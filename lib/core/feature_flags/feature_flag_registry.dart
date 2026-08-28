@@ -485,7 +485,7 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     owner: 'lib/app (adaptive shell — home_shell.dart, routing/*)',
     risk: FeatureFlagRisk.medium,
     failClosedDefault: false,
-    adr: '0467',
+    adr: '0275',
     killSwitchPath:
         'resolves to `nonProd` (`environment != AppEnvironment.production`) '
         'at feature_flags.dart:129 since E15-R02 (ADR 0467 D1) — ON by '

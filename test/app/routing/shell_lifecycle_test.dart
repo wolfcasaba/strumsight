@@ -88,10 +88,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TunerScreen), findsOneWidget);
 
-    // E15-R02: `pageBack()` looks for a back-button affordance that
-    // depends on `Navigator.canPop(context)` inside TunerScreen — pop
-    // through the router directly instead, same as the rest of this
-    // round's router-driven navigation fixes.
+    // E15-R02 (review MAJOR-1 remeasured): `tester.pageBack()` searches for
+    // a `CupertinoNavigationBarBackButton` first; `TunerScreen`'s back
+    // affordance is a Material `IconButton`, so `pageBack()` fails with
+    // "Found 0 widgets with type CupertinoNavigationBarBackButton" (see
+    // brief §10 for the literal output) — pop through the router directly
+    // instead, same as the rest of this round's router-driven navigation
+    // fixes.
     rig.container.read(routerProvider).pop();
     await tester.pumpAndSettle();
 

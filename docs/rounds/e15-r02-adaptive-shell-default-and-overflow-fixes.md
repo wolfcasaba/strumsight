@@ -547,11 +547,15 @@ zárásakor is ellenőrizve.
 ~/flutter/bin/flutter test --reporter compact
 ```
 
-Eredmény (a futás ténylegesen lefutott, végigvárva): **`+7330 ~15 -15`** — 15
-bukás, és a bukott cellák NÉV SZERINT mind az öt mért ARM↔x86 raszter-drift
-fájlban vannak (`[E]` jelölésű sorok kigyűjtve a teljes logból), a kapu x86
-architektúráján zöld (ADR 0426, L516). Fájlonkénti bontás (a konkrét bukott
-cellák a log alapján):
+Eredmény (a futás ténylegesen lefutott, végigvárva): **15 bukás**, és a
+bukott cellák NÉV SZERINT mind az öt mért ARM↔x86 raszter-drift fájlban
+vannak (`[E]` jelölésű sorok kigyűjtve a teljes logból), a kapu x86
+architektúráján zöld (ADR 0426, L516). (Review MINOR-2 fix: a korábbi
+`+7330`/`+8562` teljes-passz-szám két helyen ellentmondott egymásnak, és a
+javító kör diffje — az új `library_test.dart` cella — amúgy is elmozdítja a
+számot; a passz-szám pontos, aktuális értéke a §7 gate/Full Gate futásának
+kimenetéből olvasható, itt a bukás-szám és -halmaz a mérvadó, változatlan
+tény.) Fájlonkénti bontás (a konkrét bukott cellák a log alapján):
 
 | Fájl | Bukott cellák | Ok |
 |---|---|---|
@@ -582,7 +586,43 @@ fájl a §7 gate-ben és a teljes suite-ban is 100%-ban zöld.)
 | A7 | `docs/ui/legacy-backlog.md` §1 (lezárva a `bbf8ac90` commitban) |
 | A8 | a tizenegy típus-pinnelő őr a §7 gate-ben mind zöld, cella-szám nem csökkent (`git diff` a teszt-fájlokon csak érték-fordítást mutat) |
 | A9 | §10.2 — `e13_r18` újrafelvéve (`golden-x86.sh record`), `e13_r16` mérve és VÁLTOZATLAN |
-| A10 | §10.3 — teljes suite `+8562 -15`, kizárólag az öt mért ARM↔x86 drift-fájl piros |
+| A10 | §10.3 — teljes suite, 15 bukás, kizárólag az öt mért ARM↔x86 drift-fájlban (a pontos passz-szám a §7 gate/Full Gate kimenetéből olvasható, §10.3 MINOR-2 megjegyzés) |
 | A11 | `test/tooling/feature_flag_audit_test.dart` — a `killSwitchPath` próza-cella zöld (§7 gate [36]) |
+
+### 10.5 Javító kör 2 — a review leleteinek zárása
+
+**BLOCKER-1** (`library_test.dart`): a legacy-referencia cella VÁLTOZATLAN
+maradt; a fájl kapott egy MÁSODIK `testWidgets` cellát,
+`appConfigProvider`-override NÉLKÜL (a szállított, nem-production
+alapértelmezés), amely a `libraryV2SourcesProvider`-t egy fake analysis
+forrással köti fel, a Profile fülön át (`context.go(AppRoutes.profileLibrary)`
+a `l10n.navLibrary` gombbal) eljut az `UnifiedLibraryScreen`-hez, és ott
+méri a wire-elt session megjelenését. `flutter test test/features/library/library_test.dart --reporter compact`
+→ `+4: All tests passed!` (a fájl cellaszáma 3→4).
+
+**MAJOR-1** (`shell_lifecycle_test.dart`, „Tuner back"): a `tester.pageBack()`
+visszaállítva és lefuttatva **PIROS** lett:
+
+```
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "CupertinoNavigationBarBackButton": []>
+   Which: means none were found but one was expected
+One back button expected on screen
+```
+
+Ok: `WidgetTester.pageBack()` először `CupertinoNavigationBarBackButton`
+típusra keres; a `TunerScreen` vissza-affordanciája Material `IconButton`
+(`Icons.arrow_back`), amit a `pageBack()` heurisztikája nem talál meg —
+tehát a `router.pop()` marad (nem a `pageBack()`), a kommentben erre a mért
+kimenetre hivatkozva. `flutter test test/app/routing/shell_lifecycle_test.dart --reporter compact`
+→ `+2: All tests passed!` (visszaállítva).
+
+**MINOR-1** (`feature_flag_registry.dart:488`): `adr: '0467'` → `adr: '0275'`
+visszaállítva (a `killSwitchPath` próza — a felhatalmazott mező — változatlan,
+és amúgy is nevesíti az ADR 0467 D1/D8-at). `test/tooling/feature_flag_audit_test.dart`
+→ `+20: All tests passed!`.
+
+**MINOR-2**: §10.3/§10.4 ellentmondó teljes-suite összesítője egyeztetve — l.
+a §10.3 megjegyzését.
 
 ## 11. Review — a Claude tölti ki
