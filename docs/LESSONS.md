@@ -20958,3 +20958,60 @@ hiteles forrás, nem a helyi ref (`git reset --hard <igazolt SHA>` a helyreáll�
 
 **Őrteszt:** nincs — folyamat-szabály, a gépi őre a landoló PR-metaadat-ellenőrzése,
 ami a fenti eltéréseket fail-closed módon meg is fogta.
+---
+
+## L534 — Egy globális flag-alapértelmezés átbillentése a TESZT-alapértelmezést is átbillenti: az `appConfigProvider` defaultja MAGA a `forEnvironment(development)`, ezért egy sor 53 bukást okozott 19 fájlban (E15-R02, H3 önjavítás, 2026-08-28)
+
+**Mit mértünk.** Az E15-R02 egyetlen produkciós sort akart átírni
+(`lib/app/config/feature_flags.dart:129`, `adaptiveShellEnabled: false` →
+`nonProd`). A brief §4 listája ehhez 16 tesztfájlt engedett — a kör mégis
+`H3`-mal állt meg, implementer-dispatch NÉLKÜL, mert a pre-flight kimérte,
+hogy a flip valójában 19 fájlt tesz pirosra (53 cellát). Az önjavító kör
+függetlenül reprodukálta (izolált klón `main @ e65b1738`-ról, a TELJES suite
+kétszer):
+
+```
+flippel:      +7272 ~15 -68   → 68 bukás, 24 fájlban
+flip nélkül:  +157  -15       → 15 bukás,  5 golden-fájlban
+```
+
+A különbség — **53 bukás 19 fájlban** — a flag oksági hatósugara. A flip
+nélkül is piros 15 cella mind `Pixel test failed` (0,00–0,75%) ugyanabban az
+öt golden-fájlban (`e13_r{20,23,32,34,35}_screens_golden_test.dart`): a MÉRT
+ARM↔x86 raszter-drift (L516, ADR 0426), a kapu x86 architektúráján zöld.
+
+**Miért.** `lib/app/config/app_config.dart` — az `appConfigProvider`
+ALAPÉRTELMEZETT értéke maga is
+`FeatureFlags.forEnvironment(AppEnvironment.development, …)`. A `forEnvironment`
+gyár tehát nem csak az alkalmazás indulását írja le, hanem **minden olyan
+widget-teszt konfigurációját is, amely a valódi `StrumSightApp`-ot pumpálja és
+nem írja felül az `appConfigProvider`-t**. A shell-flag ráadásul a belépési
+pontot (`/live` → `/today`) és a tizenegy `legacyRedirects` élt vezérli, tehát
+a hatás nem egy widget belsejében marad, hanem MINDEN teszt navigációs
+kiindulását elmozdítja. A brief szerzője (és bármely olvasó) a
+`feature_flags.dart` diffjéből ezt nem látja: a csatolás egy MÁSIK fájlban,
+egy provider alapértékében él.
+
+**Hogyan alkalmazd.**
+
+1. **Környezeti flag-alapértelmezést módosító kör briefje ELŐTT mérj, ne
+   becsülj.** A hatósugár mérése egyetlen parancs — a flip + `flutter test` a
+   teljes suite-on, majd ugyanez flip nélkül; a KÜLÖNBSÉG az oksági hatás. A
+   „mely tesztek pinnelik ezt a képernyőt" típusú statikus keresés (S10/S11
+   brief-lint) ezt a hibaosztályt NEM találja meg, mert itt nem a képernyő
+   típusa, hanem a NAVIGÁCIÓS KIINDULÁS mozdul el.
+2. **A `provider` alapértékek a brief §2 „mért tények" részének kötelező
+   elemei**, ha a kör flag-et vagy konfigurációt ír át — nem elég a flag
+   definícióját megnézni, meg kell nézni, ki fogyasztja alapértelmezésben.
+3. **A bukó teszteket az ÚJ viselkedéshez igazítjuk**, nem a régihez
+   visszabillentve: a `appConfigProvider`-override-dal kikapcsolt shell zöldre
+   vinné a suite-ot, miközben elrejtené a szállított alapértelmezést a mérce
+   elől (ADR 0467 D9, a zsugorodás-őr elve, L180).
+
+**Őrteszt:** `tools/tests/test_e15_r02_adaptive_shell_scope.py` — a VALÓDI,
+commitolt briefet hajtja át a VALÓDI scope-auditon
+(`tools.ai_router.security.audit_scope`) a MÉRT fájllistával, és mindkét
+irányban őrzi: a lista szűkülése (a H3 visszatérése) és a könyvtár-szintű
+blanket-tágítás egyaránt pirosra váltja. A mért hatósugár PREMISSZÁIT
+(`appConfigProvider` default, a flag → belépési pont csatolás) külön cellák
+pinnelik, hogy a lista ne némán avuljon el.

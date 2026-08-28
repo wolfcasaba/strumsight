@@ -20,6 +20,200 @@ A `brief-lint --level strict` MÉRTE, hogy a két javítandó képernyő típus�
 
 A KÉT GOLDEN-fájl viszont várhatóan elmozdul (`e13_r18_live_stage_compact*.png`, `e13_r16_permission_primer_compact*.png`), mert a javítás a raszterképet is megváltoztatja. Ezeket **kizárólag** a `tools/golden-x86.sh record` úton szabad újrafelvenni (ADR 0426: a merge-kapu architektúráján, nem ezen az aarch64 boxon) — a §7 ezt a parancsot írja elő.
 
+## 0.0/c PRE-FLIGHT MÉRÉS (2026-08-28, orchestrátor) — a flag-átállítás valódi hatósugara, H3
+
+A pre-flight a §2 „mért tények" ÖSSZES állítását ellenőrizte, és mind igaz
+(`feature_flags.dart:129`, `app_router.dart:215`, `adaptive_shell_routes.dart:10`
+tizenegy redirect, a négy `_ExcludedCell`, a closure-suite „A4" csoportja, a
+`legacy-backlog.md` §1 öt sora, a `permission_primer_screen.dart:98-107` nem
+görgethető ága a `:111-115` görgethető ágával szemben). **Egy állítás
+azonban hiányzott a briefből, és ez a kör elindíthatóságát dönti el.**
+
+### A mért gyökérok
+
+`lib/app/config/app_config.dart:201-213` — az `appConfigProvider`
+ALAPÉRTELMEZETT értéke maga is `FeatureFlags.forEnvironment(AppEnvironment.development, …)`.
+Ezért a `adaptiveShellEnabled: nonProd` átállítás nem csak az alkalmazás
+indítását változtatja meg, hanem **minden olyan widget-teszt viselkedését is,
+amely a valódi routert pumpálja és nem írja felül az `appConfigProvider`-t**:
+a belépési pont `/live` → `/today`, és a tizenegy `legacyRedirects` él
+aktiválódik (`/live` → `/practice/live`, `/settings` → `/profile/settings`, …).
+
+### A mérés (reprodukálható)
+
+```bash
+git clone /home/ubuntu/music-theory /home/ubuntu/ss-sonnet-impl-e15-r02
+bash /home/ubuntu/ss-sonnet-impl-e15-r02/tools/prepare-flutter-generated.sh
+cd /home/ubuntu/ss-sonnet-impl-e15-r02
+sed -i 's|^      adaptiveShellEnabled: false,$|      adaptiveShellEnabled: nonProd,|' \
+  lib/app/config/feature_flags.dart
+~/flutter/bin/flutter test --reporter compact        # a TELJES suite
+git checkout -- lib/app/config/feature_flags.dart
+~/flutter/bin/flutter test --reporter compact <a 24 bukó fájl>   # alapvonal
+```
+
+- **Az átállítással:** `+7272 ~15 -68` — 68 bukás, 24 fájlban.
+- **Az átállítás NÉLKÜL (alapvonal, ugyanaz a 24 fájl):** `-15` — kizárólag
+  öt golden-fájl (`e13_r20/r23/r32/r34/r35_screens_golden_test.dart`),
+  mindegyik `Pixel test failed, 0.00%, 1px diff` alakban. Ez a MÉRT
+  ARM↔x86 golden-drift ([L516](../LESSONS.md#l516)), **nem** e kör hatása;
+  a kapu x86 architektúráján zöld.
+- **Tehát a flag-átállítás oksági hatósugara: 53 bukás, 19 fájlban.**
+
+### A 19 fájl, és hogy benne van-e a §4 engedélyezett listán
+
+| Fájl | Bukás | A listán? |
+|---|---|---|
+| `test/features/live/live_stage_test.dart` | 11 | ✅ igen |
+| `test/app/routing/shell_lifecycle_test.dart` | 2 | ✅ igen |
+| `test/app/navigation/adaptive_scaffold_test.dart` | 1 | ✅ igen |
+| `test/features/live/live_mic_release_test.dart` | 6 | ❌ **nincs** |
+| `test/features/settings/consent_center_test.dart` | 5 | ❌ **nincs** |
+| `test/features/live/live_screen_test.dart` | 5 | ❌ **nincs** |
+| `test/features/settings/settings_account_test.dart` | 3 | ❌ **nincs** |
+| `test/features/live/live_background_test.dart` | 3 | ❌ **nincs** |
+| `test/features/live/live_announcement_throttle_test.dart` | 3 | ❌ **nincs** |
+| `test/core/screen_size_guard_test.dart` | 3 | ❌ **nincs** |
+| `test/features/settings/settings_persistence_failure_test.dart` | 2 | ❌ **nincs** |
+| `test/features/live/live_lab_panel_test.dart` | 2 | ❌ **nincs** |
+| `test/widget_test.dart` | 1 | ❌ **nincs** |
+| `test/features/settings/lab_mode_toggle_test.dart` | 1 | ❌ **nincs** |
+| `test/features/live/expected_hint_cleared_on_live_test.dart` | 1 | ❌ **nincs** |
+| `test/features/library/library_test.dart` | 1 | ❌ **nincs** |
+| `test/features/analyze/cancel_on_leave_test.dart` | 1 | ❌ **nincs** |
+| `test/features/analyze/analyze_screen_test.dart` | 1 | ❌ **nincs** |
+| `test/app/routing/onboarding_first_win_test.dart` | 1 | ❌ **nincs** |
+
+Két jellemző bukás szó szerint:
+
+```
+test/app/routing/onboarding_first_win_test.dart:114
+Expected: '/live'
+  Actual: '/today'
+
+test/features/live/live_screen_test.dart:51
+Expected: at least one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "C": []>
+```
+
+### Két további, kisebb lelet
+
+1. **S11-maradék.** Az E15-R01 (merge-elve `a65aa3f9`) új, PNG-mentes
+   variáns-mátrixot hozott — `test/ui/goldens/e15_r01_theme_adoption_test.dart`
+   —, amely a `LiveScreen`-t compact portrait-ban „nincs túlcsordulás"-ra méri.
+   A brief `gate_tests`-éből HIÁNYZIK, pedig a kör a `live_screen.dart`-ot írja
+   át. `allowed_paths`-ba NEM való (változatlanul kell maradnia), `gate_tests`-be
+   igen.
+2. **Elavuló kill-switch dokumentáció (ADR 0467 D8).**
+   `lib/core/feature_flags/feature_flag_registry.dart:484-492` az
+   `adaptiveShellEnabled`-ről azt állítja: „hardcoded to `false` in every
+   environment at feature_flags.dart:129 … enabling it requires a source
+   change". A D1 után ez hamis. A `test/tooling/feature_flag_audit_test.dart`
+   csak a kulcshalmazt és a mezők nem-üres voltát méri, a prózát NEM — tehát
+   a hazugság gépi mércén ÁTMENNE. A fájl nincs a §4 listán.
+
+### A besorolás: H3
+
+A kör a §4 engedélyezett listán **kívüli 16 tesztfájl** módosítása nélkül nem
+vihető zöldre, és a lista **tágítása** nem az orchestrátor hatásköre
+(ADR 0087 §2: a szűkítés az, a tágítás H3). A kör ezért **dispatch nélkül
+halt**-ol. Az ADR 0467 és ez a §0.0/c revízió a branchre commitolva marad,
+hogy a folytatás (önjavító kör) ÚJRAHASZNOSÍTSA, ne írja meg vakon újra.
+
+**Javasolt brief-revízió a folytatásnak** (nem hajtottam végre — ez tágítás):
+
+- `allowed_paths` + `gate_tests` ← a fenti 16 „nincs" sorú tesztfájl;
+- `allowed_paths` ← `lib/core/feature_flags/feature_flag_registry.dart`
+  (kizárólag az `adaptiveShellEnabled` bejegyzés `killSwitchPath` szövege);
+- `gate_tests` ← `test/ui/goldens/e15_r01_theme_adoption_test.dart` és
+  `test/tooling/feature_flag_audit_test.dart` (`allowed_paths`-ba egyik sem);
+- új acceptance-cella: **A10** — „a `nonProd` átállítás után a TELJES
+  `flutter test` suite zöld a mért ARM↔x86 golden-driften kívül", bizonyíték a
+  Full Gate futása;
+- a §5 döntéseihez: a 16 fájl javítása KIZÁRÓLAG a mért új viselkedéshez
+  igazítás lehet (`/today` belépés, redirect-célok), **nem** a shell
+  kikapcsolása `appConfigProvider`-override-dal ott, ahol a teszt éppen a
+  valódi belépési utat méri — az a mérce gyengítése lenne.
+
+## 0.0/d ÖNJAVÍTÓ REVÍZIÓ (ADR 0112, 2026-08-28) — a mért hatósugár a scope-ba került
+
+A §0.0/c halt (H3) egyetlen kérdést hagyott nyitva: szabad-e a §4 listát a
+mért 19 fájlra tágítani. **Igen** — az önjavító kör a mérést FÜGGETLENÜL
+reprodukálta (nem a §0.0/c jelentését fogadta el), és a tágítást elvégezte.
+
+**A saját mérés** (izolált klón `main @ e65b1738`-ról,
+`tools/prepare-flutter-generated.sh` után, egyetlen `sed`-del átbillentve a
+`feature_flags.dart:129` sort, majd a TELJES suite):
+
+```bash
+git clone /home/ubuntu/music-theory <wc> && bash <wc>/tools/prepare-flutter-generated.sh
+cd <wc> && sed -i 's|^      adaptiveShellEnabled: false,$|      adaptiveShellEnabled: nonProd,|' \
+  lib/app/config/feature_flags.dart
+~/flutter/bin/flutter test --reporter compact --file-reporter json:flip.json   # TELJES suite
+git checkout -- lib/app/config/feature_flags.dart
+~/flutter/bin/flutter test --reporter compact --file-reporter json:base.json <a 24 bukó fájl>
+```
+
+- **Flippel:** `+7272 ~15 -68` — **68 bukás, 24 fájlban** (a `json` riportból
+  fájlonként számolva, nem a tömör sorból becsülve).
+- **Flip nélkül, ugyanaz a 24 fájl:** `+157 -15` — **15 bukás, 5 fájlban**,
+  mind a `test/ui/goldens/e13_r{20,23,32,34,35}_screens_golden_test.dart`
+  raszter-cellái (`Pixel test failed`, 0,00–0,75%); a 19 másik fájl ZÖLD.
+- **A különbség = a flag oksági hatósugara: 53 bukás, 19 fájlban.** A
+  maradék 15 cella a flip NÉLKÜL is ugyanígy piros, ugyanabban az öt
+  golden-fájlban — a MÉRT ARM↔x86 raszter-drift
+  ([L516](../LESSONS.md#l516), [ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)),
+  a kapu x86 architektúráján zöld, tehát NEM e kör hatása.
+
+| Fájl | Bukás |
+|---|---|
+| `test/features/live/live_stage_test.dart` | 11 |
+| `test/features/live/live_mic_release_test.dart` | 6 |
+| `test/features/settings/consent_center_test.dart` | 5 |
+| `test/features/live/live_screen_test.dart` | 5 |
+| `test/features/settings/settings_account_test.dart` | 3 |
+| `test/features/live/live_background_test.dart` | 3 |
+| `test/features/live/live_announcement_throttle_test.dart` | 3 |
+| `test/core/screen_size_guard_test.dart` | 3 |
+| `test/features/settings/settings_persistence_failure_test.dart` | 2 |
+| `test/features/live/live_lab_panel_test.dart` | 2 |
+| `test/app/routing/shell_lifecycle_test.dart` | 2 |
+| `test/widget_test.dart` | 1 |
+| `test/features/settings/lab_mode_toggle_test.dart` | 1 |
+| `test/features/library/library_test.dart` | 1 |
+| `test/features/analyze/cancel_on_leave_test.dart` | 1 |
+| `test/features/analyze/analyze_screen_test.dart` | 1 |
+| `test/features/live/expected_hint_cleared_on_live_test.dart` | 1 |
+| `test/app/navigation/adaptive_scaffold_test.dart` | 1 |
+| `test/app/routing/onboarding_first_win_test.dart` | 1 |
+
+A `test/features/live/live_widgets_test.dart`, a
+`test/features/settings/settings_sync_test.dart` és a
+`test/app/routing/route_guards_test.dart` — a mért fájlok közvetlen
+szomszédai — a flip mellett is ZÖLDEK: a scope ezért fájlonként enged, nem
+könyvtár-előtaggal.
+
+**Mit változtatott ez a revízió:**
+
+1. `allowed_paths` + `gate_tests` ← a mért, eddig hiányzó tesztfájlok. A
+   jogosultság PONTOSAN a mért új viselkedéshez igazítás (§5.4).
+2. `allowed_paths` ← `lib/core/feature_flags/feature_flag_registry.dart`
+   (kizárólag az `adaptiveShellEnabled` bejegyzés `killSwitchPath` prózája,
+   ADR 0467 D8) és `test/tooling/feature_flag_audit_test.dart` (a prózát ma
+   SEMMI nem méri — az `A11` cella ezt zárja be).
+3. `allowed_paths` + `gate_tests` ← `test/ui/goldens/e15_r01_theme_adoption_test.dart`
+   (S11-maradék: az E15-R01 PNG-mentes mátrixa a `LiveScreen`-t méri, a kör
+   pedig a `live_screen.dart`-ot írja át; a cella VÁLTOZATLANUL zöld kell
+   maradjon — §0.0/a szabálya).
+4. Új acceptance-cellák: `A10` (a teljes suite a mért ARM↔x86 drifttől
+   eltekintve zöld) és `A11` (a kill-switch próza igaz, és gépi mérce őrzi).
+5. §7 gate-parancs = `gate_tests` (S12).
+
+**A regresszió őre:** `tools/tests/test_e15_r02_adaptive_shell_scope.py` — a
+VALÓDI, commitolt briefet hajtja át a VALÓDI scope-auditon
+(`tools.ai_router.security.audit_scope`) a mért fájllistával; a lista
+szűkülése és a könyvtár-szintű blanket-tágítás egyaránt pirosra váltja.
+
 ## 0.0/b A kör két, egymást feltételező fele
 
 A shell bekapcsolása UTÁN a landscape + 200%-os szövegskála út valóban elérhetővé válik a felhasználónak, tehát a két ismert túlcsordulás ettől kezdve nem elméleti. A javítás és a bekapcsolás ezért EGY kör: külön-külön mindkettő hiányos lenne.
@@ -47,6 +241,25 @@ allowed_paths = [
   "test/features/today/hub_navigation_test.dart",
   "test/features/onboarding/onboarding_resume_test.dart",
   "test/features/onboarding/permission_primer_test.dart",
+  "test/app/routing/onboarding_first_win_test.dart",
+  "test/core/screen_size_guard_test.dart",
+  "test/widget_test.dart",
+  "test/features/live/live_screen_test.dart",
+  "test/features/live/live_mic_release_test.dart",
+  "test/features/live/live_background_test.dart",
+  "test/features/live/live_announcement_throttle_test.dart",
+  "test/features/live/live_lab_panel_test.dart",
+  "test/features/live/expected_hint_cleared_on_live_test.dart",
+  "test/features/settings/consent_center_test.dart",
+  "test/features/settings/settings_account_test.dart",
+  "test/features/settings/settings_persistence_failure_test.dart",
+  "test/features/settings/lab_mode_toggle_test.dart",
+  "test/features/library/library_test.dart",
+  "test/features/analyze/analyze_screen_test.dart",
+  "test/features/analyze/cancel_on_leave_test.dart",
+  "test/ui/goldens/e15_r01_theme_adoption_test.dart",
+  "lib/core/feature_flags/feature_flag_registry.dart",
+  "test/tooling/feature_flag_audit_test.dart",
   "test/ui/goldens/e13_r18_screens_golden_test.dart",
   "test/ui/goldens/e13_r16_screens_golden_test.dart",
   "test/ui/goldens/goldens/e13_r18_live_stage_compact.png",
@@ -73,6 +286,24 @@ gate_tests = [
   "test/features/today/hub_navigation_test.dart",
   "test/features/onboarding/onboarding_resume_test.dart",
   "test/features/onboarding/permission_primer_test.dart",
+  "test/app/routing/onboarding_first_win_test.dart",
+  "test/core/screen_size_guard_test.dart",
+  "test/widget_test.dart",
+  "test/features/live/live_screen_test.dart",
+  "test/features/live/live_mic_release_test.dart",
+  "test/features/live/live_background_test.dart",
+  "test/features/live/live_announcement_throttle_test.dart",
+  "test/features/live/live_lab_panel_test.dart",
+  "test/features/live/expected_hint_cleared_on_live_test.dart",
+  "test/features/settings/consent_center_test.dart",
+  "test/features/settings/settings_account_test.dart",
+  "test/features/settings/settings_persistence_failure_test.dart",
+  "test/features/settings/lab_mode_toggle_test.dart",
+  "test/features/library/library_test.dart",
+  "test/features/analyze/analyze_screen_test.dart",
+  "test/features/analyze/cancel_on_leave_test.dart",
+  "test/ui/goldens/e15_r01_theme_adoption_test.dart",
+  "test/tooling/feature_flag_audit_test.dart",
 ]
 native_gate = false
 ```
@@ -104,7 +335,7 @@ Az ötterületes adaptív shell legyen az alapértelmezett felület minden nem-p
 
 ## 3. Scope
 
-**Benne van:** `adaptiveShellEnabled: nonProd` a `forEnvironment`-ben (production továbbra is KI, amíg a GA-scope nem dönt) · a `live_screen.dart` stat-sorának javítása (a `Row` gyermekei `Expanded`/`Flexible`, vagy a sor görgethető) · a `permission_primer_screen.dart` véglegesen-elutasított ágának `SingleChildScrollView`-ba burkolása (a retryable ág MÁR így csinálja) · a MÉRŐ cellák átfordítása: a négy `_ExcludedCell` és a closure-cella mostantól „NINCS túlcsordulás"-t állít · a három navigációs őr és a két flag-teszt frissítése az új alapértelmezéshez · `docs/ui/legacy-backlog.md` §1 lezárása (a két tétel dátummal, a javítás hivatkozásával).
+**Benne van:** `adaptiveShellEnabled: nonProd` a `forEnvironment`-ben (production továbbra is KI, amíg a GA-scope nem dönt) · a `live_screen.dart` stat-sorának javítása (a `Row` gyermekei `Expanded`/`Flexible`, vagy a sor görgethető) · a `permission_primer_screen.dart` véglegesen-elutasított ágának `SingleChildScrollView`-ba burkolása (a retryable ág MÁR így csinálja) · a MÉRŐ cellák átfordítása: a négy `_ExcludedCell` és a closure-cella mostantól „NINCS túlcsordulás"-t állít · a három navigációs őr és a két flag-teszt frissítése az új alapértelmezéshez · **a §0.0/d-ben MÉRT, flag-átállítás miatt bukó tesztfájlok igazítása az új belépési ponthoz** (§5.4) · a `feature_flag_registry.dart` `adaptiveShellEnabled` bejegyzésének `killSwitchPath` prózája (ADR 0467 D8) + a hozzá tartozó gépi cella a `feature_flag_audit_test.dart`-ban · `docs/ui/legacy-backlog.md` §1 lezárása (a két tétel dátummal, a javítás hivatkozásával).
 
 **NINCS benne (tilos):**
 
@@ -127,8 +358,12 @@ Az ötterületes adaptív shell legyen az alapértelmezett felület minden nem-p
 | `test/app/offline_network_guard_test.dart` · `test/app/routing/{app_router,shell_lifecycle}_test.dart` · `test/features/{live/live_stage,practice/presentation/practice_routing,today/hub_navigation,ai_tutor/presentation/tutor_home_screen}_test.dart` · `test/features/onboarding/{onboarding_resume,permission_primer}_test.dart` | típus-pinnelő őrök — VÁLTOZATLANUL zöldnek kell maradniuk (§0.0/a) |
 | `test/ui/goldens/e13_r1{6,8}_screens_golden_test.dart` + a NÉGY érintett PNG | a raszterkép a javítással elmozdul; újrafelvétel KIZÁRÓLAG `tools/golden-x86.sh record` úton |
 | `docs/ui/legacy-backlog.md` | a két tétel lezárása |
+| `test/app/routing/onboarding_first_win_test.dart` · `test/core/screen_size_guard_test.dart` · `test/widget_test.dart` · `test/features/live/{live_screen,live_mic_release,live_background,live_announcement_throttle,live_lab_panel,expected_hint_cleared_on_live}_test.dart` · `test/features/settings/{consent_center,settings_account,settings_persistence_failure,lab_mode_toggle}_test.dart` · `test/features/library/library_test.dart` · `test/features/analyze/{analyze_screen,cancel_on_leave}_test.dart` | a §0.0/d-ben MÉRT bukások — a flag-átállítás oksági hatósugara; igazítás KIZÁRÓLAG az új viselkedéshez (§5.4) |
+| `test/ui/goldens/e15_r01_theme_adoption_test.dart` | S11-maradék: a `LiveScreen`-t méri — VÁLTOZATLANUL zöldnek kell maradnia (§0.0/a) |
+| `lib/core/feature_flags/feature_flag_registry.dart` | KIZÁRÓLAG az `adaptiveShellEnabled` bejegyzés `killSwitchPath` prózája (ADR 0467 D8) |
+| `test/tooling/feature_flag_audit_test.dart` | ÚJ cella: a `killSwitchPath` próza gépi mércéje (A11) |
 
-**Tilos zóna:** `lib/app/routing/**` (a router logikája NEM változik, csak a flag) · `lib/features/**` egyéb képernyői · `test/ui/goldens/goldens/**` · `docs/adr/**` · `tools/**`
+**Tilos zóna:** `lib/app/routing/**` (a router logikája NEM változik, csak a flag) · `lib/features/**` egyéb képernyői · `lib/core/feature_flags/**` az `adaptiveShellEnabled` bejegyzés `killSwitchPath` mezőjén kívül · `test/ui/goldens/goldens/**` a NÉGY nevesített PNG-n kívül · `docs/adr/**` · `tools/**`
 
 ## 5. Kötött architekturális döntések (ADR 0467)
 
@@ -144,6 +379,19 @@ Az ötterületes adaptív shell legyen az alapértelmezett felület minden nem-p
 
 A `/live` és a többi legacy útvonal továbbra is működik, a `legacyRedirects` táblán át. **NEM elfogadható gyengítés:** a régi útvonalak megszüntetése — a mentett mélylinkek és a widget-tesztek is ezeken jönnek.
 
+### 5.4 A mért bukások javítása = igazítás az ÚJ viselkedéshez (ADR 0467 D9)
+
+A §0.0/d listáján szereplő tesztek KIZÁRÓLAG úgy hozhatók zöldre, hogy az új,
+szállított viselkedéshez igazodnak: a belépési pont `/today`, a legacy
+útvonalak a `legacyRedirects` célján érhetők el (a teszt navigáljon oda, vagy
+a redirect célját várja).
+
+**NEM elfogadható gyengítés:** a shell kikapcsolása `appConfigProvider`-
+override-dal ott, ahol a teszt tárgya nem maga a kikapcsolt konfiguráció — az
+a mérce elrejtése lenne a szállított alapértelmezés elől. Ugyanígy tilos a
+cella törlése, `skip`-je vagy `expect` gyengítése (D6, [L180](../LESSONS.md#l180)).
+A teszt-cellák SZÁMA egyik érintett fájlban sem csökkenhet.
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
@@ -157,6 +405,8 @@ A `/live` és a többi legacy útvonal továbbra is működik, a `legacyRedirect
 | A7 | A `legacy-backlog.md` §1 két tétele LEZÁRTKÉNT, a javítás hivatkozásával szerepel | a dokumentum |
 | A8 | A tizenegy típus-pinnelő őr VÁLTOZATLANUL zöld, egyetlen cellájuk sem törölt/`skip`-elt | a §7 gate + `git diff` a teszt-fájlokon |
 | A9 | A két érintett golden `tools/golden-x86.sh record` úton lett újrafelvéve (nem az aarch64 boxon) | a parancs kimenete a §10-ben |
+| A10 | A `nonProd` átállítás után a TELJES `flutter test` suite zöld — kivétel KIZÁRÓLAG a mért ARM↔x86 golden-drift (L516), ami a kapu x86 architektúráján zöld | a Full Gate / `build-apk.yml` futása a merge SHA-ján; a §10-be a lokális teljes futás összesítője is bekerül |
+| A11 | A `feature_flag_registry.dart` `adaptiveShellEnabled` bejegyzésének `killSwitchPath` prózája a D1 után IGAZ, és ezt gépi cella méri | `test/tooling/feature_flag_audit_test.dart` új cellája |
 
 **Küszöb-cellahármas a szövegskálára** (a kötelező határ `2.0`, INKLUZÍV): a küszöb **alatt** (`1.5`) → nincs túlcsordulás; **pontosan rajta** (`2.0`) → nincs túlcsordulás — EZ az A5/A6 feltétele; a küszöb **fölött** (`2.5`) → nem követelmény, a mátrix nem méri, és a `2.0` teljesítése nem hivatkozhat rá.
 
@@ -168,13 +418,15 @@ A `/live` és a többi legacy útvonal továbbra is működik, a `legacyRedirect
 | A stat-sor javítása csak `en` locale-ra elég (a hosszabb `hu` címkék tovább csordulnak) | A5 `hu` cellái |
 | A primer javítása a retryable ágra kerül (ami már jó volt), a véglegesen-elutasítottra nem | A6 |
 | A javítás után a mérő cella törlődik ahelyett, hogy átfordulna | A5/A6 (a cella hiánya a §7 gate-en a teszt-szám csökkenéseként látszik) |
+| A mért bukások „javítása" `appConfigProvider`-override-dal (a shell kikapcsolása a tesztben) | A10 — a teljes suite ettől zöld lenne, de az `A2`/`A3` pinnelés és az `§5.4` tiltása alapján a review BLOCKER; a §10 diffjében a `FeatureFlags(...)`/`appConfigProvider.overrideWith` beszúrások láthatók |
+| A `killSwitchPath` próza javítása gépi mérce nélkül | A11 (a prózát ma SEMMI nem méri — pontosan ez volt a §0.0/c 2. lelete) |
 
 **Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** állítsd vissza a `live_screen.dart` stat-sorát a javítás ELŐTTI alakra, futtasd a §7 gate-et → az **A5** négy cellájának PIROSNAK kell lennie → állítsd vissza a javítást.
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/app/config/feature_flags_test.dart test/app/feature_flags_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/navigation/legacy_route_redirect_test.dart test/ui/goldens/e13_r36_variant_matrix_test.dart test/accessibility/closure_suite_test.dart test/app/offline_network_guard_test.dart test/app/routing/app_router_test.dart test/app/routing/shell_lifecycle_test.dart test/features/ai_tutor/presentation/tutor_home_screen_test.dart test/features/live/live_stage_test.dart test/features/practice/presentation/practice_routing_test.dart test/features/today/hub_navigation_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/permission_primer_test.dart
+tools/round-gate.sh test/app/config/feature_flags_test.dart test/app/feature_flags_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/navigation/legacy_route_redirect_test.dart test/ui/goldens/e13_r36_variant_matrix_test.dart test/accessibility/closure_suite_test.dart test/app/offline_network_guard_test.dart test/app/routing/app_router_test.dart test/app/routing/shell_lifecycle_test.dart test/features/ai_tutor/presentation/tutor_home_screen_test.dart test/features/live/live_stage_test.dart test/features/practice/presentation/practice_routing_test.dart test/features/today/hub_navigation_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/permission_primer_test.dart test/app/routing/onboarding_first_win_test.dart test/core/screen_size_guard_test.dart test/widget_test.dart test/features/live/live_screen_test.dart test/features/live/live_mic_release_test.dart test/features/live/live_background_test.dart test/features/live/live_announcement_throttle_test.dart test/features/live/live_lab_panel_test.dart test/features/live/expected_hint_cleared_on_live_test.dart test/features/settings/consent_center_test.dart test/features/settings/settings_account_test.dart test/features/settings/settings_persistence_failure_test.dart test/features/settings/lab_mode_toggle_test.dart test/features/library/library_test.dart test/features/analyze/analyze_screen_test.dart test/features/analyze/cancel_on_leave_test.dart test/ui/goldens/e15_r01_theme_adoption_test.dart test/tooling/feature_flag_audit_test.dart
 ```
 
 A két érintett golden ÚJRAFELVÉTELE a merge-kapu architektúráján (ADR 0426) — az aarch64 boxon felvett PNG a CI-ban MINDIG piros lenne:
