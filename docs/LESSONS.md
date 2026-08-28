@@ -20797,3 +20797,64 @@ katalogizálatlan flaggel is `exit 0`-t mért. A javító kör után ugyanaz a p
 
 **Forrás:** [`docs/reviews/e12-r05-review.md`](reviews/e12-r05-review.md) §2.3,
 §2.4 és §8.1; a kör briefjének §0.0 R1 (javított) és §10.1 szakasza.
+
+## L530 — A „generált" committolt artefaktum a GENERÁLÓ GÉP abszolút cache-útvonalát vitte magával: 155 `/home/ubuntu/...` sor egy kiadásra szánt jogi dokumentumban, teljesen zöld gate mellett (E12-R06, F1 MINOR, 2026-08-28)
+
+**Mit mértünk.** Az E12-R06 supply-chain köre a `THIRD_PARTY_NOTICES.md`-t a
+`tool/release/generate_sbom.py`-vel generálta, és a bejegyzésekbe a license-fájl
+elérési útját írta. A `_resolve_dart_license` a FELOLDOTT, teljes pub-cache
+útvonalat írta ki, ezért a committolt fájl 155 sora így nézett ki:
+
+```
+- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/analyzer-12.1.0/LICENSE
+```
+
+`grep -c "/home/ubuntu" THIRD_PARTY_NOTICES.md` → **`155`**. A kör gate-je
+(format, analyze, 28 teszt-cella, architecture, secrets, l10n) MIND ZÖLD volt,
+és a hét acceptance-cella (A1–A7) mind teljesült — egyik sem mérte a KIMENET
+hordozhatóságát.
+
+**Miért defekt, három független okból.** (1) A `THIRD_PARTY_NOTICES.md`
+kiadásra szánt, jogi célú artefaktum: egy „License text" hivatkozás, ami az
+olvasó gépén nem létezik, nem teljesíti a notice-bundle funkcióját. (2) **Nem
+reprodukálható**: más `PUB_CACHE`-sel (CI runner, másik fejlesztő) UGYANABBÓL a
+commitból MÁS fájl jön ki, tehát a „regeneráld és diffeld" ellenőrzés — egy
+supply-chain kör legtermészetesebb jövőbeli őre — soha nem lehetne zöld.
+(3) A build-box home-könyvtárának útvonala bekerül a repóba.
+
+**Hogyan derült ki.** Nem a gate-ből, hanem egy reviewer-próbából: a szállított
+generátort egy `mktemp -d` alatti fixture pub cache-csel futtatva a kimenet a
+`/tmp/tmp.JLAnHaoPa1/pc/hosted/...` sort írta ki — ez tette láthatóvá, hogy a
+gép-függés a GENERÁTOR tulajdonsága, nem a committolt fájl egyszeri
+melléktermékve. A determinizmus-cella (A1) ezt szerkezetileg nem foghatta meg:
+az a RELEASE MANIFEST kétszeri generálását méri UGYANAZON a gépen — azonos gépen
+az abszolút útvonal is determinisztikus.
+
+**Javítás.** A `licensePath` a pub cache GYÖKERÉHEZ KÉPEST relatív
+(`hosted/pub.dev/<pkg>-<ver>/LICENSE`); a feloldott cache-gyökér sehol nem
+jelenik meg. `grep -c "/home/ubuntu" THIRD_PARTY_NOTICES.md` → **`0`**.
+
+**Őrteszt:** `test/tooling/release_manifest_test.dart::A2 — missing license
+fails closed (ADR 0447 D3) the SBOM and notices carry no absolute filesystem
+path` (fixture-futásból származó SBOM+notices `Directory.systemTemp` alatti
+cache-csel), és a párja, amely a COMMITOLT `THIRD_PARTY_NOTICES.md`-t méri
+közvetlenül. Tiltott minta: `/`-rel kezdődő `licensePath`, `/home/`, `/Users/`,
+`C:\`. Valódi-sértés próbával igazolva: az abszolút útvonal visszaállítása után
+PONTOSAN ez a cella vált pirosra (`GATE_EXIT=10`), a többi 26/27 érintetlen.
+
+**Általánosítás.** Ha egy kör kimenete **committolt generált artefaktum**, a
+determinizmus-cella („kétszer futtatva bájtazonos") NEM elegendő: az csak
+ugyanazon a gépen mér. Kell egy külön, **hordozhatósági** cella is — a generátort
+más gyökér alatti fixture-bemenettel futtatva a kimenet nem tartalmazhat
+gép-specifikus abszolút útvonalat. Ugyanez a család: [L110](#l110) (a lokálisan
+jelen lévő bináris zöldre viszi a boxon azt, ami a CI-n piros) — mindkettőben a
+KÖRNYEZET szivárgott be abba, aminek környezet-függetlennek kellett volna lennie.
+
+**Vö. a kör pre-flightja.** A brief §9 kockázata úgy fogalmazott, hogy „a
+`pubspec.lock` nem tartalmaz license-mezőt **minden** csomagra" — ez a hihető
+árnyalás rejtette el, hogy a mért valóság „**egyetlen** csomagra sem"
+(`grep -ci license pubspec.lock` → `0`, 160 csomag). Az eredeti szerződéssel a
+generátor MINDIG nem-nulla kóddal állt volna meg, és a kötelező
+`THIRD_PARTY_NOTICES.md` sosem jött volna létre: elérhetetlen cél-státusz. A
+`brief-lint --level strict` **0 leletet** adott — a lint a brief ALAKJÁT méri, az
+ÁLLÍTÁSAIT nem; azokat csak a kód-mérés fogja meg.

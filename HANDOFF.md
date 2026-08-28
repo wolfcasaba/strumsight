@@ -1,5 +1,89 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R06 KÉSZ — Versioning, provenance, SBOM és release manifest — PR [#490](https://github.com/wolfcasaba/strumsight/pull/490), squash `80292431` (2026-08-28)
+
+**Minden kiadott artefaktum mostantól commitig visszakövethető, verzió-monoton és
+supply-chain szempontból leírt — és mindezt gépi kapuk tartják, nem szándék.**
+Eddig a `pubspec.yaml` `1.0.0+1`-en állt (a build number SOHA nem emelkedett), a
+verzió/SHA sehol nem jelent meg, és sem release manifest, sem SBOM, sem
+third-party notice-bundle nem létezett. A kör négy eszközt szállít:
+
+- **`tool/generate_release_manifest.dart`** — determinisztikus JSON: kanonikus
+  enkóder (minden szinten rendezett kulcsok, `\n` sorvég), **időbélyeg SEHOL**
+  (ADR 0447 D1). Mérve a fán: két egymás utáni futás sha256-a azonos
+  (`d24ec1bb…`). Az ML- és a tudáscsomagot `schemaVersion` + manifest-sha256 +
+  elemszám hármassal hivatkozza — kitalált „package version” nincs, mert
+  egyikben sem létezik ilyen mező (D6).
+- **`tool/release/generate_sbom.py`** — 171 komponens (160 Dart + 11 backend
+  Python pin), `THIRD_PARTY_NOTICES.md` + `sbom.json`. **Csak stdlib.**
+- **`tool/release/verify_artifacts.py`** — checksum-audit + **szigorúan monoton**
+  build number: a csökkenés ÉS az egyenlőség is nem-nulla kilépés; bázis nélkül
+  explicit `baseline: none`, nem néma átcsúszás (D2).
+- **`lib/app/build_info.dart`** — `const` compile-time metaadat, a bootstrap
+  érintetlen (D7).
+
+**A license-adat nem létezett, ezért MÉRT forrásból jön.** A pre-flight
+kimérte, hogy a `pubspec.lock` **egyetlen** csomagra sem hordoz license-mezőt
+(`grep -ci license pubspec.lock` → `0`, 160 csomag), és a `requirements*.txt`
+sem — az eredeti brief-szerződéssel a generátor MINDIG megbukott volna, és a
+kötelező notices-fájl sosem jött volna létre. A feloldás (ADR 0447 D3): a
+license vagy a pub cache-beli `LICENSE` fájlból (cache-gyökérhez **relatív** út
++ sha256 + első sor), vagy a generátorban élő, kézzel gondozott
+`_CURATED_LICENSES` jegyzékből jön; egyikből sem feloldható csomag →
+**nem-nulla kilépés a névvel**. `"unknown"` soha, SPDX-kitalálás soha.
+
+**A `.github/workflows/**` védett zóna, ezért a kör JAVASLATOT szállít**
+(`docs/release/workflows/release-apk-provenance.proposal.md`): 6 lépés teljes,
+bemásolható YAML-részletként, a beillesztés helyét a `release-apk.yml` LÉTEZŐ
+lépésneveivel megnevezve. A tényleges bekötés merge utáni
+orchesztrátor/emberi lépés (ADR 0447 D4). A javaslat YAML-validitását és a
+kötelező lépéseit gépi cella méri — a mérce nem gyengült.
+
+**Pre-flight: öt mért brief-ütközés feloldva (§0.0.A).** A
+`brief-lint --level strict` **0 leletet** adott; a kód-mérés ötöt talált —
+a lint a brief ALAKJÁT méri, az ÁLLÍTÁSAIT nem. (R1) a license-forrás fenti
+hiánya; (R2) a `package:yaml` csak tranzitív, a `pubspec.yaml` pedig tilos zóna
+→ saját, korlátozott YAML-parser (ADR 0444 D3 precedense), és
+[L110](docs/LESSONS.md#l110) miatt semmilyen `rg`/`grep`/`jq`/`gh` shell-out;
+(R3) a §5.1 két mondata egymásnak feszült („külön időbélyeg-mező, amit a teszt
+kizár" vs. „a mező-kihagyásos lazítás tilos") → nincs időbélyeg SEHOL;
+(R4) a tudáscsomagnak nincs package-szintű verziója; (R5) nincs
+`test/fixtures/**` az engedélyezett listán → futásidejű temp fixture-ök. **A
+lista nem bővült.** Új **A7** cella az L110 hibaosztálya ellen.
+
+**Review:** [`docs/reviews/e12-r06-review.md`](docs/reviews/e12-r06-review.md) —
+**APPROVED 1 javító kör után**, 0 BLOCKER / 0 MAJOR / 0 nyitott MINOR / 1
+follow-up NOTE. Az első kör 2 MINOR-t talált **teljesen zöld gate mellett**:
+**F1** — a committolt `THIRD_PARTY_NOTICES.md` **155 abszolút
+`/home/ubuntu/.pub-cache/...` útvonalat** hordozott, azaz egy kiadásra szánt
+jogi artefaktum gép-függő és nem reprodukálható lett; **F2** — a javasolt
+verify-lépés a beillesztési pont kényszere miatt nulla artefaktumot auditál.
+A javító kör mindkettőt zárta: **155 → 0**, két ÚJ hordozhatósági gate-cella
+(fixture-futás + a committolt fájl), valódi-sértés próbával igazolva; az F2
+kapott egy kimondott, follow-uppal együtt dokumentált szakaszt.
+
+**A gate nem bemondás:** `tools/round-gate.sh` **kétszer, két független
+izolált `/tmp` klónban** zöld, scope-audit mindkét mérésen `OK`
+(`.github/**` érintetlen), és öt reviewer-próba a SZÁLLÍTOTT eszközökön
+(feloldhatatlan Dart/Python license → exit 1 névvel, részleges kimenet nélkül;
+küszöb-hármas 41/42/43 → exit 1/1/0; checksum-eltérés → exit 1). CI a merge
+SHA-n (`46d230e0`): full-gate + router-ci `success`.
+
+**Lecke:** [L530](docs/LESSONS.md#l530) — a „kétszer futtatva bájtazonos"
+determinizmus-cella csak UGYANAZON a gépen mér; committolt generált
+artefaktumhoz kell egy külön **hordozhatósági** cella is.
+
+**Follow-up (F4, NOTE):** a Python komponensek `version: null`-lal kerülnek az
+SBOM-ba, noha a `requirements.txt` mind a 11 pinre hordoz
+verzió-specifikációt — a pin-string átvétele `versionSpec` mezőként egy
+későbbi supply-chain kör dolga.
+
+**Nyitott orchesztrátor/emberi lépés:** a
+`docs/release/workflows/release-apk-provenance.proposal.md` beillesztése a
+`.github/workflows/release-apk.yml`-be (a `Read APK metadata from pubspec`
+UTÁN, a `Materialize production keystore` ELŐTT) — ez a védett mérce-zóna
+miatt szándékosan nem a kör dolga volt.
+
 ## ✅ E12-R05 KÉSZ — Feature flag registry és emergency kill switch — PR [#489](https://github.com/wolfcasaba/strumsight/pull/489), squash `186f29c6` (2026-08-28)
 
 **A 40 kockázatos capability-kapcsoló mostantól egyetlen típusos katalógusban él
@@ -8787,7 +8871,25 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-28):** `main` @ `186f29c6` — E12-R05 Feature flag
+**Aktuális állapot (2026-08-28):** `main` @ `80292431` — E12-R06 Versioning,
+provenance, SBOM és release manifest, PR
+[#490](https://github.com/wolfcasaba/strumsight/pull/490), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
+Opus 5, **1 javító kör** — a review 0 BLOCKER / 0 MAJOR / 2 MINOR-t talált
+TELJESEN ZÖLD gate mellett (a committolt `THIRD_PARTY_NOTICES.md` 155 abszolút
+`/home/ubuntu` útvonalat hordozott, és a javasolt verify-lépés nulla
+artefaktumot auditál), a javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r06-review.md`](docs/reviews/e12-r06-review.md)).
+`risk = "normal"`, a diff nem érint hálózatot/hitelesítést/felhasználói adatot,
+ezért külön `security-reviewer` nem futott. A kör ADR-t **írt**:
+[ADR 0447](docs/adr/0447-release-manifest-provenance-and-sbom.md) (D1–D7).
+Exact-SHA evidencia a merge SHA-n (`46d230e0`): Full Gate
+[33177693883](https://github.com/wolfcasaba/strumsight/actions/runs/33177693883)
+`success`, Router CI
+[33177729254](https://github.com/wolfcasaba/strumsight/actions/runs/33177729254)
+`success`.
+
+**Korábbi: `main` @ `186f29c6`** — E12-R05 Feature flag
 registry és emergency kill switch, PR
 [#489](https://github.com/wolfcasaba/strumsight/pull/489), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
@@ -9759,7 +9861,23 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E12-R05 — Feature flag registry és emergency kill switch** (PR
+**E12-R06 — Versioning, provenance, SBOM és release manifest** (PR
+[#490](https://github.com/wolfcasaba/strumsight/pull/490), squash `80292431`).
+Determinisztikus, **időbélyeg nélküli** release manifest (két futás sha256-a
+azonos), SBOM + `THIRD_PARTY_NOTICES.md` 171 komponensre, checksum-audit
+**szigorúan monoton** build numberrel (a csökkenés ÉS az egyenlőség is hiba),
+`const` `BuildInfo`, és a `.github/workflows/**` védett zóna helyett egy
+gépileg mért workflow-JAVASLAT. A license-adat sem a `pubspec.lock`-ban, sem a
+`requirements*.txt`-ben nem létezik (`grep -ci license` → `0`), ezért két MÉRT
+forrásból oldódik fel (pub cache `LICENSE` relatív úttal, vagy kézzel gondozott
+jegyzék) — feloldhatatlan csomag → nem-nulla kilépés, `"unknown"` soha.
+**1 javító kör**, 2 MINOR javítva. Egy lecke:
+[L530](docs/LESSONS.md#l530) (a „kétszer futtatva bájtazonos" determinizmus-cella
+csak ugyanazon a gépen mér — committolt generált artefaktumhoz külön
+hordozhatósági cella kell).
+
+
+**Korábbi: E12-R05 — Feature flag registry és emergency kill switch** (PR
 [#489](https://github.com/wolfcasaba/strumsight/pull/489), squash `186f29c6`).
 Mind a 40 mért `FeatureFlags` mező típusos katalógusba került (owner, kockázat,
 fail-closed alapérték, kill-switch-út, opcionális inkluzív lejárat), az
@@ -10855,13 +10973,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ▶️ **A KÖVETKEZŐ KÖR: `E12-R06` — Verziózás, provenance és SBOM**
-> (motor: `sonnet-impl`, előre kiosztott ADR: `0447`, brief:
-> `docs/rounds/e12-r06-versioning-provenance-and-sbom.md`). A Chapter 12 sáv
-> fut: az E12 36 sorából **5 `done`** (R01–R05), 31 `pending`.
+> ▶️ **A KÖVETKEZŐ KÖR: `E12-R07` — Production signing és secret hardening**
+> (motor: `sonnet-impl`, előre kiosztott ADR: `0448`, brief:
+> `docs/rounds/e12-r07-production-signing-and-secret-hardening.md`). A Chapter 12
+> sáv fut: az E12 36 sorából **6 `done`** (R01–R06), 30 `pending`.
 >
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-28, E12-R05 zárása
-> után): **262 `done`, 40 `hold`, 18 `prepared`, 31 `pending`**. A `hold` sorok:
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-28, E12-R06 zárása
+> után): **263 `done`, 40 `hold`, 18 `prepared`, 30 `pending`**. A `hold` sorok:
 > **E10 32**, E09 5, E08 1, E99 2 — az **Epic 10 (`E10`) megy utolsóként**, a
 > nyitott `E09` (R28/R29/R31/R32) és `E08` sorok a Ch12 után.
 >
@@ -10869,6 +10987,25 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > kör-orchestrátoré (ADR 0087 §4: a kör-session a sor-fájlhoz csak a SAJÁT
 > sorának `done`-jáért nyúl). A Ch12 aktiválása 2026-08-28-án megtörtént
 > (`92576977`), a Router-CI carve-out `E12`-re kiterjesztésével együtt.
+
+> **E12-R06 nyitott szál — egy EMBERI/orchesztrátor lépés és egy follow-up**
+> ([`docs/reviews/e12-r06-review.md`](docs/reviews/e12-r06-review.md)):
+>
+> 1. **A workflow-javaslat beillesztése VÁR.** A
+>    [`docs/release/workflows/release-apk-provenance.proposal.md`](docs/release/workflows/release-apk-provenance.proposal.md)
+>    hat lépését be kell másolni a `.github/workflows/release-apk.yml`-be (a
+>    `Read APK metadata from pubspec` UTÁN, a `Materialize production keystore`
+>    ELŐTT). Ez a védett mérce-zóna (ADR 0321) miatt szándékosan NEM a kör
+>    dolga volt — amíg meg nem történik, a release-artefaktumok mellé sem
+>    manifest, sem SBOM, sem notices nem kerül fel.
+> 2. **F4 (NOTE) follow-up:** a Python komponensek `version: null`-lal kerülnek
+>    az SBOM-ba, noha a `requirements.txt` mind a 11 pinre hordoz
+>    verzió-specifikációt. Javasolt: a pin-string átvétele `versionSpec`
+>    mezőként egy későbbi supply-chain körben.
+> 3. **Az F2 megnevezett follow-upja:** a `Verify release artifacts` lépés a
+>    javasolt beillesztési ponton nulla artefaktumot auditál (az APK ott még
+>    nem létezik) — a valódi checksum-őrzéshez a lépést az APK-build UTÁNRA
+>    kell helyezni, `--artifact` paraméterrel.
 
 > **E12-R05 follow-up — három NOTE, ami nem tűnhet el**
 > ([`docs/reviews/e12-r05-review.md`](docs/reviews/e12-r05-review.md) F5/F6 és
