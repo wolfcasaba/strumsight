@@ -99,6 +99,32 @@ follow-up, not part of this proposal — without `--previous`, the tool
 itself prints `baseline: none` and exits `0` rather than silently skipping
 the check (ADR 0447 D2, measured by A3).
 
+## Why the verify step audits zero artifacts here
+
+At the proposed insertion point (immediately after `Read APK metadata from
+pubspec`, before `Materialize production keystore`), the production APK does
+not exist yet — it is produced later by `Build production APK` (currently
+line 113) and renamed by `Stage versioned production APK` (currently line
+123). The `Verify release artifacts` step above therefore runs
+`verify_artifacts.py --manifest dist/release-manifest.json` with no
+`--artifact` entries in the manifest to check, so `artifacts: 0 verified`
+and exit `0` is the correct, honest output at this insertion point — not a
+bug. As a checksum guard for the APK specifically, the step is a no-op here:
+the insertion point is forced this early because it must run before
+`Materialize production keystore` writes signing secrets to disk (ADR 0447
+D4 keeps generation out of the keystore-materialized window), while the APK
+itself only exists after that window closes.
+
+**Follow-up (not part of this proposal):** move or duplicate the `Verify
+release artifacts` step to run AFTER `Stage versioned production APK`, with
+`--artifact dist/<apk-name>` (and `--artifact dist/sbom.json`,
+`--artifact dist/THIRD_PARTY_NOTICES.md`) added to `generate_release_manifest.dart`'s
+invocation so the manifest actually lists something to checksum. Until that
+follow-up lands, this step's real value at the proposed insertion point is
+limited to catching a malformed manifest early (`verify_checksums` still
+validates manifest shape even with an empty `artifacts` list) — not
+artifact tampering.
+
 ## Why no build-time timestamp
 
 The release manifest intentionally carries no generation timestamp, in the
