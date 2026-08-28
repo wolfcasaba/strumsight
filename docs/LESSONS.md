@@ -20686,3 +20686,68 @@ domain-cellákra futtasd — az önvédő cellára is, mert az a lánc utolsó s
 amit senki más nem ellenőriz.
 
 **Őrteszt:** `test/tooling/repository_policy_test.dart`::`A8 — the guard itself never shells out to an external binary (L110) this test file never spawns an external process through any dart:io Process entry point`
+
+---
+
+## L528 — Egy DOBÓ model-szintű pydantic-validátor a TELJES settings-szótárat (titkokkal) echózza a hibaüzenetbe: a „zárt értékkészlet" szigorítása maga nyitott egy titok-szivárgást a boot-logba (E12-R04, B1 BLOCKER, 2026-08-28)
+
+**A kör célja** a `backend/app/config.py` `Settings.env` mezőjének zárt
+értékkészletre szigorítása volt: az ismeretlen `STRUMSIGHT_ENV` érték ne essen
+csendben `dev`-re, hanem `ValidationError`-ral álljon meg. A megvalósítás
+helyes: `@model_validator(mode="before")` + `raise ValueError`, plusz egy
+`mode="after"` staging-őr négy további `raise`-szel. A gate zöld lett, a
+scope-audit `ok`, a review első hat mérése (csendes visszaesés, `_guard_prod`
+regresszió, kliens fail-closed ágak, `model_fields`-ből olvasott
+dev-alapértelmezések, feltétlen staging-host tiltás) mind tiszta.
+
+**A mért hibaosztály.** A pydantic a **model-szintű** validátorból dobott
+hibánál a `ValidationError` üzenetébe beteszi az `input_value`-t — ami itt nem
+egy mező értéke, hanem a **teljes bemeneti settings-szótár**. Mérve
+(`4b066a8d`, pydantic 2.13):
+
+```
+$ STRUMSIGHT_ENV="Prod-uction" STRUMSIGHT_SECRET_KEY=… \
+  STRUMSIGHT_DATABASE_URL="postgresql+psycopg://app:<jelszó>@db.internal/ss" \
+  python -c "from app.config import Settings; Settings()"
+
+Value error, STRUMSIGHT_ENV='Prod-uction' is not a recognized environment (…).
+[type=value_error, input_value={'env': 'Prod-uction', 's...<jelszó>@db.internal/ss'}, input_type=dict]
+```
+
+A DB-jelszó **szó szerint** megjelenik. A sink valós: a
+`backend/app/main.py` modul-szinten hívja a `create_app()`-ot, tehát a hiba
+uvicorn/gunicorn import-time tracebackként a **boot-logba** kerül. A pydantic a
+dict reprjét fej ~25 + tail ~22 karakterre csonkolja, így a deklarációs
+sorrendben utolsó beállított mező (rutinszerűen `secret_key`, `database_url`
+vagy `tutor_api_key`) töredéke szivárog — a rövid értékek teljes egészében.
+
+**Miért nem fogta meg semmi.** A base-verzióban egyetlen model-szintű dobó
+validátor sem volt: a **mező**-szintű hibák `input_value`-ja csak az adott mező
+értékére terjed ki, tehát a repó addig nem is találkozott ezzel az alakkal. A
+kör tehát nem egy meglévő rést hagyott nyitva, hanem **maga nyitotta** —
+pontosan az a művelet (szigorítás), amitől a konfiguráció biztonságosabb lett.
+A `tool/ci/check_secrets.dart`, a teljes backend suite és a Full Gate mind
+zöld volt: egyik sem méri, mit ír a kivétel a stderr-re.
+
+**A javítás.** `hide_input_in_errors=True` a `SettingsConfigDict`-ben — az
+üzenet SZÖVEGE változatlan marad, tehát az összes
+`pytest.raises(ValidationError, match=…)` cella zöld maradt, csak az echózott
+érték redaktálódik. Falszifikációval igazolva: a sor eltávolítása mindhárom új
+őr-cellát pirosra váltja.
+
+**Maradék, kimondva:** a pydantic-core `ValidationError.errors()`
+`include_input` paraméterének alapértéke `True`, és ezt a `hide_input_in_errors`
+NEM módosítja — a **strukturált** alak továbbra is hordozza a bemenetet. A
+repóban ma nincs olyan hívó, amely a `Settings` hibáját `errors()`-szel
+szerializálná (`grep -rn "\.errors(" backend/app/`), tehát a valós sink zárva
+van; a strukturált út latens marad, és az E12-R07 (production signing & secret
+hardening) kör kontextusába került.
+
+**Amit ebből a következő kör vigyen tovább:** ha egy körben ÚJ, dobó
+model-szintű validátor kerül egy titkokat hordozó settings/config típusra, a
+kötelező kérdés nem az, hogy „helyes-e a validáció", hanem hogy **mit ír a
+kivétel a logba** — és a válaszhoz canary-titkos cella kell, nem szemrevétel.
+Ugyanez áll minden olyan hibaüzenetre, amely „a bemenetet" idézi vissza:
+a bemenet egy konfigurációs objektumnál a titkok halmaza.
+
+**Őrteszt:** `backend/tests/test_settings.py`::`TestSecretsNeverLeakIntoErrors` (3 cella, canary-titkokkal; a `hide_input_in_errors` eltávolítása mindhármat pirosra váltja)

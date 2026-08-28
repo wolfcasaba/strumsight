@@ -1,5 +1,66 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R04 KÉSZ — Environment és channel konfiguráció lezárása — PR [#488](https://github.com/wolfcasaba/strumsight/pull/488), squash `5a971421` (2026-08-28)
+
+**A backend környezet-jelölője zárt értékkészlet lett, a staging pedig valódi,
+fail-closed deployment-céllá vált — és a kör közben egy SAJÁT MAGA nyitotta
+titok-szivárgást is lezárt.** Az `STRUMSIGHT_ENV` eddig szabad string volt:
+egy elgépelt `prod uction` hiba nélkül elindította a backendet, és mivel minden
+production-kapu `== "prod"` egyenlőségre épül, a deploy dev-titokkal, wildcard
+CORS-szal és bekapcsolt Lab-route-okkal szolgált volna ki forgalmat. Mostantól
+a kanonikus értékkészlet `dev | lab | staging | prod`, a kliens enum-nevei
+(`development`, `production`) **aliasok**, és az ismeretlen érték
+`ValidationError` — nem csendes visszaesés ([ADR 0445](docs/adr/0445-environment-value-set-and-staging-isolation.md) D1–D2).
+
+| Fájl | |
+|---|---|
+| [`backend/app/config.py`](backend/app/config.py) | zárt `env` értékkészlet + alias-normalizálás (`trim().lower()`), ÚJ `_guard_staging` példányosítás-idejű őr (dev `secret_key`, wildcard CORS, dev/üres `diag_token` bekapcsolt diagnosztika mellett, escape-hatch nélküli SQLite), Lab-flagek stagingen alapból `False`, `hide_input_in_errors=True` |
+| [`lib/app/config/app_config.dart`](lib/app/config/app_config.dart) | productionben a `staging` részláncot tartalmazó host **feltétlen** tiltása, a meglévő loopback-tiltás MELLETT |
+| [`lib/app/config/app_environment.dart`](lib/app/config/app_environment.dart) | doc-comment: a staging NEM kliens-környezet + a backend alias-táblája |
+| [`backend/tests/test_settings.py`](backend/tests/test_settings.py) | `TestEnvironmentValueSet`, `TestStagingIsolation`, `TestSecretsNeverLeakIntoErrors` — a meglévő 8 cella változatlan |
+| [`test/app/app_config_test.dart`](test/app/app_config_test.dart) | A5 cellák: production + staging-host elutasítva, ugyanaz `lab`/`development` alatt elfogadva |
+| [`docs/release/environment-matrix.md`](docs/release/environment-matrix.md) (ÚJ) | a négy környezet mátrixa fájl+sor és teszt-hivatkozásokkal |
+
+**A kör legfontosabb tanulsága ([L528](docs/LESSONS.md#l528)):** a szigorítás
+maga nyitott egy titok-szivárgást. Egy **model-szintű** pydantic-validátorból
+dobott hiba `input_value`-ja nem egy mező értéke, hanem a **teljes bemeneti
+settings-szótár** — és a `backend/app/main.py` modul-szintű `create_app()`
+hívása miatt ez uvicorn/gunicorn import-time tracebackként a **boot-logba**
+kerül. Az orchestrátor saját reprodukciója a DB-jelszót szó szerint kiírta.
+A javítás `hide_input_in_errors=True` (az üzenet SZÖVEGE változatlan, tehát
+minden `pytest.raises(..., match=…)` cella zöld maradt), az őr pedig három
+canary-titkos cella, amelyek a javítás eltávolításakor pirosra váltanak.
+A `security-reviewer` ügynök futtatása a `risk = "high"` miatt KÖTELEZŐ volt —
+ez a lelet onnan jött.
+
+**A kör HATÁRAI, amiket nem lépett át:** a `_guard_prod`
+(`backend/app/main.py`) és a `prod` literál fogyasztói tilos zónában maradtak,
+a `backend/tests/test_hardening.py` egyetlen sora sem változott, és az
+`AppEnvironment` enum NEM bővült negyedik értékkel (a staging backend-oldali
+cél, [ADR 0445](docs/adr/0445-environment-value-set-and-staging-isolation.md) D3).
+
+**Review:** [`docs/reviews/e12-r04-review.md`](docs/reviews/e12-r04-review.md) —
+**1 javító kör után APPROVED** (B1 BLOCKER + B2 MAJOR + B3/B4 MINOR zárva,
+2 NOTE nyitva az E12-R07 felé: a `_guard_prod` azonos üres-secret rése és a
+`ValidationError.errors()` strukturált alakja). Exact-SHA evidencia a merge
+SHA-n (`f1bd7ffd`): Full Gate
+[33165886801](https://github.com/wolfcasaba/strumsight/actions/runs/33165886801)
+`success`, Backend CI
+[33165917493](https://github.com/wolfcasaba/strumsight/actions/runs/33165917493)
+`success`, Router CI `success`.
+
+**Folyamati megjegyzés:** a javító kör implementer-futása a `sonnet-impl` motor
+3600 s abszolút időkorlátjába futott bele (`status=timeout`, `scope_audit=ok`)
+a commit ELŐTT, kész kód-munkával. Ez a motor EGY halála (H6 küszöbe kettő),
+ezért az orchestrátor nem indított új futást: a scope-auditált diffet
+átnézte, a falszifikációs próbákat maga futtatta le, és a `8e832a21`
+commitban rögzítette — minden szám a brief §10.5-ben, ténylegesen futtatott
+parancsok kimeneteként.
+
+**NEXT:** `E12-R05` — Feature flag registry és kill switch
+([`docs/rounds/e12-r05-feature-flag-registry-and-kill-switch.md`](docs/rounds/e12-r05-feature-flag-registry-and-kill-switch.md),
+ADR `0446`, motor `sonnet-impl`).
+
 ## ✅ E12-R03 KÉSZ — GitHub delivery workflow, branch protection és review policy — PR [#487](https://github.com/wolfcasaba/strumsight/pull/487), squash `00be433e` (2026-08-28)
 
 **A repó megkapta a backlog-, ownership- és PR-evidence-szabályát — úgy, hogy az
@@ -8668,7 +8729,24 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-28):** `main` @ `355defd9` — E12-R02 SDD index és
+**Aktuális állapot (2026-08-28):** `main` @ `5a971421` — E12-R04 Environment és
+channel konfiguráció lezárása, PR
+[#488](https://github.com/wolfcasaba/strumsight/pull/488), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — a `risk = "high"` miatt
+kötelező `security-reviewer` egy BLOCKER titok-szivárgást talált TELJESEN ZÖLD
+gate mellett (a kör ÚJ, model-szintű pydantic-validátorai a teljes
+settings-szótárat echózták a `ValidationError`-ba, ami a boot-logba kerül), a
+javító kör után APPROVED, 0 nyitott BLOCKER/MAJOR
+([`docs/reviews/e12-r04-review.md`](docs/reviews/e12-r04-review.md)).
+A kör ADR-t **írt**: [`0445`](docs/adr/0445-environment-value-set-and-staging-isolation.md)
+(D1–D5). Exact-SHA evidencia a merge SHA-n (`f1bd7ffd`): Full Gate
+[33165886801](https://github.com/wolfcasaba/strumsight/actions/runs/33165886801)
+`success`, Backend CI
+[33165917493](https://github.com/wolfcasaba/strumsight/actions/runs/33165917493)
+`success`, Router CI `success`.
+
+**Korábbi: `main` @ `355defd9`** — E12-R02 SDD index és
 dependency graph, PR
 [#486](https://github.com/wolfcasaba/strumsight/pull/486), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -9605,7 +9683,18 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E12-R02 — SDD index és dependency graph** (PR
+**E12-R04 — Environment és channel konfiguráció lezárása** (PR
+[#488](https://github.com/wolfcasaba/strumsight/pull/488), squash `5a971421`).
+A backend `STRUMSIGHT_ENV` zárt értékkészletre (`dev | lab | staging | prod`)
+szigorítva, a kliens enum-nevei aliasként normalizálva, ÚJ staging
+példányosítás-idejű fail-closed őr, a production kliens-buildben feltétlen
+staging-host tiltás, és a négy környezet mátrixa. **1 javító kör**, 1 BLOCKER +
+1 MAJOR + 2 MINOR javítva. `risk = "high"`, a `security-reviewer` futtatása
+kötelező volt — a BLOCKER onnan jött. Egy lecke:
+[L528](docs/LESSONS.md#l528) (egy DOBÓ model-szintű pydantic-validátor a TELJES
+settings-szótárat, titkokkal együtt, a hibaüzenetbe echózza).
+
+**Korábbi: E12-R02 — SDD index és dependency graph** (PR
 [#486](https://github.com/wolfcasaba/strumsight/pull/486), squash `355defd9`).
 A 14 fejezet egyetlen, gépileg ellenőrzött indexbe és körmentes
 dependency-manifestbe rendezve: a körszám FORRÁSA mostantól a fejezet-fájl
@@ -10678,13 +10767,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ▶️ **A KÖVETKEZŐ KÖR: `E12-R03` — GitHub delivery workflow, branch protection
-> és review policy** (motor: `sonnet-impl`, előre kiosztott ADR: `0444`, brief:
-> `docs/rounds/e12-r03-…`). A Chapter 12 sáv fut: az E12 36 sorából **2 `done`**
-> (R01, R02), 34 `pending`.
+> ▶️ **A KÖVETKEZŐ KÖR: `E12-R05` — Feature flag registry és kill switch**
+> (motor: `sonnet-impl`, előre kiosztott ADR: `0446`, brief:
+> `docs/rounds/e12-r05-…`). A Chapter 12 sáv fut: az E12 36 sorából **4 `done`**
+> (R01–R04), 32 `pending`.
 >
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-28, E12-R02 zárása
-> után): **259 `done`, 40 `hold`, 18 `prepared`, 34 `pending`**. A `hold` sorok:
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-28, E12-R04 zárása
+> után): **261 `done`, 40 `hold`, 18 `prepared`, 32 `pending`**. A `hold` sorok:
 > **E10 32**, E09 5, E08 1, E99 2 — az **Epic 10 (`E10`) megy utolsóként**, a
 > nyitott `E09` (R28/R29/R31/R32) és `E08` sorok a Ch12 után.
 >
