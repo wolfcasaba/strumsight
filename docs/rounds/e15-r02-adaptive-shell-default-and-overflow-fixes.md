@@ -488,4 +488,95 @@ tools/golden-x86.sh record test/ui/goldens/e13_r18_screens_golden_test.dart test
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Kontextus:** ez a folytató kör a `HANDOFF`-ban leírt négy leletet (F0–F4)
+zárta le a korábbi `sonnet-impl` futás három meglévő commitján (`fb4d3f12`,
+`fc0d13e8`, `bbf8ac90`, `e697c194`) felül. Az F0 (a `test/ui/goldens/failures/`
+untracked bukás-artefaktum a scope-audit VIOLATION oka) már javítva volt a
+munkafa átvételekor; ez a futás nem termelt új `failures/` könyvtárat, a §10
+zárásakor is ellenőrizve.
+
+### 10.1 Valódi-sértés próba (KÖTELEZŐ, §6.1) — A5
+
+1. Kigyűjtöttem az `fc0d13e8` commit `live_screen.dart`-ra eső részét
+   (`git show fc0d13e8 -- lib/features/live/screens/live_screen.dart`),
+   patch-fájlba mentve, és `git apply -R`-rel visszaállítottam a stat-sort a
+   javítás ELŐTTI, rugalmatlan `Row(children: [_ActionButton(...), _ActionButton(...)])`
+   alakra (az `Expanded` csomagolás eltávolítva).
+2. `flutter test test/ui/goldens/e13_r36_variant_matrix_test.dart --reporter compact`
+   → **`+56 -4`**, pontosan a négy landscape+`textScale 2.0` cella bukott:
+   ```
+   00:18 +35 -1: live|light|en|landscape|2.0 [E]
+   00:18 +42 -2: live|light|hu|landscape|2.0 [E]
+   00:19 +49 -3: live|dark|en|landscape|2.0 [E]
+   00:19 +56 -4: live|dark|hu|landscape|2.0 [E]
+   ```
+   A hibaüzenetek konkrét túlcsordulás-értékei megegyeznek a brief §0.0/e
+   mérésével: `unexpected RenderFlex overflow of 12.0px` és
+   `unexpected RenderFlex overflow of 34.0px`. Az összes NEM landscape+2.0
+   cella (188 db) zöld maradt — a hiba pontosan a mérő cellák tárgya, semmi
+   más nem sérült.
+3. `git apply` (patch vissza, forward irányban) visszaállította a javítást;
+   `git status --short` és `git diff --stat lib/features/live/screens/live_screen.dart`
+   üres diffet mutatott (bájtra pontos visszaállás).
+4. Újrafuttatva ugyanaz a teszt: **`+192` — All tests passed!** — mind a 192
+   cella zöld, beleértve a négy korábban bukottat is.
+
+### 10.2 A9 — a két érintett golden `tools/golden-x86.sh record` úton
+
+- **`e13_r18_live_stage_compact{,_scale2}.png`**: az `e697c194` commit
+  (`tools/golden-x86.sh record test/ui/goldens/e13_r18_screens_golden_test.dart`)
+  vette fel x86-on; a PNG-k valóban elmozdultak (6785→5824 és 7024→7105 bájt).
+- **`e13_r16_permission_primer_compact{,_scale2}.png`**: EZEN a körön **MEGMÉRTEM**,
+  elmozdultak-e (F2) — `flutter test test/ui/goldens/e13_r16_screens_golden_test.dart --reporter compact`
+  → **`+10: All tests passed!`**, a `mic-permission primer — compact` és
+  `— compact_scale2` cellák VÁLTOZATLANUL zöldek a meglévő PNG-kkel szemben.
+  **Ok:** a golden teszt a `MicrophonePermissionState.denied` (retryable) ágat
+  rendereli (`test/ui/goldens/e13_r16_screens_golden_test.dart:113-127`), NEM
+  a `permanentlyDenied`/`restricted` — azaz `!deniedFailure.retryable` — ágat,
+  amelyiket a kör ténylegesen javított
+  (`permission_primer_screen.dart:94-107`, a `SingleChildScrollView` csomagolás
+  a nem-görgethető ágra került). A retryable ág MÁR korábban is
+  `SingleChildScrollView`-ba volt csomagolva (`:111-115` a briefben hivatkozva),
+  így ez a golden a javítás előtt és után bájtra ugyanazt a fát renderelte.
+  **Következtetés:** a két PNG nem mozdult el, ÚJRAFELVÉTEL NEM TÖRTÉNT —
+  ez a mérés (nem bemondás) igazolja a §0.0/a előrejelzését.
+
+### 10.3 A10 — a teljes suite
+
+```
+~/flutter/bin/flutter test --reporter compact
+```
+
+Eredmény: **`+8562 -15`** — 15 bukás, mind az öt mért ARM↔x86 raszter-drift
+fájlban (`Pixel test failed`, 0,00–0,75%), a kapu x86 architektúráján zöld
+(ADR 0426, L516). Fájlonkénti bontás:
+
+| Fájl | Bukott cellák | Ok |
+|---|---|---|
+| `test/ui/goldens/e13_r20_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r23_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r32_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r34_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r35_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
+
+Ezen az öt fájlon kívül a TELJES suite (beleértve a §7 gate 34 fájlját, a két
+átfordított golden-fájlt, és minden más `test/**` fájlt) zöld. Drifen kívül
+piros cella NINCS.
+
+### 10.4 Melyik cella mit bizonyít
+
+| Cella | Bizonyíték |
+|---|---|
+| A1 | `test/app/feature_flags_test.dart` új „Adaptive shell feature flag (E15-R02, ADR 0467, A1)" csoport, három cella (`development`/`lab` → `true`, `production` → `false`) — §7 gate zöld |
+| A2 | `adaptive_scaffold_test.dart` — §7 gate zöld |
+| A3 | `legacy_route_redirect_test.dart` — §7 gate zöld |
+| A4 | `tab_state_restoration_test.dart` — §7 gate zöld |
+| A5 | `e13_r36_variant_matrix_test.dart` — §7 gate zöld + §10.1 valódi-sértés próba |
+| A6 | `closure_suite_test.dart` (A4 csoport) — §7 gate zöld |
+| A7 | `docs/ui/legacy-backlog.md` §1 (lezárva a `bbf8ac90` commitban) |
+| A8 | a tizenegy típus-pinnelő őr a §7 gate-ben mind zöld, cella-szám nem csökkent (`git diff` a teszt-fájlokon csak érték-fordítást mutat) |
+| A9 | §10.2 — `e13_r18` újrafelvéve (`golden-x86.sh record`), `e13_r16` mérve és VÁLTOZATLAN |
+| A10 | §10.3 — teljes suite `+8562 -15`, kizárólag az öt mért ARM↔x86 drift-fájl piros |
+| A11 | `test/tooling/feature_flag_audit_test.dart` — a `killSwitchPath` próza-cella zöld (§7 gate [36]) |
+
 ## 11. Review — a Claude tölti ki
