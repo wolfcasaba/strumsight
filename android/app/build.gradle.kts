@@ -69,6 +69,33 @@ if (releaseStoreFile != null &&
     throw GradleException("The configured release signing keystore is missing or empty.")
 }
 
+// ADR 0448 D2: production signing rejects the DEBUG CERTIFICATE, not just a
+// missing configuration — a fully-resolved key.properties or environment
+// that happens to point at the debug keystore/alias must fail loudly, not
+// silently produce a "release" artifact indistinguishable from a debug
+// build. Gated on releaseSigningRequired so the Lab/dev build (no
+// production signing env, ADR 0448 D3) is completely unaffected.
+val defaultDebugKeystorePath =
+    File(System.getProperty("user.home"), ".android/debug.keystore").absolutePath
+if (releaseSigningRequired && releaseSigningValues != null && releaseStoreFile != null) {
+    val storeFileName = releaseStoreFile.name
+    val storeFileAbsolutePath = releaseStoreFile.absolutePath
+    if (storeFileName.equals("debug.keystore", ignoreCase = true) ||
+        storeFileAbsolutePath.equals(defaultDebugKeystorePath, ignoreCase = true)
+    ) {
+        throw GradleException(
+            "Production release signing must not use the debug keystore: " +
+                storeFileAbsolutePath,
+        )
+    }
+    val keyAlias = releaseSigningValues.getValue("keyAlias")
+    if (keyAlias.equals("androiddebugkey", ignoreCase = true)) {
+        throw GradleException(
+            "Production release signing must not use the debug key alias: $keyAlias",
+        )
+    }
+}
+
 android {
     namespace = "com.wolfcasaba.strumsight"
     compileSdk = flutter.compileSdkVersion
@@ -108,7 +135,20 @@ android {
         release {
             // Local development remains zero-config; the production workflow
             // supplies complete signing values and requires release signing.
-            signingConfig = if (releaseSigningValues == null) {
+            val fallsBackToDebugConfig = releaseSigningValues == null
+            if (releaseSigningRequired && fallsBackToDebugConfig) {
+                // Second, independent guard (ADR 0448 D2): unreachable today
+                // because releaseSigningRequired with no releaseSigningValues
+                // already threw above, but keeps the release buildType from
+                // ever silently resolving to the debug signing config while
+                // production signing is required, even if that earlier check
+                // is ever refactored away.
+                throw GradleException(
+                    "Production release signing must not fall back to the " +
+                        "debug signing config.",
+                )
+            }
+            signingConfig = if (fallsBackToDebugConfig) {
                 signingConfigs.getByName("debug")
             } else {
                 signingConfigs.getByName("release")
