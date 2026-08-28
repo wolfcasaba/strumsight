@@ -1,0 +1,151 @@
+# SDD chapter dependency graph — machine-checked source of truth.
+#
+# ADR 0443 D3: `package:yaml` is NOT used to read this file (it is only a
+# transitive dependency in pubspec.lock, and `depend_on_referenced_packages`
+# would turn `flutter analyze` red on a direct import — see ADR 0443 §D3).
+# This file is therefore a DELIBERATELY RESTRICTED YAML SUBSET, read by
+# `tool/check_sdd_index.dart` with its own line-based parser. Only the
+# following constructs are supported:
+#
+#   - exactly two top-level keys, in this order: `nodes:` then `edges:`
+#   - list items introduced by a line that is exactly two spaces of
+#     indentation followed by `- id: <chNN>` (nodes) or `- from: <chNN>`
+#     (edges)
+#   - scalar `key: value` pairs indented exactly four spaces, one per line,
+#     immediately under the list item that introduces them
+#   - node keys: `id` (required, first), `title` (quoted string),
+#     `critical_path` (`true`/`false`), `capability_gated` (`true`/`false`)
+#   - edge keys: `from` (required, first), `to` (required)
+#
+# Anything else — block scalars, flow collections (`[a, b]`, `{a: b}`),
+# anchors/aliases, multi-line strings, comments after a value on the same
+# line — is UNSUPPORTED. The parser reports the offending line number and
+# the construct it expected when it encounters a shape it cannot read.
+#
+# Edge direction: `from -> to` means the chapter `to` depends on the chapter
+# `from` (i.e. `from` must be complete, or at least contract-stable, before
+# `to` can proceed) — the same direction as the arrows in the `00-index.md`
+# "Függőségi kép" ASCII illustration, which this file supersedes as the
+# checked source (ADR 0443 D2). That illustration remains in `00-index.md`
+# purely as a human-readable rendering; it is not re-verified against this
+# file in this round.
+
+nodes:
+  - id: ch01
+    title: "Architecture & Engineering Principles"
+    critical_path: true
+    capability_gated: false
+  - id: ch02
+    title: "Epic 1: Core Platform & Infrastructure"
+    critical_path: true
+    capability_gated: false
+  - id: ch03
+    title: "Epic 2: Practice Engine"
+    critical_path: true
+    capability_gated: false
+  - id: ch04
+    title: "Epic 3: Song Trainer"
+    critical_path: false
+    capability_gated: false
+  - id: ch05
+    title: "Epic 4: AI Guitar Teacher"
+    critical_path: false
+    capability_gated: true
+  - id: ch06
+    title: "Epic 5: Computer Vision"
+    critical_path: false
+    capability_gated: true
+  - id: ch07
+    title: "Epic 6: Audio Analysis 2.0"
+    critical_path: true
+    capability_gated: false
+  - id: ch08
+    title: "Epic 7: AI Practice Generator"
+    critical_path: false
+    capability_gated: false
+  - id: ch09
+    title: "Epic 8: Gamification"
+    critical_path: false
+    capability_gated: false
+  - id: ch10
+    title: "Epic 9: Community Platform"
+    critical_path: false
+    capability_gated: true
+  - id: ch11
+    title: "Epic 10: Offline AI"
+    critical_path: false
+    capability_gated: true
+  - id: ch12
+    title: "Release Roadmap, Sprint Planning & Final Integration"
+    critical_path: true
+    capability_gated: false
+  - id: ch13
+    title: "UI/UX Design System & Screen Specification"
+    critical_path: false
+    capability_gated: false
+  - id: ch14
+    title: "Recognition Accuracy & Useful UI Recovery"
+    critical_path: false
+    capability_gated: true
+
+edges:
+  - from: ch01
+    to: ch02
+  - from: ch02
+    to: ch03
+  - from: ch02
+    to: ch06
+  - from: ch02
+    to: ch07
+  - from: ch02
+    to: ch10
+  - from: ch02
+    to: ch11
+  - from: ch03
+    to: ch04
+  - from: ch03
+    to: ch08
+  - from: ch03
+    to: ch09
+  - from: ch07
+    to: ch04
+  - from: ch07
+    to: ch05
+  - from: ch07
+    to: ch08
+  - from: ch07
+    to: ch14
+  - from: ch05
+    to: ch11
+  - from: ch08
+    to: ch09
+  - from: ch09
+    to: ch10
+  - from: ch13
+    to: ch14
+  - from: ch01
+    to: ch12
+  - from: ch02
+    to: ch12
+  - from: ch03
+    to: ch12
+  - from: ch04
+    to: ch12
+  - from: ch05
+    to: ch12
+  - from: ch06
+    to: ch12
+  - from: ch07
+    to: ch12
+  - from: ch08
+    to: ch12
+  - from: ch09
+    to: ch12
+  - from: ch10
+    to: ch12
+  - from: ch11
+    to: ch12
+  - from: ch01
+    to: ch13
+  - from: ch12
+    to: ch13
