@@ -532,6 +532,69 @@ edges:
     },
   );
 
+  group('F1 (e12-r02 review) — the real chapter table has no GFM cell-count '
+      'drift', () {
+    // parseChapterTable's tolerance (A8) inserts a missing "Zárójelentés"
+    // cell at its NAMED column position — but a real GFM/CommonMark
+    // renderer appends missing cells at the ROW END instead. As long as
+    // "Zárójelentés" was the table's last column the two interpretations
+    // coincided; once trailing columns ("Státusz" / "Implementation
+    // progress" / "Dependency") were added, a short row silently shifts
+    // every later column in the RENDERED table while the checker still
+    // reads it correctly — the checker and every human reader then see a
+    // different table from the same file. This guard reads the real file
+    // with its own GFM-faithful cell count (not parseChapterTable's
+    // by-name insertion) and fails if any data row's cell count doesn't
+    // match the header, independently of whatever tolerance
+    // parseChapterTable applies.
+    List<String> splitRowGfm(String line) {
+      var trimmed = line.trim();
+      if (trimmed.startsWith('|')) trimmed = trimmed.substring(1);
+      if (trimmed.endsWith('|')) {
+        trimmed = trimmed.substring(0, trimmed.length - 1);
+      }
+      return trimmed.split('|');
+    }
+
+    test('every data row in docs/sdd/00-index.md has the same cell count as '
+        'the table header', () {
+      final lines = File('docs/sdd/00-index.md').readAsStringSync().split('\n');
+      final headerLineIndex = lines.indexWhere(
+        (line) => RegExp(r'^\s*\|\s*Chapter\s*\|').hasMatch(line),
+      );
+      expect(
+        headerLineIndex,
+        greaterThanOrEqualTo(0),
+        reason: 'no chapter table header found',
+      );
+
+      final headerCellCount = splitRowGfm(lines[headerLineIndex]).length;
+
+      final mismatches = <String>[];
+      for (var i = headerLineIndex + 2; i < lines.length; i++) {
+        final line = lines[i];
+        if (!line.trim().startsWith('|')) break;
+        final cellCount = splitRowGfm(line).length;
+        if (cellCount != headerCellCount) {
+          mismatches.add(
+            'line ${i + 1}: $cellCount cell(s), expected '
+            '$headerCellCount: "$line"',
+          );
+        }
+      }
+
+      expect(
+        mismatches,
+        isEmpty,
+        reason:
+            'a GFM renderer places missing cells at the ROW END, not '
+            'at the "Zárójelentés" column by name — a short row '
+            'shifts every later column in the rendered table '
+            '(e12-r02 review F1):\n${mismatches.join('\n')}',
+      );
+    });
+  });
+
   group('checkSddIndexAtRoot — A7 (the real, checked-in docs/sdd/ tree)', () {
     test('the real index and dependency graph are clean', () {
       final report = checkSddIndexAtRoot(projectRoot: Directory.current);

@@ -494,4 +494,91 @@ flow-collection).
   hogy a checker bármelyik acceptance cellája pirosra váltana (csak a mezők
   KÖTELEZŐ jelenlétét kényszeríti ki A6 alatt).
 
+### 10.6 Javító kör (a `docs/reviews/e12-r02-review.md` F1/F2 leletei)
+
+**F1a — a valódi tábla rendbetétele.** A 14 sorból 9-en (Chapter 5, 6, 8, 9,
+10, 11, 12, 13, 14) explicit `—` cellát kaptak a `Zárójelentés` oszlopba,
+pontosan úgy, ahogy a Chapter 1 sora ezt már a pre-flight óta teszi. A
+Chapter 12 sorában ez azt jelentette, hogy a `folyamatban (10 nyitott
+blocker…)` szöveg — ami korábban tévesen a `Zárójelentés` HELYÉRE csúszott —
+most a helyes `Státusz` cellába kerül, a `—` pedig a `Zárójelentés`-be. A
+`parseChapterTable` toleranciáját (a `header.length - 1` ág) NEM távolítottam
+el — az továbbra is a régi, 5/6-cellás alakú sorokra védőháló, csak a valódi
+fájlban most már egyik sor sem használja ki.
+
+**F1b — gépi őr a valódi fájlra.** Új teszt-csoport
+(`test/tooling/sdd_index_guard_test.dart`, „F1 (e12-r02 review) — the real
+chapter table has no GFM cell-count drift"): saját, a `parseChapterTable`
+NÉV-szerinti beszúrásától FÜGGETLEN GFM-hű cellaszámlálóval olvassa be a
+valódi `docs/sdd/00-index.md`-t, és pirosra vált, ha bármely adatsor
+cellaszáma eltér a fejlécétől.
+
+Valódi-sértés próba (KÖTELEZŐ, ténylegesen lefuttatva — nem a régi Chapter 12
+próba megismétlése, hanem az ÚJ F1b cellára):
+
+```
+$ (docs/sdd/00-index.md Chapter 5 sorából ideiglenesen kivettem az
+   újonnan beírt "—" Zárójelentés-cellát, visszaállítva az eredeti,
+   8-cellás alakra)
+$ tools/round-gate.sh test/tooling/sdd_index_guard_test.dart
+...
+00:00 +32 -1: F1 (e12-r02 review) — the real chapter table has no GFM cell-count drift every data row in docs/sdd/00-index.md has the same cell count as the table header [E]
+  Expected: empty
+    Actual: [
+              'line 19: 8 cell(s), expected 9: "| 5 | Epic 4: AI Guitar Teacher | 24 | Chapter 2; Chapter 3 és 7 evidenciakontraktusai | [`05-epic-04-ai-guitar-teacher.md`](05-epic-04-ai-guitar-teacher.md) | specifikálva | nincs önálló mérés ebben a körben | ch07 |"'
+            ]
+    → [3] test test/tooling/sdd_index_guard_test.dart: PIROS (kilépési kód 1)
+Exit code 10 (round-gate.sh, code_failure)
+```
+
+A cella a várt módon PIROSRA váltott, a hibás sort és a pontos cellaszám-
+eltérést névvel (`line 19: 8 cell(s), expected 9`) megnevezve. Ezután a `—`
+cellát visszaírtam (`diff` az eredeti, javított fájllal: nincs eltérés), és a
+gate újra lefutott — lásd alább.
+
+A záró gate a visszaállítás UTÁN (§7, szó szerint, csővezeték/csonkítás
+nélkül):
+
+```
+$ tools/round-gate.sh test/tooling/sdd_index_guard_test.dart
+═══ [1] format  → ZÖLD
+═══ [2] analyze → ZÖLD (Analyzing 3 items... No issues found!)
+═══ [3] test test/tooling/sdd_index_guard_test.dart → ZÖLD (00:00 +36: All tests passed!)
+═══ [4] architecture → ZÖLD (Architecture dependencies OK (12 allowlisted deviation(s)).)
+═══ [5] secrets → ZÖLD (Secret scan OK (3932 file(s) scanned, 0 finding(s)).)
+═══ [6] l10n → ZÖLD (L10n aggregate freshness OK; L10n parity OK (en → hu, 2289 message(s)).)
+Gate-összegzés: format zöld · analyze zöld · test … zöld · architecture zöld · secrets zöld · l10n zöld
+MINDEN GATE ZÖLD.
+```
+
+```
+$ dart run tool/check_sdd_index.dart
+SDD index OK (0 issue(s)).
+```
+
+Egy Python-szimulációval (GFM-hű pipe-splitter, a repóba nem került be) is
+megerősítettem, hogy a javított táblán mind a 14 sor 0 eltéréssel
+renderelődik, és a `Zárójelentés` / `Státusz` / `Dependency` cellák a
+szándékolt tartalmat hordozzák (pl. Chapter 12: `Zárójelentés='—'`,
+`Státusz='folyamatban (10 nyitott blocke…'`, `Dependency='ch01–ch11'`).
+
+**F2 — a `Dependency` oszlop illusztráció, nem szerződés.** A (b) utat
+választottam (olcsóbb, nem hizlalja a diffet): a `00-index.md` jegyzet-
+blokkjába új bekezdés került, ami kimondja, hogy a `Dependency` oszlop — az
+ASCII-ábrához hasonlóan — ember-olvasó illusztráció, az EGYETLEN géppel
+ellenőrzött forrás a `dependency-graph.yaml` `edges:` blokkja, és hogy a
+checker ma nem veti össze a kettőt (a Chapter 12 sor eltérő jelölése —
+`ch01–ch11` tartomány a többi sor vesszős felsorolásához képest — miatt ma
+nem is lenne egyenesen összevethető). A checker kódja és a `Dependency` cella
+tartalma nem változott.
+
+**F3 / F4 (NOTE) — nem nyúltam hozzájuk**, a review kifejezett utasítása
+szerint.
+
+**Scope.** Ugyanaz az öt fájl, mint az eredeti körben:
+`docs/sdd/00-index.md`, `docs/sdd/dependency-graph.yaml` (változatlan ebben a
+javító körben), `tool/check_sdd_index.dart` (változatlan), `test/tooling/
+sdd_index_guard_test.dart`, `docs/rounds/e12-r02-sdd-index-and-dependency-
+graph.md`.
+
 ## 11. Review — a Claude tölti ki
