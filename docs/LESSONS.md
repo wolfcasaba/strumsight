@@ -21015,3 +21015,41 @@ irányban őrzi: a lista szűkülése (a H3 visszatérése) és a könyvtár-szi
 blanket-tágítás egyaránt pirosra váltja. A mért hatósugár PREMISSZÁIT
 (`appConfigProvider` default, a flag → belépési pont csatolás) külön cellák
 pinnelik, hogy a lista ne némán avuljon el.
+
+## L535 — A szöveges „ki termeli ezt a típust" detektálás a Dart 3 objektum-mintát KONSTRUKTOR-HÍVÁSNAK látja: a `TypeName(` alsztring a kimerítő `switch` ágán is illeszkedik (E12-R09, 2026-08-28)
+
+**Mit mértünk.** Az E12-R09 katalógusa egy MÉRT hiányt is állít: a
+`TutorActivityEvent`-nek nincs termelője a fán (a tutor adapter szándékosan
+`PracticeActivityEvent`-ként jutalmaz, ADR 0289). Az ezt őrző **A8** cella első
+változata `source.contains('TutorActivityEvent(')`-tel kereste a termelőt, és
+azonnal HAMIS POZITÍVOT adott: az
+`achievement_evaluator.dart:638` kimerítő `switch`-ének Dart 3 objektum-mintája
+
+```dart
+TutorActivityEvent() => AchievementEventKind.tutor,
+```
+
+szintaktikailag tartalmazza ugyanazt az alsztringet, holott nem konstruál
+semmit. A javítás egyetlen megkülönböztetésen áll: a nyitó zárójel utáni első
+nem-whitespace karakter — ha az rögtön `)`, az minta, nem hívás.
+
+**Miért nem elég a „majd figyelünk rá".** Ez a hibaosztály mindkét irányban
+hazudik: (a) hamis pozitívként egy IGAZ hiány-állítást váltana pirosra
+(a mérce zaja miatt a következő kör kiveszi a cellát), (b) egy naiv
+„létezik-e a fájl" ellenőrzés viszont hamis NEGATÍV: egy létező, de az adott
+eseményt nem termelő fájl is átmegy rajta. A katalógus-cellának ezért a fájl
+LÉTEZÉSÉT ÉS a konstruktor-hívás jelenlétét is mérnie kell.
+
+**Amit ebből átviszünk.** Ha egy dokumentum-cella kód-hivatkozást állít,
+a mérce két különböző módon tud némán elromlani, és a review-nak MINDKETTŐT
+próbatesztelnie kell: írj át egy hivatkozást létező-de-rossz fájlra (a hamis
+negatív próbája), és hozz létre egy valódi ellenpéldát a fán (a hiány-állítás
+próbája). Az E12-R09 review-ja pontosan ezt tette (P1/P2), és a cellák a várt
+módon pirosra váltottak.
+
+**Őrteszt:** `test/core/events/event_schema_compatibility_test.dart` —
+`A5: every producer reference is an existing file that constructs that row's event type`
+(a hamis negatív ága) és
+`A8: the tutor row claims no producer, and that claim is true on the measured lib/ tree`
+(a hiány-állítás ága); a `_containsConstructorCall` segédfüggvény hordozza a
+minta↔hívás megkülönböztetést.
