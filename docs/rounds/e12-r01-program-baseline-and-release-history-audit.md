@@ -266,4 +266,97 @@ CI-dispatch, PR és merge kizárólag orchesztrátor-oldal — az implementer `g
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Kész.** A három dokumentum elkészült a §4 engedélyezett listája szerint,
+kódváltoztatás nélkül. Mérés SHA-ja mindhárom fejlécében: `main @ 92576977`.
+
+### Mit mértem, és mit fedeztem fel a §2/§0.0.A-n felül
+
+A §0.0.A minden száma reprodukálódott ebben a munkapéldányban (`1.0.0+1`, 10
+workflow, `release-apk.yml` 174 sor, 21 migráció a `*.py` globgal, ADR-max
+`0426`, `docs/release` hiánya, a gate-teszt jelenléte). A `*.py`-mentes
+`ls backend/alembic/versions/ | wc -l` **ebben a friss munkapéldányban 21-et**
+adott, NEM 22-t (nincs `__pycache__`, mert még nem futott itt `pytest`) — ezt
+`program-baseline.md` §5 külön dokumentálja, hangsúlyozva, hogy a kanonikus
+mérő ettől függetlenül a `*.py` glob.
+
+Új, a briefben nem szereplő tényeket is mértem és bizonyítékkal
+dokumentáltam: a `docs/governance/04-release-checklist.md` mind a 30 sora
+pipálatlan (`program-baseline.md` §8); nincs `android/key.properties` ebben a
+munkapéldányban (§4); a `docs/execution/pipeline-queue.tsv` teljes Chapter 12
+sávja (36 sor, `E12-R01`…`E12-R36`) mind `pending` (§7); nincs store-metaadat
+vagy `.aab` a repóban (`release-history-audit.md` §5). Ezekből építettem a
+`blockers.md` 10 sorát, mindegyiket egy konkrét, `pending` Chapter 12
+owner-körhöz kötve.
+
+Egy saját hibámat a munka közben találtam meg és javítottam: a
+`docs/governance/04-release-checklist.md` pipálatlan sorainak számát elsőre
+becsültem (`24`), majd a `grep -c '\[ \]'` tényleges lefuttatásával `30`-ra
+javítottam — ez pontosan az A7 kritérium által tiltott hibaosztály, amit a
+saját dokumentumomban időben elkaptam (lásd alább, „A7 önellenőrzés").
+
+### A7 önellenőrzés — minden idézett parancsot ténylegesen lefuttattam
+
+A három dokumentumban szereplő ~35 db `<parancs> kimenete` alakú állítás
+mindegyikét egyenként lefuttattam és a doksiban szereplő számmal
+összevetettem (lásd a kör session-transzkriptjét): `pubspec.yaml` grep-ek,
+`.github/workflows/` listázás és soronkénti `wc -l`, `release-apk.yml` és
+`build.gradle.kts` konkrét sor-tartományainak `sed -n` kiolvasása, a
+migráció-glob és a `0019` duplikáció listája, az ADR-tartomány grep-jei, a
+`pipeline-queue.tsv` sorai, a governance checklist `[ ]`/`[x]` számlálása, a
+`git tag`/`git log` parancsok. A GitHub Releases-táblázatot (26 sor) **nem
+futtattam újra** — az implementer nem hív `gh`-t (brief §7) —, ezt a
+`release-history-audit.md` fejléce és §1/§3 külön, explicit módon jelöli;
+a helyi, `gh`-t nem igénylő tag-adatokat (27 tag, `build-81` benne van)
+viszont igen, és kereszt-ellenőriztem velük a pre-flight delta-állítását
+(§2).
+
+### Falszifikációs próba (KÖTELEZŐ, §6.1)
+
+Két próbát futtattam, mindkettőt visszaállítottam utána (`diff -q` a
+mentett másolattal → azonos):
+
+1. **A4 (blockers.md)** — kivettem az `R-SIGN-01` sor Owner-mezőjét
+   (`[E12-R07](../rounds/e12-r07-...)` → üres cella). Hatás: a sor Owner
+   nélkül bizonyíthatatlan (nincs konkrét kör, ami zárná) — **A4 PIROS
+   lett volna**. Mellékhatás: a §7 link-számláló `19`-ről `18`-ra esett
+   (eggyel kevesebb `](...)`-link). Visszaállítva: `cp
+   /tmp/blockers.md.bak docs/release/blockers.md`, `diff -q` egyezett.
+2. **A1 (program-baseline.md)** — töröltem a fejléc `**Mérés SHA-ja:** ...`
+   sorát (`sed -i '3d'`). Hatás: a dokumentumban nincs `main @ <sha>` —
+   **A1 PIROS lett volna** (§5.2 tiltott gyengítése: „aktuális állapot"
+   SHA nélkül). Visszaállítva: `cp /tmp/program-baseline.md.bak
+   docs/release/program-baseline.md`, `diff -q` egyezett.
+
+### Gate
+
+```
+tools/round-gate.sh test/app/config/feature_flags_test.dart
+```
+
+Csonkítás nélküli kimenet — mind a 6 lépés ZÖLD: `format`, `analyze`,
+`test test/app/config/feature_flags_test.dart` (12/12 teszt PASS),
+`architecture`, `secrets`, `l10n`. Összegzés: „MINDEN GATE ZÖLD."
+
+### Link-ellenőrzés (§7)
+
+```
+grep -oE '\]\([^)]+\.md[^)]*\)' docs/release/program-baseline.md docs/release/release-history-audit.md docs/release/blockers.md
+```
+
+19 db `](*.md)` hivatkozás, mindegyiket egyenként ellenőriztem
+(`dirname`+relatív útvonal feloldás) — mind a 19 létező fájlra mutat: a
+három `docs/release/*.md` egymásra hivatkozása, `../governance/
+04-release-checklist.md`, és 9 db `../rounds/e12-r*.md` owner-kör brief.
+
+### Scope (A5)
+
+`git diff --stat origin/main...HEAD` (ez a munkapéldány nem tart lokális
+`main` ágat, csak `origin/main`-t) a jelen kör commitja előtt kizárólag a
+pre-flight `docs/rounds/e12-r01-...md` módosítását mutatta (1 fájl, a §0.0.A
+brief-revízió — ezt az orchestrátor commitolta a kör indítása előtt). A jelen
+kör saját commitja a §4 négy engedélyezett fájlját érinti: a három ÚJ
+`docs/release/*.md` és ennek a §10-nek a kitöltése — `lib/`, `backend/`,
+`android/`, `.github/`, `docs/adr/`, `tools/`, `pubspec.yaml` egyike sem
+módosult.
+
 ## 11. Review — a Claude tölti ki
