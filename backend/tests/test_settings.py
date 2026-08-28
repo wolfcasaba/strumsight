@@ -1,4 +1,19 @@
-"""Settings profile: defaults, partial update, null-locale, validation, auth."""
+"""Settings profile: defaults, partial update, null-locale, validation, auth.
+
+Also covers `Settings.env` itself (ADR 0445, E12-R04 §0.0 R3): the closed
+`dev | lab | staging | prod` value set with client-alias normalization
+(`TestEnvironmentValueSet`) and the staging instantiation-time fail-closed
+guard (`TestStagingIsolation`). The production guard
+(`main.py::_guard_prod`, fired from `create_app()`) is out of scope here —
+its regression coverage lives in `test_hardening.py::TestProdBootGuards`,
+which this round does not edit.
+"""
+
+import pytest
+from pydantic import ValidationError
+
+from app.config import Settings
+from app.main import create_app
 
 
 def test_settings_default_on_new_user(client, auth_headers):
@@ -103,3 +118,126 @@ def test_settings_are_per_user(client):
         "/settings", headers={"Authorization": f"Bearer {b}"}
     ).json()
     assert b_settings["tuning_a4"] == 440
+
+
+class TestEnvironmentValueSet:
+    """`Settings.env` closed value set + client-alias normalization
+    (ADR 0445 D1-D2, E12-R04 acceptance A1/A1b/A2/A3)."""
+
+    @pytest.mark.parametrize("raw", ["prod uction", "qa", "PRODUCTION!"])
+    def test_unknown_value_refuses_to_instantiate(self, raw):
+        with pytest.raises(ValidationError, match="not a recognized environment"):
+            Settings(env=raw)
+
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ("", "dev"),
+            ("  ", "dev"),
+            ("development", "dev"),
+            ("DEV", "dev"),
+            ("production", "prod"),
+            ("PROD ", "prod"),
+            ("lab", "lab"),
+        ],
+    )
+    def test_aliases_normalize_to_canonical_values(self, raw, expected):
+        # "staging" is deliberately excluded here: it also instantiation-time
+        # guards on repo-default secrets (D4), so its normalization is
+        # covered together with that guard in
+        # TestStagingIsolation::test_real_secrets_instantiate_cleanly_with_lab_flags_off_by_default.
+        assert Settings(env=raw).env == expected
+
+    def test_staging_alias_normalizes_with_real_secrets(self):
+        assert (
+            Settings(
+                env="STAGING ",
+                secret_key="fake-staging-secret-not-the-dev-default",
+                cors_origins=["https://staging.strumsight.app"],
+                allow_sqlite_in_prod=True,
+            ).env
+            == "staging"
+        )
+
+    def test_missing_value_defaults_to_dev(self):
+        assert Settings().env == "dev"
+
+    def test_prod_with_dev_secret_instantiates_but_create_app_still_refuses_to_boot(
+        self,
+    ):
+        """Regression guard (E12-R04 §0.0 R2): the production secret check
+        stays in `main.py::_guard_prod`, fired from `create_app()` — it must
+        NOT move to `Settings` instantiation, or the existing
+        `test_hardening.py::TestProdBootGuards` cells that instantiate
+        `Settings(env="prod", ...)` with a dev secret before asserting on
+        `create_app()` would break."""
+        settings = Settings(env="prod", cors_origins=["https://app.strumsight.app"])
+        assert settings.env == "prod"
+        with pytest.raises(RuntimeError, match="secret"):
+            create_app(settings)
+
+    def test_production_alias_gets_the_same_production_guard_as_prod(self):
+        settings = Settings(
+            env="production",
+            secret_key="fake-production-secret-not-the-dev-default",
+            cors_origins=["https://app.strumsight.app"],
+            diagnostics_enabled=True,
+        )
+        assert settings.env == "prod"
+        with pytest.raises(RuntimeError, match="diagnostics token"):
+            create_app(settings)
+
+
+class TestStagingIsolation:
+    """Staging instantiation-time fail-closed guard (ADR 0445 D4, E12-R04
+    acceptance A4). Unlike production, an insecure staging config never
+    reaches `create_app()` — `Settings(...)` itself refuses."""
+
+    _REAL_SECRET = "fake-staging-secret-not-the-dev-default"
+    _REAL_CORS = ["https://staging.strumsight.app"]
+
+    def test_dev_secret_key_refuses_to_instantiate(self):
+        with pytest.raises(ValidationError, match="secret"):
+            Settings(
+                env="staging",
+                cors_origins=self._REAL_CORS,
+                allow_sqlite_in_prod=True,
+            )
+
+    def test_wildcard_cors_refuses_to_instantiate(self):
+        with pytest.raises(ValidationError, match="CORS"):
+            Settings(
+                env="staging",
+                secret_key=self._REAL_SECRET,
+                allow_sqlite_in_prod=True,
+            )
+
+    def test_dev_diag_token_with_diagnostics_enabled_refuses_to_instantiate(self):
+        with pytest.raises(ValidationError, match="diagnostics token"):
+            Settings(
+                env="staging",
+                secret_key=self._REAL_SECRET,
+                cors_origins=self._REAL_CORS,
+                allow_sqlite_in_prod=True,
+                diagnostics_enabled=True,
+            )
+
+    def test_sqlite_without_escape_hatch_refuses_to_instantiate(self, monkeypatch):
+        monkeypatch.delenv("STRUMSIGHT_ALLOW_SQLITE", raising=False)
+        with pytest.raises(ValidationError, match="SQLite"):
+            Settings(
+                env="staging",
+                secret_key=self._REAL_SECRET,
+                cors_origins=self._REAL_CORS,
+            )
+
+    def test_real_secrets_instantiate_cleanly_with_lab_flags_off_by_default(self):
+        settings = Settings(
+            env="staging",
+            secret_key=self._REAL_SECRET,
+            cors_origins=self._REAL_CORS,
+            allow_sqlite_in_prod=True,
+        )
+        assert settings.env == "staging"
+        assert settings.diagnostics_enabled is False
+        assert settings.apk_download_enabled is False

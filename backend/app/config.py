@@ -13,6 +13,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _DEFAULT_DIAGNOSTICS_DIR = str(Path(__file__).resolve().parents[1] / "diagnostics_data")
 BCRYPT_MAX_PASSWORD_BYTES = 72
 
+# Closed environment value set (ADR 0445 D1). The client's enum names
+# (`development`, `production`) are ALIASES normalized at instantiation —
+# the canonical `prod` literal stays because its consumers (`main.py`,
+# `community/__init__.py`) are outside this round's scope (ADR 0445 D2).
+_CANONICAL_ENVIRONMENTS = frozenset({"dev", "lab", "staging", "prod"})
+_ENVIRONMENT_ALIASES = {"development": "dev", "production": "prod"}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -22,8 +29,12 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    # "dev" boots with zero setup; "prod" refuses to boot on insecure
-    # defaults (round 120) — set STRUMSIGHT_ENV=prod on any public deploy.
+    # Closed value set: dev | lab | staging | prod (ADR 0445 D1). "dev" boots
+    # with zero setup; "staging" refuses insecure repo-default secrets at
+    # instantiation (`_guard_staging` below); "prod" refuses to boot on
+    # insecure defaults (round 120, `main.py::_guard_prod`) — set
+    # STRUMSIGHT_ENV=prod on any public deploy. An unrecognized value is a
+    # ValidationError, not a silent fallback to "dev".
     env: str = "dev"
 
     # SECURITY: override in production. A fixed dev key keeps tokens stable
@@ -105,14 +116,61 @@ class Settings(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def _default_lab_flags_for_environment(cls, values):
+    def _normalize_environment_and_default_lab_flags(cls, values):
         if not isinstance(values, dict):
             return values
         resolved = dict(values)
-        default_enabled = resolved.get("env", "dev") != "prod"
+        raw_env = resolved.get("env", "dev")
+        normalized = "dev" if raw_env is None else str(raw_env).strip().lower()
+        if not normalized:
+            normalized = "dev"
+        normalized = _ENVIRONMENT_ALIASES.get(normalized, normalized)
+        if normalized not in _CANONICAL_ENVIRONMENTS:
+            raise ValueError(
+                f"STRUMSIGHT_ENV={raw_env!r} is not a recognized environment "
+                f"(expected one of {sorted(_CANONICAL_ENVIRONMENTS)}, or the "
+                "aliases development/production)."
+            )
+        resolved["env"] = normalized
+        # Lab services (diagnostics, APK download) default on everywhere
+        # except the two deploy targets that must ship dark by default.
+        default_enabled = normalized not in ("prod", "staging")
         resolved.setdefault("diagnostics_enabled", default_enabled)
         resolved.setdefault("apk_download_enabled", default_enabled)
         return resolved
+
+    @model_validator(mode="after")
+    def _guard_staging(self) -> "Settings":
+        """Staging fail-closed guard (ADR 0445 D4) — instantiation-time,
+        unlike the production guard which lives in `main.py::_guard_prod`
+        and fires at `create_app()` (tilos zóna, kör E12-R04 §0.0 R2)."""
+        if self.env != "staging":
+            return self
+        dev_secret = type(self).model_fields["secret_key"].default
+        dev_diag_token = type(self).model_fields["diag_token"].default
+        if self.secret_key == dev_secret:
+            raise ValueError(
+                "STRUMSIGHT_ENV=staging requires a real secret key — "
+                "set STRUMSIGHT_SECRET_KEY."
+            )
+        if "*" in self.cors_origins:
+            raise ValueError(
+                "STRUMSIGHT_ENV=staging requires explicit CORS origins — "
+                "set STRUMSIGHT_CORS_ORIGINS (wildcard refused)."
+            )
+        if self.diagnostics_enabled and (
+            not self.diag_token.strip() or self.diag_token == dev_diag_token
+        ):
+            raise ValueError(
+                "STRUMSIGHT_ENV=staging diagnostics requires a non-empty, "
+                "non-development diagnostics token."
+            )
+        if self.database_url.startswith("sqlite") and not self.allow_sqlite_in_prod:
+            raise ValueError(
+                "SQLite on staging requires the explicit "
+                "STRUMSIGHT_ALLOW_SQLITE=true escape hatch."
+            )
+        return self
 
 
 @lru_cache

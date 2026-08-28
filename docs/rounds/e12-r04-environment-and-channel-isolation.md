@@ -382,4 +382,100 @@ A brief §8 a TERVED — nincs külön task-lista.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-28.
+
+### 10.1 Mit implementáltam
+
+- `backend/app/config.py`: a `_default_lab_flags_for_environment`
+  `mode="before"` model-validator átnevezve
+  `_normalize_environment_and_default_lab_flags`-re, kiegészítve a zárt
+  `dev | lab | staging | prod` értékkészlet-kényszerrel és a
+  `development`→`dev` / `production`→`prod` alias-normalizálással
+  (`trim().lower()` után; hiányzó/üres → `dev`; ismeretlen → `ValueError`,
+  amit pydantic `ValidationError`-rá csomagol). A Lab-flagek
+  (`diagnostics_enabled`, `apk_download_enabled`) alapértelmezése ugyanitt
+  bővült: `False`, ha `env in ("prod", "staging")`.
+- `backend/app/config.py`: új `_guard_staging` `mode="after"` model-validator
+  — kizárólag `env == "staging"` esetén fut, a dev `secret_key`, a wildcard
+  CORS, a bekapcsolt diagnosztika melletti dev/üres `diag_token` és az
+  escape-hatch nélküli SQLite ellen, ugyanazokat a dev-alapértelmezéseket
+  olvasva a `Settings.model_fields[...].default`-ból, mint a `main.py`
+  meglévő `_guard_prod`-ja. A production ág (`main.py::_guard_prod`,
+  `create_app()`) **nem módosult** — tilos zóna.
+- `backend/tests/test_settings.py`: modul-docstring kiegészítve; két új
+  osztály — `TestEnvironmentValueSet` (A1, A1b, A2 regresszió, A3) és
+  `TestStagingIsolation` (A4) —, a meglévő 8 cella változatlan.
+- `lib/app/config/app_config.dart`: a production fail-closed ág a meglévő
+  loopback-tiltás MELLÉ egy feltétlen staging-host tiltást kapott
+  (`uri.host.toLowerCase().contains('staging')`), plusz a `resolve()`
+  doc-comment pontosítása.
+- `lib/app/config/app_environment.dart`: doc-comment kiegészítve — a staging
+  NEM ennek az enumnak az értéke, a backend `STRUMSIGHT_ENV` alias-táblája
+  kimondva.
+- `test/app/app_config_test.dart`: egy új cella a production csoportban
+  (staging-host feltétlen tiltás) + egy új csoport, ami igazolja, hogy
+  ugyanaz a host `lab`/`development` alatt elfogadott.
+- `docs/release/environment-matrix.md`: új dokumentum, a négy környezet
+  mátrixa fájl+sor és teszt-hivatkozásokkal.
+
+### 10.2 Kötelező ellenőrzések — kimenet
+
+- `tools/round-gate.sh test/app/app_config_test.dart
+  test/app/config/feature_flags_test.dart` → **MINDEN GATE ZÖLD** (format,
+  analyze, mindkét dart teszt-útvonal külön, architecture, secrets, l10n,
+  backend ruff format, backend ruff check, backend pytest — a gate maga is
+  lefuttatta a teljes backend suite-ot).
+- `cd backend && python3 -m pytest tests/test_settings.py
+  tests/test_hardening.py -q` → **44 passed** (a `test_hardening.py`
+  egyetlen sora sem módosult, mindegyik zöld maradt — A7).
+- `cd backend && python3 -m pytest -q` (teljes backend suite, saját
+  ellenőrzésként a kötelező gate-en felül) → **all green** (csak
+  `DeprecationWarning`-ok, hiba nélkül).
+
+### 10.3 Valódi-sértés próbák (§6.1)
+
+**1. próba — a staging titok-ellenőrzés „csak üres string tiltott"-ra
+gyengítve** (`backend/app/config.py::_guard_staging`, a `secret_key ==
+dev_secret` sort ideiglenesen `not self.secret_key.strip()`-re cserélve):
+
+```
+$ cd backend && python3 -m pytest tests/test_settings.py -q
+......................F....                                              [100%]
+FAILED tests/test_settings.py::TestStagingIsolation::test_dev_secret_key_refuses_to_instantiate
+Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+```
+
+Az **A4** cella (`TestStagingIsolation::test_dev_secret_key_refuses_to_instantiate`)
+pirosra váltott, ahogy a mérce-mátrix előírja. Visszaállítva
+(`self.secret_key == dev_secret`), utána `pytest tests/test_settings.py
+tests/test_hardening.py -q` → **44 passed** (zöld).
+
+**2. próba — a kliens staging-host tiltása törölve**
+(`lib/app/config/app_config.dart`-ból a `uri.host.toLowerCase().contains('staging')`
+ág ideiglenesen eltávolítva):
+
+```
+$ flutter test test/app/app_config_test.dart
+00:00 +6 -1: production configuration rejects a staging-labelled host unconditionally (ADR 0445 D5) [E]
+  expected ConfigurationException
+  package:matcher                       fail
+  test/app/app_config_test.dart 39:3    _problemsOf
+  test/app/app_config_test.dart 114:24  main.<fn>.<fn>
+...
+Some tests failed.
+```
+
+Az új **A5** cella (`rejects a staging-labelled host unconditionally (ADR
+0445 D5)`) pirosra váltott. Visszaállítva, utána `flutter test
+test/app/app_config_test.dart` → **21 tests, All tests passed!** (zöld).
+
+### 10.4 Scope
+
+`git status --short` a munka végén pontosan az engedélyezett fájllista
+almazmazát mutatja: `backend/app/config.py`,
+`backend/tests/test_settings.py`, `lib/app/config/app_config.dart`,
+`lib/app/config/app_environment.dart`, `test/app/app_config_test.dart`
+(módosítva) + `docs/release/environment-matrix.md` (új) + ez a fájl (§10). A
+tilos zóna egyetlen fájlja sem érintett.
+
 ## 11. Review — a Claude tölti ki
