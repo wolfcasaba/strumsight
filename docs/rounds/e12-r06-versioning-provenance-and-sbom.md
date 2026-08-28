@@ -225,7 +225,7 @@ license-szövegből; a hiányzó csomag kihagyása a leltárból.
 | # | Kritérium | Bizonyíték |
 |---|---|---|
 | A1 | A manifest kétszeri generálása bájtazonos, és a fájl SEHOL nem tartalmaz időbélyeget (a determinizmus-cella a TELJES fájlt méri, kizárt mező nélkül) | `release_manifest_test.dart` |
-| A2 | Olyan függőség esetén, amelyre sem a pub cache `LICENSE` fájlja, sem a `_CURATED_LICENSES` jegyzék nem ad találatot, az SBOM-generátor **nem-nulla** kóddal lép ki, és megnevezi a csomagot; a kimenetben SEHOL nincs `"unknown"`/üres license-érték | `release_manifest_test.dart` (fixture `pubspec.lock` + fixture cache-könyvtár, `python3` stdlib) |
+| A2 | Olyan függőség esetén, amelyre sem a pub cache `LICENSE` fájlja, sem a `_CURATED_LICENSES` jegyzék nem ad találatot, az SBOM-generátor **nem-nulla** kóddal lép ki, és megnevezi a csomagot; a kimenetben SEHOL nincs `"unknown"`/üres license-érték; a `licensePath` a pub cache gyökeréhez képest RELATÍV, sem az SBOM, sem a committolt notices nem hordoz abszolút filesystem-útvonalat (F1-cella, javító kör) | `release_manifest_test.dart` (fixture `pubspec.lock` + fixture cache-könyvtár `/tmp` alatt, `python3` stdlib; + a committolt `THIRD_PARTY_NOTICES.md`-t közvetlenül mérő cella) |
 | A3 | Csökkenő ÉS egyenlő build number esetén a `verify_artifacts.py` nem-nulla kóddal lép ki; `--previous` nélkül `baseline: none`-t ír ki és 0-val lép ki | `release_manifest_test.dart` (küszöb-cellahármas) |
 | A4 | A manifest hivatkozza az ML-modell-manifestet (`schema_version` + fájl-sha256 + modellszám) ÉS a tudáscsomag-manifestet (`schemaVersion` + fájl-sha256 + dokumentumszám); kitalált „package version" mező NINCS | `release_manifest_test.dart` |
 | A5 | A javaslat-fájl YAML-részlete a korlátozott részhalmaz-parserrel valid, megnevezi a beillesztés helyét (a `release-apk.yml` létező lépésének nevével), és a manifest/SBOM/notices artefaktumot mind a hárommal feltölti | `release_manifest_test.dart` (saját YAML-parser + kötelező lépés-cellák) |
@@ -254,6 +254,7 @@ kiszámolva, `previous_build = 42`:
 | A tudáscsomagra kitalált „package version" kerül a mért `schemaVersion`+sha256 helyett | A4 |
 | A javaslat YAML-je szintaktikailag törött vagy hiányzik belőle a notices-feltöltés | A5 |
 | A teszt `package:yaml`-t importál vagy `rg`-re shell-el ki (boxon zöld, CI-n piros — L110) | A7 |
+| A `licensePath` a feloldott, GÉP-FÜGGŐ abszolút pub-cache útvonalat hordozza a relatív helyett | A2 (F1-cella, javító kör) |
 
 **Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** vedd ki a manifest-generátorból a kulcs-rendezést, futtasd a §7 gate-et → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
 
@@ -424,5 +425,103 @@ előírja. Ezután a sort-hívást visszaállítottam
   `docs/release/workflows/release-apk-provenance.proposal.md` javaslatot
   szállítja; a tényleges bekötés orchesztrátor/emberi lépés a merge után.
 - **`pubspec.yaml` verzió-emelés** — tiltott zóna (§3), nem a kör dolga.
+
+### Javító kör (F1–F3) — a `docs/reviews/e12-r06-review.md` leletei zárva
+
+**Motor:** `sonnet-impl` (Claude Sonnet 5), ugyanaz az ág, kiindulás `11bd78dd`.
+
+**F1 (MINOR, gép-függő abszolút útvonalak a notices-bundle-ben) — zárva.**
+`tool/release/generate_sbom.py` `_resolve_dart_license`-e mostantól a
+`licensePath`-ba a pub cache GYÖKERÉHEZ KÉPEST RELATÍV útvonalat írja
+(`hosted/pub.dev/<pkg>-<ver>/LICENSE`), a feloldott cache-gyökeret sehova
+nem írja ki. A `sha256` és a `firstLine` változatlan (gép-független
+adatok). A `THIRD_PARTY_NOTICES.md` és a `build/sbom.json` (gitignore-olt)
+újragenerálva a valódi fán:
+
+```
+$ python3 tool/release/generate_sbom.py --profile production --output-notices THIRD_PARTY_NOTICES.md --output-sbom build/sbom.json
+SBOM written: build/sbom.json (171 components). Notices written: THIRD_PARTY_NOTICES.md.
+
+$ grep -c "/home/ubuntu" THIRD_PARTY_NOTICES.md
+0
+```
+
+Két ÚJ gate-cella az A2 csoportban (`release_manifest_test.dart`):
+egy fixture-alapú, ami `Directory.systemTemp` (a boxon `/tmp/...`) alatti
+fixture pub cache-csel futtatja a `generate_sbom.py`-t és méri, hogy sem a
+kimeneti SBOM, sem a kimeneti notices nem tartalmaz abszolút
+filesystem-útvonalat (`licensePath` nem kezdődik `/`-rel, a szöveg nem
+tartalmaz `/home/`, `/Users/`, `C:\` mintát), és egy másik, ami a
+COMMITOLT `THIRD_PARTY_NOTICES.md`-t méri ugyanígy közvetlenül.
+
+**Valódi-sértés próba (KÖTELEZŐ, F1-re).** Ideiglenesen visszaállítottam
+az abszolút útvonalat (`"licensePath": str(license_path)` a relatív
+`relative_license_path.as_posix()` helyett), és lefuttattam a §7 gate-et:
+
+```
+$ tools/round-gate.sh test/tooling/release_manifest_test.dart test/tooling/ml_asset_manifest_test.dart
+...
+00:00 +9 -1: A2 — missing license fails closed (ADR 0447 D3) the SBOM and notices carry no absolute filesystem path — measured against a fixture pub cache under systemTemp (not $HOME); the pre-fix implementation embedded the full resolved cache path here and this cell would have caught it (F1, docs/reviews/e12-r06-review.md) [E]
+  Expected: false
+    Actual: <true>
+  fixture SBOM: "licensePath" must be relative to the pub cache root, not an absolute filesystem path — got: /tmp/strumsight_sbom_relative_license_path_SEGTCJ/pubcache/hosted/pub.dev/known_pkg-1.0.0/LICENSE
+...
+    → [3] test test/tooling/release_manifest_test.dart: PIROS (kilépési kód 1)
+GATE_EXIT=10
+```
+
+Pontosan az ÚJ fixture-cella váltott PIROSRA (a committolt-notices cella
+zöld maradt, mert azt a mutáció nem érintette — a committolt fájl már a
+javított generátorral készült); a többi 26/27 cella érintetlen. Ezután a
+relatív variánst visszaállítottam, és a gate újra MINDEN GATE ZÖLD-öt adott
+(28/28 cella, lásd a §7 futtatott parancsok fenti blokkját — a két új A2
+cella a `+9`/`+10` sorszámon jelenik meg).
+
+**F2 (MINOR, a verify-lépés nulla artefaktumot auditál) — zárva.**
+`docs/release/workflows/release-apk-provenance.proposal.md`-hez egy ÚJ
+„Why the verify step audits zero artifacts here" szakasz került (a „Why
+there is no `--previous`" szakasz melletti, azonos szellemű dokumentáció):
+megnevezi, hogy a beillesztési pont kényszere (a `Materialize production
+keystore` ELŐTT kell futnia, az APK viszont csak a `Build production APK` /
+`Stage versioned production APK` UTÁN létezik) miatt a lépés itt
+`artifacts: 0 verified` + exit 0-t ad — ez a helyes, becsületes kimenet
+ezen a ponton, nem hiba —, és megjelöli a follow-upot (a verify-lépés
+áthelyezése/duplikálása az APK-build UTÁNRA `--artifact` paraméterrel). A
+YAML-fragment tartalma NEM változott — a §7 gate A5 cellái (a fragment
+parse-olása, mind a három artefaktum feltöltésének mérése, a beillesztési
+pont nevének ellenőrzése) az eredeti fragmenten futnak tovább, és zöldek
+maradtak (lásd a §7 gate-futtatás A5 sorai: `+19`–`+23`).
+
+**F3 (NOTE, üres `_requirePython3()`) — zárva.** A függvényt és mindkét
+hívását (`A2`/`A3` csoport eleje) töröltem; a kommentje tartalma (a
+„nincs skip-út, `Process.runSync` PIROSRA vált, ha a python3 hiányzik"
+állítás) átkerült egy csoport-szintű megjegyzésbe közvetlenül az `A7`
+csoport (a tényleges önmérő cellát tartalmazó csoport) elé, ami kimondja,
+hogy ez a kontraktus a fájl EGÉSZÉRE — A2/A3 python3-hívásaira is — érvényes,
+nem csak az A7 saját celláira.
+
+**Gate a javító kör után (csonkítatlan, a §7 alakja szerint):**
+
+```
+$ tools/round-gate.sh test/tooling/release_manifest_test.dart test/tooling/ml_asset_manifest_test.dart
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/release_manifest_test.dart               zöld
+    test test/tooling/ml_asset_manifest_test.dart              zöld
+    architecture                                                zöld
+    secrets                                                     zöld
+    l10n                                                         zöld
+MINDEN GATE ZÖLD.
+```
+
+`release_manifest_test.dart`: 28/28 zöld (25 eredeti + 2 új F1-cella, az
+F3 törlés a cellaszámot nem változtatja — csak a hívó `_requirePython3()`
+sorokat vitte el, önálló tesztet sosem jelentett).
+
+**Érintett, engedélyezett fájlok a javító körben:** `tool/release/generate_sbom.py`,
+`THIRD_PARTY_NOTICES.md`, `test/tooling/release_manifest_test.dart`,
+`docs/release/workflows/release-apk-provenance.proposal.md`, ez a brief
+(§6, §6.1, §10). `.github/**` érintetlen.
 
 ## 11. Review — a Claude tölti ki
