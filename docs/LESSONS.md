@@ -21053,3 +21053,90 @@ módon pirosra váltottak.
 `A8: the tutor row claims no producer, and that claim is true on the measured lib/ tree`
 (a hiány-állítás ága); a `_containsConstructorCall` segédfüggvény hordozza a
 minta↔hívás megkülönböztetést.
+
+---
+
+## L536 — A gépi scope-audit a NEM KÖVETETT, generált golden-bukás-artefaktumot is a diffnek számolja: 60 PNG a `test/ui/goldens/failures/`-ben `stopped`-ra váltotta a körjelzést, miközben a commitolt diff 100%-ban a listán belül volt (E15-R02, 2026-08-28)
+
+**Mit mértünk.** Az E15-R02 első implementer-futása `status=stopped`,
+`scope_audit=VIOLATION` jelzéssel állt meg, `scope_audit_changed=89`, a
+sértés-listán csupa `test/ui/goldens/failures/e13_r20_chord_detail_compact_*.png`
+alakú útvonallal. A commitolt diff ellenőrzése viszont ezt adta:
+
+```
+git diff --name-only fb4d3f12 HEAD | grep -c "goldens/failures/"   →  0
+git status --short                                                 →  ?? test/ui/goldens/failures/
+```
+
+Azaz a 60 PNG **untracked** volt: a `flutter test` golden-keretének
+bukás-artefaktuma (a `_isolatedDiff`/`_maskedDiff`/`_masterImage` hármas),
+amit a mért ARM↔x86 raszter-drift ([L516](#l516)) minden teljes-suite futáson
+újratermel. A kör 29 commitolt fájlja mind a brief `allowed_paths`-án belül
+volt — a `VIOLATION` teljes egészében a generált könyvtárból jött.
+
+**Miért félrevezető.** A `stopped` jelzés a döntést-kérő állapot, és a
+`scope_audit=VIOLATION` szövege szerint „a listán kívüli fájlokat vissza kell
+állítani, vagy H3 halt" (ADR 0138). Az orchestrátor tehát egy H3-gyanús
+képet kap egy olyan körre, amelynek a valódi diffje hibátlan. A H3 téves
+kimondása itt egy teljes, kész implementációt dobott volna el — pontosan az a
+hibaosztály, amit az E99-R19 és az E99-R08 (`docs/reviews/**` saját-jelentés
+hamis H3-a, [L251](#l251)) már megmért, csak most nem a szabály olvasata, hanem
+a mérés bemenete volt hibás.
+
+**A megkülönböztetés, ami hiányzott.** A scope-audit szempontjából két
+különböző dolog:
+
+- **commitolt diff** — ez a kör munkája, ezt kell a listához mérni;
+- **munkafa-szemét** — generált, gitignore-olatlan output, ami se nem
+  szándék, se nem szállítmány.
+
+A második nem „scope-sértés", hanem takarítási feladat: `rm -rf
+test/ui/goldens/failures` után a munkafa tiszta, és a következő dispatch
+`scope_audit`-ja tiszta lapról indul.
+
+**Amit ebből átviszünk.** (1) `scope_audit=VIOLATION` esetén az orchestrátor
+ELŐSZÖR vesse össze a sértés-listát a `git diff --name-only <base> HEAD`
+kimenetével — ha a sértő útvonalak ott NEM szerepelnek, a lelet generált
+munkafa-szemét, nem H3. (2) Golden-érintett kör promptjába kerüljön be a
+`rm -rf test/ui/goldens/failures` a `done` jelzés ELŐTTI lépésként (az
+E15-R02 javító köre így futott, és tiszta munkafával jelzett). (3) A `git add
+-A` ilyen körben veszélyes — tételes `git add` kell.
+
+**Őrteszt:** nincs — a lelet a `tools/scope-audit.py` bemenet-szűrését
+érintené (`tools/**` az orchestrátor számára tilos zóna, ADR 0087 §4), ezért a
+javítás helye egy önjavító/governance kör: a scope-audit vagy csak a
+commitolt diffet mérje, vagy a `.gitignore` zárja ki a
+`test/ui/goldens/failures/` könyvtárat. Addig a fenti (1)–(3) eljárási őr köt.
+
+---
+
+## L537 — A `tester.pageBack()` NEM találja meg a Material `IconButton` vissza-affordanciát: a „vissza-út" cellák router-`pop()`-ra kényszerülnek, és ezt MÉRNI kell, nem feltételezni (E15-R02, review MAJOR-1, 2026-08-28)
+
+**Mit mértünk.** Az E15-R02 a `shell_lifecycle_test.dart` „Tuner back" cellájában
+`tester.pageBack()`-et `router.pop()`-ra cserélte, azzal az indoklással, hogy a
+`pageBack()` a `Navigator.canPop(context)`-tól függő affordanciát keresi. A
+review ezt MAJOR-ként megfogta, mert az indoklás **nem volt megmérve**: a
+`tuner_screen.dart:127-133` valóban `if (Navigator.canPop(context))` mögé teszi
+a gombot, de a Tuner `context.push(AppRoutes.tuner)`-rel érkezik, tehát a
+`canPop` várhatóan IGAZ. A javító kör visszaállította a `pageBack()`-et és
+lefuttatta:
+
+```
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "CupertinoNavigationBarBackButton": []>
+One back button expected on screen
+```
+
+Tehát az ok más volt, mint a komment állította: a `pageBack()` heurisztikája a
+`TunerScreen` Material `IconButton`-ját (`Icons.arrow_back`) nem találja meg. A
+`router.pop()` így MÉRT kényszer, nem kényelmi rövidítés — és a kód-komment
+azóta a mért kimenetre hivatkozik.
+
+**Amit ebből átviszünk.** Ha egy teszt felhasználói affordanciáról (tap, back,
+swipe) tér át programozott navigációra, a váltás indoklása csak akkor
+elfogadható, ha a **bukás szó szerinti kimenete** ott van a kör §10-ében. Egy
+hihető, de meg nem mért indoklás a review-ban ugyanolyan lelet, mint egy hibás
+állítás: a különbség csak az, hogy a javítása egy tesztfuttatás.
+
+**Őrteszt:** nincs — a lelet eljárási (a mérés hiánya, nem kódhiba); a
+`shell_lifecycle_test.dart` „Tuner back" cellája a viselkedést továbbra is méri.
