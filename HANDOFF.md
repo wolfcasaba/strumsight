@@ -1,5 +1,38 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 E15-R02 H3 ÖNJAVÍTÁS (ADR 0112) — a shell-flag MÉRT hatósugara a kör scope-jába került — PR [#HEAL_PR](https://github.com/wolfcasaba/strumsight/pull/HEAL_PR), squash `HEAL_SHA` (2026-08-28)
+
+**A kör NEM futott le — a pre-flight `H3`-mal állt meg, implementer-dispatch
+nélkül.** Az `adaptiveShellEnabled: false` → `nonProd` átállítás MÉRVE
+53 tesztcellát tesz pirosra 19 fájlban, mert az
+`appConfigProvider` ALAPÉRTELMEZETT értéke maga is
+`FeatureFlags.forEnvironment(development, …)` — a flip tehát MINDEN olyan
+widget-teszt navigációs kiindulását `/live`-ról `/today`-re viszi, amely nem
+írja felül a providert. A brief §4 listája ebből 16 fájlt nem engedett, a
+tágítás pedig nem orchestrátor-hatáskör (ADR 0087 §2).
+
+**Amit az önjavító kör csinált** (a kör tartalmi munkáját NEM vitte előre):
+
+- **Független reprodukció** — a teljes suite kétszer (flippel és anélkül); a
+  különbség a flag oksági hatósugara, a maradék piros cellák mind a MÉRT
+  ARM↔x86 raszter-drift (L516).
+- **Brief-revízió** (`§0.0/d`): `allowed_paths` + `gate_tests` ← a mért
+  fájlok; `lib/core/feature_flags/feature_flag_registry.dart` (ADR 0467 D8
+  próza) és `test/tooling/feature_flag_audit_test.dart` (A11 gépi cella);
+  `test/ui/goldens/e15_r01_theme_adoption_test.dart` (S11-maradék). Új
+  acceptance: **A10** (teljes suite zöld a drifttől eltekintve), **A11**.
+- **ADR 0467** (a pre-flight írta, most merge-elve) + **D9**: a bukó tesztek
+  KIZÁRÓLAG az új viselkedéshez igazíthatók — `appConfigProvider`-override-dal
+  kikapcsolt shell = a mérce elrejtése, tilos.
+- **Őrteszt:** `tools/tests/test_e15_r02_adaptive_shell_scope.py` — a valódi
+  briefet hajtja a valódi scope-auditon; a lista szűkülése ÉS a könyvtár-
+  szintű blanket-tágítás is pirosra váltja. A javítás előtt PIROS, utána zöld.
+- **Tanulság:** [L532](docs/LESSONS.md#l532).
+
+**A lánc feloldva:** az E15-R02 a következő firingen újraindul, a most már
+teljes §4 listával; a pre-flight ág (`sonnet-impl/e15-r02-…`) tartalma ebbe a
+PR-be került, az ág törölve.
+
 ## ✅ E15-R01 KÉSZ — A design-rendszer témájának app-szintű bevezetése — a **Chapter 15 sáv INDULT** — PR [#493](https://github.com/wolfcasaba/strumsight/pull/493), squash `a65aa3f9` (2026-08-28)
 
 **A Chapter 13 alatt megépült design-rendszert az alkalmazás SOHA nem kapcsolta

@@ -97,3 +97,21 @@ szakaszát). A production felület átmenetileg eltér a fejlesztőitől.
 redirect nélküli elhagyását; a mérő cellák törlését vagy `skip`-jét; a golden
 PNG-k aarch64 boxon való újrafelvételét; a tartalmi képernyő-migráció
 beszivárgását ebbe a körbe (az a Chapter 15 további köreinek dolga).
+
+## Módosítás (ADR 0112 önjavító kör, 2026-08-28)
+
+Az E15-R02 a pre-flightban `H3`-mal megállt: a döntés Kontextus/5 pontjában
+leírt teszt-hatás számszerűsítve **53 bukás 19 fájlban**, és a kör briefjének
+§4 listája ebből 16 fájlt nem engedett (a mérés az önjavító körben
+függetlenül reprodukálva — lásd a brief §0.0/d szakaszát). A scope-tágítás
+nem orchestrátor-hatáskör (ADR 0087 §2), ezért a lista bővítése ide, az
+önjavító körbe került. A döntés érdemben NEM változik; egy új korlát
+egészíti ki:
+
+**D9.** A 19 érintett teszt kizárólag az ÚJ, mért viselkedéshez igazítható
+(a belépési pont `/today`, a legacy útvonalak a `legacyRedirects` célján
+érhetők el). **NEM elfogadható gyengítés** a shell kikapcsolása
+`appConfigProvider`-override-dal ott, ahol a teszt tárgya nem maga a
+kikapcsolt konfiguráció: az a mérce elrejtése lenne a szállított
+alapértelmezés elől (a D6 zsugorodás-őr elve, [L180](../LESSONS.md#l180)).
+Cella törlése, `skip`-je vagy gyengítése ugyanúgy tilos, mint a D6-ban.
