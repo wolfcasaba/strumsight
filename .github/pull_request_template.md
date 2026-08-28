@@ -30,6 +30,13 @@
 - UI-változásnál screenshot / device-evidence:
 - Audio/DSP/ML/vision-változásnál mérési evidence (fixture/parity/real-audio):
 
+## Release evidence
+
+<!-- CI run link (build-apk.yml / full-gate.yml), APK artifact, verzió-emelés — vagy "nincs", ha ez a PR nem release-jelölt -->
+
+- CI run:
+- Release asset változott? (`android/` aláírás/verzió-konfig, store-metaadat, `docs/release/**` bizonyíték) — ha igen, magyarázd meg; ha nem, írd, hogy "nincs":
+
 ## Privacy / security hatás
 
 <!-- secret, PII, nyers audio, permission, log-tartalom — vagy "nincs" -->

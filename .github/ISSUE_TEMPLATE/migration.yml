@@ -1,0 +1,68 @@
+name: "Migration / breaking change"
+description: "Storage schema, adatmigracio vagy API breaking change"
+title: "[Migration] "
+labels:
+  - migration
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: "A kotelezo mezokrol lasd docs/process/backlog-policy.md."
+  - type: input
+    id: chapter
+    attributes:
+      label: "Chapter / SDD terulet"
+      description: "Melyik SDD fejezet vagy terulet erintett"
+      placeholder: "pl. Chapter 04 - Song Trainer"
+    validations:
+      required: true
+  - type: input
+    id: round
+    attributes:
+      label: "Kor-azonosito"
+      description: "Ha mar kiosztott kor, az azonositoja; egyebkent nincs meg kiosztva"
+      placeholder: "pl. E04-R08"
+    validations:
+      required: true
+  - type: textarea
+    id: migration_impact
+    attributes:
+      label: "Migration / API hatas"
+      description: "Storage schema, adatmigracio, OpenAPI/breaking change, rename-hatas"
+    validations:
+      required: true
+  - type: checkboxes
+    id: migration_safety
+    attributes:
+      label: "Migracios biztonsagi ellenorzes"
+      options:
+        - label: "A migracio idempotens"
+        - label: "Van visszafele kompatibilis olvasasi ut a resze migralt adaton"
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance criteria"
+      description: "Merheto elfogadasi kriteriumok"
+    validations:
+      required: true
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: "Teszt terv"
+      description: "Pontos tesztparancsok, amikkel a lezaras bizonythato"
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: "Rollback terv"
+      description: "Hogyan vonhato vissza a migracio, ha problema merul fel"
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: "Privacy / security hatas"
+      description: "secret, PII, permission, log-tartalom hatasa - vagy nincs"
+    validations:
+      required: true
