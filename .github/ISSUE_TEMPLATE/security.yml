@@ -1,0 +1,73 @@
+name: "Security issue"
+description: "Biztonsagi vagy privacy hatasu problema jelentese"
+title: "[Security] "
+labels:
+  - security
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: "Ha a lelet elozetesen kihasznalhato, ne irj le tamadasi reszletet nyilvanos issue-ban - jelezd privatban."
+  - type: input
+    id: chapter
+    attributes:
+      label: "Chapter / SDD terulet"
+      description: "Melyik SDD fejezet vagy terulet erintett"
+      placeholder: "pl. Chapter 05 - AI Guitar Teacher"
+    validations:
+      required: true
+  - type: input
+    id: round
+    attributes:
+      label: "Kor-azonosito"
+      description: "Melyik kor vezette be, ha ismert; egyebkent nincs meg kiosztva"
+      placeholder: "pl. E05-R08"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      description: "docs/release/blockers.md Severity-skala"
+      options:
+        - "P0"
+        - "P1"
+        - "P2"
+        - "P3"
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: "Hatas"
+      description: "Milyen adatot vagy funkciot erint a problema"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance criteria"
+      description: "Mikor tekintheto a problema zartnak"
+    validations:
+      required: true
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: "Teszt terv"
+      description: "Pontos tesztparancsok, amikkel a javitas bizonythato"
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: "Rollback terv"
+      description: "Hogyan vonhato vissza a javitas, ha problema merul fel"
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: "Privacy / security hatas"
+      description: "secret, PII, permission, log-tartalom hatasa - reszletezve"
+    validations:
+      required: true

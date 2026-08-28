@@ -1,0 +1,61 @@
+name: "Feature request"
+description: "Uj funkcio vagy fejlesztesi kor javaslata"
+title: "[Feature] "
+labels:
+  - feature
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: "A kotelezo mezokrol lasd docs/process/backlog-policy.md."
+  - type: input
+    id: chapter
+    attributes:
+      label: "Chapter / SDD terulet"
+      description: "Melyik SDD fejezet vagy terulet erintett"
+      placeholder: "pl. Chapter 07 - Practice and Gamification"
+    validations:
+      required: true
+  - type: input
+    id: round
+    attributes:
+      label: "Kor-azonosito"
+      description: "Ha mar kiosztott kor, az azonositoja; egyebkent nincs meg kiosztva"
+      placeholder: "pl. E07-R12"
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: "Leiras"
+      description: "Mit szeretnel, es miert"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance criteria"
+      description: "Merheto elfogadasi kriteriumok"
+    validations:
+      required: true
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: "Teszt terv"
+      description: "Pontos tesztparancsok, amikkel a lezaras bizonythato"
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: "Rollback terv"
+      description: "Hogyan vonhato vissza, ha problema merul fel"
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: "Privacy / security hatas"
+      description: "secret, PII, permission, log-tartalom hatasa - vagy nincs"
+    validations:
+      required: true
