@@ -329,4 +329,169 @@ dart run tool/check_sdd_index.dart
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), munkapéldány
+`/home/ubuntu/ss-sonnet-impl-e12-r02`, branch
+`sonnet-impl/e12-r02-sdd-index-and-dependency-graph`.
+
+### 10.1 Mit írtam
+
+Commitok (időrendben, a pre-flight `4437fdb6` után):
+
+1. `5190128c` — `docs/sdd/dependency-graph.yaml` (ÚJ) + `tool/check_sdd_index.dart` (ÚJ)
+2. `1aca7df1` — `docs/sdd/00-index.md` javítása (Chapter 12: 42→36, 3 új oszlop,
+   footnote csere) + `test/tooling/sdd_index_guard_test.dart` (ÚJ)
+3. `cb24b01a` — A9 önteszt javítás: a `test/tooling/sdd_index_guard_test.dart`
+   eredeti A9 cellája szó szerint tartalmazta a `"package:yaml"` sztringet
+   (a saját asszerciójában és a csoport címében), ami **saját magát** buktatta
+   volna el a §6 A9 evidence-parancsán (`grep -rn "package:yaml" tool/
+   test/`). Javítás: a self-guard mostantól import-direktívából kinyert
+   csomagnevet hasonlít össze a `'yaml'` literállal (sosem ír egymás mellé
+   `"package:"` prefixet és a csomagnevet a saját forrásában).
+
+**`docs/sdd/dependency-graph.yaml`** — 14 csomópont (ch01–ch14), 31 él. Az
+élek iránya `from -> to` = „`to` függ `from`-tól" (megegyezik az index ASCII-
+ábrájának nyíl-irányával). A `critical_path` (ch01, ch02, ch03, ch07, ch12) és
+`capability_gated` (ch05, ch06, ch10, ch11, ch14) jelölés az index „Fő
+előfeltétel" oszlopának és az „Ajánlott végrehajtási sorrend" szövegének
+levezetése — ítélet, nem mérés, mert a §6.1 mérce-mátrixban nincs hozzá önálló
+cella (a checker csak a mezők KÖTELEZŐ jelenlétét kényszeríti ki, ld. A6
+teszt: `parseDependencyGraph` dob, ha egy node-ról hiányzik a `critical_path`
+vagy `capability_gated`).
+
+**`tool/check_sdd_index.dart`** (D4 minta követve, top-level/tartalom-
+paraméteres API, `main()` csak vékony burkoló):
+- `parseChapterTable` / `parseKorokCount` — a Markdown-tábla sor-alapú
+  parsere; a "Zárójelentés" oszlopot NÉV szerint keresi meg a fejlécben (nem
+  pozíció szerint), ezért egyaránt kezeli az 5/6-cellás (jelenlegi) ÉS a
+  8/9-cellás (a 3 új oszloppal bővített) sorváltozatot ugyanazzal a
+  logikával.
+- `countKorHeaders` — `^#{1,2} Kör \d+` soronkénti minta, mindkét fejléc-alak.
+- `parseDependencyGraph` — a `dependency-graph.yaml` fejléc-kommentjében
+  dokumentált szűkített alakot olvassa, kézzel írt sor-alapú state-machine-
+  nel; `package:yaml` NINCS importálva.
+- `findCycle` — DFS szín-jelöléssel (fehér/szürke/fekete), a ciklust node-id
+  lista formájában adja vissza.
+- `validateSddIndex` — a tiszta, tartalom-paraméteres kereszt-ellenőrző
+  (A1–A4 + az edge-konzisztencia); `checkSddIndexAtRoot` a vékony,
+  `Directory`-paraméteres burkoló, ami a valódi `docs/sdd/`-t olvassa be.
+
+**`docs/sdd/00-index.md`** — a Chapter 12 sorának `42`→`36` javítása; a
+táblázat mind a 14 sora kapott 3 új cellát (Státusz / Implementation
+progress / Dependency); a fejléc és az elválasztó sor 6→9 oszlopra bővült. A
+meglévő 5/6-cellás heterogenitás (a `Zárójelentés` oszlop hiánya 9 sorban)
+**szándékosan megmaradt** — ez maga a §0.0.A P2 mérés, és az A7/A8 teszt
+pontosan ez ellen a valódi alak ellen fut. A footnote (eredeti 30. sor) a
+prózai mentesítés helyett a checkerre mutat. A „Függőségi kép" ASCII-blokk
+elé egy mondat került, ami a `dependency-graph.yaml`-t nevezi meg gépi
+forrásként (ADR 0443 D2) — az ASCII-ábra tartalma NEM lett ez ellen
+verifikálva ebben a körben (a brief ezt nem is kéri).
+
+**`test/tooling/sdd_index_guard_test.dart`** — 35 teszt, csoportosítva a
+§6.1 mérce-mátrix soraira (lásd 10.3).
+
+### 10.2 Milyen parancsokat futtattam, tényleges kimenettel
+
+**A valódi-sértés próba (§6, KÖTELEZŐ):**
+
+```
+$ (docs/sdd/00-index.md Chapter 12 sorát 36 -> 42-re írtam vissza)
+$ tools/round-gate.sh test/tooling/sdd_index_guard_test.dart
+...
+00:00 +32 -1: checkSddIndexAtRoot — A7 (the real, checked-in docs/sdd/ tree) the real index and dependency graph are clean [E]
+  Expected: true
+    Actual: <false>
+  SDD index check failed:
+  - [korokMismatch] Chapter 12: az index tábla 42 kört ír ("42"), a fejezet-fájlban mért kör-fejlécek száma 36.
+...
+    → [3] test test/tooling/sdd_index_guard_test.dart: PIROS (kilépési kód 1)
+Exit code 10 (round-gate.sh, code_failure)
+```
+
+Az A3 cella (a `checkSddIndexAtRoot — A7 … the real index and dependency
+graph are clean` teszt) a várt módon PIROSRA váltott, pontosan a
+`korokMismatch` kóddal és a `42`/`36` értékekkel az üzenetben. Ezután a sort
+visszaírtam `36`-ra (`git diff --stat` a visszaírás után: nincs eltérés a
+commitolt állapothoz képest).
+
+**A kötelező záró ellenőrzés (§7, szó szerint, csővezeték/csonkítás
+nélkül):**
+
+```
+$ tools/round-gate.sh test/tooling/sdd_index_guard_test.dart
+═══ [1] format  → ZÖLD
+═══ [2] analyze → ZÖLD (Analyzing 3 items... No issues found!)
+═══ [3] test test/tooling/sdd_index_guard_test.dart → ZÖLD (00:00 +35: All tests passed!)
+═══ [4] architecture → ZÖLD (Architecture dependencies OK (12 allowlisted deviation(s)).)
+═══ [5] secrets → ZÖLD (Secret scan OK (3931 file(s) scanned, 0 finding(s)).)
+═══ [6] l10n → ZÖLD (L10n aggregate freshness OK; L10n parity OK (en → hu, 2289 message(s)).)
+Gate-összegzés: format zöld · analyze zöld · test … zöld · architecture zöld · secrets zöld · l10n zöld
+MINDEN GATE ZÖLD.
+```
+
+Kilépési kód: `0`.
+
+**A checker közvetlen futtatása (§7):**
+
+```
+$ dart run tool/check_sdd_index.dart
+SDD index OK (0 issue(s)).
+```
+
+Kilépési kód: `0`.
+
+**A9 evidencia (§6, szó szerint):**
+
+```
+$ grep -rn "package:yaml" tool/ test/
+(nincs találat, kilépési kód 1)
+$ git diff --name-only 4437fdb6 HEAD -- 'pubspec*'
+(üres)
+```
+
+### 10.3 A §6.1 mérce-mátrix ↔ a ténylegesen megírt tesztcellák
+
+| Mátrix-sor (hibás implementáció) | Cella | Megírt teszt |
+|---|---|---|
+| Az index számát fogadja el forrásként | A3 | `validateSddIndex … A3 — the checker measures the round count from the chapter file, not from the index cell` (42 vs mért 36 → `korokMismatch`) |
+| Csak a `# Kör` alakot ismeri | A5 | `countKorHeaders — A5 …` mindkét alakra (single-#, double-##, kevert) |
+| Ciklus-detektálás kimarad | A4 | `findCycle — A4 …` (direkt és hosszabb ciklus) + `validateSddIndex … A4 — a cyclic dependency graph is flagged …` |
+| Nem létező fejezet-fájl átcsúszik | A2 | `validateSddIndex … A2 — a dangling Fájl/Zárójelentés reference is flagged` |
+| Fix 6 cellát vár → 9-ből 9 elhasal | A8+A7 | `parseChapterTable — A8 (5- és 6-cellás tolerancia)` öt cella + a valódi `checkSddIndexAtRoot` A7 teszt a MAI (heterogén) fájlon |
+| `int.parse` a körszám-cellán → Ch1/3/4/7 dob | A8+A7 | `parseKorokCount — A8 …` mind a 4 mért alakra (`16`, `20 (lezárva…)`, `30 — …`, `—`) |
+| `package:yaml`-t importál | A9 | `A9 — the checker never depends on the restricted YAML pub package …` (import-direktíva csomagnév-kivonat) |
+| A logika a `main()`-be kerül, beégetett úttal | A1/A2/A4 | Mindhárom `validateSddIndex`-teszt kézzel épített fixture-objektumokkal fut (nincs lemez-hozzáférés) — ez önmagában bizonyítja, hogy a logika NEM a `main()`-ben van |
+
+Extra (a mátrixon felüli, de olcsó és releváns): egy graph-él, ami nem
+létező node-ra hivatkozik (`unknownGraphNode`), és a `parseDependencyGraph`
+két hibás-alak fixture-je (hiányzó kötelező mező, rossz indentálás, YAML
+flow-collection).
+
+### 10.4 Amit NEM futtattam, és miért
+
+- **`gh workflow run build-apk.yml`** — a brief §7 / AGENTS.md szerint ezt az
+  orchestrátor indítja, nem az implementer.
+- **A teljes `flutter test` suite** — a round-gate a brief §7 szerint csak a
+  kör saját tesztjét futtatja (`test/tooling/sdd_index_guard_test.dart`); a
+  teljes suite + randomizált property gate a CI-ban fut (ADR 0053).
+- **`tools/round-gate.sh` szerkesztése** a `check_sdd_index.dart` gate-be
+  emeléséhez — ADR 0443 D5 / a brief §5.5 kifejezetten tiltja ebben a
+  körben, és a `tools/**` a kör tilos zónája.
+
+### 10.5 Ismert korlátok / jövőbeli kör tárgya
+
+- A „Státusz" / „Implementation progress" / „Dependency" oszlopok tartalmát
+  a checker NEM ellenőrzi (a brief §6 A1–A9 egyike sem követeli) — ezek a
+  cellák a linkelt zárójelentésekből és az E12-R01 baseline-ból (
+  `docs/release/program-baseline.md`, `docs/release/blockers.md`)
+  származnak, ahol nincs ilyen bizonyíték, ott „specifikálva" / „nincs
+  önálló mérés ebben a körben" szerepel — szándékosan nem találtam ki
+  státuszt olyan fejezetre, amire nincs mérés.
+- A „Függőségi kép" ASCII-ábra tartalmának a `dependency-graph.yaml` ellen
+  való gépi verifikálása nincs ebben a körben (a brief nem kéri; az ábra
+  ember-olvasó illusztráció marad, a kommentben jelölve).
+- A `critical_path` / `capability_gated` konkrét igazságértékei ítéletek
+  (ld. 10.1), nem mérés — egy jövőbeli kör felülbírálhatja őket anélkül,
+  hogy a checker bármelyik acceptance cellája pirosra váltana (csak a mezők
+  KÖTELEZŐ jelenlétét kényszeríti ki A6 alatt).
+
 ## 11. Review — a Claude tölti ki
