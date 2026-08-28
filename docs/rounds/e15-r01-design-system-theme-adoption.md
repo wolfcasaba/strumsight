@@ -260,7 +260,7 @@ test/app/bootstrap_failure_app_test.dart`) ELŐTÉRBEN, `run_in_background`
 nélkül, csővezeték nélkül futtattam — először a meglévő implementáción
 (ZÖLD, `format`/`analyze`/mind a hat teszt/`architecture`/`secrets`/`l10n`),
 majd a valódi-sértés próba után újra (szintén ZÖLD, lásd lent). Az A4
-mátrix mind a 48 kombinációja (6 képernyő × 2 fényerő × 2 locale × 2
+mátrix mind a 24 kombinációja (6 képernyő × 2 fényerő × 2 locale × 2
 szövegskála) `overflow`/kivétel nélkül futott le, kizárási lista, `skip`
 vagy tolerancia-emelés NÉLKÜL.
 
@@ -343,5 +343,16 @@ teszt, architecture, secrets, l10n).
   hozzáférési beállításba kötése — ADR 0466 D5 szerint külön kör.
 - A `SsThemeExtensions`-hez NEM nyúltam: a mérés (§0.0/R1) szerint nincs
   tényleges hiány, és a gate zöld a fájl érintetlenül is.
+
+### Javító kör (review MINOR-1, MINOR-2)
+
+A független review két MINOR leletét javítottuk: a nem létező `ADR 0466 D8`
+hivatkozás törölve (`test/app/theme_adoption_test.dart:2`,
+`docs/ui/migration-status.md:6`), és a fenti §10 cellaszáma `48`-ról a
+tényleges **24**-re javítva (6 × 2 × 2 × 2, ennyi `testWidgets` cellát
+generál a mátrix). Kód nem változott, csak komment és dokumentum-szöveg.
+A javító kör diffjét az orchestrátor auditálta az `allowed_paths` ellen és
+commitolta, majd a §7 gate-et ELŐTÉRBEN újrafuttatta — lásd
+`docs/reviews/e15-r01-review.md` §6.
 
 ## 11. Review — a Claude tölti ki

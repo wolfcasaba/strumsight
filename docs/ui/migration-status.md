@@ -3,7 +3,7 @@
 **E15-R01 update (2026-08-28):** the app's runtime theme (`MaterialApp.theme`
 / `darkTheme`, and the bootstrap-failure recovery screen) is now
 `SsLightTheme.data()` / `SsDarkTheme.data()` instead of legacy
-`AppTheme.light()`/`AppTheme.dark()` (ADR 0466 D1–D4, D8). **This changes
+`AppTheme.light()`/`AppTheme.dark()` (ADR 0466 D1–D4). **This changes
 what "token availability" means, not what "migrated" means below:** all
 **96/96** production screen sources can now resolve `SsColorScheme` /
 `SsTypography` / `SsStateOverlays` / `SsThemeBehavior` from

@@ -1,5 +1,5 @@
 // E15-R01 — proves the app's ACTUAL runtime theme is the design-system
-// theme (ADR 0466 D1-D4, D8): the MaterialApp built by StrumSightApp (and
+// theme (ADR 0466 D1-D4): the MaterialApp built by StrumSightApp (and
 // its bootstrap-failure error path) carries the four design-system theme
 // extensions in both brightnesses, a design-system component resolves
 // those tokens without a feature-level `*ThemeScope` wrapper, and the
