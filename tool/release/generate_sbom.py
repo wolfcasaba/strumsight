@@ -15,8 +15,11 @@ rather than a general YAML parser.
 package's license is resolved from one of two MEASURED sources, in order:
 
   1. Hosted Dart package: the resolved package version's own `LICENSE` file
-     in the local pub cache. The SBOM entry records the file's path, its
-     sha256 and its first non-empty line — it does NOT infer an SPDX
+     in the local pub cache. The SBOM entry records the file's path RELATIVE
+     TO THE PUB CACHE ROOT (`hosted/pub.dev/<pkg>-<ver>/LICENSE`) — never the
+     resolved absolute cache path, which differs by machine/CI runner and
+     would make the committed notices bundle non-reproducible — plus its
+     sha256 and its first non-empty line. It does NOT infer an SPDX
      identifier from that free-form text (SPDX-from-text inference is
      explicitly forbidden by ADR 0447 D3).
   2. SDK-bundled / non-hosted Dart package, or a Python pin: the
@@ -232,13 +235,13 @@ def _first_non_empty_line(data: bytes) -> str:
 
 def _resolve_dart_license(pkg: LockedPackage, pub_cache: Path) -> dict:
     if pkg.source == "hosted":
-        package_dir = pub_cache / "hosted" / "pub.dev" / f"{pkg.name}-{pkg.version}"
-        license_path = package_dir / "LICENSE"
+        relative_license_path = Path("hosted") / "pub.dev" / f"{pkg.name}-{pkg.version}" / "LICENSE"
+        license_path = pub_cache / relative_license_path
         if license_path.is_file():
             data = license_path.read_bytes()
             return {
                 "kind": "pub-cache-license-file",
-                "licensePath": str(license_path),
+                "licensePath": relative_license_path.as_posix(),
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "firstLine": _first_non_empty_line(data),
             }

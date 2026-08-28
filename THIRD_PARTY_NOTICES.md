@@ -5,277 +5,277 @@ backend `requirements*.txt` pins. Do not hand-edit — regenerate instead.
 
 ## dart / _fe_analyzer_shared 99.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/_fe_analyzer_shared-99.0.0/LICENSE
+- License text: hosted/pub.dev/_fe_analyzer_shared-99.0.0/LICENSE
 - License file sha256: efa31b5ac790016736fa9761642b0af16d37cd4fb483de2905adb5258cb89722
 - First line: Copyright 2019, the Dart project authors.
 
 ## dart / analyzer 12.1.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/analyzer-12.1.0/LICENSE
+- License text: hosted/pub.dev/analyzer-12.1.0/LICENSE
 - License file sha256: 7e124af6a556f045cb3a20cafbdaa31602ac2c82cbcb3c3b15faaaf514b06028
 - First line: Copyright 2013, the Dart project authors.
 
 ## dart / archive 4.0.9
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/archive-4.0.9/LICENSE
+- License text: hosted/pub.dev/archive-4.0.9/LICENSE
 - License file sha256: 32f97d332eae7453ec4079858e6f1d74be85beeb6d3881068b47d02a379cccea
 - First line: The MIT License
 
 ## dart / args 2.7.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/args-2.7.0/LICENSE
+- License text: hosted/pub.dev/args-2.7.0/LICENSE
 - License file sha256: dfb09c74e29386cd3e2719f32d4995d59526179753931d31840757c77fbf2791
 - First line: Copyright 2013, the Dart project authors.
 
 ## dart / async 2.13.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/async-2.13.1/LICENSE
+- License text: hosted/pub.dev/async-2.13.1/LICENSE
 - License file sha256: ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / audio_streamer 4.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/audio_streamer-4.3.0/LICENSE
+- License text: hosted/pub.dev/audio_streamer-4.3.0/LICENSE
 - License file sha256: 5b5b611b38951f3db833323eb34f737bce72953348467acad02431af490d1a1e
 - First line: MIT License.
 
 ## dart / audioplayers 6.8.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers-6.8.1/LICENSE
+- License text: hosted/pub.dev/audioplayers-6.8.1/LICENSE
 - License file sha256: d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41
 - First line: MIT License
 
 ## dart / audioplayers_android 5.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_android-5.3.0/LICENSE
+- License text: hosted/pub.dev/audioplayers_android-5.3.0/LICENSE
 - License file sha256: d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41
 - First line: MIT License
 
 ## dart / audioplayers_darwin 6.5.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_darwin-6.5.0/LICENSE
+- License text: hosted/pub.dev/audioplayers_darwin-6.5.0/LICENSE
 - License file sha256: d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41
 - First line: MIT License
 
 ## dart / audioplayers_linux 4.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_linux-4.3.0/LICENSE
+- License text: hosted/pub.dev/audioplayers_linux-4.3.0/LICENSE
 - License file sha256: d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41
 - First line: MIT License
 
 ## dart / audioplayers_platform_interface 7.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_platform_interface-7.2.0/LICENSE
+- License text: hosted/pub.dev/audioplayers_platform_interface-7.2.0/LICENSE
 - License file sha256: d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41
 - First line: MIT License
 
 ## dart / audioplayers_web 5.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_web-5.3.0/LICENSE
+- License text: hosted/pub.dev/audioplayers_web-5.3.0/LICENSE
 - License file sha256: d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41
 - First line: MIT License
 
 ## dart / audioplayers_windows 4.4.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_windows-4.4.1/LICENSE
+- License text: hosted/pub.dev/audioplayers_windows-4.4.1/LICENSE
 - License file sha256: d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41
 - First line: MIT License
 
 ## dart / boolean_selector 2.1.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/boolean_selector-2.1.2/LICENSE
+- License text: hosted/pub.dev/boolean_selector-2.1.2/LICENSE
 - License file sha256: b71519245009a3b8f126196a5408ec031e216e8e0d985085958c6543f82a8a2a
 - First line: Copyright 2016, the Dart project authors.
 
 ## dart / camera 0.11.4
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/camera-0.11.4/LICENSE
+- License text: hosted/pub.dev/camera-0.11.4/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / camera_android_camerax 0.6.30
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/camera_android_camerax-0.6.30/LICENSE
+- License text: hosted/pub.dev/camera_android_camerax-0.6.30/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / camera_avfoundation 0.9.23+2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/camera_avfoundation-0.9.23+2/LICENSE
+- License text: hosted/pub.dev/camera_avfoundation-0.9.23+2/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / camera_platform_interface 2.13.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/camera_platform_interface-2.13.1/LICENSE
+- License text: hosted/pub.dev/camera_platform_interface-2.13.1/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / camera_web 0.3.5+4
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/camera_web-0.3.5+4/LICENSE
+- License text: hosted/pub.dev/camera_web-0.3.5+4/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / characters 1.4.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/characters-1.4.1/LICENSE
+- License text: hosted/pub.dev/characters-1.4.1/LICENSE
 - License file sha256: 0371d1da6a57fb791db29d29b95333429205f51f3cb2eb3a0c12d91838a38744
 - First line: Copyright 2019, the Dart project authors.
 
 ## dart / cli_config 0.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/cli_config-0.2.0/LICENSE
+- License text: hosted/pub.dev/cli_config-0.2.0/LICENSE
 - License file sha256: 605bcf409f2347e3bcc9905ab70a2f3218e841bae372b0cbfbf305a222f74222
 - First line: Copyright 2023, the Dart project authors.
 
 ## dart / clock 1.1.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/clock-1.1.2/LICENSE
+- License text: hosted/pub.dev/clock-1.1.2/LICENSE
 - License file sha256: 58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd
 - First line: Apache License
 
 ## dart / code_assets 1.2.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/code_assets-1.2.1/LICENSE
+- License text: hosted/pub.dev/code_assets-1.2.1/LICENSE
 - License file sha256: 21ae23b0b9ff67a2dc75ab085d1e8db8ac548c5faf370af17f28dd2ef3b52b7b
 - First line: Copyright 2025, the Dart project authors.
 
 ## dart / collection 1.19.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/collection-1.19.1/LICENSE
+- License text: hosted/pub.dev/collection-1.19.1/LICENSE
 - License file sha256: ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / convert 3.1.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/convert-3.1.2/LICENSE
+- License text: hosted/pub.dev/convert-3.1.2/LICENSE
 - License file sha256: ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / coverage 1.15.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/coverage-1.15.1/LICENSE
+- License text: hosted/pub.dev/coverage-1.15.1/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / cross_file 0.3.5+4
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/cross_file-0.3.5+4/LICENSE
+- License text: hosted/pub.dev/cross_file-0.3.5+4/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / crypto 3.0.7
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/crypto-3.0.7/LICENSE
+- License text: hosted/pub.dev/crypto-3.0.7/LICENSE
 - License file sha256: ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / dbus 0.7.14
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/dbus-0.7.14/LICENSE
+- License text: hosted/pub.dev/dbus-0.7.14/LICENSE
 - License file sha256: 1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5
 - First line: Mozilla Public License Version 2.0
 
 ## dart / dio 5.10.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/dio-5.10.0/LICENSE
+- License text: hosted/pub.dev/dio-5.10.0/LICENSE
 - License file sha256: 0b4d36faa9f74d67c3b7e082fc860c643b41f5bb14b4d262fe9c3559c88992b7
 - First line: MIT License
 
 ## dart / dio_web_adapter 2.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/dio_web_adapter-2.2.0/LICENSE
+- License text: hosted/pub.dev/dio_web_adapter-2.2.0/LICENSE
 - License file sha256: 0b4d36faa9f74d67c3b7e082fc860c643b41f5bb14b4d262fe9c3559c88992b7
 - First line: MIT License
 
 ## dart / equatable 2.1.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/equatable-2.1.0/LICENSE
+- License text: hosted/pub.dev/equatable-2.1.0/LICENSE
 - License file sha256: 07720a43bdabe44206067a2bffd1089dcdc4cc5b0b7f8169308c2f8ba6ad0c86
 - First line: MIT License
 
 ## dart / fake_async 1.3.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/fake_async-1.3.3/LICENSE
+- License text: hosted/pub.dev/fake_async-1.3.3/LICENSE
 - License file sha256: 58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd
 - First line: Apache License
 
 ## dart / ffi 2.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/ffi-2.2.0/LICENSE
+- License text: hosted/pub.dev/ffi-2.2.0/LICENSE
 - License file sha256: 0371d1da6a57fb791db29d29b95333429205f51f3cb2eb3a0c12d91838a38744
 - First line: Copyright 2019, the Dart project authors.
 
 ## dart / ffi_leak_tracker 0.1.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/ffi_leak_tracker-0.1.2/LICENSE
+- License text: hosted/pub.dev/ffi_leak_tracker-0.1.2/LICENSE
 - License file sha256: 332f290333e64ed007b4f59aeeebd8fd3ceaadfbfa226a6cf2a3ab1583281624
 - First line: BSD 3-Clause License
 
 ## dart / fftea 1.5.0+1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/fftea-1.5.0+1/LICENSE
+- License text: hosted/pub.dev/fftea-1.5.0+1/LICENSE
 - License file sha256: cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
 - First line: Apache License
 
 ## dart / file 7.0.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file-7.0.1/LICENSE
+- License text: hosted/pub.dev/file-7.0.1/LICENSE
 - License file sha256: f6df86b1412172537273e8e80ee2fb8a66aa7307ce0b39ea5ddab47ca41b8c49
 - First line: Copyright 2017, the Dart project authors. All rights reserved.
 
 ## dart / file_selector 1.1.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector-1.1.0/LICENSE
+- License text: hosted/pub.dev/file_selector-1.1.0/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / file_selector_android 0.5.2+9
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_android-0.5.2+9/LICENSE
+- License text: hosted/pub.dev/file_selector_android-0.5.2+9/LICENSE
 - License file sha256: 8e139d4c7faa5e7a76752e743a745113f46e658071733bfae4914a04da12ae0e
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / file_selector_ios 0.5.3+5
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_ios-0.5.3+5/LICENSE
+- License text: hosted/pub.dev/file_selector_ios-0.5.3+5/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / file_selector_linux 0.9.4
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_linux-0.9.4/LICENSE
+- License text: hosted/pub.dev/file_selector_linux-0.9.4/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / file_selector_macos 0.9.5
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_macos-0.9.5/LICENSE
+- License text: hosted/pub.dev/file_selector_macos-0.9.5/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / file_selector_platform_interface 2.7.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_platform_interface-2.7.0/LICENSE
+- License text: hosted/pub.dev/file_selector_platform_interface-2.7.0/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / file_selector_web 0.9.5
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_web-0.9.5/LICENSE
+- License text: hosted/pub.dev/file_selector_web-0.9.5/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / file_selector_windows 0.9.3+5
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_windows-0.9.3+5/LICENSE
+- License text: hosted/pub.dev/file_selector_windows-0.9.3+5/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / fixnum 1.1.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/fixnum-1.1.1/LICENSE
+- License text: hosted/pub.dev/fixnum-1.1.1/LICENSE
 - License file sha256: ff0b91d4f3c32b25cb6ec84985e8da89b0ba2a2b2f7eef353cda5e5423a20390
 - First line: Copyright 2014, the Dart project authors.
 
@@ -286,43 +286,43 @@ backend `requirements*.txt` pins. Do not hand-edit — regenerate instead.
 
 ## dart / flutter_animate 4.5.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_animate-4.5.2/LICENSE
+- License text: hosted/pub.dev/flutter_animate-4.5.2/LICENSE
 - License file sha256: 6447ce5243f9869e88a82607d591f49736d2be2c1614161237f396d82d48e8f8
 - First line: BSD 3-Clause License
 
 ## dart / flutter_lints 6.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_lints-6.0.0/LICENSE
+- License text: hosted/pub.dev/flutter_lints-6.0.0/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
 ## dart / flutter_local_notifications 22.0.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_local_notifications-22.0.1/LICENSE
+- License text: hosted/pub.dev/flutter_local_notifications-22.0.1/LICENSE
 - License file sha256: d6885e4633e08ec3a52cd90299b97831444d487f16721e5d092289bcfedfc511
 - First line: Copyright 2018 Michael Bui. All rights reserved.
 
 ## dart / flutter_local_notifications_linux 8.0.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_local_notifications_linux-8.0.1/LICENSE
+- License text: hosted/pub.dev/flutter_local_notifications_linux-8.0.1/LICENSE
 - License file sha256: d6885e4633e08ec3a52cd90299b97831444d487f16721e5d092289bcfedfc511
 - First line: Copyright 2018 Michael Bui. All rights reserved.
 
 ## dart / flutter_local_notifications_platform_interface 12.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_local_notifications_platform_interface-12.0.0/LICENSE
+- License text: hosted/pub.dev/flutter_local_notifications_platform_interface-12.0.0/LICENSE
 - License file sha256: 2d77e2f3421858873865cf0bb0afd2fcf6f5ad8df9bdab10a7d7503bcf8a1c44
 - First line: Copyright 2020 Michael Bui. All rights reserved.
 
 ## dart / flutter_local_notifications_web 1.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_local_notifications_web-1.0.0/LICENSE
+- License text: hosted/pub.dev/flutter_local_notifications_web-1.0.0/LICENSE
 - License file sha256: 0573f66054d8a6a7c64be9378a07586516d533122812c4c2160dd398adc50c0c
 - First line: Copyright 2020 Michael Bui. All rights reserved.
 
 ## dart / flutter_local_notifications_windows 3.1.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_local_notifications_windows-3.1.1/LICENSE
+- License text: hosted/pub.dev/flutter_local_notifications_windows-3.1.1/LICENSE
 - License file sha256: bfe6db9a3430334378d729fb52a0d29972383a41e09a1d2e41f73890dcf508ca
 - First line: Copyright 2024 Michael Bui. All rights reserved.
 
@@ -333,55 +333,55 @@ backend `requirements*.txt` pins. Do not hand-edit — regenerate instead.
 
 ## dart / flutter_plugin_android_lifecycle 2.0.35
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.35/LICENSE
+- License text: hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.35/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / flutter_riverpod 3.3.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_riverpod-3.3.2/LICENSE
+- License text: hosted/pub.dev/flutter_riverpod-3.3.2/LICENSE
 - License file sha256: 757d9c09a9a2a701144328c0fd596234ea287ff62952b39cd22f9ad4caed1171
 - First line: MIT License
 
 ## dart / flutter_secure_storage 10.3.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_secure_storage-10.3.1/LICENSE
+- License text: hosted/pub.dev/flutter_secure_storage-10.3.1/LICENSE
 - License file sha256: 55dafb084270616f95b9bea53654adda8bdcad95c022a83c4cf8769073f829fa
 - First line: BSD 3-Clause License
 
 ## dart / flutter_secure_storage_darwin 0.3.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_secure_storage_darwin-0.3.2/LICENSE
+- License text: hosted/pub.dev/flutter_secure_storage_darwin-0.3.2/LICENSE
 - License file sha256: 3754c516086c62307896512b68024837bee5d2bea42a55cfd03f7448b92b06c8
 - First line: BSD 3-Clause License
 
 ## dart / flutter_secure_storage_linux 3.0.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_secure_storage_linux-3.0.1/LICENSE
+- License text: hosted/pub.dev/flutter_secure_storage_linux-3.0.1/LICENSE
 - License file sha256: 55dafb084270616f95b9bea53654adda8bdcad95c022a83c4cf8769073f829fa
 - First line: BSD 3-Clause License
 
 ## dart / flutter_secure_storage_platform_interface 2.0.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_secure_storage_platform_interface-2.0.1/LICENSE
+- License text: hosted/pub.dev/flutter_secure_storage_platform_interface-2.0.1/LICENSE
 - License file sha256: 55dafb084270616f95b9bea53654adda8bdcad95c022a83c4cf8769073f829fa
 - First line: BSD 3-Clause License
 
 ## dart / flutter_secure_storage_web 2.1.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_secure_storage_web-2.1.1/LICENSE
+- License text: hosted/pub.dev/flutter_secure_storage_web-2.1.1/LICENSE
 - License file sha256: 55dafb084270616f95b9bea53654adda8bdcad95c022a83c4cf8769073f829fa
 - First line: BSD 3-Clause License
 
 ## dart / flutter_secure_storage_windows 4.2.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_secure_storage_windows-4.2.2/LICENSE
+- License text: hosted/pub.dev/flutter_secure_storage_windows-4.2.2/LICENSE
 - License file sha256: 55dafb084270616f95b9bea53654adda8bdcad95c022a83c4cf8769073f829fa
 - First line: BSD 3-Clause License
 
 ## dart / flutter_shaders 0.1.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_shaders-0.1.3/LICENSE
+- License text: hosted/pub.dev/flutter_shaders-0.1.3/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
@@ -392,7 +392,7 @@ backend `requirements*.txt` pins. Do not hand-edit — regenerate instead.
 
 ## dart / flutter_timezone 5.1.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_timezone-5.1.0/LICENSE
+- License text: hosted/pub.dev/flutter_timezone-5.1.0/LICENSE
 - License file sha256: b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1
 - First line: Apache License
 
@@ -403,355 +403,355 @@ backend `requirements*.txt` pins. Do not hand-edit — regenerate instead.
 
 ## dart / frontend_server_client 4.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/frontend_server_client-4.0.0/LICENSE
+- License text: hosted/pub.dev/frontend_server_client-4.0.0/LICENSE
 - License file sha256: f3fedf65adeec4d6ccb2abf053ebc0f07603d402db3d3c5651322b50502e1071
 - First line: Copyright 2020, the Dart project authors.
 
 ## dart / glob 2.1.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/glob-2.1.3/LICENSE
+- License text: hosted/pub.dev/glob-2.1.3/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / go_router 17.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/go_router-17.3.0/LICENSE
+- License text: hosted/pub.dev/go_router-17.3.0/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / hooks 2.0.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/hooks-2.0.2/LICENSE
+- License text: hosted/pub.dev/hooks-2.0.2/LICENSE
 - License file sha256: 21ae23b0b9ff67a2dc75ab085d1e8db8ac548c5faf370af17f28dd2ef3b52b7b
 - First line: Copyright 2025, the Dart project authors.
 
 ## dart / http 1.6.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/http-1.6.0/LICENSE
+- License text: hosted/pub.dev/http-1.6.0/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / http_multi_server 3.2.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/http_multi_server-3.2.2/LICENSE
+- License text: hosted/pub.dev/http_multi_server-3.2.2/LICENSE
 - License file sha256: ff0b91d4f3c32b25cb6ec84985e8da89b0ba2a2b2f7eef353cda5e5423a20390
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / http_parser 4.1.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/http_parser-4.1.2/LICENSE
+- License text: hosted/pub.dev/http_parser-4.1.2/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / intl 0.20.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/intl-0.20.2/LICENSE
+- License text: hosted/pub.dev/intl-0.20.2/LICENSE
 - License file sha256: 7e124af6a556f045cb3a20cafbdaa31602ac2c82cbcb3c3b15faaaf514b06028
 - First line: Copyright 2013, the Dart project authors.
 
 ## dart / io 1.0.5
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/io-1.0.5/LICENSE
+- License text: hosted/pub.dev/io-1.0.5/LICENSE
 - License file sha256: ea97a7558a7bd7cee4e2355f7529e3cbebb0dcbb546ddb9a90f10c9eb6b08da5
 - First line: Copyright 2017, the Dart project authors.
 
 ## dart / jni 1.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/jni-1.0.0/LICENSE
+- License text: hosted/pub.dev/jni-1.0.0/LICENSE
 - License file sha256: 08a004aa8956c3cf3b24f7f69c966247233953e18e6afaa61191ea47b7eb70f6
 - First line: Copyright 2022, the Dart project authors.
 
 ## dart / jni_flutter 1.0.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/jni_flutter-1.0.1/LICENSE
+- License text: hosted/pub.dev/jni_flutter-1.0.1/LICENSE
 - License file sha256: b1fcb475d67817411f335ac92872507011e574c4cb29cfdaaf7707b75641932c
 - First line: Copyright 2026, the Dart project authors.
 
 ## dart / leak_tracker 11.0.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/leak_tracker-11.0.2/LICENSE
+- License text: hosted/pub.dev/leak_tracker-11.0.2/LICENSE
 - License file sha256: 08a004aa8956c3cf3b24f7f69c966247233953e18e6afaa61191ea47b7eb70f6
 - First line: Copyright 2022, the Dart project authors.
 
 ## dart / leak_tracker_flutter_testing 3.0.10
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/leak_tracker_flutter_testing-3.0.10/LICENSE
+- License text: hosted/pub.dev/leak_tracker_flutter_testing-3.0.10/LICENSE
 - License file sha256: 08a004aa8956c3cf3b24f7f69c966247233953e18e6afaa61191ea47b7eb70f6
 - First line: Copyright 2022, the Dart project authors.
 
 ## dart / leak_tracker_testing 3.0.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/leak_tracker_testing-3.0.2/LICENSE
+- License text: hosted/pub.dev/leak_tracker_testing-3.0.2/LICENSE
 - License file sha256: 08a004aa8956c3cf3b24f7f69c966247233953e18e6afaa61191ea47b7eb70f6
 - First line: Copyright 2022, the Dart project authors.
 
 ## dart / lints 6.1.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/lints-6.1.0/LICENSE
+- License text: hosted/pub.dev/lints-6.1.0/LICENSE
 - License file sha256: 421fe78c3b5df297f8b4ab2c74f2450a274ee6d245a113091f6b9f90570af193
 - First line: Copyright 2021, the Dart project authors.
 
 ## dart / logging 1.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/logging-1.3.0/LICENSE
+- License text: hosted/pub.dev/logging-1.3.0/LICENSE
 - License file sha256: dfb09c74e29386cd3e2719f32d4995d59526179753931d31840757c77fbf2791
 - First line: Copyright 2013, the Dart project authors.
 
 ## dart / matcher 0.12.19
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/matcher-0.12.19/LICENSE
+- License text: hosted/pub.dev/matcher-0.12.19/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / material_color_utilities 0.13.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/material_color_utilities-0.13.0/LICENSE
+- License text: hosted/pub.dev/material_color_utilities-0.13.0/LICENSE
 - License file sha256: d103f246ef4c18dab8af0c1dcf6a8af884e5cff554da7261a48ac43c17d98f2e
 - First line: Apache License
 
 ## dart / meta 1.18.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/meta-1.18.0/LICENSE
+- License text: hosted/pub.dev/meta-1.18.0/LICENSE
 - License file sha256: b71519245009a3b8f126196a5408ec031e216e8e0d985085958c6543f82a8a2a
 - First line: Copyright 2016, the Dart project authors.
 
 ## dart / mime 2.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/mime-2.0.0/LICENSE
+- License text: hosted/pub.dev/mime-2.0.0/LICENSE
 - License file sha256: ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / node_preamble 2.0.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/node_preamble-2.0.2/LICENSE
+- License text: hosted/pub.dev/node_preamble-2.0.2/LICENSE
 - License file sha256: 41997ee02074e3796e539b81b4501ed7d8bc1a620d11ef32cf56494e778461a9
 - First line: The MIT License (MIT)
 
 ## dart / objective_c 9.4.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/objective_c-9.4.1/LICENSE
+- License text: hosted/pub.dev/objective_c-9.4.1/LICENSE
 - License file sha256: 1cda25a8de6880c5338de0b4a06ee89e8537c213eb1379c16a4c035bfd198b5c
 - First line: Copyright 2024, the Dart project authors.
 
 ## dart / package_config 2.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/package_config-2.2.0/LICENSE
+- License text: hosted/pub.dev/package_config-2.2.0/LICENSE
 - License file sha256: 0371d1da6a57fb791db29d29b95333429205f51f3cb2eb3a0c12d91838a38744
 - First line: Copyright 2019, the Dart project authors.
 
 ## dart / package_info_plus 10.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/package_info_plus-10.2.0/LICENSE
+- License text: hosted/pub.dev/package_info_plus-10.2.0/LICENSE
 - License file sha256: 3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c
 - First line: Copyright 2017 The Chromium Authors. All rights reserved.
 
 ## dart / package_info_plus_platform_interface 4.1.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/package_info_plus_platform_interface-4.1.0/LICENSE
+- License text: hosted/pub.dev/package_info_plus_platform_interface-4.1.0/LICENSE
 - License file sha256: 3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c
 - First line: Copyright 2017 The Chromium Authors. All rights reserved.
 
 ## dart / path 1.9.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/path-1.9.1/LICENSE
+- License text: hosted/pub.dev/path-1.9.1/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / path_provider 2.1.6
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/path_provider-2.1.6/LICENSE
+- License text: hosted/pub.dev/path_provider-2.1.6/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / path_provider_android 2.3.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/path_provider_android-2.3.1/LICENSE
+- License text: hosted/pub.dev/path_provider_android-2.3.1/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / path_provider_foundation 2.6.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/path_provider_foundation-2.6.0/LICENSE
+- License text: hosted/pub.dev/path_provider_foundation-2.6.0/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / path_provider_linux 2.2.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.2/LICENSE
+- License text: hosted/pub.dev/path_provider_linux-2.2.2/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / path_provider_platform_interface 2.1.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/path_provider_platform_interface-2.1.3/LICENSE
+- License text: hosted/pub.dev/path_provider_platform_interface-2.1.3/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / path_provider_windows 2.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/LICENSE
+- License text: hosted/pub.dev/path_provider_windows-2.3.0/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
 ## dart / permission_handler 12.0.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/permission_handler-12.0.3/LICENSE
+- License text: hosted/pub.dev/permission_handler-12.0.3/LICENSE
 - License file sha256: 65a603f544989f5cff639d5c55f56e781796e5e1b2f8546a7cb4cb26763133f3
 - First line: MIT License
 
 ## dart / permission_handler_android 13.0.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/permission_handler_android-13.0.1/LICENSE
+- License text: hosted/pub.dev/permission_handler_android-13.0.1/LICENSE
 - License file sha256: 65a603f544989f5cff639d5c55f56e781796e5e1b2f8546a7cb4cb26763133f3
 - First line: MIT License
 
 ## dart / permission_handler_apple 9.4.10
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/permission_handler_apple-9.4.10/LICENSE
+- License text: hosted/pub.dev/permission_handler_apple-9.4.10/LICENSE
 - License file sha256: 65a603f544989f5cff639d5c55f56e781796e5e1b2f8546a7cb4cb26763133f3
 - First line: MIT License
 
 ## dart / permission_handler_html 0.1.3+5
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/permission_handler_html-0.1.3+5/LICENSE
+- License text: hosted/pub.dev/permission_handler_html-0.1.3+5/LICENSE
 - License file sha256: 65a603f544989f5cff639d5c55f56e781796e5e1b2f8546a7cb4cb26763133f3
 - First line: MIT License
 
 ## dart / permission_handler_platform_interface 4.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/permission_handler_platform_interface-4.3.0/LICENSE
+- License text: hosted/pub.dev/permission_handler_platform_interface-4.3.0/LICENSE
 - License file sha256: 65a603f544989f5cff639d5c55f56e781796e5e1b2f8546a7cb4cb26763133f3
 - First line: MIT License
 
 ## dart / permission_handler_windows 0.2.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/permission_handler_windows-0.2.1/LICENSE
+- License text: hosted/pub.dev/permission_handler_windows-0.2.1/LICENSE
 - License file sha256: 65a603f544989f5cff639d5c55f56e781796e5e1b2f8546a7cb4cb26763133f3
 - First line: MIT License
 
 ## dart / petitparser 7.0.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/petitparser-7.0.2/LICENSE
+- License text: hosted/pub.dev/petitparser-7.0.2/LICENSE
 - License file sha256: d2e8ffdbe89acbc10d5d1f2b03e7dbddf0a9f1742e809176682b62ef3d573b3e
 - First line: The MIT License
 
 ## dart / platform 3.1.6
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/platform-3.1.6/LICENSE
+- License text: hosted/pub.dev/platform-3.1.6/LICENSE
 - License file sha256: 143839f62c9b7f88143ea9f688361c27050888acde7696b34e04414bd254fafc
 - First line: Copyright 2017, the Dart project authors. All rights reserved.
 
 ## dart / plugin_platform_interface 2.1.8
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/plugin_platform_interface-2.1.8/LICENSE
+- License text: hosted/pub.dev/plugin_platform_interface-2.1.8/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
 ## dart / pool 1.5.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/pool-1.5.2/LICENSE
+- License text: hosted/pub.dev/pool-1.5.2/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / posix 6.5.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/posix-6.5.2/LICENSE
+- License text: hosted/pub.dev/posix-6.5.2/LICENSE
 - License file sha256: aaf6271abd048deb3125828613f1797b7556472de6c7acd7103bd43e9cb6a84b
 - First line: MIT License
 
 ## dart / pub_semver 2.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/pub_semver-2.2.0/LICENSE
+- License text: hosted/pub.dev/pub_semver-2.2.0/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / record_use 0.6.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/record_use-0.6.0/LICENSE
+- License text: hosted/pub.dev/record_use-0.6.0/LICENSE
 - License file sha256: 1cda25a8de6880c5338de0b4a06ee89e8537c213eb1379c16a4c035bfd198b5c
 - First line: Copyright 2024, the Dart project authors.
 
 ## dart / riverpod 3.3.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/riverpod-3.3.2/LICENSE
+- License text: hosted/pub.dev/riverpod-3.3.2/LICENSE
 - License file sha256: 757d9c09a9a2a701144328c0fd596234ea287ff62952b39cd22f9ad4caed1171
 - First line: MIT License
 
 ## dart / share_plus 13.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/share_plus-13.2.0/LICENSE
+- License text: hosted/pub.dev/share_plus-13.2.0/LICENSE
 - License file sha256: eb9741a672906ebd01fd9b3bef38f6c82eff250e91149cf404539ee7981079fd
 - First line: Copyright 2017, the Flutter project authors. All rights reserved.
 
 ## dart / share_plus_platform_interface 7.1.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/share_plus_platform_interface-7.1.0/LICENSE
+- License text: hosted/pub.dev/share_plus_platform_interface-7.1.0/LICENSE
 - License file sha256: 3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c
 - First line: Copyright 2017 The Chromium Authors. All rights reserved.
 
 ## dart / shared_preferences 2.5.5
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences-2.5.5/LICENSE
+- License text: hosted/pub.dev/shared_preferences-2.5.5/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / shared_preferences_android 2.4.26
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences_android-2.4.26/LICENSE
+- License text: hosted/pub.dev/shared_preferences_android-2.4.26/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / shared_preferences_foundation 2.5.6
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences_foundation-2.5.6/LICENSE
+- License text: hosted/pub.dev/shared_preferences_foundation-2.5.6/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / shared_preferences_linux 2.4.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences_linux-2.4.1/LICENSE
+- License text: hosted/pub.dev/shared_preferences_linux-2.4.1/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
 ## dart / shared_preferences_platform_interface 2.4.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences_platform_interface-2.4.2/LICENSE
+- License text: hosted/pub.dev/shared_preferences_platform_interface-2.4.2/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / shared_preferences_web 2.4.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences_web-2.4.3/LICENSE
+- License text: hosted/pub.dev/shared_preferences_web-2.4.3/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
 ## dart / shared_preferences_windows 2.4.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences_windows-2.4.1/LICENSE
+- License text: hosted/pub.dev/shared_preferences_windows-2.4.1/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
 ## dart / shelf 1.4.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shelf-1.4.2/LICENSE
+- License text: hosted/pub.dev/shelf-1.4.2/LICENSE
 - License file sha256: ff0b91d4f3c32b25cb6ec84985e8da89b0ba2a2b2f7eef353cda5e5423a20390
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / shelf_packages_handler 3.0.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shelf_packages_handler-3.0.2/LICENSE
+- License text: hosted/pub.dev/shelf_packages_handler-3.0.2/LICENSE
 - License file sha256: b71519245009a3b8f126196a5408ec031e216e8e0d985085958c6543f82a8a2a
 - First line: Copyright 2016, the Dart project authors.
 
 ## dart / shelf_static 1.1.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shelf_static-1.1.3/LICENSE
+- License text: hosted/pub.dev/shelf_static-1.1.3/LICENSE
 - License file sha256: ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / shelf_web_socket 3.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/shelf_web_socket-3.0.0/LICENSE
+- License text: hosted/pub.dev/shelf_web_socket-3.0.0/LICENSE
 - License file sha256: ff0b91d4f3c32b25cb6ec84985e8da89b0ba2a2b2f7eef353cda5e5423a20390
 - First line: Copyright 2014, the Dart project authors.
 
@@ -762,199 +762,199 @@ backend `requirements*.txt` pins. Do not hand-edit — regenerate instead.
 
 ## dart / source_map_stack_trace 2.1.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/source_map_stack_trace-2.1.2/LICENSE
+- License text: hosted/pub.dev/source_map_stack_trace-2.1.2/LICENSE
 - License file sha256: ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / source_maps 0.10.13
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/source_maps-0.10.13/LICENSE
+- License text: hosted/pub.dev/source_maps-0.10.13/LICENSE
 - License file sha256: ff0b91d4f3c32b25cb6ec84985e8da89b0ba2a2b2f7eef353cda5e5423a20390
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / source_span 1.10.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/source_span-1.10.2/LICENSE
+- License text: hosted/pub.dev/source_span-1.10.2/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / stack_trace 1.12.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/stack_trace-1.12.1/LICENSE
+- License text: hosted/pub.dev/stack_trace-1.12.1/LICENSE
 - License file sha256: ff0b91d4f3c32b25cb6ec84985e8da89b0ba2a2b2f7eef353cda5e5423a20390
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / state_notifier 1.0.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/state_notifier-1.0.0/LICENSE
+- License text: hosted/pub.dev/state_notifier-1.0.0/LICENSE
 - License file sha256: 757d9c09a9a2a701144328c0fd596234ea287ff62952b39cd22f9ad4caed1171
 - First line: MIT License
 
 ## dart / stream_channel 2.1.4
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/stream_channel-2.1.4/LICENSE
+- License text: hosted/pub.dev/stream_channel-2.1.4/LICENSE
 - License file sha256: ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / stream_transform 2.1.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/stream_transform-2.1.1/LICENSE
+- License text: hosted/pub.dev/stream_transform-2.1.1/LICENSE
 - License file sha256: ea97a7558a7bd7cee4e2355f7529e3cbebb0dcbb546ddb9a90f10c9eb6b08da5
 - First line: Copyright 2017, the Dart project authors.
 
 ## dart / string_scanner 1.4.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/string_scanner-1.4.1/LICENSE
+- License text: hosted/pub.dev/string_scanner-1.4.1/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / synchronized 3.4.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/synchronized-3.4.1/LICENSE
+- License text: hosted/pub.dev/synchronized-3.4.1/LICENSE
 - License file sha256: 6d07c6bb60afb906049d507e19fcc4c6b59e35c0dd0f8a7302e87b3fb0576900
 - First line: MIT License
 
 ## dart / term_glyph 1.2.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/term_glyph-1.2.2/LICENSE
+- License text: hosted/pub.dev/term_glyph-1.2.2/LICENSE
 - License file sha256: ea97a7558a7bd7cee4e2355f7529e3cbebb0dcbb546ddb9a90f10c9eb6b08da5
 - First line: Copyright 2017, the Dart project authors.
 
 ## dart / test 1.31.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/test-1.31.0/LICENSE
+- License text: hosted/pub.dev/test-1.31.0/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / test_api 0.7.11
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/test_api-0.7.11/LICENSE
+- License text: hosted/pub.dev/test_api-0.7.11/LICENSE
 - License file sha256: ff1b9f0df9036c04be424b1e3ce12789bea880ad5ffc3a48e069ae2d40a087a4
 - First line: Copyright 2018, the Dart project authors.
 
 ## dart / test_core 0.6.17
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/test_core-0.6.17/LICENSE
+- License text: hosted/pub.dev/test_core-0.6.17/LICENSE
 - License file sha256: ff1b9f0df9036c04be424b1e3ce12789bea880ad5ffc3a48e069ae2d40a087a4
 - First line: Copyright 2018, the Dart project authors.
 
 ## dart / timezone 0.11.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/timezone-0.11.1/LICENSE
+- License text: hosted/pub.dev/timezone-0.11.1/LICENSE
 - License file sha256: d8f160d6dcdd4ec77522646d04c139d89d55910d6852792d2b441625763c012f
 - First line: Copyright (c) 2014, timezone project authors.
 
 ## dart / typed_data 1.4.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/typed_data-1.4.0/LICENSE
+- License text: hosted/pub.dev/typed_data-1.4.0/LICENSE
 - License file sha256: ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / url_launcher_linux 3.2.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/url_launcher_linux-3.2.2/LICENSE
+- License text: hosted/pub.dev/url_launcher_linux-3.2.2/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / url_launcher_platform_interface 2.3.2
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/url_launcher_platform_interface-2.3.2/LICENSE
+- License text: hosted/pub.dev/url_launcher_platform_interface-2.3.2/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
 ## dart / url_launcher_web 2.4.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/url_launcher_web-2.4.3/LICENSE
+- License text: hosted/pub.dev/url_launcher_web-2.4.3/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / url_launcher_windows 3.1.5
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/url_launcher_windows-3.1.5/LICENSE
+- License text: hosted/pub.dev/url_launcher_windows-3.1.5/LICENSE
 - License file sha256: 420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d
 - First line: Copyright 2013 The Flutter Authors
 
 ## dart / uuid 4.5.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/uuid-4.5.3/LICENSE
+- License text: hosted/pub.dev/uuid-4.5.3/LICENSE
 - License file sha256: ad3e5523e51004e94ba9ce728805b1b4242dbccdb65e62b523800e35a8a7cfdc
 - First line: Copyright (c) 2021 Yulian Kuncheff
 
 ## dart / vector_math 2.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/vector_math-2.2.0/LICENSE
+- License text: hosted/pub.dev/vector_math-2.2.0/LICENSE
 - License file sha256: b5d856a1e27e9ebea4957fc3526f1c65782a04894b113c6b3b0fb1321dbdec55
 - First line: Copyright 2015, Google Inc. All rights reserved.
 
 ## dart / vm_service 15.2.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/vm_service-15.2.0/LICENSE
+- License text: hosted/pub.dev/vm_service-15.2.0/LICENSE
 - License file sha256: ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888
 - First line: Copyright 2015, the Dart project authors.
 
 ## dart / wakelock_plus 1.6.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/wakelock_plus-1.6.1/LICENSE
+- License text: hosted/pub.dev/wakelock_plus-1.6.1/LICENSE
 - License file sha256: ebff92b2e4105e903605f70bac0030c20b7a1d9d43fd73f8b8aed08ab070fcb9
 - First line: BSD 3-Clause License
 
 ## dart / wakelock_plus_platform_interface 1.5.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/wakelock_plus_platform_interface-1.5.1/LICENSE
+- License text: hosted/pub.dev/wakelock_plus_platform_interface-1.5.1/LICENSE
 - License file sha256: 1a95201dd1f509289fbbf929f72be2a25fd73c799697e30f5e7782a9cabf5102
 - First line: BSD 3-Clause License
 
 ## dart / watcher 1.2.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/watcher-1.2.1/LICENSE
+- License text: hosted/pub.dev/watcher-1.2.1/LICENSE
 - License file sha256: 3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16
 - First line: Copyright 2014, the Dart project authors.
 
 ## dart / web 1.1.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/web-1.1.1/LICENSE
+- License text: hosted/pub.dev/web-1.1.1/LICENSE
 - License file sha256: aa913ff50d7542eb8cc35b9f48a80928ac6819ba9057f85d424655e3e8dc271c
 - First line: Copyright 2023, the Dart project authors.
 
 ## dart / web_socket 1.0.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/web_socket-1.0.1/LICENSE
+- License text: hosted/pub.dev/web_socket-1.0.1/LICENSE
 - License file sha256: cbe822ef3446af4366b2b82c48b0979d0b12865edfe74c22b9aa617fc362d6e0
 - First line: Copyright 2024, the Dart project authors.
 
 ## dart / web_socket_channel 3.0.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/web_socket_channel-3.0.3/LICENSE
+- License text: hosted/pub.dev/web_socket_channel-3.0.3/LICENSE
 - License file sha256: a4b5d7d31626e90b77e8696f1c47643aa31f52e17c1907c1ab60b068110e6e10
 - First line: Copyright 2016, the Dart project authors.
 
 ## dart / webkit_inspection_protocol 1.2.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/webkit_inspection_protocol-1.2.1/LICENSE
+- License text: hosted/pub.dev/webkit_inspection_protocol-1.2.1/LICENSE
 - License file sha256: eb9a6b9672316612439514f10b5d3b24bcd140313c96a73c370bb7b07897a8cd
 - First line: Copyright 2013, Google Inc.
 
 ## dart / win32 6.3.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/win32-6.3.0/LICENSE
+- License text: hosted/pub.dev/win32-6.3.0/LICENSE
 - License file sha256: 87ef8bccdd619f2345ba5b9026cf1d6cccb305e36ab83849a8a3af9293abde7e
 - First line: BSD 3-Clause License
 
 ## dart / xdg_directories 1.1.0
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/xdg_directories-1.1.0/LICENSE
+- License text: hosted/pub.dev/xdg_directories-1.1.0/LICENSE
 - License file sha256: 89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9
 - First line: Copyright 2013 The Flutter Authors. All rights reserved.
 
 ## dart / xml 6.6.1
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/xml-6.6.1/LICENSE
+- License text: hosted/pub.dev/xml-6.6.1/LICENSE
 - License file sha256: 1f18a2e5a5c57381d93efa92df86477eb1205689b345417c90fcfdc09fa4fa1f
 - First line: The MIT License
 
 ## dart / yaml 3.1.3
 
-- License text: /home/ubuntu/.pub-cache/hosted/pub.dev/yaml-3.1.3/LICENSE
+- License text: hosted/pub.dev/yaml-3.1.3/LICENSE
 - License file sha256: d47b93335401b052d79a2f5a3710e4cf7b5aed782faedf84d40fbdd6eb934ec7
 - First line: Copyright (c) 2014, the Dart project authors.
 
