@@ -163,3 +163,89 @@ ezért **egy javító kör** indul rájuk, nem follow-up.
 
 F1, F2, F3 — a fenti „Irány" sorokkal. F4–F8 nem blokkol és nem javítandó
 ebben a körben.
+
+---
+
+## 8. Javító kör után — újra-ellenőrzés (commit `82a97527`, 2026-08-28)
+
+A javító kör a három MINOR-t zárta; a diff 4 fájl, +229/−8 sor
+(`tool/check_feature_flags.dart`, `test/tooling/feature_flag_audit_test.dart`,
+`docs/release/kill-switches.md`, a brief §10 kiegészítése). Gépi scope-audit a
+jelzésfájlban: `scope_audit=ok`, `scope_audit_base=f5b8e6f5`,
+`scope_audit_changed=4`. A `feature_flag_source.dart` resolver — a kör
+biztonsági magja — **nem módosult**.
+
+### 8.1 F1 — ZÁRVA, saját próbával mérve
+
+`tool/check_feature_flags.dart:31-44` — a minta
+`^\s*final bool\??\s+(\w+)\s*(?:;|=)` `multiLine`-nal: felismeri a csupasz, a
+nullable és az inicializált alakot, és sor-elejéhez horgonyzottan kihagyja a
+komment- és getter-sorokat. A javítás ELŐTT pirosra vitt volna cellák
+bekerültek (`parseFeatureFlagFieldNames` + `auditFeatureFlagRegistry`
+fixture-cellák).
+
+**Saját, független reprodukció** (friss `/tmp/review2-e12-r05` klón, ugyanaz a
+két mező, amivel a 2.4 szökést mértem):
+
+```
+$ # beszúrva: `final bool? probeNullableFlag;` és `final bool probeInitializedFlag = true;`
+$ dart run tool/check_feature_flags.dart
+Feature flag audit failed:
+- [missingCatalogEntry] FeatureFlags field "probeNullableFlag" ... has no catalog entry in featureFlagRegistry.
+- [missingCatalogEntry] FeatureFlags field "probeInitializedFlag" ... has no catalog entry in featureFlagRegistry.
+AUDIT_EXIT=1                                   # ← korábban 0 volt
+$ git checkout -- lib/app/config/feature_flags.dart && dart run tool/check_feature_flags.dart
+Feature flag audit OK (0 issue(s)).
+AUDIT_EXIT=0
+```
+
+**Túllövés-ellenőrzés (saját próba):** `// final bool commentedOutFlag;` és
+`/// final bool docCommentFlag;` sorokat szúrva a forrásba az audit **egyetlen**
+`missingCatalogEntry`-t sem adott rájuk — a horgonyzás helyes, nincs
+komment-beli fals pozitív (`docs/LESSONS.md` L291 hibaosztálya).
+
+### 8.2 F3 — ZÁRVA, saját próbával mérve
+
+Új issue-kód `incompleteCatalogEntry` (`:70-74`, `:167-184`): üres vagy
+csak-whitespace `owner`/`killSwitchPath`. Saját próba ugyanabban a klónban:
+
+```
+$ # a valós katalógus egyetlen bejegyzésén: owner: '   '
+$ dart run tool/check_feature_flags.dart
+Feature flag audit failed:
+- [incompleteCatalogEntry] catalog entry "accountEnabled" has an empty or whitespace-only owner
+  (A1 requires owner, risk, fail-closed default and kill-switch path).
+AUDIT_EXIT=1
+```
+
+Visszaállítva a working tree tiszta, az audit újra `exit 0`. A valós katalógus
+teljességét külön cella is méri („the real registry has no empty owner or
+kill-switch path (40/40)").
+
+### 8.3 F2 — ZÁRVA (a bizonyítatlan állítás visszavonva)
+
+`docs/release/kill-switches.md:10-15` már azt írja, ami IGAZ: a tábla a Dart
+katalógus **kézi vetülete** (nem generált); a Dart-oldali driftet a
+`check_feature_flags.dart` gépileg fogja, „de magát ezt a markdown táblát ma
+semmi nem méri — frissen tartása szerkesztői fegyelem kérdése". A választás
+indoklása a brief §10.7-ben. Ez a kisebb diffű, őszinte út; a markdown↔katalógus
+paritás-őr felvétele legitim follow-up marad.
+
+### 8.4 F4–F8
+
+Változatlanul NOTE, nem javítandó ebben a körben. Az F8 (`--effort medium` a
+§10-ben vs `high` az engine-registryben) dokumentációs elcsúszás, nem
+viselkedés.
+
+### 8.5 Gate — saját, független futtatás a javító commit után
+
+Friss `/tmp/review2-e12-r05` klónban, a `tools/round-gate.sh` artefaktumon
+(format, analyze, a 3 célzott teszt, architecture, secrets, l10n): **minden
+lépés ZÖLD**, és `dart run tool/check_feature_flags.dart` → `exit 0`.
+
+## 9. VÉGSŐ DÖNTÉS: APPROVED
+
+0 BLOCKER, 0 MAJOR, 0 nyitott MINOR. A három MINOR-t a javító kör zárta, és
+mindhármat **saját, független próbával** ellenőriztem (8.1–8.3). A merge
+feltétele a záró, exact-SHA CI-kapu: `full-gate.yml` és `router-ci.yml`
+`success` a merge SHA-n.
