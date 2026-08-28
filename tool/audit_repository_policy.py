@@ -48,6 +48,14 @@ REQUIRED_ISSUE_FIELDS = ("chapter", "round", "acceptance", "test_plan", "rollbac
 # D1-sertes: emberi jovahagyast a merge FELTETELEVE tevo minta a
 # branch-protection.md-ben. A pontos szam (>=1) a tiltott allitas, mert az
 # fagyasztana be az autonom kor-pipeline squash-merge-et.
+#
+# A minta SZOVEGES elofordulast mer, nem szandekot: egy olyan mondat is
+# pirosra valt, amely ezt a tilalmat sajat szavaival mondja ki (nem csak
+# egy olyan, ami megserti). Ez szandekos fail-closed viselkedes, nem hiba
+# - a szerkesztett dokumentumok ezert a szabalyt korulirassal fogalmazzak,
+# a lenti mintak szo szerinti fordulatai nelkul, es a minta GYENGITESE
+# (pl. negacio-erzekennye tetel) NEM megoldas, mert az pont ezt az ort
+# olne meg.
 FORBIDDEN_HUMAN_APPROVAL_PATTERNS = (
     re.compile(r"required_approving_review_count\s*[:=]?\s*[1-9]"),
     re.compile(r"legal[aá]bb\s+1\s+(?:approving\s+)?review", re.IGNORECASE),

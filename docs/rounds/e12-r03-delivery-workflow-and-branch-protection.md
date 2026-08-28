@@ -382,4 +382,81 @@ A munka a §4 engedélyezett fájllistán belül maradt. `.github/workflows/**`,
 `backend/**`, `tools/**` egyike sem módosult (`git status --porcelain` a kör
 végén az összes fenti fájlon kívül tiszta).
 
+### 10.6 Javító kör (F1 MAJOR, F2 MINOR — a független review leletei)
+
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`, `--effort medium`), 2026-08-28
+(második, javító futás).
+
+**F1 — az A8 önvédő cella vak volt a `Process.start` alakra.** A
+`forbiddenProcessCall` egyetlen, `'Process' + '.run'` mintát tartalmazott —
+ez a `Process.run` és a `Process.runSync` alakot fedte, a `Process.start`-ot
+nem, miközben a group-/teszt-név és a komment mindkét belépési pontot
+lefedettnek állította. Javítás: `forbiddenProcessCallMarkers` most KÉT
+darabolt konstanst tartalmaz (`'Process' '.run'` és `'Process' '.start'`,
+adjacent string-literal konkatenációval, hogy a fájl saját szövege ne
+tartalmazza egyik mintát sem összefüggően), a teszt mindkettőt végigméri, és
+a teszt-/group-név, illetve a komment már csak azt állítja, amit a kód
+ténylegesen mér — egyik szöveg sem nevezi meg szó szerint, összefüggően a
+keresett mintákat (ugyanaz az önhivatkozási védelem, mint eddig).
+
+**Második valódi-sértés próba (KÖTELEZŐ, F1 bizonyítéka):** a `main()` elejére
+beszúrva `Process.start('rg', ['-n', 'x']).ignore();`, majd
+`tools/round-gate.sh test/tooling/repository_policy_test.dart` lefuttatva.
+
+RED (kilépési kód 10, a `test` lépés kilépési kódja 1):
+
+```
+00:00 +27 -1: A8 — the guard itself never shells out to an external binary (L110) this test file never spawns an external process through any dart:io Process entry point [E]
+...
+00:00 +27 -1: Some tests failed.
+  /home/ubuntu/ss-sonnet-impl-e12-r03/test/tooling/repository_policy_test.dart: A8 — the guard itself never shells out to an external binary (L110) this test file never spawns an external process through any dart:io Process entry point
+    → [3] test test/tooling/repository_policy_test.dart: PIROS (kilépési kód 1)
+```
+
+A beszúrt sor eltávolítva (`diff` a mentett eredetivel üres,
+`grep -n "Process.start" test/tooling/repository_policy_test.dart` nem talál
+semmit), majd a gate újra lefuttatva — minden lépés ismét ZÖLD, 28/28 teszt
+zöld (lásd §10.2 mintáját, azonos kimenet).
+
+**F2 — az A6 tiltott-minta halmaz nem különböztette meg az ELŐÍRÁST a
+TILALOMTÓL.** A `forbiddenHumanApprovalPatterns` (Dart) és a
+`FORBIDDEN_HUMAN_APPROVAL_PATTERNS` (Python) fölé egy-egy doc-comment
+bekezdés került: a minta szöveges előfordulást mér, nem szándékot, ezért a
+tilalom saját szavakkal való kimondása is pirosra vált — ez szándékos
+fail-closed, a minta gyengítése NEM megoldás. A
+`docs/process/branch-protection.md` végére egy új **§6** került ugyanezzel
+az üzenettel, a szerkesztőnek szólva; a §6 szövege maga is körülírással
+fogalmaz (nem tartalmazza szó szerint, összefüggően egyik tiltott mintát
+sem) — ellenőrizve: a három `FORBIDDEN_HUMAN_APPROVAL_PATTERNS` regex egyike
+sem illeszkedik az új §6 szövegére (`python3` reprodukció a saját regexekkel,
+mind `None`).
+
+**Kötelező záró ellenőrzés — tényleges kimenet (a javítás után, végleges
+állapot):**
+
+```
+$ tools/round-gate.sh test/tooling/repository_policy_test.dart
+```
+
+Minden lépés ZÖLD: `format`, `analyze` (`No issues found!`), `test
+test/tooling/repository_policy_test.dart` (28/28 zöld, `A8` teszt-neve immár
+`this test file never spawns an external process through any dart:io
+Process entry point`), `architecture` (12 allowlistolt eltérés, változatlan),
+`secrets` (3944 fájl, 0 lelet), `l10n` (OK). Kilépési kód: 0.
+
+```
+$ python3 tool/audit_repository_policy.py --dry-run
+Repository-policy audit: minden ellenorzes zold.
+
+Live branch-protection ellenorzeshez (operatori lepes, NEM ez a script futtatja):
+  gh api repos/wolfcasaba/strumsight/branches/main/protection
+```
+
+Kilépési kód: 0.
+
+**Módosított fájlok ehhez a javító körhöz** (a §4-listával egyező
+allowlist): `test/tooling/repository_policy_test.dart`,
+`tool/audit_repository_policy.py`, `docs/process/branch-protection.md`,
+ez a szakasz (§10.6). Egyik sem lépett túl az engedélyezett négy fájlon.
+
 ## 11. Review — a Claude tölti ki

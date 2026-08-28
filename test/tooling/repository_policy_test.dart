@@ -417,6 +417,14 @@ List<String> findPhantomCodeownersPaths(
 /// `.github/CODEOWNERS`-ben vagy `docs/process/branch-protection.md`-ben —
 /// ez DEADLOCK-ba vinné az autonóm kör-pipeline squash-merge-ét (ADR 0444
 /// D1, ADR 0050 "Szóló-fejlesztői adaptációk").
+///
+/// A minta SZÖVEGES előfordulást mér, nem szándékot: egy olyan mondat is
+/// pirosra vált, amely ezt a tilalmat a saját szavaival mondja ki (nem csak
+/// egy olyan, ami megsérti). Ez szándékos fail-closed viselkedés, nem hiba
+/// — a szerkesztett dokumentumok ezért a szabályt körülírással fogalmazzák,
+/// a lenti minták szó szerinti fordulatai nélkül, és **a minta gyengítése
+/// (pl. negáció-érzékennyé tétel) nem megoldás**, mert az pont ezt az őrt
+/// ölné meg.
 final List<RegExp> forbiddenHumanApprovalPatterns = [
   RegExp(r'required_approving_review_count\s*[:=]?\s*[1-9]'),
   RegExp(r'legal[aá]bb\s+1\s+(?:approving\s+)?review', caseSensitive: false),
@@ -794,23 +802,32 @@ body:
   group(
     'A8 — the guard itself never shells out to an external binary (L110)',
     () {
-      // Built via concatenation so this file's OWN source text never
-      // contains the literal marker being searched for — a self-matching
-      // guard would always fail regardless of the rest of the file,
-      // exactly like the A9 guard in sdd_index_guard_test.dart avoids
-      // writing "package:" directly adjacent to "yaml" in its own source.
-      final forbiddenProcessCall =
-          'Process'
-          '.run';
+      // Built via adjacent string-literal concatenation so this file's OWN
+      // source text never contains either literal marker being searched
+      // for contiguously — a self-matching guard would always fail
+      // regardless of the rest of the file, exactly like the A9 guard in
+      // sdd_index_guard_test.dart avoids writing "package:" directly
+      // adjacent to "yaml" in its own source.
+      //
+      // `dart:io` has three external-process entry points, but only two
+      // distinct name prefixes: the synchronous variant shares its prefix
+      // with the async one, so a single marker covers both, and a second,
+      // unrelated marker covers the third entry point.
+      final forbiddenProcessCallMarkers = [
+        'Process'
+            '.run',
+        'Process'
+            '.start',
+      ];
 
-      test('this test file never spawns an external process', () {
+      test('this test file never spawns an external process through any '
+          'dart:io Process entry point', () {
         final source = File(
           'test/tooling/repository_policy_test.dart',
         ).readAsStringSync();
-        // The synchronous variant of that call starts with the same
-        // characters, so one check covers both external-process entry
-        // points without spelling either literally in this description.
-        expect(source, isNot(contains(forbiddenProcessCall)));
+        for (final marker in forbiddenProcessCallMarkers) {
+          expect(source, isNot(contains(marker)));
+        }
       });
     },
   );

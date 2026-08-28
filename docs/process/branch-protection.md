@@ -67,3 +67,16 @@ Ezt a parancsot Administration-jogú tokennel az operátor futtatja, amikor a
 tényleges GitHub-oldali beállítást akarja bekapcsolni vagy ellenőrizni — az
 implementer és az automatizált audit egyaránt csak dokumentál, hálózatot nem
 hív.
+
+## 6. Miért kerüli ez a dokumentum a tiltott szókapcsolatokat
+
+Az A6 guard (`tool/audit_repository_policy.py`,
+`test/tooling/repository_policy_test.dart`, ADR 0444 D1) ebben a fájlban és
+a `.github/CODEOWNERS`-ben SZÖVEGES mintát keres, nem szándékot — a guard
+forrása tartalmazza a pontos fordulatokat. Ha ez a dokumentum a §1–§3 fenti
+korlátot a guard saját szavaival írná körül, a guard azt a mondatot is
+pirosra váltaná, akkor is, ha a mondat éppen a tilalmat mondja ki, nem a
+sérti. Ez a hamis pozitív szándékos és fail-closed, tehát önmagában nem
+veszélyes. Aki ezt a fájlt szerkeszti, és a §1–§3 korlátot körül kell írnia:
+kerülje a guard forrásában szereplő pontos fordulatokat, és **NE gyengítse a
+mintát** (pl. ne tegye negáció-érzékennyé) — az pont az A6/D1 őrt ölné meg.
