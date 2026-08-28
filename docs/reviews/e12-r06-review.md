@@ -3,7 +3,7 @@
 - **Reviewer:** Claude (Opus 5), orchestrátor-szék, read-only
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
 - **Kör-ág:** `sonnet-impl/e12-r06-versioning-provenance-and-sbom`
-- **Review-alap:** `5734fc02` (pre-flight) → `11bd78dd` (implementáció)
+- **Review-alap:** `5734fc02` (pre-flight) → `11bd78dd` (implementáció) → `c91b5b5d` (javító kör)
 - **Brief:** [`docs/rounds/e12-r06-versioning-provenance-and-sbom.md`](../rounds/e12-r06-versioning-provenance-and-sbom.md)
 - **Szerződés:** [ADR 0447](../adr/0447-release-manifest-provenance-and-sbom.md) D1–D7
 - **Dátum:** 2026-08-28
@@ -165,7 +165,7 @@ mezőként).
   tehát a runner-image nem garantált csomagjaira nem támaszkodik (D5 ✅,
   [L110](../LESSONS.md#l110)).
 
-## 6. VÉGSŐ DÖNTÉS
+## 6. Első verdikt (a javító kör ELŐTT)
 
 **CHANGES REQUESTED** — 0 BLOCKER / 0 MAJOR / **2 MINOR** / 2 NOTE.
 
@@ -177,6 +177,80 @@ nem-reprodukálhatóvá — ez egy supply-chain kör központi állításának m
 ellent, és a javítása kicsi, a diffet nem hizlalja. Ezért egy javító kör
 következik **F1 + F2 + F3** leletekkel; az **F4** follow-up.
 
-## 7. Javító kör után — zárás leletenként
+## 7. Javító kör (`397934a8`, `b4998849`, `dc79f42a`, `c91b5b5d`) — zárás leletenként
 
-*(A javító kör után frissítve.)*
+A javító kört UGYANAZ a motor (`sonnet-impl`) vitte, a leletlistával a
+promptban. `scope_audit=ok`, `scope_audit_changed=5`; a reviewer-oldali
+újramérés: `Legacy scope audit OK (5734fc02e64d..c91b5b5d2099, 10 changed
+path(s), 1 generated/ignored)` — a `+1 generated/ignored` a kötelező
+review-artefaktumom, ami kód szintű mentesség (ADR 0138,
+`GENERATED_IGNORED_PREFIXES`), nem sértés.
+
+### Gate ÚJRA, második izolált klónban (`/tmp/review2-e12-r06` @ `c91b5b5d`)
+
+```
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/release_manifest_test.dart               zöld
+    test test/tooling/ml_asset_manifest_test.dart              zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.
+```
+
+### F1 — **ZÁRVA**
+
+- `tool/release/generate_sbom.py` a `licensePath`-ba a pub cache gyökeréhez
+  képest relatív útvonalat írja; a cache-gyökér sehol nem jelenik meg.
+- `grep -c "/home/ubuntu" THIRD_PARTY_NOTICES.md` → **`0`** (volt: `155`).
+  A bejegyzés alakja: `- License text: hosted/pub.dev/analyzer-12.1.0/LICENSE`.
+- **Reviewer-próba (független, nem a teszten át):** fixture pub cache
+  `/tmp/tmp.XXXX/pc` alatt futtatva az SBOM `licensePath`-ja
+  `hosted/pub.dev/known_pkg-1.0.0/LICENSE`, és a generált notices
+  abszolút-útvonal találata **0** — a gép-függés valóban megszűnt, nem csak
+  a committolt fájlban.
+- **Őr:** két ÚJ A2-cella — (1) fixture-futásból származó SBOM+notices,
+  (2) a COMMITOLT `THIRD_PARTY_NOTICES.md` közvetlenül. Tiltott minta:
+  `/` kezdetű `licensePath`, `/home/`, `/Users/`, `C:\`.
+- **Valódi-sértés próba (implementer, csonkolatlanul a §10-ben):** az
+  abszolút útvonal visszaállítása után PONTOSAN az új fixture-cella vált
+  pirosra (`fixture SBOM: "licensePath" must be relative to the pub cache
+  root … got: /tmp/strumsight_sbom_relative_license_path_SEGTCJ/…`,
+  `GATE_EXIT=10`), a többi 26/27 cella érintetlen; visszaállítás után 28/28
+  zöld. Ez a hibaosztály tehát nem térhet vissza némán.
+
+### F2 — **ZÁRVA**
+
+Új „Why the verify step audits zero artifacts here" szakasz a javaslatban,
+a „Why there is no `--previous`" szakasszal azonos szellemben: megnevezi a
+beillesztési pont kényszerét, kimondja, hogy a lépés ott checksum-őrként
+no-op, és megjelöli a follow-upot (`--artifact` + áthelyezés az APK-build
+utánra). **A hivatkozott sorszámokat ellenőriztem:** `Build production APK`
+= `.github/workflows/release-apk.yml:113`, `Stage versioned production APK`
+= `:123` — mindkettő pontos. A YAML-fragment nem változott, az A5 cellák
+zöldek maradtak.
+
+### F3 — **ZÁRVA**
+
+`_requirePython3()` és mindkét hívása törölve (`grep -c _requirePython3` →
+`0`); a tartalma csoport-szintű megjegyzésbe került. A tényleges őr (A7
+`python3 --version` cella) változatlanul a helyén.
+
+### F4 — **NYITOTT, follow-up** (nem blokkol)
+
+A Python komponensek `version: null`-lal kerülnek az SBOM-ba, noha a
+`requirements.txt` mind a 11 pinre hordoz verzió-specifikációt. Szándékosan
+nem ebben a körben javítva (a diffet hizlalta volna). Javasolt: a pin-string
+átvétele `versionSpec` mezőként egy későbbi supply-chain körben.
+
+## 8. VÉGSŐ DÖNTÉS
+
+**APPROVED** — 0 BLOCKER / 0 MAJOR / 0 nyitott MINOR / 1 nyitott NOTE (F4,
+follow-up).
+
+Mind a hét acceptance-cella teljesül, a gate KÉTSZER, két független izolált
+klónban zöld, a scope mindkét mérésen tiszta, a `.github/**` érintetlen, és
+a kötött döntések (D1–D3, D6) reviewer-próbákkal, nem bemondásra igazoltak.
+A merge a zöld kapu (ADR 0052) teljesülésekor mehet: `full-gate.yml` +
+`router-ci.yml` `success` a merge SHA-n.
