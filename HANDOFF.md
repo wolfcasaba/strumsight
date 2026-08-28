@@ -1,5 +1,63 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R01 KÉSZ — A design-rendszer témájának app-szintű bevezetése — a **Chapter 15 sáv INDULT** — PR [#493](https://github.com/wolfcasaba/strumsight/pull/493), squash `a65aa3f9` (2026-08-28)
+
+**A Chapter 13 alatt megépült design-rendszert az alkalmazás SOHA nem kapcsolta
+be — most bekapcsolta.** A `strumsight_app.dart` mindhárom téma-hivatkozása
+(`theme:`, `darkTheme:`, és a bootstrap-hibaág `theme:`) mostantól
+`SsLightTheme.data()` / `SsDarkTheme.data()`, a
+`core/design_system/public.dart` barrelen át (`show SsDarkTheme, SsLightTheme`).
+
+Ettől MINDEN képernyő — a 43 migrált és az 53 migrálatlan is — ugyanabból a
+`ThemeData`-ból oldja fel a `SsColorScheme` / `SsTypography` /
+`SsStateOverlays` / `SsThemeBehavior` extensiont, a kilenc feature-szintű
+`*ThemeScope` burkoló nélkül. A burkolók ettől redundánsak (a
+`migration-status.md` MÉRT módon elavultnak jelöli őket), de a törlésük a
+képernyő-körökre marad — `lib/features/**` ennek a körnek tilos zóna volt.
+
+**Az átállás ADDITÍV** (ADR 0466 D2): a `SsLightTheme`/`SsDarkTheme` a legacy
+`AppTheme`-ből származik `copyWith(extensions: …)`-szal, tehát a `colorScheme`,
+a `textTheme` és a `scaffoldBackgroundColor` bitre változatlan — a márkaszín-
+váltás az `E15-R02` dolga, nem ezé. Az `A7` cella ezt gépi egyenlőséggel köti.
+
+**Normatív döntések:** [ADR 0466](docs/adr/0466-app-runtime-theme-is-the-design-system-theme.md)
+D1 (egy token-forrás, a hibaágon is) · D2 (additív átállás) · D3 (a belépő a
+`public.dart` barrel, ADR 0273 §1) · D4 (négy extension mindkét fényerőn) ·
+D5 (a High Contrast téma megmarad, a bekötése külön kör) · D6
+(`ss_theme_extensions.dart` mért módosítási igény nélkül marad) · D7 (a záró
+mátrix PNG-mentes és kizárási lista NÉLKÜL zöld).
+
+**Mérce (mind ÚJ):**
+
+- `test/app/theme_adoption_test.dart` — hat cella: A1 (négy extension mindkét
+  fényerőn, a TÉNYLEGESEN pumpolt `MaterialApp`-ról olvasva), A2 (`SsButton`
+  `*ThemeScope` NÉLKÜL feloldja a tokeneket), A3 (a bootstrap-hibaág is), A6
+  (96 képernyő-forrás szám-pin), A7 (a legacy `colorScheme`/`textTheme`/
+  `scaffoldBackgroundColor` egyenlőség), A8 (barrel-import forrás-cella).
+- `test/ui/goldens/e15_r01_theme_adoption_test.dart` — PNG-mentes variáns-mátrix,
+  **48 cella** (6 képernyő × 2 fényerő × 2 locale × 2 szövegskála), compact
+  portrait 412×915, `FlutterError.onError`-ra kötött túlcsordulás- és
+  kivétel-figyelés, **kizárási lista / `skip` / tolerancia NÉLKÜL** (L524 mintája).
+
+**A review nem bemondásra dolgozott:** izolált `/tmp` klónban futtatott
+valódi-sértés próbák a GYÁRTÁSI kódon — a `theme:`+`darkTheme:` visszaállítása
+az A1-et ÉS az A2-t pirosra vitte (`Null check operator used on a null value`,
+azaz a komponensek `extension<SsColorScheme>()!` force-unwrapja), a hibaág
+visszaállítása az A3-at. A cellák tehát valódi kapuk. A reviewer SAJÁT
+MINOR-2 lelete (cellaszám) számolási hibának bizonyult és visszavonásra
+került — a helyes érték **48**, amit a gate `+48: All tests passed` kimenete
+mér; a hibás `24` az előre megírt briefből jött, és a brief + ADR szövegében
+is javítva lett.
+
+**Mért kör-tanulság ([L531](docs/LESSONS.md#l531)):** a `sonnet-impl`
+implementer KÉTSZER, azonos mintázattal halt meg jelzés nélkül — a `round-gate.sh`
+hívást háttér-taskba tette és a válaszát a task-értesítésre várva zárta, a
+wrapper-session pedig kilépett alóla és megölte a taskot. Az explicit „ELŐTÉRBEN,
+`run_in_background` NÉLKÜL" prompt-utasítás ezt NEM akadályozta meg.
+
+**Következő:** `E15-R02` — adaptív shell alapértelmezetté tétele és a
+túlcsordulás-javítások (a queue szerint `sonnet-impl`, ADR `0467`).
+
 ## ✅ E12-R06 KÉSZ — Versioning, provenance, SBOM és release manifest — PR [#490](https://github.com/wolfcasaba/strumsight/pull/490), squash `80292431` (2026-08-28)
 
 **Minden kiadott artefaktum mostantól commitig visszakövethető, verzió-monoton és

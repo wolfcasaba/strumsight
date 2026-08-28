@@ -20858,3 +20858,60 @@ generátor MINDIG nem-nulla kóddal állt volna meg, és a kötelező
 `THIRD_PARTY_NOTICES.md` sosem jött volna létre: elérhetetlen cél-státusz. A
 `brief-lint --level strict` **0 leletet** adott — a lint a brief ALAKJÁT méri, az
 ÁLLÍTÁSAIT nem; azokat csak a kód-mérés fogja meg.
+
+## L531 — Az implementer-harness a hosszú kaput HÁTTÉR-TASKBA teszi és a válaszát az értesítésre várva zárja: a wrapper-session kilép alóla és MEGÖLI — kétszer, ugyanabban a körben, EXPLICIT tiltó prompt-utasítás mellett (E15-R01, 2026-08-28)
+
+**Mit mértünk.** Az E15-R01 `sonnet-impl` implementere kétszer lépett ki
+`status=unknown`-nal, jelzés nélkül. Mindkétszer UGYANAZ a mintázat, a nyers
+logból:
+
+```
+"result":"... The background Bash task will notify me automatically when it
+finishes — I'll just wait."
+{"subtype":"task_updated","patch":{"status":"killed", ...}}
+{"subtype":"task_notification","summary":"Run round gate for E15-R01 fixer round","status":"stopped"}
+```
+
+Az implementer a `tools/round-gate.sh` hívást `run_in_background`-dal indította,
+majd a válaszát azzal zárta, hogy megvárja az értesítést. A
+`tools/mm-round.sh` alatt futó headless session ekkor kilépett, és a
+háttér-task `killed` lett — a kapu SOHA nem ért véget, kör-jelzés nem
+született.
+
+**A megelőzési kísérlet MÉRTEN nem elég.** A második dispatch promptja szó
+szerint tartalmazta a tiltást, a mért diagnózissal együtt:
+
+> A `tools/round-gate.sh` hívást **ELŐTÉRBEN**, egyetlen blokkoló
+> Bash-hívásként futtasd, `run_in_background` NÉLKÜL … Ne indíts rá figyelő
+> háttér-taskot. Ne fejezd be a válaszodat úgy, hogy egy háttér-taskra vársz.
+
+Az implementer ennek ellenére ismét háttér-taskot indított. **Prompt-szöveg
+nem őrizhet meg egy harness-szintű viselkedést** — ugyanaz a hibaosztály, mint
+amit az orchestrátor-oldalon az ADR 0087 §0.1 (H-NOSIGNAL, E02-R12) már
+lezárt: ott a megoldás nem intelem lett, hanem a `setsid` + előtérben futó
+`wait-for-round.sh` MINTA.
+
+**Mi mentette meg a kört.** A második `unknown` (H6-küszöb) idején a hátralévő
+delta három soros dokumentum-diff volt egy MÁR reviewelt implementáción. Az
+orchestrátor nem indított harmadik dispatchet: gépi `allowed_paths`-audit után
+maga commitolta a diffet, és a §7 kaput MAGA futtatta le előtérben
+(`MINDEN GATE ZÖLD`, `GATE_EXIT=0`), majd a teljes CI-lánc az exact merge SHA-n
+(`421062a0`: Full Gate + Router CI `success`). A mérce nem lazult — a
+falszifikációs próbák (A1/A2/A3 pirosra váltása a gyártási kódon) függetlenek
+voltak, és a merge-kapu változatlan.
+
+**Őrteszt:** nincs — a defekt a `mm-round.sh` alatti implementer-harness
+viselkedésében van, nem a repó kódjában; a `tools/**` ennek a körnek tilos
+zónája volt (ADR 0087 §4). A javítás helye: `tools/mm-round.sh` (a
+`--disallowedTools`-szerű háttér-task-tiltás, vagy a wrapper zárja le a
+sessiont csak a háttér-taskok befejezése után), illetve
+`docs/execution/implementer-preamble-*.md`. Ez önjavító kör tárgya.
+
+**A második, kisebb mért tanulság ugyanabból a körből:** a reviewer MINOR-2
+lelete („48 helyett 24 cella") a REVIEWER számolási hibája volt — 6 × 2 × 2 × 2
+= 48. A hibás `24` az ELŐRE MEGÍRT briefből jött, és a pre-flight §0.0
+revíziója sem mérte újra, mert számnak látszó állítást nem greppelt. A gate
+kimenete (`+48: All tests passed` és 48 uniq cellanév) cáfolta, mielőtt a
+hibás javítás merge-elődött volna. **Tanulság:** a brief minden
+szorzat-alakú cellaszámát a pre-flight `python3 -c`-vel számolja ki, ne
+másolja át.
