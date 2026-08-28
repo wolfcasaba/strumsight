@@ -547,21 +547,27 @@ zárásakor is ellenőrizve.
 ~/flutter/bin/flutter test --reporter compact
 ```
 
-Eredmény: **`+8562 -15`** — 15 bukás, mind az öt mért ARM↔x86 raszter-drift
-fájlban (`Pixel test failed`, 0,00–0,75%), a kapu x86 architektúráján zöld
-(ADR 0426, L516). Fájlonkénti bontás:
+Eredmény (a futás ténylegesen lefutott, végigvárva): **`+7330 ~15 -15`** — 15
+bukás, és a bukott cellák NÉV SZERINT mind az öt mért ARM↔x86 raszter-drift
+fájlban vannak (`[E]` jelölésű sorok kigyűjtve a teljes logból), a kapu x86
+architektúráján zöld (ADR 0426, L516). Fájlonkénti bontás (a konkrét bukott
+cellák a log alapján):
 
 | Fájl | Bukott cellák | Ok |
 |---|---|---|
-| `test/ui/goldens/e13_r20_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
-| `test/ui/goldens/e13_r23_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
-| `test/ui/goldens/e13_r32_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
-| `test/ui/goldens/e13_r34_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
-| `test/ui/goldens/e13_r35_screens_golden_test.dart` | drift | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r20_screens_golden_test.dart` | chord detail — compact, chord detail — compact_scale2, learning path — compact (3) | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r23_screens_golden_test.dart` | song library — compact, song library — compact_scale2 (2) | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r32_screens_golden_test.dart` | hub — compact, hub — compact_scale2, streak_detail — compact, streak_detail — compact_scale2, achievements — compact_scale2 (5) | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r34_screens_golden_test.dart` | club_detail — compact, club_detail — compact_scale2, safety — compact_scale2 (3) | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r35_screens_golden_test.dart` | share_preview — compact, share_preview — compact_scale2 (2) | `Pixel test failed`, ARM↔x86, L516 |
 
-Ezen az öt fájlon kívül a TELJES suite (beleértve a §7 gate 34 fájlját, a két
-átfordított golden-fájlt, és minden más `test/**` fájlt) zöld. Drifen kívül
-piros cella NINCS.
+3+2+5+3+2 = 15, pontosan a teljes bukás-szám — ezen az öt fájlon kívül a
+TELJES suite (beleértve a §7 gate 34 fájlját, a két átfordított golden-fájlt,
+és minden más `test/**` fájl) zöld. Drifen kívül piros cella NINCS. (A
+`test/app/routing/app_router_test.dart` „gamification routes" tesztnevei a
+compact reporter által kétszer — indításkor és záráskor — kiírt, `[E]` jel
+NÉLKÜLI, ZÖLD sorok; a log tartalmi átvizsgálása megerősítette, hogy ez a
+fájl a §7 gate-ben és a teljes suite-ban is 100%-ban zöld.)
 
 ### 10.4 Melyik cella mit bizonyít
 
