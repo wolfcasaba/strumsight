@@ -12,7 +12,88 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az `android/app/build.gradle.kts` `releaseSigningRequired` / `GradleException` ágait (a megíráskor: hiányos konfigra és üres keystore-ra is dob) és a `release-apk.yml` `signing-prerequisites` jobját. Ami MÁR fail-closed, azt nem kell újra megírni — a §2 méri, mi hiányzik.
 
-## 0.0 Két korlát: nincs Android SDK, és a workflow VÉDETT
+## 0.0 Pre-flight brief-revízió (orchesztrátor, 2026-08-28, `main @ eccf89cf`)
+
+**Ahol a §0.0 és bármely későbbi szakasz eltér, a §0.0 nyer.** A normatív
+forrás a pre-flightban megírt
+[`docs/adr/0448-production-signing-policy-and-secret-hardening.md`](../adr/0448-production-signing-policy-and-secret-hardening.md).
+
+**Visszakeresés (ADR 0312):** `--corpus lessons,halts,adr` →
+[ADR 0062](../adr/0062-ci-gate-chain-and-fail-closed-release-signing.md) (a
+„debug-signing fallback, ha nincs secret" alternatíva MÁR elutasítva: „egy
+»release« nevű, debug kulcsú artifact rosszabb, mint a hiányzó artifact") ·
+[L528](../LESSONS.md#l528) (E12-R04: egy szigorítást szolgáló ág MAGA echózta a
+titkokat a logba — ez a kör legközelebbi rokona) · `--corpus lessons,halts` →
+[L38](../LESSONS.md#l38) (a „csinált-e valamit a modell" ≠ scope-audit) ·
+teljes korpusz → nincs további releváns előzmény.
+
+### R1 — „Production `buildType`" a fán NEM létezik; a diszkriminátor a `STRUMSIGHT_REQUIRE_RELEASE_SIGNING`
+
+MÉRVE: `android/app/build.gradle.kts:107–117` egyetlen `release` buildType-ot
+definiál; `production`/`lab` buildType, flavor vagy dimenzió nincs. Ugyanezt a
+`release` buildType-ot építi mind a három APK-workflow:
+`release-apk.yml:113–121` (négy `STRUMSIGHT_RELEASE_*` env **+**
+`STRUMSIGHT_REQUIRE_RELEASE_SIGNING: 'true'`), `lab-apk.yml:36` és
+`build-apk.yml:63` (signing env **nélkül** → debug fallback).
+
+A §3/§5.3 „production `buildType`" fordulata ezért **buildType-alapon nem
+implementálható**: vagy semmit nem véd, vagy a Lab APK-t is megállítja. A
+szigorítás horgonya az **ADR 0448 D1** szerint a
+`STRUMSIGHT_REQUIRE_RELEASE_SIGNING` kapcsoló (és a ténylegesen megadott
+signing értékek), nem a buildType neve. Az **A1** és **A3** cella ezt méri.
+
+### R2 — A fingerprint SIDECAR fájlba megy; a release manifest sémája NEM változik
+
+MÉRVE: `tool/generate_release_manifest.dart` (E12-R06) manifest-objektuma
+`schemaVersion` · `app{version,buildNumber,shortSha,channel}` · `modelPackage` ·
+`knowledgePackage` · `artifacts[]` — **certificate/signing mező nincs**. A
+generátor a kör **tilos zónája** (nincs az engedélyezett listán), a
+`schemaVersion` emelése pedig az E12-R06 determinizmus-szerződését érintené.
+
+Az **A5** ezért így értendő (ADR 0448 D4): a javasolt lépés a fingerprintet a
+**`dist/signing-certificate.json`** sidecarba írja (fingerprint + kulcs-alias,
+titok soha), és a MEGLÉVŐ, ismételhető **`--artifact dist/signing-certificate.json`**
+flaggel (`tool/generate_release_manifest.dart:57–58`) köti a manifesthez — a
+manifest `artifacts[]` listája így névvel, úttal és sha256-tal hordozza. A
+„manifest sémájának megfelelő mező" kifejezés **nem** új manifest-mezőt jelent.
+
+### R3 — Az A2/A4 workflow-oldala OLVASÁS; a mai mért állapot már fail-closed
+
+MÉRVE `.github/workflows/release-apk.yml`: a `signing-prerequisites` job
+(9–36. sor) a négy secret meglétét `::error::`-rel kényszeríti a build ELŐTT;
+`Materialize production keystore` `umask 077` mellett `$RUNNER_TEMP`-be dekódol;
+`Remove production keystore` `if: always()` mellett törli; **jelszó- vagy
+kulcsanyag-echo egyetlen lépésben sincs.** Az A2/A4 tehát **regresszió-őr** a
+meglévő viselkedésre, nem új funkció — a `verify_signing_policy.py` a
+workflow-t OLVASSA. A `.github/workflows/**` írása strukturálisan lehetetlen:
+`.claude/gate-edit-policy` a fán nem létezik (`tools/gateguard-scan.py`).
+
+### R4 — Az audit KÉTIRÁNYÚ, fixture-vezérelt; az egyirányú cella nem elfogadható
+
+ADR 0448 D6: a `verify_signing_policy.py` a mérendő fájlok útvonalát
+**paraméterben** kapja, hogy fixture-ön is futhasson. A cella (i) a valós
+fájlokon exit 0-t, (ii) egy fixture-ön — amelyből az elutasító ág hiányzik,
+vagy amely `androiddebugkey`-t rendel production ághoz — **nem-nulla**
+kilépést vár, a megsértett szabály nevével. Csak-zöld, „string van-e a
+fájlban" alakú cella a mérés hiányát mutatná zöldnek
+([L220](../LESSONS.md#l220) hibaosztálya).
+
+A Python eszköz **kizárólag stdlib**; a Dart cella `Process.runSync('python3', …)`
+alakban hívja (ADR 0447 D5 precedense), és `python3` hiányában **PIROS**, néma
+skip nincs. A javaslat YAML-jét a tesztfájlban élő **korlátozott
+részhalmaz-parser** ellenőrzi — `package:yaml` a fán csak tranzitív
+(ADR 0444 D3).
+
+### R5 — A §6.1 valódi-sértés próbája a KÖTELEZŐ alak
+
+A próba: távolítsd el a D2 szerinti elutasító ágat a valós
+`android/app/build.gradle.kts`-ből → `flutter test test/tooling/signing_policy_test.dart`
+→ az **A1** cellának PIROSNAK kell lennie (a bukó cella nevével és a hibaüzenet
+első sorával a §10-ben) → állítsd vissza. A §6.1 „fixture aliasát
+`androiddebugkey`-re" próbája ezen felül, második próbaként dokumentálandó.
+A „visszaállítottam" önmagában nem bizonyíték — a kimenet kell.
+
+## 0.0.1 Két korlát: nincs Android SDK, és a workflow VÉDETT
 
 **(a)** Ezen a boxon nincs Android SDK, a release-build a CI-ban fut — a signing-viselkedés lokális bizonyítéka ezért a Gradle-fájl statikus auditja (`verify_signing_policy.py`), a futásidejű bizonyíték a CI-é.
 
