@@ -803,12 +803,13 @@ body:
           'Process'
           '.run';
 
-      test('this test file contains no Process.run / Process.runSync call', () {
+      test('this test file never spawns an external process', () {
         final source = File(
           'test/tooling/repository_policy_test.dart',
         ).readAsStringSync();
-        // "Process.run" is a prefix of "Process.runSync", so one check
-        // covers both external-process entry points.
+        // The synchronous variant of that call starts with the same
+        // characters, so one check covers both external-process entry
+        // points without spelling either literally in this description.
         expect(source, isNot(contains(forbiddenProcessCall)));
       });
     },
