@@ -1,0 +1,11 @@
+{
+  "type": "analysis",
+  "eventId": "analysis-clip-0000789",
+  "occurredAt": "2026-08-17T07:15:00.000Z",
+  "epochDay": 20682,
+  "source": "analyze",
+  "trust": "scored",
+  "schemaVersion": 1,
+  "durationMicroseconds": 45000000,
+  "score": 0.91
+}

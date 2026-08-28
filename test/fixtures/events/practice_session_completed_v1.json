@@ -1,0 +1,11 @@
+{
+  "type": "practice",
+  "eventId": "practice-session-0000123",
+  "occurredAt": "2026-08-15T09:00:00.000Z",
+  "epochDay": 20680,
+  "source": "practice",
+  "trust": "userConfirmed",
+  "schemaVersion": 1,
+  "durationMicroseconds": 900000000,
+  "score": 0.78
+}

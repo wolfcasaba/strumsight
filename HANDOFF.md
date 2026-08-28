@@ -1,5 +1,47 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R09 KÉSZ — Domain event katalógus és schema registry — PR [#496](https://github.com/wolfcasaba/strumsight/pull/496), squash `04ae8918` (2026-08-28)
+
+**A cross-feature esemény-forgalomnak eddig nem volt nyilvántartása, csak
+típusa.** A `LearningActivityEvent` sealed hierarchia (ADR 0329) hat altípussal
+régóta él, de sehol nem volt leírva, melyik feature TERMELI, melyik FOGYASZTJA,
+mi az idempotencia-kulcs és mi történik egy jövőbeli séma-verzióval. A kör ezt a
+hiányt zárja — **`lib/**` diff nélkül**: dokumentum + fixture + gépi mérce, nem
+egy második, konkurens envelope-típus.
+
+| Fájl | |
+|---|---|
+| [`docs/contracts/event-catalog.md`](docs/contracts/event-catalog.md) | a hat típus katalógusa: `type` kód, séma-verzió, **mért** producer/consumer fájl:sor, idempotencia-kulcs (`eventId`), owner Chapter, kompatibilitási szabály |
+| `test/fixtures/events/*.json` (6) | altípusonként egy, BYTE-szinten kanonikus fixture (pontosan a `toJson()` alakja) |
+| [`test/core/events/event_schema_compatibility_test.dart`](test/core/events/event_schema_compatibility_test.dart) | 22 cella: A1–A8 + a kétirányú séma-verzió küszöb-hármas, mind a VALÓDI `LearningActivityEvent.fromJson`/`toJson` belépőn |
+| [`docs/adr/0468-…`](docs/adr/0468-domain-event-catalog-and-schema-registry.md) | D1 nincs második envelope · D2 a katalógus a KÓDBÓL mért · D3 a „nincs producer" MÉRT állítás · D4 a verzió-határ MINDKÉT irányban zár · D5 kanonikus fixture · D6 idempotencia-kulcs = `eventId` |
+
+**Három mért pre-flight korrekció** (a brief `§0.0` revíziója):
+
+1. **A producer-oldal 8 konstruktor-hívás 7 fájlban**, nem „kilenc adapter".
+2. **A `TutorActivityEvent`-nek NINCS termelője a fán** — a tutor adapter
+   kifejezetten `PracticeActivityEvent`-ként jutalmaz (chat-farming elkerülése,
+   ADR 0289). A katalógus ezt kimondja, és az **A8** cella a HIÁNYT méri.
+3. **A brief küszöb-hármasának „alatta" cellája elérhetetlen volt:** a
+   `_validateEventFields` a `schemaVersion != 1`-et MINDKÉT irányban
+   `ArgumentError`-ral zárja, tehát a `< V` sem „best-effort olvasható".
+
+**Review (APPROVED, 0 BLOCKER / 0 MAJOR / 0 MINOR / 3 NOTE):** a célzott teszt
+izolált `/tmp` klónban **22/22 zöld**, és **három valódi-sértés próba** igazolta,
+hogy a cellák pirosra tudnak váltani — P1 létező de nem termelő producer → **A5**,
+P2 valódi `TutorActivityEvent(...)` a fán → **A8**, P3 nem kanonikus `occurredAt`
+→ **A7** ([`docs/reviews/e12-r09-review.md`](docs/reviews/e12-r09-review.md)).
+
+Exact-SHA evidencia a merge SHA-n (`6cc634b2`): Full Gate
+[33209945460](https://github.com/wolfcasaba/strumsight/actions/runs/33209945460)
+`success` (Coverage `success`), Router CI
+[33209914803](https://github.com/wolfcasaba/strumsight/actions/runs/33209914803)
+`success`. **Egy CI-flake, nem a kör diffjéből:** a
+`test/features/songs/import/import_flow_test.dart` A2 workspace-takarítása —
+ugyanaz a MÉRT flake, mint az E12-R05/R06 landolásánál; lokálisan zöld, és a
+job újrafuttatása UGYANAZON a SHA-n zöld lett. Egy lecke:
+[L535](docs/LESSONS.md#l535).
+
 ## 🔧 E15-R02 H3 ÖNJAVÍTÁS (ADR 0112) — a shell-flag MÉRT hatósugara a kör scope-jába került — PR [#495](https://github.com/wolfcasaba/strumsight/pull/495), squash `ee2a2bc4` (2026-08-28)
 
 **A kör NEM futott le — a pre-flight `H3`-mal állt meg, implementer-dispatch
@@ -10001,7 +10043,19 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E12-R06 — Versioning, provenance, SBOM és release manifest** (PR
+**E12-R09 — Domain event katalógus és schema registry** (PR
+[#496](https://github.com/wolfcasaba/strumsight/pull/496), squash `04ae8918`).
+A hat `LearningActivityEvent` altípus katalógusa MÉRT producer/consumer
+hivatkozásokkal, hat BYTE-kanonikus fixture és 22 cellás kompatibilitás-mérce —
+`lib/**` diff NÉLKÜL (ADR 0468: nincs második envelope). A `TutorActivityEvent`
+termelő nélküli állapota MÉRT állítás, amit az **A8** cella a fán ellenőriz; a
+séma-verzió határa MINDKÉT irányban zár. **0 javító kör**, review APPROVED
+(3 NOTE). Egy lecke: [L535](docs/LESSONS.md#l535) (a `TypeName(` alsztring a
+Dart 3 objektum-mintára is illeszkedik — a szöveges konstruktor-detektálásnak a
+nyitó zárójel utáni első nem-whitespace karaktert kell néznie).
+
+
+**Korábbi: E12-R06 — Versioning, provenance, SBOM és release manifest** (PR
 [#490](https://github.com/wolfcasaba/strumsight/pull/490), squash `80292431`).
 Determinisztikus, **időbélyeg nélküli** release manifest (két futás sha256-a
 azonos), SBOM + `THIRD_PARTY_NOTICES.md` 171 komponensre, checksum-audit
@@ -11113,7 +11167,19 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ▶️ **A KÖVETKEZŐ KÖR: `E12-R07` — Production signing és secret hardening**
+> ▶️ **A KÖVETKEZŐ KÖR: `E12-R10`** (motor: `sonnet-impl`, előre kiosztott ADR:
+> `0451`, brief: `docs/rounds/e12-r10-*.md`). Mért állapot
+> (`docs/execution/pipeline-queue.tsv`, 2026-08-28, az E12-R09 zárása után):
+> **267 `done`, 40 `hold`, 18 `prepared`, 39 `pending`**. Az E12 36 sorából
+> **9 `done`** (R01–R09).
+>
+> ⚠ Az ADR-számot a körben MINDIG a foglalótól kérd
+> (`tools/round-slots.py reserve-adr --round <kör>`), ne a queue `adr`
+> oszlopából: az E12-R09-nél a batch-terv `0450`-et jelölt, a foglaló viszont
+> `0468`-at adott, mert a `0466`/`0467` (E15 sáv) időközben landolt. A queue
+> `adr` oszlopa terv, a foglaló a normatív forrás.
+
+> ⏸️ **LEZÁRT előzmény:** `E12-R07` — Production signing és secret hardening
 > (motor: `sonnet-impl`, előre kiosztott ADR: `0448`, brief:
 > `docs/rounds/e12-r07-production-signing-and-secret-hardening.md`). A Chapter 12
 > sáv fut: az E12 36 sorából **6 `done`** (R01–R06), 30 `pending`.
