@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/library/data/library_repository.dart';
 import 'package:strumsight/features/library/model/analyzed_session.dart';
@@ -79,30 +82,53 @@ void main() {
     expect(ids, ['b']);
   });
 
-  testWidgets('Library tab lists a saved session (no more "coming soon")', (
-    tester,
-  ) async {
-    final engine = FakeStrumEngine();
-    addTearDown(engine.dispose);
+  testWidgets(
+    'LEGACY REFERENCE (adaptive shell off — the still-shipped production '
+    'default, ADR 0467 D2): Library tab lists a saved session (no more '
+    '"coming soon")',
+    (tester) async {
+      final engine = FakeStrumEngine();
+      addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-          libraryRepositoryProvider.overrideWithValue(
-            FakeLibraryRepository([_session('1', 'C · G · Am')]),
-          ),
-        ],
-        child: const StrumSightApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...preferenceOverrides(),
+            strumEngineProvider.overrideWithValue(engine),
+            libraryRepositoryProvider.overrideWithValue(
+              FakeLibraryRepository([_session('1', 'C · G · Am')]),
+            ),
+            // E15-R02 (ADR 0467 D9): the legacy `/library` route redirects
+            // to the adaptive shell's UnifiedLibraryScreen (a different
+            // widget/provider pair) once the shell is on by default — this
+            // test's subject is specifically the legacy LibraryScreen +
+            // libraryRepositoryProvider wiring, which production (shell
+            // off, D2) still ships. Explicit, not hiding the new default.
+            appConfigProvider.overrideWithValue(
+              AppConfig(
+                environment: AppEnvironment.development,
+                apiBaseUrl: AppConfig.devApiBaseUrl,
+                flags: const FeatureFlags(
+                  accountEnabled: false,
+                  diagnosticsEnabled: false,
+                  labModeAvailable: false,
+                ),
+                diagnosticsToken: AppConfig.devDiagnosticsToken,
+                buildMode: 'test',
+                appVersion: 'test',
+              ),
+            ),
+          ],
+          child: const StrumSightApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Library'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Library'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('C · G · Am'), findsOneWidget);
-    expect(find.textContaining('Coming in'), findsNothing);
-  });
+      expect(find.text('C · G · Am'), findsOneWidget);
+      expect(find.textContaining('Coming in'), findsNothing);
+    },
+  );
 }

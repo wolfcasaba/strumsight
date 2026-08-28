@@ -96,12 +96,18 @@ class _PermissionPrimerScreenState
       // A final denial: the action is opening settings, never a re-request
       // (ADR 0281 §1/§5.1, A2).
       return Scaffold(
-        body: SsPermissionState(
-          kind: SsPermissionKind.microphone,
-          rationale: l10n.onboardPrimerRationale,
-          consequence: l10n.onboardPrimerConsequence,
-          presentation: SsFailurePresentation.from(l10n, deniedFailure),
-          onOpenSettings: _openSettings,
+        body: SafeArea(
+          // Mirrors the retryable branch below: scrollable rather than
+          // overflowing when the primer's text grows past the viewport.
+          child: SingleChildScrollView(
+            child: SsPermissionState(
+              kind: SsPermissionKind.microphone,
+              rationale: l10n.onboardPrimerRationale,
+              consequence: l10n.onboardPrimerConsequence,
+              presentation: SsFailurePresentation.from(l10n, deniedFailure),
+              onOpenSettings: _openSettings,
+            ),
+          ),
         ),
       );
     }

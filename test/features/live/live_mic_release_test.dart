@@ -7,6 +7,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
@@ -22,31 +24,42 @@ void main() {
     return (engine: engine, lifecycle: FakeAppLifecycleEvents());
   }
 
-  Future<void> pumpLive(WidgetTester tester, dynamic r) async {
+  Future<ProviderContainer> pumpLive(WidgetTester tester, dynamic r) async {
+    final container = ProviderContainer(
+      overrides: [
+        ...preferenceOverrides(),
+        ...fakeAudioOverrides(lifecycle: r.lifecycle as FakeAppLifecycleEvents),
+        strumEngineProvider.overrideWithValue(r.engine as FakeStrumEngine),
+      ],
+    );
+    addTearDown(container.dispose);
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          ...fakeAudioOverrides(
-            lifecycle: r.lifecycle as FakeAppLifecycleEvents,
-          ),
-          strumEngineProvider.overrideWithValue(r.engine as FakeStrumEngine),
-        ],
+      UncontrolledProviderScope(
+        container: container,
         child: const StrumSightApp(),
       ),
     );
     await tester.pumpAndSettle();
+    // E15-R02 (ADR 0467 D9): the app now boots on the adaptive shell's
+    // /today entry point by default; /live is reachable through
+    // legacyRedirects' target, AppRoutes.practiceLive.
+    container.read(routerProvider).go(AppRoutes.practiceLive);
+    await tester.pumpAndSettle();
+    return container;
   }
 
   testWidgets('(1) navigation — leaving Live stops the mic (autoDispose)', (
     tester,
   ) async {
     final r = rig();
-    await pumpLive(tester, r);
+    final container = await pumpLive(tester, r);
     expect(r.engine.startCalls, greaterThanOrEqualTo(1));
     final stopsBefore = r.engine.stopCalls;
 
-    await tester.tap(find.text('Learn').first);
+    // E15-R02 (ADR 0467 D9): /practice/live is a Stage route (no primary
+    // navigation to tap through), so leaving is driven through the router
+    // directly, same as the app's own Finish/onException fallbacks do.
+    container.read(routerProvider).go(AppRoutes.today);
     await tester.pumpAndSettle();
 
     expect(r.engine.stopCalls, greaterThan(stopsBefore));
@@ -120,14 +133,16 @@ void main() {
     'listeners (review MINOR-1)',
     (tester) async {
       final r = rig();
-      await pumpLive(tester, r);
+      final container = await pumpLive(tester, r);
 
       final liveRegion = tester
           .widget<SsLiveRegionAnnouncer>(find.byType(SsLiveRegionAnnouncer))
           .controller;
 
-      // Leave the route so `_LiveScreenState.dispose()` runs.
-      await tester.tap(find.text('Learn').first);
+      // Leave the route so `_LiveScreenState.dispose()` runs. E15-R02
+      // (ADR 0467 D9): /practice/live is a Stage route with no primary
+      // navigation to tap through, so this goes through the router.
+      container.read(routerProvider).go(AppRoutes.today);
       await tester.pumpAndSettle();
 
       // A disposed ChangeNotifier throws on any further listener

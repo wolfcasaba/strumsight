@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/features/songs/screens/song_builder_screen.dart';
@@ -184,18 +186,32 @@ void main() {
         final engine = FakeStrumEngine();
         addTearDown(engine.dispose);
         await atSize(tester, entry.value, () async {
+          final container = ProviderContainer(
+            overrides: [
+              ...preferenceOverrides(),
+              strumEngineProvider.overrideWithValue(engine),
+            ],
+          );
+          addTearDown(container.dispose);
           await tester.pumpWidget(
-            ProviderScope(
-              overrides: [
-                ...preferenceOverrides(),
-                strumEngineProvider.overrideWithValue(engine),
-              ],
+            UncontrolledProviderScope(
+              container: container,
               child: const StrumSightApp(),
             ),
           );
           await tester.pumpAndSettle();
-          for (final tab in ['Analyze', 'Learn', 'Library', 'Settings']) {
-            await tester.tap(find.text(tab), warnIfMissed: false);
+          // E15-R02 (ADR 0467 D9): the app boots on the adaptive shell's
+          // /today entry point now; the legacy tab labels this walk used to
+          // tap are gone from the bottom nav. Walk the legacyRedirects
+          // targets instead — the same screens the old tab bar reached.
+          final router = container.read(routerProvider);
+          for (final target in [
+            AppRoutes.practiceAnalyze,
+            AppRoutes.practiceLearn,
+            AppRoutes.profileLibrary,
+            AppRoutes.profileSettings,
+          ]) {
+            router.go(target);
             await tester.pumpAndSettle();
           }
         });

@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
 
@@ -27,21 +29,31 @@ void main() {
     );
   }
 
-  Future<void> pumpLive(WidgetTester tester, dynamic r) async {
+  Future<ProviderContainer> pumpLive(WidgetTester tester, dynamic r) async {
+    final container = ProviderContainer(
+      overrides: [
+        ...preferenceOverrides(),
+        ...fakeAudioOverrides(
+          lifecycle: r.lifecycle as FakeAppLifecycleEvents,
+          wakelock: r.wakelock as FakeScreenWakelock,
+        ),
+        strumEngineProvider.overrideWithValue(r.engine as FakeStrumEngine),
+      ],
+    );
+    addTearDown(container.dispose);
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          ...fakeAudioOverrides(
-            lifecycle: r.lifecycle as FakeAppLifecycleEvents,
-            wakelock: r.wakelock as FakeScreenWakelock,
-          ),
-          strumEngineProvider.overrideWithValue(r.engine as FakeStrumEngine),
-        ],
+      UncontrolledProviderScope(
+        container: container,
         child: const StrumSightApp(),
       ),
     );
     await tester.pumpAndSettle();
+    // E15-R02 (ADR 0467 D9): the app now boots on the adaptive shell's
+    // /today entry point by default; /live is reachable through
+    // legacyRedirects' target, AppRoutes.practiceLive.
+    container.read(routerProvider).go(AppRoutes.practiceLive);
+    await tester.pumpAndSettle();
+    return container;
   }
 
   testWidgets('Live holds the wakelock while the session runs', (tester) async {
@@ -84,10 +96,13 @@ void main() {
     tester,
   ) async {
     final r = rig();
-    await pumpLive(tester, r);
+    final container = await pumpLive(tester, r);
 
-    // Switch to another tab — the Live screen is disposed (r199 path).
-    await tester.tap(find.text('Learn').first);
+    // Switch to another destination — the Live screen is disposed (r199
+    // path). E15-R02 (ADR 0467 D9): /practice/live is a Stage route with
+    // no primary navigation to tap through, so this goes through the
+    // router directly.
+    container.read(routerProvider).go(AppRoutes.today);
     await tester.pumpAndSettle();
 
     expect(r.engine.stopCalls, greaterThanOrEqualTo(1));

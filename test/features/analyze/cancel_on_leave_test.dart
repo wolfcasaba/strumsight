@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
@@ -63,10 +65,13 @@ void main() {
       tester.element(find.byType(StrumSightApp)),
     );
 
-    // Mount the Analyze screen (it believes it is recording). Bounded pumps:
-    // the recording phase runs a periodic UI ticker, so pumpAndSettle would
-    // never settle.
-    await tester.tap(find.text('Analyze'));
+    // Mount the Analyze screen (it believes it is recording). E15-R02
+    // (ADR 0467 D9): the app boots on the adaptive shell's /today entry
+    // point now, and Analyze lives at AppRoutes.practiceAnalyze — navigate
+    // there through the router rather than tapping legacy bottom-nav text
+    // that no longer exists at boot. Bounded pumps: the recording phase
+    // runs a periodic UI ticker, so pumpAndSettle would never settle.
+    container.read(routerProvider).go(AppRoutes.practiceAnalyze);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
     // The screen must really be MOUNTED (the phase alone is the stub's
@@ -79,7 +84,7 @@ void main() {
 
     // …then leave: the disposed screen must cancel the take. The old page
     // unmounts only when the route transition FINISHES — pump past it.
-    await tester.tap(find.text('Learn'));
+    container.read(routerProvider).go(AppRoutes.practiceLearn);
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(milliseconds: 50));

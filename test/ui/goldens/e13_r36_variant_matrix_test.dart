@@ -35,6 +35,11 @@
 // list forever (L180 — a declared-shape list is weaker than an enforced
 // one). `skip`, tolerance increases and disabling cells are forbidden
 // (brief §5.1) — nothing in this file uses them.
+//
+// E15-R02: the four `live` stat-strip entries below were REMOVED (not
+// zeroed-in-place) after `live_screen.dart:477`'s `Row` wrapped its children
+// in `Expanded` — the four cells now assert NO overflow via the same
+// `excluded == null` branch every other cell already uses (brief §6 A5).
 library;
 
 import 'package:flutter/material.dart';
@@ -218,57 +223,14 @@ final class _ExcludedCell {
 /// Cells with a MEASURED, dated `lib/**` overflow this round cannot fix.
 /// Populate only from an actual run of this file — never guess a px value.
 ///
-/// All four entries below are the SAME defect: `lib/features/live/screens/
-/// live_screen.dart:477` builds a horizontal `Row` (its stat strip) that
-/// does not wrap an `Expanded`/`Flexible` around its children. At the
-/// `landscape` viewport (915x412) with `textScale: 2.0`, the Row's
-/// constraint narrows to `w<=334.0` while its children need more — the
-/// overflow is 12px in `en` and 34px in `hu` (longer label text), on both
-/// `light` and `dark` (the theme does not affect layout width). Measured
-/// 2026-08-27 on this box via a direct run of this file
-/// (`flutter test test/ui/goldens/e13_r36_variant_matrix_test.dart
-/// --plain-name "live|THEME|LOCALE|landscape|2.0"`); mirrored in
-/// `docs/ui/legacy-backlog.md`. `lib/**` is this round's tilos zona (brief
-/// §4), so the fix (wrap the Row's children in `Expanded`, or let the strip
-/// scroll) is left to a future round.
-const _excludedCells = <_ExcludedCell>[
-  _ExcludedCell(
-    screen: 'live',
-    theme: 'light',
-    locale: 'en',
-    viewport: _ViewportProfile.landscape,
-    textScale: 2.0,
-    measuredOverflowPx: 12.0,
-    measuredOn: '2026-08-27',
-  ),
-  _ExcludedCell(
-    screen: 'live',
-    theme: 'dark',
-    locale: 'en',
-    viewport: _ViewportProfile.landscape,
-    textScale: 2.0,
-    measuredOverflowPx: 12.0,
-    measuredOn: '2026-08-27',
-  ),
-  _ExcludedCell(
-    screen: 'live',
-    theme: 'light',
-    locale: 'hu',
-    viewport: _ViewportProfile.landscape,
-    textScale: 2.0,
-    measuredOverflowPx: 34.0,
-    measuredOn: '2026-08-27',
-  ),
-  _ExcludedCell(
-    screen: 'live',
-    theme: 'dark',
-    locale: 'hu',
-    viewport: _ViewportProfile.landscape,
-    textScale: 2.0,
-    measuredOverflowPx: 34.0,
-    measuredOn: '2026-08-27',
-  ),
-];
+/// E15-R02 fixed the one defect this list used to carry:
+/// `lib/features/live/screens/live_screen.dart:477`'s stat-strip `Row` now
+/// wraps its children in `Expanded`, so the four `live` cells at
+/// `landscape`/`textScale: 2.0` (both themes, both locales) no longer
+/// overflow — verified by re-running this file before removing their
+/// entries (a stale entry would have failed with "STALE exclusion-list
+/// entry"). Empty until a new, dated `lib/**` defect is measured.
+const _excludedCells = <_ExcludedCell>[];
 
 final _excludedByKey = {for (final cell in _excludedCells) cell.key: cell};
 
