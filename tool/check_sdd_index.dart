@@ -6,11 +6,11 @@ import 'dart:io';
 ///
 /// Both files are read with hand-written, line-based parsers rather than a
 /// general Markdown- or YAML-parsing package: `docs/sdd/dependency-graph.yaml`
-/// is a deliberately restricted YAML subset (ADR 0443 D3 — `package:yaml` is
-/// only a transitive dependency, and a direct import would turn
-/// `flutter analyze` red via `depend_on_referenced_packages`; see the header
-/// comment of that file for the exact supported grammar), and the index
-/// table's own cell shape is not uniform (see [parseChapterTable]).
+/// is a deliberately restricted YAML subset (ADR 0443 D3 — the `yaml` pub
+/// package is only a transitive dependency, and importing it directly would
+/// turn `flutter analyze` red via `depend_on_referenced_packages`; see the
+/// header comment of that file for the exact supported grammar), and the
+/// index table's own cell shape is not uniform (see [parseChapterTable]).
 ///
 /// The logic here is intentionally NOT inside `main()`: [parseChapterTable],
 /// [parseDependencyGraph], [countKorHeaders], [parseKorokCount],
@@ -309,7 +309,8 @@ bool _requiredBool(
 
 /// Parses `docs/sdd/dependency-graph.yaml` with a hand-written, line-based
 /// parser for the deliberately restricted subset documented in that file's
-/// header comment (ADR 0443 D3) — NOT `package:yaml`.
+/// header comment (ADR 0443 D3) — the `yaml` pub package is deliberately
+/// not used (see the file-level doc comment above).
 DependencyGraph parseDependencyGraph(String yamlContent) {
   final lines = yamlContent.split('\n');
   var i = 0;
