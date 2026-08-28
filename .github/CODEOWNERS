@@ -1,0 +1,31 @@
+# .github/CODEOWNERS - jelolo szerep, NEM kapu (ADR 0444 D1).
+#
+# A minta felelos terulet jelolese es GitHub-ertesites. Sem ez a fajl, sem a
+# docs/process/branch-protection.md nem ir elo emberi jovahagyast a merge
+# feltetelekent - a kor-pipeline squash-merge-el zold gate mellett (ADR 0050
+# "Szolo-fejleszto adaptaciok"). Minden minta a repoban MERT, letezo utvonalra
+# mutat (ADR 0444 D4) - fantom-utvonal nem engedett.
+
+# audio
+/lib/core/audio/ @wolfcasaba
+/lib/features/audio_analysis/ @wolfcasaba
+/lib/features/live/ @wolfcasaba
+/lib/features/tuner/ @wolfcasaba
+
+# backend
+/backend/ @wolfcasaba
+
+# security
+/lib/features/auth/ @wolfcasaba
+/lib/core/storage/ @wolfcasaba
+/lib/core/network/ @wolfcasaba
+/docs/security/ @wolfcasaba
+
+# model
+/lib/core/ml/ @wolfcasaba
+/assets/ml/ @wolfcasaba
+
+# release
+/.github/workflows/ @wolfcasaba
+/android/ @wolfcasaba
+/docs/release/ @wolfcasaba
