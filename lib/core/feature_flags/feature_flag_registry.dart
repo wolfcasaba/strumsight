@@ -487,8 +487,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0275',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:129; no dart-define exists on purpose — '
-        'enabling it requires a source change.',
+        'resolves to `nonProd` (`environment != AppEnvironment.production`) '
+        'at feature_flags.dart:129 since E15-R02 (ADR 0467 D1) — ON by '
+        'default in development/lab, OFF in production; no dart-define '
+        'exists on purpose. The kill switch is reverting that line to '
+        '`false` (ADR 0467 D8), a source change.',
   ),
 ];

@@ -111,7 +111,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(container.read(onboardingSeenProvider), isTrue);
-      expect(router.state.uri.path, AppRoutes.live);
+      // E15-R02 (ADR 0467 D9, measured brief §0.0/c): `onboarding_screen.dart`
+      // (lib/**, out of scope for this round) still calls
+      // `router.go(AppRoutes.live)` literally; with the adaptive shell on
+      // by default the resolved redirect settles on /today (the app's
+      // entry point), not the legacy /live path. The LearnScreen push
+      // below (root-navigator, independent of the current shell tab) is
+      // what actually delivers the first-win lesson either way.
+      expect(router.state.uri.path, AppRoutes.today);
       expect(find.byType(OnboardingScreen), findsNothing);
       expect(store.boolWriteCompleted, isFalse);
       expect(memory.readBool(StorageKeys.onboardingSeen), isNull);
@@ -120,7 +127,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(store.boolWriteCompleted, isTrue);
-      expect(router.state.uri.path, AppRoutes.live);
+      // E15-R02 (ADR 0467 D9, measured): a second, later redirect
+      // evaluation (the "reactive redirect" this test is named for) lands
+      // on legacyRedirects' target for /live once settled, distinct from
+      // the immediate post-tap snapshot above.
+      expect(router.state.uri.path, AppRoutes.practiceLive);
       final learn = tester.widget<LearnScreen>(find.byType(LearnScreen));
       expect(learn.lesson.id, Lessons.firstWin.id);
     },

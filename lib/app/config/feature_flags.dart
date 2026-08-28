@@ -123,10 +123,11 @@ final class FeatureFlags {
       communityClubsEnabled: const bool.fromEnvironment(
         'STRUMSIGHT_COMMUNITY_CLUBS',
       ),
-      // E13-R08 (ADR 0275) — the five-area adaptive shell stays off in every
-      // environment; turning it on is a user decision, not a build default,
-      // and there is deliberately no dart-define override.
-      adaptiveShellEnabled: false,
+      // E15-R02 (ADR 0467) — the five-area adaptive shell is now the
+      // non-production default (`development`/`lab` on, `production` still
+      // off; the GA-scope decision for production is Chapter 12 Kör 28).
+      // There is deliberately no dart-define override (ADR 0275 unchanged).
+      adaptiveShellEnabled: nonProd,
     );
   }
 
@@ -284,9 +285,11 @@ final class FeatureFlags {
   final bool communityClubsEnabled;
 
   /// Whether the five-area (Today/Practice/Songs/Coach/Profile) adaptive
-  /// shell is reachable (ADR 0275). Defaults to OFF in every environment;
-  /// enabling it is a user decision, not a build default. The legacy shell
-  /// navigation is unaffected while this stays off.
+  /// shell is reachable (ADR 0275, ADR 0467). [forEnvironment] enables it
+  /// outside production; the default constructor stays OFF for explicitly
+  /// constructed flag sets. Production remains off pending the GA-scope
+  /// decision (Chapter 12 Kör 28). The legacy shell navigation is unaffected
+  /// while this stays off.
   final bool adaptiveShellEnabled;
 
   /// The build-time rollout level. Shadow execution has an additional

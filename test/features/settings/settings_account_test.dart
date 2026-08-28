@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
@@ -20,22 +22,29 @@ Future<void> _openSettings(
 }) async {
   final engine = FakeStrumEngine();
   addTearDown(engine.dispose);
+  final container = ProviderContainer(
+    overrides: [
+      ...preferenceOverrides(),
+      strumEngineProvider.overrideWithValue(engine),
+      tokenStoreProvider.overrideWithValue(FakeTokenStore(token)),
+      authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
+      // Keep settings-sync off the real network when a session restores.
+      settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+      accountEnabledProvider.overrideWithValue(accountEnabled),
+    ],
+  );
+  addTearDown(container.dispose);
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        ...preferenceOverrides(),
-        strumEngineProvider.overrideWithValue(engine),
-        tokenStoreProvider.overrideWithValue(FakeTokenStore(token)),
-        authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
-        // Keep settings-sync off the real network when a session restores.
-        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
-        accountEnabledProvider.overrideWithValue(accountEnabled),
-      ],
+    UncontrolledProviderScope(
+      container: container,
       child: const StrumSightApp(),
     ),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Settings'));
+  // E15-R02 (ADR 0467 D9): the app boots on the adaptive shell's /today
+  // entry point now; Settings lives at AppRoutes.profileSettings (same
+  // SettingsScreen widget as the legacy /settings route).
+  container.read(routerProvider).go(AppRoutes.profileSettings);
   await tester.pumpAndSettle();
 }
 

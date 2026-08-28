@@ -132,7 +132,8 @@ void main() {
         expect(flags.adaptiveShellEnabled, isFalse);
       });
 
-      test('forEnvironment resolves to false in every environment', () {
+      test('forEnvironment resolves to true outside production, false in '
+          'production (E15-R02, ADR 0467 D1)', () {
         for (final environment in AppEnvironment.values) {
           final flags = FeatureFlags.forEnvironment(
             environment,
@@ -140,8 +141,10 @@ void main() {
           );
           expect(
             flags.adaptiveShellEnabled,
-            isFalse,
-            reason: '$environment must default the adaptive shell OFF',
+            environment != AppEnvironment.production,
+            reason: environment == AppEnvironment.production
+                ? 'production must default the adaptive shell OFF'
+                : '$environment must default the adaptive shell ON',
           );
         }
       });

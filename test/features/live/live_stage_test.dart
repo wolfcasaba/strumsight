@@ -11,11 +11,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/music/chord.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
+import 'package:strumsight/features/today/screens/today_hub_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/main.dart';
 
@@ -40,15 +43,24 @@ Future<FakeStrumEngine> _pumpLive(
   }
   final engine = FakeStrumEngine();
   addTearDown(engine.dispose);
+  final container = ProviderContainer(
+    overrides: [
+      ...preferenceOverrides(),
+      strumEngineProvider.overrideWithValue(engine),
+    ],
+  );
+  addTearDown(container.dispose);
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        ...preferenceOverrides(),
-        strumEngineProvider.overrideWithValue(engine),
-      ],
+    UncontrolledProviderScope(
+      container: container,
       child: const StrumSightApp(),
     ),
   );
+  await tester.pumpAndSettle();
+  // E15-R02 (ADR 0467 D9): the app now boots on the adaptive shell's
+  // /today entry point by default; /live is reachable through
+  // legacyRedirects' target, AppRoutes.practiceLive.
+  container.read(routerProvider).go(AppRoutes.practiceLive);
   await tester.pumpAndSettle();
   return engine;
 }
@@ -253,34 +265,24 @@ void main() {
 
   group('Finish fallback target is the app entry route, not a fixed screen '
       '(review MINOR-2)', () {
-    testWidgets(
-      'with the adaptive shell off (default), /live IS the entry route — '
-      'Finish ends the session in place instead of hopping to Learn',
-      (tester) async {
-        final engine = await _pumpLive(tester);
-        engine.emit(_frame(current: const Chord('C')));
-        await tester.pumpAndSettle();
-        final l10n = lookupAppLocalizations(const Locale('en'));
+    testWidgets('E15-R02 (ADR 0467 D9): with the adaptive shell on (now the '
+        'non-production default) and nothing to pop to, Finish navigates to '
+        '/today — the entry route — instead of staying on Live', (
+      tester,
+    ) async {
+      final engine = await _pumpLive(tester);
+      engine.emit(_frame(current: const Chord('C')));
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.byKey(_finishKey));
-        await tester.pump();
-        // Past the 300 ms deferred-navigation beat.
-        await tester.pump(const Duration(milliseconds: 350));
+      await tester.tap(find.byKey(_finishKey));
+      await tester.pump();
+      // Past the 300 ms deferred-navigation beat.
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
 
-        // Still on Live — no navigation to Learn (or anywhere else) fired.
-        expect(find.byType(LiveScreen), findsOneWidget);
-        // The session actually ended (same visible state as a manual
-        // Pause): the transport shows "paused", not stuck "finishing".
-        expect(
-          find.byKey(const ValueKey('ss-session-transport-finishing-marker')),
-          findsNothing,
-        );
-        expect(
-          tester.widget<IconButton>(find.byKey(_pausePauseKey)).tooltip,
-          l10n.liveResume,
-        );
-        expect(find.byKey(_finishKey), findsOneWidget);
-      },
-    );
+      // Navigated away to the entry route — not stuck on Live.
+      expect(find.byType(LiveScreen), findsNothing);
+      expect(find.byType(TodayHubScreen), findsOneWidget);
+    });
   });
 }

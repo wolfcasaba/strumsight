@@ -337,10 +337,10 @@ void main() {
     );
 
     testWidgets(
-      'DATED EXCLUSION (measured 2026-08-27, lib/** — this round cannot '
-      'fix): the permanently-denied primer overflows by 297px at '
-      'textScale 2.0 — see docs/ui/legacy-backlog.md. A stale entry (the '
-      'overflow no longer reproduces) must turn this cell RED.',
+      'RESOLVED (E15-R02, was measured 2026-08-27 at 297px, lib/** — see '
+      'docs/ui/legacy-backlog.md): the permanently-denied primer no longer '
+      'overflows at textScale 2.0, now that its branch is wrapped in a '
+      'SingleChildScrollView like the retryable branch.',
       (tester) async {
         final errors = await pumpPrimer(
           tester,
@@ -351,13 +351,13 @@ void main() {
         );
 
         expect(
-          errors.any((e) => e.contains('overflowed by 297')),
-          isTrue,
+          errors.any((e) => e.contains('overflowed')),
+          isFalse,
           reason:
-              'STALE exclusion: lib/features/onboarding/screens/'
-              'permission_primer_screen.dart no longer overflows its '
-              'permanently-denied branch at textScale 2.0 — remove this '
-              'dated cell and its docs/ui/legacy-backlog.md mirror',
+              'REGRESSION: lib/features/onboarding/screens/'
+              'permission_primer_screen.dart overflows its '
+              'permanently-denied branch at textScale 2.0 again — see '
+              'docs/ui/legacy-backlog.md §1 (E15-R02 resolution)',
         );
       },
     );
