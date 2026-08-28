@@ -1,0 +1,1 @@
+round=E12-R02 verdict=pass tests=36 lesson=markdown-table-cell-tolerance-diverges-from-renderer engine=sonnet-impl
