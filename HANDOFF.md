@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔧 E15-R02 H3 ÖNJAVÍTÁS (ADR 0112) — a shell-flag MÉRT hatósugara a kör scope-jába került — PR [#495](https://github.com/wolfcasaba/strumsight/pull/495), squash `HEAL_SHA` (2026-08-28)
+## 🔧 E15-R02 H3 ÖNJAVÍTÁS (ADR 0112) — a shell-flag MÉRT hatósugara a kör scope-jába került — PR [#495](https://github.com/wolfcasaba/strumsight/pull/495), squash `ee2a2bc4` (2026-08-28)
 
 **A kör NEM futott le — a pre-flight `H3`-mal állt meg, implementer-dispatch
 nélkül.** Az `adaptiveShellEnabled: false` → `nonProd` átállítás MÉRVE
