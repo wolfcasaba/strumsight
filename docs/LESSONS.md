@@ -20630,3 +20630,59 @@ meg. A reviewer saját valódi-sértés próbája (egy `—` cella eltávolítá
 pirosra mérte: `line 19: 8 cell(s), expected 9`.
 
 **Őrteszt:** `test/tooling/sdd_index_guard_test.dart`::`F1 (e12-r02 review) — the real chapter table has no GFM cell-count drift every data row in docs/sdd/00-index.md has the same cell count as the table header`
+
+---
+
+## L527 — Az ÖNVÉDŐ cella volt a vakon zöld: egy „nem shell-elek ki külső binárisra" guard, ami a saját forrásában `Process.run`-t keres, a `Process.start`-ot átengedi — a mért hibaosztály a SAJÁT őrén ment át (E12-R03, F1 MAJOR, 2026-08-28)
+
+**Kontextus.** Az E12-R03 a repository-policy gépi mércéjét építette
+(`test/tooling/repository_policy_test.dart`, 28 cella). A kör pre-flightja az
+[L110](#l110)-et külön acceptance-cellává emelte (A8): a guard NEM hívhat külső
+binárist, mert egy `Process.run('rg', …)` ezen a boxon ZÖLD, a CI-runneren
+PIROS (ott nincs `ripgrep`). A cella a saját forrását olvassa, és egy darabolt
+konstanst keres benne — a darabolás azért kell, hogy a fájl a saját
+teszt-nevével ne váltsa magát pirosra.
+
+**Mit mértem.** A reviewer a `27f22591` fán beszúrta a guard `main()`-jébe:
+
+```dart
+final _unused = Process.start('rg', ['-n', 'x']);
+```
+
+```
+$ flutter test test/tooling/repository_policy_test.dart
+00:00 +28: All tests passed!
+```
+
+**A cella által mérni kívánt hibaosztály átment a saját őrén.** Az ok: a
+`dart:io` külső-folyamat belépési pontja **három** (`Process.run`,
+`Process.runSync`, `Process.start`), de csak **kettő** osztozik a `Process.run`
+prefixen. Az egyetlen keresett minta a harmadikat nem fedte.
+
+**A második, súlyosabb réteg: a doc-comment többet állított, mint a mérés.**
+A group neve „never shells out to an external binary", a teszt neve „never
+spawns an external process", a komment pedig kimondta: „one check covers
+**both** external-process entry points" — vagyis a forrás maga rögzítette
+tényként, hogy kettő van. A hibás szám a kommentben élt, nem a kódban: aki
+elolvasta, megerősítve látta a hiányos mintát.
+
+**A csapda általánosítva.** Egy önvédő guard, ami a saját forrását
+`contains`-szel méri, pontosan annyit ér, amennyi a felsorolt minták
+**teljessége** — és ezt a teljességet semmi nem méri. A „hány belépési pontja
+van ennek az API-nak" kérdés a kód ELŐTT eldőlt (a kommentben), nem a
+gate-ben. Ugyanaz a hibaosztály, mint az [L260](#l260) kulcsnév-listás
+redakciós tesztje: a lista *tartalma* a néma feltevés.
+
+**Javítás.** (a) A cella két darabolt mintát keres (`'Process' + '.run'` és
+`'Process' + '.start'`), és a komment kimondja, MIÉRT fedi ez le mind a hármat
+(a `runSync` a `run` prefixén osztozik). (b) A group-, teszt-név és komment a
+ténylegesen mért halmazhoz igazodott. (c) A reviewer mindhárom belépési pontra
+megismételte a próbát — mindhárom PIROS.
+
+**Amit ebből a következő kör vigyen tovább:** ha egy guard egy API
+belépési pontjait sorolja fel, a felsorolás teljességét **mérd vagy mondd ki
+mérésként**, ne kommentben állítsd. És a valódi-sértés próbát ne csak a
+domain-cellákra futtasd — az önvédő cellára is, mert az a lánc utolsó szeme,
+amit senki más nem ellenőriz.
+
+**Őrteszt:** `test/tooling/repository_policy_test.dart`::`A8 — the guard itself never shells out to an external binary (L110) this test file never spawns an external process through any dart:io Process entry point`

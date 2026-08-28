@@ -1,5 +1,66 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R03 KÉSZ — GitHub delivery workflow, branch protection és review policy — PR [#487](https://github.com/wolfcasaba/strumsight/pull/487), squash `00be433e` (2026-08-28)
+
+**A repó megkapta a backlog-, ownership- és PR-evidence-szabályát — úgy, hogy az
+autonóm kör-pipeline egyetlen merge-feltétellel sem lett terhelve.** A kör
+legfőbb kockázata nem kódhiba volt, hanem szabályozási: egy CODEOWNERS-alapú
+`required_approving_review_count ≥ 1` DEADLOCK-ba vinné a láncot, mert a PR-t a
+kör orchesztrátora nyitja és squash-merge-eli. Az [ADR 0444](docs/adr/0444-delivery-workflow-and-repository-policy.md)
+D1 ezért kimondja: **a CODEOWNERS jelöl, nem kapuz** — és a tilalmat gépi cella
+(A6) őrzi mindkét fájlon.
+
+| Fájl | |
+|---|---|
+| [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) (ÚJ, 6 fájl) | öt sablon (feature, bug, security, migration, release), mindegyiken **hat kötelező mező** (`chapter`, `round`, `acceptance`, `test_plan`, `rollback`, `privacy`) + `config.yml` a blank issue tiltásához |
+| [`.github/CODEOWNERS`](.github/CODEOWNERS) (ÚJ) | 14 minta öt területre (audio/backend/security/model/release), **jelölő** szerepben |
+| [`.github/pull_request_template.md`](.github/pull_request_template.md) | `## Release evidence` szakasz + kötelezően kitöltendő release-asset sor; a mért 11 szakasz változatlan |
+| [`docs/process/backlog-policy.md`](docs/process/backlog-policy.md), [`docs/process/branch-protection.md`](docs/process/branch-protection.md) (ÚJ) | label/severity leképezés a `docs/release/blockers.md` P0–P3 skálájára; required check vs. user-opció szétválasztása |
+| [`tool/audit_repository_policy.py`](tool/audit_repository_policy.py) (ÚJ) | statikus, **offline** policy-audit (PyYAML); a `gh api` parancsot kiírja, de nem futtatja |
+| [`test/tooling/repository_policy_test.dart`](test/tooling/repository_policy_test.dart) (ÚJ, 817 sor) | **28 cella**, saját sor-alapú issue-form parserrel |
+
+**`package:yaml` itt sem használható** ([ADR 0444](docs/adr/0444-delivery-workflow-and-repository-policy.md) D3,
+ugyanaz a mérés, mint az ADR 0443 D3-nál): a `yaml` csak `dependency: transitive`,
+és a `depend_on_referenced_packages` lint pirosra váltaná a `flutter analyze`-t,
+miközben a `pubspec.yaml` a tilos zónán van (H3). A CI-kaput ezért egy
+**szándékosan szűkített** issue-form YAML-részhalmaz + saját parser adja; a
+**teljes** YAML-érvényességet a Python audit méri operátor-oldalon PyYAML-lel —
+két független mérés ugyanazokra a fájlokra.
+
+**A kör mért tanulsága ([L527](docs/LESSONS.md#l527)) — az ÖNVÉDŐ cella volt a
+vakon zöld.** Az A8 cella pont az [L110](docs/LESSONS.md#l110) hibaosztályt
+akarta megfogni (külső binárisra shell-elő guard: a boxon zöld, a CI-runneren
+piros), és a saját forrásában a `Process.run` mintát kereste. A reviewer
+beszúrt egy `Process.start('rg', …)` hívást a guard fájlba: **mind a 28 cella
+zöld maradt.** A `dart:io` külső-folyamat belépési pontja három, nem kettő — és
+a hibás szám a KOMMENTBEN élt („one check covers both entry points"), tehát aki
+elolvasta, megerősítve látta a hiányos mintát. A javító kör mindhárom pontra
+kiterjesztette a mérést; a reprodukció mind a háromra piros.
+
+**Review:** [`docs/reviews/e12-r03-review.md`](docs/reviews/e12-r03-review.md) —
+**APPROVED egy javító kör után**, 0 BLOCKER / 0 MAJOR / 0 MINOR / 2 NOTE.
+A reviewer öt saját valódi-sértés próbát futtatott izolált klónban; kettő
+talált leletet (F1 MAJOR, F2 MINOR), egy dokumentált korlátot igazolt
+(F3: a szűkített részhalmaz a legitim `assignees:` kulcsot is **hangosan**
+elutasítja — PyYAML elfogadná).
+
+**Exact-SHA evidencia a merge SHA-n (`f5fbc26f`):** Full Gate
+[33137856678](https://github.com/wolfcasaba/strumsight/actions/runs/33137856678)
+`success` + Router CI
+[33137858325](https://github.com/wolfcasaba/strumsight/actions/runs/33137858325)
+`success`. Scope-audit az implementációra:
+`OK (de8d8eece3ec..27f22591e015, 13 changed path(s), 0 generated/ignored)`;
+a javító körre a wrapper gépi audit-ja `scope_audit=ok` (4 fájl).
+`.github/workflows/**` és `pubspec.*` érintetlen.
+
+**NEXT:** `E12-R04` — Environment és channel isolation
+([`docs/rounds/e12-r04-environment-and-channel-isolation.md`](docs/rounds/e12-r04-environment-and-channel-isolation.md),
+ADR `0445`, motor `sonnet-impl`). A `docs/process/branch-protection.md` §2
+négy elvárt beállítása **dokumentált elvárás** marad, amíg a token nem kap
+Administration jogot (ADR 0050 „Szóló-fejlesztői adaptációk" 2. pont) — ez
+user-hatáskörű, operátori lépés, nem kör-scope.
+
+
 ## ✅ E12-R02 KÉSZ — SDD index és dependency graph — PR [#486](https://github.com/wolfcasaba/strumsight/pull/486), squash `355defd9` (2026-08-28)
 
 **Az SDD program indexe gépi szerződés lett.** A `docs/sdd/00-index.md`
