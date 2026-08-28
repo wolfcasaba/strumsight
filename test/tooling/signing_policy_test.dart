@@ -342,6 +342,102 @@ jobs:
       expect(result.exitCode, isNot(0));
       expect(result.stderr, contains('keystore-cleanup-present'));
     });
+
+    test('F1 (review) — the fingerprint proposal fragment '
+        '(docs/release/workflows/release-apk-fingerprint.proposal.md), '
+        'spliced into an otherwise-compliant workflow, passes with exit 0 — '
+        'the required "::add-mask::" idiom must not itself be flagged as a '
+        'leak', () {
+      final fixture = writeFixture('fingerprint_proposal_spliced.yml', r'''
+name: Production Android APK
+jobs:
+  release-apk:
+    needs: signing-prerequisites
+    steps:
+      - name: Capture production signing certificate fingerprint
+        id: fingerprint
+        shell: bash
+        env:
+          STRUMSIGHT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          STRUMSIGHT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$STRUMSIGHT_RELEASE_STORE_PASSWORD"
+          fingerprint_line="$(
+            keytool -list -v \
+              -keystore "$KEYSTORE_PATH" \
+              -alias "$STRUMSIGHT_RELEASE_KEY_ALIAS" \
+              -storepass:env STRUMSIGHT_RELEASE_STORE_PASSWORD |
+              grep 'SHA256:'
+          )"
+          fingerprint="$(printf '%s' "$fingerprint_line" | sed -E 's/^.*SHA256: *//')"
+      - name: Remove production keystore
+        if: always()
+        run: |
+          rm -f -- "$KEYSTORE_PATH"
+''');
+      final result = _runAudit(workflowPath: fixture);
+      expect(result.exitCode, 0, reason: result.stderr);
+    });
+
+    test('F1 (review) — the SAME fixture with the "::add-mask::" prefix '
+        'stripped (a plain echo of the password) still fails with '
+        'keystore-not-echoed — the exclusion is not wider than the exact '
+        'masking idiom', () {
+      final fixture = writeFixture('fingerprint_proposal_unmasked.yml', r'''
+name: Production Android APK
+jobs:
+  release-apk:
+    needs: signing-prerequisites
+    steps:
+      - name: Capture production signing certificate fingerprint
+        id: fingerprint
+        shell: bash
+        env:
+          STRUMSIGHT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+        run: |
+          set -euo pipefail
+          echo "$STRUMSIGHT_RELEASE_STORE_PASSWORD"
+      - name: Remove production keystore
+        if: always()
+        run: |
+          rm -f -- "$KEYSTORE_PATH"
+''');
+      final result = _runAudit(workflowPath: fixture);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('keystore-not-echoed'));
+    });
+
+    test('F2 (review) — a fixture workflow that echoes the canonical GitHub '
+        'Actions secrets-interpolation form (dollar-brace-brace secrets.NAME) '
+        'fails with keystore-not-echoed', () {
+      final fixture = writeFixture('leak_interpolation_workflow.yml', r'''
+name: Production Android APK
+jobs:
+  release-apk:
+    needs: signing-prerequisites
+    steps:
+      - name: Leak
+        run: |
+          echo "${{ secrets.ANDROID_STORE_PASSWORD }}"
+      - name: Remove production keystore
+        if: always()
+        run: |
+          rm -f -- "$KEYSTORE_PATH"
+''');
+      final result = _runAudit(workflowPath: fixture);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('keystore-not-echoed'));
+    });
+
+    test('F2 (review) — the real release-apk.yml stays exit 0: its legitimate '
+        'secrets.ANDROID_KEYSTORE_BASE64 interpolation piped into '
+        'base64 --decode is not a password name and must not be flagged', () {
+      final result = _runAudit();
+      expect(result.exitCode, 0, reason: result.stderr);
+    });
   });
 
   group(

@@ -33,9 +33,13 @@ already-fail-closed behaviour, not new functionality):
 
   - secrets-checked-before-build: the release-apk job declares
     `needs: signing-prerequisites`.
-  - keystore-not-echoed: no step echoes/prints/cats a signing password, and
+  - keystore-not-echoed: no step echoes/prints/cats a signing password —
+    either as a plain shell reference (`$NAME` / `${NAME}`) or as a GitHub
+    Actions interpolation (`${{ secrets.NAME }}` / `${{ env.NAME }}`) — and
     no `set -x`-shaped line exists (which would echo every later command,
-    including secret arguments).
+    including secret arguments). The one exception is the exact
+    `echo "::add-mask::$NAME"` masking idiom ADR 0448 D5 requires before a
+    secret is used — that whole line, and nothing wider, is not a leak.
   - keystore-cleanup-present: an `if: always()` step removes the
     materialized keystore file.
 
@@ -204,10 +208,42 @@ _SECRET_ENV_NAMES = (
     "STRUMSIGHT_RELEASE_STORE_PASSWORD",
     "STRUMSIGHT_RELEASE_KEY_PASSWORD",
 )
-_ECHO_OF_SECRET = re.compile(
-    r"\b(echo|printf|cat)\b[^\n]*\$\{?(" + "|".join(_SECRET_ENV_NAMES) + r")\b"
+_SECRET_NAME_GROUP = "|".join(_SECRET_ENV_NAMES)
+
+# The one masking idiom ADR 0448 D5 REQUIRES before a secret is used
+# (`echo "::add-mask::$NAME"`) is not itself a leak — it is GitHub Actions'
+# own masking directive, and a *whole line* consisting of nothing else. The
+# match is intentionally narrow (anchored start-to-end) so it excludes only
+# that exact idiom: a same-line `echo "::add-mask::$NAME and then $NAME"`
+# would NOT match this pattern and would still trip the rule below.
+_MASK_DIRECTIVE_OF_SECRET_ONLY = re.compile(
+    r'^\s*echo\s+"::add-mask::\$\{?(?:' + _SECRET_NAME_GROUP + r')\}?"\s*$'
+)
+_ECHO_LIKE_COMMAND = re.compile(r"\b(echo|printf|cat)\b")
+# Plain shell reference: $NAME or ${NAME}.
+_SECRET_SHELL_VAR_REFERENCE = re.compile(r"\$\{?(?:" + _SECRET_NAME_GROUP + r")\}?\b")
+# GitHub Actions interpolation: ${{ secrets.NAME }} / ${{ env.NAME }} — the
+# `$` and the name are separated by `{{ secrets.`/`{{ env.`, so the plain
+# shell pattern above never matches it; this is a distinct leak shape.
+_SECRET_ACTIONS_INTERPOLATION = re.compile(
+    r"\$\{\{\s*(?:secrets|env)\.(?:" + _SECRET_NAME_GROUP + r")\s*\}\}"
 )
 _SET_X = re.compile(r"\bset\s+-\w*x\w*\b")
+
+
+def _line_echoes_secret(line: str) -> bool:
+    if _MASK_DIRECTIVE_OF_SECRET_ONLY.match(line):
+        return False
+    if not _ECHO_LIKE_COMMAND.search(line):
+        return False
+    return bool(
+        _SECRET_SHELL_VAR_REFERENCE.search(line)
+        or _SECRET_ACTIONS_INTERPOLATION.search(line)
+    )
+
+
+def _echoes_secret(text: str) -> bool:
+    return any(_line_echoes_secret(line) for line in text.split("\n"))
 
 
 def check_workflow(text: str) -> list[PolicyViolation]:
@@ -223,7 +259,7 @@ def check_workflow(text: str) -> list[PolicyViolation]:
             )
         )
 
-    if _ECHO_OF_SECRET.search(text):
+    if _echoes_secret(text):
         violations.append(
             PolicyViolation(
                 "keystore-not-echoed",

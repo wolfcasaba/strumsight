@@ -345,4 +345,93 @@ körben):**
 
 **Jelzés:** `done`.
 
+---
+
+### 10.1 Javító kör (2026-08-28) — F1 + F2 (review: `docs/reviews/e12-r07-review.md`, CHANGES REQUESTED — 2 MAJOR)
+
+A review mindkét leletet ugyanabban a szabályban mérte (`keystore-not-echoed`,
+`tool/release/verify_signing_policy.py:207–209`): **F1** hamis pozitív (a kör
+saját, ADR 0448 D5 által kötelezővé tett `::add-mask::` idiómáját
+szivárgásnak minősítette), **F2** hamis negatív (a `${{ secrets.NAME }}` /
+`${{ env.NAME }}` GitHub Actions interpolációs alakot átengedte).
+
+**Javítás.** A `_ECHO_OF_SECRET` egyetlen regexét egy sor-alapú
+`_line_echoes_secret` függvény váltotta:
+
+- `_MASK_DIRECTIVE_OF_SECRET_ONLY` — szigorúan a `echo "::add-mask::$NAME"`
+  TELJES sorra illeszkedik (horgonyzott eleje-vége), semmi szélesebbre; ha ez
+  illeszkedik, a sor NEM sértés.
+- `_SECRET_SHELL_VAR_REFERENCE` — a korábbi `$NAME`/`${NAME}` shell-hivatkozás,
+  változatlan lefedettséggel.
+- `_SECRET_ACTIONS_INTERPOLATION` (ÚJ) — `${{ secrets.NAME }}` / `${{
+  env.NAME }}`, csak a jelszó-nevekre (`_SECRET_ENV_NAMES`); az
+  `ANDROID_KEYSTORE_BASE64` nincs ebben a listában, ezért a valós workflow
+  legitim `base64 --decode` pipe-ja (`release-apk.yml:106–107`) továbbra sem
+  pirosít.
+
+Két új gépi cella a `test/tooling/signing_policy_test.dart` A4 csoportjában
+(a teljes suite ezután 27/27, a korábbi 23 változatlan marad):
+
+1. „F1 (review) — the fingerprint proposal fragment … passes with exit 0" —
+   a `release-apk-fingerprint.proposal.md` valódi YAML-fragmentjét (benne a
+   `echo "::add-mask::$STRUMSIGHT_RELEASE_STORE_PASSWORD"` sorral) egy
+   egyébként szabálykövető fixture workflow-ba illesztve az audit exit 0.
+2. „F1 (review) — … prefix stripped … still fails with keystore-not-echoed" —
+   ugyanez a fixture a maszkoló prefix nélkül (`echo
+   "$STRUMSIGHT_RELEASE_STORE_PASSWORD"`) nem-nulla kilépést ad,
+   `keystore-not-echoed`-dal — a kizárás nem szélesebb a kanonikus idiómánál.
+3. „F2 (review) — a fixture workflow that echoes the canonical GitHub Actions
+   secrets-interpolation form … fails with keystore-not-echoed" — a review
+   `leak.yml` alakja (`echo "${{ secrets.ANDROID_STORE_PASSWORD }}"`)
+   nem-nulla kilépést ad, `keystore-not-echoed`-dal.
+4. „F2 (review) — the real release-apk.yml stays exit 0" — a valós
+   `release-apk.yml` (benne az `${{ secrets.ANDROID_KEYSTORE_BASE64 }}` |
+   `base64 --decode` pipe) továbbra is exit 0.
+
+**Kötelező ellenőrzések kimenete:**
+
+```
+$ python3 tool/release/verify_signing_policy.py --strict
+signing policy: all rules satisfied
+  gradle: android/app/build.gradle.kts
+  workflow: .github/workflows/release-apk.yml
+exit=0
+```
+
+```
+$ tools/round-gate.sh test/tooling/signing_policy_test.dart test/tooling/check_secrets_test.dart
+[1] format: ZÖLD · [2] analyze: ZÖLD ·
+[3] test test/tooling/signing_policy_test.dart: ZÖLD (27/27) ·
+[4] test test/tooling/check_secrets_test.dart: ZÖLD (13/13) ·
+[5] architecture: ZÖLD · [6] secrets: ZÖLD · [7] l10n: ZÖLD
+MINDEN GATE ZÖLD.
+```
+
+**Valódi-sértés próba a javításra (mindkettő végrehajtva és visszaállítva,
+kimenettel):**
+
+1. Az `::add-mask::` kizárás kivéve (`_MASK_DIRECTIVE_OF_SECRET_ONLY.match`
+   hívása ideiglenesen `False`-ra kényszerítve) →
+   `flutter test --plain-name "F1 (review) — the fingerprint proposal fragment"`
+   PIROSRA vált:
+   ```
+   Expected: <0>
+     Actual: <1>
+   verify_signing_policy: keystore-not-echoed: a signing password env var
+   appears to be echoed/printed/catted
+   ```
+   Visszaállítva; `git diff` a fájlon üres.
+2. Az interpolációs alak kezelése kivéve
+   (`_SECRET_ACTIONS_INTERPOLATION.search` hívása ideiglenesen `False`-ra
+   kényszerítve) →
+   `flutter test --plain-name "F2 (review) — a fixture workflow that echoes the canonical"`
+   PIROSRA vált:
+   ```
+   Expected: not <0>
+     Actual: <0>
+   ```
+   Visszaállítva; `git diff` a fájlon üres.
+
+**Jelzés:** `done`.
+
 ## 11. Review — a Claude tölti ki
