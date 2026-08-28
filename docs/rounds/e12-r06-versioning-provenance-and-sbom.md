@@ -295,4 +295,134 @@ A javaslat tényleges beillesztése és a dispatch orchesztrátor/emberi lépés
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5). **Ág:**
+`sonnet-impl/e12-r06-versioning-provenance-and-sbom`, alap: `main @ 5734fc02`.
+
+### Mit épített
+
+- `lib/app/build_info.dart` — `BuildInfo`: `const` értékosztály, minden mező
+  `String.fromEnvironment`/`int.fromEnvironment` default-értékű paraméterrel
+  (`STRUMSIGHT_BUILD_VERSION`/`_BUILD_NUMBER`/`_BUILD_SHORT_SHA`/`_BUILD_CHANNEL`).
+  Dokumentált defaultok (`0.0.0-dev` / `0` / `unknown` / `dev`) — a teszt
+  ezeket pinneli. `main`/bootstrap nem hivatkozza (ADR 0447 D7).
+- `tool/generate_release_manifest.dart` — pure `buildReleaseManifest(...)`
+  függvény + `canonicalJsonBytes(...)` kanonikus JSON-enkóder (kulcsok
+  rekurzívan rendezve minden szinten, `\n` sorvég, **nincs időbélyeg
+  sehol** — D1). A `main()` beolvassa a `pubspec.yaml` verzió/build sorát
+  (`parsePubspecVersion`), a git rövid SHA-t (`--git-sha` vagy
+  `git rev-parse --short=7 HEAD`), az ML- és tudáscsomag-manifestet, és
+  opcionális `--artifact` checksumokat. A tudáscsomagot/ML-csomagot
+  KIZÁRÓLAG `schemaVersion`/`schema_version` + manifest-sha256 + elemszám
+  hármassal hivatkozza, kitalált „version" mező nélkül (D6).
+- `tool/release/generate_sbom.py` — csak stdlib. `pubspec.lock`-ot saját,
+  sor-alapú parserrel olvassa (nem YAML-parser). License-forrás: (1) hosted
+  Dart csomag → pub cache `LICENSE` fájl (path+sha256+első sor, **SPDX-et
+  NEM következtet**), (2) SDK-csomag (`flutter`, `flutter_localizations`,
+  `flutter_test`, `flutter_web_plugins`, `sky_engine`) és backend Python-pin
+  → kézzel gondozott `_CURATED_LICENSES` (SPDX + forrás bejegyzésenként).
+  Feloldatlan csomagnál nem-nulla kilépés, névvel (D3). `THIRD_PARTY_NOTICES.md`-t
+  és egy `sbom.json`-t ír.
+- `tool/release/verify_artifacts.py` — csak stdlib. Checksum-audit a
+  manifest `artifacts` listáján; `--previous`-szal szigorú `>`
+  build-number-ellenőrzés (csökkenés ÉS egyenlőség is hiba — D2);
+  `--previous` nélkül `baseline: none` kiírás, 0 kilépés.
+- `test/tooling/release_manifest_test.dart` — A1–A7, a `python3`-ra
+  shell-elő cellák (A2/A3) `Directory.systemTemp.createTempSync`
+  fixture-öket írnak és `addTearDown`-ban törlik (R5) — nincs új
+  `test/fixtures/**` fájl. A5-höz saját, korlátozott GitHub Actions
+  `steps:` YAML-részhalmaz-parser a tesztfájlban (`parseWorkflowSteps`),
+  az ADR 0444 D3 mintája szerint. A7 önméri: nincs `package:yaml` import
+  (import-sor regex, nem puszta substring), és minden `Process.*` hívás
+  végrehajtható neve pontosan `{python3}` (regex-kinyerve, nem
+  substring-keresés — ez rg/grep/jq/gh-t IS kizár, nem csak nem
+  említi őket).
+- `docs/release/workflows/release-apk-provenance.proposal.md` — teljes,
+  bemásolható YAML-részlet 6 lépéssel (manifest generálás, SBOM+notices
+  generálás, verify, 3× upload-artifact), a beillesztés helye névvel
+  megnevezve (`Read APK metadata from pubspec` UTÁN, `Materialize
+  production keystore` ELŐTT).
+- `docs/release/supply-chain.md` — a fenti eszközök szerződésének leírása.
+- `THIRD_PARTY_NOTICES.md` — a valódi fán generált kimenet (171 komponens:
+  160 Dart + 11 backend Python pin, `--profile production`).
+
+### Futtatott parancsok — tényleges kimenet
+
+```
+$ tools/round-gate.sh test/tooling/release_manifest_test.dart test/tooling/ml_asset_manifest_test.dart
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/release_manifest_test.dart               zöld
+    test test/tooling/ml_asset_manifest_test.dart              zöld
+    architecture                                                zöld
+    secrets                                                     zöld
+    l10n                                                        zöld
+MINDEN GATE ZÖLD.
+```
+
+```
+$ dart run tool/generate_release_manifest.dart --output build/release-manifest.json --channel production
+Release manifest written: build/release-manifest.json
+$ sha256sum build/release-manifest.json
+d24ec1bb2e69158af441ca0e65ebfd5be0e982769db7df2629646cb6dd705965  build/release-manifest.json
+
+$ dart run tool/generate_release_manifest.dart --output build/release-manifest.json --channel production
+Release manifest written: build/release-manifest.json
+$ sha256sum build/release-manifest.json
+d24ec1bb2e69158af441ca0e65ebfd5be0e982769db7df2629646cb6dd705965  build/release-manifest.json
+```
+
+**A két futás sha256-a egyezik** (A1 valódi bizonyítéka a fán, `main @
+5734fc02` állapotán, tényleges pub cache-szel).
+
+```
+$ python3 tool/release/generate_sbom.py --profile production --output-notices THIRD_PARTY_NOTICES.md --output-sbom build/sbom.json
+SBOM written: build/sbom.json (171 components). Notices written: THIRD_PARTY_NOTICES.md.
+(exit 0)
+
+$ python3 tool/release/verify_artifacts.py --manifest build/release-manifest.json
+baseline: none
+artifacts: 0 verified
+(exit 0)
+```
+
+### Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+A `tool/generate_release_manifest.dart` `_writeCanonical` függvényéből
+kivettem a kulcs-rendezést (`value.keys.toList()..sort()` →
+`value.keys.toList()`), majd lefuttattam a §7 gate-et:
+
+```
+$ tools/round-gate.sh test/tooling/release_manifest_test.dart test/tooling/ml_asset_manifest_test.dart
+...
+00:00 +0 -1: A1 … canonicalJsonBytes sorts object keys ascending at every nesting level … [E]
+  Expected: '{"a":{"b":3,"y":2},"m":[{"a":2,"z":1}],"z":1}\n'
+    Actual: '{"z":1,"a":{"y":2,"b":3},"m":[{"z":1,"a":2}]}\n'
+...
+00:00 +6 -2: A1 … keys are sorted ascending, recursively, in the REAL release manifest … [E]
+  Expected: ['app', 'artifacts', 'knowledgePackage', 'modelPackage', 'schemaVersion']
+    Actual: ['schemaVersion', 'app', 'modelPackage', 'knowledgePackage', 'artifacts']
+...
+    → [3] test test/tooling/release_manifest_test.dart: PIROS (kilépési kód 1)
+GATE_EXIT=10
+```
+
+Pontosan a két A1-cella (a `canonicalJsonBytes` közvetlen kulcs-rendezés
+tesztje és a valódi manifest kulcs-rendezettség tesztje) váltott PIROSRA —
+a többi 23/25 teszt (A2–A7) érintetlen maradt, ahogy a mérce-mátrix
+előírja. Ezután a sort-hívást visszaállítottam
+(`git diff tool/generate_release_manifest.dart` üres), és a gate-et
+újrafuttatva minden lépés ismét ZÖLD (lásd fent).
+
+### Amit NEM futtattam le, és miért
+
+- **CI (`build-apk.yml`)** — a brief és AGENTS.md szerint a teljes suite +
+  property gate + APK a CI-ban fut, azt az orchestrátor indítja
+  (`gh workflow run`); implementer-session ezt nem hívja.
+- **A `.github/workflows/release-apk.yml` tényleges szerkesztése és
+  dispatch-a** — védett zóna (§0.0/D4), a kör helyette a
+  `docs/release/workflows/release-apk-provenance.proposal.md` javaslatot
+  szállítja; a tényleges bekötés orchesztrátor/emberi lépés a merge után.
+- **`pubspec.yaml` verzió-emelés** — tiltott zóna (§3), nem a kör dolga.
+
 ## 11. Review — a Claude tölti ki
