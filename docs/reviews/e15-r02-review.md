@@ -165,6 +165,29 @@ szabályosan fordultak át, a 19 mért bukás igazítása a §5.4 irányát köv
 fájlra szűkül: a `library_test.dart` a szállított alapértelmezés helyett a kikapcsolt
 konfigurációt méri, ami az ADR 0467 D9 kifejezett tilalma.
 
-## 6. Újra-ellenőrzés a javító kör után
+## 6. Újra-ellenőrzés a javító kör 2 után (`a9264464`)
 
-*(a javító kör után tölti ki a reviewer)*
+Leletenként, MÉRVE:
+
+| Lelet | Állapot | Mit mértem |
+|---|---|---|
+| **BLOCKER-1** | ✅ **ZÁRVA** | A legacy-referencia cella változatlan; a fájl kapott egy MÁSODIK cellát `appConfigProvider`-override NÉLKÜL, amely a `libraryV2SourcesProvider`-t fake analysis-forrással köti fel, VALÓDI UI-tapintásokkal (`Tutor profile` → `Library`) jut el a `/profile/library`-re, és `UnifiedLibraryScreen` + a wire-elt elem megjelenését állítja. Cellaszám **3 → 4**, `expect` **6 → 8** — a coverage nőtt, nem terelődött. |
+| **MAJOR-1** | ✅ **ZÁRVA (a mérés a válasz)** | A `tester.pageBack()` visszaállítva ÉS lefuttatva → PIROS, a szó szerinti kimenettel a §10.5-ben: `Found 0 widgets with type "CupertinoNavigationBarBackButton"`. Ok: a `pageBack()` heurisztikája nem találja meg a `TunerScreen` Material `IconButton` affordanciáját. A `router.pop()` tehát MÉRT kényszer, nem kényelem; a félrevezető komment a mért kimenetre hivatkozik. A `selectedIndex` törlése (a Stage-útvonalon nincs `NavigationBar`) már az első körben elfogadott volt. |
+| **MINOR-1** | ✅ **ZÁRVA** | `adr: '0275'` visszaállítva; a `killSwitchPath` próza (a felhatalmazott mező) változatlan és igaz. |
+| **MINOR-2** | ✅ **ZÁRVA** | A §10.3 és §10.4 egyeztetve: a mérvadó tény a **bukás-szám és -halmaz** (15 bukás, kizárólag az öt mért ARM↔x86 drift-fájlban); a passz-szám a §7 gate / Full Gate kimenetéből olvasható. Ez tisztességesebb, mint két ellentmondó számot bent hagyni. |
+| **NOTE-1/2** | nyitva, tudatosan | Nem blokkoló, a javító kör nem nyúlt hozzájuk. |
+
+**Ellenőriztem azt is, hogy a javítás nem hozott új sértést:** a javító kör
+diffje (`f24e4561..a9264464`) négy fájl (brief, registry, `shell_lifecycle_test`,
+`library_test`), mind a brief `allowed_paths`-án belül; új `skip:` nincs; a
+`library_test` új cellája **nem** használ `appConfigProvider`-override-ot.
+
+**Upstream-szinkron (§0.3):** a `main` a dispatch óta mozdult (E12-R09,
+`24874c58`); az ágba `--no-ff` merge-dzsel beépítve, **konfliktus nélkül**
+(`git diff --check` üres, `merge-base --is-ancestor origin/main HEAD` → 0).
+
+### VÉGSŐ DÖNTÉS: **APPROVED**
+
+0 nyitott BLOCKER, 0 MAJOR, 0 MINOR (2 NOTE tudatosan nyitva). A merge a
+zöld kapu (Full Gate + Router CI a merge SHA-n, exact-SHA) teljesülése után
+mehet.
