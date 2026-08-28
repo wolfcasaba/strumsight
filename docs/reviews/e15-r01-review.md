@@ -79,7 +79,7 @@ alátámasztottak** — nem bemondás.
 ### 2.4 A mátrix szerkezete
 
 `test/ui/goldens/e15_r01_theme_adoption_test.dart`: 6 képernyő × 2 fényerő ×
-2 locale × 2 szövegskála = **24** `testWidgets` cella, fix `Size(412, 915)`
+2 locale × 2 szövegskála = **48** `testWidgets` cella, fix `Size(412, 915)`
 viewporton. **Nincs** `skip`, **nincs** tolerancia, **nincs** kizárási lista —
 a §5.5 / ADR 0466 D7 betartva. Minden cella két állítást tesz
 (`otherErrors` üres, `overflowPx` null) `FlutterError.onError`-on át, nem a
@@ -98,12 +98,20 @@ tartalmaz; `D8` nincs.
 Egy olvasó a nem létező döntést fogja keresni. Javítás: `D1–D4` (a hibaágra
 külön a `D1`), a `D8` törlendő.
 
-### MINOR-2 — a §10 handoff cellaszáma ellentmond a briefnek és a kódnak
+### MINOR-2 — ~~a §10 handoff cellaszáma~~ **VISSZAVONVA (a reviewer számolási hibája)**
 
-`docs/rounds/e15-r01-design-system-theme-adoption.md:263`: „a mátrix mind a
-**48** kombinációja (6 képernyő × 2 fényerő × 2 locale × 2 szövegskála)". A
-szorzat **24**, a fájl 24 `testWidgets` cellát generál, és a brief §3/§6 is
-24-et ír elő. Számtani elírás egy MÉRÉST állító mondatban.
+Az eredeti lelet azt állította, hogy a `48` téves és a helyes érték `24`. **Ez
+a reviewer hibája volt:** 6 × 2 × 2 × 2 = **48**, nem 24. A MÉRÉS is ezt
+mondja — a `tools/round-gate.sh` kimenetében a mátrix lépése
+`+48: All tests passed`, és a cellanevek
+(`<screen>|<theme>|<locale>|<textScale>`) uniq darabszáma szintén **48**
+(8 kombináció screenenként × 6 screen).
+
+Az implementer száma tehát HELYES volt. A javító kör a `48`-at tévesen
+`24`-re írta át; ezt visszaállítottuk, és a hibás `24` **a brief §3, §4, §6,
+§6.2, §8 és az ADR 0466 D7 szövegében is javítva** lett `48`-ra — a hiba
+forrása az előre megírt brief volt, amit a pre-flight §0.0 revíziója sem
+mért újra.
 
 ### NOTE-1 — az A6 cella nem falszifikálható a saját kritériumára
 
@@ -132,21 +140,48 @@ mátrix némán a régit mérné — az A1 viszont akkor pirosra vált.
 | A1 | ✅ | gate zöld; a reviewer 2.1 próbája pirosra vitte a helytelen implementáción |
 | A2 | ✅ | gate zöld; 2.1 — `Null check operator used on a null value` |
 | A3 | ✅ | gate zöld; 2.2 próba |
-| A4 | ✅ | 24 cella, kizárás/`skip`/tolerancia nélkül (2.4); gate zöld |
+| A4 | ✅ | **48** cella (mérve: `+48: All tests passed`), kizárás/`skip`/tolerancia nélkül (2.4); gate zöld |
 | A5 | ✅ | `semantics_contract_test`, `adaptive_scaffold_test`, `foundations_test`, `bootstrap_failure_app_test` mind zöld a gate-ben |
 | A6 | ⚠️ | a dokumentum frissült és a szám (96) egyezik; a cella ereje: NOTE-1 |
 | A7 | ✅ | gate zöld (a legacy `colorScheme`/`textTheme`/`scaffoldBackgroundColor` egyenlőség) |
 | A8 | ✅ | gate zöld; a barrel-import `show SsDarkTheme, SsLightTheme` alakban |
 
-## 5. Verdikt
+## 5. Verdikt (az 1. körben)
 
-**CHANGES REQUESTED** — kizárólag a két MINOR miatt (nem létező `D8`
-hivatkozás, `48` helyett `24`). Mindkettő a kör SAJÁT, még nem merge-elt
-artefaktumában van, mindkettő szövegjavítás az engedélyezett fájlokon belül.
+**CHANGES REQUESTED** — a két MINOR miatt. Az egyik (MINOR-1, `D8`) valódi
+volt, a másik (MINOR-2, cellaszám) a reviewer számolási hibájának bizonyult
+és visszavonásra került.
 
-A javító kör után a review frissül, és a teljes CI-kapu (Full Gate + Router CI)
-az ÚJ head SHA-n futtatandó újra (exact-SHA, ADR 0086 §2).
+## 6. Frissítés a javító kör után — VÉGSŐ DÖNTÉS
 
-## 6. Frissítés a javító kör után
+**A javító kör HEAD-je:** `61530884` (+ ez a review-frissítés).
 
-*(a javító kör után tölti ki a reviewer)*
+1. **MINOR-1 — LEZÁRVA.** A `, D8` mindkét helyről törölve
+   (`test/app/theme_adoption_test.dart:2`, `docs/ui/migration-status.md:6`);
+   `grep -rn "0466 D8"` → 0 találat.
+2. **MINOR-2 — VISSZAVONVA és a hibás javítás VISSZAFORDÍTVA.** A helyes
+   cellaszám **48**; a `24` a reviewer hibája volt, és az előre megírt brief
+   is `24`-et írt. A brief (§4, §6/A4, §6.2, §8, §10) és az
+   ADR 0466 D7 szövege a MÉRT `48`-ra javítva.
+3. **NOTE-1, NOTE-2** — rögzítve, nem merge-blokkoló.
+
+**Az implementer-futás H6-osztályú viselkedése (rögzítve):** a `sonnet-impl`
+motor a §7 gate-hívást KÉTSZER háttér-taskba tette
+(`run_in_background`), a válaszát a task-értesítésre várva zárta, a
+`tools/mm-round.sh` session pedig kilépett alóla és megölte a taskot —
+mindkétszer `status=unknown`, jelzés nélkül. A második eset után az
+orchestrátor NEM indított harmadik implementer-dispatchet: a hátralévő delta
+három soros dokumentum-diff volt, amit gépi `allowed_paths`-audit után maga
+commitolt, és a §7 kaput MAGA futtatta le előtérben:
+
+```
+format / analyze / mind a hat teszt / architecture / secrets / l10n … zöld
+MINDEN GATE ZÖLD   (GATE_EXIT=0)
+```
+
+Ez nem a mérce lazítása: a kaput a reviewer futtatta a VÉGLEGES fán, a
+falszifikációs próbák (2.1, 2.2) függetlenek, és a merge-kapu a teljes
+CI-lánc az exact merge SHA-n.
+
+**VÉGSŐ DÖNTÉS: APPROVED** — 0 nyitott BLOCKER/MAJOR/MINOR. A merge feltétele
+változatlanul a Full Gate + Router CI `success` a merge SHA-ján.

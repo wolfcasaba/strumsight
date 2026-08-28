@@ -131,7 +131,7 @@ kell maradnia, `ThemeData(` és színliterál nem kerülhet bele.
 ### D7 — A záró mátrix PNG-mentes, és kizárási lista NÉLKÜL zöld
 
 Az A4 mátrix hat képernyő × {világos, sötét} × {en, hu} × {1.0, 2.0 textScale}
-= 24 cella, compact portrait (412×915) viewporton, `FlutterError.onError`-ra
+= **48** cella (6 × 2 × 2 × 2), compact portrait (412×915) viewporton, `FlutterError.onError`-ra
 kötött túlcsordulás- és kivétel-figyeléssel (L524 mintája), **új golden PNG
 nélkül** (ADR 0426). A mért tény 10. szerint compact portraiton nincs ismert
 túlcsordulás, ezért **kizárási lista nem megengedett**: egy piros cella vagy
