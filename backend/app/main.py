@@ -32,6 +32,13 @@ _DEV_TUTOR_KEY = Settings.model_fields["tutor_api_key"].default
 _ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 _logger = logging.getLogger(__name__)
 
+# ADR 0449 D1/D3: the gate is active only for the two deploy environments —
+# dev/lab keep the create_all-based dev path unblocked (ADR 0060). The health
+# paths stay exempt (D2) so an orchestrator can tell "migrated but stale
+# schema" apart from "dead container".
+_TRAFFIC_GATE_ENVIRONMENTS = frozenset({"staging", "prod"})
+_TRAFFIC_GATE_EXEMPT_PATHS = frozenset({"/health", "/health/live", "/health/ready"})
+
 
 def _guard_prod(settings: Settings) -> None:
     """A misconfigured prod deploy must fail the BOOT, not serve traffic
@@ -139,6 +146,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def _traffic_gate(request: Request, call_next):
+        """Readiness-driven traffic gate (ADR 0449 D1-D3): in staging/prod, a
+        migration-head mismatch blocks every business endpoint with 503
+        instead of serving traffic against a stale schema. The predicate is
+        the existing `_readiness_failure()` — unchanged here."""
+        runtime_settings: Settings = request.app.state.settings
+        if (
+            runtime_settings.env in _TRAFFIC_GATE_ENVIRONMENTS
+            and request.url.path not in _TRAFFIC_GATE_EXEMPT_PATHS
+        ):
+            reason = _readiness_failure(request.app)
+            if reason is not None:
+                return JSONResponse(
+                    status_code=503,
+                    content={"status": "not_ready", "reason": reason},
+                )
+        return await call_next(request)
 
     app.include_router(auth.router)
     app.include_router(settings_router.router)
