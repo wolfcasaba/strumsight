@@ -204,6 +204,19 @@ class TestStagingIsolation:
                 allow_sqlite_in_prod=True,
             )
 
+    @pytest.mark.parametrize("blank_secret", ["", "   "])
+    def test_empty_or_blank_secret_key_refuses_to_instantiate(self, blank_secret):
+        # B2 regression: an empty/whitespace secret_key is not the dev
+        # default, so a bare `== dev_secret` check would let it through —
+        # a blank HS256 signing key is trivially forgeable.
+        with pytest.raises(ValidationError, match="secret"):
+            Settings(
+                env="staging",
+                secret_key=blank_secret,
+                cors_origins=self._REAL_CORS,
+                allow_sqlite_in_prod=True,
+            )
+
     def test_wildcard_cors_refuses_to_instantiate(self):
         with pytest.raises(ValidationError, match="CORS"):
             Settings(
@@ -241,3 +254,84 @@ class TestStagingIsolation:
         assert settings.env == "staging"
         assert settings.diagnostics_enabled is False
         assert settings.apk_download_enabled is False
+
+
+class TestSecretsNeverLeakIntoErrors:
+    """B1 regression (AGENTS.md §5 / 3. nem tárgyalható határ): a
+    `ValidationError` HUMÁN-OLVASHATÓ alakja (`str(exc)`) — ami az
+    `import app.config` alatt el nem kapott kivétel esetén szó szerint a
+    boot-logba (uvicorn/gunicorn traceback) kerül — nem tartalmazhatja a
+    beállított titkot, még akkor sem, ha a hiba egy MÁSIK mezőn (pl. `env`)
+    dől el. pydantic alapból az egész bemeneti dict-et (`input_value`)
+    visszaechózza ide; ezt `Settings.model_config`-ban a
+    `hide_input_in_errors=True` némítja.
+
+    Megjegyzés a `exc.errors()` (strukturált, nem-str alak) kapcsán: a
+    pydantic-core `ValidationError.errors()`-nak van egy `include_input`
+    paramétere, aminek az ALAPÉRTÉKE `True`, és ezt a `hide_input_in_errors`
+    modellkonfig NEM módosítja (mért tény, pydantic 2.13 / pydantic-core
+    2.46 — sem a régi, sem az új konfiggal nem redaktált). Egy `errors()`
+    hívó tehát csak explicit `include_input=False`-fal kap redaktált
+    kimenetet — de mivel `include_input=False` a titkot a JAVÍTÁS NÉLKÜL is
+    kiszűrné, egy ilyen assert nem lenne valódi regresszió-őr (a
+    falszifikációs próba nem váltana pirosra). Ezért ez a teszt `str(exc)`-et
+    ellenőrzi (ez az, amit a `hide_input_in_errors` ténylegesen befolyásol,
+    és ami a mért boot-log-reprodukcióban ténylegesen megjelent), plusz azt,
+    hogy a `errors()[0]['msg']` humán szövege — amit a validátorok írnak —
+    sosem ágyazza be a titkot közvetlenül (`grep -rn "\\.errors(" app/`
+    megerősíti: a `Settings` `ValidationError`-ját semmilyen in-scope hívó
+    nem szerializálja `errors()`-szel, tehát az `include_input=True`
+    alapérték itt nem aktív kockázat)."""
+
+    # NOTE on canary shape: pydantic-core reorders `input_value` to FIELD
+    # DECLARATION order (not kwarg-call order — measured), then truncates
+    # the dict's repr to a short head + a short (~22-25 char) tail. Only a
+    # value short enough to fit that tail window is guaranteed to survive
+    # truncation and thus prove the leak either way — this mirrors the
+    # orchestrator's own repro, where the (short) DB password fully leaked
+    # but the (longer) secret_key did not. Markers below are sized to that
+    # window and placed as the LAST explicitly-set field in declaration
+    # order (`env` < `secret_key` < `database_url`), so each test actually
+    # exercises the leak path instead of trivially passing either way.
+    _CANARY_SECRET = "cnrySecretX1"
+    _CANARY_DATABASE_URL = "postgresql://a:cnryPW9@h/d"
+    _CANARY_DB_MARKER = "cnryPW9"
+
+    def test_unknown_env_error_does_not_leak_secret_key(self):
+        # `secret_key` is the last explicitly-set field here, so its value
+        # (not `database_url`, which is left at its default) sits in the
+        # truncated tail.
+        with pytest.raises(ValidationError) as excinfo:
+            Settings(env="qa", secret_key=self._CANARY_SECRET)
+        message = str(excinfo.value)
+        error_texts = [err["msg"] for err in excinfo.value.errors()]
+        assert self._CANARY_SECRET not in message
+        assert all(self._CANARY_SECRET not in text for text in error_texts)
+
+    def test_unknown_env_error_does_not_leak_database_url(self):
+        # Mirrors the orchestrator's own repro (§0.0): unknown `env` +
+        # `secret_key` + `database_url` all explicitly set, `database_url`
+        # last in declaration order.
+        with pytest.raises(ValidationError) as excinfo:
+            Settings(
+                env="qa",
+                secret_key="not-the-canary",
+                database_url=self._CANARY_DATABASE_URL,
+            )
+        message = str(excinfo.value)
+        error_texts = [err["msg"] for err in excinfo.value.errors()]
+        assert self._CANARY_DB_MARKER not in message
+        assert all(self._CANARY_DB_MARKER not in text for text in error_texts)
+
+    def test_staging_guard_error_does_not_leak_database_url(self):
+        # `_guard_staging`'s first check (dev secret_key) fires before the
+        # CORS/diag_token/SQLite checks, so a real `secret_key` isn't even
+        # needed here to reach a `ValidationError` — the dev default alone
+        # (E12-R04 review B1) is enough, leaving `database_url` (the
+        # canary) as the last explicitly-set field in declaration order.
+        with pytest.raises(ValidationError) as excinfo:
+            Settings(env="staging", database_url=self._CANARY_DATABASE_URL)
+        message = str(excinfo.value)
+        error_texts = [err["msg"] for err in excinfo.value.errors()]
+        assert self._CANARY_DB_MARKER not in message
+        assert all(self._CANARY_DB_MARKER not in text for text in error_texts)

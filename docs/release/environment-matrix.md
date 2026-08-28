@@ -23,6 +23,7 @@ külön van jelölve.
 | **Lab-flagek alapértelmezése** (`diagnostics_enabled`, `apk_download_enabled`) | `True` (bekapcsolva) — `backend/app/config.py:137-139` | `True` | **`False`** (a productionnel azonosan kikapcsolt) — `backend/app/config.py:137`, bizonyítja: `test_settings.py::TestStagingIsolation::test_real_secrets_instantiate_cleanly_with_lab_flags_off_by_default` | `False` — ua. sor, bizonyítja: `backend/tests/test_hardening.py::TestProdBootGuards::test_lab_routes_default_on_in_dev_and_off_in_prod` |
 | **Production titok-őr helye** | n/a | n/a | *(saját, alább)* | `main.py::_guard_prod`, a `create_app()` hívja, **boot-idejű** hiba (nem `Settings` példányosítás-idejű) — `main.py:36-69,103-105` |
 | **Staging titok-őr helye** | n/a | n/a | `Settings._guard_staging` (`mode="after"` validator), **példányosítás-idejű** hiba — `backend/app/config.py:142-173` | n/a |
+| **Tutor provider-kulcs (`tutor_api_key`)** | repóbeli dev-alapértelmezés megengedett | ua. | **NEM ellenőrzött** — a staging-őr (4 ellenőrzés, ADR 0445 D4 taxatív listája) szándékosan nem fedi a `tutor_api_key`-t; egy `tutor_enabled=true` staging deploy a repóbeli `dev-tutor-key` értékkel is elindul. Az egységesítés az **E12-R07** kör hatásköre (review B3, E12-R04) | ellenőrzött — bekapcsolt `tutor_enabled` mellett a dev/üres `tutor_api_key` boot-idejű `RuntimeError` — `main.py:63-69` |
 
 ## 2. A staging és a production őr tudatos aszimmetriája
 
@@ -33,6 +34,15 @@ tilos zónájában (`backend/app/main.py`) él, és onnan a ~20 meglévő,
 `Settings(env="prod", …)`-ot boot-hiba-várakozással példányosító teszt miatt
 nem mozdítható e kör scope-jában. Az egységesítés (a `_guard_prod` áthozása a
 `Settings`-be) az **E12-R07** kör dolga.
+
+A két őr **lefedettségben** is eltér, nem csak időzítésben: a staging-őr négy
+ellenőrzést végez (ADR 0445 D4 taxatív listája — secret_key, CORS, diag_token,
+SQLite), a production-őr öt ellenőrzést (ugyanaz a négy + a tutor
+provider-kulcs — lásd az 1. táblázat „Tutor provider-kulcs" sorát). Ez NEM
+hiányosság a staging-őrben — a kódnak az ADR-listát kell követnie, nem
+bővítenie —, csak azt jelenti, hogy a staging-őr NEM olvasható a
+production-őr szigorúbb vagy azonos szintű megfelelőjeként. Az egyesítés
+(vagy a tutor-kulcs staging-re bővítése) az **E12-R07** kör dolga.
 
 ## 3. Operatív szabály — NEM gépi kényszer
 

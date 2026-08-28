@@ -27,6 +27,13 @@ class Settings(BaseSettings):
         env_prefix="STRUMSIGHT_",
         extra="ignore",
         populate_by_name=True,
+        # SECURITY (E12-R04 review B1): pydantic's default error rendering
+        # echoes the rejected `input_value` (secrets included) into
+        # ValidationError messages, which reach the boot log via
+        # `main.py::create_app()`. Suppressing it keeps the error TEXT
+        # unchanged (only the echoed value is redacted), so existing
+        # `pytest.raises(ValidationError, match=...)` assertions still pass.
+        hide_input_in_errors=True,
     )
 
     # Closed value set: dev | lab | staging | prod (ADR 0445 D1). "dev" boots
@@ -117,6 +124,9 @@ class Settings(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _normalize_environment_and_default_lab_flags(cls, values):
+        """Formerly `_default_lab_flags_for_environment` (renamed E12-R04).
+        ADR 0395 and `docs/security/community-threat-model.md` still
+        reference the old name — grep for either to find this validator."""
         if not isinstance(values, dict):
             return values
         resolved = dict(values)
@@ -148,7 +158,7 @@ class Settings(BaseSettings):
             return self
         dev_secret = type(self).model_fields["secret_key"].default
         dev_diag_token = type(self).model_fields["diag_token"].default
-        if self.secret_key == dev_secret:
+        if not self.secret_key.strip() or self.secret_key == dev_secret:
             raise ValueError(
                 "STRUMSIGHT_ENV=staging requires a real secret key — "
                 "set STRUMSIGHT_SECRET_KEY."
