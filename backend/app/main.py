@@ -13,7 +13,7 @@ from alembic.config import Config as AlembicConfig
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
@@ -31,6 +31,18 @@ _DEV_DIAGNOSTICS_TOKEN = Settings.model_fields["diag_token"].default
 _DEV_TUTOR_KEY = Settings.model_fields["tutor_api_key"].default
 _ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 _logger = logging.getLogger(__name__)
+
+# ADR 0449 D1/D3: the gate is active only for the two deploy environments —
+# dev/lab keep the create_all-based dev path unblocked (ADR 0060).
+_TRAFFIC_GATE_ENVIRONMENTS = frozenset({"staging", "prod"})
+
+
+class _NotReady(Exception):
+    """Raised by `_traffic_gate` (a per-router dependency, not middleware —
+    see its docstring for why) when the migration head doesn't match."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
 
 
 def _guard_prod(settings: Settings) -> None:
@@ -100,6 +112,26 @@ def _readiness_failure(application: FastAPI) -> str | None:
     return None
 
 
+def _traffic_gate(request: Request) -> None:
+    """Readiness-driven traffic gate dependency (ADR 0449 D1-D3).
+
+    A per-router `dependencies=[Depends(_traffic_gate)]`, not blanket HTTP
+    middleware: middleware runs before routing, so it would 503 a path that
+    isn't even registered (e.g. `/diagnostics` while
+    `diagnostics_enabled=False` in prod) instead of letting FastAPI 404 it —
+    that broke the existing `test_hardening.py::test_prod_defaults_do_not_register_lab_routes`
+    (A7). Attached only to business routers, so `/health`, `/health/live`,
+    `/health/ready` (defined directly on `app`, without this dependency)
+    always stay reachable (D2), and a disabled surface keeps 404ing.
+    """
+    runtime_settings: Settings = request.app.state.settings
+    if runtime_settings.env not in _TRAFFIC_GATE_ENVIRONMENTS:
+        return
+    reason = _readiness_failure(request.app)
+    if reason is not None:
+        raise _NotReady(reason)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     _guard_prod(settings)
@@ -140,10 +172,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(auth.router)
-    app.include_router(settings_router.router)
+    @app.exception_handler(_NotReady)
+    async def _not_ready_handler(_request: Request, exc: _NotReady) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": exc.reason},
+        )
+
+    _gated = [Depends(_traffic_gate)]
+    app.include_router(auth.router, dependencies=_gated)
+    app.include_router(settings_router.router, dependencies=_gated)
     if settings.diagnostics_enabled:
-        app.include_router(diagnostics.router)
+        app.include_router(diagnostics.router, dependencies=_gated)
     if settings.tutor_enabled:
         from .ratelimit import RateLimiter
         from .tutor.provider_gateway import FakeProviderGateway
@@ -181,7 +221,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             timeout_seconds=settings.tutor_timeout_seconds,
         )
         set_service(service)
-        app.include_router(tutor_router)
+        app.include_router(tutor_router, dependencies=_gated)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
@@ -203,7 +243,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     if settings.apk_download_enabled:
 
-        @app.get("/download", tags=["meta"])
+        @app.get("/download", tags=["meta"], dependencies=_gated)
         def download_apk():
             """Serve the staged Lab APK over the diagnostics tunnel."""
             path = os.environ.get("STRUMSIGHT_APK_PATH", "")

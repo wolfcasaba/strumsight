@@ -27,11 +27,60 @@ tágítás pedig nem orchestrátor-hatáskör (ADR 0087 §2).
 - **Őrteszt:** `tools/tests/test_e15_r02_adaptive_shell_scope.py` — a valódi
   briefet hajtja a valódi scope-auditon; a lista szűkülése ÉS a könyvtár-
   szintű blanket-tágítás is pirosra váltja. A javítás előtt PIROS, utána zöld.
-- **Tanulság:** [L532](docs/LESSONS.md#l532).
+- **Tanulság:** [L534](docs/LESSONS.md#l534).
 
 **A lánc feloldva:** az E15-R02 a következő firingen újraindul, a most már
 teljes §4 listával; a pre-flight ág (`sonnet-impl/e15-r02-…`) tartalma ebbe a
 PR-be került, az ág törölve.
+
+## ✅ E12-R08 KÉSZ — Staging backend, migrations és recovery alap — PR [#494](https://github.com/wolfcasaba/strumsight/pull/494), squash `e560ca79` (2026-08-28)
+
+**A migrációs fejre mérő readiness eddig csak VÁLASZ volt, most KISZOLGÁLÁSI
+ELŐFELTÉTEL is.** A `/health/ready` (`_readiness_failure`) már korábban mérte,
+hogy az alkalmazott revízió = `alembic heads`; a `/settings` és az `/auth/*`
+viszont **akkor is kiszolgált**, ha ez hamis volt. Az E12-R08 ezt a rést zárja:
+`env ∈ {staging, prod}` alatt a `Depends(_traffic_gate)` minden üzleti routeren
+ott van, migrálatlan sémán 503 `{"status":"not_ready","reason":…}` a válasz, és
+az üzleti kezelő **le sem fut** ([ADR 0449](docs/adr/0449-staging-readiness-traffic-gate-and-recovery.md) D1).
+
+**A kapu `dev`/`lab` alatt szándékosan nem aktív** (D1, §0.0 R3): ott a séma
+legitim forrása a lifespan `create_all`, amely nem stampel — a fej ELVÁRTAN
+üres. Egy környezet-független kapu a `conftest.py` fixture-jén álló ~20 meglévő
+auth/settings cellát törte volna el. **Új HTTP-útvonal nem jött létre** (R1): a
+brief `/readyz`-je a meglévő `/health/ready`-re lett átírva, mert a
+`test_migrations.py::test_openapi_contract_is_deterministic` a nyitott
+útvonalak halmazát EGYENLŐSÉGRE méri, és az a cella tilos zóna.
+
+**Mentés/visszaállítás bizonyított úton:** `backup.py` a sorokon kívül a
+migrációs fejet is menti (0600-as fájl az első bájttól — a dump PII-t és
+bcrypt hasheket hordoz); `restore.py` **Alembickel** épít sémát (`create_all`
+tilos, ADR 0060), létező adatot csak `--force` **ÉS** a cél nevét szó szerint
+megismétlő `--confirm-target` mellett ír felül, és elutasít, ha a cél feje
+eltér a mentésétől. **Konténer-profil:** digestre pinelt `python:3.12-slim`,
+nem-root user, migration-before-start `CMD`. Két üzemeltetési runbook
+(`docs/operations/backend-deploy.md`, `database-recovery.md`).
+
+**Review:** [`docs/reviews/e12-r08-review.md`](docs/reviews/e12-r08-review.md)
+— **APPROVED**, 2 MAJOR + 2 MINOR egy javító körben lezárva. A `security-reviewer`
+(kockázat: high) találta a MAJOR-1-et: a backup-dump PII-t írt trackelt
+könyvtárba, 0644-gyel. A MAJOR-2 a saját mérésem: a `staging.env.example`
+`# strumsight:allow-secret-file` markerrel ki van véve a repo titok-scanneréből,
+és az EGYETLEN őre, az A5 cella, **átengedte a `STRUMSIGHT_DATABASE_URL`-be
+ágyazott valódi jelszót** (mérve: a `<db-password>` valódira cserélve a cella
+zöld maradt; a javítás után piros).
+
+**Bizonyíték:** `tools/round-gate.sh test/app/config/feature_flags_test.dart`
+9/9 zöld · Full Gate `33197994195` ✅ · Router CI `33197996266` ✅ · Backend CI
+`33197977930` ✅ — mind az `f0073bc9` merge-SHA-n · scope-audit OK (10 útvonal).
+
+**Két mért infrastruktúra-lelet a landolásban** (L532, L533): a
+`round-gate.sh` backend sávja relatív venv-útvonallal `exit 127`-tel bukik
+(`env --chdir=backend backend/.venv/bin/python`), és a megosztott fa a landoló
+futása közben KÉTSZER visszabillent `main`-re. Mindkettő megkerülve
+(`ROUND_GATE_BACKEND_PYTHON` + landolás a munkapéldányból), a javításuk az
+önjavító kör dolga.
+
+**Következő kör:** `E12-R09` — domain event catalog és schema registry (ADR 0450).
 
 ## ✅ E15-R01 KÉSZ — A design-rendszer témájának app-szintű bevezetése — a **Chapter 15 sáv INDULT** — PR [#493](https://github.com/wolfcasaba/strumsight/pull/493), squash `a65aa3f9` (2026-08-28)
 
