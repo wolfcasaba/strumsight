@@ -246,7 +246,17 @@ A `docs/reviews/**` nem Router-CI trigger-útvonal, ezért a `router-ci.yml`-t
 kézzel kellett dispatch-elni — a push önmagában nem indította volna el, a
 merge-kapu viszont a `docs/rounds/**` érintettsége miatt továbbra is megköveteli.
 
-| Workflow | Run | head SHA (merge SHA) | Eredmény |
+| Workflow | Run | head SHA | Eredmény |
 |---|---|---|---|
-| `full-gate.yml` | RUN_FG_URL | HEAD_SHA | RES_FG |
-| `router-ci.yml` | RUN_RC_URL | HEAD_SHA | RES_RC |
+| `full-gate.yml` | [33129780261](https://github.com/wolfcasaba/strumsight/actions/runs/33129780261) | `2e3d4af6` (review-commit) | ✅ `completed success` |
+| `router-ci.yml` | [33129781636](https://github.com/wolfcasaba/strumsight/actions/runs/33129781636) | `2e3d4af6` (review-commit) | ✅ `completed success` |
+
+**A regresszió lezárása.** Minden fa-változtató commit új SHA-t képez, tehát a
+„CI zöld a merge SHA-ján" előírás önmagában végtelen visszalépés lenne, ha a
+CI-eredményt MINDIG ugyanabba a fába írnám vissza. Ezért ez a jelentés a
+**saját commitjáig** dokumentálja a zöld futásokat; a **tényleges merge SHA**
+exact-SHA evidenciája — a jelen szakasz véglegesítő commitjára dispatch-elt
+`full-gate` + `router-ci` futás — a **PR #485 törzsében és egy PR-kommentben**
+van rögzítve, valamint a `HANDOFF.md` kör-szakaszában. A PR-metaadat
+szerkesztése nem módosítja a fát, tehát a lánc ott lezárul. A merge kizárólag
+azon a HEAD-en történt, amelyen mindkét workflow `success` volt.
