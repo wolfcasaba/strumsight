@@ -42,12 +42,25 @@ A pre-flightban három állítást mértünk ki, amelyek a döntést kikényszer
 
 ## Döntés
 
-**D1 — Az idempotencia mércéje a projektált egyenleg.** Minden idempotencia-cella
-a `ProfileProjector.rebuild()` által adott `profile.totalXp`-t méri. Mock
+**D1 — Az idempotencia mércéje a ledger-egyenleg.** Minden idempotencia-cella a
+`RewardLedgerRepository.readPage` lapjain összegzett `totalXp`-t méri, a ledger
+tartalmával (bejegyzés-darabszám `sourceEventId`-nként) együtt. Mock
 hívásszám-állítás (`verify(callCount == 1)`) NEM elfogadható bizonyíték: a dupla
 hívást zárja ki, a dupla hatást nem. (Precedens:
 [L453](../LESSONS.md) — egy csatorna-specifikus mock csak azt az egy csatornát
 bizonyítja.)
+
+> **D1 módosítva az 1. javító körben (2026-08-28).** Az eredeti D1 a
+> `ProfileProjector.rebuild()` → `profile.totalXp` felületet írta elő. Az első
+> implementer-futás és az orchestrátor FÜGGETLEN próbatesztje egyaránt kimérte,
+> hogy a `rebuild()` egy **nem üres, egyetlen oldalra férő** ledgeren
+> `StateError: ledger page cursor did not advance`-szel dob
+> (`profile_projector.dart:48–49`) — az [L349](../LESSONS.md) reziduális fele: a
+> korábbi fix csak az ÜRES ledger esetét zárta, a nem üres egyoldalasnál az
+> első iteráció `cursor`-a és a helyes `nextCursor: null` ugyanúgy `null == null`.
+> A projector a kör tilos zónájában van, javítása külön kör dolga; a mérce
+> lényege (a HATÁS, sosem a hívásszám) változatlan, csak a felület került eggyel
+> közelebb a ledgerhez. Részletek és a mért kimenet: a kör-brief §0.0.0 R7.
 
 **D2 — A dedup-kulcs a `sourceEventId`, és ezt a mérce is annak méri.** Az
 ismétlés-cella ugyanazt a `sourceEventId`-t **eltérő `ledgerId`-vel** ismétli —

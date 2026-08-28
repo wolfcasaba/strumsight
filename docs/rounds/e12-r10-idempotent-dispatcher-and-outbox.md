@@ -39,6 +39,65 @@ EGY csatornát bizonyítja — az invariánst nem), **[L441](../LESSONS.md)** (a
 A kör kötött döntéseit az [`ADR 0469`](../adr/0469-outbox-idempotency-is-measured-on-the-ledger-effect.md)
 rögzíti (D1–D6). A §5 alábbi pontjai annak a rövidítései.
 
+### 0.0.0 R7 — a mérce-FELÜLET cseréje az 1. javító körben (Claude, 2026-08-28)
+
+Az első implementer-futás `stopped`-ot jelzett: minden cella pirosra bukott a
+`ProfileProjector.rebuild()`-en, `Bad state: ledger page cursor did not advance`.
+
+**Az orchestrátor FÜGGETLENÜL újramérte** (eldobható próbateszt a
+munkapéldányban, VALÓDI `LocalRewardLedgerRepository`-val, egyetlen bejegyzéssel,
+alapértelmezett `pageSize`-zal):
+
+```
+00:00 +0 -1: PROBE: rebuild() over a NON-EMPTY single-page real ledger [E]
+  Bad state: ledger page cursor did not advance
+  package:strumsight/features/gamification/application/profile_projector.dart 49:9  ProfileProjector.rebuild
+```
+
+**A mért gyökérok — az [L349](../LESSONS.md) REZIDUÁLIS fele.** Az L349 fixe
+(`be823c74`) a `page.entries.isNotEmpty &&` feltétellel az ÜRES ledger esetét
+zárta. A NEM ÜRES, de EGY oldalra férő ledger viszont ugyanabba a csapdába fut:
+a `LocalRewardLedgerRepository.readPage` az utolsó (itt: egyetlen) oldalon
+helyesen `nextCursor: null`-t ad, a `rebuild()` első iterációjában a helyi
+`cursor` szintén `null`, tehát `page.entries.isNotEmpty && null == null` → dob.
+A meglévő regresszió (`level_curve_test.dart:48`) ezt azért nem fogta meg, mert
+`pageSize: 1`-gyel három bejegyzésen lapoz — az utolsó oldalon a `cursor` már
+NEM `null`.
+
+**Miért nem H3, és miért nem is a projector javítása.** A hibás fájl
+(`profile_projector.dart`) a tilos zónában van, tehát a kör nem javíthatja — de
+nem is kell: a `rebuild()` csak azért került az útba, mert a pre-flight (ADR 0469
+D1) EZT választotta mérce-felületnek. Ez a kör SAJÁT, még nem merge-elt
+artefaktuma, tehát a feloldás az ADR 0087 §2 szerint az orchestrátor
+hatáskörében van, és **brief-revízióval** történik, nem lista-tágítással.
+
+**A revízió.** A mérce lényege változatlan (a HATÁS, sosem a hívásszám), csak a
+felület lesz eggyel közelebb a ledgerhez: az egyenleg a
+`RewardLedgerRepository.readPage` lapjain összegzett `totalXp`. A teszt SAJÁT,
+helyesen termináló lapozó segédfüggvényt használ:
+
+```dart
+int _ledgerBalance(RewardLedgerRepository ledger) {
+  var total = 0;
+  String? cursor;
+  while (true) {
+    final page = ledger.readPage(limit: 100, cursor: cursor);
+    for (final entry in page.entries) total += entry.totalXp;
+    if (page.nextCursor == null) return total;   // <- a helyes terminálás
+    cursor = page.nextCursor;
+  }
+}
+```
+
+A `ProfileProjector` a cellákból **kikerül** (importja is). A projector mért
+hibája a kör LELETE: a `docs/LESSONS.md`-be és a review-ba kerül, javítása külön
+kör dolga — ez a kör nem nyúl hozzá.
+
+**Ez NEM gyengítés.** Az egyenleg-mérés megmarad, sőt kevesebb közbeiktatott
+réteget tartalmaz; a §6.1 mátrix minden sora változatlanul érvényes, mert
+mindegyik a ledger TARTALMÁN keresztül vált pirosra. Amit a csere elveszít
+(szint-görbe/`crossedLevels`), az sosem volt a kör acceptance-e.
+
 ## 0.0.1 A kör tárgya: HIÁNYZÓ MÉRCE, nem hiányzó mechanizmus
 
 A SDD Kör 10 „implementálj dispatchert és outboxot" feladata a fán RÉSZBEN teljesült (ADR 0333). Ami MÉRHETŐEN hiányzik: (a) a **100-szoros ismétlés** invariáns-teszt, (b) a **process-kill utáni resume** bizonyítéka, (c) az **out-of-order** esemény kezelésének cellája, (d) a community-oldali outbox és a gamification-outbox EGYÜTTES viselkedésének mérése. A kör ezt a négyet szállítja, és csak akkor módosít `lib/**` kódot, ha valamelyik cella MÉRT hibát talál — a javítás ekkor a MEGLÉVŐ osztályban történik, új párhuzamos dispatcher NEM jön létre.
@@ -95,14 +154,14 @@ Bizonyítani — nem feltételezni —, hogy ismétlés, folyamat-megszakítás 
 | Ledger-kivétel a drainen belül elnyelve, a rekord PENDING marad | `local_activity_outbox_repository.dart:250–261`, `:308–312` |
 | Már feldolgozott eseményre az `enqueue` `accepted == false` + `supersededByLedger` karantén | `local_activity_outbox_repository.dart:153–168` |
 | A perzisztált állapot lustán, első használatkor töltődik (ez adja a resume-ot) | `local_activity_outbox_repository.dart:334` |
-| Az egyetlen ledger-projekció: `ProfileProjector.rebuild()` → `profile.totalXp` | `profile_projector.dart:40`, `:57` |
+| Az egyetlen ledger-projekció a `ProfileProjector.rebuild()` — de a `rebuild()` MÉRTEN dob egy nem üres, egy oldalra férő ledgeren (§0.0.0 R7), ezért a kör a `readPage`-en összegez | `profile_projector.dart:40`, `:48–49` |
 | A `StreakService`-nek **nincs hívója** a `lib/` fán | `grep -rn "StreakService(" lib/` → 0 találat |
 | Használható teszt-infra: `InMemoryKeyValueStore` + valódi `LocalRewardLedgerRepository` fölé húzott, kapcsolható `_FakeRewardLedger` | `test/support/preference_store.dart`, `test/features/gamification/application/activity_ingestor_test.dart:521–608` |
 | A katalógus idempotencia-oszlopa MÁR kitöltött (`eventId`, hat sor) | `docs/contracts/event-catalog.md` |
 
 ## 3. Scope
 
-**Benne van:** `test/core/events/idempotency_test.dart` — ugyanaz a `sourceEventId` **100** ismétléssel (eltérő `ledgerId`-kkel) pontosan EGY ledger-hatást ad; a hatás mérése a projektált egyenlegen (`ProfileProjector.rebuild().profile.totalXp`) történik, nem a hívásszámon · `test/core/events/outbox_resume_test.dart` — a drain közepén megszakított folyamat (MÁSODIK repository-példány UGYANARRA a store-ra) folytatja, duplázás nélkül; out-of-order beérkezés (a később keletkezett esemény drainelődik előbb) ugyanazt a ledger-tartalmat és egyenleget adja, mint a sorrendhelyes futás (§5.2.1) · szükség esetén PONTOSAN annyi javítás a két engedélyezett `lib/` fájlban, amennyit egy MÉRT piros cella indokol · a `docs/contracts/event-catalog.md` „Idempotencia" szakaszának bővítése a kör MÉRT outbox-invariánsaival (a Kör 9 már kitöltötte az oszlopot — pre-flight R5).
+**Benne van:** `test/core/events/idempotency_test.dart` — ugyanaz a `sourceEventId` **100** ismétléssel (eltérő `ledgerId`-kkel) pontosan EGY ledger-hatást ad; a hatás mérése a ledger-egyenlegen (a `readPage` lapjain összegzett `totalXp`, §0.0.0 R7) történik, nem a hívásszámon · `test/core/events/outbox_resume_test.dart` — a drain közepén megszakított folyamat (MÁSODIK repository-példány UGYANARRA a store-ra) folytatja, duplázás nélkül; out-of-order beérkezés (a később keletkezett esemény drainelődik előbb) ugyanazt a ledger-tartalmat és egyenleget adja, mint a sorrendhelyes futás (§5.2.1) · szükség esetén PONTOSAN annyi javítás a két engedélyezett `lib/` fájlban, amennyit egy MÉRT piros cella indokol · a `docs/contracts/event-catalog.md` „Idempotencia" szakaszának bővítése a kör MÉRT outbox-invariánsaival (a Kör 9 már kitöltötte az oszlopot — pre-flight R5).
 
 **NINCS benne (tilos):**
 
@@ -128,10 +187,11 @@ Bizonyítani — nem feltételezni —, hogy ismétlés, folyamat-megszakítás 
 
 ### 5.1 Az idempotencia mércéje a HATÁS, nem a hívásszám (ADR 0469 D1–D2)
 
-A teszt a **projektált egyenleget** méri:
-`ProfileProjector(curve: …, ledger: …).rebuild()` → `.profile.totalXp`
-(`lib/features/gamification/application/profile_projector.dart:40`), nem azt,
-hányszor hívódott egy metódus. **NEM elfogadható gyengítés:**
+A teszt a **ledger-egyenleget** méri: a `RewardLedgerRepository.readPage` lapjain
+összegzett `totalXp` (a §0.0.0 R7 `_ledgerBalance` segédfüggvénye), nem azt,
+hányszor hívódott egy metódus. A `ProfileProjector` **nem** használható
+mérce-felületként ebben a körben (R7: mért, tilos zónában élő hiba).
+**NEM elfogadható gyengítés:**
 `verify(callCount == 1)` jellegű mock-állítás — az a dupla hatást nem zárja ki,
 csak a dupla hívást ([L453](../LESSONS.md)).
 
@@ -167,7 +227,7 @@ kritikus állítás — a bukó `expect` utáni sorok soha nem futnak le
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | Ugyanaz a `sourceEventId` **100** ismétléssel (eltérő `ledgerId`-kkel) → `ProfileProjector.rebuild().profile.totalXp` pontosan EGY bejegyzés `totalXp`-je | `idempotency_test.dart` |
+| A1 | Ugyanaz a `sourceEventId` **100** ismétléssel (eltérő `ledgerId`-kkel) → a `_ledgerBalance` (§0.0.0 R7) pontosan EGY bejegyzés `totalXp`-jét adja, és a ledger pontosan EGY bejegyzést tartalmaz erre a `sourceEventId`-ra | `idempotency_test.dart` |
 | A1b | Ugyanez a 100 ismétlés **enqueue→drain** párokban (nem egy batch drainben) → ugyanaz az egyenleg; a második ismétléstől az `enqueue` `accepted == false`, `supersededByLedger` karanténnal | `idempotency_test.dart` |
 | A2 | Drain közepén megszakított folyamat után **MÁSODIK** `LocalActivityOutboxRepository` UGYANARRA a store-ra folytatja: a pending rekord előkerül, a drain befejezi, és az egyenleg egyszeres | `outbox_resume_test.dart` |
 | A3 | Out-of-order beérkezés (a KÉSŐBBI `epochDay`/`occurredAt` esemény drainelődik ELŐBB) ugyanazt a ledger-tartalmat és ugyanazt a `totalXp`-t adja, mint a sorrendhelyes futás; minden `sourceEventId` pontosan egyszer szerepel, és mindkét esemény `epochDay`-e változatlanul éli túl a perzisztált fordulót | `outbox_resume_test.dart` |
