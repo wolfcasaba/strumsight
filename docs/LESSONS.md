@@ -21140,3 +21140,96 @@ hihető, de meg nem mért indoklás a review-ban ugyanolyan lelet, mint egy hib�
 
 **Őrteszt:** nincs — a lelet eljárási (a mérés hiánya, nem kódhiba); a
 `shell_lifecycle_test.dart` „Tuner back" cellája a viselkedést továbbra is méri.
+
+## L538 — Az orchestrátor SAJÁT fájlja a munkapéldányban hamis scope-sértést okoz, és a rossz audit-BÁZIS ugyanezt teszi a saját commitjaival (E12-R10, 2026-08-28)
+
+**Mit mértünk.** Az E12-R10-ben a gépi scope-audit **kétszer** adott
+`scope_audit=VIOLATION`-t, és a kör-jelzés mindkétszer `stopped`-ra váltott —
+holott az implementer diffje **mindkétszer 100%-ban a listán belül volt**:
+
+1. Az első futásnál az orchestrátor az implementer-promptot a munkapéldány
+   gyökerébe írta (`<munkapéldány>/.round-prompt-e12-r10.md`). A fájl **nem
+   követett** (`??`), tehát „nem is része a diffnek" — az audit viszont MINDEN
+   változott utat mér, a nem követetteket is:
+   `scope_audit_violations=path outside allowed scope: .round-prompt-e12-r10.md`.
+2. A javító körnél az audit bázisa az ELŐZŐ IMPLEMENTER-commit volt
+   (`0d8181a0`), miközben az orchestrátor azóta saját revíziós commitot tett
+   (`929c8da2`, `docs/adr/0469-…`). A saját ADR-je így az auditált tartományba
+   esett, és `docs/adr/**`-ként — helyesen — sértésnek minősült.
+
+A helyes bázisokkal újrafuttatva mindkét diff tiszta:
+`Legacy scope audit OK (5f7ccf3e0063..0d8181a0c1ed, 3 changed path(s))` és
+`Legacy scope audit OK (929c8da27f7f..56580e8e7bb8, 4 changed path(s))`.
+
+**A szabály — két külön teendő.** (a) Az implementer-promptot SOHA ne a
+munkapéldányba írd; `/tmp` alá való, és a wrapper abszolút útvonalon is
+megkapja. (b) `scope_audit=VIOLATION` esetén az ELSŐ lépés a **bázis
+ellenőrzése**: az audit bázisa a legutóbbi ORCHESTRÁTOR-commit legyen, ne az
+előző implementer-jelzésé — különben a kör saját, jogos pre-flight/revíziós
+commitjai sértésnek látszanak. A `VIOLATION` tehát nem automatikus H3: előbb
+mérd ki, KINEK a fájlja lógott ki.
+
+**Őrteszt:** nincs — folyamat-lecke az orchestrátor oldalán, nem a
+repó kódjában mérhető invariáns; a védelem a fenti (a) pont betartása.
+
+## L539 — Az L349 fixe csak az ÜRES ledgert zárta: a NEM ÜRES, egyetlen oldalra férő forrás ugyanabba a `null == null` csapdába fut (E12-R10, 2026-08-28)
+
+**Mit mértünk.** A `ProfileProjector.rebuild()`
+(`lib/features/gamification/application/profile_projector.dart:48–49`) dob egy
+olyan ledgeren, amelyben **van** bejegyzés, de az mind ELFÉR egyetlen oldalon.
+Reprodukálva, VALÓDI `LocalRewardLedgerRepository`-val, EGY bejegyzéssel,
+alapértelmezett `pageSize`-zal:
+
+```
+00:00 +0 -1: PROBE: rebuild() over a NON-EMPTY single-page real ledger [E]
+  Bad state: ledger page cursor did not advance
+  package:strumsight/features/gamification/application/profile_projector.dart 49:9  ProfileProjector.rebuild
+```
+
+**A mechanizmus.** A `readPage` az utolsó (itt: egyetlen) oldalon helyesen
+`nextCursor: null`-t ad; a `do-while` első iterációjában a helyi `cursor` szintén
+`null`; a stall-guard `page.entries.isNotEmpty && page.nextCursor == cursor`
+feltétele tehát `true && null == null` → dob. Az [L349](#l349) fixe
+(`be823c74`) a `page.entries.isNotEmpty &&` taggal PONTOSAN az üres eset
+hamis riasztását zárta — a nem üres egyoldalas esetre nem terjedt ki.
+
+**Miért nem fogta meg a meglévő regresszió.** A `level_curve_test.dart:48`
+„paged rebuild" cellája `pageSize: 1`-gyel lapoz három bejegyzésen: ott az
+utolsó oldal elérésekor a `cursor` már NEM `null`, tehát a hibás ág nem aktiválódik.
+Egy lapozó ciklus tesztje csak akkor teljes, ha a **`pageSize >= elemszám`**
+eset is szerepel benne — az „egyetlen oldal" a leggyakoribb valós alak.
+
+**A szabály.** Lapozó ciklus stall-guardja a „nem haladt a cursor" jelet CSAK
+akkor jelezze hibának, ha egyáltalán VAN következő oldal:
+`page.nextCursor != null && page.nextCursor == cursor`. És minden lapozó
+teszthez kell egy `pageSize >= elemszám` cella.
+
+**Őrteszt:** nincs — a `profile_projector.dart` az E12-R10 tilos zónájában volt,
+a javítás és annak őrtesztje egy KÜLÖN kör dolga (a lelet a
+`docs/reviews/e12-r10-review.md` NOTE-1 és a HANDOFF nyitott-lelet blokkja).
+
+## L540 — A pre-flightban VÁLASZTOTT mérce-felületet is futtatni kell, mielőtt acceptance-cellák épülnek rá (E12-R10, 2026-08-28)
+
+**Mit mértünk.** Az E12-R10 pre-flightja gondosan kimérte, hogy az outbox
+egyetlen downstream-je a ledger, és hogy a ledger egyetlen projekciója a
+`ProfileProjector.rebuild()` — majd ERRE a felületre írt hat acceptance-cellát
+(ADR 0469 D1). A mérés helyes volt: a `rebuild()` VALÓBAN az egyetlen
+projekció. Amit a pre-flight NEM tett meg: **egyszer sem hívta meg**. A felület
+hibás volt (lásd [L539](#l539)), így az implementer teljes első futása — a hét
+megírt cella mind — a gate-en bukott, `stopped` jelzéssel, egy teljes javító kör
+árán.
+
+**A szabály.** Ha a brief egy KONKRÉT API-t nevez meg mérce-felületnek, a
+pre-flight futtasson rajta egy háromsoros próbahívást, mielőtt az
+acceptance-táblát ráépíti. „A kódból kimértem, hogy létezik és ez az egyetlen"
+NEM ugyanaz, mint „lefut". A költségkülönbség mérve: egy `flutter test` hívás a
+pre-flightban vs. egy teljes implementer-futás + javító kör.
+
+**Következmény a kör szintjén.** A feloldás nem H3 volt: a hibás felület a kör
+SAJÁT, még nem merge-elt pre-flight döntése (ADR 0469 D1), tehát ADR 0087 §2
+szerint brief-revízióval oldható — a mérce lényege (a HATÁS, sosem a hívásszám)
+változatlan maradt, csak a felület került eggyel közelebb a ledgerhez
+(`readPage`-en összegzett egyenleg).
+
+**Őrteszt:** nincs — folyamat-lecke a pre-flight lépéssorára; a védelem a
+brief-sablon „mérce-felület próbahívása" lépése.
