@@ -1,5 +1,63 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R05 KÉSZ — Feature flag registry és emergency kill switch — PR [#489](https://github.com/wolfcasaba/strumsight/pull/489), squash `186f29c6` (2026-08-28)
+
+**A 40 kockázatos capability-kapcsoló mostantól egyetlen típusos katalógusban él
+— owner, kockázati szint, fail-closed alapérték, kill-switch-út és opcionális
+lejárat mellett —, és a katalógus teljessége GÉPI állítás.** Eddig 40 `final
+bool` mező döntötte el, hogy egy build hálózatot használ-e
+(`usesNetwork => accountEnabled || diagnosticsEnabled`), elérhető-e a
+Lab-diagnosztika, be van-e kapcsolva a Vision kamerafelület vagy a Community
+írás — és egyikhez sem volt leírva, hogy kié, meddig él és hogyan kell
+vészhelyzetben kikapcsolni. A `dart run tool/check_feature_flags.dart` ezt
+zárja: a `lib/app/config/feature_flags.dart` FORRÁSÁT parse-olja, és minden
+mezőhöz katalógus-bejegyzést követel (hiányzó, ismeretlen, duplikált vagy
+metaadat nélküli bejegyzés → nem-nulla kilépés).
+
+A feloldás [ADR 0446](docs/adr/0446-feature-flag-registry-and-emergency-kill-switch.md)
+szerint **fail-closed**: `emergency > remote(signed) > capability > local/define
+> failClosedDefault`. A vészkapcsoló **aszimmetrikus** — kizárólag KIKAPCSOLNI
+tud (D1): a `true` értéke átcsordul a gyengébb forrásra, és nem is hiba, mert a
+legkevésbé védett bemenet nem kaphat bekapcsoló jogot. A bukott aláírású remote
+payload értékei figyelmen kívül maradnak és **nem fatálisak** (D2), hiányzó
+forrásnál nincs „utolsó ismert érték", és a kikapcsolás **nem töröl adatot**
+(D7). A remote forrás ebben a körben szándékosan csak INTERFÉSZ (D3) — hálózati
+csatorna és valódi aláírás-ellenőrzés nélkül; az a Ch12 Kör 30/31 rollout-köreié.
+
+**A kör NEM nyúlt a `lib/app/config/feature_flags.dart`-hoz** (a katalógus a
+MEGLÉVŐ mezőkre string-kulccsal hivatkozik, D5 — így a `lib/core/` réteg nem
+függ tranzitívan egy feature-domain típustól), és a két meglévő regresszió-őr
+(`test/app/config/feature_flags_test.dart` + `test/app/feature_flags_test.dart`,
+558 sor) változatlanul zöld.
+
+**1 javító kör**, 0 BLOCKER / 0 MAJOR / 3 MINOR — mind zárva. A kötelező
+`security-reviewer` (`risk = "high"`) **PASS**-t adott (D1/D2/D7 mérve, NO
+SINKS, nincs titok a katalógusban vagy a doksiban). A három MINOR-t a reviewer
+SAJÁT próbái nyitották és zárták: a teljesség-őr eredeti mintája
+(`final bool (\w+);`) mellett egy `final bool? x;` vagy `final bool x = true;`
+alakban felvett új flag **csendben kicsúszott** az auditból (exit 0) — a
+javítás után ugyanaz a próba `exit 1`-et ad, komment-beli fals pozitív nélkül;
+üres `owner`/`killSwitchPath` mostantól `incompleteCatalogEntry`; és a
+`docs/release/kill-switches.md` bizonyítatlan „generált tábla" állítása
+visszavonva.
+
+**Orchestrátor-önkorrekció, ami leckévé vált:** a kör pre-flightja **37**
+mezőt mért 40 helyett, mert a `grep -cE "final bool [a-zA-Z]+;"` minta kiejtette
+a **számjegyet tartalmazó** három mezőnevet (`practiceEngineV2Enabled`,
+`songTrainerV2Enabled`, `audioAnalysisV2Enabled`). Az implementer újramérte,
+a helyes 40-et katalogizálta és jelentette is — a brief §0.0 R1 pontja a
+review-ban javítva ([L529](docs/LESSONS.md#l529)).
+
+Exact-SHA evidencia a merge SHA-n (`2532f89c`): Full Gate
+[33170835429](https://github.com/wolfcasaba/strumsight/actions/runs/33170835429)
+`success` (Coverage `success`), Router CI
+[33170818767](https://github.com/wolfcasaba/strumsight/actions/runs/33170818767)
+`success`. **Két CI-flake mérve, egyik sem a kör diffjéből:** a
+`tools/tests/test_safe_force_push.py` `TemporaryDirectory`-takarítása
+(`OSError: [Errno 39] Directory not empty`) és a
+`test/features/songs/import/import_flow_test.dart` A2 workspace-takarítása —
+utóbbi lokálisan zölden fut, és a job újrafuttatása UGYANAZON a SHA-n zöld lett.
+
 ## ✅ E12-R04 KÉSZ — Environment és channel konfiguráció lezárása — PR [#488](https://github.com/wolfcasaba/strumsight/pull/488), squash `5a971421` (2026-08-28)
 
 **A backend környezet-jelölője zárt értékkészlet lett, a staging pedig valódi,
@@ -8729,7 +8787,25 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-28):** `main` @ `5a971421` — E12-R04 Environment és
+**Aktuális állapot (2026-08-28):** `main` @ `186f29c6` — E12-R05 Feature flag
+registry és emergency kill switch, PR
+[#489](https://github.com/wolfcasaba/strumsight/pull/489), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
+Opus 5, **1 javító kör** — a review 0 BLOCKER / 0 MAJOR / 3 MINOR-t talált
+TELJESEN ZÖLD gate mellett (a teljesség-őr mintája a nullable és inicializált
+mezőalakot átengedte, az A1 metaadat-követelménye gépileg nem volt mérve, és a
+release-doksi bizonyítatlanul „generáltnak" mondta a kézi táblát), a javító kör
+után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r05-review.md`](docs/reviews/e12-r05-review.md)).
+A kötelező `security-reviewer` (`risk = "high"`) PASS. A kör ADR-t **írt**:
+[`0446`](docs/adr/0446-feature-flag-registry-and-emergency-kill-switch.md)
+(D1–D7). Exact-SHA evidencia a merge SHA-n (`2532f89c`): Full Gate
+[33170835429](https://github.com/wolfcasaba/strumsight/actions/runs/33170835429)
+`success`, Router CI
+[33170818767](https://github.com/wolfcasaba/strumsight/actions/runs/33170818767)
+`success`.
+
+**Korábbi: `main` @ `5a971421`** — E12-R04 Environment és
 channel konfiguráció lezárása, PR
 [#488](https://github.com/wolfcasaba/strumsight/pull/488), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -9683,7 +9759,19 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E12-R04 — Environment és channel konfiguráció lezárása** (PR
+**E12-R05 — Feature flag registry és emergency kill switch** (PR
+[#489](https://github.com/wolfcasaba/strumsight/pull/489), squash `186f29c6`).
+Mind a 40 mért `FeatureFlags` mező típusos katalógusba került (owner, kockázat,
+fail-closed alapérték, kill-switch-út, opcionális inkluzív lejárat), az
+`emergency` forrás aszimmetrikusan CSAK kikapcsolhat, a katalógus teljességét
+és metaadatait a `tool/check_feature_flags.dart` gépileg méri a
+`feature_flags.dart` forrásának parse-olásával. A `lib/app/config/**` és a két
+meglévő regresszió-teszt érintetlen. **1 javító kör**, 3 MINOR javítva.
+`risk = "high"`, a `security-reviewer` PASS. Egy lecke:
+[L529](docs/LESSONS.md#l529) (a pre-flight `[a-zA-Z]+` azonosító-mintája
+kiejti a számjegyes neveket — a „mért tény" 3 mezővel alulmért).
+
+**Korábbi: E12-R04 — Environment és channel konfiguráció lezárása** (PR
 [#488](https://github.com/wolfcasaba/strumsight/pull/488), squash `5a971421`).
 A backend `STRUMSIGHT_ENV` zárt értékkészletre (`dev | lab | staging | prod`)
 szigorítva, a kliens enum-nevei aliasként normalizálva, ÚJ staging
@@ -10767,13 +10855,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ▶️ **A KÖVETKEZŐ KÖR: `E12-R05` — Feature flag registry és kill switch**
-> (motor: `sonnet-impl`, előre kiosztott ADR: `0446`, brief:
-> `docs/rounds/e12-r05-…`). A Chapter 12 sáv fut: az E12 36 sorából **4 `done`**
-> (R01–R04), 32 `pending`.
+> ▶️ **A KÖVETKEZŐ KÖR: `E12-R06` — Verziózás, provenance és SBOM**
+> (motor: `sonnet-impl`, előre kiosztott ADR: `0447`, brief:
+> `docs/rounds/e12-r06-versioning-provenance-and-sbom.md`). A Chapter 12 sáv
+> fut: az E12 36 sorából **5 `done`** (R01–R05), 31 `pending`.
 >
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-28, E12-R04 zárása
-> után): **261 `done`, 40 `hold`, 18 `prepared`, 32 `pending`**. A `hold` sorok:
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-28, E12-R05 zárása
+> után): **262 `done`, 40 `hold`, 18 `prepared`, 31 `pending`**. A `hold` sorok:
 > **E10 32**, E09 5, E08 1, E99 2 — az **Epic 10 (`E10`) megy utolsóként**, a
 > nyitott `E09` (R28/R29/R31/R32) és `E08` sorok a Ch12 után.
 >
@@ -10781,6 +10869,20 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > kör-orchestrátoré (ADR 0087 §4: a kör-session a sor-fájlhoz csak a SAJÁT
 > sorának `done`-jáért nyúl). A Ch12 aktiválása 2026-08-28-án megtörtént
 > (`92576977`), a Router-CI carve-out `E12`-re kiterjesztésével együtt.
+
+> **E12-R05 follow-up — három NOTE, ami nem tűnhet el**
+> ([`docs/reviews/e12-r05-review.md`](docs/reviews/e12-r05-review.md) F5/F6 és
+> a `security-reviewer` NOTE-1):
+>
+> 1. **A `FeatureFlagResolver` ma UNWIRED** — 0 fogyasztó a `lib/`-ben a saját
+>    könyvtárán kívül. Szándékos (ADR 0446 D3), de a fail-closed viselkedés így
+>    ma szerződés-szintű: az éles feloldásba kötés a Ch12 Kör 30/31 dolga.
+> 2. **Egyetlen katalógus-bejegyzés sem hordoz `expiresOn`-t** — a lejárat-ág a
+>    valós fán ma sosem sül el. A ténylegesen ideiglenes rollout-flageknek egy
+>    későbbi kör adjon dátumot.
+> 3. **A `docs/release/kill-switches.md` 40 soros tábláját ma semmi nem méri**
+>    (a doksi ezt ki is mondja). Olcsó follow-up: markdown↔katalógus
+>    paritás-cella a `test/tooling/feature_flag_audit_test.dart`-ban.
 
 > **E12-R02 follow-up — két NOTE, ami nem tűnhet el**
 > ([`docs/reviews/e12-r02-review.md`](docs/reviews/e12-r02-review.md) F3/F4):

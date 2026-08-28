@@ -20751,3 +20751,49 @@ Ugyanez áll minden olyan hibaüzenetre, amely „a bemenetet" idézi vissza:
 a bemenet egy konfigurációs objektumnál a titkok halmaza.
 
 **Őrteszt:** `backend/tests/test_settings.py`::`TestSecretsNeverLeakIntoErrors` (3 cella, canary-titkokkal; a `hide_input_in_errors` eltávolítása mindhármat pirosra váltja)
+
+## L529 — A pre-flight „mért tény" 3 mezővel alulmért, mert az azonosító-minta `[a-zA-Z]+` volt: a Dart mezőnév TARTALMAZHAT számjegyet (E12-R05, orchestrátor-önkorrekció, 2026-08-28)
+
+**A mérés.** Az E12-R05 pre-flightja a `lib/app/config/feature_flags.dart`
+flag-mezőit számolta meg, és a brief §0.0 R1 pontjába **37**-et írt „mért
+tényként":
+
+```
+$ grep -cE "^\s+final bool [a-zA-Z]+;" lib/app/config/feature_flags.dart
+37
+$ grep -cE "^\s+final bool [A-Za-z0-9]+;" lib/app/config/feature_flags.dart
+40
+```
+
+A különbség pontosan a három, számjegyet tartalmazó mezőnév:
+`practiceEngineV2Enabled`, `songTrainerV2Enabled`, `audioAnalysisV2Enabled`.
+A `[a-zA-Z]+` karakterosztály egy Dart azonosítót NEM fed le — a nyelv
+`[A-Za-z_$][A-Za-z0-9_$]*`-ot enged —, a `grep -c` viszont nem hibázik, csak
+kisebb számot ad. Egy alulmérés így „mérésnek" öltözve került a kör normatív
+dokumentumaiba (a brief §0.0 R1-be ÉS az ADR 0446 Kontextus szakaszába).
+
+**Miért nem okozott kárt.** Két független őr fogta meg. (1) Az ADR 0446 D4 a
+teljességet a forrás ÉLŐ parse-olásából származtatja, nem egy rögzített
+számból, ezért a katalógus csak a valóban létező 40 mezővel lehetett zöld
+(`dart run tool/check_feature_flags.dart` → exit 0). (2) Az implementer
+újramérte, a 40-et katalogizálta, és a §10.1-ben KIMONDTA az eltérést a
+briefhez képest, ahelyett hogy csendben a brief számához igazodott volna.
+
+**A tanulság két irányban.** Egy „mért tény" csak akkor mérés, ha a mintája is
+a mért nyelv szabályát követi — azonosítókra soha ne `[a-zA-Z]+`, hanem `\w+`
+vagy `[A-Za-z0-9_$]+`. És egy acceptance-kritériumot a forrás ÉLŐ állapotához
+érdemes kötni („minden mezőhöz"), nem egy előre beírt darabszámhoz („mind a
+37-hez") — az előbbi az elavult pre-flight ellenére is helyes marad.
+
+**Ugyanez a hibaosztály a kör TERMÉKÉBEN is megjelent.** A szállított
+teljesség-őr mintája (`final bool (\w+);`) a `final bool? x;` és a
+`final bool x = true;` alakot átengedte: a review reviewer-próbája két új,
+katalogizálatlan flaggel is `exit 0`-t mért. A javító kör után ugyanaz a próba
+`exit 1`-et ad, komment-beli fals pozitív nélkül.
+
+**Őrteszt:** `test/tooling/feature_flag_audit_test.dart::parseFeatureFlagFieldNames reads the plain, nullable, and initialized field forms alike`
+(a termék-oldali mintát méri). A pre-flight saját grep-mintájára gépi őr nem
+állítható — ott ez a lecke maga az őr.
+
+**Forrás:** [`docs/reviews/e12-r05-review.md`](reviews/e12-r05-review.md) §2.3,
+§2.4 és §8.1; a kör briefjének §0.0 R1 (javított) és §10.1 szakasza.
