@@ -18,11 +18,11 @@ import re
 from pathlib import Path
 
 import pytest
-from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
+from alembic import command
 from app.config import Settings
 from app.database import create_database_engine
 from app.main import create_app
@@ -299,9 +299,13 @@ def test_dockerfile_pins_base_image_by_digest_and_runs_as_non_root():
         )
 
     user_lines = [
-        line.strip() for line in content.splitlines() if line.strip().upper().startswith("USER")
+        line.strip()
+        for line in content.splitlines()
+        if line.strip().upper().startswith("USER")
     ]
     assert user_lines, "Dockerfile must switch to a non-root USER"
     for line in user_lines:
         _, _, user_value = line.partition(" ")
-        assert user_value.strip() not in ("root", "0"), f"must not run as root: {line!r}"
+        assert user_value.strip() not in ("root", "0"), (
+            f"must not run as root: {line!r}"
+        )

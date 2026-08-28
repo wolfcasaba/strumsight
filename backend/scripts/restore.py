@@ -29,12 +29,12 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from sqlalchemy import DateTime, create_engine, func, inspect, select
 from sqlalchemy.engine import Engine
 
+from alembic import command
 from app import models as _models  # noqa: F401 -- registers ORM metadata
 from app.database import Base
 
@@ -179,7 +179,9 @@ def main(argv: list[str] | None = None) -> int:
         "--confirm-target to overwrite a target that already has data",
     )
     parser.add_argument(
-        "--force", action="store_true", help="required (with --confirm-target) to overwrite"
+        "--force",
+        action="store_true",
+        help="required (with --confirm-target) to overwrite",
     )
     parser.add_argument(
         "--confirm-target",
@@ -201,7 +203,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"restore refused: {exc}", file=sys.stderr)
         return 2
 
-    table_summary = ", ".join(f"{name}={count}" for name, count in result["tables"].items())
+    table_summary = ", ".join(
+        f"{name}={count}" for name, count in result["tables"].items()
+    )
     print(f"restore complete (revision={result['revision']}, {table_summary})")
     return 0
 
