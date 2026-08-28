@@ -1,8 +1,11 @@
 // E12-R10 — resume, out-of-order and fault-tolerance invariants for the
-// activity outbox. Every cell measures the projected ledger balance
-// (ADR 0469 D1) and, for resume, a SECOND `LocalActivityOutboxRepository`
-// built on the SAME `InMemoryKeyValueStore` (ADR 0469 D3) — an in-memory
-// object continuing itself does not model a process kill.
+// activity outbox. Every cell measures the ledger balance summed over
+// RewardLedgerRepository.readPage (ADR 0469 D1, revised R7 in the 1st fix
+// round — ProfileProjector.rebuild() throws on a non-empty, single-page
+// ledger, an L349 residual in a forbidden-zone file) and, for resume, a
+// SECOND `LocalActivityOutboxRepository` built on the SAME
+// `InMemoryKeyValueStore` (ADR 0469 D3) — an in-memory object continuing
+// itself does not model a process kill.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
@@ -67,11 +70,11 @@ void main() {
       );
 
       final report = await secondIngestor.drain();
+
+      expect(_ledgerBalance(_ledgerFor(store)), entry.totalXp);
+
       expect(report.acknowledged, <String>['activity-crash-resume']);
       expect(secondOutbox.pendingRecords(), isEmpty);
-
-      final totalXp = await _totalXp(store);
-      expect(totalXp, entry.totalXp);
     });
   });
 
@@ -113,7 +116,7 @@ void main() {
         entry: lateEntry,
       );
       await sequentialIngestor.drain();
-      final sequentialTotalXp = await _totalXp(sequentialStore);
+      final sequentialTotalXp = _ledgerBalance(_ledgerFor(sequentialStore));
 
       // Out-of-order run: the LATER event is enqueued (and thus drained)
       // FIRST — the outbox drains strictly FIFO, so enqueue order is the
@@ -145,22 +148,20 @@ void main() {
         logger: const NoopAppLogger(),
       );
       final report = await resumedIngestor.drain();
-      expect(report.acknowledged, <String>['activity-late', 'activity-early']);
 
-      final oooTotalXp = await _totalXp(oooStore);
-      expect(oooTotalXp, sequentialTotalXp);
-
-      // Every sourceEventId appears exactly once in the ledger content.
-      final oooLedger = LocalRewardLedgerRepository(
-        store: oooStore,
-        logger: const NoopAppLogger(),
-      );
+      // Every sourceEventId appears exactly once in the ledger content, and
+      // the balance matches the sequential baseline — the real subject of
+      // this cell, checked before the weaker acknowledgment-order assertion.
+      final oooLedger = _ledgerFor(oooStore);
       final page = oooLedger.readPage(limit: 10);
+      expect(page.entries, hasLength(2));
       expect(page.entries.map((entry) => entry.sourceEventId).toSet(), <String>{
         'activity-early',
         'activity-late',
       });
-      expect(page.entries, hasLength(2));
+      expect(_ledgerBalance(oooLedger), sequentialTotalXp);
+
+      expect(report.acknowledged, <String>['activity-late', 'activity-early']);
     });
   });
 
@@ -199,11 +200,11 @@ void main() {
 
       ledger.alwaysThrow = false;
       final report = await ingestor.drain();
+
+      expect(_ledgerBalance(_ledgerFor(store)), entry.totalXp);
+
       expect(report.acknowledged, <String>['activity-fault']);
       expect(outbox.pendingRecords(), isEmpty);
-
-      final totalXp = await _totalXp(store);
-      expect(totalXp, entry.totalXp);
     });
   });
 
@@ -249,6 +250,12 @@ void main() {
       // quarantined; the loop must continue to the good record in the
       // SAME pass instead of stalling.
       final report = await ingestor.drain();
+
+      // The quarantined record's XP never reached the ledger, and the
+      // healthy record's XP did — the real subject of this cell, checked
+      // before the weaker report-shape assertions below.
+      expect(_ledgerBalance(_ledgerFor(store)), goodEntry.totalXp);
+
       expect(report.quarantined, hasLength(1));
       expect(
         report.quarantined.single.outcome,
@@ -257,10 +264,6 @@ void main() {
       expect(report.quarantined.single.entry?.sourceEventId, 'activity-bad');
       expect(report.acknowledged, <String>['activity-good']);
       expect(outbox.pendingRecords(), isEmpty);
-
-      // The quarantined record's XP never reached the ledger.
-      final totalXp = await _totalXp(store);
-      expect(totalXp, goodEntry.totalXp);
     });
   });
 
@@ -290,8 +293,8 @@ void main() {
 
       // Measured drain: persisted attempts 1 -> 2 (< maxAttempts).
       final report = await ingestor.drain();
-      expect(report.quarantined, isEmpty);
       expect(report.dropped, <String>['activity-below']);
+      expect(report.quarantined, isEmpty);
       expect(outbox.pendingRecords(), hasLength(1));
     });
 
@@ -375,35 +378,24 @@ void main() {
   });
 }
 
-Future<int> _totalXp(InMemoryKeyValueStore store) async {
-  final ledger = LocalRewardLedgerRepository(
-    store: store,
-    logger: const NoopAppLogger(),
-  );
-  final projection = await ProfileProjector(
-    curve: _curve(),
-    ledger: ledger,
-  ).rebuild();
-  return projection.profile.totalXp;
+/// The ledger balance, summed over every page of [RewardLedgerRepository.readPage]
+/// (ADR 0469 D1, R7) — the correctly terminating pager the round brief
+/// prescribes as the replacement for ProfileProjector.rebuild().
+int _ledgerBalance(RewardLedgerRepository ledger) {
+  var total = 0;
+  String? cursor;
+  while (true) {
+    final page = ledger.readPage(limit: 100, cursor: cursor);
+    for (final entry in page.entries) {
+      total += entry.totalXp;
+    }
+    if (page.nextCursor == null) return total;
+    cursor = page.nextCursor;
+  }
 }
 
-LevelCurve _curve() => LevelCurve(<LevelDefinition>[
-  LevelDefinition(
-    number: 1,
-    levelThreshold: 0,
-    titleKey: 'gamification.level.beginner',
-  ),
-  LevelDefinition(
-    number: 2,
-    levelThreshold: 100,
-    titleKey: 'gamification.level.explorer',
-  ),
-  LevelDefinition(
-    number: 3,
-    levelThreshold: 250,
-    titleKey: 'gamification.level.consistent',
-  ),
-]);
+RewardLedgerRepository _ledgerFor(InMemoryKeyValueStore store) =>
+    LocalRewardLedgerRepository(store: store, logger: const NoopAppLogger());
 
 LocalActivityOutboxRepository _outboxFor(
   InMemoryKeyValueStore store,

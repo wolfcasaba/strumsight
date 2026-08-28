@@ -298,135 +298,113 @@ branchre**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-**Státusz: STOPPED (§0 STOP-protokoll) — §4-en KÍVÜLI fájlban élő, ezt a kört
-blokkoló MÉRT hiba.**
+**Státusz: DONE — F1–F5 elvégezve (1. javító kör, §0.0.0 R7 mérce-felület
+csere után).**
 
-### Amit leszállítottam
+### F1 (BLOCKER) — mérce-felület csere
 
-- `test/core/events/idempotency_test.dart` — **A1** (100 ismétlés egy batch
-  drainben, eltérő `ledgerId`-kkel) és **A1b** (100 × enqueue→drain pár, a
-  második ismétléstől `accepted == false` + `supersededByLedger`) — a §4/§8
-  szerinti `_Fixture`/`_FakeRewardLedger` mintával (a
-  `activity_ingestor_test.dart:521–608` mintáját véve át), KIZÁRÓLAG az ADR
-  0469 D1 mérce-felületén (`ProfileProjector(...).rebuild().profile.totalXp`)
-  mérve.
-- `test/core/events/outbox_resume_test.dart` — **A2** (MÁSODIK
-  `LocalActivityOutboxRepository` UGYANARRA az `InMemoryKeyValueStore`-ra,
-  ADR 0469 D3), **A3** (a KÉSŐBBI esemény drainelődik ELŐBB — enqueue-sorrend
-  fordítva —, `epochDay` túléli a perzisztált resume-fordulót, ADR 0469 D4),
-  **A4** (kétszer hibázó drain nem dob át és nem görget vissza, a harmadik,
-  egészséges drain zárja egyszeres egyenleggel), **A5** (a `maxAttempts`-ot
-  elérő rekord karanténba kerül, a mögötte álló egészséges rekord UGYANABBAN a
-  drain-passzban ack-elődik — ehhez egy `throwForSourceEventIds`
-  szelektív-hiba kiegészítés kellett a `_FakeRewardLedger`-en, mert az eredeti
-  `alwaysThrow` folyamat-szintű kapcsoló nem tudja EGYIDEJŰLEG megbuktatni az
-  egyik és átengedni a másik rekordot ugyanabban a drain-hívásban), és a
-  **küszöb-cellahármas** (`maxAttempts = 3`, a DRAIN ELŐTTI, perzisztált
-  `attempts` mezőn — `alatta`/`rajta`/`fölötte`, mind a §6 táblázat szerinti
-  bemenettel és elvárt kimenettel).
+Mindkét teszt-fájlban (`idempotency_test.dart`, `outbox_resume_test.dart`) a
+`ProfileProjector(...).rebuild().profile.totalXp` mérést lecseréltem a §0.0.0
+R7 szerinti, helyesen termináló `_ledgerBalance(RewardLedgerRepository)`
+segédfüggvényre (`RewardLedgerRepository.readPage` lapjain összegzett
+`totalXp`). A `ProfileProjector`, `LevelCurve`, `LevelDefinition` szimbólumok
+és az őket használó `_curve()` segédfüggvény törölve mindkét fájlból (a
+`strumsight/features/gamification/public.dart` barrel-importon keresztül nem
+volt direkt `profile_projector.dart` import, tehát import-sor törlésére nem
+volt szükség — a brief "importja is" pontja a szimbólum-használatra
+vonatkozott). Mindkét fájl kapott egy `_ledgerFor(InMemoryKeyValueStore)`
+kényelmi helper-t is, ami a valódi `LocalRewardLedgerRepository`-t építi a
+store fölé (§4/R4 mintakövetés — nincs új mock-ledger).
 
-Mind a hét cella (A1, A1b, A2, A3, A4, A5, küszöb-hármas × 3 teszt) a brief
-§5.1/§5.2/§5.2.1 kötött mérési szabályait követi: nincs `verify(callCount)`
-jellegű mock-állítás, a resume MÁSODIK repository-példánnyal történik, az
-out-of-order cella a ledger-tartalmon és a `totalXp`-n mér, nem a
-`StreakService`-en (amelynek — újramérve — továbbra sincs hívója a `lib/`
-fán: `grep -rn "StreakService(" lib/` → 0 találat).
+### F2 (MAJOR) — ledger-tartalom mérés az A1 cellában
 
-### A blokkoló mért hiba
+Az **A1** cella (`idempotency_test.dart`) az egyenleg MELLETT most a ledger
+tartalmát is méri: egy új `_ledgerEntryCount(RewardLedgerRepository,
+sourceEventId)` segédfüggvénnyel (ugyanaz a lapozó minta) ellenőrzi, hogy a
+ledger pontosan EGY bejegyzést tartalmaz az ismételt `sourceEventId`-ra.
 
-**`tools/round-gate.sh test/core/events/idempotency_test.dart
-test/core/events/outbox_resume_test.dart
-test/core/events/event_schema_compatibility_test.dart`** — `format`: ZÖLD,
-`analyze`: ZÖLD, `test test/core/events/idempotency_test.dart`: **PIROS**
-(kilépési kód 1), a gate itt megállt (a fennmaradó két teszt-célra emiatt már
-nem futott le újra ezen a hívási sorozaton — lásd lent, ugyanaz a hiba
-mindhármat blokkolja).
+### F3 (MINOR) — kritikus állítás elsőként
 
-A tényleges piros kimenet (csonkítatlan, a fenti gate-hívásból):
+Mind a hét cellát átnéztem (A1, A1b, A2, A3, A4, A5, küszöb-hármas). Hatnál
+(A1, A2, A3, A4, A5, a küszöb-hármas „alatta" tesztje) a VALÓDI tárgyat (a
+ledger-egyenleg vagy -tartalom, illetve — az „alatta" esetben — a
+`report.dropped` konkrét lista-tartalma) előre hoztam a gyengébb
+report-alakú/sorrend-alapú assertök (`report.acknowledged`,
+`report.quarantined`, `pendingRecords()`) elé. Az A1b-nél és a küszöb-hármas
+„rajta"/„fölötte" tesztjeinél az eredeti sorrend már a valódi tárgyat mérte
+elsőként (a „rajta" esetben a `hasLength(1)` a `.single`-höz szükséges
+előfeltétel, nem gyengítő elővizsgálat) — ott nem változtattam.
+
+### F4 (KÖTELEZŐ) — valódi-sértés próba
+
+A `local_activity_outbox_repository.dart:249` `appendIfAbsent` hívását
+ideiglenesen egy olyan `RewardLedgerEntry`-re cseréltem, amelynek
+`sourceEventId`-je a `ledgerId`-ből jön (a §6.1 mátrix „az idempotencia-kulcs
+a `ledgerId`-ből hasholódik" sora) — mivel a `RewardLedgerRepository`
+interfész nem ad feltétel nélküli append-et, ez a §4-en belül elérhető,
+egyenértékű sértés. `flutter test test/core/events/idempotency_test.dart`
+ezzel a móddal:
 
 ```
 00:00 +0 -1: A1 — 100 repeats of one sourceEventId, single batch drain the projected balance reflects exactly one ledger effect even though every repeat carries a distinct ledgerId [E]
-  Bad state: ledger page cursor did not advance
-  package:strumsight/features/gamification/application/profile_projector.dart 49:9  ProfileProjector.rebuild
-  test/core/events/idempotency_test.dart 106:5                                      _totalXp
-  test/core/events/idempotency_test.dart 44:29                                      main.<fn>.<fn>
+  Expected: <10>
+    Actual: <1000>
 
-00:00 +0 -2: A1b — 100 repeats as enqueue -> drain pairs from the second repeat, enqueue is rejected as superseded-by-ledger and the projected balance never grows past the first effect [E]
-  Bad state: ledger page cursor did not advance
-  package:strumsight/features/gamification/application/profile_projector.dart 49:9  ProfileProjector.rebuild
-  test/core/events/idempotency_test.dart 106:5                                      _totalXp
-  test/core/events/idempotency_test.dart 91:31                                      main.<fn>.<fn>
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/core/events/idempotency_test.dart 45:7         main.<fn>.<fn>
 ```
 
-**Gyökér-ok (`lib/features/gamification/application/profile_projector.dart:48–49`,
-NEM az engedélyezett két lib-fájl egyikében):**
+(az A1b cella is pirosra vált ugyanettől a mutációtól, a `result.accepted`
+assertön). A módosítást visszaállítottam (`git diff` a fájlra üres), és a §7
+gate újra ZÖLD lett — lásd lent.
 
-```dart
-if (page.entries.isNotEmpty && page.nextCursor == cursor) {
-  throw StateError('ledger page cursor did not advance');
-}
+### F5 — event-catalog.md bővítés
+
+A `docs/contracts/event-catalog.md` „Idempotencia (ADR 0333)" szakasza új
+alszakaszt kapott (**„Outbox-invariánsok — MÉRT (E12-R10, ADR 0469)"**): a hét
+mért invariáns egy-egy sorban, a mérő cella nevével és teszt-fájljával, plusz
+a fenti valódi-sértés próba idézett piros sorával. A Kör 9 meglévő tartalma
+(eventId-kulcs, oszlop) változatlan.
+
+### A kötelező gate — tényleges kimenet
+
+`tools/round-gate.sh test/core/events/idempotency_test.dart
+test/core/events/outbox_resume_test.dart
+test/core/events/event_schema_compatibility_test.dart` (az F1–F5 véglegesített
+állapotán, a F4 próba visszaállítása UTÁN futtatva):
+
+```
+Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/core/events/idempotency_test.dart                zöld
+    test test/core/events/outbox_resume_test.dart              zöld
+    test test/core/events/event_schema_compatibility_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
 ```
 
-Ez a stall-guard MÁR volt egyszer hibás — [`docs/LESSONS.md` L349](../LESSONS.md)
-(E08-R07, review F1, javítás `be823c74`) pontosan ezt a `do { … } while
-(cursor != null)` mintát írja le: az ELSŐ hívásnál `cursor == null`, és egy
-olyan oldalnál, ami maga a lapozás UTOLSÓ (egyben egyetlen) oldala,
-`page.nextCursor` is `null` lesz — a guard ezt tévesen "a lapozás nem
-haladt" hibaként azonosítja, holott ez a normál, egy-oldalas befejezés jele.
-Az L349 fixe (`page.entries.isEmpty` ághoz `page.entries.isNotEmpty &&`
-feltételt adott) **csak az ÜRES ledger esetét zárta le** — a `rebuild()`
-most már nem dob egy vadonatúj, 0 bejegyzésű ledgeren. A jelenlegi kör
-pre-flightjában és brief §5.1-ében mért/elvárt eset viszont egy **1–2
-bejegyzésű, NEM üres** ledger (pontosan az idempotencia-cellák elvárt
-végállapota — egyetlen ledger-hatás sok ismétlés után), és erre a guard
-VÁLTOZATLANUL hibásan dob, mert `page.entries.isNotEmpty` igaz ÉS
-`page.nextCursor (null) == cursor (null)` is igaz az ELSŐ (és egyetlen)
-lapozó híváson, ha a teljes ledger-tartalom befér egy oldalba (ami
-`pageSize`-tól függetlenül MINDIG így van egyetlen bejegyzésnél — lásd lent).
+A `test/core/events/idempotency_test.dart` 2/2, a
+`test/core/events/outbox_resume_test.dart` 7/7 teszt zöld (A2, A3, A4, A5,
+küszöb-hármas × 3).
 
-**Miért nem kerülhető meg a §4 engedélyezett fájljain belül:** a hiba
-kizárólag attól függ, hogy a ledger teljes tartalma befér-e EGY oldalba —
-ez `pageSize`-tól függetlenül mindig igaz egyetlen bejegyzésnél (pl.
-`pageSize: 1` esetén is: az egyetlen bejegyzés lapja egyszerre az első ÉS az
-utolsó oldal, a bemenő `cursor` és a kimenő `nextCursor` is `null` marad).
-A kör MINDEN acceptance-cellája (A1, A1b, A2, A4, A5, a küszöb-hármas) egy
-1 bejegyzésű ledgerrel zár, az A3 pedig 2 bejegyzésűvel — mindegyik egyetlen,
-alapértelmezett (`pageSize: 100`) oldalba fér. A mérce-felület
-(`ProfileProjector.rebuild().profile.totalXp`) ADR 0469 D1 szerint KÖTELEZŐ —
-egy másik mérési út bevezetése tiltott gyengítés lenne. A hibás sor
-(`profile_projector.dart:49`) a §4 engedélyezett listáján kívül él (a lista
-csak `activity_event_ingestor.dart`-ot és
-`local_activity_outbox_repository.dart`-ot engedi) — ez pontosan a §0
-STOP-protokoll által megnevezett eset ("MÉRT hiba, ami a §4-en KÍVÜLI
-fájlban él").
+Regresszió-őr, külön hívás: `tools/round-gate.sh test/features/gamification/`
+— **ZÖLD** (479/479 teszt, `real-violation probe (A8)` cella is zöld;
+architecture/secrets/l10n is zöld).
 
-### Amit emiatt NEM végeztem el
+### Amit NEM végeztem el
 
-- A §8.3 lépést (javítás a két engedélyezett `lib/` fájlban) — a mért piros
-  cellák egyike sem az `activity_event_ingestor.dart` vagy a
-  `local_activity_outbox_repository.dart` hibájára vezethető vissza; mindkét
-  fájl viselkedése a blokkoló hibáig pontosan a pre-flight §2 táblázatában
-  mért módon fut (ez a `_totalXp` helper hívási láncából is látszik: a hiba a
-  `ProfileProjector.rebuild()`-ben dob, az outbox/ingestor már lezajlott,
-  hiba nélkül).
-- A §8.4 lépést (`docs/contracts/event-catalog.md` „Idempotencia" szakaszának
-  bővítése) — a brief kifejezetten "a kör MÉRT outbox-invariánsaival,
-  invariánsonként a mérő cella nevével" kéri; mérő cella nélkül (mind piros)
-  ez a szakasz bizonyítatlan állítást tartalmazna, ami a projekt saját
-  doc-comment szabályát sértené ("csak tesztben bizonyított állítás").
-- A §7 "gamification meglévő cellái regresszió-őrként" külön gate-hívást és a
-  §6.1 kötelező valódi-sértés próbát — mindkettő csak egy már zöld
-  alapállapot felett értelmezhető; a próba a MÁR piros A1 cellát nem tudja
-  új információval szolgálni.
-
-### Javaslat a következő körnek
-
-A guard javítása (`profile_projector.dart:48`) minimálisan: a stall csak
-akkor valódi hiba, ha egy KORÁBBAN MÁR NEM NULL cursor nem haladt —
-`if (cursor != null && page.entries.isNotEmpty && page.nextCursor == cursor)`.
-Ez a fix a §4 listáján kívül esik, tehát egy másik SDD-kör (vagy ennek a
-körnek egy bővített allowed-files-szal újraindított változata) feladata. A
-két itt leszállított teszt-fájl változtatás nélkül újrafuttatható a fix után
-— ezek MÁR a teljes, brief §6 szerinti cellakészletet implementálják.
+- `lib/` javítás az `activity_event_ingestor.dart` vagy a
+  `local_activity_outbox_repository.dart` fájlban — a mérce-felület cseréje
+  (F1) után minden cella zöld volt ELSŐ futásra is, tehát nem volt MÉRT piros
+  cella a §4 két engedélyezett `lib/` fájljában (§5.3/D6 szerint javítás
+  csak MÉRT piros cellára jár).
+- A `profile_projector.dart:48–49` reziduális L349-hiba (§0.0.0 R7) — a
+  tilos zónában van, javítása külön kör dolga; a leletet a
+  `docs/LESSONS.md`-be a review veszi fel.
 
 ## 11. Review — a Claude tölti ki

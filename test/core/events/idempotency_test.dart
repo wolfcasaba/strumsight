@@ -1,8 +1,10 @@
 // E12-R10 — idempotency invariant: repeated deliveries of the same
 // sourceEventId must produce exactly one ledger effect. The measure is the
-// projected balance (ProfileProjector.rebuild().profile.totalXp), never a
-// call-count mock (ADR 0469 D1/D2) — a call-count assertion would stay green
-// under an implementation that appends the same entry twice.
+// ledger balance summed over RewardLedgerRepository.readPage (ADR 0469 D1,
+// revised in the 1st fix round — R7: ProfileProjector.rebuild() throws on a
+// non-empty, single-page ledger, an L349 residual in a forbidden-zone file),
+// never a call-count mock (ADR 0469 D1/D2) — a call-count assertion would
+// stay green under an implementation that appends the same entry twice.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
@@ -38,11 +40,22 @@ void main() {
       }
 
       final report = await fixture.ingestor.drain();
+
+      final ledger = _ledgerFor(fixture.store);
+      expect(
+        _ledgerBalance(ledger),
+        fixture.entry(sourceEventId: sourceEventId).totalXp,
+      );
+      expect(
+        _ledgerEntryCount(ledger, sourceEventId),
+        1,
+        reason:
+            'the ledger must contain exactly one entry for this '
+            'sourceEventId, no matter how many repeats were enqueued',
+      );
+
       expect(report.acknowledged, hasLength(100));
       expect(report.quarantined, isEmpty);
-
-      final totalXp = await _totalXp(fixture.store);
-      expect(totalXp, fixture.entry(sourceEventId: sourceEventId).totalXp);
     });
   });
 
@@ -88,42 +101,45 @@ void main() {
           await fixture.ingestor.drain();
         }
 
-        final totalXp = await _totalXp(fixture.store);
-        expect(totalXp, firstEntry.totalXp);
+        expect(_ledgerBalance(_ledgerFor(fixture.store)), firstEntry.totalXp);
       },
     );
   });
 }
 
-Future<int> _totalXp(InMemoryKeyValueStore store) async {
-  final ledger = LocalRewardLedgerRepository(
-    store: store,
-    logger: const NoopAppLogger(),
-  );
-  final projection = await ProfileProjector(
-    curve: _curve(),
-    ledger: ledger,
-  ).rebuild();
-  return projection.profile.totalXp;
+/// The ledger balance, summed over every page of [RewardLedgerRepository.readPage]
+/// (ADR 0469 D1, R7) — the correctly terminating pager the round brief
+/// prescribes as the replacement for ProfileProjector.rebuild().
+int _ledgerBalance(RewardLedgerRepository ledger) {
+  var total = 0;
+  String? cursor;
+  while (true) {
+    final page = ledger.readPage(limit: 100, cursor: cursor);
+    for (final entry in page.entries) {
+      total += entry.totalXp;
+    }
+    if (page.nextCursor == null) return total;
+    cursor = page.nextCursor;
+  }
 }
 
-LevelCurve _curve() => LevelCurve(<LevelDefinition>[
-  LevelDefinition(
-    number: 1,
-    levelThreshold: 0,
-    titleKey: 'gamification.level.beginner',
-  ),
-  LevelDefinition(
-    number: 2,
-    levelThreshold: 100,
-    titleKey: 'gamification.level.explorer',
-  ),
-  LevelDefinition(
-    number: 3,
-    levelThreshold: 250,
-    titleKey: 'gamification.level.consistent',
-  ),
-]);
+/// The number of ledger entries carrying [sourceEventId], summed over every
+/// page — the ledger-content half of the A1 measure (brief §6, F2).
+int _ledgerEntryCount(RewardLedgerRepository ledger, String sourceEventId) {
+  var count = 0;
+  String? cursor;
+  while (true) {
+    final page = ledger.readPage(limit: 100, cursor: cursor);
+    count += page.entries
+        .where((entry) => entry.sourceEventId == sourceEventId)
+        .length;
+    if (page.nextCursor == null) return count;
+    cursor = page.nextCursor;
+  }
+}
+
+RewardLedgerRepository _ledgerFor(InMemoryKeyValueStore store) =>
+    LocalRewardLedgerRepository(store: store, logger: const NoopAppLogger());
 
 class _Fixture {
   _Fixture({required int capacity, required int maxAttempts}) {
