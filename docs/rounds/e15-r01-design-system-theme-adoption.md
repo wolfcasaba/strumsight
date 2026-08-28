@@ -1,6 +1,6 @@
 # E15-R01 — A design-rendszer témájának app-szintű bevezetése
 
-- **Státusz:** PREPARED (előre megírva 2026-08-28, kód olvasva: `main @ 4cb32eb0`)
+- **Státusz:** READY (pre-flight lefutott 2026-08-28, kód ÚJRAMÉRVE: `main @ 1e23bd27`)
 - **Típus:** Chapter 15 (UI-aktiválás és -befejezés), Kör 1
 - **Kör-azonosító:** `E15-R01`
 - **Branch:** `<motor>/e15-r01-design-system-theme-adoption`
@@ -12,7 +12,61 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `lib/app/strumsight_app.dart` MÉRT téma-sorait (a megíráskor `theme: AppTheme.light()`, `darkTheme: AppTheme.dark()`, és a hibaág `theme: AppTheme.dark()`), valamint a `SsLightTheme.data()` / `SsDarkTheme.data()` szerkezetét (mindkettő a `legacyThemeForBrightness`-ből indul és extensionöket ad hozzá). Ha az E12 sáv időközben hozzányúlt a bootstraphez, a §4 listát igazítsd.
 
-## 0.0 A kör MÉRT kiváltó oka
+## 0.0 Pre-flight revízió (Claude/Opus 5, 2026-08-28, `main @ 1e23bd27`)
+
+A brief előre megírt, MÉRT állításait a pre-flight újramérte. Négy állítás
+javításra szorult; a normatív döntéseket az
+[ADR 0466](../adr/0466-app-runtime-theme-is-the-design-system-theme.md) rögzíti.
+
+**Visszakeresés (ADR 0312, szűkítve ELŐSZÖR):**
+`--corpus lessons,halts,adr` → [ADR 0273](../adr/0273-design-system-token-source-of-truth.md)
+(egy token-forrás, `public.dart` az EGYETLEN belépő),
+[ADR 0381](../adr/0381-semantic-theme-and-accessibility-contract.md),
+[ADR 0383](../adr/0383-typography-and-text-scale-contract.md).
+`--corpus lessons,halts` → **[L387](../LESSONS.md#l387)** (egy `ThemeData`-integráció
+scope-ja a meglévő adapter-kompatibilitási tesztet is magában foglalja — ez a
+kör legveszélyesebb hibaosztálya, lásd R3 lent), **[L524](../LESSONS.md#l524)**
+(PNG-mentes variáns-mátrix), **[L517](../LESSONS.md#l517)** (a `textScaler 2.0`
+keret valódi, addig láthatatlan elrendezési hibát mér ki),
+[L486](../LESSONS.md#l486) / [L507](../LESSONS.md#l507) (miért nem PNG a mérce).
+
+| # | Brief-állítás | MÉRT valóság | Következmény |
+|---|---|---|---|
+| **R1** | „`SsLightTheme.data()` NÉGY extensiont ad hozzá… és a `SsTypography` a legacy ágon hiányozhat" | `ss_light_theme.dart:7-23` / `ss_dark_theme.dart:9-28` **HÁROM** extensiont ad (`SsColorScheme`, `SsStateOverlays`, `SsThemeBehavior`); az `SsTypography`-t a `legacyThemeForBrightness` (`ss_theme_extensions.dart:86-93`) **MINDKÉT fényerőn** már regisztrálja, és a `foundations_test.dart` első cellája `same(...)` szinten állítja | **`ss_theme_extensions.dart` módosítására nincs mért szükség** (ADR 0466 D6). A fájl az engedélyezett listán MARAD (a kör mérése kimutathat tényleges hiányt), de érintetlen fájl is elfogadható kimenet. |
+| **R2** | „**Tíz** feature-szintű `*ThemeScope` burkoló… (auth, settings, share, progress_v2, library_v2, gamification, community, offline_ai, **today, metronome**)" | `grep -rln "class .*ThemeScope" lib/` → **KILENC**: progress_v2, auth, settings, library_v2, share, gamification, community, offline_ai, **vision**. A `today` és a `metronome` nem burkol, csak fogyaszt | A §2 és a `migration-status.md` szám- és névlistája a KILENCES mérésre javítva. |
+| **R3** | (hiányzott) | `test/core/design_system/foundations_test.dart` második cellája (≈80–93. sor) **kipinneli a `ss_theme_extensions.dart` FORRÁSSZÖVEGÉT**: tartalmaznia kell az `AppColors.primary`, `AppPalette.dark`, `AppTheme.dark()`, `AppTheme.light()` szövegeket, és NEM tartalmazhat `ThemeData(` alakot vagy `Color(0x…)` literált | Ez az **L387 hibaosztály** őre. Ha az implementer mégis hozzányúl a fájlhoz, ezt a hat feltételt betartja. A cella a §7 gate-jébe **felvéve**. |
+| **R4** | „§5.3 A `SsHighContrastTheme` elérhető marad **a hozzáférési beállításból**" | Ilyen beállítás **NEM létezik**: a `themeModeProvider` (`lib/core/theme/theme_mode_provider.dart:26-31`) csak `light`/`dark`/`system` értéket ismer, és az `SsHighContrastTheme` egyetlen fogyasztója a `component_catalog_screen.dart:95` | A §5.3 átfogalmazva: a téma **nem szűnik meg**; a negyedik fok BEKÖTÉSE külön kör dolga (ADR 0466 D5). |
+
+**Két további, a briefben nem szereplő MÉRT tény, amely a scope-ot köti:**
+
+- **A belépő a barrel.** A fán MINDEN design-system import
+  `core/design_system/public.dart`-ra megy (70/70 mért feature-import), és a
+  `public.dart:65-68` mindhárom témát exportálja. `strumsight_app.dart` tehát a
+  **barrelen át** importál, nem a `themes/ss_*.dart` fájlokból (ADR 0273 §1,
+  ADR 0466 D3).
+- **A komponensek `!`-gal oldják fel a tokent** (`ss_button.dart:57`,
+  `ss_content_card.dart:107-108`:
+  `Theme.of(context).extension<SsColorScheme>()!`), tehát burkoló nélkül MA
+  kivételt dobnak — nem esnek vissza alapértékre. Ez az **A2 falszifikációs
+  mechanizmusa**: a cella a kör ELŐTT pirosnak MÉRHETŐ.
+- **A PNG-mentes mátrix előzménye** `test/ui/goldens/e13_r36_variant_matrix_test.dart`;
+  a négy kizárt cellája MIND `landscape` viewportos, tehát az e körben előírt
+  compact-portrait-only mátrixon **kizárási lista nem megengedett** (ADR 0466 D7).
+
+**Elérhető cél-státusz mérése (a prompt §1.1):** a kör nem állapotgépet
+mozgat; a mérendő „státusz" a `ThemeData.extension<T>()` feloldása, amit a
+2. pont szerinti `!`-os hívási lánc TÉNYLEGESEN produkál — nem réteg-diagramból
+következtetve.
+
+**Foglalás:** az `ADR 0466` markere lefoglalva
+(`.pipeline/inflight/adr/0466`). MÉRT eltérés: a
+`tools/round-slots.py reserve-adr` `0450`-et adott, mert csak a lemezen +
+ágakon LÉVŐ ADR-eket látja, a `pipeline-queue.tsv` E12-R09…R34 sorainak papíron
+előre kiosztott `0450`–`0465` tartományát nem. A queue és a kör-prompt
+egybehangzó `0466` az irányadó; a `0450` marker érintetlenül marad, hogy az
+E12-sáv sorát ne bolygassa.
+
+## 0.0.1 A kör MÉRT kiváltó oka
 
 A Chapter 13 alatt megépült a design-rendszer (`lib/core/design_system/`: foundations, components, layouts, motion, accessibility, **három téma**), de az alkalmazás **soha nem kapcsolta be**: a `strumsight_app.dart` ma is a `AppTheme.light()/dark()`-ot adja a `MaterialApp`-nak, és a `SsColorScheme`/`SsTypography` extensionökre a fán mindössze **22** fájl hivatkozik — mindegyik egy feature-szintű `*ThemeScope` burkolón át (auth, settings, share, progress_v2, library_v2, gamification, community, offline_ai, today, metronome). Következmény: a migrált képernyők tokenjei feature-enként külön fabrikálódnak, a nem burkolt képernyők pedig egyáltalán nem látják őket.
 
@@ -32,6 +86,8 @@ gate_tests = [
   "test/ui/goldens/e15_r01_theme_adoption_test.dart",
   "test/accessibility/semantics_contract_test.dart",
   "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/core/design_system/foundations_test.dart",
+  "test/app/bootstrap_failure_app_test.dart",
 ]
 native_gate = false
 ```
@@ -57,13 +113,14 @@ Az alkalmazás futásidejű témája a design-rendszer témája legyen (extensio
 
 - `lib/app/strumsight_app.dart:33-34` → `theme: AppTheme.light()`, `darkTheme: AppTheme.dark()`; a bootstrap-hibaág (`:62`) `AppTheme.dark()`.
 - `lib/core/design_system/themes/`: `ss_light_theme.dart`, `ss_dark_theme.dart`, `ss_high_contrast_theme.dart`, `ss_theme_extensions.dart`. **Egyik sincs importálva a `lib/app/**` fából** (`grep -rn "SsLightTheme\|SsDarkTheme" lib/app lib/main.dart` → 0 találat).
-- `SsLightTheme.data()` a `SsThemeExtensions.legacyThemeForBrightness(...)`-ből indul, és NÉGY extensiont ad hozzá: `SsColorScheme`, `SsStateOverlays`, `SsThemeBehavior`, valamint (a legacy-ágon) `SsTypography`. **Vagyis a színek forrása változatlanul a legacy `AppPalette`/`AppColors`** — ez a kör tehát NEM változtat márkaszínt (az az `E15-R02`).
-- **Tíz** feature-szintű `*ThemeScope` burkoló él a fán; ezek a kör után feleslegessé válnak, de a MEGSZÜNTETÉSÜK nem ezé a köré (a képernyő-körök viszik).
+- `SsLightTheme.data()` a `SsThemeExtensions.legacyThemeForBrightness(...)`-ből indul, és HÁROM extensiont ad hozzá: `SsColorScheme`, `SsStateOverlays`, `SsThemeBehavior`; a NEGYEDIK, az `SsTypography`, már a `legacyThemeForBrightness`-ben regisztrálva van **mindkét fényerőn** (§0.0/R1). **Vagyis a színek forrása változatlanul a legacy `AppPalette`/`AppColors`** — ez a kör tehát NEM változtat márkaszínt (az az `E15-R02`).
+- **Kilenc** feature-szintű `*ThemeScope` burkoló él a fán (progress_v2, auth, settings, library_v2, share, gamification, community, offline_ai, vision — §0.0/R2); ezek a kör után feleslegessé válnak, de a MEGSZÜNTETÉSÜK nem ezé a köré (a képernyő-körök viszik).
+- `public.dart:65-68` mindhárom témát exportálja; a fán 70/70 design-system import a barrelen megy (§0.0).
 - `dart run tool/ui_inventory.dart` → **96** képernyő-forrás; `test/ui/goldens/goldens/` **144** PNG.
 
 ## 3. Scope
 
-**Benne van:** a `MaterialApp` `theme`/`darkTheme` átállítása `SsLightTheme.data()` / `SsDarkTheme.data()`-ra (a hibaág is) · `SsThemeExtensions` kiegészítése, ha egy extension a legacy ágon hiányzik (pl. a `SsTypography` mindkét fényerőn) · `test/app/theme_adoption_test.dart`: a futó app témája MINDEN elvárt extensiont hordoz, mindkét fényerőn, és a `*ThemeScope` burkoló NÉLKÜLI képernyő is feloldja a `SsColorScheme`-t · `test/ui/goldens/e15_r01_theme_adoption_test.dart`: PNG-mentes variáns-mátrix (nincs raszter-összehasonlítás, csak túlcsordulás- és kivétel-figyelés) hat képernyőre × {világos, sötét} × {en, hu} × {1.0, 2.0 textScale} · `docs/ui/migration-status.md` frissítése a MÉRT új állapottal.
+**Benne van:** a `MaterialApp` `theme`/`darkTheme` átállítása `SsLightTheme.data()` / `SsDarkTheme.data()`-ra (a hibaág is), a `core/design_system/public.dart` barrelen át importálva (§0.0, ADR 0466 D3) · `SsThemeExtensions` kiegészítése CSAK akkor, ha a kör mérése tényleges hiányt talál (a §0.0/R1 szerint ilyen nincs; ha mégis hozzányúlsz, a §0.0/R3 forrás-pin hat feltételét tartsd) · `test/app/theme_adoption_test.dart`: a futó app témája MINDEN elvárt extensiont hordoz, mindkét fényerőn, a legacy `colorScheme`/`textTheme` VÁLTOZATLAN, és a `*ThemeScope` burkoló NÉLKÜLI design-rendszer komponens is feloldja a `SsColorScheme`-t · `test/ui/goldens/e15_r01_theme_adoption_test.dart`: PNG-mentes variáns-mátrix (nincs raszter-összehasonlítás, csak túlcsordulás- és kivétel-figyelés) hat képernyőre × {világos, sötét} × {en, hu} × {1.0, 2.0 textScale}, compact portrait (412×915) viewporton · `docs/ui/migration-status.md` frissítése a MÉRT új állapottal.
 
 **NINCS benne (tilos):**
 
@@ -77,11 +134,12 @@ Az alkalmazás futásidejű témája a design-rendszer témája legyen (extensio
 
 | Útvonal | Indok |
 |---|---|
-| `lib/app/strumsight_app.dart` | a téma átkötése |
-| `lib/core/design_system/themes/ss_theme_extensions.dart` | hiányzó extension pótlása mindkét fényerőn |
-| `test/app/theme_adoption_test.dart` | ÚJ — a §6 cellái |
-| `test/ui/goldens/e15_r01_theme_adoption_test.dart` | ÚJ — PNG-mentes variáns-mátrix |
-| `docs/ui/migration-status.md` | a MÉRT állapot frissítése |
+| `lib/app/strumsight_app.dart` | a téma átkötése (mindhárom hivatkozás), a `public.dart` barrelen át |
+| `lib/core/design_system/themes/ss_theme_extensions.dart` | CSAK ha a kör mérése tényleges extension-hiányt talál (§0.0/R1: ilyen nincs) — érintetlen fájl is elfogadható; módosítás esetén a §0.0/R3 forrás-pin köti |
+| `test/app/theme_adoption_test.dart` | ÚJ — a §6 A1–A3, A6–A8 cellái |
+| `test/ui/goldens/e15_r01_theme_adoption_test.dart` | ÚJ — PNG-mentes 24 cellás variáns-mátrix (A4) |
+| `docs/ui/migration-status.md` | a MÉRT állapot frissítése (A6) |
+| `docs/rounds/e15-r01-design-system-theme-adoption.md` | a §10 implementation handoff kitöltése |
 
 **Tilos zóna:** `lib/features/**` · `lib/core/theme/**` · `lib/core/design_system/` egyéb könyvtárai · `test/ui/goldens/goldens/**` · `docs/adr/**` · `tools/**` · `.github/**`
 
@@ -97,7 +155,15 @@ A `SsLightTheme`/`SsDarkTheme` a legacy témából származik, tehát a nem migr
 
 ### 5.3 A magas kontrasztú téma nem vész el
 
-A `SsHighContrastTheme` elérhető marad a hozzáférési beállításból. **NEM elfogadható gyengítés:** a harmadik téma csendes kihagyása a bekötésből.
+A `SsHighContrastTheme.data()` továbbra is előállítható, és a komponens-katalógusból (`component_catalog_screen.dart:95`) elérhető marad. **MÉRT pontosítás (§0.0/R4):** hozzáférési beállítás ma NEM létezik (`themeModeProvider` = `light`/`dark`/`system`), tehát a negyedik fok BEKÖTÉSE nem ezé a köré (ADR 0466 D5). **NEM elfogadható gyengítés:** a harmadik téma törlése vagy elérhetetlenné tétele azzal az indokkal, hogy „úgysem használja senki".
+
+### 5.4 A belépő a barrel
+
+`lib/app/strumsight_app.dart` a témákat `package:strumsight/core/design_system/public.dart`-ból (vagy a relatív `../core/design_system/public.dart`-ból) importálja, szükség esetén `show SsDarkTheme, SsLightTheme` szűkítéssel. **NEM elfogadható gyengítés:** közvetlen import a `themes/ss_light_theme.dart` / `ss_dark_theme.dart` fájlból (ADR 0273 §1).
+
+### 5.5 A záró mátrixnak nincs kizárási listája
+
+A §0.0 mérése szerint compact portraiton egyetlen ismert túlcsordulás sincs. **NEM elfogadható gyengítés:** `skip`, tolerancia-emelés, kizárási lista vagy cella-kikapcsolás. Piros cella → vagy a téma-átkötés regressziója (a körben javítandó), vagy `lib/features/**` defekt — utóbbi a §0 STOP-protokollját váltja ki.
 
 ## 6. Acceptance criteria
 
@@ -106,9 +172,11 @@ A `SsHighContrastTheme` elérhető marad a hozzáférési beállításból. **NE
 | A1 | A futó app témája világos ÉS sötét módban is hordozza a `SsColorScheme`, `SsTypography`, `SsStateOverlays`, `SsThemeBehavior` extensiont | `theme_adoption_test.dart` |
 | A2 | Egy `*ThemeScope` burkoló NÉLKÜL pumpolt design-rendszer komponens feloldja a tokeneket (nem dob, nem esik vissza alapértékre) | `theme_adoption_test.dart` |
 | A3 | A bootstrap-hibaág (recovery képernyő) is a design-rendszer témáját kapja | `theme_adoption_test.dart` |
-| A4 | Hat képernyő × 2 fényerő × 2 locale × 2 szövegskála (24 cella) túlcsordulás és kivétel nélkül renderel | `e15_r01_theme_adoption_test.dart` |
-| A5 | A meglévő akadálymentességi és navigációs őrök VÁLTOZATLANUL zöldek | a §7 gate |
-| A6 | A `migration-status.md` a MÉRT (nem becsült) új állapotot írja: hány képernyő old fel tokent az app témájából | a dokumentum + `theme_adoption_test.dart` szám-cellája |
+| A4 | **Hat NEVESÍTETT képernyő** (`today_hub`, `live`, `tuner`, `settings`, `vision_result`, `login` — az `e13_r36_variant_matrix_test.dart` kockázat-alapú készlete és annak fixture-mintája) × 2 fényerő × 2 locale × 2 szövegskála (24 cella) compact portrait (412×915) viewporton túlcsordulás és kivétel nélkül renderel, **az app ADOPTÁLT témájával** (`SsLightTheme.data()`/`SsDarkTheme.data()`), kizárási lista NÉLKÜL | `e15_r01_theme_adoption_test.dart` |
+| A5 | A meglévő akadálymentességi, navigációs és design-system-adapter őrök VÁLTOZATLANUL zöldek | a §7 gate |
+| A6 | A `migration-status.md` a MÉRT (nem becsült) új állapotot írja: hány képernyő old fel tokent az app témájából, és hogy a „`*ThemeScope` kerülőút" sora elavult | a dokumentum + `theme_adoption_test.dart` szám-cellája |
+| A7 | Az app témájának `colorScheme`, `textTheme` és `scaffoldBackgroundColor` mezője `equals`-szel EGYENLŐ a megfelelő `AppTheme.light()`/`AppTheme.dark()` mezőjével (ADR 0466 D2 — a legacy látvány nem változik) | `theme_adoption_test.dart` |
+| A8 | Az app témája a `core/design_system/public.dart` barrelen át kerül be (ADR 0466 D3) | `theme_adoption_test.dart` forrás-cellája: `lib/app/strumsight_app.dart` szövege tartalmazza a `design_system/public.dart` importot, és NEM tartalmazza a `themes/ss_light_theme.dart` / `themes/ss_dark_theme.dart` alakot |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -118,21 +186,51 @@ A `SsHighContrastTheme` elérhető marad a hozzáférési beállításból. **NE
 | Az extension-lista `copyWith`-nél felülíródik (a legacy extensionök elvesznek) | A1 |
 | A hibaág témája marad legacy | A3 |
 | A téma átkötése egy képernyőn túlcsordulást okoz 200%-os szövegnél | A4 |
+| „Gyorsan" új `ColorScheme`/`TextTheme` kerül a témába (márkaszín-előreszaladás) | A7 |
+| A téma közvetlen `themes/ss_dark_theme.dart` importtal jön be, a barrel megkerülésével | A8 |
+| A `*ThemeScope` burkolót „biztos, ami biztos" alapon a komponens köré teszik a tesztben | A2 (a burkoló NÉLKÜLI pumpolás a cella előírása) |
+| A mátrix egy piros cellát kizárási listával némít el | A4 (a §5.5 tiltja; a review is méri) |
+
+### 6.2 A NULLA PIXELES túlcsordulás-küszöb cellahármasa (S3)
+
+A mátrix egyetlen numerikus küszöbe a `RenderFlex` túlcsordulás **0.0 px**-e;
+tolerancia nincs (§5.5). A `RenderFlex` a szigorú `>` reláció szerint jelent,
+tehát a pontosan kitöltő cella még ZÖLD. `python3 -c` mérés a compact portrait
+412.0 px szélességére:
+
+```
+alatta:  tartalom=411.0  viewport=412.0  →  túlcsordulás 0.0 px
+rajta:   tartalom=412.0  viewport=412.0  →  túlcsordulás 0.0 px
+fölötte: tartalom=412.5  viewport=412.0  →  túlcsordulás 0.5 px
+```
+
+| Cella | Elvárt kimenet | Miért ez a mérce |
+|---|---|---|
+| **A küszöb ALATT** (411.0 px tartalom) | ZÖLD — `FlutterError.onError` nem kap `overflowed by` üzenetet | a normál eset |
+| **A küszöbÖN** (412.0 px tartalom) | ZÖLD — a `RenderFlex` a `>` reláció miatt itt még nem jelent | ez a cella tiltja a „biztonsági" 1–2 px-es tolerancia bevezetését: nincs mit kompenzálni |
+| **A küszöb FÖLÖTT** (412.5 px tartalom) | PIROS — `overflowed by 0.5 pixels`, és a §5.5 szerint kizárási listával, `skip`-pel vagy tolerancia-emeléssel NEM némítható | a fél pixel is bukás; a tényleges 24 cella egyike sem lehet ilyen |
 
 **Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** állítsd vissza a `darkTheme`-et `AppTheme.dark()`-ra, futtasd a §7 gate-et → az **A1** sötét cellájának PIROSNAK kell lennie → állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/app/theme_adoption_test.dart test/ui/goldens/e15_r01_theme_adoption_test.dart test/accessibility/semantics_contract_test.dart test/app/navigation/adaptive_scaffold_test.dart
+tools/round-gate.sh test/app/theme_adoption_test.dart test/ui/goldens/e15_r01_theme_adoption_test.dart test/accessibility/semantics_contract_test.dart test/app/navigation/adaptive_scaffold_test.dart test/core/design_system/foundations_test.dart test/app/bootstrap_failure_app_test.dart
 ```
+
+A `foundations_test.dart` és a `bootstrap_failure_app_test.dart` a §0.0
+mérése alapján került be: az előbbi az **L387** hibaosztály őre (kipinnelt
+adapter-forrás + `SsTypography` regisztráció), az utóbbi a hibaág (A3)
+meglévő cellája. **Egyik sincs az engedélyezett fájllistán** — pirosra
+váltásuk nem a teszt javítását, hanem a produkciós változtatás javítását
+jelenti; ha ez nem oldható meg a listán belül, a kimenet `stopped`.
 
 ## 8. Implementációs sorrend
 
-1. `test/app/theme_adoption_test.dart` — a mérce ELŐSZÖR (RED).
-2. `lib/core/design_system/themes/ss_theme_extensions.dart` — hiányzó extension pótlása.
-3. `lib/app/strumsight_app.dart` — mindhárom téma-hivatkozás átkötése.
-4. `test/ui/goldens/e15_r01_theme_adoption_test.dart` — a 24 cellás mátrix.
+1. `test/app/theme_adoption_test.dart` — a mérce ELŐSZÖR (RED). Az A2 cellája a kör előtt PIROS: egy `Ss*` komponens `AppTheme.dark()` alatt, burkoló nélkül pumpolva ma kivételt dob (`extension<SsColorScheme>()!`, §0.0). Ezt a pirosat MÉRD MEG, és írd be a §10-be.
+2. `lib/app/strumsight_app.dart` — mindhárom téma-hivatkozás átkötése (`:33`, `:34`, `:62`), a `core/design_system/public.dart` barrelen át (§5.4).
+3. Csak ha a 1. lépés tényleges extension-hiányt mért: `lib/core/design_system/themes/ss_theme_extensions.dart` (§0.0/R1 + R3).
+4. `test/ui/goldens/e15_r01_theme_adoption_test.dart` — a 24 cellás mátrix; a fixture-mintát (fake engine/repo doubles, `FlutterError.onError`, `TextScaler.linear`) az `test/ui/goldens/e13_r36_variant_matrix_test.dart`-ból vedd át, de a `MaterialApp` témája itt az ADOPTÁLT `SsLightTheme.data()`/`SsDarkTheme.data()`.
 5. `docs/ui/migration-status.md` + a valódi-sértés próba a §10-be.
 
 ## 9. Kockázatok
