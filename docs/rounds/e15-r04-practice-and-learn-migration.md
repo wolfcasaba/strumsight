@@ -212,6 +212,14 @@ design-rendszer témája), ADR 0467 (adaptív shell), ADR 0471 (az elérhetősé
 MÉRT), ADR 0273 (egy token-forrás), ADR 0426 (golden-raszter a merge-kapu
 architektúráján). A `docs/adr/**` marad a tilos zónában.
 
+**R10 — a brief három komponens-neve nem létezik a fán.** Mérve:
+`grep -rhoE "class (Ss[A-Za-z0-9_]+)" lib/core/design_system/` — nincs
+`SsListTile`, `SsErrorState`, `SsMetricTile`. A tényleges szerep-nevek:
+hibaállapot → `SsFailureState`, metrika → `SsMetricCard`, lista-sor →
+`SsContentCard` / `SsSection` sorai. A §3, §5.2 és a §6.1 valódi-sértés próba
+a mért nevekre javítva; a KÖVETELMÉNY (minden állapotnak van
+design-rendszer-megfelelője) változatlan.
+
 **R9 — visszakeresés (ADR 0312, szűkítve ELŐSZÖR).**
 `lessons,halts,adr`: [L536](../LESSONS.md#l536) (a golden-`failures/` hamis
 scope-sértése), [L516](../LESSONS.md#l516) (ARM↔x86 drift),
@@ -246,11 +254,11 @@ A batch 8 képernyője a design-rendszer komponenseit és tokenjeit használja, 
 
 ## 3. Scope
 
-**Benne van:** a felsorolt 8 képernyő vizuális migrálása (`SsCard`, `SsButton`, `SsListTile`, `SsEmptyState`, `SsErrorState`, `SsMetricTile` és társaik; `SsSpacing`/`SsTypography` tokenek) · a meglévő `*ThemeScope` burkoló eltávolítása, ahol az `E15-R01` óta felesleges · a `migration-status.md` frissítése a MÉRT új aránnyal.
+**Benne van:** a felsorolt 8 képernyő vizuális migrálása (`SsCard`, `SsButton`, `SsEmptyState`, `SsFailureState`, `SsMetricCard`, `SsSection`, `SsSkeleton`, `SsStatusBadge`, `SsContentCard` és társaik; `SsSpacing`/`SsRadius`/`SsTypography` tokenek — §0.0/R10: a brief eredeti `SsListTile` / `SsErrorState` / `SsMetricTile` nevei a fán NEM léteznek, mérve `grep -rhoE "class (Ss[A-Za-z0-9_]+)" lib/core/design_system/`; a hiba- és metrika-szerep valódi neve `SsFailureState` és `SsMetricCard`) · a meglévő `*ThemeScope` burkoló eltávolítása, ahol az `E15-R01` óta felesleges · a `migration-status.md` frissítése a MÉRT új aránnyal.
 
 Batch-specifikus kikötések:
 
-- a `practice_result_screen` pontszám- és visszajelzés-blokkjai `SsCard`/`SsMetricTile` komponensekre kerülnek, a MÉRT értékek és a kerekítés változatlanul
+- a `practice_result_screen` pontszám- és visszajelzés-blokkjai `SsCard`/`SsMetricCard` komponensekre kerülnek (§0.0/R10), a MÉRT értékek és a kerekítés változatlanul
 - a `speed_builder_screen` lépcső-vezérlője megtartja a jelenlegi BPM-lépéseket — a DSP/időzítés-paraméterekhez NEM nyúlunk (AGENTS.md §9)
 - a `latency_calibration_screen` mérési folyamata (a kalibrációs számok és a küszöbök) érintetlen marad
 
@@ -325,7 +333,7 @@ Ugyanaz az adat, ugyanaz a sorrend, ugyanazok az állapotok (üres, betöltés, 
 
 ### 5.2 Minden állapotnak van design-rendszer-megfelelője
 
-Üres lista → `SsEmptyState`, hiba → `SsErrorState`, betöltés → a design-rendszer betöltés-komponense. **NEM elfogadható gyengítés:** nyers `CircularProgressIndicator` vagy csupasz `Text('Hiba')` meghagyása.
+Üres lista → `SsEmptyState`, hiba → `SsFailureState` (§0.0/R10), betöltés → a design-rendszer betöltés-komponense (`SsSkeleton` / `SsAsyncState`). **NEM elfogadható gyengítés:** nyers `CircularProgressIndicator` vagy csupasz `Text('Hiba')` meghagyása.
 
 ### 5.3 A szöveg lokalizált marad
 
@@ -355,7 +363,7 @@ Beégetett felhasználói szöveg nem kerülhet a migrált kódba; új szöveg e
 | Egy szöveg beégetve kerül a kódba | A6 |
 | A képernyő importálja a design-rendszert, de a stílus továbbra is `AppColors`-ból jön | A1 (a mérés a MIGRÁLT/legacy besorolást is ellenőrzi a kód alapján) |
 
-**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** cserélj vissza EGY migrált képernyőn egy `SsErrorState`-et nyers `Text`-re, futtasd a §7 gate-et → az **A2** cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** cserélj vissza EGY migrált képernyőn egy `SsFailureState`-et (§0.0/R10) nyers `Text`-re, futtasd a §7 gate-et → az **A2** cellának PIROSNAK kell lennie → állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
