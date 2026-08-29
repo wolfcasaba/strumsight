@@ -9,6 +9,7 @@ final class InventoryField {
     required this.retention,
     required this.storage,
     required this.leavesDevice,
+    required this.leavesDeviceDeclared,
     required this.line,
   });
 
@@ -19,18 +20,24 @@ final class InventoryField {
   final String storage;
   final bool leavesDevice;
 
+  /// Whether a `leaves_device:` line was actually present — [leavesDevice]
+  /// alone cannot distinguish "declared false" from "never declared",
+  /// since the parser must default to something when the key is absent.
+  final bool leavesDeviceDeclared;
+
   /// 1-based line of the field's `- name:` entry in the source YAML.
   final int line;
 
   /// The A1 acceptance cell: every field must carry a purpose, a legal
-  /// basis, a retention statement and a storage location. Returns the
-  /// names of whichever of those are blank.
+  /// basis, a retention statement, a storage location and an explicit
+  /// leaves_device verdict. Returns the names of whichever are blank.
   List<String> missingAttributes() {
     final missing = <String>[];
     if (purpose.trim().isEmpty) missing.add('purpose');
     if (legalBasis.trim().isEmpty) missing.add('legal_basis');
     if (retention.trim().isEmpty) missing.add('retention');
     if (storage.trim().isEmpty) missing.add('storage');
+    if (!leavesDeviceDeclared) missing.add('leaves_device');
     return missing;
   }
 }
@@ -102,6 +109,7 @@ final class DataInventory {
           retention: retention ?? '',
           storage: storage ?? '',
           leavesDevice: leavesDevice ?? false,
+          leavesDeviceDeclared: leavesDevice != null,
           line: fieldLine,
         ),
       );
