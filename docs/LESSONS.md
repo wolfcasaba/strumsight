@@ -22015,3 +22015,31 @@ egyetlen mért példány, hanem a példány-OSZTÁLY.
 **Őrteszt:** `test/features/songs/setlist_flow_test.dart` — a lista- ÉS a
 detail-képernyő üres állapota egyaránt kap `2.0`/`2.5` × `en`/`hu` cellát
 (8/8 kombináció 0 hiba; a pre-fix fájl visszaállítása pontosan ezeket pirosítja)
+
+## L560 — A záró rituálé `git push origin 'refs/notes/*'` alakja ezen a repón MÉRTEN megakad, és mivel a merge-záron BELÜL fut, a másik slotot is blokkolja: `refs/notes/commits`-ot pushold (E15-R06, 2026-08-29)
+
+**Mit mértünk.** Az E15-R06 zárásakor a `tools/round-merge-lock.sh`-n keresztül
+futtatott `git push -q origin 'refs/notes/*'` **13+ percig** nem tért vissza (a
+`git send-pack --stateless-rpc` gyermek végig élt), miközben a merge-zárat végig
+FOGTA — a párhuzamos slot (E12-R18) záró rituáléja emiatt ennyivel csúszott
+volna. A `git ls-remote origin 'refs/notes/*'` megmutatja az okot: a repón ma
+**10+ notes-ref** él (`refs/notes/check`, `commits-remote`, `github-commits`,
+`heal-e08-r17-remote`, `origin-commits*`, `origin-fetched/*`, …), és a
+csillagos alak MINDET tolja. A hívás PID-re megölve, majd
+
+```
+$ timeout 180 git push origin refs/notes/commits
+   eec84769..61a46d55  refs/notes/commits -> refs/notes/commits   # másodpercek alatt
+```
+
+**A minta.** A kör-jegyzet EGYETLEN refen (`refs/notes/commits`) él — a többi
+ref idegen eszközök (GitHub, korábbi heal-körök, tükrözések) maradéka, amit a
+kör nem is írt. A záró rituáléban tehát a szűk, nevesített ref a helyes alak, és
+a push a merge-záron KÍVÜL is futhat, mert nem közös dokumentumot ír. Általános
+szabály a zárt szakaszra: a merge-záron belül csak az legyen, ami MEGOSZTOTT
+artefaktumot ír (HANDOFF, RTM, LESSONS, sor-fájl, `main`-push) — minden más,
+hálózatra váró művelet kint, `timeout`-tal.
+
+**Őrteszt:** nincs — a lelet operátori (a `docs/execution/08-round-brief.md` és
+az `AGENTS.md` záró-rituálé szövege a hordozója); a mérés reprodukciója
+`git ls-remote origin 'refs/notes/*' | wc -l` (ma 10+).
