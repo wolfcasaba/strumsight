@@ -83,9 +83,13 @@ allowed_paths = [
   "test/ui/goldens/goldens/e13_r25_setlist_run_compact_scale2.png",
   # §0.0/R6 — a §3/§5.3 megengedi az ÚJ ARB-kulcsot (mindkét locale-ra), és az
   # A6 a `song_trainer_screen.dart` HAT mért beégetett angol mondata miatt NEM
-  # teljesíthető ARB-írás nélkül. A két fájl ezért a listán van.
-  "lib/l10n/app_en.arb",
-  "lib/l10n/app_hu.arb",
+  # teljesíthető ARB-írás nélkül.
+  # §0.0/R12 JAVÍTÁS: a `lib/l10n/app_{en,hu}.arb` GENERÁLT kimenet
+  # (`tool/gen_l10n_segments.dart`), a valódi forrás a `lib/l10n/base/` — az
+  # R6 eredetileg a generált fájlokat írta a listára, ami az A6-ot
+  # elvégezhetetlenné tette. A listán ezért a FORRÁS van.
+  "lib/l10n/base/app_en.arb",
+  "lib/l10n/base/app_hu.arb",
   "docs/ui/migration-status.md",
   "docs/rounds/e15-r05-song-trainer-migration.md",
 ]
@@ -246,6 +250,19 @@ mindegyik a design-rendszer betöltés-komponensére (`SsSkeleton`, vagy
 generált artefaktum, amit a gépi scope-audit a diffnek számol (E15-R02: 60 PNG
 → hamis `VIOLATION`). Az orchestrátor pre-flightja a fenti R3-mérés után már
 törölte; a `done` jelzés ELŐTT kötelező: `rm -rf test/ui/goldens/failures`.
+
+**R12 — az R6 ARB-útvonala HIBÁS volt, javítva (orchestrátor, a review során).**
+Az `lib/l10n/app_en.arb` / `app_hu.arb` MÉRVE **generált** kimenet: a
+`tool/gen_l10n_segments.dart` állítja elő a `lib/l10n/base/app_<locale>.arb` és
+a `lib/l10n/features/<feature>_<locale>.arb` szegmensek determinisztikus
+uniójaként; a közvetlen szerkesztést a kapu `l10n` lépése visszaírja. A
+`songTrainer*` kulcsok valódi forrása a `lib/l10n/base/app_{en,hu}.arb`
+(mérve: 28-28 `songTrainer` kulcs). Az R6 emiatt az A6-ot elvégezhetetlenné
+tette, és az implementer kényszerből MÁS jelentésű, meglévő kulcsot használt
+föl (lásd a review F1 leletét). Az `allowed_paths` a FORRÁST kapja meg — ez a
+brief §3-ban prózában MÁR megadott jogosultság (`új kulcs FELVEHETŐ …
+mindkét locale-ra`) helyes fájlra irányítása, nem a tilos zóna (§4) feloldása:
+a `lib/l10n/**` a tiltólistán nincs rajta. A két generált útvonal lekerült.
 
 **Visszakeresés (ADR 0312, KÖTELEZŐ).** `--corpus lessons,halts,adr`:
 [L517](../LESSONS.md#l517) (a `textScaler 2.0` keret VALÓDI, addig láthatatlan
