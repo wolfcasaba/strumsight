@@ -38,6 +38,7 @@ Future<void> _pump(
   WidgetTester tester, {
   FeatureFlags? flags,
   GoRouter? router,
+  Locale locale = const Locale('en'),
 }) => tester.pumpWidget(
   ProviderScope(
     overrides: [
@@ -47,6 +48,7 @@ Future<void> _pump(
     child: router == null
         ? MaterialApp(
             theme: SsLightTheme.data(),
+            locale: locale,
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: LessonListScreen(now: DateTime(2026, 7, 9)),
@@ -215,4 +217,22 @@ void main() {
 
     expect(router.state.uri.path, AppRoutes.songTrainerLibrary);
   });
+
+  for (final locale in [const Locale('en'), const Locale('hu')]) {
+    testWidgets('E15-R04: textScaler 2.0 renders without overflow '
+        '(${locale.languageCode})', (tester) async {
+      tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(
+        tester,
+        flags: _flags(
+          practiceEngineV2Enabled: true,
+          songTrainerV2Enabled: true,
+        ),
+        locale: locale,
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

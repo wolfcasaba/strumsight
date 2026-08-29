@@ -10,10 +10,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/preference_store.dart';
 
-Widget _app() => ProviderScope(
+Widget _app({Locale locale = const Locale('en')}) => ProviderScope(
   overrides: preferenceOverrides(),
   child: MaterialApp(
     theme: SsLightTheme.data(),
+    locale: locale,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: LatencyCalibrationScreen(),
@@ -93,4 +94,38 @@ void main() {
       reason: 'visual mode must not touch the audio offset',
     );
   });
+
+  for (final locale in [const Locale('en'), const Locale('hu')]) {
+    testWidgets(
+      'E15-R04: textScaler 2.0 renders the idle screen without overflow '
+      '(${locale.languageCode})',
+      (tester) async {
+        tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(
+          tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+        );
+        await tester.pumpWidget(_app(locale: locale));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'E15-R04: textScaler 2.0 renders the running tap target without '
+      'overflow (${locale.languageCode})',
+      (tester) async {
+        tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(
+          tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+        );
+        await tester.pumpWidget(_app(locale: locale));
+        await tester.tap(
+          find.text(locale.languageCode == 'hu' ? 'Indítás' : 'Start'),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 640));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

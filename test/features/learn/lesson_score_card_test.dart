@@ -137,4 +137,40 @@ void main() {
     expect(log.first, contains('strumsight-score-down-up-groove.png'));
     expect(log.first, contains('85%'));
   });
+
+  // E15-R04 — `LessonScoreCard` (`lib/features/learn/widgets/
+  // lesson_score_card.dart`, outside this round's allowed_paths) is a
+  // fixed 9:16 share-image capture by design (FittedBox around a
+  // RepaintBoundary) — its own internal Row/Column already overflow their
+  // fixed pixel box at textScaler 2.0, pre-existing and unrelated to the
+  // migrated Share CTA / SsButton loading state this round owns. Locale
+  // coverage at 1.0x below exercises the migrated screen chrome instead.
+  for (final locale in [const Locale('en'), const Locale('hu')]) {
+    testWidgets(
+      'E15-R04: the migrated Share CTA renders and resolves through l10n '
+      '(${locale.languageCode})',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: LessonScorePreviewScreen(
+              lesson: Lessons.downUpGroove,
+              accuracy: 0.85,
+              maxCombo: 11,
+              hits: 10,
+              total: 12,
+              shareService: _FakeShareService(<String>[]),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        final l10n = await AppLocalizations.delegate.load(locale);
+        expect(find.text(l10n.shareCardButton), findsOneWidget);
+      },
+    );
+  }
 }
