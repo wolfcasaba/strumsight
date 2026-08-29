@@ -90,20 +90,35 @@ Two different kinds of "unfilled" exist in this schema, and they are NOT
 interchangeable:
 
 - **Identifier/provenance fields** (`id`, `name`, `os`, `api_level`,
-  `ram_gb`, `abi`, `soc`, `release_blocking`, `provenance`) describe a real,
-  measured device. A placeholder here — `unknown`, `n/a`, `tbd`, `?`, an
-  empty value, or even the literal `pending` — is **always** a defect: it is
-  the [E12-R12 measured lesson](../LESSONS.md#l546) where an "unknown"
-  licence placeholder slipped through a checker that only looked for empty
-  strings. `test/tooling/device_matrix_test.dart`'s A1 group walks this
-  exact placeholder list against every one of the nine fields.
+  `ram_gb`, `abi`, `soc`, `release_blocking`, `provenance`,
+  `spec_provenance`) describe a real, measured device. A placeholder here —
+  `unknown`, `n/a`, `tbd`, `?`, an empty value, or even the literal
+  `pending` — is **always** a defect: it is the
+  [E12-R12 measured lesson](../LESSONS.md#l546) where an "unknown" licence
+  placeholder slipped through a checker that only looked for empty strings.
+  `test/tooling/device_matrix_test.dart`'s A1 group walks this exact
+  placeholder list against every one of the eleven fields. `spec_provenance`
+  was added by the independent review's F2 finding
+  (docs/reviews/e12-r13-review.md): `provenance` only carries the
+  camera-spec source, and `ram_gb`/`soc` are measured in a different
+  document (§6 below) — that source now has its own required, validated
+  field instead of living only in this document's prose.
+- **`required_suite` is mandatory and non-empty on every device**, not a
+  placeholder-string field but held to the same "presence is not optional"
+  bar (A1). On top of that, every `release_blocking: true` device's
+  `required_suite` must cover the full thirteen-item mandatory dictionary
+  (§5 above — the fourteen-entry catalog minus `local_ai_load_ttft`) — an
+  empty or partial suite on a blocking device is the independent review's
+  F1 finding: it let `device_report.py --check` read an emptied mandatory
+  suite as "every run recorded" with nothing behind it.
 - **Result fields** (`camera_result`, `audio_result`, `vision_tier`, and
   every entry a `--results` file records for a `required_suite` item)
   describe a measurement outcome, and `pending` is the honest, valid state
   for "recorded, not yet run" — every one of the six `docs/manual-testing/`
   documents is 100% `PENDING` today (§2, no fabricated number replaces a
   real device run). What `device_report.py --check` rejects is not
-  `pending` — it is a mandatory run with **no entry at all**.
+  `pending` — it is a mandatory run with **no entry at all**, or a
+  `release_blocking` device whose `required_suite` is itself empty (F1).
 
 ## 5. Suite-id → document mapping
 
@@ -132,12 +147,18 @@ lands the Epic 10 device-tier measurement, not this one.
 `vision-device-matrix.md`:160-163 (cross-checked against
 `vision-performance-benchmark.md`:117-120 for RAM):
 
-| Device | Role | Source |
-|---|---|---|
-| Pixel 6a | `release_blocking: true` — the measured, named primary test device (R5) | `vision-device-matrix.md:160` |
-| Pixel 7 | `release_blocking: true` | `vision-device-matrix.md:161` |
-| Samsung Galaxy A54 | `release_blocking: false` (recommended) | `vision-device-matrix.md:162` |
-| Xiaomi Redmi Note 12 | `release_blocking: false` (recommended) | `vision-device-matrix.md:163` |
+`provenance` carries the camera-spec source; `ram_gb`/`soc` are measured in a
+different document, so each device also carries a `spec_provenance` field
+pointing there — both references are validated the same way (A5, real
+file + in-range line), which is how the independent review's F2 finding
+(docs/reviews/e12-r13-review.md) was closed.
+
+| Device | Role | `provenance` (camera spec) | `spec_provenance` (RAM / SoC) |
+|---|---|---|---|
+| Pixel 6a | `release_blocking: true` — the measured, named primary test device (R5) | `vision-device-matrix.md:160` | `vision-performance-benchmark.md:117` |
+| Pixel 7 | `release_blocking: true` | `vision-device-matrix.md:161` | `vision-performance-benchmark.md:118` |
+| Samsung Galaxy A54 | `release_blocking: false` (recommended) | `vision-device-matrix.md:162` | `vision-performance-benchmark.md:119` |
+| Xiaomi Redmi Note 12 | `release_blocking: false` (recommended) | `vision-device-matrix.md:163` | `vision-performance-benchmark.md:120` |
 
 **Deliberately excluded:** `vision-device-matrix.md`:164-165 also lists a
 Samsung Galaxy S23 and a Pixel 4a as "Opcionális", but neither row has a
