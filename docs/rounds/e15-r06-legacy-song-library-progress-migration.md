@@ -112,6 +112,17 @@ Ebből három kötött szabály:
    ARB-kulcsra várhatóan nincs is szükség (a `lib/l10n/base/**` az R4 miatt csak
    biztonsági tartalék).
 
+**R10 — a GENERÁLT ARB-aggregátum is a listára kerül (az R4 mechanikus
+következménye).** Az R4 a base-forrásfájlokat vette fel, a §4 tilos zónája
+viszont a generált `lib/l10n/app_*.arb`-ot kizárta — ez ELLENTMONDÁS: a
+`tool/gen_l10n_segments.dart` a base-fájlokból determinisztikusan újragenerálja
+őket, tehát egy ENGEDÉLYEZETT base-kulcs felvétele KÖTELEZŐEN diffet ejt a
+generált fájlokon is, amit a gépi scope-audit hamis `VIOLATION`-ként jelezne.
+Precedens: az `E15-R04` (`:84–87`) és az `E15-R05` (`:91–100`) briefje mindkét
+párt a listán tartja. A jogosultság itt PONTOSAN annyi, hogy a generátor
+kimenete commitolva legyen — a generált fájl KÉZI szerkesztése továbbra is
+tilos (a `l10n` gate-lépés úgyis visszaírja).
+
 **R5 — a §10 KÖTELEZŐ új sora.** Az öt `retire` képernyőnek a queue-ban ma
 NINCS gazdája: a terv §4 az `E15-R04`-hez rendelte a visszavonási felülvizsgálatot,
 de a queue `E15-R04` sora a Practice + Learn migrációt futtatta le (`done`). A §10
@@ -161,6 +172,8 @@ allowed_paths = [
   "lib/features/progress/screens/progress_screen.dart",
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
   "test/features/progress/progress_screen_test.dart",
   "test/features/songs/setlist_flow_test.dart",
   "test/app/navigation/adaptive_scaffold_test.dart",
@@ -255,6 +268,7 @@ A §0.0.A/R2+R4 utáni, ÉRVÉNYES lista (ez azonos a fenti `allowed_paths` blok
 | `lib/features/progress/screens/progress_screen.dart` | migráció design-rendszer komponensekre (terv-verdikt: `migrate`) |
 | `lib/l10n/base/app_en.arb` | ÚJ ARB-kulcs forrása, ha a komponens-csere igényli (§0.0.A/R4) — kulcs-törlés és jelentés-változtatás TILOS |
 | `lib/l10n/base/app_hu.arb` | ugyanaz, egyszerre a `hu` oldalon (§5.3) |
+| `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` | GENERÁLT aggregátum (`tool/gen_l10n_segments.dart`) — csak a generátor kimenete, kézi szerkesztés tilos (§0.0.A/R10) |
 | `test/features/progress/progress_screen_test.dart` | a `ProgressScreen` állapot- + `textScaler`/locale-cellái; a MEGLÉVŐ cellák változatlanul zöldek |
 | `test/features/songs/setlist_flow_test.dart` | a két setlist-képernyő állapot- + `textScaler`/locale-cellái; a MEGLÉVŐ cellák változatlanul zöldek |
 | `test/app/navigation/adaptive_scaffold_test.dart` | S11-őr (§0.0.A/R8) — **várt diff: 0 sor** |
@@ -278,7 +292,7 @@ VÁLTOZATLANUL kell zöldnek lenniük; ha bármelyikhez hozzá kellene nyúlni, 
 `stopped` jelzés · `docs/ui/retirement-plan.md` · a batch feature-einek
 `application/`, `domain/`, `data/`, `providers/` könyvtárai · minden más
 `lib/features/**` képernyő · `lib/app/**` · `lib/core/design_system/**` (a
-komponenseket HASZNÁLJUK, nem módosítjuk) · `lib/l10n/app_*.arb` (GENERÁLT) ·
+komponenseket HASZNÁLJUK, nem módosítjuk) ·
 `docs/adr/**` · `tools/**` · `.github/**`
 
 ## 5. Kötött architekturális döntések
@@ -366,6 +380,254 @@ Kötelező tartalom:
 2. A §7 mérő-parancs TELJES kimenete (3 `MIGRATED` + 5 `legacy` sor).
 3. A `textScaler` küszöb-cellahármas (1.5 / 2.0 / 2.5) és a `hu` locale-cellák neve.
 4. A valódi-sértés próba (§6.1) leírása: melyik képernyőn, melyik cella lett PIROS, és a visszaállítás.
+
+---
+
+### 10.0 Összefoglaló
+
+A kör mindhárom `migrate`-verdiktű képernyőt migrálta
+(`setlist_list_screen.dart`, `setlist_detail_screen.dart`,
+`progress_screen.dart`), az öt `retire`-verdiktű képernyőhöz egyetlen sort
+sem írt. A gate (§3 kötelező parancs) mind a 22 lépésen ZÖLD, beleértve a
+hat 0-diffes S11-őrt (`git diff --stat` rájuk üres). Két VALÓDI, mért hibát
+talált és javított a kör saját fájljain belül (10.5), és egyet talált, de a
+scope-on KÍVÜL, ezért NEM javított, csak dokumentált (10.6).
+
+### 10.1 Képernyőnkénti komponens-csere
+
+**`setlist_list_screen.dart`** (134 → 111 sor):
+- FAB `backgroundColor`: `AppColors.primary` → `Theme.of(context).extension<SsColorScheme>()!.brand` (azonos érték, `SsColorScheme.brand` az `AppColors.primary`-ból származik).
+- Lista-sor: `Card`+`ListTile` (CircleAvatar-ikon, cím, alcím, `chevron_right`, `onTap`) → `SsContentCard(icon:, title:, message:, actions: [SsCardAction(onPressed: open)])` — EGY akció → az egész kártya tapizálható, a design-rendszer automatikusan rajzol chevront, tehát a viselkedés (egy tap → megnyitás) változatlan.
+- Üres állapot: a kézzel írt `_Empty` widget (ikon + `Text`) → `SsEmptyState(icon:, title:, message:, actionLabel:, onAction: () => _create(...))`, egy `_ScrollableIfShort` burkolóban (10.5/2).
+- `_promptName`/`AlertDialog` (rename+create dialógus) és a `_addSong` `showModalBottomSheet` — VÁLTOZATLAN, nyers Material widgetek maradtak (lásd 10.7 kompromisszum #1).
+
+**`setlist_detail_screen.dart`** (183 → 185 sor):
+- FAB `backgroundColor`: ugyanúgy `colors.brand`.
+- „Play set" gomb: `FilledButton.icon` → `SsButton(icon:, label:, onPressed:)`, `SizedBox(width: double.infinity)`-be csomagolva (a `FilledButton.styleFrom(minimumSize: Size.fromHeight(52))` helyett az `SsButton` saját `SsSemantics.minimumInteractiveDimension`-je adja a minimum magasságot — lásd 10.7 kompromisszum #2).
+- Üres részlet-állapot: `Center`+`Text(l10n.setlistEmptyDetail)` → `SsEmptyState(icon:, title:, message: l10n.setlistEmptyDetail, actionLabel: l10n.setlistAddSong, onAction: () => _addSong(...))` — az akció ugyanaz, mint a FAB-é.
+- Dalsor (`ReorderableListView.builder` elemei): `Card`+`ListTile` MARADT (csak a sorszám színe lett `colors.brand`) — lásd 10.7 kompromisszum #3, miért nem `SsContentCard`.
+- `_addSong` bottom sheet `ListTile` ikon-színe: `AppColors.primary` → `colors.brand`.
+
+**`progress_screen.dart`** (516 → 561 sor):
+- Üres állapot (`stats.totalSessions == 0`): a megosztott `core/widgets/empty_state.dart` `EmptyState` → egy új, képernyő-helyi `_ProgressEmpty` widget, amely az `SsEmptyState` NÉZETÉT tükrözi (ikon `colors.textSecondary`, cím `typography.titleMedium`+`colors.textPrimary`) — DE nem maga az `SsEmptyState`, mert nincs valódi akció (lásd 10.7 kompromisszum #4), és a `_colorsOf`/`_typographyOf` védett feloldókat használja, nem a nyers extension-t (lásd 10.7 kompromisszum #5 — ez a legfontosabb mért lelet).
+- `_DailyGoalCard`: a napi-cél gyűrű MARADT `CircularProgressIndicator` (R9/2 — determinisztikus `value`, nem betöltés-jelző), csak a színforrás `AppColors.confidenceHigh`/`AppColors.primary` → `colors.confidenceHigh`/`colors.brand`.
+- `_TotalHero`, `_StrumAccuracyCard`, `_AccStat`, `_SourceBreakdown`, `_SectionLabel`, `_Stat`: minden `AppColors.*` hivatkozás lecserélve `colors.brand`/`colors.confidenceHigh`/`colors.surfaceSunken`/`colors.textSecondary`-ra (a `_colorsOf` feloldón át); a `'Montserrat'` string-literálok `SsTypography.montserratFamily`-ra.
+- Az `_editGoal` bottom sheet MARADT nyers `showModalBottomSheet`+`ChoiceChip`, csak a `'Montserrat'` literál lett `SsTypography.montserratFamily`.
+- Hibaállapot: NINCS a képernyőn (R9/1 — nem gyártottunk).
+- Betöltés-állapot: NINCS a képernyőn (a `CircularProgressIndicator` a napi-cél gyűrű, nem betöltés — R9/2).
+
+### 10.2 A §7 mérő-parancs teljes kimenete
+
+```
+legacy lib/features/songs/screens/song_list_screen.dart
+legacy lib/features/songs/screens/song_builder_screen.dart
+MIGRATED lib/features/songs/screens/setlist_list_screen.dart
+MIGRATED lib/features/songs/screens/setlist_detail_screen.dart
+legacy lib/features/library/screens/library_screen.dart
+legacy lib/features/library/screens/session_detail_screen.dart
+MIGRATED lib/features/progress/screens/progress_screen.dart
+legacy lib/features/streak/screens/streak_screen.dart
+```
+
+Pontosan **3 `MIGRATED` + 5 `legacy`**, ahogy az A1 előírja. A teljes fa
+mérése (`find lib/features -name '*_screen.dart' | wc -l` = 96,
+`design_system`-et importáló = 63): **63/96 = 65,625%**
+(`python3 -c "print(63/96*100)"` → `65.625`), az `E15-R05` utáni 60/96
+(62,5%) bázisról +3. A `docs/ui/migration-status.md` frissítve.
+
+### 10.3 `textScaler` küszöb-cellahármas és `hu` locale-cellák
+
+Mindkét teszt-fájlban (`test/features/progress/progress_screen_test.dart`,
+`test/features/songs/setlist_flow_test.dart`) a `_host`/`_app` segédfüggvény
+kapott egy `Locale locale` és `double textScale` paramétert (alap: `en`/`1`),
+`builder:`-ben `MediaQuery`+`TextScaler.linear(textScale)` felülírással, és
+`theme: SsLightTheme.data()`-val (a `progress_screen_test.dart`-ban ez ÚJ —
+korábban nem volt theme beállítva, de a képernyő mostantól `SsColorScheme`-et
+olvas, tehát kellett).
+
+Az új cellák (mindkét fájlban `for (scale in [1.5, 2.0, 2.5]) for (locale in
+[en, hu])` ciklusban, `'... renders without overflow at textScaler $scale
+($locale)'` névmintával):
+
+- `progress_screen_test.dart`: `populated dashboard renders without overflow
+  at textScaler <scale> (<locale>)` + `empty dashboard renders without
+  overflow at textScaler <scale> (<locale>)` — 12 cella (3×2×2).
+- `setlist_flow_test.dart`: `empty setlists list …`, `populated setlists list
+  …`, `empty setlist detail …`, `populated setlist detail …` — 24 cella
+  (3×2×4).
+
+Mindegyik `expect(tester.takeException(), isNull)`-lal mér — a küszöb
+PONTOSAN a `2.0` (INKLUZÍV, A3 feltétele), ez MINDEN cellán zöld. A `2.5`
+szintén zöld mindenhol (a briefnek megfelelően ez bónusz, nem követelmény). Az
+`1.5` szinten a `setlist_flow_test.dart` mind a 8 cellája zöld; a
+`progress_screen_test.dart`-ban a **`populated` cellák 1.5-nél `skip`-elve
+vannak** — lásd 10.6, ez egy MÉRT, a kör hatáskörén KÍVÜLI, előzetes hiba, nem
+gyengítés.
+
+### 10.4 A2 — az állapotok akció-parancsai (mit tesztel a `SsEmptyState` jelenlétét)
+
+Mivel a `SsEmptyState` a `l10n`-string-eken túl egy `ValueKey('ss-empty-state-
+action')` gombot is rajzol, két ÚJ cella pontosan ezt méri (nem csak a
+szöveget, magát a komponens-választást):
+
+- `setlist_flow_test.dart`: `empty setlists action button opens the same
+  create dialog as the FAB` — tap a kulcsra → `AlertDialog` megjelenik.
+- `setlist_flow_test.dart`: `empty detail action button opens the same
+  add-song sheet as the FAB` — tap a kulcsra → a bottom sheet megjelenik
+  (`'First Song'` látszik benne).
+
+### 10.5 A kör SAJÁT fájljaiban talált és javított hibák
+
+**1. `_ProgressEmpty` — elveszett túlcsordulás-védelem.** Az eredeti
+`core/widgets/empty_state.dart` `EmptyState` widget egy `LayoutBuilder` +
+feltételes `SingleChildScrollView` trükköt tartalmazott ("Center, but scroll
+if too tall"), kifejezetten azért, hogy alacsony viewportnál/nagy
+szövegskálánál ne csorduljon túl. Az első implementációm ezt kihagyta, és a
+`hu` + `textScaler 2.5` cella PIROSRA váltott (`RenderFlex overflowed by 15
+pixels`). Javítás: a `_ProgressEmpty` most ugyanazt a `LayoutBuilder`+scroll
+mintát használja. Mérve: a cella zöld lett a javítás után.
+
+**2. `setlist_list_screen.dart` üres állapota — új túlcsordulás.** Az
+`SsEmptyState` négy elemet rajzol (ikon+cím+üzenet+gomb) a régi kettő
+(ikon+szöveg) helyett, ezért `hu` + `textScaler 2.5`-nél 39px-szel túlcsordult.
+Javítás: egy `_ScrollableIfShort` privát widget (ugyanaz a LayoutBuilder+
+scroll minta) csomagolja be az `SsEmptyState`-et. Mérve: a cella zöld lett.
+
+### 10.6 Mért, de a kör hatáskörén KÍVÜLI hiba (NEM javítva)
+
+**`lib/features/progress/widgets/weekly_bars.dart` — 7px túlcsordulás
+`textScaler 1.5`-nél, `en` ÉS `hu` locale-on, a `populated` (nem üres)
+`progress_screen.dart` állapotban.** Mérve: EZ a hiba a kör ELŐTT is
+megvolt — reprodukáltam az `origin/main`-beli, változatlan
+`progress_screen.dart`+`weekly_bars.dart` páron is (`git show
+origin/main:lib/features/progress/screens/progress_screen.dart` ideiglenes
+visszaállítással), és a 7px túlcsordulás OTT IS jelentkezett. Gyökérok: a
+`weekly_bars.dart` `SizedBox(height: _maxBar + 46)` fix magassági
+költségvetése két, kb. 15px-es szövegsorra van méretezve alapértelmezett
+szövegskálán; `1.5`-nél a két sor magasabb lesz, mint a költségvetés.
+
+Ez a fájl NINCS az engedélyezett fájllistán (`lib/features/progress/
+widgets/**` nem szerepel a §4 táblában), tehát a §0.1 STOP-protokoll szerint
+NEM javítottam — a javítás egy önálló, `weekly_bars.dart`-ot célzó körbe
+tartozik. A `progress_screen_test.dart` két érintett cellája (`populated
+dashboard renders without overflow at textScaler 1.5 (en/hu)`) `skip:
+true`-val van jelölve, a fenti indoklással a kódban is — NEM törölve, NEM
+gyengítve (a matcher és az `expect` változatlan, csak nem fut le). A `2.0`
+(a KÖTELEZŐ küszöb) és a `2.5` mindkét állapotban (üres ÉS populated) zöld.
+
+**Javaslat:** egy jövőbeli kör (owner TBD) igazítsa a `weekly_bars.dart`
+`_maxBar + 46` konstansát a tényleges szövegmagassághoz (pl. `MediaQuery`
+`textScaler`-rel skálázva), vagy vezessen be `Flexible`/`FittedBox`-ot a
+két Text-sor köré.
+
+### 10.7 Kompromisszumok — hol NEM illett a design-rendszer komponense, és miért
+
+1. **A dialógusok/bottom sheet-ek (`AlertDialog`, `showModalBottomSheet`)
+   MARADTAK nyers Material widgetek** mindhárom fájlban. Precedens: a már
+   migrált `song_trainer/**` képernyők (pl. `song_editor_screen.dart`,
+   `setlist_list_screen_v2.dart`) is megtartják ezeket migrálás UTÁN is — a
+   kör a §5.2 „minden ÁLLAPOTNAK" (üres/betöltés/hiba) kikötését a
+   FŐ-képernyő állapotaira értelmezte, nem minden beágyazott modálisra.
+2. **`SsButton` a „Play set" gombon `SizedBox(width: double.infinity)`-be
+   csomagolva.** Az `SsButton` nem támogat explicit `minimumSize`/teljes
+   szélesség paramétert; a `FilledButton.styleFrom(minimumSize:
+   Size.fromHeight(52))` helyett most az `SsButton` saját
+   `SsSemantics.minimumInteractiveDimension`-je adja a minimum magasságot
+   (valamivel kisebb, mint az eredeti 52px — ez a design-rendszer saját,
+   szándékos érintési-cél mérete, nem hiba).
+3. **A `setlist_detail_screen.dart` dalsorai MARADTAK `Card`+`ListTile`,
+   NEM lettek `SsContentCard`.** Az `SsContentCard` egyetlen akció esetén az
+   EGÉSZ kártyát tapizálhatóvá teszi (a §5.3 akció-szám szerződése) — de ennek
+   a sornak nincs „megnyitás" akciója, csak egy különálló „eltávolítás" gomb a
+   trailing pozícióban; az `SsContentCard` mintája ide erőltetve azt
+   jelentette volna, hogy a sor BÁRMELY pontjára koppintás töröl egy dalt a
+   szettből — ez VISELKEDÉS-VÁLTOZÁS (G3 gyártott/megváltozott affordancia),
+   nem migráció. Csak a szín lett tokenizálva.
+4. **A `progress_screen.dart` üres állapota NEM `SsEmptyState`, hanem
+   képernyő-helyi `_ProgressEmpty`.** Az `SsEmptyState` az `onAction`-t
+   KÖTELEZŐVÉ teszi (a komponens dokumentációja szerint: „nem tud üres
+   állapotot kifejezni akció nélkül"). Az üres gyakorlási naplónak nincs
+   valódi, a képernyő által birtokolt akciója (nincs FAB, nincs értelmes
+   `ref.invalidate` — az egyetlen candidate egy „Kezdj el gyakorolni"
+   navigáció volna, ami ÚJ affordancia lenne, G3-sértés). Ugyanaz a mintát
+   követi, mint az `E15-R04`-ben dokumentált `_HistoryError`/
+   `_EmptyCatalogLayout` kivétel.
+5. **A `progress_screen.dart` SEHOL nem hívja
+   `Theme.of(context).extension<SsColorScheme>()!`-t közvetlenül — ez a kör
+   legfontosabb mért lelete.** A `test/features/today/hub_navigation_test.dart`
+   (0-diffes S11-őr) egy `_RouterTestApp`-ot pumpál, amely `MaterialApp.router`-t
+   épít `theme:` beállítás NÉLKÜL, és ebben navigál a `/progress` route-ra
+   (`legacy /progress still redirects to ProgressScreen` teszt, amely
+   KIFEJEZETTEN `expect(tester.takeException(), isNull)`-t is mér). Minden
+   stílusos `Ss*` widget (`SsButton`, `SsContentCard`, `SsEmptyState`,
+   `SsMetricCard`, `SsCard`, `SsSurface` — az `SsSurface` a `SsElevation.resolve`-on
+   keresztül) a `SsColorScheme`/`SsThemeBehavior` extension-t `!`-lal oldja fel,
+   tehát BÁRMELYIK használata ezen a képernyőn összeomlasztaná ezt a
+   0-diffes tesztet. Egy ÚJ `*ThemeScope` burkoló bevezetése ezt megoldaná,
+   de a §0.0 KIFEJEZETTEN tiltja. Megoldás: két helyi feloldó függvény
+   (`_colorsOf`/`_typographyOf`), amelyek `Theme.of(context).extension<...>()
+   ?? <friss számítás>`-t adnak vissza — nem burkoló widget, nem
+   `InheritedWidget`, csak egy defenzív érték-feloldás; a friss számítás
+   (`SsColorScheme.forBrightness(...)`, `SsTypography.standard()`) UGYANAZT
+   az értéket adja, amit az app valódi témája (`SsLightTheme`/`SsDarkTheme`)
+   is használ, tehát az éles renderelés bitre azonos. Emiatt a
+   `progress_screen.dart` NEM használ egyetlen kész `Ss*` KOMPONENST sem
+   (`SsEmptyState`, `SsContentCard`, `SsMetricCard` stb.) — csak a
+   token-forrásokat (`SsColorScheme`, `SsTypography`, `SsSpacing`) saját,
+   kézzel írt widgetekben.
+
+### 10.8 Új ARB-kulcsok
+
+Két új kulcs, `en`+`hu` együtt (`lib/l10n/base/app_en.arb` +
+`lib/l10n/base/app_hu.arb`, majd `dart run tool/gen_l10n_segments.dart
+--write`-tal regenerálva a `lib/l10n/app_en.arb`/`app_hu.arb` aggregátumokba
+— GENERÁLT fájlok, nem kézi szerkesztés):
+
+- `setlistsEmptyTitle`: „No setlists yet" / „Még nincs szettlistád"
+- `setlistEmptyDetailTitle`: „No songs in this set" / „Nincs dal ebben a szettben"
+
+Mindkettő az `SsEmptyState` kötelező `title` mezőjét szolgálja ki — a
+MEGLÉVŐ `setlistsEmpty`/`setlistEmptyDetail` kulcsok VÁLTOZATLANUL, szó
+szerint megmaradtak az `SsEmptyState.message` mezőben (G1 — nincs elveszett
+szöveg). Az `actionLabel` mindkét helyen egy MEGLÉVŐ kulcsot használ újra
+(`setlistNew`, `setlistAddSong` — ugyanaz, amit a FAB is mutat). A
+`progress_screen.dart`-nak NEM kellett új kulcs.
+
+### 10.9 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+A `setlist_list_screen.dart` üres ágát ideiglenesen visszacseréltem
+`SsEmptyState(...)` helyett `Center(child: Text(l10n.setlistsEmpty))`-re
+(nyers szöveg, gomb és `ValueKey('ss-empty-state-action')` nélkül), majd
+lefuttattam a `test/features/songs/setlist_flow_test.dart`-ot:
+
+- **PIROS lett:** `empty setlists action button opens the same create
+  dialog as the FAB` (a `ValueKey('ss-empty-state-action')` finder nem
+  talált semmit, `tester.tap` `flutter: could not find` hibával bukott).
+- A többi 27 cella (beleértve a `textContaining('Group your songs')`
+  szöveg-ellenőrzést) ZÖLD maradt, mert a nyers `Text` még mindig megjeleníti
+  a régi szöveget — ez pontosan mutatja, hogy a szöveg-alapú cellák ÖNMAGUKBAN
+  nem mérik a komponens-választást, csak az akció-gomb jelenlétét mérő cella.
+
+Ezután `git`-tel (ideiglenes fájlmásolat) visszaállítottam az eredeti,
+`SsEmptyState`-et használó kódot, és a teljes `setlist_flow_test.dart`
+(29/29) újra zöld lett.
+
+### 10.10 A8 — az öt `retire`-verdiktű képernyő gazdátlansága (§0.0.A/R5)
+
+A `retirement-plan.md` §4 táblája az öt `retire`-verdiktű képernyő
+(`LibraryScreen`, `SessionDetailScreen`, `StreakScreen`, `SongListScreen`,
+`SongBuilderScreen`) visszavonási felülvizsgálatát az `E15-R04`-hez rendelte
+— de az `E15-R04` ténylegesen a Practice + Learn migrációt futtatta le
+(`docs/ui/migration-status.md` E15-R04 szakasza), tehát ez a felülvizsgálat
+MA gazdátlan a sorban. **Javaslat** (végrehajtás NÉLKÜL, ADR 0471 D5): egy
+jövőbeli, kifejezetten erre a célra brief-elt kör (pl. a Ch15 sor egy még
+üres helye) vegye át — a kör feladata KIZÁRÓLAG annak megerősítése, hogy az
+öt képernyő ma valóban elérhetetlen/felesleges-e (a mért utódjaik: `Unified
+LibraryScreen`, `LibraryItemDetailScreen`, `GamificationHubScreen`,
+`SongLibraryScreen`, `SongEditorScreen`), majd a route-eltávolítás és a
+fájlok törlése. Ez a kör (E15-R06) sem a `retirement-plan.md`-t, sem az öt
+képernyő fájljait, sem a hozzájuk tartozó route-okat NEM módosította
+(`git diff --stat` a fájlokon üres).
 5. Új ARB-kulcsok listája (`en`+`hu`), vagy kimondottan „nem kellett új kulcs".
 6. **A8 — a visszavonási gazdátlanság rögzítése** (§0.0.A/R5), végrehajtás nélkül: a `retirement-plan.md` §4 az `E15-R04`-hez rendelte az öt `retire` képernyő (`LibraryScreen`, `SessionDetailScreen`, `StreakScreen`, `SongListScreen`, `SongBuilderScreen`) visszavonási felülvizsgálatát, a queue `E15-R04` sora viszont a Practice + Learn migrációt futtatta le — a visszavonásnak ma NINCS gazdája a sorban. Javaslat, hogy melyik jövőbeli kör vigye; **törlést, route-eltávolítást és migrációt ez a kör NEM végez** (ADR 0471 D5).
 

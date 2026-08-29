@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../model/setlist.dart';
@@ -38,6 +38,7 @@ class SetlistDetailScreen extends ConsumerWidget {
       ).showSnackBar(SnackBar(content: Text(l10n.setlistNoSongsYet)));
       return;
     }
+    final brand = Theme.of(context).extension<SsColorScheme>()!.brand;
     final picked = await showModalBottomSheet<Song>(
       context: context,
       showDragHandle: true,
@@ -47,7 +48,7 @@ class SetlistDetailScreen extends ConsumerWidget {
           children: [
             for (final s in library)
               ListTile(
-                leading: const Icon(Icons.music_note, color: AppColors.primary),
+                leading: Icon(Icons.music_note, color: brand),
                 title: Text(s.name),
                 subtitle: Text(s.chords.join(' · ')),
                 onTap: () => Navigator.of(context).pop(s),
@@ -73,6 +74,7 @@ class SetlistDetailScreen extends ConsumerWidget {
 
     final library = ref.watch(songsProvider);
     final songs = set.resolve(library);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
 
     return Scaffold(
       appBar: AppBar(
@@ -102,7 +104,7 @@ class SetlistDetailScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _addSong(context, ref, library),
-        backgroundColor: AppColors.primary,
+        backgroundColor: colors.brand,
         icon: const Icon(Icons.add),
         label: Text(l10n.setlistAddSong),
       ),
@@ -111,27 +113,25 @@ class SetlistDetailScreen extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: FilledButton.icon(
-                onPressed: songs.isEmpty
-                    ? null
-                    : () => _playAll(context, set, songs),
-                icon: const Icon(Icons.play_arrow),
-                label: Text(l10n.setlistPlayAll),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
+              child: SizedBox(
+                width: double.infinity,
+                child: SsButton(
+                  onPressed: songs.isEmpty
+                      ? null
+                      : () => _playAll(context, set, songs),
+                  icon: Icons.play_arrow,
+                  label: l10n.setlistPlayAll,
                 ),
               ),
             ),
             Expanded(
               child: songs.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          l10n.setlistEmptyDetail,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
+                  ? SsEmptyState(
+                      icon: Icons.queue_music,
+                      title: l10n.setlistEmptyDetailTitle,
+                      message: l10n.setlistEmptyDetail,
+                      actionLabel: l10n.setlistAddSong,
+                      onAction: () => _addSong(context, ref, library),
                     )
                   : ReorderableListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
@@ -146,14 +146,16 @@ class SetlistDetailScreen extends ConsumerWidget {
                         final song = songs[i];
                         return Card(
                           key: ValueKey('$i-${song.id}'),
-                          margin: const EdgeInsets.only(bottom: 8),
+                          margin: const EdgeInsets.only(
+                            bottom: SsSpacing.space2,
+                          ),
                           clipBehavior: Clip.antiAlias,
                           child: ListTile(
                             leading: Text(
                               '${i + 1}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w800,
-                                color: AppColors.primary,
+                                color: colors.brand,
                               ),
                             ),
                             title: Text(

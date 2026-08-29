@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../streak/public.dart';
 import '../model/practice_entry.dart';
@@ -12,6 +11,27 @@ import '../providers/daily_goal_provider.dart';
 import '../providers/practice_log_provider.dart';
 import '../../share/public.dart';
 import '../widgets/weekly_bars.dart';
+
+/// Resolves [SsColorScheme]/[SsTypography] with a computed fallback instead
+/// of force-unwrapping the theme extension: this screen is still reachable
+/// through a bare, unthemed `MaterialApp.router` in
+/// `test/features/today/hub_navigation_test.dart` (a frozen, zero-diff S11
+/// guard, §0.0.A/R8) that never installs `SsLightTheme.data()`. Every styled
+/// `Ss*` widget (`SsButton`, `SsContentCard`, `SsEmptyState`, `SsMetricCard`,
+/// `SsCard`, `SsSurface`) force-unwraps that extension internally with no
+/// such fallback, so none of them can be used on this screen without either
+/// crashing that guard or introducing a new `*ThemeScope` wrapper —
+/// explicitly prohibited by §0.0. This screen therefore stays with
+/// hand-styled widgets, reading tokens through these two resolvers (the
+/// fallback recomputes the exact same values `SsLightTheme`/`SsDarkTheme`
+/// derive at boot, so production rendering is unaffected).
+SsColorScheme _colorsOf(BuildContext context) =>
+    Theme.of(context).extension<SsColorScheme>() ??
+    SsColorScheme.forBrightness(Theme.of(context).brightness);
+
+SsTypography _typographyOf(BuildContext context) =>
+    Theme.of(context).extension<SsTypography>() ??
+    const SsTypography.standard();
 
 /// The Progress dashboard — a Yousician/Simply-Guitar-style practice tracker, but
 /// with the metric no competitor has: your **strum-direction accuracy** over time.
@@ -66,10 +86,7 @@ class ProgressScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: stats.totalSessions == 0
-            ? EmptyState(
-                icon: Icons.insights_outlined,
-                title: l10n.progressEmpty,
-              )
+            ? const _ProgressEmpty()
             : ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
@@ -128,6 +145,57 @@ class ProgressScreen extends ConsumerWidget {
   }
 }
 
+/// Provably actionless informational state (§5.2 exception, same class as
+/// `_EmptyCatalogLayout`/`_HistoryError`'s sibling pattern from E15-R04): an
+/// empty practice log has no genuine next action to attach — inviting the
+/// user to "Play in Live, analyse a riff, or pass a lesson" isn't a single
+/// callback this screen owns. [SsEmptyState] mandates one, so it isn't used;
+/// this mirrors its icon/title layout with hand-resolved tokens instead
+/// (`_colorsOf`/`_typographyOf` — see their doc comment for why this screen
+/// can't call the theme extension directly).
+class _ProgressEmpty extends StatelessWidget {
+  const _ProgressEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = _colorsOf(context);
+    final typography = _typographyOf(context);
+    final content = Padding(
+      padding: const EdgeInsets.all(SsSpacing.space6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.insights_outlined, color: colors.textSecondary, size: 40),
+          const SizedBox(height: SsSpacing.space4),
+          Text(
+            l10n.progressEmpty,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+    // "Center, but scroll if too tall" (ported from the legacy
+    // `core/widgets/empty_state.dart` this replaces): at large text scales
+    // the icon + title column can outgrow a short viewport, so a plain
+    // `Center` would overflow instead of settling into a scrollable column.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedHeight) {
+          return Center(child: content);
+        }
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(child: content),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _TotalHero extends StatelessWidget {
   const _TotalHero({required this.seconds, required this.l10n});
   final int seconds;
@@ -135,15 +203,16 @@ class _TotalHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _colorsOf(context);
     return Column(
       children: [
         Text(
           formatPractice(seconds, l10n),
-          style: const TextStyle(
-            fontFamily: 'Montserrat',
+          style: TextStyle(
+            fontFamily: SsTypography.montserratFamily,
             fontWeight: FontWeight.w800,
             fontSize: 44,
-            color: AppColors.primary,
+            color: colors.brand,
           ),
         ),
         Text(
@@ -175,7 +244,7 @@ Future<void> _editGoal(
             Text(
               l10n.progressSetGoal,
               style: const TextStyle(
-                fontFamily: 'Montserrat',
+                fontFamily: SsTypography.montserratFamily,
                 fontWeight: FontWeight.w800,
                 fontSize: 18,
               ),
@@ -227,6 +296,7 @@ class _DailyGoalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _colorsOf(context);
     final goalSeconds = goalMinutes * 60;
     final todayMin = todaySeconds ~/ 60;
     final progress = goalSeconds <= 0
@@ -234,15 +304,13 @@ class _DailyGoalCard extends StatelessWidget {
         : (todaySeconds / goalSeconds).clamp(0.0, 1.0);
     final met = todaySeconds >= goalSeconds;
     final remaining = ((goalSeconds - todaySeconds) / 60).ceil();
+    final metColor = met ? colors.confidenceHigh : colors.brand;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(SsSpacing.space4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: (met ? AppColors.confidenceHigh : AppColors.primary)
-              .withValues(alpha: 0.35),
-        ),
+        border: Border.all(color: metColor.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
@@ -261,20 +329,14 @@ class _DailyGoalCard extends StatelessWidget {
                     backgroundColor: Theme.of(
                       context,
                     ).colorScheme.outline.withValues(alpha: 0.2),
-                    valueColor: AlwaysStoppedAnimation(
-                      met ? AppColors.confidenceHigh : AppColors.primary,
-                    ),
+                    valueColor: AlwaysStoppedAnimation(metColor),
                   ),
                 ),
-                Icon(
-                  met ? Icons.check : Icons.bolt,
-                  size: 20,
-                  color: met ? AppColors.confidenceHigh : AppColors.primary,
-                ),
+                Icon(met ? Icons.check : Icons.bolt, size: 20, color: metColor),
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: SsSpacing.space4),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,7 +359,7 @@ class _DailyGoalCard extends StatelessWidget {
                       ? l10n.progressGoalMet
                       : l10n.progressGoalRemaining(remaining),
                   style: TextStyle(
-                    color: met ? AppColors.confidenceHigh : AppColors.primary,
+                    color: metColor,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
@@ -323,6 +385,7 @@ class _StrumAccuracyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _colorsOf(context);
     final avg = stats.averageDirectionAccuracy;
     final best = stats.bestDirectionAccuracy;
     return Container(
@@ -331,26 +394,26 @@ class _StrumAccuracyCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         gradient: LinearGradient(
           colors: [
-            AppColors.primary.withValues(alpha: 0.16),
-            AppColors.confidenceHigh.withValues(alpha: 0.12),
+            colors.brand.withValues(alpha: 0.16),
+            colors.confidenceHigh.withValues(alpha: 0.12),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+        border: Border.all(color: colors.brand.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.swap_vert, size: 20, color: AppColors.primary),
-              const SizedBox(width: 8),
+              Icon(Icons.swap_vert, size: 20, color: colors.brand),
+              const SizedBox(width: SsSpacing.space2),
               Expanded(
                 child: Text(
                   l10n.progressStrumAccuracyTitle,
-                  style: const TextStyle(
-                    fontFamily: 'Montserrat',
+                  style: TextStyle(
+                    fontFamily: SsTypography.montserratFamily,
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
                   ),
@@ -399,15 +462,16 @@ class _AccStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _colorsOf(context);
     return Column(
       children: [
         Text(
           '${(percent * 100).round()}%',
-          style: const TextStyle(
-            fontFamily: 'Montserrat',
+          style: TextStyle(
+            fontFamily: SsTypography.montserratFamily,
             fontWeight: FontWeight.w800,
             fontSize: 30,
-            color: AppColors.confidenceHigh,
+            color: colors.confidenceHigh,
           ),
         ),
         Text(label, style: Theme.of(context).textTheme.bodySmall),
@@ -423,6 +487,7 @@ class _SourceBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _colorsOf(context);
     final rows = <(String, IconData, int)>[
       (l10n.navLive, Icons.graphic_eq, stats.sessionsFrom(PracticeSource.live)),
       (
@@ -443,8 +508,8 @@ class _SourceBreakdown extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 5),
             child: Row(
               children: [
-                Icon(icon, size: 18, color: AppColors.primary),
-                const SizedBox(width: 12),
+                Icon(icon, size: 18, color: colors.brand),
+                const SizedBox(width: SsSpacing.space3),
                 Expanded(child: Text(label)),
                 Text(
                   '$count',
@@ -466,11 +531,11 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: const TextStyle(
+      style: TextStyle(
         fontWeight: FontWeight.w700,
         fontSize: 12,
         letterSpacing: 1.2,
-        color: AppColors.primary,
+        color: _colorsOf(context).brand,
       ),
     );
   }
@@ -484,22 +549,21 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _colorsOf(context);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
       decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: colors.surfaceSunken,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 20, color: AppColors.primary),
+          Icon(icon, size: 20, color: colors.brand),
           const SizedBox(height: 6),
           Text(
             value,
             style: const TextStyle(
-              fontFamily: 'Montserrat',
+              fontFamily: SsTypography.montserratFamily,
               fontWeight: FontWeight.w800,
               fontSize: 22,
             ),
