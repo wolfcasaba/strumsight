@@ -1,18 +1,106 @@
 # E12-R16 — AI és ML összesített release gate
 
-- **Státusz:** PREPARED (előre megírva 2026-08-27, kód olvasva: `main @ 9ca4a0dc`)
+- **Státusz:** READY (pre-flight elvégezve 2026-08-29, kód újramérve: `main @ e2a813e7`; előre megírva 2026-08-27, `main @ 9ca4a0dc`)
 - **Típus:** Chapter 12 (Release Roadmap, Sprint Planning & Final Integration), Kör 16
 - **Kör-azonosító:** `E12-R16`
 - **Branch:** `<motor>/e12-r16-ai-release-gate-aggregation`
 - **Előfeltétel:** `E12-R14` merge-elve (a benchmark-rekord séma az AI-riport egyik bemenete)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0456` — a szám FOGLALT (Chapter 12 batch-tartomány).
+- **ADR:** [`ADR 0477`](../adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md) — a pre-flightban MEGÍRVA. (A brief eredetileg `0456`-ot mondott; a `tools/round-slots.py reserve-adr --round E12-R16` foglaló `0477`-et adott, és a foglaló a kötelező út az ADR 0139 kétszeres-foglalás óta. A `0456` sem a lemezen, sem foglalva nincs — elavult batch-érték volt.)
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "AI ML release gate evaluation report model version regression"` → **[ADR 0177](../adr/0177-ai-tutor-safety-injection-usage-evaluation-gate.md)** (score 2.75): a Tutor evaluation MÁR merge-gate, claim-provenance szabállyal. A kör ezt NEM cseréli le — összesíti a többi bizonyítékkal.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az `evaluation/` fa MÉRT tartalmát (a megíráskor: `evaluation/analysis/{README.md,fixtures,manifest_schema.json}`, `evaluation/tutor/{datasets,run_eval.dart}`) és a `docs/eval/` két riportját (`real-audio-dsp-baseline.md`, `recognition-release-guard.md`). Az összesítő NEM találhat ki riport-formákat: a MÉRT kimeneteket olvassa.
 
-## 0.0 A Chapter 14 release-guard viszonya
+## 0.0 Pre-flight brief-revízió (Claude, 2026-08-29, `main @ e2a813e7`)
+
+**Visszakeresés (ADR 0312, szűkítve ELŐSZÖR):**
+`--corpus lessons,halts,adr "AI ML release gate aggregation evaluation report model version corpus identity"`
+→ [ADR 0177](../adr/0177-ai-tutor-safety-injection-usage-evaluation-gate.md) (a
+tutor-eval MÁR merge-gate — nem cseréljük le), `halts/E12-R13` (a device-mátrix
+14 capabilityje). `--corpus lessons,halts "aggregator report missing measurement
+fail closed not in scope capability"` → `halts/E08-R26` (a pre-flight négy hamis
+brief-premisszát mért ki — ugyanaz a minta ismétlődött itt is),
+`halts/E07-R25` (`notObservable` fail-closed őr mutációs review-ja).
+
+### R1 — Az ADR-szám `0456` → `0477`
+
+A foglaló (`tools/round-slots.py reserve-adr`) `0477`-et adott. A `0456` nem
+létezik és nincs foglalva. Az ADR **megírva**:
+[`0477-ai-release-evidence-aggregation-and-ga-scope-truth.md`](../adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md).
+
+### R2 — A GA-scope MA géppel olvasható, és NEM a tutor a kritikus bemenet
+
+**Mérve:** `docs/testing/device-matrix.yaml:90-133` (E12-R13, PR #503) egy
+`capabilities:` blokkot hordoz, capabilityenként `id` + `ga_scope` + `devices`.
+14 capability, ebből **11 `ga_scope: true`**: `onboarding`, `live_and_tuner`,
+`practice_engine`, `song_trainer_local`, `audio_analysis_core`,
+`progress_goals_streak`, `storage_migration`, `offline_operation`,
+`localization_en_hu`, `accessibility_minimum`, `session_lifecycle_stability`;
+és **3 `ga_scope: false`**: `computer_vision`, `offline_ai`, **`ai_tutor`**.
+
+Ebből következik, amit a brief §1 nem tudott: **a tutor-bizonyíték ma NEM
+GA-kritikus**, hanem a §5.3 / A3 `not_in_scope` ágának egyik esete — a vision és
+az offline AI mellett. Az összesítő MA kizárólag az `audio_analysis_core` és a
+`live_and_tuner` capabilityre kér kötelező AI-bizonyítékot (a
+`docs/eval/real-audio-dsp-baseline.md` és a
+`docs/eval/recognition-release-guard.md` területe).
+
+**Szerződés (ADR 0477 D1):** a `ga_scope` értéket az összesítő KIZÁRÓLAG a
+device-mátrixból olvassa; sem a Python forrás, sem a
+`docs/release/ai-quality-gates.md` nem sorolhatja fel újra. A `docs/release/ai-quality-gates.md`
+**bizonyíték-mátrix** (capability → milyen bizonyíték kell), nem GA-lista. A
+mátrixban szereplő, de a device-mátrixban ismeretlen capability → nem-nulla
+kilépés.
+
+### R3 — A modell-verziónak KÉT mért alakja van
+
+**Mérve:** `assets/ml/model_manifest.json` a `models[]` elemeket `filename`-mel
+azonosítja és `training_run.identifier`-rel verziózza (`git:<40 hex>`; négy
+elem: `chord_crnn.bin`, `strum_crnn.bin`, `strum_crnn_live.bin`,
+`strum_crnn_live_3c.bin`), a `vision_models[]` elemeket viszont `model_id`-vel
+azonosítja és egy `version` mezővel verziózza (`"1.0.0"`; `hand_landmarker`,
+`pose_landmarker`, mindkettő `status: deferred`). Egyetlen közös
+„modell-verzió" mező feltételezése találgatás lett volna (ADR 0477 D5).
+
+Modell nélküli (tisztán DSP) bizonyítékra a `modelId` a `none` literál, de
+KIZÁRÓLAG akkor, ha a bizonyíték-mátrix az adott sort kifejezetten
+`model: none`-ként deklarálja — különben nem-nulla kilépés.
+
+### R4 — A küszöb-logika IMPORTÁLT, a forrása mért
+
+**Mérve:** `tool/compare_benchmarks.py:52-56` — `WARN_THRESHOLD = 0.05`,
+`FAIL_THRESHOLD = 0.10`, és `classify()` (`:155-168`) az irány-tudatos,
+mindkét határon INKLUZÍV osztályozás (ADR 0474 D6/D7). Az összesítő ezt a három
+nevet IMPORTÁLJA (`tool/` a `sys.path`-ra téve); saját küszöb-literál vagy saját
+`classify` a forrásában TILOS, és ezt gépi cella méri (A4). A `tool/compare_benchmarks.py`
+az engedélyezett listán NINCS rajta: olvasni és importálni szabad, módosítani nem.
+
+### R5 — A `--profile` provenancia, nem kapcsoló; és a mai fán a kimenet PIROS
+
+**Mérve:** `docs/release/environment-matrix.md:14` — a zárt csatorna-szótár
+`development` / `lab` / `production`. A `--profile` az ADR 0477 D6 szerint a
+kimenetbe kerül, de egyetlen ellenőrzést sem lazít; ismeretlen érték → kilépés 2.
+
+**Következmény, amit az implementernek NEM szabad „megjavítania":** a mai fán
+`python3 tool/release/build_ai_report.py --profile development` **nem-nulla**
+kóddal lép ki, mert a két GA-scope AI-capabilityhez nincs beolvasható
+bizonyíték-dokumentum. Ez a HELYES kimenet (D2 fail-closed) — a §10-be a
+tényleges kimenet kerül. **Kitalált bizonyíték-riport commitolása TILOS**; az
+engedélyezett fájllista amúgy sem enged `docs/eval/**` vagy `evaluation/**`
+írást. A teszt-fixture-ök `Directory.systemTemp`-be íródnak és
+`addTearDown`-nal bomlanak le (a `test/tooling/benchmark_budget_test.dart`
+E12-R14 mintája), mert `test/fixtures/**` sincs a listán.
+
+### R6 — PyYAML használható, precedens van
+
+**Mérve:** `tool/device_report.py:33` `import yaml` kemény függésként, és a
+`python3 -c "import yaml"` ezen a boxon `6.0.1`-et ad. Az összesítő ugyanígy
+olvassa a device-mátrixot. (A `package:yaml` tiltás DART-oldali szabály — a
+`test/tooling/device_matrix_test.dart` szűkített olvasója miatt —, a Python
+oldalra nem vonatkozik.)
+
+## 0.0.1 A Chapter 14 release-guard viszonya
 
 A `docs/eval/recognition-release-guard.md` a Chapter 14 (felismerés-helyreállítás) sáv terméke, és a felismerési pontosság KÜLÖN kapuja. Az AI-összesítő ezt BEMENETKÉNT olvassa, és nem definiál rá második, versengő küszöböt. Ha a két dokumentum ellentmond, az a `stopped` jelzés esete.
 
@@ -65,7 +153,8 @@ Egyetlen, gépileg ellenőrizhető AI-release riport, amely a DSP-, felismerési
 - DSP/ML paraméter vagy modell módosítása (AGENTS.md §9).
 - ÚJ CI-workflow (`ai-release-gate.yml`) — a CI-integráció külön kör.
 - A Chapter 14 release-guard küszöbeinek átírása.
-- `docs/adr/**` — az ADR 0456-ot a Claude írja.
+- `docs/adr/**` — az ADR 0477-et a Claude MÁR megírta a pre-flightban.
+- `tool/compare_benchmarks.py`, `docs/testing/device-matrix.yaml`, `assets/ml/model_manifest.json` — ezek BEMENETEK: olvasni és importálni kell őket, módosítani TILOS.
 
 ## 4. Engedélyezett fájlok
 
@@ -78,7 +167,7 @@ Egyetlen, gépileg ellenőrizhető AI-release riport, amely a DSP-, felismerési
 
 **Tilos zóna:** `ml/**` · `lib/**` · `evaluation/**` · `docs/eval/**` · `.github/**` · `docs/adr/**` · `tools/**`
 
-## 5. Kötött architekturális döntések (ADR 0456)
+## 5. Kötött architekturális döntések (ADR 0477 — a teljes szöveg a `docs/adr/0477-…` fájlban, D1–D7)
 
 ### 5.1 Hiányzó kritikus mérés = BLOKK, nem figyelmeztetés
 
@@ -94,14 +183,20 @@ Az Offline AI és a Vision csak akkor kötelező bemenet, ha a GA-scope tartalma
 
 ## 6. Acceptance criteria
 
+Minden cella `Process.runSync('python3', …)` úton méri az összesítőt, `Directory.systemTemp`-be írt
+fixture-ökön, `addTearDown` bontással (a `benchmark_budget_test.dart` E12-R14 mintája).
+**`skip:` ág egyetlen cellán sem megengedett.**
+
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | Hiányzó KRITIKUS (GA-scope) riport → nem-nulla kilépés | `ai_release_report_test.dart` |
-| A2 | A riportban szereplő modell-verzió ≠ a manifest verziója → nem-nulla kilépés | `ai_release_report_test.dart` |
-| A3 | Nem-GA-scope capability hiányzó riportja NEM blokkol, de a kimenetben `not_in_scope` jelöléssel látszik | `ai_release_report_test.dart` |
-| A4 | A regresszió-osztályozás a Kör 14 küszöb-logikáját használja (nincs második, versengő küszöb) | `ai_release_report_test.dart` |
-| A5 | A riport minden metrikája korpusz-azonosítót hordoz | a séma + a teszt cellája |
-| A6 | A meglévő `analysis_evaluation_regression_test.dart` VÁLTOZATLANUL zöld | a §7 gate |
+| A1 | Egy `ga_scope: true` capability (MÉRVE ma: `audio_analysis_core`, `live_and_tuner`) előírt bizonyítéka hiányzik → nem-nulla kilépés, és a capability `missing` státusszal LÁTSZIK a kimenetben | `ai_release_report_test.dart` |
+| A2 | A riport `modelVersion`-je ≠ a `assets/ml/model_manifest.json` verziója → nem-nulla kilépés. **Két külön cella:** `models[].filename` → `training_run.identifier`, és `vision_models[].model_id` → `version` (R3). Harmadik cella: `modelId: "none"` olyan soron, amit a mátrix modellhez köt → nem-nulla | `ai_release_report_test.dart` |
+| A3 | `ga_scope: false` capability (MÉRVE ma: `computer_vision`, `offline_ai`, `ai_tutor`) hiányzó riportja NEM blokkol, és a kimenetben `not_in_scope` jelöléssel látszik. A `ga_scope` értéke a device-mátrixból JÖN: egy cella átírja a fixture-mátrixban az `ai_tutor`-t `ga_scope: true`-ra, és ugyanaz a bemenet ekkor BLOKKOL (ez bizonyítja, hogy nincs beégetett lista — ADR 0477 D1) | `ai_release_report_test.dart` |
+| A4 | Az osztályozás a `tool/compare_benchmarks.py` `classify` / `WARN_THRESHOLD` / `FAIL_THRESHOLD` neveit IMPORTÁLJA. **Gépi őr:** egy cella beolvassa a `tool/release/build_ai_report.py` forrását, és PIROS, ha az küszöb-literált (`0.05`, `0.10`, `5.0`, `10.0`) vagy saját `def classify` definíciót tartalmaz | `ai_release_report_test.dart` |
+| A5 | A riport minden metrikája `corpusId`, `buildSha`, `modelId`, `modelVersion` mezőt hordoz; bármelyik hiánya nem-nulla kilépés (négy külön cella) | a séma + `ai_release_report_test.dart` |
+| A6 | A `--profile` zárt szótár: `development` / `lab` / `production` mind elfogadott ÉS a kimenetbe kerül; ismeretlen érték → kilépés **2**. Egy cella bizonyítja, hogy ugyanaz a bemenet MINDHÁROM profilon UGYANAZT a kilépési kódot adja (ADR 0477 D6 — a profil nem lazít) | `ai_release_report_test.dart` |
+| A7 | A bizonyíték-mátrixban szereplő, de a device-mátrixban ismeretlen capability → nem-nulla kilépés (nem néma átugrás) | `ai_release_report_test.dart` |
+| A8 | A meglévő `analysis_evaluation_regression_test.dart` VÁLTOZATLANUL zöld | a §7 gate |
 
 **Küszöb-cellahármas (a Kör 14 ÖRÖKÖLT küszöbeire, itt csak ALKALMAZVA — figyelmeztetés 5%, hiba 10%, mindkét határ INKLUZÍV):** a küszöb **alatt** (4,9% romlás a baseline-hoz) → a riport `pass`; **pontosan rajta** (5,0%) → `warn`; a küszöb **fölött** (10,0% és felette) → `fail`, és az összesítő nem-nulla kóddal lép ki. A cellák bemenetét a teszt `python3 -c`-vel számolt értékekkel adja (baseline `0.800` → `0.7608` pass, `0.7600` warn, `0.7200` fail).
 
@@ -114,6 +209,10 @@ Az Offline AI és a Vision csak akkor kötelező bemenet, ha a GA-scope tartalma
 | Minden capability kötelezővé válik, így a `hold`-on álló Offline AI blokkolja a release-t | A3 |
 | Az összesítő saját, lazább küszöböt definiál | A4 |
 | A `fail` határ szigorú `>`-ként valósul meg, így a pontosan 10%-os romlás átcsúszik | a küszöb-cellahármas „fölött" cellája |
+| A `ga_scope` beégetett capability-listából jön, nem a device-mátrixból | A3 utolsó cellája (`ai_tutor` → `ga_scope: true` a fixture-ben) |
+| `development` profilon a hiány csak figyelmeztetés | A6 profil-invariancia cellája |
+| A mátrix ismeretlen capability-sorát az összesítő némán átugorja | A7 |
+| A `modelId: "none"` univerzális kiskapuvá válik | A2 harmadik cellája |
 
 **Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** vedd ki a kötelező-riport ellenőrzést, futtasd a §7 gate-et → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
 
@@ -123,11 +222,17 @@ Az Offline AI és a Vision csak akkor kötelező bemenet, ha a GA-scope tartalma
 tools/round-gate.sh test/tooling/ai_release_report_test.dart test/tooling/analysis_evaluation_regression_test.dart
 ```
 
-Az összesítő közvetlen futtatása (kimenet a §10-be):
+Az összesítő közvetlen futtatása (a TELJES kimenet és a kilépési kód a §10-be):
 
 ```bash
 python3 tool/release/build_ai_report.py --profile development --scope-file docs/release/ai-quality-gates.md
+echo "exit=$?"
 ```
+
+⚠ **Ez a futás a mai fán VÁRHATÓAN nem-nulla** (§0.0 R5): a két GA-scope
+AI-capabilityhez nincs beolvasható bizonyíték-dokumentum, és a D2 fail-closed
+ága ezt mondja ki. **A pirosat kitalált riport-dokumentummal elfedni tilos** —
+a §10-be a tényleges kimenet kerül, és ez a kör HELYES eredménye.
 
 ## 8. Implementációs sorrend
 
