@@ -10,6 +10,7 @@ import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/features/learn/providers/lesson_progress_provider.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../support/preference_store.dart';
 
@@ -37,6 +38,7 @@ Future<void> _pump(
   WidgetTester tester, {
   FeatureFlags? flags,
   GoRouter? router,
+  Locale locale = const Locale('en'),
 }) => tester.pumpWidget(
   ProviderScope(
     overrides: [
@@ -45,11 +47,14 @@ Future<void> _pump(
     ],
     child: router == null
         ? MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: LessonListScreen(now: DateTime(2026, 7, 9)),
           )
         : MaterialApp.router(
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             routerConfig: router,
@@ -114,6 +119,7 @@ void main() {
                   .read(lessonProgressProvider.notifier)
                   .record(tier[0].id, 0.85),
               builder: (_, _) => MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: LessonListScreen(now: DateTime(2026, 7, 9)),
@@ -211,4 +217,22 @@ void main() {
 
     expect(router.state.uri.path, AppRoutes.songTrainerLibrary);
   });
+
+  for (final locale in [const Locale('en'), const Locale('hu')]) {
+    testWidgets('E15-R04: textScaler 2.0 renders without overflow '
+        '(${locale.languageCode})', (tester) async {
+      tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(
+        tester,
+        flags: _flags(
+          practiceEngineV2Enabled: true,
+          songTrainerV2Enabled: true,
+        ),
+        locale: locale,
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

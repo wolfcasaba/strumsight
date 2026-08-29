@@ -4,8 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_palette.dart';
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../streak/public.dart';
 import '../providers/lesson_progress_provider.dart';
@@ -23,6 +22,7 @@ class LessonListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
     final daily = Lessons.fromDailyChallenge(DailyChallenge.forDay(today));
     final flags = ref.watch(appConfigProvider).flags;
@@ -76,11 +76,11 @@ class LessonListScreen extends ConsumerWidget {
               _ContinueCard(lesson: continueLesson),
               const SizedBox(height: 18),
             ],
-            _label(l10n.learnTodaysChallenge),
+            _label(colors, l10n.learnTodaysChallenge),
             _LessonTile(lesson: daily, unlocked: true, stars: 0),
             for (final tier in Difficulty.values) ...[
               const SizedBox(height: 18),
-              _label(_tierName(l10n, tier)),
+              _label(colors, _tierName(l10n, tier)),
               ..._tierTiles(tier, progress),
             ],
           ],
@@ -111,15 +111,19 @@ class LessonListScreen extends ConsumerWidget {
     ];
   }
 
-  Widget _label(String text) => Padding(
-    padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
+  Widget _label(SsColorScheme colors, String text) => Padding(
+    padding: const EdgeInsets.only(
+      left: SsSpacing.space1,
+      bottom: SsSpacing.space2,
+      top: SsSpacing.space1,
+    ),
     child: Text(
       text.toUpperCase(),
-      style: const TextStyle(
+      style: TextStyle(
         fontWeight: FontWeight.w700,
         fontSize: 12,
         letterSpacing: 1.2,
-        color: AppColors.primary,
+        color: colors.brand,
       ),
     ),
   );
@@ -138,27 +142,27 @@ class _V2EntryCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Card(
-    color: context.palette.surface,
-    margin: EdgeInsets.zero,
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      leading: CircleAvatar(
-        backgroundColor: AppColors.primary.withValues(alpha: 0.14),
-        child: Icon(icon, color: AppColors.primary),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontWeight: FontWeight.w800,
-          fontFamily: 'Montserrat',
-          fontSize: 16,
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Card(
+      color: colors.surface,
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: SsSpacing.space4,
+          vertical: SsSpacing.space2,
         ),
+        leading: CircleAvatar(
+          backgroundColor: colors.brand.withValues(alpha: 0.14),
+          child: Icon(icon, color: colors.brand),
+        ),
+        title: Text(title, style: typography.titleMedium),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
       ),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap,
-    ),
-  );
+    );
+  }
 }
 
 /// The hero "pick up where you left off" card — filled with the brand colour
@@ -171,35 +175,31 @@ class _ContinueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Card(
-      color: AppColors.primary.withValues(alpha: 0.14),
+      color: colors.brand.withValues(alpha: 0.14),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(SsRadius.sm),
+        side: BorderSide(color: colors.brand.withValues(alpha: 0.5)),
       ),
       margin: EdgeInsets.zero,
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: const CircleAvatar(
-          backgroundColor: AppColors.primary,
-          child: Icon(Icons.play_arrow, color: Colors.white),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: SsSpacing.space4,
+          vertical: SsSpacing.space2,
+        ),
+        leading: CircleAvatar(
+          backgroundColor: colors.brand,
+          child: Icon(Icons.play_arrow, color: colors.onBrand),
         ),
         title: Text(
           l10n.learnContinue,
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-            letterSpacing: 1.2,
-            color: AppColors.primary,
-          ),
+          style: typography.labelLarge.copyWith(color: colors.brand),
         ),
         subtitle: Text(
           lesson.name,
-          style: const TextStyle(
-            fontWeight: FontWeight.w800,
-            fontFamily: 'Montserrat',
-            fontSize: 16,
-          ),
+          style: typography.titleMedium.copyWith(color: colors.textPrimary),
         ),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(builder: (_) => LearnScreen(lesson: lesson)),
@@ -229,6 +229,8 @@ class _LessonTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final chords = lesson.chordSequence.join(' · ');
     final subtitle = (!unlocked && unlockedBy != null)
         ? l10n.learnLockedReason(unlockedBy!.name)
@@ -239,28 +241,27 @@ class _LessonTile extends StatelessWidget {
           ].join(' · ');
     return Card(
       key: ValueKey('lesson-tile-${lesson.id}'),
-      color: context.palette.surface,
-      margin: const EdgeInsets.only(bottom: 10),
+      color: colors.surface,
+      margin: const EdgeInsets.only(bottom: SsSpacing.space3),
       child: ListTile(
         enabled: unlocked,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: SsSpacing.space4,
+          vertical: SsSpacing.space2,
+        ),
         leading: CircleAvatar(
-          backgroundColor:
-              (unlocked ? AppColors.primary : AppColors.confidenceLow)
-                  .withValues(alpha: 0.15),
+          backgroundColor: (unlocked ? colors.brand : colors.confidenceLow)
+              .withValues(alpha: 0.15),
           child: Icon(
             unlocked ? Icons.play_arrow : Icons.lock,
-            color: unlocked ? AppColors.primary : AppColors.confidenceLow,
+            color: unlocked ? colors.brand : colors.confidenceLow,
           ),
         ),
-        title: Text(
-          lesson.name,
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontFamily: 'Montserrat',
-          ),
+        title: Text(lesson.name, style: typography.titleMedium),
+        subtitle: Text(
+          subtitle,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
         ),
-        subtitle: Text(subtitle),
         trailing: unlocked && stars > 0 ? _Stars(stars: stars) : null,
         // `enabled: false` already disables the tap gesture entirely — the
         // lock reason is stated in [subtitle] instead, ALWAYS visible rather
@@ -283,15 +284,18 @@ class _Stars extends StatelessWidget {
   final int stars;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      for (var i = 0; i < 3; i++)
-        Icon(
-          i < stars ? Icons.star : Icons.star_border,
-          size: 18,
-          color: AppColors.secondary,
-        ),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < 3; i++)
+          Icon(
+            i < stars ? Icons.star : Icons.star_border,
+            size: 18,
+            color: colors.info,
+          ),
+      ],
+    );
+  }
 }

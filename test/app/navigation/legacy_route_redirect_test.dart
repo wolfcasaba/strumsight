@@ -32,6 +32,7 @@ import 'package:strumsight/features/streak/screens/streak_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
@@ -43,6 +44,7 @@ class _RouterTestApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
+      theme: SsLightTheme.data(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: ref.watch(routerProvider),

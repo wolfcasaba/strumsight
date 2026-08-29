@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../share/public.dart';
 import '../model/lesson.dart';
@@ -72,7 +73,7 @@ class _LessonScorePreviewScreenState extends State<LessonScorePreviewScreen> {
             Expanded(
               child: Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(SsSpacing.space5),
                   child: FittedBox(
                     child: RepaintBoundary(
                       key: _cardKey,
@@ -90,20 +91,20 @@ class _LessonScorePreviewScreenState extends State<LessonScorePreviewScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              padding: const EdgeInsets.fromLTRB(
+                SsSpacing.space5,
+                SsSpacing.space1,
+                SsSpacing.space5,
+                SsSpacing.space4,
+              ),
               child: Builder(
-                builder: (btnCtx) => FilledButton.icon(
-                  onPressed: _busy ? null : () => _share(btnCtx),
-                  icon: _busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.ios_share, size: 20),
-                  label: Text(l10n.shareCardButton),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
+                builder: (btnCtx) => SizedBox(
+                  height: 52,
+                  child: SsButton(
+                    label: l10n.shareCardButton,
+                    icon: Icons.ios_share,
+                    loading: _busy,
+                    onPressed: () => _share(btnCtx),
                   ),
                 ),
               ),

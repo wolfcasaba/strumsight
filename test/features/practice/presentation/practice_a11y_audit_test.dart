@@ -50,6 +50,7 @@ import 'package:strumsight/features/practice/presentation/practice_route_args.da
 import 'package:strumsight/features/streak/daily_challenge.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../../support/preference_store.dart';
 
@@ -119,6 +120,7 @@ Future<void> _pump(
     ProviderScope(
       overrides: [...preferenceOverrides(), ...overrides],
       child: MaterialApp(
+        theme: SsLightTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: child,
@@ -657,6 +659,7 @@ void main() {
       ProviderScope(
         overrides: preferenceOverrides(),
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           locale: locale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

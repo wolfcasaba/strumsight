@@ -2787,6 +2787,7 @@
   "practiceHistoryErrorBody": "Hiba történt a helyi előzmények olvasásakor.",
   "practiceHistoryErrorTitle": "Az előzmények nem tölthetők be",
   "practiceHistoryFilterAll": "Minden mód",
+  "practiceHistoryLoading": "Gyakorlási előzmények betöltése…",
   "practiceHistoryRowSubtitle": "{resolved}/{total} cél",
   "@practiceHistoryRowSubtitle": {
     "placeholders": {
@@ -3023,6 +3024,7 @@
   },
   "practiceResultTimingTitle": "Időzítés",
   "practiceResultTitle": "Gyakorlat eredménye",
+  "practiceResultUnavailableAction": "Vissza a gyakorló hubra",
   "practiceResultUnavailableBody": "Futtass le egy gyakorlatot az eredmény megtekintéséhez.",
   "practiceResultUnavailableTitle": "Nincs megjeleníthető eredmény",
   "practiceRhythmOnlyBodyNoDirection": "Tempózz a 4/4-re. Az akkord- és irány-dimenzió itt nem pontozódik.",

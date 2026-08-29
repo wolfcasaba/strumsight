@@ -12,6 +12,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/design_system/public.dart';
+import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_mode.dart';
@@ -32,53 +34,93 @@ class PracticeHistoryScreen extends ConsumerWidget {
         child: switch (async) {
           AsyncData(:final value) => value.fold(
             onSuccess: (entries) => _HistoryBody(entries: entries),
-            onFailure: (_) => const _HistoryError(),
+            onFailure: (failure) => _HistoryError(
+              failure: failure,
+              onRetry: () => ref.invalidate(practiceHistoryEntriesProvider),
+            ),
           ),
-          AsyncError() => const _HistoryError(),
-          _ => const Center(child: CircularProgressIndicator()),
+          // A raw future exception (not an `AppResult.failure`) should never
+          // happen — `LocalPracticeHistoryRepository.load()` catches every
+          // storage error and returns it as a value — but if it ever does,
+          // this screen only ever reads local storage, so a storage failure
+          // is the accurate default (E15-R04 review MAJOR-2).
+          AsyncError() => _HistoryError(
+            failure: const StorageFailure(code: FailureCode.storageRead),
+            onRetry: () => ref.invalidate(practiceHistoryEntriesProvider),
+          ),
+          _ => const _HistoryLoading(),
         },
       ),
     );
   }
 }
 
-class _HistoryError extends StatelessWidget {
-  const _HistoryError();
+class _HistoryLoading extends StatelessWidget {
+  const _HistoryLoading();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: Theme.of(context).colorScheme.error,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            l10n.practiceHistoryErrorTitle,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.practiceHistoryErrorBody,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            child: Text(l10n.practiceHistoryErrorAction),
-          ),
-        ],
+    return Semantics(
+      container: true,
+      label: l10n.practiceHistoryLoading,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(SsSpacing.space4),
+        itemCount: 6,
+        separatorBuilder: (_, _) => const SizedBox(height: SsSpacing.space2),
+        itemBuilder: (_, _) =>
+            const SsSkeleton(width: double.infinity, height: 72),
       ),
     );
   }
+}
+
+class _HistoryError extends StatelessWidget {
+  const _HistoryError({required this.failure, required this.onRetry});
+  final AppFailure failure;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SsFailureState(
+      presentation: SsFailurePresentation.from(
+        _HistoryFailureL10n(l10n),
+        failure,
+      ),
+      onRetry: onRetry,
+    );
+  }
+}
+
+/// [SsFailurePresentation.from] decides the title/message from
+/// [AppFailure.code] alone, and its actions from [AppFailure.retryable] —
+/// there is no override parameter, and its constructor is private to
+/// `failure_presentation.dart`. This screen keeps its own established copy
+/// (`practiceHistoryErrorTitle`/`Body`) instead of the generic storage
+/// strings by routing only those two lookups (plus the two action labels a
+/// storage failure can produce) through the screen's ARB keys — every other
+/// getter delegates to the real [_inner] localisations, unused here since
+/// this screen only ever shows storage failures (E15-R04 review MAJOR-1).
+class _HistoryFailureL10n implements AppLocalizations {
+  const _HistoryFailureL10n(this._inner);
+  final AppLocalizations _inner;
+
+  @override
+  String get dsFailureStorageTitle => _inner.practiceHistoryErrorTitle;
+
+  @override
+  String get dsFailureStorageMessage => _inner.practiceHistoryErrorBody;
+
+  @override
+  String get dsFailureRetryAction => _inner.dsFailureRetryAction;
+
+  @override
+  String get dsFailureContactSupportAction =>
+      _inner.dsFailureContactSupportAction;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _HistoryEmpty extends StatelessWidget {
@@ -87,35 +129,12 @@ class _HistoryEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.history,
-            size: 48,
-            color: Theme.of(context).colorScheme.secondary,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            l10n.practiceHistoryEmptyTitle,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.practiceHistoryEmptyBody,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            child: Text(l10n.practiceHistoryEmptyAction),
-          ),
-        ],
-      ),
+    return SsEmptyState(
+      icon: Icons.history,
+      title: l10n.practiceHistoryEmptyTitle,
+      message: l10n.practiceHistoryEmptyBody,
+      actionLabel: l10n.practiceHistoryEmptyAction,
+      onAction: () => Navigator.of(context).maybePop(),
     );
   }
 }
@@ -142,9 +161,10 @@ class _HistoryBody extends ConsumerWidget {
           child: filtered.isEmpty
               ? const _HistoryEmpty()
               : ListView.separated(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(SsSpacing.space4),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: SsSpacing.space2),
                   itemBuilder: (context, index) =>
                       _HistoryRow(entry: filtered[index]),
                 ),
@@ -170,11 +190,16 @@ class _ModeFilterRow extends ConsumerWidget {
     final notifier = ref.read(practiceHistoryModeFilterProvider.notifier);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.fromLTRB(
+        SsSpacing.space4,
+        SsSpacing.space3,
+        SsSpacing.space4,
+        SsSpacing.space1,
+      ),
       child: Row(
         children: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: SsSpacing.space2),
             child: ChoiceChip(
               label: Text(l10n.practiceHistoryFilterAll),
               selected: current == null,
@@ -183,7 +208,7 @@ class _ModeFilterRow extends ConsumerWidget {
           ),
           for (final mode in present)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: SsSpacing.space2),
               child: ChoiceChip(
                 label: Text(practiceModeLabel(l10n, mode)),
                 selected: current == mode,
@@ -203,30 +228,56 @@ class _HistoryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final mode = PracticeMode.values.firstWhere(
       (m) => m.code == entry.modeCode,
       orElse: () => PracticeMode.strumPattern,
     );
-    return Card(
-      child: ListTile(
-        minVerticalPadding: 14,
-        title: Text(
-          entry.displayTitle.isEmpty
-              ? practiceModeLabel(l10n, mode)
-              : entry.displayTitle,
-        ),
-        subtitle: Text(
-          entry.totalTargets > 0
-              ? l10n.practiceHistoryRowSubtitle(
-                  entry.resolvedTargets,
-                  entry.totalTargets,
-                )
-              : practiceModeLabel(l10n, mode),
-        ),
-        trailing: const Icon(Icons.chevron_right),
+    return SsSurface(
+      child: InkWell(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => PracticeResultScreen(entry: entry),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: SsSpacing.space4,
+            vertical: SsSpacing.space3,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      entry.displayTitle.isEmpty
+                          ? practiceModeLabel(l10n, mode)
+                          : entry.displayTitle,
+                      style: typography.labelLarge.copyWith(
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: SsSpacing.space1),
+                    Text(
+                      entry.totalTargets > 0
+                          ? l10n.practiceHistoryRowSubtitle(
+                              entry.resolvedTargets,
+                              entry.totalTargets,
+                            )
+                          : practiceModeLabel(l10n, mode),
+                      style: typography.bodyMedium.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: colors.textSecondary),
+            ],
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/config/app_config.dart';
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/public.dart';
@@ -438,6 +439,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
 
   void _showSummary(ScoreSnapshot snap) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final passed = _scorer?.passed ?? false;
     // The finish→next retention loop (round 92): a pass offers the curriculum
     // successor; a fail keeps the focus on "Play again". One-off lessons
@@ -454,21 +457,13 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
           children: [
             Text(
               '${(snap.accuracy * 100).round()}%',
-              style: const TextStyle(
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w900,
-                fontSize: 48,
-                color: AppColors.primary,
-              ),
+              style: typography.displayScore.copyWith(color: colors.brand),
             ),
             if (snap.score > 0)
               Text(
                 '${snap.score} ${l10n.learnScore}'
                 '${snap.perfect > 0 ? ' · ${snap.perfect} ${l10n.learnPerfect}' : ''}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                ),
+                style: typography.labelLarge.copyWith(color: colors.brand),
               ),
             Text(l10n.learnScoreLine(snap.hits, snap.total, snap.maxCombo)),
             if (snap.hasChords)
@@ -631,6 +626,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final lesson = _lesson;
     final countIn = LessonTiming.countInNumber(_playhead, _countInBeats);
     final chordsUsed = lesson.chordSequence.join(' · ');
@@ -642,7 +639,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.school_outlined),
-            color: _easy ? AppColors.primary : null,
+            color: _easy ? colors.brand : null,
             tooltip: l10n.learnEasyMode,
             onPressed: () {
               setState(() => _easy = !_easy);
@@ -651,7 +648,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
           ),
           IconButton(
             icon: const Icon(Icons.music_note),
-            color: _jam ? AppColors.primary : null,
+            color: _jam ? colors.brand : null,
             tooltip: l10n.learnJam,
             onPressed: () {
               setState(() => _jam = !_jam);
@@ -691,7 +688,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                       else if (chordsUsed.isNotEmpty)
                         Text(
                           '${l10n.learnChords}: $chordsUsed',
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: typography.titleMedium.copyWith(
+                            color: colors.textPrimary,
+                          ),
                         ),
                       // Dynamic difficulty (016b P4, r154): OFFER a switch —
                       // down after a fail streak, up when Easy is aced. Quiet
@@ -771,7 +770,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                       const SizedBox(height: 6),
                       Text(
                         '${_bpm.round()} BPM',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: typography.labelLarge.copyWith(
+                          color: colors.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       // scaleDown: the chip row is wider than a 320-wide screen.
@@ -782,7 +783,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                           children: [
                             Text(
                               '${l10n.learnSpeed}  ',
-                              style: Theme.of(context).textTheme.bodySmall,
+                              style: typography.labelLarge.copyWith(
+                                color: colors.textSecondary,
+                              ),
                             ),
                             for (final s in _speeds) ...[
                               ChoiceChip(
@@ -796,18 +799,12 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                         ),
                       ),
                       const Spacer(),
-                      FilledButton.icon(
-                        onPressed: _toggle,
-                        icon: Icon(
-                          _playing ? Icons.pause : Icons.play_arrow,
-                          size: 24,
-                        ),
-                        label: Text(
-                          _playing ? l10n.learnPause : l10n.learnPlay,
-                        ),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(56),
-                          backgroundColor: AppColors.primary,
+                      SizedBox(
+                        height: 56,
+                        child: SsButton(
+                          label: _playing ? l10n.learnPause : l10n.learnPlay,
+                          icon: _playing ? Icons.pause : Icons.play_arrow,
+                          onPressed: _toggle,
                         ),
                       ),
                     ],
@@ -837,19 +834,28 @@ class _DdBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.school_outlined,
-            size: 16,
-            color: AppColors.secondary,
+          Icon(Icons.school_outlined, size: 16, color: colors.info),
+          const SizedBox(width: SsSpacing.space2),
+          Flexible(
+            child: Text(
+              text,
+              style: typography.labelLarge.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
           ),
-          const SizedBox(width: 6),
-          Flexible(child: Text(text, style: const TextStyle(fontSize: 12))),
-          TextButton(onPressed: onSwitch, child: Text(action)),
+          SsButton(
+            label: action,
+            variant: SsButtonVariant.tertiary,
+            onPressed: onSwitch,
+          ),
         ],
       ),
     );
@@ -863,6 +869,8 @@ class _ScoreHud extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     // Combo shows its live multiplier (the reward chain) once it kicks in — a
     // 🔥 signals "you're on a hot streak".
     final combo = score.multiplier > 1
@@ -871,25 +879,32 @@ class _ScoreHud extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _stat('${score.score}', l10n.learnScore),
-        _stat(combo, l10n.learnCombo),
-        _stat('${(score.accuracy * 100).round()}%', l10n.learnAccuracy),
+        _stat(context, '${score.score}', l10n.learnScore, colors, typography),
+        _stat(context, combo, l10n.learnCombo, colors, typography),
+        _stat(
+          context,
+          '${(score.accuracy * 100).round()}%',
+          l10n.learnAccuracy,
+          colors,
+          typography,
+        ),
       ],
     );
   }
 
-  Widget _stat(String value, String label) => Column(
+  Widget _stat(
+    BuildContext context,
+    String value,
+    String label,
+    SsColorScheme colors,
+    SsTypography typography,
+  ) => Column(
     children: [
+      Text(value, style: typography.metricMedium.copyWith(color: colors.brand)),
       Text(
-        value,
-        style: const TextStyle(
-          fontFamily: 'Montserrat',
-          fontWeight: FontWeight.w800,
-          fontSize: 20,
-          color: AppColors.primary,
-        ),
+        label,
+        style: typography.labelLarge.copyWith(color: colors.textSecondary),
       ),
-      Text(label, style: const TextStyle(fontSize: 10, letterSpacing: 0.5)),
     ],
   );
 }
@@ -907,15 +922,17 @@ class _FeedbackFlash extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     // Hits carry a timing verdict (PERFECT/GOOD/EARLY/LATE); wrong/miss stay
     // gentle (safe-failure). Early/late add an arrow hint at which side.
     final (text, color) = switch (result) {
       HitResult.hit => switch (timing) {
-        Timing.perfect => (l10n.learnPerfect, AppColors.confidenceHigh),
-        Timing.good => (l10n.learnGood, AppColors.confidenceHigh),
-        Timing.early => ('${l10n.learnEarly} ⟵', AppColors.confidenceMid),
-        Timing.late => ('⟶ ${l10n.learnLate}', AppColors.confidenceMid),
-        null => (l10n.learnHit, AppColors.confidenceHigh),
+        Timing.perfect => (l10n.learnPerfect, colors.confidenceHigh),
+        Timing.good => (l10n.learnGood, colors.confidenceHigh),
+        Timing.early => ('${l10n.learnEarly} ⟵', colors.confidenceMedium),
+        Timing.late => ('⟶ ${l10n.learnLate}', colors.confidenceMedium),
+        null => (l10n.learnHit, colors.confidenceHigh),
       },
       // The badge coaches: which way the stroke SHOULD have gone (016b P6).
       HitResult.wrongDirection => (
@@ -924,22 +941,15 @@ class _FeedbackFlash extends StatelessWidget {
           StrumDirection.up => '${l10n.learnWrongWay} ↑',
           null => l10n.learnWrongWay,
         },
-        AppColors.confidenceMid,
+        colors.confidenceMedium,
       ),
-      HitResult.missed => (l10n.learnMiss, AppColors.confidenceLow),
+      HitResult.missed => (l10n.learnMiss, colors.confidenceLow),
     };
     return Align(
       alignment: Alignment.topCenter,
       child: Padding(
         padding: const EdgeInsets.only(top: 6),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 16,
-            color: color,
-          ),
-        ),
+        child: Text(text, style: typography.titleMedium.copyWith(color: color)),
       ),
     );
   }

@@ -17,6 +17,7 @@ import 'package:strumsight/features/practice/domain/repository/practice_catalog_
 import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
 import 'package:strumsight/features/streak/daily_challenge.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../../support/preference_store.dart';
 
@@ -132,6 +133,7 @@ Widget _host({
       practiceCatalogRepositoryProvider.overrideWithValue(repository),
     ],
     child: MaterialApp(
+      theme: SsLightTheme.data(),
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -316,4 +318,41 @@ void main() {
     await tester.pump();
     expect(find.text('Gyakorló hub'), findsOneWidget);
   });
+
+  // E15-R04 — design-system migration: textScaler 2.0, en + hu, populated
+  // and empty catalog, must render without overflow on the migrated
+  // SsEmptyState / SsSurface visual layer.
+  for (final locale in [const Locale('en'), const Locale('hu')]) {
+    testWidgets(
+      'E15-R04: textScaler 2.0 renders without overflow — populated catalog '
+      '(${locale.languageCode})',
+      (tester) async {
+        tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(
+          tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+        );
+        await tester.pumpWidget(
+          _host(repository: const _FixtureRepository(), locale: locale),
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'E15-R04: textScaler 2.0 renders without overflow — empty catalog '
+      '(${locale.languageCode})',
+      (tester) async {
+        tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(
+          tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+        );
+        await tester.pumpWidget(
+          _host(repository: const _EmptyRepository(), locale: locale),
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

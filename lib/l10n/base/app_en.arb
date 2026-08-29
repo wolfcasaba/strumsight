@@ -1010,6 +1010,7 @@
   "practiceResultFinishInterrupted": "Session was interrupted",
   "practiceResultUnavailableTitle": "No result to show",
   "practiceResultUnavailableBody": "Finish a practice session to see the breakdown.",
+  "practiceResultUnavailableAction": "Back to practice hub",
   "practiceResultDimensionSemantic": "{label}: {value}",
   "@practiceResultDimensionSemantic": {
     "placeholders": {
@@ -1090,6 +1091,7 @@
   "practiceResultHistoryCta": "History",
   "practiceResultSpeedBuilderCta": "Speed Builder",
   "practiceHistoryTitle": "Practice history",
+  "practiceHistoryLoading": "Loading practice history…",
   "practiceHistoryEmptyTitle": "No sessions yet",
   "practiceHistoryEmptyBody": "Finish a practice session to see it here.",
   "practiceHistoryEmptyAction": "Back",

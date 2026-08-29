@@ -18,10 +18,57 @@ import 'package:strumsight/features/practice/domain/model/practice_history_entry
 import 'package:strumsight/features/practice/domain/model/practice_metric_snapshot.dart';
 import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
 import 'package:strumsight/features/practice/domain/model/practice_source.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/features/practice/domain/repository/practice_history_repository.dart';
+import 'package:strumsight/features/practice/data/local_practice_history_repository.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_history_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../support/preference_store.dart';
+
+class _FailingHistoryRepository implements PracticeHistoryRepository {
+  const _FailingHistoryRepository();
+
+  @override
+  Future<AppResult<List<PracticeHistoryEntry>>> load() async =>
+      const AppResult.failure(StorageFailure(code: FailureCode.storageRead));
+
+  @override
+  Future<AppResult<void>> save(PracticeHistoryEntry entry) async =>
+      const AppResult.success(null);
+
+  @override
+  Future<AppResult<void>> clear() async => const AppResult.success(null);
+}
+
+/// A retryable storage failure that recovers on the second `load()` —
+/// proves the retry button (E15-R04 review MAJOR-2) actually reloads the
+/// provider, not just that the button renders.
+class _RetryableThenSucceedsRepository implements PracticeHistoryRepository {
+  _RetryableThenSucceedsRepository({required this.succeedsWith});
+  final List<PracticeHistoryEntry> succeedsWith;
+  int loadCount = 0;
+
+  @override
+  Future<AppResult<List<PracticeHistoryEntry>>> load() async {
+    loadCount++;
+    if (loadCount == 1) {
+      return const AppResult.failure(
+        StorageFailure(code: FailureCode.storageRead, retryable: true),
+      );
+    }
+    return AppResult.success(succeedsWith);
+  }
+
+  @override
+  Future<AppResult<void>> save(PracticeHistoryEntry entry) async =>
+      const AppResult.success(null);
+
+  @override
+  Future<AppResult<void>> clear() async => const AppResult.success(null);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +80,8 @@ void main() {
         // client, no network provider of any kind. The screen still
         // renders the full list from this alone (A4).
         overrides: preferenceOverrides(seed),
-        child: const MaterialApp(
+        child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: PracticeHistoryScreen(),
@@ -129,6 +177,116 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Offline fixture'), findsOneWidget);
     });
+  });
+
+  group('E15-R04 — design-system migration', () {
+    Future<void> pumpWithRepository(
+      WidgetTester tester,
+      PracticeHistoryRepository repository, {
+      Locale locale = const Locale('en'),
+    }) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...preferenceOverrides(),
+            practiceHistoryRepositoryProvider.overrideWithValue(repository),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const PracticeHistoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a NON-retryable load failure (retryable: false) renders the '
+        "screen's own error copy, and NO retry action — the design system's "
+        'retry decision comes from the real AppFailure, not a fabricated one '
+        '(E15-R04 review MAJOR-2)', (tester) async {
+      await pumpWithRepository(tester, const _FailingHistoryRepository());
+      expect(tester.takeException(), isNull);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      // MAJOR-1: the screen's own copy survives the SsFailureState
+      // migration instead of the generic "Storage problem" mapping.
+      expect(find.text(l10n.practiceHistoryErrorTitle), findsOneWidget);
+      expect(find.text(l10n.practiceHistoryErrorBody), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('ss-failure-state-retry')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a RETRYABLE load failure (retryable: true) renders the retry '
+        'action, and tapping it reloads (E15-R04 review MAJOR-2)', (
+      tester,
+    ) async {
+      final repository = _RetryableThenSucceedsRepository(
+        succeedsWith: [_entry('retry-1', 'Recovered entry')],
+      );
+      await pumpWithRepository(tester, repository);
+      expect(tester.takeException(), isNull);
+
+      final retryButton = find.byKey(const ValueKey('ss-failure-state-retry'));
+      expect(retryButton, findsOneWidget);
+      expect(repository.loadCount, 1);
+
+      await tester.tap(retryButton);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(repository.loadCount, greaterThanOrEqualTo(2));
+      expect(find.text('Recovered entry'), findsOneWidget);
+    });
+
+    for (final locale in [const Locale('en'), const Locale('hu')]) {
+      testWidgets('textScaler 2.0 renders the populated list without overflow '
+          '(${locale.languageCode})', (tester) async {
+        tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(
+          tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+        );
+        final entryJson = const PracticeHistorySerializer().toJson(
+          _entry('scale-1', 'Scale fixture'),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: preferenceOverrides(<String, Object>{
+              StorageKeys.practiceHistoryV2: jsonEncode(<String, Object?>{
+                'schemaVersion': 1,
+                'items': [entryJson],
+              }),
+            }),
+            child: MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const PracticeHistoryScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('textScaler 2.0 renders the SsFailureState without overflow '
+          '(${locale.languageCode})', (tester) async {
+        tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(
+          tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+        );
+        await pumpWithRepository(
+          tester,
+          const _FailingHistoryRepository(),
+          locale: locale,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 }
 
