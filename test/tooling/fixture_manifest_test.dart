@@ -208,14 +208,8 @@ void main() {
       );
     });
 
-    test('the literal string "unknown" is NOT treated as a valid license — '
-        'it is a non-empty string, so it must be caught by a review process, '
-        'not this automated cell; this cell only guards the empty/absent '
-        'case the checker enforces mechanically', () {
-      // Documents the D4 boundary: the checker mechanically enforces
-      // non-empty license/source; a *deceptively* filled-in "unknown" value
-      // is a human review concern (§0 STOP-protocol), not a string the
-      // checker can distinguish from a real license name.
+    test('the literal string "unknown" is a hard failure, not a valid '
+        'license — a placeholder must not pass as real provenance (D4)', () {
       final projectRoot = _newFixtureProject();
       const contents = '{"a":1}';
       _writeFixtureFile(projectRoot, 'test/fixtures/data.json', contents);
@@ -230,7 +224,66 @@ void main() {
 
       final report = checkFixtureManifest(projectRoot: projectRoot);
 
-      expect(report.isClean, isTrue, reason: report.format());
+      expect(report.isClean, isFalse, reason: report.format());
+      expect(
+        report.issues.map((issue) => issue.kind),
+        contains(FixtureManifestIssueKind.placeholderProvenance),
+      );
+    });
+
+    test('the literal string "n/a" is a hard failure as a source, not a '
+        'valid provenance value (D4)', () {
+      final projectRoot = _newFixtureProject();
+      const contents = '{"a":1}';
+      _writeFixtureFile(projectRoot, 'test/fixtures/data.json', contents);
+      _writeManifest(projectRoot, [
+        _entry(
+          path: 'test/fixtures/data.json',
+          bytes: contents.length,
+          sha256Hex: _sha256Of(contents),
+          source: 'n/a',
+        ),
+      ]);
+
+      final report = checkFixtureManifest(projectRoot: projectRoot);
+
+      expect(report.isClean, isFalse, reason: report.format());
+      expect(
+        report.issues.map((issue) => issue.kind),
+        contains(FixtureManifestIssueKind.placeholderProvenance),
+      );
+    });
+
+    test('every placeholder in placeholderProvenanceValues is rejected as a '
+        'license, in original and mixed case', () {
+      for (final placeholder in placeholderProvenanceValues) {
+        for (final value in {placeholder, _shout(placeholder)}) {
+          final projectRoot = _newFixtureProject();
+          const contents = '{"a":1}';
+          _writeFixtureFile(projectRoot, 'test/fixtures/data.json', contents);
+          _writeManifest(projectRoot, [
+            _entry(
+              path: 'test/fixtures/data.json',
+              bytes: contents.length,
+              sha256Hex: _sha256Of(contents),
+              license: value,
+            ),
+          ]);
+
+          final report = checkFixtureManifest(projectRoot: projectRoot);
+
+          expect(
+            report.isClean,
+            isFalse,
+            reason: 'license "$value" should be rejected: ${report.format()}',
+          );
+          expect(
+            report.issues.map((issue) => issue.kind),
+            contains(FixtureManifestIssueKind.placeholderProvenance),
+            reason: 'license "$value" should be rejected',
+          );
+        }
+      }
     });
 
     test('a missing source/provenance field is flagged independently of '
@@ -558,6 +611,11 @@ Map<String, Object?> _entry({
 
 String _sha256Of(String contents) =>
     sha256.convert(utf8.encode(contents)).toString();
+
+/// Mixed-case variant of [value] (e.g. `unknown` -> `Unknown`) to prove the
+/// placeholder check normalizes case, not just the exact stored spelling.
+String _shout(String value) =>
+    value.isEmpty ? value : value[0].toUpperCase() + value.substring(1);
 
 List<int> _copyWithFlippedFirstByte(List<int> bytes) {
   final mutated = List<int>.from(bytes);

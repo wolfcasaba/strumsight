@@ -15,6 +15,22 @@ const _sha256Pattern = r'^[0-9a-f]{64}$';
 /// from any checkout, not tied to the generating machine's home directory.
 const machinePathFragments = <String>['/home/', '/Users/', r'C:\'];
 
+/// Normalized (trim + lowercase) `license`/`source` values that are never
+/// acceptable provenance (ADR 0473 D4): an unknown licence must stop the
+/// round, not be papered over with a placeholder string.
+const placeholderProvenanceValues = <String>{
+  'unknown',
+  'unspecified',
+  'n/a',
+  'na',
+  'tbd',
+  'todo',
+  'none',
+  '-',
+  '?',
+  'fixme',
+};
+
 /// The kinds of fixture-manifest failures this checker enforces.
 enum FixtureManifestIssueKind {
   invalidManifestJson,
@@ -25,6 +41,7 @@ enum FixtureManifestIssueKind {
   machinePath,
   missingLicense,
   missingSource,
+  placeholderProvenance,
   containsUserData,
   entryMissingFromDisk,
   fixtureMissingManifestEntry,
@@ -309,6 +326,18 @@ FixtureManifestEntry? _readEntry(
         message: 'entry has no license',
       ),
     );
+  } else if (placeholderProvenanceValues.contains(
+    license.trim().toLowerCase(),
+  )) {
+    issues.add(
+      FixtureManifestIssue(
+        kind: FixtureManifestIssueKind.placeholderProvenance,
+        path: path,
+        message:
+            'entry license "$license" is a placeholder, not a real '
+            'licence — resolve the actual licence or stop the round',
+      ),
+    );
   }
   final source = raw['source'];
   if (source is! String || source.trim().isEmpty) {
@@ -317,6 +346,18 @@ FixtureManifestEntry? _readEntry(
         kind: FixtureManifestIssueKind.missingSource,
         path: path,
         message: 'entry has no source/provenance',
+      ),
+    );
+  } else if (placeholderProvenanceValues.contains(
+    source.trim().toLowerCase(),
+  )) {
+    issues.add(
+      FixtureManifestIssue(
+        kind: FixtureManifestIssueKind.placeholderProvenance,
+        path: path,
+        message:
+            'entry source "$source" is a placeholder, not real provenance '
+            '— resolve the actual source or stop the round',
       ),
     );
   }

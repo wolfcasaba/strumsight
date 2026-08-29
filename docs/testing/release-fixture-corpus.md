@@ -73,11 +73,15 @@ listáját hiszi el (D1). Mért darabszám 2026-08-29-én: **48**.
   szövegén szkenneli, a parse-olt mezőktől függetlenül.
 - `sha256` — a fájl TARTALMÁNAK checksuma (`package:crypto`), nem méret- vagy
   névegyezés (D3).
-- `license` / `source` — mindkettő kötelező, nem üres string. Ismeretlen
-  licenc esetén a helyes válasz a `stopped` jelzés, NEM a `"unknown"` érték
-  beírása (D4) — ezt a checker csak az üres/hiányzó esetre kényszeríti ki
-  gépileg; egy szándékosan hamis, de nem üres értéket (pl. szó szerint
-  `"unknown"`) csak a review kap el.
+- `license` / `source` — mindkettő kötelező, nem üres string, és nem lehet
+  placeholder. Ismeretlen licenc esetén a helyes válasz a `stopped` jelzés,
+  NEM egy helykitöltő érték beírása (D4) — ezt a checker GÉPILEG kényszeríti
+  ki: az üres/hiányzó eset mellett a normalizált (trim + kisbetűs) mező nem
+  lehet eleme a `tool/check_fixture_manifest.dart`-ból exportált
+  `placeholderProvenanceValues` listának (`unknown`, `unspecified`, `n/a`,
+  `na`, `tbd`, `todo`, `none`, `-`, `?`, `fixme` — kis- és nagybetűs alakban
+  is). Ha egy fixture valódi licence/forrása nem állapítható meg, a válasz a
+  `stopped` jelzés, nem a placeholder beírása.
 - `containsUserData` — explicit `bool`, nincs hallgatólagos alapérték (D8).
   Ha bármelyik fixture `true`-t igényelne, az a `stopped` jelzés esete: egy
   release-korpuszban nincs helye felhasználói adatnak.

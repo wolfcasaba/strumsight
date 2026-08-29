@@ -343,4 +343,64 @@ vagy törölték (a `git status` ezt igazolja: csak 4 ÚJ fájl). `tool/ci/**`,
 `ml/**`, `lib/**`, `docs/adr/**`, `tools/**` és `test/ui/goldens/**`
 érintetlen.
 
+### Javító kör (F1) — placeholder licenc/forrás gépi tiltása
+
+A független review (`docs/reviews/e12-r12-review.md`, F1 MAJOR) azt mérte,
+hogy az „unknown" licenc-helykitöltő simán átment a checkeren, és az akkori
+teszt-cella ezt zöldként rögzítette — a brief §6.1 mátrix A3 sorával
+(„A licenc-hiány »unknown« értékkel átcsúszik → A3") és az ADR 0473 D4-gyel
+ellentétben. A javítás:
+
+1. **`tool/check_fixture_manifest.dart`** — új exportált konstans,
+   `placeholderProvenanceValues` (`unknown`, `unspecified`, `n/a`, `na`,
+   `tbd`, `todo`, `none`, `-`, `?`, `fixme`), és új
+   `FixtureManifestIssueKind.placeholderProvenance` érték. A `license` és a
+   `source` mező — ha nem üres — a normalizált (trim + kisbetűs) alakban
+   ellenőrzött ezzel a listával szemben; találat esetén az entry hibás
+   (`isClean == false`), a hiba szövege elmondja az eredeti (nem
+   normalizált) értéket.
+2. **`test/tooling/fixture_manifest_test.dart`** A3 csoport — a korábbi,
+   `expect(report.isClean, isTrue, …)`-t hordozó „unknown" cella
+   MEGFORDÍTVA: most `isFalse`-t vár, és a `placeholderProvenance` kindet is
+   ellenőrzi. Új cella a `source: 'n/a'` esetre (ugyanaz a kind). Új
+   `every placeholder in placeholderProvenanceValues is rejected …` cella,
+   amely a teljes exportált listát VÉGIGJÁRJA, mindegyik elemet eredeti ÉS
+   nagybetűvel kezdődő alakban is (`_shout` helper, pl. `unknown` →
+   `Unknown`) próbálja licencként — mindegyiknek pirosnak kell lennie.
+3. **`docs/testing/release-fixture-corpus.md`** — a mezőleírás szakasz
+   kimondja, hogy a placeholder-értékek gépileg tiltottak (felsorolva a
+   listát), és ismeretlen licenc/forrás esetén a helyes válasz a `stopped`
+   jelzés, nem a placeholder beírása.
+
+A valódi `test/fixtures/manifest.json` 48 bejegyzését a javítás előtt
+`python3` egysoros scripttel átnéztem — egyikük license/source mezője sem
+esik a placeholder-listába (mind projekt-saját, szöveges licenc/forrás-leírás),
+tehát a szigorítás a valódi korpuszt nem töri.
+
+**A kötelező gate (csonkítatlan, `tools/round-gate.sh test/tooling/fixture_manifest_test.dart test/tooling/check_assets_test.dart`):**
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/fixture_manifest_test.dart               zöld
+    test test/tooling/check_assets_test.dart                   zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+Az A3 csoport ezután `+6` cellával fut (korábbi 4 helyett): üres licenc,
+`"unknown"` licenc (megfordítva, MAJOR fix), `"n/a"` forrás (új), a teljes
+`placeholderProvenanceValues` lista söprése (új), hiányzó `source`, a valódi
+manifest „nincs unknown" dokumentációs cellája.
+
+`dart run tool/check_fixture_manifest.dart` kimenete változatlanul:
+
+```
+Fixture manifest OK (48 fixture(s)).
+```
+
 ## 11. Review — a Claude tölti ki
