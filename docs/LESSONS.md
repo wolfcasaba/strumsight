@@ -21480,3 +21480,58 @@ a futást kézzel kell dispatch-elni — a korábbi SHA zöldje nem evidencia (A
 TILOS zónája (ADR 0087 §4: „a mérce nem módosulhat attól, akit mér"). Az
 alternatíva (a merge-kapu ellenőrzés gépiesítése a landolóban) szintén
 `tools/**`. Addig a fenti, futtatható `headSha`-egyezés-mérés a védelem.
+
+## L546 — A brief falszifikációs mátrixa PIROS cellát rendelt egy hibás implementációhoz, az implementer viszont ZÖLD cellává fordította — indoklással, ami hihetőbb volt, mint a mérce (E12-R12, F1 MAJOR, 2026-08-29)
+
+**Mit mértünk.** Az E12-R12 briefjének §6.1 mérce-mátrixa szó szerint azt írta
+elő, hogy „a licenc-hiány »unknown« értékkel átcsúszik" hibás implementációnak
+az **A3** cellát PIROSRA kell vinnie (ADR 0473 D4: „Ismeretlen licenc =
+megállás, nem »unknown«"). Az implementer a cellát megírta, a NEVÉBE is beírta a
+követelményt — de az állítást megfordította:
+
+```dart
+test('the literal string "unknown" is NOT treated as a valid license — '
+     'it is a non-empty string, so it must be caught by a review process, '
+     'not this automated cell', () {
+  …
+  expect(report.isClean, isTrue, reason: report.format());   // ← zöldre pinnelve
+});
+```
+
+A checker `_readEntry`-je csak `trim().isEmpty`-t vizsgált, tehát a placeholder
+tényleg átment. A gate mind a hét lépése ZÖLD volt, a cella neve a
+követelményt idézte, a kommentje pedig kerek indoklást adott arra, MIÉRT nem
+mérhető gépileg (amit ez az eset épp megcáfol: egy exportált tiltólista +
+normalizálás triviálisan méri). A szomszédos, „a valódi manifestben nincs
+»unknown«" cella tovább növelte a hamis biztonságot: az csak a MA committolt
+tartalmat nézi, jövőbeli bejegyzésre nem szól.
+
+**Szabály.** Ha a brief falszifikációs mátrixa egy hibás implementációhoz cellát
+rendel, a review nem azt ellenőrzi, hogy a cella LÉTEZIK-e, hanem hogy melyik
+IRÁNYBA mér: a mátrix-sorhoz tartozó `expect` az adott hibás bemenetre
+`isFalse`/piros kell legyen. Egy meggyőző teszt-név és egy jól megírt komment a
+hiányzó őrt szándékká minősíti át — a gate ettől nem lesz szigorúbb. Ahol a
+tiltás értékhalmazon áll, az értékhalmaz legyen EXPORTÁLT konstans, és egy cella
+járja végig MINDEN elemét (normalizált és nem normalizált alakban is), különben
+a lista bővítése mérce nélkül marad.
+
+**Őrteszt:** `test/tooling/fixture_manifest_test.dart`::`every placeholder in placeholderProvenanceValues is rejected as a license, in original and mixed case`
+
+## L547 — A queue `adr` oszlopa terv, nem foglalás: a batch-írt szám 20-szal a valós tartomány ALATT járt, és merge-elt döntésekre mutatott volna (E12-R12 pre-flight, 2026-08-29)
+
+**Mit mértünk.** Az E12-R12 sora a `docs/execution/pipeline-queue.tsv`-ben
+`0453`-at hordozott (a Chapter 12 batch 2026-08-27-i terve). A pre-flightban
+mérve: `docs/adr/`-ben a legmagasabb szám **`0472`**, `0453` pedig **nem
+létezik** — a köztes számokat az E15 sáv és a self-heal körök vitték el.
+`tools/round-slots.py reserve-adr --round E12-R12` → **`0473`**. A `0453`
+kiosztása tehát nem „szabad szám" lett volna, hanem egy merge-elt tartomány
+alatti lyuk, amire később bármelyik retrospektív hivatkozás félrevinne.
+
+**Szabály.** A queue `adr` oszlopa a batch-terv maradványa; a normatív forrás
+minden körben a foglaló (`reserve-adr`), és a pre-flight írja is le a különbséget
+a brief §0.0 revíziójában — az [L542](#l542) (a foglalón kívül író párhuzamos
+kör) és ez a lecke együtt adják ki a teljes képet: a foglaló szükséges, de a
+BRIEFBEN ELŐRE ÍRT szám még nála is gyengébb bizonyíték.
+
+**Őrteszt:** nincs — a `reserve-adr` foglaló maga a mechanizmus; ez a lecke a
+brief-előírt szám elhitelének tilalmát rögzíti.
