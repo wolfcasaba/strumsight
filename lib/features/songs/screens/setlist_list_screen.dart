@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/setlists_provider.dart';
 import 'setlist_detail_screen.dart';
@@ -30,40 +30,44 @@ class SetlistListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final setlists = ref.watch(setlistsProvider);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.setlistsTitle)),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _create(context, ref),
-        backgroundColor: AppColors.primary,
+        backgroundColor: colors.brand,
         icon: const Icon(Icons.add),
         label: Text(l10n.setlistNew),
       ),
       body: SafeArea(
         child: setlists.isEmpty
-            ? _Empty(text: l10n.setlistsEmpty)
+            ? _ScrollableIfShort(
+                child: SsEmptyState(
+                  icon: Icons.queue_music,
+                  title: l10n.setlistsEmptyTitle,
+                  message: l10n.setlistsEmpty,
+                  actionLabel: l10n.setlistNew,
+                  onAction: () => _create(context, ref),
+                ),
+              )
             : ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                 itemCount: setlists.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) =>
+                    const SizedBox(height: SsSpacing.space2),
                 itemBuilder: (context, i) {
                   final set = setlists[i];
-                  return Card(
-                    margin: EdgeInsets.zero,
-                    clipBehavior: Clip.antiAlias,
-                    child: ListTile(
-                      leading: const CircleAvatar(
-                        backgroundColor: AppColors.primary,
-                        child: Icon(Icons.queue_music, color: Colors.white),
+                  return SsContentCard(
+                    icon: Icons.queue_music,
+                    title: set.name,
+                    message: l10n.setlistSongCount(set.songIds.length),
+                    actions: [
+                      SsCardAction(
+                        label: l10n.setlistOpen,
+                        onPressed: () => _open(context, set.id),
                       ),
-                      title: Text(
-                        set.name,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(l10n.setlistSongCount(set.songIds.length)),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _open(context, set.id),
-                    ),
+                    ],
                   );
                 },
               ),
@@ -107,28 +111,26 @@ Future<String?> promptSetlistName(
   String initial = '',
 }) => _promptName(context, initial: initial);
 
-class _Empty extends StatelessWidget {
-  const _Empty({required this.text});
-  final String text;
+/// Lets [child] (an [SsEmptyState], always `Center`-wrapped internally)
+/// scroll instead of overflow when the viewport is too short for it —
+/// measured need: at `textScaler` 2.5 + `hu`, the empty state's icon +
+/// title + message + action button outgrows a short test viewport by 39px.
+class _ScrollableIfShort extends StatelessWidget {
+  const _ScrollableIfShort({required this.child});
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.queue_music,
-              size: 56,
-              color: AppColors.primary.withValues(alpha: 0.6),
-            ),
-            const SizedBox(height: 16),
-            Text(text, textAlign: TextAlign.center),
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedHeight) return child;
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: child,
+          ),
+        );
+      },
     );
   }
 }

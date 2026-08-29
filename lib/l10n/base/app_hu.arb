@@ -570,6 +570,7 @@
   "commonCancel": "Mégse",
   "setlistsTitle": "Szettlisták",
   "setlistsEmpty": "Csoportosítsd a dalaidat egy gyakorló-szettbe, és játszd le őket egymás után.",
+  "setlistsEmptyTitle": "Még nincs szettlistád",
   "setlistNew": "Új szettlista",
   "setlistName": "Szettlista neve",
   "setlistSongCount": "{count, plural, =0{Nincs dal} =1{1 dal} other{{count} dal}}",
@@ -581,8 +582,10 @@
     }
   },
   "setlistAddSong": "Dal hozzáadása",
+  "setlistOpen": "Megnyitás",
   "setlistPlayAll": "Szett lejátszása",
   "setlistEmptyDetail": "Adj dalokat a szetthez a + gombbal.",
+  "setlistEmptyDetailTitle": "Nincs dal ebben a szettben",
   "setlistNoSongsYet": "Előbb hozz létre egy dalt, majd add hozzá itt.",
   "setlistRename": "Átnevezés",
   "setlistDelete": "Szettlista törlése",

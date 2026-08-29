@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/progress/model/practice_entry.dart';
 import 'package:strumsight/features/progress/providers/practice_log_provider.dart';
 import 'package:strumsight/features/progress/screens/progress_screen.dart';
@@ -20,14 +21,27 @@ class _SeededLog extends PracticeLogController {
   List<PracticeEntry> build() => _seed;
 }
 
-Widget _host(DateTime now, {List<PracticeEntry>? seed}) => ProviderScope(
+Widget _host(
+  DateTime now, {
+  List<PracticeEntry>? seed,
+  Locale locale = const Locale('en'),
+  double textScale = 1,
+}) => ProviderScope(
   overrides: [
     ...preferenceOverrides(),
     if (seed != null) practiceLogProvider.overrideWith(() => _SeededLog(seed)),
   ],
   child: MaterialApp(
+    theme: SsLightTheme.data(),
+    locale: locale,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(
+        context,
+      ).copyWith(textScaler: TextScaler.linear(textScale)),
+      child: child!,
+    ),
     home: ProgressScreen(now: now),
   ),
 );
@@ -152,4 +166,79 @@ void main() {
     );
     expect(find.textContaining('Pass a lesson'), findsOneWidget);
   });
+
+  // A3 — the mandatory 1.5 / 2.0 / 2.5 threshold triple, en AND hu: 2.0 is
+  // inclusive-required, 1.5 is below it, 2.5 is above it and not itself a
+  // requirement (§6, "küszöb-cellahármas"). Phone-sized viewport (360×640,
+  // devicePixelRatio 1.0) is mandatory here: the default `flutter_test`
+  // 800×600 canvas is wider than any real phone, and on top of that its
+  // extra height let the populated `ListView` lazily skip building
+  // `WeeklyBars` and everything below it at `2.0`/`2.5` — those cells were
+  // measuring an empty tree, not the real screen (review 1. forduló MAJOR-1).
+  for (final scale in [1.5, 2.0, 2.5]) {
+    for (final locale in [const Locale('en'), const Locale('hu')]) {
+      // MEASURED on the phone viewport (360×640), scrolled so `WeeklyBars`
+      // actually builds (review 1. forduló MAJOR-1/MAJOR-2): the populated
+      // dashboard overflows on ALL THREE scales — 1.5 → 7px, 2.0 → 22px,
+      // 2.5 → 73px, identical on both locales. Reproduced identically
+      // against the pre-migration `progress_screen.dart` from `origin/main`
+      // with this exact harness, so this predates this round. Root cause:
+      // `lib/features/progress/widgets/weekly_bars.dart`'s fixed
+      // `SizedBox(height: _maxBar + 46)` day-label budget, a file outside
+      // this round's allowed_paths — fixing it here would be a scope
+      // violation (§4 tilos zóna). Skipped, not deleted or weakened, so the
+      // finding stays visible instead of silently passing; see
+      // docs/rounds/e15-r06-legacy-song-library-progress-migration.md
+      // §10.6/§10.11 for the named follow-up (F6).
+      testWidgets(
+        'populated dashboard renders without overflow at textScaler '
+        '$scale ($locale)',
+        skip: true,
+        (tester) async {
+          tester.view.physicalSize = const Size(360, 640);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(
+            _host(
+              now,
+              seed: [
+                PracticeEntry(
+                  day: today,
+                  source: PracticeSource.learn,
+                  seconds: 700,
+                  strokes: 40,
+                  directionAccuracy: 0.9,
+                ),
+                PracticeEntry(
+                  day: today - 1,
+                  source: PracticeSource.live,
+                  seconds: 90,
+                  strokes: 8,
+                ),
+              ],
+              locale: locale,
+              textScale: scale,
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(
+            find.byType(WeeklyBars),
+            300,
+            scrollable: find.byType(Scrollable).first,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets('empty dashboard renders without overflow at textScaler '
+          '$scale ($locale)', (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(_host(now, locale: locale, textScale: scale));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 }
