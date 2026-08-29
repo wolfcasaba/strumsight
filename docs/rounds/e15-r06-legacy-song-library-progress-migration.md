@@ -123,6 +123,31 @@ párt a listán tartja. A jogosultság itt PONTOSAN annyi, hogy a generátor
 kimenete commitolva legyen — a generált fájl KÉZI szerkesztése továbbra is
 tilos (a `l10n` gate-lépés úgyis visszaírja).
 
+**R11 — az A3 határa a POPULATED `ProgressScreen`-en (a javító kör mérése után,
+orchestrátor-döntés).** A `2.0` küszöb a kör MINDEN saját munkájára teljesül: a
+két setlist-képernyő 24/24 A3-cellája és a `ProgressScreen` ÜRES állapotának
+6 cellája zölden fut telefon-méretű (360×640) viewporton. A POPULATED
+`ProgressScreen` viszont végiggörgetve `1.5 → 7 px`, `2.0 → 22 px`,
+`2.5 → 73 px` túlcsordulást ad — **MÉRTEN ugyanannyit az `origin/main` kódjával
+is** (a reviewer függetlenül újramérte), tehát ez **PRE-EXISTING hiba, nem a kör
+regressziója**. A gyökérok a `lib/features/progress/widgets/weekly_bars.dart:32`
+`SizedBox(height: _maxBar + 46)` fix magassági költségvetése, ami a kör
+`allowed_paths`-án KÍVÜL van — a javítása H3 (tilos zóna) lenne, a
+STOP-protokoll (§0.1) pedig pontosan erre az esetre való.
+
+**A döntés:** az A3 elfogadási sor a kör saját munkájára TELJESÜL; a populated
+`ProgressScreen`-re a kör NEM állítja, hogy teljesül — a 6 cella `skip: true`
+marad, a kódban a mért px-értékekkel és az `origin/main`-azonossággal indokolva
+(cella NEM törölve, matcher NEM gyengítve). Ez dokumentált §0.0 brief-revízió,
+nem a mérce lazítása: a kör egyetlen saját sorára sem enged el követelményt.
+
+**Nevesített követő kör (F6):** a `weekly_bars.dart` `_maxBar + 46`
+költségvetését `MediaQuery.textScalerOf(context)`-szel skálázni, vagy
+`IntrinsicHeight`+`Flexible`/`FittedBox`-ot adni a két `Text`-sor köré.
+Elfogadás-mérce: a `progress_screen_test.dart` hat `skip: true` cellája
+`skip: false`-szal ZÖLD. Ugyanez a kör vihetné az öt `retire`-verdiktű képernyő
+gazdátlan visszavonási felülvizsgálatát is (R5 / §10.10).
+
 **R5 — a §10 KÖTELEZŐ új sora.** Az öt `retire` képernyőnek a queue-ban ma
 NINCS gazdája: a terv §4 az `E15-R04`-hez rendelte a visszavonási felülvizsgálatot,
 de a queue `E15-R04` sora a Practice + Learn migrációt futtatta le (`done`). A §10

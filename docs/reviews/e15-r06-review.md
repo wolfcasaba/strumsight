@@ -174,4 +174,49 @@ rituáléban (HANDOFF §6 + `docs/LESSONS.md`) nevesített javaslattá kell tenn
 
 ## Review — 2. forduló (a javító kör után)
 
-*(a javító kör után töltendő)*
+**Review-lt HEAD:** `f1e3dbe5` (javító commit: 10 fájl, +284/−55)
+
+### VÉGSŐ DÖNTÉS: APPROVED — mind a 6 lelet ZÁRT, mért bizonyítékkal
+
+| # | Lelet | Állapot | A záró mérés |
+|---|---|---|---|
+| F1 | BLOCKER-1 | **ZÁRT** | 360×640, `en`+`hu`, `2.0`+`2.5` → **8/8 kombináció 0 hiba**. Ok-okozatilag bizonyítva: a `9e4f95d6`-beli fájl visszaállításával UGYANEZEK a cellák pirosak (`2.0 hu → 72 px`, `2.5 en → 315 px`, `2.5 hu → 365 px`) — a 72 px pontosan az 1. fordulós érték. `setlist_flow_test.dart` 29/29 zöld. |
+| F2a | MAJOR-1 | **ZÁRT** | Minden A3 cella beállítja a `physicalSize = Size(360, 640)` + `devicePixelRatio = 1.0` értéket ÉS `addTearDown(tester.view.reset)`-tel visszaállítja (4-4-4 a setlist-, 2-2-2 a progress-fájlban). A viselkedés-cellák helyesen maradtak az alapértelmezett viewporton. |
+| F2b | MAJOR-1 | **ZÁRT** | `scrollUntilVisible(find.byType(WeeklyBars), …)` a `takeException()` ELŐTT; mérve `barsBefore=false → barsAfter=true` mindhárom skálán, mindkét locale-on. |
+| F3 | MAJOR-2 | **ZÁRT** | A §10.6 újraírva: kimondja, hogy a korábbi zöld MÉRÉSI ARTEFAKTUM volt, táblázatban közli a `1.5 → 7 px`, `2.0 → 22 px`, `2.5 → 73 px` értékeket HEAD és `origin/main` oszloppal, és külön bekezdésben kimondja, hogy az A3 a populated állapotban NEM teljesül a `weekly_bars.dart` javításáig. A reviewer a számokat FÜGGETLENÜL újramérte (a `skip` feloldásával): azonosak, és `origin/main` kóddal is azonosak. |
+| F4 | MINOR-1 | **ZÁRT** | `progress_screen.dart:167` `constraints: const BoxConstraints(maxWidth: 320)` — egyezik a legacy `empty_state.dart:46`-tal. |
+| F5 | MINOR-2 | **ZÁRT** | `SsCardAction(label: l10n.setlistOpen, …)` — a `set.name` többé nem megy gép-mezőbe. Új kulcs mind a négy ARB-fájlban (`base` + generált aggregátum), paritás mérve: `en-only: []`, `hu-only: []`. Az `SsContentCard` `maxLines: 2` csonkolása a §10.11/F5-ben dokumentálva. |
+| F6 | MINOR-3 | **ZÁRT** | §10.6: konkrét fájl (`weekly_bars.dart:32`), konstans (`SizedBox(height: _maxBar + 46)`), két javítási irány, önálló kör igénye, és reprodukálható elfogadás-mérce (a 6 `skip` cella pirosból zöldbe fordul). |
+
+### Regresszió-ellenőrzés (2. forduló, mind PASS)
+
+- a hat S11-őr + `test/ui/**` diffje az `origin/main...HEAD` teljes tartományban **0 sor**;
+- `flutter analyze lib/` (külön hívás) → `No issues found!`;
+- `weekly_bars.dart` **érintetlen**;
+- a `progress_screen.dart` `l10n.*` és `Icons.*` kulcshalmaza **azonos** az `origin/main`-ével (a setlist-fájlokon csak BŐVÜLÉS, törlés nincs);
+- a valódi-sértés mérce **továbbra is él**: az `SsEmptyState` → nyers `Text` csere pontosan 1 cellát pirosít, 28 zöld;
+- ARB-paritás: `en-only`/`hu-only` üres mindkét párra;
+- scope: a javító kör **nem hozott új útvonalat** (`scope-audit.py` → OK).
+
+### Tudatosan vállalt maradék (WARNING, nem blokkoló)
+
+**A `ProgressScreen` POPULATED állapotára a körnek nincs futó zöld A3-bizonyítéka:**
+a 6 populated cella (`1.5`/`2.0`/`2.5` × `en`/`hu`) `skip: true`, mert a
+végiggörgetett képernyő `7`/`22`/`73` px-szel túlcsordul — MÉRTEN ugyanannyival
+az `origin/main` kódjával is, tehát **PRE-EXISTING, nem a kör regressziója**, és a
+gyökérok (`lib/features/progress/widgets/weekly_bars.dart`) a kör
+`allowed_paths`-án KÍVÜL van (a javítása H3 lenne). A merge ezt tudatosan
+vállalja; a feloldás a §0.0.A/R11 szerinti nevesített követő kör.
+
+Kisebb, nem érdemi doksi-pontatlanságok a §10-ben (a reviewer mérése szerint):
+§10.9 „27 cella" → valójában 28 zöld / 29 összes; §10.6 „mind a 28" setlist-cella
+→ 29; a §10.5 két px-száma (15/39) még a 800×600-as harnessen készült, és a
+doksi ezt nem címkézi. Egyik sem hamis érdemi állítás — NOTE.
+
+### Golden-tesztek (nem a kör hibája)
+
+`flutter test test/ui/` ezen a boxon 15 golden-cellán bukik (chord detail,
+learning path, song library, achievements, hub, streak detail, club detail,
+safety, share preview) — a három migrált képernyőt `origin/main`-re
+visszaállítva **ugyanaz a 15 bukás**, tehát box-környezeti (font/renderer) drift,
+PRE-EXISTING. A mérce a CI x86 architektúrája (ADR 0426).
