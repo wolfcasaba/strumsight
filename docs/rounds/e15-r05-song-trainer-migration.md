@@ -90,6 +90,14 @@ allowed_paths = [
   # elvégezhetetlenné tette. A listán ezért a FORRÁS van.
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
+  # §0.0/R14 — a generált pár VISSZA a listára: `lib/l10n/app_{en,hu}.arb`
+  # KÖVETETT fájl és a `tool/gen_l10n_segments.dart` determinisztikus kimenete,
+  # tehát a base-ARB szerkesztésekor SZÜKSÉGSZERŰEN változik. Az R12 tévesen
+  # törölte őket, amitől a gépi scope-audit a saját, engedélyezett forrásunkból
+  # származó generált kimenetre adott `VIOLATION`-t. Szerkeszteni ezeket TILOS
+  # (a generátor felülírja) — a listán mint SZÁRMAZTATOTT kimenet szerepelnek.
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
   "docs/ui/migration-status.md",
   "docs/rounds/e15-r05-song-trainer-migration.md",
 ]
