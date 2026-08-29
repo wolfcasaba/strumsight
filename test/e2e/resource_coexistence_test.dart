@@ -99,6 +99,11 @@ final class _CameraBackedConsumer implements ResourceConsumer {
   @override
   Future<void> acquire() async {
     final result = await _coordinator.acquire(owner);
+    expect(
+      result.isSuccess,
+      isTrue,
+      reason: 'the adapter must not silently swallow a BUSY failure (F4)',
+    );
     lease = result.valueOrNull;
   }
 

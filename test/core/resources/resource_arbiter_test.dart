@@ -194,6 +194,198 @@ void main() {
       },
     );
   });
+
+  group('F2 — suspension has a way back, no silent stall', () {
+    test('a suspended consumer resumes once the consumer that caused the '
+        'suspension finishes via the arbiter', () async {
+      final arbiter = ResourceArbiter();
+      final background = _FakeConsumer(ResourcePriority.backgroundAi)
+        ..state = 'partial-inference-buffer';
+      arbiter.register(background);
+      await arbiter.request(background);
+
+      final live = _FakeConsumer(ResourcePriority.liveAudio);
+      arbiter.register(live);
+      await arbiter.request(live);
+      expect(background.isSuspended, isTrue);
+
+      await arbiter.releaseConsumer(live);
+
+      expect(background.isSuspended, isFalse);
+      expect(background.resumeCalls, 1);
+      expect(background.isActive, isTrue);
+      expect(
+        background.state,
+        'partial-inference-buffer',
+        reason: 'the way back must not restart the resumed consumer',
+      );
+    });
+
+    test('partial resume: a consumer still outranked by another active '
+        'consumer stays suspended', () async {
+      final arbiter = ResourceArbiter();
+      final background = _FakeConsumer(ResourcePriority.backgroundAi);
+      final camera = _FakeConsumer(ResourcePriority.cameraFeedback);
+      final live = _FakeConsumer(ResourcePriority.liveAudio);
+      arbiter
+        ..register(background)
+        ..register(camera)
+        ..register(live);
+
+      await arbiter.request(background);
+      await arbiter.request(camera); // outranks background -> suspends it
+      await arbiter.request(live); // outranks camera -> suspends it
+      expect(background.isSuspended, isTrue);
+      expect(camera.isSuspended, isTrue);
+
+      await arbiter.releaseConsumer(live);
+
+      expect(
+        camera.isSuspended,
+        isFalse,
+        reason: 'nothing active outranks camera once live is gone',
+      );
+      expect(camera.resumeCalls, 1);
+      expect(
+        background.isSuspended,
+        isTrue,
+        reason: 'camera, now active again, still outranks background',
+      );
+      expect(background.resumeCalls, 0);
+    });
+
+    test('a consumer suspended by memory pressure resumes once the caller '
+        'signals the pressure is relieved', () async {
+      final arbiter = ResourceArbiter();
+      final live = _FakeConsumer(ResourcePriority.liveAudio)
+        ..state = 'measure-42';
+      arbiter.register(live);
+      await arbiter.request(live);
+
+      await arbiter.onMemoryPressure();
+      expect(live.isSuspended, isTrue);
+
+      await arbiter.onMemoryPressureRelieved();
+
+      expect(live.isSuspended, isFalse);
+      expect(live.resumeCalls, 1);
+      expect(live.isActive, isTrue);
+      expect(live.state, 'measure-42');
+    });
+  });
+
+  group('F1 — the ResourceConsumer contract is machine-checked, not just '
+      'asserted in prose', () {
+    runResourceConsumerContract(
+      '_FakeConsumer honours pauseForHigherPriority as a pause',
+      () => _FakeConsumer(ResourcePriority.backgroundAi),
+      putWorkIn: (consumer) =>
+          (consumer as _FakeConsumer).state = 'contract-probe',
+      readWork: (consumer) => (consumer as _FakeConsumer).state,
+    );
+
+    test('self-guard: a consumer that discards state in '
+        'pauseForHigherPriority (i.e. implements it as cancel) fails the '
+        'contract check', () async {
+      await expectLater(
+        checkResourceConsumerContract(
+          make: () => _CancellingFakeConsumer(ResourcePriority.backgroundAi),
+          putWorkIn: (consumer) =>
+              (consumer as _CancellingFakeConsumer).state = 'probe',
+          readWork: (consumer) => (consumer as _CancellingFakeConsumer).state,
+        ),
+        throwsA(isA<TestFailure>()),
+        reason:
+            'proves the contract set actually catches a cancel-style '
+            'consumer, not just a fake pauseForHigherPriority',
+      );
+    });
+  });
+}
+
+/// A reusable conformance suite for any [ResourceConsumer] implementation:
+/// `acquire` activates without suspending, `pauseForHigherPriority` suspends
+/// WITHOUT discarding [putWorkIn]'s state (ADR 0476 D3 — a pause, not a
+/// cancel), `resume` restores it, and both are idempotent. Wraps
+/// [checkResourceConsumerContract] in a `group`/`test` so a conformant
+/// implementation shows up as ordinary green cells.
+void runResourceConsumerContract(
+  String description,
+  ResourceConsumer Function() make, {
+  required void Function(ResourceConsumer consumer) putWorkIn,
+  required Object? Function(ResourceConsumer consumer) readWork,
+}) {
+  group(description, () {
+    test('acquire / pauseForHigherPriority / resume preserve isActive, '
+        'isSuspended and in-progress work', () async {
+      await checkResourceConsumerContract(
+        make: make,
+        putWorkIn: putWorkIn,
+        readWork: readWork,
+      );
+    });
+  });
+}
+
+/// The bare assertions behind [runResourceConsumerContract], factored out so
+/// a self-guard cell can assert that THIS check throws for a non-conformant
+/// consumer (`expectLater(checkResourceConsumerContract(...), throwsA(...))`)
+/// instead of merely trusting that it would.
+Future<void> checkResourceConsumerContract({
+  required ResourceConsumer Function() make,
+  required void Function(ResourceConsumer consumer) putWorkIn,
+  required Object? Function(ResourceConsumer consumer) readWork,
+}) async {
+  final consumer = make();
+
+  await consumer.acquire();
+  expect(
+    consumer.isActive,
+    isTrue,
+    reason: 'acquire() must activate the consumer',
+  );
+  expect(
+    consumer.isSuspended,
+    isFalse,
+    reason: 'a freshly acquired consumer is not suspended',
+  );
+
+  putWorkIn(consumer);
+  final work = readWork(consumer);
+
+  await consumer.pauseForHigherPriority();
+  expect(
+    consumer.isActive,
+    isTrue,
+    reason:
+        'pauseForHigherPriority is a pause, not a cancel — isActive must '
+        'stay true (ADR 0476 D3)',
+  );
+  expect(consumer.isSuspended, isTrue);
+  expect(
+    readWork(consumer),
+    work,
+    reason: 'pauseForHigherPriority must preserve in-progress work',
+  );
+
+  // Idempotent pause.
+  await consumer.pauseForHigherPriority();
+  expect(consumer.isSuspended, isTrue);
+  expect(readWork(consumer), work);
+
+  await consumer.resume();
+  expect(consumer.isSuspended, isFalse);
+  expect(consumer.isActive, isTrue);
+  expect(
+    readWork(consumer),
+    work,
+    reason: 'resume must continue from the preserved state, not restart',
+  );
+
+  // Idempotent resume.
+  await consumer.resume();
+  expect(consumer.isSuspended, isFalse);
+  expect(consumer.isActive, isTrue);
 }
 
 Matcher get _isActiveNotSuspended => predicate<_FakeConsumer>(
@@ -247,6 +439,49 @@ final class _FakeConsumer implements ResourceConsumer {
   }
 }
 
+/// A deliberately non-conformant [ResourceConsumer]: it implements
+/// [pauseForHigherPriority] as a `cancel` (discards [state]) instead of a
+/// pause — the exact violation the F1 self-guard cell proves
+/// [checkResourceConsumerContract] catches.
+final class _CancellingFakeConsumer implements ResourceConsumer {
+  _CancellingFakeConsumer(this.priority);
+
+  @override
+  final ResourcePriority priority;
+
+  String state = '';
+  bool _active = false;
+  bool _suspended = false;
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  bool get isSuspended => _suspended;
+
+  @override
+  Future<void> acquire() async {
+    _active = true;
+  }
+
+  @override
+  Future<void> release() async {
+    _active = false;
+    _suspended = false;
+  }
+
+  @override
+  Future<void> pauseForHigherPriority() async {
+    state = ''; // cancel, not pause — deliberately violates ADR 0476 D3.
+    _suspended = true;
+  }
+
+  @override
+  Future<void> resume() async {
+    _suspended = false;
+  }
+}
+
 /// A [ResourceConsumer] backed by a REAL [AudioSessionCoordinator] lease, so
 /// A2 measures the actual coordinator state rather than a mock (round brief
 /// §0.0 R3 / L453).
@@ -271,6 +506,11 @@ final class _AudioBackedConsumer implements ResourceConsumer {
   @override
   Future<void> acquire() async {
     final result = await _coordinator.acquire(owner);
+    expect(
+      result.isSuccess,
+      isTrue,
+      reason: 'the adapter must not silently swallow a BUSY failure (F4)',
+    );
     lease = result.valueOrNull;
   }
 

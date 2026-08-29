@@ -56,12 +56,13 @@ final class ResourceArbiter {
   /// [onMemoryPressure] calls can consider it. Registering does not activate
   /// it. Safe to call more than once for the same consumer.
   void register(ResourceConsumer consumer) {
-    if (!_consumers.contains(consumer)) _consumers.add(consumer);
+    final known = _consumers.any((other) => identical(other, consumer));
+    if (!known) _consumers.add(consumer);
   }
 
   /// Forgets [consumer]. Safe to call whether or not it is active.
   void unregister(ResourceConsumer consumer) {
-    _consumers.remove(consumer);
+    _consumers.removeWhere((other) => identical(other, consumer));
   }
 
   /// Requests activation for [consumer].
@@ -119,5 +120,48 @@ final class ResourceArbiter {
       (a, b) => a.priority.index >= b.priority.index ? a : b,
     );
     await lowest.pauseForHigherPriority();
+  }
+
+  /// Ends [consumer]'s work (calls its [ResourceConsumer.release]) and then
+  /// resumes whichever suspended consumers are no longer outranked by any
+  /// active, unsuspended one — the way back from [request]'s suspension,
+  /// without ever taking or granting a lease itself (D2 unaffected: this
+  /// only calls [ResourceConsumer.resume] on consumers the arbiter itself
+  /// suspended earlier).
+  Future<void> releaseConsumer(ResourceConsumer consumer) async {
+    await consumer.release();
+    await _resumeNoLongerOutranked();
+  }
+
+  /// The way back from a suspension caused by [onMemoryPressure]. The caller
+  /// — whoever knows the memory-pressure signal has cleared — invokes this
+  /// explicitly; the arbiter itself has no platform signal to react to.
+  Future<void> onMemoryPressureRelieved() async {
+    await _resumeNoLongerOutranked();
+  }
+
+  /// Resumes every suspended, still-active consumer that no active,
+  /// unsuspended consumer currently outranks — highest priority first, so a
+  /// resumed higher-priority consumer can keep a lower one suspended in the
+  /// same pass (e.g. `cameraFeedback` resumes but still keeps `backgroundAi`
+  /// suspended). A consumer still outranked by another active one stays
+  /// suspended.
+  Future<void> _resumeNoLongerOutranked() async {
+    final suspended =
+        _consumers
+            .where((consumer) => consumer.isActive && consumer.isSuspended)
+            .toList(growable: false)
+          ..sort((a, b) => a.priority.index.compareTo(b.priority.index));
+
+    for (final consumer in suspended) {
+      final stillOutranked = _consumers.any(
+        (other) =>
+            !identical(other, consumer) &&
+            other.isActive &&
+            !other.isSuspended &&
+            other.priority.outranks(consumer.priority),
+      );
+      if (!stillOutranked) await consumer.resume();
+    }
   }
 }
