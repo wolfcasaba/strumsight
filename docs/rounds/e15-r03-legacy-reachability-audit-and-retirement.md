@@ -270,4 +270,175 @@ dart run tool/check_screen_reachability.dart --format table
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Megjegyzés a futás történetéről:** ezt a szakaszt egy BEFEJEZŐ futás írta —
+az előző futás (ugyanezen az ágon) az öt munkafájlt már elkészítette, de a
+3600s abszolút időkorláton a gate futása közben megszakadt, COMMIT NÉLKÜL, és
+a gate-et csővezetéken (`| head -40`) futtatta, ami tiltott (AGENTS.md §12).
+Ez a futás a munkafájlokat NEM írta újra — csak a hiányzó két valódi-sértés
+próbát futtatta le, ezt a §10-et töltötte ki, és a gate-et a brief §0.0.A/§2
+szerinti, csővezeték nélküli alakban futtatta le.
+
+### 10.1 Mi épült (fájlonként)
+
+- **`tool/check_screen_reachability.dart`** — a mérő. `ScreenReachability`
+  osztály egy `Directory` repository fölött (`ui_inventory.dart` mintáját
+  követve), `render()` ad `ScreenReachabilityResult`-ot. Két csatorna (ADR
+  0470 D2): **deklaratív** (a képernyő osztályneve szó szerint szerepel
+  `lib/app/routing/{app_router,adaptive_shell_routes,route_guards}.dart`
+  valamelyikében) VAGY **imperatív** (az osztály konstruálva van —
+  `ClassName(` vagy `ClassName.namedCtor(` — bárhol máshol a `lib/` alatt).
+  Mindkét csatorna OSZTÁLYNÉVVEL illeszt, sosem import-útvonallal vagy
+  fájlnévvel (D3 — a barrel-csapda ellen). A flag-kapuzást (D4) egy
+  behúzás-alapú `if (...Enabled...)` hatókör-számítás jelzi
+  soronként — minden deklaratív hivatkozáshoz a rá vonatkozó flag-feltételek
+  listája társul. `--format table|json` a `main()`-ben; a `main()` vékony
+  burkoló, a mérés a teszt által is közvetlenül példányosítható osztályban él
+  (R5 mintakövetés).
+- **`test/tooling/screen_reachability_test.dart`** — A1 (mind a 96 képernyő
+  ítéletet kap, forrás-hivatkozással, determinisztikusan), A2 (fixture: egy
+  csak imperatívan elért képernyő elérhetőnek számít), **A2b** (fixture: a
+  router csak egy `public.dart` barrelen át importál, a checker mégis
+  elérhetőnek látja a hármat, mert osztálynévre illeszt), egy flag-gating
+  fixture-csoport (D4), **A3** (a valódi `retirement-plan.md`-t parse-olja,
+  és minden elérhető-és-még-legacy képernyőhöz nevesített `E15-Rxx` sort
+  követel — a beépített valódi-sértés próbával együtt, ami a plan-sorok egy
+  MÁSOLATÁBÓL veszi ki az egyik owner-round-ot), **A4** (minden `retire` sor
+  valós indokot ÉS névvel megnevezett felváltót követel a valós tervből).
+- **`docs/ui/retirement-plan.md`** (ÚJ) — a döntési tábla: §1 módszer, §2
+  összesítő, §3 mért megállapítások (a `progress_v2` be nem kötve, a
+  Practice Generator és az Audio Analysis capture wizard bekötetlen, a
+  Community 15 képernyője flag nélkül route-olatlan, négy egyedi
+  elérhetetlen), §4 kör-hozzárendelés (`E15-R04`…`E15-R11`, mind a 41
+  elérhető-és-legacy képernyőre), §5 a 6 `retire`-javaslat indokkal és
+  felváltóval, §6 a teljes 96 soros, gépileg mért tábla.
+- **`docs/ui/migration-status.md`**, **`docs/ui/legacy-backlog.md`** — a MÉRT
+  számokkal frissítve (68/96 elérhető, 28/96 elérhetetlen, 25/96 flag mögötti;
+  a `progress`↔`progress_v2` "mindkettő elérhető" korábbi állítás javítva
+  hamisra), a mérő paranccsal, és kereszthivatkozással a
+  `retirement-plan.md`-re mint kanonikus per-screen forrásra.
+
+### 10.2 `dart run tool/check_screen_reachability.dart --format table` — TÉNYLEGES kimenet
+
+Összesítő sor (a teljes 96 soros tábla a `docs/ui/retirement-plan.md` §6-ban
+van, szó szerint ugyanezekkel a számokkal):
+
+```
+Measured screens: 96. Reachable: 68. Unreachable: 28. Flag-gated: 25.
+```
+
+A parancs a `dart run` csomag-build-hook naplóját írja stdout-ra a tényleges
+kimenet elé (`Running build hooks...Running build hooks...`) — ez a `dart
+run` burkoló zaja, nem a checker kimenete; a `--format table` melletti tábla
+egyébként a `docs/ui/retirement-plan.md` §6 tartalmával karakterre egyezik
+(ugyanabból a mérésből származik). Két reprezentatív sor (egy sima
+deklaratív és egy barrel-mentes, csak imperatív eset, valamint a `progress_v2`
+hiányzó bejegyzés a §3.1 megállapításhoz):
+
+```
+| `lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart` | `TutorChatScreen` | lib/app/routing/app_router.dart:546 | — | 5 | aiTutorEnabled | lib/app/routing/app_router.dart:546 |
+| `lib/features/practice/presentation/screens/practice_history_screen.dart` | `PracticeHistoryScreen` | — | lib/features/practice/presentation/screens/practice_result_screen.dart:498 | 3 | — | lib/features/practice/presentation/screens/practice_result_screen.dart:498 |
+| `lib/features/progress_v2/screens/progress_dashboard_screen.dart` | `ProgressDashboardScreen` | — | — | 11 | — | lib/features/progress_v2/screens/progress_dashboard_screen.dart:16 |
+```
+
+### 10.3 §7 gate — TÉNYLEGES kimenet (csővezeték/`head`/`tail`/`&&` NÉLKÜL, egyetlen parancs)
+
+```
+tools/round-gate.sh test/tooling/screen_reachability_test.dart test/ui/ui_inventory_test.dart
+```
+
+Lépésenkénti verdiktek (csonkítatlan futásból):
+
+```
+    → [1] format: ZÖLD
+    → [2] analyze: ZÖLD                      (Analyzing 3 items... No issues found! (ran in 5.9s))
+    → [3] test test/tooling/screen_reachability_test.dart: ZÖLD   (9/9 teszt, "All tests passed!")
+    → [4] test test/ui/ui_inventory_test.dart: ZÖLD               (1/1 teszt, "All tests passed!")
+    → [5] architecture: ZÖLD                 (Architecture dependencies OK (12 allowlisted deviation(s)).)
+    → [6] secrets: ZÖLD                      (Secret scan OK (4015 file(s) scanned, 0 finding(s)).)
+    → [7] l10n: ZÖLD                         (L10n aggregate freshness OK; L10n parity OK (en → hu, 2289 message(s)).)
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+### 10.4 §3/§6.1 kötelező valódi-sértés próbák — TÉNYLEGES kimenet
+
+**(a) A3-próba.** A valós `docs/ui/retirement-plan.md`-ben a
+`TutorChatScreen` sorának owner-round celláját (`E15-R05`) átmenetileg
+`—`-re cseréltem, majd lefuttattam:
+
+```
+flutter test test/tooling/screen_reachability_test.dart --plain-name "every reachable-and-legacy screen has a migrate/retire verdict"
+```
+
+**A3 PIROSRA váltott**, a tényleges hibaüzenet:
+
+```
+Expected: empty
+  Actual: ['lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart']
+reachable-but-unmigrated screens with no named E15 round (ADR 0470 D6): [lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart]
+```
+
+Ezután a sort visszaállítottam `E15-R05`-re, és a tesztet újrafuttatva: `+1:
+All tests passed!` — A3 zöld.
+
+**(b) A2b barrel-próba.** Mivel `lib/**` módosítása tilos, a próbát a
+checkeren (`tool/check_screen_reachability.dart`, engedélyezett fájl)
+végeztem el ÁTMENETILEG: a deklaratív hurok `_references(lines[i],
+className)` hívását (251. sor) egy szándékosan HIBÁS, útvonal/fájlnév-alapú
+illesztésre cseréltem (`lines[i].contains(screenPath.split('/').last.split('.').first)`),
+majd lefuttattam a barrel-fixture tesztet:
+
+```
+flutter test test/tooling/screen_reachability_test.dart --plain-name "the screen is declaratively reachable even though the router never imports its file"
+```
+
+**A2b PIROSRA váltott**, a tényleges hibaüzenet:
+
+```
+Expected: true
+  Actual: <false>
+```
+
+— pontosan azt igazolva, amit a §3(b) kér: ha a checker fájlnévre/útvonalra
+illesztene osztálynév helyett, a `vision/public.dart`-hoz hasonló barrel
+mögötti képernyők (itt a fixture `HiddenScreen`-je) hamisan
+„elérhetetlennek" mérődnének. Ezután a hurkot pontosan az eredeti
+`_references(lines[i], className)` hívásra állítottam vissza (`git diff
+tool/check_screen_reachability.dart` a próba előtt és után üres), és a teljes
+`test/tooling/screen_reachability_test.dart` fájlt újrafuttatva mind a 9 teszt
+zöld (`00:52 +9: All tests passed!` — a fenti §10.3-ban idézett futás ez).
+
+### 10.5 Mért korlátok
+
+- **Egy-ugrásos imperatív lánc (ADR 0470 D7).** A checker csak azt méri, hogy
+  egy osztály konstruálva van-e VALAHOL a `lib/` alatt — nem azt, hogy az a
+  konstruáló hely maga elérhető-e egy belépési pontból. Ez két mért hamis
+  pozitívumot ad: `EditProfileScreen` csak a (mérten elérhetetlen)
+  `CommunityGateScreen`-ből konstruálódik, `ClubMemberManagementScreen` csak
+  a (mérten elérhetetlen) `ClubDetailScreen`-ből — mindkettő `keep`
+  minősítést kap a táblában, de a valós bejárási lánc szakadt
+  (`retirement-plan.md` §3.3).
+- **Csak statikus szövegillesztés.** Reflexív vagy futásidejű string-kulcs
+  alapú navigáció nem látható (a brief §9 kockázata, mérten megerősítve — a
+  fenti két community-képernyőn túl nem találtam más ilyen esetet, de a
+  checker ezt strukturálisan nem tudja kizárni).
+- **A flag-hatókör-számítás behúzás-alapú, nem AST-parser.** `dart
+  format`-tiszta fára támaszkodik (a projekt szabványa); egy kézzel rontott
+  behúzású sor téves hatókört adna. A valós fán ez nem fordult elő (a §2
+  gate `format` lépése ezt ellenőrzi is minden futásnál).
+- **A `dart run` csomag-build-hook zaja** (`Running build hooks...`) a
+  `--format json` kimenet elé is bekerül, ha valaki csővezetékben `jq`-val
+  dolgozza fel — ez nem a checker hibája, hanem a `dart run` burkolóé; egy
+  jövőbeli automatizált fogyasztónak `dart compile exe` vagy a stderr
+  elválasztása javasolt (ezt a kör nem valósítja meg, kívül esik a scope-on).
+
 ## 11. Review — a Claude tölti ki
