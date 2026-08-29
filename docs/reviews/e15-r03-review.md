@@ -12,7 +12,17 @@
 
 ## 1. Verdikt
 
-**CHANGES REQUESTED** — 1 MAJOR, 2 NOTE. Nincs BLOCKER.
+### VÉGSŐ DÖNTÉS: APPROVED (a javító kör után, `5c938294`)
+
+**Első kör (`cbcd6e08`): CHANGES REQUESTED** — 1 MAJOR, 2 NOTE, nincs BLOCKER.
+**Javító kör (`5c938294`): a MAJOR-1 ZÁRVA, mérve** — lásd a §3/MAJOR-1
+„Javítás-ellenőrzés" blokkot. A két NOTE elfogadott, nem igényel javítást.
+Nyitott BLOCKER/MAJOR/MINOR: **nincs**.
+
+---
+
+Az alábbi szakaszok az ELSŐ kör review-ját rögzítik (a leletek dokumentálása
+miatt változatlanul), a lezárásokkal kiegészítve.
 
 A kör érdemi tartalma (a mérő, a terv, a dokumentum-frissítések) **mért,
 helyes és a szerződésnek megfelelő**. Az egyetlen MAJOR egy olyan teszt, amely
@@ -148,6 +158,36 @@ vagy ha ez nem gazdaságos, TÖRÖLD a tesztet és a hozzá tartozó, valótlan
 kommentet (az A4 kötelező valódi-sértés próbája a §10.4-ben kézzel amúgy is
 dokumentálva van). **Amit tilos:** a komment megtartása a tautológia mellett.
 
+#### Javítás-ellenőrzés (`5c938294`) — **MAJOR-1 ZÁRVA**
+
+Az implementer az **(a)** utat választotta, és a lényegi pontot eltalálta: a
+két hely mostantól **bizonyíthatóan ugyanazt a logikát futtatja** egy közös
+helperen keresztül (`_retireRowsMissingSuccessorOrReason`,
+`screen_reachability_test.dart:70–79`). A próba (`:337–350`) a VALÓS,
+mért `retire` sorok egy MÁSOLATÁBAN üríti ki az egyik successort, és pontosan
+azt az egy sort várja vissza — nem csak azt, hogy „valami hibás".
+
+**A review ÚJRA lefuttatta a saját, eldobható próbáját** a javított
+`5c938294`-en: kiütöttem a közös helper testét
+(`if (false) failing.add(row.screenPath);`), majd futtattam KIZÁRÓLAG a
+próbatesztet:
+
+```
+flutter test test/tooling/screen_reachability_test.dart \
+  --plain-name "blanking one real retire row"
+→ 00:00 +0 -1: Some tests failed.
+  test/tooling/screen_reachability_test.dart 349:7  main.<fn>.<fn>
+  Failing: A4 … blanking one real retire row's successor turns this cell red
+```
+
+**Most PIROS** — pontosan az ellentéte a lelet előtti viselkedésnek (ott a
+kiütött őr mellett is `+1: All tests passed!` volt). A próba tehát valóban a
+mércét méri. A helper testét visszaállítottam, a klón tiszta
+(`git status --short` üres).
+
+**Nem gyengült a valódi cella sem:** a `:311–319` továbbra is a valós tervet
+parse-olja, `expect(retireRows, isNotEmpty)` guarddal, ugyanazon a helperen.
+
 ### NOTE-1 — Az imperatív csatorna egy-ugrásos; a kör ezt KIMONDJA, nem elhallgatja
 
 A checker azt méri, hogy egy osztály konstruálva van-e valahol `lib/` alatt,
@@ -181,7 +221,7 @@ a korlát dokumentált, nem rejtett.
 | A2 | az imperatív navigáció is elérhetőség | ✅ | `:90–130` fixture-cella (`OrphanScreen`, csak `Navigator.push`) |
 | A2b | a barrelen át hivatkozott képernyő is elérhető (D3) | ✅ | `:132–178` fixture-cella; az implementer §10.4(b) próbája szerint fájlnév-illesztésre PIROSRA vált |
 | A3 | minden elérhető legacy képernyőhöz nevesített E15 kör | ✅ | `:216–294`, a valós tervet parse-olja; a beépített próba (`:263–293`) VALÓDI |
-| A4 | minden `retire` tételhez indok ÉS felváltó | ✅ (az őr jó) | `:298–318`; a review saját próbája PIROSRA vitte — **de lásd MAJOR-1 a mellé tett tautológiáról** |
+| A4 | minden `retire` tételhez indok ÉS felváltó | ✅ | `5c938294:311–319` közös helperen; a review saját próbája PIROSRA vitte. A mellé tett falszifikációs próba a javító körben VALÓDIVÁ vált (MAJOR-1 zárva) |
 | A5 | a `ui_inventory_test` egzakt száma változatlan | ✅ | `git diff … -- test/ui/ui_inventory_test.dart` → 0 sor |
 | A6 | a `migration-status.md` MÉRT számokat tartalmaz, a paranccsal | ✅ | 68/28/25 + a `dart run …` parancs a dokumentumban; a review reprodukálta |
 
@@ -203,7 +243,14 @@ a korlát dokumentált, nem rejtett.
 - A `docs/adr/0470` a pre-flight commitban (`a4be396c`) készült, nem az
   implementer diffjében — a `docs/adr/**` tilos zóna tiszta.
 
-## 7. Merge-feltétel
+## 7. Merge-feltétel — teljesülés
 
-A MAJOR-1 javítása után: a javított teszt zölden, a gate újra zölden, és a
-Full Gate + Router CI a merge SHA-n `success`. Egyéb nyitott lelet nincs.
+| Feltétel | Állapot |
+|---|---|
+| MAJOR-1 javítva, a javítás MÉRVE | ✅ `5c938294`, a review saját próbája pirosra vitte a kiütött őrt |
+| Független gate izolált `/tmp` klónban a javított commiten | ✅ MIND ZÖLD (`format`, `analyze`, mindkét teszt-útvonal, `architecture`, `secrets`, `l10n`) |
+| Scope-audit | ✅ `scope_audit=ok`, `lib/**` érintetlen, A5 száma változatlan |
+| `gate_shape` | ✅ `ok` (az első futás `VIOLATION`-jét a javító kör orvosolta) |
+| Full Gate + Router CI a merge SHA-n `success` | a merge-lépés igazolja (exact-SHA, ADR 0086 §2) |
+
+Nyitott BLOCKER/MAJOR/MINOR: **nincs**. A kör a CI zöldjével merge-elhető.
