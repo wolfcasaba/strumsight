@@ -247,4 +247,96 @@ tools/round-gate.sh test/core/resources/resource_arbiter_test.dart test/e2e/reso
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Létrehozott fájlok** (mind az engedélyezett listáról, más nem):
+
+- `lib/core/resources/resource_priority.dart` — `ResourcePriority` rendezett
+  enum (`liveAudio` > `cameraFeedback` > `backgroundAi`), `outranks(other)`.
+- `lib/core/resources/resource_consumer.dart` — `ResourceConsumer` absztrakt
+  szerződés: `priority`, `isActive`, `isSuspended` getterek, `acquire`,
+  `release`, `pauseForHigherPriority`, `resume`. Nem hivatkozik semmilyen
+  konkrét koordinátor-típusra.
+- `lib/core/resources/resource_arbiter.dart` — `ResourceArbiter`
+  (`register`/`unregister`/`request`/`onMemoryPressure`) + a zárt
+  `ResourceDecision` eredménytípus (`ResourceGranted { suspended }` /
+  `ResourceDenied(ResourceDenialReason.equalPriorityActive)`), semmilyen
+  `FailureCode`-ot nem importál vagy talál ki.
+- `lib/core/resources/public.dart` — barrel a fenti hármon.
+- `test/core/resources/resource_arbiter_test.dart` — A1, A2, A4, A5 + egy
+  extra D1 (egyenlő prioritás nem előz) cella.
+- `test/e2e/resource_coexistence_test.dart` — A3, két sima `test()` cella
+  (route-leave és backgrounding), `testWidgets` NÉLKÜL (L513).
+- `docs/contracts/resource-coexistence.md` — a szerződés leírása.
+
+**Szabadon hagyott részleteken hozott döntések:**
+
+1. **`request(consumer)` szemantika.** Különböző prioritási szintek
+   EGYSZERRE aktívak lehetnek (ez maga a "coexistence") — a döntő csak akkor
+   avatkozik be, ha (a) egy magasabb prioritású kérés érkezik, ekkor minden
+   aktív, nem felfüggesztett, szigorúan alacsonyabb prioritású fogyasztó
+   `pauseForHigherPriority()`-t kap, vagy (b) egyenlő prioritású fogyasztó
+   már aktív ugyanazon a szinten — ekkor a döntés `ResourceDenied
+   (equalPriorityActive)`, és SEMMI nem függesztődik fel (ADR 0476 D1
+   szó szerint). Ez a modell teszi lehetővé, hogy élő hang + kamera + AI
+   normál esetben együtt fusson, a prioritás csak konfliktuskor dönt.
+2. **`onMemoryPressure()` — egy hívás, egy fogyasztó.** A metódus a
+   LEGALACSONYABB prioritású aktív, nem felfüggesztett fogyasztót
+   függeszti fel — pontosan egyet hívásonként. Ismételt hívás (elhúzódó
+   nyomás) a következő legalacsonyabbat éri, így a legmagasabb prioritású
+   aktív fogyasztó garantáltan utoljára kerül sorra (mérve:
+   `resource_arbiter_test.dart` „repeated pressure eventually reaches the
+   highest tier last"). Az „egyszerre mindenkit leállít" alternatívát az
+   ADR 0476 §6.1 kifejezetten hibás mintaként sorolja fel.
+3. **A memória-nyomás UGYANAZT a `pauseForHigherPriority()`-t hívja**, mint a
+   prioritás-alapú felfüggesztés — a `ResourceConsumer` szerződés nem
+   különböztet meg „miért függesztettek fel" okot; a fogyasztó csak azt
+   tudja, hogy fel van függesztve, és folytatható.
+4. **A2/A3 valódi koordinátorral mér, adapter-fogyasztón keresztül.** Mivel
+   `lib/core/resources/**` szándékosan NEM importálja sem az audio, sem a
+   kamera koordinátort (a fogyasztókat kizárólag a `ResourceConsumer`
+   szerződésen ismeri, D7), a teszt maga hoz létre egy privát
+   `_AudioBackedConsumer` / `_CameraBackedConsumer` adaptert, ami a VALÓDI
+   `AudioSessionCoordinator`/`CameraSessionCoordinator` lease-ére épül. Ez
+   bizonyítja, hogy az arbiter fizikailag nem tudja elvenni a lease-t (nincs
+   is rá referenciája), és a koordinátor saját BUSY-szemantikája
+   érintetlen marad.
+
+**A §7 gate MÉRT kimenete (zöld futás):** `format` → `analyze` → 4×
+`test <útvonal>` (rendre 6, 2, 7, 8 zöld cella) → `architecture` →
+`secrets` → `l10n` — mind ZÖLD, csonkítás nélkül futtatva
+(`tools/round-gate.sh test/core/resources/resource_arbiter_test.dart
+test/e2e/resource_coexistence_test.dart
+test/core/audio/audio_session_coordinator_test.dart
+test/core/camera/camera_session_coordinator_test.dart`).
+
+**Valódi-sértés próba (§6.1, KÖTELEZŐ) — MÉRT kimenet:**
+
+A `resource_arbiter.dart` `request()` felfüggesztés-ágát ideiglenesen
+lease-elvételre cseréltem:
+
+```dart
+for (final other in toSuspend) {
+  await other.release(); // ADR 0476 D2 VIOLATION — proof-of-break only.
+}
+```
+
+Ezzel a §7 gate cella `test/core/resources/resource_arbiter_test.dart`
+PIROSRA váltott (kilépési kód 1) — konkrétan **három** cella bukott, az A2
+a vártak szerint közöttük:
+
+- `A2 — ... suspending backgroundAi leaves the REAL AudioSessionCoordinator
+  lease untouched ...` → `Expected: true / Actual: <false>` a
+  `background.lease!.isActive` asszerción (60. sor) — a valódi mikrofon-lease
+  ténylegesen elszállt.
+- `A1` és `A5` is pirosra váltott (a fake fogyasztó `isActive` és `state`
+  ellenőrzésein), mert ugyanaz a kódág felelős mindkettőért — ez a
+  fogyasztói szerződés és a memória-nyomás-út közös felfüggesztés-hívási
+  pontja.
+
+A módosítást visszaállítottam (`await other.pauseForHigherPriority();`), és
+a §7 gate-et újra lefuttattam: minden cella ismét ZÖLD (lásd fent), a
+munkafa a visszaállítás után bit-azonos a commitolt állapottal
+(`git diff --stat` üres).
+
+## 11. Review — a Claude tölti ki
+
 ## 11. Review — a Claude tölti ki
