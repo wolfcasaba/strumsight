@@ -12,6 +12,52 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** nézd meg, hogy a `pubspec.yaml` `dev_dependencies` blokkja TARTALMAZZA-e az `integration_test`-et (a megíráskor NEM: csak `flutter_test` és `flutter_lints`), és mérd meg a `test/support/` MEGLÉVŐ fake-készletét (a megíráskor 12 fájl: `fake_audio.dart`, `fake_auth.dart`, `fake_settings.dart`, `fake_practice_session_clock.dart`, …). A harness ezekre ÉPÜL.
 
+## 0.0 Revízió — H2 önjavító kör (ADR 0112), 2026-08-29
+
+Az első futás **H2**-vel megállt: a „first practice" folyam a valódi appban nem
+volt végigjárható, mert a `lib/**`-ben **egyetlen hívó sem** navigált a
+`/practice/session` útvonalra (a Setup Start-gombja `PreparePractice`-t küldött,
+majd SnackBart mutatott és helyben maradt). Az implementer ezt a hiányzó
+lánc-lépést a harnessben pótolta — [L273](../LESSONS.md#l273) —, a review pedig
+BLOCKER-rel állította meg (`docs/reviews/e12-r11-review.md`, B1).
+
+**Az önjavító kör eldöntötte a normatív kérdést:** ez **termékhiba** volt, nem
+szándékosan nem-kész felület — az E02-R12 halasztásának címzett köre (E02-R13)
+fájl-szinten ki volt zárva a lezárásából, és utána egyetlen kör allowlistjére
+sem került fel ([ADR 0470](../adr/0470-practice-setup-navigates-to-the-session-route.md),
+[L541](../LESSONS.md#l541)).
+
+**Ami a `main`-en MEGVÁLTOZOTT az újrafuttatás előtt** (heal PR, ADR 0470):
+
+- a Setup Start-ja érvényes konfiguráció mellett `context.go(AppRoutes.practiceSession)`-nel
+  **navigál**, és a korábbi „command sent" SnackBar **megszűnt** (a
+  `practiceSetupStarted` ARB-kulcs a helyén maradt, de a képernyő már nem
+  használja);
+- a Start-kezelő a `start()` előtt és közvetlenül utána olvassa a
+  `practiceSessionHostProvider`-t — ez az auto-dispose aktiválási lánc
+  élettartam-szerződése, a **termékben** (ADR 0470 D3);
+- őrteszt a fán:
+  `test/features/practice/presentation/practice_setup_navigation_test.dart`.
+
+**Kötött feladat az újrafuttatásra:**
+
+1. A harness `test/support/e2e_harness.dart` **három áthidalását távolítsd el** —
+   a Setup-tap köré tett két `container.read(practiceSessionHostProvider)`-t és
+   a `session.router.go(AppRoutes.practiceSession)` hívást. A folyam ezek nélkül
+   megy végig; ha nem megy, az ÚJ mérés, és a §0 STOP-protokollja érvényes.
+2. A Setup-tap után a SnackBar-ra váró `pump(5s)` **feleslegessé vált** (nincs
+   több SnackBar) — ha a folyam enélkül is settle-öl, vedd ki; ha nem, mérd meg,
+   mi tartja, és a §10-ben írd le.
+3. A Hub-ra vitt `router.go(AppRoutes.practiceHub)` (a review másodlagos
+   megjegyzése) **maradhat**: a deep link valódi belépési út. A §10-ben nevezd
+   meg, hogy tudatos.
+4. Az A4 determinizmus-cella `createdAt`-kihagyása **marad** — az a
+   `PracticeSessionResultHistoryMapper` valódi fali órája (E12-R11 review N3),
+   önálló kör tárgya, ebben a körben NEM javítod.
+
+Az `allowed_paths` **változatlan**: a `lib/**` továbbra is tilos zóna ebben a
+körben.
+
 ## 0.0 Miért `test/e2e/` és nem `integration_test/`
 
 A SDD Kör 11 `integration_test/` könyvtárat ír elő. A MÉRT környezet: ezen a boxon **nincs Android SDK**, a CI-ban pedig ma **nincs emulátoros job** — egy `integration_test/` csomag tehát olyan mércét telepítene, amit sem a fejlesztői loop, sem a merge-kapu nem futtat. A repó mért igazsága szerint a NEM FUTTATOTT mérce rosszabb a hiányzónál. Ezért a kör a teljes-app, determinisztikus folyam-teszteket a `flutter test` gazdában futó `test/e2e/` sávra teszi (ugyanaz a `pumpWidget` a valódi `StrumSightApp`-pal, valódi routerrel, fake adapterekkel), és az eszköz-szintű `integration_test` utat egy KÉSŐBBI, capability-igazolt kör dolgává teszi (a Kör 13 device-mátrixa után). A §5.1 ezt köti meg.

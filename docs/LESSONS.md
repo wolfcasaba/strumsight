@@ -21233,3 +21233,56 @@ változatlan maradt, csak a felület került eggyel közelebb a ledgerhez
 
 **Őrteszt:** nincs — folyamat-lecke a pre-flight lépéssorára; a védelem a
 brief-sablon „mérce-felület próbahívása" lépése.
+
+---
+
+## L541 — A halasztásnak nem elég címzettet adni: a címzett kör allowlistjén ott kell lennie a halasztó fájlnak (E12-R11 / H2 önjavító kör, 2026-08-29)
+
+**Mit mértünk.** A Practice Setup Start-gombja két és fél hónapon át
+`PreparePractice`-t küldött, majd SnackBart mutatott és helyben maradt — a
+`/practice/session` útvonalnak **nulla hívója volt a `lib/**` fán**
+(`grep -rn "AppRoutes.practiceSession" lib/` → csak a konstans, a
+route-regisztráció és egy shell-predikátum). A hiány nem véletlen és nem
+felejtés volt:
+
+1. az **E02-R12** §5/5 kötött döntése szándékosan halasztott, *címzettel*:
+   „a Setup **nem** navigál a session-képernyőre (az még nem létezik)", a
+   fájl fejléce pedig kimondta: „**Kör 13 brings the session route**";
+2. a címzett **E02-R13** megépítette a route-ot és a képernyőt, de a
+   `practice_setup_screen.dart` a **tilos zónájában** volt (round-doc 135. sor;
+   a záró mérés szerint a fájlon „0 sor" változott) — nem tudta lezárni;
+3. az **E02-R21** célja szó szerint az volt, hogy a Hub → Setup → Session úton
+   „egy valódi felhasználó valóban le tudjon futtatni" egy sessiont, de a
+   `practice_setup_screen.dart` a §4 engedélyezett-fájllistáján **sem**
+   szerepelt.
+
+A halasztás így három körön át túlélte a saját címzettjét. A rés csak akkor
+bukott ki, amikor az **E12-R11** E2E harness megpróbálta végigjárni a folyamot,
+és a hiányzó lépést a tesztből kellett pótolnia ([L273](#l273)) — H2 halt, egy
+elveszett kör.
+
+**Miért.** A halasztás és a scope két külön mechanizmus, és a repóban semmi nem
+kötötte össze őket. Egy „Kör N majd megcsinálja" komment **állítás a jövőről**,
+amit a Kör N briefjének allowlistje csendben megcáfolhat; a review a Kör N
+diffjét nézi, nem azt, hogy milyen ígéretet kellett volna teljesítenie. A
+gate-ek is zöldek maradnak: minden komponens tesztelt, csak a köztük lévő
+felhasználói lépés hiányzik — pontosan azt egyik komponens-teszt sem méri.
+
+**Hogyan alkalmazd.**
+
+- Ha egy kör kódban halaszt („Kör N brings …", „wired in a later round"), a
+  **címzett kör briefjének §4 allowlistjén** ott kell lennie a halasztó
+  fájlnak. Ha nincs, a halasztás nem címzett, hanem árva — akkor inkább ne
+  halassz, vagy nevezz meg egy önálló kört.
+- A pre-flight olcsó ellenőrzése: minden ÚJ route-konstansra egy
+  `grep -rn "AppRoutes.<új>" lib/` — ha csak a konstans, a regisztráció és a
+  predikátumok jönnek vissza, a felület a termékből **elérhetetlen**.
+- Az „elérhető-e egyáltalán" nem folyam-teszt-kérdés. Egy vertical slice-ot
+  csak akkor szabad E2E cellára bízni, ha az útját előbb egy olcsó,
+  forrás-szintű méréssel igazoltuk — különben az E2E kör a saját scope-ján
+  kívüli termékhibába fut, és halt lesz belőle.
+
+**Őrteszt:**
+`test/features/practice/presentation/practice_setup_navigation_test.dart`
+(R1 útvonal, R2 auto-dispose élettartam) — a javítás előtt mindkét cella piros.
+Döntés: [ADR 0470](adr/0470-practice-setup-navigates-to-the-session-route.md).
