@@ -202,4 +202,54 @@ tools/round-gate.sh test/e2e/
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Amit szállítottam** (a §4 engedélyezett listája szerint, mind ÚJ fájl):
+
+- `test/support/fake_clock.dart` — `HarnessClock`: a MEGLÉVŐ `FakePracticeSessionClock` + `FakePracticeTickSource` (test/support/, nem szerkesztve) egyetlen `tick(tester, duration)` hívásba zárva, hogy a szinkron clock és az aszinkron tick-forrás sose essen szét (L122).
+- `test/support/fake_network_guard.dart` — `FakeNetworkGuard`: Dio `HttpClientAdapter` (dob + rögzít), `dart:io` `HttpOverrides` (dob + rögzít), és egy folyamat-szintű platform-csatorna catch-all a `TestDefaultBinaryMessenger.allMessagesHandler`-en keresztül (NEM `setMockMessageHandler(null, …)` — ez az API nem létezik ilyen alakban a Flutter SDK-ban, lásd alább). A catch-all a `flutter/`-prefixű motor-saját csatornákat (pl. `flutter/platform` — a `MaterialApp`/`Title` widget minden boot alkalmával hívja) a delegate-nek engedi át; minden más (bármely plugin-csatorna) rögzítve és eldobva.
+- `test/support/e2e_harness.dart` — determinisztikus bootstrap (`bootE2eApp`/`restartE2eApp`), a két folyam megosztott lépései (`walkOnboardingViaSkip`, `runFirstPracticeSession`), és a history-snapshot segédek (`loadPracticeHistory`, `snapshotHistoryEntry`).
+- `test/e2e/first_practice_offline_test.dart` — A1/A2 fő cella, A4 (kétszeri futtatás, saját fájlon belül) és A3 (három önálló csatorna-cella).
+- `test/e2e/returning_user_restart_test.dart` — A2 (restart), A4 (kétszeri futtatás) és A5 (forrás-szintű őr).
+- `docs/testing/e2e-harness.md` — a lefedettség és a HATÁROK.
+
+**Mért, dokumentált eltérés a brief eredeti API-feltételezésétől:** a `TestDefaultBinaryMessenger` API-ja (`/home/ubuntu/flutter/packages/flutter_test/lib/src/test_default_binary_messenger.dart`) `setMockMessageHandler(String channel, …)`-t definiál — a `channel` paraméter NEM nullázható, tehát a `setMockMessageHandler(null, handler)` „minden csatornára" minta, amit a kutatásom kezdetben feltételezett, nem fordul. A tényleges, dokumentált catch-all mechanizmus a `TestDefaultBinaryMessenger.allMessagesHandler` mező (l. a fájl 138. sora: „Handler that intercepts and responds to outgoing messages, pretending to be the platform, for all channels."). A guard ezt használja — ADR 0472 D2 szövege ez alapján teljesül, csak a konkrét API más.
+
+**Mért, dokumentált tény a Practice V2 production wiringról (NEM `lib/**` hiba a mai scope-ban, hanem a harnessnek kellett kezelnie):** `practiceSessionHostProvider` (`lib/features/practice/presentation/practice_effect_listener.dart:99`) egy sima (nem autoDispose) `Provider`, ami `ref.watch`-ol egy autoDispose láncot (`practiceActiveSessionInputsProvider` → `practiceSessionControllerProvider(inputs)` család). A Setup képernyő Start-kezelője és a prepare sink (`practice_setup_controller.dart` `_activateSessionSink`) mindkettő `ref.read`-et használ, ami NEM tartja életben az autoDispose-t; és `grep -rn "AppRoutes.practiceSession\b" lib/` szerint SEHOL a `lib/**`-ben nincs automatikus navigáció a Setup-tól a Session útvonalig. Emiatt a `practiceSessionHostProvider`-t NEM figyelő teszt (vagy egy ma létező, valódi felhasználó) az aktivált munkamenetet elveszíti, mielőtt a Session képernyő megjelenne. A harness ezt a `container.read(practiceSessionHostProvider)` két, pontosan időzített hívásával hidalja át (`runFirstPracticeSession`, a Start-tap ELŐTT és UTÁN, pump nélkül közéjük) — ugyanaz a művelet, amit a `practice_production_wiring_test.dart` is végez a `PreparePractice` előtt/után, csak a Setup-képernyő tap-jéhez igazítva. Ez NEM „megkerülő" tesztátírás (L273): a UI-n keresztül halad (`tester.tap`/`pumpAndSettle`), a `container.read` pusztán a Riverpod-figyelőt regisztrálja, nem ad hozzá vagy hagy ki egy chain-lépést. Dokumentálva a §10-ben, hogy egy KÉSŐBBI kör (amely a Setup→Session navigációt production kódban megépíti) tudja, hogy ez a pontos race a mai állapot.
+
+**Két mért fagyás-csapda kezelése:**
+- L513/ADR 0472 D6: `E2eSession.dispose` sosem awaitol broadcast `StreamController.close()`-t — a saját fake engine-jeinket `unawaited(...)`-tel zárjuk, a `ProviderContainer.dispose()` maga szinkron, a `PracticeSessionController.dispose()` belső `await`-jei (amiket a `ref.onDispose` indít) leválasztva futnak.
+- flutter_animate teardown-timer: mindkét e2e teszt fő cellája `await tester.pump(const Duration(milliseconds: 400))`-zel zár.
+
+**A gate — szó szerint, csonkítás nélkül, kétszer, önálló hívásokkal:**
+
+1. `tools/round-gate.sh test/e2e/first_practice_offline_test.dart test/e2e/returning_user_restart_test.dart test/app/offline_network_guard_test.dart` → **MINDEN GATE ZÖLD** (format, analyze, mindhárom teszt-lépés — 5+3+4 cella —, architecture, secrets, l10n).
+2. Determinizmus-ismétlés, önálló hívás: `tools/round-gate.sh test/e2e/` → **MINDEN GATE ZÖLD** (8 cella a két e2e fájlban).
+3. `test/app/offline_network_guard_test.dart` (A6) VÁLTOZATLAN — nem szerkesztve, a gate mindkét futtatásban zöld.
+
+**Valódi-sértés próba (KÖTELEZŐ, §6.1 alja) — tényleges kimenet:**
+
+Ideiglenesen meggyengítettem `test/support/fake_network_guard.dart` `_GuardedHttpClientAdapter.fetch`-jét, hogy egy kimenő Dio-hívást átengedjen (ne dobjon), majd lefuttattam `flutter test test/e2e/first_practice_offline_test.dart --plain-name "Dio HttpClientAdapter"`:
+
+```
+00:00 +0: A3 — fake_network_guard blocks every channel, one cell per path Dio HttpClientAdapter.fetch is blocked and recorded
+00:00 +0 -1: A3 — fake_network_guard blocks every channel, one cell per path Dio HttpClientAdapter.fetch is blocked and recorded [E]
+  Expected: throws <Instance of 'NetworkGuardViolation'>
+    Actual: <Closure: () => Future<ResponseBody>>
+     Which: returned a Future that emitted <Instance of 'ResponseBody'>
+
+  package:matcher                                    expectLater
+  package:flutter_test/src/widget_tester.dart 507:8  expectLater
+  test/e2e/first_practice_offline_test.dart 78:13    main.<fn>.<fn>
+
+00:00 +0 -1: Some tests failed.
+```
+
+Az A3 Dio-cella a vártnak megfelelően PIROSRA váltott. Ezután `git diff` üres eredményt adott a fájlra (a visszaállítás pontos volt), és a fenti §7 gate mindkét hívása újra ZÖLD lett a visszaállítás után.
+
+**Amit NEM mértem, és miért:**
+
+- Valódi mikrofon / valódi DSP — a harness deklarált határa (docs/testing/e2e-harness.md), eszköz-szintű kör dolga.
+- A `practiceHapticsEnabledProvider`/`practiceFeedbackOutputProvider` valódi (nem no-op) útja — szándékosan platform-határ fake, ugyanaz a minta, mint a `fakeAudioOverrides()`.
+- A Daily Challenge kártya / `PracticeHubScreen`'s `now` paraméter valódi `DateTime.now()`-ja — a folyam a Quick Start kártyát használja (nem függ `now`-tól), ezért ez nem érinti az A4/A5 determinizmust; dokumentálva, nem javítva (lib/** tiltott zóna).
+- A `PracticeAreaHubScreen` (adaptive shell változat) — a harness `adaptiveShellEnabled: false`-t állít be (a `FeatureFlags` default konstruktora), így a legacy `PracticeHubScreen`-t járja be, ugyanazt a mintát követve, mint `practice_routing_test.dart`.
+
 ## 11. Review — a Claude tölti ki
