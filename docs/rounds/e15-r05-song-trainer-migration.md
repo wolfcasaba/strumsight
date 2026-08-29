@@ -373,6 +373,26 @@ Ugyanaz az adat, ugyanaz a sorrend, ugyanazok az állapotok (üres, betöltés, 
 
 Üres lista → `SsEmptyState`, hiba → `SsFailureState`, betöltés → a design-rendszer betöltés-komponense (`SsSkeleton`, vagy `SsAsyncState`, ha a képernyő már azon a mintán van). **NEM elfogadható gyengítés:** nyers `CircularProgressIndicator` (§0.0/R10: hét darab van) vagy csupasz `Text('Hiba')` meghagyása.
 
+**§0.0/R13 pontosítás (orchestrátor-döntés a review-ban, ADR 0087 §2 — a kör
+saját, még nem merge-elt briefje).** A design-rendszer komponense a KÖTELEZŐ
+alapeset. Kiváltani KIZÁRÓLAG ott szabad, ahol a komponens szerződése MÉRHETŐEN
+nem teljesíthető adat- vagy akció-gyártás nélkül — mérve ezen a fán:
+`SsFailureState` egy valódi `AppFailure`-ből származó `SsFailurePresentation`-t
+kíván (`ss_failure_state.dart:14-22`), miközben ezeknek a képernyőknek
+`String? failureCode`-juk van; az `SsEmptyState.onAction` pedig **kötelező**
+(`ss_empty_state.dart:11-19`). Mindkét kiváltás a §5.1/G2, illetve a §5.1/G3
+sértése volna, a komponens tágítása pedig a §4 tilos zónája
+(`lib/core/design_system/**`). Ilyenkor a helyettesítő **kizárólag
+design-rendszer tokenekből és primitívekből** épülhet (`SsColorScheme`,
+`SsTypography`, `SsSpacing`, `SsCard`, `SsButton` — nyers `Colors.`,
+`textTheme`, `colorScheme` vagy literál térköz TILOS), **és két dolog jár
+hozzá:** (a) képernyőnkénti indoklás a §10-ben, (b) egy gépi cella, amely
+PIROSRA vált, ha az adott állapot visszakerül nyers Materialra (A2). Indoklás
+és cella nélkül a kiváltás gyengítés, nem mérnöki döntés. A design-rendszer
+alatta lévő hiánya (nincs `AppFailure` nélküli hibaállapot és nincs akció
+nélküli üres állapot) BACKLOG egy olyan körnek, amely a
+`lib/core/design_system/**`-hoz nyúlhat.
+
 **Három tiltás, amit az E15-R04 MÁR MÉRT MAJOR-ként (a §7 gépi őrei fogják):**
 
 1. **A képernyő-specifikus hibaszöveg nem cserélhető a `SsFailureState`
