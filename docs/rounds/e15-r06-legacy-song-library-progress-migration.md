@@ -445,6 +445,14 @@ kapott egy `Locale locale` és `double textScale` paramétert (alap: `en`/`1`),
 korábban nem volt theme beállítva, de a képernyő mostantól `SsColorScheme`-et
 olvas, tehát kellett).
 
+**Javító körben frissítve (F2, review 1. forduló MAJOR-1):** minden A3 cella
+MOST MÁR explicit telefon-méretű viewportot állít be a testtörzs elején
+(`tester.view.physicalSize = const Size(360, 640); tester.view
+.devicePixelRatio = 1.0; addTearDown(tester.view.reset);`), mert az
+alapértelmezett `flutter_test` 800×600 canvas szélesebb minden telefonnál —
+lásd 10.6/10.11 a MÉRT hatásért (a BLOCKER-1 regresszió és a `WeeklyBars`
+lusta-építési hiánya emiatt maradt láthatatlan az 1. körben).
+
 Az új cellák (mindkét fájlban `for (scale in [1.5, 2.0, 2.5]) for (locale in
 [en, hu])` ciklusban, `'... renders without overflow at textScaler $scale
 ($locale)'` névmintával):
@@ -456,13 +464,13 @@ Az új cellák (mindkét fájlban `for (scale in [1.5, 2.0, 2.5]) for (locale in
   …`, `empty setlist detail …`, `populated setlist detail …` — 24 cella
   (3×2×4).
 
-Mindegyik `expect(tester.takeException(), isNull)`-lal mér — a küszöb
-PONTOSAN a `2.0` (INKLUZÍV, A3 feltétele), ez MINDEN cellán zöld. A `2.5`
-szintén zöld mindenhol (a briefnek megfelelően ez bónusz, nem követelmény). Az
-`1.5` szinten a `setlist_flow_test.dart` mind a 8 cellája zöld; a
-`progress_screen_test.dart`-ban a **`populated` cellák 1.5-nél `skip`-elve
-vannak** — lásd 10.6, ez egy MÉRT, a kör hatáskörén KÍVÜLI, előzetes hiba, nem
-gyengítés.
+Mindegyik `expect(tester.takeException(), isNull)`-lal mér. A
+`setlist_flow_test.dart` mind a 24 cellája — mindhárom skálán, mindkét
+locale-on — ZÖLD a telefon-viewporton (a BLOCKER-1 javítása után, lásd
+10.11). A `progress_screen_test.dart`-ban az ÜRES dashboard mind a 6 cellája
+ZÖLD; a **`populated` dashboard mindhárom skálán `skip: true`-val van
+jelölve** (korábban csak `1.5` volt — lásd 10.6, ez egy MÉRT, a kör
+hatáskörén KÍVÜLI, előzetes hiba a `weekly_bars.dart`-ban, nem gyengítés).
 
 ### 10.4 A2 — az állapotok akció-parancsai (mit tesztel a `SsEmptyState` jelenlétét)
 
@@ -495,30 +503,75 @@ scroll minta) csomagolja be az `SsEmptyState`-et. Mérve: a cella zöld lett.
 
 ### 10.6 Mért, de a kör hatáskörén KÍVÜLI hiba (NEM javítva)
 
-**`lib/features/progress/widgets/weekly_bars.dart` — 7px túlcsordulás
-`textScaler 1.5`-nél, `en` ÉS `hu` locale-on, a `populated` (nem üres)
-`progress_screen.dart` állapotban.** Mérve: EZ a hiba a kör ELŐTT is
-megvolt — reprodukáltam az `origin/main`-beli, változatlan
-`progress_screen.dart`+`weekly_bars.dart` páron is (`git show
+**JAVÍTVA a javító körben (review 1. forduló MAJOR-1/MAJOR-2): az alábbi
+bekezdés az 1. körös állítást a MÉRT valóságra cserélte.** Az eredeti kör
+cellái a `flutter_test` alapértelmezett 800×600 viewportján futottak, ami
+szélesebb ÉS magasabb minden telefonnál. A többlet-magasság miatt a
+`populated` dashboard `ListView`-ja `2.0`/`2.5` szövegskálán **fel sem
+építette** a `WeeklyBars`-ot (és vele a „this week" szekciót, a
+`_StrumAccuracyCard`-ot, az `_AccStat`-ot, a `_SourceBreakdown`-t) — a
+lusta `ListView` a viewport alá eső gyermekeket nem rendereli. A `2.0`/`2.5`
+cellák tehát ÜRES fát mértek, nem a valódi képernyőt; a §10.3/10.6 korábbi
+„a `2.0` és a `2.5` mindkét állapotban zöld" mondata emiatt mérési
+artefaktum volt, nem tény.
+
+A javító kör telefon-méretű viewportra (360×640, `devicePixelRatio 1.0`)
+állította át MINDEN A3 cellát (`test/features/progress/progress_screen_test.dart`,
+`test/features/songs/setlist_flow_test.dart`), és a populated dashboard
+celláit `tester.scrollUntilVisible(find.byType(WeeklyBars), …)`-szal
+végiggörgeti, mielőtt a kivételt mérné — így a `WeeklyBars` ténylegesen
+felépül. Ezen a helyes mércén **mindhárom szövegskála túlcsordul**:
+
+| `textScaler` | Mért túlcsordulás | `origin/main` (azonos harness) |
+|---|---|---|
+| 1.5 | 7 px | 7 px |
+| 2.0 | 22 px | 22 px |
+| 2.5 | 73 px | 73 px |
+
+Mindhárom szám azonos `en`-en és `hu`-n, és — a javító kör saját, ideiglenes
+visszaállításos próbájával újramérve — azonos az `origin/main`-beli,
+változatlan `progress_screen.dart`+`weekly_bars.dart` páron is (`git show
 origin/main:lib/features/progress/screens/progress_screen.dart` ideiglenes
-visszaállítással), és a 7px túlcsordulás OTT IS jelentkezett. Gyökérok: a
+visszaállítással, majd a HEAD-kód visszamásolásával). **Ez tehát PRE-EXISTING
+hiba, nem a migráció regressziója.** Gyökérok: a
 `weekly_bars.dart` `SizedBox(height: _maxBar + 46)` fix magassági
 költségvetése két, kb. 15px-es szövegsorra van méretezve alapértelmezett
-szövegskálán; `1.5`-nél a két sor magasabb lesz, mint a költségvetés.
+szövegskálán; a szövegskála nő, a doboz nem.
 
 Ez a fájl NINCS az engedélyezett fájllistán (`lib/features/progress/
 widgets/**` nem szerepel a §4 táblában), tehát a §0.1 STOP-protokoll szerint
-NEM javítottam — a javítás egy önálló, `weekly_bars.dart`-ot célzó körbe
-tartozik. A `progress_screen_test.dart` két érintett cellája (`populated
-dashboard renders without overflow at textScaler 1.5 (en/hu)`) `skip:
-true`-val van jelölve, a fenti indoklással a kódban is — NEM törölve, NEM
-gyengítve (a matcher és az `expect` változatlan, csak nem fut le). A `2.0`
-(a KÖTELEZŐ küszöb) és a `2.5` mindkét állapotban (üres ÉS populated) zöld.
+NEM javítottuk — a javítás egy önálló, `weekly_bars.dart`-ot célzó körbe
+tartozik. A `progress_screen_test.dart` MINDHÁROM érintett skálájú
+`populated dashboard renders without overflow at textScaler <scale>
+(en/hu)` cellája (6 db, korábban csak az `1.5` kettő volt `skip`-elve)
+`skip: true`-val van jelölve, a fenti mért px-értékekkel a kódban is — NEM
+törölve, NEM gyengítve (a matcher és az `expect` változatlan, csak a helyes
+mérce mellett most mindhárom skálán bizonyítottan nem fut le zölden). Az
+ÜRES dashboard cellái (mindhárom skála, mindkét locale) és a setlist-cellák
+(mind a 28, a BLOCKER-1 javítása után) VÁLTOZATLANUL zöldek a telefon-
+viewporton — lásd §10.11.
 
-**Javaslat:** egy jövőbeli kör (owner TBD) igazítsa a `weekly_bars.dart`
-`_maxBar + 46` konstansát a tényleges szövegmagassághoz (pl. `MediaQuery`
-`textScaler`-rel skálázva), vagy vezessen be `Flexible`/`FittedBox`-ot a
-két Text-sor köré.
+**A3 revideált állapota:** a küszöb ALATT (`1.5`) → a populated dashboard
+TÚLCSORDUL (pre-existing, nem ennek a körnek a hibája); PONTOSAN a küszöbön
+(`2.0`) → a populated dashboard SZINTÉN túlcsordul (ugyanaz a pre-existing
+ok) — az A3 „2.0-nál nincs túlcsordulás" kritériuma emiatt a `weekly_bars.dart`
+javításáig NEM teljesül a populated állapotban; az ÜRES állapotban és
+mindkét setlist-képernyőn viszont mindhárom skálán teljesül.
+
+**Javaslat (F6, névvel, hogy ne maradjon gazdátlan mint a §10.10 A8-nál):**
+egy önálló, kifejezetten `lib/features/progress/widgets/weekly_bars.dart`-ra
+brief-elt kör (a Ch15 sor egy jövőbeli, még üres helyén, hasonlóan a §10.10
+A8 visszavonási javaslatához) igazítsa a `WeeklyBars.build()`
+(`weekly_bars.dart:32`) `SizedBox(height: _maxBar + 46)` sorát: a `46`
+konstans (két ~15px szövegsor + 8px rés) rögzített, holott a tényleges
+szövegmagasság `MediaQuery.textScalerOf(context)`-tel nő. Konkrét javítás:
+vagy skálázza a `46`-ot (`46 * MediaQuery.textScalerOf(context).scale(1)`
+jelleggel) a `SizedBox` magasságában, vagy cserélje a rögzített `SizedBox`-ot
+egy `IntrinsicHeight`+`Flexible`/`FittedBox` párra a két `Text`-sor (a
+perc-érték és a hét napja) köré, hogy a doboz a valódi tartalommagassághoz
+igazodjon nagy szövegskálán is. A javításnak a `progress_screen_test.dart`
+jelenleg `skip: true`-val jelölt 6 celláját kell PIROSBÓL ZÖLDRE fordítania —
+ez a kör saját reprodukálható elfogadás-mércéje.
 
 ### 10.7 Kompromisszumok — hol NEM illett a design-rendszer komponense, és miért
 
@@ -630,5 +683,106 @@ képernyő fájljait, sem a hozzájuk tartozó route-okat NEM módosította
 (`git diff --stat` a fájlokon üres).
 5. Új ARB-kulcsok listája (`en`+`hu`), vagy kimondottan „nem kellett új kulcs".
 6. **A8 — a visszavonási gazdátlanság rögzítése** (§0.0.A/R5), végrehajtás nélkül: a `retirement-plan.md` §4 az `E15-R04`-hez rendelte az öt `retire` képernyő (`LibraryScreen`, `SessionDetailScreen`, `StreakScreen`, `SongListScreen`, `SongBuilderScreen`) visszavonási felülvizsgálatát, a queue `E15-R04` sora viszont a Practice + Learn migrációt futtatta le — a visszavonásnak ma NINCS gazdája a sorban. Javaslat, hogy melyik jövőbeli kör vigye; **törlést, route-eltávolítást és migrációt ez a kör NEM végez** (ADR 0471 D5).
+
+### 10.11 Javító kör (review 1. forduló — 1 BLOCKER, 2 MAJOR, 3 MINOR)
+
+A review 1. fordulója (`docs/reviews/e15-r06-review.md`) hat leletet talált:
+1 BLOCKER, 2 MAJOR, 3 MINOR. Mind a hat javítva/dokumentálva ebben a
+javító körben.
+
+**F1 (BLOCKER-1) — a `SetlistDetailScreen` üres állapota túlcsordult a
+KÖTELEZŐ `2.0` küszöbön.** A `setlist_list_screen.dart`-on már bevezetett
+`_ScrollableIfShort` minta (10.5/2) a detail-képernyőre NEM került fel — a
+`SsEmptyState` ott védtelen maradt. Javítás:
+`lib/features/songs/screens/setlist_detail_screen.dart` kapott egy saját,
+privát `_ScrollableIfShort` widgetet (a Dart-privátság miatt a
+list-screen-beli példány nem importálható — a duplikáció szándékos, mert a
+közös hely `core/design_system/**` tilos zóna lenne), és a `songs.isEmpty`
+ágban ez csomagolja be az `SsEmptyState`-et.
+
+MÉRT előtte/utána (telefon-viewport, 360×640, `hu`, `textScaler 2.0`, a
+javítás ideiglenes visszaállításával majd visszaállításával mérve):
+
+```
+JAVÍTÁS ELŐTT: empty setlist detail renders without overflow at textScaler 2.0 (hu) → PIROS,
+                A RenderFlex overflowed by 72 pixels on the bottom.
+JAVÍTÁS UTÁN:  empty setlist detail renders without overflow at textScaler 2.0 (hu) → ZÖLD
+```
+
+A 72 px pontosan egyezik a review saját mérésével. A teljes
+`setlist_flow_test.dart` (most már telefon-viewporton, lásd F2) 29/29 zöld a
+javítás után.
+
+**F2 (MAJOR-1) — az A3 cellák nem azt mérték, amit állítottak.** Mindkét A3
+teszt-fájl (`progress_screen_test.dart`, `setlist_flow_test.dart`) minden
+cellája MOST MÁR a teszttörzs elején beállítja a telefon-méretű viewportot
+(`tester.view.physicalSize = const Size(360, 640); tester.view
+.devicePixelRatio = 1.0;`) és `addTearDown(tester.view.reset)`-et regisztrál.
+Ez volt az F1 regresszió láthatóvá tételének előfeltétele (fent). A
+`progress_screen_test.dart` populated celláit ráadásul `tester
+.scrollUntilVisible(find.byType(WeeklyBars), 300, …)` görgeti végig, mielőtt
+a kivételt mérné — enélkül a `ListView` lustasága miatt a `WeeklyBars` (és
+minden alatta lévő szekció) fel sem épült volna `2.0`/`2.5`-nél, és a cella
+üres fát mért volna zöldre. Lásd §10.6 a mért 7/22/73 px eredményért és a
+`skip: true` indoklásért — a §10.3 is frissült ugyanezzel.
+
+**F3 (MAJOR-2) — a §10.6/§10.3 a MÉRT valóságot mondja.** Lásd a §10.6 teljes
+átírását fent: kimondja, hogy a `2.0`/`2.5` korábban a `WeeklyBars`
+fel-nem-épülése miatt volt zöld (mérési artefaktum, nem tény), hogy a helyes
+mércén mindhárom skála túlcsordul (7/22/73 px), hogy ez PRE-EXISTING
+(`origin/main`-en, ugyanazzal a harnesszel, azonos számok — a javító kör ezt
+saját, ideiglenes visszaállításos próbával újramérte), és hogy a gyökérok a
+`weekly_bars.dart` `SizedBox(height: _maxBar + 46)` sora, a kör `allowed_paths`-án
+kívül. A `docs/ui/migration-status.md` E15-R06 szakaszát megvizsgáltam
+(`grep -n "textScaler\|2\.0\|zöld"`): NEM állítja a hamis „mindkét állapotban
+zöld" tényt (a 30–32. sora eleve a §10 handoff-ra utal semleges
+megfogalmazással), tehát ott nem volt mit javítani.
+
+**F4 (MINOR-1) — `_ProgressEmpty` elvesztette a `ConstrainedBox(maxWidth:
+320)`-t.** `lib/features/progress/screens/progress_screen.dart`
+`_ProgressEmpty.build()`: a `Padding` gyermeke most egy
+`ConstrainedBox(constraints: BoxConstraints(maxWidth: 320))`-ba van
+csomagolva a `Column` köré, ugyanúgy, ahogy a legacy
+`core/widgets/empty_state.dart:45` tette. Tableten/fekvő módban a cím és az
+ikon most is 320 logikai px-re korlátozva középre rendeződik, nem feszül
+széltől szélig.
+
+**F5 (MINOR-2) — felhasználói string gép-mezőben.**
+`lib/features/songs/screens/setlist_list_screen.dart`: a lista-sor
+`SsCardAction(label: set.name, …)` most `SsCardAction(label: l10n
+.setlistOpen, …)`. Új ARB-kulcs, `en`+`hu` EGYSZERRE
+(`lib/l10n/base/app_en.arb`: `"setlistOpen": "Open"`;
+`lib/l10n/base/app_hu.arb`: `"setlistOpen": "Megnyitás"`), majd `dart run
+tool/gen_l10n_segments.dart --write` a generált aggregátumra
+(`lib/l10n/app_en.arb`/`app_hu.arb`). A felhasználó által írt szettlista-név
+többé nem kerül gép-célú mezőbe.
+
+Dokumentálva (javítás NÉLKÜL, mert `lib/core/design_system/**` tilos zóna):
+az `SsContentCard(title:)` a `ss_content_card.dart:118–121` szerint
+`maxLines: 2` + ellipszis-vágást alkalmaz a címre. A legacy
+`ListTile.title` szabad sortördeléssel jelenítette meg a szettlista nevét;
+a migrált `SsContentCard` egy két sornál hosszabb, felhasználó által írt
+nevet mostantól „…"-vel csonkol. Ez a design-rendszer komponens szerződése,
+nem ennek a képernyőnek a hibája — de a felhasználó számára látható
+viselkedés-változás, ezért itt rögzítve.
+
+**F6 (MINOR-3) — a `weekly_bars.dart` hibának most van nevesített
+javaslata.** Lásd a §10.6 „Javaslat (F6, névvel…)" bekezdését: konkrét fájl
+(`weekly_bars.dart:32`), konkrét konstans (`_maxBar + 46`), két konkrét
+javítási irány (textScaler-rel skálázott magasság, vagy
+`IntrinsicHeight`+`Flexible`/`FittedBox`), és egy konkrét, reprodukálható
+elfogadás-mérce (a `progress_screen_test.dart` jelenleg `skip: true` 6
+cellája fordul PIROSBÓL ZÖLDRE).
+
+**Záró gate:** a §7 parancs (a 17 megnevezett teszt-útvonallal, csővezeték/
+`tail`/`&&` nélkül) mind a 22 lépésen ZÖLD a javító kör után — `format`,
+`analyze`, mind a 17 `test <útvonal>` lépés külön processzben, `architecture`,
+`secrets`, `l10n`. A hat S11-őr (`test/app/**` 5 fájlja +
+`test/features/today/hub_navigation_test.dart`) `git diff --stat`-ja
+VÁLTOZATLANUL üres. A `git status --short` a javító kör után kizárólag az
+`allowed_paths` 10 fájlját mutatja: a §10.1–10.10-ben leírt eredeti kör
+fájljai (3 képernyő, 2 teszt-fájl) plusz az `app_en.arb`/`app_hu.arb`
+generált aggregátum (az F5 új `setlistOpen` kulcsa miatt) és ez a
+kör-dokumentum.
 
 ## 11. Review — a Claude tölti ki

@@ -627,6 +627,7 @@
     }
   },
   "setlistAddSong": "Add song",
+  "setlistOpen": "Open",
   "setlistPlayAll": "Play set",
   "setlistEmptyDetail": "Add songs to this set with the + button.",
   "setlistEmptyDetailTitle": "No songs in this set",

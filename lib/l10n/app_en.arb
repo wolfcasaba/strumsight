@@ -3671,6 +3671,7 @@
   "setlistName": "Setlist name",
   "setlistNew": "New setlist",
   "setlistNoSongsYet": "Create a song first, then add it here.",
+  "setlistOpen": "Open",
   "setlistPlayAll": "Play set",
   "setlistRemoveSong": "Remove from set",
   "setlistRename": "Rename",

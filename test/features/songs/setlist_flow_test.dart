@@ -154,11 +154,18 @@ void main() {
 
   // A3 — the mandatory 1.5 / 2.0 / 2.5 threshold triple, en AND hu: 2.0 is
   // inclusive-required, 1.5 is below it, 2.5 is above it and not itself a
-  // requirement (§6, "küszöb-cellahármas").
+  // requirement (§6, "küszöb-cellahármas"). Phone-sized viewport (360×640,
+  // devicePixelRatio 1.0) is mandatory here: the default `flutter_test`
+  // 800×600 canvas is wider than any real phone, which is exactly why the
+  // detail screen's own `SsEmptyState` overflow (review 1. forduló BLOCKER-1)
+  // stayed invisible to this matrix before.
   for (final scale in [1.5, 2.0, 2.5]) {
     for (final locale in [const Locale('en'), const Locale('hu')]) {
       testWidgets('empty setlists list renders without overflow at textScaler '
           '$scale ($locale)', (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
         await tester.pumpWidget(
           _app(const SetlistListScreen(), locale: locale, textScale: scale),
         );
@@ -170,6 +177,9 @@ void main() {
         'populated setlists list renders without overflow at textScaler '
         '$scale ($locale)',
         (tester) async {
+          tester.view.physicalSize = const Size(360, 640);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
           const set = Setlist(id: 's', name: 'My Gig', songIds: ['a']);
           await tester.pumpWidget(
             _app(
@@ -187,6 +197,9 @@ void main() {
 
       testWidgets('empty setlist detail renders without overflow at textScaler '
           '$scale ($locale)', (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
         const set = Setlist(id: 's', name: 'My Gig', songIds: []);
         await tester.pumpWidget(
           _app(
@@ -205,6 +218,9 @@ void main() {
         'populated setlist detail renders without overflow at textScaler '
         '$scale ($locale)',
         (tester) async {
+          tester.view.physicalSize = const Size(360, 640);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
           const set = Setlist(id: 's', name: 'My Gig', songIds: ['a']);
           await tester.pumpWidget(
             _app(

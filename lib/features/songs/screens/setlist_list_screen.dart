@@ -64,7 +64,7 @@ class SetlistListScreen extends ConsumerWidget {
                     message: l10n.setlistSongCount(set.songIds.length),
                     actions: [
                       SsCardAction(
-                        label: set.name,
+                        label: l10n.setlistOpen,
                         onPressed: () => _open(context, set.id),
                       ),
                     ],

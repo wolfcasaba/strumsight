@@ -582,6 +582,7 @@
     }
   },
   "setlistAddSong": "Dal hozzáadása",
+  "setlistOpen": "Megnyitás",
   "setlistPlayAll": "Szett lejátszása",
   "setlistEmptyDetail": "Adj dalokat a szetthez a + gombbal.",
   "setlistEmptyDetailTitle": "Nincs dal ebben a szettben",

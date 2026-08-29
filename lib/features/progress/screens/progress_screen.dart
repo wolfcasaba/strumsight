@@ -163,17 +163,24 @@ class _ProgressEmpty extends StatelessWidget {
     final typography = _typographyOf(context);
     final content = Padding(
       padding: const EdgeInsets.all(SsSpacing.space6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.insights_outlined, color: colors.textSecondary, size: 40),
-          const SizedBox(height: SsSpacing.space4),
-          Text(
-            l10n.progressEmpty,
-            style: typography.titleMedium.copyWith(color: colors.textPrimary),
-            textAlign: TextAlign.center,
-          ),
-        ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.insights_outlined,
+              color: colors.textSecondary,
+              size: 40,
+            ),
+            const SizedBox(height: SsSpacing.space4),
+            Text(
+              l10n.progressEmpty,
+              style: typography.titleMedium.copyWith(color: colors.textPrimary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
     // "Center, but scroll if too tall" (ported from the legacy

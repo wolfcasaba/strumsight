@@ -126,12 +126,14 @@ class SetlistDetailScreen extends ConsumerWidget {
             ),
             Expanded(
               child: songs.isEmpty
-                  ? SsEmptyState(
-                      icon: Icons.queue_music,
-                      title: l10n.setlistEmptyDetailTitle,
-                      message: l10n.setlistEmptyDetail,
-                      actionLabel: l10n.setlistAddSong,
-                      onAction: () => _addSong(context, ref, library),
+                  ? _ScrollableIfShort(
+                      child: SsEmptyState(
+                        icon: Icons.queue_music,
+                        title: l10n.setlistEmptyDetailTitle,
+                        message: l10n.setlistEmptyDetail,
+                        actionLabel: l10n.setlistAddSong,
+                        onAction: () => _addSong(context, ref, library),
+                      ),
                     )
                   : ReorderableListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
@@ -180,6 +182,32 @@ class SetlistDetailScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Lets [child] (an [SsEmptyState], always `Center`-wrapped internally)
+/// scroll instead of overflow when the viewport is too short for it — same
+/// measured need as `setlist_list_screen.dart`'s `_ScrollableIfShort` (Dart
+/// privacy keeps that one file-local, so this is a deliberate duplicate
+/// rather than a shared-widget extraction, which `core/design_system/**`
+/// being a forbidden zone for this round rules out).
+class _ScrollableIfShort extends StatelessWidget {
+  const _ScrollableIfShort({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedHeight) return child;
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: child,
+          ),
+        );
+      },
     );
   }
 }
