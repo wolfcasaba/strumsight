@@ -12,22 +12,31 @@
 
 ## 1. Verdikt
 
-### VÉGSŐ DÖNTÉS: APPROVED (a javító kör után, `5c938294`)
+### VÉGSŐ DÖNTÉS: APPROVED (a második javító kör után, `1929e971`)
 
-**Első kör (`cbcd6e08`): CHANGES REQUESTED** — 1 MAJOR, 2 NOTE, nincs BLOCKER.
-**Javító kör (`5c938294`): a MAJOR-1 ZÁRVA, mérve** — lásd a §3/MAJOR-1
-„Javítás-ellenőrzés" blokkot. A két NOTE elfogadott, nem igényel javítást.
+| Fázis | Commit | Verdikt |
+|---|---|---|
+| Első review | `cbcd6e08` | CHANGES REQUESTED — MAJOR-1 (tautológ A4-próba) |
+| 1. javító kör | `5c938294` | **MAJOR-1 ZÁRVA**, mérve |
+| Második review-menet | `8d5cc3d1` | CHANGES REQUESTED — MAJOR-2 (négyzetes I/O, mért CI-destabilizálás) |
+| 2. javító kör | `1929e971` | **MAJOR-2 ZÁRVA**, mérve (byte-azonos kimenet, ~31× gyorsulás) |
+
+A két NOTE elfogadott, nem igényel javítást.
 Nyitott BLOCKER/MAJOR/MINOR: **nincs**.
 
 ---
 
-Az alábbi szakaszok az ELSŐ kör review-ját rögzítik (a leletek dokumentálása
-miatt változatlanul), a lezárásokkal kiegészítve.
+Az alábbi szakaszok a review menetét rögzítik (a leletek dokumentálása miatt
+változatlanul), leletenként a lezárással kiegészítve. A §2 mérései az első
+menetből valók (`cbcd6e08`); a §3 lezáró blokkjai a javított commitokon
+készültek.
 
 A kör érdemi tartalma (a mérő, a terv, a dokumentum-frissítések) **mért,
-helyes és a szerződésnek megfelelő**. Az egyetlen MAJOR egy olyan teszt, amely
-a SAJÁT nevében és kommentjében kötelező falszifikációs próbának nevezi magát,
-de tautológia — a mérce-rendszer szempontjából dekoráció.
+helyes és a szerződésnek megfelelő**. A két MAJOR egyike sem a mérés
+TARTALMÁT érintette: az egyik egy magát falszifikációs próbának nevező
+tautológia (dekoráció a mérce-rendszerben), a másik a mérő négyzetes I/O-ja,
+ami a CI-t is destabilizálta. A `96/68/28/25` mérés és a terv mindkét javítás
+után változatlan — az utóbbinál bizonyítottan byte-azonosan.
 
 ## 2. Amit a review MAGA mért (nem bemondás)
 
@@ -188,6 +197,67 @@ mércét méri. A helper testét visszaállítottam, a klón tiszta
 **Nem gyengült a valódi cella sem:** a `:311–319` továbbra is a valós tervet
 parse-olja, `expect(retireRows, isNotEmpty)` guarddal, ugyanazon a helperen.
 
+### MAJOR-2 — A mérő négyzetes I/O-ja: `render()` képernyőnként ÚJRAOLVASTA az egész fát (a CI-t is destabilizálta) — **ZÁRVA (`1929e971`)**
+
+**Hol (a lelet idején):** `tool/check_screen_reachability.dart`, `render()`
+hurka (`8d5cc3d1:242–294`).
+
+A hurkok sorrendje `O(képernyők × fájlok)` olvasást adott: mind a 96 képernyőre
+végigolvasta az ÖSSZES `lib/` és `test/` fájlt. A helyes alak `O(fájlok)` —
+minden fájlt egyszer, soronként mind a 96 osztálynévre nézve.
+
+**MÉRVE (a review futtatta, izolált klónban, `8d5cc3d1`):**
+
+```
+time flutter test test/tooling/screen_reachability_test.dart
+→ 02:56 +9: All tests passed!
+   real 3m0.848s   user 2m47.740s   sys 0m13.148s
+```
+
+**Miért MAJOR és nem NOTE — mért CI-hatás.** A kör ELSŐ CI-futása
+([`33223102444`](https://github.com/wolfcasaba/strumsight/actions/runs/33223102444),
+`cbcd6e08`) PIROS lett, egy olyan teszten, amit ez a kör **nem érintett**:
+
+```
+❌ test/features/songs/import/import_flow_test.dart:83
+   A2: cancelling a confirmed import cleans the opened workspace
+   Expected: non-empty   Actual: []
+```
+
+Az a cella `pumpEventQueue()` után várja el, hogy a workspace-könyvtár már
+létrejött legyen — időzítés-érzékeny. A fájl az E13-R24-ből való, és a
+`lib/**` a kör tilos zónája, tehát a kör diffje okilag nem érinti. **A review
+megmérte tiszta `main`-en (`fc880063`, E15-R03 nélkül): 3/3 zöld.** Egy
+percekig CPU-t telítő teszt-fájl a párhuzamos suite mellett a legvalószínűbb
+destabilizáló ok, ezért a javítás célja kettős volt: helyes algoritmus ÉS
+stabil CI.
+
+#### Javítás-ellenőrzés (`1929e971`) — **MAJOR-2 ZÁRVA**
+
+A review MAGA mérte, nem bemondásra:
+
+| Mérés | Előtte (`8d5cc3d1`) | Utána (`1929e971`) |
+|---|---|---|
+| `time flutter test test/tooling/screen_reachability_test.dart` | `real 3m0.848s` | **`real 0m5.744s`** (~31×) |
+| a 9 cella | `+9 All tests passed!` | `+9 All tests passed!` |
+| `sha256(--format json)` | `7cebc87d…c4b5958b` | **`7cebc87d…c4b5958b`** |
+
+```
+diff -q /tmp/reachability-baseline.json /tmp/reachability-after.json
+→ (nincs kimenet)   OUTPUT BYTE-IDENTICAL
+```
+
+**A viselkedés bizonyítottan változatlan** (byte-azonos JSON, azonos hash), és
+a **teszt-fájl egyáltalán nem módosult**:
+
+```
+git diff --stat 8d5cc3d1 1929e971 -- test/tooling/screen_reachability_test.dart
+→ (üres)
+```
+
+— tehát a gyorsítás nem a cellák gyengítésével született. A `96/68/28/25`
+összesítő és a `retirement-plan.md` tartalma változatlan.
+
 ### NOTE-1 — Az imperatív csatorna egy-ugrásos; a kör ezt KIMONDJA, nem elhallgatja
 
 A checker azt méri, hogy egy osztály konstruálva van-e valahol `lib/` alatt,
@@ -248,6 +318,7 @@ a korlát dokumentált, nem rejtett.
 | Feltétel | Állapot |
 |---|---|
 | MAJOR-1 javítva, a javítás MÉRVE | ✅ `5c938294`, a review saját próbája pirosra vitte a kiütött őrt |
+| MAJOR-2 javítva, a javítás MÉRVE | ✅ `1929e971`, byte-azonos JSON (`sha256` egyezik), 3m0.8s → 5.7s, a teszt-fájl változatlan |
 | Független gate izolált `/tmp` klónban a javított commiten | ✅ MIND ZÖLD (`format`, `analyze`, mindkét teszt-útvonal, `architecture`, `secrets`, `l10n`) |
 | Scope-audit | ✅ `scope_audit=ok`, `lib/**` érintetlen, A5 száma változatlan |
 | `gate_shape` | ✅ `ok` (az első futás `VIOLATION`-jét a javító kör orvosolta) |
