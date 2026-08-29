@@ -50,6 +50,57 @@ rollout változatlanul a valódi eszközös teszt utáni külön kör.
 > fali órát bélyegez a `createdAt` mezőre, ezért egy determinizmus-snapshot ezt kihagyni
 > kényszerül. Önálló kör tárgya — ez a javítás NEM nyúlt hozzá.
 
+## ✅ E15-R03 KÉSZ — Elérhetőségi audit: MELYIK képernyőt éri el a felhasználó — PR [#500](https://github.com/wolfcasaba/strumsight/pull/500), squash `a1205e52` (2026-08-29)
+
+> ⚠ **A squash-commit tárgya „(ADR 0470)"-et ír — ELAVULT.** A kör ADR-je
+> **[ADR 0471](docs/adr/0471-screen-reachability-is-measured-not-assumed.md)**;
+> a `docs/adr/0470-*` MÁS döntés (a HEAL E12-R11/H2 köré). A PR-cím a merge
+> előtti átszámozás előtt készült — [L542](docs/LESSONS.md#l542).
+
+A Chapter 15 migrációs sávja 53 legacy képernyővel indult. Ez a kör azt méri
+meg, **melyiket éri el egyáltalán a felhasználó** — mert migrálni egy soha nem
+látott képernyőt pazarlás, a „nem hivatkozza a router, tehát halott"
+következtetés viszont [L449](docs/LESSONS.md#l449) hibaosztálya.
+
+**MÉRT eredmény** (`dart run tool/check_screen_reachability.dart --format table`):
+
+```
+Measured screens: 96. Reachable: 68. Unreachable: 28. Flag-gated: 25.
+```
+
+Az 53 legacyből **41 elérhető** = 35 `migrate` + 6 `retire`, mindegyikhez
+nevesített kör (`E15-R04`…`E15-R11`) a
+[`docs/ui/retirement-plan.md`](docs/ui/retirement-plan.md)-ben.
+
+**A kör semmit nem törölt és route-ot nem vett ki** — `lib/**` diff NÉLKÜL. A
+visszavonás JAVASLAT (ADR 0471 D5); a végrehajtás az `E15-R04` önálló,
+review-zott dolga, mert felhasználói utat szüntet meg.
+
+**Két MÉRT tervezési megkötés, amit a pre-flight talált:**
+
+| # | Mérés | Következmény |
+|---|---|---|
+| D3 | a router 46 képernyőt közvetlenül importál, de **3 feature-t a `public.dart` barrelen át** (a `vision/public.dart` 3 képernyőt re-exportál) | a checker OSZTÁLYNÉVRE illeszt; az útvonal-illesztés e hármat hamisan halottnak jelentené ([L190](docs/LESSONS.md#l190)/[L193](docs/LESSONS.md#l193)) |
+| D4 | `app_router.dart:561` a Vision setup route-ot csak `visionEnabled && visionSetupEnabled` alatt regisztrálja | „a router regisztrálja" ≠ „a felhasználó ma eléri" — a flag-kapu JELENTETT dimenzió, nem hallgatólagos „elérhető" ([ADR 0065](docs/adr/0065-practice-engine-v2-parallel-rollout.md)) |
+
+**Review: APPROVED, 2 javító kör után** — mindkét MAJOR-t a reviewer
+eldobható próbatesztje mérte, nem olvasás:
+
+- **MAJOR-1** — az A4 „kötelező valódi-sértés próbája" **tautológia** volt (egy
+  helyben írt literált hasonlított önmagához). Bizonyíték: a VALÓDI A4 őrt
+  teljesen kiütve a „próba" **zöld maradt**. Zárva közös assertion-helperrel;
+  a javított próba a kiütött őr mellett most **pirosra vált**.
+- **MAJOR-2** — a `render()` `O(képernyők × fájlok)` I/O-ja: **3m0.848s**
+  egyetlen teszt-fájlra. Ez a kör **első CI-futását is pirosra vitte** — egy
+  NEM érintett, időzítés-érzékeny teszten (`import_flow_test.dart:83`; tiszta
+  `main`-en 3/3 zöld). Zárva `O(fájlok)`-ra → **5.744s (~31×)**, a `--format
+  json` kimenet **byte-azonos** (azonos `sha256`), a teszt-fájl változatlan.
+
+**Merge előtti ADR-ütközés** (a második, [L542](docs/LESSONS.md#l542)): a kör
+CI-je alatt a `main`-re merge-elődött a HEAL E12-R11/H2, amely ugyanazt a
+foglalótól kapott `0470`-et használta el. A kötelező upstream-szinkron fogta
+meg; a saját, még nem merge-elt ADR lett átszámozva `0471`-re.
+
 ## ✅ E12-R10 KÉSZ — Idempotens dispatcher és outbox: a hiányzó MÉRCE — PR [#498](https://github.com/wolfcasaba/strumsight/pull/498), squash `e9a29a86` (2026-08-28)
 
 **Az SDD Kör 10 „implementálj dispatchert és outboxot" feladata a fán RÉSZBEN már
@@ -10193,7 +10244,32 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E12-R09 — Domain event katalógus és schema registry** (PR
+**E15-R03 — Elérhetőségi audit és az örökség-képernyők visszavonási terve** (PR
+[#500](https://github.com/wolfcasaba/strumsight/pull/500), squash `a1205e52`).
+Gépi, ismételhető mérő (`tool/check_screen_reachability.dart`) + döntési tábla
+(`docs/ui/retirement-plan.md`) arról, MELYIK képernyőt éri el a felhasználó.
+MÉRVE: **96 képernyő — 68 elérhető, 28 elérhetetlen, 25 flag mögötti**; az 53
+legacyből **41 elérhető** = 35 `migrate` + 6 `retire`, mindegyikhez nevesített
+E15 kör (`E15-R04`…`E15-R11`). A kör **semmit nem törölt** és route-ot nem vett
+ki (ADR 0471 D5) — `lib/**` diff NÉLKÜL. Két MÉRT tervezési megkötés: a router
+három feature-t `public.dart` **barrelen** át ér el, ezért a checker
+OSZTÁLYNÉVRE illeszt (D3 — az útvonal-illesztés élő utat jelentene halottnak),
+és a flag-kapu **jelentett dimenzió**, nem hallgatólagos „elérhető" (D4).
+**2 javító kör**, mindkét MAJOR mérve zárva; review APPROVED.
+
+> ⚠ **A squash-commit tárgya (`a1205e52`) „ADR 0470"-et ír — ez ELAVULT.** A kör
+> ADR-je **[ADR 0471](docs/adr/0471-screen-reachability-is-measured-not-assumed.md)**.
+> A PR-cím a merge előtti átszámozás ELŐTT készült, és a squash tárgya azt
+> örökölte; a `docs/adr/0470-*` MÁS döntés (a HEAL E12-R11/H2 Practice
+> Setup-navigációja). Részletek: [L542](docs/LESSONS.md#l542).
+
+Két lecke: [L542](docs/LESSONS.md#l542) (a `reserve-adr` foglaló csak addig véd,
+amíg MINDEN író használja — egy self-heal kör elvitte a lefoglalt számot, és az
+ütközést nem a foglaló, hanem a merge előtti upstream-szinkron fogta meg),
+[L543](docs/LESSONS.md#l543) (egy `O(képernyők × fájlok)` mérő nemcsak lassú:
+percekig telítve a CI-t egy IDEGEN, időzítés-érzékeny tesztet vert pirosra).
+
+**Korábbi: E12-R09 — Domain event katalógus és schema registry** (PR
 [#496](https://github.com/wolfcasaba/strumsight/pull/496), squash `04ae8918`).
 A hat `LearningActivityEvent` altípus katalógusa MÉRT producer/consumer
 hivatkozásokkal, hat BYTE-kanonikus fixture és 22 cellás kompatibilitás-mérce —
@@ -11317,11 +11393,31 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ▶️ **A KÖVETKEZŐ KÖR: `E12-R10`** (motor: `sonnet-impl`, előre kiosztott ADR:
-> `0451`, brief: `docs/rounds/e12-r10-*.md`). Mért állapot
-> (`docs/execution/pipeline-queue.tsv`, 2026-08-28, az E12-R09 zárása után):
-> **267 `done`, 40 `hold`, 18 `prepared`, 39 `pending`**. Az E12 36 sorából
-> **9 `done`** (R01–R09).
+> ▶️ **A KÖVETKEZŐ KÖR: `E12-R11`** (motor: `sonnet-impl`, brief:
+> `docs/rounds/e12-r11-end-to-end-test-harness.md`). Mért állapot
+> (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E15-R03 zárása után):
+> **270 `done`, 40 `hold`, 18 `prepared`, 36 `pending`**.
+>
+> ⚠ Az `E12-R11` KORÁBBAN **H2-vel megállt** (a Setup → Session lánc hiánya); a
+> blokkolót a HEAL E12-R11/H2 kör azóta feloldotta (PR
+> [#499](https://github.com/wolfcasaba/strumsight/pull/499), `8e75e4f9`, ADR
+> 0470) — lásd a fájl tetején lévő önjavító blokkot. A kör pre-flightja MÉRJE
+> ÚJRA, hogy a harness elvárásai a JAVÍTOTT lánccal állnak-e.
+>
+> 🎯 **A Chapter 15 UI-sáv következő köre: `E15-R04`** — a hat `retire`-javaslat
+> review-ja és (jóváhagyás esetén) végrehajtása. A bemenete KÉSZ és MÉRT:
+> [`docs/ui/retirement-plan.md`](docs/ui/retirement-plan.md) §5 (indok +
+> felváltó képernyő tételesen), a kör-hozzárendelés pedig a §4-ben
+> (`E15-R05`…`E15-R11` a 35 `migrate` képernyőre). **Ez az első kör, amelyik
+> felhasználói útvonalat SZÜNTETHET MEG** — az ADR 0471 D5 szerint a
+> retirement-plan JAVASLAT, a végrehajtás önálló, review-zott döntés.
+
+> ⚠ Az ADR-számot a körben MINDIG a foglalótól kérd
+> (`tools/round-slots.py reserve-adr --round <kör>`) — de **a foglaló sem
+> elég**: az E15-R03-nál egy párhuzamos self-heal kör a lefoglalt `0470`-et
+> használta el, és az ütközést csak a merge előtti upstream-szinkron fogta meg
+> ([L542](docs/LESSONS.md#l542)). **Merge előtt nézd meg, nem került-e a
+> `main`-re azonos számú ADR.**
 >
 > ⚠ Az ADR-számot a körben MINDIG a foglalótól kérd
 > (`tools/round-slots.py reserve-adr --round <kör>`), ne a queue `adr`

@@ -21286,3 +21286,100 @@ felhasználói lépés hiányzik — pontosan azt egyik komponens-teszt sem mér
 `test/features/practice/presentation/practice_setup_navigation_test.dart`
 (R1 útvonal, R2 auto-dispose élettartam) — a javítás előtt mindkét cella piros.
 Döntés: [ADR 0470](adr/0470-practice-setup-navigates-to-the-session-route.md).
+
+## L542 — A `reserve-adr` foglaló csak addig véd, amíg MINDEN író rajta megy keresztül: egy párhuzamos self-heal kör elvitte a lefoglalt számot, és az ütközést nem a foglaló, hanem a merge előtti upstream-szinkron fogta meg (E15-R03, 2026-08-29)
+
+**Mit mértünk.** Az E15-R03 pre-flightja szabályosan a foglalótól kért számot
+(`tools/round-slots.py reserve-adr --round E15-R03` → `0470`), mert a brief
+előre kiosztott `0468`-át időközben a merge-elt E12-R09 elhasználta. A kör
+ezzel a számmal írta meg az ADR-t, commitolta, review-zta, és zöld CI-vel állt
+a merge előtt. **Ekkor** merge-elődött a `main`-re a HEAL E12-R11/H2 önjavító
+kör (PR #499, `8e75e4f9`), amely
+`docs/adr/0470-practice-setup-navigates-to-the-session-route.md` néven
+**ugyanazt a 0470-et** használta el.
+
+A `O_CREAT|O_EXCL` marker tehát megvolt és helyesen működött — de csak azokra
+az írókra hat, akik KÉRNEK tőle számot. Egy másik sávban futó kör, amelyik nem
+a foglalón megy keresztül, akadálytalanul elviszi a lefoglalt számot, és
+**mindkét diff átmegy a saját kapuján** — pontosan az ADR 0171 §1.0.1-ben
+rögzített 2026-08-05-i `0139`-es hibaosztály, csak most kör ↔ self-heal
+párosban, nem két kör-sáv között.
+
+**Ami megfogta:** a merge előtti KÖTELEZŐ upstream-szinkron (ADR 0086 §2 /
+kör-prompt §0.3). A `git merge origin/main` után két `0470-*` fájl állt a fán,
+ami azonnal látható. A feloldás a SAJÁT, még nem merge-elt artefaktum
+átszámozása volt (`0470` → `0471`, ADR 0087 §2) — a MÁR merge-elt 0470-hez
+nyúlni H1 lett volna.
+
+**Maradék kár, szándékosan dokumentálva:** a PR címe (és így a squash-commit
+tárgya, `a1205e52`) a renumber ELŐTT készült, ezért „(ADR 0470)"-et ír, miközben
+a kör ADR-je 0471. A `main` történetét nem írjuk át; a HANDOFF §5 és ez a lecke
+rögzíti az eltérést.
+
+**Hogyan alkalmazd.**
+
+- A foglaló a szám kérésének normatív forrása, de **nem merge-idejű zár**.
+  Merge előtt — az upstream-szinkron után — nézd meg:
+  `ls docs/adr/ | grep "^<szám>"` (vagy `git ls-tree origin/main docs/adr/`).
+  Két találat = ütközés.
+- Ütközéskor MINDIG a **saját, még nem merge-elt** ADR-t számozd át. A már
+  merge-elt fájlhoz nyúlni H1.
+- Ha a renumber a PR megnyitása UTÁN történik, a PR címét is írd át, mielőtt
+  merge-elsz — különben a squash-commit tárgya tartósan rossz ADR-re mutat.
+
+**Őrteszt:** nincs — a duplikátumot a `tools/tests/test_adr_numbering.py`
+(Router CI) a merge UTÁN fogná meg a `main`-en; a merge ELŐTTI, két ág közötti
+ütközésre gépi őr ma nincs, a védelem a §0.3 upstream-szinkron eljárása.
+Döntés: [ADR 0471](adr/0471-screen-reachability-is-measured-not-assumed.md).
+
+## L543 — Egy `O(képernyők × fájlok)` mérő nem csak lassú: percekig telítve a runnert egy IDEGEN, időzítés-érzékeny tesztet vert pirosra (E15-R03, 2026-08-29)
+
+**Mit mértünk.** Az E15-R03 elérhetőség-mérőjének `render()`-e mind a 96
+képernyőre végigolvasta az ÖSSZES `lib/` és `test/` fájlt — `O(képernyők ×
+fájlok)`, noha `O(fájlok)` elég (minden fájlt egyszer, soronként mind a 96
+osztálynévre). Ára egyetlen teszt-fájlon:
+
+```
+time flutter test test/tooling/screen_reachability_test.dart
+→ real 3m0.848s   user 2m47.740s   sys 0m13.148s
+```
+
+A kör **első CI-futása piros lett** — de nem ezen a teszten, hanem egy olyanon,
+amit a kör nem is érintett (`lib/**` a tilos zónája volt):
+
+```
+❌ test/features/songs/import/import_flow_test.dart:83
+   A2: cancelling a confirmed import cleans the opened workspace
+   Expected: non-empty   Actual: []
+```
+
+Az a cella `pumpEventQueue()` után várja el, hogy a workspace-könyvtár már
+létrejött legyen. Tiszta `main`-en (a kör nélkül) lokálisan **3/3 zöld**. A
+javítás után (`O(fájlok)`, `real 0m5.744s`, ~31×) a CI zölden futott.
+
+**A tanulság kettős, és a második a fontosabb:**
+
+1. Egy mérő-eszköznél a hurkok sorrendje nem esztétika: a „fájlonként egyszer
+   olvasok" alak ugyanazt méri nagyságrendekkel olcsóbban. A helyességet
+   bizonyítsd **byte-azonos kimenettel** (itt: azonos `sha256` a `--format
+   json`-on a javítás előtt és után), ne csak a tesztek zöldjével.
+2. **Egy lassú teszt nem csak a saját idejét viszi el.** A párhuzamosan futó
+   suite-ban percekig telített CPU mellett az időzítés-érzékeny cellák
+   elcsúsznak, és a piros egy TELJESEN MÁS, a diff által nem érintett fájlban
+   jelenik meg. Ha egy kör CI-je olyan teszten bukik, amit nem érintett, a
+   „flaky, újrafuttatom" előtt mérd meg, nem a saját köröd erőforrás-profilja
+   okozza-e.
+
+**Hogyan alkalmazd.**
+
+- Új, fát pásztázó `tool/`-hoz: a külső hurok a FÁJL, a belső a keresett
+  szimbólumok — sose fordítva. Olcsó előszűrő (pl. „tartalmazza-e egyáltalán a
+  `Screen` alsztringet") a sorok többségét kiejti.
+- Refaktor után a viselkedés-azonosságot hash-szel igazold, ne szemre.
+- Idegen teszten bukó CI-nél a diagnózis első lépése: `time` a kör SAJÁT
+  új tesztjein.
+
+**Őrteszt:** nincs — a `round-gate.sh` és a CI nem mér futásidő-küszöböt, és a
+kör scope-ja (`tools/**` tilos zóna) nem engedett ilyet bevezetni. A védelem a
+mért `5.744s` és az itt rögzített hurok-szabály.
+Döntés: [ADR 0471](adr/0471-screen-reachability-is-measured-not-assumed.md).

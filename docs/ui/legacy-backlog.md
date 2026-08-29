@@ -103,6 +103,38 @@ Chapter 13 compatibility layer this round's `migration-status.md`
 documents. None of them regressed FROM a migrated state; they were never
 assigned a Ch13 round.
 
+### 3.1 E15-R03 correction — the table above is per-FEATURE; reachability
+    is now measured per-SCREEN, and the "Owner" column above is superseded
+
+`docs/ui/retirement-plan.md` (ADR 0471) is now the canonical per-screen
+source for the "Owner" column above — `tool/check_screen_reachability.dart`
+measures reachability by class name (router reference OR construction
+anywhere in `lib/`), not by feature grouping. Three corrections to the table
+above:
+
+1. **`library`, `progress`, `streak` were never "retire once the legacy
+   route redirect is unconditional"** — that condition doesn't apply; ADR
+   0471 treats retirement as a standing proposal, not something the
+   adaptive-shell rollout auto-triggers. `library` and `streak` ARE
+   confirmed retire candidates (owner `E15-R04`, named successors in
+   `retirement-plan.md` §5). `progress` is **not** — see point 3.
+2. Every OTHER "SDD, unscheduled" owner above now has a real round:
+   `ai_tutor`→`E15-R05`, `gamification` (5 of 6 — see point below)
+   →`E15-R06`, `learn`+`onboarding`→`E15-R07`, `practice`+`progress`
+   (as `migrate`, not `retire`)→`E15-R08`, `song_trainer` (8 of 9)→`E15-R09`,
+   `songs` (2 of 4 — the other 2 are `retire`, owner `E15-R04`) +
+   `audio_analysis` remainder (2 of 8)→`E15-R10`, `vision`→`E15-R11`.
+3. **`progress` is `migrate`, not `retire`, because `progress_v2` turned out
+   to be unwired** — `ProgressDashboardScreen`/`SkillDetailScreen` have no
+   route and no construction site anywhere in `lib/`. This corrects
+   `migration-status.md`'s prior "both still reachable" claim for that pair.
+   See §5 below and `retirement-plan.md` §3.1.
+4. `gamification`'s count of 6 legacy screens included `LevelDetailScreen`,
+   which is measured **unreachable** (no route, no construction site) — it
+   is excluded from the `E15-R06` round (5 screens, not 6). `song_trainer`'s
+   9 similarly included `SetlistSessionScreen`, also unreachable and
+   excluded from `E15-R09` (8 screens, not 9).
+
 ## 4. Not in this backlog
 
 - `docs/ui/baseline/token-debt.md` — the E13-R01 static token-usage
@@ -113,3 +145,47 @@ assigned a Ch13 round.
   and machine-guarded by `test/app/navigation/legacy_route_redirect_test.dart`
   (ADR 0275); repeating them here would be a second, driftable copy of an
   already-enforced contract.
+
+## 5. E15-R03 reachability audit — new dated findings (2026-08-28)
+
+Measured with `dart run tool/check_screen_reachability.dart --format json`
+(ADR 0471); full detail and reasoning in `docs/ui/retirement-plan.md`. These
+are screens the design-migration backlog above never flagged, because
+"legacy" (no `design_system` import) and "unreachable" (no measured router
+reference or `lib/` construction site) are independent axes — a screen can
+be fully migrated and still be dead code.
+
+### 5.1 Unwired features — not a Ch15 design-migration concern
+
+| Feature | Screens | Measured gap | Owner |
+| --- | ---: | --- | --- |
+| Community | 15 (13 fully unreachable + 2 reachable only from within this same dead subgraph) | `communityEnabled` flag exists but no `community/**` class is named anywhere in `lib/app/routing/**`, gated or not | Product/navigation decision — wire the flag to a route, or retire the feature; not scheduled |
+| Practice Generator | 6 | No route, no construction site anywhere in `lib/` | Product/navigation decision; not scheduled |
+| Audio Analysis V2 capture wizard | 3 (`capture/analysis_home_screen.dart`, `analysis_processing_screen.dart`, `analysis_recording_screen.dart`) | No route, no construction site; the rest of `audio_analysis` (overview/timeline/compare/metric-detail/export) IS wired behind `audioAnalysisV2Enabled` | Wire the capture entry point, or retire; not scheduled |
+
+None of these 24 screens carry an `E15-Rxx` owner in `retirement-plan.md` —
+assigning a design-migration round to an unreachable screen would spend Ch15
+budget on something no user can open (brief §0.0), exactly what this round
+measures to prevent.
+
+### 5.2 `progress_v2` wiring gap (corrects `migration-status.md`)
+
+`ProgressDashboardScreen` and `SkillDetailScreen`
+(`lib/features/progress_v2/screens/`) are migrated (`design_system` import
+present) but have zero measured references: `app_router.dart` builds the
+legacy `ProgressScreen` for both `/progress` (line 284) and
+`/profile/progress` (line 528). `migration-status.md`'s E13-R36 "Superseded
+pairs measured this round" section claimed this pair was "both still
+reachable" — that claim predates this measurement and does not hold for
+`progress_v2`. Wiring `progress_v2` into a route is a prerequisite before a
+future round can revisit `progress/progress_screen.dart` as a `retire`
+candidate; until then it stays `migrate` (`E15-R08`).
+
+### 5.3 Smaller one-off unreachable findings
+
+`lib/features/gamification/presentation/screens/level_detail_screen.dart`
+(legacy), `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart`
+(legacy), `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart`
+(already migrated), `lib/features/onboarding/screens/first_win_stage_screen.dart`
+(already migrated) — each has zero measured router reference or `lib/`
+construction site. Same treatment as §5.1: no Ch15 round assigned.
