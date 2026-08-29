@@ -21869,3 +21869,83 @@ forrásába égetett lista második igazságforrás lenne (ADR 0477 D1).
 **Forrás:** [`docs/reviews/e12-r16-review.md`](reviews/e12-r16-review.md) MAJOR-1,
 [ADR 0477](adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md),
 PR [#507](https://github.com/wolfcasaba/strumsight/pull/507).
+
+## L556 — Egy egress-leltár teljesség-ellenőrzője, amely a transport TÍPUSÁT ismeri fel, vak a codebase leggyakoribb küldő-alakjára és a nem-HTTP egressre: a „fából mérünk" elv önmagában nem elég, a MINTAOSZTÁLYOKAT kell teljesnek bizonyítani (E12-R17, 2026-08-29)
+
+**Mit mértünk.** Az E12-R17 checkere helyesen a `lib/**` FÁBÓL indult, nem a
+leltárból (ADR 0479 D1) — az ADR kifejezetten tiltott gyengítését elkerülte, és
+a falszifikációs cellái (fantom-route, stale `wired: true`) valódiak voltak. A
+gate és a Full Gate is zöld volt. A review mégis KÉT vakfoltot mért:
+
+```
+# (1) a codebase leggyakoribb küldő-alakja — ApiClient-fogyasztó repository
+$ cat > lib/features/probe/practice_log_uploader.dart <<'X'
+class HttpPracticeLogRepository {
+  final ApiClient _client;
+  Future<void> push(String e, List<String> s) =>
+      _client.post<void>('/practice-log', data: {'email': e, 'sessions': s});
+}
+X
+$ dart run tool/check_data_inventory.dart
+Data inventory check OK (4 measured egress route(s), 4 inventory route(s))   # exit 0
+
+# (2) a fán MA létező, NEM-HTTP egress
+$ grep -rn "SharePlus.instance.share" lib | wc -l
+4      # lib/features/share/share_service.dart — sosem volt a leltárban
+```
+
+A bejárás három mintaosztálya (`DioFactory.create*Client`, `Dio`-mezős osztály,
+közvetlen `HttpClient`/`http.`) mind a transport **TÍPUSÁRA** kérdezett. A fán
+hat `ApiClient`-fogyasztó küldő volt, egyik sem „felfedezett route" — a
+payloadjaik szerzői állításként lógtak az `account_api` alatt —, és a
+`share_plus` út teljesen kívül esett.
+
+**A minta.** „A fából mérünk" NEM egyenlő „a mérés teljes"-sel. Egy
+teljesség-ellenőrzőnél a bizonyítandó állítás nem az, hogy a mai fát lefedi,
+hanem hogy **egy ÚJ, reális küldő-alak pirosra váltja**. Ehhez a mintaosztályok
+listáját kell falszifikálni (injektálj új alakot, és nézd meg, piros lesz-e) —
+a mai fa zöld lefedettsége erre nem bizonyíték. A javítás után mind a négy
+injektált alak pirosra vált (`exit 1`/`2`).
+
+**Őrteszt:** `test/tooling/data_inventory_test.dart` (a mintaosztályok
+kipinnelése + fantom-route falszifikáció)
+
+## L557 — A consent-kapu MEGLÉTE nem bizonyítja, hogy a felhasználó visszavonása ELÉRI: a kaput ETETNI is kell, és a „gate exists" ≠ „gate wired" különbséget csak a REQUEST-ÉPÍTŐ felől lehet megmérni (E12-R17, 2026-08-29)
+
+**Mit mértünk.** Az AI Tutor consent-kapuja helyes: a `reduceTutorTurn`
+(`lib/features/ai_tutor/application/orchestration/tutor_orchestrator.dart:47`) a
+`request.consent.modelUseGranted`-et olvassa MINDEN turn-nél, gateway létrehozása
+ELŐTT, és a kör A3/A6 cellái ezt a turn-úton, gateway-számlálóval bizonyították
+(helyesen alkalmazva az [L140](#l140)-et). A kapu tehát mérve jó.
+
+A `lib/**` MÁSIK vége viszont nincs bekötve:
+
+```
+$ grep -rn "TutorTurnRequest(" lib
+lib/features/ai_tutor/presentation/providers/tutor_providers.dart:433   # EGYETLEN production hely
+$ sed -n 438p lib/features/ai_tutor/presentation/providers/tutor_providers.dart
+  consent: const TutorConsent(modelUseGranted: true),
+$ grep -rn "tutorConsentControllerProvider" lib
+# csak a saját deklarációja + tutor_privacy_screen.dart — a request-építő SOHA nem olvassa
+```
+
+A `TutorConsentController.build()` alapértéke minden tengelyen `false`. A
+felhasználó visszavonása tehát egy olyan értéket ír, amit a `lib/**`-ban semmi
+nem olvas vissza turn-kérésbe: a kapu létezik, működik, és **soha nem kapja meg a
+valódi választ**. Az A3/A6 cellák ettől zöldek maradnak, mert SAJÁT MAGUK
+gyártják a `TutorConsent`-et.
+
+**Miért nem lett `stopped`.** A brief STOP-protokollja MÉRT szivárgáshoz köti a
+megállást; itt ma nem folyik adat (`createProductionTutorOrchestrator` →
+`LocalTutorModelGatewayStub`, nincs `HttpTutorStreamTransport` konstrukciós hely).
+Ezért MAJOR, és a kimenet: a leltár + a dokumentum ŐSZINTÉN kimondja a szakadást,
+és **gépi őr** pinneli mindkét mért tényt — a `lib/**` javítása önálló kör.
+
+**A minta.** Egy consent-cella akkor bizonyít a FELHASZNÁLÓRÓL, ha a
+kényszerítési pontig a felhasználó SAJÁT állapotából jut el. Ha a cella maga
+állítja elő a consent-értéket, akkor a KAPUT méri, nem a LÁNCOT — és a lánc
+szakadása pontosan ott bújik meg, ahol senki nem nézi: a request-építőben.
+Mérési szabály: a consent-kapcsolótól a kényszerítési pontig
+`grep`-eld végig, ki olvassa — ha az útvonalon van konstans, a lánc szakadt.
+
+**Őrteszt:** `test/privacy/consent_enforcement_test.dart` (MAJOR-3 guard cell)
