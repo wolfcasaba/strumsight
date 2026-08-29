@@ -692,4 +692,189 @@ Fixture-vezérelt, a `findGaCapabilitiesWithoutBlockingDevice` checkeren:
   `ruff` csak a `backend/`-re megy); a Python-oldali egyetlen gépi mérce a
   Dart A4 csoport (R4).
 
+### 10.7 JAVÍTÓ KÖR — a független review (`docs/reviews/e12-r13-review.md`) F1/F2 leletei
+
+**F1 (MAJOR — kiüresíthető `required_suite`).** Két fájlon javítva:
+
+- `tool/device_report.py`: `find_missing_required_runs` mostantól egy
+  `release_blocking: true` eszköz üres/hiányzó `required_suite`-ját is
+  hibaként jelenti (`"<id>: required_suite is empty for a release_blocking
+  device"`), nem `0 missing runs`-ként.
+- `test/tooling/device_matrix_test.dart`:
+  - `findEmptyRequiredSuiteField` — A1-be kötve: `required_suite` MINDEN
+    eszközön kötelező és nem üres (hiányzó mező == üres lista a parseren
+    keresztül), blokkoló és nem-blokkoló eszközön egyaránt;
+  - `mandatoryRequiredSuiteIds` (a 14-elemű katalógus mínusz
+    `local_ai_load_ttft`, 13 elem) + `findBlockingDevicesWithIncompleteRequiredSuite`
+    — új `F1 —` csoport: fixture-negatív (`required_suite: []`, eszköznévvel
+    a hibaüzenetben), fixture-negatív (12/13 elem, a hiányzó nevesítve),
+    fixture-pozitív self-check (teljes 13 elem), valódi-fájl cella (mindkét
+    blokkoló eszköz — Pixel 6a, Pixel 7 — pontosan a 13 elemű szótár,
+    `Set`-egyenlőséggel mérve);
+  - új A4-cella: `Process.runSync('python3', …)` egy ideiglenes
+    fixture-mátrixon, `required_suite: []` egy `release_blocking: true`
+    eszközön → nem-nulla kilépés, a kimenet nevezi az eszközt.
+
+**F2 (MINOR — `ram_gb`/`soc` forrása nincs gépileg ellenőrizve).** Új,
+kötelező `spec_provenance` mező mind a négy eszközön
+(`docs/testing/device-matrix.yaml`), a `vision-performance-benchmark.md:117-120`
+sorokra mutatva:
+
+- a Dart-parser (`_deviceFieldKeys`, `DeviceEntry.specProvenance`) beolvassa;
+- az A1 kötelező-mező ellenőrzésébe bekötve (`identifierFieldNames` —
+  kilenc helyett tizenegy mező, `spec_provenance` a helykitöltő-loopban is
+  végigjárva);
+- az A5 „létező fájl:sor” ellenőrzésébe bekötve egy megosztott
+  `_findInvalidPathLineReference` segédfüggvényen keresztül
+  (`findInvalidProvenance` és az új `findInvalidSpecProvenance` ugyanazt a
+  logikát hívja);
+- `docs/testing/device-lab.md` §4 és §6 — a §6 táblája kapott egy második
+  forrás-oszlopot (`spec_provenance` — RAM/SoC), a §4 pedig kimondja a két
+  mező szerepét.
+
+**`tools/round-gate.sh test/tooling/device_matrix_test.dart` a javítás után — teljes, csonkítatlan kimenet:**
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 2184 files (0 changed) in 9.42 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Analyzing 3 items...
+No issues found! (ran in 6.9s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/tooling/device_matrix_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/tooling/device_matrix_test.dart
+
+00:01 +121: All tests passed!
+
+    → [3] test test/tooling/device_matrix_test.dart: ZÖLD
+
+═══ [4] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [4] architecture: ZÖLD
+
+═══ [5] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+
+Secret scan OK (4044 file(s) scanned, 0 finding(s)).
+
+    → [5] secrets: ZÖLD
+
+═══ [6] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+
+L10n aggregate freshness OK (en, hu).
+L10n parity OK (en → hu, 2289 message(s)).
+
+    → [6] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/device_matrix_test.dart                  zöld
+    architecture                                                zöld
+    secrets                                                     zöld
+    l10n                                                        zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchesztrátor indítja, te ne hívj gh-t.
+```
+
+(A `[2] analyze` és `[3] test` lépések `Resolving dependencies…/Downloading
+packages…` 51-soros függőséglistája — szó szerint megegyező a §10.2-beli
+első futással — itt a jegyzőkönyv olvashatósága miatt kihagyva; a teljes,
+sortördeletlen napló a munkapéldányban reprodukálható. A `[3] test` lépés
+most **121** cellát futtat (a korábbi 99 + 22 új: 4 A1 required_suite-cella,
+6 új F1-csoport-cella, 1 új A4-cella, 5 új A5 spec_provenance-cella, mínusz
+a nettósítás; a pontos szám a fenti `+121: All tests passed!` sorból mért).
+
+**`python3 tool/device_report.py --matrix docs/testing/device-matrix.yaml --check` a javítás után:**
+
+```
+device_report check: 26 missing mandatory run(s):
+  - pixel_6a:install_and_update
+  - pixel_6a:cold_start
+  - pixel_6a:live_start_latency
+  - pixel_6a:mic_release
+  - pixel_6a:practice_soak_20min
+  - pixel_6a:analyze_memory_peak
+  - pixel_6a:camera_preview_and_thermal
+  - pixel_6a:background_resume
+  - pixel_6a:battery_saver
+  - pixel_6a:airplane_mode
+  - pixel_6a:low_storage
+  - pixel_6a:text_scale_200
+  - pixel_6a:screen_reader_path
+  - pixel_7:install_and_update
+  - pixel_7:cold_start
+  - pixel_7:live_start_latency
+  - pixel_7:mic_release
+  - pixel_7:practice_soak_20min
+  - pixel_7:analyze_memory_peak
+  - pixel_7:camera_preview_and_thermal
+  - pixel_7:background_resume
+  - pixel_7:battery_saver
+  - pixel_7:airplane_mode
+  - pixel_7:low_storage
+  - pixel_7:text_scale_200
+  - pixel_7:screen_reader_path
+```
+
+`echo $?` → **`1`**. Változatlan a §10.3-hoz képest (a `required_suite`
+maga változatlan tartalmú a valódi fájlon — csak a `--check` FAIL-CLOSED
+viselkedése változott az üres/hiányzó esetre).
+
+**A javított F1-próba (`docs/testing/device-matrix.yaml`-on, mérve):**
+
+1. `pixel_6a` `required_suite`-ját `[]`-re állítva (az egyetlen ezt a
+   blokkot érintő szerkesztés, `provenance` és minden más mező
+   változatlan):
+   ```
+   $ flutter test test/tooling/device_matrix_test.dart
+   ...
+   00:01 +119 -2: Some tests failed.
+
+   Failing tests:
+     test/tooling/device_matrix_test.dart: A1 — … the real device-matrix.yaml: every device has a non-empty required_suite
+       Expected: empty
+         Actual: ['device:18.required_suite']
+     test/tooling/device_matrix_test.dart: F1 — … the real device-matrix.yaml: both release_blocking devices (Pixel 6a, Pixel 7) carry exactly the thirteen-item mandatory required_suite
+       Expected: empty
+         Actual: ['device:18 (pixel_6a): required_suite is missing 13 mandatory item(s): install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path']
+   ```
+   **PIROS**, két cella — pontosan az F1 lelet mérete.
+2. Ugyanezen az állapoton:
+   ```
+   $ python3 tool/device_report.py --matrix docs/testing/device-matrix.yaml --check
+   device_report check: 14 missing mandatory run(s):
+     - pixel_6a: required_suite is empty for a release_blocking device
+     - pixel_7:install_and_update
+     ... (a pixel_7 maradék 12 sora)
+   $ echo $?
+   1
+   ```
+   A `pixel_6a` sora most a szöveges hibát viszi (`required_suite is empty
+   for a release_blocking device`), NEM egy `0 missing runs` zöld — ez a
+   lelet lényege, most javítva.
+3. `git checkout -- docs/testing/device-matrix.yaml` — visszaállítás.
+4. `git diff --stat docs/testing/device-matrix.yaml` → **üres kimenet**
+   (bit-pontos visszaállás).
+5. `flutter test test/tooling/device_matrix_test.dart` → újra **ZÖLD**, mind
+   a 121 cella.
+6. `python3 tool/device_report.py --matrix docs/testing/device-matrix.yaml --check`
+   → visszaáll a §10.3/fenti 26 hiányzó futásra, `echo $?` → `1` (a
+   `required_suite` tartalma helyreállt, a hiány oka újra „nincs eredmény-
+   fájl”, nem „üres csomag”).
+
 ## 11. Review — a Claude tölti ki
