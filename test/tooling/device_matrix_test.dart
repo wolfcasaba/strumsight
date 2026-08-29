@@ -539,10 +539,10 @@ List<String> findDevicesWithInvalidCoreSupportForOptionalCapability(
 
 final _provenancePattern = RegExp(r'^(.+\.md):(\d+)$');
 
-/// A5: every device's `provenance` must be a real `docs/manual-testing/…:
-/// <line>` reference — an unparseable value, a non-existent file, or an
-/// out-of-range line number is a violation (the "invented device" risk,
-/// §9).
+/// A5: every device's `provenance` must be a real
+/// `docs/manual-testing/<file>.md:<line>` reference — an unparseable value,
+/// a non-existent file, or an out-of-range line number is a violation (the
+/// "invented device" risk, §9).
 List<String> findInvalidProvenance(
   List<DeviceEntry> devices, {
   required bool Function(String path) fileExists,
@@ -854,12 +854,14 @@ required_suite_catalog: []
             '    provenance: docs/manual-testing/vision-device-matrix.md:160',
           );
       }
-      buffer
-        ..writeln('capabilities:')
-        ..writeln('  - id: onboarding')
-        ..writeln('    ga_scope: true')
-        ..writeln('    devices: [device_0, device_1]')
-        ..writeln('required_suite_catalog: []');
+      buffer.writeln('capabilities:');
+      for (final gaId in gaScopeCapabilityIds) {
+        buffer
+          ..writeln('  - id: $gaId')
+          ..writeln('    ga_scope: true')
+          ..writeln('    devices: [device_0, device_1]');
+      }
+      buffer.writeln('required_suite_catalog: []');
       return buffer.toString();
     }
 
