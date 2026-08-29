@@ -24,7 +24,7 @@
 // specific hibaosztály ("ram_gb: unknown" slips through) and the review
 // checks the *direction* of the `expect`, not just that a cell with a
 // matching name exists. The A1 group below walks the FULL placeholder list
-// (`identifierPlaceholderValues`) against EVERY one of the nine identifier
+// (`identifierPlaceholderValues`) against EVERY one of the eleven identifier
 // fields, not one representative example.
 import 'dart:io';
 
@@ -96,8 +96,11 @@ const List<String> identifierPlaceholderValues = [
   'pending',
 ];
 
-/// The nine identifier/provenance fields A1 requires present and
-/// placeholder-free on every device (§5.4).
+/// The eleven identifier/provenance fields A1 requires present and
+/// placeholder-free on every device (§5.4). `spec_provenance` was added by
+/// the independent review's F2 finding (docs/reviews/e12-r13-review.md): the
+/// measured source for `ram_gb`/`soc` is `vision-performance-benchmark.md`,
+/// not `provenance` (which only carries the camera-spec source).
 const List<String> identifierFieldNames = [
   'id',
   'name',
@@ -108,7 +111,19 @@ const List<String> identifierFieldNames = [
   'soc',
   'release_blocking',
   'provenance',
+  'spec_provenance',
 ];
+
+/// SDD Ch12 §18.2 mandatory per-device measurements minus `local_ai_load_ttft`
+/// (R7 — no device requires it today, Offline AI being `not_ga_scope`). This
+/// is the thirteen-item dictionary every `release_blocking: true` device's
+/// `required_suite` must fully cover (independent review F1 —
+/// docs/reviews/e12-r13-review.md: an emptied or partial `required_suite`
+/// on a blocking device must turn a cell red, not merely satisfy A2's
+/// "capability has a blocking device" check with nothing behind it).
+final List<String> mandatoryRequiredSuiteIds = requiredSuiteCatalogIds
+    .where((id) => id != 'local_ai_load_ttft')
+    .toList();
 
 bool isPlaceholderValue(String raw) =>
     identifierPlaceholderValues.contains(raw.trim().toLowerCase());
@@ -136,6 +151,7 @@ final class DeviceEntry {
     required this.releaseBlocking,
     required this.requiredSuite,
     required this.provenance,
+    required this.specProvenance,
     required this.lineNumber,
   });
 
@@ -155,14 +171,15 @@ final class DeviceEntry {
   final String releaseBlocking;
   final List<String> requiredSuite;
   final String provenance;
+  final String specProvenance;
   final int lineNumber;
 
   bool get releaseBlockingValue =>
       releaseBlocking.trim().toLowerCase() == 'true';
 
-  /// The nine A1 identifier fields, keyed by their YAML field name — kept as
-  /// RAW strings (not parsed ints/bools) so a placeholder given to a numeric
-  /// or boolean field is caught the exact same way a text field is.
+  /// The eleven A1 identifier fields, keyed by their YAML field name — kept
+  /// as RAW strings (not parsed ints/bools) so a placeholder given to a
+  /// numeric or boolean field is caught the exact same way a text field is.
   Map<String, String> get identifierFields => {
     'id': id,
     'name': name,
@@ -173,6 +190,7 @@ final class DeviceEntry {
     'soc': soc,
     'release_blocking': releaseBlocking,
     'provenance': provenance,
+    'spec_provenance': specProvenance,
   };
 }
 
@@ -251,6 +269,7 @@ const _deviceFieldKeys = {
   'release_blocking',
   'required_suite',
   'provenance',
+  'spec_provenance',
 };
 
 const _capabilityFieldKeys = {'id', 'ga_scope', 'devices'};
@@ -314,6 +333,7 @@ int _parseDeviceElements(
                 lineNumber: elementLine,
               ),
         provenance: fields['provenance'] ?? '',
+        specProvenance: fields['spec_provenance'] ?? '',
         lineNumber: elementLine,
       ),
     );
@@ -469,7 +489,7 @@ DeviceMatrix parseDeviceMatrix(String contents, {required String sourceLabel}) {
 // call the exact same functions.
 // ---------------------------------------------------------------------------
 
-/// A1 (§5.4, L546): every one of the nine identifier fields, on every
+/// A1 (§5.4, L546): every one of the eleven identifier fields, on every
 /// device, must be present and not one of [identifierPlaceholderValues].
 List<String> findPlaceholderIdentifierFields(List<DeviceEntry> devices) {
   final violations = <String>[];
@@ -539,22 +559,24 @@ List<String> findDevicesWithInvalidCoreSupportForOptionalCapability(
 
 final _provenancePattern = RegExp(r'^(.+\.md):(\d+)$');
 
-/// A5: every device's `provenance` must be a real
-/// `docs/manual-testing/<file>.md:<line>` reference — an unparseable value,
-/// a non-existent file, or an out-of-range line number is a violation (the
-/// "invented device" risk, §9).
-List<String> findInvalidProvenance(
+/// Shared by [findInvalidProvenance] and [findInvalidSpecProvenance]: both
+/// fields are `docs/manual-testing/<file>.md:<line>` references and share
+/// the exact same fail-closed contract (the "invented device" risk, §9) —
+/// only which field is read and how the violation names itself differ.
+List<String> _findInvalidPathLineReference(
   List<DeviceEntry> devices, {
+  required String Function(DeviceEntry device) fieldValue,
+  required String fieldName,
   required bool Function(String path) fileExists,
   required int Function(String path) lineCount,
 }) {
   final violations = <String>[];
   for (final device in devices) {
-    final raw = device.provenance.trim();
+    final raw = fieldValue(device).trim();
     final match = _provenancePattern.firstMatch(raw);
     if (match == null) {
       violations.add(
-        'device:${device.lineNumber}: provenance is not a "path:line" '
+        'device:${device.lineNumber}: $fieldName is not a "path:line" '
         'reference: "$raw"',
       );
       continue;
@@ -563,14 +585,14 @@ List<String> findInvalidProvenance(
     final line = int.parse(match.group(2)!);
     if (!path.startsWith('docs/manual-testing/')) {
       violations.add(
-        'device:${device.lineNumber}: provenance must point into '
+        'device:${device.lineNumber}: $fieldName must point into '
         'docs/manual-testing/, got "$path"',
       );
       continue;
     }
     if (!fileExists(path)) {
       violations.add(
-        'device:${device.lineNumber}: provenance file does not exist: '
+        'device:${device.lineNumber}: $fieldName file does not exist: '
         '"$path"',
       );
       continue;
@@ -578,13 +600,45 @@ List<String> findInvalidProvenance(
     final totalLines = lineCount(path);
     if (line < 1 || line > totalLines) {
       violations.add(
-        'device:${device.lineNumber}: provenance line $line out of range '
+        'device:${device.lineNumber}: $fieldName line $line out of range '
         'for "$path" ($totalLines lines)',
       );
     }
   }
   return violations;
 }
+
+/// A5: every device's `provenance` must be a real
+/// `docs/manual-testing/<file>.md:<line>` reference — an unparseable value,
+/// a non-existent file, or an out-of-range line number is a violation (the
+/// "invented device" risk, §9).
+List<String> findInvalidProvenance(
+  List<DeviceEntry> devices, {
+  required bool Function(String path) fileExists,
+  required int Function(String path) lineCount,
+}) => _findInvalidPathLineReference(
+  devices,
+  fieldValue: (device) => device.provenance,
+  fieldName: 'provenance',
+  fileExists: fileExists,
+  lineCount: lineCount,
+);
+
+/// A5 extension (independent review F2, docs/reviews/e12-r13-review.md): the
+/// MEASURED source for `ram_gb`/`soc` is `vision-performance-benchmark.md`,
+/// not `provenance` (which only carries the camera-spec source) — so
+/// `spec_provenance` gets the exact same "real path:line" validation.
+List<String> findInvalidSpecProvenance(
+  List<DeviceEntry> devices, {
+  required bool Function(String path) fileExists,
+  required int Function(String path) lineCount,
+}) => _findInvalidPathLineReference(
+  devices,
+  fieldValue: (device) => device.specProvenance,
+  fieldName: 'spec_provenance',
+  fileExists: fileExists,
+  lineCount: lineCount,
+);
 
 /// R5: the MEASURED primary test device (Pixel 6a) must be present and
 /// `release_blocking: true`. Returns `null` when satisfied.
@@ -648,6 +702,49 @@ List<String> findUnknownRequiredSuiteItems(List<DeviceEntry> devices) {
   return violations;
 }
 
+/// A1 extension (independent review F1, docs/reviews/e12-r13-review.md):
+/// `required_suite` must be present and non-empty on EVERY device, blocking
+/// or not — a device missing the field entirely and a device declaring it
+/// as `[]` parse to the same empty list (§ R3's parser), so both count as
+/// the same violation.
+List<String> findEmptyRequiredSuiteField(List<DeviceEntry> devices) {
+  final violations = <String>[];
+  for (final device in devices) {
+    if (device.requiredSuite.isEmpty) {
+      violations.add('device:${device.lineNumber}.required_suite');
+    }
+  }
+  return violations;
+}
+
+/// F1 (independent review MAJOR): a `release_blocking: true` device's
+/// `required_suite` must cover every entry of [mandatoryRequiredSuiteIds].
+/// A2 only checks that a GA capability has *a* blocking device — it says
+/// nothing about whether that device's own mandatory measurement list is
+/// intact. Without this cell, emptying a blocking device's `required_suite`
+/// left every gate cell green (the exact failure the review measured:
+/// `flutter test` at "+99: All tests passed!" and
+/// `device_report.py --check` exiting 0 with zero recorded runs).
+List<String> findBlockingDevicesWithIncompleteRequiredSuite(
+  List<DeviceEntry> devices,
+) {
+  final violations = <String>[];
+  for (final device in devices) {
+    if (!device.releaseBlockingValue) continue;
+    final present = device.requiredSuite.toSet();
+    final missing = mandatoryRequiredSuiteIds
+        .where((id) => !present.contains(id))
+        .toList();
+    if (missing.isNotEmpty) {
+      violations.add(
+        'device:${device.lineNumber} (${device.id}): required_suite is '
+        'missing ${missing.length} mandatory item(s): ${missing.join(', ')}',
+      );
+    }
+  }
+  return violations;
+}
+
 // ---------------------------------------------------------------------------
 // Fixture builders
 // ---------------------------------------------------------------------------
@@ -667,8 +764,13 @@ const Map<String, String> _validDeviceFieldDefaults = {
   'offline_ai_tier': 'not_ga_scope',
   'core_support': 'supported',
   'release_blocking': 'true',
-  'required_suite': '[]',
+  'required_suite':
+      '[install_and_update, cold_start, live_start_latency, mic_release, '
+      'practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, '
+      'background_resume, battery_saver, airplane_mode, low_storage, '
+      'text_scale_200, screen_reader_path]',
   'provenance': 'docs/manual-testing/vision-device-matrix.md:160',
+  'spec_provenance': 'docs/manual-testing/vision-performance-benchmark.md:117',
 };
 
 /// Builds a minimal, otherwise-valid device-matrix document with a single
@@ -773,8 +875,8 @@ required_suite_catalog: []
     });
   });
 
-  group('A1 — device-matrix.yaml schema validity: nine identifier fields, '
-      'no placeholder value (§5.4, L546)', () {
+  group('A1 — device-matrix.yaml schema validity: eleven identifier '
+      'fields, no placeholder value (§5.4, L546)', () {
     test('self-check: isPlaceholderValue is case-insensitive and does not '
         'flag a legitimate value', () {
       expect(isPlaceholderValue('UNKNOWN'), isTrue);
@@ -822,7 +924,7 @@ required_suite_catalog: []
       }
     }
 
-    test('the real device-matrix.yaml has all nine identifier fields on '
+    test('the real device-matrix.yaml has all eleven identifier fields on '
         'every device, none of them a placeholder value', () {
       final matrix = parseDeviceMatrix(
         File(_matrixPath).readAsStringSync(),
@@ -830,6 +932,54 @@ required_suite_catalog: []
       );
       expect(matrix.devices, isNotEmpty);
       expect(findPlaceholderIdentifierFields(matrix.devices), isEmpty);
+    });
+
+    test('matrix row: a release_blocking device with required_suite: [] is '
+        'flagged as missing the field, not silently accepted (independent '
+        'review F1)', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(overrides: {'required_suite': '[]'}),
+        sourceLabel: 'fixture',
+      );
+      final device = matrix.devices.single;
+      expect(
+        findEmptyRequiredSuiteField(matrix.devices),
+        contains('device:${device.lineNumber}.required_suite'),
+      );
+    });
+
+    test('matrix row: a non-blocking device with required_suite: [] is '
+        'flagged too — the field is mandatory regardless of '
+        'release_blocking (independent review F1)', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(
+          overrides: {'release_blocking': 'false', 'required_suite': '[]'},
+        ),
+        sourceLabel: 'fixture',
+      );
+      final device = matrix.devices.single;
+      expect(
+        findEmptyRequiredSuiteField(matrix.devices),
+        contains('device:${device.lineNumber}.required_suite'),
+      );
+    });
+
+    test('self-check: a fully populated fixture device has a non-empty '
+        'required_suite', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(),
+        sourceLabel: 'fixture',
+      );
+      expect(findEmptyRequiredSuiteField(matrix.devices), isEmpty);
+    });
+
+    test('the real device-matrix.yaml: every device has a non-empty '
+        'required_suite', () {
+      final matrix = parseDeviceMatrix(
+        File(_matrixPath).readAsStringSync(),
+        sourceLabel: _matrixPath,
+      );
+      expect(findEmptyRequiredSuiteField(matrix.devices), isEmpty);
     });
   });
 
@@ -950,6 +1100,102 @@ required_suite_catalog: []
         ),
         isEmpty,
       );
+    });
+  });
+
+  group('F1 — a release_blocking device\'s required_suite must cover the '
+      'full mandatory dictionary (independent review MAJOR, '
+      'docs/reviews/e12-r13-review.md)', () {
+    test('fixture row: a release_blocking device with required_suite: [] '
+        'is flagged, naming the device', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(overrides: {'required_suite': '[]'}),
+        sourceLabel: 'fixture',
+      );
+      expect(
+        findBlockingDevicesWithIncompleteRequiredSuite(matrix.devices),
+        contains(contains('fixture_device')),
+      );
+    });
+
+    test('fixture row: a release_blocking device missing one of the '
+        'thirteen mandatory required_suite items is flagged', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(
+          overrides: {
+            // Every mandatoryRequiredSuiteIds entry except the last one.
+            'required_suite':
+                '[install_and_update, cold_start, live_start_latency, '
+                'mic_release, practice_soak_20min, analyze_memory_peak, '
+                'camera_preview_and_thermal, background_resume, '
+                'battery_saver, airplane_mode, low_storage, text_scale_200]',
+          },
+        ),
+        sourceLabel: 'fixture',
+      );
+      final violations = findBlockingDevicesWithIncompleteRequiredSuite(
+        matrix.devices,
+      );
+      expect(violations, isNotEmpty);
+      expect(violations.single, contains('screen_reader_path'));
+    });
+
+    test('self-check: a release_blocking device with the full thirteen-item '
+        'mandatory suite is clean', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(),
+        sourceLabel: 'fixture',
+      );
+      expect(
+        findBlockingDevicesWithIncompleteRequiredSuite(matrix.devices),
+        isEmpty,
+      );
+    });
+
+    test('self-check: a non-blocking device is never checked against the '
+        'mandatory dictionary, even with an empty required_suite', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(
+          overrides: {'release_blocking': 'false', 'required_suite': '[]'},
+        ),
+        sourceLabel: 'fixture',
+      );
+      expect(
+        findBlockingDevicesWithIncompleteRequiredSuite(matrix.devices),
+        isEmpty,
+      );
+    });
+
+    test('self-check: mandatoryRequiredSuiteIds is the fourteen-entry '
+        'catalog minus local_ai_load_ttft (thirteen entries, R7)', () {
+      expect(mandatoryRequiredSuiteIds, hasLength(13));
+      expect(mandatoryRequiredSuiteIds, isNot(contains('local_ai_load_ttft')));
+    });
+
+    test('the real device-matrix.yaml: both release_blocking devices '
+        '(Pixel 6a, Pixel 7) carry exactly the thirteen-item mandatory '
+        'required_suite', () {
+      final matrix = parseDeviceMatrix(
+        File(_matrixPath).readAsStringSync(),
+        sourceLabel: _matrixPath,
+      );
+      expect(
+        findBlockingDevicesWithIncompleteRequiredSuite(matrix.devices),
+        isEmpty,
+      );
+      final blockingDevices = matrix.devices.where(
+        (device) => device.releaseBlockingValue,
+      );
+      expect(blockingDevices, hasLength(2));
+      for (final device in blockingDevices) {
+        expect(
+          device.requiredSuite.toSet(),
+          mandatoryRequiredSuiteIds.toSet(),
+          reason:
+              '${device.id} required_suite must be exactly the '
+              'thirteen-item mandatory dictionary',
+        );
+      }
     });
   });
 
@@ -1120,6 +1366,97 @@ required_suite_catalog: []
         sourceLabel: _matrixPath,
       );
       expect(findMissingMeasuredPrimaryDevice(matrix.devices), isNull);
+    });
+
+    test('matrix row: a spec_provenance value that is not a "path:line" '
+        'reference is flagged (independent review F2 — ram_gb/soc source, '
+        'docs/reviews/e12-r13-review.md)', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(overrides: {'spec_provenance': 'trust me'}),
+        sourceLabel: 'fixture',
+      );
+      expect(
+        findInvalidSpecProvenance(
+          matrix.devices,
+          fileExists: realFileExists,
+          lineCount: realLineCount,
+        ),
+        isNotEmpty,
+      );
+    });
+
+    test('matrix row: a spec_provenance value pointing at a non-existent '
+        'manual-testing file is flagged', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(
+          overrides: {
+            'spec_provenance': 'docs/manual-testing/does-not-exist.md:1',
+          },
+        ),
+        sourceLabel: 'fixture',
+      );
+      expect(
+        findInvalidSpecProvenance(
+          matrix.devices,
+          fileExists: realFileExists,
+          lineCount: realLineCount,
+        ),
+        isNotEmpty,
+      );
+    });
+
+    test('matrix row: a spec_provenance line number beyond the end of the '
+        'file is flagged', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(
+          overrides: {
+            'spec_provenance':
+                'docs/manual-testing/vision-performance-benchmark.md:999999',
+          },
+        ),
+        sourceLabel: 'fixture',
+      );
+      expect(
+        findInvalidSpecProvenance(
+          matrix.devices,
+          fileExists: realFileExists,
+          lineCount: realLineCount,
+        ),
+        isNotEmpty,
+      );
+    });
+
+    test('self-check: a well-formed, real spec_provenance reference is '
+        'clean', () {
+      final matrix = parseDeviceMatrix(
+        fixtureDeviceMatrixYaml(),
+        sourceLabel: 'fixture',
+      );
+      expect(
+        findInvalidSpecProvenance(
+          matrix.devices,
+          fileExists: realFileExists,
+          lineCount: realLineCount,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('the real device-matrix.yaml: every spec_provenance reference '
+        'points at an existing docs/manual-testing/ file and an in-range '
+        'line', () {
+      final matrix = parseDeviceMatrix(
+        File(_matrixPath).readAsStringSync(),
+        sourceLabel: _matrixPath,
+      );
+      expect(
+        findInvalidSpecProvenance(
+          matrix.devices,
+          fileExists: realFileExists,
+          lineCount: realLineCount,
+        ),
+        isEmpty,
+      );
     });
   });
 
@@ -1364,6 +1701,31 @@ runs:
         '--check',
       ]);
       expect(result.stdout.toString(), isNot(contains('fixture_recommended')));
+    });
+
+    test('matrix row: a release_blocking device with required_suite: [] is '
+        'a --check failure, not a clean "every run recorded" result '
+        '(independent review F1, docs/reviews/e12-r13-review.md)', () {
+      final file = File('${fixtureRoot.path}/matrix.yaml')
+        ..writeAsStringSync('''
+devices:
+  - id: fixture_device
+    name: Fixture Device
+    release_blocking: true
+    required_suite: []
+capabilities: []
+''');
+      final result = Process.runSync('python3', [
+        'tool/device_report.py',
+        '--matrix',
+        file.path,
+        '--check',
+      ]);
+      expect(result.exitCode, isNot(0));
+      expect(
+        result.stdout.toString(),
+        contains('fixture_device: required_suite is empty'),
+      );
     });
 
     test('--report on the real matrix runs cleanly and lists every device', () {
