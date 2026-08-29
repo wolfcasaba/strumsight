@@ -46,6 +46,36 @@ def _load_security_scan() -> ModuleType:
 _security_scan = _load_security_scan()
 
 
+def _resolve_node_id(relative_path: str, guard_test: str) -> str:
+    """Resolves the ACTUAL pytest node id for `guard_test` in
+    `relative_path` — a flat `<path>::<name>` guess breaks for a guard
+    living inside a `class Test...:` (e.g. T-API-02, `TestAuthThrottle`),
+    whose real node id is `<path>::TestAuthThrottle::<name>`. Listing the
+    file's own collected node ids and matching the `::<name>` suffix avoids
+    hardcoding a class-nesting assumption."""
+    # NOT `-q` here: quiet mode collapses a whole-file collection to a
+    # single "<file>: <count>" summary line with no node ids at all — the
+    # per-node listing this needs only appears in the default (verbose)
+    # collection format.
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", relative_path],
+        cwd=_BACKEND_DIR,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    suffix = f"::{guard_test}"
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line.endswith(suffix):
+            return line
+    # No collected node id matched — fall back to the flat guess so the
+    # guard still fails LOUDLY downstream (a missing node id, not a
+    # silently vanished guard) rather than raising here and hiding which
+    # guard is broken.
+    return f"{relative_path}{suffix}"
+
+
 def _backend_guard_node_ids() -> list[str]:
     """`backend/`-relative pytest node ids for every backend, release_gate,
     test-bearing guard in the real threat model."""
@@ -59,7 +89,7 @@ def _backend_guard_node_ids() -> list[str]:
         if not entry.guard_path.startswith("backend/"):
             continue
         relative_path = entry.guard_path[len("backend/") :]
-        node_ids.append(f"{relative_path}::{entry.guard_test}")
+        node_ids.append(_resolve_node_id(relative_path, entry.guard_test))
     return node_ids
 
 

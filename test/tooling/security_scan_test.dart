@@ -177,6 +177,7 @@ void main() {
       _write(fixtureRoot, 'exceptions.yaml', '''
 exceptions:
   - finding: SOME-FINDING
+    branch: dependencies
     owner: gate@example.invalid
     expires: "$expires"
     reason: fixture for the A3 threshold triple
@@ -385,6 +386,7 @@ exceptions:
       _write(fixtureRoot, 'exceptions.yaml', '''
 exceptions:
   - finding: CVE-2022-29217
+    branch: dependencies
     owner: gate@example.invalid
     expires: "2099-01-01"
     reason: fixture — proves live-exception suppression (A6)
@@ -402,6 +404,499 @@ exceptions:
       ]);
 
       expect(result.exitCode, 0, reason: result.stdout + result.stderr);
+    });
+  });
+
+  group('MAJOR-1 — an exceptions entry can never suppress the secrets branch, '
+      'and only ever suppresses the SAME branch + finding it names', () {
+    test('an exception naming a secrets finding id does not suppress a '
+        'failing --secrets-cmd on the default (full) run', () {
+      _write(
+        fixtureRoot,
+        'guarded.py',
+        'def test_the_real_thing():\n    pass\n',
+      );
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-MAJOR1A',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+      _write(fixtureRoot, 'requirements.txt', 'somepackage<2.0\n');
+      // Exactly the review's repro: owner + future expires, naming both
+      // fixed secrets-branch finding ids. Before the fix this silenced
+      // the WHOLE secrets branch — any future real commited secret
+      // included.
+      _write(fixtureRoot, 'exceptions.yaml', '''
+exceptions:
+  - finding: secrets.delegate-failed
+    branch: guards
+    owner: gate@example.invalid
+    expires: "2099-01-01"
+    reason: fixture — MAJOR-1, must never reach the secrets branch
+  - finding: secrets.delegate-unavailable
+    branch: guards
+    owner: gate@example.invalid
+    expires: "2099-01-01"
+    reason: fixture — MAJOR-1, must never reach the secrets branch
+''');
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--threat-model',
+        'threat-model.md',
+        '--requirements',
+        'requirements.txt',
+        '--exceptions',
+        'exceptions.yaml',
+        '--secrets-cmd',
+        '/bin/false',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('secrets.delegate-failed'));
+    });
+
+    test('an exception entry without a branch field is a critical finding', () {
+      _write(fixtureRoot, 'exceptions.yaml', '''
+exceptions:
+  - finding: SOME-FINDING
+    owner: gate@example.invalid
+    expires: "2099-01-01"
+    reason: fixture missing branch
+''');
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'exceptions',
+        '--exceptions',
+        'exceptions.yaml',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('exceptions.missing-field'));
+    });
+
+    test('an exception entry whose branch is not "guards"/"dependencies" '
+        '(e.g. "secrets") is a critical finding', () {
+      _write(fixtureRoot, 'exceptions.yaml', '''
+exceptions:
+  - finding: SOME-FINDING
+    branch: secrets
+    owner: gate@example.invalid
+    expires: "2099-01-01"
+    reason: fixture — secrets is not an exceptable branch
+''');
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'exceptions',
+        '--exceptions',
+        'exceptions.yaml',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('exceptions.invalid-branch'));
+    });
+
+    test('a dependencies-branch exception does not suppress a guards-branch '
+        'finding of the same id', () {
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(id: 'CROSS-BRANCH-01', path: 'no/such/file.py'),
+      );
+      _write(fixtureRoot, 'requirements.txt', 'somepackage<2.0\n');
+      _write(fixtureRoot, 'exceptions.yaml', '''
+exceptions:
+  - finding: CROSS-BRANCH-01
+    branch: dependencies
+    owner: gate@example.invalid
+    expires: "2099-01-01"
+    reason: fixture — a dependencies-scoped exception must not reach guards
+''');
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--threat-model',
+        'threat-model.md',
+        '--requirements',
+        'requirements.txt',
+        '--exceptions',
+        'exceptions.yaml',
+        '--secrets-cmd',
+        'true',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('CROSS-BRANCH-01'));
+    });
+
+    test('a guards-branch exception with the matching branch still '
+        'suppresses the matching guard finding (D4 stays usable)', () {
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(id: 'CROSS-BRANCH-02', path: 'no/such/file.py'),
+      );
+      _write(fixtureRoot, 'requirements.txt', 'somepackage<2.0\n');
+      _write(fixtureRoot, 'exceptions.yaml', '''
+exceptions:
+  - finding: CROSS-BRANCH-02
+    branch: guards
+    owner: gate@example.invalid
+    expires: "2099-01-01"
+    reason: fixture — correctly-scoped exception must still suppress
+''');
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--threat-model',
+        'threat-model.md',
+        '--requirements',
+        'requirements.txt',
+        '--exceptions',
+        'exceptions.yaml',
+        '--secrets-cmd',
+        'true',
+      ]);
+
+      expect(result.exitCode, 0, reason: result.stdout + result.stderr);
+    });
+  });
+
+  group('MAJOR-2 — guard.test resolution rejects disabled or comment-only '
+      'protections, not just missing ones', () {
+    test('a guard.test that exists but is skip-marked is a critical '
+        'finding, not a pass', () {
+      _write(fixtureRoot, 'guarded.py', '''
+@pytest.mark.skip(reason='flaky, TODO')
+def test_the_real_thing():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-04',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-04'));
+    });
+
+    test('a Dart guard.test whose test( call is commented out is a '
+        'critical finding, not a pass', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  // test('the real thing', () {
+  //   expect(1, 1);
+  // });
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-05',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-05'));
+    });
+
+    test('a python guard.test renamed with a suffix does not slip past an '
+        'unclosed needle', () {
+      _write(fixtureRoot, 'guarded.py', '''
+def test_the_real_thing_v2():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-06',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-06'));
+    });
+
+    test('a Dart guard.test with a skip: argument is a critical finding, '
+        'not a pass', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  test('the real thing', () {
+    expect(1, 1);
+  }, skip: true);
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-07',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+    });
+
+    test(
+      'a Dart guard.test name split across two adjacent string literals '
+      '(the shipped consent guards\' own shape) still resolves when live',
+      () {
+        _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  test('first part of the name '
+      'second part of the name', () {
+    expect(1, 1);
+  });
+}
+''');
+        _write(
+          fixtureRoot,
+          'threat-model.md',
+          _guardBlock(
+            id: 'T-FIXTURE-08',
+            path: 'guarded_test.dart',
+            test: 'first part of the name second part of the name',
+          ),
+        );
+
+        final result = _run([
+          '--root',
+          fixtureRoot.path,
+          '--only',
+          'guards',
+          '--threat-model',
+          'threat-model.md',
+        ]);
+
+        expect(result.exitCode, 0, reason: result.stdout + result.stderr);
+      },
+    );
+  });
+
+  group(
+    'MAJOR-2 cross-check — Dart guards resolve independently of the '
+    'python scan (the --collect-only analog for Dart, A9\'s counterpart)',
+    () {
+      test(
+        'every dart release_gate guard.test name is a live, unskipped '
+        'test( call — measured directly in Dart, not via the python parser',
+        () {
+          final text = File('docs/security/threat-model.md').readAsStringSync();
+          final blockPattern = RegExp(r'```yaml\n(.*?)\n```', dotAll: true);
+          var dartGuardCount = 0;
+          for (final block in blockPattern.allMatches(text)) {
+            final body = block.group(1)!;
+            if (!RegExp(
+              r'^release_gate:\s*true$',
+              multiLine: true,
+            ).hasMatch(body)) {
+              continue;
+            }
+            final pathMatch = RegExp(
+              r'^\s*path:\s*(\S+)$',
+              multiLine: true,
+            ).firstMatch(body);
+            final testMatch = RegExp(
+              r'^\s*test:\s*(.+)$',
+              multiLine: true,
+            ).firstMatch(body);
+            if (pathMatch == null || testMatch == null) continue;
+            final path = pathMatch.group(1)!.trim();
+            if (!path.endsWith('.dart')) continue;
+            dartGuardCount++;
+            final name = testMatch.group(1)!.trim();
+            final stripped = _withoutDartComments(
+              File(path).readAsStringSync(),
+            );
+            expect(
+              _dartTestNames(stripped),
+              contains(name),
+              reason:
+                  "$path has no live test('$name', ...) call (Dart "
+                  'cross-check, independent of the python scan)',
+            );
+          }
+          expect(dartGuardCount, greaterThanOrEqualTo(6));
+        },
+      );
+    },
+  );
+
+  group('MINOR-1 — guard.path cannot escape the repo root', () {
+    test('an absolute guard.path is a critical finding, not a pass', () {
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(id: 'T-ESCAPE-01', path: '/etc/hostname'),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-ESCAPE-01'));
+    });
+
+    test(
+      'a `..`-relative guard.path escaping the root is a critical finding',
+      () {
+        _write(
+          fixtureRoot,
+          'threat-model.md',
+          _guardBlock(id: 'T-ESCAPE-02', path: '../../../../etc/hosts'),
+        );
+
+        final result = _run([
+          '--root',
+          fixtureRoot.path,
+          '--only',
+          'guards',
+          '--threat-model',
+          'threat-model.md',
+        ]);
+
+        expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+        expect(result.stdout, contains('T-ESCAPE-02'));
+      },
+    );
+  });
+
+  group('MINOR-2 — every known guard id in the shipped model has its OWN '
+      'release_gate: true block, not just a component substring', () {
+    const knownGuardIds = [
+      'T-CLIENT-01',
+      'T-API-01',
+      'T-API-02',
+      'T-DIAG-01',
+      'T-DIAG-02',
+      'T-DIAG-03',
+      'T-MEDIA-01',
+      'T-MEDIA-02',
+      'T-MEDIA-03',
+      'T-MODEL-01',
+      'T-MODEL-02',
+      'T-COMM-01',
+      'T-COMM-02',
+      'T-RELEASE-01',
+      'T-RELEASE-02',
+      'T-RELEASE-03',
+      'T-EGRESS-01',
+      'T-EGRESS-02',
+    ];
+
+    test('each known id resolves to id + release_gate: true, in order', () {
+      final text = File('docs/security/threat-model.md').readAsStringSync();
+      for (final id in knownGuardIds) {
+        final pattern = RegExp(
+          'id: ${RegExp.escape(id)}\\n'
+          r'component: [^\n]+\n'
+          r'threat: [^\n]+\n'
+          r'release_gate: true\n',
+        );
+        expect(
+          pattern.hasMatch(text),
+          isTrue,
+          reason:
+              '$id is missing, or not release_gate: true, in the shipped '
+              'threat model',
+        );
+      }
+    });
+  });
+
+  group('MINOR-3 — a threat model with zero release_gate: true blocks is a '
+      'critical finding, not a clean scan', () {
+    test('all guard blocks demoted to a non-```yaml``` fence exits 1', () {
+      _write(fixtureRoot, 'threat-model.md', '''
+```text
+id: T-FIXTURE-09
+component: diagnostics-upload
+threat: tampering
+release_gate: true
+guard:
+  path: guarded.py
+```
+''');
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('no-release-gate-entries'));
     });
   });
 
@@ -506,6 +1001,7 @@ id: [this is not, valid: yaml: at: all
           'model-package',
           'community',
           'release-chain',
+          'client-egress',
         ];
         for (final component in components) {
           expect(
@@ -541,4 +1037,95 @@ id: [this is not, valid: yaml: at: all
       );
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// MAJOR-2 cross-check helpers — an INDEPENDENT (Dart, not python) re-parse of
+// `test('<name>', ...)` calls, used only to verify the shipped Dart guards
+// resolve, mirroring `test/core/architecture_dependency_test.dart:1227`
+// `_withoutTrivia`'s comment-stripping convention without importing it (this
+// file does not re-implement any PROTECTION — it re-checks the scan's OWN
+// guard-resolution claim from a second angle, the same role
+// `backend/tests/test_security_release.py`'s `--collect-only` plays for the
+// backend guards).
+// ---------------------------------------------------------------------------
+
+String _withoutDartComments(String source) {
+  final buffer = StringBuffer();
+  var index = 0;
+  while (index < source.length) {
+    if (source.startsWith('//', index)) {
+      final newline = source.indexOf('\n', index);
+      index = newline == -1 ? source.length : newline;
+      continue;
+    }
+    if (source.startsWith('/*', index)) {
+      var depth = 1;
+      index += 2;
+      while (index < source.length && depth > 0) {
+        if (source.startsWith('/*', index)) {
+          depth++;
+          index += 2;
+        } else if (source.startsWith('*/', index)) {
+          depth--;
+          index += 2;
+        } else {
+          index++;
+        }
+      }
+      continue;
+    }
+    final char = source[index];
+    if (char == "'" || char == '"') {
+      final start = index;
+      final triple = source.startsWith('$char$char$char', index);
+      final delimiter = triple ? '$char$char$char' : char;
+      index += delimiter.length;
+      while (index < source.length && !source.startsWith(delimiter, index)) {
+        index += (source[index] == r'\' && index + 1 < source.length) ? 2 : 1;
+      }
+      index = (index + delimiter.length).clamp(0, source.length);
+      buffer.write(source.substring(start, index));
+      continue;
+    }
+    buffer.write(char);
+    index++;
+  }
+  return buffer.toString();
+}
+
+Set<String> _dartTestNames(String strippedSource) {
+  final names = <String>{};
+  final callPattern = RegExp(r'\btest\(');
+  for (final match in callPattern.allMatches(strippedSource)) {
+    var index = match.end;
+    while (index < strippedSource.length &&
+        strippedSource[index].trim().isEmpty) {
+      index++;
+    }
+    final parts = <String>[];
+    while (index < strippedSource.length &&
+        (strippedSource[index] == "'" || strippedSource[index] == '"')) {
+      final quote = strippedSource[index];
+      final triple = strippedSource.startsWith('$quote$quote$quote', index);
+      final delimiter = triple ? '$quote$quote$quote' : quote;
+      index += delimiter.length;
+      final start = index;
+      while (index < strippedSource.length &&
+          !strippedSource.startsWith(delimiter, index)) {
+        index +=
+            (strippedSource[index] == r'\' && index + 1 < strippedSource.length)
+            ? 2
+            : 1;
+      }
+      parts.add(strippedSource.substring(start, index));
+      index += delimiter.length;
+      while (index < strippedSource.length &&
+          strippedSource[index].trim().isEmpty) {
+        index++;
+      }
+    }
+    if (parts.isNotEmpty) names.add(parts.join());
+  }
+  return names;
 }

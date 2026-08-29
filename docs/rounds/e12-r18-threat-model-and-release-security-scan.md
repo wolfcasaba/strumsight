@@ -517,4 +517,290 @@ teljes fájl újra zöld (`22/22, "All tests passed!"`).
 - Termékkód-javításra a scan a valós fán NEM talált okot (D7 nem
   alkalmazandó ebben a körben).
 
+## 10.6 Javító kör (E12-R18 review fixes, 2026-08-29, Claude Sonnet 5)
+
+A kötelező `security-reviewer` (`docs/reviews/e12-r18-review-security.md`)
+4 MAJOR + 3 javítandó MINOR leletet mért, izolált klónban futtatott
+próbákkal, a zöld §10.3 gate mellett. A leletlistát a `REVIEW-FINDINGS.md`
+gyűjtötte össze; az alábbi táblázat leletenként a javítást, az ÚJ cellát és
+a TÉNYLEGES parancs-kimenetet rögzíti (ADR 0481 D2 — a javítás önmagában nem
+elég, a saját mérce is bizonyítson).
+
+### MAJOR-1 — egy `exceptions.yaml` sor kikapcsolta a teljes `secrets` ágat
+
+**Javítás** (`tool/release/security_scan.py`): a `secrets` ág leletei
+**soha, semmilyen `--only` módban nem elnyelhetők** — a
+`run()`-ban a `secrets` blokk többé nem hívja `_apply_exceptions`-t (D3: a
+titok-kapu fail-closed delegáció, nem elfogadható kockázat). A kivétel-
+bejegyzés kötelező `branch` mezőt kapott (`_REQUIRED_EXCEPTION_KEYS`), amely
+csak `guards` vagy `dependencies` lehet (`_EXCEPTABLE_BRANCHES`) — ismeretlen
+vagy hiányzó `branch` kritikus lelet (`exceptions.invalid-branch` /
+`exceptions.missing-field`). A `live` szótár kulcsa mostantól
+`(branch, finding)` pár, nem csak `finding` — egy `dependencies`-re szóló
+bejegyzés nem nyel el egy azonos id-jű `guards`-leletet, és fordítva. A
+modul-docstring (`:1-43`) és a `docs/security/exceptions.yaml` sémadoksija
+igazítva a mért viselkedéshez.
+
+**Új cellák** (`test/tooling/security_scan_test.dart`, csoport `MAJOR-1`, 5
+teszt): (a) a review pontos repróját (owner+jövőbeli-lejárat kivétel a két
+fix `secrets.*` id-re, `--secrets-cmd /bin/false`, default teljes futás)
+bizonyítottan EXIT=1 marad; (b) `branch` nélküli bejegyzés →
+`exceptions.missing-field`; (c) `branch: secrets` (vagy bármilyen nem
+`guards`/`dependencies` érték) → `exceptions.invalid-branch`; (d) egy
+`dependencies`-branchre szóló kivétel NEM nyeli el az azonos id-jű
+`guards`-leletet; (e) pozitív kontroll — egy helyesen `branch: guards`-ra
+szóló kivétel TOVÁBBRA IS elnyeli a saját ágának leletét (D4 nem sérült túl).
+
+**Mérve — a régi kódon (a),(b),(c),(d) PIROS, (e) is PIROS** (a `live` dict
+korábban `finding`-re kulcsolt, `branch` mező nem is létezett):
+```
+$ (5 régi security_scan.py-ra: cp /tmp/security_scan_new.py biztonsági
+   mentés után `git show 7798dfc4:tool/release/security_scan.py` a helyére,
+   majd `flutter test test/tooling/security_scan_test.dart`)
+00:01 +14 -4: MAJOR-1 … an exception naming a secrets finding id does not
+  suppress a failing --secrets-cmd on the default (full) run [E]
+  … Expected: <1>  Actual: <0>
+… (mind az öt MAJOR-1 cella a régi kódon PIROS vagy hibásan zöld a
+   várttal ellentétesen — lásd a teljes log fentebb a beszélgetésben)
+```
+Az ÚJ kódon mind az öt zöld (lásd §10.6 végi teljes gate-log).
+
+### MAJOR-2 — a guard „létezése" nyers substring: skip/comment/rename átcsúszott
+
+**Javítás** (`tool/release/security_scan.py`): a `check_guards` többé nem
+nyers substringet keres. Új helperek: `_strip_python_trivia` /
+`_strip_dart_comments` (a `# `/`//`/`/* */` komment és a string-tartalom
+kimaszkolása a repó saját `_withoutTrivia` mintája szerint —
+`test/core/architecture_dependency_test.dart:1227`, csak olvasva, nem
+módosítva), `_python_guard_status` (LEZÁRT `def <név>(` tű + a megelőző
+~400 karakterben `@pytest.mark.skip`/`xfail`/`unittest.skip`/`pytest.skip(`
+keresés), `_dart_guard_status` (a `test(` hívás egymást követő, Dart-
+auto-konkatenált string-literáljainak összefűzése — így egy `'rész 1 '` +
+`'rész 2'` alakú, több sorra tördelt névre is illeszkedik —, a hívás teljes
+zárójel-tartományában `skip:`/`@Skip(` keresés). `found=False` → „not
+found”, `found=True és disabled=True` → külön kritikus lelet („disabled
+(skip/xfail marker)”).
+
+**Új cellák** (csoport `MAJOR-2`, 5 teszt + `MAJOR-2 cross-check`, 1 teszt):
+(1) python `@pytest.mark.skip` a guard fölött → kritikus; (2) Dart
+`test(...)` kikommentelve → kritikus; (3) python `def <név>_v2(` (utótag-
+átnevezés) NEM csúszik át a lezárt tűn; (4) Dart `skip: true` paraméter →
+kritikus; (5) pozitív kontroll — a szállított consent-guardok saját, két
+literálra tördelt alakja élőben feloldódik. A `MAJOR-2 cross-check` egy
+FÜGGETLEN, Dart-ban újraírt (nem a python parsert hívó) `test('<név>'`
+feloldást futtat a valós fa mind a hat Dart-guardjára — ugyanaz a szerep,
+mint a backend A9 `--collect-only` keresztmérésének, csak Dart oldalon.
+
+**Mérve — a régi kódon 4/5 PIROS, (5) hibásan PIROS is** (a régi tű nem
+kezelte a több-literálos konkatenációt sem):
+```
+00:02 +15 -5: … a guard.test that exists but is skip-marked … [E]
+  Expected: <1>  Actual: <0>
+00:02 +15 -6: … a Dart guard.test whose test( call is commented out … [E]
+  Expected: <1>  Actual: <0>
+00:02 +15 -7: … a python guard.test renamed with a suffix … [E]
+  Expected: <1>  Actual: <0>
+00:02 +15 -8: … a Dart guard.test with a skip: argument … [E]
+  Expected: <1>  Actual: <0>
+00:02 +15 -9: … split across two adjacent string literals … still resolves … [E]
+  Expected: <0>  Actual: <1>
+  - T-FIXTURE-08 … guard.test 'first part…second part…' not found …
+```
+Az ÚJ kódon mind a hat (5+1 cross-check) zöld.
+
+### MAJOR-3 — hiányzott a §5 nem tárgyalható határ (egress + consent)
+
+**Javítás** (`docs/security/threat-model.md`): új, 8. komponens
+(`client-egress`), két `release_gate: true` guard a MÁR MEGLÉVŐ
+`test/privacy/consent_enforcement_test.dart` (E12-R17) konkrét celláira —
+`T-EGRESS-01` (`upload() with consent false never touches the wire
+adapter` — nyers audio nem hagyja el az eszközt consent nélkül) és
+`T-EGRESS-02` (`a profile update sent while signed in reaches the wire; the
+same call after logout does not — same container, no restart (A6)` —
+kijelentkezés után nincs rejtett hálózati kérés). Plusz `T-DIAG-03`
+(`backend/tests/test_diagnostics.py::test_diagnostics_rejects_bad_token` —
+a `POST /diagnostics` `X-Diag-Token`/`hmac.compare_digest` spoofing-kapuja)
+és `T-API-02`
+(`backend/tests/test_hardening.py::TestAuthThrottle::test_login_brute_force_gets_429_with_retry_after`
+— login brute-force throttle, DoS). Egyik sem méri újra a védelmet
+(ADR 0481 §0.0 R2 szelleme) — csak bekötik a MEGLÉVŐ mércét a
+release-döntésbe.
+
+**Mérve a fán, MINDEN guard MA feloldható** (a `grep -n "def <név>\|test('<név>"
+<path>` lelépés minden új guardra elvégezve a bekötés előtt):
+```
+$ grep -n "def test_diagnostics_rejects_bad_token(" backend/tests/test_diagnostics.py
+64:def test_diagnostics_rejects_bad_token(client, tmp_path, monkeypatch):
+$ grep -n "def test_login_brute_force_gets_429_with_retry_after(" backend/tests/test_hardening.py
+43:    def test_login_brute_force_gets_429_with_retry_after(self, client):
+$ grep -n "test('upload() with consent false never touches the wire adapter'" test/privacy/consent_enforcement_test.dart
+145:      'upload() with consent false never touches the wire adapter',
+```
+(a `T-EGRESS-02` konkatenált nevét a MAJOR-2 javítás oldja fel — lásd fent.)
+
+Backend oldali kereszt-bizonyíték: `T-DIAG-03` és `T-API-02` automatikusan
+bekerült a `backend/tests/test_security_release.py`
+`_backend_guard_node_ids()` listájába (10 backend node-id 8 helyett) —
+ehhez a `_resolve_node_id` helper is javításra szorult (lásd alább, a
+mérce-mátrix melléklete).
+
+**Melléklet — a `_backend_guard_node_ids` saját hibája, amit a T-API-02
+bekötése fogott ki:** a régi node-id konstrukció `f"{path}::{test}"`
+alakú volt, ami módszer-szintű (`class Test...:`) tesztre HIBÁSAN
+kollabál, mert a valódi pytest node-id `path::Class::test`. A
+`T-API-02` (`TestAuthThrottle` osztályban) ezt PIROSRA fogta:
+```
+$ cd backend && python3 -m pytest tests/test_security_release.py -q
+FAILED …test_backend_guard_resolves_as_a_pytest_node_id[tests/test_hardening.py::test_login_brute_force_gets_429_with_retry_after]
+  ERROR: not found: …/backend/tests/test_hardening.py::test_login_brute_force_gets_429_with_retry_after
+  (no match in any of [<Module test_hardening.py>])
+```
+Javítás: `_resolve_node_id` a `pytest --collect-only <path>` (NEM `-q` —
+a `-q` egyetlen „`<file>: <szám>`” összegző sorra csonkítja a kimenetet,
+node-id nélkül) teljes node-id listáját olvassa, és a `::<guard_test>`
+utótagra illeszti — osztály-beágyazástól függetlenül helyes node-id-t ad.
+Ez a saját mérce hibája volt, nem a threat modellé; a T-API-02 bekötése
+fogta ki, pontosan a brief §6.2 „minden guardot MÉRJ LE” elve szerint.
+
+### MAJOR-4 — a `T-CLIENT-01` guard nem a leírt fenyegetést mérte
+
+**Javítás** (`docs/security/threat-model.md`): a guard átkötve
+`test/core/storage/secure_store_test.dart` (`_MemoryStorage` fake fölötti
+generikus round-trip) helyett
+`test/features/auth/token_store_test.dart::round-trips a token under the
+documented secure key`-re — ez a TÉNYLEGES tárolási utat méri
+(`SecureTokenStore` → `StorageKeys.secureAuthToken` kulcs → `SecureStore`
+interfész). A „`FlutterSecureStore` az egyetlen import-hely” állítás
+átfogalmazva **kimondottan nem mért feltevésként** (jövőbeli
+architektúra-cella tárgya), nem release-blokkoló tényként.
+
+**Mérve:**
+```
+$ grep -n "test('round-trips a token under the documented secure key'" test/features/auth/token_store_test.dart
+45:  test('round-trips a token under the documented secure key', () async {
+$ python3 tool/release/security_scan.py --only guards
+security_scan: OK — no critical or fatal finding.
+```
+
+### MINOR-1 — a `guard.path` kiléphetett a repóból
+
+**Javítás**: `check_guards`-ban `resolved_guard.is_relative_to(root.resolve())`
+ellenőrzés a `is_file()` ELŐTT — kilépő út (abszolút vagy `../`-lánc) saját
+kritikus lelet (`guard.path escapes the repo root`), nem csendes „not a
+file”.
+
+**Új cellák** (csoport `MINOR-1`, 2 teszt): `/etc/hostname` és
+`../../../../etc/hosts` mindkettő kritikus lelet.
+
+**Mérve — a régi kódon mindkettő PIROS** (a review saját reprója):
+```
+00:02 +16 -10: … an absolute guard.path is a critical finding … [E]
+  Expected: <1>  Actual: <0>
+00:02 +16 -11: … a `..`-relative guard.path escaping the root … [E]
+  Expected: <1>  Actual: <0>
+```
+
+### MINOR-2 — a `release_gate` átbillentése néma volt
+
+**Javítás**: az A8 doksi-substring-teszt (`contains('component: <name>')`)
+mellé egy ÚJ, a SZÁLLÍTOTT modellre kötött cella — mind a 18 ismert `id`
+(a MAJOR-3 4 új guardjával bővült lista) `id:`/`component:`/`threat:`/
+`release_gate: true` négysoros blokkjára illeszkedő regex, sorrendben.
+
+**Mérve — a review pontos reprója (mind a 18 `release_gate: true` →
+`false`) a régi A8-cellán ZÖLD maradt volna, az ÚJ cella PIROSRA fogja:**
+```
+$ sed 's/^release_gate: true$/release_gate: false/' docs/security/threat-model.md > /tmp/… (18 találat)
+$ flutter test test/tooling/security_scan_test.dart --plain-name "MINOR-2"
+00:00 +0 -1: … each known id resolves to id + release_gate: true, in order [E]
+  Expected: true  Actual: <false>
+  T-CLIENT-01 is missing, or not release_gate: true, in the shipped threat model
+```
+(a threat-model.md ezután visszaállítva, `python3 tool/release/security_scan.py --only guards` → EXIT=0 megerősítve.)
+
+### MINOR-3 — jelen lévő, de guard nélküli threat model zöld volt
+
+**Javítás**: `check_guards` elején — ha `entries` üres VAGY nincs köztük
+`release_gate: true`, a teljes ág EGYETLEN kritikus lelettel tér vissza
+(`guards.no-release-gate-entries`), a fájlonkénti ellenőrzés helyett/előtt.
+
+**Új cella** (csoport `MINOR-3`, 1 teszt): az egyetlen guard-blokk
+` ```yaml ``` ` helyett ` ```text ``` ` fenceben (a review pontos reprója) →
+EXIT=1, `no-release-gate-entries`.
+
+**Mérve — a régi kódon PIROS:**
+```
+00:02 +17 -12: … all guard blocks demoted to a non-```yaml``` fence exits 1 … [E]
+  Expected: <1>  Actual: <0>
+```
+
+### Kötelező ellenőrzések — TÉNYLEGES kimenet (javító kör után)
+
+```
+$ tools/round-gate.sh test/tooling/security_scan_test.dart test/tooling/check_secrets_test.dart
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/security_scan_test.dart                  zöld (37/37, "All tests passed!")
+    test test/tooling/check_secrets_test.dart                  zöld (13/13, unchanged — A10)
+    architecture                                               zöld
+    secrets                                                    PIROS (kilépési kód 1)
+```
+
+```
+$ cd backend && python -m pytest tests/test_security_release.py tests/test_hardening.py -q
+.............................                                              [100%]
+(29 passed — 12 test_security_release.py: 1 „van legalább egy guard” + 10
+paraméterezett node-id-feloldás + 1 elrontott node-id piros; 17
+test_hardening.py, változatlan)
+```
+
+```
+$ python3 tool/release/security_scan.py
+security_scan: 1 finding(s).
+- [critical] secrets: secrets delegate command 'dart run tool/ci/check_secrets.dart' exited 1:
+  Secret scan failed (4082 file(s) scanned, 1 finding(s)).
+  - docs/reviews/e12-r18-review-security.md:421: provider token literal
+  (secrets.delegate-failed)
+EXIT=1
+```
+
+**A `[6] secrets` PIROS oka — MÉRT, a kör saját hat fájlján KÍVÜLI, előfeltétel
+állapot, nem az én diffem regressziója.** A `docs/reviews/e12-r18-review-security.md:421`
+sora (a reviewer saját dokumentuma, `7798dfc4`, ez a kör §4 tiltott zónája —
+„Ne módosítsd a `docs/reviews/e12-r18-review-security.md` fájlt”) szó szerint
+idézi az A1 acceptance-cella szintetikus titok-fixture-jét (a
+`test/tooling/security_scan_test.dart:114` `sk-` előtagú, 30 karakteres
+fixture-értékét) az inline allow-jelölő NÉLKÜL — ezt a
+`tool/ci/check_secrets.dart` (szintén tiltott zóna, `tool/ci/**`) a valós
+fán bárhol megtalálja, FÜGGETLENÜL az én security_scan.py/threat-model.md
+javításaimtól:
+```
+$ dart run tool/ci/check_secrets.dart
+Secret scan failed (4082 file(s) scanned, 1 finding(s)).
+- docs/reviews/e12-r18-review-security.md:421: provider token literal
+```
+Mérve: ez a `secrets` ág EGYETLEN lelete — a MAJOR/MINOR javítások mind a
+négy másik ágon (`guards`, `exceptions`, `dependencies`) és a `secrets` ág
+saját fail-closed logikáján is bizonyítottan hibátlanok (lásd a §10.6 fenti
+cellái). A `--only guards`/`--only dependencies`/`--only exceptions` külön
+futtatva mind EXIT=0 (lásd MAJOR-3/MAJOR-4 mérései fent). A fix egy
+`strumsight:allow-secret` jelölőt igényelne a review-dokumentum saját
+sorában — ez a hat engedélyezett fájlon és a tiltott zónán (`tool/ci/**`,
+`docs/reviews/**`) is kívül esik, tehát a jelen kör hatáskörén kívül van
+(STOP-protokoll, scope-ütközés). Orchestrátor-döntés szükséges: vagy a
+review-dokumentum kap egy külön, dedikált (nem `sonnet-impl`-javító) kört
+a jelölő hozzáadására, vagy a `check_secrets.dart` szabálya bővül a
+`docs/reviews/**` kizárásával.
+
+### Nyitott, átvitt tételek (NEM javítva ebben a körben, a brief tiltása szerint)
+
+MINOR-4 (a `--format json` futás-metaadata hiánya — a Kör 25 bekötéséhez
+tartozik), MINOR-5 (az advisory-illesztés tartományos kifejezés-hiánya), N1
+(a delegált parancs stdout/stderr-je szó szerint a leletben — ma nem
+szivárgás, mérve), N2 (a 180 s timeout hideg CI-fordításon hamis kritikust
+adhat), N3 (a `dependencies` ág egyetlen manifestet lát —
+`requirements-dev.txt` és a Dart-oldal nincs bekötve), N4 (rendben —
+`shell=False`, `yaml.safe_load`, argv-alapú `--collect-only` hívás).
+
 ## 11. Review — a Claude tölti ki

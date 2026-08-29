@@ -60,6 +60,12 @@ jelenlétét) release előtt fail-closed méri. Egy csendben törölt vagy
    [community-threat-model.md](community-threat-model.md) (ADR 0395).
 7. **release-chain** — a release-előállítás lánca (signing policy, secret
    scan, dependency-korlátok; `tool/release/`, `tool/ci/`).
+8. **client-egress** — az AGENTS.md §5 KÉT nem tárgyalható termékhatára:
+   (a) nyers audio/kamera-frame alapértelmezetten nem hagyhatja el az
+   eszközt, (b) kijelentkezett/consent-off állapotban nincs rejtett
+   hálózati kérés — a consent-kikényszerítés mérő cellája
+   ([ADR 0479](../adr/0479-privacy-data-inventory-and-consent-enforcement.md),
+   E12-R17) bekötve.
 
 Az importált fájlok (natív JSON, MusicXML/MXL, MIDI) biztonsági határa
 külön ADR-rel elfogadott ([ADR 0091](../adr/0091-song-import-security-boundary.md));
@@ -72,10 +78,23 @@ guardjait az importer-implementáló körök (Epic 3) tesztjei hordozzák, a
 **Fenyegetés:** ha a session token vagy egy más érzékeny beállítás sima
 `SharedPreferences`-ben (vagy más, nem Keystore/Keychain-mögötti tárban)
 kerülne el, egy eszközhöz vagy titkosítatlan biztonsági mentéshez hozzáférő
-támadó kiolvashatná — information disclosure. Az egyetlen `lib/`-beli hely,
-amely a `flutter_secure_storage` pluginot importálja, a
-`FlutterSecureStore` (`lib/core/storage/secure_store.dart`); minden más réteg
-a `SecureStore` interfészen keresztül éri el.
+támadó kiolvashatná — information disclosure. A guard a token TÉNYLEGES
+tárolási útját méri: a `SecureTokenStore` a dokumentált
+`StorageKeys.secureAuthToken` kulcs alatt, a `SecureStore` interfészen
+(Keystore/Keychain mögötti `flutter_secure_storage`) keresztül ír és olvas —
+nem csak egy generikus, fake tároló fölötti write→read→delete kört bizonyít
+(MAJOR-4 javítás: a korábbi guard erre mutatott, a fenyegetésről semmit nem
+mondott).
+
+**Nem mért feltevés (jövőbeli kör tárgya, NEM guard-dal őrzött):** hogy a
+`FlutterSecureStore` (`lib/core/storage/secure_store.dart`) az EGYETLEN
+`lib/`-beli hely, amely a `flutter_secure_storage` pluginot importálja — ez
+MA igaz (mérve: `grep -rn "flutter_secure_storage" lib/`), de a meglévő
+`architecture_dependency_test.dart` csak a gamification és a community
+DOMAIN rétegre tiltja ezt az importot, `features/**` egészére nem — ha egy
+jövőbeli kör a JWT-t közvetlenül `SharedPreferences`-be írná valahol
+máshol, ez a dokumentum ma semmit nem venne észre. Az állítás itt
+kimondottan **nem mértként** szerepel, nem release-blokkolóként.
 
 ```yaml
 id: T-CLIENT-01
@@ -83,8 +102,8 @@ component: client-storage
 threat: information-disclosure
 release_gate: true
 guard:
-  path: test/core/storage/secure_store_test.dart
-  test: round-trips a secret
+  path: test/features/auth/token_store_test.dart
+  test: round-trips a token under the documented secure key
 ```
 
 ## 3. backend-api
@@ -103,6 +122,23 @@ release_gate: true
 guard:
   path: backend/tests/test_auth.py
   test: test_unknown_email_and_wrong_password_responses_are_byte_identical
+```
+
+**Fenyegetés (denial-of-service — brute-force login):** korlátlan
+bejelentkezési kísérletszám mellett egy támadó jelszó-szótártámadást
+futtathatna a login endpoint ellen. A login-throttle ismételt hibás
+kísérlet után `429`-cel és `Retry-After` fejléccel utasítja el, helyes
+hitelesítő adatokkal is (a throttle a KÉRÉST korlátozza, nem a
+hitelesítést).
+
+```yaml
+id: T-API-02
+component: backend-api
+threat: denial-of-service
+release_gate: true
+guard:
+  path: backend/tests/test_hardening.py
+  test: test_login_brute_force_gets_429_with_retry_after
 ```
 
 ## 4. diagnostics-upload
@@ -137,6 +173,22 @@ release_gate: true
 guard:
   path: backend/tests/test_diagnostics.py
   test: test_diagnostics_oversize_endpoint_returns_413
+```
+
+**Fenyegetés (spoofing — hamisított feltöltő):** `POST /diagnostics`
+kliens-hitelesítés nélkül bárkitől fogadna feltöltést. Az endpoint egy
+`X-Diag-Token` fejlécet vár és `hmac.compare_digest`-tel veti össze a
+konfigurált tokennel (üres konfigurált token esetén is elutasít) —
+(`backend/app/routers/diagnostics.py:122-129`).
+
+```yaml
+id: T-DIAG-03
+component: diagnostics-upload
+threat: spoofing
+release_gate: true
+guard:
+  path: backend/tests/test_diagnostics.py
+  test: test_diagnostics_rejects_bad_token
 ```
 
 ## 5. community-media-upload
@@ -307,4 +359,44 @@ release_gate: true
 guard:
   path: test/tooling/security_scan_test.dart
   test: a dependency line without an upper bound is a critical finding
+```
+
+## 9. client-egress
+
+**Ez az AGENTS.md §5 két nem tárgyalható termékhatára** — a review MAJOR-3
+mérte, hogy egyik komponens sem fedte ezeket, noha az előfeltétel-kör
+(E12-R17, `6ead9581`) MÁR szállított rájuk mérő cellát
+(`test/privacy/consent_enforcement_test.dart`). Az alábbi két guard ezt a
+meglévő mércét köti be a release-döntésbe — nem méri újra a
+consent-kikényszerítés viselkedését (ADR 0481 §0.0 R2 szelleme).
+
+**Fenyegetés (information-disclosure — nyers audio elhagyja az eszközt
+consent nélkül):** a diagnosztika-feltöltő audio-mintát (`const [0.1]`,
+`44100` Hz) hordoz; a `diagnosticsConsentProvider` hamis értéke mellett a
+feltöltésnek a wire-adapterig sem szabad eljutnia.
+
+```yaml
+id: T-EGRESS-01
+component: client-egress
+threat: information-disclosure
+release_gate: true
+guard:
+  path: test/privacy/consent_enforcement_test.dart
+  test: upload() with consent false never touches the wire adapter
+```
+
+**Fenyegetés (information-disclosure — rejtett hálózati kérés
+kijelentkezés után):** kijelentkezés után a törölt hitelesítő adatokkal
+egyetlen kérésnek sem szabad elhagynia az eszközt — az `AuthInterceptor`-nak
+a wire-adapter előtt kell elutasítania a kérést, ugyanabban a
+konténerben/folyamatban, újraindítás nélkül.
+
+```yaml
+id: T-EGRESS-02
+component: client-egress
+threat: information-disclosure
+release_gate: true
+guard:
+  path: test/privacy/consent_enforcement_test.dart
+  test: a profile update sent while signed in reaches the wire; the same call after logout does not — same container, no restart (A6)
 ```

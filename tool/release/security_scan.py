@@ -7,14 +7,20 @@ machine-checkable evidence. Four independent branches:
   guards        — every `release_gate: true` countermeasure in the threat
                   model names a `guard` (a file path and, where meaningful,
                   a test name); this branch measures that the guard still
-                  exists on the tree (ADR 0481 D2). It does NOT re-implement
-                  the protections themselves — replay, path traversal,
-                  oversize payloads and model-checksum integrity are already
-                  measured by the tests the guards point at.
+                  RESOLVES on the tree (ADR 0481 D2): the file exists, is
+                  inside the repo root, at least one `release_gate: true`
+                  entry exists at all (an empty or gate-less model is a
+                  critical finding, not a clean scan), and — where a `test`
+                  is named — that test is present, uncommented, and not
+                  `skip`/`xfail`-marked. It does NOT re-implement the
+                  protections themselves — replay, path traversal, oversize
+                  payloads and model-checksum integrity are already measured
+                  by the tests the guards point at.
   exceptions    — validates `docs/security/exceptions.yaml` (every entry
-                  needs `owner`, `expires`, `finding`, `reason` — ADR 0481
-                  D4) and applies still-live entries to suppress the finding
-                  they name.
+                  needs `owner`, `expires`, `branch`, `finding`, `reason` —
+                  ADR 0481 D4) and applies still-live entries to suppress
+                  the finding they name — but ONLY on the branch (`guards`
+                  or `dependencies`) the entry itself declares.
   dependencies  — every line in the given requirements file must carry an
                   upper version bound, and is checked against a short,
                   dated, real advisory list (ADR 0481 §5.3).
@@ -22,7 +28,10 @@ machine-checkable evidence. Four independent branches:
                   of secret patterns, ADR 0138/0481 D3). This branch never
                   declares a second regex set; a secrets command that
                   cannot run, or exits non-zero, is itself a critical
-                  finding — never a silent "skipped".
+                  finding — never a silent "skipped". Its findings are
+                  NEVER exception-suppressible, in any `--only` mode: the
+                  secret gate is a fail-closed delegation, not a risk
+                  anyone can accept away (D3).
 
 Exit codes (D5/D6, no other value and no absorbing flag):
   0  no critical (or fatal) finding
@@ -38,8 +47,10 @@ only the input(s) that branch actually needs — `--only secrets` never
 touches the threat model, `--only guards` never touches the exceptions
 registry. Exception suppression is therefore only available where it is
 actually exercised (the default full run, and `--only dependencies`); a
-guard whose test was renamed cannot be waved away by an exceptions entry in
-this round's scope.
+guard whose test was renamed CAN be waved away, but only by an exceptions
+entry that names that exact `branch: guards` and the exact finding id — an
+entry scoped to `dependencies` (or any other value) never reaches it, and
+no entry, of any branch, ever reaches `secrets` (see above).
 """
 
 from __future__ import annotations
@@ -277,11 +288,43 @@ def load_threat_model(path: Path) -> tuple[list[GuardEntry], list[Finding]]:
 
 
 def check_guards(entries: list[GuardEntry], root: Path) -> list[Finding]:
+    gated_entries = [entry for entry in entries if entry.release_gate]
+    if not gated_entries:
+        # A threat model that parses but names zero `release_gate: true`
+        # countermeasures cannot prove anything — the `check_secrets_test.dart`
+        # L220 failure class ("found no input, therefore clean") generalized
+        # to a present-but-empty document (MINOR-3).
+        return [
+            Finding(
+                id="guards.no-release-gate-entries",
+                severity="critical",
+                branch="guards",
+                message=(
+                    "the threat model has zero `release_gate: true` guard "
+                    "blocks — an empty or gate-less document is a critical "
+                    "finding, not a clean scan"
+                ),
+            )
+        ]
+
+    resolved_root = root.resolve()
     findings: list[Finding] = []
-    for entry in entries:
-        if not entry.release_gate:
-            continue
+    for entry in gated_entries:
         guard_path = root / entry.guard_path
+        resolved_guard = guard_path.resolve()
+        if not resolved_guard.is_relative_to(resolved_root):
+            findings.append(
+                Finding(
+                    id=entry.id,
+                    severity="critical",
+                    branch="guards",
+                    message=(
+                        f"{entry.id} ({entry.component}): guard.path escapes "
+                        f"the repo root: {entry.guard_path}"
+                    ),
+                )
+            )
+            continue
         if not guard_path.is_file():
             findings.append(
                 Finding(
@@ -308,9 +351,15 @@ def check_guards(entries: list[GuardEntry], root: Path) -> list[Finding]:
                     )
                 )
                 continue
-            needle_python = f"def {entry.guard_test}"
-            needle_dart = f"test('{entry.guard_test}'"
-            if needle_python not in guard_text and needle_dart not in guard_text:
+            if guard_path.suffix == ".py":
+                found, disabled = _python_guard_status(
+                    _strip_python_trivia(guard_text), entry.guard_test
+                )
+            else:
+                found, disabled = _dart_guard_status(
+                    _strip_dart_comments(guard_text), entry.guard_test
+                )
+            if not found:
                 findings.append(
                     Finding(
                         id=entry.id,
@@ -322,26 +371,212 @@ def check_guards(entries: list[GuardEntry], root: Path) -> list[Finding]:
                         ),
                     )
                 )
+            elif disabled:
+                findings.append(
+                    Finding(
+                        id=entry.id,
+                        severity="critical",
+                        branch="guards",
+                        message=(
+                            f"{entry.id} ({entry.component}): guard.test "
+                            f"{entry.guard_test!r} is present but disabled "
+                            f"(skip/xfail marker) in {entry.guard_path} — a "
+                            "silenced protection is release-blocking, not a "
+                            "silent regression (ADR 0481 D2)"
+                        ),
+                    )
+                )
     return findings
+
+
+# ---------------------------------------------------------------------------
+# guard.test resolution — trivia-aware, so a commented-out or skip-marked
+# protection cannot masquerade as a live one (MAJOR-2). The comment/string
+# stripping mirrors the repo's own trivia convention
+# (`test/core/architecture_dependency_test.dart:1227` `_withoutTrivia`).
+# ---------------------------------------------------------------------------
+
+_PY_SKIP_MARKERS = (
+    "@pytest.mark.skip",
+    "@pytest.mark.xfail",
+    "@unittest.skip",
+    "pytest.skip(",
+)
+_DART_SKIP_MARKERS = ("skip:", "@Skip(")
+_DART_TEST_CALL = re.compile(r"\btest\(")
+
+
+def _strip_python_trivia(text: str) -> str:
+    """Removes `#` comments and string-literal contents from Python source
+    so a commented-out or docstring-quoted `def <name>(` cannot count as a
+    live guard."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "#":
+            newline = text.find("\n", i)
+            i = n if newline == -1 else newline
+            continue
+        if ch in "'\"":
+            triple = text[i : i + 3] == ch * 3
+            delimiter = ch * 3 if triple else ch
+            i += len(delimiter)
+            while i < n and text[i : i + len(delimiter)] != delimiter:
+                i += 2 if text[i] == "\\" and i + 1 < n else 1
+            i += len(delimiter)
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _strip_dart_comments(text: str) -> str:
+    """Removes `//` and `/* */` comments only. Dart string CONTENTS stay
+    intact — the `test('<name>', ...)` needle itself lives inside a string
+    literal, so masking strings would defeat the search."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        if text[i : i + 2] == "//":
+            newline = text.find("\n", i)
+            i = n if newline == -1 else newline
+            continue
+        if text[i : i + 2] == "/*":
+            depth = 1
+            i += 2
+            while i < n and depth > 0:
+                if text[i : i + 2] == "/*":
+                    depth += 1
+                    i += 2
+                elif text[i : i + 2] == "*/":
+                    depth -= 1
+                    i += 2
+                else:
+                    i += 1
+            continue
+        ch = text[i]
+        if ch in "'\"":
+            start = i
+            triple = text[i : i + 3] == ch * 3
+            delimiter = ch * 3 if triple else ch
+            i += len(delimiter)
+            while i < n and text[i : i + len(delimiter)] != delimiter:
+                i += 2 if text[i] == "\\" and i + 1 < n else 1
+            i = min(i + len(delimiter), n)
+            out.append(text[start:i])
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _python_guard_status(stripped: str, guard_test: str) -> tuple[bool, bool]:
+    """Returns (found, disabled). The needle is CLOSED (`def <name>(`) so a
+    suffix-renamed test (`..._v2(`) no longer slips through as a substring
+    of the original name."""
+    needle = f"def {guard_test}("
+    idx = stripped.find(needle)
+    if idx == -1:
+        return False, False
+    prelude = stripped[max(0, idx - 400) : idx]
+    disabled = any(marker in prelude for marker in _PY_SKIP_MARKERS)
+    return True, disabled
+
+
+def _dart_call_span(text: str, call_start: int) -> str:
+    """Returns the full `test(...)` call text starting at `call_start`,
+    balancing parens while skipping over string-literal contents, so a
+    `skip:` argument anywhere inside a multi-line call is still seen."""
+    n = len(text)
+    open_paren = text.find("(", call_start)
+    if open_paren == -1:
+        return text[call_start:]
+    i = open_paren
+    depth = 0
+    while i < n:
+        ch = text[i]
+        if ch in "'\"":
+            triple = text[i : i + 3] == ch * 3
+            delimiter = ch * 3 if triple else ch
+            i += len(delimiter)
+            while i < n and text[i : i + len(delimiter)] != delimiter:
+                i += 2 if text[i] == "\\" and i + 1 < n else 1
+            i += len(delimiter)
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return text[call_start : i + 1]
+        i += 1
+    return text[call_start:]
+
+
+def _dart_guard_status(stripped: str, guard_test: str) -> tuple[bool, bool]:
+    """Returns (found, disabled) for a Dart `test('<guard_test>', ...)`
+    call. `found` joins consecutive, Dart-auto-concatenated string literals
+    right after `test(` (`'part one '` \\n `'part two'`) so a name split
+    across lines still resolves. `disabled` is True when that same call
+    carries a `skip:` argument, or an `@Skip(` annotation sits immediately
+    above it."""
+    n = len(stripped)
+    for match in _DART_TEST_CALL.finditer(stripped):
+        i = match.end()
+        while i < n and stripped[i].isspace():
+            i += 1
+        parts: list[str] = []
+        while i < n and stripped[i] in "'\"":
+            quote = stripped[i]
+            triple = stripped[i : i + 3] == quote * 3
+            delimiter = quote * 3 if triple else quote
+            i += len(delimiter)
+            start = i
+            while i < n and stripped[i : i + len(delimiter)] != delimiter:
+                i += 2 if stripped[i] == "\\" and i + 1 < n else 1
+            parts.append(stripped[start:i])
+            i += len(delimiter)
+            while i < n and stripped[i].isspace():
+                i += 1
+        if not parts or "".join(parts) != guard_test:
+            continue
+        call_text = _dart_call_span(stripped, match.start())
+        prelude = stripped[max(0, match.start() - 200) : match.start()]
+        disabled = (
+            any(marker in call_text for marker in _DART_SKIP_MARKERS)
+            or "@Skip(" in prelude
+        )
+        return True, disabled
+    return False, False
 
 
 # ---------------------------------------------------------------------------
 # exceptions branch
 # ---------------------------------------------------------------------------
 
-_REQUIRED_EXCEPTION_KEYS = ("owner", "expires", "finding", "reason")
+_REQUIRED_EXCEPTION_KEYS = ("owner", "expires", "finding", "reason", "branch")
+# Only these two branches can ever be suppressed by an exception — `secrets`
+# is deliberately absent: the secret gate is a fail-closed delegation, and
+# no exceptions entry, of any shape, can wave it away (ADR 0481 D3).
+_EXCEPTABLE_BRANCHES = {"guards", "dependencies"}
 
 
 def load_exceptions(
     path: Path, today: dt.date
-) -> tuple[dict[str, dict], list[Finding]]:
-    """Returns (live_exceptions_by_finding_id, hygiene_findings).
+) -> tuple[dict[tuple[str, str], dict], list[Finding]]:
+    """Returns (live_exceptions_by_branch_and_finding_id, hygiene_findings).
 
     Raises `InputError` for structural failures (missing file, invalid YAML,
     a document whose top-level shape is not `{exceptions: [...]}`). A
-    well-formed entry missing `owner`/`expires`/`finding`/`reason`, or one
-    that has already expired, is a critical `Finding` instead (ADR 0481 D4)
-    — the registry keeps loading, so one bad entry does not hide the rest.
+    well-formed entry missing `owner`/`expires`/`branch`/`finding`/`reason`,
+    one naming a branch other than `guards`/`dependencies`, or one that has
+    already expired, is a critical `Finding` instead (ADR 0481 D4) — the
+    registry keeps loading, so one bad entry does not hide the rest. The key
+    is `(branch, finding)`, not just `finding`: an exception only ever
+    suppresses a finding of that id on that SAME branch, so a
+    `dependencies`-scoped entry can never silence a `guards` finding (or
+    vice-versa) that happens to share an id.
     """
     _require_yaml()
     if not path.is_file():
@@ -365,7 +600,7 @@ def load_exceptions(
     if not isinstance(entries, list):
         raise InputError(f"exceptions registry: `exceptions` must be a list in {path}")
 
-    live: dict[str, dict] = {}
+    live: dict[tuple[str, str], dict] = {}
     findings: list[Finding] = []
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict):
@@ -381,8 +616,25 @@ def load_exceptions(
                     branch="exceptions",
                     message=(
                         f"exceptions[{index}] is missing required field(s) "
-                        f"{missing} — an exception without owner+expires does "
-                        "not exist (ADR 0481 D4)"
+                        f"{missing} — an exception without owner+expires+"
+                        "branch does not exist (ADR 0481 D4)"
+                    ),
+                )
+            )
+            continue
+        entry_branch = entry["branch"]
+        if entry_branch not in _EXCEPTABLE_BRANCHES:
+            findings.append(
+                Finding(
+                    id="exceptions.invalid-branch",
+                    severity="critical",
+                    branch="exceptions",
+                    message=(
+                        f"exceptions[{index}] (finding={entry['finding']!r}): "
+                        f"branch {entry_branch!r} is not exceptable — only "
+                        f"{sorted(_EXCEPTABLE_BRANCHES)} findings can ever be "
+                        "suppressed; `secrets` can never be waved away "
+                        "(ADR 0481 D3)"
                     ),
                 )
             )
@@ -418,14 +670,19 @@ def load_exceptions(
             )
             continue
         # Live (expires >= today, the boundary is inclusive per ADR 0481 D4).
-        live[str(entry["finding"])] = entry
+        live[(entry_branch, str(entry["finding"]))] = entry
     return live, findings
 
 
-def _apply_exceptions(findings: list[Finding], live: dict[str, dict]) -> list[Finding]:
+def _apply_exceptions(
+    findings: list[Finding], live: dict[tuple[str, str], dict], branch: str
+) -> list[Finding]:
+    """Suppresses a finding only when a LIVE exception names this exact
+    `branch` and the finding's own id — a `dependencies`-scoped entry never
+    reaches a `guards` finding of the same id, or vice-versa (MAJOR-1)."""
     if not live:
         return findings
-    return [f for f in findings if f.id not in live]
+    return [f for f in findings if (branch, f.id) not in live]
 
 
 # ---------------------------------------------------------------------------
@@ -698,7 +955,7 @@ def run(argv: list[str]) -> tuple[int, str]:
     only = args.only
     findings: list[Finding] = []
 
-    live_exceptions: dict[str, dict] = {}
+    live_exceptions: dict[tuple[str, str], dict] = {}
     exceptions_available = only in (None, "exceptions", "dependencies")
     if exceptions_available:
         try:
@@ -713,7 +970,7 @@ def run(argv: list[str]) -> tuple[int, str]:
             findings.extend(model_findings)
             guard_findings = check_guards(entries, root)
             if exceptions_available:
-                guard_findings = _apply_exceptions(guard_findings, live_exceptions)
+                guard_findings = _apply_exceptions(guard_findings, live_exceptions, "guards")
             findings.extend(guard_findings)
         except InputError as error:
             findings.append(Finding(id="guards.input-error", severity="fatal", branch="guards", message=str(error)))
@@ -722,16 +979,16 @@ def run(argv: list[str]) -> tuple[int, str]:
         try:
             dep_findings = check_dependencies(root / args.requirements)
             if exceptions_available:
-                dep_findings = _apply_exceptions(dep_findings, live_exceptions)
+                dep_findings = _apply_exceptions(dep_findings, live_exceptions, "dependencies")
             findings.extend(dep_findings)
         except InputError as error:
             findings.append(Finding(id="dependencies.input-error", severity="fatal", branch="dependencies", message=str(error)))
 
     if only in (None, "secrets"):
-        secret_findings = check_secrets_delegate(root, args.secrets_cmd)
-        if exceptions_available:
-            secret_findings = _apply_exceptions(secret_findings, live_exceptions)
-        findings.extend(secret_findings)
+        # No exception suppression here, ever (D3) — see the module
+        # docstring and MAJOR-1: the secret gate is a fail-closed
+        # delegation, not a risk anyone can accept away via exceptions.yaml.
+        findings.extend(check_secrets_delegate(root, args.secrets_cmd))
 
     if any(f.severity == "fatal" for f in findings):
         exit_code = 2
