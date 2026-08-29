@@ -2826,6 +2826,7 @@
   "practiceHistoryErrorBody": "Something went wrong reading your local history.",
   "practiceHistoryErrorTitle": "Couldn't load history",
   "practiceHistoryFilterAll": "All modes",
+  "practiceHistoryLoading": "Loading practice history…",
   "practiceHistoryRowSubtitle": "{resolved}/{total} targets",
   "@practiceHistoryRowSubtitle": {
     "placeholders": {
@@ -3062,6 +3063,7 @@
   },
   "practiceResultTimingTitle": "Timing",
   "practiceResultTitle": "Practice result",
+  "practiceResultUnavailableAction": "Back to practice hub",
   "practiceResultUnavailableBody": "Finish a practice session to see the breakdown.",
   "practiceResultUnavailableTitle": "No result to show",
   "practiceRhythmOnlyBodyNoDirection": "Count-in then keep the rhythm. The chord and direction dimensions are not scored here.",

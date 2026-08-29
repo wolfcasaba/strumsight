@@ -21,8 +21,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../core/foundation/app_result.dart';
-import '../../../../core/widgets/empty_state.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../streak/public.dart';
 import '../../data/adapters/daily_challenge_practice_adapter.dart';
@@ -68,25 +68,32 @@ class PracticeHubScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(l10n.practiceHubTitle)),
       body: SafeArea(
         child: catalog.isEmpty
-            ? EmptyState(
+            ? SsEmptyState(
                 icon: Icons.queue_music_outlined,
                 title: l10n.practiceHubEmptyCatalogTitle,
-                subtitle: l10n.practiceHubEmptyCatalogSubtitle,
+                message: l10n.practiceHubEmptyCatalogSubtitle,
+                actionLabel: l10n.practiceSessionRetry,
+                onAction: () => ref.invalidate(practiceCatalogProvider),
               )
             : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                padding: const EdgeInsets.fromLTRB(
+                  SsSpacing.space5,
+                  SsSpacing.space3,
+                  SsSpacing.space5,
+                  SsSpacing.space8,
+                ),
                 children: [
                   Text(
                     l10n.practiceHubSubtitle,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: SsSpacing.space4),
                   if (catalog.isNotEmpty) ...[
                     _QuickStartCard(
                       definition: catalog.first,
                       onOpen: () => _openSetup(context, catalog.first),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: SsSpacing.space3),
                   ],
                   _DailyChallengeCard(
                     result: definitionResult,
@@ -96,12 +103,14 @@ class PracticeHubScreen extends ConsumerWidget {
                       }
                     },
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: SsSpacing.space5),
                   _ModeFilterRow(active: activeMode, all: catalog),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SsSpacing.space3),
                   if (filtered.isEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: SsSpacing.space3,
+                      ),
                       child: Text(
                         l10n.practiceHubEmptyCatalogSubtitle,
                         textAlign: TextAlign.center,
@@ -111,7 +120,9 @@ class PracticeHubScreen extends ConsumerWidget {
                   else
                     ...filtered.map(
                       (def) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.only(
+                          bottom: SsSpacing.space3,
+                        ),
                         child: PracticeModeCard(
                           definition: def,
                           onTap: () => _openSetup(context, def),
@@ -173,14 +184,14 @@ class _ModeFilterRow extends ConsumerWidget {
               selected: active == null,
               onSelected: (_) => notifier.set(null),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: SsSpacing.space2),
             for (final mode in PracticeMode.values) ...[
               ChoiceChip(
                 label: Text(practiceModeLabel(l10n, mode)),
                 selected: active == mode,
                 onSelected: (_) => notifier.set(mode),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: SsSpacing.space2),
             ],
           ],
         ),
@@ -252,23 +263,23 @@ class _HubCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final color = Theme.of(context).colorScheme.primary;
-    final muted = Theme.of(context).colorScheme.outline;
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final color = enabled ? colors.brand : colors.textDisabled;
     return Semantics(
       container: true,
       button: true,
       enabled: enabled,
       label: l10n.practiceHubOpenSetup(title),
-      child: Material(
-        color: enabled
-            ? color.withValues(alpha: 0.10)
-            : Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+      child: SsSurface(
+        radius: SsSurfaceRadius.md,
         child: InkWell(
           onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            padding: const EdgeInsets.symmetric(
+              horizontal: SsSpacing.space4,
+              vertical: SsSpacing.space3,
+            ),
             // ExcludeSemantics blocks the descendant Text widgets from
             // being merged into the parent Semantics label — otherwise
             // a screen reader would announce "Open Quick start\nQuick
@@ -277,8 +288,8 @@ class _HubCard extends StatelessWidget {
             child: ExcludeSemantics(
               child: Row(
                 children: [
-                  Icon(trailing, size: 24, color: enabled ? color : muted),
-                  const SizedBox(width: 12),
+                  Icon(trailing, size: 24, color: color),
+                  const SizedBox(width: SsSpacing.space3),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,21 +297,26 @@ class _HubCard extends StatelessWidget {
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
+                          style: typography.labelLarge.copyWith(
+                            color: colors.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: SsSpacing.space1),
                         Text(
                           subtitle,
-                          style: Theme.of(context).textTheme.bodySmall,
+                          style: typography.bodyMedium.copyWith(
+                            color: colors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   if (enabled)
-                    Icon(Icons.chevron_right, size: 20, color: muted),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 20,
+                      color: colors.textSecondary,
+                    ),
                 ],
               ),
             ),

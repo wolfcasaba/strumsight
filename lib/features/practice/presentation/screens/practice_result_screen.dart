@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
-import '../../../../core/widgets/empty_state.dart';
+import '../../../../app/routing/app_route.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_insight.dart';
@@ -102,7 +104,8 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final textTheme = Theme.of(context).textTheme;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -110,19 +113,21 @@ class _Header extends StatelessWidget {
           entry.displayTitle.isEmpty
               ? l10n.practiceResultTitle
               : entry.displayTitle,
-          style: textTheme.titleLarge,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: SsSpacing.space1),
         Row(
           children: [
             Flexible(
               child: Text(
                 _finishReasonLabel(l10n, entry.finishReasonCode),
-                style: textTheme.bodyMedium,
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textSecondary,
+                ),
               ),
             ),
             if (practiceResultIsPartial(entry)) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: SsSpacing.space2),
               _Badge(label: l10n.practiceResultPartialBadge),
             ],
           ],
@@ -139,20 +144,20 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: SsSpacing.space2,
+        vertical: 3,
+      ),
       decoration: BoxDecoration(
-        color: colors.tertiaryContainer,
-        borderRadius: BorderRadius.circular(999),
+        color: colors.surfaceSunken,
+        borderRadius: BorderRadius.circular(SsRadius.pill),
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: colors.onTertiaryContainer,
-        ),
+        style: typography.labelLarge.copyWith(color: colors.textPrimary),
       ),
     );
   }
@@ -252,36 +257,35 @@ class _LowConfidenceSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.info_outline,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.practiceResultConfidenceLowTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return SsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: colors.info),
+              const SizedBox(width: SsSpacing.space2),
+              Expanded(
+                child: Text(
+                  l10n.practiceResultConfidenceLowTitle,
+                  style: typography.titleMedium.copyWith(
+                    color: colors.textPrimary,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.practiceResultConfidenceLowBody(
-                entry.resolvedTargets,
-                entry.totalTargets,
               ),
+            ],
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          Text(
+            l10n.practiceResultConfidenceLowBody(
+              entry.resolvedTargets,
+              entry.totalTargets,
             ),
-          ],
-        ),
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+        ],
       ),
     );
   }
@@ -297,36 +301,37 @@ class _RewardSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final reward = ref.watch(practiceRewardForSessionProvider(sessionId));
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              Icons.stars_rounded,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.practiceResultRewardTitle,
-                    style: Theme.of(context).textTheme.titleSmall,
+    return SsCard(
+      child: Row(
+        children: [
+          Icon(Icons.stars_rounded, color: colors.brand),
+          const SizedBox(width: SsSpacing.space3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.practiceResultRewardTitle,
+                  style: typography.labelLarge.copyWith(
+                    color: colors.textPrimary,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    reward == null
-                        ? l10n.practiceResultRewardNone
-                        : l10n.practiceResultRewardXp(reward.totalXp),
+                ),
+                const SizedBox(height: SsSpacing.space1),
+                Text(
+                  reward == null
+                      ? l10n.practiceResultRewardNone
+                      : l10n.practiceResultRewardXp(reward.totalXp),
+                  style: typography.bodyMedium.copyWith(
+                    color: colors.textSecondary,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -416,29 +421,41 @@ class _ShareSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.practiceResultShareSummaryTitle,
-              style: Theme.of(context).textTheme.titleSmall,
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return SsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.practiceResultShareSummaryTitle,
+            style: typography.labelLarge.copyWith(color: colors.textPrimary),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          Text(
+            summary.title,
+            style: typography.bodyLarge.copyWith(color: colors.textPrimary),
+          ),
+          const SizedBox(height: SsSpacing.space1),
+          Text(
+            l10n.practiceResultShareMode(summary.modeLabel),
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+          Text(
+            l10n.practiceResultShareWhen(
+              DateFormat.yMMMd().format(summary.createdAt),
             ),
-            const SizedBox(height: 8),
-            Text(summary.title, style: Theme.of(context).textTheme.bodyLarge),
-            const SizedBox(height: 4),
-            Text(l10n.practiceResultShareMode(summary.modeLabel)),
-            Text(
-              l10n.practiceResultShareWhen(
-                DateFormat.yMMMd().format(summary.createdAt),
-              ),
-            ),
-            Text(l10n.practiceResultShareResult(summary.resultLabel)),
-            Text(l10n.practiceResultShareSessionId(summary.sessionId)),
-          ],
-        ),
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+          Text(
+            l10n.practiceResultShareResult(summary.resultLabel),
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+          Text(
+            l10n.practiceResultShareSessionId(summary.sessionId),
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+        ],
       ),
     );
   }
@@ -502,7 +519,7 @@ class _QuickLinksRow extends StatelessWidget {
             label: Text(l10n.practiceResultHistoryCta),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: SsSpacing.space3),
         Expanded(
           child: OutlinedButton.icon(
             onPressed: () => Navigator.of(context).push(
@@ -576,20 +593,19 @@ class _InsightSection extends StatelessWidget {
     if (entry.coachingSummary.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.practiceResultCoachingTitle,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            for (final code in entry.coachingSummary) _InsightRow(code: code),
-          ],
-        ),
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return SsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.practiceResultCoachingTitle,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          for (final code in entry.coachingSummary) _InsightRow(code: code),
+        ],
       ),
     );
   }
@@ -758,10 +774,12 @@ class PracticeResultFallback extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceResultTitle)),
-      body: EmptyState(
+      body: SsEmptyState(
         icon: Icons.bar_chart,
         title: l10n.practiceResultUnavailableTitle,
-        subtitle: l10n.practiceResultUnavailableBody,
+        message: l10n.practiceResultUnavailableBody,
+        actionLabel: l10n.practiceResultUnavailableAction,
+        onAction: () => context.go(AppRoutes.practiceHub),
       ),
     );
   }

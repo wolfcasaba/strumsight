@@ -965,6 +965,7 @@
   "practiceResultFinishInterrupted": "A gyakorlat megszakadt",
   "practiceResultUnavailableTitle": "Nincs megjeleníthető eredmény",
   "practiceResultUnavailableBody": "Futtass le egy gyakorlatot az eredmény megtekintéséhez.",
+  "practiceResultUnavailableAction": "Vissza a gyakorló hubra",
   "practiceResultDimensionSemantic": "{label}: {value}",
   "@practiceResultDimensionSemantic": {
     "placeholders": {
@@ -1045,6 +1046,7 @@
   "practiceResultHistoryCta": "Előzmények",
   "practiceResultSpeedBuilderCta": "Speed Builder",
   "practiceHistoryTitle": "Gyakorlási előzmények",
+  "practiceHistoryLoading": "Gyakorlási előzmények betöltése…",
   "practiceHistoryEmptyTitle": "Még nincs gyakorlás",
   "practiceHistoryEmptyBody": "Fejezz be egy gyakorlást, hogy itt megjelenjen.",
   "practiceHistoryEmptyAction": "Vissza",
