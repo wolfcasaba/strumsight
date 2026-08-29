@@ -503,7 +503,7 @@ E12-R06	docs/rounds/e12-r06-versioning-provenance-and-sbom.md	sonnet-impl	0447	d
 E12-R07	docs/rounds/e12-r07-production-signing-and-secret-hardening.md	sonnet-impl	0448	done
 E12-R08	docs/rounds/e12-r08-staging-backend-migrations-and-recovery.md	sonnet-impl	0449	done
 E12-R09	docs/rounds/e12-r09-domain-event-catalog-and-schema-registry.md	sonnet-impl	0468	done
-E12-R10	docs/rounds/e12-r10-idempotent-dispatcher-and-outbox.md	sonnet-impl	0451	pending
+E12-R10	docs/rounds/e12-r10-idempotent-dispatcher-and-outbox.md	sonnet-impl	0451	done
 E12-R11	docs/rounds/e12-r11-end-to-end-test-harness.md	sonnet-impl	0452	pending
 E12-R12	docs/rounds/e12-r12-release-fixture-corpus-and-golden-data.md	sonnet-impl	0453	pending
 E12-R13	docs/rounds/e12-r13-device-matrix-and-device-lab.md	sonnet-impl	nincs	pending

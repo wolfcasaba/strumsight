@@ -1,5 +1,58 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R10 KÉSZ — Idempotens dispatcher és outbox: a hiányzó MÉRCE — PR [#498](https://github.com/wolfcasaba/strumsight/pull/498), squash `e9a29a86` (2026-08-28)
+
+**Az SDD Kör 10 „implementálj dispatchert és outboxot" feladata a fán RÉSZBEN már
+teljesült** ([ADR 0333](docs/adr/0333-activity-outbox-reliable-processing.md)): a
+korlátos, perzisztált sor karanténnal és kísérlet-számlálóval él, a dedup az
+`appendIfAbsent` `sourceEventId`-szűrésén fut. Ami MÉRHETŐEN hiányzott, az nem
+mechanizmus, hanem **mérce** — a repóban egyetlen cella sem bizonyította, hogy sok
+ismétlés, folyamat-megszakítás vagy sorrend-csere mellett sem keletkezik dupla
+hatás. A kör ezt szállítja, **`lib/**` diff nélkül**.
+
+| Fájl | |
+|---|---|
+| [`test/core/events/idempotency_test.dart`](test/core/events/idempotency_test.dart) | **A1** (100 ismétlés egy batch drainben, eltérő `ledgerId`-kkel) + **A1b** (100 × enqueue→drain pár) |
+| [`test/core/events/outbox_resume_test.dart`](test/core/events/outbox_resume_test.dart) | **A2** resume MÁSODIK repository-példánnyal · **A3** out-of-order · **A4** hibatűrés · **A5** karantén-továbbdolgozás · `maxAttempts` küszöb-hármas |
+| [`docs/contracts/event-catalog.md`](docs/contracts/event-catalog.md) | „Outbox-invariánsok — MÉRT" alszakasz, invariánsonként a mérő cellával |
+| [`docs/adr/0469-…`](docs/adr/0469-outbox-idempotency-is-measured-on-the-ledger-effect.md) | D1 a mérce a ledger-HATÁS · D2 a dedup-kulcs a `sourceEventId` · D3 a resume perzisztált állapotból · D4 a sorrend-függetlenség a ledgeren · D5 a küszöb a drain ELŐTTI számlálón · D6 javítás a MEGLÉVŐ osztályban |
+
+**Négy mért korrekció** (a brief §0.0 / §0.0.0 revíziói):
+
+1. **R2** — a `maxAttempts` küszöb a **drain ELŐTTI, perzisztált** számlálón van (a
+   számláló a ledger-hívás ELŐTT nő, a feltétel `>=`); a brief eredeti „alatta"
+   cellája (`maxAttempts - 1` → PENDING) **elérhetetlen** volt.
+2. **R3** — a `StreakService`-nek **nincs hívója a `lib/` fán**, és az outbox soha nem
+   hívja; az out-of-order acceptance ezért a ledger-tartalmon és az egyenlegen mér.
+3. **R5** — a katalógus idempotencia-oszlopa már kitöltött (Kör 9) → az A6 a szakasz
+   bővítése lett, nem oszlop-kitöltés.
+4. **R7** — az első implementer-futás `stopped`-ot jelzett: a pre-flight által
+   választott `ProfileProjector.rebuild()` mérce-felület MÉRTEN dob egy nem üres,
+   egyoldalas ledgeren. A mérce lényege változatlan, a felület a `readPage`-en
+   összegzett egyenleg lett.
+
+**Review (APPROVED, 0 BLOCKER / 0 MAJOR / 0 MINOR / 3 NOTE):** izolált `/tmp` klónban
+9/9 cella zöld, és **három FÜGGETLEN valódi-sértés próba** igazolta, hogy a cellák
+teherhordók — P1 `maxAttempts` `>=`→`>` → a „rajta"/„fölötte" cella és az A5 PIROS (az
+„alatta" helyesen zöld), P2 nem idempotens ledger → **A1 PIROS `Expected: <10>
+Actual: <1000>`** (pontosan az a dupla HATÁS, amit egy hívásszám-alapú állítás zölden
+átengedett volna), P3 resume kikapcsolva → A2 + A3 PIROS
+([`docs/reviews/e12-r10-review.md`](docs/reviews/e12-r10-review.md)).
+
+Exact-SHA evidencia a merge SHA-n (`3263ac06`): Full Gate
+[33218813807](https://github.com/wolfcasaba/strumsight/actions/runs/33218813807)
+`success`, Router CI
+[33218815147](https://github.com/wolfcasaba/strumsight/actions/runs/33218815147)
+`success`.
+
+> ⚠ **NYITOTT LELET a következő körnek (review NOTE-1, [L539](docs/LESSONS.md)):** a
+> `ProfileProjector.rebuild()` (`profile_projector.dart:48–49`) egy **nem üres, de
+> egyetlen oldalra férő** ledgeren `StateError: ledger page cursor did not advance`-szel
+> dob — az [L349](docs/LESSONS.md) reziduális fele. Ma nincs `lib/`-beli hívója, ezért
+> felhasználót nem ér el, de a Chapter 9 fő use case-e („a profil a főkönyvből teljes
+> egészében újraépíthető") egyetlen bejegyzésnél is elbukna. A fájl e kör tilos
+> zónájában volt; a javítás külön kör dolga.
+
 ## ✅ E15-R02 KÉSZ — Az adaptív shell a nem-production ALAPÉRTELMEZÉS + a két mért túlcsordulás javítása — PR [#497](https://github.com/wolfcasaba/strumsight/pull/497), squash `9dc0b1e6` (2026-08-28)
 
 **A user 2026-08-28-i döntése („minden legyen migrálva, javítva, hogy lássam a

@@ -53,6 +53,31 @@ kikényszeríti, hogy a ledger-bejegyzés `sourceEventId`-je egyezzen az esemén
 a `local_reward_ledger_repository.dart:77` append-if-absent szűrése ugyanerre a mezőre fut.
 Egy adott `eventId` kétszeri feldolgozása így nem duplikál jutalmat.
 
+### Outbox-invariánsok — MÉRT (E12-R10, ADR 0469)
+
+A mérce minden esetben a ledger-HATÁS, nem a hívásszám: a
+`RewardLedgerRepository.readPage` lapjain összegzett `totalXp` (ADR 0469 D1). A
+teljes mérési lánc `test/core/events/idempotency_test.dart` és
+`test/core/events/outbox_resume_test.dart`.
+
+| Invariáns | Mérő cella |
+|---|---|
+| Ugyanaz a `sourceEventId` tetszőleges számú (a kör 100-szoros) ismétléssel, eltérő `ledgerId`-vel, EGY batch drainben → pontosan egy ledger-hatás és egy ledger-bejegyzés erre a `sourceEventId`-ra | **A1** (`idempotency_test.dart`) |
+| Ugyanez a 100 ismétlés enqueue→drain PÁRONKÉNT → a második ismétléstől az `enqueue` `accepted == false`, `supersededByLedger` karanténnal, az egyenleg nem nő tovább | **A1b** (`idempotency_test.dart`) |
+| Drain közepén megszakított folyamat (perzisztált állapot, MÁSODIK `LocalActivityOutboxRepository` UGYANARRA a store-ra) a pending rekordot befejezi, duplázás nélkül | **A2** (`outbox_resume_test.dart`) |
+| Sorrend-független feldolgozás: a KÉSŐBBI esemény ELŐBB drainelve ugyanazt a ledger-tartalmat és ugyanazt a `totalXp`-t adja, mint a sorrendhelyes futás; minden `sourceEventId` pontosan egyszer, az `epochDay` túléli a perzisztált fordulót | **A3** (`outbox_resume_test.dart`) |
+| Sikertelen ledger-hívás (dobó `appendIfAbsent`) nem dob át a drain határán és nem görgeti vissza a lokális állapotot — a rekord PENDING marad, a következő egészséges drain zárja egyszeres egyenleggel | **A4** (`outbox_resume_test.dart`) |
+| A `maxAttempts` elérésekor a rekord karanténba kerül (`attemptLimitReached`), és a sor tovább dolgozik: a mögötte álló egészséges rekord UGYANABBAN a drain-passzban ack-elődik | **A5** (`outbox_resume_test.dart`) |
+| A `maxAttempts` küszöb a DRAIN ELŐTTI, perzisztált `attempts` mezőn dől el (`attempts >= maxAttempts`, ADR 0469 D5): alatta PENDING/dropped, rajta karantén, fölötte a friss `enqueue` `attempts = 0`-val újra elfogadott | küszöb-hármas (`outbox_resume_test.dart`) |
+
+**Valódi-sértés próba (E12-R10 F4, elvégezve és visszaállítva).** A
+`local_activity_outbox_repository.dart:249` `appendIfAbsent` hívását ideiglenesen
+a `sourceEventId`-t a `ledgerId`-ből vevő bejegyzésre cserélve (a §6.1 mátrix
+„az idempotencia-kulcs a `ledgerId`-ből hasholódik" sora) az **A1** cella
+mérten pirosra vált: `Expected: <10> Actual: <1000>` a
+`idempotency_test.dart:45` egyenleg-assertön. A javítás visszaállítva, a gate
+utána ismét zöld — a részletek: a kör-brief §10.
+
 ## Séma-kompatibilitás (ADR 0468 D4, D5)
 
 A támogatott séma-verzió `V = learningActivityEventSchemaVersion = 1`
