@@ -176,10 +176,54 @@ void main() {
       },
     );
   });
+
+  group('A3 — 200 percent text scale, en and hu', () {
+    for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+      testWidgets(
+        'setlist session remains overflow-free at 200 percent text scale — '
+        '${locale.languageCode} locale',
+        (tester) async {
+          final setlist = SongSetlist(
+            id: 'setlist-scale',
+            name: 'Text scale setlist',
+            createdAt: DateTime.utc(2026, 8, 4),
+            updatedAt: DateTime.utc(2026, 8, 4),
+            items: <SongSetlistItem>[
+              SongSetlistItem(id: 'a', songId: SongId('song-a')),
+            ],
+          );
+
+          await tester.pumpWidget(
+            _localizedApp(
+              MediaQuery(
+                data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+                child: SetlistSessionScreen(
+                  setlist: setlist,
+                  mode: SetlistSessionMode.performance,
+                  availability: (_) => SetlistItemAvailability.ready,
+                  performanceRunner: (item) async =>
+                      SetlistItemResult.completed(itemId: item.id),
+                ),
+              ),
+              locale: locale,
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(
+            find.byKey(const Key('setlist-session-start')),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  });
 }
 
-Widget _localizedApp(Widget home) => MaterialApp(
+Widget _localizedApp(Widget home, {Locale? locale}) => MaterialApp(
   theme: SsLightTheme.data(),
+  locale: locale,
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   home: home,

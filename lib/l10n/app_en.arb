@@ -3951,6 +3951,7 @@
     }
   },
   "songLibraryImport": "Import",
+  "songLibraryLoading": "Loading song library…",
   "songLibraryReadOnly": "Read-only",
   "songLibraryReadOnlySnackBar": "This song is read-only. Opened in view mode.",
   "songLibraryRetry": "Try again",
@@ -4059,6 +4060,7 @@
       }
     }
   },
+  "songTrainerLoading": "Loading song trainer…",
   "songTrainerLoopIndex": "Loop {current}/{total}",
   "@songTrainerLoopIndex": {
     "placeholders": {
@@ -4109,6 +4111,8 @@
   },
   "songTrainerSetlistResultTitle": "Setlist result",
   "songTrainerSpeedDisabledReason": "Speed disabled — backing cannot change rate.",
+  "songTrainerSpeedLabel": "Speed",
+  "songTrainerSpeedResumesOnRestart": "Paused: speed resumes when the session restarts.",
   "songTrainerTitle": "Song Trainer",
   "songVisionLoopQualityUnavailable": "Visual quality was unavailable for this loop. Audio scoring is unchanged.",
   "songsEmpty": "Build your own song — pick chords, design a ↓/↑ strum pattern, then play it. It scores just like a lesson.",

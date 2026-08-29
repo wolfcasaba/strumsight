@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/data/importers/file_picker_adapter.dart';
@@ -17,9 +19,10 @@ import 'package:strumsight/features/song_trainer/domain/models/song_source.dart'
 import 'package:strumsight/features/song_trainer/domain/models/song_track.dart';
 import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
+import 'package:strumsight/core/design_system/public.dart';
 
 void main() {
   test('editor screen retains the route document identifier', () {
@@ -112,6 +115,112 @@ void main() {
       expect(assetRepository.putCalls, 1);
     },
   );
+
+  for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+    testWidgets('remains overflow-free at 200 percent text scale — '
+        '${locale.languageCode} locale', (tester) async {
+      final repository = InMemorySongRepository();
+      final assetRepository = _RecordingAssetRepository();
+      final document = _document('editor-scale-${locale.languageCode}');
+      await repository.create(document);
+      final container = ProviderContainer(
+        overrides: [
+          songRepositoryProvider.overrideWithValue(repository),
+          songAssetRepositoryProvider.overrideWithValue(assetRepository),
+          songFilePickerAdapterProvider.overrideWithValue(_BackingPicker()),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+              child: SongEditorScreen(songId: document.id.value),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('song-editor-measure')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+    'loading editor renders the design-system skeleton, not a raw spinner',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          songRepositoryProvider.overrideWithValue(_PendingGetRepository()),
+          songAssetRepositoryProvider.overrideWithValue(
+            _RecordingAssetRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const SongEditorScreen(songId: 'missing'),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // A2 guard: `_EditorLoading` must be built from `SsSkeleton`, never a
+      // raw `CircularProgressIndicator`.
+      expect(find.byType(SsSkeleton), findsWidgets);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'failed editor load renders the design-system danger token, not a raw style',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          songRepositoryProvider.overrideWithValue(_FailingGetRepository()),
+          songAssetRepositoryProvider.overrideWithValue(
+            _RecordingAssetRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const SongEditorScreen(songId: 'missing'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // A2 guard: `_EditorLoadError` must render through the design-system
+      // danger color token, not a raw default `Text` style.
+      final messageFinder = find.byKey(const Key('song-editor-load-error'));
+      expect(messageFinder, findsOneWidget);
+      final colors = Theme.of(
+        tester.element(messageFinder),
+      ).extension<SsColorScheme>()!;
+      final messageText = tester.widget<Text>(messageFinder);
+      expect(messageText.style?.color, colors.danger);
+    },
+  );
 }
 
 SongDocument _document(String id) {
@@ -185,4 +294,69 @@ final class _BackingPicker implements FilePickerAdapter {
     mimeType: 'audio/mpeg',
     openRead: () => Stream<List<int>>.value(<int>[1]),
   );
+}
+
+/// `get()` never resolves, so the editor controller stays on
+/// `SongEditorStatus.loading` for the lifetime of the test.
+final class _PendingGetRepository implements SongRepository {
+  final _pending = Completer<AppResult<SongDocument?>>();
+
+  @override
+  Future<AppResult<SongDocument?>> get(SongId id) => _pending.future;
+
+  @override
+  Future<AppResult<List<SongSummary>>> list(SongQuery query) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> create(SongDocument document) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> moveToTrash(SongId id) => throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> permanentlyDelete(SongId id) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> restore(SongId id) => throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> update(
+    SongDocument document, {
+    required int expectedRevision,
+  }) => throw UnimplementedError();
+}
+
+final class _FailingGetRepository implements SongRepository {
+  @override
+  Future<AppResult<SongDocument?>> get(SongId id) async =>
+      AppResult<SongDocument?>.failure(
+        const StorageFailure(code: SongRepositoryErrorCode.notFound),
+      );
+
+  @override
+  Future<AppResult<List<SongSummary>>> list(SongQuery query) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> create(SongDocument document) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> moveToTrash(SongId id) => throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> permanentlyDelete(SongId id) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> restore(SongId id) => throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> update(
+    SongDocument document, {
+    required int expectedRevision,
+  }) => throw UnimplementedError();
 }

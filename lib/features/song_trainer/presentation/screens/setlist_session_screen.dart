@@ -203,7 +203,12 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
             // keeping the label text visible ("Running…") — SsButton's own
             // `loading` affordance instead hides the label under an
             // overlay spinner, which would change what is on screen during
-            // a run (§5.1 bit-identical behaviour).
+            // a run (§5.1 bit-identical behaviour). The 18px
+            // CircularProgressIndicator itself is also kept raw rather than
+            // a design-system substitute: SsSkeleton is a content-shimmer
+            // placeholder, not an inline in-progress icon, so swapping it in
+            // here would change what the affordance communicates — see
+            // §10/m4.
             Padding(
               padding: const EdgeInsets.all(SsSpacing.space4),
               child: FilledButton.icon(

@@ -20,19 +20,21 @@ brief instead run `E15-R05` = Song Trainer, `E15-R09` = AI Tutor. The
 `retirement-plan.md` itself is out of this round's allowed paths and is not
 edited here (same pattern as the E15-R04 entry below).
 
-**ARB-source correction (measured this round, not previously documented):**
-`lib/l10n/app_en.arb`/`app_hu.arb` are GENERATED output as of ADR 0307
-(`tool/gen_l10n_segments.dart`, a deterministic union of
+**ARB-source correction (measured this round, corrected in the fix round —
+§0.0/R12, review m/n7):** `lib/l10n/app_en.arb`/`app_hu.arb` are GENERATED
+output (`tool/gen_l10n_segments.dart`, a deterministic union of
 `lib/l10n/base/app_<locale>.arb` and `lib/l10n/features/<feature>_<locale>.arb`
 fragments) — editing them directly is reverted by the round's own `l10n` gate
-step. `lib/l10n/base/app_<locale>.arb` (the true source for the still-unmigrated
-`songTrainer*`/`trainer*` keys) is NOT on this round's `allowed_paths`. The
-round's A6 (no hardcoded string in the 9 files) was met without a new key: 3 of
-the 6 measured hardcoded sentences already had an exact pre-existing ARB match
-(`songTrainerTitle`, `songTrainerOverlayCountIn`, `songTrainerSpeedDisabledReason`),
-and the remaining 3 were satisfied by reusing existing, differently-worded or
-cross-feature keys (`learnSpeed`, `songTrainerFailed`, `trainerPausedPosition`)
-rather than fabricating new ones — see the round's `§10` handoff.
+step. `lib/l10n/base/app_<locale>.arb` is the true source and, after
+§0.0/R12, IS on this round's `allowed_paths`. The round's A6 (no hardcoded
+string in the 9 files) was met by a mix: 3 of the 6 measured hardcoded
+sentences already had an exact pre-existing ARB match (`songTrainerTitle`,
+`songTrainerOverlayCountIn`, `songTrainerSpeedDisabledReason`); the fix round
+added two new base keys (`songTrainerSpeedResumesOnRestart`,
+`songTrainerSpeedLabel`) for the two that had no pre-existing equivalent
+without changing meaning; `songTrainerFailed` (differently-worded, same
+meaning as the pre-migration "Failed: {code}") was kept as a reuse — see the
+round's `§10` handoff.
 
 **E15-R04 update (2026-08-29) — Practice + Learn 8 screens migrated,
 measured 51/96 (53.1%).** `PracticeHubScreen`, `PracticeResultScreen`,

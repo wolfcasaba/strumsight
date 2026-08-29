@@ -47,6 +47,43 @@ void main() {
     // teardown runs.
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+    testWidgets('remains overflow-free at 200 percent text scale — '
+        '${locale.languageCode} locale', (tester) async {
+      final picker = _FakeFilePickerAdapter();
+      final controller = SongImportController(
+        registry: const ImporterRegistry(importers: []),
+        repository: InMemorySongRepository(),
+        workspaceRoot: () async => throw StateError('workspace is not used'),
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            songImportControllerProvider.overrideWithValue(controller),
+            songFilePickerAdapterProvider.overrideWithValue(picker),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+              child: const SongImportScreen(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(SongImportScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 }
 
 final class _FakeFilePickerAdapter implements FilePickerAdapter {

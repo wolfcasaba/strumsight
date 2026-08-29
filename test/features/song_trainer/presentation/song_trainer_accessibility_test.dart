@@ -88,6 +88,49 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('200% text scaling remains usable without overflow — hu locale', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final harness = _Harness.scored();
+    addTearDown(harness.dispose);
+    final state = const SongTrainerState.initial().copyWith(
+      status: SongTrainerStatus.running,
+      backingRateSupported: true,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          ...preferenceOverrides(),
+          songTrainerControllerProvider(
+            SongTrainerControllerInputs(
+              compilation: _scoredCompilation(),
+              backingAsset: _asset,
+            ),
+          ).overrideWith((ref) => harness.controller),
+        ],
+        child: MaterialApp(
+          theme: SsLightTheme.data(),
+          locale: const Locale('hu'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: SongTrainerScreen(state: state),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('song-trainer-loop-index')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('landscape layout keeps the loop index and lane visible', (
     tester,
   ) async {

@@ -89,7 +89,10 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
       ),
       body: SafeArea(
         child: switch (state.status) {
-          SongLibraryStatus.loading => const _LibraryLoading(),
+          SongLibraryStatus.loading => Semantics(
+            label: l10n.songLibraryLoading,
+            child: const _LibraryLoading(),
+          ),
           SongLibraryStatus.failure => _LibraryError(onRetry: controller.load),
           SongLibraryStatus.ready => Column(
             children: <Widget>[
@@ -277,7 +280,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
   }
 }
 
-class _LibraryLoading extends StatelessWidget {
+final class _LibraryLoading extends StatelessWidget {
   const _LibraryLoading();
 
   @override
@@ -299,7 +302,7 @@ class _LibraryLoading extends StatelessWidget {
 /// without fabricating one (E15-R04 review MAJOR-2). The single retry action
 /// already existed pre-migration (`controller.load`) — only its styling
 /// moves onto design tokens.
-class _LibraryError extends StatelessWidget {
+final class _LibraryError extends StatelessWidget {
   const _LibraryError({required this.onRetry});
   final VoidCallback onRetry;
 
@@ -331,7 +334,7 @@ class _LibraryError extends StatelessWidget {
 /// be a behaviour change in an appearance-only round (E15-R04 review
 /// MAJOR-3 pattern) — this mirrors [PracticeHubScreen]'s
 /// `_EmptyCatalogLayout`, the same documented §5.2 exception.
-class _LibraryEmpty extends StatelessWidget {
+final class _LibraryEmpty extends StatelessWidget {
   const _LibraryEmpty();
 
   @override

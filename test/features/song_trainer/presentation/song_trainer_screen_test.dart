@@ -39,7 +39,7 @@ import 'package:strumsight/features/song_trainer/domain/models/trainer_config.da
 import 'package:strumsight/features/song_trainer/domain/models/trainer_range.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
+import 'package:strumsight/core/design_system/public.dart';
 
 import '../../../support/fake_audio.dart';
 import '../../../support/fake_practice_observation_gateway.dart';
@@ -230,11 +230,21 @@ void main() {
         find.byKey(const Key('song-trainer-speed-disabled')),
       );
       expect(speedTile.enabled, isFalse);
-      // Subtitle holds the "paused" reason — must be non-empty.
+      // Subtitle holds the "speed resumes on restart" reason — pinned to the
+      // exact localized text, not just non-empty, so a regression to a
+      // duplicate of the pause-position label (which the screen already
+      // renders above) fails this cell.
       final subtitleWidget = speedTile.subtitle;
       expect(subtitleWidget, isNotNull);
       final subtitleText = (subtitleWidget! as Text).data ?? '';
-      expect(subtitleText.trim(), isNotEmpty);
+      final l10n = AppLocalizations.of(
+        tester.element(find.byKey(const Key('song-trainer-speed-disabled'))),
+      );
+      expect(subtitleText.trim(), l10n.songTrainerSpeedResumesOnRestart);
+      expect(
+        subtitleText.trim(),
+        isNot(equals(l10n.trainerPausedPosition('anything'))),
+      );
     },
   );
 
@@ -243,6 +253,9 @@ void main() {
   ) async {
     final harness = _Harness.scored();
     addTearDown(harness.dispose);
+    final state = const SongTrainerState.initial().copyWith(
+      status: SongTrainerStatus.failed,
+    );
 
     await tester.pumpWidget(
       ProviderScope(
@@ -259,15 +272,63 @@ void main() {
           theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: SongTrainerScreen(state: harness.controller.state),
+          home: SongTrainerScreen(state: state),
         ),
       ),
     );
     await tester.pump();
 
-    // Trigger a failed status by replacing the controller state directly.
-    expect(harness.controller.state.status, SongTrainerStatus.idle);
+    expect(find.byKey(const Key('song-trainer-failed')), findsOneWidget);
+    // A2 guard: `_FailedBody` must render through the design-system danger
+    // color/typography tokens, not a raw default `Text` style — this fails
+    // red if the color/style is dropped in a future edit.
+    final failedTextFinder = find.descendant(
+      of: find.byKey(const Key('song-trainer-failed')),
+      matching: find.byType(Text),
+    );
+    final failedText = tester.widget<Text>(failedTextFinder);
+    final colors = Theme.of(
+      tester.element(find.byKey(const Key('song-trainer-failed'))),
+    ).extension<SsColorScheme>()!;
+    expect(failedText.style?.color, colors.danger);
   });
+
+  testWidgets(
+    'idle status renders the design-system skeleton, not a raw spinner',
+    (tester) async {
+      final harness = _Harness.scored();
+      addTearDown(harness.dispose);
+      final state = const SongTrainerState.initial().copyWith(
+        status: SongTrainerStatus.idle,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            ..._preferenceOverridesForScreen(),
+            songTrainerControllerProvider(
+              SongTrainerControllerInputs(
+                compilation: _scoredCompilation(),
+                backingAsset: _asset,
+              ),
+            ).overrideWith((ref) => harness.controller),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: SongTrainerScreen(state: state),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // A2 guard: `_TrainerLoading` must be built from `SsSkeleton`, never a
+      // raw `CircularProgressIndicator`.
+      expect(find.byType(SsSkeleton), findsWidgets);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    },
+  );
 
   testWidgets(
     'long-song chord lane child count is bounded by the viewport window',

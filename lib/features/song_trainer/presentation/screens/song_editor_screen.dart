@@ -313,7 +313,7 @@ final class _EditorBody extends ConsumerWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Icon(Icons.lock_outline, color: colors.textSecondary),
+                  Icon(Icons.lock_outline, color: colors.warning),
                   const SizedBox(width: SsSpacing.space2),
                   Expanded(
                     child: Text(
@@ -484,13 +484,13 @@ final class _EditorBody extends ConsumerWidget {
   };
 }
 
-class _EditorLoading extends StatelessWidget {
+final class _EditorLoading extends StatelessWidget {
   const _EditorLoading();
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: SsSkeleton(
+      child: const SsSkeleton(
         width: 120,
         height: SsSpacing.space6,
         radius: SsRadius.pill,
@@ -506,7 +506,7 @@ class _EditorLoading extends StatelessWidget {
 /// MAJOR-2). This state was action-less pre-migration (a bare `Text`) —
 /// adding a retry affordance here would be a new action in an
 /// appearance-only round (E15-R04 review MAJOR-3 pattern).
-class _EditorLoadError extends StatelessWidget {
+final class _EditorLoadError extends StatelessWidget {
   const _EditorLoadError({required this.message});
   final String message;
 
@@ -519,6 +519,7 @@ class _EditorLoadError extends StatelessWidget {
         padding: const EdgeInsets.all(SsSpacing.space6),
         child: Text(
           message,
+          key: const Key('song-editor-load-error'),
           style: typography.bodyMedium.copyWith(color: colors.danger),
           textAlign: TextAlign.center,
         ),

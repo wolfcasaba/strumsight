@@ -69,7 +69,7 @@ final class _SongImportScreenState extends ConsumerState<SongImportScreen> {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 if (active) ...<Widget>[
-                  SsSkeleton(
+                  const SsSkeleton(
                     width: 120,
                     height: SsSpacing.space6,
                     radius: SsRadius.pill,

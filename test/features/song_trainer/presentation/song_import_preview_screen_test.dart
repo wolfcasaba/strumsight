@@ -33,4 +33,35 @@ void main() {
       isNull,
     );
   });
+
+  for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+    testWidgets('remains overflow-free at 200 percent text scale — '
+        '${locale.languageCode} locale', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+              child: SongImportPreviewScreen(
+                preview: ImportPreview(
+                  displayName: 'bad.mid',
+                  byteLength: 3,
+                  format: 'MIDI',
+                  warnings: const <String>['fatal.unsupported'],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(SongImportPreviewScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

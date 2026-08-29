@@ -522,4 +522,300 @@ Elvárt kimenet: kilencszer `MIGRATED`, és a teljes fán `60/96`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+Ez a kör a `docs/reviews/e15-r05-review.md` javító köre: 3 MAJOR + 9 MINOR +
+2 NOTE. A migráció maga (9/9 képernyő) az előző körben készült el és
+változatlan; ez a kör kizárólag a lelet-listát zárja.
+
+### 10.1 m5 — commitolatlan munka
+
+A 16 fájl (golden-harness `SsDarkTheme.data()` csere + 12 PNG +
+`migration-status.md`) az ELSŐ lépésben commitba került
+(`7e24892b`), mielőtt bármi mást érintettem volna.
+
+### 10.2 MAJOR-1 — a szünetelt transzport magyarázata
+
+Új ARB-kulcs mindkét locale-ra a `lib/l10n/base/app_{en,hu}.arb`-ban:
+
+```
+songTrainerSpeedResumesOnRestart:
+  en: "Paused: speed resumes when the session restarts."
+  hu: "Szünet: a sebesség a session újraindításakor tér vissza."
+```
+
+Ez a kör előtti (`origin/main`) angol mondat szó szerinti megfelelője. A
+`song_trainer_screen.dart:376-380` `_PausedBody` `song-trainer-speed-disabled`
+csempéjének subtitle-je most ezt írja ki (nem a fölötte lévő
+`trainerPausedPosition` duplikátumát), és az elavult „outside this round's
+allowed_paths (ADR 0307)" komment törölve/frissítve. A
+`test/features/song_trainer/presentation/song_trainer_screen_test.dart` M4
+cellája (`:225-243`) mostantól a PONTOS lokalizált szövegre pinnel
+(`l10n.songTrainerSpeedResumesOnRestart`), és külön assertálja, hogy a
+subtitle NEM egyezik a `trainerPausedPosition` szöveggel — ez a cella pirosra
+váltana, ha a duplikátum-regresszió visszatérne.
+
+`dart run tool/gen_l10n_segments.dart --write` + `flutter gen-l10n` lefutott,
+hogy a generált `lib/l10n/app_{en,hu}.arb` és `lib/l10n/app_localizations*.dart`
+szinkronba kerüljön az új kulcsokkal (a `lib/l10n/app_*.arb` NEM az
+`allowed_paths`-on van — §0.0/R12 —, de a `--write` a `lib/l10n/base/`-ból
+determinisztikusan generált, nem kézi szerkesztés; a gate `l10n` lépése
+ugyanezt a frissességet követeli meg).
+
+### 10.3 MAJOR-2 — A2 gépi cellák (5 mutált csoport + bónusz)
+
+A brief §6.1 kötelező valódi-sértés próbáját pontosan a devil-advocate mérte
+5 csoportjára írtam cellát (a meglévő gate-teszt fájlokba, új fájl nélkül),
+plusz az Editor betöltés/hiba csoportjára is:
+
+| Csoport | Fájl | Új cella |
+|---|---|---|
+| `_LibraryLoading`/`_LibraryError`/`_LibraryEmpty` | `song_library_screen_test.dart` | 3 cella: `SsSkeleton` jelenlét, `SsButton` jelenlét, empty-state szöveg token-színe |
+| `_TrainerLoading` | `song_trainer_screen_test.dart` | `SsSkeleton` jelenlét idle állapotban |
+| `_FailedBody` | `song_trainer_screen_test.dart` | a hibaszöveg `colors.danger` token-színe (a korábbi „failed status" cella érdemi assertion nélkül állt — most valódi) |
+| `_OverviewLoading`/`_OverviewError` | `song_overview_screen_test.dart` | 2 cella: `SsSkeleton`, `SsButton` |
+| `_SetupLoading`/`_SetupError` | `trainer_setup_screen_test.dart` | 2 cella: `SsSkeleton`, `SsButton` |
+| `_EditorLoading`/`_EditorLoadError` (bónusz) | `song_editor_screen_test.dart` | 2 cella: `SsSkeleton`, danger-token szín (a `_EditorLoadError` `Text`-je `song-editor-load-error` kulcsot kapott, hogy egyértelműen megtalálható legyen) |
+
+A hiba-/betöltés-állapotokat egy-egy célzott repository-dupla váltja ki
+(`_PendingGetRepository`/`_PendingRepository` sosem teljesülő `Completer`-rel
+a betöltéshez, `_FailingGetRepository`/`_ToggleRepository` `AppResult.failure`-t
+adó `list`/`get`-tel a hibához) — ugyanaz a Preview-repo minta, amit a projekt
+máshol is használ.
+
+**Megjegyzés a Library hiba-cellához:** a `SongLibraryScreen.initState` MINDIG
+láncol egy `setQuery()`-t az első `load()` UTÁN, és a `setQuery()`
+feltétel nélkül `SongLibraryStatus.ready`-re publikál — emiatt egy induláskor
+bukó repository sosem hagyja a widget-fát megfigyelhetően hiba-állapotban (ez
+LÉTEZŐ, kör előtti viselkedés, nem érintettem). A cella ezért egy
+`ProviderContainer`-rel mountol egy SIKERES repository-val (ugyanazt az utat
+járva, mint az induló `initState`), majd egy MÁSODIK, önálló
+`controller.load()` hívást indít — pontosan a retry-gomb saját callback-je,
+`setQuery` lánc nélkül — egy immár bukó repository ellen. Ez az EGYETLEN út,
+ahol a teszt megfigyelhetően eléri a `SongLibraryStatus.failure`-t.
+
+**Kötelező valódi-sértés próba (a `song-trainer-screen.dart` `_TrainerLoading`
+widgetén, nyers kimenettel):**
+
+```
+$ # mutáció: SsSkeleton -> CircularProgressIndicator a _TrainerLoading.build()-ban
+$ flutter test test/features/song_trainer/presentation/song_trainer_screen_test.dart
+...
+00:01 +5: idle status renders the design-system skeleton, not a raw spinner
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞═══════════════════════════
+The following TestFailure was thrown running a test:
+Expected: at least one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "SsSkeleton": []>
+   Which: means none were found but some were expected
+...
+00:01 +5 -1: idle status renders the design-system skeleton, not a raw spinner [E]
+  Test failed. See exception logs above.
+Failing tests:
+  .../song_trainer_screen_test.dart: idle status renders the design-system skeleton, not a raw spinner
+```
+
+Visszaállítás után (`SsSkeleton` vissza):
+
+```
+$ flutter test test/features/song_trainer/presentation/song_trainer_screen_test.dart
+...
+00:01 +11: All tests passed!
+```
+
+A próba PIROSRA váltotta a gate-et a mutáción, és ZÖLDre a visszaállítás
+után — az A2-nek mostantól van őre ezen a csoporton, és analóg cellák a
+másik négy csoporton.
+
+### 10.4 MAJOR-3 — textScaler 2.0, en ÉS hu, mind a 9 képernyőn
+
+| Képernyő | Teszt-fájl | en | hu |
+|---|---|---|---|
+| `song_trainer_screen` | `song_trainer_accessibility_test.dart` | megvolt (`takeException` is) | ÚJ cella |
+| `song_overview_screen` | `song_overview_screen_test.dart` | ÚJ (loop: `en`+`hu`) | ÚJ |
+| `song_result_screen` | `song_result_screen_test.dart` | ÚJ (loop) | ÚJ |
+| `trainer_setup_screen` | `trainer_setup_screen_test.dart` | megvolt, `takeException` MOST hozzáadva | ÚJ cella |
+| `setlist_session_screen` | `setlist_run_test.dart` | ÚJ (loop, `_localizedApp` bővítve `locale` paraméterrel) | ÚJ |
+| `song_editor_screen` | `song_editor_screen_test.dart` | ÚJ (loop) | ÚJ |
+| `song_import_screen` | `song_import_screen_test.dart` | ÚJ (loop) | ÚJ |
+| `song_import_preview_screen` | `song_import_preview_screen_test.dart` | ÚJ (loop) | ÚJ |
+| `song_library_screen` | `song_library_screen_test.dart` | ÚJ (loop) | ÚJ |
+
+Minden új/kiegészített cella `expect(tester.takeException(), isNull)`-t mér a
+`MediaQueryData(textScaler: TextScaler.linear(2))` alatt, `en`-en ÉS `hu`-n
+(`locale: const Locale('hu')`). Két korrekció útközben mérve:
+
+- a `song_overview_screen` Start gombja `ListView`-ban van, és 2×
+  szövegskálán a viewporton kívülre kerül — a cella `scrollUntilVisible`-t
+  használ, mint a `trainer_setup` már meglévő mintája (a hiányzó scroll nem a
+  gomb hiányát jelezte, hanem hogy nem volt görgetve odáig);
+- a `song_import_preview_screen` cellája NEM `find.text('Import song')`-ra
+  pinnelt (ez `hu`-n lefordított szöveg lenne, tehát mindig bukna), hanem
+  `find.byType(SongImportPreviewScreen)`-re.
+
+### 10.5 MINOR-ok
+
+| # | Állapot |
+|---|---|
+| m1 | §10-jegyzet: a `976b1d55` G2-átnevezés (`_…Failure`→`_…Error`) tartalmilag valódi (mind a négy widget `String? failureCode` fölött), de a G2 mintázatának kikerülése — nem a §7.1 szellemében. NEM neveztem vissza (a review nem kérte), csak dokumentálom. |
+| m2 | JAVÍTVA — új `songTrainerSpeedLabel` kulcs (en/hu) a sebesség-csúszka `Semantics(label:)`-jén a Learn feature `learnSpeed` helyett. |
+| m3 | §10-jegyzet + komment-frissítés: `songTrainerFailed` („Session failed: {code}") megtartva a pre-migration „Failed: {code}" helyett — a JELENTÉS azonos (hibakód jelentése), a szöveg nem. Saját kulcs helyett a meglévő reuse maradt, mert azonos jelentésű. |
+| m4 | §10-jegyzet + komment-bővítés: `setlist_session_screen.dart` 18px `CircularProgressIndicator`-ja szándékosan raw marad — az `SsSkeleton` tartalom-shimmer, nem inline folyamatban-lévő ikon, a csere megváltoztatná, mit közöl az affordance. |
+| m5 | JAVÍTVA — lásd 10.1. |
+| m6 | JAVÍTVA — ez a §10 szakasz. |
+| m7 | JAVÍTVA — `song_trainer_screen.dart` (`_TrainerLoading`, új `songTrainerLoading` kulcs) és `song_library_screen.dart` (`_LibraryLoading`, új `songLibraryLoading` kulcs) betöltés-állapota most `Semantics(label: …)`-ba csomagolva, mint a `song_overview`/`trainer_setup` mintája. |
+| m8 | §10-jegyzet: a `titleLarge`→`typography.titleMedium` (song_overview szekció-fejlécek, trainer_setup fejlécek) vs. `titleLarge`→`typography.titleLarge` (song_import_preview fájlnév-cím) eltérés és a dalcím `headlineSmall`→`titleLarge` lefokozása NEM egységesítve — mindkét leképzés önmagában érvényes tipográfiai döntés (szekció-fejléc vs. lapcím-hangsúly), és az egységesítés három képernyő goldenjét mozdítaná egy megjelenés-kör hatáskörén túli, széles vizuális döntéssel. Backlog egy dedikált tipográfia-körnek. |
+| m9 | JAVÍTVA — `song_editor_screen.dart:317` a csak-olvasható lakat-ikon `colors.textSecondary`→`colors.warning` (státusz-értékű token, nem díszként olvas). |
+| n6 | JAVÍTVA — a hat új privát állapot-widget (`_TrainerLoading`, `_OverviewLoading`, `_OverviewError`, `_SetupLoading`, `_SetupError`, `_EditorLoading`, `_EditorLoadError`, `_LibraryLoading`, `_LibraryError`, `_LibraryEmpty`) `class`→`final class`, a fájl saját stílusához igazítva; az öt `SsSkeleton` hívási hely (`song_trainer`, `song_overview`, `trainer_setup`, `song_editor`, `song_import`) visszakapta a `const`-ot. |
+| n7 | JAVÍTVA — `docs/ui/migration-status.md` ARB-forrás bekezdése frissítve: a `lib/l10n/app_*.arb` GENERÁLT (`tool/gen_l10n_segments.dart`), a hivatkozás korábbi „ADR 0307" (ami valójában a pipeline-átbocsátóképesség ADR-je) törölve, a bekezdés a §0.0/R12 forrás-korrekcióval és az új kulcsokkal frissítve. |
+
+### 10.6 §0.0/R13 — képernyőnkénti indoklás a design-rendszer-kiváltásra
+
+Minden helyen, ahol a `_...Error`/`_...Empty` widget NEM `SsFailureState`/
+`SsEmptyState`-et használ, hanem képernyő-lokális, kizárólag design-rendszer
+tokenekből épült helyettesítőt:
+
+- **`song_trainer_screen` `_FailedBody`** — `state.transportState.lastFailureCode`
+  bare `String?`, nem `AppFailure`; a `SsFailureState` `SsFailurePresentation`-t
+  (egy valódi `AppFailure`-ből) kíván. Akció nincs a pre-migration állapotban
+  sem (bare `Center(Text)` volt) — nem adtam hozzá egyet.
+- **`song_overview_screen` `_OverviewError`, `trainer_setup_screen`
+  `_SetupError`** — mindkettő a `songTrainerSetupControllerProvider` közös
+  állapotán ül; a `failureCode` bare `String?`
+  (`song_trainer_setup_state.dart`). A retry-akció (`onRetry`) MEGVOLT
+  pre-migration is (`_loadIfNeeded`) — ez nem új akció, csak a stílusa
+  költözött tokenekre.
+- **`song_editor_screen` `_EditorLoadError`** — `SongEditorState`-nek nincs
+  `AppFailure`/`retryable` mezője ezen az úton; a pre-migration állapot
+  akció-mentes bare `Text` volt — akciót NEM adtam hozzá (ez lett volna az
+  E15-R04/MAJOR-3 minta).
+- **`song_library_screen` `_LibraryError`** — `failureCode` bare
+  `SongRepositoryErrorCode` string; a retry (`controller.load`) pre-migration
+  is megvolt.
+- **`song_library_screen` `_LibraryEmpty`** — az `SsEmptyState.onAction`
+  KÖTELEZŐ, a pre-migration üres állapot (mérve: `git show origin/main`)
+  akció-mentes bare `Center(Text)` volt — a meglévő FAB import-akció
+  bekötése egy `onAction`-be viselkedés-bővítés lenne egy megjelenés-körben.
+- **`song_import_screen`** (inline, nem külön widget-osztály) — a
+  `SongImportPhase.failure` blokkoló-hiba ága `state.failureCode` bare
+  string-re épül, a `SsButton`(„Choose a file") a pre-migration
+  `controller.requestSelection`-t hívja, változatlanul.
+- **`song_result_screen`, `song_import_preview_screen`,
+  `setlist_session_screen`** — nincs önálló, a design-rendszer kötelező
+  alapesetét kiváltó hiba-/üres-widgetjük ezen a batchen (a
+  `setlist_session_screen` egyetlen raw affordance-a, a 18px spinner, a
+  10.5/m4 alatt indokolt).
+
+Mind a design-rendszer tokenjeiből épül (`SsColorScheme`, `SsTypography`,
+`SsSpacing`, `SsButton`) — nulla `Colors.`/`textTheme`/`colorScheme` literál
+(G4 és a kézi grep is megerősíti).
+
+### 10.7 §7 kapu — nyers végkimenet
+
+```
+$ tools/round-gate.sh test/ui/ui_inventory_test.dart test/l10n/arb_parity_test.dart test/app/routing/app_router_test.dart test/features/song_trainer/application/setlists/setlist_session_controller_test.dart test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart test/features/song_trainer/presentation/song_editor_screen_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/song_library_screen_test.dart test/features/song_trainer/presentation/song_overview_screen_test.dart test/features/song_trainer/presentation/song_result_screen_test.dart test/features/song_trainer/presentation/song_trainer_accessibility_test.dart test/features/song_trainer/presentation/song_trainer_screen_test.dart test/features/song_trainer/presentation/trainer_setup_screen_test.dart test/features/songs/import/editor_draft_test.dart test/features/songs/import/import_blocking_error_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/song_library_test.dart test/features/songs/trainer/playback_only_result_test.dart test/features/songs/trainer/playhead_loop_sync_test.dart test/features/songs/trainer/setlist_run_test.dart test/features/songs/trainer/trainer_setup_test.dart
+...
+    → [1] format: ZÖLD
+    → [2] analyze: ZÖLD
+    → [3] test test/ui/ui_inventory_test.dart: ZÖLD
+    → [4] test test/l10n/arb_parity_test.dart: ZÖLD
+    → [5] test test/app/routing/app_router_test.dart: ZÖLD
+    → [6] test test/features/song_trainer/application/setlists/setlist_session_controller_test.dart: ZÖLD
+    → [7] test test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart: ZÖLD
+    → [8] test test/features/song_trainer/presentation/song_editor_screen_test.dart: ZÖLD
+    → [9] test test/features/song_trainer/presentation/song_import_preview_screen_test.dart: ZÖLD
+    → [10] test test/features/song_trainer/presentation/song_import_screen_test.dart: ZÖLD
+    → [11] test test/features/song_trainer/presentation/song_library_screen_test.dart: ZÖLD
+    → [12] test test/features/song_trainer/presentation/song_overview_screen_test.dart: ZÖLD
+    → [13] test test/features/song_trainer/presentation/song_result_screen_test.dart: ZÖLD
+    → [14] test test/features/song_trainer/presentation/song_trainer_accessibility_test.dart: ZÖLD
+    → [15] test test/features/song_trainer/presentation/song_trainer_screen_test.dart: ZÖLD
+    → [16] test test/features/song_trainer/presentation/trainer_setup_screen_test.dart: ZÖLD
+    → [17] test test/features/songs/import/editor_draft_test.dart: ZÖLD
+    → [18] test test/features/songs/import/import_blocking_error_test.dart: ZÖLD
+    → [19] test test/features/songs/song_asset_state_test.dart: ZÖLD
+    → [20] test test/features/songs/song_library_test.dart: ZÖLD
+    → [21] test test/features/songs/trainer/playback_only_result_test.dart: ZÖLD
+    → [22] test test/features/songs/trainer/playhead_loop_sync_test.dart: ZÖLD
+    → [23] test test/features/songs/trainer/setlist_run_test.dart: ZÖLD
+    → [24] test test/features/songs/trainer/trainer_setup_test.dart: ZÖLD
+    → [25] architecture: ZÖLD
+    → [26] secrets: ZÖLD
+    → [27] l10n: ZÖLD
+MINDEN GATE ZÖLD.
+```
+
+### 10.8 §7.1 négy gépi őr — nyers kimenet
+
+```
+$ # G1 — ELTŰNT ARB-kulcs
+(üres)
+
+$ # G2 — kézzel gyártott hiba / retryable
+(üres)
+
+$ # G3 — ÚJ akció vagy navigáció
++/// component mandates an [SsEmptyState.onAction] (§5.2), and the legacy
++/// Wiring the existing FAB's import action into a new `onAction` here would
+```
+
+A két G3-találat DOKUMENTUM-kommentben van (`song_library_screen.dart`,
+`_LibraryEmpty` doc-comment, MIÉRT nincs `onAction`), változatlan a kör
+kezdete (`7e24892b`) óta — nem ez a kör vezette be, és tényleges kódsor
+egyik sem.
+
+```
+$ # G4 — beégetett felhasználói mondat
+lib/features/song_trainer/presentation/screens/trainer_setup_screen.dart:187:                DropdownMenuItem<int>(value: bars, child: Text('$bars')),
+```
+
+Ez a §0.0/R6 kifejezetten NEM kötelező kivétele (szám-interpoláció, nem
+mondat) — a brief szó szerint kimondja, hogy ennek hiánya nem bukik el.
+
+### 10.9 Migrációs mérés
+
+```
+$ for f in ...9 képernyő...; do grep -q design_system "$f" && echo MIGRATED || echo legacy; done
+MIGRATED lib/features/song_trainer/presentation/screens/song_trainer_screen.dart
+MIGRATED lib/features/song_trainer/presentation/screens/song_overview_screen.dart
+MIGRATED lib/features/song_trainer/presentation/screens/song_result_screen.dart
+MIGRATED lib/features/song_trainer/presentation/screens/trainer_setup_screen.dart
+MIGRATED lib/features/song_trainer/presentation/screens/setlist_session_screen.dart
+MIGRATED lib/features/song_trainer/presentation/screens/song_editor_screen.dart
+MIGRATED lib/features/song_trainer/presentation/screens/song_import_screen.dart
+MIGRATED lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart
+MIGRATED lib/features/song_trainer/presentation/screens/song_library_screen.dart
+```
+
+Teljes fa: **60/96** (62,5%), változatlan a kör előtti méréshez képest (ez a
+kör nem migrált új képernyőt, csak a meglévő 9 migrációját javította).
+
+### 10.10 Golden-sáv
+
+```
+$ tools/golden-x86.sh record test/ui/goldens/e13_r23_screens_golden_test.dart test/ui/goldens/e13_r24_screens_golden_test.dart test/ui/goldens/e13_r25_screens_golden_test.dart
+...
+02:11 +20: All tests passed!
+
+$ tools/golden-x86.sh check  test/ui/goldens/e13_r23_screens_golden_test.dart test/ui/goldens/e13_r24_screens_golden_test.dart test/ui/goldens/e13_r25_screens_golden_test.dart
+...
+02:10 +20: All tests passed!
+
+$ git status --short test/ui/goldens/goldens/
+(üres — egyetlen PNG sem mozdult)
+```
+
+A nulla PNG-diff azért várt: a kör kódváltoztatásai (subtitle-szöveg a
+PAUSED állapotban, lakat-szín a `canPersist == false` szerkesztő-ágon,
+`Semantics`-csomagolás, `final class`/`const`) egyike sem esik a golden
+fixture-ök rögzített állapotaiba (a `song_trainer_stage` golden a RUNNING
+állapotot rögzíti, nem a PAUSED-et; a `song_editor` golden fixture-je nem
+`canPersist == false`) — konzisztens az eredeti kör n2-jegyzetével, mely
+szerint ez a három képernyő PNG-je pixel-semleges maradt.
+
+### 10.11 Amit NEM futtattam
+
+Semmi a brief §7/§7.1/§10 listájáról nem maradt ki. A CI-oldali teljes suite
++ randomizált property gate + release APK ezen a boxon nem futtatható (AGENTS
+mért korlát) — CI-diszpecselés az orchestrátor feladata a merge előtt.
+
+`rm -rf test/ui/goldens/failures` lefutott a `done` jelzés előtt.
+
 ## 11. Review — a Claude tölti ki

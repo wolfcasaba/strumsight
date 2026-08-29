@@ -270,13 +270,13 @@ final class _SetupBody extends StatelessWidget {
   }
 }
 
-class _SetupLoading extends StatelessWidget {
+final class _SetupLoading extends StatelessWidget {
   const _SetupLoading();
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: SsSkeleton(
+      child: const SsSkeleton(
         width: 120,
         height: SsSpacing.space6,
         radius: SsRadius.pill,
@@ -291,7 +291,7 @@ class _SetupLoading extends StatelessWidget {
 /// nothing honest to feed [SsFailurePresentation.from] without fabricating
 /// one (E15-R04 review MAJOR-2). The single retry action already existed
 /// pre-migration (`_loadIfNeeded`) — only its styling moves onto tokens.
-class _SetupError extends StatelessWidget {
+final class _SetupError extends StatelessWidget {
   const _SetupError({required this.onRetry});
   final VoidCallback onRetry;
 
