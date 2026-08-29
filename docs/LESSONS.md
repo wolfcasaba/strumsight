@@ -21383,3 +21383,100 @@ javítás után (`O(fájlok)`, `real 0m5.744s`, ~31×) a CI zölden futott.
 kör scope-ja (`tools/**` tilos zóna) nem engedett ilyet bevezetni. A védelem a
 mért `5.744s` és az itt rögzített hurok-szabály.
 Döntés: [ADR 0471](adr/0471-screen-reachability-is-measured-not-assumed.md).
+
+## L544 — A §0.3 merge-szel frissen tartott PUBLIKUS kör-ág landolása közben elmozduló `main` a landolót REBASE-re váltja, és az a saját brief-konfliktust `--ours`-szal, NÉMÁN a branch-revízió eldobásával oldja fel (E12-R11, 2026-08-29)
+
+**Mit mértünk.** Az E12-R11 javító köre a §0.3 szerint **merge-elte** a friss
+`origin/main`-t az ágba (`64563cf0`), és a brief kétoldali §0.0-ütközését kézzel
+úgy oldotta fel, hogy MINDKÉT revízió megmaradt (a `main` H2-revíziója §0.0-ként,
+az ág pre-flight revíziója — R1–R7 — §0.0.1-ként). A merge, a CI és a review
+ezen a tartalmon zöldült ki. A landolás pillanatára viszont a párhuzamos sáv
+(E15-R03) merge-elt, tehát a `main` elmozdult, és a `tools/round-land.sh`
+`merge-base --is-ancestor origin/main HEAD` próbája már **hamis** lett — a
+landoló a rebase-ágra ment:
+
+```
+git log --oneline origin/main..HEAD   # rebase UTÁN
+grep -n "^## 0\.0" docs/rounds/e12-r11-end-to-end-test-harness.md
+  15:## 0.0 Revízió — H2 önjavító kör (ADR 0112), 2026-08-29
+  79:## 0.0 Miért `test/e2e/` és nem `integration_test/`
+```
+
+Három §0.0-szakaszból **kettő** maradt: a `resolve_conflicts()` a saját briefre
+`git checkout --ours`-t hív (rebase alatt az „ours" az UPSTREAM), ami a branch
+pre-flight revízióját (R1–R7) csendben eldobta — pontosan azt a szöveget, amire
+a brief §6 acceptance-mátrixa `§0.0/R4–R6`-ként hivatkozik, és amin az ADR 0472
+áll. A mechanikus feloldás **append-only naplókra** (HANDOFF, LESSONS) helyes;
+egy brief-re, ahol MINDKÉT oldal ÉRDEMI, új szakaszt adott, tartalomvesztés.
+
+**Miért nem lett belőle baj.** A `safe-force-push.sh` fail-closed volta fogta
+meg — a rebase eldobta a merge-commitot, aminek így nincs patch-id-ekvivalense:
+
+```
+safe-force-push: MEGTAGADVA — a(z) origin/…-on olyan commit van, ami nálunk nincs:
+  64563cf0 merge: origin/main (heal E12-R11/H2, ADR 0470) a kör ágába
+  545821ae [E12-R11] Pre-flight: ADR 0472 + brief §0.0 revízió
+safe-force-push: push NEM történt
+```
+
+A romlott fa tehát SOHA nem jutott ki az originre. A `git reset --hard` a
+pushol​t csúcsra + egy ÚJ `merge --no-ff origin/main` visszaállította a helyes
+tartalmat (a `grep` újra három §0.0-szakaszt adott), és ezután a landoló a
+„branch már tartalmazza a friss `origin/main`-et; rebase kihagyva" ágon ment
+végig: gate → push → squash-merge (`36f57db3`).
+
+**A szabály.** Ha a kör-ág a §0.3 szerint **merge**-szel követi az upstreamet,
+a landoló hívása ELŐTT mérd meg és állítsd helyre az ancestor-viszonyt
+UGYANAZZAL a merge-dzsel — ne a landolóra bízd, mert az a rebase-ágon a saját
+briefed branch-oldali revízióját eldobja. A mérés egy sor:
+
+```
+git merge-base --is-ancestor origin/main HEAD || git merge --no-ff origin/main
+```
+
+**Őrteszt:** nincs — a javítás helye a `tools/round-land.sh` `resolve_conflicts()`
+brief-ága (az `--ours` helyett kétoldali, szakasz-szintű megőrzés vagy `blocked`),
+ami ennek a körnek TILOS zónája (ADR 0087 §4, ADR 0112 §3). Az őr megírása
+governance-/önjavító kör dolga; addig a fenti, futtatható ancestor-mérés a
+védelem, és a `safe-force-push.sh` fail-closed ága a hálló.
+
+## L545 — A review-commit NEM triggereli a Router CI-t, de a merge-kapu attól még a merge SHA-n kéri: kézi `workflow_dispatch` nélkül a kör „hiányzó Router-CI"-ba (H5) fut (E12-R11, 2026-08-29)
+
+**Mit mértünk.** Az E12-R11 diffje érinti a `docs/rounds/**`-ot, tehát a
+`round-ci-plan.py` `router_ci_expected: true`-t adott, és a merge-kapu (ADR 0171
+§3, `docs/LESSONS.md` L113) a **merge SHA-n** kéri a `router-ci` zöldjét. A kör
+utolsó commitja viszont a **review-jelentés** volt (`docs/reviews/**`), ami a
+`router-ci.yml` `on.push.paths` listáján **nincs rajta** — a push tehát nem
+indított Router CI-t:
+
+```
+gh run list --workflow=router-ci.yml --branch <ág> --json headSha,conclusion
+  success  16208570   ← az IMPLEMENTER commitja
+  (semmi)  02e772eb   ← a review-commit = az akkori merge-jelölt
+```
+
+A `full-gate.yml` ugyanezen a SHA-n rendben lefutott (a `paths` szűrője más),
+így a „minden zöld" benyomás megvolt, miközben a kapu EGYIK fele meg sem
+futott. Ez a néma hiány a H5 („piros VAGY hiányzó Router-CI run a merge SHA-n")
+osztálya, nem a piros ág.
+
+**A feloldás.** A `router-ci.yml` deklarál `workflow_dispatch`-ot, tehát a
+hiányzó futás pótolható a pontos ágcsúcson, gyengítés nélkül:
+
+```
+gh workflow run router-ci.yml --ref <kör-ág>
+gh run list --workflow=router-ci.yml --branch <kör-ág> --limit 1 \
+  --json databaseId,headSha,conclusion     # headSha == merge SHA, conclusion == success
+```
+
+**A szabály.** A merge előtti ellenőrzés nem „a legutóbbi Router-CI zöld-e",
+hanem „**van-e** Router-CI run a MERGE SHA-n, és az zöld-e". Ha a kör utolsó
+commitja a Router-CI trigger-útvonalain KÍVÜL esik (review-jelentés, handoff),
+a futást kézzel kell dispatch-elni — a korábbi SHA zöldje nem evidencia (ADR
+0086 §2 exact-SHA).
+
+**Őrteszt:** nincs — a `docs/reviews/**` felvétele a `router-ci.yml`
+`on.push.paths` listájára a `.github/` módosítása lenne, ami ennek a körnek
+TILOS zónája (ADR 0087 §4: „a mérce nem módosulhat attól, akit mér"). Az
+alternatíva (a merge-kapu ellenőrzés gépiesítése a landolóban) szintén
+`tools/**`. Addig a fenti, futtatható `headSha`-egyezés-mérés a védelem.

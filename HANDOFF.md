@@ -1,5 +1,55 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R11 KÉSZ — End-to-end folyam-harness a VALÓDI app-fán (a H2-heal utáni javító kör) — PR [#501](https://github.com/wolfcasaba/strumsight/pull/501), squash `36f57db3` (2026-08-29)
+
+A Ch12 **Kör 11** mércéje: két determinisztikus folyam-teszt a valódi
+`StrumSightApp` fán, a `flutter test` gazdában (`test/e2e/`), fake órával és
+globális hálózat-őrrel. A kör **két menetben** zárult:
+
+| Menet | Mi történt | Kimenet |
+|---|---|---|
+| 1. futás | a harness a `lib/**`-ből HIÁNYZÓ Setup → Session lánc-lépést a tesztből pótolta ([L273](docs/LESSONS.md)) | review **B1 BLOCKER** → **H2 halt** |
+| önjavító kör | a normatív kérdés eldőlt: **termékhiba** — [ADR 0470](docs/adr/0470-practice-setup-navigates-to-the-session-route.md), PR [#499](https://github.com/wolfcasaba/strumsight/pull/499), [L541](docs/LESSONS.md#l541) | a Start MOST `context.go(AppRoutes.practiceSession)`-nel navigál |
+| javító kör (ez) | a harness **három áthidalása** eltávolítva; a folyam a termék saját hand-off-ján megy végig | review **APPROVED** → merge |
+
+**Amit a kör szállított** (`lib/**` végig érintetlen — tilos zóna):
+
+- `test/e2e/first_practice_offline_test.dart` — A1 (fresh install → onboarding →
+  Quick Start → offline gyakorlás → history perzisztál), A3 (a hálózat-őr
+  mindhárom útja: Dio adapter, `dart:io HttpOverrides`, platform-csatorna
+  catch-all — útonként EGY cella, [L453](docs/LESSONS.md#l453)), A4 (determinizmus:
+  a folyam kétszer fut le két friss `ProviderContainer`-rel, `expect(second, equals(first))`);
+- `test/e2e/returning_user_restart_test.dart` — A2 (app-újraindítás: az első
+  container `dispose()`-a után ÚJ container + ÚJ router UGYANARRA a
+  store-példányra);
+- `test/support/e2e_harness.dart` · `fake_clock.dart` · `fake_network_guard.dart`,
+  `docs/testing/e2e-harness.md`, [ADR 0472](docs/adr/0472-e2e-flow-harness-runs-in-the-flutter-test-host.md)
+  (miért `test/e2e/` és nem `integration_test/`: a boxon nincs Android SDK, a
+  CI-ban nincs emulátoros job → a NEM FUTTATOTT mérce rosszabb a hiányzónál).
+
+**A B1 zárásának bizonyítéka nem a zöld gate** (egy áthidalt teszt is zöld),
+hanem **falszifikációs próba** izolált review-klónban: a heal navigációját
+(`practice_setup_screen.dart:198`) kivéve az **A1 és az A4 PIROSRA vált**
+(`00:03 +3 -2: Some tests failed.`) — a folyam tehát immár a termék saját
+lánc-lépésétől függ.
+
+**Mérce:** izolált review-gate 7/7 zöld; a merge SHA-n (`631ce092`)
+[full-gate 33229546260](https://github.com/wolfcasaba/strumsight/actions/runs/33229546260)
+és [router-ci 33229547180](https://github.com/wolfcasaba/strumsight/actions/runs/33229547180)
+mindkettő `success`; gépi scope-audit `ok`.
+
+**Két mért lecke a landolásból:** [L544](docs/LESSONS.md#l544) (a merge-szel
+frissen tartott publikus ág landolásakor a landoló rebase-ága a saját brief
+branch-oldali revízióját `--ours`-szal eldobja — a `safe-force-push` fail-closed
+ága fogta meg, a fa nem romlott el), [L545](docs/LESSONS.md#l545) (a
+review-commit nem triggereli a Router CI-t, de a kapu a merge SHA-n kéri →
+kézi `workflow_dispatch`).
+
+**Nyitott, tudatosan tovább vitt rés:** az A4 determinizmus-cella a `createdAt`
+mezőt kihagyja a snapshotból, mert a `PracticeSessionResultHistoryMapper` valódi
+fali órát bélyegez rá (review N3) — **önálló kör tárgya**, nem ezé.
+
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E12-R11 / H2 feloldva: a Practice Setup Start-ja a session útvonalra navigál — PR [#499](https://github.com/wolfcasaba/strumsight/pull/499) (2026-08-29)
 
 **Az E12-R11 (E2E folyam-harness) H2-vel megállt**, mert a „first practice" folyam a
