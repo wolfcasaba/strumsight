@@ -254,38 +254,11 @@ Future<void> runFirstPracticeSession(
     120,
     scrollable: find.byType(Scrollable).first,
   );
-  // `practiceSessionHostProvider` is a plain (non-autoDispose) Provider
-  // watching TWO autoDispose links in sequence —
-  // `practiceActiveSessionInputsProvider`, then (once THAT is non-null)
-  // `practiceSessionControllerProvider(inputs)` — but only as far as it has
-  // actually rebuilt. Neither the Setup screen's Start handler nor the
-  // prepare sink ever reads it (both use `ref.read`, which does not keep an
-  // autoDispose provider alive), and nothing in `lib/**` navigates to the
-  // session route automatically, so with zero listeners either link can be
-  // torn back down before anything ever observes it. `container.read`
-  // BEFORE the tap protects the first link (the same pre-read
-  // `practice_production_wiring_test.dart` performs before dispatching
-  // `PreparePractice`); a second `container.read` immediately AFTER the tap
-  // — synchronously, before any `pump` — forces `practiceSessionHostProvider`
-  // to rebuild past the (now non-null) inputs and establish the second
-  // watch on the controller the prepare sink just activated, before an
-  // event-loop turn can dispose it unseen. Both together keep the SAME
-  // controller instance alive from activation through the test-driven
-  // navigation to `/practice/session` below.
-  session.container.read(practiceSessionHostProvider);
+  // The Setup screen's own Start handler both activates the session and
+  // navigates to `/practice/session` (ADR 0470) — the harness drives the
+  // tap and lets the product's own hand-off land the flow on the Session
+  // screen, no test-side navigation or provider-lifetime priming needed.
   await tester.tap(setupStart);
-  session.container.read(practiceSessionHostProvider);
-  await tester.pump();
-  await tester.pumpAndSettle();
-
-  session.router.go(AppRoutes.practiceSession);
-  await tester.pumpAndSettle();
-  // The Setup screen's "command sent" SnackBar is shown through the app's
-  // root `ScaffoldMessenger`, which survives the route change and can sit
-  // on top of the Session screen's controls until its own (real,
-  // FakeAsync-driven) auto-dismiss timer elapses — pump it forward
-  // deterministically rather than risk a tap landing on the SnackBar.
-  await tester.pump(const Duration(seconds: 5));
   await tester.pumpAndSettle();
 
   // PracticeControls lives in the Stage scaffold's fixed `bottomAction`

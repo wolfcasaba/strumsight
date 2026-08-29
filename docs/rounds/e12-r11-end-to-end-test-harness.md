@@ -266,6 +266,52 @@ tools/round-gate.sh test/e2e/
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+## 10.0 Javító kör (§0.0 kötött feladat) — a három áthidalás eltávolítása, 2026-08-29
+
+A `main`-en landolt H2-heal (ADR 0470, PR #499) után a `runFirstPracticeSession`
+(`test/support/e2e_harness.dart`) három áthidalását távolítottam el:
+
+1. A két `session.container.read(practiceSessionHostProvider);` hívást (a
+   Setup-tap előtt és után) és a hozzájuk tartozó, már nem igaz magyarázó
+   kommentblokkot — a `_startAndOpenSession` (`practice_setup_screen.dart:191`)
+   maga végzi el ugyanezt a két `ref.read`-et a termékben (ADR 0470 D3), a
+   harnessnek erre már nincs szüksége.
+2. A `session.router.go(AppRoutes.practiceSession);` hívást — a Setup Start-ja
+   `context.go(AppRoutes.practiceSession)`-nel maga navigál oda.
+3. A SnackBar-ra váró `await tester.pump(const Duration(seconds: 5));`
+   sort és a hozzá tartozó kommentet. **Mérve:** a folyam enélkül is
+   settle-öl — a Setup-tap utáni `await tester.tap(setupStart); await
+   tester.pumpAndSettle();` pár önmagában eljuttatja a folyamot a
+   `PracticeSessionScreen`-re (a SnackBar megszűnt a termékből, nincs mit
+   kivárni). Nem volt szükség semmilyen pótló, determinisztikus pumpra.
+4. A `session.router.go(AppRoutes.practiceHub);` (`:241`) **megmaradt** —
+   tudatos döntés: ez egy valódi belépési út (deep link a Hub-ra), nem a
+   hiányzó lánc-lépés pótlása, tehát nem tartozik az eltávolítandó
+   áthidalások közé.
+
+A törlés után `practiceSessionHostProvider` importja NEM vált feleslegessé —
+a `_driveSessionUntil` (`e2e_harness.dart`) továbbra is olvassa a folyam
+állapotának figyeléséhez.
+
+**A záró mérce (mindkét hívás, csonkítás nélkül):**
+
+- `tools/round-gate.sh test/e2e/first_practice_offline_test.dart
+  test/e2e/returning_user_restart_test.dart
+  test/app/offline_network_guard_test.dart` → **MINDEN GATE ZÖLD**.
+- `tools/round-gate.sh test/e2e/` (determinizmus-ismétlés, önálló hívás) →
+  **MINDEN GATE ZÖLD**, 8 cella.
+- `tools/round-gate.sh test/features/practice` (a H2-heal saját őrtesztjének
+  ellenőrzése a merge után) → **MINDEN GATE ZÖLD**, 959 teszt, benne
+  `practice_setup_navigation_test.dart` R1/R2.
+
+A STOP-protokollra nem volt szükség: az áthidalások eltávolítása után a
+folyam a valódi appon változatlanul végigment, tehát nem merült fel új,
+mért termékhiba.
+
+**Az alábbi, eredeti (H2 előtti) handoff-szöveg a történeti rekord — a benne
+leírt áthidalás-indoklás a fenti eltávolítással OKAFOGYOTTÁ vált, de a
+szöveget nem törlöm, mert az első futás mérési munkáját dokumentálja:**
+
 **Amit szállítottam** (a §4 engedélyezett listája szerint, mind ÚJ fájl):
 
 - `test/support/fake_clock.dart` — `HarnessClock`: a MEGLÉVŐ `FakePracticeSessionClock` + `FakePracticeTickSource` (test/support/, nem szerkesztve) egyetlen `tick(tester, duration)` hívásba zárva, hogy a szinkron clock és az aszinkron tick-forrás sose essen szét (L122).
@@ -277,7 +323,7 @@ tools/round-gate.sh test/e2e/
 
 **Mért, dokumentált eltérés a brief eredeti API-feltételezésétől:** a `TestDefaultBinaryMessenger` API-ja (`/home/ubuntu/flutter/packages/flutter_test/lib/src/test_default_binary_messenger.dart`) `setMockMessageHandler(String channel, …)`-t definiál — a `channel` paraméter NEM nullázható, tehát a `setMockMessageHandler(null, handler)` „minden csatornára" minta, amit a kutatásom kezdetben feltételezett, nem fordul. A tényleges, dokumentált catch-all mechanizmus a `TestDefaultBinaryMessenger.allMessagesHandler` mező (l. a fájl 138. sora: „Handler that intercepts and responds to outgoing messages, pretending to be the platform, for all channels."). A guard ezt használja — ADR 0472 D2 szövege ez alapján teljesül, csak a konkrét API más.
 
-**Mért, dokumentált tény a Practice V2 production wiringról (NEM `lib/**` hiba a mai scope-ban, hanem a harnessnek kellett kezelnie):** `practiceSessionHostProvider` (`lib/features/practice/presentation/practice_effect_listener.dart:99`) egy sima (nem autoDispose) `Provider`, ami `ref.watch`-ol egy autoDispose láncot (`practiceActiveSessionInputsProvider` → `practiceSessionControllerProvider(inputs)` család). A Setup képernyő Start-kezelője és a prepare sink (`practice_setup_controller.dart` `_activateSessionSink`) mindkettő `ref.read`-et használ, ami NEM tartja életben az autoDispose-t; és `grep -rn "AppRoutes.practiceSession\b" lib/` szerint SEHOL a `lib/**`-ben nincs automatikus navigáció a Setup-tól a Session útvonalig. Emiatt a `practiceSessionHostProvider`-t NEM figyelő teszt (vagy egy ma létező, valódi felhasználó) az aktivált munkamenetet elveszíti, mielőtt a Session képernyő megjelenne. A harness ezt a `container.read(practiceSessionHostProvider)` két, pontosan időzített hívásával hidalja át (`runFirstPracticeSession`, a Start-tap ELŐTT és UTÁN, pump nélkül közéjük) — ugyanaz a művelet, amit a `practice_production_wiring_test.dart` is végez a `PreparePractice` előtt/után, csak a Setup-képernyő tap-jéhez igazítva. Ez NEM „megkerülő" tesztátírás (L273): a UI-n keresztül halad (`tester.tap`/`pumpAndSettle`), a `container.read` pusztán a Riverpod-figyelőt regisztrálja, nem ad hozzá vagy hagy ki egy chain-lépést. Dokumentálva a §10-ben, hogy egy KÉSŐBBI kör (amely a Setup→Session navigációt production kódban megépíti) tudja, hogy ez a pontos race a mai állapot.
+**[TÖRTÉNETI, a §10.0 javító kör óta OKAFOGYOTT] Az akkor mért Practice V2 production-wiring hiány, és a harness akkori áthidalása:** `practiceSessionHostProvider` (`lib/features/practice/presentation/practice_effect_listener.dart:99`) egy sima (nem autoDispose) `Provider`, ami `ref.watch`-ol egy autoDispose láncot (`practiceActiveSessionInputsProvider` → `practiceSessionControllerProvider(inputs)` család). Az ELSŐ futáskor sem a Setup képernyő Start-kezelője, sem a prepare sink nem tartotta életben ezt a láncot (mindkettő `ref.read`-et használt), és SEHOL a `lib/**`-ben nem volt automatikus navigáció a Setup-tól a Session útvonalig — a harness ezért két, pontosan időzített `container.read(practiceSessionHostProvider)` hívással és egy test-oldali `router.go(AppRoutes.practiceSession)`-nel hidalta át a hiányt. A review ezt B1 BLOCKER-ként állította meg (`docs/reviews/e12-r11-review.md`), és az önjavító kör (ADR 0470, PR #499) a terméket javította ki: a Setup Start-kezelője (`practice_setup_screen.dart:191`, `_startAndOpenSession`) MOST maga végzi el ugyanezt a két `ref.read`-et, majd `context.go(AppRoutes.practiceSession)`-nel navigál. A §10.0 javító kör ezért a három áthidalást TÖRÖLTE a harnessből — a mai `runFirstPracticeSession` a UI-n keresztül halad, a termék saját hand-off-jára hagyatkozva, köztes artefaktum nélkül.
 
 **Két mért fagyás-csapda kezelése:**
 - L513/ADR 0472 D6: `E2eSession.dispose` sosem awaitol broadcast `StreamController.close()`-t — a saját fake engine-jeinket `unawaited(...)`-tel zárjuk, a `ProviderContainer.dispose()` maga szinkron, a `PracticeSessionController.dispose()` belső `await`-jei (amiket a `ref.onDispose` indít) leválasztva futnak.
