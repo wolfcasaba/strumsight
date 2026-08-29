@@ -129,7 +129,11 @@ def validate_record(record: object, where: str) -> dict:
     _require_non_empty_string(record, "metric", where)
     _require_non_empty_string(record, "unit", where)
     _require_non_empty_string(record, "timestamp", where)
-    _require_number(record, "value", where)
+    value = _require_number(record, "value", where)
+    if value <= 0:
+        raise RecordFormatError(
+            f"{where}: field 'value' must be a positive number, got {value!r}"
+        )
     _require_int(record, "sampleCount", where)
 
     return record
@@ -166,36 +170,60 @@ def classify(baseline_value: float, candidate_value: float, direction: str) -> t
     return "pass", delta
 
 
-def compare(baseline: list[dict], candidate: list[dict]) -> tuple:
-    """Compares every `measured` baseline metric against the candidate.
-
-    Returns (lines, exit_code). `unknown` (missing from the candidate) and
-    `fail` both force a non-zero exit; `warn` and `pass` do not (ADR 0474
-    D6: warn is a visible, non-blocking signal — fail is the gate).
+def _index_measured(records: list[dict], label: str) -> dict:
+    """Indexes `measured` records by `(metric, deviceId)` — comparing a
+    measurement across two different devices is meaningless (ADR 0474 D1/D2),
+    so the device id is as much a part of the identity as the metric name. A
+    second `measured` record for the same `(metric, deviceId)` pair on either
+    side is a malformed document, not an "last one wins" ambiguity: it could
+    silently shadow a real regression, so it fails closed instead.
     """
-    candidate_measured = {
-        record["metric"]: record
-        for record in candidate
-        if record["kind"] == "measured"
-    }
+    indexed: dict[tuple, dict] = {}
+    for record in records:
+        if record["kind"] != "measured":
+            continue
+        key = (record["metric"], record["deviceId"])
+        if key in indexed:
+            raise RecordFormatError(
+                f"{label}: duplicate measured record for metric "
+                f"{record['metric']!r} deviceId {record['deviceId']!r} — "
+                "each (metric, deviceId) pair must appear at most once"
+            )
+        indexed[key] = record
+    return indexed
+
+
+def compare(baseline: list[dict], candidate: list[dict]) -> tuple:
+    """Compares every `measured` baseline metric against the candidate
+    measured on the SAME device.
+
+    Returns (lines, exit_code). `unknown` (missing from the candidate for
+    that metric+device pair) and `fail` both force a non-zero exit; `warn`
+    and `pass` do not (ADR 0474 D6: warn is a visible, non-blocking signal —
+    fail is the gate).
+    """
+    baseline_measured = _index_measured(baseline, "baseline")
+    candidate_measured = _index_measured(candidate, "candidate")
 
     lines: list[str] = []
     blocking = False
 
-    for record in baseline:
-        if record["kind"] != "measured":
-            continue
-        metric = record["metric"]
-        match = candidate_measured.get(metric)
+    for (metric, device_id), record in baseline_measured.items():
+        match = candidate_measured.get((metric, device_id))
         if match is None:
-            lines.append(f"{metric}: status=unknown (missing from candidate)")
+            lines.append(
+                f"{metric}: status=unknown (missing from candidate for "
+                f"deviceId {device_id!r})"
+            )
             blocking = True
             continue
         status, delta = classify(record["value"], match["value"], record["direction"])
         lines.append(
             f"{metric}: status={status} delta={delta:.6f} "
             f"baseline={record['value']!r} candidate={match['value']!r} "
-            f"direction={record['direction']}"
+            f"direction={record['direction']} deviceId={device_id!r} "
+            f"baselineBuildSha={record['buildSha']!r} "
+            f"candidateBuildSha={match['buildSha']!r}"
         )
         if status == "fail":
             blocking = True
@@ -212,20 +240,22 @@ def main(argv: list[str]) -> int:
     try:
         baseline = load_records(args.baseline)
         candidate = load_records(args.candidate)
+        lines, exit_code = compare(baseline, candidate)
     except (RecordFormatError, OSError, json.JSONDecodeError) as error:
         print(f"compare_benchmarks: {error}", file=sys.stderr)
         return 2
 
-    lines, exit_code = compare(baseline, candidate)
     for line in lines:
         print(line)
 
-    measured_count = len(lines)
     warn_count = sum(1 for line in lines if "status=warn" in line)
     fail_count = sum(1 for line in lines if "status=fail" in line)
     unknown_count = sum(1 for line in lines if "status=unknown" in line)
+    # `unknown` means the metric could NOT be compared — it must not inflate
+    # the "compared" count just because it produced a line (F5).
+    compared_count = len(lines) - unknown_count
     print(
-        f"compare_benchmarks: {measured_count} measured metric(s) compared, "
+        f"compare_benchmarks: {compared_count} measured metric(s) compared, "
         f"{warn_count} warn, {fail_count} fail, {unknown_count} unknown"
     )
 

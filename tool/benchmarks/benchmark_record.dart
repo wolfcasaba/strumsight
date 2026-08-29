@@ -206,9 +206,14 @@ List<BenchmarkRecord> parseBenchmarkRecords(String jsonText) {
     );
   }
   return records
-      .map(
-        (Object? record) =>
-            BenchmarkRecord.fromJson(record! as Map<String, Object?>),
-      )
+      .map((Object? record) {
+        if (record is! Map<String, Object?>) {
+          throw BenchmarkRecordFormatException(
+            'each entry in the "records" array must be a JSON object, got '
+            '${record.runtimeType}',
+          );
+        }
+        return BenchmarkRecord.fromJson(record);
+      })
       .toList(growable: false);
 }

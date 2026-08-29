@@ -47,6 +47,20 @@ device-lab session — no physical-device benchmark exists on the tree yet.
 An unrecognised `deviceId` is a parse error in both `benchmark_record.dart`
 and `compare_benchmarks.py`, never a silently-accepted new value.
 
+`compare_benchmarks.py` keys its regression comparison on `(metric,
+deviceId)`, not on the metric name alone (E12-R14 fix round, F1/F2) — a
+measurement is only meaningful against another measurement taken on the
+*same* device. One consequence: the five `vision_*` `target` records in
+`baseline.json` all carry `deviceId: ci_host` because no physical-device FPS
+measurement exists yet (they are `target`, not `measured`, so they are never
+compared in the first place — ADR 0474 D3). If a future round adds a real
+`measured` FPS record from, say, `pixel_6a`, it will NOT pair with the
+`ci_host` targets even after that round promotes them: a `target`'s baseline
+entry would need its own `deviceId` update (or a device-specific target
+added) once a physical-device measurement exists. Do not invent a device
+name to make an old target line up — add the real measurement with its real
+`deviceId` instead, and update `baseline.json` accordingly in that round.
+
 ## `buildSha` provenance
 
 Each group's `buildSha` is the actual commit that added its source

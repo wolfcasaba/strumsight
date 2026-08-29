@@ -349,4 +349,96 @@ Csak a 6 `measured` metrika szerepel a kimenetben — a 20 nem-`measured` bejegy
 - A `baseline.json`-ba nem vettem fel MINDEN `docs/baseline/**` számot (16 dokumentum van a fán) — csak a §0.0 R2 által kifejezetten idézett, egyértelműen egy `kind`-osztályba sorolható értékeket vettem fel (26 bejegyzés, 4 forrás-dokumentumból + a vision-célok). A többi `docs/baseline/**` dokumentum feldolgozása (pl. epic-05 gólkapu-inference, epic-07/08/09 baseline-ok, ha vannak) külön kör terjeszkedése lehet — a séma és az összehasonlító ettől függetlenül teljes.
 - Nem adtam a `compare_benchmarks.py`-hoz `--warn-threshold`/`--fail-threshold` CLI-kapcsolót — az ADR 0474 D6 kifejezetten tiltja a futásidejű küszöb-felülírást.
 
+### Javító kör (1.) — a review leletlistájának lezárása
+
+**Review:** `docs/reviews/e12-r14-review.md` — CHANGES REQUESTED, 2 MAJOR (F1,
+F2), 2 MINOR (F3, F4), 2 NOTE (F5, F6).
+
+- **F1 — MAJOR (két különböző eszközön mért érték némán `pass`-t kap).**
+  `tool/compare_benchmarks.py`: `_index_measured()` (új helper) a `measured`
+  rekordokat `(metric, deviceId)` párra kulcsolja `compare()`-ben a puszta
+  `metric` helyett; a talált párnál a kimeneti sor mindkét oldal
+  `buildSha`-ját is nevezi (`baselineBuildSha=… candidateBuildSha=…`). Cella:
+  `F1` csoport, `benchmark_budget_test.dart` — (1) azonos metrika, eltérő
+  `deviceId`, azonos érték → nem `status=pass`, hanem `status=unknown`; (2)
+  azonos `deviceId`, eltérő `buildSha` → változatlanul `status=pass`, és a
+  kimenet mindkét `buildSha`-t nevezi.
+- **F2 — MAJOR (duplikált metrika elnyeli az elsőt).** Ugyanaz az
+  `_index_measured()` az F1 kulcs-váltással együtt zárja: egy második
+  `(metric, deviceId)` rekord bármelyik oldalon `RecordFormatError`-t emel
+  (exit 2), nincs "utolsó nyer". Cella: `F2` csoport — duplikátum a
+  jelölt-oldalon és a baseline-oldalon is, mindkettő nem-nulla kilépéssel és
+  `"duplicate"` szót tartalmazó stderr-rel.
+- **F3 — MINOR (nulla/negatív baseline → `ZeroDivisionError`).**
+  `validate_record()`-ban a `value` mező immár `<= 0` esetén
+  `RecordFormatError`-t dob (exit 2), mielőtt `classify()` osztóként
+  használná. Cella: `F3` csoport — `value: 0.0` és negatív `value`, mindkettő
+  exit 2, stderr `"value"`-t tartalmaz, nincs Python-traceback.
+- **F4 — MINOR (bizonyítatlan doc-comment).**
+  `tool/benchmarks/benchmark_record.dart`: `parseBenchmarkRecords()` explicit
+  `is! Map<String, Object?>` ellenőrzést kapott minden elemre, mielőtt
+  `BenchmarkRecord.fromJson`-nak adná — `null` vagy nem-map elem esetén
+  immár `BenchmarkRecordFormatException`-t dob, nem `TypeError`/`_CastError`-t
+  (a doc-comment állítása most már igaz). Cella: A1 csoport két új teszttel —
+  `records: [null]` és `records: [42]`.
+- **F5 — NOTE (az `unknown` is „compared"-ként számolódik).**
+  `main()`-ben `compared_count = len(lines) - unknown_count`; az összegző sor
+  immár csak a ténylegesen összehasonlított metrikákat számolja. Cella: `F5`
+  csoport — egy `pass` + egy `unknown` metrika → `"1 measured metric(s)
+  compared, 0 warn, 0 fail, 1 unknown"`, nem 2.
+- **F6 — NOTE (vision `target` rekordok `deviceId: ci_host`-tal).** Nem
+  módosult adat (F6 explicit tiltja a készülék-kitalálást); a `budgets.md`
+  "Device metadata" szakasza kiegészült egy bekezdéssel, amely leírja, hogy
+  az F1 utáni `(metric, deviceId)` kulcs miatt egy jövőbeli `pixel_6a`-n mért
+  FPS nem fog párt találni a `ci_host` targethez, és mi a teendő akkor
+  (valódi mérés + saját `deviceId` felvétele, nem kitalált eszköznév).
+
+**Gate — teljes, csonkítatlan futás a javítás után:**
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/benchmark_budget_test.dart               zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+`test test/tooling/benchmark_budget_test.dart` — `00:01 +42: All tests
+passed!` (33 → 42 teszt: 2 F4-cella az A1 csoportban + F1/F2/F3/F5 csoportok,
+9 új cella összesen).
+
+**§7 önösszehasonlítás, a javítás után:**
+
+```
+$ python3 tool/compare_benchmarks.py --baseline docs/performance/baseline.json --candidate docs/performance/baseline.json
+analysis_cache_miss_latency: status=pass delta=0.000000 baseline=30589 candidate=30589 direction=lowerIsBetter deviceId='ci_host' baselineBuildSha='d325d60' candidateBuildSha='d325d60'
+… (a többi 5 measured metrika ugyanígy, mindkét oldalon deviceId='ci_host')
+compare_benchmarks: 6 measured metric(s) compared, 0 warn, 0 fail, 0 unknown
+```
+
+**Valódi-sértés próba (§9, KÖTELEZŐ a javításra) — mért kimenet:**
+`_index_measured()`-t ideiglenesen visszaállítottam a metrika-név-alapú
+kulcsra (a `deviceId`-egyezés ellenőrzése nélkül, a review PROBE1b alakja
+szerint) → `flutter test test/tooling/benchmark_budget_test.dart
+--plain-name F1` **PIROS**, pontosan a két F1-cella bukott:
+
+```
+Expected: not contains 'm1: status=pass'
+  Actual: 'm1: status=pass delta=0.000000 baseline=30589 candidate=30589 direction=lowerIsBetter\n'
+            'compare_benchmarks: 1 measured metric(s) compared, 0 warn, 0 fail, 0 unknown\n'
+
+Expected: contains 'baselineBuildSha=\'aaa1111\''
+  Actual: 'm1: status=pass delta=0.000000 baseline=200.0 candidate=200.0 direction=lowerIsBetter\n'
+            'compare_benchmarks: 1 measured metric(s) compared, 0 warn, 0 fail, 0 unknown\n'
+```
+
+A `(metric, deviceId)` kulcs visszaállítva (`diff` a mentett fájllal:
+identikus) → `tools/round-gate.sh test/tooling/benchmark_budget_test.dart`
+újra teljesen ZÖLD (mind a 6 lépés, mind a 42 teszt).
+
 ## 11. Review — a Claude tölti ki

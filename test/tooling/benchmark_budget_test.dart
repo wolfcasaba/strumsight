@@ -130,6 +130,30 @@ void main() {
       );
     });
 
+    test('a null element in "records" is a parse failure, not a null-check '
+        'crash (F4)', () {
+      expect(
+        () => parseBenchmarkRecords(
+          jsonEncode(<String, Object?>{
+            'records': [null],
+          }),
+        ),
+        throwsA(isA<BenchmarkRecordFormatException>()),
+      );
+    });
+
+    test('a non-map element (e.g. a number) in "records" is a parse '
+        'failure, not a cast crash (F4)', () {
+      expect(
+        () => parseBenchmarkRecords(
+          jsonEncode(<String, Object?>{
+            'records': [42],
+          }),
+        ),
+        throwsA(isA<BenchmarkRecordFormatException>()),
+      );
+    });
+
     test('parseBenchmarkRecords parses a full document of one record', () {
       final records = parseBenchmarkRecords(
         jsonEncode(<String, Object?>{
@@ -301,6 +325,147 @@ void main() {
         expect(
           result.stdout.toString(),
           contains('analysis_cache_miss_latency: status=unknown'),
+        );
+      });
+    });
+
+    group('F1 — the comparison key is (metric, deviceId), not metric alone '
+        '— comparing across two different devices is meaningless (review '
+        'e12-r14, round 1)', () {
+      test('a candidate measured on a DIFFERENT device than the baseline, '
+          'even with the exact same value, is never reported "pass" — it '
+          'must surface as unknown for that device instead', () {
+        final baseline = writeDocument('baseline', [
+          record(metric: 'm1', value: 30589, deviceId: 'pixel_6a'),
+        ]);
+        final candidate = writeDocument('candidate', [
+          record(metric: 'm1', value: 30589, deviceId: 'xiaomi_redmi_note_12'),
+        ]);
+
+        final result = runCompare(baseline, candidate);
+        expect(result.stdout.toString(), isNot(contains('m1: status=pass')));
+        expect(
+          result.stdout.toString(),
+          contains('m1: status=unknown (missing from candidate'),
+        );
+        expect(result.exitCode, isNot(0));
+      });
+
+      test('the SAME deviceId on both sides still compares normally even '
+          'when the buildSha differs, and the report names both build '
+          'shas', () {
+        final baseline = writeDocument('baseline', [
+          record(
+            metric: 'm1',
+            value: 200.0,
+            deviceId: 'pixel_6a',
+            buildSha: 'aaa1111',
+          ),
+        ]);
+        final candidate = writeDocument('candidate', [
+          record(
+            metric: 'm1',
+            value: 200.0,
+            deviceId: 'pixel_6a',
+            buildSha: 'bbb2222',
+          ),
+        ]);
+
+        final result = runCompare(baseline, candidate);
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+        expect(result.stdout.toString(), contains('m1: status=pass'));
+        expect(
+          result.stdout.toString(),
+          contains("baselineBuildSha='aaa1111'"),
+        );
+        expect(
+          result.stdout.toString(),
+          contains("candidateBuildSha='bbb2222'"),
+        );
+      });
+    });
+
+    group('F2 — a duplicated (metric, deviceId) pair is a record-format '
+        'error, never a silent "last one wins" that can shadow a real '
+        'regression (review e12-r14, round 1)', () {
+      test('two candidate records for the same metric+device fail closed', () {
+        final baseline = writeDocument('baseline', [
+          record(metric: 'm1', value: 30589),
+        ]);
+        final candidate = writeDocument('candidate', [
+          record(metric: 'm1', value: 61178), // 100% regression, hidden if
+          record(metric: 'm1', value: 30589), // this second record wins.
+        ]);
+
+        final result = runCompare(baseline, candidate);
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr.toString(), contains('duplicate'));
+      });
+
+      test('two baseline records for the same metric+device fail closed', () {
+        final baseline = writeDocument('baseline', [
+          record(metric: 'm1', value: 30589),
+          record(metric: 'm1', value: 1),
+        ]);
+        final candidate = writeDocument('candidate', [
+          record(metric: 'm1', value: 30589),
+        ]);
+
+        final result = runCompare(baseline, candidate);
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr.toString(), contains('duplicate'));
+      });
+    });
+
+    group('F3 — a non-positive "value" is a record-format error, never a '
+        'ZeroDivisionError traceback (review e12-r14, round 1)', () {
+      test('a baseline value of 0.0 fails closed with exit 2', () {
+        final baseline = writeDocument('baseline', [
+          record(metric: 'm1', value: 0.0),
+        ]);
+        final candidate = writeDocument('candidate', [
+          record(metric: 'm1', value: 1),
+        ]);
+
+        final result = runCompare(baseline, candidate);
+        expect(result.exitCode, 2);
+        expect(result.stderr.toString(), contains('value'));
+      });
+
+      test('a negative baseline value fails closed with exit 2', () {
+        final baseline = writeDocument('baseline', [
+          record(metric: 'm1', value: -5),
+        ]);
+        final candidate = writeDocument('candidate', [
+          record(metric: 'm1', value: 1),
+        ]);
+
+        final result = runCompare(baseline, candidate);
+        expect(result.exitCode, 2);
+        expect(result.stderr.toString(), contains('value'));
+      });
+    });
+
+    group('F5 — the summary "compared" count excludes unknown metrics, '
+        'since an unknown metric is exactly the one that could NOT be '
+        'compared (review e12-r14, round 1)', () {
+      test('one pass and one unknown metric report "1 measured metric(s) '
+          'compared", not 2', () {
+        final baseline = writeDocument('baseline', [
+          record(metric: 'm1', value: 100),
+          record(metric: 'm2', value: 100),
+        ]);
+        final candidate = writeDocument('candidate', [
+          record(metric: 'm1', value: 100),
+        ]);
+
+        final result = runCompare(baseline, candidate);
+        expect(
+          result.stdout.toString(),
+          contains(
+            'compare_benchmarks: 1 measured metric(s) compared, '
+            '0 warn, 0 fail, 1 unknown',
+          ),
         );
       });
     });
