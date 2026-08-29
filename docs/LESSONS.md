@@ -21949,3 +21949,69 @@ Mérési szabály: a consent-kapcsolótól a kényszerítési pontig
 `grep`-eld végig, ki olvassa — ha az útvonalon van konstans, a lánc szakadt.
 
 **Őrteszt:** `test/privacy/consent_enforcement_test.dart` (MAJOR-3 guard cell)
+
+## L558 — A `flutter_test` alapértelmezett 800×600-as viewportja szélesebb ÉS magasabb minden telefonnál: a rajta mért „nincs túlcsordulás" cella akár ÜRES fát is mérhet, mert a lusta `ListView` a viewport alá eső gyermeket fel sem építi (E15-R06, 2026-08-29)
+
+**Mit mértünk.** Az E15-R06 három képernyőt migrált a design-rendszerre, és a
+saját A3-cellái (`textScaler 1.5/2.0/2.5` × `en`/`hu`) **mind zöldek** voltak. A
+review eldobható próbája ugyanezt a kódot telefon-méretű viewporton
+(`tester.view.physicalSize = Size(360, 640)`, `devicePixelRatio = 1.0`) mérte
+újra:
+
+```
+HEAD:        PROBE detail-empty 2.0 hu -> 1  A RenderFlex overflowed by 72 pixels on the bottom.
+origin/main: PROBE detail-empty 2.0 hu -> 0
+```
+
+A `2.5` skálán `en` 315 px / `hu` 365 px. A kör KÖTELEZŐ `2.0` küszöbe tehát
+ténylegesen NEM teljesült, miközben minden cella zöld volt.
+
+**A második, alattomosabb fele ugyanannak.** A 800×600 nem csak szélesebb,
+hanem MAGASABB is: a populated dashboard `ListView`-ja `2.0`/`2.5` skálán a
+`WeeklyBars`-t (és a mögötte lévő négy szekciót) **fel sem építette**, mert a
+lusta `ListView` a viewport alá eső gyermekeket nem rendereli. A cellák
+üres fát mértek, és a handoff „a `2.0` és a `2.5` mindkét állapotban zöld"
+mondata **mérési artefaktum** volt, nem tény. A helyes mércén (telefon-viewport
++ `scrollUntilVisible(find.byType(WeeklyBars), …)` a `takeException()` ELŐTT)
+mindhárom skála túlcsordul: `1.5 → 7 px`, `2.0 → 22 px`, `2.5 → 73 px` — és
+MÉRTEN ugyanannyival az `origin/main` kódjával is, tehát az PRE-EXISTING hiba
+(`weekly_bars.dart:32`), nem a migráció regressziója. A két állítás
+szétválasztása csak a helyes viewporton lehetséges.
+
+**A minta.** Egy elrendezési (`RenderFlex overflow`) állítás nem a kódról szól
+önmagában, hanem a kód ÉS a viewport párosáról. Az alapértelmezett teszt-viewport
+a legmegengedőbb környezet, amit a termék soha nem lát. Két gépi következmény:
+(1) minden layout-cella PINNELJE a viewportot (`physicalSize` +
+`devicePixelRatio` + `addTearDown(tester.view.reset)`), különben nem a terméket
+méri; (2) lusta scroll-konténer mögötti widgetről szóló állítás előtt GÖRGETNI
+kell a célwidgetig, különben a cella a nemlétezését igazolja. A „green cell"
+akkor bizonyíték, ha előbb megmutattuk, hogy a mért fa tartalmazza a vizsgált
+widgetet (`barsBefore=false → barsAfter=true`).
+
+**Őrteszt:** `test/features/songs/setlist_flow_test.dart` és
+`test/features/progress/progress_screen_test.dart` A3 cellái (kipinnelt
+360×640 viewport, `addTearDown(tester.view.reset)`, `scrollUntilVisible` a
+populated cellákban)
+
+## L559 — Egy MINTA-szintű elrendezési regressziót minta-szinten kell lezárni: a védelmet EGY példányra feltéve a testvér-példány védtelen marad, és a handoff „2 valódi túlcsordulás javítva" mondata 2/3-ot takar (E15-R06, 2026-08-29)
+
+**Mit mértünk.** Az E15-R06 migrációja során az `SsEmptyState` négy elemet rajzol
+(ikon + cím + üzenet + gomb) a lecserélt kettő helyett — ez egy MINTA-szintű
+magasság-növekedés, ami minden üres állapotot érint, ahová a komponens bekerül. A
+kör ezt maga is felismerte és javította `_ScrollableIfShort`-tal… de csak a
+`setlist_list_screen.dart:44` példányon. A `setlist_detail_screen.dart:116`
+ugyanabban a diffben, ugyanazzal a cserével, védelem NÉLKÜL maradt — a review
+telefon-viewportos próbája ezen mérte a 72 px-es BLOCKER-t
+([L558](#l558)). A §10 „2 valódi túlcsordulás javítva" állítása tehát 2/3 volt.
+
+**A minta.** Ha egy migráció során a javítás oka a KOMPONENS viselkedése (nem az
+adott képernyő egyedi sajátossága), akkor a javítás hatóköre is a komponens
+összes behívási helye. Mérési szabály a handoffhoz és a review-hoz: `grep`-eld
+ki a diffben az újonnan bevezetett komponenst, számold meg a példányokat, és
+mutasd meg, hogy a védelem MINDEGYIKEN rajta van — a „javítottam, ahol láttam"
+állítás önmagában nem lezárás. Ugyanez a review oldaláról: a lelet nem az
+egyetlen mért példány, hanem a példány-OSZTÁLY.
+
+**Őrteszt:** `test/features/songs/setlist_flow_test.dart` — a lista- ÉS a
+detail-képernyő üres állapota egyaránt kap `2.0`/`2.5` × `en`/`hu` cellát
+(8/8 kombináció 0 hiba; a pre-fix fájl visszaállítása pontosan ezeket pirosítja)
