@@ -265,4 +265,88 @@ python3 tool/compare_benchmarks.py --baseline docs/performance/baseline.json --c
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`). **Ág:** `sonnet-impl/e12-r14-performance-budget-harness`.
+
+### Fájlonként
+
+- `tool/benchmarks/benchmark_record.dart` — a rekord-séma egyetlen forrása. `BenchmarkRecord` + `parseBenchmarkRecords`, csak `dart:convert`/`dart:core`. Minden kötelező mező (`schemaVersion`, `metric`, `value`, `unit`, `sampleCount`, `kind`, `direction`, `source`, `buildSha`, `deviceId`, `timestamp`) hiánya vagy érvénytelen értéke `BenchmarkRecordFormatException`-t dob — nincs alapérték egyikre sem. A `kind` négy értéke, a `direction` két értéke és a zárt `deviceId`-szótár (négy eszköz + `ci_host`) konstansként exportálva.
+- `tool/compare_benchmarks.py` — a `benchmark_record.dart`-tól független, saját JSON-validáció (ADR 0474 D1 minden mezőre), csak `measured` ↔ `measured` metrikát hasonlít össze, a küszöb (5,0 % warn / 10,0 % fail, mindkettő INKLUZÍV `>=`) a fájlban rögzített konstans, nem CLI-paraméter. Hiányzó jelölt-metrika → `status=unknown` sor és nem-nulla kilépés. `argparse --baseline/--candidate`, mindkettő ugyanaz a `{"records": [...]}` alak.
+- `docs/performance/baseline.json` — 26 bejegyzés a MÉRT dokumentumokból átemelve, forrás-hivatkozással és a valódi commit-SHA-val (`git log --follow --diff-filter=A`), nem kitalált buildSha-val. Osztályonkénti darabszám és forrás lent.
+- `docs/performance/budgets.md` — a séma, a négy `kind`-osztály, a `deviceId`-szótár, a `buildSha`-eredet és a tükrözött küszöb-cellahármas leírása, `compare_benchmarks.py` használati példával.
+- `test/tooling/benchmark_budget_test.dart` — 33 teszt, `device_matrix_test.dart` (E12-R13) mintáját követve: A1 (séma, Dart-oldali direkt import), A4 (a valódi `baseline.json` parse + forrás-létezés + kind-osztályok), majd `python3 tool/compare_benchmarks.py` fixture-alapú csoportok A2/A3/A5/A7/A8/A6, és A9 (külső-bináris önvédő cella + `python3 --version` self-check), `device_matrix_test.dart` A8-csoportjával azonos `_processCallExecutable` regex-mintával.
+
+### `baseline.json` bejegyzések osztályonként
+
+| `kind` | Darab | Forrás |
+|---|---:|---|
+| `measured` | 6 | `docs/baseline/epic-06-analysis-performance.md:10-14` (2026-08-13, `buildSha=d325d60`, E06-R28 #255) |
+| `upperBound` | 6 | `docs/baseline/epic-04-performance.md:27-37` (2026-08-06, `buildSha=0cf6323`, E04-R24 #160) |
+| `derivedContract` | 9 | `docs/baseline/epic-03-backing-drift-benchmark.md:16-28` (4 bejegyzés, `buildSha=27d45d6`, E03-R18 #119) + `docs/baseline/epic-03-pitch-observation-benchmark.md:11-19` (5 bejegyzés, `buildSha=4014f73`, E03-R20 #121) |
+| `target` | 5 | `docs/manual-testing/vision-performance-benchmark.md:37-41` (2026-08-06, `buildSha=cef864c`, E05-R01 #162), mind `sampleCount: 0` — nincs mögöttük valódi mérés |
+
+Minden bejegyzés `deviceId: "ci_host"` — a fán ma egyetlen fizikai eszközös benchmark sincs, ezt a `budgets.md` "Device metadata" szakasza explicit kimondja.
+
+### Gate — teljes, csonkítatlan futás
+
+```
+tools/round-gate.sh test/tooling/benchmark_budget_test.dart
+```
+
+Lépések: `format` ZÖLD → `analyze` ZÖLD (`No issues found!`) → `test test/tooling/benchmark_budget_test.dart` ZÖLD (`00:00 +33: All tests passed!`) → `architecture` ZÖLD (`12 allowlisted deviation(s)`, változatlan) → `secrets` ZÖLD (`4045 file(s) scanned, 0 finding(s)`) → `l10n` ZÖLD. Záró összegzés:
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/benchmark_budget_test.dart               zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+### `compare_benchmarks.py` közvetlen futtatása (§7 parancs)
+
+```
+$ python3 tool/compare_benchmarks.py --baseline docs/performance/baseline.json --candidate docs/performance/baseline.json
+analysis_cache_miss_latency: status=pass delta=0.000000 baseline=30589 candidate=30589 direction=lowerIsBetter
+analysis_cache_hit_latency: status=pass delta=0.000000 baseline=5317 candidate=5317 direction=lowerIsBetter
+analysis_model_read_and_parse_latency: status=pass delta=0.000000 baseline=43578 candidate=43578 direction=lowerIsBetter
+analysis_fixture_silence_2s_latency: status=pass delta=0.000000 baseline=190721 candidate=190721 direction=lowerIsBetter
+analysis_fixture_strums_120_bpm_latency: status=pass delta=0.000000 baseline=496777 candidate=496777 direction=lowerIsBetter
+analysis_fixture_progression_c_g_am_f_latency: status=pass delta=0.000000 baseline=308328 candidate=308328 direction=lowerIsBetter
+compare_benchmarks: 6 measured metric(s) compared, 0 warn, 0 fail, 0 unknown
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+Csak a 6 `measured` metrika szerepel a kimenetben — a 20 nem-`measured` bejegyzés (A8 szerint helyesen) nem kerül összehasonlításra.
+
+### Valódi-sértés próba (§7, KÖTELEZŐ) — mért kimenet
+
+**1. próba — a hiányzó-metrika ág kivétele `compare_benchmarks.py`-ból** (`if match is None: continue` a `status=unknown` ág és a `blocking = True` helyett):
+
+- `tools/round-gate.sh test/tooling/benchmark_budget_test.dart` → PIROS, kilépési kód 10, **pontosan és kizárólag** az A3-teszt bukott (`Expected: not <0>` / `Actual: <0>` — a hiányzó metrika miatt a kilépés csendben 0 maradt). A többi 32 teszt (A1, A4, A2, A5, A7, A8, A6, A9) változatlanul ZÖLD maradt.
+- Az ág visszaállítva → `tools/round-gate.sh test/tooling/benchmark_budget_test.dart` újra teljesen ZÖLD (mind a 6 lépés, mind a 33 teszt).
+
+**2. próba — `>=` → `>` csere a `classify()` küszöb-összehasonlításában** (mindkét, `FAIL_THRESHOLD` és `WARN_THRESHOLD` elleni cellában):
+
+- `tools/round-gate.sh test/tooling/benchmark_budget_test.dart` → PIROS, kilépési kód 10, **négy** teszt bukott — pontosan a §6.1 mérce-mátrix második sora szerint várt "pontosan rajta" cellák mindkét irányban:
+  - A5 „5,0% regression (210.0) … is warn — not pass” — `Expected: contains 'm1: status=warn'`, ténylegesen `status=pass` jött (a 210.0-nál pontosan 5,0%-os romlás a szigorú `>`-vel PASS-ra esett vissza).
+  - A5 „10,0% regression (220.0) … is fail” — `Expected: not <0>`, ténylegesen exit code 0 (a FAIL-cella WARN-ra esett vissza, ami nem blokkol).
+  - A7 „5,0% regression (28.5) … is warn” — ugyanez tükrözve `higherIsBetter`-en (`status=pass` jött `status=warn` helyett).
+  - A7 „10,0% regression (27.0) … is fail” — ugyanez tükrözve (`status=warn` jött, exit code 0).
+  - A1, A4, A2, A3, a két A7 "pass"-cella, A8, A6, A9 változatlanul ZÖLD maradt.
+- A `>=` visszaállítva → `tools/round-gate.sh test/tooling/benchmark_budget_test.dart` újra teljesen ZÖLD (mind a 6 lépés, mind a 33 teszt).
+
+### Amit NEM tettem meg, és miért
+
+- Nem hoztam létre `.github/workflows/benchmark.yml`-t — tiltott zóna (`.github/**`), a CI-integráció külön kör dolga (ADR 0474 „Következmények").
+- Nem írtam át a `tool/benchmarks/` meglévő két eszközét — tiltott zóna; a séma-adaptálásuk külön kör.
+- Nem módosítottam semmilyen DSP/ML paramétert, küszöböt vagy modellt (AGENTS.md §9) — `git diff --stat` az öt engedélyezett fájlon kívül semmit nem érint (`lib/`, `ml/` üres diff).
+- A `baseline.json`-ba nem vettem fel MINDEN `docs/baseline/**` számot (16 dokumentum van a fán) — csak a §0.0 R2 által kifejezetten idézett, egyértelműen egy `kind`-osztályba sorolható értékeket vettem fel (26 bejegyzés, 4 forrás-dokumentumból + a vision-célok). A többi `docs/baseline/**` dokumentum feldolgozása (pl. epic-05 gólkapu-inference, epic-07/08/09 baseline-ok, ha vannak) külön kör terjeszkedése lehet — a séma és az összehasonlító ettől függetlenül teljes.
+- Nem adtam a `compare_benchmarks.py`-hoz `--warn-threshold`/`--fail-threshold` CLI-kapcsolót — az ADR 0474 D6 kifejezetten tiltja a futásidejű küszöb-felülírást.
+
 ## 11. Review — a Claude tölti ki
