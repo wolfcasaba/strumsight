@@ -118,7 +118,7 @@ forrással való egyezést.
 |---|---|---|
 | A1 | ✅ | fa-bejárás + `hasLength(48)` a valódi gyökéren; „fixture nincs a manifestben" és „bejegyzés nincs a lemezen" cellák |
 | A2 | ✅ | valódi-sértés próba (F4) + „size-only egyezés is piros" mátrix-cella |
-| A3 | ⚠️ **F1** | üres/hiányzó mező ✅, de az „unknown" placeholder ÁTMEGY, és a cella ezt zöldként rögzíti |
+| A3 | ⚠️ **F1** → ✅ a javító kör után (§5) | üres/hiányzó mező ✅; az „unknown" placeholder eredetileg ÁTMENT (F1), a `fa42dcb0` óta gépileg tiltott |
 | A4 | ✅ | `test/ui/goldens/**` bejegyzés elutasítva + valódi manifest cellája |
 | A5 | ✅ | `containsUserData` kötelező bool; `true` → hiba; a valódi 48 bejegyzés mind `false` |
 | A6 | ✅ | a gate futtatta, a fájl érintetlen (F3) |
@@ -129,9 +129,42 @@ forrással való egyezést.
 
 **CHANGES REQUESTED** — 1 MAJOR (F1). A javító kör az engedélyezett fájlokon
 belül elvégezhető; a többi lelet NOTE, javítást nem igényel.
+*(Az F1 a `fa42dcb0` javító körrel lezárva — a végső döntés a §6.)*
 
 ---
 
-## 5. Javító kör utáni újra-ellenőrzés
+## 5. Javító kör utáni újra-ellenőrzés (2026-08-29, `fa42dcb0`)
 
-*(a javító kör után töltendő)*
+**F1 — ZÁRVA.** Leletenként ellenőrizve a `101fb586..fa42dcb0` diffen
+(`scope_audit=ok`, 4 változott fájl, mind az engedélyezett listán;
+`tool/ci/**` és a `test/fixtures/**` adatfájlok érintetlenek):
+
+1. `tool/check_fixture_manifest.dart` — új **exportált**
+   `const placeholderProvenanceValues = {unknown, unspecified, n/a, na, tbd,
+   todo, none, -, ?, fixme}` és új
+   `FixtureManifestIssueKind.placeholderProvenance`. A `license` ÉS a `source`
+   mező normalizált (`trim().toLowerCase()`) alakja is ellenőrzött; találat →
+   `isClean == false`, a hibaüzenet az EREDETI (nem normalizált) értéket idézi.
+2. `test/tooling/fixture_manifest_test.dart:211+` — a kifogásolt cella
+   **megfordítva**: `license: 'unknown'` → `expect(report.isClean, isFalse)` +
+   a `placeholderProvenance` kind ellenőrzése. A rést szándékként rögzítő
+   kommentblokk törölve.
+3. Új cellák: `source: 'n/a'`, valamint a teljes exportált lista végigjárása
+   eredeti ÉS nagybetűs kezdetű alakban (`_shout`) — tehát a lista bővítése
+   automatikusan mércét is kap, nem marad „egy elemre mért" őr.
+4. `docs/testing/release-fixture-corpus.md` — a mezőleírás kimondja a gépi
+   tiltást és azt, hogy ismeretlen licenc esetén a helyes kimenet a `stopped`
+   jelzés.
+
+A valódi korpusz a szigorítás után is tiszta: `dart run
+tool/check_fixture_manifest.dart` → `Fixture manifest OK (48 fixture(s)).`, és
+a `tools/round-gate.sh test/tooling/fixture_manifest_test.dart
+test/tooling/check_assets_test.dart` mind a hét lépése zöld (format, analyze,
+mindkét teszt külön, architecture, secrets, l10n).
+
+**Nincs nyitott BLOCKER/MAJOR/MINOR.**
+
+## 6. VÉGSŐ DÖNTÉS: APPROVED
+
+A merge feltétele változatlanul a teljes CI-kapu (Full Gate + Router CI)
+`success` a merge SHA-n.
