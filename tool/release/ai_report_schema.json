@@ -4,7 +4,7 @@
   "title": "StrumSight AI/ML release evidence report",
   "description": "Output document of tool/release/build_ai_report.py (E12-R16, ADR 0477). One document per --profile run: aggregates every capability the evidence matrix (docs/release/ai-quality-gates.md) declares, resolved against the GA-scope truth in docs/testing/device-matrix.yaml. This file documents the contract; build_ai_report.py enforces it directly rather than depending on a third-party JSON-Schema validator (no such package is guaranteed on the CI runner image, the same reasoning tool/release/generate_sbom.py's module docstring gives).",
   "type": "object",
-  "required": ["schemaVersion", "profile", "capabilities", "findings"],
+  "required": ["schemaVersion", "profile", "capabilities", "findings", "thresholds"],
   "additionalProperties": false,
   "properties": {
     "schemaVersion": {
@@ -15,6 +15,16 @@
       "type": "string",
       "enum": ["development", "lab", "production"],
       "description": "Provenance only (ADR 0477 D6) — records which closed-dictionary channel produced this report. Never loosens or tightens a check."
+    },
+    "thresholds": {
+      "type": "object",
+      "required": ["warn", "fail"],
+      "additionalProperties": false,
+      "description": "The WARN_THRESHOLD/FAIL_THRESHOLD values tool/compare_benchmarks.py's classify() classified every metric's status against (ADR 0477 D4) — echoed here, not redeclared, so a saved report documents which threshold produced it.",
+      "properties": {
+        "warn": { "type": "number", "description": "tool/compare_benchmarks.py WARN_THRESHOLD at the time of this run." },
+        "fail": { "type": "number", "description": "tool/compare_benchmarks.py FAIL_THRESHOLD at the time of this run." }
+      }
     },
     "findings": {
       "type": "array",

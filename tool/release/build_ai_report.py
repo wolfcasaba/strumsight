@@ -33,7 +33,9 @@ Regression classification imports `classify`, `WARN_THRESHOLD` and
 `FAIL_THRESHOLD` from `tool/compare_benchmarks.py` (ADR 0474, re-used per
 ADR 0477 D4) rather than redefining a threshold here — a second,
 independently-tuned threshold is exactly the drift ADR 0474 D6 already
-forbids.
+forbids. The two imported threshold values are echoed into the report's
+top-level `thresholds` field so a saved report documents which threshold
+classified it, without the source re-declaring them as literals.
 
 Exit codes (mirrors `tool/compare_benchmarks.py`):
   0  no ga_scope:true capability is missing evidence, mismatched against
@@ -359,6 +361,7 @@ def build_report(
         "profile": profile,
         "capabilities": capabilities,
         "findings": findings,
+        "thresholds": {"warn": WARN_THRESHOLD, "fail": FAIL_THRESHOLD},
     }
     return report, findings
 
