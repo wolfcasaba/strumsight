@@ -3,7 +3,12 @@
 // textScaler 2.0 — the two frames the round brief §7/A9 requires. Pattern
 // and sizing follow the merged
 // `test/ui/goldens/e13_r19_screens_golden_test.dart` precedent: `AppTheme`
-// (the app's actual runtime theme), not `SsDarkTheme`.
+// (the app's actual runtime theme). §0.0/E15-R04: `LessonListScreen` now
+// reads `Theme.of(context).extension<SsColorScheme/SsTypography>()!`
+// (migrated in this round) — `SsDarkTheme.data()` layers exactly those two
+// extensions on top of the SAME `AppTheme.dark()` base (colorScheme/
+// textTheme untouched), so the un-migrated chord screens render pixel-
+// identically while `LessonListScreen` stops null-check-crashing.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -11,7 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
-import 'package:strumsight/core/theme/app_theme.dart';
+import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/features/chords/widgets/chord_detail_view.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
@@ -53,7 +58,7 @@ Future<void> _pump(
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark(),
+        theme: SsDarkTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         builder: (context, child) => MediaQuery(

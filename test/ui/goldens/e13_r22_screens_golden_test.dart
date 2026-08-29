@@ -3,7 +3,13 @@
 // textScaler 2.0 — the two frames the round brief §7/A9 requires. Pattern
 // and sizing follow the merged
 // `test/ui/goldens/e13_r21_screens_golden_test.dart` precedent: `AppTheme`
-// (the app's actual runtime theme), not `SsDarkTheme`.
+// (the app's actual runtime theme). §0.0/E15-R04: all three screens here
+// (practice result/history, Speed Builder) now read
+// `Theme.of(context).extension<SsColorScheme/SsTypography>()!` (migrated in
+// this round) — `SsDarkTheme.data()` layers exactly those two extensions on
+// top of the SAME `AppTheme.dark()` base (colorScheme/textTheme untouched),
+// so this stops the null-check crash without changing rendered pixels for
+// anything that doesn't read the new extensions.
 //
 // Recorded on x86_64 (ADR 0426, §0.0/R9) via `tools/golden-x86.sh record`
 // — NOT `flutter test --update-goldens` on this (aarch64) box.
@@ -13,8 +19,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
-import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/practice/data/practice_history_serializer.dart';
 import 'package:strumsight/features/practice/domain/model/practice_attempt_result.dart';
 import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';
@@ -56,7 +62,7 @@ Future<void> _pump(
       overrides: overrides ?? preferenceOverrides(),
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark(),
+        theme: SsDarkTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         builder: (context, child) => MediaQuery(
