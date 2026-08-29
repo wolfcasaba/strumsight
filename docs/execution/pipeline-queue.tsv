@@ -506,7 +506,7 @@ E12-R09	docs/rounds/e12-r09-domain-event-catalog-and-schema-registry.md	sonnet-i
 E12-R10	docs/rounds/e12-r10-idempotent-dispatcher-and-outbox.md	sonnet-impl	0451	done
 E12-R11	docs/rounds/e12-r11-end-to-end-test-harness.md	sonnet-impl	0452	done
 E12-R12	docs/rounds/e12-r12-release-fixture-corpus-and-golden-data.md	sonnet-impl	0453	done
-E12-R13	docs/rounds/e12-r13-device-matrix-and-device-lab.md	sonnet-impl	nincs	pending
+E12-R13	docs/rounds/e12-r13-device-matrix-and-device-lab.md	sonnet-impl	nincs	done
 E12-R14	docs/rounds/e12-r14-performance-budget-harness.md	sonnet-impl	0454	pending
 E12-R15	docs/rounds/e12-r15-resource-coexistence-policy.md	sonnet-impl	0455	pending
 E12-R16	docs/rounds/e12-r16-ai-release-gate-aggregation.md	sonnet-impl	0456	pending

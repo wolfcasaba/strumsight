@@ -1,5 +1,57 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R13 KÉSZ — Device matrix és device lab nyilvántartás — PR [#503](https://github.com/wolfcasaba/strumsight/pull/503), squash `2de98844` (2026-08-29)
+
+A Ch12 **Kör 13** mércéje: a fán hat, egymástól független manuális eszköz-dokumentum
+élt, mind más formában, egyik sem géppel olvasható. Mostantól egyetlen
+nyilvántartás mondja meg, **melyik készülék blokkolja a release-t, és mit KELL
+rajta lemérni** — és ezt gépi kapu őrzi.
+
+**Amit a kör szállított** (`docs/manual-testing/**`, `lib/**`, `pubspec.yaml`,
+`.github/**`, `tools/**` végig érintetlen — tilos zóna):
+
+- `docs/testing/device-matrix.yaml` — **4 MÉRT eszköz** (Pixel 6a, Pixel 7,
+  Galaxy A54, Redmi Note 12), eszközönként 11 kötelező azonosító-mező, kettős
+  forrás-hivatkozással (`provenance` a kamera-specre, `spec_provenance` a
+  RAM/SoC-ra); **14 capability** (11 GA-scope az SDD Ch12 §5.1-ből + 3 preview a
+  §5.2-ből); **13 elemű kötelező tesztcsomag** eszközönként a §18.2-ből.
+- `docs/testing/device-lab.md` — a manuális kör menete, a szűkített YAML-nyelvtan
+  mint **szerkesztési szerződés**, a suite→dokumentum térkép, és amit a kör NEM
+  futtatott (egyetlen valós eszközös mérés sem — minden manuális sor `PENDING`).
+- `tool/device_report.py` — `--check` / `--report`; hiányzó **vagy kiüresített**
+  kötelező futásra nem-nulla kilépés (fail-closed).
+- `test/tooling/device_matrix_test.dart` — **121 cella**, `package:yaml` NÉLKÜL
+  (a csomag tranzitív, `pubspec.lock:1261`, a `pubspec.yaml` pedig tilos zóna),
+  saját szűkített olvasóval; a Python eszközt `Process.runSync('python3', …)`
+  méri ideiglenes fixture-mátrixokon, **skip-ág nélkül**.
+
+**A pre-flight hét avult brief-állítást javított** (§0.0 R1–R7): hat (nem négy)
+manuális dokumentum; a `VisionDeviceTier` enum tényleges helye
+(`lib/features/vision/data/landmarks/hand_landmark_provider.dart:125`, nem a
+`domain` réteg); `package:yaml` tranzitív → saját olvasó; az A4 gépi mércét kapott;
+a user készüléke a fában **nincs kitöltve** (`gov-05-shipping-device-run.md:120`
+üres), ezért a mátrix a MÉRT elsődleges teszteszközt (Pixel 6a) viszi; a GA-scope
+lista zárt listaként az SDD-ből; a `required_suite` szótára a §18.2-ből.
+
+**Nem mért adat nem került be:** a Galaxy S23 és a Pixel 4a szándékosan kimarad —
+`vision-performance-benchmark.md` csak négy eszközhöz mér RAM/SoC-ot, és egy
+hihető RAM-érték kitalálása pont a látszat-lefedettség kockázata.
+
+**1 javító kör.** A review egy MAJOR-t talált: a `required_suite` kiüresíthető volt
+egy `release_blocking: true` eszközön úgy, hogy a kapu **99/99 ZÖLD** maradt, és a
+`device_report.py --check` eredmény-fájl nélkül **0-val** lépett ki („every
+mandatory run is recorded") — a capability → blokkoló eszköz → kötelező mérés lánc
+harmadik szeme őrizetlen volt ([L548](docs/LESSONS.md#l548)). A javítás fail-closed
+`--check`-et, `required_suite`-teljességi cellákat és a `spec_provenance` mezőt
+hozta; review **APPROVED**, 0 nyitott lelet
+([`docs/reviews/e12-r13-review.md`](docs/reviews/e12-r13-review.md)).
+
+Exact-SHA evidencia a merge SHA-n (`6e9dfcc1`): Full Gate
+[33235460985](https://github.com/wolfcasaba/strumsight/actions/runs/33235460985)
+`success`, Router CI
+[33235461965](https://github.com/wolfcasaba/strumsight/actions/runs/33235461965)
+`success`.
+
 ## ✅ E12-R12 KÉSZ — Release fixture-korpusz és golden data — PR [#502](https://github.com/wolfcasaba/strumsight/pull/502), squash `ce14443d` (2026-08-29)
 
 A Ch12 **Kör 12** mércéje: a `test/fixtures/` fa **48 adat-fixture-je** mostantól
@@ -9349,38 +9401,43 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-29):** `main` @ `ce14443d` — E12-R12 Release
-fixture-korpusz és golden data, PR
-[#502](https://github.com/wolfcasaba/strumsight/pull/502), squash-merge.
+**Aktuális állapot (2026-08-29):** `main` @ `2de98844` — E12-R13 Device matrix és
+device lab nyilvántartás, PR
+[#503](https://github.com/wolfcasaba/strumsight/pull/503), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
 Opus 5, **1 javító kör** — a review 1 MAJOR-t talált TELJESEN ZÖLD gate mellett
-(az „unknown" licenc-placeholder átment a checkeren, és a teszt ezt zöldként
-rögzítette), a javító kör után APPROVED, 0 nyitott lelet
-([`docs/reviews/e12-r12-review.md`](docs/reviews/e12-r12-review.md)).
+(a `required_suite` kiüresíthető volt egy `release_blocking: true` eszközön:
+99/99 zöld, és a `device_report.py --check` eredmény-fájl nélkül exit 0), a
+javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r13-review.md`](docs/reviews/e12-r13-review.md)).
 `risk = "normal"`, a diff nem érint hálózatot/hitelesítést/felhasználói adatot
-(a manifest minden bejegyzése `containsUserData: false`), ezért külön
-`security-reviewer` nem futott. A kör ADR-t **írt**:
-[ADR 0473](docs/adr/0473-release-fixture-corpus-manifest.md) (D1–D8).
-Exact-SHA evidencia a merge SHA-n (`735fded0`): Full Gate
-[33232264253](https://github.com/wolfcasaba/strumsight/actions/runs/33232264253),
+(dokumentum + tooling-teszt + offline Python riport), ezért külön
+`security-reviewer` nem futott. A kör **nem írt ADR-t** — a tier-szerződést az
+[ADR 0196](docs/adr/0196-vision-device-tier-performance-and-thermal-contract.md),
+a `package:yaml`-mentes mércét az
+[ADR 0444](docs/adr/0444-delivery-workflow-and-repository-policy.md) D3/D6 és az
+[ADR 0447](docs/adr/0447-release-manifest-provenance-and-sbom.md) D5 már rögzíti.
+Exact-SHA evidencia a merge SHA-n (`6e9dfcc1`): Full Gate
+[33235460985](https://github.com/wolfcasaba/strumsight/actions/runs/33235460985),
 Router CI
-[33232260512](https://github.com/wolfcasaba/strumsight/actions/runs/33232260512)
+[33235461965](https://github.com/wolfcasaba/strumsight/actions/runs/33235461965)
 — mindkettő `success`.
 
 ## 5. Last completed round
 
-**E12-R12 — Release fixture-korpusz és golden data** (PR
-[#502](https://github.com/wolfcasaba/strumsight/pull/502), squash `ce14443d`).
-A `test/fixtures/` fa **48 adat-fixture-je** egyetlen, checksummal, licenccel és
-`containsUserData` jelöléssel ellátott `test/fixtures/manifest.json`-on át él; az
-ellenőrző (`tool/check_fixture_manifest.dart`) a **FÁT** járja be, nem a listát
-hiszi el, tehát egy új, listázatlan fixture nem maradhat láthatatlan. MÉRVE: 69
-fájl = 19 `.dart` + 2 `README.md` + **48 adat-fájl**; a védett
-`tool/ci/check_song_fixture_licenses.dart` eddig ebből csak 30-at fedett. A
-manifest a UI-goldeneket **kizárja** (ADR 0426 / L516: a raszterizációs drift
-architektúra-függő), és a `song_trainer` 30 fájljára kereszt-cella méri, hogy a
-két független checksum-forrás egyezik. **1 javító kör**, a MAJOR mérve zárva
-([L546](docs/LESSONS.md#l546)); review APPROVED.
+**E12-R13 — Device matrix és device lab nyilvántartás** (PR
+[#503](https://github.com/wolfcasaba/strumsight/pull/503), squash `2de98844`).
+A hat manuális eszköz-dokumentum FÖLÉ egyetlen géppel olvasható nyilvántartás
+került (`docs/testing/device-matrix.yaml`): **4 MÉRT eszköz**, eszközönként 11
+kötelező azonosító-mező kettős forrás-hivatkozással, **14 capability** (11
+GA-scope + 3 preview) és **13 elemű kötelező tesztcsomag**. A kapu 121 cellás,
+`package:yaml` nélküli szűkített olvasóval, és a Python riport-generátort
+`Process.runSync('python3', …)` méri skip-ág nélkül. **Nem mért adat nem került
+be:** a Galaxy S23 és a Pixel 4a indokoltan kimarad (nincs mért RAM/SoC), és a
+user készüléke a fában máig kitöltetlen — a mátrix a MÉRT elsődleges teszteszközt
+(Pixel 6a) viszi `release_blocking: true` értékkel. **1 javító kör**, a MAJOR
+mérve zárva ([L548](docs/LESSONS.md#l548)); review APPROVED. A kör NEM futtatott
+valós eszközös mérést — minden `docs/manual-testing/` sor változatlanul `PENDING`.
 
 ## 6. Exact next task
 
@@ -9392,15 +9449,22 @@ két független checksum-forrás egyezik. **1 javító kör**, a MAJOR mérve z�
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ▶️ **A KÖVETKEZŐ KÖR: `E12-R13`** (motor: `sonnet-impl`, brief:
-> `docs/rounds/e12-r13-device-matrix-and-device-lab.md`, ADR-oszlop: `nincs`).
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R12
-> zárása után): **272 `done`, 40 `hold`, 18 `prepared`, 34 `pending`**.
+> ▶️ **A KÖVETKEZŐ KÖR: `E12-R14`** (motor: `sonnet-impl`, brief:
+> `docs/rounds/e12-r14-performance-budget-harness.md`, ADR-oszlop: `0454`).
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R13
+> zárása után): **273 `done`, 40 `hold`, 18 `prepared`, 33 `pending`**.
 >
-> ⚠ A kör pre-flightja MÉRJE ÚJRA, mit tud ez a box: **nincs Android SDK és
-> nincs device-farm** — az eszközös elfogadás emberi kapu, nem merge-feltétel
-> (a Ch13 zárójelentés §5 mintája). Az ADR-oszlop `nincs` értéke terv: ha a kör
-> mégis architekturális döntést hoz, a számot a foglalótól kérd.
+> ⚠ A pre-flight MÉRJE ÚJRA: ezen a boxon **nincs Android SDK és nincs
+> device-farm**, tehát a cold start / audio / vision perf-budget harness sem
+> mérhet valódi eszközön — az eszközös elfogadás emberi kapu, nem
+> merge-feltétel. Az E12-R13 mostantól ehhez ad nyilvántartást
+> ([`docs/testing/device-matrix.yaml`](docs/testing/device-matrix.yaml),
+> [`docs/testing/device-lab.md`](docs/testing/device-lab.md)): a budget-harness
+> a `required_suite` `cold_start` / `analyze_memory_peak` /
+> `camera_preview_and_thermal` elemeire hivatkozzon, ne vezessen be párhuzamos
+> eszköz-fogalmat. Az ADR-számot a foglalótól kérd
+> (`tools/round-slots.py reserve-adr`), a queue `adr` oszlopa terv, nem
+> foglalás ([L547](docs/LESSONS.md#l547)).
 >
 > 🎯 **A Chapter 15 UI-sáv következő köre: `E15-R04`** — a hat `retire`-javaslat
 > review-ja és (jóváhagyás esetén) végrehajtása. A bemenete KÉSZ és MÉRT:

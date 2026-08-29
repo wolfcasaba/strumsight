@@ -21535,3 +21535,44 @@ BRIEFBEN ELŐRE ÍRT szám még nála is gyengébb bizonyíték.
 
 **Őrteszt:** nincs — a `reserve-adr` foglaló maga a mechanizmus; ez a lecke a
 brief-előírt szám elhitelének tilalmát rögzíti.
+
+## L548 — A lefedettségi invariánst mérő cella nem méri a lefedettség TARTALMÁT: „minden GA-capabilityhez ≥1 blokkoló eszköz" ZÖLD maradt akkor is, amikor a blokkoló eszköz kötelező tesztcsomagja ÜRES volt (E12-R13, F1 MAJOR, 2026-08-29)
+
+**Kontextus.** Az E12-R13 a device-mátrix gépi mércéjét építette
+(`test/tooling/device_matrix_test.dart`, 99 cella az 1. menetben). A kör központi
+invariánsa háromszemű lánc: **GA-capability → `release_blocking: true` eszköz →
+kötelező mérések (`required_suite`)**. Az első két szemre volt cella (A2: minden
+GA-capabilityhez van blokkoló eszköz; A1: kilenc kötelező azonosító-mező, a
+teljes helykitöltő-listával). A harmadikra nem.
+
+**Mérés.** A review izolált klónban hét eldobható mutációt futtatott a VALÓDI
+`docs/testing/device-matrix.yaml`-on. Hat pirosra vitte a megfelelő cellát
+(`+96 -3`, `+98 -1`, …). A hetedik — mindkét blokkoló eszköz
+`required_suite` mezője `[]`-re állítva — **`+99: All tests passed!`**, és ami
+súlyosabb:
+
+```
+$ python3 tool/device_report.py --matrix docs/testing/device-matrix.yaml --check
+device_report check: every mandatory run is recorded.
+$ echo $?
+0
+```
+
+Eredmény-fájl nélkül, egyetlen lefuttatott mérés nélkül a release-readiness check
+azt állította, hogy „minden kötelező futás rögzítve van". A változatlan mátrixon
+ugyanez a parancs helyesen 26 hiányzó futást sorolt fel, exit 1-gyel.
+
+**Szabály.** Ha egy mérce **lefedettséget** állít („X-hez tartozik legalább egy
+Y"), akkor önmagában az Y LÉTEZÉSÉT méri, nem azt, hogy Y bármit is csinál.
+Minden ilyen invariánshoz kell egy második cella, ami az Y TARTALMÁT is méri
+(nem-üres, és a zárt szótár teljes lefedése) — különben az invariáns egy
+szabályosnak látszó szerkesztéstől kiüresedik, a mérce pedig zölden rögzíti. Ez
+ugyanaz a hibaosztály, mint az [L546](#l546) helykitöltő-vaksága: nem hamis
+állítást írunk be, hanem az igaz állítást tesszük TARTALMATLANNÁ.
+
+A javító kör a `--check`-et fail-closedre vitte (üres vagy hiányzó
+`required_suite` egy blokkoló eszközön = megnevezett hiba, nem-nulla kilépés), és
+a teszt 121 cellára nőtt; a próba újramérve: gate `+119 -2`, `--check` exit 1
+(„`pixel_6a: required_suite is empty for a release_blocking device`").
+
+**Őrteszt:** `test/tooling/device_matrix_test.dart`::`F1 — a release_blocking device's required_suite must cover the mandatory dictionary`
