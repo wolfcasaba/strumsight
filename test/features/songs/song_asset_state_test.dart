@@ -25,6 +25,7 @@ import 'package:strumsight/features/song_trainer/domain/models/song_track.dart';
 import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_overview_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   // ─── A1: below the threshold — everything present, full functionality,
@@ -109,6 +110,7 @@ void main() {
 Widget _app(InMemorySongRepository repository, String songId) => ProviderScope(
   overrides: [songRepositoryProvider.overrideWithValue(repository)],
   child: MaterialApp(
+    theme: SsLightTheme.data(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: SongOverviewScreen(songId: songId),

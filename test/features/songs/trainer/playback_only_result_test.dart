@@ -25,6 +25,7 @@ import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/widgets/measure_heatmap.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 import '../../../support/preference_store.dart';
 
@@ -62,6 +63,7 @@ void main() {
         ProviderScope(
           overrides: preferenceOverrides(),
           child: MaterialApp(
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: SongTrainerScreen(state: controller.state),

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/song_trainer_providers.dart';
@@ -79,17 +80,13 @@ final class _SongOverviewScreenState extends ConsumerState<SongOverviewScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.songOverviewTitle)),
       body: switch (state.status) {
-        SongTrainerSetupStatus.idle || SongTrainerSetupStatus.loading => Center(
-          child: Semantics(
-            label: l10n.songOverviewLoading,
-            child: const CircularProgressIndicator(),
-          ),
+        SongTrainerSetupStatus.idle ||
+        SongTrainerSetupStatus.loading => Semantics(
+          label: l10n.songOverviewLoading,
+          child: const _OverviewLoading(),
         ),
-        SongTrainerSetupStatus.failure => Center(
-          child: FilledButton(
-            onPressed: _loadIfNeeded,
-            child: Text(l10n.songOverviewRetry),
-          ),
+        SongTrainerSetupStatus.failure => _OverviewFailure(
+          onRetry: _loadIfNeeded,
         ),
         SongTrainerSetupStatus.ready => _OverviewBody(
           state: state,
@@ -134,32 +131,37 @@ final class _OverviewBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final title = state.title ?? '';
     final source = this.source;
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(SsSpacing.space4),
         children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 24),
+          Text(
+            title,
+            style: typography.titleLarge.copyWith(color: colors.textPrimary),
+          ),
+          const SizedBox(height: SsSpacing.space6),
           Text(
             l10n.songOverviewSections,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
           ),
           SongSectionList(
             sections: state.sections,
             onSelected: onSectionSelected,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SsSpacing.space6),
           Text(
             l10n.songOverviewTracks,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
           ),
           SongTrackPicker(tracks: state.tracks, onSelected: onTrackSelected),
-          const SizedBox(height: 24),
+          const SizedBox(height: SsSpacing.space6),
           Text(
             l10n.songOverviewCapabilities,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
           ),
           for (final mode in TrainerMode.values)
             ListTile(
@@ -169,7 +171,9 @@ final class _OverviewBody extends StatelessWidget {
                   ? null
                   : Text(_unavailableLabel(l10n, state.modeAvailability(mode))),
             ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SsSpacing.space6),
+          // Stays a literal FilledButton (not SsButton): `song_asset_state_test.dart`
+          // casts `tester.widget<FilledButton>(find.byKey(...))` directly.
           Semantics(
             label: l10n.songOverviewStartSemantic(title),
             button: true,
@@ -181,36 +185,91 @@ final class _OverviewBody extends StatelessWidget {
             ),
           ),
           if (source != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: SsSpacing.space4),
             Wrap(
               key: const Key('song-overview-source-row'),
               crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
+              spacing: SsSpacing.space2,
               children: <Widget>[
                 SongSourceBadge(sourceType: source.type),
                 if (copyright != null)
                   Text(
                     l10n.songOverviewLicense(copyright!),
                     key: const Key('song-overview-license'),
+                    style: typography.bodyMedium.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
               ],
             ),
           ],
           if (state.hasMissingBackingAsset) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: SsSpacing.space3),
             Semantics(
               key: const Key('song-overview-missing-backing'),
               label: l10n.songOverviewMissingBackingAsset,
               child: Row(
                 children: <Widget>[
-                  const Icon(Icons.music_off_outlined, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(l10n.songOverviewMissingBackingAsset)),
+                  Icon(Icons.music_off_outlined, color: colors.warning),
+                  const SizedBox(width: SsSpacing.space2),
+                  Expanded(
+                    child: Text(
+                      l10n.songOverviewMissingBackingAsset,
+                      style: typography.bodyMedium.copyWith(
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _OverviewLoading extends StatelessWidget {
+  const _OverviewLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SsSkeleton(
+        width: 120,
+        height: SsSpacing.space6,
+        radius: SsRadius.pill,
+      ),
+    );
+  }
+}
+
+/// Built from design tokens directly rather than [SsFailureState]: the
+/// setup controller's `failureCode` (`song_trainer_setup_state.dart`) is a
+/// bare string, not an [AppFailure] with a `retryable` flag, so there is
+/// nothing honest to feed [SsFailurePresentation.from] without fabricating
+/// one (E15-R04 review MAJOR-2). The single retry action already existed
+/// pre-migration (`_loadIfNeeded`) — only its styling moves onto tokens.
+class _OverviewFailure extends StatelessWidget {
+  const _OverviewFailure({required this.onRetry});
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(SsSpacing.space6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, color: colors.danger, size: 40),
+            const SizedBox(height: SsSpacing.space4),
+            SsButton(label: l10n.songOverviewRetry, onPressed: onRetry),
+          ],
+        ),
       ),
     );
   }

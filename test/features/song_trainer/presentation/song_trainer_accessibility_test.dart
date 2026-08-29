@@ -36,6 +36,7 @@ import 'package:strumsight/features/song_trainer/domain/models/trainer_range.dar
 import 'package:strumsight/features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/widgets/song_loop_feedback.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 import '../../../support/fake_audio.dart';
 import '../../../support/fake_practice_observation_gateway.dart';
@@ -71,6 +72,7 @@ void main() {
           ).overrideWith((ref) => harness.controller),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: MediaQuery(
@@ -112,6 +114,7 @@ void main() {
           ).overrideWith((ref) => harness.controller),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: SongTrainerScreen(state: state),
@@ -146,6 +149,7 @@ void main() {
           ).overrideWith((ref) => harness.controller),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: MediaQuery(
@@ -199,6 +203,7 @@ void main() {
             ).overrideWith((ref) => harness.controller),
           ],
           child: MaterialApp(
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: SongTrainerScreen(state: state),
@@ -258,6 +263,7 @@ void main() {
           ).overrideWith((ref) => harness.controller),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: SongTrainerScreen(state: state),
@@ -323,6 +329,7 @@ void main() {
       final hostKey = GlobalKey();
       await tester.pumpWidget(
         MaterialApp(
+          theme: SsLightTheme.data(),
           home: Scaffold(
             body: _ThrottleHost(
               key: hostKey,
@@ -388,6 +395,7 @@ void main() {
     final hostKey = GlobalKey();
     await tester.pumpWidget(
       MaterialApp(
+        theme: SsLightTheme.data(),
         home: Scaffold(
           body: _ThrottleHost(
             key: hostKey,

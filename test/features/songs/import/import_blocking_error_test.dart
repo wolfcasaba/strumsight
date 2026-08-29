@@ -35,10 +35,12 @@ import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repos
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_preview_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   Widget previewApp(ImportPreview preview) => ProviderScope(
     child: MaterialApp(
+      theme: SsLightTheme.data(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: SongImportPreviewScreen(preview: preview),
@@ -169,6 +171,7 @@ void main() {
             songFilePickerAdapterProvider.overrideWithValue(picker),
           ],
           child: MaterialApp(
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: const SongImportScreen(),

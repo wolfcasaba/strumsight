@@ -24,6 +24,7 @@ import 'package:strumsight/features/song_trainer/presentation/screens/song_train
 import 'package:strumsight/features/song_trainer/presentation/widgets/chord_lane.dart';
 import 'package:strumsight/features/song_trainer/presentation/widgets/transport_controls.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 import '../../../support/preference_store.dart';
 
@@ -89,6 +90,7 @@ void main() {
           ProviderScope(
             overrides: preferenceOverrides(),
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: SongTrainerScreen(
@@ -128,6 +130,7 @@ void main() {
           ProviderScope(
             overrides: preferenceOverrides(),
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: SongTrainerScreen(
@@ -173,6 +176,7 @@ void main() {
           ProviderScope(
             overrides: preferenceOverrides(),
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: SongTrainerScreen(
@@ -208,6 +212,7 @@ void main() {
           ProviderScope(
             overrides: preferenceOverrides(),
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: SongTrainerScreen(
@@ -244,6 +249,7 @@ void main() {
           ProviderScope(
             overrides: preferenceOverrides(),
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: SongTrainerScreen(state: state),

@@ -9,6 +9,7 @@ import 'package:strumsight/features/song_trainer/data/importers/song_importer.da
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   testWidgets('idle import screen offers a local file picker action', (
@@ -28,6 +29,7 @@ void main() {
           songFilePickerAdapterProvider.overrideWithValue(picker),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: const SongImportScreen(),

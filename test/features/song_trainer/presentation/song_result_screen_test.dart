@@ -10,6 +10,7 @@ import 'package:strumsight/features/song_trainer/application/trainer/song_traine
 import 'package:strumsight/features/song_trainer/presentation/screens/song_result_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/widgets/measure_heatmap.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   testWidgets('renders the measure heatmap, retry, and next-section CTAs', (
@@ -19,6 +20,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: SongResultScreen(result: result),
@@ -39,6 +41,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: MeasureHeatmap(

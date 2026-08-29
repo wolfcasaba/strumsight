@@ -10,6 +10,7 @@ import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   testWidgets('empty library offers an import entry point', (tester) async {
@@ -19,6 +20,7 @@ void main() {
           songRepositoryProvider.overrideWithValue(InMemorySongRepository()),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: const SongLibraryScreen(),
@@ -55,6 +57,7 @@ void main() {
       ProviderScope(
         overrides: [songRepositoryProvider.overrideWithValue(repository)],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: const SongLibraryScreen(),

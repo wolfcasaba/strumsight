@@ -4,12 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/song_trainer/application/import/import_preview.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_preview_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   testWidgets('fatal preview disables the import confirmation', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: SongImportPreviewScreen(

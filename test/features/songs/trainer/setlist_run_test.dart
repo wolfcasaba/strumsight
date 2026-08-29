@@ -23,6 +23,7 @@ import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart
 import 'package:strumsight/features/song_trainer/presentation/screens/setlist_session_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 import '../../../support/preference_store.dart';
 
@@ -141,6 +142,7 @@ void main() {
               ).overrideWith((ref) => controller),
             ],
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: SongTrainerScreen(inputs: inputs),
@@ -177,6 +179,7 @@ void main() {
 }
 
 Widget _localizedApp(Widget home) => MaterialApp(
+  theme: SsLightTheme.data(),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   home: home,

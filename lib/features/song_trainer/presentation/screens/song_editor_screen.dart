@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/routing/route_guards.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/editor/song_editor_state.dart';
 import '../../application/editor/song_editor_controller.dart';
@@ -184,11 +185,9 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
           ],
         ),
         body: switch (state.status) {
-          SongEditorStatus.loading => const Center(
-            child: CircularProgressIndicator(),
-          ),
-          SongEditorStatus.failure when !state.isLoaded => Center(
-            child: Text(l10n.songEditorLoadFailed),
+          SongEditorStatus.loading => const _EditorLoading(),
+          SongEditorStatus.failure when !state.isLoaded => _EditorLoadFailure(
+            message: l10n.songEditorLoadFailed,
           ),
           _ => _EditorBody(
             id: _id,
@@ -262,35 +261,42 @@ final class _EditorBody extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final draft = state.draft!;
     final controller = ref.read(songEditorControllerProvider(id));
-    final errorColor = Theme.of(context).colorScheme.error;
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(SsSpacing.space4),
         children: <Widget>[
           if (state.status == SongEditorStatus.conflict)
-            Text(l10n.songEditorConflict),
+            Text(
+              l10n.songEditorConflict,
+              style: typography.bodyMedium.copyWith(color: colors.danger),
+            ),
           if (state.status == SongEditorStatus.validationFailed)
-            Text(l10n.songEditorInvalid),
+            Text(
+              l10n.songEditorInvalid,
+              style: typography.bodyMedium.copyWith(color: colors.danger),
+            ),
           // A5: a failed save (or other post-load operation) never discards
           // the draft — the content below stays exactly as edited, and the
           // failure is named with `failureCode` rather than a generic
           // message (docs/adr/0284-import-preview-is-not-a-commit.md §4).
           if (state.status == SongEditorStatus.failure)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: SsSpacing.space3),
               child: Semantics(
                 label: l10n.songEditorSaveFailed(state.failureCode ?? ''),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Icon(Icons.error_outline, color: errorColor),
-                    const SizedBox(width: 8),
+                    Icon(Icons.error_outline, color: colors.danger),
+                    const SizedBox(width: SsSpacing.space2),
                     Expanded(
                       child: Text(
                         l10n.songEditorSaveFailed(state.failureCode ?? ''),
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodyMedium?.copyWith(color: errorColor),
+                        style: typography.bodyMedium.copyWith(
+                          color: colors.danger,
+                        ),
                       ),
                     ),
                   ],
@@ -303,16 +309,20 @@ final class _EditorBody extends ConsumerWidget {
           // (docs/adr/0284-import-preview-is-not-a-commit.md §5).
           if (!canPersist)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: SsSpacing.space3),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Icon(
-                    Icons.lock_outline,
-                    color: Theme.of(context).colorScheme.tertiary,
+                  Icon(Icons.lock_outline, color: colors.textSecondary),
+                  const SizedBox(width: SsSpacing.space2),
+                  Expanded(
+                    child: Text(
+                      l10n.songEditorReadOnlySource,
+                      style: typography.bodyMedium.copyWith(
+                        color: colors.textPrimary,
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(l10n.songEditorReadOnlySource)),
                   TextButton(
                     key: const Key('song-editor-save-copy'),
                     onPressed: () => _saveCopy(context, controller, draft),
@@ -325,18 +335,18 @@ final class _EditorBody extends ConsumerWidget {
             metadata: draft.metadata,
             onChanged: controller.editMetadata,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: SsSpacing.space5),
           SongSectionEditor(
             sections: draft.sections,
             onMove: controller.reorderSections,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: SsSpacing.space5),
           MeasureGrid(
             measures: draft.measures,
             onInsert: controller.insertMeasure,
             onDelete: controller.deleteMeasure,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: SsSpacing.space5),
           SongEventEditor(
             measureCount: draft.measures.length,
             onAddChord: (measureIndex, symbol) =>
@@ -359,7 +369,7 @@ final class _EditorBody extends ConsumerWidget {
                   denominator: denominator,
                 ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: SsSpacing.space5),
           BackingAssetEditor(
             hasBacking: draft.tracks.any((track) => track is BackingAudioTrack),
             onAttach: () => _attachBacking(ref, controller),
@@ -472,4 +482,47 @@ final class _EditorBody extends ConsumerWidget {
     SongEditorStatus.conflict => true,
     _ => false,
   };
+}
+
+class _EditorLoading extends StatelessWidget {
+  const _EditorLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SsSkeleton(
+        width: 120,
+        height: SsSpacing.space6,
+        radius: SsRadius.pill,
+      ),
+    );
+  }
+}
+
+/// Built from design tokens directly rather than [SsFailureState]: the
+/// editor's load failure carries no [AppFailure]/`retryable` flag on this
+/// path (`SongEditorState` — measured), so there is nothing honest to feed
+/// [SsFailurePresentation.from] without fabricating one (E15-R04 review
+/// MAJOR-2). This state was action-less pre-migration (a bare `Text`) —
+/// adding a retry affordance here would be a new action in an
+/// appearance-only round (E15-R04 review MAJOR-3 pattern).
+class _EditorLoadFailure extends StatelessWidget {
+  const _EditorLoadFailure({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(SsSpacing.space6),
+        child: Text(
+          message,
+          style: typography.bodyMedium.copyWith(color: colors.danger),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
 }

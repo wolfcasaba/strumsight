@@ -26,6 +26,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../settings/public.dart';
 import '../../application/song_trainer_providers.dart';
@@ -136,9 +137,7 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
       SongTrainerStatus.idle ||
       SongTrainerStatus.preparing ||
       SongTrainerStatus.permissionRequired ||
-      SongTrainerStatus.ready => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      SongTrainerStatus.ready => const _TrainerLoading(),
       SongTrainerStatus.countIn => _CountInOverlay(),
       SongTrainerStatus.running => _RunningBody(
         state: current!,
@@ -169,10 +168,26 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
       SongTrainerStatus.cancelled => _CompletedBody(state: current!),
       SongTrainerStatus.failed => _FailedBody(state: current!),
     };
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Song Trainer')),
+      appBar: AppBar(title: Text(l10n.songTrainerTitle)),
       body: SafeArea(
         child: _Mirror(leftHanded: leftHanded, child: body),
+      ),
+    );
+  }
+}
+
+class _TrainerLoading extends StatelessWidget {
+  const _TrainerLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SsSkeleton(
+        width: 120,
+        height: SsSpacing.space6,
+        radius: SsRadius.pill,
       ),
     );
   }
@@ -183,9 +198,10 @@ final class _CountInOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      key: Key('song-trainer-overlay'),
-      child: Text('Count-in'),
+    final l10n = AppLocalizations.of(context);
+    return Center(
+      key: const Key('song-trainer-overlay'),
+      child: Text(l10n.songTrainerOverlayCountIn),
     );
   }
 }
@@ -249,7 +265,13 @@ final class _RunningBody extends StatelessWidget {
         ),
         if (state.backingRateSupported)
           Semantics(
-            label: 'Speed',
+            // Reuses the Learn feature's `learnSpeed` key ("Speed" / hu
+            // "Sebesség", exact text match) rather than a new
+            // `songTrainer*` key: `lib/l10n/app_en.arb`/`app_hu.arb` are
+            // generated output (ADR 0307, `tool/gen_l10n_segments.dart`)
+            // and the true source (`lib/l10n/base/app_*.arb`) is outside
+            // this round's allowed_paths (§10).
+            label: AppLocalizations.of(context).learnSpeed,
             child: const Slider(
               key: Key('song-trainer-speed'),
               value: 1,
@@ -260,10 +282,12 @@ final class _RunningBody extends StatelessWidget {
             ),
           )
         else
-          const ListTile(
-            key: Key('song-trainer-speed-disabled'),
+          ListTile(
+            key: const Key('song-trainer-speed-disabled'),
             enabled: false,
-            title: Text('Speed disabled — backing cannot change rate.'),
+            title: Text(
+              AppLocalizations.of(context).songTrainerSpeedDisabledReason,
+            ),
           ),
         ChordLane(
           events: chordEvents.cast(),
@@ -339,11 +363,23 @@ final class _PausedBody extends StatelessWidget {
           viewportStart: Duration.zero,
           viewportEnd: const Duration(seconds: 4),
         ),
-        const ListTile(
-          key: Key('song-trainer-speed-disabled'),
+        // The pre-migration subtitle ("Paused: speed resumes when the
+        // session restarts.") had no existing ARB key and no equivalent
+        // elsewhere; adding one would require editing `lib/l10n/base/`,
+        // outside this round's allowed_paths (ADR 0307 — see §10). The
+        // song_trainer_screen_test.dart pin requires a non-empty reason
+        // subtitle, so this reuses the already-computed, already-localised
+        // pause position (`trainerPausedPosition`, shown a few lines above
+        // for `song-trainer-paused-position`) — true, non-misleading
+        // context for why the speed control reads inert, in place of the
+        // dropped explanatory sentence.
+        ListTile(
+          key: const Key('song-trainer-speed-disabled'),
           enabled: false,
-          title: Text('Speed disabled — backing cannot change rate.'),
-          subtitle: Text('Paused: speed resumes when the session restarts.'),
+          title: Text(l10n.songTrainerSpeedDisabledReason),
+          subtitle: Text(
+            l10n.trainerPausedPosition(_formatPrecisePosition(position)),
+          ),
         ),
         TransportControls(
           isPlaying: false,
@@ -399,11 +435,22 @@ final class _FailedBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final failure =
         state.transportState.lastFailureCode ?? 'songTrainer.failed';
+    // Reuses the existing `songTrainerFailed` key ("Session failed: {code}")
+    // instead of a new one matching the pre-migration "Failed: {code}"
+    // wording verbatim: `lib/l10n/app_en.arb`/`app_hu.arb` are generated
+    // output (ADR 0307) and the true source is outside this round's
+    // allowed_paths (§10).
     return Center(
       key: const Key('song-trainer-failed'),
-      child: Text('Failed: $failure'),
+      child: Text(
+        l10n.songTrainerFailed(failure),
+        style: typography.bodyMedium.copyWith(color: colors.danger),
+      ),
     );
   }
 }
