@@ -1,0 +1,134 @@
+# StrumSight device support + release-blocking registry (E12-R13).
+#
+# Restricted YAML subset ONLY — no anchors/aliases, no multi-line scalars, no
+# flow maps, no tabs. The exact grammar this file must stay inside (2-space
+# list indentation, "key: value" pairs, inline "[a, b]" lists, "#" comments)
+# is documented as the editability contract in docs/testing/device-lab.md §3,
+# because that grammar is what test/tooling/device_matrix_test.dart's
+# restricted reader can parse without `package:yaml` (a transitive-only
+# dependency on this tree, pubspec.lock:1261).
+#
+# Every device below is MEASURED (docs/manual-testing/vision-device-matrix.md
+# and vision-performance-benchmark.md) — no invented RAM/SoC/name. Two
+# candidate devices (Samsung Galaxy S23, Pixel 4a) are deliberately excluded
+# because neither has a measured RAM/SoC row; see device-lab.md §5.
+schema_version: 1
+
+devices:
+  - id: pixel_6a
+    name: Pixel 6a
+    os: Android 14
+    api_level: 34
+    ram_gb: 6
+    abi: arm64-v8a
+    soc: Google Tensor, Mali-G78
+    camera_spec: 12.2 MP, 30 fps, AF
+    camera_result: pending
+    audio_result: pending
+    vision_tier: pending
+    offline_ai_tier: not_ga_scope
+    core_support: supported
+    release_blocking: true
+    required_suite: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
+    provenance: docs/manual-testing/vision-device-matrix.md:160
+    spec_provenance: docs/manual-testing/vision-performance-benchmark.md:117
+
+  - id: pixel_7
+    name: Pixel 7
+    os: Android 14
+    api_level: 34
+    ram_gb: 8
+    abi: arm64-v8a
+    soc: Google Tensor G2, Mali-G710
+    camera_spec: 50 MP, 30 fps, AF
+    camera_result: pending
+    audio_result: pending
+    vision_tier: pending
+    offline_ai_tier: not_ga_scope
+    core_support: supported
+    release_blocking: true
+    required_suite: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
+    provenance: docs/manual-testing/vision-device-matrix.md:161
+    spec_provenance: docs/manual-testing/vision-performance-benchmark.md:118
+
+  - id: samsung_galaxy_a54
+    name: Samsung Galaxy A54
+    os: Android 14
+    api_level: 34
+    ram_gb: 6
+    abi: arm64-v8a
+    soc: Exynos 1380, Mali-G68
+    camera_spec: 50 MP, 30 fps, AF
+    camera_result: pending
+    audio_result: pending
+    vision_tier: pending
+    offline_ai_tier: not_ga_scope
+    core_support: supported
+    release_blocking: false
+    required_suite: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
+    provenance: docs/manual-testing/vision-device-matrix.md:162
+    spec_provenance: docs/manual-testing/vision-performance-benchmark.md:119
+
+  - id: xiaomi_redmi_note_12
+    name: Xiaomi Redmi Note 12
+    os: Android 13
+    api_level: 33
+    ram_gb: 4
+    abi: arm64-v8a
+    soc: Snapdragon 685, Adreno 610
+    camera_spec: 48 MP, 30 fps, AF
+    camera_result: pending
+    audio_result: pending
+    vision_tier: pending
+    offline_ai_tier: not_ga_scope
+    core_support: supported
+    release_blocking: false
+    required_suite: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
+    provenance: docs/manual-testing/vision-device-matrix.md:163
+    spec_provenance: docs/manual-testing/vision-performance-benchmark.md:120
+
+capabilities:
+  - id: onboarding
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: live_and_tuner
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: practice_engine
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: song_trainer_local
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: audio_analysis_core
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: progress_goals_streak
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: storage_migration
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: offline_operation
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: localization_en_hu
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: accessibility_minimum
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: session_lifecycle_stability
+    ga_scope: true
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: computer_vision
+    ga_scope: false
+    devices: [pixel_6a, pixel_7, samsung_galaxy_a54, xiaomi_redmi_note_12]
+  - id: offline_ai
+    ga_scope: false
+    devices: []
+  - id: ai_tutor
+    ga_scope: false
+    devices: []
+
+required_suite_catalog: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, local_ai_load_ttft, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
