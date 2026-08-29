@@ -20,6 +20,7 @@ import 'package:strumsight/features/song_trainer/domain/models/song_track.dart';
 import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   group('A6 — orientation change preserves trainer setup selections', () {
@@ -42,6 +43,7 @@ void main() {
           UncontrolledProviderScope(
             container: container,
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: TrainerSetupScreen(songId: document.id.value),
@@ -101,6 +103,7 @@ void main() {
           UncontrolledProviderScope(
             container: container,
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: TrainerSetupScreen(songId: document.id.value),
@@ -158,6 +161,7 @@ void main() {
           UncontrolledProviderScope(
             container: container,
             child: MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: TrainerSetupScreen(songId: document.id.value),

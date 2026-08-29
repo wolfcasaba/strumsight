@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/library/song_library_state.dart';
 import '../../application/library/song_query.dart';
@@ -88,15 +89,11 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
       ),
       body: SafeArea(
         child: switch (state.status) {
-          SongLibraryStatus.loading => const Center(
-            child: CircularProgressIndicator(),
+          SongLibraryStatus.loading => Semantics(
+            label: l10n.songLibraryLoading,
+            child: const _LibraryLoading(),
           ),
-          SongLibraryStatus.failure => Center(
-            child: FilledButton(
-              onPressed: controller.load,
-              child: Text(l10n.songLibraryRetry),
-            ),
-          ),
+          SongLibraryStatus.failure => _LibraryError(onRetry: controller.load),
           SongLibraryStatus.ready => Column(
             children: <Widget>[
               Padding(
@@ -118,7 +115,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                         prefixIcon: const Icon(Icons.search),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: SsSpacing.space3),
                     Row(
                       children: <Widget>[
                         Expanded(
@@ -191,7 +188,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
               ),
               Expanded(
                 child: state.summaries.isEmpty
-                    ? Center(child: Text(l10n.songLibraryEmpty))
+                    ? const _LibraryEmpty()
                     : ListView.builder(
                         itemCount: state.summaries.length,
                         itemBuilder: (context, index) {
@@ -278,6 +275,81 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
             ],
           ),
         },
+      ),
+    );
+  }
+}
+
+final class _LibraryLoading extends StatelessWidget {
+  const _LibraryLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.all(SsSpacing.space4),
+      itemCount: 6,
+      separatorBuilder: (_, _) => const SizedBox(height: SsSpacing.space2),
+      itemBuilder: (_, _) =>
+          const SsSkeleton(width: double.infinity, height: 72),
+    );
+  }
+}
+
+/// Built from design tokens directly rather than [SsFailureState]: the
+/// library's `failureCode` (`song_library_state.dart`) is a bare
+/// [SongRepositoryErrorCode] string, not an [AppFailure] with a `retryable`
+/// flag, so there is nothing honest to feed [SsFailurePresentation.from]
+/// without fabricating one (E15-R04 review MAJOR-2). The single retry action
+/// already existed pre-migration (`controller.load`) — only its styling
+/// moves onto design tokens.
+final class _LibraryError extends StatelessWidget {
+  const _LibraryError({required this.onRetry});
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(SsSpacing.space6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, color: colors.danger, size: 40),
+            const SizedBox(height: SsSpacing.space4),
+            SsButton(label: l10n.songLibraryRetry, onPressed: onRetry),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Built from design tokens directly rather than [SsEmptyState]: that
+/// component mandates an [SsEmptyState.onAction] (§5.2), and the legacy
+/// empty state took no action at all (measured: `git show
+/// origin/main:…song_library_screen.dart` — a bare `Center(Text(...))`).
+/// Wiring the existing FAB's import action into a new `onAction` here would
+/// be a behaviour change in an appearance-only round (E15-R04 review
+/// MAJOR-3 pattern) — this mirrors [PracticeHubScreen]'s
+/// `_EmptyCatalogLayout`, the same documented §5.2 exception.
+final class _LibraryEmpty extends StatelessWidget {
+  const _LibraryEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(SsSpacing.space6),
+        child: Text(
+          l10n.songLibraryEmpty,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }

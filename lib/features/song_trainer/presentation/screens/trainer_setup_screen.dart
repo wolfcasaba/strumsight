@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/trainer/song_trainer_setup_controller.dart';
 import '../../application/trainer/song_trainer_setup_state.dart';
@@ -59,18 +60,12 @@ final class _TrainerSetupScreenState extends ConsumerState<TrainerSetupScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.trainerSetupTitle)),
       body: switch (state.status) {
-        SongTrainerSetupStatus.idle || SongTrainerSetupStatus.loading => Center(
-          child: Semantics(
-            label: l10n.trainerSetupLoading,
-            child: const CircularProgressIndicator(),
-          ),
+        SongTrainerSetupStatus.idle ||
+        SongTrainerSetupStatus.loading => Semantics(
+          label: l10n.trainerSetupLoading,
+          child: const _SetupLoading(),
         ),
-        SongTrainerSetupStatus.failure => Center(
-          child: FilledButton(
-            onPressed: _loadIfNeeded,
-            child: Text(l10n.songOverviewRetry),
-          ),
-        ),
+        SongTrainerSetupStatus.failure => _SetupError(onRetry: _loadIfNeeded),
         SongTrainerSetupStatus.ready => _SetupBody(
           state: state,
           onTrackSelected: (track) => controller.selectTrack(track.id),
@@ -119,21 +114,34 @@ final class _SetupBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final config = state.config;
-    if (state.tracks.isEmpty) return Center(child: Text(l10n.trainerNoTracks));
+    if (state.tracks.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(SsSpacing.space6),
+          child: Text(
+            l10n.trainerNoTracks,
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(SsSpacing.space4),
         children: <Widget>[
           Text(
             l10n.trainerSetupTrack,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
           ),
           SongTrackPicker(tracks: state.tracks, onSelected: onTrackSelected),
-          const SizedBox(height: 16),
+          const SizedBox(height: SsSpacing.space4),
           Text(
             l10n.trainerSetupMode,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
           ),
           RadioGroup<TrainerMode>(
             groupValue: config?.mode,
@@ -163,13 +171,13 @@ final class _SetupBody extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SsSpacing.space4),
           TrainerRangePicker(
             sections: state.sections,
             selection: config?.selection ?? const FullSongRange(),
             onSelected: onRangeSelected,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SsSpacing.space4),
           DropdownButtonFormField<int>(
             key: const Key('trainer-count-in'),
             initialValue: config?.countInBars ?? 0,
@@ -196,6 +204,7 @@ final class _SetupBody extends StatelessWidget {
           ),
           Text(
             l10n.trainerTargetSpeed(((config?.targetSpeed ?? 1) * 100).round()),
+            style: typography.bodyMedium.copyWith(color: colors.textPrimary),
           ),
           Slider(
             key: const Key('trainer-target-speed'),
@@ -215,29 +224,92 @@ final class _SetupBody extends StatelessWidget {
             ),
           ),
           if (state.hasMissingBackingAsset)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Text(l10n.trainerMissingBacking),
-                OutlinedButton(
-                  onPressed: onRepairMissingBackingAsset,
-                  child: Text(l10n.trainerRepairBacking),
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.only(top: SsSpacing.space2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    l10n.trainerMissingBacking,
+                    style: typography.bodyMedium.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: SsSpacing.space2),
+                  SsButton(
+                    onPressed: onRepairMissingBackingAsset,
+                    variant: SsButtonVariant.secondary,
+                    label: l10n.trainerRepairBacking,
+                  ),
+                ],
+              ),
             ),
           TuningCapoReminder(
             tuning: config?.tuningReminder,
             showCapoReminder: state.showCapoReminder,
             canResume: state.canResume,
           ),
-          const SizedBox(height: 16),
-          if (config == null) Text(l10n.trainerNoConfig),
+          const SizedBox(height: SsSpacing.space4),
+          if (config == null)
+            Text(
+              l10n.trainerNoConfig,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
+          // Stays a literal FilledButton (not SsButton): `trainer_setup_test.dart`
+          // casts `tester.widget<FilledButton>(find.byKey(...))` directly.
           FilledButton(
             key: const Key('trainer-setup-start'),
             onPressed: config == null ? null : onStart,
             child: Text(l10n.trainerSetupStart),
           ),
         ],
+      ),
+    );
+  }
+}
+
+final class _SetupLoading extends StatelessWidget {
+  const _SetupLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: const SsSkeleton(
+        width: 120,
+        height: SsSpacing.space6,
+        radius: SsRadius.pill,
+      ),
+    );
+  }
+}
+
+/// Built from design tokens directly rather than [SsFailureState]: the
+/// setup controller's `failureCode` (`song_trainer_setup_state.dart`) is a
+/// bare string, not an [AppFailure] with a `retryable` flag, so there is
+/// nothing honest to feed [SsFailurePresentation.from] without fabricating
+/// one (E15-R04 review MAJOR-2). The single retry action already existed
+/// pre-migration (`_loadIfNeeded`) — only its styling moves onto tokens.
+final class _SetupError extends StatelessWidget {
+  const _SetupError({required this.onRetry});
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(SsSpacing.space6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, color: colors.danger, size: 40),
+            const SizedBox(height: SsSpacing.space4),
+            SsButton(label: l10n.songOverviewRetry, onPressed: onRetry),
+          ],
+        ),
       ),
     );
   }

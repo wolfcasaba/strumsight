@@ -22,6 +22,7 @@ import 'package:strumsight/features/song_trainer/domain/models/song_source.dart'
 import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   // ─── A7: legacy routes are an unmodified regression guard ──────────────
@@ -104,6 +105,7 @@ void main() {
             songRepositoryProvider.overrideWithValue(repository),
           ],
           child: MaterialApp.router(
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             routerConfig: router,
@@ -168,6 +170,7 @@ void main() {
           songRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp.router(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           routerConfig: router,
@@ -227,6 +230,7 @@ void main() {
             songRepositoryProvider.overrideWithValue(repository),
           ],
           child: MaterialApp.router(
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             routerConfig: router,
@@ -285,6 +289,7 @@ void main() {
           songRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: showLibrary
@@ -325,6 +330,7 @@ final DateTime _fixedInstant = DateTime.utc(2026, 8, 1);
 Widget _app(SongRepository repository) => ProviderScope(
   overrides: <Override>[songRepositoryProvider.overrideWithValue(repository)],
   child: MaterialApp(
+    theme: SsLightTheme.data(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: const SongLibraryScreen(),

@@ -1137,6 +1137,7 @@
   "songImportGuitarProSteps": "1. Saját eszközödön használj offline átalakító eszközt.\n2. Ellenőrizd az átalakított fájlt, mert egyes Guitar Pro-részletek elveszhetnek.\n3. Importáld az eredményül kapott MusicXML-, MXL- vagy MIDI-fájlt.",
   "songImportGuitarProGuidanceSemantics": "Guitar Pro átalakítási útmutató. A Guitar Pro fájlokat a StrumSight nem importálja közvetlenül. A saját fájlodat a StrumSighton kívül alakítsd MusicXML, MXL vagy MIDI formátumba. Nincs feltöltés.",
   "songLibraryTitle": "Dalkönyvtár",
+  "songLibraryLoading": "Dalkönyvtár betöltése…",
   "songLibraryImport": "Importálás",
   "songLibraryRetry": "Próbáld újra",
   "songLibrarySearch": "Dalok keresése",
@@ -1351,7 +1352,10 @@
   "trainerNoConfig": "Először válassz érvényes sávot, módot és tartományt.",
   "songTrainerTitle": "Song Trainer",
   "songTrainerOverlayCountIn": "Bevezető",
+  "songTrainerLoading": "Song Trainer betöltése…",
   "songTrainerSpeedDisabledReason": "Sebesség letiltva — az alapzene nem támogatja.",
+  "songTrainerSpeedResumesOnRestart": "Szünet: a sebesség a session újraindításakor tér vissza.",
+  "songTrainerSpeedLabel": "Sebesség",
   "songTrainerLoopIndex": "Ismétlés {current}/{total}",
   "@songTrainerLoopIndex": {
     "placeholders": {

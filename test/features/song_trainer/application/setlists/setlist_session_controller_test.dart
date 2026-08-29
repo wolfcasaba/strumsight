@@ -14,6 +14,7 @@ import 'package:strumsight/features/song_trainer/presentation/screens/setlist_li
 import 'package:strumsight/features/song_trainer/presentation/screens/setlist_session_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_result_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   final setlist = SongSetlist(
@@ -232,6 +233,7 @@ void main() {
 }
 
 Widget _localizedApp(Widget home) => MaterialApp(
+  theme: SsLightTheme.data(),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   home: home,

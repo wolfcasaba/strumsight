@@ -1,5 +1,41 @@
 # Screen migration status
 
+**E15-R05 update (2026-08-29) — Song Trainer 9 screens migrated, measured
+60/96 (62.5%).** `SongTrainerScreen`, `SongOverviewScreen`, `SongResultScreen`,
+`TrainerSetupScreen`, `SetlistSessionScreen`, `SongEditorScreen`,
+`SongImportScreen`, `SongImportPreviewScreen`, `SongLibraryScreen` now import
+`core/design_system` (`SsCard`/`SsButton`/`SsSkeleton`/`SsSpacing`/
+`SsTypography`/`SsColorScheme` replace the raw `Theme.of`/`CircularProgressIndicator`
+references — no `SsEmptyState`/`SsFailureState` on this batch: none of the
+9 screens' failure/empty states carry a genuine `AppFailure` with a
+`retryable` flag or a pre-existing action, so each keeps a screen-local,
+token-styled state widget instead of fabricating one, mirroring the
+E15-R04-established `_HistoryError`/`_EmptyCatalogLayout` exception pattern
+— see the round's own `§10` handoff for the full list). **Owner-round
+correction against `retirement-plan.md` §4 (§0.0/R9):** that table's owner-round
+column assigns these 8 Song Trainer screens (`setlist_session` excluded, see
+below) to `E15-R09`, and `E15-R05` to AI Tutor — the queue and every written
+brief instead run `E15-R05` = Song Trainer, `E15-R09` = AI Tutor. The
+`migrate` DECISION is unchanged, only which round executed it differs;
+`retirement-plan.md` itself is out of this round's allowed paths and is not
+edited here (same pattern as the E15-R04 entry below).
+
+**ARB-source correction (measured this round, corrected in the fix round —
+§0.0/R12, review m/n7):** `lib/l10n/app_en.arb`/`app_hu.arb` are GENERATED
+output (`tool/gen_l10n_segments.dart`, a deterministic union of
+`lib/l10n/base/app_<locale>.arb` and `lib/l10n/features/<feature>_<locale>.arb`
+fragments) — editing them directly is reverted by the round's own `l10n` gate
+step. `lib/l10n/base/app_<locale>.arb` is the true source and, after
+§0.0/R12, IS on this round's `allowed_paths`. The round's A6 (no hardcoded
+string in the 9 files) was met by a mix: 3 of the 6 measured hardcoded
+sentences already had an exact pre-existing ARB match (`songTrainerTitle`,
+`songTrainerOverlayCountIn`, `songTrainerSpeedDisabledReason`); the fix round
+added two new base keys (`songTrainerSpeedResumesOnRestart`,
+`songTrainerSpeedLabel`) for the two that had no pre-existing equivalent
+without changing meaning; `songTrainerFailed` (differently-worded, same
+meaning as the pre-migration "Failed: {code}") was kept as a reuse — see the
+round's `§10` handoff.
+
 **E15-R04 update (2026-08-29) — Practice + Learn 8 screens migrated,
 measured 51/96 (53.1%).** `PracticeHubScreen`, `PracticeResultScreen`,
 `PracticeHistoryScreen`, `SpeedBuilderScreen`, `LearnScreen`,
@@ -108,11 +144,11 @@ design-system component, only that the screen's own migration round ran.
 
 ## Measured total
 
-**51 of 96 production screens migrated (53.1%)** as of E15-R04, up from
-43/96 (44.8%) before this round and 0/60 at the E08-R15 baseline (the file
-count grew from 60 to 96 as Epics 8–13 added screens — Community,
-Gamification, Library V2, Progress V2, Offline AI, Share — most of which
-shipped already migrated).
+**60 of 96 production screens migrated (62.5%)** as of E15-R05, up from
+51/96 (53.1%) after E15-R04, 43/96 (44.8%) before E15-R04, and 0/60 at the
+E08-R15 baseline (the file count grew from 60 to 96 as Epics 8–13 added
+screens — Community, Gamification, Library V2, Progress V2, Offline AI,
+Share — most of which shipped already migrated).
 
 ## Canonical token source by migration phase
 
@@ -122,7 +158,7 @@ shipped already migrated).
 | Component and screen migration (E13-R16…R35) | Design-system component tokens (`SsColorScheme`/`SsTypography` theme extensions, `Ss*` components) | A screen migrates only in its assigned round; all unassigned screens remain on the legacy theme (`AppTheme` / `AppColors` / `AppPalette`). |
 | Screens needing design-system extensions without `AppTheme` carrying them | **MEASURED OBSOLETE as of E15-R01.** A local `*ThemeScope` — the **nine** wrappers on the tree are `ProgressThemeScope` (progress_v2), `AuthThemeScope` (auth), `SettingsThemeScope` (settings), `LibraryThemeScope` (library_v2), `ShareThemeScope` (share), `GamificationThemeScope` (gamification), `CommunityThemeScope` (community), `OfflineAiThemeScope` (offline_ai), `VisionThemeScope` (vision) | Wrapped the screen so its `Ss*` cards could resolve `SsColorScheme`/`SsTypography` when those extensions were NOT yet on the app's runtime `ThemeData` (the gap this row used to describe). Since E15-R01 the app's actual `ThemeData` carries all four extensions directly (ADR 0466 D1), so the wrapper is now redundant for every screen it wraps — but the wrappers themselves are NOT removed by this round (tilos zóna, `lib/features/**`); their retirement is a per-screen follow-up round's job. |
 
-## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04)
+## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05)
 
 | Feature | Migrated / total | Legacy screens (migration pending) |
 | --- | --- | --- |
@@ -148,7 +184,7 @@ shipped already migrated).
 | progress_v2 | 2/2 | — |
 | settings | 3/3 | — |
 | share | 3/3 | — |
-| song_trainer | 0/9 | setlist_session, song_editor, song_import_preview, song_import, song_library, song_overview, song_result, song_trainer, trainer_setup |
+| song_trainer | 9/9 | — |
 | songs | 0/4 | setlist_detail, setlist_list, song_builder, song_list |
 | streak | 0/1 | streak (superseded by `gamification`'s hub, see below) |
 | today | 1/1 | — |
@@ -169,10 +205,11 @@ legacy screen is still the live one):
   (the hub is migrated; `streak_detail_screen.dart` itself is still legacy).
 
 **Not yet superseded — full feature migration still pending:** `learn`,
-`practice_generator`, `song_trainer`, `songs`, `analyze`. `song_trainer` is
-notable: despite its name suggesting a V2 rewrite of `songs`, none of its
-nine screens import `core/design_system` yet — the "V2" here was an
-architecture rewrite (E09), not a Chapter 13 design migration.
+`practice_generator`, `songs`, `analyze`. `song_trainer` is fully migrated as
+of E15-R05 (9/9); it is notable because despite its name suggesting a V2
+rewrite of `songs`, the "V2" there was an architecture rewrite (E09), not a
+Chapter 13 design migration — `songs` (the pre-V2 feature, 0/4) remains
+separately legacy.
 
 ## Legacy route safety (A6)
 

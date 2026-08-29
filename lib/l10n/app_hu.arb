@@ -3905,6 +3905,7 @@
     }
   },
   "songLibraryImport": "Importálás",
+  "songLibraryLoading": "Dalkönyvtár betöltése…",
   "songLibraryReadOnly": "Csak olvasható",
   "songLibraryReadOnlySnackBar": "Ez a dal csak olvasható. Megtekintő nézetben nyílt meg.",
   "songLibraryRetry": "Próbáld újra",
@@ -4013,6 +4014,7 @@
       }
     }
   },
+  "songTrainerLoading": "Song Trainer betöltése…",
   "songTrainerLoopIndex": "Ismétlés {current}/{total}",
   "@songTrainerLoopIndex": {
     "placeholders": {
@@ -4063,6 +4065,8 @@
   },
   "songTrainerSetlistResultTitle": "Dalcsomag eredménye",
   "songTrainerSpeedDisabledReason": "Sebesség letiltva — az alapzene nem támogatja.",
+  "songTrainerSpeedLabel": "Sebesség",
+  "songTrainerSpeedResumesOnRestart": "Szünet: a sebesség a session újraindításakor tér vissza.",
   "songTrainerTitle": "Song Trainer",
   "songVisionLoopQualityUnavailable": "Ehhez a loophoz nem volt elérhető megfelelő vizuális minőség. A hangalapú pontozás változatlan.",
   "songsEmpty": "Építsd meg a saját dalod — válassz akkordokat, tervezz ↓/↑ pengetésmintát, majd játszd le. Pontoz, mint egy lecke.",

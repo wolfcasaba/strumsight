@@ -6,6 +6,7 @@ import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repos
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/widgets/guitar_pro_conversion_guidance.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   Widget app({Locale locale = const Locale('en')}) => ProviderScope(
@@ -13,6 +14,7 @@ void main() {
       songRepositoryProvider.overrideWithValue(InMemorySongRepository()),
     ],
     child: MaterialApp(
+      theme: SsLightTheme.data(),
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

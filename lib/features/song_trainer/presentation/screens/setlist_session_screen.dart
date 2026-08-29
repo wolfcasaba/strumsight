@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/setlists/setlist_session_controller.dart';
 import '../../domain/models/setlist_result.dart';
@@ -81,6 +82,8 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final isPractice = widget.mode == SetlistSessionMode.practice;
     final resultByItem = <String, SetlistItemResult>{
       for (final result in _result?.itemResults ?? const <SetlistItemResult>[])
@@ -101,7 +104,7 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
         child: Column(
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(SsSpacing.space4),
               child: Semantics(
                 liveRegion: true,
                 label: isPractice
@@ -111,37 +114,46 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
                   isPractice
                       ? l10n.setlistSessionPracticeDescription
                       : l10n.setlistSessionPerformanceDescription,
+                  style: typography.bodyMedium.copyWith(
+                    color: colors.textPrimary,
+                  ),
                 ),
               ),
             ),
             if (tuningChangesAhead.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: SsSpacing.space4,
+                ),
                 child: Semantics(
                   key: const Key('setlist-session-tuning-ahead'),
                   container: true,
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              const Icon(Icons.tune),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.setlistSessionTuningAheadTitle,
-                                  style: Theme.of(context).textTheme.titleSmall,
+                  child: SsCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Icon(Icons.tune, color: colors.textPrimary),
+                            const SizedBox(width: SsSpacing.space2),
+                            Expanded(
+                              child: Text(
+                                l10n.setlistSessionTuningAheadTitle,
+                                style: typography.labelLarge.copyWith(
+                                  color: colors.textPrimary,
                                 ),
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                        for (final item in tuningChangesAhead)
+                          Text(
+                            _reminderText(l10n, item),
+                            style: typography.bodyMedium.copyWith(
+                              color: colors.textSecondary,
+                            ),
                           ),
-                          for (final item in tuningChangesAhead)
-                            Text(_reminderText(l10n, item)),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
@@ -166,7 +178,9 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
                 key: const Key('setlist-session-result'),
                 liveRegion: true,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: SsSpacing.space4,
+                  ),
                   child: Text(
                     l10n.setlistSessionResult(
                       _result!.itemResults
@@ -178,11 +192,25 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
                           .length,
                       _result!.itemResults.length,
                     ),
+                    style: typography.bodyMedium.copyWith(
+                      color: colors.textPrimary,
+                    ),
                   ),
                 ),
               ),
+            // Stays a literal FilledButton.icon (not SsButton): the running
+            // state swaps the icon for a bespoke inline spinner while
+            // keeping the label text visible ("Running…") — SsButton's own
+            // `loading` affordance instead hides the label under an
+            // overlay spinner, which would change what is on screen during
+            // a run (§5.1 bit-identical behaviour). The 18px
+            // CircularProgressIndicator itself is also kept raw rather than
+            // a design-system substitute: SsSkeleton is a content-shimmer
+            // placeholder, not an inline in-progress icon, so swapping it in
+            // here would change what the affordance communicates — see
+            // §10/m4.
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(SsSpacing.space4),
               child: FilledButton.icon(
                 key: const Key('setlist-session-start'),
                 onPressed: _isRunning ? null : _run,

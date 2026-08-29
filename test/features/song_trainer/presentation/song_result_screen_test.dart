@@ -10,6 +10,7 @@ import 'package:strumsight/features/song_trainer/application/trainer/song_traine
 import 'package:strumsight/features/song_trainer/presentation/screens/song_result_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/widgets/measure_heatmap.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
   testWidgets('renders the measure heatmap, retry, and next-section CTAs', (
@@ -19,6 +20,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: SongResultScreen(result: result),
@@ -39,6 +41,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: MeasureHeatmap(
@@ -56,6 +59,33 @@ void main() {
       expect(semantics.label, isNotEmpty);
     }
   });
+
+  for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+    testWidgets(
+      'remains overflow-free at 200 percent text scale — ${locale.languageCode} locale',
+      (tester) async {
+        final result = _result();
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: MediaQuery(
+                data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+                child: SongResultScreen(result: result),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('song-result-heatmap')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }
 
 SongTrainerResult _result() {

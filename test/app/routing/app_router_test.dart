@@ -9,8 +9,8 @@ import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 import 'package:strumsight/core/foundation/app_result.dart';
-import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/analyze/public.dart';
 import 'package:strumsight/features/audio_analysis/domain/comparison/analysis_comparison.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_metric_catalog.dart';
@@ -60,7 +60,7 @@ class _RouterTestApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
-      theme: AppTheme.light(),
+      theme: SsLightTheme.data(),
       locale: const Locale('en'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

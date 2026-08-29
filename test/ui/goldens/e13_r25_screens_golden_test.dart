@@ -2,8 +2,13 @@
 // setlist-run screens, at a compact portrait phone (412×915) and the same
 // frame at textScaler 2.0 — the two frames the round brief §7/A9 requires.
 // Pattern and sizing follow the merged
-// `test/ui/goldens/e13_r24_screens_golden_test.dart` precedent: `AppTheme`
-// (the app's actual runtime theme), not `SsDarkTheme`.
+// `test/ui/goldens/e13_r24_screens_golden_test.dart` precedent.
+//
+// E15-R05 correction: `theme` is `SsDarkTheme.data()`, not the original
+// `AppTheme.dark()` — all four screens now use design-system components
+// whose `Theme.of(context).extension<SsColorScheme>()!` null-check crashes
+// under the bare legacy theme (`SsDarkTheme.data()` is additive-only,
+// `AppTheme.dark()` + design-system extensions, ADR 0466 D2).
 //
 // Recorded on x86_64 (ADR 0426, §0.0/B/B5) via `tools/golden-x86.sh record`
 // — NOT `flutter test --update-goldens` on this (aarch64) box.
@@ -12,7 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/core/theme/app_theme.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsDarkTheme;
 import 'package:strumsight/features/practice/public.dart'
     hide BeatPosition, Tempo, Meter;
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
@@ -55,7 +60,7 @@ Future<void> _pump(
       overrides: <Override>[...preferenceOverrides(), ...overrides],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark(),
+        theme: SsDarkTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         builder: (context, child) => MediaQuery(

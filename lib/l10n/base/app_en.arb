@@ -1182,6 +1182,7 @@
   "songImportGuitarProSteps": "1. Use an offline conversion tool on your own device.\n2. Check the converted file, because some Guitar Pro details may not be preserved.\n3. Import the resulting MusicXML, MXL, or MIDI file.",
   "songImportGuitarProGuidanceSemantics": "Guitar Pro conversion guidance. StrumSight does not import Guitar Pro files directly. Convert your own file outside StrumSight to MusicXML, MXL, or MIDI. No upload.",
   "songLibraryTitle": "Song library",
+  "songLibraryLoading": "Loading song library…",
   "songLibraryImport": "Import",
   "songLibraryRetry": "Try again",
   "songLibrarySearch": "Search songs",
@@ -1396,7 +1397,10 @@
   "trainerNoConfig": "Choose a valid track, mode, and range first.",
   "songTrainerTitle": "Song Trainer",
   "songTrainerOverlayCountIn": "Count-in",
+  "songTrainerLoading": "Loading song trainer…",
   "songTrainerSpeedDisabledReason": "Speed disabled — backing cannot change rate.",
+  "songTrainerSpeedResumesOnRestart": "Paused: speed resumes when the session restarts.",
+  "songTrainerSpeedLabel": "Speed",
   "songTrainerLoopIndex": "Loop {current}/{total}",
   "@songTrainerLoopIndex": {
     "placeholders": {
