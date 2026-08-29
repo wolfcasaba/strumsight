@@ -21826,3 +21826,46 @@ tartozik, amit ez a kör nem módosíthat. A javítás javasolt helye:
 `test/property/dsp_property_test.dart:438` (a 20-as próbaszám és a 18-as küszöb
 együtt ad 90 %-ot; vagy a próbaszám emelése, vagy a küszöb %-os
 újrakalibrálása kell, mérés alapján).
+
+## L555 — Egy release-kapu, amelynek a KÖVETELMÉNY-listája nincs kipinnelve, a sor törlésével zöldre váltható: a hiányzó bizonyíték őrzése önmagában nem elég (E12-R16, 2026-08-29)
+
+**Mit mértünk.** Az E12-R16 AI-release összesítője helyesen zárta azt az utat,
+amelyen a *bizonyíték* hiányzik: a mai fán `exit=1`, három findinggel. De a
+követelmény-mátrix (`docs/release/ai-quality-gates.md`) SORAIT semmi nem
+őrizte. A reviewer mérése:
+
+```
+$ grep -v "^| audio_analysis_core \|^| live_and_tuner " \
+    docs/release/ai-quality-gates.md > /tmp/gutted.md
+$ python3 tool/release/build_ai_report.py --profile production \
+    --scope-file /tmp/gutted.md ; echo exit=$?
+{ "capabilities": [ { "id": "computer_vision", "metrics": [], "status": "not_in_scope" } ],
+  "findings": [], "profile": "production", "schemaVersion": 1 }
+exit=0
+
+$ grep -n "ai-quality-gates.md\|docs/release" test/tooling/ai_release_report_test.dart
+(nincs találat)
+```
+
+Az összesítő a mátrix soraiból építi a vizsgálandó halmazt
+(`build_ai_report.py:335-343`), ezért egy `ga_scope: true` capability, amelyhez
+nincs sor, **meg sem jelenik a riportban** — és a 22 cella mind fixture-mátrixon
+mért, ahol a sor definíció szerint jelen van.
+
+**A minta.** Minden „hiányzó X → BLOKK" kapunak KÉT megkerülési útja van: a
+mérés elhagyása (ezt szokás őrizni), és **a követelmény elhagyása** (ezt nem).
+A második olcsóbb. Ugyanaz a hibaosztály, mint az E12-R13 F1-e (a
+`required_suite: []` kiürítése egy blokkoló eszközön → 99/99 zöld,
+[L548](#l548)): ott is a KÖVETELMÉNY volt kiüresíthető, nem a bizonyíték.
+
+**Amit tenni kell.** Ha egy kapu tartalom-vezérelt listából dolgozik, a lista
+MÉRT, ma indokolt elemeit pinneld ki egy cellával, amely a SZÁLLÍTOTT
+dokumentumot olvassa (nem fixture-másolatot), és a bukási üzenetében mondja ki,
+hogy a sor törlése PIROS, nem zöld. A pin a teszt oldalán éljen — a kapu
+forrásába égetett lista második igazságforrás lenne (ADR 0477 D1).
+
+**Őrteszt:** `test/tooling/ai_release_report_test.dart::Pinned coverage — the two MEASURED, AI-evidence-bearing GA-scope capabilities (audio_analysis_core, live_and_tuner …)`
+
+**Forrás:** [`docs/reviews/e12-r16-review.md`](reviews/e12-r16-review.md) MAJOR-1,
+[ADR 0477](adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md),
+PR [#507](https://github.com/wolfcasaba/strumsight/pull/507).

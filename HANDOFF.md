@@ -1,5 +1,38 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R16 KÉSZ — AI és ML összesített release gate — PR [#507](https://github.com/wolfcasaba/strumsight/pull/507), squash `dd071f7d` (2026-08-29)
+
+A Ch12 **Kör 16** egyetlen, gépileg ellenőrizhető AI-release bizonyíték-kaput
+adott: `tool/release/build_ai_report.py` + `ai_report_schema.json` +
+`docs/release/ai-quality-gates.md` + 25 teszt-cella. A GA-scope **egyetlen
+igazsága** a már meglévő, géppel olvasható `docs/testing/device-matrix.yaml`
+(`capabilities[].ga_scope`) — a kör NEM hozott létre második capability-listát,
+és a regresszió-küszöböt sem definiálta újra: a `tool/compare_benchmarks.py`
+`classify` / `WARN_THRESHOLD` / `FAIL_THRESHOLD` neveit IMPORTÁLJA (ADR 0474
+öröklés). ADR: [0477](docs/adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md) (D1–D7).
+
+**A pre-flight két brief-premisszát cáfolt meg:** (1) az `ai_tutor` MA
+`ga_scope: false`, tehát a tutor-bizonyíték NEM GA-kritikus (a Tutor-kaput az
+ADR 0177 `tutor-eval.yml`-je viszi, változatlanul); (2) a modell-verziónak KÉT
+mért alakja van a manifestben (`models[].training_run.identifier` vs
+`vision_models[].version`). Az előre kiosztott `0456` ADR-szám is elavult volt —
+a foglaló `0477`-et adott.
+
+**A kör HELYES kimenete PIROS:** a mai fán
+`python3 tool/release/build_ai_report.py --profile development --scope-file
+docs/release/ai-quality-gates.md` → `exit=1`, három findinggel, mert a két
+GA-scope AI-capability (`audio_analysis_core`, `live_and_tuner`) bizonyítéka ma
+prózai Markdown (`docs/eval/*.md`), nem gépi dokumentum. Ez a fail-closed ág
+(D2), nem hiba — és az implementer NEM fedte el kitalált riporttal.
+
+**A review egy MAJOR-t talált ZÖLD gate mellett:** a kapu *bizonyíték*-hiányt
+őrizte, a *követelmény*-hiányt nem — a `docs/release/ai-quality-gates.md` három
+GA-sorának törlése `exit=0`-t adott, és egyetlen cella sem lett piros. A javító
+kör kipinnelt lefedettség-cellát tett be (a SZÁLLÍTOTT mátrixot és
+device-mátrixot olvasva); a reviewer saját valódi-sértés próbája szerint a sor
+törlése ma PONTOSAN ezt az egy cellát pirosítja, a maradék 23 zöld marad
+([L555](docs/LESSONS.md#l555)).
+
 ## ✅ E12-R15 KÉSZ — Audio, camera és local AI resource coexistence — PR [#506](https://github.com/wolfcasaba/strumsight/pull/506), squash `949cd274` (2026-08-29)
 
 A Ch12 **Kör 15** mércéje: a fán két, egymásról MIT SEM TUDÓ kizárólagos
@@ -9537,49 +9570,49 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-29):** `main` @ `949cd274` — E12-R15 Audio, camera
-és local AI resource coexistence, PR
-[#506](https://github.com/wolfcasaba/strumsight/pull/506), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
-Opus 5, **1 javító kör** — a review **2 MAJOR**-t talált TELJESEN ZÖLD gate
-mellett (7/7 lépés, 6/6 acceptance-cella): a szerződés-dokumentum olyan mérést
-állított, ami nem létezett (F1), és a felfüggesztésből nem volt visszaút (F2 —
-a kör saját céljában nevesített „néma elakadás"). A javító kör után APPROVED,
-0 nyitott lelet
-([`docs/reviews/e12-r15-review.md`](docs/reviews/e12-r15-review.md)).
+**Aktuális állapot (2026-08-29):** `main` @ `dd071f7d` — E12-R16 AI és ML
+összesített release gate, PR
+[#507](https://github.com/wolfcasaba/strumsight/pull/507), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — a review **1 MAJOR +
+1 MINOR**-t talált TELJESEN ZÖLD gate mellett (24/24 cella): a kapu
+követelmény-listája némán törölhető volt (MAJOR-1), és a két importált
+küszöb-név halott volt, így az A4 őr csak a nevek jelenlétét bizonyította
+(MINOR-1). A javító kör után APPROVED, 0 nyitott lelet, 2 NOTE nyitva
+([`docs/reviews/e12-r16-review.md`](docs/reviews/e12-r16-review.md)).
 `risk = "normal"`, a diff nem érint hálózatot, hitelesítést, tárolást vagy
-felhasználói adatot (tisztán `lib/core/` domain-logika + teszt + dokumentum),
-ezért külön `security-reviewer` nem futott. A kör ADR-je:
-[ADR 0476](docs/adr/0476-resource-coexistence-priority-and-suspension-contract.md)
-(D1–D7). Exact-SHA evidencia a merge SHA-n (`6222f521`): Full Gate
-[33241878432](https://github.com/wolfcasaba/strumsight/actions/runs/33241878432),
+felhasználói adatot (Python release-eszköz + séma + dokumentum + teszt), ezért
+külön `security-reviewer` nem futott. A kör ADR-je:
+[ADR 0477](docs/adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md)
+(D1–D7). Exact-SHA evidencia a merge SHA-n (`cac36271`): Full Gate
+[33244325533](https://github.com/wolfcasaba/strumsight/actions/runs/33244325533),
 Router CI
-[33241875691](https://github.com/wolfcasaba/strumsight/actions/runs/33241875691)
-— mindkettő `success`. A landolás `tools/round-land.sh`-sal, merge-záron
-keresztül ment. **Egy korábbi Full Gate futás (`33240406764`, a javítás ELŐTTI
-SHA-n) piros volt, de a kör diffjén kívül** — a randomizált DSP
-property-cellán, seed-függően ([L554](docs/LESSONS.md#l554)).
+[33244323662](https://github.com/wolfcasaba/strumsight/actions/runs/33244323662)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`); a landolás `tools/round-land.sh`-sal,
+merge-záron keresztül ment, közben az E15-R05 is landolt — a landoló
+sorosított, és a merge head SHA-ja változatlanul a CI-vel igazolt `cac36271`
+maradt.
 
 ## 5. Last completed round
 
-**E12-R15 — Audio, camera és local AI resource coexistence** (PR
-[#506](https://github.com/wolfcasaba/strumsight/pull/506), squash `949cd274`).
-A két, egymásról mit sem tudó kizárólagos koordinátor (mikrofon, kamera) FÖLÉ
-került egy prioritási réteg: `ResourcePriority` (`liveAudio` >
-`cameraFeedback` > `backgroundAi`), az absztrakt `ResourceConsumer` szerződés
-és a `ResourceArbiter`. Az arbiter **nem vesz el lease-t** — szerkezetileg sem
-tudna, mert egyik koordinátorra sincs referenciája ([ADR 0056](docs/adr/0056-exclusive-microphone-session.md)
-és [ADR 0184](docs/adr/0184-vision-camera-capture-stack.md) érintetlen —, csak
-a kérések SORRENDJÉT és az alacsonyabb prioritásúak MEGŐRZŐ felfüggesztését
-szabályozza, `releaseConsumer()` / `onMemoryPressureRelieved()` visszaúttal.
-13 cella (11 + 2). **A pre-flight mérése formálta a kört:** low-memory jelzés a
-fán nincs, és a kamera-lease-t ma csak a tilos zónában lévő vision-controllerek
-szerzik meg — ezért a cellák a VALÓDI koordinátorokon mérnek, nem a bekötetlen
-app-fán. **1 javító kör**, mindkét MAJOR gépi őrrel zárva
-([L552](docs/LESSONS.md#l552), [L553](docs/LESSONS.md#l553)); review APPROVED.
-A helyi AI **absztrakt fogyasztó marad** — a valódi futtató az Epic 10 Kör 12
-dolga (a sáv `hold`-on áll), és az arbiternek MA egyetlen production hívója
-sincs: a bekötés külön kör.
+**E12-R16 — AI és ML összesített release gate** (PR
+[#507](https://github.com/wolfcasaba/strumsight/pull/507), squash `dd071f7d`).
+A fán négy, egymásról mit sem tudó AI/ML bizonyíték-forrás élt
+(`tutor-eval.yml`, `dsp-probe.yml`, `docs/eval/` két prózai riportja,
+`assets/ml/model_manifest.json`), közös riport-séma nélkül. Mostantól van egy
+összesítő, amely minden állítást modell-, build- és korpusz-verzióhoz köt, a
+hiányzó GA-scope bizonyítékra fail-closed BLOKKOL, a `hold`-on álló sávokat
+(`offline_ai`, `computer_vision`, `ai_tutor`) pedig `not_in_scope` jelöléssel
+LÁTHATÓAN kihagyja — anélkül, hogy a GA-listát vagy a regresszió-küszöböt
+másodszor is definiálná. **A pre-flight formálta a kört:** a GA-scope már
+géppel olvasható volt (E12-R13 device-mátrix), és az `ai_tutor` ott
+`ga_scope: false` — a brief eredeti „tutor = kritikus bemenet" premisszája
+mérve hamis volt. **1 javító kör**, a MAJOR gépi őrrel zárva
+([L555](docs/LESSONS.md#l555)); review APPROVED. **A CI-integráció külön kör
+marad:** `ai-release-gate.yml` szándékosan NEM készült el, és a két GA-scope
+AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő ezt
+`exit=1`-gyel mondja ki.
 
 ## 6. Exact next task
 
@@ -9593,8 +9626,8 @@ sincs: a bekötés külön kör.
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R15
-> zárása után): **276 `done`, 40 `hold`, 18 `prepared`, 30 `pending`**.
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R16
+> zárása után): **278 `done`, 40 `hold`, 18 `prepared`, 28 `pending`**.
 >
 > ⚠ **Az E12-R15 arbiterének MA egyetlen production hívója sincs** — ez
 > szándékos (a bekötés `lib/features/**` és `mic_capture.dart`, mindkettő a kör
