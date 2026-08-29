@@ -66,6 +66,19 @@ bool _isMigrated(String repositoryPath, String screenPath) => File(
   '$repositoryPath/$screenPath',
 ).readAsStringSync().contains('design_system');
 
+/// The A4 assertion itself: which `retire` rows are missing a named
+/// successor or a real (non-trivial) reason. Shared by the real-plan check
+/// and its real-violation probe so both provably run the same logic.
+List<String> _retireRowsMissingSuccessorOrReason(List<_PlanRow> retireRows) {
+  final failing = <String>[];
+  for (final row in retireRows) {
+    final missingSuccessor = row.successor.isEmpty || row.successor == '—';
+    final trivialReason = row.reason.trim().length <= 10;
+    if (missingSuccessor || trivialReason) failing.add(row.screenPath);
+  }
+  return failing;
+}
+
 void main() {
   final repository = Directory.current;
 
@@ -295,40 +308,47 @@ final routes = [
 
   group('A4 — every "retire" row in the real plan has a reason AND a named '
       'successor screen', () {
-    test('no retire row has an empty successor or a trivial reason', () {
+    late List<_PlanRow> retireRows;
+
+    setUpAll(() {
       final planFile = File(
         '${Directory.current.path}/docs/ui/retirement-plan.md',
       );
       final rows = _parsePlanRows(planFile.readAsStringSync());
-      final retireRows = rows.where((r) => r.verdict == 'retire').toList();
-
-      expect(retireRows, isNotEmpty);
-      for (final row in retireRows) {
-        expect(
-          row.successor,
-          isNot(anyOf(isEmpty, '—')),
-          reason: '${row.screenPath} is retire but names no successor',
-        );
-        expect(
-          row.reason.trim().length,
-          greaterThan(10),
-          reason: '${row.screenPath} is retire but has no real reason',
-        );
-      }
+      retireRows = rows.where((r) => r.verdict == 'retire').toList();
     });
 
-    // The KÖTELEZŐ valódi-sértés próba for A4: a retire row with the
-    // successor blanked out must be rejected by the same assertion shape
-    // used above — proving the check is not vacuously true.
-    test('a retire row with its successor blanked out is rejected', () {
-      final mutated = _PlanRow(
-        screenPath: 'lib/features/fixture/screens/fixture_screen.dart',
-        verdict: 'retire',
-        ownerRound: 'E15-R04',
-        successor: '—',
-        reason: 'Some reason.',
+    test('no retire row has an empty successor or a trivial reason', () {
+      expect(retireRows, isNotEmpty);
+      expect(
+        _retireRowsMissingSuccessorOrReason(retireRows),
+        isEmpty,
+        reason: 'retire rows missing a successor or a real reason',
       );
-      expect(mutated.successor, anyOf(isEmpty, '—'));
+    });
+
+    // The KÖTELEZŐ valódi-sértés próba for A4 (A3's shape, brief §6.1/§7):
+    // blank one real retire row's successor in a COPY of the real, measured
+    // plan rows and rerun the SAME assertion helper the cell above uses —
+    // proving the check actually looks at the successor column instead of
+    // trivially passing.
+    test('blanking one real retire row\'s successor turns this cell red', () {
+      final target = retireRows.first;
+      final mutated = [
+        for (final row in retireRows)
+          if (row.screenPath == target.screenPath)
+            _PlanRow(
+              screenPath: row.screenPath,
+              verdict: row.verdict,
+              ownerRound: row.ownerRound,
+              successor: '—',
+              reason: row.reason,
+            )
+          else
+            row,
+      ];
+
+      expect(_retireRowsMissingSuccessorOrReason(mutated), [target.screenPath]);
     });
   });
 }

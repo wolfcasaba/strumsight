@@ -441,4 +441,80 @@ zöld (`00:52 +9: All tests passed!` — a fenti §10.3-ban idézett futás ez).
   jövőbeli automatizált fogyasztónak `dart compile exe` vagy a stderr
   elválasztása javasolt (ezt a kör nem valósítja meg, kívül esik a scope-on).
 
+### 10.6 Javító kör (a review MAJOR-1-jére) — TÉNYLEGES kimenet
+
+A független review (`docs/reviews/e15-r03-review.md` MAJOR-1) megmérte, hogy a
+`:323–332` A4 „kötelező valódi-sértés próbája" tautológia volt: egy helyben
+megírt literált hasonlított önmagához, nem hívta meg sem a `_parsePlanRows`-t,
+sem a valós tervet, sem az A4 tényleges állítás-logikáját.
+
+**Javítás — (a) út, az A3-próba alakja.** A `:298–318` és a `:323–332` teszt
+mostantól egy közös, top-level `_retireRowsMissingSuccessorOrReason(List<
+_PlanRow>)` függvényt hív, amely pontosan az eredeti két `expect`
+(üres/`—` successor, ≤10 karakteres reason) logikáját tartalmazza. Az A4-cella
+a valós tervet (`_parsePlanRows` + a `retire` sorok) egyszer, `setUpAll`-ban
+olvassa be:
+
+- az eredeti teszt a valós `retire` sorokon hívja a függvényt, és üres listát
+  vár;
+- az új valódi-sértés próba a valós `retire` sorok egy MÁSOLATÁBAN kiüríti
+  EGY tényleges sor successorát (`'—'`-re), majd UGYANAZT a függvényt hívja a
+  módosított listán, és azt várja, hogy pontosan az az egy `screenPath` térjen
+  vissza — az A3-próba (`:263–293`) alakjával megegyezően.
+
+**A próba VALÓDI — mérve, a brief §2 szerint.**
+
+1. **Az őr kiütve, csak az új próba fut.** A `_retireRowsMissingSuccessorOrReason`
+   belsejében a feltételt ideiglenesen `if (false && (missingSuccessor ||
+   trivialReason))`-ra cseréltem (vagyis a valós A4 állítás soha nem jelez
+   sértést), majd KIZÁRÓLAG az új próbát futtattam:
+
+   ```
+   flutter test test/tooling/screen_reachability_test.dart --plain-name "blanking one real retire row's successor turns this cell red"
+   ```
+
+   **PIROSRA váltott**, a tényleges hibaüzenet:
+
+   ```
+   Expected: ['lib/features/analyze/screens/analyze_screen.dart']
+     Actual: []
+        Which: at location [0] is [] which shorter than expected
+   test/tooling/screen_reachability_test.dart 352:7    main.<fn>.<fn>
+   ```
+
+   Vagyis a kiütött őr mellett az új próba maga bukik el — nem vákuumosan
+   igaz, ténylegesen a `_retireRowsMissingSuccessorOrReason` viselkedését
+   méri.
+
+2. **Az őr visszaállítva.** A feltételt visszaállítottam az eredeti
+   `if (missingSuccessor || trivialReason) failing.add(row.screenPath);`
+   alakra, és újrafuttattam a teljes A4 csoportot:
+
+   ```
+   flutter test test/tooling/screen_reachability_test.dart --plain-name "A4"
+   → 00:00 +2: All tests passed!
+   ```
+
+**Záró gate — TÉNYLEGES kimenet (csővezeték/`head`/`tail`/`&&` nélkül):**
+
+```
+tools/round-gate.sh test/tooling/screen_reachability_test.dart test/ui/ui_inventory_test.dart
+```
+
+```
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A `git diff` a javító körben kizárólag
+`test/tooling/screen_reachability_test.dart`-ot érinti (a `_PlanRow`-import,
+`lib/**`, `docs/adr/**`, `tool/**` érintetlen).
+
 ## 11. Review — a Claude tölti ki
