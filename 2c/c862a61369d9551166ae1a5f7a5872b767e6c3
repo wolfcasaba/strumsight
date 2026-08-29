@@ -1,0 +1,1 @@
+round=130 verdict=pass tests=509+25 lesson=excludeSemantics-drops-child-tap-action-put-onTap-on-Semantics; assert-hasAction-not-just-label
