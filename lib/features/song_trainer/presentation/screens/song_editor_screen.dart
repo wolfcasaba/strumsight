@@ -186,7 +186,7 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
         ),
         body: switch (state.status) {
           SongEditorStatus.loading => const _EditorLoading(),
-          SongEditorStatus.failure when !state.isLoaded => _EditorLoadFailure(
+          SongEditorStatus.failure when !state.isLoaded => _EditorLoadError(
             message: l10n.songEditorLoadFailed,
           ),
           _ => _EditorBody(
@@ -506,8 +506,8 @@ class _EditorLoading extends StatelessWidget {
 /// MAJOR-2). This state was action-less pre-migration (a bare `Text`) —
 /// adding a retry affordance here would be a new action in an
 /// appearance-only round (E15-R04 review MAJOR-3 pattern).
-class _EditorLoadFailure extends StatelessWidget {
-  const _EditorLoadFailure({required this.message});
+class _EditorLoadError extends StatelessWidget {
+  const _EditorLoadError({required this.message});
   final String message;
 
   @override

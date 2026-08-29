@@ -90,9 +90,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
       body: SafeArea(
         child: switch (state.status) {
           SongLibraryStatus.loading => const _LibraryLoading(),
-          SongLibraryStatus.failure => _LibraryFailure(
-            onRetry: controller.load,
-          ),
+          SongLibraryStatus.failure => _LibraryError(onRetry: controller.load),
           SongLibraryStatus.ready => Column(
             children: <Widget>[
               Padding(
@@ -301,8 +299,8 @@ class _LibraryLoading extends StatelessWidget {
 /// without fabricating one (E15-R04 review MAJOR-2). The single retry action
 /// already existed pre-migration (`controller.load`) — only its styling
 /// moves onto design tokens.
-class _LibraryFailure extends StatelessWidget {
-  const _LibraryFailure({required this.onRetry});
+class _LibraryError extends StatelessWidget {
+  const _LibraryError({required this.onRetry});
   final VoidCallback onRetry;
 
   @override

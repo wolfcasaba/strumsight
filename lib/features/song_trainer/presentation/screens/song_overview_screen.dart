@@ -85,7 +85,7 @@ final class _SongOverviewScreenState extends ConsumerState<SongOverviewScreen> {
           label: l10n.songOverviewLoading,
           child: const _OverviewLoading(),
         ),
-        SongTrainerSetupStatus.failure => _OverviewFailure(
+        SongTrainerSetupStatus.failure => _OverviewError(
           onRetry: _loadIfNeeded,
         ),
         SongTrainerSetupStatus.ready => _OverviewBody(
@@ -251,8 +251,8 @@ class _OverviewLoading extends StatelessWidget {
 /// nothing honest to feed [SsFailurePresentation.from] without fabricating
 /// one (E15-R04 review MAJOR-2). The single retry action already existed
 /// pre-migration (`_loadIfNeeded`) — only its styling moves onto tokens.
-class _OverviewFailure extends StatelessWidget {
-  const _OverviewFailure({required this.onRetry});
+class _OverviewError extends StatelessWidget {
+  const _OverviewError({required this.onRetry});
   final VoidCallback onRetry;
 
   @override
