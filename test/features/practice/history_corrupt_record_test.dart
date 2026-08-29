@@ -20,6 +20,7 @@ import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
 import 'package:strumsight/features/practice/domain/model/practice_source.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_history_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../support/preference_store.dart';
 
@@ -33,7 +34,8 @@ void main() {
         // client, no network provider of any kind. The screen still
         // renders the full list from this alone (A4).
         overrides: preferenceOverrides(seed),
-        child: const MaterialApp(
+        child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: PracticeHistoryScreen(),

@@ -5,13 +5,15 @@ import 'package:strumsight/features/learn/screens/latency_calibration_screen.dar
 import 'package:strumsight/features/settings/providers/input_latency_provider.dart';
 import 'package:strumsight/features/settings/providers/visual_latency_provider.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/preference_store.dart';
 
 Widget _app() => ProviderScope(
   overrides: preferenceOverrides(),
-  child: const MaterialApp(
+  child: MaterialApp(
+    theme: SsLightTheme.data(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: LatencyCalibrationScreen(),

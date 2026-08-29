@@ -19,6 +19,7 @@ import 'package:strumsight/features/practice/domain/service/speed_builder_engine
 import 'package:strumsight/features/practice/presentation/screens/speed_builder_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 AppLocalizations l10n() => AppLocalizationsEn();
 
@@ -64,6 +65,7 @@ void main() {
   Future<void> pump(WidgetTester tester, {SpeedBuilderState? initialState}) =>
       tester.pumpWidget(
         MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: SpeedBuilderScreen(policy: policy, initialState: initialState),

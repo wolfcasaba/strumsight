@@ -13,6 +13,7 @@ import 'package:strumsight/features/progress/model/practice_entry.dart';
 import 'package:strumsight/features/progress/providers/practice_log_provider.dart';
 import 'package:strumsight/features/streak/streak_logic.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
@@ -74,6 +75,7 @@ Future<void> _pump(
           ),
       ],
       child: MaterialApp(
+        theme: SsLightTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: LearnScreen(lesson: Lessons.firstStrums),

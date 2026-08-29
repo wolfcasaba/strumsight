@@ -19,6 +19,7 @@ import 'package:strumsight/features/practice/presentation/providers/practice_res
 import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../support/preference_store.dart';
 
@@ -80,6 +81,7 @@ void main() {
           rewardLedgerRepositoryProvider.overrideWithValue(ledger),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: PracticeResultScreen(entry: entry),

@@ -17,6 +17,7 @@ import 'package:strumsight/features/practice/domain/repository/practice_catalog_
 import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
 import 'package:strumsight/features/streak/daily_challenge.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../../support/preference_store.dart';
 
@@ -132,6 +133,7 @@ Widget _host({
       practiceCatalogRepositoryProvider.overrideWithValue(repository),
     ],
     child: MaterialApp(
+      theme: SsLightTheme.data(),
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

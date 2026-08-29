@@ -7,6 +7,7 @@ import 'package:strumsight/features/learn/widgets/lesson_score_card.dart';
 import 'package:strumsight/features/share/share_content.dart';
 import 'package:strumsight/features/share/share_service.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 class _FakeShareService extends ShareService {
   const _FakeShareService(this.log);
@@ -42,7 +43,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
+        theme: SsLightTheme.data(),
         home: Scaffold(
           body: Center(
             child: LessonScoreCard(
@@ -71,7 +73,8 @@ void main() {
         t.widget<Text>(find.textContaining('%').first).style!.color!;
 
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
+        theme: SsLightTheme.data(),
         home: Scaffold(
           body: LessonScoreCard(
             lessonName: 'L',
@@ -91,7 +94,8 @@ void main() {
     );
 
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
+        theme: SsLightTheme.data(),
         home: Scaffold(
           body: LessonScoreCard(
             lessonName: 'L',
@@ -111,6 +115,7 @@ void main() {
     final log = <String>[];
     await tester.pumpWidget(
       MaterialApp(
+        theme: SsLightTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: LessonScorePreviewScreen(
