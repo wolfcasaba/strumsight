@@ -31,6 +31,7 @@ devices:
     release_blocking: true
     required_suite: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
     provenance: docs/manual-testing/vision-device-matrix.md:160
+    spec_provenance: docs/manual-testing/vision-performance-benchmark.md:117
 
   - id: pixel_7
     name: Pixel 7
@@ -48,6 +49,7 @@ devices:
     release_blocking: true
     required_suite: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
     provenance: docs/manual-testing/vision-device-matrix.md:161
+    spec_provenance: docs/manual-testing/vision-performance-benchmark.md:118
 
   - id: samsung_galaxy_a54
     name: Samsung Galaxy A54
@@ -65,6 +67,7 @@ devices:
     release_blocking: false
     required_suite: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
     provenance: docs/manual-testing/vision-device-matrix.md:162
+    spec_provenance: docs/manual-testing/vision-performance-benchmark.md:119
 
   - id: xiaomi_redmi_note_12
     name: Xiaomi Redmi Note 12
@@ -82,6 +85,7 @@ devices:
     release_blocking: false
     required_suite: [install_and_update, cold_start, live_start_latency, mic_release, practice_soak_20min, analyze_memory_peak, camera_preview_and_thermal, background_resume, battery_saver, airplane_mode, low_storage, text_scale_200, screen_reader_path]
     provenance: docs/manual-testing/vision-device-matrix.md:163
+    spec_provenance: docs/manual-testing/vision-performance-benchmark.md:120
 
 capabilities:
   - id: onboarding
