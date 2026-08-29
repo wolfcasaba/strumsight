@@ -517,4 +517,116 @@ A `git diff` a javító körben kizárólag
 `test/tooling/screen_reachability_test.dart`-ot érinti (a `_PlanRow`-import,
 `lib/**`, `docs/adr/**`, `tool/**` érintetlen).
 
+### 10.7 Második javító kör (MAJOR-2 — a mérő négyzetes I/O-ja) — TÉNYLEGES kimenet
+
+A review megmérte, hogy `tool/check_screen_reachability.dart` `render()`
+hurka `O(képernyők × fájlok)` — minden 96 képernyőhöz újraolvasta a teljes
+`lib/`+`test/` fát — és ez izolált klónban `real 3m0.848s`-ot mért egyetlen
+teszt-fájlra.
+
+**Javítás — a hurkok megfordítva, `O(fájlok)`-ra.** A `render()` mostantól:
+
+1. előre kiszámolja mind a 96 `className → screen-index` leképezést
+   (`screenIndicesByClassName`);
+2. a `lib/app/routing/*` három fájlját (változatlanul, fájlonként EGYSZER
+   olvasva) soronként egyetlen általánosított token-regexszel
+   (`_referenceToken = r'\b([A-Za-z0-9_]*Screen)\b'`) vizsgálja, és a talált
+   névvel a leképezésben néz utána, mely képernyő(ke)t érinti;
+3. a `lib/` fákat **egyszer** olvassa be, soronként egyetlen konstrukciós
+   token-regexszel (`_constructToken = r'\b([A-Za-z0-9_]*Screen)(?:\.[A-Za-z_]
+   [A-Za-z0-9_]*)?\s*\('`) — a régi `_constructs(line, className)` 96×
+   hívása helyett;
+4. a `test/` fákat **egyszer** olvassa be, ugyanazzal a `_referenceToken`
+   mintával;
+5. minden sorra van egy olcsó előszűrő (`if (!line.contains('Screen'))
+   continue;`) — mivel minden képernyő-osztály `Screen`-re végződik
+   (`_classDeclaration` kikényszeríti), egy `Screen` alsztringet nem
+   tartalmazó sor biztosan nem illeszkedhet, a regex-illesztés elkerülhető.
+
+Az önhivatkozás-kizárás (egy képernyő saját fájlja nem számít saját
+imperatív hivatkozásának) és a routing-fájlok kizárása az imperatív
+csatornából megmaradt, csak fájl-szintre emelve (a `libPath ==
+screenPaths[idx]` és `routingSources.contains(libPath)` ellenőrzés a hurok
+megfelelő szintjén fut, nem képernyőnként újra).
+
+A régi `_references`/`_constructs` privát segédfüggvényeket eltávolítottam
+(a hívóik megszűntek, az analyzer `unused_element`-et jelzett volna) — a
+helyettük belépő `_referenceToken`/`_constructToken` a KAPCSOLT, minden
+képernyőre egyszerre futó megfelelőjük: mivel minden ismert osztálynév
+`Screen`-re végződik, egy `[A-Za-z0-9_]*Screen`-alakú, szóhatárolt token
+kinyerése és a leképezéssel való metszése pontosan azt a halmazt adja, amit
+a régi, osztálynevenkénti `\bClassName\b`/konstrukciós regex 96-szori
+lefuttatása adott volna (word-boundary szemantika azonos — lásd az
+implementáció fenti kommentjét).
+
+**A viselkedés NEM változott — mérve, byte-azonosan.** Mivel ezen a boxon a
+review referencia-hasheléséhez (`sed 's/^Running build hooks\.\.\.//'`)
+tartozó nyers kimenet MÁR a javítás előtt (tiszta, változatlan `HEAD`)
+sem egyezett a brief §3-ban idézett `7cebc87d…` hash-sel — csak
+környezeti eltérés (más doboz futtatta a review mérését), NEM a kör
+diffje —, a helyes ellenőrzés a MOSTANI `HEAD` (javítás előtti) és a
+MÓDOSÍTOTT fa kimenetének összevetése volt, izolált `git worktree`-ben:
+
+```
+git worktree add --detach /tmp/e15r03-baseline HEAD   # javítás előtti tiszta fa
+cd /tmp/e15r03-baseline && dart run tool/check_screen_reachability.dart --format json \
+  | sed 's/^Running build hooks\.\.\.//' | sha256sum
+→ 49ae2e4084b278237c03df303a14164bf7ccf80962ec93cad34a5a10b9264df0  (6113 sor)
+
+# a munkapéldányban (javítással):
+dart run tool/check_screen_reachability.dart --format json \
+  | sed 's/^Running build hooks\.\.\.//' | sha256sum
+→ 49ae2e4084b278237c03df303a14164bf7ccf80962ec93cad34a5a10b9264df0  (6113 sor)
+
+diff <(javítás előtti kimenet) <(javítás utáni kimenet)
+→ (üres — byte-azonos)
+```
+
+A két hash **megegyezik** (`49ae2e40…`), a `diff` üres — a javítás
+byte-azonos kimenetet ad a javítás előtti kódhoz képest ezen a boxon. Az
+összesítő sor is változatlan:
+
+```
+Measured screens: 96. Reachable: 68. Unreachable: 28. Flag-gated: 25.
+```
+
+**Mért gyorsulás:**
+
+```
+time flutter test test/tooling/screen_reachability_test.dart
+```
+
+| | előtte (review mérése, izolált klón) | utána (ez a kör, ugyanez a box) |
+| --- | --- | --- |
+| real | 3m0.848s | **0m5.826s** |
+| user | 2m47.740s | 0m6.381s |
+| sys | 0m13.148s | 0m1.105s |
+
+**~31×** gyorsulás — a `render()` most valóban `O(fájlok)`, nem
+`O(képernyők × fájlok)`.
+
+**Záró gate — TÉNYLEGES kimenet (csővezeték/`head`/`tail`/`&&` nélkül):**
+
+```
+tools/round-gate.sh test/tooling/screen_reachability_test.dart test/ui/ui_inventory_test.dart
+```
+
+```
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A `git diff` ebben a javító körben kizárólag
+`tool/check_screen_reachability.dart`-ot (a `render()` hurok-átalakítása +
+`_referenceToken`/`_constructToken`) és ezt a szakaszt érinti;
+`test/tooling/screen_reachability_test.dart` és a `lib/**`/`docs/adr/**`/
+`tool/ui_inventory.dart` érintetlen maradt.
+
 ## 11. Review — a Claude tölti ki

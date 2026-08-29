@@ -238,57 +238,108 @@ final class ScreenReachability {
     final libFiles = _allDartFiles('lib');
     final testFiles = _allDartFiles('test');
 
+    // One pass over every `lib/`+`test/` file, instead of one pass PER
+    // screen (was O(screens × files); this is O(files)) — see ADR 0470 /
+    // E15-R03 MAJOR-2. Every screen class ends in "Screen" (enforced by
+    // `_classDeclaration`), so a single generalised token regex can find
+    // every candidate name on a line in one shot; the per-class-name regex
+    // loop below only runs against the (typically one) screen(s) that
+    // actually own that token, via [screenIndicesByClassName].
+    final classNames = [
+      for (final screenPath in screenPaths) _classNameOf(screenPath),
+    ];
+    final screenIndicesByClassName = <String, List<int>>{};
+    for (var i = 0; i < classNames.length; i++) {
+      screenIndicesByClassName.putIfAbsent(classNames[i], () => <int>[]).add(i);
+    }
+
+    final declarativeByScreen = List.generate(
+      screenPaths.length,
+      (_) => <DeclarativeReference>[],
+    );
+    for (final routingPath in routingSources) {
+      final lines = routingLines[routingPath]!;
+      final scopes = flagScopes[routingPath]!;
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        if (!line.contains('Screen')) continue;
+        final matchedNames = <String>{
+          for (final m in _referenceToken.allMatches(line)) m.group(1)!,
+        };
+        for (final name in matchedNames) {
+          final indices = screenIndicesByClassName[name];
+          if (indices == null) continue;
+          final reference = DeclarativeReference(
+            SourceRef(routingPath, i + 1),
+            List.unmodifiable(scopes[i]),
+          );
+          for (final idx in indices) {
+            declarativeByScreen[idx].add(reference);
+          }
+        }
+      }
+    }
+
+    final imperativeByScreen = List.generate(
+      screenPaths.length,
+      (_) => <SourceRef>[],
+    );
+    for (final libPath in libFiles) {
+      if (routingSources.contains(libPath)) continue;
+      final lines = _readLines(libPath);
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        if (!line.contains('Screen')) continue;
+        final matchedNames = <String>{
+          for (final m in _constructToken.allMatches(line)) m.group(1)!,
+        };
+        for (final name in matchedNames) {
+          final indices = screenIndicesByClassName[name];
+          if (indices == null) continue;
+          final reference = SourceRef(libPath, i + 1);
+          for (final idx in indices) {
+            if (screenPaths[idx] == libPath) continue;
+            imperativeByScreen[idx].add(reference);
+          }
+        }
+      }
+    }
+
+    final testRefsByScreen = List.generate(
+      screenPaths.length,
+      (_) => <SourceRef>[],
+    );
+    for (final testPath in testFiles) {
+      final lines = _readLines(testPath);
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        if (!line.contains('Screen')) continue;
+        final matchedNames = <String>{
+          for (final m in _referenceToken.allMatches(line)) m.group(1)!,
+        };
+        for (final name in matchedNames) {
+          final indices = screenIndicesByClassName[name];
+          if (indices == null) continue;
+          final reference = SourceRef(testPath, i + 1);
+          for (final idx in indices) {
+            testRefsByScreen[idx].add(reference);
+          }
+        }
+      }
+    }
+
     final verdicts = <ScreenVerdict>[];
-    for (final screenPath in screenPaths) {
-      final className = _classNameOf(screenPath);
-      final declaredAt = _declarationRef(screenPath, className);
-
-      final declarative = <DeclarativeReference>[];
-      for (final routingPath in routingSources) {
-        final lines = routingLines[routingPath]!;
-        final scopes = flagScopes[routingPath]!;
-        for (var i = 0; i < lines.length; i++) {
-          if (_references(lines[i], className)) {
-            declarative.add(
-              DeclarativeReference(
-                SourceRef(routingPath, i + 1),
-                List.unmodifiable(scopes[i]),
-              ),
-            );
-          }
-        }
-      }
-
-      final imperative = <SourceRef>[];
-      for (final libPath in libFiles) {
-        if (libPath == screenPath) continue;
-        if (routingSources.contains(libPath)) continue;
-        final lines = _readLines(libPath);
-        for (var i = 0; i < lines.length; i++) {
-          if (_constructs(lines[i], className)) {
-            imperative.add(SourceRef(libPath, i + 1));
-          }
-        }
-      }
-
-      final testRefs = <SourceRef>[];
-      for (final testPath in testFiles) {
-        final lines = _readLines(testPath);
-        for (var i = 0; i < lines.length; i++) {
-          if (_references(lines[i], className)) {
-            testRefs.add(SourceRef(testPath, i + 1));
-          }
-        }
-      }
-
+    for (var idx = 0; idx < screenPaths.length; idx++) {
+      final screenPath = screenPaths[idx];
+      final className = classNames[idx];
       verdicts.add(
         ScreenVerdict(
           screenPath: screenPath,
           className: className,
-          declaredAt: declaredAt,
-          declarativeReferences: List.unmodifiable(declarative),
-          imperativeReferences: List.unmodifiable(imperative),
-          testReferences: List.unmodifiable(testRefs),
+          declaredAt: _declarationRef(screenPath, className),
+          declarativeReferences: List.unmodifiable(declarativeByScreen[idx]),
+          imperativeReferences: List.unmodifiable(imperativeByScreen[idx]),
+          testReferences: List.unmodifiable(testRefsByScreen[idx]),
         ),
       );
     }
@@ -318,17 +369,21 @@ final class ScreenReachability {
     return SourceRef(screenPath, 1);
   }
 
-  static bool _references(String line, String className) =>
-      RegExp('\\b${RegExp.escape(className)}\\b').hasMatch(line);
+  /// Every `[A-Za-z0-9_]*Screen`-shaped token on a line, word-bounded. Used
+  /// to find declarative/test mentions of any of the 96 screen classes in
+  /// one pass; the caller intersects the captured names against the known
+  /// class-name set, so a token that merely SHAPE-matches (ends in
+  /// `Screen`) but isn't one of the 96 real classes is a harmless no-op.
+  static final RegExp _referenceToken = RegExp(r'\b([A-Za-z0-9_]*Screen)\b');
 
   /// A construction site: `ClassName(` or `ClassName.namedCtor(`. Stricter
-  /// than [_references] on purpose — ADR 0470 D2 requires the imperative
+  /// than [_referenceToken] on purpose — ADR 0470 D2 requires the imperative
   /// channel to see the class actually being CONSTRUCTED, not merely
   /// mentioned as a type (a generic parameter or a doc comment does not
   /// make a screen reachable).
-  static bool _constructs(String line, String className) => RegExp(
-    '\\b${RegExp.escape(className)}(?:\\.[A-Za-z_][A-Za-z0-9_]*)?\\s*\\(',
-  ).hasMatch(line);
+  static final RegExp _constructToken = RegExp(
+    r'\b([A-Za-z0-9_]*Screen)(?:\.[A-Za-z_][A-Za-z0-9_]*)?\s*\(',
+  );
 
   /// For each line of a routing source, the list of flag conditions whose
   /// `if (...)` guard textually encloses it, using `dart format`'s
