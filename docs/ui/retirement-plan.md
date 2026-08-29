@@ -1,10 +1,10 @@
 # Screen retirement and migration plan (measured, E15-R03)
 
 **Status:** proposal only. This document does not remove anything — no route,
-no screen, no file (ADR 0470 D5). Every `retire` row below is a recommendation
+no screen, no file (ADR 0471 D5). Every `retire` row below is a recommendation
 for a separate, reviewed round; every `migrate` row assigns a named E15 round
-(ADR 0470 D6); every `unreachable` row is a candidate for human/product review,
-never an automatic deletion authorisation (ADR 0470 D7).
+(ADR 0471 D6); every `unreachable` row is a candidate for human/product review,
+never an automatic deletion authorisation (ADR 0471 D7).
 
 **Measured from:** `main` at the E15-R03 pre-flight baseline
 (`docs/rounds/e15-r03-legacy-reachability-audit-and-retirement.md` §0.0.A,
@@ -15,7 +15,7 @@ dart run tool/check_screen_reachability.dart --format table
 dart run tool/check_screen_reachability.dart --format json
 ```
 
-## 1. Method (ADR 0470)
+## 1. Method (ADR 0471)
 
 A screen is **reachable** if EITHER channel finds it (D2):
 
@@ -64,7 +64,7 @@ door today, not dead code.
 
 The 35 `migrate` + 6 `retire` = 41 reachable-and-legacy screens are grouped
 into eight named rounds, `E15-R04`…`E15-R11` (§4) — every one of them, per
-ADR 0470 D6. The 28 `unreachable` rows carry NO round assignment: assigning a
+ADR 0471 D6. The 28 `unreachable` rows carry NO round assignment: assigning a
 Ch15 design-migration round to a screen nobody can reach would be exactly the
 waste this round exists to prevent (brief §0.0). They are not silently
 dropped, though — §3 groups them with their own measured findings and owners.
@@ -141,7 +141,7 @@ round, unscheduled.
 None of these get a Ch15 round for the same reason as §3.2/§3.3: there is no
 reachable screen here to migrate.
 
-## 4. Round assignment (ADR 0470 D6)
+## 4. Round assignment (ADR 0471 D6)
 
 | Round | Scope |
 | --- | --- |
@@ -157,7 +157,7 @@ reachable screen here to migrate.
 Every reachable-and-legacy screen (41 total: 35 `migrate` + 6 `retire`) has
 exactly one row above. §3's unreachable findings deliberately have none.
 
-## 5. Retire proposals in detail (ADR 0470 D5, A4)
+## 5. Retire proposals in detail (ADR 0471 D5, A4)
 
 | Legacy screen | Successor | Reason |
 | --- | --- | --- |
@@ -199,13 +199,13 @@ catch.
 | `lib/features/community/presentation/screens/bookmarks_screen.dart` | `BookmarksScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
 | `lib/features/community/presentation/screens/clubs/club_detail_screen.dart` | `ClubDetailScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
 | `lib/features/community/presentation/screens/clubs/club_list_screen.dart` | `ClubListScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/clubs/club_member_management_screen.dart` | `ClubMemberManagementScreen` | yes | no | keep | — | — | Already design-system migrated. Only constructed from `ClubDetailScreen` (itself unreachable) — a one-hop-only measurement (ADR 0470 D7) marks this reachable, but the entry point into it is dead. |
+| `lib/features/community/presentation/screens/clubs/club_member_management_screen.dart` | `ClubMemberManagementScreen` | yes | no | keep | — | — | Already design-system migrated. Only constructed from `ClubDetailScreen` (itself unreachable) — a one-hop-only measurement (ADR 0471 D7) marks this reachable, but the entry point into it is dead. |
 | `lib/features/community/presentation/screens/comments_screen.dart` | `CommentsScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
 | `lib/features/community/presentation/screens/community_challenges_screen.dart` | `CommunityChallengesScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
 | `lib/features/community/presentation/screens/community_gate_screen.dart` | `CommunityGateScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
 | `lib/features/community/presentation/screens/community_notifications_screen.dart` | `CommunityNotificationsScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
 | `lib/features/community/presentation/screens/community_search_screen.dart` | `CommunitySearchScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/edit_profile_screen.dart` | `EditProfileScreen` | yes | no | keep | — | — | Already design-system migrated. Only constructed from `CommunityGateScreen` (itself unreachable) — a one-hop-only measurement (ADR 0470 D7) marks this reachable, but the entry point into it is dead. |
+| `lib/features/community/presentation/screens/edit_profile_screen.dart` | `EditProfileScreen` | yes | no | keep | — | — | Already design-system migrated. Only constructed from `CommunityGateScreen` (itself unreachable) — a one-hop-only measurement (ADR 0471 D7) marks this reachable, but the entry point into it is dead. |
 | `lib/features/community/presentation/screens/followers_screen.dart` | `FollowersScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
 | `lib/features/community/presentation/screens/following_feed_screen.dart` | `FollowingFeedScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
 | `lib/features/community/presentation/screens/leaderboard_screen.dart` | `LeaderboardScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
@@ -222,7 +222,7 @@ catch.
 | `lib/features/learn/screens/learn_screen.dart` | `LearnScreen` | yes | no | migrate | E15-R07 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/learn/screens/lesson_list_screen.dart` | `LessonListScreen` | yes | no | migrate | E15-R07 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/learn/screens/lesson_score_preview_screen.dart` | `LessonScorePreviewScreen` | yes | no | migrate | E15-R07 | — | Legacy, reachable — Ch15 design-system migration. |
-| `lib/features/library/screens/library_screen.dart` | `LibraryScreen` | yes | no | retire | E15-R04 | `lib/features/library_v2/screens/unified_library_screen.dart` | Superseded by the unified library (ADR 0470 context); successor is reachable and migrated. |
+| `lib/features/library/screens/library_screen.dart` | `LibraryScreen` | yes | no | retire | E15-R04 | `lib/features/library_v2/screens/unified_library_screen.dart` | Superseded by the unified library (ADR 0471 context); successor is reachable and migrated. |
 | `lib/features/library/screens/session_detail_screen.dart` | `SessionDetailScreen` | yes | no | retire | E15-R04 | `lib/features/library_v2/screens/library_item_detail_screen.dart` | Superseded by the unified library item detail screen; successor is reachable and migrated. |
 | `lib/features/library_v2/screens/library_item_detail_screen.dart` | `LibraryItemDetailScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/library_v2/screens/unified_library_screen.dart` | `UnifiedLibraryScreen` | yes | yes | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |

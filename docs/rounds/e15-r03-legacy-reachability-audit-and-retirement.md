@@ -6,7 +6,7 @@
 - **Branch:** `sonnet-impl/e15-r03-legacy-reachability-audit-and-retirement`
 - **Előfeltétel:** `E15-R02` merge-elve (a shell bekapcsolása UTÁN mérhető, mi érhető el valójában) — TELJESÜLT (`9dc0b1e6`)
 - **Brief szerzője:** Claude (Opus 5)
-- **Kiosztott ADR:** **`ADR 0470`** — lásd a §0.0.A/R1 revíziót (a brief eredeti `0468`-a időközben elkelt).
+- **Kiosztott ADR:** **`ADR 0471`** — lásd a §0.0.A/R1 revíziót (a brief eredeti `0468`-a időközben elkelt).
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "legacy screen retirement route reachability dead code deprecation"` → **[ADR 0065](../adr/0065-practice-engine-v2-parallel-rollout.md)** (a V2 a legacy MELLETT fut, availability flag mögött) és **[L449](../LESSONS.md#l449)** (a `StatefulShellRoute.indexedStack` életben tartja a fülek állapotát — az „elérhetetlen" képernyő nem feltétlenül halott). A kör ezért nem törölhet a `grep` alapján.
 
@@ -23,22 +23,48 @@
 Ez a szakasz a brief kötelező §0.0 revíziója. Minden állítása MÉRT, a mérő
 paranccsal együtt. Ahol a brief törzse mást mond, **ez a szakasz az erősebb**.
 
-### R1 — Az ADR-szám `0468` → **`0470`**
+### R1 — Az ADR-szám `0468` → `0470` → **`0471`** (KÉT ütközés, mindkettő mérve)
 
-A brief `0468`-at foglalta le, de azt időközben a merge-elt **E12-R09** kör
-használta el (`04ae8918 [E12-R09] Domain event katalógus és schema registry
-(ADR 0468)`, `docs/adr/0468-domain-event-catalog-and-schema-registry.md`).
-Egy merge-elt ADR-hez nem nyúlunk (ADR 0087 §2 **H1**), ezért a szám a
-foglalótól jött, nem `ls`-sel (ADR 0171 §1.0.1):
+**Első ütközés (pre-flight).** A brief `0468`-at foglalta le, de azt időközben
+a merge-elt **E12-R09** kör használta el (`04ae8918 [E12-R09] Domain event
+katalógus és schema registry (ADR 0468)`,
+`docs/adr/0468-domain-event-catalog-and-schema-registry.md`). Egy merge-elt
+ADR-hez nem nyúlunk (ADR 0087 §2 **H1**), ezért a szám a foglalótól jött, nem
+`ls`-sel (ADR 0171 §1.0.1):
 
 ```bash
 tools/round-slots.py reserve-adr --round E15-R03   # → 0470
 ```
 
-A kör ADR-je: **[`docs/adr/0470-screen-reachability-is-measured-not-assumed.md`](../adr/0470-screen-reachability-is-measured-not-assumed.md)**,
+**Második ütközés (merge előtt, MÉRVE 2026-08-29).** A kör CI-jének futása
+közben a `main`-re merge-elődött a **HEAL E12-R11/H2** önjavító kör
+([PR #499](https://github.com/wolfcasaba/strumsight/pull/499), `8e75e4f9`),
+amely `docs/adr/0470-practice-setup-navigates-to-the-session-route.md` néven
+**ugyanazt a 0470-es számot** használta el, noha ezt a kör a foglalótól
+kapta meg. A merge előtti kötelező upstream-szinkron (prompt §0.3) hozta
+felszínre: a `git merge origin/main` után KÉT `0470-*` fájl állt a fán.
+
+**Feloldás — az ÉN, még nem merge-elt artefaktumomat számoztam át**
+(ADR 0087 §2: a saját, nem merge-elt ADR a hatáskörömben van; a MÁSIK,
+MÁR merge-elt 0470-hez nem nyúltam, az H1 lenne):
+
+```bash
+tools/round-slots.py reserve-adr --round E15-R03   # → 0471
+git mv docs/adr/0470-screen-reachability-is-measured-not-assumed.md \
+       docs/adr/0471-screen-reachability-is-measured-not-assumed.md
+```
+
+**A mért tanulság:** a foglaló `O_CREAT|O_EXCL` markere önmagában NEM elég,
+ha egy párhuzamos sáv (itt egy önjavító kör) nem a foglalón keresztül kér
+számot — a védelem csak addig ér, amíg MINDEN író használja. A hibaosztály
+azonos az ADR 0171 §1.0.1-ben rögzített 2026-08-05-i `0139`-es ütközéssel,
+csak most nem két kör-sáv, hanem egy kör és egy self-heal között. Az
+ütközést nem a foglaló, hanem a **merge előtti upstream-szinkron** fogta meg.
+
+A kör ADR-je: **[`docs/adr/0471-screen-reachability-is-measured-not-assumed.md`](../adr/0471-screen-reachability-is-measured-not-assumed.md)**,
 a Claude írta ebben a pre-flightban. A brief §5 „Kötött architekturális
 döntések (ADR 0468)" címe és a §3 tilos-zóna `docs/adr/**` sora ugyanígy
-`0470`-re értendő.
+`0471`-re értendő.
 
 ### R2 — A képernyő-számok VÁLTOZATLANOK, a router-bontás NEM
 
@@ -86,7 +112,7 @@ re-exportál (`vision_setup_screen`, `guitar_calibration_screen`,
 [L193](../LESSONS.md#l193) barrel-szimbólum-rés hibaosztálya, és egy élő
 felhasználói út törlését javasolná.
 
-**Ebből kötelező tervezési megkötés lett: [ADR 0470 D3](../adr/0470-screen-reachability-is-measured-not-assumed.md)
+**Ebből kötelező tervezési megkötés lett: [ADR 0471 D3](../adr/0471-screen-reachability-is-measured-not-assumed.md)
 — a checker OSZTÁLYNÉVRE illeszt, nem fájlnévre.** Az import-útvonal legfeljebb
 másodlagos jelzés lehet, önmagában SOHA nem dönthet „elérhetetlen"-ről.
 
@@ -99,7 +125,7 @@ sed -n '561,571p' lib/app/routing/app_router.dart
 
 „A router regisztrálja" ≠ „a felhasználó ma eléri". Ez nem hiba, hanem az
 [ADR 0065](../adr/0065-practice-engine-v2-parallel-rollout.md) szándékos
-availability-flag mintája. **[ADR 0470 D4](../adr/0470-screen-reachability-is-measured-not-assumed.md):**
+availability-flag mintája. **[ADR 0471 D4](../adr/0471-screen-reachability-is-measured-not-assumed.md):**
 a flag-kapu JELENTETT dimenzió a tervben (a `retirement-plan.md` sorában
 látszik, melyik flag nyitja), nem hallgatólagos „elérhető" és nem is „halott".
 
@@ -136,7 +162,7 @@ mérés — az E08-R30 brief pont ezt feltételezte hibásan) ·
 
 A §3 tilos zónája, a §4 engedélyezett fájllistája, a §6 acceptance-cellái és a
 §7 gate-sora **változatlan**. A revízió szűkít és pontosít, nem tágít: új
-fájl nem került az engedélyezett listára (a `docs/adr/0470-…` fájlt a Claude
+fájl nem került az engedélyezett listára (a `docs/adr/0471-…` fájlt a Claude
 írta a pre-flightban, az implementernek `docs/adr/**` továbbra is TILOS).
 
 ## 0.0 Miért kell ez a kör a migráció ELÉ
@@ -194,7 +220,7 @@ Gépi, ismételhető mérés arról, MELYIK képernyő érhető el a felhasznál
 - Bármely `lib/**` fájl módosítása vagy törlése.
 - Route eltávolítása.
 - A `ui_inventory_test.dart` egzakt számának megváltoztatása (a kör nem hoz és nem visz képernyőt).
-- `docs/adr/**` — az ADR 0470-et a Claude MÁR megírta a pre-flightban.
+- `docs/adr/**` — az ADR 0471-et a Claude MÁR megírta a pre-flightban.
 
 ## 4. Engedélyezett fájlok
 
@@ -207,7 +233,7 @@ Gépi, ismételhető mérés arról, MELYIK képernyő érhető el a felhasznál
 
 **Tilos zóna:** `lib/**` · `test/ui/goldens/**` · `docs/adr/**` · `tools/**` · `.github/**`
 
-## 5. Kötött architekturális döntések (ADR 0470)
+## 5. Kötött architekturális döntések (ADR 0471)
 
 ### 5.1 Az elérhetőség MÉRT, nem feltételezett
 
@@ -283,7 +309,7 @@ szerinti, csővezeték nélküli alakban futtatta le.
 - **`tool/check_screen_reachability.dart`** — a mérő. `ScreenReachability`
   osztály egy `Directory` repository fölött (`ui_inventory.dart` mintáját
   követve), `render()` ad `ScreenReachabilityResult`-ot. Két csatorna (ADR
-  0470 D2): **deklaratív** (a képernyő osztályneve szó szerint szerepel
+  0471 D2): **deklaratív** (a képernyő osztályneve szó szerint szerepel
   `lib/app/routing/{app_router,adaptive_shell_routes,route_guards}.dart`
   valamelyikében) VAGY **imperatív** (az osztály konstruálva van —
   `ClassName(` vagy `ClassName.namedCtor(` — bárhol máshol a `lib/` alatt).
@@ -384,7 +410,7 @@ flutter test test/tooling/screen_reachability_test.dart --plain-name "every reac
 ```
 Expected: empty
   Actual: ['lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart']
-reachable-but-unmigrated screens with no named E15 round (ADR 0470 D6): [lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart]
+reachable-but-unmigrated screens with no named E15 round (ADR 0471 D6): [lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart]
 ```
 
 Ezután a sort visszaállítottam `E15-R05`-re, és a tesztet újrafuttatva: `+1:
@@ -419,7 +445,7 @@ zöld (`00:52 +9: All tests passed!` — a fenti §10.3-ban idézett futás ez).
 
 ### 10.5 Mért korlátok
 
-- **Egy-ugrásos imperatív lánc (ADR 0470 D7).** A checker csak azt méri, hogy
+- **Egy-ugrásos imperatív lánc (ADR 0471 D7).** A checker csak azt méri, hogy
   egy osztály konstruálva van-e VALAHOL a `lib/` alatt — nem azt, hogy az a
   konstruáló hely maga elérhető-e egy belépési pontból. Ez két mért hamis
   pozitívumot ad: `EditProfileScreen` csak a (mérten elérhetetlen)

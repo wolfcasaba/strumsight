@@ -106,7 +106,7 @@ assigned a Ch13 round.
 ### 3.1 E15-R03 correction — the table above is per-FEATURE; reachability
     is now measured per-SCREEN, and the "Owner" column above is superseded
 
-`docs/ui/retirement-plan.md` (ADR 0470) is now the canonical per-screen
+`docs/ui/retirement-plan.md` (ADR 0471) is now the canonical per-screen
 source for the "Owner" column above — `tool/check_screen_reachability.dart`
 measures reachability by class name (router reference OR construction
 anywhere in `lib/`), not by feature grouping. Three corrections to the table
@@ -114,7 +114,7 @@ above:
 
 1. **`library`, `progress`, `streak` were never "retire once the legacy
    route redirect is unconditional"** — that condition doesn't apply; ADR
-   0470 treats retirement as a standing proposal, not something the
+   0471 treats retirement as a standing proposal, not something the
    adaptive-shell rollout auto-triggers. `library` and `streak` ARE
    confirmed retire candidates (owner `E15-R04`, named successors in
    `retirement-plan.md` §5). `progress` is **not** — see point 3.
@@ -149,7 +149,7 @@ above:
 ## 5. E15-R03 reachability audit — new dated findings (2026-08-28)
 
 Measured with `dart run tool/check_screen_reachability.dart --format json`
-(ADR 0470); full detail and reasoning in `docs/ui/retirement-plan.md`. These
+(ADR 0471); full detail and reasoning in `docs/ui/retirement-plan.md`. These
 are screens the design-migration backlog above never flagged, because
 "legacy" (no `design_system` import) and "unreachable" (no measured router
 reference or `lib/` construction site) are independent axes — a screen can

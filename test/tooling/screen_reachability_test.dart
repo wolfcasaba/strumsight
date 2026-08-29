@@ -60,7 +60,7 @@ List<_PlanRow> _parsePlanRows(String markdown) {
 
 /// The same `grep -q design_system` measurement `docs/ui/migration-status.md`
 /// uses for "migrated vs. legacy" — reused here so A3 can tell a
-/// reachable-but-ALREADY-migrated screen (no round owed, ADR 0470 D6) apart
+/// reachable-but-ALREADY-migrated screen (no round owed, ADR 0471 D6) apart
 /// from a reachable-and-legacy one (round owed).
 bool _isMigrated(String repositoryPath, String screenPath) => File(
   '$repositoryPath/$screenPath',
@@ -159,7 +159,7 @@ library;
 export 'screens/hidden_screen.dart';
 ''');
       // The router imports ONLY the barrel — never the screen file's own
-      // path — mirroring the real tree's `vision/public.dart` (ADR 0470 D3,
+      // path — mirroring the real tree's `vision/public.dart` (ADR 0471 D3,
       // brief §0.0.A/R3).
       _write(fixture, 'lib/app/routing/app_router.dart', '''
 import '../../features/fixture/public.dart';
@@ -190,7 +190,7 @@ final routes = [
     });
   });
 
-  group('flag-gating (ADR 0470 D4, fixture)', () {
+  group('flag-gating (ADR 0471 D4, fixture)', () {
     late Directory fixture;
 
     setUp(() {
@@ -265,7 +265,7 @@ final routes = [
         isEmpty,
         reason:
             'reachable-but-unmigrated screens with no named E15 round '
-            '(ADR 0470 D6): $ownerlessReachableLegacy',
+            '(ADR 0471 D6): $ownerlessReachableLegacy',
       );
     });
 

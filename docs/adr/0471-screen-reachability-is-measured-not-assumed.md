@@ -1,4 +1,4 @@
-# ADR 0470 — Screen reachability is MEASURED, and retirement is a proposal, not an execution
+# ADR 0471 — Screen reachability is MEASURED, and retirement is a proposal, not an execution
 
 - **Status:** Accepted
 - **Date:** 2026-08-28

@@ -1,7 +1,7 @@
 # Screen migration status
 
 **E15-R03 update (2026-08-28) — reachability is now MEASURED, not counted by
-router presence.** `tool/check_screen_reachability.dart` (ADR 0470) replaces
+router presence.** `tool/check_screen_reachability.dart` (ADR 0471) replaces
 the "migrated/legacy" split below as the input to Ch15 round planning — see
 `docs/ui/retirement-plan.md` for the full per-screen decision table
 (migrate / retire / keep / unreachable) and named `E15-R04`…`E15-R11` owner

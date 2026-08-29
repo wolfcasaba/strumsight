@@ -4,7 +4,7 @@
 - **Ág:** `sonnet-impl/e15-r03-legacy-reachability-audit-and-retirement`
 - **Review-zott commit:** `cbcd6e08` (implementáció) a `a4be396c` (pre-flight) fölött
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
-- **ADR:** [`0470`](../adr/0470-screen-reachability-is-measured-not-assumed.md)
+- **ADR:** [`0471`](../adr/0471-screen-reachability-is-measured-not-assumed.md)
 - **Review dátuma:** 2026-08-29
 - **Módszer:** read-only review izolált `/tmp/ss-review-e15-r03` klónban, saját
   gate-futtatással és eldobható próbatesztekkel. A review NEM módosított
@@ -267,7 +267,7 @@ következmény: `EditProfileScreen` csak a (mérten elérhetetlen)
 elérhetetlen) `ClubDetailScreen`-ből konstruálódik — mindkettő `keep`-et kap,
 noha a bejárási lánc szakadt.
 
-**Ez NEM lelet, hanem helyes viselkedés:** az ADR 0470 D7 pontosan ezt írja
+**Ez NEM lelet, hanem helyes viselkedés:** az ADR 0471 D7 pontosan ezt írja
 elő (a korlátot kimondani, nem elhallgatni), és a `retirement-plan.md` §1/§3.3
 és a §10.5 névvel, útvonallal felsorolja a két esetet. Egy tranzitív lezárás
 szigorúbb lenne, de a D5 szerint úgysem törölhet semmit ez a kör. **A
@@ -310,7 +310,7 @@ a korlát dokumentált, nem rejtett.
 - Semmit nem töröl, route-ot nem vesz ki (D5) — a `retire` hat sora JAVASLAT
   az `E15-R04`-nek.
 - `lib/**` érintetlen.
-- A `docs/adr/0470` a pre-flight commitban (`a4be396c`) készült, nem az
+- A `docs/adr/0471` a pre-flight commitban (`a4be396c`) készült, nem az
   implementer diffjében — a `docs/adr/**` tilos zóna tiszta.
 
 ## 7. Merge-feltétel — teljesülés

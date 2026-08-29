@@ -20,7 +20,7 @@ final class SourceRef {
 
 /// One declarative (router-side) reference to a screen's class, together
 /// with the feature-flag conditions that gate THAT specific registration
-/// (ADR 0470 D4). A screen can be registered more than once under
+/// (ADR 0471 D4). A screen can be registered more than once under
 /// unrelated gates (e.g. once in a legacy `!adaptiveShellEnabled` branch and
 /// once in the adaptive shell), so the flags are attached per reference —
 /// flattening them into one screen-level list would wrongly read as a
@@ -41,10 +41,10 @@ final class DeclarativeReference {
 
 /// The measured reachability verdict for one `*_screen.dart` source.
 ///
-/// Reachability has two independent channels (ADR 0470 D2): a screen is
+/// Reachability has two independent channels (ADR 0471 D2): a screen is
 /// reachable if the router NAMES its class (declarative) OR anything else
 /// under `lib/` CONSTRUCTS its class (imperative). Both channels match by
-/// class name, never by import path or file name (ADR 0470 D3) — the router
+/// class name, never by import path or file name (ADR 0471 D3) — the router
 /// reaches some features only through a `public.dart` barrel, and a
 /// path-based match would under-report those as unreachable.
 final class ScreenVerdict {
@@ -75,7 +75,7 @@ final class ScreenVerdict {
   /// Every declarative registration is behind a flag AND there is no
   /// unconditional imperative construction either — i.e. reaching this
   /// screen today requires at least one flag to be on. Reported as a
-  /// dimension (ADR 0470 D4), not folded into [isReachable]: a flag-gated
+  /// dimension (ADR 0471 D4), not folded into [isReachable]: a flag-gated
   /// route is reachable code with a closed door, not dead code.
   bool get isFlagGated =>
       isDeclarativelyReachable &&
@@ -94,7 +94,7 @@ final class ScreenVerdict {
   /// evidence citation when a human-readable table needs exactly one
   /// location per row. Falls back to the class declaration site when the
   /// screen has no measured reference at all, so every one of the 96
-  /// verdicts still carries a source location (ADR 0470 D1).
+  /// verdicts still carries a source location (ADR 0471 D1).
   SourceRef get primaryReference {
     if (declarativeReferences.isNotEmpty) {
       return declarativeReferences.first.source;
@@ -185,25 +185,25 @@ final class ScreenReachabilityResult {
 }
 
 /// Measures, for every production `*_screen.dart` source under
-/// `lib/features/`, whether the user can actually reach it (ADR 0470 D1).
+/// `lib/features/`, whether the user can actually reach it (ADR 0471 D1).
 ///
 /// Follows the `tool/ui_inventory.dart` shape: a class over a repository
 /// [Directory] plus a `render()` call, so a test can instantiate it
 /// directly instead of shelling out.
 ///
-/// **Static-analysis limit (ADR 0470 D7):** this tool only sees text —
+/// **Static-analysis limit (ADR 0471 D7):** this tool only sees text —
 /// direct construction (`ClassName(`), named-constructor construction
 /// (`ClassName.named(`), and class-name mentions in source. It cannot see
 /// reflective or data-driven navigation (a class looked up by a runtime
 /// string key, a plugin registry, and similar). An `unreachable` verdict is
 /// therefore a proposal for human/round review, never an automatic
-/// authorisation to delete anything (ADR 0470 D5).
+/// authorisation to delete anything (ADR 0471 D5).
 final class ScreenReachability {
   ScreenReachability(this.repository);
 
   final Directory repository;
 
-  /// The declarative surface (ADR 0470 D2/1): a screen named here — by
+  /// The declarative surface (ADR 0471 D2/1): a screen named here — by
   /// class name, not import path (D3) — counts as reachable regardless of
   /// whether the surrounding registration is behind a feature flag (D4).
   static const List<String> routingSources = [
@@ -239,7 +239,7 @@ final class ScreenReachability {
     final testFiles = _allDartFiles('test');
 
     // One pass over every `lib/`+`test/` file, instead of one pass PER
-    // screen (was O(screens × files); this is O(files)) — see ADR 0470 /
+    // screen (was O(screens × files); this is O(files)) — see ADR 0471 /
     // E15-R03 MAJOR-2. Every screen class ends in "Screen" (enforced by
     // `_classDeclaration`), so a single generalised token regex can find
     // every candidate name on a line in one shot; the per-class-name regex
@@ -377,7 +377,7 @@ final class ScreenReachability {
   static final RegExp _referenceToken = RegExp(r'\b([A-Za-z0-9_]*Screen)\b');
 
   /// A construction site: `ClassName(` or `ClassName.namedCtor(`. Stricter
-  /// than [_referenceToken] on purpose — ADR 0470 D2 requires the imperative
+  /// than [_referenceToken] on purpose — ADR 0471 D2 requires the imperative
   /// channel to see the class actually being CONSTRUCTED, not merely
   /// mentioned as a type (a generic parameter or a doc comment does not
   /// make a screen reachable).
