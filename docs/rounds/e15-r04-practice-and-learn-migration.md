@@ -412,4 +412,160 @@ tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**A1 — §7 mérő-parancs kimenete (mind a 8 sor, MÉRVE 2026-08-29):**
+
+```
+MIGRATED lib/features/practice/presentation/screens/practice_hub_screen.dart
+MIGRATED lib/features/practice/presentation/screens/practice_result_screen.dart
+MIGRATED lib/features/practice/presentation/screens/practice_history_screen.dart
+MIGRATED lib/features/practice/presentation/screens/speed_builder_screen.dart
+MIGRATED lib/features/learn/screens/learn_screen.dart
+MIGRATED lib/features/learn/screens/lesson_list_screen.dart
+MIGRATED lib/features/learn/screens/lesson_score_preview_screen.dart
+MIGRATED lib/features/learn/screens/latency_calibration_screen.dart
+```
+
+**A4/A5 — a kapu záró kimenete** (`tools/round-gate.sh` a §7 sorral, csonkítás nélkül, 37 lépés):
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/ui/ui_inventory_test.dart                        zöld
+test test/app/navigation/adaptive_scaffold_test.dart       zöld
+test test/app/navigation/legacy_route_redirect_test.dart   zöld
+test test/app/offline_network_guard_test.dart              zöld
+test test/core/screen_size_guard_test.dart                 zöld
+test test/features/chords/chord_library_test.dart          zöld
+test test/features/learn/continue_card_test.dart           zöld
+test test/features/learn/expected_chord_hint_test.dart     zöld
+test test/features/learn/latency_calibration_screen_test.dart zöld
+test test/features/learn/learn_rollback_test.dart          zöld
+test test/features/learn/learn_screen_test.dart            zöld
+test test/features/learn/learning_path_test.dart           zöld
+test test/features/learn/lesson_list_screen_test.dart      zöld
+test test/features/learn/lesson_offline_test.dart          zöld
+test test/features/learn/lesson_score_card_test.dart       zöld
+test test/features/learn/live_scoring_jitter_test.dart     zöld
+test test/features/learn/next_lesson_cta_test.dart         zöld
+test test/features/learn/review_r100_fixes_test.dart       zöld
+test test/features/learn/setlist_expected_hint_test.dart   zöld
+test test/features/learn/visual_offset_test.dart           zöld
+test test/features/learn/waltz_count_in_test.dart          zöld
+test test/features/practice/history_corrupt_record_test.dart zöld
+test test/features/practice/presentation/practice_a11y_audit_test.dart zöld
+test test/features/practice/presentation/practice_hub_screen_test.dart zöld
+test test/features/practice/presentation/practice_result_screen_test.dart zöld
+test test/features/practice/presentation/practice_routing_test.dart zöld
+test test/features/practice/result_confidence_test.dart    zöld
+test test/features/practice/reward_idempotency_test.dart   zöld
+test test/features/practice/speed_ladder_test.dart         zöld
+test test/features/songs/setlist_flow_test.dart            zöld
+test test/l10n/hardcoded_string_guard_test.dart            zöld
+test test/l10n/arb_parity_test.dart                        zöld
+architecture                                                zöld
+secrets                                                      zöld
+l10n                                                          zöld
+
+MINDEN GATE ZÖLD.
+```
+
+**Golden-sáv (ADR 0426, merge-kapu architektúra) — `tools/golden-x86.sh record` majd `check`:**
+
+Első `record` futás — még a `AppTheme.dark()` témával — **exit 10**-zel bukott: a
+`_TypeError: Null check operator used on a null value` a
+`practice_result_screen.dart` `_Header`-jében (lásd alább, "Eltérés az eredeti
+tervtől"). A javítás (lásd ott) után:
+
+```
+$ tools/golden-x86.sh record test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+...
+01:01 +12: All tests passed!
+$ echo $?
+0
+
+$ tools/golden-x86.sh check test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+...
+00:56 +12: All tests passed!
+$ echo $?
+0
+```
+
+`git status --short test/ui/goldens/goldens/` a `record` UTÁN — 6 PNG változott
+(a nyolcból; a `chord_*` PNG-k, amik NEM ennek a körnek a képernyői,
+változatlanok maradtak, ahogy a §7 előírja):
+
+```
+ M test/ui/goldens/goldens/e13_r20_learning_path_compact.png
+ M test/ui/goldens/goldens/e13_r20_learning_path_compact_scale2.png
+ M test/ui/goldens/goldens/e13_r22_practice_history_compact.png
+ M test/ui/goldens/goldens/e13_r22_practice_history_compact_scale2.png
+ M test/ui/goldens/goldens/e13_r22_practice_result_compact.png
+ M test/ui/goldens/goldens/e13_r22_practice_result_compact_scale2.png
+```
+
+A `speed_builder` két PNG-je (`e13_r22_speed_builder_compact{,_scale2}.png`)
+**nem** változott, bár `speed_builder_screen.dart` is migrált ebben a körben
+(101 sor a `git show 0b405dca --stat`-ban): a rögzített `x86` raszter
+bitre-azonos a kör előtti PNG-vel — a migráció ezen a képernyőn (ennek az
+állapotnak, "active", a nézetében) csak a komponens-API-t cserélte, a
+tényleges pixel-értékeket nem (az `Ss*` tokenek ugyanabból az
+`AppPalette`/`AppColors` forrásból származnak, ADR 0466 D2). Mérve, nem
+feltételezve — a `git status --short` fenti kimenete a bizonyíték.
+
+**Eltérés az eredeti tervtől — a golden-teszt-fájlok témája.** A brief
+eredetileg (245–247. sor, `test/ui/goldens/e13_r20_screens_golden_test.dart`
+és `e13_r22_...` fejléc-kommentje) `AppTheme.dark()`-ot írt elő, és a fájlok
+táblázatban "VÁLTOZATLANUL zöld marad"-ként szerepeltek — ez az elvárás
+TÉVESNEK bizonyult, mérve: az első `golden-x86.sh record` futás a
+`practice_result_screen.dart` `_Header`-jén `_TypeError: Null check operator
+used on a null value`-val bukott (`Theme.of(context).extension<SsTypography>()!`
+— a jelen kör vezette be ezt a hívást, `git log -p` mérve). Ugyanez a hiba
+(lokálisan, aarch64-en, tehát ISA-tól függetlenül reprodukálva) a
+`e13_r20_screens_golden_test.dart` `LessonListScreen`-jén is jelentkezett — a
+`chord_detail`/`chord_library` cellák (nem ennek a körnek a képernyői) NEM
+crash-eltek, csak a mért, ismert raszter-drifttel (L516). A gyökérok: a
+`218eae01` kör 28 widget-teszt-fájlon már javította pontosan ezt a mintát
+(`MaterialApp` → `theme: SsLightTheme.data()`), de a két golden-teszt-fájlt
+kihagyta. A javítás ugyanaz a minta, `SsDarkTheme.data()`-val (a `SsDarkTheme`
+ugyanazt az `AppTheme.dark()` alapot burkolja `SsColorScheme`/`SsTypography`
+extension-nel — mérve `lib/core/design_system/themes/ss_dark_theme.dart` és
+`ss_theme_extensions.dart` — a `colorScheme`/`textTheme` bitre azonos marad,
+ezért a nem migrált `chord_library_screen.dart`/`chord_detail_view.dart`
+(mérve: egyik sem olvas `Theme.of(context).extension<Ss...>()`-t) pixel-
+azonos marad). Ez a két teszt-fájl SZEREPEL az `allowed_paths`-on (67–68.
+sor), a módosítás tehát a kör keretein belül maradt; a fájlok fejléc-
+kommentjét a tényleges okkal frissítettem.
+
+**Valódi-sértés próba (KÖTELEZŐ, §6.1).** `practice_history_screen.dart`
+`_HistoryError`-ját (a `SsFailureState`-et) ideiglenesen nyers `Text`-re
+cseréltem:
+
+```dart
+return Text(l10n.practiceHistoryLoading);
+```
+
+`flutter test test/features/practice/history_corrupt_record_test.dart` → **A2
+PIROS**, pontosan a `SsFailureState`-et kereső cellán:
+
+```
+00:01 +4: E15-R04 — design-system migration a load failure renders the SsFailureState with a working retry action, not a raw error
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _KeyWidgetFinder:<Found 0 widgets with key [<'ss-failure-state-retry'>]: []>
+   Which: means none were found but one was expected
+...
+00:01 +4 -1: E15-R04 — design-system migration a load failure renders the SsFailureState with a working retry action, not a raw error [E]
+  Test failed. See exception logs above.
+00:02 +8 -1: Some tests failed.
+```
+
+Visszaállítva (a `git diff --stat` a fájlon üres a visszaállítás után) →
+`flutter test test/features/practice/history_corrupt_record_test.dart` →
+`00:02 +9: All tests passed!` (mind a 9 cella zöld).
+
+**Egyéb kompromisszum/helyettesítés a batch 8 képernyőjén:** nincs — minden
+állapotnak (üres/betöltés/hiba) volt pontos design-rendszer-megfelelője, a
+§5.2 döntés szerint egy sem maradt kompromisszumos.
+
 ## 11. Review — a Claude tölti ki
