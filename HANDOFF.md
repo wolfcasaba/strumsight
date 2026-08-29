@@ -1,5 +1,55 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E12-R11 / H2 feloldva: a Practice Setup Start-ja a session útvonalra navigál — PR [#499](https://github.com/wolfcasaba/strumsight/pull/499) (2026-08-29)
+
+**Az E12-R11 (E2E folyam-harness) H2-vel megállt**, mert a „first practice" folyam a
+szállított appban **nem volt végigjárható**, és az implementer a hiányzó lánc-lépést a
+harnessben pótolta ([L273](docs/LESSONS.md)). A halt normatív kérdését — *termékhiba-e a
+hiányzó Setup → Session navigáció, vagy szándékosan nem-kész felület?* — nem vélemény,
+hanem a repó saját története döntötte el:
+
+| # | Kör | Mit tett | Miért nem zárult le a halasztás |
+|---|---|---|---|
+| 1 | **E02-R12** | szándékosan halasztott, **címzettel**: „a Setup **nem** navigál a session-képernyőre (az még nem létezik)"; a fájl fejléce: „**Kör 13 brings the session route**" | — |
+| 2 | **E02-R13** | megépítette a `/practice/session` route-ot és a `PracticeSessionScreen`-t | a `practice_setup_screen.dart` a **tilos zónájában** volt (round-doc 135. sor; a záró mérés szerint a fájlon „0 sor" változott) |
+| 3 | **E02-R21** | célja szó szerint: a Hub → Setup → Session úton „egy valódi felhasználó **valóban le tudjon futtatni**" egy sessiont | a `practice_setup_screen.dart` a §4 **allowlistjén sem szerepelt** |
+
+Mérés (`main @ 8bdcfff9`): `grep -rn "AppRoutes.practiceSession" lib/` → **nulla hívó**
+(csak a konstans, a route-regisztráció és egy shell-predikátum). A
+`PracticeSessionScreen` a termék saját felületéről elérhetetlen volt.
+
+**A javítás — egyetlen `lib/**` fájl, +37/−12:**
+
+- érvényes Start → `context.go(AppRoutes.practiceSession)`; a „command sent" SnackBar
+  **megszűnt** (a gyökér `ScaffoldMessenger`-en túlélné a route-váltást, ráülve a session
+  vezérlőire) — az ARB-kulcs a helyén marad;
+- az auto-dispose aktiválási lánc (`practiceActiveSessionInputsProvider` →
+  `practiceSessionControllerProvider`) **élettartam-szerződése a TERMÉKBEN**, kimondva:
+  `ref.read(practiceSessionHostProvider)` a `start()` előtt és közvetlenül utána. Enélkül
+  a sink által épp létrehozott controller megfigyelő nélkül bomlik le a session-képernyő
+  `initState`-je előtt, és a felhasználó a „session unavailable" állapotra érkezik.
+
+**Regresszió — MÉRT piros → zöld** (valódi router, valódi practice provider-gráf, csak
+platform-peremek fake-ek):
+[`test/features/practice/presentation/practice_setup_navigation_test.dart`](test/features/practice/presentation/practice_setup_navigation_test.dart)
+— **R1** (a Start `/practice/session`-re navigál; előtte `'/practice/setup'`) és **R2**
+(a képernyő élő hosttal érkezik; előtte `Expected: not null / Actual: <null>`).
+
+| Fájl | |
+|---|---|
+| [`docs/adr/0470-…`](docs/adr/0470-practice-setup-navigates-to-the-session-route.md) | D1 termékhiba · D2 a Start navigál · D3 az élettartam-szerződés a hívó oldalán · D4 a mérce a valódi provider-gráfon |
+| [`docs/LESSONS.md` L541](docs/LESSONS.md) | a halasztásnak nem elég címzettet adni: a **címzett kör allowlistjén** ott kell lennie a halasztó fájlnak; pre-flight ellenőrzés minden ÚJ route-konstansra |
+| [`docs/rounds/e12-r11-…`](docs/rounds/e12-r11-end-to-end-test-harness.md) §0.0 | revízió az újrafuttatásra: a harness `:275`/`:277`/`:281` áthidalásainak eltávolítása; `allowed_paths` **változatlan**, a `lib/**` továbbra is tilos zóna |
+
+**Következmény:** a „first practice" vertical slice a nem-produkciós appban
+végigjárható (Hub → Setup → Start → Session), az **E12-R11 újrafuttatható**, és a lánc
+feloldódik. A production flag nem mozdul (`practiceEngineV2Enabled: nonProd`) — a
+rollout változatlanul a valódi eszközös teszt utáni külön kör.
+
+> ⚠ **Nyitva marad (E12-R11 review N3):** a `PracticeSessionResultHistoryMapper` valódi
+> fali órát bélyegez a `createdAt` mezőre, ezért egy determinizmus-snapshot ezt kihagyni
+> kényszerül. Önálló kör tárgya — ez a javítás NEM nyúlt hozzá.
+
 ## ✅ E12-R10 KÉSZ — Idempotens dispatcher és outbox: a hiányzó MÉRCE — PR [#498](https://github.com/wolfcasaba/strumsight/pull/498), squash `e9a29a86` (2026-08-28)
 
 **Az SDD Kör 10 „implementálj dispatchert és outboxot" feladata a fán RÉSZBEN már

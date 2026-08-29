@@ -14,8 +14,13 @@
 ///     (A5);
 ///   * Domain-derived limits (BPM 30..300, count-in 0..4, loop 1..32) — no
 ///     hand-rolled copy of those numbers anywhere (A4 red-flag guard);
-///   * A "command sent" snackbar after a valid Start, no navigation
-///     (Kör 13 brings the session route).
+///   * The Start hand-off to the session route (ADR 0470). E02-R12
+///     deferred this ("Kör 13 brings the session route") while
+///     `/practice/session` did not exist; the route landed in E02-R13 and
+///     the production wiring in E02-R21, but this file was in both rounds'
+///     forbidden zone, so the deferral stayed open until the E12-R11 E2E
+///     harness measured it (H2). The Start now navigates instead of only
+///     showing a "command sent" snackbar.
 ///
 /// What does NOT live here:
 ///   * No clock, timing primitive, matcher, or scorer — A9 guard.
@@ -36,6 +41,7 @@ import '../../domain/model/practice_session_config.dart';
 import '../../domain/model/practice_validation.dart';
 import '../../domain/model/tempo.dart';
 import '../../application/practice_catalog_controller.dart';
+import '../practice_effect_listener.dart';
 import '../practice_route_args.dart';
 import '../widgets/practice_mode_card.dart';
 import '../widgets/practice_readiness_row.dart';
@@ -161,6 +167,37 @@ class _SetupForm extends ConsumerStatefulWidget {
 }
 
 class _SetupFormState extends ConsumerState<_SetupForm> {
+  /// The Start CTA: dispatch `PreparePractice` through the wired prepare
+  /// sink, then hand the user over to the session route (ADR 0470).
+  ///
+  /// The two `ref.read(practiceSessionHostProvider)` calls are the
+  /// lifetime contract, not ceremony. The host is the only non-auto-dispose
+  /// observer of the activation chain
+  /// (`practiceActiveSessionInputsProvider` → then
+  /// `practiceSessionControllerProvider(inputs)`), and it only establishes
+  /// each `watch` link when it actually rebuilds:
+  ///
+  ///   * the read BEFORE `start()` builds the host so the inputs notifier
+  ///     has a listener when the sink activates it;
+  ///   * the read immediately AFTER — synchronously, before any frame —
+  ///     forces the host past the now non-null inputs so it watches the
+  ///     controller the sink just built, before an event-loop turn can
+  ///     dispose it unobserved.
+  ///
+  /// Without them the controller is torn down between this tap and the
+  /// session screen's `initState`, and the user lands on the localized
+  /// "session unavailable" state. Regression:
+  /// `practice_setup_navigation_test.dart`.
+  void _startAndOpenSession() {
+    ref.read(practiceSessionHostProvider);
+    final controller = ref.read(
+      practiceSetupControllerProvider(widget.definition).notifier,
+    );
+    if (!controller.start()) return;
+    ref.read(practiceSessionHostProvider);
+    context.go(AppRoutes.practiceSession);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -260,18 +297,7 @@ class _SetupFormState extends ConsumerState<_SetupForm> {
         ],
         const SizedBox(height: 24),
         FilledButton.icon(
-          onPressed: canStart
-              ? () {
-                  if (controller.start()) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.practiceSetupStarted),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                }
-              : null,
+          onPressed: canStart ? _startAndOpenSession : null,
           icon: const Icon(Icons.play_arrow),
           label: Text(l10n.practiceSetupStart),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
