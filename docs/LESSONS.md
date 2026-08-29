@@ -21576,3 +21576,122 @@ a teszt 121 cellára nőtt; a próba újramérve: gate `+119 -2`, `--check` exit
 („`pixel_6a: required_suite is empty for a release_blocking device`").
 
 **Őrteszt:** `test/tooling/device_matrix_test.dart`::`F1 — a release_blocking device's required_suite must cover the mandatory dictionary`
+
+## L549 — A metaadat MEGLÉTÉT mérni nem ugyanaz, mint a JELENTÉSÉT érvényesíteni: 33 zöld cella közül egy sem mérte, hogy a két összehasonlított mérés UGYANAZON az eszközön készült-e (E12-R14, F1+F2 MAJOR, 2026-08-29)
+
+**Kontextus.** Az E12-R14 a performance budget harnesst építette. Az
+[ADR 0474](adr/0474-benchmark-record-and-performance-budget-comparison.md) D1/D2
+egész létezési oka az, hogy egy benchmark-szám csak a `deviceId` + `buildSha`
+párjával együtt értelmes — a brief §5.1 szó szerint kimondta: „két különböző
+készüléken mért érték összevetése értelmetlen, és pontosan ezt rejtené el".
+
+**Mérve.** Az implementáció ezt hibátlanul teljesítette — *félig*. A
+`validate_record()` elutasította a HIÁNYZÓ és az ISMERETLEN `deviceId`-t (A1, A2
+cella, zöld), a `compare()` viszont a jelölt-oldalt kizárólag `record["metric"]`-re
+kulcsolta. A reviewer eldobható próbája:
+
+```
+baseline deviceId=pixel_6a, jelölt deviceId=xiaomi_redmi_note_12, AZONOS érték
+→ rc=0, status=pass
+```
+
+és ugyanennek a kulcsválasztásnak a másik fele:
+
+```
+jelölt: ugyanaz a metrika KÉTSZER — pixel_6a a baseline KÉTSZERESÉN (100 % romlás)
+        és pixel_7 a baseline értékén
+→ rc=0, status=pass   (a dict-comprehension az UTOLSÓ azonos kulcsút tartja meg;
+                       a 100 %-os regresszió nyomtalanul eltűnt)
+```
+
+A kör gate-je ekkor **6/6 zöld** volt, a tesztfájl **33/33 cellája zöld**, a
+scope-audit `ok`. Egyetlen cella sem mérte a `deviceId` EGYEZÉSÉT — mert a
+brief falszifikációs mátrixa is csak azt a hibás implementációt nevezte meg,
+amelyben „a metaadat opcionálissá válik", nem azt, amelyben *kötelező marad, de
+nem érvényesül*.
+
+**Szabály.** Ha egy szerződés egy mezőt azért tesz kötelezővé, hogy két adat
+összevethetőségét eldöntse, akkor a mérce két külön cellát igényel:
+(1) a mező MEGLÉTE kikényszerített, és (2) a mező ÉRTÉKE ténylegesen részt vesz
+abban a döntésben, amiért felvettük. A (2) nélkül a mező dekoráció, ami a
+riportban a hitelesség látszatát kelti. A falszifikációs mátrixba tehát nem elég
+a „hiányzik" hibás implementációt felvenni — a „megvan, de nincs használatban"
+alakot is nevesíteni kell. Rokon osztály: [L548](#l548) (lefedettség állítása
+tartalom nélkül), [L546](#l546) (helykitöltő-vakság).
+
+**Zárás.** A javító kör az összevetés kulcsát `(metric, deviceId)`-re vitte, a
+duplikált `(metric, deviceId)` párt pedig mindkét oldalon nem-nulla kilépéssé
+(exit 2) tette; a kimeneti sor mostantól mindkét oldal `buildSha`-ját nevezi.
+A reviewer SEBÉSZI valódi-sértés próbája (device-vak visszaesés injektálva a
+javított `compare()`-be) **pontosan egy cellát** váltott pirosra — az F1-et —,
+azaz a cella nem vakon zöld és pontosan a lezárt hibaosztályra van kötve.
+
+**Őrteszt:** `test/tooling/benchmark_budget_test.dart`::`F1 — the comparison key is (metric, deviceId), not metric alone`
+
+## L550 — A §0.3 upstream-merge után a MUNKAPÉLDÁNY generált l10n-je elavul, és ezt a landoló kombinált-HEAD gate-je fogja meg — a `prepare-flutter-generated.sh` nem csak a friss klón lépése (E12-R14, 2026-08-29)
+
+**Mérve.** Az E12-R14 munkapéldánya a klónozás után szabályosan lefuttatta a
+`tools/prepare-flutter-generated.sh`-t (L222/L228/L230 lépése), és a kör-gate
+végig zöld volt. A merge előtt a `main` elmozdult (a párhuzamos E15-R04 sáv),
+így a §0.3 szerint `git merge --no-ff origin/main` beépítette az upstreamet —
+konfliktus nélkül. A `tools/round-land.sh` kombinált-HEAD gate-je ezután
+**PIROSRA** váltott:
+
+```
+error • The getter 'practiceHistoryLoading' isn't defined for the type
+'AppLocalizations' • lib/features/practice/presentation/screens/practice_history_screen.dart:66:19
+→ [2] analyze: PIROS (kilépési kód 1)
+round-land: BLOCKED — a kombinált HEAD gate-je piros
+```
+
+A hiba **nem kód-hiba**: az upstream ÚJ ARB-kulcsot hozott, a generált
+`lib/l10n/app_localizations*.dart` viszont gitignore-olt, tehát a merge nem
+frissítette — a munkapéldányban a merge ELŐTTI generátum maradt. Az egyetlen
+`bash <munkapéldány>/tools/prepare-flutter-generated.sh` futtatás után
+(`grep -c practiceHistoryLoading lib/l10n/app_localizations.dart` → 2) a
+landoló változatlan bemenettel 6/6 zölden ment végig és squash-merge-elt.
+
+**Szabály.** A generált Flutter-előfeltétel helyreállítása nem a klónozás
+egyszeri lépése, hanem **minden olyan pillanaté, amikor idegen commit kerül a
+munkafába** — klón UTÁN *és* `merge origin/main` / rebase UTÁN egyaránt. A tünet
+megtévesztő: „ismeretlen getter egy IDEGEN feature képernyőjén", ami a kör saját
+diffjéhez semmilyen módon nem kapcsolódik, és könnyen H8-nak vagy a másik sáv
+hibájának látszik. A diagnózis egy lépésben eldönthető: a hiányolt szimbólum
+benne van-e a `lib/l10n/*.arb`-ban, de nincs a generált `app_localizations.dart`-ban.
+
+**Őrteszt:** nincs — a mérce (`tools/round-land.sh`, `tools/round-gate.sh`) a
+kör tiltott zónája (ADR 0112 §3), a helyreállítás pedig gitignore-olt
+artefaktumon dolgozik, amit teszt nem őrizhet. A lecke a workflow-szövegbe
+tartozik: `sdd-round-driver` §3 és a kör-prompt §0.3.
+
+## L551 — A `protect_factory_files` hook `rm` ága a parancs MINDEN további tokenjét írási célpontnak veszi, ezért egy összetett parancsban a `tools/scope-audit.py` FUTTATÁSA is blokkolódik (E12-R14, 2026-08-29)
+
+**Mérve.** Az E12-R14 review-ja a kötelező scope-auditot egy összetett
+parancsban indította:
+
+```
+rm -rf /tmp/review-e12-r14 && git clone … && cd … && tools/scope-audit.py --repo … --brief … --base …
+→ protect_factory_files: BLOKKOLVA — tools/scope-audit.py a MÉRCE része
+```
+
+Az ok a hook `_bash_write_targets()` `rm`-ágában van
+(`.claude/hooks/protect_factory_files.py:202-204`): a `_WRITING_COMMANDS["rm"] = "all"`
+mód az `arguments = tokens[index + 1:]` — azaz a `rm` utáni **teljes parancssor**
+— minden nem-`-` tokenjét célpontnak veszi, `&&` határon át is. A védett
+útvonalat tehát nem írta senki: csak *említve* volt egy `rm`-mel kezdődő
+parancsban. Ez pontosan az a hibaosztály, amit a hook saját docstringje
+[L117](#l117) alapján lezártnak nyilvánít („a guard, ami a puszta említést
+bünteti, a saját dokumentációját akadályozza") — a `rm` ága azonban a
+token-alapú viselkedést megőrizte.
+
+**Megkerülés (nem kijátszás):** a `rm`-et és a mérce-eszköz futtatását **külön
+Bash-hívásba** kell tenni; így az audit lefut (`Legacy scope audit OK (…, 6
+changed path(s), 0 generated/ignored)`), és semmilyen védelem nem gyengül. A
+`tools/scope-audit.py`-t egyébként `python3`-mal kell hívni: a fájl a fában nem
+végrehajtható (`Permission denied`, exit 126).
+
+**Őrteszt:** nincs — a `.claude/hooks/**` és a `tools/**` a kör tiltott zónája
+(ADR 0112 §3, a mércét nem javíthatja az, akit mér). A javítás egy önjavító vagy
+governance-kör dolga: a `rm`-ág operandusait az első `&&`/`;`/`|` határig kell
+vágni, és a `tools/tests/`-be egy cella tartozik, amely a fenti összetett
+parancsra `allow`-ot vár.

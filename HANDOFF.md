@@ -1,5 +1,62 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R14 KÉSZ — Performance budget harness — PR [#505](https://github.com/wolfcasaba/strumsight/pull/505), squash `449783e8` (2026-08-29)
+
+A Ch12 **Kör 14** mércéje: a fán tizenhat baseline-dokumentum élt Markdownban,
+gépi összevetésre alkalmatlanul, és két benchmark-eszköz közös séma nélkül.
+Mostantól egyetlen verziózott rekord-séma mondja meg, **mi számít mérésnek, és
+mi hasonlítható mihez** — és ezt gépi kapu őrzi.
+
+**Amit a kör szállított** (`lib/**`, `ml/**`, `tools/**`, `.github/**`,
+`docs/baseline/**`, `pubspec.*` végig érintetlen — tilos zóna):
+
+- `tool/benchmarks/benchmark_record.dart` — a séma EGYETLEN forrása, 11 kötelező
+  mezővel, `dart:convert`-en kívül függőség nélkül; zárt `deviceId`-szótár a Kör
+  13 mátrixából (`pixel_6a`, `pixel_7`, `samsung_galaxy_a54`,
+  `xiaomi_redmi_note_12`) + `ci_host`.
+- `tool/compare_benchmarks.py` — `(metric, deviceId)` kulcsú összevetés; **5,0 %
+  warn / 10,0 % fail, mindkét határ INKLUZÍV**, a fájlban rögzítve (nem
+  CLI-kapcsoló); a hiányzó mérés `unknown` és nem-nulla kilépés.
+- `docs/performance/baseline.json` — **26 bejegyzés**, mind létező forrásra
+  hivatkozva.
+- `docs/performance/budgets.md`, `test/tooling/benchmark_budget_test.dart` (**42
+  cella**, `python3`-mérés skip-ág nélkül, önvédő cellával).
+
+**A pre-flight mért felfedezése (a kör lelke).** A `docs/baseline/` számai
+**négy, össze nem keverhető osztályba** esnek, és a fán MA egyetlen dokumentum
+hordoz valódi mérést: `epic-06-analysis-performance.md` (6 mikroszekundum-érték,
+2026-08-13). A többi felső korlát (`< 0.1 ms`, epic-04), származtatott
+szerződés-határ (17/34/51/68 ms, 12/35/70 cent — epic-03) vagy **cél mérés
+nélkül** (a vision FPS-táblázat minden mért cellája `PENDING`). A séma ezért
+kötelező `kind` mezőt visel, és **csak `measured` ↔ `measured`** párra számol
+regressziót — a `< 0.1 ms` felső korlátot `0.1`-ként `measured`-nek felvenni
+gépileg tiltott. Az [ADR 0474](docs/adr/0474-benchmark-record-and-performance-budget-comparison.md)
+ezen felül köti a **`direction`** mezőt alapérték NÉLKÜL: a vision FPS-célok
+`higherIsBetter`, tehát egy irány-vak („nagyobb = rosszabb") összehasonlító pont
+az FPS-esést — a felhasználó által ténylegesen érzékelt regressziót — engedné át
+zölden.
+
+**Nem mért adat nem került be:** minden bejegyzés `deviceId: ci_host`, mert a fán
+ma EGYETLEN fizikai eszközös benchmark sincs; a `budgets.md` ezt kimondja.
+Készüléknév kitalálása nem történt.
+
+**1 javító kör.** A review **2 MAJOR**-t talált TELJESEN ZÖLD gate mellett (6/6
+lépés, 33/33 cella): az összevetés a puszta metrika-NÉVRE kulcsolt, ezért (F1)
+két KÜLÖNBÖZŐ eszközön mért érték némán `pass`-t kapott, és (F2) azonos
+metrika-nevű második rekord elnyelte az elsőt — egy 100 %-os regresszió
+nyomtalanul eltűnt. A metaadat MEGLÉTE kikényszerített volt, a JELENTÉSE nem
+([L549](docs/LESSONS.md#l549)). A javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r14-review.md`](docs/reviews/e12-r14-review.md)); a zárás
+SEBÉSZI valódi-sértés próbával: device-vak visszaesés injektálva → **pontosan
+egy cella** (az F1) piros → visszaállítva.
+
+**Két infrastruktúra-lecke is mérve:** a §0.3 upstream-merge után a
+munkapéldány generált l10n-je elavul, és ezt csak a landoló kombinált-HEAD
+gate-je fogta meg ([L550](docs/LESSONS.md#l550)); a `protect_factory_files` hook
+`rm`-ága pedig a parancs minden további tokenjét írási célpontnak veszi, ezért
+egy összetett parancsban a `tools/scope-audit.py` FUTTATÁSA is blokkolódik
+([L551](docs/LESSONS.md#l551)).
+
 ## ✅ E12-R13 KÉSZ — Device matrix és device lab nyilvántartás — PR [#503](https://github.com/wolfcasaba/strumsight/pull/503), squash `2de98844` (2026-08-29)
 
 A Ch12 **Kör 13** mércéje: a fán hat, egymástól független manuális eszköz-dokumentum
@@ -9401,43 +9458,46 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-29):** `main` @ `2de98844` — E12-R13 Device matrix és
-device lab nyilvántartás, PR
-[#503](https://github.com/wolfcasaba/strumsight/pull/503), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
-Opus 5, **1 javító kör** — a review 1 MAJOR-t talált TELJESEN ZÖLD gate mellett
-(a `required_suite` kiüresíthető volt egy `release_blocking: true` eszközön:
-99/99 zöld, és a `device_report.py --check` eredmény-fájl nélkül exit 0), a
-javító kör után APPROVED, 0 nyitott lelet
-([`docs/reviews/e12-r13-review.md`](docs/reviews/e12-r13-review.md)).
+**Aktuális állapot (2026-08-29):** `main` @ `449783e8` — E12-R14 Performance
+budget harness, PR [#505](https://github.com/wolfcasaba/strumsight/pull/505),
+squash-merge. Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer
+Claude Opus 5, **1 javító kör** — a review **2 MAJOR**-t talált TELJESEN ZÖLD
+gate mellett (6/6 lépés, 33/33 cella): az összevetés a puszta metrika-NÉVRE
+kulcsolt, ezért két KÜLÖNBÖZŐ eszközön mért érték némán `pass`-t kapott, és
+azonos metrika-nevű második rekord elnyelte az elsőt. A javító kör után
+APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r14-review.md`](docs/reviews/e12-r14-review.md)).
 `risk = "normal"`, a diff nem érint hálózatot/hitelesítést/felhasználói adatot
-(dokumentum + tooling-teszt + offline Python riport), ezért külön
-`security-reviewer` nem futott. A kör **nem írt ADR-t** — a tier-szerződést az
-[ADR 0196](docs/adr/0196-vision-device-tier-performance-and-thermal-contract.md),
-a `package:yaml`-mentes mércét az
-[ADR 0444](docs/adr/0444-delivery-workflow-and-repository-policy.md) D3/D6 és az
-[ADR 0447](docs/adr/0447-release-manifest-provenance-and-sbom.md) D5 már rögzíti.
-Exact-SHA evidencia a merge SHA-n (`6e9dfcc1`): Full Gate
-[33235460985](https://github.com/wolfcasaba/strumsight/actions/runs/33235460985),
+(séma + offline Python összehasonlító + dokumentum + tooling-teszt), ezért külön
+`security-reviewer` nem futott. A kör ADR-je:
+[ADR 0474](docs/adr/0474-benchmark-record-and-performance-budget-comparison.md)
+(D1–D9). Exact-SHA evidencia a merge SHA-n (`60d711e9`): Full Gate
+[33238118552](https://github.com/wolfcasaba/strumsight/actions/runs/33238118552),
 Router CI
-[33235461965](https://github.com/wolfcasaba/strumsight/actions/runs/33235461965)
-— mindkettő `success`.
+[33238136574](https://github.com/wolfcasaba/strumsight/actions/runs/33238136574)
+— mindkettő `success`. A landolás `tools/round-land.sh`-sal, merge-záron
+keresztül ment (párhuzamos E15 sáv), kombinált-HEAD gate 6/6 zöld.
 
 ## 5. Last completed round
 
-**E12-R13 — Device matrix és device lab nyilvántartás** (PR
-[#503](https://github.com/wolfcasaba/strumsight/pull/503), squash `2de98844`).
-A hat manuális eszköz-dokumentum FÖLÉ egyetlen géppel olvasható nyilvántartás
-került (`docs/testing/device-matrix.yaml`): **4 MÉRT eszköz**, eszközönként 11
-kötelező azonosító-mező kettős forrás-hivatkozással, **14 capability** (11
-GA-scope + 3 preview) és **13 elemű kötelező tesztcsomag**. A kapu 121 cellás,
-`package:yaml` nélküli szűkített olvasóval, és a Python riport-generátort
-`Process.runSync('python3', …)` méri skip-ág nélkül. **Nem mért adat nem került
-be:** a Galaxy S23 és a Pixel 4a indokoltan kimarad (nincs mért RAM/SoC), és a
-user készüléke a fában máig kitöltetlen — a mátrix a MÉRT elsődleges teszteszközt
-(Pixel 6a) viszi `release_blocking: true` értékkel. **1 javító kör**, a MAJOR
-mérve zárva ([L548](docs/LESSONS.md#l548)); review APPROVED. A kör NEM futtatott
-valós eszközös mérést — minden `docs/manual-testing/` sor változatlanul `PENDING`.
+**E12-R14 — Performance budget harness** (PR
+[#505](https://github.com/wolfcasaba/strumsight/pull/505), squash `449783e8`).
+A tizenhat Markdown baseline-dokumentum FÖLÉ egyetlen verziózott, géppel olvasható
+rekord-séma került: `tool/benchmarks/benchmark_record.dart` (11 kötelező mező,
+zárt `deviceId`-szótár a Kör 13 mátrixából), `docs/performance/baseline.json`
+(**26 bejegyzés**, mind létező forrásra hivatkozva) és `tool/compare_benchmarks.py`
+(`(metric, deviceId)` kulcs, 5,0 % warn / 10,0 % fail, **mindkét határ
+inkluzív**, a fájlban rögzítve). A kapu 42 cellás, a `python3` eszközt skip-ág
+nélkül méri. **A pre-flight mért felfedezése:** a baseline-számok négy, össze nem
+keverhető osztályba esnek (`measured` / `upperBound` / `derivedContract` /
+`target`), és a fán MA csak 6 valódi mérés van — a séma ezért `kind` mezőt visel
+és csak `measured` ↔ `measured` párt hasonlít; a `direction` mező pedig
+alapérték nélkül kötelező, mert a vision FPS-célok `higherIsBetter`. **Nem mért
+adat nem került be:** minden bejegyzés `ci_host`, mert fizikai eszközös benchmark
+ma nincs. **1 javító kör**, mindkét MAJOR mérve zárva
+([L549](docs/LESSONS.md#l549)); review APPROVED. A kör egyetlen DSP/ML paramétert
+sem módosított (AGENTS.md §9), és NEM írt CI-workflow-t — a benchmark
+CI-integrációja külön kör.
 
 ## 6. Exact next task
 
@@ -9449,22 +9509,24 @@ valós eszközös mérést — minden `docs/manual-testing/` sor változatlanul 
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ▶️ **A KÖVETKEZŐ KÖR: `E12-R14`** (motor: `sonnet-impl`, brief:
-> `docs/rounds/e12-r14-performance-budget-harness.md`, ADR-oszlop: `0454`).
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R13
-> zárása után): **273 `done`, 40 `hold`, 18 `prepared`, 33 `pending`**.
+> ▶️ **A KÖVETKEZŐ KÖR: `E12-R15`** (motor: `sonnet-impl`, brief:
+> `docs/rounds/e12-r15-resource-coexistence-policy.md`, ADR-oszlop: `0455` —
+> **terv, nem foglalás**: a valós tartomány a `0474` FÖLÖTT jár, a számot a
+> foglalótól kérd, [L547](docs/LESSONS.md#l547)).
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R14
+> zárása után): **275 `done`, 40 `hold`, 18 `prepared`, 31 `pending`**.
 >
-> ⚠ A pre-flight MÉRJE ÚJRA: ezen a boxon **nincs Android SDK és nincs
-> device-farm**, tehát a cold start / audio / vision perf-budget harness sem
-> mérhet valódi eszközön — az eszközös elfogadás emberi kapu, nem
-> merge-feltétel. Az E12-R13 mostantól ehhez ad nyilvántartást
-> ([`docs/testing/device-matrix.yaml`](docs/testing/device-matrix.yaml),
-> [`docs/testing/device-lab.md`](docs/testing/device-lab.md)): a budget-harness
-> a `required_suite` `cold_start` / `analyze_memory_peak` /
-> `camera_preview_and_thermal` elemeire hivatkozzon, ne vezessen be párhuzamos
-> eszköz-fogalmat. Az ADR-számot a foglalótól kérd
-> (`tools/round-slots.py reserve-adr`), a queue `adr` oszlopa terv, nem
-> foglalás ([L547](docs/LESSONS.md#l547)).
+> ⚠ Az E12-R14 lezárta a benchmark-SZERZŐDÉST, de a MÉRÉST nem: minden
+> `docs/performance/baseline.json` bejegyzés `deviceId: ci_host`, mert ezen a
+> boxon **nincs Android SDK és nincs device-farm** — az eszközös elfogadás
+> emberi kapu, nem merge-feltétel. Ami MÉG NEM történt meg és külön kör:
+> (a) a benchmark CI-ba kötése (`.github/workflows/benchmark.yml`, SDD Ch12 —
+> az E12-R14 tilos zónája volt), (b) a `tool/benchmarks/` meglévő két eszközének
+> a közös sémára adaptálása, (c) a `docs/baseline/**` további dokumentumainak
+> felvétele a `baseline.json`-ba. Aki fizikai eszközre mér, a Kör 13 zárt
+> szótárát használja (`pixel_6a`, `pixel_7`, `samsung_galaxy_a54`,
+> `xiaomi_redmi_note_12`) — **új készüléknevet kitalálni tilos**
+> ([ADR 0474](docs/adr/0474-benchmark-record-and-performance-budget-comparison.md) D2).
 >
 > 🎯 **A Chapter 15 UI-sáv következő köre: `E15-R04`** — a hat `retire`-javaslat
 > review-ja és (jóváhagyás esetén) végrehajtása. A bemenete KÉSZ és MÉRT:
