@@ -38,10 +38,24 @@ revoked stops on the second turn without ever being rebuilt (proven by
 
 **What's NOT yet true:** the tutor cloud transport (`HttpTutorStreamTransport`, `POST
 /tutor/stream`) has no production construction site anywhere in `lib/**` — `wired: false` in
-the inventory. The turn path today can only ever reach a local/fake `TutorModelGateway`. The
-consent gate above is what will stop the REAL cloud call once a future round wires it — this
-round proves the gate fires before a gateway is even created, which is the strongest available
-evidence today.
+the inventory. The turn path today can only ever reach a local/fake `TutorModelGateway`.
+
+**Measured gap (E12-R17 javító kör #1, MAJOR-3):** the consent gate above reads
+`request.consent.modelUseGranted`, but the ONLY production `TutorTurnRequest` construction site
+— `_previewTurnRequest` (`lib/features/ai_tutor/presentation/providers/tutor_providers.dart:433,438`)
+— hardcodes `consent: const TutorConsent(modelUseGranted: true)` and never reads
+`tutorConsentControllerProvider` (`tutor_privacy_providers.dart:75`, the provider
+`tutor_privacy_screen.dart` writes a user's revocation to). A user's revocation via the Tutor
+privacy screen today changes a provider value that no production code path ever reads back into
+a turn request. The gate itself is sound — `reduceTutorTurn` DOES stop a request whose
+`consent.modelUseGranted` is `false` — but nothing in `lib/**` ever builds that `false` from the
+user's actual choice. **This is corrected wording** for a previous version of this paragraph,
+which claimed the gate above "is what will stop the REAL cloud call once a future round wires
+it" — that claim is false as written: wiring `HttpTutorStreamTransport` alone, without ALSO
+fixing `_previewTurnRequest`, would NOT be stopped by the gate, because the gate would still be
+fed a hardcoded `true`. `test/privacy/consent_enforcement_test.dart`'s MAJOR-3 guard group is a
+machine pin against exactly that: it fails the moment a construction site for
+`HttpTutorStreamTransport` appears in `lib/**` while the hardcode is still present.
 
 ### 2. Diagnostics — `diagnosticsConsentProvider`
 
@@ -100,6 +114,11 @@ design choice.
   [ADR 0247](../adr/0247-analysis-export-share-and-delete-contract.md) contract; this round's
   inventory cites it rather than re-deriving it.
 - **The Consent Center UI** — [E13-R35](../rounds/), out of this round's scope (§0.0).
+- **On-device stored data (MINOR-5, E12-R17 javító kör #1)** — `lib/core/storage/storage_keys.dart`
+  declares 56 persisted keys; none of them are inventoried here. This document and
+  `docs/privacy/data-inventory.yaml` cover EGRESS only (data that leaves the device), per the
+  round brief §3 — an on-device storage inventory is a separate, not-yet-started follow-up task.
+  Named here explicitly so the gap is a declared scope boundary, not a silent blind spot.
 
 ## §10 — the mandatory real-violation probe
 

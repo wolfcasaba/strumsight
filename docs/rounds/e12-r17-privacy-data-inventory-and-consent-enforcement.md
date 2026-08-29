@@ -360,4 +360,162 @@ helyesen állítja meg az adatáramlást. A tiltott zóna (`lib/**` stb.)
   A5' cella ezért az account-session kapcsolón mér, az ADR 0479 §"Döntés" D4
   pontja szerint.
 
+### 10.1 Javító kör #1 — a review 3 MAJOR + 5 MINOR leletének javítása
+
+A kör első diffje (`0fbbbad5..53db4db1`) zöld gate-tel, de a független review +
+a kötelező `security-reviewer` 3 MAJOR-t és 5 MINOR-t mért. Az alábbi a
+leletlista (`review-findings-r1.md`) sorrendjében a javítás — engedélyezett
+fájlok VÁLTOZATLANOK, `lib/**` nem módosult.
+
+**MAJOR-1 — `ShareService` (share_plus) hiányzott a leltárból.** Új
+mintaosztály: `EgressPatternKind.userInitiatedShare` — `SharePlus.instance
+.(share|shareXFiles|shareUri)` hívást tartalmazó osztálytest felismerése
+(`tool/check_data_inventory.dart` `_discoverShareInitiatedClasses` +
+`_sharePlusCallPattern`). Leltár-bejegyzés: `share_export` (3 mező —
+`strum_card_png`, `share_caption`, `redacted_analysis_export_json`), mért
+gate/consent_switch szöveggel (mind a hat hívóhely explicit `onPressed`,
+`ExportAnalysisUseCase.share` a `RedactionPolicy`-t a JSON exportra futtatja,
+a kártya/caption útra NEM). Mérő cella:
+`test/tooling/data_inventory_test.dart` „the tree-walker recognizes all five
+mandated pattern classes" — `ShareService` a discovered listában.
+
+**MAJOR-2 — az `ApiClient`-alapú küldők (a fa leggyakoribb alakja) nulla
+route-ot termeltek.** Új mintaosztály: `EgressPatternKind
+.apiClientConsumingClass` — `ApiClient`-típusú tag/paraméter +
+`getJson|postJson|putJson|post|delete` hívás felismerése
+(`_discoverApiClientConsumingClasses`). A hat mért osztály
+(`HttpAuthRepository`, `HttpSettingsRepository`,
+`HttpCommunityProfileRepository`, `HttpSocialGraphRepository`,
+`HttpCommunityChallengeRepository`, `DiagnosticsUploader`) mind megtalálva.
+Leltár: új `rides:` séma-mező (gépileg ellenőrzött hivatkozás egy másik
+route id-re, nem szabad szöveg) — öt osztály `rides: account_api`-t kap
+(mind az `accountApiClientProvider`-t viszik tovább, mérve:
+`profile_repository_impl.dart:49-50`, `relationship_repository_impl.dart:43-44`,
+`challenge_repository_impl.dart:46-47` mind
+`Provider<ApiClient?>((ref) => ref.watch(accountApiClientProvider))`), a
+`DiagnosticsUploader` `rides: diagnostics_upload`-ot. A `checkDataInventory`
+ellenőrzi, hogy a `rides` cél létező route id-re mutat ÉS annak van mezője —
+két falszifikációs cellával (`nonexistent_target`, fieldless-target). A
+fantom-osztály próba (a review saját `HttpPracticeLogRepository`
+reprodukciójának megfelelője): `test/tooling/data_inventory_test.dart`
+„a synthetic class fielding an ApiClient... is discovered... and an
+inventory that has never heard of it turns the check red".
+
+**MAJOR-3 — a tutor consent-kapcsoló nincs bekötve a turn-útra
+(`lib/**`-hiba, NEM javítva ebben a körben — §2 szerint).** A
+`data-inventory.yaml` `tutor_stream` `gate`/`consent_switch` mezője és a
+`consent-enforcement.md` §1 mostantól kimondja a mért szakadást:
+`_previewTurnRequest` (`tutor_providers.dart:433,438`) konstans
+`TutorConsent(modelUseGranted: true)`-t drótoz be, a
+`tutorConsentControllerProvider` visszavonása soha nem éri el. Gépi őr:
+`test/privacy/consent_enforcement_test.dart` új `MAJOR-3 guard` csoportja —
+egy tiszta logikai függvény (`tutorTurnConsentWiringIsSound`) mindkét
+irányban falszifikálva (wired+hardcode=UNSOUND, wired+fixed=sound,
+unwired+hardcode=sound-ma), PLUSZ egy valós-fán mérő cella, amely pinneli a
+két mai tényt (`HttpTutorStreamTransport`-nak nincs konstrukciós helye a
+deklaráló fájlon kívül; `_previewTurnRequest` MA hardcode-olja a
+`true`-t) — ha egy jövőbeli kör a cloud transportot a builder javítása
+nélkül köti be, ez a cella pirosra vált.
+
+**MINOR-1 — a fa-bejáró átcsúszott reális alakokon.** Ige-lista bővítve
+(`patch|head|download|fetch` + `*Uri` variánsok — mérve: `.patch(` ma nulla
+találat, de a backend `posts.py:291` már szállít PATCH-et). Komment/string-
+literál strip: `_codeWithoutTrivia` (a `check_architecture.dart` mintája,
+önállóan, mert a metódus library-private). P10 igazolva: a
+`community_media_uploader.dart`-ban a MAI kódban is van egy hasonló
+kommentből eredő fantom „class" találat (`// ... the class is NOT
+thread-safe"` → `group(1)="is"`), de ott szerencsésen az UTOLSÓ osztály
+elé esik, ezért ma nem tűnik el semmi — a P10 cella egy szintetikus
+temp-repo fixtúrával reprodukálja a valódi kárt okozó elrendezést (a fantom
+a VALÓDI osztály KÖZEPÉN vágna, elválasztva a tagot a hívástól) és
+bizonyítja, hogy a stripping után `RealSender` mégis megtalálható. Fájl-
+szintű visszaesés: ha egyik osztálytest sem illeszkedik, de a fájl `Dio`-t
+importál ÉS van benne ige-hívás → `file:<path>` forrású route (mixin/
+extension/typedef/top-level függvény/`dynamic` alakokat fed le egy
+csapással) — négy cellával (verb-bővítés, P10, fallback-pozitív,
+fallback-negatív).
+
+**MINOR-2 — a `dio_factory.dart` kizárás lyukat ütött az (a) mintán.** Az
+(a) minta már NEM köti magát az `ApiClient` visszatérési típushoz
+(`\w+\s+create(\w+)Client\s*\(`), így egy hipotetikus
+`Dio createTutorStreamClient() => Dio();` is látható lenne. A két kizárt
+fájl saját, szűkebb ellenőrzést kapott: `dioConsumingClassExclusionCallSiteCounts`
+pinneli mindkettő MÉRT ige-hívás-számát (`dio_factory.dart`: 0,
+`api_client.dart`: 3 — a `post`/`delete`/`_requestJson` metódusok saját
+`_dio.request(...)` hívásai), és `checkExclusionCallSiteDrift` minden
+futáskor újramér — egy `_dio.post('/exfil', …)` hozzáadása a pin-től eltérő
+számot termelne, cellával bizonyítva.
+
+**MINOR-3 — a YAML-olvasó némán `false`-ra kódolta a `True`-t.**
+`_parseStrictBool` — KIZÁRÓLAG a `true`/`false` szó szerinti literál
+fogadott el, minden más (`True`, `TRUE`, elgépelés) `FormatException`.
+Alkalmazva mindkét helyen (`leaves_device`, `wired`). Két falszifikációs
+cella (`leaves_device: True`, `wired: True` → `throwsFormatException`) + egy
+regressziós zöld cella a lowercase literálokra.
+
+**MINOR-4 — a `wired: false` állítás csak egy irányban volt ellenőrizve.**
+Új `checkWiredFalseConstructionSites`: minden `wired: false` route
+class-nevére (`_bareIdentifierPattern`-nel szűrve, hogy az (a)/(e) alakú
+source-okat kihagyja) megkeresi, hogy a deklaráló fájlon KÍVÜL van-e
+`<ClassName>(` konstrukciós hely bárhol `lib/**`-ban — ha van, piros. A mai
+két `wired: false` route (`tutor_stream`, `community_media`) zölden mérve
+(nincs ilyen hely). Három cella: valós-fán zöld, szintetikus piros
+(konstrukció egy MÁSIK fájlban), szintetikus zöld (konstrukció csak a
+deklaráló fájlban — a saját konstruktor nem számít találatnak).
+
+**MINOR-5 — az on-device tárolt adat nincs leltározva (hatókör-őszinteség).**
+`data-inventory.yaml` fejléce és `consent-enforcement.md` „What this
+document does not cover" szakasza mostantól kifejezetten kimondja: ez a
+dokumentum EGRESS-t fed (ami elhagyja az eszközt), a
+`lib/core/storage/storage_keys.dart` 56 kulcsa szándékosan nincs benne, és
+ez egy külön, MÉG EL NEM KEZDETT követő feladat — nem csendes vakfolt.
+
+#### A gate — csonkítatlan kimenet (javító kör #1 után)
+
+```
+tools/round-gate.sh test/privacy/consent_enforcement_test.dart test/tooling/data_inventory_test.dart test/ui/ui_inventory_test.dart
+```
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/privacy/consent_enforcement_test.dart            zöld
+    test test/tooling/data_inventory_test.dart                 zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+(`test/privacy/consent_enforcement_test.dart`: 10/10 zöld — a 6 eredeti +
+4 új MAJOR-3 guard cella. `test/tooling/data_inventory_test.dart`: 27/27
+zöld — a 9 eredeti + 18 új cella a fenti leletekhez. A
+`test/ui/ui_inventory_test.dart` `hasLength(96)` pinje NEM mozdult;
+`architecture`: 12 meglévő, változatlan allowlist-tétel.)
+
+#### A leltár-ellenőrző közvetlen futtatása (javító kör #1 után)
+
+```
+$ dart run tool/check_data_inventory.dart
+Data inventory check OK (11 measured egress route(s), 11 inventory route(s)).
+```
+
+11 mért route = 2 (a: `DioFactory.create*Client`) + 2 (b:
+`HttpTutorStreamTransport`, `CommunityMediaUploader`) + 6 (c:
+`ApiClient`-fogyasztók) + 1 (d: `ShareService`). 11 leltár-route = a mai 4
++ `share_export` + a 6 `rides`-bejegyzés.
+
+### Ismert, dokumentált korlát a javító kör után (nem ennek a körnek a hibája)
+
+A MAJOR-3 (tutor consent-kapcsoló bekötése) `lib/**`-javítása a §2 szerint
+KIFEJEZETTEN nem ennek a körnek a dolga — a kör feladata a mért szakadás
+őszinte dokumentálása és gépi kipinnelése volt, amit a fenti guard-csoport
+teljesít. A javítás (a `_previewTurnRequest` átkötése a
+`tutorConsentControllerProvider`-re) egy KÖVETKEZŐ kör feladata, és a MAJOR-3
+guard cella pontosan azt a pillanatot fogja pirosra váltani, amikor a cloud
+transport bekötése enélkül történne meg.
+
 ## 11. Review — a Claude tölti ki

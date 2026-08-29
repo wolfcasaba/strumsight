@@ -11,6 +11,7 @@
 // docs/privacy/data-inventory.yaml.
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -336,6 +337,115 @@ void main() {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  // MAJOR-3 (E12-R17 javító kör #1) — the machine guard against the measured
+  // gap: reduceTutorTurn's consent gate is sound, but the ONLY production
+  // TutorTurnRequest builder (`_previewTurnRequest`,
+  // lib/features/ai_tutor/presentation/providers/tutor_providers.dart:433,438)
+  // hardcodes `consent: const TutorConsent(modelUseGranted: true)` instead of
+  // reading `tutorConsentControllerProvider`. Today that is a latent gap, not
+  // a leak, because nothing in lib/** also constructs an
+  // HttpTutorStreamTransport (`wired: false` in the inventory). This group
+  // pins BOTH measured facts and proves the guard's own logic turns red for
+  // exactly the regression a future round could introduce (wiring the cloud
+  // transport without also fixing the request builder) — lib/** itself is
+  // out of scope for this round (§2), so the guard cannot be exercised by
+  // actually flipping production code; it is exercised as a pure function
+  // fed synthetic booleans, plus a real-tree cell that measures today's
+  // actual values.
+  group('MAJOR-3 guard — the tutor cloud gateway must not become reachable '
+      'while the production request-builder still hardcodes '
+      'modelUseGranted: true', () {
+    test('pure guard: wiring the cloud gateway while the hardcode is still '
+        'present is UNSOUND (the exact MAJOR-3 regression)', () {
+      expect(
+        tutorTurnConsentWiringIsSound(
+          cloudGatewayHasConstructionSite: true,
+          requestBuilderHardcodesGrantedTrue: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('pure guard: wiring the cloud gateway AFTER the hardcode is '
+        'removed is sound', () {
+      expect(
+        tutorTurnConsentWiringIsSound(
+          cloudGatewayHasConstructionSite: true,
+          requestBuilderHardcodesGrantedTrue: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test("pure guard: today's measured state (gateway unwired, hardcode "
+        'present) is sound — a latent gap only, not a live leak', () {
+      expect(
+        tutorTurnConsentWiringIsSound(
+          cloudGatewayHasConstructionSite: false,
+          requestBuilderHardcodesGrantedTrue: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('real tree: HttpTutorStreamTransport has no construction site outside '
+        'its own declaring file, and _previewTurnRequest still hardcodes '
+        'modelUseGranted: true — both measured facts are pinned so either '
+        'silently changing trips this cell', () {
+      final repository = Directory.current;
+      final libDir = Directory('${repository.path}/lib');
+      final declaringFile = File(
+        '${repository.path}/lib/features/ai_tutor/data/model_gateway/'
+        'http_tutor_stream_transport.dart',
+      ).absolute.path;
+      final constructionPattern = RegExp(r'\bHttpTutorStreamTransport\s*\(');
+      final gatewayConstructedElsewhere = libDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .where((f) => f.absolute.path != declaringFile)
+          .any((f) => constructionPattern.hasMatch(f.readAsStringSync()));
+
+      final providersSource = File(
+        '${repository.path}/lib/features/ai_tutor/presentation/providers/'
+        'tutor_providers.dart',
+      ).readAsStringSync();
+      final hardcodesGrantedTrue = RegExp(
+        r'consent:\s*const\s+TutorConsent\(modelUseGranted:\s*true\)',
+      ).hasMatch(providersSource);
+
+      // Pin today's exact measured state (E12-R17 javító kör #1 §2 —
+      // fixing THIS gap is explicitly out of scope; the pin is what makes
+      // a silent regression loud instead of invisible).
+      expect(gatewayConstructedElsewhere, isFalse);
+      expect(hardcodesGrantedTrue, isTrue);
+
+      // ...and feeding those exact measured values through the pure guard
+      // must be sound today, and would stop being sound the moment
+      // gatewayConstructedElsewhere flips to true without
+      // hardcodesGrantedTrue also flipping to false.
+      expect(
+        tutorTurnConsentWiringIsSound(
+          cloudGatewayHasConstructionSite: gatewayConstructedElsewhere,
+          requestBuilderHardcodesGrantedTrue: hardcodesGrantedTrue,
+        ),
+        isTrue,
+      );
+    });
+  });
+}
+
+/// The MAJOR-3 guard's pure logic, kept separate from the real-tree
+/// measurement above so the regression it exists to catch can be proven
+/// red/green without lib/** needing to actually change.
+bool tutorTurnConsentWiringIsSound({
+  required bool cloudGatewayHasConstructionSite,
+  required bool requestBuilderHardcodesGrantedTrue,
+}) {
+  if (!cloudGatewayHasConstructionSite) return true; // latent gap only.
+  return !requestBuilderHardcodesGrantedTrue;
 }
 
 // ---------------------------------------------------------------------------
