@@ -9,6 +9,7 @@ import 'package:strumsight/features/practice/domain/model/practice_source.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../../support/preference_store.dart';
 
@@ -23,6 +24,7 @@ void main() {
       ProviderScope(
         overrides: preferenceOverrides(),
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: child,
@@ -130,6 +132,81 @@ void main() {
         expect(find.text('12'), findsOneWidget);
       },
     );
+  });
+
+  group('E15-R04 — design-system migration', () {
+    testWidgets(
+      'PracticeResultFallback (no entry) renders the informational state, '
+      'no action and no navigation (E15-R04 review MAJOR-3b: this fallback '
+      'never navigated pre-migration; adding one would be a behaviour '
+      'change in an appearance-only round)',
+      (tester) async {
+        await pumpResult(tester, const PracticeResultFallback());
+        expect(
+          find.text(l10n().practiceResultUnavailableTitle),
+          findsOneWidget,
+        );
+        expect(find.text(l10n().practiceResultUnavailableBody), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('ss-empty-state-action')),
+          findsNothing,
+        );
+        expect(find.byType(FilledButton), findsNothing);
+        expect(find.byType(TextButton), findsNothing);
+        expect(find.byType(ElevatedButton), findsNothing);
+      },
+    );
+
+    for (final locale in [const Locale('en'), const Locale('hu')]) {
+      testWidgets('textScaler 2.0 renders without overflow — Chord Progression '
+          '(${locale.languageCode})', (tester) async {
+        tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(
+          tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: preferenceOverrides(),
+            child: MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: PracticeResultScreen(
+                entry: _entry(PracticeMode.chordProgression),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets(
+        'textScaler 2.0 renders the PracticeResultFallback without overflow '
+        '(${locale.languageCode})',
+        (tester) async {
+          tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(
+            tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+          );
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: preferenceOverrides(),
+              child: MaterialApp(
+                theme: SsLightTheme.data(),
+                locale: locale,
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: const PracticeResultFallback(),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
   });
 }
 

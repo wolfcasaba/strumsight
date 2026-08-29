@@ -25,6 +25,7 @@ import 'package:strumsight/features/practice/domain/repository/practice_catalog_
 import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 import '../../../support/fake_audio.dart';
 import '../../../support/fake_auth.dart';
@@ -114,6 +115,7 @@ Future<ProviderContainer> _pumpRouter(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp.router(
+        theme: SsLightTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         routerConfig: router,

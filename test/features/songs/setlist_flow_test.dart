@@ -10,6 +10,7 @@ import 'package:strumsight/features/songs/providers/songs_provider.dart';
 import 'package:strumsight/features/songs/screens/setlist_detail_screen.dart';
 import 'package:strumsight/features/songs/screens/setlist_list_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/preference_store.dart';
@@ -56,6 +57,7 @@ Widget _app(
     setlistsProvider.overrideWith(() => _SeededSetlists(setlists)),
   ],
   child: MaterialApp(
+    theme: SsLightTheme.data(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: home,

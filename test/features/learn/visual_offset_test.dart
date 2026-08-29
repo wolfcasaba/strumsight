@@ -8,6 +8,7 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/settings/providers/input_latency_provider.dart';
 import 'package:strumsight/features/settings/providers/visual_latency_provider.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
@@ -50,6 +51,7 @@ void main() {
           visualLatencyProvider.overrideWith(() => _FixedVisualMs(40)),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: LearnScreen(lesson: Lessons.firstStrums),
@@ -75,6 +77,7 @@ void main() {
           strumEngineProvider.overrideWithValue(engine),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: LearnScreen(lesson: Lessons.firstStrums),

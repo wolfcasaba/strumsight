@@ -39,6 +39,7 @@ import 'package:strumsight/features/tuner/model/tuner_reading.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_engines.dart';
@@ -81,7 +82,8 @@ void main() {
                 ...preferenceOverrides(),
                 tunerEngineProvider.overrideWithValue(engine),
               ],
-              child: const MaterialApp(
+              child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: TunerScreen(),
@@ -102,6 +104,7 @@ void main() {
             ProviderScope(
               overrides: preferenceOverrides(),
               child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: LessonListScreen(now: DateTime(2026, 7, 11)),
@@ -122,6 +125,7 @@ void main() {
                 strumEngineProvider.overrideWithValue(engine),
               ],
               child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: LearnScreen(lesson: Lessons.downUpGroove),
@@ -135,6 +139,7 @@ void main() {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
             MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: const MetronomeScreen(),
@@ -148,7 +153,8 @@ void main() {
           await tester.pumpWidget(
             ProviderScope(
               overrides: preferenceOverrides(),
-              child: const MaterialApp(
+              child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: ChordLibraryScreen(),
@@ -163,7 +169,8 @@ void main() {
           await tester.pumpWidget(
             ProviderScope(
               overrides: preferenceOverrides(),
-              child: const MaterialApp(
+              child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: ProgressScreen(),
@@ -220,7 +227,8 @@ void main() {
       testWidgets('Onboarding', (tester) async {
         await atSize(tester, entry.value, () async {
           await tester.pumpWidget(
-            const MaterialApp(
+            MaterialApp(
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: OnboardingScreen(),
@@ -235,6 +243,7 @@ void main() {
             ProviderScope(
               overrides: preferenceOverrides(),
               child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: StreakScreen(now: DateTime(2026, 7, 11)),
@@ -249,7 +258,8 @@ void main() {
           await tester.pumpWidget(
             ProviderScope(
               overrides: preferenceOverrides(),
-              child: const MaterialApp(
+              child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: SongBuilderScreen(),
@@ -270,6 +280,7 @@ void main() {
                 ),
               ],
               child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: PracticeHubScreen(now: DateTime(2026, 7, 11)),
@@ -292,6 +303,7 @@ void main() {
                 practicePrepareSinkProvider.overrideWithValue(_noopSink),
               ],
               child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: const PracticeSetupScreen(
@@ -314,7 +326,8 @@ void main() {
           await tester.pumpWidget(
             ProviderScope(
               overrides: preferenceOverrides(),
-              child: const MaterialApp(
+              child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: PracticeSessionScreen(),
@@ -332,7 +345,8 @@ void main() {
           await tester.pumpWidget(
             ProviderScope(
               overrides: preferenceOverrides(),
-              child: const MaterialApp(
+              child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: PracticeResultFallback(),
@@ -379,6 +393,7 @@ void main() {
             ProviderScope(
               overrides: preferenceOverrides(),
               child: MaterialApp(
+                theme: SsLightTheme.data(),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: PracticeResultScreen(entry: fixture),

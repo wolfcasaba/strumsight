@@ -53,6 +53,7 @@ class _RouterTestApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
+      theme: SsLightTheme.data(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: ref.watch(routerProvider),
@@ -389,6 +390,7 @@ void main() {
       (tester) async {
         Future<void> pumpAt(String location) => tester.pumpWidget(
           MaterialApp(
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: Builder(
@@ -465,6 +467,7 @@ void main() {
         );
         await tester.pumpWidget(
           MaterialApp.router(
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             routerConfig: router,
@@ -505,6 +508,7 @@ void main() {
     });
 
     Widget scaffoldAt(double width) => MaterialApp(
+      theme: SsLightTheme.data(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: MediaQuery(

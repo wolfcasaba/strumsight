@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/public.dart';
 import '../audio/metronome.dart';
@@ -119,6 +119,8 @@ class _LatencyCalibrationScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final colors = theme.extension<SsColorScheme>()!;
+    final typography = theme.extension<SsTypography>()!;
     final savedMs = ref.watch(
       _visualMode ? visualLatencyProvider : inputLatencyProvider,
     );
@@ -130,126 +132,152 @@ class _LatencyCalibrationScreenState
     return Scaffold(
       appBar: AppBar(title: Text(l10n.calibrationTitle)),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          child: Column(
-            children: [
-              SegmentedButton<bool>(
-                showSelectedIcon: false,
-                segments: [
-                  ButtonSegment(
-                    value: false,
-                    label: Text(l10n.calibrationModeAudio),
+        // LayoutBuilder + scroll + IntrinsicHeight (same idiom as
+        // LearnScreen): the Spacer()s below need a bounded-height ancestor,
+        // but at textScaler 2.0 the fixed content can outgrow the viewport
+        // (A3) — scrolling instead of overflowing keeps both true.
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    SsSpacing.space6,
+                    SsSpacing.space3,
+                    SsSpacing.space6,
+                    SsSpacing.space6,
                   ),
-                  ButtonSegment(
-                    value: true,
-                    label: Text(l10n.calibrationModeVisual),
-                  ),
-                ],
-                selected: {_visualMode},
-                onSelectionChanged: _running
-                    ? null
-                    : (s) => setState(() => _visualMode = s.first),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _visualMode
-                    ? l10n.calibrationIntroVisual
-                    : l10n.calibrationIntro,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                l10n.calibrationCurrent('$savedMs'),
-                style: theme.textTheme.bodySmall,
-              ),
-              const Spacer(),
-              // Beat pulse.
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 60),
-                width: _pulse ? 34 : 20,
-                height: _pulse ? 34 : 20,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primary.withValues(
-                    alpha: _pulse ? 1.0 : 0.25,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                done && offset != null
-                    ? l10n.calibrationResult('${(offset * 1000).round()}')
-                    : '${_calibrator.sampleCount} / '
-                          '${LatencyCalibrationScreen.tapsNeeded}',
-                style: const TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 30,
-                ),
-              ),
-              if (done && !_calibrator.isStable)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    l10n.calibrationUnstable,
-                    style: TextStyle(color: AppColors.confidenceMid),
-                  ),
-                ),
-              if (_running && _lastTapOffset != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    '${(_lastTapOffset! * 1000).round()} ms',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-              const Spacer(),
-              if (_running)
-                // The big silent tap target.
-                SizedBox(
-                  width: 180,
-                  height: 180,
-                  child: FilledButton(
-                    onPressed: _onTap,
-                    style: FilledButton.styleFrom(
-                      shape: const CircleBorder(),
-                      backgroundColor: AppColors.primary,
-                    ),
-                    child: Text(
-                      l10n.calibrationTap,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
+                  child: Column(
+                    children: [
+                      SegmentedButton<bool>(
+                        showSelectedIcon: false,
+                        segments: [
+                          ButtonSegment(
+                            value: false,
+                            label: Text(l10n.calibrationModeAudio),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            label: Text(l10n.calibrationModeVisual),
+                          ),
+                        ],
+                        selected: {_visualMode},
+                        onSelectionChanged: _running
+                            ? null
+                            : (s) => setState(() => _visualMode = s.first),
                       ),
-                    ),
-                  ),
-                )
-              else ...[
-                if (done && _calibrator.isStable)
-                  FilledButton.icon(
-                    onPressed: _save,
-                    icon: const Icon(Icons.check_rounded),
-                    label: Text(l10n.calibrationSave),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(56),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _start,
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: Text(
-                    done ? l10n.calibrationRetry : l10n.calibrationStart,
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(56),
+                      const SizedBox(height: SsSpacing.space3),
+                      Text(
+                        _visualMode
+                            ? l10n.calibrationIntroVisual
+                            : l10n.calibrationIntro,
+                        textAlign: TextAlign.center,
+                        style: typography.bodyMedium.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: SsSpacing.space2),
+                      Text(
+                        l10n.calibrationCurrent('$savedMs'),
+                        style: typography.labelLarge.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      // Beat pulse.
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 60),
+                        width: _pulse ? 34 : 20,
+                        height: _pulse ? 34 : 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: colors.brand.withValues(
+                            alpha: _pulse ? 1.0 : 0.25,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: SsSpacing.space5),
+                      Text(
+                        done && offset != null
+                            ? l10n.calibrationResult(
+                                '${(offset * 1000).round()}',
+                              )
+                            : '${_calibrator.sampleCount} / '
+                                  '${LatencyCalibrationScreen.tapsNeeded}',
+                        style: typography.metricLarge.copyWith(
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                      if (done && !_calibrator.isStable)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            l10n.calibrationUnstable,
+                            style: typography.bodyMedium.copyWith(
+                              color: colors.confidenceMedium,
+                            ),
+                          ),
+                        ),
+                      if (_running && _lastTapOffset != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            '${(_lastTapOffset! * 1000).round()} ms',
+                            style: typography.labelLarge.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      const Spacer(),
+                      if (_running)
+                        // The big silent tap target.
+                        SizedBox(
+                          width: 180,
+                          height: 180,
+                          child: FilledButton(
+                            onPressed: _onTap,
+                            style: FilledButton.styleFrom(
+                              shape: const CircleBorder(),
+                              backgroundColor: colors.brand,
+                            ),
+                            child: Text(
+                              l10n.calibrationTap,
+                              style: typography.titleMedium.copyWith(
+                                color: colors.onBrand,
+                              ),
+                            ),
+                          ),
+                        )
+                      else ...[
+                        if (done && _calibrator.isStable)
+                          SizedBox(
+                            height: 56,
+                            child: SsButton(
+                              label: l10n.calibrationSave,
+                              icon: Icons.check_rounded,
+                              onPressed: _save,
+                            ),
+                          ),
+                        const SizedBox(height: SsSpacing.space3),
+                        SizedBox(
+                          height: 56,
+                          child: SsButton(
+                            label: done
+                                ? l10n.calibrationRetry
+                                : l10n.calibrationStart,
+                            icon: Icons.play_arrow_rounded,
+                            variant: SsButtonVariant.secondary,
+                            onPressed: _start,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: SsSpacing.space2),
+                    ],
                   ),
                 ),
-              ],
-              const SizedBox(height: 8),
-            ],
+              ),
+            ),
           ),
         ),
       ),

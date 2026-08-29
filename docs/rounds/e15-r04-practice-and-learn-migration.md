@@ -1,6 +1,7 @@
 # E15-R04 — Practice és Learn képernyők migrálása
 
-- **Státusz:** PREPARED (előre megírva 2026-08-28, kód olvasva: `main @ 4cb32eb0`)
+- **Státusz:** READY (előre megírva 2026-08-28 `main @ 4cb32eb0`-n; pre-flight
+  revízió — §0.0/R1–R9 — MÉRVE `main @ ccc71460`-en, 2026-08-29)
 - **Típus:** Chapter 15 (UI-aktiválás és -befejezés), Kör 4
 - **Kör-azonosító:** `E15-R04`
 - **Branch:** `<motor>/e15-r04-practice-and-learn-migration`
@@ -65,6 +66,25 @@ allowed_paths = [
   "test/features/songs/setlist_flow_test.dart",
   "test/ui/goldens/e13_r20_screens_golden_test.dart",
   "test/ui/goldens/e13_r22_screens_golden_test.dart",
+  # §0.0/R4 — a batch NÉGY képernyőjének VAN goldenje; a migráció ezeket a
+  # pixeleket megváltoztatja, és a §7 már elő is írja az újrafelvételt, de a
+  # KIMENETI fájlok hiányoztak a listáról. Tételesen (nem könyvtárként):
+  "test/ui/goldens/goldens/e13_r20_learning_path_compact.png",
+  "test/ui/goldens/goldens/e13_r20_learning_path_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r22_practice_result_compact.png",
+  "test/ui/goldens/goldens/e13_r22_practice_result_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r22_practice_history_compact.png",
+  "test/ui/goldens/goldens/e13_r22_practice_history_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r22_speed_builder_compact.png",
+  "test/ui/goldens/goldens/e13_r22_speed_builder_compact_scale2.png",
+  # §0.0/R5 — a §3/§5.3 megengedi az ÚJ ARB-kulcsot (mindkét locale-ra) és
+  # tiltja a beégetett szöveget, de egyetlen ARB-útvonal sem volt a listán.
+  # Az aggregátum GENERÁLT (ADR 0307 §4), a scope-audit viszont NEM ismer
+  # generált-kivételt (mérve), ezért mind a négy fájl a listán van.
+  "lib/l10n/base/app_en.arb",
+  "lib/l10n/base/app_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
   "docs/ui/migration-status.md",
   "docs/rounds/e15-r04-practice-and-learn-migration.md",
 ]
@@ -99,13 +119,115 @@ gate_tests = [
   "test/features/practice/reward_idempotency_test.dart",
   "test/features/practice/speed_ladder_test.dart",
   "test/features/songs/setlist_flow_test.dart",
-  "test/ui/goldens/e13_r20_screens_golden_test.dart",
-  "test/ui/goldens/e13_r22_screens_golden_test.dart",
+  # §0.0/R6 — az A6 bizonyítéka eddig nem futott a kapuban (futtatni kell,
+  # SZERKESZTENI tilos — nincsenek az allowed_paths-on):
+  "test/l10n/hardcoded_string_guard_test.dart",
+  "test/l10n/arb_parity_test.dart",
+  # §0.0/R3 — a két golden-teszt-fájl NEM a lokális ARM-kapuban fut (ADR 0426):
+  # `main @ ccc71460`-en, kör-változtatás NÉLKÜL az `e13_r20_screens_golden_test.dart`
+  # 3/6 cellája piros (L516 raszter-drift). A golden-sáv mércéje:
+  #   tools/golden-x86.sh check test/ui/goldens/e13_r20_screens_golden_test.dart \
+  #                             test/ui/goldens/e13_r22_screens_golden_test.dart
 ]
 native_gate = false
 ```
 
 **Kockázat = high, indoklás:** a diff felhasználói felületet ír át azon az úton, amit a felhasználó a leggyakrabban jár; egy elveszett állapot- vagy hibajelzés némán rontaná az élményt. A `flutter-reviewer` és a `flutter-devil-advocate` futtatása a review-ban KÖTELEZŐ.
+
+### 0.0 Pre-flight revízió — MÉRVE `main @ ccc71460` (2026-08-29, orchestrátor)
+
+A brief 2026-08-28-án, `main @ 4cb32eb0`-n íródott. A `brief-lint --strict`
+nem talált leletet; az alábbi kilenc pont a KÓDBÓL és a FUTTATÁSBÓL mért
+javítás. A kör hatóköre (8 képernyő, megjelenés-csak) VÁLTOZATLAN.
+
+**R1 — a batch mind a 8 képernyője MÉG legacy.** A §7 mérő-parancs kimenete
+`main @ ccc71460`-en mind a 8 sorra `legacy` — egyetlen képernyő sem esik ki a
+§3 scope-ból.
+
+**R2 — a `retirement-plan.md` gazda-kör oszlopa és a queue eltér; a DÖNTÉS
+oszlop egyezik.** A terv (E15-R03) mind a 8 képernyőre `migrate` döntést ad —
+ez a kötelező tartalom, és egyezik. A „gazda-kör" oszlopa viszont `E15-R07`
+(learn) / `E15-R08` (practice), miközben a queue előre megírt briefjei ott MÁS
+feature-t visznek (`e15-r07-practice-generator-migration`,
+`e15-r08-gamification-migration`) — a terv oszlopát követve ez a 8 képernyő
+SOHA nem migrálódna. Kötelező: a queue + ez a brief; a terv gazda-kör oszlopa
+javaslat (ADR 0471: „retirement is a proposal, not an execution"). Kettős
+migráció nincs. A `retirement-plan.md` NINCS az `allowed_paths`-on → nem
+szerkesztjük; a korrekció egy sora a `docs/ui/migration-status.md`-be megy (A7).
+
+**R3 — BASE-lelet: a golden-sáv ezen a boxon NEM mérhető, a §7 kapu-sora
+zöldíthetetlen volt.** Mérve, kör-változtatás NÉLKÜL, `main @ ccc71460`:
+
+```
+flutter test test/ui/goldens/e13_r20_screens_golden_test.dart
+  → 00:03 +3 -3: Some tests failed.
+    chord detail — compact / chord detail — compact_scale2 / learning path — compact
+flutter test test/ui/goldens/e13_r22_screens_golden_test.dart
+  → 00:02 +6: All tests passed!
+```
+
+Ez a L516 ARM↔x86 raszter-drift, pontosan az a hibaosztály, amit az ADR 0426
+kivett a lokális kapuból (az r22 lokális zöldje esetleges, nem szerződés). A
+két golden-teszt-fájl ezért KIKERÜLT a `gate_tests`-ből és a §7
+`round-gate.sh` sorából; a golden-sáv a `tools/golden-x86.sh check|record`
+alatt fut. **A mérce nem lazul:** ugyanaz a nulla toleranciájú
+`LocalFileComparator`, ugyanaz a golden-készlet, a CI architektúráján. A
+harness elérhetősége MÉRVE ezen a boxon: `docker 29.4.0`,
+`docker run --platform linux/amd64 alpine uname -m` → `x86_64`, a
+`strumsight-golden-x86:3.44.2` image gyorsítótárazva.
+
+**R4 — a batch 4 képernyőjének VAN goldenje, a PNG-k nem voltak a listán.**
+`LessonListScreen` → `e13_r20_learning_path_{compact,compact_scale2}.png`;
+`PracticeResultScreen` / `PracticeHistoryScreen` / `SpeedBuilderScreen` → 6
+`e13_r22_*` PNG. A §7 már előírta az újrafelvételt, de a kimeneti fájlok
+hiányoztak az `allowed_paths`-ról — belső ellentmondás a kör SAJÁT
+artefaktumában, tételes (nem könyvtár-szintű) felvétellel feloldva. A másik
+négy képernyőnek (`practice_hub`, `learn`, `lesson_score_preview`,
+`latency_calibration`) nincs goldenje — mérve: `grep -rl` a nyolc
+képernyő-osztályra a `test/ui/goldens/` fában csak ezt a két teszt-fájlt adja.
+
+**R5 — az ARB-út zsákutca volt.** A §3 megengedi az új kulcsot (mindkét
+locale-ra), a §5.3 tiltja a beégetett szöveget — de egyetlen ARB-útvonal sem
+volt az `allowed_paths`-on, tehát egy szükséges új kulcs csak
+scope-sértéssel vagy `stopped`-dal lett volna felvehető. Felvéve a
+`lib/l10n/base/app_{en,hu}.arb` FORRÁS és a `lib/l10n/app_{en,hu}.arb`
+GENERÁLT aggregátum (ADR 0307 §4; a `tools/scope-audit.py`-ban MÉRVE nincs
+generált-kivétel). Új kulcs = base mindkét locale-on + `dart run
+tool/gen_l10n_segments.dart` újragenerálás, egy lépésben.
+
+**R6 — az A6 bizonyítéka nem futott.** Az A6 a
+`test/l10n/hardcoded_string_guard_test.dart`-ra hivatkozik, de az nem volt a
+kapu-sorban → az A6 mérés nélkül maradt. Felvéve a `gate_tests`-be az
+`arb_parity_test.dart`-tal együtt; szerkeszteni tilos (nincsenek az
+`allowed_paths`-on — E13-R22 precedens).
+
+**R7 — L536 eljárási őr.** A `test/ui/goldens/failures/**` NEM KÖVETETT,
+generált bukás-artefaktum, amit a gépi scope-audit a diffnek számol (E15-R02:
+60 PNG → hamis `VIOLATION`). Kötelező: `rm -rf test/ui/goldens/failures` a
+`done` jelzés ELŐTT, és tételes `git add` — `git add -A` tilos.
+
+**R8 — nincs ÚJ ADR, és ez mért döntés.** A kör nem hoz új architekturális
+döntést; a kötő szerződések már merge-eltek: ADR 0466 (az app témája a
+design-rendszer témája), ADR 0467 (adaptív shell), ADR 0471 (az elérhetőség
+MÉRT), ADR 0273 (egy token-forrás), ADR 0426 (golden-raszter a merge-kapu
+architektúráján). A `docs/adr/**` marad a tilos zónában.
+
+**R10 — a brief három komponens-neve nem létezik a fán.** Mérve:
+`grep -rhoE "class (Ss[A-Za-z0-9_]+)" lib/core/design_system/` — nincs
+`SsListTile`, `SsErrorState`, `SsMetricTile`. A tényleges szerep-nevek:
+hibaállapot → `SsFailureState`, metrika → `SsMetricCard`, lista-sor →
+`SsContentCard` / `SsSection` sorai. A §3, §5.2 és a §6.1 valódi-sértés próba
+a mért nevekre javítva; a KÖVETELMÉNY (minden állapotnak van
+design-rendszer-megfelelője) változatlan.
+
+**R9 — visszakeresés (ADR 0312, szűkítve ELŐSZÖR).**
+`lessons,halts,adr`: [L536](../LESSONS.md#l536) (a golden-`failures/` hamis
+scope-sértése), [L516](../LESSONS.md#l516) (ARM↔x86 drift),
+[ADR 0426](../adr/0426-golden-rasterization-on-the-merge-gate-architecture.md),
+[ADR 0471](../adr/0471-screen-reachability-is-measured-not-assumed.md),
+[ADR 0273](../adr/0273-design-system-token-source-of-truth.md); a golden
+újrafelvételes migrációs precedens: `halts/round-status-E13-R25`, `E13-R26`.
+Teljes korpusz: nem hozott a fentieken túli releváns előzményt.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -132,11 +254,11 @@ A batch 8 képernyője a design-rendszer komponenseit és tokenjeit használja, 
 
 ## 3. Scope
 
-**Benne van:** a felsorolt 8 képernyő vizuális migrálása (`SsCard`, `SsButton`, `SsListTile`, `SsEmptyState`, `SsErrorState`, `SsMetricTile` és társaik; `SsSpacing`/`SsTypography` tokenek) · a meglévő `*ThemeScope` burkoló eltávolítása, ahol az `E15-R01` óta felesleges · a `migration-status.md` frissítése a MÉRT új aránnyal.
+**Benne van:** a felsorolt 8 képernyő vizuális migrálása (`SsCard`, `SsButton`, `SsEmptyState`, `SsFailureState`, `SsMetricCard`, `SsSection`, `SsSkeleton`, `SsStatusBadge`, `SsContentCard` és társaik; `SsSpacing`/`SsRadius`/`SsTypography` tokenek — §0.0/R10: a brief eredeti `SsListTile` / `SsErrorState` / `SsMetricTile` nevei a fán NEM léteznek, mérve `grep -rhoE "class (Ss[A-Za-z0-9_]+)" lib/core/design_system/`; a hiba- és metrika-szerep valódi neve `SsFailureState` és `SsMetricCard`) · a meglévő `*ThemeScope` burkoló eltávolítása, ahol az `E15-R01` óta felesleges · a `migration-status.md` frissítése a MÉRT új aránnyal.
 
 Batch-specifikus kikötések:
 
-- a `practice_result_screen` pontszám- és visszajelzés-blokkjai `SsCard`/`SsMetricTile` komponensekre kerülnek, a MÉRT értékek és a kerekítés változatlanul
+- a `practice_result_screen` pontszám- és visszajelzés-blokkjai `SsCard`/`SsMetricCard` komponensekre kerülnek (§0.0/R10), a MÉRT értékek és a kerekítés változatlanul
 - a `speed_builder_screen` lépcső-vezérlője megtartja a jelenlegi BPM-lépéseket — a DSP/időzítés-paraméterekhez NEM nyúlunk (AGENTS.md §9)
 - a `latency_calibration_screen` mérési folyamata (a kalibrációs számok és a küszöbök) érintetlen marad
 
@@ -191,7 +313,13 @@ Batch-specifikus kikötések:
 | `test/features/songs/setlist_flow_test.dart` | típus-pinnelő őr — VÁLTOZATLANUL zöld marad (§0.0) |
 | `test/ui/goldens/e13_r20_screens_golden_test.dart` | típus-pinnelő őr — VÁLTOZATLANUL zöld marad (§0.0) |
 | `test/ui/goldens/e13_r22_screens_golden_test.dart` | típus-pinnelő őr — VÁLTOZATLANUL zöld marad (§0.0) |
-| `docs/ui/migration-status.md` | a MÉRT arány frissítése |
+| `test/ui/goldens/goldens/e13_r20_learning_path_compact{,_scale2}.png` | §0.0/R4 — a `LessonListScreen` goldenjei, x86-on ÚJRAFELVÉVE |
+| `test/ui/goldens/goldens/e13_r22_practice_result_compact{,_scale2}.png` | §0.0/R4 — x86-on ÚJRAFELVÉVE |
+| `test/ui/goldens/goldens/e13_r22_practice_history_compact{,_scale2}.png` | §0.0/R4 — x86-on ÚJRAFELVÉVE |
+| `test/ui/goldens/goldens/e13_r22_speed_builder_compact{,_scale2}.png` | §0.0/R4 — x86-on ÚJRAFELVÉVE |
+| `lib/l10n/base/app_en.arb`, `lib/l10n/base/app_hu.arb` | §0.0/R5 — ÚJ kulcs forrása, csak ha a komponens megköveteli |
+| `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` | §0.0/R5 — generált aggregátum (`tool/gen_l10n_segments.dart`) |
+| `docs/ui/migration-status.md` | a MÉRT arány frissítése + a §0.0/R2 gazda-kör korrekció egy sora |
 
 **Tilos zóna:** a batch feature-einek `application/`, `domain/`, `data/`, `providers/` könyvtárai · minden más `lib/features/**` képernyő · `lib/app/**` · `lib/core/design_system/**` (a komponenseket HASZNÁLJUK, nem módosítjuk) · `docs/adr/**` · `tools/**` · `.github/**`
 
@@ -205,7 +333,7 @@ Ugyanaz az adat, ugyanaz a sorrend, ugyanazok az állapotok (üres, betöltés, 
 
 ### 5.2 Minden állapotnak van design-rendszer-megfelelője
 
-Üres lista → `SsEmptyState`, hiba → `SsErrorState`, betöltés → a design-rendszer betöltés-komponense. **NEM elfogadható gyengítés:** nyers `CircularProgressIndicator` vagy csupasz `Text('Hiba')` meghagyása.
+Üres lista → `SsEmptyState`, hiba → `SsFailureState` (§0.0/R10), betöltés → a design-rendszer betöltés-komponense (`SsSkeleton` / `SsAsyncState`). **NEM elfogadható gyengítés:** nyers `CircularProgressIndicator` vagy csupasz `Text('Hiba')` meghagyása.
 
 ### 5.3 A szöveg lokalizált marad
 
@@ -235,13 +363,26 @@ Beégetett felhasználói szöveg nem kerülhet a migrált kódba; új szöveg e
 | Egy szöveg beégetve kerül a kódba | A6 |
 | A képernyő importálja a design-rendszert, de a stílus továbbra is `AppColors`-ból jön | A1 (a mérés a MIGRÁLT/legacy besorolást is ellenőrzi a kód alapján) |
 
-**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** cserélj vissza EGY migrált képernyőn egy `SsErrorState`-et nyers `Text`-re, futtasd a §7 gate-et → az **A2** cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** cserélj vissza EGY migrált képernyőn egy `SsFailureState`-et (§0.0/R10) nyers `Text`-re, futtasd a §7 gate-et → az **A2** cellának PIROSNAK kell lennie → állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/offline_network_guard_test.dart test/core/screen_size_guard_test.dart test/features/chords/chord_library_test.dart test/features/learn/continue_card_test.dart test/features/learn/expected_chord_hint_test.dart test/features/learn/latency_calibration_screen_test.dart test/features/learn/learn_rollback_test.dart test/features/learn/learn_screen_test.dart test/features/learn/learning_path_test.dart test/features/learn/lesson_list_screen_test.dart test/features/learn/lesson_offline_test.dart test/features/learn/lesson_score_card_test.dart test/features/learn/live_scoring_jitter_test.dart test/features/learn/next_lesson_cta_test.dart test/features/learn/review_r100_fixes_test.dart test/features/learn/setlist_expected_hint_test.dart test/features/learn/visual_offset_test.dart test/features/learn/waltz_count_in_test.dart test/features/practice/history_corrupt_record_test.dart test/features/practice/presentation/practice_a11y_audit_test.dart test/features/practice/presentation/practice_hub_screen_test.dart test/features/practice/presentation/practice_result_screen_test.dart test/features/practice/presentation/practice_routing_test.dart test/features/practice/result_confidence_test.dart test/features/practice/reward_idempotency_test.dart test/features/practice/speed_ladder_test.dart test/features/songs/setlist_flow_test.dart test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/offline_network_guard_test.dart test/core/screen_size_guard_test.dart test/features/chords/chord_library_test.dart test/features/learn/continue_card_test.dart test/features/learn/expected_chord_hint_test.dart test/features/learn/latency_calibration_screen_test.dart test/features/learn/learn_rollback_test.dart test/features/learn/learn_screen_test.dart test/features/learn/learning_path_test.dart test/features/learn/lesson_list_screen_test.dart test/features/learn/lesson_offline_test.dart test/features/learn/lesson_score_card_test.dart test/features/learn/live_scoring_jitter_test.dart test/features/learn/next_lesson_cta_test.dart test/features/learn/review_r100_fixes_test.dart test/features/learn/setlist_expected_hint_test.dart test/features/learn/visual_offset_test.dart test/features/learn/waltz_count_in_test.dart test/features/practice/history_corrupt_record_test.dart test/features/practice/presentation/practice_a11y_audit_test.dart test/features/practice/presentation/practice_hub_screen_test.dart test/features/practice/presentation/practice_result_screen_test.dart test/features/practice/presentation/practice_routing_test.dart test/features/practice/result_confidence_test.dart test/features/practice/reward_idempotency_test.dart test/features/practice/speed_ladder_test.dart test/features/songs/setlist_flow_test.dart test/l10n/hardcoded_string_guard_test.dart test/l10n/arb_parity_test.dart
 ```
+
+**A golden-sáv NEM ebben a parancsban van** (§0.0/R3, ADR 0426) — a merge-kapu
+architektúráján mérjük, a migráció UTÁN újrafelvétellel, majd ellenőrzéssel:
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+```
+
+Az újrafelvétel UTÁN `git status --short test/ui/goldens/goldens/` — kizárólag a
+§0.0/R4 nyolc PNG-je változhat. Ha bármelyik `e13_r20_chord_*` PNG is változik,
+az NEM a batch képernyője: állítsd vissza (`git checkout -- <png>`) és jelentsd.
+A `done` jelzés ELŐTT: `rm -rf test/ui/goldens/failures` (L536).
 
 A migrációs mérés (a kimenet a §10-be, batch-enként MIGRATED/legacy sorokkal):
 
@@ -270,5 +411,296 @@ tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
 - **Scope-csúszás a viselkedés felé.** Egy „apró" providers-módosítás a kör mérhetőségét rontja (STOP-eset).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+**A1 — §7 mérő-parancs kimenete (mind a 8 sor, MÉRVE 2026-08-29):**
+
+```
+MIGRATED lib/features/practice/presentation/screens/practice_hub_screen.dart
+MIGRATED lib/features/practice/presentation/screens/practice_result_screen.dart
+MIGRATED lib/features/practice/presentation/screens/practice_history_screen.dart
+MIGRATED lib/features/practice/presentation/screens/speed_builder_screen.dart
+MIGRATED lib/features/learn/screens/learn_screen.dart
+MIGRATED lib/features/learn/screens/lesson_list_screen.dart
+MIGRATED lib/features/learn/screens/lesson_score_preview_screen.dart
+MIGRATED lib/features/learn/screens/latency_calibration_screen.dart
+```
+
+**A4/A5 — a kapu záró kimenete** (`tools/round-gate.sh` a §7 sorral, csonkítás nélkül, 37 lépés):
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/ui/ui_inventory_test.dart                        zöld
+test test/app/navigation/adaptive_scaffold_test.dart       zöld
+test test/app/navigation/legacy_route_redirect_test.dart   zöld
+test test/app/offline_network_guard_test.dart              zöld
+test test/core/screen_size_guard_test.dart                 zöld
+test test/features/chords/chord_library_test.dart          zöld
+test test/features/learn/continue_card_test.dart           zöld
+test test/features/learn/expected_chord_hint_test.dart     zöld
+test test/features/learn/latency_calibration_screen_test.dart zöld
+test test/features/learn/learn_rollback_test.dart          zöld
+test test/features/learn/learn_screen_test.dart            zöld
+test test/features/learn/learning_path_test.dart           zöld
+test test/features/learn/lesson_list_screen_test.dart      zöld
+test test/features/learn/lesson_offline_test.dart          zöld
+test test/features/learn/lesson_score_card_test.dart       zöld
+test test/features/learn/live_scoring_jitter_test.dart     zöld
+test test/features/learn/next_lesson_cta_test.dart         zöld
+test test/features/learn/review_r100_fixes_test.dart       zöld
+test test/features/learn/setlist_expected_hint_test.dart   zöld
+test test/features/learn/visual_offset_test.dart           zöld
+test test/features/learn/waltz_count_in_test.dart          zöld
+test test/features/practice/history_corrupt_record_test.dart zöld
+test test/features/practice/presentation/practice_a11y_audit_test.dart zöld
+test test/features/practice/presentation/practice_hub_screen_test.dart zöld
+test test/features/practice/presentation/practice_result_screen_test.dart zöld
+test test/features/practice/presentation/practice_routing_test.dart zöld
+test test/features/practice/result_confidence_test.dart    zöld
+test test/features/practice/reward_idempotency_test.dart   zöld
+test test/features/practice/speed_ladder_test.dart         zöld
+test test/features/songs/setlist_flow_test.dart            zöld
+test test/l10n/hardcoded_string_guard_test.dart            zöld
+test test/l10n/arb_parity_test.dart                        zöld
+architecture                                                zöld
+secrets                                                      zöld
+l10n                                                          zöld
+
+MINDEN GATE ZÖLD.
+```
+
+**Golden-sáv (ADR 0426, merge-kapu architektúra) — `tools/golden-x86.sh record` majd `check`:**
+
+Első `record` futás — még a `AppTheme.dark()` témával — **exit 10**-zel bukott: a
+`_TypeError: Null check operator used on a null value` a
+`practice_result_screen.dart` `_Header`-jében (lásd alább, "Eltérés az eredeti
+tervtől"). A javítás (lásd ott) után:
+
+```
+$ tools/golden-x86.sh record test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+...
+01:01 +12: All tests passed!
+$ echo $?
+0
+
+$ tools/golden-x86.sh check test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+...
+00:56 +12: All tests passed!
+$ echo $?
+0
+```
+
+`git status --short test/ui/goldens/goldens/` a `record` UTÁN — 6 PNG változott
+(a nyolcból; a `chord_*` PNG-k, amik NEM ennek a körnek a képernyői,
+változatlanok maradtak, ahogy a §7 előírja):
+
+```
+ M test/ui/goldens/goldens/e13_r20_learning_path_compact.png
+ M test/ui/goldens/goldens/e13_r20_learning_path_compact_scale2.png
+ M test/ui/goldens/goldens/e13_r22_practice_history_compact.png
+ M test/ui/goldens/goldens/e13_r22_practice_history_compact_scale2.png
+ M test/ui/goldens/goldens/e13_r22_practice_result_compact.png
+ M test/ui/goldens/goldens/e13_r22_practice_result_compact_scale2.png
+```
+
+A `speed_builder` két PNG-je (`e13_r22_speed_builder_compact{,_scale2}.png`)
+**nem** változott, bár `speed_builder_screen.dart` is migrált ebben a körben
+(101 sor a `git show 0b405dca --stat`-ban): a rögzített `x86` raszter
+bitre-azonos a kör előtti PNG-vel — a migráció ezen a képernyőn (ennek az
+állapotnak, "active", a nézetében) csak a komponens-API-t cserélte, a
+tényleges pixel-értékeket nem (az `Ss*` tokenek ugyanabból az
+`AppPalette`/`AppColors` forrásból származnak, ADR 0466 D2). Mérve, nem
+feltételezve — a `git status --short` fenti kimenete a bizonyíték.
+
+**Eltérés az eredeti tervtől — a golden-teszt-fájlok témája.** A brief
+eredetileg (245–247. sor, `test/ui/goldens/e13_r20_screens_golden_test.dart`
+és `e13_r22_...` fejléc-kommentje) `AppTheme.dark()`-ot írt elő, és a fájlok
+táblázatban "VÁLTOZATLANUL zöld marad"-ként szerepeltek — ez az elvárás
+TÉVESNEK bizonyult, mérve: az első `golden-x86.sh record` futás a
+`practice_result_screen.dart` `_Header`-jén `_TypeError: Null check operator
+used on a null value`-val bukott (`Theme.of(context).extension<SsTypography>()!`
+— a jelen kör vezette be ezt a hívást, `git log -p` mérve). Ugyanez a hiba
+(lokálisan, aarch64-en, tehát ISA-tól függetlenül reprodukálva) a
+`e13_r20_screens_golden_test.dart` `LessonListScreen`-jén is jelentkezett — a
+`chord_detail`/`chord_library` cellák (nem ennek a körnek a képernyői) NEM
+crash-eltek, csak a mért, ismert raszter-drifttel (L516). A gyökérok: a
+`218eae01` kör 28 widget-teszt-fájlon már javította pontosan ezt a mintát
+(`MaterialApp` → `theme: SsLightTheme.data()`), de a két golden-teszt-fájlt
+kihagyta. A javítás ugyanaz a minta, `SsDarkTheme.data()`-val (a `SsDarkTheme`
+ugyanazt az `AppTheme.dark()` alapot burkolja `SsColorScheme`/`SsTypography`
+extension-nel — mérve `lib/core/design_system/themes/ss_dark_theme.dart` és
+`ss_theme_extensions.dart` — a `colorScheme`/`textTheme` bitre azonos marad,
+ezért a nem migrált `chord_library_screen.dart`/`chord_detail_view.dart`
+(mérve: egyik sem olvas `Theme.of(context).extension<Ss...>()`-t) pixel-
+azonos marad). Ez a két teszt-fájl SZEREPEL az `allowed_paths`-on (67–68.
+sor), a módosítás tehát a kör keretein belül maradt; a fájlok fejléc-
+kommentjét a tényleges okkal frissítettem.
+
+**Valódi-sértés próba (KÖTELEZŐ, §6.1).** `practice_history_screen.dart`
+`_HistoryError`-ját (a `SsFailureState`-et) ideiglenesen nyers `Text`-re
+cseréltem:
+
+```dart
+return Text(l10n.practiceHistoryLoading);
+```
+
+`flutter test test/features/practice/history_corrupt_record_test.dart` → **A2
+PIROS**, pontosan a `SsFailureState`-et kereső cellán:
+
+```
+00:01 +4: E15-R04 — design-system migration a load failure renders the SsFailureState with a working retry action, not a raw error
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _KeyWidgetFinder:<Found 0 widgets with key [<'ss-failure-state-retry'>]: []>
+   Which: means none were found but one was expected
+...
+00:01 +4 -1: E15-R04 — design-system migration a load failure renders the SsFailureState with a working retry action, not a raw error [E]
+  Test failed. See exception logs above.
+00:02 +8 -1: Some tests failed.
+```
+
+Visszaállítva (a `git diff --stat` a fájlon üres a visszaállítás után) →
+`flutter test test/features/practice/history_corrupt_record_test.dart` →
+`00:02 +9: All tests passed!` (mind a 9 cella zöld).
+
+**Egyéb kompromisszum/helyettesítés a batch 8 képernyőjén:** nincs — minden
+állapotnak (üres/betöltés/hiba) volt pontos design-rendszer-megfelelője, a
+§5.2 döntés szerint egy sem maradt kompromisszumos.
+
+### 10.1 Javító kör (review MAJOR-1..3)
+
+**MAJOR-1 — `practice_history_screen.dart` — a képernyő saját hibaszövege
+visszaállítva.** `SsFailurePresentation.from()`-nak nincs cím/üzenet felülíró
+paramétere, a konstruktora pedig privát a `failure_presentation.dart`
+fájlban — az a fájl és `ss_failure_state.dart` NINCS a kör
+`allowed_paths`-án (mérve: `implementer_guard.py` blokkolta a szerkesztést).
+A javítás ezért teljesen a képernyő fájlján belül maradt: egy privát
+`_HistoryFailureL10n implements AppLocalizations` wrapper class-t vezettem
+be, ami a `dsFailureStorageTitle`/`dsFailureStorageMessage` lekérdezést
+átirányítja a képernyő saját `practiceHistoryErrorTitle`/`Body`
+ARB-kulcsaira, és a két akció-címke getter-t (`dsFailureRetryAction`,
+`dsFailureContactSupportAction`) változatlanul továbbadja a valódi
+l10n-nek — minden más getter `noSuchMethod`-ra esik (sosem hívódik, mert ez
+a képernyő kizárólag storage-kódú hibát mutat). Ezzel a `SsFailureState`
+komponens-migráció megmarad (a review szerint helyes), a retry/akció döntés
+a VALÓDI `AppFailure.retryable`-ből jön (MAJOR-2), a cím/üzenet pedig a
+képernyő saját szövege. `practiceHistoryErrorAction` ("Back") kulcs
+szándékosan NEM kapott új hívót — a review konkrét javítás-utasítása csak a
+cím/törzs szöveget nevezte meg, az akció-modell pedig
+`dsFailureRetryAction`/`dsFailureContactSupportAction`-ön keresztül működik.
+
+**MAJOR-2 — ugyanott — a valódi `AppFailure` megy tovább, nincs kitalált
+`retryable: true`.** `_HistoryError` mostantól `failure: AppFailure`-t kap
+(`onFailure: (failure) => _HistoryError(failure: failure, ...)`), az
+`AsyncError` ág pedig egy alapértelmezett `StorageFailure(code:
+storageRead)`-et ad (retryable: false), mert ez a képernyő kizárólag helyi
+tárolást olvas és ez az ág valós future-kivétel esetén sosem az
+`AppResult.failure` útvonalon jönne. Két ÚJ őr-cella
+`test/features/practice/history_corrupt_record_test.dart`-ban (a régi,
+hibás alakot pinnelő cella törölve):
+- „a NON-retryable load failure (retryable: false) renders the screen's own
+  error copy, and NO retry action" — `ss-failure-state-retry`
+  `findsNothing`, cím/törzs a képernyő saját ARB-kulcsa.
+- „a RETRYABLE load failure (retryable: true) renders the retry action, and
+  tapping it reloads" — egy ÚJ `_RetryableThenSucceedsRepository` az első
+  `load()`-on `retryable: true` hibát ad, a másodikon sikert; a teszt
+  megnyomja a retry gombot, és megméri, hogy `loadCount` nő ÉS a felépült
+  bejegyzés megjelenik.
+
+**MAJOR-3a — `practice_hub_screen.dart` — a kitalált „Retry" gomb
+eltávolítva.** Az üres katalógus ága mostantól `const _EmptyCatalogLayout()`
+— egy design-tokenekből épített, akció NÉLKÜLI állapot, pontosan a
+`speed_builder_screen.dart` `_UnavailableLayout`-jának mintája szerint (a
+brief §5.2 alóli, ott már dokumentált kivétel). Az `SsEmptyState.onAction`
+kötelező, és az egyetlen elérhető akció (`ref.invalidate(
+practiceCatalogProvider)`) bizonyíthatóan no-op — a provider egy `const`
+`BuiltinPracticeCatalog` felett fut
+(`practice_catalog_controller.dart:10-23`). `l10n.practiceSessionRetry`
+más hívón (`practice_error_panel.dart`) keresztül továbbra sem árva.
+
+**MAJOR-3b — `practice_result_screen.dart` — a `PracticeResultFallback`
+navigációja visszaállítva (nincs navigáció).** A kör előtti (`0ba14f5b`)
+alak egy `EmptyState`-et használt `onAction` nélkül — a migráció tévesen egy
+ÚJ `context.go(AppRoutes.practiceHub)` hívást vezetett be, mert az
+`SsEmptyState` kötelező `onAction`-t követel. A javítás ugyanazt a
+design-token-alapú, akció nélküli mintát alkalmazza, mint a MAJOR-3a — a
+`go_router`/`app_route.dart` import eltávolítva (ez volt az egyetlen hívási
+helyük a fájlban). Az ebben a körben FELVETT
+`test/features/practice/presentation/practice_result_screen_test.dart`
+cella (`ss-empty-state-action` `findsOneWidget`) igazítva a visszaállított
+viselkedéshez: `findsNothing` az akció-gombra, és nincs
+`FilledButton`/`TextButton`/`ElevatedButton` a fába.
+
+**Kapu — a javító kör §3(1) parancsa, csonkítatlanul:**
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/ui/ui_inventory_test.dart                        zöld
+test test/app/navigation/adaptive_scaffold_test.dart       zöld
+test test/app/navigation/legacy_route_redirect_test.dart   zöld
+test test/app/offline_network_guard_test.dart              zöld
+test test/core/screen_size_guard_test.dart                 zöld
+test test/features/chords/chord_library_test.dart          zöld
+test test/features/learn/continue_card_test.dart           zöld
+test test/features/learn/expected_chord_hint_test.dart     zöld
+test test/features/learn/latency_calibration_screen_test.dart zöld
+test test/features/learn/learn_rollback_test.dart          zöld
+test test/features/learn/learn_screen_test.dart            zöld
+test test/features/learn/learning_path_test.dart           zöld
+test test/features/learn/lesson_list_screen_test.dart      zöld
+test test/features/learn/lesson_offline_test.dart          zöld
+test test/features/learn/lesson_score_card_test.dart       zöld
+test test/features/learn/live_scoring_jitter_test.dart     zöld
+test test/features/learn/next_lesson_cta_test.dart         zöld
+test test/features/learn/review_r100_fixes_test.dart       zöld
+test test/features/learn/setlist_expected_hint_test.dart   zöld
+test test/features/learn/visual_offset_test.dart           zöld
+test test/features/learn/waltz_count_in_test.dart          zöld
+test test/features/practice/history_corrupt_record_test.dart zöld
+test test/features/practice/presentation/practice_a11y_audit_test.dart zöld
+test test/features/practice/presentation/practice_hub_screen_test.dart zöld
+test test/features/practice/presentation/practice_result_screen_test.dart zöld
+test test/features/practice/presentation/practice_routing_test.dart zöld
+test test/features/practice/result_confidence_test.dart    zöld
+test test/features/practice/reward_idempotency_test.dart   zöld
+test test/features/practice/speed_ladder_test.dart         zöld
+test test/features/songs/setlist_flow_test.dart            zöld
+test test/l10n/hardcoded_string_guard_test.dart            zöld
+test test/l10n/arb_parity_test.dart                        zöld
+architecture                                                zöld
+secrets                                                      zöld
+l10n                                                          zöld
+
+MINDEN GATE ZÖLD.
+```
+
+(Az első futás pirosra váltott a `format` lépésen egy korábbi, munkapéldányban
+maradt untracked probe-fájl — `test/zz_da_probe_e15r04_test.dart`, „THROWAWAY
+devil's-advocate probe — deleted immediately after the run" fejléccel —
+miatt; ez NEM ennek a körnek a munkája, törölve, utána a fenti futás zöld.)
+
+**Golden — `record` majd `check`, mindkettő 12/12 zöld:**
+
+```
+$ tools/golden-x86.sh record test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+00:56 +12: All tests passed!
+$ tools/golden-x86.sh check test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+00:56 +12: All tests passed!
+$ git status --short test/ui/goldens/goldens/
+(üres — 0 PNG változott)
+```
+
+**A 0 PNG-diff MÉRT, nem feltételezett:** `e13_r22_screens_golden_test.dart`
+a „practice history" golden esetén a SIKER-ágat rendereli
+(`PracticeHistoryScreen` populált listával), nem a hiba-állapotot — a
+MAJOR-1/2 javítás kizárólag `_HistoryError`-t érinti. A „practice hub" és a
+`PracticeResultFallback` képernyőknek nincs golden-fixture-e ebben a
+fájlban (a „practice result" golden a sikeres `PracticeResultScreen`-t
+rendereli, nem a `PracticeResultFallback`-et) — a MAJOR-3a/3b tehát olyan
+ágakat javított, amiket a golden-korpusz nem fed le. Ez összhangban van a
+gate widget-teszt-eredményeivel (`practice_hub_screen_test.dart`,
+`practice_result_screen_test.dart` zöld).
 
 ## 11. Review — a Claude tölti ki

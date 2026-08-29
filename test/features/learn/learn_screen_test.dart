@@ -7,6 +7,7 @@ import 'package:strumsight/features/learn/providers/practice_speed_provider.dart
 import 'package:strumsight/features/learn/screens/learn_screen.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
@@ -19,20 +20,25 @@ class _Speed75 extends PracticeSpeedController {
   double build() => 0.75;
 }
 
-Future<void> _pump(WidgetTester tester, FakeStrumEngine engine) =>
-    tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-        ],
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: LearnScreen(lesson: Lessons.firstStrums),
-        ),
-      ),
-    );
+Future<void> _pump(
+  WidgetTester tester,
+  FakeStrumEngine engine, {
+  Locale locale = const Locale('en'),
+}) => tester.pumpWidget(
+  ProviderScope(
+    overrides: [
+      ...preferenceOverrides(),
+      strumEngineProvider.overrideWithValue(engine),
+    ],
+    child: MaterialApp(
+      theme: SsLightTheme.data(),
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: LearnScreen(lesson: Lessons.firstStrums),
+    ),
+  ),
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -92,6 +98,7 @@ void main() {
           practiceSpeedProvider.overrideWith(_Speed75.new),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: LearnScreen(lesson: Lessons.firstStrums),
@@ -137,6 +144,7 @@ void main() {
           strumEngineProvider.overrideWithValue(engine),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: LearnScreen(lesson: Lessons.downUpGroove), // simplifies
@@ -161,5 +169,23 @@ void main() {
     await tester.tap(find.text('50%'));
     await tester.pump();
     expect(find.text('35 BPM'), findsOneWidget); // 70 × 0.5
+  });
+
+  // E15-R04 — no textScaler-2.0 widget test is added here for the FULL
+  // screen: `LessonHighway` (`lib/features/learn/widgets/lesson_highway.dart`)
+  // and `SsChordDiagram` (`lib/core/design_system/components/music/
+  // ss_chord_diagram.dart`) each already overflow their own internal
+  // fixed-pixel boxes at textScaler 2.0 — measured, pre-existing, and
+  // unrelated to this round's changes (neither file is on this round's
+  // allowed_paths — §3 forbidden zone). The migrated hu locale still
+  // resolves correctly at 1.0x — see the persisted-speed and easy-mode
+  // cells above, which already exercise the migrated chrome.
+  testWidgets('E15-R04: hungarian locale renders the migrated chrome without '
+      'throwing (paused)', (tester) async {
+    final engine = FakeStrumEngine();
+    addTearDown(engine.dispose);
+    await _pump(tester, engine, locale: const Locale('hu'));
+    expect(find.text('Lejátszás'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

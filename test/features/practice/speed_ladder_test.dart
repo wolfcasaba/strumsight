@@ -19,6 +19,7 @@ import 'package:strumsight/features/practice/domain/service/speed_builder_engine
 import 'package:strumsight/features/practice/presentation/screens/speed_builder_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 AppLocalizations l10n() => AppLocalizationsEn();
 
@@ -61,14 +62,19 @@ void main() {
     stepBpm: 10,
   );
 
-  Future<void> pump(WidgetTester tester, {SpeedBuilderState? initialState}) =>
-      tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: SpeedBuilderScreen(policy: policy, initialState: initialState),
-        ),
-      );
+  Future<void> pump(
+    WidgetTester tester, {
+    SpeedBuilderState? initialState,
+    Locale locale = const Locale('en'),
+  }) => tester.pumpWidget(
+    MaterialApp(
+      theme: SsLightTheme.data(),
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: SpeedBuilderScreen(policy: policy, initialState: initialState),
+    ),
+  );
 
   group('A6 — stable tempo, not the peak attempt', () {
     testWidgets(
@@ -157,4 +163,38 @@ void main() {
       );
     },
   );
+
+  group('E15-R04 — design-system migration', () {
+    for (final locale in [const Locale('en'), const Locale('hu')]) {
+      testWidgets(
+        'textScaler 2.0 renders the unavailable state without overflow '
+        '(${locale.languageCode})',
+        (tester) async {
+          tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(
+            tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+          );
+          await pump(tester, locale: locale);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets('textScaler 2.0 renders the result state without overflow '
+          '(${locale.languageCode})', (tester) async {
+        tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(
+          tester.view.platformDispatcher.clearTextScaleFactorTestValue,
+        );
+        var state = SpeedBuilderState.initial(policy);
+        state = _engine.record(state, _attempt(index: 0, bpm: 110, pass: true));
+        state = _engine.record(state, _attempt(index: 1, bpm: 110, pass: true));
+        state = _engine.finish(state);
+
+        await pump(tester, initialState: state, locale: locale);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
 }

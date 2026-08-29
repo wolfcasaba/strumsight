@@ -1,5 +1,30 @@
 # Screen migration status
 
+**E15-R04 update (2026-08-29) — Practice + Learn 8 screens migrated,
+measured 51/96 (53.1%).** `PracticeHubScreen`, `PracticeResultScreen`,
+`PracticeHistoryScreen`, `SpeedBuilderScreen`, `LearnScreen`,
+`LessonListScreen`, `LessonScorePreviewScreen`, `LatencyCalibrationScreen`
+now import `core/design_system` (`SsCard`/`SsButton`/`SsEmptyState`/
+`SsFailureState`/`SsSkeleton` and `Ss*` tokens replace the raw `Theme.of`/
+`AppColors` references and `core/widgets/empty_state.dart`). **Owner-round
+correction against `retirement-plan.md` §4:** that table's owner-round
+column assigns these 8 screens to `E15-R07` (Learn + Onboarding, 5 rows) and
+`E15-R08` (Practice + Progress, 5 rows) — `E15-R04` executed the `migrate`
+decision for 8 of those 10 rows early (all except `OnboardingScreen` and
+`ProgressScreen`, which remain `E15-R07`/`E15-R08` work). The `migrate`
+DECISION in `retirement-plan.md` is unchanged; only which round executed it
+differs — `retirement-plan.md` itself is out of this round's allowed paths
+and is not edited here.
+
+```bash
+find lib/features -name '*_screen.dart' | wc -l
+for f in $(find lib/features -name '*_screen.dart' | sort); do
+  grep -q design_system "$f" && echo "MIGRATED $f" || echo "legacy $f"
+done | grep -c '^MIGRATED'
+```
+
+Measured: 96 total, 51 migrated.
+
 **E15-R03 update (2026-08-28) — reachability is now MEASURED, not counted by
 router presence.** `tool/check_screen_reachability.dart` (ADR 0471) replaces
 the "migrated/legacy" split below as the input to Ch15 round planning — see
@@ -83,10 +108,11 @@ design-system component, only that the screen's own migration round ran.
 
 ## Measured total
 
-**43 of 96 production screens migrated (44.8%)**, up from 0/60 at the
-E08-R15 baseline (the file count grew from 60 to 96 as Epics 8–13 added
-screens — Community, Gamification, Library V2, Progress V2, Offline AI,
-Share — most of which shipped already migrated).
+**51 of 96 production screens migrated (53.1%)** as of E15-R04, up from
+43/96 (44.8%) before this round and 0/60 at the E08-R15 baseline (the file
+count grew from 60 to 96 as Epics 8–13 added screens — Community,
+Gamification, Library V2, Progress V2, Offline AI, Share — most of which
+shipped already migrated).
 
 ## Canonical token source by migration phase
 
@@ -96,7 +122,7 @@ Share — most of which shipped already migrated).
 | Component and screen migration (E13-R16…R35) | Design-system component tokens (`SsColorScheme`/`SsTypography` theme extensions, `Ss*` components) | A screen migrates only in its assigned round; all unassigned screens remain on the legacy theme (`AppTheme` / `AppColors` / `AppPalette`). |
 | Screens needing design-system extensions without `AppTheme` carrying them | **MEASURED OBSOLETE as of E15-R01.** A local `*ThemeScope` — the **nine** wrappers on the tree are `ProgressThemeScope` (progress_v2), `AuthThemeScope` (auth), `SettingsThemeScope` (settings), `LibraryThemeScope` (library_v2), `ShareThemeScope` (share), `GamificationThemeScope` (gamification), `CommunityThemeScope` (community), `OfflineAiThemeScope` (offline_ai), `VisionThemeScope` (vision) | Wrapped the screen so its `Ss*` cards could resolve `SsColorScheme`/`SsTypography` when those extensions were NOT yet on the app's runtime `ThemeData` (the gap this row used to describe). Since E15-R01 the app's actual `ThemeData` carries all four extensions directly (ADR 0466 D1), so the wrapper is now redundant for every screen it wraps — but the wrappers themselves are NOT removed by this round (tilos zóna, `lib/features/**`); their retirement is a per-screen follow-up round's job. |
 
-## Per-feature status (measured 2026-08-27)
+## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04)
 
 | Feature | Migrated / total | Legacy screens (migration pending) |
 | --- | --- | --- |
@@ -107,14 +133,14 @@ Share — most of which shipped already migrated).
 | chords | 1/1 | — |
 | community | 14/15 | followers |
 | gamification | 1/7 | achievement_detail, achievements, level_detail, quests, reward_inbox, streak_detail |
-| learn | 0/4 | latency_calibration, learn, lesson_list, lesson_score_preview |
+| learn | 4/4 | — |
 | library | 0/2 | library, session_detail (superseded by `library_v2`, see below) |
 | library_v2 | 2/2 | — |
 | live | 1/1 | — |
 | metronome | 1/1 | — |
 | offline_ai | 1/1 | — |
 | onboarding | 2/3 | onboarding |
-| practice | 2/6 | practice_history, practice_hub, practice_result, speed_builder |
+| practice | 6/6 | — |
 | practice_generator | 0/6 | plan_change_review, plan_preview, plan_privacy, plan_setup, today_plan, weekly_plan |
 | practice_hub | 1/1 | — |
 | profile_hub | 1/1 | — |
@@ -165,9 +191,11 @@ The pre-migration token-debt baseline is `docs/ui/baseline/token-debt.md`
 
 ## Remaining gap
 
-See `docs/ui/legacy-backlog.md` for the dated backlog covering the 53
-still-legacy screens above, the two dated variant-matrix/closure-suite
-exclusion-list defects, and the deferred UI-architecture guard (§0.0.B/B3).
+See `docs/ui/legacy-backlog.md` for the dated backlog covering the
+still-legacy screens above (45 as of E15-R04, down from 53 — that file
+itself is outside this round's allowed paths and is not edited here), the
+two dated variant-matrix/closure-suite exclusion-list defects, and the
+deferred UI-architecture guard (§0.0.B/B3).
 As of E15-R03, `docs/ui/retirement-plan.md` is the canonical per-screen
 REACHABILITY decision table (migrate / retire / keep / unreachable, with
 named `E15-R04`…`E15-R11` owner rounds) — the "Per-feature status" table

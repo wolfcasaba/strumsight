@@ -19,7 +19,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/model/speed_builder_policy.dart';
 import '../../domain/model/speed_builder_state.dart';
@@ -71,7 +71,7 @@ class _SpeedBuilderScreenState extends State<SpeedBuilderScreen> {
         child: state == null
             ? const _UnavailableLayout()
             : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(SsSpacing.space4),
                 child: state.isClosed
                     ? _ResultLayout(
                         state: state,
@@ -88,16 +88,44 @@ class _SpeedBuilderScreenState extends State<SpeedBuilderScreen> {
 /// is no [SpeedBuilderState] to drive. Deliberately offers no "Start"
 /// affordance — starting a ladder here could only ever be closed by a
 /// fabricated attempt, which is exactly what the E13-R22 review rejected.
+///
+/// Built from design tokens directly rather than [SsEmptyState] /
+/// [SsFailureState]: both mandate at least one action button (§5.2 of their
+/// own contract), which would reintroduce the fabricated-attempt affordance
+/// the E13-R22 review removed. There is no design-system catalog entry for
+/// an action-less informational state.
 class _UnavailableLayout extends StatelessWidget {
   const _UnavailableLayout();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return EmptyState(
-      icon: Icons.speed,
-      title: l10n.speedBuilderUnavailableTitle,
-      subtitle: l10n.speedBuilderUnavailableBody,
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(SsSpacing.space6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.speed, color: colors.textSecondary, size: 40),
+            const SizedBox(height: SsSpacing.space4),
+            Text(
+              l10n.speedBuilderUnavailableTitle,
+              style: typography.titleMedium.copyWith(color: colors.textPrimary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: SsSpacing.space2),
+            Text(
+              l10n.speedBuilderUnavailableBody,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -115,10 +143,11 @@ class _ActiveLayout extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SpeedBuilderProgress(state: state),
-        const SizedBox(height: 16),
-        TextButton(
+        const SizedBox(height: SsSpacing.space4),
+        SsButton(
+          label: l10n.speedBuilderFinishCta,
+          variant: SsButtonVariant.tertiary,
           onPressed: onFinish,
-          child: Text(l10n.speedBuilderFinishCta),
         ),
       ],
     );
@@ -140,31 +169,47 @@ class _ResultLayout extends StatelessWidget {
     final stableLabel = stable == null
         ? l10n.speedBuilderNoStableBpm
         : '${_formatBpm(stable.bpm)} BPM';
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.speedBuilderResultTitle,
-                  style: Theme.of(context).textTheme.titleMedium,
+        SsCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.speedBuilderResultTitle,
+                style: typography.titleMedium.copyWith(
+                  color: colors.textPrimary,
                 ),
-                const SizedBox(height: 8),
-                Text(_statusLabel(l10n, state.status)),
-                const SizedBox(height: 4),
-                Text(l10n.speedBuilderHighestStable(stableLabel)),
-                const SizedBox(height: 4),
-                Text(l10n.speedBuilderResultAttempts(state.attempts.length)),
-              ],
-            ),
+              ),
+              const SizedBox(height: SsSpacing.space2),
+              Text(
+                _statusLabel(l10n, state.status),
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: SsSpacing.space1),
+              Text(
+                l10n.speedBuilderHighestStable(stableLabel),
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: SsSpacing.space1),
+              Text(
+                l10n.speedBuilderResultAttempts(state.attempts.length),
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        FilledButton(onPressed: onDone, child: Text(l10n.speedBuilderDoneCta)),
+        const SizedBox(height: SsSpacing.space4),
+        SsButton(label: l10n.speedBuilderDoneCta, onPressed: onDone),
       ],
     );
   }

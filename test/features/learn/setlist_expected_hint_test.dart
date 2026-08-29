@@ -7,6 +7,7 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/songs/model/setlist.dart';
 import 'package:strumsight/features/songs/model/song.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_engines.dart';
@@ -59,6 +60,7 @@ void main() {
           strumEngineProvider.overrideWithValue(engine),
         ],
         child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: LearnScreen(lesson: combined),
