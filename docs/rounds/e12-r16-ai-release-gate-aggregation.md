@@ -250,4 +250,176 @@ a §10-be a tényleges kimenet kerül, és ez a kör HELYES eredménye.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`), 2026-08-29.
+
+### 10.1 Amit a kör hozott létre
+
+- `tool/release/ai_report_schema.json` — a riport JSON-Schema (draft-07,
+  `evaluation/analysis/manifest_schema.json` stílusát követve): `capability`
+  → `metrics[]`, minden metrika kötelezően `capability`, `metric`,
+  `corpusId`, `buildSha`, `modelId`, `modelVersion`, `baselineValue`,
+  `candidateValue`, `direction`, `status`, `delta` mezővel (ADR 0477 D5).
+- `tool/release/build_ai_report.py` — az összesítő. A `docs/release/ai-quality-gates.md`
+  `<!-- ai-quality-gates:begin -->` / `...:end -->` jelölők közötti
+  Markdown-táblát olvassa (`capability | metric | direction | model |
+  evidence_path`), a `ga_scope`-ot KIZÁRÓLAG `--matrix`-ból (alapértelmezett
+  `docs/testing/device-matrix.yaml`), a modell-verziót KIZÁRÓLAG
+  `--model-manifest`-ből (alapértelmezett `assets/ml/model_manifest.json`).
+  A `classify`/`WARN_THRESHOLD`/`FAIL_THRESHOLD` a `tool/compare_benchmarks.py`-ból
+  IMPORTÁLT (`sys.path.insert` a `tool/`-ra, R4 minta). Kilépési kódok:
+  `0` tiszta, `1` release-blokkoló találat (`findings[]` nem üres — hiányzó
+  kötelező bizonyíték, modell-verzió eltérés, vagy `fail`-minősítés),
+  `2` használati/formátum-hiba (ismeretlen `--profile`, a mátrixban a
+  device-mátrixból ismeretlen capability, olvashatatlan/hibás YAML/JSON
+  bemenet, a bizonyíték-dokumentumból hiányzó kötelező mező).
+- `docs/release/ai-quality-gates.md` — a bizonyíték-mátrix. Öt sor: két
+  `audio_analysis_core` metrika (`chord_accuracy`, `onset_f1_50ms`,
+  `model: none`, forrás `docs/eval/real-audio-dsp-baseline.md`), egy
+  `live_and_tuner` metrika (`direction_accuracy`, `model:strum_crnn_live_3c.bin`,
+  forrás `docs/eval/recognition-release-guard.md`), és két `computer_vision`
+  metrika (a `model_manifest.json` `vision_models[].evaluation_report`
+  mezőiből, dokumentációs célra — `ga_scope: false` ma, sosem blokkol). Az
+  `ai_tutor` és az `offline_ai` SZÁNDÉKOSAN nincs a mátrixban — indoklás a
+  fájl §3 „Amit ez a mátrix szándékosan NEM sorol fel" szakaszában.
+- `test/tooling/ai_release_report_test.dart` — 22 teszt-cella A1–A7 +
+  küszöb-hármas + A9 önellenőrzés, mind `Directory.systemTemp` fixture-ökön,
+  `python3`-on kívül más külső binárist nem hívva.
+
+### 10.2 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+A kötelező-bizonyíték ellenőrzést (`tool/release/build_ai_report.py`
+`evaluate_capability`, a `FileNotFoundError`/`JSONDecodeError` ágat) egy
+csendes `continue`-ra cseréltem (a `missing`/`findings` írás nélkül), majd
+lefuttattam `flutter test test/tooling/ai_release_report_test.dart`-ot.
+
+**Eredmény: PIROS, pontosan az A1 cellák (és a rájuk épülő A3/A6 cellák) —**
+
+```
+00:00 +0 -1: A1 — ... a non-existent evidence path is a non-zero exit [E]
+  Expected: not <0>
+    Actual: <0>
+00:00 +0 -2: A1 — ... an evidence file that is not valid JSON ... [E]
+  Expected: not <0>
+    Actual: <0>
+00:00 +4 -3: A3 — ... the exact SAME evidence-matrix input blocks once the fixture
+             device matrix flips ga_scope to true ... [E]
+  Expected: not <0>
+    Actual: <0>
+00:01 +12 -4: A6 — ... the SAME missing-evidence input produces the SAME non-zero
+              exit code on all three profiles ... [E]
+  Expected: not <0>
+    Actual: <0>
+Some tests failed.
+```
+
+4 cella PIROS, pontosan azok, amelyek a hiányzó-bizonyíték blokkolást mérik —
+ez bizonyítja, hogy a teszt valóban a mérni kívánt viselkedést méri, nem egy
+más okból zöld ágat. Ezután a kivételkezelő ágat visszaállítottam az eredeti
+alakra (`missing = True` + `findings.append(...)`), és
+`flutter test test/tooling/ai_release_report_test.dart` újra **22/22
+zöld**. `git status --short` a próba után a négy új fájlon kívül semmi mást
+nem mutat — a próba nem hagyott vissza munkapéldány-szennyeződést.
+
+### 10.3 §7 gate — teljes, csonkítatlan kimenet
+
+```
+$ tools/round-gate.sh test/tooling/ai_release_report_test.dart test/tooling/analysis_evaluation_regression_test.dart
+═══ [1] format
+    → [1] format: ZÖLD
+═══ [2] analyze
+Analyzing 3 items...
+No issues found! (ran in 5.9s)
+    → [2] analyze: ZÖLD
+═══ [3] test test/tooling/ai_release_report_test.dart
+00:01 +22: All tests passed!
+    → [3] test test/tooling/ai_release_report_test.dart: ZÖLD
+═══ [4] test test/tooling/analysis_evaluation_regression_test.dart
+00:00 +8: All tests passed!
+    → [4] test test/tooling/analysis_evaluation_regression_test.dart: ZÖLD
+═══ [5] architecture
+Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [5] architecture: ZÖLD
+═══ [6] secrets
+Secret scan OK (4062 file(s) scanned, 0 finding(s)).
+    → [6] secrets: ZÖLD
+═══ [7] l10n
+L10n aggregate freshness OK (en, hu).
+L10n parity OK (en → hu, 2291 message(s)).
+    → [7] l10n: ZÖLD
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/ai_release_report_test.dart              zöld
+    test test/tooling/analysis_evaluation_regression_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.
+```
+
+(A fenti a tényleges futás rövidített — a `flutter pub get` függőség-lista és
+a köztes letöltési sorok nélküli — másolata; a valódi futás minden lépése
+külön processzben, csonkítás nélkül futott, a fenti a `round-gate.sh`
+összegző blokkjait és a teszt-futók végösszegzését tartalmazza szó szerint.)
+
+### 10.4 Az összesítő közvetlen futtatása a mai fán (§7, MÉRT PIROS — ez a HELYES kimenet)
+
+```
+$ python3 tool/release/build_ai_report.py --profile development --scope-file docs/release/ai-quality-gates.md
+build_ai_report: 3 release-blocking finding(s):
+  - audio_analysis_core/chord_accuracy: required evidence document is missing or unreadable (docs/eval/real-audio-dsp-baseline.md): Expecting value: line 1 column 1 (char 0)
+  - audio_analysis_core/onset_f1_50ms: required evidence document is missing or unreadable (docs/eval/real-audio-dsp-baseline.md): Expecting value: line 1 column 1 (char 0)
+  - live_and_tuner/direction_accuracy: required evidence document is missing or unreadable (docs/eval/recognition-release-guard.md): Expecting value: line 1 column 1 (char 0)
+{
+  "capabilities": [
+    {
+      "error": "audio_analysis_core/onset_f1_50ms evidence (docs/eval/real-audio-dsp-baseline.md): Expecting value: line 1 column 1 (char 0)",
+      "id": "audio_analysis_core",
+      "metrics": [],
+      "status": "missing"
+    },
+    {
+      "error": "live_and_tuner/direction_accuracy evidence (docs/eval/recognition-release-guard.md): Expecting value: line 1 column 1 (char 0)",
+      "id": "live_and_tuner",
+      "metrics": [],
+      "status": "missing"
+    },
+    {
+      "id": "computer_vision",
+      "metrics": [],
+      "status": "not_in_scope"
+    }
+  ],
+  "findings": [
+    "audio_analysis_core/chord_accuracy: required evidence document is missing or unreadable (docs/eval/real-audio-dsp-baseline.md): Expecting value: line 1 column 1 (char 0)",
+    "audio_analysis_core/onset_f1_50ms: required evidence document is missing or unreadable (docs/eval/real-audio-dsp-baseline.md): Expecting value: line 1 column 1 (char 0)",
+    "live_and_tuner/direction_accuracy: required evidence document is missing or unreadable (docs/eval/recognition-release-guard.md): Expecting value: line 1 column 1 (char 0)"
+  ],
+  "profile": "development",
+  "schemaVersion": 1
+}
+$ echo "exit=$?"
+exit=1
+```
+
+Ez pontosan a §0.0 R5 / ADR 0477 „Következmények" szakasza által előre jelzett
+mai állapot: a két GA-scope AI-capability (`audio_analysis_core`,
+`live_and_tuner`) bizonyíték-útvonala ma prózai Markdown-riportra mutat
+(`docs/eval/real-audio-dsp-baseline.md`, `docs/eval/recognition-release-guard.md`),
+ami nem `json.loads()`-olható — ezért mindkettő `missing` státusszal jelenik
+meg, és az összesítő `exit=1`-gyel lép ki. A `computer_vision`
+(`ga_scope: false`) helyesen `not_in_scope`, és nem befolyásolja a kilépési
+kódot. Nem hoztam létre kitalált bizonyíték-dokumentumot a piros elfedésére —
+a `docs/eval/**` és az `evaluation/**` amúgy sem szerepel az engedélyezett
+fájllistán.
+
+### 10.5 Amit NEM érintettem
+
+`ml/**`, `lib/**`, `evaluation/**`, `docs/eval/**`, `.github/**`,
+`docs/adr/**`, `tools/**`, `test/fixtures/**`, `docs/testing/**`,
+`assets/**`, `tool/compare_benchmarks.py` — egyik sem módosult. A
+`docs/testing/device-matrix.yaml` és az `assets/ml/model_manifest.json`
+kizárólag olvasásra/importálásra került (a fixture-alapú tesztek saját,
+`Directory.systemTemp`-be írt másolatokat használnak).
+
 ## 11. Review — a Claude tölti ki

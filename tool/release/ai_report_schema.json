@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://strumsight.internal/schemas/ai-release-report-1.json",
+  "title": "StrumSight AI/ML release evidence report",
+  "description": "Output document of tool/release/build_ai_report.py (E12-R16, ADR 0477). One document per --profile run: aggregates every capability the evidence matrix (docs/release/ai-quality-gates.md) declares, resolved against the GA-scope truth in docs/testing/device-matrix.yaml. This file documents the contract; build_ai_report.py enforces it directly rather than depending on a third-party JSON-Schema validator (no such package is guaranteed on the CI runner image, the same reasoning tool/release/generate_sbom.py's module docstring gives).",
+  "type": "object",
+  "required": ["schemaVersion", "profile", "capabilities", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "Report contract version. build_ai_report.py always emits 1; a future incompatible change bumps this."
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["development", "lab", "production"],
+      "description": "Provenance only (ADR 0477 D6) — records which closed-dictionary channel produced this report. Never loosens or tightens a check."
+    },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Every release-blocking issue this run discovered: a ga_scope:true capability with missing/unreadable evidence, an evidence modelId/modelVersion that does not match the declared model or assets/ml/model_manifest.json, or a metric classified \"fail\". A non-empty array means build_ai_report.py exited 1. An empty array does not by itself mean every capability was checked — see each capability's \"status\"."
+    },
+    "capabilities": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/capability" }
+    }
+  },
+  "definitions": {
+    "capability": {
+      "type": "object",
+      "required": ["id", "status", "metrics"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A capability id from the evidence matrix; guaranteed to also exist in docs/testing/device-matrix.yaml capabilities[].id (ADR 0477 D1) — an evidence-matrix row naming an unknown capability is a build_ai_report.py usage error, not a report entry."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "missing", "not_in_scope"],
+          "description": "\"not_in_scope\": docs/testing/device-matrix.yaml marks this capability ga_scope: false — its evidence is never required and never blocks (ADR 0477 D3). \"missing\": ga_scope: true and at least one required evidence document could not be found, parsed, or was missing a required field. \"ok\": ga_scope: true and every declared metric's evidence was read; individual metrics may still be \"warn\" or \"fail\" (see metrics[].status) without changing this to \"missing\"."
+        },
+        "error": {
+          "type": "string",
+          "description": "Present only when status is \"missing\": the read/parse failure for the first evidence document that could not be used."
+        },
+        "metrics": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/metric" },
+          "description": "One entry per evidence-matrix row that was successfully read for this capability. Empty for \"not_in_scope\" and for \"missing\" capabilities whose evidence document could not be read at all."
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "required": [
+        "capability",
+        "metric",
+        "corpusId",
+        "buildSha",
+        "modelId",
+        "modelVersion",
+        "baselineValue",
+        "candidateValue",
+        "direction",
+        "status",
+        "delta"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Same value as the enclosing capability's \"id\" — carried per-metric so a metric record is independently meaningful outside the report document (ADR 0477 D5)."
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Metric name, taken verbatim from the evidence-matrix row (e.g. chord_accuracy, onset_f1_50ms)."
+        },
+        "corpusId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifies the evaluation corpus this measurement was taken on. Sourced from the evidence document; not cross-checked against a corpus registry (none exists yet) but mandatory (ADR 0477 D5)."
+        },
+        "buildSha": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The app build the candidateValue was measured against. Sourced from the evidence document."
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Either \"none\" (a purely DSP metric with no ML model in its path — only valid when the evidence-matrix row itself declares model: none, ADR 0477 D5), an assets/ml/model_manifest.json models[].filename, or a vision_models[].model_id."
+        },
+        "modelVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "\"none\" when modelId is \"none\"; otherwise must equal the manifest's training_run.identifier (models[]) or version (vision_models[]) for that modelId — build_ai_report.py exits non-zero on any other value (ADR 0477 D5) rather than emitting a mismatched report."
+        },
+        "baselineValue": { "type": "number" },
+        "candidateValue": { "type": "number" },
+        "direction": {
+          "type": "string",
+          "enum": ["lowerIsBetter", "higherIsBetter"],
+          "description": "Imported from tool/compare_benchmarks.py's DIRECTIONS (ADR 0477 D4) — no default, no third value."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "warn", "fail"],
+          "description": "Result of tool/compare_benchmarks.py's classify(baselineValue, candidateValue, direction) — imported, not reimplemented (ADR 0477 D4). Both the 5.0% warn and 10.0% fail boundaries are inclusive."
+        },
+        "delta": {
+          "type": "number",
+          "description": "The signed regression fraction classify() returned; positive means worse, regardless of direction."
+        }
+      }
+    }
+  }
+}
