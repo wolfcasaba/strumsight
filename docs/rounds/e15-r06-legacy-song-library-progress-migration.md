@@ -72,6 +72,46 @@ A két base-fájl ezért felkerül a listára; kulcs TÖRLÉSE és jelentés-vá
 továbbra is tilos. Az `A6` mércéje (`test/l10n/hardcoded_string_guard_test.dart`)
 bekerül a `gate_tests`-be — a §6 hivatkozta, a gépi lista nem.
 
+**R9 — a §3 komponens-nevei közül HÁROM NEM LÉTEZIK, és a képernyők
+állapot-leltára MÉRVE.** Ugyanaz a mérés, amit az `E15-R05` §0.0/R2 is elvégzett
+(`grep -rho "class Ss[A-Za-z]*" lib/core/design_system/components/`):
+
+| A §3 által említett név | Valóság |
+|---|---|
+| `SsListTile` | **nincs ilyen** → `SsContentCard` / `SsCard` a sor-hordozó |
+| `SsErrorState` | **nincs ilyen** → `SsFailureState` (`SsFailurePresentation` + `SsFailureAction`) |
+| `SsMetricTile` | **nincs ilyen** → `SsMetricCard` (+ `SsMetricCardSkeleton`) |
+
+Létező, ide illő komponensek (mérve): `SsCard`, `SsContentCard`, `SsSurface`,
+`SsSection`, `SsButton`, `SsIconButton`, `SsEmptyState`, `SsFailureState`,
+`SsMetricCard`, `SsSkeleton`, `SsScoreRing`, `SsStatusBadge`, `SsTrendIndicator`.
+
+Állapot-leltár a három fájlban (MÉRVE, `main @ 34aff7fd`):
+
+| Fájl | Üres | Betöltés | Hiba |
+|---|---|---|---|
+| `setlist_list_screen.dart` | `_Empty(text: l10n.setlistsEmpty)` (`:44`) | nincs | **nincs** |
+| `setlist_detail_screen.dart` | `Center`+`Text(l10n.setlistEmptyDetail)` (`:127`) | nincs | **nincs** |
+| `progress_screen.dart` | legacy `EmptyState` (`lib/core/widgets/empty_state.dart`, `:69`) | nincs | **nincs** |
+
+Ebből három kötött szabály:
+
+1. **Hibaállapotot GYÁRTANI TILOS.** Egyik képernyőnek sincs ma hibaága és nincs
+   `AppFailure`-je; egy kitalált `AppFailure`/`retryable: true` pontosan az
+   `E15-R04` G2-MAJOR osztálya (`E15-R05` prompt §2). Az §5.2 a LÉTEZŐ
+   állapotokra vonatkozik. Ha egy képernyőnek nincs hibaága, a §10 mondja ki:
+   „nincs hibaág — nem gyártottunk".
+2. **`progress_screen.dart:258` `CircularProgressIndicator` NEM betöltés-jelző**,
+   hanem determinisztikus napi-cél gyűrű (`value: progress`, `met ? check : bolt`
+   ikonnal a közepén). Skeletonra/betöltés-komponensre cserélni
+   INFORMÁCIÓVESZTÉS; ha design-rendszer-megfelelőt kap, az az `SsScoreRing`
+   osztálya, a `value` szemantika megőrzésével.
+3. **Beégetett szöveg ma NULLA** a három fájlban (`grep -n "Text('…"` üres), és
+   `*ThemeScope` burkoló sincs bennük (a §3 eltávolítási pontja itt **no-op**).
+   Az `A6` tehát a kör előtt is teljesül — a dolgod, hogy MARADJON így; új
+   ARB-kulcsra várhatóan nincs is szükség (a `lib/l10n/base/**` az R4 miatt csak
+   biztonsági tartalék).
+
 **R5 — a §10 KÖTELEZŐ új sora.** Az öt `retire` képernyőnek a queue-ban ma
 NINCS gazdája: a terv §4 az `E15-R04`-hez rendelte a visszavonási felülvizsgálatot,
 de a queue `E15-R04` sora a Practice + Learn migrációt futtatta le (`done`). A §10
@@ -188,7 +228,7 @@ A batch 8 képernyője a design-rendszer komponenseit és tokenjeit használja, 
 > Az öt `retire`-verdiktű képernyőhöz **egyetlen sort sem** írsz — sem migrációt,
 > sem törlést; a §10-ben csak a visszavonási gazdátlanságot rögzíted (R5).
 
-**Benne van:** a felsorolt (a §0.0.A/R2 szerint 3) képernyő vizuális migrálása (`SsCard`, `SsButton`, `SsListTile`, `SsEmptyState`, `SsErrorState`, `SsMetricTile` és társaik; `SsSpacing`/`SsTypography` tokenek) · a meglévő `*ThemeScope` burkoló eltávolítása, ahol az `E15-R01` óta felesleges · a `migration-status.md` frissítése a MÉRT új aránnyal.
+**Benne van:** a felsorolt (a §0.0.A/R2 szerint 3) képernyő vizuális migrálása (`SsCard`, `SsContentCard`, `SsButton`, `SsEmptyState`, `SsFailureState`, `SsMetricCard` és társaik — a NEVEK a §0.0.A/R9 mérése szerint, a `SsListTile`/`SsErrorState`/`SsMetricTile` NEM létezik; `SsSpacing`/`SsTypography` tokenek) · a meglévő `*ThemeScope` burkoló eltávolítása, ahol az `E15-R01` óta felesleges · a `migration-status.md` frissítése a MÉRT új aránnyal.
 
 Batch-specifikus kikötések:
 
