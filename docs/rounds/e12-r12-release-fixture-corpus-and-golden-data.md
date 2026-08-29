@@ -204,4 +204,143 @@ dart run tool/check_fixture_manifest.dart
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-29.
+
+### Mit épített
+
+A brief §4 engedélyezett listáján pontosan négy fájl, mindegyik ÚJ:
+
+- `test/fixtures/manifest.json` — a globális fixture-manifest, `schemaVersion: 1`
+  gyökér-mezővel és egy `fixtures` listával; minden bejegyzés `path` (repó-relatív),
+  `bytes`, `sha256` (a fájl TARTALMÁnak checksuma, `package:crypto`), `license`,
+  `source` és `containsUserData: false` mezőt hordoz.
+- `tool/check_fixture_manifest.dart` — `checkFixtureManifest({required Directory
+  projectRoot})` tiszta függvény (`FixtureManifestReport` visszatéréssel, a
+  `check_assets.dart`/`ml_asset_manifest_test.dart` mintáját követve) + `main()`
+  nem-nulla `exitCode`-dal hiba esetén. A fa-bejárás (`_walkFixtureFiles`) a
+  `test/fixtures/` alatt mindent felsorol, KIVÉVE a `*.dart` fájlokat, a
+  `README.md`-ket ÉS saját magát a manifestet (lásd „Eltérés a brieftől" lent).
+- `test/tooling/fixture_manifest_test.dart` — A1–A8 cellák csoportosítva
+  (A6-nak nincs saját cellája itt, lásd lent), a valódi projekt-gyökéren ÉS
+  szintetikus `Directory.systemTemp` projekteken mérve.
+- `docs/testing/release-fixture-corpus.md` — a korpusz határai (mi tartozik
+  bele / mi nem, mezőleírás, kereszt-egyezés a védett checkerrel).
+
+### Mért bejegyzés-szám
+
+A `test/fixtures/` fa 2026-08-29-i mérése (`find test/fixtures -type f`)
+**69** fájlt ad, ebből **19 `.dart`**, **2 `README.md`**, **48 adat-fájl** — a
+brief §0.0/R3 mért száma pontosan stimmel. A checker ezt a 48-at méri A1
+cellaként (`hasLength(48)`), és a valódi `dart run` kimenete is 48-at jelent
+(lent).
+
+### Eltérés a brieftől — a manifest kizárja ÖNMAGÁT a korpuszból
+
+Az ADR 0473 D2 definíciója („minden fájl a `test/fixtures/` alatt, kivéve
+`*.dart` és `README.md`") szó szerint véve a `test/fixtures/manifest.json`-t
+IS bejegyzésre kényszerítené, amint a fájl létrejön a fában — ez viszont egy
+checksum-fixpont: a manifest saját sha256-ja a saját (a hash-et is
+tartalmazó) tartalmától függne. A checker ezért egy HARMADIK, a D2 szövegében
+nem nevesített kizárást alkalmaz: a `test/fixtures/manifest.json` relatív
+útvonalat a fa-bejárás explicit kihagyja (`tool/check_fixture_manifest.dart`
+`_walkFixtureFiles`, a `relative == _manifestRelativePath` ág). Enélkül a
+mért bejegyzés-szám 49 lenne, ellentmondva a brief §0.0/R3 és a §6/A1 „48"
+elvárásának. A `test/tooling/fixture_manifest_test.dart` A1-csoport egy
+külön cellával méri ezt ([„the manifest itself requires no manifest
+entry"]). Dokumentálva `docs/testing/release-fixture-corpus.md`-ben is (D2
+szakasz, utolsó bekezdés).
+
+### A6 cella — nincs önálló teszt ebben a fájlban
+
+A §6 A6 sora bizonyítékként a §7 gate-et jelöli meg
+(`test/tooling/check_assets_test.dart` VÁLTOZATLANUL zöld) — ez a fájl
+tényleg érintetlen (a `git status` csak a 4 fenti új fájlt mutatja), és a §7
+gate-parancs mindkét tesztet lefuttatja. Egy kezdeti kísérlet írt egy
+önhivatkozó cellát ebbe a fájlba („nem importálja a
+`tool/ci/check_assets.dart`-ot"), de ez önmagát találta el: a keresett
+sztring-literál maga a teszt saját forrásában is szerepelt (a `contains(...)`
+hívás argumentumaként), így a cella mindig pirosra futott — pontosan az
+önhivatkozó csapda, amit az ADR 0447 `release_manifest_test.dart`
+`_processCallExecutable` mintája (adjacent string-literal concatenation)
+kerül el. A cellát eltávolítottam; A6 bizonyítéka a §7 gate futása, nem egy
+külön cella.
+
+### `dart run tool/check_fixture_manifest.dart` kimenete
+
+```
+$ dart run tool/check_fixture_manifest.dart
+Running build hooks...Running build hooks...Fixture manifest OK (48 fixture(s)).
+```
+
+### `tools/round-gate.sh` kimenete (csonkítatlan futás)
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/fixture_manifest_test.dart               zöld
+    test test/tooling/check_assets_test.dart                   zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+A `test test/tooling/fixture_manifest_test.dart` lépés `+21` teszttel zöld
+(A1: 5, A2: 2, A3: 4, A4: 2, A5: 3, A7: 2, A8: 3).
+
+### Valódi-sértés próba (§6.1/§9 kötelező)
+
+A próba a teszt saját cellájaként fut (`A2 — ... real-corruption probe`),
+nem kézi lépésként:
+
+1. beolvassa a valódi `test/fixtures/song_trainer/midi/format0.mid` bájtjait
+   a valódi repó-gyökérből;
+2. egy `Directory.systemTemp` alá MÁSOLATOT ír, amelynek első bájtját
+   XOR 0xFF-fel megváltoztatja (`_copyWithFlippedFirstByte`);
+3. a másolat mellé egy manifestet ír, amiben az EREDETI (mutálatlan) fájl
+   sha256-ja szerepel;
+4. `checkFixtureManifest` a másolat-projekten `isClean == false`-t és
+   `FixtureManifestIssueKind.checksumMismatch`-et ad vissza;
+5. a teszt végén `expect(originalFile.readAsBytesSync(), originalBytes)` —
+   a valódi fájl bájtjai a próba után is a próba ELŐTTI állapottal
+   egyeznek (a `git status` a futás után is tisztán mutatja a
+   `test/fixtures/**` fát: nincs benne módosítás).
+
+A gate-futás fenti kimenete ezt a cellát is lefuttatta (`+5` sor:
+„real-corruption probe: a single mutated byte in a COPY of a real fixture is
+caught, and the original fixture on disk is never touched").
+
+### Licenc/forrás-megállapítás a nem-`song_trainer` 18 fájlra
+
+A `song_trainer` 30 fájljára a védett `tool/ci/check_song_fixture_licenses.dart`
+`provenance`/`licence` szövegét vettem át szó szerint (A7 kereszt-egyezés
+emiatt triviálisan teljesül — ugyanaz a bájttartalom, ugyanaz a hash). A fa
+többi 18 adat-fájljára (elemzés/gyakorlás/esemény/vision fixture-k, a 6
+gyökér parity-JSON, `pitch_fixture_manifest.json`) NEM volt meglévő
+provenance-forrás, ezért mindegyiket `git log --follow` paranccsal
+visszavezettem az ELSŐ commitjukig, amely mindegyiknél egy projekten belüli,
+round-számozott commit ([E06-R03], [E12-R09], [E03-R20], [E02-R01],
+`round134/143/163/168/175/195`) — tehát a repó saját fejlesztési
+történetéből, nem külső forrásból származnak. A fájlok TARTALMÁT is
+átnéztem: szintetikus/determinisztikus adatok (pl.
+`pitch_fixture_manifest.json` explicit `"rawAudioIncluded": false` jelölést
+hordoz; a `vision/evidence` fixture `modelVersion: "model-test-v1"`; a
+`crnn`/`logmel` parity fájlok a projekt saját Python-referencia
+implementációjából (`ml/features.py`, a trénelt CRNN) számolt golden
+kimenetek, nem felvett hangfelvétel). Licencük ezért `"Project-authored
+synthetic test fixture."` (ugyanaz a szöveg, mint a song_trainer alfa
+project-authored bejegyzéseinél), a `source` mező pedig a bevezető commitra
+mutat. Egyik fájlnál sem találtam olyan jelet, ami STOP-ot indokolna
+(harmadik féltől származó tartalmat vagy valós felhasználói adatot).
+
+### Amit NEM érintettem
+
+`test/fixtures/**` egyetlen meglévő adatfájlja sem módosult, nevezték át
+vagy törölték (a `git status` ezt igazolja: csak 4 ÚJ fájl). `tool/ci/**`,
+`ml/**`, `lib/**`, `docs/adr/**`, `tools/**` és `test/ui/goldens/**`
+érintetlen.
+
 ## 11. Review — a Claude tölti ki

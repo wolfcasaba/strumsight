@@ -1,0 +1,389 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "path": "test/fixtures/analysis/legacy_session_lab_diag.json",
+      "bytes": 418,
+      "sha256": "6bf26b9a968e669ae9ebed3d278238c2473f624be9d11a98eb3fdcbb75a1ff77",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic legacy analysis-session fixture (lab-diagnostic variant) for the V1 schema adapter tests (E06-R03, commit 592f3241).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/analysis/legacy_session_pre_bpb.json",
+      "bytes": 299,
+      "sha256": "83b5799d105c27946287827f4d28550876806e6ce1f4e0853a5b63062332217c",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic legacy analysis-session fixture (pre-beats-per-bar variant) for the V1 schema adapter tests (E06-R03, commit 592f3241).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/analysis/legacy_session_v1.json",
+      "bytes": 427,
+      "sha256": "af4170280b33489e73bd7816d05ea1b5fcdc119e75c57cd8c0fda54b97f29a47",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic legacy analysis-session fixture (V1 shape) for the codec and schema-validation tests (E06-R03, commit 592f3241).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/audio/song_trainer/pitch_fixture_manifest.json",
+      "bytes": 7497,
+      "sha256": "99e9d3c38aa04b1141f6a309b4896dc7d4efb21a90c56d5830e1fcf08d8fd4fc",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored deterministic pitch-observation replay fixture (provenance.rawAudioIncluded: false, no recorded audio) for song-trainer scoring tests (E03-R20, commit 4014f731).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/chord_crnn_parity.json",
+      "bytes": 154358,
+      "sha256": "09bd0aa037161440c59eca6a776e88d7249b0da40d068369911acb6edcab620b",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored parity golden: raw CQT input and the trained chord CRNN's Keras softmax output, computed from the project's own reference implementation, no third-party audio (round195, commit 4601a541).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/crnn_live_3c_parity.json",
+      "bytes": 1258650,
+      "sha256": "82a73b862055c8402a5b14652fa90ba474d369a4fffc38cc25725b123869a1b9",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored parity golden for the live 3-class strum-direction CRNN, computed from the project's own reference implementation, no third-party audio (round175, commit f9293d6a).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/crnn_live_parity.json",
+      "bytes": 1256148,
+      "sha256": "4b9f93f68fbb83873e5302e1346627944112fecd3d0bfeb1c77b5c62882a3923",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored parity golden for the streaming 70ms live CRNN front end, computed from the project's own reference implementation, no third-party audio (round168, commit cb325a2b).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/crnn_parity.json",
+      "bytes": 1236199,
+      "sha256": "6401c150fb324271546397f8faf1d595c986673e8b14a4a2950718aca46075b8",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored parity golden for the strum-direction CRNN vs its pure-Dart inference port, computed from the project's own reference implementation, no third-party audio (round163, commit 66c0f9a2).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/events/analysis_completed_v1.json",
+      "bytes": 247,
+      "sha256": "d33fc3046f9c65135a80d43ab1030a8eac595d92875a768adfb40eeb715009f8",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic domain-event fixture for the event catalog and schema registry (E12-R09, ADR 0468, commit 04ae8918).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/events/plan_completed_v1.json",
+      "bytes": 253,
+      "sha256": "e59d66c215c4b084e28a2ca1bc00e6f6bae180160ca230acb4b55d0a81998391",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic domain-event fixture for the event catalog and schema registry (E12-R09, ADR 0468, commit 04ae8918).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/events/practice_session_completed_v1.json",
+      "bytes": 259,
+      "sha256": "bf86d55873ddbb584109b62f9d5e4da0174df79a42b08d673f1b02c8d676b687",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic domain-event fixture for the event catalog and schema registry (E12-R09, ADR 0468, commit 04ae8918).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/events/song_session_completed_v1.json",
+      "bytes": 255,
+      "sha256": "9abe3eaebc3f30e4458a231b86c1efc072050cbc0d2180c102c2ad0b7218ed31",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic domain-event fixture for the event catalog and schema registry (E12-R09, ADR 0468, commit 04ae8918).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/events/tutor_session_completed_v1.json",
+      "bytes": 244,
+      "sha256": "5c5af86e10432ad60d98c633c2005e235085837d6ed45e50893e06f99b4e910c",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic domain-event fixture for the event catalog and schema registry (E12-R09, ADR 0468, commit 04ae8918).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/events/vision_session_completed_v1.json",
+      "bytes": 254,
+      "sha256": "14ab1a8dc8d938e41efdeadb49ebc2b74bc7c52b241ad1c9b431b299926c9527",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic domain-event fixture for the event catalog and schema registry (E12-R09, ADR 0468, commit 04ae8918).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/logmel_parity.json",
+      "bytes": 162316,
+      "sha256": "e997a1ee3e50145e889439985c017a861e48f8345adde8509756ec9413da2d59",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored parity golden for the Dart log-mel front end vs the ml/features.py reference implementation, no third-party audio (round134, commit 2e8136ee).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/logmel_parity_cases.json",
+      "bytes": 262015,
+      "sha256": "2c897b96c971e03b55ac4ae9f9b5351bf142e31857c74d3314939616a27ae537",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored adversarial log-mel parity fixtures (synthetic clipped/DC-offset/near-floor signals) vs the ml/features.py reference implementation (round143, commit f796ecef).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/practice/legacy_scorer_baseline.json",
+      "bytes": 16121,
+      "sha256": "23b4d66b2aa6a5136a4da089d0cf42c9ca76e20a0a28477716a2cf6366e65ae2",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored legacy practice-scorer baseline scenarios, frozen for the Epic 2 rollout guards (E02-R01, commit 57f37eaa).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/guitar_pro/minimal_gp3.gp3",
+      "bytes": 993,
+      "sha256": "53ee2cc024d46a8fb3c761f857f589eb3d0901468a323adea2e98247d59fb473",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "New, one-track score authored for this repository and written with PyGuitarPro 0.11.0.",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/guitar_pro/minimal_gp5.gp5",
+      "bytes": 1449,
+      "sha256": "140cccae4b4cb228ce262cbf76a94326b0dcabea9c9e98f9dfc83e3cdb8cd216",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Same newly authored score, written as GP 5.1 with PyGuitarPro 0.11.0.",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/guitar_pro/minimal_gpx.gpx",
+      "bytes": 14895,
+      "sha256": "b437b7a2b3e212822acadd67877807baee48837ea76d9b737bfbf9f5db9c07fc",
+      "license": "MPL-2.0",
+      "source": "`packages/alphatab/test-data/guitarpro6/notes.gpx` from alphaTab commit `a186437bb3263e5ae3f8fd373aef1fef5ebbc7e7`, retained under its MPL-2.0 licence.",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/legacy/setlist_duplicate.json",
+      "bytes": 1001,
+      "sha256": "4fa9d22d856154572b35d0020cf6cd29aa86e190203bc57f573ce631538ba7b2",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/legacy/setlist_missing_song.json",
+      "bytes": 1130,
+      "sha256": "6d9492bfa7713a54d5afe854244e6357fc771ed7bc59bd502a8a430c68f30756",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/legacy/setlist_mixed_bpm.json",
+      "bytes": 1339,
+      "sha256": "f3fc76d1122add6bd5e6811fcdb68a83839c0d03f6e55a34ae48acc0e482e1f1",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/legacy/song_34.json",
+      "bytes": 810,
+      "sha256": "878a557da2bc6c76c42593af798ae570c3e78bae0841aeccdeb68b644bdb69f7",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/legacy/song_44.json",
+      "bytes": 817,
+      "sha256": "1c6390a2700be0226d7b0706b36d05a4ad064f43e4add98ba62db6be5a7f7b41",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/legacy/song_multiple_chords.json",
+      "bytes": 1091,
+      "sha256": "727b56a0df6ac9ad4a58583add1c5f5f417504f8b668df89f9677e7c02e202ee",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/legacy/song_rests.json",
+      "bytes": 884,
+      "sha256": "9bab452ee9bbe01de35ec02b680cfac35307f4e9f8e9693358f11dd2ccbbbaed",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/midi/format0.mid",
+      "bytes": 43,
+      "sha256": "c1b7c74fd988bc25e434dd80c6a1b570464c5d28c0d96a6468f4dbbed6b91f93",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/midi/format1_multitrack.mid",
+      "bytes": 101,
+      "sha256": "c4b5ccd72251a3e3b30eb9d1147d8ed04df1ec0c73f77ac428aac7dc09fa75d3",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/midi/malformed_chunks.mid",
+      "bytes": 19,
+      "sha256": "1dc972dc7beb3ce451e7c94a69dde1088ec427112f30c93f03800595ade98ce0",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/midi/polyphonic_drum.mid",
+      "bytes": 42,
+      "sha256": "bf74291c359b790c648d2a590545beb748578fb5d323937f6ba1146732b4e83e",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/midi/running_velocity0.mid",
+      "bytes": 34,
+      "sha256": "1f598d44510c8251c316994fdbcc30e0ec7e592018d34998cbcd8011da15ce7e",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/midi/tempo_meter_marker.mid",
+      "bytes": 73,
+      "sha256": "b7884f6a7e1bc1b1774689b0a9731e52c54f851ef7b065b8afe8f250951e0ebf",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/chord_chart_44.musicxml",
+      "bytes": 543,
+      "sha256": "99f0838343bf8ef32af524cc415d5f711b1f65153afe603601818c3a003a5d25",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/corrupt.musicxml",
+      "bytes": 23,
+      "sha256": "7f1fe8373cef67deb860f9dbe35fe1c81d70e86ca8c6aded239fc4c6d81c4be5",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/markers_lyrics_repeat.musicxml",
+      "bytes": 702,
+      "sha256": "25c73cb1abf24ea6111f911927686bf702040cf666423dbcbc52ca0e20c0a194",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/meter_68.musicxml",
+      "bytes": 335,
+      "sha256": "04393a7c1327156d72d3eb3b0e2ed0473f130f5e05de48febab796a36fcdf979",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/monophonic_tie_rest.musicxml",
+      "bytes": 383,
+      "sha256": "626856970f2c522263880d118efb3246b3d1772a30ba84c250428b525576600d",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/multipart_polyphonic.musicxml",
+      "bytes": 654,
+      "sha256": "0c0d69f2cb45502e4b1c3c2b4bf56eb5f7523bd07ce0b506e7f57cd29a79986a",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/tempo_meter_pickup.musicxml",
+      "bytes": 598,
+      "sha256": "ddecbe808e8821379cc1f6e6b1e1a5b3a5b9018066c30eaf75dd7526eee8362f",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/two_chords.musicxml",
+      "bytes": 472,
+      "sha256": "6a35ee52c1ab8e1e1b501c04f9f4aa591a5606a71344a346c2a873108e801604",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/musicxml/waltz_34.musicxml",
+      "bytes": 335,
+      "sha256": "398ac32be7fb7b8fd239e977fb182b9afb62f292160eaaee7dd22a362046fb44",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/mxl/extracted_limit.mxl",
+      "bytes": 317,
+      "sha256": "893af338d04a433be060acd7cc71cc7455c64841cee0c419f5baaaa63a0f6e08",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/mxl/malicious_path.mxl",
+      "bytes": 320,
+      "sha256": "62e505213895a61ea8e5a047297d219f803bdd37631b488f192c463d67a1096f",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/native/corrupt.strumsight-song.json",
+      "bytes": 15,
+      "sha256": "14b3f36a005f062412df3c2f1b90b55180ace98f87b118b52badc3d2be70a466",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/native/full_song.strumsight-song.json",
+      "bytes": 1516,
+      "sha256": "bf0b360733eac1521757183061e74e17efeb14f6b776355491623a06fb5d3d9a",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/song_trainer/native/newer_version.strumsight-song.json",
+      "bytes": 80,
+      "sha256": "6cfd985e9604454e0b94d7b30dcfbde74ff104076c7d66b53da4aff7fd3b68b5",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/vision/evidence/observed_wrist_deviation.json",
+      "bytes": 402,
+      "sha256": "683c2f3d46262ce52bcbf275f59aa60060a5c91b6231de8d26bd7cb2175d78a7",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic vision-evidence fixture (modelVersion: model-test-v1, no recorded camera frames) for the observation fusion engine (E05-R22, commit 997e7bef).",
+      "containsUserData": false
+    }
+  ]
+}
