@@ -21695,3 +21695,134 @@ végrehajtható (`Permission denied`, exit 126).
 governance-kör dolga: a `rm`-ág operandusait az első `&&`/`;`/`|` határig kell
 vágni, és a `tools/tests/`-be egy cella tartozik, amely a fenti összetett
 parancsra `allow`-ot vár.
+
+## L552 — Egy INTERFÉSZ szerződését szállító kör falszifikációs celláját az IMPLEMENTÁLÓRA kell megírni, nem a hívóra — különben a szerződés-dokumentum olyan mérést állít, ami nem létezik (E12-R15, 2026-08-29)
+
+**Mit mértünk.** Az E12-R15 terméke a `ResourceConsumer` **szerződés** volt, és
+a szerződés-dokumentum szó szerint ezt állította:
+
+> „Ez NEM `cancel` — egy fogyasztó, amelyik a felfüggesztést `cancel`-lel
+> valósítja meg, sérti a szerződést (`resource_arbiter_test.dart` A5 méri)."
+
+Az A5 cella ezt **nem mérte**. Az A5 a teszt saját `_FakeConsumer`-ét használta,
+amelynek a `pauseForHigherPriority()`-ja a TESZT kódja — a cella tehát azt
+bizonyította, hogy az **arbiter** `pause`-t hív `release` helyett, nem azt, hogy
+egy **fogyasztó** megőrzi a munkáját. A review eldobható próbája ezt gépileg
+kimutatta: egy szándékosan `cancel`-ként megírt fogyasztó
+
+```dart
+@override
+Future<void> pauseForHigherPriority() async {
+  state = '';                       // cancel, nem pause
+  await super.pauseForHigherPriority();
+}
+```
+
+a teljes kör-készleten **ZÖLDEN átment** (`00:00 +3 -1`, a bukott cella egy
+másik, refutált hipotézis volt).
+
+**A gyökérok a brief §6.1 mátrixában volt, nem a kódban.** A sor — „a
+`pauseForHigherPriority` valójában `cancel`-t hív → A5" — **kétértelmű**: van
+egy arbiter-oldali és egy fogyasztó-oldali olvasata, és a cella csak az elsőt
+fedte. Egy interfészt szállító körnél mindig a MÁSODIK a lényeg: az interfész
+implementálói későbbi körök (itt: Epic 10 Kör 12, a vision- és mic-bekötés) —
+pontosan az a réteg, amit a mondat védeni ígért.
+
+**A szabály.** Ha a kör terméke egy szerződés/interfész, akkor (1) a
+falszifikációs cellát egy **nem-konform implementációra** kell megírni, (2) az
+őr legyen **újrahasznosítható konformancia-készlet**, amit a jövőbeli
+implementálók futtatnak, és (3) a készlethez **önvédő cella** tartozzon, amely
+bizonyítja, hogy a nem-konform implementáció tényleg PIROS — nem elég állítani.
+A megvalósult alak:
+
+```dart
+await expectLater(
+  checkResourceConsumerContract(make: () => _CancellingFakeConsumer(...), ...),
+  throwsA(isA<TestFailure>()),
+);
+```
+
+Ugyanaz a mintázat, mint [L549](#l549): a mechanizmus MEGLÉTE ki volt
+kényszerítve, a JELENTÉSE nem.
+
+**Őrteszt:** `test/core/resources/resource_arbiter_test.dart`::`F1 — the
+ResourceConsumer contract is machine-checked, not just asserted in prose
+self-guard: a consumer that discards state in pauseForHigherPriority (i.e.
+implements it as cancel) fails the contract check`
+
+## L553 — Egy állapotátmenet-pár EGYIK irányát szállítani zöld gate mellett is néma elakadást épít: aki felfüggeszt, annak folytatnia is kell tudni (E12-R15, 2026-08-29)
+
+**Mit mértünk.** Az E12-R15 arbitere hibátlanul felfüggesztett (`request` a
+magasabb prioritásúnak, `onMemoryPressure` a legalacsonyabbnak), és mind a hat
+acceptance-cella, valamint a `tools/round-gate.sh` mind a hét lépése ZÖLD volt.
+A review eldobható próbája viszont ezt mérte a `1e4fb889` HEAD-en:
+
+- **P1 (ZÖLD):** `backgroundAi` aktív → `liveAudio` kér → `background`
+  felfüggesztve → `live.release()` → a `background` **`isSuspended == true`,
+  `resumeCalls == 0`**. Örökre felfüggesztve.
+- **P2 (ZÖLD):** egyetlen aktív `liveAudio` + `onMemoryPressure()` → a
+  felhasználó ÉPPEN FUTÓ gyakorlása áll le, `resumeCalls == 0`.
+
+Az arbiter felülete `register` / `unregister` / `request` / `onMemoryPressure`
+volt: **nem létezett belépési pont, amin megtudhatta volna, hogy a magasabb
+prioritású fogyasztó befejezte a munkáját**, és a `resume()`-ot sehol nem hívta.
+A kör briefjének §1 célja szó szerint „leak és **néma elakadás** nélkül" — a
+kör tehát a saját céljában nevesített hibaosztályt szállította volna.
+
+**Miért nem fogta meg semmi:** az acceptance-cellák mind a felfüggesztés
+PILLANATÁT mérték (A1: felfüggesztődik; A4: a legalacsonyabb megy először; A5:
+`resume()` után megvan az állapot — de a `resume()`-ot a TESZT hívta, nem az
+arbiter). A visszaút hiánya sem az ADR-ben, sem a szerződés-doksi „Amit ez a kör
+NEM köt be" listáján nem szerepelt — nem elhalasztott döntés volt, hanem
+észrevétlen lyuk.
+
+**A szabály.** Minden állapotátmenet-párnál (`pause`↔`resume`,
+`acquire`↔`release`, `suspend`↔`restore`) a kör MINDKÉT irányt szállítsa és
+mérje, és a mérés a **mechanizmust** hívja, ne a tesztet. Konkrétan: ha egy
+cella egy visszaállító metódust maga hív meg, az a cella a visszautat NEM
+bizonyítja — a bizonyítás az, hogy a rendszer hívja meg magától.
+
+**Őrteszt:** `test/core/resources/resource_arbiter_test.dart`::`F2 — suspension
+has a way back, no silent stall a suspended consumer resumes once the consumer
+that caused the suspension finishes via the arbiter`
+
+## L554 — A randomizált HARD property-lépés seed-függően bukhat a kör diffjétől FÜGGETLENÜL: a piros CI-t a diff hatóköréhez kell mérni, mielőtt H5-nek minősül (E12-R15, 2026-08-29)
+
+**Mit mértünk.** Az E12-R15 első Full Gate futása (`33240406764`) PIROS lett:
+
+```
+❌ test/property/dsp_property_test.dart: property: random strums — one onset,
+   correct direction (20 trials) (failed)
+Expected: a value greater than or equal to <18>
+  Actual: <17>
+seed=33240406764: a strum must merge into ONE onset
+test/property/dsp_property_test.dart 438:5
+121 tests passed, 1 failed.
+```
+
+A `PROPERTY_SEED` a HORIZON-konvenció szerint a HARD lépésen `github.run_id`,
+tehát futásonként MÁS. A kör diffje ekkor kizárólag `lib/core/resources/**`,
+`test/core/resources/**`, `test/e2e/**` és dokumentum volt — DSP
+onset-összevonásra **nincs ráhatása**. Ugyanazon a kódon a következő futás
+(`33241878432`, merge SHA `6222f521`) ZÖLD lett, a Router CI pedig mindhárom
+SHA-n zöld volt.
+
+**A csapda.** A H5 („a CI kétszer piros ezen a körön") szó szerinti alkalmazása
+két ilyen véletlen bukásnál egy hibátlan kört haltolna, és az önjavító kör a
+kör kódját vizsgálná — miközben a hiba a `dsp_property_test.dart:438` **szűk
+margójú küszöbében** van: 18/20 = 90 %, azaz EGYETLEN próba elcsúszása pirosra
+vált. A HORIZON-konvenció „%-alapú, nem flaky" ígérete ezen a cellán 20 próbánál
+nem tartható.
+
+**A szabály.** Piros CI-nél ELŐSZÖR a bukott cella útvonalát vesd össze a kör
+diffjének hatókörével (`git diff --stat <base>..<head>`). Ha a bukott terület a
+diffen kívül esik, az nem a kör leletje: jegyezd fel a seedet és a mért értéket,
+dispatch-eld újra, és a H5 számlálóba csak a diff-releváns pirosakat vedd bele.
+A küszöb megemelése vagy a próbaszám növelése **nem** a kör dolga (`test/**` a
+gate része, ADR 0112 §3) — az önjavító/governance-kör feladata.
+
+**Őrteszt:** nincs — a `test/property/dsp_property_test.dart` küszöbe a mércéhez
+tartozik, amit ez a kör nem módosíthat. A javítás javasolt helye:
+`test/property/dsp_property_test.dart:438` (a 20-as próbaszám és a 18-as küszöb
+együtt ad 90 %-ot; vagy a próbaszám emelése, vagy a küszöb %-os
+újrakalibrálása kell, mérés alapján).

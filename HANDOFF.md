@@ -1,5 +1,84 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R15 KÉSZ — Audio, camera és local AI resource coexistence — PR [#506](https://github.com/wolfcasaba/strumsight/pull/506), squash `949cd274` (2026-08-29)
+
+A Ch12 **Kör 15** mércéje: a fán két, egymásról MIT SEM TUDÓ kizárólagos
+koordinátor élt (mikrofon, kamera), és semmilyen szerződés nem mondta meg, mi
+történik, amikor **különböző** erőforrások fogyasztói versengenek egyszerre.
+Mostantól van kimondott, **gépileg mért** prioritási rend — és ami a review
+nélkül kimaradt volna: **visszaút is** belőle.
+
+**Amit a kör szállított** (`lib/core/audio/**`, `lib/core/camera/**`,
+`lib/features/**`, `lib/core/foundation/app_failure.dart`, `android/**`,
+`tools/**` végig érintetlen — tilos zóna):
+
+- `lib/core/resources/resource_priority.dart` — rendezett enum
+  (`liveAudio` > `cameraFeedback` > `backgroundAi`), `outranks()`; a döntetlen
+  NEM előz.
+- `lib/core/resources/resource_consumer.dart` — absztrakt fogyasztói szerződés
+  (`acquire` / `release` / `pauseForHigherPriority` / `resume` + `isActive` /
+  `isSuspended`); egyetlen konkrét koordinátor-típust sem ismer.
+- `lib/core/resources/resource_arbiter.dart` — a döntő + zárt
+  `ResourceDecision` eredménytípus, `releaseConsumer()` /
+  `onMemoryPressureRelieved()` visszaúttal.
+- `test/core/resources/resource_arbiter_test.dart` (**11 cella**),
+  `test/e2e/resource_coexistence_test.dart` (**2 cella**),
+  `docs/contracts/resource-coexistence.md`.
+
+**A D2 nem ígéret, hanem szerkezeti tulajdonság.** Az arbiternek **nincs
+referenciája** egyik koordinátorra sem (`lib/core/` nem importálhat
+`lib/features/`-t, és a szerződés absztrakt), ezért a lease elvétele nem is
+kifejezhető benne — az [ADR 0056](docs/adr/0056-exclusive-microphone-session.md)
+„busy failure, not steal" döntése nem gyengülhet. Az A2 cella ezt a VALÓDI
+`AudioSessionCoordinator`-on méri: felfüggesztés után a lease él, és a második
+kérő továbbra is `audio.session_busy`-t kap.
+
+**A pre-flight három mért felfedezése.** (1) **Low-memory jelzés a fán NEM
+létezik** (`grep -rni 'memorypressure|didHaveMemoryPressure|lowMemory|low_memory'
+lib/ test/` → 0 találat) — az A4 ezért az arbiter SAJÁT `onMemoryPressure()`
+belépési pontjára mér, nem platform-csatornára. (2) A kamera-lease-t ma
+kizárólag `lib/features/vision/**` szerzi meg (tilos zóna), tehát az arbiter
+egyetlen képernyőre sincs bekötve — az A3 ezért a **valódi**
+`CameraSessionCoordinator` állapotán mér (`activeOwner == null` ÉS
+`lease.isActive == false`), nem a bekötetlen app-fán
+([L453](docs/LESSONS.md#l453)), sima `test()`-ben az
+[L513](docs/LESSONS.md#l513) fake-clock fagyás-csapdája miatt. (3) Az ADR száma
+a foglalótól **0476**, nem a batch-terv `0455`-e.
+
+**1 javító kör — a review 2 MAJOR-t talált TELJESEN ZÖLD gate mellett** (7/7
+lépés, 6/6 acceptance-cella), és mindkettő ugyanabból a mintázatból jött, mint
+az [L549](docs/LESSONS.md#l549): *a mechanizmus MEGLÉTE ki volt kényszerítve, a
+JELENTÉSE nem.*
+
+- **F1** — a szerződés-doksi azt állította, hogy az A5 méri a „fogyasztó
+  `cancel`-lel valósítja meg a `pause`-t" sértést. **Mérve nem mérte:** egy
+  szándékosan `cancel`-ként megírt fogyasztó a teljes készleten ZÖLDEN átment.
+  A brief §6.1 mátrix sora kétértelmű volt (arbiter-oldali vs. fogyasztó-oldali
+  olvasat), és a cella csak az elsőt fedte — pont a rossz oldalt, hiszen az
+  interfész implementálói későbbi körök ([L552](docs/LESSONS.md#l552)).
+- **F2** — a felfüggesztésből **nem volt visszaút**: a magasabb prioritású
+  fogyasztó befejezése után a felfüggesztett örökre felfüggesztve maradt
+  (`resumeCalls == 0`), és `onMemoryPressure()` a felhasználó ÉPPEN FUTÓ
+  gyakorlását is némán leállíthatta. Ez a brief §1 céljában szó szerint
+  nevesített „néma elakadás" ([L553](docs/LESSONS.md#l553)).
+
+A javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r15-review.md`](docs/reviews/e12-r15-review.md)). A zárás
+nem a zöld gate-tel, hanem a reviewer saját, izolált klónban futtatott
+**Q1–Q5 próbájával** történt: a visszaút, a *részleges* visszaút (a `camera`
+folytatódik, de a `backgroundAi` felfüggesztve marad, amíg a `camera` aktív) és
+az is mérve van, hogy egy már elengedett fogyasztót a resume-pass **nem támaszt
+fel**.
+
+**Egy infrastruktúra-lecke is mérve:** az első Full Gate futás PIROS volt, de
+**nem a kör diffje miatt** — a randomizált HARD property-lépés
+(`PROPERTY_SEED=github.run_id`) bukott a `dsp_property_test.dart:438` „a strum
+must merge into ONE onset" celláján (`17` a `>= 18` küszöb helyett, 20
+próbából), miközben a kör diffje DSP-re hatástalan. Ugyanazon a kódon a merge
+SHA-n zöld. A 18/20 = 90 %-os küszöb EGYETLEN próba elcsúszására pirosra vált —
+a H5-számlálóba csak a diff-releváns pirosakat szabad bevenni
+([L554](docs/LESSONS.md#l554)).
+
 ## ✅ E12-R14 KÉSZ — Performance budget harness — PR [#505](https://github.com/wolfcasaba/strumsight/pull/505), squash `449783e8` (2026-08-29)
 
 A Ch12 **Kör 14** mércéje: a fán tizenhat baseline-dokumentum élt Markdownban,
@@ -9458,46 +9537,49 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-29):** `main` @ `449783e8` — E12-R14 Performance
-budget harness, PR [#505](https://github.com/wolfcasaba/strumsight/pull/505),
-squash-merge. Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer
-Claude Opus 5, **1 javító kör** — a review **2 MAJOR**-t talált TELJESEN ZÖLD
-gate mellett (6/6 lépés, 33/33 cella): az összevetés a puszta metrika-NÉVRE
-kulcsolt, ezért két KÜLÖNBÖZŐ eszközön mért érték némán `pass`-t kapott, és
-azonos metrika-nevű második rekord elnyelte az elsőt. A javító kör után
-APPROVED, 0 nyitott lelet
-([`docs/reviews/e12-r14-review.md`](docs/reviews/e12-r14-review.md)).
-`risk = "normal"`, a diff nem érint hálózatot/hitelesítést/felhasználói adatot
-(séma + offline Python összehasonlító + dokumentum + tooling-teszt), ezért külön
-`security-reviewer` nem futott. A kör ADR-je:
-[ADR 0474](docs/adr/0474-benchmark-record-and-performance-budget-comparison.md)
-(D1–D9). Exact-SHA evidencia a merge SHA-n (`60d711e9`): Full Gate
-[33238118552](https://github.com/wolfcasaba/strumsight/actions/runs/33238118552),
+**Aktuális állapot (2026-08-29):** `main` @ `949cd274` — E12-R15 Audio, camera
+és local AI resource coexistence, PR
+[#506](https://github.com/wolfcasaba/strumsight/pull/506), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
+Opus 5, **1 javító kör** — a review **2 MAJOR**-t talált TELJESEN ZÖLD gate
+mellett (7/7 lépés, 6/6 acceptance-cella): a szerződés-dokumentum olyan mérést
+állított, ami nem létezett (F1), és a felfüggesztésből nem volt visszaút (F2 —
+a kör saját céljában nevesített „néma elakadás"). A javító kör után APPROVED,
+0 nyitott lelet
+([`docs/reviews/e12-r15-review.md`](docs/reviews/e12-r15-review.md)).
+`risk = "normal"`, a diff nem érint hálózatot, hitelesítést, tárolást vagy
+felhasználói adatot (tisztán `lib/core/` domain-logika + teszt + dokumentum),
+ezért külön `security-reviewer` nem futott. A kör ADR-je:
+[ADR 0476](docs/adr/0476-resource-coexistence-priority-and-suspension-contract.md)
+(D1–D7). Exact-SHA evidencia a merge SHA-n (`6222f521`): Full Gate
+[33241878432](https://github.com/wolfcasaba/strumsight/actions/runs/33241878432),
 Router CI
-[33238136574](https://github.com/wolfcasaba/strumsight/actions/runs/33238136574)
+[33241875691](https://github.com/wolfcasaba/strumsight/actions/runs/33241875691)
 — mindkettő `success`. A landolás `tools/round-land.sh`-sal, merge-záron
-keresztül ment (párhuzamos E15 sáv), kombinált-HEAD gate 6/6 zöld.
+keresztül ment. **Egy korábbi Full Gate futás (`33240406764`, a javítás ELŐTTI
+SHA-n) piros volt, de a kör diffjén kívül** — a randomizált DSP
+property-cellán, seed-függően ([L554](docs/LESSONS.md#l554)).
 
 ## 5. Last completed round
 
-**E12-R14 — Performance budget harness** (PR
-[#505](https://github.com/wolfcasaba/strumsight/pull/505), squash `449783e8`).
-A tizenhat Markdown baseline-dokumentum FÖLÉ egyetlen verziózott, géppel olvasható
-rekord-séma került: `tool/benchmarks/benchmark_record.dart` (11 kötelező mező,
-zárt `deviceId`-szótár a Kör 13 mátrixából), `docs/performance/baseline.json`
-(**26 bejegyzés**, mind létező forrásra hivatkozva) és `tool/compare_benchmarks.py`
-(`(metric, deviceId)` kulcs, 5,0 % warn / 10,0 % fail, **mindkét határ
-inkluzív**, a fájlban rögzítve). A kapu 42 cellás, a `python3` eszközt skip-ág
-nélkül méri. **A pre-flight mért felfedezése:** a baseline-számok négy, össze nem
-keverhető osztályba esnek (`measured` / `upperBound` / `derivedContract` /
-`target`), és a fán MA csak 6 valódi mérés van — a séma ezért `kind` mezőt visel
-és csak `measured` ↔ `measured` párt hasonlít; a `direction` mező pedig
-alapérték nélkül kötelező, mert a vision FPS-célok `higherIsBetter`. **Nem mért
-adat nem került be:** minden bejegyzés `ci_host`, mert fizikai eszközös benchmark
-ma nincs. **1 javító kör**, mindkét MAJOR mérve zárva
-([L549](docs/LESSONS.md#l549)); review APPROVED. A kör egyetlen DSP/ML paramétert
-sem módosított (AGENTS.md §9), és NEM írt CI-workflow-t — a benchmark
-CI-integrációja külön kör.
+**E12-R15 — Audio, camera és local AI resource coexistence** (PR
+[#506](https://github.com/wolfcasaba/strumsight/pull/506), squash `949cd274`).
+A két, egymásról mit sem tudó kizárólagos koordinátor (mikrofon, kamera) FÖLÉ
+került egy prioritási réteg: `ResourcePriority` (`liveAudio` >
+`cameraFeedback` > `backgroundAi`), az absztrakt `ResourceConsumer` szerződés
+és a `ResourceArbiter`. Az arbiter **nem vesz el lease-t** — szerkezetileg sem
+tudna, mert egyik koordinátorra sincs referenciája ([ADR 0056](docs/adr/0056-exclusive-microphone-session.md)
+és [ADR 0184](docs/adr/0184-vision-camera-capture-stack.md) érintetlen —, csak
+a kérések SORRENDJÉT és az alacsonyabb prioritásúak MEGŐRZŐ felfüggesztését
+szabályozza, `releaseConsumer()` / `onMemoryPressureRelieved()` visszaúttal.
+13 cella (11 + 2). **A pre-flight mérése formálta a kört:** low-memory jelzés a
+fán nincs, és a kamera-lease-t ma csak a tilos zónában lévő vision-controllerek
+szerzik meg — ezért a cellák a VALÓDI koordinátorokon mérnek, nem a bekötetlen
+app-fán. **1 javító kör**, mindkét MAJOR gépi őrrel zárva
+([L552](docs/LESSONS.md#l552), [L553](docs/LESSONS.md#l553)); review APPROVED.
+A helyi AI **absztrakt fogyasztó marad** — a valódi futtató az Epic 10 Kör 12
+dolga (a sáv `hold`-on áll), és az arbiternek MA egyetlen production hívója
+sincs: a bekötés külön kör.
 
 ## 6. Exact next task
 
@@ -9509,32 +9591,20 @@ CI-integrációja külön kör.
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ▶️ **A KÖVETKEZŐ KÖR: `E12-R15`** (motor: `sonnet-impl`, brief:
-> `docs/rounds/e12-r15-resource-coexistence-policy.md`, ADR-oszlop: `0455` —
-> **terv, nem foglalás**: a valós tartomány a `0474` FÖLÖTT jár, a számot a
-> foglalótól kérd, [L547](docs/LESSONS.md#l547)).
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R14
-> zárása után): **275 `done`, 40 `hold`, 18 `prepared`, 31 `pending`**.
+> ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
+> `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R15
+> zárása után): **276 `done`, 40 `hold`, 18 `prepared`, 30 `pending`**.
 >
-> ⚠ Az E12-R14 lezárta a benchmark-SZERZŐDÉST, de a MÉRÉST nem: minden
-> `docs/performance/baseline.json` bejegyzés `deviceId: ci_host`, mert ezen a
-> boxon **nincs Android SDK és nincs device-farm** — az eszközös elfogadás
-> emberi kapu, nem merge-feltétel. Ami MÉG NEM történt meg és külön kör:
-> (a) a benchmark CI-ba kötése (`.github/workflows/benchmark.yml`, SDD Ch12 —
-> az E12-R14 tilos zónája volt), (b) a `tool/benchmarks/` meglévő két eszközének
-> a közös sémára adaptálása, (c) a `docs/baseline/**` további dokumentumainak
-> felvétele a `baseline.json`-ba. Aki fizikai eszközre mér, a Kör 13 zárt
-> szótárát használja (`pixel_6a`, `pixel_7`, `samsung_galaxy_a54`,
-> `xiaomi_redmi_note_12`) — **új készüléknevet kitalálni tilos**
-> ([ADR 0474](docs/adr/0474-benchmark-record-and-performance-budget-comparison.md) D2).
->
-> 🎯 **A Chapter 15 UI-sáv következő köre: `E15-R04`** — a hat `retire`-javaslat
-> review-ja és (jóváhagyás esetén) végrehajtása. A bemenete KÉSZ és MÉRT:
-> [`docs/ui/retirement-plan.md`](docs/ui/retirement-plan.md) §5 (indok +
-> felváltó képernyő tételesen), a kör-hozzárendelés pedig a §4-ben
-> (`E15-R05`…`E15-R11` a 35 `migrate` képernyőre). **Ez az első kör, amelyik
-> felhasználói útvonalat SZÜNTETHET MEG** — az ADR 0471 D5 szerint a
-> retirement-plan JAVASLAT, a végrehajtás önálló, review-zott döntés.
+> ⚠ **Az E12-R15 arbiterének MA egyetlen production hívója sincs** — ez
+> szándékos (a bekötés `lib/features/**` és `mic_capture.dart`, mindkettő a kör
+> tilos zónája volt). A bekötő körnek két dolgot KELL tudnia: (1) az arbiter
+> csak akkor tud a visszaútról, ha a befejezés a `releaseConsumer()`-en megy
+> keresztül — a közvetlen `consumer.release()` a felfüggesztett társakat
+> felfüggesztve hagyja (kimondva a szerződés-doksiban); (2) az
+> `onMemoryPressure()` / `onMemoryPressureRelieved()` jelzésforrása
+> (app-lifecycle observer) **még nincs bekötve**, mert a fán ma nincs
+> low-memory jelzés.
 
 > ⚠ Az ADR-számot a körben MINDIG a foglalótól kérd
 > (`tools/round-slots.py reserve-adr --round <kör>`) — de **a foglaló sem
