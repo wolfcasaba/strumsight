@@ -422,4 +422,106 @@ fájllistán.
 kizárólag olvasásra/importálásra került (a fixture-alapú tesztek saját,
 `Directory.systemTemp`-be írt másolatokat használnak).
 
+### 10.6 Javító kör (`sonnet-impl`, 2. menet) — a review 1 MAJOR + 1 MINOR leletére
+
+A review (`docs/reviews/e12-r16-review.md`, 1. menet) két leletet talált:
+MAJOR-1 (a kapu lefedettsége némán törölhető) és MINOR-1 (a `WARN_THRESHOLD`
+/ `FAIL_THRESHOLD` import halott). Mindkettőt javítottam, az engedélyezett
+fájllistán belül.
+
+**MINOR-1 javítás:** a `build_report()` (`tool/release/build_ai_report.py`)
+mostantól a riport top-level `thresholds` mezőjébe írja ki az importált
+`WARN_THRESHOLD`/`FAIL_THRESHOLD` értékeket (`{"warn": 0.05, "fail": 0.10}`
+alakban, de a forrásban továbbra sincs `0.05`/`0.10` literál — az érték a
+Python-importból jön). A séma (`ai_report_schema.json`) a `thresholds`
+mezőt top-level kötelezővé teszi, `warn`/`fail` almezőkkel. Új teszt-cella
+(A4 csoport) a riport `thresholds` mezőjét a `tool/compare_benchmarks.py`-ból
+`python3 -c`-vel FUTÁSKOR kiolvasott értékkel veti össze — nem Dart-literál,
+tehát nincs második forrás.
+
+**MAJOR-1 javítás:** új „Pinned coverage" teszt-csoport
+(`test/tooling/ai_release_report_test.dart`) a SZÁLLÍTOTT
+`docs/release/ai-quality-gates.md`-t és a SZÁLLÍTOTT
+`docs/testing/device-matrix.yaml`-t olvassa (nem fixture-t), és PIROS, ha
+az `audio_analysis_core` vagy a `live_and_tuner` sora hiányzik a
+gate-táblából, VAGY ezek bármelyike a device-mátrixban már nem
+`ga_scope: true`. A `docs/release/ai-quality-gates.md`-hez egy rövid §4
+szakasz került, amely kimondja, hogy ez a két sor kipinnelt lefedettség, és
+a törlésük a kaput PIROSRA váltja.
+
+**Valódi-sértés próba (MAJOR-1, KÖTELEZŐ):**
+
+```
+$ grep -v "^| audio_analysis_core \|^| live_and_tuner " \
+    docs/release/ai-quality-gates.md > /tmp/gutted.md
+$ cp /tmp/gutted.md docs/release/ai-quality-gates.md
+$ tools/round-gate.sh test/tooling/ai_release_report_test.dart
+```
+
+Eredmény: PONTOSAN az új „Pinned coverage" cella vált PIROSRA (a többi 24
+cella zöld maradt) —
+
+```
+00:01 +18 -1: Pinned coverage — ... the shipped docs/release/ai-quality-gates.md
+              gate table names both pinned capabilities ... [E]
+  Expected: contains 'audio_analysis_core'
+    Actual: Set:['computer_vision']
+     Which: does not contain 'audio_analysis_core'
+  docs/release/ai-quality-gates.md no longer has a gate-table row for
+  "audio_analysis_core" — deleting this row turns the release gate GREEN by
+  making the capability disappear from the report entirely, instead of
+  measuring it and turning it RED. Restore the row; do not edit this cell
+  to pass.
+
+    → [3] test test/tooling/ai_release_report_test.dart: PIROS (kilépési kód 1)
+```
+
+Ezután a fájlt visszaállítottam (`cp` a mentett eredetiről), `git status
+--short` semmi maradék eltérést nem mutatott, majd a §7 gate-et újra
+lefuttattam — mind a 7 lépés zöld, 25/25 teszt-cella zöld (a review előtti
+22 + 1 MINOR-1 cella + 2 MAJOR-1 „Pinned coverage" cella).
+
+```
+$ tools/round-gate.sh test/tooling/ai_release_report_test.dart test/tooling/analysis_evaluation_regression_test.dart
+═══ [1] format
+    → [1] format: ZÖLD
+═══ [2] analyze
+No issues found! (ran in 5.9s)
+    → [2] analyze: ZÖLD
+═══ [3] test test/tooling/ai_release_report_test.dart
+00:01 +25: All tests passed!
+    → [3] test test/tooling/ai_release_report_test.dart: ZÖLD
+═══ [4] test test/tooling/analysis_evaluation_regression_test.dart
+00:00 +8: All tests passed!
+    → [4] test test/tooling/analysis_evaluation_regression_test.dart: ZÖLD
+═══ [5] architecture
+Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [5] architecture: ZÖLD
+═══ [6] secrets
+Secret scan OK (4067 file(s) scanned, 0 finding(s)).
+    → [6] secrets: ZÖLD
+═══ [7] l10n
+L10n aggregate freshness OK (en, hu).
+L10n parity OK (en → hu, 2291 message(s)).
+    → [7] l10n: ZÖLD
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/ai_release_report_test.dart              zöld
+    test test/tooling/analysis_evaluation_regression_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.
+```
+
+(A fenti a tényleges futás rövidített — a `flutter pub get` függőség-lista
+nélküli — másolata; a valódi futás minden lépése külön processzben,
+csonkítás nélkül futott.)
+
+**Amit a javító kör NEM érintett:** `ml/**`, `lib/**`, `evaluation/**`,
+`docs/eval/**`, `.github/**`, `docs/adr/**`, `tools/**`,
+`test/fixtures/**`, `docs/testing/**`, `assets/**`,
+`tool/compare_benchmarks.py` — egyik sem módosult ebben a menetben sem.
+
 ## 11. Review — a Claude tölti ki
