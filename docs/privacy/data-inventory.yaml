@@ -1,0 +1,227 @@
+# Privacy data inventory (E12-R17, ADR 0479)
+#
+# Machine-checked by tool/check_data_inventory.dart (test/tooling/data_inventory_test.dart
+# is the CI-visible gate). The checker does NOT trust this file — it independently
+# walks lib/** for every class that actually touches an HTTP transport (ADR 0479 D1)
+# and requires a `source:` entry below for each one it finds. Do not add a route here
+# that the tree does not also produce; do not remove one the tree still produces.
+#
+# `wired: false` routes are real code paths with NO production construction site in
+# lib/** yet (measured — grep finds no caller). Their `fields` describe what WOULD
+# leave the device once a future round wires them; `leaves_device` stays `false`
+# until that happens, because today nothing on that path reaches the network.
+#
+# `rides: <route id>` (E12-R17 javító kör #1, MAJOR-2) marks a route as a THIN entry
+# for a measured egress-producing class that shares another route's transport/consent
+# gate one-for-one — e.g. every `ApiClient`-consuming repository riding the same
+# `accountApiClientProvider` as `account_api`. A `rides` route may omit `fields`; its
+# data already appears under the target route. The checker verifies the target id
+# exists and itself has at least one field — a dangling or self-referential `rides`
+# fails the check, it is not free text.
+#
+# Schema (enforced by A1, test/tooling/data_inventory_test.dart):
+#   route:  id, source, file, wired (bool), gate, consent_switch,
+#           rides (optional route id — see above), fields (>=1 unless `rides` is set)
+#   field:  name, purpose, legal_basis, retention, storage, leaves_device (bool)
+#
+# Scope (MINOR-5, E12-R17 javító kör #1): this document inventories EGRESS routes —
+# data that LEAVES the device — per the round brief §3, not on-device storage.
+# `lib/core/storage/storage_keys.dart` declares 56 persisted keys; NONE of them are
+# inventoried here, on purpose — an on-device storage inventory is a separate, not-
+# yet-started follow-up task (see docs/privacy/consent-enforcement.md's "What this
+# document does not cover"), named explicitly so the gap is a declared boundary, not
+# a silent blind spot.
+
+routes:
+  - id: account_api
+    source: "DioFactory.createAccountClient"
+    file: "lib/core/network/dio_factory.dart:32"
+    wired: true
+    gate: "FeatureFlags.accountEnabled at client construction, plus a per-request auth session-generation check"
+    consent_switch: "auth session-generation (_AuthSessionGeneration.advance / _AuthSessionCredentials.clear in lib/features/auth/providers/auth_providers.dart), read per-request by AuthInterceptor.onRequest (lib/core/network/auth_interceptor.dart:50,73) — a cleared/stale generation rejects the request before it reaches the transport adapter"
+    fields:
+      - name: "email"
+        purpose: "account authentication — login/register identifier"
+        legal_basis: "contract"
+        retention: "backend, for the lifetime of the account (backend/** has no measured client-triggered account-deletion endpoint as of this round)"
+        storage: "backend"
+        leaves_device: true
+      - name: "password"
+        purpose: "account authentication — login/register credential"
+        legal_basis: "contract"
+        retention: "backend, per the account service's own hashing/storage policy (out of this client-side round's scope)"
+        storage: "backend"
+        leaves_device: true
+      - name: "settings_profile (theme_mode, locale, confidence_threshold, tuning_a4)"
+        purpose: "cross-device settings sync for a signed-in user (lib/features/settings/providers/settings_sync.dart)"
+        legal_basis: "contract"
+        retention: "backend, replaced on every confirmed push; kept for the lifetime of the account"
+        storage: "device (local settings, always) and backend (synced copy, only while signed in)"
+        leaves_device: true
+      - name: "community_profile (handle, display_name, visibility, audience_default)"
+        purpose: "public community identity created when the user opts into Community"
+        legal_basis: "contract"
+        retention: "backend, for the lifetime of the account/profile"
+        storage: "backend"
+        leaves_device: true
+      - name: "community_social_graph (follow/unfollow/block/mute target ids)"
+        purpose: "social-graph edges the user creates by interacting with Community"
+        legal_basis: "contract"
+        retention: "backend, for the lifetime of the relationship record"
+        storage: "backend"
+        leaves_device: true
+      - name: "community_challenge_activity (invite/accept/decline/cancel/submit_result payloads)"
+        purpose: "challenge participation state"
+        legal_basis: "contract"
+        retention: "backend, for the lifetime of the challenge/account"
+        storage: "backend"
+        leaves_device: true
+
+  - id: diagnostics_upload
+    source: "DioFactory.createDiagnosticsClient"
+    file: "lib/core/network/dio_factory.dart:51"
+    wired: true
+    gate: "FeatureFlags.diagnosticsEnabled at client construction, AND diagnosticsConsentProvider (default false, fail-closed) re-read at every upload call"
+    consent_switch: "diagnosticsConsentProvider (lib/features/diagnostics/providers/diagnostics_providers.dart:16) — read by DiagnosticsUploadNotifier.upload before building the session, and re-checked as the consentGranted argument inside DiagnosticsUploader.upload (lib/features/diagnostics/data/diagnostics_uploader.dart:52)"
+    fields:
+      - name: "ml_dsp_comparison_events (tSec, mlChord, dspChord, agree, mlConf, dspConf, strumDir, bpm, inputLevel)"
+        purpose: "Lab-mode ML-vs-DSP chord-detection diagnostics, explicitly opted into"
+        legal_basis: "consent"
+        retention: "backend; the upload is a one-shot best-effort POST with no client-measured deletion path"
+        storage: "backend"
+        leaves_device: true
+      - name: "audio_clip (raw 16-bit WAV, base64, decimated to fit a ~5MB pre-encode cap)"
+        purpose: "the recorded clip a diagnostics event was measured from, for offline model debugging"
+        legal_basis: "consent"
+        retention: "backend; no client-measured deletion path"
+        storage: "backend"
+        leaves_device: true
+      - name: "device_metadata (appVersion, device platform string)"
+        purpose: "diagnostics correlation — which build/platform produced the session"
+        legal_basis: "consent"
+        retention: "backend, tied to the diagnostics session record"
+        storage: "backend"
+        leaves_device: true
+
+  - id: tutor_stream
+    source: "HttpTutorStreamTransport"
+    file: "lib/features/ai_tutor/data/model_gateway/http_tutor_stream_transport.dart:16"
+    wired: false
+    gate: "TutorConsent.modelUseGranted is read by reduceTutorTurn (lib/features/ai_tutor/application/orchestration/tutor_orchestrator.dart:47) before any gateway is created, and mirrored by LocalTutorFallback (lib/features/ai_tutor/application/offline/local_tutor_fallback.dart:120) for the offline capability summary — the gate itself is sound. MEASURED GAP (E12-R17 javító kör #1, MAJOR-3): the ONLY production TutorTurnRequest construction site, _previewTurnRequest (lib/features/ai_tutor/presentation/providers/tutor_providers.dart:433,438), hardcodes `consent: const TutorConsent(modelUseGranted: true)` and never reads tutorConsentControllerProvider (lib/features/ai_tutor/presentation/providers/tutor_privacy_providers.dart:75) — the provider tutor_privacy_screen.dart writes a user's revocation to. So a revocation today changes a value nothing in lib/** ever reads back into a turn request. This is NOT yet a leak only because there is also no lib/** call site that constructs an HttpTutorStreamTransport — the turn path only ever runs a local/fake gateway. If a future round wires the cloud transport WITHOUT first fixing _previewTurnRequest, a revoked user's messages would still reach it; test/privacy/consent_enforcement_test.dart's MAJOR-3 guard cell is a machine pin against exactly that, and fails the moment it happens."
+    consent_switch: "TutorConsent.modelUseGranted (lib/features/ai_tutor/domain/models/tutor_consent.dart) — read correctly by reduceTutorTurn, but NOT wired to tutorConsentControllerProvider from the only production request-builder; see gate above."
+    fields:
+      - name: "tutor_turn_message (student free-text message + assembled context snapshot fields)"
+        purpose: "cloud-model tutor turn — POST /tutor/stream, once a production construction site exists"
+        legal_basis: "consent"
+        retention: "not measurable yet — no production transport construction site exists in lib/**"
+        storage: "backend, once wired"
+        leaves_device: false
+
+  - id: community_media
+    source: "CommunityMediaUploader"
+    file: "lib/features/community/data/api/community_media_uploader.dart"
+    wired: false
+    gate: "none today — the uploader accepts an injected Dio; the brief's HTTP wiring (fetching the presigned-upload intent, choosing which Dio to inject) is a Kör 19+ task (ADR 0410 / ADR 0479)"
+    consent_switch: "none yet — no production construction site exists; the intended gate is the same account-session mechanism the rest of Community rides on (communityApiClientProvider reuses accountApiClientProvider)"
+    fields:
+      - name: "community_media_bytes (image/video attachment bytes for a presigned PUT)"
+        purpose: "community post/media attachment upload, once wired"
+        legal_basis: "consent"
+        retention: "not measurable yet — no production construction site exists in lib/**"
+        storage: "backend object store, once wired"
+        leaves_device: false
+
+  # MAJOR-1 (E12-R17 javító kör #1) — the tree's ShareService (share_plus) route.
+  # Every call site is an explicit button onPressed handler (measured, grep —
+  # share_preview_screen.dart:132,160; wrapped_preview_screen.dart:42;
+  # lesson_score_preview_screen.dart:46; strum_reel_screen.dart:217;
+  # library_item_detail_screen.dart:186; export_analysis_use_case.dart:88 behind its
+  # own explicit preview+confirm step, ADR 0247) — there is no background/automatic
+  # share path anywhere in lib/**.
+  - id: share_export
+    source: "ShareService"
+    file: "lib/features/share/share_service.dart:15"
+    wired: true
+    gate: "user-initiated only — every ShareService call site is an explicit button onPressed handler; ExportAnalysisUseCase.share additionally requires the AnalysisExportScreen preview to have been shown and confirmed before it runs (lib/features/audio_analysis/application/export_analysis_use_case.dart:13-21)"
+    consent_switch: "none — a share is the user's own act of choosing to hand data to an OS-level, user-chosen destination app, not a StrumSight-controlled destination, so there is no revocable switch to document. ExportAnalysisUseCase.share (export_analysis_use_case.dart:62,66) applies RedactionPolicy.apply to the JSON export payload BEFORE it reaches ShareService.shareExportFile (measured: redaction_policy.dart is imported and called there). shareCard/shareImage/shareText do NOT run RedactionPolicy — they carry only the rendered card PNG plus a caption built from ShareContent (chords/strum-glyph sequence/BPM/optional session title), which never includes free-form user data beyond the optional title (measured: no RedactionPolicy reference in share_content.dart or share_service.dart)."
+    fields:
+      - name: "strum_card_png (rendered on-screen 'Strum Card' capture)"
+        purpose: "user-chosen share of a practice card image to an OS-level destination app via the share sheet"
+        legal_basis: "consent (the user's own explicit share action)"
+        retention: "not applicable — a share sheet is a one-shot, OS-arbitrated hand-off to whichever destination app the user picks; StrumSight has no further custody once the OS share intent completes"
+        storage: "device (temp file written by ShareService._writeTemp; its post-share lifecycle is owned by the OS/destination app, not tracked further by this codebase)"
+        leaves_device: true
+      - name: "share_caption (chords, strum-glyph sequence, BPM, optional session title only if includeTitle=true, install link, hashtags)"
+        purpose: "the social caption accompanying a share"
+        legal_basis: "consent"
+        retention: "not applicable — see strum_card_png"
+        storage: "n/a — generated in memory per share call, never persisted to disk"
+        leaves_device: true
+      - name: "redacted_analysis_export_json (RedactionPolicy-filtered allowlist view of an AnalysisDocument)"
+        purpose: "user-initiated JSON export/share of an analysis session, after an explicit preview + confirm step (ADR 0247)"
+        legal_basis: "consent"
+        retention: "not applicable — see strum_card_png"
+        storage: "device (temp file; ShareService.shareExportFile's own try/finally deletes it regardless of share outcome)"
+        leaves_device: true
+
+  # MAJOR-2 (E12-R17 javító kör #1) — the six measured lib/** classes that field an
+  # ApiClient and call a request-verb method on it. Five ride the SAME account-session
+  # ApiClient as account_api (auth/settings/community all construct their ApiClient via
+  # accountApiClientProvider or a provider that itself just re-exports it — measured,
+  # lib/features/community/data/repositories/{profile,relationship,challenge}_repository_impl.dart
+  # each define `Provider<ApiClient?>((ref) => ref.watch(accountApiClientProvider))`).
+  # DiagnosticsUploader rides the separate diagnostics ApiClient instead. Each entry
+  # below carries no fields of its own — see `rides` schema note at the top of this file.
+  - id: account_api_auth_repository
+    source: "HttpAuthRepository"
+    file: "lib/features/auth/data/auth_repository.dart:22"
+    wired: true
+    gate: "rides account_api — same FeatureFlags.accountEnabled + AuthInterceptor per-request session check"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_settings_repository
+    source: "HttpSettingsRepository"
+    file: "lib/features/settings/data/settings_repository.dart:70"
+    wired: true
+    gate: "rides account_api — same FeatureFlags.accountEnabled + AuthInterceptor per-request session check"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_community_profile_repository
+    source: "HttpCommunityProfileRepository"
+    file: "lib/features/community/data/repositories/profile_repository_impl.dart:100"
+    wired: true
+    gate: "rides account_api via communityApiClientProvider, which re-exports accountApiClientProvider verbatim (profile_repository_impl.dart:49-50)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_social_graph_repository
+    source: "HttpSocialGraphRepository"
+    file: "lib/features/community/data/repositories/relationship_repository_impl.dart:141"
+    wired: true
+    gate: "rides account_api via communitySocialApiClientProvider, which re-exports accountApiClientProvider verbatim (relationship_repository_impl.dart:43-44)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_community_challenge_repository
+    source: "HttpCommunityChallengeRepository"
+    file: "lib/features/community/data/repositories/challenge_repository_impl.dart:120"
+    wired: true
+    gate: "rides account_api via communityChallengeApiClientProvider, which re-exports accountApiClientProvider verbatim (challenge_repository_impl.dart:46-47)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: diagnostics_upload_uploader
+    source: "DiagnosticsUploader"
+    file: "lib/features/diagnostics/data/diagnostics_uploader.dart:20"
+    wired: true
+    gate: "rides diagnostics_upload — same FeatureFlags.diagnosticsEnabled + diagnosticsConsentProvider re-check described there"
+    consent_switch: "rides diagnostics_upload — see that route's consent_switch"
+    rides: "diagnostics_upload"
+    fields: []

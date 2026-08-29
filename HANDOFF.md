@@ -1,5 +1,32 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R17 KÉSZ — Privacy adat-leltár és consent enforcement — PR [#509](https://github.com/wolfcasaba/strumsight/pull/509), squash `6ead9581` (2026-08-29)
+
+A Ch12 **Kör 17** géppel olvasható **adat-leltárt** (`docs/privacy/data-inventory.yaml`,
+**11 route**), egy **fa-bejáró teljesség-ellenőrzőt** (`tool/check_data_inventory.dart`)
+és MÉRT consent-kényszerítési bizonyítékot adott
+(`test/privacy/consent_enforcement_test.dart`). A kör `lib/**`-ot **nem** módosít.
+ADR: [0479](docs/adr/0479-privacy-data-inventory-and-consent-enforcement.md) (D1–D4).
+
+**A pre-flight két brief-premisszát cáfolt meg:** (1) **nincs** kliensoldali
+Community-consent kapcsoló (`grep -rn "consent" lib/features/community/` → 0
+találat), ezért az **A5 átírva** az account-session visszavonására — ami a fán MA a
+Community írás-útra ténylegesen hat; (2) az `ui_inventory` pin 94 helyett **96**. Az
+előre kiosztott `0457` ADR-szám is elavult volt — a foglaló `0479`-et adott.
+
+**A review 3 MAJOR-t fogott TELJESEN ZÖLD gate mellett** (a `security-reviewer`
+kötelező volt, `risk = "high"`): (1) a leltár kihagyta a `ShareService`
+(`share_plus`) ÉLŐ, eszközt elhagyó útját; (2) egy ÚJ `ApiClient`-alapú küldő
+**nulla** új route-ot termelt — a codebase leggyakoribb küldő-alakja; (3) a tutor
+consent-kapcsoló **nincs bekötve** a turn-útra (`_previewTurnRequest` konstans
+`modelUseGranted: true`-t drótoz be). Egy javító kör után APPROVED; a zárás a
+reviewer SAJÁT, eldobható klónban futtatott négy próbájával, nem a zöld gate-tel.
+
+> ⚠ **Nyitott, átvitt tétel:** a `_previewTurnRequest` (`lib/features/ai_tutor/presentation/providers/tutor_providers.dart:433,438`)
+> `lib/**`-javítása **önálló kört érdemel**. Ma nem szivárgás (a tutor cloud gateway
+> bekötetlen), és a leltár + a `consent_enforcement_test.dart` MAJOR-3 gépi őre
+> kikényszeríti, hogy a bekötés ne történhessen meg észrevétlenül.
+
 ## ✅ E12-R16 KÉSZ — AI és ML összesített release gate — PR [#507](https://github.com/wolfcasaba/strumsight/pull/507), squash `dd071f7d` (2026-08-29)
 
 A Ch12 **Kör 16** egyetlen, gépileg ellenőrizhető AI-release bizonyíték-kaput
