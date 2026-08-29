@@ -46,8 +46,18 @@ számára a felfüggesztés; az arbiter csak ezt a négy metódust hívja.
 `pauseForHigherPriority` **megőrző** művelet: a fogyasztó utána
 `resume`-mal folytatható, és tudja magáról, hogy fel van függesztve
 (`isSuspended`). Ez NEM `cancel` — egy fogyasztó, amelyik a felfüggesztést
-`cancel`-lel valósítja meg, sérti a szerződést (`resource_arbiter_test.dart`
-A5 méri).
+`cancel`-lel valósítja meg, sérti a szerződést. Ezt gépi őr méri:
+`resource_arbiter_test.dart` `checkResourceConsumerContract` /
+`runResourceConsumerContract` — egy újrahasznosítható konformancia-készlet,
+amely BÁRMELY `ResourceConsumer` implementációra méri, hogy `acquire` után
+aktív és nem felfüggesztett, `pauseForHigherPriority` után aktív marad ÉS a
+munkája megvan, `resume` után a munka megvan és folytatható, és mindkét
+művelet idempotens. Az F1 önvédő cellája bizonyítja, hogy egy szándékosan
+`cancel`-ként megírt fogyasztó (`_CancellingFakeConsumer`) ezen a készleten
+PIROSRA vált (`expectLater(checkResourceConsumerContract(...),
+throwsA(isA<TestFailure>()))`). Az A5 cella ettől függetlenül továbbra is
+él, de csak azt méri, hogy az ARBITER `pause`-t hív `release` helyett — a
+fogyasztó-oldali megőrzést a fenti konformancia-készlet méri.
 
 Ebben a körben a helyi AI **egyetlen konkrét megvalósítással sem
 rendelkezik** — az Epic 10 (`hold`-on álló sáv) dolga. A tesztek fake
@@ -88,6 +98,40 @@ Egy hívás a **legalacsonyabb** prioritású, aktív, nem felfüggesztett
 fogyasztót függeszti fel. Ismételt hívás alatt (elhúzódó nyomás) mindig a
 következő legalacsonyabbat éri — a legmagasabb prioritású aktív fogyasztó
 így garantáltan utoljára kerül sorra (`resource_arbiter_test.dart` A4).
+
+### A visszaút a felfüggesztésből (F2 javítás) — `releaseConsumer` / `onMemoryPressureRelieved`
+
+A felfüggesztésnek **van visszaútja** — a `request` és az `onMemoryPressure`
+sosem hagy örökre felfüggesztett fogyasztót maga után:
+
+| Belépési pont | Mikor hívja a hívó | Mit tesz |
+|---|---|---|
+| `releaseConsumer(consumer)` | A fogyasztó befejezte a munkáját (a korábbi közvetlen `consumer.release()` helyett EZT hívja, ha azt akarja, hogy az arbiter a visszautat is elintézze) | Meghívja `consumer.release()`-t, majd lefuttatja a visszaút-szabályt |
+| `onMemoryPressureRelieved()` | A hívó tudja, hogy a memória-nyomás elmúlt (ma nincs platform-jelzés erre — l. alább) | Ugyanazt a visszaút-szabályt futtatja, `release()` hívása nélkül |
+
+**A visszaút szabálya, azonos mindkét belépési ponton:** minden olyan
+felfüggesztett fogyasztót folytat (`resume()`), amelyet **már egyetlen
+aktív, nem felfüggesztett fogyasztó sem előz** — legmagasabb prioritástól
+lefelé haladva. Aki még mindig egy aktív, nem felfüggesztett fogyasztó
+alá van rendelve, felfüggesztve marad. Ez a D1/D2 sérelme nélkül teszi meg:
+lease-t nem vesz el, `revokeActive()`-ot nem hív, csak a saját maga által
+felfüggesztett fogyasztókon hívja a `resume()`-ot.
+
+**Részleges visszaút:** ha három szint mindegyike aktív volt, és a
+legmagasabb kettőt felfüggesztette (pl. `cameraFeedback`-et a `backgroundAi`
+felett is aktív `liveAudio` közvetve, láncoltan), a `liveAudio` befejezése
+után a `cameraFeedback` folytatódik, de amíg a `cameraFeedback` aktív
+marad, a `backgroundAi` felfüggesztve marad — a `cameraFeedback` továbbra
+is előzi (`resource_arbiter_test.dart` F2 „partial resume" cella).
+
+**Memória-nyomás visszaútja tudatosan a hívó dolga.** Az arbiternek nincs
+platform-jelzése arról, hogy a memória-nyomás elmúlt (ugyanaz a hiányzó
+bekötés, mint az `onMemoryPressure()`-nél, §0.0 R2) — ezért az
+`onMemoryPressureRelieved()` egy explicit belépési pont, amit annak kell
+hívnia, aki a nyomás elmúltát észleli (a jövőbeli app-lifecycle observer
+réteg). Amíg ez nincs bekötve, egy memória-nyomás miatt felfüggesztett
+fogyasztó felfüggesztve marad, amíg valaki explicit nem hívja ezt a
+metódust — ez KIMONDOTT, nem néma lyuk.
 
 ### Architektúra (D7)
 

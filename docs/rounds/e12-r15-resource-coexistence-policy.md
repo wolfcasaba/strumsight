@@ -337,6 +337,68 @@ a §7 gate-et újra lefuttattam: minden cella ismét ZÖLD (lásd fent), a
 munkafa a visszaállítás után bit-azonos a commitolt állapottal
 (`git diff --stat` üres).
 
-## 11. Review — a Claude tölti ki
+## 10.1 Javító kör 1 (F1–F5) — a review 2 MAJOR + 2 MINOR + 1 NOTE leletének zárása
+
+A review (`docs/reviews/e12-r15-review.md`, HEAD `1e4fb889`) két MAJOR-t adott
+vissza: mindkettő „a mechanizmus MEGLÉTE ki van kényszerítve, a JELENTÉSE
+nincs" mintájú. Az alábbi öt lelet mindegyike zárva:
+
+**F1 (MAJOR, a szerződés-doksi mért állítás nélkül állított)** —
+`test/core/resources/resource_arbiter_test.dart`-ba került egy
+újrahasznosítható konformancia-készlet:
+`Future<void> checkResourceConsumerContract({make, putWorkIn, readWork})`
+(a nyers `expect()`-lánc) és a rá épülő `runResourceConsumerContract(...)`
+(group/test-csomagolás). A készlet lefut a `_FakeConsumer`-en (ZÖLD), és
+KÉSZÜLT egy önvédő cella is: egy szándékosan `cancel`-ként megírt
+`_CancellingFakeConsumer` (a `pauseForHigherPriority()`-ban `state = ''`)
+`expectLater(checkResourceConsumerContract(...), throwsA(isA<TestFailure>()))`
+alá téve. **Mérve:** ez a cella a §10.2 gate-futáson ZÖLDEN ment át — ami azt
+jelenti, hogy a `checkResourceConsumerContract` a `_CancellingFakeConsumer`-re
+TÉNYLEG `TestFailure`-t dobott (konkrétan a „pauseForHigherPriority must
+preserve in-progress work" asszerción, mert a cancel-fogyasztó `isActive`-ja
+véletlenül igaz marad, de a munkája nem). A `docs/contracts/resource-coexistence.md`
+mondata frissült, hogy a `checkResourceConsumerContract`/
+`runResourceConsumerContract` készletre hivatkozzon az A5 helyett, és
+kimondja, mit mér valójában az A5 (az arbiter `pause`-t hív, nem `release`-t).
+
+**F2 (MAJOR, néma elakadás felfüggesztés után)** — a `ResourceArbiter` két új
+belépési pontot kapott: `releaseConsumer(consumer)` (meghívja
+`consumer.release()`-t, majd a visszaút-szabályt) és
+`onMemoryPressureRelieved()` (csak a visszaút-szabályt, a hívó jelzi, hogy a
+nyomás elmúlt — az arbiternek erre nincs platform-jelzése, ugyanaz a hiányzó
+bekötés, mint az `onMemoryPressure()`-nél). A közös `_resumeNoLongerOutranked()`
+minden felfüggesztett, még aktív fogyasztót folytat, amelyet MÁR egyetlen
+aktív, nem felfüggesztett fogyasztó sem előz — legmagasabb prioritástól
+lefelé, lease-elvétel vagy `revokeActive()` nélkül (D1/D2 érintetlen). Három
+új cella került a `resource_arbiter_test.dart`-ba (a review P1/P2 próbáinak
+megfelelője): teljes visszaút `releaseConsumer`-en át, részleges visszaút
+(három szint, a köztes szint aktív marad → az alatta lévő felfüggesztve
+marad), és memória-nyomás visszaútja `onMemoryPressureRelieved()`-en át. A
+`docs/contracts/resource-coexistence.md` új alszakaszt kapott a visszaút
+szabályára és a memória-nyomás visszaútjának tudatosan hívó-felelősségi
+jellegére.
+
+**F3 (MINOR, `==` vs `identical` identitás-keveredés)** — a
+`register()`/`unregister()` `.contains`/`.remove` (`==`-alapú) hívásait
+`identical`-alapú `.any`/`.removeWhere`-re cseréltem, egységesen a
+`request`/`onMemoryPressure`/az új visszaút-logikával.
+
+**F4 (MINOR, néma hibaelnyelés az adapterekben)** — `_AudioBackedConsumer.acquire()`
+(`resource_arbiter_test.dart`) és `_CameraBackedConsumer.acquire()`
+(`test/e2e/resource_coexistence_test.dart`) mindegyike kapott egy
+`expect(result.isSuccess, isTrue, reason: ...)`-t a `valueOrNull` kiolvasása
+előtt, hogy egy BUSY sose maradjon néma `null`-ként.
+
+**F5 (NOTE)** — a duplikált `## 11. Review — a Claude tölti ki` fejléc egyik
+példánya törölve.
+
+**A §7 gate MÉRT kimenete (zöld futás, csonkítás nélkül):**
+`tools/round-gate.sh test/core/resources/resource_arbiter_test.dart
+test/e2e/resource_coexistence_test.dart
+test/core/audio/audio_session_coordinator_test.dart
+test/core/camera/camera_session_coordinator_test.dart` →
+`format` → `analyze` → 4× `test <útvonal>` (rendre **11**, 2, 7, 8 zöld
+cella — a `resource_arbiter_test.dart` a javító kör előtti 6-ról 11-re nőtt:
++3 F2-cella, +2 F1-cella) → `architecture` → `secrets` → `l10n` — mind ZÖLD.
 
 ## 11. Review — a Claude tölti ki
