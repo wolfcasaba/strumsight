@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
-import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/model/practice_history_entry.dart';
@@ -766,20 +764,51 @@ class PracticeMetricKind {
 
 /// Convenience used by the practice hub to land on this screen from a
 /// navigation sink. Public, so the screen can be tested directly.
+///
+/// Built from design tokens directly rather than [SsEmptyState]: that
+/// component mandates an `onAction` (§5.2), but this fallback never
+/// navigated pre-migration (measured: `git show 0ba14f5b:…
+/// practice_result_screen.dart` — the legacy `EmptyState` took no action at
+/// all). Adding a `practiceHub` navigation here would be a behaviour change
+/// in an appearance-only round (E15-R04 review MAJOR-3b) — this mirrors
+/// [SpeedBuilderScreen]'s `_UnavailableLayout`, the same documented §5.2
+/// exception used for [PracticeHubScreen]'s empty-catalog state.
 class PracticeResultFallback extends StatelessWidget {
   const PracticeResultFallback({super.key});
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceResultTitle)),
-      body: SsEmptyState(
-        icon: Icons.bar_chart,
-        title: l10n.practiceResultUnavailableTitle,
-        message: l10n.practiceResultUnavailableBody,
-        actionLabel: l10n.practiceResultUnavailableAction,
-        onAction: () => context.go(AppRoutes.practiceHub),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(SsSpacing.space6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.bar_chart, color: colors.textSecondary, size: 40),
+              const SizedBox(height: SsSpacing.space4),
+              Text(
+                l10n.practiceResultUnavailableTitle,
+                style: typography.titleMedium.copyWith(
+                  color: colors.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: SsSpacing.space2),
+              Text(
+                l10n.practiceResultUnavailableBody,
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -68,13 +68,7 @@ class PracticeHubScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(l10n.practiceHubTitle)),
       body: SafeArea(
         child: catalog.isEmpty
-            ? SsEmptyState(
-                icon: Icons.queue_music_outlined,
-                title: l10n.practiceHubEmptyCatalogTitle,
-                message: l10n.practiceHubEmptyCatalogSubtitle,
-                actionLabel: l10n.practiceSessionRetry,
-                onAction: () => ref.invalidate(practiceCatalogProvider),
-              )
+            ? const _EmptyCatalogLayout()
             : ListView(
                 padding: const EdgeInsets.fromLTRB(
                   SsSpacing.space5,
@@ -141,6 +135,59 @@ class PracticeHubScreen extends ConsumerWidget {
       queryParameters: <String, String>{'id': definition.id},
     );
     context.go(uri.toString());
+  }
+}
+
+/// The empty-catalog state (`practiceCatalogProvider` returning no
+/// definitions never happens today — [BuiltinPracticeCatalog] is a const
+/// list — but the Hub still renders this defensively for a future
+/// data-driven catalog).
+///
+/// Built from design tokens directly rather than [SsEmptyState]: that
+/// component mandates an `onAction` (§5.2), and the only candidate action —
+/// invalidating [practiceCatalogProvider] — re-reads the same const list, so
+/// it is provably a no-op (measured: `practice_catalog_controller.dart`).
+/// The E15-R04 review flagged the previous "Retry" button as a dead control
+/// borrowed from the session-retry copy; this mirrors
+/// [SpeedBuilderScreen]'s `_UnavailableLayout`, the same documented §5.2
+/// exception for a provably actionless informational state.
+class _EmptyCatalogLayout extends StatelessWidget {
+  const _EmptyCatalogLayout();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(SsSpacing.space6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.queue_music_outlined,
+              color: colors.textSecondary,
+              size: 40,
+            ),
+            const SizedBox(height: SsSpacing.space4),
+            Text(
+              l10n.practiceHubEmptyCatalogTitle,
+              style: typography.titleMedium.copyWith(color: colors.textPrimary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: SsSpacing.space2),
+            Text(
+              l10n.practiceHubEmptyCatalogSubtitle,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

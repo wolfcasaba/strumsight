@@ -136,18 +136,24 @@ void main() {
 
   group('E15-R04 — design-system migration', () {
     testWidgets(
-      'PracticeResultFallback (no entry) renders the SsEmptyState with its '
-      'action, no overflow',
+      'PracticeResultFallback (no entry) renders the informational state, '
+      'no action and no navigation (E15-R04 review MAJOR-3b: this fallback '
+      'never navigated pre-migration; adding one would be a behaviour '
+      'change in an appearance-only round)',
       (tester) async {
         await pumpResult(tester, const PracticeResultFallback());
         expect(
           find.text(l10n().practiceResultUnavailableTitle),
           findsOneWidget,
         );
+        expect(find.text(l10n().practiceResultUnavailableBody), findsOneWidget);
         expect(
           find.byKey(const ValueKey('ss-empty-state-action')),
-          findsOneWidget,
+          findsNothing,
         );
+        expect(find.byType(FilledButton), findsNothing);
+        expect(find.byType(TextButton), findsNothing);
+        expect(find.byType(ElevatedButton), findsNothing);
       },
     );
 

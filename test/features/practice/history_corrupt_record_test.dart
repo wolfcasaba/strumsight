@@ -43,6 +43,33 @@ class _FailingHistoryRepository implements PracticeHistoryRepository {
   Future<AppResult<void>> clear() async => const AppResult.success(null);
 }
 
+/// A retryable storage failure that recovers on the second `load()` —
+/// proves the retry button (E15-R04 review MAJOR-2) actually reloads the
+/// provider, not just that the button renders.
+class _RetryableThenSucceedsRepository implements PracticeHistoryRepository {
+  _RetryableThenSucceedsRepository({required this.succeedsWith});
+  final List<PracticeHistoryEntry> succeedsWith;
+  int loadCount = 0;
+
+  @override
+  Future<AppResult<List<PracticeHistoryEntry>>> load() async {
+    loadCount++;
+    if (loadCount == 1) {
+      return const AppResult.failure(
+        StorageFailure(code: FailureCode.storageRead, retryable: true),
+      );
+    }
+    return AppResult.success(succeedsWith);
+  }
+
+  @override
+  Future<AppResult<void>> save(PracticeHistoryEntry entry) async =>
+      const AppResult.success(null);
+
+  @override
+  Future<AppResult<void>> clear() async => const AppResult.success(null);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -176,18 +203,44 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets(
-      'a load failure renders the SsFailureState with a working retry '
-      'action, not a raw error',
-      (tester) async {
-        await pumpWithRepository(tester, const _FailingHistoryRepository());
-        expect(tester.takeException(), isNull);
-        expect(
-          find.byKey(const ValueKey('ss-failure-state-retry')),
-          findsOneWidget,
-        );
-      },
-    );
+    testWidgets('a NON-retryable load failure (retryable: false) renders the '
+        "screen's own error copy, and NO retry action — the design system's "
+        'retry decision comes from the real AppFailure, not a fabricated one '
+        '(E15-R04 review MAJOR-2)', (tester) async {
+      await pumpWithRepository(tester, const _FailingHistoryRepository());
+      expect(tester.takeException(), isNull);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      // MAJOR-1: the screen's own copy survives the SsFailureState
+      // migration instead of the generic "Storage problem" mapping.
+      expect(find.text(l10n.practiceHistoryErrorTitle), findsOneWidget);
+      expect(find.text(l10n.practiceHistoryErrorBody), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('ss-failure-state-retry')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a RETRYABLE load failure (retryable: true) renders the retry '
+        'action, and tapping it reloads (E15-R04 review MAJOR-2)', (
+      tester,
+    ) async {
+      final repository = _RetryableThenSucceedsRepository(
+        succeedsWith: [_entry('retry-1', 'Recovered entry')],
+      );
+      await pumpWithRepository(tester, repository);
+      expect(tester.takeException(), isNull);
+
+      final retryButton = find.byKey(const ValueKey('ss-failure-state-retry'));
+      expect(retryButton, findsOneWidget);
+      expect(repository.loadCount, 1);
+
+      await tester.tap(retryButton);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(repository.loadCount, greaterThanOrEqualTo(2));
+      expect(find.text('Recovered entry'), findsOneWidget);
+    });
 
     for (final locale in [const Locale('en'), const Locale('hu')]) {
       testWidgets('textScaler 2.0 renders the populated list without overflow '

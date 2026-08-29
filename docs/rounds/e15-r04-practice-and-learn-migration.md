@@ -568,4 +568,139 @@ Visszaállítva (a `git diff --stat` a fájlon üres a visszaállítás után) �
 állapotnak (üres/betöltés/hiba) volt pontos design-rendszer-megfelelője, a
 §5.2 döntés szerint egy sem maradt kompromisszumos.
 
+### 10.1 Javító kör (review MAJOR-1..3)
+
+**MAJOR-1 — `practice_history_screen.dart` — a képernyő saját hibaszövege
+visszaállítva.** `SsFailurePresentation.from()`-nak nincs cím/üzenet felülíró
+paramétere, a konstruktora pedig privát a `failure_presentation.dart`
+fájlban — az a fájl és `ss_failure_state.dart` NINCS a kör
+`allowed_paths`-án (mérve: `implementer_guard.py` blokkolta a szerkesztést).
+A javítás ezért teljesen a képernyő fájlján belül maradt: egy privát
+`_HistoryFailureL10n implements AppLocalizations` wrapper class-t vezettem
+be, ami a `dsFailureStorageTitle`/`dsFailureStorageMessage` lekérdezést
+átirányítja a képernyő saját `practiceHistoryErrorTitle`/`Body`
+ARB-kulcsaira, és a két akció-címke getter-t (`dsFailureRetryAction`,
+`dsFailureContactSupportAction`) változatlanul továbbadja a valódi
+l10n-nek — minden más getter `noSuchMethod`-ra esik (sosem hívódik, mert ez
+a képernyő kizárólag storage-kódú hibát mutat). Ezzel a `SsFailureState`
+komponens-migráció megmarad (a review szerint helyes), a retry/akció döntés
+a VALÓDI `AppFailure.retryable`-ből jön (MAJOR-2), a cím/üzenet pedig a
+képernyő saját szövege. `practiceHistoryErrorAction` ("Back") kulcs
+szándékosan NEM kapott új hívót — a review konkrét javítás-utasítása csak a
+cím/törzs szöveget nevezte meg, az akció-modell pedig
+`dsFailureRetryAction`/`dsFailureContactSupportAction`-ön keresztül működik.
+
+**MAJOR-2 — ugyanott — a valódi `AppFailure` megy tovább, nincs kitalált
+`retryable: true`.** `_HistoryError` mostantól `failure: AppFailure`-t kap
+(`onFailure: (failure) => _HistoryError(failure: failure, ...)`), az
+`AsyncError` ág pedig egy alapértelmezett `StorageFailure(code:
+storageRead)`-et ad (retryable: false), mert ez a képernyő kizárólag helyi
+tárolást olvas és ez az ág valós future-kivétel esetén sosem az
+`AppResult.failure` útvonalon jönne. Két ÚJ őr-cella
+`test/features/practice/history_corrupt_record_test.dart`-ban (a régi,
+hibás alakot pinnelő cella törölve):
+- „a NON-retryable load failure (retryable: false) renders the screen's own
+  error copy, and NO retry action" — `ss-failure-state-retry`
+  `findsNothing`, cím/törzs a képernyő saját ARB-kulcsa.
+- „a RETRYABLE load failure (retryable: true) renders the retry action, and
+  tapping it reloads" — egy ÚJ `_RetryableThenSucceedsRepository` az első
+  `load()`-on `retryable: true` hibát ad, a másodikon sikert; a teszt
+  megnyomja a retry gombot, és megméri, hogy `loadCount` nő ÉS a felépült
+  bejegyzés megjelenik.
+
+**MAJOR-3a — `practice_hub_screen.dart` — a kitalált „Retry" gomb
+eltávolítva.** Az üres katalógus ága mostantól `const _EmptyCatalogLayout()`
+— egy design-tokenekből épített, akció NÉLKÜLI állapot, pontosan a
+`speed_builder_screen.dart` `_UnavailableLayout`-jának mintája szerint (a
+brief §5.2 alóli, ott már dokumentált kivétel). Az `SsEmptyState.onAction`
+kötelező, és az egyetlen elérhető akció (`ref.invalidate(
+practiceCatalogProvider)`) bizonyíthatóan no-op — a provider egy `const`
+`BuiltinPracticeCatalog` felett fut
+(`practice_catalog_controller.dart:10-23`). `l10n.practiceSessionRetry`
+más hívón (`practice_error_panel.dart`) keresztül továbbra sem árva.
+
+**MAJOR-3b — `practice_result_screen.dart` — a `PracticeResultFallback`
+navigációja visszaállítva (nincs navigáció).** A kör előtti (`0ba14f5b`)
+alak egy `EmptyState`-et használt `onAction` nélkül — a migráció tévesen egy
+ÚJ `context.go(AppRoutes.practiceHub)` hívást vezetett be, mert az
+`SsEmptyState` kötelező `onAction`-t követel. A javítás ugyanazt a
+design-token-alapú, akció nélküli mintát alkalmazza, mint a MAJOR-3a — a
+`go_router`/`app_route.dart` import eltávolítva (ez volt az egyetlen hívási
+helyük a fájlban). Az ebben a körben FELVETT
+`test/features/practice/presentation/practice_result_screen_test.dart`
+cella (`ss-empty-state-action` `findsOneWidget`) igazítva a visszaállított
+viselkedéshez: `findsNothing` az akció-gombra, és nincs
+`FilledButton`/`TextButton`/`ElevatedButton` a fába.
+
+**Kapu — a javító kör §3(1) parancsa, csonkítatlanul:**
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/ui/ui_inventory_test.dart                        zöld
+test test/app/navigation/adaptive_scaffold_test.dart       zöld
+test test/app/navigation/legacy_route_redirect_test.dart   zöld
+test test/app/offline_network_guard_test.dart              zöld
+test test/core/screen_size_guard_test.dart                 zöld
+test test/features/chords/chord_library_test.dart          zöld
+test test/features/learn/continue_card_test.dart           zöld
+test test/features/learn/expected_chord_hint_test.dart     zöld
+test test/features/learn/latency_calibration_screen_test.dart zöld
+test test/features/learn/learn_rollback_test.dart          zöld
+test test/features/learn/learn_screen_test.dart            zöld
+test test/features/learn/learning_path_test.dart           zöld
+test test/features/learn/lesson_list_screen_test.dart      zöld
+test test/features/learn/lesson_offline_test.dart          zöld
+test test/features/learn/lesson_score_card_test.dart       zöld
+test test/features/learn/live_scoring_jitter_test.dart     zöld
+test test/features/learn/next_lesson_cta_test.dart         zöld
+test test/features/learn/review_r100_fixes_test.dart       zöld
+test test/features/learn/setlist_expected_hint_test.dart   zöld
+test test/features/learn/visual_offset_test.dart           zöld
+test test/features/learn/waltz_count_in_test.dart          zöld
+test test/features/practice/history_corrupt_record_test.dart zöld
+test test/features/practice/presentation/practice_a11y_audit_test.dart zöld
+test test/features/practice/presentation/practice_hub_screen_test.dart zöld
+test test/features/practice/presentation/practice_result_screen_test.dart zöld
+test test/features/practice/presentation/practice_routing_test.dart zöld
+test test/features/practice/result_confidence_test.dart    zöld
+test test/features/practice/reward_idempotency_test.dart   zöld
+test test/features/practice/speed_ladder_test.dart         zöld
+test test/features/songs/setlist_flow_test.dart            zöld
+test test/l10n/hardcoded_string_guard_test.dart            zöld
+test test/l10n/arb_parity_test.dart                        zöld
+architecture                                                zöld
+secrets                                                      zöld
+l10n                                                          zöld
+
+MINDEN GATE ZÖLD.
+```
+
+(Az első futás pirosra váltott a `format` lépésen egy korábbi, munkapéldányban
+maradt untracked probe-fájl — `test/zz_da_probe_e15r04_test.dart`, „THROWAWAY
+devil's-advocate probe — deleted immediately after the run" fejléccel —
+miatt; ez NEM ennek a körnek a munkája, törölve, utána a fenti futás zöld.)
+
+**Golden — `record` majd `check`, mindkettő 12/12 zöld:**
+
+```
+$ tools/golden-x86.sh record test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+00:56 +12: All tests passed!
+$ tools/golden-x86.sh check test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/goldens/e13_r22_screens_golden_test.dart
+00:56 +12: All tests passed!
+$ git status --short test/ui/goldens/goldens/
+(üres — 0 PNG változott)
+```
+
+**A 0 PNG-diff MÉRT, nem feltételezett:** `e13_r22_screens_golden_test.dart`
+a „practice history" golden esetén a SIKER-ágat rendereli
+(`PracticeHistoryScreen` populált listával), nem a hiba-állapotot — a
+MAJOR-1/2 javítás kizárólag `_HistoryError`-t érinti. A „practice hub" és a
+`PracticeResultFallback` képernyőknek nincs golden-fixture-e ebben a
+fájlban (a „practice result" golden a sikeres `PracticeResultScreen`-t
+rendereli, nem a `PracticeResultFallback`-et) — a MAJOR-3a/3b tehát olyan
+ágakat javított, amiket a golden-korpusz nem fed le. Ez összhangban van a
+gate widget-teszt-eredményeivel (`practice_hub_screen_test.dart`,
+`practice_result_screen_test.dart` zöld).
+
 ## 11. Review — a Claude tölti ki

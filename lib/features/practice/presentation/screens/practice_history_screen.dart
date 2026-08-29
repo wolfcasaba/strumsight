@@ -34,11 +34,18 @@ class PracticeHistoryScreen extends ConsumerWidget {
         child: switch (async) {
           AsyncData(:final value) => value.fold(
             onSuccess: (entries) => _HistoryBody(entries: entries),
-            onFailure: (_) => _HistoryError(
+            onFailure: (failure) => _HistoryError(
+              failure: failure,
               onRetry: () => ref.invalidate(practiceHistoryEntriesProvider),
             ),
           ),
+          // A raw future exception (not an `AppResult.failure`) should never
+          // happen — `LocalPracticeHistoryRepository.load()` catches every
+          // storage error and returns it as a value — but if it ever does,
+          // this screen only ever reads local storage, so a storage failure
+          // is the accurate default (E15-R04 review MAJOR-2).
           AsyncError() => _HistoryError(
+            failure: const StorageFailure(code: FailureCode.storageRead),
             onRetry: () => ref.invalidate(practiceHistoryEntriesProvider),
           ),
           _ => const _HistoryLoading(),
@@ -69,7 +76,8 @@ class _HistoryLoading extends StatelessWidget {
 }
 
 class _HistoryError extends StatelessWidget {
-  const _HistoryError({required this.onRetry});
+  const _HistoryError({required this.failure, required this.onRetry});
+  final AppFailure failure;
   final VoidCallback onRetry;
 
   @override
@@ -77,12 +85,42 @@ class _HistoryError extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return SsFailureState(
       presentation: SsFailurePresentation.from(
-        l10n,
-        const StorageFailure(code: FailureCode.storageRead, retryable: true),
+        _HistoryFailureL10n(l10n),
+        failure,
       ),
       onRetry: onRetry,
     );
   }
+}
+
+/// [SsFailurePresentation.from] decides the title/message from
+/// [AppFailure.code] alone, and its actions from [AppFailure.retryable] —
+/// there is no override parameter, and its constructor is private to
+/// `failure_presentation.dart`. This screen keeps its own established copy
+/// (`practiceHistoryErrorTitle`/`Body`) instead of the generic storage
+/// strings by routing only those two lookups (plus the two action labels a
+/// storage failure can produce) through the screen's ARB keys — every other
+/// getter delegates to the real [_inner] localisations, unused here since
+/// this screen only ever shows storage failures (E15-R04 review MAJOR-1).
+class _HistoryFailureL10n implements AppLocalizations {
+  const _HistoryFailureL10n(this._inner);
+  final AppLocalizations _inner;
+
+  @override
+  String get dsFailureStorageTitle => _inner.practiceHistoryErrorTitle;
+
+  @override
+  String get dsFailureStorageMessage => _inner.practiceHistoryErrorBody;
+
+  @override
+  String get dsFailureRetryAction => _inner.dsFailureRetryAction;
+
+  @override
+  String get dsFailureContactSupportAction =>
+      _inner.dsFailureContactSupportAction;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _HistoryEmpty extends StatelessWidget {
