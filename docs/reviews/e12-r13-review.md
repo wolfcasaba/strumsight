@@ -7,7 +7,7 @@
 - **Brief:** [`docs/rounds/e12-r13-device-matrix-and-device-lab.md`](../rounds/e12-r13-device-matrix-and-device-lab.md)
 - **Dátum:** 2026-08-29
 
-## 1. VÉGSŐ DÖNTÉS (1. menet): **CHANGES REQUESTED** — 1 MAJOR
+## 1. VÉGSŐ DÖNTÉS: **APPROVED** (2. menet, §6) — az 1. menet CHANGES REQUESTED volt, 1 MAJOR + 1 MINOR
 
 A kör tartalmilag erős: a mátrix csak MÉRT eszközöket visz be, a GA-scope lista a
 zárt SDD-szótárból jön, a Dart-oldali mérce `package:yaml` nélkül megy, és a
@@ -148,6 +148,25 @@ elgépelt eredmény-fájlnál.
 - **A tilos zóna sértetlen:** a hat `docs/manual-testing/` dokumentum bájtra
   változatlan.
 
-## 6. Javító kör után (2. menet)
+## 6. Javító kör után (2. menet) — **VÉGSŐ DÖNTÉS: APPROVED**, 0 nyitott lelet
 
-_Kitöltés a javító kör mérése után._
+Javító kör: `6192ba08`, `929f009f`, `f6701f80`, `cf8ff7b6`, `92f4a619` (motor:
+`sonnet-impl`; a wrapper jelzése `scope_audit=ok`, 5 érintett útvonal a
+`fffa8bb0` bázistól — ugyanaz az engedélyezett ötös).
+
+Újramérve az izolált `/tmp/e12r13-review` klónban, `92f4a619`-en.
+**Baseline:** `+121: All tests passed!` (99 → 121 cella).
+
+| Lelet | Mutáció | Mért eredmény | Zárás |
+|---|---|---|---|
+| **F1** | `required_suite: []` MINDKÉT `release_blocking: true` eszközön | gate `+119 -2: Some tests failed.` · `device_report.py --check` **exit 1**: „`pixel_6a: required_suite is empty for a release_blocking device`" | ✅ zárva |
+| **F1b** | egy kötelező suite-elem (`screen_reader_path`) törölve a pixel_6a csomagjából | gate `+120 -1: Some tests failed.` | ✅ zárva (a hiányos csomag is fog, nem csak az üres) |
+| **F2** | `spec_provenance` → `vision-performance-benchmark.md:99999` | gate `+120 -1: Some tests failed.` | ✅ zárva — a `ram_gb`/`soc` forrása mostantól gépileg ellenőrzött mező |
+| A2 (regresszió) | minden `release_blocking: true` → `false` | gate `+117 -4: Some tests failed.` | ✅ változatlanul fog |
+
+A javító kör a `--check`-et fail-closedre vitte: üres vagy hiányzó
+`required_suite` egy blokkoló eszközön nem „0 hiányzó futás", hanem megnevezett
+hiba, nem-nulla kilépéssel. Az N1 NOTE (nem-mapping `--results` csendes
+visszaesése) továbbra sem ad hamis zöldet; nem merge-blokkoló.
+
+**Nyitott BLOCKER/MAJOR/MINOR: nincs.**
