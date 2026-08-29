@@ -1,5 +1,39 @@
 # Screen migration status
 
+**E15-R03 update (2026-08-28) — reachability is now MEASURED, not counted by
+router presence.** `tool/check_screen_reachability.dart` (ADR 0471) replaces
+the "migrated/legacy" split below as the input to Ch15 round planning — see
+`docs/ui/retirement-plan.md` for the full per-screen decision table
+(migrate / retire / keep / unreachable) and named `E15-R04`…`E15-R11` owner
+rounds. Measure it yourself with:
+
+```bash
+dart run tool/check_screen_reachability.dart --format table
+```
+
+Measured totals: **68/96 screens reachable** (declarative router reference OR
+imperative construction anywhere in `lib/`), **28/96 unreachable**, **25/96**
+reachable only behind a feature flag today. Of the 68 reachable screens, 27
+are already migrated (`keep`, no Ch15 action) and 41 are legacy — 35 get a
+`migrate` round, 6 get a `retire` proposal (`retirement-plan.md` §5).
+
+**This measurement corrects one claim below.** The "Superseded pairs measured
+this round" list under the E13-R36 section (unchanged historical text) states
+the `progress` ↔ `progress_v2` pair is "both still reachable". Measured now:
+**false** — `lib/app/routing/app_router.dart` builds the legacy
+`ProgressScreen` for both `/progress` and `/profile/progress`;
+`ProgressDashboardScreen` and `SkillDetailScreen`
+(`lib/features/progress_v2/screens/`) have no declarative reference and no
+construction site anywhere in `lib/`. See `retirement-plan.md` §3.1. The
+`library` ↔ `library_v2` and `streak` ↔ gamification-hub pairs in that same
+list ARE confirmed still accurate by this round's measurement.
+
+Also newly measured (not previously documented): the entire Community feature
+(15 screens, `communityEnabled` flag) has no route registered anywhere in
+`lib/app/routing/**`, and Practice Generator (6 screens) plus the Audio
+Analysis V2 capture wizard (3 screens) have no measured entry point either —
+`retirement-plan.md` §3.2–§3.4.
+
 **E15-R01 update (2026-08-28):** the app's runtime theme (`MaterialApp.theme`
 / `darkTheme`, and the bootstrap-failure recovery screen) is now
 `SsLightTheme.data()` / `SsDarkTheme.data()` instead of legacy
@@ -134,6 +168,11 @@ The pre-migration token-debt baseline is `docs/ui/baseline/token-debt.md`
 See `docs/ui/legacy-backlog.md` for the dated backlog covering the 53
 still-legacy screens above, the two dated variant-matrix/closure-suite
 exclusion-list defects, and the deferred UI-architecture guard (§0.0.B/B3).
+As of E15-R03, `docs/ui/retirement-plan.md` is the canonical per-screen
+REACHABILITY decision table (migrate / retire / keep / unreachable, with
+named `E15-R04`…`E15-R11` owner rounds) — the "Per-feature status" table
+above only ever measured design-system import presence, not whether a user
+can reach the screen at all.
 
 The canonical per-file list of screens, reusable widget/view sources, and
 dialog/bottom-sheet sources is the deterministic generator output in
