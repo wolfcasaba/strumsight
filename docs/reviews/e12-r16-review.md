@@ -136,6 +136,64 @@ az kevesebbet bizonyít.)
 
 ---
 
-## 2. menet — a javító kör után
+## 2. menet — a javító kör után — verdikt: **APPROVED** (0 nyitott lelet)
 
-*(a javító kör lezárása után töltendő)*
+Javító kör: 3 commit (`4167fbae`, `06b6189e`, `e2634837`) a `f544b64e` review-commit
+fölött. `scope_audit=ok` (`scope_audit_base=f544b64e`, 5 változott útvonal),
+`gate_shape=ok`. A leleteket **nem a zöld gate**, hanem célzott mérés zárja.
+
+### MAJOR-1 — ZÁRVA, saját valódi-sértés próbával mérve
+
+A javítás egy kipinnelt lefedettség-cellapárt tett a teszt-fájlba, amely a
+SZÁLLÍTOTT `docs/release/ai-quality-gates.md` gépi tábláját és a SZÁLLÍTOTT
+`docs/testing/device-matrix.yaml`-t olvassa (nem fixture-másolatot).
+
+**A reviewer saját próbája** (a `docs/release/ai-quality-gates.md`
+`audio_analysis_core` sorainak törlése, majd `flutter test
+test/tooling/ai_release_report_test.dart`):
+
+```
+00:01 +18 -1: Pinned coverage ... the shipped docs/release/ai-quality-gates.md
+gate table names both pinned capabilities [E]
+  Expected: contains 'audio_analysis_core'
+    Actual: Set:['live_and_tuner', 'computer_vision']
+  docs/release/ai-quality-gates.md no longer has a gate-table row for
+  "audio_analysis_core" — deleting this row turns the release gate GREEN by
+  making the capability disappear from the report entirely, instead of
+  measuring it and turning it RED. Restore the row; do not edit this cell to pass.
+00:01 +24 -1: Some tests failed.
+```
+
+**Pontosan egy cella pirosodik**, a maradék 23 zöld marad; a sor visszaállítása
+után a fájl ismét zöld, a munkafa tiszta. A megkerülési út tehát géppel zárva:
+a sor törlése ma PIROS, nem zöld.
+
+A második pinnelt cella a fordított megkerülést zárja (a capability némán
+`ga_scope: false`-ra csúszása a device-mátrixban) — az ilyen átsorolás ettől
+kezdve tudatos, review-zott változtatás, nem néma követelmény-vesztés.
+
+### MINOR-1 — ZÁRVA
+
+A riport top-level kimenete hordozza a küszöb-provenanciát:
+
+```
+$ python3 tool/release/build_ai_report.py --profile development \
+    --scope-file docs/release/ai-quality-gates.md | jq .thresholds
+thresholds: {'fail': 0.1, 'warn': 0.05}
+```
+
+A hozzá tartozó cella (`test/tooling/ai_release_report_test.dart:436-484`) az
+elvárt értékeket **futásidőben a `tool/compare_benchmarks.py`-ból olvassa ki**
+(`python3 -c "from compare_benchmarks import WARN_THRESHOLD, FAIL_THRESHOLD …"`),
+nem Dart-literálként írja újra — így a küszöb második forrása nem jött létre, és
+az importált nevek teherhordóvá váltak.
+
+### A két NOTE változatlanul nyitva
+
+A NOTE-1 (a `not_in_scope` sorok `model` cellája nem validálódik) és a NOTE-2
+(munkakönyvtár-relatív útvonalak) nem blokkoló megfigyelés; egyik sem gyengíti a
+mai kaput.
+
+### VÉGSŐ DÖNTÉS: **APPROVED**
+
+A zöld kapu (exact-SHA CI) teljesülése után a kör merge-elhető.
