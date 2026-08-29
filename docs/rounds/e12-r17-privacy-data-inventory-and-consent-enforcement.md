@@ -234,4 +234,130 @@ dart run tool/check_data_inventory.dart
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`). **Ág:**
+`sonnet-impl/e12-r17-privacy-data-inventory-and-consent-enforcement`.
+
+### Mit építettem
+
+Az engedélyezett fájllista mind az öt tétele elkészült, a §8 sorrendjében
+(1. mérés a fán → 2. leltár → 3. checker → 4. consent-enforcement tesztek →
+5. tooling-teszt → 6. doksi + valódi-sértés próba):
+
+1. **`docs/privacy/data-inventory.yaml`** — a §0.0.A.2 mind a négy mért
+   egress-útjához (`DioFactory.createAccountClient`,
+   `DioFactory.createDiagnosticsClient`, `HttpTutorStreamTransport`,
+   `CommunityMediaUploader`) van bejegyzés, mezőnkénti
+   purpose/legal_basis/retention/storage/leaves_device-szel; a bekötetlen
+   kettő (`tutor_stream`, `community_media`) `wired: false`.
+2. **`tool/check_data_inventory.dart`** — a fa-bejárás a D1 mindhárom
+   mintaosztályát felismeri: (a) `DioFactory.create*Client` metódusok,
+   (b) bármely `lib/**`-beli, injektált HTTP-klienst fogadó ÉS kérés-igét
+   hívó osztály (regex a deklaráció-alakra kötve, nem puszta `Dio` szótöved
+   — egy „Dio implementations" jellegű kommentre nem fut rá), kivéve a
+   `dio_factory.dart`/`api_client.dart` két, írásban indokolt infra-fájlt;
+   (c) közvetlen `HttpClient(`/`package:http` használat (ma nulla találat).
+   A checker a FÁBÓL indul (`discoverEgressRoutes`), nem a leltárból — egy
+   leltárban nem szereplő, mért út nem-nulla kilépést ad. Tesztelhető
+   belépési pontokat exportál (`DataInventory.parse`, `discoverEgressRoutes`,
+   `checkDataInventory`), a `main()` csak vékony CLI-wrapper.
+3. **`test/tooling/data_inventory_test.dart`** — A1 (séma-teljesség, két
+   valódi-sértés próbával: hiányzó `purpose`, hiányzó `leaves_device` sor) és
+   A2 (fa↔leltár keresztellenőrzés a VALÓDI fán, három valódi-sértés
+   próbával: egy mért, huzalozott út kiejtése a leltárból, egy leltárban nem
+   szereplő új osztály felbukkanása, egy `wired: true` bejegyzés, amit a fa
+   már nem termel). 9/9 zöld.
+4. **`test/privacy/consent_enforcement_test.dart`** — A3, A6(tutor), A4,
+   A6(diagnostics), A5'(community), A5'(settings-sync). Mindegyik a
+   TURN-/WIRE-úton mér (gateway-spy a tutorhoz, `HttpClientAdapter`-próba a
+   diagnosztikához és az account-kliens forgalmához), soha nem képernyő-
+   renderrel. 6/6 zöld.
+5. **`docs/privacy/consent-enforcement.md`** — a három kikényszerítési pont
+   (Tutor/Diagnostics/Account-session) mért forrás+sor hivatkozásokkal, és a
+   §10 valódi-sértés próba.
+
+### A gate — csonkítatlan kimenet
+
+```
+tools/round-gate.sh test/privacy/consent_enforcement_test.dart test/tooling/data_inventory_test.dart test/ui/ui_inventory_test.dart
+```
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/privacy/consent_enforcement_test.dart            zöld
+    test test/tooling/data_inventory_test.dart                 zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+(analyze: „No issues found! (ran in 26.6s)"; a `test/ui/ui_inventory_test.dart`
+`hasLength(96)` pinje NEM mozdult — A7 teljesül; `architecture`: 12 meglévő,
+változatlan allowlist-tétel, egyik sem ebből a körből.)
+
+### A leltár-ellenőrző közvetlen futtatása
+
+```
+$ dart run tool/check_data_inventory.dart
+Data inventory check OK (4 measured egress route(s), 4 inventory route(s)).
+```
+
+### Valódi-sértés próba (§10 kötelező bizonyíték)
+
+A `test/privacy/consent_enforcement_test.dart` A6 (diagnostics) cellájában a
+reaktív `diagnosticsConsentProvider.overrideWith((ref) => ref.watch(consent))`
+sort ideiglenesen egy befagyasztott pillanatképre (`overrideWithValue(true)`)
+cseréltem — pontosan azt szimulálva, amit a D2 tilt: a visszavonás csak a
+következő indításkor lépne életbe. `flutter test
+test/privacy/consent_enforcement_test.dart` PIROSRA váltott:
+
+```
+00:00 +3 -1: A6 (diagnostics) — revoking upload consent stops the NEXT upload in the SAME
+container, no restart upload 1 (consent true) reaches the wire; upload 2 (consent flipped
+false, same container) does not [E]
+  Expected: an object with length of <1>
+    Actual: [Instance of 'RequestOptions', Instance of 'RequestOptions']
+     Which: has length of <2>
+  the second, post-revocation upload must not reach the wire — the consent check re-reads the
+  live provider value, not a snapshot taken at boot
+```
+
+**Mért, pontos állítás:** az A6(diagnostics) cella váltott pirosra — ez az a
+cella, aminek KIFEJEZETT feladata a session-közbeni azonnaliság mérése, és
+pontosan ezt a hibaosztályt fogta meg. Az A4 cella (ami a „kezdettől
+`false`" forgatókönyvet méri, `overrideWithValue(false)`) a próba alatt is
+zöld maradt — helyesen, mert a befagyasztott-pillanatkép hiba egy MÁSIK
+forgatókönyvet érint, nem azt, amit A4 mér. A `docs/privacy/consent-
+enforcement.md` §10 ugyanezt a nüánszot dokumentálja — mindkét cellát
+pirosnak állítani hazugság lett volna.
+
+Visszaállítás után (`diff` a próba előtti másolattal nulla eltérést mutatott)
+a teljes gate-et újra lefuttattam — fent a zöld kimenet a visszaállítás
+UTÁNI állapotot mutatja.
+
+### STOP-eset nem történt
+
+Egyik cella sem talált mért szivárgást (visszavont hozzájárulás mellett is
+menő adatot) — a `lib/**` mind a három élő kikényszerítési pontja
+(`tutor_orchestrator.dart:47`, `diagnostics_providers.dart:66` +
+`diagnostics_uploader.dart:52`, `auth_interceptor.dart:50,73` +
+`settings_sync.dart`'s `!_signedIn` guard) a turn-/wire-úton ellenőrizve
+helyesen állítja meg az adatáramlást. A tiltott zóna (`lib/**` stb.)
+érintetlen maradt.
+
+### Ismert, dokumentált korlátok (nem ennek a körnek a hibája)
+
+- A Tutor SSE (`HttpTutorStreamTransport`) és a Community media
+  (`CommunityMediaUploader`) útnak nincs `lib/**` konstrukciós helye — A3/A6
+  a tutor esetében ezért a gateway-létrehozás előtti rövidzárlatot méri (a
+  valódi HTTP-hívás nem létezik még), nem magát a hálózati hívást. Ez a mért
+  valóság, nem gyengítés — a leltár `wired: false`-szal jelzi.
+- Community-specifikus, kliensoldali consent nincs (mért, 0 találat) — az
+  A5' cella ezért az account-session kapcsolón mér, az ADR 0479 §"Döntés" D4
+  pontja szerint.
+
 ## 11. Review — a Claude tölti ki
