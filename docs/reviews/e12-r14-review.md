@@ -10,7 +10,7 @@
 
 ## 0. VERDIKT (1. menet)
 
-**CHANGES REQUESTED** — 2 MAJOR, 2 MINOR, 2 NOTE.
+**CHANGES REQUESTED** — 2 MAJOR, 2 MINOR, 2 NOTE. (A javító kör mind a hatot lezárta — §5.)
 
 Mindkét MAJOR ugyanabból a gyökérből fakad: a `compare_benchmarks.py`
 összehasonlítási KULCSA a puszta metrika-NÉV, holott az ADR 0474 D1/D2 egész
@@ -181,10 +181,73 @@ cellát is írt (`:189-198`). A hat `measured` érték pontosan az
 - A `docs/baseline/**` és a `tool/benchmarks/` meglévő két eszköze
   **érintetlen** (ADR 0474 Következmények).
 
-## 5. Gate és CI
+## 5. Javító kör (1.) — reviewer-ellenőrzés leletenként
 
-*(a merge előtt kitöltendő — a javító kör után újra futtatva)*
+**Javító commit:** `80caea10` (`[E12-R14] Javító kör: deviceId-egyezés a
+regresszió-összevetésben (F1–F6)`), 5 fájl, +330 / −24 sor, scope-audit `ok`.
 
-## 6. Javító kör
+A leleteket a reviewer **saját, eldobható próbáival** ellenőrizte a friss
+`/tmp/review2-e12-r14` klónban (a próbák a mérés után visszaállítva):
 
-*(a javító kör után kitöltendő)*
+| Lelet | Zárva? | Reviewer-mérés |
+|---|---|---|
+| **F1** MAJOR | ✅ | baseline `pixel_6a`, jelölt `xiaomi_redmi_note_12`, AZONOS érték → `rc=1`, `status=unknown (missing from candidate for deviceId 'pixel_6a')`. A korábbi néma `pass` megszűnt. |
+| **F1** (nem-regresszió) | ✅ | azonos `deviceId`, ELTÉRŐ `buildSha` → `rc=0`, normálisan összehasonlít, és a sor mindkettőt nevezi: `baselineBuildSha='d325d60' candidateBuildSha='deadbee'`. Két build összevetése tehát továbbra is a cél, nem hiba. |
+| **F2** MAJOR | ✅ | duplikált `(metric, deviceId)` a JELÖLT oldalon → `rc=2`, `duplicate measured record for metric … deviceId … — each (metric, deviceId) pair must appear at most once`; ugyanez a BASELINE oldalon → `rc=2`. |
+| **F2** (a valódi eset) | ✅ | ugyanaz a metrika KÉT KÜLÖNBÖZŐ eszközön, a `pixel_6a` a baseline kétszeresén → a regresszió most MEGJELENIK: `status=fail delta=1.000000 … deviceId='pixel_6a'`, `rc=1`. A korábbi néma elnyelés megszűnt. |
+| **F3** MINOR | ✅ | `value: 0.0` → `rc=2`, `field 'value' must be a positive number, got 0.0`; `value: -5.0` → `rc=2`. Traceback helyett a dokumentált record-format error. |
+| **F4** MINOR | ✅ | `benchmark_record.dart:206-216` explicit `is! Map<String, Object?>` ág + `BenchmarkRecordFormatException`; két új cella (`records: [null]`, `records: [42]`). |
+| **F5** NOTE | ✅ | `0 measured metric(s) compared, 0 warn, 0 fail, 1 unknown` — az `unknown` már nem számít „compared"-nek; saját cella is méri. |
+| **F6** NOTE | ✅ | `docs/performance/budgets.md` +14 sor: kimondja, hogy ma minden bejegyzés `ci_host`, és mi a teendő az első fizikai eszközös mérésnél. Kitalált készüléknév nincs. |
+
+### 5.1 Reviewer valódi-sértés próba — SEBÉSZI, egyetlen cellára
+
+A kötelező próba nem az implementer bemondása. A reviewer a javított
+`compare()`-be **device-vak visszaesést** injektált (ha a `(metric, deviceId)`
+kulcs nem talál, essen vissza bármelyik eszközre), majd futtatta a
+tesztfájlt — **pontosan EGY cella lett piros**, és az a helyes:
+
+```
+Failing tests:
+  test/tooling/benchmark_budget_test.dart: … F1 — the comparison key is
+  (metric, deviceId), not metric alone … a candidate measured on a DIFFERENT
+  device than the baseline, even with the exact same value, is never reported
+  "pass" — it must surface as unknown for that device instead
+```
+
+A módosítás visszaállítva (`git diff` üres). Ez bizonyítja, hogy az F1-cella
+nem vakon zöld, és pontosan a lezárt hibaosztályra van kötve
+([L527](../LESSONS.md#l527) ellenpróbája).
+
+*(Egy durvább próba — a `key = (metric, deviceId)` teljes visszaírása
+`key = metric`-re — 13 cellát váltott pirosra; ez is nem-vakságot bizonyít, de
+a fenti sebészi próba a pontos mérés.)*
+
+## 6. Gate és CI — a reviewer SAJÁT futtatása
+
+**Kör-gate, izolált `/tmp/review2-e12-r14` klón, csővezeték nélkül:**
+
+```
+tools/round-gate.sh test/tooling/benchmark_budget_test.dart
+GATE_EXIT=0
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/benchmark_budget_test.dart               zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+```
+
+**Upstream-szinkron (ADR 0086 §2):** a `main` a dispatch óta mozdult
+(`4c22d973`, a párhuzamos E15-R04 sáv). A kör-ág `git merge --no-ff origin/main`-nel
+beépítette (`922e35cf`), `git diff --check` tiszta, konfliktus nem volt, és
+`git merge-base --is-ancestor origin/main HEAD` 0-val tér vissza. A CI ezután a
+FRISS head SHA-n futott újra — a régi, `80caea10`-es futás nem merge-evidencia.
+
+**Exact-SHA CI:** lásd a §7 táblát.
+
+## 7. VÉGSŐ DÖNTÉS
+
+*(a CI zöldje után kitöltve)*
