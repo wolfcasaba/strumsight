@@ -395,4 +395,126 @@ python3 tool/release/security_scan.py
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-29.
+
+### 10.1 Szállított fájlok
+
+| Fájl | Tartalom |
+|---|---|
+| `docs/security/threat-model.md` | 7 komponens (client-storage, backend-api, diagnostics-upload, community-media-upload, model-package, community, release-chain), 14 `guard`-blokk, mind `release_gate: true`, mind a fán MA MÉRT tesztre mutat. D1 szerint BEEMEL (ADR 0395/0091/0448-ra hivatkozik, nem másol). |
+| `docs/security/exceptions.yaml` | Séma dokumentálva, üres `exceptions: []` — a pre-flight idején nincs elfogadott kockázat. |
+| `tool/release/security_scan.py` | A négy ág (`guards`, `exceptions`, `dependencies`, `secrets`) az §5.2 CLI-szerződéssel; exit 0/1/2, nincs elnyelő kapcsoló. |
+| `test/tooling/security_scan_test.dart` | A1–A8 + a §6.1 küszöb-cellahármas + egy `--format json` szanitás-teszt, összesen 22 teszt. |
+| `backend/tests/test_security_release.py` | A9 — a `security_scan.py`-t modulként betöltve (nem újraírt parser) kinyeri a 8 backend `release_gate` guardot, mindegyiket `pytest --collect-only`-jal feloldja, majd egy elrontott node-idet pirosra bizonyít. |
+
+### 10.2 A guard-lista (mind release_gate: true, mind MÉRT a fán)
+
+client-storage: T-CLIENT-01 (`test/core/storage/secure_store_test.dart`) ·
+backend-api: T-API-01 (`backend/tests/test_auth.py`) ·
+diagnostics-upload: T-DIAG-01, T-DIAG-02 (`backend/tests/test_diagnostics.py`) ·
+community-media-upload: T-MEDIA-01, T-MEDIA-02, T-MEDIA-03
+(`backend/tests/community/test_media_upload.py`) ·
+model-package: T-MODEL-01 (`test/tooling/vision_model_integrity_test.dart`),
+T-MODEL-02 (`test/tooling/ml_asset_manifest_test.dart`) ·
+community: T-COMM-01 (`backend/tests/community/test_challenge_verification.py`),
+T-COMM-02 (`backend/tests/community/test_access_policy.py`) ·
+release-chain: T-RELEASE-01 (`test/tooling/signing_policy_test.dart`),
+T-RELEASE-02 (`test/tooling/check_secrets_test.dart`), T-RELEASE-03
+(`test/tooling/security_scan_test.dart` — a scan saját, ebben a körben írt
+bizonyított piros útja a felső-korlát-nélküli függőség cellára).
+
+Egyik guard sem a §0.0 R2 táblázatban felsorolt öt védelem ÚJRA-mérése — a
+replay-, traversal-, oversize- és modell-checksum-viselkedést a meglévő
+tesztek (`test_challenge_verification.py`, `test_diagnostics.py`,
+`vision_model_integrity_test.dart`) hordozzák, a `guards` ág csak a
+LÉTEZÉSÜKET méri.
+
+### 10.3 Futtatott parancsok és tényleges kimenetük
+
+**A kliens-oldali gate** (`tools/round-gate.sh test/tooling/security_scan_test.dart test/tooling/check_secrets_test.dart`,
+csonkítás nélkül, teljes futás):
+
+```
+[1] format                                    zöld
+[2] analyze                                   zöld (No issues found!)
+[3] test test/tooling/security_scan_test.dart zöld (22/22, "All tests passed!")
+[4] test test/tooling/check_secrets_test.dart zöld (13/13, unchanged — A10)
+[5] architecture                              zöld
+[6] secrets                                   zöld (Secret scan OK, 4076 file(s), 0 finding(s))
+[7] l10n                                      zöld
+[8] backend ruff format                       zöld (133 files already formatted)
+[9] backend ruff check                        zöld (All checks passed!)
+[10] backend pytest (teljes suite)            zöld (100%, egy `x` = várt xfail, 0 hiba)
+```
+
+A `backend pytest` lépés a TELJES backend suite-ot futtatja (a round-gate
+saját szabálya, nem szűkíthető) — ezen a boxon kb. 10 percig fut (mért:
+11:46–11:57), de a kilépési kód `0`, minden `.` zöld, a Gate-összegzés
+mind a tíz lépésre `zöld`-et mutat.
+
+**A backend-sáv célzottan** (`cd backend && python -m pytest
+tests/test_security_release.py tests/test_hardening.py -q`):
+
+```
+...........................                                              [100%]
+27 passed
+```
+
+(10 a `test_security_release.py`-ból — 1 „van legalább egy guard” + 8
+paraméterezett node-id-feloldás + 1 elrontott node-id piros —, 17 a
+változatlan `test_hardening.py`-ból.)
+
+**A scan a valós fán** (`python3 tool/release/security_scan.py`):
+
+```
+security_scan: OK — no critical or fatal finding.
+```
+
+Exit code: `0`.
+
+### 10.4 A valódi-sértés próba (KÖTELEZŐ, §6.2 A5 cella)
+
+A `check_guards()`-ban a `guard.test` substring-ellenőrzést ideiglenesen
+kikapcsoltam (`if False and needle_python not in guard_text and ...`), majd
+lefuttattam:
+
+```
+$ flutter test test/tooling/security_scan_test.dart
+```
+
+Eredmény — **PONTOSAN az A5 cella pirosodott**, minden más zöld maradt:
+
+```
+00:01 +9 -1: A5 — the guards branch checks both guard.path AND guard.test a guard.test name absent from guard.path is a critical finding [E]
+  Expected: <1>
+    Actual: <0>
+  security_scan: OK — no critical or fatal finding.
+...
+Some tests failed.
+Failing tests:
+  .../test/tooling/security_scan_test.dart: A5 — the guards branch checks both guard.path AND guard.test a guard.test name absent from guard.path is a critical finding
+```
+
+Ezután a substring-ellenőrzést visszaállítottam, és megerősítettem, hogy a
+teljes fájl újra zöld (`22/22, "All tests passed!"`).
+
+### 10.5 Nyitott kockázatok / megjegyzések
+
+- Az `exceptions.yaml` jelenleg üres — ez a MÉRT állapotot tükrözi (nincs
+  elfogadott kockázat), nem egy hiányzó funkciót.
+- A `_ADVISORIES` lista egyetlen, valós, dátumozott bejegyzést tartalmaz
+  (PyJWT CVE-2022-29217, `<2.4.0`), amely a jelenlegi pin
+  (`PyJWT>=2.8,<3`) felett NEM aktiválódik — szándékosan valós, nem
+  kitalált CVE, hogy az A6 piros útja bizonyított legyen anélkül, hogy a
+  fánk saját, éles függőségére hamis riasztást adna.
+- A kivétel-elnyelés (exception suppression) ebben a körben a `dependencies`
+  ágra (és a default teljes futásra) van bekötve; a `--only guards` / `--only
+  secrets` izolált módok szándékosan NEM konzultálnak az `exceptions.yaml`-lal
+  (egyszerűbb, önálló branch-tesztelhetőség — a brief egyik acceptance-cellája
+  sem kéri guard- vagy secrets-kivételt).
+- A `.github/workflows/security.yml` CI-bekötése szándékosan NINCS ebben a
+  körben (§0.1) — Kör 25 (RC assembly) feladata.
+- Termékkód-javításra a scan a valós fán NEM talált okot (D7 nem
+  alkalmazandó ebben a körben).
+
 ## 11. Review — a Claude tölti ki
