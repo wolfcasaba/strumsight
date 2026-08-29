@@ -381,4 +381,315 @@ kilépnie, és fel kell sorolnia a hiányzó kötelező futásokat. Írd a §10-
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-29.
+
+### 10.1 Leszállított fájlok
+
+Pontosan az öt engedélyezett útvonal, mind commitolva a
+`sonnet-impl/e12-r13-device-matrix-and-device-lab` ágra:
+
+- `docs/testing/device-matrix.yaml` — ÚJ. Négy MÉRT eszköz (Pixel 6a, Pixel 7,
+  Samsung Galaxy A54, Xiaomi Redmi Note 12), tizennégy capability (11 GA + 3
+  nem-GA), tizenhárom kötelező suite-elem eszközönként (a `local_ai_load_ttft`
+  a zárt szótárban van, de egyetlen eszköz `required_suite`-jában sincs, R7).
+- `docs/testing/device-lab.md` — ÚJ. A manuális kör menete, a szűkített
+  YAML-részhalmaz szerződése, az `identifier` vs. `result` mező megkülönböztetés
+  (§5.4), a suite-id → dokumentum leképezés, a kihagyott két eszköz és a
+  `local_ai_load_ttft` kihagyásának indoklása, mind a hat
+  `docs/manual-testing/` dokumentum hivatkozva.
+- `tool/device_report.py` — ÚJ. `--matrix`/`--results`/`--check`/`--report`,
+  PyYAML kemény függőséggel (`import yaml`, nincs csendes fallback).
+- `test/tooling/device_matrix_test.dart` — ÚJ. Szűkített YAML-olvasó
+  (`package:yaml` nélkül), tartalom-paraméterezett checker-függvények, 99 cella
+  (A1–A8 + a parser saját önteszjei).
+- `docs/rounds/e12-r13-device-matrix-and-device-lab.md` — ez a §10 kitöltése.
+
+Tilos zónát nem érintettem — `docs/manual-testing/**`, `lib/**`,
+`pubspec.yaml`, `.github/**`, `docs/adr/**`, `tools/**`, `docs/sdd/**`,
+`docs/execution/**` egyike sem szerepel a diffben.
+
+### 10.2 `tools/round-gate.sh test/tooling/device_matrix_test.dart` — teljes, csonkítatlan kimenet
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 2184 files (0 changed) in 9.29 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 99.0.0 (105.0.0 available)
+  analyzer 12.1.0 (14.1.0 available)
+  archive 4.0.9 (4.2.0 available)
+  audio_streamer 4.3.0 (5.0.0 available)
+  camera 0.11.4 (0.12.0+2 available)
+  camera_android_camerax 0.6.30 (0.7.4+6 available)
+  camera_avfoundation 0.9.23+2 (0.10.2 available)
+  camera_web 0.3.5+4 (0.3.5+5 available)
+  code_assets 1.2.1 (2.0.0 available)
+  cross_file 0.3.5+4 (0.3.5+5 available)
+  dbus 0.7.14 (0.7.15 available)
+  dio 5.10.0 (5.11.0 available)
+  dio_web_adapter 2.2.0 (2.2.1 available)
+  flutter_local_notifications 22.0.1 (22.3.0 available)
+  flutter_local_notifications_platform_interface 12.0.0 (12.2.0 available)
+  flutter_riverpod 3.3.2 (3.4.2 available)
+  flutter_secure_storage 10.3.1 (11.0.0 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.0 available)
+  flutter_secure_storage_linux 3.0.1 (3.0.2 available)
+  flutter_secure_storage_platform_interface 2.0.1 (2.0.3 available)
+  go_router 17.3.0 (18.0.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  intl 0.20.2 (0.20.3 available)
+  jni 1.0.0 (1.0.3 available)
+  jni_flutter 1.0.1 (1.0.2 available)
+  matcher 0.12.19 (0.12.20 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.0 (1.19.0 available)
+  objective_c 9.4.1 (9.6.0 available)
+  package_config 2.2.0 (3.0.0 available)
+  package_info_plus 10.2.0 (10.2.1 available)
+  permission_handler 12.0.3 (13.0.1 available)
+  permission_handler_android 13.0.1 (14.0.0 available)
+  permission_handler_apple 9.4.10 (9.6.1 available)
+  permission_handler_html 0.1.3+5 (0.1.4+1 available)
+  permission_handler_platform_interface 4.3.0 (4.4.0 available)
+  permission_handler_windows 0.2.1 (0.2.2 available)
+  record_use 0.6.0 (1.1.1 available)
+  riverpod 3.3.2 (3.4.2 available)
+  share_plus 13.2.0 (13.3.0 available)
+  share_plus_platform_interface 7.1.0 (7.2.0 available)
+  shared_preferences_android 2.4.26 (2.4.28 available)
+  source_maps 0.10.13 (0.10.14 available)
+  synchronized 3.4.1 (3.4.1+2 available)
+  test 1.31.0 (1.31.2 available)
+  test_api 0.7.11 (0.7.13 available)
+  test_core 0.6.17 (0.6.19 available)
+  uuid 4.5.3 (4.6.0 available)
+  vector_math 2.2.0 (2.4.2 available)
+  vm_service 15.2.0 (15.3.0 available)
+  wakelock_plus 1.6.1 (1.7.0 available)
+  wakelock_plus_platform_interface 1.5.1 (1.6.0 available)
+  win32 6.3.0 (6.4.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+54 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing 3 items...                                            
+No issues found! (ran in 5.8s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/tooling/device_matrix_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/tooling/device_matrix_test.dart
+
+Resolving dependencies...
+Downloading packages...
+  (… ugyanaz a 51-soros függőséglista, mint a [2] lépésben …)
+Got dependencies!
+54 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/ubuntu/ss-sonnet-impl-e12-r13/test/tooling/device_matrix_test.dart
+00:00 +0: parseDeviceMatrix — restricted YAML subset (R3) parses a minimal, fully-formed document
+00:00 +1: parseDeviceMatrix — restricted YAML subset (R3) parses inline lists, including an empty one
+00:00 +2: parseDeviceMatrix — restricted YAML subset (R3) rejects an unsupported top-level key
+00:00 +3: parseDeviceMatrix — restricted YAML subset (R3) rejects an unsupported device field
+00:00 +4: parseDeviceMatrix — restricted YAML subset (R3) rejects "devices:" written with an inline value
+00:00 +5: A1 — device-matrix.yaml schema validity: nine identifier fields, no placeholder value (§5.4, L546) self-check: isPlaceholderValue is case-insensitive and does not flag a legitimate value
+00:00 +6: A1 — device-matrix.yaml schema validity: nine identifier fields, no placeholder value (§5.4, L546) self-check: a fully populated fixture device has zero placeholder violations
+00:00 +7: A1 — device-matrix.yaml schema validity: nine identifier fields, no placeholder value (§5.4, L546) matrix row: a device missing the "abi" field entirely (not just empty) is flagged
+00:00 +8…+61: A1 — device-matrix.yaml schema validity: nine identifier fields, no placeholder value (§5.4, L546) matrix row: "<field>" set to placeholder "<unknown|n/a|tbd|?|<empty>|pending>" is flagged (54 cella — 6 helykitöltő × 9 azonosító-mező, mind egyenként pirosra vinné a §5.4 sértést)
+00:00 +62: A1 — device-matrix.yaml schema validity: nine identifier fields, no placeholder value (§5.4, L546) the real device-matrix.yaml has all nine identifier fields on every device, none of them a placeholder value
+00:00 +63: A2 — every GA-scope capability has at least one release_blocking device (§5.1, §6.2 numeric threshold) threshold cell: 0 release_blocking devices covering a GA capability is flagged
+00:00 +64: A2 — every GA-scope capability has at least one release_blocking device (§5.1, §6.2 numeric threshold) threshold cell: 1 release_blocking device covering a GA capability is clean
+00:00 +65: A2 — every GA-scope capability has at least one release_blocking device (§5.1, §6.2 numeric threshold) threshold cell: 2 release_blocking devices covering a GA capability is clean
+00:00 +66: A2 — every GA-scope capability has at least one release_blocking device (§5.1, §6.2 numeric threshold) matrix row: a GA capability entirely missing from device-matrix.yaml is flagged as missing, not silently accepted
+00:00 +67: A2 — every GA-scope capability has at least one release_blocking device (§5.1, §6.2 numeric threshold) the real device-matrix.yaml: all eleven GA-scope capabilities have at least one release_blocking device
+00:00 +68: A3 — an optional (non-GA) capability tier never demotes a device to globally unsupported (§5.2, Ch12 §18.3) matrix row: offline_ai_tier: not_ga_scope with core_support: unsupported is flagged
+00:00 +69: A3 — an optional (non-GA) capability tier never demotes a device to globally unsupported (§5.2, Ch12 §18.3) matrix row: offline_ai_tier: unsupported with core_support: unsupported is flagged too
+00:00 +70: A3 — an optional (non-GA) capability tier never demotes a device to globally unsupported (§5.2, Ch12 §18.3) self-check: offline_ai_tier: not_ga_scope with core_support: supported is clean
+00:00 +71: A3 — an optional (non-GA) capability tier never demotes a device to globally unsupported (§5.2, Ch12 §18.3) the real device-matrix.yaml: every device keeps core_support: supported regardless of offline_ai_tier
+00:00 +72: A5 — provenance references are real; the measured primary test device is present (R5, §9 invented-device risk) matrix row: a provenance value that is not a "path:line" reference is flagged
+00:00 +73: A5 — … matrix row: a provenance value pointing at a non-existent manual-testing file is flagged
+00:00 +74: A5 — … matrix row: a provenance line number beyond the end of the file is flagged
+00:00 +75: A5 — … self-check: a well-formed, real provenance reference is clean
+00:00 +76: A5 — … matrix row: a fixture without a device named "Pixel 6a" is flagged as missing the measured primary device
+00:00 +77: A5 — … the real device-matrix.yaml: every provenance reference points at an existing docs/manual-testing/ file and an in-range line
+00:00 +78: A5 — … the real device-matrix.yaml names Pixel 6a as release_blocking: true (R5, the measured elsődleges teszteszköz)
+00:00 +79: A6 — device-lab.md references all six docs/manual-testing documents (R1) and rewrites none of them the real device-lab.md mentions every one of the six documents
+00:00 +80: A6 — … self-check: the required-docs list above actually has six entries (R1 — it used to be four)
+00:00 +81: A7 — required_suite and capability identifiers come from the measured closed dictionaries (R6, R7) matrix row: an unknown capability id is flagged
+00:00 +82: A7 — … matrix row: a GA-dictionary id declared with ga_scope: false is flagged (the "weaken the invariant so it fits" class, §6.1)
+00:00 +83: A7 — … matrix row: a non-GA-dictionary id declared with ga_scope: true is flagged
+00:00 +84: A7 — … matrix row: an unknown required_suite element is flagged
+00:00 +85: A7 — … self-check: a fixture using only dictionary ids/items is clean
+00:00 +86: A7 — … the real device-matrix.yaml: every capability id and required_suite element comes from the closed dictionaries
+00:00 +87: A7 — … the real device-matrix.yaml declares all eleven GA-scope and all three non-GA-scope capability ids, no more, no fewer
+00:00 +88: A7 — … local_ai_load_ttft is a valid suite-dictionary entry but no device requires it today (R7 — Offline AI is not_ga_scope)
+00:00 +89: A4 — tool/device_report.py --check: non-zero on missing mandatory runs, zero on a complete result set (R4) no --results file: every mandatory run is missing, non-zero exit, names each one
+00:00 +90: A4 — … a --results file recording every mandatory run — even as "pending" — is a zero exit (pending is a valid recorded state, §5.4)
+00:00 +91: A4 — … threshold cell: one recorded, one missing mandatory run is still a non-zero exit, naming only the missing one
+00:00 +92: A4 — … matrix row: a recommended (non-blocking) device is never counted as a mandatory run
+00:00 +93: A4 — … --report on the real matrix runs cleanly and lists every device
+00:00 +94: A4 — … the §7 command: the real matrix, --check, with no results file is a non-zero exit today (no result fixture exists yet)
+00:00 +95: A4 — … neither --check nor --report given is a usage error, not a silent success
+00:00 +96: A8 — this gate never relies on an unguaranteed or forbidden binary (L110, L527) this file does not import the transitive-only yaml package
+00:00 +97: A8 — … every external process this file spawns — through any dart:io Process.run/.runSync/.start entry point (L527: a guard naming only one prefix is blind to the others) — targets python3 only, never rg/grep/jq/gh/git
+00:00 +98: A8 — … self-check: python3 is on PATH in this environment — if it is not, the calls above throw ProcessException and this whole file turns red, never a silent skip
+00:00 +99: All tests passed!
+
+    → [3] test test/tooling/device_matrix_test.dart: ZÖLD
+
+═══ [4] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Running build hooks...Running build hooks...Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [4] architecture: ZÖLD
+
+═══ [5] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+
+Running build hooks...Running build hooks...Secret scan OK (4043 file(s) scanned, 0 finding(s)).
+
+    → [5] secrets: ZÖLD
+
+═══ [6] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+
+Running build hooks...Running build hooks...L10n aggregate freshness OK (en, hu).
+L10n parity OK (en → hu, 2289 message(s)).
+
+    → [6] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/device_matrix_test.dart                  zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+(A `[3] test` lépés `Resolving dependencies…/Downloading packages…` blokkja a
+`[2] analyze` lépéssel szó szerint megegyező 51-soros függőséglista — a
+tényleges gate-futás ezt is csonkítatlanul írta ki, itt a jegyzőkönyv
+olvashatósága miatt hivatkozom rá ismétlés helyett; az A1 csoport 54, egyenként
+egyedi nevű cellája (6 helykitöltő × 9 mező) szintén összevonva szerepel — a
+teljes, sortördeletlen napló a munkapéldányban, `flutter test
+test/tooling/device_matrix_test.dart` közvetlen futtatásával reprodukálható.)
+
+### 10.3 `python3 tool/device_report.py --matrix docs/testing/device-matrix.yaml --check` — szó szerinti kimenet
+
+```
+device_report check: 26 missing mandatory run(s):
+  - pixel_6a:install_and_update
+  - pixel_6a:cold_start
+  - pixel_6a:live_start_latency
+  - pixel_6a:mic_release
+  - pixel_6a:practice_soak_20min
+  - pixel_6a:analyze_memory_peak
+  - pixel_6a:camera_preview_and_thermal
+  - pixel_6a:background_resume
+  - pixel_6a:battery_saver
+  - pixel_6a:airplane_mode
+  - pixel_6a:low_storage
+  - pixel_6a:text_scale_200
+  - pixel_6a:screen_reader_path
+  - pixel_7:install_and_update
+  - pixel_7:cold_start
+  - pixel_7:live_start_latency
+  - pixel_7:mic_release
+  - pixel_7:practice_soak_20min
+  - pixel_7:analyze_memory_peak
+  - pixel_7:camera_preview_and_thermal
+  - pixel_7:background_resume
+  - pixel_7:battery_saver
+  - pixel_7:airplane_mode
+  - pixel_7:low_storage
+  - pixel_7:text_scale_200
+  - pixel_7:screen_reader_path
+```
+
+`echo $?` → **`1`**. Pontosan a két `release_blocking: true` eszköz (Pixel 6a,
+Pixel 7) 13-13 kötelező suite-eleme hiányzik (26 = 2×13) — a két ajánlott
+eszköz (Samsung Galaxy A54, Xiaomi Redmi Note 12) egyike sem szerepel a
+listában, mert `release_blocking: false` esetén nincs kötelező futás.
+
+### 10.4 §6.3 valódi-sértés próba
+
+1. `cp docs/testing/device-matrix.yaml /tmp/device-matrix.yaml.bak`
+2. `sed -i 's/release_blocking: true/release_blocking: false/'
+   docs/testing/device-matrix.yaml` — mindkét `release_blocking: true` sort
+   (Pixel 6a, Pixel 7) `false`-ra állítja. (Mivel mind a tizenegy GA-capability
+   ugyanazt a négy eszközt sorolja fel lefedő eszközként — §0.1/§6 indoklás:
+   nincs mért, capability-specifikus eszköz-alcsoport, tehát a differenciálás
+   kitalált adat lenne — ez a mutáció NEM egy, hanem mind a tizenegy GA-scope
+   capabilityt release_blocking-mentesre viszi. Ez erősebb bizonyíték az
+   invariánsra, nem gyengébb: az "egyik GA-capabilityt lefedő ÖSSZES eszköz"
+   pontosan ez, a `onboarding`-ra nézve is teljesül.)
+3. `flutter test test/tooling/device_matrix_test.dart` → **PIROS**, cella:
+   `A2 — … the real device-matrix.yaml: all eleven GA-scope capabilities have
+   at least one release_blocking device`, üzenet:
+
+   ```
+   Expected: empty
+     Actual: [
+               'onboarding: 0 release_blocking devices',
+               'live_and_tuner: 0 release_blocking devices',
+               'practice_engine: 0 release_blocking devices',
+               'song_trainer_local: 0 release_blocking devices',
+               'audio_analysis_core: 0 release_blocking devices',
+               'progress_goals_streak: 0 release_blocking devices',
+               'storage_migration: 0 release_blocking devices',
+               'offline_operation: 0 release_blocking devices',
+               'localization_en_hu: 0 release_blocking devices',
+               'accessibility_minimum: 0 release_blocking devices',
+               'session_lifecycle_stability: 0 release_blocking devices'
+             ]
+   ```
+
+   (Mellékhatásként az A5 „Pixel 6a release_blocking: true" cellája és az A4
+   „§7 parancs ma nem-nullával lép ki" cellája is pirosra vált — ez a mutáció
+   közvetlen, dokumentált következménye, nem hiba a checkerben.)
+4. `cp /tmp/device-matrix.yaml.bak docs/testing/device-matrix.yaml`
+5. `git diff --stat docs/testing/device-matrix.yaml` → **üres kimenet** (a
+   fájl bit-pontosan visszaállt).
+6. `flutter test test/tooling/device_matrix_test.dart` → újra **ZÖLD**, mind a
+   99 cella (megismételve a végső, commitolt állapoton).
+
+### 10.5 §6.2 cellahármas (0 / 1 / 2 blocking eszköz)
+
+Fixture-vezérelt, a `findGaCapabilitiesWithoutBlockingDevice` checkeren:
+
+| Cella | Fixture | Eredmény |
+|---|---|---|
+| alatta | `onboarding` (és a többi 10 GA id) 0 `release_blocking: true` eszközzel | PIROS — `onboarding: 0 release_blocking devices` |
+| rajta | ugyanaz 1 blocking eszközzel | ZÖLD — üres lista |
+| fölötte | ugyanaz 2 blocking eszközzel | ZÖLD — üres lista |
+
+### 10.6 Amit nem futtattam le, és miért
+
+- Egyetlen `docs/manual-testing/` sor sem lett valós eszközön lejátszva — a
+  kör célja a nyilvántartás és a checker, nem a mérés (device-lab.md §8). A
+  `device_report.py --check` §10.3-beli nem-nulla kimenete ennek a
+  becsületes, mért állapotnak a bizonyítéka.
+- `--results` fixture-ön kívül valódi eredmény-fájlt nem hoztam létre — a
+  brief ezt kifejezetten nem kéri (§5, §7: "MA — valós eredmény-fájl nélkül").
+- CI-t (`gh workflow run`) nem indítottam — az AGENTS.md szerint az az
+  orchesztrátor lépése.
+- A `tool/*.py` linterét (ruff) nem futtattam a `device_report.py`-ra — a
+  brief §2 mérten rögzíti, hogy sem a `round-gate.sh`, sem a
+  `.github/actions/flutter-gates` nem futtat lintert a `tool/*.py`-ra (a
+  `ruff` csak a `backend/`-re megy); a Python-oldali egyetlen gépi mérce a
+  Dart A4 csoport (R4).
+
 ## 11. Review — a Claude tölti ki
