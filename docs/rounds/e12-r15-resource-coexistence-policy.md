@@ -402,3 +402,17 @@ cella — a `resource_arbiter_test.dart` a javító kör előtti 6-ról 11-re n�
 +3 F2-cella, +2 F1-cella) → `architecture` → `secrets` → `l10n` — mind ZÖLD.
 
 ## 11. Review — a Claude tölti ki
+
+Teljes jelentés: [`docs/reviews/e12-r15-review.md`](../reviews/e12-r15-review.md).
+
+- **1. kör:** CHANGES REQUESTED — 2 MAJOR (F1: a contract-doksi olyan mérést
+  állított, ami nem létezett; F2: a felfüggesztésből nem volt visszaút — a
+  brief §1 céljában nevesített „néma elakadás"), 2 MINOR, 2 NOTE. Mindkét MAJOR
+  eldobható próbatesztekkel mérve az `1e4fb889` HEAD-en.
+- **1 javító kör** (`sonnet-impl`), majd **APPROVED**, 0 nyitott lelet: az F1-et
+  újrahasznosítható `ResourceConsumer` konformancia-készlet + **önvédő cella**
+  zárja (bizonyítva, hogy egy `cancel`-ként megírt fogyasztó a készleten
+  PIROS), az F2-t a `releaseConsumer()` / `onMemoryPressureRelieved()`
+  visszaút + három cella. A reviewer saját, izolált klónban futtatott próbája
+  (Q1–Q5) a `237fd604`-en zölden igazolta a visszautat, a részleges visszautat
+  és azt, hogy egy elengedett fogyasztót a pass nem támaszt fel.

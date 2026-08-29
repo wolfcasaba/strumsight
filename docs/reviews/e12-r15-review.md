@@ -188,6 +188,65 @@ válasz eltérhet (az utóbbinál cache-eldobás is kellhet, ami épp a megőrze
 - **A4 rendezettség:** a `reduce`-ban a `>=` a legnagyobb `index`-et
   (= legalacsonyabb prioritást) választja; megfordítva az A4 pirosra vált.
 
-## 2. kör — a javítás utáni ellenőrzés
+## 2. kör — a javítás utáni ellenőrzés (HEAD `237fd604`)
 
-*(a javító kör után töltöm ki)*
+- **Motor:** `sonnet-impl`, 1 javító kör (a MiniMax-eszkalációs küszöb alatt).
+- **`scope_audit`:** `ok`, base `3f76c313`, 5 változott fájl — mind a listáról.
+- **`dirty_files=1` a jelzéskor:** kivizsgálva, a `git status --short` üres, a
+  `HEAD` egyezik a jelzés `head=` mezőjével. Nincs elveszett munka.
+- **Módszer:** friss izolált klón (`/tmp/ss-review2-e12-r15`, `237fd604`),
+  eldobható próba (`zz_review2_probe_test.dart`, Q1–Q5), a review után törölve.
+
+### Leletenkénti zárás
+
+| Lelet | Állapot | Mérés |
+|---|---|---|
+| **F1** (MAJOR) | **ZÁRVA** | `runResourceConsumerContract` / `checkResourceConsumerContract` újrahasznosítható készlet + **önvédő cella**: `expectLater(checkResourceConsumerContract(make: () => _CancellingFakeConsumer(...)), throwsA(isA<TestFailure>()))` — ZÖLD, tehát a készlet ténylegesen MEGFOGJA a cancel-fogyasztót. A contract-doksi mondata most a valódi őr nevére hivatkozik, és külön kimondja, hogy az A5 csak az arbiter-oldalt méri. |
+| **F2** (MAJOR) | **ZÁRVA** | `releaseConsumer()` + `onMemoryPressureRelieved()` + `_resumeNoLongerOutranked()` (legmagasabb prioritástól lefelé). Saját próba **Q1 ZÖLD**: `releaseConsumer(live)` után `background.isSuspended == false`, `resumeCalls == 1`. **Q3 ZÖLD**: a részleges visszaút helyes — a `camera` folytatódik, a `background` felfüggesztve marad, amíg a `camera` aktív. **Q5 ZÖLD**: a memória-nyomás oda-vissza útja zárt. |
+| **F3** (MINOR) | **ZÁRVA** | `register`/`unregister` `identical`-re egységesítve (`resource_arbiter.dart:59-66`). |
+| **F4** (MINOR) | **ZÁRVA** | `_AudioBackedConsumer` / `_CameraBackedConsumer` adapterek `expect(result.isSuccess, isTrue)` őrt kaptak. |
+| **F5** (NOTE) | **ZÁRVA** | a duplikált `## 11.` fejléc törölve. |
+| **F6** (NOTE) | tudomásul véve | a §10 3. pontja tudatos döntésként rögzíti; nem igényel változtatást. |
+
+### Két ÚJ mérés a javítás fölött (egyik sem lelet)
+
+- **Q4 (ZÖLD):** a visszaút **nem támaszt fel** egy már teljesen elengedett
+  fogyasztót — `releaseConsumer(background)` után a `releaseConsumer(live)`
+  pass `resumeCalls == 0`-t hagy rajta. Ez fontos, mert a `_resumeNoLongerOutranked`
+  az `isActive && isSuspended` szűrőn megy, és az elengedett fogyasztó
+  `isActive == false`.
+- **Q2 (ZÖLD) — dokumentált maradvány, NOTE:** ha egy fogyasztó **közvetlenül**
+  hívja a saját `release()`-ét (megkerülve az arbitert), a felfüggesztett
+  társai továbbra is felfüggesztve maradnak. Ez ma **kimondott** — a
+  contract-doksi a `releaseConsumer` sorában nevesíti a két utat („a korábbi
+  közvetlen `consumer.release()` helyett EZT hívja, ha azt akarja, hogy az
+  arbiter a visszautat is elintézze"), és az A3 e2e cella szándékosan a
+  közvetlen utat járja (a kamera route-leave a koordinátort méri, nem az
+  arbitert). A bekötő körnek ezt tudnia kell: **az arbiter csak akkor tud a
+  visszaútról, ha a befejezés rajta megy keresztül.** Nem BLOCKER és nem MAJOR,
+  mert nincs bekötött hívó, és a szerződés kimondja.
+
+### Saját futtatás (izolált klón, `237fd604`)
+
+```
+flutter test test/core/resources/ test/e2e/resource_coexistence_test.dart
+00:00 +18: All tests passed!
+```
+
+(13 kör-cella + 5 eldobható próba-cella.)
+
+## VÉGSŐ DÖNTÉS: APPROVED
+
+Nyitott BLOCKER/MAJOR/MINOR: **0**. A két MAJOR gépi őrrel zárult, nem
+szöveggel — az F1 önvédő cellája és az F2 Q1/Q3 próbája egyaránt a MÉRT
+viselkedést bizonyítja.
+
+**Merge-feltétel (a review-tól függetlenül kötelező):** a `full-gate.yml` és a
+`router-ci.yml` `success` a merge SHA-ján. Az első CI-futás (`33240406764`, a
+javítás ELŐTTI `1e4fb889` SHA-n) **piros** volt, de **nem a kör diffje miatt**:
+a randomizált HARD property-lépés
+(`PROPERTY_SEED=33240406764`) bukott a `test/property/dsp_property_test.dart:438`
+„a strum must merge into ONE onset" celláján (`Expected: >= 18 / Actual: 17`, 20
+próbából). A kör diffje kizárólag `lib/core/resources/**`, `test/core/resources/**`,
+`test/e2e/**` és dokumentum — DSP onset-összevonásra nincs ráhatása. Ez a
+mért, seed-függő flakiness a kör előtti kódban él.
