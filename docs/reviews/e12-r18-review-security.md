@@ -1,3 +1,7 @@
+<!-- strumsight:allow-secret-file — ez a review-jelentés a titok-scan SAJÁT
+     mércéjét idézi: a benne szereplő literál a kör SZINTETIKUS fixture-je,
+     nem valódi credential. A `check_secrets_test.dart` fejléce ugyanezt teszi. -->
+
 # E12-R18 — Biztonsági review
 
 Reviewer: Claude (security-reviewer, Opus 5) · Dátum: 2026-08-29 · Kockázat: **high**
