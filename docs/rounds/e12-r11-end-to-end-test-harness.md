@@ -58,6 +58,24 @@ sem került fel ([ADR 0470](../adr/0470-practice-setup-navigates-to-the-session-
 Az `allowed_paths` **változatlan**: a `lib/**` továbbra is tilos zóna ebben a
 körben.
 
+**Az első kísérlet ága ÉL és újrahasznosítandó:**
+`sonnet-impl/e12-r11-end-to-end-test-harness` @ `d7bdb695` — a harness (8 fájl,
++1151/−13) és a review (`docs/reviews/e12-r11-review.md`) rajta van, és a review
+N1–N6 szerint a szállított infrastruktúra nagyrészt jó. Ne írd újra a nulláról.
+
+⚠ Az ág a heal ELŐTTI `main`-ről indult, ezért **ez a brief-fájl mindkét oldalon
+változott** — pontosan az a szűk, dokumentációs history-konfliktus, amit az
+ADR 0112 H8 szakasza ír le. Ha újrahasznosítod az ágat:
+
+```bash
+git -C <kör-worktree> merge --no-ff origin/main   # NEM rebase + force-push
+```
+
+A konfliktust úgy oldd fel, hogy **ennek a fájlnak a `main`-oldali változatát
+őrzöd meg** (az tartalmazza ezt a revíziót); a régi §10 handoff-szöveget alá
+írod, nem fölé. Ha a konfliktus nem kizárólag ez az egy fájl, `stopped` jelzés
+és jelentés — ne alkalmazz generikus feloldást.
+
 ## 0.0 Miért `test/e2e/` és nem `integration_test/`
 
 A SDD Kör 11 `integration_test/` könyvtárat ír elő. A MÉRT környezet: ezen a boxon **nincs Android SDK**, a CI-ban pedig ma **nincs emulátoros job** — egy `integration_test/` csomag tehát olyan mércét telepítene, amit sem a fejlesztői loop, sem a merge-kapu nem futtat. A repó mért igazsága szerint a NEM FUTTATOTT mérce rosszabb a hiányzónál. Ezért a kör a teljes-app, determinisztikus folyam-teszteket a `flutter test` gazdában futó `test/e2e/` sávra teszi (ugyanaz a `pumpWidget` a valódi `StrumSightApp`-pal, valódi routerrel, fake adapterekkel), és az eszköz-szintű `integration_test` utat egy KÉSŐBBI, capability-igazolt kör dolgává teszi (a Kör 13 device-mátrixa után). A §5.1 ezt köti meg.
