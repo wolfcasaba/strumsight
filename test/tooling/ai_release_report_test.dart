@@ -432,6 +432,56 @@ void main() {
         );
       }
     });
+
+    test('the report\'s top-level "thresholds" field carries the SAME '
+        'warn/fail values tool/compare_benchmarks.py defines — read from '
+        'that source at test time, never re-typed as a Dart literal, so '
+        'the imported WARN_THRESHOLD/FAIL_THRESHOLD names are load-bearing '
+        'and not merely present in the source (review E12-R16 MINOR-1)', () {
+      final matrix = writeFile(
+        'matrix.yaml',
+        matrixYaml([
+          {'id': 'ai_tutor', 'ga_scope': false},
+        ]),
+      );
+      final manifest = writeFile('manifest.json', manifestJson());
+      final scope = writeFile(
+        'scope.md',
+        gateTable([
+          [
+            'ai_tutor',
+            'm1',
+            'higherIsBetter',
+            'none',
+            '${fixtureRoot.path}/never_read.json',
+          ],
+        ]),
+      );
+
+      final result = runReport(
+        profile: 'development',
+        scopeFile: scope,
+        matrixFile: matrix,
+        manifestFile: manifest,
+      );
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      final thresholds =
+          decodeReport(result)['thresholds']! as Map<String, Object?>;
+
+      final sourced = Process.runSync('python3', [
+        '-c',
+        "import sys; sys.path.insert(0, 'tool'); "
+            "from compare_benchmarks import WARN_THRESHOLD, FAIL_THRESHOLD; "
+            "import json; "
+            "print(json.dumps({'warn': WARN_THRESHOLD, 'fail': FAIL_THRESHOLD}))",
+      ]);
+      expect(sourced.exitCode, 0, reason: sourced.stderr.toString());
+      final expected =
+          jsonDecode(sourced.stdout as String) as Map<String, Object?>;
+
+      expect(thresholds['warn'], expected['warn']);
+      expect(thresholds['fail'], expected['fail']);
+    });
   });
 
   group('A5 — every metric carries corpusId, buildSha, modelId and '
@@ -624,6 +674,86 @@ void main() {
         result.stderr.toString(),
         contains('a_capability_the_device_matrix_never_heard_of'),
       );
+    });
+  });
+
+  group('Pinned coverage — the two MEASURED, AI-evidence-bearing GA-scope '
+      'capabilities (audio_analysis_core, live_and_tuner — round brief '
+      '§0.0 R2) must stay present in the SHIPPED evidence matrix and '
+      'SHIPPED device matrix, never a fixture copy; deleting a row is a '
+      'cheaper way to go green than measuring, and nothing else catches '
+      'that (review E12-R16 MAJOR-1)', () {
+    const pinnedCapabilities = ['audio_analysis_core', 'live_and_tuner'];
+
+    Set<String> gateTableCapabilities(String content) {
+      if (!content.contains('<!-- ai-quality-gates:begin -->') ||
+          !content.contains('<!-- ai-quality-gates:end -->')) {
+        fail(
+          'docs/release/ai-quality-gates.md is missing its machine-readable '
+          'table markers (<!-- ai-quality-gates:begin/end -->)',
+        );
+      }
+      final block = content
+          .split('<!-- ai-quality-gates:begin -->')[1]
+          .split('<!-- ai-quality-gates:end -->')[0];
+      final rows = block
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.startsWith('|'))
+          .skip(2); // header row, then the "|---|---|..." separator row
+      return rows.map((line) => line.split('|')[1].trim()).toSet();
+    }
+
+    Map<String, bool> deviceMatrixGaScope(String content) {
+      final matches = RegExp(
+        r'-\s*id:\s*(\S+)\s*\n\s*ga_scope:\s*(true|false)',
+      ).allMatches(content);
+      return {
+        for (final match in matches) match.group(1)!: match.group(2) == 'true',
+      };
+    }
+
+    test('the shipped docs/release/ai-quality-gates.md gate table names '
+        'both pinned capabilities — removing a row is the cheap way to '
+        'make the gate pass by measuring nothing, not by measuring it', () {
+      final content = File(
+        'docs/release/ai-quality-gates.md',
+      ).readAsStringSync();
+      final capabilities = gateTableCapabilities(content);
+      for (final capability in pinnedCapabilities) {
+        expect(
+          capabilities,
+          contains(capability),
+          reason:
+              'docs/release/ai-quality-gates.md no longer has a gate-table '
+              'row for "$capability" — deleting this row turns the release '
+              'gate GREEN by making the capability disappear from the '
+              'report entirely, instead of measuring it and turning it '
+              'RED. Restore the row; do not edit this cell to pass.',
+        );
+      }
+    });
+
+    test('the shipped docs/testing/device-matrix.yaml still marks both '
+        'pinned capabilities ga_scope: true — losing that silently drops '
+        'their evidence requirement, so this must be a deliberate, '
+        'reviewed change, not a silent one', () {
+      final content = File(
+        'docs/testing/device-matrix.yaml',
+      ).readAsStringSync();
+      final gaScope = deviceMatrixGaScope(content);
+      for (final capability in pinnedCapabilities) {
+        expect(
+          gaScope[capability],
+          isTrue,
+          reason:
+              'docs/testing/device-matrix.yaml no longer marks '
+              '"$capability" ga_scope: true — if this GA-scope change is '
+              'intended, update this pinned-coverage cell '
+              '(test/tooling/ai_release_report_test.dart) deliberately; '
+              'do not let AI-evidence coverage drop silently.',
+        );
+      }
     });
   });
 

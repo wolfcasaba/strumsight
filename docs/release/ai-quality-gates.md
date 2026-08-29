@@ -90,3 +90,24 @@ maradhat csendben egy már lecserélt modellváltozathoz kötve.
 <!-- Kitalált riport-forma bevezetése TILOS (ADR 0477 §"Következmények"): ez a
 mátrix csak MÉRT dokumentumokra és a model_manifest.json-ban már deklarált
 evaluation_report útvonalakra hivatkozik. -->
+
+## 4. Kipinnelt lefedettség — egy sor törlése PIROSRA váltja a kaput
+
+Az `audio_analysis_core` és a `live_and_tuner` a két MÉRT, AI-bizonyítékot
+hordozó GA-scope capability (a kör briefjének §0.0 R2 szakasza). Mivel a
+`build_ai_report.py` a `grouped` szótárat kizárólag a fenti táblából építi
+(`build_report()`), egy capability, amelyhez a tábla egyetlen sort sem
+nevez meg, **meg sem jelenik a riportban** — a sor törlése olcsóbb út a
+kapu megkerülésére, mint a bizonyíték előállítása.
+
+Ezt egy kipinnelt teszt-cella zárja (`test/tooling/ai_release_report_test.dart`,
+"Pinned coverage" csoport), amely a SZÁLLÍTOTT (nem fixture) `ai-quality-gates.md`-t
+és `docs/testing/device-matrix.yaml`-t olvassa, és PIROS, ha:
+
+- a fenti táblából az `audio_analysis_core` vagy a `live_and_tuner` sora
+  hiányzik, VAGY
+- ezek bármelyike a device-mátrixban már nem `ga_scope: true`.
+
+Ha ez a cella pirosra vált, az a HELYES viselkedés — a sort vissza kell
+állítani (vagy, ha a GA-scope tudatosan változott, a pinnelést kell
+felülvizsgálni), nem a cellát kell módosítani, hogy zöld legyen.
