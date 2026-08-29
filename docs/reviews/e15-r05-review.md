@@ -264,3 +264,41 @@ most ez), ahol ugyanez a hiány kerülő utat kényszerít.
 | m1–m9 | lásd fent | javítás VAGY nevesített §10-jegyzet |
 | m5 | commitolatlan munka | minden a branchen, a HEAD-en reprodukálható kapu |
 | m6 | üres §10 | kitöltve, a G1–G4 és a mérések nyers kimenetével |
+
+## Javító kör (2026-08-29) — VÉGSŐ DÖNTÉS: APPROVED
+
+A javító kör a `7e24892b` és a `83ca7011` commitokban zárta a leletlistát; az
+orchestrátor ezen felül elvégezte az upstream-szinkront (`origin/main @
+e2a813e7`) és a §0.0/R14 brief-javítást. Leletenkénti ellenőrzés, saját
+méréssel — nem az implementer bemondására:
+
+| # | Zárás | Az ELLENŐRZÉS mérése |
+|---|---|---|
+| **MAJOR-1** | **ZÁRVA** | Új `songTrainerSpeedResumesOnRestart` kulcs a `lib/l10n/base/app_{en,hu}.arb`-ban, az `en` érték szó szerint a kör előtti mondat. A `song-trainer-speed-disabled` subtitle ezt írja ki, és a `song_trainer_screen_test.dart` cellája a PONTOS lokalizált szövegre pinnel + külön állítja, hogy a subtitle NEM egyezik a `trainerPausedPosition`-nel — a duplikátum-regresszió tehát pirosra váltana. |
+| **MAJOR-2** | **ZÁRVA** | Az orchestrátor FÜGGETLENÜL megismételte a mutációt egy `/tmp` másolatban (a munkapéldány érintése nélkül): `_LibraryLoading` → nyers `CircularProgressIndicator`, majd `flutter test song_library_screen_test.dart` → **`00:01 +1 -1`, „loading library renders the design-system skeleton, not a raw spinner" PIROS**. A review előtti állapotban ugyanez a mutáció-osztály 655 tesztet hagyott zölden. Az őr tehát valóban fog. Nyolc új `find.byType(Ss*)` állítás öt teszt-fájlban. |
+| **MAJOR-3** | **ZÁRVA** | Mind a 9 képernyő kapott `textScaler 2.0` cellát `en`-en ÉS `hu`-n, `expect(tester.takeException(), isNull)`-lal; `grep -rln "Locale('hu')"` most 10 teszt-fájlt ad az 1 helyett. A `trainer_setup` korábban állítás nélküli cellája megkapta a `takeException` mérést. |
+| m1, m3, m4, m8 | **ZÁRVA jegyzettel** | §10.5 — mind a négy nevesítve, mért indoklással; az m8 (tipográfia-egységesítés) tudatosan backlogba téve, mert három golden mozdítása egy megjelenés-kör hatáskörén túli vizuális döntés. |
+| m2, m7, m9, n6, n7 | **JAVÍTVA** | Saját `songTrainerSpeedLabel` kulcs a Learn-oldali `learnSpeed` helyett; a két címkézetlen betöltés-állapot `Semantics(label:)`-t kapott (`songTrainerLoading`, `songLibraryLoading`); a lakat-ikon `colors.warning`-ra (státusz-token); `class` → `final class` és a visszakapott `const`-ok; a téves ADR 0307-hivatkozás javítva. |
+| m5, m6 | **JAVÍTVA** | A munkafa üres, a §10 handoff teljes (kapu-kimenet, G1–G4, migrációs mérés, golden, R13-indoklás képernyőnként). |
+
+**Gépi kapu a merge SHA-n (`0cc1a3f8`, ADR 0086 §2 exact-SHA):**
+
+```
+$ python3 tools/scope-audit.py --repo … --brief … --base origin/main
+Legacy scope audit OK (e2a813e787a9..0cc1a3f8b3ba, 51 changed path(s), 1 generated/ignored)
+
+$ python3 tools/round-ci-plan.py --brief … --base origin/main --head HEAD
+"dispatch": ["full-gate.yml"], "router_ci_expected": true, "apk_required": false
+```
+
+A `full-gate.yml` (`33243557838`) és a `router-ci.yml` (`33243550910`) is
+`conclusion=success`, mindkettő a `0cc1a3f8` head SHA-n.
+
+**A §5.2 R13-döntés utólagos mérlege:** a kilenc képernyő közül továbbra sem
+használ egy sem `SsFailureState`-et vagy `SsEmptyState`-et, de a kiváltás
+mostantól nem hivatkozás nélküli — képernyőnkénti, mért indoklás áll mögötte
+(§10.6) ÉS gépi cella, amely a nyers Material visszatérését pirosra váltja. A
+design-rendszer alatta lévő hiánya (nincs `AppFailure` nélküli hibaállapot,
+nincs akció nélküli üres állapot) BACKLOG-lelet marad egy olyan körnek, amely
+a `lib/core/design_system/**`-hoz nyúlhat — ez a harmadik kör, ahol ugyanez a
+hiány kerülő utat kényszerít (E15-R04/m1, E15-R04/m5, E15-R05/R13).
