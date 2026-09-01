@@ -299,4 +299,173 @@ tools/round-gate.sh test/e2e/upgrade_migration_test.dart test/tooling/fixture_ma
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`). **Ág:**
+`sonnet-impl/e12-r23-legacy-migration-release-candidate`. A §0.0 revízió
+(R1–R7) mérése változatlan maradt — az implementáció abból dolgozott, nem
+mérte újra.
+
+### 10.1 Mit épített
+
+- **`test/fixtures/migrations/`** — három szintetikus, `LegacyStorageKeys`
+  kulcsnevekre épülő `KeyValueStore`-pillanatkép + README:
+  - `legacy_v1_storage.json` — pre-E01-R06 (`fromVersion 0`, mind a 22 lépés
+    függőben, mind a hat legacy content dokumentum eredeti, boríték nélküli
+    alakban).
+  - `legacy_v2_storage.json` — E01-R06/E01-R07 közötti valós történelmi rés
+    (`fromVersion 16`, csak a hat `r07.*` content-lépés függőben) —
+    `storage_migrator.dart` saját doc-commentjéből mérve, nem kitalálva.
+  - `corrupted_storage.json` — teljes, ÉRVÉNYES legacy adatkészlet (`fromVersion
+    0`); a "sérülés" a tesztben injektált store-írási hiba (lásd 10.3), mert a
+    fán élő két migráció-típus (`RenameKeyMigration`, `WrapJsonDocumentMigration`)
+    doc-commentje szerint SOHA nem dob adat-alakú hibán — ezt a README és a
+    §10.5 külön dokumentálja mért tényként.
+  - Manifest-regisztráció (`test/fixtures/manifest.json`, ADR 0473 D6-nak
+    megfelelően `bytes`/`sha256`/`license`/`source`/`containsUserData: false`)
+    és a pinnelt darabszám `test/tooling/fixture_manifest_test.dart`-ban
+    `48 → 51` (KIZÁRÓLAG a szám és a teszt-reason szövege módosult, a cellák
+    logikája nem).
+- **`test/e2e/upgrade_migration_test.dart`** — új fájl, öt csoport (A1–A5).
+  Minden cella közvetlenül hívja `StorageMigrator(store:, logger:,
+  [migrations: appStorageMigrations]).migrate()`-et a riportért (publikus
+  `lib/**` API, változatlan), és — ahol az acceptance ezt kéri — ugyanazon a
+  store-on `AppBootstrap.run(openStore:, loadVersion:, loadOnboardingSeen:)`-t
+  is az app-boot bizonyítékáért. Sem `lib/**`, sem `test/support/**` nem
+  módosult; az egyetlen `test/support/**`-importált szimbólum az
+  `InMemoryKeyValueStore` (`test/core/storage/in_memory_key_value_store.dart`,
+  ami VALÓJÁBAN `test/core/storage/`, nem `test/support/` alatt van — nem
+  tilos zóna, meglévő teszt-dupla, nem új fake).
+- **`docs/release/client-migration.md`** — ÚJ, a migrációs kör hatóköre,
+  invariáns-mérés, megszakítás/resume, fail-safe vs. fail-closed, és az
+  explicit no-rollback korlát.
+
+### 10.2 Melyik cella melyik acceptance-pontot fedi
+
+| Acceptance | Teszt-csoport | Mit bizonyít |
+|---|---|---|
+| A1 | `upgrade_migration_test.dart` "A1" (2 teszt: v1, v2) | `report.isComplete`, `toVersion == appStorageMigrations.last.version`, és a hat content-dokumentum rekordszáma/id-halmaza + a streak-egyenleg (`current`/`longest`/`last`/`freezes`/`total`) migráció előtt/után bit-azonos; utána `AppBootstrap.run` → `BootstrapSuccess` |
+| A2 | `upgrade_migration_test.dart` "A2" | `nudgeEnabled` (version 10) írási hibája → `toVersion == 9`, `applied` 9 elem; a hiba törlése után az ÚJ `migrate()` `fromVersion == 9`-től folytat, csak a maradék 13 lépést alkalmazza (`applied` egzakt lista), és a végállapot (id-halmazok, streak) megegyezik egy megszakítás nélküli, azonos fixture-ön futó referenciafuttatással; a `writeLog` közvetlenül bizonyítja, hogy a hibázó kulcs pontosan egyszer íródott sikeresen |
+| A3 | `upgrade_migration_test.dart` "A3" | `themeMode` (version 1, az ELSŐ függő lépés) írási hibája → `report.failure != null`, `toVersion == fromVersion == 0`, `applied` üres; a store teljes tartalma bájtra megegyezik a migráció előtti pillanatképpel; `AppBootstrap.run` utána is `BootstrapSuccess`; a `songs` dokumentum `JsonDocumentStore.readBody()`-n (a termelési legacy-fallback úton) keresztül a fixture eredeti id-listáját adja vissza — nem üres |
+| A4 | `upgrade_migration_test.dart` "A4" | `openStore` → `Failure(StorageFailure(storageUnavailable))` ⇒ `BootstrapFailure`, a `problems` tartalmazza a `storage.unavailable` kódot, és a `loadOnboardingSeen` (tehát bármilyen store-hozzáférés) SOHA nem fut le |
+| A5 | `upgrade_migration_test.dart` "A5" (2 teszt) | `report.fromVersion`/`toVersion` és az `applied` id-lista EGZAKT egyenlőséggel pinnelve mindkét fixture-re (`appStorageMigrations.map((m) => m.id)`, illetve a `version > 16` szűrt lista), és a migrált dokumentumok rekordszáma kulcsonként (`hasLength`) |
+| A6 | `test/ui/ui_inventory_test.dart` a §7 gate-ben | változatlan — a kör nem érintette a `lib/` fát |
+| A7 | `test/tooling/fixture_manifest_test.dart` a §7 gate-ben | a három új fixture manifest-bejegyzése tiszta bejárást ad, a pinnelt darabszám `51` |
+
+### 10.3 Mért tény, ami a briefben implicit volt, de dokumentálásra szorult
+
+A `corrupted_storage.json` fixture ÖNMAGÁBAN nem tudja megbuktatni
+`StorageMigrator.migrate()`-et: `RenameKeyMigration.apply` és
+`WrapJsonDocumentMigration.apply` doc-commentje szerint SOHA nem dob
+adat-alakú hibán (olvashatatlan típus, parse-hiba, alak-eltérés — mindegyik
+logol és visszatér, nem dob). Az egyetlen módja a
+`StorageMigrationReport.failure != null`-nak a fán egy `KeyValueStore`
+ÍRÁSI hiba (`StorageException`). Az A3 cella ezért a fixture-t egy
+test-only `InMemoryKeyValueStore.failingKeys` hibainjektálással párosítja
+(meglévő teszt-dupla, `test/core/storage/in_memory_key_value_store.dart` —
+nem új fake, nem `lib/**`/`test/support/**` érintés). Ez a `test/fixtures/
+migrations/README.md`-ben és a `docs/release/client-migration.md` §6-ban is
+rögzítve van.
+
+### 10.4 A2 tervezési döntés: hiba-injektálás kulcs, nem "N-edik írás" számláló
+
+Az `InMemoryKeyValueStore` (nem módosítható, `test/core/storage/`) a hibát
+KULCS szerint szimulálja (`failingKeys`), nem egy globális írásszámláló
+szerint. Mivel az `appStorageMigrations` minden lépése determinisztikusan,
+sorban, EGY konkrét célkulcsra ír, egy adott lépés célkulcsának
+hibássá tétele funkcionálisan pontosan azt adja, amit egy "az N-edik írás
+dob" mechanizmus adna (a lépés-sorrend fixált) — csak a meglévő test-dupla
+API-ján keresztül, új teszt-infrastruktúra nélkül.
+
+### 10.5 A valódi-sértés próba (§6.1, KÖTELEZŐ) — mindkét kimenet
+
+**Módszer:** az A1 `_LegacyContent.expectPreservedIn` metódusából
+IDEIGLENESEN eltávolítva a streak-egyenleg `expect(after.streak,
+equals(streak), ...)` sora; a `legacy_v1_storage.json`-hoz IDEIGLENESEN
+(soha nem commitolva) hozzáadva egy `"ss.streak.state":
+"{\"schemaVersion\":1,\"data\":{\"current\":0,...,\"total\":0}}"` kulcs — ez
+a mérce SZERINT MÁR-migrált stub, ezért a 22. lépés (`r07.streak`,
+`WrapJsonDocumentMigration`) a `store.contains(to)` ág miatt eldobja a
+valódi (`total: 40`) legacy egyenleget és a hamis nullát hagyja állva: valódi,
+mért adatvesztés, `lib/**` módosítása nélkül. Mindkét futtatás a §7 gate
+egzakt parancsával történt (`tools/round-gate.sh test/e2e/upgrade_migration_test.dart
+test/tooling/fixture_manifest_test.dart test/ui/ui_inventory_test.dart`);
+a `fixture_manifest_test.dart` lépés mindkét körben PIROS volt (a
+checksum-pin a szándékos, nem commitolt fixture-mutáció ellen — ez a
+művelet MELLÉKTERMÉKE, a próba tárgya kizárólag az `upgrade_migration_test.dart`
+lépés).
+
+**1. kimenet — megcsonkított cella, mérgezett fixture → ZÖLD** (a `[3] test
+test/e2e/upgrade_migration_test.dart` lépés szó szerint):
+
+```
+00:00 +0: A1 — full run from a legacy snapshot: numeric no-loss invariants (ADR 0487 D1) legacy_v1_storage.json (pre-E01-R06, fromVersion 0): record count, id-set and streak balance are identical before/after, migration reaches the last version, and the app boots on the migrated store
+...
+00:00 +7: All tests passed!
+
+    → [3] test test/e2e/upgrade_migration_test.dart: ZÖLD
+```
+
+(A gate a KÖVETKEZŐ lépésen, `[4] test test/tooling/fixture_manifest_test.dart`-on
+állt meg PIROS-sal — a mérgezett `legacy_v1_storage.json` sha256-ja már nem
+egyezik a manifest bejegyzésével. Ez a mért, várt melléktermék, nem a próba
+tárgya.)
+
+**2. kimenet — visszaállított cella, UGYANAZON mérgezett fixture → PIROS**
+(a `[3] test test/e2e/upgrade_migration_test.dart` lépés szó szerinti hiba-
+kimenete):
+
+```
+Expected: {..., 'current': 5, ...}
+  Actual: {'current': 0, 'longest': 0, 'last': -1, 'freezes': 0, 'total': 0}
+     Which: at location ['current'] is <0> instead of <5>
+  the XP/streak balance must be bit-for-bit unchanged
+
+  test/e2e/upgrade_migration_test.dart 453:5  _LegacyContent.expectPreservedIn
+  test/e2e/upgrade_migration_test.dart 54:16  main.<fn>.<fn>
+
+Failing tests:
+  .../test/e2e/upgrade_migration_test.dart: A1 — full run from a legacy snapshot: numeric no-loss invariants (ADR 0487 D1) legacy_v1_storage.json (...)
+
+    → [3] test test/e2e/upgrade_migration_test.dart: PIROS (kilépési kód 1)
+```
+
+**Utána:** `git checkout -- test/fixtures/migrations/legacy_v1_storage.json`
+(a mérgezett variáns eldobva, soha nem commitolva) és a streak-egyenleg
+`expect` visszaállítva a forrásban — `git status --porcelain` és `git diff`
+ezután üres a próba előtti állapothoz képest. A záró §7 gate futtatás
+(lásd 10.6) a helyreállított fán fut, minden lépés ZÖLD.
+
+### 10.6 A záró gate kimenete (a commitolt fán, a próba után)
+
+```
+tools/round-gate.sh test/e2e/upgrade_migration_test.dart test/tooling/fixture_manifest_test.dart test/ui/ui_inventory_test.dart
+```
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/e2e/upgrade_migration_test.dart                  zöld
+    test test/tooling/fixture_manifest_test.dart               zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+(8/8 lépés ZÖLD; `test/e2e/upgrade_migration_test.dart` mind a 8 tesztje —
+A1×2, A2×1, A3×1, A4×1, A5×2, plusz a fájlszintű `loading` bejegyzés —
+zöld; `fixture_manifest_test.dart` mind a 23, `ui_inventory_test.dart` az 1
+tesztje zöld.)
+
+### 10.7 Amit NEM érintett ez a kör
+
+`lib/**`, `test/support/**`, `tool/check_fixture_manifest.dart` (a bejáró
+LOGIKÁJA), `docs/adr/**` (az ADR 0487-et a pre-flight már megírta),
+`test/ui/goldens/**`. A `test/tooling/fixture_manifest_test.dart`-ban
+KIZÁRÓLAG a pinnelt szám és a teszt-reason szövege változott — a cellák
+logikája nem.
+
 ## 11. Review — a Claude tölti ki
