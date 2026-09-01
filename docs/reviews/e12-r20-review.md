@@ -169,3 +169,106 @@ teszt nem gyengült és nem kapott `skip`-et.
 Csak a MAJOR-1 + MINOR-1 + MINOR-2. Az `allowed_paths` **változatlan** —
 mindhárom javítás a már engedélyezett fájlokon belül elvégezhető.
 A NOTE-1-ben felsoroltak egyike sem módosulhat.
+
+---
+
+# Javító kör — újra-ellenőrzés (`fd382b21`, 2026-09-01)
+
+**Diff:** `061b9fff..fd382b21`, 5 fájl, +518/−22. Scope-audit kézzel újrafuttatva
+(a jelzésből ezúttal hiányzott a `scope_audit=` kulcs, tehát nem fogadtam el
+bizonyítéknak):
+
+```
+$ python3 tools/scope-audit.py --repo /home/ubuntu/ss-sonnet-impl-e12-r20 \
+    --brief docs/rounds/e12-r20-accessibility-and-localization-release-audit.md \
+    --base 061b9fff
+Legacy scope audit OK (061b9fffc9db..fd382b21d5b1, 5 changed path(s), 0 generated/ignored)
+```
+
+## MAJOR-1 — **ZÁRVA**. Saját mutációs próbával mérve, nem bemondásra.
+
+Az implementer három falszifikációt dokumentált a §10.1-ben. Ezeket **nem
+fogadtam el állításként** — a `fd382b21` munkapéldányon magam mutáltam, minden
+próba után `git checkout --`-ral visszaállítva (a fa a végén `0 dirty file`).
+
+Az új őr: `release_flow_semantics_test.dart`, `„A6 — known-exceptions.yaml is a
+machine-checked registry"` csoport, két cella, kézzel írt fail-closed
+sor-parszer (`_parseKnownExceptions`) — `package:yaml` valóban nincs deklarálva
+a fán.
+
+**Alap (mutáció nélkül):**
+
+```
+$ flutter test test/accessibility/release_flow_semantics_test.dart --plain-name "A6"
+00:00 +2: All tests passed!
+```
+
+**A próba — az „A" és a „C" a review 1. és 3. pontja, a „B" olyan sértés,
+amit az implementer NEM futtatott** (a MAJOR-1 `expiry`-alpontja):
+
+| # | Mutáció | Eredmény |
+|---|---|---|
+| A | az első bejegyzés `owner:` sorának törlése | **PIROS**, mindkét cella: `entry "setup-scoring-profile-overflow" (line 34) is missing required field(s): owner` |
+| B | `review_by:` törlése egy `expiry: unscheduled` bejegyzésről (**a reviewer saját próbája**) | **PIROS**: `has expiry: unscheduled but no dated review_by (YYYY-MM-DD) — an unscheduled exception with no review date never actually expires` |
+| C | a teljes `exceptions:` lista kiürítése, a teszt-oldali toleranciák meghagyásával | **PIROS**, mindkét cella (árva tükör) |
+
+A parszer minden ágon fail-closed: ismeretlen felső szintű sor, ismeretlen
+kulcs, nem illeszkedő bejegyzés-sor, váratlan behúzás, hiányzó `exceptions:`
+blokk és olvashatatlan fájl **mind dob**. Ez az E12-R19
+[L566](../LESSONS.md#l566) fail-open hibájának ellenszere, és a mutáció (B)
+bizonyítja, hogy nem csak a mezők LÉTÉT méri.
+
+**Az `expiry` alpont is feloldva:** mindhárom bejegyzés `expiry: unscheduled` +
+`review_by: "2026-12-01"`, és a (B) próba szerint a `review_by` elhagyása
+pirosra vált — az „örökké élő kivétel" állapot gépileg kizárva.
+
+**Kétirányú tükör-fedés megvan:** a YAML `id`-halmaza és a teszt-oldali
+toleranciák (`knownOverflows` a text-scale fájlban — most `id` mezővel és
+publikusan —, `switchRowSplitSemanticsId` a semantics fájlban) kölcsönösen
+fedik egymást; az árva tükör (C) és az árva YAML-bejegyzés is piros. Az üres
+nyilvántartás a toleranciák egyidejű eltávolításával legális — ez a helyes
+csatolás.
+
+## MINOR-1 — **ZÁRVA**
+
+A `release-audit.md` §5 új pontot kapott: a tartalmas `PracticeResultScreen`
+(score, per-metrika bontás, next-step akciók) **nincs auditálva** — sem
+`textScale 2.0`-n, sem `hu`-n, sem képernyőolvasóval —, mert a router
+`AppRoutes.practiceResult` útvonala mindig a statikus `PracticeResultFallback`-et
+építi, és a tartalmas nézet csak explicit `Navigator.push`-sal, egy
+`PracticeHistoryEntry`-vel érhető el (pl. a `PracticeHistoryScreen` sorából).
+A megfogalmazás a mért tényt mondja, nem szépít.
+
+## MINOR-2 — **ZÁRVA**
+
+A §2 A6 sora már nem szemrevételezésre hivatkozik: megnevezi a fájlt, a
+tesztcsoportot, a parszer fail-closed voltát, és mind a három mért szabályt
+(mező-teljesség, `expiry` + `review_by`, kétirányú tükör).
+
+## NOTE-1 — sértetlen
+
+Újramérve a `061b9fff..fd382b21` diffen: a `lib/**` érintetlen; a
+locale-paraméteres bejáró, a store-alapú locale-váltás, a
+`platformDispatcher`-es text-scale, a 412×915-ös viewport minden cellában, a
+permanens valódi-sértés próba (20.0 vs 40.0px), a traversal-alapú A3
+(`containsAllInOrder`: Pause → Finish → Exit) és a `2.5` cella szándékos hiánya
+**mind változatlan**. A `knownOverflows` publikussá tétele + `id` mező az
+egyetlen érintés rajtuk, és az a tükör-fedés előfeltétele — nem gyengítés.
+
+---
+
+# VÉGSŐ DÖNTÉS: **APPROVED**
+
+Nyitott BLOCKER: 0 · MAJOR: 0 · MINOR: 0.
+
+A kör azt szállítja, amit a brief kért: **flow-szintű** (nem képernyőnkénti)
+akadálymentességi és lokalizációs audit, mindkét locale-on, telefon-viewporton,
+`textScale 2.0`-ig, valódi szemantikus bejárással — és **három mért `lib/**`
+leletet nevez meg ahelyett, hogy elrejtette volna őket. A `lib/**` végig
+érintetlen: a kör auditált, nem javított.
+
+Külön kiemelendő a 3. lelet (`switch-row-split-semantics-node`): egy megosztott
+design-system komponens néma, tapintható szemantikus csomópontja, amit a
+meglévő `find.bySemanticsLabel` jelenlét-próbák szerkezetileg nem vehettek észre
+([L460](../LESSONS.md#l460)). Ez a kör önálló hozadéka, nem a brief listájáról
+lepipált tétel.
