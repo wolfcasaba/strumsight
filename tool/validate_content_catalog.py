@@ -283,6 +283,7 @@ class SourceMeasurementError(RuntimeError):
 _PRACTICE_DEFINITION_RE = re.compile(
     r"PracticeDefinition\(\s*"
     r"id:\s*'([^']+)'.*?"
+    r"schemaVersion:\s*(\d+).*?"
     r"titleKey:\s*'([^']+)'.*?"
     r"descriptionKey:\s*'([^']+)'.*?"
     r"(?:difficulty:\s*PracticeDifficulty\.(\w+),\s*)?"
@@ -294,11 +295,19 @@ _PRACTICE_DEFINITION_RE = re.compile(
 def extract_practice_definitions(source: str, source_label: str) -> list[dict]:
     results = []
     for match in _PRACTICE_DEFINITION_RE.finditer(source):
-        definition_id, title_key, description_key, difficulty, tags_blob = match.groups()
+        (
+            definition_id,
+            schema_version,
+            title_key,
+            description_key,
+            difficulty,
+            tags_blob,
+        ) = match.groups()
         tags = re.findall(r"'([^']+)'", tags_blob)
         results.append(
             {
                 "id": definition_id,
+                "schemaVersion": schema_version,
                 "titleKey": title_key,
                 "descriptionKey": description_key,
                 "difficulty": difficulty or "beginner",
@@ -450,6 +459,59 @@ def _mirror_source(
         findings.append(Finding(STALE_INVENTORY_ENTRY, f"{source_key}:{stale_id}"))
 
 
+# Per-item inventory dimensions that are declared as bracketed lists
+# (`skill_tags: [a, b]`, `locales: [en, hu]`) — compared as SORTED sets so
+# declaration order in the source never matters. Everything else in
+# `_ITEM_FIELDS` is compared as an exact scalar string.
+_LIST_FIELDS = {"skill_tags", "locales"}
+_ITEM_FIELDS = ("difficulty", "skill_tags", "locales", "version")
+
+
+def _mirror_fields(
+    findings: list[Finding],
+    source_key: str,
+    measured_fields: dict[str, dict[str, object]],
+    declared: dict[str, InventoryItem],
+) -> None:
+    """Element-level, bidirectional field mirror (ADR 0485 D1, brief MAJOR-1).
+
+    For every measured element that also has a matching declared inventory
+    row (an id/source mismatch was already reported by `_mirror_source`),
+    every one of `_ITEM_FIELDS` must match exactly — a declared value that
+    diverges from the measured one is `stale_inventory_entry` with the field
+    name in the detail, never a silent pass.
+    """
+    for item_id, measured in sorted(measured_fields.items()):
+        declared_item = declared.get(item_id)
+        if declared_item is None or declared_item.source != source_key:
+            continue
+        for field_name in _ITEM_FIELDS:
+            measured_value = measured[field_name]
+            declared_raw = declared_item.fields.get(field_name)
+            if field_name in _LIST_FIELDS:
+                declared_list = sorted(_split_bracket_list(declared_raw or ""))
+                measured_list = sorted(measured_value)
+                if declared_list != measured_list:
+                    findings.append(
+                        Finding(
+                            STALE_INVENTORY_ENTRY,
+                            f"{source_key}:{item_id}:{field_name} "
+                            f"(declared=[{', '.join(declared_list)}], "
+                            f"measured=[{', '.join(measured_list)}])",
+                        )
+                    )
+            else:
+                measured_str = str(measured_value)
+                if declared_raw != measured_str:
+                    findings.append(
+                        Finding(
+                            STALE_INVENTORY_ENTRY,
+                            f"{source_key}:{item_id}:{field_name} "
+                            f"(declared={declared_raw}, measured={measured_str})",
+                        )
+                    )
+
+
 def _vocabulary_check(
     findings: list[Finding],
     vocab_key: str,
@@ -494,6 +556,16 @@ def run_validation(args: argparse.Namespace) -> list[Finding]:
     en_keys = extract_arb_keys(Path(args.arb_en))
     hu_keys = extract_arb_keys(Path(args.arb_hu))
     description_suppressed = "locale:practice_engine:descriptionKey" in active_suppressions
+    # `locales:` (per item field-mirror below) means: the set of locales in
+    # which EVERY non-suppressed localization surface of that item resolves.
+    # `descriptionKey` is suppressed today (R4/known_exceptions), so only
+    # `titleKey` counts toward the measured set while that suppression is
+    # active — otherwise a real, unsuppressed regression could hide behind a
+    # declared `[en, hu]` that no longer reflects what actually resolves.
+    required_surfaces = (
+        ("titleKey",) if description_suppressed else ("titleKey", "descriptionKey")
+    )
+    practice_measured_fields: dict[str, dict[str, object]] = {}
     for d in practice_defs:
         for field_name in ("titleKey", "descriptionKey"):
             if field_name == "descriptionKey" and description_suppressed:
@@ -506,6 +578,18 @@ def run_validation(args: argparse.Namespace) -> list[Finding]:
                             f"practice_engine:{d['id']}:{field_name}:{locale}",
                         )
                     )
+        resolved_locales = [
+            locale
+            for locale, keys in (("en", en_keys), ("hu", hu_keys))
+            if all(d[surface] in keys for surface in required_surfaces)
+        ]
+        practice_measured_fields[d["id"]] = {
+            "difficulty": d["difficulty"],
+            "skill_tags": sorted(d["skillTags"]),
+            "locales": resolved_locales,
+            "version": d["schemaVersion"],
+        }
+    _mirror_fields(findings, "practice_engine", practice_measured_fields, declared_by_id)
 
     # --- Tutor knowledge -----------------------------------------------------
     knowledge_docs = extract_knowledge_documents(Path(args.knowledge_manifest))
@@ -539,6 +623,17 @@ def run_validation(args: argparse.Namespace) -> list[Finding]:
     declared_knowledge_vocab = parsed.skill_vocabularies.get("tutor_knowledge", set())
     _vocabulary_check(findings, "tutor_knowledge", knowledge_skill_enum, declared_knowledge_vocab)
 
+    knowledge_measured_fields = {
+        d["id"]: {
+            "difficulty": d.get("difficulty", ""),
+            "skill_tags": [d.get("skill", "")],
+            "locales": [d.get("locale", "")],
+            "version": d.get("version", ""),
+        }
+        for d in knowledge_docs
+    }
+    _mirror_fields(findings, "tutor_knowledge", knowledge_measured_fields, declared_by_id)
+
     # --- Legacy Learn lessons ------------------------------------------------
     lessons, first_win = extract_lessons(
         Path(args.lesson_source).read_text(encoding="utf-8"), str(args.lesson_source)
@@ -552,6 +647,25 @@ def run_validation(args: argparse.Namespace) -> list[Finding]:
     if not name_suppressed:
         for lesson_id in sorted(lesson_ids):
             findings.append(Finding(MISSING_LOCALE, f"learn_lessons:{lesson_id}:name:hu"))
+
+    # `skill_tags`, `locales` and `version` have no dimension in this source
+    # (no per-lesson tags, no ARB indirection, no schema bump ever shipped) —
+    # ADR 0485's fail-closed sentinel: a FIXED expected value the validator
+    # still enforces, so a declared row cannot simply invent a value nothing
+    # measures. `difficulty` IS measured, from the source `Difficulty` enum.
+    lesson_difficulty_by_id: dict[str, str] = {l["id"]: l["difficulty"] for l in lessons}
+    if first_win is not None:
+        lesson_difficulty_by_id[first_win["id"]] = first_win["difficulty"]
+    learn_measured_fields = {
+        lesson_id: {
+            "difficulty": difficulty,
+            "skill_tags": [],
+            "locales": ["en"],
+            "version": "1",
+        }
+        for lesson_id, difficulty in lesson_difficulty_by_id.items()
+    }
+    _mirror_fields(findings, "learn_lessons", learn_measured_fields, declared_by_id)
 
     # --- Legacy mapping table (D2 shipped reference set) ----------------------
     mapping_entries = extract_legacy_mapping(
