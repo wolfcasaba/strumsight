@@ -1,206 +1,92 @@
-# E15-R07 — Practice Generator képernyők migrálása
+# E15-R07 — Practice Generator bekötése (route + flag), majd migrálása
 
-- **Státusz:** REVISED (előre megírva 2026-08-28; pre-flight §0.0.A revízió 2026-09-01, kód újramérve: `main @ c2c38014`)
+- **Státusz:** PREPARED (újraírva 2026-09-01 user-döntés alapján, kód olvasva: `main @ c2c3801`)
 - **Típus:** Chapter 15 (UI-aktiválás és -befejezés), Kör 7
 - **Kör-azonosító:** `E15-R07`
 - **Branch:** `<motor>/e15-r07-practice-generator-migration`
-- **Előfeltétel:** `E15-R03` merge-elve (a visszavonási terv dönti el, mit KELL migrálni)
+- **Előfeltétel:** `E15-R03` merge-elve (a visszavonási terv mérte meg, hogy a flow bekötetlen)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — migrációs kör, kötött ÚJ architekturális döntés nélkül (a hivatkozott szerződéseket korábbi ADR-ek rögzítik).
+- **Előre kiosztott ADR:** `0480` — **placeholder**: a pre-flight ELSŐ dolga `tools/round-slots.py reserve-adr --round E15-R07`-tal a VALÓDI számot kérni (a `0477`/`0479` precedens szerint az előre kiosztott szám elavulhat), és a brief + a queue-sor `adr` oszlopa arra íródik át.
 
-**Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "practice generator plan preview weekly today plan UI"` → **[ADR 0306](../adr/0306-plan-preview-presentation-activation-boundary.md)** (plan-preview aktiválási határ) — a preview-felület a core útra nem hathat, és ezt a migráció nem lazíthatja fel.
+**Visszakeresett előzmény:** [ADR 0306](../adr/0306-plan-preview-presentation-activation-boundary.md) (plan-preview aktiválási határ — a preview-felület a core útra nem hathat), [ADR 0471](../adr/0471-screen-reachability-is-measured-not-assumed.md) (az elérhetőség MÉRT tulajdonság; a `retire` verdikt JAVASLAT, a bekötés/nyugdíjazás produkt-döntés), [ADR 0255](../adr/0255-deterministic-practice-plan-generation.md) (a generátor szerződése).
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd be a `docs/ui/retirement-plan.md` (E15-R03) sorait erre a batch-re, és mérd újra, mely képernyők legacyk MÉG:
-> ```bash
-> for f in lib/features/practice_generator/presentation/screens/today_plan_screen.dart lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart lib/features/practice_generator/presentation/screens/plan_setup_screen.dart lib/features/practice_generator/presentation/screens/plan_preview_screen.dart lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart; do grep -q design_system "$f" && echo "MIGRATED $f" || echo "legacy $f"; done
-> ```
-> A megíráskor mind a **6** felsorolt képernyő legacy volt. Ami időközben migrálódott, azt a §3 scope-ból ki kell venni.
+## 0.0 MIÉRT íródott újra ez a brief — a régi premisszái MÉRTEN hamisak voltak
 
-## 0.0 A kör határa: MEGJELENÉS, nem viselkedés
+A kör korábbi változata tiszta megjelenés-migráció volt, két kimondott premisszára építve. **Mindkettő hamis**, ezért futott a lánc HALT-ra (2026-09-01):
 
-A migráció a képernyők VIZUÁLIS rétegét cseréli design-rendszer-komponensekre. A képernyő TÍPUSA, route-ja, publikus API-ja és üzleti viselkedése VÁLTOZATLAN — a típus-pinnelő tesztek (§4) ezért maradnak zöldek, és a jogosultság pontosan ennyi: **cella törlése, `skip`-je vagy gyengítése TILOS**. Az `E15-R01` óta az app témája hordozza a tokeneket, tehát ÚJ `*ThemeScope` burkoló NEM vezethető be; a meglévő burkoló eltávolítható, ha a képernyő már az app témájából old fel.
-
-~~Az `E15-R02` óta a Practice Generator flag BE van kapcsolva az előnézeti/nem-production buildekben, tehát a terv-képernyők a felhasználó útjába kerültek — a legacy megjelenésük itt a legszembetűnőbb.~~ **VISSZAVONVA — mérve hamis, lásd §0.0.A/R1.**
-
-## 0.0.A Pre-flight brief-revízió (orchestrátor, 2026-09-01, `main @ c2c38014`)
-
-Az alábbi hét pont a brief MÉRT javítása. A kör ezzel a revízióval indul; ahol
-a revízió és a brief eredeti szövege ütközik, **a revízió az érvényes**.
-
-### R1 — A flag NINCS bekapcsolva; a 6 képernyő MA IS elérhetetlen (a §0.0 állítás hamis)
-
-```
-lib/app/config/feature_flags.dart:22   this.practiceGeneratorEnabled = false,   # default ctor
-lib/app/config/feature_flags.dart:84   practiceGeneratorEnabled: false,         # FeatureFlags.forEnvironment — MINDEN környezet
-test/app/config/feature_flags_test.dart:14,26,36  expect(flags.practiceGeneratorEnabled, isFalse)
-```
-
-A `forEnvironment` gyár a `nonProd` értéket a `practiceEngineV2Enabled`,
-`migratedLearnEnabled`, `songTrainerV2Enabled` mezőkre adja — a
-`practiceGeneratorEnabled` **literál `false`**, tehát nem-production buildben
-SEM kapcsol be, és ezt három kipinnelt cella őrzi. A `docs/rounds/e15-r02-*.md`
-a „Practice Generator" kifejezést egyszer sem említi, tehát a hivatkozott
-eredet sem áll fenn.
-
-Építési hely és route ugyancsak nincs (mérve `main @ c2c38014`-en):
-
-```bash
-for c in TodayPlanScreen WeeklyPlanScreen PlanSetupScreen PlanPreviewScreen \
-         PlanChangeReviewScreen PlanPrivacyScreen; do
-  grep -rn "$c" lib/ --include=*.dart | grep -v practice_generator/presentation/screens/
-done                                   # → 0 találat (a PlanPreviewScreen-re jövő
-                                       #   ai_tutor-találat a MÁS osztály, PracticePlanPreviewScreen)
-grep -rn practice_generator lib/app/   # → 0 találat
-```
-
-Ez pontosan megerősíti az `E15-R03` mérését ([ADR 0471](../adr/0471-screen-reachability-is-measured-not-assumed.md),
-`docs/ui/retirement-plan.md` §3.2): mind a 6 képernyő `unreachable`.
-
-### R2 — A kör ettől függetlenül FUT, de a valódi indoklással
-
-A retirement-plan §2 prózája szerint egy elérhetetlen képernyőhöz Ch15-kört
-rendelni pazarlás. Ez **indoklás, nem tiltás**: az ADR 0471 kötött döntései
-közül a **D5** csak a törlést tiltja („this round deletes nothing"), a **D6**
-csak azt írja elő, hogy minden **elérhető** legacy képernyőnek legyen gazdája,
-a **D7** pedig kimondja, hogy a statikus mérés korlátos és a verdikt javaslat,
-nem automatikus felhatalmazás. Egy `unreachable` verdiktű képernyő
-migrálását egyik sem tiltja, és ezeknek a soroknak a verdiktje **nem** `retire`.
-
-A kört a **commitolt sor-fájl** rendeli el (`docs/execution/pipeline-queue.tsv:558`,
-`E15-R07 … pending`), és a Ch15 sorozat szándékosan tágabb a terv §4-énél: az
-`E15-R11` (`vision-onboarding-community`) ugyanígy olyan felületeket visz,
-amelyeket a terv `unreachable`-nek mért. A kör tehát a sorozat írott
-szándékát követi.
-
-**Amit ez a kör ettől NEM tesz:** nem töröl képernyőt vagy route-ot (D5), nem
-köt be belépési pontot (az a §3 tiltott `lib/app/**` zónája), és **nem írja át
-a `docs/ui/retirement-plan.md`-t** — az a lezárt `E15-R03` artefaktuma
-(H1/H2). A `test/tooling/screen_reachability_test.dart` A3-cellája kizárólag
-`isReachable` képernyőkre állít (`if (!verdict.isReachable) continue;`), az
-A4 csak a `retire` sorokra — ezért ez a diff egyiket sem billenti pirosra.
-
-### R3 — Gazda-kör eltérés a terv §4-étől (dokumentált, nem új)
-
-A `retirement-plan.md` §4 az `E15-R07`-et a Learn + Onboarding batch-re osztja,
-a Practice Generatorhoz pedig egyáltalán nem rendel kört. A commitolt sor-fájl
-és minden megírt brief ettől eltérően számoz (`E15-R04` = Practice+Learn,
-`E15-R07` = Practice Generator, …). Ez ugyanaz a már dokumentált eltérés, amit
-a `docs/ui/migration-status.md` az `E15-R05` bejegyzésében rögzít
-(„Owner-round correction against `retirement-plan.md` §4"). A sor-fájl a
-mérvadó; a terv §4 oszlopát ez a kör **nem** írja át.
-
-### R4 — Három megnevezett komponens NEM LÉTEZIK (a §3/§5.2 javítva)
-
-Mérve (`grep -rn "class Ss…" lib/core/design_system/`):
-
-| A briefben | Valóság |
+| Régi állítás | MÉRT valóság |
 |---|---|
-| `SsErrorState` | **nincs** → a hibaállapot komponense **`SsFailureState`** (`components/feedback/ss_failure_state.dart`), amely `SsFailurePresentation`-t vár |
-| `SsListTile` | **nincs** → sorokhoz `SsContentCard`, kapcsolós sorhoz `SsSwitchRow`, listaelemhez `SsEventListRow` |
-| `SsMetricTile` | **nincs** → **`SsMetricCard`** (`components/cards/ss_metric_card.dart`) |
+| „az `E15-R02` óta a Practice Generator flag BE van kapcsolva az előnézeti buildekben" | `lib/app/config/feature_flags.dart:84` — `practiceGeneratorEnabled: false` a `forEnvironment` gyárban is, MINDEN környezetben. A mezőt a `feature_flag_registry.dart:144` `killSwitchPath`-ja szó szerint így írja le: „hardcoded to `false` in every environment … enabling it requires a source change". |
+| „ezek a képernyők a fő navigációból elérhetők" | `docs/ui/retirement-plan.md:241–246` — mind a 6 képernyő `unreachable`: **nincs route és nincs építési hely sehol a `lib/`-ben**. A `lib/app/routing/app_route.dart` egyetlen `plan*` útvonalat sem deklarál. |
 
-Létező és ide illő komponensek: `SsCard`, `SsContentCard`, `SsButton`,
-`SsEmptyState`, `SsFailureState`, `SsSkeleton`, `SsAsyncState`, `SsSwitchRow`,
-`SsSection`, `SsMetricCard`, `SsStatusBadge`, `SsTextField`, `SsChoice`,
-`SsValueSlider`; tokenek: `SsSpacing`, `SsTypography`, `SsColorScheme`, `SsRadius`.
+A `retirement-plan.md` §3.2 ezt „built, unwired" néven tartja nyilván, és kimondja: *„design tokens are moot on a screen nobody can open"* — a bekötés vagy nyugdíjazás **produkt/navigációs döntés**, amit az E15-R03 javasolt, de nem hozott meg.
 
-**`SsEmptyState` kötelező paraméterei:** `icon`, `title`, `message`,
-`actionLabel`, `onAction` — **mind `required`**. Ahol a képernyőn nincs VALÓDI,
-már létező akció, ott `SsEmptyState`-et használni akciót HAZUDNA: ilyenkor az
-`E15-R04` óta bevett, képernyő-lokális, tokenizált üres-állapot a helyes
-megoldás (`migration-status.md` `E15-R05`/`E15-R06` bejegyzés). Ugyanez áll az
-`SsFailureState`-re: valódi `SsFailurePresentation` nélkül tokenizált,
-képernyő-lokális hibaállapot a megoldás — **nyers `Text('Hiba')` és nyers
-`CircularProgressIndicator` viszont NEM marad** (§5.2).
+> **A döntés megszületett (user, 2026-09-01): BEKÖTNI.** A Practice Generator kap belépési pontot (route + flag), és **utána** megy át a design-rendszerre. A `plannerAssistEnabled` (modell-segített javaslatok) ebben a körben **NEM** kapcsol be — a bekötés a determinisztikus generátorra szól.
 
-### R5 — ARB-útvonalak: a §3 engedélye eddig út nélkül állt
+Ezért a kör KÉT fázisú, és a fázisok sorrendje kötött: **F1 bekötés → F2 migráció**. Az F2 acceptance-e (szövegskála, locale, állapotok) csak akkor jelent bármit, ha az F1 után a képernyő valóban megnyitható.
 
-A §3 megengedi új ARB-kulcs felvételét, de az `allowed_paths` egyetlen ARB-fájlt
-sem tartalmazott — az engedély így végrehajthatatlan volt. Az `E15-R06`
-mérése szerint (`migration-status.md`, „ARB-source correction") a
-`lib/l10n/app_*.arb` **generált** kimenet (`tool/gen_l10n_segments.dart`), az
-igazi forrás a `lib/l10n/base/app_*.arb`. Mind a négy fájl felkerül az
-engedélyezett listára; új kulcs **`en` és `hu` egyszerre**.
+### 0.0.A Pre-flight (indítás előtt KÖTELEZŐ)
 
-### R6 — Két létező teszt konstruálja a migrált képernyőket, de nem volt a listán
-
-```
-test/features/practice_generator/presentation/today_plan_screen_test.dart:15,38,63  TodayPlanScreen(
-test/features/practice_generator/presentation/plan_preview_screen_test.dart:387     PlanPreviewScreen(
-test/features/practice_generator/accessibility/planner_privacy_test.dart:166        PlanPrivacyScreen(
-```
-
-Ezek a migrációtól elbukhatnak, miközben sem az `allowed_paths`-on, sem a
-`gate_tests`-en nem voltak. Mindhárom felkerül **típus-pinnelő őrként**: a §0.0
-jogosultsága rájuk is szó szerint áll — **cella törlése, `skip`-je vagy
-gyengítése TILOS**, csak a migrációt követő szerkezeti illesztés megengedett.
-A `gate_tests` a `test/l10n/hardcoded_string_guard_test.dart`-tal is bővül (az
-A6 bizonyítéka).
-
-### R7 — A `textScaler` cellák TELEFON-méretű viewporton mérjenek (L558/L559)
-
-A `flutter_test` alapértelmezett viewportja **800×600** — szélesebb ÉS magasabb
-minden telefonnál, és a lusta `ListView` a viewport alá eső gyermeket fel sem
-építi, ezért a rajta mért „nincs túlcsordulás" akár ÜRES fát is mérhet
-([L558](../LESSONS.md#l558), `E15-R06`). Az A3 cellái ezért **kötelezően**:
-
-```dart
-tester.view.physicalSize = const Size(360, 640);
-tester.view.devicePixelRatio = 1.0;
-addTearDown(tester.view.reset);
-```
-
-És [L559](../LESSONS.md#l559): ha a migráció MINTA-szintű elrendezési kockázatot
-hoz (pl. az `SsEmptyState` négy eleme a korábbi kettő helyett), a védelmet
-**minden testvér-példányra** fel kell tenni, nem csak az elsőre — a §10-ben
-tételesen sorold fel, hány példány van és mindegyik védve van-e.
-
-### R8 — A `presentation/widgets/` a tiltott zónában marad
-
-A 6 képernyő közös widgeteket használ
-(`availability_editor.dart`, `catch_up_sheet.dart`, `plan_block_card.dart`,
-`plan_day_card.dart`, `plan_reason_sheet.dart`, `practice_goal_picker.dart`).
-Ezek **nincsenek** az `allowed_paths`-on, tehát nem módosíthatók (H3). A kör a
-KÉPERNYŐ-fájlokat migrálja; a beágyazott widgetek megjelenése változatlan
-marad, és ez nem hiányosság, hanem a kör határa. Ha egy képernyő A1/A2
-teljesítése CSAK egy ilyen widget módosításával lenne elérhető, az a §0
-**STOP-protokoll** esete (`stopped` jelzés), nem listatágítás.
+1. **ADR-szám:** `tools/round-slots.py reserve-adr --round E15-R07` → a kapott számra írd át a brief fejlécét, a §5 ADR-hivatkozásait és a queue-sor `adr` oszlopát.
+2. **Elérhetőség újramérése** (a kör KIINDULÓ bizonyítéka, a §7 parancsával): a 6 képernyő ma `unreachable`. Ha bármelyik időközben bekötődött, vedd ki az F1 scope-ból.
+3. **Migráltság újramérése** (a §7 `grep design_system` parancsa): a megíráskor mind a 6 legacy volt. Ami migrálódott, az az F2 scope-ból kerül ki.
+4. **Belépési pont helye:** a brief §5.2 a `practiceHub` (`/practice`) alá javasolja a flow-t. **Mérd meg** a mai shell-szerkezetet (`lib/app/routing/app_router.dart`, `adaptive_shell_routes.dart`), és ha a mérés más gazdát ad ki, a §5.2-t a MÉRÉSRE javítsd — az ADR a mért helyet rögzíti, nem a feltételezettet.
+5. **Scope-fedezet:** ha a pre-flight mérése szerint az F1+F2 együtt nem fér egy körbe (az `E15-R06` precedense: a brief 8 képernyőt sorolt, a mérés hármat engedett), akkor **az F1 a kör**, és az F2 külön, ide hivatkozó körbe kerül — a §0.0.A-ban dokumentált mérésel. A fordítottja TILOS: F2 önmagában, F1 nélkül értelmetlen.
 
 ```ai-router
 schema_version = 1
 risk = "high"
 allowed_paths = [
+  "lib/app/routing/app_route.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/app/config/feature_flags.dart",
+  "lib/core/feature_flags/feature_flag_registry.dart",
+  "lib/features/practice/presentation/screens/practice_hub_screen.dart",
   "lib/features/practice_generator/presentation/screens/today_plan_screen.dart",
   "lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart",
   "lib/features/practice_generator/presentation/screens/plan_setup_screen.dart",
   "lib/features/practice_generator/presentation/screens/plan_preview_screen.dart",
   "lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart",
   "lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart",
+  "test/app/config/feature_flags_test.dart",
+  "test/app/routing/app_router_test.dart",
+  "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/app/navigation/tab_state_restoration_test.dart",
+  "test/app/navigation/legacy_route_redirect_test.dart",
+  "test/core/screen_size_guard_test.dart",
+  "test/features/practice/presentation/practice_a11y_audit_test.dart",
+  "test/features/practice/presentation/practice_hub_screen_test.dart",
+  "test/features/practice/presentation/practice_routing_test.dart",
   "test/features/practice_generator/accessibility/planner_accessibility_test.dart",
-  "test/features/practice_generator/accessibility/planner_privacy_test.dart",
   "test/features/practice_generator/presentation/plan_setup_screen_test.dart",
   "test/features/practice_generator/presentation/plan_preview_screen_test.dart",
   "test/features/practice_generator/presentation/today_plan_screen_test.dart",
-  "lib/l10n/base/app_en.arb",
-  "lib/l10n/base/app_hu.arb",
-  "lib/l10n/app_en.arb",
-  "lib/l10n/app_hu.arb",
+  "docs/adr/0480-practice-generator-entry-point-and-rollout.md",
   "docs/ui/migration-status.md",
+  "docs/ui/retirement-plan.md",
   "docs/rounds/e15-r07-practice-generator-migration.md",
 ]
 gate_tests = [
+  "test/tooling/screen_reachability_test.dart",
+  "test/tooling/feature_flag_audit_test.dart",
+  "test/tooling/route_literal_guard_test.dart",
+  "test/app/config/feature_flags_test.dart",
+  "test/app/routing/app_router_test.dart",
+  "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/app/navigation/tab_state_restoration_test.dart",
+  "test/app/navigation/legacy_route_redirect_test.dart",
+  "test/core/screen_size_guard_test.dart",
+  "test/features/practice/presentation/practice_a11y_audit_test.dart",
+  "test/features/practice/presentation/practice_hub_screen_test.dart",
+  "test/features/practice/presentation/practice_routing_test.dart",
   "test/ui/ui_inventory_test.dart",
-  "test/l10n/hardcoded_string_guard_test.dart",
   "test/features/practice_generator/accessibility/planner_accessibility_test.dart",
-  "test/features/practice_generator/accessibility/planner_privacy_test.dart",
   "test/features/practice_generator/presentation/plan_setup_screen_test.dart",
-  "test/features/practice_generator/presentation/plan_preview_screen_test.dart",
-  "test/features/practice_generator/presentation/today_plan_screen_test.dart",
 ]
 native_gate = false
 ```
 
-**Kockázat = high, indoklás:** a diff felhasználói felületet ír át azon az úton, amit a felhasználó a leggyakrabban jár; egy elveszett állapot- vagy hibajelzés némán rontaná az élményt. A `flutter-reviewer` és a `flutter-devil-advocate` futtatása a review-ban KÖTELEZŐ.
+**Kockázat = high, indoklás:** a diff **új felhasználói utat nyit** egy eddig lezárt flow-hoz, és egy feature-flag rollout-határt mozdít el. A `security-reviewer` futtatása KÖTELEZŐ (a `plan_privacy_screen` consent-felület, és a bekötés adatgyűjtő utat tehet elérhetővé), a `flutter-reviewer` és a `flutter-devil-advocate` szintén.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -211,123 +97,157 @@ tools/codex-signal.sh stopped "<egy sor>"
 tools/codex-signal.sh blocked "<egy sor>"
 ```
 
-**STOP-protokoll:** ha a migrációhoz egy `application/`, `domain/` vagy `data/` réteg módosítása kellene, a kimenet a `stopped` jelzés — a viselkedés-változás nem ennek a körnek a hatásköre ([L478](../LESSONS.md#l478)).
+**STOP-protokoll:** ha a bekötéshez a `practice_generator` `application/`, `domain/` vagy `data/` rétegét kellene módosítani (pl. mert egy provider hiányzik a képernyő futásához), a kimenet `stopped` — a generátor-motor viselkedése NEM ennek a körnek a hatásköre ([ADR 0255](../adr/0255-deterministic-practice-plan-generation.md), [L478](../LESSONS.md#l478)). A képernyők a meglévő providereikből élnek; ha nem, az önálló kör.
 
 ## 1. Cél
 
-A batch 6 képernyője a design-rendszer komponenseit és tokenjeit használja, változatlan viselkedés mellett — hogy a felület egységes legyen, és a 200%-os szövegskála, a képernyőolvasó és a két locale mindenhol működjön.
+A Practice Generator flow-ja **megnyithatóvá** válik egy mért belépési ponton a nem-production buildekben (production változatlanul zárt), és a 6 képernyője a design-rendszer komponenseit használja — hogy a felhasználó a megtervezett tervkészítő utat végig tudja járni, egységes felülettel, 200%-os szövegskálán és mindkét locale-on.
 
 ## 2. Jelenlegi állapot — mért tények
 
-- A batch képernyői (MÉRVE `grep -L design_system`): `today_plan_screen.dart`, `weekly_plan_screen.dart`, `plan_setup_screen.dart`, `plan_preview_screen.dart`, `plan_change_review_screen.dart`, `plan_privacy_screen.dart`.
-- Egyik sem importálja a `core/design_system`-et; a stílusuk közvetlen `Theme.of(context)` / `AppColors` / `AppPalette` hivatkozásokból jön.
-- Az `E15-R01` óta az app futásidejű témája a design-rendszer témája, tehát a komponensek burkoló NÉLKÜL is feloldják a tokeneket.
-- Az `E15-R02` óta az adaptív shell az alapértelmezett belépő, tehát ezek a képernyők a fő navigációból elérhetők.
-- A `test/ui/ui_inventory_test.dart` EGZAKT képernyőszámot állít — a kör nem hoz létre és nem töröl képernyőt, tehát a szám VÁLTOZATLAN.
+- **Flag:** `practiceGeneratorEnabled` létezik (`feature_flags.dart:22,84,169`), de `false` a default konstruktorban ÉS a `forEnvironment` gyárban. A `plannerAssistEnabled` ugyanígy.
+- **Registry:** `feature_flag_registry.dart:144` — `risk: medium`, `failClosedDefault: false`, `adr: '0255'`, és a `killSwitchPath` a mai „forráskód-változás kell hozzá" állapotot írja le.
+- **Pinnelő cellák:** `test/app/config/feature_flags_test.dart` HÁROM cellája rögzíti a `false`-t: default konstruktor (14), `production` (26), `development` (36).
+- **Route:** `lib/app/routing/app_route.dart` egyetlen `plan*`/`generator*` útvonalat sem deklarál; `app_router.dart` egyetlen `practice_generator` képernyőt sem nevez meg.
+- **Elérhetőség:** `docs/ui/retirement-plan.md:241–246` — mind a 6 képernyő `unreachable`, „no route and no measured construction site anywhere in lib/".
+- **Migráltság:** a 6 képernyő egyike sem importálja a `core/design_system`-et.
+- **Minta a flag-kapuzott route-ra:** `app_router.dart:561–573` (`if (visionEnabled && visionSetupEnabled) ...[ GoRoute(path: AppRoutes.visionSetup, …) ]`) — a bekötés EZT a bevett alakot követi.
+- **Képernyő-leltár:** `test/ui/ui_inventory_test.dart:26` egzakt `hasLength(96)`. A kör **nem hoz létre és nem töröl** képernyőt, tehát ez a szám VÁLTOZATLAN — a bekötés route-ot ad, nem képernyőt.
 
 ## 3. Scope
 
-**Benne van:** a felsorolt 6 képernyő vizuális migrálása (`SsCard`, `SsContentCard`, `SsButton`, `SsSwitchRow`, `SsEmptyState`, `SsFailureState`, `SsSkeleton`, `SsSection`, `SsMetricCard` és társaik; `SsSpacing`/`SsTypography`/`SsColorScheme`/`SsRadius` tokenek — a MÉRT komponens-lista a §0.0.A/R4-ben) · a meglévő `*ThemeScope` burkoló eltávolítása, ahol az `E15-R01` óta felesleges · a `migration-status.md` frissítése a MÉRT új aránnyal.
+### F1 — bekötés (a kör kötelező magja)
+
+**Benne van:** route-konstansok a 6 képernyőhöz az `AppRoutes`-ban · a hozzájuk tartozó, `practiceGeneratorEnabled`-re kapuzott `GoRoute` regisztrációk `app_router.dart`-ban a §2 mért mintája szerint · EGY mért belépési pont, amiről a flow megnyitható (§5.2) · a flag `forEnvironment` határának átállítása a `nonProd` mintára (production továbbra is OFF) · a registry `killSwitchPath`/`adr` mezőjének igazítása az ÚJ igazsághoz · a három pinnelő cella átírása az ÚJ szerződésre (nem törlés, nem `skip`) · az ÚJ ADR.
+
+### F2 — migráció
+
+**Benne van:** a 6 képernyő vizuális migrálása a design-rendszer komponenseire (`SsContentCard`, `SsButton`, `SsEmptyState`, `SsFailureState`, `SsMetricCard` és társaik; `SsSpacing`/`SsTypography` tokenek) · a felesleges `*ThemeScope` burkoló eltávolítása (az `E15-R01` óta az app témája hordozza a tokeneket, ÚJ burkoló NEM vezethető be) · a `migration-status.md` és a `retirement-plan.md` érintett sorainak frissítése a MÉRT új értékekre.
+
+> ⚠ **Komponens-nevek MÉRÉSBŐL:** az `E15-R05`/`E15-R06` kétszer mérte, hogy a briefekben szereplő `SsListTile`/`SsErrorState`/`SsMetricTile` **nem létezik** — a valódi nevek `SsContentCard`/`SsFailureState`/`SsMetricCard`. A pre-flight a `lib/core/design_system/public.dart`-ból ellenőrizze a használt neveket, mielőtt egy sort is ír.
 
 Batch-specifikus kikötések:
 
-- a `plan_change_review_screen` diff-nézete megtartja a MÉRT változás-kategóriákat; a megjelenítés kerül csak komponensekre
-- a `plan_privacy_screen` szövegei és consent-kapcsolói VÁLTOZATLANOK (adatvédelmi felület)
+- a `plan_change_review_screen` diff-nézete megtartja a MÉRT változás-kategóriákat; csak a megjelenítés kerül komponensekre
+- a `plan_privacy_screen` szövegei és consent-kapcsolói VÁLTOZATLANOK (adatvédelmi felület) — a bekötés sem lazíthat a consent-úton
 - az ADR 0306 határa érvényben marad: a preview-felület a core flow-t nem blokkolhatja
 
 **NINCS benne (tilos):**
 
-- `application/`, `domain/`, `data/`, `providers/` réteg módosítása (viselkedés-változás).
-- Új képernyő létrehozása vagy meglévő törlése.
+- a `practice_generator` `application/`, `domain/`, `data/`, `providers/` rétege (viselkedés-változás → STOP).
+- `plannerAssistEnabled` bekapcsolása — külön rollout-döntés.
+- Új képernyő létrehozása vagy meglévő törlése (a `ui_inventory` száma VÁLTOZATLAN).
 - Új `*ThemeScope` burkoló bevezetése.
-- ARB-kulcs törlése vagy szöveg-jelentés megváltoztatása (új kulcs FELVEHETŐ, ha a komponens ezt igényli — mindkét locale-ra, egyszerre).
-- `docs/adr/**`.
+- ARB-kulcs törlése vagy szöveg-jelentés megváltoztatása (ÚJ kulcs felvehető, egyszerre `en` ÉS `hu`).
+- `tools/**`, `.github/**`, `lib/core/design_system/**` (a komponenseket HASZNÁLJUK, nem módosítjuk).
+- Minden más `lib/features/**` képernyő.
 
 ## 4. Engedélyezett fájlok
 
-| Útvonal | Indok |
-|---|---|
-| `lib/features/practice_generator/presentation/screens/today_plan_screen.dart` | migráció design-rendszer komponensekre |
-| `lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart` | migráció design-rendszer komponensekre |
-| `lib/features/practice_generator/presentation/screens/plan_setup_screen.dart` | migráció design-rendszer komponensekre |
-| `lib/features/practice_generator/presentation/screens/plan_preview_screen.dart` | migráció design-rendszer komponensekre |
-| `lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart` | migráció design-rendszer komponensekre |
-| `lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart` | migráció design-rendszer komponensekre |
-| `test/features/practice_generator/accessibility/planner_accessibility_test.dart` | típus-pinnelő őr — VÁLTOZATLANUL zöld marad (§0.0) |
-| `test/features/practice_generator/presentation/plan_setup_screen_test.dart` | típus-pinnelő őr — VÁLTOZATLANUL zöld marad (§0.0) |
-| `test/features/practice_generator/accessibility/planner_privacy_test.dart` | típus-pinnelő őr (`PlanPrivacyScreen`) — §0.0.A/R6 |
-| `test/features/practice_generator/presentation/plan_preview_screen_test.dart` | típus-pinnelő őr (`PlanPreviewScreen`) — §0.0.A/R6 |
-| `test/features/practice_generator/presentation/today_plan_screen_test.dart` | típus-pinnelő őr (`TodayPlanScreen`) — §0.0.A/R6 |
-| `lib/l10n/base/app_en.arb`, `lib/l10n/base/app_hu.arb` | ARB-FORRÁS, ha a komponens új kulcsot igényel — §0.0.A/R5 |
-| `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` | a fentiek GENERÁLT kimenete (`tool/gen_l10n_segments.dart`) — §0.0.A/R5 |
-| `docs/ui/migration-status.md` | a MÉRT arány frissítése |
+| Útvonal | Indok | Fázis |
+|---|---|---|
+| `lib/app/routing/app_route.dart` | a 6 route-konstans | F1 |
+| `lib/app/routing/app_router.dart` | a flag-kapuzott `GoRoute` regisztrációk + belépési pont | F1 |
+| `lib/app/config/feature_flags.dart` | a `forEnvironment` határ átállítása `nonProd`-ra | F1 |
+| `lib/core/feature_flags/feature_flag_registry.dart` | `killSwitchPath` + `adr` az ÚJ igazságra | F1 |
+| `test/app/config/feature_flags_test.dart` | a három pin átírása az ÚJ szerződésre | F1 |
+| `test/app/routing/app_router_test.dart` | a route-ok és a flag-kapu cellái | F1 |
+| `lib/features/practice/presentation/screens/practice_hub_screen.dart` | a flow EGY belépési pontja (§5.2) — flag-kapuzva | F1 |
+| `test/app/navigation/{adaptive_scaffold,tab_state_restoration,legacy_route_redirect}_test.dart` | navigációs őrök — a jogosultság PONTOSAN §5.5 szerinti | F1 |
+| `docs/adr/0480-practice-generator-entry-point-and-rollout.md` | az ÚJ döntés (a szám a pre-flightból) | F1 |
+| a 6 `*_screen.dart` a `practice_generator/presentation/screens/`-ben | migráció design-rendszer komponensekre | F2 |
+| `test/features/practice_generator/presentation/{plan_setup,plan_preview,today_plan}_screen_test.dart` | állapot- és variáns-cellák | F2 |
+| `test/features/practice_generator/accessibility/planner_accessibility_test.dart` | típus-pinnelő őr — VÁLTOZATLANUL zöld marad | F2 |
+| `docs/ui/migration-status.md`, `docs/ui/retirement-plan.md` | a MÉRT új arány és az elérhetőségi verdikt | F2 |
 
-**Tilos zóna:** a batch feature-einek `application/`, `domain/`, `data/`, `providers/` könyvtárai · minden más `lib/features/**` képernyő · `lib/app/**` · `lib/core/design_system/**` (a komponenseket HASZNÁLJUK, nem módosítjuk) · `docs/adr/**` · `tools/**` · `.github/**`
+## 5. Kötött architekturális döntések (ADR 0480 — a pre-flight erősíti meg a számot)
 
-## 5. Kötött architekturális döntések
+### 5.1 A production zárva marad
 
-Nincs ÚJ ADR. Három kötelező szabály:
+A flag a `practiceEngineV2Enabled` mintáját veszi át: `nonProd` → ON, `production` → OFF. **NEM elfogadható gyengítés:** a flag globális `true`-ra állítása „hogy a teszt egyszerűbb legyen". A production-cella (`feature_flags_test.dart:26`) marad, és `isFalse`-t vár TOVÁBBRA IS.
 
-### 5.1 A viselkedés bitre azonos marad
+### 5.2 EGY belépési pont, mérten
 
-Ugyanaz az adat, ugyanaz a sorrend, ugyanazok az állapotok (üres, betöltés, hiba). **NEM elfogadható gyengítés:** „egyszerűsítettük a hibaállapotot" — az információvesztés, nem migráció.
+A flow-nak pontosan egy gazdája van (a pre-flight §0.0.A/4 méri meg; a javaslat a `practiceHub` = `/practice` felület). **NEM elfogadható gyengítés:** hat különálló, egymásra nem hivatkozó route bekötése belépési pont nélkül — az az elérhetőség-mérőt kielégítené, a felhasználót nem.
 
-### 5.2 Minden állapotnak van design-rendszer-megfelelője
+### 5.3 A route-literálok az `AppRoutes`-ból jönnek
 
-Üres lista → `SsEmptyState`, hiba → `SsFailureState`, betöltés → `SsSkeleton`
-(a design-rendszer betöltés-komponense). **NEM elfogadható gyengítés:** nyers
-`CircularProgressIndicator` (ma: `plan_setup_screen.dart:65`) vagy csupasz
-`Text('Hiba')` meghagyása.
+Beégetett útvonal-string a routerben tilos (a `test/tooling/route_literal_guard_test.dart` gépi őre). **NEM elfogadható gyengítés:** az őr fellazítása a kör kedvéért.
 
-**Kivétel, §0.0.A/R4 szerint:** ahol nincs VALÓDI, már létező akció
-(`SsEmptyState` mind az 5 paramétere `required`), illetve nincs valódi
-`SsFailurePresentation`, ott a bevett képernyő-lokális, **tokenizált**
-állapot-widget a helyes megoldás — akciót vagy hibamodellt kitalálni tilos. A
-§10-ben minden ilyen kivételt tételesen indokolj.
+### 5.4 A viselkedés bitre azonos marad (F2)
 
-### 5.3 A szöveg lokalizált marad
+Ugyanaz az adat, sorrend, és ugyanazok az állapotok (üres, betöltés, hiba). **NEM elfogadható gyengítés:** „egyszerűsítettük a hibaállapotot" — az információvesztés.
 
-Beégetett felhasználói szöveg nem kerülhet a migrált kódba; új szöveg egyszerre `en` ÉS `hu` ARB-kulcsot kap. **NEM elfogadható gyengítés:** angol placeholder „amíg lefordítjuk".
+### 5.5 A navigációs őrök jogosultsága PONTOSAN a belépési pont felvétele
+
+A `test/app/navigation/` őrei (`adaptive_scaffold_test.dart`, `tab_state_restoration_test.dart`, `legacy_route_redirect_test.dart`) route-onként PINNELIK a renderelt képernyő típusát, ezért a shell egy destination-builderének átkötése pirosra váltja őket (MÉRVE: E13-R17 pre-flight, `flutter test test/app/navigation/` +33 → +30 -3 három destination átkötésével). Ez a kör **egyetlen meglévő destination buildert sem köt át** — ÚJ, flag-kapuzott route-okat vesz fel, és a `practice_hub_screen.dart`-ra EGY belépési pontot (§5.2). A jogosultság ezért PONTOSAN ennyi: az ÚJ belépési pont miatt szükséges cella-kiegészítés. Ugyanez áll a `practice_hub_screen.dart` TÍPUSÁT pinnelő négy őrre (`test/core/screen_size_guard_test.dart`, `test/features/practice/presentation/{practice_a11y_audit,practice_hub_screen,practice_routing}_test.dart`): a kör a hub képernyőt **nem cseréli le és nem alakítja át** — EGY belépési pont elemet vesz fel rá, flag-kapuzva —, tehát a jogosultság pontosan az ÚJ elem cellája. **Cella törlése, `skip`-je vagy gyengítése TILOS**, és a §10-ben szerepelnie kell a `flutter test test/app/navigation/` cellaszámának ELŐTTE és UTÁNA — a különbség csak az ÚJ cellák számával nőhet, csökkennie tilos.
+
+### 5.6 A szöveg lokalizált marad
+
+Beégetett felhasználói szöveg nem kerülhet a kódba; ÚJ szöveg egyszerre `en` ÉS `hu` ARB-kulcsot kap. **NEM elfogadható gyengítés:** angol placeholder „amíg lefordítjuk".
 
 ## 6. Acceptance criteria
 
-| # | Kritérium | Bizonyíték |
-|---|---|---|
-| A1 | Mind a 6 képernyő importálja a `core/design_system`-et, és a mérés szerint migráltnak számít | a §7 mérő-parancs kimenete a §10-ben |
-| A2 | Minden migrált képernyő üres/betöltés/hiba állapota design-rendszer-komponens | a batch célzott widget-tesztjei |
-| A3 | A képernyők `textScaler 2.0` mellett, `en` ÉS `hu` locale-on túlcsordulás nélkül renderelnek — **TELEFON-méretű viewporton** (`360×640`, `devicePixelRatio 1.0`), az alapértelmezett 800×600 NEM elfogadható (§0.0.A/R7, [L558](../LESSONS.md#l558)) | a batch variáns-cellái |
-| A4 | A típus-pinnelő tesztek VÁLTOZATLANUL zöldek, egyetlen cellájuk sem törölt/`skip`-elt | a §7 gate + `git diff` a teszt-fájlokon |
-| A5 | A `ui_inventory_test.dart` egzakt száma VÁLTOZATLAN | a §7 gate |
-| A6 | Nincs beégetett felhasználói szöveg a migrált kódban | `test/l10n/hardcoded_string_guard_test.dart` |
-| A7 | A `migration-status.md` a MÉRT új arányt írja (a mérés parancsával) | a dokumentum |
-
-**Küszöb-cellahármas a szövegskálára** (a kötelező határ `2.0`, INKLUZÍV): a küszöb **alatt** (`1.5`) → nincs túlcsordulás; **pontosan rajta** (`2.0`) → nincs túlcsordulás, EZ az A3 feltétele; a küszöb **fölött** (`2.5`) → nem követelmény, és a `2.0` teljesítése nem hivatkozhat rá.
+| # | Kritérium | Bizonyíték | Fázis |
+|---|---|---|---|
+| A1 | A 6 képernyő verdiktje `unreachable`-ből **reachable**-be fordul, a MÉRŐ ESZKÖZ kimenetében | `dart run tool/check_screen_reachability.dart` előtte/utána (§7) | F1 |
+| A2 | A route-ok a `practiceGeneratorEnabled` kapuja MÖGÖTT vannak: a flag OFF-ra állítva a 6 route NEM regisztrálódik | `app_router_test.dart` flag-be/ki cellapár | F1 |
+| A3 | A flag `nonProd`-on ON, `production`-ön OFF; a default konstruktor OFF marad | `feature_flags_test.dart` három átírt cellája | F1 |
+| A4 | A belépési pontról a flow ténylegesen megnyitható (nem csak a route létezik) | célzott widget-teszt: a belépési pont megnyomása a terv-képernyőre navigál | F1 |
+| A5 | A `feature_flag_registry` `killSwitchPath`-ja az ÚJ igazságot írja le (nem a „hardcoded false"-t) | `feature_flag_audit_test.dart` + `git diff` | F1 |
+| A6 | A `ui_inventory_test.dart` egzakt `hasLength(96)` VÁLTOZATLAN | a §7 gate | F1 |
+| A7 | Mind a 6 képernyő importálja a `core/design_system`-et, és a mérés szerint migráltnak számít | a §7 mérő-parancs kimenete a §10-ben | F2 |
+| A8 | Minden migrált képernyő üres/betöltés/hiba állapota design-rendszer-komponens | a batch célzott widget-tesztjei | F2 |
+| A9 | A képernyők `textScaler 2.0` mellett, `en` ÉS `hu` locale-on túlcsordulás nélkül renderelnek **telefon-viewporton** | a küszöb-cellahármas (§6.2) | F2 |
+| A10 | A típus-pinnelő tesztek VÁLTOZATLANUL zöldek, egyetlen cellájuk sem törölt/`skip`-elt | `git diff` a teszt-fájlokon + a §7 gate | F2 |
+| A11 | Nincs beégetett felhasználói szöveg | `test/l10n/hardcoded_string_guard_test.dart` | F1+F2 |
+| A12 | A `migration-status.md` és a `retirement-plan.md` a MÉRT új értékeket írja | a dokumentumok + a mérés parancsa | F2 |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| A képernyő megkapja a komponenseket, de a hibaállapot nyers `Text` marad | A2 |
-| A migráció csak `en` locale-on lett kipróbálva, a hosszabb `hu` szöveg túlcsordul | A3 |
-| A migráció közben egy típus-pinnelő teszt cellája `skip`-re kerül a zöldért | A4 |
-| Egy szöveg beégetve kerül a kódba | A6 |
-| A képernyő importálja a design-rendszert, de a stílus továbbra is `AppColors`-ból jön | A1 (a mérés a MIGRÁLT/legacy besorolást is ellenőrzi a kód alapján) |
+| A route bekötve, de a flag-kapu lemaradt (production is megnyitná) | A2 + A3 |
+| A flag globálisan `true`-ra állítva | A3 (production-cella) |
+| Hat route bekötve, de egyikre sem mutat semmi a felületen | A4 |
+| A registry `killSwitchPath`-ja a régi „hardcoded false" szöveget hagyja | A5 |
+| A képernyő megkapja a komponenseket, de a hibaállapot nyers `Text` marad | A8 |
+| A migráció csak `en` locale-on lett kipróbálva, a hosszabb `hu` szöveg túlcsordul | A9 |
+| Egy pinnelő cella `skip`-re kerül a zöldért | A10 |
+| A képernyő importálja a design-rendszert, de a stílus továbbra is `AppColors`-ból jön | A7 |
 
-**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** cserélj vissza EGY migrált képernyőn egy `SsErrorState`-et nyers `Text`-re, futtasd a §7 gate-et → az **A2** cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próbák (KÖTELEZŐ, a §10-ben dokumentálva):**
+1. Vedd ki a flag-feltételt EGY route regisztrációjából → az **A2** cellának PIROSNAK kell lennie → állítsd vissza.
+2. Cserélj vissza EGY migrált képernyőn egy `SsFailureState`-et nyers `Text`-re → az **A8** cellának PIROSNAK kell lennie → állítsd vissza.
+
+### 6.2 A szövegskála-cellák MÉRT szerződése (E15-R06 lecke, [L558](../LESSONS.md#l558)/[L559](../LESSONS.md#l559))
+
+A `flutter_test` alapértelmezett viewportja **800×600** — szélesebb ÉS magasabb minden telefonnál, ezért a rajta mért „nincs túlcsordulás" **semmit nem bizonyít**. Az A9 cellái KÖTELEZŐEN:
+
+- kipinnelt `tester.view.physicalSize = Size(360, 640)` + `devicePixelRatio = 1.0`, `addTearDown(tester.view.reset)`-tel;
+- küszöb-cellahármas: a küszöb **alatt** (`1.5`) → nincs túlcsordulás; **pontosan rajta** (`2.0`) → nincs túlcsordulás, EZ az A9 feltétele; a küszöb **fölött** (`2.5`) → nem követelmény, és a `2.0` teljesítése nem hivatkozhat rá;
+- `en` ÉS `hu` locale mindegyiken;
+- lusta `ListView` esetén `scrollUntilVisible(...)` a mérendő widgetre **a `takeException()` ELŐTT** — különben a cella ÜRES fát mér, és a zöld mérési artefaktum.
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/ui/ui_inventory_test.dart test/l10n/hardcoded_string_guard_test.dart test/features/practice_generator/accessibility/planner_accessibility_test.dart test/features/practice_generator/accessibility/planner_privacy_test.dart test/features/practice_generator/presentation/plan_setup_screen_test.dart test/features/practice_generator/presentation/plan_preview_screen_test.dart test/features/practice_generator/presentation/today_plan_screen_test.dart
+tools/round-gate.sh test/tooling/screen_reachability_test.dart test/tooling/feature_flag_audit_test.dart test/tooling/route_literal_guard_test.dart test/app/config/feature_flags_test.dart test/app/routing/app_router_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/navigation/legacy_route_redirect_test.dart test/core/screen_size_guard_test.dart test/features/practice/presentation/practice_a11y_audit_test.dart test/features/practice/presentation/practice_hub_screen_test.dart test/features/practice/presentation/practice_routing_test.dart test/ui/ui_inventory_test.dart test/features/practice_generator/accessibility/planner_accessibility_test.dart test/features/practice_generator/presentation/plan_setup_screen_test.dart
 ```
 
-A migrációs mérés (a kimenet a §10-be, batch-enként MIGRATED/legacy sorokkal):
+Az elérhetőség-mérés (a kimenet a §10-be, ELŐTTE és UTÁNA):
+
+```bash
+dart run tool/check_screen_reachability.dart | grep -i practice_generator
+```
+
+A migráltság-mérés (a kimenet a §10-be, MIGRATED/legacy sorokkal):
 
 ```bash
 for f in lib/features/practice_generator/presentation/screens/today_plan_screen.dart lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart lib/features/practice_generator/presentation/screens/plan_setup_screen.dart lib/features/practice_generator/presentation/screens/plan_preview_screen.dart lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart; do grep -q design_system "$f" && echo "MIGRATED $f" || echo "legacy $f"; done
 ```
 
-Ha a batch képernyőjének VAN golden PNG-je, az újrafelvétel KIZÁRÓLAG a merge-kapu architektúráján (ADR 0426):
+Ha a batch képernyőjének VAN golden PNG-je, az újrafelvétel KIZÁRÓLAG a merge-kapu architektúráján ([ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)):
 
 ```bash
 tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
@@ -335,202 +255,21 @@ tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
 
 ## 8. Implementációs sorrend
 
-1. A `retirement-plan.md` beolvasása → a tényleges képernyő-lista.
-2. Képernyőnként: komponens-csere → állapotok (üres/betöltés/hiba) → tokenek → `*ThemeScope` eltávolítása.
-3. A batch célzott widget-tesztjei (állapotok + `textScale 2.0` + `en`/`hu`).
-4. A mérés futtatása, `migration-status.md` frissítése.
-5. A valódi-sértés próba a §10-be.
+1. **Pre-flight** (§0.0.A): ADR-szám, elérhetőség- és migráltság-mérés, a belépési pont gazdájának megmérése, komponens-nevek ellenőrzése a `design_system/public.dart`-ból.
+2. **F1/a:** route-konstansok → flag-kapuzott `GoRoute` regisztrációk → belépési pont.
+3. **F1/b:** a flag `nonProd` határa + registry `killSwitchPath`/`adr` → a három pin átírása → `app_router_test` flag-be/ki cellapár + a belépési pont cellája.
+4. **F1/c:** ADR megírása, elérhetőség-mérés ÚJRA (A1 bizonyíték), valódi-sértés próba 1.
+5. **F2:** képernyőnként komponens-csere → állapotok → tokenek → `*ThemeScope` eltávolítás; cellák a 360×640 viewporton (§6.2); valódi-sértés próba 2.
+6. `migration-status.md` + `retirement-plan.md` frissítése a MÉRT értékekre.
 
 ## 9. Kockázatok
 
-- **Néma információvesztés.** A migráció közben elveszett állapot vagy mező a leggyakoribb hiba (A2).
-- **Locale-vak elrendezés.** A magyar szövegek hosszabbak; az `en`-re szabott elrendezés túlcsordul (A3).
-- **Scope-csúszás a viselkedés felé.** Egy „apró" providers-módosítás a kör mérhetőségét rontja (STOP-eset).
+- **Néma bekötés.** A route létezik, de semmi nem navigál rá — a mérő eszköz zöld, a felhasználó nem jut oda (A4 fogja).
+- **Kapu-szivárgás production-be.** Egy elfelejtett flag-feltétel élesben nyit meg egy nem kész flow-t (A2+A3 fogja; a `security-reviewer` kötelező).
+- **Rossz viewport.** A 800×600-as alapértelmezésen mért zöld szövegskála-cella mérési artefaktum (§6.2, L558/L559).
+- **Scope-csúszás a viselkedés felé.** Ha a képernyő futásához provider-módosítás kellene, az STOP-eset, nem „apró kiegészítés".
+- **Kétfázisú túlvállalás.** Ha az F1+F2 nem fér egy körbe, az F1 a kör — a §0.0.A/5 szerint, MÉRÉSSEL dokumentálva.
 
 ## 10. Implementation handoff — az implementer tölti ki
-
-### 10.1 Képernyőnkénti összefoglaló
-
-- **`today_plan_screen.dart`** — `core/design_system` import. Az üres/rest/
-  unavailable/completed/notScheduled állapotok közös `_StatusBadge`
-  widgetre (ikon+szöveg, `SsColorScheme`/`SsTypography` tokenekkel) és
-  retokenizált `Text`-ekre váltottak; a `plannedDay` ág `SsButton`-ra váltja
-  az öt korábbi `FilledButton`/`TextButton`-t (`today-plan-start/-swap/
-  -skip/-shorten/-pause`, kulcsok VÁLTOZATLANOK). Új `_ScrollableIfShort`
-  wrapper (az E15-R06 `setlist_list_screen.dart` mintájának másolata) a
-  switch KIMENETÉN, tehát mind a 6 ág egyformán védett (L559 — nem
-  ág-onkénti, hanem a switch egész eredményét fedő védelem). A
-  `_PlannedDay` korábbi `Spacer()`-e fix `SizedBox(height:
-  SsSpacing.space6)`-ra váltott, mert a scroll-ági (unbounded height)
-  Columnban egy flex gyerek hibát dobna — a gombok sorrendje és készlete
-  változatlan, csak a képernyő aljára-tűzés szűnt meg.
-- **`weekly_plan_screen.dart`** — `core/design_system` import. A
-  `Card`+`ListTile` sor `_WeeklyDayCard`-ra váltott (tokenizált `Container`
-  — NEM `SsContentCard`, mert az csak title+message párost tud, a sor
-  viszont HÁROM különálló tényt mutat — dátum, státusz-felirat, perc —, és
-  ezek összeolvasztása információvesztés lenne, §5.1). A `plan == null` ág
-  retokenizált `Text`-re váltott.
-- **`plan_setup_screen.dart`** — `core/design_system` import. A
-  `plan_setup_screen.dart:65` nyers `CircularProgressIndicator` **egy pár
-  `SsSkeleton`-ra** váltott (§5.2 kötelező eset). A lépés-fejlécek, a
-  konfliktus-szöveg (`colors.danger`), a vissza/tovább gombpár, a
-  „nem tudom" gombok (mind a 4 előfordulás — cél/elérhetőség/eszköz/
-  preferencia/kényelem lépés) és a bináris választó (`OutlinedButton`)
-  mind `SsButton`-ra váltottak. A kényelmi szabadszöveg-mező **kivétel**:
-  marad nyers `TextField` (indoklás: 10.2).
-- **`plan_preview_screen.dart`** — `core/design_system` import. A
-  `_FindingsBanner` retokenizált `Container`-re váltott (`colors.danger`/
-  `colors.warning`, `SsRadius.md`); az `intro` szöveg és a figyelmeztetés-
-  nyugtázó gomb (`plan-preview-acknowledge-warning`) `SsButton`-ra váltott.
-  **Kivétel:** a `plan-preview-confirm` gomb marad nyers `FilledButton`
-  (indoklás: 10.2).
-- **`plan_change_review_screen.dart`** — `core/design_system` import. A
-  `_ChangeCard` `Card`-ja `SsCard`-ra váltott, minden belső `Text`
-  retokenizálva; az elfogadás/elutasítás gombpár `SsButton`-ra váltott. A
-  diff-nézet KATEGÓRIÁI (before/after/reason/confidence/evidence/
-  reversible) MÉRT-változatlanok — csak a megjelenítés vált komponensre
-  (§3 batch-kikötés). Nulla tesztlefedettség ez a képernyő előtt ÉS után is
-  (mérve: `grep -rn '\bPlanChangeReviewScreen(' test/` → 0 találat) — nem
-  szerepel a `gate_tests`-en, a migráció csak kódszintű ellenőrzéssel
-  igazolható.
-- **`plan_privacy_screen.dart`** — `core/design_system` import. A
-  `_ScopeCard`/`_DiscomfortSafetyCard` `SsCard`-ra váltott. Az export-gomb
-  `SsButton(variant: secondary)`, a törlés-gomb **`SsButton(variant:
-  destructive, destructiveSemanticHint: l10n.practicePrivacyDeleteConfirmBody)`**
-  — a §5.5 dokumentált szabálya szerint a destruktív szándékot NEM csak
-  szín jelzi. A megerősítő `AlertDialog`-ok (`_DeleteConfirmDialog`,
-  `_ExportConfirmDialog`) gombjai NEM váltottak `SsButton`-ra — ugyanaz a
-  precedens, mint az E15-R06 `setlist_list_screen.dart` `_promptName`
-  dialógusa: a dialógus-akció a Material-konvenció része, nem a képernyő
-  saját felülete. A brief §0.0.A/R2 „a szövegek és consent-kapcsolók
-  VÁLTOZATLANOK" kikötése: a képernyőn TÉNYLEGESEN nincs kapcsoló
-  (`Switch`/`SsSwitchRow`) — mérve, nincs ilyen widget a fájlban sem előtte,
-  sem utána; a kikötés ezért tartalom nélkül teljesül.
-
-### 10.2 Dokumentált kivételek (§5.2, §0.0.A/R4)
-
-1. **`plan-preview-confirm` marad nyers `FilledButton`.** A
-   `plan_preview_screen_test.dart` A3/A4 cellái ezt a kulcsot
-   `tester.widget<FilledButton>(confirmButton).onPressed` alakban castolják
-   — az `SsButton` a kulcsot ÖNMAGÁRA teszi, nem a belső `FilledButton`-ra,
-   tehát a csere elbuktatná ezt a fagyasztott cellát (§0.0 tiltja a
-   gyengítést). Nincs `SsButtonVariant`, ami ezt a típus-elvárást
-   kielégítené.
-2. **A kényelmi szabadszöveg-mező (`plan-comfort-free-text`) marad nyers
-   `TextField`.** Korlátlan sorszámú bevitelt fogad (`maxLines: null`);
-   `SsTextField.maxLines` `int`, NEM nullázható — a csere csendben
-   1 sorra korlátozná a tanuló szabadszövegét (§5.1 sérülés).
-3. **Egyik képernyő sem használ `SsEmptyState`/`SsFailureState`-et.**
-   Egyik állapotnak sincs VALÓDI, már létező akciója (`SsEmptyState`
-   mind az 5 paramétere kötelező) vagy VALÓDI `SsFailurePresentation`-je
-   (a `_FindingsBanner` több, egyidejű validációs találatot listáz —
-   struktúrája nem `SsFailureState` egy-üzenetes modellje). Ugyanez az
-   osztály, mint az E15-R04/R05/R06 megalapozott kivétele
-   (`migration-status.md` korábbi bejegyzései).
-4. **A megerősítő `AlertDialog`-ok gombjai nem váltottak.** Lásd 10.1
-   `plan_privacy_screen.dart` bekezdés — ugyanaz a precedens, mint a
-   `setlist_list_screen.dart` `_promptName` dialógusa.
-5. **`plan_change_review_screen.dart` nulla tesztlefedettségű.** Nem a
-   `gate_tests` része; a migráció csak kódolvasással ellenőrizhető.
-
-### 10.3 §5 mérés kimenete (A1, A7)
-
-```
-$ for f in lib/features/practice_generator/presentation/screens/{today_plan,weekly_plan,plan_setup,plan_preview,plan_change_review,plan_privacy}_screen.dart; do grep -q design_system "$f" && echo "MIGRATED $f" || echo "legacy $f"; done
-MIGRATED lib/features/practice_generator/presentation/screens/today_plan_screen.dart
-MIGRATED lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart
-MIGRATED lib/features/practice_generator/presentation/screens/plan_setup_screen.dart
-MIGRATED lib/features/practice_generator/presentation/screens/plan_preview_screen.dart
-MIGRATED lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart
-MIGRATED lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart
-
-$ for f in $(find lib/features -name '*_screen.dart' | sort); do grep -q design_system "$f" && echo MIGRATED || echo legacy; done | grep -c MIGRATED
-69   # / 96 total → 71.875%, +6 az E15-R06 63/96 (65.625%) bázishoz képest
-```
-
-`docs/ui/migration-status.md` frissítve: új E15-R07 bekezdés a tetején, a
-„Measured total" 69/96-ra, a `practice_generator` sor `6/6`-ra (`—` legacy
-lista), a „Not yet superseded" lista `practice_generator`-t kivéve (az
-unreachable ténnyel kiegészítve).
-
-### 10.4 §7 valódi-sértés próba (KÖTELEZŐ)
-
-A briefben megnevezett `SsErrorState` egyik migrált képernyőn sem fordul
-elő (§0.0.A/R4 — a komponens nem is létezik, és egyik állapot sem indokolja
-`SsFailureState` bevezetését sem, 10.2/3. pont), ezért a próbát a kör
-TÉNYLEGES, mérhető diffjéhez adaptáltam: a `today_plan_screen.dart` új
-`_ScrollableIfShort` védelmét (A3, §0.0.A/R7 fallout) vetettem vissza.
-
-**Sértés (a védelem eltávolítva, `_ScrollableIfShort(child: ...)` hívás
-kikommentezve, a switch közvetlenül a `Padding` gyereke):**
-
-```
-$ flutter test test/features/practice_generator/accessibility/planner_accessibility_test.dart
-...
-00:01 +0 -3: A2 — large-text overflow TodayPlanScreen planned-day view renders without overflow at 2.0 [E]
-  Actual: FlutterError:<A RenderFlex overflowed by 104 pixels on the bottom.>
-00:01 +0 -4: A2 — large-text overflow TodayPlanScreen planned-day view renders without overflow at 2.0 (hu) [E]
-  Actual: FlutterError:<A RenderFlex overflowed by 104 pixels on the bottom.>
-Failing tests (4):
-  A2 — large-text overflow TodayPlanScreen empty / rest / unavailable / completed states render without overflow at 2.0 text scaler
-  A2 — large-text overflow TodayPlanScreen empty state renders without overflow at 2.0 (hu)
-  A2 — large-text overflow TodayPlanScreen planned-day view renders without overflow at 2.0
-  A2 — large-text overflow TodayPlanScreen planned-day view renders without overflow at 2.0 (hu)
-```
-
-**PIROS, mérve, 4 elbukott cella.** Visszaállítás után `git diff` a fájlon
-0 sor (a munkapéldány pontosan a commitolt állapotot adja vissza), és:
-
-```
-$ flutter test test/features/practice_generator/accessibility/planner_accessibility_test.dart
-...
-00:01 +13: All tests passed!
-```
-
-### 10.5 L559 — testvér-példány védelem tétele
-
-A kör mintaszintű elrendezési kockázata a `TodayPlanScreen` 6 állapot-ága
-(empty/rest/unavailable/completed/notScheduled/plannedDay). A védelem
-(`_ScrollableIfShort`) a switch KIMENETÉRE került, nem ág-onként — ez a hat
-testvér-példány MINDEGYIKÉT lefedi egyetlen wrapperrel, tehát elvi
-kockázata sincs annak, hogy csak az első példány kapja meg a védelmet
-(az E15-R06 review F1-BLOCKER mintája). A többi öt fájlban a listás
-tartalom (`WeeklyPlanScreen` `ListView.separated`, `PlanSetupScreen` és
-`PlanPreviewScreen` meglévő `ListView`, `PlanChangeReviewScreen`
-`ListView.separated`) eleve görgethető, tehát nincs külön
-testvér-védelemre szoruló minta.
-
-### 10.6 A5 tesztfájl-bővítés (§0.0.A/R6 nyomán)
-
-A típus-pinnelő tesztfájlak (`today_plan_screen_test.dart`,
-`planner_accessibility_test.dart`, `plan_setup_screen_test.dart`,
-`plan_preview_screen_test.dart`) pump-helperei `theme: SsLightTheme.data()`-t
-kaptak — ugyanaz a „migrációt követő szerkezeti illesztés", mint az
-E15-R05/R06 `setlist_flow_test.dart`/`progress_screen_test.dart` esetén:
-enélkül minden `Ss*` widget `Theme.of(context).extension<SsColorScheme>()!`
-force-unwrapja `null`-on bukna, mert a bare `MaterialApp(home: ...)` nem
-telepíti a design-rendszer téma-kiterjesztéseit. **Egyetlen meglévő cella
-sem törölt vagy gyengült** — a `git diff` a négy fájlon kizárólag `theme:`
-sort és ÚJ (additív) `hu`/phone-viewport cellákat mutat. A
-`planner_privacy_test.dart` nem pumpol widgetet (csak use-case tesztek),
-ott nem volt szükség módosításra.
-
-Az A3 (§0.0.A/R7) lefedettséghez a `TodayPlanScreen`/`WeeklyPlanScreen`
-(`planner_accessibility_test.dart`), `PlanPrivacyScreen`
-(`planner_accessibility_test.dart`), `PlanSetupScreen`
-(`plan_setup_screen_test.dart`) és `PlanPreviewScreen`
-(`plan_preview_screen_test.dart`) mindegyike kapott ÚJ, telefon-méretű
-(360×640, dpr 1.0) `textScaler` 2.0 cellát `en`-re és — ahol korábban nem
-volt — `hu`-ra is. `PlanChangeReviewScreen`-re nem került A3-cella (10.1 —
-nulla tesztlefedettség, nincs `gate_tests`-tag).
-
-### 10.7 Gate
-
-```
-tools/round-gate.sh test/ui/ui_inventory_test.dart test/l10n/hardcoded_string_guard_test.dart test/features/practice_generator/accessibility/planner_accessibility_test.dart test/features/practice_generator/accessibility/planner_privacy_test.dart test/features/practice_generator/presentation/plan_setup_screen_test.dart test/features/practice_generator/presentation/plan_preview_screen_test.dart test/features/practice_generator/presentation/today_plan_screen_test.dart
-```
-
-12/12 lépés ZÖLD (format, analyze, mind a 7 teszt-útvonal külön processzben,
-architecture, secrets, l10n).
 
 ## 11. Review — a Claude tölti ki
