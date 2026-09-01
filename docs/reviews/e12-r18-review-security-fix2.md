@@ -40,6 +40,11 @@ Mindkettő olcsón zárható (lásd a javasolt irányokat). Amíg nyitva vannak,
 kötés, amivel a followup APPROVED-ot adott („az S8 a CI-bekötés előtt
 záruljon"), nem teljesült.
 
+Ezt erősíti a mutation-kill: a négy új S8-cellából **három** valódi tanú, a
+Dart library-`@Skip` cella viszont a JAVÍTÁS ELŐTTI eszközzel is zöld
+(**S14**) — vagyis épp az a kód, amit az S10 megkerül, a suite szempontjából
+lefedetlen.
+
 ---
 
 ## 1. Termékhatár — RENDBEN
@@ -390,6 +395,69 @@ gyengítése.
 ARGUMENTUM-fejére szűkíteni (a záró `() {` előtti rész), és a string-literál
 tartalmakat a keresés elől maszkolni.
 
+### S14 — MINOR: az S8/2 (Dart library-`@Skip`) cella NEM méri a hozzá tartozó javítást
+
+**Hely:** `test/tooling/security_scan_test.dart:855-889` (a `T-FIXTURE-15`
+cella fixture-je) vs. `tool/release/security_scan.py:582-596`
+(`_dart_file_skipped`).
+
+**Mérés (mutation-kill, lásd lent).** A RÉGI eszközzel (`git checkout
+f252034d^ -- tool/release/security_scan.py`) az ÚJ cellák közül **három**
+pirosodik, a negyedik — épp a Dart library-`@Skip` cella — **zöld marad**.
+
+**Miért.** A cella fixture-je egy 6 soros fájl:
+
+```
+@Skip('whole file disabled')
+library;
+
+void main() {
+  test('the real thing', () {
+```
+
+Itt az `@Skip(` a `test(` hívástól kevesebb mint 200 karakterre van, tehát a
+JAVÍTÁS ELŐTTI, teszt-lokális szabály (`"@Skip(" in prelude`, `:553`,
+200 karakteres ablak) már önmagában pirosít. A cella így nem tudja
+megkülönböztetni a régi és az új viselkedést: a `_dart_file_skipped` függvény
+törölhető lenne, és a suite zöld maradna.
+
+**Következmény.** A Dart fájl-szintű ellenőrzés a suite szempontjából
+lefedetlen — és pontosan ez az a kód, amelyet az **S10** megkerül. A valós
+guard-fájlok több ezer karakteresek, ahol a 200 karakteres ablak NEM ér el a
+fejlécig.
+
+**Javasolt irány.** A fixture bővítése úgy, hogy a `test(` hívás a fejléctől
+200 karakternél messzebb legyen (pl. kitöltő tesztek/kommentek beszúrása), és
+egy második cella a `library;` NÉLKÜLI alakra (S10).
+
+---
+
+## Mutation-kill — a RÉGI eszköz az ÚJ cellák alatt
+
+```
+$ git checkout f252034d^ -- tool/release/security_scan.py
+$ flutter test test/tooling/security_scan_test.dart
+00:04 +39 -3: Some tests failed.
+
+Failing tests:
+  … S8 … a Dart `group(..., skip: true)` wrapping the guard.test silences it even though the test's own call carries no marker
+  … S8 … a module-level `pytestmark = [pytest.mark.skip(...)]` list form silences the whole python file too
+  … S8 … a module-level `pytestmark = pytest.mark.skip(...)` silences the whole python file even though the test itself carries no marker
+
+$ git checkout HEAD -- tool/release/security_scan.py
+$ git status --short
+?? docs/reviews/e12-r18-review-security-fix2.md      (csak EZ a jelentés, commitolatlanul)
+$ python3 tool/release/security_scan.py
+security_scan: OK — no critical or fatal finding.    EXIT=0
+```
+
+**Értékelés.** A négy új S8-cellából **három** valódi mutation-kill-tanú
+(pontosan a `_python_module_skip_disabled` és a `_dart_enclosing_group_skipped`
+javításokat fedik). A negyedik — `T-FIXTURE-15`, Dart library-`@Skip` —
+**nem tanú**: a régi eszközzel is zöld → **S14**. Az **S9**-cella szintén nem
+pirosodik a régi ESZKÖZZEL, de ez helyes: az S9 javítása kizárólag a
+tesztfájlban van, piros útját a threat-model rontása bizonyítja (fent).
+
 ---
 
 ## Regresszió-ellenőrzés — a hét korábban zárt lelet nem nyílt vissza
@@ -443,8 +511,6 @@ A `security_scan_test.dart` cellaszáma 37 → **42** (a négy S8-cella + az S9-
 
 ## Amit NEM mértem
 
-*(a jelentés első kiadásában; a mutation-kill pótlása külön szakaszban lent)*
-
 - A teljes `tools/round-gate.sh`-t, a teljes Flutter-suite-ot és a teljes
   backend-suite-ot (a kör-dokumentum §10 állításai) — csak a kör két
   gate-fájlját + a két megnevezett backend-tesztfájlt futtattam.
@@ -468,7 +534,7 @@ A `security_scan_test.dart` cellaszáma 37 → **42** (a négy S8-cella + az S9-
 | CRITICAL | 0 | — |
 | BLOCKER | 0 | — |
 | MAJOR | 2 | **S10** (Dart `@Skip` `library;` nélkül → EXIT 0, valós fán mérve), **S11** (`pytest.skip(allow_module_level=True)` → EXIT 0, valós fán mérve) |
-| MINOR | 2 | **S12** (osztály-szintű skip a 400 karakteres ablakon kívül), **S13** (hamis pozitív testvér-/string-beli `skip:`-re) |
+| MINOR | 3 | **S12** (osztály-szintű skip a 400 karakteres ablakon kívül), **S13** (hamis pozitív testvér-/string-beli `skip:`-re), **S14** (az S8/2 cella fixture-je degenerált — a régi eszközzel is zöld) |
 | NOTE | 1 | az S9-cella regexe a threat-model mezősorrendjét is rögzíti |
 
 Zárva ebben a körben: **S8 (a négy nevesített forgatókönyv + két python-variáns)**,
