@@ -349,4 +349,34 @@ mezők, `unknown` kezelés) EHHEZ a fájlhoz köti, nem ismétli meg a küszöb�
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`). A §4 engedélyezett-fájllistán kívül semmit nem érintettem.
+
+### Szállított fájlok
+
+| Fájl | Tartalom |
+|---|---|
+| `lib/core/telemetry/telemetry_event.dart` | `TelemetryEvent` + öt zárt enum (`TelemetryEventName`, `TelemetryEventCategory`, `TelemetryOperationResult`, `TelemetryCapability`, `TelemetryDurationBucket`). Az eseményen **kizárólag enum mezők** vannak (nincs `String`, `int`, `Duration`, `Map`, `dynamic`, `Object?`) — ez szigorúbb, mint amit az A1/A4 forrás-szken megkövetel, hogy a cellák egyértelműen ne ütközzenek egymással. A `TelemetryDurationBucket.fromMilliseconds` a küszöb-cellahármas alsó-inkluzív logikáját valósítja meg (első találat `milliseconds < upperExclusiveMs` alapján, felfelé haladva). |
+| `lib/core/telemetry/telemetry_redactor.dart` | `TelemetryRedactor` — vékony wrapper, kizárólag a `LogRedactor.fields/text/isSensitiveKey`-t hívja. Nincs saját `RegExp` vagy `Set<String>` deklaráció. |
+| `lib/core/telemetry/telemetry_sink.dart` | `TelemetrySink` interfész, `NoopTelemetrySink`, `ConsentGatedTelemetrySink` (a hozzájárulást `bool Function() consentGranted` konstruktor-paraméterként kapja; opt-out mellett a `record()` semmit nem tárol/pufferel). |
+| `lib/core/telemetry/public.dart` | barrel export a fenti három fájlhoz. |
+| `test/core/telemetry/telemetry_redaction_test.dart` | Az A1, A2, A3, A4, A5, A7 cellák EBBEN az egy fájlban (A6 változatlanul a meglévő `test/privacy/consent_enforcement_test.dart`-ban). Két helyi segédfüggvény: `_withoutCommentsAndStrings` (komment/string-literál kiürítés a forrás-szken cellákhoz, hogy a doc-comment szövege ne adjon hamis találatot) és a `docs/operations/slo.yaml` kézi sor-parszere (`_parseSloYaml`, a `tool/check_data_inventory.dart` mintáját követve). |
+| `docs/analytics/event-catalog.md` | A `telemetry_event.dart` enumjainak emberi-olvasható katalógusa — szinkronban tartandó a Dart fájllal. |
+| `docs/operations/slo.yaml` | 5 SLO (`chord_detection_latency_p95`, `tuner_pitch_accuracy`, `offline_egress_free`, `crash_free_sessions`, `tutor_turn_success_rate`), mind `required: true` + `on_missing: unknown`; `unknown ∉ success_verdicts`, `unknown ∈ blocking_verdicts`. |
+| `docs/operations/release-dashboard.md` | Bemeneti séma (metrika-sor, cohort-szűrő, `unknown`-kezelés), a küszöböket NEM ismétli meg — a `slo.yaml`-ra mutat. |
+
+### Valódi-sértés próba (§6, KÖTELEZŐ) — elvégezve
+
+1. Kivettem a `ConsentGatedTelemetrySink.record()` opt-out ágát (`if (!consentGranted()) return;` törölve — mindig gyűjt).
+2. `tools/round-gate.sh test/core/telemetry/telemetry_redaction_test.dart test/privacy/consent_enforcement_test.dart` → **PIROS**, kilépési kód 1, kizárólag a `test test/core/telemetry/telemetry_redaction_test.dart` lépésen, azon belül pontosan az **A3** csoport mindkét cellája:
+   - `A3 … record() with consent=false never reaches the delegate` — `Expected: empty / Actual: [Instance of 'TelemetryEvent', Instance of 'TelemetryEvent']`
+   - `A3 … events dropped while consent was false are NOT flushed after consent flips true …` — `Expected: empty / Actual: [Instance of 'TelemetryEvent']`
+   Minden más cella (A1, A2, A4, A5, A7, A6) zöld maradt — a sértés pontosan az A3-at találta el, semmi mást.
+3. Visszaállítottam az opt-out ágat, újrafuttattam a gate-et → **MINDEN GATE ZÖLD** (format, analyze, mindkét teszt-útvonal, architecture, secrets, l10n).
+
+### Eltérések a brieftől
+
+- Nincs eltérés az engedélyezett-fájllistától vagy a §5 kötött döntésektől.
+- A `TelemetryEvent`-en nem szerepel semmilyen `int`/`Duration` mező (a brief csak a "raw ms" mezőt tiltja explicit) — szándékosan szigorúbb választás, hogy az A1 és A4 forrás-szken egyértelműen, átfedés nélkül mérje a saját kritériumát.
+- A `docs/operations/slo.yaml` két SLO-jának (`crash_free_sessions`, `tutor_turn_success_rate`) `source` mezője a jövőbeli 31–33. rollout-körre mutat, mert a gyűjtés bekapcsolása explicit KÉSŐBBI kör (ADR 0484 §0.1) — ez nem hiányosság, hanem a `unknown`/`on_missing` szabály pontosan erre az esetre való: amíg a gyűjtés nincs bekötve, a dashboard ezeket a sorokat `unknown`-ként (blokkoló) fogja jelenteni, sosem `success`-ként.
+
 ## 11. Review — a Claude tölti ki
