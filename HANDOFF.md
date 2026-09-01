@@ -1,5 +1,67 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R06 KÉSZ — Setlist + Progress képernyők migrálása a design-rendszerre — PR [#510](https://github.com/wolfcasaba/strumsight/pull/510), squash `1c8e214a` (2026-08-29)
+
+A Ch15 **Kör 6** három képernyőt vitt át a design-rendszerre
+(`setlist_list_screen.dart`, `setlist_detail_screen.dart`, `progress_screen.dart`)
+`SsContentCard` / `SsEmptyState` / `SsButton` komponensekkel, változatlan
+viselkedés mellett. Migrációs arány: **60/96 (62,5%) → 63/96 (65,625%)**
+([`docs/ui/migration-status.md`](docs/ui/migration-status.md)). Nincs ÚJ ADR.
+
+**A pre-flight felezte a scope-ot:** a brief 8 képernyőt sorolt, a
+[`docs/ui/retirement-plan.md`](docs/ui/retirement-plan.md) viszont ötöt
+`retire`-nek ítél (E15-R03/ADR 0471) — így a kör a HÁROM `migrate`-verdiktű
+képernyőre szűkült (§0.0.A/R2), és a `retire`-ötöst egyetlen sorral sem
+érintette (A8, `git diff --stat` bizonyítékkal). A §0.0.A/R9 három komponens-nevet
+is mérésre javított: `SsListTile`/`SsErrorState`/`SsMetricTile` **nem létezik**
+(`SsContentCard`/`SsFailureState`/`SsMetricCard` a valódi név) — ugyanaz a
+hibaosztály, mint az E15-R05 §0.0/R2-nél.
+
+**A kör MÉRT tanulsága: a zöld A3-cella a rossz viewporton semmit nem bizonyít.**
+A `flutter_test` alapértelmezett viewportja 800×600 — szélesebb ÉS magasabb
+minden telefonnál. A kör saját cellái ezen zöldek voltak, a reviewer
+telefon-viewportos (360×640) próbája viszont **1 BLOCKER + 2 MAJOR**-t mért:
+
+| Lelet | Mérés |
+|---|---|
+| **BLOCKER-1** | a `SetlistDetailScreen` üres állapota `2.0 hu` mellett **72 px**-szel túlcsordult (`origin/main` ugyanott **0**) — a kör a `_ScrollableIfShort` védelmet csak a LISTA-képernyőre tette fel, a testvér-példány védtelen maradt: a „2 valódi túlcsordulás javítva" valójában 2/3 volt |
+| **MAJOR-1** | az A3 cellák nem azt mérték, amit állítottak: a magas viewporton a lusta `ListView` **fel sem építette** a `WeeklyBars`-t, tehát a `2.0`/`2.5` cellák ÜRES fát mértek |
+| **MAJOR-2** | emiatt a §10.6 „mindkét állapotban zöld" mondata **mérési artefaktum** volt, nem tény |
+
+**Egy javító kör után APPROVED**, mind a 6 lelet zárt, ok-okozati bizonyítékkal
+(a pre-fix fájl visszaállítása UGYANEZEKET a cellákat pirosítja: `2.0 hu → 72 px`,
+`2.5 en → 315 px`, `2.5 hu → 365 px`). Az A3 cellák azóta kipinnelt
+`physicalSize = 360×640` + `devicePixelRatio = 1.0` mellett futnak
+`addTearDown(tester.view.reset)`-tel, a populated dashboard pedig
+`scrollUntilVisible(find.byType(WeeklyBars), …)`-szal görget a `takeException()`
+ELŐTT. Leckék: [L558](docs/LESSONS.md#l558), [L559](docs/LESSONS.md#l559).
+
+> ⚠ **Tudatosan vállalt, NYITOTT tétel (a merge feltétele volt, hogy kimondjuk):**
+> a **populated** `ProgressScreen` a helyes mércén mindhárom szövegskálán
+> túlcsordul — `1.5 → 7 px`, `2.0 → 22 px`, `2.5 → 73 px` —, MÉRTEN
+> **ugyanannyival az `origin/main` kódjával is**, tehát **PRE-EXISTING**, nem a
+> migráció regressziója. A gyökérok
+> `lib/features/progress/widgets/weekly_bars.dart:32`
+> (`SizedBox(height: _maxBar + 46)`: a `46` két ~15px szövegsorra méretezett
+> FIX költségvetés), ami a kör `allowed_paths`-án KÍVÜL van → a javítása H3 lett
+> volna. A 6 populated cella `skip: true`, a MÉRT px-értékekkel a kódban.
+> **Önálló, `weekly_bars.dart`-ra brief-elt kör kell** (§0.0.A/R11, §10.6/F6);
+> elfogadás-mércéje reprodukálható: a 6 `skip` cella pirosból zöldbe fordul.
+
+> ⚠ **Mért dokumentációs hiány, NEM ennek a körnek a hibája:** az `E15-R04` és
+> `E15-R05` köröknek **nincs HANDOFF-szakasza és nincs RTM-soruk** — az
+> orchestrátor-sessionjük a zárás előtt halt meg, a `done` státuszt a driver
+> fail-safe ága pótolta (`e77f4101`). A két kör munkája a `main`-en van; a
+> pótlás önálló, dokumentum-körbe tartozik.
+
+CI a merge SHA-n (`8b33c197`): Full Gate
+[33250085852](https://github.com/wolfcasaba/strumsight/actions/runs/33250085852),
+Router CI
+[33250086715](https://github.com/wolfcasaba/strumsight/actions/runs/33250086715)
+— mindkettő `success`. A golden-tesztek 15 bukása ezen a boxon PRE-EXISTING
+raszter-drift (a három képernyőt `origin/main`-re visszaállítva ugyanaz a 15) —
+a mérce a CI x86 architektúrája ([ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md)).
+
 ## ✅ E12-R17 KÉSZ — Privacy adat-leltár és consent enforcement — PR [#509](https://github.com/wolfcasaba/strumsight/pull/509), squash `6ead9581` (2026-08-29)
 
 A Ch12 **Kör 17** géppel olvasható **adat-leltárt** (`docs/privacy/data-inventory.yaml`,
@@ -9597,7 +9659,24 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-29):** `main` @ `dd071f7d` — E12-R16 AI és ML
+**Aktuális állapot (2026-08-29):** `main` @ `1c8e214a` — E15-R06 Setlist +
+Progress képernyők design-rendszer migrációja, PR
+[#510](https://github.com/wolfcasaba/strumsight/pull/510), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — a review **1 BLOCKER +
+2 MAJOR + 3 MINOR**-t talált a kör SAJÁT, zöld A3-cellái mellett, mert azok a
+`flutter_test` alapértelmezett 800×600-as viewportján futottak. A javító kör
+után APPROVED, 0 nyitott lelet
+([`docs/reviews/e15-r06-review.md`](docs/reviews/e15-r06-review.md)); egy
+tudatosan vállalt, PRE-EXISTING `weekly_bars.dart` túlcsordulás nyitva marad
+(lásd a fenti E15-R06 szakasz ⚠ blokkját). Nincs ÚJ ADR. Exact-SHA evidencia a
+merge SHA-n (`8b33c197`): Full Gate
+[33250085852](https://github.com/wolfcasaba/strumsight/actions/runs/33250085852),
+Router CI
+[33250086715](https://github.com/wolfcasaba/strumsight/actions/runs/33250086715)
+— mindkettő `success`.
+
+**Előző állapot:** `main` @ `dd071f7d` — E12-R16 AI és ML
 összesített release gate, PR
 [#507](https://github.com/wolfcasaba/strumsight/pull/507), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -9622,6 +9701,24 @@ sorosított, és a merge head SHA-ja változatlanul a CI-vel igazolt `cac36271`
 maradt.
 
 ## 5. Last completed round
+
+**E15-R06 — Setlist + Progress képernyők migrálása a design-rendszerre** (PR
+[#510](https://github.com/wolfcasaba/strumsight/pull/510), squash `1c8e214a`).
+Három `migrate`-verdiktű képernyő kapott design-rendszer komponenseket
+(`SsContentCard`/`SsEmptyState`/`SsButton`), a migrációs arány **63/96
+(65,625%)**. A pre-flight a briefben szereplő 8 képernyőt a `retirement-plan.md`
+verdiktjei alapján **3-ra szűkítette**, és három NEM létező komponens-nevet
+mérésre javított. A kör érdemi hozadéka mérési: a saját A3-cellái a
+`flutter_test` alapértelmezett 800×600-as viewportján zöldek voltak, miközben
+telefon-viewporton (360×640) a detail-képernyő üres állapota **72 px**-szel
+túlcsordult (a kör saját regressziója, javítva), a populated dashboard cellái
+pedig ÜRES fát mértek, mert a lusta `ListView` fel sem építette a `WeeklyBars`-t
+([L558](docs/LESSONS.md#l558), [L559](docs/LESSONS.md#l559)). **Nyitva marad**
+egy PRE-EXISTING `weekly_bars.dart` túlcsordulás (7/22/73 px), amit a kör tilos
+zónája miatt nem javíthatott — önálló kört igényel.
+
+**Előző kör: E12-R17 — Privacy adat-leltár és consent enforcement** (PR
+[#509](https://github.com/wolfcasaba/strumsight/pull/509), squash `6ead9581`).
 
 **E12-R16 — AI és ML összesített release gate** (PR
 [#507](https://github.com/wolfcasaba/strumsight/pull/507), squash `dd071f7d`).
@@ -9653,8 +9750,17 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E12-R16
-> zárása után): **278 `done`, 40 `hold`, 18 `prepared`, 28 `pending`**.
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E15-R06
+> zárása után): **280 `done`, 40 `hold`, 18 `prepared`, 26 `pending`**.
+>
+> ⚠ **Az E15-R06 nyitva hagyott egy MÉRT, PRE-EXISTING elrendezési hibát:** a
+> populated `ProgressScreen` `1.5`/`2.0`/`2.5` szövegskálán `7`/`22`/`73`
+> px-szel túlcsordul, a gyökérok
+> `lib/features/progress/widgets/weekly_bars.dart:32`
+> (`SizedBox(height: _maxBar + 46)`). A javítás önálló kört igényel
+> (a `progress_screen_test.dart` 6 `skip: true` cellája a reprodukálható
+> elfogadás-mérce), és a Ch15 sor egyetlen jelenlegi briefje sem nevezi meg —
+> ma **gazdátlan**.
 >
 > ⚠ **Az E12-R15 arbiterének MA egyetlen production hívója sincs** — ez
 > szándékos (a bekötés `lib/features/**` és `mic_capture.dart`, mindkettő a kör

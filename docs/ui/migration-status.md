@@ -1,5 +1,36 @@
 # Screen migration status
 
+**E15-R06 update (2026-08-29) — Setlist + Progress 3 screens migrated,
+measured 63/96 (65.625%).** `SetlistListScreen`, `SetlistDetailScreen`,
+`ProgressScreen` now import `core/design_system`. `SetlistListScreen` uses
+`SsContentCard` for each row (single action = open, matching the legacy
+`ListTile.onTap`) and `SsEmptyState` for the empty list, with the action
+wired to the SAME `_create` callback the FAB already used (§0.0.A/R9 G3 — no
+fabricated affordance). `SetlistDetailScreen` uses `SsEmptyState` for the
+empty-detail state (action wired to the existing `_addSong` FAB callback)
+and `SsButton` for "Play set"; its reorderable song rows keep `Card`/
+`ListTile` (retoken color only) because `SsContentCard`'s single-action
+model would make the whole row a delete trigger — a behavior change, not a
+migration (see the round's `§10` for the full compromise list).
+`ProgressScreen`'s empty state (no genuine action exists for an empty
+practice log) keeps the E15-R04-established screen-local, token-styled
+exception pattern instead of `SsEmptyState`, and additionally cannot call
+`Theme.of(context).extension<SsColorScheme>()!` directly at all — it's
+reachable through a bare, unthemed `MaterialApp.router` in
+`test/features/today/hub_navigation_test.dart` (frozen zero-diff S11 guard)
+that never installs `SsLightTheme.data()`, and every styled `Ss*` component
+force-unwraps that extension internally. The screen resolves tokens through
+a local fallback function (`Theme.of(context).extension<SsColorScheme>() ??
+SsColorScheme.forBrightness(...)`) instead — not a `*ThemeScope` wrapper (§0.0
+prohibits introducing a new one). Two new ARB keys were added, `en`+`hu`
+together: `setlistsEmptyTitle`, `setlistEmptyDetailTitle` (the design
+system's `SsEmptyState` requires a title separate from the existing
+single-string message; the pre-existing string is kept verbatim as
+`message`, so no wording was lost or changed). See the round's own `§10`
+handoff for the measured pre-existing `weekly_bars.dart` overflow this
+round's new textScaler cells surfaced (out of this round's allowed paths,
+not fixed here).
+
 **E15-R05 update (2026-08-29) — Song Trainer 9 screens migrated, measured
 60/96 (62.5%).** `SongTrainerScreen`, `SongOverviewScreen`, `SongResultScreen`,
 `TrainerSetupScreen`, `SetlistSessionScreen`, `SongEditorScreen`,
@@ -144,11 +175,11 @@ design-system component, only that the screen's own migration round ran.
 
 ## Measured total
 
-**60 of 96 production screens migrated (62.5%)** as of E15-R05, up from
-51/96 (53.1%) after E15-R04, 43/96 (44.8%) before E15-R04, and 0/60 at the
-E08-R15 baseline (the file count grew from 60 to 96 as Epics 8–13 added
-screens — Community, Gamification, Library V2, Progress V2, Offline AI,
-Share — most of which shipped already migrated).
+**63 of 96 production screens migrated (65.625%)** as of E15-R06, up from
+60/96 (62.5%) after E15-R05, 51/96 (53.1%) after E15-R04, 43/96 (44.8%)
+before E15-R04, and 0/60 at the E08-R15 baseline (the file count grew from
+60 to 96 as Epics 8–13 added screens — Community, Gamification, Library V2,
+Progress V2, Offline AI, Share — most of which shipped already migrated).
 
 ## Canonical token source by migration phase
 
@@ -158,7 +189,7 @@ Share — most of which shipped already migrated).
 | Component and screen migration (E13-R16…R35) | Design-system component tokens (`SsColorScheme`/`SsTypography` theme extensions, `Ss*` components) | A screen migrates only in its assigned round; all unassigned screens remain on the legacy theme (`AppTheme` / `AppColors` / `AppPalette`). |
 | Screens needing design-system extensions without `AppTheme` carrying them | **MEASURED OBSOLETE as of E15-R01.** A local `*ThemeScope` — the **nine** wrappers on the tree are `ProgressThemeScope` (progress_v2), `AuthThemeScope` (auth), `SettingsThemeScope` (settings), `LibraryThemeScope` (library_v2), `ShareThemeScope` (share), `GamificationThemeScope` (gamification), `CommunityThemeScope` (community), `OfflineAiThemeScope` (offline_ai), `VisionThemeScope` (vision) | Wrapped the screen so its `Ss*` cards could resolve `SsColorScheme`/`SsTypography` when those extensions were NOT yet on the app's runtime `ThemeData` (the gap this row used to describe). Since E15-R01 the app's actual `ThemeData` carries all four extensions directly (ADR 0466 D1), so the wrapper is now redundant for every screen it wraps — but the wrappers themselves are NOT removed by this round (tilos zóna, `lib/features/**`); their retirement is a per-screen follow-up round's job. |
 
-## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05)
+## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05, progress/songs rows updated 2026-08-29 by E15-R06)
 
 | Feature | Migrated / total | Legacy screens (migration pending) |
 | --- | --- | --- |
@@ -180,12 +211,12 @@ Share — most of which shipped already migrated).
 | practice_generator | 0/6 | plan_change_review, plan_preview, plan_privacy, plan_setup, today_plan, weekly_plan |
 | practice_hub | 1/1 | — |
 | profile_hub | 1/1 | — |
-| progress | 0/1 | progress (superseded by `progress_v2`, see below) |
+| progress | 1/1 | — |
 | progress_v2 | 2/2 | — |
 | settings | 3/3 | — |
 | share | 3/3 | — |
 | song_trainer | 9/9 | — |
-| songs | 0/4 | setlist_detail, setlist_list, song_builder, song_list |
+| songs | 2/4 | song_builder, song_list (`retire`-verdiktűek, §0.0.A/R2 — nem ennek a körnek a hatásköre) |
 | streak | 0/1 | streak (superseded by `gamification`'s hub, see below) |
 | today | 1/1 | — |
 | tuner | 1/1 | — |
@@ -200,9 +231,18 @@ legacy screen is still the live one):
 
 - `library/library_screen.dart` + `library/session_detail_screen.dart` →
   `library_v2/unified_library_screen.dart` + `library_item_detail_screen.dart`.
-- `progress/progress_screen.dart` → `progress_v2/progress_dashboard_screen.dart`.
 - `streak/streak_screen.dart` → `gamification/gamification_hub_screen.dart`
   (the hub is migrated; `streak_detail_screen.dart` itself is still legacy).
+
+**E15-R06 correction:** `progress/progress_screen.dart` → `progress_v2/
+progress_dashboard_screen.dart` is REMOVED from the superseded-pairs list
+above. `progress_v2` was never actually a live successor — per the
+retirement-plan (§0.0.A/R2 measurement, `docs/ui/retirement-plan.md` §3.1)
+`ProgressDashboardScreen` has no route and no construction site anywhere in
+`lib/`, so the retirement-plan's verdict for `ProgressScreen` is `migrate`
+(not `retire`), and E15-R06 executed it: the legacy screen is now the
+migrated, actively-reachable one (`progress` row above, 1/1) while
+`progress_v2` (2/2 in its own row) remains orphaned/unreachable.
 
 **Not yet superseded — full feature migration still pending:** `learn`,
 `practice_generator`, `songs`, `analyze`. `song_trainer` is fully migrated as
