@@ -1,5 +1,56 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R19 KÉSZ — Privacy-safe telemetria-szerződés + release SLO/dashboard séma — PR [#515](https://github.com/wolfcasaba/strumsight/pull/515), squash `ea66abc5` (2026-09-01)
+
+A Ch12 **Kör 19** a kliens-oldali **telemetria-szerződést** szállította: typed
+esemény (`lib/core/telemetry/telemetry_event.dart`), redakciós kapu, consent-kapuzott
+**no-op sink**, valamint a release-döntés gépi bemeneti sémája
+(`docs/operations/slo.yaml`, `release-dashboard.md`, `docs/analytics/event-catalog.md`).
+ADR: [0484](docs/adr/0484-privacy-safe-telemetry-contract-and-release-slo-schema.md).
+A kör **nem** köt be analytics-szolgáltatót, **nem** küld semmit hálózatra, és
+`lib/features/**`-ot nem érint.
+
+**A tiltás STRUKTURÁLIS, nem szűrő (D1):** a `TelemetryEvent` mind az öt mezője
+zárt enum — nincs `Map<String,dynamic>`, `dynamic`, `Object?`, szabad `String`,
+nincs `toString()`/`toJson()` és nincs azonosító-mező sem, tehát korrelációs
+vektor sincs. Az időtartam **bucket** (`[0,250) … [10000,∞)`, alsó-inkluzív
+határokkal), nem nyers ezredmásodperc. A redakció (D2) a MEGLÉVŐ `LogRedactor`-t
+hívja — második lista tilos. Opt-out mellett a sink nem tárol, nem pufferel, és a
+consent `false → true` váltása után sincs utólagos flush (D4). A hiányzó metrika
+`unknown`, ami **blokkoló**, sosem zöld (D3 — az [ADR 0474](docs/adr/0474-benchmark-record-and-performance-budget-comparison.md)
+D5 szabályának átvitele a release-sávra).
+
+**A pre-flight négy MÉRT ténye írta a kör alakját (§0.0 R1–R9):** a fán ma
+**nincs telemetria-consent kapcsoló** (→ a consent injektált, nem szerzett);
+nincs `dart:mirrors` a `flutter_test` alatt (→ az A1 „típus-szintű" cella
+forrás-szken); nincs deklarált `package:yaml` (→ kézi sor-parszer, a
+`tool/check_data_inventory.dart` mintájára); és a `check_data_inventory.dart`
+egress-felfedezése a D5 hálózat-tilalmának GÉPI őre.
+
+**Két MAJOR — mindkettő ŐR-hiba, nem kódhiba, TELJESEN zöld gate mellett.**
+A kód elsőre helyes volt; a szállított MÉRCE nem fogta meg azt, amit a brief
+§6.1 mátrixa hozzárendelt. A reviewer mutációval mérte: az A1/A4 cella
+típusnév-**denylist** volt enum-**allowlist** helyett, ezért a
+`Map<String,String>`, `List<String>` és `double` mező MIND átcsúszott
+([L565](docs/LESSONS.md#l565)); az A5 `slo.yaml`-parszer pedig fail-**open** —
+egy 4-szóközös behúzású, `required: false` + `on_missing: success` SLO **némán
+eltűnt**, és mind az öt cella zöld maradt ([L566](docs/LESSONS.md#l566)).
+
+**A zárás mércéje a mutation-kill volt, nem a zöld gate** (az E12-R18
+[L563](docs/LESSONS.md#l563) folytatása): a javító kör után a reviewer saját
+harnesse **10 mutánst** mért a javított fán — mind PIROS, baseline 20/20 zöld.
+Végső review: **APPROVED**, 0 BLOCKER / 0 MAJOR / 0 nyitott MINOR
+([`e12-r19-review.md`](docs/reviews/e12-r19-review.md) §7). A kötelező
+`security-reviewer` (a kör `risk = "high"`) 0 CRITICAL/BLOCKER-t adott, leletei
+egybeestek a reviewerével.
+
+> 📌 **A réteg ma szándékosan INERT:** `grep -rn "core/telemetry" lib/` → **0
+> fogyasztó**, és a `slo.yaml`-nak a kör tesztjén kívül nincs gépi fogyasztója.
+> Az esemény-kibocsátás (`lib/features/**`), a telemetria data-inventory
+> route-ja (`docs/privacy/**`) és a dashboard tényleges bekötése a **rollout-körök
+> (31–33)** dolga, feature-flag mögött. A kör terméke maga a MÉRCE — az értéke
+> az, mit fog a jövőben pirosra váltani.
+
 ## ✅ E12-R18 KÉSZ — Program threat model + fail-closed release security scan — PR [#514](https://github.com/wolfcasaba/strumsight/pull/514), squash `3b49c501` (2026-09-01)
 
 A Ch12 **Kör 18** program-szintű **threat modelt** (`docs/security/threat-model.md`),

@@ -22203,3 +22203,74 @@ Folytatáskor a besorolást a szonda BEMENETÉN kell ellenőrizni
 
 **Őrteszt:** nincs — a javítás a `tools/round-resume-probe.sh`-ban van, ami a
 kör-orchestrátor számára tilos zóna (ADR 0087 §4); GOV/önjavító kör tárgya.
+
+## L565 — Egy őr, amely TÍPUSNEVEKET tilt (denylist), nem méri azt az invariánst, amely POZITÍV („minden mező zárt enum"): a `Map<String,String>`, `List<String>` és `double` mezők MIND átcsúsztak (E12-R19, 2026-09-01)
+
+**Mérve.** Az `E12-R19` A1 cellája az [ADR 0484](adr/0484-privacy-safe-telemetry-contract-and-release-slo-schema.md)
+D1 strukturális tiltását őrizte: a `TelemetryEvent`-en „nincs
+`Map<String, dynamic>`, `dynamic`, `Object?` vagy szabad `String` mező". A cella
+zöld volt, a gate zöld volt, a brief §6.1 mérce-mátrixa pedig kimondta:
+„Az esemény kap egy általános `payload` mapet → **A1**". A reviewer ezt
+mutációval mérte meg a VALÓDI teszttel:
+
+```
+final Map<String, String>? attributes;   → 15/15 zöld — átcsúszik
+final List<String>? tags;                → 15/15 zöld — átcsúszik
+final double? durationMs;                → 15/15 zöld — átcsúszik   (NYERS ms!)
+final Map<String, dynamic>? payload;     → PIROS (a kontroll)
+```
+
+**Miért.** A cella azt tiltotta, amit a szerző ELŐRE elképzelt. A
+`_freeTypedFieldPattern('String')` a `final String x;` / `String x,` / `String x)`
+ALAKOT keresi — a `Map<String, String>?` sorban az első `String` után vessző, a
+második után `>` áll, a `List<String>?` után `?`; egyik sem illeszkedik. Egy
+jövőbeli kör jóhiszeműen felveheti a `Map<String, String> attributes` mezőt („nem
+`dynamic`, tehát nem sérti a D1 betűjét"), amibe prompt-részlet, dalcím, fájlnév
+vagy URL kerül — és a kör saját mércéje zölden átengedi.
+
+**A minta.** Ha az ADR állítása POZITÍV alakú („minden X zárt szótárból jön"),
+akkor a cella is ALLOWLIST legyen: sorold fel a mezőket, és követeld meg, hogy
+mindegyik típusa a megengedett halmazba essen. A denylist mindig csak azt fogja,
+amit a szerzője már ismert; az allowlist a még ki nem talált gyengítést is.
+Ez az [L549](#l549) („a MEGLÉTET mérni ≠ a JELENTÉST érvényesíteni") típus-oldali
+alakja.
+
+**Őrteszt:** `test/core/telemetry/telemetry_redaction_test.dart` — az A1/A4
+közös `_expectTelemetryEventFieldsAreClosedEnums` allowlist-cellája (a
+`_fieldDeclarations` minden `final <típus> <név>;` mezőjének a `?`-t leszámítva
+az öt `Telemetry*` enum egyikének kell lennie), a könyvtár EGÉSZÉRE futtatva;
+a mutation-kill tábla a `docs/reviews/e12-r19-review.md` §7-ben.
+
+## L566 — Egy kézzel írt sor-parszerre épülő doksi-őr alapértelmezésben fail-OPEN: ami nem illeszkedik a mintára, az nem hibás, hanem NEM LÉTEZIK (E12-R19, 2026-09-01)
+
+**Mérve.** Az `E12-R19` A5 cellája a `docs/operations/slo.yaml`-t parszolta
+(nincs `package:yaml` deklarált függőség), és öt állítást tett: `unknown ∉
+success_verdicts`, `unknown ∈ blocking_verdicts`, minden SLO `required: true` +
+`on_missing: unknown`, egyedi `id`-k. A reviewer a fájl végére írt egy hatodik
+SLO-t **4-szóközös** behúzással:
+
+```yaml
+    - id: extra_unguarded_slo
+      required: false
+      on_missing: success
+```
+
+→ **15/15 ZÖLD.** A `sloStartPattern` (`^  - id:`) nem illeszkedett, a
+`sloKvPattern` (`^    (\w+):`) sem (a `-` nem `\w`), ezért a parszer az egész
+SLO-t **némán eldobta** — és a nem létező elemre nincs mit állítani. A tiltott
+állapot (`required: false`, `on_missing: success`) ott volt a fájlban, a kapu
+mégis átengedte. Ugyanez a rés a `success_verdicts:` sor törlésénél: a lista
+`const []`-re esett vissza, így a „nem tartalmaz `unknown`" állítás VÁKUUMBAN
+teljesült.
+
+**A minta.** Egy parszer-alapú őrnél a hallgatás a legveszélyesebb kimenet. Kösd
+a parszolt elemek SZÁMÁT a nyers előfordulások számához
+(`RegExp(r'^\s*- id:', multiLine: true)`), a „nem tartalmazza a rosszat"
+állításokat cseréld PONTOS EGYEZÉSRE (`expect(successVerdicts, ['success'])`), és
+mérd a séma verzióját is — különben egy jövőbeli szerkezet-változás csendben
+avulttá teszi a parszert, miközben a cella zöld marad. Precedens ugyanerre a
+fail-closed alakra: `tool/check_data_inventory.dart`.
+
+**Őrteszt:** `test/core/telemetry/telemetry_redaction_test.dart` — az A5
+„the parser observed every `- id:` line" cellája, a `successVerdicts` pontos
+egyezése és a `schema_version == 1` cella.
