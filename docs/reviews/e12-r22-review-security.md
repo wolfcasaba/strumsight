@@ -345,7 +345,7 @@ $ head -c 60 victim.txt
   amilyen.
 - **Tényleges kimenet (p1 próba):**
   `"authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.PAYLOAD.SIG"`,
-  `"apiKey": "sk-live-0123456789abcdef"`, `"password": "hunter2"` — mind
+  `"apiKey": "<szintetikus provider-kulcs alakú érték>"`, `"password": "hunter2"` — mind
   változatlan; a `DIAG_TOKEN` / `X-Diag-Token` / `authToken` / `diagToken`
   viszont mind `[REDACTED:token]` (a `token` osztály tehát az írásmód-variánsokat
   helyesen fedi).
