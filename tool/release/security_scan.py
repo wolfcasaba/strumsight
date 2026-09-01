@@ -14,14 +14,17 @@ machine-checkable evidence. Four independent branches:
                   is named — that test is present, uncommented, and not
                   `skip`/`xfail`-marked, INCLUDING a file-wide silencer (a
                   Python module-level `pytestmark = pytest.mark.skip(...)`,
-                  a bare module-level `pytest.skip(..., allow_module_level=
-                  True)` call, a class-level `@pytest.mark.skip`/`xfail`
-                  decorator on the guard test's own class, or a Dart
-                  `@Skip(...)` annotation above the file's first
-                  import/export/part/library directive, with or without an
-                  explicit `library;` line, or a Dart `group(..., skip:
-                  true)` wrapping the test. It does
-                  NOT re-implement the
+                  a `pytest.skip(..., allow_module_level=True)` call or a
+                  `pytest.importorskip(...)` call — either one, ANYWHERE in
+                  the module regardless of indentation, not just column 0 —
+                  a class-level `@pytest.mark.skip`/`xfail` decorator on the
+                  guard test's own class, or a Dart `@Skip(...)` annotation
+                  above the file's first import/export/part/library
+                  directive, with or without an explicit `library;` line,
+                  or a Dart `group(...)` wrapping the test with a `skip:`
+                  argument of its own, wherever that argument sits in the
+                  group's own argument list (before OR after the callback).
+                  It does NOT re-implement the
                   protections themselves — replay, path traversal, oversize
                   payloads and model-checksum integrity are already measured
                   by the tests the guards point at.
@@ -55,11 +58,17 @@ Exit codes (D5/D6, no other value and no absorbing flag):
 only the input(s) that branch actually needs — `--only secrets` never
 touches the threat model, `--only guards` never touches the exceptions
 registry. Exception suppression is therefore only available where it is
-actually exercised (the default full run, and `--only dependencies`); a
-guard whose test was renamed CAN be waved away, but only by an exceptions
-entry that names that exact `branch: guards` and the exact finding id — an
-entry scoped to `dependencies` (or any other value) never reaches it, and
-no entry, of any branch, ever reaches `secrets` (see above).
+actually exercised: the default (no `--only`) full run, and `--only
+dependencies`. Under `--only guards`, the exceptions registry is never
+loaded at all, so a LIVE `branch: guards` exception has NO effect there — a
+guard whose test was renamed CAN be waved away, but only via the default
+full run (or a future `--only exceptions`-adjacent mode, if one is ever
+added), never via `--only guards` alone. This is intentionally the
+stricter (fail-closed) direction, not a bug: an exceptions entry can only
+ever narrow what `--only guards` alone would already report, never widen
+it. An entry scoped to `dependencies` (or any other value) never reaches a
+`guards` finding either way, and no entry, of any branch, ever reaches
+`secrets` (see above).
 """
 
 from __future__ import annotations
@@ -499,6 +508,31 @@ def _python_guard_status(stripped: str, guard_test: str) -> tuple[bool, bool]:
     return True, disabled
 
 
+def _py_call_span(text: str, call_start: int) -> str:
+    """Returns the full call text starting at `call_start`, balancing
+    parens. Safe to use on `_strip_python_trivia` output without any
+    string-skipping logic of its own — that stripping already removes every
+    string literal's contents (unlike the Dart stripper, which keeps string
+    contents intact), so no quote character can remain to unbalance the
+    parens this walks."""
+    n = len(text)
+    open_paren = text.find("(", call_start)
+    if open_paren == -1:
+        return text[call_start:]
+    i = open_paren
+    depth = 0
+    while i < n:
+        ch = text[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return text[call_start : i + 1]
+        i += 1
+    return text[call_start:]
+
+
 def _dart_call_span(text: str, call_start: int) -> str:
     """Returns the full `test(...)` call text starting at `call_start`,
     balancing parens while skipping over string-literal contents, so a
@@ -577,23 +611,46 @@ def _dart_guard_status(stripped: str, guard_test: str) -> tuple[bool, bool]:
 
 _PY_MODULE_SKIP_MARKERS = ("pytest.mark.skip", "pytest.mark.xfail")
 _PY_PYTESTMARK_ASSIGN = re.compile(r"(?m)^[ \t]*pytestmark\s*=\s*")
-# Column-0 (NOT indented) — a `pytest.skip(...)` call inside a function/test
-# body is always indented, so an unindented one can only be a real
-# module-level statement (S11). pytest itself additionally requires
-# `allow_module_level=True` on such a call (otherwise it raises instead of
-# skipping) — either way the module fails to collect its tests, so this
-# does not gate on that keyword being present.
-_PY_MODULE_LEVEL_SKIP_CALL = re.compile(r"(?m)^pytest\.skip\(")
+# NOT column-anchored: an earlier version required column 0 on the theory
+# that a `pytest.skip(...)` call inside a function/test body is always
+# indented, so an unindented one can only be a module-level statement — but
+# the converse is false (a module-level call inside an `if` block, e.g.
+# `if os.environ.get(...): pytest.skip(..., allow_module_level=True)`, is
+# indented too, and silenced every test just the same, ÚJ-2). The
+# `allow_module_level` keyword itself — not indentation — is what tells
+# pytest to skip collection of the WHOLE module rather than raise from
+# inside a single running test, so that keyword on the SAME call is the
+# actual distinguishing signal, wherever the call sits in the file.
+_PY_SKIP_CALL = re.compile(r"\bpytest\.skip\(")
+# A module-level `pytest.importorskip(...)` — used to skip the whole module
+# when an optional dependency is missing — silences collection exactly like
+# `pytest.skip(..., allow_module_level=True)` (ÚJ-3); unlike `pytest.skip`,
+# `importorskip` takes no keyword to distinguish scope, so its presence
+# anywhere in the module is treated as a module-wide silencer.
+_PY_IMPORTORSKIP_CALL = re.compile(r"\bpytest\.importorskip\(")
+
+
+def _python_module_level_skip_call(stripped: str) -> bool:
+    """True when the module contains a `pytest.importorskip(...)` call, or a
+    `pytest.skip(...)` call that carries `allow_module_level` among its own
+    arguments — either one skips collection of the ENTIRE module, regardless
+    of how deeply the call itself is indented (ÚJ-2/ÚJ-3)."""
+    if _PY_IMPORTORSKIP_CALL.search(stripped):
+        return True
+    for match in _PY_SKIP_CALL.finditer(stripped):
+        if "allow_module_level" in _py_call_span(stripped, match.start()):
+            return True
+    return False
 
 
 def _python_module_skip_disabled(stripped: str) -> bool:
     """True when a module-level `pytestmark = pytest.mark.skip(...)` (or
-    `.xfail(...)`, bare or inside a `pytestmark = [...]` list), OR a bare
-    module-level `pytest.skip(..., allow_module_level=True)` call, sits
-    ANYWHERE in the module — either silences every test the module defines,
-    not just one near the assignment/call (S8, and S11's `pytest.skip(`
-    variant, which `pytestmark` alone does not catch)."""
-    if _PY_MODULE_LEVEL_SKIP_CALL.search(stripped):
+    `.xfail(...)`, bare or inside a `pytestmark = [...]` list), OR a
+    `pytest.skip(..., allow_module_level=True)` / `pytest.importorskip(...)`
+    call, sits ANYWHERE in the module — either silences every test the
+    module defines, not just one near the assignment/call (S8, and S11's
+    `pytest.skip(` variant, which `pytestmark` alone does not catch)."""
+    if _python_module_level_skip_call(stripped):
         return True
     n = len(stripped)
     for match in _PY_PYTESTMARK_ASSIGN.finditer(stripped):
@@ -619,6 +676,7 @@ def _python_module_skip_disabled(stripped: str) -> bool:
 
 
 _PY_CLASS_DEF = re.compile(r"(?m)^class\s+\w+")
+_PY_COL0_DEF_OR_CLASS = re.compile(r"(?m)^(?:def|class)\b")
 _PY_CLASS_SKIP_MARKERS = ("@pytest.mark.skip", "@pytest.mark.xfail", "@unittest.skip")
 
 
@@ -628,14 +686,30 @@ def _python_class_skip_disabled(stripped: str, guard_test: str) -> bool:
     checked independent of distance from the class to the method, so a
     class skipped thousands of bytes above its guarded method counts
     exactly like one immediately above it (S12, which the `def`-local
-    400-byte prelude window in `_python_guard_status` cannot reach)."""
+    400-byte prelude window in `_python_guard_status` cannot reach).
+
+    The nearest preceding `^class` is only credited to the guard's `def`
+    when the `def` is actually inside that class's body: it must itself be
+    INDENTED (a column-0 `def` is a module-level function, never a method,
+    no matter what class reads above it in the file), and no OTHER column-0
+    `def`/`class` may sit between the class header and the `def` — such a
+    statement ends the class's body, so a guard function that merely
+    follows an unrelated skipped class must not read as disabled (ÚJ-5)."""
     def_idx = stripped.find(f"def {guard_test}(")
     if def_idx == -1:
+        return False
+    def_line_start = stripped.rfind("\n", 0, def_idx) + 1
+    if def_idx == def_line_start:
         return False
     class_start = None
     for match in _PY_CLASS_DEF.finditer(stripped, 0, def_idx):
         class_start = match.start()
     if class_start is None:
+        return False
+    class_line_end = stripped.find("\n", class_start)
+    if class_line_end == -1:
+        class_line_end = def_idx
+    if _PY_COL0_DEF_OR_CLASS.search(stripped, class_line_end, def_idx):
         return False
     lines = stripped[:class_start].splitlines()
     idx = len(lines) - 1
@@ -686,16 +760,18 @@ def _dart_file_skipped(stripped: str) -> bool:
 _DART_GROUP_CALL = re.compile(r"\bgroup\(")
 
 
-def _dart_call_head(text: str, call_start: int) -> str:
-    """Returns the ARGUMENT HEAD of the call starting at `call_start` — the
-    text between its opening `(` and the zero-arg callback param list `()`
-    that `group`/`test` always take as their body (`() {`/`() async {`) —
-    with string-literal contents stripped out entirely. Every fixture and
-    real usage on this tree writes named arguments (like `skip: true`)
-    BEFORE that callback (`group('d', skip: true, () {...})`), so this is
-    where a group's OWN `skip:` argument lives. Text belonging to the
-    callback BODY — a sibling test's own `skip:` argument, or a `skip:`-
-    shaped substring inside a description string — is excluded (S13)."""
+def _dart_call_own_text(text: str, call_start: int) -> str:
+    """Returns the call's OWN argument-list text — every character between
+    its opening `(` and matching closing `)` — with (a) string-literal
+    contents stripped out entirely and (b) the full span of any NESTED
+    `test(`/`group(` call masked out, so a sibling's own `skip:` argument,
+    or a `skip:`-shaped substring inside a description string, is never
+    mistaken for this call's own named argument (S13). Unlike the
+    argument-HEAD approach this replaces, masking nested calls (rather than
+    stopping at the first zero-arg callback `()`) keeps a named argument
+    placed AFTER the callback visible too — `group('d', () {...}, skip:
+    true)` is the documented, canonical `package:test` shape, and a
+    head-only scan going blind to it was a real regression (ÚJ-1)."""
     n = len(text)
     open_paren = text.find("(", call_start)
     if open_paren == -1:
@@ -703,7 +779,7 @@ def _dart_call_head(text: str, call_start: int) -> str:
     i = open_paren + 1
     depth = 1
     out: list[str] = []
-    while i < n:
+    while i < n and depth > 0:
         ch = text[i]
         if ch in "'\"":
             triple = text[i : i + 3] == ch * 3
@@ -713,8 +789,12 @@ def _dart_call_head(text: str, call_start: int) -> str:
                 i += 2 if text[i] == "\\" and i + 1 < n else 1
             i += len(delimiter)
             continue
-        if depth == 1 and text[i : i + 2] == "()":
-            break
+        if depth == 1:
+            nested = _DART_TEST_CALL.match(text, i) or _DART_GROUP_CALL.match(text, i)
+            if nested:
+                nested_span = _dart_call_span(text, i)
+                i += len(nested_span)
+                continue
         if ch == "(":
             depth += 1
         elif ch == ")":
@@ -728,17 +808,18 @@ def _dart_call_head(text: str, call_start: int) -> str:
 
 def _dart_enclosing_group_skipped(stripped: str, call_start: int) -> bool:
     """True when a `group(...)` call enclosing the `test(` call at
-    `call_start` carries its own `skip:` argument in its OWN argument head
+    `call_start` carries its own `skip:` argument among its OWN arguments
     — a group-level skip silences every test nested inside it even though
     the test's own call carries no marker (S8). Narrowed to the group's
-    argument head (`_dart_call_head`), not its full body text, so a NESTED
-    sibling test's own `skip:` argument, or a `skip:`-shaped substring
-    inside a description string, is never mistaken for the group's own
-    named argument (S13)."""
+    own argument text with nested calls masked out (`_dart_call_own_text`),
+    not its raw span text, so a NESTED sibling test's own `skip:` argument,
+    or a `skip:`-shaped substring inside a description string, is never
+    mistaken for the group's own named argument (S13) — while a `skip:`
+    named argument placed AFTER the group's callback still counts (ÚJ-1)."""
     for match in _DART_GROUP_CALL.finditer(stripped, 0, call_start):
         span = _dart_call_span(stripped, match.start())
         if match.start() + len(span) > call_start:
-            if "skip:" in _dart_call_head(stripped, match.start()):
+            if "skip:" in _dart_call_own_text(stripped, match.start()):
                 return True
     return False
 
