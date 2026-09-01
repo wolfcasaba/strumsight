@@ -431,4 +431,107 @@ találattal fut, az egyetlen két MÉRT lelet (10 hiányzó `descriptionKey` ARB
 kulcs mindkét locale-ból, `Lesson.name` beégetett angolja) pontosan a §0.0
 R4-ben előre bejelentett, `known_exceptions:` úton engedélyezett tény.
 
+### 10.7 JAVÍTÓ KÖR 1 — a review MAJOR-1/MINOR-1 leletei (`e5bef8c0`)
+
+A review (`docs/reviews/e12-r21-review.md`) egy MAJOR-t és egy MINOR-t adott:
+a `_mirror_source()` csak az ID-halmazokat vetette össze, az
+`InventoryItem.fields` szótár feltöltődött, de sosem olvasódott el — négy
+egysoros mutáció (`difficulty`, `locales`, `version`, `skill_tags`) mind
+`exit 0`-t adott a valódi fán (MAJOR-1); a `practice_engine` sorok
+`locales: [en]` értéke pedig egyik olvasat szerint sem állt meg (MINOR-1).
+
+**MAJOR-1 javítása.** `tool/validate_content_catalog.py` — új
+`_mirror_fields()` (a `_mirror_source()` mellett): minden mért elemre, aminek
+van egyező ID/source párja a leltárban, mind a négy dimenziót (`difficulty`,
+`skill_tags`, `locales`, `version`) összeveti a MÉRT forrás-értékkel:
+
+- `practice_engine`: `difficulty` a `PracticeDifficulty` kódból (regex-sel
+  kiegészítve a `schemaVersion` capture-rel is), `skill_tags` a rendezett
+  `skillTags`-ből, `version` a `schemaVersion`-ből, `locales` a
+  suppression-tudatos ARB-lefedettségből (lásd MINOR-1).
+- `tutor_knowledge`: a manifest `difficulty`/`skill`/`locale`/`version`
+  mezőiből, közvetlenül.
+- `learn_lessons`: `difficulty` a `Lesson.difficulty` enumból mérve (ez az
+  egyetlen mért dimenzió ezen a forráson), `skill_tags: []` /
+  `locales: [en]` / `version: 1` KÖTÖTT, fail-closed sentinel — a forrásnak
+  nincs saját címkéje/locale-jelenlétje/verziója, de a validátor a
+  sentinelt is kikényszeríti, nem csak "nem méri".
+
+Eltérés esetén a lelet `stale_inventory_entry:<forrás>:<id>:<mező>
+(declared=…, measured=…)` — a review kérése szerint **nincs** új leletkód, a
+kódlista zárt marad.
+
+**MINOR-1 javítása.** `docs/content/catalog-inventory.yaml` fejléc-kommentje
+kimondja a `locales:` kötött definícióját (a nem elnyomott felületek mért
+lefedettsége); a validátorban a `practice_engine` ág a `descriptionKey`
+aktív elnyomását figyelembe véve számolja a mért halmazt (ha a suppression
+aktív, csak a `titleKey` számít); mind a 10 practice-sor `locales: [en]` →
+`locales: [en, hu]`, mert a `titleKey` mindkét locale-ban feloldódik, a
+`descriptionKey` pedig elnyomott.
+
+**5 új fixtúra-cella** (`test/tooling/content_catalog_test.dart`, `A1
+(MAJOR-1 fix)` csoport) — mindegyik a HIBÁS állapotot méri pirosra, a
+`_baselineInventory()` fixtúra `fixture.alpha.v1` / `fixture-first-win`
+sorának egy mezőjét téves értékre írva:
+
+1. `difficulty: beginner → advanced` → `stale_inventory_entry:
+   practice_engine:fixture.alpha.v1:difficulty (declared=advanced,
+   measured=beginner)`
+2. `skill_tags: [tagA, tagShared] → [totallyBogusTag]` → `…:skill_tags
+   (declared=[totallyBogusTag], measured=[tagA, tagShared])`
+3. `locales: [en, hu] → [en, hu, xx]` → `…:locales (declared=[en, hu, xx],
+   measured=[en, hu])`
+4. `version: 1 → 9` → `…:version (declared=9, measured=1)`
+5. `learn_lessons` sentinel: `fixture-first-win` `skill_tags: [] → [x]` →
+   `stale_inventory_entry: learn_lessons:fixture-first-win:skill_tags
+   (declared=[x], measured=[])`
+
+**A gate a javítás után (`tools/round-gate.sh test/tooling/
+content_catalog_test.dart`, csonkítatlan).** `format` zöld, `analyze` zöld
+(„No issues found!"), `test` zöld — **32/32 teszt** („All tests passed!",
+a 27 eredeti + 5 új MAJOR-1 cella), `architecture` zöld (12 allowlistelt
+eltérés, változatlan), `secrets` zöld, `l10n` zöld (2298 üzenet, en → hu
+paritás).
+
+**A validátor közvetlen futtatása a javított kódon (§7 parancs), a valós
+leltáron:**
+
+```
+$ python3 tool/validate_content_catalog.py --inventory docs/content/catalog-inventory.yaml --today 2026-09-01
+```
+
+**Kimenet:** üres stdout. **Kilépési kód: 0.**
+
+**A review MAJOR-1 négy mutációja (P1–P4) megismételve a javított
+validátoron, a valós fán — MOST MÁR PIROS:**
+
+```
+$ # P1  builtin.quarterDownstrokes.v1  difficulty: beginner -> advanced
+stale_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1:difficulty (declared=advanced, measured=beginner)
+exit=1
+
+$ # P2  builtin.quarterDownstrokes.v1  locales: [en, hu] -> [en, hu, xx]
+stale_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1:locales (declared=[en, hu, xx], measured=[en, hu])
+exit=1
+
+$ # P3  builtin.quarterDownstrokes.v1  version: 1 -> 9
+stale_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1:version (declared=9, measured=1)
+exit=1
+
+$ # P4  builtin.quarterDownstrokes.v1  skill_tags: [downstrokes, quarterNotes] -> [totallyBogusTag]
+stale_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1:skill_tags (declared=[totallyBogusTag], measured=[downstrokes, quarterNotes])
+exit=1
+```
+
+Négyből négy hamis állítás most PIROS (a review-ban mind a négy `exit=0`
+volt). Minden mutáció után a leltárt visszaállítottam
+(`git diff --stat docs/content/catalog-inventory.yaml` a próbák között
+üres volt), a próbasorozat végén a közvetlen validátor-futás visszatért a
+fenti tiszta, 0-kilépésű állapotba.
+
+**Scope.** Csak a §1 engedélyezett négy fájl változott ebben a javító
+körben (`tool/validate_content_catalog.py`, `docs/content/
+catalog-inventory.yaml`, `test/tooling/content_catalog_test.dart`, ez a
+§10 szakasz) — `git status --short` az `M`-listát erre a négyre korlátozza.
+
 ## 11. Review — a Claude tölti ki
