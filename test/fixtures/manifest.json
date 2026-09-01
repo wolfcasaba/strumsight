@@ -130,6 +130,30 @@
       "containsUserData": false
     },
     {
+      "path": "test/fixtures/migrations/corrupted_storage.json",
+      "bytes": 1297,
+      "sha256": "dfa5ca4025188734c6719d0d057aaeb03e8372d2f5a0431c6060d30bc232d69a",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic legacy KeyValueStore snapshot (fromVersion 0, full E01-R05-era legacy key set) pairing with an injected storage-write fault in the A3 controlled-failure cell (E12-R23, ADR 0487 D3).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/migrations/legacy_v1_storage.json",
+      "bytes": 2165,
+      "sha256": "a4c2d3130d8babbc2723e6555ba74acf0a692e7d9bb4b6ceca1b22c6f2c7ddd9",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic legacy KeyValueStore snapshot (pre-E01-R06 install, fromVersion 0, all 22 appStorageMigrations pending) for the upgrade-migration release-candidate evidence (E12-R23, ADR 0487).",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/migrations/legacy_v2_storage.json",
+      "bytes": 1971,
+      "sha256": "160d7cb26834fa1037b5bdc51432f92bcf079b2c4612dae401524aedc9425c1f",
+      "license": "Project-authored synthetic test fixture.",
+      "source": "Project-authored synthetic legacy KeyValueStore snapshot (mid-upgrade between E01-R06 and E01-R07, fromVersion 16, six r07.* content migrations pending) for the upgrade-migration release-candidate evidence (E12-R23, ADR 0487).",
+      "containsUserData": false
+    },
+    {
       "path": "test/fixtures/practice/legacy_scorer_baseline.json",
       "bytes": 16121,
       "sha256": "23b4d66b2aa6a5136a4da089d0cf42c9ca76e20a0a28477716a2cf6366e65ae2",
