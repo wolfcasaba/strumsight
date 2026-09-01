@@ -544,3 +544,26 @@ Zárva ebben a körben: **S8 (a négy nevesített forgatókönyv + két python-v
 reprodukált, egysoros vektorral (S10, S11) nyitva marad; mindkettő ugyanazt a
 hatást éri el, amit a javítás le akart zárni. A javítás egyébként helyes és
 mérhető; az S10/S11 zárása néhány soros bővítés ugyanabban a két függvényben.
+
+---
+
+## LEZÁRVA (2026-09-01, folytató orchestrátor) — a fenti „Nyitott leletek" tábla nem a végállapot
+
+Ez a jelentés a MÁSODIK javító körről szólt. Az akkor nyitva hagyott leletek
+sorsa a további két javító körben (mérve, saját izolált klónban):
+
+| Lelet (fix2-ből) | Zárta | Végállapot |
+|---|---|---|
+| **S10** (MAJOR) — Dart `@Skip(...)` `library;` nélkül | fix3 (`30651086`), a fixture fix4-ben hízlalva | **ZÁRVA**, mutation-kill tanúval (`docs/reviews/e12-r18-review-security-fix4.md` §3b) |
+| **S11** (MAJOR) — `pytest.skip(..., allow_module_level=True)` | fix3, alakspecifikusan; a megkerülései (ÚJ-2/ÚJ-3) fix4-ben | **ZÁRVA** |
+| **S12** (MINOR) — osztály-szintű skip az ablakon kívül | fix3 | **ZÁRVA** (fix4 az ÚJ-5 hamis pozitívját is javította) |
+| **S13** (MINOR) — hamis pozitív testvér-/string-beli `skip:`-re | fix3 | **ZÁRVA**, és a fix4 után sem nyílt vissza (S13a/S13b/S13d) |
+| **S14** (MINOR) — degenerált S8-fixture | fix4 (`77290fe8`) | **ZÁRVA**, a `4783c9f7` eszközzel piros |
+| NOTE — az S9-cella regexe a mezősorrendet is rögzíti | — | megmaradt NOTE |
+
+A fix3 ezen felül egy **regressziót** hozott (ÚJ-1: a kanonikus
+`group('…', () {…}, skip: 'reason')` alak újra láthatatlan lett) — ezt a
+`docs/reviews/e12-r18-review-security-fix3.md` mérte ki, és a fix4 zárta.
+
+**A kör végső verdiktje: APPROVED** — `docs/reviews/e12-r18-review-security-fix4.md`
+(0 BLOCKER, 0 MAJOR; 2 fail-closed MINOR követő körre javasolva).
