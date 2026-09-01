@@ -22335,3 +22335,55 @@ hozta.
 minden `tap`-akciós csomópontján felirat-követelmény, EXAKT, csak-zsugorodó
 kivétel-számmal) és az „A6 — known-exceptions.yaml is a machine-checked
 registry" csoport két cellája.
+
+## L568 — Egy „leltár = tükör" őr, amely csak a SOROK LÉTEZÉSÉT méri, a TARTALMUKAT nem: négy elem-szintű mező tetszőlegesen hazudhatott `exit 0` mellett (E12-R21, 2026-09-01)
+
+**Mérve.** Az `E12-R21` szállította a `tool/validate_content_catalog.py`-t,
+amely az [ADR 0485](adr/0485-content-catalog-inventory-and-pedagogical-readiness-contract.md)
+D1 szerint KÉTIRÁNYÚ tükör a `docs/content/catalog-inventory.yaml` és a három
+mért tartalom-forrás között. A `_mirror_source()` valóban kétirányú volt — de
+**kizárólag az ID-halmazokra**. A leltár elemenként hat dimenziót deklarál
+(`id`, `source`, `difficulty`, `skill_tags`, `locales`, `version`); ebből az
+első kettőt mérte, a maradék **négyet nem**: az `InventoryItem.fields` szótár a
+parszerben feltöltődött, majd soha nem olvasódott el.
+
+A reviewer négy egysoros mutációja a VALÓDI fán, izolált klónban:
+
+```
+# difficulty: beginner -> advanced        exit=0
+# locales:    [en] -> [en, hu, xx]        exit=0
+# version:    1 -> 9                      exit=0
+# skill_tags: [downstrokes, …] -> [totallyBogusTag]   exit=0
+```
+
+Négyből négy hamis állítás átment, miközben a kontroll-mutációk (sor törlése,
+`source` átcímkézése, ARB-kulcs törlése, kivétel lejáratának múltba állítása)
+MIND helyesen pirosra váltottak. A `skill_tags` elnyomása volt a
+legalattomosabb: a szótár-ellenőrzés (`_vocabulary_check`) a FORRÁSBÓL vett
+címkéket veti a `skill_vocabularies:` blokk ellen, tehát a szótár helyes marad,
+miközben az ELEM címkéi hazudhatnak — a „készség-címke" dimenzió így
+*látszólag* védett volt.
+
+**A minta.** Ez az E12-R18 ([L563](#l563)), E12-R19 ([L565](#l565), [L566](#l566))
+és E12-R20 ([L567](#l567)) osztályának **negyedik** egymást követő
+előfordulása: teljesen zöld kapu, helyes adat, **vak mérce**. A négy eset
+gyökere ugyanaz — *a mérce a szerződés egy SZŰKEBB vetületét méri, mint amit a
+szerződés szövege állít*: denylist allowlist helyett (L565), nem illeszkedő sor
+= nem létező (L566), jelenlét = elérhetőség (L567), és itt: sor létezése =
+sor igazsága.
+
+**Az általánosítható tanulság.** Ha egy artefaktum azt állítja magáról, hogy egy
+másik igazságforrás TÜKRE, a mércének **minden deklarált dimenziót** tükröznie
+kell, nem csak az azonosítót. Ahol a forrásnak nincs adott dimenziója, ott
+KÖTÖTT sentinel-értéket kell kikényszeríteni (pl. `skill_tags: []`), mert a
+„nem mérjük" ág pontosan az a fail-open rés, amit a tükör-szerződés kizárni
+hivatott. A lezárás mércéje itt sem a zöld gate volt, hanem a reviewer SAJÁT,
+megismételt mutációi: a javítás után mind az öt (négy mező + a sentinel-ág)
+`stale_inventory_entry`-vel pirosra vált, a kontroll pedig zöld maradt.
+
+**Őrteszt:** `test/tooling/content_catalog_test.dart` — az
+`A1 (MAJOR-1 fix) — element-level, bidirectional field mirror` csoport öt
+fixtúra-cellája (`difficulty`, `skill_tags`, `locales`,
+`version` hamis értékkel, plusz a `learn_lessons` sentinel `skill_tags: [x]`
+ága), mind nem-nulla kilépést és mező-nevesített `stale_inventory_entry`
+leletet követel.

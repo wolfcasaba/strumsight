@@ -1,5 +1,50 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R21 KÉSZ — Content catalog leltár + pedagógiai readiness validátor — PR [#517](https://github.com/wolfcasaba/strumsight/pull/517), squash `12813a2c` (2026-09-01)
+
+A Ch12 **Kör 21** gépi bizonyítékot ad arra, hogy a szállított tartalom
+**leltározott, verziózott, címkézett és hivatkozás-helyes** — tartalom
+hozzáadása, átírása vagy áthelyezése NÉLKÜL (`lib/**` és `assets/**` a kör
+tilos zónája volt). ADR: [0485](docs/adr/0485-content-catalog-inventory-and-pedagogical-readiness-contract.md).
+Szállítva: `tool/validate_content_catalog.py` (stdlib-only, fail-closed
+sor-parszer), [`docs/content/catalog-inventory.yaml`](docs/content/catalog-inventory.yaml)
+(36 elem), `test/tooling/content_catalog_test.dart` (32 cella) és
+[`docs/content/release-readiness.md`](docs/content/release-readiness.md).
+
+**A pre-flight mérése írta a kör alakját (brief §0.0 R1–R8).** A SDD `content/catalog/`
+fát ír elő; a fán viszont a tartalom **HÁROM** helyen él (nem kettőn): a
+Practice Engine Dart-katalógusa, az `assets/tutor_knowledge/` manifest és a
+legacy Learn lecke-katalógus. Egy negyedik fa kettős igazság lett volna, ezért a
+kör **leltárat és validátort** ad a meglévőkre. Két további mért tény szűkítette
+az acceptance-t: a Practice Generator katalógusa **hívó-táplált** (nincs
+`PracticeCatalogReader` implementáció a fán), ezért az A2 a SZÁLLÍTOTT
+hivatkozás-halmazon mérődik, nem egy generátor-futáson; és a fán **nincs
+kanonikus készség-taxonómia** — a három szótár diszjunkt (a
+`LegacyMappingTable` `chord.gMajor|cMajor|dMajor` azonosítói nem elemei az
+`ai_tutor` `SkillTaxonomy.initial`-jának) —, ezért a szótár forrásonként
+deklarált és kétirányúan mért.
+
+**KÉT MÉRT GA-blokkoló, egyik sem javítva** (a tartalom-források tilos zóna;
+nyilvántartás: a leltár `known_exceptions:` blokkja, `owner: strumsight-content`,
+`expiry: 2026-12-31`): (1) mind a 10 `practiceCatalog*Description` ARB-kulcs
+**hiányzik `en`-ből ÉS `hu`-ból** — miközben mind a 10 `titleKey` fele mindkét
+locale-ban megvan —, tehát a beépített gyakorlat-katalógus leírás-felülete ma
+egyetlen nyelven sem oldható fel; (2) a `Lesson.name` beégetett angol mind a 17
+leckén, `hu` felület nélkül. A kivétel-elnyomás **szűken hatókörözött**: egy
+jövőbeli `titleKey`-regresszió NEM bújik el mögötte (mérve), és a lejárat
+letelte után a validátor magától pirosra vált.
+
+**Egy MAJOR — a NEGYEDIK egymást követő ŐR-hiba, TELJESEN zöld gate mellett**
+(az E12-R18 [L563](docs/LESSONS.md#l563), E12-R19 [L565](docs/LESSONS.md#l565)/[L566](docs/LESSONS.md#l566)
+és E12-R20 [L567](docs/LESSONS.md#l567) osztálya): a leltár elemenként hat
+dimenziót deklarál, és ebből **négyet** (`difficulty`, `skill_tags`, `locales`,
+`version`) egyetlen mérce sem tükrözött — a `_mirror_source()` csak az
+ID-halmazokat vetette össze. A reviewer négy egysoros mutációja MIND `exit 0`-t
+adott a valódi fán. A javító kör elem-szintű, kétirányú mező-tükröt szállított
+(zárt leletkód-listával, `stale_inventory_entry` + mező-név), és a lezárást a
+reviewer SAJÁT, megismételt mutációi adták, nem a zöld gate
+([L568](docs/LESSONS.md#l568)).
+
 ## ✅ E12-R20 KÉSZ — Accessibility és localization release audit — PR [#516](https://github.com/wolfcasaba/strumsight/pull/516), squash `9c323c81` (2026-09-01)
 
 A Ch12 **Kör 20** az első **FOLYAM-szintű** akadálymentességi és lokalizációs
@@ -9945,10 +9990,22 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-01, az E12-R20
-> zárása után): **283 `done`, 48 `hold`, 18 `prepared`, 16 `pending`**. A
-> következő `pending` sor: **E12-R21** (content catalog & pedagogical
-> readiness, ADR `0460`).
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-01, az E12-R21
+> zárása után): **284 `done`, 48 `hold`, 18 `prepared`, 15 `pending`**.
+>
+> ⚠ **Az E12-R21 KÉT MÉRT GA-blokkolót hagyott nyitva** — mindkettő
+> nyilvántartva a leltár `known_exceptions:` blokkjában
+> ([`docs/content/catalog-inventory.yaml`](docs/content/catalog-inventory.yaml),
+> `owner: strumsight-content`, `expiry: 2026-12-31`), és **egyik nyitott brief
+> sem nevezi meg** — ma gazdátlanok: (1) mind a 10 `practiceCatalog*Description`
+> ARB-kulcs hiányzik `en`-ből ÉS `hu`-ból (a javítás `lib/l10n/features/*.arb`
+> fragmentum + `tool/gen_l10n_segments.dart` újragenerálás); (2) `Lesson.name`
+> beégetett angol mind a 17 leckén (a javítás ARB-indirekciót vezetne be a
+> `lib/features/learn/model/lesson.dart`-ba). A lejárat letelte után a
+> `content_catalog_test.dart` MAGÁTÓL pirosra vált — a kivétel nem örök.
+> **Átvitt tétel:** ha egy későbbi kör bekot egy valódi
+> `PracticeCatalogReader` implementációt, az [ADR 0485](docs/adr/0485-content-catalog-inventory-and-pedagogical-readiness-contract.md)
+> D2 mérése kiterjeszthető a Practice Generator TÉNYLEGES kimenetére.
 >
 > ⚠ **Az E12-R20 HÁROM `lib/**` leletet hagyott nyitva** — mind P2, mind
 > dátumozott `review_by: "2026-12-01"`-gyel a
