@@ -268,4 +268,92 @@ cd backend && python -m pytest tests/test_diagnostics_redaction.py tests/test_di
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5). **Induló HEAD:** `b2b37735` (pre-flight
+commit, ADR 0486 + brief §0.0.A revízió). Ez a kör egy FOLYTATÓ futás volt: az
+előző implementer-futás mind a 7 fájlt előállította és a gate [1]–[9] lépését
+zöldre vitte a munkapéldányban, de a [10] backend pytest közben ütközött a
+wrapper 3600 s abszolút időkorlátjába, **commit nélkül**. Ez a futás a
+munkapéldányt vette át `??` (untracked) állapotban.
+
+### 10.1 Szállított fájlok
+
+| Fájl | Mit tartalmaz |
+|---|---|
+| `tool/release/build_diagnostics_bundle.py` (243 sor) | A redaktáló + rétegzett-consent bundle-építő |
+| `tool/release/generate_beta_notes.py` (204 sor) | A determinisztikus béta-jegyzet generátor |
+| `test/tooling/beta_release_notes_test.dart` (991 sor) | A1–A8 minden cellája, a küszöb-cellahármas, A4 négy consent-pár |
+| `backend/tests/test_diagnostics_redaction.py` (189 sor) | Backend-oldali redakció-tesztek |
+| `docs/beta/enrollment.md`, `docs/beta/tester-consent.md`, `docs/beta/feedback-triage.md` | A tesztelői consent + triázs dokumentáció, a tester-consent.md gépi blokkja A6-ban kereszt-ellenőrizve |
+
+### 10.2 §2.2 — Backend sáv (külön processzként)
+
+```
+cd backend && python -m pytest tests/test_diagnostics_redaction.py tests/test_diagnostics.py -q
+```
+
+Ebben a futásban a rendszer `python3`-mal futott (nincs `backend/.venv` a
+munkapéldányban ehhez a lépéshez, de a záró gate `[8]`/`[9]`/`[10]` lépése a
+`/home/ubuntu/music-theory/backend/.venv`-et találta és használta — lásd
+10.4). Eredmény: **16 teszt, mind zöld**, figyelmeztetés vagy hiba nélkül.
+
+### 10.3 §2.3 — Valódi-sértés próba (kötelező, jegyzőkönyv)
+
+Parancs: a `tool/release/build_diagnostics_bundle.py` `_should_include_raw_audio()`
+függvényét `return consent_raw_audio` helyett `return True`-ra állítottam
+(a hang-melléklet alapértelmezett bekapcsolása), majd:
+
+```
+tools/round-gate.sh test/tooling/beta_release_notes_test.dart test/tooling/diagnostics_storage_separation_test.dart
+```
+
+Eredmény: `[3] test test/tooling/beta_release_notes_test.dart` → **PIROS,
+kilépési kód 1**. A gate kilépési kódja: **10**. A piros cellák pontosan a
+vártak — **A1** („a session with an audio clip produces a bundle with no
+audioClips key at all when only --consent-diagnostics is given") ÉS **A4**
+harmadik sora („only --consent-diagnostics: zero exit, bundle WITHOUT
+audio"), mindkettő ugyanazt a szerződés-sértést fogja meg két különböző
+cellából.
+
+Visszaállítás: `git checkout -- tool/release/build_diagnostics_bundle.py`.
+Bizonyíték: a visszaállítás után `git status --short` és `git diff --stat`
+üres kimenetet adott — a fa pontosan a commitolt állapotban volt.
+
+### 10.4 §2.4 — Záró, teljes gate (csonkítatlan)
+
+```
+tools/round-gate.sh test/tooling/beta_release_notes_test.dart test/tooling/diagnostics_storage_separation_test.dart
+```
+
+**MINDEN GATE ZÖLD** (10/10 lépés):
+
+| Lépés | Eredmény |
+|---|---|
+| `[1] format` | zöld |
+| `[2] analyze` | zöld — „No issues found!" |
+| `[3] test beta_release_notes_test.dart` | zöld — 44/44 teszt, „All tests passed!" |
+| `[4] test diagnostics_storage_separation_test.dart` | zöld — 3/3 teszt |
+| `[5] architecture` | zöld — 12 allowlistelt eltérés (változatlan) |
+| `[6] secrets` | zöld — 4118 fájl vizsgálva, 0 találat |
+| `[7] l10n` | zöld — en → hu paritás, 2298 üzenet |
+| `[8] backend ruff format` | zöld — 134 fájl formázva |
+| `[9] backend ruff check` | zöld |
+| `[10] backend pytest` | zöld — teljes backend suite (community modul is), 1 `x` (xfail), figyelmeztetések csak SQLAlchemy datetime deprecation |
+
+A parancs a 10 perces (600 s) eszköz-időkorlátot túllépte és a harness
+automatikusan háttérbe helyezte; a futást `TaskOutput(block=true)`-val
+blokkolva vártam meg ugyanebben a fordulóban (nem zártam a fordulót a
+háttér-feladat eredménye nélkül).
+
+### 10.5 Döntések a brief által szabadon hagyott részleteken
+
+- A backend pytest sáv (§2.2) rendszer-`python3`-mal futott, mert a
+  munkapéldányban nincs `backend/.venv`; a záró gate `[8]`–`[10]` lépése a
+  `~/music-theory/backend/.venv`-et használja — a kettő ugyanazt a 16+
+  redakciós tesztet futtatta, eltérés nem volt.
+- A valódi-sértés próbához a `_should_include_raw_audio()` egysoros
+  visszatérési értékét módosítottam (nem a hívási helyet vagy az
+  argparse-t) — ez a legkisebb, legpontosabb módosítás, ami pontosan az A1
+  szerződést (a `--consent-raw-audio` nélküli alapértelmezés) sérti meg, és
+  semmilyen más viselkedést nem érint.
+
 ## 11. Review — a Claude tölti ki
