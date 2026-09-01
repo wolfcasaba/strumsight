@@ -1,0 +1,1 @@
+round=E12-R21 verdict=pass tests=32 lesson=inventory-mirror-must-check-fields-not-just-ids engine=sonnet-impl
