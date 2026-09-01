@@ -10,7 +10,13 @@
 - **Módszer:** izolált klón (`/tmp/rev-e12r21`), a szállított validátor
   **mutációs** próbái a valódi fán — nem a szállított tesztek újrafuttatása
 
-## Verdikt: **CHANGES REQUESTED** — 1 MAJOR, 1 MINOR, 2 NOTE
+## VÉGSŐ DÖNTÉS: **APPROVED** (a javító kör után, `2da95bba`)
+
+A javító kör mindkét leletet lezárta, és a lezárást **saját mutációval** mértem,
+nem bemondásra (a bizonyíték a fájl végén, „Javító kör — újramérés"). Az alábbi
+első verdikt a javítás ELŐTTI állapoté; történeti rekordként marad.
+
+## Első verdikt (`bec2a87c`): **CHANGES REQUESTED** — 1 MAJOR, 1 MINOR, 2 NOTE
 
 A kör gerince helyes és a brief legkockázatosabb előírásait teljesíti: a
 kétirányú ID-tükör, a szűken hatókörözött kivétel-elnyomás, a fail-closed
@@ -170,3 +176,72 @@ halmaz szándékos szétválasztása dokumentált, nem lelet.
 4. A §10 handoff kiegészítése a fenti próbák TÉNYLEGES kimenetével.
 
 Az `allowed_paths` **nem bővül**.
+
+---
+
+# Javító kör — újramérés (`2da95bba`, 2026-09-01)
+
+- **Diff a javító körben:** 4 fájl, +387 / −11 sor
+  (`tool/validate_content_catalog.py`, `test/tooling/content_catalog_test.dart`,
+  `docs/content/catalog-inventory.yaml`, a brief §10) — a scope-audit kézzel
+  újrafuttatva: `Legacy scope audit OK (e5bef8c0..2da95bba, 4 changed path(s))`.
+- **Módszer:** ÚJ izolált klón (`/tmp/rev2-e12r21`), ugyanazok a mutációk, mint
+  amelyek a MAJOR-t találták.
+
+## MAJOR-1 — **LEZÁRVA**
+
+Mind a négy eredeti mutáció, plusz a sentinel-ág, MOST PIROS; a kontroll zöld:
+
+```
+$ python3 tool/validate_content_catalog.py --inventory docs/content/catalog-inventory.yaml --today 2026-09-01
+exit=0                                              # kontroll
+
+# P1 difficulty: beginner -> advanced
+stale_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1:difficulty (declared=advanced, measured=beginner)          exit=1
+# P2 locales: [en, hu] -> [en, hu, xx]
+stale_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1:locales (declared=[en, hu, xx], measured=[en, hu])         exit=1
+# P3 version: 1 -> 9
+stale_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1:version (declared=9, measured=1)                           exit=1
+# P4 skill_tags: [downstrokes, quarterNotes] -> [totallyBogusTag]
+stale_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1:skill_tags (declared=[totallyBogusTag], measured=[downstrokes, quarterNotes])  exit=1
+# P9 learn_lessons sentinel: skill_tags [] -> [x]
+stale_inventory_entry: learn_lessons:first-strums:skill_tags (declared=[x], measured=[])                                        exit=1
+```
+
+A leletkód-lista zárt maradt (`stale_inventory_entry`, mező-névvel a detailben),
+ahogy a javító prompt előírta — nincs tizenegyedik kód.
+
+## MINOR-1 — **LEZÁRVA**
+
+A `locales:` definíciója a leltár fejléc-kommentjében kimondva (20–28. sor:
+„the set of locales in which … every NON-suppressed localization surface
+resolves"), és a 10 `practice_engine` sor `[en, hu]`-ra javítva. A definíció és
+a mérce összhangját külön próba igazolja: egy `hu` `titleKey` törlése MINDKÉT
+jelzést kiváltja, tehát a `locales` mező valóban a mért lefedettséget követi,
+nem egy statikus deklarációt:
+
+```
+# P6 lib/l10n/app_hu.arb-ből practiceCatalogFolkPatternTitle törölve
+missing_locale: practice_engine:builtin.folkPattern.v1:titleKey:hu
+stale_inventory_entry: practice_engine:builtin.folkPattern.v1:locales (declared=[en, hu], measured=[en])   exit=1
+```
+
+## Regresszió — nincs
+
+A javítás előtt zöldnek mért viselkedések változatlanok; a kivétel-lejárat
+próbája ugyanúgy fog:
+
+```
+# P8 expiry 2026-12-31 -> 2026-08-31
+expired_exception: practice-catalog-description-key-missing-both-locales (expiry=2026-08-31)
+missing_locale: … 20 sor descriptionKey:en / :hu …                                                        exit=1
+```
+
+## Acceptance-mérleg — javítás után
+
+| # | Állapot |
+|---|---|
+| A1 | ✅ ID-tükör ÉS elem-szintű mező-tükör, mindkét irányban, mérve |
+| A2–A9 | ✅ változatlan (lásd a fenti mérleget) |
+
+**Nyitott BLOCKER/MAJOR/MINOR: nincs.** A kör mehet a zöld kapuhoz.
