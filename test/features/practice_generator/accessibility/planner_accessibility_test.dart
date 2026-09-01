@@ -2,6 +2,7 @@ import 'dart:io' show Directory;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/practice_generator/application/controller/today_plan_controller.dart';
 import 'package:strumsight/features/practice_generator/application/usecase/delete_practice_planning_data.dart';
@@ -31,6 +32,14 @@ import '../../../fixtures/practice_generator/validation/validation_fixtures.dart
 ///   A9 discomfort safety UX (no progression offer after discomfort).
 void main() {
   group('A2 — large-text overflow', () {
+    // §0.0.A/R7 (L558): a PHONE-sized viewport (360x640, dpr 1.0), not the
+    // flutter_test default 800x600 — that default is wider AND taller than
+    // any phone, so a lazy ListView never builds the off-screen child and
+    // "no overflow" can measure an empty tree. `_pumpWithScaler` sets the
+    // phone viewport for every cell in this group. `en` cells below are the
+    // pre-existing frozen cells (structural viewport fix only, §0.0); `hu`
+    // cells are new — the round's own A3 evidence that the longer Hungarian
+    // strings also fit at the 2.0 threshold.
     testWidgets('TodayPlanScreen empty / rest / unavailable / completed states '
         'render without overflow at 2.0 text scaler', (tester) async {
       await _pumpWithScaler(
@@ -42,6 +51,21 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+      'TodayPlanScreen empty state renders without overflow at 2.0 (hu)',
+      (tester) async {
+        await _pumpWithScaler(
+          tester,
+          const TextScaler.linear(2),
+          TodayPlanScreen(
+            controller: TodayPlanController(clock: () => DateTime(2026, 8, 19)),
+          ),
+          locale: const Locale('hu'),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets(
       'TodayPlanScreen planned-day view renders without overflow at 2.0',
@@ -58,6 +82,22 @@ void main() {
       },
     );
 
+    testWidgets(
+      'TodayPlanScreen planned-day view renders without overflow at 2.0 (hu)',
+      (tester) async {
+        await _pumpWithScaler(
+          tester,
+          const TextScaler.linear(2),
+          TodayPlanScreen(
+            controller: TodayPlanController(clock: () => DateTime(2026, 8, 19)),
+            plan: buildPlan(),
+          ),
+          locale: const Locale('hu'),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('WeeklyPlanScreen renders without overflow at 2.0', (
       tester,
     ) async {
@@ -65,6 +105,47 @@ void main() {
         tester,
         const TextScaler.linear(2),
         WeeklyPlanScreen(plan: buildPlan(), today: LocalDate(2026, 8, 17)),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('WeeklyPlanScreen renders without overflow at 2.0 (hu)', (
+      tester,
+    ) async {
+      await _pumpWithScaler(
+        tester,
+        const TextScaler.linear(2),
+        WeeklyPlanScreen(plan: buildPlan(), today: LocalDate(2026, 8, 17)),
+        locale: const Locale('hu'),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('PlanPrivacyScreen renders without overflow at 2.0 (en)', (
+      tester,
+    ) async {
+      await _pumpWithScaler(
+        tester,
+        const TextScaler.linear(2),
+        PlanPrivacyScreen(
+          deleteUseCase: _NoopDeleteUseCase(),
+          exportUseCase: _NoopExportUseCase(),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('PlanPrivacyScreen renders without overflow at 2.0 (hu)', (
+      tester,
+    ) async {
+      await _pumpWithScaler(
+        tester,
+        const TextScaler.linear(2),
+        PlanPrivacyScreen(
+          deleteUseCase: _NoopDeleteUseCase(),
+          exportUseCase: _NoopExportUseCase(),
+        ),
+        locale: const Locale('hu'),
       );
       expect(tester.takeException(), isNull);
     });
@@ -196,6 +277,7 @@ void main() {
 
 Future<void> _pump(WidgetTester tester, Widget child) => tester.pumpWidget(
   MaterialApp(
+    theme: SsLightTheme.data(),
     locale: const Locale('en'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
@@ -206,18 +288,25 @@ Future<void> _pump(WidgetTester tester, Widget child) => tester.pumpWidget(
 Future<void> _pumpWithScaler(
   WidgetTester tester,
   TextScaler scaler,
-  Widget child,
-) => tester.pumpWidget(
-  MaterialApp(
-    locale: const Locale('en'),
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    home: MediaQuery(
-      data: MediaQueryData(textScaler: scaler),
-      child: child,
+  Widget child, {
+  Locale locale = const Locale('en'),
+}) {
+  tester.view.physicalSize = const Size(360, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  return tester.pumpWidget(
+    MaterialApp(
+      theme: SsLightTheme.data(),
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: MediaQuery(
+        data: MediaQueryData(textScaler: scaler),
+        child: child,
+      ),
     ),
-  ),
-);
+  );
+}
 
 /// PracticeDay convenience — overrides only `reasonCodes`.
 extension on PracticeDay {

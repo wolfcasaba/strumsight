@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
@@ -313,6 +314,41 @@ void main() {
       },
     );
   });
+
+  group('A3 — large-text overflow, phone viewport', () {
+    testWidgets('preview renders without overflow at 2.0 (en)', (tester) async {
+      final activation = _RecordingActivation();
+      final controller = _controllerFor(
+        activation: activation,
+        hardAvoid: false,
+      );
+      addTearDown(controller.dispose);
+
+      await _pumpPreviewOnPhone(tester, controller, textScaleFactor: 2);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('preview renders without overflow at 2.0 (hu)', (tester) async {
+      final activation = _RecordingActivation();
+      final controller = _controllerFor(
+        activation: activation,
+        hardAvoid: false,
+      );
+      addTearDown(controller.dispose);
+
+      await _pumpPreviewOnPhone(
+        tester,
+        controller,
+        textScaleFactor: 2,
+        locale: const Locale('hu'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
 
 PlanPreviewController _controllerFor({
@@ -379,12 +415,44 @@ Future<void> _pumpPreview(
 ) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: SsLightTheme.data(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Navigator(
         onGenerateRoute: (settings) => MaterialPageRoute<void>(
           settings: settings,
           builder: (_) => PlanPreviewScreen(controller: controller),
+        ),
+      ),
+    ),
+  );
+}
+
+// §0.0.A/R7 (L558) — PHONE-sized viewport (360x640, dpr 1.0) + a caller
+// locale, for the round's own A3 overflow evidence (not the flutter_test
+// default 800x600, which under-measures a scrollable preview list).
+Future<void> _pumpPreviewOnPhone(
+  WidgetTester tester,
+  PlanPreviewController controller, {
+  double textScaleFactor = 1,
+  Locale locale = const Locale('en'),
+}) {
+  tester.view.physicalSize = const Size(360, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  return tester.pumpWidget(
+    MaterialApp(
+      theme: SsLightTheme.data(),
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: MediaQuery(
+        data: MediaQueryData(textScaler: TextScaler.linear(textScaleFactor)),
+        child: Navigator(
+          onGenerateRoute: (settings) => MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => PlanPreviewScreen(controller: controller),
+          ),
         ),
       ),
     ),

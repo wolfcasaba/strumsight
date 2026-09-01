@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controller/today_plan_controller.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
@@ -55,43 +56,113 @@ class TodayPlanScreen extends StatelessWidget {
       appBar: AppBar(title: Text(l10n.todayPlanTitle)),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: switch (state.mode) {
-            TodayPlanMode.noActivePlan => _EmptyState(l10n: l10n),
-            TodayPlanMode.restDay => _MessageState(
-              stateKey: const Key('today-plan-rest-day'),
-              title: l10n.todayPlanRestTitle,
-              body: l10n.todayPlanRestBody,
-              statusLabel: l10n.practicePlanStatusRestLabel,
-            ),
-            TodayPlanMode.unavailableDay => _MessageState(
-              stateKey: const Key('today-plan-unavailable-day'),
-              title: l10n.todayPlanUnavailableTitle,
-              body: l10n.todayPlanUnavailableBody,
-              statusLabel: l10n.practicePlanStatusUnavailableLabel,
-            ),
-            TodayPlanMode.completedDay => _MessageState(
-              stateKey: const Key('today-plan-completed-day'),
-              title: l10n.todayPlanCompletedTitle,
-              body: l10n.todayPlanCompletedBody,
-              statusLabel: l10n.practicePlanStatusCompletedLabel,
-            ),
-            TodayPlanMode.notScheduled => _MessageState(
-              stateKey: const Key('today-plan-not-scheduled'),
-              title: l10n.todayPlanNotScheduledTitle,
-              body: l10n.todayPlanNotScheduledBody,
-              statusLabel: l10n.practicePlanStatusNotScheduledLabel,
-            ),
-            TodayPlanMode.plannedDay => _PlannedDay(
-              state: state,
-              onStart: onStart,
-              onSwap: onSwap,
-              onSkip: onSkip,
-              onShorten: onShorten,
-              onPause: onPause,
-            ),
-          },
+          padding: const EdgeInsets.all(SsSpacing.space5),
+          child: _ScrollableIfShort(
+            child: switch (state.mode) {
+              TodayPlanMode.noActivePlan => _EmptyState(l10n: l10n),
+              TodayPlanMode.restDay => _MessageState(
+                stateKey: const Key('today-plan-rest-day'),
+                title: l10n.todayPlanRestTitle,
+                body: l10n.todayPlanRestBody,
+                statusLabel: l10n.practicePlanStatusRestLabel,
+              ),
+              TodayPlanMode.unavailableDay => _MessageState(
+                stateKey: const Key('today-plan-unavailable-day'),
+                title: l10n.todayPlanUnavailableTitle,
+                body: l10n.todayPlanUnavailableBody,
+                statusLabel: l10n.practicePlanStatusUnavailableLabel,
+              ),
+              TodayPlanMode.completedDay => _MessageState(
+                stateKey: const Key('today-plan-completed-day'),
+                title: l10n.todayPlanCompletedTitle,
+                body: l10n.todayPlanCompletedBody,
+                statusLabel: l10n.practicePlanStatusCompletedLabel,
+              ),
+              TodayPlanMode.notScheduled => _MessageState(
+                stateKey: const Key('today-plan-not-scheduled'),
+                title: l10n.todayPlanNotScheduledTitle,
+                body: l10n.todayPlanNotScheduledBody,
+                statusLabel: l10n.practicePlanStatusNotScheduledLabel,
+              ),
+              TodayPlanMode.plannedDay => _PlannedDay(
+                state: state,
+                onStart: onStart,
+                onSwap: onSwap,
+                onSkip: onSkip,
+                onShorten: onShorten,
+                onPause: onPause,
+              ),
+            },
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Lets [child] scroll instead of overflow when the viewport is too short
+/// for it (§0.0.A/R7, L558) — measured need: at `textScaler` 2.0 on a
+/// phone-sized (360x640) viewport, the empty/message states' status badge +
+/// title + body, and the planned-day state's status + remaining time + next
+/// block + action buttons, can together outgrow a short viewport. Mirrors
+/// the `_ScrollableIfShort` pattern already established on
+/// `setlist_list_screen.dart`/`setlist_detail_screen.dart` (E15-R06).
+class _ScrollableIfShort extends StatelessWidget {
+  const _ScrollableIfShort({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedHeight) return child;
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A textual status marker — icon + label, never colour alone (A4). Not
+/// [SsStatusBadge]: that component's [SsStatusBadgeKind] enumerates
+/// offline/sync/confidence states only, none of which describe a practice
+/// plan's day status (rest / unavailable / completed / planned / no-active)
+/// — inventing a mapping would misrepresent the state (§5.2).
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Semantics(
+      label: label,
+      container: true,
+      child: Row(
+        key: const Key('today-plan-status-badge'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: colors.textPrimary,
+            semanticLabel: 'status',
+          ),
+          const SizedBox(width: SsSpacing.space1),
+          Flexible(
+            child: Text(
+              label,
+              style: typography.labelLarge.copyWith(color: colors.textPrimary),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -103,33 +174,31 @@ class _EmptyState extends StatelessWidget {
   final AppLocalizations l10n;
 
   @override
-  Widget build(BuildContext context) => Column(
-    key: const Key('today-plan-empty'),
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      Semantics(
-        label: l10n.practicePlanStatusNoActiveLabel,
-        container: true,
-        child: Row(
-          key: const Key('today-plan-status-badge'),
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.info_outline, semanticLabel: 'status'),
-            const SizedBox(width: 6),
-            Text(l10n.practicePlanStatusNoActiveLabel),
-          ],
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Column(
+      key: const Key('today-plan-empty'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _StatusBadge(
+          label: l10n.practicePlanStatusNoActiveLabel,
+          icon: Icons.info_outline,
         ),
-      ),
-      const SizedBox(height: 12),
-      Text(
-        l10n.todayPlanEmptyTitle,
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const SizedBox(height: 8),
-      Text(l10n.todayPlanEmptyBody),
-    ],
-  );
+        const SizedBox(height: SsSpacing.space3),
+        Text(
+          l10n.todayPlanEmptyTitle,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        Text(
+          l10n.todayPlanEmptyBody,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+        ),
+      ],
+    );
+  }
 }
 
 class _MessageState extends StatelessWidget {
@@ -149,31 +218,29 @@ class _MessageState extends StatelessWidget {
   final String? statusLabel;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      if (statusLabel != null) ...[
-        Semantics(
-          label: statusLabel,
-          container: true,
-          child: Row(
-            key: const Key('today-plan-status-badge'),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.info_outline, semanticLabel: 'status'),
-              const SizedBox(width: 6),
-              Text(statusLabel!),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (statusLabel != null) ...[
+          _StatusBadge(label: statusLabel!, icon: Icons.info_outline),
+          const SizedBox(height: SsSpacing.space3),
+        ],
+        Text(
+          title,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: SsSpacing.space2),
+        Text(
+          body,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+        ),
       ],
-      Text(title, style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(height: 8),
-      Text(body),
-    ],
-  );
+    );
+  }
 }
 
 class _PlannedDay extends StatelessWidget {
@@ -196,68 +263,78 @@ class _PlannedDay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final next = state.nextBlock;
     return Column(
       key: const Key('today-plan-scheduled'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
+        _StatusBadge(
           label: l10n.practicePlanStatusPlannedLabel,
-          container: true,
-          child: Row(
-            key: const Key('today-plan-status-badge'),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.event_note, semanticLabel: 'status'),
-              const SizedBox(width: 6),
-              Text(l10n.practicePlanStatusPlannedLabel),
-            ],
-          ),
+          icon: Icons.event_note,
         ),
-        const SizedBox(height: 12),
-        Text(l10n.todayPlanRemaining(_formatDuration(state.remainingTime))),
-        const SizedBox(height: 16),
+        const SizedBox(height: SsSpacing.space3),
+        Text(
+          l10n.todayPlanRemaining(_formatDuration(state.remainingTime)),
+          style: typography.bodyMedium.copyWith(color: colors.textPrimary),
+        ),
+        const SizedBox(height: SsSpacing.space4),
         Text(
           l10n.todayPlanNextBlock,
-          style: Theme.of(context).textTheme.titleMedium,
+          style: typography.titleMedium.copyWith(color: colors.textPrimary),
         ),
-        const SizedBox(height: 4),
-        Text(next == null ? l10n.todayPlanNothingRemaining : next.kind.code),
-        const Spacer(),
-        FilledButton(
+        const SizedBox(height: SsSpacing.space1),
+        Text(
+          next == null ? l10n.todayPlanNothingRemaining : next.kind.code,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+        ),
+        // A fixed gap, not `Spacer()` (§0.0.A/R7 fallout): once the column
+        // sits inside `_ScrollableIfShort`'s scrollable branch, the main
+        // axis is unbounded and a flex child like `Spacer` throws. The
+        // start button no longer pins to the bottom of the viewport, but
+        // the same buttons, in the same order, are still all present —
+        // §0.0's behavior/order/state invariant, not the exact pixel
+        // position, is what's frozen.
+        const SizedBox(height: SsSpacing.space6),
+        SsButton(
           key: const Key('today-plan-start'),
           onPressed: next == null || onStart == null
               ? null
               : () => onStart!(next),
-          child: Text(l10n.todayPlanStart),
+          label: l10n.todayPlanStart,
         ),
         Wrap(
           alignment: WrapAlignment.center,
-          spacing: 8,
+          spacing: SsSpacing.space2,
           children: [
-            TextButton(
+            SsButton(
               key: const Key('today-plan-swap'),
+              variant: SsButtonVariant.tertiary,
               onPressed: next == null || onSwap == null
                   ? null
                   : () => onSwap!(next),
-              child: Text(l10n.todayPlanSwap),
+              label: l10n.todayPlanSwap,
             ),
-            TextButton(
+            SsButton(
               key: const Key('today-plan-skip'),
+              variant: SsButtonVariant.tertiary,
               onPressed: next == null || onSkip == null
                   ? null
                   : () => onSkip!(next),
-              child: Text(l10n.todayPlanSkip),
+              label: l10n.todayPlanSkip,
             ),
-            TextButton(
+            SsButton(
               key: const Key('today-plan-shorten'),
+              variant: SsButtonVariant.tertiary,
               onPressed: onShorten,
-              child: Text(l10n.todayPlanShorten),
+              label: l10n.todayPlanShorten,
             ),
-            TextButton(
+            SsButton(
               key: const Key('today-plan-pause'),
+              variant: SsButtonVariant.tertiary,
               onPressed: onPause,
-              child: Text(l10n.todayPlanPause),
+              label: l10n.todayPlanPause,
             ),
           ],
         ),
