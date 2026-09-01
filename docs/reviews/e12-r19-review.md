@@ -1,4 +1,8 @@
-# E12-R19 — Review (Claude, Opus 5) — CHANGES REQUESTED
+# E12-R19 — Review (Claude, Opus 5) — VÉGSŐ DÖNTÉS: APPROVED
+
+> **Frissítve 2026-09-01, a javító kör #1 (`bbf7c3a1`) után.** Az eredeti,
+> CHANGES REQUESTED verdiktű jelentés alább változatlanul olvasható; a zárás
+> lelet-soronkénti, ÚJRAMÉRT ellenőrzése a **§7**-ben. **Nyitott lelet: 0.**
 
 - **Kör:** `E12-R19` — Privacy-safe observability, SLO és release dashboard
 - **Ág:** `sonnet-impl/e12-r19-privacy-safe-observability-and-slo`
@@ -205,3 +209,59 @@ bizonyítékot kell adnia: a jelentésben felsorolt mutánsok a javítás után
 PIROSAK). A MINOR-1..5 ugyanebben a javító körben olcsón zárható, mert
 mindegyik ugyanazt a teszt-fájlt (és MINOR-4 esetén egy doc-commentet) érinti —
 a diffet nem hizlalja érdemben.
+
+---
+
+## 7. Javító kör #1 (`bbf7c3a1`) — a zárás ÚJRAMÉRVE → APPROVED
+
+A javító kör a `test/core/telemetry/telemetry_redaction_test.dart` fájlt írta át
+(a diff nagy része), plusz két doc-commentet (`telemetry_redactor.dart`,
+`telemetry_sink.dart`). A `lib/` viselkedése NEM változott — az őrök változtak,
+ahogy a review kérte.
+
+**A mérés nem a jelentés átvétele:** a lenti táblázatot a reviewer futtatta le
+saját mutációs harnessszel (`/tmp/mutate-e12-r19.sh`) az izolált
+`/tmp/review-e12-r19` klónban, a JAVÍTOTT fán. Minden mutáns az igazi
+`flutter test`-en ment át, nem szimuláción; a klón minden mutáns után
+`git checkout -- .`-tal állt vissza, a végén `git status --short` üres.
+
+| Lelet | Mutáns | Javítás ELŐTT (mérve, §0 M4–M10) | Javítás UTÁN (újramérve) |
+|---|---|---|---|
+| — | baseline, mutáció nélkül | 15/15 zöld | **20/20 ZÖLD** |
+| MAJOR-1 | `TelemetryEvent`-en `Map<String, String>?` mező | zöld (átcsúszott) | **PIROS** |
+| MAJOR-1 | `TelemetryEvent`-en `List<String>?` mező | zöld (átcsúszott) | **PIROS** |
+| MAJOR-1 | `TelemetryEvent`-en `double?` mező (nyers ms) | zöld (átcsúszott) | **PIROS** |
+| MAJOR-1 | kontroll: `Map<String, dynamic>?` mező | piros | **PIROS** |
+| MAJOR-2 | 6. SLO 4-szóközös behúzással, `required: false`, `on_missing: success` | zöld (némán eldobva) | **PIROS** |
+| MAJOR-2 | a `success_verdicts:` sor törölve | zöld (vákuum-igazság) | **PIROS** |
+| MINOR-1 | testvér fájlban (`telemetry_sink.dart`) `final Map<String, dynamic>? data;` | zöld (az A1 csak `telemetry_event.dart`-ot olvasta) | **PIROS** |
+| MINOR-2 | `static const List<String> extraSensitiveKeys` a redaktorban | zöld (M10) | **PIROS** |
+| MINOR-3 | `import 'dart:io'` + `File(...).writeAsStringSync` a sinkben | zöld (az A7 5 mintája nem ismerte) | **PIROS** |
+| MINOR-5 | új `TelemetryEventName.metronomeStarted` a katalógus frissítése nélkül | zöld (nem létezett cella) | **PIROS** |
+| A3 (regresszió-próba) | statikus `_pending` puffer + flush a consent-flipnél | piros | **PIROS** (nem gyengült) |
+
+MINOR-4 doc-comment-javítás, cellája nincs és nem is lehet — a
+`telemetry_redactor.dart` fejléce most azt mondja, amit a hívott
+`LogRedactor.fields` ténylegesen csinál (érték redaktálva, **kulcs
+változatlanul kikerül**), és kimondja, hogy a metaadat kulcsainak zárt szótárból
+kell származniuk. Ellenőrizve olvasással a `log_redactor.dart:59-65` ellen.
+
+### Független ellenőrzések a javított HEAD-en (`bbf7c3a1`)
+
+| Ellenőrzés | Eredmény |
+|---|---|
+| `tools/round-gate.sh test/core/telemetry/telemetry_redaction_test.dart test/privacy/consent_enforcement_test.dart` (izolált klón) | **EXIT=0** — format, analyze, mindkét teszt, architecture, secrets, l10n ZÖLD |
+| `tools/scope-audit.py --base a96dceaf` | `OK — 10 changed path(s), 1 generated/ignored` |
+| A6 (Kör 17 consent-cellák) | változatlanul ZÖLD, a kör nem érintette a `test/privacy/`-t |
+| Tilos zóna | `lib/features/**`, `lib/core/logging/**`, `lib/core/network/**`, `backend/**`, `docs/privacy/**`, `pubspec.*`, `tool/**` mind érintetlen |
+
+### Verdikt
+
+**APPROVED** — 0 BLOCKER, 0 MAJOR, 0 nyitott MINOR. A kör mind a hét
+acceptance-cellája (A1–A7) most már a JELENTÉST méri, nem a mező meglétét: a
+brief §6.1 mérce-mátrixának mind az öt sorához van olyan mutáns, amit a
+reviewer maga mért pirosra ([L549](../LESSONS.md#l549),
+[L563](../LESSONS.md#l563) alkalmazva).
+
+A merge feltétele már csak a zöld CI a merge SHA-ján (Full Gate + Router CI,
+ADR 0086 §2).
