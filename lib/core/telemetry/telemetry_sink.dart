@@ -3,8 +3,14 @@ import 'telemetry_event.dart';
 /// A destination a `TelemetryEvent` can be recorded to.
 ///
 /// This round ships the contract only — no implementation in this file ever
-/// reaches the network (ADR 0484 D5, SDD Ch12 §5.5). Wiring a real transport
-/// (and the consent switch it reads) is a later, feature-flagged round.
+/// reaches the network OR writes to local persistence (`dart:io`,
+/// `SharedPreferences`, `path_provider`, ...) (ADR 0484 D5, SDD Ch12 §5.5).
+/// The D5 prohibition covers both: a sink that buffers to disk before
+/// consent is checked would defeat [ConsentGatedTelemetrySink] just as
+/// completely as one that reaches the network directly, since a disk
+/// buffer is itself a durable, inspectable copy of the event. Wiring a
+/// real transport (and the consent switch it reads) is a later,
+/// feature-flagged round.
 abstract interface class TelemetrySink {
   void record(TelemetryEvent event);
 }

@@ -5,6 +5,16 @@
 //
 // A6 (Kör 17 consent cells) is `test/privacy/consent_enforcement_test.dart`,
 // unchanged by this round and run alongside this file by the gate.
+//
+// Javító kör #1 (docs/reviews/e12-r19-review.md): A1/A4 moved from a
+// type-name DENYLIST to a closed-enum ALLOWLIST (MAJOR-1); the
+// docs/operations/slo.yaml parser gained a fail-closed SLO-count check and
+// an exact success_verdicts match (MAJOR-2); A1 now scans the whole
+// lib/core/telemetry directory (MINOR-1); A2(b) also forbids a second
+// List<String>/set literal (MINOR-2); A7's pattern list also covers local
+// persistence (MINOR-3); the redactor doc-comment no longer overstates what
+// LogRedactor does to metadata keys (MINOR-4); event-catalog.md is now
+// checked against the enums in both directions (MINOR-5).
 
 import 'dart:io';
 
@@ -16,37 +26,42 @@ void main() {
   group('A1 — TelemetryEvent structurally forbids free-form payload fields '
       '(ADR 0484 D1) — source-scan, not runtime reflection (no dart:mirrors '
       'under flutter_test, §0.0 R4)', () {
-    test('telemetry_event.dart has no Map<String,dynamic>/dynamic/Object? '
-        'field and no free String field', () {
-      final code = _withoutCommentsAndStrings(
-        File('lib/core/telemetry/telemetry_event.dart').readAsStringSync(),
-      );
-
+    test('no .dart file under lib/core/telemetry declares a field typed '
+        'Map<..., dynamic>, dynamic, Object or a free String — scanned as '
+        'FIELD DECLARATIONS across the whole directory, not just '
+        'telemetry_event.dart, so a sibling file cannot reopen the D1 hole '
+        '(Javító kör #1, MINOR-1)', () {
+      final offences = <String>[];
+      for (final entity in Directory(
+        'lib/core/telemetry',
+      ).listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        final code = _withoutCommentsAndStrings(entity.readAsStringSync());
+        for (final field in _fieldDeclarations(code)) {
+          if (_isForbiddenTelemetryFieldType(field.key)) {
+            offences.add(
+              '${entity.path}: field `${field.value}` typed `${field.key}`',
+            );
+          }
+        }
+      }
       expect(
-        RegExp(r'Map\s*<\s*String\s*,\s*dynamic\s*>').hasMatch(code),
-        isFalse,
+        offences,
+        isEmpty,
         reason:
-            'a general Map<String, dynamic> payload field opens every '
-            'structural protection back up (ADR 0484 D1)',
-      );
-      expect(
-        RegExp(r'\bdynamic\b').hasMatch(code),
-        isFalse,
-        reason: 'no field or return type may be `dynamic`',
-      );
-      expect(
-        RegExp(r'Object\?').hasMatch(code),
-        isFalse,
-        reason: 'no field may be typed `Object?`',
-      );
-      expect(
-        _freeTypedFieldPattern('String').hasMatch(code),
-        isFalse,
-        reason:
-            'no free-form String field is allowed — every dimension on '
-            'the event must be a closed enum',
+            'a free-form field anywhere under lib/core/telemetry reopens '
+            'the D1 hole even when it is not on TelemetryEvent itself:\n'
+            '${offences.join('\n')}',
       );
     });
+
+    test(
+      'TelemetryEvent field allowlist: every field is typed as one of the '
+      'closed Telemetry* enums — an ALLOWLIST, not a denylist, so a future '
+      'Map/List/double field cannot slip through simply because nobody '
+      'named it in advance (Javító kör #1, MAJOR-1)',
+      _expectTelemetryEventFieldsAreClosedEnums,
+    );
   });
 
   group('A2 — the redactor applies the EXISTING LogRedactor rules, not a '
@@ -105,6 +120,20 @@ void main() {
         RegExp(r'Set\s*<\s*String\s*>').hasMatch(code),
         isFalse,
         reason: 'a second key dictionary here is the same D2 violation',
+      );
+      expect(
+        RegExp(r'List\s*<\s*String\s*>').hasMatch(code),
+        isFalse,
+        reason:
+            'a second string list here is the same drifting-D2-violation as '
+            'a second Set<String> (Javító kör #1, MINOR-2)',
+      );
+      expect(
+        RegExp(r'=\s*\{').hasMatch(code),
+        isFalse,
+        reason:
+            'an un-annotated set/map literal here is the same D2 violation '
+            'as a typed second list (Javító kör #1, MINOR-2)',
       );
     });
   });
@@ -181,26 +210,13 @@ void main() {
       ),
     );
 
-    test('source-scan: the TelemetryEvent class body carries no raw int/'
-        'Duration field', () {
-      final source = File(
-        'lib/core/telemetry/telemetry_event.dart',
-      ).readAsStringSync();
-      final classBody = _withoutCommentsAndStrings(
-        _extractClassBody(source, 'TelemetryEvent'),
-      );
-
-      expect(
-        _freeTypedFieldPattern('int').hasMatch(classBody),
-        isFalse,
-        reason: 'a raw int field on the event is a de-facto raw-ms channel',
-      );
-      expect(
-        _freeTypedFieldPattern('Duration').hasMatch(classBody),
-        isFalse,
-        reason: 'a raw Duration field on the event is the same violation',
-      );
-    });
+    test(
+      'source-scan: every TelemetryEvent field is one of the closed '
+      'Telemetry* enums — a raw int/Duration/double field is a de-facto '
+      'raw-ms channel and is caught by the same allowlist as A1 (Javító '
+      'kör #1, MAJOR-1)',
+      _expectTelemetryEventFieldsAreClosedEnums,
+    );
   });
 
   group('A5 — docs/operations/slo.yaml: unknown is never success, every '
@@ -213,7 +229,14 @@ void main() {
 
     test('unknown is declared as a verdict but is not a success verdict', () {
       expect(doc.verdictValues, contains('unknown'));
-      expect(doc.successVerdicts.contains('unknown'), isFalse);
+      expect(
+        doc.successVerdicts,
+        ['success'],
+        reason:
+            'must be exactly ["success"] — an accidentally emptied list '
+            'must not vacuously satisfy "does not contain unknown" '
+            '(Javító kör #1, MAJOR-2)',
+      );
     });
 
     test('unknown is a blocking verdict', () {
@@ -243,18 +266,50 @@ void main() {
       final ids = doc.slos.map((slo) => slo.id).toList();
       expect(ids.toSet(), hasLength(ids.length));
     });
+
+    test('the parser observed every "- id:" line in the file — a silently '
+        'dropped SLO (e.g. from a wrong indent) must fail loudly, not leave '
+        'the dashboard green (Javító kör #1, MAJOR-2)', () {
+      final raw = File('docs/operations/slo.yaml').readAsStringSync();
+      final rawIdCount = RegExp(
+        r'^\s*- id:',
+        multiLine: true,
+      ).allMatches(raw).length;
+      expect(
+        doc.slos.length,
+        rawIdCount,
+        reason:
+            'the hand-rolled parser found ${doc.slos.length} SLO(s) but '
+            'the file has $rawIdCount "- id:" line(s) — an indentation '
+            'mismatch is silently dropping at least one SLO from every '
+            'downstream check',
+      );
+    });
+
+    test('schema_version is declared as 1 (Javító kör #1, MAJOR-2)', () {
+      expect(doc.schemaVersion, 1);
+    });
   });
 
-  group('A7 — the telemetry layer is structurally network-incapable '
-      '(ADR 0484 D5)', () {
+  group('A7 — the telemetry layer is structurally network- AND local-'
+      'persistence-incapable (ADR 0484 D5)', () {
     test('no .dart file under lib/core/telemetry mentions Dio, ApiClient, '
-        'HttpClient(, package:http or SharePlus', () {
+        'HttpClient(, package:http, SharePlus, dart:io, File(, Socket, '
+        'WebSocket, SharedPreferences or path_provider — the D5 prohibition '
+        'covers local persistence as well as the network (Javító kör #1, '
+        'MINOR-3)', () {
       final forbidden = <RegExp>[
         RegExp(r'\bDio\b'),
         RegExp(r'\bApiClient\b'),
         RegExp(r'HttpClient\s*\('),
         RegExp(r'package:http'),
         RegExp(r'\bSharePlus\b'),
+        RegExp(r"import\s+'dart:io'"),
+        RegExp(r'\bFile\s*\('),
+        RegExp(r'\bSocket\b'),
+        RegExp(r'\bWebSocket\b'),
+        RegExp(r'\bSharedPreferences\b'),
+        RegExp(r'package:path_provider'),
       ];
 
       final offences = <String>[];
@@ -275,7 +330,74 @@ void main() {
         isEmpty,
         reason:
             'the field\'s mere presence is enough to make this layer an '
-            'egress route (ADR 0484 D5):\n${offences.join('\n')}',
+            'egress or local-persistence route (ADR 0484 D5):\n'
+            '${offences.join('\n')}',
+      );
+    });
+  });
+
+  group('MINOR-5 — event-catalog.md is checked against the enum values in '
+      'both directions, not just documented as needing to be (Javító kör '
+      '#1)', () {
+    late String enumSource;
+    late String catalog;
+
+    setUpAll(() {
+      enumSource = _withoutCommentsAndStrings(
+        File('lib/core/telemetry/telemetry_event.dart').readAsStringSync(),
+      );
+      catalog = File('docs/analytics/event-catalog.md').readAsStringSync();
+    });
+
+    test('TelemetryEventName is in sync with the catalog in both '
+        'directions', () {
+      final enumValues = _simpleEnumValues(
+        enumSource,
+        'TelemetryEventName',
+      ).toSet();
+      final catalogValues = _catalogBacktickedTokens(
+        catalog,
+        'TelemetryEventName',
+      ).toSet();
+
+      expect(enumValues, isNotEmpty);
+      expect(
+        enumValues.difference(catalogValues),
+        isEmpty,
+        reason: 'enum value(s) missing from event-catalog.md (enum → doc)',
+      );
+      expect(
+        catalogValues.difference(enumValues),
+        isEmpty,
+        reason:
+            'event-catalog.md names value(s) that do not exist on '
+            'TelemetryEventName (doc → enum)',
+      );
+    });
+
+    test('TelemetryEventCategory is in sync with the catalog in both '
+        'directions', () {
+      final enumValues = _simpleEnumValues(
+        enumSource,
+        'TelemetryEventCategory',
+      ).toSet();
+      final catalogValues = _catalogBacktickedTokens(
+        catalog,
+        'TelemetryEventCategory',
+      ).toSet();
+
+      expect(enumValues, isNotEmpty);
+      expect(
+        enumValues.difference(catalogValues),
+        isEmpty,
+        reason: 'enum value(s) missing from event-catalog.md (enum → doc)',
+      );
+      expect(
+        catalogValues.difference(enumValues),
+        isEmpty,
+        reason:
+            'event-catalog.md names value(s) that do not exist on '
+            'TelemetryEventCategory (doc → enum)',
       );
     });
   });
@@ -349,16 +471,92 @@ String _withoutCommentsAndStrings(String source) {
   return buffer.toString();
 }
 
-/// Matches a field declaration (`final <type> name;`) or constructor
-/// parameter (`required <type> name,` / `<type> name)`) for [typeName] —
-/// mirrors `tool/check_data_inventory.dart`'s `_dioTypedMemberPattern`, the
-/// fan's own precedent for detecting a typed field by its declaration shape
-/// rather than a bare token match (which would also fire on a doc comment
-/// mentioning the type by name).
-RegExp _freeTypedFieldPattern(String typeName) => RegExp(
-  '\\bfinal\\s+$typeName\\??\\s+\\w+\\s*;|'
-  '(?:required\\s+)?$typeName\\??\\s+\\w+\\s*[,)]',
-);
+/// Extracts every `final <type> <name>;` field declaration in [code] as
+/// (type, name) pairs. [code] must already have comments/strings blanked
+/// out via [_withoutCommentsAndStrings]. Scoped to whole-line declarations
+/// (this fan's own style for every field in this directory), so it
+/// naturally skips constructor parameter lists and method signatures —
+/// neither ends a line in `<word>;` the way a field declaration does, which
+/// is what keeps this directory-wide scan from tripping on e.g.
+/// `telemetry_redactor.dart`'s `Map<String, Object?> sanitizeMetadata(...)`
+/// method signature.
+List<MapEntry<String, String>> _fieldDeclarations(String code) {
+  final pattern = RegExp(r'^\s*final\s+(.+)\s+(\w+);\s*$', multiLine: true);
+  return [
+    for (final match in pattern.allMatches(code))
+      MapEntry(match.group(1)!.trim(), match.group(2)!),
+  ];
+}
+
+/// Whether [type] (a field's declared type, as captured by
+/// [_fieldDeclarations]) is one of the free-form shapes ADR 0484 D1
+/// forbids anywhere under `lib/core/telemetry` — `dynamic` in any position,
+/// a bare `Object`, a bare `String`, or a `Map<...>` whose value type is
+/// `dynamic`.
+bool _isForbiddenTelemetryFieldType(String type) {
+  final bareType = type.endsWith('?')
+      ? type.substring(0, type.length - 1)
+      : type;
+  return RegExp(r'\bdynamic\b').hasMatch(type) ||
+      bareType == 'Object' ||
+      bareType == 'String' ||
+      (bareType.startsWith('Map<') && type.contains('dynamic'));
+}
+
+/// The closed set of enum types every [TelemetryEvent] field must be typed
+/// as (nullable or not).
+const _closedTelemetryEventFieldTypes = <String>{
+  'TelemetryEventName',
+  'TelemetryEventCategory',
+  'TelemetryOperationResult',
+  'TelemetryDurationBucket',
+  'TelemetryCapability',
+};
+
+/// MAJOR-1: an ALLOWLIST, not a denylist — ADR 0484 D1 states a POSITIVE
+/// rule ("every field is a closed enum"), so this checks every field on
+/// [TelemetryEvent] against the closed set of `Telemetry*` enums instead of
+/// naming free-form types to reject one at a time. A denylist of named
+/// types (`dynamic`, `Object?`, a hand-picked `Map<String, dynamic>` shape)
+/// lets a future `Map<String, String>`, `List<String>` or raw `double`
+/// field slip through simply because nobody enumerated it in advance
+/// (docs/LESSONS.md L549) — shared between the A1 and A4 acceptance cells
+/// because both map to the same underlying assertion.
+void _expectTelemetryEventFieldsAreClosedEnums() {
+  final source = File(
+    'lib/core/telemetry/telemetry_event.dart',
+  ).readAsStringSync();
+  final classBody = _withoutCommentsAndStrings(
+    _extractClassBody(source, 'TelemetryEvent'),
+  );
+  final fields = _fieldDeclarations(classBody);
+
+  expect(
+    fields,
+    isNotEmpty,
+    reason:
+        'the field-declaration scan matched nothing on TelemetryEvent — '
+        'the pattern or the class-body extraction is broken, not that the '
+        'class genuinely has no fields',
+  );
+
+  for (final field in fields) {
+    final type = field.key;
+    final bareType = type.endsWith('?')
+        ? type.substring(0, type.length - 1)
+        : type;
+    expect(
+      _closedTelemetryEventFieldTypes.contains(bareType),
+      isTrue,
+      reason:
+          'TelemetryEvent.${field.value} is typed `$type`, which is not '
+          'one of the closed Telemetry* enums '
+          '($_closedTelemetryEventFieldTypes) — every field must be a '
+          'closed enum (ADR 0484 D1); a Map, List, double or any other '
+          'free-form type reopens the hole the enum-only contract closes',
+    );
+  }
+}
 
 /// Extracts the body of `class <className> { ... }` (brace-balanced, so the
 /// constructor's own `({ ... })` parameter list nests correctly) from
@@ -378,6 +576,51 @@ String _extractClassBody(String source, String className) {
     i++;
   }
   return source.substring(start, i - 1);
+}
+
+/// Extracts the comma-separated values of a simple (no constructor, no
+/// arguments) `enum <enumName> { a, b, c }` declaration from [code]. Used
+/// only for [TelemetryEventName] and [TelemetryEventCategory] — neither
+/// carries constructor arguments, so splitting the brace-balanced body on
+/// `,` is exact.
+List<String> _simpleEnumValues(String code, String enumName) {
+  final marker = RegExp('enum\\s+$enumName\\b\\s*\\{');
+  final match = marker.firstMatch(code);
+  if (match == null) {
+    fail('enum $enumName not found in source');
+  }
+  final end = code.indexOf('}', match.end);
+  if (end == -1) {
+    fail('unterminated enum $enumName');
+  }
+  return code
+      .substring(match.end, end)
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList();
+}
+
+/// Extracts every backtick-quoted `` `token` `` under the markdown `##
+/// \`sectionHeading\`` heading in [markdown], up to (not including) the
+/// next `## ` heading.
+List<String> _catalogBacktickedTokens(String markdown, String sectionHeading) {
+  final headingPattern = RegExp('^## `$sectionHeading`.*', multiLine: true);
+  final headingMatch = headingPattern.firstMatch(markdown);
+  if (headingMatch == null) {
+    fail('event-catalog.md has no "## `$sectionHeading`" heading');
+  }
+  final nextHeadingStart = RegExp(r'^## ', multiLine: true)
+      .allMatches(markdown)
+      .map((m) => m.start)
+      .firstWhere(
+        (start) => start > headingMatch.start,
+        orElse: () => markdown.length,
+      );
+  final section = markdown.substring(headingMatch.end, nextHeadingStart);
+  return RegExp(
+    r'`(\w+)`',
+  ).allMatches(section).map((m) => m.group(1)!).toList();
 }
 
 // ---------------------------------------------------------------------------
@@ -402,12 +645,14 @@ final class _SloDefinition {
 
 final class _SloDocument {
   const _SloDocument({
+    required this.schemaVersion,
     required this.verdictValues,
     required this.successVerdicts,
     required this.blockingVerdicts,
     required this.slos,
   });
 
+  final int? schemaVersion;
   final List<String> verdictValues;
   final List<String> successVerdicts;
   final List<String> blockingVerdicts;
@@ -415,6 +660,7 @@ final class _SloDocument {
 }
 
 _SloDocument _parseSloYaml(List<String> lines) {
+  int? schemaVersion;
   List<String>? verdictValues;
   List<String>? successVerdicts;
   List<String>? blockingVerdicts;
@@ -440,6 +686,7 @@ _SloDocument _parseSloYaml(List<String> lines) {
     inSlo = false;
   }
 
+  final schemaVersionPattern = RegExp(r'^schema_version:\s*(\d+)\s*$');
   final listPattern = RegExp(
     r'^(verdict_values|success_verdicts|blocking_verdicts):\s*\[(.*)\]\s*$',
   );
@@ -449,6 +696,12 @@ _SloDocument _parseSloYaml(List<String> lines) {
   for (final raw in lines) {
     if (raw.trim().isEmpty || raw.trimLeft().startsWith('#')) continue;
     if (raw.trim() == 'slos:') continue;
+
+    final schemaMatch = schemaVersionPattern.firstMatch(raw);
+    if (schemaMatch != null) {
+      schemaVersion = int.parse(schemaMatch.group(1)!);
+      continue;
+    }
 
     final listMatch = listPattern.firstMatch(raw);
     if (listMatch != null) {
@@ -494,6 +747,7 @@ _SloDocument _parseSloYaml(List<String> lines) {
   flush();
 
   return _SloDocument(
+    schemaVersion: schemaVersion,
     verdictValues: verdictValues ?? const [],
     successVerdicts: successVerdicts ?? const [],
     blockingVerdicts: blockingVerdicts ?? const [],

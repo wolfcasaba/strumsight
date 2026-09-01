@@ -11,7 +11,13 @@ import '../logging/log_redactor.dart';
 /// permissive way (ADR 0484 D2). Any diagnostic context a future sink
 /// implementation attaches alongside a `TelemetryEvent` (never the event
 /// itself, which carries no free-form field to begin with) must pass through
-/// here first.
+/// here first — but note [LogRedactor] only redacts VALUES, never the map's
+/// KEYS ([sanitizeMetadata] delegates to `LogRedactor.fields`, which returns
+/// each entry's own key unchanged). A caller must therefore build that map
+/// from a closed, hand-picked set of key names, the same way
+/// `TelemetryEvent`'s own fields are closed enums — a key sourced from user
+/// input (a file path, an e-mail address used as a map key) would pass
+/// through this gate completely unredacted.
 abstract final class TelemetryRedactor {
   /// Redacts a field map the same way [LogRedactor.fields] redacts a log
   /// record's fields.

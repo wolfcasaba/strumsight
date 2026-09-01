@@ -379,4 +379,65 @@ mezők, `unknown` kezelés) EHHEZ a fájlhoz köti, nem ismétli meg a küszöb�
 - A `TelemetryEvent`-en nem szerepel semmilyen `int`/`Duration` mező (a brief csak a "raw ms" mezőt tiltja explicit) — szándékosan szigorúbb választás, hogy az A1 és A4 forrás-szken egyértelműen, átfedés nélkül mérje a saját kritériumát.
 - A `docs/operations/slo.yaml` két SLO-jának (`crash_free_sessions`, `tutor_turn_success_rate`) `source` mezője a jövőbeli 31–33. rollout-körre mutat, mert a gyűjtés bekapcsolása explicit KÉSŐBBI kör (ADR 0484 §0.1) — ez nem hiányosság, hanem a `unknown`/`on_missing` szabály pontosan erre az esetre való: amíg a gyűjtés nincs bekötve, a dashboard ezeket a sorokat `unknown`-ként (blokkoló) fogja jelenteni, sosem `success`-ként.
 
+### Javító kör #1 (docs/reviews/e12-r19-review.md, 2 MAJOR + 5 MINOR) — elvégezve
+
+**Érintett fájlok:** `test/core/telemetry/telemetry_redaction_test.dart` (a diff nagy része),
+doc-comment pontosítás `lib/core/telemetry/telemetry_redactor.dart`-ban (MINOR-4) és
+`lib/core/telemetry/telemetry_sink.dart`-ban (MINOR-3 doc fele). Egyetlen tilos zóna sem
+sérült (`git diff --stat` a záráskor: pontosan ez a 3 fájl).
+
+Minden lelethez elvégeztem a mutáns → javítás ELŐTT (a HEAD-en lévő, `docs/reviews/e12-r19-review.md`
+által reviewzott test-fájllal) → javítás UTÁN mérést. Minden mutáns a `lib/` vagy
+`docs/operations/slo.yaml` oldalon élt, a teszt-fájl mindkét oldalon (régi/új) valós, futtatott
+verzió volt — nem szimuláció.
+
+| Lelet | Mutáns | Előtte (HEAD-i teszt) | Utána (javított teszt) |
+|---|---|---|---|
+| MAJOR-1 (M4) | `TelemetryEvent.capability` típusa `Map<String, String>?` | **ZÖLD** (átcsúszik) | **PIROS** |
+| MAJOR-1 (M5) | `TelemetryEvent.capability` típusa `List<String>?` | **ZÖLD** (átcsúszik) | **PIROS** |
+| MAJOR-1 (M6) | `TelemetryEvent.capability` típusa `double?` (nyers csatorna) | **ZÖLD** (átcsúszik) | **PIROS** |
+| MAJOR-1 (M7, kontroll) | `TelemetryEvent.capability` típusa `Map<String, dynamic>?` | PIROS ✓ (változatlan) | PIROS ✓ (változatlan) |
+| MAJOR-2 (M8) | `slo.yaml` végén 6. SLO 4-szóközös behúzással, `required: false`, `on_missing: success` | **ZÖLD** (némán eldobva) | **PIROS** |
+| MAJOR-2 (M9) | `slo.yaml`-ból törölve a `success_verdicts:` sor | **ZÖLD** (vákuum-igazság) | **PIROS** |
+| MINOR-1 | `telemetry_sink.dart`-ban egy top-level `final Map<String, dynamic>? debugTelemetryContext` | **ZÖLD** (az A1 csak `telemetry_event.dart`-ot olvasta) | **PIROS** |
+| MINOR-2 | `telemetry_redactor.dart`-ban `static const List<String> extraSensitiveKeys = ['lyrics', 'notes']` | **ZÖLD** (az A2(b) csak `RegExp`/`Set<String>`-et nézte) | **PIROS** |
+| MINOR-3 | `telemetry_sink.dart`-ban `import 'dart:io'` + egy `File(...)` hívás | **ZÖLD** (az A7 5 mintája nem ismerte a `dart:io`-t) | **PIROS** |
+| MINOR-5 | Új `TelemetryEventName.metronomeStarted` érték az enumban, `event-catalog.md` frissítése nélkül | **ZÖLD** (nem létezett cella, ami mérje) | **PIROS** |
+| MINOR-4 | — (doc-comment pontosítás, nincs hozzá cella/mutáns — a `telemetry_redactor.dart` doc-ja korábban túligérte, hogy a `LogRedactor` a metaadat-KULCSOKAT is redaktálja; a szöveg most kimondja, hogy csak az ÉRTÉKEKET redaktálja, és a kulcsoknak zárt szótárból kell jönniük) | n/a | n/a |
+
+**A javítás lényege leletenként** (részletek: `docs/reviews/e12-r19-review.md` §2–4):
+
+- **MAJOR-1:** az A1/A4 forrás-szken DENYLIST-je (`dynamic`/`Object?`/egy kézzel írt
+  `Map<String,dynamic>` alak) helyett most egy `TelemetryEvent`-re szűkített ALLOWLIST fut
+  (`_expectTelemetryEventFieldsAreClosedEnums`, megosztva az A1 és A4 cella között): minden
+  `final <típus> <név>;` mezőt kigyűjt (`_fieldDeclarations`, `_extractClassBody` felett) és a
+  `?`-t leszámítva megköveteli, hogy a típus az öt zárt `Telemetry*` enum egyike legyen.
+- **MAJOR-2:** a `_parseSloYaml` fail-CLOSED lett: (a) új cella ellenőrzi, hogy a parszolt SLO-k
+  száma egyezik a nyers `^\s*- id:` sorok számával (a rossz behúzású SLO így nem tűnhet el
+  némán); (b) a `success_verdicts` állítás mostantól pontos egyezés (`['success']`), nem
+  „nem tartalmaz unknown"; (c) új cella a `schema_version == 1`-re.
+- **MINOR-1:** az A1 mostantól `Directory('lib/core/telemetry').listSync(recursive: true)`
+  felett fut (az A7 mintáját követve), NEM csak `telemetry_event.dart`-on — a tiltott
+  típusokat mező-alakú regexszel (`_fieldDeclarations` + `_isForbiddenTelemetryFieldType`)
+  azonosítja, nem nyers substringgel, hogy ne adjon hamis találatot pl.
+  `telemetry_redactor.dart` `Map<String, Object?> sanitizeMetadata(...)` metódus-szignatúráján.
+- **MINOR-2:** az A2(b) cella új tiltásai: `List<String>` típusannotáció és egy annotáció
+  nélküli `= {...}` halmaz/map-literál.
+- **MINOR-3:** az A7 mintalistája `Dio`/`ApiClient`/`HttpClient(`/`package:http`/`SharePlus`
+  mellett most `dart:io` import, `File(`, `Socket`, `WebSocket`, `SharedPreferences`,
+  `package:path_provider`-t is tiltja; a `telemetry_sink.dart` doc-ja kimondja, hogy a D5
+  tiltás a lokális perzisztenciára is vonatkozik.
+- **MINOR-4:** csak doc-comment — a `telemetry_redactor.dart` fejléce most pontosan azt
+  mondja, amit a hívott `LogRedactor.fields` ténylegesen csinál (érték redaktálva, kulcs
+  változatlan), és kimondja, hogy a metaadat kulcsainak zárt szótárból kell jönniük.
+- **MINOR-5:** új `MINOR-5` teszt-csoport, ami a `TelemetryEventName`/`TelemetryEventCategory`
+  enum-értékeket MINDKÉT irányban egyezteti az `event-catalog.md`-vel
+  (`_simpleEnumValues` + `_catalogBacktickedTokens`).
+
+**Záró gate** (a javítás után, a teljes fán): `tools/round-gate.sh
+test/core/telemetry/telemetry_redaction_test.dart test/privacy/consent_enforcement_test.dart`
+→ **MINDEN GATE ZÖLD** (format, analyze, mindkét teszt-útvonal, architecture, secrets, l10n).
+A mutációs próbák mind eldobhatók voltak; a záráskor `git status --short` a három szándékolt
+fájlon kívül tiszta.
+
 ## 11. Review — a Claude tölti ki
