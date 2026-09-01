@@ -22274,3 +22274,64 @@ fail-closed alakra: `tool/check_data_inventory.dart`.
 **Őrteszt:** `test/core/telemetry/telemetry_redaction_test.dart` — az A5
 „the parser observed every `- id:` line" cellája, a `successVerdicts` pontos
 egyezése és a `schema_version == 1` cella.
+
+## L567 — A jelenlét-alapú akadálymentességi próba szerkezetileg VAK a kettéhasadt szemantikus csomópontra: a `find.bySemanticsLabel` a feliratos, de NEM aktiválható belső csomópontra illeszkedik, miközben a tapintható külső NÉMA (E12-R20, 2026-09-01)
+
+**Mit mértünk.** Az E12-R20 folyam-szintű a11y auditja a `SsSwitchRow`-n
+(megosztott design-system komponens) `tester.semantics.simulatedAccessibilityTraversal()`
+bejárással KÉT szomszédos csomópontot mért egy sor helyett:
+
+- a **külső** csomópont (az `InkWell` saját gesztus-szemantikája) a teljes,
+  48dp-s sort fedi, hordozza a `tap` akciót — és **nincs feliratja**;
+- a **belső** (`MergeSemantics`) csomópont hordozza a feliratot
+  („Metronome"/„Accent on count 1"/„Show chord hint") és a `toggled` állapotot
+  — és **nincs `tap` akciója**.
+
+A képernyőolvasó-használó tehát vagy egy néma gombra áll rá, vagy egy feliratos
+elemre, amit onnan nem tud aktiválni. A hiba 3 példányban, MINDKÉT locale-on
+reprodukálódott a Practice Setup képernyőn, és strukturális: minden
+`SsSwitchRow` hívási helyet érint.
+
+**Miért nem fogta meg egyik meglévő őr sem.** A fán három komponens-szintű a11y
+teszt futott (`semantics_contract_test.dart`, `screen_reader_copy_test.dart`,
+`tap_target_test.dart`), és mind ZÖLD volt. A `find.bySemanticsLabel(x)`
+**jelenlét**-próba a BELSŐ csomópontra illeszkedik — a felirat tényleg ott van a
+fában —, tehát a próba teljesül, miközben az elem az olvasó szempontjából
+használhatatlan. A jelenlét-próba a „létezik-e valahol a fában" kérdésre válaszol;
+az akadálymentesség kérdése viszont az, hogy **ugyanazon a csomóponton** van-e a
+felirat ÉS az akció. Ez az [L460](#l460) („a `find.text`/`bySemanticsLabel` a
+láthatatlan `hintText`-re is illeszkedik") általánosítása: a jelenlét-alapú őr
+nem invariánst mér, hanem előfordulást.
+
+**A minta.** Akadálymentességi invariánst a TÉNYLEGES bejárással mérj
+(`tester.semantics.simulatedAccessibilityTraversal()` + `SemanticsNode.getSemanticsData()`),
+és a felirat–akció párosítást EGY csomóponton belül állítsd
+(`node.hasAction(SemanticsAction.tap) && node.label.isNotEmpty`), sose két külön
+finder-hívással. A fókusz-sorrendet ugyanígy: `containsAllInOrder` a bejáráson,
+nem „mind a három felirat megvan valahol".
+
+**Másodlagos mérés ugyanebből a körből:** a `flutter_test` default 800×600-as
+viewportja ismét vakká tette volna a túlcsordulás-cellákat ([L558](#l558)) —
+mind a hat cella 412×915-ön mér. És a text-scale kapcsoló a teljes app-fán CSAK
+a `platformDispatcher.textScaleFactorTestValue`-n hat: egy a fa FÖLÉ tett
+`MediaQuery` wrappert a `MaterialApp.router` saját `MediaQuery.fromView`-ja
+felülír — ezért lett a „valódi-sértés próba" (`1.0` → 20.0px vs `2.0` → 40.0px)
+PERMANENS cella, nem egyszeri kézi lépés.
+
+**Harmadszor ugyanaz az őr-hibaosztály.** A kör MAJOR-ja megint nem kódhiba volt,
+hanem vak mérce, teljesen zöld gate mellett ([L563](#l563), [L565](#l565),
+[L566](#l566) után a HARMADIK): az A6 („minden kivétel ownerrel és lejárattal")
+mércéje a `known-exceptions.yaml`-t **egyetlen cellával sem olvasta** — mind a
+nyolc említése komment vagy `reason:` sztring volt. A javító kör fail-closed
+sor-parszert szállított kétirányú tükör-fedéssel, és a reviewer **saját
+mutációval** zárta le, nem az implementer jelentése alapján: az `owner:` törlése,
+a `review_by:` törlése egy `expiry: unscheduled` bejegyzésről, és az
+`exceptions:` lista kiürítése a teszt-toleranciák meghagyásával — MIND pirosra
+váltott. A középső mutációt az implementer NEM futtatta; a reviewer saját próbája
+hozta.
+
+**Őrteszt:** `test/accessibility/release_flow_semantics_test.dart` — a
+`knownUnlabeledCount`-os `_expectEveryTappableNodeIsLabeled` cellák (a bejárás
+minden `tap`-akciós csomópontján felirat-követelmény, EXAKT, csak-zsugorodó
+kivétel-számmal) és az „A6 — known-exceptions.yaml is a machine-checked
+registry" csoport két cellája.

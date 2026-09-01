@@ -513,7 +513,7 @@ E12-R16	docs/rounds/e12-r16-ai-release-gate-aggregation.md	sonnet-impl	0456	done
 E12-R17	docs/rounds/e12-r17-privacy-data-inventory-and-consent-enforcement.md	sonnet-impl	0457	done
 E12-R18	docs/rounds/e12-r18-threat-model-and-release-security-scan.md	sonnet-impl	0458	done
 E12-R19	docs/rounds/e12-r19-privacy-safe-observability-and-slo.md	sonnet-impl	0459	done
-E12-R20	docs/rounds/e12-r20-accessibility-and-localization-release-audit.md	sonnet-impl	nincs	pending
+E12-R20	docs/rounds/e12-r20-accessibility-and-localization-release-audit.md	sonnet-impl	nincs	done
 E12-R21	docs/rounds/e12-r21-content-catalog-and-pedagogical-readiness.md	sonnet-impl	0460	pending
 E12-R22	docs/rounds/e12-r22-beta-distribution-and-feedback.md	sonnet-impl	0461	pending
 E12-R23	docs/rounds/e12-r23-legacy-migration-release-candidate.md	sonnet-impl	0462	pending

@@ -1,5 +1,52 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R20 KÉSZ — Accessibility és localization release audit — PR [#516](https://github.com/wolfcasaba/strumsight/pull/516), squash `9c323c81` (2026-09-01)
+
+A Ch12 **Kör 20** az első **FOLYAM-szintű** akadálymentességi és lokalizációs
+mércét szállította. A Chapter 13 sáv képernyőnként mért; ez a kör a core tanulási
+utat (indítás → onboarding → practice hub → setup → session → eredmény) járja
+végig **mindkét locale-on** (`en`/`hu`), **telefon-viewporton** (412×915) és
+`textScale 1.5`/`2.0`-n. **ADR nem készült** — a szerződéseket az
+[ADR 0280](docs/adr/0280-accessibility-contract-and-live-region-budget.md),
+[0383](docs/adr/0383-typography-and-text-scale-contract.md) és
+[0424](docs/adr/0424-localization-resilience-contract.md) már rögzíti; ez a kör
+AUDITÁL, és a `docs/adr/**` a tilos zónája volt.
+
+**A kör HÁROM MÉRT `lib/**` leletet nevez meg — egyiket sem javítva** (a `lib/**`
+a kör tilos zónája): (1) `practice_setup_screen.dart:418` 43px túlcsordulás
+`textScale 2.0`-n MINDKÉT locale-on; (2) `practice_feedback.dart:89` 65px
+túlcsordulás **csak `hu`**-n (a hosszabb fordítás miatt); (3) `ss_switch_row.dart`
+— a megosztott DS-komponens szimulált akadálymentességi bejárása KÉT csomópontot
+ad egy sor helyett: a külső `tap`-célpont **néma**, a belső feliratos, de nem
+aktiválható. Mindhárom **P2**, ezért a STOP-protokoll nem lépett életbe. A
+nyilvántartás: [`docs/accessibility/known-exceptions.yaml`](docs/accessibility/known-exceptions.yaml),
+a jelentés: [`docs/accessibility/release-audit.md`](docs/accessibility/release-audit.md).
+
+**A 3. lelet a kör önálló hozadéka:** a meglévő `screen_reader_copy_test.dart` /
+`semantics_contract_test.dart` `find.bySemanticsLabel` **jelenlét**-próbái
+szerkezetileg vakok rá ([L460](docs/LESSONS.md#l460)) — a BELSŐ csomópont
+felirata megvan, tehát a jelenlét-próba zöld. Csak a valódi
+`tester.semantics.simulatedAccessibilityTraversal()` bejárás hozta elő.
+
+**A pre-flight mérése írta a kör alakját (brief §0.0.A/R1–R10):** a `test/support/e2e_harness.dart`
+NINCS az `allowed_paths`-on ÉS a bejáró segédei beégetett ANGOL literálra
+illesztenek → a két tesztfájl SAJÁT, locale-paraméteres bejárót írt
+(`lookupAppLocalizations`); a locale a store-on át megy
+(`{'ss.settings.locale': 'hu'}`), a text-scale a `platformDispatcher`-en (egy a
+fa FÖLÉ tett `MediaQuery` inert, mert a `MaterialApp.router` saját
+`MediaQuery.fromView`-t szúr be); és **minden cella 412×915-ön mér**, mert a
+`flutter_test` default 800×600-a vakká teszi a túlcsordulás-cellát
+([L558](docs/LESSONS.md#l558), [L452](docs/LESSONS.md#l452)).
+
+**Egy MAJOR — megint ŐR-hiba, nem kódhiba, TELJESEN zöld gate mellett** (az
+E12-R18 [L563](docs/LESSONS.md#l563) és E12-R19 [L565](docs/LESSONS.md#l565)/[L566](docs/LESSONS.md#l566)
+osztályának HARMADIK előfordulása): az A6-nak — „minden kivétel ownerrel és
+lejárattal" — **nem volt gépi őre**; a `known-exceptions.yaml`-t egyetlen cella
+sem olvasta (mind a nyolc említés komment/`reason:` sztring volt), és mindhárom
+bejegyzés `expiry: unscheduled` volt. A javító kör fail-closed, kézzel írt
+sor-parszert szállított (`package:yaml` nincs a fán) kétirányú tükör-fedéssel.
+**A reviewer saját mutációval zárta le, nem bemondásra** ([L567](docs/LESSONS.md#l567)).
+
 ## ✅ E12-R19 KÉSZ — Privacy-safe telemetria-szerződés + release SLO/dashboard séma — PR [#515](https://github.com/wolfcasaba/strumsight/pull/515), squash `ea66abc5` (2026-09-01)
 
 A Ch12 **Kör 19** a kliens-oldali **telemetria-szerződést** szállította: typed
@@ -9898,6 +9945,22 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-01, az E12-R20
+> zárása után): **283 `done`, 48 `hold`, 18 `prepared`, 16 `pending`**. A
+> következő `pending` sor: **E12-R21** (content catalog & pedagogical
+> readiness, ADR `0460`).
+>
+> ⚠ **Az E12-R20 HÁROM `lib/**` leletet hagyott nyitva** — mind P2, mind
+> dátumozott `review_by: "2026-12-01"`-gyel a
+> [`docs/accessibility/known-exceptions.yaml`](docs/accessibility/known-exceptions.yaml)-ben,
+> és mind **gazdátlan** (egyik nyitott Ch12/Ch15 brief sem nevezi meg):
+> `practice_setup_screen.dart:418` (43px, mindkét locale),
+> `practice_feedback.dart:89` (65px, csak `hu`), és a megosztott
+> `ss_switch_row.dart` néma/felirat-nélküli külső szemantikus csomópontja
+> (minden `SsSwitchRow` hívási helyet érint, nem csak a Practice Setupot).
+> A nyilvántartás **csak zsugorodhat**: ha egy lelet javul, a hozzá tartozó
+> teszt-tolerancia pirosra vált, amíg a YAML-bejegyzést is el nem távolítják.
+> Az `ss_switch_row.dart` javítása design-system körbe való.
 > Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E15-R06
 > zárása után): **280 `done`, 40 `hold`, 18 `prepared`, 26 `pending`**.
 >
