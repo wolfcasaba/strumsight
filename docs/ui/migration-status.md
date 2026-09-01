@@ -1,5 +1,36 @@
 # Screen migration status
 
+**E15-R07 update (2026-09-01) — Practice Generator 6 screens migrated,
+measured 69/96 (71.875%).** `TodayPlanScreen`, `WeeklyPlanScreen`,
+`PlanSetupScreen`, `PlanPreviewScreen`, `PlanChangeReviewScreen`,
+`PlanPrivacyScreen` now import `core/design_system`. All 6 screens are
+`unreachable` per `retirement-plan.md` §3.2 (no route, no construction site
+in `lib/app/**` — §0.0.A/R1 pre-flight measurement); the round ran anyway per
+the queue's written intent (§0.0.A/R2), same class of decision as the
+`E15-R11` batch. `SsButton`/`SsCard`/`SsSkeleton` and `Ss*` tokens replace
+raw `Theme.of`/`FilledButton`/`OutlinedButton`/`TextButton`/`Card` and the
+`plan_setup_screen.dart:65` raw `CircularProgressIndicator` (now a
+`SsSkeleton` pair). No screen in this batch has a genuine `AppFailure`- or
+`SsEmptyState`-shaped action (no `SsEmptyState`/`SsFailureState` usage —
+same E15-R04-established exception class: a fabricated action would lie
+about what the screen can do), so status/empty/message states stay
+screen-local, token-styled widgets reading `SsColorScheme`/`SsTypography`
+off the theme. The one exception carved for `plan-preview-confirm`
+(`plan_preview_screen.dart`): it stays a raw `FilledButton`, not `SsButton`,
+because `plan_preview_screen_test.dart`'s own type-pinning cells cast that
+key with `tester.widget<FilledButton>(...)` — `SsButton` sets the key on
+itself, not on an inner `FilledButton`, so swapping it would fail a frozen
+cell. `TodayPlanScreen` gained a `_ScrollableIfShort` wrapper (the
+E15-R06-established pattern) after its own new phone-viewport A3 cells
+(360×640, `textScaler` 2.0, `en`+`hu`) measured a 104px overflow on the
+empty/message/planned-day states; the planned-day button block's
+`Spacer()` became a fixed gap because a flex child cannot live inside the
+wrapper's scrollable branch (unbounded main axis) — same buttons, same
+order, only no longer pinned to the bottom of the viewport. See the round's
+own `§10` handoff for the per-screen list and the required real-violation
+probe (reverting `_ScrollableIfShort` measured RED on 4 cells, restored to
+green).
+
 **E15-R06 update (2026-08-29) — Setlist + Progress 3 screens migrated,
 measured 63/96 (65.625%).** `SetlistListScreen`, `SetlistDetailScreen`,
 `ProgressScreen` now import `core/design_system`. `SetlistListScreen` uses
@@ -175,11 +206,12 @@ design-system component, only that the screen's own migration round ran.
 
 ## Measured total
 
-**63 of 96 production screens migrated (65.625%)** as of E15-R06, up from
-60/96 (62.5%) after E15-R05, 51/96 (53.1%) after E15-R04, 43/96 (44.8%)
-before E15-R04, and 0/60 at the E08-R15 baseline (the file count grew from
-60 to 96 as Epics 8–13 added screens — Community, Gamification, Library V2,
-Progress V2, Offline AI, Share — most of which shipped already migrated).
+**69 of 96 production screens migrated (71.875%)** as of E15-R07, up from
+63/96 (65.625%) after E15-R06, 60/96 (62.5%) after E15-R05, 51/96 (53.1%)
+after E15-R04, 43/96 (44.8%) before E15-R04, and 0/60 at the E08-R15
+baseline (the file count grew from 60 to 96 as Epics 8–13 added screens —
+Community, Gamification, Library V2, Progress V2, Offline AI, Share — most
+of which shipped already migrated).
 
 ## Canonical token source by migration phase
 
@@ -189,7 +221,7 @@ Progress V2, Offline AI, Share — most of which shipped already migrated).
 | Component and screen migration (E13-R16…R35) | Design-system component tokens (`SsColorScheme`/`SsTypography` theme extensions, `Ss*` components) | A screen migrates only in its assigned round; all unassigned screens remain on the legacy theme (`AppTheme` / `AppColors` / `AppPalette`). |
 | Screens needing design-system extensions without `AppTheme` carrying them | **MEASURED OBSOLETE as of E15-R01.** A local `*ThemeScope` — the **nine** wrappers on the tree are `ProgressThemeScope` (progress_v2), `AuthThemeScope` (auth), `SettingsThemeScope` (settings), `LibraryThemeScope` (library_v2), `ShareThemeScope` (share), `GamificationThemeScope` (gamification), `CommunityThemeScope` (community), `OfflineAiThemeScope` (offline_ai), `VisionThemeScope` (vision) | Wrapped the screen so its `Ss*` cards could resolve `SsColorScheme`/`SsTypography` when those extensions were NOT yet on the app's runtime `ThemeData` (the gap this row used to describe). Since E15-R01 the app's actual `ThemeData` carries all four extensions directly (ADR 0466 D1), so the wrapper is now redundant for every screen it wraps — but the wrappers themselves are NOT removed by this round (tilos zóna, `lib/features/**`); their retirement is a per-screen follow-up round's job. |
 
-## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05, progress/songs rows updated 2026-08-29 by E15-R06)
+## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05, progress/songs rows updated 2026-08-29 by E15-R06, practice_generator row updated 2026-09-01 by E15-R07)
 
 | Feature | Migrated / total | Legacy screens (migration pending) |
 | --- | --- | --- |
@@ -208,7 +240,7 @@ Progress V2, Offline AI, Share — most of which shipped already migrated).
 | offline_ai | 1/1 | — |
 | onboarding | 2/3 | onboarding |
 | practice | 6/6 | — |
-| practice_generator | 0/6 | plan_change_review, plan_preview, plan_privacy, plan_setup, today_plan, weekly_plan |
+| practice_generator | 6/6 | — |
 | practice_hub | 1/1 | — |
 | profile_hub | 1/1 | — |
 | progress | 1/1 | — |
@@ -245,11 +277,13 @@ migrated, actively-reachable one (`progress` row above, 1/1) while
 `progress_v2` (2/2 in its own row) remains orphaned/unreachable.
 
 **Not yet superseded — full feature migration still pending:** `learn`,
-`practice_generator`, `songs`, `analyze`. `song_trainer` is fully migrated as
-of E15-R05 (9/9); it is notable because despite its name suggesting a V2
-rewrite of `songs`, the "V2" there was an architecture rewrite (E09), not a
-Chapter 13 design migration — `songs` (the pre-V2 feature, 0/4) remains
-separately legacy.
+`songs`, `analyze`. `song_trainer` is fully migrated as of E15-R05 (9/9); it
+is notable because despite its name suggesting a V2 rewrite of `songs`, the
+"V2" there was an architecture rewrite (E09), not a Chapter 13 design
+migration — `songs` (the pre-V2 feature, 0/4) remains separately legacy.
+`practice_generator` reached 6/6 as of E15-R07 — but per `retirement-plan.md`
+§3.2 (re-confirmed §0.0.A/R1), all 6 screens are `unreachable`: fully
+migrated is not the same claim as reachable-and-migrated.
 
 ## Legacy route safety (A6)
 

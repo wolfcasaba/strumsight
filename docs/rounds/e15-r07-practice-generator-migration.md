@@ -349,4 +349,188 @@ tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Képernyőnkénti összefoglaló
+
+- **`today_plan_screen.dart`** — `core/design_system` import. Az üres/rest/
+  unavailable/completed/notScheduled állapotok közös `_StatusBadge`
+  widgetre (ikon+szöveg, `SsColorScheme`/`SsTypography` tokenekkel) és
+  retokenizált `Text`-ekre váltottak; a `plannedDay` ág `SsButton`-ra váltja
+  az öt korábbi `FilledButton`/`TextButton`-t (`today-plan-start/-swap/
+  -skip/-shorten/-pause`, kulcsok VÁLTOZATLANOK). Új `_ScrollableIfShort`
+  wrapper (az E15-R06 `setlist_list_screen.dart` mintájának másolata) a
+  switch KIMENETÉN, tehát mind a 6 ág egyformán védett (L559 — nem
+  ág-onkénti, hanem a switch egész eredményét fedő védelem). A
+  `_PlannedDay` korábbi `Spacer()`-e fix `SizedBox(height:
+  SsSpacing.space6)`-ra váltott, mert a scroll-ági (unbounded height)
+  Columnban egy flex gyerek hibát dobna — a gombok sorrendje és készlete
+  változatlan, csak a képernyő aljára-tűzés szűnt meg.
+- **`weekly_plan_screen.dart`** — `core/design_system` import. A
+  `Card`+`ListTile` sor `_WeeklyDayCard`-ra váltott (tokenizált `Container`
+  — NEM `SsContentCard`, mert az csak title+message párost tud, a sor
+  viszont HÁROM különálló tényt mutat — dátum, státusz-felirat, perc —, és
+  ezek összeolvasztása információvesztés lenne, §5.1). A `plan == null` ág
+  retokenizált `Text`-re váltott.
+- **`plan_setup_screen.dart`** — `core/design_system` import. A
+  `plan_setup_screen.dart:65` nyers `CircularProgressIndicator` **egy pár
+  `SsSkeleton`-ra** váltott (§5.2 kötelező eset). A lépés-fejlécek, a
+  konfliktus-szöveg (`colors.danger`), a vissza/tovább gombpár, a
+  „nem tudom" gombok (mind a 4 előfordulás — cél/elérhetőség/eszköz/
+  preferencia/kényelem lépés) és a bináris választó (`OutlinedButton`)
+  mind `SsButton`-ra váltottak. A kényelmi szabadszöveg-mező **kivétel**:
+  marad nyers `TextField` (indoklás: 10.2).
+- **`plan_preview_screen.dart`** — `core/design_system` import. A
+  `_FindingsBanner` retokenizált `Container`-re váltott (`colors.danger`/
+  `colors.warning`, `SsRadius.md`); az `intro` szöveg és a figyelmeztetés-
+  nyugtázó gomb (`plan-preview-acknowledge-warning`) `SsButton`-ra váltott.
+  **Kivétel:** a `plan-preview-confirm` gomb marad nyers `FilledButton`
+  (indoklás: 10.2).
+- **`plan_change_review_screen.dart`** — `core/design_system` import. A
+  `_ChangeCard` `Card`-ja `SsCard`-ra váltott, minden belső `Text`
+  retokenizálva; az elfogadás/elutasítás gombpár `SsButton`-ra váltott. A
+  diff-nézet KATEGÓRIÁI (before/after/reason/confidence/evidence/
+  reversible) MÉRT-változatlanok — csak a megjelenítés vált komponensre
+  (§3 batch-kikötés). Nulla tesztlefedettség ez a képernyő előtt ÉS után is
+  (mérve: `grep -rn '\bPlanChangeReviewScreen(' test/` → 0 találat) — nem
+  szerepel a `gate_tests`-en, a migráció csak kódszintű ellenőrzéssel
+  igazolható.
+- **`plan_privacy_screen.dart`** — `core/design_system` import. A
+  `_ScopeCard`/`_DiscomfortSafetyCard` `SsCard`-ra váltott. Az export-gomb
+  `SsButton(variant: secondary)`, a törlés-gomb **`SsButton(variant:
+  destructive, destructiveSemanticHint: l10n.practicePrivacyDeleteConfirmBody)`**
+  — a §5.5 dokumentált szabálya szerint a destruktív szándékot NEM csak
+  szín jelzi. A megerősítő `AlertDialog`-ok (`_DeleteConfirmDialog`,
+  `_ExportConfirmDialog`) gombjai NEM váltottak `SsButton`-ra — ugyanaz a
+  precedens, mint az E15-R06 `setlist_list_screen.dart` `_promptName`
+  dialógusa: a dialógus-akció a Material-konvenció része, nem a képernyő
+  saját felülete. A brief §0.0.A/R2 „a szövegek és consent-kapcsolók
+  VÁLTOZATLANOK" kikötése: a képernyőn TÉNYLEGESEN nincs kapcsoló
+  (`Switch`/`SsSwitchRow`) — mérve, nincs ilyen widget a fájlban sem előtte,
+  sem utána; a kikötés ezért tartalom nélkül teljesül.
+
+### 10.2 Dokumentált kivételek (§5.2, §0.0.A/R4)
+
+1. **`plan-preview-confirm` marad nyers `FilledButton`.** A
+   `plan_preview_screen_test.dart` A3/A4 cellái ezt a kulcsot
+   `tester.widget<FilledButton>(confirmButton).onPressed` alakban castolják
+   — az `SsButton` a kulcsot ÖNMAGÁRA teszi, nem a belső `FilledButton`-ra,
+   tehát a csere elbuktatná ezt a fagyasztott cellát (§0.0 tiltja a
+   gyengítést). Nincs `SsButtonVariant`, ami ezt a típus-elvárást
+   kielégítené.
+2. **A kényelmi szabadszöveg-mező (`plan-comfort-free-text`) marad nyers
+   `TextField`.** Korlátlan sorszámú bevitelt fogad (`maxLines: null`);
+   `SsTextField.maxLines` `int`, NEM nullázható — a csere csendben
+   1 sorra korlátozná a tanuló szabadszövegét (§5.1 sérülés).
+3. **Egyik képernyő sem használ `SsEmptyState`/`SsFailureState`-et.**
+   Egyik állapotnak sincs VALÓDI, már létező akciója (`SsEmptyState`
+   mind az 5 paramétere kötelező) vagy VALÓDI `SsFailurePresentation`-je
+   (a `_FindingsBanner` több, egyidejű validációs találatot listáz —
+   struktúrája nem `SsFailureState` egy-üzenetes modellje). Ugyanez az
+   osztály, mint az E15-R04/R05/R06 megalapozott kivétele
+   (`migration-status.md` korábbi bejegyzései).
+4. **A megerősítő `AlertDialog`-ok gombjai nem váltottak.** Lásd 10.1
+   `plan_privacy_screen.dart` bekezdés — ugyanaz a precedens, mint a
+   `setlist_list_screen.dart` `_promptName` dialógusa.
+5. **`plan_change_review_screen.dart` nulla tesztlefedettségű.** Nem a
+   `gate_tests` része; a migráció csak kódolvasással ellenőrizhető.
+
+### 10.3 §5 mérés kimenete (A1, A7)
+
+```
+$ for f in lib/features/practice_generator/presentation/screens/{today_plan,weekly_plan,plan_setup,plan_preview,plan_change_review,plan_privacy}_screen.dart; do grep -q design_system "$f" && echo "MIGRATED $f" || echo "legacy $f"; done
+MIGRATED lib/features/practice_generator/presentation/screens/today_plan_screen.dart
+MIGRATED lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart
+MIGRATED lib/features/practice_generator/presentation/screens/plan_setup_screen.dart
+MIGRATED lib/features/practice_generator/presentation/screens/plan_preview_screen.dart
+MIGRATED lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart
+MIGRATED lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart
+
+$ for f in $(find lib/features -name '*_screen.dart' | sort); do grep -q design_system "$f" && echo MIGRATED || echo legacy; done | grep -c MIGRATED
+69   # / 96 total → 71.875%, +6 az E15-R06 63/96 (65.625%) bázishoz képest
+```
+
+`docs/ui/migration-status.md` frissítve: új E15-R07 bekezdés a tetején, a
+„Measured total" 69/96-ra, a `practice_generator` sor `6/6`-ra (`—` legacy
+lista), a „Not yet superseded" lista `practice_generator`-t kivéve (az
+unreachable ténnyel kiegészítve).
+
+### 10.4 §7 valódi-sértés próba (KÖTELEZŐ)
+
+A briefben megnevezett `SsErrorState` egyik migrált képernyőn sem fordul
+elő (§0.0.A/R4 — a komponens nem is létezik, és egyik állapot sem indokolja
+`SsFailureState` bevezetését sem, 10.2/3. pont), ezért a próbát a kör
+TÉNYLEGES, mérhető diffjéhez adaptáltam: a `today_plan_screen.dart` új
+`_ScrollableIfShort` védelmét (A3, §0.0.A/R7 fallout) vetettem vissza.
+
+**Sértés (a védelem eltávolítva, `_ScrollableIfShort(child: ...)` hívás
+kikommentezve, a switch közvetlenül a `Padding` gyereke):**
+
+```
+$ flutter test test/features/practice_generator/accessibility/planner_accessibility_test.dart
+...
+00:01 +0 -3: A2 — large-text overflow TodayPlanScreen planned-day view renders without overflow at 2.0 [E]
+  Actual: FlutterError:<A RenderFlex overflowed by 104 pixels on the bottom.>
+00:01 +0 -4: A2 — large-text overflow TodayPlanScreen planned-day view renders without overflow at 2.0 (hu) [E]
+  Actual: FlutterError:<A RenderFlex overflowed by 104 pixels on the bottom.>
+Failing tests (4):
+  A2 — large-text overflow TodayPlanScreen empty / rest / unavailable / completed states render without overflow at 2.0 text scaler
+  A2 — large-text overflow TodayPlanScreen empty state renders without overflow at 2.0 (hu)
+  A2 — large-text overflow TodayPlanScreen planned-day view renders without overflow at 2.0
+  A2 — large-text overflow TodayPlanScreen planned-day view renders without overflow at 2.0 (hu)
+```
+
+**PIROS, mérve, 4 elbukott cella.** Visszaállítás után `git diff` a fájlon
+0 sor (a munkapéldány pontosan a commitolt állapotot adja vissza), és:
+
+```
+$ flutter test test/features/practice_generator/accessibility/planner_accessibility_test.dart
+...
+00:01 +13: All tests passed!
+```
+
+### 10.5 L559 — testvér-példány védelem tétele
+
+A kör mintaszintű elrendezési kockázata a `TodayPlanScreen` 6 állapot-ága
+(empty/rest/unavailable/completed/notScheduled/plannedDay). A védelem
+(`_ScrollableIfShort`) a switch KIMENETÉRE került, nem ág-onként — ez a hat
+testvér-példány MINDEGYIKÉT lefedi egyetlen wrapperrel, tehát elvi
+kockázata sincs annak, hogy csak az első példány kapja meg a védelmet
+(az E15-R06 review F1-BLOCKER mintája). A többi öt fájlban a listás
+tartalom (`WeeklyPlanScreen` `ListView.separated`, `PlanSetupScreen` és
+`PlanPreviewScreen` meglévő `ListView`, `PlanChangeReviewScreen`
+`ListView.separated`) eleve görgethető, tehát nincs külön
+testvér-védelemre szoruló minta.
+
+### 10.6 A5 tesztfájl-bővítés (§0.0.A/R6 nyomán)
+
+A típus-pinnelő tesztfájlak (`today_plan_screen_test.dart`,
+`planner_accessibility_test.dart`, `plan_setup_screen_test.dart`,
+`plan_preview_screen_test.dart`) pump-helperei `theme: SsLightTheme.data()`-t
+kaptak — ugyanaz a „migrációt követő szerkezeti illesztés", mint az
+E15-R05/R06 `setlist_flow_test.dart`/`progress_screen_test.dart` esetén:
+enélkül minden `Ss*` widget `Theme.of(context).extension<SsColorScheme>()!`
+force-unwrapja `null`-on bukna, mert a bare `MaterialApp(home: ...)` nem
+telepíti a design-rendszer téma-kiterjesztéseit. **Egyetlen meglévő cella
+sem törölt vagy gyengült** — a `git diff` a négy fájlon kizárólag `theme:`
+sort és ÚJ (additív) `hu`/phone-viewport cellákat mutat. A
+`planner_privacy_test.dart` nem pumpol widgetet (csak use-case tesztek),
+ott nem volt szükség módosításra.
+
+Az A3 (§0.0.A/R7) lefedettséghez a `TodayPlanScreen`/`WeeklyPlanScreen`
+(`planner_accessibility_test.dart`), `PlanPrivacyScreen`
+(`planner_accessibility_test.dart`), `PlanSetupScreen`
+(`plan_setup_screen_test.dart`) és `PlanPreviewScreen`
+(`plan_preview_screen_test.dart`) mindegyike kapott ÚJ, telefon-méretű
+(360×640, dpr 1.0) `textScaler` 2.0 cellát `en`-re és — ahol korábban nem
+volt — `hu`-ra is. `PlanChangeReviewScreen`-re nem került A3-cella (10.1 —
+nulla tesztlefedettség, nincs `gate_tests`-tag).
+
+### 10.7 Gate
+
+```
+tools/round-gate.sh test/ui/ui_inventory_test.dart test/l10n/hardcoded_string_guard_test.dart test/features/practice_generator/accessibility/planner_accessibility_test.dart test/features/practice_generator/accessibility/planner_privacy_test.dart test/features/practice_generator/presentation/plan_setup_screen_test.dart test/features/practice_generator/presentation/plan_preview_screen_test.dart test/features/practice_generator/presentation/today_plan_screen_test.dart
+```
+
+12/12 lépés ZÖLD (format, analyze, mind a 7 teszt-útvonal külön processzben,
+architecture, secrets, l10n).
+
 ## 11. Review — a Claude tölti ki
