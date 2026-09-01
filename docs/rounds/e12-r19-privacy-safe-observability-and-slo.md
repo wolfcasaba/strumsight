@@ -80,8 +80,11 @@ szabad `String` mező, amely nem zárt szótárból (enum) származik.
 ### R5 — Az A5 séma-cella MÉRT alakja: kézi sor-parszer, mert nincs `yaml` csomag
 
 `pubspec.yaml` `dev_dependencies`: **csak** `flutter_test` + `flutter_lints ^6.0.0`
-— `yaml` csomag NINCS, és a kör nem adhat hozzá (a `pubspec.*` nincs az
-engedélyezett listán). A fán MÉRT precedens: `tool/check_data_inventory.dart`
+— `yaml` csomag NINCS deklarálva, és a kör nem adhat hozzá (a `pubspec.*` nincs
+az engedélyezett listán). A `package:yaml` a lock-fájlban TRANZITÍVAN jelen van
+(`yaml 3.1.3`, mérve a `flutter pub get` kimenetén), de a **közvetlen importja
+TILOS**: nem deklarált függőség (`depend_on_referenced_packages`), és a
+tranzitív jelenlét bármely upstream frissítéssel elillanhat. A fán MÉRT precedens: `tool/check_data_inventory.dart`
 saját, `RegExp`-alapú sor-parszere (`^  - id:\s*(.*)$` stb.), amit a
 `test/tooling/data_inventory_test.dart` valódi fán futtat. Az A5 cella
 UGYANEZT csinálja a `docs/operations/slo.yaml`-lel, a teszt-fájlon belüli
