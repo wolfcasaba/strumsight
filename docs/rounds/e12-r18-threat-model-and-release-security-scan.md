@@ -959,4 +959,208 @@ fájlon (`tool/release/security_scan.py`, `test/tooling/security_scan_test.dart`
 kívül tiszta — a mérési rontások (`security_scan.py` régi verzióra,
 `threat-model.md` visszagyengítve) mindegyike visszaállítva a mérés után.
 
+## 10.8 Harmadik javító kör (E12-R18 fix3, 2026-09-01, Claude Sonnet 5)
+
+A `docs/reviews/e12-r18-review-security-fix2.md` a §10.7 után az S8 négy
+NEVESÍTETT forgatókönyvét és az S9-et ZÁRVA mérte, de az S8 *hibaosztályát*
+("fájl-szintű elnémítás mellett a kapu EXIT 0-t ad") nem tekintette
+zártnak: két, a VALÓS fán reprodukált egysoros megkerülést talált (**S10**,
+**S11**, mindkettő MAJOR), plusz két kontrollált-fixture-ön mért, a mai fán
+nem realizálható leletet (**S12**, **S13**, MINOR). Ez a kör mind a négyet
+zárja, `tool/release/security_scan.py`-ban.
+
+### S10 — Dart `@Skip(...)` a `library;` NÉLKÜL
+
+**Javítás** (`tool/release/security_scan.py`, `_dart_file_skipped`): a
+korábbi `_DART_LIBRARY_SKIP` regex kifejezetten `@Skip(...)\nlibrary`
+alakot várt. Az új `_DART_SKIP_ANNOTATION` (`@Skip\(`) + `_DART_DIRECTIVE`
+(`library|import|part|export`) pár a fájl ELSŐ direktívája (bármelyik a
+négy közül) ELŐTTI fejlécben keres `@Skip(`-et — a `library;` sor többé nem
+követelmény, mert a `package:test` a fájl első DIREKTÍVÁJÁNAK metaadatát
+olvassa (`test_core`'s `parse_metadata.dart`:
+`directives.first.metadata`), nem kifejezetten a `library`-ét. Ha a fájlnak
+egyáltalán nincs direktívája, a függvény `False`-t ad — nincs mit
+`.first.metadata`-ként olvasnia a test-keretnek, tehát a fejléc soha nem
+válik "az egész fájllá" (ami hamis pozitívot adna a
+`security_scan_test.dart` saját, string-be ágyazott fixture-jeire, amelyek
+minden esetben a fájl valódi importjai UTÁN élnek).
+
+**BIZONYÍTOTT PIROS ÚT — a VALÓS fán** (`test/tooling/vision_model_integrity_test.dart`
+legelső sora elé `@Skip('whole file disabled — no library directive')`, a
+`library;` sor NÉLKÜL, közvetlenül az első `import` fölé):
+
+```
+$ python3 tool/release/security_scan.py --only guards
+security_scan: 1 finding(s).
+- [critical] guards: T-MODEL-01 (model-package): guard.test 'bad checksum
+  fails the integrity gate' is present but disabled (skip/xfail marker) in
+  test/tooling/vision_model_integrity_test.dart — a silenced protection is
+  release-blocking, not a silent regression (ADR 0481 D2) (T-MODEL-01)
+S10_EXIT=1
+```
+
+A javítás előtt ugyanez a rontás `security_scan: OK` / `SCAN_EXIT=0` volt
+(a review saját mérése). Rontás visszaállítva (`git checkout --
+test/tooling/vision_model_integrity_test.dart`).
+
+**Új cella** (`test/tooling/security_scan_test.dart`, csoport `S10`):
+`@Skip(...)` közvetlenül az első `import` fölött, `library;` direktíva
+NÉLKÜL → `EXIT=1`.
+
+### S11 — python `pytest.skip(..., allow_module_level=True)`
+
+**Javítás** (`tool/release/security_scan.py`, `_python_module_skip_disabled`):
+új `_PY_MODULE_LEVEL_SKIP_CALL` regex (`^pytest\.skip\(`, oszlop-0-n
+horgonyozva) a `pytestmark`-keresés MELLETT — egy nem-indentált
+`pytest.skip(` hívás csak modul-szinten fordulhat elő (egy függvény/teszt
+törzsében lévő hívás mindig indentált), ezért ez a minta megbízhatóan
+modul-szintű elnémítást jelez, függetlenül attól, hogy a guard `def`-je
+milyen távol van tőle (a korábbi 400 karakteres `_python_guard_status`
+prelude-ablak, amit az S11 megkerült, itt nem szűkít).
+
+**BIZONYÍTOTT PIROS ÚT — a VALÓS fán** (`backend/tests/test_diagnostics.py`
+tetejére `import pytest` + `pytest.skip('whole file disabled',
+allow_module_level=True)`):
+
+```
+$ python3 tool/release/security_scan.py --only guards
+security_scan: 3 finding(s).
+- [critical] guards: T-DIAG-01 … is present but disabled … (T-DIAG-01)
+- [critical] guards: T-DIAG-02 … is present but disabled … (T-DIAG-02)
+- [critical] guards: T-DIAG-03 … is present but disabled … (T-DIAG-03)
+S11_EXIT=1
+```
+
+Mind a három diagnosztika-guard egyszerre néma volt a javítás előtt
+(`SCAN_EXIT=0`, a review saját mérése), most mindhárom nevesítve. Rontás
+visszaállítva.
+
+**Új cella** (`test/tooling/security_scan_test.dart`, csoport `S11`): bare
+`pytest.skip('...', allow_module_level=True)` modul tetején → `EXIT=1`.
+
+### S12 — osztály-szintű `@pytest.mark.skip` a 400 karakteres ablakon kívül
+
+**Javítás** (`tool/release/security_scan.py`, új
+`_python_class_skip_disabled`): a guard `def`-et tartalmazó legközelebbi
+`^class ` deklaráció felkutatása (`_PY_CLASS_DEF.finditer` a `def_idx`-ig),
+majd a class-sor FÖLÖTTI, megszakítás nélküli `@...` dekorátor-sorok
+visszafelé bejárása `@pytest.mark.skip`/`@pytest.mark.xfail`/
+`@unittest.skip` mintára — ablak-független, tetszőleges távolságra a `def`-
+től. Bekötve a `check_guards`-ba a meglévő `_python_module_skip_disabled`
+mellé (`or`-ral).
+
+**BIZONYÍTOTT PIROS ÚT — kontrollált fixture-ön** (`/tmp/s8probe`, mert a
+mai fa egyetlen osztályba ágyazott guardja, `T-API-02`, az osztály ELSŐ
+metódusa — a lelet ott nem realizálható): `@pytest.mark.skip(reason='class
+disabled')` egy `class TestEverything:` fölött, 30 kitöltő metódus, majd a
+guard-metódus:
+
+```
+$ python3 tool/release/security_scan.py --root /tmp/s8probe \
+      --threat-model threat-model.md --only guards
+security_scan: 1 finding(s).
+- [critical] guards: T-FIXTURE-S12 … is present but disabled … (T-FIXTURE-S12)
+S12_EXIT=1
+```
+
+A javítás előtt ez `security_scan: OK` / `EXIT=0` volt (a review saját
+mérése, `pytest` oldalon `31 skipped`).
+
+**Új cella** (`test/tooling/security_scan_test.dart`, csoport `S12`):
+osztály-dekorátor + 30 kitöltő metódus + a guard-metódus → `EXIT=1`.
+
+### S13 — `_dart_enclosing_group_skipped` hamis pozitív
+
+**Javítás** (`tool/release/security_scan.py`, új `_dart_call_head` +
+átírt `_dart_enclosing_group_skipped`): a korábbi ellenőrzés a `group(...)`
+hívás TELJES span-jában (string-tartalommal együtt) kereste a `skip:`-et,
+ami a body-n BELÜLI, testvér-hívások saját `skip:` argumentumát, vagy egy
+description-string `skip:`-et tartalmazó szövegét is találatnak vette. Az
+új `_dart_call_head` a hívás nyitó `(`-je és a `group`/`test` mindig
+nulla-argumentumú callback-jének (`() {`/`() async {`) kezdete közötti
+szöveget adja vissza, string-literál TARTALOM nélkül — ez a group SAJÁT
+argumentum-feje, ahol a `skip:` névvel ellátott argumentum ténylegesen él a
+fán mindenütt használt sorrendben (`group('d', skip: true, () {...})`). A
+callback TÖRZSE (beágyazott hívások, description-stringek) kimarad a
+keresésből.
+
+**BIZONYÍTOTT PIROS ÚT (a hamis pozitív HIÁNYA) — a VALÓS fán**
+(`test/tooling/check_secrets_test.dart`: a `T-RELEASE-02` guard-teszt köré
+egy NEM-skipelt `group('mixed', () { … })`, benne egy független, `skip:
+true`-val jelölt testvér-teszttel):
+
+```
+$ python3 tool/release/security_scan.py --only guards
+security_scan: OK — no critical or fatal finding.
+S13_EXIT=0
+```
+
+A javítás ELŐTTI kóddal ugyanez a szerkesztés `EXIT=1`-et adott (a review
+saját mérése, `T-RELEASE-02 … is present but disabled` hamis állítással).
+Egy második, kontrollált fixture-ön ugyanez igaz egy tisztán
+string-literálbeli `skip:` előfordulásra (`group('contains the substring
+skip: in its own description', …)`) is: `EXIT=0`.
+
+**Regresszió-őr, ugyanazon a mechanizmuson** — az S13-narrowing nem
+nyithatja vissza az S8/3-at: `group('disabled', skip: true, () { test(…)
+})` MOST IS `EXIT=1`, `T-RELEASE-02 … is present but disabled` ✅, és az
+S8/3b „A" variáns (egymásba ágyazott group, a KÜLSŐ skipelt) is `EXIT=1`
+maradt ✅ (mindkettő mérve a valós fán, rontás visszaállítva).
+
+**Új cellák** (`test/tooling/security_scan_test.dart`, csoport `S13`, 3
+teszt): (1) testvér `skip: true` közös, NEM-skipelt groupban → `EXIT=0`;
+(2) `skip:`-et tartalmazó description-string → `EXIT=0`; (3) a group SAJÁT
+`skip: true`-ja továbbra is `EXIT=1` (regresszió-őr).
+
+### Regresszió-ellenőrzés — a mérés a valós fán
+
+Mind a négy S8-forgatókönyv (pytestmark bare, pytestmark lista, Dart
+library `@Skip`, Dart group `skip: true`) + az S8/3b „A"/„C" variáns +
+az S9-cella a javítás UTÁN is a review mérésével egyező módon viselkedik
+(mind PIROS a megfelelő rontásra), és a teljes fa `python3
+tool/release/security_scan.py` `EXIT=0`.
+
+### Kötelező ellenőrzések — TÉNYLEGES kimenet (harmadik javító kör után)
+
+```
+$ tools/round-gate.sh test/tooling/security_scan_test.dart test/tooling/check_secrets_test.dart
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/security_scan_test.dart                  zöld
+    test test/tooling/check_secrets_test.dart                  zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+    backend ruff format                                        zöld
+    backend ruff check                                         zöld
+    backend pytest                                             zöld
+
+MINDEN GATE ZÖLD.
+```
+
+`flutter test test/tooling/security_scan_test.dart`: **`00:04 +48: All
+tests passed!`** (42 → 48, a hat új S10–S13 cella).
+`flutter test test/tooling/check_secrets_test.dart`: **`00:00 +13: All
+tests passed!`** (változatlan — ez a kör nem módosította ezt a fájlt).
+
+```
+$ python3 tool/release/security_scan.py
+security_scan: OK — no critical or fatal finding.
+EXIT=0
+
+$ cd backend && python3 -m pytest tests/test_security_release.py tests/test_hardening.py -q
+.............................                                              [100%]
+(29 passed)
+EXIT=0
+```
+
+**Összegzés:** S10, S11, S12, S13 mind ZÁRVA, mérve — beleértve a S10/S11
+VALÓS fán reprodukált rontását is, nem csak kontrollált fixture-t. A fa a
+két engedélyezett fájlon (`tool/release/security_scan.py`,
+`test/tooling/security_scan_test.dart`) kívül tiszta a kör végén; minden
+mérési rontás (`vision_model_integrity_test.dart`, `test_diagnostics.py`,
+`check_secrets_test.dart`, a `/tmp/s8probe` kontrollált fixture)
+visszaállítva.
+
 ## 11. Review — a Claude tölti ki

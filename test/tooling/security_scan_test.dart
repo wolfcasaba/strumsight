@@ -923,6 +923,227 @@ void main() {
     });
   });
 
+  group('S10 — a Dart `@Skip(...)` above the file\'s first directive '
+      'silences it even WITHOUT a `library;` line', () {
+    test('`@Skip(...)` directly above the first `import` (no `library;` '
+        'directive at all) is a critical finding, not a pass', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+@Skip('whole file disabled — no library directive')
+import 'dart:convert';
+
+void main() {
+  test('the real thing', () {
+    expect(1, 1);
+  });
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-S10',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-S10'));
+    });
+  });
+
+  group('S11 — a module-level `pytest.skip(..., allow_module_level=True)` '
+      'call silences the whole python file, not just a `pytestmark`', () {
+    test('a bare, unindented `pytest.skip(...)` call at module scope is a '
+        'critical finding, not a pass', () {
+      _write(fixtureRoot, 'guarded.py', '''
+import pytest
+pytest.skip('whole file disabled', allow_module_level=True)
+
+
+def test_the_real_thing():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-S11',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-S11'));
+    });
+  });
+
+  group('S12 — a class-level skip decorator silences its methods '
+      'regardless of distance from the `def`', () {
+    test('a `@pytest.mark.skip` on the class, thirty filler methods above '
+        'the guarded one, is a critical finding, not a pass', () {
+      final filler = StringBuffer();
+      for (var i = 0; i < 30; i++) {
+        filler.write('    def test_filler_$i(self):\n        pass\n\n');
+      }
+      _write(fixtureRoot, 'guarded.py', '''
+import pytest
+
+@pytest.mark.skip(reason='class disabled')
+class TestEverything:
+$filler    def test_the_real_thing(self):
+        assert True
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-S12',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-S12'));
+    });
+  });
+
+  group('S13 — a NOT-skipped group enclosing the guard.test is never '
+      'mistaken for a group-level skip', () {
+    test('a sibling test\'s own `skip: true` argument inside a shared, '
+        'NOT-skipped group does not disable the guard.test next to it', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  group('mixed', () {
+    test('unrelated flaky', skip: true, () {
+      expect(1, 1);
+    });
+
+    test('the real thing', () {
+      expect(1, 1);
+    });
+  });
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-S13A',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 0, reason: result.stdout + result.stderr);
+    });
+
+    test('a "skip:"-shaped substring inside the group\'s OWN description '
+        'string does not disable the guard.test inside it', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  group('contains the substring skip: in its own description', () {
+    test('the real thing', () {
+      expect(1, 1);
+    });
+  });
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-S13B',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 0, reason: result.stdout + result.stderr);
+    });
+
+    test('the group-level skip (S8/3) still disables the guard.test — the '
+        'S13 narrowing must not reopen it', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  group('disabled', skip: true, () {
+    test('the real thing', () {
+      expect(1, 1);
+    });
+  });
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-S13C',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-S13C'));
+    });
+  });
+
   group('MINOR-1 — guard.path cannot escape the repo root', () {
     test('an absolute guard.path is a critical finding, not a pass', () {
       _write(

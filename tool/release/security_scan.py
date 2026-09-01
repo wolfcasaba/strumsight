@@ -14,8 +14,13 @@ machine-checkable evidence. Four independent branches:
                   is named — that test is present, uncommented, and not
                   `skip`/`xfail`-marked, INCLUDING a file-wide silencer (a
                   Python module-level `pytestmark = pytest.mark.skip(...)`,
-                  a Dart library-level `@Skip(...)` above `library;`) or a
-                  Dart `group(..., skip: true)` wrapping the test. It does
+                  a bare module-level `pytest.skip(..., allow_module_level=
+                  True)` call, a class-level `@pytest.mark.skip`/`xfail`
+                  decorator on the guard test's own class, or a Dart
+                  `@Skip(...)` annotation above the file's first
+                  import/export/part/library directive, with or without an
+                  explicit `library;` line, or a Dart `group(..., skip:
+                  true)` wrapping the test. It does
                   NOT re-implement the
                   protections themselves — replay, path traversal, oversize
                   payloads and model-checksum integrity are already measured
@@ -359,7 +364,11 @@ def check_guards(entries: list[GuardEntry], root: Path) -> list[Finding]:
                 py_stripped = _strip_python_trivia(guard_text)
                 found, disabled = _python_guard_status(py_stripped, entry.guard_test)
                 disabled = disabled or (
-                    found and _python_module_skip_disabled(py_stripped)
+                    found
+                    and (
+                        _python_module_skip_disabled(py_stripped)
+                        or _python_class_skip_disabled(py_stripped, entry.guard_test)
+                    )
                 )
             else:
                 dart_stripped = _strip_dart_comments(guard_text)
@@ -568,13 +577,24 @@ def _dart_guard_status(stripped: str, guard_test: str) -> tuple[bool, bool]:
 
 _PY_MODULE_SKIP_MARKERS = ("pytest.mark.skip", "pytest.mark.xfail")
 _PY_PYTESTMARK_ASSIGN = re.compile(r"(?m)^[ \t]*pytestmark\s*=\s*")
+# Column-0 (NOT indented) — a `pytest.skip(...)` call inside a function/test
+# body is always indented, so an unindented one can only be a real
+# module-level statement (S11). pytest itself additionally requires
+# `allow_module_level=True` on such a call (otherwise it raises instead of
+# skipping) — either way the module fails to collect its tests, so this
+# does not gate on that keyword being present.
+_PY_MODULE_LEVEL_SKIP_CALL = re.compile(r"(?m)^pytest\.skip\(")
 
 
 def _python_module_skip_disabled(stripped: str) -> bool:
     """True when a module-level `pytestmark = pytest.mark.skip(...)` (or
-    `.xfail(...)`, bare or inside a `pytestmark = [...]` list) sits ANYWHERE
-    in the module — this silences every test the module defines, not just
-    one near the assignment (S8)."""
+    `.xfail(...)`, bare or inside a `pytestmark = [...]` list), OR a bare
+    module-level `pytest.skip(..., allow_module_level=True)` call, sits
+    ANYWHERE in the module — either silences every test the module defines,
+    not just one near the assignment/call (S8, and S11's `pytest.skip(`
+    variant, which `pytestmark` alone does not catch)."""
+    if _PY_MODULE_LEVEL_SKIP_CALL.search(stripped):
+        return True
     n = len(stripped)
     for match in _PY_PYTESTMARK_ASSIGN.finditer(stripped):
         start = match.end()
@@ -598,39 +618,128 @@ def _python_module_skip_disabled(stripped: str) -> bool:
     return False
 
 
-_DART_LIBRARY_SKIP = re.compile(r"@Skip\([^)]*\)\s*\n\s*library\b")
-_DART_IMPORT_OR_PART = re.compile(r"(?m)^[ \t]*(?:import|part|export)\s")
+_PY_CLASS_DEF = re.compile(r"(?m)^class\s+\w+")
+_PY_CLASS_SKIP_MARKERS = ("@pytest.mark.skip", "@pytest.mark.xfail", "@unittest.skip")
+
+
+def _python_class_skip_disabled(stripped: str, guard_test: str) -> bool:
+    """True when the `def <guard_test>(` belongs to a top-level class whose
+    OWN class-level skip/xfail decorator sits directly above the class —
+    checked independent of distance from the class to the method, so a
+    class skipped thousands of bytes above its guarded method counts
+    exactly like one immediately above it (S12, which the `def`-local
+    400-byte prelude window in `_python_guard_status` cannot reach)."""
+    def_idx = stripped.find(f"def {guard_test}(")
+    if def_idx == -1:
+        return False
+    class_start = None
+    for match in _PY_CLASS_DEF.finditer(stripped, 0, def_idx):
+        class_start = match.start()
+    if class_start is None:
+        return False
+    lines = stripped[:class_start].splitlines()
+    idx = len(lines) - 1
+    disabled = False
+    while idx >= 0:
+        line = lines[idx].strip()
+        if not line.startswith("@"):
+            break
+        if any(marker in line for marker in _PY_CLASS_SKIP_MARKERS):
+            disabled = True
+        idx -= 1
+    return disabled
+
+
+_DART_SKIP_ANNOTATION = re.compile(r"@Skip\(")
+_DART_DIRECTIVE = re.compile(r"(?m)^[ \t]*(?:library|import|part|export)\b")
 
 
 def _dart_file_skipped(stripped: str) -> bool:
-    """True when a library-level `@Skip('...')` annotation sits directly
-    above the file's `library;` directive — this silences every test the
-    file declares, not just one local to a single `test(` call (S8).
+    """True when an `@Skip(...)` annotation sits anywhere before the file's
+    FIRST directive (`library`/`import`/`part`/`export`) — this silences
+    every test the file declares, not just one local to a single `test(`
+    call (S8, and S10's `library;`-less variant).
 
-    Restricted to the text BEFORE the file's first `import`/`part`/`export`
-    directive — Dart requires a `library;` directive (and any annotation on
-    it) to precede all of those, so real placements never occur later. This
-    also keeps the check from matching an `@Skip(...)\nlibrary;` shape that
-    merely appears inside a later string literal — e.g. this scan's own
-    test fixtures for this branch, string-embedded in
+    `package:test` reads the metadata of the file's first DIRECTIVE, not
+    specifically a `library` one (`test_core`'s `parse_metadata.dart`:
+    `_annotations = directives.isEmpty ? [] : directives.first.metadata`) —
+    so `@Skip('…')` placed directly above the first `import` is a fully
+    valid, and just as silent, file-wide skip; the `library;`-prefixed form
+    is only ONE of the shapes this idiom takes (S10).
+
+    Restricted to the text BEFORE that first directive — real placements
+    never occur later, since Dart requires any directive-level annotation to
+    precede all directives. If the file has NO directive at all, `test_core`
+    has nothing to read `.first.metadata` from, so no file-wide skip is
+    possible via this mechanism and this returns False rather than treating
+    the whole file as header — which also keeps the check from matching an
+    `@Skip(...)` shape that merely appears inside a later string literal —
+    e.g. this scan's own test fixtures for this branch, string-embedded in
     `security_scan_test.dart`, whose own guard.path is this same file."""
-    boundary = _DART_IMPORT_OR_PART.search(stripped)
-    header = stripped if boundary is None else stripped[: boundary.start()]
-    return bool(_DART_LIBRARY_SKIP.search(header))
+    boundary = _DART_DIRECTIVE.search(stripped)
+    if boundary is None:
+        return False
+    header = stripped[: boundary.start()]
+    return bool(_DART_SKIP_ANNOTATION.search(header))
 
 
 _DART_GROUP_CALL = re.compile(r"\bgroup\(")
 
 
+def _dart_call_head(text: str, call_start: int) -> str:
+    """Returns the ARGUMENT HEAD of the call starting at `call_start` — the
+    text between its opening `(` and the zero-arg callback param list `()`
+    that `group`/`test` always take as their body (`() {`/`() async {`) —
+    with string-literal contents stripped out entirely. Every fixture and
+    real usage on this tree writes named arguments (like `skip: true`)
+    BEFORE that callback (`group('d', skip: true, () {...})`), so this is
+    where a group's OWN `skip:` argument lives. Text belonging to the
+    callback BODY — a sibling test's own `skip:` argument, or a `skip:`-
+    shaped substring inside a description string — is excluded (S13)."""
+    n = len(text)
+    open_paren = text.find("(", call_start)
+    if open_paren == -1:
+        return ""
+    i = open_paren + 1
+    depth = 1
+    out: list[str] = []
+    while i < n:
+        ch = text[i]
+        if ch in "'\"":
+            triple = text[i : i + 3] == ch * 3
+            delimiter = ch * 3 if triple else ch
+            i += len(delimiter)
+            while i < n and text[i : i + len(delimiter)] != delimiter:
+                i += 2 if text[i] == "\\" and i + 1 < n else 1
+            i += len(delimiter)
+            continue
+        if depth == 1 and text[i : i + 2] == "()":
+            break
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def _dart_enclosing_group_skipped(stripped: str, call_start: int) -> bool:
     """True when a `group(...)` call enclosing the `test(` call at
-    `call_start` carries its own `skip:` argument — a group-level skip
-    silences every test nested inside it even though the test's own call
-    carries no marker (S8)."""
+    `call_start` carries its own `skip:` argument in its OWN argument head
+    — a group-level skip silences every test nested inside it even though
+    the test's own call carries no marker (S8). Narrowed to the group's
+    argument head (`_dart_call_head`), not its full body text, so a NESTED
+    sibling test's own `skip:` argument, or a `skip:`-shaped substring
+    inside a description string, is never mistaken for the group's own
+    named argument (S13)."""
     for match in _DART_GROUP_CALL.finditer(stripped, 0, call_start):
         span = _dart_call_span(stripped, match.start())
-        if match.start() + len(span) > call_start and "skip:" in span:
-            return True
+        if match.start() + len(span) > call_start:
+            if "skip:" in _dart_call_head(stripped, match.start()):
+                return True
     return False
 
 
