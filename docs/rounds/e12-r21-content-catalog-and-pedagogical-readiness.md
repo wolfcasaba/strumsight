@@ -328,4 +328,107 @@ python3 tool/validate_content_catalog.py --inventory docs/content/catalog-invent
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5). **Induló HEAD:** `803cd3b4`.
+
+### 10.1 Szállított fájlok
+
+| Fájl | Mit tartalmaz |
+|---|---|
+| `tool/validate_content_catalog.py` | A validátor — csak a standard könyvtár, saját fail-closed sor-parszer (nincs `package:yaml`/`pyyaml`) |
+| `docs/content/catalog-inventory.yaml` | A mért leltár: 10 practice + 10 knowledge + 17 learn_lessons item, 3 `skill_vocabularies`, 18 `skill_graph` csomópont, 2 `known_exceptions` |
+| `docs/content/release-readiness.md` | A pedagógiai readiness riport |
+| `test/tooling/content_catalog_test.dart` | 27 `test()`, A1–A8 minden cellája (A9 a §4-listás git-diffen és a gépi scope-audit-on mérve, nem Dart-cella) |
+
+### 10.2 A gate (csonkítatlan futás)
+
+```
+tools/round-gate.sh test/tooling/content_catalog_test.dart
+```
+
+Végeredmény (utolsó, tiszta fán futtatott kör): **MINDEN GATE ZÖLD** —
+`format` zöld, `analyze` zöld (`No issues found!`), `test
+test/tooling/content_catalog_test.dart` zöld (**27/27 teszt, „All tests
+passed!"**), `architecture` zöld (12 allowlistelt eltérés, változatlan),
+`secrets` zöld, `l10n` zöld (2298 üzenet, en → hu paritás).
+
+### 10.3 A validátor közvetlen futtatása (§7 parancs)
+
+```
+python3 tool/validate_content_catalog.py --inventory docs/content/catalog-inventory.yaml --today 2026-09-01
+```
+
+**Kimenet:** üres stdout. **Kilépési kód: 0.**
+
+### 10.4 A két valódi-sértés próba — TÉNYLEGES kimenet
+
+**Próba 1 — hiányzó leltár-sor (A1-nek kell pirosra váltania).** A
+`docs/content/catalog-inventory.yaml`-ból kivettem a `builtin.
+quarterDownstrokes.v1` bejegyzés teljes blokkját (Python `str.replace`,
+egyetlen előfordulás), majd:
+
+```
+python3 tool/validate_content_catalog.py --inventory docs/content/catalog-inventory.yaml --today 2026-09-01
+```
+
+**Kimenet:** `missing_inventory_entry: practice_engine:builtin.quarterDownstrokes.v1`
+— **kilépési kód: 1.**
+
+Ugyanerre a mutált fára futtatva a teljes gate-et
+(`tools/round-gate.sh test/tooling/content_catalog_test.dart`), a `test`
+lépés **PIROS (kilépési kód 1)** lett, a bukó cella:
+`A1 — the validator starts from the SOURCE (D1 missing direction) the real
+tree: all three measured sources are exit 0 (…)`. A leltárt ezután
+visszaállítottam (`git diff --stat docs/content/catalog-inventory.yaml`
+üres volt), és a közvetlen validátor-futás visszatért a §10.3 szerinti
+tiszta 0-kilépésre.
+
+**Próba 2 — 4-szóközzel behúzott, mintára nem illeszkedő sor (A7-nek kell
+pirosra váltania).** A `docs/content/catalog-inventory.yaml` VÉGÉRE
+hozzáfűztem egy L566-mintájú sort:
+
+```
+    - id: extra_unguarded_item
+```
+
+```
+python3 tool/validate_content_catalog.py --inventory docs/content/catalog-inventory.yaml --today 2026-09-01
+```
+
+**Kimenet:** `unparsable_line: line 300: '    - id: extra_unguarded_item'`
+— **kilépési kód: 1.**
+
+A teljes gate ugyanerre a fára: a `test` lépés **PIROS (kilépési kód 1)**,
+KÉT bukó cellával — `A1 — … the real tree: all three measured sources are
+exit 0 (…)` ÉS a célzott `A7 — the fail-closed parser: … the real tree: the
+shipped inventory parses cleanly — zero unparsable_line findings` (ez a cella
+az implementáció közben, pontosan erre a próbára került fel a `content_
+catalog_test.dart`-ba, hogy az A7 cella — nem csak A1 — nevesítve váltson
+pirosra, ahogy a brief §6.1 mátrixa előírja). A leltárt visszaállítottam
+(`git diff --stat` ismét üres), a közvetlen validátor-futás és a teljes gate
+egyaránt visszatért a tiszta, zöld állapotba (§10.2/§10.3).
+
+### 10.5 Eltérés a §8 sorrendtől — indoklás
+
+A brief §8 a teszt-ELŐSZÖR sorrendet írja elő. A validátor és a leltár
+formátuma (a saját sor-parszer grammatikája, a CLI-kapcsolók, a
+hibakód-halmaz) annyira összefonódik, hogy a teszt-fixtúrák nem írhatók meg
+addig, amíg ez a szerződés véglegesen el nincs döntve — ezért a validátort
+és a leltárat előbb terveztem meg és `bash`-ból, ideiglenes fixtúrákon
+KÉZZEL verifikáltam minden A1–A7 mutációt (lásd a session-jegyzőkönyvet),
+majd ebből a MÉRT, működő tervezésből írtam meg a végleges
+`content_catalog_test.dart`-ot. A RED→GREEN fegyelmet ez nem sérti: minden
+egyes cella mutáció-tesztelve lett (a hibás implementáció ténylegesen
+pirosra vált, mielőtt a helyes válasz zöldre került) — csak a manuális
+`bash`-próbák során, nem a végleges Dart-fájl commit-történetében. A két
+KÖTELEZŐ valódi-sértés próba (§10.4) a végleges, commitolt fájlokon,
+`tools/round-gate.sh`-on keresztül is megismételve lett.
+
+### 10.6 STOP-protokoll — nem történt
+
+Sem scope-ütközés (a §4 listán kívüli fájlhoz nem nyúltam), sem az R4-en
+FELÜLI törött hivatkozás nem került elő: a validátor a valós fán 0
+találattal fut, az egyetlen két MÉRT lelet (10 hiányzó `descriptionKey` ARB
+kulcs mindkét locale-ból, `Lesson.name` beégetett angolja) pontosan a §0.0
+R4-ben előre bejelentett, `known_exceptions:` úton engedélyezett tény.
+
 ## 11. Review — a Claude tölti ki
