@@ -555,6 +555,18 @@ E15-R03	docs/rounds/e15-r03-legacy-reachability-audit-and-retirement.md	sonnet-i
 E15-R04	docs/rounds/e15-r04-practice-and-learn-migration.md	sonnet-impl	nincs	done
 E15-R05	docs/rounds/e15-r05-song-trainer-migration.md	sonnet-impl	nincs	done
 E15-R06	docs/rounds/e15-r06-legacy-song-library-progress-migration.md	sonnet-impl	nincs	done
+#
+# BESZÚRT ELŐKÉSZÍTŐ KÖR (ADR 0112 önjavító kör, E15-R07 / H3, 2026-09-01):
+# az E15-R07 F1 fázisa (route + flag) MÉRTEN nem végezhető el, mert a
+# practice_generator alatt NULLA Riverpod-provider van és a
+# PracticeEvidenceRepository-nak NULLA konkrét implementációja — a feloldás
+# ÚJ data/ + presentation/providers/ kód, amit az E15-R07 saját STOP-mondata
+# önálló körre utal. Az E15-R14 EZT szállítja. A sor SZÁNDÉKOSAN az E15-R07
+# FÖLÖTT áll: a `round-slots.py unmet_prerequisites` az epicen belül SOR-
+# SORRENDBEN blokkol (round-slots.py:137-141), tehát az E15-R07 addig nem
+# admittálható, amíg az E15-R14 nem `done`. Az E15-R07 briefjének §0.0.B
+# revíziója ugyanezt az előfeltételt szövegesen is kimondja.
+E15-R14	docs/rounds/e15-r14-practice-generator-composition-layer.md	sonnet-impl	0482	pending
 E15-R07	docs/rounds/e15-r07-practice-generator-migration.md	sonnet-impl	0480	pending
 E15-R08	docs/rounds/e15-r08-gamification-migration.md	sonnet-impl	nincs	pending
 E15-R09	docs/rounds/e15-r09-ai-tutor-migration.md	sonnet-impl	nincs	pending
