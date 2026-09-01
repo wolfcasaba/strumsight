@@ -9,6 +9,25 @@
 # line needs a measured element (`stale_inventory_entry`). Edit the SOURCE
 # first, then this file — never the reverse.
 #
+# Every item's `difficulty`, `skill_tags`, `locales` and `version` fields are
+# ALSO mirrored element-by-element against the measured source value — a
+# declared value that no longer matches what the source actually says is
+# `stale_inventory_entry:<source>:<id>:<field>`, same as a missing/extra row.
+# Where a source has no such dimension (e.g. `learn_lessons` has no per-item
+# skill tags), the field is a FIXED sentinel the validator still enforces,
+# fail-closed rather than "not measured".
+#
+# `locales:` semantics (MINOR-1, brief §4): the set of locales in which
+# EVERY non-suppressed (not covered by an active `known_exceptions:` entry)
+# localization surface of that item resolves. For `practice_engine`, the
+# `descriptionKey` surface is suppressed today (R4) — see the
+# `practice-catalog-description-key-missing-both-locales` exception below —
+# so only `titleKey` counts toward the measured set while that suppression
+# is active; `titleKey` resolves in both `en` and `hu` for all 10 rows, so
+# `locales: [en, hu]`. `tutor_knowledge` rows measure their own manifest
+# `locale`; `learn_lessons` rows are the fixed `[en]` sentinel (`Lesson.name`
+# is hardcoded English, suppressed by the second exception below).
+#
 # Run: python3 tool/validate_content_catalog.py --inventory
 # docs/content/catalog-inventory.yaml --today YYYY-MM-DD
 schema_version: 1
@@ -24,61 +43,61 @@ items:
     source: practice_engine
     difficulty: beginner
     skill_tags: [downstrokes, quarterNotes]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.alternatingEighths.v1
     source: practice_engine
     difficulty: beginner
     skill_tags: [eighthNotes, alternating, rhythm]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.folkPattern.v1
     source: practice_engine
     difficulty: beginner
     skill_tags: [folk, syncopation, eighthNotes]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.gToDChanges.v1
     source: practice_engine
     difficulty: beginner
     skill_tags: [chordChanges, openChords, gChord, dChord]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.emToCChanges.v1
     source: practice_engine
     difficulty: beginner
     skill_tags: [chordChanges, minorChords, emChord, cChord]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.cGAmFProgression.v1
     source: practice_engine
     difficulty: intermediate
     skill_tags: [chordProgression, pop, fourChords]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.firstWaltz.v1
     source: practice_engine
     difficulty: beginner
     skill_tags: [waltz, threeFour, upstrokes]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.syncopatedUps.v1
     source: practice_engine
     difficulty: intermediate
     skill_tags: [syncopation, offBeat, upstrokes]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.rhythmOnlyQuarters.v1
     source: practice_engine
     difficulty: beginner
     skill_tags: [rhythmOnly, quarterNotes]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: builtin.freePracticeTemplate.v1
     source: practice_engine
     difficulty: beginner
     skill_tags: [freePlay, open]
-    locales: [en]
+    locales: [en, hu]
     version: 1
   - id: chord-changes-en
     source: tutor_knowledge
