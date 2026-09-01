@@ -1,5 +1,38 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR — E15-R07 / H3: a bekötésnek hiányzik az előfeltétele → beszúrt `E15-R14` (2026-09-01)
+
+Az `E15-R07` (Practice Generator bekötése + migrálása) az implementer `stopped`
+jelzésével állt meg. A STOP **mérten indokolt** volt; az önjavító kör
+függetlenül reprodukálta (`main @ 1544e6bd`): a `practice_generator` alatt
+**NULLA** Riverpod-provider van, a `PracticeEvidenceRepository`-nak **NULLA**
+konkrét implementációja (csak az `InMemoryPracticeEvidenceRepository` teszt-fake,
+ami „never forgets"), és a `PlanSetupScreen` varázslójának vége zsákutca
+(`plan_setup_screen.dart:96-99` — csak `controller.next()`).
+
+Az F1 („route + flag") tehát nem route-méretű feladat, a feloldás pedig ÚJ
+`data/` + `presentation/providers/` kód — amit a brief SAJÁT §0/§3 STOP-mondata
+tilt („a képernyők a meglévő providereikből élnek; **ha nem, az önálló kör**").
+**Önmagával ellentmondó brief:** bármely implementer újra `stopped`-ot ad.
+
+**A javítás (a STOP-mondat MARAD, nem gyengítettük):**
+
+| Mit | Hol |
+|---|---|
+| ÚJ előkészítő kör — perzisztens `PracticeEvidenceRepository`, EGY kompozíciós gyökér a `presentation/providers/`-ben (mért feature-konvenció), `StartPlanGeneration` use case a MEGLÉVŐ `GenerationOrchestrator`-ra | [`docs/rounds/e15-r14-practice-generator-composition-layer.md`](docs/rounds/e15-r14-practice-generator-composition-layer.md), ADR **0482** (lefoglalva) |
+| A sor: `E15-R14` az `E15-R07` sora **FÖLÉ** (az `unmet_prerequisites` az epicen belül SOR-SORRENDBEN blokkol) | `docs/execution/pipeline-queue.tsv` |
+| `E15-R07` §0.0.B revízió: `Előfeltétel = E15-R14`, a mért leletekkel | `docs/rounds/e15-r07-practice-generator-migration.md` |
+| Őrteszt (a driver saját függvényein) | `tools/tests/test_e15_r07_composition_prerequisite.py` — `origin/main`-en **8/10 PIROS**, javítás után **10/10 zöld** |
+
+**A `main`-en NINCS `practice_generator` kód-változás.** Az
+`sonnet-impl/e15-r07-practice-generator-migration` ágon az **F2 KÉSZ és
+MEGŐRZENDŐ** (mind a 6 képernyő design-rendszer migrációja, commit `30bc31fd`,
+69/96) — nincs PR, nincs merge. Az újrainduló `E15-R07` EZT az ágat vigye
+tovább, ne kezdje újra; az F2 önmagában továbbra sem merge-elhető
+(brief §0.0.A/5).
+
+**Következő kör a láncban: `E15-R14`.** Lecke: [L561](docs/LESSONS.md).
+
 ## ✅ E15-R06 KÉSZ — Setlist + Progress képernyők migrálása a design-rendszerre — PR [#510](https://github.com/wolfcasaba/strumsight/pull/510), squash `1c8e214a` (2026-08-29)
 
 A Ch15 **Kör 6** három képernyőt vitt át a design-rendszerre

@@ -22043,3 +22043,72 @@ hálózatra váró művelet kint, `timeout`-tal.
 **Őrteszt:** nincs — a lelet operátori (a `docs/execution/08-round-brief.md` és
 az `AGENTS.md` záró-rituálé szövege a hordozója); a mérés reprodukciója
 `git ls-remote origin 'refs/notes/*' | wc -l` (ma 10+).
+
+## L561 — Egy brief, amely olyan munkát ír elő, amit a SAJÁT STOP-mondata tilt, determinisztikusan visszatérő halt: a javítás a hiányzó előfeltétel önálló körbe emelése, NEM a STOP-mondat gyengítése (E15-R07 / H3 önjavító kör, 2026-09-01)
+
+**Mit mértünk.** Az `E15-R07` briefjét egy korábbi önjavító kör (PR #511) írta át
+kétfázisú körré: **F1 bekötés (route + flag) → F2 migráció**. Az F1 feltételezte,
+hogy a 6 terv-képernyő „a meglévő providereiből él". Az implementer `stopped`
+jelzést adott; az önjavító kör a mérést FÜGGETLENÜL reprodukálta
+(`main @ 1544e6bd`):
+
+```
+$ grep -rln "Provider<\|NotifierProvider\|ChangeNotifierProvider" lib/features/practice_generator
+(üres)                                    # NULLA Riverpod-provider a feature alatt
+
+$ grep -rn "implements PracticeEvidenceRepository" lib/
+.../domain/repository/practice_evidence_repository.dart:107   # EGY találat, és az
+                                          # az InMemoryPracticeEvidenceRepository
+                                          # TESZT-FAKE („never forgets")
+
+$ sed -n '96,99p' .../presentation/screens/plan_setup_screen.dart
+# a step-4 „Befejezés" gomb csak `controller.next()`-et hív — nincs onComplete
+```
+
+A `PlanPrivacyScreen` `deleteUseCase`/`exportUseCase`-e `PracticeEvidenceRepository`-t
+kér, a `PlanPreviewScreen` KÉSZ `AdaptivePracticePlan`-t + `GenerationPlanActivation`-t,
+a `PlanChangeReviewScreen` egy `PlanRevisionProposal`-t. A feloldás ÚJ `data/` +
+`presentation/providers/` kód — amit a brief SAJÁT §0/§3 STOP-mondata tilt: *„a
+képernyők a meglévő providereikből élnek; ha nem, az önálló kör."*
+
+**A minta.** Ez egy önmagával ellentmondó brief: az F1 elvégzéséhez pontosan azt
+kellene megtenni, amit a brief tilt. Az ilyen kör **nem egyszer** áll meg — bármely
+implementer, bármely motoron, újra `stopped`-ot ad, mert helyesen olvassa a
+briefet. A megállás tehát nem implementer-hiba és nem produkt-kérdés: a brief
+tartalmi hibája (ADR 0112 „B osztály").
+
+Két rossz reflex van rá, és mindkettő ront:
+
+1. **A STOP-mondat kivétele** („így már belefér"). Ez a mérce gyengítése: a
+   következő futásban egy adatvédelmi felület mögé csendben bekerül egy
+   in-memory fake, ami sosem felejt — hamis consent-felület (CLAUDE.md
+   „silent no-op" csapda).
+2. **A halt emberhez küldése.** A produkt-döntés (bekötni vs. nyugdíjazni) itt
+   MÁR MEGVOLT (user, 2026-09-01, a brief §0.0-ban rögzítve); ami hiányzott, az
+   nem döntés, hanem egy kör.
+
+A helyes alak: a hiányzó előfeltételt **önálló, mért scope-ú körbe** emelni, és a
+megállt kört mögé sorolni — a STOP-mondat MARAD. Az `E15-R14` (kompozíciós réteg:
+perzisztens `PracticeEvidenceRepository`, egy kompozíciós gyökér a
+`presentation/providers/`-ben — a mért feature-konvenció —, és a Setup→generálás
+use case) beszúrva az `E15-R07` sora FÖLÉ, mert az `unmet_prerequisites` az epicen
+belül SOR-SORRENDBEN blokkol (`round-slots.py:137-141`).
+
+**A megelőző mérés, amit a brief-írás elé kell tenni.** Egy „bekötő" kör briefje
+akkor teljesíthető, ha a bekötendő képernyők függőségei ELŐÁLLNAK. Ezt egyetlen
+parancs megmondja, és a brief pre-flightjába tartozik:
+
+```
+grep -rln "Provider<\|NotifierProvider\|ChangeNotifierProvider" lib/features/<feature>
+```
+
+Üres kimenet mellett a „route + flag" méretű bekötés-brief mérten hamis
+premisszára épül.
+
+**Őrteszt:** `tools/tests/test_e15_r07_composition_prerequisite.py` — a VALÓDI
+sor-fájlt és a VALÓDI briefeket hajtja át a driver saját
+`declared_prerequisites` / `unmet_prerequisites` függvényén (a sorrend
+megfordítása vagy a §0.0.B `Előfeltétel` szó eltűnése pirosra vált), és külön
+cellában pinneli, hogy az `E15-R07` STOP-mondata és scope-tilalma ÉRINTETLEN —
+a halt „megoldása" a védelem kivételével itt bukik meg. MÉRVE: `origin/main`-en
+8/10 cella PIROS, a javítás után 10/10 zöld.
