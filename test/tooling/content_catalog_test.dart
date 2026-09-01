@@ -351,6 +351,146 @@ void main() {
     });
   });
 
+  group('A1 (MAJOR-1 fix) — element-level, bidirectional field mirror: a '
+      'false declared difficulty/skill_tags/locales/version is caught even '
+      'when the id/source row itself is correct', () {
+    test('fixture: a declared difficulty that disagrees with the measured '
+        'PracticeDifficulty → stale_inventory_entry:...:difficulty, '
+        'non-zero exit', () {
+      final fixture = _writeBaseline(fixtureRoot);
+      fixture.inventory.writeAsStringSync(
+        _baselineInventory().replaceFirst(
+          '  - id: fixture.alpha.v1\n'
+              '    source: practice_engine\n'
+              '    difficulty: beginner\n',
+          '  - id: fixture.alpha.v1\n'
+              '    source: practice_engine\n'
+              '    difficulty: advanced\n',
+        ),
+      );
+      final result = _run(fixture.args());
+      expect(result.exitCode, isNot(0));
+      expect(
+        result.stdout,
+        contains(
+          'stale_inventory_entry: practice_engine:fixture.alpha.v1:difficulty '
+          '(declared=advanced, measured=beginner)',
+        ),
+      );
+    });
+
+    test('fixture: declared skill_tags that disagree with the measured '
+        'skillTags list → stale_inventory_entry:...:skill_tags, non-zero '
+        'exit', () {
+      final fixture = _writeBaseline(fixtureRoot);
+      fixture.inventory.writeAsStringSync(
+        _baselineInventory().replaceFirst(
+          '    skill_tags: [tagA, tagShared]\n'
+              '    locales: [en, hu]\n'
+              '    version: 1\n'
+              '  - id: fixture.beta.v1\n',
+          '    skill_tags: [totallyBogusTag]\n'
+              '    locales: [en, hu]\n'
+              '    version: 1\n'
+              '  - id: fixture.beta.v1\n',
+        ),
+      );
+      final result = _run(fixture.args());
+      expect(result.exitCode, isNot(0));
+      expect(
+        result.stdout,
+        contains(
+          'stale_inventory_entry: practice_engine:fixture.alpha.v1:skill_tags '
+          '(declared=[totallyBogusTag], measured=[tagA, tagShared])',
+        ),
+      );
+    });
+
+    test('fixture: declared locales that disagree with the measured, '
+        'suppression-aware ARB coverage → stale_inventory_entry:...:locales, '
+        'non-zero exit', () {
+      final fixture = _writeBaseline(fixtureRoot);
+      fixture.inventory.writeAsStringSync(
+        _baselineInventory().replaceFirst(
+          '    skill_tags: [tagA, tagShared]\n'
+              '    locales: [en, hu]\n'
+              '    version: 1\n'
+              '  - id: fixture.beta.v1\n',
+          '    skill_tags: [tagA, tagShared]\n'
+              '    locales: [en, hu, xx]\n'
+              '    version: 1\n'
+              '  - id: fixture.beta.v1\n',
+        ),
+      );
+      final result = _run(fixture.args());
+      expect(result.exitCode, isNot(0));
+      expect(
+        result.stdout,
+        contains(
+          'stale_inventory_entry: practice_engine:fixture.alpha.v1:locales '
+          '(declared=[en, hu, xx], measured=[en, hu])',
+        ),
+      );
+    });
+
+    test('fixture: a declared version that disagrees with the measured '
+        'schemaVersion → stale_inventory_entry:...:version, non-zero exit', () {
+      final fixture = _writeBaseline(fixtureRoot);
+      fixture.inventory.writeAsStringSync(
+        _baselineInventory().replaceFirst(
+          '  - id: fixture.alpha.v1\n'
+              '    source: practice_engine\n'
+              '    difficulty: beginner\n'
+              '    skill_tags: [tagA, tagShared]\n'
+              '    locales: [en, hu]\n'
+              '    version: 1\n',
+          '  - id: fixture.alpha.v1\n'
+              '    source: practice_engine\n'
+              '    difficulty: beginner\n'
+              '    skill_tags: [tagA, tagShared]\n'
+              '    locales: [en, hu]\n'
+              '    version: 9\n',
+        ),
+      );
+      final result = _run(fixture.args());
+      expect(result.exitCode, isNot(0));
+      expect(
+        result.stdout,
+        contains(
+          'stale_inventory_entry: practice_engine:fixture.alpha.v1:version '
+          '(declared=9, measured=1)',
+        ),
+      );
+    });
+
+    test('fixture: the learn_lessons FIXED skill_tags sentinel ([] — the '
+        'source has no per-lesson tags) is enforced, not just "not measured" '
+        '→ stale_inventory_entry:...:skill_tags, non-zero exit', () {
+      final fixture = _writeBaseline(fixtureRoot);
+      fixture.inventory.writeAsStringSync(
+        _baselineInventory().replaceFirst(
+          '  - id: fixture-first-win\n'
+              '    source: learn_lessons\n'
+              '    difficulty: beginner\n'
+              '    skill_tags: []\n',
+          '  - id: fixture-first-win\n'
+              '    source: learn_lessons\n'
+              '    difficulty: beginner\n'
+              '    skill_tags: [x]\n',
+        ),
+      );
+      final result = _run(fixture.args());
+      expect(result.exitCode, isNot(0));
+      expect(
+        result.stdout,
+        contains(
+          'stale_inventory_entry: learn_lessons:fixture-first-win:skill_tags '
+          '(declared=[x], measured=[])',
+        ),
+      );
+    });
+  });
+
   group('A2 — a broken reference BLOCKS (D2)', () {
     test('the real tree: every LegacyMappingTable.builtIn lessonId and every '
         'tutor-knowledge sourcePath resolve — no broken_reference', () {
