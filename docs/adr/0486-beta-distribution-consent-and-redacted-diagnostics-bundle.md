@@ -88,6 +88,30 @@ determinizmus (D4) ezen áll.
 legfelső szintre futó redakció; csak kulcsnév-alapú e-mail-keresés; a mintát nem
 találó bemenet néma átengedése.
 
+#### D2.1 kiegészítés (a kör review-ja után, 2026-09-01) — a redakció SZÖVEGES mezőkre fut
+
+**Mérve (E12-R22 review, M1):** a base64 ábécé tartalmazza a `/` karaktert, ezért
+az abszolút-útvonal minta belemar a `wavBase64` tartalmába, és a consentelt klipet
+`exit 0` mellett, csendben megsemmisíti (mért eset: 117 660 → 189 karakter, a
+kimenet nem dekódolható). Ez pontosan a D3 tiltotta néma csonkítás lett volna, egy
+másik ajtón.
+
+Ezért: az **opaque bináris payload mezők** (a `wavBase64` és a jövőbeli, ugyanilyen
+természetű mezők) NEM esnek sztring-redakció alá. Helyettük a csomagoló
+**integritás-ellenőrzést** végez: a kimeneti klip base64-ként dekódolható, és a
+dekódolt bájthossza megegyezik a bemenetivel — eltérés esetén **nem-nulla kilépés**,
+nem csendes kiírás.
+
+Ennek az ára nevesített és vállalt: egy base64-be csomagolt titok nem redaktálódik
+(eddig sem redaktálódott — a redakció a base64 szövegére futott, nem a tartalmára).
+A hang-melléklet védelme a rétegzett consent (D1) és a méret-korlát (D3), nem a
+mintaillesztés.
+
+**A kulcsokra** a redakció ugyanúgy fut, mint az értékekre (D2 első mondata): a
+token/device-id osztályozás UTÁN a kulcs sztringje is átmegy az e-mail/útvonal
+maszkoláson. Két különböző kulcs azonos maszkra képződése ütközés → `BundleError`,
+mert a D4 tiltja a megkülönböztető utótagot (só/hash/sorszám).
+
 ### D3 — A méret-korlát INKLUZÍV, a túllépés HIBA, nem csonkolás
 
 A nyers hang melléklet korlátja a MÉRT `DiagnosticsUploader.maxWavBytes`
@@ -100,6 +124,26 @@ ahol a néma csonkítás hibás következtetést okoz.
 
 **NEM elfogadható gyengítés:** csendes csonkolás; figyelmeztetés melletti
 folytatás; a korlát exkluzívra vagy „~5 MB"-ra lazítása.
+
+#### D3.1 kiegészítés (a kör review-ja után, 2026-09-01) — a hang-réteg és a korlát TARTALOM-alapú
+
+**Mérve (E12-R22 review, M2):** a legfelső szintű `audioClips` kulcsnévre álló
+gate mellett egy `events[0].wavBase64`-be helyezett 8 MB-os klip CSAK
+`--consent-diagnostics` mellett bekerült a csomagba, és a méret-korlát rá sem
+futott. A szállított kliens ma fix, legfelső szintű kulcsot ír, tehát a rés
+latens — de a csomagoló bemenete a szerveren VERBATIM tárolt, tetszőleges JSON.
+
+Ezért a hang-réteg gate-je és a méret-korlát is **rekurzív, tartalom-alapú**:
+a csomagoló minden mélységben megkeresi a hang-payload mezőket,
+`--consent-raw-audio` nélkül MINDET eltávolítja, és a korlátot az összes
+megtalált klip **összegére** alkalmazza.
+
+Ugyanide tartozik a **bemenet-méret** korlátja: a gzip-kicsomagolás nem futhat
+felső korlát nélkül (mérve: 2 MB-os feltöltés 2 GB-ra bomlik, `MemoryError`).
+A korlát MÉRT konstansból vezetendő le, nem találgatásból.
+
+**NEM elfogadható gyengítés:** kulcsnév-alapú hang-gate; a korlát csak az egyik
+lelőhelyre; korlátlan dekompresszió.
 
 ### D4 — A csomag és a béta-jegyzet is determinisztikus, időbélyeg NÉLKÜL
 
