@@ -1163,4 +1163,235 @@ mérési rontás (`vision_model_integrity_test.dart`, `test_diagnostics.py`,
 `check_secrets_test.dart`, a `/tmp/s8probe` kontrollált fixture)
 visszaállítva.
 
+## 10.9 Negyedik javító kör (E12-R18 fix4, 2026-09-01, Claude Sonnet 5)
+
+A `docs/reviews/e12-r18-review-security-fix3.md` a §10.8 után S10/S12/S13-at
+ZÁRVA mérte, de 4 ÚJ MAJOR-t (ÚJ-1 regresszió, ÚJ-2, ÚJ-3, ÚJ-4) + 2 MINOR-t
+(ÚJ-5, S14) + 1 NOTE-ot (ÚJ-6) nyitott. Ez a kör mindet zárja,
+`tool/release/security_scan.py`-ban + `test/tooling/security_scan_test.dart`-ban.
+
+### ÚJ-1 — MAJOR (REGRESSZIÓ): a group `skip:` a callback UTÁN megint láthatatlan volt
+
+**Javítás** (`_dart_call_head` → átírva `_dart_call_own_text`-re): a régi
+fejléc-alapú keresés a callback nulla-argumentumú `()`-jénél VÁGOTT — minden,
+ami utána jött (beleértve a `group('d', () {...}, skip: true)` kanonikus,
+callback UTÁNI `skip:` argumentumot), láthatatlan volt. Az új
+`_dart_call_own_text` a group hívás TELJES span-jét bejárja, és csak a
+NESTED `test(`/`group(` hívások span-jét maszkolja ki (nem áll meg az első
+`()`-nél) — így a callback utáni saját argumentum látszik, a beágyazott
+testvér-hívások (S13) tartalma viszont továbbra sem.
+
+**BIZONYÍTOTT PIROS ÚT — a fix3 eszközzel, az ÚJ tesztcellával**
+(`git show 30651086:tool/release/security_scan.py` a munkapéldányba írva,
+`flutter test test/tooling/security_scan_test.dart --plain-name "S13"`):
+
+```
+ÚJ-1 — the group-level `skip:` argument placed AFTER the callback
+(`group(..., () {...}, skip: true)`, …) still disables the guard.test …
+[E] Expected: <1>  Actual: <0>
+security_scan: OK — no critical or fatal finding.
+```
+
+A javított eszközzel ugyanez a fixture `EXIT=1`, `T-FIXTURE-UJ1` néven
+jelentve. A regresszió-őr is mérve: egy testvér-teszt saját, SAJÁT callback
+UTÁNI `skip: true`-ja egy közös, NEM-skipelt groupban továbbra sem szivárog
+be a group saját szövegébe (`T-FIXTURE-UJ1B`, `EXIT=0` mindkét eszközzel).
+
+**Új cellák** (`security_scan_test.dart`, csoport `S13`, 2 teszt): ÚJ-1
+(callback utáni `skip:` → `EXIT=1`), ÚJ-1B (testvér callback utáni `skip:`
+nem szivárog → `EXIT=0`).
+
+### ÚJ-2 — MAJOR: a modul-szintű `pytest.skip(..., allow_module_level=True)` jelző oszlop-független lett
+
+**Javítás** (`_PY_MODULE_LEVEL_SKIP_CALL` törölve, helyette
+`_python_module_level_skip_call` + `_py_call_span`): a régi minta
+(`^pytest\.skip\(`) kizárólag a 0. oszlopot fogta. Az új ellenőrzés BÁRHOL a
+modulban megkeresi a `pytest.skip(...)` hívásokat, zárójel-kiegyensúlyozással
+(`_py_call_span`, string-mentes — a `_strip_python_trivia` már eltávolította
+a string-tartalmat), és minden hívásnál megnézi, hogy az `allow_module_level`
+kulcsszó a SAJÁT argumentum-listájában van-e — ez a kulcsszó, nem a
+behúzás, a modul-szintű elnémítás valódi jele.
+
+**BIZONYÍTOTT PIROS ÚT — a fix3 eszközzel** (`if os.environ.get(...) != '0':
+\n    pytest.skip('slow suite', allow_module_level=True)`, a `def` a 400
+karakteres ablakon KÍVÜL hízlalva):
+
+```
+ÚJ-2 — … a `pytest.skip(...)` call indented inside a module-level `if`
+block is a critical finding, not a pass [E]
+Expected: <1>  Actual: <0>
+security_scan: OK — no critical or fatal finding.
+```
+
+A javított eszközzel `EXIT=1`, `T-FIXTURE-UJ2`. Hamis-pozitív őr is mérve:
+egy `allow_module_level` NÉLKÜLI, teszt-törzsbeli `pytest.skip('flaky on
+CI')` egy attól távoli, független guardot NEM némít el (`T-FIXTURE-UJ2B`,
+`EXIT=0` mindkét eszközzel).
+
+**Új cella-csoport** (`security_scan_test.dart`, `ÚJ-2`, 2 teszt): behúzott
+`if`-ágban lévő `allow_module_level` hívás → `EXIT=1`; teszt-törzsbeli,
+kulcsszó nélküli `pytest.skip()` → `EXIT=0`.
+
+### ÚJ-3 — MAJOR: `pytest.importorskip(...)` felvéve a modul-szintű elnémítás-jelzők közé
+
+**Javítás** (`_PY_IMPORTORSKIP_CALL`, `_python_module_level_skip_call`-ba
+kötve): a `pytest.importorskip(...)` hívás jelenléte a modulban BÁRHOL
+ugyanúgy modul-szintű elnémításnak számít, mint a
+`pytest.skip(..., allow_module_level=True)`.
+
+**BIZONYÍTOTT PIROS ÚT — a fix3 eszközzel** (`pytest.importorskip('some_optional_dep')`
+a modul tetején, a guard `def` 400 karakteren KÍVÜL hízlalva):
+
+```
+ÚJ-3 — … a bare `pytest.importorskip(...)` call at module scope is a
+critical finding, not a pass [E]
+Expected: <1>  Actual: <0>
+security_scan: OK — no critical or fatal finding.
+```
+
+A javított eszközzel `EXIT=1`, `T-FIXTURE-UJ3`.
+
+**Új cella** (`security_scan_test.dart`, csoport `ÚJ-3`): bare
+`pytest.importorskip(...)` a modul tetején → `EXIT=1`.
+
+### ÚJ-4 — MAJOR: S10/S11 mutation-kill tanúság — fixture-ök kihízlalva
+
+A review mérése szerint az S10 és S11 cella a RÉGI (`30651086^`) eszközzel is
+ZÖLD volt, mert az `@Skip(`/`pytest.skip(` a régi, hívás-lokális ablakon
+(Dart 200 / Python 400 karakter) BELÜL esett — a cella így nem a NEW
+fájl-/modul-szintű logikát mérte, hanem véletlenül a régi, szomszédos-ablak
+ellenőrzést. **Javítás**: mindkét fixture kitöltő deklarációkkal/
+függvényekkel hízlalva, hogy a jelző a régi ablakon KÍVÜLRE kerüljön (az S12
+minta követve). A HEAD (fix3) eszközzel mindkettő továbbra is ZÖLD marad
+(a mechanizmus MÁR ott létezik, csak ablak-független), a mechanizmus
+nélküli, korábbi eszközzel viszont PIROS.
+
+**Mutation-kill tábla — a hízlalt fixture-ök a megfelelő RÉGI eszközzel:**
+
+| Cella | Eszköz | Eredmény |
+|---|---|---|
+| S10 (`@Skip(...)` a `library;` nélkül, hízlalva) | `f252034d` (van `_dart_file_skipped`, de csak `library;`-specifikus) | **PIROS** — `Expected: <1> Actual: <0>` |
+| S11 (bare `pytest.skip(..., allow_module_level=True)`, hízlalva) | `f252034d` (nincs modul-szintű `pytest.skip` ellenőrzés) | **PIROS** — `Expected: <1> Actual: <0>` |
+| S14/S8 (Dart library-level `@Skip` a `library;` fölött, hízlalva) | `f252034d^` (nincs semmilyen fájl-/group-szintű elnémítás-ellenőrzés) | **PIROS** — mind a 4 S8-cella, beleértve ezt is |
+| S10/S11/S14 mindhárom | jelenlegi HEAD (fix4) | ZÖLD (a mechanizmus ablak-független, a hízlalás nem töri) |
+
+Pontos parancsok (mindegyik után `git checkout HEAD -- tool/release/security_scan.py`
+a visszaállításhoz):
+
+```bash
+git show 30651086:tool/release/security_scan.py > /tmp/prefix3.py   # fix3, a review tárgya
+cp /tmp/prefix3.py tool/release/security_scan.py
+flutter test test/tooling/security_scan_test.dart --plain-name "S13"   # ÚJ-1
+flutter test test/tooling/security_scan_test.dart --plain-name "ÚJ-2"  # ÚJ-2
+flutter test test/tooling/security_scan_test.dart --plain-name "ÚJ-3"  # ÚJ-3
+flutter test test/tooling/security_scan_test.dart --plain-name "ÚJ-5"  # ÚJ-5
+git checkout HEAD -- tool/release/security_scan.py
+
+git show f252034d:tool/release/security_scan.py > /tmp/fix1.py         # S8 megvan, S10/S11 még nincs
+cp /tmp/fix1.py tool/release/security_scan.py
+flutter test test/tooling/security_scan_test.dart --plain-name "S10 — a Dart"
+flutter test test/tooling/security_scan_test.dart --plain-name "S11 — a module-level"
+git checkout HEAD -- tool/release/security_scan.py
+
+git show f252034d^:tool/release/security_scan.py > /tmp/pre_s8.py      # S8 még nincs egyáltalán
+cp /tmp/pre_s8.py tool/release/security_scan.py
+flutter test test/tooling/security_scan_test.dart --plain-name "S8 — file/group-level"
+git checkout HEAD -- tool/release/security_scan.py
+```
+
+Mért tényleges kimenet (rövidítve — a teljes log az implementer session
+tool-hívásaiban): mindhárom `git show`-zott régi eszköz a megfelelő
+hízlalt cellán `Expected: <1> Actual: <0>` PIROS-t adott; a jelenlegi HEAD
+(fix4) mindhárommal `All tests passed!`.
+
+### ÚJ-5 — MINOR: modul-szintű guard-függvény hamis pozitívja egy korábbi, független skippelt osztály után
+
+**Javítás** (`_python_class_skip_disabled`): két új feltétel — (1) a guard
+`def`-nek magának BEHÚZOTTNAK kell lennie (0. oszlopos `def` sosem lehet egy
+korábbi osztály metódusa); (2) a megelőző `class` és a `def` között nem
+állhat MÁSIK 0. oszlopos `def`/`class` (`_PY_COL0_DEF_OR_CLASS`) — egy ilyen
+sor lezárja az osztály törzsét, tehát a guard nem lehet abban az osztályban.
+
+**BIZONYÍTOTT PIROS ÚT (a hamis pozitív) — a fix3 eszközzel** (egy
+`@pytest.mark.skip`-elt, 20 kitöltő metódussal ellátott
+`class TestLegacyUnrelated:`, UTÁNA egy FÜGGETLEN, modul-szintű
+`def test_the_real_thing():`):
+
+```
+ÚJ-5 — … followed by an UNRELATED module-level guard function … is NOT
+disabled [E]
+Expected: <0>  Actual: <1>
+security_scan: 1 finding(s).
+- [critical] guards: T-FIXTURE-UJ5 … is present but disabled …
+```
+
+A javított eszközzel `EXIT=0` — a guard-teszt élőnek számít.
+
+**Új cella** (`security_scan_test.dart`, csoport `ÚJ-5`): független,
+skippelt osztály UTÁN álló modul-szintű guard-függvény → `EXIT=0`.
+
+### S14 — MINOR: az eredeti S8 „library-szintű `@Skip`" cella hízlalva
+
+Lásd az ÚJ-4 táblát fent — a fixture ugyanaz a hízlalási technika, a mérés
+a `f252034d^` (S8 feature előtti) eszközzel PIROS.
+
+### ÚJ-6 — NOTE: a `--only guards` kivétel-nyilvántartás dokumentálva
+
+**Javítás** (csak docstring, `security_scan.py` modul-fejléc): a
+`--only`-szekció explicit kimondja, hogy `--only guards` mellett a
+kivétel-nyilvántartás SOSEM töltődik be, tehát egy élő `branch: guards`
+kivételnek nincs hatása — ez a szigorúbb (fail-closed) irány, nem hiba.
+Kódváltozás nem tartozik hozzá.
+
+### Regresszió-ellenőrzés — a mérés a valós fán
+
+A teljes `test/tooling/security_scan_test.dart` (54 cella, 48 + 6 új: ÚJ-1,
+ÚJ-1B, ÚJ-2, ÚJ-2B, ÚJ-3, ÚJ-5) a javítás UTÁN mind ZÖLD. Az S13
+regresszió-őr cellák (S13A/B/C) és az S8/S10/S11/S12 eredeti cellák is
+változatlanul ZÖLDEK maradtak — a hízlalás és az ÚJ-1 fix egyike sem
+nyitotta vissza a korábban zárt vektorokat.
+
+### Kötelező ellenőrzések — TÉNYLEGES kimenet (negyedik javító kör után)
+
+```
+$ tools/round-gate.sh test/tooling/security_scan_test.dart test/tooling/check_secrets_test.dart
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/security_scan_test.dart                  zöld
+    test test/tooling/check_secrets_test.dart                  zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+    backend ruff format                                        zöld
+    backend ruff check                                         zöld
+    backend pytest                                             zöld
+
+MINDEN GATE ZÖLD.
+```
+
+`flutter test test/tooling/security_scan_test.dart`: **`00:05 +54: All
+tests passed!`** (48 → 54, hat új ÚJ-1/ÚJ-1B/ÚJ-2/ÚJ-2B/ÚJ-3/ÚJ-5 cella).
+`flutter test test/tooling/check_secrets_test.dart`: **`00:00 +13: All
+tests passed!`** (változatlan — ez a kör nem módosította ezt a fájlt).
+
+```
+$ python3 tool/release/security_scan.py
+security_scan: OK — no critical or fatal finding.
+EXIT=0
+
+$ cd backend && python3 -m pytest tests/test_security_release.py tests/test_hardening.py -q
+.............................                                              [100%]
+(29 passed)
+EXIT=0
+```
+
+**Összegzés:** ÚJ-1, ÚJ-2, ÚJ-3, ÚJ-4 (MAJOR), ÚJ-5, S14 (MINOR) és ÚJ-6
+(NOTE) mind ZÁRVA, mérve — a MAJOR-oknál a fix3 eszközzel bizonyítottan
+PIROS, a fix4 (HEAD) eszközzel ZÖLD; az ÚJ-4/S14 mutation-kill táblánál a
+megfelelő korábbi (feature-mentes) eszközzel PIROS. A fa a két engedélyezett
+fájlon (`tool/release/security_scan.py`, `test/tooling/security_scan_test.dart`)
+kívül tiszta a kör végén; minden mérési rontás (a `tool/release/security_scan.py`
+ideiglenes régi-verziós felülírása) visszaállítva `git checkout HEAD --`-lal.
+
 ## 11. Review — a Claude tölti ki
