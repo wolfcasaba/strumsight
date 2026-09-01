@@ -715,6 +715,17 @@ void main() {
       expect(result.exitCode, isNot(0));
       expect(result.stdout, contains('unparsable_line:'));
     });
+
+    test('the real tree: the shipped inventory parses cleanly — zero '
+        'unparsable_line findings', () {
+      final result = _run([
+        '--inventory',
+        _realInventory,
+        '--today',
+        _todayIso,
+      ]);
+      expect(result.stdout, isNot(contains('unparsable_line')));
+    });
   });
 
   // No skip path anywhere in this file: if python3 is missing, every `_run`
