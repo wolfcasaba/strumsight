@@ -8,7 +8,16 @@
 - **Kötelező biztonsági review (risk = high):** [`e12-r22-review-security.md`](e12-r22-review-security.md)
   — VERDIKT: CHANGES REQUESTED
 
-## 0. VÉGSŐ DÖNTÉS: **CHANGES REQUESTED** (1 BLOCKER, 3 MAJOR, 2 kért MINOR)
+## 0. VÉGSŐ DÖNTÉS: **APPROVED** (a javító kör #1 után, `9a483ae5` + `7b73caab`)
+
+> Az eredeti verdikt **CHANGES REQUESTED** volt (1 BLOCKER, 3 MAJOR, 2 kért MINOR) —
+> a lelet-leírások alább változatlanul maradnak, mert a javítás mércéje ez a szöveg.
+> A **§6 zárás-ellenőrzés** leletenként dokumentálja, hogyan zárult mindegyik, a
+> reviewer SAJÁT, a javító kód ellen futtatott mérésével. **0 nyitott
+> BLOCKER/MAJOR/MINOR**; a nevesített NOTE-ok (NT2–NT4, N3, N4) follow-upok, nem
+> blokkolnak.
+
+## 0.1 Az eredeti verdikt indoklása (a javító kör bemenete)
 
 A gate ZÖLD — a saját, független futásomban is —, de a zöld gate itt is pontosan
 azt takarta el, amire a review-protokoll való: **a szállított A3 cella csak azért
@@ -152,3 +161,32 @@ burkolja őket bemeneti tartalom nélküli `BundleError`-rá.
 
 Minden javításhoz tartozzon cella, amely a mai (hibás) viselkedést PIROSRA fogja.
 A szerződést lazítani (pl. a D3 korlát felpuhítása) tilos — a mérce nem mozdul.
+
+## 6. Zárás-ellenőrzés a javító kör #1 után (`9a483ae5`, + a reviewer `7b73caab` javítása)
+
+**A mérések a javító kód ellen, ÚJ, független klónban futottak** (`/tmp/review2-e12-r22`,
+HEAD `7b73caab`) — nem az implementer jelentéséből vannak átvéve.
+
+| Lelet | Mit mértem (saját próba) | Eredmény |
+|---|---|---|
+| **B1** | hibás klip a négy titok-osztállyal → stderr | `exit 1`, `malformed audio clip at audioClips[0]: missing "wavBase64"` — a négy titokból **egy sem** jelenik meg a stderr-en | **ZÁRVA** |
+| **M1** | 1 s / 44,1 kHz szinusz WAV (a base64-ben 1400 `/`) `--consent-raw-audio` mellett | `exit 0`, a kimeneti `wavBase64` **bájtazonos** a bemenettel, dekódolva 88 244 = a WAV mérete (a javítás előtt: 117 660 → 189 karakter, nem dekódolható) | **ZÁRVA** |
+| **M2** | 1 MB-os klip `events[0].wavBase64`-ben ÉS `capture.audioClips`-ben, CSAK `--consent-diagnostics` | `exit 0`, a kimenetben a `wavBase64` kulcs **sehol** nem szerepel | **ZÁRVA** |
+| **M2 (korlát-összeg)** | két beágyazott klip, összesen 5 242 882 / 5 242 880 dekódolt bájt, `--consent-raw-audio` | `exit 1` („raw audio attachment is 5242882 bytes, exceeding the 5242880-byte cap — rejected, not truncated"), fájl nélkül / `exit 0` a határon — az **inkluzív** küszöb a beágyazott lelőhelyekre is tartja magát | **ZÁRVA** |
+| **M3** | 600 MB-ra bomló gzip-bemenet | `exit 1`, `decompressed session payload exceeds the 8388608-byte cap`, **traceback nélkül**. A korlát levezetése a kód mellett MÉRT (`ceil(5 242 880/3)*4 = 6 990 508` base64 karakter + JSON-ráhagyás → 8 MiB) | **ZÁRVA** |
+| **N1** | e-mail- és útvonal-kulcsú map | egyik kulcs sem jelenik meg nyersen a kimenetben | **ZÁRVA** |
+| **N2** | kimeneti fájl módja; `--output` szimlinkre | `0600`; szimlink-célra `exit 1`, a célfájl tartalma **érintetlen** | **ZÁRVA** |
+| **Nem-regresszió: D1** | mind a négy consent-pár | `(semmi)`→exit 1/fájl nincs · `--consent-diagnostics`→exit 0/hang nélkül · `--consent-raw-audio`→exit 1/fájl nincs · mindkettő→exit 0/hanggal | változatlan |
+| **Nem-regresszió: D4** | két futás azonos bemeneten | bájtazonos | változatlan |
+
+**Független gate a javított HEAD-en** (`/tmp/review2-e12-r22`,
+`tools/round-gate.sh test/tooling/beta_release_notes_test.dart test/tooling/diagnostics_storage_separation_test.dart`):
+**MINDEN GATE ZÖLD (10/10)** — `beta_release_notes_test.dart` **53/53** (44 → 53:
+a javító kör kilenc új cellája), `secrets` ZÖLD, `backend pytest` ZÖLD, `GATE_EXIT=0`.
+
+**Egy lelet a review saját oldalán:** a `[6] secrets` lépés a javító kör alatt PIROS volt a
+`docs/reviews/e12-r22-review-security.md:348` provider-kulcs alakú szemléltető literálja miatt.
+Az implementer helyesen **nem** nyúlt hozzá (a fájl nincs a brief engedélyezett listáján), és
+jelentette — a reviewer javította a `7b73caab` commitban (a literál szintetikus leírásra
+cserélve). A tanulság a záró LESSONS-be megy: a review-jelentés maga is a secret-scan hatálya
+alatt áll, tehát a mért kimenetekben a titok-ALAKÚ értékeket is semlegesíteni kell.
