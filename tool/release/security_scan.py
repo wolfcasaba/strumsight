@@ -12,7 +12,11 @@ machine-checkable evidence. Four independent branches:
                   entry exists at all (an empty or gate-less model is a
                   critical finding, not a clean scan), and — where a `test`
                   is named — that test is present, uncommented, and not
-                  `skip`/`xfail`-marked. It does NOT re-implement the
+                  `skip`/`xfail`-marked, INCLUDING a file-wide silencer (a
+                  Python module-level `pytestmark = pytest.mark.skip(...)`,
+                  a Dart library-level `@Skip(...)` above `library;`) or a
+                  Dart `group(..., skip: true)` wrapping the test. It does
+                  NOT re-implement the
                   protections themselves — replay, path traversal, oversize
                   payloads and model-checksum integrity are already measured
                   by the tests the guards point at.
@@ -352,13 +356,15 @@ def check_guards(entries: list[GuardEntry], root: Path) -> list[Finding]:
                 )
                 continue
             if guard_path.suffix == ".py":
-                found, disabled = _python_guard_status(
-                    _strip_python_trivia(guard_text), entry.guard_test
+                py_stripped = _strip_python_trivia(guard_text)
+                found, disabled = _python_guard_status(py_stripped, entry.guard_test)
+                disabled = disabled or (
+                    found and _python_module_skip_disabled(py_stripped)
                 )
             else:
-                found, disabled = _dart_guard_status(
-                    _strip_dart_comments(guard_text), entry.guard_test
-                )
+                dart_stripped = _strip_dart_comments(guard_text)
+                found, disabled = _dart_guard_status(dart_stripped, entry.guard_test)
+                disabled = disabled or (found and _dart_file_skipped(dart_stripped))
             if not found:
                 findings.append(
                     Finding(
@@ -546,9 +552,86 @@ def _dart_guard_status(stripped: str, guard_test: str) -> tuple[bool, bool]:
         disabled = (
             any(marker in call_text for marker in _DART_SKIP_MARKERS)
             or "@Skip(" in prelude
+            or _dart_enclosing_group_skipped(stripped, match.start())
         )
         return True, disabled
     return False, False
+
+
+# ---------------------------------------------------------------------------
+# file/group-level elnémítás (S8) — a fenti `_python_guard_status` /
+# `_dart_guard_status` csak a névre illeszkedő def/test hívás KÖZVETLEN
+# környezetét nézi; egy modul-szintű `pytestmark`, egy Dart library-szintű
+# `@Skip(`, vagy egy körülölelő `group(..., skip: true)` ugyanúgy elnémít
+# egy egyébként jelen lévő, dekorálatlan tesztet, csak nem a hívás mellett.
+# ---------------------------------------------------------------------------
+
+_PY_MODULE_SKIP_MARKERS = ("pytest.mark.skip", "pytest.mark.xfail")
+_PY_PYTESTMARK_ASSIGN = re.compile(r"(?m)^[ \t]*pytestmark\s*=\s*")
+
+
+def _python_module_skip_disabled(stripped: str) -> bool:
+    """True when a module-level `pytestmark = pytest.mark.skip(...)` (or
+    `.xfail(...)`, bare or inside a `pytestmark = [...]` list) sits ANYWHERE
+    in the module — this silences every test the module defines, not just
+    one near the assignment (S8)."""
+    n = len(stripped)
+    for match in _PY_PYTESTMARK_ASSIGN.finditer(stripped):
+        start = match.end()
+        if start < n and stripped[start] == "[":
+            depth, i = 0, start
+            while i < n:
+                if stripped[i] == "[":
+                    depth += 1
+                elif stripped[i] == "]":
+                    depth -= 1
+                    if depth == 0:
+                        i += 1
+                        break
+                i += 1
+            value = stripped[start:i]
+        else:
+            newline = stripped.find("\n", start)
+            value = stripped[start:] if newline == -1 else stripped[start:newline]
+        if any(marker in value for marker in _PY_MODULE_SKIP_MARKERS):
+            return True
+    return False
+
+
+_DART_LIBRARY_SKIP = re.compile(r"@Skip\([^)]*\)\s*\n\s*library\b")
+_DART_IMPORT_OR_PART = re.compile(r"(?m)^[ \t]*(?:import|part|export)\s")
+
+
+def _dart_file_skipped(stripped: str) -> bool:
+    """True when a library-level `@Skip('...')` annotation sits directly
+    above the file's `library;` directive — this silences every test the
+    file declares, not just one local to a single `test(` call (S8).
+
+    Restricted to the text BEFORE the file's first `import`/`part`/`export`
+    directive — Dart requires a `library;` directive (and any annotation on
+    it) to precede all of those, so real placements never occur later. This
+    also keeps the check from matching an `@Skip(...)\nlibrary;` shape that
+    merely appears inside a later string literal — e.g. this scan's own
+    test fixtures for this branch, string-embedded in
+    `security_scan_test.dart`, whose own guard.path is this same file."""
+    boundary = _DART_IMPORT_OR_PART.search(stripped)
+    header = stripped if boundary is None else stripped[: boundary.start()]
+    return bool(_DART_LIBRARY_SKIP.search(header))
+
+
+_DART_GROUP_CALL = re.compile(r"\bgroup\(")
+
+
+def _dart_enclosing_group_skipped(stripped: str, call_start: int) -> bool:
+    """True when a `group(...)` call enclosing the `test(` call at
+    `call_start` carries its own `skip:` argument — a group-level skip
+    silences every test nested inside it even though the test's own call
+    carries no marker (S8)."""
+    for match in _DART_GROUP_CALL.finditer(stripped, 0, call_start):
+        span = _dart_call_span(stripped, match.start())
+        if match.start() + len(span) > call_start and "skip:" in span:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------

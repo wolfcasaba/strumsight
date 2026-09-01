@@ -803,4 +803,160 @@ adhat), N3 (a `dependencies` ág egyetlen manifestet lát —
 `requirements-dev.txt` és a Dart-oldal nincs bekötve), N4 (rendben —
 `shell=False`, `yaml.safe_load`, argv-alapú `--collect-only` hívás).
 
+## 10.7 Második javító kör (E12-R18 fix2, 2026-09-01, Claude Sonnet 5)
+
+A `docs/reviews/e12-r18-review-security-followup.md` a §10.6 javítás után
+7/7 leletet ZÁRVA mért, és két ÚJ leletet nyitott: **S8** (MAJOR, latens —
+fájl-/group-szintű elnémítás továbbra is zöld) és **S9** (MINOR — a MAJOR-4
+guard-cél-javításának nincs piros útja). Ez a kör mindkettőt zárja.
+
+### S8 — fájl-/group-szintű elnémítás most már kritikus lelet
+
+**Javítás** (`tool/release/security_scan.py`): három új helper zárja a
+review három konkrét forgatókönyvét, a MEGLÉVŐ `_python_guard_status` /
+`_dart_guard_status` (közvetlen def/test-környezet) MELLETT, nem helyette:
+
+- `_python_module_skip_disabled` (:573-598) — a modul BÁRHOL elhelyezett
+  `pytestmark = pytest.mark.skip(...)` vagy `.xfail(...)` sorát (bare vagy
+  `pytestmark = [...]` lista alakban) keresi regexszel
+  (`_PY_PYTESTMARK_ASSIGN`), és ha talál `pytest.mark.skip`/`.xfail`
+  markert az értékben, a modul MINDEN guardját `disabled=True`-ra állítja
+  (`check_guards`, :360-363: `disabled or (found and
+  _python_module_skip_disabled(...))`).
+- `_dart_file_skipped` (:605-619) — a fájl `library;` direktívája (az első
+  `import`/`part`/`export` előtti fejléc) fölötti `@Skip(...)` annotációt
+  keresi (`_DART_LIBRARY_SKIP`), függetlenül attól, hogy a `test(` hívás
+  fölötti 200 karakteres prelude-ba belefér-e.
+- `_dart_enclosing_group_skipped` (:625-634) — a `test(` hívást megelőző
+  ÖSSZES `group(...)` hívást végigmegy, és ha bármelyik, a test hívást
+  ténylegesen körülölelő span `skip:`-et tartalmaz, `disabled=True` (a
+  meglévő `_dart_call_span` zárójel-egyensúlyozóját újrahasználva).
+
+**Új cellák** (`test/tooling/security_scan_test.dart`, csoport `S8`, 4
+teszt): (1) bare `pytestmark = pytest.mark.skip(...)`; (2) lista alakú
+`pytestmark = [pytest.mark.skip(...)]`; (3) Dart `@Skip(...)` a `library;`
+fölött; (4) Dart `group('disabled', skip: true, () { test(...) })`.
+
+**BIZONYÍTOTT PIROS ÚT — mind a négy S8-forgatókönyv, a régi (`HEAD`,
+`4783c9f7`) `security_scan.py`-on, az ÚJ tesztfájllal** (`cp
+tool/release/security_scan.py /tmp/security_scan_new.py; git show
+HEAD:tool/release/security_scan.py > tool/release/security_scan.py;
+flutter test test/tooling/security_scan_test.dart --plain-name "S8"`):
+
+```
+00:00 +0 -1: … a module-level `pytestmark = pytest.mark.skip(...)` silences
+  the whole python file even though the test itself carries no marker [E]
+  Expected: <1>  Actual: <0>
+  security_scan: OK — no critical or fatal finding.
+00:00 +0 -2: … a module-level `pytestmark = [pytest.mark.skip(...)]` list
+  form silences the whole python file too [E]
+  Expected: <1>  Actual: <0>
+00:00 +1 -3: … a Dart `group(..., skip: true)` wrapping the guard.test
+  silences it even though the test's own call carries no marker [E]
+  Expected: <1>  Actual: <0>
+00:00 +1 -3: Some tests failed.
+```
+
+3/4 cella bizonyítottan PIROS a régi kódon. A negyedik (Dart
+library-level `@Skip`) a régi kódon is ZÖLDNEK mérve — nem azért, mert a
+régi kód kezelte a fájl-szintű `@Skip`-et, hanem mert a próba-fixture
+rövidsége miatt a `@Skip(...)\nlibrary;` sor véletlenül BELEFÉRT a régi
+`_dart_guard_status` 200 karakteres prelude-ablakába (a `test(` hívás
+fölötti nyers karaktertávolság), ami a réginek KOINCIDENCIA-fedést adott
+egy 10 soros fixture-ön, nem valódi fájl-szintű ellenőrzést egy valós,
+hosszabb tesztfájlon. Ez maga a review S8-leletének pontos állítása
+("fájl-szintű karantén… ami a MAJOR-2 javítása le akart zárni, de nem
+zárt le") — a mérés ezt megerősíti, nem gyengíti.
+
+A `/tmp/security_scan_new.py` visszamásolása után (`cp
+/tmp/security_scan_new.py tool/release/security_scan.py`) mind a 4 S8-cella
+ZÖLD (`00:02 +4: All tests passed!`).
+
+### S9 — a MAJOR-4 guard-cél-javításának pinnelt mércéje
+
+**Javítás** (`test/tooling/security_scan_test.dart`, csoport `MINOR-1`
+záró cellája, `knownGuardTargets` + az új `each known id resolves to its
+OWN shipped guard.path + guard.test` teszt): a MEGLÉVŐ `knownGuardIds`
+lista (id + `release_gate: true`, sorrend) MELLÉ egy `id → (path, test)`
+map, amely mind a 18 ismert guardra a TÉNYLEGESEN szállított
+`guard.path`/`guard.test` párra illeszkedő teljes 6-soros blokkot
+(`id:`/`component:`/`threat:`/`release_gate: true`/`guard:`/`  path:`/
+`  test:`) várja a threat modellben, sorrendtől függetlenül regexpel
+ellenőrizve. `security_scan.py` maga NEM változott ehhez a lelethez — a
+scan a guard-célt már ma is helyesen FELOLDJA, akármelyik célra mutasson;
+a hiányzó mérce a fájl SAJÁT ismert-lista cellája volt, nem a scan logikája.
+
+**BIZONYÍTOTT PIROS ÚT — a `T-CLIENT-01` guard visszagyengítve a MAJOR-4
+előtti célra** (`docs/security/threat-model.md`: `guard.path` →
+`test/core/storage/secure_store_test.dart`, `guard.test` → `round-trips a
+secret`, a MAJOR-4 javítás pontos visszavonása):
+
+```
+$ python3 tool/release/security_scan.py --only guards
+security_scan: OK — no critical or fatal finding.      SCAN_EXIT=0
+```
+
+A `security_scan.py` maga — várhatóan — NEM veszi észre: a gyengébb cél is
+feloldódik, `check_guards` csak azt méri, hogy a `path`/`test` LÉTEZIK, nem
+hogy melyik konkrét pár az elvárt. Ez pontosan az S9-lelet állítása.
+
+```
+$ flutter test test/tooling/security_scan_test.dart --plain-name \
+  "each known id resolves to its OWN shipped guard.path"
+00:00 +0 -1: … each known id resolves to its OWN shipped guard.path +
+  guard.test — a silent retarget to a weaker guard is a critical finding,
+  not a pass (S9) [E]
+  Expected: true  Actual: <false>
+  T-CLIENT-01 no longer resolves to its shipped guard.path
+  (test/features/auth/token_store_test.dart) + guard.test (round-trips a
+  token under the documented secure key) in the threat model
+```
+
+Az ÚJ cella a `security_scan.py` vakfoltját fogja ki, PIROSRA váltva a
+csendes visszagyengítést, amit a scan önmagában zöldnek mérne. A
+`docs/security/threat-model.md` ezután visszaállítva a szállított célra
+(`git diff docs/security/threat-model.md` üres a mérés után); `flutter
+test test/tooling/security_scan_test.dart` a teljes fán **`00:05 +42: All
+tests passed!`**.
+
+### Kötelező ellenőrzések — TÉNYLEGES kimenet (második javító kör után)
+
+```
+$ tools/round-gate.sh test/tooling/security_scan_test.dart test/tooling/check_secrets_test.dart
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/security_scan_test.dart                  zöld
+    test test/tooling/check_secrets_test.dart                  zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+    backend ruff format                                        zöld
+    backend ruff check                                         zöld
+    backend pytest                                             zöld
+
+MINDEN GATE ZÖLD.
+```
+
+(A §10.6 idején mért `[6] secrets` PIROS — a `docs/reviews/…` fájl saját,
+jelölő nélküli fixture-idézete — időközben lezárult, a `32ed9cae
+docs(review): allow-secret-file marker a review-jelentésen` commit-tal;
+ez a kör nem nyúlt a `docs/reviews/**` tiltott zónához.)
+
+```
+$ python3 tool/release/security_scan.py
+security_scan: OK — no critical or fatal finding.
+EXIT=0
+
+$ cd backend && python3 -m pytest tests/test_security_release.py tests/test_hardening.py -q
+.............................                                              [100%]
+(29 passed)
+EXIT=0
+```
+
+**Összegzés:** S8 + S9 mindkettő ZÁRVA, mérve. A fa a két engedélyezett
+fájlon (`tool/release/security_scan.py`, `test/tooling/security_scan_test.dart`)
+kívül tiszta — a mérési rontások (`security_scan.py` régi verzióra,
+`threat-model.md` visszagyengítve) mindegyike visszaállítva a mérés után.
+
 ## 11. Review — a Claude tölti ki

@@ -784,6 +784,145 @@ void main() {
     },
   );
 
+  group('S8 — file/group-level elnémítás is a critical finding, not a pass '
+      '(ADR 0481 D2, the docstring\'s "present, uncommented, not '
+      'skip/xfail-marked" claim extended to file-wide silencers)', () {
+    test('a module-level `pytestmark = pytest.mark.skip(...)` silences the '
+        'whole python file even though the test itself carries no marker', () {
+      _write(fixtureRoot, 'guarded.py', '''
+pytestmark = pytest.mark.skip(reason='whole file disabled')
+
+
+def test_the_real_thing():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-13',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-13'));
+    });
+
+    test('a module-level `pytestmark = [pytest.mark.skip(...)]` list form '
+        'silences the whole python file too', () {
+      _write(fixtureRoot, 'guarded.py', '''
+pytestmark = [
+    pytest.mark.skip(reason='whole file disabled'),
+]
+
+
+def test_the_real_thing():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-14',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-14'));
+    });
+
+    test('a Dart library-level `@Skip(...)` above `library;` silences the '
+        'whole file even though the test itself carries no marker', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+@Skip('whole file disabled')
+library;
+
+void main() {
+  test('the real thing', () {
+    expect(1, 1);
+  });
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-15',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-15'));
+    });
+
+    test('a Dart `group(..., skip: true)` wrapping the guard.test silences it '
+        'even though the test\'s own call carries no marker', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  group('disabled', skip: true, () {
+    test('the real thing', () {
+      expect(1, 1);
+    });
+  });
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-16',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-16'));
+    });
+  });
+
   group('MINOR-1 — guard.path cannot escape the repo root', () {
     test('an absolute guard.path is a critical finding, not a pass', () {
       _write(
@@ -866,6 +1005,118 @@ void main() {
           isTrue,
           reason:
               '$id is missing, or not release_gate: true, in the shipped '
+              'threat model',
+        );
+      }
+    });
+
+    // S9 — pins the SHIPPED `guard.path`/`guard.test` pair too, not just
+    // the id + release_gate: true. Retargeting a delivered guard back to a
+    // weaker path/test (the review's measured T-CLIENT-01 regression: a
+    // silent swap from `test/features/auth/token_store_test.dart` /
+    // "round-trips a token under the documented secure key" back to the
+    // pre-fix `test/core/storage/secure_store_test.dart` / "round-trips a
+    // secret") left the old cell green — this cell catches it.
+    const knownGuardTargets = {
+      'T-CLIENT-01': (
+        path: 'test/features/auth/token_store_test.dart',
+        test: 'round-trips a token under the documented secure key',
+      ),
+      'T-API-01': (
+        path: 'backend/tests/test_auth.py',
+        test:
+            'test_unknown_email_and_wrong_password_responses_are_byte_identical',
+      ),
+      'T-API-02': (
+        path: 'backend/tests/test_hardening.py',
+        test: 'test_login_brute_force_gets_429_with_retry_after',
+      ),
+      'T-DIAG-01': (
+        path: 'backend/tests/test_diagnostics.py',
+        test: 'test_diagnostics_session_id_cannot_escape_data_dir',
+      ),
+      'T-DIAG-02': (
+        path: 'backend/tests/test_diagnostics.py',
+        test: 'test_diagnostics_oversize_endpoint_returns_413',
+      ),
+      'T-DIAG-03': (
+        path: 'backend/tests/test_diagnostics.py',
+        test: 'test_diagnostics_rejects_bad_token',
+      ),
+      'T-MEDIA-01': (
+        path: 'backend/tests/community/test_media_upload.py',
+        test: 'test_a2_finalize_rejects_expired_signed_url',
+      ),
+      'T-MEDIA-02': (
+        path: 'backend/tests/community/test_media_upload.py',
+        test: 'test_a3_finalize_rejects_bucket_mime_mismatch',
+      ),
+      'T-MEDIA-03': (
+        path: 'backend/tests/community/test_media_upload.py',
+        test: 'test_a4_finalize_rejects_oversize_bucket_object',
+      ),
+      'T-MODEL-01': (
+        path: 'test/tooling/vision_model_integrity_test.dart',
+        test: 'bad checksum fails the integrity gate',
+      ),
+      'T-MODEL-02': (
+        path: 'test/tooling/ml_asset_manifest_test.dart',
+        test: 'shipping manifest covers four valid declared ML binaries',
+      ),
+      'T-COMM-01': (
+        path: 'backend/tests/community/test_challenge_verification.py',
+        test: 'test_a1_replay_same_source_event_id_lands_one_row',
+      ),
+      'T-COMM-02': (
+        path: 'backend/tests/community/test_access_policy.py',
+        test: 'test_a2_blocked_public_profile_returns_summary',
+      ),
+      'T-RELEASE-01': (
+        path: 'test/tooling/signing_policy_test.dart',
+        test: 'the real workflow passes with exit 0',
+      ),
+      'T-RELEASE-02': (
+        path: 'test/tooling/check_secrets_test.dart',
+        test: 'flags provider token literals by their own prefix',
+      ),
+      'T-RELEASE-03': (
+        path: 'test/tooling/security_scan_test.dart',
+        test: 'a dependency line without an upper bound is a critical finding',
+      ),
+      'T-EGRESS-01': (
+        path: 'test/privacy/consent_enforcement_test.dart',
+        test: 'upload() with consent false never touches the wire adapter',
+      ),
+      'T-EGRESS-02': (
+        path: 'test/privacy/consent_enforcement_test.dart',
+        test:
+            'a profile update sent while signed in reaches the wire; the '
+            'same call after logout does not — same container, no restart '
+            '(A6)',
+      ),
+    };
+
+    test('each known id resolves to its OWN shipped guard.path + guard.test — '
+        'a silent retarget to a weaker guard is a critical finding, not a '
+        'pass (S9)', () {
+      final text = File('docs/security/threat-model.md').readAsStringSync();
+      for (final id in knownGuardIds) {
+        final target = knownGuardTargets[id]!;
+        final pattern = RegExp(
+          'id: ${RegExp.escape(id)}\\n'
+          r'component: [^\n]+\n'
+          r'threat: [^\n]+\n'
+          r'release_gate: true\n'
+          'guard:\\n'
+          '  path: ${RegExp.escape(target.path)}\\n'
+          '  test: ${RegExp.escape(target.test)}\\n',
+        );
+        expect(
+          pattern.hasMatch(text),
+          isTrue,
+          reason:
+              '$id no longer resolves to its shipped guard.path '
+              '(${target.path}) + guard.test (${target.test}) in the '
               'threat model',
         );
       }
