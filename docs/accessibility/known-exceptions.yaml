@@ -2,7 +2,7 @@
 #
 # Every entry here is a MEASURED `lib/**` defect this round's audit found
 # but could not fix (`lib/**` is this round's tilos zona, brief §4/§0.0).
-# Each entry is mirrored by a `_KnownOverflow` / `knownUnlabeledCount`
+# Each entry is mirrored by a `KnownOverflow` / `knownUnlabeledCount`
 # tolerance in the matching test file — the mirror is a HARD, shrink-only
 # guard: if the underlying `lib/**` code stops reproducing the exact
 # measurement below, the matching test cell fails ("STALE known-exception")
@@ -10,15 +10,31 @@
 # entry here without narrowing the matching test assertion — or vice versa —
 # is a drift bug in this document, not a valid state.
 #
-# Fields: id, owner, expiry (lejárat — a future round or "unscheduled" until
-# a design-migration round claims it), file, measured_on, description,
-# severity (P1 = release-blocking, P2 = major but not flow-blocking),
-# source_test (which new test cell measures it).
+# MAJOR-1 javító kör (E12-R20 review): this file is now READ by a
+# fail-closed machine guard — `release_flow_semantics_test.dart`'s "A6 —
+# known-exceptions.yaml is a machine-checked registry" group. It enforces
+# every rule this header describes, INCLUDING the bidirectional id mirror
+# against both test files' tolerances (an orphan entry here, or an orphan
+# tolerance in either test file, turns that guard red) — this document is a
+# contract the gate verifies, not prose a human must remember to keep in
+# sync.
+#
+# Fields: id, owner, expiry (lejárat — a future round/id (e.g. "E13-R05") or
+# "unscheduled"; "unscheduled" is legal ONLY together with a dated
+# `review_by:` — the guard rejects "unscheduled" with no review_by, since
+# that is exactly "no lejárat"), review_by (YYYY-MM-DD; required when
+# expiry is "unscheduled" — the next date this exception must be
+# re-reviewed, not a promise to fix it by then), file, measured_on,
+# description, severity (P1 = release-blocking, P2 = major but not
+# flow-blocking), source_test (which test file's tolerance mirrors this
+# entry — must name exactly one of `release_flow_text_scale_test.dart` /
+# `release_flow_semantics_test.dart`, the two files the guard checks).
 schema_version: 1
 exceptions:
   - id: setup-scoring-profile-overflow
     owner: "Next Practice design-migration round (SDD, unscheduled — see docs/ui/legacy-backlog.md pattern)"
     expiry: unscheduled
+    review_by: "2026-12-01"
     severity: P2
     file: lib/features/practice/presentation/screens/practice_setup_screen.dart:418
     widget: _ScoringProfileReadout
@@ -35,12 +51,13 @@ exceptions:
       `RenderFlex` overflows by 43px on the right, identically in both
       locales (the id itself never translates — driven by the fixed-width
       sibling, not by label length).
-    source_test: test/accessibility/release_flow_text_scale_test.dart (_knownOverflows)
+    source_test: test/accessibility/release_flow_text_scale_test.dart (knownOverflows)
     status: open
 
   - id: feedback-combo-row-overflow-hu
     owner: "Next Practice design-migration round (SDD, unscheduled)"
     expiry: unscheduled
+    review_by: "2026-12-01"
     severity: P2
     file: lib/features/practice/presentation/widgets/practice_feedback.dart:89
     widget: "combo-count Row (unnamed, inside the feedback panel)"
@@ -57,12 +74,13 @@ exceptions:
       by 65px on the right; the shorter English "Combo" label does not
       overflow at the same scale (measured: only the `hu` cell reproduces
       this, `en` does not).
-    source_test: test/accessibility/release_flow_text_scale_test.dart (_knownOverflows)
+    source_test: test/accessibility/release_flow_text_scale_test.dart (knownOverflows)
     status: open
 
   - id: switch-row-split-semantics-node
     owner: "Next design-system accessibility round (SDD, unscheduled) — affects every SsSwitchRow call site, not just Practice Setup"
     expiry: unscheduled
+    review_by: "2026-12-01"
     severity: P2
     file: lib/core/design_system/components/inputs/ss_switch_row.dart
     widget: SsSwitchRow
@@ -103,5 +121,5 @@ exceptions:
       `tester.semantics.simulatedAccessibilityTraversal()` before claiming
       this fixed, not by a presence-only `find.bySemanticsLabel` check
       (docs/LESSONS.md L460).
-    source_test: test/accessibility/release_flow_semantics_test.dart (knownUnlabeledCount: 3 at the practice-setup cell)
+    source_test: test/accessibility/release_flow_semantics_test.dart (knownUnlabeledCount: switchRowSplitUnlabeledCount, id: switchRowSplitSemanticsId, at the practice-setup cell)
     status: open

@@ -14,6 +14,8 @@
 // patched in `lib/**` (this round's tilos zona, brief §4).
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +28,14 @@ import 'package:strumsight/features/practice/presentation/screens/practice_resul
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../support/e2e_harness.dart';
+// MAJOR-1 javító kör: the A6 guard cell below cross-checks BOTH test files'
+// known-exception tolerance mirrors against `known-exceptions.yaml` in one
+// place, so it imports the text-scale file's public `knownOverflows` list
+// (this file's own tolerance, [switchRowSplitUnlabeledCount] below, needs no
+// import). `main()`'s import of this file does not execute
+// `release_flow_text_scale_test.dart`'s own `main()` — only its top-level
+// declarations are visible.
+import 'release_flow_text_scale_test.dart' as text_scale;
 
 /// §0.0.A/R5: the same mandatory phone viewport as the text-scale file —
 /// the default flutter_test 800x600 is not evidence of anything here either.
@@ -65,6 +75,15 @@ Future<void> _finishToResult(
   await tester.pumpAndSettle();
   expect(find.byType(PracticeResultFallback), findsOneWidget);
 }
+
+/// The `docs/accessibility/known-exceptions.yaml` entry `id` this file's
+/// `knownUnlabeledCount` tolerance (below, at the practice-setup traversal
+/// cell) mirrors. Public (not `_`-prefixed), MAJOR-1 javító kör: the A6
+/// guard cell later in this file cross-checks this id against the YAML
+/// registry, and the count itself is passed to the call site instead of a
+/// bare literal so the two cannot silently drift apart.
+const switchRowSplitSemanticsId = 'switch-row-split-semantics-node';
+const switchRowSplitUnlabeledCount = 3;
 
 Future<void> _driveSessionUntil(
   WidgetTester tester,
@@ -126,6 +145,338 @@ void _expectEveryTappableNodeIsLabeled(
   );
 }
 
+// ---------------------------------------------------------------------------
+// MAJOR-1 javító kör (E12-R20 review): the A6 acceptance criterion — "every
+// found exception has an owner + expiry, evidenced by the file + its test
+// cell" — previously had no cell that actually opened
+// `docs/accessibility/known-exceptions.yaml`. The reader below does, and is
+// FAIL-CLOSED (docs/LESSONS.md L566): an unparsable line, an unknown key, a
+// missing `exceptions:` block, or a missing/unreadable file all throw —
+// never "found nothing, so the registry must be empty and clean". There is
+// no `package:yaml` dependency on this tree (measured in E12-R19), so this
+// is a hand-rolled reader scoped to exactly this document's own restricted
+// shape, mirroring `tool/check_data_inventory.dart`'s `DataInventory.parse`.
+// ---------------------------------------------------------------------------
+
+/// One `- id: ...` entry parsed from `docs/accessibility/known-exceptions.yaml`.
+final class _KnownExceptionEntry {
+  const _KnownExceptionEntry({
+    required this.id,
+    required this.owner,
+    required this.expiry,
+    required this.reviewBy,
+    required this.severity,
+    required this.file,
+    required this.measuredOn,
+    required this.sourceTest,
+    required this.line,
+  });
+
+  final String id;
+  final String owner;
+  final String expiry;
+
+  /// Non-null only when `expiry: unscheduled` — a dated commitment to
+  /// re-review, required by the expiry rule below.
+  final String? reviewBy;
+  final String severity;
+  final String file;
+  final String measuredOn;
+  final String sourceTest;
+
+  /// 1-based line of the entry's `- id:` line — for error messages only.
+  final int line;
+}
+
+final class _KnownExceptionsParseError implements Exception {
+  const _KnownExceptionsParseError(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+const _knownExceptionsPath = 'docs/accessibility/known-exceptions.yaml';
+
+/// Every key this document's restricted YAML subset is allowed to use.
+/// A key outside this set is a parse failure, not a silently-ignored line —
+/// the fail-closed discipline this file's whole existence is about.
+const _knownExceptionEntryKeys = {
+  'owner',
+  'expiry',
+  'review_by',
+  'severity',
+  'file',
+  'widget',
+  'measured_on',
+  'measured_overflow_px',
+  'locales',
+  'text_scale',
+  'viewport',
+  'description',
+  'affected_instances_in_flow',
+  'instance_labels_en',
+  'likely_fix_direction',
+  'source_test',
+  'status',
+};
+
+final _dateLikePattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+final _roundIdLikePattern = RegExp(r'^E\d+-R\d+$', caseSensitive: false);
+final _entryStartPattern = RegExp(r'^  - id:\s*(.*)$');
+final _entryKvPattern = RegExp(r'^    (\w+):\s?(.*)$');
+
+String _unquote(String value) {
+  final trimmed = value.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.substring(1, trimmed.length - 1);
+  }
+  return trimmed;
+}
+
+/// Parses [lines] (the raw contents of `known-exceptions.yaml`) into
+/// entries, enforcing the A6 field-completeness rule AND the expiry rule
+/// inline — a caller that receives a return value at all has already had
+/// both enforced for every entry.
+///
+/// Field completeness: every entry must carry a non-empty `id`, `owner`,
+/// `expiry`, `severity`, `file`, `measured_on`, `source_test`.
+///
+/// Expiry: must be a concrete commitment — a date (`YYYY-MM-DD`), a named
+/// round id (`E<n>-R<n>`), or the literal `unscheduled` PLUS a dated
+/// `review_by:` — a `expiry: unscheduled` with no `review_by` is exactly the
+/// "no lejárat" state the round-brief §6.1 matrix names as the A6 failure
+/// mode, so it throws rather than passing silently.
+List<_KnownExceptionEntry> _parseKnownExceptions(List<String> lines) {
+  final entries = <_KnownExceptionEntry>[];
+  var sawExceptionsHeader = false;
+  var inFoldedBlock = false;
+
+  String? id, owner, expiry, reviewBy, severity, file, measuredOn, sourceTest;
+  var entryLine = 0;
+
+  void flush() {
+    if (id == null) return;
+    final missing = <String>[];
+    if ((owner ?? '').trim().isEmpty) missing.add('owner');
+    if ((expiry ?? '').trim().isEmpty) missing.add('expiry');
+    if ((severity ?? '').trim().isEmpty) missing.add('severity');
+    if ((file ?? '').trim().isEmpty) missing.add('file');
+    if ((measuredOn ?? '').trim().isEmpty) missing.add('measured_on');
+    if ((sourceTest ?? '').trim().isEmpty) missing.add('source_test');
+    if (missing.isNotEmpty) {
+      throw _KnownExceptionsParseError(
+        '$_knownExceptionsPath entry "$id" (line $entryLine) is missing '
+        'required field(s): ${missing.join(', ')}',
+      );
+    }
+    final normalizedExpiry = expiry!.trim();
+    final normalizedReviewBy = reviewBy?.trim();
+    if (normalizedExpiry == 'unscheduled') {
+      if (normalizedReviewBy == null ||
+          !_dateLikePattern.hasMatch(normalizedReviewBy)) {
+        throw _KnownExceptionsParseError(
+          '$_knownExceptionsPath entry "$id" (line $entryLine) has '
+          'expiry: unscheduled but no dated review_by (YYYY-MM-DD) — an '
+          'unscheduled exception with no review date never actually '
+          'expires, which is the A6 failure mode the round brief names',
+        );
+      }
+    } else if (!_dateLikePattern.hasMatch(normalizedExpiry) &&
+        !_roundIdLikePattern.hasMatch(normalizedExpiry)) {
+      throw _KnownExceptionsParseError(
+        '$_knownExceptionsPath entry "$id" (line $entryLine) has expiry '
+        '"$normalizedExpiry", which is neither a date (YYYY-MM-DD), a '
+        'round id (e.g. E13-R05), nor "unscheduled" with a review_by',
+      );
+    }
+    entries.add(
+      _KnownExceptionEntry(
+        id: id!,
+        owner: owner!,
+        expiry: normalizedExpiry,
+        reviewBy: normalizedReviewBy,
+        severity: severity!,
+        file: file!,
+        measuredOn: measuredOn!,
+        sourceTest: sourceTest!,
+        line: entryLine,
+      ),
+    );
+    id = owner = expiry = reviewBy = severity = file = measuredOn = sourceTest =
+        null;
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    final raw = lines[i];
+    final lineNo = i + 1;
+    if (raw.trim().isEmpty || raw.trimLeft().startsWith('#')) {
+      inFoldedBlock = false;
+      continue;
+    }
+
+    final indent = raw.length - raw.trimLeft().length;
+
+    if (inFoldedBlock) {
+      // A folded scalar (`key: >`) block's continuation lines are indented
+      // deeper than the `key:` line that opened it (6+ spaces here) — still
+      // part of the value, not a new key, so skip without re-parsing.
+      if (indent >= 6) continue;
+      inFoldedBlock = false;
+    }
+
+    if (indent == 0) {
+      final trimmed = raw.trim();
+      if (trimmed == 'exceptions:') {
+        sawExceptionsHeader = true;
+        continue;
+      }
+      if (trimmed.startsWith('schema_version:')) continue;
+      throw _KnownExceptionsParseError(
+        '$_knownExceptionsPath:$lineNo unrecognized top-level line: $raw',
+      );
+    }
+
+    final entryStart = indent == 2 ? _entryStartPattern.firstMatch(raw) : null;
+    if (entryStart != null) {
+      flush();
+      id = _unquote(entryStart.group(1)!);
+      entryLine = lineNo;
+      continue;
+    }
+
+    if (indent == 4) {
+      final kv = _entryKvPattern.firstMatch(raw);
+      if (kv == null) {
+        throw _KnownExceptionsParseError(
+          '$_knownExceptionsPath:$lineNo unrecognized entry line: $raw',
+        );
+      }
+      final key = kv.group(1)!;
+      if (!_knownExceptionEntryKeys.contains(key)) {
+        throw _KnownExceptionsParseError(
+          '$_knownExceptionsPath:$lineNo unknown key "$key"',
+        );
+      }
+      final rawValue = kv.group(2)!;
+      if (rawValue.trim() == '>') {
+        inFoldedBlock = true;
+        continue;
+      }
+      final value = _unquote(rawValue);
+      switch (key) {
+        case 'owner':
+          owner = value;
+        case 'expiry':
+          expiry = value;
+        case 'review_by':
+          reviewBy = value;
+        case 'severity':
+          severity = value;
+        case 'file':
+          file = value;
+        case 'measured_on':
+          measuredOn = value;
+        case 'source_test':
+          sourceTest = value;
+        default:
+          break; // known but unused for the A6 cross-check (widget, locales, …)
+      }
+      continue;
+    }
+
+    throw _KnownExceptionsParseError(
+      '$_knownExceptionsPath:$lineNo unexpected indentation: $raw',
+    );
+  }
+  flush();
+
+  if (!sawExceptionsHeader) {
+    throw _KnownExceptionsParseError(
+      '$_knownExceptionsPath has no "exceptions:" block',
+    );
+  }
+  return List.unmodifiable(entries);
+}
+
+/// The two test files a `source_test` value is allowed to name — anything
+/// else (a typo, a third file) is itself a parse-level failure of the
+/// mirror contract, not a silently-ignored entry.
+const _textScaleTestFile = 'release_flow_text_scale_test.dart';
+const _semanticsTestFile = 'release_flow_semantics_test.dart';
+
+/// The A6 bidirectional-mirror check (review MAJOR-1, point 3): the YAML
+/// `id` set and the two test files' tolerance mirrors
+/// ([text_scale.knownOverflows] + [switchRowSplitSemanticsId]) must cover
+/// each other exactly — no YAML entry without a matching mirror, and no
+/// mirror tolerance without a matching YAML entry. An EMPTY YAML registry is
+/// legal (every defect eventually fixed); an orphan mirror tolerance with no
+/// YAML backing is not — see the two `orphan*` checks below, which apply
+/// regardless of whether [entries] is empty.
+void _checkMirrorCoverage(List<_KnownExceptionEntry> entries) {
+  final yamlIds = entries.map((e) => e.id).toList();
+  expect(
+    yamlIds.toSet().length,
+    yamlIds.length,
+    reason: '$_knownExceptionsPath has duplicate id(s): $yamlIds',
+  );
+  final yamlIdSet = yamlIds.toSet();
+
+  final overflowIds = text_scale.knownOverflows.map((k) => k.id).toSet();
+  const unlabeledIds = {switchRowSplitSemanticsId};
+
+  for (final entry in entries) {
+    final governsOverflow = entry.sourceTest.contains(_textScaleTestFile);
+    final governsUnlabeled = entry.sourceTest.contains(_semanticsTestFile);
+    expect(
+      governsOverflow ^ governsUnlabeled,
+      isTrue,
+      reason:
+          '$_knownExceptionsPath entry "${entry.id}" (line ${entry.line}) '
+          'source_test "${entry.sourceTest}" must name exactly one of '
+          '$_textScaleTestFile / $_semanticsTestFile',
+    );
+    if (governsOverflow) {
+      expect(
+        overflowIds.contains(entry.id),
+        isTrue,
+        reason:
+            '$_knownExceptionsPath entry "${entry.id}" (line ${entry.line}) '
+            'claims $_textScaleTestFile as its source_test, but no '
+            'KnownOverflow entry in that file carries this id — orphan '
+            'YAML entry with no test-side tolerance',
+      );
+    } else {
+      expect(
+        unlabeledIds.contains(entry.id),
+        isTrue,
+        reason:
+            '$_knownExceptionsPath entry "${entry.id}" (line ${entry.line}) '
+            'claims $_semanticsTestFile as its source_test, but no '
+            'known-unlabeled tolerance in that file carries this id — '
+            'orphan YAML entry with no test-side tolerance',
+      );
+    }
+  }
+
+  final orphanOverflowIds = overflowIds.difference(yamlIdSet);
+  expect(
+    orphanOverflowIds,
+    isEmpty,
+    reason:
+        '$_textScaleTestFile\'s knownOverflows references id(s) with no '
+        '$_knownExceptionsPath entry: $orphanOverflowIds — an undocumented '
+        'tolerance is not a valid state',
+  );
+  final orphanUnlabeledIds = unlabeledIds.difference(yamlIdSet);
+  expect(
+    orphanUnlabeledIds,
+    isEmpty,
+    reason:
+        '$_semanticsTestFile\'s known-unlabeled tolerance references id(s) '
+        'with no $_knownExceptionsPath entry: $orphanUnlabeledIds',
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -178,7 +529,7 @@ void main() {
         _expectEveryTappableNodeIsLabeled(
           tester.semantics.simulatedAccessibilityTraversal(),
           screen: 'practice setup ($localeCode)',
-          knownUnlabeledCount: 3,
+          knownUnlabeledCount: switchRowSplitUnlabeledCount,
         );
 
         final setupStart = find.widgetWithText(
@@ -292,4 +643,32 @@ void main() {
       },
     );
   }
+
+  // A6 (review MAJOR-1 fix): a machine guard on
+  // `docs/accessibility/known-exceptions.yaml` — see the fail-closed reader
+  // and `_checkMirrorCoverage` defined above `main()`. `test` (not
+  // `testWidgets`) is deliberate — no widget tree is pumped, only the file
+  // is read and cross-checked.
+  group('A6 — known-exceptions.yaml is a machine-checked registry', () {
+    test('the registry parses cleanly under the fail-closed reader — every '
+        'entry has a non-empty id/owner/expiry/severity/file/measured_on/'
+        'source_test, and an unscheduled expiry carries a dated review_by', () {
+      final entries = _parseKnownExceptions(
+        File(_knownExceptionsPath).readAsLinesSync(),
+      );
+      // If parsing reached this line, every entry already satisfied both
+      // rules above — `_parseKnownExceptions` throws otherwise. This
+      // assertion just proves the call actually ran (not vacuously
+      // skipped) and records the measured entry count for the log.
+      expect(entries, everyElement(isA<_KnownExceptionEntry>()));
+    });
+
+    test('every entry is mirrored by exactly one test file\'s tolerance, and '
+        'neither test file tolerates an id the registry does not declare', () {
+      final entries = _parseKnownExceptions(
+        File(_knownExceptionsPath).readAsLinesSync(),
+      );
+      _checkMirrorCoverage(entries);
+    });
+  });
 }

@@ -314,4 +314,71 @@ tools/round-gate.sh test/accessibility/release_flow_text_scale_test.dart test/ac
 ZÖLD (lásd a kör-jelzés melletti gate-log). `format` → `analyze` → 4×
 `test <útvonal>` → `architecture` → `secrets` → `l10n` lépések mind zöldek.
 
+## 10.1 Javító kör (review CHANGES REQUESTED — 1 MAJOR, 2 MINOR)
+
+**MAJOR-1 — az A6-nak nem volt gépi őre.** A review mérte, hogy a két
+tesztfájl a `known-exceptions.yaml`-t kizárólag kommentben/`reason:`
+sztringben említette — egyetlen cella sem nyitotta meg a fájlt. Javítás:
+
+- `release_flow_semantics_test.dart`-ba egy fail-closed, kézzel írt sor-parszer
+  került (`_parseKnownExceptions`, a `tool/check_data_inventory.dart` mintáját
+  követve — `package:yaml` NINCS a fán deklarálva, csak tranzitív függőségként
+  a `pubspec.lock`-ban, `import`-ja a `depend_on_referenced_packages` lintet
+  ütné). Nem-parszolható sor, ismeretlen kulcs, hiányzó `exceptions:` blokk
+  vagy hiányzó/olvashatatlan fájl mind kivételt dob — sosem "nulla bejegyzés,
+  tehát zöld".
+- Egy `"A6 — known-exceptions.yaml is a machine-checked registry"` csoport két
+  cellával: (1) minden bejegyzésnek van nem-üres `id`/`owner`/`expiry`/
+  `severity`/`file`/`measured_on`/`source_test` mezője, és `expiry:
+  unscheduled` csak dátumozott `review_by:`-jal legális (mind a három
+  bejegyzés kapott egy `review_by: "2026-12-01"` sort); (2) **kétirányú
+  tükör-fedés** — a YAML `id`-halmaza és a két tesztfájl toleranciái
+  (`release_flow_text_scale_test.dart`'s `knownOverflows` — publikussá téve,
+  `id` mezővel bővítve — és `release_flow_semantics_test.dart`'s
+  `switchRowSplitSemanticsId`/`switchRowSplitUnlabeledCount`) kölcsönösen
+  fedik egymást.
+- A cross-file hozzáférés útja: `release_flow_semantics_test.dart` importálja
+  `release_flow_text_scale_test.dart`-ot (`as text_scale`) — ehhez a korábban
+  privát `_KnownOverflow`/`_knownOverflows` publikussá vált
+  (`KnownOverflow`/`knownOverflows`), a `main()` importálás nem futtatja a
+  másik fájl `main()`-jét.
+
+**Falszifikáció (KÖTELEZŐ, a review 3 pontja, mindhárom PIROSRA váltott,
+utána visszaállítva — `diff` a visszaállítás után üres):**
+
+1. Az első bejegyzés `owner:` sorának törlése →
+   `"...is missing required field(s): owner"` — **PIROS** (mindkét A6 cella).
+2. Egy negyedik, `falsification-orphan-entry` id-jű bejegyzés felvétele
+   (tükör nélkül, `source_test` a text-scale fájlra mutatva) →
+   `"...claims release_flow_text_scale_test.dart as its source_test, but no
+   KnownOverflow entry in that file carries this id — orphan YAML entry..."`
+   — **PIROS**.
+3. A teljes `exceptions:` lista törlése (`_knownOverflows`/
+   `knownUnlabeledCount` tesztoldali tolerancia megtartva) →
+   `"knownOverflows references id(s) with no ... entry: {setup-scoring-
+   profile-overflow, feedback-combo-row-overflow-hu} — an undocumented
+   tolerance is not a valid state"` — **PIROS**.
+
+Mindhárom próba után a fájl visszaállt az eredetire (`diff` üres), és az A6
+csoport újra zöld:
+
+```
+flutter test test/accessibility/release_flow_semantics_test.dart --plain-name "A6"
+→ 00:00 +2: All tests passed!
+```
+
+**MINOR-1 — a `PracticeResultFallback` korlát a NEM-lefedett listán.**
+`release-audit.md` §5 kapott egy új pontot: a `PracticeResultScreen`
+(`PracticeHistoryEntry`-vel, `Navigator.push`-sal nyitott, tartalmas
+eredménynézet) nincs auditálva ebben a körben — sem `textScale 2.0`-n, sem
+`hu`-n, sem képernyőolvasóval.
+
+**MINOR-2 — az A6 „PASS" indoklása.** `release-audit.md` §2 A6 sora most a
+gépi őrre hivatkozik (fájl + tesztcsoport neve), és az `expiry: unscheduled`
++ `review_by` feloldást is dokumentálja.
+
+**Amit a javító kör NEM módosított:** `lib/**`, a §0.0.A/R2–R5 bejáró, a
+valódi-sértés próba, az A3 traversal-alapú mérés, a `2.5` cella hiánya — mind
+a review NOTE-1-e szerint változatlan.
+
 ## 11. Review — a Claude tölti ki

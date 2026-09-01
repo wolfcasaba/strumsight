@@ -43,7 +43,7 @@ unmodified (A5, verified by the §7 gate).
 | A3 | Every interactive element reachable via the REAL simulated accessibility traversal, sensible focus order | **PASS with 1 recorded exception class** — `switch-row-split-semantics-node` (3 occurrences per locale on Practice Setup); the primary CTA path (Quick start → Start practice → Start → Pause/Finish/Exit, in that reading order) is fully reachable and correctly labeled in both locales |
 | A4 | No state communicated by colour alone | **PASS** — the session readiness row (`PracticeReadinessRow`) exposes its weak-signal/degraded-capability state as one of 4 fully-localised text labels, verified present in the traversal for both locales |
 | A5 | `arb_parity_test.dart` / `hardcoded_string_guard_test.dart` unchanged and green | **PASS** — §7 gate |
-| A6 | Every found exception has an owner + expiry | **PASS** — `docs/accessibility/known-exceptions.yaml`, 3 entries, each with `owner`/`expiry` |
+| A6 | Every found exception has an owner + expiry | **PASS — machine-checked**, not eyeballed: `release_flow_semantics_test.dart`'s `"A6 — known-exceptions.yaml is a machine-checked registry"` group (a fail-closed hand-rolled reader, no `package:yaml` on this tree) parses `docs/accessibility/known-exceptions.yaml`'s 3 entries and asserts (1) every entry carries a non-empty `id`/`owner`/`expiry`/`severity`/`file`/`measured_on`/`source_test`, (2) `expiry: unscheduled` — all 3 entries — is only legal together with a dated `review_by:` (all 3 now carry `review_by: "2026-12-01"`, resolving the review's "lejárat nélkül" finding), and (3) the YAML `id` set and both test files' tolerance mirrors (`knownOverflows` in `release_flow_text_scale_test.dart`, `switchRowSplitSemanticsId` here) cover each other exactly — no orphan entry either direction |
 
 None of the three findings are judged **P1** (release-blocking): the two
 overflow defects clip a SECONDARY label (a non-localised scoring-profile id;
@@ -118,6 +118,17 @@ above would not have been testing what it claims to.
 
 ## 5. What this audit does NOT cover
 
+- **The detailed `PracticeResultScreen`.** The router's `AppRoutes.practiceResult`
+  route always builds `PracticeResultFallback` (`lib/app/routing/app_router.dart:346-348`)
+  — a static icon+title+body message with no interactive control — and that
+  is the "eredmény" landing state both new test files walk to and measure.
+  The content-rich `PracticeResultScreen` (score, per-metric breakdown,
+  next-step actions) is a DIFFERENT screen, reached only via an explicit
+  `Navigator.push` carrying a `PracticeHistoryEntry` — e.g. from
+  `PracticeHistoryScreen`'s row tap, not from the practice-session
+  round-trip this audit drives. Neither this round's text-scale cells nor
+  its semantics cells measure `PracticeResultScreen` at all; it was not
+  audited at `textScale 2.0`, in `hu`, or with a screen reader.
 - **Screen-reader announcement TIMING** (ADR 0280's live-region budget) —
   already covered by `test/accessibility/semantics_contract_test.dart`'s A1
   group; this round's flow walk does not re-measure it.

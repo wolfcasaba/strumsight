@@ -190,8 +190,15 @@ _CapturedError _captureError(FlutterErrorDetails details) => (
 /// location and the exact overflow magnitude, so a regression that grows
 /// (or shrinks to zero) at the SAME site still surfaces — this list can only
 /// describe today's measured defect, never absorb a different one silently.
-final class _KnownOverflow {
-  const _KnownOverflow({
+///
+/// Public (not `_`-prefixed, MAJOR-1 javító kör): [known_exceptions_registry_test]
+/// in `release_flow_semantics_test.dart` imports [knownOverflows] to prove
+/// every [id] here has a matching `docs/accessibility/known-exceptions.yaml`
+/// entry, and that no YAML entry claiming this file as its `source_test`
+/// lacks a matching entry here.
+final class KnownOverflow {
+  const KnownOverflow({
+    required this.id,
     required this.locale,
     required this.textScale,
     required this.source,
@@ -199,13 +206,20 @@ final class _KnownOverflow {
     required this.measuredOn,
   });
 
+  /// The `docs/accessibility/known-exceptions.yaml` entry `id` this
+  /// tolerance mirrors.
+  final String id;
   final String locale;
   final double textScale;
   final String source;
   final int overflowPx;
   final String measuredOn;
 
-  bool matches(String locale, double textScale, _CapturedError error) =>
+  /// Private (not part of [KnownOverflow]'s public surface, which exists
+  /// only so `release_flow_semantics_test.dart` can import [id] for the A6
+  /// mirror-coverage guard) — takes the file-private [_CapturedError], so a
+  /// public signature would trip `library_private_types_in_public_api`.
+  bool _matches(String locale, double textScale, _CapturedError error) =>
       locale == this.locale &&
       textScale == this.textScale &&
       error.source == source &&
@@ -219,21 +233,25 @@ final class _KnownOverflow {
 /// entries are also recorded in `docs/accessibility/known-exceptions.yaml`
 /// with owner + lejárat; this list can only SHRINK (a cell that stops
 /// overflowing must have its entry removed here — see `_assertFlowCell`).
-const _knownOverflows = <_KnownOverflow>[
+/// Public: see [KnownOverflow]'s doc comment — the A6 guard cell in
+/// `release_flow_semantics_test.dart` imports this list.
+const knownOverflows = <KnownOverflow>[
   // `_ScoringProfileReadout` (practice_setup_screen.dart:410-430) puts an
   // un-`Expanded` `Text(profileId)` next to an `Expanded` label in a `Row`
   // — at textScale 2.0 the fixed-width sibling no longer fits. Identical
   // 43px on BOTH locales: the overflow is driven by `profileId` (a
   // non-localised scoring-profile id), not by the label's translation
   // length.
-  _KnownOverflow(
+  KnownOverflow(
+    id: 'setup-scoring-profile-overflow',
     locale: 'en',
     textScale: 2.0,
     source: 'practice_setup_screen.dart:418',
     overflowPx: 43,
     measuredOn: '2026-09-01',
   ),
-  _KnownOverflow(
+  KnownOverflow(
+    id: 'setup-scoring-profile-overflow',
     locale: 'hu',
     textScale: 2.0,
     source: 'practice_setup_screen.dart:418',
@@ -243,7 +261,8 @@ const _knownOverflows = <_KnownOverflow>[
   // The combo-count `Row` (practice_feedback.dart:89-101) has neither Text
   // child `Expanded` — hu's longer `practiceFeedbackComboLabel` translation
   // overflows at textScale 2.0 where en's shorter "Combo" does not.
-  _KnownOverflow(
+  KnownOverflow(
+    id: 'feedback-combo-row-overflow-hu',
     locale: 'hu',
     textScale: 2.0,
     source: 'practice_feedback.dart:89',
@@ -282,7 +301,7 @@ Future<List<_CapturedError>> _runFlowCell(
 }
 
 /// Splits [errors] into unexpected (fails the cell) and expected (a
-/// `_knownOverflows` entry for this exact cell). Also fails if a listed
+/// `knownOverflows` entry for this exact cell). Also fails if a listed
 /// entry no longer reproduces — a STALE exclusion is exactly as wrong as a
 /// silently-added one (mirrors `_excludedByKey`'s `expectOverflow` branch in
 /// `e13_r36_variant_matrix_test.dart`).
@@ -291,11 +310,13 @@ void _assertFlowCell(
   required String localeCode,
   required double textScale,
 }) {
-  final applicable = _knownOverflows.where(
+  final applicable = knownOverflows.where(
     (k) => k.locale == localeCode && k.textScale == textScale,
   );
   final unexpected = errors
-      .where((e) => !applicable.any((k) => k.matches(localeCode, textScale, e)))
+      .where(
+        (e) => !applicable.any((k) => k._matches(localeCode, textScale, e)),
+      )
       .toList();
   expect(
     unexpected,
@@ -306,12 +327,12 @@ void _assertFlowCell(
   );
   for (final known in applicable) {
     expect(
-      errors.any((e) => known.matches(localeCode, textScale, e)),
+      errors.any((e) => known._matches(localeCode, textScale, e)),
       isTrue,
       reason:
           'STALE known-exception entry (${known.source}, measured '
           '${known.overflowPx}px on ${known.measuredOn}): this cell no '
-          'longer overflows — remove the `_KnownOverflow` entry AND its '
+          'longer overflows — remove the `KnownOverflow` entry AND its '
           'docs/accessibility/known-exceptions.yaml mirror',
     );
   }
