@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R18 KÉSZ — Program threat model + fail-closed release security scan — PR [#514](https://github.com/wolfcasaba/strumsight/pull/514), squash `3b49c501` (2026-09-01)
+
+A Ch12 **Kör 18** program-szintű **threat modelt** (`docs/security/threat-model.md`),
+egy lokálisan futtatható, **fail-closed release security scant**
+(`tool/release/security_scan.py`) és lejáró **kivétel-nyilvántartást**
+(`docs/security/exceptions.yaml`) szállított. ADR:
+[0481](docs/adr/0481-program-threat-model-and-release-security-scan.md).
+A kör `lib/**`-ot és `backend/app/**`-ot **nem** módosít.
+
+**A pre-flight átírta a kör tartalmát (§0.0 R2):** az eredeti brief mind az öt
+viselkedési acceptance-cellája (replay, path traversal, oversize, modell-checksum,
+titok-minta) **MÁR MÉRVE VOLT** a fán — újra-implementálásuk második
+igazságforrást hozott volna (az E12-R16 MAJOR-jának hibaosztálya, ADR 0477,
+[L555](docs/LESSONS.md#l555)). A kör kimenete ezért **bizonyíték-kötés**: a threat
+model minden ellenintézkedése géppel olvasható `guard`-ot nevez meg, és a scan
+fail-closed módon méri, hogy ezek a guardok a fán LÉTEZNEK és ÉLNEK.
+
+**Négy javító kör, mind a némítás-felismerés körül.** A review-lánc mérte ki,
+hogy egy nyilvántartott guard hányféle egysoros idiómával tüntethető el némán:
+Dart file-szintű `@Skip` (`library;`-vel és nélküle), `group(..., skip:)` **mindkét**
+szintaktikai alakban, Python `pytestmark`, modul-szintű `pytest.skip(...,
+allow_module_level=True)` behúzástól függetlenül, `pytest.importorskip`,
+osztály-szintű dekorátor a hívás-lokális ablakon kívül. **A fix3 egy hamis pozitív
+zárása közben visszanyitott egy igaz pozitívot** — a kanonikus
+`group('…', () {…}, skip: 'reason')` alakot —, azaz a `T-EGRESS-01` consent-guard
+némán kieshetett, a kapu mégis `EXIT 0`-t adott ([L562](docs/LESSONS.md#l562)).
+A fix4 ezt zárta, a hamis pozitívok visszanyitása nélkül.
+
+**A zárás mércéje a mutation-kill volt, nem a zöld gate:** a fix3 review kimérte,
+hogy a két legfontosabb javítás (S10/S11) cellái a javítás ELŐTTI eszközzel is
+zöldek — vagyis védtelenek voltak ([L563](docs/LESSONS.md#l563)). A fix4 után
+minden viselkedés-változtatásnak saját, a reviewer által ÚJRAMÉRT piros útja van.
+Végső review: **APPROVED**, 0 BLOCKER / 0 MAJOR
+([`e12-r18-review-security-fix4.md`](docs/reviews/e12-r18-review-security-fix4.md)).
+
+> ⚠ **Nyitva hagyott, NEM merge-blokkoló tételek (követő kör):** két
+> **fail-closed** hamis pozitív a statikus skip-heurisztikában — `pytest.importorskip`
+> egy teszt-TÖRZSÖN belül az egész modult „disabled"-nek jelöli (FP-A), és a
+> `def`-lokális 400 karakteres előtag-ablak átlóg a szomszéd teszt legális
+> `pytest.skip('…')` hívására (FP-B, a kör előtt is jelen volt). Mindkettő a
+> release-t BLOKKOLJA, nem engedi át.
+
+> 📌 **A CI-bekötés szándékosan NEM készült el** (§0.1): a `.github/workflows/security.yml`
+> a merge-kapu környékét érinti, és egy workflow-változás bizonyítéka mindig egy
+> DISPATCH-elt futás (ADR 0052/0053) — ez a **Kör 25** (RC assembly) dolga.
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E15-R07 / H3: a bekötésnek hiányzik az előfeltétele → beszúrt `E15-R14` (2026-09-01)
 
 Az `E15-R07` (Practice Generator bekötése + migrálása) az implementer `stopped`
@@ -9735,7 +9781,25 @@ maradt.
 
 ## 5. Last completed round
 
-**E15-R06 — Setlist + Progress képernyők migrálása a design-rendszerre** (PR
+**E12-R18 — Program threat model + fail-closed release security scan** (PR
+[#514](https://github.com/wolfcasaba/strumsight/pull/514), squash `3b49c501`).
+A kör nem új védelmeket írt, hanem **bizonyíték-kötést**: a threat model minden
+ellenintézkedése géppel olvasható `guard`-ot nevez meg, és a
+`tool/release/security_scan.py` fail-closed módon méri, hogy ezek a guardok a fán
+léteznek és ÉLNEK (a pre-flight kimérte, hogy az eredeti brief öt viselkedési
+cellája MÁR mérve volt — újraírásuk második igazságforrás lett volna). **Négy
+javító kör** kellett, mind a némítás-felismerés körül; a fix3 közben egy hamis
+pozitív zárása **visszanyitott** egy igaz pozitívot (a kanonikus
+`group('…', () {…}, skip: 'reason')` alak — a `T-EGRESS-01` consent-guard némán
+kieshetett, `EXIT 0` mellett), amit a fix4 zárt
+([L562](docs/LESSONS.md#l562)). A zárás mércéje végig a **mutation-kill** volt:
+a fix3 review kimérte, hogy a két legfontosabb javítás cellái a javítás előtti
+eszközzel is zöldek, tehát védtelenek ([L563](docs/LESSONS.md#l563)). Végső
+review APPROVED (0 BLOCKER, 0 MAJOR); **nyitva marad** két fail-closed hamis
+pozitív (FP-A `importorskip` teszt-törzsben, FP-B a 400 karakteres ablak
+átlógása) — követő kör.
+
+**Előző kör: E15-R06 — Setlist + Progress képernyők migrálása a design-rendszerre** (PR
 [#510](https://github.com/wolfcasaba/strumsight/pull/510), squash `1c8e214a`).
 Három `migrate`-verdiktű képernyő kapott design-rendszer komponenseket
 (`SsContentCard`/`SsEmptyState`/`SsButton`), a migrációs arány **63/96

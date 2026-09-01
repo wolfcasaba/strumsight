@@ -22112,3 +22112,94 @@ megfordítása vagy a §0.0.B `Előfeltétel` szó eltűnése pirosra vált), é
 cellában pinneli, hogy az `E15-R07` STOP-mondata és scope-tilalma ÉRINTETLEN —
 a halt „megoldása" a védelem kivételével itt bukik meg. MÉRVE: `origin/main`-en
 8/10 cella PIROS, a javítás után 10/10 zöld.
+
+## L562 — Egy hamis pozitívot szűkítéssel záró javítás VISSZANYITHAT egy igaz pozitívot: a szintaktikai szűkítésnek a védett minta MINDEN alakjára cellát kell adnia (E12-R18, 2026-09-01)
+
+**Mérve.** Az `E12-R18` harmadik javító köre az S13 hamis pozitívot (`egy testvér
+teszt saját `skip:`-je a groupon belül`) úgy zárta, hogy a `group(...)` `skip:`
+argumentumát csak a hívás **argumentum-FEJÉBEN** kereste
+(`_dart_call_head` — az első `()` callback-paraméterlistáig). A fixture-ök és az
+S13c regressziós cella mind a `group('d', skip: true, () {...})` alakot írták,
+tehát a suite **zöld maradt**. A `package:test` kanonikus írásmódja viszont a
+named argumentumot a pozicionális callback UTÁN teszi:
+
+```dart
+group('A4 — …', () {
+  test('upload() with consent false never touches the wire adapter', () { … });
+}, skip: 'temporarily disabled');
+```
+
+Ez az alak a szűkítés után **láthatatlan** lett. A valós fán mérve
+(`test/privacy/consent_enforcement_test.dart`): `flutter test …` →
+`Skip: temporarily disabled`, `~1` (a `T-EGRESS-01` consent-guard NEM fut),
+miközben `python3 tool/release/security_scan.py` → `EXIT=0`. Az ELŐZŐ (fix2)
+eszköz ugyanezt `EXIT=1`-gyel fogta — tehát a javítás **regressziót szállított
+zöld gate mellett**, pontosan azon a helyen, amit a kör két körrel korábban már
+lezárt.
+
+**A minta.** Egy szűkítés (kevesebb találat) mindig két irányba mér: zárja a
+hamis pozitívot ÉS kockáztat egy igaz pozitívot. A hamis pozitívra írt cella
+önmagában sosem bizonyítja a szűkítés helyességét — az igaz pozitív MINDEN
+szintaktikai alakjára kell cella, és ezt a nyelv/keretrendszer dokumentált
+írásmódjaiból kell összeszedni, nem a fixture-ökben véletlenül szereplő alakból.
+
+**Őrteszt:** `test/tooling/security_scan_test.dart` — a `group(..., skip: …, () {…})`
+(argumentum-fej) ÉS a `group('…', () {…}, skip: '…')` (callback utáni) alak külön
+cellában, mellettük a három hamis-pozitív cella (testvér-teszt `skip:`-je,
+string-beli `skip:`-részlet, független skippelt testvér-group).
+
+## L563 — Egy új tesztcella csak akkor mérce, ha a SAJÁT javítása előtti eszközzel PIROS: a „belefér a régi ablakba" degenerált fixture két MAJOR-javítást hagyott védtelenül (E12-R18, 2026-09-01)
+
+**Mérve.** Az `E12-R18` fix3 két MAJOR leletre (S10: Dart file-szintű `@Skip`
+`library;` nélkül; S11: modul-szintű `pytest.skip(..., allow_module_level=True)`)
+javítást ÉS cellát is szállított, a gate zöld volt. A következő review a cellákat
+a javítás ELŐTTI eszközzel futtatta:
+
+```
+$ git checkout 30651086^ -- tool/release/security_scan.py
+$ flutter test test/tooling/security_scan_test.dart
+00:04 +42 -3: Some tests failed.      # az S10 és S11 cella NEM volt a pirosak között
+```
+
+Mindkét fixture degenerált volt: a némító belefért a régi, **hívás-lokális**
+ablakba (Dart: 200 karakter a `test(` előtt, Python: 400 karakter a `def` előtt,
+a trivia-stripelt szövegen), ezért a régi eszköz is „megtalálta" — csak nem azon
+az úton, amit a javítás nyitott. A cella tehát zöld volt a javítás nélkül is:
+a két legfontosabb változtatás regresszió-védelme működésképtelen. A javítás a
+fixture „hízlalása" (filler metódusok, hogy a némító az ablakon KÍVÜLRE essen);
+a mutation-killt a HELYES előző eszköz-SHA-val kell mérni (az S8-cellához pl. a
+pre-S8-fix `4783c9f7`, nem a közvetlen szülő).
+
+**A minta.** Az L220 („bizonyított piros út") nem teljesül attól, hogy a cella
+létezik és a rontott bemenetre piros — azt kell megmérni, hogy a cella a JAVÍTÁS
+NÉLKÜL is piros-e. Ha nem az, a cella a régi kódot méri, nem az újat.
+
+**Őrteszt:** `test/tooling/security_scan_test.dart` — az S8/S10/S11 cellák
+hízlalt fixture-jei (a némító mérten az ablakon kívül), plusz a kör §10-ében
+rögzített mutation-kill tábla, amely cellánként megnevezi a tanú-eszköz SHA-ját.
+
+## L564 — A hagyaték-szonda `PRE-FLIGHT` besorolása mérési artefaktum lehet: a review-fájl EGZAKT nevét keresi, az utótagos jelentéseket nem látja (E12-R18, 2026-09-01)
+
+**Mérve.** Az `E12-R18` folytató sessionje
+`.pipeline/resume-state-E12-R18.md` → `ÁLLAPOT: PRE-FLIGHT`,
+„Review: `docs/reviews/e12-r18-review.md` — nincs az ágon" jelentést kapott,
+miközben a kör-ágon **három** kész review-jelentés volt
+(`e12-r18-review-security.md`, `-security-followup.md`, `-security-fix2.md`),
+az utolsó `CHANGES REQUESTED` verdikttel és két nyitott MAJOR-ral. A szonda
+(`tools/round-resume-probe.sh`) a kanonikus `eXX-rYY-review.md` nevet keresi,
+ezért `review_seen=0` — a kör a besorolás szerint „még pre-flightban" állt, a
+valóságban a **review-ciklus közepén**.
+
+**Miért drága.** A `PRE-FLIGHT` fok teendője „az ADR + brief-revízió
+újrahasznosítása, majd implementer" — azaz a nyitott leletlista nélkül,
+a kör elejéről indított implementer-futás. Itt ez 14 commitnyi munkát és három
+review-ciklust írt volna felül. A besorolást a saját mérés (a `docs/reviews/`
+könyvtár LISTÁZÁSA, nem az egzakt név próbája) azonnal megcáfolta.
+
+**A minta.** Egy állapot-szonda „nincs ilyen fájl" eredménye NEM ugyanaz, mint
+„nincs ilyen állapot" — a névkonvenciótól eltérő artefaktum ugyanúgy létezik.
+Folytatáskor a besorolást a szonda BEMENETÉN kell ellenőrizni
+(`ls docs/reviews/ | grep <kör>`), mielőtt a fok teendője elindul.
+
+**Őrteszt:** nincs — a javítás a `tools/round-resume-probe.sh`-ban van, ami a
+kör-orchestrátor számára tilos zóna (ADR 0087 §4); GOV/önjavító kör tárgya.

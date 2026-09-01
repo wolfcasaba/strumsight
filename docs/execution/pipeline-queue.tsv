@@ -511,7 +511,7 @@ E12-R14	docs/rounds/e12-r14-performance-budget-harness.md	sonnet-impl	0454	done
 E12-R15	docs/rounds/e12-r15-resource-coexistence-policy.md	sonnet-impl	0455	done
 E12-R16	docs/rounds/e12-r16-ai-release-gate-aggregation.md	sonnet-impl	0456	done
 E12-R17	docs/rounds/e12-r17-privacy-data-inventory-and-consent-enforcement.md	sonnet-impl	0457	done
-E12-R18	docs/rounds/e12-r18-threat-model-and-release-security-scan.md	sonnet-impl	0458	pending
+E12-R18	docs/rounds/e12-r18-threat-model-and-release-security-scan.md	sonnet-impl	0458	done
 E12-R19	docs/rounds/e12-r19-privacy-safe-observability-and-slo.md	sonnet-impl	0459	pending
 E12-R20	docs/rounds/e12-r20-accessibility-and-localization-release-audit.md	sonnet-impl	nincs	pending
 E12-R21	docs/rounds/e12-r21-content-catalog-and-pedagogical-readiness.md	sonnet-impl	0460	pending
