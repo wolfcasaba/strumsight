@@ -252,4 +252,66 @@ tools/round-gate.sh test/accessibility/release_flow_text_scale_test.dart test/ac
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Négy engedélyezett fájl, mind létrehozva:**
+
+- `test/accessibility/release_flow_text_scale_test.dart` — ÚJ, saját
+  locale-paraméteres folyam-bejáróval (a harness `walkOnboardingViaSkip`/
+  `runFirstPracticeSession` beégetett angol literálra illesztene). 5 cella:
+  `{en,hu} × {1.5,2.0}` (A1/A2 + a §6 küszöb-cellahármas két releváns pontja)
+  + a §6 kötelező valódi-sértés próba (állandó teszt-cella, nem egyszeri
+  manuális lépés).
+- `test/accessibility/release_flow_semantics_test.dart` — ÚJ, ugyanaz a
+  bejáró, `tester.semantics.simulatedAccessibilityTraversal()` +
+  `SemanticsNode.getSemanticsData()` alapú valódi fabejárással (§0.0.A/R9,
+  NEM `find.bySemanticsLabel` jelenlét-próba). 2 cella (`en`, `hu`): A3
+  (elérhetőség + Pause→Finish→Exit fókusz-sorrend) + A4 (a readiness-row
+  állapota szövegként is olvasható, nem csak színnel).
+- `docs/accessibility/known-exceptions.yaml` — ÚJ, 3 bejegyzés, owner +
+  lejárat + mért adat mindegyiken.
+- `docs/accessibility/release-audit.md` — ÚJ, a teljes jelentés.
+
+**Mit talált az audit — HÁROM LELET, mindegyik `lib/**`-ban, EGYIK SEM
+javítva (§0.0/§5.2, tilos zóna):**
+
+1. `practice_setup_screen.dart:418` (`_ScoringProfileReadout`) — 43px
+   túlcsordulás `textScale 2.0`-n, MINDKÉT locale-on azonosan (a
+   `profileId` nem lokalizált, a szűkösséget a label növekedése okozza).
+2. `practice_feedback.dart:89` (combo-számláló `Row`) — 65px túlcsordulás
+   `textScale 2.0`-n, CSAK `hu`-n (a hosszabb magyar fordítás miatt).
+3. `ss_switch_row.dart` (`SsSwitchRow`, megosztott design-system komponens)
+   — a szimulált akadálymentességi bejárás KÉT szomszédos csomópontot ad
+   egy sor helyett: a külső (`InkWell` saját gesztus-szemantikája) néma
+   `tap`-célpont, a belső (`MergeSemantics`) felirat nélküli `toggled`
+   állapotot hordoz. 3 előfordulás/locale a Practice Setup képernyőn
+   (Metronome, Accent, Chord hint) — a `screen_reader_copy_test.dart`-féle
+   `find.bySemanticsLabel` jelenlét-próbák ezt NEM vették volna észre
+   (L460), mert a BELSŐ csomópont felirata megvan.
+
+**Súlyosság: mindhárom P2, egyik sem P1** — a két túlcsordulás másodlagos
+feliratot vág (nem-lokalizált profil-id; combo-számláló), a switch-row hiba
+opcionális beállításokat érint (a fő CTA-útvonal — Quick start → Start
+practice → Start → Pause/Finish/Exit — MINDKÉT locale-on hibátlanul
+elérhető és felirat-helyes). A STOP-protokoll (§0) ezért NEM lépett életbe.
+
+**§6 valódi-sértés próba — MÉRT eredmény (2026-09-01, telefon-viewport
+412×915, `en`, az onboarding „Skip" felirata):**
+
+| textScale | magasság |
+|---|---|
+| 1.0 | 20.0px |
+| 2.0 | 40.0px |
+
+A két érték eltér (pontosan 2×), tehát a `textScaleFactorTestValue` kapcsoló
+ténylegesen eléri a fát — ha nem érné el, mindkét cella 20.0px-et mérne, és
+minden A1/A2 cella értéktelen lenne.
+
+**Gate:**
+
+```
+tools/round-gate.sh test/accessibility/release_flow_text_scale_test.dart test/accessibility/release_flow_semantics_test.dart test/l10n/arb_parity_test.dart test/l10n/hardcoded_string_guard_test.dart
+```
+
+ZÖLD (lásd a kör-jelzés melletti gate-log). `format` → `analyze` → 4×
+`test <útvonal>` → `architecture` → `secrets` → `l10n` lépések mind zöldek.
+
 ## 11. Review — a Claude tölti ki

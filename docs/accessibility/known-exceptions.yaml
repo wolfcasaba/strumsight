@@ -1,0 +1,107 @@
+# E12-R20 accessibility/localization release audit — known exceptions.
+#
+# Every entry here is a MEASURED `lib/**` defect this round's audit found
+# but could not fix (`lib/**` is this round's tilos zona, brief §4/§0.0).
+# Each entry is mirrored by a `_KnownOverflow` / `knownUnlabeledCount`
+# tolerance in the matching test file — the mirror is a HARD, shrink-only
+# guard: if the underlying `lib/**` code stops reproducing the exact
+# measurement below, the matching test cell fails ("STALE known-exception")
+# until this file (and the test entry) is updated to remove it. Adding an
+# entry here without narrowing the matching test assertion — or vice versa —
+# is a drift bug in this document, not a valid state.
+#
+# Fields: id, owner, expiry (lejárat — a future round or "unscheduled" until
+# a design-migration round claims it), file, measured_on, description,
+# severity (P1 = release-blocking, P2 = major but not flow-blocking),
+# source_test (which new test cell measures it).
+schema_version: 1
+exceptions:
+  - id: setup-scoring-profile-overflow
+    owner: "Next Practice design-migration round (SDD, unscheduled — see docs/ui/legacy-backlog.md pattern)"
+    expiry: unscheduled
+    severity: P2
+    file: lib/features/practice/presentation/screens/practice_setup_screen.dart:418
+    widget: _ScoringProfileReadout
+    measured_on: "2026-09-01"
+    measured_overflow_px: 43
+    locales: [en, hu]
+    text_scale: 2.0
+    viewport: "412x915 (phone portrait)"
+    description: >
+      `_ScoringProfileReadout` renders `Row(children: [Expanded(Text(label)),
+      Text(profileId)])` — the second `Text` (a non-localised scoring-profile
+      id, e.g. a slug) is NOT wrapped in `Expanded`/`Flexible`, so at
+      `textScale 2.0` it no longer fits next to the grown label and the
+      `RenderFlex` overflows by 43px on the right, identically in both
+      locales (the id itself never translates — driven by the fixed-width
+      sibling, not by label length).
+    source_test: test/accessibility/release_flow_text_scale_test.dart (_knownOverflows)
+    status: open
+
+  - id: feedback-combo-row-overflow-hu
+    owner: "Next Practice design-migration round (SDD, unscheduled)"
+    expiry: unscheduled
+    severity: P2
+    file: lib/features/practice/presentation/widgets/practice_feedback.dart:89
+    widget: "combo-count Row (unnamed, inside the feedback panel)"
+    measured_on: "2026-09-01"
+    measured_overflow_px: 65
+    locales: [hu]
+    text_scale: 2.0
+    viewport: "412x915 (phone portrait)"
+    description: >
+      `Row(children: [Text(l10n.practiceFeedbackComboLabel), SizedBox(width:
+      8), Text(comboCount)])` has neither `Text` child wrapped in
+      `Expanded`/`Flexible`. The Hungarian `practiceFeedbackComboLabel`
+      translation is long enough that at `textScale 2.0` the row overflows
+      by 65px on the right; the shorter English "Combo" label does not
+      overflow at the same scale (measured: only the `hu` cell reproduces
+      this, `en` does not).
+    source_test: test/accessibility/release_flow_text_scale_test.dart (_knownOverflows)
+    status: open
+
+  - id: switch-row-split-semantics-node
+    owner: "Next design-system accessibility round (SDD, unscheduled) — affects every SsSwitchRow call site, not just Practice Setup"
+    expiry: unscheduled
+    severity: P2
+    file: lib/core/design_system/components/inputs/ss_switch_row.dart
+    widget: SsSwitchRow
+    measured_on: "2026-09-01"
+    locales: [en, hu]
+    affected_instances_in_flow: 3
+    instance_labels_en: ["Metronome", "Accent on count 1", "Show chord hint"]
+    description: >
+      `SsSwitchRow` wraps its content in `InkWell(child: ... MergeSemantics(
+      Row([Text(label), IgnorePointer(Switch(...))])))`. The simulated
+      accessibility traversal shows this produces TWO adjacent semantics
+      nodes per row, not the single merged node the component's own doc
+      comment claims ("status is never conveyed by colour alone" — this is
+      a DIFFERENT defect class, a split REACHABILITY node, not a colour
+      issue): (1) the OUTER node, owned by `InkWell`'s own gesture-detector
+      semantics, spans the full 48dp row and carries the `tap` action but
+      NO label; (2) the INNER node, owned by `MergeSemantics`, carries the
+      label and the `Switch`'s `toggled` state but NO `tap` action (measured
+      via `tester.semantics.simulatedAccessibilityTraversal()` +
+      `SemanticsNode.getSemanticsData()` on an isolated `SsSwitchRow`, and
+      confirmed present in the full flow at all 3 Practice Setup switches,
+      both locales). A screen-reader user landing on the silent, tappable
+      outer node hears nothing before activating it; a user landing on the
+      labeled inner node cannot activate it from there. Judged P2 (not P1 /
+      release-blocking): all three affected controls (Metronome, Accent,
+      Chord-hint) are optional practice-setup preferences, not on the
+      critical path to `l10n.practiceSetupStart` — the core flow's primary
+      CTA remains fully reachable and correctly labeled (see
+      `release_flow_semantics_test.dart`'s Pause/Finish/Exit focus-order
+      assertion, unaffected by this component).
+    likely_fix_direction: >
+      Not applied this round (lib/** is tilos zona). A plausible fix is
+      merging the InkWell's own gesture semantics into the same node as
+      `MergeSemantics` — e.g. moving the `Semantics(label: ...)` up to wrap
+      the InkWell itself instead of relying on MergeSemantics deep inside,
+      or wrapping the whole InkWell (not just its Row child) in
+      `MergeSemantics`. Not verified — a future round must re-measure with
+      `tester.semantics.simulatedAccessibilityTraversal()` before claiming
+      this fixed, not by a presence-only `find.bySemanticsLabel` check
+      (docs/LESSONS.md L460).
+    source_test: test/accessibility/release_flow_semantics_test.dart (knownUnlabeledCount: 3 at the practice-setup cell)
+    status: open
