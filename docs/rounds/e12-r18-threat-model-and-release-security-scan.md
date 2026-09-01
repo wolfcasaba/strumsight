@@ -79,6 +79,27 @@ model mindkét utat KÜLÖN komponensként veszi fel.
    (`tool/release/generate_sbom.py` SBOM-ot állít elő, de nem dönt).
 5. Egyetlen, release előtt futtatható, fail-closed biztonsági döntés — **nincs**.
 
+### R6 — Az `allowed_paths` felsorolja a kör SAJÁT ADR-jét (2026-09-01, folytató orchestrátor)
+
+**Mérve:** `python3 tools/scope-audit.py --repo <munkapéldány> --brief <ez a
+brief> --base 91ba4a4c` → `Legacy scope audit FAILED … path outside allowed
+scope: docs/adr/0481-program-threat-model-and-release-security-scan.md`.
+
+A jelzett fájl a kör **protokoll szerint kötelező** artefaktuma: az ADR-t az
+ADR 0055 / a kör-prompt §1.0.1 szerint az orchestrátor írja a pre-flightban (itt:
+`9125e618`), és a brief §3 pontosan ezért zárja ki az implementer scope-jából
+(„`docs/adr/**` — az ADR-t a Claude írja"). A gépi audit ezt a megkülönböztetést
+nem tudja kifejezni, ezért a fájl „listán kívülinek" látszott, miközben a kör
+kezdete óta a diff része, és négy javító körön át minden CI-futás zölden ment át
+rajta.
+
+**Ez NEM munkaszcope-tágítás** (ADR 0087 §2): egyetlen új munkadarab sem került a
+körbe, a felvett útvonal egy már meglévő, a brief törzsében nevesített
+artefaktum. Az implementer engedélyezett listája változatlanul a §4 három/hat
+sora; a `docs/adr/**` az ő számára TILOS zóna marad. A H3 fogalma az
+`allowed_paths`-on KÍVÜL eső fájlra vonatkozik — egy a briefben előírt,
+orchestrátor-írta artefaktum nem az (vö. `docs/reviews/**` hamis H3-a, L251).
+
 ## 0.1 Miért nincs új CI-workflow ebben a körben
 
 A `.github/workflows/security.yml` bevezetése a merge-kapu környékét érinti, és
@@ -97,6 +118,10 @@ allowed_paths = [
   "test/tooling/security_scan_test.dart",
   "backend/tests/test_security_release.py",
   "docs/rounds/e12-r18-threat-model-and-release-security-scan.md",
+  # Az orchestrátor SAJÁT artefaktuma (ADR 0055) — az implementernek TILOS
+  # zóna marad (§3, §4 „Tilos zóna: docs/adr/**"); csak a gépi scope-audit
+  # számára van itt felsorolva. Indoklás: §0.0 R5.
+  "docs/adr/0481-program-threat-model-and-release-security-scan.md",
 ]
 gate_tests = [
   "test/tooling/security_scan_test.dart",
