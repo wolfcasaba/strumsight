@@ -854,11 +854,21 @@ def test_the_real_thing():
     });
 
     test('a Dart library-level `@Skip(...)` above `library;` silences the '
-        'whole file even though the test itself carries no marker', () {
+        'whole file even though the test itself carries no marker — even '
+        'far enough from the `test(` call that the call-local 200-char '
+        'prelude window could not see it on its own (S14: the original '
+        'fixture placed `@Skip(` ~40 chars from `test(`, well inside that '
+        'window, so it passed even without the file-header check this '
+        'branch exists to prove)', () {
+      final filler = StringBuffer();
+      for (var i = 0; i < 20; i++) {
+        filler.write('const _filler$i = $i;\n');
+      }
       _write(fixtureRoot, 'guarded_test.dart', '''
 @Skip('whole file disabled')
 library;
 
+$filler
 void main() {
   test('the real thing', () {
     expect(1, 1);
@@ -926,11 +936,20 @@ void main() {
   group('S10 — a Dart `@Skip(...)` above the file\'s first directive '
       'silences it even WITHOUT a `library;` line', () {
     test('`@Skip(...)` directly above the first `import` (no `library;` '
-        'directive at all) is a critical finding, not a pass', () {
+        'directive at all) is a critical finding, not a pass — even far '
+        'enough from the `test(` call that the call-local 200-char prelude '
+        'window could not see it on its own (ÚJ-4: the original fixture put '
+        '`@Skip(` ~70 chars from `test(`, inside that window, so it passed '
+        'even against a tool with no `_dart_file_skipped` at all)', () {
+      final filler = StringBuffer();
+      for (var i = 0; i < 20; i++) {
+        filler.write('const _filler$i = $i;\n');
+      }
       _write(fixtureRoot, 'guarded_test.dart', '''
 @Skip('whole file disabled — no library directive')
 import 'dart:convert';
 
+$filler
 void main() {
   test('the real thing', () {
     expect(1, 1);
@@ -964,12 +983,21 @@ void main() {
   group('S11 — a module-level `pytest.skip(..., allow_module_level=True)` '
       'call silences the whole python file, not just a `pytestmark`', () {
     test('a bare, unindented `pytest.skip(...)` call at module scope is a '
-        'critical finding, not a pass', () {
+        'critical finding, not a pass — even far enough from the guard '
+        '`def` that the def-local 400-char prelude window could not see it '
+        'on its own (ÚJ-4: the original fixture put `pytest.skip(` ~60 '
+        'chars from the `def`, inside that window, so it passed even '
+        'against a tool with no module-level check at all)', () {
+      final filler = StringBuffer();
+      for (var i = 0; i < 30; i++) {
+        filler.write('def _filler_$i():\n    pass\n\n\n');
+      }
       _write(fixtureRoot, 'guarded.py', '''
 import pytest
 pytest.skip('whole file disabled', allow_module_level=True)
 
 
+$filler
 def test_the_real_thing():
     pass
 ''');
@@ -994,6 +1022,135 @@ def test_the_real_thing():
 
       expect(result.exitCode, 1, reason: result.stdout + result.stderr);
       expect(result.stdout, contains('T-FIXTURE-S11'));
+    });
+  });
+
+  group('ÚJ-2 — a module-level `pytest.skip(..., allow_module_level=True)` '
+      'call silences the module even when INDENTED inside an `if` block '
+      '(the S11 fix was column-0-anchored and this bypassed it)', () {
+    test('a `pytest.skip(...)` call indented inside a module-level `if` '
+        'block is a critical finding, not a pass', () {
+      final filler = StringBuffer();
+      for (var i = 0; i < 30; i++) {
+        filler.write('def _filler_$i():\n    pass\n\n\n');
+      }
+      _write(fixtureRoot, 'guarded.py', '''
+import os
+import pytest
+
+if os.environ.get('STRUMSIGHT_FAST_CI') != '0':
+    pytest.skip('slow suite', allow_module_level=True)
+
+
+$filler
+def test_the_real_thing():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-UJ2',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-UJ2'));
+    });
+
+    test('a `pytest.skip(reason)` call WITHOUT `allow_module_level` inside '
+        'a test body does not disable an unrelated guard elsewhere in the '
+        'module (the keyword, not the call alone, is the module-level '
+        'signal)', () {
+      final filler = StringBuffer();
+      for (var i = 0; i < 30; i++) {
+        filler.write('def _filler_$i():\n    pass\n\n\n');
+      }
+      _write(fixtureRoot, 'guarded.py', '''
+import pytest
+
+
+def test_unrelated_runtime_skip():
+    pytest.skip('flaky on CI')
+
+
+$filler
+def test_the_real_thing():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-UJ2B',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 0, reason: result.stdout + result.stderr);
+    });
+  });
+
+  group('ÚJ-3 — a module-level `pytest.importorskip(...)` call silences '
+      'the whole python file, exactly like `pytest.skip(..., '
+      'allow_module_level=True)`', () {
+    test('a bare `pytest.importorskip(...)` call at module scope is a '
+        'critical finding, not a pass', () {
+      final filler = StringBuffer();
+      for (var i = 0; i < 30; i++) {
+        filler.write('def _filler_$i():\n    pass\n\n\n');
+      }
+      _write(fixtureRoot, 'guarded.py', '''
+import pytest
+pytest.importorskip('some_optional_dep')
+
+
+$filler
+def test_the_real_thing():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-UJ3',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-UJ3'));
     });
   });
 
@@ -1034,6 +1191,51 @@ $filler    def test_the_real_thing(self):
 
       expect(result.exitCode, 1, reason: result.stdout + result.stderr);
       expect(result.stdout, contains('T-FIXTURE-S12'));
+    });
+  });
+
+  group('ÚJ-5 — a module-level guard function is never mistaken for a '
+      'method of an earlier, unrelated skipped class', () {
+    test('a `@pytest.mark.skip`-ped class, followed by an UNRELATED '
+        'module-level guard function far enough away to be outside the '
+        'def-local 400-char prelude window, is NOT disabled', () {
+      final filler = StringBuffer();
+      for (var i = 0; i < 20; i++) {
+        filler.write('    def test_filler_$i(self):\n        pass\n\n');
+      }
+      _write(fixtureRoot, 'guarded.py', '''
+import pytest
+
+
+@pytest.mark.skip(reason='unrelated class disabled')
+class TestLegacyUnrelated:
+$filler    def test_something(self):
+        pass
+
+
+def test_the_real_thing():
+    pass
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-UJ5',
+          path: 'guarded.py',
+          test: 'test_the_real_thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 0, reason: result.stdout + result.stderr);
     });
   });
 
@@ -1141,6 +1343,82 @@ void main() {
 
       expect(result.exitCode, 1, reason: result.stdout + result.stderr);
       expect(result.stdout, contains('T-FIXTURE-S13C'));
+    });
+
+    test('ÚJ-1 — the group-level `skip:` argument placed AFTER the '
+        'callback (`group(..., () {...}, skip: true)`, the documented '
+        '`package:test` shape) still disables the guard.test — the S13 '
+        'narrowing must not go blind to it', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  group('disabled', () {
+    test('the real thing', () {
+      expect(1, 1);
+    });
+  }, skip: 'temporarily disabled');
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-UJ1',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 1, reason: result.stdout + result.stderr);
+      expect(result.stdout, contains('T-FIXTURE-UJ1'));
+    });
+
+    test('ÚJ-1 — a sibling test\'s own `skip: true` placed AFTER ITS OWN '
+        'callback, inside a shared NOT-skipped group, still does not '
+        'disable the guard.test next to it (the nested-call masking must '
+        'not leak a sibling\'s post-callback argument into the group\'s own '
+        'text either)', () {
+      _write(fixtureRoot, 'guarded_test.dart', '''
+void main() {
+  group('mixed', () {
+    test('unrelated flaky', () {
+      expect(1, 1);
+    }, skip: true);
+
+    test('the real thing', () {
+      expect(1, 1);
+    });
+  });
+}
+''');
+      _write(
+        fixtureRoot,
+        'threat-model.md',
+        _guardBlock(
+          id: 'T-FIXTURE-UJ1B',
+          path: 'guarded_test.dart',
+          test: 'the real thing',
+        ),
+      );
+
+      final result = _run([
+        '--root',
+        fixtureRoot.path,
+        '--only',
+        'guards',
+        '--threat-model',
+        'threat-model.md',
+      ]);
+
+      expect(result.exitCode, 0, reason: result.stdout + result.stderr);
     });
   });
 
