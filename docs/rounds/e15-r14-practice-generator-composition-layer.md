@@ -52,10 +52,10 @@ allowed_paths = [
   "lib/features/practice_generator/public/data.dart",
   "lib/features/practice_generator/public/application.dart",
   "lib/features/practice_generator/public/presentation.dart",
+  "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/data/local_practice_evidence_repository_test.dart",
   "test/features/practice_generator/presentation/practice_generator_providers_test.dart",
   "test/features/practice_generator/application/start_plan_generation_test.dart",
-  "docs/privacy/data-inventory.yaml",
   "docs/adr/0482-practice-generator-composition-layer.md",
   "docs/rounds/e15-r14-practice-generator-composition-layer.md",
 ]
@@ -81,7 +81,11 @@ itt hamis consent-felületet adna. A `security-reviewer` futtatása a review-ban
 **KÖTELEZŐ** ([ADR 0479](../adr/0479-privacy-data-inventory-and-consent-enforcement.md)),
 a `flutter-reviewer` és a `flutter-devil-advocate` szintén.
 
-## 0.0.A Pre-flight (indítás előtt KÖTELEZŐ)
+## 0.0.A Pre-flight (indítás előtt KÖTELEZŐ) — LEFUTOTT, az eredménye a §0.0.B
+
+> Az alábbi öt teendő az orchestrátor pre-flightjáé, és 2026-09-01-én **lefutott**.
+> Az eredményt és a belőle következő **kötelező brief-revíziókat** a §0.0.B
+> tartalmazza; ütközés esetén a §0.0.B szövege az érvényes.
 
 1. **ADR-szám:** ellenőrizd, hogy a `docs/adr/0482-*.md` NEM létezik. Ha időközben
    elkelt, `tools/round-slots.py reserve-adr --round E15-R14` és a brief fejlécét
@@ -102,6 +106,104 @@ a `flutter-reviewer` és a `flutter-devil-advocate` szintén.
    `public/{data,application,presentation}.dart` barrelek generáltak-e, és ha igen,
    milyen paranccsal; az ÚJ fájlok exportját a MÉRT úton vedd fel, ne kézzel, ha a
    generátor a forrás.
+
+## 0.0.B Pre-flight EREDMÉNY és brief-revízió (Claude / Opus 5, 2026-09-01, `main @ 26753c6f`)
+
+A pre-flight lefutott. A §0.0 három kiinduló mérése VÁLTOZATLANUL érvényes
+(a kimenetek a §10-be is bekerülnek, ELŐTTE-oszlopként):
+
+| Mérés | Parancs | Eredmény |
+|---|---|---|
+| Provider a feature alatt | `grep -rln "Provider<\|NotifierProvider\|ChangeNotifierProvider" lib/features/practice_generator` | **ÜRES** (exit 1) |
+| Konkrét evidence-repository | `grep -rn "implements PracticeEvidenceRepository" lib/` | **EGY** találat (`domain/repository/practice_evidence_repository.dart:107`, a teszt-fake) |
+| Setup-varázsló vége | `plan_setup_screen.dart:96–99` | csak `controller.next()` |
+| ADR-szám | `ls docs/adr/0482-*` | nem létezett → az ADR 0482 ebben a pre-flightban MEGÍRVA |
+
+A pre-flight NÉGY további mérése a briefet módosítja. **A revíziók kötelezőek,
+az implementer ezeket követi, nem a revízió előtti szöveget.**
+
+### R1 — a generált `public.dart` az engedélyezett listára KERÜL (lista-bővítés)
+
+**Mérés:** a `public/{data,application,presentation}.dart` fájlok **fragmensek**;
+a `lib/features/practice_generator/public.dart` belőlük **generált**
+(`tool/gen_public_barrel.dart`, fájlnév-sorrendű összefűzés). A
+`tool/check_architecture.dart:760` `_checkGeneratedBarrels` **code_failure**-t ad
+elavult barrelre („run: `dart run tool/gen_public_barrel.dart --write`"), és a
+`tools/round-gate.sh` `architecture` lépése pontosan ezt futtatja.
+
+**Következmény:** a §4 engedélyezett fragmens-szerkesztés MECHANIKUS
+következménye a barrel újragenerálása. Enélkül a kör kötelező kapuja
+**bizonyíthatóan** piros (H7), a barrellel viszont scope-sértés lenne (H3) — a
+két hibaosztály közti kiút a lista-bővítés, egyetlen, származtatott fájlra.
+Precedens ugyanerre a mintára: `docs/rounds/e12-r15-*` (`lib/core/resources/public.dart`),
+`docs/rounds/e09-r05-*` (`lib/features/community/public.dart`).
+
+**Az implementer teendője:** a barrelt **NEM kézzel** írja — a fragmens
+szerkesztése után `dart run tool/gen_public_barrel.dart --write`, és a
+generátor kimenetét commitolja (ADR 0482 / D6).
+
+### R2 — az adat-leltár KIKERÜL a scope-ból, az A8 átfogalmazva (lista-szűkítés)
+
+**Mérés:** a `docs/privacy/data-inventory.yaml` a saját fejléce szerint
+**EGRESS**-leltár („this document inventories EGRESS routes — data that LEAVES
+the device… `lib/core/storage/storage_keys.dart` declares 56 persisted keys;
+NONE of them are inventoried here, on purpose"), a checker
+(`tool/check_data_inventory.dart:431`) kizárólag `Dio`/`ApiClient`/`SharePlus`/
+direkt-HTTP osztályokat talál a fában, és `wired: true` sorra, amit a fa nem
+termel, **violationt** ad (`:825`).
+
+**Következmény:** az ÚJ, eszközön belüli bizonyíték-tár nem egy kibocsátási út.
+Felvétele vagy gate-sértés (`wired: true`), vagy szemantikailag hamis bejegyzés
+(`wired: false`) egy dokumentumban, amelynek fejléce ezt kimondottan tiltja („Do
+not add a route here that the tree does not also produce"). A `docs/privacy/data-inventory.yaml`
+ezért **kikerül az engedélyezett fájllistából**; a
+`test/tooling/data_inventory_test.dart` a §7 gate-ben MARAD, immár **nem-regressziós**
+cellaként. A határt az ADR 0482 / D5 mondja ki (az on-device tár-leltár a
+`docs/privacy/consent-enforcement.md` „What this document does not cover"
+szakaszában már deklarált, önálló feladat).
+
+**Az A8 új alakja a §6-ban.** Az adat-leltár szerkesztése ebben a körben
+**tilos zóna**.
+
+### R3 — két mért szűkösség, amit az implementernek a repository-fájlon BELÜL kell megoldania
+
+1. **A `SkillEvidence`-nek nincs szerializációja** (`grep -n "toJson\|fromJson"
+   .../domain/model/skill_evidence.dart` → üres; a `data/` fában sincs
+   evidence-serializer). A JSON-kép a `local_practice_evidence_repository.dart`
+   fájlba kerül — **külön serializer-fájl létrehozása H3** (nincs a listán).
+2. **A `KeyValueStore`-nak nincs kulcs-felsorolása**
+   (`lib/core/storage/key_value_store.dart:22`). A planner mért megoldása a
+   perzisztens **manifest** (`local_practice_plan_repository.dart:168`,
+   `manifestKey`, „hydration is the only way to make delete-all / export-all
+   restart-stable"). Az ÚJ tár ugyanezt a mintát követi, saját, elkülönített
+   kulcs-névtérben (`ss.practice_generator.evidence…`) — enélkül a `deleteForPlan`
+   egy FRISS példányon nem tudná, mit töröljön, és az A2 cella pirosra vált.
+
+`lib/core/**` szerkesztése változatlanul tilos: a `StorageKeys` a mérés szerint
+ma sem sorolja fel a planner kulcsait (`grep -n "practice_generator\|generation_draft"
+lib/core/storage/storage_keys.dart` → üres), tehát az új kulcs-konstans a
+repository fájljában él, pontosan úgy, mint a `GenerationDraftRepository.draftStorageKey`.
+
+### R4 — az A3 „minden kötelező konstruktor-függőség" MÉRT olvasata
+
+A 6 képernyő konstruktora MÉRVE (a `presentation/screens/` fából). Az A3 cella
+képernyőnként azt bizonyítja, hogy az alábbi jobb oldali oszlop MINDEN eleme
+előáll `container.read`-del egyetlen `ProviderScope`-ból — az adatot (`plan`,
+`proposal`, `today`) az azt ELŐÁLLÍTÓ provider/szolgáltatás formájában:
+
+| Képernyő | Kötelező konstruktor-paraméter (mérve) | Amit a kompozíciós gyökérből fel kell építeni |
+|---|---|---|
+| `PlanSetupScreen` | `controller: PlanSetupController` | `PlanSetupController` (`draftRepository`, `clock`, `generateId`, `locale`) |
+| `PlanPreviewScreen` | `controller: PlanPreviewController` | `PlanPreviewController` (köztük `activation` = a konkrét `LocalPracticePlanRepository`, ADR 0482 / D4) |
+| `PlanPrivacyScreen` | `deleteUseCase`, `exportUseCase` | `DeletePracticePlanningData` + `ExportPracticePlanningData` (mindkettő a PERZISZTENS evidence-repositoryval, ADR 0482 / D2) |
+| `PlanChangeReviewScreen` | `proposal`, `onAccepted`, `onRejected` | a `proposal`-t TERMELŐ `RevisePracticePlan` (`:54`); a két callback a hívó (`E15-R07 / F1`) dolga, nem provider |
+| `TodayPlanScreen` | `controller: TodayPlanController` | `TodayPlanController` (`clock`) |
+| `WeeklyPlanScreen` | `plan: AdaptivePracticePlan?`, `today: LocalDate` | az aktív tervet adó provider (a `LocalPracticePlanRepository`-ból) + a `today`-t adó provider |
+
+Ahol a konstruktor-paraméter **callback** (`onAccepted`, `onStart`, …), az a
+bekötő réteg (`E15-R07 / F1`) felelőssége; a kompozíciós gyökérnek nem kell
+navigációs closure-t gyártania — az route-tudást igényelne, ami ebben a körben
+tilos.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -164,9 +266,10 @@ rétegzett feature, mind ott tartja). Ez a kör EZT követi.
    draftjából `GenerationPlanInput`-ot állít elő és a MEGLÉVŐ
    `GenerationOrchestrator.generate`-et hívja; a visszaadott `AppResult<AdaptivePracticePlan>`
    az, amiből az `E15-R07 / F1` a `PlanPreviewScreen`-t felépíti.
-4. A `public/` barrelek kiegészítése az ÚJ típusokkal (a §0.0.A/5 MÉRT útján).
-5. `docs/privacy/data-inventory.yaml` — az ÚJ perzisztens tár felvétele (ADR 0479 D1).
-6. Az ÚJ ADR (§5).
+4. A `public/` barrel-FRAGMENSEK kiegészítése az ÚJ típusokkal, majd a generált
+   `public.dart` újragenerálása (`dart run tool/gen_public_barrel.dart --write`;
+   §0.0.B/R1, ADR 0482 / D6).
+5. Az ÚJ ADR (§5).
 
 **NINCS benne (tilos):**
 
@@ -186,15 +289,15 @@ rétegzett feature, mind ott tartja). Ez a kör EZT követi.
 | `lib/features/practice_generator/data/local/local_practice_evidence_repository.dart` | ÚJ — a `PracticeEvidenceRepository` perzisztens implementációja |
 | `lib/features/practice_generator/presentation/providers/practice_generator_providers.dart` | ÚJ — a kompozíciós gyökér (a mért `presentation/providers/` konvenció) |
 | `lib/features/practice_generator/application/usecase/start_plan_generation.dart` | ÚJ — a Setup-draft → `GenerationOrchestrator` use case |
-| `lib/features/practice_generator/public/{data,application,presentation}.dart` | az ÚJ típusok exportja (a §0.0.A/5 mért útján) |
+| `lib/features/practice_generator/public/{data,application,presentation}.dart` | az ÚJ típusok exportja — a barrel FRAGMENSEI (kézzel írt forrás) |
+| `lib/features/practice_generator/public.dart` | a fragmensekből GENERÁLT barrel; kézi szerkesztése tilos, a `dart run tool/gen_public_barrel.dart --write` kimenete (§0.0.B/R1) |
 | `test/features/practice_generator/data/local_practice_evidence_repository_test.dart` | ÚJ — perzisztencia + a törlés TÉNY cellái |
 | `test/features/practice_generator/presentation/practice_generator_providers_test.dart` | ÚJ — mind a 6 képernyő függőségének felépítése `ProviderScope`-ból |
 | `test/features/practice_generator/application/start_plan_generation_test.dart` | ÚJ — a Setup→generálás lánc cellái |
-| `docs/privacy/data-inventory.yaml` | ADR 0479 D1 — az ÚJ tár leltárba kerül |
-| `docs/adr/0482-practice-generator-composition-layer.md` | az ÚJ döntés |
-| `docs/rounds/e15-r14-practice-generator-composition-layer.md` | a §0.0.A és a §10 kitöltése |
+| `docs/adr/0482-practice-generator-composition-layer.md` | az ÚJ döntés (a pre-flightban MÁR MEGÍRVA) |
+| `docs/rounds/e15-r14-practice-generator-composition-layer.md` | a §10 kitöltése |
 
-**Tilos zóna:** `lib/features/practice_generator/presentation/screens/**` · `lib/features/practice_generator/domain/**` · `lib/app/**` · `lib/core/**` · minden más `lib/features/**` · `tools/**` · `.github/**` · `docs/execution/pipeline-*`
+**Tilos zóna:** `lib/features/practice_generator/presentation/screens/**` · `lib/features/practice_generator/domain/**` · `lib/app/**` · `lib/core/**` · minden más `lib/features/**` · `tools/**` · `tool/**` · `.github/**` · `docs/execution/pipeline-*` · **`docs/privacy/**`** (§0.0.B/R2: az adat-leltár EGRESS-hatókörű, az ÚJ tár nem tartozik bele)
 
 ## 5. Kötött architekturális döntések (ADR 0482)
 
@@ -254,7 +357,8 @@ Kézzel írt `Provider`/`Notifier`/`AsyncNotifier`, NINCS codegen (CLAUDE.md). A
 | A5 | A 6 terv-képernyő elérhetőségi verdiktje VÁLTOZATLANUL `unreachable` (a kör nem köt be route-ot) | `dart run tool/check_screen_reachability.dart` előtte/utána, a §10-ben |
 | A6 | A `ui_inventory_test.dart` egzakt `hasLength(96)` VÁLTOZATLAN | a §7 gate |
 | A7 | Nincs `InMemoryPracticeEvidenceRepository` a production-kompozícióban | `grep -rn "InMemoryPracticeEvidenceRepository" lib/features/practice_generator/presentation lib/features/practice_generator/data` → ÜRES, a kimenet a §10-ben |
-| A8 | Az ÚJ perzisztens tár szerepel a `docs/privacy/data-inventory.yaml`-ban, teljes mezőkészlettel | `test/tooling/data_inventory_test.dart` |
+| A8 | **(§0.0.B/R2 szerint átírva)** Az ÚJ, eszközön belüli tár NEM kerül az EGRESS adat-leltárba, és a leltár-kapu VÁLTOZATLANUL zöld: a `docs/privacy/data-inventory.yaml` diffje ÜRES | `git diff --stat -- docs/privacy/` → üres (a §10-ben), és `test/tooling/data_inventory_test.dart` zöld a §7 gate-ben |
+| A9 | A generált barrel FRISS: a `public.dart` a fragmensekből generált állapotban van | a §7 gate `architecture` lépése (`tool/check_architecture.dart` `_checkGeneratedBarrels`) zöld; a §10 rögzíti a futtatott `dart run tool/gen_public_barrel.dart --write` parancsot |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -265,7 +369,9 @@ Kézzel írt `Provider`/`Notifier`/`AsyncNotifier`, NINCS codegen (CLAUDE.md). A
 | Csak 5 képernyő függősége áll elő, a `PlanPrivacyScreen`-é nem | A3 (a hatodik cella piros) |
 | A `StartPlanGeneration` saját, új generálási logikát ír a `GenerationOrchestrator` helyett | A4 (a hiba-cella nem `AppResult`-ot ad) + STOP-sértés |
 | A kör „mindjárt kell úgyis" alapon felvesz egy route-ot | A5 (az elérhetőség-mérés megváltozik) |
-| Az ÚJ tár kimarad az adat-leltárból | A8 |
+| A kör mégis beír egy sort az EGRESS adat-leltárba | A8 (a `docs/privacy/` diff nem üres) + `wired: true` esetén a `data_inventory_test` is piros |
+| A fragmens bővül, de a generált `public.dart` elavult marad | A9 (a gate `architecture` lépése code_failure-t ad) |
+| A `deleteForPlan` manifest nélkül, csak a memóriában nyilvántartott kulcsokra fut | A2 (friss példány visszaolvassa) |
 
 **Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** cseréld a provider
 mögötti repository-t vissza `InMemoryPracticeEvidenceRepository`-ra, futtasd a §7
@@ -289,12 +395,19 @@ dart run tool/check_screen_reachability.dart
 
 ## 8. Implementációs sorrend
 
-1. **Pre-flight** (§0.0.A): ADR-szám, a három hiány újramérése, a `GenerationDraftRepository` kulcs-tár mintája, az adat-leltár és a barrel-generálás mért útja.
-2. `LocalPracticeEvidenceRepository` + a perzisztencia/törlés cellái (A1, A2) — **először a teszt, RED → GREEN**.
+1. **Pre-flight — KÉSZ** (§0.0.B): az ADR 0482 megírva, a három hiány újramérve, a
+   `GenerationDraftRepository` kulcs-tár mintája, a manifest-kényszer, az
+   adat-leltár hatóköre és a barrel-generálás mért útja rögzítve. Az implementer
+   a §0.0.B revízióit követi.
+2. `LocalPracticeEvidenceRepository` (saját kulcs-névtér + manifest + a
+   fájlon belüli `SkillEvidence` JSON-kép, §0.0.B/R3) + a perzisztencia/törlés
+   cellái (A1, A2) — **először a teszt, RED → GREEN**.
 3. `StartPlanGeneration` a meglévő orchestratorra + siker/hiba cellapár (A4).
-4. `practice_generator_providers.dart` — képernyőnként haladva, míg mind a 6 függőség-halmaz felépül (A3).
-5. Barrel-export (§0.0.A/5) + `data-inventory.yaml` (A8).
-6. ADR 0482 megírása, elérhetőség-mérés ÚJRA (A5), valódi-sértés próba (§6.1).
+4. `practice_generator_providers.dart` — a §0.0.B/R4 táblája szerint
+   képernyőnként haladva, míg mind a 6 függőség-halmaz felépül (A3).
+5. Barrel-fragmensek bővítése, majd `dart run tool/gen_public_barrel.dart --write` (A9).
+6. Elérhetőség-mérés ÚJRA (A5), valódi-sértés próba (§6.1), a §10 kitöltése
+   (a mért kimenetekkel, `docs/privacy/` üres diffjével együtt — A8).
 
 ## 9. Kockázatok
 
