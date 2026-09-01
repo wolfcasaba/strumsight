@@ -356,4 +356,113 @@ háttér-feladat eredménye nélkül).
   szerződést (a `--consent-raw-audio` nélküli alapértelmezés) sérti meg, és
   semmilyen más viselkedést nem érint.
 
+### 10.6 Javító kör #1 — B1 + M1–M3 + N1–N2 (`docs/reviews/e12-r22-review.md`,
+`docs/reviews/e12-r22-review-security.md`)
+
+**Induló HEAD:** `43d9e713` (a review-commit). **Motor:** `sonnet-impl` (Claude
+Sonnet 5), folytató javító kör. A szerződést (ADR 0486 D1–D7 + a D2.1/D3.1
+kiegészítés) NEM lazítottam; a küszöb/consent-mátrix változatlan.
+
+**B1 (BLOCKER) + NT1 — hibaüzenet redakció előtti tartalommal.**
+`_raw_audio_byte_count` helyett `_validate_audio_clips_shape` (index-szintű:
+`malformed audio clip at audioClips[N]: missing "wavBase64"`) + `_decode_raw_
+audio_field` (path-szintű: `malformed audio payload base64 at session.…`) —
+egyik hibaág sem `repr()`-eli a klip-dictet. `main()` egy `except Exception`
+ággal minden nem-`BundleError` kivételt (pl. `RecursionError`) tartalom
+nélküli, generikus üzenetre burkol. **Cella:** új `B1` csoport — hibás klip +
+mind a négy D2-osztály a klip többi mezőjében → a stderr egyikét sem
+tartalmazza, csak az `audioClips[0]` index-jelölést. A RÉGI kódon ez a cella
+pirosra vált (a stderr szó szerint tartalmazta a token/e-mail/útvonal/
+device-id értékeket).
+
+**M1 (MAJOR) — a nyers hang csendben megsemmisült.** A `redact()` a
+`_RAW_AUDIO_KEYS = {"wavBase64"}` mezőket kizárja a sztring-redakcióból (D2.1);
+a csomagoló `--consent-raw-audio` mellett `_verify_raw_audio_integrity()`-vel
+ellenőrzi, hogy a kimeneti klip ugyanannyi bájtra dekódolható, mint a bemeneti
+— eltérés `BundleError`. A fixture (`beta_release_notes_test.dart`) `Uint8List(n)`
+helyett determinisztikus xorshift32 PRNG-t ad (`deterministicPcm`), aminek
+base64-je valódi `/`-t tartalmaz (mérve: 1 MB klipnél több ezer `/`). **Cella:**
+új `M1` csoport (byte-for-byte azonosság) + a küszöb-hármas immár erre a
+fixture-re fut. A RÉGI kódon a küszöb-hármas és az új M1-cella egyaránt
+pirosra vált volna (a kimeneti `wavBase64` nem dekódolható).
+
+**M2 (MAJOR) — a hang-réteg/korlát csak a legfelső `audioClips` kulcsnéven
+állt.** `_iter_raw_audio_fields()` rekurzívan bejárja a teljes session-fát
+bármely mélységben lévő `wavBase64` mezőért; `--consent-raw-audio` nélkül
+`_strip_raw_audio_fields()` MINDET eltávolítja (a top-level `audioClips` pop
+is megmaradt, a meglévő A1/A4 cellák változatlanul zöldek); a korlát
+(`_total_raw_audio_bytes`) az ÖSSZES megtalált klip összegére fut. **Cella:**
+új `M2` csoport — `events[0].wavBase64` (nem `audioClips` alatt) csak
+diagnostics-consenttel → a kimenetben sehol nincs `wavBase64` kulcs; ugyanaz
++ raw-audio-consent és 5 242 881 bájtos beágyazott klip → a korlát elutasítja.
+A RÉGI kódon mindkettő pirosra váltott volna (a beágyazott klip bekerült,
+korlát nélkül).
+
+**M3 (MAJOR) — korlátlan gzip-kicsomagolás.** `_decompress_bounded()`
+64 KiB-os darabokban olvas, és az összeg `MAX_SESSION_INPUT_BYTES` (8 MiB)
+fölött azonnal `BundleError`-ral leáll — sosem allokál a korlátnál nagyobb
+puffert. A korlát levezetése kommentben: az 5 242 880 bájtos raw-audio korlát
+base64-kódolva 6 990 508 karakter, + JSON-boríték, kerekítve 8 MiB-re. A
+bemeneti FÁJL méretét is ugyanez a korlát védi (`_read_bounded_file`). **Cella:**
+új `M3` csoport — 20 MB, erősen tömöríthető payload gzip-elve → nem-nulla
+kilépés, kimeneti fájl nincs, a stderr nem tartalmaz "Traceback"-et. Kézi
+mérés (nem a Dart cellában, memória-védelem demonstrálására): 2 GB-ra bomló
+2 MB-os bombát `ulimit -v 500000` (≈500 MB) alatt futtatva is tisztán
+`exit 1`-gyel elutasította, `MemoryError` nélkül.
+
+**N1 (MINOR, kért) — a kulcsok maguk nem redaktálódtak.** A `redact()` a
+token/device-id KULCS-osztályozás UTÁN minden kulcsot átfuttat
+`_redact_string()`-en (email/útvonal osztály); két különböző kulcs azonos
+maszkra képződése `BundleError`. **Cella:** új `N1` csoport — e-mail- és
+útvonal-kulcsú map → maszkolt kulcs, `authToken` kulcs-osztályozás
+változatlan; két ütköző e-mail-kulcs → nem-nulla kilépés.
+
+**N2 (MINOR, kért) — világ-olvasható kimenet, szimlinket követett.**
+`_write_output_file()` (mindkét eszközben) `os.open(O_WRONLY|O_CREAT|O_TRUNC|
+O_NOFOLLOW, 0o600)` + `os.fchmod(fd, 0o600)`. **Cella:** új `N2` csoport — a
+kimeneti fájl módja `0600`; `--output` szimlinkre mutatva nem-nulla kilépés,
+a cél tartalma (`PRE-EXISTING`) érintetlen.
+
+**Záró gate (előtérben, csonkítás nélkül):**
+
+```
+tools/round-gate.sh test/tooling/beta_release_notes_test.dart test/tooling/diagnostics_storage_separation_test.dart
+```
+
+| Lépés | Eredmény |
+|---|---|
+| `[1] format` | zöld |
+| `[2] analyze` | zöld — „No issues found!" |
+| `[3] test beta_release_notes_test.dart` | zöld — **53/53** teszt (44 régi + 9 új: B1/M1/M2×2/M3/N1×2/N2×2), „All tests passed!" |
+| `[4] test diagnostics_storage_separation_test.dart` | zöld — 3/3 |
+| `[5] architecture` | zöld — 12 allowlistelt eltérés (változatlan) |
+| `[6] secrets` | **PIROS** — `docs/reviews/e12-r22-review-security.md:348` („provider token literal", az N4 lelet szemléltető `sk-live-…` mintája). Ez a fájl NEM az engedélyezett fájllistámon van (a review-commit `43d9e713` hozta létre, `git diff --stat 43d9e713` szerint a fájl a saját munkámban bájtra érintetlen) — **nem nyúltam hozzá**, mert a brief kifejezetten tiltja a listán kívüli módosítást. Ez egy a review-kör saját hibája, a javító körömtől függetlenül piros marad. |
+| `[7]-[10]` (l10n, backend ruff/pytest) | a fenti PIROS lépés miatt a script itt megállt; a backend sávot külön, a §2.2 parancsával futtattam (lásd lent) |
+
+Backend sáv, külön processzként (a munkapéldányban nincs `backend/.venv`,
+rendszer-`python3`-mal, mint a 10.2 pontban):
+
+```
+cd backend && python3 -m pytest tests/test_diagnostics_redaction.py tests/test_diagnostics.py -q
+```
+
+Eredmény: **16 teszt, mind zöld** (`................  [100%]`), figyelmeztetés
+nélkül — a backend-oldali redakciós tesztek a bundle-eszköz API-jában nem
+változtak, továbbra is a `bundle_tool.main([...])` közvetlen hívásra épülnek.
+`ruff format app tests` / `ruff check app tests`: mindkettő zöld (a backend
+fájlokhoz ebben a körben nem nyúltam, `134 files left unchanged`).
+
+**Scope-audit:** `python3 tools/scope-audit.py --repo . --brief docs/rounds/
+e12-r22-beta-distribution-and-feedback.md --base 43d9e713` →
+„Legacy scope audit OK (43d9e713..43d9e713, 3 changed path(s), 0
+generated/ignored)" — a 3 módosított fájl pontosan a brief listáján van:
+`tool/release/build_diagnostics_bundle.py`, `tool/release/generate_beta_notes.py`,
+`test/tooling/beta_release_notes_test.dart`.
+
+**Amit szándékosan NEM érintettem:** `docs/beta/tester-consent.md` és
+`docs/beta/feedback-triage.md` állításai (rekurzív redakció, inkluzív korlát,
+elutasítás-nem-csonkítás) a javítások UTÁN is igazak maradtak — nem volt
+bennük olyan mondat, amit a fixek hamissá tettek volna, ezért nem módosítottam
+őket.
+
 ## 11. Review — a Claude tölti ki

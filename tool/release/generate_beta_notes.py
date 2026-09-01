@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -165,6 +166,22 @@ def render(notes: BetaNotes) -> str:
     return "\n".join(lines)
 
 
+def _write_output_file(path: Path, text: str) -> None:
+    """Writes [text] to [path] mode 0600, refusing to follow a symlink
+    (N2, the same fix as `build_diagnostics_bundle.py` — round E12-R22)."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags, 0o600)
+    except OSError as error:
+        raise BetaNotesError(f"cannot write output file: {error}") from error
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+    except OSError as error:
+        raise BetaNotesError(f"cannot write output file: {error}") from error
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True)
@@ -189,13 +206,13 @@ def main(argv: list[str]) -> int:
 
         notes = parse_release_manifest(manifest)
         text = render(notes)
+        if args.output is not None:
+            _write_output_file(Path(args.output), text)
     except BetaNotesError as error:
         print(f"generate_beta_notes: {error}", file=sys.stderr)
         return 1
 
-    if args.output is not None:
-        Path(args.output).write_text(text, encoding="utf-8")
-    else:
+    if args.output is None:
         sys.stdout.write(text)
     return 0
 

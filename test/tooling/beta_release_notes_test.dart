@@ -51,9 +51,27 @@ void main() {
   // build_diagnostics_bundle.py fixtures
   // ---------------------------------------------------------------------
 
+  // Deterministic xorshift32 PRNG, NOT `Uint8List(n)` (all-zero bytes) —
+  // a zero-filled clip base64-encodes to a run of "A"/"=" containing no "/"
+  // at all, which is exactly the one input the M1 regression (the absolute
+  // -path pattern mistaking base64 "/" for a path separator and silently
+  // mangling a consented audio clip, ADR 0486 D2.1) cannot reproduce on.
+  // Fixed seed, no external RNG dependency ⇒ byte-for-byte reproducible.
+  Uint8List deterministicPcm(int byteCount, {int seed = 0xc0ffee}) {
+    final bytes = Uint8List(byteCount);
+    var state = seed;
+    for (var i = 0; i < byteCount; i++) {
+      state ^= (state << 13) & 0xffffffff;
+      state ^= state >> 17;
+      state ^= (state << 5) & 0xffffffff;
+      bytes[i] = state & 0xff;
+    }
+    return bytes;
+  }
+
   Map<String, Object?> audioClip(int rawByteCount, {double tSec = 0}) => {
     'tSec': tSec,
-    'wavBase64': base64Encode(Uint8List(rawByteCount)),
+    'wavBase64': base64Encode(deterministicPcm(rawByteCount)),
   };
 
   String sessionJson({
@@ -441,6 +459,261 @@ void main() {
 
       expect(result.exitCode, isNot(0));
       expect(File(output).existsSync(), isFalse);
+    });
+  });
+
+  group('M1 — a realistic (slash-bearing) audio clip survives redaction '
+      'byte-for-byte: base64 "/" characters must not be mistaken for an '
+      'absolute-path separator (ADR 0486 D2.1)', () {
+    test('a clip whose base64 contains many "/" characters comes out of '
+        'the bundle bit-for-bit identical to the input', () {
+      final rawClip = deterministicPcm(1024 * 1024);
+      final inputB64 = base64Encode(rawClip);
+      expect(
+        inputB64.contains('/'),
+        isTrue,
+        reason:
+            'the fixture must be non-degenerate for this cell to mean '
+            'anything',
+      );
+      final sessionFile = writeSessionFile(
+        'session.json',
+        sessionJson(
+          audioClips: [
+            {'tSec': 0.0, 'wavBase64': inputB64},
+          ],
+        ),
+      );
+      final output = fixturePath('bundle.json');
+
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: output,
+        consentDiagnostics: true,
+        consentRawAudio: true,
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      final session = decodeBundle(output)['session']! as Map<String, Object?>;
+      final clips = session['audioClips']! as List;
+      final outputB64 = (clips.single as Map)['wavBase64'] as String;
+      expect(outputB64, inputB64);
+      expect(base64Decode(outputB64), rawClip);
+    });
+  });
+
+  group('M2 — the raw-audio gate and size cap are CONTENT-based, not tied '
+      'to the top-level "audioClips" key name (ADR 0486 D3.1)', () {
+    test('a wavBase64 field nested inside "events" (not audioClips) is '
+        'stripped entirely when only --consent-diagnostics is given', () {
+      final clip = base64Encode(deterministicPcm(1024));
+      final sessionFile = writeSessionFile(
+        'session.json',
+        jsonEncode({
+          'sessionId': 'fixture-session',
+          'events': [
+            {'tSec': 0.0, 'wavBase64': clip},
+          ],
+          'audioClips': [],
+        }),
+      );
+      final output = fixturePath('bundle.json');
+
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: output,
+        consentDiagnostics: true,
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      expect(File(output).readAsStringSync(), isNot(contains('wavBase64')));
+    });
+
+    test('a wavBase64 field nested outside "audioClips" still counts '
+        'toward the size cap when --consent-raw-audio is given', () {
+      final oversizedClip = base64Encode(deterministicPcm(5242880 + 1));
+      final sessionFile = writeSessionFile(
+        'session.json',
+        jsonEncode({
+          'sessionId': 'fixture-session',
+          'events': [
+            {'tSec': 0.0, 'wavBase64': oversizedClip},
+          ],
+          'audioClips': [],
+        }),
+      );
+      final output = fixturePath('bundle.json');
+
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: output,
+        consentDiagnostics: true,
+        consentRawAudio: true,
+      );
+
+      expect(result.exitCode, isNot(0));
+      expect(File(output).existsSync(), isFalse);
+    });
+  });
+
+  group('B1 — a malformed audio clip error never puts the surrounding '
+      'session content on stderr', () {
+    test('a clip missing "wavBase64", alongside all four D2 secret '
+        'classes elsewhere in that same clip, fails with an index-only '
+        'message — none of the secrets leak onto stderr', () {
+      final sessionFile = writeSessionFile(
+        'session.json',
+        jsonEncode({
+          'sessionId': 'fixture-session',
+          'events': [],
+          'audioClips': [
+            {
+              'tSec': 0.0,
+              'diagToken': 'tok-fixture-should-not-leak',
+              'contact': 'fixture-leak-probe@example.test',
+              'file': '/home/fixture/Music/should-not-leak.wav',
+              'deviceId': 'fixture-device-should-not-leak',
+            },
+          ],
+        }),
+      );
+      final output = fixturePath('bundle.json');
+
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: output,
+        consentDiagnostics: true,
+        consentRawAudio: true,
+      );
+
+      expect(result.exitCode, isNot(0));
+      expect(File(output).existsSync(), isFalse);
+      final stderr = result.stderr.toString();
+      expect(stderr, isNot(contains('tok-fixture-should-not-leak')));
+      expect(stderr, isNot(contains('fixture-leak-probe@example.test')));
+      expect(
+        stderr,
+        isNot(contains('/home/fixture/Music/should-not-leak.wav')),
+      );
+      expect(stderr, isNot(contains('fixture-device-should-not-leak')));
+      expect(stderr, contains('audioClips[0]'));
+    });
+  });
+
+  group('M3 — gzip decompression is bounded (ADR 0486 D3.1): a small, '
+      'highly-compressible upload that would decompress far past the '
+      'session budget is rejected outright, not decompressed in full', () {
+    test('a gzip payload that decompresses to well over the session cap '
+        'is a non-zero exit, no output file, and no raw traceback on '
+        'stderr', () {
+      final oversized = utf8.encode('{"pad":"${'A' * (20 * 1024 * 1024)}"}');
+      final sessionFile = writeBytes('bomb.json.gz', gzip.encode(oversized));
+      final output = fixturePath('bundle.json');
+
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: output,
+        consentDiagnostics: true,
+      );
+
+      expect(result.exitCode, isNot(0));
+      expect(File(output).existsSync(), isFalse);
+      expect(result.stderr.toString(), isNot(contains('Traceback')));
+    });
+  });
+
+  group('N1 — object KEYS go through the same email/path redaction as '
+      'values, after token/device-id key classification (ADR 0486 D2.1)', () {
+    test('an e-mail-shaped and a path-shaped map KEY are both masked, and '
+        'the token-key classification still applies unchanged', () {
+      final sessionFile = writeSessionFile(
+        'session.json',
+        jsonEncode({
+          'sessionId': 'fixture-session',
+          'events': [],
+          'audioClips': [],
+          'byKey': {
+            '/home/fixture/Music/secret.wav': 'value-under-path-key',
+            'fixture.tester@example.test': 'value-under-email-key',
+            'authToken': 'value-under-token-key',
+          },
+        }),
+      );
+      final output = fixturePath('bundle.json');
+
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: output,
+        consentDiagnostics: true,
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      final session = decodeBundle(output)['session']! as Map<String, Object?>;
+      final byKey = session['byKey']! as Map<String, Object?>;
+      expect(byKey.containsKey('[REDACTED:path]'), isTrue);
+      expect(byKey.containsKey('[REDACTED:email]'), isTrue);
+      expect(byKey['authToken'], '[REDACTED:token]');
+      expect(byKey.keys, isNot(contains('/home/fixture/Music/secret.wav')));
+      expect(byKey.keys, isNot(contains('fixture.tester@example.test')));
+    });
+
+    test('two distinct e-mail-shaped keys colliding onto the same '
+        'redacted key is a non-zero exit, not a silently dropped entry', () {
+      final sessionFile = writeSessionFile(
+        'session.json',
+        jsonEncode({
+          'sessionId': 'fixture-session',
+          'events': [],
+          'audioClips': [],
+          'byKey': {
+            'fixture-a@example.test': 'v1',
+            'fixture-b@example.test': 'v2',
+          },
+        }),
+      );
+      final output = fixturePath('bundle.json');
+
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: output,
+        consentDiagnostics: true,
+      );
+
+      expect(result.exitCode, isNot(0));
+      expect(File(output).existsSync(), isFalse);
+    });
+  });
+
+  group('N2 — the output file is written 0600 and refuses to follow a '
+      'symlink at --output', () {
+    test('the bundle file mode is 0600', () {
+      final sessionFile = writeSessionFile('session.json', sessionJson());
+      final output = fixturePath('bundle.json');
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: output,
+        consentDiagnostics: true,
+      );
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      final mode = File(output).statSync().mode & 0x1ff;
+      expect(mode, 0x180); // 0600 in octal.
+    });
+
+    test('a symlinked --output is refused — the link target is left '
+        'untouched, never overwritten', () {
+      final sessionFile = writeSessionFile('session.json', sessionJson());
+      final victim = File(fixturePath('victim.txt'))
+        ..writeAsStringSync('PRE-EXISTING');
+      final link = Link(fixturePath('link.json'))..createSync(victim.path);
+
+      final result = runBundle(
+        sessionFile: sessionFile,
+        output: link.path,
+        consentDiagnostics: true,
+      );
+
+      expect(result.exitCode, isNot(0));
+      expect(victim.readAsStringSync(), 'PRE-EXISTING');
     });
   });
 
