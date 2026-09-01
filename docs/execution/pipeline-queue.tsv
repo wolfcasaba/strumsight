@@ -556,6 +556,25 @@ E15-R04	docs/rounds/e15-r04-practice-and-learn-migration.md	sonnet-impl	nincs	do
 E15-R05	docs/rounds/e15-r05-song-trainer-migration.md	sonnet-impl	nincs	done
 E15-R06	docs/rounds/e15-r06-legacy-song-library-progress-migration.md	sonnet-impl	nincs	done
 #
+# ============================================================================
+# A Ch15 (UI) SÁV LEÁLLÍTVA — user-döntés, 2026-09-01: "az E15-öt várjuk meg,
+# amíg befejezi ezt a kört, de utána állítsd le; fusson csak egy slot a 12-es
+# epiccel."
+#
+# A döntés pillanatában MÉRT állapot: az E15-R07 `stopped` jelzéssel MÁR
+# megállt (H3, jogos STOP — hiányzó kompozíciós réteg), az önjavító kör
+# beszúrta elé az E15-R14-et, és az E15-R14 MÉG NEM INDULT EL (nincs ága az
+# originon). Vagyis nem vágtunk félbe futó kört: a sávon nem volt munka.
+#
+# A `hold` az ALÁBBI HAT SORON szándékos, és a `docs/execution/pipeline-slots`
+# 2 -> 1 váltásával együtt utazik. Amíg így áll, a lánc EGY kört visz
+# egyszerre, a Ch12 sávból.
+#
+# VISSZAKAPCSOLÁS (user-go kell hozzá): a `hold` -> `pending` csere ezeken a
+# sorokon + `pipeline-slots` 1 -> 2. A sorrend KÖTÖTT: az E15-R14 az E15-R07
+# előfeltétele (ADR 0112 önjavító kör, a §0.0.B revízió), ezért az R14 megy
+# elsőként.
+# ============================================================================
 # BESZÚRT ELŐKÉSZÍTŐ KÖR (ADR 0112 önjavító kör, E15-R07 / H3, 2026-09-01):
 # az E15-R07 F1 fázisa (route + flag) MÉRTEN nem végezhető el, mert a
 # practice_generator alatt NULLA Riverpod-provider van és a
@@ -566,14 +585,14 @@ E15-R06	docs/rounds/e15-r06-legacy-song-library-progress-migration.md	sonnet-imp
 # SORRENDBEN blokkol (round-slots.py:137-141), tehát az E15-R07 addig nem
 # admittálható, amíg az E15-R14 nem `done`. Az E15-R07 briefjének §0.0.B
 # revíziója ugyanezt az előfeltételt szövegesen is kimondja.
-E15-R14	docs/rounds/e15-r14-practice-generator-composition-layer.md	sonnet-impl	0482	pending
-E15-R07	docs/rounds/e15-r07-practice-generator-migration.md	sonnet-impl	0480	pending
-E15-R08	docs/rounds/e15-r08-gamification-migration.md	sonnet-impl	nincs	pending
-E15-R09	docs/rounds/e15-r09-ai-tutor-migration.md	sonnet-impl	nincs	pending
-E15-R10	docs/rounds/e15-r10-analysis-migration.md	sonnet-impl	nincs	pending
-E15-R11	docs/rounds/e15-r11-vision-onboarding-community-migration.md	sonnet-impl	nincs	pending
-E15-R12	docs/rounds/e15-r12-backend-mounting-and-end-to-end.md	sonnet-impl	0469	pending
-E15-R13	docs/rounds/e15-r13-ui-closure-and-release-evidence.md	sonnet-impl	nincs	pending
+E15-R14	docs/rounds/e15-r14-practice-generator-composition-layer.md	sonnet-impl	0482	hold
+E15-R07	docs/rounds/e15-r07-practice-generator-migration.md	sonnet-impl	0480	hold
+E15-R08	docs/rounds/e15-r08-gamification-migration.md	sonnet-impl	nincs	hold
+E15-R09	docs/rounds/e15-r09-ai-tutor-migration.md	sonnet-impl	nincs	hold
+E15-R10	docs/rounds/e15-r10-analysis-migration.md	sonnet-impl	nincs	hold
+E15-R11	docs/rounds/e15-r11-vision-onboarding-community-migration.md	sonnet-impl	nincs	hold
+E15-R12	docs/rounds/e15-r12-backend-mounting-and-end-to-end.md	sonnet-impl	0469	hold
+E15-R13	docs/rounds/e15-r13-ui-closure-and-release-evidence.md	sonnet-impl	nincs	hold
 #
 # ===== EPIC 9 — Community Platform (Chapter 10, 32 kör) =====
 # Batch-előkészítve 2026-08-22 (user-döntés: a lánc E08 lezárása után
