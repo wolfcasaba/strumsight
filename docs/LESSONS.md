@@ -22387,3 +22387,55 @@ fixtúra-cellája (`difficulty`, `skill_tags`, `locales`,
 `version` hamis értékkel, plusz a `learn_lessons` sentinel `skill_tags: [x]`
 ága), mind nem-nulla kilépést és mező-nevesített `stale_inventory_entry`
 leletet követel.
+
+## L569 — A degenerált fixture szerkezetileg KIZÁRJA a hibaosztályt: a csupa-nulla PCM base64-jében egyetlen `/` sincs, ezért a küszöb-cella zöld maradt, miközben valós hangon a tiltott néma csonkítás történt (E12-R22, 2026-09-01)
+
+**Mérve.** Az `E12-R22` `tool/release/build_diagnostics_bundle.py`-ja az
+[ADR 0486](adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md)
+D3 szerint SOHA nem csonkíthat csendben: a méret-korlát fölötti hang-melléklet
+nem-nulla kilépés, kimeneti fájl nélkül. A küszöb-cellahármas (5 242 879 /
+5 242 880 / 5 242 881 bájt) zölden futott, a teljes gate 10/10 zöld volt — a
+review viszont valósághű klippel mért:
+
+```
+1 s / 44,1 kHz szinusz WAV, 88 244 bájt
+  → a kimeneti wavBase64: 117 660 → 189 karakter, exit 0
+  → base64Decode(kimenet) DOB: binascii.Error
+```
+
+**A gyökérok.** A redakció abszolút-útvonal mintája (`(?:/[^\s"'/]{1,255}){2,}`)
+a `wavBase64` ÉRTÉKÉRE is lefutott, és a base64 ábécé `/` karakterei miatt
+belemart a hangadatba. A cella azért nem fogta meg, mert a fixture
+`Uint8List(rawByteCount)` volt: **csupa nulla bájt → csupa `A` base64 → egyetlen
+`/` sem**. A fixture nem „egyszerűsítés" volt, hanem pontosan az az EGYETLEN
+bemenet, amelyen a hibaosztály szerkezetileg nem tud előfordulni. Valódi
+mikrofon-felvétel soha nem csupa nulla.
+
+**Az általánosítható szabály.** Ha egy cella egy TARTALOM-függő
+transzformációt (regex, parszer, tömörítés, kódolás) mér, a fixture nem lehet
+degenerált a transzformáció ábécéjére nézve. Tedd fel a kérdést: *„milyen
+karakter/érték kellene a bemenetbe ahhoz, hogy a hiba előálljon — benne van a
+fixture-ben?"* A csupa-nulla, csupa-`a`, üres és „szép kerek" fixture-ök
+rendszeresen kiejtik éppen azt a karakterosztályt, amit a mérce keresne.
+
+**A javítás.** (1) az opaque bináris payload nem esik sztring-redakció alá
+(ADR 0486 D2.1), és a csomagoló ellenőrzi, hogy a kimeneti klip dekódolható és
+bájthossza változatlan — eltérés = HIBA; (2) a fixture determinisztikus, de
+nem-degenerált PCM lett, tehát a cella pirosra tud váltani.
+
+**Két kísérő lelet ugyanebből a körből:** a hang-réteg és a méret-korlát
+egyetlen legfelső szintű kulcsnéven (`audioClips`) állt — egy `events[0]`-ba
+tett klip CSAK diagnosztikai consenttel, korlát nélkül átment (a javítás
+rekurzív, tartalom-alapú gate, ADR 0486 D3.1) —, és a csomagoló hibaüzenete a
+redakció ELŐTT írta ki a teljes klip-dictet (token, e-mail, útvonal, device-id
+egy sorban) a stderr-re. Mindkettő ZÖLD gate mellett élt.
+
+**Harmadik, a review SAJÁT oldaláról:** a review-jelentés maga is a secret-scan
+hatálya alatt áll — a biztonsági jelentésbe másolt, provider-kulcs ALAKÚ mért
+kimenet pirosra váltotta a `[6] secrets` gate-et, és az implementer helyesen NEM
+javíthatta (a fájl nincs a brief engedélyezett listáján). A mért kimenetekben a
+titok-alakú értékeket a reviewernek kell semlegesítenie.
+
+**Őrteszt:** `test/tooling/beta_release_notes_test.dart` — a nem-degenerált PCM
+fixture-re épülő klip-integritás cella (a kimeneti `wavBase64` dekódolható és
+bájtazonos), a beágyazott-klip consent-cella és a stderr-tartalom cella.

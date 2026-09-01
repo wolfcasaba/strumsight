@@ -1,5 +1,55 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R22 KÉSZ — Béta-terjesztés, tesztelői consent és redaktált diagnosztikai csomag — PR [#518](https://github.com/wolfcasaba/strumsight/pull/518), squash `3b1855ff` (2026-09-01)
+
+A Ch12 **Kör 22** a béta-visszajelzés **csatornáját és csomagját** szállítja —
+felület nélkül (`lib/**`, `.github/**`, `lab_build.json` a kör tilos zónája volt).
+ADR: [0486](docs/adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md)
+(D1–D7 + a review után D2.1/D3.1). Szállítva:
+`tool/release/build_diagnostics_bundle.py` (rétegzett consent, rekurzív redakció,
+tartalom-alapú hang-gate, inkluzív 5 242 880 bájtos korlát HIBÁVAL, korlátos
+gzip-kicsomagolás, `0600`-as kanonikus kimenet), `tool/release/generate_beta_notes.py`
+(fail-closed, bájtazonos béta-jegyzet a release-manifestből),
+`test/tooling/beta_release_notes_test.dart` (53 cella),
+`backend/tests/test_diagnostics_redaction.py`, valamint
+[`docs/beta/enrollment.md`](docs/beta/enrollment.md),
+[`docs/beta/tester-consent.md`](docs/beta/tester-consent.md) (a data-inventory
+GÉPI, kétirányú tükre — 12 mező, 3 útvonal) és
+[`docs/beta/feedback-triage.md`](docs/beta/feedback-triage.md).
+
+**A kör érdemi hozadéka mérési** ([L569](docs/LESSONS.md#l569)): a teljes gate
+10/10 zöld volt, a review mégis **1 BLOCKER + 3 MAJOR + 2 MINOR**-t talált. A
+legsúlyosabb (M1): a redakció útvonal-mintája a `wavBase64` ÉRTÉKÉRE is lefutott,
+és a base64 ábécé `/` karakterei miatt **csendben megsemmisítette a consentelt
+klipet** (117 660 → 189 karakter, `exit 0`, a kimenet nem dekódolható) — pontosan
+az a néma csonkítás, amit a D3 nevesítve tilt. A cella azért volt zöld, mert a
+fixture `Uint8List(n)` volt: csupa nulla bájt → csupa `A` base64 → **egyetlen `/`
+sem**, tehát a hibaosztály szerkezetileg nem tudott előfordulni. Egy javító kör
+után APPROVED, 0 nyitott lelet; a zárást a reviewer SAJÁT, a javító kód ellen
+futtatott próbái igazolják
+([`docs/reviews/e12-r22-review.md`](docs/reviews/e12-r22-review.md) §6).
+
+`risk = "high"` → a kötelező `security-reviewer` futott
+([`docs/reviews/e12-r22-review-security.md`](docs/reviews/e12-r22-review-security.md)).
+Exact-SHA evidencia a merge SHA-n (`0192cb6b`): Full Gate
+[33566453442](https://github.com/wolfcasaba/strumsight/actions/runs/33566453442),
+Router CI [33566455858](https://github.com/wolfcasaba/strumsight/actions/runs/33566455858),
+Backend CI [33566457950](https://github.com/wolfcasaba/strumsight/actions/runs/33566457950)
+— mind `success`.
+
+> ⚠ **NEVESÍTETT HIÁNY:** a `lib/features/feedback/` visszajelzés-KÉPERNYŐ nem
+> készült el (ADR 0486 D7) — a `test/ui/ui_inventory_test.dart` egzakt
+> képernyőszámot pinnel, és a felületek a Chapter 13/15 sáv kompetenciája. **Ma
+> egyetlen nyitott brief sem nevezi meg**, tehát gazdátlan tétel.
+>
+> ⚠ **Két follow-up NOTE a security review-ból** (nem blokkoló, az ADR 0486 D2
+> betűje szerint helyes viselkedés): az e-mail-osztály ASCII-only, tehát egy IDN
+> cím (`tesztelő@példa.hu`) redaktálatlan marad; és a titok-osztályt egyedül a
+> `token` kulcs-részsztring definiálja, tehát `apiKey`, `password`,
+> `authorization` értéke átmegy. A `docs/beta/tester-consent.md` szövege
+> erősebbnek hangzik ennél — egy későbbi kör vagy a D2-t bővíti, vagy a
+> dokumentumot pontosítja.
+
 ## ✅ E12-R21 KÉSZ — Content catalog leltár + pedagógiai readiness validátor — PR [#517](https://github.com/wolfcasaba/strumsight/pull/517), squash `12813a2c` (2026-09-01)
 
 A Ch12 **Kör 21** gépi bizonyítékot ad arra, hogy a szállított tartalom
@@ -9881,7 +9931,29 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-29):** `main` @ `1c8e214a` — E15-R06 Setlist +
+**Aktuális állapot (2026-09-01):** `main` @ `3b1855ff` — E12-R22 béta-terjesztés,
+tesztelői consent és redaktált diagnosztikai csomag, PR
+[#518](https://github.com/wolfcasaba/strumsight/pull/518), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — a review **1 BLOCKER +
+3 MAJOR + 2 kért MINOR**-t talált TELJESEN ZÖLD gate (10/10, 44 cella) mellett,
+mert az A3 küszöb-cella csupa-nulla PCM fixture-rel mért, ahol a hibaosztály
+szerkezetileg nem tud előfordulni ([L569](docs/LESSONS.md#l569)). A javító kör
+után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r22-review.md`](docs/reviews/e12-r22-review.md)), két
+follow-up NOTE nyitva (IDN e-mail, a titok-osztály szűk kulcslistája). ÚJ ADR:
+[0486](docs/adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md).
+`risk = "high"` → a kötelező `security-reviewer` futott. Exact-SHA evidencia a
+merge SHA-n (`0192cb6b`): Full Gate
+[33566453442](https://github.com/wolfcasaba/strumsight/actions/runs/33566453442),
+Router CI
+[33566455858](https://github.com/wolfcasaba/strumsight/actions/runs/33566455858),
+Backend CI
+[33566457950](https://github.com/wolfcasaba/strumsight/actions/runs/33566457950)
+— mind `success`. A CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml`,
+`native_gate = false`).
+
+**Előző állapot:** `main` @ `1c8e214a` — E15-R06 Setlist +
 Progress képernyők design-rendszer migrációja, PR
 [#510](https://github.com/wolfcasaba/strumsight/pull/510), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -9924,7 +9996,23 @@ maradt.
 
 ## 5. Last completed round
 
-**E12-R18 — Program threat model + fail-closed release security scan** (PR
+**E12-R22 — Béta-terjesztés, tesztelői consent és redaktált diagnosztikai csomag**
+(PR [#518](https://github.com/wolfcasaba/strumsight/pull/518), squash `3b1855ff`).
+A kör a béta-visszajelzés csatornáját és csomagját szállította, felület nélkül: két
+független consent-kapcsoló (a nyers hang SOHA nem jár a diagnosztikai
+hozzájárulással), assembly-idejű rekurzív redakció négy osztályra, inkluzív
+5 242 880 bájtos méret-korlát HIBÁVAL, és determinisztikus, manifesthez kötött
+béta-jegyzet. **A review a zöld gate mögött találta a lényeget:** a redakció
+útvonal-mintája belemart a base64 hangba és csendben megsemmisítette a klipet
+(`exit 0`), a hang-réteg és a méret-korlát egyetlen legfelső szintű kulcsnéven
+állt (beágyazott klip consent és korlát nélkül átment), a hibaüzenet pedig a
+redakció ELŐTT írta ki a token/e-mail/útvonal/device-id négyest a stderr-re. Egy
+javító kör mindet lezárta, a reviewer saját, a javító kód ellen futtatott
+próbáival igazolva ([L569](docs/LESSONS.md#l569)). **Nyitva marad** a
+`lib/features/feedback/` képernyő mint nevesített, ma gazdátlan hiány, és két
+nem-blokkoló NOTE (IDN e-mail, szűk titok-kulcslista).
+
+**Előző kör: E12-R18 — Program threat model + fail-closed release security scan** (PR
 [#514](https://github.com/wolfcasaba/strumsight/pull/514), squash `3b49c501`).
 A kör nem új védelmeket írt, hanem **bizonyíték-kötést**: a threat model minden
 ellenintézkedése géppel olvasható `guard`-ot nevez meg, és a
@@ -9990,8 +10078,8 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-01, az E12-R21
-> zárása után): **284 `done`, 48 `hold`, 18 `prepared`, 15 `pending`**.
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-01, az E12-R22
+> zárása után): **285 `done`, 48 `hold`, 18 `prepared`, 14 `pending`**.
 >
 > ⚠ **Az E12-R21 KÉT MÉRT GA-blokkolót hagyott nyitva** — mindkettő
 > nyilvántartva a leltár `known_exceptions:` blokkjában
