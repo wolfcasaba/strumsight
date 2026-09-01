@@ -1,0 +1,299 @@
+# Content-catalog inventory (E12-R21, ADR 0485).
+#
+# A MIRROR of the three places learner content actually lives on this tree —
+# never a canonical source itself (ADR 0485 D1). `tool/validate_content_
+# catalog.py` reads this file with its own strict, fail-closed line parser
+# (no `package:yaml` dependency is guaranteed on the runner, R7) and measures
+# it BOTH ways against the real Dart/JSON sources: every measured element
+# needs an inventory line (`missing_inventory_entry`), and every inventory
+# line needs a measured element (`stale_inventory_entry`). Edit the SOURCE
+# first, then this file — never the reverse.
+#
+# Run: python3 tool/validate_content_catalog.py --inventory
+# docs/content/catalog-inventory.yaml --today YYYY-MM-DD
+schema_version: 1
+content_package_version: "2026.09.01"
+
+sources:
+  practice_engine: lib/features/practice/data/builtin_practice_catalog.dart
+  tutor_knowledge: assets/tutor_knowledge/manifest.json
+  learn_lessons: lib/features/learn/model/lesson.dart
+
+items:
+  - id: builtin.quarterDownstrokes.v1
+    source: practice_engine
+    difficulty: beginner
+    skill_tags: [downstrokes, quarterNotes]
+    locales: [en]
+    version: 1
+  - id: builtin.alternatingEighths.v1
+    source: practice_engine
+    difficulty: beginner
+    skill_tags: [eighthNotes, alternating, rhythm]
+    locales: [en]
+    version: 1
+  - id: builtin.folkPattern.v1
+    source: practice_engine
+    difficulty: beginner
+    skill_tags: [folk, syncopation, eighthNotes]
+    locales: [en]
+    version: 1
+  - id: builtin.gToDChanges.v1
+    source: practice_engine
+    difficulty: beginner
+    skill_tags: [chordChanges, openChords, gChord, dChord]
+    locales: [en]
+    version: 1
+  - id: builtin.emToCChanges.v1
+    source: practice_engine
+    difficulty: beginner
+    skill_tags: [chordChanges, minorChords, emChord, cChord]
+    locales: [en]
+    version: 1
+  - id: builtin.cGAmFProgression.v1
+    source: practice_engine
+    difficulty: intermediate
+    skill_tags: [chordProgression, pop, fourChords]
+    locales: [en]
+    version: 1
+  - id: builtin.firstWaltz.v1
+    source: practice_engine
+    difficulty: beginner
+    skill_tags: [waltz, threeFour, upstrokes]
+    locales: [en]
+    version: 1
+  - id: builtin.syncopatedUps.v1
+    source: practice_engine
+    difficulty: intermediate
+    skill_tags: [syncopation, offBeat, upstrokes]
+    locales: [en]
+    version: 1
+  - id: builtin.rhythmOnlyQuarters.v1
+    source: practice_engine
+    difficulty: beginner
+    skill_tags: [rhythmOnly, quarterNotes]
+    locales: [en]
+    version: 1
+  - id: builtin.freePracticeTemplate.v1
+    source: practice_engine
+    difficulty: beginner
+    skill_tags: [freePlay, open]
+    locales: [en]
+    version: 1
+  - id: chord-changes-en
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [chord]
+    locales: [en]
+    version: 1
+  - id: chord-changes-hu
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [chord]
+    locales: [hu]
+    version: 1
+  - id: practice-short-loop-en
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [practice]
+    locales: [en]
+    version: 1
+  - id: practice-short-loop-hu
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [practice]
+    locales: [hu]
+    version: 1
+  - id: rhythm-counting-en
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [rhythm]
+    locales: [en]
+    version: 1
+  - id: rhythm-counting-hu
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [rhythm]
+    locales: [hu]
+    version: 1
+  - id: safety-pain-en
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [safety]
+    locales: [en]
+    version: 1
+  - id: safety-pain-hu
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [safety]
+    locales: [hu]
+    version: 1
+  - id: technique-relaxed-hand-en
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [technique]
+    locales: [en]
+    version: 1
+  - id: technique-relaxed-hand-hu
+    source: tutor_knowledge
+    difficulty: beginner
+    skill_tags: [technique]
+    locales: [hu]
+    version: 1
+  - id: first-win
+    source: learn_lessons
+    difficulty: beginner
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: first-strums
+    source: learn_lessons
+    difficulty: beginner
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: two-chord-change
+    source: learn_lessons
+    difficulty: beginner
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: eighth-drive
+    source: learn_lessons
+    difficulty: beginner
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: fifties-doo-wop
+    source: learn_lessons
+    difficulty: beginner
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: two-finger-frame
+    source: learn_lessons
+    difficulty: beginner
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: first-waltz
+    source: learn_lessons
+    difficulty: beginner
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: down-up-groove
+    source: learn_lessons
+    difficulty: intermediate
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: folk-pattern
+    source: learn_lessons
+    difficulty: intermediate
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: barre-groove
+    source: learn_lessons
+    difficulty: intermediate
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: anthem-drive
+    source: learn_lessons
+    difficulty: intermediate
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: rising-minor
+    source: learn_lessons
+    difficulty: intermediate
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: waltz-time
+    source: learn_lessons
+    difficulty: intermediate
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: reggae-skank
+    source: learn_lessons
+    difficulty: advanced
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: funk-chop
+    source: learn_lessons
+    difficulty: advanced
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: blues-shuffle
+    source: learn_lessons
+    difficulty: advanced
+    skill_tags: []
+    locales: [en]
+    version: 1
+  - id: push-and-pull
+    source: learn_lessons
+    difficulty: advanced
+    skill_tags: []
+    locales: [en]
+    version: 1
+
+skill_vocabularies:
+  practice_engine: [alternating, cChord, chordChanges, chordProgression, dChord, downstrokes, eighthNotes, emChord, folk, fourChords, freePlay, gChord, minorChords, offBeat, open, openChords, pop, quarterNotes, rhythm, rhythmOnly, syncopation, threeFour, upstrokes, waltz]
+  tutor_knowledge: [chord, practice, rhythm, safety, technique]
+  legacy_mapping_table: [chord.cMajor, chord.dMajor, chord.gMajor]
+
+skill_graph:
+  - id: rhythm.pulse
+    prerequisites: []
+  - id: rhythm.onBeatAccuracy
+    prerequisites: [rhythm.pulse]
+  - id: rhythm.offBeatAccuracy
+    prerequisites: [rhythm.onBeatAccuracy]
+  - id: rhythm.subdivisionEighth
+    prerequisites: [rhythm.onBeatAccuracy]
+  - id: rhythm.subdivisionSixteenth
+    prerequisites: [rhythm.offBeatAccuracy]
+  - id: strum.downStroke
+    prerequisites: []
+  - id: strum.upStroke
+    prerequisites: []
+  - id: strum.directionPattern
+    prerequisites: [strum.downStroke, strum.upStroke]
+  - id: chord.shapeClarity
+    prerequisites: []
+  - id: chord.changeSpeed
+    prerequisites: [chord.shapeClarity]
+  - id: chord.progressionAccuracy
+    prerequisites: [chord.changeSpeed]
+  - id: chord.barreFoundation
+    prerequisites: [chord.shapeClarity]
+  - id: pitch.singleNoteAccuracy
+    prerequisites: []
+  - id: pitch.noteDuration
+    prerequisites: [pitch.singleNoteAccuracy]
+  - id: song.sectionConsistency
+    prerequisites: []
+  - id: song.fullRunConsistency
+    prerequisites: [song.sectionConsistency]
+  - id: practice.consistency
+    prerequisites: []
+  - id: practice.focus
+    prerequisites: [practice.consistency]
+
+known_exceptions:
+  - id: practice-catalog-description-key-missing-both-locales
+    reason: "All 10 builtin practice descriptionKey ARB entries (practiceCatalog*Description) are absent from both lib/l10n/app_en.arb and lib/l10n/app_hu.arb; only the titleKey half of each pair resolves today (brief R4). Fixing requires editing lib/l10n/**, which is this round's tilos zona (D7) — tracked here as a GA-blocking gap, not fixed."
+    owner: strumsight-content
+    expiry: "2026-12-31"
+    suppresses: locale:practice_engine:descriptionKey
+  - id: learn-lesson-name-hardcoded-english
+    reason: "Lesson.name (lib/features/learn/model/lesson.dart) is a plain hardcoded English string across all 16 Lessons.all entries plus firstWin — there is no ARB indirection and no hu surface at all. Fixing requires editing lib/features/learn/**, which is this round's tilos zona (D7) — tracked here as a GA-blocking gap, not fixed."
+    owner: strumsight-content
+    expiry: "2026-12-31"
+    suppresses: locale:learn_lessons:name
