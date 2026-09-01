@@ -6,7 +6,7 @@
 - **Branch:** `<motor>/e15-r07-practice-generator-migration`
 - **Előfeltétel:** `E15-R03` merge-elve (a visszavonási terv mérte meg, hogy a flow bekötetlen)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `0480` — **placeholder**: a pre-flight ELSŐ dolga `tools/round-slots.py reserve-adr --round E15-R07`-tal a VALÓDI számot kérni (a `0477`/`0479` precedens szerint az előre kiosztott szám elavulhat), és a brief + a queue-sor `adr` oszlopa arra íródik át.
+- **Előre kiosztott ADR:** `0481` — a pre-flight MEGMÉRTE: `tools/round-slots.py reserve-adr --round E15-R07` → a `0480` már foglalt volt (exit 2), a kör VALÓDI, lefoglalt száma **`0481`** (exit 0). A brief ezen a számon íródott át; a queue-sor `adr` oszlopát a driver vezeti (orchestrátor-tilalom a `pipeline-queue.tsv`-re).
 
 **Visszakeresett előzmény:** [ADR 0306](../adr/0306-plan-preview-presentation-activation-boundary.md) (plan-preview aktiválási határ — a preview-felület a core útra nem hathat), [ADR 0471](../adr/0471-screen-reachability-is-measured-not-assumed.md) (az elérhetőség MÉRT tulajdonság; a `retire` verdikt JAVASLAT, a bekötés/nyugdíjazás produkt-döntés), [ADR 0255](../adr/0255-deterministic-practice-plan-generation.md) (a generátor szerződése).
 
@@ -61,7 +61,7 @@ allowed_paths = [
   "test/features/practice_generator/presentation/plan_setup_screen_test.dart",
   "test/features/practice_generator/presentation/plan_preview_screen_test.dart",
   "test/features/practice_generator/presentation/today_plan_screen_test.dart",
-  "docs/adr/0480-practice-generator-entry-point-and-rollout.md",
+  "docs/adr/0481-practice-generator-entry-point-and-rollout.md",
   "docs/ui/migration-status.md",
   "docs/ui/retirement-plan.md",
   "docs/rounds/e15-r07-practice-generator-migration.md",
@@ -154,13 +154,13 @@ Batch-specifikus kikötések:
 | `test/app/routing/app_router_test.dart` | a route-ok és a flag-kapu cellái | F1 |
 | `lib/features/practice/presentation/screens/practice_hub_screen.dart` | a flow EGY belépési pontja (§5.2) — flag-kapuzva | F1 |
 | `test/app/navigation/{adaptive_scaffold,tab_state_restoration,legacy_route_redirect}_test.dart` | navigációs őrök — a jogosultság PONTOSAN §5.5 szerinti | F1 |
-| `docs/adr/0480-practice-generator-entry-point-and-rollout.md` | az ÚJ döntés (a szám a pre-flightból) | F1 |
+| `docs/adr/0481-practice-generator-entry-point-and-rollout.md` | az ÚJ döntés (a szám a pre-flightból) | F1 |
 | a 6 `*_screen.dart` a `practice_generator/presentation/screens/`-ben | migráció design-rendszer komponensekre | F2 |
 | `test/features/practice_generator/presentation/{plan_setup,plan_preview,today_plan}_screen_test.dart` | állapot- és variáns-cellák | F2 |
 | `test/features/practice_generator/accessibility/planner_accessibility_test.dart` | típus-pinnelő őr — VÁLTOZATLANUL zöld marad | F2 |
 | `docs/ui/migration-status.md`, `docs/ui/retirement-plan.md` | a MÉRT új arány és az elérhetőségi verdikt | F2 |
 
-## 5. Kötött architekturális döntések (ADR 0480 — a pre-flight erősíti meg a számot)
+## 5. Kötött architekturális döntések (ADR 0481 — a pre-flight MEGERŐSÍTETTE a számot)
 
 ### 5.1 A production zárva marad
 
