@@ -532,7 +532,7 @@ void main() {
 
     test('(3) nextAfter(first-win) enters the curriculum; every non-last '
         'lesson has a successor; the last has none', () {
-      expect(Lessons.nextAfter('first-win'), same(Lessons.all.first));
+      expect(Lessons.nextAfter('first-win')?.id, Lessons.all.first.id);
       final all = Lessons.all;
       for (var i = 0; i < all.length - 1; i++) {
         expect(
