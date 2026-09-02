@@ -1,0 +1,211 @@
+# Proposal: Hotfix workflow (E12-R34, ADR 0490)
+#
+# Status: proposal only — NOT applied. `.github/workflows/**` is the
+# measure-gate's protected zone (ADR 0321 `PROTECTED_GLOBS`), and the
+# standing gate-edit authorization file (ADR 0372) does not exist on this
+# tree, so an implementer session cannot install this file as
+# `.github/workflows/hotfix.yml` directly (round brief §0.0). Installing
+# this file and dispatching it is an orchestrator/human step that happens
+# AFTER this round merges (ADR 0490 D6, ADR 0112 §3, precedent ADR 0488 D1).
+#
+# This file is itself a complete, syntactically valid GitHub Actions
+# workflow document (not a fragment spliced into an existing file), so it
+# is machine-checked as ONE document by `tool/release/verify_hotfix.py`
+# (static mode) and by `test/tooling/hotfix_policy_test.dart`, via
+# restricted-subset job/step-level YAML parsers living in each of those
+# files — `package:yaml` is only a transitive dependency on this tree and is
+# NOT imported by the Dart test (ADR 0490 D7, precedent ADR 0447 D5 / ADR
+# 0448 D6 / ADR 0488 D6).
+#
+# This is a SCOPE-NARROWED variant of the Kör 25 release-candidate proposal
+# (`release-candidate.proposal.yml`, ADR 0488): the speed a hotfix needs
+# comes from a SMALLER changeset, not from skipping a gate (ADR 0490,
+# context). Every job that would run for a full release candidate still
+# runs here — approval, the shared Flutter quality gate composite, the
+# release security scan, and production signing — nothing is made
+# conditional or optional.
+#
+# Architecture (ADR 0490):
+#   D1 — the release security scan step and the production-signing step are
+#        BOTH unconditional: no `if:`, no `continue-on-error:`, and no
+#        `workflow_dispatch` input of any kind can skip either of them (no
+#        `skip_scan`/`emergency` switch exists in this document at all).
+#   D2 — `incident_id` is a `required: true` workflow_dispatch input; a
+#        hotfix run with no bound incident cannot even be dispatched.
+#   D3 — `approve-hotfix` carries the only `environment:` key in this
+#        document and has no `needs:` of its own; `quality-gates` and
+#        `security-scan` both `needs: approve-hotfix`; `build-hotfix`
+#        `needs: [quality-gates, security-scan]` — so approval stands
+#        BEFORE every job that builds, scans, signs, or uploads, exactly
+#        the Kör 25 RC precedent's ordering (approval -> gates -> build).
+#   D5 — `previous_version`/`version` are also required inputs, and the
+#        build job calls `tool/release/verify_hotfix.py` (request mode)
+#        before touching the keystore, so a non-incrementing hotfix version
+#        never reaches the signing step.
+#   D7 — the shared quality gate chain is called via
+#        `uses: ./.github/actions/flutter-gates`; no step here copies one
+#        of that composite's own `run:` commands.
+
+name: Hotfix
+
+on:
+  workflow_dispatch:
+    inputs:
+      incident_id:
+        description: Bound incident identifier (e.g. INC-2026-0001). Required — an unbound hotfix is not auditable (ADR 0490 D2).
+        required: true
+        type: string
+      previous_version:
+        description: The version currently in production that this hotfix supersedes.
+        required: true
+        type: string
+      version:
+        description: The hotfix version being shipped. Must be strictly greater than previous_version (ADR 0490 D5).
+        required: true
+        type: string
+      summary:
+        description: One-line human summary of the hotfix, for the approval record.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  approve-hotfix:
+    name: Approve hotfix
+    runs-on: ubuntu-latest
+    environment: hotfix-approval
+    steps:
+      - name: Verify hotfix request
+        run: |
+          python3 tool/release/verify_hotfix.py --incident-id "${{ inputs.incident_id }}" --previous-version "${{ inputs.previous_version }}" --version "${{ inputs.version }}"
+      - name: Record hotfix approval
+        run: |
+          echo "Hotfix ${{ inputs.version }} (incident ${{ inputs.incident_id }}) approved by the hotfix-approval environment's required reviewers."
+          echo "Summary: ${{ inputs.summary }}"
+
+  quality-gates:
+    name: Flutter quality gates
+    needs: approve-hotfix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - name: Run Flutter quality gates
+        uses: ./.github/actions/flutter-gates
+
+  security-scan:
+    name: Release security scan
+    needs: approve-hotfix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Release security scan
+        run: |
+          python3 tool/release/security_scan.py --format json > hotfix-security-report.json
+      - name: Upload security scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotfix-security-report
+          path: hotfix-security-report.json
+          if-no-files-found: error
+
+  build-hotfix:
+    name: Build and sign hotfix APK
+    needs: [quality-gates, security-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production signing prerequisites
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for secret_name in ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "::error::Missing required production signing secret: $secret_name"
+              missing=1
+            fi
+          done
+          if (( missing != 0 )); then
+            exit 1
+          fi
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - name: Verify hotfix version increment
+        run: |
+          python3 tool/release/verify_hotfix.py --incident-id "${{ inputs.incident_id }}" --previous-version "${{ inputs.previous_version }}" --version "${{ inputs.version }}"
+      - name: Materialize production keystore
+        id: keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keystore_path="$RUNNER_TEMP/strumsight-hotfix-$GITHUB_RUN_ID.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          if [[ ! -s "$keystore_path" ]]; then
+            echo "::error::The decoded production keystore is empty."
+            exit 1
+          fi
+          printf 'path=%s\n' "$keystore_path" >> "$GITHUB_OUTPUT"
+      - name: Build and sign production APK
+        env:
+          STRUMSIGHT_RELEASE_STORE_FILE: ${{ steps.keystore.outputs.path }}
+          STRUMSIGHT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          STRUMSIGHT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          STRUMSIGHT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STRUMSIGHT_REQUIRE_RELEASE_SIGNING: 'true'
+        run: |
+          flutter build apk --release --dart-define=STRUMSIGHT_ENV=production --build-name=${{ inputs.version }}
+      - name: Generate release manifest
+        run: |
+          dart run tool/generate_release_manifest.dart --output build/hotfix-release-manifest.json --channel hotfix --artifact build/app/outputs/flutter-apk/app-release.apk
+      - name: Stage hotfix package
+        run: |
+          mkdir -p build/hotfix-package
+          cp build/app/outputs/flutter-apk/app-release.apk build/hotfix-package/app-release.apk
+          cp build/hotfix-release-manifest.json build/hotfix-package/hotfix-release-manifest.json
+      - name: Upload hotfix package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotfix-${{ inputs.version }}
+          path: build/hotfix-package
+          if-no-files-found: error
+      - name: Remove production keystore
+        if: always()
+        shell: bash
+        env:
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+        run: |
+          if [[ -n "${KEYSTORE_PATH:-}" ]]; then
+            rm -f -- "$KEYSTORE_PATH"
+          fi

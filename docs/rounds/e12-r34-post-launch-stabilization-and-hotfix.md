@@ -292,4 +292,163 @@ A javaslat telepítése és a dispatch orchesztrátor/emberi lépés a merge UT�
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), E12-R34, 2026-09-02.
+
+### 10.1 Mit építettem, fájlonként
+
+- **`tool/release/verify_hotfix.py`** (ÚJ) — a §0.0.P5 kétmódú CLI-szerződés
+  (`main(argv) -> int`, `sys.exit(main(sys.argv[1:]))`, a
+  `verify_signing_policy.py`/`verify_rollout_decision.py` argparse-mintája).
+  Standard library only (nincs `package:yaml`). Két önálló belső parser:
+  - `parse_workflow_dispatch_inputs` — a `workflow_dispatch: inputs:` blokk
+    (6-space input-név, 8-space mező), fail-closed a `jobs:` blokkon kívüli
+    idegen sorra.
+  - `parse_workflow_jobs` — job/step-szintű restricted YAML (2/4/6/8/10-space
+    indent-szintek, `run: |` blokk, `env:`/`with:` mapping), fail-closed
+    (`VerifyError` a sor megnevezésével, L566 — nincs néma `continue`).
+  - `static_check` (D1/D2/D3): `incident_id` `required: true`; nincs
+    `skip`/`emergency`-szerű input; van "security scan"-szerű ÉS
+    "sign"-szerű lépés, mindkettő feltétel nélküli (`if:`/`continue-on-error:`
+    tiltott rajtuk); pontosan egy job hordoz `environment:`-et, és minden
+    build/sign/assembl/upload lépést tartalmazó job tranzitívan `needs:`-eli.
+  - `request_check` (D2/D5): nem üres `--incident-id`; `--version` SZIGORÚAN
+    nagyobb `--previous-version`-nél (dotted-integer összehasonlítás,
+    `tuple <= tuple`).
+- **`docs/release/workflows/hotfix.proposal.yml`** (ÚJ) — a Kör 25 RC-javaslat
+  szűkített mintája. Négy job: `approve-hotfix` (EGYETLEN `environment:` kulcs,
+  `needs:` nélkül; a `verify_hotfix.py` kérés-módját is lefuttatja jóváhagyás
+  előtt) → `quality-gates` (composite `uses: ./.github/actions/flutter-gates`)
+  és `security-scan` (mindkettő `needs: approve-hotfix`) → `build-hotfix`
+  (`needs: [quality-gates, security-scan]`, production signing + verzió-
+  ellenőrzés + upload). Négy kötelező `workflow_dispatch` input:
+  `incident_id`, `previous_version`, `version`, `summary` — mind
+  `required: true`. Nincs `skip_scan`/`emergency` input. Megjegyzés: a
+  "Upload hotfix package" step eredetileg többsoros `path: |` blokkot
+  kapott volna a `with:` alatt — ezt a korlátozott parser (sem a Python-, sem
+  a Dart-oldali) nem támogatja (a mapping csak egysoros `key: value` párokat
+  ismer fel), ezért egy "Stage hotfix package" lépéssel egyetlen könyvtárba
+  gyűjtöm az APK-t és a manifestet, és a `path:` egyetlen könyvtárra mutat —
+  ugyanaz a minta, mint az RC `path: dist/rc` sora.
+- **`test/tooling/hotfix_policy_test.dart`** (ÚJ) — A1–A7 csoportok, a §6.1
+  mátrix minden sorára legalább egy mutációs próbával (fixtúrán, nem a valódi
+  fájlon, kivéve a §6.2 kötelező valódi-sértés próbát, ld. 10.3). A6/A7 saját,
+  a `verify_hotfix.py`-tól FÜGGETLEN Dart-oldali job/step-parsert visel
+  (mirroring `rc_assembly_test.dart`), hogy egy a két implementáció közt
+  megosztott hiba ne fusson át mindkét őrön észrevétlenül. `python3` az
+  EGYETLEN külső bináris (meta-csoport ezt gépivel is ellenőrzi), nincs
+  `package:yaml` import.
+- **`docs/operations/hotfix-runbook.md`** (ÚJ) — mikor hotfix vs. rendes
+  kiadás, kötelező incident-azonosító, a §3 "MANDATORY regression test — RED
+  before the fix, GREEN after" szakasz (D4), a workflow-dispatch inputok
+  leírása, a kapuk changetelenségének kimondása.
+- **`docs/operations/postmortem-template.md`** (ÚJ) — VÁZ, `<TBD>`
+  helyőrzőkkel; kimondja, hogy a kitöltés emberi lépés; kötelező mező a
+  RED/GREEN regressziós teszt bizonyítékának.
+- **`docs/release/post-launch-day7.md`** / **`post-launch-day14.md`** (ÚJ) —
+  öt kötelező mező mindkettőn (crash, migration, battery, audio, support,
+  szó szerint angolul is szerepeltetve a gépi cella miatt), `<TBD>`
+  helyőrzőkkel, kimondva hogy a kitöltés emberi lépés (D8) — nincs kitalált
+  adat.
+- **`docs/rounds/e12-r34-post-launch-stabilization-and-hotfix.md`** — ez a
+  §10 szakasz.
+
+### 10.2 A §7 kötelező ellenőrzések — tényleges kimenet
+
+```
+tools/round-gate.sh test/tooling/hotfix_policy_test.dart test/tooling/rc_assembly_test.dart
+```
+→ mind a hét lépés (`format`, `analyze`, `test test/tooling/hotfix_policy_test.dart`
+[34/34 teszt], `test test/tooling/rc_assembly_test.dart` [36/36 teszt],
+`architecture`, `secrets`, `l10n`) ZÖLD, exit 0.
+
+A mérce közvetlen futtatása mindkét módban:
+
+```
+$ python3 tool/release/verify_hotfix.py --workflow docs/release/workflows/hotfix.proposal.yml
+verify_hotfix (static mode): ok — docs/release/workflows/hotfix.proposal.yml
+exit=0
+
+$ python3 tool/release/verify_hotfix.py --incident-id INC-2026-0001 --previous-version 1.2.3 --version 1.2.4
+verify_hotfix (request mode): ok — incident_id="INC-2026-0001", 1.2.3 -> 1.2.4
+exit=0
+
+$ python3 tool/release/verify_hotfix.py --incident-id INC-2026-0001 --previous-version 1.2.3 --version 1.2.3
+verify_hotfix (request mode): 1 violation(s):
+  VIOLATION version-strictly-greater: --version "1.2.3" is not strictly greater than --previous-version "1.2.3" (ADR 0490 D5 — same or stricter than verify_artifacts.py's monotonicity check, never looser)
+exit=1
+```
+
+A várt `0`, `0`, `1` minta pontosan teljesül (§6.3 "rajta" cella: azonos
+verzió → exit 1, a szigorú `>` bizonyítéka).
+
+### 10.3 A §6.2/§8 kötelező valódi-sértés próba
+
+1. A VALÓDI `docs/release/workflows/hotfix.proposal.yml`-ből kivettem a
+   teljes `security-scan:` jobot (a security-scan lépéssel együtt), és a
+   `build-hotfix` job `needs:`-ét `quality-gates`-re szűkítettem.
+2. `tools/round-gate.sh test/tooling/hotfix_policy_test.dart
+   test/tooling/rc_assembly_test.dart` → a `test
+   test/tooling/hotfix_policy_test.dart` lépés **PIROS** lett (kilépési kód
+   1), pontosan az A2 csoport két cellája bukott:
+
+   ```
+   00:00 +0 -1: A1 — ... the real proposal: static mode exits 0
+     Expected: <0>
+       Actual: <1>
+     verify_hotfix (static mode): 1 violation(s):
+       VIOLATION security-scan-required: no step named like "security scan" found (ADR 0490 D1)
+   ...
+   00:00 +3 -2: A2 — ... the real proposal: static mode exits 0 (already proven in A1, restated here for the A2 group)
+     Expected: <0>
+       Actual: <1>
+     verify_hotfix (static mode): 1 violation(s):
+       VIOLATION security-scan-required: no step named like "security scan" found (ADR 0490 D1)
+   ...
+   → [3] test test/tooling/hotfix_policy_test.dart: PIROS (kilépési kód 1)
+   ```
+
+   (A1 cellája is bukik, mert ugyanaz a "valódi proposal exit 0" assertion a
+   security-scan hiánya miatt piros lesz — ez VÁRT, mindkét csoport a
+   `verify_hotfix.py` static módjára támaszkodik.)
+3. Visszaállítottam a fájlt az eredeti tartalomra (`git diff` üres volt
+   utána), és a §7 gate-et újra lefuttattam → mind a hét lépés újra ZÖLD (a
+   teljes kimenet megegyezik a 10.2 szakasszal).
+
+### 10.4 Acceptance A1–A7
+
+| # | Teljesül? | Bizonyíték |
+|---|---|---|
+| A1 | ✅ | `verify_hotfix.py` static+request mód; `hotfix_policy_test.dart` "A1" csoport (4 teszt: valódi proposal 0, request-mód 0, üres incident-id mutáció 1, `required` hiány mutáció 1) |
+| A2 | ✅ | `hotfix_policy_test.dart` "A2" csoport (6 teszt: valódi proposal 0, feltételes scan mutáció, hiányzó scan mutáció, `continue-on-error` signing mutáció, hiányzó signing mutáció, `skip_scan` input mutáció) + §10.3 valódi-sértés próba |
+| A3 | ✅ | `hotfix_policy_test.dart` "A3" csoport, a §6.3 mindhárom cellája (alatta/rajta/fölötte → 1/1/0) |
+| A4 | ✅ | `hotfix-runbook.md` §3 "MANDATORY regression test — RED before the fix, GREEN after"; `hotfix_policy_test.dart` "A4" csoport (valódi runbook + mutációs fixtúra) |
+| A5 | ✅ | `post-launch-day7.md`/`post-launch-day14.md` mind az öt mezővel; `hotfix_policy_test.dart` "A5" csoport (valódi mindkét dokumentumon + 5 mutációs próba, egyenként egy-egy hiányzó mezőre) |
+| A6 | ✅ | `hotfix_policy_test.dart` "A6" csoport — saját Dart-parser a valódi proposalra (1 environment-job, upload-job tranzitívan needs-eli) + 2 mutációs próba |
+| A7 | ✅ | `hotfix_policy_test.dart` "A7" csoport — composite `uses:` hívás jelen van, nincs másolt composite-parancs a valódin + mutációs/self-check próba |
+
+### 10.5 Döntések, amiket a brief nem kötött meg
+
+- A job-gráf: `approve-hotfix` → `quality-gates` + `security-scan`
+  (mindkettő közvetlenül `needs: approve-hotfix`) → `build-hotfix`
+  (`needs: [quality-gates, security-scan]`) — az RC precedens
+  (`approve-release-candidate` → `quality-gates` + `backend-tests` →
+  `build-release-candidate`) egy az egyben átültetve, csak a "backend-tests"
+  helyén "security-scan" job.
+- A security-scan SAJÁT jobot kapott (nem lépésként a build jobban), hogy a
+  `needs:` gráfban is explicit módon jóváhagyás-függő legyen, és a signing a
+  scan sikeres lefutása UTÁN induljon.
+- A `verify_hotfix.py` kérés-módját magába a workflow-ba is beépítettem
+  (`approve-hotfix` jobban ÉS a `build-hotfix` jobban, közvetlenül a
+  keystore materializálása előtt) — ez a D2/D5 kettős védelme: már a
+  jóváhagyás előtt buktatja a hibás kérést, és a signing előtt is
+  újraellenőrzi.
+- A `test/tooling/hotfix_policy_test.dart` A6/A7 csoportjai egy a
+  `verify_hotfix.py`-tól FÜGGETLEN, saját Dart-parsert kaptak (nem csak a
+  Python szkript szóbeli visszajelzésére támaszkodnak ezekre a cellákra) —
+  védelem az ellen, hogy egy közös hiba mindkét oldalon észrevétlen maradjon.
+- A `security_scan.py`/`generate_release_manifest.dart` hívásokat
+  VÁLTOZATLANUL vettem át az RC precedensből (a §3 "Kör 6/7 provenance és
+  signing lépések VÁLTOZATLANUL" elvárásának megfelelően), a hotfix-specifikus
+  fájlnevekkel (`hotfix-security-report.json`, `hotfix-release-manifest.json`).
+
 ## 11. Review — a Claude tölti ki
