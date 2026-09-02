@@ -22865,3 +22865,65 @@ azt a review mérése szerint helyesen teszi. Egy jövőbeli, általános
 „bizonyíték-hivatkozás feloldható + empirikus állítás mellett mért forrás" őr
 (az ADR 0489 D3 kiterjesztése a `docs/operations/**`-ra) lenne a
 hibaosztály-szintű zárás.
+
+## L578 — Az őr két olcsó néma-módja: (1) a FŐ ellenőrzés kimarad az ALAPÉRTELMEZETT hívásból, (2) az összevetés csak az ÁRTALMATLAN irányban fut (E12-R30, 2 MAJOR, 2026-09-02)
+
+**A helyzet.** Az `E12-R30` egy freeze-ellenőrzőt szállított
+(`tool/release/verify_freeze.py`), 31 zöld cellával, teljesen zöld gate-tel és
+tiszta scope-audittal. A független review mégis **két MAJOR** leletet mért,
+mindkettőt ugyanabból a családból, mint amit a kör maga akart megfogni.
+
+**MAJOR-1 — a bare hívás nem ellenőrzött semmit.** A `main()` a
+`--since`/`--changes-file` hiányában `changes = None`-t hagyott, és a
+klasszifikációt (az eszköz FŐ ellenőrzését, A1) átugorva `ok` + **exit 0**-t
+nyomtatott. Mérve, a reviewer izolált klónjában:
+
+```
+$ printf '\n// probe\n' >> lib/app/build_info.dart
+$ git commit -qam "chore: apró javítás, nem számít"   # a §5.1 NÉVSZERINT tiltott kategóriája
+$ python3 tool/release/verify_freeze.py
+verify_freeze: ok — 17 known-issue row(s)
+exit=0
+$ python3 tool/release/verify_freeze.py --since 4ac78365
+verify_freeze: 1 finding(s): … not classified under any freeze change class …
+exit=1
+```
+
+Súlyosbító: a `feature-freeze.md` gépi blokkja **kimondta** a
+`freeze_base_sha`-t, a kód be is olvasta (`load_freeze_base(...)`), majd az
+eredményt **eldobta** — a deklarált freeze-bázisnak nulla gépi hatása volt. És
+a hibát egy **zöld cella tartotta életben**: a sanity-teszt kifejezetten azt
+várta el, hogy a bare hívás `ok` + `0` legyen (`freeze_policy_test.dart:44-48`).
+
+**MAJOR-2 — az összevetés csak felfelé mért.** A `known-issues.md` ↔
+`blockers.md` súlyosság-egyeztetés csak akkor futott, ha a known-issues sor
+MAGA `P0`/`P1` volt. Így a **felhangolást** (P1 → P0) elkapta — arra volt is
+cella —, a **lefokozást** (P1 → P2) viszont nem, pedig kizárólag ez az irány
+rejt el egy blockert. Egyetlen karakter átírása a szállított dokumentumban:
+`exit 0`, `ok`. A kör deklarált célja (`§5.2 „a known-issues lista ŐSZINTE"`)
+így egy `sed`-del kikerülhető volt.
+
+**Az általánosítás.** Az [L566](#l566)/[L571](#l571)/[L575](#l575) családot
+eddig a *parszer* szintjén ismertük („ami nem illeszkedik, az nem hibás, hanem
+nem létezik"). Ez a kör két új, magasabb szintű változatot mért:
+
+1. **Belépési-pont fail-OPEN.** Hiába fail-closed minden parszer, ha az
+   ellenőrzés az alapértelmezett hívásban **el sem indul**. A kérdés nem az,
+   hogy „mit csinál a tool, ha megkapja a kapcsolót", hanem az, hogy **mit
+   csinál, ha nem kapja meg**. Aki később futtatja (ember vagy CI-lépés), a
+   csupasz alakot fogja írni.
+2. **Irány-vak összevetés.** Ha egy őr két forrás eltérését méri, azt
+   **irányfüggetlenül** kell mérnie. Az az irány, ami „szigorúbbnak látszik"
+   (P1 → P0), ártalmatlan; a hibaosztály mindig az enyhítés felé mozdul.
+
+**Módszertani tanulság a review-nak.** Mindkét leletet ugyanaz a próbatípus
+hozta elő: a szállított dokumentumot/kódot **minimálisan, ellenséges
+szándékkal** mutáltam (egy commit a tiltott kategóriából; egy karakter a
+súlyossági oszlopban), és NEM a tool tesztjeit néztem. A cellák számossága
+(31) semmit nem mondott a fedettségről; a fedettséget csak a mutáció mérte.
+
+**Őrteszt:**
+`test/tooling/freeze_policy_test.dart::a product path changed since freeze_base_sha, on a bare call with no --since/--changes-file override, is a non-zero exit naming the path`
+(MAJOR-1, izolált `git init`-elt temp-repóval) és
+`test/tooling/freeze_policy_test.dart::a known-issues.md row DOWNGRADED below its blockers.md severity (P1 -> P2) is a non-zero exit naming it`
+(MAJOR-2).

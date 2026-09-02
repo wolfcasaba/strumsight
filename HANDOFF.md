@@ -1,5 +1,83 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R30 KÉSZ — Feature freeze és final regression — PR [#526](https://github.com/wolfcasaba/strumsight/pull/526), squash `b3061936` (2026-09-02)
+
+A Ch12 **Kör 30** a projekt ELSŐ feature-freeze köre: kimondott scope- és
+kódfagyasztás, gépi freeze-ellenőrző, és egy **őszinte** known-issues lista.
+ADR nincs (a kör eljárást ad, nem új normát; a `docs/adr/**` tilos zóna volt) —
+a kapcsolódó normát az [ADR 0489](docs/adr/0489-ga-scope-classification-and-contract-freeze.md)
+rögzíti. **A kör egyetlen termékkód-fájlt sem módosít** (A6).
+
+**Szállítva:**
+
+- `docs/release/feature-freeze.md` — a freeze szabálya két gépileg parszolható
+  blokkal: `freeze_base_sha: 4ac78365` + `approver_role`, és a **zárt, három
+  elemű** változás-osztály tábla (`documentation` / `release-tooling` /
+  `blocker-fix`). A `blocker-fix` osztály commit-szintű granularitása (egy
+  érvényes blocker ID a commit ÖSSZES útvonalát engedélyezi) **kimondva**, a
+  jóváhagyó szerep felelősségeként.
+- `tool/release/verify_freeze.py` — három ellenőrzés egy eszközben
+  (freeze-osztályozás, `known-issues.md`, `CHANGELOG.md`), 0/1/2 kilépő-kóddal
+  (a `contract-freeze.md` által fagyasztott testvér-szemantika), végig
+  fail-closed parszerekkel.
+- `docs/release/known-issues.md` — **17 sor**: a `blockers.md` tíz sorának MAI,
+  soronkénti mérése, `K-RC-01` (a Kör 25 RC-workflow soha nem futott), és hat
+  gazdátlan, korábban mért nyitott lelet (E12-R20/R21/R23/R24/R29).
+- `CHANGELOG.md` — gépileg kötött release-fejléc (`version: 1.0.0`, `build: 1`,
+  `schema_version: 1`, **pontosan 3 sor**: egy negyedik, pl. időbélyeg-sor
+  fail-closed elutasítva, ADR 0447 D1).
+- `test/tooling/freeze_policy_test.dart` — **33 cella** (A1–A4, A7).
+
+**Két MÉRT tény, amit a kör kimond, nem szépít:**
+
+1. A `docs/release/blockers.md` **elavult** (fejléc: `main @ 92576977`,
+   2026-08-28; mind a 10 sor `Owner … (pending)`, miközben mind a tíz
+   owner-kör MA `done`) — de **tilos zóna**, és mégis ő az A3 szótára. A kör
+   nem írja át, hanem a `known-issues.md`-ben kimondja az elavulást, és
+   soronként megméri, hogy a **zárási feltétel** teljesült-e. Mérés:
+   `docs/governance/04-release-checklist.md` mind a 30 sora ma is pipálatlan,
+   ezért **egyetlen blocker sem tekinthető lezártnak**.
+2. A Kör 25 RC-workflow-ja (`release-candidate.yml`) **soha nem futott** és
+   telepítve sincs (`.github/workflows/` → 10 workflow, nincs köztük); a Kör 25
+   szándékosan javaslatként szállította (ADR 0488 D1/D8, a telepítés emberi
+   lépés). Az A5 bizonyítéka ezért a `build-apk.yml` dispatch, nem az RC-kapu.
+
+**Pre-flight (§0.0 P1–P7) — az előre megírt brief két állítása MÉRTEN hibás
+volt:** (P1) a hivatkozott „ADR 0464" **nem létezik** (`ls docs/adr/0464*` →
+nincs), a Kör 28 ADR-je **0489**; (P4) a §3 „a Kör 6 manifest-adataiból
+generált CHANGELOG" nem kivitelezhető — a manifest-generátor az engedélyezett
+listán KÍVÜL van, ezért az A4 **kötő ellenőrzés** lett (a fejléc-blokk a mért
+`pubspec.yaml:5` = `1.0.0+1` és a `generate_release_manifest.dart:23`
+`releaseManifestSchemaVersion = 1` forrásokhoz kötve).
+
+**Review:** [`docs/reviews/e12-r30-review.md`](docs/reviews/e12-r30-review.md)
+— az 1. kör **két MAJOR** leletet kapott TELJESEN ZÖLD gate és tiszta
+scope-audit mellett; mindkettő zárva az 1. javító körben, mindkettő ÚJ
+regressziós cellával (31 → 33 cella), a zárás a reviewer friss klónjában,
+függetlenül újramérve:
+
+- **MAJOR-1:** a `verify_freeze.py` **ALAPÉRTELMEZETT** hívása nem osztályozott
+  — a §5.1 által névszerint tiltott „apró javítás, nem számít" commit is `ok` +
+  exit `0`-t kapott, és a deklarált `freeze_base_sha`-nak nulla gépi hatása
+  volt (beolvasva, majd eldobva). Súlyosbító: a hibát egy **zöld cella**
+  rögzítette elvárásként. Javítva: a bare hívás a `freeze_base_sha`-ra esik
+  vissza.
+- **MAJOR-2:** egy `blockers.md`-beli P0/P1 sor **lefokozása** a
+  known-issues-ban észrevétlen maradt (a felhangolást elkapta, a lefokozást
+  nem) — a §5.2 őszinteség-mércéje egy `sed`-del kikerülhető volt. Javítva: a
+  súlyosság-egyeztetés iránytól függetlenül fut.
+- MINOR-1 (két `P3` besorolás ellentmondott a saját hivatkozott mérésének →
+  `P2`) és NOTE-1 (a `blocker-fix` granularitása) szintén zárva.
+
+**Zöld kapu:** `tools/round-gate.sh` (reviewer izolált klónban: format,
+analyze, +33, +23, architecture, secrets, l10n — mind zöld) · exact-SHA CI a
+`99284e5d` merge SHA-n: [build-apk 33635933136](https://github.com/wolfcasaba/strumsight/actions/runs/33635933136)
++ [router-ci 33635917276](https://github.com/wolfcasaba/strumsight/actions/runs/33635917276).
+
+**Lecke:** [L578](docs/LESSONS.md#l578) — az őr két olcsó néma-módja: a FŐ
+ellenőrzés kimarad az alapértelmezett hívásból, és az összevetés csak az
+ártalmatlan irányban fut.
+
 ## ✅ E12-R29 KÉSZ — Open Beta és canary cohort — PR [#525](https://github.com/wolfcasaba/strumsight/pull/525), squash `3d9721df` (2026-09-02)
 
 A Ch12 **Kör 29** az Open Beta canary-cohort **előkészítését** szállítja. ADR
@@ -10609,9 +10687,9 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R29
-> zárása után): **292 `done`, 48 `hold`, 18 `prepared`, 7 `pending`**
-> (az E12 sávból 29 `done`, 7 `pending`).
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R30
+> zárása után): **293 `done`, 48 `hold`, 18 `prepared`, 6 `pending`**
+> (az E12 sávból 30 `done`, 6 `pending`).
 >
 > ⚠ **Az E12-R24 két EMBERI lépést hagyott nyitva a store-feltöltés előtt** —
 > egyik nyitott brief sem nevezi meg őket, ma gazdátlanok: (1) a
