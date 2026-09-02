@@ -270,4 +270,80 @@ cd backend && python -m pytest tests/test_capacity_guards.py tests/test_hardenin
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5), `--effort medium`.
+
+**Szállított fájlok** (a §4 engedélyezett listával egyezően, semmi más nem
+módosult a `docs/rounds/e12-r29-open-beta-and-canary-cohort.md` §10-en kívül):
+
+- `backend/tests/test_capacity_guards.py` — ÚJ, 7 teszt-eset (A2 3×
+  paraméterezett küszöb-cellahármas a `login_limiter.max_attempts`-ból
+  számolva; A3 3× paraméterezett méret-küszöb `create_upload_intent`-en; A4
+  1 eset a §0.0 P1 mért útvonalon).
+- `docs/operations/capacity-review.md` — ÚJ. A számított plafon:
+  `canary_max_testers = closed_beta.maxTesters (50, docs/beta/cohort-profiles.yaml)
+  × (register_limiter.max_attempts (5) / login_limiter.max_attempts (10))
+  = 25`. A szűk keresztmetszet kimondva: a `register_limiter` (a szigorúbb a
+  két mountolt admissziós kapu közül) — nem egy fizikai kapacitáskorlát,
+  mert §3 megméri, hogy a per-key rate limitek NEM adnak globális
+  fejszám-plafont; a 25 egy, a mért konstansokból reprodukálható, óvatossági
+  operatív plafon. A moderációs kapacitás (§5 a dokumentumban) kimondottan
+  NEM méri az emberi kapacitást. A settings-sync végponton mért rés (nincs
+  rate limiter) is dokumentálva (§3).
+- `docs/beta/open-beta-launch.md` — ÚJ. Gépileg parszolható
+  `<!-- canary-cohort-profile:begin/end -->` blokk (`id: canary`,
+  `maxTesters: 25`, 16 flag-kulcs a mért 40-es katalógusból), explicit
+  `<!-- human-gate:begin/end -->` blokk ("has NOT launched" / "human
+  decision"), és egy kimondott, nem javított rés (§4: settings-sync
+  rate-limiter hiánya).
+- `test/tooling/canary_cohort_test.dart` — ÚJ, 14 teszt-eset: A1 (3, a
+  plafon 3-utas konzisztenciája: `capacity-review.md` marker ↔
+  `open-beta-launch.md` canary `maxTesters` ↔ friss újraszámítás
+  `auth.py` + `cohort-profiles.yaml`-ból), A5 (2, benne a §10 KÖTELEZŐ
+  valódi-sértés próba), A6 (1), P6 fail-closed (5, hiányzó canary-blokk /
+  yaml-fence / flags-szekció / human-gate-marker / capacity-review-marker),
+  P7 (2, a canary flag-kulcsok a mért regisztry-ből valók).
+
+**Kötelező záró ellenőrzés — tényleges kimenet:**
+
+```
+tools/round-gate.sh test/tooling/canary_cohort_test.dart test/tooling/ga_scope_test.dart
+```
+
+`MINDEN GATE ZÖLD`: format, analyze, `test test/tooling/canary_cohort_test.dart`
+(14/14), `test test/tooling/ga_scope_test.dart` (23/23), architecture, secrets,
+l10n, backend ruff format, backend ruff check, **backend pytest** (teljes
+suite, `.................. [100%]`, 0 hiba).
+
+Célzott backend-futtatás (§7 kiegészítés):
+
+```
+cd backend && /home/ubuntu/music-theory/backend/.venv/bin/python -m pytest tests/test_capacity_guards.py tests/test_hardening.py -q
+```
+
+→ 24/24 zöld.
+
+**A KÖTELEZŐ valódi-sértés próba (§6.1, §10) — tényleges kimenet, nem ígéret:**
+
+1. `docs/beta/cohort-profiles.yaml` `closed_beta` cohortjának
+   `migratedLearnEnabled: false` sorát ideiglenesen `migratedLearnEnabled: true`-ra
+   állítottam (`sed`, egyetlen occurrence, a `internal` cohort sora
+   érintetlen maradt).
+2. Lefuttattam: `flutter test test/tooling/canary_cohort_test.dart --plain-name
+   "the real tree — internal and closed_beta match the E12-R27/R28 baseline exactly"`
+   → **PIROS**, a tényleges hibaüzenet: `Which: at location
+   ['migratedLearnEnabled'] is <true> instead of <false>` — pontosan az A5
+   cella bukott, a szimulált szivárgást elkapva.
+3. `git checkout -- docs/beta/cohort-profiles.yaml` — visszaállítva; `git
+   status --porcelain docs/beta/cohort-profiles.yaml` üres (nincs diff), a
+   fájl a tilos zónában változatlan maradt.
+4. Ugyanaz a teszt a visszaállítás után újra lefuttatva → **ZÖLD**
+   (`All tests passed!`).
+
+**Doc-comment fegyelem (§5):** minden "korlát N" / "plafon M" állítás a
+`capacity-review.md`-ben fájl:sor hivatkozással mért; a settings-sync
+rate-limiter HIÁNYA és a moderációs emberi kapacitás MÉRÉS NÉLKÜLI állapota
+explicit ki van mondva, nem hallgatva el.
+
+**Kör-jelzés:** `tools/codex-signal.sh done` a commit után.
+
 ## 11. Review — a Claude tölti ki

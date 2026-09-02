@@ -460,7 +460,7 @@ void main() {
       final block = _extractMarked(text, begin: _canaryBegin, end: _canaryEnd);
       final flagsLineIndex = block.indexOf('\nflags:');
       expect(flagsLineIndex, isNot(-1));
-      final truncatedBlock = block.substring(0, flagsLineIndex) + '\n```';
+      final truncatedBlock = '${block.substring(0, flagsLineIndex)}\n```';
       final mangled = text.replaceFirst(block, truncatedBlock);
       expect(() => parseCanaryProfile(mangled), throwsFormatException);
     });
