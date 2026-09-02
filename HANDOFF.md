@@ -1,5 +1,61 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R14 KÉSZ — Practice Generator kompozíciós réteg — PR [#534](https://github.com/wolfcasaba/strumsight/pull/534), squash `d28c79d3` (2026-09-02)
+
+A Ch15 beszúrt előkészítő köre megépítette azt, ami az `E15-R07 / H3` STOP mért
+lelete szerint hiányzott: a Practice Generator 6 terv-képernyője mögötti
+**kompozíciót**. A kör route-ot NEM nyitott, flaget NEM kapcsolt, képernyőt NEM
+módosított — a 6 képernyő verdiktje VÁLTOZATLANUL `unreachable`
+(`Measured screens: 96. Reachable: 68. Unreachable: 28.`), a `ui_inventory`
+`hasLength(96)` érintetlen.
+
+**Három ÚJ termék** (ADR [0482](docs/adr/0482-practice-generator-composition-layer.md), D1–D11):
+
+- `lib/features/practice_generator/data/local/local_practice_evidence_repository.dart`
+  — az ELSŐ perzisztens `PracticeEvidenceRepository` (a fán korábban csak a
+  „never forgets" teszt-fake létezett). Saját `ss.practice_generator.evidence`
+  névtér, **read-modify-write manifest**, kompenzáló írás-egyeztetés és
+  `lastWriteFailure` — a `SkillEvidence` JSON-képe a fájlon belül (a domain
+  tilos zóna).
+- `presentation/providers/practice_generator_providers.dart` — **EGY**
+  kompozíciós gyökér (D1); a fa alatt korábban NULLA provider volt.
+- `application/usecase/start_plan_generation.dart` — a Setup-draftot a MEGLÉVŐ
+  `GenerationOrchestrator`-nak adja át, nulla új generálási logika (STOP-határ).
+
+**A review a zöld gate mögött találta a lényeget — másodszor is.** A kötelező
+három ügynök (`security-reviewer`, `flutter-reviewer`, `flutter-devil-advocate`,
+`risk = "high"`) futtatott próbákkal **2 BLOCKER + 7 MAJOR**-t mért ki
+TELJESEN ZÖLD gate mellett: (1) az `unawaited` `KeyValueStore` írás/törlés
+elnyelte a `StorageException`-t, tehát a törlés sikert jelentett, az adat a
+lemezen maradt és **örökre törölhetetlenné** vált — pontosan a hamis
+consent-felület, ami ellen a kör létrejött; (2) a production-alakú
+`ProviderScope`-ban a 6 képernyőből **3-nak** a függősége és a teljes
+generálási út `UnimplementedError`-t dobott, az A3 cella pedig azért volt zöld,
+mert a **saját tesztje** írta felül a két hiányzó seamet ([L583](docs/LESSONS.md#l583)).
+
+**Két javító kör** zárta le mindet, független újraméréssel (eldobható
+próbatesztek a javított fán, izolált klónokban). Ami a scope-on kívülre esett,
+az **kimondott, ADR-be írt `E15-R07 / F1`-előfeltétel** lett — halasztás igen,
+hallgatás nem:
+
+- **D9** — a két `UnimplementedError` seam boot-override-ja (`main.dart`);
+  7 guard-cella méri provider-enként, MELYIK dob ma.
+- **D10** — az `evidence_aggregator.dart:61` tulajdonos nélküli `save`-je
+  miatt a `deleteForPlan` ma nem éri el, amit a production ír (a kör hagyott
+  hozzá `outcomePlanLookup` seamet).
+- **D11** — a `DeletePracticePlanningData` ne jelentsen optimista
+  `evidenceCount`-ot bukó platform-remove esetén.
+
+Verdikt: **APPROVED**, 0 nyitott lelet
+([`docs/reviews/e15-r14-review.md`](docs/reviews/e15-r14-review.md) §8).
+Exact-SHA evidencia a merge SHA-n (`29aa7b91`): Full Gate
+[33678702648](https://github.com/wolfcasaba/strumsight/actions/runs/33678702648),
+Router CI
+[33678705251](https://github.com/wolfcasaba/strumsight/actions/runs/33678705251)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`); a Router CI-t az [L581](docs/LESSONS.md#l581)
+miatt kézzel kellett a merge SHA-ra dispatch-elni.
+
 ## ✅ E12-R33 KÉSZ — Staged rollout 50–100% és GA — PR [#533](https://github.com/wolfcasaba/strumsight/pull/533), squash `f685db4a` (2026-09-02)
 
 A Ch12 **Kör 33** a GA-állapotot teszi **auditálhatóvá — publikálás nélkül**.
@@ -10747,7 +10803,26 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-02):** `main` @ `cf7c6fb6` — E12-R24 store listing,
+**Aktuális állapot (2026-09-02):** `main` @ `d28c79d3` — E15-R14 Practice
+Generator kompozíciós réteg, PR
+[#534](https://github.com/wolfcasaba/strumsight/pull/534), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **2 javító kör** — a review **2 BLOCKER
++ 7 MAJOR**-t talált TELJESEN ZÖLD gate mellett (elnyelt `StorageException` a
+törlés-úton; a production-kompozíció 3/6 képernyőre dobott, miközben az A3
+cella a saját override-jaitól volt zöld — [L583](docs/LESSONS.md#l583)). A két
+javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e15-r14-review.md`](docs/reviews/e15-r14-review.md) §8).
+ÚJ ADR: [0482](docs/adr/0482-practice-generator-composition-layer.md) (D1–D11);
+a D9/D10/D11 az `E15-R07 / F1` KÖTELEZŐ előfeltétele. `risk = "high"` →
+`security-reviewer` kötelező volt, lefutott. Exact-SHA evidencia a merge SHA-n
+(`29aa7b91`): Full Gate
+[33678702648](https://github.com/wolfcasaba/strumsight/actions/runs/33678702648),
+Router CI
+[33678705251](https://github.com/wolfcasaba/strumsight/actions/runs/33678705251)
+— mindkettő `success`.
+
+**Előző kör (2026-09-02):** `main` @ `cf7c6fb6` — E12-R24 store listing,
 privacy és legal package, PR
 [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -10853,7 +10928,20 @@ maradt.
 
 ## 5. Last completed round
 
-**E12-R24 — Store listing, privacy és legal package**
+**E15-R14 — Practice Generator kompozíciós réteg**
+(PR [#534](https://github.com/wolfcasaba/strumsight/pull/534), squash `d28c79d3`).
+A kör az `E15-R07 / H3` STOP mért hiányát szüntette meg: a fa alatt NULLA
+Riverpod-provider volt, és az EGYETLEN `PracticeEvidenceRepository` a „never
+forgets" teszt-fake. A kör hozott egy perzisztens evidence-tárat (saját
+kulcs-névtér, RMW manifest, kompenzáló írás-egyeztetés), **EGY** kompozíciós
+gyökeret a 6 terv-képernyő függőségeihez, és egy `StartPlanGeneration` use
+case-t, ami kizárólag a MEGLÉVŐ `GenerationOrchestrator`-t hívja. Route, flag
+és képernyő érintetlen (a 6 képernyő továbbra is `unreachable`, `ui_inventory`
+96). **A review a zöld gate mögött 2 BLOCKER + 7 MAJOR-t mért**, két javító kör
+zárta le mindet; ami a scope-on kívülre esett, az ADR 0482 **D9/D10/D11**
+kötelező `E15-R07 / F1`-előfeltétellé vált. Tanulság: [L583](docs/LESSONS.md#l583).
+
+**Előző kör: E12-R24 — Store listing, privacy és legal package**
 (PR [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash `cf7c6fb6`).
 A kör az első olyan artefaktumot szállította, amiből a store-feltöltés emberi
 lépése ELLENTMONDÁS-MENTESEN elvégezhető: store-szöveg, manifestből MÉRT
