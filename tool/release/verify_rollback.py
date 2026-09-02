@@ -53,6 +53,11 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from alembic.migration import MigrationContext
+from sqlalchemy import create_engine, func, inspect, select
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _BACKEND_ROOT = _REPO_ROOT / "backend"
 if str(_BACKEND_ROOT) not in sys.path:
@@ -60,10 +65,6 @@ if str(_BACKEND_ROOT) not in sys.path:
     # pytest.ini sets `pythonpath = .`) this is already the case and the
     # insert is a harmless no-op duplicate.
     sys.path.insert(0, str(_BACKEND_ROOT))
-
-from alembic.migration import MigrationContext  # noqa: E402
-from sqlalchemy import create_engine, func, inspect, select  # noqa: E402
-from sqlalchemy.engine import Engine  # noqa: E402
 
 from app import models as _models  # noqa: E402,F401 -- registers ORM metadata
 from app.database import Base  # noqa: E402
@@ -177,13 +178,19 @@ def check_migration_head(
     if backup_error is not None or backup is None:
         elapsed = time.perf_counter() - start
         return DimensionResult(
-            "migration_head", _STATUS_FAIL, backup_error or "backup dump unavailable", elapsed
+            "migration_head",
+            _STATUS_FAIL,
+            backup_error or "backup dump unavailable",
+            elapsed,
         )
     expected_revision = backup.get("revision")
     if not expected_revision:
         elapsed = time.perf_counter() - start
         return DimensionResult(
-            "migration_head", _STATUS_FAIL, "backup dump has no recorded revision", elapsed
+            "migration_head",
+            _STATUS_FAIL,
+            "backup dump has no recorded revision",
+            elapsed,
         )
     try:
         engine = _make_engine(database_url)
@@ -192,10 +199,13 @@ def check_migration_head(
                 heads = MigrationContext.configure(connection).get_current_heads()
         finally:
             engine.dispose()
-    except Exception as exc:  # fail-closed: a DB error is a FAIL, not a crash
+    except SQLAlchemyError as exc:  # fail-closed: a DB error is a FAIL, not a crash
         elapsed = time.perf_counter() - start
         return DimensionResult(
-            "migration_head", _STATUS_FAIL, f"could not read live migration head: {exc}", elapsed
+            "migration_head",
+            _STATUS_FAIL,
+            f"could not read live migration head: {exc}",
+            elapsed,
         )
     live_head = next(iter(heads), None)
     elapsed = time.perf_counter() - start
@@ -225,7 +235,10 @@ def check_record_counts(
     if backup_error is not None or backup is None:
         elapsed = time.perf_counter() - start
         return DimensionResult(
-            "record_counts", _STATUS_FAIL, backup_error or "backup dump unavailable", elapsed
+            "record_counts",
+            _STATUS_FAIL,
+            backup_error or "backup dump unavailable",
+            elapsed,
         )
     tables = backup.get("tables")
     if not isinstance(tables, dict) or not tables:
@@ -243,7 +256,9 @@ def check_record_counts(
                     if table.name not in tables:
                         continue
                     info = tables[table.name]
-                    expected_count = info.get("count") if isinstance(info, dict) else None
+                    expected_count = (
+                        info.get("count") if isinstance(info, dict) else None
+                    )
                     if expected_count is None:
                         mismatches.append(f"{table.name}: backup dump missing a count")
                         continue
@@ -259,14 +274,19 @@ def check_record_counts(
                         )
         finally:
             engine.dispose()
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         elapsed = time.perf_counter() - start
         return DimensionResult(
-            "record_counts", _STATUS_FAIL, f"could not read live record counts: {exc}", elapsed
+            "record_counts",
+            _STATUS_FAIL,
+            f"could not read live record counts: {exc}",
+            elapsed,
         )
     elapsed = time.perf_counter() - start
     if mismatches:
-        return DimensionResult("record_counts", _STATUS_FAIL, "; ".join(mismatches), elapsed)
+        return DimensionResult(
+            "record_counts", _STATUS_FAIL, "; ".join(mismatches), elapsed
+        )
     return DimensionResult(
         "record_counts", _STATUS_PASS, f"{len(tables)} table(s) match", elapsed
     )
@@ -288,24 +308,35 @@ def check_model_manifest(
     except OSError as exc:
         elapsed = time.perf_counter() - start
         return DimensionResult(
-            "model_manifest", _STATUS_FAIL, f"cannot read {manifest_path}: {exc}", elapsed
+            "model_manifest",
+            _STATUS_FAIL,
+            f"cannot read {manifest_path}: {exc}",
+            elapsed,
         )
     try:
         manifest = json.loads(raw)
     except json.JSONDecodeError as exc:
         elapsed = time.perf_counter() - start
         return DimensionResult(
-            "model_manifest", _STATUS_FAIL, f"{manifest_path} is not valid JSON: {exc}", elapsed
+            "model_manifest",
+            _STATUS_FAIL,
+            f"{manifest_path} is not valid JSON: {exc}",
+            elapsed,
         )
     if not isinstance(manifest, dict):
         elapsed = time.perf_counter() - start
         return DimensionResult(
-            "model_manifest", _STATUS_FAIL, f"{manifest_path} root must be a JSON object", elapsed
+            "model_manifest",
+            _STATUS_FAIL,
+            f"{manifest_path} root must be a JSON object",
+            elapsed,
         )
 
     mismatches: list[str] = []
     if manifest.get("schema_version") != 1:
-        mismatches.append(f"schema_version={manifest.get('schema_version')!r}, expected 1")
+        mismatches.append(
+            f"schema_version={manifest.get('schema_version')!r}, expected 1"
+        )
     models = manifest.get("models")
     if not isinstance(models, list) or not models:
         mismatches.append("manifest 'models' must be a non-empty list")
@@ -331,7 +362,9 @@ def check_model_manifest(
             )
     elapsed = time.perf_counter() - start
     if mismatches:
-        return DimensionResult("model_manifest", _STATUS_FAIL, "; ".join(mismatches), elapsed)
+        return DimensionResult(
+            "model_manifest", _STATUS_FAIL, "; ".join(mismatches), elapsed
+        )
     return DimensionResult(
         "model_manifest", _STATUS_PASS, f"{len(models)} model(s) verified", elapsed
     )
@@ -376,10 +409,14 @@ def check_flag_profile(
         elif key not in observed:
             mismatches.append(f"{key}: missing from observed profile")
         elif expected[key] != observed[key]:
-            mismatches.append(f"{key}: expected={expected[key]} observed={observed[key]}")
+            mismatches.append(
+                f"{key}: expected={expected[key]} observed={observed[key]}"
+            )
     elapsed = time.perf_counter() - start
     if mismatches:
-        return DimensionResult("flag_profile", _STATUS_FAIL, "; ".join(mismatches), elapsed)
+        return DimensionResult(
+            "flag_profile", _STATUS_FAIL, "; ".join(mismatches), elapsed
+        )
     return DimensionResult(
         "flag_profile", _STATUS_PASS, f"{len(all_keys)} flag(s) match", elapsed
     )
@@ -440,9 +477,13 @@ def run_verification(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--database-url", required=True, help="the RESTORED target's URL")
     parser.add_argument(
-        "--backup", required=True, help="path to the backup.py JSON dump the restore used"
+        "--database-url", required=True, help="the RESTORED target's URL"
+    )
+    parser.add_argument(
+        "--backup",
+        required=True,
+        help="path to the backup.py JSON dump the restore used",
     )
     parser.add_argument("--project-root", default=str(_REPO_ROOT))
     parser.add_argument("--model-manifest", default=DEFAULT_MODEL_MANIFEST_RELPATH)
