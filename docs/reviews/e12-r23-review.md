@@ -6,7 +6,9 @@
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
 - **ADR:** [0487](../adr/0487-legacy-upgrade-migration-evidence-contract.md)
 - **Dátum:** 2026-09-02
-- **VERDIKT (1. kör):** **CHANGES REQUESTED** — 1 MAJOR, 1 MINOR
+- **VERDIKT (1. kör):** CHANGES REQUESTED — 1 MAJOR, 1 MINOR
+- **VÉGSŐ DÖNTÉS (javító kör után, `37be88757584c973cc77cbfb282099a0b782ab3b`):**
+  **APPROVED** — 0 nyitott lelet (lásd §7)
 
 ## 1. Mit mértem magam
 
@@ -131,6 +133,61 @@ külön parancsokra bontással megkerülhető — de az önjavító sávnak érd
 
 ## 6. Merge-döntés
 
-**MERGE TILOS**, amíg a MAJOR-1 nyitva van. A javító kört ugyanaz a motor
+**(1. kör)** MERGE TILOS, amíg a MAJOR-1 nyitva van. A javító kört ugyanaz a motor
 (`sonnet-impl`) viszi, a fenti leletlistával — ez a lánc NORMÁL útja (ADR 0087 §2,
 user-döntés 2026-07-31), nem halt-ok.
+
+## 7. Javító kör — leletenkénti zárás (`37be8875`)
+
+A javító kör egy commitot hozott: `37be8875` — 6 fájl, +316/−44, mind az
+`allowed_paths`-on belül (`scope-audit` → **OK**, 10 path, 1 generated/ignored = ez a
+review-jelentés, a dokumentált mentesség).
+
+### MAJOR-1 — **ZÁRVA**
+
+Új **A3b** cella (`test/e2e/upgrade_migration_test.dart:247-359`), amely a valódi
+korrupciós utat hajtja, **injektált írás-hiba nélkül**, és négy dolgot pinnel:
+
+1. a fixture ténylegesen malformált (`expect(() => jsonDecode(raw), throwsFormatException)`)
+   — ez maga őrzi, hogy a cella ne csússzon vissza a write-fault ágra;
+2. `report.failure` `null`, `toVersion` a végérték, mind a 22 lépés `applied` — a
+   korrupció-átlátszóság **mérve, nem feltételezve**;
+3. a nyers malformált bájtok bájtra azonosak maradnak a legacy kulcson, és az új kulcs
+   NEM íródik ki — ez a valódi adatvesztés-őr;
+4. `JsonDocumentStore.readBody()` → `null`, `reason:`-ben **„ISMERT KORLÁT (ADR 0487)"**
+   megjelöléssel; plusz egy ellenpróba, hogy a korrupció a többi, jól formált dokumentumra
+   NEM terjed át (a `songs` továbbra is nem üresen olvasható).
+
+A korlát átvezetve a `docs/release/client-migration.md`-be és a brief §6/§6.1 tábláiba.
+
+**Valódi-sértés próba a JAVÍTÁSON (magam futtattam, `/tmp/review2-e12-r23`):** a
+`corrupted_storage.json` `user_setlists_v1` mezőjét visszaállítottam jól formáltra →
+`flutter test test/e2e/upgrade_migration_test.dart` → **`+7 -1`**, és a bukó cella
+PONTOSAN az A3b:
+
+```
+Failing tests:
+  test/e2e/upgrade_migration_test.dart: A3b — a genuinely malformed legacy document
+  does NOT make migrate() fail … returns null
+```
+
+A fixture visszaállítása után újra **`+8: All tests passed!`**. Az őr tehát bizonyítottan
+a korrupciós utat méri, nem valami mást.
+
+### MINOR-1 — **ZÁRVA**
+
+A `corrupted_storage.json` `user_setlists_v1` értéke immár ténylegesen csonka JSON
+(`…"name":"Solo practice",`), tehát a fájl neve igazzá vált. A `test/fixtures/manifest.json`
+`bytes`/`sha256` bejegyzése és a `README.md` érintett szakasza együtt frissült — a
+`fixture_manifest_test.dart` zölden méri.
+
+### Gate újrafuttatás a javítás után (izolált `/tmp/review2-e12-r23` klón)
+
+```
+format / analyze / test×3 / architecture / secrets / l10n   → MINDEN GATE ZÖLD
+```
+
+### Verdikt
+
+**APPROVED.** Nyitott BLOCKER/MAJOR/MINOR: **nincs**. A merge a zöld kapu (ADR 0052)
+teljesülése után mehet: `full-gate.yml` + `router-ci.yml` `success` a merge SHA-n.
