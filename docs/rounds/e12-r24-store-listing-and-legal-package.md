@@ -266,4 +266,118 @@ tools/round-gate.sh test/tooling/store_package_test.dart test/tooling/data_inven
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`), 2026-09-02.
+
+### Létrehozott fájlok
+
+- `docs/store/listing.md` — store-szöveg, kategória, screenshot-terv, engedély/
+  data-safety-mutató, és a gépileg olvasott `<!-- capabilities-marketed: … -->`
+  jelölés (9 GA-scope capability id, a `computer_vision`/`offline_ai`/
+  `ai_tutor` egyike sincs se a jelölésben, se a prózában).
+- `docs/store/permissions-rationale.md` — a `main` variant mind az 5 mért
+  engedélyéhez (`RECORD_AUDIO`, `CAMERA`, `INTERNET`, `POST_NOTIFICATIONS`,
+  `RECEIVE_BOOT_COMPLETED`) funkció+adat indoklás; a `CAMERA` sor kimondottan
+  opcionális/nem-GA; külön szakasz a debug/profile variant (csak `INTERNET`)
+  kizárásáról.
+- `docs/store/data-safety.yaml` — 11 kategória, mindegyik egy létező
+  `docs/privacy/data-inventory.yaml` route.id/field.name párra hivatkozva; a
+  12 `leaves_device: true` mező mindegyike lefedett (email+password egy
+  kategóriában, a többi 1:1).
+- `docs/legal/privacy-policy-draft.md` — TERVEZET, nevesített felülvizsgáló
+  (Ralph, `kcsabi176@gmail.com`), a §0.0 R2 szerinti ŐSZINTE fiók-törlési
+  állapot (`does not have a client-triggered account-deletion endpoint`,
+  szó szerint, a `test/tooling/store_package_test.dart` A4 cellája ellenőrzi),
+  támogatási e-mail PLACEHOLDER (`privacy-support@strumsight.app`).
+- `docs/legal/community-guidelines-draft.md` — TERVEZET, ugyanaz a
+  felülvizsgáló, őszinte "nincs önálló moderátor-felület" állapot.
+- `test/tooling/store_package_test.dart` — 29 cella, A1–A5 mindegyikéhez
+  valós-fa mérés + legalább egy self-defense/regresszió cella, amely egy
+  MÁSOLATON (nem a valódi fájlon) fordítja meg az eredményt.
+
+### Valódi-sértés próbák (§6.1/§7, ténylegesen lefuttatva)
+
+**A1 (kötelező, brief §6.1 utolsó bekezdése):** a
+`docs/store/permissions-rationale.md` `## android.permission.RECORD_AUDIO`
+fejlécét ideiglenesen átneveztem (`## VIOLATION-PROBE-TEMPORARILY-REMOVED-RECORD_AUDIO`),
+lefuttattam `tools/round-gate.sh test/tooling/store_package_test.dart
+test/tooling/data_inventory_test.dart`-ot — kilépési kód **10**, az A1
+real-tree cella `[E]`-vel bukott, szó szerinti üzenet:
+
+```
+Expected: empty
+  Actual: [
+            'android.permission.RECORD_AUDIO has no rationale entry in docs/store/permissions-rationale.md'
+          ]
+```
+
+Ezután a fejlécet visszaállítottam (`## android.permission.RECORD_AUDIO`),
+`git status --porcelain -- docs/store/permissions-rationale.md` az eredeti
+tartalmat mutatja (a fájl untracked, nincs commit-alapú diff, de az öt
+`## android.permission.*` fejléc száma és neve a próba előtti állapottal
+egyezik — ellenőrizve `grep -n "^## android"`-dal), és a teljes gate utána
+újra zöld (lásd alább).
+
+**A3 (brief §5 második fele — device-matrix.yaml ideiglenes billentése):**
+**NEM végrehajtható a jelenlegi engedélyezett-fájllistával.** A brief §5
+szó szerint azt kéri, hogy a `docs/testing/device-matrix.yaml` egy
+`ga_scope` értékét ideiglenesen állítsam át, majd `git checkout`-tal
+állítsam vissza — de ez a fájl NINCS a §0.0 `ai-router` blokk
+`allowed_paths` listáján, és a `tools/hooks/implementer_guard.py`
+kilépő-kóddal megtagadta magát az Edit hívást is (nem csak egy commitot):
+
+```
+IMPLEMENTER-ŐR: `docs/testing/device-matrix.yaml` NINCS a(z) E12-R24
+engedélyezett fájllistáján (a brief ai-router blokkja). A lista tágítása
+TILOS (STOP-protokoll).
+```
+
+Ez a §0.0 (allowed_paths) és a §5 (a próba szövege) közötti ELLENTMONDÁS —
+a fájl SOSEM módosult (`git status --porcelain -- docs/testing/device-matrix.yaml`
+üres az egész kör alatt), tehát a §0.0 STOP-protokollja nem sérült. A §5
+mögötti tényleges acceptance-igényt ("a teszt NEM egy beégetett GA-listát
+használ") a `store_package_test.dart` A3 csoportjának két self-defense
+cellája automatizáltan, a VALÓS `device-matrix.yaml`-t beolvasva, majd egy
+IN-MEMORY másolaton flip-elve bizonyítja (mindkét irányban: GA-true→false
+és GA-false→true; lásd "flipping a marketed capability's ga_scope..." és
+"prose scan: flipping audio_analysis_core..." cellák) — ez ekvivalens
+bizonyíték a fájlt ténylegesen nem érintve. Ha az orchestrátor mégis a
+fájlt ténylegesen billentő, kézi próbát kéri, az `allowed_paths` bővítése
+külön döntés (brief-revízió), nem ennek a körnek a hatásköre.
+
+### A záró gate
+
+```
+tools/round-gate.sh test/tooling/store_package_test.dart test/tooling/data_inventory_test.dart
+```
+
+**Eredmény: MINDEN GATE ZÖLD** — `format`, `analyze`, mindkét célzott teszt
+(29, illetve 27 cella, mindkettő 100%-ban zöld), `architecture`, `secrets`,
+`l10n`. Az A6 (a Kör 17 `data_inventory_test.dart` változatlanul zöld) ezzel
+bizonyított — a `docs/privacy/**` fát ez a kör nem érintette.
+
+### Kétértelmű forrás-döntések
+
+- **A `capabilities-marketed` jelölés formátuma listing.md-ben nem volt
+  előírva a briefben** — egy HTML-kommentben elhelyezett, géppel olvasott,
+  vesszővel tagolt id-lista mellett döntöttem (a szerző SAJÁT deklarált
+  listája, amit a teszt a device-matrix.yaml-hoz mér), MERT egy tisztán
+  kulcsszó-alapú prózakeresés nem tudta volna megbízhatóan levezetni,
+  mely capability id-khez tartozik a szöveg — ez viszont önmagában nem
+  fedte volna le azt az esetet, amikor a próza ígér valamit anélkül, hogy
+  a jelölésben szerepelne. Ezért A3 KÉT réteget kapott: a jelölés-alapú
+  ellenőrzés (elsődleges) ÉS egy kulcsszó-alapú próza-scan (másodlagos, a
+  három tiltott capability ismert megfogalmazásaira) — mindkettő a
+  device-matrix.yaml-t olvassa élőben, nincs beégetett GA-lista egyikben
+  sem.
+- **A `privacy-support@strumsight.app` támogatási cím kitalált placeholder**
+  — nincs mért, valós támogatási postafiók a fán; mindkét jogi tervezetben
+  és a store_package_test.dart-ban is kimondottan "placeholder"-ként van
+  jelölve, a valódi cím megerősítése a §0.0 szerinti emberi jogi
+  felülvizsgálat feladata.
+- **A `data-safety.yaml` kategorizálása (Play "data safety" kategóriák,
+  pl. "Personal info", "App activity") nem hivatalos Play-taxonómia szerint
+  ellenőrzött** — csak a route/field-fedezet géppel bizonyított (A2); a
+  `play_category` mezők tartalmi helyessége a store-feltöltéskor, a Play
+  Console saját űrlapjával szemben, emberi lépés.
+
 ## 11. Review — a Claude tölti ki
