@@ -418,4 +418,147 @@ dart run tool/check_screen_reachability.dart
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`, `--effort high`), 2026-09-02.
+**Branch:** `sonnet-impl/e15-r14-practice-generator-composition-layer`, két commit
+(`E15-R14: Practice Generator composition layer`,
+`E15-R14: keep A7 grep literally empty …`).
+
+### 10.1 Mit szállított a kör
+
+| Fájl | Mit ad |
+|---|---|
+| `lib/features/practice_generator/data/local/local_practice_evidence_repository.dart` | ÚJ. A `PracticeEvidenceRepository` PERZISZTENS implementációja: saját `ss.practice_generator.evidence` névtér, manifest-hidratáció konstruktorban (`GenerationDraftRepository`/`LocalPracticePlanRepository` mért mintája), a `SkillEvidence` JSON-képe a fájlon belül (§0.0.B/R3). |
+| `lib/features/practice_generator/application/usecase/start_plan_generation.dart` | ÚJ. `StartPlanGeneration` — a Setup-draftot egy injektált `GenerationPlanInputBuilder` seamen át `GenerationPlanInput`-tá alakítja, majd KIZÁRÓLAG a meglévő `GenerationOrchestrator.generate`-et hívja. A seam maga nem generálási logika: a valódi katalógus/evidence-alapú összeállítás egy KÉSŐBBI kör hatásköre (ADR 0482 §Kontextus 4. pont) — ezt a `generationPlanInputBuilderProvider` `UnimplementedError`-je jelzi explicit módon, a `tutorOrchestratorProvider` mért mintáját követve. |
+| `lib/features/practice_generator/presentation/providers/practice_generator_providers.dart` | ÚJ. Az EGY kompozíciós gyökér — a 6 terv-képernyő MINDEN kötelező konstruktor-függősége (§0.0.B/R4 táblázata szerint), a `GenerationOrchestrator` `ref.onDispose`-os lezárásával (D8). |
+| `lib/features/practice_generator/public/{data,application,presentation}.dart` | Az ÚJ típusok exportja (fragmens). |
+| `lib/features/practice_generator/public.dart` | Generált — `dart run tool/gen_public_barrel.dart --write` (lásd 10.5). |
+| 3 ÚJ tesztfájl | `test/features/practice_generator/data/local_practice_evidence_repository_test.dart` (12 cella, A1/A2), `test/features/practice_generator/application/start_plan_generation_test.dart` (3 cella, A4), `test/features/practice_generator/presentation/practice_generator_providers_test.dart` (9 cella, A3 + a production-default ellenőrzés + D8). |
+
+### 10.2 §0.0 három mérése — ELŐTTE / UTÁNA
+
+| Mérés | ELŐTTE (§0.0.B, `main @ 26753c6f`) | UTÁNA (ez a kör) |
+|---|---|---|
+| `grep -rln "Provider<\|NotifierProvider\|ChangeNotifierProvider" lib/features/practice_generator` | ÜRES (exit 1) | `lib/features/practice_generator/presentation/providers/practice_generator_providers.dart` (EGY találat — a kompozíciós gyökér) |
+| `grep -rn "implements PracticeEvidenceRepository" lib/` | EGY találat (a teszt-fake, `domain/repository/practice_evidence_repository.dart:107`) | KETTŐ találat: a fake VÁLTOZATLANUL (`:107`) + `lib/features/practice_generator/data/local/local_practice_evidence_repository.dart:44` (az ÚJ, perzisztens implementáció) |
+| `dart run tool/check_screen_reachability.dart` — a 6 terv-képernyő | mind `unreachable` (a §0.0.B nem futtatta újra numerikusan, de a route-ok/flag-ek nem léteztek) | **VÁLTOZATLANUL `unreachable`** mind a 6-ra (`plan_setup_screen.dart`, `plan_preview_screen.dart`, `plan_privacy_screen.dart`, `plan_change_review_screen.dart`, `today_plan_screen.dart`, `weekly_plan_screen.dart`) — teljes mérés: „Measured screens: 96. Reachable: 68. Unreachable: 28. Flag-gated: 25.” (A5, A6 egyaránt zöld: a 96-os darabszám és a 6 képernyő unreachable-verdiktje is a kör előtti állapotot tükrözi) |
+
+### 10.3 A7 — nincs `InMemoryPracticeEvidenceRepository` a production-kompozícióban
+
+```
+$ grep -rn "InMemoryPracticeEvidenceRepository" lib/features/practice_generator/presentation lib/features/practice_generator/data
+(üres kimenet)
+```
+
+Megjegyzés: az első verzióban a doc-commentek név szerint hivatkoztak a
+teszt-fake-re (magyarázat célból), ami a NEM kommentszűrt grepet nem-üresre
+vitte — ezt a második commit javította (a hivatkozás a class nevének
+kimondása nélkül maradt meg).
+
+### 10.4 A8 — az adat-leltár diffje üres
+
+```
+$ git diff --stat -- docs/privacy/
+(üres kimenet)
+```
+
+A `docs/privacy/**` a §4 szerint tilos zóna maradt — a kör nem érintette.
+
+### 10.5 A9 — a generált barrel friss
+
+A `public/{data,application,presentation}.dart` fragmensek bővítése után:
+
+```
+$ dart run tool/gen_public_barrel.dart --write
+Running build hooks...Running build hooks...Wrote 1 barrel(s).
+```
+
+A `tools/round-gate.sh` `architecture` lépése (`_checkGeneratedBarrels`) ezt
+követően zöld (lásd 10.7).
+
+### 10.6 §6.1 — a valódi-sértés próba (KÖTELEZŐ, mindkét ág)
+
+**1. ág — a fake bekötve.** A `practiceEvidenceRepositoryProvider`
+ideiglenesen (NEM commitolva) a következőre módosult:
+
+```dart
+final practiceEvidenceRepositoryProvider = Provider<PracticeEvidenceRepository>(
+  (ref) => InMemoryPracticeEvidenceRepository(),
+);
+```
+
+(az immár felesleges `local_practice_evidence_repository.dart` import is
+eltávolítva, hogy a bukás ne csak egy `unused_import` lint-en akadjon el).
+
+A §7 gate újrafuttatva **PIROS**-ra váltott — pontosan azon a cellán, amit a
+kompozíció-teszt (`practice_generator_providers_test.dart`, A3) mér, NEM a
+`local_practice_evidence_repository_test.dart`-on (az utóbbi közvetlenül a
+osztályt teszteli, a providertől függetlenül — ez helyes, hiszen A2 mércéje
+maga a repository-osztály, nem a bekötés; a bekötés helyes/helytelen voltát
+az A3-teszt méri):
+
+```
+Failing tests:
+  .../practice_generator_providers_test.dart: practice_generator_providers — A3 (one cell per screen)
+    PlanPrivacyScreen: DeletePracticePlanningData + ExportPracticePlanningData build from the scope,
+    both bound to the PERSISTENT evidence repository (ADR 0482 / D2)
+  .../practice_generator_providers_test.dart: production default: the evidence repository is the
+    PERSISTENT implementation, never the never-forgets in-memory test fake (A1/A7)
+
+  Expected: <Instance of 'LocalPracticeEvidenceRepository'>
+    Actual: <Instance of 'InMemoryPracticeEvidenceRepository'>
+     Which: is not an instance of 'LocalPracticeEvidenceRepository'
+
+  → [4] test test/features/practice_generator/presentation/practice_generator_providers_test.dart: PIROS (kilépési kód 1)
+```
+
+Gate teljes kimenet: `exit=10` (`code_failure`).
+
+**2. ág — visszaállítás.** `git checkout --
+lib/features/practice_generator/presentation/providers/practice_generator_providers.dart`
+→ `git status --porcelain` üres (a próba NEM került commitba). A §7 gate
+újrafuttatva ismét **ZÖLD** (lásd 10.7 — ez a végső, commitolt állapot
+mérése).
+
+### 10.7 A kötelező záró gate (§7) — végső, csonkítatlan futás
+
+```
+$ tools/round-gate.sh test/features/practice_generator/data/local_practice_evidence_repository_test.dart test/features/practice_generator/presentation/practice_generator_providers_test.dart test/features/practice_generator/application/start_plan_generation_test.dart test/features/practice_generator/accessibility/planner_privacy_test.dart test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/data/local_repository_test.dart test/tooling/data_inventory_test.dart test/tooling/screen_reachability_test.dart test/tooling/gen_public_barrel_test.dart test/ui/ui_inventory_test.dart
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice_generator/data/local_practice_evidence_repository_test.dart zöld
+    test test/features/practice_generator/presentation/practice_generator_providers_test.dart zöld
+    test test/features/practice_generator/application/start_plan_generation_test.dart zöld
+    test test/features/practice_generator/accessibility/planner_privacy_test.dart zöld
+    test test/features/practice_generator/evidence/evidence_aggregator_test.dart zöld
+    test test/features/practice_generator/data/local_repository_test.dart zöld
+    test test/tooling/data_inventory_test.dart                 zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/tooling/gen_public_barrel_test.dart              zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+(`exit=0`.)
+
+### 10.8 Scope-fegyelem — amit a kör NEM tett
+
+- Route, `AppRoutes`, `app_router.dart`, feature-flag: érintetlen.
+- `lib/features/practice_generator/presentation/screens/**`,
+  `lib/features/practice_generator/domain/**`, `lib/app/**`, `lib/core/**`,
+  `tools/**`, `tool/**`, `.github/**`, `docs/execution/pipeline-*`,
+  `docs/privacy/**`: érintetlen — `git diff --stat HEAD~2..HEAD` pontosan a
+  §4 engedélyezett-listájára korlátozódik (10 fájl: a 3 ÚJ lib-fájl, a 3
+  barrel-fragmens + a generált `public.dart`, a 3 ÚJ tesztfájl).
+- A `ui_inventory_test.dart` (A6) és a 6 képernyő elérhetőségi verdiktje
+  (A5) VÁLTOZATLAN (10.2).
+- `GenerationOrchestrator`, `PlanValidator`, `PlanRepairer`,
+  `WeeklyScheduler` stb. viselkedése VÁLTOZATLAN — a `StartPlanGeneration`
+  kizárólag a meglévő orchestrátort hívja (10.1).
+
 ## 11. Review — a Claude tölti ki
