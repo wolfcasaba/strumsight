@@ -1,5 +1,6 @@
 export '../presentation/controller/plan_setup_controller.dart';
 export '../presentation/controller/plan_preview_controller.dart';
+export '../presentation/providers/practice_generator_providers.dart';
 export '../presentation/screens/plan_setup_screen.dart';
 export '../presentation/screens/plan_preview_screen.dart';
 export '../presentation/screens/today_plan_screen.dart';

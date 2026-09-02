@@ -21,6 +21,7 @@ export 'application/usecase/pause_practice_plan.dart';
 export 'application/usecase/resume_practice_plan.dart';
 export 'application/usecase/delete_practice_planning_data.dart';
 export 'application/usecase/export_practice_planning_data.dart';
+export 'application/usecase/start_plan_generation.dart';
 
 export 'data/adapter/legacy_lesson_candidate_adapter.dart';
 export 'data/adapter/legacy_lesson_catalog_adapter.dart';
@@ -35,6 +36,7 @@ export 'data/adapter/song_goal_reader_adapter.dart';
 export 'data/ai/planner_assist_schema.dart';
 export 'data/ai/remote_planner_assist_gateway.dart';
 export 'data/ai/fake_planner_assist_gateway.dart';
+export 'data/local/local_practice_evidence_repository.dart';
 export 'data/local/local_practice_plan_repository.dart';
 export 'data/local/practice_plan_migrator.dart';
 // The older serializer record is repository-local. R23 publishes the richer
@@ -91,6 +93,7 @@ export 'domain/service/song_goal_planner.dart';
 
 export 'presentation/controller/plan_setup_controller.dart';
 export 'presentation/controller/plan_preview_controller.dart';
+export 'presentation/providers/practice_generator_providers.dart';
 export 'presentation/screens/plan_setup_screen.dart';
 export 'presentation/screens/plan_preview_screen.dart';
 export 'presentation/screens/today_plan_screen.dart';

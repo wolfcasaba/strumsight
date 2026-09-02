@@ -23195,3 +23195,72 @@ a `blocked` jelzés nem óvatosság, hanem a lánc végleges megállítása egy 
 rejected while a stage-* decision is not approved or a P0/P1 blocker is open`
 (a rekord-oldali invariáns), és ugyanott a fixture-felülírásos inverz cella,
 amely bizonyítja, hogy a szabály nem vacuous.
+
+## L583 — Egy ÚJ kompozíciós gyökér két úton hazudik zölden: a szinkron interfész mögötti `unawaited` perzisztencia elnyeli a tárolási hibát, a „minden függőség felépül" cella pedig a SAJÁT override-jaitól zöld (E15-R14, 2026-09-02)
+
+**Tünet.** Az E15-R14 (Practice Generator kompozíciós réteg) teljes gate-je
+zölden állt — `format`, `analyze`, 10 teszt-útvonal, `architecture`, `secrets`,
+`l10n` mind zöld, a scope-audit `ok`, mind a 9 acceptance-cella teljesült,
+és a kötelező „valódi-sértés próba" is szabályosan pirosra váltott. A review
+(`security-reviewer` + `flutter-reviewer` + `flutter-devil-advocate`, mind a
+három futtatott próbákkal) ebben az állapotban **2 BLOCKER + 7 MAJOR**-t mért ki.
+
+**Az első hibaosztály — a szinkron interfész mögötti fire-and-forget írás.** A
+`PracticeEvidenceRepository` metódusai szinkronok (a reducer pure kódból hívja
+őket), a `KeyValueStore` írásai viszont aszinkronok, ezért az implementáció
+minden írást/törlést `unawaited(...)`-tel indított. A store szerződése
+(`lib/core/storage/key_value_store.dart`) kimondja: *„Writes never fail
+silently. A platform-level write failure completes the future with a
+`StorageException`"* — az `unawaited` viszont pontosan ezt a jelzést dobja el.
+Mérve (`InMemoryKeyValueStore.failingKeys`, egy fake-mező, amit a kör tesztjei
+egyszer sem használtak):
+
+```
+deleteForPlan reported removed=1
+record STILL on disk? true
+manifest=[]                              <- a manifest-írás SIKERÜLT
+fresh instance deleteForPlan removes=0
+=> residue undeletable forever: true
+UNHANDLED async errors escaping unawaited(): 1 [StorageException]
+```
+
+A törlés sikert jelentett a privacy-képernyőnek, az adat a lemezen maradt, és
+mivel a manifestből már kikerült, **egyetlen későbbi törlés sem érte el**. Ez a
+CLAUDE.md „silent no-op" csapdájának lokális tár-változata, és pont az ellen a
+hamis consent-felület ellen szólt a kör saját ADR-je (0482 / D2). A testvér
+`LocalPracticePlanRepository` ugyanezt HELYESEN csinálja (minden írást `await`-el
+és `AppResult`/`StorageFailure`-re képez) — a doc-comment mégis azt állította,
+hogy „exactly like" az. **A javítás nem az `await` volt** (a szinkron szerződés
+nem engedi), hanem kompenzáló egyeztetés: a bukott fizikai `remove` visszateszi
+az id-t a manifestbe (a rekord felfedezhető marad egy későbbi próbához), a
+bukott `write` kiveszi az optimista bejegyzést, a hiba pedig `lastWriteFailure`-ben
+megfigyelhető.
+
+**A második hibaosztály — a körkörös acceptance-cella.** Az A3 kritérium így
+szólt: „mind a 6 képernyő MINDEN kötelező konstruktor-függősége felépül egyetlen
+`ProviderScope`-ból". A cella zöld volt. A cella `buildContainer()`-e viszont
+**maga írta felül** azt a két providert, ami éles kódban `UnimplementedError`-t
+dob. Production-alakú konténerben (kizárólag `keyValueStoreProvider` override,
+ahogy a `main.dart` teszi) mérve: 3/6 képernyő függősége + a teljes generálási
+út **dobott**. A cella nem hazudott a saját scope-járól — a scope volt rosszul
+megválasztva.
+
+**Általánosítás.** Egy „X felépül a kompozícióból" cella csak akkor bizonyít,
+ha a konténere **legfeljebb annyit** override-ol, amennyit a production boot
+(`main.dart`) is. Minden további override-ot a cellának ki kell mondania, és
+külön, negatív guard-cellának kell mérnie, mi az, ami MA nem áll elő — így a
+hiány mért tény lesz, nem felfedezetlen üresség, és a bekötő kör pirosra
+futtatja a guardot, amikor betölti a seamet.
+
+**Amit a hiányból tanultunk a scope-ról.** A seam maga védhető volt (valódi
+resolverhez másik feature `public.dart`-ja kellett volna = tilos zóna), a
+**hallgatás** nem: a kör ADR-je egyetlen döntésben sem említette a két dobó
+providert, a §10 pedig egy nem létező ADR-pontra hivatkozott indoklásként. A
+zárás ezért nem a bekötés lett, hanem három kimondott, ADR-be írt, kötelező
+`E15-R07 / F1`-előfeltétel (0482 / D9, D10, D11). **Halasztás igen, hallgatás nem.**
+
+**Őrteszt:** `test/features/practice_generator/presentation/practice_generator_providers_test.dart`::`B2 guard`
+(provider-enként `throwsUnimplementedError` egy CSAK `keyValueStoreProvider`-t
+felülíró konténeren) és
+`test/features/practice_generator/data/local_practice_evidence_repository_test.dart`::`B1 — a failing physical remove does not silently succeed`
+(`failingKeys`-alapú cella; a review előtti kódon bizonyítottan piros).
