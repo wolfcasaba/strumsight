@@ -1,0 +1,31 @@
+# Kivétel-nyilvántartás a tool/release/security_scan.py számára (ADR 0481 D4).
+#
+# Jelenleg NINCS élő kivétel — a kör pre-flightja idején a fán MÉRT
+# guardok, függőség-korlátok és secret-scan mind zöldek voltak (§10). Egy
+# kritikus lelet ide csak akkor kerülhet, ha a felelős TUDATOSAN, lejárattal
+# elfogadja — az üres lista NEM azt jelenti, hogy a scan enyhébb, hanem hogy
+# ma nincs elfogadott kockázat.
+#
+# Séma (minden mező KÖTELEZŐ — owner, expires vagy branch nélküli bejegyzés
+# kritikus lelet, ADR 0481 D4):
+#
+#   exceptions:
+#     - finding: <a kivételezett lelet id-je (pl. guard id, advisory CVE-id,
+#                 vagy a security_scan.py által generált finding-id)>
+#       branch: <MELYIK ágra vonatkozik — KIZÁRÓLAG "guards" vagy
+#                "dependencies". A "secrets" ág leletei ELVI okból SOHA nem
+#                elnyelhetők (a titok-kapu a D3 szerint fail-closed
+#                delegáció): egy `branch: secrets` (vagy bármilyen más,
+#                ismeretlen érték) maga kritikus lelet, nem egy csendben
+#                figyelmen kívül hagyott mező. A kivétel csak az itt
+#                megnevezett ágon, az itt megnevezett `finding`-re illeszkedik
+#                — egy `dependencies`-re szóló bejegyzés SOHA nem nyel el egy
+#                azonos id-jű `guards`-leletet, és fordítva.>
+#       owner: <felelős e-mail vagy handle>
+#       expires: <ISO YYYY-MM-DD — a HATÁR INKLUZÍV: a MA lejáró kivétel MÉG
+#                 érvényes; a tegnap lejárt kivétel kritikus lelet>
+#       reason: <miért fogadható el ideiglenesen a lelet>
+#
+# A lejárat-összevetés alapja a `--today` (alapértéke a mai UTC dátum) — így
+# a küszöb determinisztikusan tesztelhető (brief §6.1).
+exceptions: []

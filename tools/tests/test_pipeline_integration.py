@@ -272,7 +272,10 @@ class PipelineIntegrationTest(unittest.TestCase):
                 # Indok azonos: a Ch15-körök mércéje invariáns-sűrű (típus-
                 # pinnelő őrök, text-scale mátrix, a11y-szerződés, backend
                 # kapu-cellák).
-                if round_id.startswith(("E12-", "E13-", "E15-")):
+                # USER-DÖNTÉS 2026-09-02: a Chapter 16 (Kompozíció és rollout)
+                # sáv ugyanezzel a felállással fut — implementer `sonnet-impl`,
+                # orchestrátor Opus 5.
+                if round_id.startswith(("E12-", "E13-", "E15-", "E16-")):
                     allowed = allowed | {"sonnet-impl"}
                 self.assertIn(
                     engine,

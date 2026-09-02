@@ -6,7 +6,10 @@
 - **Branch:** `<motor>/e12-r22-beta-distribution-and-feedback`
 - **Előfeltétel:** `E12-R06` és `E12-R17` merge-elve (release-notes generálás a manifestből; a consent-határ a data-inventoryból)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0461` — a szám FOGLALT (Chapter 12 batch-tartomány).
+- **Előre kiosztott ADR:** ~~`ADR 0461`~~ → **`ADR 0486`** (a §0.0.A pre-flight revízió szerint: a
+  foglaló `tools/round-slots.py reserve-adr --round E12-R22` 2026-09-01-én `0486`-ot adott; a queue
+  batch-előjegyzése elavult). A megírt ADR:
+  [`docs/adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md`](../adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md).
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "beta distribution tester consent feedback diagnostics bundle redaction"` → a `halts/round-status-E08-R20` és `E09-R14` merge-elt körök (diagnosztikai és média-consent minták). A MÉRT precedens a fán a Lab-diagnosztika: opt-in, token mögött, méret-korlátos WAV-melléklettel.
 
@@ -37,6 +40,111 @@ native_gate = false
 ```
 
 **Kockázat = high, indoklás:** a kör a felhasználói diagnosztikai adat útját érinti (bundle-tartalom, redakció, melléklet-consent) — egy hiányos redakció token vagy e-mail kiszivárgását jelentené. A `security-reviewer` futtatása a review-ban KÖTELEZŐ.
+
+## 0.0.A Pre-flight revízió — MÉRT tények (Claude, 2026-09-01, `main @ 1f09d56c`)
+
+A brief 2026-08-27-én készült (`main @ 9ca4a0dc`). Az indítás előtti mérés a következőket
+erősítette meg / írta felül. **Ami itt áll, az erősebb a brief korábbi szövegénél.**
+
+### R1 — Az ADR száma `0486`, nem `0461`
+
+`tools/round-slots.py reserve-adr --round E12-R22` → **`0486`**. A lemezen a legmagasabb szám
+`0485` (E12-R21), és `0461`-es fájl nem létezik. Ugyanaz a minta, mint az E12-R21-nél
+(előjegyzés `0460`, tényleges `0485`). A §5 kötött döntései tehát az
+[ADR 0486](../adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md)
+D1–D7 pontjai. **Az ADR-t a Claude MEGÍRTA a pre-flightban — az implementer nem nyúl a
+`docs/adr/**`-hoz.**
+
+### R2 — Mért állandók és kulcsok, amiket az implementer NEM talál ki
+
+| Mért érték | Forrás |
+|---|---|
+| `maxWavBytes = 5 * 1024 * 1024` = **5 242 880** bájt, a határ INKLUZÍV | `lib/features/diagnostics/data/diagnostics_uploader.dart:40` |
+| A backend a feltöltést **verbatim bájtként** tárolja, nem transzformál | `backend/app/routers/diagnostics.py` (fejléc + `_unique_session_path`) |
+| Release-manifest kulcsok (a béta-jegyzet BEMENETE): `schemaVersion`, `app.{version,buildNumber,shortSha,channel}`, `modelPackage.{schemaVersion,manifestSha256,modelCount}`, `knowledgePackage.{schemaVersion,manifestSha256,documentCount}`, `artifacts[].{name,path,sha256}` | `tool/generate_release_manifest.dart:206-272` |
+| Commitolt release-manifest JSON **nincs** — futásidőben áll elő, tehát a teszt FIXTURE manifestet ír `Directory.systemTemp`-be | `git ls-files` |
+| `leaves_device: true` mezőt tartó útvonalak: `account_api` (6 mező), `diagnostics_upload` (3), `share_export` (3). A `tutor_stream` és `community_media` mezői `false`-ok; az öt `rides:` sor mező nélküli | `docs/privacy/data-inventory.yaml` |
+
+### R3 — Szállított minták, amiket követni KELL (ne írj újat)
+
+- **Dart tooling-teszt Python eszközre:** `test/tooling/ai_release_report_test.dart` és
+  `release_manifest_test.dart` `python3`-ra shell-el, fixture-fát `Directory.systemTemp`-be ír, és
+  `tearDown`-ban bont. A `python3` az EGYETLEN külső bináris, amit a
+  `test/tooling/beta_release_notes_test.dart` meghívhat; `skip:` ág SEHOL nincs benne.
+- **Backend pytest a `tool/release/*.py`-ra:** `backend/tests/test_security_release.py`
+  `importlib.util.spec_from_file_location` + `sys.modules[spec.name] = module` mintával tölti be a
+  modult (a `from __future__ import annotations` miatt a regisztráció a `exec_module` ELŐTT
+  kötelező). A `backend/tests/test_diagnostics_redaction.py` ezt a mintát használja.
+- **Leltár-parszolás:** `test/tooling/beta_release_notes_test.dart` a szállított
+  `tool/check_data_inventory.dart` `DataInventory.parseFile`-ját IMPORTÁLJA
+  (`import '../../tool/check_data_inventory.dart';`, ahogy `data_inventory_test.dart` teszi) —
+  második YAML-parszert írni tilos (ADR 0486 D6).
+- **Fixture-fa nincs commitolva:** a `test/fixtures/**` NEM engedélyezett útvonal, tehát minden
+  fixture futásidőben, temp-könyvtárban keletkezik.
+
+### R4 — A `beta_release_notes_test.dart` a kör EGYETLEN Dart teszt-fájlja
+
+A név a Kör 6-os elnevezést örökli, de a fájl MINDKÉT Python eszköz celláit hordozza
+(`build_diagnostics_bundle.py` ÉS `generate_beta_notes.py`), plusz a §6 A6 dokumentum-celláját. Ez
+nem tévedés: az engedélyezett-fájllista egyetlen új Dart teszt-fájlt ad, és a lista **szűkíthető,
+nem tágítható**.
+
+### R5 — A `--consent-*` kapcsolók pontos szerződése (ADR 0486 D1)
+
+Az A4 cella nem „valamilyen" consent-ellenőrzést mér, hanem ezt a négy bemenet/kimenet párt:
+
+| Bemenet | Elvárt |
+|---|---|
+| se `--consent-diagnostics`, se `--consent-raw-audio` | exit ≠ 0, **kimeneti fájl nem jön létre** |
+| csak `--consent-diagnostics` | exit 0, csomag hang NÉLKÜL |
+| csak `--consent-raw-audio` | exit ≠ 0 (a hang-consent önmagában nem jogosít) |
+| `--consent-diagnostics --consent-raw-audio` | exit 0, csomag a hang-melléklettel |
+
+### R6 — Az A6 kereszt-ellenőrzés pontos alakja (ADR 0486 D6)
+
+A `docs/beta/tester-consent.md` egy gépi blokkot tart:
+
+```text
+<!-- data-inventory-crosscheck:begin -->
+| route | field |
+|---|---|
+| diagnostics_upload | ml_dsp_comparison_events (tSec, mlChord, dspChord, agree, mlConf, dspConf, strumDir, bpm, inputLevel) |
+…
+<!-- data-inventory-crosscheck:end -->
+```
+
+A `field` cella a leltár `name:` értékének **szó szerinti** másolata. A teszt KÉTIRÁNYBAN mér:
+minden `leaves_device: true` mezőhöz kell dokumentum-sor (hiány → piros), és minden dokumentum-sor
+mögött kell leltár-mező (kitalált sor → piros). A blokk a leltár HÁROM ilyen útvonalát fedi le
+(`account_api`, `diagnostics_upload`, `share_export`), nem csak a diagnosztikait — a tesztelő a
+teljes app-ot használja.
+
+### R7 — Redakció: négy osztály, rekurzívan (ADR 0486 D2)
+
+token · e-mail · abszolút fájl-útvonal · eszköz-azonosító (`deviceId`, `device_id`, `androidId`,
+`installId`, `udid`). Az e-mail BÁRMELY sztringértékben, nem csak `email` nevű kulcsban. A
+`device_metadata` platform-sztringje (`appVersion`, `device`) **marad** — a leltár szerint a
+build-korreláció a célja. Helyettesítő: állandó `[REDACTED:token|email|path|device-id]`, só és hash
+nélkül (a determinizmus ezen áll).
+
+### R8 — Amit ez a kör NEM előlegez meg
+
+Az [E12-R25](e12-r25-release-candidate-assembly.md) RC-workflow-ja (`beta-release.yml`) és az
+[E12-R27](e12-r27-closed-beta-launch-and-monitoring.md) cohort-profilja
+(`docs/beta/cohort-profiles.yaml`, `tool/release/verify_beta_profile.py`) **más körök tulajdona** —
+sem fájlt, sem sémát ne hozz létre hozzájuk. A `docs/beta/enrollment.md` a cohort-fogalmat
+PRÓZÁBAN írja le, gépi profil-fájl nélkül.
+
+### R9 — Visszakeresés (ADR 0312)
+
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "beta distribution tester consent
+feedback diagnostics bundle redaction"` → `halts/E08-R20`, `E09-R14` (rétegzett consent és
+diagnosztikai minták, mindkettő merge-elt). `--corpus lessons,halts --top 5 "redaction masking
+secret leak python generator deterministic byte-identical output"` → **[L394](../LESSONS.md#l394)**
+(friss klónban a generált l10n első gate-je átmenetileg stale lehet — a változatlan-HEAD ismétlés
+diagnosztikai bizonyíték, nem product-fix; a `tools/prepare-flutter-generated.sh` a klón után
+KÖTELEZŐ) és [L92](../LESSONS.md#l92) (determinisztikus generátor-precondition). Teljes korpuszon a
+saját brief és az SDD Ch12 „Fő érintett fájlok" blokkja jött vissza — új korlát nem került elő.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -70,7 +178,7 @@ Kontrollált béta-terjesztés, tájékozott tesztelői hozzájárulás és reda
 - ÚJ képernyő vagy `lib/**` módosítás.
 - ÚJ CI-workflow (`beta-release.yml`) — a Kör 25 RC-workflow-jával együtt jön.
 - Valódi tesztelői adat vagy valódi token a fixture-ökben.
-- `docs/adr/**` — az ADR 0461-et a Claude írja.
+- `docs/adr/**` — az ADR **0486**-ot a Claude MÁR megírta a pre-flightban (§0.0.A R1).
 
 ## 4. Engedélyezett fájlok
 
@@ -86,7 +194,7 @@ Kontrollált béta-terjesztés, tájékozott tesztelői hozzájárulás és reda
 
 **Tilos zóna:** `lib/**` · `.github/**` · `lab_build.json` · `docs/adr/**` · `tools/**`
 
-## 5. Kötött architekturális döntések (ADR 0461)
+## 5. Kötött architekturális döntések (ADR 0486 — a teljes szöveg a D1–D7 pontokban)
 
 ### 5.1 A nyers hang KÜLÖN, kikapcsolt alapértelmezésű melléklet
 
@@ -107,9 +215,10 @@ Titok nem kerül a csomagba, tehát a szerverre sem. **NEM elfogadható gyengít
 | A1 | A bundle alapértelmezésben NEM tartalmaz nyers hangot | `beta_release_notes_test.dart` |
 | A2 | Token, e-mail és fájl-útvonal maszkolva kerül a bundle-be | `beta_release_notes_test.dart` + `test_diagnostics_redaction.py` |
 | A3 | Méret-korlát fölötti melléklet elutasított (nem csendben csonkolt) | `beta_release_notes_test.dart` |
-| A4 | Hozzájárulás nélkül a bundle-építés nem-nulla kóddal áll le | `beta_release_notes_test.dart` |
-| A5 | A béta-jegyzet kétszeri generálása bájtazonos, és tartalmazza a build-azonosítót | `beta_release_notes_test.dart` |
-| A6 | A `tester-consent.md` mezőről mezőre megegyezik a Kör 17 data-inventoryjával | `beta_release_notes_test.dart` dokumentum-cellája |
+| A4 | A §0.0.A R5 NÉGY consent-bemenete pontosan a táblázat szerinti kimenetet adja; hozzájárulás nélkül kimeneti fájl SEM keletkezik | `beta_release_notes_test.dart` |
+| A5 | A béta-jegyzet kétszeri generálása bájtazonos, tartalmazza az `app.version` + `app.buildNumber` + `app.shortSha` hármast és a `app.channel`-t; hiányzó kötelező manifest-kulcsra nem-nulla kilépés | `beta_release_notes_test.dart` |
+| A6 | A `tester-consent.md` gépi blokkja KÉTIRÁNYBAN egyezik a Kör 17 data-inventory `leaves_device: true` mezőivel (§0.0.A R6) | `beta_release_notes_test.dart` dokumentum-cellája |
+| A8 | A csomag JSON-ja kanonikus (minden szinten rendezett kulcsok, egyetlen záró `\n`), és két futás bájtazonos | `beta_release_notes_test.dart` |
 | A7 | A meglévő `diagnostics_storage_separation_test.dart` VÁLTOZATLANUL zöld | a §7 gate |
 
 **Küszöb-cellahármas a melléklet-méretre** (a MÉRT `maxWavBytes = 5 242 880` bájt, a határ INKLUZÍV — a pontosan ekkora melléklet MÉG elfogadott): a küszöb **alatt** (5 242 879 bájt) → elfogadva; **pontosan rajta** (5 242 880) → elfogadva; a küszöb **fölött** (5 242 881) → ELUTASÍTVA, hibával, nem csonkolással.
@@ -123,6 +232,11 @@ Titok nem kerül a csomagba, tehát a szerverre sem. **NEM elfogadható gyengít
 | A túl nagy melléklet csendben csonkolódik | a küszöb-cellahármas „fölött" cellája |
 | A consent-ellenőrzés figyelmeztet, de folytatja a csomagolást | A4 |
 | A jegyzet generálási időbélyeget tartalmaz | A5 |
+| A redakció csak a legfelső szinten fut, a beágyazott event nyers marad | A2 (rekurzív cella) |
+| Csak `--consent-raw-audio` mellett is összeáll a csomag | A4 harmadik sora |
+| A csomag kulcsai a bejárási sorrendben kerülnek a JSON-ba | A8 |
+| A dokumentum-blokk a leltárban nem létező mezőnevet sorol fel | A6 fordított iránya |
+| A jegyzet hiányzó `app.shortSha` mellett üres mezővel folytatja | A5 fail-closed cellája |
 
 **Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** kapcsold be a hang-mellékletet alapértelmezetté, futtasd a §7 gate-et → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
 
@@ -153,5 +267,202 @@ cd backend && python -m pytest tests/test_diagnostics_redaction.py tests/test_di
 - **Felület-hiány elfelejtése.** A feedback-képernyő NEVESÍTETT hiány marad — a §0.0 kimondja, hogy a Chapter 13 pótkörébe tartozik.
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+**Motor:** `sonnet-impl` (Claude Sonnet 5). **Induló HEAD:** `b2b37735` (pre-flight
+commit, ADR 0486 + brief §0.0.A revízió). Ez a kör egy FOLYTATÓ futás volt: az
+előző implementer-futás mind a 7 fájlt előállította és a gate [1]–[9] lépését
+zöldre vitte a munkapéldányban, de a [10] backend pytest közben ütközött a
+wrapper 3600 s abszolút időkorlátjába, **commit nélkül**. Ez a futás a
+munkapéldányt vette át `??` (untracked) állapotban.
+
+### 10.1 Szállított fájlok
+
+| Fájl | Mit tartalmaz |
+|---|---|
+| `tool/release/build_diagnostics_bundle.py` (243 sor) | A redaktáló + rétegzett-consent bundle-építő |
+| `tool/release/generate_beta_notes.py` (204 sor) | A determinisztikus béta-jegyzet generátor |
+| `test/tooling/beta_release_notes_test.dart` (991 sor) | A1–A8 minden cellája, a küszöb-cellahármas, A4 négy consent-pár |
+| `backend/tests/test_diagnostics_redaction.py` (189 sor) | Backend-oldali redakció-tesztek |
+| `docs/beta/enrollment.md`, `docs/beta/tester-consent.md`, `docs/beta/feedback-triage.md` | A tesztelői consent + triázs dokumentáció, a tester-consent.md gépi blokkja A6-ban kereszt-ellenőrizve |
+
+### 10.2 §2.2 — Backend sáv (külön processzként)
+
+```
+cd backend && python -m pytest tests/test_diagnostics_redaction.py tests/test_diagnostics.py -q
+```
+
+Ebben a futásban a rendszer `python3`-mal futott (nincs `backend/.venv` a
+munkapéldányban ehhez a lépéshez, de a záró gate `[8]`/`[9]`/`[10]` lépése a
+`/home/ubuntu/music-theory/backend/.venv`-et találta és használta — lásd
+10.4). Eredmény: **16 teszt, mind zöld**, figyelmeztetés vagy hiba nélkül.
+
+### 10.3 §2.3 — Valódi-sértés próba (kötelező, jegyzőkönyv)
+
+Parancs: a `tool/release/build_diagnostics_bundle.py` `_should_include_raw_audio()`
+függvényét `return consent_raw_audio` helyett `return True`-ra állítottam
+(a hang-melléklet alapértelmezett bekapcsolása), majd:
+
+```
+tools/round-gate.sh test/tooling/beta_release_notes_test.dart test/tooling/diagnostics_storage_separation_test.dart
+```
+
+Eredmény: `[3] test test/tooling/beta_release_notes_test.dart` → **PIROS,
+kilépési kód 1**. A gate kilépési kódja: **10**. A piros cellák pontosan a
+vártak — **A1** („a session with an audio clip produces a bundle with no
+audioClips key at all when only --consent-diagnostics is given") ÉS **A4**
+harmadik sora („only --consent-diagnostics: zero exit, bundle WITHOUT
+audio"), mindkettő ugyanazt a szerződés-sértést fogja meg két különböző
+cellából.
+
+Visszaállítás: `git checkout -- tool/release/build_diagnostics_bundle.py`.
+Bizonyíték: a visszaállítás után `git status --short` és `git diff --stat`
+üres kimenetet adott — a fa pontosan a commitolt állapotban volt.
+
+### 10.4 §2.4 — Záró, teljes gate (csonkítatlan)
+
+```
+tools/round-gate.sh test/tooling/beta_release_notes_test.dart test/tooling/diagnostics_storage_separation_test.dart
+```
+
+**MINDEN GATE ZÖLD** (10/10 lépés):
+
+| Lépés | Eredmény |
+|---|---|
+| `[1] format` | zöld |
+| `[2] analyze` | zöld — „No issues found!" |
+| `[3] test beta_release_notes_test.dart` | zöld — 44/44 teszt, „All tests passed!" |
+| `[4] test diagnostics_storage_separation_test.dart` | zöld — 3/3 teszt |
+| `[5] architecture` | zöld — 12 allowlistelt eltérés (változatlan) |
+| `[6] secrets` | zöld — 4118 fájl vizsgálva, 0 találat |
+| `[7] l10n` | zöld — en → hu paritás, 2298 üzenet |
+| `[8] backend ruff format` | zöld — 134 fájl formázva |
+| `[9] backend ruff check` | zöld |
+| `[10] backend pytest` | zöld — teljes backend suite (community modul is), 1 `x` (xfail), figyelmeztetések csak SQLAlchemy datetime deprecation |
+
+A parancs a 10 perces (600 s) eszköz-időkorlátot túllépte és a harness
+automatikusan háttérbe helyezte; a futást `TaskOutput(block=true)`-val
+blokkolva vártam meg ugyanebben a fordulóban (nem zártam a fordulót a
+háttér-feladat eredménye nélkül).
+
+### 10.5 Döntések a brief által szabadon hagyott részleteken
+
+- A backend pytest sáv (§2.2) rendszer-`python3`-mal futott, mert a
+  munkapéldányban nincs `backend/.venv`; a záró gate `[8]`–`[10]` lépése a
+  `~/music-theory/backend/.venv`-et használja — a kettő ugyanazt a 16+
+  redakciós tesztet futtatta, eltérés nem volt.
+- A valódi-sértés próbához a `_should_include_raw_audio()` egysoros
+  visszatérési értékét módosítottam (nem a hívási helyet vagy az
+  argparse-t) — ez a legkisebb, legpontosabb módosítás, ami pontosan az A1
+  szerződést (a `--consent-raw-audio` nélküli alapértelmezés) sérti meg, és
+  semmilyen más viselkedést nem érint.
+
+### 10.6 Javító kör #1 — B1 + M1–M3 + N1–N2 (`docs/reviews/e12-r22-review.md`,
+`docs/reviews/e12-r22-review-security.md`)
+
+**Induló HEAD:** `43d9e713` (a review-commit). **Motor:** `sonnet-impl` (Claude
+Sonnet 5), folytató javító kör. A szerződést (ADR 0486 D1–D7 + a D2.1/D3.1
+kiegészítés) NEM lazítottam; a küszöb/consent-mátrix változatlan.
+
+**B1 (BLOCKER) + NT1 — hibaüzenet redakció előtti tartalommal.**
+`_raw_audio_byte_count` helyett `_validate_audio_clips_shape` (index-szintű:
+`malformed audio clip at audioClips[N]: missing "wavBase64"`) + `_decode_raw_
+audio_field` (path-szintű: `malformed audio payload base64 at session.…`) —
+egyik hibaág sem `repr()`-eli a klip-dictet. `main()` egy `except Exception`
+ággal minden nem-`BundleError` kivételt (pl. `RecursionError`) tartalom
+nélküli, generikus üzenetre burkol. **Cella:** új `B1` csoport — hibás klip +
+mind a négy D2-osztály a klip többi mezőjében → a stderr egyikét sem
+tartalmazza, csak az `audioClips[0]` index-jelölést. A RÉGI kódon ez a cella
+pirosra vált (a stderr szó szerint tartalmazta a token/e-mail/útvonal/
+device-id értékeket).
+
+**M1 (MAJOR) — a nyers hang csendben megsemmisült.** A `redact()` a
+`_RAW_AUDIO_KEYS = {"wavBase64"}` mezőket kizárja a sztring-redakcióból (D2.1);
+a csomagoló `--consent-raw-audio` mellett `_verify_raw_audio_integrity()`-vel
+ellenőrzi, hogy a kimeneti klip ugyanannyi bájtra dekódolható, mint a bemeneti
+— eltérés `BundleError`. A fixture (`beta_release_notes_test.dart`) `Uint8List(n)`
+helyett determinisztikus xorshift32 PRNG-t ad (`deterministicPcm`), aminek
+base64-je valódi `/`-t tartalmaz (mérve: 1 MB klipnél több ezer `/`). **Cella:**
+új `M1` csoport (byte-for-byte azonosság) + a küszöb-hármas immár erre a
+fixture-re fut. A RÉGI kódon a küszöb-hármas és az új M1-cella egyaránt
+pirosra vált volna (a kimeneti `wavBase64` nem dekódolható).
+
+**M2 (MAJOR) — a hang-réteg/korlát csak a legfelső `audioClips` kulcsnéven
+állt.** `_iter_raw_audio_fields()` rekurzívan bejárja a teljes session-fát
+bármely mélységben lévő `wavBase64` mezőért; `--consent-raw-audio` nélkül
+`_strip_raw_audio_fields()` MINDET eltávolítja (a top-level `audioClips` pop
+is megmaradt, a meglévő A1/A4 cellák változatlanul zöldek); a korlát
+(`_total_raw_audio_bytes`) az ÖSSZES megtalált klip összegére fut. **Cella:**
+új `M2` csoport — `events[0].wavBase64` (nem `audioClips` alatt) csak
+diagnostics-consenttel → a kimenetben sehol nincs `wavBase64` kulcs; ugyanaz
++ raw-audio-consent és 5 242 881 bájtos beágyazott klip → a korlát elutasítja.
+A RÉGI kódon mindkettő pirosra váltott volna (a beágyazott klip bekerült,
+korlát nélkül).
+
+**M3 (MAJOR) — korlátlan gzip-kicsomagolás.** `_decompress_bounded()`
+64 KiB-os darabokban olvas, és az összeg `MAX_SESSION_INPUT_BYTES` (8 MiB)
+fölött azonnal `BundleError`-ral leáll — sosem allokál a korlátnál nagyobb
+puffert. A korlát levezetése kommentben: az 5 242 880 bájtos raw-audio korlát
+base64-kódolva 6 990 508 karakter, + JSON-boríték, kerekítve 8 MiB-re. A
+bemeneti FÁJL méretét is ugyanez a korlát védi (`_read_bounded_file`). **Cella:**
+új `M3` csoport — 20 MB, erősen tömöríthető payload gzip-elve → nem-nulla
+kilépés, kimeneti fájl nincs, a stderr nem tartalmaz "Traceback"-et. Kézi
+mérés (nem a Dart cellában, memória-védelem demonstrálására): 2 GB-ra bomló
+2 MB-os bombát `ulimit -v 500000` (≈500 MB) alatt futtatva is tisztán
+`exit 1`-gyel elutasította, `MemoryError` nélkül.
+
+**N1 (MINOR, kért) — a kulcsok maguk nem redaktálódtak.** A `redact()` a
+token/device-id KULCS-osztályozás UTÁN minden kulcsot átfuttat
+`_redact_string()`-en (email/útvonal osztály); két különböző kulcs azonos
+maszkra képződése `BundleError`. **Cella:** új `N1` csoport — e-mail- és
+útvonal-kulcsú map → maszkolt kulcs, `authToken` kulcs-osztályozás
+változatlan; két ütköző e-mail-kulcs → nem-nulla kilépés.
+
+**N2 (MINOR, kért) — világ-olvasható kimenet, szimlinket követett.**
+`_write_output_file()` (mindkét eszközben) `os.open(O_WRONLY|O_CREAT|O_TRUNC|
+O_NOFOLLOW, 0o600)` + `os.fchmod(fd, 0o600)`. **Cella:** új `N2` csoport — a
+kimeneti fájl módja `0600`; `--output` szimlinkre mutatva nem-nulla kilépés,
+a cél tartalma (`PRE-EXISTING`) érintetlen.
+
+**Záró gate (előtérben, csonkítás nélkül):**
+
+```
+tools/round-gate.sh test/tooling/beta_release_notes_test.dart test/tooling/diagnostics_storage_separation_test.dart
+```
+
+| Lépés | Eredmény |
+|---|---|
+| `[1] format` | zöld |
+| `[2] analyze` | zöld — „No issues found!" |
+| `[3] test beta_release_notes_test.dart` | zöld — **53/53** teszt (44 régi + 9 új: B1/M1/M2×2/M3/N1×2/N2×2), „All tests passed!" |
+| `[4] test diagnostics_storage_separation_test.dart` | zöld — 3/3 |
+| `[5] architecture` | zöld — 12 allowlistelt eltérés (változatlan) |
+| `[6] secrets` | **PIROS** — `docs/reviews/e12-r22-review-security.md:348` („provider token literal", az N4 lelet szemléltető `sk-live-…` mintája). Ez a fájl NEM az engedélyezett fájllistámon van (a review-commit `43d9e713` hozta létre, `git diff --stat 43d9e713` szerint a fájl a saját munkámban bájtra érintetlen) — **nem nyúltam hozzá**, mert a brief kifejezetten tiltja a listán kívüli módosítást. Ez egy a review-kör saját hibája, a javító körömtől függetlenül piros marad. |
+| `[7]-[10]` (l10n, backend ruff/pytest) | a fenti PIROS lépés miatt a script itt megállt; a backend sávot külön, a §2.2 parancsával futtattam (lásd lent) |
+
+Backend sáv, külön processzként (a munkapéldányban nincs `backend/.venv`,
+rendszer-`python3`-mal, mint a 10.2 pontban):
+
+```
+cd backend && python3 -m pytest tests/test_diagnostics_redaction.py tests/test_diagnostics.py -q
+```
+
+Eredmény: **16 teszt, mind zöld** (`................  [100%]`), figyelmeztetés
+nélkül — a backend-oldali redakciós tesztek a bundle-eszköz API-jában nem
+változtak, továbbra is a `bundle_tool.main([...])` közvetlen hívásra épülnek.
+`ruff format app tests` / `ruff check app tests`: mindkettő zöld (a backend
+fájlokhoz ebben a körben nem nyúltam, `134 files left unchanged`).
+
+**Scope-audit:** `python3 tools/scope-audit.py --repo . --brief docs/rounds/
+e12-r22-beta-distribution-and-feedback.md --base 43d9e713` →
+„Legacy scope audit OK (43d9e713..43d9e713, 3 changed path(s), 0
+generated/ignored)" — a 3 módosított fájl pontosan a brief listáján van:
+`tool/release/build_diagnostics_bundle.py`, `tool/release/generate_beta_notes.py`,
+`test/tooling/beta_release_notes_test.dart`.
+
+**Amit szándékosan NEM érintettem:** `docs/beta/tester-consent.md` és
+`docs/beta/feedback-triage.md` állításai (rekurzív redakció, inkluzív korlát,
+elutasítás-nem-csonkítás) a javítások UTÁN is igazak maradtak — nem volt
+bennük olyan mondat, amit a fixek hamissá tettek volna, ezért nem módosítottam
+őket.
 
 ## 11. Review — a Claude tölti ki

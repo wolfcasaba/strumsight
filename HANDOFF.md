@@ -1,5 +1,924 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E12-R32 / H7 feloldva: a NEM SZÁLLÍTOTT verifikációs útvonalak is `release-tooling` — PR [#530](https://github.com/wolfcasaba/strumsight/pull/530), squash `4de5643f` (2026-09-02)
+
+**Az E12-R32 (staged rollout) H7-tel megállt**, pedig a kör négy terméke kész
+volt, a `scope_audit=ok`, és a saját mércéje 28/28 zöld. A §7 gate pirosát
+**nem a kör diffje** okozta: az `origin/main` csúcsán (`11d0d2bb`), bármely kör
+diffje NÉLKÜL:
+
+```
+$ python3 tool/release/verify_freeze.py
+verify_freeze: 2 finding(s):
+  - backend/tests/test_production_smoke_contract.py: not classified …
+  - tools/tests/test_sol_terra_both_slots.py: not classified …
+exit=1
+```
+
+Ez **eggyel több**, mint amit a halt jelentett — a `tools/tests/…` az azóta
+merge-elt [#529](https://github.com/wolfcasaba/strumsight/pull/529)-cel érkezett.
+
+**A gyökérok nem a tool, hanem az ADAT.** A `verify_freeze.py` (E12-R30) helyes
+és fail-closed; a `docs/release/feature-freeze.md` **prefix-listája** volt
+szűkebb a valóságnál, mert a bevezető kör a SAJÁT diffjéből töltötte fel
+(`tool/release/`, `test/tooling/`). Egy zárt osztálykészletű politika-ellenőrző
+viszont a REPÓ EGÉSZÉRE mér, a freeze VÉGÉIG — így minden későbbi kör nem
+szállított kódja osztályozatlan lett. **Ugyanez a hibaosztály harmadszor:**
+
+| # | Útvonal | Honnan | Feloldás |
+|---|---|---|---|
+| 1 | `HANDOFF.md` | a lánc MINDEN köre ír `docs(handoff)` commitot | `07638527` (E12-R30 post-merge) |
+| 2 | `backend/tests/test_production_smoke_contract.py` | E12-R31, `accd30c2` | **ez a kör** |
+| 3 | `tools/tests/test_sol_terra_both_slots.py` | `11d0d2bb` (#529) | **ez a kör** |
+
+**Miért nem fogta meg a CI.** A gate-cella (`freeze_policy_test.dart:60–101`) a
+sekély (`--depth 1`) CI-klónban a fail-closed ágra fut (a `freeze_base_sha` nem
+elérhető → `exit 2`), és zölden állítja a 2-es kódot. A piros ág KIZÁRÓLAG teljes
+klónban, azaz a boxon, azaz csak a KÖVETKEZŐ kör §7 gate-jén látszik.
+
+**A javítás — elvből, nem a két mért fájlból (`docs/release/feature-freeze.md`):**
+`release-tooling` = ami **nem kerül bele a szállított termékbe**
+(`tool/release/`, `test/`, `backend/tests/`, `tools/`).
+
+**A mérce NEM lazult:** a szállított kód (`lib/**`, `backend/app/**`,
+`android/**`, `assets/**`, `pubspec.yaml`) továbbra is nyitott P0/P1/P2 blocker
+ID-t követel; a `.github/**` és a `.ai/**` **szándékosan nem** került a listára
+(a CI-definíció és a router-politika maga a kapu); a három osztály zárt maradt;
+teszt nem törlődött és nem lett `skip`-elve; a `tools/round-gate.sh` és a
+`.github/workflows/` érintetlen.
+
+**Kötelező regressziós cellák a MÉRT adatból** (`test/tooling/freeze_policy_test.dart`):
+
+| cella | ELŐTTE | UTÁNA |
+|---|---|---|
+| `the NON-SHIPPING verification paths (backend/tests/, tools/, test/) are release-tooling too` — a piros futás nyers útvonalaival és valódi commit-üzeneteivel | `exit 1`, 3 finding | `exit 0` |
+| `the widened release-tooling prefixes do NOT exempt the shipped backend or app code` | `exit 1` | `exit 1` (a határ másik oldala piros marad) |
+
+**Mérés:** izolált worktree-ben `tools/round-gate.sh
+test/tooling/freeze_policy_test.dart` → format/analyze/test/architecture/
+secrets/l10n MIND ZÖLD, `freeze_policy_test.dart` **36/36** (34+2); Full Gate
+[33662777103](https://github.com/wolfcasaba/strumsight/actions/runs/33662777103)
+**success** az exact `e89bd183` SHA-n (Router CI nem trigger: a diff egyetlen
+`router-ci.yml` útvonalat sem érint). A merge UTÁN a `main`-en
+`verify_freeze.py` → **exit 0** (33 útvonal osztályozva).
+
+**A megállt kör folytatható:** a kör saját diffje (6 útvonal) tisztán
+osztályozódik a javított doksi ellen, az ága
+(`sonnet-impl/e12-r32-staged-rollout-1-to-20-percent` @ `1f286841`) az originon
+van, a review verdikt: nincs nyitott lelet
+([`docs/reviews/e12-r32-review.md`](docs/reviews/e12-r32-review.md)).
+
+**Lecke:** [L580](docs/LESSONS.md#l580) — a zárt osztálykészletű
+politika-ellenőrző prefix-listáját ELVBŐL kell levezetni, nem a bevezető kör
+diffjéből; a tágítás határát mutáció-cellával kell őrizni; és ha egy kapunak
+környezet-függő ága van, a másik ágat is mérni kell valahol.
+
+
+## ✅ E12-R31 KÉSZ — Production deployment és internal production cohort — PR [#527](https://github.com/wolfcasaba/strumsight/pull/527), squash `accd30c2` (2026-09-02)
+
+A Ch12 **Kör 31** a production környezet és a belső cohort validálását szállítja
+— **deploy nélkül**: a §0.0 emberi kapu szerint a tényleges deploy és a
+telepítés user-művelet (infrastruktúra, titkok, store), az implementer terméke a
+deploy UTÁN futtatható, gépileg döntő füst-csomag. ADR nincs (a kör
+ellenőrzőlistát, füst-cellákat és döntési sablont ad, nem új normát; a
+`docs/adr/**` tilos zóna volt).
+
+**Szállítva:**
+
+- `tool/release/production_smoke.py` — paraméteres cél-URL, **titok nélkül** (a
+  jelszó sosem argv-ből, csak `--password-env`-ből → nincs `ps`-ben és
+  shell-historyban), stdlib-only, minden ágon fail-closed;
+- `backend/tests/test_production_smoke_contract.py` (13/13) — a hívott végpontok
+  szerződés-cellái + a kötelező valódi-sértés próba;
+- `test/tooling/production_readiness_test.dart` (20/20) — kliens production
+  profil + CLI-cellák;
+- `docs/release/internal-production-checklist.md` — 16 pont **6 GÉPI / 10
+  EMBERI** bontásban (a §5.3 tiltja a „minden automatikus" hamis készenlétet);
+- `docs/release/rollout-packet-template.md` — az SDD §26.1 mind a kilenc eleme
+  (build/commit, active flags, migration version, model version, known issues,
+  dashboard snapshot, support readiness, rollback target, döntéshozó).
+
+**A pre-flight a brief KÉT állítását MÉRTEN megcáfolta** (§0.0.1 P1–P7 revízió;
+a mérce nem lazult, az engedélyezett-fájllista nem tágult):
+
+- **P1:** `/readyz` **nem létezik** — az E12-R08 §0.0 R1 és az ADR 0449
+  kifejezetten elvetette; a readiness `GET /health/ready`
+  (`backend/app/main.py:234`).
+- **P2:** a fingerprint **nincs** a release manifestben
+  (`tool/generate_release_manifest.dart:247–268` — nincs signing mező); az
+  ADR 0448 D4 szerint **sidecar** `dist/signing-certificate.json`
+  (`keyAlias` + `sha256Fingerprint`), és maga a workflow-lépés is csak
+  *proposal* (a `.github/workflows/release-apk.yml` egyiket sem tartalmazza).
+  Az A4 ezért a sidecarra lett újraalapozva.
+
+**Review: CHANGES REQUESTED → egy javító kör → APPROVED.** A kötelező
+`security-reviewer` (risk = high) 3 MAJOR-t mért, mindhárom a kör SAJÁT kötött
+szabályát (§5.1/§5.2) tette vakká; a reviewer saját kódolvasással megerősítette:
+
+1. a `/download` láb **fail-open** volt — a regisztrált, de nem staged
+   Lab-letöltő szintén 404-et ad, a check pedig csak státuszkódot nézett
+   (javítva: `POST /download` rossz-metódusú próba, 405 ⇒ a route létezik, +
+   izolációs contract-cella, ami CSAK az APK-flaget kapcsolja be);
+2. az egyetlen titok-szivárgási cella elérhetetlen URL-re mutatott, ezért a
+   sikerág — az EGYETLEN szivárgási út — le sem futott (mutáció-kill próbával
+   mérve zöld maradt egy jelszót ÉS tokent kiíró mutánsra is); javítva
+   stub-szerveres cellával, amely a sikerág lefutását is **bizonyítja**;
+3. nem volt `https`-kikényszerítés — `http://` célon a cohort-jelszó tisztán
+   ment volna a dróton (javítva: fail-closed `exit 2` a `run_checks()` ELŐTT,
+   `--allow-insecure-http` opt-outtal).
+
+A 4 MINOR (redirect-védelem, `community_feed` hamis magabiztossága, nem mért
+docstring-állítás, elkerülhető secret-scan marker) szintén zárva. Részletek:
+[`docs/reviews/e12-r31-review.md`](docs/reviews/e12-r31-review.md).
+
+**Lecke:** [L579](docs/LESSONS.md#l579) — egy negatív állítást mérő cella (a
+Lab-route hiánya, a titok hiánya) csendben vákuummá válhat, ha a mért ág el sem
+éri a hibalehetőséget.
+
+## ✅ E12-R30 KÉSZ — Feature freeze és final regression — PR [#526](https://github.com/wolfcasaba/strumsight/pull/526), squash `b3061936` (2026-09-02)
+
+A Ch12 **Kör 30** a projekt ELSŐ feature-freeze köre: kimondott scope- és
+kódfagyasztás, gépi freeze-ellenőrző, és egy **őszinte** known-issues lista.
+ADR nincs (a kör eljárást ad, nem új normát; a `docs/adr/**` tilos zóna volt) —
+a kapcsolódó normát az [ADR 0489](docs/adr/0489-ga-scope-classification-and-contract-freeze.md)
+rögzíti. **A kör egyetlen termékkód-fájlt sem módosít** (A6).
+
+**Szállítva:**
+
+- `docs/release/feature-freeze.md` — a freeze szabálya két gépileg parszolható
+  blokkal: `freeze_base_sha: 4ac78365` + `approver_role`, és a **zárt, három
+  elemű** változás-osztály tábla (`documentation` / `release-tooling` /
+  `blocker-fix`). A `blocker-fix` osztály commit-szintű granularitása (egy
+  érvényes blocker ID a commit ÖSSZES útvonalát engedélyezi) **kimondva**, a
+  jóváhagyó szerep felelősségeként.
+- `tool/release/verify_freeze.py` — három ellenőrzés egy eszközben
+  (freeze-osztályozás, `known-issues.md`, `CHANGELOG.md`), 0/1/2 kilépő-kóddal
+  (a `contract-freeze.md` által fagyasztott testvér-szemantika), végig
+  fail-closed parszerekkel.
+- `docs/release/known-issues.md` — **17 sor**: a `blockers.md` tíz sorának MAI,
+  soronkénti mérése, `K-RC-01` (a Kör 25 RC-workflow soha nem futott), és hat
+  gazdátlan, korábban mért nyitott lelet (E12-R20/R21/R23/R24/R29).
+- `CHANGELOG.md` — gépileg kötött release-fejléc (`version: 1.0.0`, `build: 1`,
+  `schema_version: 1`, **pontosan 3 sor**: egy negyedik, pl. időbélyeg-sor
+  fail-closed elutasítva, ADR 0447 D1).
+- `test/tooling/freeze_policy_test.dart` — **33 cella** (A1–A4, A7).
+
+**Két MÉRT tény, amit a kör kimond, nem szépít:**
+
+1. A `docs/release/blockers.md` **elavult** (fejléc: `main @ 92576977`,
+   2026-08-28; mind a 10 sor `Owner … (pending)`, miközben mind a tíz
+   owner-kör MA `done`) — de **tilos zóna**, és mégis ő az A3 szótára. A kör
+   nem írja át, hanem a `known-issues.md`-ben kimondja az elavulást, és
+   soronként megméri, hogy a **zárási feltétel** teljesült-e. Mérés:
+   `docs/governance/04-release-checklist.md` mind a 30 sora ma is pipálatlan,
+   ezért **egyetlen blocker sem tekinthető lezártnak**.
+2. A Kör 25 RC-workflow-ja (`release-candidate.yml`) **soha nem futott** és
+   telepítve sincs (`.github/workflows/` → 10 workflow, nincs köztük); a Kör 25
+   szándékosan javaslatként szállította (ADR 0488 D1/D8, a telepítés emberi
+   lépés). Az A5 bizonyítéka ezért a `build-apk.yml` dispatch, nem az RC-kapu.
+
+**Pre-flight (§0.0 P1–P7) — az előre megírt brief két állítása MÉRTEN hibás
+volt:** (P1) a hivatkozott „ADR 0464" **nem létezik** (`ls docs/adr/0464*` →
+nincs), a Kör 28 ADR-je **0489**; (P4) a §3 „a Kör 6 manifest-adataiból
+generált CHANGELOG" nem kivitelezhető — a manifest-generátor az engedélyezett
+listán KÍVÜL van, ezért az A4 **kötő ellenőrzés** lett (a fejléc-blokk a mért
+`pubspec.yaml:5` = `1.0.0+1` és a `generate_release_manifest.dart:23`
+`releaseManifestSchemaVersion = 1` forrásokhoz kötve).
+
+**Review:** [`docs/reviews/e12-r30-review.md`](docs/reviews/e12-r30-review.md)
+— az 1. kör **két MAJOR** leletet kapott TELJESEN ZÖLD gate és tiszta
+scope-audit mellett; mindkettő zárva az 1. javító körben, mindkettő ÚJ
+regressziós cellával (31 → 33 cella), a zárás a reviewer friss klónjában,
+függetlenül újramérve:
+
+- **MAJOR-1:** a `verify_freeze.py` **ALAPÉRTELMEZETT** hívása nem osztályozott
+  — a §5.1 által névszerint tiltott „apró javítás, nem számít" commit is `ok` +
+  exit `0`-t kapott, és a deklarált `freeze_base_sha`-nak nulla gépi hatása
+  volt (beolvasva, majd eldobva). Súlyosbító: a hibát egy **zöld cella**
+  rögzítette elvárásként. Javítva: a bare hívás a `freeze_base_sha`-ra esik
+  vissza.
+- **MAJOR-2:** egy `blockers.md`-beli P0/P1 sor **lefokozása** a
+  known-issues-ban észrevétlen maradt (a felhangolást elkapta, a lefokozást
+  nem) — a §5.2 őszinteség-mércéje egy `sed`-del kikerülhető volt. Javítva: a
+  súlyosság-egyeztetés iránytól függetlenül fut.
+- MINOR-1 (két `P3` besorolás ellentmondott a saját hivatkozott mérésének →
+  `P2`) és NOTE-1 (a `blocker-fix` granularitása) szintén zárva.
+
+**Zöld kapu:** `tools/round-gate.sh` (reviewer izolált klónban: format,
+analyze, +33, +23, architecture, secrets, l10n — mind zöld) · exact-SHA CI a
+`99284e5d` merge SHA-n: [build-apk 33635933136](https://github.com/wolfcasaba/strumsight/actions/runs/33635933136)
++ [router-ci 33635917276](https://github.com/wolfcasaba/strumsight/actions/runs/33635917276).
+
+**Merge UTÁNI javítás (a kötelező post-merge gate lelete, orchestrátor):** a
+`main`-en a `freeze_policy_test.dart` két sanity cellája PIROS lett —
+`HANDOFF.md: not classified under any freeze change class`. Az őr a lánc
+NORMÁL működését (a körönkénti `docs(handoff)` commitot, ami a gyökér
+`HANDOFF.md`-t írja) minősítette szabálysértésnek, mert a `documentation`
+osztály csak a `docs/` prefixet és a `CHANGELOG.md`-t sorolta fel. Ez sem a
+branch-gate-ben, sem a CI-ban nem volt mérhető (a branch diffje `docs/` alatti
+volt; a CI sekély klónjában a klasszifikáció el sem futott). Javítva a gyökér
+dokumentum-fájljainak nevesítésével (`HANDOFF.md`, `AGENTS.md`, `CLAUDE.md`,
+`README.md`) + egy pinnelő cellával (33 → 34 cella); a post-merge gate ezután
+teljesen zöld.
+
+**Lecke:** [L578](docs/LESSONS.md#l578) — az őr HÁROM olcsó néma-módja: a FŐ
+ellenőrzés kimarad az alapértelmezett hívásból, az összevetés csak az
+ártalmatlan irányban fut, és a házirend a rendszer NORMÁL működését minősíti
+szabálysértésnek (ez csak a merge utáni gate-en látszott).
+
+## ✅ E12-R29 KÉSZ — Open Beta és canary cohort — PR [#525](https://github.com/wolfcasaba/strumsight/pull/525), squash `3d9721df` (2026-09-02)
+
+A Ch12 **Kör 29** az Open Beta canary-cohort **előkészítését** szállítja. ADR
+nincs (a kör eljárást ad, nem új normát; a `docs/adr/**` a tilos zónában volt).
+**A cohort megnyitása változatlanul EMBERI kapu** — a kör nem nyit cohortot.
+
+**Szállítva:**
+
+- `docs/operations/capacity-review.md` — a MÉRT backend-korlátokból SZÁMOLT
+  cohort-plafon (**25**), `fájl:sor` hivatkozásokkal: login **10/60 s**
+  (`backend/app/routers/auth.py:16`), register **5/60 s** (`:17`), bejelentés
+  **12/3600 s** (`report_service.py:93-94`), `MAX_UPLOAD_BYTES` **100 MiB**
+  (`media_upload_service.py:133`), élő feltöltés **10/profil** (`:154`).
+- **Két mért, kimondott tény, amit a dokumentum NEM hallgat el:** (1) a
+  Community router **nincs mountolva** a fő appban (`grep -n community
+  backend/app/main.py` → 0 találat), tehát a canary ma nulla Community-terhelést
+  tud generálni; (2) a `backend/app/routers/settings.py` **egyáltalán nem visel
+  rate limitert** — ez rés, nem guard, és a `docs/beta/open-beta-launch.md` §4
+  is így nevezi.
+- `docs/beta/open-beta-launch.md` — gépileg parszolható canary-profil
+  (`<!-- canary-cohort-profile:begin/end -->`, `id: canary`, `maxTesters: 25`,
+  16 flag a mért 40-es katalógusból), explicit human-gate blokk, kipipálatlan
+  Human launch field. A `docs/beta/cohort-profiles.yaml` **érintetlen**: a
+  `ga_scope_test.dart` 16-kulcsos cellája egy 17. kulcstól azonnal pirosra
+  váltana (a brief §0.0 P7 mért indoka).
+- `backend/tests/test_capacity_guards.py` — A2 rate-limit küszöb-cellahármas a
+  `login_limiter.max_attempts`-ból **SZÁMOLVA** (nem 9/10/11 bedrótozva; az
+  „elfogadva" helyesen `401`, nem `200`), A3 upload-méret hármas (`MAX-1`/`MAX`
+  átmegy, `MAX+1` dob), A4 moderation-queue füst a **MÉRT** úton.
+- `test/tooling/canary_cohort_test.dart` — 14 cella: 3-utas plafon-konzisztencia
+  (capacity-review marker ↔ launch-doc `maxTesters` ↔ friss újraszámítás),
+  canary-izoláció (A5), human-gate (A6), öt **fail-CLOSED** parse-cella
+  (L571/L575 ellenszere) és a flag-kulcsok regisztry-ellenőrzése.
+
+**Pre-flight (a kör §0.0 P1–P8) — a brief előre megírt állításai közül kettő
+MÉRTEN pontatlan volt:** (P1) a `submit_report` **nem** nyit moderációs ügyet
+(`grep case_service report_service.py` → 0 találat), a queue mért útja
+`get_or_create_case` → `list_open_cases`, a jel a `priority_score`-ban; (P3/P4)
+a Community router nincs mountolva, és a `tests/community/conftest.py` fixtúrái
+a kör tesztfájljából nem hivatkozhatók.
+
+**Review:** [`docs/reviews/e12-r29-review.md`](docs/reviews/e12-r29-review.md) —
+**hét valódi-sértés próba** izolált klónban, mind a hét a helyes cellát váltotta
+pirosra (throttle kikapcs → A2; méret-guard lazítás → A3; report-jel nullázás →
+A4; cohort-szivárgás a VALÓDI fán → A5; plafon-drift → A1; human-gate marker
+törlés → A6/P6; kitalált flag-kulcs → P7).
+
+- **MAJOR-1 (1. javító körben zárva):** a plafon bázis-inputját (`closed_beta
+  = 50`) HAMIS empirikus állítás támasztotta alá — „ténylegesen ki lett osztva
+  és incidens nélkül futott" —, miközben a fán `docs/beta/closed-beta-launch.md:3`
+  → „Status: **NOT launched**". Pontosan az [ADR 0489](docs/adr/0489-ga-scope-classification-and-contract-freeze.md)
+  D3 által mechanizált hibaosztály (kitalált béta-adat bizonyítékként), ezúttal
+  gépi őr nélküli prózában. A hivatkozott `docs/HANDOFF.md` útvonal ráadásul nem
+  is létezett. Zárva: az 50 most **konfigurációs precedens**, kimondva, hogy
+  üzemi tapasztalat nincs mögötte.
+- **MINOR-1 (1. javító kör):** a képlet egy **brute-force biztonsági** küszöböt
+  (`register_limiter`) köt fejszám-politikához — a dokumentum most kimondja, hogy
+  helyettesítőről van szó egy valódi globális kapacitás-mérésig, és hogy egy
+  jövőbeli biztonsági szigorítás okozta driftre a válasz nem a küszöb
+  visszalazítása.
+- **MINOR-2 (2. javító kör):** a launch-doc a három `preview` flaget
+  „proven"-ként idézte a `ga-scope.md`-ből, ami ott csak **konfiguráció**
+  (`internal: true`/`closed_beta: false`) — átfogalmazva, kimondva, hogy
+  futásidejű bizonyíték nincs, mert egyetlen cohort sem indult el.
+
+**Zöld kapu:** Full Gate [`33624228648`](https://github.com/wolfcasaba/strumsight/actions/runs/33624228648)
+és Router CI [`33626142221`](https://github.com/wolfcasaba/strumsight/actions/runs/33626142221)
+mindkettő `success` a `6cdea0e5` merge SHA-n; a backend sáv (ruff format + ruff
+check + teljes pytest) a `backend/` érintése miatt a gate-ben automatikusan
+futott. Motor: `sonnet-impl` (Claude Sonnet 5), 2 javító kör. Lecke:
+[L577](docs/LESSONS.md#l577).
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending`
+sora — a driver választja ki.
+
+## ✅ E12-R28 KÉSZ — Beta stabilization és scope cut — PR [#524](https://github.com/wolfcasaba/strumsight/pull/524), squash `7b33a1aa` (2026-09-02)
+
+A Ch12 **Kör 28** a GA-scope besorolását és a core contractok befagyasztását
+szállítja, GÉPI konzisztencia-őrrel. ADR: **[0489](docs/adr/0489-ga-scope-classification-and-contract-freeze.md)**
+(a queue `0464` értéke elavult volt — a foglaló `0489`-et adott, mint az
+E12-R22/R23/R25-nél).
+
+**A kör mért kiindulópontja — a brief előfeltétele NEM teljesült.** A brief
+`blocked` jelzést írt elő béta-adat hiányára. A pre-flight MÉRTE:
+`docs/beta/closed-beta-launch.md:3` → „Status: NOT launched", a §5 Human launch
+field üres, a HANDOFF E12-R27 bejegyzése kimondja, hogy **a béta nem indult el**
+— és nem is fog, amíg egy ember le nem futtatja (E12-R27 szerint szándékosan
+EMBERI kapu). A §0.0.B **R2 revízió** döntése: a kör NEM áll meg, hanem a
+béta-hiányt **mért tényként** szállítja, a besorolás pedig a fán mérhető
+bizonyítékra épül (a brief §5.2 SAJÁT vagylagos „mérési riport" ága; az A1–A6
+egyike sem hivatkozik béta-adatra; precedens: az E12-R27 ugyanezt tette ugyanezzel
+az emberi kapuval). **A kitalált béta-adatot nem ígéret zárja ki, hanem gépi őr**
+(ADR 0489 D3): minden bizonyíték-hivatkozásnak a fán FELOLDHATÓ útvonalra kell
+mutatnia — reviewer-próbával igazolva (egy nem létező `docs/beta/closed-beta-results.md`
+hivatkozás → exit 1).
+
+**Szállítva:**
+
+- `docs/release/ga-scope.md` — a `docs/beta/cohort-profiles.yaml` MÉRT **16**
+  flag-kulcsának pontosan egy besorolása a zárt készletből
+  (`ga`/`preview`/`disabled`/`postponed`): **1 `ga`** (`practiceEngineV2Enabled`),
+  4 `preview`, 3 `disabled`, 8 `postponed` — soronként feloldható
+  bizonyíték-útvonallal, a mért **`production_default`** értékkel és indoklással;
+  a core tanulási út 4 lépése a rátámaszkodó capabilityvel; explicit
+  **NEM KÉSZ (NOT READY)** fejléc (nyitott `R-SIGN-01` P0 + öt P1 miatt).
+- `docs/release/contract-freeze.md` — 4 befagyasztott contract, mindegyikhez
+  NEVESÍTETT, ellenőrizhető feloldó feltétellel (a „szükség esetén módosítható"
+  alakú nem-események tiltólistán).
+- `docs/release/beta-findings.md` — a béta MÉRT `NOT launched` állapota, a
+  helyette használt bizonyítékforrások, és melyik besorolás melyik jövőbeli
+  béta-mérésre vár.
+- `tool/release/verify_ga_scope.py` — fail-closed ellenőrző (D1–D7), stdlib +
+  PyYAML (a testvér `verify_beta_profile.py` precedense).
+- `test/tooling/ga_scope_test.dart` — az A1–A5 mutáció-cellái + exit-2
+  használati cellák; a Kör 27 `beta_profile_test.dart` VÁLTOZATLAN és zöld (A6).
+
+**Review:** [`docs/reviews/e12-r28-review.md`](docs/reviews/e12-r28-review.md) —
+1. menet **2 MAJOR (0 BLOCKER)** teljesen zöld gate és tiszta scope-audit mellett:
+
+- **MAJOR-1 — az A3/D5 őr fail-OPEN volt.** A `_parse_table` a laza elő-szűrőt
+  (`row_start`) nem teljesítő sort `continue`-val NÉMÁN eldobta, a core-path
+  táblának pedig — a capability-táblával ellentétben — NINCS teljességi
+  ellenőrzése. Reviewer-mérés izolált klónban: egy `preview` capabilityt a core
+  útra tevő sor, vezető `|` után szóköz nélkül és backtickes lépés-cellával →
+  **exit 0, ZÖLD**, a darabszám csendben 4-ről 3-ra esett. Súlyosbító: a
+  modul-docstring az ELLENKEZŐJÉT állította („never a silently-dropped row"),
+  ilyen kereszt-ellenőrzés a kódban nem volt. Ugyanaz a mutáció a javítás után
+  **exit 2**, a sor számával — a javítás mind a HÁROM táblára kiterjed.
+- **MAJOR-2 — a kör egyetlen `ga` capabilitye production build-ben `false`.**
+  `practiceEngineV2Enabled` mért production alapértelmezése `false`
+  (`lib/app/config/feature_flags.dart:78` — `nonProd`, dart-define felülíró ág
+  NÉLKÜL), tehát a `/practice*` route-ok production buildben nincsenek
+  regisztrálva és a §3 első core-út-lépése ma nem járható végig — a dokumentum
+  ezt nem mondta ki. Ez a §9 „Rejtett GA" tükörképe (rejtett NEM-GA), és a
+  NOT-READY fejléc NEM fedi le (az a blocker-listáról szól). Javítás: géppel
+  kötött `production_default` oszlop, a mért forrásból (`forEnvironment` törzse,
+  fail-closed parse) visszaellenőrizve, plusz kikényszerített nevesített
+  feloldási feltétel.
+
+**1 javító kör** (`25cad21f`) → **APPROVED** (0 nyitott BLOCKER/MAJOR). A zárás
+a reviewer SAJÁT újra-méréseivel: P7 → exit 2; `production_default` hamisítva →
+exit 1 a mért értékkel; feloldó feltétel kivéve → exit 1; ismeretlen forrás-alak
+→ exit 2 (fail-closed); a D3/D7 regresszió-próbák továbbra is pirosak; célzott
+gate 7/7 zöld friss `/tmp` klónban. **MINOR-1 follow-upra marad** (a `postponed`
+besorolás cohort-flag állapotát nem köti cella; élő rés nincs — mind a 8
+`postponed` flag `false` mindkét cohortban —, és az ADR 0489 D4 sem követeli meg).
+
+**Exact-SHA CI a `a3fe03d3` merge SHA-n:** [full-gate 33613004979](https://github.com/wolfcasaba/strumsight/actions/runs/33613004979)
++ [router-ci 33613007674](https://github.com/wolfcasaba/strumsight/actions/runs/33613007674),
+mindkettő `success`. Lecke: [L576](docs/LESSONS.md).
+
+## ✅ E12-R27 KÉSZ — Closed Beta launch és monitoring — PR [#523](https://github.com/wolfcasaba/strumsight/pull/523), squash `6b5dcb5a` (2026-09-02)
+
+A Ch12 **Kör 27** a Closed Beta **indítási konfigurációját** és a hozzá tartozó
+**monitoring-eljárást** szállítja — az indítás MAGA emberi kapu, amit ez a kör
+szándékosan NEM hajt végre. ADR nincs; a szerződéseket a merge-elt
+[ADR 0446](docs/adr/0446-feature-flag-registry-and-emergency-kill-switch.md) (D1/D2/D7),
+[ADR 0395](docs/adr/0395-community-baseline-feature-flags-and-threat-model-scope.md) és
+[ADR 0486](docs/adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md)
+hordozza (precedens: E12-R24, E12-R26).
+
+**Szállítva:**
+
+- `docs/beta/cohort-profiles.yaml` — 2 cohort (`internal`, `closed_beta`), 32
+  flag-hozzárendelés a MÉRT 40-es katalógusból; mind a **7** `high` kockázatú
+  flag `false` mindkét cohortban.
+- `tool/release/verify_beta_profile.py` — a profilt **PyYAML**-lel parse-olja
+  (kemény függőség, precedens `build_ai_report.py`), a Dart registryt
+  **fail-closed** regexszel: `< 40` bejegyzés VAGY `FeatureFlagDefinition(`
+  előfordulásszám ≠ sikeresen parse-olt hármasok száma → nem-nulla kilépés
+  kimondott üzenettel. A1/A2/A3 validáció (exit 1), `--kill-switch` **read-only**
+  dry-run (exit 0, csak stdout).
+- `test/tooling/beta_profile_test.dart` — **18 cella**, A1–A6, ellenséges
+  fixture-ök temp-könyvtárban (fixture nincs commitolva).
+- `docs/beta/daily-triage-template.md` — napi triage-ritmus, KIMONDOTT döntési
+  szabály: **nyitott P0/P1 mellett nincs cohort-bővítés**; a bemenetek a
+  diagnosztikai bundle + a kézi visszajelzés, mert **telemetria-gyűjtés MA nincs**.
+- `docs/beta/closed-beta-launch.md` — 14 pontos indítási ellenőrzőlista, minden
+  pont MÉRT bizonyítékra hivatkozva, a valódi kill-switch dry-run kimenetével
+  (`labModeAvailable` a `closed_beta` cohortban — `low` kockázatú ÉS bekapcsolt),
+  a monitoring valódi határainak kimondásával, és az **ÜRES emberi indítási
+  mezővel**. **A béta NEM indult el.**
+
+**Review:** [`docs/reviews/e12-r27-review.md`](docs/reviews/e12-r27-review.md) —
+1. menet **1 MAJOR (0 BLOCKER)** teljesen zöld gate és tiszta scope-audit
+mellett: az A5 ellenőrzőlista-őr bullet-mintája fail-OPEN volt a **kipipált**
+(`- [x]`) sorokra, tehát pontosan a dokumentum rendeltetésszerű használatakor
+némult volna el (reviewer-mérés izolált klónban: kipipált sor + nem létező
+útvonal → **exit 0, ZÖLD**; ugyanaz kipipálatlanul → piros). MINOR-1: az A3
+másodlagos regex a kettőspont előtt nem engedett szóközt. **1 javító kör** →
+**APPROVED** (0 nyitott lelet, 2 NOTE). Zárás a reviewer saját újra-mérésével:
+a mutáció most exit 1, a kipipált-de-valós változat 18/18 zöld, célzott gate
+`gate_exit=0`. Lecke: [L575](docs/LESSONS.md#l575).
+
+Exact-SHA evidencia a `522248b2` merge SHA-n: Full Gate
+[33604475615](https://github.com/wolfcasaba/strumsight/actions/runs/33604475615),
+Router CI [33604523266](https://github.com/wolfcasaba/strumsight/actions/runs/33604523266)
+(`workflow_dispatch` — a záró review-commit nem trigger-útvonal, [L572](docs/LESSONS.md#l572))
+— mindkettő `success`. CI-terv: `tools/round-ci-plan.py` → `full-gate.yml`, `native_gate = false`.
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending` sora,
+új sessionben.
+
+## ✅ E12-R26 KÉSZ — Rollback és disaster recovery drill — PR [#522](https://github.com/wolfcasaba/strumsight/pull/522), squash `e9b20604` (2026-09-02)
+
+A Ch12 **Kör 26** a projekt **ELSŐ rollback-gyakorlata**: nem dokumentumot ír a
+visszaállításról, hanem **lefuttatja**, méri, és gépi ellenőrzőt ad rá. ADR nincs —
+a szerződéseket a merge-elt [ADR 0446](docs/adr/0446-feature-flag-registry-and-emergency-kill-switch.md)
+(D1/D2/D7) és [ADR 0449](docs/adr/0449-staging-readiness-traffic-gate-and-recovery.md)
+(D4/D5) hordozza (precedens: E12-R24).
+
+**Szállítva:**
+
+- [`tool/release/verify_rollback.py`](tool/release/verify_rollback.py) — négy
+  **fail-closed** dimenzió a visszaállítás UTÁNI állapotra (migrációs fej,
+  táblánkénti rekordszám, modell-manifest sha256, flag-profil), importálható
+  maggal és CLI-vel. Hiányzó/olvashatatlan bemenet **FAIL**, sosem csendes
+  `SKIPPED`; kihagyás csak explicit `--no-flag-profile`-lal, láthatóan.
+- [`docs/operations/disaster-recovery-drill.md`](docs/operations/disaster-recovery-drill.md)
+  — a **ténylegesen lefuttatott** gyakorlat jegyzőkönyve, lépésenként MÉRT
+  idővel, az itt NEM elvégezhető lépések kimondásával.
+- `backend/tests/test_rollback_drill.py` (**15 cella**) + `test/tooling/rollback_policy_test.dart`
+  (**10 cella**) — az A1–A6 gépi mércéje.
+
+**A pre-flight KÉT acceptance-premisszát mért HAMISNAK** (§0.0.1 revízió, listatágítás nélkül):
+az **A4** „flag-cache lejárata" — cache **nem létezik**, és az ADR 0446 D2 kifejezetten
+tiltja (`feature_flag_source.dart:72–75`), ezért a küszöb-hármas a **feloldás-indexre**
+állt át (elavulási ablak = 0 feloldás, ami ERŐSEBB állítás bármely véges `T`-nél);
+az **A2** „előző kliens-verzió" — **nincs API-verziózás** a backendben.
+
+**A review 4 MAJOR-t talált TELJESEN ZÖLD gate és tiszta scope mögött**
+([`docs/reviews/e12-r26-review.md`](docs/reviews/e12-r26-review.md)); **1 javító kör** → APPROVED, 0 nyitott lelet.
+KÉT független `security-reviewer` futás **egymástól függetlenül ugyanazt a MAJOR-1-et
+és MAJOR-2-t** találta meg elsőként:
+
+- **MAJOR-1:** a `verify_rollback.py` a **29 élő táblából 2-t** hasonlított
+  (`Base.metadata` az `app.models` importja után csak `users` + `user_settings`), a
+  `continue` a többit csendben kihagyta, a PASS-szöveg pedig a DUMP tábláinak számát
+  írta ki — így egy 27 táblát vesztő visszaállítás is `PASS / 2 table(s) match / EXIT=0`
+  volt. Zárva élő-vs-dump **kétirányú** összehasonlítással; a javítás után a valós
+  lánc függetlenül újramérve `OVERALL: FAIL`, `EXIT=1`, mind a 26 Community tábla
+  nevesítve. Ugyanaz a fail-OPEN hibaosztály, mint az E12-R25 F1-e ([L566](docs/LESSONS.md#l566), [L573](docs/LESSONS.md#l573)).
+- **MAJOR-2:** a jegyzőkönyv „(+ minden Community tábla `0` sorral)" állítása mérhetően
+  hamis volt — a dump kulcsai kizárólag `['user_settings','users']`.
+- MAJOR-3 (üres `{}` flag-profil → PASS), MAJOR-4 (`{value!r}` visszhang: PII + bcrypt
+  hash a riportba), + 7 MINOR — mind zárva, mindegyikhez ÚJ mérő cella ([L574](docs/LESSONS.md#l574)).
+
+**A kör legértékesebb terméke az A6 runbook-lelet** (a jegyzőkönyv §7): a
+`backend/scripts/backup.py` a `Base.metadata`-ra támaszkodik, a **27 Community tábla
+viszont raw-DDL Alembic-migrációkban jön létre, ORM-modell nélkül** — ezért a dump
+ŐKET SOHA nem tartalmazza, akármennyi éles adat van bennük. Ez **latens produkciós
+adatvesztési kockázat**, és pontosan az ilyen gyakorlatnak kell felszínre hoznia. A
+javítás `backend/scripts/**`-t érintene (tiltott zóna), ezért helyesen LELET maradt,
+nem csendes javítás — **egy jövőbeli kör dolga**.
+
+**Nyitva marad (nem blokkoló):** MINOR-3 (elgépelt `sqlite:///` úton 0 bájtos fájl
+keletkezik) és a NOTE-ok (rekordszám ≠ tartalom — azonosító-halmaz nincs mérve).
+
+Exact-SHA evidencia a `744bf7b0` merge SHA-n: Full Gate
+[33597766331](https://github.com/wolfcasaba/strumsight/actions/runs/33597766331),
+Router CI [33597810750](https://github.com/wolfcasaba/strumsight/actions/runs/33597810750)
+(`workflow_dispatch` — a záró review-commit nem trigger-útvonal, [L572](docs/LESSONS.md#l572)),
+Backend CI [33596216760](https://github.com/wolfcasaba/strumsight/actions/runs/33596216760)
+— mind `success`. CI-terv: `tools/round-ci-plan.py` → `full-gate.yml`, `native_gate = false`.
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending` sora,
+új sessionben.
+
+## ✅ E12-R25 KÉSZ — Release Candidate assembly workflow — PR [#521](https://github.com/wolfcasaba/strumsight/pull/521), squash `37724df4` (2026-09-02)
+
+A Ch12 **Kör 25** összeköti a Chapter 12 eddig **külön-külön** meglévő kiadási
+bizonyíték-darabjait (manifest/SBOM `E12-R06`, signing `E12-R07`, AI-riport
+`E12-R16`, security-scan `E12-R18`) **egyetlen, manuálisan jóváhagyható, auditálható
+útba**. A kötött döntések:
+[ADR 0488](docs/adr/0488-release-candidate-assembly-and-approval-gate.md) D1–D8.
+
+**A kör kettéosztva szállít, mert a `.github/workflows/**` VÉDETT mérce-zóna**
+([ADR 0321](docs/adr/0321-gateguard-round-hold-not-chain-halt.md) `PROTECTED_GLOBS`),
+és az [ADR 0372](docs/adr/0372-gate-edit-policy.md) álló felhatalmazásának fájlja
+(`.claude/gate-edit-policy`) a fán MA sem létezik — a pre-flight ezt újramérte:
+
+- **javaslatként:** [`docs/release/workflows/release-candidate.proposal.yml`](docs/release/workflows/release-candidate.proposal.yml)
+  — a teljes `release-candidate.yml`: `workflow_dispatch` **nulla inputtal**, egyetlen
+  `environment: release-candidate-approval` job, amelyre a gate-, build- és
+  upload-jobok `needs:`-szel épülnek (a jóváhagyás így ténylegesen a **build ELŐTT**
+  áll, D3), a mérce-lánc a KÖZÖS `./.github/actions/flutter-gates` composite-ból (D2),
+  a production signing a mért `release-apk.yml` env-szerződésével;
+- **kódként:** [`tool/release/assemble_rc.py`](tool/release/assemble_rc.py) — stdlib-only,
+  fail-closed összeállító: hét kötelező bemenet feloldása írás ELŐTT, hiányzóra
+  nem-nulla kilépés félkész csomag nélkül (D4); `--verify` a csomagot a saját
+  checksum-manifestjéhez köti, ahol **hiányzó, megváltozott ÉS többlet** fájl is
+  eltérés (D5); `--dry-run` a tervet írja ki és tiszta fán szándékosan nem-nullával áll meg.
+
+**A review a TELJESEN ZÖLD gate mögött találta meg a lényeget** — 1 MAJOR + 1 MINOR
++ 2 NOTE, **1 javító kör** → APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r25-review.md`](docs/reviews/e12-r25-review.md)):
+
+- **MAJOR (F1):** a `verify_package` a csomagot `iterdir()` + `is_file()`-fal járta be —
+  **nem rekurzívan**. Egy alkönyvtárba csempészett többletfájl (`extra/evil.apk`) így
+  `--verify`-ra **exit 0**-val átment („matches its checksum manifest exactly"), miközben
+  az `upload-artifact` a TELJES `dist/rc` fát tölti fel — a fájl kiszállt volna a kiadott
+  csomagban. Ugyanaz a fájl a csomag gyökerében helyesen pirosra váltott: a rés kizárólag
+  a beágyazottság. A [L566](docs/LESSONS.md#l566) fail-OPEN hibaosztály, fájlrendszeren.
+  Zárva `rglob('*')` + csomag-gyökérhez relatív POSIX útvonalakkal, mindkét oldalon
+  (assemble ÉS verify), + 1 új cellával ([L573](docs/LESSONS.md#l573)).
+- **MINOR (F2):** az `--output-dir` `rmtree`-je a bemenetek ELLENŐRZÉSE UTÁN fut, ezért
+  ha a kimeneti könyvtár a bemenetek őse, letörli MAGUKAT a bemeneteket, majd elkapatlan
+  `FileNotFoundError`-rel száll el — a docstring D4-ígérete („no half-built package")
+  ezen az úton nem tartható. Zárva `resolve()`-alapú ancestor-guarddal a `rmtree` ELŐTT
+  + `OSError → AssembleError` fordítással + 1 új cellával.
+
+**A cellák mérő voltát hat valódi-sértés próba igazolta** (mutate → mérj → állítsd vissza,
+izolált `/tmp` klónban): a kötelező-bemenet ellenőrzés kivétele → **8 A3-cella piros**;
+a composite hívásának bemásolt `run:` lépésre cserélése → **mindkét A5-cella piros**;
+a `needs: approve-release-candidate` élek törlése → **az A1 tranzitív-needs cella piros**;
+a fix1 előtti assemblerrel a két ÚJ cella **pontosan kettesével** piros (L563).
+`security-reviewer` (`risk = high`) lefuttatva: **nincs BLOCKER**.
+
+**Nyitott NOTE-ok (nem merge-blokkolók, a TELEPÍTÉSI lépés ellenőrzési pontjai):**
+(1) a `--verify` belső konzisztenciát bizonyít, nem hitelességet — a checksum-manifest
+aláíratlan, a valódi horgony az APK aláírása; (2) a jóváhagyási kapu ereje a repo
+Settingsben él: a `release-candidate-approval` environmenthez **required reviewert kell
+beállítani**, különben az `environment:` kulcs nem blokkol.
+
+**A merge UTÁNI, EMBERI/orchesztrátori lépés (ADR 0488 D8, még NEM történt meg):** a
+javaslat telepítése `.github/workflows/release-candidate.yml` néven, majd KÉT dispatch —
+egy ZÖLD és egy BIZONYÍTOTT PIROS (hiányzó jóváhagyás vagy hiányzó AI-riport) —, a linkek
+a kör §11 review-jegyzetébe. Ez a kör ezt szándékosan nem tette meg: a védett zónába írni
+`H-GATEGUARD` halt lenne.
+
+Exact-SHA evidencia a merge SHA-n (`62ab967d`): Full Gate
+[33585065695](https://github.com/wolfcasaba/strumsight/actions/runs/33585065695),
+Router CI
+[33585067030](https://github.com/wolfcasaba/strumsight/actions/runs/33585067030)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml`,
+`native_gate = false`, `router_ci_expected = true`).
+
+**Következő kör:** `E12-R26` — rollback és disaster recovery drill
+(`docs/rounds/e12-r26-rollback-and-disaster-recovery-drill.md`, ADR `nincs`,
+`sonnet-impl`), új sessionben.
+
+## ✅ E12-R24 KÉSZ — Store listing, privacy és legal package — PR [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash `cf7c6fb6` (2026-09-02)
+
+A Ch12 **Kör 24** a production-terjesztéshez szükséges, **ellentmondás-mentes
+dokumentum-csomagot** állítja elő, és — ez a lényeg — **gépi mércét** ad rá. A
+store-fiók, a feltöltés és a jogi felülvizsgálat továbbra is EMBERI lépés (a
+brief §0.0 ezt kimondja). **ÚJ ADR nincs, szándékosan:** minden normatív állítás
+MÁR merge-elt döntésre vezet vissza — [ADR 0477](docs/adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md)
+D1 (a GA-scope EGYETLEN igazsága a `docs/testing/device-matrix.yaml`
+`capabilities[].ga_scope`), [ADR 0479](docs/adr/0479-privacy-data-inventory-and-consent-enforcement.md)
+(a privacy-leltár), [ADR 0247](docs/adr/0247-analysis-export-share-and-delete-contract.md)
+(export/share/delete). Precedens: E12-R13 („új ADR nincs").
+
+**Szállított csomag (5 dokumentum + 1 őr):** `docs/store/listing.md` ·
+`docs/store/permissions-rationale.md` · `docs/store/data-safety.yaml` ·
+`docs/legal/privacy-policy-draft.md` · `docs/legal/community-guidelines-draft.md`
+· `test/tooling/store_package_test.dart` (**31 cella**, A1–A5).
+
+**A kör érdemi állítása: nincs beégetett lista.** A teszt a manifestet, a
+privacy-leltárt és a device-mátrixot ÉLŐBEN olvassa. Ezt nem a zöld gate
+bizonyítja, hanem a reviewer nyolc valódi-sértés próbája a VALÓDI
+forrásfájlokon, eldobható klónban: ÚJ `ACCESS_FINE_LOCATION` a manifestbe → A1
+piros; `CAMERA` rationale-blokk eltávolítása → A1 piros; data-safety hivatkozás
+nem létező mezőre → A2 piros mindkét irányban; ÚJ `leaves_device: true` mező a
+leltárba → A2 piros; `audio_analysis_core` `ga_scope` billentése → A3 piros;
+kitalált `/privacy-center` a listingbe → A4 piros.
+
+**A pre-flight két avult brief-állítást mért ki** (§0.0 revízió R1–R6): (1) a
+brief §2 azt állította, hogy a fiók-törlés a `backend/app/routers/auth.py`
+felelőssége — MÉRVE HAMIS, a router csak `POST /register`, `POST /login`,
+`GET /me` végpontot ad, **kliens által indítható fiók-törlés a fán NEM létezik**;
+(2) az A3 nem nevezte meg a GA-scope forrását. A csomag ezért a fiók-törlést
+őszintén támogatási (e-mail) csatornaként írja le, és a `privacy-policy-draft.md`
+szó szerint kimondja a hiányzó végpontot — külön cella méri.
+
+**A review a TELJESEN ZÖLD gate mögött találta meg a lényeget** — 1 MAJOR + 1
+MINOR + 2 NOTE, **1 javító kör** → APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r24-review.md`](docs/reviews/e12-r24-review.md)):
+
+- **MAJOR-1 (P7 próba):** az A3 próza-scan némán kihagyta a signature nélküli
+  `ga_scope: false` capabilityket (`if (pattern == null) continue`). Egy ÚJ,
+  negyedik non-GA capability + „Band Jam Mode … coming soon" próza-ígéret a
+  listingben **29/29 ZÖLDEN átment** — pontosan az a §5.3-sértés, aminek a
+  megfogása a kör célja. Fail-open egy gépi mércében, az ADR 0477 D2 által
+  tiltott „nincs adat → nincs regresszió" minta; ugyanez a hibaosztály már
+  egyszer mérve volt ([L555](docs/LESSONS.md#l555), E12-R16 MAJOR-1). Zárva
+  fail-closed kezeléssel + 2 új cellával — a P7 forgatókönyv most 3 cellát visz
+  pirosra, tetszőleges (nem beégetett) capability-id-vel is
+  ([L571](docs/LESSONS.md#l571)).
+- **MINOR-1:** az A4 route-scan a csomag 5 dokumentumából csak 4-et nézett.
+  Zárva; a P8b próba (backtick-idézett `/privacy-center` a `data-safety.yaml`
+  `purpose:` mezőjében) most piros.
+
+**Nyitott NOTE-ok (nem merge-blokkolók, ma gazdátlanok):** (1) a
+`privacy-support@strumsight.app` cím **kitalált PLACEHOLDER** — a valódi cím
+megerősítése a store-feltöltés emberi előfeltétele; (2) a `data-safety.yaml`
+`play_category` mezőinek megfeleltetése a hivatalos Play-taxonómiához a Play
+Console űrlapján, emberi lépés.
+
+Exact-SHA evidencia a merge SHA-n (`b3e346d4`): Full Gate
+[33579841775](https://github.com/wolfcasaba/strumsight/actions/runs/33579841775),
+Router CI
+[33579897602](https://github.com/wolfcasaba/strumsight/actions/runs/33579897602)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`); a Router CI-t `workflow_dispatch`-csel
+kellett a merge SHA-ra kérni, mert a záró review-commit csak `docs/reviews/**`-ot
+érintett, ami nem trigger-útvonal ([L572](docs/LESSONS.md#l572)).
+
+## ✅ E12-R23 KÉSZ — Legacy user migration release candidate — PR [#519](https://github.com/wolfcasaba/strumsight/pull/519), squash `3e6dbbf0` (2026-09-02)
+
+A Ch12 **Kör 23** azt méri végig, hogy egy **régi telepítésről frissítő**
+felhasználó adata a boot-idejű migrátor-láncon (`appStorageMigrations`, 22 lépés)
+átér-e — `lib/**` és a meglévő e2e harness érintése NÉLKÜL. ADR:
+[0487](docs/adr/0487-legacy-upgrade-migration-evidence-contract.md) (D1 a „nincs
+adatvesztés" invariáns SZÁMSZERŰ, nem viselkedési · D2 megszakítás után FOLYTATÁS
+van, nem újrakezdés · D3 a hibás migráció fail-safe és SOHA nem üres profil · D4
+a safe-mode felület a MÉRT elérhetőségén pinnelendő · D5 a mérce nem módosít
+`lib/**`-ot · D6 minden ÚJ fixture az ADR 0473 manifest-szerződése alá esik).
+Szállítva: `test/e2e/upgrade_migration_test.dart` (8 cella: A1 mező-szintű
+adatmegőrzés, A2 megszakítás→folytatás replay nélkül, A3 write-fault,
+**A3b valódi korrupció**, A4 `BootstrapFailure`, A5 pinnelt lépéssorrend),
+három legacy fixture (`legacy_v1`/`legacy_v2`/`corrupted_storage`) manifest-be
+regisztrálva (`test/fixtures/manifest.json` 48 → 51), és
+[`docs/release/client-migration.md`](docs/release/client-migration.md).
+
+**A pre-flight négy mért állítást döntött meg** (brief §0.0/R1–R6): az ADR
+száma `0462` → **`0487`** (a batch-előjegyzés elavult, a foglaló a normatív
+forrás); a három ÚJ `.json` fixture a `fixture_manifest_test.dart` egzakt
+`hasLength(48)` cellájával a **teljes CI-suite-ot buktatta volna**, ezért az
+`allowed_paths` szűken bővült a manifesttel és a cellával (a kör MÉRI a
+regisztrációt, nem kerüli meg); az A3 eredeti „sérült bemenet →
+`RecoveryScreen`" célja a fán **elérhetetlen** volt.
+
+**A kör érdemi hozadéka mérési** ([L570](docs/LESSONS.md#l570)): a szállított A3
+cella a `corrupted_storage.json` NEVE ellenére nem a korrupt bemenetet mérte,
+hanem egy injektált írás-hibát — a fixture minden értéke jól formált JSON volt,
+a cella szó szerint ugyanígy zöld lett volna a `legacy_v1` fixture-rel. A
+reviewer eldobható próbatesztje ténylegesen malformált dokumentummal kimérte,
+hogy a `migrate()` **sikert jelent** (`failure=null`, mind a 22 lépés `applied`),
+a nyers bájtok a lemezen megmaradnak, **de a production olvasási út üres
+dokumentumot ad** — a felhasználó frissítés után üres dalkönyvtárat lát. Egy
+javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r23-review.md`](docs/reviews/e12-r23-review.md)).
+
+> ⚠ **NYITVA MARAD — ismert korlát, `lib/**` javítást igényel:** egy sérült
+> legacy dokumentum után a `JsonDocumentStore.readBody()` `null`-t ad, tehát a
+> felhasználó ÜRES dokumentumot lát, miközben az adata a lemezen ott van (a
+> következő `write()` karanténba menti). Az A3b cella ezt „ISMERT KORLÁT
+> (ADR 0487)" jelöléssel **pinneli**, tehát ha egy jövőbeli kör megjavítja vagy
+> elrontja, a cella szól. A javítás iránya (per-dokumentum hiba felszínre
+> hozása, vagy a „nincs itt semmi" ↔ „van, de olvashatatlan" megkülönböztetése)
+> a `docs/release/client-migration.md` §6-ban dokumentált, és **ma gazdátlan** —
+> önálló, `lib/**`-ot érintő kört igényel.
+
+## ✅ E12-R22 KÉSZ — Béta-terjesztés, tesztelői consent és redaktált diagnosztikai csomag — PR [#518](https://github.com/wolfcasaba/strumsight/pull/518), squash `3b1855ff` (2026-09-01)
+
+A Ch12 **Kör 22** a béta-visszajelzés **csatornáját és csomagját** szállítja —
+felület nélkül (`lib/**`, `.github/**`, `lab_build.json` a kör tilos zónája volt).
+ADR: [0486](docs/adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md)
+(D1–D7 + a review után D2.1/D3.1). Szállítva:
+`tool/release/build_diagnostics_bundle.py` (rétegzett consent, rekurzív redakció,
+tartalom-alapú hang-gate, inkluzív 5 242 880 bájtos korlát HIBÁVAL, korlátos
+gzip-kicsomagolás, `0600`-as kanonikus kimenet), `tool/release/generate_beta_notes.py`
+(fail-closed, bájtazonos béta-jegyzet a release-manifestből),
+`test/tooling/beta_release_notes_test.dart` (53 cella),
+`backend/tests/test_diagnostics_redaction.py`, valamint
+[`docs/beta/enrollment.md`](docs/beta/enrollment.md),
+[`docs/beta/tester-consent.md`](docs/beta/tester-consent.md) (a data-inventory
+GÉPI, kétirányú tükre — 12 mező, 3 útvonal) és
+[`docs/beta/feedback-triage.md`](docs/beta/feedback-triage.md).
+
+**A kör érdemi hozadéka mérési** ([L569](docs/LESSONS.md#l569)): a teljes gate
+10/10 zöld volt, a review mégis **1 BLOCKER + 3 MAJOR + 2 MINOR**-t talált. A
+legsúlyosabb (M1): a redakció útvonal-mintája a `wavBase64` ÉRTÉKÉRE is lefutott,
+és a base64 ábécé `/` karakterei miatt **csendben megsemmisítette a consentelt
+klipet** (117 660 → 189 karakter, `exit 0`, a kimenet nem dekódolható) — pontosan
+az a néma csonkítás, amit a D3 nevesítve tilt. A cella azért volt zöld, mert a
+fixture `Uint8List(n)` volt: csupa nulla bájt → csupa `A` base64 → **egyetlen `/`
+sem**, tehát a hibaosztály szerkezetileg nem tudott előfordulni. Egy javító kör
+után APPROVED, 0 nyitott lelet; a zárást a reviewer SAJÁT, a javító kód ellen
+futtatott próbái igazolják
+([`docs/reviews/e12-r22-review.md`](docs/reviews/e12-r22-review.md) §6).
+
+`risk = "high"` → a kötelező `security-reviewer` futott
+([`docs/reviews/e12-r22-review-security.md`](docs/reviews/e12-r22-review-security.md)).
+Exact-SHA evidencia a merge SHA-n (`0192cb6b`): Full Gate
+[33566453442](https://github.com/wolfcasaba/strumsight/actions/runs/33566453442),
+Router CI [33566455858](https://github.com/wolfcasaba/strumsight/actions/runs/33566455858),
+Backend CI [33566457950](https://github.com/wolfcasaba/strumsight/actions/runs/33566457950)
+— mind `success`.
+
+> ⚠ **NEVESÍTETT HIÁNY:** a `lib/features/feedback/` visszajelzés-KÉPERNYŐ nem
+> készült el (ADR 0486 D7) — a `test/ui/ui_inventory_test.dart` egzakt
+> képernyőszámot pinnel, és a felületek a Chapter 13/15 sáv kompetenciája. **Ma
+> egyetlen nyitott brief sem nevezi meg**, tehát gazdátlan tétel.
+>
+> ⚠ **Két follow-up NOTE a security review-ból** (nem blokkoló, az ADR 0486 D2
+> betűje szerint helyes viselkedés): az e-mail-osztály ASCII-only, tehát egy IDN
+> cím (`tesztelő@példa.hu`) redaktálatlan marad; és a titok-osztályt egyedül a
+> `token` kulcs-részsztring definiálja, tehát `apiKey`, `password`,
+> `authorization` értéke átmegy. A `docs/beta/tester-consent.md` szövege
+> erősebbnek hangzik ennél — egy későbbi kör vagy a D2-t bővíti, vagy a
+> dokumentumot pontosítja.
+
+## ✅ E12-R21 KÉSZ — Content catalog leltár + pedagógiai readiness validátor — PR [#517](https://github.com/wolfcasaba/strumsight/pull/517), squash `12813a2c` (2026-09-01)
+
+A Ch12 **Kör 21** gépi bizonyítékot ad arra, hogy a szállított tartalom
+**leltározott, verziózott, címkézett és hivatkozás-helyes** — tartalom
+hozzáadása, átírása vagy áthelyezése NÉLKÜL (`lib/**` és `assets/**` a kör
+tilos zónája volt). ADR: [0485](docs/adr/0485-content-catalog-inventory-and-pedagogical-readiness-contract.md).
+Szállítva: `tool/validate_content_catalog.py` (stdlib-only, fail-closed
+sor-parszer), [`docs/content/catalog-inventory.yaml`](docs/content/catalog-inventory.yaml)
+(36 elem), `test/tooling/content_catalog_test.dart` (32 cella) és
+[`docs/content/release-readiness.md`](docs/content/release-readiness.md).
+
+**A pre-flight mérése írta a kör alakját (brief §0.0 R1–R8).** A SDD `content/catalog/`
+fát ír elő; a fán viszont a tartalom **HÁROM** helyen él (nem kettőn): a
+Practice Engine Dart-katalógusa, az `assets/tutor_knowledge/` manifest és a
+legacy Learn lecke-katalógus. Egy negyedik fa kettős igazság lett volna, ezért a
+kör **leltárat és validátort** ad a meglévőkre. Két további mért tény szűkítette
+az acceptance-t: a Practice Generator katalógusa **hívó-táplált** (nincs
+`PracticeCatalogReader` implementáció a fán), ezért az A2 a SZÁLLÍTOTT
+hivatkozás-halmazon mérődik, nem egy generátor-futáson; és a fán **nincs
+kanonikus készség-taxonómia** — a három szótár diszjunkt (a
+`LegacyMappingTable` `chord.gMajor|cMajor|dMajor` azonosítói nem elemei az
+`ai_tutor` `SkillTaxonomy.initial`-jának) —, ezért a szótár forrásonként
+deklarált és kétirányúan mért.
+
+**KÉT MÉRT GA-blokkoló, egyik sem javítva** (a tartalom-források tilos zóna;
+nyilvántartás: a leltár `known_exceptions:` blokkja, `owner: strumsight-content`,
+`expiry: 2026-12-31`): (1) mind a 10 `practiceCatalog*Description` ARB-kulcs
+**hiányzik `en`-ből ÉS `hu`-ból** — miközben mind a 10 `titleKey` fele mindkét
+locale-ban megvan —, tehát a beépített gyakorlat-katalógus leírás-felülete ma
+egyetlen nyelven sem oldható fel; (2) a `Lesson.name` beégetett angol mind a 17
+leckén, `hu` felület nélkül. A kivétel-elnyomás **szűken hatókörözött**: egy
+jövőbeli `titleKey`-regresszió NEM bújik el mögötte (mérve), és a lejárat
+letelte után a validátor magától pirosra vált.
+
+**Egy MAJOR — a NEGYEDIK egymást követő ŐR-hiba, TELJESEN zöld gate mellett**
+(az E12-R18 [L563](docs/LESSONS.md#l563), E12-R19 [L565](docs/LESSONS.md#l565)/[L566](docs/LESSONS.md#l566)
+és E12-R20 [L567](docs/LESSONS.md#l567) osztálya): a leltár elemenként hat
+dimenziót deklarál, és ebből **négyet** (`difficulty`, `skill_tags`, `locales`,
+`version`) egyetlen mérce sem tükrözött — a `_mirror_source()` csak az
+ID-halmazokat vetette össze. A reviewer négy egysoros mutációja MIND `exit 0`-t
+adott a valódi fán. A javító kör elem-szintű, kétirányú mező-tükröt szállított
+(zárt leletkód-listával, `stale_inventory_entry` + mező-név), és a lezárást a
+reviewer SAJÁT, megismételt mutációi adták, nem a zöld gate
+([L568](docs/LESSONS.md#l568)).
+
+## ✅ E12-R20 KÉSZ — Accessibility és localization release audit — PR [#516](https://github.com/wolfcasaba/strumsight/pull/516), squash `9c323c81` (2026-09-01)
+
+A Ch12 **Kör 20** az első **FOLYAM-szintű** akadálymentességi és lokalizációs
+mércét szállította. A Chapter 13 sáv képernyőnként mért; ez a kör a core tanulási
+utat (indítás → onboarding → practice hub → setup → session → eredmény) járja
+végig **mindkét locale-on** (`en`/`hu`), **telefon-viewporton** (412×915) és
+`textScale 1.5`/`2.0`-n. **ADR nem készült** — a szerződéseket az
+[ADR 0280](docs/adr/0280-accessibility-contract-and-live-region-budget.md),
+[0383](docs/adr/0383-typography-and-text-scale-contract.md) és
+[0424](docs/adr/0424-localization-resilience-contract.md) már rögzíti; ez a kör
+AUDITÁL, és a `docs/adr/**` a tilos zónája volt.
+
+**A kör HÁROM MÉRT `lib/**` leletet nevez meg — egyiket sem javítva** (a `lib/**`
+a kör tilos zónája): (1) `practice_setup_screen.dart:418` 43px túlcsordulás
+`textScale 2.0`-n MINDKÉT locale-on; (2) `practice_feedback.dart:89` 65px
+túlcsordulás **csak `hu`**-n (a hosszabb fordítás miatt); (3) `ss_switch_row.dart`
+— a megosztott DS-komponens szimulált akadálymentességi bejárása KÉT csomópontot
+ad egy sor helyett: a külső `tap`-célpont **néma**, a belső feliratos, de nem
+aktiválható. Mindhárom **P2**, ezért a STOP-protokoll nem lépett életbe. A
+nyilvántartás: [`docs/accessibility/known-exceptions.yaml`](docs/accessibility/known-exceptions.yaml),
+a jelentés: [`docs/accessibility/release-audit.md`](docs/accessibility/release-audit.md).
+
+**A 3. lelet a kör önálló hozadéka:** a meglévő `screen_reader_copy_test.dart` /
+`semantics_contract_test.dart` `find.bySemanticsLabel` **jelenlét**-próbái
+szerkezetileg vakok rá ([L460](docs/LESSONS.md#l460)) — a BELSŐ csomópont
+felirata megvan, tehát a jelenlét-próba zöld. Csak a valódi
+`tester.semantics.simulatedAccessibilityTraversal()` bejárás hozta elő.
+
+**A pre-flight mérése írta a kör alakját (brief §0.0.A/R1–R10):** a `test/support/e2e_harness.dart`
+NINCS az `allowed_paths`-on ÉS a bejáró segédei beégetett ANGOL literálra
+illesztenek → a két tesztfájl SAJÁT, locale-paraméteres bejárót írt
+(`lookupAppLocalizations`); a locale a store-on át megy
+(`{'ss.settings.locale': 'hu'}`), a text-scale a `platformDispatcher`-en (egy a
+fa FÖLÉ tett `MediaQuery` inert, mert a `MaterialApp.router` saját
+`MediaQuery.fromView`-t szúr be); és **minden cella 412×915-ön mér**, mert a
+`flutter_test` default 800×600-a vakká teszi a túlcsordulás-cellát
+([L558](docs/LESSONS.md#l558), [L452](docs/LESSONS.md#l452)).
+
+**Egy MAJOR — megint ŐR-hiba, nem kódhiba, TELJESEN zöld gate mellett** (az
+E12-R18 [L563](docs/LESSONS.md#l563) és E12-R19 [L565](docs/LESSONS.md#l565)/[L566](docs/LESSONS.md#l566)
+osztályának HARMADIK előfordulása): az A6-nak — „minden kivétel ownerrel és
+lejárattal" — **nem volt gépi őre**; a `known-exceptions.yaml`-t egyetlen cella
+sem olvasta (mind a nyolc említés komment/`reason:` sztring volt), és mindhárom
+bejegyzés `expiry: unscheduled` volt. A javító kör fail-closed, kézzel írt
+sor-parszert szállított (`package:yaml` nincs a fán) kétirányú tükör-fedéssel.
+**A reviewer saját mutációval zárta le, nem bemondásra** ([L567](docs/LESSONS.md#l567)).
+
+## ✅ E12-R19 KÉSZ — Privacy-safe telemetria-szerződés + release SLO/dashboard séma — PR [#515](https://github.com/wolfcasaba/strumsight/pull/515), squash `ea66abc5` (2026-09-01)
+
+A Ch12 **Kör 19** a kliens-oldali **telemetria-szerződést** szállította: typed
+esemény (`lib/core/telemetry/telemetry_event.dart`), redakciós kapu, consent-kapuzott
+**no-op sink**, valamint a release-döntés gépi bemeneti sémája
+(`docs/operations/slo.yaml`, `release-dashboard.md`, `docs/analytics/event-catalog.md`).
+ADR: [0484](docs/adr/0484-privacy-safe-telemetry-contract-and-release-slo-schema.md).
+A kör **nem** köt be analytics-szolgáltatót, **nem** küld semmit hálózatra, és
+`lib/features/**`-ot nem érint.
+
+**A tiltás STRUKTURÁLIS, nem szűrő (D1):** a `TelemetryEvent` mind az öt mezője
+zárt enum — nincs `Map<String,dynamic>`, `dynamic`, `Object?`, szabad `String`,
+nincs `toString()`/`toJson()` és nincs azonosító-mező sem, tehát korrelációs
+vektor sincs. Az időtartam **bucket** (`[0,250) … [10000,∞)`, alsó-inkluzív
+határokkal), nem nyers ezredmásodperc. A redakció (D2) a MEGLÉVŐ `LogRedactor`-t
+hívja — második lista tilos. Opt-out mellett a sink nem tárol, nem pufferel, és a
+consent `false → true` váltása után sincs utólagos flush (D4). A hiányzó metrika
+`unknown`, ami **blokkoló**, sosem zöld (D3 — az [ADR 0474](docs/adr/0474-benchmark-record-and-performance-budget-comparison.md)
+D5 szabályának átvitele a release-sávra).
+
+**A pre-flight négy MÉRT ténye írta a kör alakját (§0.0 R1–R9):** a fán ma
+**nincs telemetria-consent kapcsoló** (→ a consent injektált, nem szerzett);
+nincs `dart:mirrors` a `flutter_test` alatt (→ az A1 „típus-szintű" cella
+forrás-szken); nincs deklarált `package:yaml` (→ kézi sor-parszer, a
+`tool/check_data_inventory.dart` mintájára); és a `check_data_inventory.dart`
+egress-felfedezése a D5 hálózat-tilalmának GÉPI őre.
+
+**Két MAJOR — mindkettő ŐR-hiba, nem kódhiba, TELJESEN zöld gate mellett.**
+A kód elsőre helyes volt; a szállított MÉRCE nem fogta meg azt, amit a brief
+§6.1 mátrixa hozzárendelt. A reviewer mutációval mérte: az A1/A4 cella
+típusnév-**denylist** volt enum-**allowlist** helyett, ezért a
+`Map<String,String>`, `List<String>` és `double` mező MIND átcsúszott
+([L565](docs/LESSONS.md#l565)); az A5 `slo.yaml`-parszer pedig fail-**open** —
+egy 4-szóközös behúzású, `required: false` + `on_missing: success` SLO **némán
+eltűnt**, és mind az öt cella zöld maradt ([L566](docs/LESSONS.md#l566)).
+
+**A zárás mércéje a mutation-kill volt, nem a zöld gate** (az E12-R18
+[L563](docs/LESSONS.md#l563) folytatása): a javító kör után a reviewer saját
+harnesse **10 mutánst** mért a javított fán — mind PIROS, baseline 20/20 zöld.
+Végső review: **APPROVED**, 0 BLOCKER / 0 MAJOR / 0 nyitott MINOR
+([`e12-r19-review.md`](docs/reviews/e12-r19-review.md) §7). A kötelező
+`security-reviewer` (a kör `risk = "high"`) 0 CRITICAL/BLOCKER-t adott, leletei
+egybeestek a reviewerével.
+
+> 📌 **A réteg ma szándékosan INERT:** `grep -rn "core/telemetry" lib/` → **0
+> fogyasztó**, és a `slo.yaml`-nak a kör tesztjén kívül nincs gépi fogyasztója.
+> Az esemény-kibocsátás (`lib/features/**`), a telemetria data-inventory
+> route-ja (`docs/privacy/**`) és a dashboard tényleges bekötése a **rollout-körök
+> (31–33)** dolga, feature-flag mögött. A kör terméke maga a MÉRCE — az értéke
+> az, mit fog a jövőben pirosra váltani.
+
+## ✅ E12-R18 KÉSZ — Program threat model + fail-closed release security scan — PR [#514](https://github.com/wolfcasaba/strumsight/pull/514), squash `3b49c501` (2026-09-01)
+
+A Ch12 **Kör 18** program-szintű **threat modelt** (`docs/security/threat-model.md`),
+egy lokálisan futtatható, **fail-closed release security scant**
+(`tool/release/security_scan.py`) és lejáró **kivétel-nyilvántartást**
+(`docs/security/exceptions.yaml`) szállított. ADR:
+[0481](docs/adr/0481-program-threat-model-and-release-security-scan.md).
+A kör `lib/**`-ot és `backend/app/**`-ot **nem** módosít.
+
+**A pre-flight átírta a kör tartalmát (§0.0 R2):** az eredeti brief mind az öt
+viselkedési acceptance-cellája (replay, path traversal, oversize, modell-checksum,
+titok-minta) **MÁR MÉRVE VOLT** a fán — újra-implementálásuk második
+igazságforrást hozott volna (az E12-R16 MAJOR-jának hibaosztálya, ADR 0477,
+[L555](docs/LESSONS.md#l555)). A kör kimenete ezért **bizonyíték-kötés**: a threat
+model minden ellenintézkedése géppel olvasható `guard`-ot nevez meg, és a scan
+fail-closed módon méri, hogy ezek a guardok a fán LÉTEZNEK és ÉLNEK.
+
+**Négy javító kör, mind a némítás-felismerés körül.** A review-lánc mérte ki,
+hogy egy nyilvántartott guard hányféle egysoros idiómával tüntethető el némán:
+Dart file-szintű `@Skip` (`library;`-vel és nélküle), `group(..., skip:)` **mindkét**
+szintaktikai alakban, Python `pytestmark`, modul-szintű `pytest.skip(...,
+allow_module_level=True)` behúzástól függetlenül, `pytest.importorskip`,
+osztály-szintű dekorátor a hívás-lokális ablakon kívül. **A fix3 egy hamis pozitív
+zárása közben visszanyitott egy igaz pozitívot** — a kanonikus
+`group('…', () {…}, skip: 'reason')` alakot —, azaz a `T-EGRESS-01` consent-guard
+némán kieshetett, a kapu mégis `EXIT 0`-t adott ([L562](docs/LESSONS.md#l562)).
+A fix4 ezt zárta, a hamis pozitívok visszanyitása nélkül.
+
+**A zárás mércéje a mutation-kill volt, nem a zöld gate:** a fix3 review kimérte,
+hogy a két legfontosabb javítás (S10/S11) cellái a javítás ELŐTTI eszközzel is
+zöldek — vagyis védtelenek voltak ([L563](docs/LESSONS.md#l563)). A fix4 után
+minden viselkedés-változtatásnak saját, a reviewer által ÚJRAMÉRT piros útja van.
+Végső review: **APPROVED**, 0 BLOCKER / 0 MAJOR
+([`e12-r18-review-security-fix4.md`](docs/reviews/e12-r18-review-security-fix4.md)).
+
+> ⚠ **Nyitva hagyott, NEM merge-blokkoló tételek (követő kör):** két
+> **fail-closed** hamis pozitív a statikus skip-heurisztikában — `pytest.importorskip`
+> egy teszt-TÖRZSÖN belül az egész modult „disabled"-nek jelöli (FP-A), és a
+> `def`-lokális 400 karakteres előtag-ablak átlóg a szomszéd teszt legális
+> `pytest.skip('…')` hívására (FP-B, a kör előtt is jelen volt). Mindkettő a
+> release-t BLOKKOLJA, nem engedi át.
+
+> 📌 **A CI-bekötés szándékosan NEM készült el** (§0.1): a `.github/workflows/security.yml`
+> a merge-kapu környékét érinti, és egy workflow-változás bizonyítéka mindig egy
+> DISPATCH-elt futás (ADR 0052/0053) — ez a **Kör 25** (RC assembly) dolga.
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E15-R07 / H3: a bekötésnek hiányzik az előfeltétele → beszúrt `E15-R14` (2026-09-01)
 
 Az `E15-R07` (Practice Generator bekötése + migrálása) az implementer `stopped`
@@ -9692,7 +10611,70 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-29):** `main` @ `1c8e214a` — E15-R06 Setlist +
+**Aktuális állapot (2026-09-02):** `main` @ `cf7c6fb6` — E12-R24 store listing,
+privacy és legal package, PR
+[#520](https://github.com/wolfcasaba/strumsight/pull/520), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** — a review **1 MAJOR + 1
+MINOR**-t talált TELJESEN ZÖLD gate mellett: az A3 próza-scan fail-open volt
+(signature nélküli non-GA capability némán kimaradt), amit a reviewer P7 próbája
+mért ki — egy ÚJ non-GA capability „coming soon" ígérete 29/29 zölden átment
+([L571](docs/LESSONS.md#l571)). A javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r24-review.md`](docs/reviews/e12-r24-review.md)); 2 NOTE
+nyitva (placeholder support-cím, Play-taxonómia — mindkettő emberi lépés).
+**ÚJ ADR nincs, szándékosan** (a normatív állítások az ADR 0477 D1 / 0479 / 0247
+alá esnek; precedens E12-R13). `risk = "normal"` → `security-reviewer` nem volt
+kötelező. Exact-SHA evidencia a merge SHA-n (`b3e346d4`): Full Gate
+[33579841775](https://github.com/wolfcasaba/strumsight/actions/runs/33579841775),
+Router CI
+[33579897602](https://github.com/wolfcasaba/strumsight/actions/runs/33579897602)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`).
+
+**Előző kör (2026-09-02):** `main` @ `3e6dbbf0` — E12-R23 legacy user
+migration release candidate, PR
+[#519](https://github.com/wolfcasaba/strumsight/pull/519), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude, **1 javító kör** — a review **1 MAJOR + 1 MINOR**-t
+talált 8/8 ZÖLD gate mellett, mert a „korrupt bemenet" cella valójában egy
+injektált írás-hibát mért, a `corrupted_storage.json` pedig hibátlan JSON-t
+tartalmazott ([L570](docs/LESSONS.md#l570)). A javító kör után APPROVED, 0 nyitott
+lelet ([`docs/reviews/e12-r23-review.md`](docs/reviews/e12-r23-review.md)); egy
+ismert, dokumentált korlát (`readBody()` → `null` sérült dokumentum után) cellával
+pinnelve marad nyitva. ÚJ ADR:
+[0487](docs/adr/0487-legacy-upgrade-migration-evidence-contract.md).
+`risk = "high"` → a kötelező `security-reviewer` futott (PASS, 0 lelet, a három
+fixture `sha256`/`bytes` értékét függetlenül újraszámolta). Exact-SHA evidencia a
+merge-elt head SHA-n (`aec92f4b`): Full Gate
+[33574437257](https://github.com/wolfcasaba/strumsight/actions/runs/33574437257),
+Router CI
+[33574439209](https://github.com/wolfcasaba/strumsight/actions/runs/33574439209)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`).
+
+**Előző állapot:** `main` @ `3b1855ff` — E12-R22 béta-terjesztés,
+tesztelői consent és redaktált diagnosztikai csomag, PR
+[#518](https://github.com/wolfcasaba/strumsight/pull/518), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — a review **1 BLOCKER +
+3 MAJOR + 2 kért MINOR**-t talált TELJESEN ZÖLD gate (10/10, 44 cella) mellett,
+mert az A3 küszöb-cella csupa-nulla PCM fixture-rel mért, ahol a hibaosztály
+szerkezetileg nem tud előfordulni ([L569](docs/LESSONS.md#l569)). A javító kör
+után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r22-review.md`](docs/reviews/e12-r22-review.md)), két
+follow-up NOTE nyitva (IDN e-mail, a titok-osztály szűk kulcslistája). ÚJ ADR:
+[0486](docs/adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md).
+`risk = "high"` → a kötelező `security-reviewer` futott. Exact-SHA evidencia a
+merge SHA-n (`0192cb6b`): Full Gate
+[33566453442](https://github.com/wolfcasaba/strumsight/actions/runs/33566453442),
+Router CI
+[33566455858](https://github.com/wolfcasaba/strumsight/actions/runs/33566455858),
+Backend CI
+[33566457950](https://github.com/wolfcasaba/strumsight/actions/runs/33566457950)
+— mind `success`. A CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml`,
+`native_gate = false`).
+
+**Előző állapot:** `main` @ `1c8e214a` — E15-R06 Setlist +
 Progress képernyők design-rendszer migrációja, PR
 [#510](https://github.com/wolfcasaba/strumsight/pull/510), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -9735,7 +10717,77 @@ maradt.
 
 ## 5. Last completed round
 
-**E15-R06 — Setlist + Progress képernyők migrálása a design-rendszerre** (PR
+**E12-R24 — Store listing, privacy és legal package**
+(PR [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash `cf7c6fb6`).
+A kör az első olyan artefaktumot szállította, amiből a store-feltöltés emberi
+lépése ELLENTMONDÁS-MENTESEN elvégezhető: store-szöveg, manifestből MÉRT
+permission-rationale (funkció + adat minden engedélyhez), a privacy-leltárból
+SZÁRMAZTATOTT data-safety nyilatkozat, és két TERVEZET jelölésű jogi dokumentum
+— mind a `docs/testing/device-matrix.yaml`, `docs/privacy/data-inventory.yaml`
+és `android/app/src/main/AndroidManifest.xml` ÉLŐ olvasásával mérve
+(`test/tooling/store_package_test.dart`, 31 cella). A pre-flight kimérte, hogy a
+brief „a fiók-törlés a `backend/app/routers/auth.py` felelőssége" állítása HAMIS
+(a router három végpontja között nincs törlés), ezért a csomag ezt őszintén,
+támogatási csatornaként írja le. **A review a zöld gate mögött találta a
+lényeget:** az A3 próza-scan fail-open volt — egy ÚJ, signature nélküli
+`ga_scope: false` capability „coming soon" ígérete 29/29 zölden átment, a
+`if (pattern == null) continue` néma kihagyása miatt. A javító kör fail-closed
+kezelést + 2 cellát adott ([L571](docs/LESSONS.md#l571)). **Nyitva marad** két
+emberi lépés: a placeholder support-cím megerősítése és a `play_category` mezők
+megfeleltetése a Play Console hivatalos taxonómiájának.
+
+**Előző kör: E12-R23 — Legacy user migration release candidate**
+(PR [#519](https://github.com/wolfcasaba/strumsight/pull/519), squash `3e6dbbf0`).
+A kör bizonyítékot szállított arról, hogy egy régi telepítésről frissítő
+felhasználó adata a 22 lépéses boot-migrátor-láncon átér: mező-szintű
+adatmegőrzés, megszakítás utáni FOLYTATÁS (a bukott kulcs pontosan egyszer
+íródik, nincs replay), write-fault fail-safe, `BootstrapFailure` fail-closed ág,
+és pinnelt lépéssorrend — mind `lib/**` érintése nélkül, három manifest-be
+regisztrált legacy fixture-rel. **A review a zöld gate mögött találta a
+lényeget:** a „korrupt bemenet" acceptance-sorát egyetlen cella sem őrizte (az
+A3 injektált írás-hibát mért, a `corrupted_storage.json` hibátlan JSON volt), és
+a reviewer saját próbatesztje kimérte a valódi hibaosztályt: sérült legacy
+dokumentum után a `migrate()` sikert jelent, a nyers bájtok megmaradnak, de a
+production olvasási út ÜRES dokumentumot ad. A javító kör ezt A3b cellával
+pinnelte („ISMERT KORLÁT (ADR 0487)"), és a fixture nevét igazzá tette
+([L570](docs/LESSONS.md#l570)). **Nyitva marad** maga a korlát: a felhasználói
+oldali javítás `lib/**`-ot érint, ma gazdátlan.
+
+**Előző kör: E12-R22 — Béta-terjesztés, tesztelői consent és redaktált diagnosztikai csomag**
+(PR [#518](https://github.com/wolfcasaba/strumsight/pull/518), squash `3b1855ff`).
+A kör a béta-visszajelzés csatornáját és csomagját szállította, felület nélkül: két
+független consent-kapcsoló (a nyers hang SOHA nem jár a diagnosztikai
+hozzájárulással), assembly-idejű rekurzív redakció négy osztályra, inkluzív
+5 242 880 bájtos méret-korlát HIBÁVAL, és determinisztikus, manifesthez kötött
+béta-jegyzet. **A review a zöld gate mögött találta a lényeget:** a redakció
+útvonal-mintája belemart a base64 hangba és csendben megsemmisítette a klipet
+(`exit 0`), a hang-réteg és a méret-korlát egyetlen legfelső szintű kulcsnéven
+állt (beágyazott klip consent és korlát nélkül átment), a hibaüzenet pedig a
+redakció ELŐTT írta ki a token/e-mail/útvonal/device-id négyest a stderr-re. Egy
+javító kör mindet lezárta, a reviewer saját, a javító kód ellen futtatott
+próbáival igazolva ([L569](docs/LESSONS.md#l569)). **Nyitva marad** a
+`lib/features/feedback/` képernyő mint nevesített, ma gazdátlan hiány, és két
+nem-blokkoló NOTE (IDN e-mail, szűk titok-kulcslista).
+
+**Előző kör: E12-R18 — Program threat model + fail-closed release security scan** (PR
+[#514](https://github.com/wolfcasaba/strumsight/pull/514), squash `3b49c501`).
+A kör nem új védelmeket írt, hanem **bizonyíték-kötést**: a threat model minden
+ellenintézkedése géppel olvasható `guard`-ot nevez meg, és a
+`tool/release/security_scan.py` fail-closed módon méri, hogy ezek a guardok a fán
+léteznek és ÉLNEK (a pre-flight kimérte, hogy az eredeti brief öt viselkedési
+cellája MÁR mérve volt — újraírásuk második igazságforrás lett volna). **Négy
+javító kör** kellett, mind a némítás-felismerés körül; a fix3 közben egy hamis
+pozitív zárása **visszanyitott** egy igaz pozitívot (a kanonikus
+`group('…', () {…}, skip: 'reason')` alak — a `T-EGRESS-01` consent-guard némán
+kieshetett, `EXIT 0` mellett), amit a fix4 zárt
+([L562](docs/LESSONS.md#l562)). A zárás mércéje végig a **mutation-kill** volt:
+a fix3 review kimérte, hogy a két legfontosabb javítás cellái a javítás előtti
+eszközzel is zöldek, tehát védtelenek ([L563](docs/LESSONS.md#l563)). Végső
+review APPROVED (0 BLOCKER, 0 MAJOR); **nyitva marad** két fail-closed hamis
+pozitív (FP-A `importorskip` teszt-törzsben, FP-B a 400 karakteres ablak
+átlógása) — követő kör.
+
+**Előző kör: E15-R06 — Setlist + Progress képernyők migrálása a design-rendszerre** (PR
 [#510](https://github.com/wolfcasaba/strumsight/pull/510), squash `1c8e214a`).
 Három `migrate`-verdiktű képernyő kapott design-rendszer komponenseket
 (`SsContentCard`/`SsEmptyState`/`SsButton`), a migrációs arány **63/96
@@ -9783,6 +10835,55 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R30
+> zárása után): **293 `done`, 48 `hold`, 18 `prepared`, 6 `pending`**
+> (az E12 sávból 30 `done`, 6 `pending`).
+>
+> ⚠ **Az E12-R24 két EMBERI lépést hagyott nyitva a store-feltöltés előtt** —
+> egyik nyitott brief sem nevezi meg őket, ma gazdátlanok: (1) a
+> `docs/legal/privacy-policy-draft.md` és `community-guidelines-draft.md`
+> `privacy-support@strumsight.app` címe **kitalált PLACEHOLDER** — valódi,
+> működő támogatási postafiók nincs a fán; (2) a `docs/store/data-safety.yaml`
+> `play_category` mezőinek megfeleltetése a Play Console HIVATALOS
+> taxonómiájához nincs gépileg ellenőrizve (csak a route/field-fedezet az). A
+> jogi felülvizsgálat és a store-fiók továbbra is a useré (a kör §0.0-ja ezt
+> kimondja).
+>
+> ⚠ **Az E12-R23 egy MÉRT, felhasználót érintő korlátot hagyott nyitva:** sérült
+> legacy dokumentum után a frissítő felhasználó ÜRES dokumentumot lát
+> (`JsonDocumentStore.readBody()` → `null`), miközben az adata a lemezen ott van.
+> A korlát cellával pinnelve (`test/e2e/upgrade_migration_test.dart` A3b, „ISMERT
+> KORLÁT (ADR 0487)") és dokumentálva
+> ([`docs/release/client-migration.md`](docs/release/client-migration.md) §6), a
+> javítás viszont `lib/**`-ot érint (per-dokumentum hiba felszínre hozása, vagy a
+> „nincs itt semmi" ↔ „van, de olvashatatlan" megkülönböztetése) — **egyik nyitott
+> brief sem nevezi meg, ma gazdátlan**.
+>
+> ⚠ **Az E12-R21 KÉT MÉRT GA-blokkolót hagyott nyitva** — mindkettő
+> nyilvántartva a leltár `known_exceptions:` blokkjában
+> ([`docs/content/catalog-inventory.yaml`](docs/content/catalog-inventory.yaml),
+> `owner: strumsight-content`, `expiry: 2026-12-31`), és **egyik nyitott brief
+> sem nevezi meg** — ma gazdátlanok: (1) mind a 10 `practiceCatalog*Description`
+> ARB-kulcs hiányzik `en`-ből ÉS `hu`-ból (a javítás `lib/l10n/features/*.arb`
+> fragmentum + `tool/gen_l10n_segments.dart` újragenerálás); (2) `Lesson.name`
+> beégetett angol mind a 17 leckén (a javítás ARB-indirekciót vezetne be a
+> `lib/features/learn/model/lesson.dart`-ba). A lejárat letelte után a
+> `content_catalog_test.dart` MAGÁTÓL pirosra vált — a kivétel nem örök.
+> **Átvitt tétel:** ha egy későbbi kör bekot egy valódi
+> `PracticeCatalogReader` implementációt, az [ADR 0485](docs/adr/0485-content-catalog-inventory-and-pedagogical-readiness-contract.md)
+> D2 mérése kiterjeszthető a Practice Generator TÉNYLEGES kimenetére.
+>
+> ⚠ **Az E12-R20 HÁROM `lib/**` leletet hagyott nyitva** — mind P2, mind
+> dátumozott `review_by: "2026-12-01"`-gyel a
+> [`docs/accessibility/known-exceptions.yaml`](docs/accessibility/known-exceptions.yaml)-ben,
+> és mind **gazdátlan** (egyik nyitott Ch12/Ch15 brief sem nevezi meg):
+> `practice_setup_screen.dart:418` (43px, mindkét locale),
+> `practice_feedback.dart:89` (65px, csak `hu`), és a megosztott
+> `ss_switch_row.dart` néma/felirat-nélküli külső szemantikus csomópontja
+> (minden `SsSwitchRow` hívási helyet érint, nem csak a Practice Setupot).
+> A nyilvántartás **csak zsugorodhat**: ha egy lelet javul, a hozzá tartozó
+> teszt-tolerancia pirosra vált, amíg a YAML-bejegyzést is el nem távolítják.
+> Az `ss_switch_row.dart` javítása design-system körbe való.
 > Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-29, az E15-R06
 > zárása után): **280 `done`, 40 `hold`, 18 `prepared`, 26 `pending`**.
 >

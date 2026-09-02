@@ -1,0 +1,74 @@
+# Closed Beta cohort ↔ feature-flag profiles (E12-R27).
+#
+# Machine-checked by `tool/release/verify_beta_profile.py` against the
+# measured catalog `lib/core/feature_flags/feature_flag_registry.dart` (40
+# entries — Kör 5 / ADR 0446). Every flag key below MUST exist in that
+# registry (A1/A2); every `high`-risk flag MUST be `false` in every cohort
+# (A3). This file does not itself decide who is IN a cohort — see
+# `docs/beta/enrollment.md` for the (still prose-only, per that document's
+# own scope note) invite-list side of that question.
+#
+# `versionRange.min` is the release-manifest `app.version` a build must be
+# at or above to be considered in-range for the cohort (no upper bound is
+# declared today — `docs/beta/enrollment.md`'s "Version enforcement"
+# section is the monotonicity guarantee, not a per-cohort ceiling).
+# `maxTesters` is a headcount cap enforced operationally (the invite-list
+# owner, per `docs/beta/enrollment.md`), not by this tool — there is no
+# tester-roster data on this tree to check it against.
+
+schemaVersion: 1
+
+cohorts:
+  - id: internal
+    description: >-
+      Pre-closed-beta internal dogfood group (team members only). Wider
+      exposure than closed_beta on purpose — this is the group that finds a
+      broken cohort profile before an external tester does.
+    versionRange:
+      min: "0.9.0"
+    maxTesters: 12
+    flags:
+      accountEnabled: false
+      diagnosticsEnabled: false
+      labModeAvailable: true
+      practiceEngineV2Enabled: true
+      migratedLearnEnabled: true
+      practiceDetailedHistoryEnabled: true
+      songTrainerV2Enabled: false
+      aiTutorEnabled: false
+      aiTutorCloudEnabled: false
+      visionEnabled: false
+      visionLabCaptureEnabled: false
+      audioAnalysisV2Enabled: true
+      communityEnabled: false
+      communityWritesEnabled: false
+      communityMediaEnabled: false
+      adaptiveShellEnabled: true
+
+  - id: closed_beta
+    description: >-
+      The externally-invited Closed Beta cohort this round prepares the
+      configuration for. Deliberately narrower than internal: every
+      medium-risk surface not needed to exercise core detection stays off
+      for the first external cohort, and every high-risk capability is off
+      (A3) regardless of cohort.
+    versionRange:
+      min: "1.0.0"
+    maxTesters: 50
+    flags:
+      accountEnabled: false
+      diagnosticsEnabled: false
+      labModeAvailable: true
+      practiceEngineV2Enabled: true
+      migratedLearnEnabled: false
+      practiceDetailedHistoryEnabled: false
+      songTrainerV2Enabled: false
+      aiTutorEnabled: false
+      aiTutorCloudEnabled: false
+      visionEnabled: false
+      visionLabCaptureEnabled: false
+      audioAnalysisV2Enabled: false
+      communityEnabled: false
+      communityWritesEnabled: false
+      communityMediaEnabled: false
+      adaptiveShellEnabled: false
