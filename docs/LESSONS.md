@@ -22720,3 +22720,50 @@ LEFUTTATOTT gyakorlat találta meg. A javítás tiltott zónában van
 (`backend/scripts/**`), ezért helyesen LELET maradt (A6), nem csendes javítás.
 
 **Őrteszt:** `backend/tests/test_rollback_drill.py::test_verify_rollback_record_counts_fails_when_live_table_missing_from_dump` (+ `::test_verify_rollback_record_counts_fails_on_unknown_dump_table`, `::test_verify_rollback_record_counts_pass_detail_reports_compared_count`)
+
+---
+
+## L575 — A kipipálható ellenőrzőlista őre a `- [ ]` alakra épült, ezért pontosan a KIPIPÁLÁS pillanatában némult el: a `- [x]` sor nem hibás, hanem NEM LÉTEZIK (E12-R27, 2026-09-02)
+
+**Mit mértünk.** Az E12-R27 `docs/beta/closed-beta-launch.md`-je egy indítási
+ellenőrzőlista, amelynek MINDEN sora mért bizonyítékra hivatkozik (A5), és az
+őr (`test/tooling/beta_profile_test.dart`) a hivatkozott repó-relatív
+útvonalak létezését `existsSync()`-kel méri. A szállított fán a cella zöld
+volt, a fejlesztő saját mutáció-próbái is helyesen pirosak. A reviewer viszont
+a dokumentum **rendeltetésszerű** használatát próbálta ki — egy ember indítás
+előtt **kipipálja** a sorokat —, izolált klónban:
+
+```
+# 1. próba: kipipált sor, NEM létező útvonal
+- [x] Beta enrollment process is documented — `docs/beta/NOPE-does-not-exist.md`.
+$ flutter test test/tooling/beta_profile_test.dart   → exit 0, ZÖLD   ← fail-OPEN
+
+# 2. próba (kontroll): UGYANAZ a sor kipipálatlanul
+- [ ] Beta enrollment process is documented — `docs/beta/NOPE-does-not-exist.md`.
+$ flutter test test/tooling/beta_profile_test.dart   → exit 1, A5 PIROS
+```
+
+Az ok egyetlen minta: `_splitChecklistItems` bullet-regexe `^- \[ \] (.*)$`
+volt, tehát a `- [x]` sor nem „rendben lévő" volt, hanem a parszer számára
+**nem létezett** — az [L566](#l566) fail-OPEN hibaosztálya.
+
+**Ami ezt az esetet megkülönbözteti az L566/L571/L573-tól.** Ott a rés egy
+ritka, nem várt bemeneti alaknál nyílt ki. Itt a fail-OPEN alakot **a
+dokumentum saját, tervezett életciklusa állítja elő**: a lista azért létezik,
+hogy kipipálják. Az őr tehát pontosan addig mért, amíg senki nem használta a
+dokumentumot, és attól a pillanattól vakult meg, amikor az első ember dolgozni
+kezdett vele — a lista onnantól tetszőlegesen elsodródhatott volna a fától
+(hivatkozás nélküli vagy lógó hivatkozású sorok), zöld gate mellett.
+
+**A javítás.** `^- \[[ xX]\] (.*)$`, plusz KÉT új cella: kipipált sor + nem
+létező útvonal → jelzés; kipipált sor + létező útvonal → nincs jelzés (hogy a
+javítás ne lőjön túl). Újra-mérve ugyanazzal a mutációval: exit 1, A5 piros;
+a kipipált-de-valós változat 18/18 zöld.
+
+**Az általánosítható szabály.** *Ha egy őr egy EMBER által kitöltendő
+dokumentumot mér, a mintáinak a KITÖLTÖTT alakot is fel kell ismerniük —
+különben a mérce a dokumentum használatba vételekor kapcsol ki.* A kérdés
+mindig ugyanaz: „hogyan fog kinézni ez a fájl, miután az, akinek szól,
+hozzányúlt?" — és arra az alakra is legyen piros cella.
+
+**Őrteszt:** `test/tooling/beta_profile_test.dart::mutation probe: a CHECKED (- [x]) line referencing a non-existent repo-relative path is flagged (fail-open guard, L566)` (+ `::mutation probe: a CHECKED (- [x]) line referencing a real path is NOT flagged`)

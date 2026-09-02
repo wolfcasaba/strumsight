@@ -1,5 +1,57 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R27 KÉSZ — Closed Beta launch és monitoring — PR [#523](https://github.com/wolfcasaba/strumsight/pull/523), squash `6b5dcb5a` (2026-09-02)
+
+A Ch12 **Kör 27** a Closed Beta **indítási konfigurációját** és a hozzá tartozó
+**monitoring-eljárást** szállítja — az indítás MAGA emberi kapu, amit ez a kör
+szándékosan NEM hajt végre. ADR nincs; a szerződéseket a merge-elt
+[ADR 0446](docs/adr/0446-feature-flag-registry-and-emergency-kill-switch.md) (D1/D2/D7),
+[ADR 0395](docs/adr/0395-community-baseline-feature-flags-and-threat-model-scope.md) és
+[ADR 0486](docs/adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md)
+hordozza (precedens: E12-R24, E12-R26).
+
+**Szállítva:**
+
+- `docs/beta/cohort-profiles.yaml` — 2 cohort (`internal`, `closed_beta`), 32
+  flag-hozzárendelés a MÉRT 40-es katalógusból; mind a **7** `high` kockázatú
+  flag `false` mindkét cohortban.
+- `tool/release/verify_beta_profile.py` — a profilt **PyYAML**-lel parse-olja
+  (kemény függőség, precedens `build_ai_report.py`), a Dart registryt
+  **fail-closed** regexszel: `< 40` bejegyzés VAGY `FeatureFlagDefinition(`
+  előfordulásszám ≠ sikeresen parse-olt hármasok száma → nem-nulla kilépés
+  kimondott üzenettel. A1/A2/A3 validáció (exit 1), `--kill-switch` **read-only**
+  dry-run (exit 0, csak stdout).
+- `test/tooling/beta_profile_test.dart` — **18 cella**, A1–A6, ellenséges
+  fixture-ök temp-könyvtárban (fixture nincs commitolva).
+- `docs/beta/daily-triage-template.md` — napi triage-ritmus, KIMONDOTT döntési
+  szabály: **nyitott P0/P1 mellett nincs cohort-bővítés**; a bemenetek a
+  diagnosztikai bundle + a kézi visszajelzés, mert **telemetria-gyűjtés MA nincs**.
+- `docs/beta/closed-beta-launch.md` — 14 pontos indítási ellenőrzőlista, minden
+  pont MÉRT bizonyítékra hivatkozva, a valódi kill-switch dry-run kimenetével
+  (`labModeAvailable` a `closed_beta` cohortban — `low` kockázatú ÉS bekapcsolt),
+  a monitoring valódi határainak kimondásával, és az **ÜRES emberi indítási
+  mezővel**. **A béta NEM indult el.**
+
+**Review:** [`docs/reviews/e12-r27-review.md`](docs/reviews/e12-r27-review.md) —
+1. menet **1 MAJOR (0 BLOCKER)** teljesen zöld gate és tiszta scope-audit
+mellett: az A5 ellenőrzőlista-őr bullet-mintája fail-OPEN volt a **kipipált**
+(`- [x]`) sorokra, tehát pontosan a dokumentum rendeltetésszerű használatakor
+némult volna el (reviewer-mérés izolált klónban: kipipált sor + nem létező
+útvonal → **exit 0, ZÖLD**; ugyanaz kipipálatlanul → piros). MINOR-1: az A3
+másodlagos regex a kettőspont előtt nem engedett szóközt. **1 javító kör** →
+**APPROVED** (0 nyitott lelet, 2 NOTE). Zárás a reviewer saját újra-mérésével:
+a mutáció most exit 1, a kipipált-de-valós változat 18/18 zöld, célzott gate
+`gate_exit=0`. Lecke: [L575](docs/LESSONS.md#l575).
+
+Exact-SHA evidencia a `522248b2` merge SHA-n: Full Gate
+[33604475615](https://github.com/wolfcasaba/strumsight/actions/runs/33604475615),
+Router CI [33604523266](https://github.com/wolfcasaba/strumsight/actions/runs/33604523266)
+(`workflow_dispatch` — a záró review-commit nem trigger-útvonal, [L572](docs/LESSONS.md#l572))
+— mindkettő `success`. CI-terv: `tools/round-ci-plan.py` → `full-gate.yml`, `native_gate = false`.
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending` sora,
+új sessionben.
+
 ## ✅ E12-R26 KÉSZ — Rollback és disaster recovery drill — PR [#522](https://github.com/wolfcasaba/strumsight/pull/522), squash `e9b20604` (2026-09-02)
 
 A Ch12 **Kör 26** a projekt **ELSŐ rollback-gyakorlata**: nem dokumentumot ír a
