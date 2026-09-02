@@ -5,7 +5,7 @@
 - **Reviewer:** Claude Opus 5 (orchestrátor), READ-ONLY, izolált klón: `/tmp/review-e15-r14`
 - **Kötelező ügynökök (brief §0.0, `risk = "high"`):** `security-reviewer` ✅ · `flutter-reviewer` ✅ · `flutter-devil-advocate` ✅ (mindhárom lefutott, mérésekkel)
 
-## VÉGSŐ DÖNTÉS: CHANGES REQUESTED
+## VÉGSŐ DÖNTÉS: APPROVED (a §8 szerint, `c9a98211` — az alábbi §2–§5 az EREDETI, `6416d8db`-re szóló verdikt)
 
 **2 BLOCKER, 7 MAJOR, 7 MINOR, 3 NOTE.** Merge TILOS, amíg a BLOCKER-ek és a
 MAJOR-ok nyitva vannak.
@@ -337,6 +337,57 @@ rögzítendő az `E15-R07 / F1` nyitott előfeltételeként. Minden viselkedési
 javításhoz **piros-képes cella** tartozzon (`failingKeys`, korrupt rekord,
 elavult példány, override nélküli konténer) — a mérce nem gyengül.
 
-## 8. Javító kör után — újraellenőrzés
+## 8. Javító körök után — újraellenőrzés
 
-_(a javító kör után tölti ki a reviewer)_
+**VÉGSŐ DÖNTÉS: APPROVED** (fix2, `c9a98211`). Nyitott BLOCKER/MAJOR: **nincs**.
+
+Két javító kör futott, ugyanazzal a motorral (`sonnet-impl`), és minden lelet
+lezárása **független újraméréssel** ellenőrizve (eldobható próbatesztek a
+javított fán, izolált klónokban: `/tmp/review-e15-r14-fix1`,
+`/tmp/review-e15-r14-fix2`; a próbák törölve, a klónok `git status`-a üres).
+
+### 8.1 Leletenkénti zárás
+
+| Lelet | fix1 után | fix2 után | Zárás módja |
+|---|---|---|---|
+| **B1** bukó írás/törlés | RÉSZBEN | **ZÁRULT** | kompenzáló `_reconcileSave`/`_reconcileRemove` + read-modify-write manifest + `lastWriteFailure`; mérve: az örökre törölhetetlen árva ELTŰNT (`fresh instance deleteForPlan removes=1`), `UNHANDLED async errors: 0` (előtte 1). A hívó-oldali optimista számlálás a tilos zónában van → **D11** (F1-előfeltétel) |
+| **B2** production-kompozíció | RÉSZBEN | **ZÁRULT** | a seam marad (a bekötés a scope-on kívül), de MÉRT és KÖTELEZŐ: 7 guard-cella (`practice_generator_providers_test.dart:248-340`) provider-enként `throwsUnimplementedError`-t mér; **ADR 0482 / D9** rögzíti az `E15-R07 / F1` boot-override-kötelezettségét; a §Következmények hamis „route + flag" mondata visszavonva és a mért igazságra írva |
+| **M1** korrupt rekord | RÉSZBEN | **ZÁRULT** | a tulajdonos-olvasás az evidence-dekódolás ELÉ került (b/c ág törölhető); a nem parse-olható boríték **szándékos, dokumentált nyitott korlát** (R3) — mérve **nem** okoz wildcard-törlést idegen tervre (`deleteForPlan(plan.OTHER) removed=0`, a szomszéd rekord sértetlen) |
+| **M2** két élő példány | RÉSZBEN | **ZÁRULT** | RMW manifest + idempotens `_persistManifestAdd`; mérve: `record raw STILL on disk after 2nd delete? false` (előtte `true`), szellem-bejegyzés nincs |
+| **M3** befagyott „ma" | **ZÁRULT** | — | a provider `LocalDate Function()`-t ad; mérve: éjfél átlépésekor `FROZEN? false` |
+| **M4** `Failure` → `null` | **ZÁRULT** | — | `switch` + `throw error` → `AsyncError`; mérve korrupt pointeren: `THREW StorageFailure` |
+| **M5** globális `StreamController` | **ZÁRULT** | — | `Provider.autoDispose` mindkettőn; mérve: figyelő nélkül a stream zárul, figyelő alatt él |
+| **M6** hibás ADR-hivatkozás | **ZÁRULT** | — | a §10.1 javítva, a seamek a D9-ben |
+| **M7** `deleteForPlan` vs. aggregátor | **ZÁRULT** (dok.) | — | **ADR 0482 / D10** — kötelező F1-előfeltétel, két nevesített megoldással (tulajdonos-propagálás vagy `outcomePlanLookup`) |
+| **R1** A7-regresszió (fix1 hozta be) | — | **ZÁRULT** | a doc-commentek átfogalmazva; `grep … InMemoryPracticeEvidenceRepository lib/…/{presentation,data}` → ÜRES (exit 1), §10.3 frissítve |
+| MINOR 1–7 | nagyrészt | **ZÁRULT** | `discomfort`+`validUntil` friss-példány cella, `outcomePlanLookup` seam, tautologikus asszerciók, A4 hiba-cella, orchestrátor-dispose. A `path_provider` NOTE marad (a `pubspec.yaml` a tilos zónában) |
+
+**A javítások mércéje nem utólag zöldre szabott teszt:** az R2-cella
+asszercióit visszamértem a fix2 ELŐTTI viselkedésre — pontosan azokat az
+értékeket adta volna, amiket a próba `false/0/true`-ként mért, tehát a cella
+bizonyíthatóan piros lett volna.
+
+### 8.2 Tudatosan halasztott, ADR-be írt F1-előfeltételek
+
+- **D9** — a két `UnimplementedError` seam boot-override-ja (`main.dart`).
+- **D10** — tulajdonos-propagálás az aggregátor láncán vagy az `outcomePlanLookup` bekötése.
+- **D11** — a `DeletePracticePlanningData` ne jelentsen optimista `evidenceCount`-ot bukó remove-nál.
+- **R3** — a nem parse-olható boríték tulajdonos nélkül marad (külön terméki döntést igényel).
+
+Egyik sem néma: mindegyik kimondott döntés + kötelezettség, tilos-zóna-sértés
+nélkül. **Az `E15-R07 / F1` briefjének mindhárom D-t acceptance-kritériumként
+kell átvennie** — különösen a D9-et, mert az F1 route-ot nyit, és a ma
+fail-loud seamek ott felhasználó által látható összeomlássá válnának.
+
+### 8.3 Záró mérések (`c9a98211`)
+
+- **Gate, izolált klón, csonkítatlan:** `MINDEN GATE ZÖLD` (format, analyze,
+  10 teszt-útvonal, architecture, secrets, l10n) — `/tmp/review-gate-e15-r14-fix2.log`.
+- **`flutter analyze lib/`** (külön hívás): `No issues found!`
+- **Scope-audit:** `Legacy scope audit OK (bab785bc..c9a98211, 13 changed path(s), 1 generated/ignored)`
+  — a 13. a `docs/reviews/e15-r14-review.md`, azaz a reviewer saját, mindig
+  mentesített artefaktuma.
+- **Nem-regresszió:** A1 (2 találat), A5/A6 (`Measured screens: 96. Reachable:
+  68. Unreachable: 28.` bit-azonos; `hasLength(96)` változatlan), A7 (ÜRES),
+  A8 (`docs/privacy/` diff üres), névtér-izoláció, szerializációs round-trip —
+  mind változatlanul zöld.
