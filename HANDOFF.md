@@ -1,5 +1,79 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E12-R32 / H7 feloldva: a NEM SZÁLLÍTOTT verifikációs útvonalak is `release-tooling` — PR [#530](https://github.com/wolfcasaba/strumsight/pull/530), squash `4de5643f` (2026-09-02)
+
+**Az E12-R32 (staged rollout) H7-tel megállt**, pedig a kör négy terméke kész
+volt, a `scope_audit=ok`, és a saját mércéje 28/28 zöld. A §7 gate pirosát
+**nem a kör diffje** okozta: az `origin/main` csúcsán (`11d0d2bb`), bármely kör
+diffje NÉLKÜL:
+
+```
+$ python3 tool/release/verify_freeze.py
+verify_freeze: 2 finding(s):
+  - backend/tests/test_production_smoke_contract.py: not classified …
+  - tools/tests/test_sol_terra_both_slots.py: not classified …
+exit=1
+```
+
+Ez **eggyel több**, mint amit a halt jelentett — a `tools/tests/…` az azóta
+merge-elt [#529](https://github.com/wolfcasaba/strumsight/pull/529)-cel érkezett.
+
+**A gyökérok nem a tool, hanem az ADAT.** A `verify_freeze.py` (E12-R30) helyes
+és fail-closed; a `docs/release/feature-freeze.md` **prefix-listája** volt
+szűkebb a valóságnál, mert a bevezető kör a SAJÁT diffjéből töltötte fel
+(`tool/release/`, `test/tooling/`). Egy zárt osztálykészletű politika-ellenőrző
+viszont a REPÓ EGÉSZÉRE mér, a freeze VÉGÉIG — így minden későbbi kör nem
+szállított kódja osztályozatlan lett. **Ugyanez a hibaosztály harmadszor:**
+
+| # | Útvonal | Honnan | Feloldás |
+|---|---|---|---|
+| 1 | `HANDOFF.md` | a lánc MINDEN köre ír `docs(handoff)` commitot | `07638527` (E12-R30 post-merge) |
+| 2 | `backend/tests/test_production_smoke_contract.py` | E12-R31, `accd30c2` | **ez a kör** |
+| 3 | `tools/tests/test_sol_terra_both_slots.py` | `11d0d2bb` (#529) | **ez a kör** |
+
+**Miért nem fogta meg a CI.** A gate-cella (`freeze_policy_test.dart:60–101`) a
+sekély (`--depth 1`) CI-klónban a fail-closed ágra fut (a `freeze_base_sha` nem
+elérhető → `exit 2`), és zölden állítja a 2-es kódot. A piros ág KIZÁRÓLAG teljes
+klónban, azaz a boxon, azaz csak a KÖVETKEZŐ kör §7 gate-jén látszik.
+
+**A javítás — elvből, nem a két mért fájlból (`docs/release/feature-freeze.md`):**
+`release-tooling` = ami **nem kerül bele a szállított termékbe**
+(`tool/release/`, `test/`, `backend/tests/`, `tools/`).
+
+**A mérce NEM lazult:** a szállított kód (`lib/**`, `backend/app/**`,
+`android/**`, `assets/**`, `pubspec.yaml`) továbbra is nyitott P0/P1/P2 blocker
+ID-t követel; a `.github/**` és a `.ai/**` **szándékosan nem** került a listára
+(a CI-definíció és a router-politika maga a kapu); a három osztály zárt maradt;
+teszt nem törlődött és nem lett `skip`-elve; a `tools/round-gate.sh` és a
+`.github/workflows/` érintetlen.
+
+**Kötelező regressziós cellák a MÉRT adatból** (`test/tooling/freeze_policy_test.dart`):
+
+| cella | ELŐTTE | UTÁNA |
+|---|---|---|
+| `the NON-SHIPPING verification paths (backend/tests/, tools/, test/) are release-tooling too` — a piros futás nyers útvonalaival és valódi commit-üzeneteivel | `exit 1`, 3 finding | `exit 0` |
+| `the widened release-tooling prefixes do NOT exempt the shipped backend or app code` | `exit 1` | `exit 1` (a határ másik oldala piros marad) |
+
+**Mérés:** izolált worktree-ben `tools/round-gate.sh
+test/tooling/freeze_policy_test.dart` → format/analyze/test/architecture/
+secrets/l10n MIND ZÖLD, `freeze_policy_test.dart` **36/36** (34+2); Full Gate
+[33662777103](https://github.com/wolfcasaba/strumsight/actions/runs/33662777103)
+**success** az exact `e89bd183` SHA-n (Router CI nem trigger: a diff egyetlen
+`router-ci.yml` útvonalat sem érint). A merge UTÁN a `main`-en
+`verify_freeze.py` → **exit 0** (33 útvonal osztályozva).
+
+**A megállt kör folytatható:** a kör saját diffje (6 útvonal) tisztán
+osztályozódik a javított doksi ellen, az ága
+(`sonnet-impl/e12-r32-staged-rollout-1-to-20-percent` @ `1f286841`) az originon
+van, a review verdikt: nincs nyitott lelet
+([`docs/reviews/e12-r32-review.md`](docs/reviews/e12-r32-review.md)).
+
+**Lecke:** [L580](docs/LESSONS.md#l580) — a zárt osztálykészletű
+politika-ellenőrző prefix-listáját ELVBŐL kell levezetni, nem a bevezető kör
+diffjéből; a tágítás határát mutáció-cellával kell őrizni; és ha egy kapunak
+környezet-függő ága van, a másik ágat is mérni kell valahol.
+
+
 ## ✅ E12-R31 KÉSZ — Production deployment és internal production cohort — PR [#527](https://github.com/wolfcasaba/strumsight/pull/527), squash `accd30c2` (2026-09-02)
 
 A Ch12 **Kör 31** a production környezet és a belső cohort validálását szállítja
