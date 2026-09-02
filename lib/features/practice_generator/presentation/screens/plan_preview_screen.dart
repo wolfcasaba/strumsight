@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/id/planner_ids.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
@@ -80,7 +81,8 @@ class _PlanPreviewScreenState extends State<PlanPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final state = widget.controller.state;
     return PopScope(
       // §5.1: leaving the screen without confirm must not activate. The
@@ -110,13 +112,15 @@ class _PlanPreviewScreenState extends State<PlanPreviewScreen> {
                 ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(SsSpacing.space4),
                   children: [
                     Text(
                       l10n.planPreviewIntro,
-                      style: theme.textTheme.bodyMedium,
+                      style: typography.bodyMedium.copyWith(
+                        color: colors.textSecondary,
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: SsSpacing.space4),
                     for (final day in state.plan.days)
                       PlanDayCard(
                         day: day,
@@ -184,14 +188,18 @@ class _FindingsBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final tone = isError ? colors.danger : colors.warning;
     return Container(
       key: Key('plan-preview-findings-${isError ? 'error' : 'warning'}'),
       width: double.infinity,
-      color: isError
-          ? theme.colorScheme.errorContainer
-          : theme.colorScheme.tertiaryContainer,
-      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        border: Border.all(color: tone.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(SsRadius.md),
+      ),
+      padding: const EdgeInsets.all(SsSpacing.space3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -199,22 +207,16 @@ class _FindingsBanner extends StatelessWidget {
             isError
                 ? l10n.planPreviewErrorBannerTitle
                 : l10n.planPreviewWarningBannerTitle,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: isError
-                  ? theme.colorScheme.onErrorContainer
-                  : theme.colorScheme.onTertiaryContainer,
-            ),
+            style: typography.labelLarge.copyWith(color: tone),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: SsSpacing.space1),
           for (final issue in issues)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Text(
                 issue.message,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: isError
-                      ? theme.colorScheme.onErrorContainer
-                      : theme.colorScheme.onTertiaryContainer,
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textPrimary,
                 ),
               ),
             ),
@@ -244,17 +246,25 @@ class _ConfirmBar extends StatelessWidget {
     final blocked = state.hasBlockingError;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(SsSpacing.space4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (requiresAcknowledgement)
-              OutlinedButton(
+              SsButton(
                 key: const Key('plan-preview-acknowledge-warning'),
+                variant: SsButtonVariant.secondary,
                 onPressed: onAcknowledgeWarning,
-                child: Text(l10n.planPreviewAcknowledgeWarning),
+                label: l10n.planPreviewAcknowledgeWarning,
               ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SsSpacing.space2),
+            // Raw FilledButton, not SsButton (§0.0.A/R6 exception): the
+            // round's own type-pinning guard
+            // (`plan_preview_screen_test.dart` A3/A4) casts this exact key
+            // with `tester.widget<FilledButton>(...)`, which only resolves
+            // against the literal widget type at the key — SsButton sets
+            // the key on itself, not on an inner FilledButton, so swapping
+            // it would fail that frozen cell (§0.0 forbids weakening it).
             FilledButton(
               key: const Key('plan-preview-confirm'),
               onPressed: blocked || requiresAcknowledgement ? null : onConfirm,

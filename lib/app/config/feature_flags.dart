@@ -63,6 +63,10 @@ final class FeatureFlags {
   ///   diagnostics-capable device build is what [AppEnvironment.lab] is for.
   /// - Practice V2, detailed history, and migrated Learn are available outside
   ///   production. None of the practice flags has a dart-define override.
+  /// - [practiceGeneratorEnabled] is available outside production through the
+  ///   same `nonProd` rollout boundary (E15-R07, ADR 0491 D2); its default
+  ///   constructor value remains OFF. [plannerAssistEnabled] (model-assisted
+  ///   suggestions) is a separate rollout decision and stays OFF everywhere.
   /// - [songTrainerV2Enabled] is available outside production through the
   ///   same `nonProd` rollout boundary as Practice V2. The default constructor
   ///   remains OFF, so manually created flags still require an explicit opt-in.
@@ -81,7 +85,11 @@ final class FeatureFlags {
       songTrainerV2Enabled: nonProd,
       aiTutorEnabled: false,
       aiTutorCloudEnabled: false,
-      practiceGeneratorEnabled: false,
+      // E15-R07 F1 (ADR 0491 D2) — same `nonProd` rollout boundary as
+      // `practiceEngineV2Enabled`: ON outside production, OFF in
+      // production. `plannerAssistEnabled` (model-assisted suggestions) is
+      // a separate rollout decision and stays OFF everywhere.
+      practiceGeneratorEnabled: nonProd,
       plannerAssistEnabled: false,
       visionEnabled: false,
       visionSetupEnabled: false,
@@ -164,8 +172,11 @@ final class FeatureFlags {
   /// Whether cloud AI Tutor capabilities are available. Defaults to OFF.
   final bool aiTutorCloudEnabled;
 
-  /// Whether deterministic practice-plan generation is available. It remains
-  /// OFF in every environment until its rollout decision is recorded.
+  /// Whether deterministic practice-plan generation is available. Available
+  /// outside production through the same `nonProd` rollout boundary as
+  /// [practiceEngineV2Enabled] (E15-R07, ADR 0491 D2); the default
+  /// constructor remains OFF, so manually created flag sets still require
+  /// an explicit opt-in.
   final bool practiceGeneratorEnabled;
 
   /// Whether model-assisted practice-plan suggestions are available. It

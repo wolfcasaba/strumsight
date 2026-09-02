@@ -2,6 +2,7 @@ import 'dart:io' show Directory;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/usecase/delete_practice_planning_data.dart';
 import '../../application/usecase/export_practice_planning_data.dart';
@@ -123,6 +124,8 @@ class _PlanPrivacyScreenState extends State<PlanPrivacyScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Scaffold(
       appBar: AppBar(
         title: Semantics(
@@ -132,53 +135,50 @@ class _PlanPrivacyScreenState extends State<PlanPrivacyScreen> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(SsSpacing.space5),
           children: [
             Text(
               l10n.practicePrivacyIntro,
               key: const Key('plan-privacy-intro'),
-              style: Theme.of(context).textTheme.bodyLarge,
+              style: typography.bodyLarge.copyWith(color: colors.textPrimary),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: SsSpacing.space4),
             _ScopeCard(l10n: l10n),
-            const SizedBox(height: 16),
+            const SizedBox(height: SsSpacing.space4),
             _DiscomfortSafetyCard(l10n: l10n),
-            const SizedBox(height: 24),
-            Semantics(
+            const SizedBox(height: SsSpacing.space6),
+            SsButton(
+              key: const Key('plan-privacy-export-action'),
+              variant: SsButtonVariant.secondary,
+              icon: Icons.download_outlined,
+              onPressed: _isWorking ? null : _confirmAndExport,
               label: l10n.practicePrivacyExportAction,
-              button: true,
-              child: OutlinedButton.icon(
-                key: const Key('plan-privacy-export-action'),
-                onPressed: _isWorking ? null : _confirmAndExport,
-                icon: const Icon(Icons.download_outlined),
-                label: Text(l10n.practicePrivacyExportAction),
-              ),
             ),
-            const SizedBox(height: 12),
-            Semantics(
+            const SizedBox(height: SsSpacing.space3),
+            SsButton(
+              key: const Key('plan-privacy-delete-action'),
+              variant: SsButtonVariant.destructive,
+              icon: Icons.delete_outline,
+              onPressed: _isWorking ? null : _confirmAndDelete,
               label: l10n.practicePrivacyDeleteAction,
-              button: true,
-              child: FilledButton.tonalIcon(
-                key: const Key('plan-privacy-delete-action'),
-                onPressed: _isWorking ? null : _confirmAndDelete,
-                icon: const Icon(Icons.delete_outline),
-                label: Text(l10n.practicePrivacyDeleteAction),
-              ),
+              destructiveSemanticHint: l10n.practicePrivacyDeleteConfirmBody,
             ),
             if (_lastExportFileName != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               Text(
                 l10n.practicePrivacyExportReady(_lastExportFileName!),
                 key: const Key('plan-privacy-export-last-name'),
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textPrimary,
+                ),
               ),
             ],
             if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               Text(
                 _errorMessage!,
                 key: const Key('plan-privacy-error'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: typography.bodyMedium.copyWith(color: colors.danger),
               ),
             ],
           ],
@@ -197,30 +197,44 @@ class _ScopeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return SsCard(
       key: const Key('plan-privacy-scope-card'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.practicePrivacyScopeTitle,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(l10n.practicePrivacyScopeBody),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.lock_outline, semanticLabel: 'kept'),
-                const SizedBox(width: 8),
-                Expanded(child: Text(l10n.practicePrivacyScopePreserved)),
-              ],
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.practicePrivacyScopeTitle,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          Text(
+            l10n.practicePrivacyScopeBody,
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.lock_outline,
+                size: 20,
+                color: colors.textSecondary,
+                semanticLabel: 'kept',
+              ),
+              const SizedBox(width: SsSpacing.space2),
+              Expanded(
+                child: Text(
+                  l10n.practicePrivacyScopePreserved,
+                  style: typography.bodyMedium.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -234,29 +248,37 @@ class _DiscomfortSafetyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return SsCard(
       key: const Key('plan-privacy-discomfort-card'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.health_and_safety_outlined),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.practicePrivacyDiscomfortSafetyTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.health_and_safety_outlined,
+                size: 20,
+                color: colors.textSecondary,
+              ),
+              const SizedBox(width: SsSpacing.space2),
+              Expanded(
+                child: Text(
+                  l10n.practicePrivacyDiscomfortSafetyTitle,
+                  style: typography.titleMedium.copyWith(
+                    color: colors.textPrimary,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(l10n.practicePrivacyDiscomfortSafetyBody),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          Text(
+            l10n.practicePrivacyDiscomfortSafetyBody,
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+        ],
       ),
     );
   }

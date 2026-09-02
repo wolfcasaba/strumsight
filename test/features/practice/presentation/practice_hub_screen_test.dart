@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/practice/application/practice_catalog_controller.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
@@ -121,16 +124,36 @@ class _EmptyRepository implements PracticeCatalogRepository {
       const <PracticeDefinition>[];
 }
 
+AppConfig _configWith(bool practiceGeneratorEnabled) {
+  return AppConfig(
+    environment: AppEnvironment.development,
+    apiBaseUrl: AppConfig.devApiBaseUrl,
+    flags: FeatureFlags(
+      accountEnabled: false,
+      diagnosticsEnabled: false,
+      labModeAvailable: false,
+      practiceGeneratorEnabled: practiceGeneratorEnabled,
+    ),
+    diagnosticsToken: AppConfig.devDiagnosticsToken,
+    buildMode: 'test',
+    appVersion: 'test',
+  );
+}
+
 Widget _host({
   required PracticeCatalogRepository repository,
   DailyChallenge? dailyChallenge,
   DateTime? now,
   Locale locale = const Locale('en'),
+  bool practiceGeneratorEnabled = false,
 }) {
   return ProviderScope(
     overrides: [
       ...preferenceOverrides(),
       practiceCatalogRepositoryProvider.overrideWithValue(repository),
+      appConfigProvider.overrideWithValue(
+        _configWith(practiceGeneratorEnabled),
+      ),
     ],
     child: MaterialApp(
       theme: SsLightTheme.data(),
@@ -307,6 +330,58 @@ void main() {
     await tester.pump();
     expect(find.text('Daily challenge'), findsOneWidget);
     expect(find.text('No daily challenge available right now'), findsNothing);
+  });
+
+  // E15-R07 F1 (ADR 0491 D1/D3) — the ONE Practice Generator entry point.
+  // §5.5 cell-addition: the hub screen's type/structure is unchanged, so
+  // the review's jogosultság is exactly this new element's presence/absence
+  // pair, mirroring the flag-gated-route A2 pattern.
+  testWidgets(
+    'entry point: Plan builder card renders when practiceGeneratorEnabled '
+    'is on',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          repository: const _FixtureRepository(),
+          practiceGeneratorEnabled: true,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Build your practice plan'), findsOneWidget);
+      expect(find.text('What would you like to work on?'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'entry point: Plan builder card is absent when practiceGeneratorEnabled '
+    'is off',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          repository: const _FixtureRepository(),
+          practiceGeneratorEnabled: false,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Build your practice plan'), findsNothing);
+    },
+  );
+
+  testWidgets('entry point: the card copy never claims a plan is ready (A4′)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        repository: const _FixtureRepository(),
+        practiceGeneratorEnabled: true,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('ready', findRichText: true), findsNothing);
+    expect(find.textContaining('generated', findRichText: true), findsNothing);
   });
 
   testWidgets('A8: hungarian locale renders a hungarian title in the tree', (

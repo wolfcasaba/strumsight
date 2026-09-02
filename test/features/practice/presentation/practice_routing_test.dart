@@ -24,6 +24,7 @@ import 'package:strumsight/features/practice/domain/model/tempo.dart';
 import 'package:strumsight/features/practice/domain/repository/practice_catalog_repository.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
+import 'package:strumsight/features/practice_generator/presentation/screens/plan_setup_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
@@ -66,7 +67,10 @@ class _RoutingRepository implements PracticeCatalogRepository {
       const <PracticeDefinition>[];
 }
 
-AppConfig _configFor(bool practiceEngineV2Enabled) {
+AppConfig _configFor(
+  bool practiceEngineV2Enabled, {
+  bool practiceGeneratorEnabled = false,
+}) {
   return AppConfig.resolve(
     environment: AppEnvironment.development,
     apiBaseUrl: AppConfig.devApiBaseUrl,
@@ -75,6 +79,7 @@ AppConfig _configFor(bool practiceEngineV2Enabled) {
       diagnosticsEnabled: false,
       labModeAvailable: false,
       practiceEngineV2Enabled: practiceEngineV2Enabled,
+      practiceGeneratorEnabled: practiceGeneratorEnabled,
     ),
     diagnosticsToken: AppConfig.devDiagnosticsToken,
     buildMode: 'test',
@@ -86,6 +91,7 @@ Future<ProviderContainer> _pumpRouter(
   WidgetTester tester, {
   required bool practiceOn,
   required String startLocation,
+  bool practiceGeneratorEnabled = false,
 }) async {
   final engine = FakeStrumEngine();
   final container = ProviderContainer(
@@ -97,7 +103,12 @@ Future<ProviderContainer> _pumpRouter(
       accountEnabledProvider.overrideWithValue(false),
       tokenStoreProvider.overrideWithValue(FakeTokenStore()),
       authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
-      appConfigProvider.overrideWithValue(_configFor(practiceOn)),
+      appConfigProvider.overrideWithValue(
+        _configFor(
+          practiceOn,
+          practiceGeneratorEnabled: practiceGeneratorEnabled,
+        ),
+      ),
       practiceCatalogRepositoryProvider.overrideWithValue(
         const _RoutingRepository(),
       ),
@@ -206,5 +217,41 @@ void main() {
     expect(find.byType(LiveScreen), findsOneWidget);
     expect(find.byType(PracticeSetupScreen), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  // E15-R07 F1 (ADR 0491 D1) — A4: the flow is actually navigable from the
+  // ONE entry point, not merely route-reachable in isolation (A7 above only
+  // proves the route exists). Independent flag from `practiceEngineV2Enabled`
+  // (D2), so both are ON here to reach the hub AND its new card.
+  testWidgets(
+    'A4: flag ON, tapping the hub Plan builder entry opens PlanSetupScreen',
+    (tester) async {
+      await _pumpRouter(
+        tester,
+        practiceOn: true,
+        practiceGeneratorEnabled: true,
+        startLocation: AppRoutes.practiceHub,
+      );
+      expect(find.byType(PracticeHubScreen), findsOneWidget);
+
+      await tester.tap(find.text('Build your practice plan'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(PlanSetupScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('A2: flag OFF, the hub has no Plan builder entry to tap', (
+    tester,
+  ) async {
+    await _pumpRouter(
+      tester,
+      practiceOn: true,
+      practiceGeneratorEnabled: false,
+      startLocation: AppRoutes.practiceHub,
+    );
+    expect(find.byType(PracticeHubScreen), findsOneWidget);
+    expect(find.text('Build your practice plan'), findsNothing);
   });
 }

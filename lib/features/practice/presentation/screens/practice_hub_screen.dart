@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../app/config/app_config.dart';
 import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../core/foundation/app_result.dart';
@@ -63,6 +64,14 @@ class PracticeHubScreen extends ConsumerWidget {
     final filtered = activeMode == null
         ? catalog
         : repository.byMode(activeMode);
+    // E15-R07 F1 (ADR 0491 D1/D3) — the ONE entry point into the Practice
+    // Generator flow. Flag-gated independently of the catalog above; the
+    // card's copy is deliberately "build a plan", never "your plan is
+    // ready" — the wizard it opens does not generate a plan yet (D3).
+    final practiceGeneratorEnabled = ref
+        .watch(appConfigProvider)
+        .flags
+        .practiceGeneratorEnabled;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceHubTitle)),
@@ -97,6 +106,10 @@ class PracticeHubScreen extends ConsumerWidget {
                       }
                     },
                   ),
+                  if (practiceGeneratorEnabled) ...[
+                    const SizedBox(height: SsSpacing.space3),
+                    _PlanBuilderCard(onOpen: () => _openPlanBuilder(context)),
+                  ],
                   const SizedBox(height: SsSpacing.space5),
                   _ModeFilterRow(active: activeMode, all: catalog),
                   const SizedBox(height: SsSpacing.space3),
@@ -135,6 +148,10 @@ class PracticeHubScreen extends ConsumerWidget {
       queryParameters: <String, String>{'id': definition.id},
     );
     context.go(uri.toString());
+  }
+
+  void _openPlanBuilder(BuildContext context) {
+    context.go(AppRoutes.practiceGeneratorSetup);
   }
 }
 
@@ -260,6 +277,31 @@ class _QuickStartCard extends StatelessWidget {
       title: l10n.practiceHubQuickStartLabel,
       subtitle: l10n.practiceHubQuickStartSubtitle,
       trailing: Icons.play_arrow,
+      onTap: onOpen,
+    );
+  }
+}
+
+/// The ONE entry point into the Practice Generator flow (E15-R07 F1, ADR
+/// 0491 D1/D3). Opens [PlanSetupScreen] — a locally resumable wizard that
+/// does NOT generate a plan at its last step (`plan_setup_screen.dart:96-99`
+/// only advances the wizard); the label/subtitle here must stay honest about
+/// that (ADR 0078 precedent) rather than implying a finished plan. Reuses
+/// [AppLocalizations.planSetupTitle]/[AppLocalizations.planSetupGoalTitle] —
+/// both already ship in `en`+`hu` — instead of adding a new ARB key, which
+/// this round's file list does not cover.
+class _PlanBuilderCard extends StatelessWidget {
+  const _PlanBuilderCard({required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return _HubCard(
+      title: l10n.planSetupTitle,
+      subtitle: l10n.planSetupGoalTitle,
+      trailing: Icons.auto_awesome_outlined,
       onTap: onOpen,
     );
   }

@@ -54,13 +54,19 @@ door today, not dead code.
 | | Count |
 | --- | ---: |
 | Screens measured | 96 |
-| Reachable | 68 |
-| Unreachable | 28 |
-| Flag-gated (closed door today) | 25 |
-| Verdict: `keep` (reachable, already migrated) | 27 |
+| Reachable | 70 |
+| Unreachable | 26 |
+| Flag-gated (closed door today) | 27 |
+| Verdict: `keep` (reachable, already migrated) | 29 |
 | Verdict: `migrate` (reachable, legacy) | 35 |
 | Verdict: `retire` (reachable, legacy, superseded) | 6 |
-| Verdict: `unreachable` | 28 |
+| Verdict: `unreachable` | 26 |
+
+**E15-R07 F1 update (2026-09-02, ADR 0491):** `PlanSetupScreen` and
+`TodayPlanScreen` moved from `unreachable` to `keep` (reachable, flag-gated
+behind `practiceGeneratorEnabled`, already design-system migrated) — see the
+per-screen table in §6. The other 4 Practice Generator screens are
+unaffected (§3.2 below, revised).
 
 The 35 `migrate` + 6 `retire` = 41 reachable-and-legacy screens are grouped
 into eight named rounds, `E15-R04`…`E15-R11` (§4) — every one of them, per
@@ -86,25 +92,39 @@ favor of yet. Wiring `progress_v2` into a route is a prerequisite for a future
 round to revisit this as a `retire` candidate — this round does not do that
 wiring (`lib/**` is out of scope, brief §3).
 
-### 3.2 Practice Generator and the Audio Analysis capture wizard: built, unwired
+### 3.2 Practice Generator (partially wired, E15-R07) and the Audio Analysis capture wizard (still unwired)
 
-Two whole flows have zero measured entry point:
+**Revised (E15-R07 F1, ADR 0491, 2026-09-02).** The Practice Generator's
+composition root (`E15-R14`, ADR 0482) left two production seams
+(`exerciseCandidateResolverProvider`, `generationPlanInputBuilderProvider`)
+throwing `UnimplementedError`; only the 2 of 6 screens that do NOT
+transitively depend on either seam are MEASURABLY constructible:
 
-- **Practice Generator** (`lib/features/practice_generator/`, 6 screens:
-  `PlanSetupScreen`, `PlanPreviewScreen`, `PlanChangeReviewScreen`,
-  `PlanPrivacyScreen`, `TodayPlanScreen`, `WeeklyPlanScreen`) — no route, no
-  construction site anywhere in `lib/`.
-- **Audio Analysis V2 capture wizard**
-  (`lib/features/audio_analysis/presentation/capture/`, 3 screens:
-  `AnalysisHomeScreen`, `AnalysisProcessingScreen`, `AnalysisRecordingScreen`)
-  — same measurement. The rest of `audio_analysis` (overview, timeline,
-  compare, metric detail, export) IS wired behind `audioAnalysisV2Enabled` —
-  only the capture entry point is missing.
+- **Wired this round:** `PlanSetupScreen`, `TodayPlanScreen` — reachable,
+  flag-gated behind `practiceGeneratorEnabled`, via the practice hub's one
+  entry point (§6 table, verdict `keep`).
+- **Still unreachable — real seam, not oversight:** `PlanPreviewScreen`,
+  `PlanChangeReviewScreen`, `PlanPrivacyScreen`, `WeeklyPlanScreen` — each
+  needs a concrete `ExerciseCandidateResolver` (and, for generation itself,
+  a `GenerationPlanInputBuilder`), which is `data/`+`application/` work this
+  round's STOP-protocol explicitly excludes (ADR 0491 D5). No route was
+  registered for them — a route to a provider that throws is a clickable
+  crash, not a wired screen.
 
-Neither is a Chapter 15 design-migration concern (design tokens are moot on
-a screen nobody can open). Both need a product/navigation decision — wire an
-entry point, or retire the flow — which this round proposes but does not
-make (D5/D7). Owner: a future scoped round, unscheduled.
+**Audio Analysis V2 capture wizard**
+(`lib/features/audio_analysis/presentation/capture/`, 3 screens:
+`AnalysisHomeScreen`, `AnalysisProcessingScreen`, `AnalysisRecordingScreen`)
+— unaffected by this round, still no route, no construction site anywhere in
+`lib/`. The rest of `audio_analysis` (overview, timeline, compare, metric
+detail, export) IS wired behind `audioAnalysisV2Enabled` — only the capture
+entry point is missing.
+
+The capture wizard is not a Chapter 15 design-migration concern (design
+tokens are moot on a screen nobody can open); it needs a product/navigation
+decision — wire an entry point, or retire the flow — which this round does
+not make (D5/D7). Owner: a future scoped round, unscheduled. The remaining
+4 Practice Generator screens have a named next step instead (wire the two
+seams, ADR 0491 D5) — not an open product decision.
 
 ### 3.3 Community: 15 screens, one flag, zero routes
 
@@ -241,8 +261,8 @@ catch.
 | `lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart` | `PlanChangeReviewScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
 | `lib/features/practice_generator/presentation/screens/plan_preview_screen.dart` | `PlanPreviewScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
 | `lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart` | `PlanPrivacyScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
-| `lib/features/practice_generator/presentation/screens/plan_setup_screen.dart` | `PlanSetupScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
-| `lib/features/practice_generator/presentation/screens/today_plan_screen.dart` | `TodayPlanScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
+| `lib/features/practice_generator/presentation/screens/plan_setup_screen.dart` | `PlanSetupScreen` | yes | yes | keep | — | — | E15-R07 F1 (ADR 0491 D1) wired this screen behind `practiceGeneratorEnabled`, via the practice hub's one entry point; already design-system migrated — no Ch15 action. |
+| `lib/features/practice_generator/presentation/screens/today_plan_screen.dart` | `TodayPlanScreen` | yes | yes | keep | — | — | E15-R07 F1 (ADR 0491 D1) wired this screen behind `practiceGeneratorEnabled`; already design-system migrated — no Ch15 action. |
 | `lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart` | `WeeklyPlanScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
 | `lib/features/practice_hub/screens/practice_area_hub_screen.dart` | `PracticeAreaHubScreen` | yes | yes | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/profile_hub/screens/profile_hub_screen.dart` | `ProfileHubScreen` | yes | yes | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |

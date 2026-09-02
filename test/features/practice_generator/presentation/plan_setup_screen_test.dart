@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/practice_generator/data/local/generation_draft_repository.dart';
 import 'package:strumsight/features/practice_generator/presentation/controller/plan_setup_controller.dart';
 import 'package:strumsight/features/practice_generator/presentation/screens/plan_setup_screen.dart';
@@ -8,13 +9,15 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import '../../../core/storage/in_memory_key_value_store.dart';
 
 void main() {
-  PlanSetupController controllerFor(InMemoryKeyValueStore store) =>
-      PlanSetupController(
-        draftRepository: GenerationDraftRepository(keyValueStore: store),
-        clock: () => DateTime.utc(2026, 8, 18),
-        generateId: () => 'wizard-test-id',
-        locale: 'en',
-      );
+  PlanSetupController controllerFor(
+    InMemoryKeyValueStore store, {
+    String locale = 'en',
+  }) => PlanSetupController(
+    draftRepository: GenerationDraftRepository(keyValueStore: store),
+    clock: () => DateTime.utc(2026, 8, 18),
+    generateId: () => 'wizard-test-id',
+    locale: locale,
+  );
 
   Future<void> pumpWizard(
     WidgetTester tester,
@@ -22,6 +25,7 @@ void main() {
     double textScaleFactor = 1,
   }) => tester.pumpWidget(
     MaterialApp(
+      theme: SsLightTheme.data(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: MediaQuery(
@@ -30,6 +34,32 @@ void main() {
       ),
     ),
   );
+
+  // §0.0.A/R7 (L558) — PHONE-sized viewport (360x640, dpr 1.0), not the
+  // flutter_test default 800x600, so the wizard's own overflow (or lack of
+  // it) is measured on a real phone-shaped tree, not a wider/taller one.
+  Future<void> pumpWizardOnPhone(
+    WidgetTester tester,
+    PlanSetupController controller, {
+    double textScaleFactor = 1,
+    Locale locale = const Locale('en'),
+  }) {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    return tester.pumpWidget(
+      MaterialApp(
+        theme: SsLightTheme.data(),
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(textScaleFactor)),
+          child: PlanSetupScreen(controller: controller),
+        ),
+      ),
+    );
+  }
 
   Future<void> completeComfortStep(
     WidgetTester tester,
@@ -195,6 +225,46 @@ void main() {
     expect(restored.state.request!.constraints.constraints, hasLength(1));
   });
 
+  // E15-R07 F1 (ADR 0491 D3/A4′) — the wizard's last step does NOT start
+  // generation (`plan_setup_screen.dart:96-99` only calls
+  // `controller.next()`), and this round does not change that. The UI must
+  // therefore never claim a plan was generated or is ready — neither the
+  // Finish button's label nor anything else on screen.
+  testWidgets(
+    'A4′: the last step never claims a plan was generated or is ready',
+    (tester) async {
+      final controller = controllerFor(InMemoryKeyValueStore());
+      addTearDown(controller.dispose);
+      await pumpWizard(tester, controller);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('plan-goal-unknown')));
+      await tester.tap(find.byKey(const Key('plan-setup-next')));
+      await tester.pumpAndSettle();
+      for (var step = 1; step < 4; step++) {
+        await tester.tap(find.byKey(const Key('plan-setup-unknown')));
+        await tester.tap(find.byKey(const Key('plan-setup-next')));
+        await tester.pumpAndSettle();
+      }
+
+      expect(controller.state.currentStep, 4);
+      expect(find.text('Finish setup'), findsOneWidget);
+      expect(find.textContaining('ready', findRichText: true), findsNothing);
+      expect(
+        find.textContaining('generated', findRichText: true),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const Key('plan-setup-next')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('ready', findRichText: true), findsNothing);
+      expect(
+        find.textContaining('generated', findRichText: true),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('unknown answers are persisted as absence, never defaults (A4)', (
     tester,
   ) async {
@@ -265,5 +335,34 @@ void main() {
     } finally {
       debugPrint = originalDebugPrint;
     }
+  });
+
+  group('A3 — large-text overflow, phone viewport', () {
+    testWidgets('goal step renders without overflow at 2.0 (en)', (
+      tester,
+    ) async {
+      final controller = controllerFor(InMemoryKeyValueStore());
+      addTearDown(controller.dispose);
+      await pumpWizardOnPhone(tester, controller, textScaleFactor: 2);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('goal step renders without overflow at 2.0 (hu)', (
+      tester,
+    ) async {
+      final controller = controllerFor(InMemoryKeyValueStore(), locale: 'hu');
+      addTearDown(controller.dispose);
+      await pumpWizardOnPhone(
+        tester,
+        controller,
+        textScaleFactor: 2,
+        locale: const Locale('hu'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
   });
 }

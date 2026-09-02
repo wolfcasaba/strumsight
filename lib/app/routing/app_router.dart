@@ -47,6 +47,9 @@ import '../../features/practice/presentation/screens/practice_hub_screen.dart';
 import '../../features/practice/presentation/screens/practice_result_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
+import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
+import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
+import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
 import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
 import '../../features/profile_hub/screens/profile_hub_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
@@ -186,6 +189,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       .flags
       .songTrainerV2Enabled;
   final aiTutorEnabled = ref.read(appConfigProvider).flags.aiTutorEnabled;
+  // E15-R07 F1 (ADR 0491 D1) — gates the two Practice Generator screens
+  // registered below that the composition root can already build from real
+  // providers; the other 4 screens transitively depend on two seams
+  // (an exercise-candidate resolver, a generation-plan-input builder) that
+  // still throw `UnimplementedError` and are deliberately NOT wired here
+  // (ADR 0491 D5). NOTE: keep this comment free of the two screens' exact
+  // class names — `tool/check_screen_reachability.dart` textually matches
+  // class names anywhere in this file (D3 of that tool), so naming them
+  // here would falsely count as an un-gated declarative reference and flip
+  // their measured `isFlagGated` to false.
+  final practiceGeneratorEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .practiceGeneratorEnabled;
   final visionEnabled = ref.read(appConfigProvider).flags.visionEnabled;
   final visionSetupEnabled = ref
       .read(appConfigProvider)
@@ -345,6 +362,30 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.practiceResult,
           builder: (_, _) => const PracticeResultFallback(),
+        ),
+      ],
+      // E15-R07 F1 (ADR 0491 D1) — the two MEASURED-constructible Practice
+      // Generator screens, each built from the composition root's real
+      // providers (`planSetupControllerProvider`, `todayPlanControllerProvider`
+      // — `practice_generator_providers.dart`, out of scope for this round).
+      // Gated independently of `practiceEnabled` (Practice Engine V2): the
+      // Generator is a distinct rollout (ADR 0491 D2).
+      if (practiceGeneratorEnabled) ...[
+        GoRoute(
+          path: AppRoutes.practiceGeneratorSetup,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => PlanSetupScreen(
+              controller: ref.watch(planSetupControllerProvider),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorToday,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => TodayPlanScreen(
+              controller: ref.watch(todayPlanControllerProvider),
+            ),
+          ),
         ),
       ],
       if (songTrainerEnabled) ...[
