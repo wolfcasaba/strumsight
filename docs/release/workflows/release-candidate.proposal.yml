@@ -1,0 +1,199 @@
+# Proposal: Release Candidate assembly workflow (E12-R25, ADR 0488)
+#
+# Status: proposal only — NOT applied. `.github/workflows/**` is the
+# measure-gate's protected zone (ADR 0321 `PROTECTED_GLOBS`), and the
+# standing gate-edit authorization file (ADR 0372) does not exist on this
+# tree, so an implementer session cannot install this file as
+# `.github/workflows/release-candidate.yml` directly (§0.0 of the round
+# brief). Installing this file and dispatching it twice — once green, once
+# with a proven-red case (missing approval or missing AI report) — is an
+# orchestrator/human step that happens AFTER this round merges (ADR 0488
+# D8, ADR 0112 §3).
+#
+# This file is itself a complete, syntactically valid GitHub Actions
+# workflow document (not a fragment spliced into an existing file), so it
+# is machine-checked as ONE document by `test/tooling/rc_assembly_test.dart`
+# via a restricted-subset job/step-level YAML parser living in that test
+# file (`package:yaml` is only a transitive dependency on this tree and is
+# NOT imported here — ADR 0488 D6, precedent ADR 0447 D5 / ADR 0448 D6).
+#
+# Architecture (ADR 0488):
+#   D1 — this workflow is a proposal, the assembler is code (assemble_rc.py).
+#   D2 — the quality-gates job calls the shared composite action
+#        (`uses: ./.github/actions/flutter-gates`) and does not copy any of
+#        its steps.
+#   D3 — `approve-release-candidate` carries the only `environment:` key in
+#        this document; every job that builds, assembles or uploads a
+#        release artifact `needs:` it, directly or transitively — no
+#        `workflow_dispatch` input can ever skip it, because this trigger
+#        takes no inputs at all.
+#   D4 — `assemble_rc.py` (this round's `tool/release/assemble_rc.py`)
+#        resolves every mandatory input before writing the package and
+#        exits non-zero if any is missing.
+#   D5 — the package's checksum manifest covers every file it contains
+#        (`--verify` binds it to the package's actual file list).
+
+name: Release Candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  approve-release-candidate:
+    name: Approve release candidate
+    runs-on: ubuntu-latest
+    environment: release-candidate-approval
+    steps:
+      - name: Record release candidate approval
+        run: |
+          echo "Release candidate assembly approved by the release-candidate-approval environment's required reviewers."
+
+  quality-gates:
+    name: Flutter quality gates
+    needs: approve-release-candidate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - name: Run Flutter quality gates
+        uses: ./.github/actions/flutter-gates
+
+  backend-tests:
+    name: Backend test suite
+    needs: approve-release-candidate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Ruff lint gate
+        run: |
+          cd backend
+          python -m ruff check app tests
+      - name: Ruff format gate
+        run: |
+          cd backend
+          python -m ruff format --check app tests
+      - name: Backend test gate
+        run: |
+          cd backend
+          python -m pytest -q
+      - name: Alembic migration gate
+        run: |
+          cd backend
+          python -m alembic upgrade head
+
+  build-release-candidate:
+    name: Build and assemble release candidate
+    needs: [quality-gates, backend-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production signing prerequisites
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for secret_name in ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "::error::Missing required production signing secret: $secret_name"
+              missing=1
+            fi
+          done
+          if (( missing != 0 )); then
+            exit 1
+          fi
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - name: Materialize production keystore
+        id: keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keystore_path="$RUNNER_TEMP/strumsight-rc-$GITHUB_RUN_ID.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          if [[ ! -s "$keystore_path" ]]; then
+            echo "::error::The decoded production keystore is empty."
+            exit 1
+          fi
+          printf 'path=%s\n' "$keystore_path" >> "$GITHUB_OUTPUT"
+      - name: Build production APK
+        env:
+          STRUMSIGHT_RELEASE_STORE_FILE: ${{ steps.keystore.outputs.path }}
+          STRUMSIGHT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          STRUMSIGHT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          STRUMSIGHT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STRUMSIGHT_REQUIRE_RELEASE_SIGNING: 'true'
+        run: |
+          flutter build apk --release --dart-define=STRUMSIGHT_ENV=production
+      - name: Generate release manifest
+        run: |
+          dart run tool/generate_release_manifest.dart --output build/release-manifest.json --channel release-candidate --artifact build/app/outputs/flutter-apk/app-release.apk
+      - name: Generate SBOM and third-party notices
+        run: |
+          python3 tool/release/generate_sbom.py --profile production --output-sbom build/sbom.json --output-notices THIRD_PARTY_NOTICES.md
+      - name: Generate AI quality report
+        run: |
+          python3 tool/release/build_ai_report.py --profile production --scope-file docs/release/ai-quality-gates.md > build/ai-report.json
+      - name: Generate security scan report
+        run: |
+          python3 tool/release/security_scan.py --format json > build/security-report.json
+      - name: Test coverage gate
+        run: |
+          flutter test --coverage
+      - name: Assemble release candidate package
+        run: |
+          python3 tool/release/assemble_rc.py --profile production --apk build/app/outputs/flutter-apk/app-release.apk --release-manifest build/release-manifest.json --sbom build/sbom.json --notices THIRD_PARTY_NOTICES.md --ai-report build/ai-report.json --security-report build/security-report.json --test-report coverage/lcov.info --output-dir dist/rc
+      - name: Verify release candidate checksum manifest
+        run: |
+          python3 tool/release/assemble_rc.py --verify --output-dir dist/rc
+      - name: Upload release candidate package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: dist/rc
+          if-no-files-found: error
+      - name: Remove production keystore
+        if: always()
+        shell: bash
+        env:
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+        run: |
+          if [[ -n "${KEYSTORE_PATH:-}" ]]; then
+            rm -f -- "$KEYSTORE_PATH"
+          fi

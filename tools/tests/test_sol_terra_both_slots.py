@@ -39,7 +39,7 @@ implementernek választva ütközik a sol-orchestrátorral (`H-INDEP`,
 fail-closed), a `terra` sor nem.
 
 A slotszám megváltoztatásakor a `docs/execution/pipeline-slots` fájlt és a
-`test_the_committed_slots_file_value_is_one` cellát EGYÜTT kell átírni —
+`test_the_committed_slots_file_value_is_two` cellát EGYÜTT kell átírni —
 ugyanaz a szerződés, mint a rotáció-fájlnál.
 """
 
@@ -75,7 +75,7 @@ class SlotDecisionTest(unittest.TestCase):
     """A kért slotszám feloldása: file > env > script-default."""
 
     def test_the_committed_slots_file_value_is_two(self) -> None:
-        # A KORÁBBI user-döntés (2026-08-21) egy sávot kért, mert a Codex-oldal
+        # A LEGKORÁBBI user-döntés (2026-08-21) egy sávot kért, mert a Codex-oldal
         # kiesésével MINDEN sáv orchestrátora a Claude, és két párhuzamos
         # session ugyanabból az előfizetésből enne.
         #
@@ -89,6 +89,22 @@ class SlotDecisionTest(unittest.TestCase):
         # azaz „vidd el a keret végéig"), és PIPELINE_FALLBACK_ENGINE=none
         # mellett a küszöb elérése MINDKÉT sávot megállítja (nincs Codex-oldal:
         # a ChatGPT Pro előfizetés 2026-08-23-án elfogyott, ~egy hónapig).
+        #
+        # ÚJRA FELÜLÍRVA 2026-09-01 (user-döntés): "az E15-öt várjuk meg, amíg
+        # befejezi ezt a kört, de utána állítsd le; fusson csak egy slot a
+        # 12-es epiccel." A 2. sáv a Chapter 15 UI-lánc volt — azt a
+        # `pipeline-queue.tsv` nyolc `hold` sora állítja meg —, tehát a kért
+        # slotszám ismét EGY. A cella EREJE változatlan: továbbra is EGZAKT pin
+        # a commitolt fájlra, csak az ÚJ döntésre; a döntési lánc (2026-08-21 ->
+        # 08-23 -> 09-01) szándékosan itt marad olvashatóan.
+        #
+        # VISSZAKAPCSOLVA 2026-09-02 (user-döntés): "szeretném, ha az egész
+        # fejlesztett kód működőképes lenne az UI-val együtt" — a Chapter 15
+        # nyolc `hold` sora `pending` lett, tehát a kért slotszám ismét KETTŐ.
+        # A cella EREJE változatlan: EGZAKT pin a commitolt fájlra, csak az ÚJ
+        # döntésre; a döntési lánc (2026-08-21 -> 08-23 -> 09-01 -> 09-02)
+        # szándékosan itt marad olvashatóan. A metódusnév a MÉRT értéket
+        # tükrözi, hogy a pin ne hazudjon a nevében.
         self.assertEqual(SLOTS_FILE.read_text(encoding="utf-8").strip(), "2")
 
     def test_the_committed_file_overrides_the_operator_env(self) -> None:
@@ -119,7 +135,9 @@ class SlotDecisionTest(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        # 2026-08-23 óta két sáv (lásd test_the_committed_slots_file_value_is_two).
+        # 2026-09-02 óta ismét KÉT sáv (lásd
+        # test_the_committed_slots_file_value_is_two) — a driver env nélkül a
+        # commitolt fájlt olvassa, tehát ugyanazt az értéket kell adnia.
         self.assertEqual(result.stdout.strip(), "2")
 
     def test_without_a_file_the_env_semantics_stay_measurable(self) -> None:

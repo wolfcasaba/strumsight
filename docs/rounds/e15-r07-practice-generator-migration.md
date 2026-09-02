@@ -25,6 +25,42 @@ A `retirement-plan.md` §3.2 ezt „built, unwired" néven tartja nyilván, és 
 
 Ezért a kör KÉT fázisú, és a fázisok sorrendje kötött: **F1 bekötés → F2 migráció**. Az F2 acceptance-e (szövegskála, locale, állapotok) csak akkor jelent bármit, ha az F1 után a képernyő valóban megnyitható.
 
+### 0.0.B Revízió (ADR 0112 önjavító kör, 2026-09-01) — az F1-nek ELŐFELTÉTELE van
+
+**Előfeltétel (ÚJ):** `E15-R14` (Practice Generator kompozíciós réteg,
+[`e15-r14-practice-generator-composition-layer.md`](e15-r14-practice-generator-composition-layer.md))
+merge-elve. A `docs/execution/pipeline-queue.tsv` sora ezért az `E15-R07` sora
+FÖLÉ került — a `round-slots.py unmet_prerequisites` sor-sorrendben ÉS a fenti
+`Előfeltétel` szóból egyaránt blokkol, amíg az `E15-R14` nem `done`.
+
+**Miért.** A kör `stopped` jelzéssel állt meg (H3, 2026-09-01), és a STOP mérten
+indokolt volt; az önjavító kör FÜGGETLENÜL reprodukálta (`main @ 1544e6bd`):
+
+| Mérés | Eredmény |
+|---|---|
+| `grep -rln "Provider<\|NotifierProvider\|ChangeNotifierProvider" lib/features/practice_generator` | **ÜRES** — nulla Riverpod-provider a feature alatt |
+| `grep -rn "implements PracticeEvidenceRepository" lib/` | **EGY** találat, és az a `domain/repository/practice_evidence_repository.dart:107` `InMemoryPracticeEvidenceRepository` **teszt-fake** („never forgets") |
+| `plan_setup_screen.dart:96-99` | a step-4 „Befejezés" gomb csak `controller.next()`-et hív — nincs `onComplete`, nem indít generálást |
+
+Ebből az F1 NEM „route + flag" méretű: a `PlanPrivacyScreen` `deleteUseCase`/
+`exportUseCase`-e `PracticeEvidenceRepository`-t kér (`delete_practice_planning_data.dart:56`,
+`export_practice_planning_data.dart:103`), a `PlanPreviewScreen` KÉSZ
+`AdaptivePracticePlan`-t + `GenerationPlanActivation`-t, a `PlanChangeReviewScreen`
+egy `PlanRevisionProposal`-t. A feloldás ÚJ `data/` + `presentation/providers/`
+kód — amit EZ a brief a §0 és a §3 STOP-mondatával kifejezetten tilt („a
+képernyők a meglévő providereikből élnek; **ha nem, az önálló kör**"). A brief
+tehát önmagával volt ellentmondásban: bármely implementer újra `stopped`-ot ad.
+
+**A javítás alakja.** A STOP-mondat MARAD (valódi védelem, nem gyengítjük); a
+hiányzó kompozíciós réteget az `E15-R14` szállítja, és az `E15-R07` utána indul
+újra — akkor az F1 valóban route + flag + belépési pont méretű lesz.
+
+**A már elvégzett munka MEGŐRZENDŐ.** Az `sonnet-impl/e15-r07-practice-generator-migration`
+ágon az **F2 KÉSZ** (mind a 6 képernyő design-rendszer migrációja, commit
+`30bc31fd`, migráltság 69/96), nincs PR és nincs merge. Az újrainduló kör EZT AZ
+ÁGAT viszi tovább (a `round-resume-probe.sh` hagyaték-méréssel), nem kezdi újra.
+Az F2 önmagában továbbra sem merge-elhető (§0.0.A/5).
+
 ### 0.0.A Pre-flight (indítás előtt KÖTELEZŐ)
 
 1. **ADR-szám:** `tools/round-slots.py reserve-adr --round E15-R07` → a kapott számra írd át a brief fejlécét, a §5 ADR-hivatkozásait és a queue-sor `adr` oszlopát.

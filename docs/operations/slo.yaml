@@ -1,0 +1,58 @@
+# Release SLO schema (ADR 0484 D3, SDD Ch12 E12-R19 §8.1).
+#
+# Flat, machine-readable on purpose: the project has no `package:yaml`
+# dependency (pubspec.* is out of this round's scope) and the fan already has
+# a hand-rolled, line-oriented reader precedent
+# (`tool/check_data_inventory.dart` over `docs/privacy/data-inventory.yaml`).
+# Do NOT restructure this file into nested/anchored YAML — the
+# test-local parser in `test/core/telemetry/telemetry_redaction_test.dart`
+# reads exactly this shape (2-space `- id:` list items, 4-space key lines).
+#
+# `unknown` is never a successful verdict (ADR 0484 D3 / ADR 0474 D5): a
+# missing measurement is reported, not silently dropped from the release
+# summary, and it blocks the release gate the same as a real breach.
+schema_version: 1
+verdict_values: [success, degraded, breach, unknown]
+success_verdicts: [success]
+blocking_verdicts: [degraded, breach, unknown]
+slos:
+  - id: chord_detection_latency_p95
+    title: Chord detection stays fast on a real phone
+    metric: p95 end-to-end chord-detection latency per analyzed clip
+    objective: <= 3000ms (TelemetryDurationBucket.ms1000To3000 or lower)
+    window: 7d rolling
+    required: true
+    on_missing: unknown
+    source: tool/compare_benchmarks.py (E12-R14 perf budget, ADR 0474)
+  - id: tuner_pitch_accuracy
+    title: Tuner reports the correct pitch class
+    metric: on-device tuner pitch-class match rate against the DSP truth fixtures
+    objective: >= 98%
+    window: per release build
+    required: true
+    on_missing: unknown
+    source: docs/rag/chunks/ (DSP truth) and the tuner feature's own test suite
+  - id: offline_egress_free
+    title: Logged-out / account-disabled use makes zero network requests
+    metric: sessions with zero outbound requests while the account layer is disabled
+    objective: 100%
+    window: per release build
+    required: true
+    on_missing: unknown
+    source: test/tooling/data_inventory_test.dart (ADR 0479 A2)
+  - id: crash_free_sessions
+    title: Sessions complete without an unhandled crash
+    metric: percentage of app sessions with no fatal crash
+    objective: >= 99.5%
+    window: 7d rolling
+    required: true
+    on_missing: unknown
+    source: rollout round 31-33 (telemetry collection not yet wired, ADR 0484 section 0.1)
+  - id: tutor_turn_success_rate
+    title: AI tutor turns complete without a gateway failure
+    metric: percentage of dispatched tutor turns reaching TutorTurnStatus.completed
+    objective: >= 95%
+    window: 7d rolling
+    required: true
+    on_missing: unknown
+    source: rollout round 31-33 (telemetry collection not yet wired, ADR 0484 section 0.1)

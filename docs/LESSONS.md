@@ -22043,3 +22043,1224 @@ hálózatra váró művelet kint, `timeout`-tal.
 **Őrteszt:** nincs — a lelet operátori (a `docs/execution/08-round-brief.md` és
 az `AGENTS.md` záró-rituálé szövege a hordozója); a mérés reprodukciója
 `git ls-remote origin 'refs/notes/*' | wc -l` (ma 10+).
+
+## L561 — Egy brief, amely olyan munkát ír elő, amit a SAJÁT STOP-mondata tilt, determinisztikusan visszatérő halt: a javítás a hiányzó előfeltétel önálló körbe emelése, NEM a STOP-mondat gyengítése (E15-R07 / H3 önjavító kör, 2026-09-01)
+
+**Mit mértünk.** Az `E15-R07` briefjét egy korábbi önjavító kör (PR #511) írta át
+kétfázisú körré: **F1 bekötés (route + flag) → F2 migráció**. Az F1 feltételezte,
+hogy a 6 terv-képernyő „a meglévő providereiből él". Az implementer `stopped`
+jelzést adott; az önjavító kör a mérést FÜGGETLENÜL reprodukálta
+(`main @ 1544e6bd`):
+
+```
+$ grep -rln "Provider<\|NotifierProvider\|ChangeNotifierProvider" lib/features/practice_generator
+(üres)                                    # NULLA Riverpod-provider a feature alatt
+
+$ grep -rn "implements PracticeEvidenceRepository" lib/
+.../domain/repository/practice_evidence_repository.dart:107   # EGY találat, és az
+                                          # az InMemoryPracticeEvidenceRepository
+                                          # TESZT-FAKE („never forgets")
+
+$ sed -n '96,99p' .../presentation/screens/plan_setup_screen.dart
+# a step-4 „Befejezés" gomb csak `controller.next()`-et hív — nincs onComplete
+```
+
+A `PlanPrivacyScreen` `deleteUseCase`/`exportUseCase`-e `PracticeEvidenceRepository`-t
+kér, a `PlanPreviewScreen` KÉSZ `AdaptivePracticePlan`-t + `GenerationPlanActivation`-t,
+a `PlanChangeReviewScreen` egy `PlanRevisionProposal`-t. A feloldás ÚJ `data/` +
+`presentation/providers/` kód — amit a brief SAJÁT §0/§3 STOP-mondata tilt: *„a
+képernyők a meglévő providereikből élnek; ha nem, az önálló kör."*
+
+**A minta.** Ez egy önmagával ellentmondó brief: az F1 elvégzéséhez pontosan azt
+kellene megtenni, amit a brief tilt. Az ilyen kör **nem egyszer** áll meg — bármely
+implementer, bármely motoron, újra `stopped`-ot ad, mert helyesen olvassa a
+briefet. A megállás tehát nem implementer-hiba és nem produkt-kérdés: a brief
+tartalmi hibája (ADR 0112 „B osztály").
+
+Két rossz reflex van rá, és mindkettő ront:
+
+1. **A STOP-mondat kivétele** („így már belefér"). Ez a mérce gyengítése: a
+   következő futásban egy adatvédelmi felület mögé csendben bekerül egy
+   in-memory fake, ami sosem felejt — hamis consent-felület (CLAUDE.md
+   „silent no-op" csapda).
+2. **A halt emberhez küldése.** A produkt-döntés (bekötni vs. nyugdíjazni) itt
+   MÁR MEGVOLT (user, 2026-09-01, a brief §0.0-ban rögzítve); ami hiányzott, az
+   nem döntés, hanem egy kör.
+
+A helyes alak: a hiányzó előfeltételt **önálló, mért scope-ú körbe** emelni, és a
+megállt kört mögé sorolni — a STOP-mondat MARAD. Az `E15-R14` (kompozíciós réteg:
+perzisztens `PracticeEvidenceRepository`, egy kompozíciós gyökér a
+`presentation/providers/`-ben — a mért feature-konvenció —, és a Setup→generálás
+use case) beszúrva az `E15-R07` sora FÖLÉ, mert az `unmet_prerequisites` az epicen
+belül SOR-SORRENDBEN blokkol (`round-slots.py:137-141`).
+
+**A megelőző mérés, amit a brief-írás elé kell tenni.** Egy „bekötő" kör briefje
+akkor teljesíthető, ha a bekötendő képernyők függőségei ELŐÁLLNAK. Ezt egyetlen
+parancs megmondja, és a brief pre-flightjába tartozik:
+
+```
+grep -rln "Provider<\|NotifierProvider\|ChangeNotifierProvider" lib/features/<feature>
+```
+
+Üres kimenet mellett a „route + flag" méretű bekötés-brief mérten hamis
+premisszára épül.
+
+**Őrteszt:** `tools/tests/test_e15_r07_composition_prerequisite.py` — a VALÓDI
+sor-fájlt és a VALÓDI briefeket hajtja át a driver saját
+`declared_prerequisites` / `unmet_prerequisites` függvényén (a sorrend
+megfordítása vagy a §0.0.B `Előfeltétel` szó eltűnése pirosra vált), és külön
+cellában pinneli, hogy az `E15-R07` STOP-mondata és scope-tilalma ÉRINTETLEN —
+a halt „megoldása" a védelem kivételével itt bukik meg. MÉRVE: `origin/main`-en
+8/10 cella PIROS, a javítás után 10/10 zöld.
+
+## L562 — Egy hamis pozitívot szűkítéssel záró javítás VISSZANYITHAT egy igaz pozitívot: a szintaktikai szűkítésnek a védett minta MINDEN alakjára cellát kell adnia (E12-R18, 2026-09-01)
+
+**Mérve.** Az `E12-R18` harmadik javító köre az S13 hamis pozitívot (`egy testvér
+teszt saját `skip:`-je a groupon belül`) úgy zárta, hogy a `group(...)` `skip:`
+argumentumát csak a hívás **argumentum-FEJÉBEN** kereste
+(`_dart_call_head` — az első `()` callback-paraméterlistáig). A fixture-ök és az
+S13c regressziós cella mind a `group('d', skip: true, () {...})` alakot írták,
+tehát a suite **zöld maradt**. A `package:test` kanonikus írásmódja viszont a
+named argumentumot a pozicionális callback UTÁN teszi:
+
+```dart
+group('A4 — …', () {
+  test('upload() with consent false never touches the wire adapter', () { … });
+}, skip: 'temporarily disabled');
+```
+
+Ez az alak a szűkítés után **láthatatlan** lett. A valós fán mérve
+(`test/privacy/consent_enforcement_test.dart`): `flutter test …` →
+`Skip: temporarily disabled`, `~1` (a `T-EGRESS-01` consent-guard NEM fut),
+miközben `python3 tool/release/security_scan.py` → `EXIT=0`. Az ELŐZŐ (fix2)
+eszköz ugyanezt `EXIT=1`-gyel fogta — tehát a javítás **regressziót szállított
+zöld gate mellett**, pontosan azon a helyen, amit a kör két körrel korábban már
+lezárt.
+
+**A minta.** Egy szűkítés (kevesebb találat) mindig két irányba mér: zárja a
+hamis pozitívot ÉS kockáztat egy igaz pozitívot. A hamis pozitívra írt cella
+önmagában sosem bizonyítja a szűkítés helyességét — az igaz pozitív MINDEN
+szintaktikai alakjára kell cella, és ezt a nyelv/keretrendszer dokumentált
+írásmódjaiból kell összeszedni, nem a fixture-ökben véletlenül szereplő alakból.
+
+**Őrteszt:** `test/tooling/security_scan_test.dart` — a `group(..., skip: …, () {…})`
+(argumentum-fej) ÉS a `group('…', () {…}, skip: '…')` (callback utáni) alak külön
+cellában, mellettük a három hamis-pozitív cella (testvér-teszt `skip:`-je,
+string-beli `skip:`-részlet, független skippelt testvér-group).
+
+## L563 — Egy új tesztcella csak akkor mérce, ha a SAJÁT javítása előtti eszközzel PIROS: a „belefér a régi ablakba" degenerált fixture két MAJOR-javítást hagyott védtelenül (E12-R18, 2026-09-01)
+
+**Mérve.** Az `E12-R18` fix3 két MAJOR leletre (S10: Dart file-szintű `@Skip`
+`library;` nélkül; S11: modul-szintű `pytest.skip(..., allow_module_level=True)`)
+javítást ÉS cellát is szállított, a gate zöld volt. A következő review a cellákat
+a javítás ELŐTTI eszközzel futtatta:
+
+```
+$ git checkout 30651086^ -- tool/release/security_scan.py
+$ flutter test test/tooling/security_scan_test.dart
+00:04 +42 -3: Some tests failed.      # az S10 és S11 cella NEM volt a pirosak között
+```
+
+Mindkét fixture degenerált volt: a némító belefért a régi, **hívás-lokális**
+ablakba (Dart: 200 karakter a `test(` előtt, Python: 400 karakter a `def` előtt,
+a trivia-stripelt szövegen), ezért a régi eszköz is „megtalálta" — csak nem azon
+az úton, amit a javítás nyitott. A cella tehát zöld volt a javítás nélkül is:
+a két legfontosabb változtatás regresszió-védelme működésképtelen. A javítás a
+fixture „hízlalása" (filler metódusok, hogy a némító az ablakon KÍVÜLRE essen);
+a mutation-killt a HELYES előző eszköz-SHA-val kell mérni (az S8-cellához pl. a
+pre-S8-fix `4783c9f7`, nem a közvetlen szülő).
+
+**A minta.** Az L220 („bizonyított piros út") nem teljesül attól, hogy a cella
+létezik és a rontott bemenetre piros — azt kell megmérni, hogy a cella a JAVÍTÁS
+NÉLKÜL is piros-e. Ha nem az, a cella a régi kódot méri, nem az újat.
+
+**Őrteszt:** `test/tooling/security_scan_test.dart` — az S8/S10/S11 cellák
+hízlalt fixture-jei (a némító mérten az ablakon kívül), plusz a kör §10-ében
+rögzített mutation-kill tábla, amely cellánként megnevezi a tanú-eszköz SHA-ját.
+
+## L564 — A hagyaték-szonda `PRE-FLIGHT` besorolása mérési artefaktum lehet: a review-fájl EGZAKT nevét keresi, az utótagos jelentéseket nem látja (E12-R18, 2026-09-01)
+
+**Mérve.** Az `E12-R18` folytató sessionje
+`.pipeline/resume-state-E12-R18.md` → `ÁLLAPOT: PRE-FLIGHT`,
+„Review: `docs/reviews/e12-r18-review.md` — nincs az ágon" jelentést kapott,
+miközben a kör-ágon **három** kész review-jelentés volt
+(`e12-r18-review-security.md`, `-security-followup.md`, `-security-fix2.md`),
+az utolsó `CHANGES REQUESTED` verdikttel és két nyitott MAJOR-ral. A szonda
+(`tools/round-resume-probe.sh`) a kanonikus `eXX-rYY-review.md` nevet keresi,
+ezért `review_seen=0` — a kör a besorolás szerint „még pre-flightban" állt, a
+valóságban a **review-ciklus közepén**.
+
+**Miért drága.** A `PRE-FLIGHT` fok teendője „az ADR + brief-revízió
+újrahasznosítása, majd implementer" — azaz a nyitott leletlista nélkül,
+a kör elejéről indított implementer-futás. Itt ez 14 commitnyi munkát és három
+review-ciklust írt volna felül. A besorolást a saját mérés (a `docs/reviews/`
+könyvtár LISTÁZÁSA, nem az egzakt név próbája) azonnal megcáfolta.
+
+**A minta.** Egy állapot-szonda „nincs ilyen fájl" eredménye NEM ugyanaz, mint
+„nincs ilyen állapot" — a névkonvenciótól eltérő artefaktum ugyanúgy létezik.
+Folytatáskor a besorolást a szonda BEMENETÉN kell ellenőrizni
+(`ls docs/reviews/ | grep <kör>`), mielőtt a fok teendője elindul.
+
+**Őrteszt:** nincs — a javítás a `tools/round-resume-probe.sh`-ban van, ami a
+kör-orchestrátor számára tilos zóna (ADR 0087 §4); GOV/önjavító kör tárgya.
+
+## L565 — Egy őr, amely TÍPUSNEVEKET tilt (denylist), nem méri azt az invariánst, amely POZITÍV („minden mező zárt enum"): a `Map<String,String>`, `List<String>` és `double` mezők MIND átcsúsztak (E12-R19, 2026-09-01)
+
+**Mérve.** Az `E12-R19` A1 cellája az [ADR 0484](adr/0484-privacy-safe-telemetry-contract-and-release-slo-schema.md)
+D1 strukturális tiltását őrizte: a `TelemetryEvent`-en „nincs
+`Map<String, dynamic>`, `dynamic`, `Object?` vagy szabad `String` mező". A cella
+zöld volt, a gate zöld volt, a brief §6.1 mérce-mátrixa pedig kimondta:
+„Az esemény kap egy általános `payload` mapet → **A1**". A reviewer ezt
+mutációval mérte meg a VALÓDI teszttel:
+
+```
+final Map<String, String>? attributes;   → 15/15 zöld — átcsúszik
+final List<String>? tags;                → 15/15 zöld — átcsúszik
+final double? durationMs;                → 15/15 zöld — átcsúszik   (NYERS ms!)
+final Map<String, dynamic>? payload;     → PIROS (a kontroll)
+```
+
+**Miért.** A cella azt tiltotta, amit a szerző ELŐRE elképzelt. A
+`_freeTypedFieldPattern('String')` a `final String x;` / `String x,` / `String x)`
+ALAKOT keresi — a `Map<String, String>?` sorban az első `String` után vessző, a
+második után `>` áll, a `List<String>?` után `?`; egyik sem illeszkedik. Egy
+jövőbeli kör jóhiszeműen felveheti a `Map<String, String> attributes` mezőt („nem
+`dynamic`, tehát nem sérti a D1 betűjét"), amibe prompt-részlet, dalcím, fájlnév
+vagy URL kerül — és a kör saját mércéje zölden átengedi.
+
+**A minta.** Ha az ADR állítása POZITÍV alakú („minden X zárt szótárból jön"),
+akkor a cella is ALLOWLIST legyen: sorold fel a mezőket, és követeld meg, hogy
+mindegyik típusa a megengedett halmazba essen. A denylist mindig csak azt fogja,
+amit a szerzője már ismert; az allowlist a még ki nem talált gyengítést is.
+Ez az [L549](#l549) („a MEGLÉTET mérni ≠ a JELENTÉST érvényesíteni") típus-oldali
+alakja.
+
+**Őrteszt:** `test/core/telemetry/telemetry_redaction_test.dart` — az A1/A4
+közös `_expectTelemetryEventFieldsAreClosedEnums` allowlist-cellája (a
+`_fieldDeclarations` minden `final <típus> <név>;` mezőjének a `?`-t leszámítva
+az öt `Telemetry*` enum egyikének kell lennie), a könyvtár EGÉSZÉRE futtatva;
+a mutation-kill tábla a `docs/reviews/e12-r19-review.md` §7-ben.
+
+## L566 — Egy kézzel írt sor-parszerre épülő doksi-őr alapértelmezésben fail-OPEN: ami nem illeszkedik a mintára, az nem hibás, hanem NEM LÉTEZIK (E12-R19, 2026-09-01)
+
+**Mérve.** Az `E12-R19` A5 cellája a `docs/operations/slo.yaml`-t parszolta
+(nincs `package:yaml` deklarált függőség), és öt állítást tett: `unknown ∉
+success_verdicts`, `unknown ∈ blocking_verdicts`, minden SLO `required: true` +
+`on_missing: unknown`, egyedi `id`-k. A reviewer a fájl végére írt egy hatodik
+SLO-t **4-szóközös** behúzással:
+
+```yaml
+    - id: extra_unguarded_slo
+      required: false
+      on_missing: success
+```
+
+→ **15/15 ZÖLD.** A `sloStartPattern` (`^  - id:`) nem illeszkedett, a
+`sloKvPattern` (`^    (\w+):`) sem (a `-` nem `\w`), ezért a parszer az egész
+SLO-t **némán eldobta** — és a nem létező elemre nincs mit állítani. A tiltott
+állapot (`required: false`, `on_missing: success`) ott volt a fájlban, a kapu
+mégis átengedte. Ugyanez a rés a `success_verdicts:` sor törlésénél: a lista
+`const []`-re esett vissza, így a „nem tartalmaz `unknown`" állítás VÁKUUMBAN
+teljesült.
+
+**A minta.** Egy parszer-alapú őrnél a hallgatás a legveszélyesebb kimenet. Kösd
+a parszolt elemek SZÁMÁT a nyers előfordulások számához
+(`RegExp(r'^\s*- id:', multiLine: true)`), a „nem tartalmazza a rosszat"
+állításokat cseréld PONTOS EGYEZÉSRE (`expect(successVerdicts, ['success'])`), és
+mérd a séma verzióját is — különben egy jövőbeli szerkezet-változás csendben
+avulttá teszi a parszert, miközben a cella zöld marad. Precedens ugyanerre a
+fail-closed alakra: `tool/check_data_inventory.dart`.
+
+**Őrteszt:** `test/core/telemetry/telemetry_redaction_test.dart` — az A5
+„the parser observed every `- id:` line" cellája, a `successVerdicts` pontos
+egyezése és a `schema_version == 1` cella.
+
+## L567 — A jelenlét-alapú akadálymentességi próba szerkezetileg VAK a kettéhasadt szemantikus csomópontra: a `find.bySemanticsLabel` a feliratos, de NEM aktiválható belső csomópontra illeszkedik, miközben a tapintható külső NÉMA (E12-R20, 2026-09-01)
+
+**Mit mértünk.** Az E12-R20 folyam-szintű a11y auditja a `SsSwitchRow`-n
+(megosztott design-system komponens) `tester.semantics.simulatedAccessibilityTraversal()`
+bejárással KÉT szomszédos csomópontot mért egy sor helyett:
+
+- a **külső** csomópont (az `InkWell` saját gesztus-szemantikája) a teljes,
+  48dp-s sort fedi, hordozza a `tap` akciót — és **nincs feliratja**;
+- a **belső** (`MergeSemantics`) csomópont hordozza a feliratot
+  („Metronome"/„Accent on count 1"/„Show chord hint") és a `toggled` állapotot
+  — és **nincs `tap` akciója**.
+
+A képernyőolvasó-használó tehát vagy egy néma gombra áll rá, vagy egy feliratos
+elemre, amit onnan nem tud aktiválni. A hiba 3 példányban, MINDKÉT locale-on
+reprodukálódott a Practice Setup képernyőn, és strukturális: minden
+`SsSwitchRow` hívási helyet érint.
+
+**Miért nem fogta meg egyik meglévő őr sem.** A fán három komponens-szintű a11y
+teszt futott (`semantics_contract_test.dart`, `screen_reader_copy_test.dart`,
+`tap_target_test.dart`), és mind ZÖLD volt. A `find.bySemanticsLabel(x)`
+**jelenlét**-próba a BELSŐ csomópontra illeszkedik — a felirat tényleg ott van a
+fában —, tehát a próba teljesül, miközben az elem az olvasó szempontjából
+használhatatlan. A jelenlét-próba a „létezik-e valahol a fában" kérdésre válaszol;
+az akadálymentesség kérdése viszont az, hogy **ugyanazon a csomóponton** van-e a
+felirat ÉS az akció. Ez az [L460](#l460) („a `find.text`/`bySemanticsLabel` a
+láthatatlan `hintText`-re is illeszkedik") általánosítása: a jelenlét-alapú őr
+nem invariánst mér, hanem előfordulást.
+
+**A minta.** Akadálymentességi invariánst a TÉNYLEGES bejárással mérj
+(`tester.semantics.simulatedAccessibilityTraversal()` + `SemanticsNode.getSemanticsData()`),
+és a felirat–akció párosítást EGY csomóponton belül állítsd
+(`node.hasAction(SemanticsAction.tap) && node.label.isNotEmpty`), sose két külön
+finder-hívással. A fókusz-sorrendet ugyanígy: `containsAllInOrder` a bejáráson,
+nem „mind a három felirat megvan valahol".
+
+**Másodlagos mérés ugyanebből a körből:** a `flutter_test` default 800×600-as
+viewportja ismét vakká tette volna a túlcsordulás-cellákat ([L558](#l558)) —
+mind a hat cella 412×915-ön mér. És a text-scale kapcsoló a teljes app-fán CSAK
+a `platformDispatcher.textScaleFactorTestValue`-n hat: egy a fa FÖLÉ tett
+`MediaQuery` wrappert a `MaterialApp.router` saját `MediaQuery.fromView`-ja
+felülír — ezért lett a „valódi-sértés próba" (`1.0` → 20.0px vs `2.0` → 40.0px)
+PERMANENS cella, nem egyszeri kézi lépés.
+
+**Harmadszor ugyanaz az őr-hibaosztály.** A kör MAJOR-ja megint nem kódhiba volt,
+hanem vak mérce, teljesen zöld gate mellett ([L563](#l563), [L565](#l565),
+[L566](#l566) után a HARMADIK): az A6 („minden kivétel ownerrel és lejárattal")
+mércéje a `known-exceptions.yaml`-t **egyetlen cellával sem olvasta** — mind a
+nyolc említése komment vagy `reason:` sztring volt. A javító kör fail-closed
+sor-parszert szállított kétirányú tükör-fedéssel, és a reviewer **saját
+mutációval** zárta le, nem az implementer jelentése alapján: az `owner:` törlése,
+a `review_by:` törlése egy `expiry: unscheduled` bejegyzésről, és az
+`exceptions:` lista kiürítése a teszt-toleranciák meghagyásával — MIND pirosra
+váltott. A középső mutációt az implementer NEM futtatta; a reviewer saját próbája
+hozta.
+
+**Őrteszt:** `test/accessibility/release_flow_semantics_test.dart` — a
+`knownUnlabeledCount`-os `_expectEveryTappableNodeIsLabeled` cellák (a bejárás
+minden `tap`-akciós csomópontján felirat-követelmény, EXAKT, csak-zsugorodó
+kivétel-számmal) és az „A6 — known-exceptions.yaml is a machine-checked
+registry" csoport két cellája.
+
+## L568 — Egy „leltár = tükör" őr, amely csak a SOROK LÉTEZÉSÉT méri, a TARTALMUKAT nem: négy elem-szintű mező tetszőlegesen hazudhatott `exit 0` mellett (E12-R21, 2026-09-01)
+
+**Mérve.** Az `E12-R21` szállította a `tool/validate_content_catalog.py`-t,
+amely az [ADR 0485](adr/0485-content-catalog-inventory-and-pedagogical-readiness-contract.md)
+D1 szerint KÉTIRÁNYÚ tükör a `docs/content/catalog-inventory.yaml` és a három
+mért tartalom-forrás között. A `_mirror_source()` valóban kétirányú volt — de
+**kizárólag az ID-halmazokra**. A leltár elemenként hat dimenziót deklarál
+(`id`, `source`, `difficulty`, `skill_tags`, `locales`, `version`); ebből az
+első kettőt mérte, a maradék **négyet nem**: az `InventoryItem.fields` szótár a
+parszerben feltöltődött, majd soha nem olvasódott el.
+
+A reviewer négy egysoros mutációja a VALÓDI fán, izolált klónban:
+
+```
+# difficulty: beginner -> advanced        exit=0
+# locales:    [en] -> [en, hu, xx]        exit=0
+# version:    1 -> 9                      exit=0
+# skill_tags: [downstrokes, …] -> [totallyBogusTag]   exit=0
+```
+
+Négyből négy hamis állítás átment, miközben a kontroll-mutációk (sor törlése,
+`source` átcímkézése, ARB-kulcs törlése, kivétel lejáratának múltba állítása)
+MIND helyesen pirosra váltottak. A `skill_tags` elnyomása volt a
+legalattomosabb: a szótár-ellenőrzés (`_vocabulary_check`) a FORRÁSBÓL vett
+címkéket veti a `skill_vocabularies:` blokk ellen, tehát a szótár helyes marad,
+miközben az ELEM címkéi hazudhatnak — a „készség-címke" dimenzió így
+*látszólag* védett volt.
+
+**A minta.** Ez az E12-R18 ([L563](#l563)), E12-R19 ([L565](#l565), [L566](#l566))
+és E12-R20 ([L567](#l567)) osztályának **negyedik** egymást követő
+előfordulása: teljesen zöld kapu, helyes adat, **vak mérce**. A négy eset
+gyökere ugyanaz — *a mérce a szerződés egy SZŰKEBB vetületét méri, mint amit a
+szerződés szövege állít*: denylist allowlist helyett (L565), nem illeszkedő sor
+= nem létező (L566), jelenlét = elérhetőség (L567), és itt: sor létezése =
+sor igazsága.
+
+**Az általánosítható tanulság.** Ha egy artefaktum azt állítja magáról, hogy egy
+másik igazságforrás TÜKRE, a mércének **minden deklarált dimenziót** tükröznie
+kell, nem csak az azonosítót. Ahol a forrásnak nincs adott dimenziója, ott
+KÖTÖTT sentinel-értéket kell kikényszeríteni (pl. `skill_tags: []`), mert a
+„nem mérjük" ág pontosan az a fail-open rés, amit a tükör-szerződés kizárni
+hivatott. A lezárás mércéje itt sem a zöld gate volt, hanem a reviewer SAJÁT,
+megismételt mutációi: a javítás után mind az öt (négy mező + a sentinel-ág)
+`stale_inventory_entry`-vel pirosra vált, a kontroll pedig zöld maradt.
+
+**Őrteszt:** `test/tooling/content_catalog_test.dart` — az
+`A1 (MAJOR-1 fix) — element-level, bidirectional field mirror` csoport öt
+fixtúra-cellája (`difficulty`, `skill_tags`, `locales`,
+`version` hamis értékkel, plusz a `learn_lessons` sentinel `skill_tags: [x]`
+ága), mind nem-nulla kilépést és mező-nevesített `stale_inventory_entry`
+leletet követel.
+
+## L569 — A degenerált fixture szerkezetileg KIZÁRJA a hibaosztályt: a csupa-nulla PCM base64-jében egyetlen `/` sincs, ezért a küszöb-cella zöld maradt, miközben valós hangon a tiltott néma csonkítás történt (E12-R22, 2026-09-01)
+
+**Mérve.** Az `E12-R22` `tool/release/build_diagnostics_bundle.py`-ja az
+[ADR 0486](adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md)
+D3 szerint SOHA nem csonkíthat csendben: a méret-korlát fölötti hang-melléklet
+nem-nulla kilépés, kimeneti fájl nélkül. A küszöb-cellahármas (5 242 879 /
+5 242 880 / 5 242 881 bájt) zölden futott, a teljes gate 10/10 zöld volt — a
+review viszont valósághű klippel mért:
+
+```
+1 s / 44,1 kHz szinusz WAV, 88 244 bájt
+  → a kimeneti wavBase64: 117 660 → 189 karakter, exit 0
+  → base64Decode(kimenet) DOB: binascii.Error
+```
+
+**A gyökérok.** A redakció abszolút-útvonal mintája (`(?:/[^\s"'/]{1,255}){2,}`)
+a `wavBase64` ÉRTÉKÉRE is lefutott, és a base64 ábécé `/` karakterei miatt
+belemart a hangadatba. A cella azért nem fogta meg, mert a fixture
+`Uint8List(rawByteCount)` volt: **csupa nulla bájt → csupa `A` base64 → egyetlen
+`/` sem**. A fixture nem „egyszerűsítés" volt, hanem pontosan az az EGYETLEN
+bemenet, amelyen a hibaosztály szerkezetileg nem tud előfordulni. Valódi
+mikrofon-felvétel soha nem csupa nulla.
+
+**Az általánosítható szabály.** Ha egy cella egy TARTALOM-függő
+transzformációt (regex, parszer, tömörítés, kódolás) mér, a fixture nem lehet
+degenerált a transzformáció ábécéjére nézve. Tedd fel a kérdést: *„milyen
+karakter/érték kellene a bemenetbe ahhoz, hogy a hiba előálljon — benne van a
+fixture-ben?"* A csupa-nulla, csupa-`a`, üres és „szép kerek" fixture-ök
+rendszeresen kiejtik éppen azt a karakterosztályt, amit a mérce keresne.
+
+**A javítás.** (1) az opaque bináris payload nem esik sztring-redakció alá
+(ADR 0486 D2.1), és a csomagoló ellenőrzi, hogy a kimeneti klip dekódolható és
+bájthossza változatlan — eltérés = HIBA; (2) a fixture determinisztikus, de
+nem-degenerált PCM lett, tehát a cella pirosra tud váltani.
+
+**Két kísérő lelet ugyanebből a körből:** a hang-réteg és a méret-korlát
+egyetlen legfelső szintű kulcsnéven (`audioClips`) állt — egy `events[0]`-ba
+tett klip CSAK diagnosztikai consenttel, korlát nélkül átment (a javítás
+rekurzív, tartalom-alapú gate, ADR 0486 D3.1) —, és a csomagoló hibaüzenete a
+redakció ELŐTT írta ki a teljes klip-dictet (token, e-mail, útvonal, device-id
+egy sorban) a stderr-re. Mindkettő ZÖLD gate mellett élt.
+
+**Harmadik, a review SAJÁT oldaláról:** a review-jelentés maga is a secret-scan
+hatálya alatt áll — a biztonsági jelentésbe másolt, provider-kulcs ALAKÚ mért
+kimenet pirosra váltotta a `[6] secrets` gate-et, és az implementer helyesen NEM
+javíthatta (a fájl nincs a brief engedélyezett listáján). A mért kimenetekben a
+titok-alakú értékeket a reviewernek kell semlegesítenie.
+
+**Őrteszt:** `test/tooling/beta_release_notes_test.dart` — a nem-degenerált PCM
+fixture-re épülő klip-integritás cella (a kimeneti `wavBase64` dekódolható és
+bájtazonos), a beágyazott-klip consent-cella és a stderr-tartalom cella.
+
+## L570 — A fixture NEVE nem mérce: a „corrupted_storage.json" hibátlan JSON-t tartalmazott, ezért a korrupt-bemenet acceptance-sora őrizetlen maradt, miközben a valódi út ÜRES profilt ad (E12-R23, 2026-09-02)
+
+**Forrás:** [`docs/reviews/e12-r23-review.md`](reviews/e12-r23-review.md) §2 (MAJOR-1,
+MINOR-1) és §7; kör: E12-R23, PR [#519](https://github.com/wolfcasaba/strumsight/pull/519),
+squash `3e6dbbf0`; ADR [0487](adr/0487-legacy-upgrade-migration-evidence-contract.md) D3.
+
+**A mérés.** A kör 8/8 zöld gate-tel és teljes acceptance-mátrixszal érkezett
+review-ra. A brief §6.1 falszifikációs mátrixának egyik sora — *„a sérült bemenet
+csendben »sikeresnek« jelenti magát → A3"* — a szállított fán **őrizetlen** volt:
+az A3 cella (`test/e2e/upgrade_migration_test.dart:177-244`) a hibát nem a
+bemenetből nyerte, hanem egy injektált írás-hibából
+(`store.failingKeys.add(StorageKeys.themeMode)`), a `corrupted_storage.json`
+minden értéke pedig **jól formált JSON** volt. A cella szó szerint ugyanígy zöld
+lett volna a `legacy_v1_storage.json`-nal — a „corrupted" csak a **fájlnévben**
+és a `README.md` prózájában létezett.
+
+Az eldobható próbateszt (a reviewer futtatta, ténylegesen csonka
+`user_songs_v1`-gyel) kimérte, mit csinál a fa valójában:
+
+```
+P1 failure=null from=0 to=22 applied=22
+P2 legacyKeyPreserved=true newKeyWritten=false schemaVersion=22
+P2 readBody=NULL (üres dokumentum)
+```
+
+Vagyis: a `migrate()` **sikert jelent**, mind a 22 lépés `applied`, a nyers legacy
+bájtok a lemezen megmaradnak (nincs adatvesztés) — **de a production olvasási út
+üres dokumentumot ad**, mert az új kulcs nincs kiírva, a legacy fallback pedig a
+sérült bájtokon `_decode`-ol. A frissítő felhasználó tehát üres dalkönyvtárat lát:
+pontosan az az eredmény, amit az ADR 0487 D3 nevesítve kizár („a sikertelen
+migráció SOHA nem indít üres profilt").
+
+**Az általánosítható szabály.** Egy fixture NEVE, a `README` prózája és a
+manifest `source` mezője **nem mérce** — csak a cella az. Ha egy acceptance-sor
+egy hibaosztályt nevez meg (korrupt, csonka, túl nagy, lejárt, hiányzó), a
+fixture-t a hibaosztály **jelenlétére** kell ellenőrizni, lehetőleg magában a
+cellában: az E12-R23 javítása ezért `expect(() => jsonDecode(raw),
+throwsFormatException)`-nel kezdődik — az őr önmagát őrzi, nem tud némán
+visszacsúszni a write-fault ágra. Ez a hibaosztály a
+[L563](#l563) („a cella a saját javítása előtti eszközzel is zöld") és a
+[L569](#l569) („a degenerált fixture kizárja a hibaosztályt") **harmadik**
+egymást követő megjelenése: a fixture-ről szóló állítás és a fixture tartalma
+külön él, és a gate a kettő eltérését nem látja.
+
+**A javítás.** (1) ÚJ **A3b** cella
+(`test/e2e/upgrade_migration_test.dart:247-359`), amely a valódi korrupciós utat
+hajtja, injektált írás-hiba NÉLKÜL, és négy dolgot pinnel: a fixture ténylegesen
+malformált; `failure == null` és mind a 22 lépés `applied` (a korrupció-átlátszóság
+**mérve**, nem feltételezve); a nyers bájtok bájtra azonosak maradnak, az új kulcs
+NEM íródik ki (ez a valódi adatvesztés-őr); a `readBody()` → `null` **„ISMERT
+KORLÁT (ADR 0487)"** megjelöléssel, plusz ellenpróba, hogy a korrupció a jól
+formált dokumentumokra nem terjed át. (2) a fixture `user_setlists_v1` mezője
+ténylegesen csonka JSON lett (a neve igazzá vált), a `test/fixtures/manifest.json`
+`bytes`/`sha256` bejegyzésével EGYÜTT. (3) a korlát átvezetve a
+`docs/release/client-migration.md` §6-ba. A zárást a reviewer saját, a javító kód
+ellen futtatott mutation-próbája igazolja: a fixture jól formáltra visszaállítva
+`+7 -1`, és a bukó cella PONTOSAN az A3b.
+
+**Ami NEM zárult le:** maga a korlát. A felhasználó továbbra is üres dokumentumot
+lát sérült legacy adat után — a javítás `lib/**`-ot érint (a migrátor
+per-dokumentum hibát jelentsen, vagy a `JsonDocumentStore` különböztesse meg a
+„nincs itt semmi"-t az „olvashatatlan"-tól), ami a kör tilos zónája volt. A
+cella-szintű pin miatt ez már **mért, nem elfelejtett** tartozás.
+
+**Kísérő lelet (nem a kör hibája, az önjavító sávnak szól):** a
+`.claude/hooks/protect_factory_files.py` `_bash_write_targets()` függvénye nem
+bontja a parancsot `&&` mentén, ezért egy `rm -rf <tmp> && … && tools/round-gate.sh …`
+alakú láncban az `rm` MINDEN későbbi tokent operandusnak vesz, és a gate-hívás
+„írás-célpontként" blokkolódik (H-GATEGUARD). Mérve 2026-09-02 a `_bash_write_targets`
+közvetlen futtatásával; külön parancsokra bontással megkerülhető.
+
+**Őrteszt:** `test/e2e/upgrade_migration_test.dart` — az A3b cella (a fixture
+malformáltságát MAGA ellenőrzi `throwsFormatException`-nel, majd a
+korrupció-átlátszóságot, a bájtazonos legacy megőrzést és a `readBody()` mai
+kimenetét pinneli), valamint `test/tooling/fixture_manifest_test.dart` (51 fixture,
+`sha256`/`bytes` egyezés).
+
+---
+
+## L571 — A kétrétegű őr MÁSODIK rétege némán elveszhet: a „nincs mintám hozzá → átugrom" (`if (pattern == null) continue`) fail-OPEN, és pontosan azt a hibaosztályt engedi át, amiért a réteg készült (E12-R24, 2026-09-02)
+
+**Mérés.** Az E12-R24 A3 cellája két rétegű: (1) a `listing.md`
+`capabilities-marketed` markerében felsorolt minden id-nek `ga_scope: true`-nak
+kell lennie a `docs/testing/device-matrix.yaml`-ben; (2) egy próza-scan, amely a
+`ga_scope: false` capabilityket lexikai signature alapján keresi a store-szöveg
+PRÓZÁJÁBAN — épp azért, hogy a markerbe fel NEM vett, de a szövegben mégis
+ígért funkciót elkapja. A második réteg viszont így indult:
+
+```dart
+final pattern = signaturePatterns[capability.id];
+if (pattern == null) continue;      // <— néma kihagyás
+```
+
+és egyetlen cella sem mérte, hogy a kézzel karbantartott
+`capabilityMarketingSignaturePatterns` térkép lefedi-e az ÖSSZES non-GA
+capabilityt. A reviewer próbája (P7) a valódi fájlokon: egy ÚJ, negyedik
+`ga_scope: false` capability (`band_jam_mode`) a device-mátrixba + a listing
+prózájába `**Band Jam Mode.** … coming soon` — a markert NEM bővítve. Eredmény:
+
+```
+00:00 +29: All tests passed!        # exit 0
+```
+
+Ez PONTOSAN a kör §5.3 tilalma („NEM elfogadható gyengítés: »hamarosan«
+megfogalmazású funkció-ígéret"), és a második réteg pontosan ezért létezett.
+
+**Miért ismétlődő hibaosztály.** Ugyanez a minta már mérve volt ezen a fán:
+[L555](#l555) (E12-R16 MAJOR-1) — „a kapu KÖVETELMÉNY-listája némán törölhető,
+három sor törlése `exit=0`, és egyetlen cella sem piros". Az
+[ADR 0477](adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md) **D2**
+normatívan is tiltja: hiányzó bizonyíték BLOKKOL, a „nincs adat → nincs
+regresszió" nem elfogadható. A `continue` az az egy sor, amivel ez a tiltás
+csendben visszaszivárog egy új tesztbe.
+
+**A javítás alakja (nem a tüneté).** A hiányzó signature MAGA legyen violation
+(fail-closed), PLUSZ külön cella mérje, hogy `capabilities.where((c) =>
+!c.gaScope).map((c) => c.id)` ⊆ `signaturePatterns.keys` — a mátrixból élőben
+olvasva. A javítás UTÁN a P7 forgatókönyv három cellát visz pirosra, tetszőleges,
+korábban nem ismert id-vel is:
+
+```
+'capabilityMarketingSignaturePatterns has no entry for ga_scope: false
+ capability "band_jam_mode" — the prose scan cannot verify it is unmarketed
+ (fail-closed: add a signature pattern)'
+```
+
+**Átvihető szabály:** ha egy őr egy KÉZZEL karbantartott térképet/listát indexel
+egy GÉPILEG felderített halmaz elemeivel, a „nincs bejegyzés" ág soha ne
+`continue` legyen — vagy violation, vagy külön teljességi cella. A kézi térkép és
+a gépi halmaz közti rés a hiba helye, nem a mellékkörülmény.
+
+**Őrteszt:** `test/tooling/store_package_test.dart` — az A3 csoport fail-closed
+cellája (`capabilityMarketingSignaturePatterns has no entry for ga_scope: false
+capability …`) és a signature-térkép teljességét mérő cella.
+
+---
+
+## L572 — A `docs/reviews/**` NEM Router-CI trigger-útvonal: egy review-only záró commit merge SHA-t képez, amelyen SOHA nem fut Router CI — `workflow_dispatch`-csel kell rákérni (E12-R24, 2026-09-02)
+
+**Mérés.** Az E12-R24 kör-ága három commitot kapott: implementáció
+(`ff86ad57`), review (`89a3e5bd`), javító kör (`f9c2de0e`), majd a záró,
+**kizárólag `docs/reviews/e12-r24-review.md`-t érintő** APPROVED-commit
+(`b3e346d4`) — ez lett a merge SHA. A `router-ci.yml` `on.push.paths` listája
+(`tools/**`, `docs/rounds/**`, `docs/execution/pipeline-*`, `.ai/**`,
+`.github/workflows/router-ci.yml`) a `docs/reviews/**`-ot **nem** tartalmazza,
+ezért az utolsó push NEM indított Router CI-t: a legfrissebb `push` eseményű
+futás a `f9c2de0e`-n állt, a merge SHA-n **egyetlen Router-CI run sem volt**.
+
+A kör diffje viszont érintette a `docs/rounds/**`-ot, tehát az ADR 0086 §2
+exact-SHA szabálya szerint a Router CI a zöld kapu része — a `build-apk`/
+`full-gate` zöldje önmagában nem elég ([L113](#l113)).
+
+**Feloldás (nem a mérce lazítása):** a `router-ci.yml` deklarál
+`workflow_dispatch`-ot, tehát a merge SHA-ra rá lehet kérni a futást:
+
+```bash
+gh workflow run router-ci.yml --ref <kör-branch>
+gh run list --workflow=router-ci.yml --branch <kör-branch> --limit 1 \
+  --json databaseId,headSha,conclusion,event
+```
+
+A `headSha` így a merge SHA lesz, `event: workflow_dispatch` — teljes értékű
+exact-SHA evidencia, ugyanaz a job-mátrix.
+
+**Átvihető szabály:** merge előtt ne azt nézd, hogy „volt-e zöld Router CI ezen
+az ágon", hanem hogy van-e `conclusion: success` PONTOSAN a merge SHA-n. Ha a
+kör utolsó commitja csak nem-trigger útvonalat érint (tipikusan a
+`docs/reviews/**` záró review-commit — vagyis KÖRÖNKÉNT visszatérő eset, nem
+kivétel), a run hiányozni fog, és `workflow_dispatch`-csel kell pótolni.
+
+**Őrteszt:** nincs — a lelet a merge-eljárásra vonatkozik, nem a fa
+viselkedésére; a mérce a merge előtti kötelező `gh run list … --json
+headSha,conclusion` ellenőrzés (kör-prompt §3), amit ez a lecke pontosít.
+
+## L573 — A „minden fájlra kiterjed" checksum-őr `iterdir()`-rel NEM rekurzív: az alkönyvtárba csempészett többletfájl nem hibás, hanem NEM LÉTEZIK — miközben az upload a teljes fát viszi (E12-R25, 2026-09-02)
+
+**Mérve.** Az `E12-R25` `assemble_rc.py`-ja fail-closed összeállítót szállított: a
+`--verify` a csomagot a saját `checksum-manifest.json`-jához köti, és a hiányzó /
+megváltozott / **többlet** fájl mindegyike nem-nulla kilépés (ADR 0488 D5). A csomag
+tényleges fájllistáját viszont így képezte:
+
+```python
+actual_names = {
+    item.name for item in package_dir.iterdir()
+    if item.name != CHECKSUM_MANIFEST_NAME and item.is_file()
+}
+```
+
+Az `iterdir()` **nem rekurzív**, az `is_file()` pedig kiszűri a könyvtárakat. A review
+próbája ezt mérte:
+
+```
+$ python3 tool/release/assemble_rc.py --profile development --output-dir /tmp/x/out …
+assemble_rc: package written to /tmp/x/out (7 file(s)).
+$ mkdir -p /tmp/x/out/extra && echo "smuggled payload" > /tmp/x/out/extra/evil.apk
+$ python3 tool/release/assemble_rc.py --verify --output-dir /tmp/x/out
+assemble_rc: /tmp/x/out matches its checksum manifest exactly.
+verify exit=0                       ← FAIL-OPEN
+
+$ rm -rf /tmp/x/out/extra; echo "smuggled" > /tmp/x/out/evil.apk     # ugyanaz a fájl, LAPOSAN
+  - present in package but not in the checksum manifest: evil.apk
+verify exit=1                       ← helyesen piros
+```
+
+A rés kizárólag a **beágyazottság** volt. A javasolt workflow pedig a TELJES fát tölti
+fel (`actions/upload-artifact@v4`, `path: dist/rc`), tehát a becsempészett fájl kiszállt
+volna a kiadott RC-csomagban — miközben a csomag SAJÁT checksum-audit lépése zölden
+jelentett. A hét deklarált artefaktumon a gate 33 cellája végig zöld volt.
+
+**A minta.** Ez a [L566](#l566) fail-OPEN hibaosztálya, csak nem sor-parszeren, hanem
+**fájlrendszeren**: ami a bejárásnak nem esik útjába, az nem hibás, hanem NEM LÉTEZIK —
+és a nem létező elemre nincs mit állítani. Egy „a manifest MINDEN fájlra kiterjed"
+állítás mögött a bejárásnak ugyanolyan **teljesnek** kell lennie, mint az állításnak:
+`rglob('*')` (vagy `os.walk`), a horgonyhoz képest **relatív, normalizált** útvonalakkal,
+és a manifest ÍRÓ oldala ugyanabban az alakban. Amíg a csomag lapos, a két alak egybeesik,
+tehát a hiba nem is látszik — pontosan ezért kell a próbát a NEM lapos bemeneten futtatni.
+Ugyanez a kérdés minden „a könyvtár tartalma egyezik X-szel" őrnél: symlink, üres
+alkönyvtár, rejtett fájl.
+
+**Őrteszt:** `test/tooling/rc_assembly_test.dart` — az „A4/F1 — an extra file smuggled
+into a package SUBDIRECTORY after assembly (not the package root) is STILL a non-zero
+`--verify` exit, naming its manifest-relative path" cella (a fix ELŐTTI assemblerrel
+mérve PIROS).
+
+## L574 — A `Base.metadata`-ra épülő „minden táblát ellenőrzök" mérce a 29 élő táblából 2-t lát: a raw-DDL migrációval született tábla ORM-modell nélkül LÁTHATATLAN, és a PASS-szöveg a DUMP darabszámát írja ki, nem az ellenőrzöttét (E12-R26, 2026-09-02)
+
+**Mit mértünk.** Az E12-R26 `verify_rollback.py`-ja a visszaállítás utáni
+rekordszámokat a `Base.metadata.sorted_tables`-ön iterálva hasonlította a backup
+dumphoz, és a dumpban nem szereplő táblát `continue`-zal kihagyta. A gate, a
+teljes CI (Full Gate + Router CI + Backend CI) és a gépi scope-audit **mind zöld
+volt**; a rést a review találta meg, majd KÉT független `security-reviewer` futás
+egymástól függetlenül UGYANEZT hozta elsőként:
+
+```
+$ cd backend && python3 -c "from app import models; from app.database import Base; print(len(Base.metadata.tables))"
+2
+$ alembic upgrade head && sqlite3 … "select count(*) from sqlite_master where type='table'"
+29
+```
+
+A 27 Community tábla (`community_posts`, `community_profiles`,
+`community_moderation_cases`, …) **raw-DDL Alembic-migrációkban** jön létre, ORM-modell
+NÉLKÜL — ezért sem a `backup.py`, sem a `verify_rollback.py` `Base.metadata`-ja nem
+tud róluk. A mért következmény: egy olyan visszaállítás, amely a teljes Community
+adatot elvesztette, `[PASS] record_counts: 2 table(s) match`, `OVERALL: PASS`,
+`EXIT=0` eredményt adott.
+
+**A csapda két, egymást erősítő fele.**
+
+1. **A bejárás az ORM-nyilvántartásból indult, nem az ÉLŐ rendszerből.** A függvény
+   kezében MÁR ott volt az `inspect(engine).get_table_names()` (a `present` halmaz),
+   csak épp a jelenlét-ellenőrzésre használta, nem a lefedettség mérésére.
+2. **A PASS-szöveg a rossz halmazt számolta.** `f"{len(tables)} table(s) match"` a
+   DUMP tábláit írta ki, nem az ténylegesen összehasonlítottakat — így a „2 table(s)
+   match" a TELJESSÉG látszatát keltette. Egy csupa ismeretlen tábla-nevű dump
+   NULLA összehasonlítás mellett is PASS-t adott.
+
+**A javítás.** Az élő tábla-halmaz (mínusz a nevesített
+`_MIGRATION_BOOKKEEPING_TABLES = {"alembic_version"}`) és a dump tábla-halmaza
+**kétirányú** összevetése: élőben létező, de a dumpban nem szereplő tábla → FAIL;
+dumpban szereplő, de ismeretlen tábla → FAIL; a PASS-szöveg pedig
+`N table(s) compared`. A javítás után a valós lánc függetlenül újramérve
+`OVERALL: FAIL`, `EXIT=1`, mind a 26 tábla nevesítve.
+
+**Az általánosítható szabály.** *Ha egy mérce azt állítja, hogy „mindenre kiterjed",
+a lefedettséget az ÉLŐ rendszerből kell származtatnia, nem abból a nyilvántartásból,
+amelyet a mért kód maga is használ* — különben a mérce és a mért kód UGYANAZT a vakfoltot
+osztja, és a mérce pontosan ott hallgat, ahol beszélnie kellene. Ugyanez a fail-OPEN
+hibaosztály, mint az [L566](#l566) (csendben átengedett dimenzió) és az
+[L573](#l573) (`iterdir()` nem rekurzív → a beágyazott többletfájl „nem létezik"):
+mindháromban a bejárás halmaza szűkebb, mint amit az állítás sugall.
+
+**A gyakorlat mint felderítő eszköz.** A kör legértékesebb terméke nem a szállított
+kód, hanem a MÉRT runbook-lelet: a `backup.py` produkciós futása — akárhány
+Community-sor van élesben — mindig csak a fiók-táblákat menti. Ez latens produkciós
+adatvesztési kockázat, amit dokumentum-olvasással senki nem talált meg; a
+LEFUTTATOTT gyakorlat találta meg. A javítás tiltott zónában van
+(`backend/scripts/**`), ezért helyesen LELET maradt (A6), nem csendes javítás.
+
+**Őrteszt:** `backend/tests/test_rollback_drill.py::test_verify_rollback_record_counts_fails_when_live_table_missing_from_dump` (+ `::test_verify_rollback_record_counts_fails_on_unknown_dump_table`, `::test_verify_rollback_record_counts_pass_detail_reports_compared_count`)
+
+---
+
+## L575 — A kipipálható ellenőrzőlista őre a `- [ ]` alakra épült, ezért pontosan a KIPIPÁLÁS pillanatában némult el: a `- [x]` sor nem hibás, hanem NEM LÉTEZIK (E12-R27, 2026-09-02)
+
+**Mit mértünk.** Az E12-R27 `docs/beta/closed-beta-launch.md`-je egy indítási
+ellenőrzőlista, amelynek MINDEN sora mért bizonyítékra hivatkozik (A5), és az
+őr (`test/tooling/beta_profile_test.dart`) a hivatkozott repó-relatív
+útvonalak létezését `existsSync()`-kel méri. A szállított fán a cella zöld
+volt, a fejlesztő saját mutáció-próbái is helyesen pirosak. A reviewer viszont
+a dokumentum **rendeltetésszerű** használatát próbálta ki — egy ember indítás
+előtt **kipipálja** a sorokat —, izolált klónban:
+
+```
+# 1. próba: kipipált sor, NEM létező útvonal
+- [x] Beta enrollment process is documented — `docs/beta/NOPE-does-not-exist.md`.
+$ flutter test test/tooling/beta_profile_test.dart   → exit 0, ZÖLD   ← fail-OPEN
+
+# 2. próba (kontroll): UGYANAZ a sor kipipálatlanul
+- [ ] Beta enrollment process is documented — `docs/beta/NOPE-does-not-exist.md`.
+$ flutter test test/tooling/beta_profile_test.dart   → exit 1, A5 PIROS
+```
+
+Az ok egyetlen minta: `_splitChecklistItems` bullet-regexe `^- \[ \] (.*)$`
+volt, tehát a `- [x]` sor nem „rendben lévő" volt, hanem a parszer számára
+**nem létezett** — az [L566](#l566) fail-OPEN hibaosztálya.
+
+**Ami ezt az esetet megkülönbözteti az L566/L571/L573-tól.** Ott a rés egy
+ritka, nem várt bemeneti alaknál nyílt ki. Itt a fail-OPEN alakot **a
+dokumentum saját, tervezett életciklusa állítja elő**: a lista azért létezik,
+hogy kipipálják. Az őr tehát pontosan addig mért, amíg senki nem használta a
+dokumentumot, és attól a pillanattól vakult meg, amikor az első ember dolgozni
+kezdett vele — a lista onnantól tetszőlegesen elsodródhatott volna a fától
+(hivatkozás nélküli vagy lógó hivatkozású sorok), zöld gate mellett.
+
+**A javítás.** `^- \[[ xX]\] (.*)$`, plusz KÉT új cella: kipipált sor + nem
+létező útvonal → jelzés; kipipált sor + létező útvonal → nincs jelzés (hogy a
+javítás ne lőjön túl). Újra-mérve ugyanazzal a mutációval: exit 1, A5 piros;
+a kipipált-de-valós változat 18/18 zöld.
+
+**Az általánosítható szabály.** *Ha egy őr egy EMBER által kitöltendő
+dokumentumot mér, a mintáinak a KITÖLTÖTT alakot is fel kell ismerniük —
+különben a mérce a dokumentum használatba vételekor kapcsol ki.* A kérdés
+mindig ugyanaz: „hogyan fog kinézni ez a fájl, miután az, akinek szól,
+hozzányúlt?" — és arra az alakra is legyen piros cella.
+
+**Őrteszt:** `test/tooling/beta_profile_test.dart::mutation probe: a CHECKED (- [x]) line referencing a non-existent repo-relative path is flagged (fail-open guard, L566)` (+ `::mutation probe: a CHECKED (- [x]) line referencing a real path is NOT flagged`)
+
+## L576 — A „mérési riport VAGY béta-adat" vagylagos bizonyíték-szabályt nem ígéret tartja meg, hanem az útvonal-feloldás: a nem létező forrásra mutató hivatkozás legyen NEM-NULLA KILÉPÉS (E12-R28, 2026-09-02)
+
+**A helyzet mérve.** Az E12-R28 briefje `blocked` jelzést írt elő arra az esetre,
+ha nincs béta-adat („a scope-cut mérési döntés, nem vélemény"). A pre-flight
+MÉRTE, hogy a Closed Beta nem indult el (`docs/beta/closed-beta-launch.md:3` →
+„Status: NOT launched"; a §5 Human launch field üres; az E12-R27 HANDOFF-ja
+kimondja), és **nem is fog**, amíg egy ember le nem futtatja — az E12-R27
+szándékosan EMBERI kapunak tervezte. Egy `blocked` halt tehát nem egy megoldható
+akadályt jelzett volna, hanem a láncot állította volna meg határozatlan időre,
+miközben a kör mind a hat acceptance-kritériuma (A1–A6) a fán mérhető anyagból
+teljesíthető, és a brief SAJÁT §5.2-je a bizonyítékra **vagylagos** („a béta-adat
+**vagy a mérési riport** hivatkozása kötelező").
+
+**A tanulság nem az, hogy „a halt elkerülhető".** Az, hogy a halt helyett
+választott út CSAK akkor legitim, ha a halt által védett kockázatot **gépi őr**
+veszi át. Itt a kockázat a kitalált terepi adat volt (kitalált top-issue,
+funnel-szám, tesztelői létszám). Az őr (ADR 0489 D3): **minden
+bizonyíték-hivatkozásnak a fán FELOLDHATÓ repó-relatív útvonalra kell mutatnia**,
+`Path(evidence).exists()`, különben nem-nulla kilépés. Béta-riport ma nem
+létezik, tehát béta-mérésre hivatkozni nem stílushiba, hanem piros cella —
+reviewer-próbával igazolva (`docs/beta/closed-beta-results.md` hivatkozás →
+`exit 1`). Ez erősebb védelem, mint a halt: a halt csak elhalasztotta volna a
+kérdést, az őr minden JÖVŐBELI körre is köti.
+
+**Őrteszt:** `test/tooling/ga_scope_test.dart::a dangling evidence path is a non-zero exit (D3)` (a `A1 — the closed capability set (D1) …` csoportban, `test/tooling/ga_scope_test.dart:140`)
+
+**Ellenpróba, amit a review kimért.** Ugyanennek a körnek a másik két MAJOR-ja
+mutatja, hogy a „gépi őr" önmagában sem elég, ha az őr fail-OPEN vagy a
+normatív állítás mellől hiányzik a mért tény:
+
+1. a core-path tábla egy sora NÉMÁN eldobható volt (`_parse_table` `continue`
+   a laza elő-szűrő hibájára, teljességi ellenőrzés nélkül) → a `preview`
+   capabilityt a core útra tevő tiltott állapot mellett `exit 0`
+   ([L566](#l566) fail-OPEN osztály, immár harmadszor mérve);
+2. a kör EGYETLEN `ga` besorolású capabilitye (`practiceEngineV2Enabled`)
+   production build-ben `false` (`lib/app/config/feature_flags.dart:78`,
+   `nonProd`, felülíró ág nélkül) — a dokumentum ezt nem mondta ki, és semmi
+   nem kötötte a besorolást a mért production-feloldhatósághoz. A javítás egy
+   `production_default` oszlopot köt a forrás fail-closed olvasásához: a
+   dokumentált és a mért érték eltérése `exit 1`, ismeretlen forrás-alak
+   `exit 2`.
+
+**Általánosítás.** Ha egy kör egy előírt STOP-ot mért indoklással megkerül, a
+jelentésben (§0.0 revízió) ki kell mondani (a) mit mért, (b) melyik kockázatot
+vette át melyik gépi őr, és (c) mi az újramérés nevesített feltétele. A
+megkerülés e három nélkül nem döntés, hanem sodródás.
+## L577 — A gépi őr csak a SZÁMOT védte, a szám INDOKLÁSÁT nem: a plafon-aritmetika három forrásból újraszámolva zöld volt, miközben a bázis-inputot egy MÉRTEN hamis empirikus mondat legitimálta (E12-R29, MAJOR-1, 2026-09-02)
+
+**Mit mértünk.** Az E12-R29 `docs/operations/capacity-review.md`-je a canary
+cohort plafonját (25) három mért konstansból számolja, és a
+`test/tooling/canary_cohort_test.dart` A1 csoportja HÁROM helyről ellenőrzi a
+konzisztenciát (a dokumentum HTML-marker értéke ↔ a launch-doc
+`maxTesters` mezője ↔ friss újraszámítás a `backend/app/routers/auth.py`
+és a `docs/beta/cohort-profiles.yaml` alapján). A reviewer mérése szerint az őr
+JÓ: a marker 25→999 és a `maxTesters` 25→26 mutációja egyaránt pirosra váltja a
+cellát a VALÓDI fán.
+
+Az őr mégis átengedte a kör legsúlyosabb hibáját. A bázis-input (`closed_beta.
+maxTesters = 50`) mellett ez a mondat állt:
+
+> „az egyetlen cohort-méret ezen a fán, ami **ténylegesen ki lett osztva és
+> incidens nélkül futott**"
+
+A fán MÉRT valóság ennek az ellenkezője: `docs/beta/closed-beta-launch.md:3` →
+„Status: **NOT launched**", a §5 Human launch field üres, és ugyanezt mondja ki
+a `HANDOFF.md` E12-R28 bejegyzése. **Egyetlen cohort sem lett kiosztva** —
+üzemi tapasztalat nulla. Ráadásul a mondat bizonyítékként egy nem létező
+útvonalra hivatkozott (`docs/HANDOFF.md`; a fájl a repó GYÖKERÉBEN van).
+
+**Miért fontos.** Ez pontosan az a hibaosztály, ami ellen az ELŐZŐ kör
+([L576](#l576), ADR 0489 D3) gépi őrt épített — csak ott a *besorolás
+bizonyíték-hivatkozásaira*. A mérce tehát megvolt, de egy MÁSIK dokumentum
+prózájában, egy MÁSIK szerepben (a számítás bemenetének legitimálása) újra
+megjelent, mert az őr a **számot** méri, nem a szám melletti **indoklást**.
+A kitalált empíria itt nem díszítés volt: a kör főszámának bázisát támasztotta
+alá.
+
+**Az általánosítás.** Egy „mért, nem becsült" kimenetnél a gépi őr rendszerint
+az ÉRTÉK-láncot pinneli (forrás-konstans → aritmetika → dokumentált érték). Az
+érték melletti **empirikus állítás** (`futott`, `bizonyított`, `incidens
+nélkül`, `proven`) ezen a láncon KÍVÜL van, és pontosan olyan olcsón hazudik,
+mint a kerek szám, ami ellen a szabály készült. Amíg nincs rá őr, a review
+KÖTELES a szám indoklását külön megmérni: minden „futott / bizonyított"
+állításhoz kérj fájl:sor bizonyítékot, és oldd fel a hivatkozott útvonalat.
+
+Ugyanezen kör MINOR-2 lelete a fenti mintázat gyengébb változata: a launch-doc
+a `docs/release/ga-scope.md`-t idézve három flaget „proven"-nek nevezett,
+miközben a hivatkozott dokumentum csak KONFIGURÁCIÓT állít (`internal: true`,
+`closed_beta: false`, „internal-dogfood-only rollout today"). Konfiguráció ≠
+empíria — a félreidézés ugyanaz a hibaosztály egy szinttel lejjebb.
+
+**Őrteszt:** nincs — a lelet a szám INDOKLÓ PRÓZÁJÁT érinti, amire ma nincs
+gépi mérce; a `canary_cohort_test.dart` A1 csoportja az érték-láncot köti, és
+azt a review mérése szerint helyesen teszi. Egy jövőbeli, általános
+„bizonyíték-hivatkozás feloldható + empirikus állítás mellett mért forrás" őr
+(az ADR 0489 D3 kiterjesztése a `docs/operations/**`-ra) lenne a
+hibaosztály-szintű zárás.
+
+## L578 — Az őr két olcsó néma-módja: (1) a FŐ ellenőrzés kimarad az ALAPÉRTELMEZETT hívásból, (2) az összevetés csak az ÁRTALMATLAN irányban fut (E12-R30, 2 MAJOR, 2026-09-02)
+
+**A helyzet.** Az `E12-R30` egy freeze-ellenőrzőt szállított
+(`tool/release/verify_freeze.py`), 31 zöld cellával, teljesen zöld gate-tel és
+tiszta scope-audittal. A független review mégis **két MAJOR** leletet mért,
+mindkettőt ugyanabból a családból, mint amit a kör maga akart megfogni.
+
+**MAJOR-1 — a bare hívás nem ellenőrzött semmit.** A `main()` a
+`--since`/`--changes-file` hiányában `changes = None`-t hagyott, és a
+klasszifikációt (az eszköz FŐ ellenőrzését, A1) átugorva `ok` + **exit 0**-t
+nyomtatott. Mérve, a reviewer izolált klónjában:
+
+```
+$ printf '\n// probe\n' >> lib/app/build_info.dart
+$ git commit -qam "chore: apró javítás, nem számít"   # a §5.1 NÉVSZERINT tiltott kategóriája
+$ python3 tool/release/verify_freeze.py
+verify_freeze: ok — 17 known-issue row(s)
+exit=0
+$ python3 tool/release/verify_freeze.py --since 4ac78365
+verify_freeze: 1 finding(s): … not classified under any freeze change class …
+exit=1
+```
+
+Súlyosbító: a `feature-freeze.md` gépi blokkja **kimondta** a
+`freeze_base_sha`-t, a kód be is olvasta (`load_freeze_base(...)`), majd az
+eredményt **eldobta** — a deklarált freeze-bázisnak nulla gépi hatása volt. És
+a hibát egy **zöld cella tartotta életben**: a sanity-teszt kifejezetten azt
+várta el, hogy a bare hívás `ok` + `0` legyen (`freeze_policy_test.dart:44-48`).
+
+**MAJOR-2 — az összevetés csak felfelé mért.** A `known-issues.md` ↔
+`blockers.md` súlyosság-egyeztetés csak akkor futott, ha a known-issues sor
+MAGA `P0`/`P1` volt. Így a **felhangolást** (P1 → P0) elkapta — arra volt is
+cella —, a **lefokozást** (P1 → P2) viszont nem, pedig kizárólag ez az irány
+rejt el egy blockert. Egyetlen karakter átírása a szállított dokumentumban:
+`exit 0`, `ok`. A kör deklarált célja (`§5.2 „a known-issues lista ŐSZINTE"`)
+így egy `sed`-del kikerülhető volt.
+
+**Az általánosítás.** Az [L566](#l566)/[L571](#l571)/[L575](#l575) családot
+eddig a *parszer* szintjén ismertük („ami nem illeszkedik, az nem hibás, hanem
+nem létezik"). Ez a kör két új, magasabb szintű változatot mért:
+
+1. **Belépési-pont fail-OPEN.** Hiába fail-closed minden parszer, ha az
+   ellenőrzés az alapértelmezett hívásban **el sem indul**. A kérdés nem az,
+   hogy „mit csinál a tool, ha megkapja a kapcsolót", hanem az, hogy **mit
+   csinál, ha nem kapja meg**. Aki később futtatja (ember vagy CI-lépés), a
+   csupasz alakot fogja írni.
+2. **Irány-vak összevetés.** Ha egy őr két forrás eltérését méri, azt
+   **irányfüggetlenül** kell mérnie. Az az irány, ami „szigorúbbnak látszik"
+   (P1 → P0), ártalmatlan; a hibaosztály mindig az enyhítés felé mozdul.
+
+**Módszertani tanulság a review-nak.** Mindkét leletet ugyanaz a próbatípus
+hozta elő: a szállított dokumentumot/kódot **minimálisan, ellenséges
+szándékkal** mutáltam (egy commit a tiltott kategóriából; egy karakter a
+súlyossági oszlopban), és NEM a tool tesztjeit néztem. A cellák számossága
+(31) semmit nem mondott a fedettségről; a fedettséget csak a mutáció mérte.
+
+**HARMADIK mód, a merge UTÁN mérve (post-merge gate, ugyanaz a kör).** A
+kötelező merge utáni `tools/round-gate.sh` futás a `main`-en **PIROS** lett:
+
+```
+verify_freeze: 1 finding(s):
+  - HANDOFF.md: not classified under any freeze change class … (A1)
+```
+
+A `documentation` osztály `docs/` prefixet és `CHANGELOG.md`-t sorolt fel — a
+lánc viszont MINDEN kör végén egy `docs(handoff): …` commitot készít, ami a
+**gyökér** `HANDOFF.md`-t írja. Az őr tehát a saját házirendjének normál,
+körönként ismétlődő működését minősítette szabálysértésnek. Ez sem a
+branch-gate-ben, sem a CI-ban nem látszott: a branch-en a kör commitjai mind
+`docs/`+`tool/release/`+`test/tooling/` alattiak voltak, a CI-ban pedig a
+sekély klón miatt a klasszifikáció el sem futott — **csak a merge utáni,
+teljes történetű `main`-en**, a záró handoff-commit után. Javítva: a gyökér
+dokumentum-fájljai (`HANDOFF.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`)
+nevesítve bekerültek a `documentation` osztályba, cellával pinnelve.
+
+**A tanulság kiterjesztése:** egy házirend-őr első valódi bemenete nem a kör
+saját diffje, hanem a **rendszer normál működése**. Mielőtt zöldnek nyilvánítod,
+futtasd le arra a commit-mintázatra, amit a lánc magától termel — itt ez a
+`docs(handoff)` záró commit volt. A merge utáni gate nem formalitás: ez a
+lelet KIZÁRÓLAG ott volt mérhető.
+
+**Őrteszt:**
+`test/tooling/freeze_policy_test.dart::a product path changed since freeze_base_sha, on a bare call with no --since/--changes-file override, is a non-zero exit naming the path`
+(MAJOR-1, izolált `git init`-elt temp-repóval) és
+`test/tooling/freeze_policy_test.dart::a known-issues.md row DOWNGRADED below its blockers.md severity (P1 -> P2) is a non-zero exit naming it`
+(MAJOR-2).
+`test/tooling/freeze_policy_test.dart::the root-level documentation files (HANDOFF.md, AGENTS.md, CLAUDE.md, README.md, CHANGELOG.md) are `documentation` too` (a merge utáni mód).
+
+## L579 — Egy NEGATÍV állítást mérő cella (a Lab-route hiánya, a titok hiánya) csendben vákuummá válik, ha a mért ág el sem éri a hibalehetőséget (E12-R31, 2 MAJOR, 2026-09-02)
+
+**A helyzet.** Az `E12-R31` egy production füst-teszt csomagot szállított
+(`tool/release/production_smoke.py`), teljes zöld gate-tel (kliens 16/16,
+backend 12/12), `scope_audit=ok`-kal, és zöld Full Gate-tel a `279d977f`
+SHA-n. A kör két kötött szabálya kifejezetten NEGATÍV állítás volt: „a
+Lab-route NEM elérhető" (§5.2) és „a füst-csomag SOSEM tartalmaz titkot,
+a kimenet nem szivárogtat" (§5.1). Mindkettőhöz volt cella, és mindkét
+cella zöld volt. **Mindkét cella vak volt.**
+
+**Amit mértünk.**
+
+1. **A `/download` láb fail-open** (`production_smoke.py:289–305`). A check
+   `if resp.status_code != 404` alapon döntött. A `backend/app/main.py:250`
+   viszont **regisztrált** útvonalon is 404-et ad, ha nincs staged APK
+   (`raise HTTPException(status_code=404, detail="no APK staged")`). Egy ÉLŐ
+   Lab-letöltő felület mellett tehát a füst-teszt ezt írta ki és 0-val lépett
+   ki: `[PASS] lab_routes_absent: all three Lab routes 404`. A kör kötelező
+   valódi-sértés próbája **nem fogta meg**, mert MINDKÉT env-flaget
+   bekapcsolta — az aggregátum a `/diagnostics` lábak miatt pirosodott, így a
+   `/download` láb mérhetetlen maradt.
+2. **A titok-szivárgási cella vákuum** (`production_readiness_test.dart:78–99`).
+   A cella `http://127.0.0.1:1`-re futott (azonnali connection refused), ezért
+   a `POST /auth/login` **soha nem ment ki**, és a sikeres-válasz ág — az
+   EGYETLEN hely, ahol a jelszó vagy a bearer token kimenetre kerülhetett
+   volna — le sem futott. Mutáció-kill próbával mérve: a sikerág elejére
+   szúrt `print(f"… {password} -> {token}")` mellett a cella **ZÖLD maradt**;
+   ugyanez a mutáns egy 200-at válaszoló socket ellen kiírta a jelszót ÉS a
+   tokent.
+
+**A közös hibaosztály.** Egy negatív állítás cellája akkor is zöld, ha a
+mérés SOHA nem jut el addig a pontig, ahol a hiba megtörténhetne. A pozitív
+állításnál („a fingerprint egyezik") ez nem fordulhat elő: ott a zöld a
+mérés MEGTÖRTÉNTÉT is bizonyítja. A negatív állításnál a „nem találtam"
+és a „megmértem és nincs ott" ugyanúgy néz ki — kívülről mindkettő zöld.
+
+**Hogyan alkalmazd (mindkettő bekerült a kör javításába).**
+
+1. **A negatív cella állítson a mérés MEGTÖRTÉNTÉRE is**, mielőtt a hiányra
+   állítana. A javított cella két sanity-sorral kezd —
+   `expect(stdout, contains('[PASS] auth_login:'))` és `contains('[PASS] auth_me:')`
+   —, azaz bizonyítja, hogy a sikerág lefutott, és csak UTÁNA állít a
+   sentinel hiányára. Ez különbözteti meg a mérést a vákuumtól.
+2. **A több lábból álló ellenőrzést lábanként IZOLÁLVA kell pirosra vinni.**
+   Egy aggregátum-cella, amely minden kapcsolót egyszerre billent, nem
+   bizonyítja, hogy MINDEN láb mér — csak azt, hogy legalább egy. A javítás
+   külön cellát kapott, amely CSAK az egy flaget kapcsolja be, és külön
+   állít az izolációra is: `assert "/diagnostics" not in result.detail`.
+3. **Ha egy állapotot a státuszkód nem különböztet meg, keress
+   diszkriminátort.** A „route hiányzik" és a „route létezik, csak nincs
+   staged APK" egyaránt 404 — de egy rossz metódus a regisztrált útvonalon
+   405-öt ad, amit egy hiányzó útvonal SOHA nem tud produkálni.
+
+**Őrteszt:**
+`backend/tests/test_production_smoke_contract.py::test_apk_download_enabled_alone_turns_the_check_red`
+(a lábankénti izoláció, a `POST /download` → 405 diszkriminátorral) és
+`test/tooling/production_readiness_test.dart::a distinctive password AND a distinctive bearer token never appear in stdout or stderr of a run that ACTUALLY logs in against a local stub server`
+(a mérés megtörténtét is állító sanity-sorokkal).
+
+---
+
+## L580 — A ZÁRT osztálykészletű politika-ellenőrző a REPÓ EGÉSZÉRE mér, de a prefix-listája csak a saját köre útvonalait ismerte: minden későbbi kör NEM SZÁLLÍTOTT kódja pirosra vitte a `main`-t (E12-R32 / H7 önjavító kör, harmadik előfordulás, 2026-09-02)
+
+**A helyzet.** Az `E12-R30` egy fail-closed freeze-ellenőrzőt szállított
+(`tool/release/verify_freeze.py`): a `freeze_base_sha` óta MINDEN megváltozott
+útvonalnak be kell esnie a `docs/release/feature-freeze.md` HÁROM zárt
+osztályának egyikébe, különben `1`-es kilépés. A prefix-lista a kör saját
+diffjéből született: `documentation` = `docs/`, `CHANGELOG.md`;
+`release-tooling` = `tool/release/`, `test/tooling/`. A tool helyes, a kapu
+erős — a LISTA volt szűkebb, mint a valóság.
+
+**Amit mértünk (három egymást követő előfordulás, ugyanaz a hibaosztály).**
+
+1. **`HANDOFF.md`** (E12-R30 post-merge, `07638527`): a lánc MINDEN köre
+   `docs(handoff): …` commitot ír a gyökér `HANDOFF.md`-be → osztályozatlan.
+2. **`backend/tests/test_production_smoke_contract.py`** (E12-R31, `accd30c2`):
+   backend teszt, nem szállított kód → osztályozatlan.
+3. **`tools/tests/test_sol_terra_both_slots.py`** (`11d0d2bb`): a pipeline
+   saját router-tesztje → osztályozatlan.
+
+A 2. és a 3. EGYSZERRE állt a `main` csúcsán: `python3
+tool/release/verify_freeze.py` az `origin/main`-en, **bármely kör diffje
+nélkül**, `exit=1` és 2 findinget adott. Ez állította meg az E12-R32 kört
+(H7): a kör saját mércéje 28/28 zöld volt, a `scope_audit=ok`, a §7 gate
+mégis piros — egy MÁR MERGE-ELT, idegen regresszió miatt.
+
+**Miért nem fogta meg a CI.** A gate-cella (`freeze_policy_test.dart:60–101`)
+a sekély (`--depth 1`) klónban a fail-closed ágra fut: a `freeze_base_sha` nem
+elérhető → `exit 2` → a cella a 2-es kódot állítja, és ZÖLD. A piros ág
+KIZÁRÓLAG teljes klónban, azaz a boxon, azaz csak a következő kör §7 gate-jén
+látszik. **Egy környezet-függő elágazású cella az egyik környezetben nem
+ellenőrzés, hanem csak jelenlét-igazolás.**
+
+**A hibaosztály.** Egy „zárt készlet" politika-ellenőrző hatóköre a REPÓ
+EGÉSZE, az élettartama pedig a freeze VÉGÉIG tart — a listáját viszont a
+bevezető kör a SAJÁT diffjéből tölti fel. Ez időzített bomba: a lista abban a
+pillanatban elavul, amikor egy KÉSŐBBI kör olyan útvonalat érint, ami a
+bevezetéskor még nem létezett. A tool minden alkalommal helyesen működött; az
+ADAT volt hiányos.
+
+**Hogyan alkalmazd.**
+
+1. **A prefix-listát ELVBŐL vezesd le, ne a diffből.** A javítás nem a két
+   mért fájlt vette fel, hanem a valódi elvet mondta ki: `release-tooling` =
+   ami **nem kerül bele a szállított termékbe** (`test/`, `backend/tests/`,
+   `tools/`, `tool/release/`) — szemben a szállított kóddal (`lib/**`,
+   `backend/app/**`, `android/**`, `assets/**`, `pubspec.yaml`), amihez
+   továbbra is kell egy nyitott P0/P1/P2 blocker ID.
+2. **Az elvhatárt őrizd MUTÁCIÓVAL is.** A tágítás önmagában nem bizonyíték;
+   a párcella azt méri, hogy a határ MÁSIK oldala piros maradt
+   (`backend/app/main.py` → `exit 1`), különben a „`backend/tests/`
+   felvétele" észrevétlenül `backend/` blanket-mentességgé válhat.
+3. **Ha egy kapunak környezet-függő ága van, a másik ágat is mérni kell
+   valahol.** Itt a determinisztikus `--changes-file` cella az, ami a
+   klón-mélységtől függetlenül a VALÓDI szállított dokumentum
+   prefix-listájára mér.
+4. **A politika-doksi „MÉRVE a merge UTÁN" blokkja maradjon a fájlban.** Már
+   a második ilyen blokk ugyanabban a §3-ban — pontosan ez a két bejegyzés
+   mutatta ki, hogy nem elszigetelt hibákról, hanem egy osztályról van szó.
+
+**Őrteszt:**
+`test/tooling/freeze_policy_test.dart::the NON-SHIPPING verification paths (backend/tests/, tools/, test/) are `release-tooling` too`
+(a MÉRT piros útvonalakkal és a valódi commit-üzenetekkel) és a párja,
+`::the widened `release-tooling` prefixes do NOT exempt the shipped backend or app code`
+(a határ másik oldala piros marad).
+
+## L581 — A Router CI `on.push.paths` szűrője a PUSH diffjére néz, nem a kör diffjére: a kör UTOLSÓ commitja (a `docs/reviews/**` review) SOSEM triggereli, tehát az exact-SHA kapun a merge SHA-n nincs futás (E12-R32, 2026-09-02)
+
+**A helyzet.** A merge-kapu exact-SHA (ADR 0086 §2): a `router-ci.yml`-nek a
+**merge SHA-n** kell `success`-nek lennie, ha a kör diffje bármelyik
+trigger-útvonalat érinti. A tervező ezt helyesen meg is mondja:
+
+```
+$ python3 tools/round-ci-plan.py --brief docs/rounds/e12-r32-…md --base origin/main --head HEAD
+"router_ci_expected": true,
+"router_ci_paths_hit": ["docs/rounds/e12-r32-staged-rollout-1-to-20-percent.md"]
+```
+
+**Amit mértünk.** A kör utolsó commitja a review frissítése volt
+(`a50e80a2`, egyetlen fájl: `docs/reviews/e12-r32-review.md`). Push után:
+
+```
+$ gh run list --workflow router-ci.yml --branch sonnet-impl/e12-r32-… --json headSha,conclusion
+[{"conclusion":"success","headSha":"6abbe822…"},   # az ELŐZŐ push
+ {"conclusion":"success","headSha":"a723749d…"}]   # és a még korábbi
+```
+
+A merge SHA-n (`a50e80a2`) **nulla** Router-CI futás. A `full-gate.yml`-t ez
+nem érinti (azt `workflow_dispatch`-csal indítja az orchestrátor), a Router CI
+viszont KIZÁRÓLAG `push`-ra indul magától — és a `on.push.paths` a **push saját
+diffjét** szűri, nem az ág `main`-hez mért kumulatív diffjét. A
+`docs/reviews/**` egyetlen trigger-útvonalon sincs rajta.
+
+**A hibaosztály.** Két, külön-külön helyes szabály szerkezetileg ütközik:
+
+1. a kör-protokoll szerint a kör UTOLSÓ commitja a review-jelentés
+   (`docs/reviews/eXX-rYY-review.md`) — tehát a merge SHA-t **majdnem mindig**
+   egy `docs/reviews/**`-only push állítja elő;
+2. a Router CI trigger-listája (szándékosan) nem tartalmazza a
+   `docs/reviews/**`-ot.
+
+Az eredmény: a Router CI a kör közbenső SHA-in zölden lefut, a merge SHA-n
+viszont hiányzik. Aki „van zöld Router-CI futás az ágon"-t mér „a merge SHA-n
+zöld" helyett, **elavult bizonyítékra merge-el** — a kapu csendben lazul,
+anélkül hogy bárki lazította volna.
+
+**Hogyan alkalmazd.**
+
+1. **A `--json headSha` összevetés NEM formalitás.** A `gh run list --workflow
+   router-ci.yml --branch <ág> --json headSha,conclusion` kimenetét mindig a
+   `git rev-parse HEAD`-hez mérd, ne a puszta `conclusion`-höz. Ez a mérés
+   fogta meg itt a rést.
+2. **Hiányzó futás esetén a Router CI kézzel indítható:** a workflow-nak van
+   `workflow_dispatch` triggere, és a dispatch a BRANCH CSÚCSÁN fut, tehát
+   pontosan a merge SHA-t méri:
+   `gh workflow run router-ci.yml --ref <kör-ág>` →
+   `headSha=a50e80a2…`, `conclusion=success` (run
+   [33668495951](https://github.com/wolfcasaba/strumsight/actions/runs/33668495951)).
+   Ez nem kerülőút, hanem a kapu HELYES kiszolgálása.
+3. **A tartós javítás helye nem a kör-oldal.** Vagy a `router-ci.yml`
+   `on.push.paths` listája kapja meg a `docs/reviews/**`-ot (a legolcsóbb, és
+   a review-only pusht amúgy is másodpercek alatt lefutó Python-suite méri),
+   vagy a merge-kapu ellenőrzője dispatch-eli automatikusan, ha a tervező
+   `router_ci_expected=true`-t mond, de a merge SHA-n nincs futás.
+
+**Őrteszt:** nincs — a javítás helye a `.github/workflows/router-ci.yml` vagy a
+`tools/` merge-kapu, mindkettő az E12-R32 `allowed_paths`-án KÍVÜL és a kör
+tiltott zónájában (ADR 0087 §4). A rés MÉRVE és dokumentálva van; a gépi őrt
+egy governance-kör (vagy önjavító kör) szállíthatja, amelynek a briefje
+kifejezetten felsorolja ezeket az útvonalakat.
+
+## L582 — Az előre megírt kör-brief ⚠ pre-flight kapuja olyan EMBERI előfeltételt írhat elő, amit a SAJÁT §2 mért állapota kizár: a feloldás nem a kapu kihagyása, hanem GÉPI invariánssá alakítása — és az invariánst INVERZ próbával kell igazolni (E12-R33, 2026-09-02)
+
+**Tünet.** Az E12-R33 briefje (előre megírva 2026-08-27) kötelező pre-flight
+kapuként ezt írta elő: „ellenőrizd, hogy a `staged-rollout-log.md` 1/5/20%-os
+lépcsői KITÖLTVE és jóváhagyva vannak-e. Üres napló mellett a kör nem
+indítható (`blocked`)." A mérés szerint a napló SÉMÁJA megvolt (Kör 32,
+`f6db8a8d`: 3 döntés-sor + 15 megfigyelés-sor), de KITÖLTVE nem — mind a három
+`decision` `pending`, mind a 15 verdikt `unknown`, minden szöveges cella `TBD`.
+
+**Mért gyökérok.** A kapu szó szerinti alkalmazása a láncot **véglegesen**
+megállította volna, nem átmenetileg: a naplót csak egy VALÓDI store-rollout
+töltheti ki, az pedig ma maga is blokkolt — `docs/release/blockers.md` szerint
+nyitva van egy **P0** (`R-SIGN-01`) és öt **P1** (`R-VER-01`, `R-PRIV-01`,
+`R-SEC-01`, `R-STAGE-01`, `R-STORE-01`), és a `ga-scope.md` fejléce ezért
+mondja ki: „NEM KÉSZ (NOT READY)". Ugyanennek a briefnek a §2-je viszont MÁR
+MÉRTE ezt („Store-jelenlét MA nincs … a GA-rekord ezért a publikálás UTÁN
+kitöltendő mezőket EXPLICIT emberi jelöléssel viszi") — a brief tehát
+ÖNMAGÁVAL volt ellentmondásban: a kapu egy olyan világot feltételezett,
+amelynek a hiányára a kör terméke kifejezetten tervezve volt.
+
+**Feloldás (ADR 0087 §2 — a kör SAJÁT, még nem merge-elt briefje).** A
+dokumentált §0.0.1 pre-flight revízió a kaput **séma-létezés** ellenőrzéssé
+tette (teljesül), a kitöltetlenséget pedig nem elkente, hanem **GÉPI
+invariánssá** emelte: a GA-rekord `ga_status` mezője zárt értékkészletű
+(`not-yet` | `in-progress` | `ga`), és a `verify_ga_record.py` nem-nulla
+kilépéssel áll meg, ha `ga_status: ga`, miközben bármely `stage-*` döntés nem
+`approved`, VAGY nyitott P0/P1 van. A kör így SZIGORÚBB lett, nem lazább: a
+korábban emberi figyelemre bízott „ne mondd ki idő előtt a GA-t" szabályt
+mostantól gép méri.
+
+**A második, könnyen kimaradó fél: az INVERZ próba.** Egy „mindig piros"
+invariáns pontosan olyan használhatatlan, mint a hiányzó: a valódi GA
+pillanatában sem engedne át semmit, tehát az első éles használatkor
+megkerülnék. A review ezért nem csak azt mérte, hogy `ga_status: ga` ma
+pirosat ad (P3), hanem azt is, hogy szintetikus, mind-`approved` naplóval és
+üres blocker-táblával **`exit=0`**-t ad (P12) — ez bizonyítja, hogy az őr
+ADAT-VEZÉRELT, nem bedrótozott tiltás. Minden „X tiltva, amíg Y" alakú
+ellenőrzőhöz KELL egy ilyen inverz cella.
+
+**Általánosítás.** Egy előre megírt brief mért állításai avulnak (ADR 0087
+§1), és ez a kötelező kapuira is igaz. Ha egy kapu emberi előfeltételt ír elő,
+a pre-flightban azt is meg kell mérni, hogy az előfeltétel **teljesíthető-e
+egyáltalán** a jelen fán. Ha nem — és a kör terméke nem is függ tőle —, akkor
+a `blocked` jelzés nem óvatosság, hanem a lánc végleges megállítása egy olyan
+állapot miatt, amelyre a kört tervezték.
+
+**Őrteszt:** `test/tooling/ga_record_test.dart`::`A7 — ga_status: ga is
+rejected while a stage-* decision is not approved or a P0/P1 blocker is open`
+(a rekord-oldali invariáns), és ugyanott a fixture-felülírásos inverz cella,
+amely bizonyítja, hogy a szabály nem vacuous.
+
+## L583 — Egy ÚJ kompozíciós gyökér két úton hazudik zölden: a szinkron interfész mögötti `unawaited` perzisztencia elnyeli a tárolási hibát, a „minden függőség felépül" cella pedig a SAJÁT override-jaitól zöld (E15-R14, 2026-09-02)
+
+**Tünet.** Az E15-R14 (Practice Generator kompozíciós réteg) teljes gate-je
+zölden állt — `format`, `analyze`, 10 teszt-útvonal, `architecture`, `secrets`,
+`l10n` mind zöld, a scope-audit `ok`, mind a 9 acceptance-cella teljesült,
+és a kötelező „valódi-sértés próba" is szabályosan pirosra váltott. A review
+(`security-reviewer` + `flutter-reviewer` + `flutter-devil-advocate`, mind a
+három futtatott próbákkal) ebben az állapotban **2 BLOCKER + 7 MAJOR**-t mért ki.
+
+**Az első hibaosztály — a szinkron interfész mögötti fire-and-forget írás.** A
+`PracticeEvidenceRepository` metódusai szinkronok (a reducer pure kódból hívja
+őket), a `KeyValueStore` írásai viszont aszinkronok, ezért az implementáció
+minden írást/törlést `unawaited(...)`-tel indított. A store szerződése
+(`lib/core/storage/key_value_store.dart`) kimondja: *„Writes never fail
+silently. A platform-level write failure completes the future with a
+`StorageException`"* — az `unawaited` viszont pontosan ezt a jelzést dobja el.
+Mérve (`InMemoryKeyValueStore.failingKeys`, egy fake-mező, amit a kör tesztjei
+egyszer sem használtak):
+
+```
+deleteForPlan reported removed=1
+record STILL on disk? true
+manifest=[]                              <- a manifest-írás SIKERÜLT
+fresh instance deleteForPlan removes=0
+=> residue undeletable forever: true
+UNHANDLED async errors escaping unawaited(): 1 [StorageException]
+```
+
+A törlés sikert jelentett a privacy-képernyőnek, az adat a lemezen maradt, és
+mivel a manifestből már kikerült, **egyetlen későbbi törlés sem érte el**. Ez a
+CLAUDE.md „silent no-op" csapdájának lokális tár-változata, és pont az ellen a
+hamis consent-felület ellen szólt a kör saját ADR-je (0482 / D2). A testvér
+`LocalPracticePlanRepository` ugyanezt HELYESEN csinálja (minden írást `await`-el
+és `AppResult`/`StorageFailure`-re képez) — a doc-comment mégis azt állította,
+hogy „exactly like" az. **A javítás nem az `await` volt** (a szinkron szerződés
+nem engedi), hanem kompenzáló egyeztetés: a bukott fizikai `remove` visszateszi
+az id-t a manifestbe (a rekord felfedezhető marad egy későbbi próbához), a
+bukott `write` kiveszi az optimista bejegyzést, a hiba pedig `lastWriteFailure`-ben
+megfigyelhető.
+
+**A második hibaosztály — a körkörös acceptance-cella.** Az A3 kritérium így
+szólt: „mind a 6 képernyő MINDEN kötelező konstruktor-függősége felépül egyetlen
+`ProviderScope`-ból". A cella zöld volt. A cella `buildContainer()`-e viszont
+**maga írta felül** azt a két providert, ami éles kódban `UnimplementedError`-t
+dob. Production-alakú konténerben (kizárólag `keyValueStoreProvider` override,
+ahogy a `main.dart` teszi) mérve: 3/6 képernyő függősége + a teljes generálási
+út **dobott**. A cella nem hazudott a saját scope-járól — a scope volt rosszul
+megválasztva.
+
+**Általánosítás.** Egy „X felépül a kompozícióból" cella csak akkor bizonyít,
+ha a konténere **legfeljebb annyit** override-ol, amennyit a production boot
+(`main.dart`) is. Minden további override-ot a cellának ki kell mondania, és
+külön, negatív guard-cellának kell mérnie, mi az, ami MA nem áll elő — így a
+hiány mért tény lesz, nem felfedezetlen üresség, és a bekötő kör pirosra
+futtatja a guardot, amikor betölti a seamet.
+
+**Amit a hiányból tanultunk a scope-ról.** A seam maga védhető volt (valódi
+resolverhez másik feature `public.dart`-ja kellett volna = tilos zóna), a
+**hallgatás** nem: a kör ADR-je egyetlen döntésben sem említette a két dobó
+providert, a §10 pedig egy nem létező ADR-pontra hivatkozott indoklásként. A
+zárás ezért nem a bekötés lett, hanem három kimondott, ADR-be írt, kötelező
+`E15-R07 / F1`-előfeltétel (0482 / D9, D10, D11). **Halasztás igen, hallgatás nem.**
+
+**Őrteszt:** `test/features/practice_generator/presentation/practice_generator_providers_test.dart`::`B2 guard`
+(provider-enként `throwsUnimplementedError` egy CSAK `keyValueStoreProvider`-t
+felülíró konténeren) és
+`test/features/practice_generator/data/local_practice_evidence_repository_test.dart`::`B1 — a failing physical remove does not silently succeed`
+(`failingKeys`-alapú cella; a review előtti kódon bizonyítottan piros).

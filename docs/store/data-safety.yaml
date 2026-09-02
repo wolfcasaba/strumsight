@@ -1,0 +1,156 @@
+# StrumSight — Data safety declaration source (E12-R24)
+#
+# SZÁRMAZTATOTT dokumentum (§5.1): minden `categories[].references[]` bejegyzés
+# egy LÉTEZŐ `docs/privacy/data-inventory.yaml` route.id / field.name párra
+# mutat. Nincs önállóan megfogalmazott kategória — ha egy kategóriát ide
+# felveszel, előbb a data-inventory-ban kell léteznie a mögötte álló
+# route/field-nek.
+#
+# Gépileg ellenőrzött: test/tooling/store_package_test.dart (A2) — kétirányban:
+#   1) minden itteni `references[]` bejegyzés route.id/field.name párja
+#      feloldódik a valódi docs/privacy/data-inventory.yaml-ban
+#      (tool/check_data_inventory.dart DataInventory.parseFile-jával olvasva);
+#   2) minden `leaves_device: true` leltár-mező szerepel legalább egy itteni
+#      kategória references-listájában (nincs "elfelejtett" kategória).
+#
+# A `rides:` route-ok (account_api_auth_repository, stb.) saját `fields`
+# nélküliek a leltárban — a fedezetük az `account_api`/`diagnostics_upload`
+# célroute-on keresztül automatikus, nincs hozzájuk külön kategória (§0.0 R4).
+#
+# `wired: false` route-ok mezői (`tutor_stream`.tutor_turn_message,
+# `community_media`.community_media_bytes) `leaves_device: false` — ma
+# semmilyen production kódút nem küldi őket a hálózatra, ezért nincs itt
+# hozzájuk data-safety kategória; a `leaves_device` mező automatikusan zöldre
+# vált a fedezet-ellenőrzésben (nem "true", tehát nem követel kategóriát).
+#
+# Restricted YAML subset — package:yaml NÉLKÜL olvasva
+# (test/tooling/store_package_test.dart saját olvasója), 2-space lista-elem
+# indentáció, 4-space kv, a `references:` beágyazott listája 6-space
+# elem-fejléc / 8-space kv — ugyanaz a grammatika, amit
+# docs/privacy/data-inventory.yaml routes/fields nesting-je használ.
+
+schema_version: 1
+
+categories:
+  - id: account_credentials
+    label: "Account credentials"
+    play_category: "Personal info"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Account creation and sign-in for the optional account layer (contract, backend-side)."
+    references:
+      - route: account_api
+        field: "email"
+      - route: account_api
+        field: "password"
+
+  - id: settings_sync
+    label: "Synced app settings"
+    play_category: "App info and performance"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Cross-device settings sync for a signed-in user."
+    references:
+      - route: account_api
+        field: "settings_profile (theme_mode, locale, confidence_threshold, tuning_a4)"
+
+  - id: community_identity
+    label: "Community profile"
+    play_category: "Personal info"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Public community identity created only when the user opts into Community."
+    references:
+      - route: account_api
+        field: "community_profile (handle, display_name, visibility, audience_default)"
+
+  - id: community_social_graph
+    label: "Community connections"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Social-graph edges (follow/unfollow/block/mute) the user creates by interacting with Community."
+    references:
+      - route: account_api
+        field: "community_social_graph (follow/unfollow/block/mute target ids)"
+
+  - id: community_challenge_activity
+    label: "Community challenge activity"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Challenge participation state (invite/accept/decline/cancel/submit_result)."
+    references:
+      - route: account_api
+        field: "community_challenge_activity (invite/accept/decline/cancel/submit_result payloads)"
+
+  - id: diagnostics_comparison_events
+    label: "Diagnostics: ML/DSP comparison events"
+    play_category: "App info and performance"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Lab-mode ML-vs-DSP chord-detection diagnostics, explicitly opted into (diagnosticsConsentProvider, default false)."
+    references:
+      - route: diagnostics_upload
+        field: "ml_dsp_comparison_events (tSec, mlChord, dspChord, agree, mlConf, dspConf, strumDir, bpm, inputLevel)"
+
+  - id: diagnostics_audio_clip
+    label: "Diagnostics: audio clip"
+    play_category: "Audio files"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "The recorded clip a diagnostics event was measured from, for offline model debugging (Lab-mode opt-in only)."
+    references:
+      - route: diagnostics_upload
+        field: "audio_clip (raw 16-bit WAV, base64, decimated to fit a ~5MB pre-encode cap)"
+
+  - id: diagnostics_device_metadata
+    label: "Diagnostics: device metadata"
+    play_category: "Device or other IDs"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Diagnostics correlation — which app build/platform produced the session (Lab-mode opt-in only)."
+    references:
+      - route: diagnostics_upload
+        field: "device_metadata (appVersion, device platform string)"
+
+  - id: share_card_image
+    label: "User-initiated share: card image"
+    play_category: "Photos or videos"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "User-chosen share of a rendered practice card image to an OS-level destination app the user picks; StrumSight has no further custody once the OS share intent completes."
+    references:
+      - route: share_export
+        field: "strum_card_png (rendered on-screen 'Strum Card' capture)"
+
+  - id: share_caption
+    label: "User-initiated share: caption text"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "The social caption accompanying a user-initiated share."
+    references:
+      - route: share_export
+        field: "share_caption (chords, strum-glyph sequence, BPM, optional session title only if includeTitle=true, install link, hashtags)"
+
+  - id: share_export_json
+    label: "User-initiated share: analysis export"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "User-initiated JSON export/share of an analysis session, after an explicit preview + confirm step (ADR 0247); RedactionPolicy-filtered allowlist, not the raw internal document."
+    references:
+      - route: share_export
+        field: "redacted_analysis_export_json (RedactionPolicy-filtered allowlist view of an AnalysisDocument)"
