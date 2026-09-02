@@ -323,3 +323,37 @@ igényelnek változtatást — rögzítve maradnak.)
 A javító kör ugyanazzal a motorral (`sonnet-impl`), ugyanazon a branchen megy, a
 fenti leletlistával; minden javításhoz ÚJ mérő cella tartozik, és a §5 exact-SHA
 CI-kapu az új HEAD-en ÚJRA lefut.
+
+---
+
+## 8. Javító kör (fix1) — újra-ellenőrzés leletenként
+
+Commit `4936b1f9`, diff a review-commit óta: 5 fájl (mind az `allowed_paths`-on),
+`+657 / −129`. Backend cellák: **6 → 15**. A gate 10/10 zöld.
+
+| Lelet | Zárva? | A ZÁRÁS MÉRT bizonyítéka |
+|---|---|---|
+| **MAJOR-1** | ✅ | `verify_rollback.py:265–316` immár az ÉLŐ tábla-halmazt (`inspect(engine).get_table_names()` mínusz a nevesített `_MIGRATION_BOOKKEEPING_TABLES`) is a dumphoz méri, MINDKÉT irányban FAIL-lel, és a PASS-szöveg a ténylegesen összehasonlított darabszámot írja (`N table(s) compared`). **Függetlenül újramérve** a valós láncon: `OVERALL: FAIL`, `EXIT=1`, mind a 26 Community tábla nevesítve — ott, ahol a javítás ELŐTT `PASS / 2 table(s) match / EXIT=0` állt. |
+| **MAJOR-2** | ✅ | a hamis „(+ minden Community tábla `0` sorral)" állítás eltűnt; a §4 9. sora most a TÉNYLEGES, PIROS eredményt rögzíti; a §7 pedig felveszi a gyökérokot MÉRT leletként (lásd lent) |
+| **MAJOR-3** | ✅ | `verify_rollback.py:451–471`: üres `expected` VAGY `observed` profil → FAIL („a dimenziónak legalább egy kulcsot össze kell hasonlítania") |
+| **MAJOR-4** | ✅ | `:161` és `:376` már csak `type(value).__name__` / `keys present=[…]` alakot ír, ÉRTÉKET soha — a PII/bcrypt visszhang útja zárva |
+| **MINOR-1** | ✅ | `:369`, `:394`: `resolve()` + `project_root` alatti ellenőrzés |
+| **MINOR-2** | ✅ | `:202`, `:299`: `except Exception` → FAIL dimenzió, a riport MINDIG elkészül |
+| **MINOR-4** | ✅ | az időtartam-minta a lépés-sor idő-OSZLOPÁRA kötve |
+| **MINOR-5** | ✅ | `disaster-recovery-drill.md:40–41` átírva arra, amit az A3 cella TÉNYLEGESEN bizonyít |
+| **MINOR-6** | ✅ | `DimensionResult.ok` allowlist (`in (PASS, SKIPPED)`), nem `!= FAIL` |
+| **MINOR-7** | ✅ | a 9. lépés két KÜLÖN felépített profilfájlt használ, és új **9b** sor méri a NEGATÍV ágat (`communityWritesEnabled` eltérés → `flag_profile` FAIL); a §7 megalapozatlan `--force` állítása javítva |
+| MINOR-3, NOTE-ok | — | szándékosan nyitva, nem igényelnek változtatást |
+
+**A kör legértékesebb terméke a javítás után az A6 runbook-lelet** (`disaster-recovery-drill.md`
+§7, első pont): a `backend/scripts/backup.py` a `Base.metadata`-ra támaszkodik, amely az
+`app.models` importja után csak `users` + `user_settings`; a 27 Community tábla **raw-DDL
+Alembic-migrációkban jön létre, ORM-modell nélkül**, ezért a dump ŐKET SOHA nem tartalmazza —
+akármennyi éles adat van bennük. Ez egy **latens, produkciós adatvesztési kockázat**, amit
+pontosan az ilyen gyakorlatnak kell felszínre hoznia. A javítás `backend/scripts/**`-t érintene
+(tiltott zóna), ezért helyesen LELET maradt, nem csendes javítás.
+
+## 9. Verdikt — **APPROVED**, 0 nyitott BLOCKER/MAJOR/kezelendő MINOR
+
+Egy javító kör (a MiniMax-eszkalációs küszöb alatt), ugyanazzal a motorral. A
+zöld kapu exact-SHA evidenciája a `4936b1f9` HEAD-en a §5-ben frissítve.
