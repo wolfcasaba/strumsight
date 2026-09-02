@@ -114,6 +114,14 @@ canary_max_testers = closed_beta.maxTesters × (register_limiter.max_attempts
                     = 50 × (5 / 10)
                     = 25
 ```
+<!-- canary-max-testers: 25 -->
+
+The HTML comment marker directly above is the machine-readable copy of the
+result — [`test/tooling/canary_cohort_test.dart`](../../test/tooling/canary_cohort_test.dart)'s
+A1 group reads it back and cross-checks it against a fresh recomputation from
+`backend/app/routers/auth.py` + `docs/beta/cohort-profiles.yaml`, AND against
+the `maxTesters` field in `docs/beta/open-beta-launch.md`'s canary block — a
+prose-only edit to any of the three cannot silently drift from the other two.
 
 **Bemenetek (mindegyik mért):**
 
