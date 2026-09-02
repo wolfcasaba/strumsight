@@ -1,5 +1,78 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R33 KÉSZ — Staged rollout 50–100% és GA — PR [#533](https://github.com/wolfcasaba/strumsight/pull/533), squash `f685db4a` (2026-09-02)
+
+A Ch12 **Kör 33** a GA-állapotot teszi **auditálhatóvá — publikálás nélkül**.
+A brief §0.0 emberi kapuja szerint a 100%-os store-rollout és a GA-jelölés
+kizárólag user-művelet; a kör terméke a **rekord**, az **ellenőrző**, a
+**gate-teszt** és a záró **jegyzet**. A kör nem publikált, nem állított
+rollout-százalékot, és nem írta át a `staged-rollout-log.md`-t.
+
+**A pre-flight oldott fel egy önmagával ellentmondó briefet ([L582](docs/LESSONS.md#l582)).**
+A brief ⚠ kapuja („kitöltetlen rollout-napló → `blocked`") szó szerint
+olvasva **véglegesen** megállította volna a láncot: a naplót csak valódi
+store-rollout töltheti ki, az pedig ma maga is blokkolt — nyitva van egy
+**P0** (`R-SIGN-01`) és öt **P1** (`blockers.md`), a `ga-scope.md` fejléce
+pedig „NEM KÉSZ". Ugyanennek a briefnek a §2-je viszont MÁR MÉRTE ezt, és a
+kört kifejezetten erre az állapotra tervezte. A §0.0.1 revízió (ADR 0087 §2 —
+a kör SAJÁT, még nem merge-elt briefje) a kaput **séma-létezés** ellenőrzéssé
+tette, a kitöltetlenséget pedig **gépi invariánssá** emelte: a kör így
+SZIGORÚBB lett, nem lazább.
+
+**Négy termék (5 útvonal, `scope_audit=ok`):**
+
+- [`docs/release/ga-record.md`](docs/release/ga-record.md) — `ga_status` gépi
+  mező zárt értékkészlettel (ma **`not-yet`**), a verzió-mezők a manifest
+  **deklarált bemeneteiből**, a **16 kulcsos** flag-profil pillanatkép, a
+  rollback-cél, és a GA UTÁN kitöltendő emberi mezők (build-SHA, support-link,
+  publikálási időbélyeg) EXPLICIT `GA UTÁN, EMBERI KITÖLTÉS` jelöléssel —
+  kitalált érték egyikbe sem került.
+- [`tool/release/verify_ga_record.py`](tool/release/verify_ga_record.py) —
+  fail-closed ellenőrző (A1–A7; `exit 2` hiányzó/üres marker-blokkra).
+  **Mért tény: statikus release-manifest fájl a fán NINCS** — a manifest
+  generált Dart-artefaktum, ezért az ellenőrző a három deklarált bemenetből
+  (`pubspec.yaml` + a két asset-manifest sha256) számol újra minden futáskor;
+  nincs `dart run`, és nincs a Pythonba másolt verzió-literál.
+- [`test/tooling/ga_record_test.dart`](test/tooling/ga_record_test.dart) — az
+  A2 Dart-oldali összevetése a `tool/generate_release_manifest.dart`
+  importjával (a `release_manifest_test.dart` mért mintája); az A5 cella SAJÁT
+  vakság-őrt is hordoz (a használt ISO-8601 regex bizonyítottan felismer egy
+  valódi időbélyeget).
+- [`docs/release/release-notes.md`](docs/release/release-notes.md) —
+  determinisztikus, generálási időbélyeg nélkül, a `known-issues.md`-re
+  hivatkozva (nem másolva).
+
+**Review: APPROVED első menetben**, 0 nyitott BLOCKER/MAJOR/MINOR — javító kör
+nem kellett ([`docs/reviews/e12-r33-review.md`](docs/reviews/e12-r33-review.md)).
+A review a gate-et izolált klónban függetlenül újrafuttatta (MINDEN ZÖLD), a
+hiányzó `scope_audit=` kulcsot kézzel pótolta (OK, 5 útvonal), és **12 saját,
+eldobható valódi-sértés próbát** futtatott az ellenőrző ellen. Ezek közül a
+legfontosabb a **P12 inverz próba**: szintetikus, mind-`approved` naplóval és
+üres blocker-táblával a `ga_status: ga` **`exit=0`**-t ad — az A7 tehát
+ADAT-VEZÉRELT őr, nem bedrótozott tiltás, és a valódi GA pillanatában zöldet
+fog adni. 2 NOTE (nem blokkoló): a jelzésfájl `dirty_files=1` pillanatkép-
+műterméke (a fa mérve tiszta volt), és hogy a három GA-utáni emberi mező
+prózában él, a gépi A1-hatókörön kívül — a rés zárása egy jövőbeli kör olcsó
+munkája.
+
+**CI (exact-SHA, `84844715`):** Full Gate
+[33674653017](https://github.com/wolfcasaba/strumsight/actions/runs/33674653017)
+**success** · Router CI
+[33674655878](https://github.com/wolfcasaba/strumsight/actions/runs/33674655878)
+**success**. A `round-ci-plan.py` terve `full-gate.yml` volt
+(`native_gate=false`, `apk_required=false`).
+
+**Lecke:** [L582](docs/LESSONS.md#l582) — ha egy előre megírt brief kötelező
+kapuja emberi előfeltételt ír elő, a pre-flightban azt is meg kell mérni, hogy
+az előfeltétel **teljesíthető-e egyáltalán**; és minden „X tiltva, amíg Y"
+alakú őrhöz KELL egy inverz cella, különben a „mindig piros" invariáns az első
+éles használatkor kerül megkerülésre.
+
+**Következő kör:** `E12-R34` — Post-launch stabilization és hotfix
+(`docs/rounds/e12-r34-post-launch-stabilization-and-hotfix.md`, előre kiosztott
+ADR **0465**).
+
+
 ## ✅ E12-R32 KÉSZ — Staged rollout 1–20 százalék (a H7 után folytatva) — PR [#532](https://github.com/wolfcasaba/strumsight/pull/532), squash `f6db8a8d` (2026-09-02)
 
 A Ch12 **Kör 32** a publikus rollout első három lépcsőjét (**1% → 5% → 20%**)

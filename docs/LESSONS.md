@@ -23144,3 +23144,54 @@ anélkül hogy bárki lazította volna.
 tiltott zónájában (ADR 0087 §4). A rés MÉRVE és dokumentálva van; a gépi őrt
 egy governance-kör (vagy önjavító kör) szállíthatja, amelynek a briefje
 kifejezetten felsorolja ezeket az útvonalakat.
+
+## L582 — Az előre megírt kör-brief ⚠ pre-flight kapuja olyan EMBERI előfeltételt írhat elő, amit a SAJÁT §2 mért állapota kizár: a feloldás nem a kapu kihagyása, hanem GÉPI invariánssá alakítása — és az invariánst INVERZ próbával kell igazolni (E12-R33, 2026-09-02)
+
+**Tünet.** Az E12-R33 briefje (előre megírva 2026-08-27) kötelező pre-flight
+kapuként ezt írta elő: „ellenőrizd, hogy a `staged-rollout-log.md` 1/5/20%-os
+lépcsői KITÖLTVE és jóváhagyva vannak-e. Üres napló mellett a kör nem
+indítható (`blocked`)." A mérés szerint a napló SÉMÁJA megvolt (Kör 32,
+`f6db8a8d`: 3 döntés-sor + 15 megfigyelés-sor), de KITÖLTVE nem — mind a három
+`decision` `pending`, mind a 15 verdikt `unknown`, minden szöveges cella `TBD`.
+
+**Mért gyökérok.** A kapu szó szerinti alkalmazása a láncot **véglegesen**
+megállította volna, nem átmenetileg: a naplót csak egy VALÓDI store-rollout
+töltheti ki, az pedig ma maga is blokkolt — `docs/release/blockers.md` szerint
+nyitva van egy **P0** (`R-SIGN-01`) és öt **P1** (`R-VER-01`, `R-PRIV-01`,
+`R-SEC-01`, `R-STAGE-01`, `R-STORE-01`), és a `ga-scope.md` fejléce ezért
+mondja ki: „NEM KÉSZ (NOT READY)". Ugyanennek a briefnek a §2-je viszont MÁR
+MÉRTE ezt („Store-jelenlét MA nincs … a GA-rekord ezért a publikálás UTÁN
+kitöltendő mezőket EXPLICIT emberi jelöléssel viszi") — a brief tehát
+ÖNMAGÁVAL volt ellentmondásban: a kapu egy olyan világot feltételezett,
+amelynek a hiányára a kör terméke kifejezetten tervezve volt.
+
+**Feloldás (ADR 0087 §2 — a kör SAJÁT, még nem merge-elt briefje).** A
+dokumentált §0.0.1 pre-flight revízió a kaput **séma-létezés** ellenőrzéssé
+tette (teljesül), a kitöltetlenséget pedig nem elkente, hanem **GÉPI
+invariánssá** emelte: a GA-rekord `ga_status` mezője zárt értékkészletű
+(`not-yet` | `in-progress` | `ga`), és a `verify_ga_record.py` nem-nulla
+kilépéssel áll meg, ha `ga_status: ga`, miközben bármely `stage-*` döntés nem
+`approved`, VAGY nyitott P0/P1 van. A kör így SZIGORÚBB lett, nem lazább: a
+korábban emberi figyelemre bízott „ne mondd ki idő előtt a GA-t" szabályt
+mostantól gép méri.
+
+**A második, könnyen kimaradó fél: az INVERZ próba.** Egy „mindig piros"
+invariáns pontosan olyan használhatatlan, mint a hiányzó: a valódi GA
+pillanatában sem engedne át semmit, tehát az első éles használatkor
+megkerülnék. A review ezért nem csak azt mérte, hogy `ga_status: ga` ma
+pirosat ad (P3), hanem azt is, hogy szintetikus, mind-`approved` naplóval és
+üres blocker-táblával **`exit=0`**-t ad (P12) — ez bizonyítja, hogy az őr
+ADAT-VEZÉRELT, nem bedrótozott tiltás. Minden „X tiltva, amíg Y" alakú
+ellenőrzőhöz KELL egy ilyen inverz cella.
+
+**Általánosítás.** Egy előre megírt brief mért állításai avulnak (ADR 0087
+§1), és ez a kötelező kapuira is igaz. Ha egy kapu emberi előfeltételt ír elő,
+a pre-flightban azt is meg kell mérni, hogy az előfeltétel **teljesíthető-e
+egyáltalán** a jelen fán. Ha nem — és a kör terméke nem is függ tőle —, akkor
+a `blocked` jelzés nem óvatosság, hanem a lánc végleges megállítása egy olyan
+állapot miatt, amelyre a kört tervezték.
+
+**Őrteszt:** `test/tooling/ga_record_test.dart`::`A7 — ga_status: ga is
+rejected while a stage-* decision is not approved or a P0/P1 blocker is open`
+(a rekord-oldali invariáns), és ugyanott a fixture-felülírásos inverz cella,
+amely bizonyítja, hogy a szabály nem vacuous.
