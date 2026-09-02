@@ -291,4 +291,96 @@ cd backend && python -m pytest tests/test_rollback_drill.py -q
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Amit építettünk
+
+| Fájl | Tartalom |
+|---|---|
+| `tool/release/verify_rollback.py` | ÚJ. Négy fail-closed dimenzió (migrációs fej, rekordszám, modell-manifest, flag-profil), importálható mag (`check_*`, `run_verification`) + CLI (`main`). Stdlib + a backend meglévő sqlalchemy/alembic függősége, új pip-csomag nincs. |
+| `backend/tests/test_rollback_drill.py` | ÚJ. 6 cella: A1 öt cellája (teljes lánc + 4 fail-closed variáns), A2 egy cellája (restored-DB füst-teszt). |
+| `test/tooling/rollback_policy_test.dart` | ÚJ. 6 teszt: A3 (round-trip), A4 (küszöb-cellahármas), A5(a)/A5(b)/A6 (a jegyzőkönyv gépi mércéje) + a jegyzőkönyv létezésének cellája. |
+| `docs/operations/disaster-recovery-drill.md` | ÚJ. A TÉNYLEGESEN lefuttatott gyakorlat jegyzőkönyve, minden lépéshez mért idővel. |
+
+### 10.2 Mérce-cellák leképezése A1–A6-ra
+
+| # | Elvárás | Bizonyíték |
+|---|---|---|
+| A1 | migrációs fej + rekordszám egyezik restore után; fail-closed hiányzó bemenetre/rekordszám-eltérésre/fej-eltérésre | `backend/tests/test_rollback_drill.py::test_full_backup_restore_verify_chain_matches`, `::test_verify_rollback_fails_closed_on_missing_backup`, `::test_verify_rollback_fails_on_record_count_mismatch`, `::test_verify_rollback_fails_on_migration_head_mismatch`, `::test_verify_rollback_flag_profile_fails_closed_unless_explicitly_opted_out` |
+| A2 | a szállított kliens tényleges végpont-halmaza (`/auth/register` → `/auth/login` → hitelesített `/settings`) 2xx a visszaállított sémán | `backend/tests/test_rollback_drill.py::test_restored_database_smoke_passes_registration_login_and_settings_read` |
+| A3 | kikapcsolás → adat megvan → visszakapcsolás → ugyanaz az adat elérhető (round-trip, egyetlen resolver-példány) | `test/tooling/rollback_policy_test.dart` — `A3 — kill switch round-trip` |
+| A4 | küszöb-cellahármas a feloldás-indexen (`k-1`/`k`/`k+1`), inkluzív határ, egyetlen resolver-példány, hívások között változó fake forrás | `test/tooling/rollback_policy_test.dart` — `A4 — the resolver is stateless` |
+| A5 | a jegyzőkönyv minden lépéséhez szigorú numerikus időtartam tartozik, és nincs becslés-jelölő | `test/tooling/rollback_policy_test.dart` — `A5(a)`, `A5(b)` + `docs/operations/disaster-recovery-drill.md` |
+| A6 | a jegyzőkönyvnek van „Felfedezett runbook-hibák" szakasza; a Kör 8 scriptjei/runbookjai változatlanok | `test/tooling/rollback_policy_test.dart` — `A6`; `git diff --stat` (lásd 10.5) |
+
+### 10.3 Valódi-sértés próba eredménye
+
+A `verify_rollback.py::check_migration_head` fej-eltérés ágát ideiglenesen
+`_STATUS_FAIL` helyett `_STATUS_PASS`-ra mutáltuk (a részletet lásd
+`docs/operations/disaster-recovery-drill.md` §5). Futtatás a mutáció alatt:
+
+```
+$ python3 -m pytest backend/tests/test_rollback_drill.py
+...
+FAILED backend/tests/test_rollback_drill.py::test_verify_rollback_fails_on_migration_head_mismatch
+1 failed, 5 passed in 7.25s
+```
+
+Pontosan az A1 mátrix-sor ("A restore után csak a kapcsolat ellenőrzött, a
+migrációs fej nem" / a fej-eltérés cellája) vált pirosra, semmi más. A
+mutációt visszaállítottuk, és a teljes fájl újra zöld:
+
+```
+$ python3 -m pytest backend/tests/test_rollback_drill.py
+......                                                                   [100%]
+6 passed in 7.07s
+```
+
+A visszaállított állapot bizonyítéka: a próba után `git diff
+tool/release/verify_rollback.py` üres (a fájl bájtra egyezik a mutáció előtti
+tartalommal — ellenőrizve a commit előtt).
+
+### 10.4 Felfedezett runbook-hibák
+
+Egy hiba, mérve, NEM javítva (`docs/operations/database-recovery.md` tiltott
+zóna ebben a körben): a §2/§3 dokumentált `python scripts/backup.py` /
+`scripts/restore.py` fájlútvonal-alakú indítás a repó ÖSSZES többi
+parancssori példájával (`backend/README.md`: `alembic`, `ruff`, `pytest` —
+mind `-m` modul-formában) ellentétben `ModuleNotFoundError: No module named
+'app'`-pal bukik, mert CPython a szkript SAJÁT könyvtárát
+(`backend/scripts/`) teszi a `sys.path[0]`-ra, nem a meghívás könyvtárát
+(`backend/`) — függetlenül attól, van-e aktivált virtualenv. A gyakorlat 7–8.
+lépése (`docs/operations/disaster-recovery-drill.md` §4) csak
+`PYTHONPATH=.` előtaggal futott le. Részletek és a reprodukáló parancs:
+`docs/operations/disaster-recovery-drill.md` §7.
+
+### 10.5 Nem elvégezhető lépések (indoklással)
+
+- **Élő cohort-rollout leállítása** — nincs futó staging/production
+  infrastruktúra ezen a boxon; a Kör 30–33 operátori lépése.
+- **Backend endpoint korlátozása éles forgalommal** — a traffic-gate
+  rollback éles kérésfolyamra épül, ezen a boxon csak szintetikus
+  (`TestClient`) forgalom érhető el.
+- **App release rollback (store/APK terjesztés)** — sem Play Store, sem App
+  Store, sem eszközflotta nem érhető el innen.
+
+### 10.6 A tiltott zóna érintetlensége
+
+```
+$ git diff --stat origin/main -- backend/scripts docs/operations/backend-deploy.md docs/operations/database-recovery.md docs/adr docs/release lib .github
+(üres — nincs kimenet)
+```
+
+### 10.7 Záró mérce
+
+```
+tools/round-gate.sh test/tooling/rollback_policy_test.dart test/core/feature_flags/feature_flag_registry_test.dart
+```
+
+— ZÖLD (a teljes, csonkítatlan kimenet a kör naplójában).
+
+```
+cd backend && python3 -m pytest tests/test_rollback_drill.py -q
+```
+
+— ZÖLD, `6 passed`.
+
 ## 11. Review — a Claude tölti ki
