@@ -39,25 +39,41 @@ Minden `evidence` oszlop egy, a fán MA feloldható repó-relatív útvonal (D3)
 béta-mérési riportra mutató hivatkozás egyikük esetében sincs, mert ilyen
 riport ma nem létezik (D8, [`beta-findings.md`](beta-findings.md)).
 
+**`production_default` (E12-R28 MAJOR-2 javítás):** minden sor egy, a
+`tool/release/verify_ga_scope.py` által géppel visszaellenőrzött mért tényt
+hordoz — mit ad vissza `FeatureFlags.forEnvironment` (`lib/app/config/
+feature_flags.dart`) production környezetben, MA. A besorolás (`ga` |
+`preview` | `disabled` | `postponed`) egy SZÁNDÉK; a `production_default` egy
+MÉRÉS — a kettő eltérhet (pl. `ga`, de a flag ma mégis `false` production
+buildben), és pontosan ezt a rést fedte le eddig csend: az EGYETLEN `ga` sor
+production alapértelmezése ma `false`, ezért a sor nevesített, ellenőrizhető
+feloldó feltételt hordoz a `note` oszlopban (`Production unlock:` jelölővel) —
+lásd a mintát [`contract-freeze.md`](contract-freeze.md) `resolution_condition`
+oszlopában. `accountEnabled` kivétel: a `FeatureFlags.forEnvironment`-ben
+csak áteresztett paraméter (a tényleges forrás `lib/core/api/api_config.dart:19`
+— `bool.fromEnvironment('STRUMSIGHT_ACCOUNT')`, MA `false`), ezért a tool ezt
+a sort nem tudja `feature_flags.dart`-ból visszaellenőrizni; a `disabled`
+besorolás miatt ez nem D5/MAJOR-2 rés.
+
 <!-- ga-scope-capabilities:begin -->
-| flag_key | classification | evidence | note |
-|---|---|---|---|
-| `accountEnabled` | `disabled` | `lib/core/feature_flags/feature_flag_registry.dart` | High-risk optional account layer; already off by default in every cohort (`docs/beta/cohort-profiles.yaml`); the core learning path never reads it (CLAUDE.md: app fully usable logged out). |
-| `diagnosticsEnabled` | `disabled` | `lib/core/feature_flags/feature_flag_registry.dart` | Dev/lab-only diagnostics; the `environment != production` gate already resolves false in every production build; both cohorts false today. |
-| `labModeAvailable` | `preview` | `docs/beta/cohort-profiles.yaml` | True in both cohorts (testers can reach Lab surfaces), but environment-gated to non-production only; the core path never opens Lab mode. |
-| `practiceEngineV2Enabled` | `ga` | `lib/app/routing/app_router.dart` | Gates `AppRoutes.practiceHub` (`lib/app/routing/app_router.dart:180-183`); the core path's Quick Start step cannot render without it — see §3 below. |
-| `migratedLearnEnabled` | `preview` | `docs/beta/cohort-profiles.yaml` | `internal: true`, `closed_beta: false` — a progressive, internal-dogfood-only rollout today; no core-path step references it. |
-| `practiceDetailedHistoryEnabled` | `preview` | `docs/beta/cohort-profiles.yaml` | Same internal-only, progressive pattern as `migratedLearnEnabled`; no core-path reference. |
-| `songTrainerV2Enabled` | `postponed` | `docs/sdd/epic-03-completion-report.md` | Epic 3's own status is "implementation evidence recorded" with release blockers still open in that report's own section; both cohorts false. |
-| `aiTutorEnabled` | `postponed` | `docs/testing/device-matrix.yaml` | The `ai_tutor` capability there already carries `ga_scope: false`; hardcoded `false` in every `FeatureFlags.forEnvironment` branch, no dart-define exists to flip it. |
-| `aiTutorCloudEnabled` | `postponed` | `docs/release/blockers.md` | Cloud/network sub-capability of `aiTutorEnabled`; `R-PRIV-01` (no privacy policy covering data egress) is an open P1 precondition for any network-touching capability. |
-| `visionEnabled` | `postponed` | `docs/testing/device-matrix.yaml` | The `computer_vision` capability there already carries `ga_scope: false`; both shipped vision model manifest entries are `status: deferred` with missing model assets. |
-| `visionLabCaptureEnabled` | `disabled` | `lib/core/feature_flags/feature_flag_registry.dart` | Lab-only camera-capture diagnostics, hardcoded `false` in every environment; not a user-facing capability this scope ever ships. |
-| `audioAnalysisV2Enabled` | `postponed` | `docs/sdd/epic-06-completion-report.md` | Epic 6's own status is "rollout stays at shadow"; `ShadowAnalysisRunner` has no live caller yet, only a contract test. |
-| `communityEnabled` | `postponed` | `docs/release/blockers.md` | `R-PRIV-01`/`R-SEC-01` (no release-level threat model — only the feature-scoped `community-threat-model.md`) are open P1 preconditions for any social/data-collecting surface. |
-| `communityWritesEnabled` | `postponed` | `docs/release/blockers.md` | Same `R-PRIV-01`/`R-SEC-01` precondition as `communityEnabled`, narrower (the writes sub-surface). |
-| `communityMediaEnabled` | `postponed` | `docs/release/blockers.md` | Same `R-PRIV-01`/`R-SEC-01` precondition as `communityEnabled`, narrowest (the media-upload sub-surface). |
-| `adaptiveShellEnabled` | `preview` | `docs/adr/0467-adaptive-shell-is-the-non-production-default.md` | ADR 0467 explicitly defers the production GA decision to this round; `internal: true`, `closed_beta: false`; the core path never routes through it (`test/e2e/first_practice_offline_test.dart` drives `AppRoutes.practiceHub` directly, not the shell). |
+| flag_key | classification | production_default | evidence | note |
+|---|---|---|---|---|
+| `accountEnabled` | `disabled` | `false` | `lib/core/feature_flags/feature_flag_registry.dart` | High-risk optional account layer; already off by default in every cohort (`docs/beta/cohort-profiles.yaml`); the core learning path never reads it (CLAUDE.md: app fully usable logged out). Production default measured at `lib/core/api/api_config.dart:19` (`bool.fromEnvironment('STRUMSIGHT_ACCOUNT')`), not `feature_flags.dart` — a pass-through parameter there, so `verify_ga_scope.py` does not cross-check this row's `production_default` automatically. |
+| `diagnosticsEnabled` | `disabled` | `false` | `lib/core/feature_flags/feature_flag_registry.dart` | Dev/lab-only diagnostics; the `environment != production` gate already resolves false in every production build; both cohorts false today. |
+| `labModeAvailable` | `preview` | `false` | `docs/beta/cohort-profiles.yaml` | True in both cohorts (testers can reach Lab surfaces), but environment-gated to non-production only; the core path never opens Lab mode. |
+| `practiceEngineV2Enabled` | `ga` | `false` | `lib/app/routing/app_router.dart` | Gates `AppRoutes.practiceHub` (`lib/app/routing/app_router.dart:180-183`); the core path's Quick Start step cannot render without it — see §3 below. Measured production default is `false` (`lib/app/config/feature_flags.dart:78` — `practiceEngineV2Enabled: nonProd,`, no dart-define override) — the `/practice*` routes are NOT reachable in a production build today. Production unlock: a future round flips this field's `forEnvironment` production branch to `true` (or adds a dart-define override), and this row's `production_default` updates to `true` in the same commit. |
+| `migratedLearnEnabled` | `preview` | `false` | `docs/beta/cohort-profiles.yaml` | `internal: true`, `closed_beta: false` — a progressive, internal-dogfood-only rollout today; no core-path step references it. |
+| `practiceDetailedHistoryEnabled` | `preview` | `false` | `docs/beta/cohort-profiles.yaml` | Same internal-only, progressive pattern as `migratedLearnEnabled`; no core-path reference. |
+| `songTrainerV2Enabled` | `postponed` | `false` | `docs/sdd/epic-03-completion-report.md` | Epic 3's own status is "implementation evidence recorded" with release blockers still open in that report's own section; both cohorts false. |
+| `aiTutorEnabled` | `postponed` | `false` | `docs/testing/device-matrix.yaml` | The `ai_tutor` capability there already carries `ga_scope: false`; hardcoded `false` in every `FeatureFlags.forEnvironment` branch, no dart-define exists to flip it. |
+| `aiTutorCloudEnabled` | `postponed` | `false` | `docs/release/blockers.md` | Cloud/network sub-capability of `aiTutorEnabled`; `R-PRIV-01` (no privacy policy covering data egress) is an open P1 precondition for any network-touching capability. |
+| `visionEnabled` | `postponed` | `false` | `docs/testing/device-matrix.yaml` | The `computer_vision` capability there already carries `ga_scope: false`; both shipped vision model manifest entries are `status: deferred` with missing model assets. |
+| `visionLabCaptureEnabled` | `disabled` | `false` | `lib/core/feature_flags/feature_flag_registry.dart` | Lab-only camera-capture diagnostics, hardcoded `false` in every environment; not a user-facing capability this scope ever ships. |
+| `audioAnalysisV2Enabled` | `postponed` | `false` | `docs/sdd/epic-06-completion-report.md` | Epic 6's own status is "rollout stays at shadow"; `ShadowAnalysisRunner` has no live caller yet, only a contract test. |
+| `communityEnabled` | `postponed` | `false` | `docs/release/blockers.md` | `R-PRIV-01`/`R-SEC-01` (no release-level threat model — only the feature-scoped `community-threat-model.md`) are open P1 preconditions for any social/data-collecting surface. |
+| `communityWritesEnabled` | `postponed` | `false` | `docs/release/blockers.md` | Same `R-PRIV-01`/`R-SEC-01` precondition as `communityEnabled`, narrower (the writes sub-surface). |
+| `communityMediaEnabled` | `postponed` | `false` | `docs/release/blockers.md` | Same `R-PRIV-01`/`R-SEC-01` precondition as `communityEnabled`, narrowest (the media-upload sub-surface). |
+| `adaptiveShellEnabled` | `preview` | `false` | `docs/adr/0467-adaptive-shell-is-the-non-production-default.md` | ADR 0467 explicitly defers the production GA decision to this round; `internal: true`, `closed_beta: false`; the core path never routes through it (`test/e2e/first_practice_offline_test.dart` drives `AppRoutes.practiceHub` directly, not the shell). |
 <!-- ga-scope-capabilities:end -->
 
 ## 3. A core tanulási út — lépésenként, a rátámaszkodó capabilityvel

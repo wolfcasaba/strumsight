@@ -337,4 +337,115 @@ módosított `docs/adr/**`-t, nem nyúlt `lib/**`/`backend/**`/`.github/**`/
 `docs/eval/**`-hoz, és a `docs/beta/cohort-profiles.yaml` egyetlen commitolt
 sora sem változott (a valódi-sértés próba visszaállítva).
 
+### 10.1 — 1. javító kör (Claude Sonnet 5, 2026-09-02) — 2 MAJOR zárása
+
+A független review (`docs/reviews/e12-r28-review.md`, commit `99451ed9`-en)
+**CHANGES REQUESTED**-et adott, 2 MAJOR / 0 BLOCKER leletlistával. Mindkettő
+zárva; a leletlista minden más pontja (A1, A2, A4, A5, D8) érintetlenül
+zölden maradt.
+
+#### MAJOR-1 — a `_parse_table` fail-open bugja (review P7)
+
+**Hiba:** `_parse_table` egy laza `row_start` elő-szűrőt futtatott a szigorú
+`row_pattern` ELŐTT; egy olyan sor, ami a lazább mintát is elvétette (vezető
+`|` után nincs szóköz, a lépés-cella backtickkel kezdődik), `continue`-val
+csendben eldobódott — nem `VerifyError`, és a jelentett darabszámhoz sem volt
+kötve. Ez a core-path táblát fail-OPEN állapotba hozta a D5/A3 őr számára: egy
+`preview` capabilityt a core út kötelező elemeként megjelölő, de a laza mintát
+elvétő sor egyszerűen nem is létezett a tool számára.
+
+**Javítás:** `_parse_table`-ből eltávolítva a `row_start` elő-szűrő; MINDEN
+`|`-lel kezdődő, nem-fejléc, nem-elválasztó sor kötelezően `row_pattern`
+ellen parszolandó — ami nem illeszkedik, az `VerifyError` a sor számával. A
+javítás mindhárom táblát érinti (capability, core-path, contract-freeze),
+mert mindhárom ugyanazt a `_parse_table`-t hívja.
+
+**P7 reprodukció, előtte/utána (a review pontos mutációjával):**
+
+```
+$ python3 tool/release/verify_ga_scope.py --scope /tmp/p7.md --profile docs/beta/cohort-profiles.yaml
+# JAVÍTÁS ELŐTT (mért a review-ban):
+verify_ga_scope: ok — 16 capability classification(s), 3 core-path step(s), 4 frozen contract(s), 6 open P0/P1 blocker(s)
+exit=0
+
+# JAVÍTÁS UTÁN (ugyanaz a mutáció, ugyanaz a fixture):
+verify_ga_scope: /tmp/p7.md:92: table row does not match the expected shape — '|`LabMode` overlay is required to finish onboarding | `labModeAvailable` | `test/e2e/returning_user_restart_test.dart` |'
+exit=2
+```
+
+Cella: `test/tooling/ga_scope_test.dart` — `MAJOR-1 fix ... (review P7)` csoport,
+egyetlen teszt, temp-dir fixture a meglévő mintát követve.
+
+#### MAJOR-2 — az EGYETLEN `ga` capability production build-ben `false`, dokumentálatlanul
+
+**Hiba:** `practiceEngineV2Enabled` (az egyetlen `ga` besorolás) production
+build-ben mérten `false` (`lib/app/config/feature_flags.dart:78` —
+`practiceEngineV2Enabled: nonProd,`, dart-define felülíró ág nélkül), és ezt
+a `ga-scope.md` sehol nem mondta ki — egy "rejtett NEM-GA" rés.
+
+**Javítás:**
+
+1. Új `production_default` oszlop a capability-táblában (mind a 16 sorra),
+   a mért forrásra (`lib/app/config/feature_flags.dart`) hivatkozva. A
+   `_CAPABILITY_ROW` minta és a Dart duplikált-sor teszt markere frissítve.
+2. Új, fail-closed `lib/app/config/feature_flags.dart` olvasó
+   (`load_feature_flags_production_defaults`) a `FeatureFlags.forEnvironment`
+   `return FeatureFlags(...)` törzsét olvassa; pontosan négy alakot ismer fel
+   (`nonProd` → `false`; `true`/`false` literál; `const
+   bool.fromEnvironment(...)` → `false`, hacsak nincs `defaultValue: true`;
+   a mező nevével azonos áteresztő azonosító → `None`, mert a valódi forrás
+   MÁS fájlban van — ma az egyetlen ilyen `accountEnabled`). Bármi más alak →
+   `VerifyError`. `validate_scope` a mért értéket a dokumentált
+   `production_default`-tal veti össze; eltérés → nem-nulla kilépés.
+3. Egy `ga` besorolású + `production_default: false` sor a `note` oszlopban
+   egy `Production unlock:` jelölővel bevezetett, nevesített feloldó
+   feltételt KÖTELEZŐ hordozzon (a tiltólista ugyanaz, mint a
+   `contract-freeze.md` D6-jáé); üres/hiányzó feltétel → nem-nulla kilépés.
+   `practiceEngineV2Enabled` sora megkapta ezt a feltételt.
+
+**Előtte/utána, mindkét cella (temp-dir fixture a valódi `ga-scope.md`-ból):**
+
+```
+# (a) production_default eltérés a mért forrástól — a JAVÍTÁS ELŐTTI eszközzel
+#     nem is létezett ez a mező, tehát a dokumentum bármit állíthatott
+#     ellenőrzés nélkül; a JAVÍTÁS UTÁNI eszközzel:
+$ python3 tool/release/verify_ga_scope.py --scope /tmp/mismatch.md --profile docs/beta/cohort-profiles.yaml
+verify_ga_scope: 1 finding(s):
+  - ga-scope.md:64: capability 'practiceEngineV2Enabled' production_default is documented as True but the measured FeatureFlags.forEnvironment default in lib/app/config/feature_flags.dart is False
+exit=1
+
+# (b) ga + production_default:false, nevesített feltétel nélkül — a JAVÍTÁS
+#     ELŐTTI eszközzel a `note` szabad szöveg volt, semmilyen ellenőrzés
+#     nem kötötte hozzá; a JAVÍTÁS UTÁNI eszközzel:
+$ python3 tool/release/verify_ga_scope.py --scope /tmp/no_unlock.md --profile docs/beta/cohort-profiles.yaml
+verify_ga_scope: 1 finding(s):
+  - ga-scope.md:64: capability 'practiceEngineV2Enabled' is classified ga with production_default false but its note names no 'Production unlock:' condition
+exit=1
+```
+
+Cella: `test/tooling/ga_scope_test.dart` — `MAJOR-2 fix ...` csoport, 2
+mutáció-próba + 1 tool-független sanity (a szállított dokumentum a mért
+forrással konzisztens).
+
+#### Záró, tiszta fás futtatás
+
+```
+$ python3 tool/release/verify_ga_scope.py --scope docs/release/ga-scope.md --profile docs/beta/cohort-profiles.yaml
+verify_ga_scope: ok — 16 capability classification(s), 4 core-path step(s), 4 frozen contract(s), 6 open P0/P1 blocker(s)
+```
+
+```
+$ tools/round-gate.sh test/tooling/ga_scope_test.dart test/tooling/beta_profile_test.dart
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/ga_scope_test.dart                       zöld
+    test test/tooling/beta_profile_test.dart                   zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+```
+
+`beta_profile_test.dart` VÁLTOZATLAN és zöld maradt (A6). Engedélyezett
+fájlokon kívül nem történt módosítás; a `docs/beta/**` érintetlen.
+
 ## 11. Review — a Claude tölti ki

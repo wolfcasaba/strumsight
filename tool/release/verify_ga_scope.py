@@ -32,10 +32,18 @@ must be an error, never a silent skip):
     build_ai_report.py`; the fan measured `PyYAML 6.0.1` on this tree).
   * `ga-scope.md`, `contract-freeze.md` and `blockers.md` cannot be executed
     from here, so each is read with a regex tuned to its own fixed table
-    shape. Every parse is fail-closed: the number of candidate data-row
-    line starts is cross-checked against the number of fully-matched rows,
-    and a mismatch is a `VerifyError` naming the offending line, never a
-    silently-dropped row.
+    shape. Every parse is fail-closed: every non-header, non-separator line
+    inside a marker block is a required data row, and it must fully match
+    that table's row shape — one that does not is a `VerifyError` naming
+    the offending line, never a silently-dropped row (E12-R28 MAJOR-1: a
+    core-path row that missed only the looser pre-filter, not the row
+    shape itself, used to vanish with no error and no effect on any count).
+  * `docs/release/ga-scope.md`'s capability table also carries a
+    `production_default` column, cross-checked against a fail-closed read
+    of `lib/app/config/feature_flags.dart`'s `FeatureFlags.forEnvironment`
+    body (E12-R28 MAJOR-2): a documented `ga` classification is not enough
+    on its own — production must actually default the flag on, or the row
+    must name a checkable unlock condition in its `note` column.
 
 Exit codes:
   0  every check passed
@@ -43,10 +51,14 @@ Exit codes:
      classification, D3 dangling evidence path, D4 disabled/profile
      mismatch, D5 a non-`ga` capability required by the core path, D6 empty
      or banned-phrase resolution condition, D7 NOT-READY header missing
-     while a P0/P1 blocker is open)
+     while a P0/P1 blocker is open, a `production_default` column that
+     disagrees with the measured `FeatureFlags.forEnvironment` default, or
+     a `ga` capability whose measured production default is `false` with no
+     named production-unlock condition — MAJOR-2)
   2  usage or format error: a missing/malformed file, a table row that does
-     not match the expected shape, or a profile whose YAML does not decode
-     to the expected shape
+     not match the expected shape, a `FeatureFlags.forEnvironment` field
+     assignment whose shape this reader does not recognize, or a profile
+     whose YAML does not decode to the expected shape
 """
 
 from __future__ import annotations
@@ -62,6 +74,7 @@ DEFAULT_SCOPE_PATH = Path("docs/release/ga-scope.md")
 DEFAULT_PROFILE_PATH = Path("docs/beta/cohort-profiles.yaml")
 DEFAULT_CONTRACT_FREEZE_PATH = Path("docs/release/contract-freeze.md")
 DEFAULT_BLOCKERS_PATH = Path("docs/release/blockers.md")
+DEFAULT_FEATURE_FLAGS_PATH = Path("lib/app/config/feature_flags.dart")
 
 _CLOSED_CLASSIFICATIONS = {"ga", "preview", "disabled", "postponed"}
 
@@ -80,6 +93,11 @@ _BANNED_RESOLUTION_PHRASES = [
 
 _NOT_READY_MARKER = re.compile(r"állapot\s*:\s*nem kész", re.IGNORECASE)
 _GA_READY_CLAIM = re.compile(r"\bga[\s-]*kész\b", re.IGNORECASE)
+
+# A `ga`-classified capability whose measured production_default is `false`
+# must name its unlock condition in the capability row's `note` column,
+# introduced by this literal marker (E12-R28 MAJOR-2).
+_PRODUCTION_UNLOCK_MARKER = re.compile(r"Production unlock:\s*(?P<condition>.+)$")
 
 _ALLOWED_COHORT_KEYS = {"id", "description", "versionRange", "maxTesters", "flags"}
 
@@ -161,19 +179,18 @@ def profile_flag_keys(profile: dict[str, dict]) -> set[str]:
 # docs/release/ga-scope.md — fail-closed table + header parser
 # ---------------------------------------------------------------------------
 
-# `| `flagKey` | `classification` | `evidence/path` | free-text note |`
+# `| `flagKey` | `classification` | `productionDefault` | `evidence/path` | free-text note |`
 _CAPABILITY_ROW = re.compile(
     r"^\|\s*`(?P<key>[^`]+)`\s*\|\s*`(?P<classification>[^`]+)`\s*\|\s*"
-    r"`(?P<evidence>[^`]+)`\s*\|\s*(?P<note>.*?)\s*\|\s*$"
+    r"`(?P<production_default>[^`]+)`\s*\|\s*`(?P<evidence>[^`]+)`\s*\|\s*"
+    r"(?P<note>.*?)\s*\|\s*$"
 )
-_CAPABILITY_ROW_START = re.compile(r"^\|\s*`[^`]+`\s*\|")
 
 # `| step text | `capabilityKey` | `evidence/path` |`
 _CORE_PATH_ROW = re.compile(
     r"^\|\s*(?P<step>[^|`][^|]*)\|\s*`(?P<capability>[^`]+)`\s*\|\s*"
     r"`(?P<evidence>[^`]+)`\s*\|\s*$"
 )
-_CORE_PATH_ROW_START = re.compile(r"^\|\s*[^|`]")
 
 
 def _extract_table(
@@ -201,17 +218,21 @@ def _extract_table(
 def _parse_table(
     rows: list[tuple[int, str]],
     *,
-    row_start: re.Pattern,
     row_pattern: re.Pattern,
     path: Path,
     header_prefixes: tuple[str, ...],
 ) -> list[tuple[int, re.Match]]:
+    """Every `|`-starting, non-header, non-separator line is a REQUIRED data
+    row (E12-R28 MAJOR-1): what does not fully match `row_pattern` is a
+    `VerifyError` naming the line, never a silently-dropped row. There is no
+    separate, looser "is this even a data row" pre-filter — a row that
+    misses the shape a hair (a missing leading space, a step cell that
+    starts with a backtick) used to vanish into that pre-filter with no
+    error and no effect on any reported count; it now fails loud."""
     parsed: list[tuple[int, re.Match]] = []
     for line_number, line in rows:
         stripped = line.strip()
         if stripped.startswith(header_prefixes) or set(stripped.replace("|", "").strip()) <= {"-", " "}:
-            continue
-        if not row_start.match(stripped):
             continue
         match = row_pattern.match(stripped)
         if match is None:
@@ -241,7 +262,6 @@ def load_ga_scope(path: Path) -> dict:
     )
     capabilities = _parse_table(
         capability_rows,
-        row_start=_CAPABILITY_ROW_START,
         row_pattern=_CAPABILITY_ROW,
         path=path,
         header_prefixes=("| flag_key", "| `flag_key`"),
@@ -255,7 +275,6 @@ def load_ga_scope(path: Path) -> dict:
     )
     core_path = _parse_table(
         core_path_rows,
-        row_start=_CORE_PATH_ROW_START,
         row_pattern=_CORE_PATH_ROW,
         path=path,
         header_prefixes=("| step", "| Step"),
@@ -270,6 +289,121 @@ def load_ga_scope(path: Path) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# lib/app/config/feature_flags.dart — fail-closed FeatureFlags.forEnvironment
+# production-default reader (E12-R28 MAJOR-2)
+# ---------------------------------------------------------------------------
+
+_FOR_ENVIRONMENT_FACTORY_MARKER = "factory FeatureFlags.forEnvironment("
+_FOR_ENVIRONMENT_RETURN_MARKER = "return FeatureFlags("
+_FOR_ENVIRONMENT_CLOSE_MARKER = "\n    );"
+_FIELD_ASSIGNMENT = re.compile(r"^(?P<key>[a-zA-Z_][a-zA-Z0-9_]*):\s*(?P<rest>.*)$")
+
+
+def _extract_for_environment_field_assignments(
+    text: str, *, path: Path
+) -> dict[str, str]:
+    """Join `FeatureFlags.forEnvironment`'s `return FeatureFlags(...)` call
+    into one raw right-hand-side string per field. A multi-line assignment
+    (`const bool.fromEnvironment(...)` wraps its define name onto its own
+    line for the Community flags) is joined; a `//` comment-only line
+    between fields is dropped, never merged into a neighboring value. Any
+    line that is neither a `field: value` start nor a continuation of one
+    is a `VerifyError` — fail-closed, per MAJOR-1's same principle."""
+    factory_index = text.find(_FOR_ENVIRONMENT_FACTORY_MARKER)
+    if factory_index == -1:
+        raise VerifyError(f"{path}: `{_FOR_ENVIRONMENT_FACTORY_MARKER}` not found")
+    return_index = text.find(_FOR_ENVIRONMENT_RETURN_MARKER, factory_index)
+    if return_index == -1:
+        raise VerifyError(
+            f"{path}: `{_FOR_ENVIRONMENT_RETURN_MARKER}` not found after the "
+            "forEnvironment factory"
+        )
+    body_start = return_index + len(_FOR_ENVIRONMENT_RETURN_MARKER)
+    close_index = text.find(_FOR_ENVIRONMENT_CLOSE_MARKER, body_start)
+    if close_index == -1:
+        raise VerifyError(
+            f"{path}: no matching `{_FOR_ENVIRONMENT_CLOSE_MARKER.strip()}` "
+            "found for the forEnvironment return call"
+        )
+    body = text[body_start:close_index]
+
+    fields: dict[str, str] = {}
+    current_key: str | None = None
+    current_parts: list[str] = []
+
+    def _flush() -> None:
+        if current_key is not None:
+            fields[current_key] = " ".join(current_parts).strip()
+
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("//"):
+            continue
+        match = _FIELD_ASSIGNMENT.match(line)
+        if match:
+            _flush()
+            current_key = match.group("key")
+            current_parts = [match.group("rest")]
+        elif current_key is not None:
+            current_parts.append(line)
+        else:
+            raise VerifyError(
+                f"{path}: forEnvironment return body has a line that is "
+                f"neither a `field: value` assignment nor a continuation of "
+                f"one — {raw_line!r}"
+            )
+    _flush()
+    return fields
+
+
+def _resolve_production_default(key: str, raw_value: str, *, path: Path) -> bool | None:
+    """Fail-closed classification of one field's right-hand-side text into
+    its measured PRODUCTION default. Exactly four shapes are recognized;
+    anything else is a `VerifyError` naming the field, never a silent guess:
+
+      * `nonProd` — production means non-production is `false`.
+      * a literal `true`/`false`.
+      * `const bool.fromEnvironment(...)` — the measured Dart default is
+        `false` unless the same call also passes `defaultValue: true`.
+      * a bare pass-through identical to the field's own name — the value
+        comes from the caller, not from this file (today's sole instance is
+        `accountEnabled`, sourced from `lib/core/api/api_config.dart`); this
+        reader cannot measure it from `feature_flags.dart` alone, so it
+        returns `None` rather than guessing.
+    """
+    value = raw_value.strip()
+    if value.endswith(","):
+        value = value[:-1].strip()
+    if value == "nonProd":
+        return False
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    if value == key:
+        return None
+    if value.startswith("const bool.fromEnvironment("):
+        return "defaultValue: true" in value
+    raise VerifyError(
+        f"{path}: FeatureFlags.forEnvironment assigns {key!r} = {raw_value!r}, "
+        "an unrecognized shape for a fail-closed production-default read"
+    )
+
+
+def load_feature_flags_production_defaults(path: Path) -> dict[str, bool | None]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as error:
+        raise VerifyError(f"feature-flags source not found: {path}") from error
+
+    fields = _extract_for_environment_field_assignments(text, path=path)
+    return {
+        key: _resolve_production_default(key, raw_value, path=path)
+        for key, raw_value in fields.items()
+    }
+
+
+# ---------------------------------------------------------------------------
 # docs/release/contract-freeze.md — fail-closed table parser
 # ---------------------------------------------------------------------------
 
@@ -278,7 +412,6 @@ _FREEZE_ROW = re.compile(
     r"^\|\s*(?P<contract>[^|]+?)\s*\|\s*(?P<frozen_scope>[^|]+?)\s*\|\s*"
     r"`(?P<evidence>[^`]+)`\s*\|\s*(?P<condition>[^|]+?)\s*\|\s*$"
 )
-_FREEZE_ROW_START = re.compile(r"^\|\s*[^|-]")
 
 
 def load_contract_freeze(path: Path) -> list[tuple[int, re.Match]]:
@@ -295,7 +428,6 @@ def load_contract_freeze(path: Path) -> list[tuple[int, re.Match]]:
     )
     return _parse_table(
         rows,
-        row_start=_FREEZE_ROW_START,
         row_pattern=_FREEZE_ROW,
         path=path,
         header_prefixes=("| contract", "| Contract"),
@@ -342,6 +474,7 @@ def validate_scope(
     *,
     profile: dict[str, dict],
     open_blockers: list[str],
+    feature_flag_defaults: dict[str, bool | None],
 ) -> list[str]:
     findings: list[str] = []
     profile_keys = profile_flag_keys(profile)
@@ -351,7 +484,9 @@ def validate_scope(
     for line_number, match in scope["capabilities"]:
         key = match.group("key")
         classification = match.group("classification")
+        production_default_text = match.group("production_default")
         evidence = match.group("evidence")
+        note = match.group("note")
 
         if key in seen_keys:
             findings.append(
@@ -389,6 +524,63 @@ def validate_scope(
                         f"classified disabled but cohort {cohort_id!r} sets it "
                         "to true (D4)"
                     )
+
+        # E12-R28 MAJOR-2: a `ga` classification is not enough on its own —
+        # production must actually default the flag on, or the row must
+        # name a checkable unlock condition. `production_default` is
+        # documented AND cross-checked against the measured
+        # `FeatureFlags.forEnvironment` default in feature_flags.dart.
+        documented_default: bool | None = None
+        if production_default_text not in {"true", "false"}:
+            findings.append(
+                f"ga-scope.md:{line_number}: capability {key!r} "
+                f"production_default {production_default_text!r} must be "
+                "`true` or `false`"
+            )
+        else:
+            documented_default = production_default_text == "true"
+
+        if key not in feature_flag_defaults:
+            findings.append(
+                f"ga-scope.md:{line_number}: capability {key!r} has no "
+                "matching field in FeatureFlags.forEnvironment "
+                "(lib/app/config/feature_flags.dart) — its production_default "
+                "cannot be verified"
+            )
+        else:
+            measured_default = feature_flag_defaults[key]
+            if (
+                measured_default is not None
+                and documented_default is not None
+                and measured_default != documented_default
+            ):
+                findings.append(
+                    f"ga-scope.md:{line_number}: capability {key!r} "
+                    f"production_default is documented as {documented_default} "
+                    f"but the measured FeatureFlags.forEnvironment default in "
+                    f"lib/app/config/feature_flags.dart is {measured_default}"
+                )
+
+        if classification == "ga" and documented_default is False:
+            unlock_match = _PRODUCTION_UNLOCK_MARKER.search(note)
+            condition = unlock_match.group("condition").strip() if unlock_match else ""
+            if not condition:
+                findings.append(
+                    f"ga-scope.md:{line_number}: capability {key!r} is "
+                    "classified ga with production_default false but its "
+                    "note names no 'Production unlock:' condition"
+                )
+            else:
+                lowered_condition = condition.lower()
+                for banned in _BANNED_RESOLUTION_PHRASES:
+                    if banned in lowered_condition:
+                        findings.append(
+                            f"ga-scope.md:{line_number}: capability {key!r}'s "
+                            f"production-unlock condition matches a banned "
+                            f"non-event ({banned!r}) — a named, checkable "
+                            "event is required"
+                        )
+                        break
 
     missing_keys = profile_keys - set(seen_keys)
     for key in sorted(missing_keys):
@@ -480,6 +672,9 @@ def main(argv: list[str]) -> int:
         "--contract-freeze", type=Path, default=DEFAULT_CONTRACT_FREEZE_PATH
     )
     parser.add_argument("--blockers", type=Path, default=DEFAULT_BLOCKERS_PATH)
+    parser.add_argument(
+        "--feature-flags", type=Path, default=DEFAULT_FEATURE_FLAGS_PATH
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -487,11 +682,19 @@ def main(argv: list[str]) -> int:
         scope = load_ga_scope(args.scope)
         freeze_rows = load_contract_freeze(args.contract_freeze)
         open_blockers = load_open_blockers(args.blockers)
+        feature_flag_defaults = load_feature_flags_production_defaults(
+            args.feature_flags
+        )
     except VerifyError as error:
         print(f"verify_ga_scope: {error}", file=sys.stderr)
         return 2
 
-    findings = validate_scope(scope, profile=profile, open_blockers=open_blockers)
+    findings = validate_scope(
+        scope,
+        profile=profile,
+        open_blockers=open_blockers,
+        feature_flag_defaults=feature_flag_defaults,
+    )
     findings += validate_contract_freeze(freeze_rows)
 
     if findings:
