@@ -23372,3 +23372,81 @@ a mérőeszköz szövegesen illeszt, ott a KOMMENT is bemenet — a mérés
 megváltoztatható anélkül, hogy a kód változna.
 
 **Őrteszt:** `test/app/routing/app_router_test.dart::flagged Practice Generator setup route is registered and builds from the composition root without throwing (A1″, A2 ON)` — a cella a VALÓDI kompozíciós gyökérből építi a route-ot (a `_pumpRouter` harness egyetlen `practice_generator` providert sem ír felül), és `expect(tester.takeException(), isNull)`-lal bizonyítja, hogy nem dob; a párja a flag-OFF cella. Ha egy későbbi kör dobó seamre kötne route-ot, ez a cellapár váltana pirosra.
+
+## L586 — Egy audit-eszköz bázisvonal-cellája VAK arra, amit a saját parsere kihagy: a keresztmérce csak DURVÁBB, független mérés lehet — és a „hívd az X-et" szerződést sem a viselkedés, hanem forrás-szintű őr bizonyítja (E12-R35, 2026-09-02)
+
+**A kör.** Az E12-R35 egy adósság-audit eszközt szállított
+(`tool/check_deprecations.dart`) + a leltárt + 35 cellát. A gate mind zöld
+volt, a scope tiszta, a §10 valódi-sértés próbája hitelesen dokumentált — a
+független review mégis KÉT MAJOR-t fogott, mindkettőt eldobható mutációval
+izolált klónban. **Ugyanaz a hibaosztály mindkettő: a cella a VISELKEDÉST
+mérte, a SZERZŐDÉST nem.**
+
+**M1 — a „nincs második igazság" szerződés viselkedés-cellával mérhetetlen.**
+A brief A2-je (és a §6.1 mátrix első sora) kimondta: a lejárt flagek listája a
+Kör 5 `isFeatureFlagExpired`-jéből jöjjön, saját dátum-összehasonlítás nélkül.
+A szállított két cella fixture-katalógust adott a `findExpiredFlags`-nek, és a
+kimenetet ellenőrizte. MÉRVE: az importot törölve és a hívást egy lokális,
+azonos szemantikájú `_localExpired`-re cserélve **mind a 14 cella zöld
+maradt** — pontosan az a hibás implementáció, amit a mátrix pirosra ígért.
+Egy viselkedés-cella elvileg sem tud különbséget tenni „ugyanazt hívja" és
+„ugyanazt csinálja" között; a REUSE csak forrás-szintű őrrel bizonyítható.
+
+**M2 — a bázisvonal-cella a parser vakfoltját nem látja.** Az A1 elvárása:
+„az audit MINDEN `@Deprecated` elemet felsorol". Az őrcella a valódi fán
+`12 site / 9 fájl`-t állított. A `_deprecatedPattern` viszont csak az
+`@Deprecated('egyetlen literál')` alakot ismerte fel. MÉRVE: egy VALÓDI,
+többsoros (szomszédos string-literálos) `@Deprecated` hozzáadása a nyers
+`grep -ro '@Deprecated(' lib | wc -l` értéket 13-ra vitte, a tool viszont
+továbbra is 12-t látott — **és a 12/9-es cella is zöld maradt, ÉPPEN AZÉRT,
+mert a hiányzó találat miatt a szám nem változott.** A bázisvonal-cella
+öndegradáló: a parser minden új vakfoltja egyszerre rontja a mérést ÉS
+némítja az őrt.
+
+**Szabály.** (1) Ha egy kör szerződése az, hogy a kód egy MÁSIK, meglévő
+mércét HASZNÁLJON, azt forrás-szintű cella bizonyítsa (import + hivatkozás
+megléte, a duplikált logika hiánya) — a viselkedés-cella erre elvileg
+alkalmatlan. (2) Ha egy eszköz egy halmaz TELJESSÉGÉT állítja, a keresztmérce
+egy DURVÁBB, független számlálás legyen (itt: a nyers `@Deprecated(`
+előfordulásszám), ne az eszköz saját, finomabb parse-ának egy pillanatképe —
+különben az őr és a mért dolog ugyanabban a vakfoltban osztozik.
+
+**Őrteszt:** `test/tooling/deprecation_audit_test.dart::A2 the tool has no second expiry truth of its own` (M1) és `test/tooling/deprecation_audit_test.dart::A1 no @Deprecated form is silently missed` (M2) — mindkettőt a MEGFOGÓ mutáció megismétlésével igazoltam a javítás után: az M1 mutáció mellett most PONTOSAN egy cella bukik, az M2 mutáció mellett a tool megtalálja a 13. deprecationt és a bázisvonal-cella pirosra vált.
+
+## L587 — Az OSZTOTT munkafán futó `round-land.sh` hamis H8-at ad: a másik sáv `reset --hard origin/main`-je a landoló futása KÖZBEN visszaállítja a branch refet, és a remote-only lista a saját, elveszett commitjaidat sorolja fel (E12-R35, 2026-09-02)
+
+**Mérés.** Az E12-R35 landolását a hub munkafából (`/home/ubuntu/music-theory`)
+indítottam, miközben a párhuzamos E15-R07 sáv ugyanazt a fát használta. A
+landoló rebase-elt (`a56b29df`), a kombinált-HEAD gate mind a 8 lépésben zöld
+lett, majd a `safe-force-push` **MEGTAGADTA** a pusht öt „remote-only"
+committal — amelyek a SAJÁT köröm commitjai voltak, a saját tárgysoraikkal. A
+`git reflog show <branch>` a diagnózis:
+
+```
+289fcaac @{0}: reset: moving to origin/main        ← a MÁSIK sáv zárása
+ef61ccc6 @{1}: rebase (finish): ... onto 289fcaac  ← az én 2. landolásom
+a56b29df @{2}: rebase (finish): ... onto d0cd45ee  ← az én 1. landolásom
+```
+
+A `git patch-id --stable` ezután BIZONYÍTOTTA, hogy nem volt divergencia: a
+remote lánc és a lokális lánc öt patch-id-je **karakterre azonos**. A H8
+tehát hamis volt — a landoló helyesen működött, a bemenete lett kicserélve
+alóla.
+
+**Miért fail-closed és miért helyes így.** A `safe-force-push` (ADR 0242)
+szándékosan nem tudja megkülönböztetni „a remote-on tényleg van más munkája
+valakinek" és „a lokális refem alól kihúzták a talajt" esetet — mindkettőre
+push-megtagadással válaszol. Ez a helyes irány (2026-08-13, majdnem-adatvesztés),
+de a hibaüzenet félrevezető, mert a saját commitjaidat idegennek mutatja.
+
+**Szabály.** A landolást (és minden git-műveletet a kör-ágon) az IZOLÁLT
+munkapéldányból futtasd, sose az osztott hub-fából — ott a másik sáv záró
+rituáléja bármikor `reset --hard origin/main`-t hajt végre. Ha mégis hamis
+H8-ba futsz: a diagnózis a `git reflog show <branch>` + a két lánc
+`git patch-id --stable` összevetése; ha a patch-id-k egyeznek, NEM H8 —
+ismételd meg a landolást az izolált munkapéldányból, ne írj felül semmit
+kézzel. Az E12-R35-ben ez pontosan így oldódott: a klónból indított landoló
+első hívása rebase-elt + pusholt + `blocked`-ot kért friss exact-SHA CI-ért,
+a második hívása merge-elt.
+
+**Őrteszt:** nincs — a hibaosztály a shell-környezet versenyhelyzete, nem a repóé; a gépi védelem (a `safe-force-push` fail-closed megtagadása) MŰKÖDÖTT, a hiányzó darab a diagnózis, amit ez a lecke ad. A megelőzés eljárási: az izolált munkapéldányból landolj.
