@@ -424,7 +424,7 @@ A run-link a merge-kézfogás során kerül ide/`HANDOFF.md`-be.
   blocker javítását igényelné, vagy kívül esne a három zárt osztályon;
   ehelyett a `CHANGELOG.md` a MÉRT, változatlan `1.0.0+1`-et rögzíti.
 
-## 11. 1. javító kör — a független review két MAJOR leletének zárása
+## 10.1 1. javító kör — a független review leleteinek zárása (implementer)
 
 A kör ELSŐ futása (`b93204c2`) után egy független review két **MAJOR** és
 egy **MINOR**/**NOTE** leletet mért. Mind a négyet ez a javító kör zárja,
@@ -536,3 +536,20 @@ exit=1                      # ← MAJOR-2 zárva: a lefokozás is elkapva
 ```
 
 ## 11. Review — a Claude tölti ki
+
+**Jelentés:** [`docs/reviews/e12-r30-review.md`](../reviews/e12-r30-review.md)
+(reviewer: Claude Opus 5, orchestrátor-szék, ADR 0055 read-only review).
+
+- **1. kör (`b93204c2`):** CHANGES REQUESTED — **MAJOR-1** (a
+  `verify_freeze.py` ALAPÉRTELMEZETT hívása nem osztályozott, `ok` + exit `0`
+  a §5.1 által névszerint tiltott „apró javítás, nem számít" commitra is; a
+  deklarált `freeze_base_sha`-nak nem volt gépi hatása, és a hibát egy zöld
+  cella rögzítette elvárásként), **MAJOR-2** (egy `blockers.md`-beli P0/P1 sor
+  LEFOKOZÁSA a `known-issues.md`-ben észrevétlen maradt — a §5.2
+  őszinteség-mércéjének kikerülhetősége), **MINOR-1** (két `P3` besorolás
+  ellentmondott a saját hivatkozott mérésének), **NOTE-1** (a `blocker-fix`
+  osztály commit-szintű granularitása kimondatlan volt).
+- **1. javító kör (`69588a3c`):** mind a négy lelet **ZÁRVA**, mindkét MAJOR
+  ÚJ regressziós cellával megfogva (31 → 33 cella). A zárásokat a reviewer
+  friss klónban, függetlenül újramérte (review §6.1, négyirányú próba).
+- **Végső döntés: APPROVED.**
