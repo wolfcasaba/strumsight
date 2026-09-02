@@ -159,6 +159,51 @@ void main() {
       expect(result.exitCode, 0, reason: result.stderr.toString());
     });
 
+    test('the NON-SHIPPING verification paths (backend/tests/, tools/, '
+        'test/) are `release-tooling` too — the E12-R32 / H7 post-merge '
+        'regression: the freeze-era tree carried two such paths that the '
+        'original `tool/release/` + `test/tooling/` prefix list left '
+        'unclassified, turning main red and halting the round before its own '
+        'diff was even considered', () {
+      final dir = _tempDir();
+      addTearDown(() => dir.deleteSync(recursive: true));
+      // The two paths and their commit subjects are the MEASURED findings of
+      // the red run on main @ 11d0d2bb (neither commit names a blocker id).
+      final changes = _writeIn(
+        dir,
+        'changes.tsv',
+        'backend/tests/test_production_smoke_contract.py\t'
+            '[E12-R31] Production deployment és internal production cohort '
+            '(ADR nincs) (#527)\n'
+            'tools/tests/test_sol_terra_both_slots.py\t'
+            'fix(ci): a slots-pin a MÉRT új értékre (2), a piros main '
+            'javítása (#529)\n'
+            'test/tooling/rollout_decision_test.dart\ttooling update, no '
+            'blocker\n'
+            'test/dsp/chord_detector_test.dart\ttest update, no blocker\n',
+      );
+
+      final result = _run(['--changes-file', changes.path]);
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+    });
+
+    test('the widened `release-tooling` prefixes do NOT exempt the shipped '
+        'backend or app code — `backend/app/**` and `lib/**` still need a '
+        'blocker id (the fix must not blanket-exempt `backend/`)', () {
+      final dir = _tempDir();
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final changes = _writeIn(
+        dir,
+        'changes.tsv',
+        'backend/app/main.py\tunrelated tidy-up, no blocker cited\n',
+      );
+
+      final result = _run(['--changes-file', changes.path]);
+      expect(result.exitCode, 1);
+      expect(result.stderr.toString(), contains('backend/app/main.py'));
+      expect(result.stderr.toString(), contains('not classified'));
+    });
+
     test('a non-doc/tooling path is accepted when the commit names an open '
         'P0/P1/P2 blockers.md id', () {
       final dir = _tempDir();
