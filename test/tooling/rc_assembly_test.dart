@@ -84,7 +84,7 @@ void main() {
     });
     tearDown(() => fixtureRoot.deleteSync(recursive: true));
 
-    List<String> _allArgs({String? outputDir}) {
+    List<String> allArgs({String? outputDir}) {
       final args = <String>[
         '--profile',
         'development',
@@ -103,7 +103,7 @@ void main() {
       final outputDir = '${fixtureRoot.path}/out';
       final result = Process.runSync('python3', [
         _tool,
-        ..._allArgs(outputDir: outputDir),
+        ...allArgs(outputDir: outputDir),
       ]);
       expect(result.exitCode, 0, reason: result.stderr.toString());
 
@@ -138,7 +138,7 @@ void main() {
       }
     });
 
-    const _labels = {
+    const labels = {
       'apk': 'APK artifact',
       'release_manifest': 'release manifest',
       'sbom': 'SBOM',
@@ -148,9 +148,9 @@ void main() {
       'test_report': 'test/coverage report',
     };
 
-    for (final missingKey in _labels.keys) {
+    for (final missingKey in labels.keys) {
       test('A3 — missing "$missingKey" alone (all six others present) is a '
-          'non-zero exit naming "${_labels[missingKey]}", and the output '
+          'non-zero exit naming "${labels[missingKey]}", and the output '
           'directory is never created (D4: no half-built package)', () {
         final outputDir = '${fixtureRoot.path}/out-missing-$missingKey';
         final args = <String>[
@@ -167,7 +167,7 @@ void main() {
         }
         final result = Process.runSync('python3', [_tool, ...args]);
         expect(result.exitCode, isNot(0));
-        expect(result.stderr.toString(), contains(_labels[missingKey]!));
+        expect(result.stderr.toString(), contains(labels[missingKey]!));
         expect(Directory(outputDir).existsSync(), isFalse);
       });
     }
@@ -197,7 +197,7 @@ void main() {
         '${fixtureRoot.path}/nope-test',
       ]);
       expect(result.exitCode, isNot(0));
-      for (final label in _labels.values) {
+      for (final label in labels.values) {
         expect(result.stderr.toString(), contains(label));
       }
     });
@@ -227,7 +227,7 @@ void main() {
         '--dry-run',
         '--output-dir',
         outputDir,
-        ..._allArgs(outputDir: outputDir).skip(4),
+        ...allArgs(outputDir: outputDir).skip(4),
       ]);
       expect(result.exitCode, 0, reason: result.stderr.toString());
       expect(
@@ -241,7 +241,7 @@ void main() {
       final outputDir = '${fixtureRoot.path}/out-verify-ok';
       final assemble = Process.runSync('python3', [
         _tool,
-        ..._allArgs(outputDir: outputDir),
+        ...allArgs(outputDir: outputDir),
       ]);
       expect(assemble.exitCode, 0, reason: assemble.stderr.toString());
       final verify = Process.runSync('python3', [
@@ -258,7 +258,7 @@ void main() {
       final outputDir = '${fixtureRoot.path}/out-verify-tamper';
       final assemble = Process.runSync('python3', [
         _tool,
-        ..._allArgs(outputDir: outputDir),
+        ...allArgs(outputDir: outputDir),
       ]);
       expect(assemble.exitCode, 0, reason: assemble.stderr.toString());
       final sbomFile = File('$outputDir/sbom.json');
@@ -278,7 +278,7 @@ void main() {
       final outputDir = '${fixtureRoot.path}/out-verify-extra';
       final assemble = Process.runSync('python3', [
         _tool,
-        ..._allArgs(outputDir: outputDir),
+        ...allArgs(outputDir: outputDir),
       ]);
       expect(assemble.exitCode, 0, reason: assemble.stderr.toString());
       File('$outputDir/uninvited.txt').writeAsStringSync('surprise');
@@ -301,7 +301,7 @@ void main() {
       final outputDir = '${fixtureRoot.path}/out-verify-missing';
       final assemble = Process.runSync('python3', [
         _tool,
-        ..._allArgs(outputDir: outputDir),
+        ...allArgs(outputDir: outputDir),
       ]);
       expect(assemble.exitCode, 0, reason: assemble.stderr.toString());
       File('$outputDir/ai-report.json').deleteSync();
@@ -324,7 +324,7 @@ void main() {
       final outputDir = '${fixtureRoot.path}/out-apk-only-manifest';
       final assemble = Process.runSync('python3', [
         _tool,
-        ..._allArgs(outputDir: outputDir),
+        ...allArgs(outputDir: outputDir),
       ]);
       expect(assemble.exitCode, 0, reason: assemble.stderr.toString());
 
@@ -634,8 +634,9 @@ jobs:
       );
     });
 
-    test('fail-closed: an unrecognized step key throws FormatException, '
-        'not a silent partial parse', () {
+    test('fail-closed: a "with:" block that starts but has no '
+        '10-space-indented "key: value" line following it throws '
+        'FormatException, not a silently empty map', () {
       const fixture = '''
 jobs:
   build:
@@ -643,12 +644,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: X
-        some_unknown_key: value
+        uses: actions/checkout@v4
+        with:
+      - name: Y
+        run: |
+          echo hi
 ''';
       expect(
         () => parseWorkflowJobs(fixture, sourceLabel: 'fixture'),
         throwsFormatException,
       );
+    });
+
+    test('step fields accept env var names carrying digits (e.g. '
+        '"ANDROID_KEYSTORE_BASE64") — a regression guard for the '
+        'real proposal\'s own signing-secret env block', () {
+      const fixture = '''
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: X
+        env:
+          ANDROID_KEYSTORE_BASE64: some-value
+        run: |
+          echo hi
+''';
+      final workflow = parseWorkflowJobs(fixture, sourceLabel: 'fixture');
+      final env =
+          workflow.jobs.single.steps.single.fields['env']
+              as Map<String, String>;
+      expect(env['ANDROID_KEYSTORE_BASE64'], 'some-value');
     });
   });
 }
@@ -797,7 +824,7 @@ final _jobHeader = RegExp(r'^  ([a-z][a-z0-9_-]*):$');
 final _jobFieldLine = RegExp(r'^ {4}([a-zA-Z_-]+):(.*)$');
 final _stepHeader = RegExp(r'^ {6}- name: (.*)$');
 final _stepFieldLine = RegExp(r'^ {8}([a-zA-Z_-]+):(.*)$');
-final _stepMapLine = RegExp(r'^ {10}([a-zA-Z_-]+):(.*)$');
+final _stepMapLine = RegExp(r'^ {10}([a-zA-Z0-9_-]+):(.*)$');
 
 ParsedWorkflow parseWorkflowJobs(
   String contents, {
