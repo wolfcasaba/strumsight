@@ -43,13 +43,23 @@ fail-closed `2`-es kilépéssel áll meg, és megnevezi a hiányzó bázist (nem
 <!-- freeze-classes:begin -->
 | class | path_prefixes | requires_blocker_id |
 |---|---|---|
-| `documentation` | `docs/`, `CHANGELOG.md` | `no` |
+| `documentation` | `docs/`, `CHANGELOG.md`, `HANDOFF.md`, `AGENTS.md`, `CLAUDE.md`, `README.md` | `no` |
 | `release-tooling` | `tool/release/`, `test/tooling/` | `no` |
 | `blocker-fix` | `*` | `yes` |
 <!-- freeze-classes:end -->
 
-- **`documentation`** — bármely `docs/**` alatti fájl vagy a gyökér
-  `CHANGELOG.md`. Nem kell hozzá blocker ID.
+- **`documentation`** — bármely `docs/**` alatti fájl, valamint a gyökér
+  **dokumentum**-fájljai: `CHANGELOG.md`, `HANDOFF.md`, `AGENTS.md`,
+  `CLAUDE.md`, `README.md`. Nem kell hozzá blocker ID.
+
+  > **MÉRVE a merge UTÁN (E12-R30, post-merge gate):** az eredeti lista csak a
+  > `docs/` prefixet és a `CHANGELOG.md`-t tartalmazta, ezért a lánc MINDEN kör
+  > végén készülő `docs(handoff): …` commitja — ami a gyökér `HANDOFF.md`-t
+  > írja — **osztályozatlan** lett, és a `verify_freeze.py` a `main`-en `1`-es
+  > kilépést adott (`HANDOFF.md: not classified under any freeze change
+  > class`). A gyökér dokumentum-fájljai tehát nevesítve szerepelnek. A lista
+  > továbbra is ZÁRT: ami nincs rajta és nem `tool/release/`/`test/tooling/`,
+  > az blocker ID nélkül nem változhat.
 - **`release-tooling`** — a `tool/release/**` vagy `test/tooling/**` alatti
   fájlok (a release-eszközök és a rájuk épülő gate-cellák). Nem kell hozzá
   blocker ID.

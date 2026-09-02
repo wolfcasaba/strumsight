@@ -74,9 +74,22 @@ analyze, +33, +23, architecture, secrets, l10n — mind zöld) · exact-SHA CI a
 `99284e5d` merge SHA-n: [build-apk 33635933136](https://github.com/wolfcasaba/strumsight/actions/runs/33635933136)
 + [router-ci 33635917276](https://github.com/wolfcasaba/strumsight/actions/runs/33635917276).
 
-**Lecke:** [L578](docs/LESSONS.md#l578) — az őr két olcsó néma-módja: a FŐ
-ellenőrzés kimarad az alapértelmezett hívásból, és az összevetés csak az
-ártalmatlan irányban fut.
+**Merge UTÁNI javítás (a kötelező post-merge gate lelete, orchestrátor):** a
+`main`-en a `freeze_policy_test.dart` két sanity cellája PIROS lett —
+`HANDOFF.md: not classified under any freeze change class`. Az őr a lánc
+NORMÁL működését (a körönkénti `docs(handoff)` commitot, ami a gyökér
+`HANDOFF.md`-t írja) minősítette szabálysértésnek, mert a `documentation`
+osztály csak a `docs/` prefixet és a `CHANGELOG.md`-t sorolta fel. Ez sem a
+branch-gate-ben, sem a CI-ban nem volt mérhető (a branch diffje `docs/` alatti
+volt; a CI sekély klónjában a klasszifikáció el sem futott). Javítva a gyökér
+dokumentum-fájljainak nevesítésével (`HANDOFF.md`, `AGENTS.md`, `CLAUDE.md`,
+`README.md`) + egy pinnelő cellával (33 → 34 cella); a post-merge gate ezután
+teljesen zöld.
+
+**Lecke:** [L578](docs/LESSONS.md#l578) — az őr HÁROM olcsó néma-módja: a FŐ
+ellenőrzés kimarad az alapértelmezett hívásból, az összevetés csak az
+ártalmatlan irányban fut, és a házirend a rendszer NORMÁL működését minősíti
+szabálysértésnek (ez csak a merge utáni gate-en látszott).
 
 ## ✅ E12-R29 KÉSZ — Open Beta és canary cohort — PR [#525](https://github.com/wolfcasaba/strumsight/pull/525), squash `3d9721df` (2026-09-02)
 

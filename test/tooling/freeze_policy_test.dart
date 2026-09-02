@@ -138,6 +138,27 @@ void main() {
       expect(result.exitCode, 0, reason: result.stderr.toString());
     });
 
+    test('the root-level documentation files (HANDOFF.md, AGENTS.md, '
+        'CLAUDE.md, README.md, CHANGELOG.md) are `documentation` too — the '
+        'post-merge regression: every round ends with a `docs(handoff)` '
+        'commit touching the ROOT HANDOFF.md, and the original `docs/`-only '
+        'prefix list left it unclassified, turning main red', () {
+      final dir = _tempDir();
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final changes = _writeIn(
+        dir,
+        'changes.tsv',
+        'HANDOFF.md\tdocs(handoff): E12-RXX KÉSZ; queue done, RTM\n'
+            'AGENTS.md\tdocs: rulebook update\n'
+            'CLAUDE.md\tdocs: project instructions update\n'
+            'README.md\tdocs: readme update\n'
+            'CHANGELOG.md\tdocs: changelog update\n',
+      );
+
+      final result = _run(['--changes-file', changes.path]);
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+    });
+
     test('a non-doc/tooling path is accepted when the commit names an open '
         'P0/P1/P2 blockers.md id', () {
       final dir = _tempDir();

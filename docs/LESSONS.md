@@ -22922,8 +22922,34 @@ szándékkal** mutáltam (egy commit a tiltott kategóriából; egy karakter a
 súlyossági oszlopban), és NEM a tool tesztjeit néztem. A cellák számossága
 (31) semmit nem mondott a fedettségről; a fedettséget csak a mutáció mérte.
 
+**HARMADIK mód, a merge UTÁN mérve (post-merge gate, ugyanaz a kör).** A
+kötelező merge utáni `tools/round-gate.sh` futás a `main`-en **PIROS** lett:
+
+```
+verify_freeze: 1 finding(s):
+  - HANDOFF.md: not classified under any freeze change class … (A1)
+```
+
+A `documentation` osztály `docs/` prefixet és `CHANGELOG.md`-t sorolt fel — a
+lánc viszont MINDEN kör végén egy `docs(handoff): …` commitot készít, ami a
+**gyökér** `HANDOFF.md`-t írja. Az őr tehát a saját házirendjének normál,
+körönként ismétlődő működését minősítette szabálysértésnek. Ez sem a
+branch-gate-ben, sem a CI-ban nem látszott: a branch-en a kör commitjai mind
+`docs/`+`tool/release/`+`test/tooling/` alattiak voltak, a CI-ban pedig a
+sekély klón miatt a klasszifikáció el sem futott — **csak a merge utáni,
+teljes történetű `main`-en**, a záró handoff-commit után. Javítva: a gyökér
+dokumentum-fájljai (`HANDOFF.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`)
+nevesítve bekerültek a `documentation` osztályba, cellával pinnelve.
+
+**A tanulság kiterjesztése:** egy házirend-őr első valódi bemenete nem a kör
+saját diffje, hanem a **rendszer normál működése**. Mielőtt zöldnek nyilvánítod,
+futtasd le arra a commit-mintázatra, amit a lánc magától termel — itt ez a
+`docs(handoff)` záró commit volt. A merge utáni gate nem formalitás: ez a
+lelet KIZÁRÓLAG ott volt mérhető.
+
 **Őrteszt:**
 `test/tooling/freeze_policy_test.dart::a product path changed since freeze_base_sha, on a bare call with no --since/--changes-file override, is a non-zero exit naming the path`
 (MAJOR-1, izolált `git init`-elt temp-repóval) és
 `test/tooling/freeze_policy_test.dart::a known-issues.md row DOWNGRADED below its blockers.md severity (P1 -> P2) is a non-zero exit naming it`
 (MAJOR-2).
+`test/tooling/freeze_policy_test.dart::the root-level documentation files (HANDOFF.md, AGENTS.md, CLAUDE.md, README.md, CHANGELOG.md) are `documentation` too` (a merge utáni mód).
