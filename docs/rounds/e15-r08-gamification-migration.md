@@ -1,6 +1,7 @@
 # E15-R08 — Gamification képernyők migrálása
 
-- **Státusz:** PREPARED (előre megírva 2026-08-28, kód olvasva: `main @ 4cb32eb0`)
+- **Státusz:** READY (előre megírva 2026-08-28 `main @ 4cb32eb0`-n; pre-flight
+  újramérve és revideálva 2026-09-02, `main @ 289fcaac` — lásd **§0.0.A**)
 - **Típus:** Chapter 15 (UI-aktiválás és -befejezés), Kör 8
 - **Kör-azonosító:** `E15-R08`
 - **Branch:** `<motor>/e15-r08-gamification-migration`
@@ -32,24 +33,191 @@ allowed_paths = [
   "lib/features/gamification/presentation/screens/level_detail_screen.dart",
   "lib/features/gamification/presentation/screens/reward_inbox_screen.dart",
   "lib/features/gamification/presentation/screens/streak_detail_screen.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "lib/l10n/base/app_en.arb",
+  "lib/l10n/base/app_hu.arb",
   "test/app/routing/app_router_test.dart",
   "test/features/gamification/presentation/achievements_screen_test.dart",
+  "test/features/gamification/presentation/achievement_detail_screen_test.dart",
+  "test/features/gamification/presentation/gamification_accessibility_test.dart",
   "test/features/gamification/presentation/gamification_hub_screen_test.dart",
+  "test/features/gamification/presentation/level_detail_screen_test.dart",
   "test/features/gamification/presentation/quests_screen_test.dart",
+  "test/features/gamification/presentation/reward_inbox_screen_test.dart",
+  "test/features/gamification/presentation/streak_detail_screen_test.dart",
+  "test/features/gamification/ui/reduced_motion_test.dart",
+  "test/features/gamification/ui/streak_states_test.dart",
+  "test/ui/goldens/e13_r32_screens_golden_test.dart",
+  "test/ui/goldens/goldens/e13_r32_achievements_compact.png",
+  "test/ui/goldens/goldens/e13_r32_achievements_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r32_quests_compact.png",
+  "test/ui/goldens/goldens/e13_r32_quests_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r32_reward_inbox_compact.png",
+  "test/ui/goldens/goldens/e13_r32_reward_inbox_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r32_streak_detail_compact.png",
+  "test/ui/goldens/goldens/e13_r32_streak_detail_compact_scale2.png",
   "docs/ui/migration-status.md",
   "docs/rounds/e15-r08-gamification-migration.md",
 ]
 gate_tests = [
   "test/ui/ui_inventory_test.dart",
+  "test/l10n/hardcoded_string_guard_test.dart",
   "test/app/routing/app_router_test.dart",
   "test/features/gamification/presentation/achievements_screen_test.dart",
+  "test/features/gamification/presentation/achievement_detail_screen_test.dart",
+  "test/features/gamification/presentation/gamification_accessibility_test.dart",
   "test/features/gamification/presentation/gamification_hub_screen_test.dart",
+  "test/features/gamification/presentation/level_detail_screen_test.dart",
   "test/features/gamification/presentation/quests_screen_test.dart",
+  "test/features/gamification/presentation/reward_inbox_screen_test.dart",
+  "test/features/gamification/presentation/streak_detail_screen_test.dart",
+  "test/features/gamification/ui/reduced_motion_test.dart",
+  "test/features/gamification/ui/streak_states_test.dart",
 ]
 native_gate = false
 ```
 
 **Kockázat = high, indoklás:** a diff felhasználói felületet ír át azon az úton, amit a felhasználó a leggyakrabban jár; egy elveszett állapot- vagy hibajelzés némán rontaná az élményt. A `flutter-reviewer` és a `flutter-devil-advocate` futtatása a review-ban KÖTELEZŐ.
+
+## 0.0.A Pre-flight brief-revízió (orchestrátor, 2026-09-02, `main @ 289fcaac`)
+
+A brief 2026-08-28-án, `main @ 4cb32eb0`-n íródott. Az alábbi revíziók MÉRT
+eltéréseket zárnak; ahol ütköznek a lentebbi eredeti szöveggel, **a revízió az
+irányadó**. A `brief-lint` (strict) leletet nem adott — ezek a saját
+pre-flight-mérésem leletei. A queue sora `ADR = nincs`, a §3 tiltja a
+`docs/adr/**`-ot → **ez a kör nem ír ADR-t** (a prompt sablon-sora ehhez képest
+általános).
+
+### R1 — Mind a 6 képernyő MÉG legacy: a §3 scope VÁLTOZATLAN
+
+A §7 mérő-parancs kimenete `main @ 289fcaac`-n:
+
+```
+legacy achievements_screen.dart    legacy achievement_detail_screen.dart
+legacy quests_screen.dart          legacy level_detail_screen.dart
+legacy reward_inbox_screen.dart    legacy streak_detail_screen.dart
+```
+
+Egyik sem migrálódott időközben, tehát a pre-flight kikötése („ami időközben
+migrálódott, azt ki kell venni") nem szűkít.
+
+### R2 — Kör-szám sodródás a `retirement-plan.md` §4-hez képest — MÉRT, és nem javítjuk itt
+
+A `docs/ui/retirement-plan.md` §4 táblája az `E15-R08` sorba a *Practice +
+Progress* batch-et írja, a gamification batch-et pedig `E15-R06`-ba. A lánc
+tényleges végrehajtása ettől eltért (`migration-status.md`: R06 = Setlist +
+Progress, R07 = Practice Generator). **Az irányadó artefaktum a queue sora és
+ez a brief** — a `retirement-plan.md` NINCS az `allowed_paths`-on, tehát ez a
+kör NEM írja át; a sodródás rögzítése a `migration-status.md`-be megy (A7).
+
+### R3 — `level_detail_screen.dart` MÉRTEN `unreachable`, mégis a scope-ban marad
+
+A `retirement-plan.md` §3.4 és a per-képernyő tábla (`level_detail_screen.dart`
+sora: `Reachable = no`, verdikt `unreachable`) szerint a képernyőnek nincs mért
+konstrukciós helye a `lib/`-ben. A brief mégis felsorolja, és **bent is marad**:
+pontosan ugyanaz a döntési osztály, mint az `E15-R07` (6 unreachable Practice
+Generator képernyő migrálva a queue írott szándéka szerint) és az `E15-R11`
+batch. Az `unreachable` NEM `retire` (ADR 0471 D5: a nyugdíjazás javaslat, nem
+végrehajtás), tehát a migrálása megengedett — de a §10-be a MÉRT elérhetőségi
+besorolást is bele kell írni, hogy a döntés auditálható legyen.
+
+### R4 — Az `allowed_paths` KIEGÉSZÍTVE: a brief §6-ja olyan bizonyítékot kért, amit a saját fájllistája nem tudott előállítani
+
+A lista négy mért hézagot zárt be. Egyik hozzávett fájl sem esik a §4 **tilos
+zónájába** (nincs köztük `application/`/`domain/`/`data/`/`providers/`, más
+feature képernyője, `lib/app/**`, `lib/core/design_system/**`, `docs/adr/**`,
+`tools/**`, `.github/**`) — mindegyik a kör SAJÁT gamification-felületének
+teszt-, golden- vagy l10n-oldala:
+
+| # | Mért hézag | Hozzávéve |
+|---|---|---|
+| G1 | **A golden-sáv a batch 4 képernyőjét PNG-re pinneli.** `test/ui/goldens/e13_r32_screens_golden_test.dart` rendereli a `QuestsScreen`, `AchievementsScreen`, `StreakDetailScreen`, `RewardInboxScreen` képernyőt, és 8 committolt PNG-hez hasonlít (`compact` + `compact_scale2`). Vizuális migráció után ezek KONSTRUKCIÓBÓL pirosak — a teljes CI-suite futtatja őket. A fájllista nélkül a kör zöldre hozhatatlan (H7). | a golden-teszt + a 8 érintett PNG |
+| G2 | **Négy képernyőnek NINCS teszt-fájlja**, miközben az A2/A3 képernyőnkénti állapot- és `textScaler` cellákat kér: `achievement_detail`, `level_detail`, `reward_inbox` (nincs fájl), `streak_detail` (van fájl, de nem volt a listán). | a 4 teszt-fájl (3 ÚJ + 1 meglévő) |
+| G3 | **Meglévő pinek, amiket a migráció újramérhet:** `gamification_accessibility_test.dart` (kontraszt-ellenőrzés a gamification felületen), `ui/reduced_motion_test.dart` és `ui/streak_states_test.dart` (mindkettő `StreakDetailScreen`-t épít). | a 3 teszt-fájl |
+| G4 | **A §3 kifejezetten ENGEDI az új ARB-kulcsot** („mindkét locale-ra, egyszerre"), de egyetlen ARB sem volt a listán → a megengedett művelet scope-sértés lett volna. | `lib/l10n/{,base/}app_{en,hu}.arb` |
+
+A `gate_tests` ugyanezekkel bővült, plusz a **`test/l10n/hardcoded_string_guard_test.dart`**: az A6 sor NÉV SZERINT ezt jelöli meg bizonyítéknak, de a `gate_tests`-ből hiányzott.
+
+**Amit a bővítés NEM tesz:** a `GamificationHubScreen` és a két hub-goldenje
+(`e13_r32_hub_compact{,_scale2}.png`) KÍVÜL maradt — a hub már migrált (Ch13-R32),
+ezért a kör diffjében **bájtra változatlanul** kell maradnia. A közös
+gamification widgetek (`pending_rewards_card`, `level_badge`, `xp_progress_bar`,
+`reward_summary_sheet`) szintén kívül maradnak.
+
+### R5 — A3: a cellákat TELEFON-viewporton kell mérni, különben hamis zöldek ([L558](../LESSONS.md#l558))
+
+A `flutter_test` alapértelmezett 800×600-as viewportja **szélesebb ÉS magasabb
+minden telefonnál**, és a lusta `ListView` a viewport alá eső gyermeket fel sem
+építi — az így mért „nincs túlcsordulás" cella akár ÜRES fát is mérhet. Az
+E15-R06 A3-cellái pontosan így voltak mind zöldek, miközben a review próbája
+telefon-méreten 72 px túlcsordulást mért.
+
+**Kötelező cella-alak** (a §6 küszöb-hármas ezen felül változatlan):
+
+```dart
+tester.view.physicalSize = const Size(360, 640);
+tester.view.devicePixelRatio = 1.0;
+addTearDown(tester.view.reset);
+```
+
+Az A3 cellái tehát: `{1.5, 2.0, 2.5} × {en, hu}` **telefon-viewporton**. A `2.0`
+INKLUZÍV követelmény; a `2.5` továbbra sem követelmény, és a `2.0` teljesítése
+nem hivatkozhat rá.
+
+### R6 — A layout-javítás MINTA-szinten zár ([L559](../LESSONS.md#l559))
+
+Ha egy állapot telefon-viewporton túlcsordul, a javítás (pl. az E15-R06/R07-ben
+bevált, képernyő-lokális `_ScrollableIfShort`) **a batch MINDEN olyan
+példányára** felkerül, amely ugyanazt a mintát mutatja — nem csak arra az
+egyre, amelyik éppen pirosat adott. A §10-be a példányok TÉTELES listája megy.
+Az E15-R06 handoffja azért mondott „2 valódi túlcsordulás javítva"-t 2/3
+helyett, mert a testvér-példány védtelen maradt.
+
+### R7 — `SsEmptyState` akció-kivétel: kitalált affordancia TILOS (E15-R04/R06/R07 precedens)
+
+A §5.2 („üres lista → `SsEmptyState`") érvényben marad, EGY kikötéssel: ha az
+adott állapotnak nincs VALÓDI, a képernyőn már létező akciója, akkor **nem
+szabad kitalálni egyet** azért, hogy a komponens beférjen. Ilyenkor a state
+képernyő-lokális, de **token-stílusú** widget marad (`SsColorScheme` /
+`SsTypography` a témából), és a §10 tételesen indokolja. Ez nem gyengítés: a
+kitalált gomb hazudna arról, mit tud a képernyő — ugyanaz az információhűségi
+elv, mint a §5.1.
+
+### R8 — A `GamificationThemeScope` osztály MEGMARAD, csak a 6 képernyő burkolója tűnik el
+
+A burkolót a hub és négy közös widget is használja (mérve:
+`gamification_hub_screen.dart:87`, `pending_rewards_card.dart:50`,
+`level_badge.dart:36`, `xp_progress_bar.dart:53`, `reward_summary_sheet.dart:79`)
+— ezek mind a scope-on KÍVÜL vannak. A `gamification_theme_scope.dart` fájlt
+tehát **nem töröljük**; csak a 6 migrált képernyő saját `return
+GamificationThemeScope(` burkolója szűnik meg (mérve: 5 képernyőn van ilyen,
+`achievement_detail_screen.dart`-on nincs).
+
+### R9 — Golden újrafelvétel: a merge-kapu architektúráján, MÉRTEN elérhető
+
+A §7 golden-kikötése él, és a futtatási előfeltétel a boxon MÉRVE megvan:
+`docker 29.4.0`, `binfmt qemu-x86_64`, `strumsight-golden-x86:3.44.2` image jelen.
+Az újrafelvétel KIZÁRÓLAG:
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r32_screens_golden_test.dart
+```
+
+Aarch64-en felvett PNG a CI-n (x86_64, nulla toleranciájú `LocalFileComparator`)
+mindig piros — ez az ADR 0426 / [L486](../LESSONS.md#l486) / [L493](../LESSONS.md#l493)
+mért osztálya. A felvétel után a **hub két PNG-je nem változhat** (R4).
+
+### Visszakeresés (ADR 0312)
+
+`--corpus lessons,halts,adr`: ADR 0471 (elérhetőség mért, nyugdíjazás javaslat),
+`halts/round-status-E13-R32` (a hub migrációja). `--corpus lessons,halts`:
+[L558](../LESSONS.md#l558) (800×600 hamis zöld → R5), [L559](../LESSONS.md#l559)
+(minta-szintű zárás → R6), [L517](../LESSONS.md#l517) (a `textScaler 2.0` keret
+VALÓDI hibát mér ki, a kör előtti kódban is), [L452](../LESSONS.md#l452)
+(`MediaQuery(size:)` NEM méretez — ezért `tester.view.physicalSize` az R5-ben),
+[L477](../LESSONS.md#l477) (mérd a cella BUKÁSI képességét, ne csak a zöldjét →
+a §6.1 valódi-sértés próba).
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -108,6 +276,10 @@ Batch-specifikus kikötések:
 | `test/features/gamification/presentation/quests_screen_test.dart` | típus-pinnelő őr — VÁLTOZATLANUL zöld marad (§0.0) |
 | `docs/ui/migration-status.md` | a MÉRT arány frissítése |
 
+> **A §0.0.A/R4 kiegészítette ezt a listát** (golden-sáv + 4 képernyő-teszt +
+> 3 meglévő pin + ARB-k). A gépi scope-audit forrása a fenti `ai-router`
+> blokk `allowed_paths` mezője — ez a tábla annak olvasható kivonata.
+
 **Tilos zóna:** a batch feature-einek `application/`, `domain/`, `data/`, `providers/` könyvtárai · minden más `lib/features/**` képernyő · `lib/app/**` · `lib/core/design_system/**` (a komponenseket HASZNÁLJUK, nem módosítjuk) · `docs/adr/**` · `tools/**` · `.github/**`
 
 ## 5. Kötött architekturális döntések
@@ -155,7 +327,14 @@ Beégetett felhasználói szöveg nem kerülhet a migrált kódba; új szöveg e
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/routing/app_router_test.dart test/features/gamification/presentation/achievements_screen_test.dart test/features/gamification/presentation/gamification_hub_screen_test.dart test/features/gamification/presentation/quests_screen_test.dart
+tools/round-gate.sh test/ui/ui_inventory_test.dart test/l10n/hardcoded_string_guard_test.dart test/app/routing/app_router_test.dart test/features/gamification/presentation/achievements_screen_test.dart test/features/gamification/presentation/achievement_detail_screen_test.dart test/features/gamification/presentation/gamification_accessibility_test.dart test/features/gamification/presentation/gamification_hub_screen_test.dart test/features/gamification/presentation/level_detail_screen_test.dart test/features/gamification/presentation/quests_screen_test.dart test/features/gamification/presentation/reward_inbox_screen_test.dart test/features/gamification/presentation/streak_detail_screen_test.dart test/features/gamification/ui/reduced_motion_test.dart test/features/gamification/ui/streak_states_test.dart
+```
+
+A golden-sáv (§0.0.A/R9) ezen felül KÖTELEZŐ, mert a batch 4 képernyője
+PNG-re pinnelt:
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r32_screens_golden_test.dart
 ```
 
 A migrációs mérés (a kimenet a §10-be, batch-enként MIGRATED/legacy sorokkal):
