@@ -6,7 +6,8 @@
 - **Review-alap:** `9c265f0d` (`origin/main` = `496264d9`)
 - **Izolált klón:** `/tmp/rev-e12-r35` (`git clone` a munkapéldányból, `9c265f0d`,
   `tools/prepare-flutter-generated.sh` után) — a próbák NEM a munkapéldányban futottak
-- **Verdikt (1. kör):** **CHANGES REQUESTED** — 2 MAJOR, 2 MINOR
+- **Verdikt (1. kör):** CHANGES REQUESTED — 2 MAJOR, 2 MINOR
+- **Verdikt (2. kör, `a261400c` után):** **APPROVED** — 0 nyitott lelet (§7)
 
 ## 0. Mit mértem újra
 
@@ -205,4 +206,35 @@ frissíteni az új cellanevekkel.
 
 ## 7. Második kör — a javítás ellenőrzése
 
-*(a javító kör után töltendő)*
+- **Javító kör commitja:** `a261400c` (motor: `sonnet-impl`, ugyanaz az ág)
+- **Izolált klón:** `/tmp/rev2-e12-r35` (`a261400c`, friss
+  `prepare-flutter-generated.sh`)
+- **Scope:** `tools/scope-audit.py --base 11277b3d` →
+  `Legacy scope audit OK (11277b3dbd60..a261400c50b7, 5 changed path(s), 1 generated/ignored)`
+- **Alapfutás:** `flutter test` a §7 három útvonalán → `00:09 +37: All tests passed!`
+  (a review-alapon 35 volt; +2 az új őrcella)
+
+### Leletenkénti zárás — mindegyik a MEGFOGÓ próba megismétlésével
+
+| # | Státusz | Amit MÉRTEM a javítás után |
+|---|---|---|
+| **M1** | **ZÁRVA** | Ugyanaz a mutáció (a Kör 5 `isFeatureFlagExpired` import + hívás lecserélve egy lokális, azonos szemantikájú `_localExpired`-re) most PIROSRA vált: `Some tests failed.` — és pontosan egy cella bukik: `check_deprecations.dart source — A2 has no second expiry truth A2 the tool has no second expiry truth of its own`. Az 1. körben ugyanez a mutáció mellett `All tests passed!` volt. Visszaállítva. |
+| **M2** | **ZÁRVA** | Ugyanaz a mutáció (`lib/features/live/model/chord.dart` végére egy valódi, többsoros / szomszédos-string-literálos `@Deprecated`, nyers `grep -ro '@Deprecated(' lib` → **13**) most PIROSRA vált: `A1 the real tree reports 12 deprecated sites in 9 files [E]` — vagyis a tool MEGTALÁLJA a többsoros alakot, és a bázisvonal-cella észreveszi az új deprecationt. Az 1. körben a tool 12-t látott és minden cella zöld maradt. Visszaállítva (`git status --short` üres). Az új kereszt-ellenőrző cella (`A1 no @Deprecated form is silently missed`, `deprecation_audit_test.dart:70`) a jövőbeli alakokra is köt. |
+| **m1** | **ZÁRVA** | `externalCallsiteCount` → `externalImporterCount` (`check_deprecations.dart:169,179,197`), a jelentés szövege `external importer file(s)` (`:471`), és a `technical-debt.md` mindhárom helye átírva (Methodology, a „Measured" oszlop 14 sora, a `zero external importers` megfogalmazás). A számok változatlanok — csak az állítás lett igaz. |
+| **m2** | **ZÁRVA** | Bevezetve a `noSinglePathMarker = '—'` konstans (`check_deprecations.dart:286`); a frozen-scope őr doc-commentje (`:377`) kimondja, hogy KIZÁRÓLAG ez a jelölő opt-out, minden más nem-üres érték átesik az ellenőrzésen. A `TechnicalDebtItem.path` doc-commentje (`:271`) a valósághoz igazítva. |
+
+### Mit ellenőriztem még
+
+- A §6 cellanév-tábla és a §6.1 mérce-mátrix a briefben az ÚJ cellaneveket
+  hivatkozza, és a §10 mindkét új őr valódi-sértés próbáját dokumentálja.
+- A tilos zóna érintetlen: `tool/check_architecture.dart`,
+  `tool/check_feature_flags.dart` és a `lib/**` fa a kör diffjében nem
+  szerepel (`git diff --stat origin/main...HEAD` → 5 útvonal, mind a §4
+  listáján + ez a review-fájl).
+- A NOTE-ok (§4) nyitva maradnak — egyik sem merge-blokkoló, és egyik sem
+  romlott a javítással.
+
+## VÉGSŐ DÖNTÉS: **APPROVED**
+
+0 nyitott BLOCKER/MAJOR/MINOR. A merge feltétele a változatlan zöld kapu a
+merge SHA-n (Full Gate + Router CI).
