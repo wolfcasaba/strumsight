@@ -535,6 +535,108 @@ verify_freeze: 1 finding(s):
 exit=1                      # ← MAJOR-2 zárva: a lefokozás is elkapva
 ```
 
+## 10.2 2. javító kör — a shallow CI-klón mért hibája
+
+**A MÉRT hiba.** A `build-apk.yml` a `6eb6fb3a` SHA-n PIROS
+([run 33632164312](https://github.com/wolfcasaba/strumsight/actions/runs/33632164312)):
+`test/tooling/freeze_policy_test.dart` 10 cellája bukott, mind ugyanazzal
+a `verify_freeze: --since '4ac78365' is not a valid git revision: ...
+returned non-zero exit status 128` okkal.
+
+**Gyökérok.** `actions/checkout@v4` fetch-depth felüldefiniálás nélkül
+**shallow (depth=1)** klónt ad — a `freeze_base_sha: 4ac78365` (a Kör 29
+záró commitja) ott nem létezik, `git rev-parse --verify 4ac78365` exit
+128-cal bukik. A MAJOR-1 javítás óta a bare hívás (és minden olyan cella,
+ami nem ad `--changes-file`-t) mindig ezt az utat futtatja le ELŐSZÖR, a
+`main()` try-blokkjában, még a known-issues/CHANGELOG validáció előtt —
+ezért nemcsak a 2 sanity cella, hanem 8 további, a known-issues.md/
+CHANGELOG.md validációt mérni kívánó A2/A3/A4 cella is ugyanide bukott,
+mielőtt a mérni kívánt findinghez ért volna. A lokális gate azért volt
+zöld, mert a munkapéldány teljes klón — a hiba csak sekély klónban látszik.
+
+**Javítás (`.github/**` tilos zóna, tehát nem `fetch-depth: 0`):**
+
+1. **`tool/release/verify_freeze.py` — `get_changes_from_git`.** A kilépőkód
+   változatlanul `2` (fail-closed — a freeze-t történet nélkül nem lehet
+   ellenőrizni, a `0`/`1` hazugság lenne), de a hibaüzenet most megnevezi a
+   valódi okot és a feloldást:
+   ```
+   verify_freeze: freeze base '4ac78365' is not present in this clone
+   (shallow checkout?) — the freeze classification needs full git history
+   (`git fetch --unshallow` / `actions/checkout` `fetch-depth: 0`); use
+   --changes-file to check the documents without git history
+   ```
+   Nincs „ha nincs történet, átugrom" ág — az a MAJOR-1 hibaosztály
+   visszahozása lenne.
+2. **A két sanity cella** (`freeze_policy_test.dart` — bare hívás és
+   explicit `--since 4ac78365`) most `git rev-parse --verify` -zel méri a
+   klón mélységét, és MINDKÉT ágon szigorú: elérhető bázis → `exit 0` +
+   `changed path(s) classified`; nem elérhető → `exit 2` + a stderr
+   megnevezi a hiányzó bázist. A MAJOR-1 fedezete (a bare hívás
+   klasszifikál) így a fejlesztői (teljes klónú) oldalon megmarad, a
+   sekély CI-klónban pedig determinisztikusan, a helyes okkal bukik —
+   nem néma átcsúszás.
+3. **A nyolc A2/A3/A4 cella** (5× known-issues.md: üres workaround,
+   ismeretlen severity, hiányzó blockers.md id, severity-eltérés,
+   MAJOR-2 lefokozás; 3× CHANGELOG.md: version/build/schema_version
+   eltérés) most egy üres, csak `#` kommentsort tartalmazó
+   `--changes-file`-t kap — `classify_changes` üres listára nem ad
+   findingot, tehát a cellák a klón mélységétől függetlenül pontosan azt
+   az 1-es kilépést mérik, amiért készültek. Az A7 (marker-block
+   fail-closed) cellák NEM kaptak ilyen módosítást: ott a `VerifyError` a
+   `load_freeze_classes`/`load_freeze_base`/`load_known_issues`/
+   `load_changelog_header` hívásokban keletkezik, a git-ág elérése előtt —
+   azok a klón mélységétől már eddig is függetlenek voltak.
+
+**ÚJ gate-kimenet** (`tools/round-gate.sh test/tooling/freeze_policy_test.dart
+test/tooling/ga_scope_test.dart`, teljes klónú munkapéldányon):
+
+```
+═══ [1] format                                                          → ZÖLD  (Formatted 2214 files (0 changed))
+═══ [2] analyze                                                         → ZÖLD  (No issues found!)
+═══ [3] test test/tooling/freeze_policy_test.dart                       → ZÖLD  (00:02 +33: All tests passed!)
+═══ [4] test test/tooling/ga_scope_test.dart                            → ZÖLD  (00:01 +23: All tests passed!)
+═══ [5] architecture                                                    → ZÖLD  (Architecture dependencies OK (12 allowlisted deviation(s)))
+═══ [6] secrets                                                         → ZÖLD  (Secret scan OK (4170 file(s) scanned, 0 finding(s)))
+═══ [7] l10n                                                            → ZÖLD  (L10n aggregate freshness OK; L10n parity OK (en → hu, 2298 message(s)))
+
+Gate-összegzés: format zöld · analyze zöld · test test/tooling/freeze_policy_test.dart zöld ·
+test test/tooling/ga_scope_test.dart zöld · architecture zöld · secrets zöld · l10n zöld
+MINDEN GATE ZÖLD.
+```
+
+(A cellaszám 33: az 1. javító kör 2 regressziós cellája (MAJOR-1, MAJOR-2)
+plusz a jelen kör két átalakított sanity cellája — a szám maga nem nőtt,
+mert nem cellát adtunk, hanem a meglévőket tettük klón-mélység-független
+próbává.)
+
+**A shallow-klón szimuláció tényleges kimenete** (a §7 receptje szerint —
+teljes klón NEM reprodukálja a hibát, ezért külön kell futtatni):
+
+```
+$ rm -rf /tmp/shallow-e12-r30
+$ git clone -q --depth 1 --branch sonnet-impl/e12-r30-feature-freeze-and-final-regression \
+    file:///home/ubuntu/ss-sonnet-impl-e12-r30 /tmp/shallow-e12-r30
+$ cd /tmp/shallow-e12-r30 && git rev-parse --verify 4ac78365
+fatal: Needed a single revision
+exit=128                       # ← a CI-t okozó feltétel itt is reprodukálva
+
+$ bash tools/prepare-flutter-generated.sh   # OK
+$ flutter test test/tooling/freeze_policy_test.dart
+...
+00:00 +1: sanity … exit 0 … when the freeze base is reachable … — exit 2 naming
+           the unreachable base when it is not (shallow CI clone; fail-closed,
+           not a regression)
+...
+00:01 +33: All tests passed!
+```
+
+A sekély klónban is **mind a 33 cella zöld** — a sanity cellák a `2`-es
+fail-closed ágon futottak le sikerrel (a bázis nem elérhető), a nyolc
+A2/A3/A4 cella pedig az üres `--changes-file` miatt a git-történettől
+függetlenül a mérni kívánt findingot mérte. Ez a kör mércéje: a cellák a
+klón mélységétől függetlenül helyeset mérnek.
+
 ## 11. Review — a Claude tölti ki
 
 **Jelentés:** [`docs/reviews/e12-r30-review.md`](../reviews/e12-r30-review.md)

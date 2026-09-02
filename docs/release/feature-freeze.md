@@ -33,6 +33,11 @@ L577`, `4ac78365`) — a §0.0 P7 mérése szerint ez a kör-brief maga rögzít
 nem ez a kör méri újra. A `tool/release/verify_freeze.py --since
 <freeze_base_sha>` a git-történetet ETTŐL a pontól osztályozza.
 
+A freeze-ellenőrzés **teljes git-történetet igényel**: egy sekély
+(`--depth 1`) klónban, ahol a `freeze_base_sha` nem érhető el, a tool
+fail-closed `2`-es kilépéssel áll meg, és megnevezi a hiányzó bázist (nem
+`0`-val „nincs mit ellenőrizni" — az hazugság lenne).
+
 ## 3. Gépileg parszolható blokk — a zárt változás-osztály készlet
 
 <!-- freeze-classes:begin -->
