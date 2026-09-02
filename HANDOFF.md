@@ -1,5 +1,68 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R34 KÉSZ — Post-launch stabilization és hotfix-út — PR [#535](https://github.com/wolfcasaba/strumsight/pull/535), squash `51184118` (2026-09-02)
+
+A Ch12 **Kör 34** a GA utáni **hotfix-utat** teszi auditálhatóvá. A kör tétele
+egyetlen mondat, és az [ADR 0490](docs/adr/0490-hotfix-path-gates-incident-binding-and-regression-obligation.md)
+D1-e önti szerződésbe: **a gyorsaság a SCOPE szűkítéséből jön, nem a kapuk
+elhagyásából.** A kör terméke ezért nem egy „gyors sáv", hanem a hotfix-út
+**gépi őre**: `tool/release/verify_hotfix.py` (kétmódú — statikus
+dokumentum-audit + kérés-audit), a `docs/release/workflows/hotfix.proposal.yml`
+javaslat, a runbook, a postmortem-sablon és a 7./14. napi riport váza.
+
+A kör **nem telepít workflow-t és nem ad ki hotfixet**: a `.github/workflows/**`
+védett mérce-zóna (`PROTECTED_GLOBS`, ADR 0321), az ADR 0372 álló
+felhatalmazásának fájlja pedig a fán nem létezik — a telepítés és a dispatch a
+merge utáni EMBERI/orchesztrátor lépés (D6, a Kör 25 precedense).
+
+**A pre-flight a brief két állítását megcáfolta.** A `0465`-ös előre kiosztott
+ADR elavult volt (a foglaló `0490`-et adott; a Ch12 batch `0460`–`0465`
+tartománya végig elavult — a Kör 22 és a Kör 25 ugyanígy cserélt), és a brief
+§2 első mért ténye — „a Kör 25 után `release-candidate.yml` is" — HAMIS: az RC
+javaslat-fájlként él, a `.github/workflows/` tíz fájlja közt nincs. Az A6
+lépés-sorrendje is fordítva állt: a mért RC job-gráf **jóváhagyás → gate →
+build**, nem „gate → jóváhagyás → build".
+
+**A review a zöld gate mögött találta a lényeget — és a lényeg maga az őr volt.**
+Az implementer 34 cellája, a `tools/round-gate.sh` mind a hét lépése és a
+kötelező §6.2 valódi-sértés próba egyaránt zöld volt, a `scope_audit=ok`. Az őr
+mégis **három valódi kapu-gyengítést átengedett** `exit=0`-val: a `security-scan`
+JOB fejlécére tett `continue-on-error: true`-t és `if:`-et (a mérce csak
+LÉPÉS-szinten nézett, és a `fast_track` név kikerülte a `skip|emergency` mintát),
+a névben megmaradó de `echo`-t futtató scan-lépést (a mérce a nevet nézte, a
+törzset soha), és egy `needs:` nélküli `publish-hotfix` jobot (a jóváhagyás-gráf
+denylistára épült). Negyedikként a javaslat `${{ inputs.* }}`-ot interpolált
+`run:` törzsbe egy a production keystore-t kezelő jobban — GHA script injection,
+a repó saját `env:`-kötéses precedensével szemben. A kötelező `security-reviewer`
+(`risk = "high"`) függetlenül ugyanezt a leletcsoportot reprodukálta.
+
+Egy javító kör (`1dcc16c0`) mind a négy MAJOR-t és az egy MINOR-t lezárta. A
+zárás bizonyítéka nem bemondás: a kör #1 **mind a négy fixtúrája** `exit=0`-ról
+`exit=1`-re váltott, és **két ÚJ, a javító promptban nem szereplő próba** — a
+signing-oldali tartalmi próba és a **build** jobra (nem a scan jobra) tett
+job-szintű `if:` — szintén megfogott, tehát a javítás általános, nem
+fixtúra-szabott. A gyökérok tanulsága: a brief §6.1 mutációs mátrixának sora
+KONKRÉT szintaktikai alakot írt le, és pontosan arra illeszkedő ellenőrzést
+kapott — a sort HIBAOSZTÁLYKÉNT kell írni ([L584](docs/LESSONS.md#l584)).
+
+Exact-SHA evidencia a `7daaac78` merge SHA-n: Full Gate
+[33683136645](https://github.com/wolfcasaba/strumsight/actions/runs/33683136645),
+Router CI
+[33683203602](https://github.com/wolfcasaba/strumsight/actions/runs/33683203602)
+— mindkettő `success`. A Router CI-t az [L581](docs/LESSONS.md#l581) miatt
+explicit `workflow_dispatch`-csal kellett a merge SHA-ra kényszeríteni (a kör
+utolsó commitja `docs/reviews/**`, ami nincs az `on.push.paths` szűrőn). A
+CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml`, `native_gate = false`).
+
+**Következő teendő a hotfix-úttal (EMBERI/orchesztrátor lépés):** a
+`docs/release/workflows/hotfix.proposal.yml` telepítése
+`.github/workflows/hotfix.yml`-ként, a `hotfix-approval` GitHub environment
+létrehozása kötelező reviewerekkel, majd egy dispatch-próba — egyszer zölden,
+egyszer bizonyítottan pirosan (hiányzó incident-azonosító vagy nem emelt
+verzió).
+
+**Előző állapot:** `main` @ `70eefdf4` — E15-R14 Practice Generator kompozíciós réteg.
+
 ## ✅ E15-R14 KÉSZ — Practice Generator kompozíciós réteg — PR [#534](https://github.com/wolfcasaba/strumsight/pull/534), squash `d28c79d3` (2026-09-02)
 
 A Ch15 beszúrt előkészítő köre megépítette azt, ami az `E15-R07 / H3` STOP mért
