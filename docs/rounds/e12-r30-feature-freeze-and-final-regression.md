@@ -1,18 +1,162 @@
 # E12-R30 — Feature freeze és final regression
 
-- **Státusz:** PREPARED (előre megírva 2026-08-27, kód olvasva: `main @ 9ca4a0dc`)
+- **Státusz:** IN PROGRESS (előre megírva 2026-08-27, `main @ 9ca4a0dc`; pre-flight revízió 2026-09-02, `main @ 4ac78365` — §0.0)
 - **Típus:** Chapter 12 (Release Roadmap, Sprint Planning & Final Integration), Kör 30
 - **Kör-azonosító:** `E12-R30`
 - **Branch:** `<motor>/e12-r30-feature-freeze-and-final-regression`
 - **Előfeltétel:** `E12-R28` és `E12-R29` merge-elve (GA-scope + Open Beta tapasztalat)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a kör eljárást és riportot szállít; a freeze szabályát az ADR 0464 (Kör 28) rögzíti.
+- **Előre kiosztott ADR:** nincs — a kör eljárást és riportot szállít; a freeze-hez kapcsolódó normát a **[ADR 0489](../adr/0489-ga-scope-classification-and-contract-freeze.md)** (Kör 28) rögzíti (a törzsszöveg eredeti „ADR 0464" hivatkozása MÉRTEN hibás — §0.0 P1).
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "feature freeze final regression known issues changelog"` → a `halts/round-status-E08-R07`, `E09-R01` és `E09-R14` merge-elt körök (epic-nyitó/záró mérési minták). Release-domain előzmény nincs — ez a projekt ELSŐ feature-freeze köre.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd, hogy a `docs/release/blockers.md` naprakész-e, és hogy a Kör 25 RC-workflow-ja LEFUTOTT-e zölden legalább egyszer. A final regression a MÉRT kapuk újrafuttatása, nem újak kitalálása.
+>
+> **Elvégezve (orchestrátor, §0.0):** a `blockers.md` **ELAVULT** (mérés `main @ 92576977`, owner-körök azóta `done` — P2), az RC-workflow **SOHA nem futott** és innen nem is futtatható (P3). Mindkét tény a `known-issues.md` kimondott tartalma; egyik sem javítható ebben a körben.
 
-## 0.0 Mit jelent itt a „teljes regresszió"
+## 0.0 Pre-flight revízió (orchestrátor, 2026-09-02, `main @ 4ac78365`)
+
+A brief `PREPARED` állításait a fán ÚJRAMÉRTEM. Az alábbi P1–P7 a brief
+**KÖTELEZŐ** része: ahol a mérés mást mond, mint a törzsszöveg, a **mérés**
+győz. ADR nincs és nem is lesz — a §5 így dönt, és a `docs/adr/**` a tilos
+zónában van (a `tools/round-slots.py reserve-adr` ezért nem futott).
+
+**Visszakeresés (ADR 0312, szűkítve előbb):**
+`--corpus lessons,halts,adr --top 5 "feature freeze known issues changelog
+release regression"` → `adr/0489` (a Kör 28 GA-scope + contract-freeze ADR-je),
+`adr/0487`, `adr/0067`; `--corpus lessons,halts --top 5 "python release tool
+dart test invocation deterministic generated document parse fail-closed"` →
+**[L206](../LESSONS.md#l206)** (a `paths:`-szűrős `router-ci.yml` a review-doc
+commit után nem tüzel újra — kézi dispatch kell),
+**[L573](../LESSONS.md#l573)**, és a fán mellette
+**[L566](../LESSONS.md#l566)** / **[L571](../LESSONS.md#l571)** /
+**[L575](../LESSONS.md#l575)**: mind a négy ugyanazt a hibaosztályt méri — a
+kézzel írt doksi-parszer alapértelmezésben **fail-OPEN**, azaz ami nem
+illeszkedik a mintára, az nem hibás, hanem „nem létezik". Ennek a körnek
+MINDHÁROM parszere (freeze-osztályozó, known-issues, CHANGELOG) **fail-CLOSED**
+kell legyen — lásd P6. Release-domain (feature freeze) előzmény a korpuszban
+**nincs**: ez a projekt ELSŐ feature-freeze köre.
+
+### P1 — a hivatkozott ADR-szám HIBÁS: 0464 helyett **0489**
+
+Mérve: `ls docs/adr/0464*` → `No such file or directory`. A Kör 28 ADR-je
+[`docs/adr/0489-ga-scope-classification-and-contract-freeze.md`](../adr/0489-ga-scope-classification-and-contract-freeze.md)
+(„**Kör:** E12-R28", dátum 2026-09-02). A `pipeline-queue.tsv` `0464` oszlopa
+elavult tervezési foglalás — a fán ilyen ADR nincs. A brief fejlécének
+„a freeze szabályát az ADR 0464 (Kör 28) rögzíti" mondata ezennel **ADR 0489**-re
+javítva; a jelen kör ADR-t továbbra sem ír.
+
+### P2 — a `blockers.md` ELAVULT, de a tilos zónában van, és MÉGIS ő az A3 szótára
+
+Mérve: `docs/release/blockers.md:3` → „**Mérés SHA-ja:** `main @ 92576977`"
+(2026-08-28), és mind a 10 sor `Owner (kör) … (pending)` annotációt hordoz.
+A `docs/execution/pipeline-queue.tsv` MAI állapota szerint viszont mind a tíz
+owner-kör (`E12-R04`, `R06`, `R07`, `R08`, `R13`, `R17`, `R18`, `R19`, `R24`,
+`R26`) **`done`**. Az `Owner … (pending)` annotáció tehát elavult; a
+**zárási feltételek** viszont NEM automatikusan teljesültek — azt ennek a
+körnek kell MÉRNIE, soronként.
+
+Következmények, kötelezően:
+
+1. A `blockers.md`-t **nem írjuk át** (§3 tilos zóna, és a
+   `tool/release/verify_ga_scope.py` D7-mérése is ebből a fájlból olvassa a
+   nyitott P0/P1 halmazt — egy „karbantartó" átírás egy MÁSIK kör zöld
+   celláját mozdítaná el).
+2. A `known-issues.md` **P0/P1 tételei kizárólag a `blockers.md`-ben szereplő
+   ID-kkal** (`R-SIGN-01`, `R-VER-01`, `R-PRIV-01`, `R-SEC-01`, `R-STAGE-01`,
+   `R-STORE-01`) azonosíthatók — ez az A3 gépi tartalma.
+3. A `known-issues.md` **kimondja** az elavulást (mért SHA + a MAI queue-állapot),
+   ahelyett hogy elhallgatná vagy szépítené.
+4. **Ha a mérés olyan nyitott hibát talál, ami valóban P0/P1, de a
+   `blockers.md`-ben NINCS benne:** az NEM súlyosság-lefokozással oldandó fel,
+   hanem a §0 **STOP-protokolljával** (`tools/codex-signal.sh stopped` +
+   jelentés). A `blockers.md` bővítése egy külön kör dolga. A „gyorsan
+   P2-re teszem" út a §5.2 kimondott gyengítés-tilalmába ütközik.
+
+### P3 — a Kör 25 RC-workflow-ja MÉG SOHA NEM FUTOTT, és ebből a körből nem is futtatható
+
+A brief pre-flight-kérése („LEFUTOTT-e zölden legalább egyszer") mért válasza:
+**NEM, egyszer sem.** `ls .github/workflows/` → 10 workflow
+(`backend-ci`, `build-apk`, `chord-train`, `dsp-probe`, `full-gate`, `lab-apk`,
+`ml-train`, `release-apk`, `router-ci`, `tutor-eval`) — `release-candidate.yml`
+**nincs köztük**. A Kör 25 szándékosan *javaslatként* szállította
+(`docs/release/workflows/release-candidate.proposal.yml`), a telepítés
+[ADR 0488](../adr/0488-release-candidate-assembly-and-approval-gate.md) D1/D8
+szerint **emberi lépés**, a futtatás pedig egy jóváhagyói environment mögött
+van. A `.github/**` ennek a körnek **tilos zóna**, tehát:
+
+- az **A5** bizonyítéka a §0.1 (a) szerinti orchesztrátor-dispatch
+  (`build-apk.yml` / `full-gate.yml` a `tools/round-ci-plan.py` döntése szerint),
+  **nem** az RC-workflow;
+- „az RC-kapu még egyszer sem futott le" maga is **known-issues tétel**
+  (súlyosság: a `R-SIGN-01` P0 zárási feltételéhez kötött), nem elhallgatandó
+  részlet.
+
+### P4 — A4: a körben NINCS CHANGELOG-generátor, ezért az A4 **kötő ellenőrzés**, nem generálás
+
+A §3 „a Kör 6 manifest-adataiból generált" megfogalmazása a fán nem
+kivitelezhető úgy, ahogy hangzik: az egyetlen engedélyezett ÚJ eszköz a
+`tool/release/verify_freeze.py`, a manifest-generátor
+(`tool/generate_release_manifest.dart`) pedig az engedélyezett listán **kívül**
+van, tehát nem módosítható, és a fán nincs commitolt `release-manifest.json`
+sem (CI-artefaktum). Mért manifest-bemenetek
+(`tool/generate_release_manifest.dart:23-33`): `releaseManifestSchemaVersion = 1`,
+a verzió/build a `pubspec.yaml`-ból (`pubspec.yaml:5` → **`1.0.0+1`**), rövid
+git SHA, `channel`, ML- és tutor-knowledge-manifest — és a manifest
+[ADR 0447](../adr/0447-versioning-provenance-and-sbom.md) D1 szerint
+**semmilyen időbélyeget nem tartalmaz**.
+
+Az **A4 ezért így mérendő:** a `CHANGELOG.md` egy gépileg parszolható
+release-fejléc blokkot hordoz (marker-párral határolva), amelynek mezői a MÉRT
+manifest-bemenetekkel egyeznek — `version` + `build` a `pubspec.yaml`-ból,
+`schema_version` a `generate_release_manifest.dart` konstansából (fail-closed
+olvasás; precedens: a `verify_ga_scope.py` `feature_flags.dart`-olvasója) —,
+és a blokk **determinisztikus**: nem tartalmaz generálási időbélyeget vagy
+dátumot (ADR 0447 D1). Az ellenőrzést a `verify_freeze.py` végzi, a cella a
+`freeze_policy_test.dart`-ban él. „Kézzel írt, manifest-hivatkozás nélküli
+CHANGELOG" = a fejléc-blokk hiánya vagy a mezők eltérése ⇒ **piros** (a §6.1
+sora ezzel változatlanul teljesül).
+
+### P5 — a kilépő-kód szemantika BE VAN FAGYASZTVA: `verify_freeze.py` is 0/1/2
+
+A `docs/release/contract-freeze.md` negyedik sora a `verify_ga_scope.py` /
+`verify_beta_profile.py` **0 = ok, 1 = validációs találat, 2 = használati/
+formátumhiba** szemantikáját fagyasztja. Az új `verify_freeze.py` ugyanezt a
+három kódot használja (az A1 „nem-nulla" elvárását az `1` teljesíti) — negyedik
+kód bevezetése tilos, mert a testvéreszközök szerződését olvasztaná fel.
+
+### P6 — mindhárom parszer FAIL-CLOSED (L566 / L571 / L573 / L575)
+
+Marker-párral határolt blokkon belül **minden** nem-fejléc, nem-elválasztó sor
+kötelező adatsor, és teljes egészében illeszkednie kell a tábla sor-alakjára;
+ami nem illeszkedik, az **hiba** (`2`-es kilépés a sor megnevezésével), soha
+nem csendben eldobott sor. Tilos a `continue`-val átugrott „nincs mintám hozzá"
+ág, és tilos a `- [ ]`/`- [x]` alakra szűkített őr. Ez a P6 a `freeze_policy_test.dart`
+külön celláival bizonyítandó (legalább: hiányzó marker-blokk, elrontott sor-alak,
+üres blokk — mindhárom nem-nulla kilépés).
+
+### P7 — a freeze bázisa és az osztályozás zárt készlete
+
+A `feature-freeze.md` gépileg parszolható blokkja rögzíti:
+`freeze_base_sha: 4ac78365` (a jelen kör indulási `origin/main`-je,
+`docs(handoff): E12-R29 KÉSZ …`), a jóváhagyó szerepét, és az engedélyezett
+változás-osztályok **zárt** készletét:
+
+| osztály | mit fed | mi kell hozzá |
+|---|---|---|
+| `blocker-fix` | a freeze alatt engedett termékváltozás | a commit MEGNEVEZ egy `blockers.md`-beli blocker ID-t (`R-…`) |
+| `documentation` | `docs/**`, `CHANGELOG.md` | nem kell blocker ID |
+| `release-tooling` | `tool/release/**`, `test/tooling/**` | nem kell blocker ID |
+
+Minden más útvonal (`lib/**`, `backend/**`, `android/**`, `assets/**`,
+`pubspec.yaml`, …) blocker ID nélkül **osztályozatlan ⇒ találat ⇒ `1`-es
+kilépés**. Az „apró javítás, nem számít" osztály (§5.1) a zárt készlet miatt
+gépileg sem létezik. A `verify_freeze.py` a változáslistát a git-ből
+(`--since <sha>`) VAGY egy explicit, fail-closed formátumú bemeneti fájlból
+veszi, hogy a negatív cellák git-fixtúra nélkül is determinisztikusak
+legyenek; egy cella a VALÓDI fán futtatja a `--since`-t.
+
+## 0.1 Mit jelent itt a „teljes regresszió"
 
 A boxon a teljes Flutter-suite ~15 perc, a CI-ban 4–5; a MÉRT szabály (ADR 0053) szerint a teljes suite + property-gate + APK a CI-ban fut. A kör „final regression"-je ezért: (a) egy ZÖLD `build-apk.yml` / RC-dispatch az orchesztrátortól, (b) a backend és a release-eszközök lokális sávja, (c) a `known-issues.md` MÉRT tartalommal. A kör NEM ír új gate-et.
 
@@ -96,12 +240,13 @@ Minden ismert, nyitott hiba felkerül, még ha kellemetlen is. **NEM elfogadhat�
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | `verify_freeze.py` a nem-blocker változást nem-nulla kóddal jelzi | `freeze_policy_test.dart` |
-| A2 | A `known-issues.md` minden tétele hordoz súlyosságot, hatást és megkerülő utat (vagy annak hiányát) | `freeze_policy_test.dart` |
-| A3 | A `known-issues.md` minden P0/P1 tétele szerepel a `blockers.md`-ben is (nincs elrejtett blocker) | `freeze_policy_test.dart` |
-| A4 | A `CHANGELOG.md` a Kör 6 manifest-mezőiből generált, és determinisztikus | `freeze_policy_test.dart` |
-| A5 | ZÖLD teljes CI-futás a kör-branchen | orchesztrátor-dispatch linkje a §10-ben |
+| A1 | `verify_freeze.py` a nem-blocker (osztályozatlan) változást **`1`-es** kóddal jelzi, a sértő útvonalak megnevezésével; a `documentation` / `release-tooling` osztályú változás `0` (§0.0 P5, P7) | `freeze_policy_test.dart` |
+| A2 | A `known-issues.md` minden tétele hordoz súlyosságot (`P0`–`P3`), hatást és megkerülő utat — az „nincs megkerülő út" is **kimondva**, üres cella nem elfogadható | `freeze_policy_test.dart` |
+| A3 | A `known-issues.md` minden P0/P1 tétele szerepel a `blockers.md`-ben is (nincs elrejtett blocker); a `blockers.md` **változatlan** (§0.0 P2) | `freeze_policy_test.dart` + `git diff --stat` |
+| A4 | A `CHANGELOG.md` release-fejléc blokkja a MÉRT manifest-bemenetekkel egyezik (`version`/`build` a `pubspec.yaml`-ból, `schema_version` a generátor konstansából) és determinisztikus (nincs benne időbélyeg) — §0.0 P4 | `freeze_policy_test.dart` |
+| A5 | ZÖLD teljes CI-futás a kör-branchen (`build-apk.yml` / `full-gate.yml` a `round-ci-plan.py` szerint — **nem** az RC-workflow, §0.0 P3) | orchesztrátor-dispatch linkje a §10-ben |
 | A6 | A kör egyetlen termékkód-fájlt sem módosít | `git diff --stat` |
+| A7 | Mindhárom parszer **fail-CLOSED**: hiányzó marker-blokk, elrontott sor-alak és üres blokk mind nem-nulla kilépés (§0.0 P6, L566/L571/L573/L575) | `freeze_policy_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -109,8 +254,10 @@ Minden ismert, nyitott hiba felkerül, még ha kellemetlen is. **NEM elfogadhat�
 |---|---|
 | A freeze-ellenőrző csak figyelmeztet a nem-blocker változásra | A1 |
 | Egy P1 hiba csak a known-issues-ban szerepel, a blockers-ben nem | A3 |
-| A CHANGELOG kézzel íródik, manifest-hivatkozás nélkül | A4 |
+| A CHANGELOG kézzel íródik, manifest-hivatkozás nélkül (nincs fejléc-blokk, vagy a `version`/`build` eltér a `pubspec.yaml`-tól) | A4 |
 | A kör „menet közben" javít egy talált hibát | A6 |
+| Egy known-issues sor megkerülő-út cellája üres marad | A2 |
+| A parszer a nem illeszkedő sort átugorja (`continue`), nem hibának veszi | A7 |
 
 **Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** vegyél fel a `known-issues.md`-be egy P1 tételt, ami a `blockers.md`-ben NEM szerepel, futtasd a §7 gate-et → az **A3** cellának PIROSNAK kell lennie → állítsd vissza.
 
@@ -120,21 +267,30 @@ Minden ismert, nyitott hiba felkerül, még ha kellemetlen is. **NEM elfogadhat�
 tools/round-gate.sh test/tooling/freeze_policy_test.dart test/tooling/ga_scope_test.dart
 ```
 
-A freeze-ellenőrző közvetlen futtatása (kimenet a §10-be):
+A freeze-ellenőrző közvetlen futtatása a VALÓDI fán (a kimenet szó szerint a §10-be):
 
 ```bash
-python3 tool/release/verify_freeze.py --since <freeze-sha>
+python3 tool/release/verify_freeze.py --since 4ac78365
 ```
+
+A kör saját diffje `documentation` + `release-tooling` osztályú, tehát ennek a
+hívásnak a kör végén **`0`-val** kell kilépnie (§0.0 P7).
 
 A teljes suite + property-gate + APK a CI-ban fut (ADR 0053) — a dispatch az orchesztrátoré.
 
 ## 8. Implementációs sorrend
 
-1. `docs/release/feature-freeze.md` — a szabály.
-2. `tool/release/verify_freeze.py` + `test/tooling/freeze_policy_test.dart`.
-3. `docs/release/known-issues.md` a MÉRT nyitott hibákból.
-4. `CHANGELOG.md` generálás.
-5. A valódi-sértés próba a §10-be; a CI-dispatch az orchesztrátortól.
+1. `docs/release/feature-freeze.md` — a szabály + a §0.0 P7 gépileg parszolható
+   blokkja (`freeze_base_sha`, jóváhagyó, a három változás-osztály).
+2. `tool/release/verify_freeze.py` — három ellenőrzés egy eszközben
+   (freeze-osztályozás, `known-issues.md`, `CHANGELOG.md`), 0/1/2 kilépő-kóddal
+   (§0.0 P5), végig fail-CLOSED parszerekkel (§0.0 P6).
+3. `docs/release/known-issues.md` a MÉRT nyitott hibákból — a `blockers.md` tíz
+   sorának MAI, soronkénti mérése (a zárási feltétel teljesült-e), plusz a
+   §0.0 P2/P3 kimondott tényei.
+4. `CHANGELOG.md` + a hozzá tartozó A4 ellenőrzés (§0.0 P4).
+5. `test/tooling/freeze_policy_test.dart` — az A1–A4 és A7 cellái.
+6. A valódi-sértés próba a §10-be; a CI-dispatch az orchesztrátortól.
 
 ## 9. Kockázatok
 
