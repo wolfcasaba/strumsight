@@ -99,10 +99,11 @@ final localPracticePlanRepositoryProvider =
       ),
     );
 
-/// The PERSISTENT `PracticeEvidenceRepository` (ADR 0482 / D2). Never
-/// `InMemoryPracticeEvidenceRepository` — binding that fake here would make
-/// `PlanPrivacyScreen`'s delete button a silent no-op the moment this
-/// provider is rebuilt (CLAUDE.md "silent no-op" trap).
+/// The PERSISTENT `PracticeEvidenceRepository` (ADR 0482 / D2). Never the
+/// never-forgets in-memory test-fake declared alongside the interface —
+/// binding that fake here would make `PlanPrivacyScreen`'s delete button a
+/// silent no-op the moment this provider is rebuilt (CLAUDE.md "silent
+/// no-op" trap).
 final practiceEvidenceRepositoryProvider = Provider<PracticeEvidenceRepository>(
   (ref) => LocalPracticeEvidenceRepository(
     keyValueStore: ref.watch(keyValueStoreProvider),

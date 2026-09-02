@@ -12,9 +12,9 @@ import '../../domain/repository/practice_evidence_repository.dart';
 
 /// The first PERSISTENT [PracticeEvidenceRepository] implementation.
 ///
-/// [InMemoryPracticeEvidenceRepository] (the test-fake declared alongside
-/// the interface) is safe for tests and the mock-mode path only: bound
-/// behind the real [DeletePracticePlanningData] use case it would make the
+/// The never-forgets in-memory test-fake declared alongside the interface
+/// is safe for tests and the mock-mode path only: bound behind the real
+/// [DeletePracticePlanningData] use case it would make the
 /// `PlanPrivacyScreen` delete button a silent no-op the moment the
 /// provider (or the app) is rebuilt (ADR 0482 / D2, CLAUDE.md "silent
 /// no-op" trap). This class is the real one.
