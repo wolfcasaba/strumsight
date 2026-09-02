@@ -169,3 +169,56 @@ sora írja elő a `https://` prefixet, és egy cella mérje a nem-https cél exi
 A javító kört UGYANAZ a motor (`sonnet-impl`) viszi, ugyanazon az ágon, az
 engedélyezett-fájllista változatlanul. A javítás után a review frissül, és a
 teljes CI-kapu ÚJRA fut a friss HEAD-en (exact-SHA, ADR 0086 §2).
+
+---
+
+# Második kör — a javítás ellenőrzése (HEAD `8d092641`)
+
+**A javító kör mind a 7 leletet lezárta** (a 4 kötelezőt ÉS a 3 opcionálisat).
+Az alábbi ellenőrzés a reviewer SAJÁT kódolvasása, nem az implementer
+bejelentése (a `done` jelzés a saját állapotáról szól, nem a helyességről).
+
+## VERDIKT: **APPROVED** — 0 nyitott BLOCKER/MAJOR/MINOR
+
+| Lelet | Javítás | Reviewer-ellenőrzés (mért) |
+|---|---|---|
+| **MAJOR-1** | `_LAB_ROUTES` kiegészítve egy `("POST", "/download")` rossz-metódusú próbával (`production_smoke.py:95–104`): egy VALÓBAN hiányzó útvonal minden metódusra 404-et ad, egy regisztrált (de nem staged) viszont 405-öt — ez az EGYETLEN HTTP-szintű diszkriminátor. | ✅ Zárva. Az új contract-cella `test_apk_download_enabled_alone_turns_the_check_red:218–244` **kizárólag** a `STRUMSIGHT_APK_DOWNLOAD_ENABLED`-et kapcsolja be (`monkeypatch.delenv("STRUMSIGHT_DIAGNOSTICS_ENABLED")` + `assert settings.diagnostics_enabled is False`), és állít a `"POST /download: expected 404, got 405"` szövegre **plusz** egy izolációs bizonyítékra: `assert "/diagnostics" not in result.detail`. Pontosan az a cella, aminek a hiánya a leletet okozta. |
+| **MAJOR-2** | Új cella (`production_readiness_test.dart:419–474`), amely egy lokálisan indított **stub-szerver** ellen futtatja az eszközt, `access_token`-t adó `/auth/login` válasszal. | ✅ Zárva, és a javítás **jobb a kértnél**: a cella két sanity-állítást tesz — `expect(stdout, contains('[PASS] auth_login:'))` és `contains('[PASS] auth_me:')` —, azaz **bizonyítja, hogy a sikerág tényleg lefutott**, mielőtt a sentinel-hiányra állítana. Ez teszi a mérést nem-vákuumossá. Jelszó- ÉS token-sentinel is ellenőrizve, stdout+stderr. (Mért részlet a §10-ben: a Dart-bound `HttpServer` a `python3` alfolyamatból nem érhető el, ezért a stub maga is `python3` alfolyamat — legitim, dokumentált megoldás.) |
+| **MAJOR-3** | `_https_scheme_error()` + fail-closed `exit 2` a `run_checks()` ELŐTT (`production_smoke.py:501–524`, `main()` `:541–547`), `--allow-insecure-http` opt-outtal. | ✅ Zárva. A cella a `exitCode == 2`-t, a stderr `"https"` tartalmát ÉS az **üres stdoutot** is állítja (bizonyítva, hogy egyetlen check sem futott, tehát hálózati hívás sem történt). A NOTE-1 (séma nélküli URL → nyers traceback) ezzel együtt lezárva. |
+| **MINOR-1** | `_NoRedirectHandler` (`redirect_request` → `None`) + `_NO_REDIRECT_OPENER`. | ✅ Zárva. A 3xx így `HTTPError`-ként jön vissza, `Response(302)`-vé alakul, és „unexpected status"-ként **fail-closed** bukik — az `Authorization` fejléc nem juthat másik hostra. |
+| **MINOR-2** | A `community_feed` 404-es ága már nem állít elérhetőséget. | ✅ Zárva. Az új szöveg kimondja a mérés határát: „*a status code alone cannot tell the two apart, so no reachability is claimed here*". |
+| **MINOR-3** | A modul-docstringből törölve a „masked" állítás. | ✅ Zárva. A helyére a MÉRT tulajdonság került (a hitelesített válaszok bodyja sosem kerül kimenetre). |
+| **MINOR-4** | A fájl-szintű `strumsight:allow-secret-file` marker eltávolítva. | ✅ Zárva, és a `secrets` gate-lépés a marker nélkül is **ZÖLD** (0 finding) — a fájl visszakerült a titok-scan hatálya alá. |
+
+## A gate-ek
+
+| Kapu | Eredmény |
+|---|---|
+| `scope_audit` | `ok` — az engedélyezett-fájllista nem tágult (5 fájl + a brief §10) |
+| Munkapéldány | tiszta (`git status` üres a `done` után) |
+| Lokális gate (implementer, a végleges futás) | `format`, `analyze` („No issues found!"), `production_readiness_test.dart` **20/20**, `app_config_test.dart` **21/21**, `architecture`, `secrets`, `l10n`, backend `ruff` ×2, **teljes backend `pytest`** — mind ZÖLD |
+| Backend sáv | `test_production_smoke_contract.py` **13/13** |
+| CI (exact-SHA) | lásd lent — a merge feltétele |
+
+**A jelentett flake kivizsgálva, NEM regresszió.** A gate egy köztes futásán a
+`tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2`
+pirosat adott. Ez egy `threading.Barrier`-alapú, időzítés-érzékeny szál-verseny
+teszt, amelyet **ez a kör nem érint** (a diff nem tartalmazza a fájlt), és amely
+a párhuzamosan futtatott `flutter test`-ek CPU-terhelése mellett nem
+szinkronizálódott. Elszigetelten és a terhelés nélküli ismételt teljes futáson
+egyaránt ZÖLD. Az implementer ezt a §10.7-ben nyíltan leírta, nem hallgatta el —
+a döntő bizonyíték azonban a friss SHA-n futó CI, nem a lokális futás.
+
+## Acceptance criteria — végleges
+
+| # | Állapot |
+|---|---|
+| A1 | ✅ Paraméteres cél, titok nélkül; a szivárgás-cella immár a sikerágat méri (MAJOR-2), és `https` kikényszerítve (MAJOR-3). |
+| A2 | ✅ Mind a három Lab-útvonal mérve, **plusz** a rossz-metódusú próba, izolációs cellával (MAJOR-1). |
+| A3 | ✅ |
+| A4 | ✅ Minden ág fail-closed; a normalizálás nem tesz egyenlővé két különböző lenyomatot. |
+| A5 | ✅ 16 pont, 6 GÉPI / 10 EMBERI. |
+| A6 | ✅ Az SDD §26.1 mind a kilenc eleme. |
+
+**Merge-feltétel:** a `full-gate.yml` és a `router-ci.yml` `success` a merge
+SHA-n (ADR 0086 §2). Review-oldalról nincs akadály.
