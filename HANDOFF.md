@@ -1,5 +1,70 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R26 KÉSZ — Rollback és disaster recovery drill — PR [#522](https://github.com/wolfcasaba/strumsight/pull/522), squash `e9b20604` (2026-09-02)
+
+A Ch12 **Kör 26** a projekt **ELSŐ rollback-gyakorlata**: nem dokumentumot ír a
+visszaállításról, hanem **lefuttatja**, méri, és gépi ellenőrzőt ad rá. ADR nincs —
+a szerződéseket a merge-elt [ADR 0446](docs/adr/0446-feature-flag-registry-and-emergency-kill-switch.md)
+(D1/D2/D7) és [ADR 0449](docs/adr/0449-staging-readiness-traffic-gate-and-recovery.md)
+(D4/D5) hordozza (precedens: E12-R24).
+
+**Szállítva:**
+
+- [`tool/release/verify_rollback.py`](tool/release/verify_rollback.py) — négy
+  **fail-closed** dimenzió a visszaállítás UTÁNI állapotra (migrációs fej,
+  táblánkénti rekordszám, modell-manifest sha256, flag-profil), importálható
+  maggal és CLI-vel. Hiányzó/olvashatatlan bemenet **FAIL**, sosem csendes
+  `SKIPPED`; kihagyás csak explicit `--no-flag-profile`-lal, láthatóan.
+- [`docs/operations/disaster-recovery-drill.md`](docs/operations/disaster-recovery-drill.md)
+  — a **ténylegesen lefuttatott** gyakorlat jegyzőkönyve, lépésenként MÉRT
+  idővel, az itt NEM elvégezhető lépések kimondásával.
+- `backend/tests/test_rollback_drill.py` (**15 cella**) + `test/tooling/rollback_policy_test.dart`
+  (**10 cella**) — az A1–A6 gépi mércéje.
+
+**A pre-flight KÉT acceptance-premisszát mért HAMISNAK** (§0.0.1 revízió, listatágítás nélkül):
+az **A4** „flag-cache lejárata" — cache **nem létezik**, és az ADR 0446 D2 kifejezetten
+tiltja (`feature_flag_source.dart:72–75`), ezért a küszöb-hármas a **feloldás-indexre**
+állt át (elavulási ablak = 0 feloldás, ami ERŐSEBB állítás bármely véges `T`-nél);
+az **A2** „előző kliens-verzió" — **nincs API-verziózás** a backendben.
+
+**A review 4 MAJOR-t talált TELJESEN ZÖLD gate és tiszta scope mögött**
+([`docs/reviews/e12-r26-review.md`](docs/reviews/e12-r26-review.md)); **1 javító kör** → APPROVED, 0 nyitott lelet.
+KÉT független `security-reviewer` futás **egymástól függetlenül ugyanazt a MAJOR-1-et
+és MAJOR-2-t** találta meg elsőként:
+
+- **MAJOR-1:** a `verify_rollback.py` a **29 élő táblából 2-t** hasonlított
+  (`Base.metadata` az `app.models` importja után csak `users` + `user_settings`), a
+  `continue` a többit csendben kihagyta, a PASS-szöveg pedig a DUMP tábláinak számát
+  írta ki — így egy 27 táblát vesztő visszaállítás is `PASS / 2 table(s) match / EXIT=0`
+  volt. Zárva élő-vs-dump **kétirányú** összehasonlítással; a javítás után a valós
+  lánc függetlenül újramérve `OVERALL: FAIL`, `EXIT=1`, mind a 26 Community tábla
+  nevesítve. Ugyanaz a fail-OPEN hibaosztály, mint az E12-R25 F1-e ([L566](docs/LESSONS.md#l566), [L573](docs/LESSONS.md#l573)).
+- **MAJOR-2:** a jegyzőkönyv „(+ minden Community tábla `0` sorral)" állítása mérhetően
+  hamis volt — a dump kulcsai kizárólag `['user_settings','users']`.
+- MAJOR-3 (üres `{}` flag-profil → PASS), MAJOR-4 (`{value!r}` visszhang: PII + bcrypt
+  hash a riportba), + 7 MINOR — mind zárva, mindegyikhez ÚJ mérő cella ([L574](docs/LESSONS.md#l574)).
+
+**A kör legértékesebb terméke az A6 runbook-lelet** (a jegyzőkönyv §7): a
+`backend/scripts/backup.py` a `Base.metadata`-ra támaszkodik, a **27 Community tábla
+viszont raw-DDL Alembic-migrációkban jön létre, ORM-modell nélkül** — ezért a dump
+ŐKET SOHA nem tartalmazza, akármennyi éles adat van bennük. Ez **latens produkciós
+adatvesztési kockázat**, és pontosan az ilyen gyakorlatnak kell felszínre hoznia. A
+javítás `backend/scripts/**`-t érintene (tiltott zóna), ezért helyesen LELET maradt,
+nem csendes javítás — **egy jövőbeli kör dolga**.
+
+**Nyitva marad (nem blokkoló):** MINOR-3 (elgépelt `sqlite:///` úton 0 bájtos fájl
+keletkezik) és a NOTE-ok (rekordszám ≠ tartalom — azonosító-halmaz nincs mérve).
+
+Exact-SHA evidencia a `744bf7b0` merge SHA-n: Full Gate
+[33597766331](https://github.com/wolfcasaba/strumsight/actions/runs/33597766331),
+Router CI [33597810750](https://github.com/wolfcasaba/strumsight/actions/runs/33597810750)
+(`workflow_dispatch` — a záró review-commit nem trigger-útvonal, [L572](docs/LESSONS.md#l572)),
+Backend CI [33596216760](https://github.com/wolfcasaba/strumsight/actions/runs/33596216760)
+— mind `success`. CI-terv: `tools/round-ci-plan.py` → `full-gate.yml`, `native_gate = false`.
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending` sora,
+új sessionben.
+
 ## ✅ E12-R25 KÉSZ — Release Candidate assembly workflow — PR [#521](https://github.com/wolfcasaba/strumsight/pull/521), squash `37724df4` (2026-09-02)
 
 A Ch12 **Kör 25** összeköti a Chapter 12 eddig **külön-külön** meglévő kiadási

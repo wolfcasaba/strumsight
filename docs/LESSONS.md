@@ -22663,3 +22663,60 @@ alkönyvtár, rejtett fájl.
 into a package SUBDIRECTORY after assembly (not the package root) is STILL a non-zero
 `--verify` exit, naming its manifest-relative path" cella (a fix ELŐTTI assemblerrel
 mérve PIROS).
+
+## L574 — A `Base.metadata`-ra épülő „minden táblát ellenőrzök" mérce a 29 élő táblából 2-t lát: a raw-DDL migrációval született tábla ORM-modell nélkül LÁTHATATLAN, és a PASS-szöveg a DUMP darabszámát írja ki, nem az ellenőrzöttét (E12-R26, 2026-09-02)
+
+**Mit mértünk.** Az E12-R26 `verify_rollback.py`-ja a visszaállítás utáni
+rekordszámokat a `Base.metadata.sorted_tables`-ön iterálva hasonlította a backup
+dumphoz, és a dumpban nem szereplő táblát `continue`-zal kihagyta. A gate, a
+teljes CI (Full Gate + Router CI + Backend CI) és a gépi scope-audit **mind zöld
+volt**; a rést a review találta meg, majd KÉT független `security-reviewer` futás
+egymástól függetlenül UGYANEZT hozta elsőként:
+
+```
+$ cd backend && python3 -c "from app import models; from app.database import Base; print(len(Base.metadata.tables))"
+2
+$ alembic upgrade head && sqlite3 … "select count(*) from sqlite_master where type='table'"
+29
+```
+
+A 27 Community tábla (`community_posts`, `community_profiles`,
+`community_moderation_cases`, …) **raw-DDL Alembic-migrációkban** jön létre, ORM-modell
+NÉLKÜL — ezért sem a `backup.py`, sem a `verify_rollback.py` `Base.metadata`-ja nem
+tud róluk. A mért következmény: egy olyan visszaállítás, amely a teljes Community
+adatot elvesztette, `[PASS] record_counts: 2 table(s) match`, `OVERALL: PASS`,
+`EXIT=0` eredményt adott.
+
+**A csapda két, egymást erősítő fele.**
+
+1. **A bejárás az ORM-nyilvántartásból indult, nem az ÉLŐ rendszerből.** A függvény
+   kezében MÁR ott volt az `inspect(engine).get_table_names()` (a `present` halmaz),
+   csak épp a jelenlét-ellenőrzésre használta, nem a lefedettség mérésére.
+2. **A PASS-szöveg a rossz halmazt számolta.** `f"{len(tables)} table(s) match"` a
+   DUMP tábláit írta ki, nem az ténylegesen összehasonlítottakat — így a „2 table(s)
+   match" a TELJESSÉG látszatát keltette. Egy csupa ismeretlen tábla-nevű dump
+   NULLA összehasonlítás mellett is PASS-t adott.
+
+**A javítás.** Az élő tábla-halmaz (mínusz a nevesített
+`_MIGRATION_BOOKKEEPING_TABLES = {"alembic_version"}`) és a dump tábla-halmaza
+**kétirányú** összevetése: élőben létező, de a dumpban nem szereplő tábla → FAIL;
+dumpban szereplő, de ismeretlen tábla → FAIL; a PASS-szöveg pedig
+`N table(s) compared`. A javítás után a valós lánc függetlenül újramérve
+`OVERALL: FAIL`, `EXIT=1`, mind a 26 tábla nevesítve.
+
+**Az általánosítható szabály.** *Ha egy mérce azt állítja, hogy „mindenre kiterjed",
+a lefedettséget az ÉLŐ rendszerből kell származtatnia, nem abból a nyilvántartásból,
+amelyet a mért kód maga is használ* — különben a mérce és a mért kód UGYANAZT a vakfoltot
+osztja, és a mérce pontosan ott hallgat, ahol beszélnie kellene. Ugyanez a fail-OPEN
+hibaosztály, mint az [L566](#l566) (csendben átengedett dimenzió) és az
+[L573](#l573) (`iterdir()` nem rekurzív → a beágyazott többletfájl „nem létezik"):
+mindháromban a bejárás halmaza szűkebb, mint amit az állítás sugall.
+
+**A gyakorlat mint felderítő eszköz.** A kör legértékesebb terméke nem a szállított
+kód, hanem a MÉRT runbook-lelet: a `backup.py` produkciós futása — akárhány
+Community-sor van élesben — mindig csak a fiók-táblákat menti. Ez latens produkciós
+adatvesztési kockázat, amit dokumentum-olvasással senki nem talált meg; a
+LEFUTTATOTT gyakorlat találta meg. A javítás tiltott zónában van
+(`backend/scripts/**`), ezért helyesen LELET maradt (A6), nem csendes javítás.
+
+**Őrteszt:** `backend/tests/test_rollback_drill.py::test_verify_rollback_fails_when_a_live_table_is_not_covered_by_the_dump`
