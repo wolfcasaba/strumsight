@@ -61,6 +61,19 @@ import '../../domain/repository/practice_evidence_repository.dart';
 ///     rather than escaping as an unhandled async error; [flush] lets a
 ///     caller await every write/remove — and its reconciliation — before
 ///     inspecting the store or [lastWriteFailure].
+///
+/// MINOR (E15-R14 fix2): the "a fresh instance sees a write with no
+/// `await` gap" guarantee above is only as good as [keyValueStore]'s own
+/// consistency between an unawaited write's synchronous return and a
+/// subsequent read — the [KeyValueStore] interface itself does not
+/// promise this (`lib/core/storage/key_value_store.dart` is silent on
+/// ordering). The production implementation
+/// (`lib/core/storage/shared_preferences_store.dart`, backed by the
+/// `shared_preferences` plugin's synchronously-updated in-memory cache)
+/// satisfies it in practice, and this class's entire read-after-write
+/// test suite is a standing proof of that — but it is a store-level
+/// invariant this repository RELIES ON rather than one the store's own
+/// interface contract guarantees.
 final class LocalPracticeEvidenceRepository
     implements PracticeEvidenceRepository {
   LocalPracticeEvidenceRepository({
@@ -73,7 +86,7 @@ final class LocalPracticeEvidenceRepository
   final KeyValueStore keyValueStore;
 
   /// Optional fallback ownership lookup for records saved without a
-  /// `sourcePlanId`, mirroring `InMemoryPracticeEvidenceRepository`'s
+  /// `sourcePlanId`, mirroring the never-forgets in-memory test-fake's
   /// constructor parameter and the interface's own doc-contract
   /// (`domain/repository/practice_evidence_repository.dart:20-23`,
   /// MINOR-6 parity fix). `null` (the default) means "no fallback": a
@@ -110,7 +123,11 @@ final class LocalPracticeEvidenceRepository
 
   /// Every write/remove currently in flight against [keyValueStore],
   /// tracked so [flush] can await them and so a failure lands in
-  /// [lastWriteFailure] instead of escaping unhandled (B1 fix).
+  /// [lastWriteFailure] instead of escaping unhandled (B1 fix). [_track]
+  /// removes each entry once it settles (NOTE, E15-R14 fix2): production
+  /// code never calls [flush] (only tests do, for a deterministic point to
+  /// assert from), so without self-removal this list would grow without
+  /// bound for the lifetime of a long-running app session.
   final List<Future<void>> _pendingWrites = <Future<void>>[];
 
   Object? _lastWriteFailure;
@@ -138,18 +155,21 @@ final class LocalPracticeEvidenceRepository
   }
 
   void _track(Future<void> future) {
-    _pendingWrites.add(
-      future.catchError((Object error, StackTrace stackTrace) {
-        _lastWriteFailure = error;
-        _lastWriteFailureStackTrace = stackTrace;
-      }),
-    );
+    final tracked = future.catchError((Object error, StackTrace stackTrace) {
+      _lastWriteFailure = error;
+      _lastWriteFailureStackTrace = stackTrace;
+    });
+    _pendingWrites.add(tracked);
+    // Self-remove once settled (NOTE, E15-R14 fix2) — see the field
+    // doc-comment above. Safe even if [flush] already removed it first:
+    // `List.remove` is a no-op when the element is not found.
+    tracked.whenComplete(() => _pendingWrites.remove(tracked));
   }
 
   /// Effective ownership: the recorded data relation first, the
   /// [outcomePlanLookup] fallback second. `null` means ownership is
-  /// unknown — a refusal, not a wildcard (mirrors
-  /// `InMemoryPracticeEvidenceRepository._resolveOwnership`).
+  /// unknown — a refusal, not a wildcard (mirrors the never-forgets
+  /// in-memory test-fake's own ownership resolution).
   PlanId? _resolveOwnership(String outcomeId) {
     final owner = _ownership[outcomeId];
     if (owner != null) return owner;
@@ -165,8 +185,8 @@ final class LocalPracticeEvidenceRepository
       'evidence': _encodeEvidence(evidence),
       'sourcePlanId': sourcePlanId?.value,
     };
-    final isNew = !_outcomeIds.contains(outcomeId);
-    if (isNew) _outcomeIds.add(outcomeId);
+    final isNewLocally = !_outcomeIds.contains(outcomeId);
+    if (isNewLocally) _outcomeIds.add(outcomeId);
     _records[outcomeId] = evidence;
     if (sourcePlanId != null) {
       _ownership[outcomeId] = sourcePlanId;
@@ -182,23 +202,36 @@ final class LocalPracticeEvidenceRepository
     // test suite) relies on: a fresh instance constructed right after
     // `save()` returns, with no `await`, must already see the write. See
     // `_reconcileSave` for what happens if either one actually fails.
+    //
+    // R2 fix (E15-R14 fix2): the manifest add is attempted UNCONDITIONALLY,
+    // never gated on `isNewLocally`. `_persistManifestAdd` is itself
+    // idempotent (a no-op if disk already lists the id), so this costs
+    // nothing when the local cache is accurate — but when this instance's
+    // `_outcomeIds` is stale (it hydrated the id before a concurrent
+    // instance deleted it, then this `save()` re-adds the same outcome),
+    // `isNewLocally` would read `false` even though disk no longer lists
+    // it. Gating on that stale local flag skipped the manifest write
+    // entirely: the physical record came back, but with no manifest entry
+    // pointing at it — invisible to every future instance's hydration, and
+    // therefore undeletable forever (the exact permanent-residue class
+    // this repository exists to prevent).
     final write = keyValueStore.writeString(
       _recordKey(outcomeId),
       jsonEncode(envelope),
     );
-    final manifestWrite = isNew ? _persistManifestAdd(outcomeId) : null;
+    final manifestWrite = _persistManifestAdd(outcomeId);
     _track(_reconcileSave(outcomeId, write, manifestWrite));
   }
 
   /// See the class doc-comment. Reconciles the outcome of [write] (the
   /// physical record write) against [manifestWrite] (the manifest add,
-  /// non-null only when [outcomeId] was new) once both settle — self-
-  /// healing an inconsistency the two synchronous-apparent starts above
-  /// could not observe in advance.
+  /// always attempted — see the R2 fix note in [save]) once both settle —
+  /// self-healing an inconsistency the two synchronous-apparent starts
+  /// above could not observe in advance.
   Future<void> _reconcileSave(
     String outcomeId,
     Future<void> write,
-    Future<void>? manifestWrite,
+    Future<bool> manifestWrite,
   ) async {
     Object? writeError;
     StackTrace? writeStackTrace;
@@ -210,22 +243,25 @@ final class LocalPracticeEvidenceRepository
     }
 
     var manifestOk = true;
-    if (manifestWrite != null) {
-      try {
-        await manifestWrite;
-      } on Object {
-        manifestOk = false;
-      }
+    // Whether THIS call's manifest add actually inserted a fresh disk
+    // entry (as opposed to finding the id already present and no-op'ing) —
+    // only that case may be undone below; undoing an add that was really a
+    // no-op would erase a pre-existing, legitimately-tracked entry.
+    var manifestAdded = false;
+    try {
+      manifestAdded = await manifestWrite;
+    } on Object {
+      manifestOk = false;
     }
 
-    if (writeError == null && manifestWrite != null && !manifestOk) {
+    if (writeError == null && !manifestOk) {
       // The record write succeeded but the manifest add did not — retry
       // it (read-modify-write, so it is safe even if the manifest
       // changed again meanwhile).
       await _persistManifestAdd(outcomeId);
-    } else if (writeError != null && manifestWrite != null && manifestOk) {
-      // B1: the manifest already (optimistically) listed this NEW id,
-      // but the physical record write failed — undo it. A fresh
+    } else if (writeError != null && manifestOk && manifestAdded) {
+      // B1: the manifest was (optimistically) given a NEW entry for this
+      // id, but the physical record write failed — undo it. A fresh
       // instance must never advertise a record that was never actually
       // persisted.
       await _persistManifestRemove(outcomeId);
@@ -370,12 +406,20 @@ final class LocalPracticeEvidenceRepository
   /// can never blindly clobber a concurrent delete performed by another
   /// instance sharing the same store (the prior implementation always
   /// wrote this instance's full, possibly-stale `_outcomeIds` list).
-  Future<void> _persistManifestAdd(String outcomeId) async {
+  ///
+  /// Returns whether a NEW entry was actually inserted (`false` when
+  /// [outcomeId] was already present on disk, i.e. a no-op) — [save]
+  /// always calls this unconditionally (R2 fix, E15-R14 fix2), and
+  /// [_reconcileSave] needs this to decide whether undoing it on a later
+  /// physical-write failure is safe.
+  Future<bool> _persistManifestAdd(String outcomeId) async {
     final ids = _readManifestIds();
     if (!ids.contains(outcomeId)) {
       ids.add(outcomeId);
       await keyValueStore.writeString(manifestKey, jsonEncode(ids));
+      return true;
     }
+    return false;
   }
 
   /// Read-modify-write manifest remove (M2 fix) — see [_persistManifestAdd].
@@ -428,16 +472,31 @@ final class LocalPracticeEvidenceRepository
   /// Reads and decodes one record during hydration. A corrupt or
   /// unreadable individual record is skipped (record-level fault
   /// isolation, same posture as `LocalPracticePlanRepository.readArchive`)
-  /// — the outcome id stays tracked in the manifest so `deleteForPlan`
-  /// still finds it.
+  /// — the outcome id always stays tracked in the manifest, but whether
+  /// `deleteForPlan` / `deleteForOutcomes` can still FIND it through that
+  /// tracking depends on which part of the record was unreadable:
   ///
-  /// M1 fix (E15-R14 fix1): ownership is read BEFORE the `evidence` body
-  /// is decoded. Ownership is an independent data relation from the
-  /// evidence payload — a corrupt/unknown `evidence` field must not also
-  /// leave the record un-owned, which would make it permanently immune to
-  /// [deleteForPlan] / [deleteForOutcomes] (the previous `return` on a bad
-  /// evidence body skipped the ownership read entirely, contradicting this
-  /// very doc-comment).
+  ///   * A corrupt `evidence` body with a readable envelope (the JSON map
+  ///     itself decodes, `sourcePlanId` is present) still resolves
+  ///     ownership — M1 fix (E15-R14 fix1): ownership is read BEFORE the
+  ///     `evidence` body is decoded, so a corrupt/unknown `evidence` field
+  ///     alone does not also leave the record un-owned (the previous
+  ///     `return` on a bad evidence body skipped the ownership read
+  ///     entirely).
+  ///   * An UNPARSEABLE envelope (the raw string is not valid JSON, or not
+  ///     a JSON object at all) never reaches the ownership read — there is
+  ///     no `sourcePlanId` to read. That outcome id stays in the manifest
+  ///     (so it is not a silent leak) but has NO resolvable owner, which
+  ///     makes it immune to [deleteForPlan] / [deleteForOutcomes] exactly
+  ///     like a record genuinely saved without a `sourcePlanId` (absence
+  ///     of ownership data is a refusal, never a wildcard). This is an
+  ///     OPEN, documented limitation (R3, E15-R14 fix2) — deliberately
+  ///     NOT auto-tombstoned here, because doing so would require a new,
+  ///     explicit product rule for what `deleteForPlan(planId)` may do
+  ///     with a record whose true owner can never be determined (it could
+  ///     just as easily belong to a DIFFERENT plan); that rule belongs in
+  ///     an ADR, not a silent behavioural change. See round-brief §10 for
+  ///     the measured repro and the deferral.
   void _hydrateRecord(String outcomeId) {
     _outcomeIds.add(outcomeId);
     final raw = keyValueStore.readString(_recordKey(outcomeId));

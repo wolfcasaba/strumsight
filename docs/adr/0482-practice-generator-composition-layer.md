@@ -223,13 +223,49 @@ előfeltételként — vagy a tulajdonos-propagálást az aggregátor hívási l
 vagy az `outcomePlanLookup` bekötését —, mielőtt a `PlanPrivacyScreen` törlés
 gombja bekötésre kerül. Halasztás igen, hallgatás nem.
 
+### D11 — `DeletePracticePlanningData` optimistán jelent sikeres törlést egy
+bukó platform-remove esetén is (a review R4 leletének zárása — **halasztott,
+kötelező F1-előfeltétel, dokumentáció-only, kódjavítás EBBEN a körben TILOS**)
+
+`application/usecase/delete_practice_planning_data.dart:84`
+(`evidenceCount += evidenceRepository.deleteForPlan(planId);`) ebben a körben
+**tilos zóna** — a use-case fájl nem `docs/adr/**` vagy `docs/rounds/**`,
+tehát nem szerepel a §4 engedélyezett-listáján, így ide semmilyen kódjavítás
+nem kerülhet.
+
+`LocalPracticeEvidenceRepository.deleteForPlan` szinkron API-t ad (a
+`PracticeEvidenceRepository` interfész szerződése), de a fizikai
+`KeyValueStore.remove` alatta **fire-and-forget** — fix1 óta a hiba
+megfigyelhető (`lastWriteFailure`) és `flush()`-sal megvárható (D10
+kiegészítéseként), de a jelenlegi hívó (`DeletePracticePlanningData.call`,
+:84) **egyiket sem teszi**: a visszaadott `evidenceCount` a szinkron
+`deleteForPlan` visszatérési értékéből számol, ami az in-memory nézet
+alapján optimistán `removed`-et jelent, mielőtt a fizikai remove ténylegesen
+lezárulna vagy sikerülne. Egy bukó platform-remove esetén a
+`PlanPrivacyScreen` így „N törölve"-t mutatna a felhasználónak, miközben a
+rekord ténylegesen a lemezen maradt (self-healing manifest-visszaállítással,
+lásd B1/D10 — tehát nem hallgatag adat-maradék, de a UI-üzenet ekkor mégis
+hamis lenne).
+
+**Kötelezettség:** az `E15-R07 / F1` brief-je nevezze meg ezt EXPLICIT
+előfeltételként (a D10 mintájára) — `DeletePracticePlanningData.call` a
+törlési szakasz (:81-85) UTÁN olvassa `LocalPracticeEvidenceRepository
+.lastWriteFailure`-t (a konkrét `PracticeEvidenceRepository` interfész
+mögötti implementációra castolva, vagy az interfészen egy jövőbeli
+`flush()`/hiba-jelző kiegészítéssel), és bukás esetén a
+`DeletePracticePlanningDataResult` NE optimista `evidenceCount`-ot,
+hanem a valós, megerősített törlésszámot (vagy egy explicit
+részleges-siker jelzőt) adjon vissza — mielőtt a `PlanPrivacyScreen`
+sikeres törlést jelent a felhasználónak. Halasztás igen, hallgatás nem.
+
 ## Következmények
 
 - Az `E15-R07 / F1` bekötése ezek után **részben** „route + flag" méretű: 4/6
   képernyő és a preview/today/change-review út MÁR MOST felépül egyetlen
   `ProviderScope`-ból, de **két nyitott seamet** (D9) az F1-nek kell boot-időben
-  lezárnia, és a bizonyíték-törlés strukturális hiányát (D10) is fel kell
-  oldania, mielőtt a `PlanPrivacyScreen`/`PlanPreviewScreen`/`WeeklyPlanScreen`/
+  lezárnia, a bizonyíték-törlés strukturális hiányát (D10) is fel kell
+  oldania, ÉS a törlés-use-case optimista számlálását (D11) is ki kell
+  javítania, mielőtt a `PlanPrivacyScreen`/`PlanPreviewScreen`/`WeeklyPlanScreen`/
   a generálási út route-ot kap. **(Fix1 javítás:** az eredeti mondat — „a
   képernyők függőségei egyetlen `ProviderScope`-ból felépülnek" — a review B2
   leletében **mérve hamis** volt 3/6-ra; ez a bekezdés a mért igazságra

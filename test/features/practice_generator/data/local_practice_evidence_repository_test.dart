@@ -287,6 +287,38 @@ void main() {
       expect(removed, 1);
     });
 
+    test('R3 (open limitation): an UNPARSEABLE envelope — not a corrupt '
+        'evidence body, the whole record string is not valid JSON — has no '
+        'sourcePlanId to read at all, so it stays immune to deleteForPlan '
+        "even though its outcome id remains in the manifest (it's never a "
+        'silent leak, just an unresolvable owner — documented in round-brief '
+        '§10, deferred to an ADR before any auto-tombstone behaviour is '
+        'added)', () {
+      final store = InMemoryKeyValueStore({
+        LocalPracticeEvidenceRepository.manifestKey: jsonEncode(<String>[
+          'outcome.unparseable',
+        ]),
+        'ss.practice_generator.evidence.record.outcome.unparseable':
+            'NOT-JSON-AT-ALL{{{',
+      });
+
+      final repository = LocalPracticeEvidenceRepository(keyValueStore: store);
+
+      expect(
+        repository.findByOutcomeId(OutcomeId('outcome.unparseable')),
+        isNull,
+      );
+      final removed = repository.deleteForPlan(PlanId('plan.1'));
+
+      expect(removed, 0);
+      expect(
+        store.values.containsKey(
+          'ss.practice_generator.evidence.record.outcome.unparseable',
+        ),
+        isTrue,
+      );
+    });
+
     test(
       "M2: a stale instance's save does not resurrect an id a NEWER "
       'instance already deleted — the manifest write re-reads disk '
@@ -326,6 +358,49 @@ void main() {
         expect(fresh.findByOutcomeId(a.sourceOutcomeId), isNull);
         expect(fresh.findByOutcomeId(b.sourceOutcomeId), b);
         expect(fresh.findByOutcomeId(c.sourceOutcomeId), c);
+      },
+    );
+
+    test(
+      "R2: a stale instance's RE-SAVE of an outcome another instance already "
+      'deleted still lands in the manifest — never a physical record with '
+      'no manifest entry pointing at it (permanently invisible AND '
+      'undeletable)',
+      () async {
+        final store = InMemoryKeyValueStore();
+        final writer = LocalPracticeEvidenceRepository(keyValueStore: store);
+        final evidence = _evidence(outcomeId: 'outcome.stale-resave');
+        writer.save(evidence, sourcePlanId: PlanId('plan.1'));
+        await writer.flush();
+
+        // A second instance hydrates the same outcome id into its own
+        // `_outcomeIds`, then deletes it — the manifest on disk drops it,
+        // but `writer`'s local cache still (staleness) lists it.
+        final second = LocalPracticeEvidenceRepository(keyValueStore: store);
+        final removed = second.deleteForPlan(PlanId('plan.1'));
+        await second.flush();
+        expect(removed, 1);
+
+        // `writer` now re-saves the SAME outcome id. Its local
+        // `_outcomeIds` still contains it, so a naive `isNew` check would
+        // skip the manifest write entirely.
+        writer.save(evidence, sourcePlanId: PlanId('plan.1'));
+        await writer.flush();
+
+        const recordKey =
+            'ss.practice_generator.evidence.record.outcome'
+            '.stale-resave';
+        expect(store.values.containsKey(recordKey), isTrue);
+
+        // The falsifiable proof: a BRAND NEW instance must be able to
+        // discover — and therefore delete — the re-saved record.
+        final third = LocalPracticeEvidenceRepository(keyValueStore: store);
+        expect(third.findByOutcomeId(evidence.sourceOutcomeId), evidence);
+
+        final secondRemoved = third.deleteForPlan(PlanId('plan.1'));
+        await third.flush();
+        expect(secondRemoved, 1);
+        expect(store.values.containsKey(recordKey), isFalse);
       },
     );
 
