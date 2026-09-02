@@ -344,19 +344,23 @@ def validate_known_issues(
                 "leaving it blank (A2, §5.2)"
             )
 
-        if severity in {"P0", "P1"}:
-            blocker_severity = blocker_ids.get(issue_id)
-            if blocker_severity is None:
+        blocker_severity = blocker_ids.get(issue_id)
+        if blocker_severity is None:
+            if severity in {"P0", "P1"}:
                 findings.append(
                     f"known-issues.md:{line_number}: id {issue_id!r} is severity "
                     f"{severity!r} but has no matching row in blockers.md (A3) — "
                     "no P0/P1 known issue may hide outside the blocker registry"
                 )
-            elif blocker_severity != severity:
-                findings.append(
-                    f"known-issues.md:{line_number}: id {issue_id!r} is severity "
-                    f"{severity!r} here but {blocker_severity!r} in blockers.md (A3)"
-                )
+        elif blocker_severity != severity:
+            # Checked for EVERY id that exists in blockers.md, regardless of
+            # its known-issues.md severity — not only P0/P1 — so a downgrade
+            # (e.g. blockers.md P1 -> known-issues.md P2) is caught, not just
+            # an upgrade (MAJOR-2).
+            findings.append(
+                f"known-issues.md:{line_number}: id {issue_id!r} is severity "
+                f"{severity!r} here but {blocker_severity!r} in blockers.md (A3)"
+            )
     return findings
 
 
@@ -599,7 +603,9 @@ def main(argv: list[str]) -> int:
         "--since",
         metavar="SHA",
         help="Base git SHA — classify every path changed since this commit on "
-        "the real git history (mutually exclusive with --changes-file).",
+        "the real git history (mutually exclusive with --changes-file). "
+        "Defaults to --feature-freeze's freeze_base_sha when neither this "
+        "nor --changes-file is given (MAJOR-1: a bare call still classifies).",
     )
     parser.add_argument(
         "--changes-file",
@@ -618,25 +624,28 @@ def main(argv: list[str]) -> int:
 
     try:
         classes = load_freeze_classes(args.feature_freeze)
-        load_freeze_base(args.feature_freeze)  # validated for its own shape
+        freeze_base = load_freeze_base(args.feature_freeze)
         blocker_ids = load_blocker_ids(args.blockers)
         known_issues_rows = load_known_issues(args.known_issues)
         changelog_header = load_changelog_header(args.changelog)
         pubspec_version, pubspec_build = load_pubspec_version(args.pubspec)
         schema_version = load_manifest_schema_version(args.manifest_generator)
 
-        changes: list[tuple[str, str]] | None = None
-        if args.since is not None:
-            changes = get_changes_from_git(args.since)
-        elif args.changes_file is not None:
+        # MAJOR-1: a bare call (no --since, no --changes-file) must still
+        # classify — it falls back to the feature-freeze.md-declared
+        # `freeze_base_sha` rather than silently skipping A1/A6. --since
+        # remains the explicit override.
+        if args.changes_file is not None:
             changes = load_changes_file(args.changes_file)
+        else:
+            since_sha = args.since if args.since is not None else freeze_base["freeze_base_sha"]
+            changes = get_changes_from_git(since_sha)
     except VerifyError as error:
         print(f"verify_freeze: {error}", file=sys.stderr)
         return 2
 
     findings: list[str] = []
-    if changes is not None:
-        findings += classify_changes(changes, classes, blocker_ids)
+    findings += classify_changes(changes, classes, blocker_ids)
     findings += validate_known_issues(known_issues_rows, blocker_ids)
     findings += validate_changelog(
         changelog_header,
@@ -651,9 +660,10 @@ def main(argv: list[str]) -> int:
             print(f"  - {finding}", file=sys.stderr)
         return 1
 
-    summary = f"verify_freeze: ok — {len(known_issues_rows)} known-issue row(s)"
-    if changes is not None:
-        summary += f", {len(changes)} changed path(s) classified"
+    summary = (
+        f"verify_freeze: ok — {len(known_issues_rows)} known-issue row(s), "
+        f"{len(changes)} changed path(s) classified"
+    )
     print(summary)
     return 0
 
