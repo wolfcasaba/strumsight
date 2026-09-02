@@ -104,6 +104,15 @@ def assemble_package(present: dict[str, Path], *, output_dir: Path, profile: str
     and writes its checksum manifest. Only called once every mandatory
     input has already been confirmed present — never leaves a half-built
     directory behind (D4)."""
+    resolved_output = output_dir.resolve()
+    labels_by_key = dict(REQUIRED_INPUTS)
+    for key, source in present.items():
+        if resolved_output in source.resolve().parents:
+            raise AssembleError(
+                f"--output-dir {output_dir} is the (or an ancestor) directory of the "
+                f"{labels_by_key[key]} ({source}) — refusing to delete a mandatory input"
+            )
+
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True)
@@ -117,8 +126,13 @@ def assemble_package(present: dict[str, Path], *, output_dir: Path, profile: str
                 f"two mandatory inputs share the file name {source.name!r} — "
                 "the assembled package cannot disambiguate them"
             )
-        shutil.copyfile(source, destination)
-        entries.append({"path": destination.name, "sha256": _sha256_of(destination)})
+        try:
+            shutil.copyfile(source, destination)
+        except OSError as error:
+            raise AssembleError(f"failed to copy {source} to {destination}: {error}") from error
+        entries.append(
+            {"path": destination.relative_to(output_dir).as_posix(), "sha256": _sha256_of(destination)}
+        )
 
     entries.sort(key=lambda entry: entry["path"])
     manifest = {
@@ -157,7 +171,9 @@ def verify_package(package_dir: Path) -> list[str]:
         expected_by_name[name] = expected_sha256
 
     actual_names = {
-        item.name for item in package_dir.iterdir() if item.name != CHECKSUM_MANIFEST_NAME and item.is_file()
+        item.relative_to(package_dir).as_posix()
+        for item in package_dir.rglob("*")
+        if item.is_file() and item.relative_to(package_dir).as_posix() != CHECKSUM_MANIFEST_NAME
     }
     expected_names = set(expected_by_name)
 

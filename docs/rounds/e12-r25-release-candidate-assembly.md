@@ -356,4 +356,86 @@ a diff a négy engedélyezett fájlra korlátozódik. `gh`-t nem hívtam; a
 javaslat telepítése és a két dispatch (zöld + bizonyított piros) az
 orchesztrátor/emberi lépés a merge után (ADR 0488 D8).
 
+### Javító kör (fix1) — F1/F2 zárása, L563 mérce-próba tényleges kimenettel
+
+A review (`docs/reviews/e12-r25-review.md` §3) két nyitott leletet talált:
+F1 (MAJOR) — `--verify` FAIL-OPEN az alkönyvtárba csempészett többletfájlra
+(`iterdir()` nem rekurzív, `is_file()` kiszűri a könyvtárakat); F2 (MINOR) —
+`assemble_package` `rmtree`-je elviheti magukat a bemeneteket, ha az
+`--output-dir` azok szülőkönyvtára, elkapatlan `FileNotFoundError`-rel.
+
+**Két új cella az L563 mérce-próbájával** — a cella megírása után, MIELŐTT a
+kódot javítottam, lefuttattam `flutter test test/tooling/rc_assembly_test.dart`-ot:
+
+```
+00:01 +14 -1: A2/A3/A4 … A4/F1 — an extra file smuggled into a package SUBDIRECTORY … [E]
+  Expected: not <0>
+    Actual: <0>
+  test/tooling/rc_assembly_test.dart 317:7            main.<fn>.<fn>
+
+00:01 +16 -2: A2/A3/A4 … A2/F2 — an --output-dir that is the mandatory inputs' own parent directory … [E]
+  Expected: contains 'APK artifact'
+    Actual: 'Traceback (most recent call last):\n'
+              …
+              '    shutil.copyfile(source, destination)\n'
+              …
+              'FileNotFoundError: [Errno 2] No such file or directory: '
+              '\'/tmp/strumsight_rc_assembly_HCLNXY/self-output/app-release.apk\'\n'
+  test/tooling/rc_assembly_test.dart 426:7            main.<fn>.<fn>
+```
+
+Mindkét új cella PIROS volt az első futásra — a mérce méri, nem tautológia.
+
+**Javítás** (`tool/release/assemble_rc.py`):
+
+- `verify_package`: `actual_names` most `package_dir.rglob("*")`-tal,
+  könyvtárhoz relatív, POSIX-alakú útvonalakkal épül fel (`is_file()` szűrő
+  megmaradt); `assemble_package` a manifest `path` mezőjét is
+  `destination.relative_to(output_dir).as_posix()`-szal írja (a mai lapos
+  csomagnál ez bájtra ugyanaz, mint a korábbi `destination.name`, de a
+  szerződést rekurzív csomagra is egyértelművé teszi).
+- `assemble_package`: a `rmtree` ELŐTT minden jelen lévő bemenetre
+  ellenőrzi, hogy a feloldott `output_dir` nincs-e a feloldott bemenet
+  szülőláncában (`resolved_output in source.resolve().parents`) — ütközésnél
+  `AssembleError`, amely megnevezi az érintett bemenetet, a `rmtree` NEM fut.
+  A `shutil.copyfile` hívás `OSError`-re fogva `AssembleError`-ré alakul —
+  elkapatlan traceback többé nem lehetséges ezen az ágon.
+
+Javítás után **mindkét cella ZÖLD**, a teljes fájl 36/36 zöld:
+
+```
+00:01 +36: All tests passed!
+```
+
+**A review §3 mindkét MÉRT reprodukciója manuálisan megismételve, javítás
+után:**
+
+```
+$ mkdir -p /tmp/x/out/extra && echo "smuggled payload" > /tmp/x/out/extra/evil.apk
+$ python3 tool/release/assemble_rc.py --verify --output-dir /tmp/x/out
+assemble_rc: package at /tmp/x/out deviates from its checksum manifest:
+  - present in package but not in the checksum manifest: extra/evil.apk
+verify exit=1                                    ← most helyesen PIROS (F1)
+
+$ python3 tool/release/assemble_rc.py --profile development --output-dir /tmp/y/build \
+    --apk /tmp/y/build/app-release.apk … --test-report /tmp/y/build/lcov.info
+assemble_rc: --output-dir /tmp/y/build is the (or an ancestor) directory of
+the APK artifact (/tmp/y/build/app-release.apk) — refusing to delete a
+mandatory input
+exit=1
+$ ls -A /tmp/y/build
+THIRD_PARTY_NOTICES.md ai-report.json app-release.apk lcov.info
+release-manifest.json sbom.json security-report.json  ← bemenetek MEGVANNAK (F2)
+```
+
+**§7 gate a fix után, csonkítatlanul:**
+
+```
+tools/round-gate.sh test/tooling/rc_assembly_test.dart test/tooling/release_manifest_test.dart
+```
+
+→ **MINDEN GATE ZÖLD** (format, analyze, mindkét teszt, architecture, secrets,
+l10n). Nem nyúltam a `docs/release/workflows/release-candidate.proposal.yml`-hez
+sem a `docs/reviews/e12-r25-review.md`-hez, ahogy a javító-kör brief §3 előírta.
+
 ## 11. Review — a Claude tölti ki

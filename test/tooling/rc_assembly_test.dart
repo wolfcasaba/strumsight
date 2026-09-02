@@ -296,6 +296,32 @@ void main() {
       );
     });
 
+    test('A4/F1 — an extra file smuggled into a package SUBDIRECTORY after '
+        'assembly (not the package root) is STILL a non-zero --verify exit, '
+        'naming its manifest-relative path (review e12-r25 F1, ADR 0488 D5 '
+        '"extra file is a deviation" also applies below the top level)', () {
+      final outputDir = '${fixtureRoot.path}/out-verify-extra-subdir';
+      final assemble = Process.runSync('python3', [
+        _tool,
+        ...allArgs(outputDir: outputDir),
+      ]);
+      expect(assemble.exitCode, 0, reason: assemble.stderr.toString());
+      Directory('$outputDir/extra').createSync(recursive: true);
+      File('$outputDir/extra/evil.apk').writeAsStringSync('smuggled payload');
+      final verify = Process.runSync('python3', [
+        _tool,
+        '--verify',
+        '--output-dir',
+        outputDir,
+      ]);
+      expect(verify.exitCode, isNot(0));
+      expect(verify.stderr.toString(), contains('extra/evil.apk'));
+      expect(
+        verify.stderr.toString(),
+        contains('not in the checksum manifest'),
+      );
+    });
+
     test('A4 — deleting a packaged file after assembly is a non-zero '
         '--verify exit naming it as missing', () {
       final outputDir = '${fixtureRoot.path}/out-verify-missing';
@@ -357,6 +383,55 @@ void main() {
         'lcov.info',
       ]) {
         expect(verify.stderr.toString(), contains(name));
+      }
+    });
+
+    test('A2/F2 — an --output-dir that is the mandatory inputs\' own parent '
+        'directory is refused BEFORE the rmtree, naming the endangered '
+        'input, and every input file survives the run (review e12-r25 F2, '
+        'ADR 0488 D4 "no half-built package" also covers not destroying '
+        'the inputs themselves)', () {
+      final buildDir = Directory('${fixtureRoot.path}/self-output')
+        ..createSync(recursive: true);
+      String write(String name, String contents) {
+        final file = File('${buildDir.path}/$name');
+        file.writeAsStringSync(contents);
+        return file.path;
+      }
+
+      final selfPaths = {
+        'apk': write('app-release.apk', 'fake apk bytes'),
+        'release_manifest': write(
+          'release-manifest.json',
+          '{"app":{"buildNumber":1}}',
+        ),
+        'sbom': write('sbom.json', '{"componentCount":0,"components":[]}'),
+        'notices': write('THIRD_PARTY_NOTICES.md', '# Third-party notices\n'),
+        'ai_report': write('ai-report.json', '{"findings":[]}'),
+        'security_report': write('security-report.json', '{"findings":[]}'),
+        'test_report': write('lcov.info', 'TN:\nend_of_record\n'),
+      };
+      final args = <String>[
+        '--profile',
+        'development',
+        '--output-dir',
+        buildDir.path,
+      ];
+      for (final entry in selfPaths.entries) {
+        args.addAll(['--${entry.key.replaceAll('_', '-')}', entry.value]);
+      }
+
+      final result = Process.runSync('python3', [_tool, ...args]);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('APK artifact'));
+      for (final path in selfPaths.values) {
+        expect(
+          File(path).existsSync(),
+          isTrue,
+          reason:
+              '$path must survive a refused assembly, not be deleted '
+              'by an rmtree of its own parent directory',
+        );
       }
     });
   });
