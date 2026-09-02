@@ -1,5 +1,63 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R07 KÉSZ — Practice Generator bekötése (route + flag + belépési pont) — PR [#536](https://github.com/wolfcasaba/strumsight/pull/536), squash `d0cd45ee` (2026-09-02)
+
+A Chapter 15 **Kör 7** azt szállítja, amiért a kör létrejött: a Practice
+Generator flow-ja **először megnyitható**. A `PlanSetupScreen` és a
+`TodayPlanScreen` route-ot kapott a `practiceGeneratorEnabled` kapuja mögött,
+a practice hubon egy flag-kapuzott belépési pont vezet a terv-varázslóhoz, a
+flag rollout-határa pedig a mért `nonProd` mintára került — **a production
+zárva marad**. A kör ADR-je: [ADR 0491](docs/adr/0491-practice-generator-entry-point-and-rollout.md).
+
+**A kör MÉRT szűkítése — miért 2 képernyő, nem 6.** Az `E15-R14` (ADR 0482)
+leszállította a kompozíciós gyökeret, de két seamet szándékosan nyitva hagyott,
+és azok ma dobnak (`practice_generator_providers.dart:85` és `:149` →
+`UnimplementedError`); konkrét implementációjuk **nulla** a `lib/`-ben, és a
+`main.dart` sem írja felül őket. Mivel a `localPracticePlanRepositoryProvider`
+watch-olja az elsőt, a dobás **tranzitív**: a 6 képernyőből csak a `PlanSetup`
+és a `TodayPlan` konstruálható valódi providerekből. A másik négy
+(`PlanPreview`, `PlanPrivacy`, `Weekly`, `PlanChangeReview`) **szándékosan NEM
+kapott route-ot** — egy dobó providerre kötött route kattintható crash-út, nem
+bekötés (ADR 0491 D1/D5). A `practice_generator` `application/`/`domain/`/
+`data/`/`providers/` rétege érintetlen: a STOP-protokoll és a merge-elt
+`tools/tests/test_e15_r07_composition_prerequisite.py` mind a 10 cellája zöld.
+
+**Az őszinte fél lépés (ADR 0491 D3, ADR 0078 precedens).** A Setup-varázsló
+vége ma nem generál tervet, és ezt a UI nem hazudja el: a belépési pont
+cselekvést ígér („Build your practice plan" / „Gyakorlási terv összeállítása"),
+nem kész tervet; nincs bevezetett no-op `onComplete` callback.
+
+**Mérés (`dart run tool/check_screen_reachability.dart`):** Reachable **68 → 70**,
+Unreachable **28 → 26**, Flag-gated **25 → 27**; `Measured screens: 96`
+változatlan (a kör route-ot ad, nem képernyőt).
+
+**⚠ NYITVA MARAD — az ADR 0482 D9/D10/D11 kötelezettségei NEM teljesültek, és
+gazdátlanul sem maradnak.** Az ADR 0482 ezeket „halasztott, kötelező
+`E15-R07 / F1`-előfeltételként" rögzítette. A D9 tényleges biztonsági feltétele
+(*„MIELŐTT bármelyik ÉRINTETT képernyőre route nyílik"*) **teljesül**: ez a kör
+a három érintett (dobó) képernyő egyikére sem nyitott route-ot. A
+kötelezettségek érdemi része viszont nyitva van, és ANNAK a körnek a dolga,
+amelyik a négy maradék képernyőt beköti (ADR 0491 D5):
+
+- **D9** — a `main.dart` boot-override mindkét seamre + az acceptance-cella:
+  „egy production-alakú `ProviderScope`-on a 6 képernyő EGYIKE sem dob";
+- **D10** — a tulajdonos (`sourcePlanId`) propagálása az `evidence_aggregator`
+  hívási láncán VAGY az `outcomePlanLookup` bekötése, **mielőtt** a
+  `PlanPrivacyScreen` törlés gombja bekötésre kerül;
+- **D11** — a `DeletePracticePlanningData` optimista siker-jelentésének
+  megszüntetése.
+
+**Review:** [`e15-r07-review.md`](docs/reviews/e15-r07-review.md) — **APPROVED**,
+0 BLOCKER / 0 MAJOR / 0 MINOR, 1 NOTE, javító kör NÉLKÜL. A review külön
+megmérte az [L583](docs/LESSONS.md#l583) hibaosztályt: az „a route felépül"
+cella **nem** a saját override-jaitól zöld — az `app_router_test` harness
+egyetlen generátor-providert sem ír felül, tehát a valódi kompozíciós gyökérből
+épül.
+
+**CI a merge SHA-n (`ed362594`):** [full-gate 33689749950](https://github.com/wolfcasaba/strumsight/actions/runs/33689749950),
+[router-ci 33689752109](https://github.com/wolfcasaba/strumsight/actions/runs/33689752109) — mindkettő `success`.
+Lecke: [L585](docs/LESSONS.md#l585).
+
 ## ✅ E12-R34 KÉSZ — Post-launch stabilization és hotfix-út — PR [#535](https://github.com/wolfcasaba/strumsight/pull/535), squash `51184118` (2026-09-02)
 
 A Ch12 **Kör 34** a GA utáni **hotfix-utat** teszi auditálhatóvá. A kör tétele

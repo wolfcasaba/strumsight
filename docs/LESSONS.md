@@ -23320,3 +23320,55 @@ javaslat, hiszen a telepítés a merge utáni lépés.
 mutációs cellája (job-szintű `continue-on-error`, job-szintű `if:`,
 tartalom-nélküli scan, tartalom-nélküli signing, `needs:` nélküli publish-job,
 `${{ inputs.` a `run:` törzsekben, `1.2` → `1.2.0` verzió-normalizálás).
+
+---
+
+## L585 — Egy „overridable production seam" NEM kész kompozíció: a dobó provider tranzitívan zárja a képernyőket, és ezt a bekötő körnek MÉRNIE kell, nem feltételeznie (E15-R07, 2026-09-02)
+
+**Mit mértünk.** Az `E15-R07` (Practice Generator bekötése) második nekifutása
+azzal indult, hogy az előfeltétele — az `E15-R14` kompozíciós kör (ADR 0482) —
+merge-elve van, tehát az önjavító kör előrevetítése szerint „az F1 valóban
+route + flag + belépési pont méretű lesz". A kötelező pre-flight újramérés ezt
+**megcáfolta**: a kompozíciós gyökér két függőséget szándékosan nyitva hagyott
+`overridable production seam` néven, és azok dobnak:
+
+```
+practice_generator_providers.dart:85   exerciseCandidateResolverProvider  -> throw UnimplementedError
+practice_generator_providers.dart:149  generationPlanInputBuilderProvider -> throw UnimplementedError
+```
+
+`grep -rn "ExerciseCandidateResolver" lib/` és `grep -rn "GenerationPlanInputBuilder" lib/`:
+mindkettő KIZÁRÓLAG `typedef` + a dobó provider — konkrét implementáció **nulla**
+a `lib/` egészében —, és `lib/main.dart:90` `overrides:` listája egyiket sem
+írja felül.
+
+**Miért ez a döntő.** A `localPracticePlanRepositoryProvider` (`:95`)
+`ref.watch(exerciseCandidateResolverProvider)`-t hív, ezért a dobás
+**tranzitívan** terjed. A képernyőnkénti mérés emiatt 6-ból csak **2**
+konstruálhatót adott (`PlanSetupScreen`, `TodayPlanScreen`); a `PlanPreview`,
+`PlanPrivacy`, `Weekly` és `PlanChangeReview` mind a dobó seamre fut ki. A
+„kompozíciós kör kész → minden képernyő bekötethető" következtetés tehát
+**hamis** volt: egy seam attól, hogy nevesítve és dokumentálva van, még zárva
+tartja a rá épülő felületet.
+
+**Hogyan alkalmazd.** Egy route-bekötő kör pre-flightja ne a kompozíciós kör
+LÉTÉT mérje, hanem képernyőnként a **tényleges provider-utat**, a dobó/override-ra
+váró seamekig követve. Route-ot **tilos** regisztrálni olyan képernyőhöz,
+amelynek a providere ma dob: az nem „majdnem kész bekötés", hanem kattintható
+crash-út — az elérhetőség-mérő zöldül tőle, a felhasználó hibaképernyőt kap.
+A helyes lépés a scope MÉRT szűkítése (itt: 2/6 képernyő bekötése, a maradék
+nevesített okkal és nevesített következő körrel, ADR 0491 D5), nem a STOP-mondat
+gyengítése és nem fake implementáció a seam mögé.
+
+**Egy második, mérőeszközre vonatkozó lelet ugyanebből a körből.** A
+`practiceGeneratorEnabled` melletti doc-comment eredetileg szó szerint
+tartalmazta a két bekötött képernyő class-nevét. A
+`tool/check_screen_reachability.dart` a class-neveket **szövegesen** illeszti a
+router fájlban (D3), ezért a kommentbeli előfordulást guard NÉLKÜLI deklaratív
+referenciának mérte, és mindkét képernyő `isFlagGated` verdiktjét hamisan
+`false`-ra váltotta (`Flag-gated: 25` maradt volna a helyes `27` helyett). A
+comment átírása (a class-nevek kivétele) javította a mérést. **Tanulság:** ahol
+a mérőeszköz szövegesen illeszt, ott a KOMMENT is bemenet — a mérés
+megváltoztatható anélkül, hogy a kód változna.
+
+**Őrteszt:** `test/app/routing/app_router_test.dart::flagged Practice Generator setup route is registered and builds from the composition root without throwing (A1″, A2 ON)` — a cella a VALÓDI kompozíciós gyökérből építi a route-ot (a `_pumpRouter` harness egyetlen `practice_generator` providert sem ír felül), és `expect(tester.takeException(), isNull)`-lal bizonyítja, hogy nem dob; a párja a flag-OFF cella. Ha egy későbbi kör dobó seamre kötne route-ot, ez a cellapár váltana pirosra.
