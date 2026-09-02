@@ -55,7 +55,12 @@ nem ez a kör méri újra. A `tool/release/verify_freeze.py --since
   súlyosságú blocker-azonosítót (`R-[A-Z0-9-]+` alakú). A `P3` súlyosság
   (ha valaha felkerül egy sor `blockers.md`-be) **nem** elég önmagában —
   ez a §5.1 „minden commit vagy P0/P1/P2 blocker-javítás, vagy dokumentáció"
-  mondatának pontos leképezése.
+  mondatának pontos leképezése. **Az osztályozás commit-szintű, nem
+  útvonal-szintű**: ha egy commit üzenete megnevez egy érvényes blocker ID-t,
+  a commit MINDEN útvonala `blocker-fix`-nek minősül, akkor is, ha egy részük
+  ténylegesen semmilyen kapcsolatban nincs a megnevezett blockerrel — a
+  jóváhagyó szerep (`approver_role` fent) felelőssége a commit tartalmának
+  szűkítése a valódi blocker-javításra, nem a gépi ellenőrzésé.
 
 Ez a három osztály **zárt** — a `tool/release/verify_freeze.py` ezt a
 táblázatot olvassa be (nem hardkódolja), de a táblázat maga csak ezt a három
