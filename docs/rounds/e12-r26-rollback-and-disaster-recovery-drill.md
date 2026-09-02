@@ -383,4 +383,77 @@ cd backend && python3 -m pytest tests/test_rollback_drill.py -q
 
 — ZÖLD, `6 passed`.
 
+### 10.8 Javító kör (fix1) — a review leletlistája (`docs/reviews/e12-r26-review.md`)
+
+A review 4 MAJOR-t és 7 nyitott MINOR-t talált a `9865de60` HEAD-en (CHANGES
+REQUESTED). Az alábbi táblázat leletenként mutatja a javítást, az ÚJ mérő
+cellát és a mért kimenetet. Minden javítás a review-ban kijelölt öt fájlon
+belül maradt (`tool/release/verify_rollback.py`,
+`docs/operations/disaster-recovery-drill.md`,
+`backend/tests/test_rollback_drill.py`,
+`test/tooling/rollback_policy_test.dart`, ez a fájl) — a tiltott zóna
+(`backend/scripts/**`, `backend/app/**`, `lib/**`, `.github/**`, `tools/**`,
+`docs/operations/{backend-deploy,database-recovery}.md`, `docs/adr/**`,
+`docs/release/**`) érintetlen maradt.
+
+| Lelet | Javítás | Új mérő cella | Mért kimenet |
+|---|---|---|---|
+| MAJOR-1 | `check_record_counts` mostantól az ÉLŐ DB tábla-halmazát (`inspect(engine).get_table_names() - {"alembic_version"}`) veti össze a dump tábla-halmazával — minden eltérés (élőben-de-nem-dumpban, dumpban-de-nem-élőben) FAIL; a PASS-szöveg a TÉNYLEGESEN összehasonlított táblák számát írja (`Base.metadata`-ra támaszkodás megszűnt, az import is törölve) | `test_full_backup_restore_verify_chain_matches` (átírva — a `backup.py`-t VALÓDI subprocessként hívja, hogy a MAJOR-1 rést ténylegesen reprodukálja, ne az in-process alembic-import-mellékhatás fedje el), `test_verify_rollback_record_counts_fails_when_live_table_missing_from_dump`, `test_verify_rollback_record_counts_fails_on_unknown_dump_table`, `test_verify_rollback_record_counts_pass_detail_reports_compared_count` | a valódi láncon: `record_counts` **FAIL**, 26 Community tábla „present in the live database but not covered by the backup dump"; `OVERALL: FAIL`, CLI `EXIT=1` (ld. jegyzőkönyv §4, 9. sor) |
+| MAJOR-2 | `disaster-recovery-drill.md` 7. lépésének hamis „+ minden Community tábla 0 sorral" zárójele törölve, a valódi (`revision=e09_r27_0020, users=1, user_settings=1`) kimenetre cserélve; a §7 „Felfedezett runbook-hibák" szakasz ÚJ, elsődleges leletet kapott: a `backup.py` `Base.metadata`-alapú importja miatt a 29 élő táblából csak 2-t ment el | (dokumentum-javítás — a mérő cella az A6 szakasz-létezés cella, változatlan) | a §7 új lelete a reprodukáló parancsokkal és a mért `2`/`29` számokkal együtt szerepel |
+| MAJOR-3 | `check_flag_profile`: üres `expected` VAGY üres `observed` profil explicit FAIL, a `--no-flag-profile` opt-out-tól függetlenül | `test_verify_rollback_flag_profile_fails_on_empty_profile` | mindhárom kombináció (üres/üres, üres/nem-üres, nem-üres/üres) `status == "FAIL"` |
+| MAJOR-4 | `load_flag_profile` és `check_model_manifest` hibaüzenetei mostantól csak a kulcsot/típust írják ki, az ÉRTÉKET soha | `test_verify_rollback_load_flag_profile_does_not_echo_pii_or_password_hash` | egy szintetikus e-mail + bcrypt-alakú hash fixture-re a hibaüzenet sem az e-mailt, sem a hash-t nem tartalmazza, csak `"...got a dict"` |
+| MINOR-1 | `check_model_manifest`: a feloldott asset-útvonalnak a feloldott `project_root` ALATT kell maradnia (`Path.resolve()` + `relative_to`), különben FAIL | `test_verify_rollback_model_manifest_rejects_absolute_path_traversal`, `test_verify_rollback_model_manifest_rejects_dotdot_path_traversal` | mindkét fixture (`/etc/passwd`, `../../../etc/passwd`) `status == "FAIL"`, `"escapes project_root"` a részletben |
+| MINOR-2 | `check_migration_head`/`check_record_counts`: `except Exception`, nem csak `SQLAlchemyError` — egy hiányzó DB-driver modul is FAIL dimenziót ad, a riport nem szakad meg | `test_verify_rollback_reports_dimension_fail_on_unsupported_driver_url` | `postgresql://` URL-lel (nincs `psycopg2`): `migration_head`/`record_counts` FAIL, `model_manifest` lefut, jelszó nem szivárog a `detail`-be |
+| MINOR-4 | `rollback_policy_test.dart` A5(b): a mintát a lépés-sor idő-OSZLOPÁRA kötöttük (`row.split('\|')[3]`), nem a nyers sorra | `A5(b) MINOR-4 red fixture` teszt | egy üres idő-cellájú, `30s`-t a Parancs-cellában tartalmazó fixture-sor `isFalse`-t ad |
+| MINOR-5 | a jegyzőkönyv §2 „Mi történt az adattal" bekezdése átírva: az A3 a feloldás-round-trip-et bizonyítja, NEM az idegen adattár érintetlenségét (kódváltozás nem kellett) | (dokumentum-javítás) | — |
+| MINOR-6 | `DimensionResult.ok` allowlist (`status in (PASS, SKIPPED)`), nem `!= FAIL` denylist | `test_verify_rollback_dimension_result_ok_is_allowlist_not_denylist` | egy `"UNKNOWN_STATUS"` `DimensionResult.ok` értéke `False` |
+| MINOR-7 | a jegyzőkönyv 9. lépése két KÜLÖN fájlra mutat (nem ugyanarra a fájlútvonalra mindkét kapcsolóval); ÚJ 9b sor egy ELTÉRŐ megfigyelt profillal (negatív ág); a §7 hamis `--force` állítás törölve/átírva a Kör 8 tesztjére hivatkozva | (dokumentum-javítás — a mérő a verify_rollback CLI valódi futása) | 9. sor: `flag_profile` PASS (3 flag egyezik); 9b. sor: `flag_profile` **FAIL** (`communityWritesEnabled: expected=False observed=True`) |
+| MINOR-3, NOTE-1/2/3 | nem igényeltek változtatást (a review szerint sem merge-blokkoló, sem hamis) | — | — |
+
+**A valódi-sértés próba megismételve a javított kódon** (a mutáció a
+`check_migration_head` fej-eltérés ágát `FAIL`→`PASS`-ra állította,
+ugyanúgy, mint az eredeti körben):
+
+```
+$ python3 -m pytest backend/tests/test_rollback_drill.py    # mutált kóddal
+1 failed, 14 passed in 8.03s   # a bukott cella: test_verify_rollback_fails_on_migration_head_mismatch
+
+$ python3 -m pytest backend/tests/test_rollback_drill.py    # visszaállítva
+15 passed in 8.14s
+
+$ git diff --stat tool/release/verify_rollback.py            # a mutáció után, visszaállítva
+tool/release/verify_rollback.py | 139 ++++++++++++++++++++++++++++++----------
+1 file changed, 106 insertions(+), 33 deletions(-)   # PONTOSAN a fix1 javítás mérete — nincs maradék mutáció
+```
+
+**Scope-ellenőrzés (a review MÁSODIK legfontosabb mérése az E12-R25 óta):**
+
+```
+$ git status --porcelain
+ M backend/tests/test_rollback_drill.py
+ M docs/operations/disaster-recovery-drill.md
+ M test/tooling/rollback_policy_test.dart
+ M tool/release/verify_rollback.py
+ M docs/rounds/e12-r26-rollback-and-disaster-recovery-drill.md
+```
+
+Pontosan az öt engedélyezett fájl — semmi más nem módosult. (Egy `ruff
+format` futtatás menet közben tévedésből 7 tiltott-zónás `tool/release/*.py`
+fájlt is átformázott a saját stílusa szerint; ezt `git checkout --` -tal
+azonnal visszaállítottuk, mielőtt bármi commitolva lett volna — a fenti
+`git status` a helyreállítás UTÁNI állapot.)
+
+### 10.9 Záró mérce (fix1)
+
+```
+tools/round-gate.sh test/tooling/rollback_policy_test.dart test/core/feature_flags/feature_flag_registry_test.dart
+```
+
+```
+cd backend && python3 -m pytest tests/test_rollback_drill.py -q
+```
+
+— a teljes, csonkítatlan kimenet a kör naplójában; mindkettő ZÖLD a `done`
+jelzés előtt (`backend/tests/test_rollback_drill.py`: `15 passed`).
+
 ## 11. Review — a Claude tölti ki

@@ -48,32 +48,26 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from alembic.migration import MigrationContext
-from sqlalchemy import create_engine, func, inspect, select
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_BACKEND_ROOT = _REPO_ROOT / "backend"
-if str(_BACKEND_ROOT) not in sys.path:
-    # Standalone CLI use needs `app.*` importable; under pytest (backend's
-    # pytest.ini sets `pythonpath = .`) this is already the case and the
-    # insert is a harmless no-op duplicate.
-    sys.path.insert(0, str(_BACKEND_ROOT))
-
-from app import models as _models  # noqa: E402,F401 -- registers ORM metadata
-from app.database import Base  # noqa: E402
 
 DEFAULT_MODEL_MANIFEST_RELPATH = "assets/ml/model_manifest.json"
 
 _STATUS_PASS = "PASS"
 _STATUS_FAIL = "FAIL"
 _STATUS_SKIPPED = "SKIPPED"
+
+# `alembic_version` is migration bookkeeping, not application data — it is
+# never in a `backup.py` dump and must be excluded from the live/dump table
+# SET comparison explicitly, not by accident of the dump never mentioning it.
+_MIGRATION_BOOKKEEPING_TABLES = frozenset({"alembic_version"})
 
 
 @dataclass
@@ -85,7 +79,9 @@ class DimensionResult:
 
     @property
     def ok(self) -> bool:
-        return self.status != _STATUS_FAIL
+        # Allowlist, not a `!= FAIL` denylist (MINOR-6): an unknown or
+        # mistyped status must fail closed, not default to `ok=True`.
+        return self.status in (_STATUS_PASS, _STATUS_SKIPPED)
 
     def to_dict(self) -> dict:
         return {
@@ -157,8 +153,12 @@ def load_flag_profile(path: str | Path) -> tuple[dict | None, str | None]:
         return None, f"flag profile {path} must be a JSON object of {{flagKey: bool}}"
     for key, value in data.items():
         if not isinstance(value, bool):
+            # MAJOR-4: never echo `value` — an operator who points this at a
+            # backup dump by mistake (also "a JSON file path") would leak
+            # PII/password hashes into stdout, --json, and the drill log.
             return None, (
-                f"flag profile {path} key {key!r} must be a boolean, got {value!r}"
+                f"flag profile {path} key {key!r} must be a boolean, "
+                f"got a {type(value).__name__}"
             )
     return data, None
 
@@ -199,7 +199,10 @@ def check_migration_head(
                 heads = MigrationContext.configure(connection).get_current_heads()
         finally:
             engine.dispose()
-    except SQLAlchemyError as exc:  # fail-closed: a DB error is a FAIL, not a crash
+    except Exception as exc:  # noqa: BLE001 -- MINOR-2: fail-closed on ANY
+        # error (e.g. a missing driver module raises ModuleNotFoundError,
+        # not a SQLAlchemyError) — this dimension must still report FAIL
+        # instead of an uncaught traceback that skips the rest of the report.
         elapsed = time.perf_counter() - start
         return DimensionResult(
             "migration_head",
@@ -250,31 +253,50 @@ def check_record_counts(
         engine = _make_engine(database_url)
         mismatches: list[str] = []
         try:
-            present = set(inspect(engine).get_table_names())
+            # MAJOR-1: compare the LIVE database's ACTUAL table set against
+            # the dump's, not `Base.metadata.sorted_tables` (only the ORM
+            # models `app.models` registers — 2 tables — while migrations
+            # create Community tables via raw DDL with no ORM model, so a
+            # live schema can hold 29). Every set difference is a FAIL: a
+            # live table the dump never covered would otherwise be silently
+            # `continue`d past, and a restore that lost 27/29 tables read
+            # as "2 table(s) match".
+            live_tables = (
+                set(inspect(engine).get_table_names()) - _MIGRATION_BOOKKEEPING_TABLES
+            )
+            dump_tables = set(tables)
+
+            for name in sorted(live_tables - dump_tables):
+                mismatches.append(
+                    f"{name}: present in the live database but not covered by "
+                    "the backup dump"
+                )
+            for name in sorted(dump_tables - live_tables):
+                mismatches.append(
+                    f"{name}: present in the backup dump but not a live database table"
+                )
+
+            compared = sorted(live_tables & dump_tables)
             with engine.connect() as connection:
-                for table in Base.metadata.sorted_tables:
-                    if table.name not in tables:
-                        continue
-                    info = tables[table.name]
+                quote = connection.dialect.identifier_preparer.quote
+                for name in compared:
+                    info = tables[name]
                     expected_count = (
                         info.get("count") if isinstance(info, dict) else None
                     )
                     if expected_count is None:
-                        mismatches.append(f"{table.name}: backup dump missing a count")
+                        mismatches.append(f"{name}: backup dump missing a count")
                         continue
-                    if table.name not in present:
-                        actual_count = 0
-                    else:
-                        actual_count = connection.execute(
-                            select(func.count()).select_from(table)
-                        ).scalar_one()
+                    actual_count = connection.execute(
+                        text(f"SELECT COUNT(*) FROM {quote(name)}")
+                    ).scalar_one()
                     if actual_count != expected_count:
                         mismatches.append(
-                            f"{table.name}: expected={expected_count} actual={actual_count}"
+                            f"{name}: expected={expected_count} actual={actual_count}"
                         )
         finally:
             engine.dispose()
-    except SQLAlchemyError as exc:
+    except Exception as exc:  # noqa: BLE001 -- MINOR-2, see check_migration_head
         elapsed = time.perf_counter() - start
         return DimensionResult(
             "record_counts",
@@ -287,8 +309,11 @@ def check_record_counts(
         return DimensionResult(
             "record_counts", _STATUS_FAIL, "; ".join(mismatches), elapsed
         )
+    # The PASS text states the number ACTUALLY compared (live ∩ dump), never
+    # the dump's table count — the pre-fix text made a 2/29 comparison read
+    # as complete.
     return DimensionResult(
-        "record_counts", _STATUS_PASS, f"{len(tables)} table(s) match", elapsed
+        "record_counts", _STATUS_PASS, f"{len(compared)} table(s) compared", elapsed
     )
 
 
@@ -341,17 +366,40 @@ def check_model_manifest(
     if not isinstance(models, list) or not models:
         mismatches.append("manifest 'models' must be a non-empty list")
         models = []
+    project_root_resolved = Path(project_root).resolve()
     for entry in models:
         if not isinstance(entry, dict):
-            mismatches.append(f"malformed models[] entry: {entry!r}")
+            # MAJOR-4: keys/type only, never the content — same rule as
+            # `load_flag_profile`.
+            mismatches.append(
+                f"malformed models[] entry: expected an object, got a "
+                f"{type(entry).__name__}"
+            )
             continue
         filename = entry.get("filename")
         rel_path = entry.get("path")
         expected_sha = entry.get("sha256")
         if not filename or not rel_path or not expected_sha:
-            mismatches.append(f"malformed models[] entry: {entry!r}")
+            mismatches.append(
+                "malformed models[] entry: missing filename/path/sha256; "
+                f"keys present={sorted(entry.keys())}"
+            )
             continue
-        asset_path = Path(project_root) / rel_path
+        # MINOR-1: the resolved asset path must stay UNDER project_root — an
+        # absolute path (`/etc/passwd`) or a `..`-escape must FAIL, not be
+        # read and hashed. A manifest is a followed input, but the
+        # model-rollback use case is exactly a manifest arriving from a
+        # RESTORED package, where the trust level is lower than "on this
+        # tree today".
+        asset_path = (Path(project_root) / rel_path).resolve()
+        try:
+            asset_path.relative_to(project_root_resolved)
+        except ValueError:
+            mismatches.append(
+                f"{filename}: path {rel_path!r} escapes project_root, refusing "
+                "to read it"
+            )
+            continue
         if not asset_path.is_file():
             mismatches.append(f"{filename}: missing on disk at {rel_path}")
             continue
@@ -398,6 +446,30 @@ def check_flag_profile(
             "flag_profile",
             _STATUS_FAIL,
             observed_error or "observed flag profile unavailable",
+            elapsed,
+        )
+    # MAJOR-3: an empty `{}` profile on EITHER side must FAIL, not PASS — an
+    # empty `expected`/`observed` pair makes `all_keys` empty, so the
+    # comparison loop below never runs and would otherwise report
+    # "0 flag(s) match" as PASS. That is worse than `--no-flag-profile`: it
+    # is invisible in the report as an opt-out, and it bypasses P4's rule
+    # that the ONLY way to leave this dimension out is the explicit switch.
+    if not expected:
+        elapsed = time.perf_counter() - start
+        return DimensionResult(
+            "flag_profile",
+            _STATUS_FAIL,
+            "expected flag profile is empty — a dimension must compare at "
+            "least one key; use --no-flag-profile to opt out explicitly",
+            elapsed,
+        )
+    if not observed:
+        elapsed = time.perf_counter() - start
+        return DimensionResult(
+            "flag_profile",
+            _STATUS_FAIL,
+            "observed flag profile is empty — a dimension must compare at "
+            "least one key; use --no-flag-profile to opt out explicitly",
             elapsed,
         )
 

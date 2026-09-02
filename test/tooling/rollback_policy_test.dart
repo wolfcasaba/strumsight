@@ -50,6 +50,22 @@ FeatureFlagDefinition _definitionOf({
   );
 }
 
+/// A5(b)'s table convention: `| # | Parancs | Mért idő | Eredmény |` — the
+/// duration must live in the DURATION COLUMN specifically (index 3 after
+/// splitting on `|`), not just appear anywhere in the row (MINOR-4: a
+/// `--max-time 30s` substring inside the command cell must not make an
+/// empty duration cell read as measured).
+final RegExp _durationPattern = RegExp(r'\d+(\.\d+)?\s*(s|ms)\b');
+const int _stepRowDurationColumnIndex = 3;
+
+bool _stepRowDurationColumnIsStrict(String row) {
+  final cells = row.split('|');
+  if (cells.length <= _stepRowDurationColumnIndex) {
+    return false;
+  }
+  return _durationPattern.hasMatch(cells[_stepRowDurationColumnIndex]);
+}
+
 Directory _findProjectRoot() {
   var candidate = Directory.current.absolute;
   while (true) {
@@ -151,73 +167,98 @@ void main() {
     },
   );
 
-  group('A5/A6 — the disaster-recovery drill log is a MACHINE-CHECKED artifact, '
-      'not a prose promise (§0.0.1 P5)', () {
-    final drillFile = File(
-      '${_findProjectRoot().path}/docs/operations/disaster-recovery-drill.md',
-    );
-
-    test('the drill log file exists', () {
-      expect(
-        drillFile.existsSync(),
-        isTrue,
-        reason:
-            'docs/operations/disaster-recovery-drill.md must exist — '
-            'the round §4.4 deliverable',
+  group(
+    'A5/A6 — the disaster-recovery drill log is a MACHINE-CHECKED artifact, '
+    'not a prose promise (§0.0.1 P5)',
+    () {
+      final drillFile = File(
+        '${_findProjectRoot().path}/docs/operations/disaster-recovery-drill.md',
       );
-    });
 
-    final content = drillFile.existsSync() ? drillFile.readAsStringSync() : '';
-    final durationPattern = RegExp(r'\d+(\.\d+)?\s*(s|ms)\b');
-    final estimatePattern = RegExp(
-      r'(kb\.|~|approx|becsült|körülbelül)',
-      caseSensitive: false,
-    );
-    final stepRowPattern = RegExp(r'^\|\s*\d+\s*\|');
-
-    test('A5(a): no documented step uses an estimate marker (kb., ~, approx, '
-        'becsült, körülbelül) — becsült idő NEM elfogadható (brief §5.1)', () {
-      final offenders = content
-          .split('\n')
-          .where((line) => estimatePattern.hasMatch(line))
-          .toList();
-      expect(
-        offenders,
-        isEmpty,
-        reason: 'estimation marker(s) found:\n${offenders.join('\n')}',
-      );
-    });
-
-    test('A5(b): every documented drill step row carries a strict numeric '
-        'duration (`\\d+(\\.\\d+)?\\s*(s|ms)`) — the "| # | ... |" step-table '
-        'convention', () {
-      final stepRows = content
-          .split('\n')
-          .where((line) => stepRowPattern.hasMatch(line))
-          .toList();
-      expect(
-        stepRows,
-        isNotEmpty,
-        reason:
-            'no step rows found — the drill log must record each step '
-            'as a "| <#> | ... | <measured duration> | ... |" table row',
-      );
-      for (final row in stepRows) {
+      test('the drill log file exists', () {
         expect(
-          durationPattern.hasMatch(row),
+          drillFile.existsSync(),
           isTrue,
-          reason: 'step row has no strict numeric duration: $row',
+          reason:
+              'docs/operations/disaster-recovery-drill.md must exist — '
+              'the round §4.4 deliverable',
         );
-      }
-    });
+      });
 
-    test('A6: the log has a "Felfedezett runbook-hibák" section (stated '
-        'explicitly even when empty — "nem találtunk" must be said, not '
-        'omitted)', () {
-      expect(
-        content,
-        contains(RegExp('Felfedezett runbook-hibák', caseSensitive: false)),
+      final content = drillFile.existsSync()
+          ? drillFile.readAsStringSync()
+          : '';
+      final estimatePattern = RegExp(
+        r'(kb\.|~|approx|becsült|körülbelül)',
+        caseSensitive: false,
       );
-    });
-  });
+      final stepRowPattern = RegExp(r'^\|\s*\d+\s*\|');
+
+      test(
+        'A5(a): no documented step uses an estimate marker (kb., ~, approx, '
+        'becsült, körülbelül) — becsült idő NEM elfogadható (brief §5.1)',
+        () {
+          final offenders = content
+              .split('\n')
+              .where((line) => estimatePattern.hasMatch(line))
+              .toList();
+          expect(
+            offenders,
+            isEmpty,
+            reason: 'estimation marker(s) found:\n${offenders.join('\n')}',
+          );
+        },
+      );
+
+      test('A5(b): every documented drill step row carries a strict numeric '
+          'duration (`\\d+(\\.\\d+)?\\s*(s|ms)`) in its Mért idő COLUMN — the '
+          '"| # | Parancs | Mért idő | Eredmény |" step-table convention '
+          '(MINOR-4: anchored to the duration column, not the whole row — a '
+          '`30s` substring inside the Parancs cell must not count)', () {
+        final stepRows = content
+            .split('\n')
+            .where((line) => stepRowPattern.hasMatch(line))
+            .toList();
+        expect(
+          stepRows,
+          isNotEmpty,
+          reason:
+              'no step rows found — the drill log must record each step '
+              'as a "| <#> | ... | <measured duration> | ... |" table row',
+        );
+        for (final row in stepRows) {
+          expect(
+            _stepRowDurationColumnIsStrict(row),
+            isTrue,
+            reason:
+                'step row has no strict numeric duration in its Mért idő '
+                'column: $row',
+          );
+        }
+      });
+
+      test('A5(b) MINOR-4 red fixture: a `30s` substring in the Parancs cell '
+          'does NOT satisfy an empty Mért idő cell — proves the check is '
+          'anchored to the duration column, not the raw row', () {
+        const offendingRow =
+            '| 1 | `python3 verify_rollback.py --max-time 30s` |  | ZÖLD |';
+        expect(
+          _stepRowDurationColumnIsStrict(offendingRow),
+          isFalse,
+          reason:
+              'a duration-shaped substring in the command cell must not '
+              'satisfy the empty duration column: $offendingRow',
+        );
+      });
+
+      test('A6: the log has a "Felfedezett runbook-hibák" section (stated '
+          'explicitly even when empty — "nem találtunk" must be said, not '
+          'omitted)', () {
+        expect(
+          content,
+          contains(RegExp('Felfedezett runbook-hibák', caseSensitive: false)),
+        );
+      });
+    },
+  );
 }
