@@ -11,11 +11,20 @@ Two modes, one script, one `main(argv) -> int` (round brief §0.0.P5 — the
     - the `incident_id` `workflow_dispatch` input is `required: true` (D2),
       and no `skip_scan`/`emergency`-shaped input exists anywhere (D1);
     - a step named like "security scan" and a step named like "sign" both
-      exist and are BOTH unconditional — no `if:`, no `continue-on-error:`
-      (D1);
-    - exactly one job carries an `environment:` key, and every job whose
-      steps build, sign, assemble, or upload a release artifact
-      transitively `needs:` it (D3).
+      exist and are BOTH unconditional — no `if:`, no `continue-on-error:`,
+      checked on the step itself AND on the JOB that contains it (a
+      job-level `continue-on-error:`/`if:` bypasses the gate exactly like a
+      step-level one does) (D1);
+    - the scan/signing steps are also checked for CONTENT, not just name: the
+      job containing the scan step must have a step whose `run:` invokes
+      `tool/release/security_scan.py`, and the job containing the signing
+      step must have a step whose `env:` binds
+      `STRUMSIGHT_REQUIRE_RELEASE_SIGNING` and whose `run:` calls
+      `flutter build apk --release` — a correctly-named step with a decoy
+      body (e.g. `echo skipping scan`) is a violation (D1);
+    - exactly one job carries an `environment:` key, and EVERY OTHER job,
+      without exception, transitively `needs:` it — a fail-closed allowlist,
+      not a denylist keyed on step names/verbs (D3).
 
   request — `--incident-id --previous-version --version`. Audits a single
   hotfix REQUEST:
@@ -282,7 +291,9 @@ def job_transitively_needs(jobs: list[ParsedJob], start_job_id: str, target_job_
 _SKIP_INPUT_NAME_PATTERN = re.compile(r"skip|emergency", re.IGNORECASE)
 _SECURITY_SCAN_STEP_NAME = re.compile(r"security scan", re.IGNORECASE)
 _SIGNING_STEP_NAME = re.compile(r"sign", re.IGNORECASE)
-_RELEASE_VERB = re.compile(r"build|sign|assembl|upload", re.IGNORECASE)
+_SECURITY_SCAN_INVOCATION = re.compile(r"tool/release/security_scan\.py")
+_FLUTTER_RELEASE_BUILD = re.compile(r"flutter build apk --release")
+_SIGNING_REQUIRED_ENV_KEY = "STRUMSIGHT_REQUIRE_RELEASE_SIGNING"
 
 
 def static_check(workflow_text: str, *, source_label: str) -> list[str]:
@@ -318,7 +329,9 @@ def static_check(workflow_text: str, *, source_label: str) -> list[str]:
         violations.append(
             'security-scan-required: no step named like "security scan" found (ADR 0490 D1)'
         )
+    security_scan_jobs: dict[str, ParsedJob] = {}
     for job, step in security_steps:
+        security_scan_jobs[job.id] = job
         if step.if_condition is not None:
             violations.append(
                 f'security-scan-unconditional: step "{step.name}" (job "{job.id}") '
@@ -328,6 +341,27 @@ def static_check(workflow_text: str, *, source_label: str) -> list[str]:
             violations.append(
                 f'security-scan-unconditional: step "{step.name}" (job "{job.id}") '
                 f'carries "continue-on-error:" — forbidden (ADR 0490 D1)'
+            )
+    for job in security_scan_jobs.values():
+        has_scan_invocation = any(
+            step.run is not None and _SECURITY_SCAN_INVOCATION.search(step.run)
+            for step in job.steps
+        )
+        if not has_scan_invocation:
+            violations.append(
+                f'security-scan-content: job "{job.id}" has no step whose "run:" '
+                f"body invokes tool/release/security_scan.py — a step name alone "
+                f"is not the gate (ADR 0490 D1)"
+            )
+        if job.fields.get("if") is not None:
+            violations.append(
+                f'security-scan-unconditional: job "{job.id}" carries an "if:" '
+                f'condition — forbidden (ADR 0490 D1)'
+            )
+        if job.fields.get("continue-on-error") is not None:
+            violations.append(
+                f'security-scan-unconditional: job "{job.id}" carries '
+                f'"continue-on-error:" — forbidden (ADR 0490 D1)'
             )
 
     signing_steps = [
@@ -337,7 +371,9 @@ def static_check(workflow_text: str, *, source_label: str) -> list[str]:
         violations.append(
             'production-signing-required: no step named like "sign" found (ADR 0490 D1)'
         )
+    signing_jobs: dict[str, ParsedJob] = {}
     for job, step in signing_steps:
+        signing_jobs[job.id] = job
         if step.if_condition is not None:
             violations.append(
                 f'production-signing-unconditional: step "{step.name}" (job "{job.id}") '
@@ -347,6 +383,31 @@ def static_check(workflow_text: str, *, source_label: str) -> list[str]:
             violations.append(
                 f'production-signing-unconditional: step "{step.name}" (job "{job.id}") '
                 f'carries "continue-on-error:" — forbidden (ADR 0490 D1)'
+            )
+    for job in signing_jobs.values():
+        if job.fields.get("if") is not None:
+            violations.append(
+                f'production-signing-unconditional: job "{job.id}" carries an "if:" '
+                f'condition — forbidden (ADR 0490 D1)'
+            )
+        if job.fields.get("continue-on-error") is not None:
+            violations.append(
+                f'production-signing-unconditional: job "{job.id}" carries '
+                f'"continue-on-error:" — forbidden (ADR 0490 D1)'
+            )
+        has_bound_release_build = any(
+            step.run is not None
+            and _FLUTTER_RELEASE_BUILD.search(step.run)
+            and isinstance(step.fields.get("env"), dict)
+            and _SIGNING_REQUIRED_ENV_KEY in step.fields["env"]
+            for step in job.steps
+        )
+        if not has_bound_release_build:
+            violations.append(
+                f'production-signing-content: job "{job.id}" has no step whose '
+                f'"env:" binds {_SIGNING_REQUIRED_ENV_KEY} and whose "run:" body '
+                f'calls "flutter build apk --release" — a step name alone is not '
+                f"the gate (ADR 0490 D1)"
             )
 
     approval_jobs = [job for job in jobs if job.environment is not None]
@@ -361,17 +422,13 @@ def static_check(workflow_text: str, *, source_label: str) -> list[str]:
         for job in jobs:
             if job.id == approval_job_id:
                 continue
-            touches_release_artifact = any(
-                _RELEASE_VERB.search(step.name) or _RELEASE_VERB.search(step.uses or "")
-                for step in job.steps
-            )
-            if not touches_release_artifact:
-                continue
             if not job_transitively_needs(jobs, job.id, approval_job_id):
                 violations.append(
-                    f'approval-gate-transitive: job "{job.id}" builds/signs/assembles/'
-                    f'uploads a release artifact but does not transitively need the '
-                    f'approval job "{approval_job_id}" (ADR 0490 D3)'
+                    f'approval-gate-transitive: job "{job.id}" does not transitively '
+                    f'need the approval job "{approval_job_id}" — fail-closed: every '
+                    f"job other than the approval gate itself must need it, not only "
+                    f"jobs whose steps happen to match a build/sign/upload verb "
+                    f"(ADR 0490 D3)"
                 )
 
     return violations
@@ -401,6 +458,9 @@ def request_check(*, incident_id: str, previous_version: str, version: str) -> l
 
     previous_tuple = _parse_version(previous_version, label="--previous-version")
     version_tuple = _parse_version(version, label="--version")
+    width = max(len(previous_tuple), len(version_tuple))
+    previous_tuple = previous_tuple + (0,) * (width - len(previous_tuple))
+    version_tuple = version_tuple + (0,) * (width - len(version_tuple))
 
     if version_tuple <= previous_tuple:
         violations.append(

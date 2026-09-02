@@ -451,4 +451,104 @@ verzió → exit 1, a szigorú `>` bizonyítéka).
   signing lépések VÁLTOZATLANUL" elvárásának megfelelően), a hotfix-specifikus
   fájlnevekkel (`hotfix-security-report.json`, `hotfix-release-manifest.json`).
 
+### 10.6 Javító kör #1
+
+A `docs/reviews/e12-r34-review.md` §1 négy MAJOR + egy MINOR leletére a
+javítás:
+
+- **MAJOR-1** (job-szintű `if:`/`continue-on-error:` vak folt) —
+  `verify_hotfix.py` `static_check`-je mostantól a scan-/signing-lépést
+  TARTALMAZÓ job `fields`-jét is vizsgálja `if`/`continue-on-error` kulcsra,
+  a step-szintű ellenőrzés MELLETT, a bemenet nevétől függetlenül (a
+  `_SKIP_INPUT_NAME_PATTERN` csak az input-NÉV tilalmára vonatkozik, nem a
+  job/step `if:` jelenlétére). Új cella: job-szintű
+  `continue-on-error: true` a `security-scan:` job fejlécében (a VALÓDI
+  proposalon) → `security-scan-unconditional`, exit 1. Új cella: job-szintű
+  `if: inputs.fast_track != true` egy `fast_track` nevű (skip/emergency
+  mintát NEM illesztő) inputtal → ugyanaz a violation, exit 1.
+- **MAJOR-2** (a mérce csak a lépés NEVÉT nézte) — tartalmi állítás: a
+  scan-lépést tartalmazó job legalább egy lépésének `run:` törzse hívja a
+  `tool/release/security_scan.py`-t (`security-scan-content`); a
+  signing-lépést tartalmazó job legalább egy lépésének `env:`-je köti a
+  `STRUMSIGHT_REQUIRE_RELEASE_SIGNING` kulcsot ÉS a `run:` törzse hívja a
+  `flutter build apk --release` parancsot (`production-signing-content`). A
+  névillesztés (`_SECURITY_SCAN_STEP_NAME`/`_SIGNING_STEP_NAME`) a
+  lépés-megtalálásra megmaradt; az ellenőrzés job-szinten aggregál, mert a
+  valódi proposalban KÉT lépés neve is illeszkedik a `sign` mintára
+  ("Verify production signing prerequisites" és "Build and sign production
+  APK") — a job-szintű aggregálás nélkül a content-check hamis pozitívot
+  adott volna az elsőre (ezt egy köztes futtatás ténylegesen megfogta, és a
+  scan-oldali content-check ugyanígy job-szintűre lett igazítva, mert
+  "Upload security scan report" is illeszkedik a "security scan" mintára).
+  Új cella: a valódi proposal scan-lépésének `run:` törzse
+  `echo 'skipping scan for speed' > ...`-ra cserélve →
+  `security-scan-content`, exit 1.
+- **MAJOR-3** (D3 denylista → fail-closed allowlist) — a
+  `_RELEASE_VERB = build|sign|assembl|upload` denylista és a hozzá tartozó
+  `touches_release_artifact` szűrés törölve; a `static_check` mostantól
+  MINDEN jobot megkövetel (az approval jobon kívül), hogy tranzitívan
+  `needs:`-elje az approval jobot — kivétel nincs. A valódi proposal négy
+  joba (`approve-hotfix`, `quality-gates`, `security-scan`, `build-hotfix`)
+  az új szabály mellett is zöld marad (ellenőrizve). Új cella: a valódi
+  proposal + egy `publish-hotfix` job `needs:` NÉLKÜL, "Publish to Play
+  Store" lépéssel (a régi denylista négy szava egyikére sem illeszkedik) →
+  `approval-gate-transitive`, exit 1.
+- **MAJOR-4** (GHA script injection) — `docs/release/workflows/hotfix.proposal.yml`
+  mind az öt érintett `run:` törzse (a két `approve-hotfix`-lépés, a
+  `build-hotfix` job verzió-ellenőrzése, és a `flutter build apk --release
+  --build-name=`) átírva: minden `${{ inputs.* }}` egy `env:` blokkon át kötve
+  (`INCIDENT_ID`, `PREVIOUS_VERSION`, `VERSION`, `SUMMARY`), a `run:` törzsben
+  idézett shell-változóként hivatkozva (`"$INCIDENT_ID"`,
+  `--build-name="$VERSION"`) — a repó saját precedense
+  (`release-candidate.proposal.yml`, `release-apk.yml`) szerinti alak. A
+  `with: name: hotfix-${{ inputs.version }}` (artifact-név, nem `run:` törzs,
+  GHA-szinten szubsztituálva, sosem kerül shellbe) változatlan maradt — ez
+  nem injekciós felület. Új cella (A8 csoport): a valódi proposal EGYETLEN
+  lépésének `run:` törzse sem tartalmazza a `${{ inputs.` mintát (a Dart-oldali
+  FÜGGETLEN `parseWorkflowJobs`-szal ellenőrizve), plusz egy szintetikus
+  mutációs önteszt, hogy az assertion ténylegesen elkapná az interpolációt.
+- **MINOR-1** (`1.2` → `1.2.0` emelésnek számított) — `request_check` a
+  tuple-összehasonlítás előtt mindkét verziót azonos hosszra egészíti ki
+  nullákkal (`width = max(len(previous), len(version))`). Új cella:
+  `--previous-version 1.2 --version 1.2.0` → `version-strictly-greater`,
+  exit 1.
+
+**Mind az öt új mutációs cella PIROS volt a Javító kör #1 ELŐTTI
+`verify_hotfix.py`-n** (ezt a `git stash`-elt régi fájllal külön futtatva
+ellenőriztem az implementáció közben — a MAJOR-1 job-szintű `continue-on-error`
+és `if:` fixtúrákon, a MAJOR-2 decoy-scan fixtúrán, a MAJOR-3
+`publish-hotfix` fixtúrán, és a MINOR-1 `1.2`/`1.2.0` párral mind `exit=0`
+volt a régi kóddal — pontosan a review §1 reprodukciói), és mind ZÖLD az
+ÚJ `verify_hotfix.py`-n (lásd a `hotfix_policy_test.dart` teljes futása
+lent, 41/41 teszt).
+
+**A §7 gate újra-futtatása (a javítás után):**
+
+```
+tools/round-gate.sh test/tooling/hotfix_policy_test.dart test/tooling/rc_assembly_test.dart
+```
+→ mind a hét lépés (`format`, `analyze`, `test test/tooling/hotfix_policy_test.dart`
+[41/41 teszt — a §10.2-beli 34-ről 41-re nőtt a hét új cellával], `test
+test/tooling/rc_assembly_test.dart` [36/36 teszt, változatlan], `architecture`,
+`secrets`, `l10n`) ZÖLD, exit 0.
+
+A mérce közvetlen futtatása (§7):
+
+```
+$ python3 tool/release/verify_hotfix.py --workflow docs/release/workflows/hotfix.proposal.yml
+verify_hotfix (static mode): ok — docs/release/workflows/hotfix.proposal.yml
+exit=0
+
+$ python3 tool/release/verify_hotfix.py --incident-id INC-2026-0001 --previous-version 1.2.3 --version 1.2.4
+verify_hotfix (request mode): ok — incident_id="INC-2026-0001", 1.2.3 -> 1.2.4
+exit=0
+
+$ python3 tool/release/verify_hotfix.py --incident-id INC-2026-0001 --previous-version 1.2.3 --version 1.2.3
+verify_hotfix (request mode): 1 violation(s):
+  VIOLATION version-strictly-greater: --version "1.2.3" is not strictly greater than --previous-version "1.2.3" (ADR 0490 D5 — same or stricter than verify_artifacts.py's monotonicity check, never looser)
+exit=1
+```
+
+A várt `0`, `0`, `1` minta pontosan teljesül, változatlanul.
+
 ## 11. Review — a Claude tölti ki

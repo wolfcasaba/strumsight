@@ -371,6 +371,103 @@ jobs:
       expect(result.stderr.toString(), contains('gate-not-skippable'));
       fixture.parent.deleteSync(recursive: true);
     });
+
+    // Javító kör #1 / MAJOR-1: the same gate-not-skippable, one indent level
+    // up. Review kör #1 reproduced this on the REAL proposal (not a minimal
+    // synthetic fixture) — a `continue-on-error: true` on the JOB header
+    // that CONTAINS the security-scan step slipped past the old step-only
+    // check. Mirror that reproduction here so the cell proves the real
+    // fixture, not a hand-shrunk stand-in.
+    test('mutation probe (job-level, real proposal): "continue-on-error: '
+        'true" on the security-scan JOB header (not the step) is a '
+        'non-zero exit', () {
+      final fixture = _fixtureFromRealProposal(
+        '  security-scan:\n'
+            '    name: Release security scan\n'
+            '    needs: approve-hotfix\n',
+        '  security-scan:\n'
+            '    name: Release security scan\n'
+            '    needs: approve-hotfix\n'
+            '    continue-on-error: true\n',
+      );
+      final result = Process.runSync('python3', [
+        _verifyHotfixTool,
+        '--workflow',
+        fixture.path,
+      ]);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('security-scan-unconditional'));
+      fixture.parent.deleteSync(recursive: true);
+    });
+
+    // Javító kör #1 / MAJOR-1: a job-level "if:" using a neutral input name
+    // ("fast_track") that does NOT match the skip|emergency name pattern —
+    // the old code only inspected step.if_condition, so this slipped past
+    // both the name-pattern check (D1's "no skip switch" rule targets input
+    // NAMES) and the unconditional check (which never looked at the job).
+    test('mutation probe (job-level, real proposal): "if: '
+        'inputs.fast_track != true" on the security-scan JOB header, with a '
+        'neutrally-named "fast_track" input, is a non-zero exit', () {
+      final withInput = _replaceOnce(
+        File(_proposalPath).readAsStringSync(),
+        '      summary:\n'
+            '        description: One-line human summary of the hotfix, for '
+            'the approval record.\n'
+            '        required: true\n'
+            '        type: string\n',
+        '      summary:\n'
+            '        description: One-line human summary of the hotfix, for '
+            'the approval record.\n'
+            '        required: true\n'
+            '        type: string\n'
+            '      fast_track:\n'
+            '        description: y\n'
+            '        required: false\n'
+            '        type: boolean\n',
+      );
+      final mutated = _replaceOnce(
+        withInput,
+        '  security-scan:\n'
+            '    name: Release security scan\n'
+            '    needs: approve-hotfix\n',
+        '  security-scan:\n'
+            '    name: Release security scan\n'
+            '    needs: approve-hotfix\n'
+            '    if: inputs.fast_track != true\n',
+      );
+      final fixture = _writeFixture(mutated);
+      final result = Process.runSync('python3', [
+        _verifyHotfixTool,
+        '--workflow',
+        fixture.path,
+      ]);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('security-scan-unconditional'));
+      fixture.parent.deleteSync(recursive: true);
+    });
+
+    // Javító kör #1 / MAJOR-2: the step keeps its gate-shaped NAME
+    // ("Release security scan") but its "run:" body no longer calls
+    // security_scan.py at all — the old code matched on name only, so a
+    // decoy body satisfied the whole D1 scan requirement.
+    test('mutation probe (real proposal): the security-scan step keeps its '
+        'name but its "run:" body is replaced with a decoy echo — non-zero '
+        'exit naming the missing content assertion', () {
+      final fixture = _fixtureFromRealProposal(
+        '          python3 tool/release/security_scan.py --format json > '
+            'hotfix-security-report.json\n',
+        "          echo 'skipping scan for speed' > "
+            'hotfix-security-report.json\n',
+      );
+      final result = Process.runSync('python3', [
+        _verifyHotfixTool,
+        '--workflow',
+        fixture.path,
+      ]);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('security-scan-content'));
+      fixture.parent.deleteSync(recursive: true);
+    });
   });
 
   group('A3 — version increment is enforced, strictly (ADR 0490 D5, §6.3 '
@@ -415,6 +512,25 @@ jobs:
         '1.2.4',
       ]);
       expect(result.exitCode, 0, reason: result.stderr.toString());
+    });
+
+    // Javító kör #1 / MINOR-1: unequal dotted-integer lengths compared as
+    // tuples made "1.2" < "1.2.0" TRUE, so a same-semantic "increment"
+    // wrongly passed. The fix pads both tuples to equal length with
+    // trailing zeros before comparing.
+    test('mutation probe: previous 1.2, version 1.2.0 -> exit 1 (same '
+        'semantic version, zero-padded to equal length before comparison)', () {
+      final result = Process.runSync('python3', [
+        _verifyHotfixTool,
+        '--incident-id',
+        'INC-2026-0001',
+        '--previous-version',
+        '1.2',
+        '--version',
+        '1.2.0',
+      ]);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('version-strictly-greater'));
     });
   });
 
@@ -545,6 +661,83 @@ jobs:
       expect(approvalJobs, hasLength(2));
       expect(approvalJobs, isNot(hasLength(1)));
     });
+
+    // Javító kör #1 / MAJOR-3: the D3 check used to be a DENYLIST keyed on
+    // step-name/`uses:` verbs (build|sign|assembl|upload) — a job whose
+    // step names/uses fall outside those four words was silently skipped,
+    // "needs:" or not. `verify_hotfix.py` now requires EVERY job other than
+    // the approval gate to transitively need it, fail-closed. Reproduced on
+    // the real proposal plus a `publish-hotfix` job with a "Publish to Play
+    // Store" step and no "needs:" at all — the denylist words never match
+    // "publish", so the old check let this straight through.
+    test('mutation probe (real proposal, fail-closed): a "publish-hotfix" job '
+        'with no "needs:" and a "Publish to Play Store" step is a non-zero '
+        'exit even though its step name matches none of the old '
+        'build/sign/assemble/upload denylist words', () {
+      final mutated =
+          '${File(_proposalPath).readAsStringSync()}\n'
+          '  publish-hotfix:\n'
+          '    name: Publish hotfix\n'
+          '    runs-on: ubuntu-latest\n'
+          '    steps:\n'
+          '      - name: Publish to Play Store\n'
+          '        run: |\n'
+          '          echo publish\n';
+      final fixture = _writeFixture(mutated);
+      final result = Process.runSync('python3', [
+        _verifyHotfixTool,
+        '--workflow',
+        fixture.path,
+      ]);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('approval-gate-transitive'));
+      fixture.parent.deleteSync(recursive: true);
+    });
+  });
+
+  group('A8 — no workflow_dispatch input is interpolated into a "run:" '
+      'shell body (ADR 0490 D1/D3 context, GHA script-injection, MAJOR-4)', () {
+    test('the real proposal: no step\'s "run:" body contains a literal '
+        '"\${{ inputs." — every input reaches the shell only via an "env:" '
+        'binding, referenced as a quoted shell variable', () {
+      final source = File(_proposalPath).readAsStringSync();
+      final workflow = parseWorkflowJobs(source, sourceLabel: _proposalPath);
+      final offendingSteps = <String>[];
+      for (final job in workflow.jobs) {
+        for (final step in job.steps) {
+          final run = step.run;
+          if (run != null && run.contains(r'${{ inputs.')) {
+            offendingSteps.add('${job.id}/${step.name}');
+          }
+        }
+      }
+      expect(
+        offendingSteps,
+        isEmpty,
+        reason:
+            'GitHub Actions substitutes \${{ }} textually into the shell '
+            'script before execution — an input containing a quote and a '
+            ';" breaks out of the string. Offending steps: $offendingSteps',
+      );
+    });
+
+    test('mutation probe: a fixture step whose "run:" body interpolates '
+        '"\${{ inputs.version }}" unquoted is caught by the same assertion '
+        'this A8 check makes', () {
+      const fixture = '''
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and sign production APK
+        run: |
+          flutter build apk --release --build-name=\${{ inputs.version }}
+''';
+      final workflow = parseWorkflowJobs(fixture, sourceLabel: 'fixture');
+      final run = workflow.jobs.single.steps.single.run!;
+      expect(run.contains(r'${{ inputs.'), isTrue);
+    });
   });
 
   group('A7 — the proposal calls the shared composite gate, never copies '
@@ -665,6 +858,26 @@ File _writeFixture(String contents) {
   final file = File('${directory.path}/hotfix-fixture.yml');
   file.writeAsStringSync(contents);
   return file;
+}
+
+// Javító kör #1 helpers: several MAJOR-1/-2/-3 mutation probes reproduce
+// their fixture the same way the review did — take the REAL proposal
+// document and apply exactly one textual mutation, rather than a hand-built
+// minimal fixture that might not exercise the same job/step structure.
+String _replaceOnce(String source, String find, String replace) {
+  final index = source.indexOf(find);
+  if (index == -1) {
+    throw StateError(
+      'fixture anchor text not found in the real proposal document — the '
+      'proposal changed shape, update this mutation probe: $find',
+    );
+  }
+  return source.replaceRange(index, index + find.length, replace);
+}
+
+File _fixtureFromRealProposal(String find, String replace) {
+  final source = File(_proposalPath).readAsStringSync();
+  return _writeFixture(_replaceOnce(source, find, replace));
 }
 
 // Built via adjacent string-literal concatenation so this constant's own

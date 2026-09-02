@@ -78,12 +78,22 @@ jobs:
     environment: hotfix-approval
     steps:
       - name: Verify hotfix request
+        shell: bash
+        env:
+          INCIDENT_ID: ${{ inputs.incident_id }}
+          PREVIOUS_VERSION: ${{ inputs.previous_version }}
+          VERSION: ${{ inputs.version }}
         run: |
-          python3 tool/release/verify_hotfix.py --incident-id "${{ inputs.incident_id }}" --previous-version "${{ inputs.previous_version }}" --version "${{ inputs.version }}"
+          python3 tool/release/verify_hotfix.py --incident-id "$INCIDENT_ID" --previous-version "$PREVIOUS_VERSION" --version "$VERSION"
       - name: Record hotfix approval
+        shell: bash
+        env:
+          INCIDENT_ID: ${{ inputs.incident_id }}
+          VERSION: ${{ inputs.version }}
+          SUMMARY: ${{ inputs.summary }}
         run: |
-          echo "Hotfix ${{ inputs.version }} (incident ${{ inputs.incident_id }}) approved by the hotfix-approval environment's required reviewers."
-          echo "Summary: ${{ inputs.summary }}"
+          echo "Hotfix $VERSION (incident $INCIDENT_ID) approved by the hotfix-approval environment's required reviewers."
+          echo "Summary: $SUMMARY"
 
   quality-gates:
     name: Flutter quality gates
@@ -160,8 +170,13 @@ jobs:
           channel: stable
           cache: true
       - name: Verify hotfix version increment
+        shell: bash
+        env:
+          INCIDENT_ID: ${{ inputs.incident_id }}
+          PREVIOUS_VERSION: ${{ inputs.previous_version }}
+          VERSION: ${{ inputs.version }}
         run: |
-          python3 tool/release/verify_hotfix.py --incident-id "${{ inputs.incident_id }}" --previous-version "${{ inputs.previous_version }}" --version "${{ inputs.version }}"
+          python3 tool/release/verify_hotfix.py --incident-id "$INCIDENT_ID" --previous-version "$PREVIOUS_VERSION" --version "$VERSION"
       - name: Materialize production keystore
         id: keystore
         shell: bash
@@ -184,8 +199,9 @@ jobs:
           STRUMSIGHT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           STRUMSIGHT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           STRUMSIGHT_REQUIRE_RELEASE_SIGNING: 'true'
+          VERSION: ${{ inputs.version }}
         run: |
-          flutter build apk --release --dart-define=STRUMSIGHT_ENV=production --build-name=${{ inputs.version }}
+          flutter build apk --release --dart-define=STRUMSIGHT_ENV=production --build-name="$VERSION"
       - name: Generate release manifest
         run: |
           dart run tool/generate_release_manifest.dart --output build/hotfix-release-manifest.json --channel hotfix --artifact build/app/outputs/flutter-apk/app-release.apk
