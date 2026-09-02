@@ -424,4 +424,115 @@ A run-link a merge-kézfogás során kerül ide/`HANDOFF.md`-be.
   blocker javítását igényelné, vagy kívül esne a három zárt osztályon;
   ehelyett a `CHANGELOG.md` a MÉRT, változatlan `1.0.0+1`-et rögzíti.
 
+## 11. 1. javító kör — a független review két MAJOR leletének zárása
+
+A kör ELSŐ futása (`b93204c2`) után egy független review két **MAJOR** és
+egy **MINOR**/**NOTE** leletet mért. Mind a négyet ez a javító kör zárja,
+az engedélyezett fájllista változatlan, a `blockers.md` továbbra is tilos
+zóna.
+
+### MAJOR-1 — a bare hívás fail-OPEN volt (nem klasszifikált)
+
+**A hiba:** `verify_freeze.py` `main()`-ja `--since`/`--changes-file` nélkül
+`changes = None`-t hagyott, a klasszifikációt (A1/A6) teljesen kihagyta, és
+`ok` + `exit 0`-t nyomtatott — annak ellenére, hogy a `freeze-base:begin`
+blokk `freeze_base_sha`-t deklarál, amit a `load_freeze_base()` beolvasott,
+de eldobott.
+
+**A javítás** (`tool/release/verify_freeze.py`, `main()`): a bare hívás
+(sem `--since`, sem `--changes-file`) mostantól a `feature-freeze.md`-ből
+beolvasott `freeze_base_sha`-val hívja a `get_changes_from_git()`-et — az
+explicit `--since` továbbra is felülír. A `changes` így SOHA nem `None`,
+a `classify_changes()` és az összegző sor mindig lefut.
+
+**Teszt** (`test/tooling/freeze_policy_test.dart`):
+- a `sanity` cella (44-56. sor) mostantól a `changed path(s) classified`
+  szöveget is elvárja az alapértelmezett hívás stdoutjában (korábban csak
+  `ok`-ot várt — ez tartotta életben a hibát);
+- ÚJ A1-cella: egy izolált, `git init`-elt temp-repóban két commit
+  (`seed`, majd egy `lib_stub.dart`-ot módosító, blocker-ID nélküli
+  commit), a `verify_freeze.py`-t a temp-repó `workingDirectory`-jában, a
+  temp-repó saját `freeze_base_sha`-jára mutató `--feature-freeze`
+  fixtúrával híva, `--since`/`--changes-file` NÉLKÜL — `exit 1`,
+  `lib_stub.dart` + `not classified` a stderr-ben. Ez pontosan a reviewer
+  `/tmp/probe-e12-r30` reprodukciójának Dart-gate megfelelője.
+
+### MAJOR-2 — a súlyosság-lefokozás észrevétlen maradt
+
+**A hiba:** `validate_known_issues()` a `blockers.md`-vel való
+súlyosság-egyeztetést csak akkor futtatta, ha a `known-issues.md` sora MAGA
+`P0`/`P1` volt — egy `blockers.md`-ben `P1`-es tétel `known-issues.md`-beli
+lefokozása `P2`-re (vagy alacsonyabbra) így egyetlen findinget sem
+generált.
+
+**A javítás:** a súlyosság-egyeztetés mostantól MINDEN olyan `id`-re fut,
+ami szerepel a `blockers.md`-ben, iránytól függetlenül — a „nincs
+`blockers.md`-ben" ág (ami a P0/P1 kötelező jelenlétet kényszeríti)
+változatlanul csak a known-issues.md-beli P0/P1 sorokra kötelező.
+
+**Teszt:** ÚJ A3-cella — `R-VER-01` `P1` → `P2` fixtúrán → `exit 1`,
+`R-VER-01` + `blockers.md` a stderr-ben.
+
+### MINOR-1 — két önmagával ellentmondó `P3` besorolás
+
+`K-E12R21-01` és `K-E12R24-01` `P3` → `P2`-re emelve
+(`docs/release/known-issues.md`), mert egyik sem indokolt egy, a saját
+bevezetőben kimondott `P2`-plafonnál (§0.0) alacsonyabb besorolást:
+`K-E12R21-01`-et a `HANDOFF.md` §6 „KÉT MÉRT GA-blokkoló"-ként nevezi meg;
+`K-E12R24-01` impact-cellája mostantól kimondja, hogy a tétel az
+`R-PRIV-01` `P1` blocker **rész-bizonyítéka**, nem tőle független, enyhébb
+hiba.
+
+### NOTE-1 — a `blocker-fix` osztály granularitása kimondva
+
+`docs/release/feature-freeze.md` §3 `blocker-fix` bekezdése kiegészítve:
+a commit-szintű granularitás (egy érvényes blocker ID a commit
+üzenetében a commit MINDEN útvonalát engedélyezetté teszi) most explicit
+mondat, a jóváhagyó szerep felelősségeként megnevezve.
+
+### Az ÚJ gate-kimenet (a javítás UTÁN, csonkítás nélkül)
+
+```
+$ tools/round-gate.sh test/tooling/freeze_policy_test.dart test/tooling/ga_scope_test.dart
+═══ [1] format                                                          → ZÖLD  (Formatted 2214 files (0 changed))
+═══ [2] analyze                                                         → ZÖLD  (No issues found! (ran in 6.1s))
+═══ [3] test test/tooling/freeze_policy_test.dart                       → ZÖLD  (00:02 +33: All tests passed!)
+═══ [4] test test/tooling/ga_scope_test.dart                            → ZÖLD  (00:01 +23: All tests passed!)
+═══ [5] architecture                                                    → ZÖLD  (Architecture dependencies OK (12 allowlisted deviation(s)))
+═══ [6] secrets                                                         → ZÖLD  (Secret scan OK (4169 file(s) scanned, 0 finding(s)))
+═══ [7] l10n                                                            → ZÖLD  (L10n aggregate freshness OK; L10n parity OK (en → hu, 2298 message(s)))
+
+Gate-összegzés: format zöld · analyze zöld · test test/tooling/freeze_policy_test.dart zöld ·
+test test/tooling/ga_scope_test.dart zöld · architecture zöld · secrets zöld · l10n zöld
+MINDEN GATE ZÖLD.
+```
+
+```
+$ python3 tool/release/verify_freeze.py --since 4ac78365
+verify_freeze: ok — 17 known-issue row(s), 7 changed path(s) classified
+```
+
+(A cellaszám 31→33: a két új regressziós cella, MAJOR-1 az A1, MAJOR-2 az
+A3 csoportban. A klasszifikált útvonal-szám 6→7 nem a javítástól jön,
+hanem attól, hogy a HEAD a `0245c7fb`/`a30a9467`/`5cec7b2b`/`b93204c2`
+négy kör-commitján áll, mindegyik `documentation`/`release-tooling`.)
+
+### Independens reprodukció-visszajátszás (a reviewer `/tmp/probe-e12-r30`
+lépéseivel, a javított kódon)
+
+```
+$ printf '\n// freeze-era probe\n' >> lib/app/build_info.dart
+$ git commit -qam "chore: apró javítás, nem számít"
+$ python3 tool/release/verify_freeze.py
+verify_freeze: 1 finding(s):
+  - lib/app/build_info.dart: not classified under any freeze change class … (A1)
+exit=1                      # ← MAJOR-1 zárva: a bare hívás is elkapja
+
+$ sed -i 's/| `R-VER-01` | `P1` |/| `R-VER-01` | `P2` |/' docs/release/known-issues.md
+$ python3 tool/release/verify_freeze.py
+verify_freeze: 1 finding(s):
+  - known-issues.md:45: id 'R-VER-01' is severity 'P2' here but 'P1' in blockers.md (A3)
+exit=1                      # ← MAJOR-2 zárva: a lefokozás is elkapva
+```
+
 ## 11. Review — a Claude tölti ki
