@@ -1,5 +1,81 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R28 KÉSZ — Beta stabilization és scope cut — PR [#524](https://github.com/wolfcasaba/strumsight/pull/524), squash `7b33a1aa` (2026-09-02)
+
+A Ch12 **Kör 28** a GA-scope besorolását és a core contractok befagyasztását
+szállítja, GÉPI konzisztencia-őrrel. ADR: **[0489](docs/adr/0489-ga-scope-classification-and-contract-freeze.md)**
+(a queue `0464` értéke elavult volt — a foglaló `0489`-et adott, mint az
+E12-R22/R23/R25-nél).
+
+**A kör mért kiindulópontja — a brief előfeltétele NEM teljesült.** A brief
+`blocked` jelzést írt elő béta-adat hiányára. A pre-flight MÉRTE:
+`docs/beta/closed-beta-launch.md:3` → „Status: NOT launched", a §5 Human launch
+field üres, a HANDOFF E12-R27 bejegyzése kimondja, hogy **a béta nem indult el**
+— és nem is fog, amíg egy ember le nem futtatja (E12-R27 szerint szándékosan
+EMBERI kapu). A §0.0.B **R2 revízió** döntése: a kör NEM áll meg, hanem a
+béta-hiányt **mért tényként** szállítja, a besorolás pedig a fán mérhető
+bizonyítékra épül (a brief §5.2 SAJÁT vagylagos „mérési riport" ága; az A1–A6
+egyike sem hivatkozik béta-adatra; precedens: az E12-R27 ugyanezt tette ugyanezzel
+az emberi kapuval). **A kitalált béta-adatot nem ígéret zárja ki, hanem gépi őr**
+(ADR 0489 D3): minden bizonyíték-hivatkozásnak a fán FELOLDHATÓ útvonalra kell
+mutatnia — reviewer-próbával igazolva (egy nem létező `docs/beta/closed-beta-results.md`
+hivatkozás → exit 1).
+
+**Szállítva:**
+
+- `docs/release/ga-scope.md` — a `docs/beta/cohort-profiles.yaml` MÉRT **16**
+  flag-kulcsának pontosan egy besorolása a zárt készletből
+  (`ga`/`preview`/`disabled`/`postponed`): **1 `ga`** (`practiceEngineV2Enabled`),
+  4 `preview`, 3 `disabled`, 8 `postponed` — soronként feloldható
+  bizonyíték-útvonallal, a mért **`production_default`** értékkel és indoklással;
+  a core tanulási út 4 lépése a rátámaszkodó capabilityvel; explicit
+  **NEM KÉSZ (NOT READY)** fejléc (nyitott `R-SIGN-01` P0 + öt P1 miatt).
+- `docs/release/contract-freeze.md` — 4 befagyasztott contract, mindegyikhez
+  NEVESÍTETT, ellenőrizhető feloldó feltétellel (a „szükség esetén módosítható"
+  alakú nem-események tiltólistán).
+- `docs/release/beta-findings.md` — a béta MÉRT `NOT launched` állapota, a
+  helyette használt bizonyítékforrások, és melyik besorolás melyik jövőbeli
+  béta-mérésre vár.
+- `tool/release/verify_ga_scope.py` — fail-closed ellenőrző (D1–D7), stdlib +
+  PyYAML (a testvér `verify_beta_profile.py` precedense).
+- `test/tooling/ga_scope_test.dart` — az A1–A5 mutáció-cellái + exit-2
+  használati cellák; a Kör 27 `beta_profile_test.dart` VÁLTOZATLAN és zöld (A6).
+
+**Review:** [`docs/reviews/e12-r28-review.md`](docs/reviews/e12-r28-review.md) —
+1. menet **2 MAJOR (0 BLOCKER)** teljesen zöld gate és tiszta scope-audit mellett:
+
+- **MAJOR-1 — az A3/D5 őr fail-OPEN volt.** A `_parse_table` a laza elő-szűrőt
+  (`row_start`) nem teljesítő sort `continue`-val NÉMÁN eldobta, a core-path
+  táblának pedig — a capability-táblával ellentétben — NINCS teljességi
+  ellenőrzése. Reviewer-mérés izolált klónban: egy `preview` capabilityt a core
+  útra tevő sor, vezető `|` után szóköz nélkül és backtickes lépés-cellával →
+  **exit 0, ZÖLD**, a darabszám csendben 4-ről 3-ra esett. Súlyosbító: a
+  modul-docstring az ELLENKEZŐJÉT állította („never a silently-dropped row"),
+  ilyen kereszt-ellenőrzés a kódban nem volt. Ugyanaz a mutáció a javítás után
+  **exit 2**, a sor számával — a javítás mind a HÁROM táblára kiterjed.
+- **MAJOR-2 — a kör egyetlen `ga` capabilitye production build-ben `false`.**
+  `practiceEngineV2Enabled` mért production alapértelmezése `false`
+  (`lib/app/config/feature_flags.dart:78` — `nonProd`, dart-define felülíró ág
+  NÉLKÜL), tehát a `/practice*` route-ok production buildben nincsenek
+  regisztrálva és a §3 első core-út-lépése ma nem járható végig — a dokumentum
+  ezt nem mondta ki. Ez a §9 „Rejtett GA" tükörképe (rejtett NEM-GA), és a
+  NOT-READY fejléc NEM fedi le (az a blocker-listáról szól). Javítás: géppel
+  kötött `production_default` oszlop, a mért forrásból (`forEnvironment` törzse,
+  fail-closed parse) visszaellenőrizve, plusz kikényszerített nevesített
+  feloldási feltétel.
+
+**1 javító kör** (`25cad21f`) → **APPROVED** (0 nyitott BLOCKER/MAJOR). A zárás
+a reviewer SAJÁT újra-méréseivel: P7 → exit 2; `production_default` hamisítva →
+exit 1 a mért értékkel; feloldó feltétel kivéve → exit 1; ismeretlen forrás-alak
+→ exit 2 (fail-closed); a D3/D7 regresszió-próbák továbbra is pirosak; célzott
+gate 7/7 zöld friss `/tmp` klónban. **MINOR-1 follow-upra marad** (a `postponed`
+besorolás cohort-flag állapotát nem köti cella; élő rés nincs — mind a 8
+`postponed` flag `false` mindkét cohortban —, és az ADR 0489 D4 sem követeli meg).
+
+**Exact-SHA CI a `a3fe03d3` merge SHA-n:** [full-gate 33613004979](https://github.com/wolfcasaba/strumsight/actions/runs/33613004979)
++ [router-ci 33613007674](https://github.com/wolfcasaba/strumsight/actions/runs/33613007674),
+mindkettő `success`. Lecke: [L576](docs/LESSONS.md).
+
 ## ✅ E12-R27 KÉSZ — Closed Beta launch és monitoring — PR [#523](https://github.com/wolfcasaba/strumsight/pull/523), squash `6b5dcb5a` (2026-09-02)
 
 A Ch12 **Kör 27** a Closed Beta **indítási konfigurációját** és a hozzá tartozó
@@ -10458,9 +10534,9 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R24
-> zárása után): **287 `done`, 48 `hold`, 18 `prepared`, 12 `pending`**
-> (az E12 sávból 24 `done`, 12 `pending`).
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R28
+> zárása után): **291 `done`, 48 `hold`, 18 `prepared`, 8 `pending`**
+> (az E12 sávból 28 `done`, 8 `pending`).
 >
 > ⚠ **Az E12-R24 két EMBERI lépést hagyott nyitva a store-feltöltés előtt** —
 > egyik nyitott brief sem nevezi meg őket, ma gazdátlanok: (1) a

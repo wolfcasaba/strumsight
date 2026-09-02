@@ -22767,3 +22767,50 @@ mindig ugyanaz: „hogyan fog kinézni ez a fájl, miután az, akinek szól,
 hozzányúlt?" — és arra az alakra is legyen piros cella.
 
 **Őrteszt:** `test/tooling/beta_profile_test.dart::mutation probe: a CHECKED (- [x]) line referencing a non-existent repo-relative path is flagged (fail-open guard, L566)` (+ `::mutation probe: a CHECKED (- [x]) line referencing a real path is NOT flagged`)
+
+## L576 — A „mérési riport VAGY béta-adat" vagylagos bizonyíték-szabályt nem ígéret tartja meg, hanem az útvonal-feloldás: a nem létező forrásra mutató hivatkozás legyen NEM-NULLA KILÉPÉS (E12-R28, 2026-09-02)
+
+**A helyzet mérve.** Az E12-R28 briefje `blocked` jelzést írt elő arra az esetre,
+ha nincs béta-adat („a scope-cut mérési döntés, nem vélemény"). A pre-flight
+MÉRTE, hogy a Closed Beta nem indult el (`docs/beta/closed-beta-launch.md:3` →
+„Status: NOT launched"; a §5 Human launch field üres; az E12-R27 HANDOFF-ja
+kimondja), és **nem is fog**, amíg egy ember le nem futtatja — az E12-R27
+szándékosan EMBERI kapunak tervezte. Egy `blocked` halt tehát nem egy megoldható
+akadályt jelzett volna, hanem a láncot állította volna meg határozatlan időre,
+miközben a kör mind a hat acceptance-kritériuma (A1–A6) a fán mérhető anyagból
+teljesíthető, és a brief SAJÁT §5.2-je a bizonyítékra **vagylagos** („a béta-adat
+**vagy a mérési riport** hivatkozása kötelező").
+
+**A tanulság nem az, hogy „a halt elkerülhető".** Az, hogy a halt helyett
+választott út CSAK akkor legitim, ha a halt által védett kockázatot **gépi őr**
+veszi át. Itt a kockázat a kitalált terepi adat volt (kitalált top-issue,
+funnel-szám, tesztelői létszám). Az őr (ADR 0489 D3): **minden
+bizonyíték-hivatkozásnak a fán FELOLDHATÓ repó-relatív útvonalra kell mutatnia**,
+`Path(evidence).exists()`, különben nem-nulla kilépés. Béta-riport ma nem
+létezik, tehát béta-mérésre hivatkozni nem stílushiba, hanem piros cella —
+reviewer-próbával igazolva (`docs/beta/closed-beta-results.md` hivatkozás →
+`exit 1`). Ez erősebb védelem, mint a halt: a halt csak elhalasztotta volna a
+kérdést, az őr minden JÖVŐBELI körre is köti.
+
+**Őrteszt:** `test/tooling/ga_scope_test.dart::a dangling evidence path is a non-zero exit (D3)` (a `A1 — the closed capability set (D1) …` csoportban, `test/tooling/ga_scope_test.dart:140`)
+
+**Ellenpróba, amit a review kimért.** Ugyanennek a körnek a másik két MAJOR-ja
+mutatja, hogy a „gépi őr" önmagában sem elég, ha az őr fail-OPEN vagy a
+normatív állítás mellől hiányzik a mért tény:
+
+1. a core-path tábla egy sora NÉMÁN eldobható volt (`_parse_table` `continue`
+   a laza elő-szűrő hibájára, teljességi ellenőrzés nélkül) → a `preview`
+   capabilityt a core útra tevő tiltott állapot mellett `exit 0`
+   ([L566](#l566) fail-OPEN osztály, immár harmadszor mérve);
+2. a kör EGYETLEN `ga` besorolású capabilitye (`practiceEngineV2Enabled`)
+   production build-ben `false` (`lib/app/config/feature_flags.dart:78`,
+   `nonProd`, felülíró ág nélkül) — a dokumentum ezt nem mondta ki, és semmi
+   nem kötötte a besorolást a mért production-feloldhatósághoz. A javítás egy
+   `production_default` oszlopot köt a forrás fail-closed olvasásához: a
+   dokumentált és a mért érték eltérése `exit 1`, ismeretlen forrás-alak
+   `exit 2`.
+
+**Általánosítás.** Ha egy kör egy előírt STOP-ot mért indoklással megkerül, a
+jelentésben (§0.0 revízió) ki kell mondani (a) mit mért, (b) melyik kockázatot
+vette át melyik gépi őr, és (c) mi az újramérés nevesített feltétele. A
+megkerülés e három nélkül nem döntés, hanem sodródás.
