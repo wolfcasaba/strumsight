@@ -251,4 +251,109 @@ A javaslat telepítése és a KÉT dispatch (zöld + bizonyított piros) orchesz
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Négy új fájl, semmi más (a brief §4 listája szerint):**
+
+- `tool/release/assemble_rc.py` — stdlib-only (`argparse`, `hashlib`, `json`,
+  `shutil`, `sys`, `pathlib`) összeállító. `resolve_inputs()` a hét kötelező
+  bemenetet (`apk`, `release_manifest`, `sbom`, `notices`, `ai_report`,
+  `security_report`, `test_report`) az összeállítás ELŐTT oldja fel;
+  hiányzó bemenet esetén `assemble_package()` sosem fut, a kimeneti könyvtár
+  nem jön létre (D4). `--verify` a `checksum-manifest.json`-t a csomag
+  TÉNYLEGES fájllistájához köti — hiányzó, megváltozott ÉS többlet fájl is
+  nem-nulla kilépés (D5).
+- `test/tooling/rc_assembly_test.dart` — a kör gate-je, `python3`-on
+  keresztül fixture-bemenetekkel hívja az összeállítót, és egy job/step-szintű
+  korlátozott YAML-parszert tartalmaz (`parseWorkflowJobs`) a javaslat
+  statikus ellenőrzéséhez. `package:yaml` NINCS importálva.
+- `docs/release/workflows/release-candidate.proposal.yml` — a teljes javasolt
+  workflow (4 job: `approve-release-candidate` → `quality-gates` +
+  `backend-tests` → `build-release-candidate`).
+- `docs/release/rc-checklist.md` — az orchesztrátor/emberi dispatch előtti/
+  utáni ellenőrzőlista.
+
+**Mért CLI-eltérés a brief §0.0.B R4-hez képest:** `build_ai_report.py` és
+`security_scan.py` NEM ismer `--output` flaget (stdout-ra írnak) — a javaslat
+ezért shell-redirekcióval írja `build/ai-report.json` / `build/security-report.json`
+alá (`> build/ai-report.json`), a brief mért CLI-táblázata ezt nem tiltja, csak
+nem sorolta fel explicit módon.
+
+### §7 gate — csonkítatlan futás
+
+```
+tools/round-gate.sh test/tooling/rc_assembly_test.dart test/tooling/release_manifest_test.dart
+```
+
+→ **MINDEN GATE ZÖLD** (format, analyze, mindkét teszt, architecture, secrets,
+l10n). Két apró hiba merült fel és lett javítva az ELSŐ futáskor (nem
+maradtak a végleges fába):
+
+1. `_stepMapLine` regex `[a-zA-Z_-]+` nem engedett számjegyet a kulcsban →
+   a valós javaslat `env:` blokkja (`ANDROID_KEYSTORE_BASE64`) parszolási
+   hibát dobott. Javítva `[a-zA-Z0-9_-]+`-re, regressziós teszttel
+   ("step fields accept env var names carrying digits").
+2. Egy tévesen írt "unrecognized step key throws" teszt ellentmondott a
+   parszer szándékolt, precedensből átvett tervezésének (a step-mezők
+   generikusan tárolódnak, nincs run/uses/with allowlist — l.
+   `signing_policy_test.dart`-nak ugyanez a döntése) → törölve, helyette egy
+   valódi fail-closed eset (`with:` blokk kulcs-érték sor nélkül) és egy
+   regressziós teszt került be.
+
+### §7 `--dry-run` — a D4 élő bizonyítéka, tényleges kimenet
+
+```
+$ python3 tool/release/assemble_rc.py --profile development --dry-run
+assemble_rc: input plan
+  - APK artifact: build/app/outputs/flutter-apk/app-release.apk [MISSING]
+  - release manifest: build/release-manifest.json [MISSING]
+  - SBOM: build/sbom.json [MISSING]
+  - third-party notices: THIRD_PARTY_NOTICES.md [present]
+  - AI quality report: build/ai-report.json [MISSING]
+  - security scan report: build/security-report.json [MISSING]
+  - test/coverage report: coverage/lcov.info [MISSING]
+6 mandatory input(s) missing:
+  - APK artifact: build/app/outputs/flutter-apk/app-release.apk
+  - release manifest: build/release-manifest.json
+  - SBOM: build/sbom.json
+  - AI quality report: build/ai-report.json
+  - security scan report: build/security-report.json
+  - test/coverage report: coverage/lcov.info
+$ echo $?
+1
+```
+
+A `THIRD_PARTY_NOTICES.md` a repó gyökerén már ma is létező, commitolt fájl —
+ezért `[present]` a tiszta fán is; a másik hat bemenet build-artefaktum, ami
+tiszta checkoutból hiányzik. Nem-nulla kilépés a hat hiányzó bemenettel — ez
+pontosan a §0.0.B R2 / ADR 0488 D4 előre jelzett, elvárt viselkedése.
+
+### §6.1 kötelező valódi-sértés próba (A3)
+
+A `main()`-ban a kötelező-bemenet ellenőrzést (a `if missing: return 1`
+ágat) ideiglenesen eltávolítottam, és `present`-et a hét kulcs teljes
+halmazára kényszerítettem függetlenül attól, hogy a fájl létezik-e. Ezután
+lefuttattam a §7 gate-et:
+
+```
+tools/round-gate.sh test/tooling/rc_assembly_test.dart
+```
+
+**Eredmény: `test test/tooling/rc_assembly_test.dart: PIROS (kilépési kód
+1)`** — pontosan 8 teszt bukott, mind az A3 csoportból (a hét egyenkénti
+"missing `<key>`" eset + az "ALL seven inputs missing" mátrix-sor); az A2/A4/
+A1/A5/A6/A7 csoportok változatlanul zöldek maradtak (a mutáció csak az A3
+által mért ágat érinti). Ez a §6.1 mátrix előírt bizonyítéka: a cella
+PONTOSAN akkor vált pirosra, amikor a hibás implementáció (a kötelező-bemenet
+ellenőrzés hiánya) bekerül. A módosítást ezután visszaálltottam
+(`git diff tool/release/assemble_rc.py` → üres, a fájl bájtra egyezik a
+`caadef2f` commit-tal), és a teljes gate-et újra lefuttattam: **MINDEN GATE
+ZÖLD**.
+
+### Amit NEM csináltam (STOP-protokoll nem kellett)
+
+Nem nyúltam `.github/workflows/**`-hoz, `.github/actions/**`-hoz,
+`docs/adr/**`-hoz, `tools/**`-hoz, `lib/**`-hez, `backend/app/**`-hez —
+a diff a négy engedélyezett fájlra korlátozódik. `gh`-t nem hívtam; a
+javaslat telepítése és a két dispatch (zöld + bizonyított piros) az
+orchesztrátor/emberi lépés a merge után (ADR 0488 D8).
+
 ## 11. Review — a Claude tölti ki
