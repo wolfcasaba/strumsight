@@ -49,15 +49,46 @@ bool allowlistExceedsBaseline({
 // @Deprecated inventory (A1)
 // ---------------------------------------------------------------------
 
-/// Matches a standalone `@Deprecated('...')` / `@Deprecated("...")`
-/// annotation line, whichever quote style is used. Anchored to (optional
-/// leading whitespace then) the start of a line, mirroring
-/// `check_feature_flags.dart`'s `_fieldPattern` so a mention inside a doc
-/// comment or a commented-out line is never matched.
+/// Matches a standalone `@Deprecated(...)` annotation whose argument is one
+/// or more adjacent string literals (single or double quoted), across one
+/// or more physical lines — covers both `@Deprecated('...')` and the
+/// multi-line, adjacent-literal form Dart uses for long messages:
+/// ```dart
+/// @Deprecated(
+///   'first part '
+///   'second part',
+/// )
+/// ```
+/// Anchored to (optional leading whitespace then) the start of a line,
+/// mirroring `check_feature_flags.dart`'s `_fieldPattern` so a mention
+/// inside a doc comment or a commented-out line is never matched. Each
+/// quoted segment is matched by its own character class (`[^']*`/`[^"]*`)
+/// rather than a dot-all span up to the closing `)`, so a literal
+/// parenthesis inside the message (e.g. "via appConfigProvider
+/// (lib/app/config/).") does not truncate the match early.
 final _deprecatedPattern = RegExp(
-  r"""^\s*@Deprecated\(\s*(?:'([^']*)'|"([^"]*)")\s*\)""",
+  r"""^\s*@Deprecated\(\s*((?:'[^']*'|"[^"]*")(?:\s*(?:'[^']*'|"[^"]*"))*)\s*,?\s*\)""",
   multiLine: true,
 );
+
+/// Matches a single quoted string literal, used to pull the individual
+/// segments out of a [_deprecatedPattern] match's argument capture so
+/// adjacent-literal messages are joined the way Dart itself concatenates
+/// them.
+final _deprecatedMessageSegmentPattern = RegExp('\'([^\']*)\'|"([^"]*)"');
+
+/// Joins the quoted-literal segments inside [argumentText] (the capture
+/// group from [_deprecatedPattern]) the way Dart concatenates adjacent
+/// string literals.
+String _extractDeprecatedMessage(String argumentText) {
+  final buffer = StringBuffer();
+  for (final match in _deprecatedMessageSegmentPattern.allMatches(
+    argumentText,
+  )) {
+    buffer.write(match.group(1) ?? match.group(2) ?? '');
+  }
+  return buffer.toString();
+}
 
 /// Matches a top-level `import` or `export` directive's target string,
 /// whichever quote style is used.
@@ -135,17 +166,21 @@ final class DeprecatedSite {
     required this.filePath,
     required this.line,
     required this.message,
-    required this.externalCallsiteCount,
+    required this.externalImporterCount,
   });
 
   final String filePath;
   final int line;
   final String message;
-  final int externalCallsiteCount;
+
+  /// The number of OTHER files in the tree that import or export
+  /// [filePath] — a count of importing FILES, not import statements or
+  /// call sites within them (see [countExternalImporters]).
+  final int externalImporterCount;
 }
 
 /// Finds every `@Deprecated(...)` site in [filesByPath], each carrying the
-/// MEASURED external-callsite count of the file it lives in (A1: "az audit
+/// MEASURED external-importer count of the file it lives in (A1: "az audit
 /// MINDEN `@Deprecated` elemhez kiad egy tételt, benne a MÉRT
 /// hívóhely-számmal").
 List<DeprecatedSite> findDeprecatedSites(Map<String, String> filesByPath) {
@@ -158,8 +193,8 @@ List<DeprecatedSite> findDeprecatedSites(Map<String, String> filesByPath) {
         DeprecatedSite(
           filePath: filePath,
           line: _lineNumberAt(source, match.start),
-          message: (match.group(1) ?? match.group(2))!,
-          externalCallsiteCount: countExternalImporters(
+          message: _extractDeprecatedMessage(match.group(1)!),
+          externalImporterCount: countExternalImporters(
             filePath: filePath,
             filesByPath: filesByPath,
           ),
@@ -233,12 +268,22 @@ final class TechnicalDebtItem {
 
   final String name;
 
-  /// The path this item concerns, or an empty string when the item spans
-  /// no single checkable path (e.g. a scattered TODO cluster).
+  /// The path this item concerns, or the empty string / [noSinglePathMarker]
+  /// when the item spans no single checkable path (e.g. a scattered TODO
+  /// cluster). Any other non-empty value is treated as a real path and is
+  /// checked against the frozen scope by [auditTechnicalDebtItems].
   final String path;
   final String owner;
   final String removalCondition;
 }
+
+/// The recognized `docs/release/technical-debt.md` Path-column marker for
+/// "this item spans no single checkable path" (a scattered TODO cluster).
+/// Only the empty string and this exact marker opt an item out of the
+/// frozen-scope check in [auditTechnicalDebtItems] — every other non-empty
+/// value is checked, so a row cannot silently dodge the guard by writing a
+/// non-path placeholder into its Path cell.
+const noSinglePathMarker = '—';
 
 /// Extracts the content between `<!-- <markerName>:begin -->` and
 /// `<!-- <markerName>:end -->` markers, or an empty string if either marker
@@ -328,7 +373,9 @@ final class TechnicalDebtAuditIssue {
 /// Validates [items] against §5.2 (every item needs a non-empty owner AND
 /// a non-empty removal condition) and §0.0/R5 (no item's [TechnicalDebtItem.path]
 /// may fall inside a [frozenScopeCells] entry from
-/// `docs/release/contract-freeze.md`).
+/// `docs/release/contract-freeze.md`). Only an empty path or
+/// [noSinglePathMarker] opts an item out of the frozen-scope check — every
+/// other non-empty path value is checked.
 List<TechnicalDebtAuditIssue> auditTechnicalDebtItems({
   required List<TechnicalDebtItem> items,
   required List<String> frozenScopeCells,
@@ -353,6 +400,7 @@ List<TechnicalDebtAuditIssue> auditTechnicalDebtItems({
     }
     final path = item.path.trim();
     if (path.isNotEmpty &&
+        path != noSinglePathMarker &&
         frozenScopeCells.any((cell) => cell.contains(path))) {
       issues.add(
         TechnicalDebtAuditIssue(
@@ -420,7 +468,7 @@ final class DeprecationAuditReport {
     for (final site in deprecatedSites) {
       output.writeln(
         '  - ${site.filePath}:${site.line} '
-        '(${site.externalCallsiteCount} external callsite(s)) '
+        '(${site.externalImporterCount} external importer file(s)) '
         '${site.message}',
       );
     }

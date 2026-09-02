@@ -213,8 +213,8 @@ másképp nincs jelölve. A cellanevek KÖTÖTTEK — a review ezeket keresi.
 
 | # | Kritérium | Bizonyíték (cellanév) |
 |---|---|---|
-| A1 | Az audit MINDEN `@Deprecated` elemhez kiad egy tételt, benne a MÉRT hívóhely-számmal; a valódi fán a `lib/` alatti találatszám **12** (9 fájlban), és a jelentés minden tétele megnevezi a forrásfájlt | `A1 every @Deprecated site gets an inventory item with a callsite count` + `A1 the real tree reports 12 deprecated sites in 9 files` |
-| A2 | A lejárt flagek listája a Kör 5 eszközéből jön (nincs második igazság): a lejárati döntés `isFeatureFlagExpired`, a katalógus `featureFlagRegistry`; injektált lejárt fixture-re PIROS, jövőbeli dátumra ZÖLD, a lejárat NAPJÁN ZÖLD (inkluzív határ) | `A2 expired flags come from the round-5 checker` + `A2 expiry boundary is inclusive on the expiry day` |
+| A1 | Az audit MINDEN `@Deprecated` elemhez kiad egy tételt, benne a MÉRT hívóhely-számmal (a többsoros / szomszédos-string-literálos alakot is felismerve); a valódi fán a `lib/` alatti találatszám **12** (9 fájlban), és a jelentés minden tétele megnevezi a forrásfájlt; a `findDeprecatedSites` találatszáma egyezik a nyers `@Deprecated(` előfordulásszámmal ugyanazon a bemeneten | `A1 every @Deprecated site gets an inventory item with a callsite count` + `A1 the real tree reports 12 deprecated sites in 9 files` + `A1 no @Deprecated form is silently missed` |
+| A2 | A lejárt flagek listája a Kör 5 eszközéből jön (nincs második igazság): a lejárati döntés `isFeatureFlagExpired`, a katalógus `featureFlagRegistry`; injektált lejárt fixture-re PIROS, jövőbeli dátumra ZÖLD, a lejárat NAPJÁN ZÖLD (inkluzív határ); a `tool/check_deprecations.dart` SAJÁT forrása importálja és hívja az `isFeatureFlagExpired`-et, és nincs benne saját nap-granularitású dátum-összehasonlítás | `A2 expired flags come from the round-5 checker` + `A2 expiry boundary is inclusive on the expiry day` + `A2 the tool has no second expiry truth of its own` |
 | A3 | Az allowlist mérete nem nőtt a MÉRT bázisvonalhoz (**12**) képest — a SHIPPED halmazon mérve (L120) | `A3 the shipped architecture allowlist stays at the measured baseline` |
 | A4 | Minden adósság-tétel hordoz nem üres felelőst ÉS nem üres eltávolítási feltételt; felelős vagy feltétel nélküli tétel lelet | `A4 a debt item without an owner is an issue` + `A4 a debt item without a removal condition is an issue` + `A4 the shipped technical-debt.md is clean` |
 | A5 | A támogatott régi kliens útja ép: az `appStorageMigrations` lánc **22** lépés, és a leltár egyetlen tétele sem nevez meg a `contract-freeze.md` `frozen_scope` oszlopában szereplő útvonalat eltávolíthatóként | `A5 the supported-client migration chain is intact` + `A5 no debt item targets a frozen contract scope` |
@@ -236,8 +236,9 @@ lévő őr-teszten. A cellák bemenetét ne írd kézzel: `python3 -c` számolja
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| Az audit saját flag-listát vagy saját dátum-összehasonlítást épít a Kör 5 eszköze helyett | `A2 expired flags come from the round-5 checker` (a fixture-katalógus lejárt flagje nem jelenik meg a jelentésben) |
+| Az audit saját flag-listát vagy saját dátum-összehasonlítást épít a Kör 5 eszköze helyett | `A2 expired flags come from the round-5 checker` (a fixture-katalógus lejárt flagje nem jelenik meg a jelentésben) + `A2 the tool has no second expiry truth of its own` (forrás-szintű őr: hiányzó import/hívás VAGY saját `.isAfter(`/`.isBefore(`/`.compareTo(` a lejárati úton) |
 | Az audit a lejárat NAPJÁN már lejártnak veszi a flaget (exkluzív határra vált) | `A2 expiry boundary is inclusive on the expiry day` |
+| Az `@Deprecated` minta nem ismeri fel a többsoros / szomszédos-string-literálos alakot, ezért egy valódi elem néma alulmérést okoz | `A1 no @Deprecated form is silently missed` (a `findDeprecatedSites` találatszáma és a nyers `@Deprecated(` előfordulásszám eltér — a `A1 the real tree reports 12 deprecated sites in 9 files` bázisvonal-cella ezt ÖNMAGÁBAN nem fogja meg, mert a hiányzó találat miatt a szám nem változik) |
 | Az allowlist egy „ideiglenes" bejegyzéssel bővül | `A3 the shipped architecture allowlist stays at the measured baseline` (és a `threshold above` cella az izolált függvényre) |
 | A küszöb-függvény exkluzívra vált (`>=` a `>` helyett) | `threshold on — 12 entries` |
 | Egy adósság-tétel felelős nélkül kerül a listára | `A4 a debt item without an owner is an issue` |
@@ -255,6 +256,24 @@ cellának PIROSNAK kell lennie (és a `architecture_allowlist_guard_test.dart`
 piros kimenetet szó szerint. A visszaállítás után a `git status --short`
 legyen tiszta a `tool/check_architecture.dart`-ra — ez a fájl a §4 tilos
 zónájában van, a próba után nem maradhat módosítva.
+
+**Két további valódi-sértés próba (javító kör, KÖTELEZŐ, a §10-ben
+dokumentálva):**
+
+- **M1 — A2 második igazság:** cseréld ki IDEIGLENESEN a
+  `isFeatureFlagExpired` hívást egy lokális, azonos szemantikájú
+  dátum-összehasonlításra a `tool/check_deprecations.dart`-ban → az
+  `A2 the tool has no second expiry truth of its own` cellának PIROSNAK
+  kell lennie → **állítsd vissza**, `git status --short` tiszta legyen.
+- **M2 — A1 többsoros alak:** adj egy valódi, többsoros
+  `@Deprecated(...)` annotációt a `lib/`-hez (pl.
+  `lib/features/live/model/chord.dart` végére) ÉS ideiglenesen állítsd
+  vissza `_deprecatedPattern`-t az egysoros-csak alakra → az
+  `A1 no @Deprecated form is silently missed` cellának PIROSNAK kell
+  lennie, miközben az `A1 the real tree reports 12 deprecated sites in 9
+  files` bázisvonal-cella ZÖLD marad (ez maga a mért vakfolt) →
+  **állítsd vissza mindkettőt**, `git status --short` tiszta legyen a
+  `lib/`-re és a `tool/check_deprecations.dart`-ra is.
 
 ## 7. Kötelező ellenőrzések
 
@@ -402,23 +421,97 @@ után) kimenete:
 
 ```
 Deprecation audit: 12 @Deprecated site(s) in 9 file(s).
-  - lib/features/learn/audio/wav.dart:1 (0 external callsite(s)) Import from core/audio/codec/wav_codec.dart
-  - lib/features/tuner/model/guitar_strings.dart:5 (0 external callsite(s)) Import package:strumsight/core/music/guitar_strings.dart
-  - lib/features/tuner/model/tuning.dart:4 (0 external callsite(s)) Import package:strumsight/core/music/tuning.dart
-  - lib/features/analyze/engine/wav_decoder.dart:1 (0 external callsite(s)) Import from core/audio/codec/wav_codec.dart
-  - lib/features/live/engine/dsp/sliding_framer.dart:5 (0 external callsite(s)) Import package:strumsight/core/audio/dsp/sliding_framer.dart
-  - lib/features/live/model/chord.dart:5 (0 external callsite(s)) Import package:strumsight/core/music/chord.dart
-  - lib/features/live/model/chord_event.dart:4 (0 external callsite(s)) Import package:strumsight/core/music/chord_event.dart
-  - lib/features/live/model/strum.dart:6 (0 external callsite(s)) Import package:strumsight/core/music/strum.dart
-  - lib/core/api/api_config.dart:8 (0 external callsite(s)) Use AppConfig via appConfigProvider (lib/app/config/).
-  - lib/core/api/api_config.dart:11 (0 external callsite(s)) Use AppConfig.rawApiBaseUrl / appConfigProvider apiBaseUrl.
-  - lib/core/api/api_config.dart:17 (0 external callsite(s)) Use appConfigProvider flags.accountEnabled.
-  - lib/core/api/api_config.dart:20 (0 external callsite(s)) Use appConfigProvider diagnosticsToken.
+  - lib/features/learn/audio/wav.dart:1 (0 external importer file(s)) Import from core/audio/codec/wav_codec.dart
+  - lib/features/tuner/model/guitar_strings.dart:5 (0 external importer file(s)) Import package:strumsight/core/music/guitar_strings.dart
+  - lib/features/tuner/model/tuning.dart:4 (0 external importer file(s)) Import package:strumsight/core/music/tuning.dart
+  - lib/features/analyze/engine/wav_decoder.dart:1 (0 external importer file(s)) Import from core/audio/codec/wav_codec.dart
+  - lib/features/live/engine/dsp/sliding_framer.dart:5 (0 external importer file(s)) Import package:strumsight/core/audio/dsp/sliding_framer.dart
+  - lib/features/live/model/chord.dart:5 (0 external importer file(s)) Import package:strumsight/core/music/chord.dart
+  - lib/features/live/model/chord_event.dart:4 (0 external importer file(s)) Import package:strumsight/core/music/chord_event.dart
+  - lib/features/live/model/strum.dart:6 (0 external importer file(s)) Import package:strumsight/core/music/strum.dart
+  - lib/core/api/api_config.dart:8 (0 external importer file(s)) Use AppConfig via appConfigProvider (lib/app/config/).
+  - lib/core/api/api_config.dart:11 (0 external importer file(s)) Use AppConfig.rawApiBaseUrl / appConfigProvider apiBaseUrl.
+  - lib/core/api/api_config.dart:17 (0 external importer file(s)) Use appConfigProvider flags.accountEnabled.
+  - lib/core/api/api_config.dart:20 (0 external importer file(s)) Use appConfigProvider diagnosticsToken.
 Architecture allowlist: within the measured baseline.
 Supported-client migration chain: intact.
 Expired feature flags: none.
 docs/release/technical-debt.md: clean.
 ```
+
+### Javító kör (`docs/reviews/e12-r35-review.md` 1. kör — 2 MAJOR, 2 MINOR)
+
+**M1 — `A2 the tool has no second expiry truth of its own`.** Új cella a
+`deprecation_audit_test.dart`-ban, ami a `tool/check_deprecations.dart`
+SAJÁT forrását olvassa és állítja: (a) tartalmazza a
+`import 'check_feature_flags.dart' show isFeatureFlagExpired;` sort, (b)
+tartalmaz egy `isFeatureFlagExpired(` hívást, (c) NEM tartalmaz
+`.isAfter(`/`.isBefore(`/`.compareTo(` mintát. Valódi-sértés próba: a
+`isFeatureFlagExpired` hívást IDEIGLENESEN egy lokális, azonos szemantikájú
+`_localExpired` (`.isAfter(`-t használó) függvényre cseréltem — az új
+cella szó szerinti piros kimenete:
+
+```
+00:06 +5 -1: check_deprecations.dart source — A2 has no second expiry truth A2 the tool has no second expiry truth of its own [E]
+  Expected: contains 'import \'check_feature_flags.dart\' show isFeatureFlagExpired;'
+    Actual: <a long string>
+     Which: does not contain 'import \'check_feature_flags.dart\' show isFeatureFlagExpired;'
+  the tool must import the round-5 checker's isFeatureFlagExpired rather than building its own expiry truth.
+```
+
+Visszaállítás (`cp` a mutáció előtti mentett fájlból) után `git status
+--short tool/check_deprecations.dart` a próba nyomát NEM mutatta (csak az
+M2 forrásjavítás maradt a diffben).
+
+**M2 — `A1 no @Deprecated form is silently missed`.** A `_deprecatedPattern`
+mostantól szomszédos string-literálokat is felismer, több soron át, a záró
+zárójelig (nem dot-all span, hanem idézőjel-tudatos alternáció, mert egy
+valódi üzenet — `lib/core/api/api_config.dart:8` — zárójelet tartalmaz:
+`"...appConfigProvider (lib/app/config/)."` — egy naiv dot-all minta ezen
+korán megállt volna). Új keresztellenőrző cella: a `findDeprecatedSites`
+találatszáma egyezzen a nyers `@Deprecated(` előfordulásszámmal ugyanazon a
+bemeneten (fixture + a valódi fa). Valódi-sértés próba: (1) a review §2/M2
+szerinti 13. deprecationt hozzáadtam IDEIGLENESEN a
+`lib/features/live/model/chord.dart` végére, (2) a `_deprecatedPattern`-t
+IDEIGLENESEN visszaállítottam az egysoros-csak (régi) alakra. A fixture-alapú
+rész az új cellában (a valódi fáig el sem jutott, mert a fixture már ott
+elbukott) szó szerinti piros kimenete:
+
+```
+00:00 +0 -1: findDeprecatedSites / countExternalImporters — A1 A1 no @Deprecated form is silently missed [E]
+  Expected: an object with length of <2>
+    Actual: [Instance of 'DeprecatedSite']
+     Which: has length of <1>
+```
+
+Ugyanekkor az `A1 the real tree reports 12 deprecated sites in 9 files`
+bázisvonal-cella (a régi mintával, a hozzáadott 13. deprecation mellett) —
+a review pontos állítását igazolva — ZÖLD maradt (`00:03 +1: All tests
+passed!`): a hiányzó találat miatt a szám nem változott, tehát a
+bázisvonal-cella önmagában nem fogja meg a néma alulmérést, csak az új
+kereszt-ellenőrző cella. Mindkét mutációt (`chord.dart`, `_deprecatedPattern`)
+visszaállítottam a mentett verzióból; `git diff lib/` a próba után 0 sort
+mutatott.
+
+**m1 — `externalCallsiteCount` → `externalImporterCount`.** A mező, a
+`format()` jelentésszövege ("external importer file(s)") és a
+`technical-debt.md` Methodology + Measured oszlopa mind
+"external importer file(s)"-re lett átírva; a számok nem változtak (a valós
+fán a `dart run tool/check_deprecations.dart` kimenete fent, mind 0).
+
+**m2 — a frozen-scope őr `—`-sal kikerülhető.** Bevezettem a
+`noSinglePathMarker = '—'` konstanst: az `auditTechnicalDebtItems` mostantól
+csak az üres cellát ÉS ezt a pontos jelölőt engedi át a frozen-scope
+ellenőrzésen — minden más nem-üres érték átesik rajta. A
+`technical-debt.md` két érintett TODO-klaszter sorát (E08-R30 routing,
+chunk 013 retention/nudge) átírtam: a leíró szöveg (a szórt helyek) az Item
+cellába költözött, a Path cella pontosan `—`. A `home_shell.dart` nav ARB
+sor változatlan (ott a Path egy valódi, egyetlen útvonal). A
+`TechnicalDebtItem.path` doc-commentje frissült: "empty string" helyett
+"empty string / `noSinglePathMarker`".
+
+A javító kör után a §7 gate-et újra lefuttattam (lásd fent) — **MINDEN
+GATE ZÖLD** a végleges, mutáció nélküli fán.
 
 ### Scope
 

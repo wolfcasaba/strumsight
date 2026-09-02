@@ -43,7 +43,7 @@ void main() {
         // (relative import, properly resolved against its own directory)
         // both reach the shim; unrelated.dart and the shim's own export do
         // not count.
-        expect(site.externalCallsiteCount, 2);
+        expect(site.externalImporterCount, 2);
       },
     );
 
@@ -66,6 +66,40 @@ void main() {
         ),
       );
     });
+
+    test('A1 no @Deprecated form is silently missed', () {
+      final fixtureFiles = {
+        'lib/features/single/single_line.dart':
+            "@Deprecated('single line form')\nclass SingleLine {}\n",
+        'lib/features/multi/multi_line.dart':
+            "@Deprecated(\n"
+            "  'a multi-line deprecation message '\n"
+            "  'spanning two adjacent string literals',\n"
+            ")\n"
+            "class MultiLine {}\n",
+      };
+      final fixtureRawCount = fixtureFiles.values
+          .map((source) => '@Deprecated('.allMatches(source).length)
+          .fold<int>(0, (sum, count) => sum + count);
+      expect(fixtureRawCount, 2);
+      expect(findDeprecatedSites(fixtureFiles), hasLength(fixtureRawCount));
+
+      final realFiles = readSourceTree(
+        projectRoot: Directory.current,
+        relativeSubdir: 'lib',
+      );
+      final realRawCount = realFiles.values
+          .map((source) => '@Deprecated('.allMatches(source).length)
+          .fold<int>(0, (sum, count) => sum + count);
+      expect(
+        findDeprecatedSites(realFiles),
+        hasLength(realRawCount),
+        reason:
+            'raw "@Deprecated(" occurrence count ($realRawCount) must match '
+            'findDeprecatedSites — a mismatch means the parser silently '
+            'misses a valid @Deprecated form.',
+      );
+    });
   });
 
   group('findExpiredFlags — A2 (no second truth, inclusive boundary)', () {
@@ -84,6 +118,43 @@ void main() {
       final now = DateTime(2026, 8, 28);
       final registry = [_flag('todayFlag', expiresOn: DateTime(2026, 8, 28))];
       expect(findExpiredFlags(registry: registry, now: now), isEmpty);
+    });
+  });
+
+  group('check_deprecations.dart source — A2 has no second expiry truth', () {
+    test('A2 the tool has no second expiry truth of its own', () {
+      final toolSource = File(
+        '${Directory.current.path}/tool/check_deprecations.dart',
+      ).readAsStringSync();
+      expect(
+        toolSource,
+        contains(
+          "import 'check_feature_flags.dart' show isFeatureFlagExpired;",
+        ),
+        reason:
+            'the tool must import the round-5 checker\'s isFeatureFlagExpired '
+            'rather than building its own expiry truth.',
+      );
+      expect(
+        toolSource,
+        contains('isFeatureFlagExpired('),
+        reason:
+            'the expiry decision must call the imported isFeatureFlagExpired.',
+      );
+      for (final localComparison in const [
+        '.isAfter(',
+        '.isBefore(',
+        '.compareTo(',
+      ]) {
+        expect(
+          toolSource.contains(localComparison),
+          isFalse,
+          reason:
+              'found "$localComparison" in tool/check_deprecations.dart — that '
+              'is a second, local day-granularity date comparison duplicating '
+              'isFeatureFlagExpired (§0.0/R4).',
+        );
+      }
     });
   });
 
