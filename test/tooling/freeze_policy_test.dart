@@ -41,11 +41,20 @@ void main() {
   });
 
   group('sanity — the shipped documents validate against the real tree', () {
-    test('exit 0 with only default paths (no --since/--changes-file)', () {
-      final result = _run([]);
-      expect(result.exitCode, 0, reason: result.stderr.toString());
-      expect(result.stdout.toString(), contains('ok'));
-    });
+    test(
+      'exit 0 with only default paths (no --since/--changes-file) — the '
+      'default call classifies too (MAJOR-1: it falls back to '
+      'feature-freeze.md\'s freeze_base_sha, it does not silently skip A1)',
+      () {
+        final result = _run([]);
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+        expect(result.stdout.toString(), contains('ok'));
+        expect(
+          result.stdout.toString(),
+          contains('changed path(s) classified'),
+        );
+      },
+    );
 
     test('exit 0 classifying the real freeze-era diff since freeze_base_sha '
         '(§7 — this round\'s own diff is documentation + release-tooling '
@@ -173,6 +182,74 @@ void main() {
       );
     });
 
+    test('a product path changed since freeze_base_sha, on a bare call with '
+        'no --since/--changes-file override, is a non-zero exit naming the '
+        'path (MAJOR-1 regression — the default call used to skip '
+        'classification entirely and print "ok" with exit 0)', () {
+      final repoDir = _tempDir();
+      addTearDown(() => repoDir.deleteSync(recursive: true));
+      void git(List<String> args) {
+        final result = Process.runSync(
+          'git',
+          args,
+          workingDirectory: repoDir.path,
+        );
+        expect(
+          result.exitCode,
+          0,
+          reason: 'git ${args.join(' ')} failed: ${result.stderr}',
+        );
+      }
+
+      git(['init', '-q']);
+      git(['config', 'user.email', 'freeze-test@strumsight.app']);
+      git(['config', 'user.name', 'freeze-test']);
+      _writeIn(repoDir, 'seed.txt', 'seed\n');
+      git(['add', '-A']);
+      git(['commit', '-q', '-m', 'seed']);
+      final baseSha = Process.runSync('git', [
+        'rev-parse',
+        'HEAD',
+      ], workingDirectory: repoDir.path).stdout.toString().trim();
+      _writeIn(repoDir, 'lib_stub.dart', '// not classified\n');
+      git(['add', '-A']);
+      git(['commit', '-q', '-m', 'unrelated tidy-up, no blocker cited']);
+
+      final featureFreeze = _writeIn(repoDir, 'feature-freeze.md', '''
+<!-- freeze-base:begin -->
+freeze_base_sha: $baseSha
+approver_role: freeze-test fixture
+<!-- freeze-base:end -->
+
+<!-- freeze-classes:begin -->
+| class | path_prefixes | requires_blocker_id |
+|---|---|---|
+| `documentation` | `docs/`, `CHANGELOG.md` | `no` |
+| `release-tooling` | `tool/release/`, `test/tooling/` | `no` |
+| `blocker-fix` | `*` | `yes` |
+<!-- freeze-classes:end -->
+''');
+
+      final result = Process.runSync('python3', [
+        File(_tool).absolute.path,
+        '--feature-freeze',
+        featureFreeze.path,
+        '--known-issues',
+        File(_knownIssues).absolute.path,
+        '--blockers',
+        File(_blockers).absolute.path,
+        '--changelog',
+        File(_changelog).absolute.path,
+        '--pubspec',
+        File('pubspec.yaml').absolute.path,
+        '--manifest-generator',
+        File('tool/generate_release_manifest.dart').absolute.path,
+      ], workingDirectory: repoDir.path);
+      expect(result.exitCode, 1, reason: result.stderr.toString());
+      expect(result.stderr.toString(), contains('lib_stub.dart'));
+      expect(result.stderr.toString(), contains('not classified'));
+    });
+
     test('--since and --changes-file together is a usage error (exit 2)', () {
       final dir = _tempDir();
       addTearDown(() => dir.deleteSync(recursive: true));
@@ -275,6 +352,25 @@ void main() {
       final result = _run(['--known-issues', file.path]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('R-VER-01'));
+    });
+
+    test('a known-issues.md row DOWNGRADED below its blockers.md severity '
+        '(P1 -> P2) is a non-zero exit naming it (MAJOR-2 regression — a '
+        'severity mismatch used to be checked only when the known-issues.md '
+        'row was itself P0/P1, so a P1 -> P2 downgrade went undetected)', () {
+      final issuesText = File(_knownIssues).readAsStringSync();
+      const original = '| `R-VER-01` | `P1` |';
+      const mangled = '| `R-VER-01` | `P2` |';
+      expect(issuesText, contains(original));
+      final mangledText = issuesText.replaceFirst(original, mangled);
+      final fixture = _tempDir();
+      addTearDown(() => fixture.deleteSync(recursive: true));
+      final file = _writeIn(fixture, 'known-issues.md', mangledText);
+
+      final result = _run(['--known-issues', file.path]);
+      expect(result.exitCode, 1);
+      expect(result.stderr.toString(), contains('R-VER-01'));
+      expect(result.stderr.toString(), contains('blockers.md'));
     });
 
     test('the shipped known-issues.md has no P0/P1 row outside blockers.md '
