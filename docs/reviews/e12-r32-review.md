@@ -2,14 +2,18 @@
 
 - **Reviewer:** Claude (orchestrátor, ADR 0055) — read-only review, production-szerkesztés nélkül.
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `tools/mm-round.sh`).
-- **Branch:** `sonnet-impl/e12-r32-staged-rollout-1-to-20-percent` @ `a723749d`
-- **Dátum:** 2026-09-02
+- **Branch:** `sonnet-impl/e12-r32-staged-rollout-1-to-20-percent` @ `6abbe822` (a `23cdeb09` upstream-szinkron merge után; az eredeti review `a723749d`-n készült)
+- **Dátum:** 2026-09-02 (első verdikt), 2026-09-02 újramérés a H7 önjavító kör merge-e után
 
-## VÉGSŐ DÖNTÉS: **HALT (H7)** — a kör diffje ellen NINCS nyitott lelet, de a kötelező §7 gate egy **kör-hatáskörön kívüli, már merge-elt regresszió** miatt PIROS
+## VÉGSŐ DÖNTÉS: **APPROVED** — a kör diffje ellen NINCS nyitott lelet, és a §7 gate a H7 önjavító kör merge-e után ZÖLD
 
-A kör négy terméke elkészült, a scope tiszta, a saját mércéje zöld. A merge
-mégsem történhet meg: a brief §7 gate-je a Kör 30 `freeze_policy_test.dart`-ját
-is futtatja, és az **már az `origin/main`-en is PIROS** (lásd §3).
+A kör négy terméke elkészült, a scope tiszta, a saját mércéje zöld. Az első
+verdikt **HALT (H7)** volt, mert a brief §7 gate-je a Kör 30
+`freeze_policy_test.dart`-ját is futtatja, és az akkor **az `origin/main`-en is
+PIROS** volt (a gyökérok mérése változatlanul a §3-ban). Ezt a
+kör-hatáskörön kívüli regressziót a **`4de5643f` (PR #530, E12-R32/H7 önjavító
+kör)** javította a `main`-en; a kör-ág az upstream-szinkron (ADR 0087 §0.3)
+után tartalmazza. A halt oka tehát megszűnt — lásd §5.
 
 ## 1. Scope-audit
 
@@ -55,7 +59,7 @@ mutatója csak `platform:android` bontásban van jelen (az `all` sor nélkül),
 sérti, de a Kör 33 (`verify_ga_record.py`) érdemes, hogy a `cohort`-onkénti
 teljességet is mérje.
 
-## 3. A BLOKKOLÓ, kör-hatáskörön kívüli regresszió (H7)
+## 3. A (MÁR FELOLDOTT) blokkoló, kör-hatáskörön kívüli regresszió (H7) — az első verdikt oka
 
 ```
 tools/round-gate.sh test/tooling/rollout_decision_test.dart test/tooling/freeze_policy_test.dart
@@ -95,7 +99,7 @@ kiterjesztése a `backend/tests/`-re, VAGY a `freeze_base_sha` előreléptetése
 szerződése (H2). A mérce nem lazítható a gate_tests szűkítésével sem: a brief
 A6 cellája kifejezetten a `freeze_policy_test.dart` változatlan zöldjét kéri.
 
-## 4. Javasolt feloldás az önjavító kör számára
+## 4. Javasolt feloldás az önjavító kör számára (MEGVALÓSULT — `4de5643f`, PR #530)
 
 1. `docs/release/feature-freeze.md` `freeze-classes` táblájában a
    `release-tooling` osztály útvonal-listája egészüljön ki a
@@ -109,3 +113,24 @@ A6 cellája kifejezetten a `freeze_policy_test.dart` változatlan zöldjét kér
    test/tooling/freeze_policy_test.dart` újrafuttatása, és a kör a
    CI-dispatch → merge lépésnél folytatható — az E12-R32 diffje ellen nincs
    nyitott lelet.
+
+## 5. Újramérés a H7 önjavító kör merge-e után (2026-09-02, második session)
+
+A `main` időközben megkapta a `4de5643f` (PR #530) javítást: a
+`docs/release/feature-freeze.md` `release-tooling` osztálya kiterjedt a NEM
+szállított verifikációs útvonalakra (köztük a `backend/tests/`-re), és a Kör 30
+`freeze_policy_test.dart` +45 sorral bővült a hozzá tartozó cellákkal. A kör-ág
+az ADR 0087 §0.3 szerinti upstream-szinkronnal (`merge --no-ff origin/main`,
+`23cdeb09`, konfliktusmentes, `git diff --check` tiszta) felvette ezt.
+
+| Mérés a szinkronizált `6abbe822` HEAD-en | Eredmény |
+|---|---|
+| `tools/round-gate.sh test/tooling/rollout_decision_test.dart test/tooling/freeze_policy_test.dart` | **MINDEN GATE ZÖLD** — format, analyze, `rollout_decision_test` (28 cella), `freeze_policy_test` (36 cella), architecture, secrets (4186 fájl, 0 lelet), l10n (en→hu 2298 üzenet) |
+| `python3 tool/release/verify_rollout_decision.py --log docs/release/staged-rollout-log.md` | exit 0 — `ok — 3 decision row(s), 15 observation row(s)` |
+| `python3 tools/scope-audit.py --base origin/main` | `Legacy scope audit OK (23cdeb09679c..6abbe822e9e5, 6 changed path(s), 1 generated/ignored)` |
+| A kör saját diffje (`git diff --name-only origin/main HEAD`) | `docs/release/rollout-decision.md`, `docs/release/staged-rollout-log.md`, `tool/release/verify_rollout_decision.py`, `test/tooling/rollout_decision_test.dart`, `docs/rounds/e12-r32-…md`, `docs/reviews/e12-r32-review.md` (a review saját jelentése — L251) |
+
+A §2 kódolvasás leletei változatlanok: nincs nyitott BLOCKER/MAJOR/MINOR. A
+NOTE-1 (R7 cohort-lefedettség) továbbra is nem blokkoló, a Kör 33 anyaga.
+
+**A merge feltétele innen:** exact-SHA CI (Full Gate + Router CI) a merge SHA-n.
