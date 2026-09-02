@@ -64,8 +64,13 @@ _KNOWN_DECISIONS = {"pending", "approved", "held", "rolled_back"}
 _KNOWN_SOURCES = {"machine", "manual"}
 _OPEN_BLOCKER_SEVERITIES = {"P0", "P1"}
 _REQUIRED_HUMAN_GATE_SENTENCE = "A rollout-százalék állítása EMBERI művelet."
+# The value part deliberately excludes ',' and ':' — a comma is how a
+# careless author would smuggle a second dimension into one cell (e.g.
+# "platform:android,build_mode:release"), and this pattern must reject that
+# (round brief §0.0.1 P7 / A7): the dashboard never silently intersects
+# dimensions.
 _COHORT_PATTERN = re.compile(
-    r"^(all|platform:\S+|app_version:\S+|build_mode:\S+)$"
+    r"^(all|(?:platform|app_version|build_mode):[A-Za-z0-9_.+-]+)$"
 )
 _PLACEHOLDER_VALUES = {"", "TBD"}
 _PLACEHOLDER_BRACKET = re.compile(r"^<.*>$")
