@@ -2,13 +2,19 @@
 """Production/internal-cohort smoke test (E12-R31, round brief §0.0.1 P1-P5).
 
 Runs a fixed set of read-mostly checks against a deployed backend and a
-local artifact tree, and prints one masked PASS/FAIL line per check. Never
-takes a credential as a CLI argument (§5.1) — the account password is read
-from an environment variable named by ``--password-env`` (default
+local artifact tree, and prints one PASS/FAIL line per check. Never takes a
+credential as a CLI argument (§5.1) — the account password is read from an
+environment variable named by ``--password-env`` (default
 ``STRUMSIGHT_SMOKE_PASSWORD``), never from ``sys.argv``, so it never shows
 up in shell history or a process listing (``ps``). No check output ever
-includes the password or the bearer token; only status codes and the
-server's own ``reason``/``status`` fields (never secret) are printed.
+includes the password or the bearer token, and the body of an authenticated
+response (``/auth/me``, ``/settings``, ``/community/feed``) is never
+printed — only status codes and the server's own ``reason``/``status``
+fields (never secret, see the ``/health/ready`` traffic-gate shape below).
+``--base-url`` must be ``https://`` (round brief MAJOR-3, exit 2 fail-closed
+if not) so the password and the bearer token are never sent over a plain
+``http://`` wire; ``--allow-insecure-http`` opts a local/staging run back
+into plain HTTP.
 
 Standard library only (`urllib.request`), matching
 `tool/release/verify_signing_policy.py`'s precedent: this tool has to run
@@ -30,7 +36,16 @@ single invocation reports the full picture in one pass):
                   GET /download must ALL be 404 (ADR 0061, §0.0.1 P3) — the
                   legacy reference is
                   `backend/tests/test_hardening.py::TestProdHardening::
-                  test_prod_defaults_do_not_register_lab_routes`
+                  test_prod_defaults_do_not_register_lab_routes`. Also
+                  probes POST /download (a method the route, if registered,
+                  never exposes): a route that is truly absent 404s any
+                  method, but a route that exists with `apk_download_enabled`
+                  on (even with no APK staged, itself a plain 404) answers a
+                  wrong method with 405 — so this wrong-method probe is the
+                  only way to fail closed on "route exists but nothing is
+                  staged yet" (round brief MAJOR-1; a status-code-only check
+                  on GET /download alone cannot tell that apart from "route
+                  absent", since both read 404).
   fingerprint     the `--signing-certificate` sidecar JSON's
                   `sha256Fingerprint` key must match `--expected-fingerprint`
                   (§0.0.1 P2 — the release manifest has NO signing field,
@@ -69,6 +84,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 DEFAULT_PASSWORD_ENV = "STRUMSIGHT_SMOKE_PASSWORD"
 
@@ -76,6 +92,13 @@ _LAB_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/diagnostics"),
     ("GET", "/diagnostics/health"),
     ("GET", "/download"),
+    # Wrong-method probe (round brief MAJOR-1): if /download is registered
+    # (apk_download_enabled=True), only GET is exposed, so POST answers 405
+    # Method Not Allowed — a status a truly-absent route can never produce
+    # (an unmatched path 404s regardless of method). This is what catches
+    # "registered but no APK staged yet", which itself 404s on GET and would
+    # otherwise be indistinguishable from "route absent".
+    ("POST", "/download"),
 )
 
 
@@ -301,7 +324,9 @@ def check_lab_routes_absent(client) -> CheckResult:
     return CheckResult(
         "lab_routes_absent",
         True,
-        "all three Lab routes 404 (POST /diagnostics, GET /diagnostics/health, GET /download)",
+        "all Lab routes 404 (POST /diagnostics, GET /diagnostics/health, "
+        "GET /download) and POST /download is not a registered route "
+        "(405 would mean it is)",
     )
 
 
@@ -434,7 +459,39 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Repo-relative root containing assets/ml/model_manifest.json (§0.0.1 P4).",
     )
     parser.add_argument("--timeout", type=float, default=10.0, help="HTTP timeout in seconds.")
+    parser.add_argument(
+        "--allow-insecure-http",
+        action="store_true",
+        help=(
+            "Allow a plain http:// --base-url (round brief MAJOR-3). Without "
+            "this flag a non-https --base-url is a usage error (exit 2) — a "
+            "production/staging target MUST be https:// so the smoke-test "
+            "password and the bearer token it obtains are never sent "
+            "unencrypted on the wire. Use only for a local/staging run "
+            "against a target you know is plain HTTP."
+        ),
+    )
     return parser
+
+
+def _https_scheme_error(base_url: str, *, allow_insecure_http: bool) -> str | None:
+    """Fail-closed scheme check (round brief MAJOR-3): returns an error
+    message if `base_url` is not an acceptable target, `None` if it is.
+    `https` is always accepted; plain `http` is accepted only with
+    `--allow-insecure-http`. Any other/missing scheme is always rejected."""
+    scheme = urlsplit(base_url).scheme
+    if scheme == "https":
+        return None
+    if scheme == "http" and allow_insecure_http:
+        return None
+    return (
+        f"production_smoke: --base-url {base_url!r} must use https:// "
+        f"(got scheme {scheme or '<none>'!r}) — a plain http:// target "
+        "sends the smoke-test password and the bearer token it obtains "
+        "unencrypted on the wire (round brief MAJOR-3). Pass "
+        "--allow-insecure-http only for a local/staging run where that is "
+        "expected."
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -449,6 +506,13 @@ def main(argv: list[str]) -> int:
             "accepts a credential as a CLI argument (round brief §5.1)",
             file=sys.stderr,
         )
+        return 2
+
+    scheme_error = _https_scheme_error(
+        args.base_url, allow_insecure_http=args.allow_insecure_http
+    )
+    if scheme_error is not None:
+        print(scheme_error, file=sys.stderr)
         return 2
 
     client = UrllibClient(args.base_url, timeout=args.timeout)

@@ -6,6 +6,7 @@
 // `lib/app/config/app_config.dart` (A3) and the two new release documents
 // (A5/A6) — the same "the cell measures the document, not the other way
 // round" split `beta_profile_test.dart`'s A5/A6 groups use.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -33,6 +34,87 @@ ProcessResult _run(
   environment: environment,
   includeParentEnvironment: includeParentEnvironment,
 );
+
+/// A local stub backend (round brief MAJOR-2 fix) that answers `POST
+/// /auth/login` with 200 + `bearerToken`, so `production_smoke.py`'s
+/// success branch — `check_auth`'s `login_result`/token assignment, the
+/// ONLY place a password or bearer token could ever reach a print
+/// statement — actually executes. The unreachable-port cells elsewhere in
+/// this file (`_unreachableBaseUrl`) never reach that branch at all, so
+/// they cannot prove a leak there is caught; this stub is what makes the
+/// sentinel-absence assertion below meaningful (measured mutation-kill: see
+/// the round brief §10 transcript).
+///
+/// MEASURED environment constraint: a socket bound directly in *this* Dart
+/// test process (`HttpServer.bind`) is unreachable from the `python3`
+/// subprocess `_run` launches on this box (probed directly — a `curl`/
+/// `python3` child of a `dart run` process times out against a socket the
+/// parent Dart process itself bound, even with the tool sandbox disabled).
+/// A `python3` SUBPROCESS-to-`python3`-SUBPROCESS loopback connection (two
+/// siblings, both spawned via `dart:io Process`, same as `_run` spawns the
+/// smoke tool) works fine — so the stub itself is a spawned `python3`
+/// process too, not a Dart-bound `HttpServer`.
+class _StubServer {
+  _StubServer(this._process, this.port);
+  final Process _process;
+  final int port;
+
+  void stop() => _process.kill();
+}
+
+Future<_StubServer> _startStubServer({required String bearerToken}) async {
+  final script =
+      '''
+import http.server
+import json
+
+BEARER_TOKEN = ${jsonEncode(bearerToken)}
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def _reply(self, status, body):
+        payload = json.dumps(body).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_GET(self):
+        if self.path == "/health/ready":
+            self._reply(200, {"status": "ready"})
+        elif self.path == "/auth/me":
+            self._reply(200, {"email": "smoke@strumsight.app"})
+        elif self.path == "/settings":
+            self._reply(200, {})
+        else:
+            self._reply(404, {"detail": "Not Found"})
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        self.rfile.read(length)
+        if self.path == "/auth/login":
+            self._reply(200, {"access_token": BEARER_TOKEN, "token_type": "bearer"})
+        else:
+            self._reply(404, {"detail": "Not Found"})
+
+    def log_message(self, *args):
+        pass
+
+
+server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+print("PORT", server.server_port, flush=True)
+server.serve_forever()
+''';
+
+  final process = await Process.start('python3', ['-c', script]);
+  final portLine = await process.stdout
+      .transform(utf8.decoder)
+      .transform(const LineSplitter())
+      .firstWhere((line) => line.startsWith('PORT '));
+  final port = int.parse(portLine.substring('PORT '.length).trim());
+  return _StubServer(process, port);
+}
 
 void main() {
   group('self-check — python3 is on PATH', () {
@@ -75,12 +157,17 @@ void main() {
       );
     });
 
-    test('a distinctive password value never appears in stdout or stderr', () {
+    test('a distinctive password value never appears in stdout or stderr '
+        'when the target is unreachable — this is an offline sanity check '
+        '(the tool never even gets to attempt a login), NOT proof that a '
+        'successful login cannot leak the password/token; that proof is the '
+        "MAJOR-2 stub-server probe below", () {
       const sentinel = 'sentinel-password-must-never-leak-9f3c';
       final result = _run(
         [
           '--base-url',
           _unreachableBaseUrl,
+          '--allow-insecure-http',
           '--email',
           'smoke@strumsight.app',
           '--password-env',
@@ -164,6 +251,7 @@ void main() {
         [
           '--base-url',
           _unreachableBaseUrl,
+          '--allow-insecure-http',
           '--email',
           'smoke@strumsight.app',
           '--password-env',
@@ -327,4 +415,131 @@ void main() {
       });
     },
   );
+
+  group('MAJOR-2 (review E12-R31) — the password/token sentinel probe must '
+      'actually reach the login success branch', () {
+    test('a distinctive password AND a distinctive bearer token never '
+        'appear in stdout or stderr of a run that ACTUALLY logs in '
+        'against a local stub server', () async {
+      const passwordSentinel = 'sentinel-password-must-never-leak-9f3c';
+      const tokenSentinel = 'sentinel-bearer-token-must-never-leak-7a1d';
+
+      final server = await _startStubServer(bearerToken: tokenSentinel);
+      addTearDown(server.stop);
+
+      final tempDir = Directory.systemTemp.createTempSync(
+        'strumsight_production_smoke_breach_probe_',
+      );
+      addTearDown(() => tempDir.deleteSync(recursive: true));
+      Directory('${tempDir.path}/assets/ml').createSync(recursive: true);
+      File(
+        '${tempDir.path}/assets/ml/model_manifest.json',
+      ).writeAsStringSync('{"models": []}');
+      final cert = File('${tempDir.path}/signing-certificate.json');
+      cert.writeAsStringSync(
+        '{"keyAlias": "release", "sha256Fingerprint": "AA:BB"}',
+      );
+
+      final result = _run(
+        [
+          '--base-url',
+          'http://127.0.0.1:${server.port}',
+          '--allow-insecure-http',
+          '--email',
+          'smoke@strumsight.app',
+          '--password-env',
+          'STRUMSIGHT_SMOKE_TEST_PW',
+          '--signing-certificate',
+          cert.path,
+          '--expected-fingerprint',
+          'AA:BB',
+          '--asset-root',
+          tempDir.path,
+        ],
+        environment: {'STRUMSIGHT_SMOKE_TEST_PW': passwordSentinel},
+      );
+
+      // Sanity: the success branch this probe targets actually ran — this
+      // is what makes the sentinel-absence assertions below a meaningful
+      // measurement rather than a vacuous one (unlike the unreachable-URL
+      // cells above, which never reach this branch at all).
+      expect(result.stdout.toString(), contains('[PASS] auth_login:'));
+      expect(result.stdout.toString(), contains('[PASS] auth_me:'));
+
+      expect(result.stdout.toString(), isNot(contains(passwordSentinel)));
+      expect(result.stderr.toString(), isNot(contains(passwordSentinel)));
+      expect(result.stdout.toString(), isNot(contains(tokenSentinel)));
+      expect(result.stderr.toString(), isNot(contains(tokenSentinel)));
+    });
+  });
+
+  group('MAJOR-3 (review E12-R31) — the CLI refuses a non-https --base-url '
+      'without an explicit opt-out', () {
+    test('a plain http:// --base-url exits 2 with a structured message and '
+        'never attempts a network call', () {
+      const sentinel = 'sentinel-password-must-never-leak-9f3c';
+      final result = _run(
+        [
+          '--base-url',
+          _unreachableBaseUrl,
+          '--email',
+          'smoke@strumsight.app',
+          '--password-env',
+          'STRUMSIGHT_SMOKE_TEST_PW',
+          '--signing-certificate',
+          'does/not/matter.json',
+          '--expected-fingerprint',
+          'AA:BB',
+        ],
+        environment: {'STRUMSIGHT_SMOKE_TEST_PW': sentinel},
+      );
+
+      expect(result.exitCode, 2);
+      expect(result.stderr.toString(), contains('https'));
+      // No check line printed — the scheme is rejected before run_checks().
+      expect(result.stdout.toString(), isEmpty);
+    });
+
+    test('--allow-insecure-http lets a plain http:// target proceed past '
+        'the usage-error stage (network failure now, exit 1, not exit 2)', () {
+      final result = _run(
+        [
+          '--base-url',
+          _unreachableBaseUrl,
+          '--allow-insecure-http',
+          '--email',
+          'smoke@strumsight.app',
+          '--password-env',
+          'STRUMSIGHT_SMOKE_TEST_PW',
+          '--signing-certificate',
+          'does/not/matter.json',
+          '--expected-fingerprint',
+          'AA:BB',
+        ],
+        environment: {'STRUMSIGHT_SMOKE_TEST_PW': 'irrelevant-for-this-cell'},
+      );
+
+      expect(result.exitCode, isNot(2));
+    });
+
+    test('an https:// --base-url needs no opt-out flag', () {
+      final result = _run(
+        [
+          '--base-url',
+          'https://127.0.0.1:1',
+          '--email',
+          'smoke@strumsight.app',
+          '--password-env',
+          'STRUMSIGHT_SMOKE_TEST_PW',
+          '--signing-certificate',
+          'does/not/matter.json',
+          '--expected-fingerprint',
+          'AA:BB',
+        ],
+        environment: {'STRUMSIGHT_SMOKE_TEST_PW': 'irrelevant-for-this-cell'},
+      );
+
+      expect(result.exitCode, isNot(2));
+    });
+  });
 }

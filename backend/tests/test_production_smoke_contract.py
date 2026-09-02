@@ -17,6 +17,8 @@ Acceptance-map:
       test_prod_defaults_do_not_register_lab_routes)
       + the §6.1/§7 REAL-BREACH probe (documented in the round brief §10):
       test_real_breach_probe_lab_surface_enabled_turns_the_check_red
+      + the MAJOR-1 fix's own isolation cell (review E12-R31, documented in
+      the round brief §10): test_apk_download_enabled_alone_turns_the_check_red
   readiness / traffic gate (§0.0.1 P1):
       test_readiness_check_reports_ready_after_migration
       test_business_checks_report_the_traffic_gate_reason_not_a_generic_failure
@@ -213,6 +215,33 @@ def test_lab_routes_absent_by_default_in_prod(tmp_path, monkeypatch):
         result = smoke.check_lab_routes_absent(client)
 
     assert result.ok, result.detail
+
+
+def test_apk_download_enabled_alone_turns_the_check_red(tmp_path, monkeypatch):
+    """MAJOR-1 (review E12-R31 CHANGES REQUESTED): isolates the `/download`
+    leg from the two `/diagnostics` legs. The mandatory real-breach probe
+    below flips ALL THREE env flags at once, so its aggregate RED cannot
+    prove `/download` itself is measured — the `/diagnostics` legs alone are
+    enough to redden it. This cell flips ONLY
+    `STRUMSIGHT_APK_DOWNLOAD_ENABLED=true` (`STRUMSIGHT_DIAGNOSTICS_ENABLED`
+    stays at its prod default, False) and no `STRUMSIGHT_APK_PATH` is
+    staged, so `GET /download` still 404s ("no APK staged") exactly like an
+    absent route would — only the `POST /download` wrong-method probe (405,
+    since the route is registered for GET only) can catch this."""
+    monkeypatch.delenv("STRUMSIGHT_DIAGNOSTICS_ENABLED", raising=False)
+    settings = _migrated_prod_settings(tmp_path, monkeypatch, apk_download_enabled=True)
+    assert settings.diagnostics_enabled is False, "this cell must isolate /download alone"
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        result = smoke.check_lab_routes_absent(client)
+
+    assert result.ok is False
+    assert "POST /download: expected 404, got 405" in result.detail
+    # Isolation proof: the /diagnostics legs are untouched by this flag —
+    # if they showed up here too, this cell would not be measuring
+    # /download in isolation.
+    assert "/diagnostics" not in result.detail
 
 
 def test_real_breach_probe_lab_surface_enabled_turns_the_check_red(
