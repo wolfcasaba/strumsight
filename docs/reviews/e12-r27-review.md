@@ -125,4 +125,46 @@ leletlistával, ugyanazon a branchen.
 
 ## 6. Javító kör (fix1) — újra-ellenőrzés
 
-*(a javító kör után tölti ki a reviewer)*
+- **Javító commit:** `a8d99e6b` — „A5 checklist guard recognizes checked
+  lines, A3 regex tolerates space before colon". Két fájl
+  (`test/tooling/beta_profile_test.dart`, a brief §10 handoffja),
+  `scope_audit=ok` (2 changed path).
+- **A dokumentum tartalma NEM változott** — a javítás az őrben van, ahogy a
+  javító-prompt kérte.
+
+### 6.1 MAJOR-1 — LEZÁRVA
+
+`_splitChecklistItems` bullet-mintája `^- \[[ xX]\] (.*)$`, és két ÚJ cella
+méri: kipipált + nem létező útvonal → jelzés; kipipált + létező útvonal →
+nincs jelzés.
+
+**Reviewer-oldali újra-mérés** (friss izolált klón, `/tmp/review2-e12-r27`,
+HEAD `a8d99e6b`, `flutter test test/tooling/beta_profile_test.dart`):
+
+| # | Mutáció | Várt | Mért | Ítélet |
+|---|---|---|---|---|
+| 0 | nincs (baseline) | zöld | `All tests passed!` (**18** cella), exit 0 | ✔ |
+| 1 | ugyanaz a mutáció, ami az 1. körben ZÖLDEN átment: `- [x]` + nem létező útvonal | PIROS | **exit 1**, az A5 cella piros | ✔ (a fail-OPEN megszűnt) |
+| 5 | `- [x]` + LÉTEZŐ útvonal (túllövés-próba) | zöld | exit 0, 18 cella | ✔ (a javítás nem lett túl szigorú) |
+
+### 6.2 MINOR-1 — LEZÁRVA
+
+`RegExp('^\\s*$flag\\s*:\\s*true\\s*\$')` — a kettőspont előtt is enged
+szóközt, és a cella fölé került doc-komment kimondja, hogy ez másodlagos
+backstop; az elsődleges mérés az A1 tool-futás.
+
+### 6.3 Célzott gate (reviewer, izolált klón, `a8d99e6b`)
+
+```
+tools/round-gate.sh test/tooling/beta_profile_test.dart test/core/feature_flags/feature_flag_registry_test.dart
+→ gate_exit=0
+   format zöld · analyze zöld · test beta_profile_test.dart zöld ·
+   test feature_flag_registry_test.dart zöld · architecture zöld ·
+   secrets zöld · l10n zöld
+```
+
+## 7. VÉGSŐ DÖNTÉS: APPROVED
+
+0 nyitott BLOCKER/MAJOR/MINOR. A két NOTE tudomásul véve, javítást nem
+igényel. A kör merge-elhető, amint a teljes CI-kapu (Full Gate + Router CI) a
+merge SHA-n zöld.
