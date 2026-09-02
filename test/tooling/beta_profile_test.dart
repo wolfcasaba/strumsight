@@ -120,12 +120,22 @@ void main() {
         expect(result.stderr.toString(), contains('communityWritesEnabled'));
       });
 
+      // Secondary backstop only — the primary measurement of "the shipped
+      // profile is valid" is the A1 "exit 0 on the real tree" cell above,
+      // which runs the tool (i.e. measures PyYAML-parsed truth, not this
+      // regex's idea of YAML). This cell is a cheap, tool-independent
+      // second signal, so its pattern tolerates whitespace on both sides
+      // of the colon (`flag : true` is valid YAML the PyYAML parser would
+      // accept, even though the shipped profile doesn't use that style).
       test('the shipped profile never sets any of the 7 known high-risk '
           'flags to true', () {
         final text = File(_profile).readAsStringSync();
         for (final flag in _knownHighRiskFlags) {
           expect(
-            RegExp('^\\s*$flag:\\s*true\\s*\$', multiLine: true).hasMatch(text),
+            RegExp(
+              '^\\s*$flag\\s*:\\s*true\\s*\$',
+              multiLine: true,
+            ).hasMatch(text),
             isFalse,
             reason: '$flag must default to false in every cohort',
           );
@@ -282,6 +292,30 @@ void main() {
       final problems = findChecklistReferenceProblems(fixture);
       expect(problems, isEmpty);
     });
+
+    test('mutation probe: a CHECKED (- [x]) line referencing a '
+        'non-existent repo-relative path is flagged (fail-open guard, '
+        'L566)', () {
+      const fixture = '''
+## Checklist
+
+- [x] See `docs/beta/NOPE-does-not-exist.md` for details.
+''';
+      final problems = findChecklistReferenceProblems(fixture);
+      expect(problems, isNotEmpty);
+    });
+
+    test('mutation probe: a CHECKED (- [x]) line referencing a real path '
+        'is NOT flagged', () {
+      final fixture =
+          '''
+## Checklist
+
+- [x] See `$_profile` for details.
+''';
+      final problems = findChecklistReferenceProblems(fixture);
+      expect(problems, isEmpty);
+    });
   });
 
   group('A6 — the document states the beta has NOT launched and launching '
@@ -366,22 +400,24 @@ String _extractFencedBlock(
 }
 
 // ---------------------------------------------------------------------------
-// A5 helper — every "- [ ] ..." checklist item must carry a recognized
-// reference: a backtick-quoted repo-relative path that exists, or a bare
-// http(s) URL. A backtick span containing whitespace (a command example,
-// e.g. `python3 tool/... --flag`) is not treated as a path candidate and is
-// not checked for existence, but also does not count as the item's
-// reference on its own. Fail-closed (L566): an item with none of the above
-// is a problem, never a silently-accepted gap.
+// A5 helper — every "- [ ] ..." OR "- [x] ..." checklist item must carry a
+// recognized reference: a backtick-quoted repo-relative path that exists, or
+// a bare http(s) URL. A backtick span containing whitespace (a command
+// example, e.g. `python3 tool/... --flag`) is not treated as a path
+// candidate and is not checked for existence, but also does not count as
+// the item's reference on its own. Fail-closed (L566): an item with none of
+// the above is a problem, never a silently-accepted gap — including a
+// CHECKED item, which is exactly when the guard matters most (a human just
+// ticked the box, trusting the reference behind it still resolves).
 //
 // An item may wrap across multiple physical lines — a bullet line followed
 // by 6-space-indented continuation lines (this doc's own wrapping style,
-// aligned under "- [ ] ") — so the item is first reassembled into one
-// logical string before reference extraction runs.
+// aligned under "- [ ] " / "- [x] ") — so the item is first reassembled
+// into one logical string before reference extraction runs.
 // ---------------------------------------------------------------------------
 
 List<String> _splitChecklistItems(String text) {
-  final bulletStart = RegExp(r'^- \[ \] (.*)$');
+  final bulletStart = RegExp(r'^- \[[ xX]\] (.*)$');
   final items = <String>[];
   StringBuffer? current;
 

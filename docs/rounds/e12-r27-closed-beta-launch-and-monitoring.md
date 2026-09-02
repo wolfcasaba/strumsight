@@ -359,4 +359,78 @@ Eredmény: `format` zöld, `analyze` zöld (0 finding), `test test/tooling/beta_
 - **Nincs élő monitoring-dashboard.** A Kör 19 csak szerződést szállított, gyűjtést nem — ezt a `closed-beta-launch.md` §2 és a `daily-triage-template.md` is kimondja, nem állít mást.
 - **A teljes `flutter test` suite + randomizált property gate + APK nem futott itt** — az ADR 0053 szerint ez CI-feladat (`gh workflow run build-apk.yml`), amit az orchestrátor indít, nem az implementer.
 
+### 10.8 Javító kör (fix1) — a review leleteinek javítása
+
+**Alap:** `docs/reviews/e12-r27-review.md` §2–3, verdikt CHANGES REQUESTED (1 MAJOR,
+1 MINOR, 2 NOTE nélkül javítás). Engedélyezett fájlok: `test/tooling/beta_profile_test.dart`
+és ez a szakasz.
+
+**MAJOR-1 (az A5 őr fail-OPEN a kipipált sorokra) — javítva.**
+`_splitChecklistItems` bullet-mintáját (`beta_profile_test.dart:384`)
+`RegExp(r'^- \[ \] (.*)$')`-ról `RegExp(r'^- \[[ xX]\] (.*)$')`-re cseréltem —
+a kipipált (`- [x]`/`- [X]`) és a kipipálatlan (`- [ ]`) sor egyaránt
+felismert bullet-ként, a 6 szóköz behúzású folytatás-sor kezelése
+változatlan. Két ÚJ mérő-cella került az A5 csoportba, a meglévő
+kipipálatlan mutáció-próbák MELLÉ (nem helyettük):
+
+- „mutation probe: a CHECKED (- [x]) line referencing a non-existent
+  repo-relative path is flagged (fail-open guard, L566)" — egy `- [x]`
+  kezdetű, nem létező `docs/beta/NOPE-does-not-exist.md` útvonalra hivatkozó
+  fixture-sorra `findChecklistReferenceProblems` nem-üres listát ad.
+- „mutation probe: a CHECKED (- [x]) line referencing a real path is NOT
+  flagged" — egy `- [x]` kezdetű, LÉTEZŐ (`docs/beta/cohort-profiles.yaml`)
+  útvonalra hivatkozó sor NEM jelez hibát, tehát a javítás nem lőtt túl.
+
+A helper doc-kommentjét (`beta_profile_test.dart:368-381`) frissítettem: a
+„- [ ] ... OR - [x] ..." alak mindkettőt lefedi, és kimondja, hogy a
+fail-closed szerződés a kipipált sorra érvényesül a leginkább — épp akkor,
+amikor egy ember már kipipálta és megbízna benne.
+
+**MINOR-1 (az A3 szállított-profil regex a kettőspont előtt nem enged
+szóközt) — javítva.** A mintát (`beta_profile_test.dart:128`, a fix után
+kb. 133. sor) `'^\\s*$flag:\\s*true\\s*\$'`-ról `'^\\s*$flag\\s*:\\s*true\\s*\$'`-re
+cseréltem — `\s*` most a kettőspont ELŐTT is megengedett, tehát az
+`accountEnabled : true` alakot is elkapja. A cella fölé egy megjegyzést
+írtam, amely kimondja: ez másodlagos backstop, az elsődleges mérés az A1
+„exit 0 a valódi fán" cella (az futtatja a tool-t, tehát a PyYAML-lel
+parse-olt igazságot méri).
+
+**NOTE-1 / NOTE-2 — nem javítottam**, a review kifejezetten nem kért
+javítást rájuk.
+
+**Regressziós önpróba (a MAJOR-1 javítás valódi hatásának bizonyítéka):**
+
+1. Mutáltam a szállított `docs/beta/closed-beta-launch.md` 26. sorát:
+   `- [ ] Cohort profile exists and is schema-valid — \`docs/beta/cohort-profiles.yaml\`.`
+   →
+   `- [x] Cohort profile exists and is schema-valid — \`docs/beta/NOPE-does-not-exist.md\`.`
+   (kipipált, nem létező útvonalra hivatkozó sor — pontosan a review 1. próbája).
+2. `tools/round-gate.sh test/tooling/beta_profile_test.dart` a mutált fán:
+   a `[3] test` lépés **PIROSRA váltott** (kilépési kód 1), konkrétan az
+   „A5 — … the real document has no unreferenced or dangling-reference
+   checklist lines" cella bukott —
+   `Expected: empty` / `Actual: [dangling path reference: Cohort profile
+   exists and is schema-valid — \`docs/beta/NOPE-does-not-exist.md\`.]`
+   — tehát a javítás UTÁN a review 1. próbájában mért fail-OPEN eltűnt.
+3. Visszaállítás: `git checkout -- docs/beta/closed-beta-launch.md`; a fájl
+   bájtazonos a mutáció előtti (utolsó commitolt) tartalommal (`diff` a
+   mentett másolattal üres).
+4. Újra-zöldítés: `tools/round-gate.sh test/tooling/beta_profile_test.dart
+   test/core/feature_flags/feature_flag_registry_test.dart` a visszaállítás
+   UTÁN mind a 7 lépésre (`format`, `analyze`, mindkét teszt-útvonal 18/18
+   ill. 16/16, `architecture`, `secrets`, `l10n`) ZÖLD-öt adott —
+   „MINDEN GATE ZÖLD."
+
+**Záró gate (fix1, a tényleges javítás után, csonkítatlan):**
+
+```bash
+tools/round-gate.sh test/tooling/beta_profile_test.dart test/core/feature_flags/feature_flag_registry_test.dart
+```
+
+Eredmény: `format` zöld, `analyze` zöld (0 finding), `test
+test/tooling/beta_profile_test.dart` zöld (18/18 — a két új A5 cellával),
+`test test/core/feature_flags/feature_flag_registry_test.dart` zöld
+(16/16), `architecture` zöld, `secrets` zöld, `l10n` zöld. „MINDEN GATE
+ZÖLD."
+
 ## 11. Review — a Claude tölti ki
