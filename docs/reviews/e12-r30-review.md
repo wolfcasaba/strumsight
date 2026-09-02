@@ -187,7 +187,84 @@ architecture zöld · secrets zöld · l10n zöld → MINDEN GATE ZÖLD
 | A6 | ✅ | scope-audit `OK`, 6 útvonal; `git diff -- lib backend .github docs/adr docs/release/blockers.md tools` üres |
 | A7 | ✅ | A7 csoport (9 cella) mindhárom parszerre: hiányzó blokk / elrontott sor / üres blokk → `2` |
 
-## 8. Végső verdikt
+## 8. Verdikt (1. javító kör után)
 
-**APPROVED.** Nyitott BLOCKER/MAJOR/MINOR nincs. A merge a zöld kapun
-(ADR 0052: gate + exact-SHA `build-apk.yml` + `router-ci.yml`) mehet.
+**APPROVED** a kód/dokumentum tartalmára — de a merge-kapu még nem volt zöld:
+lásd §9.
+
+## 9. A CI PIROS lett a `6eb6fb3a` SHA-n — 2. javító kör (`3ee48bea`)
+
+A `build-apk.yml` [33632164312](https://github.com/wolfcasaba/strumsight/actions/runs/33632164312)
+futása **failure** lett, miközben a lokális gate (és az én izolált klónom is)
+zöld volt. Ez a review egyik legfontosabb mérése ebben a körben, mert a
+gyökérok **a lokális teljes klónban elvi okból nem reprodukálható**.
+
+**Mért gyökérok.** Mind a 10 bukó cella ugyanazt írta:
+
+```
+Expected: <0>   Actual: <2>
+verify_freeze: --since '4ac78365' is not a valid git revision:
+  Command '['git', 'rev-parse', '--verify', '4ac78365']' returned non-zero exit status 128.
+```
+
+A CI `actions/checkout@v4`-et használ `fetch-depth` felüldefiniálás nélkül
+(`.github/workflows/build-apk.yml:24`, `:88`) → **shallow, 1 commit mélységű
+klón**, amelyben a `freeze_base_sha: 4ac78365` (a Kör 29 záró commitja)
+**nem létezik**. A MAJOR-1 javítás óta a bare hívás mindig a git-úton megy,
+ezért nemcsak a 2 sanity cella bukott, hanem 8 további A2/A3/A4 cella is,
+amelyek a known-issues/CHANGELOG validációt akarták mérni, de a git-ág
+`VerifyError`-ába futottak, mielőtt a mérni kívánt findinghez értek volna.
+
+**Ez tehát a MAJOR-1 javításának mellékhatása** — a javítás maga helyes (a
+bare hívásnak ellenőriznie KELL), a hiba az volt, hogy a cellák a klón
+mélységét hallgatólagos előfeltételnek vették. A `.github/**` a kör tilos
+zónája, ezért `fetch-depth: 0` nem volt megoldás.
+
+### 9.1 A 2. javító kör javítása és a reviewer SAJÁT mérése
+
+1. `verify_freeze.py`: a kilépőkód marad **`2`** (fail-closed — történet
+   nélkül a freeze nem ellenőrizhető, a `0` hazugság lenne), de az üzenet
+   megnevezi az okot és a feloldást. **Nincs** „nincs történet → átugrom" ág.
+2. A két sanity cella `git rev-parse --verify`-vel megméri a klón mélységét,
+   és MINDKÉT ágon szigorú: elérhető bázis → `exit 0` + `changed path(s)
+   classified` (a MAJOR-1 fedezete megmarad); nem elérhető → `exit 2` + a
+   hiányzó bázis a stderr-ben.
+3. A nyolc A2/A3/A4 cella üres (`#`-kommentsoros) `--changes-file`-t kap, így
+   a klón mélységétől függetlenül pontosan azt az `1`-es kilépést méri,
+   amiért készült.
+
+**Reviewer-mérés — a shallow klón szimulációja (a fejlesztői teljes klón NEM
+reprodukálja a hibát):**
+
+```
+git clone -q --depth 1 --branch <round-branch> file:///home/ubuntu/ss-sonnet-impl-e12-r30 /tmp/shallow-rev-e12-r30
+git rev-list --count HEAD        → 1
+git rev-parse --verify 4ac78365  → fatal: Needed a single revision
+flutter test test/tooling/freeze_policy_test.dart
+→ 00:01 +33: All tests passed!
+```
+
+Ugyanez teljes klónban (`/tmp/review3-e12-r30`) is **33/33 zöld** a teljes
+gate-tel együtt (format, analyze, +33, +23, architecture, secrets, l10n).
+A cellák tehát a klón mélységétől függetlenül helyeset mérnek — ez volt a
+2. javító kör mércéje.
+
+### 9.2 Egy IDEGEN teszt is piros volt — mért besorolás
+
+A `Coverage` job 11. bukása
+`test/features/songs/import/import_flow_test.dart` „A2: cancelling a confirmed
+import cleans the opened workspace" volt — **a `build-apk` jobban ugyanezen a
+SHA-n ZÖLD** (10 vs 11 bukás), tehát nem determinisztikus. Ez pontosan a
+[L543](../LESSONS.md#l543)-ban mért, dokumentált időzítés-érzékeny cella
+(`import_flow_test.dart:83`, „Expected: non-empty Actual: []"), amely telített
+runner mellett csúszik el. A kör diffje `lib/**`-ot nem érint. A L543 előírása
+szerint viszont nem elég „flaky"-nak nevezni: a kör saját erőforrás-profilját
+is meg kell nézni — a 2. javító kör ebből a szempontból is javít, mert a 8
+A2/A3/A4 cella többé nem futtat `git rev-list` + commitonként két további
+git-alfolyamatot. A következő CI-futás ezt méri.
+
+## 10. Végső verdikt
+
+**APPROVED.** Nyitott BLOCKER/MAJOR/MINOR nincs; a két MAJOR és a
+CI-gyökérok is zárva, mindegyik reprodukálható cellával. A merge a zöld
+kapun (ADR 0052: gate + exact-SHA `build-apk.yml` + `router-ci.yml`) mehet.

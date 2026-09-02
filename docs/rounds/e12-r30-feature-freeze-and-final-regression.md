@@ -654,4 +654,15 @@ klón mélységétől függetlenül helyeset mérnek.
 - **1. javító kör (`69588a3c`):** mind a négy lelet **ZÁRVA**, mindkét MAJOR
   ÚJ regressziós cellával megfogva (31 → 33 cella). A zárásokat a reviewer
   friss klónban, függetlenül újramérte (review §6.1, négyirányú próba).
+- **2. javító kör (`3ee48bea`):** a `6eb6fb3a` SHA-n a CI **PIROS** lett,
+  miközben a lokális gate zöld volt — mért gyökérok: az `actions/checkout@v4`
+  **shallow (depth=1)** klónjában a `freeze_base_sha: 4ac78365` commit nem
+  létezik, ezért a MAJOR-1 javítás óta git-úton menő bare hívás (és 8 további,
+  csak dokumentumot mérni kívánó cella) `2`-es kilépéssel bukott. A `.github/**`
+  tilos zóna, ezért a javítás a tool és a cellák oldalán történt: fail-closed
+  `2` beszédes üzenettel, a két sanity cella MINDKÉT ágon szigorú (elérhető
+  bázis → `0` + `changed path(s) classified`, sekély klón → `2` + a hiányzó
+  bázis), a nyolc dokumentum-cella pedig üres `--changes-file`-lal független
+  lett a klón mélységétől. Reviewer-mérés: sekély (`--depth 1`) klónban
+  **33/33 zöld**, teljes klónban a teljes gate zöld.
 - **Végső döntés: APPROVED.**
