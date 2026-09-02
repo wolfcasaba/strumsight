@@ -1,5 +1,66 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R31 KÉSZ — Production deployment és internal production cohort — PR [#527](https://github.com/wolfcasaba/strumsight/pull/527), squash `accd30c2` (2026-09-02)
+
+A Ch12 **Kör 31** a production környezet és a belső cohort validálását szállítja
+— **deploy nélkül**: a §0.0 emberi kapu szerint a tényleges deploy és a
+telepítés user-művelet (infrastruktúra, titkok, store), az implementer terméke a
+deploy UTÁN futtatható, gépileg döntő füst-csomag. ADR nincs (a kör
+ellenőrzőlistát, füst-cellákat és döntési sablont ad, nem új normát; a
+`docs/adr/**` tilos zóna volt).
+
+**Szállítva:**
+
+- `tool/release/production_smoke.py` — paraméteres cél-URL, **titok nélkül** (a
+  jelszó sosem argv-ből, csak `--password-env`-ből → nincs `ps`-ben és
+  shell-historyban), stdlib-only, minden ágon fail-closed;
+- `backend/tests/test_production_smoke_contract.py` (13/13) — a hívott végpontok
+  szerződés-cellái + a kötelező valódi-sértés próba;
+- `test/tooling/production_readiness_test.dart` (20/20) — kliens production
+  profil + CLI-cellák;
+- `docs/release/internal-production-checklist.md` — 16 pont **6 GÉPI / 10
+  EMBERI** bontásban (a §5.3 tiltja a „minden automatikus" hamis készenlétet);
+- `docs/release/rollout-packet-template.md` — az SDD §26.1 mind a kilenc eleme
+  (build/commit, active flags, migration version, model version, known issues,
+  dashboard snapshot, support readiness, rollback target, döntéshozó).
+
+**A pre-flight a brief KÉT állítását MÉRTEN megcáfolta** (§0.0.1 P1–P7 revízió;
+a mérce nem lazult, az engedélyezett-fájllista nem tágult):
+
+- **P1:** `/readyz` **nem létezik** — az E12-R08 §0.0 R1 és az ADR 0449
+  kifejezetten elvetette; a readiness `GET /health/ready`
+  (`backend/app/main.py:234`).
+- **P2:** a fingerprint **nincs** a release manifestben
+  (`tool/generate_release_manifest.dart:247–268` — nincs signing mező); az
+  ADR 0448 D4 szerint **sidecar** `dist/signing-certificate.json`
+  (`keyAlias` + `sha256Fingerprint`), és maga a workflow-lépés is csak
+  *proposal* (a `.github/workflows/release-apk.yml` egyiket sem tartalmazza).
+  Az A4 ezért a sidecarra lett újraalapozva.
+
+**Review: CHANGES REQUESTED → egy javító kör → APPROVED.** A kötelező
+`security-reviewer` (risk = high) 3 MAJOR-t mért, mindhárom a kör SAJÁT kötött
+szabályát (§5.1/§5.2) tette vakká; a reviewer saját kódolvasással megerősítette:
+
+1. a `/download` láb **fail-open** volt — a regisztrált, de nem staged
+   Lab-letöltő szintén 404-et ad, a check pedig csak státuszkódot nézett
+   (javítva: `POST /download` rossz-metódusú próba, 405 ⇒ a route létezik, +
+   izolációs contract-cella, ami CSAK az APK-flaget kapcsolja be);
+2. az egyetlen titok-szivárgási cella elérhetetlen URL-re mutatott, ezért a
+   sikerág — az EGYETLEN szivárgási út — le sem futott (mutáció-kill próbával
+   mérve zöld maradt egy jelszót ÉS tokent kiíró mutánsra is); javítva
+   stub-szerveres cellával, amely a sikerág lefutását is **bizonyítja**;
+3. nem volt `https`-kikényszerítés — `http://` célon a cohort-jelszó tisztán
+   ment volna a dróton (javítva: fail-closed `exit 2` a `run_checks()` ELŐTT,
+   `--allow-insecure-http` opt-outtal).
+
+A 4 MINOR (redirect-védelem, `community_feed` hamis magabiztossága, nem mért
+docstring-állítás, elkerülhető secret-scan marker) szintén zárva. Részletek:
+[`docs/reviews/e12-r31-review.md`](docs/reviews/e12-r31-review.md).
+
+**Lecke:** [L579](docs/LESSONS.md#l579) — egy negatív állítást mérő cella (a
+Lab-route hiánya, a titok hiánya) csendben vákuummá válhat, ha a mért ág el sem
+éri a hibalehetőséget.
+
 ## ✅ E12-R30 KÉSZ — Feature freeze és final regression — PR [#526](https://github.com/wolfcasaba/strumsight/pull/526), squash `b3061936` (2026-09-02)
 
 A Ch12 **Kör 30** a projekt ELSŐ feature-freeze köre: kimondott scope- és

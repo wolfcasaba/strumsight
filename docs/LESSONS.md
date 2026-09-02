@@ -22953,3 +22953,62 @@ lelet KIZÁRÓLAG ott volt mérhető.
 `test/tooling/freeze_policy_test.dart::a known-issues.md row DOWNGRADED below its blockers.md severity (P1 -> P2) is a non-zero exit naming it`
 (MAJOR-2).
 `test/tooling/freeze_policy_test.dart::the root-level documentation files (HANDOFF.md, AGENTS.md, CLAUDE.md, README.md, CHANGELOG.md) are `documentation` too` (a merge utáni mód).
+
+## L579 — Egy NEGATÍV állítást mérő cella (a Lab-route hiánya, a titok hiánya) csendben vákuummá válik, ha a mért ág el sem éri a hibalehetőséget (E12-R31, 2 MAJOR, 2026-09-02)
+
+**A helyzet.** Az `E12-R31` egy production füst-teszt csomagot szállított
+(`tool/release/production_smoke.py`), teljes zöld gate-tel (kliens 16/16,
+backend 12/12), `scope_audit=ok`-kal, és zöld Full Gate-tel a `279d977f`
+SHA-n. A kör két kötött szabálya kifejezetten NEGATÍV állítás volt: „a
+Lab-route NEM elérhető" (§5.2) és „a füst-csomag SOSEM tartalmaz titkot,
+a kimenet nem szivárogtat" (§5.1). Mindkettőhöz volt cella, és mindkét
+cella zöld volt. **Mindkét cella vak volt.**
+
+**Amit mértünk.**
+
+1. **A `/download` láb fail-open** (`production_smoke.py:289–305`). A check
+   `if resp.status_code != 404` alapon döntött. A `backend/app/main.py:250`
+   viszont **regisztrált** útvonalon is 404-et ad, ha nincs staged APK
+   (`raise HTTPException(status_code=404, detail="no APK staged")`). Egy ÉLŐ
+   Lab-letöltő felület mellett tehát a füst-teszt ezt írta ki és 0-val lépett
+   ki: `[PASS] lab_routes_absent: all three Lab routes 404`. A kör kötelező
+   valódi-sértés próbája **nem fogta meg**, mert MINDKÉT env-flaget
+   bekapcsolta — az aggregátum a `/diagnostics` lábak miatt pirosodott, így a
+   `/download` láb mérhetetlen maradt.
+2. **A titok-szivárgási cella vákuum** (`production_readiness_test.dart:78–99`).
+   A cella `http://127.0.0.1:1`-re futott (azonnali connection refused), ezért
+   a `POST /auth/login` **soha nem ment ki**, és a sikeres-válasz ág — az
+   EGYETLEN hely, ahol a jelszó vagy a bearer token kimenetre kerülhetett
+   volna — le sem futott. Mutáció-kill próbával mérve: a sikerág elejére
+   szúrt `print(f"… {password} -> {token}")` mellett a cella **ZÖLD maradt**;
+   ugyanez a mutáns egy 200-at válaszoló socket ellen kiírta a jelszót ÉS a
+   tokent.
+
+**A közös hibaosztály.** Egy negatív állítás cellája akkor is zöld, ha a
+mérés SOHA nem jut el addig a pontig, ahol a hiba megtörténhetne. A pozitív
+állításnál („a fingerprint egyezik") ez nem fordulhat elő: ott a zöld a
+mérés MEGTÖRTÉNTÉT is bizonyítja. A negatív állításnál a „nem találtam"
+és a „megmértem és nincs ott" ugyanúgy néz ki — kívülről mindkettő zöld.
+
+**Hogyan alkalmazd (mindkettő bekerült a kör javításába).**
+
+1. **A negatív cella állítson a mérés MEGTÖRTÉNTÉRE is**, mielőtt a hiányra
+   állítana. A javított cella két sanity-sorral kezd —
+   `expect(stdout, contains('[PASS] auth_login:'))` és `contains('[PASS] auth_me:')`
+   —, azaz bizonyítja, hogy a sikerág lefutott, és csak UTÁNA állít a
+   sentinel hiányára. Ez különbözteti meg a mérést a vákuumtól.
+2. **A több lábból álló ellenőrzést lábanként IZOLÁLVA kell pirosra vinni.**
+   Egy aggregátum-cella, amely minden kapcsolót egyszerre billent, nem
+   bizonyítja, hogy MINDEN láb mér — csak azt, hogy legalább egy. A javítás
+   külön cellát kapott, amely CSAK az egy flaget kapcsolja be, és külön
+   állít az izolációra is: `assert "/diagnostics" not in result.detail`.
+3. **Ha egy állapotot a státuszkód nem különböztet meg, keress
+   diszkriminátort.** A „route hiányzik" és a „route létezik, csak nincs
+   staged APK" egyaránt 404 — de egy rossz metódus a regisztrált útvonalon
+   405-öt ad, amit egy hiányzó útvonal SOHA nem tud produkálni.
+
+**Őrteszt:**
+`backend/tests/test_production_smoke_contract.py::test_apk_download_enabled_alone_turns_the_check_red`
+(a lábankénti izoláció, a `POST /download` → 405 diszkriminátorral) és
+`test/tooling/production_readiness_test.dart::a distinctive password AND a distinctive bearer token never appear in stdout or stderr of a run that ACTUALLY logs in against a local stub server`
+(a mérés megtörténtét is állító sanity-sorokkal).
