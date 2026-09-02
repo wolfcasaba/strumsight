@@ -244,6 +244,7 @@ ahol a cella az app viselkedését is méri — ugyanazon a store-on bootol a me
 | A1 | A `legacy_v1` és `legacy_v2` fixture-ből a frissítés VÉGIGFUT (`report.isComplete`, `toVersion == appStorageMigrations.last.version`), és az adat-invariánsok SZÁMSZERŰEN változatlanok: a felhasználói dokumentumok **rekordszáma**, az **azonosító-halmaz** és az **XP/streak-egyenleg** migráció előtt/után azonos | `upgrade_migration_test.dart` |
 | A2 | A migráció közepén megszakadó futás (a store az N-edik írásnál dob) után az ÚJ indítás a `schemaVersion`-tól FOLYTAT: a már migrált kulcsok nem íródnak újra, az azonosító-halmaz duplikátum-mentes, a rekordszám ugyanaz, mint a megszakítás nélküli futásé | `upgrade_migration_test.dart` |
 | A3 | Sérült bemenet (`corrupted_storage.json`) esetén a migráció kontrollált hibát ad (`report.failure != null`, `toVersion == fromVersion`), a **nyers legacy adat bitre érintetlen** marad, és a rákövetkező app-boot NEM üres profilt mutat, hanem a meglévő értékeket; a safe-mode felület a mért elérhetőségén pinnelve (`AppRoutes.recovery` route létezik, bootstrap-hibán `BootstrapFailureApp`) | `upgrade_migration_test.dart` |
+| A3b *(javító kör, MAJOR-1)* | Egy TÉNYLEGESEN malformált legacy dokumentummal (`corrupted_storage.json`, `user_setlists_v1` csonkolva) a migráció `report.failure == null`-t és a végső `schemaVersion`-t ad — a korrupció-átlátszóság kimondva és mérve; a nyers legacy érték bitre azonos marad; a `JsonDocumentStore.readBody()` mai kimenete (`null`) explicit `expect`-tel, „ISMERT KORLÁT (ADR 0487)" jelöléssel rögzítve | `upgrade_migration_test.dart` |
 | A4 | Alacsony tárhely / megnyithatatlan store szimulációja (`openStore` → `Failure`) esetén a bootstrap **`BootstrapFailure`**-t ad a storage-unavailable indokkal, és a store egyetlen kulcsa sem íródik/törlődik | `upgrade_migration_test.dart` |
 | A5 | A migrációs riport SZÁMSZERŰ: `fromVersion`, `toVersion` és az `applied` id-lista fixture-enként pinnelve, és a migrált rekordszámok kulcsonként ellenőrizve; a dokumentált kimeneti felület a `docs/release/client-migration.md` | `upgrade_migration_test.dart` |
 | A6 | A képernyőszám VÁLTOZATLAN | `test/ui/ui_inventory_test.dart` a §7 gate-ben |
@@ -258,7 +259,7 @@ ahol a cella az app viselkedését is méri — ugyanazon a store-on bootol a me
 | A megszakítás után a migráció elölről kezd (duplikáció) | A2 | id-halmaz duplikátum-mentessége + rekordszám a nem-megszakított futáshoz mérve |
 | A megszakítás után a `schemaVersion` visszaáll 0-ra | A2 | `report.fromVersion` a folytatásnál == a megszakításkori `toVersion` |
 | A sérült bemenet üres profilt indít / törli a nyers kulcsot | A3 | a nyers legacy érték bitre azonos + a boot utáni olvasás nem üres |
-| A sérült bemenet csendben „sikeresnek" jelenti magát | A3 | `report.failure != null` ÉS `toVersion == fromVersion` |
+| A sérült bemenet csendben „sikeresnek" jelenti magát | A3b *(javító kör, MAJOR-1 — korábban ŐRIZETLEN, lásd `docs/reviews/e12-r23-review.md`)* | `report.failure == null` ÉS `schemaVersion` a végértékre lép, a nyers legacy érték bitre azonos, ÉS a `JsonDocumentStore.readBody()` mai `null` kimenete explicit pinnelve (ISMERT KORLÁT) |
 | A megnyithatatlan store mellett az app mégis elindul | A4 | `BootstrapFailure` típus-cella |
 | A riport csak „sikeres" jelzést ad, számok nélkül | A5 | `applied` id-lista + `from/toVersion` pinnelve |
 | Egy új fixture manifest-bejegyzés nélkül kerül a fába | A7 | `fixtureMissingManifestEntry` + a pinnelt `51` |
@@ -314,11 +315,15 @@ mérte újra.
   - `legacy_v2_storage.json` — E01-R06/E01-R07 közötti valós történelmi rés
     (`fromVersion 16`, csak a hat `r07.*` content-lépés függőben) —
     `storage_migrator.dart` saját doc-commentjéből mérve, nem kitalálva.
-  - `corrupted_storage.json` — teljes, ÉRVÉNYES legacy adatkészlet (`fromVersion
-    0`); a "sérülés" a tesztben injektált store-írási hiba (lásd 10.3), mert a
-    fán élő két migráció-típus (`RenameKeyMigration`, `WrapJsonDocumentMigration`)
-    doc-commentje szerint SOHA nem dob adat-alakú hibán — ezt a README és a
-    §10.5 külön dokumentálja mért tényként.
+  - `corrupted_storage.json` — legacy adatkészlet (`fromVersion 0`); **a javító
+    körig** minden mezője érvényes volt, a "sérülés" kizárólag a tesztben
+    injektált store-írási hiba volt (lásd 10.3), mert a fán élő két
+    migráció-típus (`RenameKeyMigration`, `WrapJsonDocumentMigration`)
+    doc-commentje szerint SOHA nem dob adat-alakú hibán. **A javító kör
+    (§10.8, MINOR-1) egy mezőt (`user_setlists_v1`) ténylegesen malformálttá
+    tett**, hogy a fájl neve igazat állítson és az A3b cella (§10.8, MAJOR-1)
+    egy VALÓDI sérült dokumentumon mérhessen — ezt a README és a §10.5/§10.8
+    dokumentálja mért tényként.
   - Manifest-regisztráció (`test/fixtures/manifest.json`, ADR 0473 D6-nak
     megfelelően `bytes`/`sha256`/`license`/`source`/`containsUserData: false`)
     és a pinnelt darabszám `test/tooling/fixture_manifest_test.dart`-ban
@@ -460,12 +465,110 @@ A1×2, A2×1, A3×1, A4×1, A5×2, plusz a fájlszintű `loading` bejegyzés —
 zöld; `fixture_manifest_test.dart` mind a 23, `ui_inventory_test.dart` az 1
 tesztje zöld.)
 
-### 10.7 Amit NEM érintett ez a kör
+### 10.7 Javító kör (fix round, 2026-09-02) — MAJOR-1 és MINOR-1 zárása
+
+A review (`docs/reviews/e12-r23-review.md`) egy mért, nem-mérce-fedett utat
+talált: egy TÉNYLEGESEN sérült legacy dokumentum a migrációt csendben
+„sikeresnek" jelenti (`report.failure == null`), miközben a termelési
+olvasási út (`JsonDocumentStore.readBody()`) üres dokumentumot ad. Az eredeti
+A3 cella ezt nem mérte, mert a hibáját egy injektált ÍRÁSI hibából nyerte,
+nem a bemenet tartalmából.
+
+**MINOR-1 feloldása (a briefben felkínált két opció közül az elsőt
+választva):** a `corrupted_storage.json` fixture `user_setlists_v1` mezőjét
+ténylegesen malformálttá tettem (csonkolt JSON:
+`[{"id":"setlist-corrupt-solo","name":"Solo practice",`) — a fájl neve ezzel
+igazat állít. Minden más mező (beleértve a meglévő A3 cella által olvasott
+`songs` dokumentumot) érvényes maradt, ezért a meglévő A3 cella
+VÁLTOZATLANUL zöld (az A3 hibáját az ELSŐ lépésen, `themeMode`-on injektált
+írási hiba adja — az soha nem ér el a 19. lépésig, ahol a malformált mező
+él). Indoklás a másik opció (fájlnév-átnevezés) ellen: az újrafelhasználás
+egyetlen fixture-t igényel a két cellához, és a README/manifest egy helyen
+dokumentálja mindkét felhasználást — kevesebb új felület, mint egy negyedik
+fixture-fájl bevezetése lett volna.
+Manifest-frissítés: `test/fixtures/migrations/corrupted_storage.json` —
+`bytes: 1297 → 1261`, `sha256: dfa5ca40… → 463d89fa…` (a `source` mező
+kiegészítve a szerepe pontos leírásával). A fájlszám (51) nem változott, a
+`test/tooling/fixture_manifest_test.dart` cellák logikája és pinnelt száma
+érintetlen.
+
+**MAJOR-1 feloldása:** új `A3b` teszt-csoport a
+`test/e2e/upgrade_migration_test.dart`-ban (az A3 után, az A4 előtt) — az
+eredeti A3-at nem törölte, nem módosította. Az A3b UGYANAZT a fixture-t
+tölti be, DE nem injektál írási hibát, így a teljes 22 lépés lefut a valódi
+(a malformált `user_setlists_v1` mezőn elakadó) tartalommal. Amit a cella
+pinnel:
+
+1. **Fixture-önellenőrzés:** `jsonDecode(rawMalformedSetlists)` ténylegesen
+   `FormatException`-t dob — a cella a VALÓDI korrupciós utat méri, nem az
+   írás-hiba ágat.
+2. **A silent-success mérés:** `report.failure == null`,
+   `report.toVersion == appStorageMigrations.last.version` (22),
+   `report.applied` mind a 22 lépést tartalmazza — mért tény, hogy
+   `WrapJsonDocumentMigration.apply` a parse-hibát logolja és visszatér, nem
+   dob.
+3. **Az adatvesztés-őr:** `store.readString(LegacyStorageKeys.setlists)`
+   bitre egyenlő a migráció előtti nyers értékkel
+   (`legacyKeyPreserved=true`), és `store.contains(StorageKeys.setlists)`
+   hamis (`newKeyWritten=false`) — pontosan a review mért terminológiája.
+4. **Az ISMERT KORLÁT explicit pinnelése:** egy a termelési kóddal azonos
+   paraméterezésű `JsonDocumentStore` (`key: StorageKeys.setlists,
+   legacyKey: LegacyStorageKeys.setlists`) `readBody()`-ja `null`-t ad,
+   `reason:`-ben „ISMERT KORLÁT (ADR 0487)" jelöléssel — ha egy jövőbeli kör
+   ezt megjavítja vagy elrontja, a cella pirosra vált.
+5. **Kontroll:** a `songs` dokumentum (jól formált mező, ugyanabban a
+   fixture-ben) `readBody()`-ja továbbra is a fixture eredeti listáját adja
+   — a korrupció a mért egy mezőre szűkül, nem az egész futásra.
+
+**Melyik hibás implementációt fogja pirosra:** ha egy jövőbeli, `lib/**`-et
+érintő kör a `WrapJsonDocumentMigration.apply`-t úgy módosítaná, hogy egy
+parse-hibán is a `report.failure`-t állítsa, VAGY a `JsonDocumentStore` a
+korrupt legacy blobot törölné ahelyett, hogy a legacy kulcson hagyná — az
+A3b 2., 3. vagy 4. pontja pirosra vált (a §6.1 mátrix új sora).
+
+**Dokumentáció-átvezetés:** `docs/release/client-migration.md` §6 kibővítve
+— a szakasz cím és tartalom immár kimondja a frissítés-utáni üres
+dokumentum korlátot (a nyers adat megmarad, a következő írás karanténba
+menti), és a §0 „Mérce" sor felsorolja az A3b cellát.
+`test/fixtures/migrations/README.md` `corrupted_storage.json` szakasza
+átírva: a fájl immár EGY ténylegesen malformált mezőt tartalmaz, és a két
+cella (A3 write-fault, A3b real-corruption) különálló forrásait a README
+külön bekezdésben tárgyalja.
+
+**Záró gate (a javító kör commitjai után, szó szerint):**
+
+```
+tools/round-gate.sh test/e2e/upgrade_migration_test.dart test/tooling/fixture_manifest_test.dart test/ui/ui_inventory_test.dart
+```
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/e2e/upgrade_migration_test.dart                  zöld
+    test test/tooling/fixture_manifest_test.dart               zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+(`test/e2e/upgrade_migration_test.dart` mostantól 9 teszt — A1×2, A2×1,
+A3×1, **A3b×1 ÚJ**, A4×1, A5×2, plusz a fájlszintű `loading` bejegyzés —
+mind zöld; a fixture-manifest és ui-inventory suite-ok változatlanul zöldek.)
+
+**Tilos zóna, változatlanul:** `lib/**` (a migrátor és a `JsonDocumentStore`
+viselkedése nem módosult), `test/support/**`, `tool/check_fixture_manifest.dart`
+logikája.
+
+### 10.8 Amit NEM érintett ez a kör (az eredeti kör ÉS a javító kör)
 
 `lib/**`, `test/support/**`, `tool/check_fixture_manifest.dart` (a bejáró
 LOGIKÁJA), `docs/adr/**` (az ADR 0487-et a pre-flight már megírta),
 `test/ui/goldens/**`. A `test/tooling/fixture_manifest_test.dart`-ban
 KIZÁRÓLAG a pinnelt szám és a teszt-reason szövege változott — a cellák
-logikája nem.
+logikája nem; a javító kör ezt a fájlt egyáltalán nem érintette.
 
 ## 11. Review — a Claude tölti ki

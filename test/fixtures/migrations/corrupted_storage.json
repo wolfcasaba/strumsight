@@ -17,7 +17,7 @@
   "practice_speed_v1": 1.0,
   "library_sessions": "[{\"id\":\"lib-corrupt-001\",\"createdAt\":\"2025-09-20T07:00:00.000Z\",\"title\":\"First session\",\"customTitle\":false,\"result\":{\"duration\":15.0,\"bpm\":80.0,\"bpb\":4,\"chords\":[{\"label\":\"C\",\"start\":0.0,\"end\":1.0}],\"strums\":[{\"dir\":\"down\",\"time\":0.0,\"conf\":0.7}]}}]",
   "user_songs_v1": "[{\"id\":\"song-corrupt-oasis\",\"name\":\"Don't Look Back in Anger\",\"chords\":[\"C\",\"D\",\"G\",\"Em\"],\"pat\":\"d-du-udu\",\"bpm\":85,\"bpb\":4}]",
-  "user_setlists_v1": "[{\"id\":\"setlist-corrupt-solo\",\"name\":\"Solo practice\",\"songs\":[\"song-corrupt-oasis\"]}]",
+  "user_setlists_v1": "[{\"id\":\"setlist-corrupt-solo\",\"name\":\"Solo practice\",",
   "practice_log_v1": "[{\"day\":20200,\"src\":\"live\",\"sec\":300,\"str\":70,\"chd\":2,\"dir\":0.6}]",
   "daily_goal_min_v1": 15,
   "practice_streak_v1": "{\"current\":2,\"longest\":2,\"last\":20200,\"freezes\":0,\"total\":3}"

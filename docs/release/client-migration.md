@@ -2,7 +2,7 @@
 
 **Kör:** `E12-R23` (Legacy user migration release candidate).
 **Normatív forrás:** [ADR 0487](../adr/0487-legacy-upgrade-migration-evidence-contract.md).
-**Mérce:** `test/e2e/upgrade_migration_test.dart` (A1–A5), `test/fixtures/migrations/`.
+**Mérce:** `test/e2e/upgrade_migration_test.dart` (A1–A5, A3b), `test/fixtures/migrations/`.
 
 This is the release-candidate evidence for a user upgrading from an older
 StrumSight build: what the boot-time migrator moves, what it deliberately
@@ -98,18 +98,50 @@ fail-closed counterpart to §4's fail-safe path: a corrupt-but-openable store
 keeps the user's data and boots; a store that cannot be opened at all
 refuses to start rather than guess.
 
-## 6. Why no step currently reports data-shape corruption as a failure
+## 6. Why no step currently reports data-shape corruption as a failure — and the empty-document limit that follows from it
 
 Both migration kinds on the tree — `RenameKeyMigration` and
-`WrapJsonDocumentMigration` — are written to **never throw on bad data** an
+`WrapJsonDocumentMigration` — are written to **never throw on bad data**: an
 unreadable type, unparsable JSON, or an unexpected shape is logged and the
 value is left on its legacy key (or quarantined) rather than raising. The
-`corrupted_storage.json` fixture's own bytes are therefore valid, ordinary
-legacy content; the A3 cell pairs it with a test-only injected
-`KeyValueStore` write fault (see `test/fixtures/migrations/README.md`) to
-exercise the one path that *does* produce `report.failure != null` on the
-current tree. This is a measured fact about today's migrator, not a design
-recommendation either way.
+`corrupted_storage.json` fixture carries one field, `user_setlists_v1`, that
+is genuinely malformed (truncated JSON) for exactly this reason — the A3
+cell pairs the *same* fixture with a test-only injected `KeyValueStore`
+write fault (see `test/fixtures/migrations/README.md`) to exercise the one
+path that *does* produce `report.failure != null` on the current tree; that
+write-fault path is unaffected by the malformed field because it fires on
+the very first pending step.
+
+**The genuinely-malformed-content path is measured separately (A3b, fix
+round, docs/reviews/e12-r23-review.md MAJOR-1), and its outcome is a real,
+accepted limit of this release candidate:**
+
+- `WrapJsonDocumentMigration.apply` catches the parse failure, logs it, and
+  returns — `StorageMigrator.migrate()` sees no exception, so the run
+  reports **`failure: null`** and reaches the last schema version, exactly
+  as if nothing had gone wrong.
+- The raw malformed bytes are **not lost** — they stay on the legacy key
+  untouched (the migration never writes the new key nor removes the old one
+  for a document it could not parse), and the very next successful `write()`
+  through `JsonDocumentStore` quarantines them (`storage.document.quarantined`,
+  `lib/core/storage/json_document_store.dart`) rather than discarding them.
+- **But the user sees an empty document immediately after the update.**
+  `JsonDocumentStore.readBody()` — the same production read path
+  `AppBootstrap` and every repository use — has no new-key value to read
+  (the migration never wrote one), falls back to the legacy key, and tries
+  to decode the *same* malformed bytes; that decode fails the same way and
+  `readBody()` returns `null`. For a list document (library sessions, songs,
+  setlists, practice log) this reads as an empty list; for an object
+  document (lesson progress, streak) it reads as "no saved state" and the
+  feature falls back to its default. The document is not deleted and is not
+  silently discarded — it is quarantined on the next write — but between the
+  update and that next write, the screen the user sees is empty.
+- This is a **known limitation of the current tree**, not a regression this
+  round introduces or a gap this round closes: fixing it (e.g. having the
+  migrator surface a per-document failure the app can act on, or having
+  `JsonDocumentStore` distinguish "nothing here" from "something here I
+  could not read") is a `lib/**`-touching change and is explicitly out of
+  this round's scope (§0.0/R3, ADR 0487 D3/D4).
 
 ## 7. Rollback: there is none, by design — the limit
 

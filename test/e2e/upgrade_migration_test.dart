@@ -244,6 +244,119 @@ void main() {
     });
   });
 
+  group('A3b — a genuinely malformed legacy document does NOT make migrate() '
+      'fail: it reports a clean success while the production read path '
+      'silently returns empty (fix round, ADR 0487, docs/reviews/'
+      'e12-r23-review.md MAJOR-1)', () {
+    test('corrupted_storage.json with NO injected write fault: the truncated '
+        '`user_setlists_v1` blob leaves migrate() reporting failure == null '
+        'and schemaVersion at the LAST version, the raw malformed bytes '
+        'untouched on the legacy key, but JsonDocumentStore.readBody() for '
+        'the setlists document — the same path AppBootstrap/every repository '
+        'reads through — returns null', () async {
+      final seed = _loadFixtureStore('corrupted_storage.json');
+      final rawMalformedSetlists = seed[LegacyStorageKeys.setlists]! as String;
+      // Sanity check on the fixture itself: prove it is genuinely
+      // malformed JSON, not a well-formed document wrapped in a
+      // misleading filename (MINOR-1 of the review).
+      expect(
+        () => jsonDecode(rawMalformedSetlists),
+        throwsFormatException,
+        reason:
+            'this cell exists to drive the REAL-corruption path — if the '
+            'fixture parses cleanly it is testing the same injected '
+            'write-fault path A3 already covers',
+      );
+
+      final store = InMemoryKeyValueStore(seed);
+      // Deliberately NO store.failingKeys entry: the failure this cell
+      // measures comes from the DATA, not an injected storage fault.
+
+      final report = await StorageMigrator(
+        store: store,
+        logger: const NoopAppLogger(),
+      ).migrate();
+
+      // Measured, not assumed: WrapJsonDocumentMigration.apply catches
+      // the jsonDecode FormatException, logs it, and returns without
+      // throwing — corruption-transparency, not corruption-detection.
+      // StorageMigrator.migrate() therefore sees no exception at all and
+      // reports a complete, "successful" run.
+      expect(
+        report.failure,
+        isNull,
+        reason:
+            'a malformed content document is swallowed by '
+            'WrapJsonDocumentMigration, not surfaced as a migration '
+            'failure — this is the "silently reports success" row of '
+            'the §6.1 matrix',
+      );
+      expect(report.toVersion, appStorageMigrations.last.version);
+      expect(report.applied, hasLength(appStorageMigrations.length));
+
+      // The real data-loss guard: the raw malformed bytes are left on
+      // the legacy key exactly as they were. WrapJsonDocumentMigration
+      // never writes the new key nor removes the legacy one when the
+      // body does not parse.
+      expect(
+        store.readString(LegacyStorageKeys.setlists),
+        rawMalformedSetlists,
+        reason:
+            'a document that could not parse must not be touched — not '
+            'rewritten, not deleted (legacyKeyPreserved)',
+      );
+      expect(
+        store.contains(StorageKeys.setlists),
+        isFalse,
+        reason:
+            'the new-namespace key is never written for a document that '
+            'failed to parse (newKeyWritten=false)',
+      );
+
+      // KNOWN LIMITATION (ADR 0487): the production read path
+      // (JsonDocumentStore.readBody(), used by AppBootstrap and every
+      // repository) does not fall back to "empty but present" when the
+      // legacy blob itself is unparsable — it decodes the legacy
+      // fallback too, and that decode fails the same way. The user sees
+      // an EMPTY setlist library after the update, even though the raw
+      // bytes are still on disk and the next successful write would
+      // quarantine them (JsonDocumentStore.write). If a future round
+      // changes this behaviour — fixes it or regresses it further — this
+      // assertion must flip, which is the point of pinning it here.
+      final setlistsDocument = JsonDocumentStore(
+        store: store,
+        logger: const NoopAppLogger(),
+        key: StorageKeys.setlists,
+        legacyKey: LegacyStorageKeys.setlists,
+        name: 'setlists',
+      );
+      expect(
+        setlistsDocument.readBody(),
+        isNull,
+        reason:
+            'ISMERT KORLÁT (ADR 0487): a legacy fallback ugyanazt a '
+            'sérült blobot próbálja dekódolni, és ugyanúgy elbukik — a '
+            'felhasználó frissítés után üres setlist-könyvtárat lát, '
+            'miközben a nyers bájtok a lemezen megvannak, és a '
+            'következő sikeres írás karanténba menti őket',
+      );
+
+      // The corruption stays scoped to the one document that was
+      // actually malformed — every OTHER, well-formed document in the
+      // same fixture still migrates and reads back cleanly.
+      final songsDocument = JsonDocumentStore(
+        store: store,
+        logger: const NoopAppLogger(),
+        key: StorageKeys.songs,
+        legacyKey: LegacyStorageKeys.songs,
+        name: 'songs',
+      );
+      final songsBody = songsDocument.readBody();
+      expect(songsBody, isA<List>());
+      expect((songsBody! as List), isNotEmpty);
+    });
+  });
+
   group('A4 — storage that cannot be opened fails closed, no write attempted '
       '(ADR 0487 D3)', () {
     test(

@@ -131,10 +131,10 @@
     },
     {
       "path": "test/fixtures/migrations/corrupted_storage.json",
-      "bytes": 1297,
-      "sha256": "dfa5ca4025188734c6719d0d057aaeb03e8372d2f5a0431c6060d30bc232d69a",
+      "bytes": 1261,
+      "sha256": "463d89fadeaf728bad3f25e61f49aecd0da2034f46f808625e06e1e32667d2a5",
       "license": "Project-authored synthetic test fixture.",
-      "source": "Project-authored synthetic legacy KeyValueStore snapshot (fromVersion 0, full E01-R05-era legacy key set) pairing with an injected storage-write fault in the A3 controlled-failure cell (E12-R23, ADR 0487 D3).",
+      "source": "Project-authored synthetic legacy KeyValueStore snapshot (fromVersion 0, full E01-R05-era legacy key set) with a genuinely malformed `user_setlists_v1` blob (truncated JSON) for the A3b real-corruption cell, paired with an injected storage-write fault in the A3 controlled-failure cell (E12-R23 fix round, ADR 0487 D3).",
       "containsUserData": false
     },
     {
