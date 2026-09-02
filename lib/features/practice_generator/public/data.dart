@@ -11,6 +11,7 @@ export '../data/adapter/song_goal_reader_adapter.dart';
 export '../data/ai/planner_assist_schema.dart';
 export '../data/ai/remote_planner_assist_gateway.dart';
 export '../data/ai/fake_planner_assist_gateway.dart';
+export '../data/local/local_practice_evidence_repository.dart';
 export '../data/local/local_practice_plan_repository.dart';
 export '../data/local/practice_plan_migrator.dart';
 // The older serializer record is repository-local. R23 publishes the richer
