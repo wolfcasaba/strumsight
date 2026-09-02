@@ -411,9 +411,14 @@ kötése **egy jövőbeli kör** feladata — a mai `backend/app/main.py` a
 Community routert EGYÁLTALÁN NEM regisztrálja. Emiatt `GET /community/feed`
 a mai fán MINDIG 404-et ad, függetlenül a `community_enabled` flagtől. A
 füst-eszköz `community_feed` cellája ezt tudottan kezeli: 200 ÉS 404 is
-elfogadott (`"reachable and correctly gated"`), így a cella ma és a Community
-router bekötése UTÁN is helyesen validál, kód-módosítás nélkül — de ez a
-kör NEM köti be a Community routert (tiltott zóna, `backend/app/main.py`).
+elfogadott, így a cella ma és a Community router bekötése UTÁN is helyesen
+validál, kód-módosítás nélkül — de ez a kör NEM köti be a Community routert
+(tiltott zóna, `backend/app/main.py`). **A javító kör (MINOR-2, §10.7)
+pontosította a 404-ág szövegét**: a `"reachable and correctly gated"` állítás
+egy nem-bekötött routerről tévesen sugallt elérhetőség-mérést — a mostani
+szöveg (`"404 — either not registered on this deploy, or registered and
+correctly gated…"`) kimondja, hogy egy státuszkódból a két eset nem
+megkülönböztethető.
 
 ### 10.5 Mért eltérés a briefben feltételezett paranccsortól
 
@@ -432,5 +437,145 @@ provenance-workflow lépések továbbra is *proposal* állapotban vannak
 (`docs/release/workflows/*.proposal.md`) — alkalmazásuk `.github/workflows/**`-t
 érintené, ami tiltott zóna. A `docs/adr/**` érintetlen (nincs új ADR, §0.0.1
 P7).
+
+### 10.7 Javító kör (`docs/reviews/e12-r31-review.md`, CHANGES REQUESTED) — MÉRT bizonyíték
+
+Az implementer ugyanaz (`sonnet-impl`), ugyanezen az ágon. A négy KÖTELEZŐ
+lelet (MAJOR-1, MAJOR-2, MAJOR-3, MINOR-3) és mindhárom OLCSÓ MINOR (MINOR-1,
+MINOR-2, MINOR-4) javítva.
+
+**MAJOR-1 — `/download` fail-open javítva, MÉRT RED→GREEN.** A
+`_LAB_ROUTES`-hoz egy `("POST", "/download")` rossz-metódus próba került
+(`production_smoke.py`): egy valóban hiányzó route minden metódusra 404-et
+ad, de egy regisztrált-de-nincs-staged-APK route (`apk_download_enabled=True`,
+nincs `STRUMSIGHT_APK_PATH`) a GET-en 404-et, POST-on viszont 405-öt —
+ezt a `check_lab_routes_absent` most FAIL-ként kezeli. Új, IZOLÁLT
+contract-cella (`test_apk_download_enabled_alone_turns_the_check_red`) —
+KIZÁRÓLAG `apk_download_enabled=True`-t kapcsol be, a `diagnostics_enabled`
+prod-alapértéken (False) marad, tehát a `/diagnostics` lábak NEM
+pirosíthatják a cellát (explicit `assert "/diagnostics" not in result.detail`).
+Kézzel mérve a javítás előtti kóddal (a `("POST", "/download")` bejegyzés
+ideiglenesen kivéve): a cella **PIROS** (`AssertionError: assert True is
+False`); visszaállítva: **13/13 ZÖLD**
+(`backend/tests/test_production_smoke_contract.py`).
+
+**MAJOR-2 — a szivárgás-cella most ténylegesen a sikeres bejelentkezési ágat
+futtatja, MÉRT mutáció-kill RED→GREEN.** A `test/tooling/
+production_readiness_test.dart`-ban egy ÚJ, önálló csoport
+(`MAJOR-2 (review E12-R31) …`) egy lokális stub-backendet indít, és a
+füst-eszközt VALÓDI sikeres `POST /auth/login`-nal futtatja ellene (a
+korábbi elérhetetlen-portos cella ezt sosem érte el). **Mért környezeti
+korlát**, amiért a stub NEM `dart:io HttpServer.bind` (a review javaslata
+szerinti közvetlen alak): ezen a boxon egy a Dart tesztfolyamatban közvetlenül
+kötött socket **nem érhető el** a `_run` által indított `python3`
+alfolyamatból — direkt próbával mérve (`curl`/`python3` gyermekfolyamat 5s
+timeout-tal fut le egy szülő-Dart-folyamat saját maga kötötte porton, a
+Bash-sandbox kikapcsolásával is), miközben KÉT, egyaránt alfolyamatként
+indított `python3` (szerver + kliens, egymás testvérei) simán eléri egymást.
+A stub ezért egy `python3 -c <script>` alfolyamat (`_startStubServer`
+`Process.start`-tal), amit a `_run`-nal indított füst-eszköz testvér-
+alfolyamatként ér el. **Mutáció-kill próba (a §10-ben előírt önellenőrzés,
+ténylegesen elvégezve):** a `check_auth` sikerágába (`production_smoke.py`,
+a `login_result = CheckResult("auth_login", True, "ok")` sor után) ideiglenesen
+beszúrt `print(f"[DEBUG] logged in as {email} with {password} -> {token}")`
+mellett az ÚJ cella futtatva **PIROS** lett:
+
+```
+Expected: not contains 'sentinel-password-must-never-leak-9f3c'
+  Actual: '[DEBUG] logged in as smoke@strumsight.app with
+           sentinel-password-must-never-leak-9f3c ->
+           sentinel-bearer-token-must-never-leak-7a1d\n' …
+```
+
+— mind a jelszó-, mind a token-sentinel megjelent (a `print` a valóságban
+mindkettőt kiírta volna). A `print` eltávolítása után a cella **ZÖLD**
+(`flutter test test/tooling/production_readiness_test.dart --plain-name
+"ACTUALLY logs in"` → `+1: All tests passed!`). A cella emellett explicit
+szondázza, hogy a sikerág TÉNYLEG lefutott (`[PASS] auth_login:` /
+`[PASS] auth_me:` a kimenetben) — enélkül a sentinel-hiány üres állítás
+lenne. A régi elérhetetlen-portos cella megmaradt, de átnevezve arra, amit
+ténylegesen mér (offline sanity, nem a sikeres bejelentkezés próbája).
+
+**MAJOR-3 — `https` kikényszerítés, fail-closed exit 2, MÉRT.** `main()`-ben
+egy `_https_scheme_error()` séma-ellenőrzés fut a jelszó-env-ellenőrzés UTÁN,
+de MINDEN hálózati hívás ELŐTT: nem-`https` séma (és nincs
+`--allow-insecure-http`) → `exit 2`, strukturált stderr-üzenettel, `run_checks`
+SOSEM hívódik meg (nincs se helyi, se hálózati próba). Új `--allow-insecure-
+http` kapcsoló lokális/staging futtatáshoz. Három ÚJ Dart-cella
+(`MAJOR-3 …` csoport) mind ZÖLD: sima `http://` → exit 2 + `"https"` a
+stderr-ben + üres stdout (egyetlen check-sor sem íródott ki); `--allow-
+insecure-http` mellett a kilépés `isNot(2)` (a hálózati hiba miatt 1-re vált,
+nem 2-re — bizonyítva, hogy túljutott a séma-kapun); `https://` cél
+opt-out nélkül is túljut a séma-kapun. A meglévő `_unreachableBaseUrl`-t
+használó cellák (A1, A4) mind kaptak `--allow-insecure-http`-t, különben a
+séma-kapu MINDEGYIKÜKET usage-errorra váltaná még a próba előtt — ez a NOTE-1-et
+is lezárja (a séma nélküli `--base-url` mostantól strukturált exit 2, nem
+csupasz `ValueError`-traceback). A checklist §2 sora mostantól `https://
+<production-hosztnév>`-t ír elő, és explicit figyelmezteti, hogy
+`--allow-insecure-http` production célon SOSEM használandó.
+
+**MINOR-3 — a docstring most a MÉRT tulajdonságot állítja.** A „prints one
+masked PASS/FAIL line" mondat lecserélve: a valós, tesztelt tulajdonság,
+hogy egy hitelesített végpont BODY-ja sosem kerül kiírásra (csak
+státuszkód/`reason`/`status`), és hogy a `--base-url`-nek `https`-nek kell
+lennie.
+
+**MINOR-1 (olcsó, elvégezve) — redirect-védelem.** `_NoRedirectHandler`
+(`urllib.request.HTTPRedirectHandler` alosztály, `redirect_request` `None`-t
+ad vissza) + `urllib.request.build_opener` — egy 3xx válasz mostantól saját
+státuszkódként bukik (`"unexpected status 3xx"`), nem követi az `urllib` a
+redirectet más hostra az `Authorization` fejléc/jelszó-body megtartásával.
+
+**MINOR-2 (olcsó, elvégezve) — `community_feed` szöveg pontosítva.** A 404-ág
+mostantól kimondja, hogy egy státuszkódból nem dönthető el „nincs bekötve" vs
+„bekötve és helyesen kapuzott ehhez a fiókhoz” — nem állítja többé, hogy
+„reachable”. A 200-ág változatlanul „reachable and correctly gated (status
+200)”.
+
+**MINOR-4 (olcsó, elvégezve) — a fájl-szintű secret-marker eltávolítva.** A
+három érintett literál (`_SMOKE_PASSWORD`, két `secret_key=`/`diag_token=`
+fixture) `fake-` prefixet kapott; a `strumsight:allow-secret-file` sor
+törölve. Mérve: `dart run tool/ci/check_secrets.dart` a marker nélkül is
+**0 finding** (4176 fájl), és a backend-suite (13/13) és a `ruff format`/
+`ruff check` (mindkettő zöld, a formázó 1 fájlt újraformázott a hosszú
+`assert`-sor miatt) is változatlanul zöld.
+
+**A §7 két gate-sávjának TÉNYLEGES kimenete (javító kör után):**
+
+Backend sáv (`cd backend && python -m pytest
+tests/test_production_smoke_contract.py -q`, `/home/ubuntu/music-theory/
+backend/.venv/bin/python`):
+
+```
+.............                                                            [100%]
+```
+
+13/13 zöld (a MAJOR-1 izolációs cellával eggyel több, mint a §10.2-ben mért
+12). `ruff format --check backend/app backend/tests` és `ruff check
+backend/app backend/tests` is zöld.
+
+Kliens sáv (`tools/round-gate.sh test/tooling/production_readiness_test.dart
+test/app/app_config_test.dart`): `format` ZÖLD, `analyze` ZÖLD ("No issues
+found!"), `test test/tooling/production_readiness_test.dart` **20/20 ZÖLD**
+(a §10.2-ben mért 16 helyett — a MAJOR-2 stub-cella és a MAJOR-3 három
+cellája új), `test test/app/app_config_test.dart` 21/21 ZÖLD (érintetlen),
+`architecture` ZÖLD, `secrets` ZÖLD (0 finding, a MINOR-4 marker-eltávolítás
+után is), `l10n` ZÖLD, `backend ruff format`/`ruff check` ZÖLD, **`backend
+pytest` (a TELJES backend suite, mert a kör backendet is érint) ZÖLD**.
+
+Az utolsó lépés első futása egy izolált leletet adott: `tests/community/
+test_follow_service.py::test_swap_unique_constraint_breaks_a2` PIROS lett —
+egy szál-verseny (`threading.Barrier`) időzítés-érzékeny regressziós teszt a
+Community follow service-ben, amit ez a kör NEM érint (utoljára `1cc49e41`
+E09-R07-ben módosítva, a jelen diff nem nyúl hozzá). A round-gate.sh HÁTTÉRBEN
+futott, miközben PÁRHUZAMOSAN több `flutter test`-et is futtattam ellenőrzés
+gyanánt (MAJOR-2/MAJOR-3 cellák, majd a mutáció-kill próba) — ez a CPU-
+terhelés torzította a két szál ütemezését, és a teszt által vártan
+egyidejűleg futó INSERT-ek NEM versenyeztek a szinkron ponton. Elszigetelten
+lefuttatva (`pytest tests/community/test_follow_service.py::
+test_swap_unique_constraint_breaks_a2 -q`) **ZÖLD** — megerősítve, hogy nem
+regresszió. A `round-gate.sh`-t ezután MÉG EGYSZER, párhuzamos terhelés
+nélkül lefuttatva mind a 10 lépés **ZÖLD** (`backend pytest` is), ez a
+végleges, mérvadó futás.
 
 ## 11. Review — a Claude tölti ki
