@@ -29,9 +29,12 @@ single invocation reports the full picture in one pass):
   auth_me         GET  /auth/me  (bearer from login) (§0.0.1 P5)
   settings        GET  /settings (bearer)            (§0.0.1 P5)
   community_feed  GET  /community/feed (bearer)      (§0.0.1 P5 — 200 or 404
-                  both count as "reachable and correctly gated": a smoke
-                  account with no community profile legitimately 404s,
-                  per `app/community/routers/feed.py`'s own docstring)
+                  both PASS: a smoke account with no community profile
+                  legitimately 404s (`app/community/routers/feed.py`'s own
+                  docstring), and so does a deploy where the Community
+                  router isn't mounted at all (true of this round's tree) —
+                  a status code alone can't tell those two apart, so a 404
+                  detail says so instead of claiming "reachable")
   lab_routes_absent  POST /diagnostics, GET /diagnostics/health,
                   GET /download must ALL be 404 (ADR 0061, §0.0.1 P3) — the
                   legacy reference is
@@ -128,6 +131,23 @@ def _dumps(payload: dict) -> bytes:
     return json.dumps(payload).encode("utf-8")
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Blocks redirect-following (round brief MINOR-1): `urllib`, unlike
+    `requests`/`httpx`, does NOT strip the `Authorization` header on a
+    host-changing redirect — a 3xx response from `--base-url` could hand the
+    bearer token (or a POST body containing the password) to a different
+    host. This smoke tool exists to measure the GIVEN `--base-url`, not to
+    follow wherever it points, so a redirect is reported as its own status
+    code (e.g. 302) — an "unexpected status" failure — instead of being
+    followed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_NO_REDIRECT_OPENER = urllib.request.build_opener(_NoRedirectHandler)
+
+
 class UrllibClient:
     """A minimal HTTP client with the same `.get(path, headers=)` /
     `.post(path, json=, headers=)` -> `Response(status_code, .json())` shape
@@ -166,7 +186,7 @@ class UrllibClient:
             url, data=data, headers=request_headers, method=method
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as resp:
+            with _NO_REDIRECT_OPENER.open(request, timeout=self.timeout) as resp:
                 return Response(resp.status, resp.read())
         except urllib.error.HTTPError as error:
             return Response(error.code, error.read())
@@ -300,11 +320,21 @@ def check_community_feed(client, *, token: str) -> CheckResult:
     reason = _traffic_gate_reason(resp)
     if reason is not None:
         return CheckResult("community_feed", False, reason)
-    # 404 is a legitimate outcome — a fresh smoke account with no community
-    # profile onboarding is not a deploy failure; see feed.py's own docstring.
-    if resp.status_code in (200, 404):
+    if resp.status_code == 200:
+        return CheckResult("community_feed", True, "reachable and correctly gated (status 200)")
+    if resp.status_code == 404:
+        # A 404 here is a legitimate outcome either way — a fresh smoke
+        # account with no community profile onboarding 404s (see feed.py's
+        # own docstring), AND the router being entirely un-mounted (as it is
+        # on the tree this round shipped against) also 404s. The two are
+        # indistinguishable from a status code alone (round brief MINOR-2),
+        # so the detail says exactly that instead of claiming "reachable".
         return CheckResult(
-            "community_feed", True, f"reachable and correctly gated (status {resp.status_code})"
+            "community_feed",
+            True,
+            "404 — either not registered on this deploy, or registered and "
+            "correctly gated for this account; a status code alone cannot "
+            "tell the two apart, so no reachability is claimed here",
         )
     return CheckResult("community_feed", False, f"unexpected status {resp.status_code}")
 

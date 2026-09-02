@@ -1,5 +1,3 @@
-# strumsight:allow-secret-file — minden hitelesito adat kitalalt fixture,
-# csak a smoke-eszkoz szerzodeset meri egy elore migralt, ideiglenes DB-n.
 """E12-R31 — production_smoke.py endpoint-contract cells (round brief §0.0.1
 P1-P5, §6, §7).
 
@@ -51,7 +49,7 @@ if str(_REPO_ROOT) not in sys.path:
 from tool.release import production_smoke as smoke  # noqa: E402
 
 _SMOKE_EMAIL = "smoke@strumsight.app"
-_SMOKE_PASSWORD = "correct-horse-battery-staple"
+_SMOKE_PASSWORD = "fake-correct-horse-battery-staple"
 _FINGERPRINT = "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88"
 
 
@@ -70,9 +68,9 @@ def _migrated_prod_settings(tmp_path: Path, monkeypatch, **overrides) -> Setting
     command.upgrade(_alembic_config(), "head")
     defaults = dict(
         env="prod",
-        secret_key="a-real-32-char-production-secret",
+        secret_key="fake-a-real-32-char-production-secret",
         cors_origins=["https://app.strumsight.app"],
-        diag_token="a-real-deploy-diagnostics-token",
+        diag_token="fake-a-real-deploy-diagnostics-token",
         database_url=database_url,
         allow_sqlite_in_prod=True,
     )
@@ -176,9 +174,9 @@ def test_business_checks_report_the_traffic_gate_reason_not_a_generic_failure(tm
     database_url = f"sqlite:///{tmp_path / 'unmigrated.db'}"
     settings = Settings(
         env="prod",
-        secret_key="a-real-32-char-production-secret",
+        secret_key="fake-a-real-32-char-production-secret",
         cors_origins=["https://app.strumsight.app"],
-        diag_token="a-real-deploy-diagnostics-token",
+        diag_token="fake-a-real-deploy-diagnostics-token",
         database_url=database_url,
         allow_sqlite_in_prod=True,
     )
@@ -230,7 +228,9 @@ def test_apk_download_enabled_alone_turns_the_check_red(tmp_path, monkeypatch):
     since the route is registered for GET only) can catch this."""
     monkeypatch.delenv("STRUMSIGHT_DIAGNOSTICS_ENABLED", raising=False)
     settings = _migrated_prod_settings(tmp_path, monkeypatch, apk_download_enabled=True)
-    assert settings.diagnostics_enabled is False, "this cell must isolate /download alone"
+    assert settings.diagnostics_enabled is False, (
+        "this cell must isolate /download alone"
+    )
     app = create_app(settings)
 
     with TestClient(app) as client:

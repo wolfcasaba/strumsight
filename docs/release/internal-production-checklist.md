@@ -34,10 +34,14 @@ futtatás szimulálásával nem lehet kiváltani (round brief §0.0 STOP-protoko
 ## 2. Deploy után — automatikus füst-teszt
 
 - [ ] **[GÉPI]** `python3 tool/release/production_smoke.py --base-url
-      <production-URL> --email <cohort-teszt-email> --password-env
-      <env-változó-neve> --signing-certificate dist/signing-certificate.json
-      --expected-fingerprint <a store-listázásból ismert SHA-256>
-      --asset-root .` fut, és **exit code 0**-t ad.
+      https://<production-hosztnév> --email <cohort-teszt-email>
+      --password-env <env-változó-neve> --signing-certificate
+      dist/signing-certificate.json --expected-fingerprint <a
+      store-listázásból ismert SHA-256> --asset-root .` fut, és **exit
+      code 0**-t ad. A `--base-url` KÖTELEZŐEN `https://` sémájú — egy nem-
+      https cél fail-closed exit 2-t ad (round brief MAJOR-3); a
+      `--allow-insecure-http` kapcsoló KIZÁRÓLAG lokális/staging futtatáshoz
+      való, production célon SOSEM használandó.
 - [ ] **[GÉPI]** A fenti futás kimenete tartalmazza a `[PASS] readiness:
       ready` sort — a `GET /health/ready` (NEM `/readyz`, §0.0.1 P1) 200-at
       ad, a migrációs fej egyezik.
