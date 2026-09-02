@@ -22613,3 +22613,53 @@ kivétel), a run hiányozni fog, és `workflow_dispatch`-csel kell pótolni.
 **Őrteszt:** nincs — a lelet a merge-eljárásra vonatkozik, nem a fa
 viselkedésére; a mérce a merge előtti kötelező `gh run list … --json
 headSha,conclusion` ellenőrzés (kör-prompt §3), amit ez a lecke pontosít.
+
+## L573 — A „minden fájlra kiterjed" checksum-őr `iterdir()`-rel NEM rekurzív: az alkönyvtárba csempészett többletfájl nem hibás, hanem NEM LÉTEZIK — miközben az upload a teljes fát viszi (E12-R25, 2026-09-02)
+
+**Mérve.** Az `E12-R25` `assemble_rc.py`-ja fail-closed összeállítót szállított: a
+`--verify` a csomagot a saját `checksum-manifest.json`-jához köti, és a hiányzó /
+megváltozott / **többlet** fájl mindegyike nem-nulla kilépés (ADR 0488 D5). A csomag
+tényleges fájllistáját viszont így képezte:
+
+```python
+actual_names = {
+    item.name for item in package_dir.iterdir()
+    if item.name != CHECKSUM_MANIFEST_NAME and item.is_file()
+}
+```
+
+Az `iterdir()` **nem rekurzív**, az `is_file()` pedig kiszűri a könyvtárakat. A review
+próbája ezt mérte:
+
+```
+$ python3 tool/release/assemble_rc.py --profile development --output-dir /tmp/x/out …
+assemble_rc: package written to /tmp/x/out (7 file(s)).
+$ mkdir -p /tmp/x/out/extra && echo "smuggled payload" > /tmp/x/out/extra/evil.apk
+$ python3 tool/release/assemble_rc.py --verify --output-dir /tmp/x/out
+assemble_rc: /tmp/x/out matches its checksum manifest exactly.
+verify exit=0                       ← FAIL-OPEN
+
+$ rm -rf /tmp/x/out/extra; echo "smuggled" > /tmp/x/out/evil.apk     # ugyanaz a fájl, LAPOSAN
+  - present in package but not in the checksum manifest: evil.apk
+verify exit=1                       ← helyesen piros
+```
+
+A rés kizárólag a **beágyazottság** volt. A javasolt workflow pedig a TELJES fát tölti
+fel (`actions/upload-artifact@v4`, `path: dist/rc`), tehát a becsempészett fájl kiszállt
+volna a kiadott RC-csomagban — miközben a csomag SAJÁT checksum-audit lépése zölden
+jelentett. A hét deklarált artefaktumon a gate 33 cellája végig zöld volt.
+
+**A minta.** Ez a [L566](#l566) fail-OPEN hibaosztálya, csak nem sor-parszeren, hanem
+**fájlrendszeren**: ami a bejárásnak nem esik útjába, az nem hibás, hanem NEM LÉTEZIK —
+és a nem létező elemre nincs mit állítani. Egy „a manifest MINDEN fájlra kiterjed"
+állítás mögött a bejárásnak ugyanolyan **teljesnek** kell lennie, mint az állításnak:
+`rglob('*')` (vagy `os.walk`), a horgonyhoz képest **relatív, normalizált** útvonalakkal,
+és a manifest ÍRÓ oldala ugyanabban az alakban. Amíg a csomag lapos, a két alak egybeesik,
+tehát a hiba nem is látszik — pontosan ezért kell a próbát a NEM lapos bemeneten futtatni.
+Ugyanez a kérdés minden „a könyvtár tartalma egyezik X-szel" őrnél: symlink, üres
+alkönyvtár, rejtett fájl.
+
+**Őrteszt:** `test/tooling/rc_assembly_test.dart` — az „A4/F1 — an extra file smuggled
+into a package SUBDIRECTORY after assembly (not the package root) is STILL a non-zero
+`--verify` exit, naming its manifest-relative path" cella (a fix ELŐTTI assemblerrel
+mérve PIROS).

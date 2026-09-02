@@ -1,5 +1,78 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R25 KÉSZ — Release Candidate assembly workflow — PR [#521](https://github.com/wolfcasaba/strumsight/pull/521), squash `37724df4` (2026-09-02)
+
+A Ch12 **Kör 25** összeköti a Chapter 12 eddig **külön-külön** meglévő kiadási
+bizonyíték-darabjait (manifest/SBOM `E12-R06`, signing `E12-R07`, AI-riport
+`E12-R16`, security-scan `E12-R18`) **egyetlen, manuálisan jóváhagyható, auditálható
+útba**. A kötött döntések:
+[ADR 0488](docs/adr/0488-release-candidate-assembly-and-approval-gate.md) D1–D8.
+
+**A kör kettéosztva szállít, mert a `.github/workflows/**` VÉDETT mérce-zóna**
+([ADR 0321](docs/adr/0321-gateguard-round-hold-not-chain-halt.md) `PROTECTED_GLOBS`),
+és az [ADR 0372](docs/adr/0372-gate-edit-policy.md) álló felhatalmazásának fájlja
+(`.claude/gate-edit-policy`) a fán MA sem létezik — a pre-flight ezt újramérte:
+
+- **javaslatként:** [`docs/release/workflows/release-candidate.proposal.yml`](docs/release/workflows/release-candidate.proposal.yml)
+  — a teljes `release-candidate.yml`: `workflow_dispatch` **nulla inputtal**, egyetlen
+  `environment: release-candidate-approval` job, amelyre a gate-, build- és
+  upload-jobok `needs:`-szel épülnek (a jóváhagyás így ténylegesen a **build ELŐTT**
+  áll, D3), a mérce-lánc a KÖZÖS `./.github/actions/flutter-gates` composite-ból (D2),
+  a production signing a mért `release-apk.yml` env-szerződésével;
+- **kódként:** [`tool/release/assemble_rc.py`](tool/release/assemble_rc.py) — stdlib-only,
+  fail-closed összeállító: hét kötelező bemenet feloldása írás ELŐTT, hiányzóra
+  nem-nulla kilépés félkész csomag nélkül (D4); `--verify` a csomagot a saját
+  checksum-manifestjéhez köti, ahol **hiányzó, megváltozott ÉS többlet** fájl is
+  eltérés (D5); `--dry-run` a tervet írja ki és tiszta fán szándékosan nem-nullával áll meg.
+
+**A review a TELJESEN ZÖLD gate mögött találta meg a lényeget** — 1 MAJOR + 1 MINOR
++ 2 NOTE, **1 javító kör** → APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r25-review.md`](docs/reviews/e12-r25-review.md)):
+
+- **MAJOR (F1):** a `verify_package` a csomagot `iterdir()` + `is_file()`-fal járta be —
+  **nem rekurzívan**. Egy alkönyvtárba csempészett többletfájl (`extra/evil.apk`) így
+  `--verify`-ra **exit 0**-val átment („matches its checksum manifest exactly"), miközben
+  az `upload-artifact` a TELJES `dist/rc` fát tölti fel — a fájl kiszállt volna a kiadott
+  csomagban. Ugyanaz a fájl a csomag gyökerében helyesen pirosra váltott: a rés kizárólag
+  a beágyazottság. A [L566](docs/LESSONS.md#l566) fail-OPEN hibaosztály, fájlrendszeren.
+  Zárva `rglob('*')` + csomag-gyökérhez relatív POSIX útvonalakkal, mindkét oldalon
+  (assemble ÉS verify), + 1 új cellával ([L573](docs/LESSONS.md#l573)).
+- **MINOR (F2):** az `--output-dir` `rmtree`-je a bemenetek ELLENŐRZÉSE UTÁN fut, ezért
+  ha a kimeneti könyvtár a bemenetek őse, letörli MAGUKAT a bemeneteket, majd elkapatlan
+  `FileNotFoundError`-rel száll el — a docstring D4-ígérete („no half-built package")
+  ezen az úton nem tartható. Zárva `resolve()`-alapú ancestor-guarddal a `rmtree` ELŐTT
+  + `OSError → AssembleError` fordítással + 1 új cellával.
+
+**A cellák mérő voltát hat valódi-sértés próba igazolta** (mutate → mérj → állítsd vissza,
+izolált `/tmp` klónban): a kötelező-bemenet ellenőrzés kivétele → **8 A3-cella piros**;
+a composite hívásának bemásolt `run:` lépésre cserélése → **mindkét A5-cella piros**;
+a `needs: approve-release-candidate` élek törlése → **az A1 tranzitív-needs cella piros**;
+a fix1 előtti assemblerrel a két ÚJ cella **pontosan kettesével** piros (L563).
+`security-reviewer` (`risk = high`) lefuttatva: **nincs BLOCKER**.
+
+**Nyitott NOTE-ok (nem merge-blokkolók, a TELEPÍTÉSI lépés ellenőrzési pontjai):**
+(1) a `--verify` belső konzisztenciát bizonyít, nem hitelességet — a checksum-manifest
+aláíratlan, a valódi horgony az APK aláírása; (2) a jóváhagyási kapu ereje a repo
+Settingsben él: a `release-candidate-approval` environmenthez **required reviewert kell
+beállítani**, különben az `environment:` kulcs nem blokkol.
+
+**A merge UTÁNI, EMBERI/orchesztrátori lépés (ADR 0488 D8, még NEM történt meg):** a
+javaslat telepítése `.github/workflows/release-candidate.yml` néven, majd KÉT dispatch —
+egy ZÖLD és egy BIZONYÍTOTT PIROS (hiányzó jóváhagyás vagy hiányzó AI-riport) —, a linkek
+a kör §11 review-jegyzetébe. Ez a kör ezt szándékosan nem tette meg: a védett zónába írni
+`H-GATEGUARD` halt lenne.
+
+Exact-SHA evidencia a merge SHA-n (`62ab967d`): Full Gate
+[33585065695](https://github.com/wolfcasaba/strumsight/actions/runs/33585065695),
+Router CI
+[33585067030](https://github.com/wolfcasaba/strumsight/actions/runs/33585067030)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml`,
+`native_gate = false`, `router_ci_expected = true`).
+
+**Következő kör:** `E12-R26` — rollback és disaster recovery drill
+(`docs/rounds/e12-r26-rollback-and-disaster-recovery-drill.md`, ADR `nincs`,
+`sonnet-impl`), új sessionben.
+
 ## ✅ E12-R24 KÉSZ — Store listing, privacy és legal package — PR [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash `cf7c6fb6` (2026-09-02)
 
 A Ch12 **Kör 24** a production-terjesztéshez szükséges, **ellentmondás-mentes
