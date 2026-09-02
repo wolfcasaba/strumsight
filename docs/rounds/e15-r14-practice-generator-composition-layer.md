@@ -428,11 +428,22 @@ dart run tool/check_screen_reachability.dart
 | Fájl | Mit ad |
 |---|---|
 | `lib/features/practice_generator/data/local/local_practice_evidence_repository.dart` | ÚJ. A `PracticeEvidenceRepository` PERZISZTENS implementációja: saját `ss.practice_generator.evidence` névtér, manifest-hidratáció konstruktorban (`GenerationDraftRepository`/`LocalPracticePlanRepository` mért mintája), a `SkillEvidence` JSON-képe a fájlon belül (§0.0.B/R3). |
-| `lib/features/practice_generator/application/usecase/start_plan_generation.dart` | ÚJ. `StartPlanGeneration` — a Setup-draftot egy injektált `GenerationPlanInputBuilder` seamen át `GenerationPlanInput`-tá alakítja, majd KIZÁRÓLAG a meglévő `GenerationOrchestrator.generate`-et hívja. A seam maga nem generálási logika: a valódi katalógus/evidence-alapú összeállítás egy KÉSŐBBI kör hatásköre (ADR 0482 §Kontextus 4. pont) — ezt a `generationPlanInputBuilderProvider` `UnimplementedError`-je jelzi explicit módon, a `tutorOrchestratorProvider` mért mintáját követve. |
-| `lib/features/practice_generator/presentation/providers/practice_generator_providers.dart` | ÚJ. Az EGY kompozíciós gyökér — a 6 terv-képernyő MINDEN kötelező konstruktor-függősége (§0.0.B/R4 táblázata szerint), a `GenerationOrchestrator` `ref.onDispose`-os lezárásával (D8). |
+| `lib/features/practice_generator/application/usecase/start_plan_generation.dart` | ÚJ. `StartPlanGeneration` — a Setup-draftot egy injektált `GenerationPlanInputBuilder` seamen át `GenerationPlanInput`-tá alakítja, majd KIZÁRÓLAG a meglévő `GenerationOrchestrator.generate`-et hívja. A seam maga nem generálási logika: a valódi katalógus/evidence-alapú összeállítás egy KÉSŐBBI kör hatásköre (**M6 fix1 javítás:** a helyes hivatkozás **ADR 0482 / D9**, nem a korábban tévesen idézett „§Kontextus 4. pont" — az a `data-inventory.yaml` EGRESS-hatóköréről szól) — ezt a `generationPlanInputBuilderProvider` `UnimplementedError`-je jelzi explicit módon, a `tutorOrchestratorProvider` mért mintáját követve. |
+| `lib/features/practice_generator/presentation/providers/practice_generator_providers.dart` | ÚJ. Az EGY kompozíciós gyökér — a 6 terv-képernyő MINDEN kötelező konstruktor-függősége (§0.0.B/R4 táblázata szerint), a `GenerationOrchestrator` `ref.onDispose`-os lezárásával (D8, fix1-ben `autoDispose`-ra javítva — lásd §10.9/M5). |
 | `lib/features/practice_generator/public/{data,application,presentation}.dart` | Az ÚJ típusok exportja (fragmens). |
 | `lib/features/practice_generator/public.dart` | Generált — `dart run tool/gen_public_barrel.dart --write` (lásd 10.5). |
-| 3 ÚJ tesztfájl | `test/features/practice_generator/data/local_practice_evidence_repository_test.dart` (12 cella, A1/A2), `test/features/practice_generator/application/start_plan_generation_test.dart` (3 cella, A4), `test/features/practice_generator/presentation/practice_generator_providers_test.dart` (9 cella, A3 + a production-default ellenőrzés + D8). |
+| 3 ÚJ tesztfájl | `test/features/practice_generator/data/local_practice_evidence_repository_test.dart`, `test/features/practice_generator/application/start_plan_generation_test.dart`, `test/features/practice_generator/presentation/practice_generator_providers_test.dart` — a fix1 kör (§10.9) mindháromhoz kísérő cellákat adott a review B1/B2/M1–M5/M7 leleteihez. |
+
+**B2 fix1 pontosítás (kötelező, a review B2/2. pontja):** az A3 kritérium
+(„MINDEN kötelező konstruktor-függőség felépül EGY `ProviderScope`-ból") **két,
+még kitöltetlen seam mellett** teljesül: `exerciseCandidateResolverProvider` és
+`generationPlanInputBuilderProvider` egy kizárólag `keyValueStoreProvider`-t
+felülíró (production-alakú) konténeren `UnimplementedError`-t dob, tehát a 6
+képernyőből 3 (`PlanPreviewScreen`, `PlanPrivacyScreen`, `WeeklyPlanScreen`
+aktív-terv olvasása) és a teljes generálási út nem épül fel — ezt a
+`practice_generator_providers_test.dart` „B2 guard" csoportja méri
+képernyőnként/providerenként. A két seamet **az `E15-R07 / F1` tölti ki**
+boot-időben (ADR 0482 / D9); részletek §10.9-ben.
 
 ### 10.2 §0.0 három mérése — ELŐTTE / UTÁNA
 
@@ -521,6 +532,12 @@ mérése).
 
 ### 10.7 A kötelező záró gate (§7) — végső, csonkítatlan futás
 
+**Első verzió (a review előtt).** `exit=0`, minden lépés zöld — ugyanaz az
+állapot, amit a review §1 izolált klónban reprodukált, majd a saját mérésével
+(B1, B2, M1–M7) mégis megbukott a `main` gate mögötti VISELKEDÉSI szinten.
+
+**A javító kör (fix1) UTÁNI, végső futás** (lásd §10.9 a leletekért):
+
 ```
 $ tools/round-gate.sh test/features/practice_generator/data/local_practice_evidence_repository_test.dart test/features/practice_generator/presentation/practice_generator_providers_test.dart test/features/practice_generator/application/start_plan_generation_test.dart test/features/practice_generator/accessibility/planner_privacy_test.dart test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/data/local_repository_test.dart test/tooling/data_inventory_test.dart test/tooling/screen_reachability_test.dart test/tooling/gen_public_barrel_test.dart test/ui/ui_inventory_test.dart
 
@@ -544,7 +561,11 @@ $ tools/round-gate.sh test/features/practice_generator/data/local_practice_evide
 MINDEN GATE ZÖLD.
 ```
 
-(`exit=0`.)
+(`exit=0`.) A `local_practice_evidence_repository_test.dart` 16 cellát futtat
+(a review-előtti 12 + a fix1 B1/M1/M2/MINOR-1/MINOR-6 kísérő cellái), a
+`practice_generator_providers_test.dart` 18-at (a review-előtti 9 + M3/M4/M5 +
+a hét „B2 guard" cella), a `start_plan_generation_test.dart` 5-öt (a
+review-előtti 3 + MINOR-4 + MINOR-7).
 
 ### 10.8 Scope-fegyelem — amit a kör NEM tett
 
@@ -560,5 +581,46 @@ MINDEN GATE ZÖLD.
 - `GenerationOrchestrator`, `PlanValidator`, `PlanRepairer`,
   `WeeklyScheduler` stb. viselkedése VÁLTOZATLAN — a `StartPlanGeneration`
   kizárólag a meglévő orchestrátort hívja (10.1).
+
+### 10.9 Javító kör (fix1) — a review leletei, leletenként
+
+A review (`docs/reviews/e15-r14-review.md`) 2 BLOCKER, 7 MAJOR, 7 MINOR, 3
+NOTE-ot mért, mindhárom kötelező ügynökkel függetlenül reprodukálva. Az
+alábbi táblázat leletenként rögzíti, mit tett a fix1 kör, ÉS melyik kísérő
+cella futtatta volna PIROSRA a review-előtti (`6416d8db`) kódot.
+
+| Lelet | Mit tett a fix1 | Piros-képes cella (a review-előtti kódon PIROS lenne) |
+|---|---|---|
+| **B1** (BLOCKER) — az `unawaited` írás/törlés elnyeli a `StorageException`-t | `local_practice_evidence_repository.dart`: a fizikai írás/törlés és a manifest-frissítés EGYÜTT indul (a review-előtti kód szinkron-látszó időzítését megőrizve — lásd az osztály doc-commentjét, miért nem `.then()`-lánc), de egy `_reconcileSave`/`_reconcileRemove` pár async ÖNJAVÍTÁSSAL zárja: sikertelen fizikai törlésnél az id visszakerül a manifestbe (sosem vész el a felfedezhetősége), sikertelen íráskor az optimista manifest-bejegyzés visszavonódik. A hiba `lastWriteFailure`-ben megfigyelhető, `flush()`-sal megvárható. | `local_practice_evidence_repository_test.dart` „B1: a failing physical remove…" — `InMemoryKeyValueStore.failingKeys`-alapú, a review-előtti kódon a manifest a törlés sikertelensége ELLENÉRE elveszítené az id-t (a fresh reader `findByOutcomeId` `null`-t adna a review mérésének megfelelően) |
+| **B2** (BLOCKER) — a production-kompozíció 3/6 képernyőre dob, az A3 bizonyítéka körkörös | ADR 0482 / **D9** (új döntés): a két nyitott seam (`exerciseCandidateResolverProvider`, `generationPlanInputBuilderProvider`) fail-loud `UnimplementedError`-je KIMONDOTT, nem hallgatott; kötelezettségként rögzítve az `E15-R07 / F1` boot-override-jára. Brief §10.1/§10.2 kiegészítve: az A3 „két, még kitöltetlen seam mellett" teljesül. | `practice_generator_providers_test.dart` „B2 guard" csoport (7 cella) — egy KIZÁRÓLAG `keyValueStoreProvider`-t felülíró konténeren tételesen méri, melyik provider épül fel (1/6, 4/6, 5/6, 6/6 today-fn) és melyik dob (2/6, 3/6×2, 6/6 active-plan, GEN×2) — a review-előtti kódon ÍRVA sem lett volna piros (a review-előtti kódnak ELVILEG ugyanez a viselkedése — a lelet a MÉRÉS és a dokumentáció hiánya volt, azt ez a cella pótolja) |
+| **M1** — hidratáláskor olvashatatlan rekord elveszti a tulajdonosát | `_hydrateRecord`: a `sourcePlanId` olvasása az `evidence`-dekódolás ELÉ került; egy korrupt `evidence` test most is törölhető marad. A doc-comment a tényleges viselkedésre javítva. | `local_practice_evidence_repository_test.dart` „M1: a record with a corrupt evidence body…" — kézzel befecskendezett korrupt `evidence` mezővel, a review-előtti kódon `deleteForPlan` `0`-t adna vissza |
+| **M2** — elavult példány manifest-írása felülírja egy másik példány törlését | `_persistManifestAdd`/`_persistManifestRemove`: read-modify-write — minden manifest-írás közvetlenül írás előtt olvassa vissza a lemezt, sosem a helyi (esetleg elavult) `_outcomeIds`-t dobja rá. | `local_practice_evidence_repository_test.dart` „M2: a stale instance's save…" — egy régebbi példány `save`-je UTÁN egy újabb példány törlését a manifeszten mérve, a review-előtti kódon a törölt id visszakerülne |
+| **M3** — `practiceGeneratorTodayProvider` befagyasztja a „ma"-t | A provider típusa `LocalDate` helyett `LocalDate Function()` — a hívó olvasáskor számol, sosem cache-elt értéket kap (a `practiceGeneratorClockProvider` és a `TodayPlanController.resolve()` mért mintája). | `practice_generator_providers_test.dart` „M3: … két különböző clock-érték…" — a review-előtti kódon a második olvasás is az ELSŐ napot adná vissza |
+| **M4** — `activePracticePlanProvider` a `Failure`-t „nincs terv"-vé minősíti | `.valueOrNull` helyett `switch`: egy `Failure` `throw`-olódik, a `FutureProvider` `AsyncError`-ré alakítja. Kísérő fix: `retry: (_, _) => null` — Riverpod 3 alapértelmezett auto-retry-ja (nem-`ProviderException` hibára) egyébként 30s-nál tovább növekvő backoff-fal próbálkozna újra egy determinisztikusan olvashatatlan (nem újrapróbálható) rekordon; ezt MÉRVE fedezte fel a kísérő cella (a hiba nélküli javítás egy tesztet lefagyasztott volna). | `practice_generator_providers_test.dart` „M4: a corrupt active-plan pointer…" — a review-előtti kódon `activePlan` `null` lenne, nem `AsyncError` |
+| **M5** — `StreamController` globális, sosem eldobott providerben | `generationOrchestratorProvider` és a rá `watch`-oló `startPlanGenerationProvider` `Provider.autoDispose`-ra állítva. | `practice_generator_providers_test.dart` „M5: … autoDispose…" — `container.dispose()` NÉLKÜL, csak az utolsó figyelő leiratkozása után méri, hogy a stream lezárul; a review-előtti (sima `Provider`) kódon ez sosem futna le |
+| **M6** — hibás ADR-hivatkozás a §10.1-ben | §10.1 táblázata javítva: a helyes hivatkozás ADR 0482 / D9, nem a `data-inventory.yaml`-ról szóló „§Kontextus 4. pont". | dokumentáció-only, nincs futtatható cella |
+| **M7** — a `deleteForPlan` nem éri el, amit a production író termel | **NEM javítva kódban** (`evidence_aggregator.dart` + `l10n` tilos zóna, H3 lenne). ADR 0482 / **D10** (új döntés) rögzíti az `E15-R07 / F1` kötelező, nyitott előfeltételeként — VAGY a tulajdonos-propagálás az aggregátor hívási láncán, VAGY a fix1-ben hozzáadott `outcomePlanLookup` seam (MINOR-6) bekötése. | nincs — halasztott, dokumentált (nem hallgatott) |
+| MINOR-1 — `discomfort`+`validUntil` teszteletlen fresh-instance ágon | Kísérő cella hozzáadva. | `local_practice_evidence_repository_test.dart` „MINOR-1: …" |
+| MINOR-2 — `sampleCount as int? ?? 1` csendes visszaesés | `as int?? ?? 1` → `as int` (a korrupt rekord immár a „skip it" útra esik, nem 1-re hamisítja a mintaszámot). | a meglévő cellák lefedik (nincs önálló új cella, a viselkedés a decode-hibaágon keresztül tesztelt) |
+| MINOR-3 — `planSetupControllerProvider` a `localeProvider`-t `watch`-olja | `ref.watch` → `ref.read` — a locale-t egyszer, konstrukciókor olvassa, futásidejű nyelvváltás többé nem dobja el a varázsló-kontrollert. A `PlanSetupController` belső `notifyListeners()` disposed-guardja NEM javítva (tilos zóna). | nincs önálló új cella (a meglévő A3 PlanSetup cella a build-et méri; a runtime-locale-change regressziót egy widget-szintű teszt fedné, ami screens/ tilos zónát igényelne) |
+| MINOR-4 — az A4 hiba-cellája nem fedi a dobó `buildInput`-ot | `StartPlanGeneration.call`: a `buildInput(draft)` `try/catch`-be került, a hiba `AppResult.failure`-ré képződik. | `start_plan_generation_test.dart` „MINOR-4: a builder that THROWS…" |
+| MINOR-5 — tautologikus asszerciók | `practice_generator_providers_test.dart:76-81` és a „production default" teszt: az `isNot(isA<InMemory…>)` lecserélve pozitív `isA<Local…>()` asszerciókra. | n/a (teszt-minőségi javítás) |
+| MINOR-6 — `outcomePlanLookup` interfész-seam nincs implementálva | `LocalPracticeEvidenceRepository` konstruktora kapott egy opcionális `outcomePlanLookup` paramétert (az `InMemory` fake mintájára), `_resolveOwnership`-en át `deleteForPlan`/`deleteForOutcomes`-ba kötve. | `local_practice_evidence_repository_test.dart` „MINOR-6: …" |
+| MINOR-7 — `start_plan_generation_test.dart` nem a provideren át mér, nem `dispose`-ol | A 3 meglévő cella mindegyike `addTearDown(orchestrator.dispose)`-t kapott; ÚJ csoport a `startPlanGenerationProvider`-en át méri a bekötést (a kompozíciós gyökér ÁLTAL épített és eldobott orchestrátorral azonosítva, nem egy önálló, teszt-készítette példánnyal). | `start_plan_generation_test.dart` „MINOR-7: measured through the composition root…" |
+
+**Amit a NOTE-ok közül szándékosan nem érintett a kör:** `path_provider`
+deklaráció, export-könyvtár, korlátlan tár — mind tilos zóna vagy külön kör
+(a review is ezt mondja ki).
+
+**Egy mért, a review-ban NEM szereplő regresszió, amit a fix1 saját tesztjei
+fogtak meg és zártak le magán a köreiken belül:** a B1 fix kezdeti kísérlete
+(`.then()`-lánccal a manifest-írást a fizikai írás/törlés jövője MÖGÉ téve)
+megtörte a review-előtti kód ÖSSZES „fresh instance látja a mentést await
+nélkül" celláját — a `.then()` callback Dartban SOHA nem szinkron, még egy már
+teljesült Future-ön sem, tehát egy await nélkül épített „friss" olvasó a
+manifest-írás előtt futott volna. A végleges alak (`_reconcileSave`/
+`_reconcileRemove`) ezért a fizikai műveletet és a manifest-írást EGYÜTT
+indítja (megőrizve a szinkron-látszó viselkedést), és csak a hiba-ágon
+kompenzál aszinkron módon — lásd a §10.9 B1 sorát és az osztály doc-commentjét.
 
 ## 11. Review — a Claude tölti ki

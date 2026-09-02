@@ -1,10 +1,32 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 
 import '../../../core/storage/in_memory_key_value_store.dart';
 import '../../../fixtures/practice_generator/validation/validation_fixtures.dart';
+
+/// Riverpod 3 wraps a provider-creation error in a [ProviderException]
+/// (possibly nested, when the failure comes from a chain of `ref.watch`
+/// calls) whenever it crosses a `container.read`/`ref.watch` boundary.
+/// The B2 guard cells below care about the ROOT cause
+/// (`UnimplementedError`, the deliberate open-seam signal — round brief
+/// §10.9 / ADR 0482 / D9), not how many wrapping layers Riverpod added.
+Object _rootCause(Object error) {
+  var current = error;
+  while (current is ProviderException) {
+    current = current.exception;
+  }
+  return current;
+}
+
+final Matcher _throwsUnimplementedSeam = throwsA(
+  predicate<Object>(
+    (error) => _rootCause(error) is UnimplementedError,
+    'unwraps (through any ProviderException wrapping) to an UnimplementedError',
+  ),
+);
 
 /// E15-R14 §6/A3: every MANDATORY constructor dependency of the 6 plan
 /// screens (round brief §0.0.B/R4) resolves from ONE `ProviderScope`, with
@@ -73,9 +95,11 @@ void main() {
 
       expect(deleteUseCase, isA<DeletePracticePlanningData>());
       expect(exportUseCase, isA<ExportPracticePlanningData>());
+      // MINOR-5 fix: a positive assertion on the concrete type, not a
+      // lone `isNot` that doesn't independently falsify anything.
       expect(
         deleteUseCase.evidenceRepository,
-        isNot(isA<InMemoryPracticeEvidenceRepository>()),
+        isA<LocalPracticeEvidenceRepository>(),
       );
       expect(
         identical(
@@ -133,15 +157,186 @@ void main() {
         'both build from the scope', () async {
       final container = buildContainer();
 
+      // M3 fix: the today-provider now exposes a function, computed at
+      // READ time, never a value cached in provider state.
       final today = container.read(practiceGeneratorTodayProvider);
       final activePlan = await container.read(
         activePracticePlanProvider.future,
       );
 
-      expect(today, isA<LocalDate>());
+      expect(today(), isA<LocalDate>());
       expect(activePlan, isNull); // nothing activated in this test scope.
     });
   });
+
+  test('M3: practiceGeneratorTodayProvider computes "today" at READ time — '
+      'two different clock readings in the SAME container produce two '
+      'different results (no LocalDate frozen in provider state)', () {
+    var current = DateTime.utc(2026, 9, 2, 23, 59);
+    final container = ProviderContainer(
+      overrides: [
+        keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+        exerciseCandidateResolverProvider.overrideWithValue(
+          (exerciseId) => buildCandidate(exerciseId: exerciseId),
+        ),
+        generationPlanInputBuilderProvider.overrideWithValue(
+          (request) => _fixtureInput(request),
+        ),
+        practiceGeneratorClockProvider.overrideWithValue(() => current),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final today = container.read(practiceGeneratorTodayProvider);
+    final first = today();
+    current = DateTime.utc(2026, 9, 3, 0, 1);
+    final second = today();
+
+    expect(first, LocalDate(2026, 9, 2));
+    expect(second, LocalDate(2026, 9, 3));
+  });
+
+  test("M4: a corrupt active-plan pointer surfaces as an AsyncError, never "
+      'silently reclassified as "no active plan" '
+      '(LocalPracticePlanRepository\'s own doc-contract, '
+      'local_practice_plan_repository.dart:358-361)', () async {
+    final store = InMemoryKeyValueStore({
+      'ss.practice_generator.plan.active_pointer': 'not-json-at-all{{{',
+    });
+    final container = ProviderContainer(
+      overrides: [
+        keyValueStoreProvider.overrideWithValue(store),
+        exerciseCandidateResolverProvider.overrideWithValue(
+          (exerciseId) => buildCandidate(exerciseId: exerciseId),
+        ),
+        generationPlanInputBuilderProvider.overrideWithValue(
+          (request) => _fixtureInput(request),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await expectLater(
+      container.read(activePracticePlanProvider.future),
+      throwsA(isA<Object>()),
+    );
+    expect(
+      container.read(activePracticePlanProvider),
+      isA<AsyncError<AdaptivePracticePlan?>>(),
+    );
+  });
+
+  test('M5: generationOrchestratorProvider is autoDispose — its progress '
+      'stream closes once nothing watches it, without waiting for the '
+      'whole container to be disposed (ADR 0482 / D8, brief §5.5)', () async {
+    final container = buildContainer();
+    var closed = false;
+    final subscription = container.listen(
+      generationOrchestratorProvider,
+      (previous, next) {},
+    );
+    final orchestrator = container.read(generationOrchestratorProvider);
+    orchestrator.progress.listen((_) {}, onDone: () => closed = true);
+
+    subscription.close();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(closed, isTrue);
+  });
+
+  group(
+    'B2 guard: a production-shape container (keyValueStoreProvider '
+    'overridden ONLY) — which provider builds and which throws is a '
+    'MEASURED fact, not an assumption (round brief §10.1, ADR 0482 / D9)',
+    () {
+      ProviderContainer buildProductionShapeContainer() {
+        final container = ProviderContainer(
+          overrides: [
+            keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+          ],
+        );
+        addTearDown(container.dispose);
+        return container;
+      }
+
+      test('1/6 PlanSetup: planSetupControllerProvider builds', () {
+        final container = buildProductionShapeContainer();
+        expect(
+          () => container.read(planSetupControllerProvider),
+          returnsNormally,
+        );
+      });
+
+      test('2/6 PlanPreview: planPreviewControllerFactoryProvider throws — '
+          'no production ExerciseCandidateResolver seam yet', () {
+        final container = buildProductionShapeContainer();
+        expect(
+          () => container.read(planPreviewControllerFactoryProvider),
+          _throwsUnimplementedSeam,
+        );
+      });
+
+      test('3/6 PlanPrivacy: deletePracticePlanningDataProvider and '
+          'exportPracticePlanningDataProvider both throw', () {
+        final container = buildProductionShapeContainer();
+        expect(
+          () => container.read(deletePracticePlanningDataProvider),
+          _throwsUnimplementedSeam,
+        );
+        expect(
+          () => container.read(exportPracticePlanningDataProvider),
+          _throwsUnimplementedSeam,
+        );
+      });
+
+      test('4/6 PlanChangeReview: revisePracticePlanProvider builds', () {
+        final container = buildProductionShapeContainer();
+        expect(
+          () => container.read(revisePracticePlanProvider),
+          returnsNormally,
+        );
+      });
+
+      test('5/6 TodayPlan: todayPlanControllerProvider builds', () {
+        final container = buildProductionShapeContainer();
+        expect(
+          () => container.read(todayPlanControllerProvider),
+          returnsNormally,
+        );
+      });
+
+      test('6/6 WeeklyPlan: practiceGeneratorTodayProvider builds, but '
+          'activePracticePlanProvider throws — it needs the plan '
+          'repository, which needs the resolver seam', () async {
+        final container = buildProductionShapeContainer();
+        expect(
+          () => container.read(practiceGeneratorTodayProvider),
+          returnsNormally,
+        );
+        await expectLater(
+          container.read(activePracticePlanProvider.future),
+          _throwsUnimplementedSeam,
+        );
+      });
+
+      test(
+        'GEN: generationOrchestratorProvider and startPlanGenerationProvider '
+        'both throw — the resolver AND the input-builder seam are both open',
+        () {
+          final container = buildProductionShapeContainer();
+          expect(
+            () => container.read(generationOrchestratorProvider),
+            _throwsUnimplementedSeam,
+          );
+          expect(
+            () => container.read(startPlanGenerationProvider),
+            _throwsUnimplementedSeam,
+          );
+        },
+      );
+    },
+  );
 
   test('production default: the evidence repository is the PERSISTENT '
       'implementation, never the never-forgets in-memory test fake '
@@ -151,7 +346,6 @@ void main() {
     final repository = container.read(practiceEvidenceRepositoryProvider);
 
     expect(repository, isA<LocalPracticeEvidenceRepository>());
-    expect(repository, isNot(isA<InMemoryPracticeEvidenceRepository>()));
   });
 
   test('D8: disposing the ProviderScope closes the GenerationOrchestrator\'s '

@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/features/practice_generator/data/local/local_practice_evidence_repository.dart';
 import 'package:strumsight/features/practice_generator/domain/id/planner_ids.dart';
 import 'package:strumsight/features/practice_generator/domain/model/skill_evidence.dart';
@@ -220,5 +223,150 @@ void main() {
         expect(repository.findByOutcomeId(OutcomeId('anything')), isNull);
       },
     );
+
+    test(
+      'B1: a failing physical remove does not silently succeed — the '
+      'failure is observable via lastWriteFailure, and the record stays '
+      'recoverable (never an undeletable residue) once the store recovers',
+      () async {
+        final store = InMemoryKeyValueStore();
+        final repository = LocalPracticeEvidenceRepository(
+          keyValueStore: store,
+        );
+        final evidence = _evidence(outcomeId: 'outcome.residue');
+        repository.save(evidence, sourcePlanId: PlanId('plan.1'));
+        await repository.flush();
+
+        const recordKey =
+            'ss.practice_generator.evidence.record.outcome.residue';
+        expect(store.values.containsKey(recordKey), isTrue);
+        store.failingKeys.add(recordKey);
+
+        final removed = repository.deleteForPlan(PlanId('plan.1'));
+        expect(removed, 1);
+        await repository.flush();
+
+        expect(repository.lastWriteFailure, isA<StorageException>());
+        // The physical record is still on disk — the remove really failed.
+        expect(store.values.containsKey(recordKey), isTrue);
+
+        // Recovery proof (falsifies the review's "residue undeletable
+        // forever" finding): a FRESH instance opened on the same store
+        // must still see — and therefore still be able to delete — the
+        // record. The manifest was never rewritten to drop an id whose
+        // physical removal never confirmed.
+        final reader = LocalPracticeEvidenceRepository(keyValueStore: store);
+        expect(reader.findByOutcomeId(evidence.sourceOutcomeId), evidence);
+
+        store.failingKeys.remove(recordKey);
+        final retryRemoved = reader.deleteForPlan(PlanId('plan.1'));
+        await reader.flush();
+
+        expect(retryRemoved, 1);
+        expect(store.values.containsKey(recordKey), isFalse);
+      },
+    );
+
+    test('M1: a record with a corrupt evidence body still hydrates its '
+        'owner, so deleteForPlan can remove the orphaned key instead of it '
+        'staying permanently un-owned', () {
+      final store = InMemoryKeyValueStore({
+        LocalPracticeEvidenceRepository.manifestKey: jsonEncode(<String>[
+          'outcome.corrupt',
+        ]),
+        'ss.practice_generator.evidence.record.outcome.corrupt': jsonEncode(
+          <String, Object?>{'evidence': 'NOT-A-MAP', 'sourcePlanId': 'plan.1'},
+        ),
+      });
+
+      final repository = LocalPracticeEvidenceRepository(keyValueStore: store);
+
+      expect(repository.findByOutcomeId(OutcomeId('outcome.corrupt')), isNull);
+      final removed = repository.deleteForPlan(PlanId('plan.1'));
+
+      expect(removed, 1);
+    });
+
+    test(
+      "M2: a stale instance's save does not resurrect an id a NEWER "
+      'instance already deleted — the manifest write re-reads disk '
+      "instead of overwriting it with the stale instance's own list",
+      () async {
+        final store = InMemoryKeyValueStore();
+        final writer = LocalPracticeEvidenceRepository(keyValueStore: store);
+        final a = _evidence(outcomeId: 'outcome.a');
+        final b = _evidence(outcomeId: 'outcome.b');
+        writer.save(a, sourcePlanId: PlanId('plan.1'));
+        writer.save(b, sourcePlanId: PlanId('plan.1'));
+        await writer.flush();
+
+        // A second, "stale" instance opened on the same store BEFORE `a`
+        // is deleted — it hydrates both `a` and `b` into its own
+        // in-memory view.
+        final stale = LocalPracticeEvidenceRepository(keyValueStore: store);
+
+        writer.deleteForOutcomes(PlanId('plan.1'), {a.sourceOutcomeId});
+        await writer.flush();
+
+        // `stale` now saves a brand-new evidence `c`. Its own in-memory
+        // outcome-id list still (wrongly) includes `a`, since it
+        // hydrated before the delete — the manifest write this triggers
+        // must not resurrect `a`.
+        final c = _evidence(outcomeId: 'outcome.c');
+        stale.save(c, sourcePlanId: PlanId('plan.1'));
+        await stale.flush();
+
+        final rawManifest =
+            store.values[LocalPracticeEvidenceRepository.manifestKey] as String;
+        final manifestIds = (jsonDecode(rawManifest) as List).cast<String>();
+        expect(manifestIds, isNot(contains('outcome.a')));
+        expect(manifestIds, containsAll(<String>['outcome.b', 'outcome.c']));
+
+        final fresh = LocalPracticeEvidenceRepository(keyValueStore: store);
+        expect(fresh.findByOutcomeId(a.sourceOutcomeId), isNull);
+        expect(fresh.findByOutcomeId(b.sourceOutcomeId), b);
+        expect(fresh.findByOutcomeId(c.sourceOutcomeId), c);
+      },
+    );
+
+    test('MINOR-1: a discomfort-only evidence WITH a validUntil round-trips '
+        'through a FRESH instance (that branch was never exercised past '
+        'the same-process cache before)', () {
+      final store = InMemoryKeyValueStore();
+      final writer = LocalPracticeEvidenceRepository(keyValueStore: store);
+      final evidence = SkillEvidence(
+        skillId: 'chord.gMajor',
+        source: EvidenceSource.selfReport,
+        sourceOutcomeId: OutcomeId('outcome.discomfort'),
+        measurementVersion: 1,
+        measuredAt: DateTime.utc(2026, 8, 20),
+        capturedAt: DateTime.utc(2026, 8, 20),
+        confidence: 0.5,
+        validUntil: DateTime.utc(2026, 9, 20),
+        discomfort: DiscomfortReport(category: DiscomfortCategory.tension),
+      );
+      writer.save(evidence, sourcePlanId: PlanId('plan.1'));
+
+      final reader = LocalPracticeEvidenceRepository(keyValueStore: store);
+
+      expect(reader.findByOutcomeId(evidence.sourceOutcomeId), evidence);
+    });
+
+    test('MINOR-6: outcomePlanLookup is an ownership fallback for records '
+        'saved without a sourcePlanId, mirroring the in-memory fake', () {
+      final store = InMemoryKeyValueStore();
+      final repository = LocalPracticeEvidenceRepository(
+        keyValueStore: store,
+        outcomePlanLookup: (outcomeId) =>
+            outcomeId == 'outcome.legacy' ? PlanId('plan.1') : null,
+      );
+      final evidence = _evidence(outcomeId: 'outcome.legacy');
+      repository.save(evidence);
+
+      final removed = repository.deleteForPlan(PlanId('plan.1'));
+
+      expect(removed, 1);
+      expect(repository.findByOutcomeId(evidence.sourceOutcomeId), isNull);
+    });
   });
 }

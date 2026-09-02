@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
 
+import '../../../../core/foundation/app_result.dart';
 import '../../../../core/i18n/locale_provider.dart';
 import '../../../../core/storage/storage_providers.dart';
 import '../../application/controller/today_plan_controller.dart';
@@ -119,13 +120,25 @@ final practiceEvidenceRepositoryProvider = Provider<PracticeEvidenceRepository>(
 /// builds it, so it is the one that closes it (ADR 0482 / D8, the repo's
 /// `liveFrameProvider` precedent: a provider that builds a resource-holding
 /// object disposes that resource).
-final generationOrchestratorProvider = Provider<GenerationOrchestrator>((ref) {
-  final orchestrator = GenerationOrchestrator(
-    activation: ref.watch(localPracticePlanRepositoryProvider),
-  );
-  ref.onDispose(() => unawaited(orchestrator.dispose()));
-  return orchestrator;
-});
+///
+/// M5 fix (E15-R14 fix1, brief §5.5): `autoDispose`. A plain, non-disposed
+/// `Provider` never tears down once the app has read it even once — the
+/// `ref.onDispose` above would then only ever run when the WHOLE
+/// `ProviderScope` is torn down (app shutdown), i.e. never in practice.
+/// `autoDispose` closes the stream as soon as nothing watches this
+/// provider anymore, exactly the posture brief §5.5 requires ("NEM
+/// elfogadható gyengítés: lezáratlan `StreamController` egy globális,
+/// sosem eldobott providerben"). A caller that needs the orchestrator to
+/// survive an active generation must `ref.watch` it (keeping it alive for
+/// as long as it is watched), the same `liveFrameProvider` precedent.
+final generationOrchestratorProvider =
+    Provider.autoDispose<GenerationOrchestrator>((ref) {
+      final orchestrator = GenerationOrchestrator(
+        activation: ref.watch(localPracticePlanRepositoryProvider),
+      );
+      ref.onDispose(() => unawaited(orchestrator.dispose()));
+      return orchestrator;
+    });
 
 /// Overridable production seam, mirroring [exerciseCandidateResolverProvider]:
 /// turning a Setup-wizard draft into a `GenerationPlanInput` needs the
@@ -143,7 +156,11 @@ final generationPlanInputBuilderProvider = Provider<GenerationPlanInputBuilder>(
   },
 );
 
-final startPlanGenerationProvider = Provider<StartPlanGeneration>(
+/// `autoDispose` because it watches [generationOrchestratorProvider] (M5):
+/// a non-autoDispose provider watching an autoDispose one would itself
+/// keep the orchestrator pinned forever, defeating the fix above (the
+/// same `liveFrameProvider`-precedent rule applies transitively).
+final startPlanGenerationProvider = Provider.autoDispose<StartPlanGeneration>(
   (ref) => StartPlanGeneration(
     orchestrator: ref.watch(generationOrchestratorProvider),
     buildInput: ref.watch(generationPlanInputBuilderProvider),
@@ -159,7 +176,17 @@ final planSetupControllerProvider = Provider<PlanSetupController>((ref) {
     draftRepository: ref.watch(generationDraftRepositoryProvider),
     clock: ref.watch(practiceGeneratorClockProvider),
     generateId: ref.watch(practiceGeneratorIdGeneratorProvider),
-    locale: ref.watch(localeProvider)?.languageCode ?? 'en',
+    // MINOR-3 fix (E15-R14 fix1): `ref.read`, not `ref.watch`. The
+    // `locale` constructor parameter is a plain `String` snapshot
+    // (`PlanSetupController` lives in the forbidden `presentation/
+    // controller/` zone for this round, so it cannot be changed to accept
+    // a locale-reading function the way `clock` does). Watching
+    // `localeProvider` here would rebuild — and so dispose — this whole
+    // provider on every runtime locale change, discarding an in-progress
+    // wizard draft the controller is holding in memory. `ref.read` takes
+    // the locale once, at first build, without subscribing to later
+    // changes.
+    locale: ref.read(localeProvider)?.languageCode ?? 'en',
   );
   ref.onDispose(controller.dispose);
   return controller;
@@ -233,15 +260,55 @@ final todayPlanControllerProvider = Provider<TodayPlanController>(
 // Screen 6/6 — WeeklyPlanScreen
 // ---------------------------------------------------------------------------
 
-final practiceGeneratorTodayProvider = Provider<LocalDate>((ref) {
-  final now = ref.watch(practiceGeneratorClockProvider)();
-  return LocalDate(now.year, now.month, now.day);
+/// Computes "today" at READ time — never a [LocalDate] cached in provider
+/// state (M3 fix, E15-R14 fix1). A `Provider<LocalDate>` that calls the
+/// clock once, in its build function, freezes on the FIRST read forever:
+/// nothing invalidates a plain `Provider` at midnight, so the app's
+/// "today" would silently stay stuck on whatever day it was first read —
+/// exactly the "stale `DateTime.now()` in provider state" trap CLAUDE.md
+/// warns about. This mirrors `TodayPlanController.resolve()`
+/// (`today_plan_controller.dart:54`), which calls the clock on every
+/// access rather than caching a `LocalDate` field; the same discipline
+/// applies to [practiceGeneratorClockProvider] itself (a function, not a
+/// cached `DateTime`). A caller (`WeeklyPlanScreen`'s eventual binding)
+/// reads the provider to get the function, then calls it exactly when it
+/// needs "today" — never earlier.
+final practiceGeneratorTodayProvider = Provider<LocalDate Function()>((ref) {
+  final clock = ref.watch(practiceGeneratorClockProvider);
+  return () {
+    final now = clock();
+    return LocalDate(now.year, now.month, now.day);
+  };
 });
 
+/// M4 fix (E15-R14 fix1): a read [Failure] surfaces as an `AsyncError`,
+/// never as `null`. `LocalPracticePlanRepository.readActivePlan`'s own
+/// doc-contract (`local_practice_plan_repository.dart:358-361`) is
+/// explicit: "A present-but-corrupt pointer is a controlled failure,
+/// never silently reclassified as first launch." Collapsing every
+/// `Failure` to `null` via `.valueOrNull` would make `WeeklyPlanScreen`
+/// show "no plan yet" for a learner whose plan is actually present but
+/// unreadable — the exact silent-reclassification the contract forbids.
+/// Throwing the [AppFailure] lets `FutureProvider`'s implicit
+/// `AsyncValue.guard` turn it into `AsyncError`, which the UI can render
+/// distinctly from "no active plan".
+///
+/// `retry: (_, _) => null` — Riverpod 3 auto-retries a `FutureProvider`
+/// that throws a plain (non-`ProviderException`) error, with a growing
+/// backoff, by default. A read failure here is [AppFailure.retryable]
+/// `false` by construction (`StorageFailure`'s default): a corrupt
+/// pointer will not become readable by simply trying again, so retrying
+/// only delays the `AsyncError` the UI is waiting to render. Disabling
+/// it is a correctness fix, not just a test-timing one — measured via a
+/// hang: without it, awaiting `activePracticePlanProvider.future` on a
+/// corrupt store did not settle within a 30s test timeout.
 final activePracticePlanProvider = FutureProvider<AdaptivePracticePlan?>((
   ref,
 ) async {
   final repository = ref.watch(localPracticePlanRepositoryProvider);
   final result = await repository.readActivePlan();
-  return result.valueOrNull;
-});
+  return switch (result) {
+    Success<AdaptivePracticePlan?>(:final value) => value,
+    Failure<AdaptivePracticePlan?>(:final error) => throw error,
+  };
+}, retry: (retryCount, error) => null);

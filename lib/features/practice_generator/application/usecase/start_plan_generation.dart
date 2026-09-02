@@ -1,6 +1,7 @@
 /// Setup-wizard draft → generation entry point (E15-R14, ADR 0482).
 library;
 
+import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_generation_request.dart';
@@ -40,7 +41,23 @@ final class StartPlanGeneration {
   final GenerationOrchestrator orchestrator;
   final GenerationPlanInputBuilder buildInput;
 
+  /// MINOR-4 fix (E15-R14 fix1): [buildInput] is called from inside the
+  /// `try` below, so a builder that throws (rather than merely producing
+  /// an input the orchestrator later rejects) still surfaces as an
+  /// [AppResult] [Failure] — matching this class's own doc-contract
+  /// above ("never a thrown exception"), which the un-guarded call
+  /// previously made too broad a claim for.
   Future<AppResult<AdaptivePracticePlan>> call(
     PracticeGenerationRequest draft,
-  ) => orchestrator.generate(buildInput(draft));
+  ) async {
+    final GenerationPlanInput input;
+    try {
+      input = buildInput(draft);
+    } on Object catch (error, stackTrace) {
+      return Failure<AdaptivePracticePlan>(
+        UnknownFailure(cause: error, stackTrace: stackTrace),
+      );
+    }
+    return orchestrator.generate(input);
+  }
 }

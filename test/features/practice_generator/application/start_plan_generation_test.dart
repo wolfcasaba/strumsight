@@ -1,7 +1,10 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 
+import '../../../core/storage/in_memory_key_value_store.dart';
 import '../../../fixtures/practice_generator/validation/validation_fixtures.dart';
 
 /// E15-R14 §6/A4: [StartPlanGeneration] assembles the Setup-wizard's draft
@@ -16,6 +19,7 @@ void main() {
         'through the existing GenerationOrchestrator', () async {
       final activation = _RecordingActivation();
       final orchestrator = GenerationOrchestrator(activation: activation);
+      addTearDown(orchestrator.dispose);
       final draft = _draft();
       final useCase = StartPlanGeneration(
         orchestrator: orchestrator,
@@ -38,6 +42,7 @@ void main() {
       () async {
         final activation = _RecordingActivation();
         final orchestrator = GenerationOrchestrator(activation: activation);
+        addTearDown(orchestrator.dispose);
         final draft = _draft();
         final useCase = StartPlanGeneration(
           orchestrator: orchestrator,
@@ -57,6 +62,7 @@ void main() {
         'builder produced', () async {
       final activation = _RecordingActivation();
       final orchestrator = GenerationOrchestrator(activation: activation);
+      addTearDown(orchestrator.dispose);
       final draft = _draft();
       GenerationPlanInput? seen;
       final useCase = StartPlanGeneration(
@@ -72,6 +78,55 @@ void main() {
 
       expect(seen, isNotNull);
       expect(seen!.request, draft);
+    });
+
+    test('MINOR-4: a builder that THROWS surfaces as an AppResult failure, '
+        'not a thrown exception (start_plan_generation.dart:45 is now '
+        'guarded, matching this class\'s own "never a thrown exception" '
+        'doc-contract)', () async {
+      final activation = _RecordingActivation();
+      final orchestrator = GenerationOrchestrator(activation: activation);
+      addTearDown(orchestrator.dispose);
+      final draft = _draft();
+      final useCase = StartPlanGeneration(
+        orchestrator: orchestrator,
+        buildInput: (request) => throw StateError('assembly exploded'),
+      );
+
+      final result = await useCase(draft);
+
+      expect(result, isA<Failure<AdaptivePracticePlan>>());
+      expect(activation.calls, isZero);
+    });
+  });
+
+  group('MINOR-7: measured through the composition root, not standalone', () {
+    test('startPlanGenerationProvider wires the SAME orchestrator the '
+        'composition root itself builds and disposes (ADR 0482 / D8, M5) — '
+        'not a standalone re-construction the test made up', () {
+      final container = ProviderContainer(
+        overrides: [
+          keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+          exerciseCandidateResolverProvider.overrideWithValue(
+            (exerciseId) => buildCandidate(exerciseId: exerciseId),
+          ),
+          generationPlanInputBuilderProvider.overrideWithValue(
+            (request) => _input(request),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final useCase = container.read(startPlanGenerationProvider);
+
+      expect(useCase, isA<StartPlanGeneration>());
+      expect(
+        identical(
+          useCase.orchestrator,
+          container.read(generationOrchestratorProvider),
+        ),
+        isTrue,
+      );
     });
   });
 }

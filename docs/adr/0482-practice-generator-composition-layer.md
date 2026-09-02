@@ -156,15 +156,92 @@ A `GenerationOrchestrator` broadcast `StreamController`-t tart
 (`generation_orchestrator.dart:74`). Az őt építő provider `ref.onDispose`-ban
 zárja le a tartott erőforrást (a repó mért `liveFrameProvider`-precedense: egy
 erőforrást tartó providert figyelő provider maga is eldobható kell legyen,
-különben az erőforrás bekapcsolva marad).
+különben az erőforrás bekapcsolva marad). **Fix1 kiegészítés (E15-R14 review
+B/M5):** a providert magát is `Provider.autoDispose`-ra kellett állítani — egy
+sima, sosem eldobott `Provider` esetén a `ref.onDispose` a gyakorlatban csak a
+teljes `ProviderScope` leállásakor futna le, ami a brief §5.5 tiltott alakja
+(„lezáratlan `StreamController` egy globális, sosem eldobott providerben").
+`startPlanGenerationProvider`, ami rá `watch`-ol, ugyanezért szintén
+`autoDispose`.
+
+### D9 — Két nyitott seam MARAD ebben a körben; fail-loud, nem hallgatás, és
+**kötelezettség** az `E15-R07 / F1` felé (fix1, a review B2 leletének zárása)
+
+A kompozíciós gyökér két helyen **mérten** `UnimplementedError`-t dob egy
+kizárólag `keyValueStoreProvider`-t felülíró (production-alakú) konténeren:
+
+| Seam | Miért nyitott | Ami hiányzik |
+|---|---|---|
+| `exerciseCandidateResolverProvider` | `LocalPracticePlanRepository` (és minden rá épülő provider) ezt kéri egy perzisztált előírás `exerciseId`-jének visszafeloldásához | a `practice` feature katalógusa (`lib/features/practice/public.dart`) még nem exportálja a `practiceCatalogProvider`-t, más feature = tilos zóna ebben a körben |
+| `generationPlanInputBuilderProvider` | a `StartPlanGeneration` ezzel állítja elő a `GenerationPlanInput`-ot a Setup-draftból | a valódi összeállításhoz katalógus + evidence-rangsorolás + `WeeklyScheduleDecision`/`PlanValidationContext` kell — a STOP-protokoll szerint ez motor-viselkedés, nem kompozíció |
+
+**Mért hatás:** egy production-alakú konténeren a 6 képernyőből **3**
+(`PlanPreviewScreen`, `PlanPrivacyScreen` mindkét use case-e,
+`WeeklyPlanScreen` aktív-terv olvasása) és a **teljes generálási út**
+(`generationOrchestratorProvider`, `startPlanGenerationProvider`) dob — ezt a
+`practice_generator_providers_test.dart` „B2 guard" csoportja képernyőnként /
+providerenként méri (`throwsUnimplementedError`), nem csak állítja.
+
+**Döntés:** a hiány NEM hallgatás — `UnimplementedError`, nem egy csendben
+no-op-oló fake vagy `_NoopActivation`-szerű megoldás (a `tutorOrchestratorProvider`
+mért mintáját követve, `ai_tutor/presentation/providers/tutor_providers.dart`).
+A különbség ehhez a precedenshez képest: ott a seamet a boot
+(`main.dart:37,40`) MÁR lezárja; itt — mivel ez a kör route-ot és boot-kötést
+nem nyithat (STOP-protokoll) — a lezárás nyitva marad.
+
+**Kötelezettség:** az `E15-R07 / F1` MUST override-olja mindkét providert a
+boot-kompozícióban (`main.dart`), a `tutorOrchestratorProvider`
+boot-override-mintáját követve, MIELŐTT bármelyik érintett képernyőre route
+nyílik vagy a generálási út elérhetővé válik. Az `E15-R07 / F1` brief-jének
+explicit acceptance-kritériumként kell rögzítenie: „egy production-alakú
+`ProviderScope`-on a 6 képernyő EGYIKE sem dob" (a B2 guard-teszt mintája
+ehhez közvetlenül átvehető).
+
+### D10 — `deleteForPlan` nem éri el, amit az egyetlen production-író termel
+(a review M7 leletének zárása — **halasztott, kötelező F1-előfeltétel**)
+
+`application/service/evidence_aggregator.dart:61` a `PracticeEvidenceRepository.save`-et
+tulajdonos (`sourcePlanId`) **nélkül** hívja — ez a fájl és az `l10n` ebben a
+körben tilos zóna, tehát a hívás nem módosítható itt. Amíg ez fennáll,
+`deleteForPlan` **strukturálisan** nem törli azt, amit az aggregátor ír, holott
+az ARB-szöveg (`practicePrivacyDeleteConfirmBody`, `practicePrivacyDeleteDone`)
+a bizonyíték törlését ígéri.
+
+**A kör két, kész, de EBBEN a körben be nem kötött eszközt hagy hátra a
+javításhoz** (`local_practice_evidence_repository.dart`, fix1):
+
+1. a `save`-nek már most is van `sourcePlanId` paramétere — az aggregátor
+   hívási láncának kell átadnia a tulajdonos `PlanId`-t;
+2. a repository konstruktora fix1-ben kapott egy `outcomePlanLookup`
+   fallback-öt (a `PracticeEvidenceRepository` interfész saját
+   doc-kontraktusának megfelelően, `domain/repository/
+   practice_evidence_repository.dart:20-23`) — ha a tulajdonos-átadás az
+   aggregátor láncán át nem old meg mindent, ez a másodlagos seam.
+
+**Kötelezettség:** az `E15-R07 / F1` brief-je nevezze meg ezt EXPLICIT
+előfeltételként — vagy a tulajdonos-propagálást az aggregátor hívási láncán,
+vagy az `outcomePlanLookup` bekötését —, mielőtt a `PlanPrivacyScreen` törlés
+gombja bekötésre kerül. Halasztás igen, hallgatás nem.
 
 ## Következmények
 
-- Az `E15-R07 / F1` bekötése ezek után valóban „route + flag" méretű: a
-  képernyők függőségei egyetlen `ProviderScope`-ból felépülnek.
+- Az `E15-R07 / F1` bekötése ezek után **részben** „route + flag" méretű: 4/6
+  képernyő és a preview/today/change-review út MÁR MOST felépül egyetlen
+  `ProviderScope`-ból, de **két nyitott seamet** (D9) az F1-nek kell boot-időben
+  lezárnia, és a bizonyíték-törlés strukturális hiányát (D10) is fel kell
+  oldania, mielőtt a `PlanPrivacyScreen`/`PlanPreviewScreen`/`WeeklyPlanScreen`/
+  a generálási út route-ot kap. **(Fix1 javítás:** az eredeti mondat — „a
+  képernyők függőségei egyetlen `ProviderScope`-ból felépülnek" — a review B2
+  leletében **mérve hamis** volt 3/6-ra; ez a bekezdés a mért igazságra
+  javítva.)
 - A `PlanPrivacyScreen` törlés/export gombja az első bekötés pillanatától
-  **valódi** adatműveletet takar.
+  **valódi** adatműveletet takar a tervadatra; a bizonyíték-oldalon D10 nyitott
+  előfeltétele is teljesülnie kell ahhoz, hogy ez a bizonyítékra is igaz legyen.
 - A kör felületet nem ír, ARB-kulcsot nem mozdít, a `ui_inventory` egzakt
   darabszáma (96) változatlan.
 - Egy jövőbeli, on-device tár-leltár (D5) az itt bevezetett kulcs-névteret és
   manifesztet készen találja.
+- A perzisztens írás/törlés hibája fix1-ben megfigyelhetővé vált
+  (`LocalPracticeEvidenceRepository.lastWriteFailure`/`flush()`) — a szinkron
+  `PracticeEvidenceRepository` interfészt nem kellett átírni, de egy platform-szintű
+  `StorageException` innentől soha nem szökik el kezeletlen aszinkron hibaként.
