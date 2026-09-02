@@ -1,16 +1,18 @@
 # E12-R28 — Beta stabilization és scope cut
 
-- **Státusz:** PREPARED (előre megírva 2026-08-27, kód olvasva: `main @ 9ca4a0dc`)
+- **Státusz:** IN PROGRESS (előre megírva 2026-08-27 `main @ 9ca4a0dc`-ra; pre-flight újramérve 2026-09-02, `main @ 4bdedfbc` — lásd **§0.0.B**)
 - **Típus:** Chapter 12 (Release Roadmap, Sprint Planning & Final Integration), Kör 28
 - **Kör-azonosító:** `E12-R28`
 - **Branch:** `<motor>/e12-r28-beta-stabilization-and-scope-cut`
 - **Előfeltétel:** `E12-R27` merge-elve ÉS a Closed Beta USER általi lefuttatása (a kör bemenete a béta tapasztalata)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0464` — a szám FOGLALT (Chapter 12 batch-tartomány): a **contract freeze** szabálya kötött architekturális döntés.
+- **ADR:** `ADR 0489` — [`docs/adr/0489-ga-scope-classification-and-contract-freeze.md`](../adr/0489-ga-scope-classification-and-contract-freeze.md), a pre-flightban MEGÍRVA (a brief eredeti `0464` értéke elavult — §0.0.B R1).
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "beta stabilization scope cut contract freeze preview feature"` → **[ADR 0306](../adr/0306-plan-preview-presentation-activation-boundary.md)** (plan-preview aktiválási határ): a repóban MÁR van mintája annak, hogy egy preview-funkció a core útra nem hathat. A scope-cut ezt a mintát általánosítja.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd, hogy a Closed Beta MEGTÖRTÉNT-e és van-e a `docs/beta/`-ban lezárt triage-anyag. Ha nincs béta-adat, a kör NEM indítható (`blocked` jelzés) — a scope-cut mérési döntés, nem vélemény.
+>
+> **MEGMÉRVE 2026-09-02 (§0.0.B R2): a Closed Beta NEM indult el, terepi triage-anyag NINCS.** A kör mégis fut, de a béta-hiányt MÉRT tényként szállítja, és a besorolás a fán mérhető bizonyítékra épül (a §5.2 „mérési riport" ága). A kitalált béta-adatot az [ADR 0489 D3](../adr/0489-ga-scope-classification-and-contract-freeze.md) útvonal-feloldása GÉPILEG zárja ki. Az indoklás teljes egészében a §0.0.B R2-ben.
 
 ## 0.0 A kör bemenete emberi mérésből jön
 
@@ -34,6 +36,116 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0.B Pre-flight revíziók (Claude, 2026-09-02) — ütközésnél EZ a szöveg érvényes
+
+A brief 2026-08-27-én készült, `main @ 9ca4a0dc` állapotra. A pre-flight a fán
+ÚJRAMÉRT minden hivatkozott állítást (`main @ 4bdedfbc`). Hét revízió.
+
+### R1 — Az ADR száma **0489**, nem 0464
+
+A `tools/round-slots.py reserve-adr --round E12-R28` foglaló **0489**-et adott (a
+lemezen a legmagasabb ADR ma `0488`). A brief §0.0/§3/§5 „ADR 0464" említései
+tehát a **`docs/adr/0489-ga-scope-classification-and-contract-freeze.md`** fájlt
+jelentik. A queue `adr` oszlopa (`0464`) az előre kiosztott, elavult érték —
+ugyanez a mintázat mérve az előző körökben: `E12-R22` queue `0461` → tényleges
+`0486`; `E12-R25` queue `0463` → tényleges `0488`. A foglaló a mérce
+(pipeline-prompt §1.0.1), az `ls docs/adr | tail` tilos. **Az ADR-t az
+orchesztrátor MÁR megírta — az implementer nem írja át, és `docs/adr/**`-hoz nem
+nyúl.**
+
+### R2 — Az előfeltétel MÉRTEN nem teljesül: a Closed Beta NEM indult el
+
+A brief §0.0 pre-flight-doboza a béta-adat hiányára `blocked` jelzést írt elő. A
+pre-flight MÉRTE az állapotot:
+
+- `docs/beta/closed-beta-launch.md:3` → „**Status: NOT launched** — this document
+  is a gate, not a launch announcement";
+- ugyanennek a fájlnak a §5 „Human launch field" mezője kipipálatlan és
+  kitöltetlen („intentionally left unticked by this round");
+- a HANDOFF `E12-R27` bejegyzése kimondja: „**A béta NEM indult el.**"
+
+Tehát a fán **nulla** terepi béta-mérés van, és lesz is, amíg egy ember le nem
+futtatja a bétát — ez `E12-R27` szerint szándékosan **emberi kapu**.
+
+**Döntés: a kör NEM áll meg, hanem a béta-hiányt MÉRT tényként szállítja.**
+Indoklás — és ez a döntés hatóköre:
+
+1. A brief SAJÁT §5.2-je a bizonyítékra **vagylagos**: „a béta-adat **vagy a
+   mérési riport** hivatkozása kötelező". A fán mérhető bizonyíték (flag-katalógus,
+   cohort-profil, blocker-lista, felismerési release-guard, e2e-cellák) a második
+   ág, tehát a besorolás nem lesz vélemény.
+2. Az acceptance-kritériumok (A1–A6) egyike sem hivatkozik béta-adatra — mind a
+   fán mérhető anyagból teljesíthető.
+3. **Precedens:** az `E12-R27` PONTOSAN ezt tette ugyanezzel az emberi kapuval —
+   leszállította a konfigurációt és a monitoring-eljárást, az indítást pedig
+   kimondottan ÜRESEN hagyta. A kör review-t kapott és merge-elődött.
+
+**A veszély, amit a §0.0 doboz el akart kerülni — a kitalált béta-adat — ettől
+NEM enyhül, hanem gépi őrt kap:** [ADR 0489 D3](../adr/0489-ga-scope-classification-and-contract-freeze.md)
+szerint minden bizonyíték-hivatkozásnak a fán **feloldható útvonalra** kell
+mutatnia. Nem létező béta-riportra hivatkozni így nem stílushiba, hanem nem-nulla
+kilépés.
+
+**STOP-protokoll (szigorítva):** ha egy capability GA/`preview` besorolása
+KIZÁRÓLAG béta-adatból következne, a besorolása **`postponed`**, feloldó
+feltételként a béta lefutásával — **nem** becslés, és **nem** `stopped` jelzés. A
+`stopped` marad a scope-ütközés jelzése (§0).
+
+### R3 — A `beta-findings.md` tartalma átdefiniálva
+
+A fájl **nem** terepi top-issue/funnel összefoglaló (nincs mihez). Az
+[ADR 0489 D8](../adr/0489-ga-scope-classification-and-contract-freeze.md) köti:
+rögzíti a béta MÉRT állapotát (feloldható hivatkozással a
+`docs/beta/closed-beta-launch.md`-ra), felsorolja, mely bizonyítékforrásokra épül
+helyette a besorolás, és kimondja, melyik besorolás melyik béta-mérés hatására
+kerül újramérésre. **Kitalált top-issue lista, funnel-szám vagy tesztelői létszám
+TILOS** — a D3 útvonal-feloldása ezt gépileg is fogja.
+
+### R4 — A capability-halmaz MÉRT és zárt: a cohort-profil 16 kulcsa
+
+Az A1 („minden capability") csak akkor mérhető, ha a halmaz meg van nevezve. Mérve
+(`python3 -c "import yaml; …"` a `docs/beta/cohort-profiles.yaml`-on): mindkét
+cohort **16** flag-kulcsot rendel hozzá, ugyanazt a 16-ot, és mind a 16 benne van
+a MÉRT 40-es `lib/core/feature_flags/feature_flag_registry.dart` katalógusban.
+[ADR 0489 D1](../adr/0489-ga-scope-classification-and-contract-freeze.md): a
+besorolás alanyainak halmaza **ez a 16 kulcs**, pontosan egy besorolással,
+hallgatólagos default NÉLKÜL. A besorolási készlet zárt:
+`ga` | `preview` | `disabled` | `postponed` (D2).
+
+### R5 — Az A5 bemenete MÉRVE: van nyitott P0
+
+`docs/release/blockers.md` a mérés pillanatában: `R-SIGN-01` **P0** nyitva
+(owner-kör `E12-R07`, `pending`), mellette öt **P1** (`R-VER-01`, `R-PRIV-01`,
+`R-SEC-01`, `R-STAGE-01`, `R-STORE-01`). Tehát a `ga-scope.md`-nek
+[D7](../adr/0489-ga-scope-classification-and-contract-freeze.md) szerint
+**kimondottan NEM-KÉSZ** állapotot kell hordoznia a fejlécében — ez a dokumentum
+helyes állapota, nem hiányossága. Egy „GA-kész" fejléc a mai fán az A5 celláját
+PIROSRA váltja.
+
+### R6 — Az A3 gépi mérése: a core út lépései a scope-dokumentumban vannak nevesítve
+
+A `verify_ga_scope.py` Dart e2e-tesztet nem futtat. Az A3
+([D5](../adr/0489-ga-scope-classification-and-contract-freeze.md)) ezért
+dokumentum-szintű: a `ga-scope.md` nevesíti a core út lépéseit, minden lépéshez a
+D3 szerint feloldható bizonyítékkal — az `E12-R11` (`done`, ADR 0452) e2e-cellái,
+MÉRVE: `test/e2e/first_practice_offline_test.dart`,
+`test/e2e/returning_user_restart_test.dart`,
+`test/e2e/upgrade_migration_test.dart`, `test/e2e/resource_coexistence_test.dart`
+— és megjelöli, mely capabilityre támaszkodik a lépés. Minden core-úthoz
+szükségesnek jelölt capability besorolása **`ga`** kell legyen; bármi más
+nem-nulla kilépés.
+
+### R7 — Parszer-fegyelem és külső függőség
+
+[ADR 0489 D9](../adr/0489-ga-scope-classification-and-contract-freeze.md): a
+`ga-scope.md`/`contract-freeze.md` táblázatait **fail-closed** parszer olvassa
+(nem illeszkedő sor → hiba a sor számával, néma átugrás TILOS — L566); a
+cohort-profil **PyYAML**-lel olvasandó (precedens: a testvér
+`tool/release/verify_beta_profile.py` ugyanezt a fájlt így olvassa; a fán mérve
+`PyYAML 6.0.1`). Az eszköz stdlib + `yaml`, más külső csomag nincs; a gate-teszt
+egyetlen külső binárisa a `python3` (ADR 0488 D6 / ADR 0447 D5). Minden cella a
+saját javítása ELŐTTI eszközzel PIROS (L563).
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -43,7 +155,7 @@ tools/codex-signal.sh stopped "<egy sor>"
 tools/codex-signal.sh blocked "<egy sor>"
 ```
 
-**STOP-protokoll:** ha egy capability besorolása a béta-adatból nem következik (nincs mérés), a kimenet a `stopped` jelzés — a besorolás nem lehet becslés.
+**STOP-protokoll:** `stopped` jelzés **scope-ütközésre** (a §4 listáján kívüli fájl kellene). — ⚠ **A §0.0.B R2 felülírja e szakasz korábbi szövegét:** a béta-adat hiánya MÉRT tény, nem `stopped`-ok; az ilyen capability besorolása `postponed`, a béta lefutásával mint feloldó feltétellel. A besorolás továbbra sem lehet becslés — ezt az [ADR 0489 D3](../adr/0489-ga-scope-classification-and-contract-freeze.md) útvonal-feloldása kényszeríti ki.
 
 ## 1. Cél
 
@@ -65,7 +177,7 @@ A GA-scope legyen kisebb, de stabil: minden capability mért indoklással kap GA
 - Kód-változtatás bármely feature-ben (a scope-cut ITT dokumentum + profil).
 - Új flag bevezetése.
 - A `docs/eval/recognition-release-guard.md` küszöbeinek átírása.
-- `docs/adr/**` — az ADR 0464-et a Claude írja.
+- `docs/adr/**` — az ADR 0489-et a Claude MÁR megírta (§0.0.B R1).
 
 ## 4. Engedélyezett fájlok
 
@@ -79,7 +191,7 @@ A GA-scope legyen kisebb, de stabil: minden capability mért indoklással kap GA
 
 **Tilos zóna:** `lib/**` · `backend/**` · `.github/**` · `docs/eval/**` · `docs/adr/**` · `tools/**`
 
-## 5. Kötött architekturális döntések (ADR 0464)
+## 5. Kötött architekturális döntések (ADR 0489)
 
 ### 5.1 A preview capability NEM lehet a core flow kötelező eleme
 
