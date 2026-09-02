@@ -178,14 +178,89 @@ megtalálva) és két NOTE (= F3, F4). Amit kifejezetten átnézett és rendben 
   másolja és hasheli;
 - **gate-gyengítés:** nincs — a `quality-gates` a közös composite-ot hívja (D2).
 
-## 5. Verdikt
+## 5. Első verdikt
 
 **CHANGES REQUESTED** — 1 MAJOR (F1) + 1 MINOR (F2). Mindkettő a kör saját, engedélyezett
 fájljaiban javítható (`tool/release/assemble_rc.py`, `test/tooling/rc_assembly_test.dart`),
-tehát javító kör következik, nem halt.
+tehát javító kör következett, nem halt.
 
 ---
 
-## 6. Javító kör (fix1) — a leletek zárása
+## 6. Javító kör (fix1, `1aa77d0c`) — a leletek zárása, függetlenül újramérve
 
-*(a javító kör után töltve)*
+Motor: `sonnet-impl`, ugyanaz a munkapéldány, a fenti leletlistával.
+`scope_audit=ok` (base `f7072258`, 3 változott fájl: `assemble_rc.py`,
+`rc_assembly_test.dart`, a brief §10-e — mind az engedélyezett listán).
+
+### F1 — ZÁRVA
+
+Javítás: a `verify_package` az `iterdir()` + `is_file()` lapos halmaz helyett
+`package_dir.rglob('*')`-ot használ, csomag-gyökérhez képest **relatív, POSIX-alakú**
+útvonalakkal; az `assemble_package` ugyanezt az alakot írja a manifest `path` mezőjébe.
+
+**Független újramérés (friss klón, `/tmp/rc-review-e12-r25b`):**
+
+```
+$ python3 tool/release/assemble_rc.py --profile development --output-dir /tmp/rcprobe3/out …
+assemble_rc: package written to /tmp/rcprobe3/out (7 file(s)).
+$ mkdir -p /tmp/rcprobe3/out/extra && echo "smuggled payload" > /tmp/rcprobe3/out/extra/evil.apk
+$ python3 tool/release/assemble_rc.py --verify --output-dir /tmp/rcprobe3/out
+assemble_rc: package at /tmp/rcprobe3/out deviates from its checksum manifest:
+  - present in package but not in the checksum manifest: extra/evil.apk
+nested-extra verify exit=1                       ← a fail-open bezárva, a relatív út megnevezve
+```
+
+### F2 — ZÁRVA
+
+Javítás: a `rmtree` ELŐTT feloldott (`resolve()`) útvonalakon ancestor-guard fut
+(`resolved_output in source.resolve().parents` → `AssembleError`, megnevezve az
+érintett bemenetet); a `shutil.copyfile` `OSError`-re `AssembleError`-be fordítva.
+
+**Független újramérés:**
+
+```
+$ python3 tool/release/assemble_rc.py --profile development --output-dir /tmp/rcprobe4/build \
+    --apk /tmp/rcprobe4/build/app-release.apk … --test-report /tmp/rcprobe4/build/lcov.info
+assemble_rc: --output-dir /tmp/rcprobe4/build is the (or an ancestor) directory of the
+  APK artifact (/tmp/rcprobe4/build/app-release.apk) — refusing to delete a mandatory input
+ancestor-output exit=1
+$ ls -A /tmp/rcprobe4/build
+THIRD_PARTY_NOTICES.md ai-report.json app-release.apk lcov.info release-manifest.json sbom.json security-report.json
+                                                 ← MIND a hét bemenet megvan, traceback nincs
+```
+
+### A két ÚJ cella valódi mérce (L563) — a JAVÍTÁS ELŐTTI eszközzel PIROS
+
+```
+$ git checkout f7072258 -- tool/release/assemble_rc.py     # a fix1 ELŐTTI assembler
+$ flutter test test/tooling/rc_assembly_test.dart
+00:01 +34 -2: Some tests failed.
+Failing tests:
+  … A2/F2 — an --output-dir that is the mandatory inputs' own parent directory is refused
+     BEFORE the rmtree, naming the endangered input, and every input file survives the run
+  … A4/F1 — an extra file smuggled into a package SUBDIRECTORY after assembly … is STILL
+     a non-zero --verify exit, naming its manifest-relative path
+```
+
+Pontosan a két új cella bukik, más nem — tehát mindkettő a saját javítását méri, nem
+egy tágabb ablakot. (A restore után `git status --short` üres: a próba nem hagyott nyomot.)
+
+### Gate a fix1 után (izolált klón, csonkítatlanul)
+
+```
+$ tools/round-gate.sh test/tooling/rc_assembly_test.dart test/tooling/release_manifest_test.dart
+    format / analyze / test rc_assembly / test release_manifest / architecture / secrets / l10n
+    → mind ZÖLD          gate exit=0
+```
+
+### F3 / F4 (NOTE)
+
+Javítást nem kértek, és nem is történt. Az F4 (a required reviewer beállítása a
+`release-candidate-approval` environmenthez) a merge UTÁNI telepítési lépés ellenőrzési
+pontja — a §11-be kerülő két dispatch pontosan ezt bizonyítja.
+
+## 7. VÉGSŐ DÖNTÉS: **APPROVED**
+
+Nyitott BLOCKER/MAJOR/MINOR: **nincs**. A hat acceptance-kritérium (A1–A6) mindegyike
+mögött gépi cella áll, és a cellák mérő voltát négy + két valódi-sértés próba igazolta.
+A merge feltétele változatlanul a teljes zöld kapu a merge SHA-n (Full Gate + Router CI).
