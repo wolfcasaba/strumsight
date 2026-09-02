@@ -22516,3 +22516,100 @@ malformáltságát MAGA ellenőrzi `throwsFormatException`-nel, majd a
 korrupció-átlátszóságot, a bájtazonos legacy megőrzést és a `readBody()` mai
 kimenetét pinneli), valamint `test/tooling/fixture_manifest_test.dart` (51 fixture,
 `sha256`/`bytes` egyezés).
+
+---
+
+## L571 — A kétrétegű őr MÁSODIK rétege némán elveszhet: a „nincs mintám hozzá → átugrom" (`if (pattern == null) continue`) fail-OPEN, és pontosan azt a hibaosztályt engedi át, amiért a réteg készült (E12-R24, 2026-09-02)
+
+**Mérés.** Az E12-R24 A3 cellája két rétegű: (1) a `listing.md`
+`capabilities-marketed` markerében felsorolt minden id-nek `ga_scope: true`-nak
+kell lennie a `docs/testing/device-matrix.yaml`-ben; (2) egy próza-scan, amely a
+`ga_scope: false` capabilityket lexikai signature alapján keresi a store-szöveg
+PRÓZÁJÁBAN — épp azért, hogy a markerbe fel NEM vett, de a szövegben mégis
+ígért funkciót elkapja. A második réteg viszont így indult:
+
+```dart
+final pattern = signaturePatterns[capability.id];
+if (pattern == null) continue;      // <— néma kihagyás
+```
+
+és egyetlen cella sem mérte, hogy a kézzel karbantartott
+`capabilityMarketingSignaturePatterns` térkép lefedi-e az ÖSSZES non-GA
+capabilityt. A reviewer próbája (P7) a valódi fájlokon: egy ÚJ, negyedik
+`ga_scope: false` capability (`band_jam_mode`) a device-mátrixba + a listing
+prózájába `**Band Jam Mode.** … coming soon` — a markert NEM bővítve. Eredmény:
+
+```
+00:00 +29: All tests passed!        # exit 0
+```
+
+Ez PONTOSAN a kör §5.3 tilalma („NEM elfogadható gyengítés: »hamarosan«
+megfogalmazású funkció-ígéret"), és a második réteg pontosan ezért létezett.
+
+**Miért ismétlődő hibaosztály.** Ugyanez a minta már mérve volt ezen a fán:
+[L555](#l555) (E12-R16 MAJOR-1) — „a kapu KÖVETELMÉNY-listája némán törölhető,
+három sor törlése `exit=0`, és egyetlen cella sem piros". Az
+[ADR 0477](adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md) **D2**
+normatívan is tiltja: hiányzó bizonyíték BLOKKOL, a „nincs adat → nincs
+regresszió" nem elfogadható. A `continue` az az egy sor, amivel ez a tiltás
+csendben visszaszivárog egy új tesztbe.
+
+**A javítás alakja (nem a tüneté).** A hiányzó signature MAGA legyen violation
+(fail-closed), PLUSZ külön cella mérje, hogy `capabilities.where((c) =>
+!c.gaScope).map((c) => c.id)` ⊆ `signaturePatterns.keys` — a mátrixból élőben
+olvasva. A javítás UTÁN a P7 forgatókönyv három cellát visz pirosra, tetszőleges,
+korábban nem ismert id-vel is:
+
+```
+'capabilityMarketingSignaturePatterns has no entry for ga_scope: false
+ capability "band_jam_mode" — the prose scan cannot verify it is unmarketed
+ (fail-closed: add a signature pattern)'
+```
+
+**Átvihető szabály:** ha egy őr egy KÉZZEL karbantartott térképet/listát indexel
+egy GÉPILEG felderített halmaz elemeivel, a „nincs bejegyzés" ág soha ne
+`continue` legyen — vagy violation, vagy külön teljességi cella. A kézi térkép és
+a gépi halmaz közti rés a hiba helye, nem a mellékkörülmény.
+
+**Őrteszt:** `test/tooling/store_package_test.dart` — az A3 csoport fail-closed
+cellája (`capabilityMarketingSignaturePatterns has no entry for ga_scope: false
+capability …`) és a signature-térkép teljességét mérő cella.
+
+---
+
+## L572 — A `docs/reviews/**` NEM Router-CI trigger-útvonal: egy review-only záró commit merge SHA-t képez, amelyen SOHA nem fut Router CI — `workflow_dispatch`-csel kell rákérni (E12-R24, 2026-09-02)
+
+**Mérés.** Az E12-R24 kör-ága három commitot kapott: implementáció
+(`ff86ad57`), review (`89a3e5bd`), javító kör (`f9c2de0e`), majd a záró,
+**kizárólag `docs/reviews/e12-r24-review.md`-t érintő** APPROVED-commit
+(`b3e346d4`) — ez lett a merge SHA. A `router-ci.yml` `on.push.paths` listája
+(`tools/**`, `docs/rounds/**`, `docs/execution/pipeline-*`, `.ai/**`,
+`.github/workflows/router-ci.yml`) a `docs/reviews/**`-ot **nem** tartalmazza,
+ezért az utolsó push NEM indított Router CI-t: a legfrissebb `push` eseményű
+futás a `f9c2de0e`-n állt, a merge SHA-n **egyetlen Router-CI run sem volt**.
+
+A kör diffje viszont érintette a `docs/rounds/**`-ot, tehát az ADR 0086 §2
+exact-SHA szabálya szerint a Router CI a zöld kapu része — a `build-apk`/
+`full-gate` zöldje önmagában nem elég ([L113](#l113)).
+
+**Feloldás (nem a mérce lazítása):** a `router-ci.yml` deklarál
+`workflow_dispatch`-ot, tehát a merge SHA-ra rá lehet kérni a futást:
+
+```bash
+gh workflow run router-ci.yml --ref <kör-branch>
+gh run list --workflow=router-ci.yml --branch <kör-branch> --limit 1 \
+  --json databaseId,headSha,conclusion,event
+```
+
+A `headSha` így a merge SHA lesz, `event: workflow_dispatch` — teljes értékű
+exact-SHA evidencia, ugyanaz a job-mátrix.
+
+**Átvihető szabály:** merge előtt ne azt nézd, hogy „volt-e zöld Router CI ezen
+az ágon", hanem hogy van-e `conclusion: success` PONTOSAN a merge SHA-n. Ha a
+kör utolsó commitja csak nem-trigger útvonalat érint (tipikusan a
+`docs/reviews/**` záró review-commit — vagyis KÖRÖNKÉNT visszatérő eset, nem
+kivétel), a run hiányozni fog, és `workflow_dispatch`-csel kell pótolni.
+
+**Őrteszt:** nincs — a lelet a merge-eljárásra vonatkozik, nem a fa
+viselkedésére; a mérce a merge előtti kötelező `gh run list … --json
+headSha,conclusion` ellenőrzés (kör-prompt §3), amit ez a lecke pontosít.

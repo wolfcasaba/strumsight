@@ -1,5 +1,72 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R24 KÉSZ — Store listing, privacy és legal package — PR [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash `cf7c6fb6` (2026-09-02)
+
+A Ch12 **Kör 24** a production-terjesztéshez szükséges, **ellentmondás-mentes
+dokumentum-csomagot** állítja elő, és — ez a lényeg — **gépi mércét** ad rá. A
+store-fiók, a feltöltés és a jogi felülvizsgálat továbbra is EMBERI lépés (a
+brief §0.0 ezt kimondja). **ÚJ ADR nincs, szándékosan:** minden normatív állítás
+MÁR merge-elt döntésre vezet vissza — [ADR 0477](docs/adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md)
+D1 (a GA-scope EGYETLEN igazsága a `docs/testing/device-matrix.yaml`
+`capabilities[].ga_scope`), [ADR 0479](docs/adr/0479-privacy-data-inventory-and-consent-enforcement.md)
+(a privacy-leltár), [ADR 0247](docs/adr/0247-analysis-export-share-and-delete-contract.md)
+(export/share/delete). Precedens: E12-R13 („új ADR nincs").
+
+**Szállított csomag (5 dokumentum + 1 őr):** `docs/store/listing.md` ·
+`docs/store/permissions-rationale.md` · `docs/store/data-safety.yaml` ·
+`docs/legal/privacy-policy-draft.md` · `docs/legal/community-guidelines-draft.md`
+· `test/tooling/store_package_test.dart` (**31 cella**, A1–A5).
+
+**A kör érdemi állítása: nincs beégetett lista.** A teszt a manifestet, a
+privacy-leltárt és a device-mátrixot ÉLŐBEN olvassa. Ezt nem a zöld gate
+bizonyítja, hanem a reviewer nyolc valódi-sértés próbája a VALÓDI
+forrásfájlokon, eldobható klónban: ÚJ `ACCESS_FINE_LOCATION` a manifestbe → A1
+piros; `CAMERA` rationale-blokk eltávolítása → A1 piros; data-safety hivatkozás
+nem létező mezőre → A2 piros mindkét irányban; ÚJ `leaves_device: true` mező a
+leltárba → A2 piros; `audio_analysis_core` `ga_scope` billentése → A3 piros;
+kitalált `/privacy-center` a listingbe → A4 piros.
+
+**A pre-flight két avult brief-állítást mért ki** (§0.0 revízió R1–R6): (1) a
+brief §2 azt állította, hogy a fiók-törlés a `backend/app/routers/auth.py`
+felelőssége — MÉRVE HAMIS, a router csak `POST /register`, `POST /login`,
+`GET /me` végpontot ad, **kliens által indítható fiók-törlés a fán NEM létezik**;
+(2) az A3 nem nevezte meg a GA-scope forrását. A csomag ezért a fiók-törlést
+őszintén támogatási (e-mail) csatornaként írja le, és a `privacy-policy-draft.md`
+szó szerint kimondja a hiányzó végpontot — külön cella méri.
+
+**A review a TELJESEN ZÖLD gate mögött találta meg a lényeget** — 1 MAJOR + 1
+MINOR + 2 NOTE, **1 javító kör** → APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r24-review.md`](docs/reviews/e12-r24-review.md)):
+
+- **MAJOR-1 (P7 próba):** az A3 próza-scan némán kihagyta a signature nélküli
+  `ga_scope: false` capabilityket (`if (pattern == null) continue`). Egy ÚJ,
+  negyedik non-GA capability + „Band Jam Mode … coming soon" próza-ígéret a
+  listingben **29/29 ZÖLDEN átment** — pontosan az a §5.3-sértés, aminek a
+  megfogása a kör célja. Fail-open egy gépi mércében, az ADR 0477 D2 által
+  tiltott „nincs adat → nincs regresszió" minta; ugyanez a hibaosztály már
+  egyszer mérve volt ([L555](docs/LESSONS.md#l555), E12-R16 MAJOR-1). Zárva
+  fail-closed kezeléssel + 2 új cellával — a P7 forgatókönyv most 3 cellát visz
+  pirosra, tetszőleges (nem beégetett) capability-id-vel is
+  ([L571](docs/LESSONS.md#l571)).
+- **MINOR-1:** az A4 route-scan a csomag 5 dokumentumából csak 4-et nézett.
+  Zárva; a P8b próba (backtick-idézett `/privacy-center` a `data-safety.yaml`
+  `purpose:` mezőjében) most piros.
+
+**Nyitott NOTE-ok (nem merge-blokkolók, ma gazdátlanok):** (1) a
+`privacy-support@strumsight.app` cím **kitalált PLACEHOLDER** — a valódi cím
+megerősítése a store-feltöltés emberi előfeltétele; (2) a `data-safety.yaml`
+`play_category` mezőinek megfeleltetése a hivatalos Play-taxonómiához a Play
+Console űrlapján, emberi lépés.
+
+Exact-SHA evidencia a merge SHA-n (`b3e346d4`): Full Gate
+[33579841775](https://github.com/wolfcasaba/strumsight/actions/runs/33579841775),
+Router CI
+[33579897602](https://github.com/wolfcasaba/strumsight/actions/runs/33579897602)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`); a Router CI-t `workflow_dispatch`-csel
+kellett a merge SHA-ra kérni, mert a záró review-commit csak `docs/reviews/**`-ot
+érintett, ami nem trigger-útvonal ([L572](docs/LESSONS.md#l572)).
+
 ## ✅ E12-R23 KÉSZ — Legacy user migration release candidate — PR [#519](https://github.com/wolfcasaba/strumsight/pull/519), squash `3e6dbbf0` (2026-09-02)
 
 A Ch12 **Kör 23** azt méri végig, hogy egy **régi telepítésről frissítő**
@@ -9977,7 +10044,27 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-02):** `main` @ `3e6dbbf0` — E12-R23 legacy user
+**Aktuális állapot (2026-09-02):** `main` @ `cf7c6fb6` — E12-R24 store listing,
+privacy és legal package, PR
+[#520](https://github.com/wolfcasaba/strumsight/pull/520), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** — a review **1 MAJOR + 1
+MINOR**-t talált TELJESEN ZÖLD gate mellett: az A3 próza-scan fail-open volt
+(signature nélküli non-GA capability némán kimaradt), amit a reviewer P7 próbája
+mért ki — egy ÚJ non-GA capability „coming soon" ígérete 29/29 zölden átment
+([L571](docs/LESSONS.md#l571)). A javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r24-review.md`](docs/reviews/e12-r24-review.md)); 2 NOTE
+nyitva (placeholder support-cím, Play-taxonómia — mindkettő emberi lépés).
+**ÚJ ADR nincs, szándékosan** (a normatív állítások az ADR 0477 D1 / 0479 / 0247
+alá esnek; precedens E12-R13). `risk = "normal"` → `security-reviewer` nem volt
+kötelező. Exact-SHA evidencia a merge SHA-n (`b3e346d4`): Full Gate
+[33579841775](https://github.com/wolfcasaba/strumsight/actions/runs/33579841775),
+Router CI
+[33579897602](https://github.com/wolfcasaba/strumsight/actions/runs/33579897602)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`).
+
+**Előző kör (2026-09-02):** `main` @ `3e6dbbf0` — E12-R23 legacy user
 migration release candidate, PR
 [#519](https://github.com/wolfcasaba/strumsight/pull/519), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -10063,7 +10150,26 @@ maradt.
 
 ## 5. Last completed round
 
-**E12-R23 — Legacy user migration release candidate**
+**E12-R24 — Store listing, privacy és legal package**
+(PR [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash `cf7c6fb6`).
+A kör az első olyan artefaktumot szállította, amiből a store-feltöltés emberi
+lépése ELLENTMONDÁS-MENTESEN elvégezhető: store-szöveg, manifestből MÉRT
+permission-rationale (funkció + adat minden engedélyhez), a privacy-leltárból
+SZÁRMAZTATOTT data-safety nyilatkozat, és két TERVEZET jelölésű jogi dokumentum
+— mind a `docs/testing/device-matrix.yaml`, `docs/privacy/data-inventory.yaml`
+és `android/app/src/main/AndroidManifest.xml` ÉLŐ olvasásával mérve
+(`test/tooling/store_package_test.dart`, 31 cella). A pre-flight kimérte, hogy a
+brief „a fiók-törlés a `backend/app/routers/auth.py` felelőssége" állítása HAMIS
+(a router három végpontja között nincs törlés), ezért a csomag ezt őszintén,
+támogatási csatornaként írja le. **A review a zöld gate mögött találta a
+lényeget:** az A3 próza-scan fail-open volt — egy ÚJ, signature nélküli
+`ga_scope: false` capability „coming soon" ígérete 29/29 zölden átment, a
+`if (pattern == null) continue` néma kihagyása miatt. A javító kör fail-closed
+kezelést + 2 cellát adott ([L571](docs/LESSONS.md#l571)). **Nyitva marad** két
+emberi lépés: a placeholder support-cím megerősítése és a `play_category` mezők
+megfeleltetése a Play Console hivatalos taxonómiájának.
+
+**Előző kör: E12-R23 — Legacy user migration release candidate**
 (PR [#519](https://github.com/wolfcasaba/strumsight/pull/519), squash `3e6dbbf0`).
 A kör bizonyítékot szállított arról, hogy egy régi telepítésről frissítő
 felhasználó adata a 22 lépéses boot-migrátor-láncon átér: mező-szintű
@@ -10162,9 +10268,19 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R23
-> zárása után): **286 `done`, 48 `hold`, 18 `prepared`, 13 `pending`**
-> (az E12 sávból 23 `done`, 13 `pending`).
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R24
+> zárása után): **287 `done`, 48 `hold`, 18 `prepared`, 12 `pending`**
+> (az E12 sávból 24 `done`, 12 `pending`).
+>
+> ⚠ **Az E12-R24 két EMBERI lépést hagyott nyitva a store-feltöltés előtt** —
+> egyik nyitott brief sem nevezi meg őket, ma gazdátlanok: (1) a
+> `docs/legal/privacy-policy-draft.md` és `community-guidelines-draft.md`
+> `privacy-support@strumsight.app` címe **kitalált PLACEHOLDER** — valódi,
+> működő támogatási postafiók nincs a fán; (2) a `docs/store/data-safety.yaml`
+> `play_category` mezőinek megfeleltetése a Play Console HIVATALOS
+> taxonómiájához nincs gépileg ellenőrizve (csak a route/field-fedezet az). A
+> jogi felülvizsgálat és a store-fiók továbbra is a useré (a kör §0.0-ja ezt
+> kimondja).
 >
 > ⚠ **Az E12-R23 egy MÉRT, felhasználót érintő korlátot hagyott nyitva:** sérült
 > legacy dokumentum után a frissítő felhasználó ÜRES dokumentumot lát
