@@ -457,13 +457,17 @@ boot-időben (ADR 0482 / D9); részletek §10.9-ben.
 
 ```
 $ grep -rn "InMemoryPracticeEvidenceRepository" lib/features/practice_generator/presentation lib/features/practice_generator/data
-(üres kimenet)
+(üres kimenet, exit=1)
 ```
 
 Megjegyzés: az első verzióban a doc-commentek név szerint hivatkoztak a
 teszt-fake-re (magyarázat célból), ami a NEM kommentszűrt grepet nem-üresre
-vitte — ezt a második commit javította (a hivatkozás a class nevének
-kimondása nélkül maradt meg).
+vitte — a `d1d279bc` commit javította. **A fix1 kör (`local_practice_evidence_repository.dart:76,152`,
+az `outcomePlanLookup` mező és a `_resolveOwnership` doc-commentje) ezt a
+javítást akaratlanul visszahozta, tehát az A7-cella a fix2 elején ismét
+piros volt (R1, review-lelet).** A fix2 mindkét mentést a class nevének
+kimondása nélkül fogalmazta át — lásd §10.10/R1 — a fenti, a fix2 VÉGÉN
+újra futtatott mérés ismét üres.
 
 ### 10.4 A8 — az adat-leltár diffje üres
 
@@ -567,6 +571,38 @@ MINDEN GATE ZÖLD.
 a hét „B2 guard" cella), a `start_plan_generation_test.dart` 5-öt (a
 review-előtti 3 + MINOR-4 + MINOR-7).
 
+**A javító kör (fix2) UTÁNI, végső futás** (`HEAD` a fix2 elején `d18442d4`,
+lásd §10.10 a leletekért) — ugyanaz a parancs, csonkítatlanul:
+
+```
+$ tools/round-gate.sh test/features/practice_generator/data/local_practice_evidence_repository_test.dart test/features/practice_generator/presentation/practice_generator_providers_test.dart test/features/practice_generator/application/start_plan_generation_test.dart test/features/practice_generator/accessibility/planner_privacy_test.dart test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/data/local_repository_test.dart test/tooling/data_inventory_test.dart test/tooling/screen_reachability_test.dart test/tooling/gen_public_barrel_test.dart test/ui/ui_inventory_test.dart
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice_generator/data/local_practice_evidence_repository_test.dart zöld
+    test test/features/practice_generator/presentation/practice_generator_providers_test.dart zöld
+    test test/features/practice_generator/application/start_plan_generation_test.dart zöld
+    test test/features/practice_generator/accessibility/planner_privacy_test.dart zöld
+    test test/features/practice_generator/evidence/evidence_aggregator_test.dart zöld
+    test test/features/practice_generator/data/local_repository_test.dart zöld
+    test test/tooling/data_inventory_test.dart                 zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/tooling/gen_public_barrel_test.dart              zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+(`exit=0`.) A `local_practice_evidence_repository_test.dart` mostantól 18
+cellát futtat (a fix1-utáni 16 + a fix2 R2 és R3 kísérő cellái) — mindegyik
+`format`/`analyze` is zöld, a `sampleCount as int? ?? 1` → `as int` (MINOR-2,
+fix1) és az `_pendingWrites` self-removal (NOTE, fix2) analyzer-tisztán
+fordul, `dart format` nem jelzett eltérést egyik érintett fájlon sem.
+
 ### 10.8 Scope-fegyelem — amit a kör NEM tett
 
 - Route, `AppRoutes`, `app_router.dart`, feature-flag: érintetlen.
@@ -622,5 +658,28 @@ manifest-írás előtt futott volna. A végleges alak (`_reconcileSave`/
 `_reconcileRemove`) ezért a fizikai műveletet és a manifest-írást EGYÜTT
 indítja (megőrizve a szinkron-látszó viselkedést), és csak a hiba-ágon
 kompenzál aszinkron módon — lásd a §10.9 B1 sorát és az osztály doc-commentjét.
+
+### 10.10 Javító kör (fix2) — a maradék leletek, leletenként
+
+A fix2 kör a fix1 UTÁNI, független újramérés maradék 4 leletét (R1 BLOCKER,
+R2-R4 MAJOR) és 2 új MINOR/NOTE-osztályú lelet zárta. `HEAD` a fix2 elején
+`d18442d4` volt.
+
+| Lelet | Mit tett a fix2 | Piros-képes / mérő cella |
+|---|---|---|
+| **R1** (BLOCKER) — az A7 grep regresszióba ment: a fix1 `outcomePlanLookup` doc-commentjei (`local_practice_evidence_repository.dart:76,152`) név szerint hivatkoztak az `InMemoryPracticeEvidenceRepository`-ra | Mindkét doc-comment átfogalmazva a class nevének kimondása nélkül (`d1d279bc` mintáját követve: „the never-forgets in-memory test-fake…", „mirrors the never-forgets in-memory test-fake's own ownership resolution"). | Az A7 acceptance-cella maga: `grep -rn "InMemoryPracticeEvidenceRepository" lib/features/practice_generator/presentation lib/features/practice_generator/data` — a fix2 ELEJÉN 2 találat (piros), a §10.3 friss futása most üres |
+| **R2** (MAJOR) — `save()` az `isNew`-t kizárólag a helyi (esetleg elavult) `_outcomeIds`-ből olvasta; egy elavult példány UJRA-mentése egy MÁSIK példány által közben törölt outcome-ra a manifest-írást teljesen kihagyta — a fizikai rekord visszakerült a lemezre, de manifest-bejegyzés nélkül: minden későbbi példány számára láthatatlan ÉS törölhetetlen | A `save()` mostantól FELTÉTEL NÉLKÜL hívja `_persistManifestAdd`-et (ami maga idempotens: csak akkor ír, ha a LEMEZEN még nincs ott az id). `_persistManifestAdd` visszaadja, hogy valóban ÚJ bejegyzést szúrt-e be; `_reconcileSave` ezt (nem a helyi `isNew`-t) használja annak eldöntésére, hogy egy KÉSŐBBI fizikai-írás-hiba esetén biztonságos-e visszavonni a manifest-bejegyzést (különben egy MÁR meglévő, jogos bejegyzést törölne). | `local_practice_evidence_repository_test.dart` „R2: a stale instance's RE-SAVE…" — RED-re futtatva a fix2 ELŐTTI kódon (`removed`/`still on disk`/`NEW instance can read it back` pontosan a brief §2 mérésének megfelelően bukott), GREEN a fix UTÁN; a teljes 18 cellás fájl (beleértve B1, M2) is zöld marad |
+| **R3** (MAJOR) — egy nem parse-olható evidence-BORÍTÉK (nem csak a `evidence`-törzs) sosem éri el a `sourcePlanId` olvasását, tehát a tulajdonos örökre feloldhatatlan marad — a `_hydrateRecord` doc-comment ennek ELLENKEZŐJÉT állította | A doc-comment kettébontva: (a) korrupt `evidence`-törzs olvasható borítékkal → az M1-fix (fix1) miatt a tulajdonos MÉGIS feloldódik; (b) nem parse-olható boríték → nincs `sourcePlanId` mező, amit olvasni lehetne, tehát a `deleteForPlan`/`deleteForOutcomes` számára feloldhatatlan marad — ez SZÁNDÉKOSAN NEM lett auto-tombstone-olva: egy „ismeretlen tulajdonosú rekord törölhető-e egy adott `planId`-ra" szabály új, kimondott terméki döntést igényelne (lehet, hogy a rekord egy MÁSIK tervhez tartozik), ezt a §5-ös brief-utasítás explicit egy ADR-re utalja, nem egy hallgatólagos kódváltoztatásra. Nyitott korlátként dokumentálva itt és a doc-commentben. | `local_practice_evidence_repository_test.dart` „R3 (open limitation): an UNPARSEABLE envelope…" — méri, hogy `deleteForPlan` `removed=0`-t ad és a rekord a lemezen marad; ez a mért, DOKUMENTÁLT viselkedés, nem regresszió |
+| **R4** (MAJOR, dokumentáció-only — a `delete_practice_planning_data.dart` tilos zóna, kódjavítás nem történt) — a törlés-use-case optimistán jelent sikeres törlést egy bukó fizikai remove esetén is, mert a hívó sem `lastWriteFailure`-t nem olvassa, sem `flush()`-t nem vár meg | ADR 0482 kiegészítve **D11**-gyel (a D10 mintájára): rögzíti a mért rést és a kötelezettséget. A „Következmények" szakasz is frissítve (D11 megemlítve a D9/D10 mellett). **Kötelező, explicit `E15-R07 / F1` előfeltétel** (lásd az ADR D11 szövegét): a törlés-use-case olvassa `lastWriteFailure`-t (vagy várja meg a `flush()`-t) MIELŐTT sikeres törlést jelent. | nincs — dokumentáció-only, a tilos zóna miatt nincs futtatható cella ebben a körben |
+| MINOR (új) — a szinkron-látszó read-after-write kontraktus egy STORE-szintű invariánsra épül, amit a `KeyValueStore` interfész (`lib/core/**`, tilos zóna) nem ígér | Doc-comment a repository osztály tetején (a class doc-comment végén): kimondja, hogy ez a `SharedPreferencesStore`/`shared_preferences` plugin szinkron in-memory cache-ére támaszkodó, RÁ ÉPÍTETT feltevés, nem az interfész szerződésének része. | dokumentáció-only (a teljes read-after-write tesztsor önmagában a mért bizonyíték — lásd §10.6/10.7) |
+| NOTE (új) — `_pendingWrites` produkcióban append-only, korlátlanul nő (a `flush()`-t a `lib/` sosem hívja) | Olcsón megoldható volt a fájlon belül: `_track` mostantól minden bejegyzést a saját beteljesülésekor eltávolít (`Future.whenComplete`) — `flush()` viselkedése és a tesztek változatlanok (a `List.remove` no-op, ha `flush()` már korábban kivette). | a meglévő 18 cella változatlanul zöld marad (a self-removal nem figyelhető meg kívülről, csak a memória-profilban) |
+| Címkézés-ellenőrzés (a brief §5.3 szerint) — „az előző javító kör „MINOR-2 fix" címkéje félrement" | **Ellenőrizve, NEM igaz**: a review (`docs/reviews/e15-r14-review.md` §4, 2. pont) MINOR-2-je ténylegesen `sampleCount as int? ?? 1`, és a §10.9 táblázat pontosan ezt sorolja fel „MINOR-2" néven — a `path_provider` deklaráció-hiány a review §5 NOTE-listájának ELSŐ pontja, és a §10.9 utáni „Amit a NOTE-ok közül szándékosan nem érintett a kör" bekezdés NOTE-ként, nem MINOR-2-ként sorolja fel. Nincs tényleges félrecímkézés a §10-ben — a brief feltevése ezen a ponton nem állt meg a mérésen; nem történt módosítás. | n/a (dokumentáció-audit, nem kódlelet) |
+
+**Amit a fix2 SZÁNDÉKOSAN nem tett meg** (a §4 engedélyezett-lista és a §5
+STOP-protokoll szerint): nem nyúlt `delete_practice_planning_data.dart`-hoz
+(R4 — tilos zóna), nem épített auto-tombstone-mechanizmust a nem
+parse-olható borítékokra (R3 — új terméki szabályt igényelne, ADR-re
+halasztva), és nem bővítette az engedélyezett fájllistát egyetlen ponton
+sem.
 
 ## 11. Review — a Claude tölti ki
