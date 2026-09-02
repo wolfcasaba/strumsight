@@ -299,4 +299,138 @@ cd backend && python -m pytest tests/test_production_smoke_contract.py -q
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-09-02.
+
+### 10.1 Mit épített
+
+- **`tool/release/production_smoke.py`** (ÚJ) — paraméteres, titok nélküli
+  füst-csomag. Nyolc független ellenőrzés fut minden hívásban (egy bukása
+  nem hagyja ki a többit): `readiness` (`GET /health/ready`, §0.0.1 P1),
+  `auth_login`/`auth_me` (`POST /auth/login` + `GET /auth/me`), `settings`
+  (`GET /settings`), `community_feed` (`GET /community/feed` — 200 VAGY 404
+  egyaránt „elérhető és helyesen kapuzott", mert a mai fán a Community
+  router NINCS bekötve `main.py`-ba, tehát mindig 404-et ad, ld. 10.4),
+  `lab_routes_absent` (a P3 hármas mind 404, §0.0.1 P3), `fingerprint` (a
+  sidecar `dist/signing-certificate.json` `sha256Fingerprint` kulcsa
+  egyezik `--expected-fingerprint`-tel, fail-closed a hiányzó kulcsra is,
+  §0.0.1 P2), `model_manifest` (`--asset-root`/`assets/ml/model_manifest.json`
+  létezik és parszolható, LOKÁLIS ellenőrzés, nincs HTTP-hívás, §0.0.1 P4).
+  A jelszó KIZÁRÓLAG a `--password-env`-ben megnevezett környezeti
+  változóból jön (nincs `--password` CLI-kapcsoló); a kimenet minden sora
+  `[PASS]`/`[FAIL] <check>: <részlet>` alakú, és sosem tartalmazza a
+  jelszót/tokent. Egy `GET /health/ready` 503 `{"status":"not_ready",...}`
+  válasza (ADR 0449 D1 forgalmi kapu) az üzleti végpontok ellenőrzésén
+  KÜLÖN kimeneti okként jelenik meg (`"traffic gate active (not_ready): …"`),
+  nem általános `"unexpected status 503"`-ként. Standard library only
+  (`urllib.request`), a `tool/release/verify_signing_policy.py` precedense
+  szerint. Kilépési kód: 0 minden cella zöld, 1 legalább egy cella piros, 2
+  használati hiba (pl. hiányzó `--password-env` érték).
+- **`backend/tests/test_production_smoke_contract.py`** (ÚJ) — a füst-eszköz
+  `run_checks()`/egyedi `check_*` függvényeit hívja közvetlenül, egy valódi
+  `fastapi.testclient.TestClient`-tel egy migrált, prod-profilú
+  `create_app()` app körül (nincs hálózat). 12 cella: a teljes A1 lefutás
+  egy frissen migrált prod appon (mind a nyolc check zöld), a readiness/
+  forgalmi-kapu külön-kimeneti-ok próba, az A2 alapértelmezett-404 próba, a
+  §6.1/§7 KÖTELEZŐ valódi-sértés próba (ld. 10.3), és a fingerprint/model-
+  manifest offline cellák (egyezés, eltérés, hiányzó kulcs, hiányzó/érvénytelen
+  fájl).
+- **`test/tooling/production_readiness_test.dart`** (ÚJ) — 16 cella öt
+  csoportban: A1 (nincs `--password` kapcsoló a forrásban; hiányzó env-var
+  → nem-nulla kilépés hálózati kísérlet nélkül; egy megkülönböztető jelszó
+  SOSEM jelenik meg sem a stdoutban, sem a stderrben), A3 (a kliens
+  `AppConfig.resolve` production + dev host + dev token esetén MINDKÉT okra
+  dob — kiegészítve, nem duplikálva a meglévő `app_config_test.dart`-ot),
+  A4 (a füst-eszköz CLI-jén keresztül: egyező sidecar → PASS, eltérő →
+  FAIL „mismatch"-sel, hiányzó `sha256Fingerprint` kulcs → FAIL ÉS nem-nulla
+  kilépés — explicit próba a fail-OPEN regresszió ellen, §6.1 mátrix —,
+  parszolhatatlan JSON → FAIL), A5 (a checklist minden sora `**[GÉPI]**`
+  vagy `**[EMBERI]**` címkét visel — számlálásos + két mutáció-próba), A6
+  (a rollout-sablon mind a kilenc §26.1 fejlécet tartalmazza a mért
+  sorrendben, a Rollback target és a Döntéshozó szakasz nem üres).
+- **`docs/release/internal-production-checklist.md`** (ÚJ) — 16 sor,
+  mindegyik `**[GÉPI]**`/`**[EMBERI]**` címkével, négy szakaszban (deploy
+  előtt, deploy utáni automatikus füst-teszt, deploy utáni emberi döntési
+  pontok, piros füst-teszt esetén a teendő).
+- **`docs/release/rollout-packet-template.md`** (ÚJ) — az SDD §26.1 mind a
+  kilenc eleme saját `## N. <cím>` szakaszként, helykitöltő tartalommal.
+
+### 10.2 A §6 két gate-sávjának TÉNYLEGES kimenete
+
+**Backend sáv** (`cd backend && python -m pytest
+tests/test_production_smoke_contract.py -q`, `/home/ubuntu/music-theory/
+backend/.venv/bin/python` — a boxon nincs `backend/.venv`, ld. 10.5):
+
+```
+............                                                             [100%]
+```
+
+12/12 zöld. `ruff format --check backend/app backend/tests` és `ruff check
+backend/app backend/tests` is zöld (mindkettő lefutott a commit előtt, a
+záró-sorrend §3 pontja szerint).
+
+**Kliens sáv** (`tools/round-gate.sh test/tooling/production_readiness_test.dart
+test/app/app_config_test.dart`): a teljes gate (format → analyze → mindkét
+teszt-útvonal külön → architecture → secrets → l10n → backend ruff × 2 →
+backend pytest teljes suite) **ZÖLD** — a `flutter test
+test/tooling/production_readiness_test.dart` önmagában 16/16, a
+`test/app/app_config_test.dart` a meglévő cellákkal érintetlen (a kör nem
+módosította).
+
+### 10.3 A §7 valódi-sértés próba MÉRT eredménye
+
+`test_production_smoke_contract.py::test_real_breach_probe_lab_surface_enabled_turns_the_check_red`
+egy migrált, prod-profilú appon `STRUMSIGHT_DIAGNOSTICS_ENABLED=true`,
+`STRUMSIGHT_APK_DOWNLOAD_ENABLED=true`, `STRUMSIGHT_DIAG_TOKEN=a-real-deploy-
+diagnostics-token` mellett futtatja a `check_lab_routes_absent`-et — a
+`backend/tests/test_hardening.py::test_prod_lab_routes_can_be_enabled_from_environment`
+mért felállását ismételve, azt a fájlt NEM módosítva.
+
+**MÉRT kimenet (piros cella: `lab_routes_absent`):**
+
+```
+OK= False
+DETAIL= POST /diagnostics: expected 404, got 401; GET /diagnostics/health: expected 404, got 200
+```
+
+`POST /diagnostics` 401-et ad (nincs `X-Diag-Token` fejléc a próbahívásban —
+`routers/diagnostics.py:126-134`), `GET /diagnostics/health` 200-at (az a
+végpont tervezetten hitelesítés nélküli — `routers/diagnostics.py:111-116`).
+`GET /download` a próbában továbbra is 404 marad (nincs `STRUMSIGHT_APK_PATH`
+staged fájl — `main.py`'s `download_apk()` handler), de ez nem menti meg a
+cellát: az aggregált `check_lab_routes_absent` BÁRMELYIK nem-404 választ
+elégségesnek tekinti a bukáshoz, így az A2 cella a mérce-mátrix szerint
+PIROS. A próba után a környezeti változók (`monkeypatch`) automatikusan
+visszaállnak — nincs maradó állapot.
+
+### 10.4 Mért eltérés a §0.0.1 P5-től, amit dokumentálni kell
+
+A P5 tábla a `GET /community/feed`-et a mai fán definiált végpontként
+nevezi meg (`community/routers/feed.py:173`), de a `backend/app/community/
+__init__.py:50-59` docstringje szerint ennek a routernek a `create_app()`-ba
+kötése **egy jövőbeli kör** feladata — a mai `backend/app/main.py` a
+Community routert EGYÁLTALÁN NEM regisztrálja. Emiatt `GET /community/feed`
+a mai fán MINDIG 404-et ad, függetlenül a `community_enabled` flagtől. A
+füst-eszköz `community_feed` cellája ezt tudottan kezeli: 200 ÉS 404 is
+elfogadott (`"reachable and correctly gated"`), így a cella ma és a Community
+router bekötése UTÁN is helyesen validál, kód-módosítás nélkül — de ez a
+kör NEM köti be a Community routert (tiltott zóna, `backend/app/main.py`).
+
+### 10.5 Mért eltérés a briefben feltételezett paranccsortól
+
+A brief §6 backend-parancsa `python -m pytest`-et ír; ezen a boxon
+`python` NINCS a PATH-on (csak `python3`), és a munkapéldányban nincs
+`backend/.venv`. A `tools/round-gate.sh` maga is a megosztott
+`$HOME/music-theory/backend/.venv/bin/python`-t keresi és találja meg
+(`resolve_backend_python()`), és a záró gate ezt sikeresen használta — az
+implementáció maga NEM tartalmaz ilyen feltételezést (a smoke-eszköz és a
+kontraktus-teszt egyaránt sima `python3`/a hívó interpretere alatt fut).
+
+### 10.6 Amit ez a kör NEM csinált (scope-on kívül, brief §3)
+
+Nincs tényleges deploy, titok-kiosztás vagy telepítés. A fingerprint- és
+provenance-workflow lépések továbbra is *proposal* állapotban vannak
+(`docs/release/workflows/*.proposal.md`) — alkalmazásuk `.github/workflows/**`-t
+érintené, ami tiltott zóna. A `docs/adr/**` érintetlen (nincs új ADR, §0.0.1
+P7).
+
 ## 11. Review — a Claude tölti ki
