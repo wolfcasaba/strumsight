@@ -125,10 +125,14 @@ prose-only edit to any of the three cannot silently drift from the other two.
 
 **Bemenetek (mindegyik mért):**
 
-- `closed_beta.maxTesters = 50` — `docs/beta/cohort-profiles.yaml`, az
-  egyetlen cohort-méret ezen a fán, ami ténylegesen ki lett osztva és
-  incidens nélkül futott (`docs/beta/closed-beta-launch.md`,
-  `docs/HANDOFF.md` E12-R27/R28 kézfogás).
+- `closed_beta.maxTesters = 50` — `docs/beta/cohort-profiles.yaml`, a Kör 27
+  által RÖGZÍTETT, emberi kapura váró cohort-méret — a legnagyobb,
+  dokumentumban jóváhagyott cohort-konfiguráció ezen a fán. **Üzemi
+  tapasztalat nincs mögötte**: a Closed Beta MÉRTEN nem indult el
+  (`docs/beta/closed-beta-launch.md:3` → „Status: NOT launched"; `:5` → „The
+  Closed Beta has NOT launched"; a §5 Human launch field üres — ugyanezt
+  mondja ki `HANDOFF.md` E12-R27/R28 bejegyzése is). Az 50 tehát
+  **konfigurációs precedens, nem terhelési tapasztalat**.
 - `register_limiter.max_attempts = 5` — `backend/app/routers/auth.py:17`.
 - `login_limiter.max_attempts = 10` — `backend/app/routers/auth.py:16`.
 
@@ -144,13 +148,29 @@ bejelentkezés) az, amit egy canary-meghívó hulláma ténylegesen megterhel.
 
 **Ez A SZÁM NEM azt jelenti, hogy 26 tesztelő technikailag eltörné a
 backendet** — láttuk (§3), hogy a mért korlátok per-key jellege miatt ez nem
-igaz. A 25 egy **operatív, óvatossági plafon**, ami a Kör 27 egyetlen már
-bizonyítottan biztonságos cohort-méretéből (`closed_beta`, 50) és a két
-mountolt admissziós kapu mért szigorúsági arányából adódik. Egy jövőbeli
+igaz. A 25 egy **operatív, óvatossági plafon**, ami a Kör 27 egyetlen
+dokumentumban rögzített, emberi kapura váró cohort-konfigurációjából
+(`closed_beta`, 50 — üzemi tapasztalat nélkül, lásd fent) és a két mountolt
+admissziós kapu mért szigorúsági arányából adódik. Egy jövőbeli
 kör, ami mér egy VALÓDI, globális kapacitáskorlátot (settings-sync
 átviteli sebesség, adatbázis-kapcsolat-pool méret, moderátor-óra), ezt a
 számot felülírhatja — ez a dokumentum nem állítja, hogy ez a végleges
 plafon, csak hogy ez a MA mérhető bemenetekből reprodukálhatóan számolt.
+
+**A képlet egy helyettesítő, nem egy fejszám-politikai döntés — kimondva:**
+a `register_limiter.max_attempts` egy **brute-force BIZTONSÁGI** küszöb, nem
+kapacitás-tervezési paraméter, és a fenti képlet ezt a biztonsági konstanst
+köti a tesztelői plafonhoz. Ez azt jelenti, hogy egy jövőbeli, tisztán
+biztonsági indíttatású szigorítás (pl. `register_limiter.max_attempts`
+5 → 4, brute-force elleni védelem erősítése) ezzel a képlettel mechanikusan
+a tesztelői plafont is elmozdítja (20-ra) — két, egymástól független döntés
+akaratlanul összekötve. A kapu emiatt fail-closed (a drift mindig pirosra
+vált, sosem enged át csendben), ezért ez nem blokkolja a jelen kört, de egy
+ilyen jövőbeli drift esetén a helyes válasz **nem** a küszöb visszalazítása
+a kapu zöldre vitele érdekében, hanem a plafon szándékos újraszámítása vagy
+újragondolása. A képlet tehát egy jövőbeli, VALÓDI globális
+kapacitás-mérésig (adatbázis kapcsolat-pool, settings-sync átviteli
+sebesség, moderátor-óra) érvényes **helyettesítő**, nem végleges politika.
 
 ## 7. Amit ez a szám NEM állít
 

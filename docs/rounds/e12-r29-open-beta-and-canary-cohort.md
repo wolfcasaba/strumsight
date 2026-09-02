@@ -346,4 +346,43 @@ explicit ki van mondva, nem hallgatva el.
 
 **Kör-jelzés:** `tools/codex-signal.sh done` a commit után.
 
+### 10.1 Javító kör — review-leletek zárása (2026-09-02)
+
+A review (`docs/reviews/e12-r29-review.md`) CHANGES REQUESTED, 1 MAJOR + 1
+MINOR. Mindkettő kizárólag `docs/operations/capacity-review.md` §6
+„Bemenetek" blokkját érintette.
+
+- **MAJOR-1 zárva:** a `closed_beta.maxTesters = 50` bemenet leírása mostantól
+  **konfigurációs precedensként** hivatkozik rá (a Kör 27 által rögzített,
+  emberi kapura váró cohort-méret), és kimondja, hogy üzemi tapasztalat
+  NINCS mögötte, mert a Closed Beta MÉRTEN nem indult el
+  (`docs/beta/closed-beta-launch.md:3,5`). A hamis „ténylegesen ki lett
+  osztva és incidens nélkül futott" állítás és a fel nem oldható
+  `docs/HANDOFF.md` hivatkozás (helyesen: gyökér `HANDOFF.md`) törölve —
+  ugyanez a hamis „bizonyítottan biztonságos" megfogalmazás a §6 alsó
+  bekezdésében is javítva. `docs/beta/open-beta-launch.md`-ban nem volt
+  hasonló állítás, azt nem módosítottam.
+- **MINOR-1 zárva:** a §6-hoz új bekezdés került, kimondva, hogy a képlet a
+  `register_limiter.max_attempts` BIZTONSÁGI konstansát köti a tesztelői
+  fejszámhoz, hogy egy jövőbeli biztonsági szigorítás (5→4) mechanikusan
+  20-ra mozgatná a plafont, és hogy egy ilyen drift esetén a helyes válasz a
+  plafon szándékos újragondolása, nem a küszöb visszalazítása. A képlet és a
+  25-ös plafon változatlan.
+- NOTE-1/NOTE-2: nincs teendő (a review is így jelölte).
+- `test/tooling/canary_cohort_test.dart`, `backend/tests/test_capacity_guards.py`,
+  a tilos zóna: érintetlen.
+
+**Kötelező záró ellenőrzés — tényleges kimenet:**
+
+```
+tools/round-gate.sh test/tooling/canary_cohort_test.dart test/tooling/ga_scope_test.dart
+```
+
+`MINDEN GATE ZÖLD`: format, analyze, `test test/tooling/canary_cohort_test.dart`
+(14/14 „All tests passed!"), `test test/tooling/ga_scope_test.dart` (24/24 „All
+tests passed!"), architecture, secrets, l10n, backend ruff format, backend
+ruff check, backend pytest (teljes suite, 100%, 0 hiba).
+
+**Kör-jelzés:** `tools/codex-signal.sh done` a commit után.
+
 ## 11. Review — a Claude tölti ki
