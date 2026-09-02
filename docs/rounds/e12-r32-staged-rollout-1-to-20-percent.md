@@ -336,4 +336,125 @@ python3 tool/release/verify_rollout_decision.py --log docs/release/staged-rollou
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`). **Ág:** `sonnet-impl/e12-r32-staged-rollout-1-to-20-percent`.
+**Jelzés:** `blocked` — a §7 gate NEM zöld, egy MÉRT, ezen a körön KÍVÜLI, a
+tilos zónába eső oksági lánccal (részletek alább). A kör saját négy
+terméke (`rollout-decision.md`, `staged-rollout-log.md`,
+`verify_rollout_decision.py`, `rollout_decision_test.dart`) elkészült,
+commitolva van, és **önmagában, elszigetelten futtatva teljesen zöld**
+(28/28 cella, ld. lent) — a blokkoló ok egy MÁSIK, a szállított
+`test/tooling/freeze_policy_test.dart`-ban mért, ezen kör engedélyezett
+fájllistáján kívül eső, előre létező regresszió.
+
+### 10.1 A négy szállított termék
+
+| Fájl | Tartalom |
+|---|---|
+| `docs/release/rollout-decision.md` | séma: `human-gate` + `rollout-steps` marker-blokk (stage-1/5/20 → 1/5/20% → 24/48/72 óra), R1–R8 szabálytábla dokumentálva |
+| `docs/release/staged-rollout-log.md` | váz: 3 döntés-sor (`pending`, `TBD` cellák), 15 megfigyelés-sor (3 lépcső × 5 `slo.yaml`-mutató, `unknown`/`n/a`, `source: manual`), kill-switch `[EMBERI]` előfeltétel-tábla |
+| `tool/release/verify_rollout_decision.py` | R1–R8 ellenőrző; `slo.yaml`-t és `blockers.md`-t frissen olvassa minden futáskor (nem másolja a saját forrásába) |
+| `test/tooling/rollout_decision_test.dart` | `python3` önellenőrző cella + A1/A2/A3/A4/A5/A7/A8/A9 csoportok + a `23`/`24`/`25` küszöb-hármas — 28 teszt, mind zöld |
+
+### 10.2 Az ellenőrző közvetlen futtatása (§7)
+
+```text
+$ python3 tool/release/verify_rollout_decision.py
+verify_rollout_decision: ok — 3 decision row(s), 15 observation row(s)
+(exit 0)
+
+$ python3 tool/release/verify_rollout_decision.py --log docs/release/staged-rollout-log.md
+verify_rollout_decision: ok — 3 decision row(s), 15 observation row(s)
+(exit 0)
+```
+
+### 10.3 Küszöb-cellahármas (24 órás, INKLUZÍV határ) — MÉRT
+
+TEMP fixture-ön, `approved` `stage-1` döntéssel, tiszta (P2-only) fixture
+`blockers.md`-vel, csupa `success` verdikttel (a `test/tooling/rollout_decision_test.dart`
+„threshold triple" csoportja):
+
+| `observed_hours` | Kilépőkód | Megjegyzés |
+|---|---|---|
+| `23` | `1` | stderr: „step 'stage-1' approved with observed_hours '23' < min_observation_hours 24 (R6)" — nevesíti a lépcsőt és a `24`-et |
+| `24` | `0` | pontosan a határon — a INKLUZÍV határ bizonyítéka |
+| `25` | `0` | a határ fölött |
+
+A hármas bizonyítja: az ablak-ellenőrzés NEM szigorú `>`-t használ (§6.1
+mérce-mátrix).
+
+### 10.4 Valódi-sértés próba (KÖTELEZŐ, §6.1) — A2 / R5
+
+1. `tool/release/verify_rollout_decision.py`-ban a `validate_decisions()`
+   `open_blockers` számítását ideiglenesen `{}`-re cseréltem (a
+   `blockers.md`-olvasás hatását kiiktatva, a fájlt magát is beolvasva
+   hagyva — csak a talált súlyosságokat dobtam el).
+2. `flutter test test/tooling/rollout_decision_test.dart` → **A2 csoport
+   első cellája PIROS** (`Expected: <1> Actual: <0>`), pontosan az a cella,
+   ami a REAL `blockers.md`-t olvassa nyitott P0/P1 mellett `approved`
+   döntésre.
+3. A módosítást visszaállítottam (`git diff --stat` üres a visszaállítás
+   után).
+4. `flutter test test/tooling/rollout_decision_test.dart` → **28/28 zöld**
+   újra.
+
+Ezzel bizonyítva: az A2 cella TÉNYLEG a `blockers.md`-olvasást méri, nem egy
+önvédő (vakon zöld) cella (L527).
+
+### 10.5 §7 gate — MÉRT, és MIÉRT nem zöld
+
+```text
+$ tools/round-gate.sh test/tooling/rollout_decision_test.dart test/tooling/freeze_policy_test.dart
+[1] format:  ZÖLD
+[2] analyze: ZÖLD
+[3] test test/tooling/rollout_decision_test.dart: ZÖLD (28/28)
+[3] test test/tooling/freeze_policy_test.dart:    PIROS — exit 10
+```
+
+A piros cella: `sanity — … exit 0 classifying the real freeze-era diff since
+freeze_base_sha … (§7 — this round's own diff is documentation +
+release-tooling only)`. A `verify_freeze.py --since 4ac78365` (a
+`docs/release/feature-freeze.md` frozen `freeze_base_sha`-ja) egy
+osztályozatlan útvonalat talál:
+
+```text
+verify_freeze: 1 finding(s):
+  - backend/tests/test_production_smoke_contract.py: not classified under
+    any freeze change class (no documentation/release-tooling path prefix
+    matched, and the commit names no P0/P1/P2 blockers.md id) — commit
+    message: '[E12-R31] Production deployment és internal production
+    cohort (ADR nincs) (#527)…'
+```
+
+**Mérve — EZ NEM az én diffem hatása.** `git worktree add --detach
+/tmp/freeze-check 852633f3` (a jelen kör ELSŐ, pre-flight commitja, a saját
+munkám ELŐTT) + `python3 tool/release/verify_freeze.py --since 4ac78365`
+ugyanazt az 1 findinget adja, ugyanazzal az exit 1-gyel. A gyökér ok: az
+`E12-R31` squash-merge commitja (`accd30c2` / PR #527) egy `backend/**`
+útvonalat (`backend/tests/test_production_smoke_contract.py`) módosított,
+és a commit-üzenet nem nevez meg P0/P1/P2 `blockers.md`-azonosítót — ezért
+a `verify_freeze.py` `blocker-fix` osztálya nem fogadja el. Az `E12-R31`
+kör saját `§7` gate-parancsa (`docs/rounds/e12-r31-…md:277`) **nem
+tartalmazta** a `test/tooling/freeze_policy_test.dart`-ot — ez a Kör 30
+gate-je azóta nem futott újra, és a regresszió észrevétlen maradt egészen
+addig, amíg a jelen kör brief-je elő nem írta az együtt-futtatást.
+
+**Miért nem javítható ez a kör hatáskörében:** a javítás vagy (a) a
+`docs/release/feature-freeze.md` `freeze_base_sha`-jának előreléptetése az
+`E12-R31` merge-e utánra, vagy (b) egy retroaktív blocker-azonosító idézése
+— egyik sem lehetséges a már mergelt git-történet módosítása nélkül, és
+mindkét fájl (`feature-freeze.md`, `test/tooling/freeze_policy_test.dart`)
+a jelen kör tilos zónájában van (§4 — nincs a `4` engedélyezett fájl
+között). A STOP-protokoll (§0, közös preambulum §4) szerint ehhez a
+fájlhoz nem nyúlok.
+
+### 10.6 Ajánlás a láncnak
+
+Egy külön, `docs/release/feature-freeze.md`-t érintő kör (vagy egy
+Kör 30/31 utólagos javító köre) léptesse előre a `freeze_base_sha`-t egy,
+az `E12-R31` merge UTÁNI SHA-ra (pl. a jelen ág szülője, `852633f3`, vagy
+`origin/main` aktuális feje), miután megerősítette, hogy az azóta eltelt
+összes commit a három zárt osztály valamelyikébe esik. Eddig a pontig a
+`test/tooling/freeze_policy_test.dart` a `--since 4ac78365` sanity cellán
+PIROS marad minden jövőbeli körben is, függetlenül azok saját diffjétől.
+
 ## 11. Review — a Claude tölti ki
