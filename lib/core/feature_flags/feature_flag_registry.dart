@@ -145,11 +145,13 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     owner: 'lib/features/practice_generator',
     risk: FeatureFlagRisk.medium,
     failClosedDefault: false,
-    adr: '0255',
+    adr: '0491',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:84; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'resolves to `nonProd` (`environment != AppEnvironment.production`) '
+        'at feature_flags.dart:92 since E15-R07 (ADR 0491 D2) — ON by '
+        'default outside production, OFF in production; no dart-define '
+        'exists on purpose. The kill switch is reverting that line to '
+        '`false` (ADR 0491), a source change.',
   ),
   FeatureFlagDefinition(
     key: 'plannerAssistEnabled',

@@ -31,6 +31,8 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
+import 'package:strumsight/features/practice_generator/presentation/screens/plan_setup_screen.dart';
+import 'package:strumsight/features/practice_generator/presentation/screens/today_plan_screen.dart';
 import 'package:strumsight/features/progress/screens/progress_screen.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
@@ -87,6 +89,7 @@ Future<_RouterHarness> _pumpRouter(
   bool accountEnabled = false,
   bool songTrainerEnabled = false,
   bool analysisComparisonEnabled = false,
+  bool practiceGeneratorEnabled = false,
 }) async {
   final engine = FakeStrumEngine();
   final songRepository = InMemorySongRepository();
@@ -113,6 +116,7 @@ Future<_RouterHarness> _pumpRouter(
             labModeAvailable: true,
             songTrainerV2Enabled: songTrainerEnabled,
             analysisComparisonEnabled: analysisComparisonEnabled,
+            practiceGeneratorEnabled: practiceGeneratorEnabled,
           ),
           diagnosticsToken: AppConfig.devDiagnosticsToken,
           buildMode: 'test',
@@ -286,6 +290,76 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(harness.router.state.uri.path, AppRoutes.live);
   });
+
+  // E15-R07 F1 (ADR 0491) — A2: the two Practice Generator routes are
+  // registered ONLY behind `practiceGeneratorEnabled`, independently of
+  // `practiceEngineV2Enabled`/`adaptiveShellEnabled`. A2 also requires the
+  // OFF cell: with the flag off, the route must not exist at all (the
+  // router's onException falls back to the entry location), not merely
+  // render something different.
+  testWidgets(
+    'flagged Practice Generator setup route is registered and builds from '
+    'the composition root without throwing (A1″, A2 ON)',
+    (tester) async {
+      final harness = await _pumpRouter(
+        tester,
+        seen: true,
+        practiceGeneratorEnabled: true,
+      );
+
+      harness.router.go(AppRoutes.practiceGeneratorSetup);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.practiceGeneratorSetup);
+      expect(find.byType(PlanSetupScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'flagged Practice Generator today route is registered and builds from '
+    'the composition root without throwing (A1″, A2 ON)',
+    (tester) async {
+      final harness = await _pumpRouter(
+        tester,
+        seen: true,
+        practiceGeneratorEnabled: true,
+      );
+
+      harness.router.go(AppRoutes.practiceGeneratorToday);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.practiceGeneratorToday);
+      expect(find.byType(TodayPlanScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Practice Generator routes are NOT registered when the flag is off '
+    '(A2 OFF)',
+    (tester) async {
+      final harness = await _pumpRouter(
+        tester,
+        seen: true,
+        practiceGeneratorEnabled: false,
+      );
+
+      harness.router.go(AppRoutes.practiceGeneratorSetup);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.live);
+      expect(find.byType(PlanSetupScreen), findsNothing);
+
+      harness.router.go(AppRoutes.practiceGeneratorToday);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.live);
+      expect(find.byType(TodayPlanScreen), findsNothing);
+    },
+  );
 
   testWidgets('flagged Song Trainer library route is registered', (
     tester,

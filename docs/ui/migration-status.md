@@ -1,5 +1,20 @@
 # Screen migration status
 
+**E15-R07 F1 update (2026-09-02, ADR 0491) — 2 of the 6 Practice Generator
+screens are now reachable.** `PlanSetupScreen` and `TodayPlanScreen` are
+wired behind `practiceGeneratorEnabled` (`nonProd` rollout boundary,
+production stays OFF), via the practice hub's one entry point
+(`lib/features/practice/presentation/screens/practice_hub_screen.dart`).
+This SUPERSEDES the "all 6 screens are unreachable" claim in the F2 note
+directly below (written the same round, before F1 landed) for those two
+screens only — `PlanPreviewScreen`, `PlanChangeReviewScreen`,
+`PlanPrivacyScreen`, `WeeklyPlanScreen` remain `unreachable`: their
+providers transitively depend on two seams
+(`exerciseCandidateResolverProvider`, `generationPlanInputBuilderProvider`)
+that still throw `UnimplementedError` (`retirement-plan.md` §3.2, revised).
+See the round's own `§10` handoff for the reachability measurement
+before/after and the real-violation probe.
+
 **E15-R07 update (2026-09-01) — Practice Generator 6 screens migrated,
 measured 69/96 (71.875%).** `TodayPlanScreen`, `WeeklyPlanScreen`,
 `PlanSetupScreen`, `PlanPreviewScreen`, `PlanChangeReviewScreen`,
@@ -281,9 +296,16 @@ migrated, actively-reachable one (`progress` row above, 1/1) while
 is notable because despite its name suggesting a V2 rewrite of `songs`, the
 "V2" there was an architecture rewrite (E09), not a Chapter 13 design
 migration — `songs` (the pre-V2 feature, 0/4) remains separately legacy.
-`practice_generator` reached 6/6 as of E15-R07 — but per `retirement-plan.md`
-§3.2 (re-confirmed §0.0.A/R1), all 6 screens are `unreachable`: fully
-migrated is not the same claim as reachable-and-migrated.
+`practice_generator` reached 6/6 (migration) as of E15-R07 F2. **E15-R07 F1
+update (2026-09-02, ADR 0491), same round:** 2 of the 6 — `PlanSetupScreen`,
+`TodayPlanScreen` — are now also reachable, flag-gated behind
+`practiceGeneratorEnabled`, via the practice hub's one entry point. The
+other 4 remain `unreachable` per `retirement-plan.md` §3.2 (revised): their
+providers transitively depend on two seams
+(`exerciseCandidateResolverProvider`, `generationPlanInputBuilderProvider`)
+that still throw `UnimplementedError` — a real seam, not an oversight, and
+out of this round's STOP-protocol scope. Fully migrated was never the same
+claim as reachable-and-migrated; now 2/6 are both.
 
 ## Legacy route safety (A6)
 

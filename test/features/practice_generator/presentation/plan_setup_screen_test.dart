@@ -225,6 +225,46 @@ void main() {
     expect(restored.state.request!.constraints.constraints, hasLength(1));
   });
 
+  // E15-R07 F1 (ADR 0491 D3/A4′) — the wizard's last step does NOT start
+  // generation (`plan_setup_screen.dart:96-99` only calls
+  // `controller.next()`), and this round does not change that. The UI must
+  // therefore never claim a plan was generated or is ready — neither the
+  // Finish button's label nor anything else on screen.
+  testWidgets(
+    'A4′: the last step never claims a plan was generated or is ready',
+    (tester) async {
+      final controller = controllerFor(InMemoryKeyValueStore());
+      addTearDown(controller.dispose);
+      await pumpWizard(tester, controller);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('plan-goal-unknown')));
+      await tester.tap(find.byKey(const Key('plan-setup-next')));
+      await tester.pumpAndSettle();
+      for (var step = 1; step < 4; step++) {
+        await tester.tap(find.byKey(const Key('plan-setup-unknown')));
+        await tester.tap(find.byKey(const Key('plan-setup-next')));
+        await tester.pumpAndSettle();
+      }
+
+      expect(controller.state.currentStep, 4);
+      expect(find.text('Finish setup'), findsOneWidget);
+      expect(find.textContaining('ready', findRichText: true), findsNothing);
+      expect(
+        find.textContaining('generated', findRichText: true),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const Key('plan-setup-next')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('ready', findRichText: true), findsNothing);
+      expect(
+        find.textContaining('generated', findRichText: true),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('unknown answers are persisted as absence, never defaults (A4)', (
     tester,
   ) async {

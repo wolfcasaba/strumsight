@@ -27,15 +27,24 @@ void main() {
       expect(flags.plannerAssistEnabled, isFalse);
     });
 
-    test('factory keeps both flags off in non-production', () {
-      final flags = FeatureFlags.forEnvironment(
-        AppEnvironment.development,
-        accountEnabled: false,
-      );
+    // E15-R07 F1 (ADR 0491 D2) — the rollout boundary moved: outside
+    // production, `practiceGeneratorEnabled` now follows the same `nonProd`
+    // pattern as `practiceEngineV2Enabled`. `plannerAssistEnabled`
+    // (model-assisted suggestions) is a separate rollout decision and stays
+    // OFF everywhere, including non-production.
+    test(
+      'factory turns practiceGeneratorEnabled on but keeps plannerAssistEnabled '
+      'off in non-production (ADR 0491)',
+      () {
+        final flags = FeatureFlags.forEnvironment(
+          AppEnvironment.development,
+          accountEnabled: false,
+        );
 
-      expect(flags.practiceGeneratorEnabled, isFalse);
-      expect(flags.plannerAssistEnabled, isFalse);
-    });
+        expect(flags.practiceGeneratorEnabled, isTrue);
+        expect(flags.plannerAssistEnabled, isFalse);
+      },
+    );
   });
 
   group('Recognition recovery feature flags', () {

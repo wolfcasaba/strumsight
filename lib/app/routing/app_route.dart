@@ -23,6 +23,14 @@ abstract final class AppRoutes {
   static const String practiceSetup = '/practice/setup';
   static const String practiceSession = '/practice/session';
   static const String practiceResult = '/practice/result';
+
+  // Practice Generator entry points (E15-R07 F1, ADR 0491 D1). Only the two
+  // MEASURED-constructible screens get a route — `PlanPreviewScreen`,
+  // `PlanPrivacyScreen`, `WeeklyPlanScreen`, and `PlanChangeReviewScreen`
+  // stay unreachable until a later round wires the two seams their
+  // providers transitively depend on (ADR 0491 D5).
+  static const String practiceGeneratorSetup = '/practice/generator/setup';
+  static const String practiceGeneratorToday = '/practice/generator/today';
   static const String songTrainerLibrary = '/song-trainer';
   static const String songTrainerImport = '/song-trainer/import';
   static const String songTrainerNewEditor = '/song-trainer/editor/new';

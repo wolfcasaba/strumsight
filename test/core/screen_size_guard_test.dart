@@ -288,6 +288,15 @@ void main() {
             ),
           );
           await tester.pump();
+          // E15-R07 F1 (ADR 0491) — the ONE Practice Generator entry point
+          // renders here too: `appConfigProvider`'s own default config
+          // (`FeatureFlags.forEnvironment(AppEnvironment.development, ...)`)
+          // now resolves `practiceGeneratorEnabled` to `nonProd` = true, and
+          // this test never overrides it. Pinning presence at all three
+          // viewport sizes (this test runs once per `sizes` entry) is the
+          // §5.5 cell-addition this guard owes the new element.
+          expect(tester.takeException(), isNull);
+          expect(find.text('Build your practice plan'), findsOneWidget);
         });
       });
 
