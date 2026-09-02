@@ -1,0 +1,1 @@
+round=20 verdict=pass tests=74 lesson=Analyze-reuses-LivePipeline-in-batch(same-DSP-streaming-vs-clip);identical()-marks-new-strum;compute()-keeps-FFT-heavy-analysis-off-UI-isolate;AnalyzeResult-JSON-for-Library
