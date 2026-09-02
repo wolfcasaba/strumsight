@@ -23012,3 +23012,70 @@ mérés MEGTÖRTÉNTÉT is bizonyítja. A negatív állításnál a „nem talá
 (a lábankénti izoláció, a `POST /download` → 405 diszkriminátorral) és
 `test/tooling/production_readiness_test.dart::a distinctive password AND a distinctive bearer token never appear in stdout or stderr of a run that ACTUALLY logs in against a local stub server`
 (a mérés megtörténtét is állító sanity-sorokkal).
+
+---
+
+## L580 — A ZÁRT osztálykészletű politika-ellenőrző a REPÓ EGÉSZÉRE mér, de a prefix-listája csak a saját köre útvonalait ismerte: minden későbbi kör NEM SZÁLLÍTOTT kódja pirosra vitte a `main`-t (E12-R32 / H7 önjavító kör, harmadik előfordulás, 2026-09-02)
+
+**A helyzet.** Az `E12-R30` egy fail-closed freeze-ellenőrzőt szállított
+(`tool/release/verify_freeze.py`): a `freeze_base_sha` óta MINDEN megváltozott
+útvonalnak be kell esnie a `docs/release/feature-freeze.md` HÁROM zárt
+osztályának egyikébe, különben `1`-es kilépés. A prefix-lista a kör saját
+diffjéből született: `documentation` = `docs/`, `CHANGELOG.md`;
+`release-tooling` = `tool/release/`, `test/tooling/`. A tool helyes, a kapu
+erős — a LISTA volt szűkebb, mint a valóság.
+
+**Amit mértünk (három egymást követő előfordulás, ugyanaz a hibaosztály).**
+
+1. **`HANDOFF.md`** (E12-R30 post-merge, `07638527`): a lánc MINDEN köre
+   `docs(handoff): …` commitot ír a gyökér `HANDOFF.md`-be → osztályozatlan.
+2. **`backend/tests/test_production_smoke_contract.py`** (E12-R31, `accd30c2`):
+   backend teszt, nem szállított kód → osztályozatlan.
+3. **`tools/tests/test_sol_terra_both_slots.py`** (`11d0d2bb`): a pipeline
+   saját router-tesztje → osztályozatlan.
+
+A 2. és a 3. EGYSZERRE állt a `main` csúcsán: `python3
+tool/release/verify_freeze.py` az `origin/main`-en, **bármely kör diffje
+nélkül**, `exit=1` és 2 findinget adott. Ez állította meg az E12-R32 kört
+(H7): a kör saját mércéje 28/28 zöld volt, a `scope_audit=ok`, a §7 gate
+mégis piros — egy MÁR MERGE-ELT, idegen regresszió miatt.
+
+**Miért nem fogta meg a CI.** A gate-cella (`freeze_policy_test.dart:60–101`)
+a sekély (`--depth 1`) klónban a fail-closed ágra fut: a `freeze_base_sha` nem
+elérhető → `exit 2` → a cella a 2-es kódot állítja, és ZÖLD. A piros ág
+KIZÁRÓLAG teljes klónban, azaz a boxon, azaz csak a következő kör §7 gate-jén
+látszik. **Egy környezet-függő elágazású cella az egyik környezetben nem
+ellenőrzés, hanem csak jelenlét-igazolás.**
+
+**A hibaosztály.** Egy „zárt készlet" politika-ellenőrző hatóköre a REPÓ
+EGÉSZE, az élettartama pedig a freeze VÉGÉIG tart — a listáját viszont a
+bevezető kör a SAJÁT diffjéből tölti fel. Ez időzített bomba: a lista abban a
+pillanatban elavul, amikor egy KÉSŐBBI kör olyan útvonalat érint, ami a
+bevezetéskor még nem létezett. A tool minden alkalommal helyesen működött; az
+ADAT volt hiányos.
+
+**Hogyan alkalmazd.**
+
+1. **A prefix-listát ELVBŐL vezesd le, ne a diffből.** A javítás nem a két
+   mért fájlt vette fel, hanem a valódi elvet mondta ki: `release-tooling` =
+   ami **nem kerül bele a szállított termékbe** (`test/`, `backend/tests/`,
+   `tools/`, `tool/release/`) — szemben a szállított kóddal (`lib/**`,
+   `backend/app/**`, `android/**`, `assets/**`, `pubspec.yaml`), amihez
+   továbbra is kell egy nyitott P0/P1/P2 blocker ID.
+2. **Az elvhatárt őrizd MUTÁCIÓVAL is.** A tágítás önmagában nem bizonyíték;
+   a párcella azt méri, hogy a határ MÁSIK oldala piros maradt
+   (`backend/app/main.py` → `exit 1`), különben a „`backend/tests/`
+   felvétele" észrevétlenül `backend/` blanket-mentességgé válhat.
+3. **Ha egy kapunak környezet-függő ága van, a másik ágat is mérni kell
+   valahol.** Itt a determinisztikus `--changes-file` cella az, ami a
+   klón-mélységtől függetlenül a VALÓDI szállított dokumentum
+   prefix-listájára mér.
+4. **A politika-doksi „MÉRVE a merge UTÁN" blokkja maradjon a fájlban.** Már
+   a második ilyen blokk ugyanabban a §3-ban — pontosan ez a két bejegyzés
+   mutatta ki, hogy nem elszigetelt hibákról, hanem egy osztályról van szó.
+
+**Őrteszt:**
+`test/tooling/freeze_policy_test.dart::the NON-SHIPPING verification paths (backend/tests/, tools/, test/) are `release-tooling` too`
+(a MÉRT piros útvonalakkal és a valódi commit-üzenetekkel) és a párja,
+`::the widened `release-tooling` prefixes do NOT exempt the shipped backend or app code`
+(a határ másik oldala piros marad).
