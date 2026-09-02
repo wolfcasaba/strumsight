@@ -1,0 +1,1 @@
+heal=E06-R25 halt=H-NOSIGNAL verdict=fixed lesson=L258 pr=249 root_cause=unguarded-gh-call-hang
