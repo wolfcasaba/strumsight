@@ -41,8 +41,12 @@ Every flag key below is drawn from the measured 40-entry catalog
 `test/tooling/canary_cohort_test.dart`'s P7 group fails the cell on an invented key. The three
 flags this profile turns on beyond `closed_beta` — `migratedLearnEnabled`,
 `practiceDetailedHistoryEnabled`, `adaptiveShellEnabled` — are exactly the three `preview`-classified
-flags `docs/release/ga-scope.md` §2 already lists as proven in the `internal` cohort. Nothing
-classified `disabled` or `postponed` there is ever turned on here, in any cohort, by this document.
+flags `docs/release/ga-scope.md` §2 already lists as `internal: true`, `closed_beta: false` in the
+cohort-profile configuration. That is a configuration fact, not operational evidence: no cohort on
+this tree has actually launched (the Closed Beta measurably has not,
+`docs/beta/closed-beta-launch.md:3`), so there is no run-time proof that these three flags behave
+correctly for either cohort. Nothing classified `disabled` or `postponed` there is ever turned on
+here, in any cohort, by this document.
 
 `maxTesters` below is the ceiling [`docs/operations/capacity-review.md`](../operations/capacity-review.md)
 §6 computes from measured backend constants — see that document for the reproducible arithmetic;

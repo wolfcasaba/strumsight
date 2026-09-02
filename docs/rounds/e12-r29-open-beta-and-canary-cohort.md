@@ -385,4 +385,39 @@ ruff check, backend pytest (teljes suite, 100%, 0 hiba).
 
 **Kör-jelzés:** `tools/codex-signal.sh done` a commit után.
 
+### 10.2 2. javító kör — MINOR-2 zárása (2026-09-02)
+
+A review MINOR-2 leletet talált: `docs/beta/open-beta-launch.md:42-44` a
+három `preview`-besorolású canary flaget úgy idézte, mint amit
+`docs/release/ga-scope.md` §2 „proven"-nek listáz az `internal` cohortban.
+A `ga-scope.md` MÉRTEN csak konfigurációt mond (`internal: true`,
+`closed_beta: false`, „progressive, internal-dogfood-only rollout today"),
+nem üzemi bizonyítékot — és egyetlen cohort sem indult el eddig
+(`docs/beta/closed-beta-launch.md:3`), tehát „proven" állítás mögött nincs
+mérés.
+
+- **MINOR-2 zárva:** a mondat átfogalmazva — a három flag a `ga-scope.md`
+  szerint `preview`-besorolású és a cohort-profil konfigurációjában
+  `internal: true`/`closed_beta: false`, ez konfigurációs tény, nem
+  operatív bizonyíték, mert egyik cohort sem futott ténylegesen. A „proven"
+  szó és minden ezzel egyenértékű állítás eltávolítva.
+- Egyedül `docs/beta/open-beta-launch.md` módosult (egy bekezdés); a canary
+  yaml-blokk, `maxTesters: 25`, a marker-sorok, `capacity-review.md`, a
+  tesztfájlok és a tilos zóna (`backend/app/**`, `lib/**`,
+  `docs/beta/cohort-profiles.yaml`, `.github/**`, `docs/adr/**`, `tools/**`)
+  érintetlen.
+
+**Kötelező záró ellenőrzés — tényleges kimenet:**
+
+```
+tools/round-gate.sh test/tooling/canary_cohort_test.dart test/tooling/ga_scope_test.dart
+```
+
+`MINDEN GATE ZÖLD`: format, analyze, `test test/tooling/canary_cohort_test.dart`
+(14/14 „All tests passed!"), `test test/tooling/ga_scope_test.dart` (24/24
+„All tests passed!"), architecture, secrets, l10n, backend ruff format,
+backend ruff check, backend pytest (teljes suite, 100%, 0 hiba).
+
+**Kör-jelzés:** `tools/codex-signal.sh done` a commit után.
+
 ## 11. Review — a Claude tölti ki
