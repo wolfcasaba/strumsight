@@ -184,3 +184,68 @@ az implementertől `allowed_paths`-on kívüli írást.
 **MAJOR-1 és MINOR-1 javító körben zárandó** (ugyanaz a motor, ugyanaz a
 branch). A javítás után a P7 reprodukciónak PIROSNAK kell lennie, és a
 29 meglévő cellának zöldnek maradnia.
+
+---
+
+# 2. menet (javító kör #1 után) — VÉGSŐ DÖNTÉS: APPROVED
+
+- **Review-head:** `f9c2de0e` (`[E12-R24] Javító kör #1: A3 prose-scan
+  fail-closed (MAJOR-1) + A4 data-safety.yaml lefedettség (MINOR-1)`)
+- **Izolált klón:** ÚJ klón a `f9c2de0e` SHA-n
+- **Scope-audit:** `--base 89a3e5bd --head f9c2de0e` → **OK**, 2 changed path
+  (`test/tooling/store_package_test.dart`,
+  `docs/rounds/e12-r24-store-listing-and-legal-package.md`) — mindkettő az
+  `allowed_paths`-on. A `docs/testing/**` és a `docs/reviews/**` érintetlen.
+- **Alap-mérés:** 29 → **31/31 zöld**.
+
+A leleteket **nem a zöld gate-tel** zártam, hanem ugyanazokkal a próbákkal,
+amelyek megnyitották őket:
+
+### MAJOR-1 — ZÁRVA
+
+A P7 forgatókönyv (ÚJ, negyedik `ga_scope: false` capability a valódi
+`device-matrix.yaml`-ben + „coming soon" próza-ígéret a valódi `listing.md`-ben,
+a marker bővítése NÉLKÜL) újrafuttatva a javított fán:
+
+```
+00:00 +28 -3: Some tests failed.          # exit 1 (a 2. menet előtt: exit 0)
+  Actual: [
+    'capabilityMarketingSignaturePatterns has no entry for ga_scope: false
+     capability "band_jam_mode" — the prose scan cannot verify it is
+     unmarketed (fail-closed: add a signature pattern)'
+  ]
+  Actual: Set:['band_jam_mode']
+```
+
+A néma `continue` helyére fail-closed kezelés került, és a hiányzó lefedettséget
+külön cella is méri — a hiba immár HÁROM cellát visz pirosra, üzenetében
+megnevezve a hiányzó capabilityt és a teendőt. A javítás **nem** a
+`band_jam_mode` (vagy bármely konkrét id) beégetésével történt: a próba egy
+tetszőleges, korábban nem ismert id-vel is piros.
+
+### MINOR-1 — ZÁRVA
+
+Az A4 `docFiles` listája immár mind az öt szállított dokumentumot tartalmazza
+(`test/tooling/store_package_test.dart:480-486`). Ellenőrző próba (P8b): egy
+backtick-idézett, kitalált `/privacy-center` route a `data-safety.yaml`
+`purpose:` mezőjébe írva:
+
+```
+00:00 +30 -1: Some tests failed.          # exit 1
+  'docs/store/data-safety.yaml references app route "/privacy-center",
+   which does not exist in lib/app/routing/app_route.dart'
+```
+
+> Módszertani megjegyzés: az első P8 próbám backtick NÉLKÜL írta be a route-ot,
+> és zöld maradt — ez a próba hibája volt, nem a javításé (a scan szándékosan
+> backtick-idézett tokenekre illeszkedik, ahogy a többi dokumentumon is). A
+> P8b a helyes próba.
+
+### NOTE-1 / NOTE-2 — nyitva marad, nem merge-blokkoló
+
+- **NOTE-1:** a `privacy-support@strumsight.app` placeholder cím megerősítése az
+  emberi jogi felülvizsgálat és a store-feltöltés előfeltétele (§0.0).
+- **NOTE-2:** az orchestrátor dispatch-promptjának hibája, a kör kódját nem
+  érinti; a tanulság a `docs/LESSONS.md`-be megy.
+
+## Nyitott BLOCKER/MAJOR/MINOR: **0** — a kör merge-elhető a zöld kapu mellett.
