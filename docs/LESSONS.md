@@ -23264,3 +23264,59 @@ zárás ezért nem a bekötés lett, hanem három kimondott, ADR-be írt, kötel
 felülíró konténeren) és
 `test/features/practice_generator/data/local_practice_evidence_repository_test.dart`::`B1 — a failing physical remove does not silently succeed`
 (`failingKeys`-alapú cella; a review előtti kódon bizonyítottan piros).
+
+## L584 — Ha a kör TERMÉKE maga az őr, a zöld gate semmit nem bizonyít: a gyengítést MINDEN szintaktikai szinten próbáld ki, ahol kifejezhető — a mutációs mátrix sorát OSZTÁLYKÉNT írd, ne konkrét alakként (E12-R34, 2026-09-02)
+
+**Mit mértem.** Az E12-R34 terméke a hotfix-út gépi őre
+(`tool/release/verify_hotfix.py`) — egy `risk = "high"` kör, amelynek KIMONDOTT
+indoklása: „ha megkerülhetővé válik a security/signing kapu, az a teljes
+release-védelmet üresíti ki". Az implementer 34 cellát írt, a `tools/round-gate.sh`
+mind a hét lépésben zöld volt, a `scope_audit=ok`, és a kötelező §6.2
+valódi-sértés próba (a security-scan lépés kivétele) helyesen PIROSRA váltott.
+
+Az őr ennek ellenére **három valódi kapu-gyengítést átengedett**, mindegyiket
+a valódi javaslat-dokumentumból származtatott fixtúrán mérve, `exit=0`-val:
+
+| Gyengítés | Miért csúszott át |
+|---|---|
+| `continue-on-error: true` a `security-scan:` **JOB** fejlécében | a `static_check` csak `step.if_condition` / `step.continue_on_error` mezőt nézett — kizárólag LÉPÉS-szinten |
+| `if: inputs.fast_track != true` a **JOB** fejlécében | ugyanaz, plusz a `fast_track` név kikerülte a `skip|emergency` névmintát |
+| a scan-lépés NEVE megmarad, a `run:` törzse `echo 'skipping scan for speed'` | az ellenőrzés a `step.name`-re illesztett, a törzset egyetlen ponton sem nézte |
+| `publish-hotfix` job `needs:` NÉLKÜL, „Publish to Play Store" lépéssel | a D3 jóváhagyás-gráf DENYLISTÁRA épült (`build|sign|assembl|upload`): az ismeretlen nevű job kimaradt az ellenőrzésből |
+
+**A gyökérok — a brief SAJÁT mutációs mátrixa.** A §6.1 első sora így szólt:
+„A javaslat `if: inputs.skip_scan != true` ágat kap → **A2** PIROSRA". Az
+implementer ezt **szó szerint** valósította meg, és a cella a **konkrét alakra**
+zöld/piros lett helyesen. A HIBAOSZTÁLY — „a scan feltételessé tehető" — viszont
+nyitva maradt: ugyanaz a gyengítés egy indent-szinttel feljebb, vagy egy másik
+input-névvel, átment. **A mátrix sora a mérce specifikációja**; ha konkrét
+szintaktikai alakot ír, konkrét alakra illeszkedő ellenőrzést kapsz.
+
+**Szabály.** Amikor a kör terméke maga a mérce:
+
+1. **A mutációs mátrix sorát OSZTÁLYKÉNT fogalmazd** („a scan bármely úton
+   feltételessé válik — step- vagy job-szintű `if:`/`continue-on-error:`, bármely
+   input-névvel"), ne egy konkrét YAML-alakként.
+2. **Névillesztés soha nem kapu.** Ha egy lépés a kapu, a mérce a TARTALMÁT
+   állítsa (a `run:` törzs hívja-e a `security_scan.py`-t), ne csak a nevét.
+3. **Gráf-ellenőrzés fail-closed ALLOWLIST**, ne denylist: a jóváhagyón kívül
+   minden job kötelezően `needs:`-elje a jóváhagyót; ismeretlen job = sértés.
+4. **A reviewer a saját fixtúráival mérjen**, ne az implementer fixtúráival — és
+   a javító kör után futtasson OLYAN próbát is, amit a javító prompt NEM
+   nevezett meg. Az E12-R34-ben ez fogta meg, hogy a javítás általános, nem
+   fixtúra-szabott: a signing-oldali tartalmi próba és a **build** jobra tett
+   job-szintű `if:` (a fixtúra a scan jobot használta) is `exit=1`-et adott.
+
+**Melléklelet ugyanabból a körből (MAJOR-4):** a javaslat `${{ inputs.* }}`-ot
+interpolált `run:` törzsbe egy olyan jobban, amelynek későbbi lépései a
+production keystore-t kezelik — klasszikus GitHub Actions script injection. A
+repó SAJÁT precedense (`release-candidate.proposal.yml`, `release-apk.yml`) ezt
+következetesen kerüli: minden érték `env:`-en át kötve, idézett
+shell-változóként. **Ha egy új workflow eltér a repó bevett titok-kötési
+alakjától, az önmagában review-lelet** — akkor is, ha a dokumentum „csak"
+javaslat, hiszen a telepítés a merge utáni lépés.
+
+**Őrteszt:** `test/tooling/hotfix_policy_test.dart` — a javító kör 7 új
+mutációs cellája (job-szintű `continue-on-error`, job-szintű `if:`,
+tartalom-nélküli scan, tartalom-nélküli signing, `needs:` nélküli publish-job,
+`${{ inputs.` a `run:` törzsekben, `1.2` → `1.2.0` verzió-normalizálás).
