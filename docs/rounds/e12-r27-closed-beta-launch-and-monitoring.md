@@ -41,6 +41,151 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0.1 Pre-flight brief-revízió (orchestrátor, 2026-09-02, `main @ 02d0e36e`)
+
+**Ahol ez a szakasz és bármely későbbi szakasz eltér, EZ nyer.** ADR nincs
+(a kör indítási eljárást és mérő-eszközt szállít; `docs/adr/**` tiltott zóna) —
+a hivatkozott szerződések: [ADR 0446](../adr/0446-feature-flag-registry-and-emergency-kill-switch.md)
+(flag-katalógus, feloldási lánc, D7 „a kikapcsolás nem töröl adatot"),
+[ADR 0395](../adr/0395-community-baseline-feature-flags-and-threat-model-scope.md)
+(a kill switch MA operábilis, dart-define/env úton felülírható).
+
+**Visszakeresés (ADR 0312, szűkítve → teljes korpusz):**
+`--corpus lessons,halts,adr "closed beta launch monitoring triage kill switch dry run cohort profile"`
+→ [ADR 0395](../adr/0395-community-baseline-feature-flags-and-threat-model-scope.md)
+(bm25#7 emb#1), [ADR 0486](../adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md)
+(bm25#1 emb#3 — a béta-artefaktumok GÉPI igazságforrásra épülnek, hiányzó
+kulcs → nem-nulla kilépés, „unknown"-nal továbbmenetel helyett).
+`--corpus lessons,halts "python tool parses dart registry yaml profile validation exit code test"`
+→ **[L566](../LESSONS.md#l566)** (bm25#4 emb#4) — **ez a kör legfontosabb
+előzménye**: egy kézzel írt sor-parszerre épülő doksi-/YAML-őr alapértelmezésben
+**fail-OPEN**; ami nem illeszkedik a mintára, az nem hibás, hanem NEM LÉTEZIK.
+Az E12-R19 pontosan így engedett át egy őrizetlen SLO-bejegyzést. Továbbá
+[L86](../LESSONS.md#l86) (beágyazott Dart tool-package analyzer-csapdái —
+ezért a `tool/release/` gyökérben egyetlen fájl, nem új package).
+
+### P1 — A „Kör 5 flag-katalógus" a **Dart registry**, nem a markdown tábla
+
+MÉRVE (`main @ 02d0e36e`):
+
+| Mért tény | Parancs / hely |
+|---|---|
+| `lib/core/feature_flags/feature_flag_registry.dart` = **40** bejegyzés | `grep -c "key: '" lib/core/feature_flags/feature_flag_registry.dart` → `40` |
+| **7** `high` kockázatú bejegyzés: `accountEnabled`, `diagnosticsEnabled`, `aiTutorCloudEnabled`, `visionLabCaptureEnabled`, `communityEnabled`, `communityWritesEnabled`, `communityMediaEnabled` | `grep -B6 "FeatureFlagRisk.high" …registry.dart \| grep "key:"` |
+| `grep -c "FeatureFlagRisk.high"` **8**-at ad — a 8. találat a fájl fejléc-doc-commentjének szövege, NEM bejegyzés | `sed -n '26,32p' …registry.dart` |
+| mind a 40 bejegyzés `failClosedDefault: false` | `grep -c "failClosedDefault: false"` |
+| a besorolás enum: `FeatureFlagRisk { low, medium, high }` | `lib/core/feature_flags/feature_flag_definition.dart:9` |
+| a bejegyzés mezői: `key`, `owner`, `risk`, `failClosedDefault`, `killSwitchPath`, opcionális `adr`, `expiresOn` | `feature_flag_definition.dart:20-27` |
+
+**`docs/release/kill-switches.md` NEM az igazságforrás** — a saját fejléce
+mondja ki: „magát ezt a markdown táblát ma semmi nem méri". Az A1/A3 cellák
+igazságforrása a **Dart registry**; a `verify_beta_profile.py` azt olvassa.
+(Ez amúgy is tiltott zóna: `docs/release/**` nincs az `allowed_paths`-on.)
+
+### P2 — Parser-fegyelem: PyYAML a profilhoz, **fail-closed** regex a registryhez (L566)
+
+1. A `cohort-profiles.yaml`-t **PyYAML-lel** parse-old (`import yaml`
+   modul-szinten, KEMÉNY függőség). Precedens és CI-bizonyíték:
+   `tool/release/build_ai_report.py:59` ugyanígy importál, és a
+   `test/tooling/ai_release_report_test.dart` a teljes `flutter test` kapuban
+   futtatja — a CI-n tehát MA is zölden fut PyYAML-lel. Kézzel írt sor-parszer
+   a YAML-hez **TILOS** (L566).
+2. A Dart registry oldalán regex-parse-olsz (Dartot futtatni innen nem lehet).
+   Ez a L566 hibaosztály veszélyzónája, ezért **fail-closed** szerződés:
+   - a parse-olt bejegyzésszám `< 40` → **nem-nulla kilépés** kimondott
+     hibaüzenettel („registry parse yielded N entries, expected >= 40"), NEM
+     csendben kisebb katalógus;
+   - bármely bejegyzés, amelyből a `key` / `risk` / `failClosedDefault`
+     hármas nem olvasható ki → **hiba**, nem kihagyás;
+   - a profilban minden olyan sor, amely nem illeszkedik a várt alakra →
+     **hiba**, nem „nem létező szabály".
+3. Ugyanez köt a Dart-oldali doksi-olvasó cellákra (A5/A6): a fel nem ismert
+   ellenőrzőlista-sor **PIROS**, sosem „nincs is ilyen sor".
+
+### P3 — A cellák a TOOL-t futtatják, ellenséges fixture-ökön
+
+Az A2/A3 nem bizonyítható a szállított profilon (az zölden fut). A
+`beta_profile_test.dart` `Process.runSync('python3', [...])`-tal hívja a
+tool-t ideiglenes könyvtárban felépített, SZÁNDÉKOSAN hibás profilokon
+(elgépelt flag-név; `true`-ra állított `high` flag). Precedens:
+`test/tooling/rc_assembly_test.dart:104`, `test/tooling/security_scan_test.dart:31`.
+**Fixture-t NEM commitolsz** (`test/fixtures/**` nincs az `allowed_paths`-on) —
+a temp-fát a teszt építi és takarítja.
+
+### P4 — Az A4 „kill-switch dry-run" GÉPILEG mért alakja
+
+A dry-run definíciója (a brief §5.3 „bizonyított kimenet" követelményének
+mérhető alakja):
+
+```bash
+python3 tool/release/verify_beta_profile.py --profile docs/beta/cohort-profiles.yaml \
+  --kill-switch <flag> --cohort <cohort>
+```
+
+Kötelező tulajdonságok, cellánként mérve:
+
+- **read-only**: a `--kill-switch` mód SEMMIT nem ír a lemezre. A cella egy
+  temp-be másolt profilon futtatja, és a futás után a fájl tartalma
+  bájtazonos, új fájl nem keletkezett;
+- **determinisztikus, before/after blokk** a stdout-on;
+- **pontosan egy flag billen `false`-ra**, minden más bejegyzés változatlan;
+- a dry-run alanya egy **`low` kockázatú, a cohortban BEKAPCSOLT** feature —
+  egy `high` flag alapból `false`, azon a dry-run semmit nem bizonyítana;
+- a `closed-beta-launch.md`-be beillesztett kimeneti blokk **bájtazonos** a
+  tool tényleges stdout-jával: a cella újrafuttatja a tool-t és a dokumentum
+  kódblokkjával veti össze. **Ez teszi a „bizonyított kimenetet" méréssé, nem
+  állítássá.**
+
+**„A kikapcsolt feature NEM tört adatot" (ADR 0446 D7):** ezt a kör NEM
+duplikálja — a round-trip cella MÁR LÉTEZIK
+(`test/tooling/rollback_policy_test.dart:86-129`, E12-R26 A3) és az „idegen
+adattárat nem mutál" cella is
+(`test/core/feature_flags/feature_flag_registry_test.dart:216-248`). Az A4
+dokumentum-oldala EZEKRE hivatkozik mért bizonyítékként, a Dart-cella pedig
+azt méri, hogy a dry-run maga nem ír a lemezre.
+
+### P5 — Az A5 hivatkozás-cella: minden hivatkozott útvonalnak LÉTEZNIE kell
+
+Az indítási ellenőrzőlista minden sora hordozzon egy repó-relatív útvonalat
+vagy egy CI-run URL-t. A cella:
+
+- minden sorból kiolvassa a hivatkozás(oka)t, és a repó-relatív útvonalakra
+  `File`/`Directory` `existsSync()`-et mér — hiányzó út → PIROS;
+- a hivatkozás NÉLKÜLI sor → PIROS (nem „nem ellenőrzött sor");
+- a fel nem ismert alakú sor → PIROS (P2/3, L566).
+
+Az előfeltétel-artefaktumok MÉRVE léteznek, tehát hivatkozhatók:
+`docs/beta/{enrollment,tester-consent,feedback-triage}.md` (Kör 22),
+`docs/release/rc-checklist.md` + `.github/workflows/release-apk.yml` +
+`tool/release/assemble_rc.py` (Kör 25),
+`docs/operations/disaster-recovery-drill.md` + `tool/release/verify_rollback.py` (Kör 26),
+`docs/release/kill-switches.md` + `lib/core/feature_flags/feature_flag_registry.dart` (Kör 5).
+
+### P6 — Az A6 megfogalmazás-cella
+
+A dokumentum tartalmazzon kimondott mondatot arról, hogy **a béta NEM indult
+el**, az indítás EMBERI döntés, és ezt a kört nem hajtja végre. A cella
+kis-nagybetű-érzéketlenül tiltja a múltidejű indítás-állítást (pl.
+„a béta elindult", „tesztelők meghívva", „beta launched", „testers invited",
+„cohort opened") — a „indításra kész" / „ready to launch" alak megengedett.
+
+### P7 — Monitoring-illúzió kimondva
+
+A Kör 19 telemetria-SZERZŐDÉST szállított, gyűjtést nem (brief §2). A
+`closed-beta-launch.md`-nek ezt **ki kell mondania**, és a napi triage
+bemeneteként a diagnosztikai bundle-t
+(`tool/release/build_diagnostics_bundle.py`) és a manuális visszajelzést
+(`docs/beta/feedback-triage.md`) kell megneveznie. A P0/P1 nyitottság melletti
+cohort-bővítés tilalma a `daily-triage-template.md` döntési szabálya.
+
+### P8 — Előfeltételek MÉRVE megvannak
+
+`docs/beta/{enrollment,tester-consent,feedback-triage}.md` (Kör 22),
+`docs/release/rc-checklist.md` + `tool/release/assemble_rc.py` (Kör 25),
+`docs/operations/disaster-recovery-drill.md` (Kör 26, 15 970 bájt),
+`lib/core/feature_flags/feature_flag_registry.dart` 40 bejegyzéssel (Kör 5).
+A `blocked` jelzés tehát csak VALÓDI, mért elakadásra jár, nem kényelemből.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
