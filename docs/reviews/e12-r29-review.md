@@ -137,6 +137,34 @@ gépi mércék változatlanok maradnak, mert a leletek egyike sem a cellákat é
 
 ---
 
-## 6. Javító kör utáni újra-ellenőrzés — 2026-09-02
+## 6. Javító körök utáni újra-ellenőrzés — 2026-09-02
 
-*(a javító kör után kitöltve)*
+Két javító kör futott, mindkettő `sonnet-impl` motoron (a Codex-oldal a
+2026-08-21-i user-döntés szerint nem futtatható, ezért az eszkaláció célpontja
+nem létezik — a javító kör ugyanazon a motoron marad, a mércét gépi őr tartja).
+
+| Lelet | Javító kör | Commit | Zárás mérve |
+|---|---|---|---|
+| **MAJOR-1** | 1. | `9b6e6071` | `capacity-review.md` §6: az 50 most **konfigurációs precedensként** szerepel, kimondva, hogy „**üzemi tapasztalat nincs mögötte**", `docs/beta/closed-beta-launch.md:3` idézetével; a `docs/HANDOFF.md` → `HANDOFF.md` hivatkozás javítva. `grep -rn "incidens nélkül\|ténylegesen ki lett osztva\|docs/HANDOFF.md"` a két dokumentumon → **0 találat**. ✅ |
+| **MINOR-1** | 1. | `9b6e6071` | §6 új bekezdése kimondja, hogy a `register_limiter` **brute-force biztonsági** küszöb, a képlet egy valódi globális kapacitás-mérésig érvényes **helyettesítő**, és egy jövőbeli biztonsági szigorítás okozta drift esetén a helyes válasz nem a küszöb visszalazítása. ✅ |
+| **MINOR-2** (a 2. körben találva) | 2. | `362ffa65` | `open-beta-launch.md` a három `preview` flaget már nem idézi „proven"-ként: konfigurációs tényként (`internal: true` / `closed_beta: false`) írja le, és kimondja, hogy futásidejű bizonyíték nincs, mert egyetlen cohort sem indult el. ✅ |
+| NOTE-1 / NOTE-2 | — | — | szándékos, fail-closed döntések — változatlanul hagyva, ahogy a review kérte. ✅ |
+
+**Újra-mérés a végleges HEAD-en (`362ffa65`), friss izolált klónban
+(`/tmp/rev2-e12-r29`):**
+
+| Mérés | Kimenet |
+|---|---|
+| `pytest tests/test_capacity_guards.py -q` | `7 passed` |
+| `flutter test test/tooling/canary_cohort_test.dart test/tooling/ga_scope_test.dart` | `+37 All tests passed!` |
+| valódi-sértés próba — `closed_beta.migratedLearnEnabled` szivárgás | **A5 piros** ✅ |
+| valódi-sértés próba — `maxTesters: 25 → 26` | **A1 piros** ✅ |
+
+A javító körök egyetlen gépi cellát sem érintettek (a diff `9b6e6071..362ffa65`
+és `7acbb405..9b6e6071` csak dokumentumszöveg), és a mércék a javítás után is
+ugyanúgy lökést bírnak.
+
+## 7. VÉGSŐ DÖNTÉS: APPROVED
+
+0 nyitott BLOCKER/MAJOR/MINOR. A merge-kapu a `362ffa65` head SHA-n futó
+`full-gate.yml` + `router-ci.yml` zöldjével teljes.
