@@ -1,5 +1,80 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R29 KÉSZ — Open Beta és canary cohort — PR [#525](https://github.com/wolfcasaba/strumsight/pull/525), squash `3d9721df` (2026-09-02)
+
+A Ch12 **Kör 29** az Open Beta canary-cohort **előkészítését** szállítja. ADR
+nincs (a kör eljárást ad, nem új normát; a `docs/adr/**` a tilos zónában volt).
+**A cohort megnyitása változatlanul EMBERI kapu** — a kör nem nyit cohortot.
+
+**Szállítva:**
+
+- `docs/operations/capacity-review.md` — a MÉRT backend-korlátokból SZÁMOLT
+  cohort-plafon (**25**), `fájl:sor` hivatkozásokkal: login **10/60 s**
+  (`backend/app/routers/auth.py:16`), register **5/60 s** (`:17`), bejelentés
+  **12/3600 s** (`report_service.py:93-94`), `MAX_UPLOAD_BYTES` **100 MiB**
+  (`media_upload_service.py:133`), élő feltöltés **10/profil** (`:154`).
+- **Két mért, kimondott tény, amit a dokumentum NEM hallgat el:** (1) a
+  Community router **nincs mountolva** a fő appban (`grep -n community
+  backend/app/main.py` → 0 találat), tehát a canary ma nulla Community-terhelést
+  tud generálni; (2) a `backend/app/routers/settings.py` **egyáltalán nem visel
+  rate limitert** — ez rés, nem guard, és a `docs/beta/open-beta-launch.md` §4
+  is így nevezi.
+- `docs/beta/open-beta-launch.md` — gépileg parszolható canary-profil
+  (`<!-- canary-cohort-profile:begin/end -->`, `id: canary`, `maxTesters: 25`,
+  16 flag a mért 40-es katalógusból), explicit human-gate blokk, kipipálatlan
+  Human launch field. A `docs/beta/cohort-profiles.yaml` **érintetlen**: a
+  `ga_scope_test.dart` 16-kulcsos cellája egy 17. kulcstól azonnal pirosra
+  váltana (a brief §0.0 P7 mért indoka).
+- `backend/tests/test_capacity_guards.py` — A2 rate-limit küszöb-cellahármas a
+  `login_limiter.max_attempts`-ból **SZÁMOLVA** (nem 9/10/11 bedrótozva; az
+  „elfogadva" helyesen `401`, nem `200`), A3 upload-méret hármas (`MAX-1`/`MAX`
+  átmegy, `MAX+1` dob), A4 moderation-queue füst a **MÉRT** úton.
+- `test/tooling/canary_cohort_test.dart` — 14 cella: 3-utas plafon-konzisztencia
+  (capacity-review marker ↔ launch-doc `maxTesters` ↔ friss újraszámítás),
+  canary-izoláció (A5), human-gate (A6), öt **fail-CLOSED** parse-cella
+  (L571/L575 ellenszere) és a flag-kulcsok regisztry-ellenőrzése.
+
+**Pre-flight (a kör §0.0 P1–P8) — a brief előre megírt állításai közül kettő
+MÉRTEN pontatlan volt:** (P1) a `submit_report` **nem** nyit moderációs ügyet
+(`grep case_service report_service.py` → 0 találat), a queue mért útja
+`get_or_create_case` → `list_open_cases`, a jel a `priority_score`-ban; (P3/P4)
+a Community router nincs mountolva, és a `tests/community/conftest.py` fixtúrái
+a kör tesztfájljából nem hivatkozhatók.
+
+**Review:** [`docs/reviews/e12-r29-review.md`](docs/reviews/e12-r29-review.md) —
+**hét valódi-sértés próba** izolált klónban, mind a hét a helyes cellát váltotta
+pirosra (throttle kikapcs → A2; méret-guard lazítás → A3; report-jel nullázás →
+A4; cohort-szivárgás a VALÓDI fán → A5; plafon-drift → A1; human-gate marker
+törlés → A6/P6; kitalált flag-kulcs → P7).
+
+- **MAJOR-1 (1. javító körben zárva):** a plafon bázis-inputját (`closed_beta
+  = 50`) HAMIS empirikus állítás támasztotta alá — „ténylegesen ki lett osztva
+  és incidens nélkül futott" —, miközben a fán `docs/beta/closed-beta-launch.md:3`
+  → „Status: **NOT launched**". Pontosan az [ADR 0489](docs/adr/0489-ga-scope-classification-and-contract-freeze.md)
+  D3 által mechanizált hibaosztály (kitalált béta-adat bizonyítékként), ezúttal
+  gépi őr nélküli prózában. A hivatkozott `docs/HANDOFF.md` útvonal ráadásul nem
+  is létezett. Zárva: az 50 most **konfigurációs precedens**, kimondva, hogy
+  üzemi tapasztalat nincs mögötte.
+- **MINOR-1 (1. javító kör):** a képlet egy **brute-force biztonsági** küszöböt
+  (`register_limiter`) köt fejszám-politikához — a dokumentum most kimondja, hogy
+  helyettesítőről van szó egy valódi globális kapacitás-mérésig, és hogy egy
+  jövőbeli biztonsági szigorítás okozta driftre a válasz nem a küszöb
+  visszalazítása.
+- **MINOR-2 (2. javító kör):** a launch-doc a három `preview` flaget
+  „proven"-ként idézte a `ga-scope.md`-ből, ami ott csak **konfiguráció**
+  (`internal: true`/`closed_beta: false`) — átfogalmazva, kimondva, hogy
+  futásidejű bizonyíték nincs, mert egyetlen cohort sem indult el.
+
+**Zöld kapu:** Full Gate [`33624228648`](https://github.com/wolfcasaba/strumsight/actions/runs/33624228648)
+és Router CI [`33626142221`](https://github.com/wolfcasaba/strumsight/actions/runs/33626142221)
+mindkettő `success` a `6cdea0e5` merge SHA-n; a backend sáv (ruff format + ruff
+check + teljes pytest) a `backend/` érintése miatt a gate-ben automatikusan
+futott. Motor: `sonnet-impl` (Claude Sonnet 5), 2 javító kör. Lecke:
+[L577](docs/LESSONS.md#l577).
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending`
+sora — a driver választja ki.
+
 ## ✅ E12-R28 KÉSZ — Beta stabilization és scope cut — PR [#524](https://github.com/wolfcasaba/strumsight/pull/524), squash `7b33a1aa` (2026-09-02)
 
 A Ch12 **Kör 28** a GA-scope besorolását és a core contractok befagyasztását
@@ -10534,9 +10609,9 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R28
-> zárása után): **291 `done`, 48 `hold`, 18 `prepared`, 8 `pending`**
-> (az E12 sávból 28 `done`, 8 `pending`).
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R29
+> zárása után): **292 `done`, 48 `hold`, 18 `prepared`, 7 `pending`**
+> (az E12 sávból 29 `done`, 7 `pending`).
 >
 > ⚠ **Az E12-R24 két EMBERI lépést hagyott nyitva a store-feltöltés előtt** —
 > egyik nyitott brief sem nevezi meg őket, ma gazdátlanok: (1) a

@@ -522,7 +522,7 @@ E12-R25	docs/rounds/e12-r25-release-candidate-assembly.md	sonnet-impl	0463	done
 E12-R26	docs/rounds/e12-r26-rollback-and-disaster-recovery-drill.md	sonnet-impl	nincs	done
 E12-R27	docs/rounds/e12-r27-closed-beta-launch-and-monitoring.md	sonnet-impl	nincs	done
 E12-R28	docs/rounds/e12-r28-beta-stabilization-and-scope-cut.md	sonnet-impl	0464	done
-E12-R29	docs/rounds/e12-r29-open-beta-and-canary-cohort.md	sonnet-impl	nincs	pending
+E12-R29	docs/rounds/e12-r29-open-beta-and-canary-cohort.md	sonnet-impl	nincs	done
 E12-R30	docs/rounds/e12-r30-feature-freeze-and-final-regression.md	sonnet-impl	nincs	pending
 E12-R31	docs/rounds/e12-r31-production-deployment-and-internal-cohort.md	sonnet-impl	nincs	pending
 E12-R32	docs/rounds/e12-r32-staged-rollout-1-to-20-percent.md	sonnet-impl	nincs	pending

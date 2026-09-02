@@ -22814,3 +22814,54 @@ normatív állítás mellől hiányzik a mért tény:
 jelentésben (§0.0 revízió) ki kell mondani (a) mit mért, (b) melyik kockázatot
 vette át melyik gépi őr, és (c) mi az újramérés nevesített feltétele. A
 megkerülés e három nélkül nem döntés, hanem sodródás.
+## L577 — A gépi őr csak a SZÁMOT védte, a szám INDOKLÁSÁT nem: a plafon-aritmetika három forrásból újraszámolva zöld volt, miközben a bázis-inputot egy MÉRTEN hamis empirikus mondat legitimálta (E12-R29, MAJOR-1, 2026-09-02)
+
+**Mit mértünk.** Az E12-R29 `docs/operations/capacity-review.md`-je a canary
+cohort plafonját (25) három mért konstansból számolja, és a
+`test/tooling/canary_cohort_test.dart` A1 csoportja HÁROM helyről ellenőrzi a
+konzisztenciát (a dokumentum HTML-marker értéke ↔ a launch-doc
+`maxTesters` mezője ↔ friss újraszámítás a `backend/app/routers/auth.py`
+és a `docs/beta/cohort-profiles.yaml` alapján). A reviewer mérése szerint az őr
+JÓ: a marker 25→999 és a `maxTesters` 25→26 mutációja egyaránt pirosra váltja a
+cellát a VALÓDI fán.
+
+Az őr mégis átengedte a kör legsúlyosabb hibáját. A bázis-input (`closed_beta.
+maxTesters = 50`) mellett ez a mondat állt:
+
+> „az egyetlen cohort-méret ezen a fán, ami **ténylegesen ki lett osztva és
+> incidens nélkül futott**"
+
+A fán MÉRT valóság ennek az ellenkezője: `docs/beta/closed-beta-launch.md:3` →
+„Status: **NOT launched**", a §5 Human launch field üres, és ugyanezt mondja ki
+a `HANDOFF.md` E12-R28 bejegyzése. **Egyetlen cohort sem lett kiosztva** —
+üzemi tapasztalat nulla. Ráadásul a mondat bizonyítékként egy nem létező
+útvonalra hivatkozott (`docs/HANDOFF.md`; a fájl a repó GYÖKERÉBEN van).
+
+**Miért fontos.** Ez pontosan az a hibaosztály, ami ellen az ELŐZŐ kör
+([L576](#l576), ADR 0489 D3) gépi őrt épített — csak ott a *besorolás
+bizonyíték-hivatkozásaira*. A mérce tehát megvolt, de egy MÁSIK dokumentum
+prózájában, egy MÁSIK szerepben (a számítás bemenetének legitimálása) újra
+megjelent, mert az őr a **számot** méri, nem a szám melletti **indoklást**.
+A kitalált empíria itt nem díszítés volt: a kör főszámának bázisát támasztotta
+alá.
+
+**Az általánosítás.** Egy „mért, nem becsült" kimenetnél a gépi őr rendszerint
+az ÉRTÉK-láncot pinneli (forrás-konstans → aritmetika → dokumentált érték). Az
+érték melletti **empirikus állítás** (`futott`, `bizonyított`, `incidens
+nélkül`, `proven`) ezen a láncon KÍVÜL van, és pontosan olyan olcsón hazudik,
+mint a kerek szám, ami ellen a szabály készült. Amíg nincs rá őr, a review
+KÖTELES a szám indoklását külön megmérni: minden „futott / bizonyított"
+állításhoz kérj fájl:sor bizonyítékot, és oldd fel a hivatkozott útvonalat.
+
+Ugyanezen kör MINOR-2 lelete a fenti mintázat gyengébb változata: a launch-doc
+a `docs/release/ga-scope.md`-t idézve három flaget „proven"-nek nevezett,
+miközben a hivatkozott dokumentum csak KONFIGURÁCIÓT állít (`internal: true`,
+`closed_beta: false`, „internal-dogfood-only rollout today"). Konfiguráció ≠
+empíria — a félreidézés ugyanaz a hibaosztály egy szinttel lejjebb.
+
+**Őrteszt:** nincs — a lelet a szám INDOKLÓ PRÓZÁJÁT érinti, amire ma nincs
+gépi mérce; a `canary_cohort_test.dart` A1 csoportja az érték-láncot köti, és
+azt a review mérése szerint helyesen teszi. Egy jövőbeli, általános
+„bizonyíték-hivatkozás feloldható + empirikus állítás mellett mért forrás" őr
+(az ADR 0489 D3 kiterjesztése a `docs/operations/**`-ra) lenne a
+hibaosztály-szintű zárás.
