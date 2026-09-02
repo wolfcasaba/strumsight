@@ -253,6 +253,33 @@ void main() {
     });
   });
 
+  group('A3 — phone viewport (360x640), textScaler 1.5/2.0/2.5, en+hu '
+      '(§0.0.A/R5 — the exact mandated cell shape, in addition to the '
+      'existing 320x568/412x732 coverage above)', () {
+    for (final scale in <double>[1.5, 2.0, 2.5]) {
+      for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+        testWidgets(
+          '$scale / ${locale.languageCode} — broken reason, no overflow',
+          (tester) async {
+            tester.view.physicalSize = const Size(360, 640);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+
+            await _pump(
+              tester,
+              locale: locale,
+              reason: StreakEvaluationReason.broken,
+              textScale: scale,
+            );
+
+            expect(find.byType(ListView), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  });
+
   group('A7 + A8 — responsive and accessible feedback', () {
     for (final size in <Size>[const Size(320, 568), const Size(412, 732)]) {
       for (final scale in <double>[1, 2, 3]) {

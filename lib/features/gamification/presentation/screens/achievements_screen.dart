@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/gamification/domain/achievements/achievement_definition.dart';
 import 'package:strumsight/features/gamification/domain/achievements/achievement_progress.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/achievement_tile.dart';
@@ -85,7 +86,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                     )
                     .toList(growable: false),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               if (visible.isEmpty)
                 _EmptyAchievementsState()
               else
@@ -95,7 +96,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                     progress: widget.progressByAchievement[definition.id],
                     onSelected: widget.onAchievementSelected,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SsSpacing.space3),
                 ],
             ],
           ),
@@ -148,23 +149,40 @@ const _filterableCategories = <AchievementCategory>[
   AchievementCategory.personalBest,
 ];
 
+// Screen-local, token-styled — NOT SsEmptyState: this state has no real
+// affordance to offer (the definitions list is caller-fed and there is
+// nothing for the user to "go do" from here), and inventing a CTA just to
+// fit SsEmptyState's required action would misrepresent the screen (brief
+// §0.0.A/R7, same exception class as E15-R06/R07's empty states).
 class _EmptyAchievementsState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 48),
+        padding: const EdgeInsets.symmetric(vertical: SsSpacing.space12),
         child: Column(
           children: [
-            const Icon(Icons.emoji_events_outlined, size: 40),
-            const SizedBox(height: 12),
+            Icon(
+              Icons.emoji_events_outlined,
+              size: 40,
+              color: colors.textSecondary,
+            ),
+            const SizedBox(height: SsSpacing.space3),
             Text(
               l10n.achievementEmptyTitle,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: typography.titleMedium.copyWith(color: colors.textPrimary),
             ),
-            const SizedBox(height: 4),
-            Text(l10n.achievementEmptyBody, textAlign: TextAlign.center),
+            const SizedBox(height: SsSpacing.space1),
+            Text(
+              l10n.achievementEmptyBody,
+              textAlign: TextAlign.center,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
           ],
         ),
       ),

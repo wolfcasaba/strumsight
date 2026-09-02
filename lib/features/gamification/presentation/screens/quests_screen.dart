@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../application/daily_challenge_service.dart'
     show DailyChallengeInstance;
 import '../../domain/quests/quest_definition.dart';
@@ -86,7 +87,12 @@ class QuestsScreen extends StatelessWidget {
               ? const _EmptyQuestsState()
               : ListView(
                   key: const Key('quests-screen-list'),
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(
+                    SsSpacing.space5,
+                    SsSpacing.space3,
+                    SsSpacing.space5,
+                    SsSpacing.space6,
+                  ),
                   children: [
                     if (showOfflineBanner) const _OfflineBanner(),
                     if (dailyChallenge != null) ...[
@@ -94,24 +100,24 @@ class QuestsScreen extends StatelessWidget {
                         title: dailyChallengeTitle,
                         keyName: 'quests-daily-section-title',
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: SsSpacing.space2),
                       ChallengeCard(
                         title: dailyChallengeTitle,
                         instance: dailyChallenge!,
                         contentAvailable: dailyChallengeAvailable,
                         onAction: onAction,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: SsSpacing.space4),
                     ],
                     if (dailyQuests.isNotEmpty) ...[
                       _SectionHeader(
                         title: l10n.questsDailySectionTitle,
                         keyName: 'quests-daily-quests-title',
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: SsSpacing.space2),
                       for (final projection in dailyQuests) ...[
                         _buildQuestCard(context, projection),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: SsSpacing.space3),
                       ],
                     ],
                     if (weeklyQuests.isNotEmpty) ...[
@@ -119,10 +125,10 @@ class QuestsScreen extends StatelessWidget {
                         title: l10n.questsWeeklySectionTitle,
                         keyName: 'quests-weekly-quests-title',
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: SsSpacing.space2),
                       for (final projection in weeklyQuests) ...[
                         _buildQuestCard(context, projection),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: SsSpacing.space3),
                       ],
                     ],
                   ],
@@ -165,11 +171,8 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      key: Key(keyName),
-      style: Theme.of(context).textTheme.titleLarge,
-    );
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Text(title, key: Key(keyName), style: typography.titleLarge);
   }
 }
 
@@ -179,58 +182,63 @@ class _OfflineBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Container(
+      padding: const EdgeInsets.only(bottom: SsSpacing.space4),
+      child: SsSurface(
         key: const Key('quests-offline-banner'),
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.questsOfflineBanner,
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              l10n.questsOfflineBody,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(SsSpacing.space3),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.questsOfflineBanner, style: typography.titleMedium),
+              const SizedBox(height: SsSpacing.space1),
+              Text(l10n.questsOfflineBody, style: typography.bodyMedium),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+// Screen-local, token-styled — NOT SsEmptyState: a brand-new user with no
+// quests yet has no real next action to offer from this screen (quests are
+// generated by the caller, not created here), so inventing a CTA to satisfy
+// SsEmptyState's required action would misrepresent the screen (brief
+// §0.0.A/R7, same exception class as E15-R06/R07's empty states).
 class _EmptyQuestsState extends StatelessWidget {
   const _EmptyQuestsState();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Center(
       key: const Key('quests-empty-state'),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+        padding: const EdgeInsets.symmetric(
+          horizontal: SsSpacing.space8,
+          vertical: SsSpacing.space12,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               l10n.questsEmptyTitle,
-              style: Theme.of(context).textTheme.titleLarge,
+              style: typography.titleLarge.copyWith(color: colors.textPrimary),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SsSpacing.space2),
             Text(
               l10n.questsEmptyBody,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
             ),
           ],
         ),

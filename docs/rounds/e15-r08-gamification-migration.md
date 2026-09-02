@@ -365,4 +365,135 @@ tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.0 Eltérés a brief R8-tól — a `GamificationThemeScope` MINDEN migrált képernyőn megmaradt
+
+A §0.0.A/R8 szerint a burkoló eltávolítható 5 képernyőről (mert „az app témája hordozza a tokeneket"). Ezt a kör MEGMÉRTE és ELLENTMONDÓNAK találta:
+
+- `lib/core/theme/app_theme.dart` `_build()` KIZÁRÓLAG `extensions: [palette]`-et ad hozzá — nincs benne `SsColorScheme`/`SsTypography`/`SsThemeBehavior`.
+- A design-rendszer kiterjesztéseit a futásidejű app KIZÁRÓLAG `lib/app/strumsight_app.dart`-on át kapja (`theme: SsLightTheme.data()`, `darkTheme: SsDarkTheme.data()`), NEM `AppTheme`-en keresztül.
+- A golden-teszt (`test/ui/goldens/e13_r32_screens_golden_test.dart`) `theme: AppTheme.dark()`-ot pumpál — ez NEM hordozza a kiterjesztéseket.
+- A widget-tesztek túlnyomó többsége (`achievements_screen_test.dart`, `quests_screen_test.dart`, `streak_detail_screen_test.dart`, és az új `achievement_detail_screen_test.dart`/`level_detail_screen_test.dart`/`reward_inbox_screen_test.dart`) burkoló NÉLKÜLI `MaterialApp()`-ot pumpál — ez SEM hordozza őket.
+- A HUB képernyő (Ch13-R32, már migrált) maga is bizonyíték: TELJESEN design-rendszerre migrált, és MÉGIS megtartja a saját `GamificationThemeScope`-ját.
+
+Mérve: a burkoló eltávolítása bármelyik migrált képernyőn `Theme.of(context).extension<SsColorScheme>()!`/`<SsTypography>()!` null-check összeomlást okozott (kipróbálva `achievement_detail_screen.dart`-on és `level_detail_screen.dart`-on — mindkettőt Builder-lel kellett javítani, lásd 10.6). A döntés: **egyik képernyőről sem távolítottam el a burkolót**; az `AchievementDetailScreen` most kapta meg ELŐSZÖR (korábban nem volt neki, de most SS-komponenseket használ). Ez a brief R8 szó szerinti szövegétől eltér, de annak SAJÁT feltételes kikötését ("ha a képernyő már az app témájából old fel") követi — a feltétel mérve HAMIS.
+
+### 10.1 Képernyőnkénti komponens-csere és állapot-elhelyezés
+
+**`achievements_screen.dart`**
+- `SsSpacing` tokenek a lista-paddingre és a tile-ok közti gap-re.
+- Üres állapot (`_EmptyAchievementsState`): NEM `SsEmptyState` — nincs valódi akció (a lista caller-fed, nincs "menj csinálj valamit" lépés) → screen-local, de `SsColorScheme`/`SsTypography`/`SsSpacing` token-stílusú widget maradt (R7).
+- Szűrő-chipek (`ChoiceChip`/`Wrap`) VÁLTOZATLANOK — natív Material widget, már az ambiens témából (E15-R01 óta) helyesen színez, típus-pinnelt teszt-cellák nem sérülnek.
+- `AchievementTile` (widgets/, scope-on kívül) VÁLTOZATLAN.
+
+**`achievement_detail_screen.dart`**
+- `GamificationThemeScope` ÚJ burkoló (10.0).
+- A fő tartalom `SsTypography` tokeneket használ (`headlineMedium`/`bodyMedium`/`titleMedium`) a korábbi `Theme.of(context).textTheme.*` helyett.
+- Az evidence-panel `SsCard`-ba került (korábban puszta `Text`-oszlop volt).
+- Nem-található / rejtett állapot (`_notFound`/`_hidden`): NEM `SsEmptyState` — egyiknek sincs valódi következő lépése (R7) → új `_TokenMessage` screen-local widget, `SsColorScheme`/`SsTypography`/`SsSpacing` tokenekkel. Mindkettő `SingleChildScrollView`-t kapott (lásd 10.3 — R6 minta-szintű javítás).
+
+**`quests_screen.dart`**
+- `SsSpacing` tokenek a lista-paddingre és a szekció-gap-ekre.
+- `_OfflineBanner`: `Container`+kézi `BoxDecoration` → `SsSurface` (a `Key('quests-offline-banner')` VÁLTOZATLAN, típus-pin nem volt rá).
+- `_SectionHeader`: `SsTypography.titleLarge`.
+- Üres állapot (`_EmptyQuestsState`): NEM `SsEmptyState` — a küldetések caller-fedeltek, a képernyőnek nincs "hozz létre küldetést" akciója (R7) → screen-local, token-stílusú.
+- `QuestCard`/`ChallengeCard` (widgets/, scope-on kívül) VÁLTOZATLANOK.
+
+**`level_detail_screen.dart`**
+- `SsSpacing` tokenek mindenhol; a fejléc-szövegek `SsTypography`/`SsColorScheme.brand`-ra vált a korábbi `Theme.of(context).textTheme`/`colorScheme.primary` helyett.
+- `_XpComponentRow`: kézi `Container`+`BoxDecoration` (szín/border/radius) → `SsCard`.
+- Nincs üres/hiba/betöltés állapota a képernyőnek (tiszta adatmegjelenítés) — A2 erre a képernyőre nem alkalmazható cella-szinten, csak a design-rendszer komponens-használat (A1).
+- **R3 — mért elérhetőség:** `grep -rn "LevelDetailScreen(" lib/` a saját fájlján kívül NULLA találatot ad → a képernyő MÉRVE `unreachable`, megegyezik a `retirement-plan.md` §3.4 verdiktjével. A migráció mégis megtörtént, ugyanaz a döntési osztály, mint az E15-R07 hat unreachable Practice Generator képernyője (ADR 0471 D5: `unreachable` ≠ `retire`, a nyugdíjazás csak javaslat).
+
+**`reward_inbox_screen.dart`**
+- A `Column`+`Expanded(ListView.separated(...))` szerkezet `CustomScrollView`+`SliverList.separated`-re cserélődött MINDKÉT ágon (üres ÉS listás állapot) — lásd 10.3.
+- `_EmptyState`: NEM `SsEmptyState` — a postaláda olvasás-only (ADR 0389 §4), nincs "claim" vagy egyéb akció (R7) → screen-local, `SsColorScheme`/`SsTypography`/`SsSpacing` token-stílusú.
+- `_InboxEntryTile`: a `Material`+`InkWell` szerkezet MEGMARADT (a látatlan/olvasott állapot vizuális megkülönböztetése — `colors.surface` vs `colors.surfaceRaised` — nem fér bele az `SsCard`/`SsSurface` egy-elevációs modelljébe anélkül, hogy elveszne az információ), de MINDEN szín/tipográfia/térköz `SsColorScheme`/`SsTypography`/`SsSpacing`/`SsRadius` tokenre váltott. Ugyanaz a kompromisszum-osztály, mint a `SetlistDetailScreen` újrarendezhető sorai (E15-R06).
+- `PendingRewardsCard` (widgets/, scope-on kívül) VÁLTOZATLAN.
+
+**`streak_detail_screen.dart`**
+- `SsSpacing` tokenek a lista-paddingre és a metrika-rács gap-jeire.
+- Recovery CTA: `FilledButton.icon` → `SsButton` (valódi akció — `onRecoveryPressed` callback létezik, nincs R7-kivétel). A `Key('streak-recovery-cta')` VÁLTOZATLAN; a meglévő tesztek (`streak_detail_screen_test.dart`, `ui/streak_states_test.dart`) csak a Key-re és a tap-viselkedésre pinnelnek, `FilledButton` TÍPUS-pin nem volt rájuk, ezért a csere nem sértett típus-pinnelő cellát.
+- **`_StreakMetricCard` (4 metrika-kártya) VÁLTOZATLAN maradt — `Card` típusú, NEM `SsCard`.** A meglévő `streak_detail_screen_test.dart` A7+A8 csoportja `find.byType(Card, skipOffstage: false)` findsNWidgets(4) ÉS `tester.getSize(metricCards.first).height, greaterThan(80)` cellákat pinnel — ezek típus- ÉS geometria-pinek, amiket egy `SsCard`-csere eltört volna (`SsSurface` nem ad `Card` típust). Ugyanaz a kompromisszum-osztály, mint a `SetlistDetailScreen` reorderable sorai (E15-R06 precedens).
+
+### 10.2 Golden újrafelvétel (R9)
+
+```
+tools/golden-x86.sh record test/ui/goldens/e13_r32_screens_golden_test.dart
+```
+kimenet: 10/10 teszt zöld (`hub`/`quests`/`achievements`/`streak_detail`/`reward_inbox` × `compact`/`compact_scale2`).
+
+`git diff --stat -- test/ui/goldens/goldens/`:
+```
+ test/ui/goldens/goldens/e13_r32_quests_compact.png         | Bin 9910 -> 11189 bytes
+ test/ui/goldens/goldens/e13_r32_quests_compact_scale2.png  | Bin 5883 -> 6980 bytes
+ test/ui/goldens/goldens/e13_r32_reward_inbox_compact.png       | Bin 8488 -> 8887 bytes
+ test/ui/goldens/goldens/e13_r32_reward_inbox_compact_scale2.png| Bin 8526 -> 8910 bytes
+```
+Csak `quests` és `reward_inbox` PNG-je változott (a látható komponens-csere ott jár pixel-eltéréssel). `achievements` és `streak_detail` PNG-je BÁJTRA VÁLTOZATLAN — a golden fixture a `streak_detail`-t `StreakEvaluationReason.grace` állapotban rendereli, ahol a Recovery CTA (az egyetlen vizuális csere ezen a képernyőn) nem is jelenik meg; az `achievements` fixture a betöltött listát mutatja, az üres állapot (az egyetlen csere) nem.
+
+A hub két PNG-je (`e13_r32_hub_compact{,_scale2}.png`) **SHA256-ra mérve bájtra változatlan** a felvétel előtt/után:
+```
+efb66f9a21d320ed762cbfbaa68ddf5e7cb632c32a3b651376911ccdfb9b4c67  e13_r32_hub_compact.png
+45e0c1d48cc0ea0a9748dfa60f7fb27cee7bf68e412d67dd65f8c8e7fd493cc9  e13_r32_hub_compact_scale2.png
+```
+(mindkét hash azonos a felvétel előtt és után) — a hub scope-on kívül maradt, ahogy R4 megkövetelte.
+
+### 10.3 R6 — minta-szintű javítás, tételes példány-lista
+
+Két külön mintát mértem, mindkettőt a BATCH MINDEN példányára alkalmaztam, nem csak az elsőre, ami pirosat adott:
+
+1. **Nem-scrollozható `Center` üres/hiba-állapot, ami 200%+ szövegskálán túlcsordulhat.** Mérve: `achievement_detail_screen.dart` `_notFound`/`_hidden` — 2.5 skálán, `hu` locale-on 104 px túlcsordulás mérve PRÓBA ELŐTT. Javítás: mindkettő `SingleChildScrollView`-t kapott (nem csak az, amelyiken a próba pirosat adott).
+2. **Fix magasságú fejléc-sor(ok) egy `Expanded(ListView)`-t tartalmazó `Column`-ban, ami nagy szövegskálán negatív helyre szoríthatja a listát.** Mérve: `reward_inbox_screen.dart` — 2.0 skálán (hu) és 2.5 skálán (en+hu) 110–410 px túlcsordulás mérve PRÓBA ELŐTT, MIND a listás, MIND az üres ág ugyanazt a `Column`+`Expanded` mintát használta. Javítás: mindkét ág (nem csak a listás) `CustomScrollView`+`SliverList.separated`/`SliverFillRemaining`-re cserélődött.
+
+A csere UTÁN mind a hat képernyő mind a 6 A3-cellája (`{1.5, 2.0, 2.5} × {en, hu}`, `360×640` telefon-viewport) zöld — beleértve a korábban NEM kötelező 2.5-öst is.
+
+### 10.4 A3 — a telefon-viewportos cellák valóban mérnek
+
+Az `achievement_detail_screen_test.dart`, `level_detail_screen_test.dart`, `reward_inbox_screen_test.dart` (mind ÚJ) és a kiegészített `quests_screen_test.dart`/`streak_detail_screen_test.dart` mind `tester.view.physicalSize = const Size(360, 640)` + `devicePixelRatio = 1.0` + `addTearDown(tester.view.reset)` mintát használ. A `quests_screen_test.dart` eredeti A8 csoportja a flutter_test alap 800×600-as felületén futott (R5 hamis-zöld kockázat) — az ÚJ A3 csoport ezt zárja be a valódi telefon-méreten, a régi cellák VÁLTOZATLANUL megmaradtak (nincs törlés/gyengítés).
+
+A `reward_inbox_screen.dart` és `achievement_detail_screen.dart` fenti (10.3) túlcsordulásai PONTOSAN ezekkel az új cellákkal lettek megmérve — a 10.3 "PRÓBA ELŐTT" számok a javítás előtti kóddal, ugyanezekkel a cellákkal mérve.
+
+### 10.5 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+Cél: `level_detail_screen.dart` `_XpComponentRow` — `SsCard` → nyers `Container` (padding-gel, de dekoráció/token nélkül).
+
+PIROS (a csere után, `level_detail_screen_test.dart` A1 cella):
+```
+Expected: exactly 5 matching candidates
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "SsCard": []>
+00:01 +0 -1: A1 — ... all five R06 Xp components render inside SsCard rows [E]
+```
+
+Visszaállítás után ZÖLD:
+```
+00:00 +0: A1 — the screen imports the design system for its component rows all five R06 Xp components render inside SsCard rows
+00:01 +1: All tests passed!
+```
+
+`git diff --stat -- lib/features/gamification/presentation/screens/level_detail_screen.dart` a próba UTÁN a §8-beli teljes migrációs diffet mutatja (a próba nem hagyott maradék eltérést — a revert szó szerint visszaállította az eredeti `SsCard`-blokkot).
+
+### 10.6 Mért implementer-hiba, ami a próba KÖZBEN derült ki (és javítva lett)
+
+Az `achievement_detail_screen.dart` és `level_detail_screen.dart` build()-je eredetileg a KÜLSŐ (a `GamificationThemeScope`/`Builder` FELETTI) `context`-ből olvasta ki `Theme.of(context).extension<SsColorScheme>()!`/`<SsTypography>()!`-t, MIELŐTT visszaadta a burkolt fát — ez null-check összeomlást okozott minden olyan harnessben, ahol az AMBIENS téma (a burkoló előtti) nem hordozza a kiterjesztéseket (lásd 10.0). Javítás: mindkét képernyő `Builder`-be csomagolta a Scaffold-ot, és a kiterjesztéseket a Builder SAJÁT (a burkoló ALATTI) contextjéből olvassa. A `reward_inbox_screen.dart`-ban ugyanez a hiba egyetlen `Text`-re (a `reward-inbox-count`) korlátozódott — ugyanígy `Builder`-be került.
+
+### 10.7 Migrációs mérés
+
+Batch (§7 parancs kimenete):
+```
+MIGRATED lib/features/gamification/presentation/screens/achievement_detail_screen.dart
+MIGRATED lib/features/gamification/presentation/screens/achievements_screen.dart
+MIGRATED lib/features/gamification/presentation/screens/level_detail_screen.dart
+MIGRATED lib/features/gamification/presentation/screens/quests_screen.dart
+MIGRATED lib/features/gamification/presentation/screens/reward_inbox_screen.dart
+MIGRATED lib/features/gamification/presentation/screens/streak_detail_screen.dart
+```
+
+Teljes arány: **75/96 (78.125%)** — a `docs/ui/migration-status.md`-be felvéve (E15-R08 bejegyzés).
+
+### 10.8 Amit NEM tettem meg, és miért
+
+- **A `GamificationThemeScope` eltávolítása 5 képernyőről** (a brief §0.0.A/R8 eredeti szándéka) — NEM történt meg, mert a feltétele (az app témája burkoló nélkül is hordozza a tokeneket) ezen a boxon MINDEN mért harnessben (golden, widget-tesztek) HAMIS-nak bizonyult; a burkoló eltávolítása null-check összeomlást okozott volna. Lásd 10.0. A burkoló-osztály maga (ahogy R8 is mondja) NEM törlődött.
+- **`SsListTile`/`SsMetricTile`/`SsErrorState` konkrét nevű komponensek** — ezek nem léteznek a design-rendszerben (`core/design_system/public.dart` export-listája nem tartalmazza őket); a brief ezeket illusztratív névként használta. A ténylegesen létező, releváns komponenskészletet használtam: `SsCard`, `SsSurface`, `SsButton`, `SsSpacing`/`SsTypography`/`SsColorScheme`/`SsRadius` tokenek. `SsEmptyState`/`SsFailureState` egyik állapotra sem illett (R7 — lásd 10.1), ezért egyik képernyőn sem használtam őket — ez összhangban van az E15-R04/R06/R07 precedenssel.
+- **Viselkedés-változás egyik képernyőn sem történt** — nem kellett STOP-ot jelezni, mert a migráció során egyszer sem merült fel `application/`/`domain/`/`data/`/`providers/` réteg módosításának igénye.
+
 ## 11. Review — a Claude tölti ki

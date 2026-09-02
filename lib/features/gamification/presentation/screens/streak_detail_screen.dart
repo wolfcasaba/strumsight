@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/gamification/application/streak_service.dart';
 import 'package:strumsight/features/gamification/domain/streak/streak_state.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
@@ -44,16 +45,22 @@ class StreakDetailScreen extends StatelessWidget {
         appBar: AppBar(title: Text(l10n.streakV2Title)),
         body: SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            padding: const EdgeInsets.fromLTRB(
+              SsSpacing.space5,
+              SsSpacing.space3,
+              SsSpacing.space5,
+              SsSpacing.space6,
+            ),
             children: [
               StreakStatusCard(reason: reason, reduceMotion: reduceMotion),
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final cardWidth = (constraints.maxWidth - 12) / 2;
+                  final cardWidth =
+                      (constraints.maxWidth - SsSpacing.space3) / 2;
                   return Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
+                    spacing: SsSpacing.space3,
+                    runSpacing: SsSpacing.space3,
                     children: [
                       SizedBox(
                         width: cardWidth,
@@ -103,15 +110,15 @@ class StreakDetailScreen extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               WeeklyConsistencyCard(days: weeklyConsistencyDays),
               if (reason == StreakEvaluationReason.broken) ...[
-                const SizedBox(height: 16),
-                FilledButton.icon(
+                const SizedBox(height: SsSpacing.space4),
+                SsButton(
                   key: const Key('streak-recovery-cta'),
+                  label: l10n.streakV2RecoveryCta,
+                  icon: Icons.play_arrow_outlined,
                   onPressed: onRecoveryPressed,
-                  icon: const Icon(Icons.play_arrow_outlined),
-                  label: Text(l10n.streakV2RecoveryCta),
                 ),
               ],
             ],

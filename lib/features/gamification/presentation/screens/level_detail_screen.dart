@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/gamification/domain/profile/gamification_profile.dart';
 import 'package:strumsight/features/gamification/domain/rewards/experience_points.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
@@ -50,102 +51,114 @@ class LevelDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final current = profile.currentLevel;
     final next = profile.nextLevel;
     return GamificationThemeScope(
-      child: Scaffold(
-        appBar: AppBar(
-          title: Semantics(
-            header: true,
-            child: Text(l10n.gamificationLevelDetailTitle(current.number)),
-          ),
-        ),
-        body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-            children: [
-              Semantics(
+      child: Builder(
+        builder: (context) {
+          // A fresh `context` from inside the wrapper's subtree — the
+          // outer `build(context)` parameter sits ABOVE the merged theme,
+          // so resolving the SS extensions on it would null-check against
+          // the ambient (non-DS) theme.
+          final colors = Theme.of(context).extension<SsColorScheme>()!;
+          final typography = Theme.of(context).extension<SsTypography>()!;
+          return Scaffold(
+            appBar: AppBar(
+              title: Semantics(
                 header: true,
-                child: Text(
-                  l10n.gamificationLevelDetailCurrentTitle,
-                  key: const Key('level-detail-current-header'),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
+                child: Text(l10n.gamificationLevelDetailTitle(current.number)),
+              ),
+            ),
+            body: SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  SsSpacing.space5,
+                  SsSpacing.space3,
+                  SsSpacing.space5,
+                  SsSpacing.space6,
                 ),
-              ),
-              const SizedBox(height: 8),
-              LevelBadge(level: current),
-              const SizedBox(height: 16),
-              Text(
-                l10n.gamificationLevelDetailCurrentBody,
-                key: const Key('level-detail-current-body'),
-                style: theme.textTheme.bodyMedium,
-              ),
-              if (next != null) ...[
-                const SizedBox(height: 20),
-                Semantics(
-                  header: true,
-                  child: Text(
-                    l10n.gamificationLevelDetailNextTitle,
-                    key: const Key('level-detail-next-header'),
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: theme.colorScheme.primary,
+                children: [
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      l10n.gamificationLevelDetailCurrentTitle,
+                      key: const Key('level-detail-current-header'),
+                      style: typography.titleMedium.copyWith(
+                        color: colors.brand,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                LevelBadge(level: next),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.gamificationLevelDetailNextBody,
-                  key: const Key('level-detail-next-body'),
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-              const SizedBox(height: 24),
-              XpProgressBar(
-                xpIntoCurrentLevel: profile.xpIntoCurrentLevel,
-                xpToNextLevel: profile.xpToNextLevel,
-                totalXp: profile.totalXp,
+                  const SizedBox(height: SsSpacing.space2),
+                  LevelBadge(level: current),
+                  const SizedBox(height: SsSpacing.space4),
+                  Text(
+                    l10n.gamificationLevelDetailCurrentBody,
+                    key: const Key('level-detail-current-body'),
+                    style: typography.bodyMedium,
+                  ),
+                  if (next != null) ...[
+                    const SizedBox(height: SsSpacing.space5),
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        l10n.gamificationLevelDetailNextTitle,
+                        key: const Key('level-detail-next-header'),
+                        style: typography.titleMedium.copyWith(
+                          color: colors.brand,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: SsSpacing.space2),
+                    LevelBadge(level: next),
+                    const SizedBox(height: SsSpacing.space2),
+                    Text(
+                      l10n.gamificationLevelDetailNextBody,
+                      key: const Key('level-detail-next-body'),
+                      style: typography.bodyMedium,
+                    ),
+                  ],
+                  const SizedBox(height: SsSpacing.space6),
+                  XpProgressBar(
+                    xpIntoCurrentLevel: profile.xpIntoCurrentLevel,
+                    xpToNextLevel: profile.xpToNextLevel,
+                    totalXp: profile.totalXp,
+                  ),
+                  const SizedBox(height: SsSpacing.space6),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      l10n.gamificationLevelDetailHowXpWorksTitle,
+                      key: const Key('level-detail-how-title'),
+                      style: typography.titleMedium,
+                    ),
+                  ),
+                  const SizedBox(height: SsSpacing.space1),
+                  Text(
+                    l10n.gamificationLevelDetailHowXpWorksBody,
+                    key: const Key('level-detail-how-body'),
+                    style: typography.bodyMedium,
+                  ),
+                  const SizedBox(height: SsSpacing.space3),
+                  for (final entry in components) ...[
+                    _XpComponentRow(component: entry),
+                    const SizedBox(height: SsSpacing.space2),
+                  ],
+                  const SizedBox(height: SsSpacing.space2),
+                  Text(
+                    l10n.gamificationLevelDetailXpTotalLabel(
+                      latestSessionXp.totalXp,
+                    ),
+                    key: const Key('level-detail-session-total'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: typography.titleMedium.copyWith(color: colors.brand),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              Semantics(
-                header: true,
-                child: Text(
-                  l10n.gamificationLevelDetailHowXpWorksTitle,
-                  key: const Key('level-detail-how-title'),
-                  style: theme.textTheme.titleMedium,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                l10n.gamificationLevelDetailHowXpWorksBody,
-                key: const Key('level-detail-how-body'),
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 12),
-              for (final entry in components) ...[
-                _XpComponentRow(component: entry),
-                const SizedBox(height: 8),
-              ],
-              const SizedBox(height: 8),
-              Text(
-                l10n.gamificationLevelDetailXpTotalLabel(
-                  latestSessionXp.totalXp,
-                ),
-                key: const Key('level-detail-session-total'),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -173,28 +186,19 @@ class _XpComponentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Semantics(
       container: true,
       label: component.semantics,
       child: ExcludeSemantics(
-        child: Container(
+        child: SsCard(
           key: const Key('level-detail-component-row'),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.star_outline,
-                color: theme.colorScheme.primary,
-                size: 18,
-              ),
-              const SizedBox(width: 10),
+              Icon(Icons.star_outline, color: colors.brand, size: 18),
+              const SizedBox(width: SsSpacing.space2),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,18 +207,18 @@ class _XpComponentRow extends StatelessWidget {
                     Text(
                       component.title,
                       key: const Key('level-detail-component-title'),
-                      style: theme.textTheme.titleSmall,
+                      style: typography.titleMedium,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: SsSpacing.space1),
                     Text(
                       component.body,
                       key: const Key('level-detail-component-body'),
-                      style: theme.textTheme.bodySmall,
+                      style: typography.bodyMedium,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: SsSpacing.space2),
               Flexible(
                 child: Text(
                   '${component.xp} XP',
@@ -222,9 +226,7 @@ class _XpComponentRow extends StatelessWidget {
                   maxLines: 2,
                   textAlign: TextAlign.end,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
+                  style: typography.labelLarge.copyWith(color: colors.brand),
                 ),
               ),
             ],
