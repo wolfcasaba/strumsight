@@ -256,4 +256,85 @@ python3 tool/release/verify_ga_scope.py --scope docs/release/ga-scope.md --profi
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-09-02.
+
+### Mit szállít ez a kör
+
+- [`docs/release/beta-findings.md`](../release/beta-findings.md) — a Closed
+  Beta MÉRT NOT-launched állapota (D8), a helyette használt bizonyítékforrások
+  listája, és melyik besorolás melyik jövőbeli béta-mérésre vár.
+- [`docs/release/ga-scope.md`](../release/ga-scope.md) — a
+  `docs/beta/cohort-profiles.yaml` 16 flag-kulcsának PONTOSAN egy besorolása
+  mindegyikhez (`ga`/`preview`/`disabled`/`postponed`), a core tanulási út
+  4 lépése a rátámaszkodó capabilityvel (csak `practiceEngineV2Enabled`
+  szükséges — a másik három e2e-cella capability-független, `none`), és egy
+  explicit **NEM KÉSZ (NOT READY)** fejléc (a nyitott P0 `R-SIGN-01` + öt P1
+  miatt, D7).
+- [`docs/release/contract-freeze.md`](../release/contract-freeze.md) — 4
+  befagyasztott contract, mindegyikhez nevesített, ellenőrizhető feloldó
+  feltétellel (D6).
+- [`tool/release/verify_ga_scope.py`](../../tool/release/verify_ga_scope.py)
+  — fail-closed konzisztencia-ellenőrző (D1–D7), PyYAML a cohort-profilhoz
+  (a testvér `verify_beta_profile.py` precedense szerint), stdlib+`yaml`
+  egyéb függőség nélkül.
+- [`test/tooling/ga_scope_test.dart`](../../test/tooling/ga_scope_test.dart)
+  — A1 (D1, 3 mutáció-próba), A2 (D4, a §6.1 valódi-sértés próba +
+  tool-független sanity), A3 (D5), A4 (D6, 2 mutáció-próba), A5 (D7, 2
+  mutáció-próba), plusz két exit-2 használati-hiba cella.
+
+### Besorolási döntések rövid indoklása (a teljes indoklás `ga-scope.md`-ban)
+
+`practiceEngineV2Enabled` az EGYETLEN `ga` — ez gátolja a Practice Hub
+route-ot (`lib/app/routing/app_router.dart:180-183`), amit az `E12-R11` core
+e2e-cellája (`test/e2e/first_practice_offline_test.dart`) ténylegesen
+meghajt. A `docs/testing/device-matrix.yaml` egy MÁSIK, durvább szemcséjű,
+MÁR meglévő tengelye (`practice_engine: ga_scope: true`, `ai_tutor`/
+`computer_vision: ga_scope: false`) megerősítő, nem döntő forrásként
+kereszthivatkozva. A `postponed` sorok mindegyike vagy egy Epic completion
+report nyitott release-blokkolójára (`epic-03`/`epic-06-completion-report.md`),
+vagy a `blockers.md` nyitott P1-jeire (`R-PRIV-01`, `R-SEC-01`) hivatkozik —
+egyik sem béta-adatra (D8).
+
+### Valódi-sértés próba (§6.1, KÖTELEZŐ) — tényleges kimenet
+
+Ideiglenesen (a commit ELŐTT visszaállítva): `docs/beta/cohort-profiles.yaml`
+`internal` cohortjában `accountEnabled: false` → `accountEnabled: true`
+(`accountEnabled` a `ga-scope.md`-ban `disabled`).
+
+```
+$ python3 tool/release/verify_ga_scope.py --scope docs/release/ga-scope.md --profile docs/beta/cohort-profiles.yaml
+verify_ga_scope: 1 finding(s):
+  - ga-scope.md:45: capability 'accountEnabled' is classified disabled but cohort 'internal' sets it to true (D4)
+exit=1
+```
+
+**A2 PIROSRA váltott, ahogy a §6.1 mátrix előírja.** A Dart gate-en
+(`flutter test test/tooling/ga_scope_test.dart`) ugyanezen a mutált fán 4
+sanity-cella bukott (a `_scope`/`_profile` alapértelmezéssel futó A1–A4
+"exit 0 on the real tree" jellegű cellák) — ez a tool-független megerősítés.
+A `docs/beta/cohort-profiles.yaml`-t ezután byte-pontosan visszaállítottam
+(`git diff docs/beta/cohort-profiles.yaml` üres a commit előtt), a mutáció
+NEM került commitba.
+
+### `verify_ga_scope.py` közvetlen futtatása — a tiszta fán
+
+```
+$ python3 tool/release/verify_ga_scope.py --scope docs/release/ga-scope.md --profile docs/beta/cohort-profiles.yaml
+verify_ga_scope: ok — 16 capability classification(s), 4 core-path step(s), 4 frozen contract(s), 6 open P0/P1 blocker(s)
+```
+
+### Gate
+
+`tools/round-gate.sh test/tooling/ga_scope_test.dart test/tooling/beta_profile_test.dart`
+— **MINDEN GATE ZÖLD** (format, analyze, mindkét test-fájl külön-külön,
+architecture, secrets, l10n). A `beta_profile_test.dart` VÁLTOZATLAN és zöld
+maradt (A6).
+
+### Amit ez a kör NEM tett meg (szándékosan)
+
+Nem indította el a Closed Bétát, nem gyártott terepi triage-adatot, nem
+módosított `docs/adr/**`-t, nem nyúlt `lib/**`/`backend/**`/`.github/**`/
+`docs/eval/**`-hoz, és a `docs/beta/cohort-profiles.yaml` egyetlen commitolt
+sora sem változott (a valódi-sértés próba visszaállítva).
+
 ## 11. Review — a Claude tölti ki
