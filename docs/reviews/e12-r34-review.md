@@ -211,6 +211,64 @@ Minden javításhoz **mutációs cella** kell a `hotfix_policy_test.dart`-ban: a
 fenti négy fixtúra-alak mindegyike fordítsa PIROSRA a saját celláját. A
 mutációs próbák a fixtúrákon fussanak, ne a valódi fájlon.
 
-## 3. Kör #2 — a javító kör után
+## 3. Kör #2 — a javító kör után — VERDIKT: **APPROVED**
 
-_(a javító kör után töltendő)_
+- **Mért HEAD:** `7d31c868` (a javító commit `1dcc16c0` + az `origin/main`
+  `70eefdf4` upstream-merge, ADR 0086 §2)
+- **Mérési identitás:** friss izolált klón `/tmp/review-e12-r34b`, exact HEAD,
+  a gate a klón munkakönyvtárából
+- **Scope:** `scope_audit=ok`, `scope_audit_changed=4` — a javító kör a
+  `verify_hotfix.py`, a `hotfix.proposal.yml`, a `hotfix_policy_test.dart` és a
+  brief §10 fájlokat érintette, mind az engedélyezett listán.
+
+### 3.1 Leletenkénti zárás — a kör #1 fixtúrái ÚJRAFUTTATVA a javított mércén
+
+Minden lelet ugyanazon a fixtúrán mérve, amelyen a kör #1-ben hamis zöldet adott:
+
+| Lelet | Kör #1 | Kör #2 | A javított mérce üzenete |
+|---|---|---|---|
+| MAJOR-1 (job-szintű `continue-on-error`) | `exit=0` ❌ | **`exit=1`** ✅ | `security-scan-unconditional: job "security-scan" carries "continue-on-error:" — forbidden (ADR 0490 D1)` |
+| MAJOR-1 (job-szintű `if:`, semleges nevű input) | `exit=0` ❌ | **`exit=1`** ✅ | `security-scan-unconditional: job "security-scan" carries an "if:" condition — forbidden (ADR 0490 D1)` |
+| MAJOR-2 (névben megmaradó, tartalmában üres scan) | `exit=0` ❌ | **`exit=1`** ✅ | `security-scan-content: job "security-scan" has no step whose "run:" body invokes tool/release/security_scan.py — a step name alone is not the gate (ADR 0490 D1)` |
+| MAJOR-3 (`publish-hotfix` job `needs:` nélkül) | `exit=0` ❌ | **`exit=1`** ✅ | `approval-gate-transitive: … fail-closed: every job other than the approval gate itself must need it, not only jobs whose steps happen to match a build/sign/upload verb (ADR 0490 D3)` |
+| MAJOR-4 (GHA script injection) | 5 találat ❌ | **0 találat** ✅ | egyetlen `run:` törzs sem tartalmaz `${{ }}`-t (mérve a javaslaton; a `hotfix_policy_test.dart:709,739` gépi cellát is visel rá) |
+| MINOR-1 (`1.2` → `1.2.0`) | `exit=0` ❌ | **`exit=1`** ✅ | `version-strictly-greater: --version "1.2.0" is not strictly greater than --previous-version "1.2"` |
+
+### 3.2 ÚJ, a javításra nem illesztett próbák — a fix általános, nem fixtúra-szabott
+
+A javító kör promptja négy fixtúra-alakot nevezett meg. Két olyan próbát is
+futtattam, amit **nem** kapott meg — mindkettőt megfogja:
+
+| Új próba | Eredmény |
+|---|---|
+| a signing tartalma kiürítve, a NEVE megtartva (a MAJOR-2 tükörképe a signing oldalon) | **`exit=1`** — `production-signing-content: job "build-hotfix" has no step whose "env:" binds STRUMSIGHT_REQUIRE_RELEASE_SIGNING and whose "run:" body calls "flutter build apk --release"` |
+| job-szintű `if:` a **build** jobon (nem a scan jobon, amit a fixtúra használt) | **`exit=1`** — `production-signing-unconditional: job "build-hotfix" carries an "if:" condition` |
+
+A valódi javaslat mindeközben zöld: `verify_hotfix (static mode): ok`, és a
+kérés-mód a `0 / 0 / 1` mintát adja (§6.3 „fölötte/alatta/rajta").
+
+### 3.3 Gépi kapuk a javító HEAD-en (`/tmp/review-e12-r34b`, `7d31c868`)
+
+```
+tools/round-gate.sh test/tooling/hotfix_policy_test.dart test/tooling/rc_assembly_test.dart
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/hotfix_policy_test.dart                  zöld
+    test test/tooling/rc_assembly_test.dart                    zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+```
+
+A `hotfix_policy_test.dart` 37 cellát visel (kör #1: 34 → +7 új mutációs cella,
+a csoport-átrendezéssel együtt).
+
+### 3.4 Nyitott lelet
+
+**Nincs.** A négy MAJOR és az egy MINOR mind zárva, mindegyik a saját,
+független reprodukciójával mérve. A NOTE-ok (a `--previous-version` operátori
+bemenet, vezető nulla) továbbra is előremutató megjegyzések, nem e kör
+kötelezettségei — a javaslat telepítése utáni körben érdemes a `pubspec.yaml`-hoz
+kötni a monotonitást.
+
+## VÉGSŐ DÖNTÉS: **APPROVED**
