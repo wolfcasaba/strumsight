@@ -1,5 +1,69 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R35 KÉSZ — Technikaiadósság- és flag cleanup — PR [#537](https://github.com/wolfcasaba/strumsight/pull/537), squash `3326e32a` (2026-09-02)
+
+A Chapter 12 **Kör 35** azt szállítja, amit a neve ígér, és **csak** azt: mért
+adósság-**leltárt** és a hozzá tartozó **audit-eszközt**. A kör **egyetlen
+`lib/` fájlt sem módosít** — a kompatibilitási réteg vagy flag lezárása a repó
+mért szabálya szerint dedikált GOV-kör dolga ([ADR 0395](docs/adr/0395-community-baseline-feature-flags-and-threat-model-scope.md)),
+nem egy építő-köré. ADR **nem** született (indoklás a brief §0.0-ban: új ADR az
+`allowed_paths` bővítését kívánta volna, ami ADR 0087 §2 szerint nem
+orchestrátori hatáskör).
+
+**Amit szállít.** `tool/check_deprecations.dart` (ÚJ) — a mérő-eszköz, a Kör 5
+`check_feature_flags.dart` tartalom-paraméteres mintájára: minden lépés tiszta
+függvény, a `main()` vékony `exitCode`-burkoló, így a teszt olyan bemenetet is
+felépíthet, amit a valódi fa nem produkál. `docs/release/technical-debt.md`
+(ÚJ) — **14 mért tétel**, mindegyik FELELŐSSEL és konkrét ELTÁVOLÍTÁSI
+FELTÉTELLEL. `test/tooling/deprecation_audit_test.dart` (ÚJ) — **37 cella**,
+köztük a küszöb-cellahármas (11/12/13, INKLUZÍV határ, a bázisvonalból
+számolva, nem kézzel írt literálból).
+
+**A mért leltár.** 12 `@Deprecated` jelölés 9 fájlban (8 egyszerű re-export
+shim + az `ApiConfig` 4-tagú shimje) — **mind 0 külső importáló fájllal**,
+tehát ezek a legerősebb törlés-jelöltek, de a törlés ettől még külön kör. A
+`library`/`library_v2` (5 / 1) és `progress`/`progress_v2` (17 / 0) párhuzamos
+rétegek, plusz 3 TODO-klaszter (14 TODO). **A `progress_v2` nulla külső
+hívóhelye kifejezetten NEM töröl-engedély** (brief §5.3) — a leltár ezt
+tételként, feltétellel rögzíti.
+
+**A review két MAJOR-t fogott, mindkettőt eldobható mutációval — és mindkettő
+ugyanaz a hibaosztály: a cella a VISELKEDÉST mérte, a SZERZŐDÉST nem.**
+**M1** — az A2 „nincs második igazság" nem volt gépi mérce: a Kör 5
+`isFeatureFlagExpired` hívást egy lokális, azonos szemantikájú másolatra
+cserélve **mind a 14 cella zöld maradt**, holott a brief §6.1 mátrixa
+kifejezetten ezt a hibás implementációt ígérte pirosra. **M2** — az A1 „MINDEN
+`@Deprecated` elem" némán alulmért: egy VALÓDI, többsoros (szomszédos
+string-literálos) `@Deprecated` a nyers előfordulásszámot 13-ra vitte, a tool
+viszont továbbra is 12-t látott, és **a 12/9-es bázisvonal-cella is zöld
+maradt** — pontosan azért, mert a hiányzó találat miatt a szám nem változott.
+Javító kör (`df7ef710` → rebase `3f3ba1c0`) után mindkét mutáció PIROS, és
+mindkettőt a MEGFOGÓ próba megismétlésével zártam. +2 MINOR
+(`externalCallsiteCount` → `externalImporterCount`, mert importáló FÁJLOKAT
+mér; a frozen-scope őr `—`-sal kikerülhető volt) szintén zárva.
+
+**Landolás.** A `main` a kör alatt kétszer mozdult (a párhuzamos E15-R07 sáv),
+ezért a landolás a merge-záron át, `tools/round-land.sh`-sal ment: rebase →
+kombinált-HEAD gate (8/8 zöld) → safe force push (`c4d76788`) → exact-SHA CI
+ÚJRA a rebase-elt HEAD-en → squash-merge. Egy első landolási kísérlet
+hamis H8-cal állt meg — a mért ok NEM divergencia volt (a patch-id-k
+azonosak), hanem az OSZTOTT munkafa: a másik sáv `git reset --hard
+origin/main`-je a landoló futása közben visszaállította a branch refet
+([L587](docs/LESSONS.md#l587)).
+
+**Bizonyíték.** Exact-SHA CI a `c4d76788` merge-elt HEAD-en:
+[full-gate 33692345767](https://github.com/wolfcasaba/strumsight/actions/runs/33692345767)
++ [router-ci 33692347955](https://github.com/wolfcasaba/strumsight/actions/runs/33692347955),
+mindkettő `success`. Review: [`e12-r35-review.md`](docs/reviews/e12-r35-review.md)
+(1. menet CHANGES REQUESTED → 2. menet **APPROVED**, 0 nyitott lelet).
+Leckék: [L586](docs/LESSONS.md#l586), [L587](docs/LESSONS.md#l587).
+
+**Amit a következő köröknek tudniuk kell.** Az `A1 the real tree reports 12
+deprecated sites in 9 files` cella **bázisvonal-jellegű**: minden jövőbeli
+`@Deprecated` hozzáadás pirosra viszi, és a számot ott KELL frissíteni. A 9
+shim (mind 0 külső importáló) törlése egy dedikált takarító kör olcsó munkája
+— a feltételek a `technical-debt.md`-ben tételenként ott vannak.
+
 ## ✅ E15-R07 KÉSZ — Practice Generator bekötése (route + flag + belépési pont) — PR [#536](https://github.com/wolfcasaba/strumsight/pull/536), squash `d0cd45ee` (2026-09-02)
 
 A Chapter 15 **Kör 7** azt szállítja, amiért a kör létrejött: a Practice
