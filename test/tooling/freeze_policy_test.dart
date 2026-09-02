@@ -32,6 +32,16 @@ Directory _tempDir() =>
 File _writeIn(Directory dir, String name, String contents) =>
     File('${dir.path}/$name')..writeAsStringSync(contents);
 
+// E12-R30 2nd fix round: an empty (comment-only) --changes-file for cells
+// that measure known-issues.md/CHANGELOG.md validation, not freeze-era git
+// classification — isolates them from the clone's history/depth.
+const _noChanges =
+    '# no changes — this cell only measures known-issues/CHANGELOG '
+    'validation, not freeze-era git classification\n';
+
+bool _gitRevisionAvailable(String sha) =>
+    Process.runSync('git', ['rev-parse', '--verify', sha]).exitCode == 0;
+
 void main() {
   group('self-check — python3 is on PATH', () {
     test('a missing python3 would turn every cell below red, not skip it', () {
@@ -41,27 +51,53 @@ void main() {
   });
 
   group('sanity — the shipped documents validate against the real tree', () {
-    test(
-      'exit 0 with only default paths (no --since/--changes-file) — the '
-      'default call classifies too (MAJOR-1: it falls back to '
-      'feature-freeze.md\'s freeze_base_sha, it does not silently skip A1)',
-      () {
-        final result = _run([]);
+    // Both cells below measure the environment first: a full clone can
+    // resolve `feature-freeze.md`'s freeze_base_sha and must classify (exit
+    // 0); a shallow CI clone (actions/checkout default, no fetch-depth
+    // override — `.github/**` stays out of scope for this round) cannot
+    // reach that commit and must fail CLOSED (exit 2, naming the missing
+    // base) rather than silently passing or silently skipping A1. Neither
+    // branch is a free pass — each asserts a precise exit code and message.
+    test('exit 0 with only default paths (no --since/--changes-file) when the '
+        'freeze base is reachable in this clone (MAJOR-1: the default call '
+        'falls back to feature-freeze.md\'s freeze_base_sha, it does not '
+        'silently skip A1) — exit 2 naming the unreachable base when it is '
+        'not (shallow CI clone; fail-closed, not a regression)', () {
+      final freezeBaseSha = RegExp(
+        r'^freeze_base_sha:\s*([0-9a-f]{7,40})$',
+        multiLine: true,
+      ).firstMatch(File(_featureFreeze).readAsStringSync())!.group(1)!;
+
+      final result = _run([]);
+      if (_gitRevisionAvailable(freezeBaseSha)) {
         expect(result.exitCode, 0, reason: result.stderr.toString());
         expect(result.stdout.toString(), contains('ok'));
         expect(
           result.stdout.toString(),
           contains('changed path(s) classified'),
         );
-      },
-    );
+      } else {
+        expect(result.exitCode, 2);
+        expect(result.stderr.toString(), contains(freezeBaseSha));
+      }
+    });
 
     test('exit 0 classifying the real freeze-era diff since freeze_base_sha '
         '(§7 — this round\'s own diff is documentation + release-tooling '
-        'only)', () {
-      final result = _run(['--since', '4ac78365']);
-      expect(result.exitCode, 0, reason: result.stderr.toString());
-      expect(result.stdout.toString(), contains('changed path(s) classified'));
+        'only) when reachable — exit 2 naming the unreachable base when it '
+        'is not (shallow CI clone; fail-closed, not a regression)', () {
+      const freezeBaseSha = '4ac78365';
+      final result = _run(['--since', freezeBaseSha]);
+      if (_gitRevisionAvailable(freezeBaseSha)) {
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+        expect(
+          result.stdout.toString(),
+          contains('changed path(s) classified'),
+        );
+      } else {
+        expect(result.exitCode, 2);
+        expect(result.stderr.toString(), contains(freezeBaseSha));
+      }
     });
   });
 
@@ -289,8 +325,14 @@ approver_role: freeze-test fixture
       final fixture = _tempDir();
       addTearDown(() => fixture.deleteSync(recursive: true));
       final file = _writeIn(fixture, 'known-issues.md', mangled);
+      final changes = _writeIn(fixture, 'changes.tsv', _noChanges);
 
-      final result = _run(['--known-issues', file.path]);
+      final result = _run([
+        '--known-issues',
+        file.path,
+        '--changes-file',
+        changes.path,
+      ]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('R-DEVICE-01'));
       expect(result.stderr.toString(), contains('workaround'));
@@ -305,8 +347,14 @@ approver_role: freeze-test fixture
       final fixture = _tempDir();
       addTearDown(() => fixture.deleteSync(recursive: true));
       final file = _writeIn(fixture, 'known-issues.md', mangledText);
+      final changes = _writeIn(fixture, 'changes.tsv', _noChanges);
 
-      final result = _run(['--known-issues', file.path]);
+      final result = _run([
+        '--known-issues',
+        file.path,
+        '--changes-file',
+        changes.path,
+      ]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('P9'));
     });
@@ -331,8 +379,14 @@ approver_role: freeze-test fixture
       final fixture = _tempDir();
       addTearDown(() => fixture.deleteSync(recursive: true));
       final file = _writeIn(fixture, 'known-issues.md', mangled);
+      final changes = _writeIn(fixture, 'changes.tsv', _noChanges);
 
-      final result = _run(['--known-issues', file.path]);
+      final result = _run([
+        '--known-issues',
+        file.path,
+        '--changes-file',
+        changes.path,
+      ]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('K-FAKE-01'));
       expect(result.stderr.toString(), contains('blockers.md'));
@@ -348,8 +402,14 @@ approver_role: freeze-test fixture
       final fixture = _tempDir();
       addTearDown(() => fixture.deleteSync(recursive: true));
       final file = _writeIn(fixture, 'known-issues.md', mangledText);
+      final changes = _writeIn(fixture, 'changes.tsv', _noChanges);
 
-      final result = _run(['--known-issues', file.path]);
+      final result = _run([
+        '--known-issues',
+        file.path,
+        '--changes-file',
+        changes.path,
+      ]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('R-VER-01'));
     });
@@ -366,8 +426,14 @@ approver_role: freeze-test fixture
       final fixture = _tempDir();
       addTearDown(() => fixture.deleteSync(recursive: true));
       final file = _writeIn(fixture, 'known-issues.md', mangledText);
+      final changes = _writeIn(fixture, 'changes.tsv', _noChanges);
 
-      final result = _run(['--known-issues', file.path]);
+      final result = _run([
+        '--known-issues',
+        file.path,
+        '--changes-file',
+        changes.path,
+      ]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('R-VER-01'));
       expect(result.stderr.toString(), contains('blockers.md'));
@@ -416,8 +482,14 @@ approver_role: freeze-test fixture
       final fixture = _tempDir();
       addTearDown(() => fixture.deleteSync(recursive: true));
       final file = _writeIn(fixture, 'CHANGELOG.md', mangledText);
+      final changes = _writeIn(fixture, 'changes.tsv', _noChanges);
 
-      final result = _run(['--changelog', file.path]);
+      final result = _run([
+        '--changelog',
+        file.path,
+        '--changes-file',
+        changes.path,
+      ]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('9.9.9'));
     });
@@ -431,8 +503,14 @@ approver_role: freeze-test fixture
       final fixture = _tempDir();
       addTearDown(() => fixture.deleteSync(recursive: true));
       final file = _writeIn(fixture, 'CHANGELOG.md', mangledText);
+      final changes = _writeIn(fixture, 'changes.tsv', _noChanges);
 
-      final result = _run(['--changelog', file.path]);
+      final result = _run([
+        '--changelog',
+        file.path,
+        '--changes-file',
+        changes.path,
+      ]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('42'));
     });
@@ -446,8 +524,14 @@ approver_role: freeze-test fixture
       final fixture = _tempDir();
       addTearDown(() => fixture.deleteSync(recursive: true));
       final file = _writeIn(fixture, 'CHANGELOG.md', mangledText);
+      final changes = _writeIn(fixture, 'changes.tsv', _noChanges);
 
-      final result = _run(['--changelog', file.path]);
+      final result = _run([
+        '--changelog',
+        file.path,
+        '--changes-file',
+        changes.path,
+      ]);
       expect(result.exitCode, 1);
       expect(result.stderr.toString(), contains('7'));
     });

@@ -479,7 +479,10 @@ def get_changes_from_git(since_sha: str) -> list[tuple[str, str]]:
         )
     except (subprocess.CalledProcessError, OSError) as error:
         raise VerifyError(
-            f"--since {since_sha!r} is not a valid git revision: {error}"
+            f"freeze base {since_sha!r} is not present in this clone (shallow "
+            "checkout?) — the freeze classification needs full git history "
+            "(`git fetch --unshallow` / `actions/checkout` `fetch-depth: 0`); "
+            "use --changes-file to check the documents without git history"
         ) from error
 
     try:
