@@ -300,4 +300,128 @@ A teljes suite + property-gate + APK a CI-ban fut (ADR 0053) — a dispatch az o
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5), 1 kör (javító kör nélkül).
+
+### Szállítva (fájlonként)
+
+- [`docs/release/feature-freeze.md`](../release/feature-freeze.md) — ÚJ. A
+  freeze szabálya + két gépileg parszolható marker-blokk:
+  `<!-- freeze-base:begin/end -->` (`freeze_base_sha: 4ac78365`,
+  `approver_role`) és `<!-- freeze-classes:begin/end -->` (a zárt, 3 elemű
+  osztály-tábla: `documentation` / `release-tooling` / `blocker-fix`, a
+  `path_prefixes` és `requires_blocker_id` oszlopokkal — ezt olvassa be a
+  `verify_freeze.py`, nem hardkódolja).
+- [`docs/release/known-issues.md`](../release/known-issues.md) — ÚJ. Egy
+  közös `<!-- known-issues:begin/end -->` blokk, ami mindhárom §-t (§1 a
+  `blockers.md` tíz sorának MAI, soronkénti mérése; §2 a Kör 25
+  RC-workflow-ja soha nem futott; §3 hat gazdátlan, korábban MÉRT nyitott
+  lelet: `E12-R20`/`R21`/`R23`/`R24`/`R29`) átfogja — 17 adatsor
+  (`id`/`severity`/`title`/`impact`/`workaround`).
+- [`CHANGELOG.md`](../../CHANGELOG.md) — ÚJ. `<!-- release-header:begin/end
+  -->` marker-blokk (`version: 1.0.0`, `build: 1`, `schema_version: 1`,
+  pontosan 3 sor — negyedik sor, pl. időbélyeg, fail-closed elutasítva), a
+  Chapter-szintű mérföldkövek `docs/sdd/00-index.md`-ből, és a jelen kör
+  saját bejegyzése.
+- [`tool/release/verify_freeze.py`](../../tool/release/verify_freeze.py) —
+  ÚJ. Három ellenőrzés egy futásban: freeze-osztályozás (git `--since` VAGY
+  fail-closed `--changes-file`), `known-issues.md` (A2/A3), `CHANGELOG.md`
+  fejléc (A4) — 0/1/2 kilépő-kóddal (`verify_ga_scope.py`/
+  `verify_beta_profile.py` szemantikája, negyedik kód nélkül).
+- [`test/tooling/freeze_policy_test.dart`](../../test/tooling/freeze_policy_test.dart)
+  — ÚJ. 31 cella, `ga_scope_test.dart` mintája (`Process.runSync`, temp-dir
+  fixtúrák, valódi-fán futó sanity cellák).
+- Ez a fájl (`docs/rounds/e12-r30-…md`) — csak a §10 (jelen szakasz)
+  kitöltve, a törzsszöveg és a §0.0 pre-flight változatlan.
+
+### A1–A7 megfeleltetés
+
+| # | Bizonyíték a `freeze_policy_test.dart`-ban |
+|---|---|
+| A1 | csoport „A1 — freeze-era change classification" (7 cella): osztályozatlan útvonal → `1`; `documentation`/`release-tooling` → `0` blocker ID nélkül; `blocker-fix` érvényes `blockers.md` ID-vel → `0`; nemlétező ID → `1`; `P3` súlyosságú ID NEM elég → `1` (izolált fixtúrával, ld. lent); `--since`+`--changes-file` együtt és érvénytelen `--since` → `2` |
+| A2 | csoport „A2" (2 cella): üres workaround-cella → `1`, ismeretlen severity (`P9`) → `1` — mindkettő a sértő `id`-t nevezi meg |
+| A3 | csoport „A3" (3 cella): a §6.1 valódi-sértés próba mint reprodukálható regressziós cella (fixtúrán, `K-FAKE-01` a `blockers.md`-ben nincs) → `1`; severity-eltérés (`R-VER-01` itt `P0`, `blockers.md`-ben `P1`) → `1`; sanity — a szállított `known-issues.md`-ben egyetlen P0/P1 sor sincs `blockers.md`-n kívül |
+| A4 | csoport „A4" (3 cella): `version`/`build`/`schema_version` eltérés külön-külön → `1`, mindegyik a hibás értéket nevezi meg |
+| A5 | ld. „CI-dispatch" alszakasz lent — ez NEM a `freeze_policy_test.dart` cellája |
+| A6 | `git diff --stat 4ac78365 HEAD` (lent) — nincs `lib/**`/`backend/**`/`android/**`/`assets/**`/`pubspec.yaml` a diffben |
+| A7 | csoport „A7" (9 cella, mindhárom dokumentumra: `feature-freeze.md`, `known-issues.md`, `CHANGELOG.md`): hiányzó marker-blokk → `2`, elrontott sor-alak → `2`, üres blokk → `2` (a `feature-freeze.md`-nél a `freeze-base` ÉS a `freeze-classes` blokkra is, 4 cella) |
+
+### `tools/round-gate.sh` — a TÉNYLEGES kimenet (csonkítás nélkül futtatva)
+
+```
+$ tools/round-gate.sh test/tooling/freeze_policy_test.dart test/tooling/ga_scope_test.dart
+═══ [1] format                                                          → ZÖLD  (Formatted 2214 files (0 changed))
+═══ [2] analyze                                                         → ZÖLD  (No issues found! (ran in 27.1s))
+═══ [3] test test/tooling/freeze_policy_test.dart                       → ZÖLD  (00:01 +31: All tests passed!)
+═══ [4] test test/tooling/ga_scope_test.dart                            → ZÖLD  (00:01 +23: All tests passed!)
+═══ [5] architecture                                                    → ZÖLD  (Architecture dependencies OK (12 allowlisted deviation(s)))
+═══ [6] secrets                                                         → ZÖLD  (Secret scan OK (4169 file(s) scanned, 0 finding(s)))
+═══ [7] l10n                                                            → ZÖLD  (L10n aggregate freshness OK; L10n parity OK (en → hu, 2298 message(s)))
+
+Gate-összegzés: format zöld · analyze zöld · test test/tooling/freeze_policy_test.dart zöld ·
+test test/tooling/ga_scope_test.dart zöld · architecture zöld · secrets zöld · l10n zöld
+MINDEN GATE ZÖLD.
+```
+
+### `verify_freeze.py --since 4ac78365` — a TÉNYLEGES kimenet (a kör saját diffjén, a végleges commitok után)
+
+```
+$ python3 tool/release/verify_freeze.py --since 4ac78365
+verify_freeze: ok — 17 known-issue row(s), 6 changed path(s) classified
+```
+
+(A 6 osztályozott útvonal mind a jelen kör két commitjából jön —
+`docs/release/feature-freeze.md`, `docs/release/known-issues.md`,
+`CHANGELOG.md` → `documentation`; `tool/release/verify_freeze.py`,
+`test/tooling/freeze_policy_test.dart` → `release-tooling`; a hatodik a
+`docs/rounds/e12-r30-…md` §10-frissítés, szintén `documentation` — egyik sem
+`blocker-fix`, konzisztens a §7 elvárásával, hogy a kör saját diffje
+kizárólag `documentation` + `release-tooling`.)
+
+### §6.1 Valódi-sértés próba — dokumentálva
+
+1. A `docs/release/known-issues.md` `<!-- known-issues:begin -->` markere
+   utáni sorba beszúrva: `` | `K-PROBE-01` | `P1` | valódi-sértés próba — nincs
+   a blockers.md-ben | próba impact | próba workaround | ``.
+2. `python3 tool/release/verify_freeze.py` (a valódi fán, felülírás nélkül)
+   → `1` kilépő kód, `known-issues.md:23: id 'K-PROBE-01' is severity 'P1'
+   but has no matching row in blockers.md (A3) — no P0/P1 known issue may
+   hide outside the blocker registry`.
+3. `flutter test test/tooling/freeze_policy_test.dart` a mutált fán → **PIROS**,
+   pontosan az A3 „the shipped known-issues.md has no P0/P1 row outside
+   blockers.md (sanity, tool-independent)" cella bukik (`Expected: 'P1',
+   Actual: <null>` — `K-PROBE-01` nincs a `blockers.md`-ben), és emiatt két
+   további, a valódi `known-issues.md`-re támaszkodó sanity/A1 cella is
+   pirosra vált (kaszkád, nem hiba — mind ugyanazt a mutált bemenetet olvassa).
+4. Visszaállítva: `cp /tmp/known-issues.md.orig docs/release/known-issues.md`,
+   `git status --short` → tiszta munkafa, `python3 tool/release/verify_freeze.py`
+   → újra `0`.
+
+### CI-dispatch (A5)
+
+Az orchesztrátor feladata (`tools/round-ci-plan.py` dönti a `build-apk.yml`/
+`full-gate.yml` választást a brief `native_gate = true` mezőjéből) — ez az
+implementer-kör nem hív `gh`-t (CLAUDE.md „REMOTE Claude Code konténerben").
+A run-link a merge-kézfogás során kerül ide/`HANDOFF.md`-be.
+
+### Amit NEM tettem meg, és miért
+
+- **Nem írtam át a `blockers.md`-t** — tilos zóna (§0.0 P2, §3, §4). A
+  `known-issues.md` P0/P1 tételei kizárólag a `blockers.md`-ben MA szereplő
+  ID-kat használják.
+- **Nem telepítettem és nem futtattam az RC-workflow-t** — a `.github/**`
+  tilos zóna (§0.0 P3); az A5 bizonyítéka az orchesztrátor
+  `build-apk.yml`/`full-gate.yml` dispatchja, nem az RC-kapu.
+- **Nem javítottam egyetlen MÉRT nyitott hibát sem** (pl. `K-E12R23-01`,
+  `K-E12R29-01/02`) — a `lib/**`/`backend/**` tilos zóna, és a freeze
+  pontosan azért van, hogy ezek látszódjanak, ne tűnjenek el egy „gyors
+  javítás" mögött (§5.1/§5.2, §9 „Regresszió-lelet elfedése").
+- **Nem futtattam a teljes `flutter test` suite-ot vagy a property-gate-et
+  lokálisan** — ADR 0053 szerint ez a CI dolga (0.1. szakasz); a lokális
+  gate a brief §7 szerinti két célzott teszt + a `round-gate.sh` beépített
+  architecture/secrets/l10n lépései.
+- **Nem emeltem a `pubspec.yaml` build-számát** — az emelés `blocker-fix`
+  osztályú termékváltozás lenne (§0.0 P7 táblázat), ami vagy egy nyitott
+  blocker javítását igényelné, vagy kívül esne a három zárt osztályon;
+  ehelyett a `CHANGELOG.md` a MÉRT, változatlan `1.0.0+1`-et rögzíti.
+
 ## 11. Review — a Claude tölti ki
