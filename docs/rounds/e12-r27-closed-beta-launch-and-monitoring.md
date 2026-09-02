@@ -297,4 +297,66 @@ python3 tool/release/verify_beta_profile.py --profile docs/beta/cohort-profiles.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), branch
+`sonnet-impl/e12-r27-closed-beta-launch-and-monitoring`.
+
+### 10.1 Mit építettem
+
+Az engedélyezett hat fájl mindegyike elkészült, egyenként commitolva:
+
+| Fájl | Tartalom |
+|---|---|
+| `docs/beta/cohort-profiles.yaml` | 2 cohort (`internal`, `closed_beta`), összesen 32 flag-hozzárendelés a MÉRT 40-es katalógusból. Mind a 7 `high` flag `false` mindkét cohortban. A `closed_beta` cohort `labModeAvailable: true` — ez a §4.4/A4 dry-run alanya (egyetlen `low` kockázatú, bekapcsolt flag). |
+| `tool/release/verify_beta_profile.py` | Stdlib + `import yaml` (modul-szinten, kemény függőség, precedens `build_ai_report.py:59`). A registryt regexszel olvassa fail-closed szerződéssel: `< 40` bejegyzés VAGY `FeatureFlagDefinition(` előfordulásszám ≠ sikeresen parse-olt hármasok száma → nem-nulla kilépés kimondott üzenettel. A1/A2/A3 validáció (exit 1), `--kill-switch <flag> --cohort <c>` read-only dry-run mód (exit 0, csak stdout, semmi lemezírás), formátum/használati hiba exit 2. |
+| `test/tooling/beta_profile_test.dart` | 16 teszt-eset, A1–A6 lefedve (l. §10.2 leképezés). `Process.runSync('python3', …)` a valódi fán és ideiglenes könyvtárban épített ellenséges fixture-ökön (precedens: `rc_assembly_test.dart`, `security_scan_test.dart`) — fixture nincs commitolva. |
+| `docs/beta/daily-triage-template.md` | `feedback-triage.md` kategóriáira/súlyosságára épül (nem duplikálja), napi 5-lépéses ritmus, KIMONDOTT döntési szabály: nyitott P0 (Blocker) / P1 (High) mellett nincs cohort-bővítés. Bemenetek kimondva: diagnosztikai bundle (`build_diagnostics_bundle.py`) + kézi visszajelzés; telemetria-gyűjtés MA nincs (kimondva, E12-R19-re hivatkozva). |
+| `docs/beta/closed-beta-launch.md` | 14 pontos indítási ellenőrzőlista, minden pont MÉRT hivatkozással (A5); a §3-ban a valódi, lefuttatott kill-switch dry-run kimenete (A4, `<!-- beta-kill-switch-dry-run:begin/end -->` jelölőkkel körülvéve); §4 kimondja, mit NEM lehetett elvégezni ezen a boxon; §5 az üres emberi indítási mező. §1 „Status" bekezdés kimondja: a béta NEM indult el, az indítás emberi döntés (A6). |
+| `docs/rounds/e12-r27-closed-beta-launch-and-monitoring.md` | ez a §10 szakasz. |
+
+### 10.2 Mérce-mátrix leképezés (A1–A6 → `beta_profile_test.dart` csoportok)
+
+- **A1** — „A1 — the shipped profile validates…" csoport: exit 0 a valódi fán + registry-parse fail-closed cella (5 bejegyzésre csonkolt registry-másolat temp-ben → nem-nulla kilépés, üzenetben „expected >= 40").
+- **A2** — „A2 — an unknown flag name…" csoport: temp-profil elgépelt `accountEnabldTypo` kulccsal → nem-nulla kilépés, stderr tartalmazza a kulcsnevet.
+- **A3** — „A3 — a high-risk flag…" csoport: temp-profil `communityWritesEnabled: true`-val → nem-nulla kilépés; PLUSZ egy regex-alapú cella, amely a SZÁLLÍTOTT `cohort-profiles.yaml`-ban ellenőrzi mind a 7 ismert `high` flag `false` állapotát.
+- **A4** — „A4 — the kill-switch dry-run…" csoport, 4 cella: (a) read-only — temp-profil bájtazonos marad, nem keletkezik új fájl a temp könyvtárban; (b) pontosan egy sor különbözik a before/after blokk között; (c) ismeretlen `--cohort`/`--kill-switch` → nem-nulla kilépés; (d) a `closed-beta-launch.md` beágyazott blokkja bájtazonos (trim-elve) a tool friss stdout-jával — ÚJRA lefuttatja a tool-t és összeveti.
+- **A5** — „A5 — every launch-checklist line…" csoport: a valódi dokumentum minden ellenőrzőlista-sora (többsoros elemek is, 6 szóköz behúzású folytatással összefűzve) hordoz felismert hivatkozást (backtick-es repó-relatív útvonal, `existsSync()`-kel ellenőrizve, VAGY URL); hiányzó vagy lógó hivatkozás → PIROS. Két mutáció-próba (nincs hivatkozás; nem létező útvonal) + egy önteszt (létező útvonal nem jelez hibát) + méret-önteszt (≥ 8 elem).
+- **A6** — „A6 — the document states…" csoport: a dokumentum tartalmazza („has not launched", „human decision"), és NEM tartalmazza a múltidejű indítás-állítások egyikét sem (kis-nagybetű-érzéketlen lista, angol + magyar variánsokkal).
+
+### 10.3 `verify_beta_profile.py` valódi kimenete (szállított profil)
+
+```
+$ python3 tool/release/verify_beta_profile.py --profile docs/beta/cohort-profiles.yaml
+verify_beta_profile: ok — 32 flag assignment(s) across 2 cohort(s), all present in a 40-entry registry
+```
+
+Exit code: 0.
+
+### 10.4 Kill-switch dry-run — valódi kimenet
+
+Parancs: `python3 tool/release/verify_beta_profile.py --profile docs/beta/cohort-profiles.yaml --kill-switch labModeAvailable --cohort closed_beta`. A teljes, valódi stdout a `closed-beta-launch.md` §3-ban van rögzítve (`<!-- beta-kill-switch-dry-run:begin/end -->` jelölők között) — a `beta_profile_test.dart` A4 csoportjának utolsó cellája ezt a blokkot ÚJRA-futtatással veti össze, tehát a dokumentum kimenete nem állítás, hanem mérés.
+
+### 10.5 Valódi-sértés próba (brief §6, KÖTELEZŐ)
+
+1. **Mutáció:** a szállított `docs/beta/cohort-profiles.yaml`-ban az `internal` cohort `accountEnabled: false` sorát `accountEnabledXYZ: false`-ra cseréltem (`sed`/python string-replace, első előfordulás).
+2. **Direkt tool-futás a sabotált fájlon:** `python3 tool/release/verify_beta_profile.py --profile docs/beta/cohort-profiles.yaml` → `verify_beta_profile: 1 finding(s): - cohort 'internal': flag 'accountEnabledXYZ' does not exist in the feature flag registry (A1/A2)`, exit 1.
+3. **`flutter test test/tooling/beta_profile_test.dart` a sabotált fán:** az „A1 — … exit 0 on the real tree" cella PIROSRA váltott (`Expected: <0> Actual: <1>`), minden más cella (A2–A6, beleértve az A3 „szállított profil" cellát is, mert az csak a 7 `high` flagre néz, nem az `accountEnabled` kulcsra) ZÖLD maradt — pontosan az elvárt A1/A2 szelektivitás.
+4. **Visszaállítás:** a fájlt az eredeti (utolsó commitolt) tartalomra állítottam vissza; `diff` a mentett eredetivel üres, `git status --short docs/beta/cohort-profiles.yaml` tiszta (nincs diff a HEAD-hez képest).
+5. **Újra-zöldítés bizonyítéka:** `tools/round-gate.sh test/tooling/beta_profile_test.dart test/core/feature_flags/feature_flag_registry_test.dart` a visszaállítás UTÁN mind a 7 lépésre (`format`, `analyze`, mindkét teszt-útvonal, `architecture`, `secrets`, `l10n`) ZÖLD-öt adott — l. §10.6.
+
+### 10.6 Záró gate — a teljes, csonkítatlan futás
+
+```bash
+tools/round-gate.sh test/tooling/beta_profile_test.dart test/core/feature_flags/feature_flag_registry_test.dart
+```
+
+Eredmény: `format` zöld, `analyze` zöld (0 finding), `test test/tooling/beta_profile_test.dart` zöld (16/16), `test test/core/feature_flags/feature_flag_registry_test.dart` zöld (16/16), `architecture` zöld, `secrets` zöld (0 finding, 4151 fájl), `l10n` zöld. „MINDEN GATE ZÖLD."
+
+### 10.7 Amit ez a kör NEM végzett el ezen a boxon, és miért
+
+- **Nem futott APK-build és nem történt telepítés.** A jelölt/RC artefaktum összeállítása a Kör 25 (`tool/release/assemble_rc.py`, `.github/workflows/release-apk.yml`) dolga; ez a kör a konfigurációt készíti, nem az artefaktumot.
+- **Nem történt valódi tesztelő-meghívás és cohort-megnyitás.** Ez a §0.0 EMBERI KAPU szerint szándékosan a user döntése és művelete — a `closed-beta-launch.md` §5 emberi mezője ezért maradt üresen.
+- **`maxTesters`/`versionRange` nincs kódban kikényszerítve.** Operatív fegyelem kérdése, ahogy a `docs/beta/enrollment.md` már kimondja a cohort-tagságra nézve is.
+- **Nincs élő monitoring-dashboard.** A Kör 19 csak szerződést szállított, gyűjtést nem — ezt a `closed-beta-launch.md` §2 és a `daily-triage-template.md` is kimondja, nem állít mást.
+- **A teljes `flutter test` suite + randomizált property gate + APK nem futott itt** — az ADR 0053 szerint ez CI-feladat (`gh workflow run build-apk.yml`), amit az orchestrátor indít, nem az implementer.
+
 ## 11. Review — a Claude tölti ki
