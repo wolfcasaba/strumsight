@@ -11,8 +11,9 @@ egyetlen forrása — ezt a fájlt ez a dokumentum és a hozzá tartozó
 
 ## 1. Mit jelent a freeze
 
-A `freeze_base_sha` alatti fán a termékkód (`lib/**`, `backend/**`,
-`android/**`, `assets/**`, `pubspec.yaml`, …) **csak** egy nyitott
+A `freeze_base_sha` alatti fán a **szállított** termékkód (`lib/**`,
+`backend/app/**`, `android/**`, `assets/**`, `pubspec.yaml`, …) **csak** egy
+nyitott
 `blockers.md`-beli P0/P1/P2 blocker javításaként módosulhat, és a commit
 üzenete **megnevezi** a javított blocker azonosítóját (`R-…`). Minden más
 változás a `documentation` vagy a `release-tooling` osztály valamelyikébe
@@ -44,7 +45,7 @@ fail-closed `2`-es kilépéssel áll meg, és megnevezi a hiányzó bázist (nem
 | class | path_prefixes | requires_blocker_id |
 |---|---|---|
 | `documentation` | `docs/`, `CHANGELOG.md`, `HANDOFF.md`, `AGENTS.md`, `CLAUDE.md`, `README.md` | `no` |
-| `release-tooling` | `tool/release/`, `test/tooling/` | `no` |
+| `release-tooling` | `tool/release/`, `test/`, `backend/tests/`, `tools/` | `no` |
 | `blocker-fix` | `*` | `yes` |
 <!-- freeze-classes:end -->
 
@@ -58,14 +59,34 @@ fail-closed `2`-es kilépéssel áll meg, és megnevezi a hiányzó bázist (nem
   > írja — **osztályozatlan** lett, és a `verify_freeze.py` a `main`-en `1`-es
   > kilépést adott (`HANDOFF.md: not classified under any freeze change
   > class`). A gyökér dokumentum-fájljai tehát nevesítve szerepelnek. A lista
-  > továbbra is ZÁRT: ami nincs rajta és nem `tool/release/`/`test/tooling/`,
-  > az blocker ID nélkül nem változhat.
-- **`release-tooling`** — a `tool/release/**` vagy `test/tooling/**` alatti
-  fájlok (a release-eszközök és a rájuk épülő gate-cellák). Nem kell hozzá
-  blocker ID.
-- **`blocker-fix`** — bármely más útvonal (tipikusan `lib/**`, `backend/**`,
-  `android/**`, `assets/**`, `pubspec.yaml`). A `path_prefixes` értéke `*`
-  (bármely útvonal), de **kizárólag** akkor fogadható el, ha az érintő commit
+  > továbbra is ZÁRT: ami nincs rajta és nem `release-tooling` prefix, az
+  > blocker ID nélkül nem változhat.
+- **`release-tooling`** — a `tool/release/**`, `test/**`, `backend/tests/**`
+  vagy `tools/**` alatti fájlok: a release-eszközök, a rájuk épülő
+  gate-cellák, a Flutter- és backend-tesztek, valamint a pipeline/router
+  segédeszközök és azok tesztjei. Közös nevezőjük, hogy **egyik sem kerül
+  bele a szállított termékbe** — sem az APK-ba (`lib/**`, `assets/**`,
+  `android/**`, `pubspec.yaml`), sem a telepített backendbe
+  (`backend/app/**`) —, ezért a viselkedésüket nem tudják megváltoztatni.
+  Nem kell hozzájuk blocker ID.
+
+  > **MÉRVE a merge UTÁN (ADR 0112 önjavító kör, E12-R32 / H7, 2026-09-02):**
+  > a lista eredetileg csak a `tool/release/` és `test/tooling/` prefixet
+  > tartalmazta, ezért a freeze-korszakban merge-elt, NEM szállított
+  > verifikációs kód osztályozatlan lett, és a `verify_freeze.py` a
+  > `main`-en `1`-es kilépést adott — az E12-R32 kör §7 gate-je emiatt állt
+  > meg, a saját diffje nélkül. A `main` csúcsán (`11d0d2bb`) **két**
+  > találat volt egyszerre: `backend/tests/test_production_smoke_contract.py`
+  > (E12-R31, `accd30c2`) és `tools/tests/test_sol_terra_both_slots.py`
+  > (`11d0d2bb`). Ez ugyanaz a hibaosztály, mint a fenti `HANDOFF.md`-eset,
+  > harmadszor: a prefix-lista szűkebb volt, mint a NEM szállított
+  > útvonalak halmaza. A `.github/**` és a `.ai/**` szándékosan **nem**
+  > került a listára — a CI-definíció és a router-politika maga a kapu, azt
+  > a freeze alatt jóváhagyás nélkül változtatni nem szabad.
+- **`blocker-fix`** — bármely más útvonal (tipikusan `lib/**`,
+  `backend/app/**`, `android/**`, `assets/**`, `pubspec.yaml`). A
+  `path_prefixes` értéke `*` (bármely útvonal), de **kizárólag** akkor
+  fogadható el, ha az érintő commit
   üzenete megnevez egy, a `blockers.md`-ben ma szereplő, `P0`/`P1`/`P2`
   súlyosságú blocker-azonosítót (`R-[A-Z0-9-]+` alakú). A `P3` súlyosság
   (ha valaha felkerül egy sor `blockers.md`-be) **nem** elég önmagában —

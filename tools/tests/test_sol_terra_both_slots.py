@@ -39,7 +39,7 @@ implementernek választva ütközik a sol-orchestrátorral (`H-INDEP`,
 fail-closed), a `terra` sor nem.
 
 A slotszám megváltoztatásakor a `docs/execution/pipeline-slots` fájlt és a
-`test_the_committed_slots_file_value_is_one` cellát EGYÜTT kell átírni —
+`test_the_committed_slots_file_value_is_two` cellát EGYÜTT kell átírni —
 ugyanaz a szerződés, mint a rotáció-fájlnál.
 """
 
@@ -74,7 +74,7 @@ def run_driver(*arguments: str, **environment_overrides: str) -> subprocess.Comp
 class SlotDecisionTest(unittest.TestCase):
     """A kért slotszám feloldása: file > env > script-default."""
 
-    def test_the_committed_slots_file_value_is_one(self) -> None:
+    def test_the_committed_slots_file_value_is_two(self) -> None:
         # A LEGKORÁBBI user-döntés (2026-08-21) egy sávot kért, mert a Codex-oldal
         # kiesésével MINDEN sáv orchestrátora a Claude, és két párhuzamos
         # session ugyanabból az előfizetésből enne.
@@ -98,11 +98,14 @@ class SlotDecisionTest(unittest.TestCase):
         # a commitolt fájlra, csak az ÚJ döntésre; a döntési lánc (2026-08-21 ->
         # 08-23 -> 09-01) szándékosan itt marad olvashatóan.
         #
-        # VISSZAKAPCSOLÁS: ha a user újra két sávot kér, ez a cella és a
-        # `test_the_real_driver_reads_the_committed_file_without_any_env`
-        # együtt vált "2"-re a `docs/execution/pipeline-slots`-szal — a
-        # queue `hold` sorainak `pending`-re állításával egy időben.
-        self.assertEqual(SLOTS_FILE.read_text(encoding="utf-8").strip(), "1")
+        # VISSZAKAPCSOLVA 2026-09-02 (user-döntés): "szeretném, ha az egész
+        # fejlesztett kód működőképes lenne az UI-val együtt" — a Chapter 15
+        # nyolc `hold` sora `pending` lett, tehát a kért slotszám ismét KETTŐ.
+        # A cella EREJE változatlan: EGZAKT pin a commitolt fájlra, csak az ÚJ
+        # döntésre; a döntési lánc (2026-08-21 -> 08-23 -> 09-01 -> 09-02)
+        # szándékosan itt marad olvashatóan. A metódusnév a MÉRT értéket
+        # tükrözi, hogy a pin ne hazudjon a nevében.
+        self.assertEqual(SLOTS_FILE.read_text(encoding="utf-8").strip(), "2")
 
     def test_the_committed_file_overrides_the_operator_env(self) -> None:
         with tempfile.TemporaryDirectory() as name:
@@ -132,10 +135,10 @@ class SlotDecisionTest(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        # 2026-09-01 óta ismét EGY sáv (lásd
-        # test_the_committed_slots_file_value_is_one) — a driver env nélkül a
+        # 2026-09-02 óta ismét KÉT sáv (lásd
+        # test_the_committed_slots_file_value_is_two) — a driver env nélkül a
         # commitolt fájlt olvassa, tehát ugyanazt az értéket kell adnia.
-        self.assertEqual(result.stdout.strip(), "1")
+        self.assertEqual(result.stdout.strip(), "2")
 
     def test_without_a_file_the_env_semantics_stay_measurable(self) -> None:
         for wanted in ("1", "2", "4"):

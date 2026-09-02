@@ -566,14 +566,12 @@ E15-R06	docs/rounds/e15-r06-legacy-song-library-progress-migration.md	sonnet-imp
 # beszúrta elé az E15-R14-et, és az E15-R14 MÉG NEM INDULT EL (nincs ága az
 # originon). Vagyis nem vágtunk félbe futó kört: a sávon nem volt munka.
 #
-# A `hold` az ALÁBBI HAT SORON szándékos, és a `docs/execution/pipeline-slots`
-# 2 -> 1 váltásával együtt utazik. Amíg így áll, a lánc EGY kört visz
-# egyszerre, a Ch12 sávból.
-#
-# VISSZAKAPCSOLÁS (user-go kell hozzá): a `hold` -> `pending` csere ezeken a
-# sorokon + `pipeline-slots` 1 -> 2. A sorrend KÖTÖTT: az E15-R14 az E15-R07
-# előfeltétele (ADR 0112 önjavító kör, a §0.0.B revízió), ezért az R14 megy
-# elsőként.
+# VISSZAKAPCSOLVA 2026-09-02 (user-go: „szeretném, ha az egész fejlesztett kód
+# működőképes lenne az UI-val együtt"): mind a nyolc E15 sor `pending`, és a
+# `docs/execution/pipeline-slots` 1 -> 2, tehát a Ch12 és a Ch15 sáv ismét
+# PÁRHUZAMOSAN fut (a diszjunktságot a driver minden firingnél újraméri).
+# A sorrend KÖTÖTT marad: az E15-R14 az E15-R07 előfeltétele (ADR 0112
+# önjavító kör, a §0.0.B revízió), ezért az R14 megy elsőként.
 # ============================================================================
 # BESZÚRT ELŐKÉSZÍTŐ KÖR (ADR 0112 önjavító kör, E15-R07 / H3, 2026-09-01):
 # az E15-R07 F1 fázisa (route + flag) MÉRTEN nem végezhető el, mert a
@@ -585,14 +583,38 @@ E15-R06	docs/rounds/e15-r06-legacy-song-library-progress-migration.md	sonnet-imp
 # SORRENDBEN blokkol (round-slots.py:137-141), tehát az E15-R07 addig nem
 # admittálható, amíg az E15-R14 nem `done`. Az E15-R07 briefjének §0.0.B
 # revíziója ugyanezt az előfeltételt szövegesen is kimondja.
-E15-R14	docs/rounds/e15-r14-practice-generator-composition-layer.md	sonnet-impl	0482	hold
-E15-R07	docs/rounds/e15-r07-practice-generator-migration.md	sonnet-impl	0480	hold
-E15-R08	docs/rounds/e15-r08-gamification-migration.md	sonnet-impl	nincs	hold
-E15-R09	docs/rounds/e15-r09-ai-tutor-migration.md	sonnet-impl	nincs	hold
-E15-R10	docs/rounds/e15-r10-analysis-migration.md	sonnet-impl	nincs	hold
-E15-R11	docs/rounds/e15-r11-vision-onboarding-community-migration.md	sonnet-impl	nincs	hold
-E15-R12	docs/rounds/e15-r12-backend-mounting-and-end-to-end.md	sonnet-impl	0469	hold
-E15-R13	docs/rounds/e15-r13-ui-closure-and-release-evidence.md	sonnet-impl	nincs	hold
+E15-R14	docs/rounds/e15-r14-practice-generator-composition-layer.md	sonnet-impl	0482	pending
+E15-R07	docs/rounds/e15-r07-practice-generator-migration.md	sonnet-impl	0480	pending
+E15-R08	docs/rounds/e15-r08-gamification-migration.md	sonnet-impl	nincs	pending
+E15-R09	docs/rounds/e15-r09-ai-tutor-migration.md	sonnet-impl	nincs	pending
+E15-R10	docs/rounds/e15-r10-analysis-migration.md	sonnet-impl	nincs	pending
+E15-R11	docs/rounds/e15-r11-vision-onboarding-community-migration.md	sonnet-impl	nincs	pending
+E15-R12	docs/rounds/e15-r12-backend-mounting-and-end-to-end.md	sonnet-impl	0469	pending
+E15-R13	docs/rounds/e15-r13-ui-closure-and-release-evidence.md	sonnet-impl	nincs	pending
+#
+# Chapter 16 sáv (Kompozíció és rollout) — USER-DÖNTÉS 2026-09-02: „szeretném,
+# ha az egész fejlesztett kód működőképes lenne az UI-val együtt". A Ch15 a
+# felületet migrálja; ez a sáv a MÖGÖTTE lévő bekötést zárja le.
+#
+# MÉRT kiváltó okok (main @ 11d0d2bb):
+#   * a gamification feature-ben NULLA Riverpod-provider van, a router pedig
+#     konstans placeholderekkel építi a képernyőket (activeQuestCount: 0,
+#     masteryUnlockedCount: 0, progressByAchievement: {}, dailyChallenge: null,
+#     weeklyConsistencyDays: 0) — 8 db TODO(E08-R30) markerrel;
+#   * a progress_v2 ELÉRHETETLEN: a /profile/progress ma is a legacy
+#     ProgressScreen-t építi, a két új képernyő projekcióját SENKI nem állítja
+#     elő (0 hivatkozás a feature-en kívül);
+#   * a rollout-kapuk (vision 10, analysis 10, tutor 2, generator 2, community 5)
+#     alapból KI vannak — egy sima buildben a felhasználó ezeket nem éri el.
+#
+# Implementer `sonnet-impl`, orchestrátor Opus 5 — a router-CI carve-out ezért
+# az `E16-` előtagra is szól.
+#
+E16-R01	docs/rounds/e16-r01-gamification-composition-layer.md	sonnet-impl	0490	pending
+E16-R02	docs/rounds/e16-r02-progress-projection-and-router-placeholders.md	sonnet-impl	0491	pending
+E16-R03	docs/rounds/e16-r03-capability-rollout-decisions.md	sonnet-impl	0492	pending
+E16-R04	docs/rounds/e16-r04-live-backend-end-to-end.md	sonnet-impl	0493	pending
+E16-R05	docs/rounds/e16-r05-full-app-verification-and-release.md	sonnet-impl	nincs	pending
 #
 # ===== EPIC 9 — Community Platform (Chapter 10, 32 kör) =====
 # Batch-előkészítve 2026-08-22 (user-döntés: a lánc E08 lezárása után
@@ -712,6 +734,13 @@ E10-R32	docs/rounds/e10-r32-integration-device-matrix-and-epic-closure.md	minima
 # kör) UTÁNA jön — user-döntés, mert a design-rendszer közben végig fennmaradna
 # az igazmondási hiba.
 E14-R01	docs/rounds/e14-r01-recovery-kickoff-and-release-guard.md	codex	0271	done
+#
+# CHAPTER 14 (felismerési pontosság) — USER-DÖNTÉS 2026-09-02: „végén menjen az
+# E14 is". A sorok SZÁNDÉKOSAN `prepared` állapotban maradnak (a driver csak
+# `pending` sort admittál), és a Ch16 zárókörének (E16-R05) merge-e UTÁN
+# váltanak `pending`-re, EGY commitban. A sáv 42 kört tervez; brief ma az
+# R01-R19-re van, az R20-R42 megírása a visszakapcsolás előtti feladat.
+#
 E14-R02	docs/rounds/e14-r02-baseline-and-evidence-index.md	minimax	0354	prepared
 E14-R03	docs/rounds/e14-r03-model-activation-telemetry.md	minimax	0355	prepared
 E14-R04	docs/rounds/e14-r04-recognition-frame-v2-contract.md	minimax	0356	prepared

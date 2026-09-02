@@ -348,7 +348,7 @@ Terra — közös `~/.codex-terra` auth) NEM futtatható. Az érvényes feláll�
   `docs/execution/orchestrator-rotation` fájlt (`sol` vagy `alternate`) a
   `test_the_committed_rotation_file_value_is_claude` cellával EGYÜTT, döntsd el
   a slotszámot (`docs/execution/pipeline-slots` + a
-  `test_the_committed_slots_file_value_is_one` cella EGYÜTT írandó át), állítsd
+  `test_the_committed_slots_file_value_is_two` cella EGYÜTT írandó át), állítsd
   vissza a `fallback_engine` defaultot `terra`-ra, oszd vissza a nyitott
   queue-sorokat a mért szabály szerint (ADR 0069: `minimax`/`codex`), és
   frissítsd ezt a blokkot. A Sol/Terra GÉPEZETE végig a helyén maradt, tehát
