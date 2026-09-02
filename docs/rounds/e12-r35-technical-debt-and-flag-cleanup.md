@@ -1,6 +1,6 @@
 # E12-R35 — Technikaiadósság- és flag cleanup
 
-- **Státusz:** PREPARED (előre megírva 2026-08-27, kód olvasva: `main @ 9ca4a0dc`)
+- **Státusz:** IN PROGRESS (előre megírva 2026-08-27, `main @ 9ca4a0dc`; **§0.0 pre-flight brief-revízió 2026-09-02, `main @ 496264d9`** — a mért bázisvonalak ott)
 - **Típus:** Chapter 12 (Release Roadmap, Sprint Planning & Final Integration), Kör 35
 - **Kör-azonosító:** `E12-R35`
 - **Branch:** `<motor>/e12-r35-technical-debt-and-flag-cleanup`
@@ -12,7 +12,107 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd meg a `tool/check_architecture.dart` allowlist MÉRETÉT (a megíráskor a fájl 786 sor) és a `test/tooling/architecture_allowlist_guard_test.dart` mai állítását. Az „allowlist nem nő" invariáns ehhez a MÉRT bázisvonalhoz szól.
 
-## 0.0 Miért nem töröl kódot ez a kör
+## 0.0 Pre-flight brief-revízió (orchestrátor, 2026-09-02, `main @ 496264d9`)
+
+A brief 2026-08-27-én íródott (`main @ 9ca4a0dc`). Az alábbi hat pont a MÉRT
+állapothoz igazítja; a mérce sehol nem lazul, csak pontosabb lesz.
+
+**R1 — a bázisvonal NEM sorszám, hanem BEJEGYZÉS-SZÁM.** A §2 „786 sor"
+állítása avult: `wc -l tool/check_architecture.dart` → **850**. A sorszám
+amúgy sem mércéje az allowlistnek (egy doc-comment is növeli). A MÉRT
+bázisvonal a `tool/check_architecture.dart:11` `architectureAllowlist`
+konstans halmaz **N = 12 bejegyzése**, és a mai őr
+(`test/tooling/architecture_allowlist_guard_test.dart`) pontosan ezt méri:
+`expect(architectureAllowlist.length, lessThanOrEqualTo(12))`. A §5.1 és az
+A3 ehhez a 12-es entry-számhoz szól, nem a fájlmérethez.
+
+**R2 — a küszöb-cellahármas HOL él.** A §6 hármasa (`N-1` zöld, `N` zöld,
+`N+1` piros) a mai őr-teszttel **nem futtatható**: az a `const`
+`architectureAllowlist`-et méri közvetlenül, paramétert nem vesz fel, és a
+fájl a §4 **tilos zónájában** van, tehát nem is módosítható. A hármas ezért
+a `test/tooling/deprecation_audit_test.dart`-ban él, egy **halmaz-paraméteres,
+tiszta függvény** fölött, amit a `tool/check_deprecations.dart` exportál —
+pontosan az `auditFeatureFlagRegistry` (Kör 5) bevált mintájára, ahol minden
+bemenet sima érték, így a teszt olyan bemenetet is fel tud építeni, amit a
+valódi fa nem produkál. A határ **INKLUZÍV**: `length > baseline` a lelet.
+
+**R3 — a hármas mellé KÖTELEZŐ a SHIPPED-halmaz cellája (L120).** A mért
+lecke ([`docs/LESSONS.md`](../LESSONS.md) L120, E04-R10): egy allowlist-őrt a
+**szállított** készlet mutációjával kell mérni, nem csak a konstruktor
+közvetlen hívásával — különben a tiszta függvény zöld, miközben a valódi
+allowlist elszabadult. Ezért a hármas mellett egy negyedik cella a valódi
+`architectureAllowlist`-et köti a `check_deprecations.dart`-ban rögzített
+bázisvonal-konstanshoz. Ez a cella teszi a §6.1 „ideiglenes bejegyzés"
+sorát valóban pirosra váltóvá.
+
+**R4 — az A2 „nincs második igazság" GÉPI alakja.** A `check_feature_flags.dart`
+(Kör 5) MÁR exportál minden szükséges darabot: `featureFlagRegistry`
+(a `lib/core/feature_flags/public.dart`-ból), `isFeatureFlagExpired` és
+`auditFeatureFlagRegistry`. Az A2 tehát nem szöveges elvárás: a
+`check_deprecations.dart` a lejárt flagek listáját **kizárólag** ezek
+hívásával állíthatja elő — saját dátum-összehasonlítás, saját flag-lista
+vagy saját `expiresOn` parse nélkül. A falszifikációs cella: injektált,
+lejárt `expiresOn`-ú fixture-katalógusra az audit lejárt flaget jelent,
+egy jövőbeli dátumúra nem — ugyanazzal az inkluzív határral, mint a Kör 5
+(a lejárat NAPJÁN még érvényes). A `tool/check_feature_flags.dart` a §4
+tilos zónájában marad: **használni** kell, módosítani tilos.
+
+**R5 — az A5 megkapja a mért referensét.** A „támogatott régi kliens"
+nem elvont fogalom ezen a fán: a `docs/release/client-migration.md` §1 a
+boot-időben futó **22 lépéses** `appStorageMigrations` láncot írja le
+(`lib/core/storage/storage_migrator.dart`, `LegacyStorageKeys` →
+`StorageKeys`), a `docs/release/contract-freeze.md` pedig a `contract-freeze`
+markerblokkban sorolja a befagyasztott core-path contractokat a feloldó
+feltételükkel (ADR 0489 D6). Az A5 füst-cellája ezt a kettőt méri:
+(a) a régi-kliens út ép — az `appStorageMigrations` lánc hossza változatlanul
+**22**; (b) a leltár egyetlen „eltávolítható" tétele sem nevez meg olyan
+útvonalat, amely a `contract-freeze.md` `frozen_scope` oszlopában szerepel,
+amíg a sor `resolution_condition`-je nem teljesült. Ez a §5.3 gépi alakja.
+
+**R6 — az A6 bizonyítéka a gépi scope-audit.** A „`git diff --stat`" nem
+futtatható cella (egy teszt nem méri a saját köre diffjét megbízhatóan a
+CI-ban). Az A6 bizonyítéka a burkoló `ROUND_BRIEF`-es **scope-auditja**
+(`scope_audit=ok` a `.codex-round-status`-ban) az alábbi `allowed_paths`
+ellen, amely egyetlen `lib/` útvonalat sem tartalmaz — plusz az orchestrátor
+merge előtti `git diff --stat origin/main...HEAD` ellenőrzése a review-ban.
+
+**Nem születik ADR.** A kör auditot és backlogot szállít; a normatív
+szabályokat a már merge-elt [ADR 0395](../adr/0395-community-baseline-feature-flags-and-threat-model-scope.md)
+(flag-lezárás = dedikált GOV-kör), az [ADR 0446](../adr/0446-feature-flag-catalog-and-kill-switch-contract.md)
+(flag-katalógus) és az [ADR 0489](../adr/0489-ga-scope-classification-and-contract-freeze.md) D6
+(contract freeze) hordozza. Új ADR írása az `allowed_paths` **bővítését**
+kívánná, ami az ADR 0087 §2 szerint nem az orchestrátor hatásköre (szűkíteni
+szabad, bővíteni nem) — és a §3 kifejezetten tiltja a `docs/adr/**`-ot.
+
+**Visszakeresés (ADR 0312).** Szűkítve: `lessons,halts,adr` →
+[`L120`](../LESSONS.md) (allowlist-őrt a shipped készlet mutációjával mérj →
+R3), [`L368`](../LESSONS.md) (a generikus checker és a célzott őr bizonyítéka
+nem felcserélhető → az A3 bizonyítéka a nevesített cella, nem a
+`check_architecture` zöldje), [ADR 0395](../adr/0395-community-baseline-feature-flags-and-threat-model-scope.md)
+(a flag-lezárás külön kör). Teljes korpuszon: a
+`docs/sdd/12-release-roadmap-final-integration.md` „Fő érintett fájlok"
+szakasza ugyanezt a három fájlt nevezi meg — a `check_feature_flags.dart`
+ott **olvasandó** forrásként szerepel, ami egybevág az R4-gyel.
+
+### MÉRT bázisadatok, amelyekre a leltár épül (2026-09-02, `main @ 496264d9`)
+
+| Mérés | Parancs | Érték |
+|---|---|---|
+| architecture-allowlist bejegyzés | `tool/check_architecture.dart:11-23` | **12** |
+| őr mai állítása | `test/tooling/architecture_allowlist_guard_test.dart` | `length <= 12` |
+| `@Deprecated` jelölés | `grep -rn "@Deprecated" lib/ --include="*.dart"` | **12** találat, **9** fájlban |
+| TODO/FIXME | `grep -rn "TODO\|FIXME" lib/ --include="*.dart"` | **14** |
+| `library` / `library_v2` | fájl / külső hívóhely | 6 / 4 · 18 / 3 |
+| `progress` / `progress_v2` | fájl / külső hívóhely | 8 / 6 · 8 / **0** |
+| `tool/check_deprecations.dart` | `ls` | **nem létezik** (ez a kör hozza) |
+| `docs/release/technical-debt.md` | `ls` | **nem létezik** (ez a kör hozza) |
+
+A `progress_v2` nulla KÜLSŐ hívóhelye önmagában **NEM** töröl-engedély
+(§5.3): a leltár tétele lehet, de az eltávolítás feltétellel és felelőssel
+kerül a backlogba — a törlés a §4 listán kívüli fájlokat érintene, tehát
+külön kör (STOP-protokoll, §0).
+
+## 0.1 Miért nem töröl kódot ez a kör
 
 A repó mért szabálya (ADR 0395): egy kompatibilitási réteg vagy flag lezárása önálló, dokumentált kör, mert a támogatott régi kliensek még használhatják. Ez a kör tehát MÉR és TERVEZ: mit lehet eltávolítani, mi a feltétele, ki a felelőse. Kódot csak akkor töröl, ha a MÉRÉS bizonyítja, hogy nulla hívóhely és nulla támogatott kliens érinti — és akkor is a §4 listán belül.
 
@@ -50,11 +150,24 @@ Mért adósság-leltár: mi ideiglenes, kinek a felelőssége, mi az eltávolít
 
 ## 2. Jelenlegi állapot — mért tények
 
-- `tool/check_architecture.dart` (786 sor) allowlist-alapú; a `test/tooling/architecture_allowlist_guard_test.dart` az őre.
-- `tool/check_feature_flags.dart` (Kör 5) a lejárt flageket fogja; a katalógus a `lib/core/feature_flags/`-ban él.
+> A §0.0/R1 újramérte: az alábbi pontok a 2026-09-02-i (`main @ 496264d9`)
+> értékekkel érvényesek, a bázisvonal a **12 allowlist-bejegyzés**.
+
+- `tool/check_architecture.dart` (**850 sor**, 2026-09-02) allowlist-alapú; a
+  `test/tooling/architecture_allowlist_guard_test.dart` az őre, mai állítása
+  `architectureAllowlist.length <= 12`, a szállított halmaz **12** bejegyzés.
+- `tool/check_feature_flags.dart` (Kör 5) a lejárt flageket fogja; a katalógus a
+  `lib/core/feature_flags/`-ban él (`featureFlagRegistry`). Exportált,
+  ÚJRAHASZNÁLANDÓ darabjai: `featureFlagRegistry`, `isFeatureFlagExpired`,
+  `auditFeatureFlagRegistry`, `checkFeatureFlagsAtRoot` (§0.0/R4).
 - `tool/check_deprecations.dart` **nem létezik**.
-- A `lib/features/` fa MA `library` ÉS `library_v2`, illetve `progress` ÉS `progress_v2` párokat is tartalmaz — mért, párhuzamos rétegek, amelyek tipikus adósság-jelöltek.
+- A `lib/features/` fa MA `library` ÉS `library_v2`, illetve `progress` ÉS
+  `progress_v2` párokat is tartalmaz — mért, párhuzamos rétegek, amelyek tipikus
+  adósság-jelöltek; a mért fájl/külső-hívóhely számok a §0.0 táblázatában.
 - A `docs/release/technical-debt.md` **nincs**.
+- Támogatott régi kliens: `docs/release/client-migration.md` §1 — **22 lépéses**
+  `appStorageMigrations` lánc boot-időben; befagyasztott core-path contractok:
+  `docs/release/contract-freeze.md` `contract-freeze` markerblokk (§0.0/R5).
 
 ## 3. Scope
 
@@ -95,27 +208,53 @@ A `check_architecture.dart` allowlistje a MÉRT bázisvonalhoz képest nem bőv�
 
 ## 6. Acceptance criteria
 
-| # | Kritérium | Bizonyíték |
-|---|---|---|
-| A1 | Az audit felsorolja MINDEN `@Deprecated` elem hívóhely-számát | `deprecation_audit_test.dart` |
-| A2 | A lejárt flagek listája megegyezik a Kör 5 `check_feature_flags.dart` kimenetével (nincs második igazság) | `deprecation_audit_test.dart` |
-| A3 | Az allowlist mérete nem nőtt a MÉRT bázisvonalhoz képest | `architecture_allowlist_guard_test.dart` a §7 gate-ben |
-| A4 | Minden adósság-tétel hordoz felelőst és eltávolítási feltételt | `deprecation_audit_test.dart` |
-| A5 | A támogatott régi kliens contract füst-cellája zöld (nem töröltünk el használatban lévő utat) | `deprecation_audit_test.dart` |
-| A6 | A kör egyetlen `lib/` fájlt sem módosít | `git diff --stat` |
+Minden cella a `test/tooling/deprecation_audit_test.dart`-ban él, hacsak
+másképp nincs jelölve. A cellanevek KÖTÖTTEK — a review ezeket keresi.
 
-**Küszöb-cellahármas az allowlist méretére** (a MÉRT bázisvonal `N` bejegyzés; a határ INKLUZÍV): a küszöb **alatt** (`N-1`, azaz csökkent) → ZÖLD (és a csökkenés a leltárban indokolt); **pontosan rajta** (`N`) → ZÖLD; a küszöb **fölött** (`N+1`) → PIROS.
+| # | Kritérium | Bizonyíték (cellanév) |
+|---|---|---|
+| A1 | Az audit MINDEN `@Deprecated` elemhez kiad egy tételt, benne a MÉRT hívóhely-számmal; a valódi fán a `lib/` alatti találatszám **12** (9 fájlban), és a jelentés minden tétele megnevezi a forrásfájlt | `A1 every @Deprecated site gets an inventory item with a callsite count` + `A1 the real tree reports 12 deprecated sites in 9 files` |
+| A2 | A lejárt flagek listája a Kör 5 eszközéből jön (nincs második igazság): a lejárati döntés `isFeatureFlagExpired`, a katalógus `featureFlagRegistry`; injektált lejárt fixture-re PIROS, jövőbeli dátumra ZÖLD, a lejárat NAPJÁN ZÖLD (inkluzív határ) | `A2 expired flags come from the round-5 checker` + `A2 expiry boundary is inclusive on the expiry day` |
+| A3 | Az allowlist mérete nem nőtt a MÉRT bázisvonalhoz (**12**) képest — a SHIPPED halmazon mérve (L120) | `A3 the shipped architecture allowlist stays at the measured baseline` |
+| A4 | Minden adósság-tétel hordoz nem üres felelőst ÉS nem üres eltávolítási feltételt; felelős vagy feltétel nélküli tétel lelet | `A4 a debt item without an owner is an issue` + `A4 a debt item without a removal condition is an issue` + `A4 the shipped technical-debt.md is clean` |
+| A5 | A támogatott régi kliens útja ép: az `appStorageMigrations` lánc **22** lépés, és a leltár egyetlen tétele sem nevez meg a `contract-freeze.md` `frozen_scope` oszlopában szereplő útvonalat eltávolíthatóként | `A5 the supported-client migration chain is intact` + `A5 no debt item targets a frozen contract scope` |
+| A6 | A kör egyetlen `lib/` fájlt sem módosít | a burkoló `scope_audit=ok` a `.codex-round-status`-ban (§0.0/R6) + `git diff --stat origin/main...HEAD` a review-ban |
+
+**Küszöb-cellahármas az allowlist méretére** — a MÉRT bázisvonal **`N = 12`**
+bejegyzés, a határ **INKLUZÍV**, és a hármas a `check_deprecations.dart`
+halmaz-paraméteres tiszta függvénye fölött fut (§0.0/R2), NEM a tilos zónában
+lévő őr-teszten. A cellák bemenetét ne írd kézzel: `python3 -c` számolja
+(`11`, `12`, `13`).
+
+| Cella | Bemenet | Elvárt |
+|---|---|---|
+| `threshold below — 11 entries` | `N-1 = 11` bejegyzés, baseline 12 | **ZÖLD** (nincs lelet; a csökkenés a leltárban indokolandó) |
+| `threshold on — 12 entries` | `N = 12` bejegyzés, baseline 12 | **ZÖLD** (inkluzív határ) |
+| `threshold above — 13 entries` | `N+1 = 13` bejegyzés, baseline 12 | **PIROS** (lelet: az allowlist nőtt) |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| Az audit saját flag-listát épít a Kör 5 eszköze helyett | A2 |
-| Az allowlist egy „ideiglenes" bejegyzéssel bővül | a küszöb-cellahármas „fölött" cellája |
-| Egy adósság-tétel felelős nélkül kerül a listára | A4 |
-| A kör kódot töröl a `lib/`-ből | A6 |
+| Az audit saját flag-listát vagy saját dátum-összehasonlítást épít a Kör 5 eszköze helyett | `A2 expired flags come from the round-5 checker` (a fixture-katalógus lejárt flagje nem jelenik meg a jelentésben) |
+| Az audit a lejárat NAPJÁN már lejártnak veszi a flaget (exkluzív határra vált) | `A2 expiry boundary is inclusive on the expiry day` |
+| Az allowlist egy „ideiglenes" bejegyzéssel bővül | `A3 the shipped architecture allowlist stays at the measured baseline` (és a `threshold above` cella az izolált függvényre) |
+| A küszöb-függvény exkluzívra vált (`>=` a `>` helyett) | `threshold on — 12 entries` |
+| Egy adósság-tétel felelős nélkül kerül a listára | `A4 a debt item without an owner is an issue` |
+| Egy tétel „később eltávolítjuk" alakban, feltétel nélkül kerül a listára | `A4 a debt item without a removal condition is an issue` |
+| A leltár egy befagyasztott contract útvonalát jelöli eltávolíthatónak | `A5 no debt item targets a frozen contract scope` |
+| A kör kódot töröl a `lib/`-ből (pl. a `progress_v2`-t a 0 külső hívóhelyre hivatkozva) | `A5 the supported-client migration chain is intact` + a gépi scope-audit (A6) |
+| Az `@Deprecated` tételek hívóhely-szám nélkül kerülnek a jelentésbe | `A1 every @Deprecated site gets an inventory item with a callsite count` |
 
-**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** adj egy bejegyzést az architektúra-allowlisthez ideiglenesen, futtasd a §7 gate-et → az **A3** cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** adj egy
+bejegyzést a `tool/check_architecture.dart` `architectureAllowlist`
+konstansához IDEIGLENESEN, futtasd a §7 gate-et → az
+`A3 the shipped architecture allowlist stays at the measured baseline`
+cellának PIROSNAK kell lennie (és a `architecture_allowlist_guard_test.dart`
+`<= 12` állítása is elbukik) → **állítsd vissza**, és a §10-ben írd le a
+piros kimenetet szó szerint. A visszaállítás után a `git status --short`
+legyen tiszta a `tool/check_architecture.dart`-ra — ez a fájl a §4 tilos
+zónájában van, a próba után nem maradhat módosítva.
 
 ## 7. Kötelező ellenőrzések
 
@@ -131,10 +270,32 @@ dart run tool/check_deprecations.dart
 
 ## 8. Implementációs sorrend
 
-1. `tool/check_deprecations.dart` — a mérés.
-2. `test/tooling/deprecation_audit_test.dart` — a küszöb-cellahármassal.
-3. `docs/release/technical-debt.md` — a MÉRT leltár, felelősökkel és feltételekkel.
-4. A valódi-sértés próba a §10-be.
+Ez a szakasz a TERVED — nincs külön task-lista.
+
+1. `tool/check_deprecations.dart` — a mérés. Kötelező szerkezet (a Kör 5
+   `check_feature_flags.dart` mintájára, §0.0/R2+R4): a logika NEM a
+   `main()`-ben él, hanem tiszta, **tartalom-paraméteres** függvényekben, hogy
+   a teszt olyan bemenetet is fel tudjon építeni, amit a valódi fa nem
+   produkál. Legalább:
+   - a bázisvonal-konstans (`12`) és a halmaz-paraméteres küszöb-függvény
+     (`allowlist`, `baseline` → lelet, ha `allowlist.length > baseline`);
+   - a `@Deprecated` találatok forrás-parse-a (fájl + hívóhely-szám),
+     tartalom-paraméteresen;
+   - a `docs/release/technical-debt.md` leltár-parse-a és validálása
+     (felelős + eltávolítási feltétel megléte), tartalom-paraméteresen;
+   - a lejárt flagek: **kizárólag** a `tool/check_feature_flags.dart`
+     `featureFlagRegistry` + `isFeatureFlagExpired` hívásával;
+   - a `contract-freeze.md` `frozen_scope` oszlopának beolvasása az A5-höz;
+   - `main()` csak vékony, `exitCode`-ot állító burkoló.
+2. `test/tooling/deprecation_audit_test.dart` — a §6 KÖTÖTT cellaneveivel és
+   a küszöb-cellahármassal (a bemenetek `python3 -c`-vel számolva).
+3. `docs/release/technical-debt.md` — a MÉRT leltár, tételenként felelőssel és
+   eltávolítási feltétellel; a §0.0 bázisadatai a kiindulás. A `progress_v2`
+   nulla külső hívóhelye tétel, NEM töröl-engedély.
+4. A valódi-sértés próba (§6.1) a §10-be, szó szerinti piros kimenettel.
+
+**Doc-commentben csak tesztben bizonyított állítás** (`const`, `immutable`,
+„nem dob", „mindig") szerepelhet.
 
 ## 9. Kockázatok
 
