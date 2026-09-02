@@ -1,5 +1,141 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R33 KÉSZ — Staged rollout 50–100% és GA — PR [#533](https://github.com/wolfcasaba/strumsight/pull/533), squash `f685db4a` (2026-09-02)
+
+A Ch12 **Kör 33** a GA-állapotot teszi **auditálhatóvá — publikálás nélkül**.
+A brief §0.0 emberi kapuja szerint a 100%-os store-rollout és a GA-jelölés
+kizárólag user-művelet; a kör terméke a **rekord**, az **ellenőrző**, a
+**gate-teszt** és a záró **jegyzet**. A kör nem publikált, nem állított
+rollout-százalékot, és nem írta át a `staged-rollout-log.md`-t.
+
+**A pre-flight oldott fel egy önmagával ellentmondó briefet ([L582](docs/LESSONS.md#l582)).**
+A brief ⚠ kapuja („kitöltetlen rollout-napló → `blocked`") szó szerint
+olvasva **véglegesen** megállította volna a láncot: a naplót csak valódi
+store-rollout töltheti ki, az pedig ma maga is blokkolt — nyitva van egy
+**P0** (`R-SIGN-01`) és öt **P1** (`blockers.md`), a `ga-scope.md` fejléce
+pedig „NEM KÉSZ". Ugyanennek a briefnek a §2-je viszont MÁR MÉRTE ezt, és a
+kört kifejezetten erre az állapotra tervezte. A §0.0.1 revízió (ADR 0087 §2 —
+a kör SAJÁT, még nem merge-elt briefje) a kaput **séma-létezés** ellenőrzéssé
+tette, a kitöltetlenséget pedig **gépi invariánssá** emelte: a kör így
+SZIGORÚBB lett, nem lazább.
+
+**Négy termék (5 útvonal, `scope_audit=ok`):**
+
+- [`docs/release/ga-record.md`](docs/release/ga-record.md) — `ga_status` gépi
+  mező zárt értékkészlettel (ma **`not-yet`**), a verzió-mezők a manifest
+  **deklarált bemeneteiből**, a **16 kulcsos** flag-profil pillanatkép, a
+  rollback-cél, és a GA UTÁN kitöltendő emberi mezők (build-SHA, support-link,
+  publikálási időbélyeg) EXPLICIT `GA UTÁN, EMBERI KITÖLTÉS` jelöléssel —
+  kitalált érték egyikbe sem került.
+- [`tool/release/verify_ga_record.py`](tool/release/verify_ga_record.py) —
+  fail-closed ellenőrző (A1–A7; `exit 2` hiányzó/üres marker-blokkra).
+  **Mért tény: statikus release-manifest fájl a fán NINCS** — a manifest
+  generált Dart-artefaktum, ezért az ellenőrző a három deklarált bemenetből
+  (`pubspec.yaml` + a két asset-manifest sha256) számol újra minden futáskor;
+  nincs `dart run`, és nincs a Pythonba másolt verzió-literál.
+- [`test/tooling/ga_record_test.dart`](test/tooling/ga_record_test.dart) — az
+  A2 Dart-oldali összevetése a `tool/generate_release_manifest.dart`
+  importjával (a `release_manifest_test.dart` mért mintája); az A5 cella SAJÁT
+  vakság-őrt is hordoz (a használt ISO-8601 regex bizonyítottan felismer egy
+  valódi időbélyeget).
+- [`docs/release/release-notes.md`](docs/release/release-notes.md) —
+  determinisztikus, generálási időbélyeg nélkül, a `known-issues.md`-re
+  hivatkozva (nem másolva).
+
+**Review: APPROVED első menetben**, 0 nyitott BLOCKER/MAJOR/MINOR — javító kör
+nem kellett ([`docs/reviews/e12-r33-review.md`](docs/reviews/e12-r33-review.md)).
+A review a gate-et izolált klónban függetlenül újrafuttatta (MINDEN ZÖLD), a
+hiányzó `scope_audit=` kulcsot kézzel pótolta (OK, 5 útvonal), és **12 saját,
+eldobható valódi-sértés próbát** futtatott az ellenőrző ellen. Ezek közül a
+legfontosabb a **P12 inverz próba**: szintetikus, mind-`approved` naplóval és
+üres blocker-táblával a `ga_status: ga` **`exit=0`**-t ad — az A7 tehát
+ADAT-VEZÉRELT őr, nem bedrótozott tiltás, és a valódi GA pillanatában zöldet
+fog adni. 2 NOTE (nem blokkoló): a jelzésfájl `dirty_files=1` pillanatkép-
+műterméke (a fa mérve tiszta volt), és hogy a három GA-utáni emberi mező
+prózában él, a gépi A1-hatókörön kívül — a rés zárása egy jövőbeli kör olcsó
+munkája.
+
+**CI (exact-SHA, `84844715`):** Full Gate
+[33674653017](https://github.com/wolfcasaba/strumsight/actions/runs/33674653017)
+**success** · Router CI
+[33674655878](https://github.com/wolfcasaba/strumsight/actions/runs/33674655878)
+**success**. A `round-ci-plan.py` terve `full-gate.yml` volt
+(`native_gate=false`, `apk_required=false`).
+
+**Lecke:** [L582](docs/LESSONS.md#l582) — ha egy előre megírt brief kötelező
+kapuja emberi előfeltételt ír elő, a pre-flightban azt is meg kell mérni, hogy
+az előfeltétel **teljesíthető-e egyáltalán**; és minden „X tiltva, amíg Y"
+alakú őrhöz KELL egy inverz cella, különben a „mindig piros" invariáns az első
+éles használatkor kerül megkerülésre.
+
+**Következő kör:** `E12-R34` — Post-launch stabilization és hotfix
+(`docs/rounds/e12-r34-post-launch-stabilization-and-hotfix.md`, előre kiosztott
+ADR **0465**).
+
+
+## ✅ E12-R32 KÉSZ — Staged rollout 1–20 százalék (a H7 után folytatva) — PR [#532](https://github.com/wolfcasaba/strumsight/pull/532), squash `f6db8a8d` (2026-09-02)
+
+A Ch12 **Kör 32** a publikus rollout első három lépcsőjét (**1% → 5% → 20%**)
+teszi dokumentált, MÉRT döntéssé — **a százalék állítása nélkül**: a brief §0.0
+emberi kapuja szerint a store-művelet kizárólag user-feladat, a kör terméke a
+döntési SÉMA, az ELLENŐRZŐ és a NAPLÓ.
+
+**Négy termék (6 útvonal, `scope_audit=ok`):**
+
+- [`docs/release/rollout-decision.md`](docs/release/rollout-decision.md) — a
+  lépcső-séma zárt marker-blokkokkal: `stage-1`/`stage-5`/`stage-20`, 1/5/20 %,
+  **24/48/72 óra** minimális megfigyelési ablak. A `human-gate` blokk szó
+  szerint hordozza az „A rollout-százalék állítása EMBERI művelet." mondatot —
+  ez az A5 GÉPI horgonya, nem szövegbeli ígéret.
+- [`tool/release/verify_rollout_decision.py`](tool/release/verify_rollout_decision.py)
+  — R1–R8: fail-closed marker-parserek (`exit 2` hiányzó/üres blokkra, alakra
+  nem illő sorra), majd `exit 1` hiányzó mezőre, ismeretlen `decision`-re,
+  forrás-jelölés nélküli mutatóra, ismeretlen cohortra, nyitott P0/P1 melletti
+  `approved`-ra, az **INKLUZÍV** ablak-küszöb alatti `approved`-ra, hiányzó
+  `slo.yaml`-mutatóra és `TBD` döntéshozóra. **Kettős igazságforrás tartva:** a
+  kötelező mutató-halmaz a `docs/operations/slo.yaml`-ből, a küszöb a
+  `rollout-decision.md`-ből jön — egyik sincs a Pythonba másolva.
+- [`test/tooling/rollout_decision_test.dart`](test/tooling/rollout_decision_test.dart)
+  — **28 cella**, köztük a `23`/`24`/`25` küszöb-cellahármas (ez különbözteti
+  meg a `<` és a `<=` implementációt) és az A2 valódi-sértés próba a VALÓS
+  `blockers.md` ellen.
+- [`docs/release/staged-rollout-log.md`](docs/release/staged-rollout-log.md) —
+  a napló váza: 3 döntés-sor + 15 megfigyelés-sor, minden döntés `pending`,
+  minden verdikt `unknown`, `measured_value` `n/a`, és **minden `source`
+  `manual`** — telemetria-gyűjtés nincs, a séma ezt kimondja, nem elfedi.
+
+**A H7 halt feloldva.** Az első review verdiktje HALT (H7) volt: a §7 gate a
+Kör 30 `freeze_policy_test.dart`-ját is futtatja, és az akkor **a kör diffje
+nélkül is** piros volt a `main`-en. A [#530](https://github.com/wolfcasaba/strumsight/pull/530)
+önjavító kör (`4de5643f`, L580) ezt javította; a kör-ág az ADR 0087 §0.3
+upstream-szinkronjával (`merge --no-ff origin/main` @ `23cdeb09`,
+konfliktusmentes) felvette, és a `tools/round-gate.sh
+test/tooling/rollout_decision_test.dart test/tooling/freeze_policy_test.dart`
+a szinkronizált HEAD-en **MINDEN GATE ZÖLD** (format, analyze, 28+36 cella,
+architecture, secrets 4186 fájl/0 lelet, l10n en→hu 2298 üzenet). A review
+verdiktje **APPROVED**, 0 nyitott lelettel
+([`docs/reviews/e12-r32-review.md`](docs/reviews/e12-r32-review.md)); az egyetlen
+NOTE (az R7 lefedettség-ellenőrzés a cohortot figyelmen kívül hagyja) a Kör 33
+anyaga.
+
+**CI (exact-SHA, `a50e80a2`):** Full Gate
+[33666407322](https://github.com/wolfcasaba/strumsight/actions/runs/33666407322)
+**success** · Router CI
+[33668495951](https://github.com/wolfcasaba/strumsight/actions/runs/33668495951)
+**success**. A `round-ci-plan.py` terve `full-gate.yml` volt
+(`native_gate=false`, a diff natív útvonalat nem érint).
+
+**Lecke:** [L581](docs/LESSONS.md#l581) — a Router CI `on.push.paths` szűrője a
+PUSH diffjére néz, nem a kör diffjére: a kör utolsó, `docs/reviews/**`-only
+commitja sosem triggereli, ezért a merge SHA-n magától NINCS futása. A
+`--json headSha` ↔ `git rev-parse HEAD` összevetés fogta meg; a kiszolgálás a
+`workflow_dispatch`.
+
+**Következő kör:** `E12-R33` — Staged rollout 50–100% és GA
+(`docs/rounds/e12-r33-staged-rollout-50-to-100-and-ga.md`).
+
+
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E12-R32 / H7 feloldva: a NEM SZÁLLÍTOTT verifikációs útvonalak is `release-tooling` — PR [#530](https://github.com/wolfcasaba/strumsight/pull/530), squash `4de5643f` (2026-09-02)
 
 **Az E12-R32 (staged rollout) H7-tel megállt**, pedig a kör négy terméke kész

@@ -525,8 +525,8 @@ E12-R28	docs/rounds/e12-r28-beta-stabilization-and-scope-cut.md	sonnet-impl	0464
 E12-R29	docs/rounds/e12-r29-open-beta-and-canary-cohort.md	sonnet-impl	nincs	done
 E12-R30	docs/rounds/e12-r30-feature-freeze-and-final-regression.md	sonnet-impl	nincs	done
 E12-R31	docs/rounds/e12-r31-production-deployment-and-internal-cohort.md	sonnet-impl	nincs	done
-E12-R32	docs/rounds/e12-r32-staged-rollout-1-to-20-percent.md	sonnet-impl	nincs	pending
-E12-R33	docs/rounds/e12-r33-staged-rollout-50-to-100-and-ga.md	sonnet-impl	nincs	pending
+E12-R32	docs/rounds/e12-r32-staged-rollout-1-to-20-percent.md	sonnet-impl	nincs	done
+E12-R33	docs/rounds/e12-r33-staged-rollout-50-to-100-and-ga.md	sonnet-impl	nincs	done
 E12-R34	docs/rounds/e12-r34-post-launch-stabilization-and-hotfix.md	sonnet-impl	0465	pending
 E12-R35	docs/rounds/e12-r35-technical-debt-and-flag-cleanup.md	sonnet-impl	nincs	pending
 E12-R36	docs/rounds/e12-r36-program-completion-and-next-roadmap.md	sonnet-impl	nincs	pending

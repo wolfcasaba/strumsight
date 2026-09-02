@@ -23079,3 +23079,119 @@ ADAT volt hiányos.
 (a MÉRT piros útvonalakkal és a valódi commit-üzenetekkel) és a párja,
 `::the widened `release-tooling` prefixes do NOT exempt the shipped backend or app code`
 (a határ másik oldala piros marad).
+
+## L581 — A Router CI `on.push.paths` szűrője a PUSH diffjére néz, nem a kör diffjére: a kör UTOLSÓ commitja (a `docs/reviews/**` review) SOSEM triggereli, tehát az exact-SHA kapun a merge SHA-n nincs futás (E12-R32, 2026-09-02)
+
+**A helyzet.** A merge-kapu exact-SHA (ADR 0086 §2): a `router-ci.yml`-nek a
+**merge SHA-n** kell `success`-nek lennie, ha a kör diffje bármelyik
+trigger-útvonalat érinti. A tervező ezt helyesen meg is mondja:
+
+```
+$ python3 tools/round-ci-plan.py --brief docs/rounds/e12-r32-…md --base origin/main --head HEAD
+"router_ci_expected": true,
+"router_ci_paths_hit": ["docs/rounds/e12-r32-staged-rollout-1-to-20-percent.md"]
+```
+
+**Amit mértünk.** A kör utolsó commitja a review frissítése volt
+(`a50e80a2`, egyetlen fájl: `docs/reviews/e12-r32-review.md`). Push után:
+
+```
+$ gh run list --workflow router-ci.yml --branch sonnet-impl/e12-r32-… --json headSha,conclusion
+[{"conclusion":"success","headSha":"6abbe822…"},   # az ELŐZŐ push
+ {"conclusion":"success","headSha":"a723749d…"}]   # és a még korábbi
+```
+
+A merge SHA-n (`a50e80a2`) **nulla** Router-CI futás. A `full-gate.yml`-t ez
+nem érinti (azt `workflow_dispatch`-csal indítja az orchestrátor), a Router CI
+viszont KIZÁRÓLAG `push`-ra indul magától — és a `on.push.paths` a **push saját
+diffjét** szűri, nem az ág `main`-hez mért kumulatív diffjét. A
+`docs/reviews/**` egyetlen trigger-útvonalon sincs rajta.
+
+**A hibaosztály.** Két, külön-külön helyes szabály szerkezetileg ütközik:
+
+1. a kör-protokoll szerint a kör UTOLSÓ commitja a review-jelentés
+   (`docs/reviews/eXX-rYY-review.md`) — tehát a merge SHA-t **majdnem mindig**
+   egy `docs/reviews/**`-only push állítja elő;
+2. a Router CI trigger-listája (szándékosan) nem tartalmazza a
+   `docs/reviews/**`-ot.
+
+Az eredmény: a Router CI a kör közbenső SHA-in zölden lefut, a merge SHA-n
+viszont hiányzik. Aki „van zöld Router-CI futás az ágon"-t mér „a merge SHA-n
+zöld" helyett, **elavult bizonyítékra merge-el** — a kapu csendben lazul,
+anélkül hogy bárki lazította volna.
+
+**Hogyan alkalmazd.**
+
+1. **A `--json headSha` összevetés NEM formalitás.** A `gh run list --workflow
+   router-ci.yml --branch <ág> --json headSha,conclusion` kimenetét mindig a
+   `git rev-parse HEAD`-hez mérd, ne a puszta `conclusion`-höz. Ez a mérés
+   fogta meg itt a rést.
+2. **Hiányzó futás esetén a Router CI kézzel indítható:** a workflow-nak van
+   `workflow_dispatch` triggere, és a dispatch a BRANCH CSÚCSÁN fut, tehát
+   pontosan a merge SHA-t méri:
+   `gh workflow run router-ci.yml --ref <kör-ág>` →
+   `headSha=a50e80a2…`, `conclusion=success` (run
+   [33668495951](https://github.com/wolfcasaba/strumsight/actions/runs/33668495951)).
+   Ez nem kerülőút, hanem a kapu HELYES kiszolgálása.
+3. **A tartós javítás helye nem a kör-oldal.** Vagy a `router-ci.yml`
+   `on.push.paths` listája kapja meg a `docs/reviews/**`-ot (a legolcsóbb, és
+   a review-only pusht amúgy is másodpercek alatt lefutó Python-suite méri),
+   vagy a merge-kapu ellenőrzője dispatch-eli automatikusan, ha a tervező
+   `router_ci_expected=true`-t mond, de a merge SHA-n nincs futás.
+
+**Őrteszt:** nincs — a javítás helye a `.github/workflows/router-ci.yml` vagy a
+`tools/` merge-kapu, mindkettő az E12-R32 `allowed_paths`-án KÍVÜL és a kör
+tiltott zónájában (ADR 0087 §4). A rés MÉRVE és dokumentálva van; a gépi őrt
+egy governance-kör (vagy önjavító kör) szállíthatja, amelynek a briefje
+kifejezetten felsorolja ezeket az útvonalakat.
+
+## L582 — Az előre megírt kör-brief ⚠ pre-flight kapuja olyan EMBERI előfeltételt írhat elő, amit a SAJÁT §2 mért állapota kizár: a feloldás nem a kapu kihagyása, hanem GÉPI invariánssá alakítása — és az invariánst INVERZ próbával kell igazolni (E12-R33, 2026-09-02)
+
+**Tünet.** Az E12-R33 briefje (előre megírva 2026-08-27) kötelező pre-flight
+kapuként ezt írta elő: „ellenőrizd, hogy a `staged-rollout-log.md` 1/5/20%-os
+lépcsői KITÖLTVE és jóváhagyva vannak-e. Üres napló mellett a kör nem
+indítható (`blocked`)." A mérés szerint a napló SÉMÁJA megvolt (Kör 32,
+`f6db8a8d`: 3 döntés-sor + 15 megfigyelés-sor), de KITÖLTVE nem — mind a három
+`decision` `pending`, mind a 15 verdikt `unknown`, minden szöveges cella `TBD`.
+
+**Mért gyökérok.** A kapu szó szerinti alkalmazása a láncot **véglegesen**
+megállította volna, nem átmenetileg: a naplót csak egy VALÓDI store-rollout
+töltheti ki, az pedig ma maga is blokkolt — `docs/release/blockers.md` szerint
+nyitva van egy **P0** (`R-SIGN-01`) és öt **P1** (`R-VER-01`, `R-PRIV-01`,
+`R-SEC-01`, `R-STAGE-01`, `R-STORE-01`), és a `ga-scope.md` fejléce ezért
+mondja ki: „NEM KÉSZ (NOT READY)". Ugyanennek a briefnek a §2-je viszont MÁR
+MÉRTE ezt („Store-jelenlét MA nincs … a GA-rekord ezért a publikálás UTÁN
+kitöltendő mezőket EXPLICIT emberi jelöléssel viszi") — a brief tehát
+ÖNMAGÁVAL volt ellentmondásban: a kapu egy olyan világot feltételezett,
+amelynek a hiányára a kör terméke kifejezetten tervezve volt.
+
+**Feloldás (ADR 0087 §2 — a kör SAJÁT, még nem merge-elt briefje).** A
+dokumentált §0.0.1 pre-flight revízió a kaput **séma-létezés** ellenőrzéssé
+tette (teljesül), a kitöltetlenséget pedig nem elkente, hanem **GÉPI
+invariánssá** emelte: a GA-rekord `ga_status` mezője zárt értékkészletű
+(`not-yet` | `in-progress` | `ga`), és a `verify_ga_record.py` nem-nulla
+kilépéssel áll meg, ha `ga_status: ga`, miközben bármely `stage-*` döntés nem
+`approved`, VAGY nyitott P0/P1 van. A kör így SZIGORÚBB lett, nem lazább: a
+korábban emberi figyelemre bízott „ne mondd ki idő előtt a GA-t" szabályt
+mostantól gép méri.
+
+**A második, könnyen kimaradó fél: az INVERZ próba.** Egy „mindig piros"
+invariáns pontosan olyan használhatatlan, mint a hiányzó: a valódi GA
+pillanatában sem engedne át semmit, tehát az első éles használatkor
+megkerülnék. A review ezért nem csak azt mérte, hogy `ga_status: ga` ma
+pirosat ad (P3), hanem azt is, hogy szintetikus, mind-`approved` naplóval és
+üres blocker-táblával **`exit=0`**-t ad (P12) — ez bizonyítja, hogy az őr
+ADAT-VEZÉRELT, nem bedrótozott tiltás. Minden „X tiltva, amíg Y" alakú
+ellenőrzőhöz KELL egy ilyen inverz cella.
+
+**Általánosítás.** Egy előre megírt brief mért állításai avulnak (ADR 0087
+§1), és ez a kötelező kapuira is igaz. Ha egy kapu emberi előfeltételt ír elő,
+a pre-flightban azt is meg kell mérni, hogy az előfeltétel **teljesíthető-e
+egyáltalán** a jelen fán. Ha nem — és a kör terméke nem is függ tőle —, akkor
+a `blocked` jelzés nem óvatosság, hanem a lánc végleges megállítása egy olyan
+állapot miatt, amelyre a kört tervezték.
+
+**Őrteszt:** `test/tooling/ga_record_test.dart`::`A7 — ga_status: ga is
+rejected while a stage-* decision is not approved or a P0/P1 blocker is open`
+(a rekord-oldali invariáns), és ugyanott a fixture-felülírásos inverz cella,
+amely bizonyítja, hogy a szabály nem vacuous.
