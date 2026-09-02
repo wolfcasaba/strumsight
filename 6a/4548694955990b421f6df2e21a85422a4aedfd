@@ -1,0 +1,1 @@
+heal=E02-R21 halt=H4 attempt=10 verdict=fixed lesson=L47-selfheal-content-fix-when-router-budget-cannot-reach-known-review-fix pr=55 merge=6e5cec7
