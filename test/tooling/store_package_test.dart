@@ -420,6 +420,51 @@ void main() {
       );
       expect(allowed, isEmpty);
     });
+
+    // MAJOR-1 fix: the hand-maintained capabilityMarketingSignaturePatterns
+    // map must cover every ga_scope: false capability the LIVE matrix
+    // declares — read live, not a hardcoded id list, so growing the matrix
+    // without extending the map is caught rather than silently skipped.
+    test('every ga_scope: false capability in the real device-matrix.yaml '
+        'has a capabilityMarketingSignaturePatterns entry (fail-closed '
+        'coverage, MAJOR-1)', () {
+      final nonGaIds = realCapabilities()
+          .where((c) => !c.gaScope)
+          .map((c) => c.id)
+          .toSet();
+      final missing = nonGaIds.difference(
+        capabilityMarketingSignaturePatterns.keys.toSet(),
+      );
+      expect(
+        missing,
+        isEmpty,
+        reason:
+            'capabilityMarketingSignaturePatterns has no entry for: '
+            '${missing.join(', ')}',
+      );
+    });
+
+    // Self-defense (MAJOR-1, P7 reproduction): a ga_scope: false capability
+    // with NO signature-pattern entry must turn the prose-scan cell red on
+    // its own — proving the map's coverage gap is fail-closed rather than
+    // a silent `continue`, regardless of what the prose says.
+    test('a ga_scope: false capability with no signature-pattern entry '
+        'turns the prose-scan cell red by itself (fail-closed — P7 '
+        'reproduction)', () {
+      final capabilities = [
+        ...realCapabilities(),
+        const CapabilityEntry(id: 'band_jam_mode', gaScope: false),
+      ];
+      final violations = checkListingProseAgainstCapabilitySignatures(
+        listingText:
+            '**Band Jam Mode.** Play along with a full backing '
+            'band, coming soon.',
+        capabilities: capabilities,
+        signaturePatterns: capabilityMarketingSignaturePatterns,
+      );
+      expect(violations, isNotEmpty);
+      expect(violations.join('\n'), contains('band_jam_mode'));
+    });
   });
 
   // ---------------------------------------------------------------------
@@ -428,11 +473,14 @@ void main() {
 
   group('A4 — every referenced app route exists, and no doc claims a '
       'fabricated deletion endpoint/route (§0.0 R2)', () {
-    // Every doc file this round produced that carries prose (data-safety.yaml
-    // is structured data, not prose, and is excluded from this scan).
+    // Every doc file this round produced, scanned as text. data-safety.yaml
+    // is structured data, not prose, but its `purpose:` fields are free
+    // text, so it is included too (MINOR-1) — coverage must be complete
+    // across all five shipped documents, not four of five.
     final docFiles = <String>[
       'docs/store/listing.md',
       'docs/store/permissions-rationale.md',
+      'docs/store/data-safety.yaml',
       'docs/legal/privacy-policy-draft.md',
       'docs/legal/community-guidelines-draft.md',
     ];
@@ -1042,7 +1090,11 @@ const Map<String, String> capabilityMarketingSignaturePatterns = {
 };
 
 /// A3 (prose scan): flags any GA-false capability whose signature matches
-/// [listingText], regardless of hedging ("coming soon") — §5.3.
+/// [listingText], regardless of hedging ("coming soon") — §5.3. Fail-closed
+/// (MAJOR-1): a ga_scope: false capability with no entry in
+/// [signaturePatterns] is itself a violation — the map's coverage must be
+/// complete, not silently skipped, or an unmapped capability could be
+/// marketed with zero prose-scan protection.
 List<String> checkListingProseAgainstCapabilitySignatures({
   required String listingText,
   required List<CapabilityEntry> capabilities,
@@ -1052,7 +1104,14 @@ List<String> checkListingProseAgainstCapabilitySignatures({
   for (final capability in capabilities) {
     if (capability.gaScope) continue;
     final pattern = signaturePatterns[capability.id];
-    if (pattern == null) continue;
+    if (pattern == null) {
+      violations.add(
+        'capabilityMarketingSignaturePatterns has no entry for ga_scope: '
+        'false capability "${capability.id}" — the prose scan cannot '
+        'verify it is unmarketed (fail-closed: add a signature pattern)',
+      );
+      continue;
+    }
     final match = RegExp(pattern, caseSensitive: false).firstMatch(listingText);
     if (match != null) {
       violations.add(

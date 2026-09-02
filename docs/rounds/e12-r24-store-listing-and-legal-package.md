@@ -380,4 +380,67 @@ bizonyított — a `docs/privacy/**` fát ez a kör nem érintette.
   `play_category` mezők tartalmi helyessége a store-feltöltéskor, a Play
   Console saját űrlapjával szemben, emberi lépés.
 
+### Javító kör #1 (review-leletek zárása)
+
+**Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`), 2026-09-02.
+Review: `docs/reviews/e12-r24-review.md` (`89a3e5bd`), VERDIKT: CHANGES
+REQUESTED (1 MAJOR + 1 MINOR + 2 NOTE). A NOTE-1/NOTE-2-nek nem volt teendője
+(§10 helyesen kezeli a placeholder-t; a NOTE-2 az orchestrátor
+dispatch-promptjának hibája volt, nem az implementeré).
+
+**MAJOR-1 zárva.** `checkListingProseAgainstCapabilitySignatures`
+(`test/tooling/store_package_test.dart`) korábban egy `if (pattern == null)
+continue;` ággal csendben kihagyta azokat a `ga_scope: false` capability-ket,
+amelyekhez nincs bejegyzés a kézzel karbantartott
+`capabilityMarketingSignaturePatterns` térképben — a hiányzó lefedettség
+zöldként jelent meg. Fail-closedre javítva:
+
+- a hiányzó signature-minta MOST maga is violation (nem `continue`);
+- ÚJ cella: `capabilityMarketingSignaturePatterns.keys` ⊇ a device-matrix.yaml
+  MINDEN `ga_scope: false` capability id-je (élőben olvasva a mátrixból,
+  beégetett lista nélkül) — "every ga_scope: false capability in the real
+  device-matrix.yaml has a capabilityMarketingSignaturePatterns entry
+  (fail-closed coverage, MAJOR-1)";
+- ÚJ önvédő cella, amely a P7 forgatókönyvet in-memory reprodukálja (egy
+  `band_jam_mode` id, `ga_scope: false`, NINCS hozzá signature-bejegyzés, +
+  a hozzá tartozó "coming soon" próza) — "a ga_scope: false capability with
+  no signature-pattern entry turns the prose-scan cell red by itself
+  (fail-closed — P7 reproduction)".
+
+**A P7 forgatókönyv ÚJ, PIROS kimenete.** A fenti önvédő cella a javítás
+ELŐTTI (a `continue`-t visszaállított) kóddal lefuttatva:
+
+```
+A3 — listing.md never markets a ga_scope: false capability (ADR 0477 D1, §0.0 R1)
+a ga_scope: false capability with no signature-pattern entry turns the
+prose-scan cell red by itself (fail-closed — P7 reproduction) [E]
+  Expected: non-empty
+    Actual: []
+```
+
+— vagyis a régi kód pontosan azt a hiányosságot mutatja, amit a reviewer a
+valódi fájlokon (P7) mért. A javítás UTÁN ugyanez a cella ZÖLD (a violations
+lista tartalmazza a `band_jam_mode`-ot), és a `device-matrix.yaml`/`listing.md`
+fájlokat egyik lépés sem érintette (nincsenek az `allowed_paths`-on) — a teljes
+reprodukció in-memory másolaton történt, konzisztensen az A3 csoport meglévő
+önvédő mintájával (§10 "A3 (brief §5 második fele…)" szakasz, ugyanaz az indok).
+
+**MINOR-1 zárva.** Az A4 `docFiles` listája a négy prózafájl mellett most
+tartalmazza a csomag ötödik szállított dokumentumát,
+`docs/store/data-safety.yaml`-t is (mind a route-scan, mind a
+fabricated-deletion-endpoint scan lefut rajta). A fájl ma nem tartalmaz
+route-alakú backtick-tokent vagy `DELETE /auth|account` mintát, tehát élő
+regresszió nincs — a cella a javítás után is zöld maradt.
+
+**A záró gate (javító kör #1 után):**
+
+```
+tools/round-gate.sh test/tooling/store_package_test.dart test/tooling/data_inventory_test.dart
+```
+
+**Eredmény: MINDEN GATE ZÖLD** — `format`, `analyze`, `test
+store_package_test.dart` (**31/31**, +2 az első menethez képest: a MAJOR-1
+két új cellája), `test data_inventory_test.dart` (27/27, változatlan),
+`architecture`, `secrets`, `l10n`.
+
 ## 11. Review — a Claude tölti ki
