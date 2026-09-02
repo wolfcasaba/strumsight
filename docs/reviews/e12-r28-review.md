@@ -8,6 +8,10 @@
 
 ## 1. menet — VERDIKT: **CHANGES REQUESTED** (2 MAJOR, 0 BLOCKER)
 
+> **2. menet (javító kör, commit `25cad21f`) — VÉGSŐ DÖNTÉS: APPROVED.**
+> Mindkét MAJOR zárva, leletenként ÚJRAMÉRVE friss `/tmp/review-e12-r28b`
+> klónban. A záró mérés a jelentés végén (**„2. menet"** szakasz).
+
 ## Amit magam mértem (nem bemondásra)
 
 ### Gate — izolált klónban ÚJRAFUTTATVA
@@ -225,3 +229,99 @@ stdlib + `yaml` (a testvér `verify_beta_profile.py` precedense). Az `architectu
 
 A két MAJOR zárásáig **merge TILOS**. A javító kör ugyanezzel a motorral megy,
 ezzel a leletlistával.
+
+---
+
+# 2. menet — javító kör (commit `25cad21f`) — VERDIKT: **APPROVED**
+
+Reviewer: Claude (orchesztrátor), 2026-09-02. Friss, izolált klón:
+`/tmp/review-e12-r28b` (a GitHub-remote-ról, `25cad21f`). Read-only; production
+kód a review alatt nem íródott.
+
+## Leletenkénti zárás — ÚJRAMÉRVE
+
+### MAJOR-1 — ZÁRVA
+
+A `_parse_table` már nem dob el sort némán: a marker-blokk minden nem-fejléc,
+nem-elválasztó sora **kötelező adatsor**, és ha nem illeszkedik a tábla
+alakjára, `VerifyError` a sor számával. A P7 mutáció (a lelet reprodukciója)
+a javítás UTÁN:
+
+```
+verify_ga_scope: docs/release/ga-scope.md:92: table row does not match the expected shape — '|`LabMode` overlay is required to finish onboarding | `labModeAvailable` | `test/e2e/returning_user_restart_test.dart` |'
+exit=2
+```
+
+(Javítás ELŐTT ugyanez `exit=0`, „3 core-path step(s)" — a lelet mérése.) A
+javítás mindhárom táblára kiterjed, nem csak a core-path-ra. A modul-docstring
+állítása immár a kódot írja le, és nevesíti a mérést (`E12-R28 MAJOR-1`) —
+a nem bizonyított doc-comment-állítás megszűnt.
+
+### MAJOR-2 — ZÁRVA
+
+A capability-tábla új, géppel kötött `production_default` oszlopot kapott, és a
+tool a **mért forrásból** olvassa vissza (`lib/app/config/feature_flags.dart`
+`FeatureFlags.forEnvironment`, fail-closed parse). Három mérés:
+
+| Próba | Mutáció | Mért |
+|---|---|---|
+| P9 | a dokumentum `production_default`-ja `true`-ra írva | **exit 1** — `production_default is documented as True but the measured FeatureFlags.forEnvironment default … is False` |
+| P10 | `ga` + `production_default false`, a nevesített feloldó feltétel kivéve | **exit 1** — `classified ga with production_default false but its note names no 'Production unlock:' condition` |
+| P11 | a mért forrásban ismeretlen alak (`someWeirdHelper(environment)`) | **exit 2** — `an unrecognized shape for a fail-closed production-default read` |
+
+A `ga-scope.md:64` sor immár KIMONDJA a mért tényt („Measured production default
+is `false` (`lib/app/config/feature_flags.dart:78` … no dart-define override) —
+the `/practice*` routes are NOT reachable in a production build today"), és
+nevesített feloldó feltételt hordoz. A besorolás — helyesen — `ga` maradt: a
+lelet nem a besorolás volt, hanem a kimondatlan, őrizetlen production-tény.
+
+### Regresszió-próbák a javítás UTÁN (a korábbi őrök nem lazultak)
+
+| # | Mutáció | Mért |
+|---|---|---|
+| P3 | evidence egy nem létező béta-riportra (D3 anti-fabrikáció) | **exit 1** |
+| P4 | NOT-READY fejléc → `GA-kész`, nyitott P0 mellett (D7) | **exit 1**, két ágon |
+| — | tiszta fa | **exit 0** — 16 capability, 4 core-path step, 4 frozen contract, 6 open P0/P1 |
+
+### MINOR-1 — NYITVA HAGYVA (follow-up, nem blokkol)
+
+A `postponed` besorolás cohort-flag állapotát továbbra sem köti cella. Ez a
+javító-prompt szerint kifejezetten **opcionális** volt (élő rés nincs: mind a
+hét `postponed` flag `false` mindkét cohortban; az ADR 0489 D4 sem követeli
+meg). Follow-up körre marad, nem merge-akadály.
+
+NOTE-1 / NOTE-2 változatlanul nem blokkol.
+
+## Gate — SAJÁT kézzel, a friss klónban
+
+```
+tools/round-gate.sh test/tooling/ga_scope_test.dart test/tooling/beta_profile_test.dart
+    format / analyze / test ga_scope_test.dart / test beta_profile_test.dart
+    / architecture / secrets / l10n                            mind ZÖLD
+GATE_EXIT=0
+```
+
+## Scope-audit — a hiteles eszközzel, a teljes körre
+
+```
+Legacy scope audit OK (e3d4a1a54bda..25cad21ff8c4, 7 changed path(s), 1 generated/ignored)
+```
+
+A 7. útvonal a saját review-jelentésem (`generated/ignored` — állandó,
+kód szintű mentesség, ADR 0138). A `docs/beta/**` és a `lib/**` érintetlen.
+
+## Acceptance criteria — záró állás
+
+| # | Állás | Bizonyíték |
+|---|---|---|
+| A1 | ✅ | P2/P6 piros; 16/16 sor; a `note`-ok mért forrásai visszaellenőrizve |
+| A2 | ✅ | §6.1 valódi-sértés próba + Dart A2 cella + tool-független sanity |
+| A3 | ✅ **(javítva)** | P1 piros ÉS **P7 immár exit 2** — az őr nem kerülhető meg |
+| A4 | ✅ | P5/P8 piros |
+| A5 | ✅ | P4 piros, két ágon |
+| A6 | ✅ | `beta_profile_test.dart` változatlan, saját gate-futáson zöld |
+| — | D8 (nincs kitalált béta-adat) | ✅ P3 piros; `beta-findings.md` a mért NOT-launched állapotot rögzíti |
+| — | D3+production-tény (MAJOR-2) | ✅ P9/P10/P11 |
+
+**VÉGSŐ DÖNTÉS: APPROVED.** 0 nyitott BLOCKER/MAJOR. A merge a zöld
+exact-SHA CI-kapun (Full Gate + Router CI a merge SHA-ján) múlik.
