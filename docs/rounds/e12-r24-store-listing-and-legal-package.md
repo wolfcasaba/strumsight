@@ -35,6 +35,130 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0.1 §0.0 BRIEF-REVÍZIÓ — pre-flight mérés (orchestrátor, 2026-09-02, `main @ 62c88b35`)
+
+A brief előre megírt (2026-08-27) állításait a pre-flight kimérte. Négy állítás
+avult vagy volt pontatlan; a revízió **szűkít és forrást köt**, nem tágít. A
+`brief-lint (strict)` 0 leletet adott, a hagyaték-szonda `ÁLLAPOT: NINCS`.
+
+**Visszakeresés (ADR 0312, szűkítve → teljes korpusz):**
+`--corpus lessons,halts,adr` → [ADR 0479](../adr/0479-privacy-data-inventory-and-consent-enforcement.md)
+(a leltár gépi szerződése; „ez a döntés nem lazítható azért, hogy egy teszt zöld
+legyen"), [ADR 0247](../adr/0247-analysis-export-share-and-delete-contract.md)
+(export/share/delete). `--corpus lessons,halts` → [L420](../LESSONS.md#l420)
+(a célzott gate NEM fedi a kereszt-fájlrendszeres `test/tooling/*_guard_test.dart`
+őröket — a teljes CI a mérce), [L102](../LESSONS.md#l102) (a `dart format` lépés
+csak a `round-gate.sh`-ban fut le). Teljes korpuszon nem jött új, releváns
+előzmény a briefen kívülről.
+
+### R1 — A GA-scope EGYETLEN igazsága a device-mátrix, nem a brief prózája
+
+[ADR 0477](../adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md) **D1**
+kimondja: a GA-scope egyetlen forrása a `docs/testing/device-matrix.yaml`
+`capabilities[].ga_scope` mezője — **új GA-lista TILOS**. A brief A3 cellája ezt
+nem nevezte meg. MÉRVE (`docs/testing/device-matrix.yaml:90–133`):
+
+| `ga_scope: true` (11) | `ga_scope: false` (3) |
+|---|---|
+| `onboarding`, `live_and_tuner`, `practice_engine`, `song_trainer_local`, `audio_analysis_core`, `progress_goals_streak`, `storage_migration`, `offline_operation`, `localization_en_hu`, `accessibility_minimum`, `session_lifecycle_stability` | `computer_vision`, `offline_ai`, `ai_tutor` |
+
+**Kötelező:** az **A3** cella a `device-matrix.yaml`-t OLVASSA (szűkített,
+`package:yaml` NÉLKÜLI olvasóval — a `yaml` csomag ezen a fán csak tranzitív
+függőség, lásd `docs/testing/device-lab.md` §3), és a `listing.md` capability-
+hivatkozásait ehhez méri. A három `ga_scope: false` capability (Computer Vision /
+Vision coach, Offline AI, AI Tutor) a store-leírásban **nem ígérhető**, sem
+„hamarosan" alakban (§5.3). Beégetett capability-lista a tesztben TILOS.
+
+### R2 — A §2 „fiók-törlés a `backend/app/routers/auth.py` felelőssége" állítás MÉRVE HAMIS
+
+`grep -n "@router\." backend/app/routers/auth.py` → **csak** `POST /register`,
+`POST /login`, `GET /me`. **A fán MA nincs kliens által indítható
+fiók-törlési végpont** — ezt a `docs/privacy/data-inventory.yaml` maga is
+kimondja (`account_api`/`email` retention: *„backend/** has no measured
+client-triggered account-deletion endpoint as of this round"*).
+
+A MÉRT, létező törlési/exportálási felületek:
+
+| Felület | Mérés | Hatóköre |
+|---|---|---|
+| `PrivacyCenterScreen` — „delete all" + export | `lib/features/settings/screens/privacy_center_screen.dart:92,118` (`deleteAllVisionData`), belépés `lib/features/settings/screens/settings_screen.dart:86`-ról `MaterialPageRoute`-tal — **nincs hozzá nevesített `AppRoute` konstans** | on-device vision-adat |
+| `AppRoute.tutorData` = `/tutor/data` | `lib/app/routing/app_route.dart:38` | on-device tutor-memória |
+| `AppRoute.tutorPrivacy` = `/tutor/privacy` | `lib/app/routing/app_route.dart:37` | tutor consent visszavonás |
+| `AppRoute.settings` = `/settings` | `lib/app/routing/app_route.dart:11` | a Privacy Center szülő-képernyője |
+
+**Kötelező:** a store-csomag a fiók-törlést **NEM** írhatja le meglévő in-app
+útként vagy backend-végpontként. A dokumentumnak ki kell mondania, hogy a
+**backend-oldali fiók-törlés ma nem létező képesség**, és a kezelése támogatási
+(e-mail) csatorna. Az **A4** cella két irányban mér: (a) minden, a
+dokumentumokban `/…` alakban hivatkozott alkalmazás-útvonalnak léteznie kell az
+`app_route.dart`-ban; (b) a `PrivacyCenterScreen`-re hivatkozás a
+fájl:osztály párra mutasson, ne kitalált route-ra. Nem létező végpont
+dokumentálása az A4-et PIROSRA viszi.
+
+### R3 — A manifest MÉRT engedélylistája (az A1 bemenete)
+
+`android/app/src/main/AndroidManifest.xml`: **`RECORD_AUDIO`** (3), **`CAMERA`**
+(5), **`INTERNET`** (9), **`POST_NOTIFICATIONS`** (12),
+**`RECEIVE_BOOT_COMPLETED`** (13); továbbá `uses-feature
+android.hardware.camera` `required="false"` (6). A `debug`/`profile` variáns
+**kizárólag** `INTERNET`-et kér, a Flutter tooling hot-reloadjához — ezek nem
+kerülnek a release-artefaktumba, tehát a rationale-dokumentum a `main` variánst
+sorolja, és a két dev-variánst **kimondva** zárja ki.
+
+**Mért feszültség, amit a rationale-nak kezelnie kell (NEM STOP):** a `CAMERA`
+engedélyhez van a fán mérhető funkció (`lib/features/vision/**`), tehát a §0
+STOP-protokoll **nem** áll fenn — de az általa kiszolgált `computer_vision`
+capability `ga_scope: false` (R1). A `permissions-rationale.md`-ben a `CAMERA`
+sor ezért **opcionális, nem-GA** minősítést kap, és a `listing.md` nem
+reklámozhatja. A `RECEIVE_BOOT_COMPLETED` indoklása a
+`ScheduledNotificationBootReceiver` (manifest 60–66. sor,
+`flutter_local_notifications`) — a §5.2 szerint a FUNKCIÓT (napi gyakorlás-
+emlékeztető újraregisztrálása újraindítás után) és az adatot kell megnevezni,
+nem a plugint.
+
+**Az A1 cella a manifestet OLVASSA** (`uses-permission android:name="…"`
+regex), és minden megtalált engedélyhez követel egy sort a
+`permissions-rationale.md`-ből. Beégetett engedélylista a tesztben TILOS — a
+falszifikáció (§6.1) az indoklás kivételére épül.
+
+### R4 — Az A2 forrása a MÉRT leltár, a szűkített olvasó KÉSZ
+
+A `docs/privacy/data-inventory.yaml` **11 route**-ot deklarál: `account_api`,
+`diagnostics_upload`, `tutor_stream`, `community_media`, `share_export`, és 6
+`rides:` alakú, saját mező nélküli bejegyzés
+(`account_api_auth_repository`, `…_settings_repository`,
+`…_community_profile_repository`, `…_social_graph_repository`,
+`…_community_challenge_repository`, `diagnostics_upload_uploader`).
+
+A leltár olvasásához **ne írj új parsert**: a `tool/check_data_inventory.dart`
+már szállít egy `package:yaml`-mentes `DataInventory.parseFile` olvasót, amit a
+`test/tooling/data_inventory_test.dart` ugyanígy importál
+(`import '../../tool/check_data_inventory.dart';`). A `tool/**` a tilos zónában
+van: **importálni szabad, módosítani TILOS**.
+
+**Az A2 kétirányú:** minden `data-safety.yaml` kategória egy LÉTEZŐ
+`route.id`/`field.name` párra hivatkozzon, és minden `leaves_device: true`
+leltár-mezőnek legyen data-safety fedezete. A `rides:` route-ok mezők nélküliek
+— ezeket a fedezet-számítás a `rides` célján keresztül vegye, ne követeljen
+rájuk külön kategóriát (különben a cella szükségszerűen piros).
+
+### R5 — A gate és a teljes suite viszonya (L420)
+
+A §7 célzott gate **nem** fedi a kereszt-fájlrendszeres őröket
+(`test/tooling/sdd_index_guard_test.dart`, `check_secrets_test.dart`,
+`check_assets_test.dart`, `test/ui/ui_inventory_test.dart`). Öt ÚJ dokumentum-
+fájl keletkezik: a merge-kapu az **exact-SHA CI teljes suite-ja**, nem a célzott
+gate. A `dart format` a `round-gate.sh` ELSŐ lépése (L102) — a záró sort
+csővezeték nélkül, szó szerint kell futtatni.
+
+### R6 — ADR: nincs, és ez SZÁNDÉKOS
+
+A kör dokumentum-csomagot állít elő; minden normatív állítása MÁR merge-elt
+döntésre vezet vissza (ADR 0477 D1 a GA-scope-ra, ADR 0479 a leltárra, ADR 0247
+a törlés/export szerződésre). Új ADR-szám kiosztása merge-elt döntés fölé nem
+történik; a precedens az E12-R13 (RTM: „**új ADR nincs**"). A `docs/adr/**`
+ezért marad a tilos zónában.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -54,7 +178,7 @@ A store-metaadat, az adatbiztonsági nyilatkozat és a jogi dokumentumok legyene
 
 - `docs/store/` és `docs/legal/` **nem létezik**.
 - A `docs/privacy/data-inventory.yaml` a Kör 17 után létezik — ez a data-safety nyilatkozat egyetlen forrása.
-- A törlési/exportálási út szerződése ADR 0247-ben rögzített; a fiók-törlés backend-oldali útja a `backend/app/routers/auth.py` felelőssége.
+- A törlési/exportálási út szerződése ADR 0247-ben rögzített. ~~a fiók-törlés backend-oldali útja a `backend/app/routers/auth.py` felelőssége.~~ **§0.0 revízió R2 (MÉRVE 2026-09-02): a `backend/app/routers/auth.py` HÁROM végpontot ad (`POST /register`, `POST /login`, `GET /me`) — kliens által indítható fiók-törlés a fán NEM létezik.** A MÉRT törlési felületek a revízió R2 táblázatában.
 - A publikus store-jelenlét MA nincs (Kör 1 release-history audit).
 
 ## 3. Scope
@@ -101,10 +225,10 @@ A listing csak a GA-scope-ban lévő capabilitykre hivatkozik. **NEM elfogadhat�
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | A manifest MINDEN kért engedélyéhez van indoklás | `store_package_test.dart` |
-| A2 | A data-safety minden kategóriája leltár-mezőre hivatkozik, és fordítva: nincs leltár-mező nyilatkozat nélkül | `store_package_test.dart` |
-| A3 | A listing nem hivatkozik GA-scope-on kívüli capabilityre | `store_package_test.dart` |
-| A4 | A fiók-/adattörlés útja a dokumentumban létező route-ra/URL-re mutat | `store_package_test.dart` |
+| A1 | A manifest MINDEN kért engedélyéhez van indoklás — a listát a teszt az `AndroidManifest.xml`-ből OLVASSA (§0.0 R3), beégetett engedélylista tilos | `store_package_test.dart` |
+| A2 | A data-safety minden kategóriája LÉTEZŐ leltár-`route.id`/`field.name` párra hivatkozik, és fordítva: nincs `leaves_device: true` leltár-mező nyilatkozat nélkül; a `rides:` route-ok a céljukon át fedettek (§0.0 R4) | `store_package_test.dart` |
+| A3 | A listing nem hivatkozik GA-scope-on kívüli capabilityre — a GA-lista a `docs/testing/device-matrix.yaml` `capabilities[].ga_scope`-jából OLVASVA (ADR 0477 D1, §0.0 R1), beégetett lista tilos | `store_package_test.dart` |
+| A4 | Minden, a csomagban `/…` alakban hivatkozott alkalmazás-útvonal LÉTEZIK az `app_route.dart`-ban, ÉS a csomag nem állít nem létező fiók-törlési végpontot/route-ot (§0.0 R2) | `store_package_test.dart` |
 | A5 | A jogi dokumentumok TERVEZET jelöléssel és felülvizsgálati felelőssel készülnek | a dokumentumok fejléce |
 | A6 | A Kör 17 `data_inventory_test.dart` VÁLTOZATLANUL zöld | a §7 gate |
 
@@ -114,8 +238,9 @@ A listing csak a GA-scope-ban lévő capabilitykre hivatkozik. **NEM elfogadhat�
 |---|---|
 | Egy manifest-engedély indoklás nélkül marad | A1 |
 | A data-safety kategória kézzel íródik, leltár-hivatkozás nélkül | A2 |
-| A listing „AI gitártanár"-t ígér, miközben az Offline AI nincs GA-scope-ban | A3 |
-| A törlési útvonal nem létező route-ra mutat | A4 |
+| A listing „AI gitártanár"-t ígér, miközben az `ai_tutor`/`offline_ai` `ga_scope: false` | A3 |
+| A teszt beégetett GA-listát használ a `device-matrix.yaml` olvasása helyett | A3 önvédő cella: a mátrix egy `ga_scope` értékét `true`↔`false`-ra billentve a cellának meg kell FORDULNIA |
+| A törlési útvonal nem létező route-ra (pl. `/privacy-center`) vagy nem létező backend-végpontra (pl. `DELETE /auth/me`) mutat | A4 |
 
 **Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** vedd ki az egyik engedély indoklását, futtasd a §7 gate-et → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
 
