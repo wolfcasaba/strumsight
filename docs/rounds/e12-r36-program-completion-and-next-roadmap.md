@@ -16,6 +16,149 @@
 
 A program-riport akkor ér valamit, ha a NEM elkészült részeket is pontosan nevezi meg. A megíráskor MÉRT állapot szerint az Epic 10 (Offline AI) sáv `hold`-on, a Chapter 14 sáv `prepared` státuszban áll, és a Chapter 12 rounds 27–33 emberi kapuja külön jelölendő. A riport ezeket NEM írhatja késznek.
 
+## 0.0.A Pre-flight revízió (orchestrátor, 2026-09-02, `main @ 9da6d2f3`)
+
+A brief 2026-08-27-én, `main @ 9ca4a0dc`-n készült. Az alábbi hét pont a MAI
+mérés, és a brief §2/§6 megfelelő állításait **felülírja**. A mérés forrásai:
+`docs/execution/pipeline-queue.tsv`, `docs/sdd/00-index.md`, `ls docs/sdd/`,
+`tool/check_sdd_index.dart`.
+
+**Visszakeresés (ADR 0312):** `--corpus lessons,halts,adr` →
+`lessons/L118` (az őr tesztje ne a valódi repóra mutasson: az ambiens engedély
+NÉMÁN 20 állítást fordított zöldre rossz okból), `lessons/L577` (az őr a
+SZÁMOT védte, a szám INDOKLÁSÁT nem), `lessons/L133` (előre megírt brief mért
+állítása avulhat → a feloldás scope-SZŰKÍTÉS, nem tágítás). A teljes korpuszon
+saját magán kívül csak a Ch12 SDD-fejezet fájllistája jött vissza — új
+információ nélkül. A P5 pont közvetlenül az L118 + L577 ellenszere.
+
+### P1 — A fejezet ↔ queue-előtag leképezés NEM azonosság, és a queue NEM teljes kör-nyilvántartás
+
+MÉRVE:
+
+- **Chapter 1**-nek nincs köre (az index „Fejlesztési körök" cellája `—`).
+- **Chapter 2–11 = Epic 1–10**, queue-előtag `E01`–`E10`. Az **`E01` előtagra
+  NULLA queue-sor van** (`grep -c "^E01" … → 0`): az Epic 1 a queue létrejötte
+  ELŐTT zárult, bizonyítéka az `epic-01-completion-report.md` (zárókör
+  `E01-R16`), nem queue-sor.
+- Az **`E02` sorai `R12`-nél kezdődnek** (10 sor: R12–R21), miközben az Epic 2
+  20+1 kört futott — a queue az epic KÖZEPÉN jött létre.
+  **Következmény:** a completion matrix „körök" oszlopa NEM a queue-sorok
+  száma. A kör-szám forrása a fejezet-fájl / `00-index.md`; a queue-ból MÉRT
+  szám külön, `queue-sorok` néven nevezett oszlop.
+- **Chapter 12/13/14 = `E12`/`E13`/`E14`** — a szám a FEJEZETET jelöli, nem
+  epicet.
+- **Két sávnak NINCS SDD-fejezetfájlja:** `E15` (Ch15 — UI-migráció,
+  user-döntés 2026-08-28) és `E16` (Ch16 — kompozíció és rollout, user-döntés
+  2026-09-02). Rajtuk kívül az `E99` a governance-pszeudoepic.
+  **A riportnak MINDHÁRMAT fel kell sorolnia mért, nyitott sávként, és ki kell
+  mondania, hogy `docs/sdd/`-ben nincs fejezetfájljuk.** A hallgatólagos
+  kihagyásuk a matrixot hamis „a program kész" állítássá tenné — ez pontosan a
+  §9 első kockázata.
+
+### P2 — A MÉRT queue-állapot előtagonként (2026-09-02)
+
+| Előtag | Fejezet | done | pending | prepared | hold |
+|---|---|---:|---:|---:|---:|
+| `E01` | Ch2 / Epic 1 | — (nincs sor) | — | — | — |
+| `E02` | Ch3 / Epic 2 | 10 | 0 | 0 | 0 |
+| `E03` | Ch4 / Epic 3 | 22 | 0 | 0 | 0 |
+| `E04` | Ch5 / Epic 4 | 24 | 0 | 0 | 0 |
+| `E05` | Ch6 / Epic 5 | 30 | 0 | 0 | 0 |
+| `E06` | Ch7 / Epic 6 | 30 | 0 | 0 | 0 |
+| `E07` | Ch8 / Epic 7 | 30 | 0 | 0 | 0 |
+| `E08` | Ch9 / Epic 8 | 29 | 0 | 0 | **1** (`E08-R29`) |
+| `E09` | Ch10 / Epic 9 | 27 | 0 | 0 | **5** (`E09-R28…R32`) |
+| `E10` | Ch11 / Epic 10 | **0** | 0 | 0 | **32** (a TELJES sáv) |
+| `E12` | Ch12 | 35 | 1 (ez a kör) | 0 | 0 |
+| `E13` | Ch13 | 36 | 0 | 0 | 0 |
+| `E14` | Ch14 | 1 | 0 | **18** | 0 |
+| `E15` | Ch15 (nincs fejezetfájl) | 8 | **6** | 0 | 0 |
+| `E16` | Ch16 (nincs fejezetfájl) | **0** | **5** | 0 | 0 |
+| `E99` | governance | 18 | 0 | 0 | **2** (`E99-R21`, `E99-R23`) |
+
+Reprodukció:
+`awk -F'\t' '$1 ~ /^E[0-9]/ {split($1,a,"-"); print a[1]"\t"$NF}' docs/execution/pipeline-queue.tsv | sort | uniq -c`
+
+A Ch14 sáv **42 kört** tervez, de ma csak **19 sor** létezik (R01 `done` +
+R02–R19 `prepared`) — az R20–R42 briefjei MEG SEM ÍRÓDTAK (queue-komment,
+2026-09-02). A riport ezt a különbséget nevezze meg.
+
+### P3 — A §2 completion-report felsorolása elavult
+
+MÉRVE (`ls docs/sdd/`): **nyolc** zárójelentés létezik —
+`epic-01`…`epic-08-completion-report.md` —, nem a §2-ben írt négy
+(`0{1,2,3,6}`). A §2 megfelelő mondata ezzel a mért listával olvasandó.
+
+### P4 — A `done` queue-sor NEM bizonyítéka annak, hogy az emberi művelet megtörtént
+
+MÉRVE: az `E12-R27`…`E12-R33` mind a hét sora `done`. Ezek a körök a
+zárt/nyílt béta, a produkciós deploy, a szakaszos rollout és a GA
+**artefaktumait és eszközeit** szállították — a user-oldali TÉNYLEGES műveletek
+(valódi Play Console béta, valódi rollout, valódi GA) és a **valódi gitáros
+APK-teszt** NEM történtek meg. Az A5 tehát megköveteli, hogy a riport
+**megkülönböztesse** a „kör `done`" és az „emberi kapu NYITOTT" állítást; a
+`done` sort emberi kapu teljesítéseként feltüntetni a §5.3 tiltott gyengítése.
+
+### P5 — A §6 őr KÖTELEZŐ szigorítása: tartalom-paraméteres, RED-bizonyító cellák
+
+Az L118 és az L577 ugyanazt a hibaosztályt méri: a valódi fára mutató őr
+zöld lehet **rossz okból**, mert nem tud olyan bemenetet előállítani, amit a
+valódi fa nem produkál. A `test/tooling/program_completion_test.dart` ezért
+NEM állhat csak a valódi fán zöld cellákból. Kötelező szerkezet — az E12-R35
+`check_deprecations.dart` bevált mintája szerint:
+
+1. **Tiszta függvények, tartalom-paraméterrel.** A queue-parszolás, a
+   riport-parszolás és az összevetés `String` (queue-szöveg, riport-szöveg,
+   roadmap-szöveg) paramétert vevő, tiszta függvény legyen; a valódi fát mérő
+   cellák ezek **vékony burkolói**. Mivel a brief a `tool/`-t TILTJA, ezek a
+   függvények magában a teszt-fájlban élnek — ez a scope-on BELÜL van, és ez az
+   EGYETLEN út a (2) ponthoz scope-tágítás nélkül.
+2. **Acceptance-pontonként legalább egy RED-bizonyító cella**, kézzel épített,
+   a valódi fa által elő nem állítható bemeneten:
+   - **A1** — szintetikus queue, amelyben egy előtag státusza eltér a riportban
+     jelölttől → a cellának PIROSNAK kell lennie;
+   - **A2** — szintetikus riport, amely a `hold`-on álló `E10`-et késznek
+     jelöli → PIROS;
+   - **A3** — szintetikus riport, amely nem létező fájlra hivatkozik → PIROS;
+   - **A4** — szintetikus roadmap-tétel mérőszám nélkül, illetve olyan tétel,
+     amelynek tartalma csak kör-azonosítók felsorolása (`E\d\d-R\d\d`) → PIROS;
+   - **A5** — szintetikus riport, amely egy emberi kaput elvégzett lépésként
+     tüntet fel → PIROS.
+3. A valódi fát mérő cellák ezután ugyanezekkel a függvényekkel mérik a
+   TÉNYLEGES `docs/execution/pipeline-queue.tsv`-t és a megírt riportot.
+
+### P5.1 — Az A4 gépi alakja (különben nem mérhető)
+
+„Mérhető outcome" gépileg csak akkor ellenőrizhető, ha kötött alakja van. A
+`docs/roadmap/next-six-months.md` minden tétele tartalmazzon:
+
+- egy `**Outcome:**` sort (a felhasználói/terméki eredmény mondata),
+- egy `**Mérőszám:**` sort, amelyben van **szám** (küszöb vagy célérték),
+- egy `**Forrás:**` sort, amely megnevezi, MI méri (fájl, teszt, eszköz vagy
+  dokumentált manuális mérés).
+
+Az A4 cella ezt a három sort és a számot ellenőrzi tételenként, továbbá
+elutasítja azt a tételt, amelynek törzse pusztán kör-azonosítók listája.
+
+### P6 — ADR: NINCS, és ez a pre-flight döntése
+
+A brief §0/§5 ADR-mentes záró körként definiálja magát, és a `docs/adr/**` a
+**tilos zónában** van. Egy új ADR az `allowed_paths` **tágítását** kívánná, ami
+az ADR 0087 §2 szerint NEM orchestrátori hatáskör (a hatáskör a lista
+SZŰKÍTÉSE). Precedens: **E12-R35** ugyanezzel az indoklással zárult ADR nélkül,
+és merge-elve van. A `reserve-adr` foglalót ezért nem hívjuk.
+
+### P7 — A `00-index.md` frissítés HATÁRA (az A6 miatt)
+
+A `tool/check_sdd_index.dart` a „Fejlesztési körök" cellát a fejezet-fájlok
+`# Kör N` / `## Kör N` fejléceiből méri, és ellenőrzi a fájl- és
+zárójelentés-linkeket. A státusz-frissítés ezért **kizárólag** a `Státusz` és
+az `Implementation progress` oszlop szövegét érintheti; a körszám-cellákat, a
+fájl-linkeket és a zárójelentés-linkeket **nem szabad módosítani**. A Ch15/Ch16
+sávnak nincs fejezetfájlja, ezért **nem kap sort** a `## Fejezetek` táblában —
+őket a program-riport nevezi meg (P1). Az A6-ot a
+`test/tooling/sdd_index_guard_test.dart` méri a §7 gate-ben.
+
 ```ai-router
 schema_version = 1
 risk = "normal"
@@ -106,6 +249,11 @@ A Kör 27–33 user-műveletei és a valós gitáros APK-teszt a riportban EXPLI
 | A4 | A roadmap minden tétele mérhető outcome-ot nevez meg | `program_completion_test.dart` szerkezeti cellája |
 | A5 | Az emberi kapuk (Kör 27–33, valós APK-teszt) explicit jelöléssel szerepelnek | a riport + a teszt cellája |
 | A6 | A `00-index.md` a Kör 2 ellenőrzőjével továbbra is valid | `sdd_index_guard_test.dart` a §7 gate-ben |
+
+> **A §0.0.A P5 KÖTELEZŐ:** az A1–A5 cellák nem állhatnak csak a valódi fán
+> zöld állításokból — acceptance-pontonként legalább egy RED-bizonyító, kézzel
+> épített bemenetű cella kell, tartalom-paraméteres tiszta függvényeken. Az A4
+> gépi alakját a §0.0.A P5.1 rögzíti.
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
