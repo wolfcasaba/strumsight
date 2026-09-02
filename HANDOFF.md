@@ -1,5 +1,68 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R32 KÉSZ — Staged rollout 1–20 százalék (a H7 után folytatva) — PR [#532](https://github.com/wolfcasaba/strumsight/pull/532), squash `f6db8a8d` (2026-09-02)
+
+A Ch12 **Kör 32** a publikus rollout első három lépcsőjét (**1% → 5% → 20%**)
+teszi dokumentált, MÉRT döntéssé — **a százalék állítása nélkül**: a brief §0.0
+emberi kapuja szerint a store-művelet kizárólag user-feladat, a kör terméke a
+döntési SÉMA, az ELLENŐRZŐ és a NAPLÓ.
+
+**Négy termék (6 útvonal, `scope_audit=ok`):**
+
+- [`docs/release/rollout-decision.md`](docs/release/rollout-decision.md) — a
+  lépcső-séma zárt marker-blokkokkal: `stage-1`/`stage-5`/`stage-20`, 1/5/20 %,
+  **24/48/72 óra** minimális megfigyelési ablak. A `human-gate` blokk szó
+  szerint hordozza az „A rollout-százalék állítása EMBERI művelet." mondatot —
+  ez az A5 GÉPI horgonya, nem szövegbeli ígéret.
+- [`tool/release/verify_rollout_decision.py`](tool/release/verify_rollout_decision.py)
+  — R1–R8: fail-closed marker-parserek (`exit 2` hiányzó/üres blokkra, alakra
+  nem illő sorra), majd `exit 1` hiányzó mezőre, ismeretlen `decision`-re,
+  forrás-jelölés nélküli mutatóra, ismeretlen cohortra, nyitott P0/P1 melletti
+  `approved`-ra, az **INKLUZÍV** ablak-küszöb alatti `approved`-ra, hiányzó
+  `slo.yaml`-mutatóra és `TBD` döntéshozóra. **Kettős igazságforrás tartva:** a
+  kötelező mutató-halmaz a `docs/operations/slo.yaml`-ből, a küszöb a
+  `rollout-decision.md`-ből jön — egyik sincs a Pythonba másolva.
+- [`test/tooling/rollout_decision_test.dart`](test/tooling/rollout_decision_test.dart)
+  — **28 cella**, köztük a `23`/`24`/`25` küszöb-cellahármas (ez különbözteti
+  meg a `<` és a `<=` implementációt) és az A2 valódi-sértés próba a VALÓS
+  `blockers.md` ellen.
+- [`docs/release/staged-rollout-log.md`](docs/release/staged-rollout-log.md) —
+  a napló váza: 3 döntés-sor + 15 megfigyelés-sor, minden döntés `pending`,
+  minden verdikt `unknown`, `measured_value` `n/a`, és **minden `source`
+  `manual`** — telemetria-gyűjtés nincs, a séma ezt kimondja, nem elfedi.
+
+**A H7 halt feloldva.** Az első review verdiktje HALT (H7) volt: a §7 gate a
+Kör 30 `freeze_policy_test.dart`-ját is futtatja, és az akkor **a kör diffje
+nélkül is** piros volt a `main`-en. A [#530](https://github.com/wolfcasaba/strumsight/pull/530)
+önjavító kör (`4de5643f`, L580) ezt javította; a kör-ág az ADR 0087 §0.3
+upstream-szinkronjával (`merge --no-ff origin/main` @ `23cdeb09`,
+konfliktusmentes) felvette, és a `tools/round-gate.sh
+test/tooling/rollout_decision_test.dart test/tooling/freeze_policy_test.dart`
+a szinkronizált HEAD-en **MINDEN GATE ZÖLD** (format, analyze, 28+36 cella,
+architecture, secrets 4186 fájl/0 lelet, l10n en→hu 2298 üzenet). A review
+verdiktje **APPROVED**, 0 nyitott lelettel
+([`docs/reviews/e12-r32-review.md`](docs/reviews/e12-r32-review.md)); az egyetlen
+NOTE (az R7 lefedettség-ellenőrzés a cohortot figyelmen kívül hagyja) a Kör 33
+anyaga.
+
+**CI (exact-SHA, `a50e80a2`):** Full Gate
+[33666407322](https://github.com/wolfcasaba/strumsight/actions/runs/33666407322)
+**success** · Router CI
+[33668495951](https://github.com/wolfcasaba/strumsight/actions/runs/33668495951)
+**success**. A `round-ci-plan.py` terve `full-gate.yml` volt
+(`native_gate=false`, a diff natív útvonalat nem érint).
+
+**Lecke:** [L581](docs/LESSONS.md#l581) — a Router CI `on.push.paths` szűrője a
+PUSH diffjére néz, nem a kör diffjére: a kör utolsó, `docs/reviews/**`-only
+commitja sosem triggereli, ezért a merge SHA-n magától NINCS futása. A
+`--json headSha` ↔ `git rev-parse HEAD` összevetés fogta meg; a kiszolgálás a
+`workflow_dispatch`.
+
+**Következő kör:** `E12-R33` — Staged rollout 50–100% és GA
+(`docs/rounds/e12-r33-staged-rollout-50-to-100-and-ga.md`).
+
+
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E12-R32 / H7 feloldva: a NEM SZÁLLÍTOTT verifikációs útvonalak is `release-tooling` — PR [#530](https://github.com/wolfcasaba/strumsight/pull/530), squash `4de5643f` (2026-09-02)
 
 **Az E12-R32 (staged rollout) H7-tel megállt**, pedig a kör négy terméke kész

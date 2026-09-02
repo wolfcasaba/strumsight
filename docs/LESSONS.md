@@ -23079,3 +23079,68 @@ ADAT volt hiányos.
 (a MÉRT piros útvonalakkal és a valódi commit-üzenetekkel) és a párja,
 `::the widened `release-tooling` prefixes do NOT exempt the shipped backend or app code`
 (a határ másik oldala piros marad).
+
+## L581 — A Router CI `on.push.paths` szűrője a PUSH diffjére néz, nem a kör diffjére: a kör UTOLSÓ commitja (a `docs/reviews/**` review) SOSEM triggereli, tehát az exact-SHA kapun a merge SHA-n nincs futás (E12-R32, 2026-09-02)
+
+**A helyzet.** A merge-kapu exact-SHA (ADR 0086 §2): a `router-ci.yml`-nek a
+**merge SHA-n** kell `success`-nek lennie, ha a kör diffje bármelyik
+trigger-útvonalat érinti. A tervező ezt helyesen meg is mondja:
+
+```
+$ python3 tools/round-ci-plan.py --brief docs/rounds/e12-r32-…md --base origin/main --head HEAD
+"router_ci_expected": true,
+"router_ci_paths_hit": ["docs/rounds/e12-r32-staged-rollout-1-to-20-percent.md"]
+```
+
+**Amit mértünk.** A kör utolsó commitja a review frissítése volt
+(`a50e80a2`, egyetlen fájl: `docs/reviews/e12-r32-review.md`). Push után:
+
+```
+$ gh run list --workflow router-ci.yml --branch sonnet-impl/e12-r32-… --json headSha,conclusion
+[{"conclusion":"success","headSha":"6abbe822…"},   # az ELŐZŐ push
+ {"conclusion":"success","headSha":"a723749d…"}]   # és a még korábbi
+```
+
+A merge SHA-n (`a50e80a2`) **nulla** Router-CI futás. A `full-gate.yml`-t ez
+nem érinti (azt `workflow_dispatch`-csal indítja az orchestrátor), a Router CI
+viszont KIZÁRÓLAG `push`-ra indul magától — és a `on.push.paths` a **push saját
+diffjét** szűri, nem az ág `main`-hez mért kumulatív diffjét. A
+`docs/reviews/**` egyetlen trigger-útvonalon sincs rajta.
+
+**A hibaosztály.** Két, külön-külön helyes szabály szerkezetileg ütközik:
+
+1. a kör-protokoll szerint a kör UTOLSÓ commitja a review-jelentés
+   (`docs/reviews/eXX-rYY-review.md`) — tehát a merge SHA-t **majdnem mindig**
+   egy `docs/reviews/**`-only push állítja elő;
+2. a Router CI trigger-listája (szándékosan) nem tartalmazza a
+   `docs/reviews/**`-ot.
+
+Az eredmény: a Router CI a kör közbenső SHA-in zölden lefut, a merge SHA-n
+viszont hiányzik. Aki „van zöld Router-CI futás az ágon"-t mér „a merge SHA-n
+zöld" helyett, **elavult bizonyítékra merge-el** — a kapu csendben lazul,
+anélkül hogy bárki lazította volna.
+
+**Hogyan alkalmazd.**
+
+1. **A `--json headSha` összevetés NEM formalitás.** A `gh run list --workflow
+   router-ci.yml --branch <ág> --json headSha,conclusion` kimenetét mindig a
+   `git rev-parse HEAD`-hez mérd, ne a puszta `conclusion`-höz. Ez a mérés
+   fogta meg itt a rést.
+2. **Hiányzó futás esetén a Router CI kézzel indítható:** a workflow-nak van
+   `workflow_dispatch` triggere, és a dispatch a BRANCH CSÚCSÁN fut, tehát
+   pontosan a merge SHA-t méri:
+   `gh workflow run router-ci.yml --ref <kör-ág>` →
+   `headSha=a50e80a2…`, `conclusion=success` (run
+   [33668495951](https://github.com/wolfcasaba/strumsight/actions/runs/33668495951)).
+   Ez nem kerülőút, hanem a kapu HELYES kiszolgálása.
+3. **A tartós javítás helye nem a kör-oldal.** Vagy a `router-ci.yml`
+   `on.push.paths` listája kapja meg a `docs/reviews/**`-ot (a legolcsóbb, és
+   a review-only pusht amúgy is másodpercek alatt lefutó Python-suite méri),
+   vagy a merge-kapu ellenőrzője dispatch-eli automatikusan, ha a tervező
+   `router_ci_expected=true`-t mond, de a merge SHA-n nincs futás.
+
+**Őrteszt:** nincs — a javítás helye a `.github/workflows/router-ci.yml` vagy a
+`tools/` merge-kapu, mindkettő az E12-R32 `allowed_paths`-án KÍVÜL és a kör
+tiltott zónájában (ADR 0087 §4). A rés MÉRVE és dokumentálva van; a gépi őrt
+egy governance-kör (vagy önjavító kör) szállíthatja, amelynek a briefje
+kifejezetten felsorolja ezeket az útvonalakat.
