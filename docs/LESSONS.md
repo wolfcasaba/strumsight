@@ -22719,4 +22719,4 @@ adatvesztési kockázat, amit dokumentum-olvasással senki nem talált meg; a
 LEFUTTATOTT gyakorlat találta meg. A javítás tiltott zónában van
 (`backend/scripts/**`), ezért helyesen LELET maradt (A6), nem csendes javítás.
 
-**Őrteszt:** `backend/tests/test_rollback_drill.py::test_verify_rollback_fails_when_a_live_table_is_not_covered_by_the_dump`
+**Őrteszt:** `backend/tests/test_rollback_drill.py::test_verify_rollback_record_counts_fails_when_live_table_missing_from_dump` (+ `::test_verify_rollback_record_counts_fails_on_unknown_dump_table`, `::test_verify_rollback_record_counts_pass_detail_reports_compared_count`)
