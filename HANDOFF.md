@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R23 KÉSZ — Legacy user migration release candidate — PR [#519](https://github.com/wolfcasaba/strumsight/pull/519), squash `3e6dbbf0` (2026-09-02)
+
+A Ch12 **Kör 23** azt méri végig, hogy egy **régi telepítésről frissítő**
+felhasználó adata a boot-idejű migrátor-láncon (`appStorageMigrations`, 22 lépés)
+átér-e — `lib/**` és a meglévő e2e harness érintése NÉLKÜL. ADR:
+[0487](docs/adr/0487-legacy-upgrade-migration-evidence-contract.md) (D1 a „nincs
+adatvesztés" invariáns SZÁMSZERŰ, nem viselkedési · D2 megszakítás után FOLYTATÁS
+van, nem újrakezdés · D3 a hibás migráció fail-safe és SOHA nem üres profil · D4
+a safe-mode felület a MÉRT elérhetőségén pinnelendő · D5 a mérce nem módosít
+`lib/**`-ot · D6 minden ÚJ fixture az ADR 0473 manifest-szerződése alá esik).
+Szállítva: `test/e2e/upgrade_migration_test.dart` (8 cella: A1 mező-szintű
+adatmegőrzés, A2 megszakítás→folytatás replay nélkül, A3 write-fault,
+**A3b valódi korrupció**, A4 `BootstrapFailure`, A5 pinnelt lépéssorrend),
+három legacy fixture (`legacy_v1`/`legacy_v2`/`corrupted_storage`) manifest-be
+regisztrálva (`test/fixtures/manifest.json` 48 → 51), és
+[`docs/release/client-migration.md`](docs/release/client-migration.md).
+
+**A pre-flight négy mért állítást döntött meg** (brief §0.0/R1–R6): az ADR
+száma `0462` → **`0487`** (a batch-előjegyzés elavult, a foglaló a normatív
+forrás); a három ÚJ `.json` fixture a `fixture_manifest_test.dart` egzakt
+`hasLength(48)` cellájával a **teljes CI-suite-ot buktatta volna**, ezért az
+`allowed_paths` szűken bővült a manifesttel és a cellával (a kör MÉRI a
+regisztrációt, nem kerüli meg); az A3 eredeti „sérült bemenet →
+`RecoveryScreen`" célja a fán **elérhetetlen** volt.
+
+**A kör érdemi hozadéka mérési** ([L570](docs/LESSONS.md#l570)): a szállított A3
+cella a `corrupted_storage.json` NEVE ellenére nem a korrupt bemenetet mérte,
+hanem egy injektált írás-hibát — a fixture minden értéke jól formált JSON volt,
+a cella szó szerint ugyanígy zöld lett volna a `legacy_v1` fixture-rel. A
+reviewer eldobható próbatesztje ténylegesen malformált dokumentummal kimérte,
+hogy a `migrate()` **sikert jelent** (`failure=null`, mind a 22 lépés `applied`),
+a nyers bájtok a lemezen megmaradnak, **de a production olvasási út üres
+dokumentumot ad** — a felhasználó frissítés után üres dalkönyvtárat lát. Egy
+javító kör után APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r23-review.md`](docs/reviews/e12-r23-review.md)).
+
+> ⚠ **NYITVA MARAD — ismert korlát, `lib/**` javítást igényel:** egy sérült
+> legacy dokumentum után a `JsonDocumentStore.readBody()` `null`-t ad, tehát a
+> felhasználó ÜRES dokumentumot lát, miközben az adata a lemezen ott van (a
+> következő `write()` karanténba menti). Az A3b cella ezt „ISMERT KORLÁT
+> (ADR 0487)" jelöléssel **pinneli**, tehát ha egy jövőbeli kör megjavítja vagy
+> elrontja, a cella szól. A javítás iránya (per-dokumentum hiba felszínre
+> hozása, vagy a „nincs itt semmi" ↔ „van, de olvashatatlan" megkülönböztetése)
+> a `docs/release/client-migration.md` §6-ban dokumentált, és **ma gazdátlan** —
+> önálló, `lib/**`-ot érintő kört igényel.
+
 ## ✅ E12-R22 KÉSZ — Béta-terjesztés, tesztelői consent és redaktált diagnosztikai csomag — PR [#518](https://github.com/wolfcasaba/strumsight/pull/518), squash `3b1855ff` (2026-09-01)
 
 A Ch12 **Kör 22** a béta-visszajelzés **csatornáját és csomagját** szállítja —
@@ -9931,7 +9977,28 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-01):** `main` @ `3b1855ff` — E12-R22 béta-terjesztés,
+**Aktuális állapot (2026-09-02):** `main` @ `3e6dbbf0` — E12-R23 legacy user
+migration release candidate, PR
+[#519](https://github.com/wolfcasaba/strumsight/pull/519), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude, **1 javító kör** — a review **1 MAJOR + 1 MINOR**-t
+talált 8/8 ZÖLD gate mellett, mert a „korrupt bemenet" cella valójában egy
+injektált írás-hibát mért, a `corrupted_storage.json` pedig hibátlan JSON-t
+tartalmazott ([L570](docs/LESSONS.md#l570)). A javító kör után APPROVED, 0 nyitott
+lelet ([`docs/reviews/e12-r23-review.md`](docs/reviews/e12-r23-review.md)); egy
+ismert, dokumentált korlát (`readBody()` → `null` sérült dokumentum után) cellával
+pinnelve marad nyitva. ÚJ ADR:
+[0487](docs/adr/0487-legacy-upgrade-migration-evidence-contract.md).
+`risk = "high"` → a kötelező `security-reviewer` futott (PASS, 0 lelet, a három
+fixture `sha256`/`bytes` értékét függetlenül újraszámolta). Exact-SHA evidencia a
+merge-elt head SHA-n (`aec92f4b`): Full Gate
+[33574437257](https://github.com/wolfcasaba/strumsight/actions/runs/33574437257),
+Router CI
+[33574439209](https://github.com/wolfcasaba/strumsight/actions/runs/33574439209)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`).
+
+**Előző állapot:** `main` @ `3b1855ff` — E12-R22 béta-terjesztés,
 tesztelői consent és redaktált diagnosztikai csomag, PR
 [#518](https://github.com/wolfcasaba/strumsight/pull/518), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -9996,7 +10063,24 @@ maradt.
 
 ## 5. Last completed round
 
-**E12-R22 — Béta-terjesztés, tesztelői consent és redaktált diagnosztikai csomag**
+**E12-R23 — Legacy user migration release candidate**
+(PR [#519](https://github.com/wolfcasaba/strumsight/pull/519), squash `3e6dbbf0`).
+A kör bizonyítékot szállított arról, hogy egy régi telepítésről frissítő
+felhasználó adata a 22 lépéses boot-migrátor-láncon átér: mező-szintű
+adatmegőrzés, megszakítás utáni FOLYTATÁS (a bukott kulcs pontosan egyszer
+íródik, nincs replay), write-fault fail-safe, `BootstrapFailure` fail-closed ág,
+és pinnelt lépéssorrend — mind `lib/**` érintése nélkül, három manifest-be
+regisztrált legacy fixture-rel. **A review a zöld gate mögött találta a
+lényeget:** a „korrupt bemenet" acceptance-sorát egyetlen cella sem őrizte (az
+A3 injektált írás-hibát mért, a `corrupted_storage.json` hibátlan JSON volt), és
+a reviewer saját próbatesztje kimérte a valódi hibaosztályt: sérült legacy
+dokumentum után a `migrate()` sikert jelent, a nyers bájtok megmaradnak, de a
+production olvasási út ÜRES dokumentumot ad. A javító kör ezt A3b cellával
+pinnelte („ISMERT KORLÁT (ADR 0487)"), és a fixture nevét igazzá tette
+([L570](docs/LESSONS.md#l570)). **Nyitva marad** maga a korlát: a felhasználói
+oldali javítás `lib/**`-ot érint, ma gazdátlan.
+
+**Előző kör: E12-R22 — Béta-terjesztés, tesztelői consent és redaktált diagnosztikai csomag**
 (PR [#518](https://github.com/wolfcasaba/strumsight/pull/518), squash `3b1855ff`).
 A kör a béta-visszajelzés csatornáját és csomagját szállította, felület nélkül: két
 független consent-kapcsoló (a nyers hang SOHA nem jár a diagnosztikai
@@ -10078,8 +10162,19 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 
 > ▶️ **A KÖVETKEZŐ KÖR: a `docs/execution/pipeline-queue.tsv` első
 > `pending` sora** — a driver választja ki, ne a HANDOFF-ból olvasd ki.
-> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-01, az E12-R22
-> zárása után): **285 `done`, 48 `hold`, 18 `prepared`, 14 `pending`**.
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-09-02, az E12-R23
+> zárása után): **286 `done`, 48 `hold`, 18 `prepared`, 13 `pending`**
+> (az E12 sávból 23 `done`, 13 `pending`).
+>
+> ⚠ **Az E12-R23 egy MÉRT, felhasználót érintő korlátot hagyott nyitva:** sérült
+> legacy dokumentum után a frissítő felhasználó ÜRES dokumentumot lát
+> (`JsonDocumentStore.readBody()` → `null`), miközben az adata a lemezen ott van.
+> A korlát cellával pinnelve (`test/e2e/upgrade_migration_test.dart` A3b, „ISMERT
+> KORLÁT (ADR 0487)") és dokumentálva
+> ([`docs/release/client-migration.md`](docs/release/client-migration.md) §6), a
+> javítás viszont `lib/**`-ot érint (per-dokumentum hiba felszínre hozása, vagy a
+> „nincs itt semmi" ↔ „van, de olvashatatlan" megkülönböztetése) — **egyik nyitott
+> brief sem nevezi meg, ma gazdátlan**.
 >
 > ⚠ **Az E12-R21 KÉT MÉRT GA-blokkolót hagyott nyitva** — mindkettő
 > nyilvántartva a leltár `known_exceptions:` blokkjában

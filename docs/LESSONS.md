@@ -22439,3 +22439,80 @@ titok-alakú értékeket a reviewernek kell semlegesítenie.
 **Őrteszt:** `test/tooling/beta_release_notes_test.dart` — a nem-degenerált PCM
 fixture-re épülő klip-integritás cella (a kimeneti `wavBase64` dekódolható és
 bájtazonos), a beágyazott-klip consent-cella és a stderr-tartalom cella.
+
+## L570 — A fixture NEVE nem mérce: a „corrupted_storage.json" hibátlan JSON-t tartalmazott, ezért a korrupt-bemenet acceptance-sora őrizetlen maradt, miközben a valódi út ÜRES profilt ad (E12-R23, 2026-09-02)
+
+**Forrás:** [`docs/reviews/e12-r23-review.md`](reviews/e12-r23-review.md) §2 (MAJOR-1,
+MINOR-1) és §7; kör: E12-R23, PR [#519](https://github.com/wolfcasaba/strumsight/pull/519),
+squash `3e6dbbf0`; ADR [0487](adr/0487-legacy-upgrade-migration-evidence-contract.md) D3.
+
+**A mérés.** A kör 8/8 zöld gate-tel és teljes acceptance-mátrixszal érkezett
+review-ra. A brief §6.1 falszifikációs mátrixának egyik sora — *„a sérült bemenet
+csendben »sikeresnek« jelenti magát → A3"* — a szállított fán **őrizetlen** volt:
+az A3 cella (`test/e2e/upgrade_migration_test.dart:177-244`) a hibát nem a
+bemenetből nyerte, hanem egy injektált írás-hibából
+(`store.failingKeys.add(StorageKeys.themeMode)`), a `corrupted_storage.json`
+minden értéke pedig **jól formált JSON** volt. A cella szó szerint ugyanígy zöld
+lett volna a `legacy_v1_storage.json`-nal — a „corrupted" csak a **fájlnévben**
+és a `README.md` prózájában létezett.
+
+Az eldobható próbateszt (a reviewer futtatta, ténylegesen csonka
+`user_songs_v1`-gyel) kimérte, mit csinál a fa valójában:
+
+```
+P1 failure=null from=0 to=22 applied=22
+P2 legacyKeyPreserved=true newKeyWritten=false schemaVersion=22
+P2 readBody=NULL (üres dokumentum)
+```
+
+Vagyis: a `migrate()` **sikert jelent**, mind a 22 lépés `applied`, a nyers legacy
+bájtok a lemezen megmaradnak (nincs adatvesztés) — **de a production olvasási út
+üres dokumentumot ad**, mert az új kulcs nincs kiírva, a legacy fallback pedig a
+sérült bájtokon `_decode`-ol. A frissítő felhasználó tehát üres dalkönyvtárat lát:
+pontosan az az eredmény, amit az ADR 0487 D3 nevesítve kizár („a sikertelen
+migráció SOHA nem indít üres profilt").
+
+**Az általánosítható szabály.** Egy fixture NEVE, a `README` prózája és a
+manifest `source` mezője **nem mérce** — csak a cella az. Ha egy acceptance-sor
+egy hibaosztályt nevez meg (korrupt, csonka, túl nagy, lejárt, hiányzó), a
+fixture-t a hibaosztály **jelenlétére** kell ellenőrizni, lehetőleg magában a
+cellában: az E12-R23 javítása ezért `expect(() => jsonDecode(raw),
+throwsFormatException)`-nel kezdődik — az őr önmagát őrzi, nem tud némán
+visszacsúszni a write-fault ágra. Ez a hibaosztály a
+[L563](#l563) („a cella a saját javítása előtti eszközzel is zöld") és a
+[L569](#l569) („a degenerált fixture kizárja a hibaosztályt") **harmadik**
+egymást követő megjelenése: a fixture-ről szóló állítás és a fixture tartalma
+külön él, és a gate a kettő eltérését nem látja.
+
+**A javítás.** (1) ÚJ **A3b** cella
+(`test/e2e/upgrade_migration_test.dart:247-359`), amely a valódi korrupciós utat
+hajtja, injektált írás-hiba NÉLKÜL, és négy dolgot pinnel: a fixture ténylegesen
+malformált; `failure == null` és mind a 22 lépés `applied` (a korrupció-átlátszóság
+**mérve**, nem feltételezve); a nyers bájtok bájtra azonosak maradnak, az új kulcs
+NEM íródik ki (ez a valódi adatvesztés-őr); a `readBody()` → `null` **„ISMERT
+KORLÁT (ADR 0487)"** megjelöléssel, plusz ellenpróba, hogy a korrupció a jól
+formált dokumentumokra nem terjed át. (2) a fixture `user_setlists_v1` mezője
+ténylegesen csonka JSON lett (a neve igazzá vált), a `test/fixtures/manifest.json`
+`bytes`/`sha256` bejegyzésével EGYÜTT. (3) a korlát átvezetve a
+`docs/release/client-migration.md` §6-ba. A zárást a reviewer saját, a javító kód
+ellen futtatott mutation-próbája igazolja: a fixture jól formáltra visszaállítva
+`+7 -1`, és a bukó cella PONTOSAN az A3b.
+
+**Ami NEM zárult le:** maga a korlát. A felhasználó továbbra is üres dokumentumot
+lát sérült legacy adat után — a javítás `lib/**`-ot érint (a migrátor
+per-dokumentum hibát jelentsen, vagy a `JsonDocumentStore` különböztesse meg a
+„nincs itt semmi"-t az „olvashatatlan"-tól), ami a kör tilos zónája volt. A
+cella-szintű pin miatt ez már **mért, nem elfelejtett** tartozás.
+
+**Kísérő lelet (nem a kör hibája, az önjavító sávnak szól):** a
+`.claude/hooks/protect_factory_files.py` `_bash_write_targets()` függvénye nem
+bontja a parancsot `&&` mentén, ezért egy `rm -rf <tmp> && … && tools/round-gate.sh …`
+alakú láncban az `rm` MINDEN későbbi tokent operandusnak vesz, és a gate-hívás
+„írás-célpontként" blokkolódik (H-GATEGUARD). Mérve 2026-09-02 a `_bash_write_targets`
+közvetlen futtatásával; külön parancsokra bontással megkerülhető.
+
+**Őrteszt:** `test/e2e/upgrade_migration_test.dart` — az A3b cella (a fixture
+malformáltságát MAGA ellenőrzi `throwsFormatException`-nel, majd a
+korrupció-átlátszóságot, a bájtazonos legacy megőrzést és a `readBody()` mai
+kimenetét pinneli), valamint `test/tooling/fixture_manifest_test.dart` (51 fixture,
+`sha256`/`bytes` egyezés).
