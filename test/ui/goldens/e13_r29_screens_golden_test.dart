@@ -1,13 +1,17 @@
 // Golden snapshots of the E13-R29 Coach Home, Chat and Debrief (practice
 // plan preview) screens at a compact portrait phone (412×915) and the same
-// frame at textScaler 2.0, per the round brief §7/A9. Pattern follows the
-// merged `test/ui/goldens/e13_r28_screens_golden_test.dart` precedent:
-// `AppTheme` (the app's actual runtime theme), not `SsLightTheme`/
-// `SsDarkTheme` — none of the three screens' persistent trees depend on the
-// design-system theme extensions (§0.0/B6 dev-note in the screen files:
-// those extensions are absent under the ambient `AppTheme` the real app
-// boots with, so the screens build their AI-mode UI from plain [Theme]
-// tokens instead).
+// frame at textScaler 2.0, per the round brief §7/A9.
+//
+// `SsDarkTheme.data()` (E15-R09 §0.0.A/R4) — the app's ACTUAL runtime dark
+// theme (`lib/app/strumsight_app.dart`), not `AppTheme.dark()`: since the
+// E15-R09 design-system migration, `TutorChatScreen`'s AI-mode indicator and
+// empty state (and `PracticePlanPreviewScreen`, already migrated) read the
+// design-system theme extensions (`SsColorScheme`/`SsTypography`), which
+// `AppTheme.dark()` never carried (it only ever added `AppPalette`) — this
+// golden would have rendered a broken/fallback tree under the old theme.
+// `TutorHomeScreen` deliberately still resolves via plain [Theme] tokens
+// (see its own file doc comment) but renders identically under either theme
+// choice, so switching the shared `_pump` theme is safe for it too.
 //
 // Recorded on x86_64 (ADR 0426, §0.0/B7) via `tools/golden-x86.sh record` —
 // NOT `flutter test --update-goldens` on this (aarch64) box.
@@ -17,7 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/core/theme/app_theme.dart';
+import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
 import 'package:strumsight/features/ai_tutor/application/controller/tutor_state.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/practice_plan_block.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/practice_plan_draft.dart';
@@ -108,7 +112,7 @@ Future<void> _pump(
       overrides: overrides,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark(),
+        theme: SsDarkTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         builder: (context, child) => MediaQuery(
