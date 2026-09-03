@@ -24079,3 +24079,29 @@ rövidebb küszöböt és nagyobb ébresztés-keretet érdemel — a terminális
 
 **Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::ApiOverloadWindowTest`
 (ADR 0497 D2).
+
+## L601 — Az ébresztő beküldését egy MÁSIK, a doboz fölé kitett kérdés is elnyelheti: a 529 után felugró visszajelzés-kérdés újra tétlenül hagyta a kört (ops, 2026-09-03)
+
+**Mérve.** A 13:56-os, MÁR JAVÍTOTT (külön Enteres) ébresztés után az `E15-R12`
+14:04-kor ismét tétlen volt, és a `tmux capture-pane` megmutatta, miért: a 529
+fölé a CLI egy kérdést tett ki —
+
+```
+● How is Claude doing this session? (optional)
+  1: Bad    2: Fine   3: Good   0: Dismiss
+```
+
+— ami elnyelte a beküldést. Az ébresztő szövege bement, a kör mégis állt. A
+kérdés ráadásul KITOLTA a `529`-sort az őr látóteréből (utolsó 8 sor), tehát a
+felismerés is elnémult.
+
+**A tanulság iránya.** Egy TUI-t vezérelni annyi, mint egy állapotgépet
+vezérelni, amelynek nem mi írjuk a szabályait: a beviteli doboz nem mindig
+fogadókész, és a blokkoló állapotok nem hibaüzenetként jelennek meg, hanem
+teljesen normális felületi elemként. Ezért (1) a beküldés ELŐTT fel kell
+ismerni és el kell bocsátani a blokkolót, és (2) az állapot-felismerés ablaka
+legyen bőven nagyobb annál, amennyi a keresett sorhoz épp elég — egy váratlan
+felületi elem néhány sorral elnémíthatja az egész őrt.
+
+**Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::FeedbackPromptTest`
+(ADR 0497 D3) — a javítás előtti fán mind a 3 cella PIROS.

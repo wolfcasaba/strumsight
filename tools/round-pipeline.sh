@@ -723,9 +723,24 @@ send_nudge_to_pane() {   # $1=tmux-session $2=szöveg
   ( exec 9>&-; tmux send-keys -t "$pane" Enter ) 2>/dev/null || true
 }
 
+# MÉRVE 2026-09-03 14:04 (E15-R12): a 529 után a CLI a beviteli doboz FÖLÉ egy
+# visszajelzés-kérdést tett ki („How is Claude doing this session? … 0: Dismiss"),
+# ami elnyeli a beküldést — az ébresztő hiába megy be, a kör tétlen marad. A
+# kérdést el kell bocsátani, MIELŐTT a folytatás-prompt megy (ADR 0497 D3).
+FEEDBACK_PROMPT_PATTERN='0: Dismiss'
+
+dismiss_feedback_prompt_if_present() {   # $1=tmux-session
+  local pane="$1"
+  tmux capture-pane -p -t "$pane" 2>/dev/null \
+    | grep -qa "$FEEDBACK_PROMPT_PATTERN" || return 0
+  log "VISSZAJELZÉS-KÉRDÉS a(z) $pane panelen — elbocsátjuk, hogy az ébresztő beküldhessen"
+  send_nudge_to_pane "$pane" "0"
+  sleep "$NUDGE_SUBMIT_DELAY"
+}
+
 # A MÉRT 529-aláírás a session-naplóban, és mennyit nézünk a napló végéből.
 API_OVERLOAD_PATTERN='API Error: 529|529 Overloaded'
-OVERLOAD_TAIL_BYTES=${PIPELINE_ORCH_OVERLOAD_TAIL_BYTES:-4000}
+OVERLOAD_TAIL_BYTES=${PIPELINE_ORCH_OVERLOAD_TAIL_BYTES:-8000}
 
 STALL_NUDGE_TEXT=${PIPELINE_ORCH_STALL_NUDGE_TEXT:-'FOLYTASD (elakadas-ebreszto): a sessiont kulso megszakitas allitotta le, kor-jelzes nem szuletett. Ellenorizd az implementer jelzesfajljat (tools/wait-for-round.sh <munkapeldany> 540), es folytasd a kor protokolljat ott, ahol abbamaradt.'}
 
@@ -1055,6 +1070,7 @@ run_tmux_session() {
           last_nudge_at=$(date +%s)
           log "ELAKADÁS-ÉBRESZTŐ ($nudges_sent/$active_nudge_budget): a(z) $label panelje $(( active_stall_seconds / 60 )) perce néma, de a Claude-process ÉL — folytatás-prompt megy be, még nem öljük meg a sessiont"
           # fd 9 (a lánc-zár) lezárása, mint a többi tmux-hívásnál (2026-08-18).
+          dismiss_feedback_prompt_if_present "$tmux_session"
           send_nudge_to_pane "$tmux_session" "$STALL_NUDGE_TEXT"
         else
           log "ELAKADÁS: a(z) $label session-naplója $(( active_stall_seconds / 60 )) perce nem változott (élő tmux-session, jelzés nélkül) — leállítjuk, nem várjuk ki a teljes időkorlátot"

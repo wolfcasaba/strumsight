@@ -115,3 +115,62 @@ class ApiOverloadWindowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FeedbackPromptTest(unittest.TestCase):
+    """ADR 0497 D3 — a promptot blokkoló visszajelzés-kérdés elbocsátása.
+
+    MÉRVE 2026-09-03 14:04 (`E15-R12`): a 529 után a CLI a beviteli doboz FÖLÉ
+    egy kérdést tett ki (`How is Claude doing this session? … 0: Dismiss`), ami
+    elnyelte a beküldést — az ébresztő bement, a kör mégis tétlen maradt.
+    """
+
+    MEASURED_PANE = (
+        "● API Error: 529 Overloaded. This is a server-side issue, usually\n"
+        "  temporary — try again in a moment.\n"
+        "✻ Cooked for 3m 41s\n"
+        "● How is Claude doing this session? (optional)\n"
+        "  1: Bad    2: Fine   3: Good   0: Dismiss\n"
+        "❯ \n"
+    )
+
+    def _run(self, pane_text: str) -> list[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            calls = state / "tmux-calls"
+            pane_file = state / "pane"
+            pane_file.write_text(pane_text, encoding="utf-8")
+            shell = (
+                f"source <(sed -n '{PREFIX}' \"$PIPELINE_SCRIPT\")\n"
+                'tmux() { if [ "$1" = "capture-pane" ]; then cat "$PANE"; '
+                'else printf "%s\\n" "$*" >> "$CALLS"; fi; }\n'
+                "NUDGE_SUBMIT_DELAY=0\n"
+                "dismiss_feedback_prompt_if_present pipeline-E15-R12\n"
+            )
+            environment = dict(os.environ)
+            environment.update(
+                PIPELINE_SCRIPT=str(SCRIPT),
+                PIPELINE_STATE_DIR=str(state),
+                CALLS=str(calls),
+                PANE=str(pane_file),
+            )
+            completed = subprocess.run(
+                ["bash", "-c", shell], cwd=ROOT, env=environment, text=True, capture_output=True
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            return calls.read_text(encoding="utf-8").splitlines() if calls.exists() else []
+
+    def test_the_measured_survey_is_dismissed_with_a_zero(self) -> None:
+        calls = self._run(self.MEASURED_PANE)
+        self.assertEqual(len(calls), 2, f"nem KÉT hívás (szöveg + Enter): {calls}")
+        self.assertTrue(calls[0].rstrip().endswith("0"), calls[0])
+        self.assertTrue(calls[1].endswith("Enter"), calls[1])
+
+    def test_without_the_survey_it_is_silent(self) -> None:
+        self.assertEqual(self._run("● API Error: 529 Overloaded.\n❯ \n"), [])
+
+    def test_the_dismissal_runs_before_the_continuation_prompt(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        dismissal = source.index('dismiss_feedback_prompt_if_present "$tmux_session"')
+        nudge = source.index('send_nudge_to_pane "$tmux_session" "$STALL_NUDGE_TEXT"')
+        self.assertLess(dismissal, nudge)
