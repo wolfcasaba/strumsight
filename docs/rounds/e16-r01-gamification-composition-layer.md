@@ -29,6 +29,7 @@ A Gamification feature `application/` rétege **tizenkét** szolgáltatást tart
 schema_version = 1
 risk = "high"
 allowed_paths = [
+  "lib/features/gamification/providers/gamification_providers.dart",
   "lib/features/gamification/application/gamification_providers.dart",
   "lib/features/gamification/public.dart",
   "lib/app/routing/app_router.dart",
@@ -48,6 +49,7 @@ gate_tests = [
   "test/app/navigation/tab_state_restoration_test.dart",
   "test/app/navigation/legacy_route_redirect_test.dart",
   "test/ui/ui_inventory_test.dart",
+  "test/core/architecture_dependency_test.dart",
 ]
 native_gate = false
 ```
@@ -140,6 +142,35 @@ Az `E15-R11` (vision/onboarding/community migráció) `allowed_paths`-ával
 `test/app/routing/app_router_test.dart`-ot — ezt a kör **nem érinti** és nem is
 kell érintenie (R4 mérése). Átfedés észlelése esetén a szabály változatlan:
 HALT (H3), nem „gyors rendezés".
+
+### R7 — A kompozíciós fájl helye: `application/` → `providers/` (a CI mérése alapján, 2026-09-03)
+
+**MÉRT bukás:** a `b81d0493` Full Gate (run `33754452934`) PIROS lett egyetlen
+cellán: `test/core/architecture_dependency_test.dart` → *„gamification
+application stays framework-free and presentation keeps storage in data
+(E08-R08)"*. A szabály (`:124-155`) tiltja a Flutter-import minden fájlban a
+`lib/features/gamification/application/` alatt — az új
+`gamification_providers.dart` viszont `package:flutter_riverpod`-ot importál.
+
+A kör CÉLZOTT kapuja ezt nem foghatta meg: az őr nem volt a `gate_tests`
+listán, tehát a `round-gate.sh` zölden ment azon a fán, amit a teljes CI
+pirosra vitt (ugyanaz a hibaosztály, mint az E15-R09 H5 barrel-hézaga).
+
+**Döntés (kettő, együtt):**
+
+1. A fájl a repó bevett feature-provider helyére kerül:
+   **`lib/features/gamification/providers/gamification_providers.dart`**
+   (mérve: `lib/features/learn/providers/`, `lib/features/songs/providers/`
+   ugyanígy tartja a Riverpod-providereket; a `providers/` könyvtárra
+   egyetlen architektúra-szabály sem vonatkozik, az `application/`-ra igen).
+   A `public.dart` export és a router import ehhez igazodik. A régi útvonal
+   TÖRLENDŐ — ezért a lista mindkét útvonalat felsorolja.
+2. A `test/core/architecture_dependency_test.dart` felkerül a `gate_tests`
+   listára ÉS a §7 gate-parancsba — a kör mércéje mostantól maga méri azt,
+   amit eddig csak a teljes CI.
+
+Ez nem scope-tágítás: ugyanaz az EGY fájl, más — a fa saját szabályai szerint
+megengedett — helyen, plusz egy már létező őr felvétele a kör kapujába.
 
 **Visszakeresés (ADR 0312):** `--corpus lessons,halts,adr` →
 [`adr/0333`](../adr/0333-activity-outbox-reliable-processing.md),
@@ -247,7 +278,7 @@ Az XP/szint/jutalom a MEGLÉVŐ ledger- és outbox-rétegből jön (ADR 0333). *
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/gamification/application/gamification_providers_test.dart test/app/routing/gamification_composition_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/navigation/legacy_route_redirect_test.dart test/ui/ui_inventory_test.dart
+tools/round-gate.sh test/features/gamification/application/gamification_providers_test.dart test/app/routing/gamification_composition_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/navigation/legacy_route_redirect_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart
 ```
 
 A TODO-mérés (a kimenet a §10-be):
