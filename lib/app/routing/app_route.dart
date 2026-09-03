@@ -71,6 +71,11 @@ abstract final class AppRoutes {
   static const String streakDetail = '/gamification/streak';
   static const String rewardInbox = '/gamification/inbox';
 
+  // Level detail (E16-R01, ADR 0496 §4 / §0.0.A/R3 #2) — the composition
+  // root's route constant for the already-built, already-tested
+  // `LevelDetailScreen`, which had no route before this round.
+  static const String levelDetail = '/gamification/level';
+
   // Adaptive shell (E13-R08, ADR 0275) — five target destinations, reachable
   // only when `adaptiveShellEnabled` is on. `practiceHub` and `songs` above
   // are reused as the Practice and Songs destinations; `today`, `coachHome`,

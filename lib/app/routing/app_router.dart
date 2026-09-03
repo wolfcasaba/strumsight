@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
 import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
@@ -12,24 +15,7 @@ import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart
 import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
-import '../../features/gamification/application/streak_service.dart';
-import '../../features/gamification/data/gamification_repository.dart';
-import '../../features/gamification/data/gamification_storage_schema.dart';
-import '../../features/gamification/data/local_gamification_repository.dart';
-import '../../features/gamification/data/migration/legacy_streak_migrator.dart';
-import '../../features/gamification/domain/achievements/achievement_progress.dart';
-import '../../features/gamification/domain/levels/level_curve.dart';
-import '../../features/gamification/domain/levels/level_definition.dart';
-import '../../features/gamification/domain/profile/gamification_profile.dart';
-import '../../features/gamification/domain/profile/reward_inbox_item.dart';
-import '../../features/gamification/domain/streak/streak_state.dart';
-import '../../features/gamification/infrastructure/default_achievement_catalog.dart';
-import '../../features/gamification/presentation/screens/achievement_detail_screen.dart';
-import '../../features/gamification/presentation/screens/achievements_screen.dart';
-import '../../features/gamification/presentation/screens/gamification_hub_screen.dart';
-import '../../features/gamification/presentation/screens/quests_screen.dart';
-import '../../features/gamification/presentation/screens/reward_inbox_screen.dart';
-import '../../features/gamification/presentation/screens/streak_detail_screen.dart';
+import '../../features/gamification/public.dart';
 import '../../l10n/app_localizations.dart';
 import '../../features/learn/screens/latency_calibration_screen.dart';
 import '../../features/learn/screens/lesson_list_screen.dart';
@@ -73,8 +59,6 @@ import '../../features/ai_tutor/presentation/screens/tutor_privacy_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_profile_screen.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
 import '../../features/vision/public.dart';
-import '../../core/logging/logger_provider.dart';
-import '../../core/storage/storage_providers.dart';
 import '../bootstrap/recovery_screen.dart';
 import '../config/app_config.dart';
 import '../home_shell.dart';
@@ -91,84 +75,75 @@ final class _RouterRefreshNotifier extends ChangeNotifier {
 // file by the achievements list callback.
 const String _achievementDetailName = 'achievement-detail';
 
-// E08-R30 — minimal Riverpod glue for the new gamification routes. These
-// providers stay file-private because the gamification feature's own
-// `presentation/providers/` directory remains out of scope for this round
-// (the registered routes only need a synchronous projection; a future round
-// can lift them into the feature once the UI binds additional inputs).
-final _gamificationRepositoryProvider = Provider<GamificationRepository>((ref) {
-  final repo = LocalGamificationRepository(
-    store: ref.watch(keyValueStoreProvider),
-    logger: ref.watch(appLoggerProvider),
+/// Review B1 — `achievementProgressProvider` is a `FutureProvider`, so its
+/// `AsyncValue.value` is `null` on BOTH loading and error, which previously
+/// collapsed to the SAME `?? const {}` fallback as a genuinely measured
+/// empty achievement set (a transient dobás would then look permanently
+/// like "no badges unlocked"). This routes the three states through
+/// `.when` instead: loading gets its own indicator (never the "0 badges"
+/// screen), error is logged and falls back to empty (the screen has no
+/// richer error contract to degrade to — tilos zona), and only the `data`
+/// branch is the actual measured projection.
+Widget _achievementsAsyncBuilder({
+  required WidgetRef ref,
+  required Widget Function(Map<String, AchievementProgress> progress) onData,
+}) {
+  final progressAsync = ref.watch(achievementProgressProvider);
+  return progressAsync.when(
+    loading: () =>
+        const Scaffold(body: Center(child: CircularProgressIndicator())),
+    error: (error, stackTrace) {
+      ref
+          .read(appLoggerProvider)
+          .error(
+            'gamification.achievement_progress.load_failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+      return onData(const <String, AchievementProgress>{});
+    },
+    data: onData,
   );
-  ref.onDispose(repo.dispose);
-  return repo;
-});
+}
 
-final _levelCurveProvider = Provider<LevelCurve>((_) {
-  return LevelCurve(<LevelDefinition>[
-    LevelDefinition(
-      number: 1,
-      levelThreshold: 0,
-      titleKey: 'gamification.level.beginner',
+/// Review B3 — resolves each item's `titleKey`/`bodyKey` to an EXISTING ARB
+/// string via [AppLocalizations], since `RewardInboxScreen` renders both
+/// fields raw (no lookup of its own — a pre-existing, tilos-zona screen
+/// pattern) and `gamification_providers.dart` has no `BuildContext` to
+/// resolve them itself. `RewardKind.challengeCompleted`/`.levelUp` are
+/// unreachable from the provider's `_rewardKindFor` this round, but the
+/// switch stays exhaustive.
+List<RewardInboxItem> _localizedRewardInboxItems(
+  Iterable<RewardInboxItem> items,
+  AppLocalizations l10n,
+) => [
+  for (final item in items)
+    RewardInboxItem(
+      id: item.id,
+      addedAt: item.addedAt,
+      seen: item.seen,
+      event: RewardEvent(
+        id: item.event.id,
+        kind: item.event.kind,
+        titleKey: _rewardTitleFor(item.event.kind, l10n),
+        bodyKey: l10n.questRewardAlreadyCredited,
+        earnedXp: item.event.earnedXp,
+        earnedAt: item.event.earnedAt,
+        sourceLedgerId: item.event.sourceLedgerId,
+        crossedLevelNumbers: item.event.crossedLevelNumbers,
+      ),
     ),
-    LevelDefinition(
-      number: 2,
-      levelThreshold: 100,
-      titleKey: 'gamification.level.explorer',
-    ),
-    LevelDefinition(
-      number: 3,
-      levelThreshold: 250,
-      titleKey: 'gamification.level.consistent',
-    ),
-    LevelDefinition(
-      number: 4,
-      levelThreshold: 500,
-      titleKey: 'gamification.level.advanced',
-    ),
-  ]);
-});
+];
 
-final _gamificationProfileProvider = Provider<GamificationProfile>((ref) {
-  final repo = ref.watch(_gamificationRepositoryProvider);
-  final curve = ref.watch(_levelCurveProvider);
-  final read = repo.readProfileSnapshot();
-  final totalXp =
-      read.status == GamificationReadStatus.available && read.value != null
-      ? read.value!.totalXp
-      : 0;
-  return GamificationProfile(
-    schemaVersion: gamificationProfileSchemaVersion,
-    totalXp: totalXp,
-    progress: curve.progressForTotalXp(totalXp),
-  );
-});
-
-final _streakStateProvider = Provider<StreakState>((ref) {
-  final store = ref.watch(keyValueStoreProvider);
-  // TODO(E08-R30): wire `LegacyStreakMigrator.migrate()` writes back to the
-  // V2 namespaced envelope once the v22 storage migration clears the legacy
-  // key. For now this is a read-only projection of the on-disk state.
-  final migrated = LegacyStreakMigrator(store).migrate();
-  return migrated ??
-      StreakState(
-        current: 0,
-        longest: 0,
-        lastQualifiedDay: -1,
-        totalQualifiedDays: 0,
-        freezes: 0,
-      );
-});
-
-final _rewardInboxProvider = Provider<List<GamificationInboxItem>>((ref) {
-  final repo = ref.watch(_gamificationRepositoryProvider);
-  final read = repo.readInbox();
-  if (read.status == GamificationReadStatus.available && read.value != null) {
-    return read.value!;
-  }
-  return const <GamificationInboxItem>[];
-});
+String _rewardTitleFor(RewardKind kind, AppLocalizations l10n) =>
+    switch (kind) {
+      RewardKind.masteryMilestone => l10n.feedCardAchievementUnlocked,
+      RewardKind.questCompleted => l10n.questCompletedBadge,
+      RewardKind.challengeCompleted =>
+        l10n.communityNotificationChallengeCompletedTitle,
+      RewardKind.levelUp => l10n.gamificationHubSkillSectionTitle,
+      RewardKind.dailyReward => l10n.practiceResultRewardTitle,
+    };
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
@@ -679,26 +654,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       ],
       // E08-R30 — Epic 8 gamification routes. The legacy `/streak` and
       // `/progress` deep links above remain live; these are the new
-      // canonical V2 destinations.
+      // canonical V2 destinations. E16-R01 (ADR 0496) moved the composition
+      // — repository/curve/profile/streak/inbox/achievement projections —
+      // into the feature's own `gamification_providers.dart`; this block
+      // only reads those public providers.
       GoRoute(
         path: AppRoutes.gamificationHub,
         builder: (_, _) => Consumer(
           builder: (context, ref, _) {
-            final profile = ref.watch(_gamificationProfileProvider);
-            final streakState = ref.watch(_streakStateProvider);
-            final inbox = ref.watch(_rewardInboxProvider);
-            final unseenCount = inbox
-                .where((GamificationInboxItem item) => !item.isViewed)
-                .length;
+            final profile = ref.watch(gamificationProfileProvider);
+            final streakState = ref.watch(streakStateProvider);
+            final activeQuests = ref.watch(activeQuestCountProvider);
+            final masteryUnlocked = ref.watch(masteryUnlockedCountProvider);
+            final unseenCount = ref.watch(inboxUnseenCountProvider);
             return GamificationHubScreen(
               profile: profile,
-              activeQuestCount: 0,
+              activeQuestCount: activeQuests.value,
               streakCurrentDays: streakState.current,
-              masteryUnlockedCount: 0,
+              masteryUnlockedCount: masteryUnlocked.value,
               inboxUnseenCount: unseenCount,
-              // TODO(E08-R30): level-detail navigation needs a route
-              // constant and screen wiring beyond the current scope.
-              onOpenLevelDetail: () {},
+              onOpenLevelDetail: () => context.push(AppRoutes.levelDetail),
               onOpenInbox: () => context.push(AppRoutes.rewardInbox),
               onOpenAchievements: () => context.push(AppRoutes.achievements),
               onOpenStreak: () => context.push(AppRoutes.streakDetail),
@@ -709,26 +684,53 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: AppRoutes.levelDetail,
+        builder: (_, _) => Consumer(
+          builder: (context, ref, _) {
+            final l10n = AppLocalizations.of(context);
+            final profile = ref.watch(gamificationProfileProvider);
+            // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 5):
+            // `.value` is passed through unconditionally because
+            // `LevelDetailScreen` has no absence contract for this required
+            // parameter (review M1) — `.available` stays unread until a
+            // future round adds one.
+            final latestSessionXp = ref.watch(latestSessionXpProvider).value;
+            return LevelDetailScreen(
+              profile: profile,
+              latestSessionXp: latestSessionXp,
+              components: buildR06XpComponents(l10n: l10n, xp: latestSessionXp),
+            );
+          },
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.achievements,
-        builder: (context, _) => AchievementsScreen(
-          definitions: defaultAchievementCatalog.definitions,
-          // TODO(E08-R30): wire achievement progress through a future
-          // AchievementProgressRepository; this round the surface is the
-          // curated catalog definitions only.
-          progressByAchievement: const <String, AchievementProgress>{},
-          onAchievementSelected: (String id) => context.pushNamed(
-            _achievementDetailName,
-            pathParameters: <String, String>{'achievementId': id},
+        builder: (_, _) => Consumer(
+          builder: (context, ref, _) => _achievementsAsyncBuilder(
+            ref: ref,
+            onData: (progressByAchievement) => AchievementsScreen(
+              definitions: defaultAchievementCatalog.definitions,
+              progressByAchievement: progressByAchievement,
+              onAchievementSelected: (String id) => context.pushNamed(
+                _achievementDetailName,
+                pathParameters: <String, String>{'achievementId': id},
+              ),
+            ),
           ),
         ),
       ),
       GoRoute(
         name: _achievementDetailName,
         path: AppRoutes.achievementDetail,
-        builder: (_, state) => AchievementDetailScreen(
-          achievementId: state.pathParameters['achievementId']!,
-          definitions: defaultAchievementCatalog.definitions,
-          progressByAchievement: const <String, AchievementProgress>{},
+        builder: (_, state) => Consumer(
+          builder: (context, ref, _) => _achievementsAsyncBuilder(
+            ref: ref,
+            onData: (progressByAchievement) => AchievementDetailScreen(
+              achievementId: state.pathParameters['achievementId']!,
+              definitions: defaultAchievementCatalog.definitions,
+              progressByAchievement: progressByAchievement,
+            ),
+          ),
         ),
       ),
       GoRoute(
@@ -736,15 +738,27 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => Consumer(
           builder: (context, ref, _) {
             final l10n = AppLocalizations.of(context);
+            final questBoard = ref.watch(questBoardProvider);
             return QuestsScreen(
               dailyChallengeTitle: l10n.challengeDailyTitle,
-              dailyChallenge: null,
-              dailyChallengeAvailable: false,
-              dailyQuests: const <QuestViewProjection>[],
-              weeklyQuests: const <QuestViewProjection>[],
-              onAction: (_) {
-                // TODO(E08-R30): route the typed QuestRouteAction through
-                // go_router once the quest-action vocabulary is finalised.
+              dailyChallenge: questBoard.dailyChallenge,
+              dailyChallengeAvailable: questBoard.dailyChallengeAvailable,
+              dailyQuests: questBoard.dailyQuests,
+              weeklyQuests: questBoard.weeklyQuests,
+              onAction: (QuestRouteAction action) {
+                switch (action) {
+                  case QuestStartPracticeAction():
+                    context.push(AppRoutes.practiceHub);
+                  case QuestContinuePracticeAction():
+                    context.push(AppRoutes.practiceHub);
+                  case QuestTryLiveAction():
+                    context.push(AppRoutes.live);
+                  case QuestUnavailableAction():
+                    // The card itself disables the CTA whenever content is
+                    // unavailable, so this case fires only from a direct
+                    // test call, never a live tap — intentionally a no-op.
+                    break;
+                }
               },
               now: DateTime.now(),
             );
@@ -755,17 +769,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.streakDetail,
         builder: (_, _) => Consumer(
           builder: (context, ref, _) {
-            final streakState = ref.watch(_streakStateProvider);
+            final evaluation = ref.watch(streakEvaluationProvider);
+            final weeklyConsistencyDays = ref.watch(
+              weeklyConsistencyDaysProvider,
+            );
             return StreakDetailScreen(
-              state: streakState,
-              // TODO(E08-R30): evaluate today's reason against the live
-              // activity stream once that stream is wired to the screen.
-              reason: StreakEvaluationReason.qualified,
-              weeklyConsistencyDays: 0,
+              state: evaluation.state,
+              reason: evaluation.reason,
+              weeklyConsistencyDays: weeklyConsistencyDays.value,
               onRecoveryPressed: () {
-                // TODO(E08-R30): the streak-recovery purchase flow has no
-                // public repository method yet; the button is rendered but
-                // a no-op until the next round.
+                // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 2):
+                // no repository method exists to purchase/apply a streak
+                // recovery, and `StreakDetailScreen` has no "recovery
+                // unavailable" contract to fall back to (screens are this
+                // round's tilos zona) — the button stays rendered but inert.
               },
             );
           },
@@ -774,20 +791,53 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.rewardInbox,
         builder: (_, _) => Consumer(
-          builder: (context, ref, _) => RewardInboxScreen(
-            items: const <RewardInboxItem>[],
-            onItemSelected: (_) {
-              // TODO(E08-R30): route to the source ledger detail once
-              // the reward-detail screen is built.
-            },
-            onMarkSeen: (_) {
-              // TODO(E08-R30): the inbox is backed by the domain
-              // [RewardInboxItem] (a projection of ledger entries), not
-              // the storage-shaped [GamificationInboxItem] exposed by
-              // [GamificationRepository]. Wiring the two is a future
-              // round; the screen renders an empty state today.
-            },
-          ),
+          builder: (context, ref, _) {
+            final l10n = AppLocalizations.of(context);
+            return RewardInboxScreen(
+              items: _localizedRewardInboxItems(
+                ref.watch(rewardInboxItemsProvider),
+                l10n,
+              ),
+              onItemSelected: (_) {
+                // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 3): no
+                // reward-detail screen exists on the tree to navigate to —
+                // building one is new scope, not a bekötés.
+              },
+              onMarkSeen: (RewardInboxItem item) {
+                // Review m2: the screen's `onMarkSeen` contract is `void`
+                // (tilos zona), so this Future cannot be awaited by the
+                // caller — `unawaited` + `catchError` at least turns a
+                // silently-dropped write failure into a logged one instead
+                // of an unhandled async error.
+                unawaited(
+                  markGamificationInboxItemSeen(
+                    current: ref.read(gamificationInboxProvider),
+                    repository: ref.read(gamificationRepositoryProvider),
+                    id: item.id,
+                    onWritten: () => ref.invalidate(gamificationInboxProvider),
+                    onReplaced: (report) {
+                      if (report.trimmedCount > 0) {
+                        ref
+                            .read(appLoggerProvider)
+                            .warning(
+                              'gamification.reward_inbox.trimmed',
+                              fields: {'trimmedCount': report.trimmedCount},
+                            );
+                      }
+                    },
+                  ).catchError((Object error, StackTrace stackTrace) {
+                    ref
+                        .read(appLoggerProvider)
+                        .error(
+                          'gamification.reward_inbox.mark_seen_failed',
+                          error: error,
+                          stackTrace: stackTrace,
+                        );
+                  }),
+                );
+              },
+            );
+          },
         ),
       ),
     ],
