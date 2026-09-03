@@ -269,10 +269,33 @@ Három független mérés mondja ki, hogy ez **flake**, nem a kör regressziója
    import"), és a Full Gate a `c2b1362a` SHA-n — ugyanezzel a
    `song_trainer` fával — **zölden** futott le.
 
-**Megerősítő futás:** `full-gate.yml` újradispatch az `a5979875` SHA-n
-(run `33798888247`) — az eredményt a kör-jelzés `detail=` mezője hordozza.
-Ez a piros a H5 számláló szempontjából NEM a kör pirosa; a merge-blokkoló
-változatlanul a §4 szerinti Router CI.
+**A megerősítő futás DÖNTŐ:** a `full-gate.yml` újradispatch az `a5979875`
+SHA-n (run `33798888247`) szintén pirosra futott — de **MÁSIK teszttel**:
+
+| Futás | SHA | Bukott cella |
+|---|---|---|
+| `33796054904` | `5420777e` | `song_trainer/application/import/song_import_controller_test.dart` — „cancellation during import closes the workspace without a record" |
+| `33798888247` | `a5979875` | `songs/import/import_flow_test.dart` — „A2: cancelling a confirmed import cleans the opened workspace" |
+
+**Két futás, két KÜLÖNBÖZŐ bukó cella, mindkettő ugyanabból az
+import-megszakítási családból — ez a flakiness aláírása, nem egy
+determinisztikus regresszióé** (egy regresszió ugyanazt a cellát buktatná).
+Megerősítő mérés a kör HEAD-jén, izolált klónban:
+
+```
+flutter test test/features/songs/import/import_flow_test.dart \
+             test/features/song_trainer/application/import/song_import_controller_test.dart
+→ 00:00 +8: All tests passed!
+```
+
+és a kör diffje egyik területet sem érinti:
+`git diff --name-only 9ba54399..HEAD | grep -iE "songs/|import"` → üres.
+
+**Következtetés:** a fán van egy MEGLÉVŐ, e körtől független flaky
+teszt-fészek az import-megszakítási cellák körül. A `c2b1362a` SHA zöld Full
+Gate-je ugyanezzel az import-fával futott le. A kör terméke ettől nem
+bizonyított rosszabbnak — de **a zöld kapu így sem teljesül**, és ezt a
+fészket az önjavító körnek külön kezelnie kell (a halt-detail 2. pontja).
 
 ## 6. NOTE-ok (nem blokkolnak)
 
