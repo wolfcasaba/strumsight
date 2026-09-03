@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/live/engine/mock_strum_engine.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
@@ -209,7 +210,11 @@ Future<void> _capture(WidgetTester tester, String path) =>
 
 Widget _directCaptureApp({required Widget home}) => MaterialApp(
   debugShowCheckedModeBanner: false,
-  theme: AppTheme.dark(),
+  // MINOR-1 (E15-R11 review): OnboardingScreen's migrated SsButton reads
+  // the design-system theme extensions — AppTheme.dark() alone null-check
+  // crashes (L593-class defect). SsDarkTheme.data() is AppTheme.dark() plus
+  // the Ss extensions merged in, so TunerScreen's capture is unaffected.
+  theme: SsDarkTheme.data(),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   home: home,

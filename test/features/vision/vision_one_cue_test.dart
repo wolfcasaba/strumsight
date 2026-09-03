@@ -260,6 +260,13 @@ void main() {
         testWidgets('renders without overflow at $textScale ($locale)', (
           tester,
         ) async {
+          // MAJOR-1 (§0.0/R5, E15-R11 review MAJOR-2): the default
+          // flutter_test surface (800x600) is wider than any phone — run
+          // the matrix at phone width so it can actually see an overflow.
+          tester.view.physicalSize = const Size(412, 915);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+
           final rig = _rig(labModeAvailable: true, labModeOn: true);
           addTearDown(rig.dispose);
           await tester.pumpWidget(

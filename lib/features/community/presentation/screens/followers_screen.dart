@@ -234,16 +234,28 @@ class _FollowerTile extends StatelessWidget {
     return SsCard(
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: colors.surfaceRaised,
-            child: Text(
-              profile.displayName.isEmpty
-                  ? profile.handle.value.isEmpty
-                        ? '?'
-                        : profile.handle.value[0].toUpperCase()
-                  : profile.displayName[0].toUpperCase(),
-              style: typography.bodyLarge.copyWith(color: colors.textPrimary),
+          // MINOR-3 (E15-R11 review): the avatar's own fill (surfaceRaised)
+          // barely differs from the SsCard's raised background it now sits
+          // on (light 1.01:1, dark 1.09:1, measured off the recorded
+          // golden). `borderStrong` gives it a measurable edge (17.25:1
+          // light / 13.04:1 dark, tool/ui_contrast_check.dart) instead of a
+          // new token.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: colors.borderStrong, width: 1.5),
+            ),
+            child: CircleAvatar(
+              radius: 24,
+              backgroundColor: colors.surfaceRaised,
+              child: Text(
+                profile.displayName.isEmpty
+                    ? profile.handle.value.isEmpty
+                          ? '?'
+                          : profile.handle.value[0].toUpperCase()
+                    : profile.displayName[0].toUpperCase(),
+                style: typography.bodyLarge.copyWith(color: colors.textPrimary),
+              ),
             ),
           ),
           const SizedBox(width: SsSpacing.space3),
@@ -294,18 +306,19 @@ class _Footer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<SsColorScheme>()!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: SsSpacing.space4),
       child: Center(
+        // MAJOR-2 (E15-R11 review): the footer betöltés-állapot a
+        // design-rendszer betöltés-komponensére vált (§5.2) — raw
+        // CircularProgressIndicator was a documented not-acceptable
+        // weakening.
         child: isLoading
-            ? SizedBox(
-                height: 18,
+            ? const SsSkeleton(
+                key: Key('followers-footer-loading'),
                 width: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(colors.brand),
-                ),
+                height: 18,
+                radius: 9,
               )
             : const SizedBox.shrink(),
       ),

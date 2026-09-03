@@ -50,7 +50,6 @@ class VisionSessionScreen extends ConsumerWidget {
     final labEnabled = labAvailable && ref.watch(labModeProvider);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
-    final isAlarmStatus = _isPermissionOrDeviceIssue(state.status);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.visionSessionTitle)),
       body: SafeArea(
@@ -74,10 +73,16 @@ class VisionSessionScreen extends ConsumerWidget {
                 children: <Widget>[
                   if (thermalState == VisionThermalUiState.throttled)
                     const _ThermalBanner(),
+                  // MAJOR-3 (E15-R11 review): `colors.danger` is a fixed
+                  // (brightness-invariant) token — against the light canvas
+                  // it measures 3.27:1, below the 4.5:1 text threshold
+                  // (tool/ui_contrast_check.dart). `textPrimary` is already
+                  // proven ≥4.5:1 on every theme (contrast_test.dart) — the
+                  // failure is spoken by the TEXT, not by colour alone.
                   Text(
                     _statusText(l10n, state.status),
                     style: typography.bodyLarge.copyWith(
-                      color: isAlarmStatus ? colors.danger : colors.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
                   if (labAvailable)
@@ -97,16 +102,6 @@ class VisionSessionScreen extends ConsumerWidget {
       ),
     );
   }
-
-  static bool _isPermissionOrDeviceIssue(VisionSessionStatus status) =>
-      switch (status) {
-        VisionSessionStatus.permissionDenied ||
-        VisionSessionStatus.permissionPermanentlyDenied ||
-        VisionSessionStatus.cameraUnavailable ||
-        VisionSessionStatus.cameraBusy ||
-        VisionSessionStatus.inferenceFailed => true,
-        _ => false,
-      };
 
   static String _statusText(
     AppLocalizations l10n,

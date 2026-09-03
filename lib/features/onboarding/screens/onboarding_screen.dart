@@ -61,10 +61,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   /// The checkpoint read, defensive against a Riverpod-free construction
   /// (no ancestor `ProviderScope`) — a bare layout-smoke test builds this
-  /// screen directly under a plain `MaterialApp`. A missing scope degrades
-  /// to the safe default (show the intro from the top), the same
-  /// fail-safe philosophy `OnboardingController.readSeen` already applies
-  /// to a corrupt stored value.
+  /// screen directly under a themed `MaterialApp` with no `ProviderScope`
+  /// (the migrated screen's `SsButton` needs the design-system theme
+  /// extensions, so the harness can no longer be themeless — §0.0/R2). A
+  /// missing scope degrades to the safe default (show the intro from the
+  /// top), the same fail-safe philosophy `OnboardingController.readSeen`
+  /// already applies to a corrupt stored value.
   OnboardingStep _currentStep() {
     try {
       return ref.watch(onboardingStepProvider);
@@ -228,11 +230,24 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
               child: Column(
                 children: [
+                  // Stays a literal FilledButton (not SsButton): SsButton
+                  // lays its label out in a Flexible(overflow:
+                  // TextOverflow.ellipsis), which caps it to one line — the
+                  // hu "Próbáld ki az első győzelmed — 30 mp" copy truncates
+                  // at the required 2.0x text scale on phone width (E15-R11
+                  // review MAJOR-1). A bare FilledButton's Text has no such
+                  // cap, so it wraps across lines instead of clipping —
+                  // same documented-exception class as the
+                  // streak_detail_screen.dart recovery CTA (E15-R08 review
+                  // M3).
                   SizedBox(
                     width: double.infinity,
-                    child: SsButton(
-                      label: onLast ? l10n.onboardFirstWin : l10n.onboardNext,
+                    child: FilledButton(
                       onPressed: onLast ? _firstWin : () => _next(last),
+                      child: Text(
+                        onLast ? l10n.onboardFirstWin : l10n.onboardNext,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
                   // The quieter path for players who just want to explore.

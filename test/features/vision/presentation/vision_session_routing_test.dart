@@ -6,6 +6,7 @@ import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -41,6 +42,10 @@ Future<void> _pumpRouter(WidgetTester tester, ProviderContainer container) =>
         container: container,
         child: Consumer(
           builder: (context, ref, _) => MaterialApp.router(
+            // §0.0/R9: the route reaches the migrated VisionSessionScreen,
+            // which reads the design-system theme extensions — a themeless
+            // MaterialApp.router null-check crashes (L593-class defect).
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             routerConfig: ref.watch(routerProvider),

@@ -332,7 +332,12 @@ class _EntryBanner extends StatelessWidget {
       key: Key('guitar-calibration-entry-staleness-${reason.name}'),
       padding: const EdgeInsets.all(SsSpacing.space3),
       decoration: BoxDecoration(
-        color: colors.danger.withValues(alpha: 0.12),
+        // MINOR-2 (E15-R11 review): the icon paints at full-opacity danger
+        // on top of this blended background — at 0.12 alpha the light-theme
+        // blend measures 2.85:1, below the 3.0 non-text threshold
+        // (tool/ui_contrast_check.dart). 0.05 keeps the tint visible while
+        // measuring 3.09:1 light / 4.89:1 dark.
+        color: colors.danger.withValues(alpha: 0.05),
         border: Border.all(color: colors.danger),
         borderRadius: BorderRadius.circular(SsRadius.sm),
       ),
