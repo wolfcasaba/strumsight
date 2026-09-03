@@ -1,5 +1,85 @@
 # Screen migration status
 
+**E15-R09 update (2026-09-03) — AI Tutor 5 screens migrated, measured
+80/96 (83.333%).** `TutorHomeScreen`, `TutorChatScreen`, `TutorProfileScreen`,
+`TutorDataScreen`, `TutorPrivacyScreen` now import `core/design_system`.
+Measurement command:
+`dart run tool/ui_inventory.dart` (96 total, unchanged — A5) piped through the
+round's own `for f in ...; do grep -q design_system "$f" ...` loop over all 96
+listed paths, not just the batch — 80/96 confirmed both ways.
+
+The `ai_tutor` feature has NO `*ThemeScope` wrapper (§0.0.A/R2, measured —
+unlike `gamification`'s `GamificationThemeScope`), and none was introduced
+(§3 tiltás, unchanged). Two screens hit the SAME theme-extension-availability
+constraint the E15-R08/R07/R06/R04 precedents already measured, but with
+**different resolutions each time** because each screen's OWN untouchable
+pinned test differs:
+
+- **`TutorHomeScreen` stays fully extension-free.** Its own pinned widget
+  test (`tutor_home_screen_test.dart`) renders it through the REAL app router
+  (`MaterialApp.router` with no `theme:`) and is NOT on this round's
+  `allowed_paths` — unfixable. Every `Ss*` component that reads
+  `Theme.of(context).extension<SsColorScheme>()!` (`SsButton`, `SsEmptyState`,
+  `SsFailureState`, `SsModelStatusCard`, `SsProvenanceBadge`, `SsSkeleton`,
+  `SsMetricCard`, `SsContentCard`, `SsInsightCard`, `SsStatusBadge` — all
+  measured) would crash there, so the screen uses only the extension-free
+  primitives (`SsCard`, `SsSpacing`) and keeps its icons and status-card
+  content on plain `Theme` tokens, exactly as the file's own (E13-R29) doc
+  comment already explained. Icons stay raw `Icon(IconData)` for a SECOND,
+  independent reason: `SsIcon`'s catalog (`play`/`pause`/`settings`/`close`/
+  `check`/`info` + 14 guitar glyphs, measured in `ss_icons.dart`) does not
+  cover `smartphone_outlined`/`cloud_outlined`/`chat_bubble_outline`/
+  `arrow_back`/`stop_circle_outlined`/`download_outlined`/
+  `delete_forever_outlined`/`remove_circle_outline`/`add` — an unmapped name
+  resolves to `SsIcon`'s visible "missing glyph" fallback mark, which would
+  be a real regression, not a safe substitution. This applies to icons on
+  ALL 5 screens, not just the Home screen.
+- **The other 4 screens' own pinned tests ARE on `allowed_paths`** (unlike
+  the E15-R08 batch, where `AchievementDetailScreen`/`LevelDetailScreen`
+  needed a `Builder`-based inner-context fix to read the extension from
+  BELOW their `GamificationThemeScope`), so the round wired
+  `theme: SsLightTheme.data()` directly into the bare `MaterialApp`s in the
+  6 test files this needed (§0.0.A/R3 — no `Builder` workaround required,
+  since `ai_tutor` has no per-screen theme wrapper to sit above/below):
+  `tutor_chat_screen_test.dart:196`, `tutor_data_screen_test.dart:247`,
+  `tutor_privacy_screen_test.dart:146`, `tutor_profile_screen_test.dart:61`,
+  `ai_mode_visibility_test.dart:125` and `:146`,
+  `streaming_announcement_test.dart:119`. Every pinned expectation in those
+  6 files (widget types, keys, text, semantics labels) was left byte-for-byte
+  unchanged; only the `theme:` argument was added. `TutorChatScreen`'s
+  AI-mode indicator now uses the real `SsProvenanceBadge` (local/cloud) with
+  a fallback-message suffix; its empty-conversation prompt is the
+  §0.0.A/R6 exception (no caller-wireable action exists — the real next step
+  is typing in the always-visible `TutorComposer`, a different widget this
+  one cannot invoke), kept screen-local but `SsColorScheme`/`SsTypography`/
+  `SsSpacing`-styled. `TutorDataScreen`'s two `FutureProvider.when` error
+  branches (`tutorMemoryFactsProvider`/`tutorConversationsProvider`) are
+  `SsFailureState` with a working retry (`ref.invalidate`) — MEASURED
+  practically unreachable today (the providers collapse a repository
+  `Failure` to an empty list/page rather than rethrowing), so the round
+  added `R22-DA8` (a genuine new test forcing the fake repository to
+  `throw`) to give this cell REAL gate coverage rather than leaving it an
+  untested code path; see §10.1 (real-violation probe) in the round file.
+  `TutorPrivacyScreen`'s and `TutorProfileScreen`'s `SwitchListTile`/
+  `TextFormField` widgets are UNCHANGED (batch-specific brief note: consent
+  switches/copy are ADR 0132's sensitive surface; `TextFormField`'s
+  `initialValue`-per-rebuild pattern has no `SsTextField` equivalent without
+  introducing new controller-owning state, a behaviour change out of this
+  visual-only round's scope) — both screens still gained `SsSection`/
+  `SsButton`/`SsSpacing` everywhere else. `TutorDataScreen`'s per-row `Card`s
+  became `SsCard` where a bespoke `Padding` wrapper already existed
+  (`_MemoryFactRow`); `_ConversationRow`'s `Card`+`ListTile` combo was left
+  alone to avoid double-padding a `ListTile`'s own built-in insets.
+
+Golden re-record (§0.0.A/R4): `test/ui/goldens/e13_r29_screens_golden_test.dart`
+switched its shared `_pump` theme from `AppTheme.dark()` to
+`SsDarkTheme.data()` (the app's actual runtime dark theme) and all 6
+`e13_r29_*` PNGs were re-recorded via
+`tools/golden-x86.sh record test/ui/goldens/e13_r29_screens_golden_test.dart`
+(exit 0, all 6 cells green). Only the 4 Coach Home / Coach Chat PNGs changed
+bytes; the 2 Practice Plan Preview PNGs are byte-identical (that screen,
+already migrated pre-round, reads no theme-extension widget either way).
+
 **E15-R08 update (2026-09-02) — Gamification 6 screens migrated, measured
 75/96 (78.125%).** `AchievementsScreen`, `AchievementDetailScreen`,
 `QuestsScreen`, `LevelDetailScreen`, `RewardInboxScreen`, `StreakDetailScreen`
