@@ -24126,3 +24126,31 @@ mintát mindig egy pozitív, jelen idejű jellel kell párosítani.
 
 **Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::PaneActivityGuardTest`
 (ADR 0499 D1) — a javítás előtti fán 2 cella PIROS.
+
+## L606 — A kész felület bekötése előtt a FORRÁST kell mérni: az üres katalógus és a zöld kapu megkülönböztethetetlen (E16-R02 H3 + önjavító kör, 2026-09-03)
+
+**Mérve.** Az E16-R02 briefje (`main @ 11d0d2bb` fán íródott) a `/profile/progress`
+átkötését írta elő a `ProgressDashboardScreen`-re „valós projekcióval", és a §2-ben
+a gamification-profilt meg a ledgert nevezte meg forrásként. A kör pre-flightja
+ezt megcáfolta: `grep -rn "MasteryMilestone(" --include=*.dart lib test` → 9 hely,
+ebből 1 definíció és 8 TESZT (produkciós katalógus: 0); `grep -rln "MasteryEvidence"
+--include=*.dart lib` → 4 fájl, egyetlen `data/` előállító sem; milestone cím/leírás
+ARB-kulcs: 0. Üres `milestones` listával viszont a
+`ProgressOverviewProjection.isNewUser` `[].every(...)` miatt **igaz**, tehát a
+képernyő csak a `_NewUserState`-et rendereli — a kör a MA valós adatot mutató
+legacy `ProgressScreen`-t (`app_router.dart:545`) egy örökre üres „get started"
+állapotra cserélte volna, **miközben mind a hét acceptance-cella zöld marad**, mert
+mindegyik közvetlenül a projekciót eteti (L397/L449 hibaosztály).
+
+**A tanulság iránya.** Egy hívó-adta („caller-fed") szerződésű képernyő
+bekötésekor a cellák a HÍVÓT mérik, nem az adat létezését: aki a projekciót
+tölti, az a tesztben is tölti. Ezért a bekötő kör briefjének a pre-flightja nem
+azt kérdezi, hogy „renderel-e", hanem hogy **melyik mezőnek van a fán MÉRT
+forrása** — mezőnként, kiírva. Ahol nincs, ott két őszinte kimenet van: a forrás
+a kör része lesz (bővített `allowed_paths` + a hiányt piroba vivő új cella), vagy
+a bekötés marad. A cellák gyengítése vagy a hiány „üres állapotnak" nevezése
+nem kimenet.
+
+**Őrteszt:** `tools/tests/test_e16_r02_mastery_source_scope.py` — a revízió
+előtti briefen 3 cella PIROS; az `A10` cella (három küszöb fölötti gyakorlással a
+route NEM a new-user állapotot rendereli) pontosan ezt a hibamódot méri.
