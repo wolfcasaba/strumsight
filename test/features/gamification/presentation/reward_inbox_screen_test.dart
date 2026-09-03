@@ -71,6 +71,32 @@ void main() {
     });
   });
 
+  group('m3 — reward-inbox-list is the shared scroll carrier', () {
+    testWidgets(
+      'branch is distinguished by reward-inbox-empty vs entry keys, not '
+      'reward-inbox-list',
+      (tester) async {
+        // reward-inbox-list now sits on the CustomScrollView, which is
+        // present in BOTH branches (needed so the pending-rewards card,
+        // count header, and rows all scroll together — E15-R08 review m3).
+        // The branch distinction lives in reward-inbox-empty (empty only)
+        // vs reward-inbox-entry-* (non-empty only).
+        await _pump(tester);
+        expect(find.byKey(const Key('reward-inbox-list')), findsOneWidget);
+        expect(find.byKey(const Key('reward-inbox-empty')), findsOneWidget);
+        expect(find.byKey(const Key('reward-inbox-entry-evt-1')), findsNothing);
+
+        await _pump(tester, items: <RewardInboxItem>[_item('evt-1')]);
+        expect(find.byKey(const Key('reward-inbox-list')), findsOneWidget);
+        expect(find.byKey(const Key('reward-inbox-empty')), findsNothing);
+        expect(
+          find.byKey(const Key('reward-inbox-entry-evt-1')),
+          findsOneWidget,
+        );
+      },
+    );
+  });
+
   group('A2 — empty state is token-styled, no fabricated action', () {
     testWidgets('an empty inbox renders the empty state, no button', (
       tester,
@@ -139,6 +165,39 @@ void main() {
         );
       }
     }
+  });
+
+  group('M2 — seen vs unseen backgrounds are genuinely different', () {
+    testWidgets(
+      'unseen and seen entries render distinct tile background colors',
+      (tester) async {
+        await _pump(
+          tester,
+          items: <RewardInboxItem>[_item('evt-1'), _item('evt-2', seen: true)],
+        );
+
+        Color? materialColorFor(String id) => tester
+            .widget<Material>(
+              find
+                  .descendant(
+                    of: find.byKey(Key('reward-inbox-entry-$id')),
+                    matching: find.byType(Material),
+                  )
+                  .first,
+            )
+            .color;
+
+        final unseenColor = materialColorFor('evt-1');
+        final seenColor = materialColorFor('evt-2');
+        expect(
+          unseenColor,
+          isNot(equals(seenColor)),
+          reason:
+              'seen vs unseen rows must use genuinely different background '
+              'tokens — an identical pair loses the read/unread signal',
+        );
+      },
+    );
   });
 
   group('tap behaviour — selecting an unseen item marks it seen', () {

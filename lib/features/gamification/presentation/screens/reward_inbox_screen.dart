@@ -237,7 +237,13 @@ class _InboxEntryTile extends StatelessWidget {
       label: semantics,
       child: ExcludeSemantics(
         child: Material(
-          color: item.seen ? colors.surface : colors.surfaceRaised,
+          // `surfaceRaised` currently resolves to the same value as
+          // `surface` (ss_colors.dart — design_system is out of this
+          // round's scope), so seen-vs-unseen no longer differed by color
+          // (E15-R08 review M2). `surfaceSunken` genuinely diverges from
+          // `surface` on both palettes: a read item recedes toward the
+          // sunken tone, an unseen item keeps the plain (brighter) surface.
+          color: item.seen ? colors.surfaceSunken : colors.surface,
           borderRadius: BorderRadius.circular(SsRadius.lg),
           child: InkWell(
             key: Key('reward-inbox-entry-tap-${item.id}'),
