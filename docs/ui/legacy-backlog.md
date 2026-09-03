@@ -103,8 +103,15 @@ legitimate outcome, not a broken contract. The Ch15 sáv's záró állítása is
 therefore "every reachable screen is migrated **or** deliberately
 retire-planned with a named successor" — **not** "the retirement happened."
 
-**Owner:** a future round whose `allowed_paths` covers the five screens'
-route redirects + file deletion (SDD, unscheduled).
+**Owner:** the measurable carrier round is `E16-R05`
+(`docs/rounds/e16-r05-full-app-verification-and-release.md`) — its
+pre-flight explicitly re-runs `check_screen_reachability`, so it will
+re-measure whether these five screens are still reachable at that point.
+The round that would actually PERFORM the retirement (the route
+redirects + file deletion for the five screens) does not yet exist in the
+queue — admitting one is a user/pipeline scheduling decision, not an
+SDD-round assignment made here (review E15-R13 MINOR-1: a generic "SDD,
+unscheduled" stub without a real round id is not a named owner).
 
 **Date measured:** 2026-09-03 (E15-R13, `dart run
 tool/check_screen_reachability.dart --format json` + the `grep -q

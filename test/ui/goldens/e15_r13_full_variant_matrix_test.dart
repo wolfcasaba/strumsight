@@ -3185,8 +3185,9 @@ const _exclusions = <_ExclusionEntry>[
         'screen. Building one is new test-authoring scope beyond this '
         'measurement-only round.',
     followUpRound:
-        'a future round whose allowed_paths covers a '
-        'WrappedPreviewScreen pump fixture (SDD, unscheduled)',
+        'no round is currently queued to build a WrappedPreviewScreen pump '
+        'fixture; admitting one is a user/pipeline scheduling decision, not '
+        'an SDD-round assignment (measured, §0.0.A/R3)',
   ),
 ];
 
@@ -3653,18 +3654,30 @@ void main() {
         );
       });
 
-      test('every exclusion entry carries a non-trivial reason and a named '
-          'follow-up round', () {
+      test('every exclusion entry carries a non-trivial reason, and its '
+          'follow-up round is either a real round id or an explicit '
+          '"none queued" disclosure (review E15-R13 MINOR-1: a generic '
+          '"a future round … (SDD, unscheduled)" stub is machine-invisible '
+          'and was previously accepted by a bare isNotEmpty check)', () {
+        final roundIdPattern = RegExp(r'E\d{2}-R\d{2}');
         for (final entry in _exclusions) {
           expect(
             entry.reason.trim().length,
             greaterThan(10),
             reason: '${entry.screenPath} has a trivial/empty exclusion reason',
           );
+          final namesRealRound = roundIdPattern.hasMatch(entry.followUpRound);
+          final disclosesNoRoundQueued = entry.followUpRound.contains(
+            'no round is currently queued',
+          );
           expect(
-            entry.followUpRound.trim(),
-            isNotEmpty,
-            reason: '${entry.screenPath} has no named follow-up round',
+            namesRealRound || disclosesNoRoundQueued,
+            isTrue,
+            reason:
+                '${entry.screenPath} has a vague/generic follow-up-round '
+                'placeholder — must either name a real round id '
+                '(${roundIdPattern.pattern}) or explicitly state no round '
+                'is currently queued',
           );
         }
       });
@@ -3747,6 +3760,36 @@ void main() {
         report,
         contains('${_excludedCells.length}'),
         reason: '_ExcludedCell count (${_excludedCells.length}) missing/stale',
+      );
+    });
+
+    // Review E15-R13 MAJOR-1 (L588 recurrence): the report quoted a
+    // hand-typed "+1157: All tests passed!" `flutter test` output that
+    // could not actually come out of that command — none of the cells
+    // above pin the GRAND TOTAL (cells + this file's own structural
+    // groups), only their individual components, so the wrong number
+    // slipped through undetected.
+    test('cites the grand total test count this file itself produces '
+        '(cells + A1 + A5 structural groups) — catches a hand-typed, '
+        'non-reproducible "All tests passed!" count (review MAJOR-1)', () {
+      final totalCells =
+          _screens.length * 2 * 2 * _ViewportProfile.values.length * 2;
+      // Structural group sizes are pinned as literals (there is no
+      // reflection-based way to count `test()` calls at runtime) and MUST
+      // be kept in sync with the actual number of test() calls in the
+      // 'A1 — completeness' and 'A5 — completion-report guard' groups
+      // above — a1CellCount below is the A1 group's own test count; a5
+      // includes this very test.
+      const a1CellCount = 5;
+      const a5CellCount = 6;
+      final grandTotal = totalCells + a1CellCount + a5CellCount;
+      expect(
+        report,
+        contains('$grandTotal'),
+        reason:
+            'grand total test count ($grandTotal = $totalCells matrix '
+            'cells + $a1CellCount A1 + $a5CellCount A5) missing/stale — the '
+            'report must cite the number `flutter test` actually produces',
       );
     });
 

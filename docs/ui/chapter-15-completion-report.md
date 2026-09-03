@@ -22,14 +22,16 @@ retirement happened." Both halves are measured below, and the second half
   (`WrappedPreviewScreen`, §2 below) = **72 screens** × {light, dark} ×
   {en, hu} × {compact portrait 412×915, landscape 915×412} × {textScale
   1.0, 2.0} = **1152 cells**, each asserting no `RenderFlex` overflow and
-  no pump exception via `FlutterError.onError`, plus **5 completeness /
-  structural cells** (A1) — **1157 tests total, all green** (measured
-  locally this session, two commits: 48 "A-level" golden-fixtured screens,
-  then the remaining 24 "B-level" `test/features/**`-fixtured screens,
-  §8 steps 2–3).
+  no pump exception via `FlutterError.onError`, plus **5 completeness
+  cells** (A1) and **6 report-guard cells** (A5, including the grand-total
+  guard added this fixing round, review MAJOR-1) — **1163 tests total,
+  all green** (measured locally this session: 48 "A-level"
+  golden-fixtured screens and 24 "B-level" `test/features/**`-fixtured
+  screens shipped in the original round, §8 steps 2–3; the A5 grand-total
+  cell added in this fixing round, §10).
 - `docs/ui/legacy-backlog.md` §3 — the stale "53 legacy" table replaced
   with the MEASURED 5, and the `E15-R04` unexecuted retirement recorded as
-  an explicit open item (dated, owned, named follow-up round).
+  an explicit open item (dated, owned, named carrier round `E16-R05`).
 - This report.
 - No golden PNG was added or changed (this file is PNG-free by
   construction — no `matchesGoldenFile` call anywhere in it).
@@ -71,9 +73,11 @@ reachable, and not deleted or route-redirected — `E15-R04` (the round
 retirement. Per [ADR 0471](../adr/0471-screen-reachability-is-measured-not-assumed.md)
 D5 this is not a scope violation (a `retire` verdict is a proposal for a
 separate, reviewed round, not deletion authority) — it is recorded as a
-dated, owned open item in `docs/ui/legacy-backlog.md` §3.0 (owner: a future
-round whose `allowed_paths` covers the five route redirects + file
-deletion, SDD, unscheduled; date measured: 2026-09-03).
+dated, owned open item in `docs/ui/legacy-backlog.md` §3.0 (measurable
+carrier round: `E16-R05`, whose pre-flight re-runs
+`check_screen_reachability`; the round that would perform the actual
+retirement does not yet exist in the queue — admitting one is a
+user/pipeline scheduling decision; date measured: 2026-09-03).
 
 ## 4. The closing variant matrix (A1, A2)
 
@@ -82,21 +86,30 @@ session:
 
 ```
 flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart
-# +1157: All tests passed!
+# +1163: All tests passed!
 ```
+
+**1163** (= 72 screens × 16 variants = 1152 cells + 5 A1-completeness
+cells + 6 A5-report-guard cells), reproduced this fixing round (§10.4).
 
 - **Completeness (A1):** a dedicated test group re-runs
   `ScreenReachability(Directory.current).render()` at test time and
   asserts the measured reachable-screen-path set is a subset of (the 72
   matrix screens ∪ the 1-entry exclusion list). Every exclusion entry is
-  machine-checked to carry a non-trivial reason and a named follow-up
-  round, and the `"no merged pump fixture"` reason is machine-checked to
-  apply to `WrappedPreviewScreen` alone (§0.0.A/R3).
+  machine-checked to carry a non-trivial reason and either a real round
+  id or an explicit "no round is currently queued" disclosure for its
+  follow-up round (tightened this fixing round, review MINOR-1), and the
+  `"no merged pump fixture"` reason is machine-checked to apply to
+  `WrappedPreviewScreen` alone (§0.0.A/R3).
 - **Per-cell rendering (A2):** every one of the 1152 screen × variant
   cells sets its OWN `tester.view.physicalSize` + `devicePixelRatio`
   (L558) and asserts zero pump exceptions; overflow-free UNLESS the cell
   is a dated, measured `_ExcludedCell` entry (§5 below) — never `skip`,
-  never a raised tolerance (brief §5.1).
+  never a raised tolerance (brief §5.1). One caveat (review NOTE-1): the
+  `library|…|compact_portrait|1.0` cell renders the screen's EMPTY state
+  (2 `Text`, 224 widgets) rather than a populated list — "every cell
+  renders" does not mean "every cell renders a populated fixture"; see
+  §1.4 of the review for the full 72-screen tree-richness measurement.
 - **Threshold triplet (brief §6):** `textScale 1.0` and `textScale 2.0`
   (the mandatory, inclusive threshold) are both fully covered — every one
   of their cells is either green or a dated `_ExcludedCell` finding; no
@@ -122,6 +135,13 @@ anywhere:
 date (2026-09-03), and is machine-verified to still genuinely overflow —
 a resolved defect would turn its cell red (`STALE exclusion-list entry`),
 not silently stay excluded forever.
+
+**Most severe (review E15-R13 NOTE-2):** `StrumReelScreen` already
+overflows (191px) at `compact_portrait|textScale 1.0` — the DEFAULT text
+scale, not only at the mandatory 200% threshold. Of the four defects
+above, this is the only one a user hits with no accessibility setting
+changed at all, which makes it the highest-priority follow-up of the
+four.
 
 ## 6. Real-violation probe (brief §6.1/§7, mandatory)
 
@@ -149,3 +169,12 @@ above from the LIVE measurement (`ScreenReachability`, `_screens.length`,
 parsing whatever rows happen to be here (L588: a guard that only iterates
 present rows stays green on a silently deleted one), but by asserting a
 closed-form, independently-derived set of expected facts.
+
+**Added this fixing round (review MAJOR-1):** a sixth A5 cell now derives
+the GRAND TOTAL test count (matrix cells + the A1 group's own 5 tests +
+the A5 group's own 6 tests, itself included) and asserts that exact
+number appears in this file — the gap the review found (this file quoted
+"+1157" while the matrix actually produces a different total) existed
+precisely because no prior cell pinned the total, only its components.
+Real-violation probe (RED with a wrong number, GREEN once corrected) is
+in the round brief's §10.

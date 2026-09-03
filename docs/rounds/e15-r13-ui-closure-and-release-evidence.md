@@ -363,13 +363,21 @@ A mátrix-fájl önmagában **1162 teszt** (1152 cella + 5 A1-teljesség-cella
 `hasLength(96)` változatlan; `git diff --stat` a diffben nulla `lib/**`
 sort mutat.
 
+> **A 10.4 számai a JAVÍTÓ MENET előttiek** (első futás, review-elt HEAD
+> `d7c4c65e`). A `chapter-15-completion-report.md` ekkor hibásan **1157**-et
+> állított — ezt a review MAJOR-1 találta meg. A javító menet tényleges
+> kimenete és a mért **1163** a §10.7-ben.
+
 ### 10.5 LELETEK — nem javítva (§5.2, §9)
 
 1. **`E15-R04` visszavonása nem történt meg** — a `legacy-backlog.md`
-   §3.0-ban rögzítve, NYITOTT, gazda + nevesített (unscheduled SDD) kör.
+   §3.0-ban rögzítve, NYITOTT; a javító menet óta mérhető hordozó kör
+   (`E16-R05`) nevesítve, a végrehajtó kör még nem létezik a sorban
+   (§10.7).
 2. **`WrappedPreviewScreen`-nek nincs pump-fixture-je sehol a fán** — a
-   mátrix `_exclusions` egyetlen bejegyzése, indokkal + nevesített
-   (unscheduled SDD) követő körrel.
+   mátrix `_exclusions` egyetlen bejegyzése, indokkal; a javító menet óta
+   a `followUpRound` explicit kimondja, hogy jelenleg nincs erre ütemezett
+   kör (§10.7).
 3. **4 mért `lib/**` túlcsordulás-defekt** (32 `_ExcludedCell` cella) —
    `StrumReelScreen` (`strum_reel_screen.dart:339`, a tagline `Row`),
    `AnalyzeScreen` (`analyze_screen.dart:331`), `LatencyCalibrationScreen`,
@@ -377,10 +385,120 @@ sort mutat.
    (`lesson_score_preview_screen.dart:101`) — mind a
    `chapter-15-completion-report.md` §5-ben részletezve, dátummal és
    px-mérettel; `lib/**` ehhez a körhöz tilos zóna, ezért NEM javítottam.
+   A `StrumReelScreen` már `textScale 1.0`-nál is túlcsordul (191px,
+   `compact_portrait`) — a review NOTE-2 szerint ez a négy közül a
+   legsúlyosabb, mert alapbeállítású felhasználót is érint.
 
 ### 10.6 Orchesztrátor-lépések (nem ez a kör feladata)
 
 CI-dispatch (`build-apk.yml`) és az APK-link — brief §7, az orchesztrátor
 feladata.
+
+### 10.7 Javító menet (1. menet) — a review MAJOR-1/MINOR-1 zárása
+
+**Alap:** `docs/reviews/e15-r13-review.md`, verdikt CHANGES REQUESTED
+(1 MAJOR, 1 MINOR, 2 NOTE), review-elt HEAD `d7c4c65e`.
+
+**MAJOR-1 (a zárójelentés hamis parancs-kimenetet idézett, A5).** A riport
+`:26` és `:85` helyén **1157**-et állított; a mért érték **1162** volt (a
+review saját mérése). Javítás:
+
+1. A két hely a MÉRT `flutter test` kimenetre javítva.
+2. **Új A5 gépi cella** (`test/ui/goldens/e15_r13_full_variant_matrix_test.dart`,
+   "cites the grand total test count …"): a végösszeget
+   `_screens.length × 2 × 2 × _ViewportProfile.values.length × 2` (mátrix
+   cellák) `+ 5` (A1-csoport tesztjeinek száma) `+ 6` (A5-csoport
+   tesztjeinek száma, ÖNMAGÁVAL együtt, mert az új cella maga is A5-tag)
+   képletből vezeti le, és megköveteli a riportban. Az új cella hozzáadása
+   az A5-csoportot 5-ről 6-ra növelte, ezért a mátrix-fájl saját tesztszáma
+   is nőtt: **1152 + 5 + 6 = 1163**.
+3. **Valódi-sértés próba** (a riportban MINDHÁROM "1163" előfordulást
+   `9999`-re cserélve, majd `flutter test … --plain-name "grand total"`):
+
+   ```
+   Expected: true
+     Actual: <false>
+   does not contain '1163'
+   grand total test count (1163 = 1152 matrix cells + 5 A1 + 6 A5)
+   missing/stale — the report must cite the number `flutter test`
+   actually produces
+   +0 -1: Some tests failed.
+   ```
+
+   **PIROS.** Visszaállítás után (`sed -i 's/9999/1163/g'`):
+
+   ```
+   +1: All tests passed!
+   ```
+
+   **ZÖLD.**
+4. A teljes mátrix-fájl önálló futása ezen a fán a javítás UTÁN:
+
+   ```
+   $ flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart
+   00:55 +1163: All tests passed!
+   ```
+
+   A riport mindhárom helye (§1, §4, §8) most **1163**-at állít, és ez a
+   MÉRT `flutter test` kimenettel egyezik.
+
+**MINOR-1 (nyitott tétel nevesített kör nélkül, A3).**
+
+1. `docs/ui/legacy-backlog.md` §3.0 gazdája: a mérhető hordozó kör
+   `E16-R05` (`docs/rounds/e16-r05-full-app-verification-and-release.md`)
+   — pre-flightje újrafuttatja a `check_screen_reachability`-t. A
+   VÉGREHAJTÓ kör (öt útvonal-átirányítás + fájltörlés) még nem létezik a
+   sorban — a szöveg ezt is kimondja, admittálása user/pipeline döntés
+   (nem találtam ki nem létező kör-azonosítót).
+2. Az őr-cella szigorítva: a `_exclusions` minden bejegyzésének
+   `followUpRound` mezője MOST vagy `RegExp(r'E\d{2}-R\d{2}')`-t
+   tartalmaz, VAGY explicit kimondja `'no round is currently queued'`. Az
+   egyetlen `_exclusions` tag (`WrappedPreviewScreen`) az utóbbit kapta —
+   nincs valós kör a fixture felvételére, ezt a szöveg most kimondja a
+   korábbi homályos „a future round … (SDD, unscheduled)" helyett.
+3. **Valódi-sértés próba** (a `followUpRound` visszaírva a régi homályos
+   szövegre, majd `--plain-name "follow-up round is either"`):
+
+   ```
+   Expected: true
+     Actual: <false>
+   lib/features/share/screens/wrapped_preview_screen.dart has a
+   vague/generic follow-up-round placeholder — must either name a real
+   round id (E\d{2}-R\d{2}) or explicitly state no round is currently
+   queued
+   +0 -1: Some tests failed.
+   ```
+
+   **PIROS.** Visszaállítás után:
+
+   ```
+   +6: All tests passed!
+   ```
+
+   **ZÖLD.**
+
+**NOTE-1 / NOTE-2.** Mindkettő bekerült a `chapter-15-completion-report.md`
+§4-be (a `library`-cella üres-fa korlátja) és §5-be (a `StrumReelScreen`
+`textScale 1.0`-nál is túlcsorduló, alapbeállítású-felhasználót érintő
+defektje mint a négy közül legsúlyosabb).
+
+**A kötelező gate — a javítás UTÁN, csonkítatlanul:**
+
+```
+tools/round-gate.sh test/ui/goldens/e15_r13_full_variant_matrix_test.dart test/ui/ui_inventory_test.dart test/tooling/screen_reachability_test.dart test/accessibility/closure_suite_test.dart
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/ui/goldens/e15_r13_full_variant_matrix_test.dart zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/accessibility/closure_suite_test.dart            zöld
+    architecture                                                zöld
+    secrets                                                    zöld
+    l10n                                                        zöld
+
+MINDEN GATE ZÖLD.
+```
 
 ## 11. Review — a Claude tölti ki
