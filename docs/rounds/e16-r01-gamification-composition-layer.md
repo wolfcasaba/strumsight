@@ -446,4 +446,181 @@ lépés ismét zöld.
   (brief §3). `activeQuestCount`/`masteryUnlockedCount`/
   `weeklyConsistencyDays` ezért `available:false` marad.
 
+### Javító kör (fix1) handoff — `sonnet-impl`, 2026-09-03
+
+Alap: `docs/reviews/e16-r01-review.md` — CHANGES REQUESTED, 3 BLOCKER + 3
+MAJOR + 5 MINOR. Leletenként:
+
+**B1 — `?? const {}` egybeesik loading/error-ral** (`app_router.dart` régi
+`:645`, `:664`). **ZÁRVA.** Új `_achievementsAsyncBuilder({ref, onData})`
+helper (`app_router.dart`, a fájl elején, `_achievementDetailName` konstans
+után) — `achievementProgressProvider.when(loading: ..., error: ..., data:
+onData)`. Loading ágon `Scaffold(body: Center(child:
+CircularProgressIndicator()))` (nem az üres képernyő), error ágon
+`appLoggerProvider.error('gamification.achievement_progress.load_failed', …)`
+majd üres map a screen-nek (a screen-nek nincs gazdagabb hiba-szerződése).
+Mindkét achievement-route (`AppRoutes.achievements`,
+`AppRoutes.achievementDetail`) ezt hívja. **Valódi-sértés próba lefuttatva:**
+a régi `?? const {}` mintát ideiglenesen visszaállítva mind a statikus cella
+(`gamification_composition_test.dart` "no longer collapse loading/error…")
+PIROSRA vált (`Expected: false / Actual: <true>`), mind az új widget-szintű
+cella ("shows a loading state, not AchievementsScreen") PIROSRA vált
+(`AchievementsScreen` render, nem a loading state) — utána mindkettő
+visszaállítva, a §7 gate újra teljesen zöld.
+
+**B2 — Quests-útvonal 100% placeholder, se provider, se backlog.** **ZÁRVA.**
+Új `GamificationQuestBoard` típus + `questBoardProvider`
+(`gamification_providers.dart`) — `available:false`, minden mező üres/`null`,
+ugyanaz a "hiányt típusban hordozó" minta, mint a `GamificationDerivedCount`.
+A router (`AppRoutes.quests`) most `questBoard.dailyChallenge` /
+`.dailyChallengeAvailable` / `.dailyQuests` / `.weeklyQuests` mezőket olvassa,
+bare literál helyett. Negyedik backlog-tétel: `docs/ui/legacy-backlog.md`
+§6.4 (E16-R01 entry 4) — a quest-generáláshoz szükséges perzisztált snapshot
+hiánya, dátumozva, gazdás.
+
+**B3 — beégetett angol szöveg a `titleKey`/`bodyKey`-ben.** **ZÁRVA.** A
+`gamification_providers.dart`-beli `_rewardEventFor` már NEM gyárt angol
+szöveget — `titleKey`/`bodyKey` most a `kind.name` technikai placeholder
+(sosem kerül képernyőre). Az l10n-feloldás átkerült a routerbe: új
+`_localizedRewardInboxItems`/`_rewardTitleFor` helper (`app_router.dart`),
+amely a `RewardInboxScreen` felé adott listát a valódi
+`AppLocalizations`-ból építi újra, KIZÁRÓLAG MEGLÉVŐ ARB-kulcsokkal:
+`masteryMilestone` → `l10n.feedCardAchievementUnlocked` ("Achievement
+unlocked"), `questCompleted` → `l10n.questCompletedBadge` ("Completed"),
+`dailyReward` → `l10n.practiceResultRewardTitle` ("Reward"),
+`challengeCompleted`/`levelUp` (ezen a körön nem érhető el a
+`_rewardKindFor`-ból, de a switch kimerítő) → `l10n
+.communityNotificationChallengeCompletedTitle` / `l10n
+.gamificationHubSkillSectionTitle`. A body minden esetben `l10n
+.questRewardAlreadyCredited` ("Reward already credited") — ezzel az XP
+kétszeri megjelenítése (a régi `+N XP` body-szöveg és a screen saját
+`rewardInboxEarnedXpLabel`-je) is megszűnt. ARB-fájlt NEM módosítottam.
+
+**M1 — a `.available` mezőt senki nem olvassa; `latestSessionXp` hiány-típus
+nélkül.** **ZÁRVA (a §0.0.A/R5 keretei között).** (a) `latestSessionXpProvider`
+mostantól `GamificationDerivedExperience{value: ExperiencePoints, available:
+bool}`-t ad vissza (`gamification_providers.dart`), a router
+(`AppRoutes.levelDetail`) a `.value`-t adja tovább — a `.available` NEM
+fogyasztható tovább, mert a `LevelDetailScreen` kötelező, nem-nullable
+paramétere erre nem ad szerződést (ugyanaz a screen-oldali korlát, mint az
+`activeQuestCount`/`masteryUnlockedCount`/`weeklyConsistencyDays` esetében —
+ezt a review is elismerte, a feloldás NEM screen-módosítás). (b) mind a NÉGY
+kifejezhetetlen-hiány érték datált, gazdás backlog-bejegyzést kapott:
+`docs/ui/legacy-backlog.md` §6.5 (E16-R01 entry 5) — egyetlen bejegyzésbe
+vonva a négy értéket (`activeQuestCount`, `masteryUnlockedCount`,
+`weeklyConsistencyDays`, `latestSessionXp`), mert a gyökér-ok azonos: a négy
+érintett screen egyikének sincs "unavailable" ága.
+
+**M2 — a bekötött olvasásoknak nincs írója; ezt ki kell mondani.** **ZÁRVA
+(kimondással, NEM implementálással).** Ötödik/hatodik backlog-tétel:
+`docs/ui/legacy-backlog.md` §6.6 (E16-R01 entry 6) — kimondja, hogy
+`replaceProfileSnapshot`/`ActivityEventIngestor`/`DailyChallengeService`-nek
+nulla hívási helye van `lib/`-ben a saját definíciójukon kívül, tehát a zöld
+router-tesztek egy SEEDELT teszt-store-on mérnek, nem élő termelői útvonalon.
+Producer bekötése ennek a körnek tiltott (§3, új üzleti logika/más feature
+írási útvonala) — NEM implementáltam.
+
+**M3 — a mérce-mátrix négy sora nem mér, az A1-nek nincs útvonal-szintű
+cellája.** **ZÁRVA.** `gamification_composition_test.dart`-ban:
+- "Provider a routerben marad, csak átnevezve" → új alak-alapú cella
+  (`RegExp(r'final _\w+Provider(<[^>]*>)? =')` a teljes forráson), bármely
+  ÚJ privát provider-deklarációt elkap, nem csak az öt régi nevet.
+- "Quest-provider instabil" → `gamification_providers_test.dart`-ban két új
+  cella (`questBoardProvider is unavailable…`, `…is stable across repeated
+  reads`) + a router-oldali statikus cella (bare quest-literál eltűnt,
+  `questBoard.*` jelen van).
+- "Egy BACKLOG-tétel némán törölve" → új teszt-csoport, ami magát a
+  `docs/ui/legacy-backlog.md`-t olvassa és a mind a hat E16-R01-bejegyzést
+  (`entry 1`–`entry 6`) grepeli.
+- Hiányzó "0 megy a képernyőnek üres állapot helyett" mérés → a B1
+  widget-szintű regressziós teszt (fent) pontosan ezt fedi az achievement
+  útvonalra; a másik három (`activeQuestCount` stb.) esetében a screen-oldali
+  korlát (M1) miatt ez a screen módosítása nélkül nem mérhető tovább — ezt a
+  §0.0.A/R5 eleve kimondta.
+- Az A1 route-szintű cellái (R3 #3/#4/#5/#8): 5 új `testWidgets` a
+  `gamification_composition_test.dart`-ban — valódi router `pumpWidget` +
+  seedelt store, NEM csak provider-szintű olvasás: achievement-haladás (valós
+  ledger-receipt → `AchievementsScreen.progressByAchievement`),
+  quest-akció-routing (`QuestStartPracticeAction`/`QuestTryLiveAction` →
+  `router.state.uri.path`), streak-reason (`StreakDetailScreen.reason`),
+  inbox-join + B3 regresszió (`RewardInboxScreen.items`, lokalizált
+  `titleKey`).
+
+**m1 (kurzor-őr)** — **ZÁRVA.** `rewardInboxItemsProvider` lapozó ciklusa
+most ugyanazt a nem-haladó-kurzor `StateError`-t dobja, mint
+`AchievementEvaluator._buildReceiptIndex`.
+
+**m2 (fire-and-forget írás)** — **ZÁRVA (a screen-kontraktus keretein
+belül).** A router `onMarkSeen` most `unawaited(...).catchError(...)`-ral
+logol hiba esetén (`appLoggerProvider.error`), és
+`markGamificationInboxItemSeen` új opcionális `onReplaced` paramétere adja
+tovább a `GamificationInboxWriteReport`-ot (a router `trimmedCount > 0`
+esetén logol) — a screen `onMarkSeen` kontraktusa `void` marad (tilos zóna),
+ezért a Future-t továbbra sem lehet a hívó felől awaitolni, de a hiba/riport
+többé nem vész el csendben.
+
+**m3 (mély import)** — **ZÁRVA.** `app_router.dart` 12 mély gamification
+importja (`application/gamification_providers.dart`,
+`domain/achievements/achievement_progress.dart`,
+`domain/profile/reward_inbox_item.dart`,
+`infrastructure/default_achievement_catalog.dart`, 6 screen +
+`presentation/widgets/quest_card.dart`) egyetlen
+`import '../../features/gamification/public.dart';` barrel-importra
+cserélve — ugyanaz a minta, amit a fájl a `library`/`song_trainer`/`vision`
+feature-öknél már használ.
+
+**m4 (nincs invalidálási út)** — **NEM ZÁRVA.** Az akadály változatlan: a
+profil/streak/achievement/inbox providerek mind keepAlive, és az egyetlen
+hely, ahol egy gyakorlás befejezése invalidálná őket, a `practice`/session
+completion flow — az ezen a körön KÍVÜL esik (más feature írási útvonala,
+`allowed_paths`-on kívül). Backlog-tételt nem kapott külön (a review nem
+kérte tételesen); a jövőbeli invalidálási-út kör tudja ezt is felvenni az
+M2-es producer-hiánnyal együtt.
+
+**m5 (`LegacyStreakMigrator` őrizetlen dobás)** — **ZÁRVA.**
+`streakStateProvider` most `try`/`on FormatException catch` blokkban hívja a
+migrátort, hibán logol (`appLoggerProvider.error('gamification.streak
+.legacy_migration_failed', …)`) és az alapértelmezett üres `StreakState`-re
+esik vissza — a hub ÉS a streak-detail képernyő egyaránt védett.
+
+### Futtatott parancsok — fix-kör tényleges kimenete
+
+```
+$ grep -c "TODO(E08-R30)" lib/app/routing/app_router.dart
+0
+$ grep -n "E16-R01" docs/ui/legacy-backlog.md
+193:## 6. E16-R01 gamification composition — dated `TODO(E08-R30)` exclusions
+196:(E16-R01, ADR 0496 §5 / brief §0.0.A/R3). The round wired five of the eight
+204:### 6.1 Legacy streak write-back into the V2 envelope (E16-R01 entry 1)
+222:### 6.2 Streak-recovery purchase flow (E16-R01 entry 2)
+239:### 6.3 Reward-detail route (E16-R01 entry 3)
+255:### 6.4 Quest-board content source (E16-R01 entry 4, fix-round)
+275:### 6.5 Four inexpressible-absence values stay a router-passed zero/empty (E16-R01 entry 5, fix-round)
+300:### 6.6 Real producers for the bekötött reads do not exist yet (E16-R01 entry 6, fix-round)
+```
+
+A §7 gate (mind a hat útvonallal, csonkítatlanul, előtérben futtatva) —
+MINDEN lépés zöld:
+
+```
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/gamification/application/gamification_providers_test.dart zöld
+    test test/app/routing/gamification_composition_test.dart   zöld
+    test test/app/navigation/adaptive_scaffold_test.dart       zöld
+    test test/app/navigation/tab_state_restoration_test.dart   zöld
+    test test/app/navigation/legacy_route_redirect_test.dart   zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.
+```
+
+`gamification_providers_test.dart`: 17/17 zöld (6 új cella: `latestSessionXp`
+hiány-típus, `questBoardProvider` kétszer, titleKey/bodyKey nem angol,
+`onReplaced` riport). `gamification_composition_test.dart`: 19/19 zöld (10 új
+cella az A2-csoportban + backlog-csoport + B1-csoport 2 cellával + A1
+route-szintű csoport 5 cellával).
+
 ## 11. Review — a Claude tölti ki

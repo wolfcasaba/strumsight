@@ -251,3 +251,70 @@ scope beyond this round's composition-only brief (brief §3 — "NINCS benne:
 (SDD, unscheduled).
 
 **Date measured:** 2026-09-03.
+
+### 6.4 Quest-board content source (E16-R01 entry 4, fix-round)
+
+**What:** `AppRoutes.quests` renders an always-empty `QuestsScreen`
+(`dailyChallenge: null`, `dailyChallengeAvailable: false`, `dailyQuests`/
+`weeklyQuests: const []`) — the router source for these came from
+`questBoardProvider` (fix-round review B2), but that provider itself has no
+real quest source to read: it always returns `available: false`.
+
+**Why it wasn't built this round:** quest generation
+(`DailyQuestGenerator`/`WeeklyQuestGenerator`) needs a persisted snapshot
+(`plannedObjectives`, `availableDays`, `baselineWeeklyMinutes`) that does not
+exist anywhere on the tree (§0.0.A/R2) — persisting one is new
+business logic/persistence, out of this composition-only round's scope
+(brief §3).
+
+**Owner:** a future round whose `allowed_paths` covers the quest-snapshot
+persistence and the generator wiring (SDD, unscheduled).
+
+**Date measured:** 2026-09-03 (review), entry added in the fix round.
+
+### 6.5 Four inexpressible-absence values stay a router-passed zero/empty (E16-R01 entry 5, fix-round)
+
+**What:** `activeQuestCountProvider`, `masteryUnlockedCountProvider`,
+`weeklyConsistencyDaysProvider`, and `latestSessionXpProvider` all carry
+their absence in a type (`GamificationDerivedCount`/
+`GamificationDerivedExperience`, `.available == false`), per ADR 0496 §2.
+But `GamificationHubScreen.activeQuestCount`/`.masteryUnlockedCount`,
+`StreakDetailScreen.weeklyConsistencyDays`, and
+`LevelDetailScreen.latestSessionXp` are all required, non-nullable
+parameters with no "unavailable" contract — so the router still passes
+`.value` (`0` / `ExperiencePoints.empty()`) through unconditionally, and the
+user sees the same "0"/"no XP" a bare literal would have shown. The type
+carries the fact; nothing downstream can act on it yet.
+
+**Why it wasn't built this round:** the screens are this round's tilos zona
+(`presentation/screens/**`) — adding an "unavailable" branch to each of the
+four call sites (e.g. an `SsEmptyState` instead of a numeric tile) is a
+screen change, not a composition bekötés.
+
+**Owner:** a future round whose `allowed_paths` covers the four screens
+above, to add an absence-aware branch for each of these parameters (SDD,
+unscheduled).
+
+**Date measured:** 2026-09-03 (review), entry added in the fix round.
+
+### 6.6 Real producers for the bekötött reads do not exist yet (E16-R01 entry 6, fix-round)
+
+**What:** This round's providers read real repository/ledger state
+honestly, but nothing on the tree currently WRITES most of it in production:
+`GamificationRepository.replaceProfileSnapshot(...)`,
+`ActivityEventIngestor(...)`, and `DailyChallengeService(...)` have zero
+call sites in `lib/` outside their own definitions. The green router-level
+tests (`gamification_composition_test.dart`) prove the wiring against a
+seeded test store, not against a live producer — a real device today would
+still show an empty profile/inbox/achievement set because nothing feeds
+these repositories yet.
+
+**Why it wasn't built this round:** wiring a producer (e.g. calling
+`replaceProfileSnapshot` from the practice-session completion flow) reaches
+into other features' write paths, which is both new scope (brief §3 —
+composition-only) and outside this round's `allowed_paths`.
+
+**Owner:** a future round that scopes and wires the practice/session
+completion flow to these gamification write APIs (SDD, unscheduled).
+
+**Date measured:** 2026-09-03 (review), entry added in the fix round.
