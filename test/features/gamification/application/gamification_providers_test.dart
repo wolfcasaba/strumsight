@@ -11,6 +11,7 @@ import 'package:strumsight/core/logging/logger_provider.dart';
 import 'package:strumsight/features/gamification/application/achievement_evaluator.dart';
 import 'package:strumsight/features/gamification/application/gamification_providers.dart';
 import 'package:strumsight/features/gamification/application/streak_service.dart';
+import 'package:strumsight/features/gamification/data/gamification_repository.dart';
 import 'package:strumsight/features/gamification/data/gamification_storage_schema.dart';
 import 'package:strumsight/features/gamification/data/local_reward_ledger_repository.dart';
 import 'package:strumsight/features/gamification/domain/rewards/reward_ledger_entry.dart';
@@ -82,6 +83,42 @@ void main() {
       final count = container.read(weeklyConsistencyDaysProvider);
       expect(count.value, 0);
       expect(count.available, isFalse);
+    });
+
+    // Fix-round review M1: latestSessionXp gets the same type-carried-gap
+    // treatment as the three counts above (a different wrapper class since
+    // the value is an ExperiencePoints breakdown, not a plain int).
+    test('latestSessionXpProvider is unavailable, not a placeholder empty', () {
+      final container = _containerWith({});
+      final derived = container.read(latestSessionXpProvider);
+      expect(derived.value.totalXp, 0);
+      expect(derived.available, isFalse);
+    });
+
+    // Fix-round review B2: the quest board is routed through a provider
+    // (matching the pattern above) instead of a bare literal in the router,
+    // and reading it twice must not re-run a generator (A1's "quest-provider
+    // instabil" cell — there is no generator here, but the contract is that
+    // there never becomes one that runs per-watch without carrying
+    // `available`).
+    test('questBoardProvider is unavailable with empty projections', () {
+      final container = _containerWith({});
+      final board = container.read(questBoardProvider);
+      expect(board.available, isFalse);
+      expect(board.dailyChallenge, isNull);
+      expect(board.dailyChallengeAvailable, isFalse);
+      expect(board.dailyQuests, isEmpty);
+      expect(board.weeklyQuests, isEmpty);
+    });
+
+    test('questBoardProvider is stable across repeated reads', () {
+      final container = _containerWith({});
+      final first = container.read(questBoardProvider);
+      container.invalidate(questBoardProvider);
+      final second = container.read(questBoardProvider);
+      expect(second.available, first.available);
+      expect(second.dailyQuests, equals(first.dailyQuests));
+      expect(second.weeklyQuests, equals(first.weeklyQuests));
     });
   });
 
@@ -261,6 +298,31 @@ void main() {
           expect(items.single.seen, isFalse);
         },
       );
+
+      // Fix-round review B3: this layer must not bake user-facing English
+      // into titleKey/bodyKey (it has no AppLocalizations to resolve a real
+      // string, and inventing one is the bug that was fixed) — the router's
+      // `_localizedRewardInboxItems` is responsible for the real text.
+      test(
+        'titleKey/bodyKey are not baked English — the router localizes them',
+        () {
+          final entry = _rewardEntry('practice-evt-3', totalXp: 12);
+          final container = _containerWith({
+            GamificationStorageKeys.rewardInbox: storedCollection([
+              GamificationInboxItem(
+                id: 'practice-evt-3',
+                createdAt: DateTime.utc(2026, 3, 1),
+              ).toJson(),
+            ]),
+            LocalRewardLedgerRepository.storageKey: _ledgerDocument([entry]),
+          });
+
+          final event = container.read(rewardInboxItemsProvider).single.event;
+
+          expect(event.titleKey, isNot(contains(' ')));
+          expect(event.bodyKey, isNot(contains(' ')));
+        },
+      );
     },
   );
 
@@ -300,6 +362,43 @@ void main() {
 
           expect(container.read(inboxUnseenCountProvider), 0);
           expect(container.read(rewardInboxItemsProvider).single.seen, isTrue);
+        },
+      );
+
+      // Fix-round review m2: the write report (notably `trimmedCount`) was
+      // previously discarded; `onReplaced` gives the caller a way to read it.
+      test(
+        'onReplaced receives the write report instead of it being dropped',
+        () async {
+          final entry = _rewardEntry('practice-evt-4', totalXp: 5);
+          final store = InMemoryKeyValueStore({
+            GamificationStorageKeys.rewardInbox: storedCollection([
+              GamificationInboxItem(
+                id: 'practice-evt-4',
+                createdAt: DateTime.utc(2026, 3, 3),
+              ).toJson(),
+            ]),
+            LocalRewardLedgerRepository.storageKey: _ledgerDocument([entry]),
+          });
+          final container = ProviderContainer(
+            overrides: [
+              preferenceStoreOverride(store),
+              appLoggerProvider.overrideWithValue(const NoopAppLogger()),
+            ],
+          );
+          addTearDown(container.dispose);
+
+          GamificationInboxWriteReport? received;
+          await markGamificationInboxItemSeen(
+            current: container.read(gamificationInboxProvider),
+            repository: container.read(gamificationRepositoryProvider),
+            id: 'practice-evt-4',
+            onWritten: () => container.invalidate(gamificationInboxProvider),
+            onReplaced: (report) => received = report,
+          );
+
+          expect(received, isNotNull);
+          expect(received!.trimmedCount, 0);
         },
       );
     },
