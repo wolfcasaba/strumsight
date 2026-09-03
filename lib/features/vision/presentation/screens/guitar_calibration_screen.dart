@@ -287,8 +287,13 @@ class _Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    // A3 (§0.0/R5): at 1.5/2.0 textScale three side-by-side buttons overflow
+    // a phone-width Row — Wrap lets the third button drop to its own line
+    // instead, same buttons, same order, no clipped content.
+    return Wrap(
+      alignment: WrapAlignment.spaceEvenly,
+      spacing: SsSpacing.space2,
+      runSpacing: SsSpacing.space2,
       children: [
         SsButton(
           key: const Key('guitar-calibration-reset-button'),

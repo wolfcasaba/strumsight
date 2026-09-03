@@ -13,6 +13,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/camera/camera_coordinate_space.dart';
+import 'package:strumsight/core/design_system/components/actions/ss_button.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/storage/json_document_store.dart';
@@ -96,6 +97,52 @@ Future<ProviderContainer> _pumpHarness(
   );
   await tester.pumpAndSettle();
   return container;
+}
+
+/// A3 (§6/§0.0/R5) variant pump: same harness, plus a controllable locale
+/// and textScale so the migrated screen's overflow behaviour can be
+/// measured at the required threshold pair.
+Future<void> _pumpVariant(
+  WidgetTester tester, {
+  required VisionCalibrationRepository repository,
+  required GuitarCalibrationContext context,
+  required double textScale,
+  required Locale locale,
+}) async {
+  tester.view.physicalSize = const Size(412, 915);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  final container = ProviderContainer(
+    overrides: [
+      visionCalibrationRepositoryProvider.overrideWithValue(repository),
+      guitarCalibrationRuntimeContextProvider.overrideWithValue(context),
+    ],
+  );
+  addTearDown(container.dispose);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: SsLightTheme.data(),
+        locale: locale,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('en'), Locale('hu')],
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+        home: const GuitarCalibrationScreen(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -258,4 +305,38 @@ void main() {
       expect(state.bridgeAnchor.x, lessThan(0.6));
     },
   );
+
+  // A3 (§6/§0.0/R5) — the migrated screen must not overflow at the required
+  // 1.5/2.0 textScale threshold pair, in both `en` and `hu`.
+  group('A3 — textScale variant matrix (1.5 / 2.0 × en / hu)', () {
+    for (final textScale in [1.5, 2.0]) {
+      for (final locale in [const Locale('en'), const Locale('hu')]) {
+        testWidgets('renders without overflow at $textScale ($locale)', (
+          tester,
+        ) async {
+          await _pumpVariant(
+            tester,
+            repository: _emptyRepo(),
+            context: _context(),
+            textScale: textScale,
+            locale: locale,
+          );
+
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+
+    testWidgets('uses the design-system SsButton toolbar', (tester) async {
+      await _pumpVariant(
+        tester,
+        repository: _emptyRepo(),
+        context: _context(),
+        textScale: 1.0,
+        locale: const Locale('en'),
+      );
+
+      expect(find.byType(SsButton), findsWidgets);
+    });
+  });
 }

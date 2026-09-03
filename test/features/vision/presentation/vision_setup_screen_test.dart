@@ -10,6 +10,7 @@ import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/camera/camera_permission.dart';
 import 'package:strumsight/core/camera/camera_providers.dart';
 import 'package:strumsight/core/camera/camera_session_coordinator.dart';
+import 'package:strumsight/core/design_system/components/actions/ss_button.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
@@ -255,6 +256,75 @@ void main() {
       _containsRoute(setupDisabled.read(routerProvider).configuration.routes),
       isFalse,
     );
+  });
+
+  // A3 (§6/§0.0/R5) — the migrated screen must not overflow at the required
+  // 1.5/2.0 textScale threshold pair, in both `en` and `hu`.
+  group('A3 — textScale variant matrix (1.5 / 2.0 × en / hu)', () {
+    Future<void> pumpVariant(
+      WidgetTester tester,
+      ProviderContainer container, {
+      required double textScale,
+      required Locale locale,
+    }) async {
+      tester.view.physicalSize = const Size(412, 915);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(textScale)),
+              child: child!,
+            ),
+            home: const Scaffold(body: VisionSetupScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    for (final textScale in [1.5, 2.0]) {
+      for (final locale in [const Locale('en'), const Locale('hu')]) {
+        testWidgets(
+          'renders the profile step without overflow at $textScale ($locale)',
+          (tester) async {
+            final container = _setupContainer(visionEnabled: true);
+            addTearDown(container.dispose);
+            await pumpVariant(
+              tester,
+              container,
+              textScale: textScale,
+              locale: locale,
+            );
+
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+
+    testWidgets('the profile step uses the design-system SsButton', (
+      tester,
+    ) async {
+      final container = _setupContainer(visionEnabled: true);
+      addTearDown(container.dispose);
+      await pumpVariant(
+        tester,
+        container,
+        textScale: 1.0,
+        locale: const Locale('en'),
+      );
+
+      expect(find.byType(SsButton), findsWidgets);
+    });
   });
 }
 
