@@ -935,7 +935,12 @@ run_tmux_session() {
   # (ADR 0497 D2): rövidebb küszöb és nagyobb ébresztés-keret, mert egy külső
   # kimaradás ismétlődhet.
   overload_seconds=${PIPELINE_ORCH_OVERLOAD_SECONDS:-120}
-  overload_budget=${PIPELINE_ORCH_OVERLOAD_NUDGES:-4}
+  # A keret AZÉRT bőkezű, mert egy 529-ébresztés NEM arról szól, hogy a session
+  # elakadt — az API van lenn. MÉRVE 2026-09-03 13:55: a 13:47-es ébresztés után
+  # mindkét kör ÚJRA 529-et kapott, alig 3 perc 40 mp munka után. Egy szűk keret
+  # ilyenkor pont a kimaradás közepén ölné meg a kört, a MÁR ELVÉGZETT turn-munkával
+  # együtt (az E15-R12 egyszer már 1 óra 22 percet vesztett így).
+  overload_budget=${PIPELINE_ORCH_OVERLOAD_NUDGES:-12}
   while [ ! -f "$signal_file" ]; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
       log "időkorlát lejárt ($label) — a tmux-sessiont leállítjuk"

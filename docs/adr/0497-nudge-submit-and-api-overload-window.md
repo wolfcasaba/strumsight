@@ -53,7 +53,7 @@ váljon kapcsolóvá.
 utolsó `PIPELINE_ORCH_OVERLOAD_TAIL_BYTES` (alap: 4000) bájtja illeszkedik az
 `API Error: 529|529 Overloaded` mintára, az ébresztés küszöbe
 `PIPELINE_ORCH_OVERLOAD_SECONDS` (alap: 120 s) a 20 perc helyett, és az
-ébresztés-keret `PIPELINE_ORCH_OVERLOAD_NUDGES` (alap: 4), mert egy külső
+ébresztés-keret `PIPELINE_ORCH_OVERLOAD_NUDGES` (alap: 12), mert egy külső
 kimaradás ismétlődhet. A terminális ág (`break`) VÁLTOZATLAN: a keret
 kimerülése után a session továbbra is leáll.
 
