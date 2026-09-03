@@ -381,6 +381,54 @@ void main() {
       });
     }
   });
+
+  group('M5 — phone viewport (360x640), textScaler 1.5/2.0/2.5, en+hu', () {
+    for (final scale in <double>[1.5, 2.0, 2.5]) {
+      for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+        testWidgets(
+          '$scale / ${locale.languageCode} — list state, no overflow',
+          (tester) async {
+            tester.view.physicalSize = const Size(360, 640);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+
+            await _pumpAchievements(
+              tester,
+              definitions: definitions,
+              progress: progress(),
+              locale: locale,
+              textScale: scale,
+            );
+
+            expect(find.byType(ListView), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+
+        testWidgets(
+          '$scale / ${locale.languageCode} — empty state, no overflow',
+          (tester) async {
+            tester.view.physicalSize = const Size(360, 640);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+
+            await _pumpAchievements(
+              tester,
+              definitions: const <AchievementDefinition>[],
+              progress: const <String, AchievementProgress>{},
+              locale: locale,
+              textScale: scale,
+            );
+
+            final emptyIcon = find.byIcon(Icons.emoji_events_outlined);
+            await tester.scrollUntilVisible(emptyIcon, 200);
+            expect(emptyIcon, findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  });
 }
 
 Future<void> _scrollUntilText(WidgetTester tester, String text) =>
@@ -432,9 +480,11 @@ Future<void> _pumpAchievements(
   required List<AchievementDefinition> definitions,
   required Map<String, AchievementProgress> progress,
   double textScale = 1,
+  Locale locale = const Locale('en'),
   ValueChanged<String> onAchievementSelected = _ignoreAchievementSelection,
 }) => tester.pumpWidget(
   MaterialApp(
+    locale: locale,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: MediaQuery(
