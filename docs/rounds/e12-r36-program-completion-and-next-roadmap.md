@@ -368,4 +368,44 @@ kellett igazolni, nem újraírni — az egyetlen új munka az őr-teszt és a
 kör közötti rés (R20–R42 briefjei meg sem íródtak) a program legnagyobb,
 még meg sem tervezett hátraléka — ezt a roadmap 5. tétele nevesíti.
 
+**fix1 (javító kör, MAJOR-1 + MINOR-1, `docs/reviews/e12-r36-review.md`):**
+
+- **MAJOR-1 javítva** — az őr eddig csak a riportban JELEN LÉVŐ sorokat
+  ellenőrizte; egy teljesen kihagyott nyitott sáv vagy emberi kapu minden
+  cellán zöld maradt (a reviewer PROBE1–PROBE3 mérése). Két új
+  lefedettség-ellenőrzés `test/tooling/program_completion_test.dart`-ban,
+  ugyanazzal a tartalom-paraméteres tiszta függvény + RED-bizonyító cella
+  mintával:
+  - `findLanesMissingFromMatrix(queueCounts, rows)` — a `parseQueueCounts`
+    minden queue-előtagjának legyen sora a completion matrixban (a `—`
+    Ch1-előtag sosem lehet queue-kulcs, nincs szükség kivételre). RED-cella:
+    szintetikus `E15` queue-előtag, aminek nincs sora a szintetikus
+    riportban → piros; a valódi fán zöld (mind a 15 előtag — E01–E16, E99 —
+    kap sort).
+  - `findMissingHumanGates(expectedGateRefs, rows)` a `parseHumanGateRows`
+    (a korábbi `findHumanGatesMarkedDone` belső parseréből kiemelve, a
+    viselkedése változatlan) fölött — a hét `E12-R27`…`E12-R33` és a valódi
+    gitáros APK-teszt sora mind jelen van-e a §5 táblában
+    (`humanGateCoverageExpectedRefs`, 8 elem). Két RED-cella (egy kör-sor
+    törölve, ill. a névtelen APK-teszt sor törölve) → mindkettő piros; a
+    valódi fán zöld.
+  - Mindkét új cella az ÚJ `the real tree (...)` csoportban is fut a valódi
+    `pipeline-queue.tsv` / `program-completion-report.md` ellen — zöld,
+    tehát a MAI riport lefedettsége teljes; a MÁJOR a regresszió elleni őr
+    hiányát javította, nem egy tartalmi hibát.
+- **MINOR-1 javítva ((b) ág)** — `parseEvidencePaths` doc-commentje eddig
+  azt állította, hogy a bulleteket "a riport evidence-sources
+  szakaszából" gyűjti; a mintázat valójában a TELJES dokumentumon fut,
+  szakasz-határ nélkül. A doc-comment pontosítva arra, amit a függvény
+  ténylegesen tesz (a §7 lista egyezése ma a prózaszerkezet
+  mellékterméke, nem invariáns) — kódváltozás nem történt.
+- **Gate (fix1, MÉRT):** `tools/round-gate.sh
+  test/tooling/program_completion_test.dart
+  test/tooling/sdd_index_guard_test.dart` → mind a 7 lépés zöld; a célfájl
+  cellaszáma 20 → 27 (7 új: 2 RED + 1 zöld-kontroll lane-coverage-höz, 3
+  RED/zöld-kontroll human-gate-coverage-hez, 2 új valódi-fa cella).
+- Nem nyúltam a riport/roadmap TARTALMÁHOZ, a `docs/reviews/e12-r36-review.md`
+  fájlhoz, sem a §4 engedélyezett listán kívüli más fájlhoz (`NOTE-1`-t
+  szándékosan nem érintettem — opcionális, a brief §4 szerint nem blokkol).
+
 ## 11. Review — a Claude tölti ki

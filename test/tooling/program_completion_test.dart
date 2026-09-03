@@ -150,6 +150,25 @@ List<String> compareMatrixToQueue(
   return issues;
 }
 
+/// A1-coverage — flags every queue prefix present in [queueCounts] that has
+/// no row at all in the completion matrix (a lane the report silently
+/// omits, rather than a lane it mismeasures — [compareMatrixToQueue] only
+/// ever looks at rows that exist). [rows] is the parsed matrix.
+/// `parseQueueCounts` never produces a `—` key (its data-line pattern
+/// requires `E\d+`), so the Chapter-1 exception in [compareMatrixToQueue]
+/// needs no counterpart here.
+List<String> findLanesMissingFromMatrix(
+  Map<String, Map<String, int>> queueCounts,
+  List<CompletionMatrixRow> rows,
+) {
+  final reportedPrefixes = rows.map((row) => row.queuePrefix).toSet();
+  return [
+    for (final prefix in queueCounts.keys)
+      if (!reportedPrefixes.contains(prefix))
+        'queue prefix "$prefix" has no row in the completion matrix',
+  ];
+}
+
 final _wordSplitPattern = RegExp(r'[^\p{L}]+', unicode: true);
 
 Set<String> _lowercaseWords(String text) => text
@@ -186,8 +205,11 @@ List<String> findOpenLaneMarkedClosed(List<CompletionMatrixRow> rows) {
 
 final _evidenceBulletPattern = RegExp(r'^-\s*`([^`]+)`', multiLine: true);
 
-/// Extracts every `- \`path\`` bullet from a report's evidence-sources
-/// section (repo-relative paths only).
+/// Extracts every `- \`path\`` bullet anywhere in [markdown] (no
+/// section-boundary check). In today's report this happens to return
+/// exactly the §7 evidence-sources list, because no bullet elsewhere in
+/// the document starts with a backtick — that is a property of the current
+/// prose, not an invariant this function enforces.
 List<String> parseEvidencePaths(String markdown) => [
   for (final match in _evidenceBulletPattern.allMatches(markdown))
     match.group(1)!,
@@ -206,10 +228,21 @@ List<String> findMissingEvidence(
 // docs/sdd/program-completion-report.md §5 human gates table
 // ---------------------------------------------------------------------
 
-/// A5 — parses the "Emberi kapu | Kör-hivatkozás | Állapot" table and flags
-/// every row whose Állapot cell is not exactly `NYITOTT` — a human gate the
-/// report claims as done.
-List<String> findHumanGatesMarkedDone(String markdown) {
+final class HumanGateRow {
+  const HumanGateRow({
+    required this.gate,
+    required this.roundRef,
+    required this.state,
+  });
+
+  final String gate;
+  final String roundRef;
+  final String state;
+}
+
+/// Parses the "Emberi kapu | Kör-hivatkozás | Állapot" table out of a
+/// `program-completion-report.md`-shaped [markdown].
+List<HumanGateRow> parseHumanGateRows(String markdown) {
   final lines = markdown.split('\n');
   final headerIndex = lines.indexWhere(
     (line) => line.trim().startsWith('| Emberi kapu |'),
@@ -219,7 +252,7 @@ List<String> findHumanGatesMarkedDone(String markdown) {
       'program-completion-report.md: no "| Emberi kapu |" table header found',
     );
   }
-  final issues = <String>[];
+  final rows = <HumanGateRow>[];
   for (var i = headerIndex + 2; i < lines.length; i++) {
     final line = lines[i];
     if (!line.trim().startsWith('|')) break;
@@ -230,14 +263,51 @@ List<String> findHumanGatesMarkedDone(String markdown) {
         '${cells.length} cell(s), expected 3: "$line"',
       );
     }
-    final gate = cells[0];
-    final state = cells[2];
-    if (state != 'NYITOTT') {
-      issues.add('human gate "$gate" has Állapot="$state", expected NYITOTT');
-    }
+    rows.add(HumanGateRow(gate: cells[0], roundRef: cells[1], state: cells[2]));
   }
-  return issues;
+  return rows;
 }
+
+/// A5 — flags every row whose Állapot cell is not exactly `NYITOTT` — a
+/// human gate the report claims as done.
+List<String> findHumanGatesMarkedDone(String markdown) => [
+  for (final row in parseHumanGateRows(markdown))
+    if (row.state != 'NYITOTT')
+      'human gate "${row.gate}" has Állapot="${row.state}", expected NYITOTT',
+];
+
+/// A5-coverage — flags every entry in [expectedGateRefs] with no matching
+/// row in [rows]: a human gate the table omits entirely, rather than
+/// mislabels (which [findHumanGatesMarkedDone] already catches). A ref
+/// matches a row when it equals the row's Kör-hivatkozás cell (e.g.
+/// `E12-R27`) or appears as a substring of the row's Emberi kapu cell — the
+/// real-guitar-APK-test row carries no round reference, so it can only be
+/// matched by its gate-name text.
+List<String> findMissingHumanGates(
+  List<String> expectedGateRefs,
+  List<HumanGateRow> rows,
+) => [
+  for (final expected in expectedGateRefs)
+    if (!rows.any(
+      (row) => row.roundRef == expected || row.gate.contains(expected),
+    ))
+      'expected human gate "$expected" has no row in the table',
+];
+
+/// The eight human gates the round brief §5.3 requires this program's §5
+/// table to always list: the seven `E12-R27`…`E12-R33` round references,
+/// plus the real guitar APK test, which carries no round reference and is
+/// matched by name instead.
+const humanGateCoverageExpectedRefs = [
+  'E12-R27',
+  'E12-R28',
+  'E12-R29',
+  'E12-R30',
+  'E12-R31',
+  'E12-R32',
+  'E12-R33',
+  'gitáros APK-teszt',
+];
 
 // ---------------------------------------------------------------------
 // docs/roadmap/next-six-months.md — outcome-based roadmap items
@@ -383,6 +453,43 @@ E10-R02\tdocs/rounds/b.md\tcodex\t0002\thold
     });
   });
 
+  group('lane-coverage — a queue prefix silently missing from the matrix '
+      '(RED-proving)', () {
+    test('a queue prefix with no matching matrix row at all is flagged, even '
+        'though compareMatrixToQueue sees no mismatch (there is no row to '
+        'mismeasure)', () {
+      const queueTsv = '''
+E15-R01\tdocs/rounds/a.md\tcodex\t0001\tpending
+E15-R02\tdocs/rounds/b.md\tcodex\t0002\tpending
+''';
+      const reportMarkdown = '''
+| Sáv | Fejezet / cím | Queue-előtag | done | pending | prepared | hold | Riport-státusz | Bizonyíték |
+|---|---|---|---:|---:|---:|---:|---|---|
+| Ch11 | Epic 10: Offline AI | E10 | 0 | 0 | 0 | 0 | lezárva | — |
+''';
+      final rows = parseCompletionMatrix(reportMarkdown);
+      final queueCounts = parseQueueCounts(queueTsv);
+      expect(compareMatrixToQueue(rows, queueCounts), isEmpty);
+      final issues = findLanesMissingFromMatrix(queueCounts, rows);
+      expect(issues, isNotEmpty);
+      expect(issues.single, contains('E15'));
+    });
+
+    test('every queue prefix having a matrix row produces no issue', () {
+      const queueTsv = '''
+E10-R01\tdocs/rounds/a.md\tcodex\t0001\thold
+''';
+      const reportMarkdown = '''
+| Sáv | Fejezet / cím | Queue-előtag | done | pending | prepared | hold | Riport-státusz | Bizonyíték |
+|---|---|---|---:|---:|---:|---:|---|---|
+| Ch11 | Epic 10: Offline AI | E10 | 0 | 0 | 0 | 1 | nyitva | — |
+''';
+      final rows = parseCompletionMatrix(reportMarkdown);
+      final queueCounts = parseQueueCounts(queueTsv);
+      expect(findLanesMissingFromMatrix(queueCounts, rows), isEmpty);
+    });
+  });
+
   group('A2 — an open lane marked closed (RED-proving)', () {
     test('a hold-on lane reported as "kész" is flagged', () {
       const reportMarkdown = '''
@@ -520,6 +627,68 @@ E10-R02\tdocs/rounds/b.md\tcodex\t0002\thold
     });
   });
 
+  group('human-gate-coverage — a gate row silently missing from the table '
+      '(RED-proving)', () {
+    test('deleting one of the seven E12-R27…E12-R33 rows is flagged, even '
+        'though the remaining rows are all honestly NYITOTT', () {
+      const markdown = '''
+| Emberi kapu | Kör-hivatkozás | Állapot |
+|---|---|---|
+| Zárt béta valós elindítása | E12-R27 | NYITOTT |
+| Nyílt béta + canary cohort valós aktiválása | E12-R29 | NYITOTT |
+| Feature-freeze utáni végső regresszió valós elfogadása | E12-R30 | NYITOTT |
+| Produkciós deploy + belső kohort valós művelete | E12-R31 | NYITOTT |
+| Szakaszos rollout 1→20% valós művelete | E12-R32 | NYITOTT |
+| Szakaszos rollout 50→100% + GA valós művelete | E12-R33 | NYITOTT |
+| Valódi gitáros APK-teszt (a végső acceptance predikátum) | — | NYITOTT |
+''';
+      final rows = parseHumanGateRows(markdown);
+      expect(findHumanGatesMarkedDone(markdown), isEmpty);
+      final issues = findMissingHumanGates(humanGateCoverageExpectedRefs, rows);
+      expect(issues, isNotEmpty);
+      expect(issues.single, contains('E12-R28'));
+    });
+
+    test('deleting the real-guitar-APK-test row (no round reference) is '
+        'flagged too', () {
+      const markdown = '''
+| Emberi kapu | Kör-hivatkozás | Állapot |
+|---|---|---|
+| Zárt béta valós elindítása | E12-R27 | NYITOTT |
+| Béta stabilizáció valós felhasználói visszajelzés alapján | E12-R28 | NYITOTT |
+| Nyílt béta + canary cohort valós aktiválása | E12-R29 | NYITOTT |
+| Feature-freeze utáni végső regresszió valós elfogadása | E12-R30 | NYITOTT |
+| Produkciós deploy + belső kohort valós művelete | E12-R31 | NYITOTT |
+| Szakaszos rollout 1→20% valós művelete | E12-R32 | NYITOTT |
+| Szakaszos rollout 50→100% + GA valós művelete | E12-R33 | NYITOTT |
+''';
+      final rows = parseHumanGateRows(markdown);
+      final issues = findMissingHumanGates(humanGateCoverageExpectedRefs, rows);
+      expect(issues, isNotEmpty);
+      expect(issues.single, contains('gitáros APK-teszt'));
+    });
+
+    test('all eight expected gates present produces no issue', () {
+      const markdown = '''
+| Emberi kapu | Kör-hivatkozás | Állapot |
+|---|---|---|
+| Zárt béta valós elindítása | E12-R27 | NYITOTT |
+| Béta stabilizáció valós felhasználói visszajelzés alapján | E12-R28 | NYITOTT |
+| Nyílt béta + canary cohort valós aktiválása | E12-R29 | NYITOTT |
+| Feature-freeze utáni végső regresszió valós elfogadása | E12-R30 | NYITOTT |
+| Produkciós deploy + belső kohort valós művelete | E12-R31 | NYITOTT |
+| Szakaszos rollout 1→20% valós művelete | E12-R32 | NYITOTT |
+| Szakaszos rollout 50→100% + GA valós művelete | E12-R33 | NYITOTT |
+| Valódi gitáros APK-teszt (a végső acceptance predikátum) | — | NYITOTT |
+''';
+      final rows = parseHumanGateRows(markdown);
+      expect(
+        findMissingHumanGates(humanGateCoverageExpectedRefs, rows),
+        isEmpty,
+      );
+    });
+  });
+
   // ---------------------------------------------------------------------
   // The real, checked-in tree — same functions, real files
   // ---------------------------------------------------------------------
@@ -548,6 +717,18 @@ E10-R02\tdocs/rounds/b.md\tcodex\t0002\thold
       expect(issues, isEmpty, reason: issues.join('\n'));
     });
 
+    test(
+      'lane-coverage — every queue prefix has a row in the completion matrix',
+      () {
+        final rows = parseCompletionMatrix(reportMarkdown);
+        final issues = findLanesMissingFromMatrix(
+          parseQueueCounts(queueTsv),
+          rows,
+        );
+        expect(issues, isEmpty, reason: issues.join('\n'));
+      },
+    );
+
     test('A2 — no open lane is marked closed', () {
       final rows = parseCompletionMatrix(reportMarkdown);
       final issues = findOpenLaneMarkedClosed(rows);
@@ -575,6 +756,12 @@ E10-R02\tdocs/rounds/b.md\tcodex\t0002\thold
 
     test('A5 — every human gate is explicitly NYITOTT', () {
       final issues = findHumanGatesMarkedDone(reportMarkdown);
+      expect(issues, isEmpty, reason: issues.join('\n'));
+    });
+
+    test('human-gate-coverage — all eight expected gates have a row in §5', () {
+      final rows = parseHumanGateRows(reportMarkdown);
+      final issues = findMissingHumanGates(humanGateCoverageExpectedRefs, rows);
       expect(issues, isEmpty, reason: issues.join('\n'));
     });
 
