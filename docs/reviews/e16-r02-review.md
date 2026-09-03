@@ -425,3 +425,64 @@ S11-ágának ugyanaz a fixture-kötés a helyes javítása, mint amit a `#557` a
 A kör terméke változatlanul kész és mérve jó (A1–A12 ✅, célzott kapu 21/21
 zöld, Router CI zöld, scope-audit 0 sértés). A merge-et EGYETLEN, a kör tilos
 zónájában élő, az élő fát mérő doc-konzisztencia-őr blokkolja.
+
+---
+
+## 9. Második upstream-szinkron (`7abd604c`) — a §8.1 H3 blokkoló FELOLDVA
+
+A `#559` self-heal (`d6519b1a`, „Dátumozott jelentést ne az ÉLŐ fából mért szám
+őrizzen") merge-elve a `main`-re. Ez a kör-ág `7abd604c`-ben beépíti
+(`git merge --no-ff origin/main`, **konfliktus nélkül**,
+`git diff --check` üres, `merge-base --is-ancestor origin/main HEAD` → 0).
+
+A heal pontosan a §8.1-ben MÉRT gyökérokot javítja: az `A5` guard a
+completion-report számait többé nem az ÉLŐ fából méri újra, hanem a jelentés
+SAJÁT bázisán rögzített pillanatképből
+(`test/fixtures/ui/e15_r13_completion_report_baseline.json`), az élő fa őre
+pedig az `A1` completeness-group marad, amely a jogos növekedést túléli.
+
+### 9.1 Mérések a `7abd604c` HEAD-en
+
+| Mérés | Eredmény |
+|---|---|
+| `flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart --plain-name "A5 — completion-report guard"` (a §8.1 blokkoló cellája) | **`00:00 +6: All tests passed!`** (korábban piros) |
+| `flutter test … --plain-name "A1 — completeness"` (az élő fát mérő őr, +2 elérhető képernyővel) | **`00:00 +5: All tests passed!`** |
+| `tools/round-gate.sh` a §7 teljes 16 útvonalával | **21/21 ZÖLD** (format, analyze, 16 teszt, architecture, secrets, l10n) |
+| `python3 -m pytest tools/tests -q` | **908 passed, 3 skipped** (benne a heal új `test_dated_report_guards.py`-ja) |
+| `python3 tools/brief-lint.py --brief <ez a brief> --level base` | nincs lelet |
+| `tools/round-ci-plan.py` | `dispatch: full-gate.yml`, `router_ci_expected: true` |
+| **Router CI** (`router-ci.yml`, run `33815342626`) a `7abd604c` SHA-n | **success** |
+| **Full Gate** (`full-gate.yml`, run `33815358429`) a `7abd604c` SHA-n | **success** |
+
+A `full-gate` zöldje egyúttal a §5.1 flaky import-fészkét is átvitte
+(`song_import_controller_test.dart`, `import_flow_test.dart` — mindkettő zöld).
+A fészek stabilitása ettől nincs bizonyítva, de a kör terméke MÉRVE nem érinti:
+`git diff --name-only origin/main...HEAD | grep -iE "songs/|song_trainer|import"`
+→ üres.
+
+### 9.2 Scope-audit a kör SAJÁT diffjén
+
+`python3 tools/scope-audit.py --repo . --brief <ez a brief> --base origin/main`
+→ 24 változott útvonal, egyetlen jelentett eltérés:
+`docs/adr/0500-progress-v2-projection-source-and-route-activation.md`.
+
+Ez **NEM sértés**: az ADR-t a brief §3 kimondottan kiveszi az implementer
+scope-jából („`docs/adr/**` — az ADR **0500**-at a Claude írja"), tehát az
+orchestrátor saját artefaktuma — ugyanaz az ismert, hamis-H3 osztály, mint a
+`docs/reviews/**` saját-jelentésé (`docs/LESSONS.md` L251). A maradék 23
+útvonal mind az `allowed_paths` listán van.
+
+### 9.3 A H5 piros-CI számláló
+
+A körön három korábbi piros Full Gate futás volt (`33796054904`,
+`33798888247`, `33808412804`). Az ADR 0112 önjavító körei mindkét MÉRT
+gyökérokot javították és merge-elték (`#557` → a route-szintű őrök, `#559` → a
+dátumozott jelentés élő-fás mérése), ezért a H5 pontosítása szerint a számláló
+**nulláról indul**; a `33815358429` az így számolt ELSŐ futás — és **zöld**.
+A zöld kapu mércéje változatlan: minden gate + a teljes CI-suite + a
+randomizált property + a Router CI a merge SHA-n zöld.
+
+## VÉGSŐ DÖNTÉS (frissítve, `7abd604c`): **APPROVED**
+
+Nyitott BLOCKER/MAJOR/MINOR: **nincs**. A §6 hat NOTE-ja továbbra is nyitva
+marad, egyik sem blokkoló, és a §10 handoff továbbadja őket.
