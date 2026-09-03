@@ -350,4 +350,248 @@ tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Komponens-térkép képernyőnként
+
+**`vision_setup_screen.dart`** — barrel import (`core/design_system/public.dart`).
+`_PrivacyNotice` Container→`SsCard` (title/body `SsTypography`/`SsColorScheme`
+színezve). `_ProfileStep`/`_CameraStep`/`_PermissionStep`/`_ReadyStep`/
+`_AudioOnlyStep` mind `SsSection(title: ..., child: ...)`-ba kerültek (a
+korábbi kézi "Text(headlineSmall) + SizedBox" mintát váltva). A lépések
+"Continue" `FilledButton`-jai → `SsButton` (primary). Minden nyers
+`SizedBox(height: N)` → `SsSpacing.spaceN` token. A `CameraPermissionPanel`
+(külön widget-fájl, NEM ezen kör allowed_paths-án) változatlanul hívva —
+az engedély-elutasítás VALÓDI rajzolása ott történik, nem ebben a fájlban.
+Az AppBar "Skip" `TextButton`-ja SZÁNDÉKOSAN maradt nyers: a meglévő
+`ConstrainedBox(maxWidth: 120)` + `maxLines: 2` kombináció egy már bevizsgált
+A9-defenzíva nagy szövegskálára — az `SsButton` egysoros `Flexible+ellipsis`
+mintája ezt a védelmet elvenné.
+
+**`vision_session_screen.dart`** — barrel import. Preview-háttér
+`DecoratedBox` színe `colors.surfaceSunken`-re token-esítve. A státusz-szöveg
+`SsTypography.bodyLarge`-ot kap, és `colors.danger`-re vált
+engedély-elutasítás/eszköz-hiba/inferencia-hiba állapotoknál (üzenet
+VÁLTOZATLAN, csak a szín jelez súlyosságot). `SwitchListTile` →
+`SsSwitchRow` (ugyanaz a kulcs, érték, callback, felirat). `_ThermalBanner`
+Container-je `colors.warning`-alapú háttérre/keretre vált (korábban
+`tertiaryContainer`). A `_SessionActions` mind a 8 `FilledButton`/
+`OutlinedButton`-ja → `SsButton` (primary/secondary), a `Wrap` spacingja
+`SsSpacing.space2`. **NEM vezettem be `SsPermissionState`-et** a
+permission-denied/permanently-denied állapotokra (§0.0/R1 irányelve ide
+mutatna) — indoklás a §10.3-ban.
+
+**`guitar_calibration_screen.dart`** — barrel import. `_QualityScorePanel`
+Container→`SsCard`. `_Toolbar` 3 gombja (`TextButton`×2 + `FilledButton`) →
+`SsButton` (tertiary/primary/tertiary); a `Row(spaceEvenly)` →
+`Wrap(alignment: spaceEvenly)`, mert az ÚJ A3 cellák 1.5-ös textScale-en
+118px túlcsordulást mértek a 3 egymás melletti gombbal — ez a kör SAJÁT
+mérési eredménye, nem előre feltételezett hiba (lásd §10.2). `_EntryBanner`
+Container-je `colors.danger`-alapú háttérre/keretre vált (korábban
+`errorContainer`), a szöveg és az `Icons.warning_amber` ikon is
+`colors.danger`-t kap. A precíziós zoom `IconButton` (`Icons.zoom_in`/
+`zoom_out`) SZÁNDÉKOSAN maradt nyers — az `SsIcon` katalógusban nincs
+`zoom_in`/`zoom_out` név (csak play/pause/settings/close/check/info + 14
+gitár-glifa, mérve `ss_icons.dart`), egy nem-katalogizált név a látható
+"hiányzó glifa" fallbackra váltana (ugyanaz a kivétel-osztály, mint az
+E15-R09 handoff ikon-megjegyzése). Az `AlertDialog` reset/recalibrate
+megerősítő gombjai (`TextButton`/`FilledButton`) SZÁNDÉKOSAN maradtak
+nyersek — a `destructive` `SsButton`-variánshoz kötelező
+`destructiveSemanticHint` szöveg nincs meglévő ARB-kulcsban, és ez a kör
+nem vehet fel új ARB-kulcsot (lásd §10.3).
+
+**`onboarding_screen.dart`** — barrel import, `core/theme/app_colors.dart`
+import törölve (minden `AppColors.*` hivatkozás `SsColorScheme`-re
+cserélve). "Skip"/"Enable mic & start" `TextButton` → `SsButton` (tertiary).
+A fő CTA (`Next`/`Try your first win`) `FilledButton` → `SsButton` (primary,
+`SizedBox(width: double.infinity)`-be csomagolva — a korábbi
+`minimumSize: Size.fromHeight(54)` stílus nem írható át `SsButton`-on,
+így a gomb magassága a design-rendszer `SsSemantics.minimumInteractiveDimension`
+(48dp) alapértékére vált, ami VIZUÁLIS, nem viselkedésbeli változás).
+`_Page` nyíl-ikonjai és a `_Dots` pöttyei `colors.brand`/`colors.confidenceHigh`
+tokent kapnak `AppColors` helyett. A carousel cím
+(`fontFamily: 'Montserrat', w800, 26px`) SZÁNDÉKOSAN maradt egyedi stílus —
+ez egy márka-specifikus hero-felirat, nem térkép a design-rendszer
+`SsTypography` skálájára (a legközelebbi `headlineMedium` Poppins/w700,
+vizuálisan más karakterű lenne egy meglévő golden nélküli indoklás nélkül).
+
+**`followers_screen.dart`** — barrel import. `_FollowerTile` teljes sora
+`SsCard`-ba került (avatár + név/handle + 2 ikon-gomb megmaradt, mert az
+`SsContentCard` NEM támogat egyedi avatár-widgetet — annak használata
+információvesztés lenne). Név/handle szövegek `SsTypography`/`SsColorScheme`
+tokent kapnak. A mute/block `IconButton`-ok SZÁNDÉKOSAN maradtak nyersek —
+`volume_off`/`block` NINCS az `SsIcon` katalógusban (ugyanaz a kivétel-osztály,
+mint fent), csak a színük lett token-esítve (`colors.textSecondary`/
+`colors.danger`). Az üres állapot (`'No one here yet.'`) és a footer-spinner
+képernyő-lokális, token-stílusú maradt (`colors.textSecondary`/`colors.brand`)
+— NEM `SsEmptyState`, mert nincs valódi akció (ugyanaz a kivétel-osztály,
+mint a `ProgressScreen`/`RewardInboxScreen` precedens). A `CommunityThemeScope`
+burkoló MEGMARADT — indoklás §10.4-ben. A `'Followers'`/`'Following'`/
+`'No one here yet.'`/`'Network error'`/`'Server error'` beégetett angol
+szövegek ELŐZŐLEG is jelen voltak (nem ez a kör vezette be), és ARB-fájl
+nincs ezen kör `allowed_paths`-án — indoklás §10.3-ban.
+
+### 10.2 §6 mérés kimenete
+
+```
+$ for f in lib/features/vision/presentation/screens/vision_setup_screen.dart lib/features/vision/presentation/screens/vision_session_screen.dart lib/features/vision/presentation/screens/guitar_calibration_screen.dart lib/features/onboarding/screens/onboarding_screen.dart lib/features/community/presentation/screens/followers_screen.dart; do grep -q design_system "$f" && echo "MIGRATED $f" || echo "legacy $f"; done
+MIGRATED lib/features/vision/presentation/screens/vision_setup_screen.dart
+MIGRATED lib/features/vision/presentation/screens/vision_session_screen.dart
+MIGRATED lib/features/vision/presentation/screens/guitar_calibration_screen.dart
+MIGRATED lib/features/onboarding/screens/onboarding_screen.dart
+MIGRATED lib/features/community/presentation/screens/followers_screen.dart
+```
+
+Teljes fa méréssel is megerősítve: `for f in $(find lib/features -name
+'*_screen.dart' | sort); do grep -q design_system "$f" ...; done | grep -c
+MIGRATED` → **85**, `wc -l` a teljes listára → **96**. `docs/ui/migration-status.md`
+frissítve **85/96 (88,542%)**-ra (`python3 -c "print(round(85/96*100,3))"` →
+`88.542`).
+
+Az A3 mátrix futtatása közben a `guitar_calibration_screen_test.dart` ÚJ
+1.5/2.0×en/hu cellái **valódi túlcsordulást mértek** (`RenderFlex overflowed
+by 118 pixels on the right`) a `_Toolbar` 3 gombos `Row`-ján — ez a kör
+SAJÁT hibája volt (az `SsButton` migráció óta), nem előzetes defekt. Javítás:
+`Row(mainAxisAlignment: spaceEvenly)` → `Wrap(alignment: spaceEvenly)`
+(ugyanazok a gombok, ugyanaz a sorrend, csak sortörhet nagy szövegskálán).
+Az összes többi A3 cella (vision_setup, vision_session, onboarding,
+followers) ELSŐ futásra zöld volt.
+
+### 10.3 §7 / preambulum-§7 valódi-sértés próba
+
+Visszaváltottam `vision_setup_screen.dart` `_ProfileStep`-jének
+`SsButton(key: 'vision-setup-profile-continue')`-ját nyers
+`FilledButton`-ra, majd lefuttattam:
+
+```
+$ flutter test test/features/vision/presentation/vision_setup_screen_test.dart
+...
+A3 — textScale variant matrix (1.5 / 2.0 × en / hu) the profile step uses the design-system SsButton [E]
+  Expected: at least one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "SsButton": []>
+Some tests failed.
+```
+
+**PIROS**, pontosan az A1/A3 típus-állítás cellája (`find.byType(SsButton)`).
+Visszaállítottam a `SsButton`-t, újrafuttattam ugyanazt a fájlt — **13/13
+zöld**. A próbát a diffben NEM hagytam bent (`git diff --stat` a fájlra
+üres a visszaállítás után).
+
+### 10.4 Amit NEM tettem meg, és miért
+
+1. **`SsPermissionState` a vision_session_screen.dart permission-denied
+   állapotára (§0.0/R1 irányelve).** A komponens KÖTELEZŐ, egyedi
+   `rationale`/`consequence` szöveget vár; a meglévő ARB-kulcsok
+   (`visionSessionPermission`, `visionSetupPermissionDenied`, …) nem
+   bomlanak tisztán "miért kell" / "mi történik, ha nem" párra anélkül,
+   hogy jelentés-átfedést vagy kitalált szöveget vinnék be — és ez a kör
+   `allowed_paths`-a NEM tartalmaz ARB-fájlt, tehát új kulcsot sem tudok
+   felvenni. A vision-út VALÓDI, gazdag engedély-UI-ja (`CameraPermissionPanel`,
+   a `vision_setup_screen.dart` `_PermissionStep`-jén át hívva) egy
+   KÜLÖN widget-fájlban él, ami NINCS ezen kör `allowed_paths`-án — ott
+   már ma is állapot-specifikus (granted/denied/permanently denied/
+   restricted/unavailable) elágazó UI van, csak nem `Ss*` komponensekkel.
+   A `vision_session_screen.dart` saját, másodlagos állapot-tükrözése
+   (szöveg + gomb) `colors.danger`-re vált színt engedély-/eszköz-hiba
+   állapotokban — ez a kompromisszum ugyanabba az osztályba esik, mint az
+   E15-R04..R09 rondák "nincs valódi akció → képernyő-lokális, token-stílusú
+   widget" precedense.
+2. **ARB-kulcs felvétel / meglévő beégetett szöveg cseréje
+   `followers_screen.dart`-ban** (`'Followers'`, `'Following'`,
+   `'No one here yet.'`, `'Network error'`, `'Server error'`) — ezek a
+   sztringek MÁR jelen voltak a képernyőn a kör előtt (nem ez a kör vezette
+   be), és `lib/l10n/base/app_<locale>.arb` / `lib/l10n/features/*.arb`
+   NINCS ezen kör `allowed_paths`-án (ellenőrizve: az `ai-router` blokk
+   egyetlen `.arb` fájlt sem sorol fel). A `test/l10n/hardcoded_string_guard_test.dart`
+   hatóköre (mérve a teszt saját `_scopeDirs` listájából) KIZÁRÓLAG
+   `lib/core/design_system/{components,accessibility,layouts,motion}` — a
+   `lib/features/**` fájlokat NEM vizsgálja, tehát ez a mérce-lelet nem
+   buktatja meg a kaput, de a §5.3 szabály szellemében dokumentálom: ÚJ
+   beégetett szöveget NEM vezettem be, a meglévőt nem tudtam ARB-ra
+   cserélni a fájllista korlátja miatt.
+3. **`CommunityThemeScope` eltávolítása `followers_screen.dart`-ról**
+   (§3 "burkoló eltávolítása, ahol felesleges" + §0.0/R6 szó szerinti
+   szövege). MÉRVE: az `e13_r33_screens_golden_test.dart` (ezen kör
+   `allowed_paths`-án) és a `block_mute_test.dart` `FollowersScreen`-t egy
+   puszta `AppTheme.dark()`/témátlan `MaterialApp` alatt pumpálja — a
+   `CommunityThemeScope.mergeSsExtensions` az EGYETLEN forrás, ami ott az
+   `SsColorScheme`/`SsTypography` kiterjesztést biztosítja. Eltávolítása
+   null-check összeomlást okozna ezekben a mért harnessekben — ugyanaz a
+   döntési osztály, mint a `GamificationThemeScope` E15-R08-as megtartása.
+4. **`SsIconButton` a zoom/mute/block ikonokra.** Az `SsIcon` katalógus
+   (mérve `ss_icons.dart`) csak `play`/`pause`/`settings`/`close`/`check`/
+   `info` + 14 gitár-glifa nevet ismer — `zoom_in`, `zoom_out`,
+   `volume_off_outlined`, `block_outlined` egyike sincs benne, egy
+   nem-egyező név a látható "hiányzó glifa" fallbackra váltana (valódi
+   regresszió, nem biztonságos csere — ugyanaz a mérés, mint az E15-R09
+   handoff icon-megjegyzése).
+5. **`destructive` `SsButton`-variáns a guitar_calibration reset/recalibrate
+   megerősítő `AlertDialog`-okban.** A variáns megköveteli a
+   `destructiveSemanticHint`-et, ami hívó-oldali, kitalálatlan szöveg kell
+   legyen — nincs meglévő ARB-kulcs erre, és ARB nincs ezen kör
+   `allowed_paths`-án (lásd 2. pont).
+6. **Golden-újrafelvétel `ADR 0426` szerint x86-on:** lefutott
+   (`tools/golden-x86.sh record test/ui/goldens/e13_r16_screens_golden_test.dart
+   test/ui/goldens/e13_r30_screens_golden_test.dart
+   test/ui/goldens/e13_r33_screens_golden_test.dart`), 8 PNG változott
+   (2× onboarding, 4× vision setup/coach stage, 2× followers) — a
+   `vision_result`/`launch`/`recovery`/`mic-permission primer`/
+   `first-win mini Stage`/a többi 7 community-képernyő golden PNG-je
+   BYTE-AZONOS maradt (nem ért hozzájuk ez a kör).
+
+### 10.5 A kötelező gate kimenete
+
+```
+$ tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/offline_network_guard_test.dart test/core/architecture_dependency_test.dart test/accessibility/closure_suite_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/core/screen_size_guard_test.dart test/features/community/block_mute_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/features/vision/presentation/guitar_calibration_screen_test.dart test/features/vision/presentation/vision_setup_screen_test.dart test/features/vision/vision_cleanup_test.dart test/features/vision/vision_degraded_test.dart test/features/vision/vision_one_cue_test.dart test/features/vision/vision_permission_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e13_r30_screens_golden_test.dart test/ui/goldens/e13_r33_screens_golden_test.dart test/ui/ui_baseline_screenshot_test.dart
+
+format                                                     zöld
+analyze                                                    zöld
+test test/ui/ui_inventory_test.dart                        zöld
+test test/app/offline_network_guard_test.dart              zöld
+test test/core/architecture_dependency_test.dart           zöld
+test test/accessibility/closure_suite_test.dart            zöld
+test test/app/routing/app_router_test.dart                 zöld
+test test/app/routing/onboarding_first_win_test.dart       zöld
+test test/core/screen_size_guard_test.dart                 zöld
+test test/features/community/block_mute_test.dart          zöld
+test test/features/onboarding/first_win_test.dart          zöld
+test test/features/onboarding/onboarding_resume_test.dart  zöld
+test test/features/onboarding/onboarding_test.dart         zöld
+test test/features/onboarding/permission_primer_test.dart  zöld
+test test/features/vision/presentation/guitar_calibration_screen_test.dart zöld
+test test/features/vision/presentation/vision_setup_screen_test.dart zöld
+test test/features/vision/vision_cleanup_test.dart         zöld
+test test/features/vision/vision_degraded_test.dart        zöld
+test test/features/vision/vision_one_cue_test.dart         zöld
+test test/features/vision/vision_permission_test.dart      zöld
+test test/ui/goldens/e13_r16_screens_golden_test.dart      zöld
+test test/ui/goldens/e13_r30_screens_golden_test.dart      zöld
+test test/ui/goldens/e13_r33_screens_golden_test.dart      zöld
+test test/ui/ui_baseline_screenshot_test.dart              zöld
+architecture                                               zöld
+secrets                                                    PIROS (1)
+```
+
+A brief §5 SAJÁT maga csak `format → analyze → test <mindegyik külön> →
+architecture` lépéseket nevesíti a gate-ként — mind a NÉGY lépéstípus zöld
+(24/24 futtatott test-fájl beleértve, egyenként külön processzben). A
+`round-gate.sh`-ban emellett élő `secrets`/`l10n` lépés a `secrets`-en piros
+lett — **ez MÉRVE nem ennek a körnek a hibája**: a talált sor
+(`tools/tests/test_authenticated_git_fetch.py:34`, egy `TOKEN =
+"github_pat_FIXTURE_ONLY_not_a_real_secret"` teszt-fixture) BYTE-AZONOS a
+`main`-en is (`git diff --stat main -- tools/tests/test_authenticated_git_fetch.py`
+üres kimenetet ad), és a `61cd9e3e` commitból származik (ADR 0495 D5, egy
+másik, korábbi kör munkája) — TEHÁT minden `main`-ből ágazó branch-en
+ugyanígy piros lenne. A fájl `tools/**` alatt van, ami ennek a körnek
+TILOS zónája, és a `.claude/hooks/protect_factory_files.py` gépi őr
+kifejezetten megtiltja, hogy a mérőeszközt (`tool/ci/*`) az javítsa, akit
+mér — a helyes válasz a hook saját szövege szerint is emberi döntés, nem
+implementer-oldali javítás. Javasolt javítás (NEM ez a kör hatásköre):
+`// strumsight:allow-secret test fixture, not a real token` felvétele a
+`tools/tests/test_authenticated_git_fetch.py:34` sor végére.
+
+A `test/l10n/hardcoded_string_guard_test.dart` (A6) is lefutott KÜLÖN
+(`flutter test test/l10n/hardcoded_string_guard_test.dart` → 1/1 zöld) —
+hatóköre mérve KIZÁRÓLAG `lib/core/design_system/{components,accessibility,
+layouts,motion}`, tehát a `lib/features/**` migrált képernyőket nem
+vizsgálja (lásd §10.4/2).
+
 ## 11. Review — a Claude tölti ki
