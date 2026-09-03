@@ -1,22 +1,26 @@
 """Community (Epic 9) backend module boundary.
 
-E09-R02, ADR 0396. This module owns:
+E09-R02, ADR 0396; wired live E15-R12, ADR 0497. This module owns:
 
 * the ``community_profiles`` / ``community_privacy_settings`` ORM models
   (BigInteger internal PK + ``Uuid`` public_id, see ADR 0396 §1),
 * the Pydantic response contract that whitelists only ``public_id`` and never
   leaks the internal ``id`` (A2),
-* a router that registers itself conditionally based on
-  ``settings.community_enabled``,
-* a ``build_community_router`` factory and a ``community_readiness_failure``
-  gate — both self-contained here so the live ``backend/app/main.py`` does
-  NOT need to be touched this round. Wiring the router into
-  ``create_app()`` and ``/health/ready`` is a future round's job per
-  ADR 0395 Következmények 3. pont and ADR 0396 §3–4.
+* a ``build_community_router`` factory that aggregates all 13 router
+  modules behind ``settings.community_enabled`` (registration-level gate,
+  ADR 0497 D1 — the module simply does not exist in the route table when
+  off, no runtime 403) plus the sub-flags (D2), in the deterministic order
+  D3 requires,
+* a ``community_readiness_failure`` gate, called from ``main.py``'s
+  ``/health/ready`` when the module is enabled (D4).
 
 The acceptance points are spelled out in
-``docs/rounds/e09-r02-backend-community-module-and-migration.md`` §6. The
-tests live in ``backend/tests/community/``.
+``docs/rounds/e09-r02-backend-community-module-and-migration.md`` §6 (Kör 2)
+and ``docs/rounds/e15-r12-backend-mounting-and-end-to-end.md`` §6 (Kör 12 —
+the live wiring). The tests live in ``backend/tests/community/`` (Kör 2
+module-boundary suite, untouched this round — ADR 0497 Következmények) and
+``backend/tests/test_community_mounting.py`` / ``test_client_contract_parity.py``
+(Kör 12).
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from fastapi import APIRouter
+from fastapi.routing import APIRoute
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -46,26 +51,114 @@ __all__ = [
     "community_readiness_failure",
 ]
 
+# ADR 0497 D2/D1: the write-method branch (POST/PUT/PATCH/DELETE) of the
+# posts + social-graph (follow-request) routers is a REGISTRATION-level
+# gate on ``community_writes_enabled`` — same fail-closed strength as the
+# top-level module flag (D1: "route-ok nem regisztrálódnak", not a runtime
+# 403). GET/HEAD/OPTIONS on those same routers stay registered either way
+# (A3 — "az írási ág nem elérhető, az olvasási igen"). The ``profile``
+# router is deliberately NOT included in this gate: its two write routes
+# (create/update the caller's own profile) are identity/onboarding, not
+# the "post, comment, reaction, follow-request" content-write domain ADR
+# 0395 §6 names, and E09-R06's ``backend/tests/community/test_profile_service.py``
+# (tilos zóna, R4) already exercises them under ``community_enabled=True``
+# alone — gating them here would turn that suite red.
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def _reads_only(router: APIRouter) -> APIRouter:
+    """A copy of ``router`` carrying only its safe-method routes."""
+    reads = APIRouter()
+    reads.routes = [
+        route
+        for route in router.routes
+        if isinstance(route, APIRoute) and route.methods <= _SAFE_METHODS
+    ]
+    return reads
+
 
 def build_community_router(settings) -> APIRouter | None:
-    """Return the Community router only when the module is enabled.
+    """Aggregate all 13 Community router modules into one ``APIRouter``,
+    or return ``None`` when the module is disabled.
 
-    Mirrors ``main.py``'s ``if settings.tutor_enabled: app.include_router(...)``
-    pattern, but lives entirely inside the community module so this round
-    never has to touch the forbidden ``backend/app/main.py``. Wiring this
-    into the live ``create_app()`` app is a future round's job
-    (ADR 0395 Következmények 3. pont) — this function's only consumer THIS
-    round is ``backend/tests/community/conftest.py``'s own, self-contained
-    test app.
+    Registration-level gating (ADR 0497 D1): a disabled module — or a
+    disabled sub-flag branch — never adds routes to the table, so the
+    caller (``main.py``'s ``if settings.community_enabled:``, or this
+    round's ``backend/tests/community/conftest.py``, unchanged) gets a
+    plain 404 for anything that doesn't exist, never a runtime 403.
+
+    Sub-flags (D2, independent of the master flag and of each other):
+
+    * ``community_writes_enabled`` — gates the write-method routes of
+      ``posts`` and ``social_graph`` (see ``_reads_only`` above). Not
+      applied to ``bookmarks``/``challenges``/``handles``/``moderation``/
+      ``privacy``/``reports``/``safety``: none of those are named by
+      ADR 0395 §6's write-domain list ("poszt, komment, reakció,
+      follow-request"), and none are exercised through this factory by
+      the tilos-zóna suite, so this round leaves their existing
+      all-or-nothing-with-``community_enabled`` behaviour as measured.
+    * ``community_media_enabled`` — already self-gated inside
+      ``services/media_upload_service.py`` (checked at every call site);
+      no router in the 13 exposes a dedicated media-upload HTTP surface
+      yet, so there is nothing to conditionally mount here.
+    * ``community_leaderboard_enabled`` — gates the whole ``leaderboards``
+      router (an all-or-nothing competitive surface, not a read/write
+      split).
+    * ``community_clubs_enabled`` — no clubs router exists among the 13
+      yet; nothing to gate here either.
+
+    Router order is NOT alphabetical — it is the ADR 0497 D3 contract:
+    ``search`` (a literal ``/community/profiles/search`` route) MUST be
+    registered before ``profile`` (whose ``/community/profiles/{public_id}``
+    is a single-segment catch-all at the same depth); FastAPI/Starlette
+    matches routes in registration order, so registering ``profile``
+    first would make it swallow ``GET /community/profiles/search`` as
+    ``public_id="search"``. Every other router's prefix is unique among
+    the 13, so ``profile`` is placed last as the general D3 rule (literal
+    routes before the broadest param-collector) rather than reasoning
+    about each pair individually.
     """
     if not settings.community_enabled:
         return None
-    # Local import so that the factory returns None (no router import) when
-    # the module is disabled — keeps ``app.community`` cheap to import even
-    # for builds that never enable Community.
-    from .routers.profile import router as community_router
 
-    return community_router
+    # Local imports so a disabled module never imports the router tree —
+    # keeps ``app.community`` cheap to import for builds that never
+    # enable Community (mirrors the pre-existing single-router pattern).
+    from .routers.bookmarks import router as bookmarks_router
+    from .routers.challenges import router as challenges_router
+    from .routers.feed import router as feed_router
+    from .routers.handles import router as handles_router
+    from .routers.leaderboards import router as leaderboards_router
+    from .routers.moderation import router as moderation_router
+    from .routers.posts import router as posts_router
+    from .routers.privacy import router as privacy_router
+    from .routers.profile import router as profile_router
+    from .routers.reports import router as reports_router
+    from .routers.safety import router as safety_router
+    from .routers.search import router as search_router
+    from .routers.social_graph import router as social_graph_router
+
+    aggregate = APIRouter()
+    writes_on = settings.community_writes_enabled
+
+    aggregate.include_router(bookmarks_router)
+    aggregate.include_router(challenges_router)
+    aggregate.include_router(feed_router)
+    aggregate.include_router(handles_router)
+    if settings.community_leaderboard_enabled:
+        aggregate.include_router(leaderboards_router)
+    aggregate.include_router(moderation_router)
+    aggregate.include_router(posts_router if writes_on else _reads_only(posts_router))
+    aggregate.include_router(privacy_router)
+    aggregate.include_router(reports_router)
+    aggregate.include_router(safety_router)
+    aggregate.include_router(search_router)  # before profile — D3
+    aggregate.include_router(
+        social_graph_router if writes_on else _reads_only(social_graph_router)
+    )
+    aggregate.include_router(profile_router)  # last — D3
+
+    return aggregate
 
 
 def community_readiness_failure(
@@ -74,9 +167,12 @@ def community_readiness_failure(
     alembic_ini: Path,
 ) -> str | None:
     """Analogous to ``main.py._readiness_failure``, scoped to the Community
-    migration chain. Not wired into ``/health/ready`` this round (that call
-    site is ``main.py``, out of scope) — a future round's job per ADR 0396
-    §4 / ADR 0395 Következmények 2. pont.
+    migration chain. Called from ``main.py``'s ``_readiness_failure`` when
+    ``settings.community_enabled`` is true (E15-R12, ADR 0497 D4) — after
+    the base checks pass, so a disabled-Community deploy's readiness verdict
+    is unaffected and the ``community_requires_postgres`` reason is reached
+    on its own, not shadowed by an unrelated base-check failure (round
+    brief §0.0 R5).
 
     Fail-closed ordering:
 

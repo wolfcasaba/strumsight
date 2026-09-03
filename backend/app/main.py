@@ -21,6 +21,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from . import __version__
+from .community import build_community_router, community_readiness_failure
 from .config import Settings, get_settings
 from .database import Base, create_database_engine, create_session_factory
 from .routers import auth, diagnostics
@@ -109,6 +110,18 @@ def _readiness_failure(application: FastAPI) -> str | None:
 
     if current_heads != expected_heads:
         return "migration_mismatch"
+
+    # ADR 0497 D4: the Community gate runs AFTER the base checks pass, so
+    # a disabled Community deploy's readiness verdict is untouched, and the
+    # `community_requires_postgres` reason is reached on its own merits —
+    # not shadowed by an unrelated base-check failure (round brief §0.0 R5).
+    if runtime_settings.community_enabled:
+        community_reason = community_readiness_failure(
+            engine, runtime_settings, _ALEMBIC_INI
+        )
+        if community_reason is not None:
+            return community_reason
+
     return None
 
 
@@ -222,6 +235,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         set_service(service)
         app.include_router(tutor_router, dependencies=_gated)
+    if settings.community_enabled:
+        community_router = build_community_router(settings)
+        if community_router is not None:
+            app.include_router(community_router, dependencies=_gated)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
