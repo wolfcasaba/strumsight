@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../application/export_analysis_use_case.dart';
@@ -38,13 +39,14 @@ class _AnalysisExportScreenState extends State<AnalysisExportScreen> {
           children: <Widget>[
             Expanded(child: ExportPreview(export: export)),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(SsSpacing.space4),
               child: SizedBox(
                 width: double.infinity,
-                child: FilledButton(
+                child: SsButton(
                   key: const Key('analysis-export-confirm'),
-                  onPressed: _sharing ? null : _handleConfirm,
-                  child: Text(l10n.analysisExportConfirmShare),
+                  label: l10n.analysisExportConfirmShare,
+                  loading: _sharing,
+                  onPressed: _handleConfirm,
                 ),
               ),
             ),

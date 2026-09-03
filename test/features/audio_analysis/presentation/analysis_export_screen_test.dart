@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/audio_analysis/public.dart';
 import 'package:strumsight/features/share/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -90,6 +91,7 @@ Widget _harness(
   Locale locale = const Locale('en'),
 }) {
   return MaterialApp(
+    theme: SsLightTheme.data(),
     locale: locale,
     localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
       AppLocalizations.delegate,
@@ -201,6 +203,31 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
       await tester.pumpWidget(_harness(_document(), useCase));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'overflow matrix — 320px / textScale 2.0 (hu) renders without overflow',
+    (tester) async {
+      final fake = _FakeShareService();
+      final useCase = ExportAnalysisUseCase(
+        shareService: fake,
+        tempDirectory: tempRoot,
+      );
+
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1.0;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await tester.pumpWidget(
+        _harness(_document(), useCase, locale: const Locale('hu')),
+      );
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
