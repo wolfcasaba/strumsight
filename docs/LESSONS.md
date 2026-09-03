@@ -24299,3 +24299,72 @@ lefuttatnia, nem az implementer bemondására elfogadnia (itt mérve: a két
 
 **Őrtesztek:** `backend/tests/test_community_mounting.py::test_a2_all_eleven_routers_are_mounted_and_every_route_requires_auth_except_documented_exceptions`
 és `::test_a2b_handles_and_privacy_routes_404_even_with_community_enabled`.
+
+## L610 — A parancs-kimenetként IDÉZETT szám is állítás: a riport-őr csak azt méri, amit pinnel, és a végösszeg pinnelése maradt ki (E15-R13, review MAJOR-1, 2026-09-03)
+
+**Mit mértünk.** Az E15-R13 zárójelentése (`docs/ui/chapter-15-completion-report.md`)
+mintaszerű riport-őrt kapott: a saját teszt-fájljában egy `A5 —
+completion-report guard` csoport a riport számait a mátrix ÉLŐ állapotából
+(`ScreenReachability`, `_screens.length`, `totalCells`, `_excludedCells.length`)
+vezette le, és — az [L588](#l588) tanulságát beépítve — az ELHALLGATÁST is
+mérte: egy törölt lelet-sorra és egy törölt szám-állításra is pirosra váltott
+(a reviewer mindkettőt mutációval igazolta).
+
+Mégis átment rajta egy hamis állítás. A riport két helyen ezt írta:
+
+```
+**1157 tests total, all green**
+# +1157: All tests passed!
+```
+
+A tényleges kimenet a reviewer izolált klónjában:
+
+```
+$ flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart
+01:04 +1162: All tests passed!
+```
+
+A kör SAJÁT briefje (§10.4) is 1162-t írt — a riport tehát a saját
+handoffjával is ütközött.
+
+**A gyökérok.** Az őr a RÉSZSZÁMOKAT pinnelte (72 képernyő, 1152 cella, 32
+kizárt cella), a **végösszeget** nem — pedig épp a végösszeg az, amit a riport
+`+NNNN: All tests passed!` alakban, **parancs-kimenetként idézve** állított. Egy
+idézett parancs-kimenet a legerősebb formájú állítás (reprodukálhatónak
+látszik), ezért a leggyengébb helye annak, ahol nincs mögötte őrcella.
+
+**Hogyan alkalmazd.** Ha egy dokumentum parancs-kimenetet IDÉZ, az idézett
+érték is pinnelendő — nem elég a benne szereplő komponenseket pinnelni. A
+reviewer próbája ne csak „hiányzik-e a sor", hanem „ELRONTVA is pirosra
+vált-e": az E15-R13-nál a `1163 → 1164` átírás csak akkor bukott el, amikor
+MINDEN előfordulást átírtam; két előfordulás átírása mellett a `contains`-alapú
+cella zöld maradt (a harmadik, helyes előfordulás elfedte). A `contains`-őr
+tehát a hiányt méri, nem az ellentmondást — ha ez számít, a cellának a
+dokumentum ÖSSZES előfordulását kell néznie.
+
+**Őrteszt:** `test/ui/goldens/e15_r13_full_variant_matrix_test.dart` → `A5 — completion-report guard … cites the grand total test count this file itself produces (cells + A1 + A5 structural groups)`.
+
+## L611 — Két párhuzamos kör `allowed_paths`-átfedése nem automatikusan H3: ha a SAJÁT, még nem merge-elt listád szűkítésével feloldható, az a pre-flight dolga (E15-R13, 2026-09-03)
+
+**Mit mértünk.** Az E15-R13 pre-flightja alatt a `tools/round-slots.py
+inflight-list` egy párhuzamosan futó kört mutatott (`E16-R02`, indult
+18:05:07Z), és a két brief `allowed_paths`-a EGY fájlban átfedett:
+`docs/ui/migration-status.md`. A pipeline-prompt §4.1/2 az átfedésre „HALT
+(H3)"-at ír elő.
+
+**A feloldás.** A H3 fogalma (ADR 0087 §2) a **tilos zónára** szól: arra, ami az
+`allowed_paths`-on KÍVÜL esik. Az átfedő fájl viszont a SAJÁT, még nem
+merge-elt listámon volt, az ADR 0087 §2 pedig kifejezetten megengedi a lista
+**szűkítését** — tehát a helyes lépés nem a lánc megállítása, hanem a fájl
+kivezetése a listáról a pre-flightban (§0.0.A/R4), a mérce gyengítése nélkül:
+egyetlen acceptance-cella sem hivatkozott rá, a végleges mért állapot pedig a
+kör SAJÁT új fájljába (`chapter-15-completion-report.md`) került, ahol nulla az
+átfedés. A `tools/scope-audit.py` a merge előtt megerősítette: 4 changed path,
+0 sértés, a `migration-status.md` érintetlen.
+
+**Hogyan alkalmazd.** Slot-átfedésnél előbb kérdezd meg: az ütköző fájl a te
+listádon van-e? Ha igen ÉS az acceptance-mérce nem hivatkozik rá, a szűkítés
+elhárítja (dokumentált §0.0 revízióval). H3 akkor marad, ha az átfedő fájl
+a mércéhez KELL, vagy ha a másik kör ágához/PR-jéhez kellene nyúlni.
+
+**Őrteszt:** nincs — pre-flight döntési szabály, nem futásidejű viselkedés; a gépi ellenőrzés a merge előtti `tools/scope-audit.py` futása.

@@ -1,5 +1,52 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R13 KÉSZ — a Chapter 15 sáv LEZÁRVA: 72 képernyős záró variáns-mátrix és mért zárójelentés (2026-09-03)
+
+**PR [#556](https://github.com/wolfcasaba/strumsight/pull/556), squash `b968cc4a`; ADR: nincs (mérési/záró kör).**
+
+**A sáv mérlege — MÉRVE, nem becsülve:** **91/96 képernyő migrált (94,792%)**
+(a sáv indulásakor 43/96 volt), **71 elérhető / 25 elérhetetlen / 27
+flag-kapuzott**. A záró állítás pontos alakja: *minden ELÉRHETŐ képernyő vagy
+migrált (91), vagy `retire`-verdiktes nevesített utóddal szerepel (5)* —
+**nem** „a visszavonás megtörtént".
+
+- **`test/ui/goldens/e15_r13_full_variant_matrix_test.dart` (ÚJ, ~3900 sor):**
+  72 képernyő × {light, dark} × {en, hu} × {compact portrait 412×915,
+  landscape 915×412} × {textScale 1.0, 2.0} = **1152 cella**, + 5 A1- és 6
+  A5-őrcella = **1163 teszt**, 55 s alatt. Minden cella saját
+  `tester.view.physicalSize`-szal ([L558](docs/LESSONS.md#l558)),
+  `FlutterError.onError`-alapú túlcsordulás-méréssel; `skip`/tolerancia sehol.
+- **`docs/ui/chapter-15-completion-report.md` (ÚJ):** a sáv zárójelentése,
+  külön §-sal arról, amit NEM állít.
+- **4 mért `lib/**` túlcsordulás-LELET** 32 dátumozott, csak-zsugorodó
+  `_ExcludedCell`-lel (a kör MÉR, nem javít — `lib/**` tilos zóna):
+  `StrumReelScreen` (191–935 px, **már `textScale 1.0`-nál is** — a
+  legsúlyosabb), `AnalyzeScreen`, `LatencyCalibrationScreen`, `LearnScreen`,
+  `LessonScorePreviewScreen`.
+- **Nyitott, gazdás tétel:** az `E15-R04` nevesített visszavonása SOHA nem
+  hajtódott végre (ADR 0471 D5 szerint ez nem szabálysértés) — a
+  `legacy-backlog.md` §3.0-ban dátummal, gazdával és nevesített hordozó körrel
+  (`E16-R05`).
+
+**A review megfogta, amit a zöld kapu nem** (1 MAJOR + 1 MINOR): a zárójelentés
+`+1157: All tests passed!`-et idézett **parancs-kimenetként**, miközben a mért
+érték `+1162` volt — az A5-őr a részszámokat pinnelte, a **végösszeget** nem
+([L610](docs/LESSONS.md#l610)). A javító menet a számot javította ÉS az őrt
+kiegészítette; a nyitott tételek „unscheduled" gazdája pedig gépi mércét kapott
+(`E\d{2}-R\d{2}` vagy explicit „nincs sorba állítva" közlés). Újra-review:
+**APPROVED**, 0 nyitott lelet (`docs/reviews/e15-r13-review.md`).
+
+**A reviewer öt eldobható mutációs próbája** mind PIROSRA váltott, majd
+visszaállt: képernyő kivétele a mátrixból → A1; riport-sor **törlése** → A5
+([L588](docs/LESSONS.md#l588)); lelet-sor törlése → A5; hamis `_ExcludedCell`
+→ „STALE"; a végösszeg elrontása → az új A5-cella. Külön mérés a kozmetikai
+zárás ellen: mind a 72 képernyő renderelt fája lemérve — 70 gazdag fát
+renderel, a maradék 2 is épített fa (224 / 744 widget).
+
+**Zöld kapu:** `build-apk.yml` (`33798598939`) és `router-ci.yml`
+(`33798600961`) mind `success` a `460cbbab` merge SHA-n; a `tools/round-gate.sh`
+mind a 9 lépésen zöld a reviewer saját, izolált klónos futásában.
+
 ## ✅ E15-R12 KÉSZ — a Community backend felcsatolva, 11 hitelesített routerrel (2026-09-03)
 
 **PR [#554](https://github.com/wolfcasaba/strumsight/pull/554), squash `220887e9`; ADR 0497.**
@@ -11485,7 +11532,25 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-03):** `main` @ `7259c563` — **E15-R09 AI Tutor 5
+**Aktuális állapot (2026-09-03):** `main` @ `b968cc4a` — **E15-R13: a Chapter 15
+sáv ZÁRÓ köre**, PR [#556](https://github.com/wolfcasaba/strumsight/pull/556),
+squash-merge. Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **1 javító menet** (review: 1 MAJOR +
+1 MINOR + 2 NOTE → APPROVED, 0 nyitott lelet,
+[`docs/reviews/e15-r13-review.md`](docs/reviews/e15-r13-review.md)). ÚJ ADR:
+**nincs** (mérési/záró kör). `risk = "normal"`, `native_gate = true` → a
+CI-tervet a `tools/round-ci-plan.py` adta (`build-apk.yml`). Exact-SHA
+evidencia a `460cbbab` merge SHA-n: Build Android APK
+[33798598939](https://github.com/wolfcasaba/strumsight/actions/runs/33798598939),
+Router CI
+[33798600961](https://github.com/wolfcasaba/strumsight/actions/runs/33798600961)
+— mindkettő `success`. A pre-flight öt MÉRT revíziót írt a briefbe (§0.0.A),
+köztük az `allowed_paths` **szűkítését** (`docs/ui/migration-status.md`
+kivezetése), mert a párhuzamos slot köre (`E16-R02`) ugyanazt a fájlt sorolja —
+a slot-átfedés így nem H3-halt lett, hanem diszjunkt fájlhalmaz
+([L611](docs/LESSONS.md#l611)).
+
+**Előző állapot (2026-09-03):** `main` @ `7259c563` — **E15-R09 AI Tutor 5
 képernyő migrálása a design-rendszerre (80/96, 83,333%)**, PR
 [#540](https://github.com/wolfcasaba/strumsight/pull/540), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -11649,7 +11714,19 @@ maradt.
 
 ## 5. Last completed round
 
-**E15-R09 — AI Tutor 5 képernyő migrálása a design-rendszerre**
+**E15-R13 — A Chapter 15 sáv lezárása: teljes migrációs mérés, vizuális
+regresszió és APK-evidencia** (PR
+[#556](https://github.com/wolfcasaba/strumsight/pull/556), squash `b968cc4a`).
+A sáv **91/96 migrált képernyővel (94,792%)** zárul (indulás: 43/96); a záró
+mátrix 72 képernyő × 16 variáns = 1152 cellája + 11 őrcella = **1163 teszt**
+zöld. A kör MÉRT, nem javított: 4 `lib/**` túlcsordulás-defekt 32 dátumozott,
+csak-zsugorodó kizárt cellán, és az `E15-R04` végre nem hajtott visszavonása
+nyitott, gazdás tételként. A review a zöld kapu mögött 1 MAJOR-t mért: a
+zárójelentés `+1157`-et idézett parancs-kimenetként a valós `+1162` helyett —
+az őr a részszámokat pinnelte, a **végösszeget** nem
+([L610](docs/LESSONS.md#l610)).
+
+**Előző kör: E15-R09 — AI Tutor 5 képernyő migrálása a design-rendszerre**
 (PR [#540](https://github.com/wolfcasaba/strumsight/pull/540), squash `7259c563`).
 Az öt Tutor-képernyő a design-rendszer komponenseit és tokenjeit használja,
 változatlan viselkedés mellett; a migrációs arány **80/96 (83,333%)**. A kör
@@ -11800,6 +11877,21 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 `exit=1`-gyel mondja ki.
 
 ## 6. Exact next task
+
+> **A Ch15 (UI-aktiválás és -befejezés) SÁV LEZÁRULT — 2026-09-03, `E15-R13`
+> merge-elve (`b968cc4a`).** Mind a 14 E15 sor `done`. A záró kör mérlege:
+> **91/96 production képernyő migrálva (94,792%)**, 71 elérhető képernyő
+> mindegyike migrált VAGY `retire`-verdiktes nevesített utóddal, 4 mért `lib/**`
+> túlcsordulás-defekt 32 dátumozott, csak-zsugorodó kizárt cellán, és 1 nyitott,
+> gazdás tétel (az `E15-R04` végre nem hajtott visszavonása) — részletek:
+> [`docs/ui/chapter-15-completion-report.md`](docs/ui/chapter-15-completion-report.md),
+> [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md) §3.0.
+>
+> ⚠ **Ami a felhasználót ma is érinti, és MA GAZDÁTLAN:** a `StrumReelScreen`
+> tagline-`Row`-ja (`strum_reel_screen.dart:339`) **alapértelmezett
+> szövegskálán (1.0) is túlcsordul** compact portraiton (191 px) — a 4 lelet
+> közül ez az egyetlen, ami nem 200%-hoz kötött. A javítás `lib/**`-ot érint,
+> tehát nevesített kört kíván.
 
 > **A Ch13 (UI/UX Design System) SÁV LEZÁRULT — 2026-08-27, `E13-R36` merge-elve
 > (`15d55b12`).** Mind a 36 E13 sor `done`. A záró kör mérlege:
