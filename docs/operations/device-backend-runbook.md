@@ -38,10 +38,22 @@ Both flags default to `false` (ADR 0395/0497 D1/D2) — with `community_enabled`
 left unset, every `/community/**` route stays unregistered (404), exactly as
 in production, and the phone's Community screens will look "empty" for the
 same reason a disabled deploy does. `community_writes_enabled=false` still
-mounts every Community router, but the write-method routes on `posts` and
-`social_graph` (create a post, follow, block, …) are absent too (ADR 0497 D2)
-— reads work, writes 404 — so flip it on if you want to exercise those flows
-from the phone.
+mounts every aggregated Community router, but the write-method routes on
+`posts` and `social_graph` (create a post, follow/unfollow) are absent too
+(ADR 0497 D2) — reads work, those writes 404 — so flip it on if you want to
+exercise those two flows from the phone. **Block/mute are unaffected by this
+flag**: they live on the `safety` router, which `community_writes_enabled`
+does not gate (measured — `backend/app/community/__init__.py`'s `_reads_only`
+wrapper is only applied to `posts`/`social_graph`), so
+`POST/DELETE /community/profiles/{id}/block` and `/mute` work as soon as
+`community_enabled=true` alone.
+
+`community_enabled=true` does **not** unlock the `handles` or `privacy`
+routers — they are never aggregated regardless of any flag (ADR 0497 D6):
+both would expose an authless write surface (handle takeover, privacy-setting
+tampering), so `GET/PUT /community/privacy/**` and every `/community/handles/**`
+route return `404` on this build the same way they do in production, until a
+future round lands their authentication.
 
 ## 2. Find the laptop's LAN IP
 
@@ -115,11 +127,12 @@ LAN address above is a `dev`/`lab` build only.
 
 | Server flag (env var) | Client dart-define | Unlocks |
 |---|---|---|
-| `STRUMSIGHT_COMMUNITY_ENABLED` | `STRUMSIGHT_COMMUNITY` | the module at all — profiles, follow/block/mute, search, feed, posts (read), bookmarks (read), challenges (invite lifecycle), reports, moderation, handles, privacy |
-| `STRUMSIGHT_COMMUNITY_WRITES_ENABLED` | *(client-side sub-flag, same ADR 0395 shape)* | creating a post, following/unfollowing, blocking/muting — everything under `posts`/`social_graph` that isn't a `GET` (ADR 0497 D2) |
+| `STRUMSIGHT_COMMUNITY_ENABLED` | `STRUMSIGHT_COMMUNITY` | the 11 aggregated routers — profiles, follow, block/mute, search, feed, posts (read), bookmarks (read), challenges (invite lifecycle), reports, moderation |
+| `STRUMSIGHT_COMMUNITY_WRITES_ENABLED` | *(client-side sub-flag, same ADR 0395 shape)* | creating a post, following/unfollowing — everything under `posts`/`social_graph` that isn't a `GET` (ADR 0497 D2). Does **not** gate block/mute (`safety` router, always on with the master flag) |
 | `STRUMSIGHT_COMMUNITY_LEADERBOARD_ENABLED` | *(client-side sub-flag)* | the whole `leaderboards` router — off means `404`, not an empty list |
 | `STRUMSIGHT_COMMUNITY_MEDIA_ENABLED` | *(client-side sub-flag)* | media upload (self-gated inside `services/media_upload_service.py` — see that module, not the router table) |
 | `STRUMSIGHT_COMMUNITY_CLUBS_ENABLED` | *(client-side sub-flag)* | reserved — no clubs router exists in the backend yet, so this flag has no server-side effect today |
+| *(none — no flag mounts these)* | — | `handles` and `privacy` stay `404` regardless of any flag combination (ADR 0497 D6): both are authless today, so mounting them is deferred to the round that lands their auth |
 
 Both sides default to `false` everywhere (ADR 0395 D1–D3, ADR 0497 D1/D2) —
 this is a deliberate kill switch, not a bug: the module is un-audited and

@@ -6,11 +6,17 @@ E09-R02, ADR 0396; wired live E15-R12, ADR 0497. This module owns:
   (BigInteger internal PK + ``Uuid`` public_id, see ADR 0396 §1),
 * the Pydantic response contract that whitelists only ``public_id`` and never
   leaks the internal ``id`` (A2),
-* a ``build_community_router`` factory that aggregates all 13 router
+* a ``build_community_router`` factory that aggregates 11 of the 13 router
   modules behind ``settings.community_enabled`` (registration-level gate,
   ADR 0497 D1 — the module simply does not exist in the route table when
   off, no runtime 403) plus the sub-flags (D2), in the deterministic order
-  D3 requires,
+  D3 requires. ``handles`` and ``privacy`` are deliberately NOT aggregated
+  (ADR 0497 D6): neither router requires authentication on any of its
+  routes (measured: their 6 route-methods, out of 48 total, all answered
+  an anonymous caller instead of 401/403 — see each router's own docstring
+  for why auth is still pending), so mounting them would open a public
+  write surface (handle takeover, privacy-setting tampering) ahead of
+  their authz landing in a future round,
 * a ``community_readiness_failure`` gate, called from ``main.py``'s
   ``/health/ready`` when the module is enabled (D4).
 
@@ -78,8 +84,8 @@ def _reads_only(router: APIRouter) -> APIRouter:
 
 
 def build_community_router(settings) -> APIRouter | None:
-    """Aggregate all 13 Community router modules into one ``APIRouter``,
-    or return ``None`` when the module is disabled.
+    """Aggregate 11 of the 13 Community router modules into one
+    ``APIRouter``, or return ``None`` when the module is disabled.
 
     Registration-level gating (ADR 0497 D1): a disabled module — or a
     disabled sub-flag branch — never adds routes to the table, so the
@@ -87,19 +93,35 @@ def build_community_router(settings) -> APIRouter | None:
     round's ``backend/tests/community/conftest.py``, unchanged) gets a
     plain 404 for anything that doesn't exist, never a runtime 403.
 
+    ``handles`` and ``privacy`` are excluded fail-closed (ADR 0497 D6):
+    both routers' own docstrings say their authz is a future round's job
+    (``routers/handles.py:16-19,95,239-241`` — "internal endpoint, not
+    yet exposed"/"auth lands in Kör 6"; ``routers/privacy.py:5-9,194-201``
+    — "deliberately unmounted"/authz-policy "out of scope"), and measured
+    behaviour confirms it: every one of their 6 route-methods answers an
+    anonymous caller instead of 401/403 — including a ``PUT`` that
+    overwrites another user's privacy visibility and a ``POST`` that
+    claims a handle onto a raw internal ``community_profiles.id``. The
+    client never calls either router (absent from
+    ``docs/contracts/client-backend-endpoints.json``), so leaving them
+    out costs no functionality and closes an authless write surface. This
+    is a fail-closed default, not a permanent exclusion: mounting them is
+    the job of the future round that lands their auth (ADR 0400
+    Következmények (c)).
+
     Sub-flags (D2, independent of the master flag and of each other):
 
     * ``community_writes_enabled`` — gates the write-method routes of
       ``posts`` and ``social_graph`` (see ``_reads_only`` above). Not
-      applied to ``bookmarks``/``challenges``/``handles``/``moderation``/
-      ``privacy``/``reports``/``safety``: none of those are named by
-      ADR 0395 §6's write-domain list ("poszt, komment, reakció,
-      follow-request"), and none are exercised through this factory by
-      the tilos-zóna suite, so this round leaves their existing
-      all-or-nothing-with-``community_enabled`` behaviour as measured.
+      applied to ``bookmarks``/``challenges``/``moderation``/``reports``/
+      ``safety``: none of those are named by ADR 0395 §6's write-domain
+      list ("poszt, komment, reakció, follow-request"), and none are
+      exercised through this factory by the tilos-zóna suite, so this
+      round leaves their existing all-or-nothing-with-
+      ``community_enabled`` behaviour as measured.
     * ``community_media_enabled`` — already self-gated inside
       ``services/media_upload_service.py`` (checked at every call site);
-      no router in the 13 exposes a dedicated media-upload HTTP surface
+      no aggregated router exposes a dedicated media-upload HTTP surface
       yet, so there is nothing to conditionally mount here.
     * ``community_leaderboard_enabled`` — gates the whole ``leaderboards``
       router (an all-or-nothing competitive surface, not a read/write
@@ -113,8 +135,8 @@ def build_community_router(settings) -> APIRouter | None:
     is a single-segment catch-all at the same depth); FastAPI/Starlette
     matches routes in registration order, so registering ``profile``
     first would make it swallow ``GET /community/profiles/search`` as
-    ``public_id="search"``. Every other router's prefix is unique among
-    the 13, so ``profile`` is placed last as the general D3 rule (literal
+    ``public_id="search"``. Every other aggregated router's prefix is
+    unique, so ``profile`` is placed last as the general D3 rule (literal
     routes before the broadest param-collector) rather than reasoning
     about each pair individually.
     """
@@ -124,14 +146,14 @@ def build_community_router(settings) -> APIRouter | None:
     # Local imports so a disabled module never imports the router tree —
     # keeps ``app.community`` cheap to import for builds that never
     # enable Community (mirrors the pre-existing single-router pattern).
+    # ``handles`` and ``privacy`` are deliberately NOT imported here — see
+    # the docstring above (ADR 0497 D6).
     from .routers.bookmarks import router as bookmarks_router
     from .routers.challenges import router as challenges_router
     from .routers.feed import router as feed_router
-    from .routers.handles import router as handles_router
     from .routers.leaderboards import router as leaderboards_router
     from .routers.moderation import router as moderation_router
     from .routers.posts import router as posts_router
-    from .routers.privacy import router as privacy_router
     from .routers.profile import router as profile_router
     from .routers.reports import router as reports_router
     from .routers.safety import router as safety_router
@@ -144,12 +166,10 @@ def build_community_router(settings) -> APIRouter | None:
     aggregate.include_router(bookmarks_router)
     aggregate.include_router(challenges_router)
     aggregate.include_router(feed_router)
-    aggregate.include_router(handles_router)
     if settings.community_leaderboard_enabled:
         aggregate.include_router(leaderboards_router)
     aggregate.include_router(moderation_router)
     aggregate.include_router(posts_router if writes_on else _reads_only(posts_router))
-    aggregate.include_router(privacy_router)
     aggregate.include_router(reports_router)
     aggregate.include_router(safety_router)
     aggregate.include_router(search_router)  # before profile — D3

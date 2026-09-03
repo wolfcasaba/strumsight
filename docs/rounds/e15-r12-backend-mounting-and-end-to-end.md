@@ -282,4 +282,135 @@ tools/round-gate.sh test/app/app_config_test.dart test/app/config/feature_flags_
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Javító kör (Claude Sonnet 5, 2026-09-03) — a `docs/reviews/e15-r12-review.md`
+2 BLOCKER + 2 MAJOR + 1 MINOR + 1 NOTE leletének javítása.** Scope: kizárólag
+a leletlista, új funkció nem került be, a zöld rész (A1, A3, A4, A8)
+változatlan.
+
+### B1 + B2 — hitelesítetlen router NEM kerül az aggregátumba
+
+`backend/app/community/__init__.py`: a `handles_router` és a `privacy_router`
+import és `include_router` sora törölve a `build_community_router()`-ből (a
+függvény most 11-et, nem 13-at aggregál). A docstring (modul-szintű és a
+függvényé is) tételesen indokolja a kihagyást: mindkét router SAJÁT
+docstringje (`routers/handles.py:16-19,95,239-241`, `routers/privacy.py:5-9,
+194-201`) kimondja, hogy az authz egy jövőbeli kör dolga, és a mérés (a
+review §2 route-leltára) megerősíti: mindkét router MINDEN route-ja (6
+route-metódus a 48-ból) auth nélkül válaszol. Hivatkozás: ADR 0497 D6.
+
+**Mérve, hogy ez NEM töri a tilos zónás suite-ot:** a
+`backend/tests/community/**` a két routert a SAJÁT fixture-jeiben csatolja
+fel, nem a factory-n keresztül (`test_handle_policy.py:126`,
+`test_block_query_regression.py:127-128`); a `conftest.py` nem hivatkozik
+rájuk. A teljes `pytest -q` (lásd lent) ezt megerősíti: 872 teszt zöld,
+ugyanannyi mint a javítás előtt.
+
+**Kézi falszifikálhatósági próba (a review kérése):** a két `include_router`
+sort visszavettem egy ideiglenes, nem-commitolt másolatban, és lefuttattam
+`pytest tests/test_community_mounting.py -k a2` -t — mindkét cella (A2 és
+A2b) PIROSRA váltott (az A2 egy `sqlite3.OperationalError`-ral a
+`handles.py:180`-ban, mert a `handles`/`privacy` router megint elérte az
+adatbázist auth nélkül; az A2b `assert not any(...)` közvetlenül bukott).
+Ezután a fájlt visszaállítottam az eredeti (javított) állapotra, és a teljes
+`test_community_mounting.py` újra zöld 9/9-cel. Ez bizonyítja: az M1 cella
+nem vak mintavétel, hanem valóban megfogja a B1/B2 hibaosztályt.
+
+### B3 — secret-scan zöld
+
+`backend/tests/test_community_mounting.py` tetejére (a modul-docstring ELÉ)
+egy `# strumsight:allow-secret-file` jelölő került, a `_deploy_settings()` fix
+`secret_key` teszt-fixture-jére hivatkozva. **Eltérés a review betű szerinti
+javaslatától** (sorvégi `# strumsight:allow-secret <indok>`): a
+`tool/ci/check_secrets.dart:76-81` saját, mért megjegyzése szerint egy
+sorvégi jelölő 2026-08-05-ben már egyszer törött a `ruff format`
+újratördelésétől pontosan a `backend/tests` fán — a formázó a fixture-t egy
+sorral feljebb tolta, a jelölő pedig a záró zárójel során maradt, és a
+lelet csendben újra élesedett. A fájl-szintű jelölő emiatt biztonságosabb
+választás ugyanarra a problémára; a `ruff format app tests` lefuttatása után
+(lásd §7 lent) a fájl nem változott a jelölőn kívül, ami igazolja, hogy a
+választás jó volt. `check_secrets.dart`-ot a jelen kör `allowed_paths`-a nem
+engedi futtatni külön (Dart binary nélkül a boxon nincs is rá mód) — a
+gate-újrafuttatás (§8 lent) a bizonyíték.
+
+### M1 + A2b — kimerítő A2 auth-leltár, és a `handles`/`privacy` 404-próba
+
+`test_a2_all_thirteen_routers_are_mounted_and_authenticated_ones_require_auth`
+helyébe
+`test_a2_all_eleven_routers_are_mounted_and_every_route_requires_auth_except_documented_exceptions`
+lépett: a régi öt kézzel válogatott próba helyett a teszt az `app.routes`
+fából olvassa ki AZ ÖSSZES felcsatolt `/community/**` route-metódust (egy
+`>=40` alsó korlát véd a néma-üres-aggregátum ellen), és mindegyiken
+401/403-at követel, KÉT tételesen indokolt kivétellel:
+
+- `GET /community/ping` — triviális liveness-próba, adatolvasás és
+  mellékhatás nélkül, ugyanaz a jellegű route, mint a felső szintű
+  `/health` végpontok.
+- `GET /community/profiles/{public_id}` — lásd az M2 szakaszt lent.
+
+Új `test_a2b_handles_and_privacy_routes_404_even_with_community_enabled`:
+`community_enabled=true` MINDEN al-flaggel BE mellett a `/community/handles/**`
+és `/community/privacy/**` egyetlen bejegyzést sem ad az OpenAPI sémában, és
+6 konkrét (GET/POST/PUT) hívás mindegyike `404`-et ad — nem `403`-at —, ami
+az ADR 0497 D6 „regisztráció-szintű, nem futásidejű" döntését pinneli.
+
+### M2 — a `GET /community/profiles/{public_id}` NEM vehető ki
+
+Kimérve: `backend/tests/community/test_profile_service.py:351`
+(`test_update_profile_uses_callers_own_row`, tilos zóna, MÓDOSÍTÁS NÉLKÜL) a
+`community_client_enabled` fixture-ön keresztül — ami UGYANAZT a
+`build_community_router()` factory-t hívja, mint a production `main.py` —
+`Authorization` fejléc NÉLKÜL hívja meg ezt a route-ot, és `200`-at vár. Ha a
+route kikerülne az aggregátumból, ez a tilos-zónás teszt `404`-re bukna, amit
+az A7 tilt. **Döntés: a route bent marad**, és felkerült az A2 kivétel-
+listájára, mért indoklással (lásd fent) — a válasz-séma
+(`CommunityProfileOut`) az A2 saját kontraktusa szerint MOST is csak
+`public_id`/`display_name`/`created_at`-et ad vissza, a belső `id`-t soha; a
+kliens ezt a route-ot nem hívja (nincs a `client-backend-endpoints.json`-ban).
+Ez egy MEGMARADÓ, nyitott tartozás (ADR 0400 Következmények (c) — ugyanaz a
+privacy-authz kör zárja majd, amikor a `handles`/`privacy` is felcsatolható
+lesz).
+
+### N1 — a runbook block/mute állítása javítva
+
+`docs/operations/device-backend-runbook.md`: a §1 és a §6 tábla korábban azt
+sugallta, hogy `community_writes_enabled=false` a blocking/muting írásokat is
+letiltja. Mérve: a `safety` router (block/mute) nincs a `_reads_only()`
+kapun — csak `posts` és `social_graph` van. A szöveg és a tábla javítva a
+mért viselkedésre, és mindkét hely kiegészült azzal is, hogy a `handles`/
+`privacy` egyetlen flag-kombinációval sem érhető el (a B1/B2 javítás
+következménye).
+
+### §6.1 — a valódi-sértés próba (KÖTELEZŐ dokumentáció)
+
+A próba a kódban MÁR megvolt a javító kör előtt is
+(`backend/tests/test_client_contract_parity.py::test_a5_real_violation_probe_missing_route_is_caught`),
+csak a brief nem írta le. A próba: a mounted-listából kivesz egy
+véletlenszerű bejegyzést (`next(e for e in entries if e["status"] ==
+"mounted")`), egy MÁSOLT `paths` dict-ből (nem az élő appból) törli a
+bejegyzés útvonalát (`paths.pop(target["path"], None)`), majd ugyanazzal a
+`_missing_mounted_entries()` segédfüggvénnyel — amit az A5 él-cellája
+(`test_a5_every_mounted_client_call_exists_in_openapi`) is használ — leméri,
+hogy a hiányzó bejegyzés visszajön-e a `missing` listában, és igenli
+(`assert target in missing`). Ez bizonyítja, hogy az A5 cella tényleg
+falszifikálható: ha egy jövőbeli kör átnevez egy route-ot a szerveren, a
+kontraktus-fájl és a valós OpenAPI séma szétválik, és ugyanez a mérő-logika
+piros lesz — nem csak ezen a mesterséges próbán, hanem az éles A5 cellán is.
+Eredmény: a próba ZÖLD (a teszt maga PASS), és a benne szimulált „route
+eltűnt" eset a `missing` listában landol, ahogy a próba elvárja.
+
+### §7 — kötelező ellenőrzések (a javítás UTÁN mérve)
+
+```
+cd backend && .venv/bin/python -m ruff check app tests        → All checks passed!
+cd backend && .venv/bin/python -m ruff format app tests       → 1 file reformatted (test_community_mounting.py, a hosszú
+                                                                  unexpectedly_open.append(...) sor tördelése), 138 unchanged
+cd backend && .venv/bin/python -m ruff format --check app tests → 139 files already formatted (a fenti formázás után)
+cd backend && .venv/bin/python -m pytest -q                    → lásd a §11 review-t / a commit-log mellékelt kimenetét
+tools/round-gate.sh test/app/app_config_test.dart test/app/config/feature_flags_test.dart → lásd a §11 review-t
+```
+
+A `pytest -q` teljes futása és a Flutter-oldali `round-gate.sh` kimenete
+csonkítatlanul a javító kör commit-üzenetében / jelzésében van rögzítve (a
+B3 javítás után a `secrets` lépésnek is zöldnek kell lennie).
+
 ## 11. Review — a Claude tölti ki
