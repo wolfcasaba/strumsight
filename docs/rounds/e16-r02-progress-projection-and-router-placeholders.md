@@ -147,6 +147,47 @@ briefen mind a 8 cellája PIROS; minden állítását a KÓDHOZ méri (a regexet
 `mastery_milestone.dart`-ból olvassa ki, az export hiányát a barrelből), nem
 kézzel másolt elváráshoz.
 
+## 0.0.J Módosítás (ADR 0112 önjavító kör, 2026-09-03) — az útvonal-szintű képernyőcserét PINNELŐ tesztek a scope-ba kerülnek
+
+A kör HARMADIK pre-flightja (`main @ b685831a`) egy ÚJ blokkolót mért ki
+(H3, `.pipeline/halt-detail-E16-R02.md`): az **A1** cella a `/profile/progress`
+útvonalat a `ProgressDashboardScreen`-re köti át, a `ProgressScreen`-t viszont
+a briefen KÍVÜL élő tesztek pinnelik a legacy típusra. A halt-detail §1/§2
+teljes lánca mérve; az önjavító kör a mérést újra elvégezte:
+
+| Mért parancs | Eredmény |
+|---|---|
+| `sed -n '544,545p' lib/app/routing/app_router.dart` | `path: AppRoutes.profileProgress` → `const ProgressScreen()` — ezt írja át az A1 |
+| `sed -n '247,255p' test/features/today/hub_navigation_test.dart` | shell-ON routeren `router.go(AppRoutes.progress)` után `expect(find.byType(ProgressScreen), findsOneWidget)` |
+| `flutter test test/features/today/hub_navigation_test.dart` | `00:03 +8: All tests passed!` — MA ZÖLD, tehát élő regresszió-őr, nem előre piros teszt |
+| `python3 tools/brief-lint.py --brief <ez a brief> --level strict` (a lint javítása UTÁN) | **S11**: `progress_screen.dart` → `offline_network_guard_test.dart`, `app_router_test.dart`, `hub_navigation_test.dart` |
+
+A lint mind a HÁROM tesztet felsorolja, mert mindhárom a `/progress` →
+`/profile/progress` láncon jut a képernyőhöz (`AppRoutes.progress` /
+`AppRoutes.profileProgress` a forrásukban). Kettő közülük ma azért marad zöld,
+mert a harness shellje KI van kapcsolva — ez azonban futásidejű konfiguráció,
+nem szerződés: egy útvonal-átkötésnek pontosan ezek a legközelebbi őrei, ezért
+a kör SAJÁT kapuján is futniuk kell (L593: a célzott gate mérje azt, amit a kör
+elronthat). A `test/core/screen_size_guard_test.dart` és a
+`test/features/progress/progress_screen_test.dart` NEM kerül a listára: azok a
+képernyőt közvetlenül építik (`home: ProgressScreen()`), a routertől
+függetlenül futnak tovább, és az utóbbi ráadásul a kör TILOS zónájában él.
+
+**A revízió:** a három teszt bekerül az `allowed_paths`-ba ÉS a `gate_tests`-be
+(a §7 gate-parancs is bővül, S12), a §4 tábla pedig a MEGLÉVŐ három-őr sorral
+azonos szigorral pinneli a jogosultságot. **Cellát nem töröltünk, nem
+gyengítettünk, küszöböt nem lazítottunk** — a `hub_navigation_test.dart` A5
+cellájában a VÁRT KÉPERNYŐ-TÍPUS változik (`ProgressScreen` →
+`ProgressDashboardScreen`), maga az állítás (a legacy `/progress` mélylink a
+redirect végén a `/profile/progress` képernyőjét adja) VÁLTOZATLAN.
+
+**Az eszköz-oldali gyökérok is javítva** (ADR 0112 §1/A osztály): a
+`tools/brief-lint.py` `owned_existing_screens()` a képernyő-cserét
+FÁJL-TULAJDONLÁSBÓL mérte, ezért erre a briefre (0 db `*_screen.dart` és 0 db
+`lib/` könyvtár-előtag az `allowed_paths`-on) az S11/S14 strukturálisan néma
+volt. A `route_level_swapped_screens()` ezt zárja, őrteszt:
+`tools/tests/test_brief_lint_route_level_screen_swap.py`.
+
 ## 0.0 A MÉRT hiba: kész felület, amihez nincs adatforrás
 
 A `progress_v2` feature **hét** fájlt tartalmaz: két képernyőt (`ProgressDashboardScreen`, `SkillDetailScreen`), négy domain-projekciót (`progress_overview_projection`, `skill_detail_projection`, `progress_trend`, `metric_version_segment`) és egy téma-burkolót. A képernyők „hívó-adta" szerződésűek (`required this.projection`), de **a projekciót SENKI nem állítja elő**: a típusokra a feature-en kívül nulla hivatkozás van, és a router `/profile/progress` útvonala ma is a legacy `ProgressScreen`-t építi. A felület tehát elkészült, de halott kód.
@@ -177,6 +218,9 @@ allowed_paths = [
   "test/app/navigation/adaptive_scaffold_test.dart",
   "test/app/navigation/legacy_route_redirect_test.dart",
   "test/app/navigation/tab_state_restoration_test.dart",
+  "test/app/offline_network_guard_test.dart",
+  "test/app/routing/app_router_test.dart",
+  "test/features/today/hub_navigation_test.dart",
   "test/ui/ui_inventory_test.dart",
   "docs/ui/migration-status.md",
   "docs/rounds/e16-r02-progress-projection-and-router-placeholders.md",
@@ -191,6 +235,9 @@ gate_tests = [
   "test/app/navigation/adaptive_scaffold_test.dart",
   "test/app/navigation/legacy_route_redirect_test.dart",
   "test/app/navigation/tab_state_restoration_test.dart",
+  "test/app/offline_network_guard_test.dart",
+  "test/app/routing/app_router_test.dart",
+  "test/features/today/hub_navigation_test.dart",
   "test/ui/ui_inventory_test.dart",
   "test/l10n/arb_parity_test.dart",
   "test/tooling/gen_l10n_segments_test.dart",
@@ -259,6 +306,7 @@ A `/profile/progress` a Progress V2 dashboardot mutassa, VALÓS, meglévő adato
 | `test/features/progress_v2/progress_projection_builder_test.dart` | a §6 projekció-cellái |
 | `test/app/routing/progress_composition_test.dart` | a §6 útvonal-cellái |
 | `test/app/navigation/*.dart` (három őr) · `test/ui/ui_inventory_test.dart` | regresszió-őrök — a jogosultság PONTOSAN a `/profile/progress` adapter típusának átírása; cella törlése, `skip`-je vagy gyengítése TILOS |
+| `test/features/today/hub_navigation_test.dart` · `test/app/routing/app_router_test.dart` · `test/app/offline_network_guard_test.dart` | útvonal-szintű regresszió-őrök (§0.0.J) — a jogosultság PONTOSAN annyi, hogy a `/profile/progress`-en VÁRT képernyő-típus `ProgressScreen` → `ProgressDashboardScreen` legyen ott, ahol a teszt ezen az útvonalon jut a képernyőhöz; minden más állítás (a redirect-lánc, a shell-OFF `/progress` viselkedés, az offline-őr) VÁLTOZATLAN, cella törlése, `skip`-je, átnevezése vagy gyengítése TILOS |
 | `docs/ui/migration-status.md` | a MÉRT állapot |
 
 **Tilos zóna:** `lib/features/progress/**` (a legacy fájl) · `lib/features/progress_v2/domain/**` · `lib/features/{audio_analysis,song_trainer}/**` (olvasás igen, írás nem) · `lib/features/gamification/**` a §4 táblában NEM szereplő minden fájlja (az evaluator, a `mastery_progress.dart` és a `mastery_milestone.dart` VÁLTOZATLAN — a katalógus a MEGLÉVŐ típusokat tölti) · `lib/features/practice/**` a `public.dart` export-során kívül · `docs/adr/**` · `tools/**`
@@ -418,7 +466,7 @@ VÁLTOZATLANOK (a skill-detail nem shell-cél).
 
 ```bash
 dart run tool/gen_l10n_segments.dart --write   # az ARB-kulcsok felvétele UTÁN, a gate ELŐTT
-tools/round-gate.sh test/features/gamification/domain/mastery_milestone_catalog_test.dart test/features/gamification/data/practice_mastery_evidence_adapter_test.dart test/features/progress_v2/progress_projection_builder_test.dart test/features/progress_v2/dashboard_states_test.dart test/features/progress_v2/mastery_evidence_test.dart test/app/routing/progress_composition_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/navigation/tab_state_restoration_test.dart test/ui/ui_inventory_test.dart test/l10n/arb_parity_test.dart test/tooling/gen_l10n_segments_test.dart test/core/architecture_dependency_test.dart
+tools/round-gate.sh test/features/gamification/domain/mastery_milestone_catalog_test.dart test/features/gamification/data/practice_mastery_evidence_adapter_test.dart test/features/progress_v2/progress_projection_builder_test.dart test/features/progress_v2/dashboard_states_test.dart test/features/progress_v2/mastery_evidence_test.dart test/app/routing/progress_composition_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/offline_network_guard_test.dart test/app/routing/app_router_test.dart test/features/today/hub_navigation_test.dart test/ui/ui_inventory_test.dart test/l10n/arb_parity_test.dart test/tooling/gen_l10n_segments_test.dart test/core/architecture_dependency_test.dart
 ```
 
 ## 8. Implementációs sorrend

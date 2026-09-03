@@ -1,5 +1,42 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 E16-R02 / H3 ÖNJAVÍTÓ KÖR, 3. (ADR 0112) — az útvonal-szintű képernyőcserét pinnelő tesztek a scope-ba, és a lint vakfoltja javítva (2026-09-03)
+
+Az E16-R02 **harmadik** pre-flightja (`main @ b685831a`) ismét **H3**: az **A1**
+cella a `/profile/progress`-t köti át a `ProgressDashboardScreen`-re, a legacy
+`ProgressScreen`-t viszont a briefen KÍVÜL élő
+`test/features/today/hub_navigation_test.dart:247` pinnelte (shell-ON router,
+`flutter test` → `00:03 +8: All tests passed!` = ÉLŐ regresszió-őr).
+
+**Két javítás egy körben:**
+
+1. **Eszköz (A osztály):** a `tools/brief-lint.py` a képernyő-cserét
+   FÁJL-TULAJDONLÁSBÓL mérte, ezért erre a briefre (0 db `*_screen.dart` és 0 db
+   `lib/` könyvtár-előtag az `allowed_paths`-on) az `S11`/`S14` **strukturálisan
+   néma** volt. Az új `route_level_swapped_screens()` a router
+   `GoRoute(path: AppRoutes.X, builder: … const YScreen())` párjaiból méri az
+   ÚTVONAL-szintű cserét; három hamis-riasztás-mérce szűkíti (router a
+   scope-ban · a brief nevezze meg az útvonalat · a PIN is nevezze meg) —
+   mérve: 45 bekötésből 1 képernyő, 5 pinből 3.
+2. **Kör-tartalom (B osztály):** §0.0.J revízió — a három útvonal-szintű őr
+   (`hub_navigation_test.dart`, `app_router_test.dart`,
+   `offline_network_guard_test.dart`) bekerült az `allowed_paths`-ba ÉS a
+   `gate_tests`-be (a §7 gate-parancs is), a §4 tábla pedig a jogosultságot
+   PONTOSAN a várt képernyő-típus átírására szűkíti.
+
+**Cellát nem töröltünk, nem gyengítettünk** — a `hub_navigation` A5 cellájában
+csak a VÁRT TÍPUS változik, az állítás (a legacy `/progress` a redirect végén a
+`/profile/progress` képernyőjét adja) változatlan. A képernyőt közvetlenül építő
+két teszt (`screen_size_guard_test`, `progress_screen_test`) MÉRVE kimarad.
+
+**Őrtesztek:** `tools/tests/test_brief_lint_route_level_screen_swap.py` (a
+javítás előtti fán 5 cellája PIROS) · `tools/tests/test_e16_r02_hub_navigation_pin_scope.py`
+· **Tanulság:** `docs/LESSONS.md` **L608**.
+
+**A kör így újraindítható** — az E16-R02 sora a `pipeline-queue.tsv`-ben
+változatlanul `pending`, a brief-lint `strict` szinten **nincs lelet**.
+
+
 ## 🔧 E16-R02 / H3 ÖNJAVÍTÓ KÖR, 2. (ADR 0112) — a route-katalógus ownere a scope-ba + négy mért brief-hiba (2026-09-03)
 
 Az E16-R02 **második** pre-flightja (`main @ 18a649ec`, tehát már a lenti

@@ -231,7 +231,7 @@ ELEJÉN a legolcsóbb — a review-ban már egy teljes implementer-futás az ár
 | `S8` | nincs visszakeresett előzmény: futtasd a `knowledge-rag`-ot, és a találatot írd a brief fejlécébe |
 | `S9` | a képernyő-leltár őre hiányzik az `allowed_paths` **és** a `gate_tests` közül egyszerre |
 | `S10` | a kör a router forrását engedi, de a navigációs őrök nincsenek a listán |
-| `S11` | a lecserélt képernyőt a briefen **kívül** élő teszt pinneli → vedd fel `allowed_paths`-ba **és** `gate_tests`-be (különben H3) |
+| `S11` | a lecserélt képernyőt a briefen **kívül** élő teszt pinneli → vedd fel `allowed_paths`-ba **és** `gate_tests`-be (különben H3). A csere lehet **fájl-szintű** (a kör átírja a képernyő fájlját) vagy **útvonal-szintű** (a kör az `app_router.dart` `GoRoute.builder`-ét köti át, a képernyő fájlja érintetlen) — E16-R02 |
 | `S12` | a §7 gate-parancs nem tükrözi a `gate_tests` listát — a brief olyan mércét ígér, amit sosem futtat |
 | `S13` | az `allowed_paths` nem létező könyvtár-előtagot sorol fel: nulla fájlt fed, a lint zöldje semmit nem bizonyít |
 | `S14` | a lecserélt képernyőt a briefen **belül** élő teszt pinneli, de az nincs a `gate_tests`-ben → a célzott kapu zölden megy át azon a fán, amit a kör pirosra visz (L593) |
