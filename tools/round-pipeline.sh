@@ -706,6 +706,27 @@ CLAUDE_PROCESS_COMM_PATTERN='^claude([.-][A-Za-z0-9_-]+)?$'
 # `tmux send-keys`-szel egy néma, de élő interaktív Claude-panelbe, mielőtt a
 # driver megölné a sessiont. Szándékosan EGYETLEN sor és tisztán ASCII: a
 # send-keys argumentumként adja át, aposztróf/újsor a beírást törné.
+# A `claude` TUI beviteli doboza a gyorsan érkező, hosszú szöveget BEILLESZTÉSNEK
+# kezeli, és ilyenkor a KÖZVETLENÜL utána érkező Enter ÚJ SORT ír, nem küld be.
+# MÉRVE 2026-09-03: a `tmux send-keys -t <pane> "<szöveg>" Enter` alakkal a
+# folytatás-prompt BENN MARADT a dobozban (négy sorra tördelve), a session
+# tovább állt üresen; egy KÜLÖN, később küldött Enter azonnal beküldte. A
+# driver ébresztője ugyanezt az alakot használta, tehát a „kill előtt ébressz"
+# mechanizmus (HEAL E13-R14) megbízhatatlan volt (ADR 0497 D1).
+NUDGE_SUBMIT_DELAY=${PIPELINE_ORCH_NUDGE_SUBMIT_DELAY:-1}
+
+send_nudge_to_pane() {   # $1=tmux-session $2=szöveg
+  local pane="$1" text="$2"
+  # fd 9 (a lánc-zár) lezárása, mint a többi tmux-hívásnál (2026-08-18).
+  ( exec 9>&-; tmux send-keys -t "$pane" -- "$text" ) 2>/dev/null || true
+  sleep "$NUDGE_SUBMIT_DELAY"
+  ( exec 9>&-; tmux send-keys -t "$pane" Enter ) 2>/dev/null || true
+}
+
+# A MÉRT 529-aláírás a session-naplóban, és mennyit nézünk a napló végéből.
+API_OVERLOAD_PATTERN='API Error: 529|529 Overloaded'
+OVERLOAD_TAIL_BYTES=${PIPELINE_ORCH_OVERLOAD_TAIL_BYTES:-4000}
+
 STALL_NUDGE_TEXT=${PIPELINE_ORCH_STALL_NUDGE_TEXT:-'FOLYTASD (elakadas-ebreszto): a sessiont kulso megszakitas allitotta le, kor-jelzes nem szuletett. Ellenorizd az implementer jelzesfajljat (tools/wait-for-round.sh <munkapeldany> 540), es folytasd a kor protokolljat ott, ahol abbamaradt.'}
 
 # A Codex/Terra fallback-ágon futó `codex exec` process MÉRT neve: `codex`
@@ -857,6 +878,7 @@ run_tmux_session() {
   local deadline pinger_pid claude_started_at claude_limit_seen=0 pane_tty
   local stall_seconds log_age
   local nudge_budget nudges_sent=0 last_nudge_at=0 stall_reference nudge_tty
+  local overload_seconds overload_budget active_stall_seconds active_nudge_budget
 
   # TESZT-BIZTOSÍTÉK (ADR 0138, MÉRVE 2026-08-05). A `tools/tests/` teljes
   # firinget futtató esetei izolált `PIPELINE_STATE_DIR`-t kapnak, de a
@@ -908,6 +930,12 @@ run_tmux_session() {
   claude_started_at=$(date +%s)
   stall_seconds=${PIPELINE_ORCH_STALL_SECONDS:-$(( ${PIPELINE_ORCH_STALL_MINUTES:-20} * 60 ))}
   nudge_budget=${PIPELINE_ORCH_STALL_NUDGES:-1}
+  # API 529 („Overloaded") esetén a session BIZONYÍTOTTAN üres prompton áll —
+  # nem gondolkodik. Ilyenkor nincs értelme kivárni a teljes néma ablakot
+  # (ADR 0497 D2): rövidebb küszöb és nagyobb ébresztés-keret, mert egy külső
+  # kimaradás ismétlődhet.
+  overload_seconds=${PIPELINE_ORCH_OVERLOAD_SECONDS:-120}
+  overload_budget=${PIPELINE_ORCH_OVERLOAD_NUDGES:-4}
   while [ ! -f "$signal_file" ]; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
       log "időkorlát lejárt ($label) — a tmux-sessiont leállítjuk"
@@ -997,23 +1025,34 @@ run_tmux_session() {
       stall_reference=$(stat -c %Y "$session_log" 2>/dev/null || date +%s)
       [ "$last_nudge_at" -gt "$stall_reference" ] && stall_reference=$last_nudge_at
       log_age=$(( $(date +%s) - stall_reference ))
-      if [ "$log_age" -ge "$stall_seconds" ]; then
+      # MÉRT eset (2026-09-03 13:31, E15-R12 + E16-R02): mindkét session
+      # `API Error: 529 Overloaded`-del ZÁRTA a turnjét („Cooked for 1h 22m
+      # 21s"), és üres prompton állt. A 20 perces néma ablak ilyenkor tiszta
+      # veszteség — a session nem dolgozik, csak vár.
+      active_stall_seconds=$stall_seconds
+      active_nudge_budget=$nudge_budget
+      if tail -c "$OVERLOAD_TAIL_BYTES" "$session_log" 2>/dev/null \
+        | grep -qaE "$API_OVERLOAD_PATTERN"; then
+        active_stall_seconds=$overload_seconds
+        active_nudge_budget=$overload_budget
+      fi
+      if [ "$log_age" -ge "$active_stall_seconds" ]; then
         nudge_tty=$(tmux list-panes -t "$tmux_session" -F '#{pane_tty}' 2>/dev/null | head -n 1)
         # Csak interaktív Claude-panelt van értelme ébreszteni: annak van
         # prompt-doboza. A `codex exec` a promptot argv-ből kapja, stdin-re
         # küldött szöveg nem éri el — ott a minta nem illeszkedik, tehát a
         # viselkedés változatlanul az azonnali `break`.
-        if [ "$nudges_sent" -lt "$nudge_budget" ] \
+        if [ "$nudges_sent" -lt "$active_nudge_budget" ] \
           && [ -n "$nudge_tty" ] \
           && ps -t "${nudge_tty#/dev/pts/}" -o comm= 2>/dev/null \
             | grep -qE "$CLAUDE_PROCESS_COMM_PATTERN"; then
           nudges_sent=$(( nudges_sent + 1 ))
           last_nudge_at=$(date +%s)
-          log "ELAKADÁS-ÉBRESZTŐ ($nudges_sent/$nudge_budget): a(z) $label panelje $(( stall_seconds / 60 )) perce néma, de a Claude-process ÉL — folytatás-prompt megy be, még nem öljük meg a sessiont"
+          log "ELAKADÁS-ÉBRESZTŐ ($nudges_sent/$active_nudge_budget): a(z) $label panelje $(( active_stall_seconds / 60 )) perce néma, de a Claude-process ÉL — folytatás-prompt megy be, még nem öljük meg a sessiont"
           # fd 9 (a lánc-zár) lezárása, mint a többi tmux-hívásnál (2026-08-18).
-          ( exec 9>&-; tmux send-keys -t "$tmux_session" "$STALL_NUDGE_TEXT" Enter ) 2>/dev/null || true
+          send_nudge_to_pane "$tmux_session" "$STALL_NUDGE_TEXT"
         else
-          log "ELAKADÁS: a(z) $label session-naplója $(( stall_seconds / 60 )) perce nem változott (élő tmux-session, jelzés nélkül) — leállítjuk, nem várjuk ki a teljes időkorlátot"
+          log "ELAKADÁS: a(z) $label session-naplója $(( active_stall_seconds / 60 )) perce nem változott (élő tmux-session, jelzés nélkül) — leállítjuk, nem várjuk ki a teljes időkorlátot"
           break
         fi
       fi
