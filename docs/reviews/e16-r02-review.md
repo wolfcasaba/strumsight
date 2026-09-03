@@ -247,6 +247,33 @@ MINDEN GATE ZÖLD.
 `aggregátum ELÁVULT — PIROS` sor a `gen_l10n_segments_test.dart` SAJÁT
 őr-cellájának várt belső kimenete, nem gate-hiba: maga a lépés ZÖLD.)
 
+## 5.1 A `5420777e` Full Gate pirosa MÉRVE FLAKE, nem regresszió
+
+A javító kör utáni Full Gate futás (`33796054904`, SHA `5420777e`) egyetlen
+teszttel bukott:
+
+```
+❌ test/features/song_trainer/application/import/song_import_controller_test.dart:
+   SongImportController cancellation during import closes the workspace without a record
+8531 tests passed, 1 failed, 21 skipped
+```
+
+Három független mérés mondja ki, hogy ez **flake**, nem a kör regressziója:
+
+1. **A kör diffje nulla `song_trainer` fájlt érint:**
+   `git diff --name-only 9ba54399..5420777e | grep -i song_trainer` → üres.
+2. **A teszt a KÖR HEAD-jén lokálisan zöld** (izolált `/tmp/review2-e16-r02`
+   klón, `5420777e`): `flutter test …/song_import_controller_test.dart` →
+   `+6: All tests passed!`, benne a bukott cellával.
+3. A cella egy **aszinkron megszakítási versenyt** mér („cancellation during
+   import"), és a Full Gate a `c2b1362a` SHA-n — ugyanezzel a
+   `song_trainer` fával — **zölden** futott le.
+
+**Megerősítő futás:** `full-gate.yml` újradispatch az `a5979875` SHA-n
+(run `33798888247`) — az eredményt a kör-jelzés `detail=` mezője hordozza.
+Ez a piros a H5 számláló szempontjából NEM a kör pirosa; a merge-blokkoló
+változatlanul a §4 szerinti Router CI.
+
 ## 6. NOTE-ok (nem blokkolnak)
 
 1. `progress_projection_builder.dart:44-54` — a trend-pontok a *mastery
