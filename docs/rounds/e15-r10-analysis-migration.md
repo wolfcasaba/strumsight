@@ -490,16 +490,29 @@ parancsa és a részletes komponens-térkép ott).
 
 ### 10.2 Komponens-térkép (5.2, R3, R9, R12)
 
+> **Frissítve a javító körben (1. javító menet, §10.8)** — az idle fázis
+> `SsEmptyState`-je és a `SsContentCard` home-képernyős használata a review
+> B1/M1/M4 leletei nyomán token-stílusú helyi widgetre cserélődött; a lenti
+> lista a JAVÍTOTT állapotot írja le.
+
 - **`SsEmptyState`** — `AnalysisHomeScreen` üres recent-lista (akció:
-  `onStartRecording`, valódi), `AnalyzeScreen` idle és micDenied fázis
-  (micDenied akciója `openAppSettings`, valódi — a lecserélt bespoke Column
-  ezt nem tudta modellezni), `AnalysisMetricDetailScreen` új üres ága (se
-  metrika, se insight — korábban néma üres `ListView` volt; akció: `commonClose`
-  + `Navigator.maybePop`).
+  `onStartRecording`, valódi), `AnalyzeScreen` micDenied fázis (akció:
+  `openAppSettings`, valódi — a lecserélt bespoke Column ezt nem tudta
+  modellezni; cím: `analysisRecordingPermissionDeniedTitle`, a §10.8/m1
+  javítás után, hogy ne ismételje a képernyő-fejlécet), `AnalysisMetricDetailScreen`
+  új üres ága (se metrika, se insight — korábban néma üres `ListView` volt;
+  akció: `commonClose` + `Navigator.maybePop`; cím/üzenet a §10.8/m2 javítás
+  után `analysisOverviewUnavailable`/`analysisOverviewNotApplicable`).
 - **`SsFailureState`** — `AnalysisRecordingScreen._RecordingStage.error`,
   `AnalysisProcessingScreen`'s `AnalysisInputError`/`AnalysisError` —
   mindhárom valódi `AppFailure`-t hordoz, `SsFailurePresentation.from`
-  kódalapú címet/üzenetet ad a korábbi nyers `failure.code` helyett.
+  kódalapú címet/üzenetet ad a korábbi nyers `failure.code` helyett. A
+  §10.8/B1 és M3 javítás után: ha a mért `retryable == false`
+  (`contactSupport`-only prezentáció, amelyre ennek a két képernyőnek nincs
+  valódi kezelője), a screen egy explicit, token-stílusú fallback gombot ad
+  (`analysis-processing-restart` / `analysis-recording-error-retry`) — az
+  `SsFailureState` a maga beépített gombját csak `retryable == true` esetén
+  kapja meg, hogy sose legyen két azonos célú CTA egymás alatt.
 - **Kivétel-osztály (R12), token-stílusú helyi widget marad** —
   `AnalysisRecordingScreen._PermissionDeniedBody` (a `retryable`-től
   függetlenül MINDIG retry-t mutat; az `SsFailureState` kód-alapú akciója ezt
@@ -508,10 +521,30 @@ parancsa és a részletes komponens-térkép ott).
   `AnalysisPermissionDenied` ága (nincs `AppFailure` objektum ezen az
   állapoton — kitalálni egyet mért kódot hamisítana), `AnalyzeScreen`'s
   `micError` fázisa (a busy-mic szövegnek szándékosan nincs saját akciója — a
-  Retry a különálló nagy vezérlőben él, parity Live r13/Tuner r68-cal).
+  Retry a különálló nagy vezérlőben él, parity Live r13/Tuner r68-cal),
+  `AnalyzeScreen`'s `AnalyzeSkeleton` (`:222`, betöltés — a widget maga
+  scope-on kívüli, de a hívási hely token-stílusú) és `analyzeNoChords`
+  (`:227-234`, nyers `Text`, de a `bodyMedium`/`textSecondary` tokent
+  használja — nincs saját akciója, a "New recording" a lenti vezérlősávban
+  él). **A javító kör (§10.8/M4) egy ÚJ taggal bővítette ezt az osztályt:**
+  `AnalyzeScreen`'s **idle** fázisa — a lenti vezérlősáv már ad egy valódi
+  "Record" CTA-t, ezért az `SsEmptyState` kötelező második akciója csak
+  hamisítható vagy duplikálható lett volna (M4); a fázis emiatt VISSZAállt
+  token-stílusú helyi widgetre, cím nélkül (hogy ne ismételje a `:108-113`
+  fejlécet), üzenettel (`analyzeIntro`).
 - **Betöltés** — `AnalysisProcessingScreen`'s `LinearProgressIndicator`
   típusban PINNELT (`processing_progress_test.dart`), ezért típusban
   változatlan marad, csak `color`/`backgroundColor` tokent kap.
+- **`AnalysisHomeScreen` — `_UntruncatedContentCard` (§10.8/M1)** — a
+  `SsContentCard` (`lib/core/design_system/components/cards/ss_content_card.dart`,
+  scope-on KÍVÜL) `maxLines: 2`/`4` + `TextOverflow.ellipsis` némán csonkolja
+  a valódi felhasználói tartalmat (a legutóbbi elemzés címét) `textScaler
+  2.0`-n. Mivel a komponens maga nem módosítható, a képernyő két kártyája
+  (`_InputModeCard`, `_RecentAnalysisTile`) egy képernyő-lokális,
+  ugyanazokra a tokenekre (`SsSpacing`/`SsTypography`/`SsColorScheme`) és
+  ugyanarra a `SsSurface`/`SsCardActionRegion`/`SsCardAction` primitívre épülő
+  megfelelőre vált, `maxLines`/`overflow` NÉLKÜL — a `ListView` amúgy is
+  görgethető, tehát a hosszabb szöveg csak több sort foglal, nem csordul túl.
 - **`AnalysisMetricDetailScreen` SEKÉLY migráció (R9)** — a vizuális törzs a
   `MetricCard`/`InsightCard` megosztott widgetekben él, azok NINCSENEK az
   `allowed_paths`-on; a kör csak a képernyő saját rétegét migrálta
@@ -623,5 +656,201 @@ golden-felvétel UTÁN történtek) nem változtatták meg egyik golden képerny
 kimenetét sem — mindkét érintett üres-állapot ág (`AnalysisHomeScreen`,
 `AnalysisMetricDetailScreen`) a golden-fixture NEM-üres adatával fut, tehát
 az érintett kódágat a golden sosem hívta.
+
+### 10.8 Javító kör (1. javító menet) — leletenkénti javítás és bizonyíték
+
+A `docs/reviews/e15-r10-review.md` CHANGES REQUESTED verdiktje 1 BLOCKER + 4
+MAJOR + 6 MINOR + 1 NOTE leletet mért. Az alábbi lista leletenként rögzíti a
+javítást és a bizonyítékot; a §7 gate + a golden-újrafelvétel/-ellenőrzés
+teljes kimenete a §10.7-et követi (frissítve a javító kör után).
+
+- **B1 (BLOCKER) — javítva.** `analysis_processing_screen.dart`'s
+  `_FailureBody`: a nem-újrapróbálható ág (`presentation.retryable == false`
+  — `UnknownFailure`/`ValidationFailure`) mostantól MINDIG kap egy explicit
+  `SsButton(key: Key('analysis-processing-restart'))` fallback-akciót, az
+  `SsFailureState`-nek pedig csak `retryable == true` esetén adjuk át az
+  `onRetry`-t (hogy sose legyen két, ugyanarra a célra mutató gomb). Bizonyíték:
+  `test/features/analyze/processing_progress_test.dart` `§0.0.A/R12` csoportja
+  HÁROM cellára bővült — `AnalysisInputError` (non-retryable),
+  `AnalysisError`+`AudioFailure` (retryable) és `AnalysisError`+`UnknownFailure`
+  (non-retryable) —, mindhárom a valódi akció jelenlétét is állítja
+  (`analysis-processing-restart` kulcs vagy `FilledButton` típus), nem csak a
+  `SsFailureState` típusát.
+- **M1 (MAJOR) — javítva.** `analysis_home_screen.dart`: a `SsContentCard`
+  (scope-on kívüli) `maxLines`+`ellipsis` csonkolása helyett a képernyő két
+  kártyája (`_InputModeCard`, `_RecentAnalysisTile`) egy új, screen-lokális
+  `_UntruncatedContentCard`-ot használ — ugyanazok a design-rendszer
+  primitívek (`SsSurface`, `SsCardActionRegion`, `SsCardAction`), de
+  `maxLines`/`overflow` nélkül. Bizonyíték:
+  `test/features/analyze/recording_state_test.dart`'s `AnalysisHomeScreen —
+  en/hu` A3-cellája a `takeException` mellett most `RenderParagraph
+  .didExceedMaxLines`-t is ellenőrzi minden `RichText`-en — ez a mérce
+  STRUKTURÁLISAN látja az ellipszist is, nem csak a kivételt.
+- **M2 (MAJOR) — mérve dokumentálva, nem visszaállítható.** A
+  `analysisProcessingErrorTitle`/`analysisRecordingErrorTitle`/
+  `analysisRecordingErrorRetry` (utóbbi visszakötve, ld. M3) képernyő-specifikus
+  szövegek forrása az `SsFailurePresentation.from(l10n, failure)` — MÉRVE ez
+  egy `factory`, ami egy PRIVÁT konstruktort (`SsFailurePresentation._`) hív;
+  a `title`/`message` mezők a `failure.code`-ból származnak
+  (`failure_presentation.dart:59-96`), és a hívó oldalról nem
+  felülírhatók anélkül, hogy a `lib/core/design_system/**` fájlt módosítanánk
+  — ami a kör `allowed_paths`-án KÍVÜL van. A processzálás-képernyőn a régi
+  nyers `failure.code` cseréje (§10.2 eredeti indoklása) valóban helytálló; a
+  felvétel-képernyőn a cím korábban IS rendes lokalizált szöveg volt (mérve:
+  `analysisRecordingErrorTitle` = "Recording couldn't start"), tehát ott a
+  §10.2 eredeti indoklása MÉRVE PONTATLAN volt — ez a javító kör helyesbíti.
+  A generikus (`dsFailureUnknownTitle`, "Something went wrong") cím
+  MEGMARAD mindkét képernyőn, mert az ADR 0277 kód-alapú modellje ezt a
+  screen-specifikus felülírást szándékosan nem teszi lehetővé a design-rendszer
+  módosítása nélkül; a `analysisProcessingErrorTitle`/`analysisRecordingErrorTitle`
+  ARB-kulcsok ezután is árván maradnak (nincs hívási helyük a `lib/`-ben) —
+  egy jövőbeli körnek, ha vissza akarja hozni a screen-specifikus címeket,
+  vagy az `SsFailurePresentation`-t kell bővítenie egy opcionális
+  title-felülbírálással (ADR-döntés, ki a `lib/core/design_system/**`
+  scope-ból), vagy a két árva kulcsot törölnie kell.
+- **M3 (MAJOR) — javítva, a hiba MA is csak védekező ágon érhető el.**
+  `analysis_recording_screen.dart`'s `_ErrorBody`: pontosan a B1 mintája —
+  `presentation.retryable == false` esetén az `SsFailureState` helyett/mellett
+  egy explicit `SsButton(key: Key('analysis-recording-error-retry'), label:
+  l10n.analysisRecordingErrorRetry)` jelenik meg, ugyanazzal az `onRetry`
+  (`_start`) callback-kel. Mérve: `mic_capture.dart` MA is kizárólag
+  `PermissionFailure`/`CancelledFailure`/`AudioFailure`-t ad vissza
+  (mindhárom `retryable = true`), tehát ez az ág élő úton MA is csak a
+  `failure ?? const UnknownFailure()` védekező fallback-on át érhető el — a
+  fix mégis szükséges, mert a `_ErrorBody` privát osztály, nem tesztelhető
+  közvetlenül a védekező ág kikényszerítése nélkül; a kódmintát a B1-gyel
+  szimmetrikusan tartja karban, hogy egyetlen jövőbeli, nem-újrapróbálható
+  `AppFailure` hozzáadása a `data/` rétegben NE reprodukálja csendben a B1
+  osztályát.
+- **M4 (MAJOR) — javítva.** `analyze_screen.dart`'s `idle` fázisa többé NEM
+  `SsEmptyState`-et használ: a lenti vezérlősáv (`_controls`, `:266-279`) már
+  ad egy valódi "Record" CTA-t, így az `SsEmptyState` kötelező második
+  akciója csak ennek szó szerinti duplikátuma lehetett (`analyzeRecord`
+  felirat mindkét helyen). A fázis egy token-stílusú, cím nélküli helyi
+  widgetre váltott (ugyanaz a minta, mint a MEGLÉVŐ `micError` ág — R12
+  kivétel-osztály), `l10n.analyzeIntro` üzenettel. Bizonyíték:
+  `test/features/analyze/mic_error_parity_test.dart` — nincs olyan cella, ami
+  `find.byType(SsEmptyState)`-et állítana az idle fázisra (csak a `micDenied`
+  fázisra, ami VÁLTOZATLANUL valódi, egyedi akciót ad), tehát a törlés egyetlen
+  kipinnelt cellát sem gyengít; a `find.byKey(Key('analyze-idle-empty'))`
+  kulcs megmaradt.
+- **m1 (MINOR) — javítva.** A duplikált CTA az M4 javításával megszűnt
+  (nincs többé két "Record" gomb az idle fázison). A cím-duplikáció: a
+  `micDenied` fázis `title`-je `l10n.navAnalyze` helyett
+  `l10n.analysisRecordingPermissionDeniedTitle` ("Microphone access needed" —
+  meglévő kulcs, más képernyőn már bevezetve, ÚJ ARB-kulcs nem kellett), az
+  idle fázis pedig `title` NÉLKÜL renderel (ld. M4) — egyik ág sem ismétli
+  többé a `:108-113` képernyő-fejlécet.
+- **m2 (MINOR) — javítva.** `analysis_metric_detail_screen.dart`'s üres ága:
+  `title` `analysisOverviewMetricDetailTitle` (AppBar-duplikátum) →
+  `analysisOverviewUnavailable` ("Measurement unavailable"); `message`
+  `analysisOverviewNoDocument` ("No analysis document is available yet." —
+  téves állítás LÉTEZŐ dokumentumnál) → `analysisOverviewNotApplicable`
+  ("Not applicable for this recording"). Mindkettő meglévő, más
+  `analysisOverview*` képernyőn már bevezetett kulcs — új ARB-kulcs nem
+  kellett.
+- **m3 (MINOR) — javítva.** A §10.2 kivétel-lista kiegészült az
+  `AnalyzeSkeleton` (`:222`) és az `analyzeNoChords` (`:227-234`) ágakkal, és
+  a javító kör ÚJ tagjával, az `AnalyzeScreen` idle fázisával (M4).
+- **m4 (MINOR) — javítva a kóddal, itt dokumentálva.** A B1/M3 javítás
+  VISSZAHOZTA mindkét törölt kulcsot: `Key('analysis-processing-restart')`
+  most már MINDHÁROM ágon reachable, ahol korábban élt VAGY hiányzott
+  (cancelled, permission-denied — változatlanul —, és most az input-error/
+  general-error ág is, ha `retryable == false`); `Key
+  ('analysis-recording-error-retry')` szintén visszatért az `_ErrorBody`
+  `retryable == false` ágára. Egyik kulcs sem "eltűnt, dokumentálatlanul" —
+  mindkettő aktív widget-fa-tag lett újra.
+- **m5 (MINOR) — javítva.** Az A6-őszinteségi mondat (§0.0.A/R10 által
+  előírt) itt, szó szerint: mért tény, hogy a hivatkozott
+  `test/l10n/hardcoded_string_guard_test.dart` (`_scopeDirs`, `:18-23`) NEM
+  fedi a `lib/features/**`-ot, tehát az A6 bizonyítéka a diff kézi és
+  reviewer-oldali ellenőrzése, amely új beégetett felhasználói szöveget nem
+  talált. A guard a kapuban marad mint a design-rendszer oldali
+  regresszió-őr, nem mint az A6 bizonyítéka.
+- **m6 (MINOR) — javítva.** Új `textScaler 2.0` cellák, `en` ÉS `hu`:
+  `AnalyzeScreen` micDenied fázisa (`mic_error_parity_test.dart`, az idle
+  fázis melletti testvér-cella) és `AnalysisRecordingScreen` `error`/
+  `permissionDenied` törzse (`recording_state_test.dart`, a ready/idle
+  cella melletti két testvér-cella, `FakeAudioCapture(failWith:)` illetve
+  `FakeMicrophonePermissionGateway(state: denied)` állítja elő az ágat).
+  Az `AnalyzeScreen` `done` fázisa (§10 "Nyitott mérési hézag") továbbra is
+  méretlen marad — ez a kör-előtti `ProviderException` a review szerint a
+  körtől független, javítása külön kör dolga.
+- **N3 (NOTE) — dokumentálva, kód-változtatás nem szükséges.**
+  `AnalysisExportScreen`-nek MÉRVE nincs saját üres/betöltés/hiba állapota: a
+  törzse egészében a scope-on kívüli `ExportPreview`-ra delegál, a képernyő
+  saját rétege csak az `AppBar` cím és az `SsButton`
+  (`analysis-export-confirm`, `loading: _sharing`). Az A2 mérce-mátrix ezért
+  erre a képernyőre nem alkalmazható — nincs mit "nyers `Text`-re
+  visszacserélni" a valódi-sértés próbához sem.
+
+### 10.9 Javító kör — záró ellenőrzés (§7 kötelező sor, csővezeték nélkül)
+
+Az M1 javítás (SsContentCard → `_UntruncatedContentCard`) VIZUÁLISAN
+megváltoztatta az `AnalysisHomeScreen`-t (a golden fixture hosszabb
+tartalommal tölt, ezért a csonkolás megszűnése után a kártyák magassága nő,
+`textScaler 2.0`-n a `home_compact_scale2` PNG 44%-ban tért el) — a golden a
+§7/ADR 0426 szerint kizárólag a merge-kapu x86 architektúráján lett
+újrafelvéve:
+
+```
+$ tools/golden-x86.sh record test/ui/goldens/e13_r26_screens_golden_test.dart test/ui/goldens/e13_r27_screens_golden_test.dart
+...
+00:55 +14: All tests passed!
+```
+
+Egy második, FÜGGETLEN `check` futás (nem csak a felvétel önmaga) is
+megerősítette:
+
+```
+$ tools/golden-x86.sh check test/ui/goldens/e13_r26_screens_golden_test.dart test/ui/goldens/e13_r27_screens_golden_test.dart
+...
+00:57 +14: All tests passed!
+```
+
+A teljes §7 gate-sor a golden-újrafelvétel UTÁN, csővezeték/`tail` nélkül:
+
+```
+$ tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/offline_network_guard_test.dart test/features/analyze/analyze_cleanup_test.dart test/features/analyze/mic_error_parity_test.dart test/features/analyze/processing_progress_test.dart test/features/analyze/recording_state_test.dart test/features/audio_analysis/presentation/analysis_overview_screen_test.dart test/features/audio_analysis/presentation/analysis_export_screen_test.dart test/ui/goldens/e13_r26_screens_golden_test.dart test/ui/goldens/e13_r27_screens_golden_test.dart test/l10n/arb_parity_test.dart test/l10n/hardcoded_string_guard_test.dart test/core/architecture_dependency_test.dart
+...
+    format                                                       zöld
+    analyze                                                      zöld
+    test test/ui/ui_inventory_test.dart                          zöld
+    test test/app/navigation/adaptive_scaffold_test.dart         zöld
+    test test/app/navigation/legacy_route_redirect_test.dart     zöld
+    test test/app/offline_network_guard_test.dart                zöld
+    test test/features/analyze/analyze_cleanup_test.dart         zöld
+    test test/features/analyze/mic_error_parity_test.dart        zöld
+    test test/features/analyze/processing_progress_test.dart     zöld
+    test test/features/analyze/recording_state_test.dart         zöld
+    test test/features/audio_analysis/presentation/analysis_overview_screen_test.dart zöld
+    test test/features/audio_analysis/presentation/analysis_export_screen_test.dart zöld
+    test test/ui/goldens/e13_r26_screens_golden_test.dart        zöld
+    test test/ui/goldens/e13_r27_screens_golden_test.dart        zöld
+    test test/l10n/arb_parity_test.dart                          zöld
+    test test/l10n/hardcoded_string_guard_test.dart              zöld
+    test test/core/architecture_dependency_test.dart             zöld
+    architecture                                                 zöld
+MINDEN GATE ZÖLD (exit 0). A teljes suite + randomizált property gate + APK a
+CI-ban fut.
+```
+
+**B1 valódi-sértés próba, megismételve a javítás UTÁN** (a §10.6 próbája a
+felvétel-képernyőn, a B1/M3 szimmetrikus javítás igazolására): a
+`_ErrorBody`'s `SsFailureState`-jét ideiglenesen nyers `Text`-re cserélve
+(`analysis_recording_screen.dart`), `flutter test
+test/features/analyze/analyze_cleanup_test.dart` →
+
+```
+00:01 +1 -1: AnalysisRecordingScreen — A5 no orphan microphone an engine
+failure mid-start releases the lease it took [E]
+  Expected: exactly one matching candidate
+  Actual: <Found 0 widgets with type "SsFailureState": []>
+```
+
+Az A2 cella PIROSRA váltott, ugyanúgy, mint a §10.6-ban. Visszaállítva (`git
+diff` üres erre a fájlra), `flutter test
+test/features/analyze/analyze_cleanup_test.dart` → 5/5 zöld;
+`flutter analyze lib/ test/` → No issues found.
 
 ## 11. Review — a Claude tölti ki

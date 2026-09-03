@@ -1,5 +1,18 @@
 # Screen migration status
 
+**E15-R10 javító kör (1. javító menet, 2026-09-03)** — the review
+(`docs/reviews/e15-r10-review.md`) measured 1 BLOCKER + 4 MAJOR + 6 MINOR + 1
+NOTE against the round below; all fixed, full evidence per lelet in the round
+brief's §10.8 (`docs/rounds/e15-r10-analysis-migration.md`). The ratio stays
+**86/96 (89.583%)** — no screen left the migrated set. Two component-map
+entries below changed shape as part of the fix: `AnalyzeScreen`'s **idle**
+phase no longer uses `SsEmptyState` (its own required action would only ever
+duplicate the bottom control bar's real "Record" CTA — B1/M4 defect class);
+`AnalysisHomeScreen`'s two cards no longer use `SsContentCard` (its fixed
+`maxLines`+`ellipsis` silently truncated real user content at `textScaler
+2.0` — M1), replaced by a screen-local `_UntruncatedContentCard` built on the
+same `SsSurface`/`SsCardActionRegion` primitives, without the line limit.
+
 **E15-R10 update (2026-09-03) — Audio Analysis + Analyze 6 screens migrated,
 measured 86/96 (89.583%).** `AnalysisHomeScreen`, `AnalysisRecordingScreen`,
 `AnalysisProcessingScreen`, `AnalysisMetricDetailScreen`,
@@ -20,13 +33,18 @@ per the batch's mért component-name correction (§0.0.A/R3 — `SsErrorState`/
   `title`/`message` reuse the existing `analysisHomeRecentSectionTitle`/
   `analysisHomeRecentEmpty` keys, so the standalone section heading now only
   renders in the non-empty branch — no duplicate heading), `AnalyzeScreen`'s
-  idle AND micDenied phases (`micDenied` had a REAL existing action,
-  `openAppSettings`, that the pre-migration bespoke Column could not model —
-  `SsEmptyState` fits it natively; both reuse `l10n.navAnalyze` as title),
-  and `AnalysisMetricDetailScreen`'s newly-added empty case (no metrics AND
-  no insights — previously rendered a blank `ListView`, action = close/back
-  via `commonClose` + `Navigator.maybePop`; title/message reuse
-  `analysisOverviewMetricDetailTitle`/`analysisOverviewNoDocument`).
+  micDenied phase (a REAL existing action, `openAppSettings`, that the
+  pre-migration bespoke Column could not model — `SsEmptyState` fits it
+  natively; title fixed in the javító kör to
+  `analysisRecordingPermissionDeniedTitle`, so it no longer repeats the
+  screen header — see below), and `AnalysisMetricDetailScreen`'s newly-added
+  empty case (no metrics AND no insights — previously rendered a blank
+  `ListView`, action = close/back via `commonClose` + `Navigator.maybePop`;
+  title/message fixed in the javító kör to
+  `analysisOverviewUnavailable`/`analysisOverviewNotApplicable`, replacing a
+  key pair that misreported an existing document as missing — see the
+  javító-kör note above). `AnalyzeScreen`'s **idle** phase was moved OUT of
+  this bucket in the javító kör — see the exception-class bullet below.
   **No new ARB key was added this round** (§0.0.A/R7 read the brief's §3
   "new key allowed" permission at face value; measured mid-round that
   `lib/l10n/app_en.arb`/`app_hu.arb` — the two files the brief's
@@ -51,11 +69,17 @@ per the batch's mért component-name correction (§0.0.A/R3 — `SsErrorState`/
   a permanently-denied permission, a BEHAVIOUR change, not a visual one),
   `AnalysisProcessingScreen`'s `AnalysisPermissionDenied` branch (no
   `AppFailure` object exists on that state — fabricating one would invent an
-  unmeasured code), and `AnalyzeScreen`'s `micError` phase (busy-mic copy has
+  unmeasured code), `AnalyzeScreen`'s `micError` phase (busy-mic copy has
   no action of its own by design — Retry lives in the separate big control
   below, parity with Live r13/Tuner r68; forcing an action here would
-  duplicate it). All three stay token-styled local widgets
-  (`SsColorScheme`/`SsTypography`/`SsSpacing`), not raw `Theme.of(context)`.
+  duplicate it), `AnalyzeSkeleton` (loading) and `analyzeNoChords` (the
+  empty-result `done` branch). **The javító kör added a fifth member:**
+  `AnalyzeScreen`'s **idle** phase — the bottom control bar already offers
+  the one real next step (start recording), so `SsEmptyState`'s required
+  second action could only ever duplicate it (review B1/M4 defect class);
+  moved out of the `SsEmptyState` bucket above into this one. All members
+  stay token-styled local widgets (`SsColorScheme`/`SsTypography`/
+  `SsSpacing`), not raw `Theme.of(context)`.
 - **Loading → the existing `LinearProgressIndicator`, token-coloured.**
   `AnalysisProcessingScreen`'s indeterminate/phase bar is pinned BY TYPE in
   `processing_progress_test.dart` (`tester.widget<LinearProgressIndicator>`)
