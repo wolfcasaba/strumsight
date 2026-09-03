@@ -882,6 +882,35 @@ void main() {
       expect(find.byKey(const Key('quests-empty-state')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    // B1 (review) — the single 2.0/en cell above missed the hu overflow: the
+    // empty state was a bare Center with no scroll parent. Full cycle, the
+    // existing cell stays.
+    for (final scale in <double>[1.5, 2.0, 2.5]) {
+      for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+        testWidgets(
+          'empty state $scale / ${locale.languageCode} — no overflow on a '
+          'real phone size',
+          (tester) async {
+            tester.view.physicalSize = const Size(360, 640);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+
+            await _pumpScreen(
+              tester,
+              locale: locale,
+              textScale: scale,
+              withChallenge: false,
+              dailyQuests: const <QuestViewProjection>[],
+              weeklyQuests: const <QuestViewProjection>[],
+            );
+
+            expect(find.byKey(const Key('quests-empty-state')), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
   });
 
   group('Localisation — Hungarian copy renders without banned urgency', () {

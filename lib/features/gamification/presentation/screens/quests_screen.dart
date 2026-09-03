@@ -217,30 +217,38 @@ class _EmptyQuestsState extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
+    // SingleChildScrollView, not a bare Center — at 200%+ text scale on a
+    // phone-width viewport the message can outgrow the screen height, and an
+    // unscrollable Center would overflow (§0.0.A/R5/R6, same pattern fixed
+    // for achievement_detail's _notFound/_hidden states — E15-R08 review B1).
     return Center(
       key: const Key('quests-empty-state'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: SsSpacing.space8,
-          vertical: SsSpacing.space12,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              l10n.questsEmptyTitle,
-              style: typography.titleLarge.copyWith(color: colors.textPrimary),
-            ),
-            const SizedBox(height: SsSpacing.space2),
-            Text(
-              l10n.questsEmptyBody,
-              textAlign: TextAlign.center,
-              style: typography.bodyMedium.copyWith(
-                color: colors.textSecondary,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: SsSpacing.space8,
+            vertical: SsSpacing.space12,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                l10n.questsEmptyTitle,
+                style: typography.titleLarge.copyWith(
+                  color: colors.textPrimary,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: SsSpacing.space2),
+              Text(
+                l10n.questsEmptyBody,
+                textAlign: TextAlign.center,
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
