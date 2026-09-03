@@ -729,6 +729,22 @@ send_nudge_to_pane() {   # $1=tmux-session $2=szöveg
 # kérdést el kell bocsátani, MIELŐTT a folytatás-prompt megy (ADR 0498 D3).
 FEEDBACK_PROMPT_PATTERN='0: Dismiss'
 
+# MÉRT hamis riasztás (2026-09-03 15:02, ADR 0499): a napló mtime-ja egy HOSSZÚ
+# forduló alatt is BEFAGY — amíg egy parancs fut, a panel képe nem változik,
+# tehát a `pipe-pane` nem ír új bájtot. A 529-minta ezzel együtt a napló végében
+# RAGAD a helyreállás után is, így a rövid (120 s) ablak ÉPPEN DOLGOZÓ sessionbe
+# küldött folytatás-promptot (5-5 alkalommal az E15-R12/E16-R02 körön), és a
+# keret kimerülése után MEGÖLTE volna a dolgozó kört.
+#
+# Az egyetlen HITELES jel a panel élő állapota: amíg a CLI a megszakítás
+# lehetőségét kínálja, addig fordul egy turn. Ezt kérdezzük meg, mielőtt
+# bármit tennénk.
+PANE_ACTIVITY_PATTERN=${PIPELINE_ORCH_PANE_ACTIVITY_PATTERN:-'esc to interrupt'}
+
+pane_is_working() {   # $1=tmux-session → 0, ha a panelen ÉPP fut egy forduló
+  tmux capture-pane -p -t "$1" 2>/dev/null | grep -qa "$PANE_ACTIVITY_PATTERN"
+}
+
 dismiss_feedback_prompt_if_present() {   # $1=tmux-session
   local pane="$1"
   tmux capture-pane -p -t "$pane" 2>/dev/null \
@@ -894,6 +910,7 @@ run_tmux_session() {
   local stall_seconds log_age
   local nudge_budget nudges_sent=0 last_nudge_at=0 stall_reference nudge_tty
   local overload_seconds overload_budget active_stall_seconds active_nudge_budget
+  local last_activity_at=0
 
   # TESZT-BIZTOSÍTÉK (ADR 0138, MÉRVE 2026-08-05). A `tools/tests/` teljes
   # firinget futtató esetei izolált `PIPELINE_STATE_DIR`-t kapnak, de a
@@ -1042,8 +1059,14 @@ run_tmux_session() {
       # A referencia a napló mtime-ja ÉS az utolsó ébresztés közül a
       # későbbi: egy ébresztés után az őr teljes új ablakot ad a válaszra,
       # anélkül hogy a naplófájlt (a bizonyítékot) hamis mtime-mal írnánk át.
+      # A panel élő állapota ELŐBBRE való, mint a napló mtime-ja: egy dolgozó
+      # sessiont sem ébreszteni, sem megölni nem szabad (ADR 0499 D1).
+      if pane_is_working "$tmux_session"; then
+        last_activity_at=$(date +%s)
+      fi
       stall_reference=$(stat -c %Y "$session_log" 2>/dev/null || date +%s)
       [ "$last_nudge_at" -gt "$stall_reference" ] && stall_reference=$last_nudge_at
+      [ "$last_activity_at" -gt "$stall_reference" ] && stall_reference=$last_activity_at
       log_age=$(( $(date +%s) - stall_reference ))
       # MÉRT eset (2026-09-03 13:31, E15-R12 + E16-R02): mindkét session
       # `API Error: 529 Overloaded`-del ZÁRTA a turnjét („Cooked for 1h 22m
