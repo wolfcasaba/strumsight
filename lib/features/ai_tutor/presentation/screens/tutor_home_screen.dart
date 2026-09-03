@@ -1,4 +1,4 @@
-/// Tutor Home screen (E04-R18 §3, design-system migration E13-R29).
+/// Tutor Home screen (E04-R18 §3, design-system migration E13-R29 + E15-R09).
 ///
 /// The entry surface for the AI Tutor feature. Leads with the AI-mode
 /// status card (ADR 0278 §1: local/cloud/fallback is always visible,
@@ -19,14 +19,23 @@
 /// per-turn local/cloud/fallback/offline nuance lives on the Chat screen,
 /// which already has a real turn to describe.
 ///
-/// The status card is built from plain [Theme]-token widgets, not the
-/// `Ss*` design-system components: this screen's own pinned widget test
-/// (`tutor_home_screen_test.dart`, outside this round's scope) builds a
-/// bare `MaterialApp` without `AppTheme`, so `Theme.of(context).extension<
-/// SsColorScheme>()` is null there and every `Ss*` component crashes on
-/// the `!` it uses internally (measured: E13-R29 dev run). The design
-/// system's l10n copy ([AppLocalizations.dsProvenanceBadgeLocalLabel]) is
-/// still reused for wording consistency.
+/// The status card uses [SsCard] (an extension-free surface primitive) and
+/// [SsSpacing] tokens, but NOT the theme-extension `Ss*` components
+/// (`SsModelStatusCard`, `SsProvenanceBadge`, ...): this screen's own
+/// pinned widget test (`tutor_home_screen_test.dart`, outside this
+/// round's `allowed_paths` — E15-R09 §0.0.A/R3 only wires the 6 named
+/// tests) builds a bare `MaterialApp` without a themed root, so
+/// `Theme.of(context).extension<SsColorScheme>()` is null there and every
+/// extension-consuming `Ss*` component crashes on the `!` it uses
+/// internally (measured: E13-R29 dev run, reconfirmed E15-R09 — `SsCard`/
+/// `SsSurface`/`SsSection` read no extension, `SsModelStatusCard`/
+/// `SsProvenanceBadge`/`SsButton`/`SsEmptyState`/`SsFailureState` all do).
+/// The design system's l10n copy
+/// ([AppLocalizations.dsProvenanceBadgeLocalLabel]) is still reused for
+/// wording consistency. Icons stay plain [Icon]s for the same reason
+/// `SsIcon` resolves unmapped names (`smartphone_outlined` is not in its
+/// catalog) to the visible "missing glyph" fallback mark, not a silent
+/// no-op — that would be a real regression, not a safe substitution.
 ///
 /// Registered in [app_router.dart] behind the `aiTutorEnabled` flag.
 library;
@@ -35,6 +44,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
+import '../../../../core/design_system/components/surfaces/ss_card.dart';
+import '../../../../core/design_system/foundations/ss_spacing.dart';
 import '../../../../l10n/app_localizations.dart';
 
 class TutorHomeScreen extends StatelessWidget {
@@ -48,17 +59,17 @@ class TutorHomeScreen extends StatelessWidget {
       appBar: AppBar(title: Text(l10n.aiTutorHomeTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(SsSpacing.space6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               const _ModelStatusCard(),
-              const SizedBox(height: 24),
+              const SizedBox(height: SsSpacing.space6),
               Text(
                 l10n.aiTutorHomeIntro,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: SsSpacing.space6),
               FilledButton.icon(
                 key: const Key('tutorHomeStartCta'),
                 icon: const Icon(Icons.chat),
@@ -76,9 +87,9 @@ class TutorHomeScreen extends StatelessWidget {
 /// The AI-mode status card (ADR 0278 §1) — always renders, so a student
 /// never has to find it behind a tap. Meaning is carried by icon AND text
 /// together (§5.2), never colour alone, same rule the design system's own
-/// provenance badge documents — this is a plain-[Theme] rebuild of that
-/// rule (see the file doc comment for why neither the `Ss*` widget nor a
-/// provider read can be used here).
+/// provenance badge documents — this is an [SsCard] rebuild of that rule
+/// (see the file doc comment for why neither the theme-extension `Ss*`
+/// widgets nor a provider read can be used here).
 class _ModelStatusCard extends StatelessWidget {
   const _ModelStatusCard();
 
@@ -87,29 +98,26 @@ class _ModelStatusCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
-    return Card(
+    return SsCard(
       key: const Key('tutorHomeModelStatus'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              l10n.aiTutorHomeModelStatusTitle,
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.aiTutorAiModeLocalMessage,
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 8),
-            _ModeChip(
-              icon: Icons.smartphone_outlined,
-              label: l10n.dsProvenanceBadgeLocalLabel,
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            l10n.aiTutorHomeModelStatusTitle,
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          Text(
+            l10n.aiTutorAiModeLocalMessage,
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          _ModeChip(
+            icon: Icons.smartphone_outlined,
+            label: l10n.dsProvenanceBadgeLocalLabel,
+          ),
+        ],
       ),
     );
   }
@@ -134,7 +142,7 @@ class _ModeChip extends StatelessWidget {
           size: 16,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: SsSpacing.space1),
         Text(label, style: Theme.of(context).textTheme.labelLarge),
       ],
     ),
