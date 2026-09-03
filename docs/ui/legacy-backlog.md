@@ -189,3 +189,65 @@ candidate; until then it stays `migrate` (`E15-R08`).
 (already migrated), `lib/features/onboarding/screens/first_win_stage_screen.dart`
 (already migrated) — each has zero measured router reference or `lib/`
 construction site. Same treatment as §5.1: no Ch15 round assigned.
+
+## 6. E16-R01 gamification composition — dated `TODO(E08-R30)` exclusions
+
+Measured against `main @ 4ca8785f` plus this round's own tree, 2026-09-03
+(E16-R01, ADR 0496 §5 / brief §0.0.A/R3). The round wired five of the eight
+`TODO(E08-R30)` markers in `lib/app/routing/app_router.dart` to real
+providers (`lib/features/gamification/application/gamification_providers.dart`)
+and removed every marker from the file; the three below could not be
+resolved without touching this round's tilos zona (`lib/features/
+gamification/data/**` and the gamification `presentation/screens/**`), so
+each is recorded here instead of silently dropped.
+
+### 6.1 Legacy streak write-back into the V2 envelope (E16-R01 entry 1)
+
+**What:** `streakStateProvider` re-runs `LegacyStreakMigrator.migrate()` on
+every read instead of persisting the migrated `StreakState` into the V2
+namespaced storage envelope once.
+
+**Why it wasn't built this round:** persisting the migrated result needs a
+streak-write method on `GamificationRepository` (e.g.
+`replaceStreakState(...)`), and `lib/features/gamification/data/**` is this
+round's tilos zona (brief §4) — only `application/gamification_providers.dart`
+was writable.
+
+**Owner:** a future round whose `allowed_paths` covers
+`lib/features/gamification/data/gamification_repository.dart` and its local
+implementation (SDD, unscheduled).
+
+**Date measured:** 2026-09-03.
+
+### 6.2 Streak-recovery purchase flow (E16-R01 entry 2)
+
+**What:** `StreakDetailScreen.onRecoveryPressed` (wired in the router's
+`AppRoutes.streakDetail` route) stays a no-op — the recovery CTA renders
+(when `reason == StreakEvaluationReason.broken`) but tapping it does nothing.
+
+**Why it wasn't built this round:** there is no repository method to
+purchase or apply a streak recovery, and `StreakDetailScreen` itself has no
+"recovery unavailable" contract to degrade to instead — both are in this
+round's tilos zona (`data/**`, `presentation/screens/**`).
+
+**Owner:** a future round whose `allowed_paths` covers the streak-recovery
+repository method and the screen's disabled/unavailable state (SDD,
+unscheduled).
+
+**Date measured:** 2026-09-03.
+
+### 6.3 Reward-detail route (E16-R01 entry 3)
+
+**What:** `RewardInboxScreen.onItemSelected` (wired in the router's
+`AppRoutes.rewardInbox` route) stays a no-op — selecting an inbox entry does
+not navigate anywhere.
+
+**Why it wasn't built this round:** there is no reward-detail screen
+anywhere on the tree to route to; building one is a new screen, which is new
+scope beyond this round's composition-only brief (brief §3 — "NINCS benne:
+ÚJ üzleti logika / képernyő").
+
+**Owner:** a future round that scopes and builds a reward-detail screen
+(SDD, unscheduled).
+
+**Date measured:** 2026-09-03.

@@ -7,6 +7,7 @@ export 'application/achievement_index.dart';
 export 'application/celebration_coordinator.dart';
 export 'application/daily_challenge_service.dart';
 export 'application/daily_quest_generator.dart';
+export 'application/gamification_providers.dart';
 export 'application/profile_projector.dart';
 export 'application/mastery_evaluator.dart';
 export 'application/reward_eligibility_policy.dart';

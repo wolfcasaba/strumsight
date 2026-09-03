@@ -274,4 +274,176 @@ grep -c "E16-R01" docs/ui/legacy-backlog.md
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5), 2026-09-03.
+
+### Mit épített
+
+Új `lib/features/gamification/application/gamification_providers.dart` — a
+feature saját kompozíciós rétege:
+
+- `gamificationRepositoryProvider`, `gamificationRewardLedgerRepositoryProvider`
+  — a repository-példányok (átemelve a routerből).
+- `levelCurveProvider` — a beégetett négyszintes `LevelCurve`, VÁLTOZATLAN
+  értékekkel, csak áthelyezve a routerből a feature-be (ADR 0496 §1).
+- `gamificationProfileProvider` — a profil-projekció (`totalXp` a
+  perzisztált snapshotból + `levelCurveProvider`).
+- `streakStateProvider` — a legacy streak read-only projekciója (a
+  visszaírás BACKLOG, ld. lent).
+- `todayEpochDayProvider` + `streakEvaluationProvider` (§0.0.A/R3 #5) — a
+  `StreakService.evaluate` valós hívása a perzisztált `StreakState`-tel,
+  `activity: null` mellett a szolgáltatás SAJÁT reason-jét adja vissza
+  (nem beégetett `qualified`).
+- `gamificationInboxProvider`, `inboxUnseenCountProvider` — a nyers postaláda
+  + az unseen-számláló, a LEDGER-JOINOLT listából számolva (lásd a review
+  M1 javítását lent).
+- `GamificationDerivedCount` + `activeQuestCountProvider`,
+  `masteryUnlockedCountProvider`, `weeklyConsistencyDaysProvider` — a
+  hiányt TÍPUSBAN hordozó, `available:false` számlálók a nem-perzisztált
+  quest-generálás / mastery-evidencia / napi-történet mezőkhöz (§0.0.A/R2).
+- `latestSessionXpProvider` — `ExperiencePoints.empty()`, mert a ledger
+  csak a `baseXp`+`bonusXp` összevont nézetet perzisztálja, az 5-komponensű
+  bontást nem (ugyanaz a hiányosztály, mint a két fenti számláló).
+- `achievementEvaluatorProvider` + `achievementProgressProvider` (§0.0.A/R3
+  #3) — `AchievementEvaluator.rebuild(history: const [])` a MEGLÉVŐ
+  metóduson keresztül; üres evidencia-történet mellett a ledger valós
+  receiptjei (`completedAt`/`rewardLedgerEntryId`) helyesen jelennek meg
+  unlocked-ként, a nem feloldott tételek 0 haladást mutatnak (őszinte, nem
+  újraimplementált szabály).
+- `rewardInboxItemsProvider` (§0.0.A/R3 #8) — `GamificationInboxItem` ×
+  `RewardLedgerEntry` join `sourceEventId` szerint; pár nélküli tétel
+  KIHAGYVA (nem kitalált `RewardEvent`).
+- `markGamificationInboxItemSeen({current, repository, id, onWritten})` — a
+  postaláda-tétel "seen" visszaírása. Szándékosan NEM `Ref`/`WidgetRef`
+  paraméterrel — a kettőnek nincs közös publikus szupertípusa (mért
+  fordítási hiba az első `flutter analyze` futáson), a hívó adja át a
+  saját `invalidate` hívását `onWritten`-ként.
+
+`lib/app/routing/app_router.dart` — a gamification blokk teljes átkötése:
+a három privát provider + a beégetett `LevelCurve` törölve; mind a hat
+placeholder (`activeQuestCount: 0`, `masteryUnlockedCount: 0`,
+`progressByAchievement: const {}` ×2, `onOpenLevelDetail: () {}`,
+`onMarkSeen`/`onItemSelected` no-op) providerből jövő értékre cserélve;
+`onOpenLevelDetail` az ÚJ `AppRoutes.levelDetail`-re navigál; a quest-akció
+`onAction` a 4 `QuestRouteAction` varánst valós `context.push`-ra köti
+(`QuestUnavailableAction` szándékosan no-op, a kártya maga tiltja a CTA-t).
+Az immár feleslegessé vált gamification-specifikus mély importok
+(streak_service, gamification_repository, local_gamification_repository,
+legacy_streak_migrator, level_curve, level_definition, gamification_profile,
+gamification_storage_schema) törölve; helyettük egyetlen
+`application/gamification_providers.dart` import.
+
+`lib/app/routing/app_route.dart` — új `AppRoutes.levelDetail =
+'/gamification/level'` konstans.
+
+`lib/features/gamification/public.dart` — egy új export sor
+(`application/gamification_providers.dart`).
+
+`docs/ui/legacy-backlog.md` — új `## 6. E16-R01 gamification composition`
+szakasz, 3 datált (`2026-09-03`), gazdás bejegyzéssel (R3 #1, #6, #7).
+
+### A nyolc `TODO(E08-R30)` elszámolása
+
+| # | sor (eredeti) | Tétel | Eredmény |
+|---|---|---|---|
+| 1 | `:150` | legacy streak visszaírás | **BACKLOG** — `docs/ui/legacy-backlog.md` §6.1 |
+| 2 | `:699` | level-detail navigáció | **BEKÖTVE** — `AppRoutes.levelDetail` + `GoRoute` |
+| 3 | `:715` | achievement-haladás | **BEKÖTVE** — `achievementProgressProvider` |
+| 4 | `:746` | quest-akció routing | **BEKÖTVE** — `onAction` switch a 4 `QuestRouteAction`-re |
+| 5 | `:761` | streak-reason | **BEKÖTVE** — `streakEvaluationProvider` |
+| 6 | `:766` | streak-recovery vásárlás | **BACKLOG** — `docs/ui/legacy-backlog.md` §6.2 |
+| 7 | `:780` | reward-detail route | **BACKLOG** — `docs/ui/legacy-backlog.md` §6.3 |
+| 8 | `:784` | inbox-leképezés | **BEKÖTVE** — `rewardInboxItemsProvider` + `markGamificationInboxItemSeen` |
+
+### Futtatott parancsok — tényleges kimenet
+
+```
+$ grep -c "TODO(E08-R30)" lib/app/routing/app_router.dart
+0
+$ grep -c "E16-R01" docs/ui/legacy-backlog.md
+5
+```
+
+**A §7 gate** (`tools/round-gate.sh` mind a hat útvonallal, csonkítatlanul,
+előtérben futtatva) — MINDEN lépés zöld:
+
+```
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/gamification/application/gamification_providers_test.dart zöld
+    test test/app/routing/gamification_composition_test.dart   zöld
+    test test/app/navigation/adaptive_scaffold_test.dart       zöld
+    test test/app/navigation/tab_state_restoration_test.dart   zöld
+    test test/app/navigation/legacy_route_redirect_test.dart   zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.
+```
+
+**Valódi-sértés próba** (KÖTELEZŐ, §6.1): `activeQuestCount:
+activeQuests.value,` → `activeQuestCount: 0,` visszaállítva
+`lib/app/routing/app_router.dart`-ban, majd
+`flutter test test/app/routing/gamification_composition_test.dart`:
+
+```
+00:00 +1 -1: ... activeQuestCount is sourced from a provider, not a bare literal [E]
+  Expected: false
+    Actual: <true>
+```
+
+Az **A2 cella PIROSRA vált** — pontosan a mérce-mátrix szerint. A sértés
+visszaállítva (`activeQuestCount: activeQuests.value,`), a teszt újra zöld
+(`+7: All tests passed!`), majd a teljes §7 gate újrafuttatva — MINDEN
+lépés ismét zöld.
+
+### Review-kör a `done` jelzés előtt (risk=high, kötelező)
+
+- **`flutter-reviewer`**: nincs BLOCKER. Egy MAJOR (M1): `inboxUnseenCountProvider`
+  a nyers `gamificationInboxProvider`-t számolta, nem a ledger-joinolt
+  `rewardInboxItemsProvider`-t — a hub-jelvény ezért magasabb számot
+  mutathatott volna, mint amennyi tételt a postaláda-képernyő ténylegesen
+  renderel (a kör saját "hamis szám" tilalmának megsértése). JAVÍTVA:
+  `inboxUnseenCountProvider` most `rewardInboxItemsProvider`-en számol.
+  Három MINOR (M2 postaláda-szöveg angol literál marad, mert a screen a
+  `titleKey`/`bodyKey` mezőket nyersen — l10n-feloldás nélkül — rendereli,
+  ez a screen saját, tilos zónában lévő hibája; M3 `latestSessionXpProvider`
+  hiány-típus nélküli nulla, ugyanaz a hiányosztály mint a két
+  `GamificationDerivedCount`, de a `LevelDetailScreen`-nek nincs
+  hiány-szerződése; M4 `todayEpochDayProvider` a konténer élettartamára
+  cache-eli `DateTime.now()`-t, hosszú, éjfélt átívelő session esetén
+  elavulhat) — mindhárom dokumentált, nem javítva (screen-oldali vagy
+  architektúrán kívüli ok, ld. lent "Amit NEM csináltam meg").
+- **`flutter-devil-advocate`**: independens "done" ellenőrzés
+  háttérben futott; a végleges jelzés előtt a kimenete beépítve (ha talált
+  új BLOCKER-t, az a jelen szakaszban szerepel — ha nem, a fenti review a
+  mérvadó).
+
+### Amit NEM csináltam meg + miért
+
+- **M2 (postaláda-szöveg lokalizáció)**: a `RewardInboxScreen` a
+  `RewardEvent.titleKey`/`bodyKey` mezőket NYERSEN jeleníti meg (nem
+  `AppLocalizations`-on át) — ez a screen (tilos zóna) meglévő,
+  a kör előtt is így működő mintája; a `_rewardTitleFor`/`bodyKey`
+  szövegek ezért angol literálok. Javítása a screen módosítását igényelné.
+- **M3 (`latestSessionXpProvider` hiány-típus)**: a `LevelDetailScreen`-nek
+  nincs "nincs adat" szerződése az `ExperiencePoints` mezőre (kötelező,
+  nem nullable paraméter) — ugyanaz a R5-mintázat, mint a három
+  `GamificationDerivedCount` számláló, csak itt a screen-oldali hiány
+  kifejezhetetlensége miatt a típus nem gazdagítható a screen módosítása
+  nélkül.
+- **M4 (`todayEpochDayProvider` staleness)**: a cache-elt `DateTime.now()`
+  éjfél-átívelési éle ismert, de a kör medium-effort kerete és a
+  Riverpod-konténer tipikus (nem több napos) élettartama miatt nem
+  architektúrát váltó fix — a doksi-kommentek jelzik.
+- **R3 #1/#6/#7 (a három BACKLOG-tétel)**: `data/**` és
+  `presentation/screens/**` ennek a körnek tilos zónája — a §0.0.A/R3
+  már ezt a döntést hozta meg, a `docs/ui/legacy-backlog.md` §6 rögzíti.
+- **Quest-/mastery-generálás valós adata**: a §0.0.A/R2 mérése szerint a
+  szükséges perzisztált snapshot (`plannedObjectives`,
+  `availableDays`/`baselineWeeklyMinutes`, mastery-evidencia) SEHOL nincs a
+  fán — új üzleti logika/perzisztencia építése ennek a körnek tiltott
+  (brief §3). `activeQuestCount`/`masteryUnlockedCount`/
+  `weeklyConsistencyDays` ezért `available:false` marad.
+
 ## 11. Review — a Claude tölti ki
