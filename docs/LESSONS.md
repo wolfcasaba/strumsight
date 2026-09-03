@@ -23751,3 +23751,22 @@ gépileg — a mérlegelés helye a §0.0 revízió, nem a szabály hiánya.
 
 **Őrteszt:** `tools/tests/test_brief_gate_measures_own_pins.py` — az `S14`
 szabály (`unmeasured_screen_pins`), és a diszjunkt hatókör az `S11`-gyel.
+
+## L598 — Egy lint-szabály, amire nincs kimondott elvárás, FUT, de nem ÉL: az S1–S14-ből csak az S1–S4-nek volt szerződés-sora (ops, 2026-09-03)
+
+**Mérve.** A `tools/brief-lint.py` tizennégy `strict` szabályt implementál, a
+`docs/execution/pipeline-orchestrator-prompt.md` §1.0 táblája viszont **négyet**
+dokumentált (`S1`–`S4`). Az `S5`–`S14` úgy tüzelt minden kör pre-flightján, hogy
+az orchestrátor semmilyen kimondott elvárást nem kapott rájuk — miközben a
+prompt saját mondata szerint a strict lelet „nem halt-ok, és nem is hagyható
+ki". Az [[L593]] (E15-R09) pontosan ezt a különbséget fizette meg: két piros
+CI-futás, `H5` halt, önjavító kör.
+
+**A tanulság iránya.** A „fut" és az „él" két külön állítás. Egy gépi jelzésnek
+két fele van: a MÉRÉS (a szabály) és a SZERZŐDÉS (mit vár a címzettől). Ha csak
+az első létezik, a jelzés zajjá válik, és a hibaosztály ugyanúgy bejön. A
+dokumentáció itt nem kényelem, hanem a mérce második fele — ezért gépi paritás
+őrzi.
+
+**Őrteszt:** `tools/tests/test_lint_rule_contract_parity.py` — a javítás előtti
+fán 2 cella PIROS (4 dokumentált szabály a 14 implementáltból).
