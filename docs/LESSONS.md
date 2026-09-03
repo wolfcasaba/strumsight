@@ -24040,3 +24040,68 @@ marad — a hamis pozitív olcsó, a hamis negatív drága lenne.
 számára tilos zóna (ADR 0087 §4); az ADR 0112 önjavító sávjának tétele. A
 mérés reprodukálható:
 `grep -oE ".{60}round-gate\.sh \| head -60" /tmp/mm-e16-r01-fix1.log`.
+
+## L599 — A „kill előtt ébressz" fok két éven át beküldés nélkül ébresztett: a TUI a gyors, hosszú szöveget beillesztésnek veszi, és a rátapadó Enter ÚJ SORT ír (ops, 2026-09-03)
+
+**Mérve.** Két futó kör sessionje (`E15-R12`, `E16-R02`) `API Error: 529
+Overloaded`-del zárta a turnjét, és ÜRES prompton állt. A driver ébresztő-alakja
+(`tmux send-keys -t <pane> "<szöveg>" Enter`) kézzel reprodukálva **nem küldte
+be** a szöveget: `tmux capture-pane` szerint a prompt négy sorra tördelve
+TARTALMAZTA a folytatás-promptot, a session pedig tovább állt tétlenül. Egy
+KÜLÖN, egy másodperccel később küldött `Enter` azonnal beküldte — mindkét
+session azonnal folytatta (`esc to interrupt`, a napló újra frissült).
+
+**A tanulság iránya.** Egy „megpróbáljuk megmenteni, mielőtt megölnénk" fok
+akkor is *létezőnek* látszik a naplóban (`ELAKADÁS-ÉBRESZTŐ (1/1)`), ha a
+HATÁSA elmarad — a napló azt írja, mit KÜLDTÜNK, nem azt, hogy MEGÉRKEZETT-E.
+Interaktív TUI-t vezérelni annyi, mint egy protokollt beszélni: a beviteli
+doboz beillesztés-heurisztikája a protokoll része, nem részletkérdés. Az ilyen
+fokot a CÉL-oldalon kell megmérni (`capture-pane`), nem a küldés visszatérési
+értékén.
+
+**Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::NudgeSubmitTest`
+(ADR 0498 D1) — a javítás előtti alakkal PIROS.
+
+## L600 — Egy külső kimaradásnak SAJÁT, rövid ablak jár: a 20 perces néma ablak a 529 után tiszta veszteség (ops, 2026-09-03)
+
+**Mérve.** Az `E15-R12` sessionje `Cooked for 1h 22m 21s` után 529-cel esett el
+— **1 óra 22 percnyi turn-munka** veszett el —, majd a driver 20 perces néma
+ablakára várt volna, miközben a jel (`API Error: 529`) betű szerint ott van a
+napló végén. A körönkénti ár tehát nem a 529 maga, hanem a rá következő,
+felismerhető, mégis kivárt tétlenség.
+
+**A tanulság iránya.** A néma ablak azért hosszú, mert nem tudjuk
+megkülönböztetni a gondolkodást a haláltól. Ahol a napló ezt MEGMONDJA, ott a
+hosszú ablak nem óvatosság, hanem vakság: a felismert kimaradás saját,
+rövidebb küszöböt és nagyobb ébresztés-keretet érdemel — a terminális ág
+(`break`) változatlanul marad. Ugyanaz az elv, mint a `github_actions_degraded`
+ágé: külső kimaradáson az önjavításnak nincs mit javítania.
+
+**Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::ApiOverloadWindowTest`
+(ADR 0498 D2).
+
+## L601 — Az ébresztő beküldését egy MÁSIK, a doboz fölé kitett kérdés is elnyelheti: a 529 után felugró visszajelzés-kérdés újra tétlenül hagyta a kört (ops, 2026-09-03)
+
+**Mérve.** A 13:56-os, MÁR JAVÍTOTT (külön Enteres) ébresztés után az `E15-R12`
+14:04-kor ismét tétlen volt, és a `tmux capture-pane` megmutatta, miért: a 529
+fölé a CLI egy kérdést tett ki —
+
+```
+● How is Claude doing this session? (optional)
+  1: Bad    2: Fine   3: Good   0: Dismiss
+```
+
+— ami elnyelte a beküldést. Az ébresztő szövege bement, a kör mégis állt. A
+kérdés ráadásul KITOLTA a `529`-sort az őr látóteréből (utolsó 8 sor), tehát a
+felismerés is elnémult.
+
+**A tanulság iránya.** Egy TUI-t vezérelni annyi, mint egy állapotgépet
+vezérelni, amelynek nem mi írjuk a szabályait: a beviteli doboz nem mindig
+fogadókész, és a blokkoló állapotok nem hibaüzenetként jelennek meg, hanem
+teljesen normális felületi elemként. Ezért (1) a beküldés ELŐTT fel kell
+ismerni és el kell bocsátani a blokkolót, és (2) az állapot-felismerés ablaka
+legyen bőven nagyobb annál, amennyi a keresett sorhoz épp elég — egy váratlan
+felületi elem néhány sorral elnémíthatja az egész őrt.
+
+**Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::FeedbackPromptTest`
+(ADR 0498 D3) — a javítás előtti fán mind a 3 cella PIROS.
