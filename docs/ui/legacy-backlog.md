@@ -71,9 +71,57 @@ migrated/legacy set, and a regression check that a MIGRATED screen never
 reverts to importing `AppColors`/`AppPalette` directly instead of
 `core/design_system` tokens.
 
-## 3. Remaining legacy screens — 53 of 96 (55.2%)
+## 3. Remaining legacy screens — 5 of 96 (5.208%), MEASURED 2026-09-03
+   (E15-R13, §0.0.A/R1) — supersedes the 53-of-96 table below
 
-The exhaustive, measured per-screen table lives in
+**91/96 screens are migrated (94.792%)**, measured by
+`grep -q design_system` over every `lib/features/**/*_screen.dart` file
+(same measurement `migration-status.md` uses). All 5 remaining legacy
+screens are **reachable** and all 5 carry a `retire` verdict with a named
+successor in `docs/ui/retirement-plan.md` §6:
+
+| Screen | Verdict | Owner round | Successor |
+| --- | --- | --- | --- |
+| `library/screens/library_screen.dart` | `retire` | `E15-R04` | `library_v2/.../unified_library_screen.dart` |
+| `library/screens/session_detail_screen.dart` | `retire` | `E15-R04` | `library_v2/.../library_item_detail_screen.dart` |
+| `songs/screens/song_list_screen.dart` | `retire` | `E15-R04` | `song_trainer/.../song_library_screen.dart` |
+| `songs/screens/song_builder_screen.dart` | `retire` | `E15-R04` | `song_trainer/.../song_editor_screen.dart` |
+| `streak/screens/streak_screen.dart` | `retire` | `E15-R04` | `gamification/.../gamification_hub_screen.dart` |
+
+### 3.0 OPEN — `E15-R04`'s named retirement was never executed
+
+**What:** the five `retire`-verdicted screens above are still present,
+still reachable, and NOT deleted or route-redirected. `E15-R04` — the
+round `retirement-plan.md` §6 names as owner — closed without performing
+the retirement.
+
+**Why this is not a scope violation:**
+[ADR 0471](../adr/0471-screen-reachability-is-measured-not-assumed.md) D5:
+a `retire` verdict is "a proposal for a separate, reviewed round," not
+authorization to delete — `E15-R04` closing without executing it is a
+legitimate outcome, not a broken contract. The Ch15 sáv's záró állítása is
+therefore "every reachable screen is migrated **or** deliberately
+retire-planned with a named successor" — **not** "the retirement happened."
+
+**Owner:** the measurable carrier round is `E16-R05`
+(`docs/rounds/e16-r05-full-app-verification-and-release.md`) — its
+pre-flight explicitly re-runs `check_screen_reachability`, so it will
+re-measure whether these five screens are still reachable at that point.
+The round that would actually PERFORM the retirement (the route
+redirects + file deletion for the five screens) does not yet exist in the
+queue — admitting one is a user/pipeline scheduling decision, not an
+SDD-round assignment made here (review E15-R13 MINOR-1: a generic "SDD,
+unscheduled" stub without a real round id is not a named owner).
+
+**Date measured:** 2026-09-03 (E15-R13, `dart run
+tool/check_screen_reachability.dart --format json` + the `grep -q
+design_system` sweep above).
+
+### 3.1 Historical — the 53-of-96 table (2026-08-27, E13-R36 measurement)
+
+Kept for history; superseded first by the E15-R03 per-screen reachability
+audit below (§3.2, was §3.1) and now fully superseded by the measured 5
+above. The exhaustive, measured per-screen table lives in
 `docs/ui/migration-status.md` (§"Per-feature status") — not duplicated
 here. Summary, with owner and date:
 
@@ -103,7 +151,7 @@ Chapter 13 compatibility layer this round's `migration-status.md`
 documents. None of them regressed FROM a migrated state; they were never
 assigned a Ch13 round.
 
-### 3.1 E15-R03 correction — the table above is per-FEATURE; reachability
+### 3.2 E15-R03 correction — the table above is per-FEATURE; reachability
     is now measured per-SCREEN, and the "Owner" column above is superseded
 
 `docs/ui/retirement-plan.md` (ADR 0471) is now the canonical per-screen

@@ -32,6 +32,23 @@ not against a hand-copied expectation:
   accepts cross-feature imports through the barrel.
 
 This guard is red on the pre-revision brief.
+
+## The two live-tree cells were REWRITTEN, not deleted (2026-09-03)
+
+ADR 0112 self-heal round, E16-R02 / 4th H3. Two cells measured the tree with
+``assertNotIn`` — they pinned the ABSENCE of work this round's own brief makes
+MANDATORY (§5.8 the route constant, §0.0.I/I5 the barrel exports). The round
+therefore turned its own guard red by SUCCEEDING: targeted gate 21/21 green,
+Full Gate green on ``c2b1362a``, yet ``router-ci`` red on every SHA
+(``.pipeline/halt-detail-E16-R02.md``). Both cells said so themselves — *"if it
+lands outside this round, this guard must be rewritten, not deleted"* and
+*"this guard's premise moved; re-measure instead of relaxing it"*.
+
+Both now measure an invariant that holds on BOTH sides of the landing and is
+strictly stronger afterwards: the catalogue declares the pinned route shape or
+no skill-detail route at all (a typo or a competing variant is red), and the
+practice barrel exports the whole §5.5 adapter surface or none of it (a
+half-landed export is red). The general lesson is ``docs/LESSONS.md`` L612.
 """
 
 import re
@@ -69,9 +86,19 @@ ADAPTER_TYPES = (
     "PracticeMetricDimension",
 )
 
+# The SDD UI-50 route shape §5 pins, and every skill-detail literal the
+# catalogue could carry — a near-miss (`:skill`, `/skill/`, a trailing segment)
+# has to be visible, otherwise the shape check would be a substring test.
+SKILL_DETAIL_ROUTE = "/profile/progress/skills/:skillId"
+SKILL_DETAIL_LITERAL = re.compile(r"'(/profile/progress/skill[^']*)'")
+
 
 def _brief_text() -> str:
     return BRIEF.read_text(encoding="utf-8")
+
+
+def _catalogue_text() -> str:
+    return ROUTE_CATALOGUE.read_text(encoding="utf-8")
 
 
 def _stable_id_regex() -> re.Pattern[str]:
@@ -119,16 +146,45 @@ class E16R02RouteCatalogScopeTest(unittest.TestCase):
         text = _brief_text()
 
         self.assertIn(
-            "/profile/progress/skills/:skillId",
+            SKILL_DETAIL_ROUTE,
             text,
             "§5 must pin the route shape (the SDD UI-50 route, also named in "
             "skill_detail_screen.dart:15) so the implementer invents nothing",
         )
-        self.assertNotIn(
-            "/profile/progress/skills/:skillId",
-            ROUTE_CATALOGUE.read_text(encoding="utf-8"),
-            "the constant does not exist yet — if it lands outside this "
-            "round, this guard must be rewritten, not deleted",
+
+        # REWRITTEN, not deleted (ADR 0112 self-heal round, 4th H3, 2026-09-03).
+        # The original cell asserted the constant was ABSENT from the catalogue
+        # — i.e. it pinned the ABSENCE of the very work §5.8 makes MANDATORY for
+        # this round, so the round's SUCCESS turned it red and its own guard
+        # locked it out of the merge (`.pipeline/halt-detail-E16-R02.md`).
+        # The invariant that holds on BOTH sides of the landing, and is strictly
+        # stronger afterwards: whatever skill-detail route the catalogue
+        # declares must be EXACTLY the shape §5 pins. A typo, a renamed
+        # parameter or a second competing variant is red.
+        catalogue = _catalogue_text()
+        declared = sorted(set(SKILL_DETAIL_LITERAL.findall(catalogue)))
+
+        self.assertIn(
+            declared,
+            ([], [SKILL_DETAIL_ROUTE]),
+            "the catalogue must declare either no skill-detail route (before "
+            f"this round lands) or exactly {SKILL_DETAIL_ROUTE!r} (after) — "
+            f"found {declared}",
+        )
+
+        if not declared:
+            return
+
+        # A2's premise is that every `GoRoute.path` comes from an `AppRoutes`
+        # constant (`test/tooling/route_literal_guard_test.dart` forbids
+        # navigation literals). Once the route lands, that is the measure.
+        self.assertRegex(
+            catalogue,
+            r"static\s+const\s+String\s+\w+\s*=\s*\n?\s*'"
+            + re.escape(SKILL_DETAIL_ROUTE)
+            + r"'",
+            "the landed skill-detail route must be an AppRoutes constant, not "
+            "an inline literal",
         )
 
     def test_milestone_ids_satisfy_the_domain_regex(self) -> None:
@@ -185,12 +241,6 @@ class E16R02RouteCatalogScopeTest(unittest.TestCase):
         table = text.split("## 4.", 1)[1].split("## 5.", 1)[0]
 
         for type_name in ADAPTER_TYPES:
-            self.assertNotIn(
-                type_name,
-                barrel,
-                f"{type_name} is already exported — this guard's premise "
-                "moved; re-measure instead of relaxing it",
-            )
             self.assertIn(
                 type_name,
                 table,
@@ -198,6 +248,25 @@ class E16R02RouteCatalogScopeTest(unittest.TestCase):
                 "border, and check_architecture.dart only allows that "
                 "through public.dart — the §4 row must permit the export",
             )
+
+        # REWRITTEN, not relaxed (ADR 0112 self-heal round, 4th H3,
+        # 2026-09-03). The original cell asserted every type was ABSENT from the
+        # barrel — the ABSENCE of the export §0.0.I/I5 makes MANDATORY for this
+        # round, so the round's SUCCESS turned it red
+        # (`.pipeline/halt-detail-E16-R02.md`). The invariant that holds on both
+        # sides of the landing: the §5.5 adapter needs the WHOLE set across the
+        # feature border, so the barrel exports all three or none. A partial
+        # export is a half-landed round — the adapter cannot compile — and that
+        # is exactly what this cell now catches.
+        exported = sorted(name for name in ADAPTER_TYPES if name in barrel)
+
+        self.assertIn(
+            exported,
+            ([], sorted(ADAPTER_TYPES)),
+            "practice/public.dart must export either none of the §5.5 adapter "
+            "types (before this round lands) or all of them (after) — found "
+            f"{exported}",
+        )
 
     def test_header_adr_matches_the_reservation(self) -> None:
         text = _brief_text()
