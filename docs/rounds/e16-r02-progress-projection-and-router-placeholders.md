@@ -1,6 +1,6 @@
 # E16-R02 — A Progress V2 bekötése és a router placeholder-mentesítése
 
-- **Státusz:** PREPARED (előre megírva 2026-09-02, kód olvasva: `main @ 11d0d2bb`)
+- **Státusz:** IN PROGRESS (pre-flight mérve 2026-09-03, `main @ e367048f`)
 - **Típus:** Chapter 16 (Kompozíció és rollout), Kör 2
 - **Kör-azonosító:** `E16-R02`
 - **Branch:** `<motor>/e16-r02-progress-projection-and-router-placeholders`
@@ -187,6 +187,78 @@ FÁJL-TULAJDONLÁSBÓL mérte, ezért erre a briefre (0 db `*_screen.dart` és 0
 `lib/` könyvtár-előtag az `allowed_paths`-on) az S11/S14 strukturálisan néma
 volt. A `route_level_swapped_screens()` ezt zárja, őrteszt:
 `tools/tests/test_brief_lint_route_level_screen_swap.py`.
+
+## 0.0.K Pre-flight (E16-R02 orchestrátor, 2026-09-03, `main @ e367048f`) — a §0.0.H–J revíziók MÉRVE állnak, egy fájl-útvonal javítva
+
+A kör NEGYEDIK pre-flightja a §0.0.H, §0.0.I és §0.0.J revíziókkal EGYÜTT futott
+le. **Nincs új blokkoló** — a §0.0.J óta merge-elt fán a kör indulhat. A mérés:
+
+| Mért parancs | Eredmény | Következtetés |
+|---|---|---|
+| `sed -n '543,546p' lib/app/routing/app_router.dart` | `path: AppRoutes.profileProgress` → `const ProgressScreen()` | a fejléc pre-flight-előírása ÁLL: a route MÉG a legacy képernyőt építi |
+| `grep -rn "ProgressOverviewProjection\|SkillDetailProjection" --include=*.dart lib \| grep -v progress_v2/` | **0** | a projekciós típusokra a feature-en kívül továbbra is 0 hivatkozás |
+| `grep -n "skill" lib/app/routing/app_route.dart` | **0** | az §5.8 ÚJ konstansa tényleg hiányzik (I1 áll) |
+| `python3 tools/brief-lint.py --brief <ez a brief> --level strict` | `nincs lelet` (exit 0) | S1–S14 mind rendben |
+| `find lib -name "*mastery*"` + `grep -n "difficulty" …/application/mastery_evaluator.dart` | `:108 if (sample.difficulty != milestone.difficulty) continue;` | az I4 ÁLLÍTÁSA áll; a fájl útvonala kimondva (K1) |
+| `grep -n "_requireStableId\|factory MasteryMilestone\|const MasteryMilestone._" …/mastery_milestone.dart` | `:161` regex, `:86` factory, `:136` privát const | az I2 és az I3 áll |
+| `grep -n "practice_metric_snapshot\|practice_difficulty\|practice_history_entry\|practice_catalog" lib/features/practice/public.dart` | **0** | az I5 áll: az export-sorok tényleg hiányoznak |
+| `grep -c "id: 'builtin\."` / `grep -n "difficulty: PracticeDifficulty"` a builtin katalóguson | `10` / `:160`, `:214` | az §5.4 nehézség-indoklása áll: 8 `beginner`, 2 `intermediate` |
+| a §7 `gate_tests` 16 útvonalának létezés-próbája | 12 létezik, 4 a kör ÚJ tesztje | egyik meglévő útvonal sem elgépelés |
+| `ls -d /home/ubuntu/ss-*e16-r02*` + `git ls-remote --heads origin \| grep e16-r02` | üres / üres | a hagyaték-mérés (`ÁLLAPOT: NINCS`) megerősítve |
+
+### K1 — a `mastery_evaluator.dart` útvonala kimondva (a §0.0.I/I4 és az §5.4 csak a fájlnevet adta)
+
+A §0.0.I/I4 és az §5.4 a nehézség-szűrőt csupasz fájlnévvel hivatkozza
+(`mastery_evaluator.dart:108`), könyvtár nélkül, miközben a körülötte lévő
+hivatkozások (`mastery_milestone.dart`, `mastery_progress.dart`) mind a
+`domain/mastery/` könyvtárban élnek. A fájl MÉRVE **nem ott** van:
+
+```
+find lib -name "*mastery*"
+→ lib/features/gamification/application/mastery_evaluator.dart
+→ lib/features/gamification/domain/mastery/{mastery_badge,mastery_milestone,mastery_progress}.dart
+```
+
+A hivatkozott **sor és állítás helyes** (`:108` valóban
+`if (sample.difficulty != milestone.difficulty) continue;`), csak a helye volt
+kikövetkeztethető rosszul. A pre-flight ezért kimondja:
+**`lib/features/gamification/application/mastery_evaluator.dart`**.
+
+**Ez pontosítás, nem scope-változás.** Az `allowed_paths` NEM változik: az
+evaluator egyik alakban sem szerepel rajta, tehát a gépi scope-audit mindkét
+könyvtárban tiltja az írását, és a tilos zóna „az evaluator … VÁLTOZATLAN"
+sora könyvtár-független. Cellát nem töröltünk, nem gyengítettünk, küszöböt nem
+lazítottunk.
+
+### K2 — az ADR-szám a foglalóból: `0500`
+
+`tools/round-slots.py reserve-adr --round E16-R02` MÉRVE három markert hagyott
+maga után az ismételt pre-flightok miatt (`.pipeline/inflight/adr/0500`, `0501`,
+`0502` — **mind `round=E16-R02`**), és egyik sincs a lemezen (`ls docs/adr/0500*`
+→ üres). A hiteles szám a **`0500`**: ezt hordozza a
+`docs/execution/pipeline-queue.tsv` E16-R02 sora és a §0.0.I-ben javított
+fejléc is. A `0501`/`0502` az ismételt foglalás mellékterméke, nem külön döntés.
+Az ADR megírva: `docs/adr/0500-progress-v2-projection-source-and-route-activation.md`.
+
+### K3 — visszakeresés (ADR 0312), szűkítve majd teljes korpuszon
+
+- `--corpus lessons,halts,adr "progress projection builder router screen swap dead code wiring"` →
+  **[ADR 0471](../adr/0471-screen-reachability-is-measured-not-assumed.md)** (a
+  képernyő elérhetősége MÉRT, és a `progress/` ↔ `progress_v2/` párhuzamos réteg
+  nevesítve van), `halts/round-status-E08-R30` (route-bekötés `lib/features`
+  írás nélkül).
+- `--corpus lessons,halts "route rebinding legacy screen regression guard test expectations"` →
+  **[L393](../LESSONS.md#l393)** (a lecserélt típus scope-ja a legacy
+  finder-contractot IS magában foglalja — pontosan a §0.0.J hibaosztálya),
+  **[L397](../LESSONS.md#l397)** (a `ui_inventory_test` bázisvonala CI-only
+  leletként bukott — a §7 gate ezért futtatja), **[L449](../LESSONS.md#l449)**
+  (az `indexedStack` shell életben tartja a brancheket).
+- teljes korpuszon: a találatok a kör SAJÁT forrásfájljai
+  (`progress_overview_projection.dart`, `dashboard_states_test.dart`,
+  `progress_dashboard_screen.dart`) — új normatív előzmény nincs.
+
+A §0.0.J által már lefedett L393/L397 osztályt a `gate_tests` 16 útvonala
+(köztük az `ui_inventory_test.dart` és a három útvonal-szintű őr) fedi.
 
 ## 0.0 A MÉRT hiba: kész felület, amihez nincs adatforrás
 
