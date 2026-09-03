@@ -23733,3 +23733,21 @@ előrejelzés. A mérés forrása legyen a rendszer SAJÁT válasza, ne kézzel 
 naptár-bejegyzés.
 
 **Őrteszt:** `tools/tests/test_gh_token_expiry_guard.py` (ADR 0495 D4).
+
+## L597 — Az „ez a brief-szerző mérlegelése" kikötés a lint-szabályban pontosan az a rés, amin a mért halt bejött: az S11 a listán BELÜLI pint lezártnak vette (ops, 2026-09-03)
+
+**Mérve.** A `tools/brief-lint.py` `outside_screen_pins` függvénye a saját
+kommentjében mondta ki a kivételt: *„A briefen MÁR szereplő teszt a kör vállalt
+hatóköre — hogy bekerül-e a célzott `gate_tests`-be is, az a brief szerzőjének
+mérlegelése, nem lint-kérdés."* Az [[L593]] (E15-R09) ezt megcáfolta: a kör
+célzott kapuja **17/17 zöld** volt, miközben a migrált képernyőt pinnelő
+harness 2 cellán pirosra vált — két piros CI-futás, `H5` halt, önjavító kör.
+
+**A tanulság iránya.** Egy gépi szabályba írt „ezt emberi mérlegelésre hagyjuk"
+kikötés nem semleges: az a szabály hatókörének a HATÁRA, és a hibaosztály
+pontosan ott lép be. Ha az L593 utasítása („a `gate_tests` a migrált képernyő
+ÖSSZES kipinnelt harnessét tartalmazza") gépileg kimondható, akkor mondjuk ki
+gépileg — a mérlegelés helye a §0.0 revízió, nem a szabály hiánya.
+
+**Őrteszt:** `tools/tests/test_brief_gate_measures_own_pins.py` — az `S14`
+szabály (`unmeasured_screen_pins`), és a diszjunkt hatókör az `S11`-gyel.
