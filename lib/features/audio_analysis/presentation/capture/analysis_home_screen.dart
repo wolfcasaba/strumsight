@@ -9,6 +9,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../data/input/input_limits.dart';
 import '../../domain/analysis_summary.dart';
@@ -34,11 +35,13 @@ final class AnalysisHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.analysisHomeTitle)),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(SsSpacing.space4),
           children: <Widget>[
             _InputModeCard(
               key: const Key('analysis-home-record'),
@@ -47,7 +50,7 @@ final class AnalysisHomeScreen extends StatelessWidget {
               description: l10n.analysisHomeRecordDescription,
               onTap: onStartRecording,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: SsSpacing.space3),
             _InputModeCard(
               key: const Key('analysis-home-import'),
               icon: Icons.file_upload_outlined,
@@ -57,18 +60,24 @@ final class AnalysisHomeScreen extends StatelessWidget {
               ),
               onTap: onImportFile,
             ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.analysisHomeRecentSectionTitle,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SsSpacing.space6),
             if (recentAnalyses.isEmpty)
-              Text(
-                l10n.analysisHomeRecentEmpty,
+              SsEmptyState(
                 key: const Key('analysis-home-recent-empty'),
+                icon: Icons.history,
+                title: l10n.analysisHomeRecentSectionTitle,
+                message: l10n.analysisHomeRecentEmpty,
+                actionLabel: l10n.analysisHomeRecordCta,
+                onAction: onStartRecording,
               )
-            else
+            else ...<Widget>[
+              Text(
+                l10n.analysisHomeRecentSectionTitle,
+                style: typography.titleMedium.copyWith(
+                  color: colors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: SsSpacing.space2),
               for (final summary in recentAnalyses)
                 _RecentAnalysisTile(
                   summary: summary,
@@ -76,6 +85,7 @@ final class AnalysisHomeScreen extends StatelessWidget {
                       ? null
                       : () => onOpenAnalysis!(summary),
                 ),
+            ],
           ],
         ),
       ),
@@ -99,29 +109,11 @@ final class _InputModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: <Widget>[
-              Icon(icon, size: 32),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(title, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(description),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return SsContentCard(
+      icon: icon,
+      title: title,
+      message: description,
+      actions: [SsCardAction(label: title, onPressed: onTap)],
     );
   }
 }
@@ -136,14 +128,20 @@ final class _RecentAnalysisTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final title = summary.title.isEmpty ? summary.documentId : summary.title;
-    return Semantics(
-      label: l10n.analysisHomeOpenAnalysisSemantics(title),
-      button: onTap != null,
-      child: ListTile(
-        key: Key('analysis-home-recent-${summary.documentId}'),
-        title: Text(title),
-        subtitle: Text(_formatDate(summary.createdAt)),
-        onTap: onTap,
+    final onTapCallback = onTap;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SsSpacing.space2),
+      child: Semantics(
+        label: l10n.analysisHomeOpenAnalysisSemantics(title),
+        button: onTapCallback != null,
+        child: SsContentCard(
+          key: Key('analysis-home-recent-${summary.documentId}'),
+          title: title,
+          message: _formatDate(summary.createdAt),
+          actions: onTapCallback == null
+              ? const []
+              : [SsCardAction(label: title, onPressed: onTapCallback)],
+        ),
       ),
     );
   }

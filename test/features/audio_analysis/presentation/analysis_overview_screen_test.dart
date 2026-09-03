@@ -10,6 +10,7 @@ import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_capability.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_input_summary.dart';
@@ -99,6 +100,7 @@ Widget _harness(
   Locale locale = const Locale('en'),
 }) {
   return MaterialApp(
+    theme: SsLightTheme.data(),
     locale: locale,
     localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
       AppLocalizations.delegate,
@@ -147,6 +149,7 @@ Widget _routedHarness(
   );
   return MaterialApp.router(
     routerConfig: router,
+    theme: SsLightTheme.data(),
     locale: locale,
     localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
       AppLocalizations.delegate,
@@ -181,15 +184,16 @@ void main() {
     ) async {
       await _pumpAt(
         tester,
-        const MaterialApp(
-          localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        MaterialApp(
+          theme: SsLightTheme.data(),
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
             AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],
           supportedLocales: AppLocalizations.supportedLocales,
-          home: AnalysisOverviewScreen(),
+          home: const AnalysisOverviewScreen(),
         ),
         size: const Size(400, 800),
       );
@@ -526,6 +530,82 @@ void main() {
         expect(detailInsightMatches.evaluate().length, 5);
       },
     );
+  });
+
+  group('AnalysisMetricDetailScreen — §0.0.A/R9/R12', () {
+    testWidgets(
+      'no metrics or insights renders the design-system empty state',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const AnalysisMetricDetailScreen(),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(SsEmptyState), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+      testWidgets('overflow matrix — textScale 2.0 — ${locale.languageCode}', (
+        tester,
+      ) async {
+        // Pumps AnalysisMetricDetailScreen directly (not via the overview
+        // screen's navigation) — this cell is scoped to A3 for THIS round's
+        // screen, not to the unrelated (out-of-scope, already-migrated)
+        // AnalysisOverviewScreen/SsConfidenceLegend the navigation path
+        // would also exercise.
+        const card = OverviewMetricCard(
+          metricId: 'metric.overflow.v1',
+          metricLabel: 'Timing accuracy',
+          unit: 'ms',
+          state: OverviewMetricCardState.available,
+          valueText: '45 ms',
+          confidence: 0.9,
+          statusLabel: 'High confidence',
+          reasonText: '',
+          tipText: '',
+          isUsable: true,
+        );
+        const insight = OverviewInsightCard(
+          title: 'Rush bias',
+          body: 'You are rushing by 12 ms on average.',
+          kindLabel: 'Recommendation',
+          actionLabel: 'Slow down',
+          actionTooltip: 'Slow down',
+        );
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
+            localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const AnalysisMetricDetailScreen(
+              metrics: <OverviewMetricCard>[card],
+              remainingInsights: <OverviewInsightCard>[insight],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 
   group('flag-gated route (F2)', () {

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/core/platform/microphone_permission.dart';
 import 'package:strumsight/features/audio_analysis/data/capture/analysis_recorder.dart';
 import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
@@ -17,6 +18,7 @@ import '../../support/fake_audio.dart';
 
 Future<void> _pump(WidgetTester tester, Widget home) => tester.pumpWidget(
   MaterialApp(
+    theme: SsLightTheme.data(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: home,
@@ -86,6 +88,8 @@ void main() {
         find.byKey(const Key('analysis-recording-error-title')),
         findsOneWidget,
       );
+      // §0.0.A/R12 — the error state is a real design-system component.
+      expect(find.byType(SsFailureState), findsOneWidget);
       expect(coordinator.activeOwner, isNull);
       expect(recorder.isRecording, isFalse);
     });

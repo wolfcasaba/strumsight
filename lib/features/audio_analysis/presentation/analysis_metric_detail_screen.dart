@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import 'controllers/overview_view_model.dart';
@@ -30,38 +31,53 @@ class AnalysisMetricDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final cards = metrics ?? const <OverviewMetricCard>[];
     final insights = remainingInsights ?? const <OverviewInsightCard>[];
     return Scaffold(
       appBar: AppBar(title: Text(l10n.analysisOverviewMetricDetailTitle)),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: <Widget>[
-            for (final card in cards) ...<Widget>[
-              MetricCard(
-                card: card,
-                metricSemanticLabel: (label, value, status) =>
-                    l10n.analysisOverviewMetricSemantic(label, value, status),
-                detailLabel: l10n.analysisOverviewSeeDetails,
+        child: cards.isEmpty && insights.isEmpty
+            ? SsEmptyState(
+                key: const Key('analysis-metric-detail-empty'),
+                icon: Icons.insights_outlined,
+                title: l10n.analysisOverviewMetricDetailTitle,
+                message: l10n.analysisOverviewNoDocument,
+                actionLabel: l10n.commonClose,
+                onAction: () => Navigator.of(context).maybePop(),
+              )
+            : ListView(
+                padding: const EdgeInsets.all(SsSpacing.space4),
+                children: <Widget>[
+                  for (final card in cards) ...<Widget>[
+                    MetricCard(
+                      card: card,
+                      metricSemanticLabel: (label, value, status) => l10n
+                          .analysisOverviewMetricSemantic(label, value, status),
+                      detailLabel: l10n.analysisOverviewSeeDetails,
+                    ),
+                    const SizedBox(height: SsSpacing.space2),
+                  ],
+                  if (insights.isNotEmpty) ...<Widget>[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: SsSpacing.space2,
+                      ),
+                      child: Text(
+                        l10n.analysisOverviewRemainingInsights,
+                        style: typography.titleMedium.copyWith(
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    for (final insight in insights) ...<Widget>[
+                      InsightCard(card: insight),
+                      const SizedBox(height: SsSpacing.space2),
+                    ],
+                  ],
+                ],
               ),
-              const SizedBox(height: 8),
-            ],
-            if (insights.isNotEmpty) ...<Widget>[
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  l10n.analysisOverviewRemainingInsights,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              for (final insight in insights) ...<Widget>[
-                InsightCard(card: insight),
-                const SizedBox(height: 8),
-              ],
-            ],
-          ],
-        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/analyze/engine/clip_recorder.dart';
 import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
 import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
@@ -18,6 +19,11 @@ import '../../support/fake_audio.dart';
 class _MicErrorStub extends AnalyzeController {
   @override
   AnalyzeState build() => const AnalyzeState(phase: AnalyzePhase.micError);
+}
+
+class _MicDeniedStub extends AnalyzeController {
+  @override
+  AnalyzeState build() => const AnalyzeState(phase: AnalyzePhase.micDenied);
 }
 
 void main() {
@@ -48,10 +54,11 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [analyzeControllerProvider.overrideWith(_MicErrorStub.new)],
-        child: const MaterialApp(
+        child: MaterialApp(
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(body: AnalyzeScreen()),
+          home: const Scaffold(body: AnalyzeScreen()),
         ),
       ),
     );
@@ -67,5 +74,53 @@ void main() {
       findsNothing,
       reason: 'a busy mic is not a permission problem',
     );
+  });
+
+  testWidgets(
+    'the micDenied phase shows the design-system empty state with the '
+    'open-settings action',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            analyzeControllerProvider.overrideWith(_MicDeniedStub.new),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const Scaffold(body: AnalyzeScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SsEmptyState), findsOneWidget);
+      expect(find.text('Open settings'), findsOneWidget);
+    },
+  );
+
+  group('§0.0.A/R11 — textScaler 2.0, en/hu, no overflow', () {
+    for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+      testWidgets('AnalyzeScreen idle — ${locale.languageCode}', (
+        tester,
+      ) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const Scaffold(body: AnalyzeScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 }

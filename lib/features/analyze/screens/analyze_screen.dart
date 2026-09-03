@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_palette.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../library/public.dart';
 import '../../diagnostics/public.dart';
@@ -90,29 +88,32 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final palette = context.palette;
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final state = ref.watch(analyzeControllerProvider);
     final controller = ref.read(analyzeControllerProvider.notifier);
     _syncTicker(state.phase);
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+        padding: const EdgeInsets.fromLTRB(
+          SsSpacing.space5,
+          SsSpacing.space6,
+          SsSpacing.space5,
+          SsSpacing.space4,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               l10n.navAnalyze,
-              style: TextStyle(
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w800,
-                fontSize: 30,
-                color: palette.ink,
+              style: typography.headlineLarge.copyWith(
+                color: colors.textPrimary,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: SsSpacing.space4),
             Expanded(child: _body(context, l10n, state, controller)),
-            const SizedBox(height: 12),
+            const SizedBox(height: SsSpacing.space3),
             _controls(context, l10n, state, controller),
           ],
         ),
@@ -126,38 +127,38 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
     AnalyzeState state,
     AnalyzeController controller,
   ) {
-    final palette = context.palette;
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     switch (state.phase) {
       case AnalyzePhase.idle:
-        return EmptyState(
-          icon: Icons.multitrack_audio,
-          title: l10n.analyzeIntro,
+        // Scrolls instead of overflowing at large textScaler on a short
+        // viewport (A3) — SsEmptyState itself only centers, it does not
+        // reserve scroll room.
+        return SingleChildScrollView(
+          child: SsEmptyState(
+            key: const Key('analyze-idle-empty'),
+            icon: Icons.multitrack_audio,
+            title: l10n.navAnalyze,
+            message: l10n.analyzeIntro,
+            actionLabel: l10n.analyzeRecord,
+            onAction: () {
+              _saved = false;
+              controller.startRecording();
+            },
+          ),
         );
       case AnalyzePhase.micDenied:
-        // Kept bespoke: this variant needs an action button (open settings)
-        // below the copy, which the icon+title EmptyState doesn't model.
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.multitrack_audio, size: 56, color: palette.muted),
-              const SizedBox(height: 16),
-              Text(
-                l10n.micPermissionBody,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  height: 1.45,
-                  color: palette.muted,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: openAppSettings,
-                child: Text(l10n.micPermissionAction),
-              ),
-            ],
+        // A real, single action (open the OS settings) maps cleanly onto
+        // SsEmptyState's required actionLabel/onAction (§0.0.A/R12) — unlike
+        // the bespoke Column this replaces, SsEmptyState models it natively.
+        return SingleChildScrollView(
+          child: SsEmptyState(
+            key: const Key('analyze-mic-denied'),
+            icon: Icons.multitrack_audio,
+            title: l10n.navAnalyze,
+            message: l10n.micPermissionBody,
+            actionLabel: l10n.micPermissionAction,
+            onAction: openAppSettings,
           ),
         );
       case AnalyzePhase.recording:
@@ -167,21 +168,21 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _RecordingDot(),
-              const SizedBox(height: 20),
+              const SizedBox(height: SsSpacing.space5),
               Text(
                 _fmt(elapsed),
-                style: TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w800,
+                style: typography.metricLarge.copyWith(
+                  color: colors.textPrimary,
                   fontSize: 44,
-                  color: palette.ink,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: SsSpacing.space2),
               Text(
                 l10n.analyzeRecordingHint,
-                style: TextStyle(color: palette.muted, fontFamily: 'Poppins'),
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -189,21 +190,25 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
       case AnalyzePhase.micError:
         // A busy mic is NOT a permission problem: no settings deep-link,
         // just the failure copy — Retry lives in the big control below
-        // (parity with Live r13 / Tuner r68).
+        // (parity with Live r13 / Tuner r68). No AppFailure/action belongs
+        // to this widget, so it stays a token-styled local widget rather
+        // than a forced SsEmptyState/SsFailureState (§0.0.A/R12 exception
+        // class).
         return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.mic_off_outlined, size: 56, color: palette.muted),
-              const SizedBox(height: 16),
+              Icon(
+                Icons.mic_off_outlined,
+                size: 56,
+                color: colors.textSecondary,
+              ),
+              const SizedBox(height: SsSpacing.space4),
               Text(
                 l10n.micErrorBody,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  height: 1.45,
-                  color: palette.muted,
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textSecondary,
                 ),
               ),
             ],
@@ -222,7 +227,9 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
             child: Text(
               l10n.analyzeNoChords,
               textAlign: TextAlign.center,
-              style: TextStyle(color: palette.muted, fontFamily: 'Poppins'),
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
             ),
           );
         }
@@ -258,31 +265,40 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
     switch (state.phase) {
       case AnalyzePhase.idle:
       case AnalyzePhase.micDenied:
-        return _BigButton(
-          label: l10n.analyzeRecord,
-          icon: Icons.fiber_manual_record,
-          color: AppColors.primary,
-          onTap: () {
-            _saved = false;
-            controller.startRecording();
-          },
+        return SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: SsButton(
+            label: l10n.analyzeRecord,
+            icon: Icons.fiber_manual_record,
+            onPressed: () {
+              _saved = false;
+              controller.startRecording();
+            },
+          ),
         );
       case AnalyzePhase.micError:
-        return _BigButton(
-          label: l10n.micErrorAction,
-          icon: Icons.refresh,
-          color: AppColors.primary,
-          onTap: () {
-            _saved = false;
-            controller.startRecording();
-          },
+        return SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: SsButton(
+            label: l10n.micErrorAction,
+            icon: Icons.refresh,
+            onPressed: () {
+              _saved = false;
+              controller.startRecording();
+            },
+          ),
         );
       case AnalyzePhase.recording:
-        return _BigButton(
-          label: l10n.analyzeStop,
-          icon: Icons.stop,
-          color: AppColors.primary,
-          onTap: controller.stopAndAnalyze,
+        return SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: SsButton(
+            label: l10n.analyzeStop,
+            icon: Icons.stop,
+            onPressed: controller.stopAndAnalyze,
+          ),
         );
       case AnalyzePhase.analyzing:
         return const SizedBox(height: 52);
@@ -307,7 +323,7 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
               tooltip: l10n.actionShare,
               style: IconButton.styleFrom(minimumSize: const Size.square(52)),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: SsSpacing.space2),
             IconButton.filledTonal(
               onPressed: result.strums.isNotEmpty
                   ? () => Navigator.of(context).push(
@@ -325,30 +341,30 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
               tooltip: l10n.learnPracticeThis,
               style: IconButton.styleFrom(minimumSize: const Size.square(52)),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: SsSpacing.space3),
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: canSave ? () => _save(result) : null,
-                icon: Icon(
-                  _saved ? Icons.check : Icons.bookmark_add_outlined,
-                  size: 18,
-                ),
-                label: Text(_saved ? l10n.analyzeSaved : l10n.analyzeSave),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
+              child: SizedBox(
+                height: 52,
+                child: SsButton(
+                  variant: SsButtonVariant.secondary,
+                  icon: _saved ? Icons.check : Icons.bookmark_add_outlined,
+                  label: _saved ? l10n.analyzeSaved : l10n.analyzeSave,
+                  onPressed: canSave ? () => _save(result) : null,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: SsSpacing.space3),
             Expanded(
-              child: _BigButton(
-                label: l10n.analyzeNewRecording,
-                icon: Icons.refresh,
-                color: AppColors.primary,
-                onTap: () {
-                  setState(() => _saved = false);
-                  controller.reset();
-                },
+              child: SizedBox(
+                height: 52,
+                child: SsButton(
+                  label: l10n.analyzeNewRecording,
+                  icon: Icons.refresh,
+                  onPressed: () {
+                    setState(() => _saved = false);
+                    controller.reset();
+                  },
+                ),
               ),
             ),
           ],
@@ -384,48 +400,13 @@ class _RecordingDotState extends State<_RecordingDot>
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
     return FadeTransition(
       opacity: Tween(begin: 0.35, end: 1.0).animate(_c),
       child: Container(
         width: 22,
         height: 22,
-        decoration: const BoxDecoration(
-          color: AppColors.primary,
-          shape: BoxShape.circle,
-        ),
-      ),
-    );
-  }
-}
-
-class _BigButton extends StatelessWidget {
-  const _BigButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon),
-      label: Text(label),
-      style: FilledButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: context.palette.onAccent,
-        minimumSize: const Size.fromHeight(52),
-        textStyle: const TextStyle(
-          fontFamily: 'Poppins',
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-        ),
+        decoration: BoxDecoration(color: colors.brand, shape: BoxShape.circle),
       ),
     );
   }

@@ -472,4 +472,156 @@ tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Migrációs mérés (A1, A7)
+
+```
+$ for f in lib/features/audio_analysis/presentation/capture/analysis_home_screen.dart lib/features/audio_analysis/presentation/capture/analysis_recording_screen.dart lib/features/audio_analysis/presentation/capture/analysis_processing_screen.dart lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart lib/features/audio_analysis/presentation/analysis_export_screen.dart lib/features/analyze/screens/analyze_screen.dart; do grep -q design_system "$f" && echo "MIGRATED $f" || echo "legacy $f"; done
+MIGRATED lib/features/audio_analysis/presentation/capture/analysis_home_screen.dart
+MIGRATED lib/features/audio_analysis/presentation/capture/analysis_recording_screen.dart
+MIGRATED lib/features/audio_analysis/presentation/capture/analysis_processing_screen.dart
+MIGRATED lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart
+MIGRATED lib/features/audio_analysis/presentation/analysis_export_screen.dart
+MIGRATED lib/features/analyze/screens/analyze_screen.dart
+```
+
+Mind a 6 képernyő migrált. A teljes 96-os korpuszon: **86/96 (89.583%)**, fel
+az E15-R09 utáni 80/96-ról (`docs/ui/migration-status.md` teteje — a mérés
+parancsa és a részletes komponens-térkép ott).
+
+### 10.2 Komponens-térkép (5.2, R3, R9, R12)
+
+- **`SsEmptyState`** — `AnalysisHomeScreen` üres recent-lista (akció:
+  `onStartRecording`, valódi), `AnalyzeScreen` idle és micDenied fázis
+  (micDenied akciója `openAppSettings`, valódi — a lecserélt bespoke Column
+  ezt nem tudta modellezni), `AnalysisMetricDetailScreen` új üres ága (se
+  metrika, se insight — korábban néma üres `ListView` volt; akció: `commonClose`
+  + `Navigator.maybePop`).
+- **`SsFailureState`** — `AnalysisRecordingScreen._RecordingStage.error`,
+  `AnalysisProcessingScreen`'s `AnalysisInputError`/`AnalysisError` —
+  mindhárom valódi `AppFailure`-t hordoz, `SsFailurePresentation.from`
+  kódalapú címet/üzenetet ad a korábbi nyers `failure.code` helyett.
+- **Kivétel-osztály (R12), token-stílusú helyi widget marad** —
+  `AnalysisRecordingScreen._PermissionDeniedBody` (a `retryable`-től
+  függetlenül MINDIG retry-t mutat; az `SsFailureState` kód-alapú akciója ezt
+  némán "open settings"-re cserélné egy tartósan megtagadott engedélynél —
+  VISELKEDÉS-változás, nem vizuális), `AnalysisProcessingScreen`'s
+  `AnalysisPermissionDenied` ága (nincs `AppFailure` objektum ezen az
+  állapoton — kitalálni egyet mért kódot hamisítana), `AnalyzeScreen`'s
+  `micError` fázisa (a busy-mic szövegnek szándékosan nincs saját akciója — a
+  Retry a különálló nagy vezérlőben él, parity Live r13/Tuner r68-cal).
+- **Betöltés** — `AnalysisProcessingScreen`'s `LinearProgressIndicator`
+  típusban PINNELT (`processing_progress_test.dart`), ezért típusban
+  változatlan marad, csak `color`/`backgroundColor` tokent kap.
+- **`AnalysisMetricDetailScreen` SEKÉLY migráció (R9)** — a vizuális törzs a
+  `MetricCard`/`InsightCard` megosztott widgetekben él, azok NINCSENEK az
+  `allowed_paths`-on; a kör csak a képernyő saját rétegét migrálta
+  (scaffold, `ListView` tokenek, az új üres állapot, a "More insights"
+  szekció-cím). A két kártya design-rendszer-migrációja follow-up, rögzítve a
+  `migration-status.md`-ben.
+- **`AnalyzeScreen`** — `AppColors` → `SsColorScheme`, `_BigButton` törölve
+  (minden hívási hely `SizedBox(width: infinity, height: 52, child: SsButton)`
+  mintát kap), `done` fázis "Save"/"New recording" párja
+  `SsButtonVariant.secondary`/`.primary`. A megosztás/gyakorlás ikon-gombok
+  (`IconButton.filledTonal`) VÁLTOZATLANOK maradtak — nem hordoznak
+  `AppColors`/legacy-token hivatkozást, és az `SsIconButton` névkatalógusa
+  nem tartalmazza az `ios_share`/`school_outlined` ikonneveket.
+
+### 10.3 Teszt-harness téma-drótozás (R4) — egy HETEDIK ponttal
+
+A briefben nevesített 6 harness (`analyze_cleanup_test.dart`,
+`processing_progress_test.dart`, `recording_state_test.dart`,
+`mic_error_parity_test.dart`, `analysis_overview_screen_test.dart` — `_harness`
+ÉS az inline üres-állapot `MaterialApp`, `analysis_export_screen_test.dart`)
+mind megkapta a `theme: SsLightTheme.data()`-t. **A gate első teljes futása egy
+HETEDIK, a briefben nem nevesített pontot is elkapott:**
+`analysis_overview_screen_test.dart`'s `_routedHarness` (egy HARMADIK
+`MaterialApp`-építő ugyanabban a fájlban, a már meglévő, kipinnelt
+"maximum-policy" tesztet szolgálja ki) szintén téma nélküli volt — ez egy
+VALÓDI `AnalysisMetricDetailScreen` null-check összeomlást okozott egy
+kipinnelt cellán. Javítva ugyanúgy (`theme: SsLightTheme.data()`), a mért
+"literálisan változatlan" kritérium (kulcsok/típusok/szövegek) sértetlen.
+
+### 10.4 ARB-mérés — a brief §3/§7 engedélye vs. a mért forrás (R7 kiegészítés)
+
+A brief `allowed_paths`-a a `lib/l10n/app_en.arb`/`app_hu.arb` fájlokat sorolja
+fel új kulcs felvételéhez. Mérve a kör közben: ezek **GENERÁLT aggregátumok**
+(ADR 0307 §4, `tool/gen_l10n_segments.dart`), a `lib/l10n/base/app_<locale>.arb`
++ `lib/l10n/features/<feature>_<locale>.arb` fragmentumok determinisztikus
+uniója — egy kézi szerkesztést a gate saját `l10n` lépése (amely újragenerálja
+az aggregátumot) NÉMÁN felülír. Három új kulcsot (`analyzeIntroTitle`,
+`analysisHomeRecentEmptyTitle`, `analysisMetricDetailEmptyTitle`/`Message`)
+így elvesztettem az első gate-futás után — a `lib/l10n/base/app_en.arb` NINCS
+az `allowed_paths`-on (a scope-audit ezt blokkolta is, STOP-eset lett volna).
+Mivel egyik új szöveg sem volt VALÓDI új tartalom (mindegyik egy már létező
+képernyő-cím vagy üzenet ismételt felhasználása), a végleges megoldás a
+meglévő kulcsok újrahasznosítása lett — **ÚJ ARB-kulcs végül nem került be**:
+
+- `AnalysisHomeScreen` üres állapota: title = `analysisHomeRecentSectionTitle`
+  (a különálló szekció-fejléc emiatt csak a NEM üres ágon jelenik meg —
+  duplikáció-mentes), message = `analysisHomeRecentEmpty` (változatlan).
+- `AnalyzeScreen` idle/micDenied title: `navAnalyze` ("Analyze"/"Elemzés").
+- `AnalysisMetricDetailScreen` üres állapota: title =
+  `analysisOverviewMetricDetailTitle`, message = `analysisOverviewNoDocument`
+  (mindkettő már létező, testvér-képernyőn bevezetett kulcs, jelentésük nem
+  változott, csak újrahasznosítva).
+
+Egy jövőbeli körnek, ha VALÓDI új szöveget kell felvennie ide, a
+`lib/l10n/base/**`/`lib/l10n/features/**` fragmentumot kell az
+`allowed_paths`-ra tennie, nem az aggregátumot — rögzítve a
+`migration-status.md`-ben is.
+
+### 10.5 A3 — egy valódi túlcsordulás, megtalálva és javítva
+
+`AnalyzeScreen`'s idle-állapotának `SsEmptyState`-je a saját `textScaler 2.0`
+cellámban (`mic_error_parity_test.dart`) VALÓDI `RenderFlex overflow`-t adott
+az alapértelmezett teszt-viewporton — az `SsEmptyState` csak középre igazít,
+nem tart fenn scroll-helyet. Javítás: `SingleChildScrollView` az idle és a
+micDenied ág köré (mindkettő `SsEmptyState`-et használ). Hasonló okból az
+`AnalysisMetricDetailScreen` A3 cellája NEM az overview-képernyőn át navigálva
+méri magát (az a navigáció egy MÁSIK, a kör hatókörén kívüli, már migrált
+komponenst — `SsConfidenceLegend` — is belehúzna, amely 320px+2.0 kombón
+önmagában túlcsordul, a batch-től függetlenül); helyette
+`AnalysisMetricDetailScreen`-t közvetlenül pumpálja reprezentatív
+metrika+insight tartalommal.
+
+### 10.6 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+Cél: `analysis_recording_screen.dart`'s `_ErrorBody` — `SsFailureState` →
+nyers `Text(presentation.title, key: ...)`. Gate-cella:
+`test/features/analyze/analyze_cleanup_test.dart` ÚJ sora
+(`expect(find.byType(SsFailureState), findsOneWidget)`).
+
+```
+$ flutter test test/features/analyze/analyze_cleanup_test.dart   # SÉRTÉS UTÁN
+...
+00:01 +1 -1: AnalysisRecordingScreen — A5 no orphan microphone an engine
+failure mid-start releases the lease it took [E]
+  Expected: exactly one matching candidate
+  Actual: <zero widgets with type SsFailureState>
+Failing tests:
+  .../analyze_cleanup_test.dart: ... an engine failure mid-start releases
+  the lease it took
+```
+
+Az A2 cella PIROSRA váltott, ahogy a mátrix előírja. Visszaállítva
+(`git diff` a kör commitjai között üres erre a fájlra a próba előtt/után),
+`flutter test test/features/analyze/analyze_cleanup_test.dart` → 5/5 zöld.
+
+### 10.7 Kötelező ellenőrzés — artefaktum
+
+```
+$ tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/offline_network_guard_test.dart test/features/analyze/analyze_cleanup_test.dart test/features/analyze/mic_error_parity_test.dart test/features/analyze/processing_progress_test.dart test/features/analyze/recording_state_test.dart test/features/audio_analysis/presentation/analysis_overview_screen_test.dart test/features/audio_analysis/presentation/analysis_export_screen_test.dart test/ui/goldens/e13_r26_screens_golden_test.dart test/ui/goldens/e13_r27_screens_golden_test.dart test/l10n/arb_parity_test.dart test/l10n/hardcoded_string_guard_test.dart test/core/architecture_dependency_test.dart
+...
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (exit 0).
+```
+
+A golden-újrafelvétel (`tools/golden-x86.sh record ...`, exit 0, 14/14 zöld) és
+egy második, független `tools/golden-x86.sh check ...` futás (exit 0, 14/14
+zöld) is megerősítette, hogy a §10.4 utólagos ARB/kód-javítások (amelyek a
+golden-felvétel UTÁN történtek) nem változtatták meg egyik golden képernyő
+kimenetét sem — mindkét érintett üres-állapot ág (`AnalysisHomeScreen`,
+`AnalysisMetricDetailScreen`) a golden-fixture NEM-üres adatával fut, tehát
+az érintett kódágat a golden sosem hívta.
+
 ## 11. Review — a Claude tölti ki

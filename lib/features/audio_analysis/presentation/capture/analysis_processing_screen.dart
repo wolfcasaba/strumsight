@@ -9,6 +9,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
+import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/analysis_state.dart';
 import '../../domain/analysis_capability.dart';
@@ -97,16 +99,14 @@ class _AnalysisProcessingScreenState extends State<AnalysisProcessingScreen> {
               title: l10n.analysisProcessingPermissionDeniedTitle,
               onRestart: widget.onRestart,
             ),
-            AnalysisInputError(:final failure) => _MessageBody(
+            AnalysisInputError(:final failure) => _FailureBody(
               key: const Key('analysis-processing-input-error'),
-              title: l10n.analysisProcessingErrorTitle,
-              detail: failure.code,
+              failure: failure,
               onRestart: widget.onRestart,
             ),
-            AnalysisError(:final failure) => _MessageBody(
+            AnalysisError(:final failure) => _FailureBody(
               key: const Key('analysis-processing-error'),
-              title: l10n.analysisProcessingErrorTitle,
-              detail: failure.code,
+              failure: failure,
               onRestart: widget.onRestart,
             ),
           },
@@ -122,6 +122,8 @@ final class _IndeterminateBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Semantics(
       container: true,
       label: l10n.analysisProcessingStarting,
@@ -131,13 +133,18 @@ final class _IndeterminateBody extends StatelessWidget {
         children: <Widget>[
           Text(
             l10n.analysisProcessingStarting,
-            style: Theme.of(context).textTheme.titleMedium,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
           ),
-          const SizedBox(height: 8),
-          Text(l10n.analysisProcessingStartingDescription),
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(
-            key: Key('analysis-processing-starting-bar'),
+          const SizedBox(height: SsSpacing.space2),
+          Text(
+            l10n.analysisProcessingStartingDescription,
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(height: SsSpacing.space3),
+          LinearProgressIndicator(
+            key: const Key('analysis-processing-starting-bar'),
+            color: colors.brand,
+            backgroundColor: colors.surfaceSunken,
           ),
         ],
       ),
@@ -163,6 +170,8 @@ final class _AnalyzingBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final index = AnalysisProgressPhase.values.indexOf(phase) + 1;
     final total = AnalysisProgressPhase.values.length;
     return Column(
@@ -172,9 +181,9 @@ final class _AnalyzingBody extends StatelessWidget {
         Text(
           l10n.analysisProcessingStepIndicator(index, total),
           key: const Key('analysis-processing-step'),
-          style: Theme.of(context).textTheme.labelLarge,
+          style: typography.labelLarge.copyWith(color: colors.textSecondary),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: SsSpacing.space3),
         AnalysisProgressView(
           phase: phase,
           completedUnits: completedUnits,
@@ -194,6 +203,8 @@ final class _CompletedBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -201,14 +212,14 @@ final class _CompletedBody extends StatelessWidget {
         Text(
           l10n.analysisProcessingCompletedTitle,
           key: const Key('analysis-processing-completed-title'),
-          style: Theme.of(context).textTheme.titleLarge,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: SsSpacing.space3),
         if (onViewResult != null)
-          FilledButton(
+          SsButton(
             key: const Key('analysis-processing-view-result'),
+            label: l10n.analysisProcessingViewResult,
             onPressed: onViewResult,
-            child: Text(l10n.analysisProcessingViewResult),
           ),
       ],
     );
@@ -224,6 +235,8 @@ final class _DegradedBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final labels = AppLocalizationsOverviewLabels(l10n);
     final reasons = <CapabilityUnavailableReason>{
       for (final capability in document.capabilities)
@@ -238,23 +251,31 @@ final class _DegradedBody extends StatelessWidget {
         Text(
           l10n.analysisProcessingDegradedTitle,
           key: const Key('analysis-processing-degraded-title'),
-          style: Theme.of(context).textTheme.titleLarge,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
         ),
-        const SizedBox(height: 8),
-        Text(l10n.analysisProcessingDegradedDescription),
-        const SizedBox(height: 8),
+        const SizedBox(height: SsSpacing.space2),
+        Text(
+          l10n.analysisProcessingDegradedDescription,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+        ),
+        const SizedBox(height: SsSpacing.space2),
         for (final reason in reasons)
           Padding(
             key: Key('analysis-processing-degraded-reason-${reason.name}'),
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text('• ${labels.unavailableReason(reason)}'),
+            padding: const EdgeInsets.only(bottom: SsSpacing.space1),
+            child: Text(
+              '• ${labels.unavailableReason(reason)}',
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
           ),
-        const SizedBox(height: 12),
+        const SizedBox(height: SsSpacing.space3),
         if (onViewResult != null)
-          FilledButton(
+          SsButton(
             key: const Key('analysis-processing-view-result'),
+            label: l10n.analysisProcessingViewResult,
             onPressed: onViewResult,
-            child: Text(l10n.analysisProcessingViewResult),
           ),
       ],
     );
@@ -269,6 +290,8 @@ final class _CancelledBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -276,14 +299,14 @@ final class _CancelledBody extends StatelessWidget {
         Text(
           l10n.analysisProcessingCancelledTitle,
           key: const Key('analysis-processing-cancelled-title'),
-          style: Theme.of(context).textTheme.titleLarge,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
         ),
         if (onRestart != null) ...<Widget>[
-          const SizedBox(height: 12),
-          FilledButton(
+          const SizedBox(height: SsSpacing.space3),
+          SsButton(
             key: const Key('analysis-processing-restart'),
+            label: l10n.analysisProcessingRestart,
             onPressed: onRestart,
-            child: Text(l10n.analysisProcessingRestart),
           ),
         ],
       ],
@@ -291,39 +314,60 @@ final class _CancelledBody extends StatelessWidget {
   }
 }
 
+/// The permission-denied message: no [AppFailure] is carried by
+/// [AnalysisPermissionDenied] (§0.0.A/R12 — `SsFailureState` needs a real
+/// presentation, and fabricating one here would invent a code that was never
+/// measured), so this stays a token-styled local widget.
 final class _MessageBody extends StatelessWidget {
-  const _MessageBody({
-    required this.title,
-    this.detail,
-    required this.onRestart,
-    super.key,
-  });
+  const _MessageBody({required this.title, required this.onRestart, super.key});
 
   final String title;
-  final String? detail;
   final VoidCallback? onRestart;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        if (detail != null) ...<Widget>[
-          const SizedBox(height: 4),
-          Text(detail!, style: Theme.of(context).textTheme.bodySmall),
-        ],
+        Text(
+          title,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
+        ),
         if (onRestart != null) ...<Widget>[
-          const SizedBox(height: 12),
-          FilledButton(
+          const SizedBox(height: SsSpacing.space3),
+          SsButton(
             key: const Key('analysis-processing-restart'),
+            label: l10n.analysisProcessingRestart,
             onPressed: onRestart,
-            child: Text(l10n.analysisProcessingRestart),
           ),
         ],
       ],
     );
+  }
+}
+
+/// The input-validation and general engine failure states
+/// (`AnalysisInputError` / `AnalysisError`, §0.0.A/R12): both carry a real
+/// [AppFailure], so `SsFailureState` renders the code-mapped presentation
+/// instead of the raw failure code that used to leak into the UI.
+final class _FailureBody extends StatelessWidget {
+  const _FailureBody({
+    required this.failure,
+    required this.onRestart,
+    super.key,
+  });
+
+  final AppFailure failure;
+  final VoidCallback? onRestart;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final presentation = SsFailurePresentation.from(l10n, failure);
+    return SsFailureState(presentation: presentation, onRetry: onRestart);
   }
 }

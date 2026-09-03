@@ -8,6 +8,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
 import 'package:strumsight/features/audio_analysis/presentation/widgets/labels_adapter.dart';
 import 'package:strumsight/features/audio_analysis/public.dart';
@@ -15,6 +17,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 
 Future<void> _pump(WidgetTester tester, Widget home) => tester.pumpWidget(
   MaterialApp(
+    theme: SsLightTheme.data(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: home,
@@ -194,6 +197,66 @@ void main() {
       expect(find.textContaining('heat'), findsNothing);
       expect(find.textContaining('battery'), findsNothing);
     });
+  });
+
+  group('§0.0.A/R12 — input/general failures render SsFailureState', () {
+    testWidgets('AnalysisInputError shows the design-system failure state', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        AnalysisProcessingScreen(
+          state: const AnalysisInputError(
+            ValidationFailure(code: 'validation.input'),
+          ),
+          onCancel: () {},
+        ),
+      );
+      expect(find.byType(SsFailureState), findsOneWidget);
+    });
+
+    testWidgets('AnalysisError shows the design-system failure state', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        AnalysisProcessingScreen(
+          state: const AnalysisError(runId: 'run-1', failure: AudioFailure()),
+          onCancel: () {},
+        ),
+      );
+      expect(find.byType(SsFailureState), findsOneWidget);
+    });
+  });
+
+  group('§0.0.A/R11 — textScaler 2.0, en/hu, no overflow', () {
+    for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+      testWidgets('AnalysisProcessingScreen — ${locale.languageCode}', (
+        tester,
+      ) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: AnalysisProcessingScreen(
+              state: const AnalysisAnalyzing(
+                runId: 'run-1',
+                phase: AnalysisProgressPhase.computingMetrics,
+                completedUnits: 3,
+                totalUnits: 5,
+              ),
+              onCancel: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 }
 
