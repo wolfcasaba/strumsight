@@ -121,6 +121,32 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       });
+
+      testWidgets('AnalyzeScreen micDenied — ${locale.languageCode}', (
+        tester,
+      ) async {
+        // m6 — the idle phase already had 2.0 coverage; micDenied (a
+        // different SsEmptyState instance, §10.5 sibling-instance rule /
+        // L559) did not.
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              analyzeControllerProvider.overrideWith(_MicDeniedStub.new),
+            ],
+            child: MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const Scaffold(body: AnalyzeScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
     }
   });
 }

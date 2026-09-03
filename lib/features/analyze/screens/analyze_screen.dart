@@ -131,31 +131,53 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
     final typography = Theme.of(context).extension<SsTypography>()!;
     switch (state.phase) {
       case AnalyzePhase.idle:
-        // Scrolls instead of overflowing at large textScaler on a short
-        // viewport (A3) — SsEmptyState itself only centers, it does not
-        // reserve scroll room.
+        // The bottom control bar (`_controls`, below) already offers the
+        // one real next step for this phase — start recording. SsEmptyState
+        // requires its own actionLabel/onAction, which would only ever be
+        // able to duplicate that same button (review M4 — a fabricated
+        // second "Record" CTA, §0.0.A/R12 forbids forcing a fake action).
+        // Token-styled local widget instead, same shape as the micError
+        // branch below; no title, so it does not repeat the screen header
+        // above (review m1). Scrolls instead of overflowing at large
+        // textScaler on a short viewport (A3).
         return SingleChildScrollView(
-          child: SsEmptyState(
-            key: const Key('analyze-idle-empty'),
-            icon: Icons.multitrack_audio,
-            title: l10n.navAnalyze,
-            message: l10n.analyzeIntro,
-            actionLabel: l10n.analyzeRecord,
-            onAction: () {
-              _saved = false;
-              controller.startRecording();
-            },
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(SsSpacing.space6),
+              child: Column(
+                key: const Key('analyze-idle-empty'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.multitrack_audio,
+                    size: 40,
+                    color: colors.textSecondary,
+                  ),
+                  const SizedBox(height: SsSpacing.space4),
+                  Text(
+                    l10n.analyzeIntro,
+                    textAlign: TextAlign.center,
+                    style: typography.bodyMedium.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       case AnalyzePhase.micDenied:
         // A real, single action (open the OS settings) maps cleanly onto
         // SsEmptyState's required actionLabel/onAction (§0.0.A/R12) — unlike
         // the bespoke Column this replaces, SsEmptyState models it natively.
+        // Title reuses the existing microphone-permission title from the
+        // audio_analysis feature instead of `navAnalyze`, which would repeat
+        // the screen header above (review m1) — no new ARB key needed.
         return SingleChildScrollView(
           child: SsEmptyState(
             key: const Key('analyze-mic-denied'),
             icon: Icons.multitrack_audio,
-            title: l10n.navAnalyze,
+            title: l10n.analysisRecordingPermissionDeniedTitle,
             message: l10n.micPermissionBody,
             actionLabel: l10n.micPermissionAction,
             onAction: openAppSettings,
