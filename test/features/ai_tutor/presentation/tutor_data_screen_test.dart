@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/components/feedback/ss_failure_state.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
@@ -68,12 +69,25 @@ class _FakeMemoryRepository implements TutorMemoryRepository {
   final List<String> deletedFactIds = <String>[];
   final List<TutorMemoryFact> updatedFacts = <TutorMemoryFact>[];
   bool rejectSensitiveUpdates = false;
+  int listCalls = 0;
+
+  /// R22-DA8 (§0.0.A real-violation probe): when true, `list()` throws
+  /// instead of returning an `AppResult`, exercising the
+  /// `memoryFacts.when(error: ...)` branch for real (the provider only
+  /// reaches `error` on a genuine throw — a returned `Failure` is
+  /// swallowed to an empty list, see `tutor_privacy_providers.dart`).
+  bool throwOnList = false;
 
   @override
-  Future<AppResult<List<TutorMemoryFact>>> list() async =>
-      Success<List<TutorMemoryFact>>(
-        List<TutorMemoryFact>.unmodifiable(_facts),
-      );
+  Future<AppResult<List<TutorMemoryFact>>> list() async {
+    listCalls++;
+    if (throwOnList) {
+      throw StateError('memory repository unavailable');
+    }
+    return Success<List<TutorMemoryFact>>(
+      List<TutorMemoryFact>.unmodifiable(_facts),
+    );
+  }
 
   @override
   Future<AppResult<TutorMemoryFact>> saveCandidate(
@@ -431,4 +445,23 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.A/R6 + §6.1 real-violation probe: the memory-facts load
+  // failure is a design-system `SsFailureState`, not raw `Text` — and its
+  // retry action re-invokes the repository (`ref.invalidate`).
+  // -------------------------------------------------------------------
+  testWidgets(
+    'R22-DA8: memory-facts load failure renders SsFailureState with a working retry',
+    (tester) async {
+      final memory = _FakeMemoryRepository()..throwOnList = true;
+      await _pump(tester, memory: memory);
+      expect(find.byType(SsFailureState), findsOneWidget);
+      expect(memory.listCalls, 1);
+
+      await tester.tap(find.byKey(const ValueKey('ss-failure-state-retry')));
+      await tester.pump();
+      expect(memory.listCalls, 2);
+    },
+  );
 }
