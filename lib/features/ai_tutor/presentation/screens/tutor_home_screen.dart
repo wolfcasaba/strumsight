@@ -143,7 +143,14 @@ class _ModeChip extends StatelessWidget {
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         const SizedBox(width: SsSpacing.space1),
-        Text(label, style: Theme.of(context).textTheme.labelLarge),
+        Flexible(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     ),
   );

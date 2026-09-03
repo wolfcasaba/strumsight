@@ -323,8 +323,9 @@ class _MemoryFactRow extends ConsumerWidget {
         children: <Widget>[
           Text(fact.content),
           const SizedBox(height: SsSpacing.space2),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: SsSpacing.space2,
             children: <Widget>[
               TextButton(
                 key: Key('tutorDataMemoryEdit:${fact.id}'),
