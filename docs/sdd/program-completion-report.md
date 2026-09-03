@@ -107,7 +107,7 @@ szóval.
 | Ch13 | UI/UX Design System & Screen Specification | E13 | 36 | 0 | 0 | 0 | queue-szinten lezárva (36/36 done) | — |
 | Ch14 | Recognition Accuracy & Useful UI Recovery | E14 | 1 | 0 | 18 | 0 | nyitva (prepared: R02–R19 megírva, nem futtatva; R20–R42 briefjei meg sem íródtak) | — |
 | — | Ch15 UI-migráció (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E15 | 14 | 0 | 0 | 0 | nyitva (pending: R09–R13 hátravan — AI-tutor/analysis/vision/onboarding/community migráció, backend mounting, release evidence; R08 gamification merge-elve) | — |
-| — | Ch16 kompozíció és rollout (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E16 | 1 | 4 | 0 | 0 | nyitva (pending: mind az 5 kör — kompozíció, progress-projekció, capability rollout, live backend E2E, teljes-app verifikáció) | — |
+| — | Ch16 kompozíció és rollout (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E16 | 2 | 3 | 0 | 0 | nyitva (pending: mind az 5 kör — kompozíció, progress-projekció, capability rollout, live backend E2E, teljes-app verifikáció) | — |
 | — | governance (pszeudoepic) | E99 | 18 | 0 | 0 | 2 | nyitva (hold: E99-R21, E99-R23) | — |
 
 ## 4. Eltérések a tervtől (mért, nem becsült)
