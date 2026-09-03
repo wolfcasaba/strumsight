@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/audio_providers.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/chords/chord_shape.dart';
 import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/core/music/strum.dart';
@@ -72,6 +73,10 @@ void main() {
           ),
         ],
         child: MaterialApp(
+          // R2 (§0.0, extended measurement): the migrated OnboardingScreen
+          // now reads the design-system theme extensions via SsButton — a
+          // themeless MaterialApp null-check crashes (L593-class defect).
+          theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: OnboardingScreen(onDone: () {}, onFirstWin: () => firstWin++),

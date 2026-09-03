@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
@@ -50,6 +51,10 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp(
+            // R2 (§0.0): the migrated screen's SsButton now reads the
+            // design-system theme extensions — a themeless MaterialApp
+            // null-check crashes (L593-class defect).
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: OnboardingScreen(onDone: onDone),
@@ -105,10 +110,14 @@ void main() {
       'carousel instead of throwing',
       (tester) async {
         await tester.pumpWidget(
-          const MaterialApp(
+          MaterialApp(
+            // R2 (§0.0): the migrated screen's SsButton now reads the
+            // design-system theme extensions — a themeless MaterialApp
+            // null-check crashes (L593-class defect).
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: OnboardingScreen(),
+            home: const OnboardingScreen(),
           ),
         );
 

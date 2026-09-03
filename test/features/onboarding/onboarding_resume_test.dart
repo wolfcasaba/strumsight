@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
@@ -95,6 +96,10 @@ void main() {
         ProviderScope(
           overrides: [preferenceStoreOverride(store)],
           child: MaterialApp(
+            // R2 (§0.0, extended measurement): the migrated OnboardingScreen
+            // now reads the design-system theme extensions via SsButton — a
+            // themeless MaterialApp null-check crashes (L593-class defect).
+            theme: SsLightTheme.data(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: const OnboardingScreen(),
