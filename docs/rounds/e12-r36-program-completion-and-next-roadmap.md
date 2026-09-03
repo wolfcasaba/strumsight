@@ -289,4 +289,83 @@ tools/round-gate.sh test/tooling/program_completion_test.dart test/tooling/sdd_i
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), folytató futás (az előző futás a
+kvótakorlát miatt jelzés nélkül szakadt meg 23:42 UTC-kor; a §−1 leírja a
+folytatás kiindulását).
+
+**Szállítva (a §4 engedélyezett fájllista mind az öt eleme + a brief maga):**
+
+- `docs/sdd/program-completion-report.md` — a completion matrix (§3), a
+  fejezet↔queue-előtag leképezés magyarázata (§2), az eltérések (§4), az
+  emberi kapuk táblája (§5), a fő tanulságok (§6) és a bizonyíték-lista (§7).
+  A meglévő draftot ellenőriztem a §0.0.A P1–P4 mérésével (`awk` reprodukció
+  megismételve, ld. alább) — pontos egyezést találtam, nem kellett javítani.
+- `docs/roadmap/next-six-months.md` — 7 outcome-tétel, mindegyik
+  `**Outcome:**`/`**Mérőszám:**`/`**Forrás:**` hármassal. Szintén ellenőrizve,
+  változtatás nélkül elfogadva.
+- `test/tooling/program_completion_test.dart` (ÚJ, 20 cella) — a §5 szerinti
+  őr: tartalom-paraméteres tiszta függvények (`parseQueueCounts`,
+  `parseCompletionMatrix`, `compareMatrixToQueue`, `findOpenLaneMarkedClosed`,
+  `parseEvidencePaths`/`findMissingEvidence`, `findHumanGatesMarkedDone`,
+  `parseRoadmapItems`/`validateRoadmapItem`) + acceptance-pontonként (A1–A5)
+  legalább egy kézzel épített RED-bizonyító cella, majd ugyanazokkal a
+  függvényekkel a valódi fát mérő cellák.
+- `docs/sdd/00-index.md` — **kizárólag** a Chapter 5–14 sorok Státusz és
+  Implementation progress cellái frissültek a §0.0.A P2 mért állapotra (a
+  Chapter 1–4 sorok már pontosak voltak, nem nyúltam hozzájuk; a
+  „Fejlesztési körök"/„Fájl"/„Zárójelentés" oszlopokat és a Chapter 15/16
+  hiányát — P7 szerint — nem érintettem).
+- `HANDOFF.md` — záró bejegyzés (lásd a git history-ban ezzel egy időben).
+
+**Mérési újra-ellenőrzés (§0.0.A P2 reprodukció, 2026-09-02):**
+`awk -F'\t' '$1 ~ /^E[0-9]/ {split($1,a,"-"); print a[1]"\t"$NF}'
+docs/execution/pipeline-queue.tsv | sort | uniq -c` — a kimenet BYTE szinten
+egyezik a brief táblájával; a queue azóta nem változott.
+
+**Döntések:**
+
+- A `_extractLabelValue` (roadmap A4 parser) belső hibát mértem és javítottam
+  fejlesztés közben: az első verzió `[A-Za-zÀ-ÿ ]+` karakterosztályt
+  használt a `**Label:**` határ felismerésére, ami a magyar "ő" (U+0151)
+  betűnél (a `Mérőszám` szóban) elbukott — a Latin-1 Supplement tartomány nem
+  tartalmazza. Emiatt a nem-mohó capture átnyelte a következő teljes szakaszt
+  is. Javítás: `\p{L}` Unicode betű-osztály (`unicode: true` flaggel) — a
+  teszt ezt a hibát az A4 "csak kör-azonosítók felsorolása" RED-cellája fogta
+  meg fejlesztés közben (a cella előbb hamisan zöld volt).
+- ADR-t nem foglaltam (a brief §0.0.A P6 és a precedens `E12-R35` szerint).
+
+**A KÖTELEZŐ valódi-sértés próba (§6.1/§10), két formában:**
+
+1. **Automatizált, a gate részeként fut** (`program_completion_test.dart`,
+   "(a)"/"(b)" cellák): (a) csak a Riport-státusz szöveg átírása "lezárva,
+   minden kör kész"-re (a számok érintetlenek) → A2 PIROS, A1 zöld marad;
+   (b) csak a számok átírása (a 32 hold-ot done-ba mozgatva, a szöveg
+   érintetlen) → A1 PIROS a valódi mért queue ellen, A2 zöld marad. Mindkettő
+   dokumentálja, hogy A1 és A2 EGYMÁSTÓL FÜGGETLENÜL fog hibát.
+2. **Kézi, a fájlon (KÖTELEZŐ, a brief §10 szerint):** a
+   `docs/sdd/program-completion-report.md` Ch11/E10 sorának
+   Riport-státusz celláját "nyitva (hold: a TELJES sáv, mind a 32 kör)"-ról
+   "lezárva, minden kör kész"-re írtam, futtattam a §9 gate-sort szó szerint
+   (`tools/round-gate.sh test/tooling/program_completion_test.dart
+   test/tooling/sdd_index_guard_test.dart`) → **kilépési kód 10, a [3] `test
+   test/tooling/program_completion_test.dart` lépés PIROS**, a konkrét bukó
+   cella: `the real tree (...) A2 — no open lane is marked closed`, üzenet:
+   `Ch11 (E10): open lane (openCount=32) but report-status claims closure:
+   "lezárva, minden kör kész"`. Ezután visszaállítottam a MÉRT szöveget, és a
+   gate-et újra futtattam: **mind a 7 lépés (format, analyze, mindkét teszt,
+   architecture, secrets, l10n) ZÖLD** — "MINDEN GATE ZÖLD" záró sorral.
+
+**Gate (végleges, a MÉRT állapoton):** `tools/round-gate.sh
+test/tooling/program_completion_test.dart test/tooling/sdd_index_guard_test.dart`
+→ mind a 7 lépés zöld (format, analyze, a két megnevezett teszt fájl 20+36
+cellával, architecture 12 allowlisted deviation, secrets 0 finding, l10n
+2298 üzenet en→hu párban).
+
+**Amit a következő körnek/orchestrátornak tudnia kell:** a riport és a
+roadmap tartalmilag a 2026-08-27-es draft volt, amit csak a §0.0.A mérésével
+kellett igazolni, nem újraírni — az egyetlen új munka az őr-teszt és a
+`00-index.md` státusz-frissítés volt. A Chapter 14 42-tervezett/19-létező
+kör közötti rés (R20–R42 briefjei meg sem íródtak) a program legnagyobb,
+még meg sem tervezett hátraléka — ezt a roadmap 5. tétele nevesíti.
+
 ## 11. Review — a Claude tölti ki

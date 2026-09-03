@@ -1,5 +1,43 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R36 KÉSZ — Program completion report és következő roadmap (implementer kész, review/merge hátravan)
+
+A Chapter 12 **záró köre**. Szállítás: `docs/sdd/program-completion-report.md`
+(ÚJ) — a program állapotának bizonyíték-alapú, ŐSZINTE lezárása: egy
+completion matrix minden sora egy queue-előtaghoz tartozó, ténylegesen
+mért `done`/`pending`/`prepared`/`hold` sorszámot közöl, és a nyitott
+sávokat (Epic 9 5 kör, Epic 10 mind a 32 kör, Chapter 14 41/42 kör, a
+fejezetfájl NÉLKÜLI `E15`/`E16` sávok) nyitottként nevezi meg — plusz egy
+explicit emberi-kapu tábla (Kör 27–33 + a valós gitáros APK-teszt, mind
+NYITOTT, mert a `done` queue-sor csak az ESZKÖZ elkészültét bizonyítja, nem
+a valódi Play Console/rollout/GA műveletet). `docs/roadmap/next-six-months.md`
+(ÚJ) — 7 **outcome**-alapú tétel (nem feature-lista), mindegyik
+`**Outcome:**`/`**Mérőszám:**`(számmal)/`**Forrás:**` hármassal.
+`test/tooling/program_completion_test.dart` (ÚJ, 20 cella) — tartalom-
+paraméteres tiszta függvények + acceptance-pontonként (A1–A5) kézzel épített
+RED-bizonyító cella, a valódi fát mérő cellák mellett. `docs/sdd/00-index.md`
+— kizárólag a Chapter 5–14 Státusz/Implementation progress cellái frissültek
+a mai mérésre (a Kör 2 gépi egyezése — `sdd_index_guard_test.dart`, 36 cella
+— érintetlen maradt).
+
+**A KÖTELEZŐ valódi-sértés próba mindkét formában lefutott.** Automatizált
+(a tesztfájl "(a)"/"(b)" cellái): a Riport-státusz szöveg és a számok
+egymástól függetlenül átírva mutatják, hogy A1 és A2 külön-külön fog hibát.
+Kézi (a fájlon): az Epic 10 sorát "lezárva, minden kör kész"-re írva a
+`tools/round-gate.sh` szó szerinti futtatása **kilépési kód 10-zel, az A2
+cellán PIROSRA váltott** (`Ch11 (E10): open lane (openCount=32) but
+report-status claims closure`), majd a mért állapot visszaállítása után a
+teljes 7 lépéses gate ismét zöld. Fejlesztés közben a roadmap A4 parserének
+egy Unicode-hibáját (`[A-Za-zÀ-ÿ]` karakterosztály nem fedte a magyar "ő"
+betűt a "Mérőszám" szóban, `\p{L}`-re javítva) pontosan ez a RED-cella fogta
+meg — a hiba felfedezése önmagában bizonyítja, hogy az őr valóban tud
+pirosra váltani, nem csak a valódi fán zöld.
+
+**Ami hátravan.** Ez a bejegyzés az implementer-oldali munkát zárja; a kör
+Claude-review-ja és a squash-merge (ADR 0055 protokoll) még nem történt meg
+— a branch `sonnet-impl/e12-r36-program-completion-and-next-roadmap`.
+Részletek: [`e12-r36-program-completion-and-next-roadmap.md`](docs/rounds/e12-r36-program-completion-and-next-roadmap.md) §10.
+
 ## ✅ E12-R35 KÉSZ — Technikaiadósság- és flag cleanup — PR [#537](https://github.com/wolfcasaba/strumsight/pull/537), squash `3326e32a` (2026-09-02)
 
 A Chapter 12 **Kör 35** azt szállítja, amit a neve ígér, és **csak** azt: mért
