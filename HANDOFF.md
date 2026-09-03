@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ E12-R36 KÉSZ — Program completion report és következő roadmap (implementer kész, review/merge hátravan)
+## ✅ E12-R36 KÉSZ — Program completion report és következő roadmap — PR [#538](https://github.com/wolfcasaba/strumsight/pull/538), squash `e8686066` (2026-09-03)
 
 A Chapter 12 **záró köre**. Szállítás: `docs/sdd/program-completion-report.md`
 (ÚJ) — a program állapotának bizonyíték-alapú, ŐSZINTE lezárása: egy
@@ -33,10 +33,33 @@ betűt a "Mérőszám" szóban, `\p{L}`-re javítva) pontosan ez a RED-cella fog
 meg — a hiba felfedezése önmagában bizonyítja, hogy az őr valóban tud
 pirosra váltani, nem csak a valódi fán zöld.
 
-**Ami hátravan.** Ez a bejegyzés az implementer-oldali munkát zárja; a kör
-Claude-review-ja és a squash-merge (ADR 0055 protokoll) még nem történt meg
-— a branch `sonnet-impl/e12-r36-program-completion-and-next-roadmap`.
-Részletek: [`e12-r36-program-completion-and-next-roadmap.md`](docs/rounds/e12-r36-program-completion-and-next-roadmap.md) §10.
+**A review a zöld gate mögött 1 MAJOR-t mért — eldobható próbateszttel, nem
+olvasással.** Az őr a hamis ÁLLÍTÁST fogta (rossz szám, hazug státusz-szöveg),
+az ELHALLGATÁST nem: egy teljes nyitott sáv (`E15` 6 `pending`, `E10` 32
+`hold`) vagy egy emberi-kapu sor TÖRLÉSE a riportból **minden cellán zöld
+maradt** — épp az a „kozmetikai zárójelentés", amit a brief §9 első kockázatnak
+nevez. A javító kör két lefedettség-őrt adott hozzá
+(`findLanesMissingFromMatrix`, `findMissingHumanGates` + nyolcelemű
+elvárás-lista), RED-bizonyító cellákkal; ugyanaz a három mutáció most piros
+(20 → **27 cella**). VERDIKT: APPROVED, 0 nyitott lelet
+([`docs/reviews/e12-r36-review.md`](docs/reviews/e12-r36-review.md) §8).
+Tanulság: [L588](docs/LESSONS.md#l588).
+
+Exact-SHA evidencia a merge SHA-n (`d47e64fa`): Full Gate
+[33698915230](https://github.com/wolfcasaba/strumsight/actions/runs/33698915230),
+Router CI
+[33698956202](https://github.com/wolfcasaba/strumsight/actions/runs/33698956202)
+— mindkettő `success`. ADR: **nincs** (záró/riport-kör; a `docs/adr/**` a kör
+tilos zónája volt, a lista tágítása nem orchestrátori hatáskör — precedens:
+E12-R35). Részletek:
+[`e12-r36-program-completion-and-next-roadmap.md`](docs/rounds/e12-r36-program-completion-and-next-roadmap.md) §10.
+
+> ⚠ **A riport a program NYITOTT részeit is kimondja** — ez nem „minden kész"
+> bejegyzés. Nyitva: Epic 8 1 kör, Epic 9 5 kör, **Epic 10 mind a 32 köre**,
+> Chapter 14 41/42 kör (az R20–R42 briefjei MEG SEM ÍRÓDTAK — a program
+> legnagyobb, még meg sem tervezett hátraléka), az `E15`/`E16` sávok, `E99`
+> 2 kör, és mind a **8 emberi kapu** (E12-R27…R33 valós Play Console /
+> rollout / GA műveletei + a **valós gitáros APK-teszt**).
 
 ## ✅ E12-R35 KÉSZ — Technikaiadósság- és flag cleanup — PR [#537](https://github.com/wolfcasaba/strumsight/pull/537), squash `3326e32a` (2026-09-02)
 
@@ -11026,7 +11049,26 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-02):** `main` @ `d28c79d3` — E15-R14 Practice
+**Aktuális állapot (2026-09-03):** `main` @ `e8686066` — **E12-R36 Program
+completion report és következő roadmap: a Chapter 12 sáv ZÁRÓ köre**, PR
+[#538](https://github.com/wolfcasaba/strumsight/pull/538), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** — a review a TELJESEN
+ZÖLD gate mögött 1 MAJOR-t mért próbateszttel: az őr a hamis állítást fogta, az
+ELHALLGATÁST (törölt nyitott sáv / törölt emberi kapu) nem
+([L588](docs/LESSONS.md#l588)). Utána APPROVED, 0 nyitott lelet. ÚJ ADR:
+**nincs** (záró/riport-kör). `risk = "normal"`. Exact-SHA evidencia a merge
+SHA-n (`d47e64fa`): Full Gate
+[33698915230](https://github.com/wolfcasaba/strumsight/actions/runs/33698915230),
+Router CI
+[33698956202](https://github.com/wolfcasaba/strumsight/actions/runs/33698956202).
+Ezzel **mind a 36 `E12` queue-sor `done`** — a program állapotának
+bizonyíték-alapú lezárása a
+[`docs/sdd/program-completion-report.md`](docs/sdd/program-completion-report.md),
+a következő fél év outcome-céljai a
+[`docs/roadmap/next-six-months.md`](docs/roadmap/next-six-months.md).
+
+**Előző állapot (2026-09-02):** `main` @ `d28c79d3` — E15-R14 Practice
 Generator kompozíciós réteg, PR
 [#534](https://github.com/wolfcasaba/strumsight/pull/534), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -11151,7 +11193,23 @@ maradt.
 
 ## 5. Last completed round
 
-**E15-R14 — Practice Generator kompozíciós réteg**
+**E12-R36 — Program completion report és következő roadmap (a Chapter 12 ZÁRÓ köre)**
+(PR [#538](https://github.com/wolfcasaba/strumsight/pull/538), squash `e8686066`).
+A kör a program állapotának ŐSZINTE, bizonyíték-alapú lezárását szállítja: a
+completion matrix minden sora egy queue-előtaghoz tartozó, TÉNYLEGESEN MÉRT
+`done`/`pending`/`prepared`/`hold` sorszám a `pipeline-queue.tsv`-ből (a
+fejezet ↔ előtag leképezés NEM azonosság: `E01`-re nulla sor van, az `E02`
+sorai `R12`-nél kezdődnek — a queue az epic közepén jött létre), a nyitott
+sávok nyitottként vannak megnevezve, és a 8 emberi kapu (E12-R27…R33 + a valós
+gitáros APK-teszt) mind `NYITOTT` — mert a `done` queue-sor csak az ESZKÖZ
+elkészültét bizonyítja, nem a valódi Play Console / rollout / GA műveletet. A
+[`docs/roadmap/next-six-months.md`](docs/roadmap/next-six-months.md) 7
+**outcome**-alapú tétele (nem feature-lista) mindegyike `Outcome` / `Mérőszám`
+(számmal) / `Forrás` hármas. Az őr (`test/tooling/program_completion_test.dart`,
+27 cella) tartalom-paraméteres tiszta függvényeken áll, acceptance-pontonként
+RED-bizonyító cellával. Tanulság: [L588](docs/LESSONS.md#l588).
+
+**Előző kör: E15-R14 — Practice Generator kompozíciós réteg**
 (PR [#534](https://github.com/wolfcasaba/strumsight/pull/534), squash `d28c79d3`).
 A kör az `E15-R07 / H3` STOP mért hiányát szüntette meg: a fa alatt NULLA
 Riverpod-provider volt, és az EGYETLEN `PracticeEvidenceRepository` a „never
@@ -11164,7 +11222,7 @@ case-t, ami kizárólag a MEGLÉVŐ `GenerationOrchestrator`-t hívja. Route, fl
 zárta le mindet; ami a scope-on kívülre esett, az ADR 0482 **D9/D10/D11**
 kötelező `E15-R07 / F1`-előfeltétellé vált. Tanulság: [L583](docs/LESSONS.md#l583).
 
-**Előző kör: E12-R24 — Store listing, privacy és legal package**
+**Azelőtti kör: E12-R24 — Store listing, privacy és legal package**
 (PR [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash `cf7c6fb6`).
 A kör az első olyan artefaktumot szállította, amiből a store-feltöltés emberi
 lépése ELLENTMONDÁS-MENTESEN elvégezhető: store-szöveg, manifestből MÉRT

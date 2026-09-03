@@ -23450,3 +23450,80 @@ első hívása rebase-elt + pusholt + `blocked`-ot kért friss exact-SHA CI-ért
 a második hívása merge-elt.
 
 **Őrteszt:** nincs — a hibaosztály a shell-környezet versenyhelyzete, nem a repóé; a gépi védelem (a `safe-force-push` fail-closed megtagadása) MŰKÖDÖTT, a hiányzó darab a diagnózis, amit ez a lecke ad. A megelőzés eljárási: az izolált munkapéldányból landolj.
+
+## L588 — Egy riport-őr a hamis ÁLLÍTÁST méri, az ELHALLGATÁST nem: a törölt sor minden cellán zöld marad, mert minden ellenőrzés a JELEN LÉVŐ sorokon iterál (E12-R36, 2026-09-03)
+
+**Mérés.** Az E12-R36 completion-riportjának őre
+(`test/tooling/program_completion_test.dart`, első változat, 20 cella) mintaszerű
+volt: tartalom-paraméteres tiszta függvények, acceptance-pontonként kézzel épített
+RED-bizonyító cella, plusz két „valódi-sértés" cella, amelyek külön-külön
+bizonyítják, hogy A1 (a számok) és A2 (a státusz-szöveg) EGYMÁSTÓL FÜGGETLENÜL
+vált pirosra. A kör kötelező gate-je mind a 7 lépésben zöld volt, izolált
+klónban REPRODUKÁLVA.
+
+A reviewer eldobható próbatesztje mégis ezt mérte a valódi fán:
+
+```
+PROBE1 (a teljes E15 sáv sora törölve a matrixból)   A1_issues=[]  A2_issues=[]
+PROBE2 (a teljes E10 sáv sora törölve, 32 hold kör)  A1_issues=[]  A2_issues=[]
+PROBE3 (egy emberi-kapu sor törölve a §5 táblából)   A5_issues=[]
+All tests passed!   ← mind a három ELHALLGATÁS zöld maradt
+```
+
+**Gyökérok.** Mind a három ellenőrző függvény (`compareMatrixToQueue`,
+`findOpenLaneMarkedClosed`, `findHumanGatesMarkedDone`) a **riportból parszolt
+sorokon** iterált. Ez a hamis ÁLLÍTÁS teljes lefedése — de a hiányzó sor nem
+hamis állítás, hanem hiányzó állítás: nincs mit összevetni, tehát nincs lelet.
+A mérce IRÁNYA volt rossz, nem az ereje: `riport → forrás` irányban mértünk,
+miközben a `forrás → riport` irány (megkapott-e MINDEN queue-előtag sort?)
+teljesen mérhetetlen maradt.
+
+**Miért drága ez pont egy zárójelentésnél.** A kör briefje szó szerint azt írta
+elő, hogy a fejezetfájl NÉLKÜLI `E15`/`E16`/`E99` sávokat is fel kell sorolni,
+mert „a hallgatólagos kihagyásuk a matrixot hamis »a program kész« állítássá
+tenné". Egy completion reportnál az elhallgatás a TERMÉSZETES hazugság-forma —
+senki nem ír be hamis számot, egyszerűen kihagyja a kellemetlen sort. Az őr
+pontosan azt a formát nem fogta, amelyik ellen készült.
+
+**Általános szabály.** Ha egy dokumentum-őr egy KÜLSŐ forrás (queue, manifest,
+route-tábla, engedélylista) tükrözését ellenőrzi, két külön mérce kell:
+1. *egyezés* — a dokumentum minden sora egyezik a forrással (`riport → forrás`);
+2. *lefedettség* — a forrás minden kulcsa kapott sort a dokumentumban
+   (`forrás → riport`).
+Az (1) önmagában mindig vak a törlésre. A lefedettséghez rögzített
+elvárás-listát is kell adni ott, ahol a forrás nem gépi (itt: a nyolc emberi
+kapu, amelyek közül az egyiknek — a valós gitáros APK-tesztnek — nincs is
+kör-azonosítója, tehát csak névvel illeszthető).
+
+**Őrteszt:** `test/tooling/program_completion_test.dart::lane-coverage — a queue prefix silently missing from the matrix (RED-proving)` és
+`test/tooling/program_completion_test.dart::human-gate-coverage — a gate row silently missing from the table (RED-proving)` (a javító kör, `bd3f8dc5`; ugyanaz a három mutáció most piros).
+
+**Kapcsolódó:** [L118](#l118) (a valódi fára mutató őr némán zöld lehet rossz
+okból), [L577](#l577) (az őr a SZÁMOT védte, a szám INDOKLÁSÁT nem) — ugyanaz a
+család: az őr azt méri, ami KÖNNYEN mérhető, nem azt, ahogyan a hiba
+ténylegesen bekövetkezik.
+
+## L589 — A landolót a kör SAJÁT munkapéldányából futtatva az L587 hamis H8-a meg sem jelenik (E12-R36, 2026-09-03)
+
+**Mérés.** Az E12-R35 landolása a hub munkafából (`/home/ubuntu/music-theory`)
+indult, és a párhuzamos sáv `reset --hard origin/main`-je miatt hamis H8-at
+adott ([L587](#l587)). Az E12-R36 landolása UGYANEZEN a boxon, UGYANÚGY
+párhuzamos sáv mellett (`E15-R08` inflight) futott — de a kör SAJÁT, izolált
+munkapéldányából (`/home/ubuntu/ss-sonnet-impl-e12-r36`, a kör-branchen állva):
+`--pr 538 --round E12-R36` → **exit 0, egyetlen újra-dispatch-kérés nélkül**, a
+PR `MERGED` (`e8686066`).
+
+**Szabály.** A landolót (és minden záró git-műveletet) a kör SAJÁT
+munkapéldányából futtasd, sose az osztott hub-fából — a merge-zár a KÖZÖS
+dokumentumokat sorosítja, de a `git` ref-eket nem védi meg attól, hogy egy
+másik sáv ugyanabban a fában resetel. A két mechanizmus egymást kiegészíti, nem
+helyettesíti.
+
+**Ugyanez a fa, ugyanez a session, ellenpélda ára:** a záró rituálék közben egy
+`reset --hard origin/main` (a merge-zárban, „ellenőrzésnek szánt" parancsként)
+a MÁR MEGÍRT, még nem commitolt HANDOFF/RTM/LESSONS/queue szerkesztéseket
+törölte — újra kellett írni őket. A `reset --hard` sosem „ellenőrzés": a záró
+szerkesztéseket ELŐBB commitold, és csak utána szinkronizálj.
+
+**Őrteszt:** nincs — munkamód-szabály, nem kódviselkedés; a mércéje az L587
+hibaosztályának meg nem ismétlődése.
