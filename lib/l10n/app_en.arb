@@ -2446,6 +2446,12 @@
   "@liveWeakSignal": {
     "description": "Shown next to the input-level meter when listening but the raw mic level is below the presentation threshold."
   },
+  "masteryChordTransitionDescription": "Smooth, accurate switches between open chords.",
+  "masteryChordTransitionTitle": "Chord transitions",
+  "masteryRhythmAccuracyDescription": "Steady strums that land on the beat.",
+  "masteryRhythmAccuracyTitle": "Rhythm accuracy",
+  "masteryStrumConsistencyDescription": "Reliable up/down strum direction on every pattern.",
+  "masteryStrumConsistencyTitle": "Strum consistency",
   "metronomeAdvancedSettings": "Advanced settings",
   "metronomeBpm": "BPM",
   "metronomeStart": "Start",

@@ -2407,6 +2407,12 @@
   "@liveWeakSignal": {
     "description": "Shown next to the input-level meter when listening but the raw mic level is below the presentation threshold."
   },
+  "masteryChordTransitionDescription": "Sima, pontos váltás a nyitott akkordok között.",
+  "masteryChordTransitionTitle": "Akkordváltások",
+  "masteryRhythmAccuracyDescription": "Egyenletes pengetés, pontosan az ütemre.",
+  "masteryRhythmAccuracyTitle": "Ritmuspontosság",
+  "masteryStrumConsistencyDescription": "Megbízható le/fel pengetésirány minden mintában.",
+  "masteryStrumConsistencyTitle": "Pengetésirány-stabilitás",
   "metronomeAdvancedSettings": "Speciális beállítások",
   "metronomeBpm": "BPM",
   "metronomeStart": "Indítás",
