@@ -170,14 +170,169 @@ def covered_by(path: str, entries) -> bool:
     return False
 
 
-def owned_existing_screens(repo: Path, allowed_paths) -> list[str]:
+ROUTER_SOURCE = "lib/app/routing/app_router.dart"
+ROUTE_CATALOGUE_SOURCE = "lib/app/routing/app_route.dart"
+
+# `GoRoute(path: AppRoutes.profileProgress, builder: (_, _) => const ProgressScreen(`
+GO_ROUTE_BUILDER = re.compile(
+    r"GoRoute\(\s*path:\s*AppRoutes\.(?P<constant>\w+)\s*,"
+    r"(?:\s*name:[^\n]*\n)?"
+    r"\s*builder:\s*\([^)]*\)\s*=>\s*const\s+(?P<screen>\w+)\(",
+)
+# `static const String profileProgress = '/profile/progress';`
+ROUTE_CONSTANT = re.compile(r"static const String (?P<name>\w+)\s*=\s*'(?P<literal>[^']*)'")
+SCREEN_IMPORT = re.compile(r"^import\s+'(?P<uri>[^']*_screen\.dart)'", re.MULTILINE)
+
+
+def _router_screen_files(repo: Path) -> dict[str, str]:
+    """képernyő-TÍPUS → a forrásfájlja, a router saját importjaiból.
+
+    A típusnevet a repó kivétel nélküli fájlnév-konvenciójából vezetjük le
+    (`_dart_type_name_guess`), ugyanúgy, ahogy az `_screen_pins` teszi — így a
+    két oldal ugyanazt a szabályt használja, nem két külön tippet.
+    """
+    source = repo / ROUTER_SOURCE
+    try:
+        text = source.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    files: dict[str, str] = {}
+    for match in SCREEN_IMPORT.finditer(text):
+        uri = match.group("uri")
+        if uri.startswith("package:strumsight/"):
+            relative = "lib/" + uri[len("package:strumsight/") :]
+        elif uri.startswith("package:") or uri.startswith("dart:"):
+            continue
+        else:
+            resolved = (repo / ROUTER_SOURCE).parent / uri
+            try:
+                relative = resolved.resolve().relative_to(repo.resolve()).as_posix()
+            except (OSError, ValueError):
+                continue
+        if not relative.startswith("lib/") or not (repo / relative).is_file():
+            continue
+        files[_dart_type_name_guess(PurePosixPath(relative).stem)] = relative
+    return files
+
+
+def route_level_swapped_screens(
+    repo: Path, allowed_paths, brief_text: str | None
+) -> dict[str, list[str]]:
+    """A kör által ÚTVONAL-SZINTEN lecserélhető, létező képernyők (S11/S14).
+
+    A visszatérés `képernyő-fájl → a briefben MEGNEVEZETT útvonal-tokenek`
+    (a konstans neve és a katalógusbeli szó szerinti útvonal); a tokenek adják
+    a pin-szűrő második mércéjét (`_route_pin_requirement`).
+
+    MÉRT vakfolt (E16-R02 / 3. H3, 2026-09-03): az `owned_existing_screens` a
+    képernyő-cserét FÁJL-TULAJDONLÁSBÓL méri („a kör átírja a képernyő
+    fájlját"), a valóságban viszont a csere történhet a routerben is — a
+    képernyő fájlja érintetlen marad, csak a `GoRoute.builder` mutat máshová.
+    Az E16-R02 `allowed_paths`-a egyetlen `*_screen.dart` fájlt és egyetlen
+    `lib/` könyvtár-előtagot sem tartalmazott, ezért a képernyő-halmaz ÜRES
+    lett, és az S11 (`external_screen_pins`) meg az S14 strukturálisan NÉMA
+    maradt — miközben a `/profile/progress` átkötését a briefen kívül élő
+    `test/features/today/hub_navigation_test.dart:247` pinnelte a legacy
+    `ProgressScreen` típusára (`.pipeline/halt-detail-E16-R02.md` §3). A
+    lecserélt képernyő ráadásul jellemzően a kör TILOS zónájában van, tehát
+    elvileg sem kerülhetne az `allowed_paths`-ba.
+
+    A HAMIS RIASZTÁS elleni három mérce (a router 45 `GoRoute`-ot köt be, a
+    válogatás nélküli felvétel használhatatlan zajt adna):
+
+    * a router forrása legyen a kör scope-jában (`covered_by`) — enélkül a kör
+      egyetlen buildert sem tud átkötni;
+    * a brief NEVEZZE MEG az útvonalat: vagy az `AppRoutes.<konstans>` alakot,
+      vagy a katalógusbeli szó szerinti útvonalat. Az E16-R02-n mérve ez a két
+      szűrő 45 bekötésből **2**-t hagy meg (`progress`, `profileProgress`),
+      mindkettő ugyanarra a `ProgressScreen`-re — pontosan a cserélt képernyő;
+    * a PIN oldalán ugyanezt kérjük (`_route_pin_requirement`): a listázott
+      teszt nevezze meg magát az útvonalat is. Egy builder-átkötés ugyanis csak
+      azt a tesztet viheti pirosra, amelyik AZON az útvonalon jut a képernyőhöz
+      — a képernyőt közvetlenül építő teszt (`home: ProgressScreen()`,
+      `test/core/screen_size_guard_test.dart:176`) és a képernyő saját
+      unit-tesztje a routertől függetlenül fut tovább. Az E16-R02-n mérve ez a
+      harmadik mérce 5 pinből **3**-at hagy meg — mindhárom valóban a
+      `/progress` → `/profile/progress` láncon jut a képernyőhöz.
+    """
+    if brief_text is None or not covered_by(ROUTER_SOURCE, allowed_paths):
+        return {}
+    try:
+        router_text = (repo / ROUTER_SOURCE).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    try:
+        catalogue_text = (repo / ROUTE_CATALOGUE_SOURCE).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        catalogue_text = ""
+
+    literals = {
+        match.group("name"): match.group("literal")
+        for match in ROUTE_CONSTANT.finditer(catalogue_text)
+    }
+    screen_files = _router_screen_files(repo)
+    swapped: dict[str, list[str]] = {}
+    for match in GO_ROUTE_BUILDER.finditer(router_text):
+        constant = match.group("constant")
+        relative = screen_files.get(match.group("screen"))
+        if relative is None:
+            continue
+        literal = literals.get(constant)
+        if not re.search(r"\bAppRoutes\." + re.escape(constant) + r"\b", brief_text):
+            # Az útvonal-határ kizárja, hogy a `/progress` a `/profile/progress`
+            # részszövegére, vagy egy szegmens egy hosszabb szó belsejére üljön.
+            if not literal or not re.search(
+                r"(?<![\w/])" + re.escape(literal) + r"(?![\w/:])", brief_text
+            ):
+                continue
+        tokens = swapped.setdefault(relative, [])
+        for token in (constant, literal):
+            if token and token not in tokens:
+                tokens.append(token)
+    return {screen: sorted(tokens) for screen, tokens in sorted(swapped.items())}
+
+
+def _route_pin_requirement(swapped: dict[str, list[str]], file_owned) -> dict[str, re.Pattern[str]]:
+    """képernyő → az a minta, amit a PINNELŐ tesztnek is tartalmaznia kell.
+
+    Csak a KIZÁRÓLAG útvonal-szinten cserélt képernyőkre szól: ha a kör magát a
+    képernyő fájlját is átírhatja, a pin minden alakja érintett, tehát ott nincs
+    második mérce.
+    """
+    requirement: dict[str, re.Pattern[str]] = {}
+    for screen, tokens in swapped.items():
+        if screen in file_owned or not tokens:
+            continue
+        alternatives = []
+        for token in tokens:
+            if token.startswith("/"):
+                alternatives.append(r"(?<![\w/])" + re.escape(token) + r"(?![\w/:])")
+            else:
+                alternatives.append(r"\bAppRoutes\." + re.escape(token) + r"\b")
+        requirement[screen] = re.compile("|".join(alternatives))
+    return requirement
+
+
+def owned_existing_screens(repo: Path, allowed_paths, brief_text: str | None = None) -> list[str]:
     """A kör által ÁTÍRHATÓ, a fában MÁR LÉTEZŐ képernyők (S11).
 
     Az S9 párja, ellenkező irányba: az S9 az ÚJ képernyő leltár-hatását méri, ez
     a MEGLÉVŐ képernyő lecserélésének kifelé mutató hatását. A könyvtár-előtag
     itt is számít (a `covered_by`/scope-audit ugyanígy dönt), de csak a
     ténylegesen létező fájlokra bomlik le — nemlétező képernyőt senki nem pinnel.
+
+    A csere KÉT alakban történhet, és mindkettő ide tartozik: a kör átírja a
+    képernyő FÁJLJÁT (ez a `brief_text` nélkül is mért, eredeti ág), vagy
+    ÚTVONAL-SZINTEN köti át a routert (`route_level_swapped_screens`) — az
+    utóbbi a mért E16-R02 vakfolt, ahol a képernyő fájlja érintetlen marad.
     """
+    screens: set[str] = set(route_level_swapped_screens(repo, allowed_paths, brief_text))
+    screens.update(file_owned_screens(repo, allowed_paths))
+    return sorted(screens)
+
+
+def file_owned_screens(repo: Path, allowed_paths) -> list[str]:
+    """A kör `allowed_paths`-a által FÁJLKÉNT birtokolt, létező képernyők."""
     screens: set[str] = set()
     repo_root = repo.resolve()
     for path in allowed_paths:
@@ -197,8 +352,12 @@ def owned_existing_screens(repo: Path, allowed_paths) -> list[str]:
     return sorted(screens)
 
 
-def _screen_pins(repo: Path, screens, keep) -> dict[str, list[str]]:
+def _screen_pins(repo: Path, screens, keep, require=None) -> dict[str, list[str]]:
     """képernyő → az őt PINNELŐ tesztek, a `keep(relative)` szűrő szerint.
+
+    A `require` (képernyő → minta) a KIZÁRÓLAG útvonal-szinten cserélt
+    képernyők második mércéje: ott a tesztnek magát az útvonalat is meg kell
+    neveznie, különben a builder-átkötés nem érinti (`_route_pin_requirement`).
 
     A pinnelés MÉRT alakja (E13-R17/H3): a teszt importálja a képernyő
     forrásfájlját ÉS néven nevezi a típusát (`find.byType(LiveScreen)`,
@@ -231,12 +390,18 @@ def _screen_pins(repo: Path, screens, keep) -> dict[str, list[str]]:
         except (OSError, UnicodeDecodeError):
             continue
         for screen, (import_uri, type_pattern) in wanted.items():
-            if import_uri in source and type_pattern.search(source):
-                pins.setdefault(screen, []).append(relative)
+            if import_uri not in source or not type_pattern.search(source):
+                continue
+            route_pattern = (require or {}).get(screen)
+            if route_pattern is not None and not route_pattern.search(source):
+                continue
+            pins.setdefault(screen, []).append(relative)
     return {screen: sorted(found) for screen, found in sorted(pins.items())}
 
 
-def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[str, list[str]]:
+def outside_screen_pins(
+    repo: Path, screens, allowed_paths, gate_tests, require=None
+) -> dict[str, list[str]]:
     """képernyő → a briefen KÍVÜL élő tesztek, amelyek PINNELIK (S11).
 
     A MÉRT halt-ok az `allowed_paths` hiánya: ha a teszt nincs a listán, az
@@ -244,10 +409,17 @@ def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[
     E13-R17/H3). Ez a lelet PONTOSAN a listán kívüli pineket sorolja; a listán
     BELÜLI, de nem MÉRT pineket az `unmeasured_screen_pins` (S14) adja.
     """
-    return _screen_pins(repo, screens, lambda relative: not covered_by(relative, allowed_paths))
+    return _screen_pins(
+        repo,
+        screens,
+        lambda relative: not covered_by(relative, allowed_paths),
+        require,
+    )
 
 
-def unmeasured_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[str, list[str]]:
+def unmeasured_screen_pins(
+    repo: Path, screens, allowed_paths, gate_tests, require=None
+) -> dict[str, list[str]]:
     """képernyő → a briefen BELÜL élő, de a kör kapuján NEM futó pinnelő tesztek.
 
     MÉRT rés (E15-R09, `docs/LESSONS.md` L593, 2026-09-03): az S11 a listán
@@ -263,6 +435,7 @@ def unmeasured_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> di
         screens,
         lambda relative: covered_by(relative, allowed_paths)
         and not covered_by(relative, gate_tests),
+        require,
     )
 
 
@@ -869,11 +1042,18 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
         brief.task_id, ""
     )
     if round_status_for_s11 != "done":
+        # A KIZÁRÓLAG útvonal-szinten cserélt képernyők pin-szűrője: ott a
+        # teszt nevezze meg magát az útvonalat is (E16-R02 / 3. H3).
+        screen_swap_require = _route_pin_requirement(
+            route_level_swapped_screens(repo, metadata.allowed_paths, text),
+            file_owned_screens(repo, metadata.allowed_paths),
+        )
         pins = outside_screen_pins(
             repo,
-            owned_existing_screens(repo, metadata.allowed_paths),
+            owned_existing_screens(repo, metadata.allowed_paths, text),
             metadata.allowed_paths,
             metadata.gate_tests,
+            screen_swap_require,
         )
         if pins:
             detail = "; ".join(
@@ -1019,11 +1199,18 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
         brief.task_id, ""
     )
     if round_status_for_s14 != "done":
+        # A KIZÁRÓLAG útvonal-szinten cserélt képernyők pin-szűrője: ott a
+        # teszt nevezze meg magát az útvonalat is (E16-R02 / 3. H3).
+        screen_swap_require = _route_pin_requirement(
+            route_level_swapped_screens(repo, metadata.allowed_paths, text),
+            file_owned_screens(repo, metadata.allowed_paths),
+        )
         unmeasured = unmeasured_screen_pins(
             repo,
-            owned_existing_screens(repo, metadata.allowed_paths),
+            owned_existing_screens(repo, metadata.allowed_paths, text),
             metadata.allowed_paths,
             metadata.gate_tests,
+            screen_swap_require,
         )
         if unmeasured:
             detail = "; ".join(

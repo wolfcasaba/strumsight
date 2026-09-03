@@ -24198,3 +24198,55 @@ forrásból** (a regexet a `mastery_milestone.dart`-ból, az export hiányát a
 **Őrteszt:** `tools/tests/test_e16_r02_route_catalog_scope.py` — a revízió
 előtti briefen mind a 8 cellája PIROS, és minden állítását a fán lévő kódhoz
 méri.
+
+## L608 — A képernyő-cserét ÚTVONAL-szinten is mérni kell: a fájl-tulajdonlásra kötött lint strukturálisan néma maradt (E16-R02, harmadik H3, 2026-09-03)
+
+**A mért eset.** Az E16-R02 harmadik pre-flightja ugyanazon a köron a HARMADIK
+H3-at adta: a kör az `/profile/progress` útvonalat köti át a legacy
+`ProgressScreen`-ről a `ProgressDashboardScreen`-re, és ezt a cserét egy briefen
+KÍVÜL élő teszt pinnelte a legacy típusra
+(`test/features/today/hub_navigation_test.dart:247`, shell-ON routeren,
+`flutter test` → `00:03 +8: All tests passed!`, tehát ÉLŐ regresszió-őr).
+Pontosan az `S11` lelet-osztálya — a `brief-lint` mégis „nincs lelet"-et adott.
+
+**A gyökérok.** A `tools/brief-lint.py` `owned_existing_screens()` a kör által
+átírható képernyők halmazát KIZÁRÓLAG az `allowed_paths`-beli `*_screen.dart`
+fájlokból és `lib/…/` könyvtár-előtagokból vezette le:
+
+```
+sed -n '/```ai-router/,/```/p' <brief> | grep -cE '_screen\.dart"|lib/[^"]*/"'
+→ 0
+```
+
+Üres halmaz → az `S11` (`outside_screen_pins`) és az `S14`
+(`unmeasured_screen_pins`) is üres bemenetet fogyasztott, tehát **strukturálisan
+néma** maradt: bármi pinelte is a lecserélt képernyőt, a lint hallgatott. A
+csere ugyanis nem fájl-szinten történt — a képernyő forrásfájlja érintetlen (sőt
+a kör TILOS zónájában van, elvileg sem kerülhetne az `allowed_paths`-ba), csak
+az `app_router.dart` `GoRoute.builder`-e mutat máshová.
+
+**A tanulság iránya.** Egy szabály, ami a hatását a SZÁNDÉK egyetlen alakjából
+vezeti le („a kör átírja a fájlt"), néma marad a szándék minden más alakjára. A
+képernyő-cserének két mérhető alakja van: fájl-tulajdonlás ÉS útvonal-átkötés.
+Amikor egy lint bemeneti halmaza üres lehet, a némaság nem „nincs lelet",
+hanem mérendő állapot — a halmaz üressége önmagában gyanús.
+
+**A javítás alakja** (`route_level_swapped_screens`): ha a kör scope-jában ott a
+router forrása, a lint kiolvassa a `GoRoute(path: AppRoutes.X, builder: … const
+YScreen())` párokat, és azokat veszi cserélhetőnek, amelyek útvonalát a brief
+MEGNEVEZI (a konstanst vagy a katalógusbeli literált). A hamis riasztás ellen
+harmadik mérce a PIN oldalán: a listázott teszt is nevezze meg az útvonalat —
+egy builder-átkötés nem viheti pirosra azt, aki a képernyőt közvetlenül építi
+(`home: ProgressScreen()`). Az E16-R02-n mérve: 45 bekötésből 1 képernyő, 5
+pinből 3 — pontosan a `/progress` → `/profile/progress` láncon élő őrök.
+
+**Hogyan alkalmazd.** (1) Útvonalat átkötő körnél a pin-sweepet a ROUTE-ról
+indítsd, ne a fájlról: `grep -rl "<ScreenName>" test/` után szűrd arra, ki jut
+oda az érintett `AppRoutes` konstanson. (2) Ami a cserélt útvonalon pinnel, az
+`allowed_paths`-ba ÉS `gate_tests`-be megy (L593), a jogosultság pedig PONTOSAN
+a várt képernyő-típus átírása. (3) Ami a képernyőt közvetlenül építi, az marad
+kívül — a felvétele mérés nélküli jogosultság lenne.
+
+**Őrtesztek:** `tools/tests/test_brief_lint_route_level_screen_swap.py` (a
+valódi fán mér, a javítás előtt 5 cellája PIROS) és
+`tools/tests/test_e16_r02_hub_navigation_pin_scope.py`.
