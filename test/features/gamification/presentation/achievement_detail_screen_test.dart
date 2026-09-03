@@ -174,6 +174,36 @@ void main() {
             expect(tester.takeException(), isNull);
           },
         );
+
+        testWidgets(
+          '$scale / ${locale.languageCode} — hidden state, no overflow '
+          '(m1)',
+          (tester) async {
+            tester.view.physicalSize = const Size(360, 640);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+
+            final hidden = _definition(
+              id: 'balanced_practice_week',
+              keyStem: 'achievementBalancedPracticeWeek',
+              category: AchievementCategory.consistency,
+              hidden: true,
+            );
+
+            await _pump(
+              tester,
+              achievementId: hidden.id,
+              definitions: <AchievementDefinition>[hidden],
+              progress: <String, AchievementProgress>{
+                hidden.id: _progress(hidden.id, 0.4),
+              },
+              locale: locale,
+              textScale: scale,
+            );
+
+            expect(tester.takeException(), isNull);
+          },
+        );
       }
     }
   });
