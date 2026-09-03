@@ -66,6 +66,7 @@ gate_tests = [
   "test/features/ai_tutor/presentation/tutor_home_screen_test.dart",
   "test/l10n/arb_parity_test.dart",
   "test/l10n/hardcoded_string_guard_test.dart",
+  "test/core/architecture_dependency_test.dart",
 ]
 native_gate = false
 ```
@@ -302,6 +303,76 @@ dokumentálása a §10-ben, a data/privacy lista-blokk token-következetessége
 `_ConversationRow` kártya-kezelése. Ezek MINOR-ok: ha egy javítás
 viselkedés-kockázatot hozna, dokumentált elhagyás is elfogadható.
 
+## 0.0.C Pre-flight brief-revízió #3 — a javító kör #1 review-ja után (Claude / Opus 5, 2026-09-03, `main @ ab2f98db`)
+
+A javító kör #1 (`c9409564..c8be6e7d`) az első menet MIND a 6 leletét (1 BLOCKER
++ 5 MAJOR) lezárta, de a review #2 EGY ÚJ, nyitott leletet mért — `BLOCKER-2` —,
+és a kör CI-ja ekkor kétszer volt piros (`33707997183`, `33711465885`) → H5 halt.
+A haltot az ADR 0112 önjavító köre oldotta fel: **ADR 0494**, merge-elve a
+`main`-re (`ab2f98db`, PR #541). Ez a revízió a **javító kör #2** szerződése;
+erősebb a §0.0.A/§0.0.B-nél és a brief korábbi szövegénél.
+
+### R18 — a H5 piros-számláló nulláról indul (ADR 0494 D3), a zöld kapu változatlan
+
+Az ADR 0494 D3 kimondja: egy merge-elt önjavítás után, amely a pirosak MÉRT
+gyökérokát javította, a H5 számláló **nulláról** indul. A folytatás első
+CI-futása tehát az „első piros" lehetősége, nem a harmadik. A mérce NEM lazul:
+minden gate + a **teljes** CI-suite + a Router CI zöldje a **merge SHA-n**
+továbbra is kötelező.
+
+### R19 — BLOCKER-2: az öt képernyő a design-rendszert a `public.dart` barrelen át éri el
+
+**Mérve** (review §5.2, ADR 0494 kontextus): a batch öt képernyő-fájlja **24
+MÉLY importtal** hivatkozik a `lib/core/design_system/**`-ra
+(`tutor_home_screen.dart` 4, `tutor_chat_screen.dart` 6, `tutor_data_screen.dart` 8,
+`tutor_profile_screen.dart` 4, `tutor_privacy_screen.dart` 2 — mind
+`import '../../../../core/design_system/<alkönyvtár>/<fájl>.dart'` alakú). Ez az
+E13-R02 merge-elt architektúra-szerződést sérti (ADR 0273 §1: „a design system
+kizárólag a `public.dart`-on át importálható"; [L190](../LESSONS.md#l190): a
+szabály az import CÉLJÁT kényszeríti ki).
+
+**A javítás** fájlonként EGY sor:
+
+```dart
+import 'package:strumsight/core/design_system/public.dart';
+```
+
+a mély importok HELYETT. A `public.dart` mind a szükséges szimbólumot
+exportálja (`ss_card`, `ss_section`, `ss_surface`, `ss_skeleton`,
+`ss_failure_state`, `failure_presentation`, `ss_button`, `ss_model_status_card`,
+`ss_provenance_badge`, `ss_validation_summary`, `foundations/*`) — a mért
+precedens az E15-R08
+`lib/features/gamification/presentation/screens/achievements_screen.dart:2`.
+Mind az öt fájl az `allowed_paths`-on van, tehát ez NEM tilos zóna.
+
+**A javítás határa:** kizárólag import-sorok cseréje. A képernyők
+komponens-használata, állapotai, tokenjei és viselkedése VÁLTOZATLAN; egyetlen
+teszt-cella sem törölhető, `skip`-elhető vagy gyengíthető. Ha egy szimbólum
+mérten NEM érhető el a barrelen át, az `stopped` jelzés (a barrel bővítése a
+design-rendszer köre, nem ezé).
+
+### R20 — a megismétlődés őre: a `gate_tests` és a gate `architecture` lépése
+
+A BLOCKER-2 azért maradt rejtve két CI-futáson át, mert a szabályt KIZÁRÓLAG a
+teljes CI-suite mérte (`test/core/architecture_dependency_test.dart:754`), a kör
+célzott kapuja és a `dart run tool/check_architecture.dart` lépés nem. Két,
+egymást kiegészítő őr zárja ezt:
+
+1. **ADR 0494 D2** (merge-elve): a `designSystemImportsMustUsePublicBarrel`
+   szabály bekerült a `tool/check_architecture.dart`-ba, tehát a
+   `tools/round-gate.sh` **`architecture`** lépése MINDEN körön, lokálisan,
+   push előtt méri. A `test/tooling/design_system_barrel_architecture_test.dart`
+   ennek a szabálynak a saját őre. Egyik fájl sem ennek a körnek a dolga —
+   `main`-ről érkeznek, az upstream-szinkron merge-csel (§0.3).
+2. **Ebben a körben:** a `test/core/architecture_dependency_test.dart` felkerül a
+   `gate_tests` listára és a §7 gate-sorára, hogy a kör SAJÁT kapuja is mérje.
+
+### R21 — upstream-szinkron megtörtént
+
+Az ág a javító kör #2 előtt `--no-ff` merge-cselt `origin/main`-t (ADR 0494 heal),
+tehát a fenti `architecture` szabály már ezen a fán MÉR. A gate futtatása előtt a
+munkafán `tools/prepare-flutter-generated.sh` kötelező.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -418,7 +489,7 @@ Beégetett felhasználói szöveg nem kerülhet a migrált kódba; új szöveg e
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/offline_network_guard_test.dart test/features/ai_tutor/presentation/tutor_chat_screen_test.dart test/features/ai_tutor/presentation/tutor_data_screen_test.dart test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart test/features/ai_tutor/presentation/tutor_profile_screen_test.dart test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/ui/goldens/e13_r29_screens_golden_test.dart test/features/ai_tutor/presentation/tutor_home_screen_test.dart test/l10n/arb_parity_test.dart test/l10n/hardcoded_string_guard_test.dart
+tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/offline_network_guard_test.dart test/features/ai_tutor/presentation/tutor_chat_screen_test.dart test/features/ai_tutor/presentation/tutor_data_screen_test.dart test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart test/features/ai_tutor/presentation/tutor_profile_screen_test.dart test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/ui/goldens/e13_r29_screens_golden_test.dart test/features/ai_tutor/presentation/tutor_home_screen_test.dart test/l10n/arb_parity_test.dart test/l10n/hardcoded_string_guard_test.dart test/core/architecture_dependency_test.dart
 ```
 
 A migrációs mérés (a kimenet a §10-be, batch-enként MIGRATED/legacy sorokkal):
