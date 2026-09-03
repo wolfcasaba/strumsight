@@ -1,0 +1,1 @@
+round=15 verdict=pass tests=59 lesson=secure_storage-v10-keeps-win32-6-single-major;Riverpod3.3.2-AsyncValue-uses-.value-not-.valueOrNull;Override-type-not-nameable-in-test-build-values-fakes-inline;defensive-token-store-swallows-missing-plugin-in-tests;INTERNET-perm-needed-for-release-apk

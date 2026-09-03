@@ -1,0 +1,1 @@
+round=E08-R04 verdict=pass tests=15-target+full-gate+router-ci lesson=router-ci-exact-sha-after-upstream-sync engine=minimax
