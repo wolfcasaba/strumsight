@@ -1,4 +1,4 @@
-/// Tutor Chat screen (E04-R18 §3 + §6).
+/// Tutor Chat screen (E04-R18 §3 + §6, design-system migration E15-R09).
 ///
 /// A virtualized message list + composer + banners. The screen is a
 /// pure `ConsumerWidget`; all state lives in [TutorChatController].
@@ -12,11 +12,21 @@
 /// Raw-HTML / unknown-block safety: the bubble renders unknown blocks
 /// verbatim inside a monospaced panel (see `tutor_message_bubble.dart`).
 /// The screen never passes raw text through a HTML parser.
+///
+/// Unlike [TutorHomeScreen], this screen's own pinned widget test
+/// (`tutor_chat_screen_test.dart`) IS on the E15-R09 `allowed_paths` list
+/// and its bare `MaterialApp` is wired with `theme: SsLightTheme.data()`
+/// (§0.0.A/R3) — so the AI-mode indicator below safely uses the
+/// theme-extension `SsProvenanceBadge` instead of a plain-[Theme] rebuild.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/design_system/components/ai/ss_provenance_badge.dart';
+import '../../../../core/design_system/foundations/ss_colors.dart';
+import '../../../../core/design_system/foundations/ss_spacing.dart';
+import '../../../../core/design_system/foundations/ss_typography.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controller/tutor_state.dart';
 import '../../domain/models/tutor_content_block.dart';
@@ -114,12 +124,14 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
             // E13-R29 §5.2) — this is the screen-level anchor; the
             // streaming indicator below repeats it at message level.
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: SsSpacing.space2),
               child: _AiModeIndicator(mode: aiMode),
             ),
             if (status.isActive)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: SsSpacing.space2,
+                ),
                 child: TextButton.icon(
                   onPressed: controller.cancel,
                   icon: const Icon(Icons.stop_circle_outlined),
@@ -139,12 +151,14 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
                     : ListView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                          horizontal: SsSpacing.space4,
+                          vertical: SsSpacing.space3,
                         ),
                         itemCount: messages.length,
                         itemBuilder: (context, index) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: SsSpacing.space2,
+                          ),
                           child: messages[index],
                         ),
                       ),
@@ -152,8 +166,8 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
               if (status == TutorTurnStatus.streaming)
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
+                    horizontal: SsSpacing.space4,
+                    vertical: SsSpacing.space1,
                   ),
                   child: Align(
                     alignment: AlignmentDirectional.centerStart,
@@ -168,7 +182,7 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
                             height: 12,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: SsSpacing.space2),
                           _AiModeIndicator(mode: aiMode),
                         ],
                       ),
@@ -196,6 +210,13 @@ class _BannerSlot extends StatelessWidget {
   }
 }
 
+/// The "no messages yet" prompt. NOT [SsEmptyState]: that component
+/// requires a caller-supplied `onAction` (ADR 0277 §5 — an empty state must
+/// name a next step), but this screen's real next step is typing in the
+/// always-visible [TutorComposer] below, not a button this widget could
+/// wire up itself (§0.0.A/R6 exception class — same as the E15-R04/R06/
+/// R07/R08 precedent). Still fully token-styled via [SsColorScheme]/
+/// [SsTypography]/[SsSpacing], never a bare [Theme] read.
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.scrollController});
 
@@ -204,29 +225,27 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return SingleChildScrollView(
       controller: scrollController,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(SsSpacing.space6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const SizedBox(height: 48),
-          Icon(
-            Icons.chat_bubble_outline,
-            size: 48,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: SsSpacing.space12),
+          Icon(Icons.chat_bubble_outline, size: 48, color: colors.brand),
+          const SizedBox(height: SsSpacing.space3),
           Text(
             l10n.aiTutorChatEmptyTitle,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SsSpacing.space2),
           Text(
             l10n.aiTutorChatEmptyBody,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
           ),
         ],
       ),
@@ -270,18 +289,13 @@ class _ChatBubble extends StatelessWidget {
   }
 }
 
-/// The AI-mode indicator (ADR 0278 §1, E13-R29 §5.2) — built from plain
-/// [Theme] tokens, not the design system's `SsProvenanceBadge`: this
-/// screen's own pinned widget test (`tutor_chat_screen_test.dart`, outside
-/// this round's scope) builds a bare `MaterialApp` without `AppTheme`, so
-/// `Theme.of(context).extension<SsColorScheme>()` is null there and
-/// `SsProvenanceBadge` crashes on the `!` it uses internally (measured:
-/// E13-R29 dev run). The design system's own l10n copy
-/// ([AppLocalizations.dsProvenanceBadgeLocalLabel] and friends) is reused
-/// for wording consistency. Fallback reuses the local icon+label (the
-/// fallback path answers FROM the local model) plus an explicit trailing
-/// notice — meaning is carried by icon+text together, never colour alone
-/// (same rule `SsProvenanceBadge` itself documents).
+/// The AI-mode indicator (ADR 0278 §1, E13-R29 §5.2) — an [SsProvenanceBadge]
+/// (safe here: see the file doc comment on why this screen, unlike
+/// [TutorHomeScreen], can use theme-extension `Ss*` components). Fallback
+/// reuses the local badge (the fallback path answers FROM the local model)
+/// plus an explicit trailing notice — meaning is carried by icon+text
+/// together, never colour alone (same rule [SsProvenanceBadge] itself
+/// documents).
 class _AiModeIndicator extends StatelessWidget {
   const _AiModeIndicator({required this.mode});
 
@@ -290,39 +304,24 @@ class _AiModeIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final (icon, label) = switch (mode) {
-      TutorAiMode.cloud => (
-        Icons.cloud_outlined,
-        l10n.dsProvenanceBadgeCloudLabel,
-      ),
-      TutorAiMode.local || TutorAiMode.fallback => (
-        Icons.smartphone_outlined,
-        l10n.dsProvenanceBadgeLocalLabel,
-      ),
+    final provenance = switch (mode) {
+      TutorAiMode.cloud => SsProvenanceKind.cloud,
+      TutorAiMode.local || TutorAiMode.fallback => SsProvenanceKind.local,
     };
-    final badge = Semantics(
-      container: true,
-      label: label,
-      excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 16),
-          const SizedBox(width: 4),
-          Text(label, style: Theme.of(context).textTheme.labelLarge),
-        ],
-      ),
-    );
+    final badge = SsProvenanceBadge(l10n: l10n, kind: provenance);
     if (mode != TutorAiMode.fallback) return badge;
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         badge,
-        const SizedBox(width: 4),
+        const SizedBox(width: SsSpacing.space1),
         Flexible(
           child: Text(
             l10n.aiTutorAiModeFallbackMessage,
-            style: Theme.of(context).textTheme.labelSmall,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: colors.textSecondary),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
