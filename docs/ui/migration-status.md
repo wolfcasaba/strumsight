@@ -1,5 +1,49 @@
 # Screen migration status
 
+**E15-R08 update (2026-09-02) — Gamification 6 screens migrated, measured
+75/96 (78.125%).** `AchievementsScreen`, `AchievementDetailScreen`,
+`QuestsScreen`, `LevelDetailScreen`, `RewardInboxScreen`, `StreakDetailScreen`
+now import `core/design_system`. Kör-számsodródás mérve (§0.0.A/R2): a
+`retirement-plan.md` §4 táblája ezt a batch-et `E15-R06`-ba, az `E15-R08`
+sorába pedig a Practice + Progress batch-et írja — a tényleges végrehajtás
+(`E15-R06` = Setlist + Progress, `E15-R07` = Practice Generator, `E15-R08` =
+Gamification) ettől eltért; az irányadó a queue sora és e kör brief-je, a
+`retirement-plan.md` NINCS az `allowed_paths`-on, tehát változatlan marad.
+`LevelDetailScreen` MÉRTEN `unreachable` (nincs `LevelDetailScreen(` hívás
+`lib/`-ben a saját fájlján kívül, megegyezik a `retirement-plan.md` §3.4
+tábla verdiktjével) — a migráció mégis bekerült, ugyanaz a döntési osztály,
+mint az `E15-R07` hat unreachable Practice Generator képernyője (ADR 0471 D5:
+`unreachable` NEM `retire`). A `GamificationThemeScope` burkoló minden
+migrált képernyőn MEGMARADT (öt már hordozta, az `AchievementDetailScreen`
+most kapta meg elsőként) — mérve: `core/theme/app_theme.dart` csak
+`AppPalette`-et ad hozzá a témához, a design-rendszer `SsColorScheme`/
+`SsTypography` kiterjesztéseit KIZÁRÓLAG a futásidejű app gyökere
+(`lib/app/strumsight_app.dart`, `SsLightTheme`/`SsDarkTheme`) és a
+`GamificationThemeScope`-hoz hasonló feature-szintű burkolók biztosítják —
+sem az `AppTheme.dark()`-ot használó golden-teszt, sem a burkoló nélküli
+`MaterialApp()`-ot pumpáló widget-tesztek nem kapják meg őket. A burkoló
+eltávolítása (a brief §0.0.A/R8 eredeti szándéka) ezért ezen a boxon minden
+mért harnessben null-check összeomlást okozott volna — a döntés ellentétben
+áll R8 szó szerinti szövegével, de annak SAJÁT feltételes kikötését követi
+("eltávolítható, HA a képernyő már az app témájából old fel" — ez a feltétel
+mérve HAMIS). Egyik státusz-állapotnak sincs valódi akciója (üres lista,
+nem-található/rejtett részlet, üres postaláda) → `SsEmptyState`/`SsFailureState`
+NEM használt, ugyanaz a kivétel-osztály, mint az E15-R04/R06/R07 precedens —
+az állapotok képernyő-lokális, `SsColorScheme`/`SsTypography`/`SsSpacing`
+token-stílusú widgetek maradtak. A `_StreakMetricCard` (streak_detail) raw
+`Card` típusa VÁLTOZATLAN maradt — a meglévő `streak_detail_screen_test.dart`
+`find.byType(Card, skipOffstage: false)` 4-es darabszámot és magasság-mérést
+pinnelt rá, ugyanaz a kompromisszum-osztály, mint a `SetlistDetailScreen`
+reorderable sorai (E15-R06). A `RewardInboxScreen` `Column`+`Expanded(ListView)`
+szerkezete `CustomScrollView`+`SliverList.separated`-re cserélődött (mindkét
+ágon, üres ÉS listás állapot) — a régi szerkezet 2.0-ás (hu) és 2.5-ös
+szövegskálán ténylegesen túlcsordult telefon-viewporton (110–410 px, mérve),
+az `AchievementDetailScreen` `_notFound`/`_hidden` állapota `SingleChildScrollView`-t
+kapott ugyanazon okból (2.5-ös hu-n 104 px túlcsordulás mérve) — mindkettő a
+§0.0.A/R6 minta-szintű javítási kötelezettség alá esik. Lásd a round `§10`
+handoffját a képernyőnkénti kompromisszum-listáért, a valódi-sértés próbáért
+és a golden-újrafelvétel mérésért.
+
 **E15-R07 F1 update (2026-09-02, ADR 0491) — 2 of the 6 Practice Generator
 screens are now reachable.** `PlanSetupScreen` and `TodayPlanScreen` are
 wired behind `practiceGeneratorEnabled` (`nonProd` rollout boundary,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/gamification/domain/profile/reward_inbox_item.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/pending_rewards_card.dart';
@@ -67,68 +68,93 @@ class _RewardInboxScreenState extends State<RewardInboxScreen> {
         appBar: AppBar(
           title: Semantics(header: true, child: Text(l10n.rewardInboxTitle)),
         ),
+        // A single CustomScrollView (not a Column+Expanded(ListView)) so the
+        // pending-rewards card, count header, and item rows all scroll
+        // together — at large text scale the fixed-size header rows could
+        // otherwise outgrow the viewport and force the Expanded list into
+        // negative space, overflowing (§0.0.A/R5/R6, same pattern fixed for
+        // both branches below since only one caused the probe to fail).
         body: SafeArea(
-          child: widget.items.isEmpty
-              ? Column(
-                  children: [
-                    if (widget.pendingCount > 0 || widget.quarantinedCount > 0)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                        child: PendingRewardsCard(
-                          pendingCount: widget.pendingCount,
-                          quarantinedCount: widget.quarantinedCount,
-                          onRetry: widget.onRetryPending,
-                        ),
-                      ),
-                    Expanded(
-                      child: _EmptyState(
-                        key: const Key('reward-inbox-empty'),
-                        title: l10n.rewardInboxEmptyTitle,
-                        body: l10n.rewardInboxEmptyBody,
-                      ),
+          child: CustomScrollView(
+            key: const Key('reward-inbox-list'),
+            slivers: [
+              if (widget.pendingCount > 0 || widget.quarantinedCount > 0)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    SsSpacing.space5,
+                    SsSpacing.space3,
+                    SsSpacing.space5,
+                    0,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: PendingRewardsCard(
+                      pendingCount: widget.pendingCount,
+                      quarantinedCount: widget.quarantinedCount,
+                      onRetry: widget.onRetryPending,
                     ),
-                  ],
+                  ),
+                ),
+              if (widget.items.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _EmptyState(
+                    key: const Key('reward-inbox-empty'),
+                    title: l10n.rewardInboxEmptyTitle,
+                    body: l10n.rewardInboxEmptyBody,
+                  ),
                 )
-              : Column(
-                  children: [
-                    if (widget.pendingCount > 0 || widget.quarantinedCount > 0)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                        child: PendingRewardsCard(
-                          pendingCount: widget.pendingCount,
-                          quarantinedCount: widget.quarantinedCount,
-                          onRetry: widget.onRetryPending,
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                      child: Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: Text(
+              else ...[
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    SsSpacing.space5,
+                    SsSpacing.space3,
+                    SsSpacing.space5,
+                    SsSpacing.space2,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      // Builder gives a fresh context INSIDE the
+                      // GamificationThemeScope subtree — the outer
+                      // `context` sits above the merged theme, so
+                      // resolving the SS extension on it would
+                      // null-check against the ambient (non-DS) theme.
+                      child: Builder(
+                        builder: (context) => Text(
                           l10n.rewardInboxCountSemantics(unseenCount),
                           key: const Key('reward-inbox-count'),
-                          style: Theme.of(context).textTheme.bodyMedium,
+                          style: Theme.of(
+                            context,
+                          ).extension<SsTypography>()!.bodyMedium,
                         ),
                       ),
                     ),
-                    Expanded(
-                      child: ListView.separated(
-                        key: const Key('reward-inbox-list'),
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                        itemCount: widget.items.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final item = widget.items[index];
-                          return _InboxEntryTile(
-                            key: Key('reward-inbox-entry-${item.id}'),
-                            item: item,
-                            onTap: () => _onTap(item),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    SsSpacing.space5,
+                    SsSpacing.space1,
+                    SsSpacing.space5,
+                    SsSpacing.space6,
+                  ),
+                  sliver: SliverList.separated(
+                    itemCount: widget.items.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: SsSpacing.space3),
+                    itemBuilder: (context, index) {
+                      final item = widget.items[index];
+                      return _InboxEntryTile(
+                        key: Key('reward-inbox-entry-${item.id}'),
+                        item: item,
+                        onTap: () => _onTap(item),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -142,6 +168,11 @@ class _RewardInboxScreenState extends State<RewardInboxScreen> {
   }
 }
 
+// Screen-local, token-styled — NOT SsEmptyState: the inbox is a read-only
+// ledger view (brief §5.2 / ADR 0389 §4 — no claim action exists anywhere
+// on this screen), so there is no real next step to attach as the required
+// SsEmptyState action (brief §0.0.A/R7, same exception class as
+// E15-R06/R07's empty states).
 class _EmptyState extends StatelessWidget {
   const _EmptyState({super.key, required this.title, required this.body});
 
@@ -150,27 +181,31 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(SsSpacing.space6),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               Icons.inbox_outlined,
               size: 48,
-              color: theme.colorScheme.outline,
+              color: colors.textSecondary,
               semanticLabel: title,
             ),
-            const SizedBox(height: 12),
-            Text(title, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
+            const SizedBox(height: SsSpacing.space3),
+            Text(
+              title,
+              style: typography.titleMedium.copyWith(color: colors.textPrimary),
+            ),
+            const SizedBox(height: SsSpacing.space2),
             Text(
               body,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
               ),
             ),
           ],
@@ -188,7 +223,8 @@ class _InboxEntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final l10n = AppLocalizations.of(context);
     final semantics = l10n.rewardInboxEntrySemantics(
       item.event.titleKey,
@@ -201,24 +237,25 @@ class _InboxEntryTile extends StatelessWidget {
       label: semantics,
       child: ExcludeSemantics(
         child: Material(
-          color: item.seen
-              ? theme.colorScheme.surface
-              : theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(16),
+          // `surfaceRaised` currently resolves to the same value as
+          // `surface` (ss_colors.dart — design_system is out of this
+          // round's scope), so seen-vs-unseen no longer differed by color
+          // (E15-R08 review M2). `surfaceSunken` genuinely diverges from
+          // `surface` on both palettes: a read item recedes toward the
+          // sunken tone, an unseen item keeps the plain (brighter) surface.
+          color: item.seen ? colors.surfaceSunken : colors.surface,
+          borderRadius: BorderRadius.circular(SsRadius.lg),
           child: InkWell(
             key: Key('reward-inbox-entry-tap-${item.id}'),
             onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(SsRadius.lg),
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(SsSpacing.space3),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    _iconFor(item.event.kind),
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 12),
+                  Icon(_iconFor(item.event.kind), color: colors.brand),
+                  const SizedBox(width: SsSpacing.space3),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,46 +265,45 @@ class _InboxEntryTile extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 item.event.titleKey,
-                                style: theme.textTheme.titleSmall,
+                                style: typography.titleMedium,
                               ),
                             ),
                             if (!item.seen)
                               Container(
                                 key: Key('reward-inbox-entry-badge-${item.id}'),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
+                                  horizontal: SsSpacing.space2,
+                                  vertical: SsSpacing.space1 / 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: colors.brand,
+                                  borderRadius: BorderRadius.circular(
+                                    SsRadius.sm,
+                                  ),
                                 ),
                                 child: Text(
                                   l10n.rewardInboxUnseenLabel,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.onPrimary,
+                                  style: typography.labelLarge.copyWith(
+                                    color: colors.onBrand,
                                   ),
                                 ),
                               ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.event.bodyKey,
-                          style: theme.textTheme.bodyMedium,
-                        ),
+                        const SizedBox(height: SsSpacing.space1),
+                        Text(item.event.bodyKey, style: typography.bodyMedium),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: SsSpacing.space3),
                   Flexible(
                     child: Text(
                       l10n.rewardInboxEarnedXpLabel(item.event.earnedXp),
                       maxLines: 2,
                       textAlign: TextAlign.end,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
+                      style: typography.labelLarge.copyWith(
+                        color: colors.brand,
                       ),
                     ),
                   ),

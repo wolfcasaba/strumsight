@@ -831,6 +831,88 @@ void main() {
     );
   });
 
+  group('A3 — phone viewport (360x640), textScaler 1.5/2.0/2.5, en+hu '
+      '(§0.0.A/R5 — the default 800x600 test viewport is wider AND taller '
+      'than any phone and can mask a real overflow, L558)', () {
+    final definition = _buildQuestDefinition(baseXp: 50);
+    final projection = _buildProjection(
+      definition: definition,
+      completedUnits: 2,
+    );
+
+    for (final scale in <double>[1.5, 2.0, 2.5]) {
+      for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+        testWidgets(
+          '$scale / ${locale.languageCode} — no overflow on a real phone size',
+          (tester) async {
+            tester.view.physicalSize = const Size(360, 640);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+
+            await _pumpScreen(
+              tester,
+              locale: locale,
+              textScale: scale,
+              withChallenge: true,
+              dailyQuests: <QuestViewProjection>[projection],
+            );
+
+            expect(find.byKey(const Key('quests-screen-list')), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+
+    testWidgets('empty state at 2.0 on a real phone size has no overflow', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pumpScreen(
+        tester,
+        textScale: 2.0,
+        withChallenge: false,
+        dailyQuests: const <QuestViewProjection>[],
+        weeklyQuests: const <QuestViewProjection>[],
+      );
+
+      expect(find.byKey(const Key('quests-empty-state')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // B1 (review) — the single 2.0/en cell above missed the hu overflow: the
+    // empty state was a bare Center with no scroll parent. Full cycle, the
+    // existing cell stays.
+    for (final scale in <double>[1.5, 2.0, 2.5]) {
+      for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+        testWidgets(
+          'empty state $scale / ${locale.languageCode} — no overflow on a '
+          'real phone size',
+          (tester) async {
+            tester.view.physicalSize = const Size(360, 640);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+
+            await _pumpScreen(
+              tester,
+              locale: locale,
+              textScale: scale,
+              withChallenge: false,
+              dailyQuests: const <QuestViewProjection>[],
+              weeklyQuests: const <QuestViewProjection>[],
+            );
+
+            expect(find.byKey(const Key('quests-empty-state')), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  });
+
   group('Localisation — Hungarian copy renders without banned urgency', () {
     testWidgets('every visible string in hu is non-urgent', (tester) async {
       final definition = _buildQuestDefinition();
