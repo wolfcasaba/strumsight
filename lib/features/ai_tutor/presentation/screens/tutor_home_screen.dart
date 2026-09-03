@@ -43,10 +43,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
-import '../../../../core/design_system/components/actions/ss_button.dart';
-import '../../../../core/design_system/components/ai/ss_model_status_card.dart';
-import '../../../../core/design_system/components/ai/ss_provenance_badge.dart';
-import '../../../../core/design_system/foundations/ss_spacing.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 
 class TutorHomeScreen extends StatelessWidget {

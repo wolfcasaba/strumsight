@@ -23,8 +23,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/design_system/components/surfaces/ss_section.dart';
-import '../../../../core/design_system/foundations/ss_spacing.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../core/storage/storage_keys.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../providers/tutor_privacy_providers.dart';

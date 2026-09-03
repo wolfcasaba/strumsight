@@ -50,14 +50,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/design_system/components/actions/ss_button.dart';
-import '../../../../core/design_system/components/feedback/failure_presentation.dart';
-import '../../../../core/design_system/components/feedback/ss_failure_state.dart';
-import '../../../../core/design_system/components/feedback/ss_skeleton.dart';
-import '../../../../core/design_system/components/surfaces/ss_card.dart';
-import '../../../../core/design_system/foundations/ss_colors.dart';
-import '../../../../core/design_system/foundations/ss_spacing.dart';
-import '../../../../core/design_system/foundations/ss_typography.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/storage/storage_keys.dart';

@@ -28,10 +28,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/design_system/components/actions/ss_button.dart';
-import '../../../../core/design_system/components/inputs/ss_validation_summary.dart';
-import '../../../../core/design_system/components/surfaces/ss_section.dart';
-import '../../../../core/design_system/foundations/ss_spacing.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/learning_goal.dart';
 import '../../domain/models/student_profile.dart';
