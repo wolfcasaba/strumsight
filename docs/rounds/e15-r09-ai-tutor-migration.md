@@ -40,6 +40,7 @@ allowed_paths = [
   "test/features/tutor/ai_mode_visibility_test.dart",
   "test/features/tutor/streaming_announcement_test.dart",
   "test/ui/goldens/e13_r29_screens_golden_test.dart",
+  "test/features/ai_tutor/presentation/tutor_home_screen_test.dart",
   "test/ui/goldens/goldens/e13_r29_coach_home_compact.png",
   "test/ui/goldens/goldens/e13_r29_coach_home_compact_scale2.png",
   "test/ui/goldens/goldens/e13_r29_coach_chat_compact.png",
@@ -62,6 +63,7 @@ gate_tests = [
   "test/features/tutor/ai_mode_visibility_test.dart",
   "test/features/tutor/streaming_announcement_test.dart",
   "test/ui/goldens/e13_r29_screens_golden_test.dart",
+  "test/features/ai_tutor/presentation/tutor_home_screen_test.dart",
   "test/l10n/arb_parity_test.dart",
   "test/l10n/hardcoded_string_guard_test.dart",
 ]
@@ -203,6 +205,103 @@ nem új döntés. `tools/round-slots.py reserve-adr` ezért nem futott; ha az
 implementer szerint ÚJ architekturális döntés kellene, az **STOP-eset**
 (`stopped` jelzés), nem önkezű ADR-írás.
 
+## 0.0.B Pre-flight brief-revízió #2 — a review után (Claude / Opus 5, 2026-09-03)
+
+Az első implementer-menet (`ba6be648..c6504b53`) review-ja
+(`docs/reviews/e15-r09-review.md`) 1 BLOCKER + 5 MAJOR leletet mért. Az alábbi
+revíziók a JAVÍTÓ kör szerződése; erősebbek a §0.0.A-nál és a brief korábbi
+szövegénél.
+
+### R9 — a §3 „chat hibaállapot" kikötése MÉRTEN hamis premisszán állt
+
+A §3 azt írta, hogy a chat „nincs backend" hibaállapota ma **nyers szöveg**.
+Mérve ez NEM igaz: strukturált `TutorBanner`
+(`lib/features/ai_tutor/presentation/widgets/tutor_banners.dart:160-170`) —
+ikon + cím + törzs + `semanticsLabel` + `retry` akció —, ami a kör
+`allowed_paths`-án KÍVÜL, egy megosztott, öt banner-fajtát kiszolgáló
+widget-fájlban él. A kikötés ezért **átfogalmazva**: a chat hibaállapota ebben a
+körben VÁLTOZATLAN `TutorBanner` marad (a kipinnelt `find.byType(TutorBanner)`
+cellák így maradnak zöldek), a banner-család design-rendszer-migrációja pedig
+KÜLÖN kör dolga — a `docs/ui/migration-status.md`-ben nevesített follow-upként
+kell rögzíteni. Ez nem az A2 lazítása, hanem egy mért tény átvezetése: az
+érintett állapot nem a kör öt képernyő-fájljában él.
+
+### R10 — `tutor_home_screen_test.dart` a fájllistára ÉS a kapuba (BLOCKER-1)
+
+Mérve (reviewer saját futása): a fájl 2 cellája (`R18-R1`, `R18-R3`) ma PIROS,
+mert csupasz `MaterialApp.router`-t pumpál `theme:` nélkül, és a migrált
+képernyők `SsCard`/`SsProvenanceBadge`-e theme-extensiont olvas. A fájl felkerült
+az `allowed_paths`-ra és a `gate_tests`-be; a javítás ugyanaz az EGYSORNYI
+`theme: SsLightTheme.data()` drótozás, mint a másik hat harnessnél (cella
+törlése/`skip`-je/gyengítése TOVÁBBRA IS TILOS). Ezzel a Home-képernyő
+„extension-mentes" kényszere megszűnik: használhatja a valódi komponenseket
+(`SsModelStatusCard`/`SsProvenanceBadge`/`SsButton`), és ezzel a Home/Chat
+ikon-divergencia (review m3) is megszűnik.
+
+### R11 — a hamis MÉRT állítások javítása kötelező (MAJOR-1)
+
+Az `SsCard` **NEM** extension-mentes: `ss_card.dart:15-17` → `ss_surface.dart:42`
+→ `ss_elevation.dart:14-15` két `!`-es extension-olvasás. Az `SsSection` viszont
+tényleg az. Javítandó MINDHÁROM helyen: `tutor_home_screen.dart` fájl-doc,
+`docs/ui/migration-status.md`, és e brief §10.2 szövege.
+
+### R12 — hiba-ág információvesztés (MAJOR-2)
+
+`tutor_data_screen.dart` mindkét `error:` ága a TÉNYLEGES hibát adja át
+(`SsFailurePresentation.from(l10n, error is AppFailure ? error : const UnknownFailure(retryable: true))`
+vagy ezzel egyenértékű), nem beégetett `UnknownFailure`-t. Ha a két lista
+korábbi, KÜLÖNBÖZŐ lokalizált üzenete (`tutorDataMemoryLoadFailed`,
+`tutorDataConversationsLoadFailed`) nem őrizhető meg az ADR 0277
+prezentációs modelljében, azt a §10-ben mért indoklással KI KELL MONDANI —
+a néma összeolvadás §5.1-sértés.
+
+### R13 — az A2 négy nyitott állapota (MAJOR-3)
+
+- `tutor_chat_screen.dart:183` nyers `CircularProgressIndicator` → design-rendszer
+  betöltés-komponens (`SsSkeleton`), a §5.2 szó szerinti előírása szerint.
+- `tutor_data_screen.dart:178` és `:215` üres állapotai → `SsEmptyState`, VAGY a
+  §0.0.A/R6 kivétel-osztály MINDKÉT feltételével: token-stílus
+  (`SsColorScheme`/`SsTypography`/`SsSpacing`) ÉS képernyőnkénti, mért indoklás a §10-ben.
+- `tutor_profile_screen.dart:93-101` validációs hibája → `SsValidationSummary`
+  (létezik), vagy ugyanaz a kétfeltételes kivétel-dokumentáció.
+
+### R14 — committolt mérce a szövegskálára (MAJOR-4)
+
+Az A3 bizonyítéka nem lehet törölt `/tmp`-beli próbateszt. A javító kör
+committol cellákat az engedélyezett teszt-fájlokba: mind az 5 képernyőre,
+`textScaler` **2.0** mellett `en` ÉS `hu` locale-on, `tester.takeException()`
+`isNull` elvárással (a küszöb-hármas `1.5`/`2.5` cellái opcionálisak, de a `2.0`
+KÖTELEZŐ). Ez a két megtalált túlcsordulás-javítás (`_ModeChip` Flexible+ellipsis,
+`_MemoryFactRow` Row→Wrap) regressziós őre.
+
+### R15 — az A2-nek képernyőnkénti mércéje legyen (MAJOR-5)
+
+Ma egyetlen produkciós design-rendszer-állítás van a batch-ben
+(`tutor_data_screen_test.dart:459`). A javító kör minden migrált állapotra ad
+egy típus-állítást (pl. `find.byType(SsSkeleton)` a chat betöltésre,
+`find.byType(SsFailureState)` a data conversations-ágra, a választott
+üres-állapot komponensre a data-képernyőn), hogy a §6.1 első sora
+képernyőnként piros tudjon lenni. A záró valódi-sértés próbát ezúttal a
+§7 GATE-en kell futtatni (nem egyetlen fájlon), és a kimenetét a §10-be írni.
+
+### R16 — A6: a hivatkozott őr nem méri, amit állít (MINOR m1)
+
+`test/l10n/hardcoded_string_guard_test.dart:18-23` csak a
+`lib/core/design_system/**` alá néz, a `lib/features/**`-ra nem. Az őr
+hatókörének átírása NEM ennek a körnek a dolga; az A6 bizonyítéka a §10-ben
+ŐSZINTÉN átfogalmazandó: „mért tény, hogy a hivatkozott guard nem fedi a
+`lib/features/**`-ot; a kör bizonyítéka a diff kézi és reviewer-oldali
+ellenőrzése, amely új beégetett felhasználói szöveget nem talált".
+
+### R17 — a maradék MINOR-ok, ha nem hizlalják a diffet
+
+Golden fejléc-komment javítása (a „renders identically under either theme
+choice" állítás hamis), a három CTA `Align(centerStart)`-változásának
+dokumentálása a §10-ben, a data/privacy lista-blokk token-következetessége
+(és az `SsSpacing.space1 / 2` aritmetika elhagyása), valamint a
+`_ConversationRow` kártya-kezelése. Ezek MINOR-ok: ha egy javítás
+viselkedés-kockázatot hozna, dokumentált elhagyás is elfogadható.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -319,7 +418,7 @@ Beégetett felhasználói szöveg nem kerülhet a migrált kódba; új szöveg e
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/offline_network_guard_test.dart test/features/ai_tutor/presentation/tutor_chat_screen_test.dart test/features/ai_tutor/presentation/tutor_data_screen_test.dart test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart test/features/ai_tutor/presentation/tutor_profile_screen_test.dart test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/ui/goldens/e13_r29_screens_golden_test.dart test/l10n/arb_parity_test.dart test/l10n/hardcoded_string_guard_test.dart
+tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/offline_network_guard_test.dart test/features/ai_tutor/presentation/tutor_chat_screen_test.dart test/features/ai_tutor/presentation/tutor_data_screen_test.dart test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart test/features/ai_tutor/presentation/tutor_profile_screen_test.dart test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/ui/goldens/e13_r29_screens_golden_test.dart test/features/ai_tutor/presentation/tutor_home_screen_test.dart test/l10n/arb_parity_test.dart test/l10n/hardcoded_string_guard_test.dart
 ```
 
 A migrációs mérés (a kimenet a §10-be, batch-enként MIGRATED/legacy sorokkal):
