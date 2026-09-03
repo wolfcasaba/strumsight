@@ -14,6 +14,8 @@ export 'presentation/screens/practice_result_screen.dart';
 export 'presentation/screens/practice_session_screen.dart';
 export 'presentation/screens/speed_builder_screen.dart';
 export 'presentation/widgets/practice_mode_card.dart';
+export 'application/practice_catalog_controller.dart'
+    show practiceCatalogProvider;
 export 'application/practice_setup_controller.dart';
 export 'application/practice_observation_gateway.dart'
     show PracticeObservationConfig, PracticeObservationGateway;
@@ -53,8 +55,17 @@ export 'domain/model/beat_position.dart' show BeatPosition;
 export 'domain/model/compiled_practice_target.dart' show CompiledPracticeTarget;
 export 'domain/model/meter.dart' show Meter;
 export 'domain/model/practice_definition.dart' show PracticeDefinition;
+export 'domain/model/practice_difficulty.dart' show PracticeDifficulty;
 export 'domain/model/practice_event.dart' show PracticeEvent;
 export 'domain/model/practice_event.dart' show isCanonicalPracticeChordLabel;
+export 'domain/model/practice_history_entry.dart' show PracticeHistoryEntry;
+export 'domain/model/practice_metric_snapshot.dart'
+    show
+        PracticeMetricDimension,
+        PracticeMetricDimensionAvailable,
+        PracticeMetricDimensionInsufficientData,
+        PracticeMetricDimensionNotApplicable,
+        PracticeMetricSnapshot;
 export 'domain/model/practice_mode.dart' show PracticeMode;
 export 'domain/model/practice_observation.dart' show StrumObservation;
 export 'domain/model/practice_session_config.dart' show PracticeSessionConfig;

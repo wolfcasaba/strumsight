@@ -1,5 +1,42 @@
 # Screen migration status
 
+**E16-R02 update (2026-09-03, ADR 0500) — `progress_v2` is now reachable;
+the E15-R06 "orphaned" correction below is superseded for this pair only.**
+`lib/app/routing/app_router.dart`'s `/profile/progress` route (inside the
+adaptive shell) now builds `ProgressDashboardScreen` from a real projection
+(`buildProgressOverviewProjection`, `lib/features/progress_v2/application/
+progress_projection_builder.dart`) sourced from the measured mastery
+milestone catalog (`masteryMilestoneCatalogV1`, `lib/features/gamification/
+domain/mastery/mastery_milestone_catalog.dart`) and the practice-history
+repository, through a new adapter (`practice_mastery_evidence_adapter.dart`).
+A new top-level route, `AppRoutes.profileProgressSkill` (`/profile/progress/
+skills/:skillId`), makes `SkillDetailScreen` reachable too; an unknown or
+unmapped `:skillId` redirects to the overview rather than 404ing. Measured
+before this round: `grep -rn "ProgressOverviewProjection\|
+SkillDetailProjection" --include=*.dart lib | grep -v progress_v2/` → **0**
+hits outside the feature (§0.0.K pre-flight) — both screens' projection
+types had zero external references. That is now false: the router
+constructs and passes a real projection on both routes.
+
+The legacy `ProgressScreen` (`progress` row, 1/1 below) is UNCHANGED: it
+stays the bare `/progress` route's screen (outside the adaptive shell) and
+`AppRoutes.progress` still redirects to `/profile/progress` when the shell
+is on (`legacy_route_redirect_test.dart`) — that redirect target now renders
+`ProgressDashboardScreen` instead of `ProgressScreen`. The legacy file is
+not deleted (out of this round's scope, per the E15-R03 plan). The
+`progress_v2` row below (2/2 migrated) is unaffected by this round —
+migration (design-system import) and reachability (route wiring) are
+separate axes, per the E15-R03 methodology note further down this file.
+
+The mastery-evidence source itself was measured MISSING at this round's
+first pre-flight (§0.0.H): 0 production milestone catalog, 0 evidence
+adapter, 0 milestone-title/description ARB keys. All three are now part of
+the tree — see the round brief's §10 handoff
+(`docs/rounds/e16-r02-progress-projection-and-router-placeholders.md`) for
+the full measurement chain, the two mandatory real-mutation probes, and the
+one documented remaining gap (practice history does not retain the tempo
+actually played, so the v1 milestones' tempo range does not filter — §5.5).
+
 **E15-R11 update (2026-09-03) — Vision, onboarding and the last community
 screen migrated; the tree measures 91/96 (94.792%).** The round's own five
 screens took the ratio from 80/96 to 85/96 (88.542%) on the branch; E15-R10

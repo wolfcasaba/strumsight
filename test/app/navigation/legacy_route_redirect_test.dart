@@ -25,7 +25,7 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
-import 'package:strumsight/features/progress/screens/progress_screen.dart';
+import 'package:strumsight/features/progress_v2/public.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/songs/screens/setlist_list_screen.dart';
 import 'package:strumsight/features/streak/screens/streak_screen.dart';
@@ -165,7 +165,9 @@ void main() {
           AppRoutes.settings: SettingsScreen,
           AppRoutes.tuner: TunerScreen,
           AppRoutes.metronome: MetronomeScreen,
-          AppRoutes.progress: ProgressScreen,
+          // E16-R02 (ADR 0500) — `/profile/progress` now renders the real
+          // Progress V2 dashboard, not the legacy ProgressScreen adapter.
+          AppRoutes.progress: ProgressDashboardScreen,
           AppRoutes.streak: StreakScreen,
           AppRoutes.setlists: SetlistListScreen,
           AppRoutes.chords: ChordLibraryScreen,

@@ -582,5 +582,11 @@
     "placeholders": {
       "count": {"type": "int"}
     }
-  }
+  },
+  "masteryChordTransitionTitle": "Akkordváltások",
+  "masteryChordTransitionDescription": "Sima, pontos váltás a nyitott akkordok között.",
+  "masteryRhythmAccuracyTitle": "Ritmuspontosság",
+  "masteryRhythmAccuracyDescription": "Egyenletes pengetés, pontosan az ütemre.",
+  "masteryStrumConsistencyTitle": "Pengetésirány-stabilitás",
+  "masteryStrumConsistencyDescription": "Megbízható le/fel pengetésirány minden mintában."
 }

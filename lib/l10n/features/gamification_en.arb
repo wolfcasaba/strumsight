@@ -582,5 +582,11 @@
     "placeholders": {
       "count": {"type": "int"}
     }
-  }
+  },
+  "masteryChordTransitionTitle": "Chord transitions",
+  "masteryChordTransitionDescription": "Smooth, accurate switches between open chords.",
+  "masteryRhythmAccuracyTitle": "Rhythm accuracy",
+  "masteryRhythmAccuracyDescription": "Steady strums that land on the beat.",
+  "masteryStrumConsistencyTitle": "Strum consistency",
+  "masteryStrumConsistencyDescription": "Reliable up/down strum direction on every pattern."
 }
