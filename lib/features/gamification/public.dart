@@ -34,6 +34,7 @@ export 'domain/levels/level_curve.dart';
 export 'domain/levels/level_definition.dart';
 export 'domain/mastery/mastery_badge.dart';
 export 'domain/mastery/mastery_milestone.dart';
+export 'domain/mastery/mastery_milestone_catalog.dart';
 export 'domain/mastery/mastery_progress.dart';
 export 'domain/profile/gamification_profile.dart';
 export 'domain/quests/challenge_definition.dart';
