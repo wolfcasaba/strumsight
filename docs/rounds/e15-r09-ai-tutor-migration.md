@@ -350,4 +350,204 @@ tools/golden-x86.sh record <a batch érintett golden-teszt fájljai>
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), medium effort. **Ág:**
+`sonnet-impl/e15-r09-ai-tutor-migration`. Minden lépés külön commit-ban
+(10 commit); a `docs/rounds/e15-r09-ai-tutor-migration.md` ez a §10.
+
+### 10.1 Migrációs mérés (§7 parancs kimenete)
+
+```
+MIGRATED lib/features/ai_tutor/presentation/screens/tutor_home_screen.dart
+MIGRATED lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart
+MIGRATED lib/features/ai_tutor/presentation/screens/tutor_profile_screen.dart
+MIGRATED lib/features/ai_tutor/presentation/screens/tutor_data_screen.dart
+MIGRATED lib/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart
+```
+
+Teljes arány (mérve `dart run tool/ui_inventory.dart` + a mérő-hurok mind a
+96 útvonalon): **80/96 (83.333%)** — felvéve `docs/ui/migration-status.md`-be.
+
+### 10.2 Képernyőnkénti komponens-térkép és a mért kivétel-osztályok
+
+**`TutorHomeScreen` — extension-mentes migráció (R2/R3 mért korlát).** A
+képernyő saját pinnelt tesztje (`tutor_home_screen_test.dart`) NEM az
+`allowed_paths`-on van, és a valódi app-routeren (`MaterialApp.router`,
+`theme:` NÉLKÜL) rendereli a képernyőt — ez javíthatatlan ebben a körben.
+Minden `Ss*` komponens, ami `Theme.of(context).extension<SsColorScheme>()!`
+vagy `<SsTypography>()!` bang-el old fel (`SsButton`, `SsEmptyState`,
+`SsFailureState`, `SsModelStatusCard`, `SsProvenanceBadge`, `SsSkeleton`,
+`SsMetricCard`, `SsContentCard`, `SsInsightCard`, `SsStatusBadge` — mind
+mérve `grep -n "extension<SsColorScheme>\|extension<SsTypography>"` a
+`core/design_system/`-ben) ott null-check összeomlást adna. Ezért:
+- `Card` → `SsCard` (extension-mentes, csak `SsSurface`/`Padding`-ot használ).
+- `EdgeInsets.all(24)`/`SizedBox(height: 24/8)` → `SsSpacing.space6`/`space2`.
+- Ikonok (`Icons.smartphone_outlined` stb.) MARADTAK nyers `Icon`-ok — MÁSODIK,
+  független ok: az `SsIcon` katalógusa (`play`/`pause`/`settings`/`close`/
+  `check`/`info` + 14 gitár-glyph, mérve `ss_icons.dart`-ban) nem tartalmazza
+  egyik screen-ikont sem; egy fel nem oldott név az `SsIcon` látható "hiányzó
+  glyph" jelére esne vissza — ez valódi regresszió lenne, nem biztonságos
+  csere. Ez mind az 5 képernyő ikonjaira igaz, nem csak a Home-éra.
+- **Mért implementer-hiba, ami az A3-mérés KÖZBEN derült ki (és javítva
+  lett):** a `_ModeChip` Row-ja (`icon + SizedBox + Text(label)`,
+  `mainAxisSize: MainAxisSize.min`) nem védte a `Text`-et `Flexible`+
+  `overflow: ellipsis`-szel — 2.0x/2.5x `hu` textScale-en `RenderFlex
+  overflowed... on the right` (25–109 px, mérve). Javítás: `Flexible(child:
+  Text(..., maxLines: 1, overflow: TextOverflow.ellipsis))`. Ugyanaz a védelem,
+  amit az `SsProvenanceBadge` már eleve tartalmaz (ezért NEM esett át ez a
+  hiba a Chat képernyőn).
+
+**A másik 4 képernyő pinnelt tesztje az `allowed_paths`-on van**, ezért a
+harness-drótozás (R3) közvetlen `theme: SsLightTheme.data()` — nem kellett
+`Builder`-es belső-context trükk (mint az E15-R08 `GamificationThemeScope`
+alatt/felett problémájánál), mert az `ai_tutor`-nak nincs feature-szintű
+téma-burkolója (R2, mérve: `grep -rn "ThemeScope" lib/features/ai_tutor/` → 0
+találat). A drótozott 6 fájl, pontos sor:
+- `test/features/ai_tutor/presentation/tutor_chat_screen_test.dart:196`
+- `test/features/ai_tutor/presentation/tutor_data_screen_test.dart:247`
+- `test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart:146`
+- `test/features/ai_tutor/presentation/tutor_profile_screen_test.dart:61`
+- `test/features/tutor/ai_mode_visibility_test.dart:125` és `:146`
+- `test/features/tutor/streaming_announcement_test.dart:119`
+
+Egyik fájlban SEM változott pinnelt elvárás (widget-típus, kulcs, szöveg,
+szemantika-címke) — kizárólag a `theme:` argumentum került be. `git diff`
+minden érintett teszt-fájlon ezt igazolja (egy-egy sor beszúrás + az import).
+
+**`TutorChatScreen`** — az `_AiModeIndicator` most valódi `SsProvenanceBadge`-t
+használ (`local`/`cloud`), a `fallback` módhoz ugyanaz a trailing-üzenet
+Flexible+ellipsis-szel, mint korábban. Az üres beszélgetés prompt (`_EmptyState`)
+a §0.0.A/R6 kivétel-osztály: nincs a widgetnek saját kiváltható akciója (a
+valódi következő lépés — gépelés — a mindig látható, KÜLÖN `TutorComposer`
+widgetben van, amit ez a widget nem tud meghívni), ezért képernyő-lokális
+maradt, de KÖTELEZŐEN `SsColorScheme`/`SsTypography`/`SsSpacing` tokenekkel.
+
+**`TutorDataScreen`** — mindkét `FutureProvider.when` hiba-ág (`memoryFacts`,
+`conversations`) `SsFailureState`-re cserélve, működő újrapróbával
+(`ref.invalidate`). MÉRVE: mindkét branch a gyakorlatban elérhetetlen ma (a
+`tutor_privacy_providers.dart` a repository `Failure`-jét üres listára/oldalra
+fordítja, nem dobja tovább) — ezért a kör felvett egy ÚJ, valódi tesztet
+(`R22-DA8`, lásd §10.3), ami a fake repository-t VALÓBAN dobásra kényszeríti,
+hogy ez a cella mérhető gate-lefedettséget kapjon, ne csak "meg fog felelni"
+állítást. Az `_MemoryFactRow` `Card`-ja `SsCard`-ra cserélve (egyedi `Padding`
+volt, tiszta csere); a `_ConversationRow` `Card`+`ListTile` párosa VÁLTOZATLAN
+maradt — egy `SsCard` a `ListTile` saját beépített paddingjával duplázná a
+térközt. Export/Delete-all gombok `SsButton`-ra cserélve (a Delete-all trigger
+`SsButtonVariant.secondary`-ként — maga a trigger csak megnyitja a
+megerősítő dialógust, a TÉNYLEGES destruktív akció a dialóg belsejében marad
+sima `FilledButton`-ként, hogy ne kelljen új `destructiveSemanticHint`
+ARB-kulcs egy dialóg-belső gombhoz ebben a vizuális körben). **Mért
+implementer-hiba, ami az A3-mérés KÖZBEN derült ki (és javítva lett):** a
+`_MemoryFactRow` szerkesztés/törlés gombjainak `Row`-ja (`mainAxisAlignment:
+end`) nem tűrte a magyar `TextButton`-feliratokat 1.5x-en már (93 px
+túlcsordulás, mérve) — javítás: `Row` → `Wrap(alignment: WrapAlignment.end)`.
+
+**`TutorProfileScreen`** — a három szekció (`Student`/`Guitar`/`Goals`)
+`SsSection`-be került, az "Add goal" gomb `SsButton`. A két `TextFormField`
+(heti percek, gitár neve) VÁLTOZATLAN maradt: ez a képernyő `ConsumerWidget`
+(állapot nélküli), a mezők `initialValue`-t olvasnak minden Riverpod-rebuild-en
+— az `SsTextField` viszont KIZÁRÓLAG `TextField`+`controller` API-t ad,
+`initialValue` nélkül. Egy inline `TextEditingController(text: ...)` minden
+rebuild-en új controllert hozna létre → kurzor-ugrás/fókuszvesztés minden
+billentyűleütésnél (mért Flutter-antiminta), ez VISELKEDÉS-változás lenne egy
+vizuális körben — ezért maradt a `TextFormField`.
+
+**`TutorPrivacyScreen`** — a scope-cím+lista+footer `SsSection`-be került. A
+három `SwitchListTile` consent-kapcsoló (és feliratuk) VÁLTOZATLAN maradt — ez
+a brief §3 saját, kifejezett kivétele ("a privacy- és adat-képernyő
+consent-kapcsolói és szövegei érintetlenek", ADR 0132).
+
+### 10.3 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+A `tutor_data_screen_test.dart`-hoz felvett ÚJ teszt (`R22-DA8`): egy
+`_FakeMemoryRepository.throwOnList` flag valódi kivételt dob a `.list()`-ből
+(a régi `Failure`-visszaadás NEM éri el a hiba-ágat, mérve — lásd 10.2), így
+a teszt VALÓDI gate-lefedettséget ad az A2 cellának erre az állapotra:
+
+1. Zöld (a jelen implementációval): `find.byType(SsFailureState)`
+   `findsOneWidget`, retry gomb (`ss-failure-state-retry`) újrahívja
+   `repo.list()`-et (`listCalls: 1 → 2`).
+2. A próba: `error: (_, _) => SsFailureState(...)` visszaírva
+   `error: (_, _) => Text(l10n.tutorDataMemoryLoadFailed)`-re, majd
+   `flutter test test/features/ai_tutor/presentation/tutor_data_screen_test.dart`
+   → **PIROS**, pontosan az `R22-DA8` cellán:
+   ```
+   Expected: exactly one matching candidate
+     Actual: _TypeWidgetFinder:<Found 0 widgets with type "SsFailureState": []>
+   00:03 +9 -1: R22-DA8: memory-facts load failure renders SsFailureState with a working retry [E]
+   ```
+   A többi 9 cella VÁLTOZATLANUL zöld maradt (a nyers szöveg tartalma
+   megegyezett, a típus-ellenőrzés bukott).
+3. Visszaállítva a `SsFailureState`-es változatra → újra ZÖLD (10/10),
+   `git diff` a próba UTÁN üres a `tutor_data_screen.dart`-on.
+
+### 10.4 Golden újrafelvétel (§0.0.A/R4)
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r29_screens_golden_test.dart
+```
+Kimenet: exit 0, mind a 6 cella zöld (`coach home/chat — compact` +
+`_scale2`, `practice plan preview — compact` + `_scale2`).
+
+```
+$ git diff --stat -- test/ui/goldens/goldens/
+ test/ui/goldens/goldens/e13_r29_coach_chat_compact.png        | Bin 7053 -> 7108 bytes
+ test/ui/goldens/goldens/e13_r29_coach_chat_compact_scale2.png | Bin 8220 -> 8221 bytes
+ test/ui/goldens/goldens/e13_r29_coach_home_compact.png        | Bin 6536 -> 6693 bytes
+ test/ui/goldens/goldens/e13_r29_coach_home_compact_scale2.png | Bin 5641 -> 5806 bytes
+ 4 files changed, 0 insertions(+), 0 deletions(-)
+```
+
+A 2 Practice Plan Preview PNG BYTE-AZONOS maradt (az a képernyő már
+migrált volt a kör előtt is, és egyik komponense sem olvas theme-extension-t,
+tehát a téma-csere rá nem hatott — mérve).
+
+### 10.5 `textScaler` küszöb-hármas (1.5 / 2.0 / 2.5) × `en`/`hu`
+
+Mérőeszköz: egyszeri, a repón kívüli (`/tmp/e15_r09_textscale_probe_test.dart`,
+NEM commitolva, NEM az `allowed_paths`-on — a mérés után törölve) 30 cellás
+teszt, `tester.takeException()` `isNull` minden (képernyő × scale × locale)
+kombinációra, a batch mind az 5 képernyőjére, 412×915 kompakt viewport (a
+golden-sáv saját konvenciója).
+
+**Első futás (a §10.2 két javítás ELŐTT): 7/30 piros** —
+`home@2.0hu`, `home@2.5en`, `home@2.5hu`, `data@1.5hu`, `data@2.0hu`,
+`data@2.5en`, `data@2.5hu` — mind `RenderFlex overflowed ... on the right`
+(25–343 px). A `2.0x` küszöb (az A3 KÖTELEZŐ feltétele) piros volt
+`home`-on ÉS `data`-n is `hu`-n — ez valódi, javítandó hiba volt, nem
+mérési műtermék.
+
+**A §10.2-ben leírt két javítás (`_ModeChip` Flexible+ellipsis,
+`_MemoryFactRow` Row→Wrap) UTÁN: 30/30 zöld** minden képernyőre, minden
+skálára, mindkét locale-on. `chat`, `profile`, `privacy` már az ELSŐ
+futáson is 30/30 zöld volt.
+
+### 10.6 A6 (nincs beégetett szöveg) és ARB
+
+Nem vettem fel ÚJ ARB-kulcsot — minden migrált widget a MEGLÉVŐ
+`AppLocalizations` gettereket használja (`l10n.tutorData*`, `l10n.aiTutor*`,
+`dsFailure*`/`dsProvenanceBadge*` a design-rendszerből). `lib/l10n/app_en.arb`
+és `lib/l10n/app_hu.arb` ezért VÁLTOZATLAN maradt ebben a körben (az
+`allowed_paths`-bővítés R7 szerint elérhető volt, de nem kellett élnem vele).
+
+### 10.7 Amit NEM tettem meg, és miért
+
+- **`SsTextField`** — nem használtam a Profile-on (10.2, controller/
+  `initialValue` inkompatibilitás).
+- **`SsSwitchRow`** — nem használtam a Privacy consent-kapcsolóin (a brief §3
+  saját kivétele, ADR 0132).
+- **`SsIcon`** — nem használtam SEHOL az 5 képernyőn (10.2, katalógus-hiány
+  minden szükséges ikonnévre).
+- **A Chat-képernyő `TutorBannerKind.error` "nincs backend" nyers szövege**
+  (amit a §3 kifejezetten `SsFailureState`-re várt) a `tutor_banners.dart`
+  widget-fájlban él, ami NINCS az `allowed_paths`-on (csak a screen-fájlok
+  vannak rajta) — ezt NEM módosítottam. Ehelyett a `TutorDataScreen` két,
+  ténylegesen a screen-fájlban élő hiba-ágát migráltam `SsFailureState`-re
+  (10.2/10.3), és ide dokumentálom a mért hézagot a review számára: a §3
+  betű szerinti "chat-képernyő hibaállapota" cél NEM teljesült, mert a
+  megnevezett widget kívül esik a kör fájllistáján.
+- **A Delete-all dialóg belső `FilledButton`-ja** nem lett
+  `SsButtonVariant.destructive` (10.2) — elkerülve egy új
+  `destructiveSemanticHint` ARB-kulcsot egy dialóg-belső gombért, ami a
+  vizuális kör hatókörén túlmutató döntésnek tűnt.
+
 ## 11. Review — a Claude tölti ki
