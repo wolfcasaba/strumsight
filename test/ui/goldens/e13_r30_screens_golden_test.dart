@@ -1,12 +1,16 @@
 // Golden snapshots of the E13-R30 Vision Setup, Vision Coach Stage and
 // Vision Result screens at a compact portrait phone (412×915) and the same
-// frame at textScaler 2.0, per the round brief §7/A9. Pattern follows the
-// merged `test/ui/goldens/e13_r29_screens_golden_test.dart` precedent:
-// `AppTheme` (the app's actual runtime theme), not `SsLightTheme`/
-// `SsDarkTheme` directly — the Result screen instead wraps itself in a
-// local `VisionThemeScope` (mirrors `library_theme_scope.dart`'s measured
-// fix) because `AppTheme` alone does not carry the design-system's
-// `SsColorScheme`/`SsTypography` extensions its cards need.
+// frame at textScaler 2.0, per the round brief §7/A9.
+//
+// E15-R11 (§0.0, extended measurement): Vision Setup and Vision Coach Stage
+// are now migrated to SsCard/SsButton/SsSection/SsSwitchRow, which read the
+// design-system theme extensions — the previous `AppTheme` (the app's
+// legacy runtime theme, carrying no `SsColorScheme`/`SsTypography`)
+// null-check crashes (L593-class defect). `SsDarkTheme` replaces it here;
+// it is additive-only over the same `AppPalette` values (ADR 0466 D2), so
+// this is a real-theme fix, not a mercy weakening. The Result screen still
+// wraps itself in a local `VisionThemeScope` (mirrors
+// `library_theme_scope.dart`'s measured fix, out of this round's scope).
 //
 // Recorded on x86_64 (ADR 0426, §0.0/B6) via `tools/golden-x86.sh record` —
 // NOT `flutter test --update-goldens` on this (aarch64) box.
@@ -17,8 +21,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/camera/camera_permission.dart';
 import 'package:strumsight/core/camera/camera_providers.dart';
 import 'package:strumsight/core/camera/camera_session_coordinator.dart';
+import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
-import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/vision/application/calibration_loss_machine.dart';
 import 'package:strumsight/features/vision/application/vision_session_controller.dart';
 import 'package:strumsight/features/vision/application/vision_session_state.dart';
@@ -106,7 +110,7 @@ Future<void> _pump(
       overrides: overrides,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark(),
+        theme: SsDarkTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         builder: (context, child) => MediaQuery(

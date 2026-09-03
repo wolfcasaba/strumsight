@@ -67,7 +67,12 @@ class _RouterTestApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
-      theme: AppTheme.light(),
+      // R2 (§0.0, extended measurement): `/welcome` resolves to
+      // OnboardingScreen, now migrated to SsButton/SsSection — a themeless
+      // (or legacy-AppTheme) MaterialApp null-check crashes (L593-class
+      // defect). SsLightTheme is additive-only over AppPalette (ADR 0466
+      // D2), so this does not change any non-migrated screen's colours.
+      theme: SsLightTheme.data(),
       locale: const Locale('en'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -381,7 +386,10 @@ void main() {
               keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
             ],
             child: MaterialApp(
-              theme: AppTheme.light(),
+              // R2 (§0.0, extended measurement): VisionSetupScreen is now
+              // migrated (SsCard/SsButton/SsSection) — a legacy AppTheme
+              // null-check crashes (L593-class defect).
+              theme: SsLightTheme.data(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               builder: (context, child) => MediaQuery(
