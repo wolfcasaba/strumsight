@@ -98,7 +98,7 @@ class TutorPrivacyScreen extends ConsumerWidget {
                       for (final key in StorageKeys.tutorAiData)
                         Padding(
                           padding: const EdgeInsets.symmetric(
-                            vertical: SsSpacing.space1 / 2,
+                            vertical: SsSpacing.space1,
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,7 +112,7 @@ class TutorPrivacyScreen extends ConsumerWidget {
                       for (final key in StorageKeys.tutorAiData)
                         Padding(
                           padding: const EdgeInsets.symmetric(
-                            vertical: SsSpacing.space1 / 2,
+                            vertical: SsSpacing.space1,
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,

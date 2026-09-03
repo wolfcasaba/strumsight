@@ -18,13 +18,20 @@
 /// and its bare `MaterialApp` is wired with `theme: SsLightTheme.data()`
 /// (§0.0.A/R3) — so the AI-mode indicator below safely uses the
 /// theme-extension `SsProvenanceBadge` instead of a plain-[Theme] rebuild.
+///
+/// The streaming pill next to it is [SsSkeleton] (a small `SsRadius.pill`
+/// circle), not a raw [CircularProgressIndicator] — javító kör #1,
+/// §0.0.B/R13: §5.2 names a raw spinner as an unacceptable weakening, and
+/// [SsSkeleton] is this design system's one loading primitive.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/components/ai/ss_provenance_badge.dart';
+import '../../../../core/design_system/components/feedback/ss_skeleton.dart';
 import '../../../../core/design_system/foundations/ss_colors.dart';
+import '../../../../core/design_system/foundations/ss_radius.dart';
 import '../../../../core/design_system/foundations/ss_spacing.dart';
 import '../../../../core/design_system/foundations/ss_typography.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -177,10 +184,10 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          const SizedBox(
+                          const SsSkeleton(
                             width: 12,
                             height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            radius: SsRadius.pill,
                           ),
                           const SizedBox(width: SsSpacing.space2),
                           _AiModeIndicator(mode: aiMode),
@@ -308,15 +315,31 @@ class _AiModeIndicator extends StatelessWidget {
       TutorAiMode.cloud => SsProvenanceKind.cloud,
       TutorAiMode.local || TutorAiMode.fallback => SsProvenanceKind.local,
     };
-    final badge = SsProvenanceBadge(l10n: l10n, kind: provenance);
-    if (mode != TutorAiMode.fallback) return badge;
+    if (mode != TutorAiMode.fallback) {
+      return SsProvenanceBadge(l10n: l10n, kind: provenance);
+    }
     final colors = Theme.of(context).extension<SsColorScheme>()!;
+    // §0.0.B/R14 (measured via the committed textScaler 2.0 cells): this
+    // widget renders inside `AppBar.actions`, which lays each action out at
+    // its OWN natural width before the title claims the remainder — an
+    // ambient constraint neither [SsProvenanceBadge]'s own internal
+    // `Flexible` nor a `Flexible` wrapped around the trailing text here can
+    // see through, since both are non-flexible siblings free to claim
+    // whatever width they naturally need first (measured: `RenderFlex
+    // overflowed by 1187 pixels`, en, textScaler 2.0, before either bound
+    // existed). Bounding EACH piece's own width directly — not via the
+    // Row's flex negotiation — clips both deterministically regardless of
+    // locale or the ambient constraint.
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        badge,
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 130),
+          child: SsProvenanceBadge(l10n: l10n, kind: provenance),
+        ),
         const SizedBox(width: SsSpacing.space1),
-        Flexible(
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 90),
           child: Text(
             l10n.aiTutorAiModeFallbackMessage,
             style: Theme.of(

@@ -468,39 +468,48 @@ Teljes arány (mérve `dart run tool/ui_inventory.dart` + a mérő-hurok mind a
 
 ### 10.2 Képernyőnkénti komponens-térkép és a mért kivétel-osztályok
 
-**`TutorHomeScreen` — extension-mentes migráció (R2/R3 mért korlát).** A
-képernyő saját pinnelt tesztje (`tutor_home_screen_test.dart`) NEM az
-`allowed_paths`-on van, és a valódi app-routeren (`MaterialApp.router`,
-`theme:` NÉLKÜL) rendereli a képernyőt — ez javíthatatlan ebben a körben.
-Minden `Ss*` komponens, ami `Theme.of(context).extension<SsColorScheme>()!`
-vagy `<SsTypography>()!` bang-el old fel (`SsButton`, `SsEmptyState`,
-`SsFailureState`, `SsModelStatusCard`, `SsProvenanceBadge`, `SsSkeleton`,
-`SsMetricCard`, `SsContentCard`, `SsInsightCard`, `SsStatusBadge` — mind
-mérve `grep -n "extension<SsColorScheme>\|extension<SsTypography>"` a
-`core/design_system/`-ben) ott null-check összeomlást adna. Ezért:
-- `Card` → `SsCard` (extension-mentes, csak `SsSurface`/`Padding`-ot használ).
-- `EdgeInsets.all(24)`/`SizedBox(height: 24/8)` → `SsSpacing.space6`/`space2`.
-- Ikonok (`Icons.smartphone_outlined` stb.) MARADTAK nyers `Icon`-ok — MÁSODIK,
-  független ok: az `SsIcon` katalógusa (`play`/`pause`/`settings`/`close`/
-  `check`/`info` + 14 gitár-glyph, mérve `ss_icons.dart`-ban) nem tartalmazza
-  egyik screen-ikont sem; egy fel nem oldott név az `SsIcon` látható "hiányzó
+**`TutorHomeScreen` — teljes `Ss*` migráció (javítva §0.0.B/R10-ben; az
+alábbi bekezdés a JAVÍTOTT állapotot írja le, az eredeti "extension-mentes"
+állítás MÉRTEN HAMIS volt, lásd 10.8/BLOCKER-1 + MAJOR-1).** A képernyő saját
+pinnelt tesztje (`tutor_home_screen_test.dart`) az első menetben csupasz
+`MaterialApp.router`-t pumpált `theme:` nélkül; ez 2 cellát (`R18-R1`,
+`R18-R3`) pirosra vitt, mert a képernyő `SsCard`-ot használt, ami — a
+`SsSurface`→`SsElevation.resolve` láncon át — MAGA IS
+`Theme.of(context).extension<SsColorScheme>()!`/`<SsThemeBehavior>()!`-t
+olvas (mérve: `ss_card.dart:15-17` → `ss_surface.dart:42` →
+`ss_elevation.dart:14-15`, két `!`). A javító kör felvette a fájlt az
+`allowed_paths`-ra és a `gate_tests`-be, és ugyanazt az egysoros
+`theme: SsLightTheme.data()` drótozást adta hozzá, mint a másik 6 harness.
+Ezzel a képernyő immár a TELJES `Ss*` katalógust használhatja:
+- `_ModelStatusCard`/`_ModeChip` → `SsModelStatusCard` (ami belül
+  `SsProvenanceBadge`-et rendereli) — ezzel a Home/Chat ikon-divergencia
+  (review m3, `Icons.smartphone_outlined` vs `Icons.memory_outlined`) is
+  megszűnt, mindkét képernyő ugyanazt a badge-et használja.
+- `FilledButton.icon` CTA → `SsButton(icon: Icons.chat, ...)`.
+- `EdgeInsets.all(24)`/`SizedBox(height: 24/8)` → `SsSpacing.space6`/`space2`
+  (változatlan az első menethez képest).
+- Ikonok (`Icons.chat` a CTA-n) MARADTAK nyers `Icon`-ok — független ok:
+  az `SsIcon` katalógusa (`play`/`pause`/`settings`/`close`/`check`/`info`
+  + 14 gitár-glyph, mérve `ss_icons.dart`-ban) nem tartalmazza egyik
+  screen-ikont sem; egy fel nem oldott név az `SsIcon` látható "hiányzó
   glyph" jelére esne vissza — ez valódi regresszió lenne, nem biztonságos
   csere. Ez mind az 5 képernyő ikonjaira igaz, nem csak a Home-éra.
 - **Mért implementer-hiba, ami az A3-mérés KÖZBEN derült ki (és javítva
-  lett):** a `_ModeChip` Row-ja (`icon + SizedBox + Text(label)`,
-  `mainAxisSize: MainAxisSize.min`) nem védte a `Text`-et `Flexible`+
-  `overflow: ellipsis`-szel — 2.0x/2.5x `hu` textScale-en `RenderFlex
-  overflowed... on the right` (25–109 px, mérve). Javítás: `Flexible(child:
-  Text(..., maxLines: 1, overflow: TextOverflow.ellipsis))`. Ugyanaz a védelem,
-  amit az `SsProvenanceBadge` már eleve tartalmaz (ezért NEM esett át ez a
-  hiba a Chat képernyőn).
+  lett az első menetben, a javító kör nem érintette):** a `_ModeChip` Row-ja
+  (`icon + SizedBox + Text(label)`, `mainAxisSize: MainAxisSize.min`) nem
+  védte a `Text`-et `Flexible`+`overflow: ellipsis`-szel — 2.0x/2.5x `hu`
+  textScale-en `RenderFlex overflowed... on the right` (25–109 px, mérve).
+  Ez a Row a javító körben `SsProvenanceBadge`-re cserélődött, ami ugyanezt
+  a `Flexible`+ellipsis védelmet már eleve tartalmazza.
 
-**A másik 4 képernyő pinnelt tesztje az `allowed_paths`-on van**, ezért a
-harness-drótozás (R3) közvetlen `theme: SsLightTheme.data()` — nem kellett
-`Builder`-es belső-context trükk (mint az E15-R08 `GamificationThemeScope`
-alatt/felett problémájánál), mert az `ai_tutor`-nak nincs feature-szintű
-téma-burkolója (R2, mérve: `grep -rn "ThemeScope" lib/features/ai_tutor/` → 0
-találat). A drótozott 6 fájl, pontos sor:
+**Mind az 5 képernyő pinnelt tesztje az `allowed_paths`-on van** (a Home
+tesztje a javító kör óta), ezért a harness-drótozás (R3 + R10) közvetlen
+`theme: SsLightTheme.data()` — nem kellett `Builder`-es belső-context trükk
+(mint az E15-R08 `GamificationThemeScope` alatt/felett problémájánál), mert
+az `ai_tutor`-nak nincs feature-szintű téma-burkolója (R2, mérve:
+`grep -rn "ThemeScope" lib/features/ai_tutor/` → 0 találat). A drótozott 7
+fájl, pontos sor:
+- `test/features/ai_tutor/presentation/tutor_home_screen_test.dart` (`MaterialApp.router`, javító kör)
 - `test/features/ai_tutor/presentation/tutor_chat_screen_test.dart:196`
 - `test/features/ai_tutor/presentation/tutor_data_screen_test.dart:247`
 - `test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart:146`
@@ -621,6 +630,19 @@ skálára, mindkét locale-on. `chat`, `profile`, `privacy` már az ELSŐ
 futáson is 30/30 zöld volt.
 
 ### 10.6 A6 (nincs beégetett szöveg) és ARB
+
+**Őszinte korrekció (§0.0.B/R16, MINOR m1):** az A6 sor korábbi
+„Bizonyíték" hivatkozása (`test/l10n/hardcoded_string_guard_test.dart`)
+MÉRTEN nem fedi ezt a kört — a guard hatóköre (`_scopeDirs`, a fájl
+`:18-23`-a) kizárólag `lib/core/design_system/{components,accessibility,
+layouts,motion}` alá néz, a `lib/features/**`-ra (tehát a kör öt
+képernyőjére) NEM. A guard a gate-listán szerepel és zölden fut, de erre a
+körre nézve HOLT cella — false-positive biztonságot adna, ha A6
+bizonyítékaként hivatkoznánk rá. A kör valódi bizonyítéka: a diff kézi
+átolvasása (implementer + reviewer oldalán is) — új, beégetett
+felhasználói szöveget egyik migrált képernyőn sem talált; minden szöveg a
+meglévő `AppLocalizations` gettereken át jön. A guard hatókörének
+`lib/features/**`-ra bővítése NEM ennek a körnek a feladata (külön kör).
 
 Nem vettem fel ÚJ ARB-kulcsot — minden migrált widget a MEGLÉVŐ
 `AppLocalizations` gettereket használja (`l10n.tutorData*`, `l10n.aiTutor*`,

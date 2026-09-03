@@ -10,42 +10,42 @@ listed paths, not just the batch — 80/96 confirmed both ways.
 
 The `ai_tutor` feature has NO `*ThemeScope` wrapper (§0.0.A/R2, measured —
 unlike `gamification`'s `GamificationThemeScope`), and none was introduced
-(§3 tiltás, unchanged). Two screens hit the SAME theme-extension-availability
-constraint the E15-R08/R07/R06/R04 precedents already measured, but with
-**different resolutions each time** because each screen's OWN untouchable
-pinned test differs:
+(§3 tiltás, unchanged). All 5 screens' own pinned tests are now wired with
+`theme: SsLightTheme.data()` — including `TutorHomeScreen`'s
+(`tutor_home_screen_test.dart`, fixed in the javító kör, §0.0.B/R10 — its
+first migration pass left this test's bare `MaterialApp.router` unthemed,
+which crashed 2 cells once the screen's own components started reading a
+theme extension) — so every screen can use the full theme-extension `Ss*`
+catalog, not just the extension-free primitives:
 
-- **`TutorHomeScreen` stays fully extension-free.** Its own pinned widget
-  test (`tutor_home_screen_test.dart`) renders it through the REAL app router
-  (`MaterialApp.router` with no `theme:`) and is NOT on this round's
-  `allowed_paths` — unfixable. Every `Ss*` component that reads
-  `Theme.of(context).extension<SsColorScheme>()!` (`SsButton`, `SsEmptyState`,
-  `SsFailureState`, `SsModelStatusCard`, `SsProvenanceBadge`, `SsSkeleton`,
-  `SsMetricCard`, `SsContentCard`, `SsInsightCard`, `SsStatusBadge` — all
-  measured) would crash there, so the screen uses only the extension-free
-  primitives (`SsCard`, `SsSpacing`) and keeps its icons and status-card
-  content on plain `Theme` tokens, exactly as the file's own (E13-R29) doc
-  comment already explained. Icons stay raw `Icon(IconData)` for a SECOND,
-  independent reason: `SsIcon`'s catalog (`play`/`pause`/`settings`/`close`/
-  `check`/`info` + 14 guitar glyphs, measured in `ss_icons.dart`) does not
-  cover `smartphone_outlined`/`cloud_outlined`/`chat_bubble_outline`/
-  `arrow_back`/`stop_circle_outlined`/`download_outlined`/
-  `delete_forever_outlined`/`remove_circle_outline`/`add` — an unmapped name
-  resolves to `SsIcon`'s visible "missing glyph" fallback mark, which would
-  be a real regression, not a safe substitution. This applies to icons on
-  ALL 5 screens, not just the Home screen.
-- **The other 4 screens' own pinned tests ARE on `allowed_paths`** (unlike
-  the E15-R08 batch, where `AchievementDetailScreen`/`LevelDetailScreen`
-  needed a `Builder`-based inner-context fix to read the extension from
-  BELOW their `GamificationThemeScope`), so the round wired
-  `theme: SsLightTheme.data()` directly into the bare `MaterialApp`s in the
-  6 test files this needed (§0.0.A/R3 — no `Builder` workaround required,
-  since `ai_tutor` has no per-screen theme wrapper to sit above/below):
+- **`TutorHomeScreen` uses the theme-extension `Ss*` components.**
+  `SsModelStatusCard` (which renders `SsProvenanceBadge` internally) replaces
+  the screen-local `_ModelStatusCard`/`_ModeChip`, and `SsButton` replaces
+  the `FilledButton.icon` CTA. **Correction (§0.0.B/R11 — the first
+  migration pass's claim was measured FALSE):** `SsCard`/`SsSurface` are
+  **NOT** extension-free — both resolve
+  `Theme.of(context).extension<SsColorScheme>()!`/`<SsThemeBehavior>()!` via
+  `SsElevation.resolve` (measured: `ss_card.dart:15-17` →
+  `ss_surface.dart:42` → `ss_elevation.dart:14-15`, two `!`-reads). Only
+  `SsSection` reads no extension. Icons stay raw `Icon(IconData)` for an
+  UNCHANGED, independent reason: `SsIcon`'s catalog (`play`/`pause`/
+  `settings`/`close`/`check`/`info` + 14 guitar glyphs, measured in
+  `ss_icons.dart`) does not cover `smartphone_outlined`/`cloud_outlined`/
+  `chat_bubble_outline`/`arrow_back`/`stop_circle_outlined`/
+  `download_outlined`/`delete_forever_outlined`/`remove_circle_outline`/`add`
+  — an unmapped name resolves to `SsIcon`'s visible "missing glyph" fallback
+  mark, which would be a real regression, not a safe substitution. This
+  applies to icons on ALL 5 screens.
+- **All 5 screens' own pinned tests are on `allowed_paths`**, so the round
+  wired `theme: SsLightTheme.data()` directly into the bare `MaterialApp`s in
+  the 7 test files this needed (§0.0.A/R3 + §0.0.B/R10 — no `Builder`
+  workaround required, since `ai_tutor` has no per-screen theme wrapper to
+  sit above/below): `tutor_home_screen_test.dart` (`MaterialApp.router`),
   `tutor_chat_screen_test.dart:196`, `tutor_data_screen_test.dart:247`,
   `tutor_privacy_screen_test.dart:146`, `tutor_profile_screen_test.dart:61`,
   `ai_mode_visibility_test.dart:125` and `:146`,
   `streaming_announcement_test.dart:119`. Every pinned expectation in those
-  6 files (widget types, keys, text, semantics labels) was left byte-for-byte
+  7 files (widget types, keys, text, semantics labels) was left byte-for-byte
   unchanged; only the `theme:` argument was added. `TutorChatScreen`'s
   AI-mode indicator now uses the real `SsProvenanceBadge` (local/cloud) with
   a fallback-message suffix; its empty-conversation prompt is the

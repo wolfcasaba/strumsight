@@ -21,6 +21,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/components/ai/ss_provenance_badge.dart';
+import 'package:strumsight/core/design_system/components/feedback/ss_skeleton.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/ai_tutor/application/controller/tutor_state.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_content_block.dart';
@@ -488,4 +490,73 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R15 — per-screen design-system type assertions, so
+  // §6.1's first row can go red on THIS screen too, not only on the data
+  // screen. A raw `CircularProgressIndicator` regression on the streaming
+  // indicator, or a raw badge Row instead of `SsProvenanceBadge`, must
+  // fail one of these two cells.
+  // -------------------------------------------------------------------
+  testWidgets(
+    'R18-A17: streaming indicator is the design-system SsSkeleton, not a raw spinner',
+    (tester) async {
+      final fake = _FakeController(
+        status: TutorTurnStatus.streaming,
+        responseText: 'Try tuning the low E string',
+      );
+      await _pump(tester, controller: fake);
+
+      expect(find.byType(SsSkeleton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'R18-A18: the AI-mode indicator is the design-system SsProvenanceBadge',
+    (tester) async {
+      await _pump(tester);
+
+      expect(find.byType(SsProvenanceBadge), findsOneWidget);
+    },
+  );
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R14 — committed textScaler 2.0 coverage (en + hu), on
+  // the phone viewport the golden lane uses (412x915). Pumps the
+  // fallback AI-mode + streaming state together: the longest-text path
+  // on this screen (fallback trailing message + streaming pill + a
+  // real message bubble).
+  // -------------------------------------------------------------------
+  for (final locale in const [Locale('en'), Locale('hu')]) {
+    testWidgets(
+      'R18-A19: textScaler 2.0, locale=${locale.languageCode} — no overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(412, 915);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final earlier = TutorMessage(
+          id: TutorMessageId('m-1'),
+          role: TutorMessageRole.tutor,
+          createdAt: DateTime.utc(2026, 8, 5),
+          sequence: 1,
+          deliveryState: TutorMessageDeliveryState.complete,
+          blocks: <TutorContentBlock>[
+            TutorTextBlock(text: 'Try tuning the low E string first.'),
+          ],
+        );
+        final fake = _FakeController(
+          initialMessages: [earlier],
+          status: TutorTurnStatus.fallback,
+          responseText: 'Try tuning the low E string',
+        );
+        await _pump(tester, controller: fake, locale: locale);
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

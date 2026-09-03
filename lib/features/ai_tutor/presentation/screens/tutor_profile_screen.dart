@@ -17,14 +17,20 @@
 /// would mean owning per-keystroke controller state this
 /// `ConsumerWidget` (stateless by design) doesn't have today, which is a
 /// behaviour change this visual-only round is not scoped to make.
+///
+/// The weekly-minutes validation error uses [SsValidationSummary] (javító
+/// kör #1, §0.0.B/R13) rather than a bare styled [Text] — the existing
+/// component already carries the danger-coloured icon + heading + field
+/// label, so reusing it costs nothing that the screen-local `TextStyle`
+/// version had to hand-roll.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/components/actions/ss_button.dart';
+import '../../../../core/design_system/components/inputs/ss_validation_summary.dart';
 import '../../../../core/design_system/components/surfaces/ss_section.dart';
-import '../../../../core/design_system/foundations/ss_colors.dart';
 import '../../../../core/design_system/foundations/ss_spacing.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/learning_goal.dart';
@@ -90,14 +96,15 @@ class TutorProfileScreen extends ConsumerWidget {
                       ),
                       if (weeklyErrorText != null) ...<Widget>[
                         const SizedBox(height: SsSpacing.space2),
-                        Text(
+                        SsValidationSummary(
                           key: const Key('tutorProfileWeeklyMinutesError'),
-                          weeklyErrorText,
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).extension<SsColorScheme>()!.danger,
-                          ),
+                          l10n: l10n,
+                          issues: <SsValidationIssue>[
+                            SsValidationIssue(
+                              fieldLabel: l10n.tutorProfileWeeklyMinutesLabel,
+                              message: weeklyErrorText,
+                            ),
+                          ],
                         ),
                       ],
                     ],

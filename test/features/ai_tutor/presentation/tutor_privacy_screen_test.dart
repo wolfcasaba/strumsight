@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/components/surfaces/ss_section.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
@@ -256,4 +257,35 @@ void main() {
     expect(find.byType(TutorPrivacyScreen), findsOneWidget);
     expect(find.text(l10nHu().tutorPrivacyTitle), findsOneWidget);
   });
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R15 — per-screen design-system type assertion.
+  // -------------------------------------------------------------------
+  testWidgets('R22-PC6: the scope block is the design-system SsSection', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(find.byType(SsSection), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R14 — committed textScaler 2.0 coverage (en + hu), on
+  // the phone viewport the golden lane uses (412x915).
+  // -------------------------------------------------------------------
+  for (final locale in const [Locale('en'), Locale('hu')]) {
+    testWidgets(
+      'R22-PC7: textScaler 2.0, locale=${locale.languageCode} — no overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(412, 915);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        await _pump(tester, locale: locale);
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

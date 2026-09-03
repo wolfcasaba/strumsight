@@ -5,13 +5,13 @@
 // `SsDarkTheme.data()` (E15-R09 §0.0.A/R4) — the app's ACTUAL runtime dark
 // theme (`lib/app/strumsight_app.dart`), not `AppTheme.dark()`: since the
 // E15-R09 design-system migration, `TutorChatScreen`'s AI-mode indicator and
-// empty state (and `PracticePlanPreviewScreen`, already migrated) read the
-// design-system theme extensions (`SsColorScheme`/`SsTypography`), which
-// `AppTheme.dark()` never carried (it only ever added `AppPalette`) — this
-// golden would have rendered a broken/fallback tree under the old theme.
-// `TutorHomeScreen` deliberately still resolves via plain [Theme] tokens
-// (see its own file doc comment) but renders identically under either theme
-// choice, so switching the shared `_pump` theme is safe for it too.
+// empty state, `TutorHomeScreen`'s model-status card and CTA (`SsModelStatusCard`/
+// `SsProvenanceBadge`/`SsButton`, wired in the javító kör, §0.0.B/R10), and
+// `PracticePlanPreviewScreen` (already migrated) all read the design-system
+// theme extensions (`SsColorScheme`/`SsTypography`), which `AppTheme.dark()`
+// never carried (it only ever added `AppPalette`) — this golden would render
+// a broken/crashing tree under the old theme for ALL THREE screens now, not
+// just Chat and the Debrief preview.
 //
 // Recorded on x86_64 (ADR 0426, §0.0/B7) via `tools/golden-x86.sh record` —
 // NOT `flutter test --update-goldens` on this (aarch64) box.

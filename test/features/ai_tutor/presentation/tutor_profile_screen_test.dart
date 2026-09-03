@@ -16,6 +16,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/components/actions/ss_button.dart';
+import 'package:strumsight/core/design_system/components/inputs/ss_validation_summary.dart';
+import 'package:strumsight/core/design_system/components/surfaces/ss_section.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/learning_goal.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_privacy_providers.dart';
@@ -103,6 +106,9 @@ void main() {
       find.byKey(const Key('tutorProfileWeeklyMinutesError')),
       findsOneWidget,
     );
+    // E15-R09 §0.0.B/R15 — the validation error is the design-system
+    // SsValidationSummary, not a bare styled Text.
+    expect(find.byType(SsValidationSummary), findsOneWidget);
   });
 
   testWidgets('R22-PF3: adding a goal appends it to the goal list', (
@@ -141,4 +147,54 @@ void main() {
       );
     },
   );
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R15 — per-screen design-system type assertions.
+  // -------------------------------------------------------------------
+  testWidgets(
+    'R22-PF6: the three sections are the design-system SsSection, and Add goal is SsButton',
+    (tester) async {
+      await _pump(tester);
+      expect(find.byType(SsSection), findsNWidgets(3));
+      expect(find.byType(SsButton), findsOneWidget);
+    },
+  );
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R14 — committed textScaler 2.0 coverage (en + hu), on
+  // the phone viewport the golden lane uses (412x915). Drives the
+  // weekly-minutes validation error AND adds a goal, so the
+  // `SsValidationSummary` and the goal-row `IconButton` both render.
+  // -------------------------------------------------------------------
+  for (final locale in const [Locale('en'), Locale('hu')]) {
+    testWidgets(
+      'R22-PF7: textScaler 2.0, locale=${locale.languageCode} — no overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(412, 915);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final container = await _pump(tester, locale: locale);
+        container
+            .read(tutorProfileControllerProvider.notifier)
+            .setWeeklyMinutes(100000000);
+        container
+            .read(tutorLearningGoalControllerProvider.notifier)
+            .addGoal(
+              LearningGoal(
+                id: 'g-stable-tempo',
+                statement: 'Stable tempo at 90 BPM',
+                category: LearningGoalCategory.increaseStableTempo,
+                priority: LearningGoalPriority.high,
+                status: LearningGoalStatus.active,
+              ),
+            );
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }
