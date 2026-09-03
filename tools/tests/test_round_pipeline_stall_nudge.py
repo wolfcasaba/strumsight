@@ -74,10 +74,16 @@ class RoundPipelineStallNudgeTest(unittest.TestCase):
             f"  list-panes) printf '%s\\n' '{FAKE_PANE_TTY}' ;;\n"
             "  send-keys)\n"
             "    session=$3\n"
-            '    printf \'%s\\n\' "$4" >> "$state/sent-keys"\n'
+            # A driver ADR 0498 D1 óta `--`-sal zárja le a kapcsolókat, hogy a
+            # kötőjellel kezdődő prompt se váljon tmux-opcióvá — a hasznos teher
+            # ilyenkor az $5. A stub ezt a valódi tmux szemantikája szerint oldja
+            # fel, nem rögzített argumentum-pozícióval.
+            "    payload=$4\n"
+            '    if [ "$payload" = "--" ]; then payload=${5:-}; fi\n'
+            '    printf \'%s\\n\' "$payload" >> "$state/sent-keys"\n'
             # Az INDÍTÓ parancs egyetlen sort ír a panelre, aztán a session
             # elnémul (a kívülről megszakított, üres prompton álló állapot).
-            '    case "$4" in\n'
+            '    case "$payload" in\n'
             "      FOLYTASD*)\n"
             f"        if [ '{revive_flag}' = '1' ]; then\n"
             "          printf '%s\\n' 'resumed after the nudge' >> \"$(cat \"$state/log-$session\")\"\n"
