@@ -23950,3 +23950,93 @@ felismerte a veszélyt.)
 cella `didExceedMaxLines == false`-t állít 412×915-ön, és külön `expect`-tel
 pinneli, hogy a CTA `FilledButton` marad, tehát egy jövőbeli `SsButton`-visszacsere
 azonnal pirosra vált.
+
+## L603 — Az előre megírt brief ADR-száma AVUL: a foglaló a hiteles forrás, nem a brief fejléce (E16-R01 pre-flight, 2026-09-03)
+
+**Mérés.** Az `E16-R01` briefje 2026-09-02-án készült, és `ADR 0490`-et jelölt
+előre („a szám FOGLALT, Chapter 16 batch-tartomány: `0490`–`0494`"). A kör
+2026-09-03-i pre-flightjában a `tools/round-slots.py reserve-adr --round E16-R01`
+a **`0496`**-ot adta vissza, mert a `0490` időközben MÁS körnek kelt el és
+merge-elődött: `docs/adr/0490-hotfix-path-gates-incident-binding-and-regression-obligation.md`
+(a `0491` és `0494` szintén foglalt). Ha az orchestrátor a brief fejlécét
+követi, két különböző döntés kerül ugyanarra a számra — pontosan az a
+hibaosztály, amit a `tools/tests/test_adr_numbering.py` és az ADR 0087 §1.0.1
+`O_CREAT|O_EXCL` markere kizárni hivatott.
+
+**Következmény.** Az ADR `0496` néven született meg, és mind a brief fejléce,
+mind a §0.0.A/R1 revízió kimondja az eltérést és az okát. A
+`docs/execution/pipeline-queue.tsv` `E16-R01` sorának ADR-oszlopa (`0490`) a
+driver tulajdona, ezért a kör nem írta át — a hiteles hivatkozás a brief és az
+ADR-fájl.
+
+**Általános szabály.** Egy előre megírt brief MINDEN mért állítása avulhat, de
+az ADR-szám a legveszélyesebb: az ütközés nem a saját körön bukik el, hanem a
+két diff ÖSSZEGÉN. Az `ls docs/adr | tail` és az előre írt fejléc egyaránt
+tiltott sorszám-forrás; egyedül a foglaló mérése az.
+
+**Őrteszt:** `tools/tests/test_adr_numbering.py` (a duplikált sorszámot fogja;
+a foglaló `O_CREAT|O_EXCL` markere a versenyt dönti el).
+
+## L604 — Riverpod-providert nem tehetsz a feature FRAMEWORK-MENTES rétegébe: a kör célzott kapuja zölden ment azon a fán, amit a teljes CI pirosra vitt (E16-R01, 2026-09-03)
+
+**Mérés.** Az `E16-R01` a gamification kompozíciós rétegét — a brief szó
+szerinti előírása szerint — a
+`lib/features/gamification/application/gamification_providers.dart` fájlba
+írta, `package:flutter_riverpod` importtal. A kör §7 gate-je (`round-gate.sh`
+a `gate_tests` hat útvonalával) **zöld** volt, a `b81d0493` Full Gate viszont
+PIROS (run `33754452934`), egyetlen cellán:
+
+```
+❌ test/core/architecture_dependency_test.dart:
+   „gamification application stays framework-free and presentation keeps
+   storage in data (E08-R08)" — enforces the layer-specific dependency
+   boundaries (failed)
+```
+
+A szabály (`test/core/architecture_dependency_test.dart:124-155`) MINDEN
+`.dart` fájlt megvizsgál a `lib/features/gamification/application/` alatt, és
+tiltja bennük a framework-importot. A brief `gate_tests` listáján ez az őr NEM
+szerepelt, tehát a kör mércéje szerkezetileg nem tudott róla.
+
+**Javítás.** (1) A fájl a repó bevett feature-provider helyére került:
+`lib/features/gamification/providers/gamification_providers.dart` — mérve:
+`lib/features/learn/providers/`, `lib/features/songs/providers/` ugyanígy
+tartja a Riverpod-providereket, és a `providers/` könyvtárra egyetlen
+architektúra-szabály sem vonatkozik. (2) Az
+`architecture_dependency_test.dart` felkerült a kör `gate_tests` listájára ÉS a
+§7 gate-parancsba. A javítás után a célzott kapu 12/12 zöld, a Full Gate
+(`00d48edc`, run `33757358322`) és a Router CI (`33757359266`) is zöld.
+
+**Általános szabály (az L593 barrel-hézag testvére).** Ha egy kör ÚJ FÁJLT tesz
+egy feature-be, a brief-írásnál ki kell mérni, milyen RÉTEG-szabály vonatkozik
+a célkönyvtárra (`grep -n "<feature>/<dir>" test/core/architecture_dependency_test.dart`),
+és a vonatkozó őrt fel kell venni a `gate_tests`-be. Enélkül a kör zöld kapuja
+nem mércéje a kör diffjének — csak annak, amit véletlenül megmért.
+
+**Őrteszt:** `test/core/architecture_dependency_test.dart::gamification application stays framework-free and presentation keeps storage in data (E08-R08)` (mostantól a kör `gate_tests` listáján is).
+
+## L605 — A `gate_shape` heurisztika a gate-script OLVASÁSÁRA is tüzel: a `VIOLATION` nem bizonyíték csonkított gate-futásra (E16-R01 fix1, 2026-09-03)
+
+**Mérés.** Az `E16-R01` első javító köre `gate_shape=VIOLATION` jelzéssel zárt.
+Az őr (`tools/mm-round.sh:381-384`, azonos a `tools/codex-round.sh:332-335`-tel)
+az EGÉSZ implementer-logban keresi a
+`round-gate\.sh[^\n]*(\| *(tail|head)|&&)` mintát. A tényleges találat:
+
+```
+sed -n '1,40p' /home/ubuntu/ss-sonnet-impl-e16-r01/tools/round-gate.sh | head -60
+```
+
+— vagyis az implementer ELOLVASTA a gate scriptjét, nem csonkított egy
+gate-FUTÁST. A valódi hívás a teljes, csővezeték nélküli §7 sor volt
+(`grep -oE "tools/round-gate\.sh test/…" /tmp/mm-e16-r01-fix1.log`).
+
+**Következmény.** A `VIOLATION` jelzésre az orchestrátornak KI KELL MÉRNIE a
+tényleges illeszkedést, mielőtt halt-ot vagy javító kört rendel: a minta nem
+különbözteti meg a `round-gate.sh` mint ARGUMENTUM (olvasás, `cat`/`sed`/`grep`)
+és mint PARANCS (futtatás) esetét. Fordítva viszont a heurisztika értékes
+marad — a hamis pozitív olcsó, a hamis negatív drága lenne.
+
+**Őrteszt:** nincs — a javítás a `tools/**`-ot érintené, ami a kör-orchestrátor
+számára tilos zóna (ADR 0087 §4); az ADR 0112 önjavító sávjának tétele. A
+mérés reprodukálható:
+`grep -oE ".{60}round-gate\.sh \| head -60" /tmp/mm-e16-r01-fix1.log`.

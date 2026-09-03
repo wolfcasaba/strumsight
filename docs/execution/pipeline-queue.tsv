@@ -610,7 +610,7 @@ E15-R13	docs/rounds/e15-r13-ui-closure-and-release-evidence.md	sonnet-impl	nincs
 # Implementer `sonnet-impl`, orchestrátor Opus 5 — a router-CI carve-out ezért
 # az `E16-` előtagra is szól.
 #
-E16-R01	docs/rounds/e16-r01-gamification-composition-layer.md	sonnet-impl	0490	pending
+E16-R01	docs/rounds/e16-r01-gamification-composition-layer.md	sonnet-impl	0490	done
 E16-R02	docs/rounds/e16-r02-progress-projection-and-router-placeholders.md	sonnet-impl	0491	pending
 E16-R03	docs/rounds/e16-r03-capability-rollout-decisions.md	sonnet-impl	0492	pending
 E16-R04	docs/rounds/e16-r04-live-backend-end-to-end.md	sonnet-impl	0493	pending
