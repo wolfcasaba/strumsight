@@ -33,12 +33,14 @@ import '../../features/practice/presentation/screens/practice_hub_screen.dart';
 import '../../features/practice/presentation/screens/practice_result_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
+import '../../features/practice/public.dart' show practiceCatalogProvider;
 import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
 import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
 import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
 import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
 import '../../features/profile_hub/screens/profile_hub_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
+import '../../features/progress_v2/public.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/today/screens/today_hub_screen.dart';
 import '../../features/songs/screens/setlist_list_screen.dart';
@@ -144,6 +146,28 @@ String _rewardTitleFor(RewardKind kind, AppLocalizations l10n) =>
       RewardKind.levelUp => l10n.gamificationHubSkillSectionTitle,
       RewardKind.dailyReward => l10n.practiceResultRewardTitle,
     };
+
+/// E16-R02 (ADR 0500 §5.8) — [ProgressDashboardScreen.onOpenSkillDetail]
+/// hands back a milestone id, but the skill-detail route's `:skillId`
+/// segment is a `MasterySkill.code` (a milestone's *skill*, not its id) —
+/// this resolves one to the other. Returns `null` for an id the catalog no
+/// longer carries, which the caller must not navigate on.
+MasteryMilestone? _masteryMilestoneById(String milestoneId) {
+  for (final milestone in masteryMilestoneCatalogV1) {
+    if (milestone.id == milestoneId) return milestone;
+  }
+  return null;
+}
+
+/// E16-R02 (ADR 0500 §5.8) — whether [skillId] (a `MasterySkill.code`) has a
+/// v1 milestone at all. `tempoStability` has none (§5.4); an unknown string
+/// has none either. Both cases redirect to [AppRoutes.profileProgress]
+/// rather than 404ing.
+bool _hasMasteryMilestoneForSkill(String? skillId) =>
+    skillId != null &&
+    masteryMilestoneCatalogV1.any(
+      (milestone) => milestone.skill.code == skillId,
+    );
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
@@ -316,6 +340,38 @@ final routerProvider = Provider<GoRouter>((ref) {
             state.extra is LibraryItem ? null : AppRoutes.profileLibrary,
         builder: (_, state) =>
             LibraryItemDetailScreen(item: state.extra as LibraryItem),
+      ),
+      // Progress V2 skill detail (E16-R02, SDD UI-50, ADR 0500 §5.8). Not a
+      // shell destination — pushed on top, like [profileLibrarySession]
+      // above. An unknown/unmapped `:skillId` redirects to the overview
+      // rather than 404ing (§5.8) — `tempoStability` has no v1 milestone
+      // (§5.4), so it redirects too.
+      GoRoute(
+        path: AppRoutes.profileProgressSkill,
+        redirect: (_, state) =>
+            _hasMasteryMilestoneForSkill(state.pathParameters['skillId'])
+            ? null
+            : AppRoutes.profileProgress,
+        builder: (_, state) => Consumer(
+          builder: (context, ref, _) {
+            final l10n = AppLocalizations.of(context);
+            final projection = buildSkillDetailProjection(
+              skillCode: state.pathParameters['skillId']!,
+              milestoneCatalog: masteryMilestoneCatalogV1,
+              practiceHistory: ref.watch(progressPracticeHistoryProvider),
+              practiceCatalog: ref.watch(practiceCatalogProvider),
+              now: ref.watch(progressNowProvider),
+              localize: (key) => progressV2LocalizedText(l10n, key),
+            )!;
+            return SkillDetailScreen(
+              projection: projection,
+              onOpenEvidence: (route, sessionId) =>
+                  context.push(route.replaceFirst(':sessionId', sessionId)),
+              onStartRecommendedPractice: () =>
+                  context.push(AppRoutes.practiceHub),
+            );
+          },
+        ),
       ),
       if (practiceEnabled) ...[
         // E13-R08 (D6) — excluded when the adaptive shell owns `/practice`
@@ -540,9 +596,42 @@ final routerProvider = Provider<GoRouter>((ref) {
                   path: AppRoutes.profileSettings,
                   builder: (_, _) => const SettingsScreen(),
                 ),
+                // E16-R02 (ADR 0500) — replaces the legacy `ProgressScreen`
+                // adapter with the real Progress V2 dashboard, built from
+                // the measured mastery catalog + practice history (§5.1).
+                // The legacy `ProgressScreen` itself stays wired, unchanged,
+                // at the bare `/progress` route above (A5).
                 GoRoute(
                   path: AppRoutes.profileProgress,
-                  builder: (_, _) => const ProgressScreen(),
+                  builder: (_, _) => Consumer(
+                    builder: (context, ref, _) {
+                      final l10n = AppLocalizations.of(context);
+                      final projection = buildProgressOverviewProjection(
+                        milestoneCatalog: masteryMilestoneCatalogV1,
+                        practiceHistory: ref.watch(
+                          progressPracticeHistoryProvider,
+                        ),
+                        practiceCatalog: ref.watch(practiceCatalogProvider),
+                        now: ref.watch(progressNowProvider),
+                        isOffline: progressV2IsOffline,
+                        localize: (key) => progressV2LocalizedText(l10n, key),
+                      );
+                      return ProgressDashboardScreen(
+                        projection: projection,
+                        onOpenSkillDetail: (milestoneId) {
+                          final milestone = _masteryMilestoneById(milestoneId);
+                          if (milestone == null) return;
+                          context.push(
+                            AppRoutes.profileProgressSkill.replaceFirst(
+                              ':skillId',
+                              milestone.skill.code,
+                            ),
+                          );
+                        },
+                        onGetStarted: () => context.push(AppRoutes.practiceHub),
+                      );
+                    },
+                  ),
                 ),
                 GoRoute(
                   path: AppRoutes.profileRewards,

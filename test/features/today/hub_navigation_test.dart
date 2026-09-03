@@ -14,7 +14,7 @@ import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
-import 'package:strumsight/features/progress/screens/progress_screen.dart';
+import 'package:strumsight/features/progress_v2/public.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/streak/screens/streak_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
@@ -251,7 +251,9 @@ void main() {
       router.go(AppRoutes.progress);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byType(ProgressScreen), findsOneWidget);
+      // E16-R02 (ADR 0500) — the redirect now lands on the real Progress V2
+      // dashboard, not the legacy ProgressScreen adapter.
+      expect(find.byType(ProgressDashboardScreen), findsOneWidget);
     });
 
     testWidgets('legacy /streak still redirects to StreakScreen', (

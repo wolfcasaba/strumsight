@@ -32,7 +32,7 @@ import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
 import 'package:strumsight/features/profile_hub/screens/profile_hub_screen.dart';
-import 'package:strumsight/features/progress/screens/progress_screen.dart';
+import 'package:strumsight/features/progress_v2/public.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/songs/screens/setlist_list_screen.dart';
 import 'package:strumsight/features/songs/screens/song_list_screen.dart';
@@ -243,7 +243,9 @@ void main() {
         // stays wired at the legacy `/library` route below (untouched).
         AppRoutes.profileLibrary: UnifiedLibraryScreen,
         AppRoutes.profileSettings: SettingsScreen,
-        AppRoutes.profileProgress: ProgressScreen,
+        // E16-R02 (ADR 0500) — the legacy ProgressScreen adapter is replaced
+        // by the real Progress V2 dashboard here.
+        AppRoutes.profileProgress: ProgressDashboardScreen,
         AppRoutes.profileRewards: StreakScreen,
       };
 

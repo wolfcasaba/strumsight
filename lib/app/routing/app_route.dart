@@ -113,6 +113,14 @@ abstract final class AppRoutes {
       '/profile/library/session/:sessionId';
   static const String profileSettings = '/profile/settings';
   static const String profileProgress = '/profile/progress';
+
+  // Progress V2 skill detail (E16-R02, SDD UI-50, ADR 0500 §5.8). `:skillId`
+  // is a `MasterySkill.code` (`chordTransition`/`rhythmAccuracy`/
+  // `strumConsistency`/`tempoStability`); an unknown or unmapped code
+  // redirects to [profileProgress] rather than 404ing. Not a shell
+  // destination — pushed on top, like [profileLibrarySession].
+  static const String profileProgressSkill =
+      '/profile/progress/skills/:skillId';
   static const String profileRewards = '/profile/rewards';
 
   /// Top-level destinations in the same order as the shell navigation bar.
