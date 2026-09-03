@@ -375,7 +375,22 @@ A §0.0.A/R8 szerint a burkoló eltávolítható 5 képernyőről (mert „az ap
 - A widget-tesztek túlnyomó többsége (`achievements_screen_test.dart`, `quests_screen_test.dart`, `streak_detail_screen_test.dart`, és az új `achievement_detail_screen_test.dart`/`level_detail_screen_test.dart`/`reward_inbox_screen_test.dart`) burkoló NÉLKÜLI `MaterialApp()`-ot pumpál — ez SEM hordozza őket.
 - A HUB képernyő (Ch13-R32, már migrált) maga is bizonyíték: TELJESEN design-rendszerre migrált, és MÉGIS megtartja a saját `GamificationThemeScope`-ját.
 
-Mérve: a burkoló eltávolítása bármelyik migrált képernyőn `Theme.of(context).extension<SsColorScheme>()!`/`<SsTypography>()!` null-check összeomlást okozott (kipróbálva `achievement_detail_screen.dart`-on és `level_detail_screen.dart`-on — mindkettőt Builder-lel kellett javítani, lásd 10.6). A döntés: **egyik képernyőről sem távolítottam el a burkolót**; az `AchievementDetailScreen` most kapta meg ELŐSZÖR (korábban nem volt neki, de most SS-komponenseket használ). Ez a brief R8 szó szerinti szövegétől eltér, de annak SAJÁT feltételes kikötését ("ha a képernyő már az app témájából old fel") követi — a feltétel mérve HAMIS.
+Mérve: a burkoló eltávolítása bármelyik migrált képernyőn `Theme.of(context).extension<SsColorScheme>()!`/`<SsTypography>()!` null-check összeomlást okozott (kipróbálva `achievement_detail_screen.dart`-on és `level_detail_screen.dart`-on — mindkettőt Builder-lel kellett javítani, lásd 10.6). A döntés: **egyik képernyőről sem távolítottam el a burkolót**; az `AchievementDetailScreen` most kapta meg ELŐSZÖR (korábban nem volt neki, de most SS-komponenseket használ). Ez a brief R8 szó szerinti szövegétől eltér, de annak SAJÁT feltételes kikötését ("ha a képernyő már az app témájából old fel") követi.
+
+**Javító kör (E15-R08 review N1) — a feltétel pontosítása.** A fenti bekezdés
+záró mondata ("a feltétel mérve HAMIS") FORDÍTVA mondta ki a premisszát.
+Ténylegesen újramérve: a FUTÁSIDEJŰ app a kiterjesztéseket `SsLightTheme.data()`/
+`SsDarkTheme.data()`-n át KAPJA (`lib/app/strumsight_app.dart:33-34` ezeket
+telepíti) — vagyis a brief R8 feltétele ("ha a képernyő már az app témájából
+old fel") a valódi appban IGAZ, nem hamis. Ami valóban HAMIS-nak mérhető, az a
+FENTEBB felsorolt HARNESSEK állapota: a golden teszt `AppTheme.dark()`-ot
+pumpál (ami CSAK `[palette]`-et ad hozzá `extensions`-ként), a widget-tesztek
+túlnyomó többsége burkoló nélküli csupasz `MaterialApp()`-ot — egyik sem
+hordozza a kiterjesztéseket. A burkoló megtartása emiatt továbbra is
+INDOKOLT (e harnessek zölden tartásához kell), de az indoklás helyesen: „a
+teszt-harnessek nem hordozzák a tokeneket", NEM „az app témája nem hordozza
+őket" — ez utóbbi állítás egy jövőbeli kör számára tévesen sugallná, hogy a
+futásidejű app-nak is szüksége van a burkolóra a tokenek feloldásához.
 
 ### 10.1 Képernyőnkénti komponens-csere és állapot-elhelyezés
 
