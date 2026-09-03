@@ -1,7 +1,19 @@
 # Screen migration status
 
 **E15-R11 update (2026-09-03) — Vision, onboarding and the last community
-screen migrated, measured 85/96 (88.542%).** `VisionSetupScreen`,
+screen migrated; the tree measures 91/96 (94.792%).** The round's own five
+screens took the ratio from 80/96 to 85/96 (88.542%) on the branch; E15-R10
+landed its own six screens on `main` in parallel, so the merged tree measures
+**91/96 (94.792%)** — re-measured at merge time over every
+`lib/features/**/*_screen.dart`, not derived by adding the two rounds up:
+
+```bash
+total=$(find lib/features -name '*_screen.dart' | wc -l)
+mig=$(for f in $(find lib/features -name '*_screen.dart'); do grep -q design_system "$f" && echo M; done | wc -l)
+echo "MIGRATED=$mig TOTAL=$total"   # → MIGRATED=91 TOTAL=96 → 94.792%
+```
+
+`VisionSetupScreen`,
 `VisionSessionScreen`, `GuitarCalibrationScreen`, `OnboardingScreen`,
 `FollowersScreen` now import `core/design_system`. Measurement command (the
 round's own `for f in ...; do grep -q design_system "$f" ...` loop over the
@@ -30,6 +42,145 @@ system's `SsColorScheme`/`SsTypography` there. `VisionThemeScope` on
 scope). Golden files re-recorded via `tools/golden-x86.sh record` (ADR
 0426) for the 3 affected suites (`e13_r16`, `e13_r30`, `e13_r33` — 8 PNGs
 total, only the ones this round's screens appear in).
+**E15-R10 javító kör (1. javító menet, 2026-09-03)** — the review
+(`docs/reviews/e15-r10-review.md`) measured 1 BLOCKER + 4 MAJOR + 6 MINOR + 1
+NOTE against the round below; all fixed, full evidence per lelet in the round
+brief's §10.8 (`docs/rounds/e15-r10-analysis-migration.md`). The ratio stays
+**86/96 (89.583%)** — no screen left the migrated set. Two component-map
+entries below changed shape as part of the fix: `AnalyzeScreen`'s **idle**
+phase no longer uses `SsEmptyState` (its own required action would only ever
+duplicate the bottom control bar's real "Record" CTA — B1/M4 defect class);
+`AnalysisHomeScreen`'s two cards no longer use `SsContentCard` (its fixed
+`maxLines`+`ellipsis` silently truncated real user content at `textScaler
+2.0` — M1), replaced by a screen-local `_UntruncatedContentCard` built on the
+same `SsSurface`/`SsCardActionRegion` primitives, without the line limit.
+
+**E15-R10 update (2026-09-03) — Audio Analysis + Analyze 6 screens migrated,
+measured 86/96 (89.583%).** `AnalysisHomeScreen`, `AnalysisRecordingScreen`,
+`AnalysisProcessingScreen`, `AnalysisMetricDetailScreen`,
+`AnalysisExportScreen`, `AnalyzeScreen` now import `core/design_system`.
+Measurement command:
+`for f in <the 6 batch paths>; do grep -q design_system "$f" && echo MIGRATED
+|| echo legacy; done` — all 6 report `MIGRATED` (§7 of the round brief).
+
+The two `audio_analysis`/`analyze` features have NO `*ThemeScope` wrapper
+(§0.0.A/R2, measured — `grep -rn "ThemeScope" lib/features/audio_analysis/
+lib/features/analyze/` → 0 hits), so this constraint was a no-op for the
+batch; the §3 tiltás (no NEW `*ThemeScope`) is unchanged. Component mapping,
+per the batch's mért component-name correction (§0.0.A/R3 — `SsErrorState`/
+`SsListTile`/`SsMetricTile` do not exist in the design system):
+
+- **Empty states → `SsEmptyState`.** `AnalysisHomeScreen`'s empty recent-list
+  (a real action existed: `onStartRecording`, reused — not fabricated;
+  `title`/`message` reuse the existing `analysisHomeRecentSectionTitle`/
+  `analysisHomeRecentEmpty` keys, so the standalone section heading now only
+  renders in the non-empty branch — no duplicate heading), `AnalyzeScreen`'s
+  micDenied phase (a REAL existing action, `openAppSettings`, that the
+  pre-migration bespoke Column could not model — `SsEmptyState` fits it
+  natively; title fixed in the javító kör to
+  `analysisRecordingPermissionDeniedTitle`, so it no longer repeats the
+  screen header — see below), and `AnalysisMetricDetailScreen`'s newly-added
+  empty case (no metrics AND no insights — previously rendered a blank
+  `ListView`, action = close/back via `commonClose` + `Navigator.maybePop`;
+  title/message fixed in the javító kör to
+  `analysisOverviewUnavailable`/`analysisOverviewNotApplicable`, replacing a
+  key pair that misreported an existing document as missing — see the
+  javító-kör note above). `AnalyzeScreen`'s **idle** phase was moved OUT of
+  this bucket in the javító kör — see the exception-class bullet below.
+  **No new ARB key was added this round** (§0.0.A/R7 read the brief's §3
+  "new key allowed" permission at face value; measured mid-round that
+  `lib/l10n/app_en.arb`/`app_hu.arb` — the two files the brief's
+  `allowed_paths` names — are a GENERATED aggregate (ADR 0307 §4,
+  `tool/gen_l10n_segments.dart`) assembled from `lib/l10n/base/` +
+  `lib/l10n/features/*` fragments, neither of which is on `allowed_paths`;
+  a hand-edit to the aggregate is silently overwritten by the gate's own
+  `l10n` step. Every new-string need was satisfiable by reusing an existing
+  key instead, so no STOP was needed — but a future round adding a GENUINE
+  new string here must get the fragment file on its `allowed_paths`, not the
+  aggregate).
+- **Real failures → `SsFailureState`.** `AnalysisRecordingScreen`'s
+  `_RecordingStage.error` branch and `AnalysisProcessingScreen`'s
+  `AnalysisInputError`/`AnalysisError` branches carry a real `AppFailure`, so
+  `SsFailurePresentation.from(l10n, failure)` renders the code-mapped
+  title/message/action instead of the raw `failure.code` string that used to
+  leak into the UI on the processing screen.
+- **Exception class — no real action/failure available (§0.0.A/R12).**
+  `AnalysisRecordingScreen._PermissionDeniedBody` (always shows "retry",
+  independent of `retryable` — forcing `SsFailureState`'s code-mapped actions
+  here would silently swap the always-available retry for "open settings" on
+  a permanently-denied permission, a BEHAVIOUR change, not a visual one),
+  `AnalysisProcessingScreen`'s `AnalysisPermissionDenied` branch (no
+  `AppFailure` object exists on that state — fabricating one would invent an
+  unmeasured code), `AnalyzeScreen`'s `micError` phase (busy-mic copy has
+  no action of its own by design — Retry lives in the separate big control
+  below, parity with Live r13/Tuner r68; forcing an action here would
+  duplicate it), `AnalyzeSkeleton` (loading) and `analyzeNoChords` (the
+  empty-result `done` branch). **The javító kör added a fifth member:**
+  `AnalyzeScreen`'s **idle** phase — the bottom control bar already offers
+  the one real next step (start recording), so `SsEmptyState`'s required
+  second action could only ever duplicate it (review B1/M4 defect class);
+  moved out of the `SsEmptyState` bucket above into this one. All members
+  stay token-styled local widgets (`SsColorScheme`/`SsTypography`/
+  `SsSpacing`), not raw `Theme.of(context)`.
+- **Loading → the existing `LinearProgressIndicator`, token-coloured.**
+  `AnalysisProcessingScreen`'s indeterminate/phase bar is pinned BY TYPE in
+  `processing_progress_test.dart` (`tester.widget<LinearProgressIndicator>`)
+  — no design-system component reimplements a progress bar, so this one
+  keeps its Material type and gains `color: colors.brand` /
+  `backgroundColor: colors.surfaceSunken`.
+- **`AnalysisMetricDetailScreen` is a SHALLOW migration (§0.0.A/R9, mért
+  scope-korlát).** Its full visual body is delegated to two shared widgets —
+  `MetricCard` (`widgets/metric_card.dart`) and `InsightCard`
+  (`widgets/insight_card.dart`) — that are NOT on this round's
+  `allowed_paths` (other screens use them too). Only the screen's own layer
+  migrated: scaffold, `ListView` padding/spacing tokens, the new empty state,
+  and the "More insights" section header typography. The two cards' own
+  design-system migration is a follow-up, tracked here.
+- **`AnalyzeScreen`'s `AppColors` references became `SsColorScheme` tokens**
+  (the `_BigButton` class was deleted — every call site now wraps `SsButton`
+  in a `SizedBox(width: double.infinity, height: 52, ...)`, matching the
+  `SsContentCard`/`analysis_export_screen.dart` full-width-CTA precedent).
+  The "Save"/"New recording" pair in the `done` phase became
+  `SsButtonVariant.secondary`/`.primary` respectively; the two icon-only
+  share/practice `IconButton.filledTonal`s were left as Material stock
+  widgets (out of scope — they carry no `AppColors`/legacy-token reference,
+  and `SsIconButton` requires a NAMED icon-catalog entry that `ios_share`/
+  `school_outlined` do not have).
+
+Test-harness theme wiring (§0.0.A/R4 — 6 harnesses were pumping a themeless
+`MaterialApp`, which the migrated components' `Theme.of(context)
+.extension<...>()!` reads would null-check-crash under): `analyze_cleanup_
+test.dart`, `processing_progress_test.dart`, `recording_state_test.dart`,
+`mic_error_parity_test.dart`, `analysis_overview_screen_test.dart` (both its
+`_harness` and the inline empty-state `MaterialApp`), and
+`analysis_export_screen_test.dart` all now pass `theme: SsLightTheme.data()`.
+**A seventh spot the brief did not name:** `analysis_overview_screen_test.
+dart`'s `_routedHarness` (a THIRD `MaterialApp`-builder in that file, used by
+the pre-existing "maximum-policy" test) was ALSO themeless — the gate's first
+full run caught it as a real `AnalysisMetricDetailScreen` null-check crash on
+a PINNED cell, fixed the same way. Every pre-existing pinned cell (keys,
+types, texts) is byte-for-byte unchanged; new cells only ADD coverage (A2
+`find.byType(SsEmptyState|SsFailureState)` pins, A3 textScaler-2.0 en+hu
+no-overflow cells on all 6 screens — one of which, `AnalyzeScreen`'s idle
+state, surfaced a REAL overflow this round fixed with a `SingleChildScrollView`
+wrap, since `SsEmptyState` only centers and does not itself reserve scroll
+room on a short viewport).
+
+Golden re-record (§0.0.A/R5): both `test/ui/goldens/e13_r26_screens_golden_
+test.dart` and `e13_r27_screens_golden_test.dart` switched their shared
+`_pump` theme from `AppTheme.dark()` to `SsDarkTheme.data()` (the app's
+actual runtime dark theme, `strumsight_app.dart:34` — ADR 0466) and all 14
+`e13_r26_*`/`e13_r27_*` PNGs were re-recorded via `tools/golden-x86.sh record
+test/ui/goldens/e13_r26_screens_golden_test.dart test/ui/goldens/
+e13_r27_screens_golden_test.dart` (exit 0, all 14 cells green). Only the 6
+`e13_r26_*` PNGs (the 3 batch screens this round touches, ×2 scales) changed
+bytes; all 8 `e13_r27_*` PNGs are byte-identical — `AppTheme.dark()` and
+`SsDarkTheme.data()` share the same base `ColorScheme`/`textTheme` (ADR
+0466), so a screen that reads no `SsColorScheme`/`SsTypography` extension
+(the three already-migrated `e13_r27` screens) or whose migrated code path
+isn't exercised by the golden's fixture (`AnalysisMetricDetailScreen`'s
+empty-state branch, given the fixture always supplies a non-empty metric
+list) renders pixel-identically either way.
 
 **E15-R09 update (2026-09-03) — AI Tutor 5 screens migrated, measured
 80/96 (83.333%).** `TutorHomeScreen`, `TutorChatScreen`, `TutorProfileScreen`,
@@ -376,8 +527,12 @@ design-system component, only that the screen's own migration round ran.
 
 ## Measured total
 
-**85 of 96 production screens migrated (88.542%)** as of E15-R11, up from
-80/96 (83.333%) after E15-R09, 75/96 (78.125%) after E15-R08, 69/96
+**91 of 96 production screens migrated (94.792%)** as of E15-R11, re-measured
+on the merged tree (E15-R11's five screens and E15-R10's six landed within the
+same hour; the figure is a fresh count over every
+`lib/features/**/*_screen.dart`, not a sum of the two rounds). Up from
+86/96 (89.583%) after E15-R10, 80/96 (83.333%) after E15-R09, 75/96
+(78.125%) after E15-R08, 69/96
 (71.875%) after E15-R07, 63/96 (65.625%) after E15-R06, 60/96 (62.5%) after
 E15-R05, 51/96 (53.1%) after E15-R04, 43/96 (44.8%) before E15-R04, and
 0/60 at the E08-R15 baseline (the file count grew from 60 to 96 as Epics
@@ -392,13 +547,13 @@ Offline AI, Share — most of which shipped already migrated).
 | Component and screen migration (E13-R16…R35) | Design-system component tokens (`SsColorScheme`/`SsTypography` theme extensions, `Ss*` components) | A screen migrates only in its assigned round; all unassigned screens remain on the legacy theme (`AppTheme` / `AppColors` / `AppPalette`). |
 | Screens needing design-system extensions without `AppTheme` carrying them | **MEASURED OBSOLETE as of E15-R01.** A local `*ThemeScope` — the **nine** wrappers on the tree are `ProgressThemeScope` (progress_v2), `AuthThemeScope` (auth), `SettingsThemeScope` (settings), `LibraryThemeScope` (library_v2), `ShareThemeScope` (share), `GamificationThemeScope` (gamification), `CommunityThemeScope` (community), `OfflineAiThemeScope` (offline_ai), `VisionThemeScope` (vision) | Wrapped the screen so its `Ss*` cards could resolve `SsColorScheme`/`SsTypography` when those extensions were NOT yet on the app's runtime `ThemeData` (the gap this row used to describe). Since E15-R01 the app's actual `ThemeData` carries all four extensions directly (ADR 0466 D1), so the wrapper is now redundant for every screen it wraps — but the wrappers themselves are NOT removed by this round (tilos zóna, `lib/features/**`); their retirement is a per-screen follow-up round's job. |
 
-## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05, progress/songs rows updated 2026-08-29 by E15-R06, practice_generator row updated 2026-09-01 by E15-R07, community/onboarding/vision rows updated 2026-09-03 by E15-R11)
+## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05, progress/songs rows updated 2026-08-29 by E15-R06, practice_generator row updated 2026-09-01 by E15-R07, analyze/audio_analysis rows updated 2026-09-03 by E15-R10 — ai_tutor/gamification rows below are NOT updated by their own migration rounds (E15-R09/E15-R08 did not touch this table) and stay stale until a future round measures them, community/onboarding/vision rows updated 2026-09-03 by E15-R11)
 
 | Feature | Migrated / total | Legacy screens (migration pending) |
 | --- | --- | --- |
 | ai_tutor | 1/6 | tutor_chat, tutor_data, tutor_home, tutor_privacy, tutor_profile |
-| analyze | 0/1 | analyze |
-| audio_analysis | 3/8 | analysis_export, analysis_metric_detail, capture/analysis_home, capture/analysis_processing, capture/analysis_recording |
+| analyze | 1/1 | — |
+| audio_analysis | 8/8 | — |
 | auth | 1/1 | — |
 | chords | 1/1 | — |
 | community | 15/15 | — |

@@ -1,6 +1,46 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ [HEAL E15-R10/H3] KÉSZ — a titok-kapu a `tools/**` automatikus sávjában is mér (ADR 0112) — PR [#546](https://github.com/wolfcasaba/strumsight/pull/546), squash `PENDING` (2026-09-03)
+## ✅ E15-R10 KÉSZ — Audio Analysis + Analyze 6 képernyő migrálása a design-rendszerre — PR [#547](https://github.com/wolfcasaba/strumsight/pull/547), squash `78e2b5dd` (2026-09-03)
+
+A batch mind a **6** képernyője a `core/design_system` komponenseit és tokenjeit
+használja, változatlan viselkedés mellett. Mért migrációs arány:
+**86/96 (89,583%)** — a kör nem hozott létre és nem törölt képernyőt, a
+`ui_inventory_test.dart` egzakt száma VÁLTOZATLAN.
+
+Migrálva: `analysis_home_screen`, `analysis_recording_screen`,
+`analysis_processing_screen`, `analysis_metric_detail_screen`,
+`analysis_export_screen`, `analyze_screen`. Diff: 23 fájl, +2153/−310, benne 6
+újrafelvett golden PNG (`golden-x86.sh record` a merge-kapu architektúráján,
+ADR 0426).
+
+**Egy javító kör futott** — 1 BLOCKER + 4 MAJOR + 6 MINOR, mind ZÁRVA
+(`docs/reviews/e15-r10-review.md`): a nem-újrapróbálható hiba zsákutcája
+(B1/M3), az `SsContentCard` néma ellipszis-csonkolása `textScaler 2.0`-n (M1),
+kitalált CTA az idle `SsEmptyState`-en (M4 — ez volt a teljes CI PIROS
+gyökéroka), kulcs-sodródás (m1/m2). Az M2 **mért indoklással** zárult, nem
+visszaállítással: az `SsFailurePresentation.from()` szövege a `failure.code`-ból
+jön, hívói oldalról nem felülírható a `lib/core/design_system/**` — a kör
+`allowed_paths`-án KÍVÜLI — módosítása nélkül.
+
+**A merge két lépcsőben állt helyre.** A kör munkája már a 2. review-menetben
+**APPROVED** volt (0 nyitott lelet), de a kapu a `main`-ről ÖRÖKÖLT
+titok-kapu-defekten bukott (H3) — ezt az L599 önjavító köre (PR #546,
+`d0e21add`) oldotta fel. A friss merge SHA-n (`b2c5fdda`) a kiterjesztett kapu
+ezután **magát a kör halt-jelentését** vette találatnak
+(`docs/reviews/e15-r10-review.md:361`), mert a H3-diagnózis szó szerint idézte a
+fixture-token literált. Az orchestrátor a saját hatáskörében (ADR 0087 §2,
+L251) redaktálta az idézetet — marker nélkül, a kapu saját elvét követve. Új
+lecke: **[L600](docs/LESSONS.md)**.
+
+**Zöld kapu a merge SHA-n (`a5d03244`), exact-SHA:** Full Gate
+[`33741172317`](https://github.com/wolfcasaba/strumsight/actions/runs/33741172317)
+`success` (`full-gate` + `Coverage`), Router CI
+[`33741207943`](https://github.com/wolfcasaba/strumsight/actions/runs/33741207943)
+`success`. CI-terv: `full-gate.yml` (`native_gate=false`, nincs natív diff).
+Gépi scope-audit a review-ban: **OK**, 22 változott útvonal, mind az
+`allowed_paths`-on.
+
+## ✅ [HEAL E15-R10/H3] KÉSZ — a titok-kapu a `tools/**` automatikus sávjában is mér (ADR 0112) — PR [#546](https://github.com/wolfcasaba/strumsight/pull/546), squash `d0e21add` (2026-09-03)
 
 Az E15-R10 munkája KÉSZ és APPROVED volt (0 nyitott lelet), a merge-kapu mégis
 piros: a `main`-ről ÖRÖKÖLT titok-kapu-defekten bukott, nem a kör diffjén.

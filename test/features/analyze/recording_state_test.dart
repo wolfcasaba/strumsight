@@ -6,9 +6,12 @@
 // and silence are two distinct, separate action states).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
+import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/core/platform/microphone_permission.dart';
 import 'package:strumsight/features/audio_analysis/data/capture/analysis_recorder.dart';
 import 'package:strumsight/features/audio_analysis/data/capture/recording_run.dart';
 import 'package:strumsight/features/audio_analysis/data/input/input_limits.dart';
@@ -22,11 +25,32 @@ import '../../support/fake_audio.dart';
 
 Future<void> _pump(WidgetTester tester, Widget home) => tester.pumpWidget(
   MaterialApp(
+    theme: SsLightTheme.data(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: home,
   ),
 );
+
+Future<void> _pumpScaled(
+  WidgetTester tester,
+  Widget home, {
+  required Locale locale,
+  required double textScale,
+}) async {
+  tester.platformDispatcher.textScaleFactorTestValue = textScale;
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: SsLightTheme.data(),
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: home,
+    ),
+  );
+  await tester.pumpAndSettle();
+}
 
 AnalysisRecorder _recorder({FakeAudioCapture? capture}) => AnalysisRecorder(
   mic: fakeMicCapture(
@@ -79,6 +103,9 @@ void main() {
         find.byKey(const Key('analysis-home-recent-empty')),
         findsOneWidget,
       );
+      // §0.0.A/R12 — the empty state is a real design-system component, not
+      // a plain Text left in place.
+      expect(find.byType(SsEmptyState), findsOneWidget);
 
       final summary = AnalysisSummary(
         documentId: 'doc-1',
@@ -273,6 +300,123 @@ void main() {
         findsNothing,
       );
     });
+  });
+
+  group('§0.0.A/R11 — textScaler 2.0, en/hu, no overflow', () {
+    for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+      testWidgets('AnalysisHomeScreen — ${locale.languageCode}', (
+        tester,
+      ) async {
+        await _pumpScaled(
+          tester,
+          AnalysisHomeScreen(
+            recentAnalyses: <AnalysisSummary>[
+              AnalysisSummary(
+                documentId: 'doc-scale',
+                title: 'C · G · Am · F',
+                customTitle: false,
+                createdAt: DateTime.utc(2026, 8, 20),
+                completionStatus: 'complete',
+                documentHash: 'a' * 64,
+                sizeBytes: 128,
+              ),
+            ],
+            onStartRecording: () {},
+            onImportFile: () {},
+          ),
+          locale: locale,
+          textScale: 2.0,
+        );
+        expect(tester.takeException(), isNull);
+        // M1 — `takeException` alone is structurally blind to an ellipsis:
+        // TextOverflow.ellipsis swallows the overflow exception it would
+        // otherwise throw. Assert directly that no paragraph — including
+        // the most-recent-analysis title, real user content — was cut off.
+        final truncated = tester
+            .renderObjectList<RenderParagraph>(find.byType(RichText))
+            .where((paragraph) => paragraph.didExceedMaxLines)
+            .toList();
+        expect(truncated, isEmpty);
+      });
+
+      testWidgets('AnalysisRecordingScreen — ${locale.languageCode}', (
+        tester,
+      ) async {
+        await _pumpScaled(
+          tester,
+          AnalysisRecordingScreen(
+            recorder: _recorder(),
+            onFinished: (_, _) {},
+            onCancel: () {},
+          ),
+          locale: locale,
+          textScale: 2.0,
+        );
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets(
+        'AnalysisRecordingScreen error body — ${locale.languageCode}',
+        (tester) async {
+          // m6 — the ready/idle body had 2.0 coverage; the error and
+          // permissionDenied bodies (distinct sibling widgets, §10.5 rule)
+          // did not.
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: AnalysisRecordingScreen(
+                recorder: _recorder(
+                  capture: FakeAudioCapture(failWith: Exception('engine down')),
+                ),
+                onFinished: (_, _) {},
+                onCancel: () {},
+              ),
+            ),
+          );
+          await tester.tap(find.byKey(const Key('analysis-recording-start')));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets(
+        'AnalysisRecordingScreen permissionDenied body — ${locale.languageCode}',
+        (tester) async {
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          final recorder = AnalysisRecorder(
+            mic: fakeMicCapture(
+              owner: AudioOwner.analyzeRecorder,
+              coordinator: AudioSessionCoordinator(),
+              permissions: FakeMicrophonePermissionGateway(
+                state: MicrophonePermissionState.denied,
+              ),
+            ),
+          );
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: AnalysisRecordingScreen(
+                recorder: recorder,
+                onFinished: (_, _) {},
+                onCancel: () {},
+              ),
+            ),
+          );
+          await tester.tap(find.byKey(const Key('analysis-recording-start')));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
   });
 }
 

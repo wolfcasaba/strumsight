@@ -23818,3 +23818,49 @@ router-ci automatikus trigger-útvonalain. A szabályt nem másolja le: a
 darabkái), ezért a két oldal nem tud szétcsúszni, és a Dart oldal alaki
 változása PIROSRA vált, nem némán zöldre. A javítás előtti fán 1 cella PIROS,
 pontosan ugyanazzal a `path:line` találattal, amit a Dart szkenner adott.
+
+---
+
+## L600 — A kiterjesztett kapu ELSŐ áldozata a saját HALT-JELENTÉSE lett: a H3-diagnózis szó szerint idézte a titkot, amiről szólt (E15-R10 merge-lépés, 2026-09-03)
+
+**Mérve.** Az L599 önjavító köre (PR #546, `d0e21add`) helyesen szélesítette ki
+a titok-kaput. A feloldás után az E15-R10 merge-lépése az upstream-szinkron
+SHA-n (`b2c5fdda`) ÚJRA elindította a teljes kaput — és az ismét PIROS lett,
+ezúttal MÁS találattal (`full-gate` `33739275972`):
+
+```
+Secret scan failed (4237 file(s) scanned, 1 finding(s)).
+- docs/reviews/e15-r10-review.md:361: provider token literal
+```
+
+A találat a kör SAJÁT halt-jelentése volt: a `H3`-diagnózis bekezdése — amely
+azt indokolta, miért nem javíthatja a kör a `main`-ről örökölt fixture-tokent —
+**szó szerint beidézte magát a token-literált**. A jelentés így pontosan azt a
+szabályt sértette meg, aminek a megsértéséről beszámolt.
+
+**Miért nem fogta meg semmi korábban.** A jelentés a `docs/reviews/**` alatt
+él, ahová a review-t az orchestrátor a HALT ELŐTT írja meg — a kapu viszont
+akkor futott le utoljára a `secrets` lépés előtt megállva (a `secrets` a
+composite 5. lépése, utána minden `skipped`). A defektet elrejtő lépés és a
+defektet leíró mondat ugyanabban a futásban keletkezett, ezért az első zöld
+`secrets`-lépés volt az első alkalom, amikor a jelentés egyáltalán MÉRHETŐVÉ
+vált.
+
+**A tanulság iránya.** Egy titok-találatról szóló jelentés a találat HELYÉT
+írja le, az ÉRTÉKÉT soha — ezt a kapu hibaüzenete maga is kimondja. Ez nem
+stílus-kérdés: egy teljes fát mérő szkenner számára a diagnózis szövege
+ugyanolyan fájl, mint a diagnosztizált forrás, tehát az idézet **átviszi** a
+defektet a jelentésbe. Halt-jelentés írásakor a szabálysértő literál helyett a
+`path:line` hivatkozás és a szabály NEVE az, ami bizonyít.
+
+**Jogosultsági fok (a javítás NEM volt H3).** A `docs/reviews/eXX-rYY-review.md`
+a kör saját, még nem merge-elt artefaktuma, amit maga az orchestrátor írt —
+ADR 0087 §2 szerint a szerkesztése a kör hatáskörében van (ugyanaz a mintázat,
+mint a saját-jelentés hamis-H3-ánál, L251). A javítás **marker nélkül**,
+redakcióval történt, tehát a mércét egy jottányit sem lazította.
+
+**Őrteszt:** nincs külön cella — az őr maga a `tool/ci/check_secrets.dart`
+lépés, ami a `docs/**`-ot is a teljes fa részeként méri; a mérés MEGTÖRTÉNT és
+PIROSRA váltott (`33739275972`), a redakció után ugyanaz a parancs a
+munkapéldányon `Secret scan OK (4237 file(s) scanned, 0 finding(s))`. Külön
+őrteszt itt a meglévő kaput duplikálná, nem bővítené.

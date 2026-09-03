@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -199,25 +200,28 @@ final class _ReadyBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Text(
           l10n.analysisRecordingReadyTitle,
-          style: Theme.of(context).textTheme.titleLarge,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: SsSpacing.space2),
         Text(
           l10n.analysisRecordingReadyDescription(maximumDuration.inMinutes),
           key: const Key('analysis-recording-capacity-limit'),
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: SsSpacing.space2),
         _RetentionNotice(retentionPolicy: retentionPolicy),
         const Spacer(),
-        FilledButton(
+        SsButton(
           key: const Key('analysis-recording-start'),
+          label: l10n.analysisRecordingStart,
           onPressed: starting ? null : onStart,
-          child: Text(l10n.analysisRecordingStart),
         ),
       ],
     );
@@ -250,6 +254,8 @@ final class _RecordingBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final labels = AppLocalizationsOverviewLabels(l10n);
     final elapsed = run == null
         ? Duration.zero
@@ -268,19 +274,27 @@ final class _RecordingBody extends StatelessWidget {
           child: Row(
             key: const Key('analysis-recording-live-indicator'),
             children: <Widget>[
-              const Icon(Icons.fiber_manual_record, color: Colors.red),
-              const SizedBox(width: 8),
-              Text(l10n.analysisRecordingLiveLabel),
+              Icon(Icons.fiber_manual_record, color: colors.danger),
+              const SizedBox(width: SsSpacing.space2),
+              Text(
+                l10n.analysisRecordingLiveLabel,
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textPrimary,
+                ),
+              ),
               const Spacer(),
               Text(
                 l10n.analysisRecordingElapsed(labels.formatDuration(elapsed)),
+                style: typography.bodyMedium.copyWith(
+                  color: colors.textPrimary,
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: SsSpacing.space3),
         _RetentionNotice(retentionPolicy: retentionPolicy),
-        const SizedBox(height: 12),
+        const SizedBox(height: SsSpacing.space3),
         if (_isClipping)
           _WarningBanner(
             key: const Key('analysis-recording-clipping'),
@@ -294,16 +308,17 @@ final class _RecordingBody extends StatelessWidget {
             message: l10n.analysisRecordingSilenceWarning,
           ),
         const Spacer(),
-        FilledButton(
+        SsButton(
           key: const Key('analysis-recording-stop'),
+          label: l10n.analysisRecordingStop,
           onPressed: onStop,
-          child: Text(l10n.analysisRecordingStop),
         ),
-        const SizedBox(height: 8),
-        OutlinedButton(
+        const SizedBox(height: SsSpacing.space2),
+        SsButton(
           key: const Key('analysis-recording-cancel'),
+          label: l10n.analysisRecordingCancel,
+          variant: SsButtonVariant.secondary,
           onPressed: onCancel,
-          child: Text(l10n.analysisRecordingCancel),
         ),
       ],
     );
@@ -318,6 +333,8 @@ final class _RetentionNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Semantics(
       container: true,
       child: Row(
@@ -328,14 +345,17 @@ final class _RetentionNotice extends StatelessWidget {
                 ? Icons.save_outlined
                 : Icons.privacy_tip_outlined,
             size: 18,
+            color: colors.textSecondary,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: SsSpacing.space2),
           Expanded(
             child: Text(
               retentionPolicy.keepOriginal
                   ? l10n.analysisRecordingRetentionKept
                   : l10n.analysisRecordingRetentionDiscarded,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -352,14 +372,21 @@ final class _WarningBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Semantics(
       container: true,
       liveRegion: true,
       child: Row(
         children: <Widget>[
-          Icon(icon, color: Theme.of(context).colorScheme.error),
-          const SizedBox(width: 8),
-          Expanded(child: Text(message)),
+          Icon(icon, color: colors.danger),
+          const SizedBox(width: SsSpacing.space2),
+          Expanded(
+            child: Text(
+              message,
+              style: typography.bodyMedium.copyWith(color: colors.textPrimary),
+            ),
+          ),
         ],
       ),
     );
@@ -375,31 +402,50 @@ final class _PermissionDeniedBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Text(
           l10n.analysisRecordingPermissionDeniedTitle,
-          style: Theme.of(context).textTheme.titleLarge,
+          style: typography.titleLarge.copyWith(color: colors.textPrimary),
         ),
-        const SizedBox(height: 8),
-        Text(l10n.analysisRecordingPermissionDeniedDescription),
+        const SizedBox(height: SsSpacing.space2),
+        Text(
+          l10n.analysisRecordingPermissionDeniedDescription,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+        ),
         const Spacer(),
-        FilledButton(
+        SsButton(
           key: const Key('analysis-recording-permission-retry'),
+          label: l10n.analysisRecordingPermissionRetry,
           onPressed: onRetry,
-          child: Text(l10n.analysisRecordingPermissionRetry),
         ),
-        const SizedBox(height: 8),
-        OutlinedButton(
+        const SizedBox(height: SsSpacing.space2),
+        SsButton(
+          label: l10n.analysisRecordingCancel,
+          variant: SsButtonVariant.secondary,
           onPressed: onCancel,
-          child: Text(l10n.analysisRecordingCancel),
         ),
       ],
     );
   }
 }
 
+/// The engine/general-recorder failure state (`_RecordingStage.error`):
+/// `SsFailureState` renders the code-mapped title/message/action (ADR 0277).
+/// The `analysis-recording-error-title` key moves to the whole failure
+/// widget — the pinned key still identifies exactly one widget in the tree,
+/// literally satisfying the existing cell (§0.0.A/R4).
+///
+/// A non-retryable failure maps to the `contactSupport` action, which this
+/// screen has no handler for — so `onRetry` alone would leave the failure
+/// section with zero buttons (review M3, same defect class as B1).
+/// Restarting capture (`onRetry` calls `_start` again) is always a valid
+/// next step here regardless of failure classification, so the explicit
+/// "Retry" button is restored on that branch instead of being silently
+/// dropped.
 final class _ErrorBody extends StatelessWidget {
   const _ErrorBody({
     required this.failure,
@@ -414,24 +460,32 @@ final class _ErrorBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final presentation = SsFailurePresentation.from(
+      l10n,
+      failure ?? const UnknownFailure(),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(
-          l10n.analysisRecordingErrorTitle,
-          key: const Key('analysis-recording-error-title'),
-          style: Theme.of(context).textTheme.titleLarge,
+        Expanded(
+          child: SsFailureState(
+            key: const Key('analysis-recording-error-title'),
+            presentation: presentation,
+            onRetry: presentation.retryable ? onRetry : null,
+          ),
         ),
-        const Spacer(),
-        FilledButton(
-          key: const Key('analysis-recording-error-retry'),
-          onPressed: onRetry,
-          child: Text(l10n.analysisRecordingErrorRetry),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton(
+        if (!presentation.retryable) ...<Widget>[
+          SsButton(
+            key: const Key('analysis-recording-error-retry'),
+            label: l10n.analysisRecordingErrorRetry,
+            onPressed: onRetry,
+          ),
+          const SizedBox(height: SsSpacing.space2),
+        ],
+        SsButton(
+          label: l10n.analysisRecordingCancel,
+          variant: SsButtonVariant.secondary,
           onPressed: onCancel,
-          child: Text(l10n.analysisRecordingCancel),
         ),
       ],
     );
