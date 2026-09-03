@@ -215,3 +215,61 @@ BLOCKER-2-n), ami az ADR 0087 §2 szerint kötelező megállás — a maradék j
 önmagában triviális, de a szabály nem a nehézségtől függ. A kör munkája
 (`c8be6e7d`, PR #540) megmarad az ágon; a folytatás az önjavító session dolga a
 fenti, mért javítás-recepttel.
+
+## 6. Javító kör #2 utáni review (2026-09-03, `41b6285f..d52410da`)
+
+**Előzmény:** az §5.3 H5 haltját az ADR 0112 önjavító köre oldotta fel — **ADR 0494**
+(`ab2f98db`, PR #541) a `main`-en. A heal (D2) a `designSystemImportsMustUsePublicBarrel`
+szabályt a `tool/check_architecture.dart`-ba tette, tehát a barrel-szerződést mostantól
+MINDEN kör `round-gate.sh` `architecture` lépése méri, lokálisan. A D3 szerint a H5
+piros-CI-számláló egy ilyen, a gyökérokot javító merge-elt heal után **nulláról** indul;
+a zöld kapu (teljes CI-suite + Router CI a merge SHA-n) változatlan.
+
+**Upstream-szinkron (§0.3):** az ág `--no-ff` merge-cselte az `origin/main`-t (`70aeb83c`),
+`git merge-base --is-ancestor origin/main HEAD` → **0**. A brief `§0.0.C` (R18–R21) a
+javító kör #2 szerződése; a `test/core/architecture_dependency_test.dart` felkerült a
+`gate_tests`-re és a §7 gate-sorára (R20).
+
+### 6.1 A BLOCKER-2 ZÁRVA — mérve
+
+| Mérés (a reviewer SAJÁT futása) | Eredmény |
+|---|---|
+| Célzott gate izolált klónban (`/tmp/review-e15-r09-fix2`, a §7 **19** lépése) | **MINDEN GATE ZÖLD** — benne `test/core/architecture_dependency_test.dart` **zöld** és `architecture` **zöld** |
+| `tools/scope-audit.py --base 41b6285f` | `Legacy scope audit OK (6 changed path(s), 0 generated/ignored)` |
+| Mély importok utó-állapota (`grep -c "core/design_system/"`) | mind az 5 képernyőn **1** (a barrel), előtte 4/6/8/4/2 = **24** |
+| Router CI a `d52410da` head SHA-n | `success` (`33719099381`) |
+| `flutter-reviewer` (KÖTELEZŐ, risk=high) | 0 BLOCKER / 0 MAJOR / 0 MINOR — a diff bizonyítottan import-only (a `design_system` sorok kiszűrésével a két revízió byte-azonos); mind a 13 mély-importált fájl exportált a barrelből; a barrel 117 nevű felülete metszve az összes többi import szimbólumaival: **0 ütközés**; extension-tag nincs, tehát ambiguous-extension sem lehet |
+| `flutter-devil-advocate` (KÖTELEZŐ, risk=high) | falszifikálni nem tudta: teszt-cella törlés/`skip`/gyengítés az EGÉSZ ágon 0 (`git diff origin/main...HEAD -- test/`), a cella-számok nőttek (chat 16→19, data 9→16, home 4→6, privacy 6→8, profile 5→7); a **relatív** barrel-forma mérten megfelel (a checker `_resolveProjectUri`+`_normalizePath` után `lib/core/design_system/public.dart`-ra old fel, és a `design_system_barrel_architecture_test.dart:129` pont a relatív alakot pinneli); `lib/` egészében **0** mély design-system import maradt |
+
+Az implementer §10.10 valódi-sértés próbája korrekt: egy mély import ideiglenes
+visszaállítása MÉRTEN pirosra vitte a célzott
+`test/core/architecture_dependency_test.dart` cellát és az `architecture` lépést,
+majd a visszaállítás után a gate ismét zöld. Ez az őr tehát nem holt cella.
+
+### 6.2 Acceptance-mérleg — záró
+
+| # | Verdikt | Indok |
+|---|---|---|
+| A1 | teljesül | 80/96 (83.333%), függetlenül újramérve; a barrel-import a `contains('design_system')` mérést nem billenti |
+| A2 | teljesül | MAJOR-3 zárva (javító kör #1); az n1 chat-banner dokumentált follow-up (R9) |
+| A3 | teljesül | committolt `textScaler 2.0` × `en`/`hu` cellák mind az 5 képernyőn (MAJOR-4 zárva) |
+| A4 | teljesül | a kipinnelt cellák zöldek; a teszt-diff az egész ágon szigorúan additív |
+| A5 | teljesül | 96 képernyő, változatlan |
+| A6 | teljesül (őszinte megszorítással) | a hivatkozott guard mérten nem fedi a `lib/features/**`-ot; a bizonyíték a két reviewer-agent és a saját kézi olvasás — új beégetett szöveg nincs |
+| A7 | teljesül | `migration-status.md` 80/96 (83.333%) |
+
+### 6.3 Nyitott leletek: **NINCS**
+
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0. A korábbi MINOR-ok (m1–m6) a javító kör #1-ben
+zárva vagy dokumentáltan elhagyva (§10.8–10.9).
+
+**NOTE (nem lelet, jövőbeli körre):** a `test/tooling/design_system_barrel_architecture_test.dart`
+(a szabály saját, `main`-ről érkezett őre) nincs ezen a kör `gate_tests`-én; a fedése
+átfed a gate `architecture` lépésével, tehát ez redundancia, nem rés — de a jövőbeli
+design-rendszer-migrációs brief-sablonba érdemes felvenni.
+
+## 7. VÉGSŐ DÖNTÉS: **APPROVED**
+
+Merge engedélyezve, amint a zöld kapu a **merge SHA-n** teljesül: Full Gate
+(`full-gate.yml`, a `round-ci-plan.py` terve: tisztán Dart/dokumentum-diff,
+`native_gate=false`) + Router CI + a fenti célzott gate — mind zöld.
