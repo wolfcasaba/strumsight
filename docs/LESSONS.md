@@ -23646,3 +23646,41 @@ tehát a szabály allowlist és technikai adósság nélkül landolhatott.
 **Őrteszt:** `test/tooling/design_system_barrel_architecture_test.dart` (a 24
 MÉRT import mindegyike sértés; barrel-importtal tiszta; a design-rendszer a
 sajátjait elérheti; a valódi fa tiszta) — ADR 0494 D2.
+
+## L593 — Egy kipinnelt teszt, ami NINCS a kör `gate_tests`-ében, a célzott kaput zölden hagyja, miközben a kör pirosra viszi: a `gate_tests` a MIGRÁLT képernyő MINDEN kipinnelt harnessét tartalmazza (E15-R09, 2026-09-03)
+
+**Mit mértünk.** Az E15-R09 első menete után a kör célzott gate-je **17/17
+zöld** volt, a review viszont a kapun KÍVÜLI
+`test/features/ai_tutor/presentation/tutor_home_screen_test.dart`-ot lefuttatva
+**2 piros cellát** mért (`R18-R1`, `R18-R3`). Ok: a fájl csupasz
+`MaterialApp.router`-t pumpál `theme:` NÉLKÜL, a migrált Home/Chat képernyő
+`SsCard`/`SsProvenanceBadge`-e viszont theme-extensiont olvas
+(`ss_card.dart` → `ss_surface.dart:42` → `ss_elevation.dart:14-15`, két `!`).
+A fájl a brief `allowed_paths`-án ÉS `gate_tests`-én kívül volt — a kör
+kapuja tehát a saját regresszióját nem tudta megmérni. Ugyanez a hibaosztály
+ismétlődött egy szinttel feljebb a BLOCKER-2-nél ([[L592]]): a barrel-szerződést
+is csak a teljes CI-suite mérte. **Két piros CI-futás → H5 halt**, ADR 0112
+önjavítással feloldva ([ADR 0494](adr/0494-derived-completion-matrix-and-h5-counter-reset.md)).
+
+**Miért.** Egy UI-migrációs kör azt a fát változtatja meg, amin a képernyő
+KIPINNELT tesztjei futnak. Ha a kapu csak azokat a teszteket futtatja, amiket a
+brief-szerző előre felsorolt, a mérce hatóköre a brief-szerző emlékezete lesz,
+nem a diff hatóköre. A „zöld gate" ilyenkor igaz állítás egy rossz kérdésre.
+
+**Hogyan alkalmazd.** (1) Design-rendszer- vagy téma-migrációs briefben a
+`gate_tests` a migrált képernyő ÖSSZES kipinnelt harnessét tartalmazza —
+mérd ki: `grep -rl "<ScreenName>" test/`, ne emlékezetből sorold. (2) A
+`gate_tests` bővítése a kör SAJÁT, még nem merge-elt artefaktuma, tehát
+orchesztrátori hatáskör (ADR 0087 §2) — a review-ban mért rést §0.0 revízióval
+zárd, ne a következő körre halaszd. (3) Ha egy architektúra- vagy
+tématípus-szerződés csak teszt-cellában él, told le a gate `architecture`
+lépésébe ([[L592]]) — az `gate_tests`-től függetlenül MINDEN körön fut.
+(4) A H5 piros-számláló egy merge-elt, gyökérokot javító önjavítás után
+nulláról indul (ADR 0494 D3) — a zöld kapu ettől nem lazul.
+
+**Őrteszt:** `test/core/architecture_dependency_test.dart` (a kör `gate_tests`-ébe
+felvéve, §0.0.C/R20 — a BLOCKER-2 mintázatát mérten pirosra viszi; az implementer
+valódi-sértés próbája ezt kimérte) + `test/tooling/design_system_barrel_architecture_test.dart`
+(ADR 0494 D2). A kipinnelt harness-rést magát a
+`test/features/ai_tutor/presentation/tutor_home_screen_test.dart` `gate_tests`-be
+vétele zárta (§0.0.B/R10).

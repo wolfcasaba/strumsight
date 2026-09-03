@@ -1,5 +1,55 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R09 KÉSZ — AI Tutor 5 képernyő migrálása a design-rendszerre — PR [#540](https://github.com/wolfcasaba/strumsight/pull/540), squash `7259c563` (2026-09-03)
+
+Az AI-Tutor batch öt képernyője (`tutor_home`, `tutor_chat`, `tutor_data`,
+`tutor_profile`, `tutor_privacy`) a design-rendszer komponenseit és tokenjeit
+használja, változatlan viselkedés mellett: `SsCard`/`SsSection`/`SsButton`/
+`SsSkeleton`/`SsFailureState`/`SsModelStatusCard`/`SsProvenanceBadge`/
+`SsValidationSummary` + `SsSpacing`/`SsTypography`/`SsColorScheme` tokenek.
+**Migrációs arány: 80/96 (83,333%)** — függetlenül újramérve.
+
+**A kör három menetben zárult (1 alap + 2 javító kör), és H5 halton is átment:**
+
+- **Review #1** — 1 BLOCKER + 5 MAJOR TELJESEN ZÖLD célzott gate mellett. A
+  hordozó premissza („az `SsCard` extension-mentes") MÉRTEN hamis volt
+  (`ss_card.dart` → `ss_surface.dart:42` → `ss_elevation.dart:14-15`, két `!`-es
+  extension-olvasás), ezért a `theme:` nélkül pumpáló
+  `tutor_home_screen_test.dart` 2 cellája pirosra váltott — a fájl viszont sem az
+  `allowed_paths`-on, sem a `gate_tests`-ben nem volt, tehát a kör saját kapuja
+  nem mérte. További leletek: hiba-ág információvesztés (beégetett
+  `UnknownFailure`), 4 nem migrált állapot, az A3 (textScale) mércéje `/tmp`-ben
+  törölt próbateszt volt, és az egész batch-re EGYETLEN design-rendszer típus-
+  állítás jutott.
+- **Review #2** — mind a 6 lelet zárva, de ÚJ, nyitott **BLOCKER-2**: az öt
+  képernyő **24 MÉLY importtal** érte el a design-rendszert a `public.dart`
+  barrel helyett (E13-R02 / [ADR 0273](docs/adr/0273-design-system-token-source-of-truth.md) §1).
+  A CI ekkor kétszer volt piros → **H5 halt**.
+- **Önjavító kör** ([ADR 0494](docs/adr/0494-derived-completion-matrix-and-h5-counter-reset.md),
+  PR [#541](https://github.com/wolfcasaba/strumsight/pull/541)) a mért gyökérokot
+  javította: a barrel-szabály bekerült a `tool/check_architecture.dart`-ba, tehát
+  MINDEN kör `round-gate.sh` `architecture` lépése méri, lokálisan.
+- **Javító kör #2 + Review #3 → APPROVED, 0 nyitott lelet.** A javítás
+  fájlonként EGY sor (24 mély import → 5 barrel-import); a diff bizonyítottan
+  import-only (a `design_system` sorok kiszűrésével a két revízió byte-azonos),
+  a barrel 117 nevű felülete metszve az összes többi importtal **0 ütközés**,
+  és teszt-cella törlés/`skip`/gyengítés az EGÉSZ ágon **0** (a cella-számok
+  nőttek: chat 16→19, data 9→16, home 4→6, privacy 6→8, profile 5→7).
+
+**A megismétlődés őre kettős:** az ADR 0494 D2 gate-szabálya + a kör
+`gate_tests`-ébe felvett `test/core/architecture_dependency_test.dart` (§0.0.C/R20).
+Az implementer valódi-sértés próbája MÉRTEN pirosra vitte mindkettőt.
+Tanulság: [L593](docs/LESSONS.md#l593).
+
+**Zöld kapu a merge SHA-n (`31e30233`):** Full Gate (no APK)
+[33720016489](https://github.com/wolfcasaba/strumsight/actions/runs/33720016489)
+`success`, Router CI
+[33720058092](https://github.com/wolfcasaba/strumsight/actions/runs/33720058092)
+`success`, plusz az orchesztrátor saját, izolált klónban futtatott célzott
+gate-je: **19/19 zöld**. ÚJ ADR: **nincs** (a normatív állítások az ADR 0273 /
+E13-R02 és az ADR 0494 alá esnek). `risk = "high"` → a `flutter-reviewer` ÉS a
+`flutter-devil-advocate` KÖTELEZŐ volt, mindkettő lefutott (0 lelet).
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E15-R09 / H5 — KÉT lánc-akadály feloldva (2026-09-03)
 
 A kör-pipeline **kétszeresen** állt: (1) a `main` Full Gate PIROS volt (run
@@ -28,6 +78,10 @@ OK`-ot adott, amin a CI kétszer bukott. **Javítás:** új
 0494 D2). A `main` a szabály alatt tiszta (0 sértés, allowlist nélkül).
 [L592](docs/LESSONS.md#l592).
 
+> ✅ **ELVÉGEZVE 2026-09-03:** a folytató session pontosan ezt tette — javító
+> kör #2 a MEGLÉVŐ ágon, 24 mély import → 5 barrel-import, review #3 APPROVED,
+> merge `7259c563` (PR #540). Az alábbi blokk a történeti recept.
+>
 > ▶ **A KÖVETKEZŐ SESSION-nek, ami az E15-R09-et folytatja:** a
 > `round-resume-probe` `REVIEW-NYITOTT`-ra állítja az ágat
 > (`sonnet-impl/e15-r09-ai-tutor-migration @ 78fd3a64`, PR
@@ -11109,7 +11163,27 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-03):** `main` @ `e8686066` — **E12-R36 Program
+**Aktuális állapot (2026-09-03):** `main` @ `7259c563` — **E15-R09 AI Tutor 5
+képernyő migrálása a design-rendszerre (80/96, 83,333%)**, PR
+[#540](https://github.com/wolfcasaba/strumsight/pull/540), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **2 javító kör + egy közbeékelt ADR 0112
+önjavító kör** (a kör H5-tel halt: a CI kétszer piros — a 2. piros gyökéroka a
+24 mély design-system import volt, amit KIZÁRÓLAG a teljes CI-suite mért). A
+heal (ADR 0494 D2) a barrel-szabályt a gate `architecture` lépésébe tette, a D3
+szerint a piros-számláló nulláról indult, majd a javító kör #2 után a review
+**APPROVED**, 0 nyitott lelet
+([`docs/reviews/e15-r09-review.md`](docs/reviews/e15-r09-review.md) §7).
+ÚJ ADR: **nincs**. `risk = "high"` → `flutter-reviewer` + `flutter-devil-advocate`
+kötelező volt, mindkettő lefutott. Exact-SHA evidencia a merge SHA-n
+(`31e30233`): Full Gate
+[33720016489](https://github.com/wolfcasaba/strumsight/actions/runs/33720016489),
+Router CI
+[33720058092](https://github.com/wolfcasaba/strumsight/actions/runs/33720058092)
+— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`, `native_gate = false`).
+
+**Előző állapot (2026-09-03):** `main` @ `e8686066` — **E12-R36 Program
 completion report és következő roadmap: a Chapter 12 sáv ZÁRÓ köre**, PR
 [#538](https://github.com/wolfcasaba/strumsight/pull/538), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
@@ -11253,7 +11327,22 @@ maradt.
 
 ## 5. Last completed round
 
-**E12-R36 — Program completion report és következő roadmap (a Chapter 12 ZÁRÓ köre)**
+**E15-R09 — AI Tutor 5 képernyő migrálása a design-rendszerre**
+(PR [#540](https://github.com/wolfcasaba/strumsight/pull/540), squash `7259c563`).
+Az öt Tutor-képernyő a design-rendszer komponenseit és tokenjeit használja,
+változatlan viselkedés mellett; a migrációs arány **80/96 (83,333%)**. A kör
+három menetben zárult: review #1 (1 BLOCKER + 5 MAJOR) → javító kör #1 → review
+#2 (mind zárva, de ÚJ BLOCKER-2: 24 mély design-system import a `public.dart`
+barrel helyett) → **H5 halt** → ADR 0112 önjavító kör
+([ADR 0494](docs/adr/0494-derived-completion-matrix-and-h5-counter-reset.md),
+PR #541) → javító kör #2 → review #3 **APPROVED**, 0 nyitott lelet. A két
+mért, egymást erősítő tanulság: (a) egy kipinnelt teszt, amely NINCS a kör
+`gate_tests`-ében, a célzott kaput zölden hagyja, miközben a teljes suite piros
+([L593](docs/LESSONS.md#l593)); (b) egy architektúra-szerződés, amit csak
+teszt-cella mér és a gate `architecture` lépése nem, két CI-futáson át rejtve
+marad (ADR 0494 D2 zárta).
+
+**Előző kör: E12-R36 — Program completion report és következő roadmap (a Chapter 12 ZÁRÓ köre)**
 (PR [#538](https://github.com/wolfcasaba/strumsight/pull/538), squash `e8686066`).
 A kör a program állapotának ŐSZINTE, bizonyíték-alapú lezárását szállítja: a
 completion matrix minden sora egy queue-előtaghoz tartozó, TÉNYLEGESEN MÉRT
@@ -11269,7 +11358,7 @@ elkészültét bizonyítja, nem a valódi Play Console / rollout / GA műveletet
 27 cella) tartalom-paraméteres tiszta függvényeken áll, acceptance-pontonként
 RED-bizonyító cellával. Tanulság: [L588](docs/LESSONS.md#l588).
 
-**Előző kör: E15-R14 — Practice Generator kompozíciós réteg**
+**Azelőtti kör: E15-R14 — Practice Generator kompozíciós réteg**
 (PR [#534](https://github.com/wolfcasaba/strumsight/pull/534), squash `d28c79d3`).
 A kör az `E15-R07 / H3` STOP mért hiányát szüntette meg: a fa alatt NULLA
 Riverpod-provider volt, és az EGYETLEN `PracticeEvidenceRepository` a „never
@@ -11282,7 +11371,7 @@ case-t, ami kizárólag a MEGLÉVŐ `GenerationOrchestrator`-t hívja. Route, fl
 zárta le mindet; ami a scope-on kívülre esett, az ADR 0482 **D9/D10/D11**
 kötelező `E15-R07 / F1`-előfeltétellé vált. Tanulság: [L583](docs/LESSONS.md#l583).
 
-**Azelőtti kör: E12-R24 — Store listing, privacy és legal package**
+**Korábbi kör: E12-R24 — Store listing, privacy és legal package**
 (PR [#520](https://github.com/wolfcasaba/strumsight/pull/520), squash `cf7c6fb6`).
 A kör az első olyan artefaktumot szállította, amiből a store-feltöltés emberi
 lépése ELLENTMONDÁS-MENTESEN elvégezhető: store-szöveg, manifestből MÉRT
