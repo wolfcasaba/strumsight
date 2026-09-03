@@ -100,6 +100,25 @@ bele, és minden bejegyzés mellé kerüljön a forrás (`lib/**` fájl:sor).
 **R7 — A `docs/contracts/` és a `docs/operations/` könyvtár LÉTEZIK** (S13
 ellenőrizve), az `allowed_paths` tehát valós fákat fed.
 
+**R9 — A review MÉRÉSE két ponton felülírja az R3-at és a §3 scope-ját
+(2026-09-03, `docs/reviews/e15-r12-review.md`).**
+
+1. *Az árnyékolás iránya fordított.* Az R3 azt írja, hogy a `search.py`
+   paraméteres `/community/profiles/{handle}` útvonala árnyékolhatja a
+   `profile.py` `/community/profiles/me` literálját. Mérve ez **nem áll**: a
+   `search.py`-nak egyetlen route-ja van, a LITERÁL `/search`
+   (`search.py:151`); a paraméteres gyűjtő a `profile.py`
+   `/profiles/{public_id}`-ja (`profile.py:117`), a `/profiles/me` literál
+   pedig azon a routeren BELÜL helyesen előbb van deklarálva. A valódi
+   szerződés tehát: **`search` a `profile` ELŐTT**, a `profile` utolsóként —
+   ezt az ADR 0497 D3 helyesbített szövege köti meg, és az A8 cella pinneli.
+2. *A `handles` és a `privacy` router NEM csatolható fel* (ADR 0497 **D6**):
+   mindkettő hitelesítés nélkül elérhető írási felületet nyitna (mérve: 48
+   community route-metódusból 8 authless, köztük két `POST /community/handles/*`
+   és egy `PUT /community/privacy/{id}`). A §3 „MIND a 13 router" megfogalmazása
+   ezért **11 routerre** szűkül; a kimaradás indoklása a D6-ban van. A szűkítés
+   az ADR 0087 §2 szerinti engedélyezett-lista-szűkítés, nem tágítás.
+
 **R8 — Párhuzamos kör fut** (`E16-R01`, `sonnet-impl/e16-r01-gamification-composition-layer`).
 Az ADR 0495 mérése szerint az `E15-R12` (`backend/**` + docs) **egyetlen
 fájlban sem** ütközik vele. A záró rituálék és a merge a merge-záron
@@ -201,7 +220,8 @@ Bekapcsolt modul mellett migrálatlan community-séma → NOT READY. **NEM elfog
 | # | Kritérium | Bizonyíték |
 |---|---|---|
 | A1 | `community_enabled=false` → a community útvonalak **404**-et adnak (a route nem létezik) | `test_community_mounting.py` |
-| A2 | `community_enabled=true` → mind a 13 router útvonalai léteznek, és hitelesítés nélkül **401/403**-at adnak | `test_community_mounting.py` |
+| A2 | `community_enabled=true` → a felcsatolt **11** router (§0.0 R9, ADR 0497 D6) útvonalai léteznek, és a felcsatolt community route-ok **KIMERÍTŐ** (az `app.routes` fából felsorolt, nem mintavételes) halmaza hitelesítés nélkül **401/403**-at ad, egy rövid, tételesen indokolt kivétel-listával | `test_community_mounting.py` |
+| A2b | A `handles` és a `privacy` router útvonalai `community_enabled=true` mellett is **404**-et adnak (D6: hitelesítetlen router nem kerül az aggregátumba) | `test_community_mounting.py` |
 | A3 | Al-flag KI (pl. `community_writes_enabled=false`) → az írási ág nem elérhető, az olvasási igen | `test_community_mounting.py` |
 | A4 | Bekapcsolt modul + `env=prod` + SQLite (`allow_sqlite_in_prod=true`) → `/health/ready` **503**, `reason == "community_requires_postgres"` (§0.0 R5, ADR 0497 D4) | `test_community_mounting.py` |
 | A5 | A kliens által hívott MINDEN végpont szerepel az OpenAPI sémában (nincs kliens↔szerver drift) | `test_client_contract_parity.py` |
@@ -216,6 +236,7 @@ Bekapcsolt modul mellett migrálatlan community-séma → NOT READY. **NEM elfog
 |---|---|
 | A router mindig regisztrálódik, a flag csak 403-at ad | A1 |
 | Az aggregátor csak a `profile` routert adja vissza (a mai állapot) | A2 |
+| Az aggregátor felcsatol egy hitelesítetlen routert (`handles`, `privacy`) | A2 (kimerítő auth-leltár) + A2b |
 | A fő flag minden al-ágat bekapcsol | A3 |
 | A readiness nem hívja a `community_readiness_failure()`-t | A4 |
 | A kliens hív egy végpontot, ami a szerveren nincs (vagy más az útja) | A5 |

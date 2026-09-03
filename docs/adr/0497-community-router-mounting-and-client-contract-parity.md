@@ -63,16 +63,25 @@ meg.
 
 A 13 router prefixei mérten **átfedők**: `profile`, `feed`, `reports`,
 `safety` és `social_graph` mind a `/community` prefixen ül, a `search` pedig
-a `/community/profiles`-on, ahol a `profile` a `/community/profiles/me`
-literál útvonalat viszi. FastAPI-ban az **első illeszkedő** route nyer, ezért
-a paraméteres útvonalak (`/community/profiles/{handle}`) árnyékolhatják a
-literálokat (`/community/profiles/me`), ha előbb regisztrálódnak.
+a `/community/profiles`-on. FastAPI-ban az **első illeszkedő** route nyer,
+ezért a paraméteres útvonalak árnyékolhatják a literálokat, ha előbb
+regisztrálódnak.
+
+**Az árnyékolás MÉRT iránya (helyesbítve a review-ban, 2026-09-03 — az ADR
+első szövege és a brief §0.0 R3 fordítva mérte):** a `search` routernek
+egyetlen route-ja van, a **literál** `/community/profiles/search`
+(`routers/search.py:151`); a paraméteres gyűjtő a `profile` routeré
+(`/community/profiles/{public_id}`, `routers/profile.py:117`). A `profile`
+routeren BELÜL a `/profiles/me` literál helyesen a `{public_id}` ELŐTT van
+deklarálva, tehát ott nincs kockázat. A tényleges kockázat a **routerek
+közötti** sorrend: `profile` előbb regisztrálva elnyelné a
+`/community/profiles/search`-öt `public_id="search"`-ként.
 
 Az aggregátor sorrendje ezért a szerződés része: a **literál-útvonalú
-routerek előbb, a paraméteres-gyűjtő routerek utóbb** kerülnek be, és ezt a
-sorrendet a kör tesztje pinneli. A meglévő `backend/tests/community/**` suite
-zöldsége (A7) ennek a gépi mércéje: az a fa az összes érintett útvonalat már
-ma lefedi.
+routerek előbb, a paraméteres-gyűjtő routerek utóbb** kerülnek be — konkrétan
+`search` a `profile` ELŐTT, a `profile` pedig utolsóként —, és ezt a
+sorrendet a kör tesztje pinneli
+(`test_a8_search_literal_route_is_not_shadowed_by_profile_param_route`).
 
 ### D4 — A readiness a bekapcsolt modulra a Community-gate-et is lefuttatja
 
@@ -102,6 +111,36 @@ A lista a kliens MÉRT hívásaiból készül, nem a kívánságlistából; a m�
 falszifikálhatóságát a brief §6.1 valódi-sértés próbája adja (egy szerver
 oldali route átnevezése az A5 cellát pirosra kell vigye).
 
+### D6 — A felcsatolás fail-closed: hitelesítetlen router NEM kerül az aggregátumba
+
+*(Hozzáadva a review után, 2026-09-03 — a mérés a D1–D5 hiányzó feltételét
+tárta fel.)*
+
+A 13 router közül a `handles` és a `privacy` **nem** hitelesít: a
+`POST /community/handles/claim|change` és a
+`GET|PUT /community/privacy/{profile_public_id}` `Authorization` fejléc
+nélkül is elér a handlerig (mérve: 48 community route-metódusból 8 authless).
+Mindkét router saját docstringje kimondja, hogy szándékosan nincs
+felcsatolva, és hogy az authz egy későbbi kör dolga
+(`routers/handles.py:16-19,95,239-241`, `routers/privacy.py:5-9,194-201`).
+
+**Döntés:** az aggregátum csak olyan routert vehet fel, amelynek MINDEN
+route-ja hitelesítést követel; a `handles` és a `privacy` ezért kimarad,
+amíg az authz-uk (ADR 0400 Következmények (c) pont) meg nem születik. A
+kliens egyiket sem hívja — a `docs/contracts/client-backend-endpoints.json`
+egyetlen ilyen bejegyzést sem tartalmaz —, tehát a kimaradás nem okoz
+kliens-driftet.
+
+**Kimondottan NEM elfogadható gyengítés:** „a modul alapból ki van kapcsolva,
+tehát a hitelesítetlen route nem baj". A `community_enabled=False` default
+enyhítő, nem feloldó: a kör célja épp a bekapcsolhatóvá tétel, és a
+`docs/operations/device-backend-runbook.md` a bekapcsolást tanítja.
+
+**A gépi mércéje:** az A2 cella nem mintát próbál, hanem a felcsatolt
+community route-okat **kimerítően** sorolja fel az `app.routes` fából, és
+mindegyiken megköveteli az auth-ot — rövid, tételesen indokolt
+kivétel-listával.
+
 ## Következmények
 
 - A `backend/app/main.py` mostantól **öt** feltételes/feltétlen router-blokkot
@@ -116,10 +155,17 @@ oldali route átnevezése az A5 cellát pirosra kell vigye).
 - **Séma NEM változik.** Ha bármely router bekötése ÚJ Alembic migrációt
   igényelne, a kör `stopped`-ot jelez: ez a kör meglévő modult csatol fel.
 - Az ADR 0400 Következmények szakaszában nevesített router-mounting tételekből
-  ez a kör az (a) és a (d) pontot zárja. A (b) TOCTOU-rés és a (c)
-  `privacy.py` authz **továbbra is nyitott tartozás** — azok a
-  `backend/app/community/` moduljait írnák át, ami ennek a körnek a tilos
-  zónája.
+  ez a kör az (a) pontot **részlegesen** (11 router a 13-ból, D6) és a (d)
+  pontot teljesen zárja. A (b) TOCTOU-rés és a (c) `privacy.py` authz
+  **továbbra is nyitott tartozás** — azok a `backend/app/community/`
+  moduljait írnák át, ami ennek a körnek a tilos zónája. **Amíg a (c) nyitott,
+  a `privacy` és a `handles` router a D6 szerint felcsatolatlan marad**; a
+  bekötésük a (b)/(c) pontot záró jövőbeli kör dolga, és a D6 A2-cellája
+  gépileg akadályozza meg a korábbi, hitelesítés nélküli élesítést.
+- Nyitott tartozásként rögzítve (tilos zóna, a kör nem okozza, de a mérés
+  feltárta): a `routers/bookmarks.py:195` „opak" lapozó kurzora base64-elt
+  JSON, benne a belső row `id` — a modul „never leaks the internal `id`"
+  kontraktusa (ADR 0396 §1) itt nem áll maradéktalanul.
 - A flagek alapértelmezése **változatlanul `False`** minden környezetben: a
   bekapcsolás telepítési döntés marad, és ezt a kör nem érinti.
 - A backend-oldali mérce a `backend-ci.yml` workflow-ban fut (ruff lint, ruff
