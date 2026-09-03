@@ -306,3 +306,73 @@ duplikált `SsButton` megszüntetése — de nem a kettő egymás mellett.
    kulcs-jelentés sodródás, a §10 kivétel-listájának kiegészítése, a törölt
    retry-/restart-kulcsok rögzítése, a hiányzó A6-őszinteségi mondat, az A3
    fázis-fedés.
+
+---
+
+# 2. menet — a javító kör ellenőrzése
+
+- **Review-zott commit:** `bdaf0490` (javító kör), majd az upstream-szinkron
+  utáni **merge SHA `1c561597`** (`Merge origin/main`, ADR 0086 §2 / §0.3)
+- **Javító commitok:** `70f60c9e` (B1+M3), `bda784cc` (M1), `34d5c0cf` (M4+m1+m2),
+  `bdaf0490` (§10.8/§10.9 dokumentálás)
+
+## Leletenkénti zárás
+
+| Lelet | Állapot | A zárás MÉRT bizonyítéka |
+|---|---|---|
+| **B1** (BLOCKER) | **ZÁRVA** | `analysis_processing_screen.dart:385-387`: `onRetry: presentation.retryable ? onRestart : null`, ÉS `if (!presentation.retryable && onRestart != null)` ág explicit újraindítás-gombbal — a nem-újrapróbálható hiba többé nem zsákutca. A `Key('analysis-processing-restart')` mindhárom ágon elérhető (m4). |
+| **M1** (MAJOR) | **ZÁRVA** | `SsContentCard` → `_UntruncatedContentCard` az `analysis_home_screen.dart`-ban; a változás VIZUÁLIS, ezért a két `home_compact*` golden újra lett véve az x86 merge-kapun (`golden-x86.sh record`, majd FÜGGETLEN `check` → `+14: All tests passed!`). |
+| **M2** (MAJOR) | **ZÁRVA — mért indoklással, nem visszaállítással** | A §10.8 kimondja: az `SsFailurePresentation.from()` `factory`, a `title`/`message` a `failure.code`-ból jön (`failure_presentation.dart:59-96`), és hívói oldalról nem írható felül a `lib/core/design_system/**` módosítása nélkül — ami a kör `allowed_paths`-án KÍVÜL van. A §10 önmagát is helyesbíti: a §10.2 eredeti indoklása a FELVÉTEL-képernyőre mérve pontatlan volt. Ez pontosan a §5.1 által megkövetelt „mondd ki mérve" út. |
+| **M3** (MAJOR) | **ZÁRVA** | `analysis_recording_screen.dart:474-477` — a B1-gyel szimmetrikus javítás; az `analysisRecordingErrorRetry` kulcs visszakötve. |
+| **M4** (MAJOR) | **ZÁRVA — és ez volt a CI PIROS gyökéroka** | Az idle `SsEmptyState` kitalált akciója eltávolítva; az `analyze_screen.dart:135-136` doc-commentje kimondja, miért. **Független bizonyíték:** a `test/features/analyze/analyze_screen_test.dart:38` cella (ami a kör célzott kapuján KÍVÜL van) az alap menetben PIROS volt — `Found 2 widgets with text "Record"` —, a javítás után a saját izolált klónomban **ZÖLD**. |
+| **m1, m2, m3, m4, m5, m6, N3** | **ZÁRVA** | m2: a kulcs-sodródás feloldva meglévő kulcsokkal (`analysisOverviewUnavailable`, `analysisOverviewNotApplicable`) — új ARB-kulcs nem kellett. m5: az A6-őszinteségi mondat bekerült. m6: az `AnalyzeScreen` micDenied és a felvétel-képernyő hiba-ágai megkapták a `2.0` cellát. |
+
+## Az orchestrátor SAJÁT mérése a merge SHA-n (`1c561597`)
+
+A célzott gate-et a `test/features/analyze/analyze_screen_test.dart` cellával
+**KIBŐVÍTVE** futtattam (ez fogta meg az M4-et a teljes CI-ban):
+
+```
+[1] format … ZÖLD          [11] analyze_screen_test.dart … ZÖLD  ← a CI-piros cella
+[2] analyze … ZÖLD         [12]–[18] a többi teszt … ZÖLD
+[3]–[10] tesztek … ZÖLD    [19] architecture … ZÖLD
+[20] secrets … PIROS
+```
+
+**19/20 zöld.** Az EGYETLEN piros lépés a `secrets`, és a találata **nem ennek a
+körnek a munkája**.
+
+## A kör munkáján KÍVÜLI blokkoló (halt-ok)
+
+```
+Secret scan failed (4236 file(s) scanned, 1 finding(s)).
+- tools/tests/test_authenticated_git_fetch.py:34: provider token literal
+```
+
+Mérve, három egymástól független futáson:
+
+1. a merge SHA (`1c561597`) teljes CI-ja — `full-gate` `33733304877`
+   **failure**, és a secret-lépés után MINDEN további lépés (l10n, asset, test,
+   property, coverage) `skipped`, tehát a kör saját munkája meg sem lett mérve;
+2. a saját izolált klónom gate-je ugyanezen a SHA-n → `secrets` PIROS;
+3. **a TISZTA `origin/main` (`45d20193`) ugyanígy PIROS** — a klónt a
+   kör-ághoz nem is érintve, önmagában.
+
+A hibás sor `TOKEN = "github_pat_FIXTURE_ONLY_not_a_real_secret"` — nyilvánvaló
+teszt-fixture, amiről hiányzik a scanner saját, dokumentált mentesítő markere.
+A sort a **`61cd9e3e` (PR #544, „a `git fetch` HITELESÍTVE megy", ADR 0495 D5)**
+hozta be a `main`-re; `git log -S'github_pat_FIXTURE_ONLY'` ezt az egy commitot
+adja. Az E15-R10 csak annyit tett, hogy az ADR 0086 §2 által ELŐÍRT
+upstream-szinkronnal beemelte a `main`-t.
+
+**Miért nem javíthatja ez a kör:** a `tools/tests/test_authenticated_git_fetch.py`
+az `allowed_paths`-on KÍVÜL van, és a `tools/**` a brief §4 tilos zónája; az
+ADR 0087 §4 szerint a mércét nem módosíthatja az, akit mér. Ez **H3**.
+
+## VÉGSŐ DÖNTÉS — a kör saját munkájára: **APPROVED**
+
+0 nyitott BLOCKER, 0 nyitott MAJOR, 0 nyitott MINOR. A kör tartalmilag KÉSZ és
+merge-re kész; a merge-et kizárólag a `main`-ről örökölt, körön kívüli
+secret-gate defekt tartja vissza. A feloldás után a folytatás a **merge-lépésnél**
+kezdődik (§0.2 `REVIEW-APPROVED`): upstream-szinkron → PR → a teljes CI-kapu ÚJRA
+a friss merge SHA-n → zöld kapus squash-merge. A zöld kapu NEM lazul.
