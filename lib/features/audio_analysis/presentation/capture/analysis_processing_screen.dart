@@ -354,6 +354,14 @@ final class _MessageBody extends StatelessWidget {
 /// (`AnalysisInputError` / `AnalysisError`, §0.0.A/R12): both carry a real
 /// [AppFailure], so `SsFailureState` renders the code-mapped presentation
 /// instead of the raw failure code that used to leak into the UI.
+///
+/// A non-retryable failure (e.g. `UnknownFailure`, `ValidationFailure`) maps
+/// to `SsFailurePresentation`'s `contactSupport` action, which this screen
+/// has no real handler for — leaving the user with zero actionable buttons
+/// (review B1). The pre-migration screen always offered "Start again"
+/// regardless of failure class, so that affordance is restored here
+/// unconditionally on the non-retryable branch instead of being silently
+/// dropped.
 final class _FailureBody extends StatelessWidget {
   const _FailureBody({
     required this.failure,
@@ -368,6 +376,23 @@ final class _FailureBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final presentation = SsFailurePresentation.from(l10n, failure);
-    return SsFailureState(presentation: presentation, onRetry: onRestart);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SsFailureState(
+          presentation: presentation,
+          onRetry: presentation.retryable ? onRestart : null,
+        ),
+        if (!presentation.retryable && onRestart != null) ...<Widget>[
+          const SizedBox(height: SsSpacing.space3),
+          SsButton(
+            key: const Key('analysis-processing-restart'),
+            label: l10n.analysisProcessingRestart,
+            onPressed: onRestart,
+          ),
+        ],
+      ],
+    );
   }
 }

@@ -438,6 +438,14 @@ final class _PermissionDeniedBody extends StatelessWidget {
 /// The `analysis-recording-error-title` key moves to the whole failure
 /// widget — the pinned key still identifies exactly one widget in the tree,
 /// literally satisfying the existing cell (§0.0.A/R4).
+///
+/// A non-retryable failure maps to the `contactSupport` action, which this
+/// screen has no handler for — so `onRetry` alone would leave the failure
+/// section with zero buttons (review M3, same defect class as B1).
+/// Restarting capture (`onRetry` calls `_start` again) is always a valid
+/// next step here regardless of failure classification, so the explicit
+/// "Retry" button is restored on that branch instead of being silently
+/// dropped.
 final class _ErrorBody extends StatelessWidget {
   const _ErrorBody({
     required this.failure,
@@ -463,9 +471,17 @@ final class _ErrorBody extends StatelessWidget {
           child: SsFailureState(
             key: const Key('analysis-recording-error-title'),
             presentation: presentation,
-            onRetry: onRetry,
+            onRetry: presentation.retryable ? onRetry : null,
           ),
         ),
+        if (!presentation.retryable) ...<Widget>[
+          SsButton(
+            key: const Key('analysis-recording-error-retry'),
+            label: l10n.analysisRecordingErrorRetry,
+            onPressed: onRetry,
+          ),
+          const SizedBox(height: SsSpacing.space2),
+        ],
         SsButton(
           label: l10n.analysisRecordingCancel,
           variant: SsButtonVariant.secondary,

@@ -200,33 +200,66 @@ void main() {
   });
 
   group('§0.0.A/R12 — input/general failures render SsFailureState', () {
-    testWidgets('AnalysisInputError shows the design-system failure state', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        AnalysisProcessingScreen(
-          state: const AnalysisInputError(
-            ValidationFailure(code: 'validation.input'),
+    testWidgets(
+      'AnalysisInputError (non-retryable) shows the failure state with a real action',
+      (tester) async {
+        await _pump(
+          tester,
+          AnalysisProcessingScreen(
+            state: const AnalysisInputError(
+              ValidationFailure(code: 'validation.input'),
+            ),
+            onCancel: () {},
+            onRestart: () {},
           ),
-          onCancel: () {},
-        ),
-      );
-      expect(find.byType(SsFailureState), findsOneWidget);
-    });
+        );
+        expect(find.byType(SsFailureState), findsOneWidget);
+        // B1 — a non-retryable failure must not leave the user with zero
+        // actionable buttons: the restart affordance stays reachable.
+        expect(
+          find.byKey(const Key('analysis-processing-restart')),
+          findsOneWidget,
+        );
+      },
+    );
 
-    testWidgets('AnalysisError shows the design-system failure state', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        AnalysisProcessingScreen(
-          state: const AnalysisError(runId: 'run-1', failure: AudioFailure()),
-          onCancel: () {},
-        ),
-      );
-      expect(find.byType(SsFailureState), findsOneWidget);
-    });
+    testWidgets(
+      'AnalysisError (retryable) shows the failure state with a real action',
+      (tester) async {
+        await _pump(
+          tester,
+          AnalysisProcessingScreen(
+            state: const AnalysisError(runId: 'run-1', failure: AudioFailure()),
+            onCancel: () {},
+            onRestart: () {},
+          ),
+        );
+        expect(find.byType(SsFailureState), findsOneWidget);
+        expect(find.byType(FilledButton), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'AnalysisError (non-retryable) shows the failure state with a real action',
+      (tester) async {
+        await _pump(
+          tester,
+          AnalysisProcessingScreen(
+            state: const AnalysisError(
+              runId: 'run-1',
+              failure: UnknownFailure(),
+            ),
+            onCancel: () {},
+            onRestart: () {},
+          ),
+        );
+        expect(find.byType(SsFailureState), findsOneWidget);
+        expect(
+          find.byKey(const Key('analysis-processing-restart')),
+          findsOneWidget,
+        );
+      },
+    );
   });
 
   group('§0.0.A/R11 — textScaler 2.0, en/hu, no overflow', () {
