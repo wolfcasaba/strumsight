@@ -13,6 +13,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/camera/camera_coordinate_space.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/storage/json_document_store.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
@@ -78,6 +79,10 @@ Future<ProviderContainer> _pumpHarness(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        // R2 (§0.0): the migrated screen's SsCard/SsButton now read the
+        // design-system theme extensions — a themeless MaterialApp
+        // null-check crashes (L593-class defect).
+        theme: SsLightTheme.data(),
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,

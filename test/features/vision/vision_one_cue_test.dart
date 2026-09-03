@@ -12,6 +12,7 @@ import 'package:strumsight/core/camera/camera_permission.dart';
 import 'package:strumsight/core/camera/camera_providers.dart';
 import 'package:strumsight/core/camera/camera_session_coordinator.dart';
 import 'package:strumsight/core/camera/fake_camera_capture.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/vision/application/vision_session_controller.dart';
@@ -33,7 +34,11 @@ final class _PermissionGateway implements CameraPermissionGateway {
       CameraPermissionState.granted;
 }
 
+// R2 (§0.0): the migrated screen's SsButton/SsSwitchRow now read the
+// design-system theme extensions — a themeless MaterialApp null-check
+// crashes (L593-class defect).
 Widget _host(Widget child) => MaterialApp(
+  theme: SsLightTheme.data(),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   home: child,
