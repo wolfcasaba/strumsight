@@ -254,4 +254,133 @@ A teljes suite + property gate + APK a CI-ban fut (ADR 0053); a dispatch és a k
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-09-03.
+
+### 10.1 Mit csináltam
+
+Két commitban (§8 lépés 2–3), ahogy a §0.0.A/R3 előírja:
+
+1. `test/ui/goldens/e15_r13_full_variant_matrix_test.dart` **A-level** — a
+   46 golden-fixture-ös elérhető képernyő + `ProgressDashboardScreen` +
+   `SkillDetailScreen` (48 összesen), 16 cella/képernyő (light/dark ×
+   en/hu × compact portrait/landscape × textScale 1.0/2.0) + az A1
+   teljesség-cella. A kizárás-lista ekkor a 25 B-level képernyőt (indok:
+   "B-level fixture, ütemezve a kör saját B-level commitjára") +
+   `WrappedPreviewScreen`-t tartalmazta.
+2. Ugyanaz a fájl, **B-level** — a maradék 24 elérhető képernyő (a
+   `test/features/**` alatti fixture-ökből adaptálva); a kizárás-lista
+   25-ről 1-re zsugorodott (csak `WrappedPreviewScreen` marad, mérve:
+   nincs merge-elt fixture sehol a fán). A B-level felvétele **4 valódi,
+   mért `lib/**` túlcsordulás-leletet** hozott felszínre (`StrumReelScreen`
+   — 12/16 cella; `AnalyzeScreen`, `LatencyCalibrationScreen`,
+   `LearnScreen`, `LessonScorePreviewScreen` — mind csak `textScale 2.0`-nál)
+   — a §5.2 szerint ezeket NEM javítottam a `lib/`-ben; egy per-cella
+   kizárás-lista (`_ExcludedCell`/`_excludedCells`, az e13_r36 mintát
+   követve) rögzíti mértként, dátummal, csak-zsugorodó (`STALE
+   exclusion-list entry`) őrzéssel.
+3. `docs/ui/legacy-backlog.md` (A3) — a §3 avult "53 legacy" táblája a
+   mért 5-re frissült, az `E15-R04` végre nem hajtott visszavonása NYITOTT
+   tételként rögzítve (dátum 2026-09-03, gazda: jövőbeli, nevesítetlen SDD
+   kör, ADR 0471 D5 szerint nem szabálysértés).
+4. `docs/ui/chapter-15-completion-report.md` (A5, ÚJ) — a végleges MÉRT
+   állapot (§0.0.A/R4 miatt a `migration-status.md` helyett), egy
+   report-guard teszt-csoporttal (`A5 — completion-report guard`) a
+   mátrix-fájlban, amely a riport számait a mátrix ÉLŐ állapotából
+   (`ScreenReachability`, `_screens.length`, `_excludedCells`) vezeti le
+   és ellenőrzi jelenlétüket a riportban — nem csak a jelen lévő sorok
+   belső konzisztenciáját méri (L588).
+
+### 10.2 A mérések tényleges kimenete (reprodukálva ezen a fán)
+
+```
+$ find lib/features -name '*_screen.dart' | wc -l
+96
+$ for f in $(find lib/features -name '*_screen.dart'); do grep -q design_system "$f" && echo M; done | wc -l
+91
+$ dart run tool/check_screen_reachability.dart --format table
+Measured screens: 96. Reachable: 71. Unreachable: 25. Flag-gated: 27.
+```
+
+91/96 migrált (94,792%), 5 legacy — mind az 5 elérhető, mind az 5 `retire`
+verdiktes, névvel ellátott utóddal (`retirement-plan.md` §6), owner
+`E15-R04`. Fixture-fedettség: 46 golden + 24 feature + 1
+(`WrappedPreviewScreen`) sehol — pontosan a brief §0.0.A/R3 mért állítása.
+
+### 10.3 Valódi-sértés próba (§6.1/§7, KÖTELEZŐ)
+
+`test/ui/goldens/e15_r13_full_variant_matrix_test.dart`-ban ideiglenesen
+kivettem a `'tutor_chat'` bejegyzést a `_screens` map-ből, majd:
+
+```
+$ flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart --name "A1"
+...
+Expected: empty
+  Actual: Set:['lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart']
+  reachable screens missing from BOTH the matrix and the exclusion list
+  (brief §0.0.A/R3): {lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart}
+...
++4 -1: Some tests failed.
+```
+
+Az A1 teljesség-cella **PIROS** lett, pontosan a hiányzó képernyő nevét
+jelentve. Ezután `git checkout -- test/ui/goldens/e15_r13_full_variant_matrix_test.dart`-tal
+visszaállítottam (a `git diff --stat` üres lett), és:
+
+```
+$ flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart --name "A1"
+...
++5: All tests passed!
+```
+
+**ZÖLD** — a próba bizonyítja, hogy a teljesség-cella valóban méri a
+lefedettséget, nem csak formálisan zöld.
+
+### 10.4 A kötelező gate futása (§7, csonkítatlanul)
+
+```
+tools/round-gate.sh test/ui/goldens/e15_r13_full_variant_matrix_test.dart \
+  test/ui/ui_inventory_test.dart test/tooling/screen_reachability_test.dart \
+  test/accessibility/closure_suite_test.dart
+```
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/ui/goldens/e15_r13_full_variant_matrix_test.dart zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/accessibility/closure_suite_test.dart            zöld
+    architecture                                                zöld
+    secrets                                                    zöld
+    l10n                                                        zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A mátrix-fájl önmagában **1162 teszt** (1152 cella + 5 A1-teljesség-cella
++ 5 A5-report-guard cella), mind zöld; `test/ui/ui_inventory_test.dart`
+`hasLength(96)` változatlan; `git diff --stat` a diffben nulla `lib/**`
+sort mutat.
+
+### 10.5 LELETEK — nem javítva (§5.2, §9)
+
+1. **`E15-R04` visszavonása nem történt meg** — a `legacy-backlog.md`
+   §3.0-ban rögzítve, NYITOTT, gazda + nevesített (unscheduled SDD) kör.
+2. **`WrappedPreviewScreen`-nek nincs pump-fixture-je sehol a fán** — a
+   mátrix `_exclusions` egyetlen bejegyzése, indokkal + nevesített
+   (unscheduled SDD) követő körrel.
+3. **4 mért `lib/**` túlcsordulás-defekt** (32 `_ExcludedCell` cella) —
+   `StrumReelScreen` (`strum_reel_screen.dart:339`, a tagline `Row`),
+   `AnalyzeScreen` (`analyze_screen.dart:331`), `LatencyCalibrationScreen`,
+   `LearnScreen` (`learn_screen.dart:879`), `LessonScorePreviewScreen`
+   (`lesson_score_preview_screen.dart:101`) — mind a
+   `chapter-15-completion-report.md` §5-ben részletezve, dátummal és
+   px-mérettel; `lib/**` ehhez a körhöz tilos zóna, ezért NEM javítottam.
+
+### 10.6 Orchesztrátor-lépések (nem ez a kör feladata)
+
+CI-dispatch (`build-apk.yml`) és az APK-link — brief §7, az orchesztrátor
+feladata.
+
 ## 11. Review — a Claude tölti ki
