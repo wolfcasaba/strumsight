@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/ai_tutor/application/controller/tutor_state.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_message.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_providers.dart';
@@ -117,6 +118,7 @@ Future<_FakeController> _pump(WidgetTester tester) async {
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        theme: SsLightTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const TutorChatScreen(),
