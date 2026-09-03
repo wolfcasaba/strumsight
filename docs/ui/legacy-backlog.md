@@ -189,3 +189,132 @@ candidate; until then it stays `migrate` (`E15-R08`).
 (already migrated), `lib/features/onboarding/screens/first_win_stage_screen.dart`
 (already migrated) — each has zero measured router reference or `lib/`
 construction site. Same treatment as §5.1: no Ch15 round assigned.
+
+## 6. E16-R01 gamification composition — dated `TODO(E08-R30)` exclusions
+
+Measured against `main @ 4ca8785f` plus this round's own tree, 2026-09-03
+(E16-R01, ADR 0496 §5 / brief §0.0.A/R3). The round wired five of the eight
+`TODO(E08-R30)` markers in `lib/app/routing/app_router.dart` to real
+providers (`lib/features/gamification/application/gamification_providers.dart`)
+and removed every marker from the file; the three below could not be
+resolved without touching this round's tilos zona (`lib/features/
+gamification/data/**` and the gamification `presentation/screens/**`), so
+each is recorded here instead of silently dropped.
+
+### 6.1 Legacy streak write-back into the V2 envelope (E16-R01 entry 1)
+
+**What:** `streakStateProvider` re-runs `LegacyStreakMigrator.migrate()` on
+every read instead of persisting the migrated `StreakState` into the V2
+namespaced storage envelope once.
+
+**Why it wasn't built this round:** persisting the migrated result needs a
+streak-write method on `GamificationRepository` (e.g.
+`replaceStreakState(...)`), and `lib/features/gamification/data/**` is this
+round's tilos zona (brief §4) — only `application/gamification_providers.dart`
+was writable.
+
+**Owner:** a future round whose `allowed_paths` covers
+`lib/features/gamification/data/gamification_repository.dart` and its local
+implementation (SDD, unscheduled).
+
+**Date measured:** 2026-09-03.
+
+### 6.2 Streak-recovery purchase flow (E16-R01 entry 2)
+
+**What:** `StreakDetailScreen.onRecoveryPressed` (wired in the router's
+`AppRoutes.streakDetail` route) stays a no-op — the recovery CTA renders
+(when `reason == StreakEvaluationReason.broken`) but tapping it does nothing.
+
+**Why it wasn't built this round:** there is no repository method to
+purchase or apply a streak recovery, and `StreakDetailScreen` itself has no
+"recovery unavailable" contract to degrade to instead — both are in this
+round's tilos zona (`data/**`, `presentation/screens/**`).
+
+**Owner:** a future round whose `allowed_paths` covers the streak-recovery
+repository method and the screen's disabled/unavailable state (SDD,
+unscheduled).
+
+**Date measured:** 2026-09-03.
+
+### 6.3 Reward-detail route (E16-R01 entry 3)
+
+**What:** `RewardInboxScreen.onItemSelected` (wired in the router's
+`AppRoutes.rewardInbox` route) stays a no-op — selecting an inbox entry does
+not navigate anywhere.
+
+**Why it wasn't built this round:** there is no reward-detail screen
+anywhere on the tree to route to; building one is a new screen, which is new
+scope beyond this round's composition-only brief (brief §3 — "NINCS benne:
+ÚJ üzleti logika / képernyő").
+
+**Owner:** a future round that scopes and builds a reward-detail screen
+(SDD, unscheduled).
+
+**Date measured:** 2026-09-03.
+
+### 6.4 Quest-board content source (E16-R01 entry 4, fix-round)
+
+**What:** `AppRoutes.quests` renders an always-empty `QuestsScreen`
+(`dailyChallenge: null`, `dailyChallengeAvailable: false`, `dailyQuests`/
+`weeklyQuests: const []`) — the router source for these came from
+`questBoardProvider` (fix-round review B2), but that provider itself has no
+real quest source to read: it always returns `available: false`.
+
+**Why it wasn't built this round:** quest generation
+(`DailyQuestGenerator`/`WeeklyQuestGenerator`) needs a persisted snapshot
+(`plannedObjectives`, `availableDays`, `baselineWeeklyMinutes`) that does not
+exist anywhere on the tree (§0.0.A/R2) — persisting one is new
+business logic/persistence, out of this composition-only round's scope
+(brief §3).
+
+**Owner:** a future round whose `allowed_paths` covers the quest-snapshot
+persistence and the generator wiring (SDD, unscheduled).
+
+**Date measured:** 2026-09-03 (review), entry added in the fix round.
+
+### 6.5 Four inexpressible-absence values stay a router-passed zero/empty (E16-R01 entry 5, fix-round)
+
+**What:** `activeQuestCountProvider`, `masteryUnlockedCountProvider`,
+`weeklyConsistencyDaysProvider`, and `latestSessionXpProvider` all carry
+their absence in a type (`GamificationDerivedCount`/
+`GamificationDerivedExperience`, `.available == false`), per ADR 0496 §2.
+But `GamificationHubScreen.activeQuestCount`/`.masteryUnlockedCount`,
+`StreakDetailScreen.weeklyConsistencyDays`, and
+`LevelDetailScreen.latestSessionXp` are all required, non-nullable
+parameters with no "unavailable" contract — so the router still passes
+`.value` (`0` / `ExperiencePoints.empty()`) through unconditionally, and the
+user sees the same "0"/"no XP" a bare literal would have shown. The type
+carries the fact; nothing downstream can act on it yet.
+
+**Why it wasn't built this round:** the screens are this round's tilos zona
+(`presentation/screens/**`) — adding an "unavailable" branch to each of the
+four call sites (e.g. an `SsEmptyState` instead of a numeric tile) is a
+screen change, not a composition bekötés.
+
+**Owner:** a future round whose `allowed_paths` covers the four screens
+above, to add an absence-aware branch for each of these parameters (SDD,
+unscheduled).
+
+**Date measured:** 2026-09-03 (review), entry added in the fix round.
+
+### 6.6 Real producers for the bekötött reads do not exist yet (E16-R01 entry 6, fix-round)
+
+**What:** This round's providers read real repository/ledger state
+honestly, but nothing on the tree currently WRITES most of it in production:
+`GamificationRepository.replaceProfileSnapshot(...)`,
+`ActivityEventIngestor(...)`, and `DailyChallengeService(...)` have zero
+call sites in `lib/` outside their own definitions. The green router-level
+tests (`gamification_composition_test.dart`) prove the wiring against a
+seeded test store, not against a live producer — a real device today would
+still show an empty profile/inbox/achievement set because nothing feeds
+these repositories yet.
+
+**Why it wasn't built this round:** wiring a producer (e.g. calling
+`replaceProfileSnapshot` from the practice-session completion flow) reaches
+into other features' write paths, which is both new scope (brief §3 —
+composition-only) and outside this round's `allowed_paths`.
+
+**Owner:** a future round that scopes and wires the practice/session
+completion flow to these gamification write APIs (SDD, unscheduled).
+
+**Date measured:** 2026-09-03 (review), entry added in the fix round.

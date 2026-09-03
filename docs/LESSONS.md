@@ -23950,3 +23950,158 @@ felismerte a veszélyt.)
 cella `didExceedMaxLines == false`-t állít 412×915-ön, és külön `expect`-tel
 pinneli, hogy a CTA `FilledButton` marad, tehát egy jövőbeli `SsButton`-visszacsere
 azonnal pirosra vált.
+
+## L603 — Az előre megírt brief ADR-száma AVUL: a foglaló a hiteles forrás, nem a brief fejléce (E16-R01 pre-flight, 2026-09-03)
+
+**Mérés.** Az `E16-R01` briefje 2026-09-02-án készült, és `ADR 0490`-et jelölt
+előre („a szám FOGLALT, Chapter 16 batch-tartomány: `0490`–`0494`"). A kör
+2026-09-03-i pre-flightjában a `tools/round-slots.py reserve-adr --round E16-R01`
+a **`0496`**-ot adta vissza, mert a `0490` időközben MÁS körnek kelt el és
+merge-elődött: `docs/adr/0490-hotfix-path-gates-incident-binding-and-regression-obligation.md`
+(a `0491` és `0494` szintén foglalt). Ha az orchestrátor a brief fejlécét
+követi, két különböző döntés kerül ugyanarra a számra — pontosan az a
+hibaosztály, amit a `tools/tests/test_adr_numbering.py` és az ADR 0087 §1.0.1
+`O_CREAT|O_EXCL` markere kizárni hivatott.
+
+**Következmény.** Az ADR `0496` néven született meg, és mind a brief fejléce,
+mind a §0.0.A/R1 revízió kimondja az eltérést és az okát. A
+`docs/execution/pipeline-queue.tsv` `E16-R01` sorának ADR-oszlopa (`0490`) a
+driver tulajdona, ezért a kör nem írta át — a hiteles hivatkozás a brief és az
+ADR-fájl.
+
+**Általános szabály.** Egy előre megírt brief MINDEN mért állítása avulhat, de
+az ADR-szám a legveszélyesebb: az ütközés nem a saját körön bukik el, hanem a
+két diff ÖSSZEGÉN. Az `ls docs/adr | tail` és az előre írt fejléc egyaránt
+tiltott sorszám-forrás; egyedül a foglaló mérése az.
+
+**Őrteszt:** `tools/tests/test_adr_numbering.py` (a duplikált sorszámot fogja;
+a foglaló `O_CREAT|O_EXCL` markere a versenyt dönti el).
+
+## L604 — Riverpod-providert nem tehetsz a feature FRAMEWORK-MENTES rétegébe: a kör célzott kapuja zölden ment azon a fán, amit a teljes CI pirosra vitt (E16-R01, 2026-09-03)
+
+**Mérés.** Az `E16-R01` a gamification kompozíciós rétegét — a brief szó
+szerinti előírása szerint — a
+`lib/features/gamification/application/gamification_providers.dart` fájlba
+írta, `package:flutter_riverpod` importtal. A kör §7 gate-je (`round-gate.sh`
+a `gate_tests` hat útvonalával) **zöld** volt, a `b81d0493` Full Gate viszont
+PIROS (run `33754452934`), egyetlen cellán:
+
+```
+❌ test/core/architecture_dependency_test.dart:
+   „gamification application stays framework-free and presentation keeps
+   storage in data (E08-R08)" — enforces the layer-specific dependency
+   boundaries (failed)
+```
+
+A szabály (`test/core/architecture_dependency_test.dart:124-155`) MINDEN
+`.dart` fájlt megvizsgál a `lib/features/gamification/application/` alatt, és
+tiltja bennük a framework-importot. A brief `gate_tests` listáján ez az őr NEM
+szerepelt, tehát a kör mércéje szerkezetileg nem tudott róla.
+
+**Javítás.** (1) A fájl a repó bevett feature-provider helyére került:
+`lib/features/gamification/providers/gamification_providers.dart` — mérve:
+`lib/features/learn/providers/`, `lib/features/songs/providers/` ugyanígy
+tartja a Riverpod-providereket, és a `providers/` könyvtárra egyetlen
+architektúra-szabály sem vonatkozik. (2) Az
+`architecture_dependency_test.dart` felkerült a kör `gate_tests` listájára ÉS a
+§7 gate-parancsba. A javítás után a célzott kapu 12/12 zöld, a Full Gate
+(`00d48edc`, run `33757358322`) és a Router CI (`33757359266`) is zöld.
+
+**Általános szabály (az L593 barrel-hézag testvére).** Ha egy kör ÚJ FÁJLT tesz
+egy feature-be, a brief-írásnál ki kell mérni, milyen RÉTEG-szabály vonatkozik
+a célkönyvtárra (`grep -n "<feature>/<dir>" test/core/architecture_dependency_test.dart`),
+és a vonatkozó őrt fel kell venni a `gate_tests`-be. Enélkül a kör zöld kapuja
+nem mércéje a kör diffjének — csak annak, amit véletlenül megmért.
+
+**Őrteszt:** `test/core/architecture_dependency_test.dart::gamification application stays framework-free and presentation keeps storage in data (E08-R08)` (mostantól a kör `gate_tests` listáján is).
+
+## L605 — A `gate_shape` heurisztika a gate-script OLVASÁSÁRA is tüzel: a `VIOLATION` nem bizonyíték csonkított gate-futásra (E16-R01 fix1, 2026-09-03)
+
+**Mérés.** Az `E16-R01` első javító köre `gate_shape=VIOLATION` jelzéssel zárt.
+Az őr (`tools/mm-round.sh:381-384`, azonos a `tools/codex-round.sh:332-335`-tel)
+az EGÉSZ implementer-logban keresi a
+`round-gate\.sh[^\n]*(\| *(tail|head)|&&)` mintát. A tényleges találat:
+
+```
+sed -n '1,40p' /home/ubuntu/ss-sonnet-impl-e16-r01/tools/round-gate.sh | head -60
+```
+
+— vagyis az implementer ELOLVASTA a gate scriptjét, nem csonkított egy
+gate-FUTÁST. A valódi hívás a teljes, csővezeték nélküli §7 sor volt
+(`grep -oE "tools/round-gate\.sh test/…" /tmp/mm-e16-r01-fix1.log`).
+
+**Következmény.** A `VIOLATION` jelzésre az orchestrátornak KI KELL MÉRNIE a
+tényleges illeszkedést, mielőtt halt-ot vagy javító kört rendel: a minta nem
+különbözteti meg a `round-gate.sh` mint ARGUMENTUM (olvasás, `cat`/`sed`/`grep`)
+és mint PARANCS (futtatás) esetét. Fordítva viszont a heurisztika értékes
+marad — a hamis pozitív olcsó, a hamis negatív drága lenne.
+
+**Őrteszt:** nincs — a javítás a `tools/**`-ot érintené, ami a kör-orchestrátor
+számára tilos zóna (ADR 0087 §4); az ADR 0112 önjavító sávjának tétele. A
+mérés reprodukálható:
+`grep -oE ".{60}round-gate\.sh \| head -60" /tmp/mm-e16-r01-fix1.log`.
+
+## L599 — A „kill előtt ébressz" fok két éven át beküldés nélkül ébresztett: a TUI a gyors, hosszú szöveget beillesztésnek veszi, és a rátapadó Enter ÚJ SORT ír (ops, 2026-09-03)
+
+**Mérve.** Két futó kör sessionje (`E15-R12`, `E16-R02`) `API Error: 529
+Overloaded`-del zárta a turnjét, és ÜRES prompton állt. A driver ébresztő-alakja
+(`tmux send-keys -t <pane> "<szöveg>" Enter`) kézzel reprodukálva **nem küldte
+be** a szöveget: `tmux capture-pane` szerint a prompt négy sorra tördelve
+TARTALMAZTA a folytatás-promptot, a session pedig tovább állt tétlenül. Egy
+KÜLÖN, egy másodperccel később küldött `Enter` azonnal beküldte — mindkét
+session azonnal folytatta (`esc to interrupt`, a napló újra frissült).
+
+**A tanulság iránya.** Egy „megpróbáljuk megmenteni, mielőtt megölnénk" fok
+akkor is *létezőnek* látszik a naplóban (`ELAKADÁS-ÉBRESZTŐ (1/1)`), ha a
+HATÁSA elmarad — a napló azt írja, mit KÜLDTÜNK, nem azt, hogy MEGÉRKEZETT-E.
+Interaktív TUI-t vezérelni annyi, mint egy protokollt beszélni: a beviteli
+doboz beillesztés-heurisztikája a protokoll része, nem részletkérdés. Az ilyen
+fokot a CÉL-oldalon kell megmérni (`capture-pane`), nem a küldés visszatérési
+értékén.
+
+**Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::NudgeSubmitTest`
+(ADR 0498 D1) — a javítás előtti alakkal PIROS.
+
+## L600 — Egy külső kimaradásnak SAJÁT, rövid ablak jár: a 20 perces néma ablak a 529 után tiszta veszteség (ops, 2026-09-03)
+
+**Mérve.** Az `E15-R12` sessionje `Cooked for 1h 22m 21s` után 529-cel esett el
+— **1 óra 22 percnyi turn-munka** veszett el —, majd a driver 20 perces néma
+ablakára várt volna, miközben a jel (`API Error: 529`) betű szerint ott van a
+napló végén. A körönkénti ár tehát nem a 529 maga, hanem a rá következő,
+felismerhető, mégis kivárt tétlenség.
+
+**A tanulság iránya.** A néma ablak azért hosszú, mert nem tudjuk
+megkülönböztetni a gondolkodást a haláltól. Ahol a napló ezt MEGMONDJA, ott a
+hosszú ablak nem óvatosság, hanem vakság: a felismert kimaradás saját,
+rövidebb küszöböt és nagyobb ébresztés-keretet érdemel — a terminális ág
+(`break`) változatlanul marad. Ugyanaz az elv, mint a `github_actions_degraded`
+ágé: külső kimaradáson az önjavításnak nincs mit javítania.
+
+**Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::ApiOverloadWindowTest`
+(ADR 0498 D2).
+
+## L601 — Az ébresztő beküldését egy MÁSIK, a doboz fölé kitett kérdés is elnyelheti: a 529 után felugró visszajelzés-kérdés újra tétlenül hagyta a kört (ops, 2026-09-03)
+
+**Mérve.** A 13:56-os, MÁR JAVÍTOTT (külön Enteres) ébresztés után az `E15-R12`
+14:04-kor ismét tétlen volt, és a `tmux capture-pane` megmutatta, miért: a 529
+fölé a CLI egy kérdést tett ki —
+
+```
+● How is Claude doing this session? (optional)
+  1: Bad    2: Fine   3: Good   0: Dismiss
+```
+
+— ami elnyelte a beküldést. Az ébresztő szövege bement, a kör mégis állt. A
+kérdés ráadásul KITOLTA a `529`-sort az őr látóteréből (utolsó 8 sor), tehát a
+felismerés is elnémult.
+
+**A tanulság iránya.** Egy TUI-t vezérelni annyi, mint egy állapotgépet
+vezérelni, amelynek nem mi írjuk a szabályait: a beviteli doboz nem mindig
+fogadókész, és a blokkoló állapotok nem hibaüzenetként jelennek meg, hanem
+teljesen normális felületi elemként. Ezért (1) a beküldés ELŐTT fel kell
+ismerni és el kell bocsátani a blokkolót, és (2) az állapot-felismerés ablaka
+legyen bőven nagyobb annál, amennyi a keresett sorhoz épp elég — egy váratlan
+felületi elem néhány sorral elnémíthatja az egész őrt.
+
+**Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::FeedbackPromptTest`
+(ADR 0498 D3) — a javítás előtti fán mind a 3 cella PIROS.

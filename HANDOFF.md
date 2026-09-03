@@ -1,5 +1,54 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E16-R01 KÉSZ — A Gamification kompozíciós rétege: valós adat a felület mögé — PR [#549](https://github.com/wolfcasaba/strumsight/pull/549), squash `8c27bf3a` (2026-09-03)
+
+A **Chapter 16 (Kompozíció és rollout) első köre.** A gamification feature
+tizenkét `application/` szolgáltatása és működő `data/` rétege eddig sem jutott
+el a képernyőkig: a feature-ben **nulla** Riverpod-provider volt, az egyetlen
+bekötés a ROUTERBEN élt ad hoc módon (3 privát provider + **beégetett
+négyszintes `LevelCurve`**), a képernyők pedig konstans placeholdereket kaptak,
+nyolc `TODO(E08-R30)` markerrel megjelölve.
+
+**A kör mérlege:**
+
+- ÚJ kompozíciós réteg: `lib/features/gamification/providers/gamification_providers.dart`,
+  a `public.dart` barrelen át kivezetve; a router a **barrelen keresztül**
+  fogyaszt, katalógus/görbe/projekció nem él többé a router fájlban.
+- **8 → 0** `TODO(E08-R30)` a routerben: **5 BEKÖTVE** (achievement-haladás a
+  ledger idempotens receiptjeiből, streak-reason a `StreakService`-ből — nem
+  beégetett `qualified`, reward-inbox a ledger-joinból, level-detail projekció,
+  quest-akció-routing a lezárt `QuestRouteAction` szótárral), **3 BACKLOG**
+  datált, gazdás bejegyzésként. A javító kör további **3** bejegyzést tett
+  hozzá (`docs/ui/legacy-backlog.md` §6.1–§6.6).
+- A `LevelDetailScreen` (létező, tesztelt, de route nélküli képernyő) végre
+  elérhető: ÚJ `AppRoutes.levelDetail` konstans + route (ADR 0123 / L90 mintája:
+  route-aktiváláshoz a kör-scope-nak a composition rootot is birtokolnia kell).
+- **Hamis nulla helyett explicit hiány** ([ADR 0496](docs/adr/0496-gamification-composition-layer-and-honest-unavailability.md)):
+  ahol a perzisztált állapotból nem számítható érték, a provider a hiányt
+  TÍPUSBAN hordozza, a `FutureProvider` loading/error ága nem eshet egybe a
+  MÉRT üressel (`_achievementsAsyncBuilder` `.when` + hibalogolás), és minden
+  kifejezhetetlen hiány datált backlog-tételt kap.
+
+**Protokoll:** implementer `sonnet-impl`, orchestrátor/reviewer Claude Opus 5.
+A review (`docs/reviews/e16-r01-review.md`) az első körben **3 BLOCKER, 3 MAJOR,
+5 MINOR** leletet adott (a két kötelező ügynök — `flutter-reviewer`,
+`flutter-devil-advocate` — a `risk = "high"` miatt), a javító kör után
+**APPROVED**, leletenkénti bizonyítékkal.
+
+**Két mért tanulság ment a naplóba (L603, L604):** a pre-flightban az előre
+kiosztott `ADR 0490` MÁR FOGLALT volt (a foglaló `0496`-ot adott), és a kör
+célzott kapuja zölden ment azon a fán, amit a teljes CI pirosra vitt — az
+`architecture_dependency_test.dart` (gamification `application/` =
+framework-mentes, E08-R08) nem volt a `gate_tests` listán. A fájl azóta a repó
+bevett `features/<f>/providers/` helyén él, az őr pedig a kör kapujában.
+
+**Ismert, kimondott korlát:** a bekötött olvasásoknak ma nincs ÍRÓJUK a fán
+(`replaceProfileSnapshot` / `ActivityEventIngestor` / `DailyChallengeService`
+hívási hely a `lib/`-ben: **nulla**) — a producer-bekötés új üzleti logika,
+ezért nem ennek a körnek a hatásköre; `docs/ui/legacy-backlog.md` §6.6
+rögzíti.
+
+
 ## ✅ E15-R11 KÉSZ — Vision, onboarding és a maradék közösségi képernyő a design-rendszeren — PR [#548](https://github.com/wolfcasaba/strumsight/pull/548), squash `80846c92` (2026-09-03)
 
 A Chapter 15 **utolsó** migrációs batch-e: a kamera-út három képernyője
