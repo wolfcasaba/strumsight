@@ -722,3 +722,95 @@ class RoundMetricsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeasuredPrerequisiteRegimeTest(unittest.TestCase):
+    """ADR 0495 D1/D2 — a párhuzamot a KIMONDOTT előfeltétel dönti el.
+
+    MÉRVE 2026-09-03: a korábbi, epicen belüli VAK sorosítás a teljes hátralévő
+    sort (E15-R09…R13 + E16-R01…R05) egyszálúvá tette, pedig az `E15-R10` és
+    az `E15-R11` briefje az `E15-R03`-at (KÉSZ) nevezi meg előfeltételként. A
+    2. slot heteken át üresen állt (`.pipeline/chain.log`: „nincs a futókkal
+    diszjunkt, előfeltétel-kész kör" — az utolsó héten 358 firing).
+    """
+
+    def _round_brief(self, repo: Path, name: str, prerequisite_line: str | None) -> str:
+        rounds = repo / "docs" / "rounds"
+        rounds.mkdir(parents=True, exist_ok=True)
+        text = "# fixture\n"
+        if prerequisite_line is not None:
+            text += prerequisite_line + "\n"
+        (rounds / name).write_text(text, encoding="utf-8")
+        return f"docs/rounds/{name}"
+
+    def test_a_declared_and_done_prerequisite_no_longer_serialises_the_epic(self) -> None:
+        """A kimondottan FÜGGETLEN, azonos epicbeli kör NEM blokkolt."""
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            first = self._round_brief(repo, "e15-r09.md", "- **Előfeltétel:** `E15-R03` merge-elve")
+            second = self._round_brief(repo, "e15-r10.md", "- **Előfeltétel:** `E15-R03` merge-elve")
+            rows = [
+                ("E15-R03", "docs/rounds/e15-r03.md", "sonnet-impl", "nincs", "done"),
+                ("E15-R09", first, "sonnet-impl", "nincs", "pending"),
+                ("E15-R10", second, "sonnet-impl", "nincs", "pending"),
+            ]
+            self.assertEqual(round_slots.unmet_prerequisites(repo, "E15-R10", second, rows), [])
+
+    def test_a_declared_and_open_prerequisite_still_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            brief = self._round_brief(repo, "e16-r02.md", "- **Előfeltétel:** `E16-R01` merge-elve")
+            rows = [
+                ("E16-R01", "docs/rounds/e16-r01.md", "sonnet-impl", "nincs", "pending"),
+                ("E16-R02", brief, "sonnet-impl", "nincs", "pending"),
+            ]
+            self.assertEqual(round_slots.unmet_prerequisites(repo, "E16-R02", brief, rows), ["E16-R01"])
+
+    def test_a_brief_that_says_nothing_falls_back_to_epic_serialisation(self) -> None:
+        """FAIL-CLOSED: a hallgatás nem enged párhuzamot."""
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            first = self._round_brief(repo, "e15-r09.md", None)
+            second = self._round_brief(repo, "e15-r10.md", None)
+            rows = [
+                ("E15-R09", first, "sonnet-impl", "nincs", "pending"),
+                ("E15-R10", second, "sonnet-impl", "nincs", "pending"),
+            ]
+            self.assertEqual(round_slots.unmet_prerequisites(repo, "E15-R10", second, rows), ["E15-R09"])
+
+    def test_a_round_does_not_block_itself(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            brief = self._round_brief(repo, "e15-r10.md", "- **Előfeltétel:** `E15-R10` a saját sora")
+            rows = [("E15-R10", brief, "sonnet-impl", "nincs", "pending")]
+            self.assertEqual(round_slots.unmet_prerequisites(repo, "E15-R10", brief, rows), [])
+
+    def test_the_migration_journal_is_not_a_collision_surface(self) -> None:
+        """A migrációs napló a merge-zár sorosítottja, nem ütközési felület."""
+        paths = round_slots.effective_paths(
+            ("docs/ui/migration-status.md", "lib/features/a/x_screen.dart")
+        )
+        self.assertEqual(paths, frozenset({"lib/features/a/x_screen.dart"}))
+
+    def test_the_real_queue_admits_a_second_round_beside_the_running_one(self) -> None:
+        """A MÉRT defekt cellája: E15-R09 futása mellett indulhat egy másik kör."""
+        rows = round_slots.queue_rows(ROOT)
+        pending = [row for row in rows if row[4] == "pending"]
+        if not pending:
+            self.skipTest("nincs nyitott kör a sorban")
+        running = pending[0]
+        admitted = []
+        for candidate in pending[1:]:
+            if round_slots.unmet_prerequisites(ROOT, candidate[0], candidate[1], rows):
+                continue
+            if round_slots.paths_conflict(
+                round_slots.load_paths(ROOT, running[1]),
+                round_slots.load_paths(ROOT, candidate[1]),
+            ):
+                continue
+            admitted.append(candidate[0])
+        self.assertTrue(
+            admitted,
+            "a 2. slot ismét üresen áll: a nyitott sorban egyetlen kör sem indítható "
+            f"a(z) {running[0]} mellett",
+        )
