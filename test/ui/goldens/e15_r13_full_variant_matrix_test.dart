@@ -224,9 +224,69 @@ import 'package:strumsight/features/vision/presentation/screens/vision_result_sc
 import 'package:strumsight/features/vision/presentation/screens/vision_session_screen.dart';
 import 'package:strumsight/features/vision/presentation/screens/vision_setup_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/l10n/app_localizations_en.dart';
+
+// ── B-level-only imports (§8 step 3) ────────────────────────────────────
+
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/logging/app_logger.dart';
+import 'package:strumsight/core/storage/json_document_store.dart';
+import 'package:strumsight/core/camera/camera_coordinate_space.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/tutor_conversation.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/tutor_memory_fact.dart';
+import 'package:strumsight/features/ai_tutor/domain/repositories/tutor_conversation_repository.dart';
+import 'package:strumsight/features/ai_tutor/domain/repositories/tutor_memory_repository.dart';
+import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_privacy_providers.dart';
+import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_data_screen.dart';
+import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart';
+import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_profile_screen.dart';
+import 'package:strumsight/features/analyze/providers/analyze_providers.dart';
+import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
+import 'package:strumsight/features/audio_analysis/application/export_analysis_use_case.dart';
+import 'package:strumsight/features/audio_analysis/presentation/analysis_export_screen.dart';
+import 'package:strumsight/features/learn/model/lesson.dart';
+import 'package:strumsight/features/learn/screens/latency_calibration_screen.dart';
+import 'package:strumsight/features/learn/screens/learn_screen.dart';
+import 'package:strumsight/features/learn/screens/lesson_score_preview_screen.dart';
+import 'package:strumsight/features/library/model/analyzed_session.dart';
+import 'package:strumsight/features/library/screens/library_screen.dart';
+import 'package:strumsight/features/library/screens/session_detail_screen.dart';
+import 'package:strumsight/features/practice/domain/model/beat_position.dart'
+    as practice_beat_position;
+import 'package:strumsight/features/practice/domain/model/meter.dart'
+    as practice_meter;
+import 'package:strumsight/features/practice/domain/model/practice_event.dart';
+import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
+import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
+import 'package:strumsight/features/practice_generator/data/local/generation_draft_repository.dart';
+import 'package:strumsight/features/practice_generator/public.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart'
+    as progress_entry;
+import 'package:strumsight/features/progress/providers/practice_log_provider.dart';
+import 'package:strumsight/features/progress/screens/progress_screen.dart';
+import 'package:strumsight/features/settings/screens/vision_privacy_screen.dart';
+import 'package:strumsight/features/share/screens/strum_reel_screen.dart';
+import 'package:strumsight/features/songs/model/setlist.dart';
+import 'package:strumsight/features/songs/model/song.dart';
+import 'package:strumsight/features/songs/providers/setlists_provider.dart';
+import 'package:strumsight/features/songs/providers/songs_provider.dart';
+import 'package:strumsight/features/songs/screens/setlist_detail_screen.dart';
+import 'package:strumsight/features/songs/screens/setlist_list_screen.dart';
+import 'package:strumsight/features/songs/screens/song_builder_screen.dart';
+import 'package:strumsight/features/songs/screens/song_list_screen.dart';
+import 'package:strumsight/features/streak/daily_challenge.dart';
+import 'package:strumsight/features/streak/screens/streak_screen.dart';
+import 'package:strumsight/features/vision/data/persistence/vision_calibration_codec.dart';
+import 'package:strumsight/features/vision/data/persistence/vision_calibration_repository.dart';
+import 'package:strumsight/features/vision/data/persistence/vision_export.dart';
+import 'package:strumsight/features/vision/data/persistence/vision_session_repository.dart';
+import 'package:strumsight/features/vision/domain/vision_setup_profile.dart';
+import 'package:strumsight/features/vision/presentation/providers/guitar_calibration_providers.dart';
+import 'package:strumsight/features/vision/presentation/screens/guitar_calibration_screen.dart';
 
 import '../../../tool/check_screen_reachability.dart';
 import '../../fixtures/practice/session/practice_session_test_fixtures.dart';
+import '../../fixtures/practice_generator/validation/validation_fixtures.dart';
 import '../../support/fake_audio.dart';
 import '../../support/fake_auth.dart';
 import '../../support/fake_engines.dart';
@@ -1956,8 +2016,732 @@ List<Override> _visionSetupOverrides() => [
 ];
 
 // ---------------------------------------------------------------------------
-// A-level registry (46 already-golden-fixtured screens + the two R5 screens,
-// §0.0.A/R3). The B-level 25 are added in a later commit (§8 step 3).
+// B-level fixtures (§8 step 3) — the remaining 24 reachable screens whose
+// pump fixture lives in `test/features/**`, not `test/ui/goldens/**`.
+// Adapted from the source test file named in each block's comment.
+// ---------------------------------------------------------------------------
+
+// ── ai_tutor (test/features/ai_tutor/presentation/tutor_*_screen_test.dart)─
+
+AppConfig _tutorAiConfig({bool aiTutorEnabled = true}) => AppConfig.resolve(
+  environment: AppEnvironment.development,
+  apiBaseUrl: AppConfig.devApiBaseUrl,
+  flags: FeatureFlags(
+    accountEnabled: false,
+    diagnosticsEnabled: false,
+    labModeAvailable: false,
+    aiTutorEnabled: aiTutorEnabled,
+  ),
+  diagnosticsToken: AppConfig.devDiagnosticsToken,
+  buildMode: 'test',
+  appVersion: 'test',
+);
+
+class _FakeTutorMemoryRepository implements TutorMemoryRepository {
+  _FakeTutorMemoryRepository({
+    List<TutorMemoryFact> facts = const <TutorMemoryFact>[],
+  }) {
+    _facts.addAll(facts);
+  }
+
+  final List<TutorMemoryFact> _facts = <TutorMemoryFact>[];
+  int deleteAllCalls = 0;
+  int exportRedactedCalls = 0;
+  String? lastExportPayload;
+  final List<String> deletedFactIds = <String>[];
+
+  @override
+  Future<AppResult<List<TutorMemoryFact>>> list() async =>
+      Success<List<TutorMemoryFact>>(
+        List<TutorMemoryFact>.unmodifiable(_facts),
+      );
+
+  @override
+  Future<AppResult<TutorMemoryFact>> saveCandidate(
+    TutorMemoryCandidate candidate,
+  ) async {
+    final fact = TutorMemoryFact(
+      id: candidate.id,
+      content: candidate.content,
+      conversationId: candidate.conversationId,
+      messageId: candidate.messageId,
+      createdAt: candidate.createdAt,
+      updatedAt: candidate.createdAt,
+      expiresAt: candidate.expiresAt,
+    );
+    _facts.add(fact);
+    return Success<TutorMemoryFact>(fact);
+  }
+
+  @override
+  Future<AppResult<void>> update(TutorMemoryFact fact) async {
+    final index = _facts.indexWhere((item) => item.id == fact.id);
+    if (index == -1) {
+      return const Failure<void>(
+        ValidationFailure(code: FailureCode.validationInvalidInput),
+      );
+    }
+    _facts[index] = fact;
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<AppResult<void>> delete(String factId) async {
+    _facts.removeWhere((item) => item.id == factId);
+    deletedFactIds.add(factId);
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<AppResult<void>> purgeExpired(DateTime now) async {
+    _facts.removeWhere((fact) => fact.isExpiredAt(now));
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<AppResult<String>> exportRedacted() async {
+    exportRedactedCalls++;
+    lastExportPayload =
+        '{"schemaVersion":1,"facts":[{"id":"x","content":"[redacted]"}]}';
+    return Success<String>(lastExportPayload!);
+  }
+
+  @override
+  Future<AppResult<void>> deleteAllAiData() async {
+    deleteAllCalls++;
+    _facts.clear();
+    return const Success<void>(null);
+  }
+}
+
+class _FakeTutorConversationRepository implements TutorConversationRepository {
+  final List<TutorConversation> _conversations = <TutorConversation>[];
+
+  @override
+  Future<AppResult<void>> save(TutorConversation conversation) async {
+    _conversations.add(conversation);
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<AppResult<TutorConversation?>> get(TutorConversationId id) async =>
+      Success<TutorConversation?>(
+        _conversations.cast<TutorConversation?>().firstWhere(
+          (item) => item?.id == id,
+          orElse: () => null,
+        ),
+      );
+
+  @override
+  Future<AppResult<TutorConversationPage>> list({
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    final end = (offset + limit).clamp(0, _conversations.length);
+    final page = offset >= _conversations.length
+        ? const <TutorConversation>[]
+        : _conversations.sublist(offset, end);
+    return Success<TutorConversationPage>(
+      TutorConversationPage(
+        items: page,
+        offset: offset,
+        total: _conversations.length,
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<TutorConversationSummary?>> summary(
+    TutorConversationId id,
+  ) async {
+    for (final c in _conversations) {
+      if (c.id == id) {
+        return Success<TutorConversationSummary?>(
+          TutorConversationSummary(
+            conversationId: c.id,
+            messageCount: c.messages.length,
+            messageProvenance: const <TutorMessageProvenance>[],
+          ),
+        );
+      }
+    }
+    return const Success<TutorConversationSummary?>(null);
+  }
+
+  @override
+  Future<AppResult<void>> delete(TutorConversationId id) async {
+    _conversations.removeWhere((item) => item.id == id);
+    return const Success<void>(null);
+  }
+}
+
+Widget _tutorDataScreen() => const TutorDataScreen();
+List<Override> _tutorDataOverrides() => [
+  ...preferenceOverrides(),
+  appConfigProvider.overrideWithValue(_tutorAiConfig()),
+  tutorMemoryRepositoryProvider.overrideWithValue(_FakeTutorMemoryRepository()),
+  tutorConversationRepositoryProvider.overrideWithValue(
+    _FakeTutorConversationRepository(),
+  ),
+];
+
+Widget _tutorPrivacyScreen() => const TutorPrivacyScreen();
+List<Override> _tutorPrivacyOverrides() => [
+  ...preferenceOverrides(),
+  appConfigProvider.overrideWithValue(_tutorAiConfig()),
+  tutorMemoryRepositoryProvider.overrideWithValue(_FakeTutorMemoryRepository()),
+];
+
+Widget _tutorProfileScreen() => const TutorProfileScreen();
+List<Override> _tutorProfileOverrides() => [
+  ...preferenceOverrides(),
+  appConfigProvider.overrideWithValue(_tutorAiConfig()),
+];
+
+// ── analyze (test/features/analyze/mic_error_parity_test.dart) ────────────
+
+class _AnalyzeMicErrorStub extends AnalyzeController {
+  @override
+  AnalyzeState build() => const AnalyzeState(phase: AnalyzePhase.micError);
+}
+
+Widget _analyzeScreen() => const Scaffold(body: AnalyzeScreen());
+List<Override> _analyzeOverrides() => [
+  ...preferenceOverrides(),
+  analyzeControllerProvider.overrideWith(_AnalyzeMicErrorStub.new),
+];
+
+// ── audio_analysis export (test/features/audio_analysis/.../analysis_export_screen_test.dart)
+
+class _ExportFakeShareService extends ShareService {
+  _ExportFakeShareService();
+
+  @override
+  Future<void> shareExportFile({
+    required File file,
+    required String caption,
+    String? subject,
+    Rect? sharePositionOrigin,
+  }) async {}
+}
+
+AnalysisDocument _analysisExportDocument() => AnalysisDocument(
+  id: 'doc-screen',
+  schemaVersion: analysisDocumentSchemaVersion,
+  createdAt: DateTime.utc(2026, 8, 13),
+  mode: AnalysisMode.freePlay,
+  input: AnalysisInputSummary(
+    source: AnalysisInputSource.microphone,
+    duration: const Duration(seconds: 20),
+    sampleRate: 48000,
+    channelCount: 1,
+    fingerprint: 'fp',
+  ),
+  provenance: AnalysisProvenance(
+    appVersion: '1.0.0',
+    analyzerVersion: '1',
+    pipelineVersion: '1',
+    stageVersions: const <String, String>{},
+    dspConfigHash: 'cfg',
+    modelManifestIds: const <String>[],
+    inputFingerprint: 'fp',
+    platform: 'android',
+    featureFlagSnapshot: const <String, bool>{},
+  ),
+  signalQuality: SignalQualityReport(
+    overall: 0.8,
+    peakDbfs: -3,
+    rmsDbfs: -18,
+    noiseFloorDbfs: -60,
+    clippedSampleRatio: 0,
+    silentRatio: 0,
+    tonalness: 0.5,
+  ),
+  capabilities: <CapabilityReport>[
+    CapabilityReport(
+      capability: AnalysisCapability.onsetTimeline,
+      status: CapabilityStatus.available,
+      confidence: 0.9,
+    ),
+  ],
+  timeline: AnalysisTimeline(duration: const Duration(seconds: 20)),
+  metrics: <AnalysisMetricResult>[
+    AnalysisMetricResult(
+      id: AnalysisMetricId.timingMeanAbsoluteError,
+      version: 1,
+      status: CapabilityStatus.available,
+      confidence: 0.7,
+      unit: 's',
+      sampleCount: 4,
+      evidence: const <String>[],
+      value: ScalarMetricValue(0.05),
+    ),
+  ],
+  hotspots: const <AnalysisHotspot>[],
+  insights: const <AnalysisInsight>[],
+  warnings: const <AnalysisWarning>[],
+  completion: AnalysisCompletion(status: AnalysisCompletionStatus.complete),
+);
+
+Widget _analysisExportScreen() => AnalysisExportScreen(
+  document: _analysisExportDocument(),
+  exportUseCase: ExportAnalysisUseCase(
+    shareService: _ExportFakeShareService(),
+    tempDirectory: Directory.systemTemp,
+  ),
+);
+List<Override> _analysisExportOverrides() => [...preferenceOverrides()];
+
+// ── gamification (test/features/gamification/presentation/*_test.dart) ────
+
+Widget _achievementDetailScreen() => AchievementDetailScreen(
+  achievementId: 'practice_starter',
+  definitions: <AchievementDefinition>[
+    AchievementDefinition(
+      id: 'practice_starter',
+      category: AchievementCategory.practice,
+      titleKey: 'achievementPracticeStarterTitle',
+      descriptionKey: 'achievementPracticeStarterDescription',
+      accessibilityDescriptionKey: 'achievementPracticeStarterSemantics',
+      objectives: <AchievementObjective>[
+        CountAchievementObjective(
+          eventKind: AchievementEventKind.practice,
+          target: 1,
+        ),
+      ],
+      tierPrerequisiteIds: const [],
+      hidden: false,
+      version: 1,
+      deprecated: false,
+    ),
+  ],
+  progressByAchievement: <String, AchievementProgress>{
+    'practice_starter': AchievementProgress(
+      achievementId: 'practice_starter',
+      catalogVersion: 1,
+      value: 0.6,
+    ),
+  },
+  evidence: null,
+);
+List<Override> _achievementDetailOverrides() => [...preferenceOverrides()];
+
+LevelCurve _levelDetailCurve() => LevelCurve(<LevelDefinition>[
+  LevelDefinition(
+    number: 1,
+    levelThreshold: 0,
+    titleKey: 'gamification.level.beginner',
+  ),
+  LevelDefinition(
+    number: 2,
+    levelThreshold: 100,
+    titleKey: 'gamification.level.explorer',
+  ),
+  LevelDefinition(
+    number: 3,
+    levelThreshold: 250,
+    titleKey: 'gamification.level.consistent',
+  ),
+]);
+
+GamificationProfile _levelDetailProfile({int totalXp = 60}) =>
+    GamificationProfile(
+      schemaVersion: gamificationProfileSchemaVersion,
+      totalXp: totalXp,
+      progress: _levelDetailCurve().progressForTotalXp(totalXp),
+    );
+
+ExperiencePoints _levelDetailXp() => ExperiencePoints(
+  baseXp: 10,
+  durationXp: 8,
+  qualityXp: 6,
+  improvementXp: 4,
+  diversityXp: 2,
+);
+
+Widget _levelDetailScreen() => LevelDetailScreen(
+  profile: _levelDetailProfile(totalXp: 60),
+  latestSessionXp: _levelDetailXp(),
+  components: buildR06XpComponents(
+    l10n: AppLocalizationsEn(),
+    xp: _levelDetailXp(),
+  ),
+);
+List<Override> _levelDetailOverrides() => [...preferenceOverrides()];
+
+// ── learn (test/features/learn/*_test.dart) ────────────────────────────────
+
+Widget _latencyCalibrationScreen() => LatencyCalibrationScreen();
+List<Override> _latencyCalibrationOverrides() => [...preferenceOverrides()];
+
+Widget _learnScreen() => LearnScreen(lesson: Lessons.firstStrums);
+List<Override> _learnOverrides() {
+  final engine = FakeStrumEngine();
+  addTearDown(engine.dispose);
+  return [
+    ...preferenceOverrides(),
+    strumEngineProvider.overrideWithValue(engine),
+  ];
+}
+
+class _ScoreCardFakeShareService extends ShareService {
+  const _ScoreCardFakeShareService();
+
+  @override
+  Future<void> shareImage({
+    required GlobalKey boundaryKey,
+    required String caption,
+    required String fileName,
+    String? fallbackText,
+    Rect? sharePositionOrigin,
+  }) async {}
+}
+
+Widget _lessonScorePreviewScreen() => LessonScorePreviewScreen(
+  lesson: Lessons.downUpGroove,
+  accuracy: 0.85,
+  maxCombo: 11,
+  hits: 10,
+  total: 12,
+  shareService: const _ScoreCardFakeShareService(),
+);
+List<Override> _lessonScorePreviewOverrides() => [...preferenceOverrides()];
+
+// ── library (test/features/library/rename_capo_title_test.dart) ───────────
+
+Widget _libraryScreen() => const Scaffold(body: LibraryScreen());
+List<Override> _libraryOverrides() => [...preferenceOverrides()];
+
+AnalyzedSession _sessionDetailFixtureSession() => AnalyzedSession(
+  id: 'a',
+  createdAt: DateTime(2026, 7, 11),
+  title: 'C · G',
+  result: const AnalyzeResult(
+    durationSec: 4,
+    bpm: 90,
+    chords: [TimelineChord(label: 'C', startSec: 0, endSec: 4)],
+    strums: [],
+  ),
+);
+
+Widget _sessionDetailScreen() =>
+    SessionDetailScreen(session: _sessionDetailFixtureSession());
+List<Override> _sessionDetailOverrides() => [...preferenceOverrides()];
+
+// ── practice_hub (test/features/practice/presentation/practice_a11y_audit_test.dart)
+
+class _PracticeHubFixtureRepo implements PracticeCatalogRepository {
+  _PracticeHubFixtureRepo(this.defs);
+  final List<PracticeDefinition> defs;
+  @override
+  List<PracticeDefinition> all() => defs;
+  @override
+  PracticeDefinition? byId(String id) {
+    for (final d in defs) {
+      if (d.id == id) return d;
+    }
+    return null;
+  }
+
+  @override
+  List<PracticeDefinition> byMode(PracticeMode mode) =>
+      defs.where((d) => d.mode == mode).toList(growable: false);
+
+  @override
+  List<PracticeDefinition> byDifficulty(PracticeDifficulty difficulty) =>
+      defs.where((d) => d.difficulty == difficulty).toList(growable: false);
+}
+
+PracticeDefinition _practiceHubStrumPatternDef(String id, String title) =>
+    PracticeDefinition(
+      id: id,
+      schemaVersion: 1,
+      titleKey: 'practiceCatalogTestSetupTitle',
+      descriptionKey: 'practiceCatalogTestSetupDescription',
+      mode: PracticeMode.strumPattern,
+      source: PracticeSource.builtin,
+      meter: const practice_meter.Meter(beatsPerBar: 4),
+      defaultTempo: practice_tempo.Tempo(80),
+      totalBeats: practice_beat_position.BeatPosition.quarters(8),
+      events: List<PracticeEvent>.unmodifiable(
+        List.generate(
+          8,
+          (i) => PracticeEvent(
+            id: '$id.e$i',
+            position: practice_beat_position.BeatPosition.quarters(i),
+            direction: i.isEven ? StrumDirection.down : StrumDirection.up,
+          ),
+        ),
+      ),
+      scoringProfile: ScoringProfile.legacyLearnParity,
+      skillTags: const ['rhythm.quarter_notes'],
+      sourceReference: null,
+      difficulty: PracticeDifficulty.beginner,
+      displayTitle: title,
+    );
+
+Widget _practiceHubScreen() => const PracticeHubScreen(
+  now: null,
+  dailyChallenge: DailyChallenge(
+    day: 19633,
+    name: 'Audit',
+    pattern: <StrumDirection>[],
+  ),
+);
+List<Override> _practiceHubOverrides() {
+  final repo = _PracticeHubFixtureRepo([
+    _practiceHubStrumPatternDef('d1', 'Quarter downstrokes'),
+    _practiceHubStrumPatternDef('d2', 'Alternating eighths'),
+  ]);
+  return [
+    ...preferenceOverrides(),
+    practiceCatalogRepositoryProvider.overrideWithValue(repo),
+  ];
+}
+
+// ── practice_generator (test/features/practice_generator/presentation/*_test.dart)
+
+Widget _planSetupScreen() {
+  final controller = PlanSetupController(
+    draftRepository: GenerationDraftRepository(
+      keyValueStore: InMemoryKeyValueStore(),
+    ),
+    clock: () => DateTime.utc(2026, 8, 18),
+    generateId: () => 'wizard-test-id',
+    locale: 'en',
+  );
+  addTearDown(controller.dispose);
+  return PlanSetupScreen(controller: controller);
+}
+
+List<Override> _planSetupOverrides() => [...preferenceOverrides()];
+
+Widget _todayPlanScreen() {
+  final restDay = PracticeDay(
+    id: DayId('rest-day'),
+    localDate: LocalDate(2026, 8, 19),
+    status: PracticeItemStatus.planned,
+    timeBudget: const Duration(minutes: 30),
+    blocks: const <PracticeBlock>[],
+    primaryFocusSkillIds: const <String>['rest'],
+    reasonCodes: <String>[ScheduleDecisionReason.restDay.code],
+  );
+  return TodayPlanScreen(
+    controller: TodayPlanController(clock: () => DateTime(2026, 8, 19)),
+    plan: buildPlan(days: <PracticeDay>[restDay]),
+  );
+}
+
+List<Override> _todayPlanOverrides() => [...preferenceOverrides()];
+
+// ── progress (test/features/progress/progress_screen_test.dart) ───────────
+
+class _SeededPracticeLog extends PracticeLogController {
+  _SeededPracticeLog(this._seed);
+  final List<progress_entry.PracticeEntry> _seed;
+  @override
+  List<progress_entry.PracticeEntry> build() => _seed;
+}
+
+Widget _progressScreen() => ProgressScreen(now: DateTime(2026, 7, 9));
+List<Override> _progressOverrides() => [
+  ...preferenceOverrides(),
+  practiceLogProvider.overrideWith(
+    () => _SeededPracticeLog([
+      progress_entry.PracticeEntry(
+        day: 19548,
+        source: progress_entry.PracticeSource.learn,
+        seconds: 120,
+        strokes: 10,
+        chords: 3,
+        directionAccuracy: 0.8,
+      ),
+      progress_entry.PracticeEntry(
+        day: 19548,
+        source: progress_entry.PracticeSource.analyze,
+        seconds: 60,
+        strokes: 5,
+      ),
+      progress_entry.PracticeEntry(
+        day: 19547,
+        source: progress_entry.PracticeSource.live,
+        seconds: 90,
+        strokes: 8,
+      ),
+    ]),
+  ),
+];
+
+// ── vision_privacy (test/features/settings/vision_privacy_screen_test.dart)
+
+Widget _visionPrivacyScreen() {
+  final store = InMemoryKeyValueStore();
+  final repository = VisionSessionRepository(store: store);
+  return VisionPrivacyScreen(
+    repository: repository,
+    export: VisionExport(store: store),
+  );
+}
+
+List<Override> _visionPrivacyOverrides() => [...preferenceOverrides()];
+
+// ── share (test/features/share/strum_reel_test.dart) ───────────────────────
+
+final _strumReelResult = AnalyzeResult(
+  durationSec: 4,
+  bpm: 100,
+  chords: const [
+    TimelineChord(label: 'C', startSec: 0, endSec: 2),
+    TimelineChord(label: 'G', startSec: 2, endSec: 4),
+  ],
+  strums: [
+    for (var i = 0; i < 6; i++)
+      TimelineStrum(
+        direction: i.isEven ? StrumDirection.down : StrumDirection.up,
+        timeSec: i * 0.5,
+        confidence: 1,
+      ),
+  ],
+);
+
+Widget _strumReelScreen() => StrumReelScreen(result: _strumReelResult);
+List<Override> _strumReelOverrides() => [...preferenceOverrides()];
+
+// ── songs (test/features/songs/*_test.dart) ─────────────────────────────────
+
+class _SeededSongs extends SongsController {
+  _SeededSongs(this._seed);
+  final List<Song> _seed;
+  @override
+  List<Song> build() {
+    super.build();
+    return _seed;
+  }
+}
+
+class _SeededSetlists extends SetlistsController {
+  _SeededSetlists(this._seed);
+  final List<Setlist> _seed;
+  @override
+  List<Setlist> build() {
+    super.build();
+    return _seed;
+  }
+}
+
+const _setlistFixtureSong = Song(
+  id: 'a',
+  name: 'First Song',
+  chords: ['C', 'G'],
+  pattern: [
+    StrumDirection.down, null, StrumDirection.down, null, //
+    StrumDirection.down, null, StrumDirection.down, null,
+  ],
+  bpm: 100,
+);
+
+const _setlistFixtureSet = Setlist(id: 's', name: 'My Gig', songIds: ['a']);
+
+Widget _setlistDetailScreen() => const SetlistDetailScreen(setlistId: 's');
+List<Override> _setlistDetailOverrides() => [
+  ...preferenceOverrides(),
+  songsProvider.overrideWith(() => _SeededSongs([_setlistFixtureSong])),
+  setlistsProvider.overrideWith(() => _SeededSetlists([_setlistFixtureSet])),
+];
+
+Widget _setlistListScreen() => const SetlistListScreen();
+List<Override> _setlistListOverrides() => [
+  ...preferenceOverrides(),
+  songsProvider.overrideWith(() => _SeededSongs(const [])),
+  setlistsProvider.overrideWith(() => _SeededSetlists([_setlistFixtureSet])),
+];
+
+Widget _songBuilderScreen() => const SongBuilderScreen();
+List<Override> _songBuilderOverrides() => [...preferenceOverrides()];
+
+const _songListD = StrumDirection.down;
+const _songListU = StrumDirection.up;
+const StrumDirection? _songListX = null;
+
+Song _songListWaltz({int bpm = 60}) => Song(
+  id: 'w1',
+  name: 'My Waltz',
+  chords: const ['C', 'G'],
+  pattern: const [
+    _songListD,
+    _songListX,
+    _songListU,
+    _songListX,
+    _songListU,
+    _songListX,
+  ],
+  beatsPerBar: 3,
+  bpm: bpm,
+);
+
+Widget _songListScreen() => const SongListScreen();
+List<Override> _songListOverrides() => [
+  ...preferenceOverrides(),
+  songsProvider.overrideWith(
+    () => _SeededSongs([
+      _songListWaltz(),
+      Song(
+        id: 'c1',
+        name: 'Common Time',
+        chords: const ['C'],
+        pattern: const [
+          _songListD, _songListX, _songListD, _songListX, //
+          _songListD, _songListX, _songListD, _songListX,
+        ],
+        bpm: 90,
+      ),
+    ]),
+  ),
+];
+
+// ── streak (test/features/streak/streak_screen_test.dart) ─────────────────
+
+Widget _streakScreen() => StreakScreen(now: DateTime(2026, 7, 9));
+List<Override> _streakOverrides() => [...preferenceOverrides()];
+
+// ── vision guitar calibration (test/features/vision/.../guitar_calibration_screen_test.dart)
+
+GuitarCalibrationContext _guitarCalibrationContext() =>
+    GuitarCalibrationContext(
+      camera: VisionCameraPreference.back,
+      orientation: CameraRotation.degrees0,
+      zoom: 0.5,
+      setupProfile: VisionSetupProfile.practiceBalanced,
+      now: () => DateTime(2026, 1, 1, 12),
+    );
+
+VisionCalibrationRepository _emptyGuitarCalibrationRepository() =>
+    VisionCalibrationRepository(
+      document: JsonDocumentStore(
+        store: InMemoryKeyValueStore(),
+        logger: const NoopAppLogger(),
+        key: StorageKeys.visionCalibration,
+        legacyKey: 'ss.vision.calibration.legacy',
+        name: 'vision_calibration',
+        bodyKey: 'data',
+      ),
+      codec: const VisionCalibrationCodec(),
+    );
+
+Widget _guitarCalibrationScreen() => const GuitarCalibrationScreen();
+List<Override> _guitarCalibrationOverrides() => [
+  ...preferenceOverrides(),
+  visionCalibrationRepositoryProvider.overrideWithValue(
+    _emptyGuitarCalibrationRepository(),
+  ),
+  guitarCalibrationRuntimeContextProvider.overrideWithValue(
+    _guitarCalibrationContext(),
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// A-level + B-level registry (§0.0.A/R3 — the full 70 fixtured screens + the
+// two R5 screens; only `WrappedPreviewScreen` stays excluded, §8 step 3).
 // ---------------------------------------------------------------------------
 
 final _screens = <String, _ScreenFixture>{
@@ -2233,6 +3017,136 @@ final _screens = <String, _ScreenFixture>{
     build: _skillDetailScreen,
     overridesBuilder: _skillDetailOverrides,
   ),
+  'tutor_data': _ScreenFixture(
+    screenPath:
+        'lib/features/ai_tutor/presentation/screens/tutor_data_screen.dart',
+    build: _tutorDataScreen,
+    overridesBuilder: _tutorDataOverrides,
+  ),
+  'tutor_privacy': _ScreenFixture(
+    screenPath:
+        'lib/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart',
+    build: _tutorPrivacyScreen,
+    overridesBuilder: _tutorPrivacyOverrides,
+  ),
+  'tutor_profile': _ScreenFixture(
+    screenPath:
+        'lib/features/ai_tutor/presentation/screens/tutor_profile_screen.dart',
+    build: _tutorProfileScreen,
+    overridesBuilder: _tutorProfileOverrides,
+  ),
+  'analyze': _ScreenFixture(
+    screenPath: 'lib/features/analyze/screens/analyze_screen.dart',
+    build: _analyzeScreen,
+    overridesBuilder: _analyzeOverrides,
+  ),
+  'analysis_export': _ScreenFixture(
+    screenPath:
+        'lib/features/audio_analysis/presentation/analysis_export_screen.dart',
+    build: _analysisExportScreen,
+    overridesBuilder: _analysisExportOverrides,
+  ),
+  'achievement_detail': _ScreenFixture(
+    screenPath:
+        'lib/features/gamification/presentation/screens/achievement_detail_screen.dart',
+    build: _achievementDetailScreen,
+    overridesBuilder: _achievementDetailOverrides,
+  ),
+  'level_detail': _ScreenFixture(
+    screenPath:
+        'lib/features/gamification/presentation/screens/level_detail_screen.dart',
+    build: _levelDetailScreen,
+    overridesBuilder: _levelDetailOverrides,
+  ),
+  'latency_calibration': _ScreenFixture(
+    screenPath: 'lib/features/learn/screens/latency_calibration_screen.dart',
+    build: _latencyCalibrationScreen,
+    overridesBuilder: _latencyCalibrationOverrides,
+  ),
+  'learn': _ScreenFixture(
+    screenPath: 'lib/features/learn/screens/learn_screen.dart',
+    build: _learnScreen,
+    overridesBuilder: _learnOverrides,
+  ),
+  'lesson_score_preview': _ScreenFixture(
+    screenPath: 'lib/features/learn/screens/lesson_score_preview_screen.dart',
+    build: _lessonScorePreviewScreen,
+    overridesBuilder: _lessonScorePreviewOverrides,
+  ),
+  'library': _ScreenFixture(
+    screenPath: 'lib/features/library/screens/library_screen.dart',
+    build: _libraryScreen,
+    overridesBuilder: _libraryOverrides,
+  ),
+  'session_detail': _ScreenFixture(
+    screenPath: 'lib/features/library/screens/session_detail_screen.dart',
+    build: _sessionDetailScreen,
+    overridesBuilder: _sessionDetailOverrides,
+  ),
+  'practice_hub': _ScreenFixture(
+    screenPath:
+        'lib/features/practice/presentation/screens/practice_hub_screen.dart',
+    build: _practiceHubScreen,
+    overridesBuilder: _practiceHubOverrides,
+  ),
+  'plan_setup': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/plan_setup_screen.dart',
+    build: _planSetupScreen,
+    overridesBuilder: _planSetupOverrides,
+  ),
+  'today_plan': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/today_plan_screen.dart',
+    build: _todayPlanScreen,
+    overridesBuilder: _todayPlanOverrides,
+  ),
+  'progress': _ScreenFixture(
+    screenPath: 'lib/features/progress/screens/progress_screen.dart',
+    build: _progressScreen,
+    overridesBuilder: _progressOverrides,
+  ),
+  'vision_privacy': _ScreenFixture(
+    screenPath: 'lib/features/settings/screens/vision_privacy_screen.dart',
+    build: _visionPrivacyScreen,
+    overridesBuilder: _visionPrivacyOverrides,
+  ),
+  'strum_reel': _ScreenFixture(
+    screenPath: 'lib/features/share/screens/strum_reel_screen.dart',
+    build: _strumReelScreen,
+    overridesBuilder: _strumReelOverrides,
+  ),
+  'setlist_detail': _ScreenFixture(
+    screenPath: 'lib/features/songs/screens/setlist_detail_screen.dart',
+    build: _setlistDetailScreen,
+    overridesBuilder: _setlistDetailOverrides,
+  ),
+  'setlist_list': _ScreenFixture(
+    screenPath: 'lib/features/songs/screens/setlist_list_screen.dart',
+    build: _setlistListScreen,
+    overridesBuilder: _setlistListOverrides,
+  ),
+  'song_builder': _ScreenFixture(
+    screenPath: 'lib/features/songs/screens/song_builder_screen.dart',
+    build: _songBuilderScreen,
+    overridesBuilder: _songBuilderOverrides,
+  ),
+  'song_list': _ScreenFixture(
+    screenPath: 'lib/features/songs/screens/song_list_screen.dart',
+    build: _songListScreen,
+    overridesBuilder: _songListOverrides,
+  ),
+  'streak': _ScreenFixture(
+    screenPath: 'lib/features/streak/screens/streak_screen.dart',
+    build: _streakScreen,
+    overridesBuilder: _streakOverrides,
+  ),
+  'guitar_calibration': _ScreenFixture(
+    screenPath:
+        'lib/features/vision/presentation/screens/guitar_calibration_screen.dart',
+    build: _guitarCalibrationScreen,
+    overridesBuilder: _guitarCalibrationOverrides,
+  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -2258,110 +3172,11 @@ final class _ExclusionEntry {
   final String followUpRound;
 }
 
-const _bLevelReason =
-    'B-level fixture (fixture found in test/features/**, not yet in this '
-    'file) — scheduled for this same round\'s own B-level commit, §8 step 3.';
-
+// The exclusion list may only shrink (L180) — after the B-level commit
+// (§8 step 3) this holds exactly the one screen with NO merged pump fixture
+// anywhere in the tree, `WrappedPreviewScreen` (measured, §0.0.A/R3): the
+// "no merged fixture" reason is the ONLY one that may appear here.
 const _exclusions = <_ExclusionEntry>[
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/ai_tutor/presentation/screens/tutor_data_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/ai_tutor/presentation/screens/tutor_profile_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/analyze/screens/analyze_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/audio_analysis/presentation/analysis_export_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/gamification/presentation/screens/achievement_detail_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/gamification/presentation/screens/level_detail_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/learn/screens/latency_calibration_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/learn/screens/learn_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/learn/screens/lesson_score_preview_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/library/screens/library_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/library/screens/session_detail_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/practice/presentation/screens/practice_hub_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/practice_generator/presentation/screens/plan_setup_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/practice_generator/presentation/screens/today_plan_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/progress/screens/progress_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/settings/screens/vision_privacy_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/share/screens/strum_reel_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
-  ),
   _ExclusionEntry(
     screenPath: 'lib/features/share/screens/wrapped_preview_screen.dart',
     reason:
@@ -2373,38 +3188,369 @@ const _exclusions = <_ExclusionEntry>[
         'a future round whose allowed_paths covers a '
         'WrappedPreviewScreen pump fixture (SDD, unscheduled)',
   ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/songs/screens/setlist_detail_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
+];
+
+// ---------------------------------------------------------------------------
+// Per-CELL overflow exclusion list (§5.2, mirrors
+// `e13_r36_variant_matrix_test.dart`'s `_ExcludedCell`/`_excludedCells`
+// pattern) — orthogonal to `_exclusions` above (which is about which
+// SCREENS are in the matrix, §0.0.A/R3). This one records a genuine,
+// measured, dated `lib/**` overflow this closing round found but — per
+// brief §5.2 — may NOT fix (`lib/**` is this round's tilos zona). Every
+// entry is mirrored in `docs/ui/legacy-backlog.md`. Can only SHRINK: a
+// listed cell that no longer overflows fails this suite (`_runCell`'s
+// `STALE exclusion-list entry` branch) rather than silently staying on the
+// list forever (L180).
+// ---------------------------------------------------------------------------
+
+final class _ExcludedCell {
+  const _ExcludedCell({
+    required this.screen,
+    required this.theme,
+    required this.locale,
+    required this.viewport,
+    required this.textScale,
+    required this.measuredOverflowPx,
+    required this.measuredOn,
+  });
+
+  final String screen;
+  final String theme;
+  final String locale;
+  final _ViewportProfile viewport;
+  final double textScale;
+  final double measuredOverflowPx;
+  final String measuredOn;
+
+  String get key =>
+      '$screen|$theme|$locale|${_viewportNames[viewport]}|$textScale';
+}
+
+/// `lib/features/share/screens/strum_reel_screen.dart:339` — the tagline
+/// `Row` (`↓↑` glyph + `l10n.reelTagline` text, `mainAxisAlignment: center`,
+/// no `Flexible`/`Expanded` wrapper) inside a fixed-aspect-ratio reel card
+/// narrower than the device width; the card's `landscape|1.0` cells never
+/// overflow (most horizontal room relative to text), every other cell does.
+/// Measured 2026-09-03 on this box, both themes identically (theme doesn't
+/// affect layout, only color) — MEASURE, DO NOT FIX (`lib/**` is this
+/// round's tilos zona, brief §5.2).
+const _excludedCells = <_ExcludedCell>[
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'light',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 1.0,
+    measuredOverflowPx: 191,
+    measuredOn: '2026-09-03',
   ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/songs/screens/setlist_list_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'light',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 862,
+    measuredOn: '2026-09-03',
   ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/songs/screens/song_builder_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'light',
+    locale: 'en',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 312,
+    measuredOn: '2026-09-03',
   ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/songs/screens/song_list_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'light',
+    locale: 'hu',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 1.0,
+    measuredOverflowPx: 228,
+    measuredOn: '2026-09-03',
   ),
-  _ExclusionEntry(
-    screenPath: 'lib/features/streak/screens/streak_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'light',
+    locale: 'hu',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 935,
+    measuredOn: '2026-09-03',
   ),
-  _ExclusionEntry(
-    screenPath:
-        'lib/features/vision/presentation/screens/guitar_calibration_screen.dart',
-    reason: _bLevelReason,
-    followUpRound: 'E15-R13 (this round, B-level commit)',
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'light',
+    locale: 'hu',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 419,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'dark',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 1.0,
+    measuredOverflowPx: 191,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'dark',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 862,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'dark',
+    locale: 'en',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 312,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'dark',
+    locale: 'hu',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 1.0,
+    measuredOverflowPx: 228,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'dark',
+    locale: 'hu',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 935,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'strum_reel',
+    theme: 'dark',
+    locale: 'hu',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 419,
+    measuredOn: '2026-09-03',
+  ),
+
+  // Four MORE measured, dated `lib/**` defects, all textScale 2.0 only
+  // (each screen's own row/card layout has no accessibility-scale headroom
+  // at 2.0x — brief §6's "pontosan a küszöbön (2.0) minden cella zöld"
+  // requirement is the DESIGN intent A2 verifies; a genuine found defect is
+  // recorded here, not silently made to pass, per §5.2/§9). Different
+  // screens, different root causes — MEASURE, DO NOT FIX.
+
+  // `lib/features/analyze/screens/analyze_screen.dart:331` — the mic-error
+  // state's action Row (icon + retry label), hu locale only (longer string)
+  // at landscape (least vertical room pushes it into a horizontal squeeze).
+  _ExcludedCell(
+    screen: 'analyze',
+    theme: 'light',
+    locale: 'hu',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 36,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'analyze',
+    theme: 'dark',
+    locale: 'hu',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 36,
+    measuredOn: '2026-09-03',
+  ),
+
+  // `lib/features/learn/screens/latency_calibration_screen.dart` — compact
+  // portrait, en only (the shorter locale — this one is a fixed-height
+  // measurement row, not a text-length issue).
+  _ExcludedCell(
+    screen: 'latency_calibration',
+    theme: 'light',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 25,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'latency_calibration',
+    theme: 'dark',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 25,
+    measuredOn: '2026-09-03',
+  ),
+
+  // `lib/features/learn/screens/learn_screen.dart:879`'s bottom action Row —
+  // overflows identically (26.3px) at EVERY locale/viewport combination at
+  // textScale 2.0, i.e. depends only on the scale, not locale or viewport.
+  _ExcludedCell(
+    screen: 'learn',
+    theme: 'light',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 26.3,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'learn',
+    theme: 'light',
+    locale: 'en',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 26.3,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'learn',
+    theme: 'light',
+    locale: 'hu',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 26.3,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'learn',
+    theme: 'light',
+    locale: 'hu',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 26.3,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'learn',
+    theme: 'dark',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 26.3,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'learn',
+    theme: 'dark',
+    locale: 'en',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 26.3,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'learn',
+    theme: 'dark',
+    locale: 'hu',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 26.3,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'learn',
+    theme: 'dark',
+    locale: 'hu',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 26.3,
+    measuredOn: '2026-09-03',
+  ),
+
+  // `lib/features/learn/screens/lesson_score_preview_screen.dart:101`'s
+  // fixed-size `SizedBox` share-card boundary — overflows identically
+  // (366px) at EVERY locale/viewport combination at textScale 2.0: the card
+  // is a fixed pixel size (for the share-image capture boundary) that does
+  // not grow with the accessibility text scale.
+  _ExcludedCell(
+    screen: 'lesson_score_preview',
+    theme: 'light',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 366,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'lesson_score_preview',
+    theme: 'light',
+    locale: 'en',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 366,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'lesson_score_preview',
+    theme: 'light',
+    locale: 'hu',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 366,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'lesson_score_preview',
+    theme: 'light',
+    locale: 'hu',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 366,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'lesson_score_preview',
+    theme: 'dark',
+    locale: 'en',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 366,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'lesson_score_preview',
+    theme: 'dark',
+    locale: 'en',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 366,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'lesson_score_preview',
+    theme: 'dark',
+    locale: 'hu',
+    viewport: _ViewportProfile.compactPortrait,
+    textScale: 2.0,
+    measuredOverflowPx: 366,
+    measuredOn: '2026-09-03',
+  ),
+  _ExcludedCell(
+    screen: 'lesson_score_preview',
+    theme: 'dark',
+    locale: 'hu',
+    viewport: _ViewportProfile.landscape,
+    textScale: 2.0,
+    measuredOverflowPx: 366,
+    measuredOn: '2026-09-03',
   ),
 ];
+
+final _excludedByKey = {for (final cell in _excludedCells) cell.key: cell};
 
 // ---------------------------------------------------------------------------
 // Pump + capture (adapted from e13_r36_variant_matrix_test.dart; bounded pump
@@ -2578,14 +3724,31 @@ void main() {
                     'no exception may occur while pumping this cell (brief '
                     '§3); got: ${result.otherErrors}',
               );
-              expect(
-                result.overflowPx,
-                isNull,
-                reason:
-                    'unexpected RenderFlex overflow of ${result.overflowPx}px '
-                    '— a real lib/** regression this closing round measures '
-                    'but does not fix (brief §5.2)',
-              );
+
+              final excluded = _excludedByKey[cellKey];
+              if (excluded == null) {
+                expect(
+                  result.overflowPx,
+                  isNull,
+                  reason:
+                      'unexpected RenderFlex overflow of '
+                      '${result.overflowPx}px — either this is a new '
+                      'lib/** regression (blocked, this round cannot fix '
+                      'lib/**) or a dated _ExcludedCell entry is missing',
+                );
+              } else {
+                expect(
+                  result.overflowPx,
+                  isNotNull,
+                  reason:
+                      'STALE exclusion-list entry (measured '
+                      '${excluded.measuredOverflowPx}px on '
+                      '${excluded.measuredOn}): this cell no longer '
+                      'overflows — remove the _ExcludedCell entry and its '
+                      'docs/ui/legacy-backlog.md mirror (§0.0.A/R3: the '
+                      'list may only shrink)',
+                );
+              }
             });
           }
         }
