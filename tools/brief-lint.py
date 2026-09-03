@@ -197,8 +197,8 @@ def owned_existing_screens(repo: Path, allowed_paths) -> list[str]:
     return sorted(screens)
 
 
-def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[str, list[str]]:
-    """képernyő → a briefen KÍVÜL élő tesztek, amelyek PINNELIK.
+def _screen_pins(repo: Path, screens, keep) -> dict[str, list[str]]:
+    """képernyő → az őt PINNELŐ tesztek, a `keep(relative)` szűrő szerint.
 
     A pinnelés MÉRT alakja (E13-R17/H3): a teszt importálja a képernyő
     forrásfájlját ÉS néven nevezi a típusát (`find.byType(LiveScreen)`,
@@ -224,14 +224,7 @@ def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[
     pins: dict[str, list[str]] = {}
     for dart_file in sorted(test_root.rglob("*_test.dart")):
         relative = dart_file.resolve().relative_to(repo_root).as_posix()
-        # A MÉRT halt-ok az `allowed_paths` hiánya: ha a teszt nincs a listán,
-        # az implementer hozzá sem nyúlhat, és a kör H3-ban áll meg (E13-R16/F9,
-        # E13-R17/H3). A briefen MÁR szereplő teszt a kör vállalt hatóköre — hogy
-        # bekerül-e a célzott `gate_tests`-be is, az a brief szerzőjének mérlegelése,
-        # nem lint-kérdés. A lelet ezért PONTOSAN a listán kívüli pineket sorolja,
-        # és rájuk kéri mindkét listát (a kívül élő őrök szerkezetileg csak a
-        # teljes CI-suite-on futnának, azaz a lelet mindig későn érkezne).
-        if covered_by(relative, allowed_paths):
+        if not keep(relative):
             continue
         try:
             source = dart_file.read_text(encoding="utf-8")
@@ -241,6 +234,36 @@ def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[
             if import_uri in source and type_pattern.search(source):
                 pins.setdefault(screen, []).append(relative)
     return {screen: sorted(found) for screen, found in sorted(pins.items())}
+
+
+def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[str, list[str]]:
+    """képernyő → a briefen KÍVÜL élő tesztek, amelyek PINNELIK (S11).
+
+    A MÉRT halt-ok az `allowed_paths` hiánya: ha a teszt nincs a listán, az
+    implementer hozzá sem nyúlhat, és a kör H3-ban áll meg (E13-R16/F9,
+    E13-R17/H3). Ez a lelet PONTOSAN a listán kívüli pineket sorolja; a listán
+    BELÜLI, de nem MÉRT pineket az `unmeasured_screen_pins` (S14) adja.
+    """
+    return _screen_pins(repo, screens, lambda relative: not covered_by(relative, allowed_paths))
+
+
+def unmeasured_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[str, list[str]]:
+    """képernyő → a briefen BELÜL élő, de a kör kapuján NEM futó pinnelő tesztek.
+
+    MÉRT rés (E15-R09, `docs/LESSONS.md` L593, 2026-09-03): az S11 a listán
+    BELÜLI pint lezártnak vette — „hogy bekerül-e a célzott `gate_tests`-be is,
+    az a brief szerzőjének mérlegelése". A mérés ezt megcáfolta: az öt migrált
+    AI-Tutor képernyőt pinnelő teszt az `allowed_paths`-on volt, a
+    `gate_tests`-en NEM, ezért a kör CÉLZOTT kapuja ZÖLDEN ment át azon a fán,
+    amit a kör pirosra vitt — a lelet a 15 perces teljes CI-suite-ról érkezett,
+    javító körrel.
+    """
+    return _screen_pins(
+        repo,
+        screens,
+        lambda relative: covered_by(relative, allowed_paths)
+        and not covered_by(relative, gate_tests),
+    )
 
 
 def tracked_directory_prefixes(repo: Path) -> set[str]:
@@ -976,6 +999,52 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                         "vagy a §0.0 mondja ki, hogy a könyvtárat EZ a kör hozza létre",
                     )
                 )
+
+    # S14 — a briefen BELÜL élő, de a kör kapuján NEM futó pinnelő teszt
+    # (E15-R09, `docs/LESSONS.md` L593, 2026-09-03).
+    #
+    # Az S11 a listán BELÜLI pint szándékosan lezártnak vette: „hogy bekerül-e a
+    # célzott `gate_tests`-be is, az a brief szerzőjének mérlegelése, nem
+    # lint-kérdés". A mérés ezt MEGCÁFOLTA. Az E15-R09 öt AI-Tutor képernyőt
+    # cserélt le; az őket pinnelő tesztek az `allowed_paths`-on voltak, a
+    # `gate_tests`-en NEM — a kör CÉLZOTT kapuja ezért ZÖLDEN ment át azon a fán,
+    # amit a kör pirosra vitt. A lelet a 15 perces teljes CI-suite-ról érkezett,
+    # javító kör árán. Ugyanaz a hibaosztály, mint az L592-é: amit csak a teljes
+    # CI mér, arról a jelzés MINDIG későn jön.
+    #
+    # HAMIS RIASZTÁS elleni mércék, az S11-ével azonosak: `status == "done"` →
+    # néma; csak a fában LÉTEZŐ képernyő számít; a pinnelés kettős feltétele
+    # import ÉS típusnév; a fedettség a router `_matches` előtag-szemantikájával.
+    round_status_for_s14 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(
+        brief.task_id, ""
+    )
+    if round_status_for_s14 != "done":
+        unmeasured = unmeasured_screen_pins(
+            repo,
+            owned_existing_screens(repo, metadata.allowed_paths),
+            metadata.allowed_paths,
+            metadata.gate_tests,
+        )
+        if unmeasured:
+            detail = "; ".join(
+                f"`{screen}` → " + ", ".join(f"`{test}`" for test in tests)
+                for screen, tests in unmeasured.items()
+            )
+            findings.append(
+                Finding(
+                    "strict",
+                    "S14",
+                    "a kör olyan MEGLÉVŐ képernyőt írhat át, amelynek a típusát a "
+                    f"brief SAJÁT `allowed_paths`-án élő teszt pinneli ({detail}), de "
+                    "ez a teszt NINCS a `gate_tests`-ben — a kör célzott kapuja így "
+                    "zölden megy át azon a fán, amit a kör pirosra visz, és a lelet "
+                    "csak a teljes CI-suite-ról érkezik, javító kör árán (mérve: "
+                    "E15-R09, [L593](../LESSONS.md#l593)); vedd fel a felsorolt "
+                    "teszteket a `gate_tests`-be ÉS a §7 gate-parancsba (az S12 ezt "
+                    "külön méri). Ha a kör a képernyőt bizonyíthatóan nem cseréli le, "
+                    "a §0.0 mondja ki ezt a mérést",
+                )
+            )
 
     return findings
 

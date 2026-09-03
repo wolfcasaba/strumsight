@@ -23684,3 +23684,89 @@ valódi-sértés próbája ezt kimérte) + `test/tooling/design_system_barrel_ar
 (ADR 0494 D2). A kipinnelt harness-rést magát a
 `test/features/ai_tutor/presentation/tutor_home_screen_test.dart` `gate_tests`-be
 vétele zárta (§0.0.B/R10).
+## L594 — A párhuzamot tiltó szabály lehet a legdrágább szabály: az epicen belüli VAK sorosítás a 2. slotot heteken át üresen tartotta, miközben a valódi függés a briefben ki volt mondva (ops, 2026-09-03)
+
+**Mérve.** `tools/round-slots.py plan --slots 2` a 10 nyitott körből EGYET SEM
+engedett a futó `E15-R09` mellé; a `.pipeline/chain.log` az utolsó héten 358
+firingen írta ki, hogy „nincs a futókkal diszjunkt, előfeltétel-kész kör". Az
+`E15-R10`/`E15-R11` briefje viszont az `E15-R03`-at (KÉSZ) nevezi meg
+előfeltételként, az `E15-R12` (`backend/**`) pedig egyetlen fájlban sem ütközik
+egyetlen UI-körrel sem. A blokkolás forrása egy KONZERVATÍVNAK szánt heurisztika
+volt („az SDD a köröket függőségi sorrendben írja"), nem mérés.
+
+**A tanulság iránya.** Egy konzervatív alapértelmezés csak addig olcsó, amíg a
+pontosabb csatorna hiányzik. Amikor a pontosabb csatorna (a brief `Előfeltétel`
+sora) már MINDEN nyitott briefen jelen van és mérten pontos, a heurisztika nem
+biztonság többé, hanem tiszta veszteség — a fail-closed tartalék (aki nem mondja
+ki, arra a régi szabály él) megtartja a védelmet is.
+
+**Őrteszt:** `tools/tests/test_pipeline_throughput.py::MeasuredPrerequisiteRegimeTest`
+(ADR 0495 D1), köztük a `test_the_real_queue_admits_a_second_round_beside_the_running_one`
+cella, amely a NÉMA slot-kiesést önmagában pirosra viszi.
+
+## L595 — Az emlékeztetőnek nincs olyan időpontja, ami után a baj már nem baj: a 24 órás elnémítás pontosan a kétnapos kiesés második napját takarta el (ops, 2026-09-03)
+
+**Mérve.** `.pipeline/chain.log`, 2026-08-30 és 08-31: 288+288 firing, **0 kör**,
+`E15-R07 / H2`, kimerült önjavítás. A telefon-értesítés viszont a
+`halt_reminder_due` `[ "$now" -lt "$(( halted_epoch + max_seconds ))" ] || return 1`
+sora miatt a halt után 24 órával VÉGLEG elhallgatott. A jelzés akkor szűnt meg,
+amikor a kiesés a legdrágább lett.
+
+**A tanulság iránya.** Egy „ne spammeljünk" korlátot ritkítással kell
+megvalósítani, nem megszüntetéssel — és a ritkított üzenetnek a SÚLYT is
+hordoznia kell (prioritás + „hány órája áll"). Az elnémítási határ mindig a
+legrosszabb pillanatot takarja el, mert a hosszú kiesés definíció szerint túl
+van rajta.
+
+**Őrteszt:** `tools/tests/test_halt_reminder_escalation.py` (ADR 0495 D3).
+
+## L596 — A DÁTUMOZOTT hibaosztályt nem javítani kell, hanem előre jelezni: a PAT lejáratát a `gh` maga megmondja (ops, 2026-09-03)
+
+**Mérve.** 2026-08-28: a lejárt GitHub-PAT 57 firingen (~4,75 óra) át `H-AUTH`-tal
+állította meg a láncot, és a feloldás emberi volt. A `gh api -i user` válasza
+ugyanakkor tartalmazza a `Github-Authentication-Token-Expiration` fejlécet —
+a hibaosztály tehát napokkal előre látható volt, csak senki nem kérdezte meg.
+
+**A tanulság iránya.** Ha egy halt-osztály oka egy ISMERT jövőbeli időpont, a
+helyes védelem nem az önjavítás (annak nincs mit javítania a repóban), hanem az
+előrejelzés. A mérés forrása legyen a rendszer SAJÁT válasza, ne kézzel vezetett
+naptár-bejegyzés.
+
+**Őrteszt:** `tools/tests/test_gh_token_expiry_guard.py` (ADR 0495 D4).
+
+## L597 — Az „ez a brief-szerző mérlegelése" kikötés a lint-szabályban pontosan az a rés, amin a mért halt bejött: az S11 a listán BELÜLI pint lezártnak vette (ops, 2026-09-03)
+
+**Mérve.** A `tools/brief-lint.py` `outside_screen_pins` függvénye a saját
+kommentjében mondta ki a kivételt: *„A briefen MÁR szereplő teszt a kör vállalt
+hatóköre — hogy bekerül-e a célzott `gate_tests`-be is, az a brief szerzőjének
+mérlegelése, nem lint-kérdés."* Az [[L593]] (E15-R09) ezt megcáfolta: a kör
+célzott kapuja **17/17 zöld** volt, miközben a migrált képernyőt pinnelő
+harness 2 cellán pirosra vált — két piros CI-futás, `H5` halt, önjavító kör.
+
+**A tanulság iránya.** Egy gépi szabályba írt „ezt emberi mérlegelésre hagyjuk"
+kikötés nem semleges: az a szabály hatókörének a HATÁRA, és a hibaosztály
+pontosan ott lép be. Ha az L593 utasítása („a `gate_tests` a migrált képernyő
+ÖSSZES kipinnelt harnessét tartalmazza") gépileg kimondható, akkor mondjuk ki
+gépileg — a mérlegelés helye a §0.0 revízió, nem a szabály hiánya.
+
+**Őrteszt:** `tools/tests/test_brief_gate_measures_own_pins.py` — az `S14`
+szabály (`unmeasured_screen_pins`), és a diszjunkt hatókör az `S11`-gyel.
+
+## L598 — Egy lint-szabály, amire nincs kimondott elvárás, FUT, de nem ÉL: az S1–S14-ből csak az S1–S4-nek volt szerződés-sora (ops, 2026-09-03)
+
+**Mérve.** A `tools/brief-lint.py` tizennégy `strict` szabályt implementál, a
+`docs/execution/pipeline-orchestrator-prompt.md` §1.0 táblája viszont **négyet**
+dokumentált (`S1`–`S4`). Az `S5`–`S14` úgy tüzelt minden kör pre-flightján, hogy
+az orchestrátor semmilyen kimondott elvárást nem kapott rájuk — miközben a
+prompt saját mondata szerint a strict lelet „nem halt-ok, és nem is hagyható
+ki". Az [[L593]] (E15-R09) pontosan ezt a különbséget fizette meg: két piros
+CI-futás, `H5` halt, önjavító kör.
+
+**A tanulság iránya.** A „fut" és az „él" két külön állítás. Egy gépi jelzésnek
+két fele van: a MÉRÉS (a szabály) és a SZERZŐDÉS (mit vár a címzettől). Ha csak
+az első létezik, a jelzés zajjá válik, és a hibaosztály ugyanúgy bejön. A
+dokumentáció itt nem kényelem, hanem a mérce második fele — ezért gépi paritás
+őrzi.
+
+**Őrteszt:** `tools/tests/test_lint_rule_contract_parity.py` — a javítás előtti
+fán 2 cella PIROS (4 dokumentált szabály a 14 implementáltból).

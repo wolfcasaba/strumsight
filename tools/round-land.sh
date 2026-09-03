@@ -151,7 +151,7 @@ resolve_conflicts() {
 
     while IFS= read -r conflict; do
       case "$conflict" in
-        HANDOFF.md | docs/LESSONS.md | "$own_brief")
+        HANDOFF.md | docs/LESSONS.md | docs/ui/migration-status.md | "$own_brief")
           ;;
         *)
           git rebase --abort
@@ -162,9 +162,11 @@ resolve_conflicts() {
 
     while IFS= read -r conflict; do
       case "$conflict" in
-        HANDOFF.md | docs/LESSONS.md)
+        HANDOFF.md | docs/LESSONS.md | docs/ui/migration-status.md)
           # Append-only napló: mindkét oldal új része maradjon meg; csak a
-          # Git konfliktusjelölőit vesszük ki.
+          # Git konfliktusjelölőit vesszük ki. A migrációs napló ADR 0495 D2
+          # óta tartozik ide: minden kör a SAJÁT dátumozott blokkját fűzi
+          # hozzá, és egyetlen gépi mérce sem olvassa a tartalmát a fa ellen.
           awk '!/^(<<<<<<<|=======|>>>>>>>)/' "$conflict" > "$conflict.round-land" \
             && mv "$conflict.round-land" "$conflict"
           git add "$conflict"
