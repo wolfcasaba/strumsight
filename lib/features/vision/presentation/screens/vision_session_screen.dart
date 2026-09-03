@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/config/app_config.dart';
 import '../../../../core/camera/camera_providers.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../settings/public.dart';
 import '../../application/vision_session_controller.dart';
@@ -47,6 +48,9 @@ class VisionSessionScreen extends ConsumerWidget {
     // when the build-level gate is off (defence in depth).
     final labAvailable = ref.watch(appConfigProvider).flags.labModeAvailable;
     final labEnabled = labAvailable && ref.watch(labModeProvider);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final isAlarmStatus = _isPermissionOrDeviceIssue(state.status);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.visionSessionTitle)),
       body: SafeArea(
@@ -54,9 +58,7 @@ class VisionSessionScreen extends ConsumerWidget {
           children: <Widget>[
             Expanded(
               child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
+                decoration: BoxDecoration(color: colors.surfaceSunken),
                 child: VisionPreviewOverlay(
                   quality: state.overlayQuality,
                   realtimeCue: state.realtimeCue,
@@ -66,21 +68,26 @@ class VisionSessionScreen extends ConsumerWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(SsSpacing.space4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   if (thermalState == VisionThermalUiState.throttled)
                     const _ThermalBanner(),
-                  Text(_statusText(l10n, state.status)),
+                  Text(
+                    _statusText(l10n, state.status),
+                    style: typography.bodyLarge.copyWith(
+                      color: isAlarmStatus ? colors.danger : colors.textPrimary,
+                    ),
+                  ),
                   if (labAvailable)
-                    SwitchListTile(
+                    SsSwitchRow(
                       key: const Key('vision-detailed-overlay-toggle'),
                       value: state.detailedOverlayEnabled,
                       onChanged: controller.setDetailedOverlayEnabled,
-                      title: Text(l10n.visionSessionDetailedOverlay),
+                      label: l10n.visionSessionDetailedOverlay,
                     ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SsSpacing.space2),
                   _SessionActions(controller: controller, state: state),
                 ],
               ),
@@ -90,6 +97,16 @@ class VisionSessionScreen extends ConsumerWidget {
       ),
     );
   }
+
+  static bool _isPermissionOrDeviceIssue(VisionSessionStatus status) =>
+      switch (status) {
+        VisionSessionStatus.permissionDenied ||
+        VisionSessionStatus.permissionPermanentlyDenied ||
+        VisionSessionStatus.cameraUnavailable ||
+        VisionSessionStatus.cameraBusy ||
+        VisionSessionStatus.inferenceFailed => true,
+        _ => false,
+      };
 
   static String _statusText(
     AppLocalizations l10n,
@@ -129,86 +146,94 @@ class _SessionActions extends StatelessWidget {
       VisionSessionStatus.completed ||
       VisionSessionStatus.cancelled ||
       VisionSessionStatus.inferenceFailed => <Widget>[
-        FilledButton(
+        SsButton(
           key: const Key('vision-session-begin'),
+          label: l10n.visionSessionStart,
           onPressed: controller.begin,
-          child: Text(l10n.visionSessionStart),
         ),
       ],
       VisionSessionStatus.permissionDenied ||
       VisionSessionStatus.permissionPermanentlyDenied ||
       VisionSessionStatus.cameraUnavailable => <Widget>[
-        FilledButton(
+        SsButton(
           key: const Key('vision-session-request-permission'),
+          label: l10n.visionSetupRequestPermission,
           onPressed: controller.requestPermission,
-          child: Text(l10n.visionSetupRequestPermission),
         ),
       ],
       VisionSessionStatus.setup => <Widget>[
-        FilledButton(
+        SsButton(
           key: const Key('vision-session-calibrate'),
+          label: l10n.visionSessionCalibrate,
           onPressed: controller.beginCalibration,
-          child: Text(l10n.visionSessionCalibrate),
         ),
       ],
       VisionSessionStatus.calibrating => <Widget>[
-        FilledButton(
+        SsButton(
           key: const Key('vision-session-start'),
+          label: l10n.visionSessionStart,
           onPressed: controller.start,
-          child: Text(l10n.visionSessionStart),
         ),
       ],
       VisionSessionStatus.running => <Widget>[
-        OutlinedButton(
+        SsButton(
           key: const Key('vision-session-pause'),
+          variant: SsButtonVariant.secondary,
+          label: l10n.livePause,
           onPressed: controller.pause,
-          child: Text(l10n.livePause),
         ),
-        OutlinedButton(
+        SsButton(
           key: const Key('vision-session-recalibrate'),
+          variant: SsButtonVariant.secondary,
+          label: l10n.visionSessionRecalibrate,
           onPressed: controller.recalibrate,
-          child: Text(l10n.visionSessionRecalibrate),
         ),
-        FilledButton(
+        SsButton(
           key: const Key('vision-session-stop'),
+          label: l10n.analyzeStop,
           onPressed: controller.stop,
-          child: Text(l10n.analyzeStop),
         ),
       ],
       VisionSessionStatus.paused => <Widget>[
-        OutlinedButton(
+        SsButton(
           key: const Key('vision-session-resume'),
+          variant: SsButtonVariant.secondary,
+          label: l10n.liveResume,
           onPressed: controller.resume,
-          child: Text(l10n.liveResume),
         ),
-        OutlinedButton(
+        SsButton(
           key: const Key('vision-session-recalibrate'),
+          variant: SsButtonVariant.secondary,
+          label: l10n.visionSessionRecalibrate,
           onPressed: controller.recalibrate,
-          child: Text(l10n.visionSessionRecalibrate),
         ),
-        FilledButton(
+        SsButton(
           key: const Key('vision-session-stop'),
+          label: l10n.analyzeStop,
           onPressed: controller.stop,
-          child: Text(l10n.analyzeStop),
         ),
       ],
       VisionSessionStatus.calibrationLost => <Widget>[
-        FilledButton(
+        SsButton(
           key: const Key('vision-session-recalibrate'),
+          label: l10n.visionSessionRecalibrate,
           onPressed: controller.recalibrate,
-          child: Text(l10n.visionSessionRecalibrate),
         ),
-        FilledButton(
+        SsButton(
           key: const Key('vision-session-stop'),
+          label: l10n.analyzeStop,
           onPressed: controller.stop,
-          child: Text(l10n.analyzeStop),
         ),
       ],
       VisionSessionStatus.cameraBusy ||
       VisionSessionStatus.finalizing ||
       VisionSessionStatus.disposed => const <Widget>[],
     };
-    return Wrap(spacing: 8, runSpacing: 8, children: actions);
+    return Wrap(
+      spacing: SsSpacing.space2,
+      runSpacing: SsSpacing.space2,
+      children: actions,
+    );
   }
 }
 
@@ -221,19 +246,27 @@ class _ThermalBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Container(
       key: const Key('vision-thermal-throttled'),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: SsSpacing.space2),
+      padding: const EdgeInsets.all(SsSpacing.space3),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(12),
+        color: colors.warning.withValues(alpha: 0.15),
+        border: Border.all(color: colors.warning),
+        borderRadius: BorderRadius.circular(SsRadius.sm),
       ),
       child: Row(
         children: [
-          const Icon(Icons.thermostat),
-          const SizedBox(width: 8),
-          Expanded(child: Text(l10n.visionSessionThermalThrottled)),
+          Icon(Icons.thermostat, color: colors.warning),
+          const SizedBox(width: SsSpacing.space2),
+          Expanded(
+            child: Text(
+              l10n.visionSessionThermalThrottled,
+              style: typography.bodyMedium.copyWith(color: colors.textPrimary),
+            ),
+          ),
         ],
       ),
     );
