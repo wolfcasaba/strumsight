@@ -654,4 +654,62 @@ hiány-típus, `questBoardProvider` kétszer, titleKey/bodyKey nem angol,
 cella az A2-csoportban + backlog-csoport + B1-csoport 2 cellával + A1
 route-szintű csoport 5 cellával).
 
+### fix2 — CI-piros gyökérokának javítása (§0.0.A/R7)
+
+**Implementer:** `sonnet-impl` (Claude Sonnet 5), 2026-09-03, javító kör.
+
+**Ok:** a `b81d0493` Full Gate (run `33754452934`) az architektúra-őrön
+bukott — `gamification_providers.dart` a
+`lib/features/gamification/application/` alatt élt, ami a tiltott
+Flutter-importja (`flutter_riverpod`) miatt sértette az
+`architecture_dependency_test.dart:124-155` szabályt.
+
+**Mit csinált:**
+
+- `git mv lib/features/gamification/application/gamification_providers.dart`
+  → `lib/features/gamification/providers/gamification_providers.dart` (a
+  repó bevett helye, ld. `lib/features/learn/providers/`,
+  `lib/features/songs/providers/`).
+- A fájlon belül a relatív importok igazítva: `../domain/…`, `../data/…`,
+  `../infrastructure/…`, `../presentation/…` VÁLTOZATLAN mélységűek maradtak
+  (a `providers/` ugyanolyan mély, mint az `application/` volt); az
+  azonos-könyvtári (`achievement_evaluator.dart`, `daily_challenge_service.dart`,
+  `streak_service.dart`) importok `../application/…`-re módosultak, mert
+  ezek továbbra is az `application/` alatt maradtak.
+- `lib/features/gamification/public.dart`: az export sor
+  `application/gamification_providers.dart` → `providers/gamification_providers.dart`,
+  ábécérendben átmozgatva a `presentation/providers/…` export utánra.
+- `lib/app/routing/app_router.dart`: NEM változott — a router a barrelen
+  (`public.dart`) keresztül fogyaszt, közvetlen import nem volt rá.
+- `test/features/gamification/application/gamification_providers_test.dart`:
+  az import `package:strumsight/features/gamification/application/gamification_providers.dart`
+  → `package:strumsight/features/gamification/providers/gamification_providers.dart`,
+  ábécérendben az `infrastructure/…` import utánra mozgatva. A teszt-fájl
+  MARADT a jelenlegi helyén/nevén (az `allowed_paths` erre a névre szól).
+- `test/app/routing/gamification_composition_test.dart`: nem importálja
+  közvetlenül a fájlt (csak egy kommentben említi), NEM módosult.
+
+**§7 gate — tényleges kimenet (mind a hét útvonallal, csonkítatlanul,
+előtérben futtatva):**
+
+```
+    [1]  format                                                       ZÖLD
+    [2]  analyze                                                      ZÖLD
+    [3]  test .../gamification_providers_test.dart (17/17)            ZÖLD
+    [4]  test .../gamification_composition_test.dart (19/19)          ZÖLD
+    [5]  test .../adaptive_scaffold_test.dart (24/24)                 ZÖLD
+    [6]  test .../tab_state_restoration_test.dart (1/1)               ZÖLD
+    [7]  test .../legacy_route_redirect_test.dart (8/8)               ZÖLD
+    [8]  test .../ui_inventory_test.dart (1/1)                        ZÖLD
+    [9]  test test/core/architecture_dependency_test.dart (44/44)     ZÖLD  ← az őr, ami a run 33754452934-ben pirosat adott
+    [10] architecture                                                 ZÖLD
+    [11] secrets                                                      ZÖLD
+    [12] l10n                                                         ZÖLD
+MINDEN GATE ZÖLD.
+```
+
+TODO-mérés: `grep -c "TODO(E08-R30)" lib/app/routing/app_router.dart` → `0`;
+`grep -c "E16-R01" docs/ui/legacy-backlog.md` → `8` (változatlan az előző
+körhöz képest — ez a javítás nem érintett viselkedést vagy backlogot).
+
 ## 11. Review — a Claude tölti ki

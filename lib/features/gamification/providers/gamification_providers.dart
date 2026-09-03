@@ -2,6 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/storage/storage_providers.dart';
+import '../application/achievement_evaluator.dart';
+import '../application/daily_challenge_service.dart'
+    show DailyChallengeInstance;
+import '../application/streak_service.dart';
 import '../data/gamification_repository.dart';
 import '../data/gamification_storage_schema.dart';
 import '../data/local_gamification_repository.dart';
@@ -19,9 +23,6 @@ import '../domain/rewards/reward_reason.dart';
 import '../domain/streak/streak_state.dart';
 import '../infrastructure/default_achievement_catalog.dart';
 import '../presentation/screens/quests_screen.dart' show QuestViewProjection;
-import 'achievement_evaluator.dart';
-import 'daily_challenge_service.dart' show DailyChallengeInstance;
-import 'streak_service.dart';
 
 /// The gamification feature's own Riverpod composition layer (ADR 0496 §1).
 ///

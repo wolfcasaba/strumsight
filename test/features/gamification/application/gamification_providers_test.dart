@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/logging/logger_provider.dart';
 import 'package:strumsight/features/gamification/application/achievement_evaluator.dart';
-import 'package:strumsight/features/gamification/application/gamification_providers.dart';
 import 'package:strumsight/features/gamification/application/streak_service.dart';
 import 'package:strumsight/features/gamification/data/gamification_repository.dart';
 import 'package:strumsight/features/gamification/data/gamification_storage_schema.dart';
@@ -17,6 +16,7 @@ import 'package:strumsight/features/gamification/data/local_reward_ledger_reposi
 import 'package:strumsight/features/gamification/domain/rewards/reward_ledger_entry.dart';
 import 'package:strumsight/features/gamification/domain/rewards/reward_reason.dart';
 import 'package:strumsight/features/gamification/infrastructure/default_achievement_catalog.dart';
+import 'package:strumsight/features/gamification/providers/gamification_providers.dart';
 
 import '../../../support/preference_store.dart';
 
