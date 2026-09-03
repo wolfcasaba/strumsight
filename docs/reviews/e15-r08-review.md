@@ -319,3 +319,71 @@ renderelődik.
 Minden javításhoz: a cella ELŐSZÖR piros legyen a hibás állapoton, és a §10-be
 kerüljön be a piros→zöld mérés. Meglévő cellát törölni, `skip`-elni vagy
 gyengíteni továbbra is TILOS.
+
+---
+
+# Javító kör utáni újra-review (2026-09-03)
+
+- **Javító commitok:** `7127c9f8` … `4b17b509` (7 commit), a kör feje `4b17b509`
+- **A javító kör diffje:** 9 fájl, MIND az `allowed_paths`-on
+  (`quests_screen`, `reward_inbox_screen`, `streak_detail_screen`, 5 teszt-fájl,
+  a brief). Kód a `lib/core/design_system/**` tilos zónában NEM változott.
+
+## Verdikt: APPROVED
+
+Mind a 8 lelet lezárva; a §10.9 leletenként hozza a piros→zöld mérést.
+
+### Az orchestrátor FÜGGETLEN falszifikációs próbái (nem az implementer mérése)
+
+Eldobható `/tmp` klónban, a javított fejen, a javítást paren-biztosan visszavonva:
+
+**B1 — a cella VALÓDI.** A `SingleChildScrollView` → nem-scrollozó `Container`
+cserével pontosan a három várt cella pirosodik, a review számaival egyezően:
+
+```
+empty state 2.0 / hu  [E]   (a KÖTELEZŐ küszöb)
+empty state 2.5 / en  [E]
+empty state 2.5 / hu  [E]  A RenderFlex overflowed by 205 pixels on the bottom.
+```
+
+`1.5/en`, `1.5/hu`, `2.0/en` zöld marad — pontosan az eredetileg mért eloszlás.
+
+**M2 — a cella VALÓDI.** Az azonos-színű token-párt visszaállítva:
+
+```
+M2 — seen vs unseen backgrounds are genuinely different ... [E]
+Expected: not Color:<Color(alpha: 1.0000, red: 1.0000, green: 1.0000, blue: 1.0000 ...
+  Actual: Color:<Color(alpha: 1.0000, red: 1.0000, green: 1.0000, blue: 1.0000 ...
+```
+
+### Leletenkénti zárás
+
+| Lelet | Zárás | Bizonyíték |
+|---|---|---|
+| **B1** | JAVÍTVA | `SingleChildScrollView` a `_EmptyQuestsState`-re + teljes `{1.5,2.0,2.5}×{en,hu}` ciklus; a meglévő `2.0/en` cella megmaradt. Függetlenül falszifikálva (fent). |
+| **M2** | JAVÍTVA | `colors.surfaceSunken` (olvasott) vs `colors.surface` (olvasatlan) — mérten eltérő mindkét témán, a tilos zóna érintése NÉLKÜL. Függetlenül falszifikálva (fent). |
+| **M3** | JAVÍTVA | A CTA dokumentált kivételként token-stílusú `FilledButton.icon` (a review kifejezetten engedte ezt az utat); a `Text`-nek nincs sor-korlátja, a felirat tör. Új cella: `RenderParagraph.didExceedMaxLines == false` `hu`×`2.0`-n, helyesen a label `Text`-jét célzó finderrel (nem az ikon `RichText`-jét). |
+| **M4** | JAVÍTVA | `expect(tester.widget(recoveryCta), isA<FilledButton>())` — a komponens-választás pinnelve, tehát a néma visszacserélés többé nem marad zöld. |
+| **M5** | JAVÍTVA (mérce-hézag volt, nem élő hiba) | 360×640 `{1.5,2.0,2.5}×{en,hu}` mátrix a lista- ÉS üres állapotra. Az implementer KIMONDJA, hogy ezek javítás nélkül is zöldek, mert itt az üres állapot a `ListView` GYERMEKE, nem a `SafeArea` alatti csere — ez őszinte, és a saját mérésemmel egyezik. |
+| **m1** | JAVÍTVA | A `_hidden` állapot bekerült a scale/locale ciklusba; a fix ideiglenes eltávolítása `2.5/en`+`2.5/hu` pirosat ad. A képernyő-fájl változatlan. |
+| **m3** | DOKUMENTÁLVA (elfogadva) | A kulcs-jelentés nem állítható vissza a folytonos scroll-terület feladása nélkül; helyette a szerződés rögzítve: `reward-inbox-list` = közös scroll-hordozó, az ág-azonosságot a `reward-inbox-empty` és `reward-inbox-entry-*` viszi, mindkét állapotra pumpáló új cellával. Ez érvényes zárás: a mérce nem tűnt el, csak átkerült egy pontosabb kulcsra. |
+| **N1** | JAVÍTVA | A §10.0 a mért igazságra írva: futásidőben az R8 feltétele IGAZ, a hamis premissza a teszt-harnesseké. A burkoló-döntés változatlan. |
+| **m2** | ELFOGADVA | Kimondottan dokumentálva, hogy a vékony (`2.5`-ös) őr tudatos. Cella nem törölve, nem gyengítve. |
+
+### Változatlanul álló PASS-ok
+
+Az első fordulóban külön igazolt PASS-ok a javító kör után is állnak: az
+`A4` (a teszt-diff továbbra is tisztán additív — nulla törölt cella, nulla
+`skip`), az `A6` (ARB nem változott), a golden-sáv (mind a 10 PNG bájtazonos, a
+hubé is — az újrafelvétel `git diff`-je üres; ez konzisztens a fixture-ökkel: a
+`quests` fixture nem-üres listát, a `streak_detail` `grace`-t, a `reward_inbox`
+egyetlen `seen=false` elemet renderel, és az olvasatlan ág színe a csere előtt
+és után is mérten ugyanaz).
+
+### CI
+
+- **Router CI:** `success` a merge-elendő fejen (`4b17b509`).
+- **Full Gate:** a `4b17b509` fejen dispatch-elve (`33700336628`) — a merge
+  KIZÁRÓLAG a zöldje esetén történhet meg (ADR 0052, exact-SHA ADR 0086 §2).
+- Az első forduló egyetlen bukása (`songs/import` flake) az érintetlen
+  upstream kódban volt; a kör diffje `songs`/`import` fájlt nem tartalmaz.
