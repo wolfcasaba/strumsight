@@ -1,0 +1,74 @@
+  group(
+    'A1 — completeness: measured reachable set ⊆ matrix ∪ exclusion list',
+    () {
+      test('every reachable screen is either pumped here or excluded with a '
+          'reason and a named follow-up round', () {
+        final measured = ScreenReachability(Directory.current).render();
+        final reachablePaths = measured.verdicts
+            .where((v) => v.isReachable)
+            .map((v) => v.screenPath)
+            .toSet();
+        final matrixPaths = _screens.values.map((f) => f.screenPath).toSet();
+        final excludedPaths = _exclusions.map((e) => e.screenPath).toSet();
+        final covered = matrixPaths.union(excludedPaths);
+        final uncovered = reachablePaths.difference(covered);
+
+        expect(
+          uncovered,
+          isEmpty,
+          reason:
+              'reachable screens missing from BOTH the matrix and the '
+              'exclusion list (brief §0.0.A/R3): $uncovered',
+        );
+      });
+
+      test('every exclusion entry carries a non-trivial reason, and its '
+          'follow-up round is either a real round id or an explicit '
+          '"none queued" disclosure (review E15-R13 MINOR-1: a generic '
+          '"a future round … (SDD, unscheduled)" stub is machine-invisible '
+          'and was previously accepted by a bare isNotEmpty check)', () {
+        final roundIdPattern = RegExp(r'E\d{2}-R\d{2}');
+        for (final entry in _exclusions) {
+          expect(
+            entry.reason.trim().length,
+            greaterThan(10),
+            reason: '${entry.screenPath} has a trivial/empty exclusion reason',
+          );
+          final namesRealRound = roundIdPattern.hasMatch(entry.followUpRound);
+          final disclosesNoRoundQueued = entry.followUpRound.contains(
+            'no round is currently queued',
+          );
+          expect(
+            namesRealRound || disclosesNoRoundQueued,
+            isTrue,
+            reason:
+                '${entry.screenPath} has a vague/generic follow-up-round '
+                'placeholder — must either name a real round id '
+                '(${roundIdPattern.pattern}) or explicitly state no round '
+                'is currently queued',
+          );
+        }
+      });
+
+      test('the "no merged fixture" reason is used ONLY for '
+          'WrappedPreviewScreen (measured, §0.0.A/R3)', () {
+        final noFixtureEntries = _exclusions.where(
+          (e) => e.reason.contains('No merged pump fixture'),
+        );
+        expect(noFixtureEntries.map((e) => e.screenPath), <String>[
+          'lib/features/share/screens/wrapped_preview_screen.dart',
+        ]);
+      });
+
+      test('the exclusion list has no duplicate screen paths', () {
+        final paths = _exclusions.map((e) => e.screenPath).toList();
+        expect(paths.toSet(), hasLength(paths.length));
+      });
+
+      test('no screen appears in both the matrix and the exclusion list', () {
+        final matrixPaths = _screens.values.map((f) => f.screenPath).toSet();
+        final excludedPaths = _exclusions.map((e) => e.screenPath).toSet();
+        expect(matrixPaths.intersection(excludedPaths), isEmpty);
+      });
+    },
+  );

@@ -1,0 +1,143 @@
+  group('A5 — completion-report guard (measures completeness, not just '
+      'present-row consistency, L588)', () {
+    late String report;
+
+    setUpAll(() {
+      report = File(
+        'docs/ui/chapter-15-completion-report.md',
+      ).readAsStringSync();
+    });
+
+    // L588: a guard that only iterates the rows PRESENT in the report and
+    // checks each is well-formed stays green on a silently DELETED row —
+    // every fact checked here is derived from the LIVE measurement/matrix
+    // state, independently of what the report currently says, so a removed
+    // claim (not just a wrong one) fails this test.
+    // L613: measured at the report's OWN base, not on the live tree — see
+    // the `_CompletionReportBaseline` header above for the measured root
+    // cause. The snapshot's four counts are recomputed from its own
+    // per-screen rows first, so the fixture cannot be hand-edited into
+    // agreement with a wrong report without also rewriting all 96 rows.
+    test('cites the migration + reachability numbers measured at its own '
+        'base (recorded snapshot, not the live tree)', () {
+      final baseline = _CompletionReportBaseline.read(_baselinePath);
+
+      expect(baseline.screens, hasLength(baseline.measuredScreenCount));
+      expect(
+        baseline.screens.where((s) => s.isReachable).length,
+        baseline.reachableCount,
+      );
+      expect(
+        baseline.screens.where((s) => !s.isReachable).length,
+        baseline.unreachableCount,
+      );
+      expect(
+        baseline.screens.where((s) => s.isFlagGated).length,
+        baseline.flagGatedCount,
+      );
+      expect(
+        baseline.screens.where((s) => s.isMigrated).length,
+        baseline.migratedCount,
+      );
+
+      expect(report, contains('${baseline.measuredScreenCount}'));
+      expect(report, contains('${baseline.reachableCount}'));
+      expect(report, contains('${baseline.unreachableCount}'));
+      expect(report, contains('${baseline.flagGatedCount}'));
+      expect(
+        report,
+        contains('${baseline.migratedCount} / ${baseline.measuredScreenCount}'),
+        reason:
+            'the migrated/total count must be the RECORDED grep result of '
+            'the report\'s own base, not a stale hand-typed number',
+      );
+    });
+
+    test('cites the matrix screen/cell counts derived from THIS file, not '
+        'hand-typed', () {
+      expect(
+        report,
+        contains('${_screens.length}'),
+        reason: 'matrix screen count (${_screens.length}) missing/stale',
+      );
+      final totalCells =
+          _screens.length * 2 * 2 * _ViewportProfile.values.length * 2;
+      expect(
+        report,
+        contains('$totalCells'),
+        reason: 'total cell count ($totalCells) missing/stale',
+      );
+      expect(
+        report,
+        contains('${_excludedCells.length}'),
+        reason: '_ExcludedCell count (${_excludedCells.length}) missing/stale',
+      );
+    });
+
+    // Review E15-R13 MAJOR-1 (L588 recurrence): the report quoted a
+    // hand-typed "+1157: All tests passed!" `flutter test` output that
+    // could not actually come out of that command — none of the cells
+    // above pin the GRAND TOTAL (cells + this file's own structural
+    // groups), only their individual components, so the wrong number
+    // slipped through undetected.
+    test('cites the grand total test count this file itself produces '
+        '(cells + A1 + A5 structural groups) — catches a hand-typed, '
+        'non-reproducible "All tests passed!" count (review MAJOR-1)', () {
+      final totalCells =
+          _screens.length * 2 * 2 * _ViewportProfile.values.length * 2;
+      // Structural group sizes are pinned as literals (there is no
+      // reflection-based way to count `test()` calls at runtime) and MUST
+      // be kept in sync with the actual number of test() calls in the
+      // 'A1 — completeness' and 'A5 — completion-report guard' groups
+      // above — a1CellCount below is the A1 group's own test count; a5
+      // includes this very test.
+      const a1CellCount = 5;
+      const a5CellCount = 6;
+      final grandTotal = totalCells + a1CellCount + a5CellCount;
+      expect(
+        report,
+        contains('$grandTotal'),
+        reason:
+            'grand total test count ($grandTotal = $totalCells matrix '
+            'cells + $a1CellCount A1 + $a5CellCount A5) missing/stale — the '
+            'report must cite the number `flutter test` actually produces',
+      );
+    });
+
+    test('every currently-excluded SCREEN name is mentioned (no silent '
+        'deletion of a finding)', () {
+      // Normalized (lowercase, non-alnum stripped) so the report's
+      // PascalCase class names (e.g. "LatencyCalibrationScreen") match the
+      // matrix's snake_case keys (e.g. "latency_calibration") without
+      // forcing the two to use identical spelling.
+      final normalizedReport = report.toLowerCase().replaceAll(
+        RegExp('[^a-z0-9]'),
+        '',
+      );
+      final excludedScreenNames = _excludedCells.map((c) => c.screen).toSet();
+      for (final name in excludedScreenNames) {
+        final normalizedName = name.toLowerCase().replaceAll('_', '');
+        expect(
+          normalizedReport.contains(normalizedName),
+          isTrue,
+          reason:
+              '$name has a live _ExcludedCell entry but is not mentioned in '
+              'the completion report — a removed finding would stay '
+              'undetected without this check',
+        );
+      }
+    });
+
+    test('names WrappedPreviewScreen as the sole coverage exclusion', () {
+      expect(report, contains('WrappedPreviewScreen'));
+      expect(_exclusions, hasLength(1));
+      expect(
+        _exclusions.single.screenPath,
+        endsWith('wrapped_preview_screen.dart'),
+      );
+    });
+
+    test('names the E15-R04 unexecuted retirement as an open item', () {
+      expect(report, contains('E15-R04'));
+    });
+  });
