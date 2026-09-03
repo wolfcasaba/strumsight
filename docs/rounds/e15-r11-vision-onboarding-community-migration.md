@@ -160,6 +160,39 @@ glob), és mind a nyolc a kör öt képernyőjének egyikéhez tartozik — MÉR
 community golden PNG **byte-azonos** maradt. Az arány így nem tágul: a kör
 továbbra is pontosan a saját öt képernyőjének vizuális rétegét írja.
 
+### R9 (kör közbeni revízió, 2026-09-03, review után) — a ROUTEREN át pinnelő teszt felvéve
+
+**A lelet.** A `full-gate.yml` `33739838255` futása a `6461d8bb` HEAD-en PIROS
+lett, és a MÉRT gyökérok a `test/features/vision/presentation/vision_session_routing_test.dart`
+„Vision session route is registered behind only visionEnabled" cellája:
+
+```
+The following _TypeError was thrown building VisionSessionScreen: Null check operator used on a null value
+#0  VisionSessionScreen.build (…/vision_session_screen.dart:51:64)
+    VisionSessionScreen:file:///…/lib/app/routing/app_router.dart:617:36
+```
+
+Ez pontosan az [L593](../LESSONS.md#l593) / §0.0/R2 hibaosztálya: a harness
+(`vision_session_routing_test.dart:43`) csupasz `MaterialApp.router`-t pumpol,
+tehát a migrált képernyő `Theme.of(context).extension<SsColorScheme>()!`
+olvasása null-check crash-t ad.
+
+**Miért kerülte el az R2/R3 mérése.** Az R2 és R3 a `find.byType(<Képernyő>)`
+/ osztálynév-hivatkozás alapján kereste a pinnelő harnesseket. Ez a fájl a
+képernyőt **nem nevezi meg**: a `routerProvider`-en át `router.go(AppRoutes.visionSession)`
+hívással jut el hozzá, tehát az osztálynév-keresés (és ugyanezen okból a
+`brief-lint` S11 szabálya is) NEM találta meg. A `tools/`-beli lint
+kiterjesztése a route-on át pinnelő tesztekre a §4 szerint NEM ennek a körnek
+a dolga — az önjavító sáv tárgya, a leletet a `docs/LESSONS.md` rögzíti.
+
+**A döntés.** A fájl felvéve az `allowed_paths`-ra **ÉS** a `gate_tests`-be,
+pontosan úgy, ahogy az `S11` szabály előírja (a lecserélt képernyőt a briefen
+kívül élő teszt pinneli → mindkét listára fel kell venni, különben H3). A
+javítás iránya kötött és az R2-vel azonos: a harness a VALÓDI futásidejű témát
+kapja (`SsLightTheme.data()` / `SsDarkTheme.data()`, ADR 0466). **Cella
+törlése, `skip`-je vagy állítás-lazítása továbbra is TILOS** — a `router.go`
+utáni két `expect` (`:68`, `:86`) változatlan marad.
+
 ### ADR
 
 **Nincs új ADR**, és nem is kerül kiosztásra: a kör egyetlen ÚJ architekturális
@@ -192,6 +225,7 @@ allowed_paths = [
   "test/features/onboarding/onboarding_test.dart",
   "test/features/onboarding/permission_primer_test.dart",
   "test/features/vision/presentation/guitar_calibration_screen_test.dart",
+  "test/features/vision/presentation/vision_session_routing_test.dart",
   "test/features/vision/presentation/vision_setup_screen_test.dart",
   "test/features/vision/vision_cleanup_test.dart",
   "test/features/vision/vision_degraded_test.dart",
@@ -224,6 +258,7 @@ gate_tests = [
   "test/features/onboarding/onboarding_test.dart",
   "test/features/onboarding/permission_primer_test.dart",
   "test/features/vision/presentation/guitar_calibration_screen_test.dart",
+  "test/features/vision/presentation/vision_session_routing_test.dart",
   "test/features/vision/presentation/vision_setup_screen_test.dart",
   "test/features/vision/vision_cleanup_test.dart",
   "test/features/vision/vision_degraded_test.dart",
@@ -359,7 +394,7 @@ Beégetett felhasználói szöveg nem kerülhet a migrált kódba; új szöveg e
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/offline_network_guard_test.dart test/core/architecture_dependency_test.dart test/accessibility/closure_suite_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/core/screen_size_guard_test.dart test/features/community/block_mute_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/features/vision/presentation/guitar_calibration_screen_test.dart test/features/vision/presentation/vision_setup_screen_test.dart test/features/vision/vision_cleanup_test.dart test/features/vision/vision_degraded_test.dart test/features/vision/vision_one_cue_test.dart test/features/vision/vision_permission_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e13_r30_screens_golden_test.dart test/ui/goldens/e13_r33_screens_golden_test.dart test/ui/ui_baseline_screenshot_test.dart
+tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/offline_network_guard_test.dart test/core/architecture_dependency_test.dart test/accessibility/closure_suite_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/core/screen_size_guard_test.dart test/features/community/block_mute_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/features/vision/presentation/guitar_calibration_screen_test.dart test/features/vision/presentation/vision_session_routing_test.dart test/features/vision/presentation/vision_setup_screen_test.dart test/features/vision/vision_cleanup_test.dart test/features/vision/vision_degraded_test.dart test/features/vision/vision_one_cue_test.dart test/features/vision/vision_permission_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e13_r30_screens_golden_test.dart test/ui/goldens/e13_r33_screens_golden_test.dart test/ui/ui_baseline_screenshot_test.dart
 ```
 
 A migrációs mérés (a kimenet a §10-be, batch-enként MIGRATED/legacy sorokkal):
