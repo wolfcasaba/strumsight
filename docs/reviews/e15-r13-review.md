@@ -9,7 +9,10 @@
 
 ## 0. Verdikt
 
-**CHANGES REQUESTED** — 1 MAJOR, 1 MINOR, 2 NOTE. A kör **tartalmi** munkája
+**VÉGSŐ DÖNTÉS: APPROVED** (a javító menet, `45ce01c3` után — a leletenkénti
+újra-ellenőrzés a §6-ban; 0 nyitott BLOCKER/MAJOR/MINOR).
+
+**Első mérés (`d7c4c65e`): CHANGES REQUESTED** — 1 MAJOR, 1 MINOR, 2 NOTE. A kör **tartalmi** munkája
 erős: a záró mátrix valódi (72 képernyő, mért fákkal), és mind a négy gépi őr
 átment a saját valódi-sértés próbámon. A MAJOR nem a mátrixban van, hanem a
 zárójelentés egyetlen, **parancs-kimenetként idézett, de a valóságtól eltérő
@@ -172,3 +175,50 @@ prioritása.
 
 MAJOR-1 zárása után: friss gate + `build-apk.yml` és `router-ci.yml`
 **success a merge SHA-n** → squash-merge (ADR 0052).
+
+## 6. Javító menet újra-ellenőrzése (`45ce01c3`, 2026-09-03) — leletenként
+
+Új, FRISS izolált klón (`/tmp/review2-e15-r13`), a gate teljes újrafuttatásával
+és két új eldobható mutációs próbával.
+
+### MAJOR-1 → **ZÁRVA**
+
+- A riport mindhárom helyen a MÉRT `1163`-at írja (`:27`, `:89`, `:92`), és a
+  SAJÁT futásom pontosan ezt adja: `00:55 +1163: All tests passed!`
+  (1152 cella + 5 A1 + 6 A5 — az A5 a javító menet új cellájával nőtt 5→6).
+- **Új őr-cella:** „cites the grand total test count this file itself produces
+  (cells + A1 + A5 structural groups)". **Valódi-sértés próbám:**
+  - a riport `1163` → `1164` átírása **CSAK a két idézett helyen**: a cella
+    ZÖLD maradt (a harmadik, §4-beli előfordulás miatt) — ezért a próbát
+    kiterjesztettem;
+  - `sed 's/1163/1164/g'` (mind a 3 előfordulás): a cella **PIROSRA VÁLT**,
+    a pontos indoklással („grand total test count (1163 = 1152 matrix cells +
+    5 A1 + 6 A5) missing/stale");
+  - visszaállítás után ismét ZÖLD.
+- Az őr tehát valóban pinneli a végösszeget. **NOTE-3** (nem blokkol): az
+  `a1CellCount = 5` / `a5CellCount = 6` kézzel pinnelt literál — a fájlban
+  dokumentáltan —, mert a `test()`-hívások futásidejű megszámlálására nincs
+  reflexió; ha valaki e két csoportba cellát vesz fel a literál frissítése
+  nélkül, a várt végösszeg elcsúszik.
+
+### MINOR-1 → **ZÁRVA**
+
+- `docs/ui/legacy-backlog.md` §3.0 gazdája most **nevesített**: `E16-R05`
+  (a mérhető hordozó kör), a végrehajtó kör hiányát pedig kimondja.
+- A `_exclusions[0].followUpRound` a vágó, gépi mércét kapta: „no round is
+  currently queued … a user/pipeline scheduling decision", és az őr-cella már
+  **nem** `isNotEmpty`-t mér, hanem `RegExp(r'E\d{2}-R\d{2}')` **vagy**
+  explicit „no round is currently queued" közlést követel — a korábbi
+  „(SDD, unscheduled)" alakú, gépileg láthatatlan stub innentől PIROS.
+
+### NOTE-1 / NOTE-2 → átvezetve a riportba és a backlogba.
+
+### Gate — SAJÁT újrafuttatás a javító menet után (friss klón)
+
+```
+    format / analyze / test ×4 / architecture / secrets / l10n   mind zöld
+MINDEN GATE ZÖLD.
+```
+
+`git status --short` a próbák után üres (minden eldobható mutáció
+visszaállítva, a próbafájlok törölve).
