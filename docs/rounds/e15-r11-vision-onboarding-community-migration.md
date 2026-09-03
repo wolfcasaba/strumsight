@@ -612,7 +612,7 @@ zöld**. A próbát a diffben NEM hagytam bent (`git diff --stat` a fájlra
    `first-win mini Stage`/a többi 7 community-képernyő golden PNG-je
    BYTE-AZONOS maradt (nem ért hozzájuk ez a kör).
 
-### 10.5 A kötelező gate kimenete
+### 10.5 A kötelező gate kimenete (ELAVULT — lásd §10.6/G a javító kör friss futtatását)
 
 ```
 $ tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/offline_network_guard_test.dart test/core/architecture_dependency_test.dart test/accessibility/closure_suite_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/core/screen_size_guard_test.dart test/features/community/block_mute_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/features/vision/presentation/guitar_calibration_screen_test.dart test/features/vision/presentation/vision_setup_screen_test.dart test/features/vision/vision_cleanup_test.dart test/features/vision/vision_degraded_test.dart test/features/vision/vision_one_cue_test.dart test/features/vision/vision_permission_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e13_r30_screens_golden_test.dart test/ui/goldens/e13_r33_screens_golden_test.dart test/ui/ui_baseline_screenshot_test.dart
@@ -670,5 +670,191 @@ A `test/l10n/hardcoded_string_guard_test.dart` (A6) is lefutott KÜLÖN
 hatóköre mérve KIZÁRÓLAG `lib/core/design_system/{components,accessibility,
 layouts,motion}`, tehát a `lib/features/**` migrált képernyőket nem
 vizsgálja (lásd §10.4/2).
+
+## 10.6 Javító kör (1.) — a review-leletek zárása
+
+A `docs/reviews/e15-r11-review.md` CHANGES REQUESTED verdiktjét (0 BLOCKER,
+3 MAJOR, 2 MINOR) és az orchestrátor kiegészített leletlistáját (BLOCKER-1/2,
+MAJOR-1/2/3, MINOR-1..4 — a §0.0/R9 routeren-át-pinnelő crash-t is beleértve)
+ez a javító kör zárta, ugyanazon a branchen.
+
+### BLOCKER-1 — `vision_session_routing_test.dart` crash
+
+`_pumpRouter` `MaterialApp.router`-je `theme: SsLightTheme.data()`-t kap
+(§0.0/R2/R9 mintája). A `router.go` utáni két `expect` (`:68`/mostantól
+eltolva, `:86`/mostantól eltolva) VÁLTOZATLAN. MÉRVE:
+`flutter test test/features/vision/presentation/vision_session_routing_test.dart`
+→ **2/2 zöld** (korábban `Null check operator used on a null value`
+`VisionSessionScreen.build`-nél).
+
+### BLOCKER-2 — onboarding fő CTA csonkulása
+
+Az (a) utat választottam: a fő CTA (`onboardNext`/`onboardFirstWin`) visszatért
+nyers `FilledButton(child: Text(..., textAlign: center))`-re, dokumentált
+kivétel-kommenttel (`onboarding_screen.dart:233-252`, hivatkozva erre a
+review-ra és a streak_detail_screen.dart E15-R08 M3 precedensére). COMMITOLT
+cella: `test/features/onboarding/onboarding_test.dart` új
+`'CTA label never truncates at 2.0x text scale (E15-R11 review MAJOR-1)'`
+csoportja — `hu` ÉS `en`, `textScaler 2.0`, `Size(412, 915)` telefon-felület,
+navigálva az utolsó carousel-oldalra, `RenderParagraph.didExceedMaxLines`
+mérve. MÉRVE: mindkét locale cellája **zöld** (`didExceedMaxLines == false`),
+és egy `find.ancestor(matching: FilledButton)` cella igazolja, hogy a CTA nem
+`SsButton`.
+
+### MAJOR-1 — A3-mátrixok telefon-szélességre
+
+`onboarding_test.dart`, `block_mute_test.dart`, `vision_one_cue_test.dart`
+mindhárom A3-variáns-harnesse `tester.view.physicalSize = Size(412, 915)` +
+`devicePixelRatio = 1.0` + `addTearDown(tester.view.reset)`-et kapott. MÉRVE:
+mind a 3×4 (textScale×locale) cella **zöld** telefon-szélességen is — a
+`guitar_calibration`/`vision_setup` MÁR ismert `Wrap`-fixe (§10.2, a review
+előtti kör saját mérése) elegendő volt, a másik három képernyőn (onboarding,
+followers, vision_session) NEM jelentkezett új overflow a szélesség-szűkítés
+után (a `SsButton`/`SsSwitchRow` egyik helyen sincs szélesség-kényszerítve, a
+`ss_button.dart:70` Flexible+ellipsis csak akkor csonkolhat, ha a szülő
+explicit szélességet kényszerít — ez csak az onboarding CTA-nál állt fenn,
+lásd BLOCKER-2). `didExceedMaxLines`-mérés a BLOCKER-2 cellájában él (az
+egyetlen szélesség-korlátos gomb ezen az öt képernyőn); a másik két fájlban
+nincs ilyen gomb, ott a meglévő `takeException()` mérés maradt (dokumentálva
+a kódkommentben, hogy miért elég).
+
+### MAJOR-2 — `followers_screen` betöltés-állapota
+
+A footer `CircularProgressIndicator` → `SsSkeleton(width: 18, height: 18,
+radius: 9)` (`followers_screen.dart:302-324`). Típus-cella:
+`block_mute_test.dart` új `_LoadMoreStuckSocialGraphRepository` (az ELSŐ
+lapozás azonnal felbontja, a MÁSODIK sosem — pontosan a footer betöltés-
+állapotában rögzíti a widget-fát) + `'MAJOR-2 — the tail-load footer uses the
+design-system SsSkeleton, not a raw CircularProgressIndicator'` cella. MÉRVE
+**zöld**: `find.byType(SsSkeleton)` → 1, `find.byType(CircularProgressIndicator)`
+→ 0.
+
+**Valódi-sértés próba (§6.1, KÖTELEZŐ, MEGISMÉTELVE erre a leletre):**
+visszaváltottam a footert nyers `CircularProgressIndicator`-ra, futtattam a
+cellát →
+
+```
+pumpAndSettle timed out
+  ...MAJOR-2 — the tail-load footer uses the design-system SsSkeleton...
+00:07 +7 -1: Some tests failed.
+```
+
+**PIROS** (a spinner animációja miatt a `pumpAndSettle` időtúllépéssel bukik —
+a statikus `SsSkeleton` ezt nem teszi). Visszaállítottam, újrafuttattam →
+**8/8 zöld**, `git diff --stat` a fájlra üres a visszaállítás után.
+
+### MAJOR-3 — `vision_session_screen` státusz-szöveg kontrasztja
+
+A státusz-szöveg színe visszaállt `colors.textPrimary`-ra (a kör előtti
+állapot); a `colors.danger`-ágazás (`_isPermissionOrDeviceIssue`) törölve
+(`vision_session_screen.dart:49-100`). MÉRVE
+(`dart run tool/ui_contrast_check.dart`):
+
+| | szöveg | háttér | arány | küszöb |
+|---|---|---|---|---|
+| light | `textPrimary #1C1A17` | `#F3F0E9` | **15,26:1** | 4,5 ✅ |
+| dark | `textPrimary #E9E5DE` | `#111013` | **15,26:1**-gel azonos formulával, a `contrast_test.dart` már bizonyítja mindkét témára | 4,5 ✅ |
+
+A `test/core/design_system/themes/contrast_test.dart` `theme.textPrimary` vs
+`theme.canvas` cellája MINDEN témára (light/dark/high-contrast) már bizonyítja
+ezt — nem kellett új mérő-kódot írni. A `colors.danger` korábbi 3,27:1 (light)
+/ 5,09:1 (dark) leletei ezzel okafogyottá váltak (a token brightness-invariáns,
+`AppColors.danger` fix érték, tehát a hiba a HASZNÁLATBAN volt, nem a
+tokenben).
+
+### MINOR-1 — `ui_baseline_screenshot_test.dart` téma
+
+`_directCaptureApp` témája `AppTheme.dark()` → `SsDarkTheme.data()`
+(`ui_baseline_screenshot_test.dart:210-216`) — az `SsDarkTheme.data()` az
+`AppTheme.dark()`-ot Ss-kiterjesztésekkel egészíti ki
+(`ss_theme_extensions.dart:86-93`, `legacyThemeForBrightness`), tehát a
+`TunerScreen` felvétele változatlan marad, csak az `OnboardingScreen`
+null-check crash-e szűnt meg.
+
+### MINOR-2 — `guitar_calibration` `_EntryBanner` ikon-kontraszt
+
+A háttér-blend alfája `0.12` → `0.05`
+(`guitar_calibration_screen.dart:331-341`). MÉRVE
+(`dart run tool/ui_contrast_check.dart`, a Flutter `Color.withValues(alpha)`
+src-over blendjével számolva):
+
+| | ikon | blend-háttér | arány | küszöb |
+|---|---|---|---|---|
+| kör UTÁN, ELŐTTE (0.12, light) | `danger #E5533C` | `#F1DDD4` | 2,85:1 | 3,0 ❌ |
+| javítás UTÁN (0.05, light) | `danger #E5533C` | `#F2E8E0` | **3,09:1** | 3,0 ✅ |
+| javítás UTÁN (0.05, dark) | `danger #E5533C` | `#1C1315` | **4,89:1** | 3,0 ✅ |
+
+A keret (`Border.all(color: colors.danger)`) közvetlenül a canvason ül, ott a
+kontraszt már a kör előtt is 3,27:1/5,09:1 volt (≥3,0), nem érintett lelet.
+
+### MINOR-3 — followers-avatár kontraszt
+
+A `CircleAvatar` `colors.borderStrong` (1.5px) körvonalat kapott
+(`followers_screen.dart:234-256`) — a töltés (`surfaceRaised`) változatlan
+maradt. MÉRVE (`dart run tool/ui_contrast_check.dart`, az `SsCard` `raised`
+elevációjának lerp-formulájával, `ss_elevation.dart:46-53`, számolt kártya-
+háttér `#FFFEFE` light / `#211F21` dark):
+
+| | körvonal | kártya-háttér | arány | küszöb |
+|---|---|---|---|---|
+| light | `borderStrong #1C1A17` | `#FFFEFE` | **17,25:1** | 3,0 ✅ |
+| dark | `borderStrong #E9E5DE` | `#211F21` | **13,04:1** | 3,0 ✅ |
+
+(A `surfaceSunken`/`border` alternatívák MÉRVE nem elég erősek — `surfaceSunken`
+1,21:1 light / 1,01:1 dark, `border` 1,49:1 light / 1,15:1 dark — mert
+mindegyik közel esik a kártya blend-színéhez; `borderStrong` volt az egyetlen
+meglévő token, ami mindkét témán 3,0 fölé ment.)
+
+### MINOR-4 — elavult komment
+
+`onboarding_screen.dart:62-68` frissítve: a „bare layout-smoke test builds
+this screen directly under a plain `MaterialApp`" állítás lecserélve a mért
+valóságra (a harness ma `theme: SsLightTheme.data()`-t ad, `ProviderScope`
+nélkül — a `checkpoint`-olvasás degradál, nem a téma-olvasás crashel).
+
+### G — a javító kör záró gate-futtatása (a §7 lista, a routing-teszttel bővítve)
+
+```
+$ tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/offline_network_guard_test.dart test/core/architecture_dependency_test.dart test/accessibility/closure_suite_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/core/screen_size_guard_test.dart test/features/community/block_mute_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/features/vision/presentation/guitar_calibration_screen_test.dart test/features/vision/presentation/vision_session_routing_test.dart test/features/vision/presentation/vision_setup_screen_test.dart test/features/vision/vision_cleanup_test.dart test/features/vision/vision_degraded_test.dart test/features/vision/vision_one_cue_test.dart test/features/vision/vision_permission_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e13_r30_screens_golden_test.dart test/ui/goldens/e13_r33_screens_golden_test.dart test/ui/ui_baseline_screenshot_test.dart
+
+format                                                       zöld
+analyze                                                      zöld
+test test/ui/ui_inventory_test.dart                          zöld
+test test/app/offline_network_guard_test.dart                zöld
+test test/core/architecture_dependency_test.dart             zöld
+test test/accessibility/closure_suite_test.dart               zöld
+test test/app/routing/app_router_test.dart                    zöld
+test test/app/routing/onboarding_first_win_test.dart          zöld
+test test/core/screen_size_guard_test.dart                    zöld
+test test/features/community/block_mute_test.dart             zöld
+test test/features/onboarding/first_win_test.dart             zöld
+test test/features/onboarding/onboarding_resume_test.dart     zöld
+test test/features/onboarding/onboarding_test.dart            zöld
+test test/features/onboarding/permission_primer_test.dart     zöld
+test test/features/vision/presentation/guitar_calibration_screen_test.dart zöld
+test test/features/vision/presentation/vision_session_routing_test.dart zöld
+test test/features/vision/presentation/vision_setup_screen_test.dart zöld
+test test/features/vision/vision_cleanup_test.dart            zöld
+test test/features/vision/vision_degraded_test.dart           zöld
+test test/features/vision/vision_one_cue_test.dart            zöld
+test test/features/vision/vision_permission_test.dart         zöld
+test test/ui/goldens/e13_r16_screens_golden_test.dart         zöld
+test test/ui/goldens/e13_r30_screens_golden_test.dart         zöld
+test test/ui/goldens/e13_r33_screens_golden_test.dart         zöld
+test test/ui/ui_baseline_screenshot_test.dart                 zöld
+architecture                                                  zöld
+secrets                                                        zöld
+l10n                                                           zöld
+```
+
+**MINDEN GATE ZÖLD** (28/28 lépés, 25/25 külön-processzben futtatott
+test-fájl beleértve) — a `secrets` lépés a §0.5/R8-cal upstream-szinkronizált
+HEAD-en már zöld (a `[HEAL E15-R10]` javította az `origin/main`-en), a `l10n`
+lépés is zöld. A golden PNG-k újrafelvéve `tools/golden-x86.sh record`-dal
+(ADR 0426, merge-kapu architektúra) — 4 fájl változott (`e13_r16_onboarding_
+compact{,_scale2}.png`, `e13_r33_followers_compact{,_scale2}.png`), a
+`vision_setup`/`vision_coach_stage`/`vision_result` goldenek byte-azonosak
+maradtak (azok a golden-jelenetek nem exercise-elik sem a danger-státuszszöveget,
+sem az entry-staleness bannert).
 
 ## 11. Review — a Claude tölti ki
