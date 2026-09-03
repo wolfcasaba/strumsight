@@ -1,5 +1,41 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E15-R10/H3] KÉSZ — a titok-kapu a `tools/**` automatikus sávjában is mér (ADR 0112) — PR [#546](https://github.com/wolfcasaba/strumsight/pull/546), squash `PENDING` (2026-09-03)
+
+Az E15-R10 munkája KÉSZ és APPROVED volt (0 nyitott lelet), a merge-kapu mégis
+piros: a `main`-ről ÖRÖKÖLT titok-kapu-defekten bukott, nem a kör diffjén.
+
+**Mért gyökérok.** A `tool/ci/check_secrets.dart` a teljes követett fát méri, de
+csak a `flutter-gates` composite 5. lépéseként fut, azt pedig kizárólag a
+`build-apk.yml` / `full-gate.yml` hívja — **mindkettő `workflow_dispatch`**. A
+`tools/**`-ra viszont a `router-ci.yml` indul AUTOMATIKUSAN, és annak nincs
+titok-lépése. Ezen a résen vitt a PR #544 (tools-only ops PR, egyetlen zöld
+check: `router-ci`) egy csupasz provider-token literált a `main`-re, marker
+nélkül (`tools/tests/test_authenticated_git_fetch.py:34`). Mivel a `secrets` az
+5. lépés, utána a full-gate MINDEN további lépése (l10n, asset, test, property,
+coverage) `skipped` lett — a kör saját munkája meg sem lett mérve —, és az
+ADR 0086 §2 miatt minden következő kör ugyanígy bukott volna.
+
+**A javítás két fele.** (1) A szkenner **saját, meglévő** sor végi markere a
+fixture-tokenre — nem mérce-gyengítés: a `providerToken` szabálynak nincs
+`valueGroup`-ja, ezért a `_placeholder` mentesítés (`fake`/`test_only`/…) rá nem
+vonatkozik, a szolgáltatói előtag önmagában találat. (2) A hibaosztály zárása a
+`tools/**` oldalon: új őrteszt a router-ci automatikus sávjában. A
+`.github/workflows/**` az ADR 0112 §3 tiltott zónája, ezért a lefedettség ott
+állt helyre, ahol szabad — szigorúan BŐVÍTVE a mércét.
+
+**Mérés.** A javítás előtt a Dart szkenner tiszta `main`-en (`45d20193`):
+`Secret scan failed (4235 file(s) scanned, 1 finding(s))`; utána a heal-fán:
+`Secret scan OK (4235 file(s) scanned, 0 finding(s))`. Az őrteszt a javítás
+előtt PIROS, pontosan ugyanazzal a `path:line` találattal.
+
+**Őrteszt:** `tools/tests/test_secret_gate_router_paths.py` — a szabályt nem
+másolja le, a `check_secrets.dart` forrásából olvassa ki, ezért a két oldal nem
+csúszhat szét. Tanulság: [`docs/LESSONS.md`](docs/LESSONS.md) **L599**.
+
+**A lánc folytatása:** az E15-R10 a MERGE-lépésnél folytatódik (ág
+`sonnet-impl/e15-r10-analysis-migration`, review APPROVED).
+
 ## ✅ E15-R09 KÉSZ — AI Tutor 5 képernyő migrálása a design-rendszerre — PR [#540](https://github.com/wolfcasaba/strumsight/pull/540), squash `7259c563` (2026-09-03)
 
 Az AI-Tutor batch öt képernyője (`tutor_home`, `tutor_chat`, `tutor_data`,
