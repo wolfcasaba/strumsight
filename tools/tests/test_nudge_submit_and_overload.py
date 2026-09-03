@@ -1,4 +1,4 @@
-"""Az ébresztő KÜLÖN Enterrel küld be, és a 529 saját, rövid ablakot kap (ADR 0497).
+"""Az ébresztő KÜLÖN Enterrel küld be, és a 529 saját, rövid ablakot kap (ADR 0498).
 
 MÉRT eset (2026-09-03 13:31–13:50). Mindkét futó kör sessionje ugyanabban a
 percben esett el `API Error: 529 Overloaded`-del, ÜRES prompton maradt, és az
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
 
 class FeedbackPromptTest(unittest.TestCase):
-    """ADR 0497 D3 — a promptot blokkoló visszajelzés-kérdés elbocsátása.
+    """ADR 0498 D3 — a promptot blokkoló visszajelzés-kérdés elbocsátása.
 
     MÉRVE 2026-09-03 14:04 (`E15-R12`): a 529 után a CLI a beviteli doboz FÖLÉ
     egy kérdést tett ki (`How is Claude doing this session? … 0: Dismiss`), ami

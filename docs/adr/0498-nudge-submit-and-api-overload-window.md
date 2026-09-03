@@ -1,4 +1,4 @@
-# ADR 0497 — Az ébresztő KÜLÖN Enterrel küld be, és az API-túlterhelés saját, rövid ablakot kap
+# ADR 0498 — Az ébresztő KÜLÖN Enterrel küld be, és az API-túlterhelés saját, rövid ablakot kap
 
 - **Státusz:** elfogadva (2026-09-03)
 - **Kontextus:** ADR 0087 (halt-protokoll), ADR 0112 (önjavító lánc),

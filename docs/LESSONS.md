@@ -24060,7 +24060,7 @@ fokot a CÉL-oldalon kell megmérni (`capture-pane`), nem a küldés visszatér�
 értékén.
 
 **Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::NudgeSubmitTest`
-(ADR 0497 D1) — a javítás előtti alakkal PIROS.
+(ADR 0498 D1) — a javítás előtti alakkal PIROS.
 
 ## L600 — Egy külső kimaradásnak SAJÁT, rövid ablak jár: a 20 perces néma ablak a 529 után tiszta veszteség (ops, 2026-09-03)
 
@@ -24078,7 +24078,7 @@ rövidebb küszöböt és nagyobb ébresztés-keretet érdemel — a terminális
 ágé: külső kimaradáson az önjavításnak nincs mit javítania.
 
 **Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::ApiOverloadWindowTest`
-(ADR 0497 D2).
+(ADR 0498 D2).
 
 ## L601 — Az ébresztő beküldését egy MÁSIK, a doboz fölé kitett kérdés is elnyelheti: a 529 után felugró visszajelzés-kérdés újra tétlenül hagyta a kört (ops, 2026-09-03)
 
@@ -24104,4 +24104,4 @@ legyen bőven nagyobb annál, amennyi a keresett sorhoz épp elég — egy vára
 felületi elem néhány sorral elnémíthatja az egész őrt.
 
 **Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::FeedbackPromptTest`
-(ADR 0497 D3) — a javítás előtti fán mind a 3 cella PIROS.
+(ADR 0498 D3) — a javítás előtti fán mind a 3 cella PIROS.

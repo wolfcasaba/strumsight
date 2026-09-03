@@ -712,7 +712,7 @@ CLAUDE_PROCESS_COMM_PATTERN='^claude([.-][A-Za-z0-9_-]+)?$'
 # folytatás-prompt BENN MARADT a dobozban (négy sorra tördelve), a session
 # tovább állt üresen; egy KÜLÖN, később küldött Enter azonnal beküldte. A
 # driver ébresztője ugyanezt az alakot használta, tehát a „kill előtt ébressz"
-# mechanizmus (HEAL E13-R14) megbízhatatlan volt (ADR 0497 D1).
+# mechanizmus (HEAL E13-R14) megbízhatatlan volt (ADR 0498 D1).
 NUDGE_SUBMIT_DELAY=${PIPELINE_ORCH_NUDGE_SUBMIT_DELAY:-1}
 
 send_nudge_to_pane() {   # $1=tmux-session $2=szöveg
@@ -726,7 +726,7 @@ send_nudge_to_pane() {   # $1=tmux-session $2=szöveg
 # MÉRVE 2026-09-03 14:04 (E15-R12): a 529 után a CLI a beviteli doboz FÖLÉ egy
 # visszajelzés-kérdést tett ki („How is Claude doing this session? … 0: Dismiss"),
 # ami elnyeli a beküldést — az ébresztő hiába megy be, a kör tétlen marad. A
-# kérdést el kell bocsátani, MIELŐTT a folytatás-prompt megy (ADR 0497 D3).
+# kérdést el kell bocsátani, MIELŐTT a folytatás-prompt megy (ADR 0498 D3).
 FEEDBACK_PROMPT_PATTERN='0: Dismiss'
 
 dismiss_feedback_prompt_if_present() {   # $1=tmux-session
@@ -947,7 +947,7 @@ run_tmux_session() {
   nudge_budget=${PIPELINE_ORCH_STALL_NUDGES:-1}
   # API 529 („Overloaded") esetén a session BIZONYÍTOTTAN üres prompton áll —
   # nem gondolkodik. Ilyenkor nincs értelme kivárni a teljes néma ablakot
-  # (ADR 0497 D2): rövidebb küszöb és nagyobb ébresztés-keret, mert egy külső
+  # (ADR 0498 D2): rövidebb küszöb és nagyobb ébresztés-keret, mert egy külső
   # kimaradás ismétlődhet.
   overload_seconds=${PIPELINE_ORCH_OVERLOAD_SECONDS:-120}
   # A keret AZÉRT bőkezű, mert egy 529-ébresztés NEM arról szól, hogy a session
