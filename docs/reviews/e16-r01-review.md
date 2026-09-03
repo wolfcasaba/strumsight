@@ -9,7 +9,34 @@
   előírása). A két ügynök egymástól függetlenül futott; a lenti leletek a
   KONVERGÁLÓ halmaz, mindegyik fájl:sor bizonyítékkal újraellenőrizve.
 
-## VÉGSŐ DÖNTÉS: CHANGES REQUESTED — 3 BLOCKER, 3 MAJOR, 5 MINOR
+## VÉGSŐ DÖNTÉS: **APPROVED** (a javító kör után, `4af5fa39`)
+
+> **1. kör verdiktje:** CHANGES REQUESTED — 3 BLOCKER, 3 MAJOR, 5 MINOR (`8bc5cc95`).
+> **Javító kör (fix1, `0a06ac54` + `4af5fa39`) — leletenként újramérve:**
+>
+> | Lelet | Állapot | Bizonyíték |
+> |---|---|---|
+> | **B1** | **ZÁRVA** | `grep -c "?? const <String, AchievementProgress>{}" lib/app/routing/app_router.dart` → **0**; `_achievementsAsyncBuilder` (`app_router.dart:87-103`) `.when`-nel bontja a három állapotot: loading saját indikátor, error **logolva** (`appLoggerProvider`), csak a `data` ág a mért projekció. |
+> | **B2** | **ZÁRVA** | `questBoardProvider` (`gamification_providers.dart:227`) a hiányt TÍPUSBAN hordozza; a router `questBoard.*`-ot ad át (`:741-746`), a literálok eltűntek; backlog **entry 4** (`legacy-backlog.md §6.4`). |
+> | **B3** | **ZÁRVA** | a kompozíciós réteg NEM gyárt angol szöveget (`titleKey/bodyKey: kind.name`, sosem renderelt placeholder); a router `_localizedRewardInboxItems` (`app_router.dart:116-130`) MEGLÉVŐ ARB-kulcsokkal old fel; ARB-fájl nem módosult. |
+> | **M1** | **ZÁRVA** | `latestSessionXpProvider` is hiány-típust kapott; backlog **entry 5** (`§6.5`) a négy kifejezhetetlen-hiány értékről, datálva. |
+> | **M2** | **ZÁRVA** | backlog **entry 6** (`§6.6`) kimondja: a bekötött olvasásoknak ma nincs írójuk a fán — implementálás nélkül, ahogy előírtam. |
+> | **M3** | **ZÁRVA** | a mátrix hiányzó sorai pótolva: alak-alapú „nincs privát `*Provider` a routerben" cella (`gamification_composition_test.dart:212`), backlog-cella (`:269-293`, mind a 6 bejegyzésre), és **útvonal-szintű A1 cellák** (`testWidgets` #3/#4/#5/#8, köztük a quest-akció-routing). |
+> | **m1** | **ZÁRVA** | nem-haladó kurzor őr (`gamification_providers.dart:323` `StateError`). |
+> | **m2** | **ZÁRVA** | `unawaited(...)` + `catchError` + `onReplaced` report (`app_router.dart:806-820`). |
+> | **m3** | **ZÁRVA** | a router a barrelen át importál (`app_router.dart:18` → `features/gamification/public.dart`). |
+> | **m5** | **ZÁRVA** | a migrátor-hívás őrzött. |
+> | **m4** | **NYITVA, kimondva** | az invalidálási út gyakorlás után a kör engedélyezett fájljain KÍVÜL esik (producer-hook); a backlog **entry 6** fedi. Nem BLOCKER/MAJOR — a mérce nem gyengült. |
+>
+> **`gate_shape=VIOLATION` — hamis pozitív, kivizsgálva:** a wrapper heurisztikája
+> (`tools/mm-round.sh:382`) az EGÉSZ logban keresi a `round-gate.sh … | tail|head|&&`
+> mintát, és a találat egy `sed -n '1,40p' …/tools/round-gate.sh | head -60` volt —
+> a gate SCRIPT olvasása, nem egy csonkított gate-FUTÁS. A tényleges hívás a teljes,
+> csővezeték nélküli §7 sor (`grep -oE "tools/round-gate\.sh test/…"`).
+
+### Eredeti (1. kör) leletlista
+
+**CHANGES REQUESTED — 3 BLOCKER, 3 MAJOR, 5 MINOR**
 
 A kör érdemi része megvan: a három privát provider és a beégetett `LevelCurve`
 eltűnt a routerből, a kompozíció a feature-ben él, a barrel exportál, a nyolc
