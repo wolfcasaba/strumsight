@@ -56,6 +56,15 @@ SERIALIZED_PATHS = frozenset(
         "docs/LESSONS.md",
         "docs/execution/pipeline-queue.tsv",
         "docs/execution/06-requirements-traceability-matrix.md",
+        # A képernyő-migrációs napló (ADR 0495 D2). MÉRVE 2026-09-03: ez volt az
+        # EGYETLEN ütközési felület az E15 migrációs körei között (E15-R09 ↔
+        # E15-R10), és nincs olyan gépi mérce, amely a TARTALMÁT a fa ellen
+        # olvasná — a `test/tooling/screen_reachability_test.dart` és a
+        # `test/app/theme_adoption_test.dart` a FÁT méri, a fájlt csak prózában
+        # említi. Minden kör a saját dátumozott blokkját fűzi hozzá, ezért a
+        # `tools/round-land.sh` ugyanazzal az append-only unióval oldja fel,
+        # mint a HANDOFF-ot és a LESSONS-t.
+        "docs/ui/migration-status.md",
     }
 )
 # Public barrelek generált artefaktumok (tool/gen_public_barrel.dart kimenetei);
@@ -122,24 +131,48 @@ def declared_prerequisites(repo: Path, brief: str | Path) -> frozenset[str]:
     return frozenset(tokens)
 
 
-def unmet_prerequisites(repo: Path, round_id: str, brief: str, rows: list[tuple[str, str, str, str, str]]) -> list[str]:
-    """A kör indulását blokkoló, még nem `done` körök.
+def has_prerequisite_line(repo: Path, brief: str | Path) -> bool:
+    """True iff a brief KIMONDJA az előfeltételét (akár úgy, hogy „nincs")."""
+    path = Path(brief)
+    if not path.is_absolute():
+        path = repo / path
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return bool(PREREQ_LINE.search(text))
 
-    Két forrás, mindkettő KONZERVATÍV irányba téved:
-      1. az epicen BELÜLI sorrend (minden korábbi kör ugyanabból az epicből) —
-         az SDD a köröket függőségi sorrendben írja, és az importfüggés a
-         fájllistából nem látszik;
-      2. a briefben nevesített előfeltétel (jellemzően egy másik epic zárása).
+
+def unmet_prerequisites(repo: Path, round_id: str, brief: str, rows: list[tuple[str, str, str, str, str]]) -> list[str]:
+    """A kör indulását blokkoló, még nem `done` körök (ADR 0495 D1).
+
+    A blokkolás forrása a brief `Előfeltétel` sora — ez az EGYETLEN csatorna,
+    amelyen az importfüggés (a fájllistából nem látszó „a második kör az
+    elsőben SZÜLETŐ API-t használja" eset) kimondható. Aki nem függ, az
+    párhuzamosan futhat; a fájl-átfedést a hívó `plan_slots` külön méri.
+
+    MÉRVE 2026-09-03: a korábbi, epicen belüli VAK sorosítás („minden korábbi,
+    nem `done` kör ugyanabból az epicből blokkol") a teljes hátralévő sort
+    egyszálúvá tette — az `E15-R10`/`E15-R11` valódi, briefben kimondott
+    előfeltétele az `E15-R03` (KÉSZ), az `E15-R12` pedig egyetlen fájlban sem
+    ütközik egyetlen UI-körrel sem. A 2. slot ezért heteken át üresen állt
+    (`.pipeline/chain.log`, „nincs a futókkal diszjunkt, előfeltétel-kész kör").
+
+    FAIL-CLOSED tartalék: ha a brief NEM mondja ki az előfeltételét, a régi,
+    epicen belüli sorosítás lép életbe rá — a hallgatás nem enged párhuzamot.
     """
     status_by_round = {row[0]: row[4] for row in rows}
-    epic = round_id.split("-")[0]
     blocking: list[str] = []
-    for other_round, _brief, _engine, _adr, status in rows:
-        if other_round == round_id:
-            break
-        if other_round.startswith(epic + "-") and status != "done":
-            blocking.append(other_round)
+    if not has_prerequisite_line(repo, brief):
+        epic = round_id.split("-")[0]
+        for other_round, _brief, _engine, _adr, status in rows:
+            if other_round == round_id:
+                break
+            if other_round.startswith(epic + "-") and status != "done":
+                blocking.append(other_round)
     for prerequisite in sorted(declared_prerequisites(repo, brief)):
+        if prerequisite == round_id:
+            continue
         if status_by_round.get(prerequisite, "done") != "done" and prerequisite not in blocking:
             blocking.append(prerequisite)
     return blocking

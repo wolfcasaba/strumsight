@@ -77,6 +77,7 @@ status_file="$state_dir/round-status"   # csak a default; a kör kiválasztása 
 heal_status_file="$state_dir/heal-status"
 heal_count_file="$state_dir/selfheal.count"
 halt_reminder_file="$state_dir/halt-reminder-last"
+gh_token_expiry_file="$state_dir/gh-token-expiry"
 router_status_file="$state_dir/router-status"
 chain_log="$state_dir/chain.log"
 
@@ -105,7 +106,17 @@ heal_timeout=${PIPELINE_SELFHEAL_TIMEOUT:-10800}     # 3 óra: diagnózis + fix 
 selfheal_enabled=${PIPELINE_SELFHEAL:-1}
 selfheal_max=${PIPELINE_SELFHEAL_MAX:-3}
 halt_reminder_min=${PIPELINE_HALT_REMINDER_MIN:-60}
+# A `max_h` MA NEM elnémítási határ, hanem ESZKALÁCIÓS küszöb (ADR 0495 D3).
+# MÉRVE 2026-08-30/31: az emlékeztető a régi szerződés szerint 24 óra után
+# ELHALLGATOTT, a lánc viszont további ~24 órán át állt (576 firing, 0 kör,
+# `E15-R07 / H2`). Ezért a küszöb fölött az emlékeztető nem megszűnik, hanem
+# ritkul (`backoff_h`) és `urgent`-re vált.
 halt_reminder_max_h=${PIPELINE_HALT_REMINDER_MAX_H:-24}
+halt_reminder_backoff_h=${PIPELINE_HALT_REMINDER_BACKOFF_H:-6}
+# A GitHub-PAT lejáratának előrejelzése (ADR 0495 D4). MÉRVE 2026-08-28: a
+# lejárt token 57 firingen (~4,75 óra) állította meg a láncot `H-AUTH`-tal.
+gh_token_warn_days=${PIPELINE_GH_TOKEN_WARN_DAYS:-7}
+gh_token_probe_h=${PIPELINE_GH_TOKEN_PROBE_H:-6}
 claude_bin=${CLAUDE_BIN:-claude}
 # Sonnet 5 az orchestrátor-default (user-döntés 2026-08-06: „állítsd át az
 # orchestrátort MINDEN RÉTEGBEN Sonnet 5 modellre, a fejlesztő agentet pedig
@@ -1071,17 +1082,39 @@ pipeline_now_epoch() {
   esac
 }
 
+halt_stall_hours() {   # → hány EGÉSZ órája áll a lánc; 1, ha nem mérhető
+  local now halted_at halted_epoch
+  now=$(pipeline_now_epoch)
+  halted_at=$(grep -m1 '^halted_at=' "$halt_file" 2>/dev/null | cut -d= -f2-)
+  [ -n "$halted_at" ] || return 1
+  halted_epoch=$(TZ=UTC date -d "$halted_at" +%s 2>/dev/null) || return 1
+  printf '%s\n' "$(( (now - halted_epoch) / 3600 ))"
+}
+
+halt_reminder_priority() {   # → a MOST esedékes emlékeztető ntfy-prioritása
+  local hours
+  hours=$(halt_stall_hours) || { printf 'high\n'; return 0; }
+  case "$halt_reminder_max_h" in ''|*[!0-9]*) printf 'high\n'; return 0 ;; esac
+  if [ "$hours" -ge "$halt_reminder_max_h" ]; then printf 'urgent\n'; else printf 'high\n'; fi
+}
+
 halt_reminder_due() {   # $1=kör $2=halt-kód → 0, ha MOST kell küldeni
   local round="$1" halt_code="$2" now halted_at halted_epoch
-  local last_line last_reminder min_seconds max_seconds
+  local last_line last_reminder min_seconds max_seconds interval_seconds
   now=$(pipeline_now_epoch)
   halted_at=$(grep -m1 '^halted_at=' "$halt_file" | cut -d= -f2-)
   halted_epoch=$(TZ=UTC date -d "$halted_at" +%s 2>/dev/null) || return 0
   case "$halt_reminder_min" in ''|*[!0-9]*) return 0 ;; esac
   case "$halt_reminder_max_h" in ''|*[!0-9]*) return 0 ;; esac
+  case "$halt_reminder_backoff_h" in ''|*[!0-9]*) return 0 ;; esac
   min_seconds=$(( halt_reminder_min * 60 ))
   max_seconds=$(( halt_reminder_max_h * 60 * 60 ))
-  [ "$now" -lt "$(( halted_epoch + max_seconds ))" ] || return 1
+  # A küszöb fölött az emlékeztető NEM szűnik meg — ritkul és `urgent` lesz.
+  if [ "$now" -lt "$(( halted_epoch + max_seconds ))" ]; then
+    interval_seconds=$min_seconds
+  else
+    interval_seconds=$(( halt_reminder_backoff_h * 60 * 60 ))
+  fi
 
   [ -f "$halt_reminder_file" ] || return 0
   last_line=$(cat "$halt_reminder_file")
@@ -1090,7 +1123,7 @@ halt_reminder_due() {   # $1=kör $2=halt-kód → 0, ha MOST kell küldeni
     *) return 0 ;;
   esac
   case "$last_reminder" in ''|*[!0-9]*) return 0 ;; esac
-  [ "$now" -ge "$(( last_reminder + min_seconds ))" ]
+  [ "$now" -ge "$(( last_reminder + interval_seconds ))" ]
 }
 
 record_halt_reminder() {   # $1=kör $2=halt-kód
@@ -1591,6 +1624,7 @@ attempt_selfheal() {
   local halt_round halt_code attempts stamp prompt_file heal_log
   local tests_before hashes_before tests_after hashes_after outcome summary
   local heal_branch pr_number violation round_engine heal_engine engine_note
+  local stall_hours
   # A heal-ülés orchestrátora KÖRNYEZETI döntés (lásd lentebb a Sol-pint), és
   # csak erre a hívásra érvényes: bash dinamikus hatókör miatt a `local` a
   # meghívott run_orchestrator_session-ben is látszik, a függvény visszatérése
@@ -1650,8 +1684,10 @@ attempt_selfheal() {
   if [ "$attempts" -ge "$selfheal_max" ]; then
     log "az önjavítás KIMERÜLT ($attempts/$selfheal_max) — $halt_round / $halt_code"
     if halt_reminder_due "$halt_round" "$halt_code"; then
+      stall_hours=$(halt_stall_hours) || stall_hours="?"
       notify "🛑 önjavítás kimerült: $halt_round" \
-        "$halt_code — $selfheal_max kísérlet után is áll, emberi döntés kell: tools/pipeline-status.sh --resume" high
+        "$halt_code — $selfheal_max kísérlet után is áll, ${stall_hours} órája: tools/pipeline-status.sh --resume" \
+        "$(halt_reminder_priority)"
       record_halt_reminder "$halt_round" "$halt_code"
     fi
     return 3
@@ -2313,6 +2349,63 @@ if [ -n "$active_round" ] && claude_quota_hold_active_for "$active_round"; then
 fi
 [ -n "$active_round" ] && terra_clear_stale_halt_for "$active_round"
 
+# --- 1c. A GitHub-PAT lejárata (ADR 0495 D4) ------------------------------
+# MÉRVE 2026-08-28: a lejárt token `H-AUTH`-tal állította meg a láncot, 57
+# firingen (~4,75 óra) át, és a hibaosztály DÁTUMOZOTT — tehát előre látható.
+# A `gh` a saját válaszfejlécében megmondja a lejáratot; ezt naponta párszor
+# megkérdezzük, és a küszöb alatt szólunk, MIELŐTT a lánc megáll.
+gh_token_expiry_probe() {   # → a lejárat ISO-alakja a stdouton, vagy 1
+  if [ -n "${PIPELINE_GH_EXPIRY_CMD:-}" ]; then
+    eval "$PIPELINE_GH_EXPIRY_CMD"
+    return $?
+  fi
+  timeout 20 gh api -i user 2>/dev/null \
+    | grep -im1 '^Github-Authentication-Token-Expiration:' \
+    | cut -d: -f2- \
+    | sed 's/^ *//; s/ *$//'
+}
+
+gh_token_expiry_days() {   # → hány NAP múlva jár le a PAT, vagy 1
+  local now cached cached_epoch expiry expiry_epoch probe_seconds
+  now=$(pipeline_now_epoch)
+  case "$gh_token_probe_h" in ''|*[!0-9]*) return 1 ;; esac
+  probe_seconds=$(( gh_token_probe_h * 60 * 60 ))
+  if [ -f "$gh_token_expiry_file" ]; then
+    cached=$(head -1 "$gh_token_expiry_file")
+    cached_epoch=${cached%%|*}
+    expiry=${cached#*|}
+    case "$cached_epoch" in
+      ''|*[!0-9]*) ;;
+      *) [ "$now" -lt "$(( cached_epoch + probe_seconds ))" ] || expiry="" ;;
+    esac
+  fi
+  if [ -z "${expiry:-}" ]; then
+    expiry=$(gh_token_expiry_probe) || return 1
+    [ -n "$expiry" ] || return 1
+    printf '%s|%s\n' "$now" "$expiry" > "$gh_token_expiry_file"
+  fi
+  expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null) || return 1
+  printf '%s\n' "$(( (expiry_epoch - now) / 86400 ))"
+}
+
+check_gh_token_expiry() {
+  local days
+  case "$gh_token_warn_days" in ''|*[!0-9]*) return 0 ;; esac
+  days=$(gh_token_expiry_days) || return 0
+  [ "$days" -le "$gh_token_warn_days" ] || return 0
+  if [ "$days" -le 2 ]; then
+    log "GITHUB-TOKEN: $days nap múlva lejár — cseréld ki, különben a lánc H-AUTH-tal áll meg"
+    notify "🔑 a GitHub-token $days nap múlva lejár" \
+      "cseréld ki a ~/.git-credentials + gh auth párost, különben a lánc H-AUTH-tal áll meg" urgent
+  else
+    log "GITHUB-TOKEN: $days nap múlva lejár (küszöb: $gh_token_warn_days nap)"
+    notify "🔑 a GitHub-token $days nap múlva lejár" \
+      "küszöb: $gh_token_warn_days nap — tervezd be a cserét" high
+  fi
+}
+
+check_gh_token_expiry
+
 # --- 2. Halt-állapot → önjavítás (ADR 0112) -------------------------------
 # A halt nem a lánc vége, hanem az önjavító kör bemenete. A driver ugyanezen a
 # záron belül indítja: egyszerre továbbra is EGY session dolgozik.
@@ -2528,8 +2621,9 @@ done
 # Egy slot mellett a sor ELEJE következik, változatlanul. Több slot mellett a
 # választás gépi: `tools/round-slots.py` csak olyan kört enged, amely (a) a
 # futókkal fájl-diszjunkt és (b) minden előfeltétele `done`. Az „előfeltétel"
-# konzervatív: az epicen belüli sorrend ÉS a briefben nevesített körök —
-# a futó kör NEM számít teljesítettnek, mert a benne születő API még nem létezik.
+# forrása ADR 0495 D1 óta a brief KIMONDOTT `Előfeltétel` sora — a futó kör NEM
+# számít teljesítettnek, mert a benne születő API még nem létezik. Amelyik brief
+# nem mondja ki, arra a régi, epicen belüli sorosítás él (fail-closed).
 if [ "$slots" -gt 1 ] && [ -f "$repo_root/tools/round-slots.py" ]; then
   selected_round=$(python3 "$repo_root/tools/round-slots.py" --repo "$repo_root" \
     --inflight "$inflight_dir" plan --slots "$slots" --limit 1 --format round 2>/dev/null | head -1)
