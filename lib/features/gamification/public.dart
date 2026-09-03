@@ -22,6 +22,7 @@ export 'data/migration/gamification_migrator.dart';
 export 'data/migration/legacy_daily_challenge_adapter.dart';
 export 'data/migration/legacy_practice_adapter.dart';
 export 'data/migration/legacy_streak_migrator.dart';
+export 'data/practice_mastery_evidence_adapter.dart';
 export 'domain/activity/activity_source.dart';
 export 'domain/activity/evidence_trust.dart';
 export 'domain/gamification_preferences.dart';
