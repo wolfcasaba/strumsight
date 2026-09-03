@@ -1,0 +1,1 @@
+round=E07-R07 verdict=pass tests=20-targeted+full-ci+router-ci+postmerge-gate lesson=L285 engine=sonnet-impl
