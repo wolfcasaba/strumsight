@@ -7,12 +7,22 @@
 
 > ⚠ **A §3 matrix a queue ÉLŐ állapotát tükrözi, nem befagyasztott
 > pillanatképet.** Az `A1` cella egyenlőséget mér a
-> `docs/execution/pipeline-queue.tsv` ellen, ezért **minden jövőbeli kör,
-> amely egy queue-sort `pending` → `done`-ra vált (E14, E15, E16, E99, és az
-> Epic 8/9/10 `hold`-jainak feloldása), PIROSRA váltja ezt a cellát, amíg a
-> matrix megfelelő sora nem frissül.** Ez a mérce szigorúságának ára; a
-> feloldása (befagyasztott, dátumozott pillanatkép vagy nem-egyenlőség alapú
-> invariáns) egy KÖVETKEZŐ kör feladata — lásd `docs/LESSONS.md` L590.
+> `docs/execution/pipeline-queue.tsv` ellen, ezért **minden kör, amely egy
+> queue-sort `pending` → `done`-ra vált (E14, E15, E16, E99, és az Epic 8/9/10
+> `hold`-jainak feloldása), elavulttá teszi a matrix megfelelő sorát.**
+>
+> **MEGOLDVA 2026-09-03 (E15-R09 / H5 önjavító kör, ADR 0112):** a négy
+> szám-oszlop már nem kézzel karbantartott — a
+> `tools/sync-completion-matrix.py` a queue-ból SZÁRMAZTATJA őket, és a
+> kör-driver ugyanabban a lépésben futtatja, ahol a queue-sort `done`-ra
+> billenti (`tools/round-pipeline.sh`, merge-ág). Az `A1` egyenlősége
+> VÁLTOZATLANUL szigorú; ami megszűnt, az a kézi bookkeeping. A mért ár, ami
+> ezt kikényszerítette: az E12-R36 riport merge-e utáni ELSŐ queue-flip
+> (E15-R08, `e9691f74`) pirosra vitte a main Full Gate-jét (run 33704424852),
+> és a lánc 89 percig állt — lásd `docs/LESSONS.md` L590 és L591.
+>
+> A `Riport-státusz` prózát a szinkron SOSEM írja: az emberi őszinteség
+> oszlopa, az `A2` szó szinten olvassa.
 - **Mérés forrásai:** `docs/execution/pipeline-queue.tsv` (a queue-státusz EGYETLEN gépi forrása),
   `docs/sdd/00-index.md`, `ls docs/sdd/`, a nyolc létező epic-zárójelentés
   (`docs/sdd/epic-01…epic-08-completion-report.md`).
@@ -96,7 +106,7 @@ szóval.
 | Ch12 | Release Roadmap, Sprint Planning & Final Integration | E12 | 36 | 0 | 0 | 0 | kör-munka: 36/36 queue-sor done (a záró E12-R36-tal együtt); **EMBERI KAPUK NYITOTT** (ld. §5) — a sáv kör-munkája teljes, a KIADÁS nem | `docs/release/program-baseline.md` |
 | Ch13 | UI/UX Design System & Screen Specification | E13 | 36 | 0 | 0 | 0 | queue-szinten lezárva (36/36 done) | — |
 | Ch14 | Recognition Accuracy & Useful UI Recovery | E14 | 1 | 0 | 18 | 0 | nyitva (prepared: R02–R19 megírva, nem futtatva; R20–R42 briefjei meg sem íródtak) | — |
-| — | Ch15 UI-migráció (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E15 | 8 | 6 | 0 | 0 | nyitva (pending: R08–R13 hátravan — gamification/AI-tutor/analysis/vision/onboarding/community migráció, backend mounting, release evidence) | — |
+| — | Ch15 UI-migráció (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E15 | 9 | 5 | 0 | 0 | nyitva (pending: R09–R13 hátravan — AI-tutor/analysis/vision/onboarding/community migráció, backend mounting, release evidence; R08 gamification merge-elve) | — |
 | — | Ch16 kompozíció és rollout (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E16 | 0 | 5 | 0 | 0 | nyitva (pending: mind az 5 kör — kompozíció, progress-projekció, capability rollout, live backend E2E, teljes-app verifikáció) | — |
 | — | governance (pszeudoepic) | E99 | 18 | 0 | 0 | 2 | nyitva (hold: E99-R21, E99-R23) | — |
 

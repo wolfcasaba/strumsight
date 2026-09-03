@@ -28,6 +28,7 @@ enum ArchitectureRule {
   coreMustNotImportFeatures,
   sharedDomainMustRemainFrameworkIndependent,
   crossFeatureImportsMustUsePublicApi,
+  designSystemImportsMustUsePublicBarrel,
   rawVisionPayloadMustNotPersist,
   rawVisionPayloadMustNotEnterProviderState,
 }
@@ -352,6 +353,16 @@ void _collectViolations({
     );
   }
 
+  if (_isDesignSystemBarrelBypass(sourcePath, targetPath)) {
+    violations.add(
+      ArchitectureViolation(
+        sourcePath: sourcePath,
+        target: targetPath!,
+        rule: ArchitectureRule.designSystemImportsMustUsePublicBarrel,
+      ),
+    );
+  }
+
   final sourceFeature = _featureName(sourcePath);
   final targetFeature = targetPath == null ? null : _featureName(targetPath);
   if (sourceFeature != null &&
@@ -379,6 +390,30 @@ bool _isFeaturePublicBarrel(String? targetPath, String targetFeature) {
   if (targetPath == null) return false;
   return targetPath.startsWith('lib/features/$targetFeature/') &&
       targetPath.endsWith('/public.dart');
+}
+
+/// The design system (`lib/core/design_system/**`) has exactly one entry point
+/// for the rest of `lib/`: its `public.dart` barrel (E13-R02 contract, pinned
+/// by `test/core/architecture_dependency_test.dart` — "real production source
+/// reaches the design system only via public.dart"). Anything else is a deep
+/// import that couples a screen to the design system's internal file layout.
+///
+/// MEASURED (E15-R09, H5 self-heal, ADR 0112, 2026-09-03): until this rule
+/// existed, the contract was measured ONLY by the full CI suite. A migration
+/// round's targeted gate (`gate_tests`) and the gate's own `architecture` step
+/// both ran green over 24 deep imports across five migrated Tutor screens, and
+/// the violation surfaced only in CI — twice — which is an H5 halt of the whole
+/// round pipeline. Placing it here means every round's `tools/round-gate.sh`
+/// `architecture` step measures it locally, before any push.
+///
+/// The design system's own files are exempt: internal cohesion is what the
+/// barrel exists to hide.
+bool _isDesignSystemBarrelBypass(String sourcePath, String? targetPath) {
+  const designSystemRoot = 'lib/core/design_system/';
+  if (targetPath == null) return false;
+  if (!targetPath.startsWith(designSystemRoot)) return false;
+  if (sourcePath.startsWith(designSystemRoot)) return false;
+  return targetPath != '${designSystemRoot}public.dart';
 }
 
 bool _isSharedDomain(String sourcePath) =>
@@ -737,6 +772,9 @@ String _ruleDescription(ArchitectureRule rule) => switch (rule) {
         'framework-independent',
   ArchitectureRule.crossFeatureImportsMustUsePublicApi =>
     'cross-feature imports must target public.dart',
+  ArchitectureRule.designSystemImportsMustUsePublicBarrel =>
+    'design-system imports must target '
+        'lib/core/design_system/public.dart',
   ArchitectureRule.rawVisionPayloadMustNotPersist =>
     'raw vision payloads must not enter persistence',
   ArchitectureRule.rawVisionPayloadMustNotEnterProviderState =>
