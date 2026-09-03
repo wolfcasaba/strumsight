@@ -211,3 +211,54 @@ A javító kör ugyanazon a branchen, ugyanazzal a motorral (`sonnet-impl`) megy
 munkát a branchre kell commitolni. A javítás után a §7 gate ÚJRA fut, a golden
 PNG-k szükség szerint újrafelvéve (ADR 0426, `tools/golden-x86.sh record`), és a
 teljes CI-kapu (Full Gate + Router CI) az ÚJ merge SHA-n zöld kell legyen.
+
+---
+
+## 7. A javító kör (1.) ellenőrzése — 2026-09-03, orchestrátor
+
+A javító kör commitjai: `a4341874` (kód+cellák), `eda3ba9f` (goldenek),
+`193bcce0` (§10.6 handoff). Leletenként újramérve, a review HEAD-jén:
+
+| Lelet | Zárás | A MÉRT bizonyíték |
+|---|---|---|
+| **BLOCKER-1** (routing-crash) | ✅ | `vision_session_routing_test.dart:45` `theme: SsLightTheme.data()`; a `router.go` utáni két `expect` VÁLTOZATLAN. A teszt lokálisan zöld. |
+| **BLOCKER-2** (CTA-csonkulás) | ✅ | A CTA visszatért nyers `FilledButton` + `Text`-re, a kódban dokumentált kivétel-kommenttel, ami erre a review-ra ÉS az E15-R08 M3-ra hivatkozik — pontosan a `streak_detail_screen.dart:117-126` precedens mintája. Az ÚJ cella (`onboarding_test.dart:250-277`) `en` ÉS `hu` locale-on, `textScaler 2.0`-n, **412×915** felületen `didExceedMaxLines == false`-t állít, és külön `expect`-tel pinneli, hogy a CTA `FilledButton` marad („not the ellipsis-prone SsButton") — egy jövőbeli visszacsere ezért PIROSRA vált. |
+| **MAJOR-1** (800×600 mátrixok) | ✅ | `physicalSize` mind a három harnessben (`onboarding_test.dart:142,210`, `block_mute_test.dart:389`, `vision_one_cue_test.dart:266`), `devicePixelRatio = 1.0` + `addTearDown(tester.view.reset)` mindenhol. |
+| **MAJOR-2** (nyers spinner) | ✅ | `followers_screen.dart` footer → `SsSkeleton(key: Key('followers-footer-loading'))`; a típust `block_mute_test.dart:431` `expect(find.byType(SsSkeleton), findsOneWidget)` állítja. |
+| **MAJOR-3** (3,27:1 kontraszt) | ✅ | A `danger` szín-döntés visszavéve (`colors.textPrimary`), a most már használatlan `_isPermissionOrDeviceIssue` helper törölve. A hibát továbbra is a SZÖVEG mondja ki — a `_statusText` ága érintetlen, tehát információvesztés nincs. |
+| **MINOR-1** (baseline-teszt) | ✅ | `ui_baseline_screenshot_test.dart:213` `theme: SsDarkTheme.data()`. |
+| **MINOR-2** (ikon 2,85:1) | ✅ | `_EntryBanner` kitöltés `danger @0.12` → `@0.05`; mért 3,09:1 light / 4,89:1 dark, a nem-szöveg küszöb (3,0) fölött. |
+| **MINOR-3** (avatár-kontraszt) | ✅ | `DecoratedBox` + `Border.all(colors.borderStrong, 1.5)` a `CircleAvatar` körül — mért 17,25:1 light / 13,04:1 dark, új token nélkül. |
+| **MINOR-4** (elavult komment) | ✅ | `onboarding_screen.dart:62-68` a MÉRT valóságot írja („themed `MaterialApp` with no `ProviderScope`"). |
+
+### Gépi mércék a javító kör után
+
+| Mérce | Eredmény |
+|---|---|
+| `scope_audit` (`4ca8785f..fa57dbf7`) | **ok** — 30 fájl, 0 sértés |
+| Implementer-oldali `tools/round-gate.sh` | **28/28 zöld** (`gate_shape=ok`) |
+| Orchestrátor-oldali célzott újrafuttatás (6 fájl, a 4 új/módosított cellával + 2 golden-suite) | **58/58 zöld** |
+| A4-őr: törölt/`skip`-elt/lazított cella | **nincs** — `git diff \| grep '^-.*expect('` ÜRES, `skip:` 0→0 |
+| `full-gate.yml` @ `193bcce0` | **success** (`33744905907`) |
+| `router-ci.yml` @ `193bcce0` | **success** |
+
+### A CI ELSŐ pirosának mért gyökéroka (lezárva)
+
+A `full-gate` `33739838255` (a `6461d8bb` HEAD-en) két cellán bukott:
+
+1. `vision_session_routing_test.dart` — **a kör okozta**, BLOCKER-1, javítva (R9).
+2. `test/features/songs/import/import_flow_test.dart` „A2: cancelling a
+   confirmed import cleans the opened workspace" — **NEM a kör okozta**:
+   lokálisan zölden fut (2/2), és a kör diffje **nulla** `songs`-fájlt
+   érint (`git diff --name-only -- lib/features/songs test/features/songs`
+   üres). CI-oldali időzítési flake (`pumpEventQueue()` után várt temp-fájl);
+   a `193bcce0` futásán már nem jelentkezett. Ezen a körön javítani való nincs.
+
+## 8. VÉGSŐ DÖNTÉS
+
+**APPROVED.** 0 nyitott BLOCKER, 0 nyitott MAJOR, 0 nyitott MINOR.
+
+A merge feltétele változatlanul a **merge SHA-n** zöld teljes kapu (Full Gate +
+Router CI, exact-SHA, ADR 0086 §2) — az `origin/main` a review óta mozdult
+(E15-R10 merge), ezért az upstream beépítése után a kapu ÚJRA fut a
+`fa57dbf7` HEAD-en, és a merge kizárólag annak zöldjével történhet.
