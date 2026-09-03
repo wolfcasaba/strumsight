@@ -1,4 +1,4 @@
-/// Tutor Profile screen (E04-R22 §3).
+/// Tutor Profile screen (E04-R22 §3, design-system migration E15-R09).
 ///
 /// Edits the in-memory `StudentProfile` and `GuitarProfile` pair held by
 /// [tutorProfileControllerProvider], and the `LearningGoal` list held by
@@ -9,11 +9,23 @@
 ///
 /// Pure presentation: no persistence, no networking, no domain work
 /// beyond the model's own constructor + helpers.
+///
+/// The two [TextFormField]s stay plain Material widgets rather than
+/// [SsTextField]: this screen rebuilds them on every Riverpod `watch` via
+/// `initialValue` (no owned [TextEditingController]), and [SsTextField]'s
+/// `TextField`-only API has no `initialValue` — wiring a controller here
+/// would mean owning per-keystroke controller state this
+/// `ConsumerWidget` (stateless by design) doesn't have today, which is a
+/// behaviour change this visual-only round is not scoped to make.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/design_system/components/actions/ss_button.dart';
+import '../../../../core/design_system/components/surfaces/ss_section.dart';
+import '../../../../core/design_system/foundations/ss_colors.dart';
+import '../../../../core/design_system/foundations/ss_spacing.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/learning_goal.dart';
 import '../../domain/models/student_profile.dart';
@@ -47,7 +59,7 @@ class TutorProfileScreen extends ConsumerWidget {
           container: true,
           label: l10n.tutorProfileScreenSemantics,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(SsSpacing.space4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
@@ -55,84 +67,95 @@ class TutorProfileScreen extends ConsumerWidget {
                   l10n.tutorProfileIntro,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.tutorProfileStudentSection,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  key: const Key('tutorProfileWeeklyMinutes'),
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: l10n.tutorProfileWeeklyMinutesLabel,
-                    helperText: l10n.tutorProfileWeeklyMinutesHelper,
-                  ),
-                  initialValue:
-                      (profile.student.weeklyPracticeMinutes.value ?? '')
-                          .toString(),
-                  onChanged: (raw) {
-                    final value = int.tryParse(raw);
-                    profileController.setWeeklyMinutes(value);
-                  },
-                ),
-                if (weeklyErrorText != null) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Text(
-                    key: const Key('tutorProfileWeeklyMinutesError'),
-                    weeklyErrorText,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                Text(
-                  l10n.tutorProfileGuitarSection,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  key: const Key('tutorProfileGuitarName'),
-                  decoration: InputDecoration(
-                    labelText: l10n.tutorProfileGuitarNameLabel,
-                  ),
-                  initialValue: profile.guitar.name.value,
-                  onChanged: profileController.setGuitarName,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.tutorProfileGoalsSection,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                for (final goal in goals)
-                  ListTile(
-                    key: Key('tutorProfileGoal:${goal.id}'),
-                    title: Text(goal.statement),
-                    trailing: IconButton(
-                      key: Key('tutorProfileGoalRemove:${goal.id}'),
-                      icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: () => goalsController.removeGoal(goal.id),
-                    ),
-                  ),
-                FilledButton.icon(
-                  key: const Key('tutorProfileAddGoal'),
-                  onPressed: () {
-                    final now = DateTime.now().toUtc();
-                    final id = 'g-${now.microsecondsSinceEpoch}';
-                    goalsController.addGoal(
-                      LearningGoal(
-                        id: id,
-                        statement: l10n.tutorProfileNewGoalPlaceholder,
-                        category: LearningGoalCategory.improveRhythm,
-                        priority: LearningGoalPriority.medium,
-                        status: LearningGoalStatus.active,
+                const SizedBox(height: SsSpacing.space4),
+                SsSection(
+                  title: l10n.tutorProfileStudentSection,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      TextFormField(
+                        key: const Key('tutorProfileWeeklyMinutes'),
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: l10n.tutorProfileWeeklyMinutesLabel,
+                          helperText: l10n.tutorProfileWeeklyMinutesHelper,
+                        ),
+                        initialValue:
+                            (profile.student.weeklyPracticeMinutes.value ?? '')
+                                .toString(),
+                        onChanged: (raw) {
+                          final value = int.tryParse(raw);
+                          profileController.setWeeklyMinutes(value);
+                        },
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.tutorProfileAddGoalAction),
+                      if (weeklyErrorText != null) ...<Widget>[
+                        const SizedBox(height: SsSpacing.space2),
+                        Text(
+                          key: const Key('tutorProfileWeeklyMinutesError'),
+                          weeklyErrorText,
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).extension<SsColorScheme>()!.danger,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: SsSpacing.space4),
+                SsSection(
+                  title: l10n.tutorProfileGuitarSection,
+                  child: TextFormField(
+                    key: const Key('tutorProfileGuitarName'),
+                    decoration: InputDecoration(
+                      labelText: l10n.tutorProfileGuitarNameLabel,
+                    ),
+                    initialValue: profile.guitar.name.value,
+                    onChanged: profileController.setGuitarName,
+                  ),
+                ),
+                const SizedBox(height: SsSpacing.space4),
+                SsSection(
+                  title: l10n.tutorProfileGoalsSection,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      for (final goal in goals)
+                        ListTile(
+                          key: Key('tutorProfileGoal:${goal.id}'),
+                          title: Text(goal.statement),
+                          trailing: IconButton(
+                            key: Key('tutorProfileGoalRemove:${goal.id}'),
+                            icon: const Icon(Icons.remove_circle_outline),
+                            onPressed: () =>
+                                goalsController.removeGoal(goal.id),
+                          ),
+                        ),
+                      const SizedBox(height: SsSpacing.space2),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: SsButton(
+                          key: const Key('tutorProfileAddGoal'),
+                          onPressed: () {
+                            final now = DateTime.now().toUtc();
+                            final id = 'g-${now.microsecondsSinceEpoch}';
+                            goalsController.addGoal(
+                              LearningGoal(
+                                id: id,
+                                statement: l10n.tutorProfileNewGoalPlaceholder,
+                                category: LearningGoalCategory.improveRhythm,
+                                priority: LearningGoalPriority.medium,
+                                status: LearningGoalStatus.active,
+                              ),
+                            );
+                          },
+                          icon: Icons.add,
+                          label: l10n.tutorProfileAddGoalAction,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
