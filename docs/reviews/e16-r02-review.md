@@ -335,3 +335,93 @@ fészket az önjavító körnek külön kezelnie kell (a halt-detail 2. pontja).
    „Őrtesztje" nem pinnelheti a javított kör munkájának HIÁNYÁT az élő fán**,
    különben a kör sikere garantáltan pirosra viszi a Router CI-t, és a kört a
    saját őre zárja ki a merge-ből.
+
+---
+
+## 8. Upstream-szinkron (`73ff5351`) — az ELŐZŐ blokkoló FELOLDVA, ÚJ blokkoló MÉRVE
+
+**A §4 H3 blokkoló megszűnt.** A `#557` self-heal (`70b56465`) merge-elve, ez az
+ág `73ff5351`-ben beépíti (`git merge --no-ff origin/main`, konfliktus nélkül,
+`merge-base --is-ancestor origin/main HEAD` → 0):
+
+| Mérés a `73ff5351` HEAD-en | Eredmény |
+|---|---|
+| a §4 öt őr-tesztje (`test_e16_r02_route_catalog_scope.py`, `test_brief_lint_route_level_screen_swap.py`, `test_e16_r02_mastery_source_scope.py`) | **20 passed** (korábban 5 failed) |
+| `python3 -m pytest tools/tests -q` | **903 passed, 3 skipped** |
+| `python3 tools/brief-lint.py --open --level base` | nincs lelet |
+| **Router CI** (`router-ci.yml`, run `33808400511`) a `73ff5351` SHA-n | **success** |
+| `tools/round-gate.sh` a §7 16 útvonalával, a `73ff5351` HEAD-en | **21/21 ZÖLD** |
+| `tools/round-ci-plan.py` | `dispatch: full-gate.yml`, `router_ci_expected: true` |
+
+### 8.1 ÚJ MERGE-BLOKKOLÓ — H3: az `E15-R13` completion-report őre az ÉLŐ fán méri a reachability-t
+
+A `full-gate.yml` (run `33808412804`) a `73ff5351` SHA-n **EGYETLEN** cellával
+piros — és ez a cella az upstream-merge-dzsel érkezett be (`E15-R13`,
+`9ba54399..origin/main` egyetlen Dart-fájlja):
+
+```
+❌ test/ui/goldens/e15_r13_full_variant_matrix_test.dart:
+   A5 — completion-report guard … cites the current measured migration + reachability numbers
+   Expected: contains '73'
+   Actual:   <docs/ui/chapter-15-completion-report.md tartalma>
+```
+
+**Lokálisan reprodukálva** (`flutter test … --plain-name "cites the current
+measured migration"` a kör HEAD-jén): ugyanaz a bukás, `…test.dart:3733`.
+
+#### A MÉRT gyökérok
+
+```dart
+// test/ui/goldens/e15_r13_full_variant_matrix_test.dart:3724,3733
+final measured = ScreenReachability(Directory.current).render();   // az ÉLŐ fa
+expect(report, contains('${measured.reachableCount}'));            // 73 kell
+```
+
+```
+# docs/ui/chapter-15-completion-report.md:47,56
+# measuredScreenCount=96 reachableCount=71 unreachableCount=25 flagGatedCount=27
+- **Reachability: 96 measured, 71 reachable, 25 unreachable, 27 flag-gated.**
+```
+
+A guard az ÉLŐ fából számolja a reachability-t, és megköveteli, hogy egy MÁSIK,
+LEZÁRT kör (`E15-R13`) dátumozott jelentése ugyanazt a számot tartalmazza. Ez a
+kör pontosan **+2 képernyőt tesz elérhetővé** (`ProgressDashboardScreen`,
+`SkillDetailScreen` — ez az A1 és az A2 cella TARTALMA), tehát
+`reachableCount 71 → 73`, a jelentés viszont a 71-et rögzíti a saját mért
+bázisán (`main @ 9ba54399`). **A kör sikere teszi pirossá az őrt** — ugyanaz a
+hibaosztály, mint az imént healelt L612, csak a doc-konzisztencia felől.
+
+#### Miért nem javíthatja ez a session
+
+| Fájl, ami a javításhoz kell | Az `allowed_paths`-on? |
+|---|---|
+| `docs/ui/chapter-15-completion-report.md` | **NINCS** |
+| `test/ui/goldens/e15_r13_full_variant_matrix_test.dart` | **NINCS** |
+
+Az `allowed_paths` bővítése az orchestrátornak tágítás (ADR 0087 §2 — csak
+SZŰKÍTÉS az övé), a lista-tágítás nélküli írás pedig definíció szerint **H3**.
+A kör nem tudja elkerülni a sértést: a reachability növelése maga az A1/A2
+acceptance-cella.
+
+### 8.2 A korábbi flaky import-fészek ezen a futáson NEM bukott
+
+A `33808412804` futásban a §5.1-ben leírt két import-megszakítási cella
+**zölden** futott le; a futás egyetlen bukása a fenti A5 cella. Ez megerősíti a
+§5.1 flake-diagnózisát (nem determinisztikus regresszió), de a fészek
+stabilitása továbbra sincs bizonyítva.
+
+### 8.3 Nyitott, NEM blokkoló: a strict brief-lint S11-e most az élő fán csúszik el
+
+`python3 tools/brief-lint.py --brief <ez a brief> --level strict` a kör HEAD-jén
+az `unified_library_screen.dart`-ot jelenti (a `/profile/progress` már a
+dashboardra mutat, így a szabály a következő route-szintű cserét látja) —
+**a kör ezt a képernyőt nem cseréli le**. A Router CI a NYITOTT körökre
+`--level base`-t futtat, ami zöld, tehát ez nem kapu-blokkoló; a lint élő-fás
+S11-ágának ugyanaz a fixture-kötés a helyes javítása, mint amit a `#557` a
+`route_level_swapped_screens()` szabály-viselkedésére már elvégzett.
+
+## VÉGSŐ DÖNTÉS (frissítve, `73ff5351`): **CHANGES REQUESTED — a kör HALT-ol (H3)**
+
+A kör terméke változatlanul kész és mérve jó (A1–A12 ✅, célzott kapu 21/21
+zöld, Router CI zöld, scope-audit 0 sértés). A merge-et EGYETLEN, a kör tilos
+zónájában élő, az élő fát mérő doc-konzisztencia-őr blokkolja.
