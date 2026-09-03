@@ -671,4 +671,169 @@ Nem vettem fel ÚJ ARB-kulcsot — minden migrált widget a MEGLÉVŐ
   `destructiveSemanticHint` ARB-kulcsot egy dialóg-belső gombért, ami a
   vizuális kör hatókörén túlmutató döntésnek tűnt.
 
+### 10.8 Javító kör #1
+
+Commit-ok: `b1597fa1` (BLOCKER-1 + MAJOR-1…5 javítás, golden-újrafelvétel),
+`f2398750` (takarítás — véletlenül commitolt golden-diff debug-fájlok
+törlése, nem termelési változás).
+
+**BLOCKER-1 (R10).** `test/features/ai_tutor/presentation/tutor_home_screen_test.dart`
+`MaterialApp.router`-je megkapta a `theme: SsLightTheme.data()` drótozást
+(a fájl importálja `ss_light_theme.dart`-ot és felvette a `locale`
+paramétert is, hogy a §0.0.B/R14 textScale-cellák hu-t is tudjanak
+futtatni ugyanazon a harnessen). Ezzel a Home-képernyő „extension-mentes"
+kényszere megszűnt: `tutor_home_screen.dart` `_ModelStatusCard`/`_ModeChip`
+helyett most `SsModelStatusCard` (belül `SsProvenanceBadge`) + `SsButton`
+CTA-t használ. **Visszaesést fogó cella:** `R18-R1`/`R18-R3` (a saját
+pinnelt teszt két korábban piros cellája) — bármelyik visszaáll pirosra,
+ha a `theme:` drótozás vagy a téma-extension-olvasó komponens eltűnik.
+
+**MAJOR-1 (R11).** A hamis „`SsCard`/`SsSurface` extension-mentes"
+állítás javítva mindhárom helyen: `tutor_home_screen.dart` fájl-doc (most
+a mért láncot idézi: `ss_card.dart:15-17` → `ss_surface.dart:42` →
+`ss_elevation.dart:14-15`), `docs/ui/migration-status.md` (a `TutorHomeScreen`
+bekezdés átírva), és e brief §10.2-je (fent). **Visszaesést fogó cella:**
+nincs önálló teszt-cella (dokumentum-pontosság), de a BLOCKER-1 cellái
+tényleges bizonyítékot adnak arra, hogy az állítás iránya (extension-olvasás
+biztonságos, ha a harness témázva van) helyes.
+
+**MAJOR-2 (R12).** `tutor_data_screen.dart` mindkét `error:` ága
+(`memoryFacts`, `conversations`) a valódi hibát adja át:
+`error is AppFailure ? error : const UnknownFailure(retryable: true)`.
+Mivel az `SsFailurePresentation.from` kizárólag `AppFailure.code`/`.retryable`
+alapján dönt (ADR 0277), nem aszerint, MELYIK lista hibázott, a két korábbi
+KÜLÖNBÖZŐ ARB-üzenet (`tutorDataMemoryLoadFailed`,
+`tutorDataConversationsLoadFailed`) továbbra is holt kulcs marad — ez a
+prezentációs modell mért korlátja, nem ennek a körnek a hibája (a fájl
+doc-kommentje ezt most kimondja). **Visszaesést fogó cella:** a §10-ben
+lent dokumentált valódi-sértés próba a teljes GATE-en — `R22-DA8` pirosra
+vált, ha az `error:` ág visszaáll beégetett `UnknownFailure`-re vagy nyers
+`Text`-re.
+
+**MAJOR-3 (R13).** Négy nyitott állapot lezárva:
+- `tutor_chat_screen.dart:183` (eredeti sor) nyers `CircularProgressIndicator`
+  → `SsSkeleton` (12×12, `SsRadius.pill`). **Cella:** `R18-A17`.
+- `tutor_data_screen.dart` memory/conversations üres állapota → új,
+  screen-lokális `_DataEmptyState` (token-stílus: `SsColorScheme`/
+  `SsTypography`/`SsSpacing`; a §0.0.A/R6 kivétel-osztály, mert egyik
+  listának sincs valódi, e widgetből meghívható következő lépése — a
+  chat `_EmptyState`-tel azonos indoklás). **Cellák:** `R22-DA11`, `R22-DA12`.
+- `tutor_profile_screen.dart:93-101` validációs hiba → `SsValidationSummary`.
+  **Cella:** `R22-PF2` (kibővítve) + `R22-PF6`.
+
+**MAJOR-4 (R14).** Mind az 5 képernyő saját pinnelt teszt-fájlja kapott
+committolt `textScaler 2.0` × `en`/`hu` cellát (`R18-R7`, `R18-A19`,
+`R22-DA14`, `R22-PC7`, `R22-PF7`), a 412×915 kompakt viewporton. **Mért,
+valódi regresszió, amit ez a mérés talált és ami itt javítva lett:** a
+Chat képernyő `_AiModeIndicator` fallback-ága (badge + trailing üzenet az
+AppBar `actions`-ában) `RenderFlex overflowed by 1187 pixels`-t adott
+(`en`, 2.0×) — az `AppBar.actions` minden akciót a SAJÁT természetes
+szélességén mér, mielőtt a cím a maradékot megkapná, ez az ambiens
+korlát pedig láthatatlan a `Flexible`/`TextOverflow.ellipsis` számára,
+amíg minden gyermek nem-flexibilis testvér marad. Javítás: mind a badge,
+mind a trailing szöveg SAJÁT `ConstrainedBox`-ot kapott (130px, illetve
+90px), ami a vágást a Row flex-egyeztetésétől függetlenül, determinisztikusan
+kényszeríti ki. **Visszaesést fogó cella:** `R18-A19` (mindkét locale).
+
+**MAJOR-5 (R15).** Képernyőnkénti design-rendszer típus-állítás minden
+migrált állapotra: Home (`R18-R5`: `SsModelStatusCard`, `SsButton`), Chat
+(`R18-A17`: `SsSkeleton`; `R18-A18`: `SsProvenanceBadge`), Data (`R22-DA9`:
+`conversations` hiba-ág `SsFailureState` — ÚJ valódi-sértés próba, mert
+korábban EGYETLEN ilyen cella élt a batch-ben, a `memoryFacts` ágon;
+`R22-DA10`: `SsCard`; `R22-DA11`/`R22-DA12`: a token-stílusú üres-állapot;
+`R22-DA13`: `SsButton`), Profile (`R22-PF6`: `SsSection`×3, `SsButton`),
+Privacy (`R22-PC6`: `SsSection`).
+
+**R16 (A6 őszinteség).** `test/l10n/hardcoded_string_guard_test.dart`
+hatóköre (`:18-23`) kizárólag `lib/core/design_system/**`-ra terjed ki, a
+kör öt `lib/features/ai_tutor/**` képernyőjére NEM — ez a gate-listán
+zölden fut, de erre a körre nézve holt bizonyíték. A §10.6 mostantól ezt
+mondja ki: a valódi bizonyíték a diff kézi átolvasása (implementer +
+reviewer), ami nem talált új beégetett szöveget. A guard hatókör-bővítése
+külön kör dolga.
+
+**R17 (MINOR-ok).**
+- **m2** — a golden fejléc-komment javítva: a `TutorHomeScreen` mostantól
+  SZINTÉN theme-extension komponenseket használ, tehát `AppTheme.dark()`
+  alatt ő is összeomlana; a komment ezt mondja ki (nem "renders identically").
+- **m3** — magától megszűnt: a Home most `SsProvenanceBadge`-et használ
+  (ugyanazt, mint a Chat), a korábbi `Icons.smartphone_outlined` vs
+  `Icons.memory_outlined` divergencia eltűnt.
+- **m4** — dokumentálva, NEM javítva: a három CTA
+  (`tutorDataExportRedacted`, `tutorDataDeleteAllTrigger`,
+  `tutorProfileAddGoal`) `Align(centerStart)`-tal intrinsic szélességű
+  marad — a teljes-szélességű visszaállítás egy tap-target-méretet érintő
+  layout-döntés lenne, ami túlmutat ezen a javító körön; a §10.2 dokumentálja
+  a jelenlegi állapotot.
+- **m5** — javítva: `tutor_data_screen.dart:271/276` (a scope-lista bullet
+  sorok) a beégetett `vertical: 2`/`width: 8` helyett `SsSpacing.space1`/
+  `SsSpacing.space2`-t használ; `tutor_privacy_screen.dart` `SsSpacing.space1
+  / 2` aritmetikája szintén `SsSpacing.space1`-re egyszerűsödött — mindkét
+  fájl most valódi, nevesített tokent használ, nem levezetett/beégetett
+  értéket. Vizuálisan elhanyagolható (2px) különbség egy 3+3 soros
+  bullet-listán, egyik fájlnak sincs golden-je.
+- **m6** — NEM javítva, dokumentálva: `_ConversationRow` marad nyers
+  `Card`+`ListTile`, mert egy `SsCard` duplázná a `ListTile` saját
+  paddingját (a §10.2-ben már rögzített indoklás, változatlan).
+
+**Valódi-sértés próba a teljes GATE-en (KÖTELEZŐ, MÉRVE).** A
+`tutor_data_screen.dart` memory-facts `error:` ága ideiglenesen visszaírva
+`Text(l10n.tutorDataMemoryLoadFailed)`-re (a `SsFailureState`/
+`SsFailurePresentation.from` hívás eltávolítva), majd a §7 GATE
+csonkítatlanul lefuttatva:
+
+```
+→ [7] test test/features/ai_tutor/presentation/tutor_data_screen_test.dart: PIROS (kilépési kód 1)
+  R22-DA8: memory-facts load failure renders SsFailureState with a working retry [E]
+    Expected: exactly one matching candidate
+      Actual: _TypeWidgetFinder:<Found 0 widgets with type "SsFailureState": []>
+  R22-DA10: a memory-fact row renders inside the design-system SsCard [E]
+    (másodlagos bukás — a memory-facts lista üres marad, amíg a hiba-ág aktív)
+═══ Gate-összegzés: … test test/features/ai_tutor/presentation/tutor_data_screen_test.dart PIROS (1) …
+GATE_EXIT=10
+```
+
+A többi 14 lépés (format/analyze/12 másik teszt-fájl) VÁLTOZATLANUL zöld
+maradt a sértés alatt is — a próba pontosan a célzott cellákat vitte
+pirosra, nem az egész gate-et. Visszaállítva (a `git diff` a visszaállítás
+UTÁN üres a fájlon) → a §10.9 alatti teljes gate-futás újra 18/18 zöld.
+
+### 10.9 Záró GATE — csonkítatlan (a §4 parancs, javító kör után)
+
+```bash
+tools/round-gate.sh test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/offline_network_guard_test.dart test/features/ai_tutor/presentation/tutor_chat_screen_test.dart test/features/ai_tutor/presentation/tutor_data_screen_test.dart test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart test/features/ai_tutor/presentation/tutor_profile_screen_test.dart test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/ui/goldens/e13_r29_screens_golden_test.dart test/features/ai_tutor/presentation/tutor_home_screen_test.dart test/l10n/arb_parity_test.dart test/l10n/hardcoded_string_guard_test.dart
+```
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/app/navigation/adaptive_scaffold_test.dart       zöld
+    test test/app/offline_network_guard_test.dart              zöld
+    test test/features/ai_tutor/presentation/tutor_chat_screen_test.dart zöld
+    test test/features/ai_tutor/presentation/tutor_data_screen_test.dart zöld
+    test test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart zöld
+    test test/features/ai_tutor/presentation/tutor_profile_screen_test.dart zöld
+    test test/features/tutor/ai_mode_visibility_test.dart      zöld
+    test test/features/tutor/streaming_announcement_test.dart  zöld
+    test test/ui/goldens/e13_r29_screens_golden_test.dart      zöld
+    test test/features/ai_tutor/presentation/tutor_home_screen_test.dart zöld
+    test test/l10n/arb_parity_test.dart                        zöld
+    test test/l10n/hardcoded_string_guard_test.dart            zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A BLOCKER-1 által korábban pirosra vitt `R18-R1`/`R18-R3` MÉRVE zöld a
+`test test/features/ai_tutor/presentation/tutor_home_screen_test.dart`
+lépésen belül (7/7 cella, beleértve az új `R18-R5`/`R18-R7`-et is). A
+golden-sáv (`test/ui/goldens/e13_r29_screens_golden_test.dart`) 6/6 zöld
+az x86-on újrafelvett Home PNG-kkel (`tools/golden-x86.sh record`, exit 0)
+— a Chat és a Practice Plan Preview PNG-k byte-azonosak maradtak, csak a
+Home 2 PNG-je (compact + `_scale2`) változott, a §10.4-ben leírt módon.
+
 ## 11. Review — a Claude tölti ki
