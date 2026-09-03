@@ -585,7 +585,7 @@ E15-R06	docs/rounds/e15-r06-legacy-song-library-progress-migration.md	sonnet-imp
 # revíziója ugyanezt az előfeltételt szövegesen is kimondja.
 E15-R14	docs/rounds/e15-r14-practice-generator-composition-layer.md	sonnet-impl	0482	done
 E15-R07	docs/rounds/e15-r07-practice-generator-migration.md	sonnet-impl	0480	done
-E15-R08	docs/rounds/e15-r08-gamification-migration.md	sonnet-impl	nincs	pending
+E15-R08	docs/rounds/e15-r08-gamification-migration.md	sonnet-impl	nincs	done
 E15-R09	docs/rounds/e15-r09-ai-tutor-migration.md	sonnet-impl	nincs	pending
 E15-R10	docs/rounds/e15-r10-analysis-migration.md	sonnet-impl	nincs	pending
 E15-R11	docs/rounds/e15-r11-vision-onboarding-community-migration.md	sonnet-impl	nincs	pending
