@@ -19,6 +19,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_profile.dart';
 import 'package:strumsight/features/community/domain/policies/community_audience.dart';
@@ -35,6 +36,12 @@ Widget _harness(SocialGraphRepository repo) {
   return ProviderScope(
     overrides: [socialGraphRepositoryProvider.overrideWithValue(repo)],
     child: MaterialApp(
+      // R2 (§0.0): FollowersScreen's SsCard now reads the design-system
+      // theme extensions — a themeless MaterialApp null-check crashes
+      // (L593-class defect). CommunityThemeScope also merges these in
+      // internally (R6), but the round's own instruction is to make the
+      // harness carry the real runtime theme regardless.
+      theme: SsLightTheme.data(),
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
