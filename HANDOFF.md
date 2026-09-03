@@ -1,5 +1,46 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E15-R09 / H5 — KÉT lánc-akadály feloldva (2026-09-03)
+
+A kör-pipeline **kétszeresen** állt: (1) a `main` Full Gate PIROS volt (run
+[33704424852](https://github.com/wolfcasaba/strumsight/actions/runs/33704424852)),
+ezért a driver 02:25–03:54 között **18 firingen, 89 percen át** egyetlen kört
+sem indított; (2) az `E15-R09` kör H5-tel halt (a CI kétszer piros).
+
+**(1) gyökérok — MÉRVE.** Az E15-R08 merge a queue `E15` eloszlását
+`8 done / 6 pending` → `9 done / 5 pending`-re vitte, a
+`docs/sdd/program-completion-report.md` §3 matrixa viszont a kézzel írt régi
+számokon maradt; a `program_completion_test.dart` `A1` cellája SZIGORÚ
+egyenlőséget mér a queue ellen. Ez pontosan az [L590](docs/LESSONS.md#l590)
+által megjósolt csapda, ami az ELSŐ queue-flipen detonált. **Javítás:** a négy
+szám-oszlop mostantól SZÁRMAZTATOTT — `tools/sync-completion-matrix.py`, amit a
+driver a queue-flip commitban futtat ([ADR 0494](docs/adr/0494-derived-completion-matrix-and-h5-counter-reset.md)
+D1). Az `A1` egyenlősége VÁLTOZATLANUL szigorú; csak a kézi bookkeeping szűnt
+meg. [L591](docs/LESSONS.md#l591).
+
+**(2) gyökérok — MÉRVE.** Az öt migrált Tutor-képernyő 24 MÉLY importtal érte
+el a design-rendszert a `public.dart` barrel helyett (E13-R02 szerződés). A
+szabályt KIZÁRÓLAG a teljes CI-suite mérte: a `main` állapotú
+`dart tool/check_architecture.dart` ugyanazon a fán `Architecture dependencies
+OK`-ot adott, amin a CI kétszer bukott. **Javítás:** új
+`designSystemImportsMustUsePublicBarrel` szabály a checkerben → **minden** kör
+`tools/round-gate.sh` `architecture` lépése méri, lokálisan, push előtt (ADR
+0494 D2). A `main` a szabály alatt tiszta (0 sértés, allowlist nélkül).
+[L592](docs/LESSONS.md#l592).
+
+> ▶ **A KÖVETKEZŐ SESSION-nek, ami az E15-R09-et folytatja:** a
+> `round-resume-probe` `REVIEW-NYITOTT`-ra állítja az ágat
+> (`sonnet-impl/e15-r09-ai-tutor-migration @ 78fd3a64`, PR
+> [#540](https://github.com/wolfcasaba/strumsight/pull/540) NYITVA) — a dolgod
+> a **javító kör a MEGLÉVŐ ágon**, nem újrakezdés. A javítás mechanikus és a
+> kör fájllistáján BELÜL van: a 24 mély import helyett fájlonként EGY
+> `import 'package:strumsight/core/design_system/public.dart';` (precedens:
+> `lib/features/gamification/presentation/screens/achievements_screen.dart:2`,
+> E15-R08). A friss `main` beépítése után a gate `architecture` lépése MAGA
+> mutatja meg mind a 24-et. **A H5 piros-számláló NULLÁRÓL indul** (ADR 0494
+> D3): a heal ELŐTTI két pirosra hivatkozva nem szabad újra halt-olni — a zöld
+> kapu viszont változatlan (teljes CI-suite + Router CI a merge SHA-n).
+
 ## ✅ E12-R36 KÉSZ — Program completion report és következő roadmap — PR [#538](https://github.com/wolfcasaba/strumsight/pull/538), squash `e8686066` (2026-09-03)
 
 A Chapter 12 **záró köre**. Szállítás: `docs/sdd/program-completion-report.md`
@@ -54,7 +95,14 @@ tilos zónája volt, a lista tágítása nem orchestrátori hatáskör — prece
 E12-R35). Részletek:
 [`e12-r36-program-completion-and-next-roadmap.md`](docs/rounds/e12-r36-program-completion-and-next-roadmap.md) §10.
 
-> 🔴 **NYITOTT, a KÖVETKEZŐ kör dolga — a post-merge gate mérte
+> ✅ **LEZÁRVA 2026-09-03** az E15-R09 / H5 önjavító körben ([ADR 0494](docs/adr/0494-derived-completion-matrix-and-h5-counter-reset.md)
+> D1, [L591](docs/LESSONS.md#l591)) — az alábbi „nyitott" szöveg a
+> MEGJÓSOLT csapdát írja le, ami az ELSŐ queue-flipen (E15-R08) valóban
+> elsült, és 89 percre megállította a láncot. A feloldás egyik felkínált
+> normatív irány sem lett: a szám-oszlopok SZÁRMAZTATOTTAK, az `A1`
+> egyenlősége változatlanul szigorú.
+>
+> 🔴 **(EREDETI, 2026-09-03 előtt) NYITOTT, a KÖVETKEZŐ kör dolga — a post-merge gate mérte
 > ([L590](docs/LESSONS.md#l590)):** a riport §3 matrixának `A1` cellája
 > EGYENLŐSÉGET mér az ÉLŐ `docs/execution/pipeline-queue.tsv` ellen. A saját
 > záró rituálém (`E12-R36` sor `pending` → `done`) emiatt azonnal pirosra

@@ -429,6 +429,19 @@ A jelzésfájl `scope_audit=` kulcsát a review ELŐTT olvasd el:
 leletlistával a promptban, és a review-t frissítsd utána. Számold a javító
 köröket a kör-branch commitjaiból.
 
+> **H5 pontosítása (ADR 0112 önjavító kör, 2026-09-03, E15-R09 H5):** a
+> **piros-CI számláló egy merge-elt önjavító kör után NULLÁRÓL indul**, ha az
+> a kör a piros futások MÉRT gyökérokát javította — a folytatás első CI-futása
+> tehát az „első piros" lehetőség, nem a harmadik. Indoklás: a H5 egy vak
+> újrapróbálkozás-hurok őre, az ADR 0112 önjavítás pedig épp az a mechanizmus,
+> ami a hurkot megtöri; e nélkül a kikötés nélkül egy önjavítással FELOLDOTT
+> H5 örökre megállítja a kört (a folytatás azonnal ugyanarra a két, már
+> tárgytalan pirosra hivatkozva halt-olna, és a lánc holtpontra jutna). A
+> **zöld kapu változatlan**: minden gate + a teljes CI-suite + a Router CI a
+> merge SHA-n zöld kell legyen — ez a kikötés kizárólag a SZÁMLÁLÓRÓL szól,
+> semmit nem enged el a mércéből. A hivatkozás a feloldó heal-PR-re a
+> `.pipeline/healed-*.txt` archívumban és a `docs/LESSONS.md`-ben van.
+
 **H8 pontosítása (ADR 0242, felülírja az ADR 0087 §2 H8-sorát, 2026-08-13):**
 a `--force-with-lease` **elutasítása önmagában NEM H8** — az a rebase utáni
 push protokoll ELSŐ lépése, nem a vége. Rebase után **mindig**

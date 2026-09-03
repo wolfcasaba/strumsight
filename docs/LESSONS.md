@@ -23566,3 +23566,83 @@ legközelebb módosítani, és attól piros lesz-e?* Ha igen, a mérce vagy
 pillanatképet kap, vagy nem-egyenlőség alapú invariánst.
 
 **Őrteszt:** `test/tooling/program_completion_test.dart::the real tree … A1 — every matrix row matches the measured queue counts` — ez a cella MAGA a jelzés: ha egy jövőbeli kör pirosra váltja, az ezt a leckét igazolja, nem cáfolja. A tartós feloldás nyitott.
+
+## L591 — Az L590-ben megjósolt dokumentum-drift nem EGY tesztet vitt pirosra, hanem a LÁNCOT állította meg: a piros `main` a driver előfeltétele, tehát a drift a KÖVETKEZŐ köröket is kizárja (E15-R09 / H5 önjavító kör, 2026-09-03)
+
+**Mit mértünk.** Az L590 pontosan leírta, hogy a §3 completion-matrix élő
+forrás elleni egyenlőség-mérése minden jövőbeli `pending → done` billentéstől
+pirosra vált, és a feloldást „egy KÖVETKEZŐ kör" dolgának nevezte. **Az első
+queue-flip azonnal detonált:** az E15-R08 merge (`e9691f74`) után a `main` Full
+Gate PIROS lett (run `33704424852`) —
+
+```
+— (E15): reports done=8, queue measures done=9
+— (E15): reports pending=6, queue measures pending=5
+8380 tests passed, 2 failed, 21 skipped
+```
+
+— és mivel a kör-driver előfeltétele „a lánc nem indul piros main fölé", a
+`chain.log` **02:25 és 03:54 között 18 firingen, 89 percen át** ugyanazt a
+sort írta, kör nélkül. A drift költsége tehát nem „egy piros cella", hanem a
+teljes autonóm fejlesztés leállása — a mérce iránya (L590) a LÁNC
+rendelkezésre állásának kérdése, nem dokumentum-higiéniáé.
+
+**Miért.** A halasztás („következő kör dolga") olyan hibaosztálynál, aminek a
+detonációja MÁS körök munkáját blokkolja, nem semleges: az L590 maga írta le,
+hogy a következő flip pirosra vált — a döntés arról szólt, hogy a lánc
+megálljon-e addig. Egy nyitott csapdát nem az számít, mennyire jól van
+dokumentálva, hanem hogy mit blokkol, amikor elsül.
+
+**Hogyan alkalmazd.** (1) Ha egy őr piros `main`-t okozhat, a feloldása nem
+halasztható „következő körre" — az a lánc kritikus útja. (2) Az L590 két
+felkínált iránya (befagyasztott pillanatkép / nem-egyenlőség alapú reláció)
+egyik sem kellett: a HARMADIK út — a számok SZÁRMAZTATÁSA a forrásból — a
+mércét érintetlenül hagyja, és csak a kézi bookkeepinget szünteti meg. Ha egy
+„gyengítsük vagy bonyolítsuk a mércét" dilemmába futsz, kérdezd meg előbb:
+*származtatható-e a kézzel karbantartott adat?*
+
+**Őrtesztek:** `tools/tests/test_completion_matrix_sync.py` (a mért drift
+`--check`-en piros; a driver a queue-flip commitban szinkronizál; a valódi fa
+szinkronban van) — ADR 0494 D1.
+
+## L592 — Az architektúra-szerződést csak a TELJES CI-suite mérte: a kör célzott kapuja ÉS a gate saját `architecture` lépése ugyanazon a fán zölden ment át, amin a CI kétszer bukott (E15-R09 / H5 önjavító kör, 2026-09-03)
+
+**Mit mértünk.** Az E15-R09 kör CI-ja kétszer volt piros (`33707997183`,
+`33711465885`); a 2. piros cella:
+
+```
+test/core/architecture_dependency_test.dart:754
+"real production source reaches the design system only via public.dart"
+```
+
+Az öt migrált Tutor-képernyő **24 MÉLY importtal** érte el a design-rendszert a
+`public.dart` barrel helyett. A döntő mérés: ugyanazon a fán (a kör ága
+`78fd3a64`) a `main` állapotú checker
+
+```
+$ dart tool/check_architecture.dart        # a main verziója
+Architecture dependencies OK (12 allowlisted deviation(s)).     exit=0
+```
+
+zöldet ad, az új szabállyal viszont mind a 24 importot néven nevezi és `exit=1`.
+Vagyis a kör a saját, teljes gate-jén (format + analyze + 13 teszt-útvonal +
+architecture) **jogosan hitte magát zöldnek** — a szerződést EGYETLEN cella
+mérte, és azt a cellát semmi nem futtatta a 15 perces teljes CI-suite előtt.
+
+**Miért.** Egy architektúra-szerződés őre nem lehet olyan teszt-fájlban, amit
+csak a teljes suite futtat, ha a szerződés megsértése tipikusan egy CÉLZOTT
+körben (migráció) történik. A visszacsatolási hurok hossza határozza meg, hány
+piros CI kell a felismeréshez — kettő már H5, azaz a LÁNC megáll.
+
+**Hogyan alkalmazd.** (1) A szerződés őre oda kerüljön, ahol MINDEN kör
+futtatja: `tool/check_architecture.dart` → a gate `architecture` lépése. Ez
+erősebb, mint per-brief `gate_tests` bookkeeping, mert nem függ attól, hogy egy
+brief-szerző emlékszik-e rá. (2) Ha egy piros CI-cella nevét megkapod,
+mérd meg, hogy a kör gate-jének MELYIK lépése futtatta volna — ha egyik sem, a
+gyökérok a mérce ELHELYEZÉSE, nem az implementer figyelmetlensége. (3) Új
+architektúra-szabály bevezetése előtt mérd meg a `main`-t: itt 0 sértés volt,
+tehát a szabály allowlist és technikai adósság nélkül landolhatott.
+
+**Őrteszt:** `test/tooling/design_system_barrel_architecture_test.dart` (a 24
+MÉRT import mindegyike sértés; barrel-importtal tiszta; a design-rendszer a
+sajátjait elérheti; a valódi fa tiszta) — ADR 0494 D2.

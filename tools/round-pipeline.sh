@@ -63,6 +63,10 @@ dry_run=0
 
 state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
 queue_file=${PIPELINE_QUEUE_FILE:-"$repo_root/docs/execution/pipeline-queue.tsv"}
+# A queue-ból származtatott completion-matrix hordozója (ADR 0112 önjavító kör,
+# 2026-09-03): a merge-ág ugyanabban a commitban szinkronizálja, ahol a
+# queue-sort `done`-ra billenti — l. `tools/sync-completion-matrix.py`.
+completion_report_file="$repo_root/docs/sdd/program-completion-report.md"
 engine_registry=${PIPELINE_ENGINE_REGISTRY:-"$repo_root/docs/execution/engine-registry.tsv"}
 prompt_template="$repo_root/docs/execution/pipeline-orchestrator-prompt.md"
 heal_template="$repo_root/docs/execution/pipeline-selfheal-prompt.md"
@@ -2879,8 +2883,29 @@ case "$outcome" in
     # orchesztrátor kihagyta a lépést), EZ az ág pótolja — az elveszett
     # `done` státusz mért hibaosztály, a fail-safe zártan tartja.
     sed -i "s|^\($round\t.*\t\)pending$|\1done|" "$queue_file"
-    if [ -n "$(git status --porcelain "$queue_file")" ]; then
-      git add "$queue_file"
+    # A completion-riport §3 matrixa a queue-ból SZÁRMAZTATOTT (E15-R09 H5
+    # önjavító kör, ADR 0112, 2026-09-03). A `program_completion_test.dart` A1
+    # cellája SZIGORÚ egyenlőséget mér a queue ellen, ezért minden `done`-ra
+    # billentett sor elavulttá teszi a matrixot — és a lánc nem indul piros
+    # main fölé, tehát a drift a KÖVETKEZŐ kört is megállítja. MÉRVE: az
+    # E15-R08 merge (`e9691f74`) 89 percre megállította a láncot (main Full
+    # Gate run 33704424852, 2 piros cella). A szinkron idempotens: ha az
+    # orchesztrátor záró commitja már elvégezte, ez no-op.
+    # A szinkron KIZÁRÓLAG a valódi repó-queue ellen fut: egy tesztből
+    # felüldefiniált `PIPELINE_QUEUE_FILE` mellett a riport (ami mindig a
+    # repóé) hamis számokat kapna.
+    sync_paths=("$queue_file")
+    if [ "$queue_file" = "$repo_root/docs/execution/pipeline-queue.tsv" ] \
+       && [ -x "$repo_root/tools/sync-completion-matrix.py" ] && [ -f "$completion_report_file" ]; then
+      if "$repo_root/tools/sync-completion-matrix.py" --write \
+           --queue "$queue_file" --report "$completion_report_file" >/dev/null 2>&1; then
+        sync_paths+=("$completion_report_file")
+      else
+        log "FIGYELEM: a completion-matrix szinkron hibára futott — a main gate pirosra válthat"
+      fi
+    fi
+    if [ -n "$(git status --porcelain -- "${sync_paths[@]}")" ]; then
+      git add -- "${sync_paths[@]}"
       git commit -q -m "chore(pipeline): $round done — fail-safe (ADR 0087, D2 E99-R19)"
       git push -q origin main || log "FIGYELEM: a sor-fájl push-a nem ment át"
     fi
