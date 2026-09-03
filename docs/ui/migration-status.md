@@ -1,5 +1,36 @@
 # Screen migration status
 
+**E15-R11 update (2026-09-03) — Vision, onboarding and the last community
+screen migrated, measured 85/96 (88.542%).** `VisionSetupScreen`,
+`VisionSessionScreen`, `GuitarCalibrationScreen`, `OnboardingScreen`,
+`FollowersScreen` now import `core/design_system`. Measurement command (the
+round's own `for f in ...; do grep -q design_system "$f" ...` loop over the
+5 batch paths — all 5 print `MIGRATED`):
+
+```bash
+for f in lib/features/vision/presentation/screens/vision_setup_screen.dart lib/features/vision/presentation/screens/vision_session_screen.dart lib/features/vision/presentation/screens/guitar_calibration_screen.dart lib/features/onboarding/screens/onboarding_screen.dart lib/features/community/presentation/screens/followers_screen.dart; do grep -q design_system "$f" && echo "MIGRATED $f" || echo "legacy $f"; done
+```
+
+This is the last migration batch (§0.0.1 of the round brief): the camera
+path (setup/session/calibration), onboarding (the first screen a new user
+sees), and the one remaining legacy community screen. `SsCard`/`SsSection`/
+`SsButton`/`SsSwitchRow`/`SsSpacing`/`SsTypography`/`SsColorScheme` replace
+the raw `Theme.of`/`Container`/`FilledButton`/`TextButton`/`SwitchListTile`/
+`AppColors` references on all 5 screens — see the round's own `§10` handoff
+for the full per-screen component map, the required A3 textScale
+1.5/2.0×en/hu variant cells (one guitar-calibration overflow this round's
+own new cells surfaced and fixed: the 3-button toolbar `Row` became a
+`Wrap`), and the real-violation probe. `CommunityThemeScope` on
+`FollowersScreen` was measured NOT removable — the same decision class as
+`GamificationThemeScope` in E15-R08: the E13-R33 golden harness (and
+`block_mute_test.dart`) render the screen under a legacy `AppTheme`/no
+theme, and only the wrapper's own `mergeSsExtensions` supplies the design
+system's `SsColorScheme`/`SsTypography` there. `VisionThemeScope` on
+`vision_result_screen.dart` is untouched (§0.0/R6, out of this round's
+scope). Golden files re-recorded via `tools/golden-x86.sh record` (ADR
+0426) for the 3 affected suites (`e13_r16`, `e13_r30`, `e13_r33` — 8 PNGs
+total, only the ones this round's screens appear in).
+
 **E15-R09 update (2026-09-03) — AI Tutor 5 screens migrated, measured
 80/96 (83.333%).** `TutorHomeScreen`, `TutorChatScreen`, `TutorProfileScreen`,
 `TutorDataScreen`, `TutorPrivacyScreen` now import `core/design_system`.
@@ -345,12 +376,13 @@ design-system component, only that the screen's own migration round ran.
 
 ## Measured total
 
-**69 of 96 production screens migrated (71.875%)** as of E15-R07, up from
-63/96 (65.625%) after E15-R06, 60/96 (62.5%) after E15-R05, 51/96 (53.1%)
-after E15-R04, 43/96 (44.8%) before E15-R04, and 0/60 at the E08-R15
-baseline (the file count grew from 60 to 96 as Epics 8–13 added screens —
-Community, Gamification, Library V2, Progress V2, Offline AI, Share — most
-of which shipped already migrated).
+**85 of 96 production screens migrated (88.542%)** as of E15-R11, up from
+80/96 (83.333%) after E15-R09, 75/96 (78.125%) after E15-R08, 69/96
+(71.875%) after E15-R07, 63/96 (65.625%) after E15-R06, 60/96 (62.5%) after
+E15-R05, 51/96 (53.1%) after E15-R04, 43/96 (44.8%) before E15-R04, and
+0/60 at the E08-R15 baseline (the file count grew from 60 to 96 as Epics
+8–13 added screens — Community, Gamification, Library V2, Progress V2,
+Offline AI, Share — most of which shipped already migrated).
 
 ## Canonical token source by migration phase
 
@@ -360,7 +392,7 @@ of which shipped already migrated).
 | Component and screen migration (E13-R16…R35) | Design-system component tokens (`SsColorScheme`/`SsTypography` theme extensions, `Ss*` components) | A screen migrates only in its assigned round; all unassigned screens remain on the legacy theme (`AppTheme` / `AppColors` / `AppPalette`). |
 | Screens needing design-system extensions without `AppTheme` carrying them | **MEASURED OBSOLETE as of E15-R01.** A local `*ThemeScope` — the **nine** wrappers on the tree are `ProgressThemeScope` (progress_v2), `AuthThemeScope` (auth), `SettingsThemeScope` (settings), `LibraryThemeScope` (library_v2), `ShareThemeScope` (share), `GamificationThemeScope` (gamification), `CommunityThemeScope` (community), `OfflineAiThemeScope` (offline_ai), `VisionThemeScope` (vision) | Wrapped the screen so its `Ss*` cards could resolve `SsColorScheme`/`SsTypography` when those extensions were NOT yet on the app's runtime `ThemeData` (the gap this row used to describe). Since E15-R01 the app's actual `ThemeData` carries all four extensions directly (ADR 0466 D1), so the wrapper is now redundant for every screen it wraps — but the wrappers themselves are NOT removed by this round (tilos zóna, `lib/features/**`); their retirement is a per-screen follow-up round's job. |
 
-## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05, progress/songs rows updated 2026-08-29 by E15-R06, practice_generator row updated 2026-09-01 by E15-R07)
+## Per-feature status (measured 2026-08-27, learn/practice rows updated 2026-08-29 by E15-R04, song_trainer row updated 2026-08-29 by E15-R05, progress/songs rows updated 2026-08-29 by E15-R06, practice_generator row updated 2026-09-01 by E15-R07, community/onboarding/vision rows updated 2026-09-03 by E15-R11)
 
 | Feature | Migrated / total | Legacy screens (migration pending) |
 | --- | --- | --- |
@@ -369,7 +401,7 @@ of which shipped already migrated).
 | audio_analysis | 3/8 | analysis_export, analysis_metric_detail, capture/analysis_home, capture/analysis_processing, capture/analysis_recording |
 | auth | 1/1 | — |
 | chords | 1/1 | — |
-| community | 14/15 | followers |
+| community | 15/15 | — |
 | gamification | 1/7 | achievement_detail, achievements, level_detail, quests, reward_inbox, streak_detail |
 | learn | 4/4 | — |
 | library | 0/2 | library, session_detail (superseded by `library_v2`, see below) |
@@ -377,7 +409,7 @@ of which shipped already migrated).
 | live | 1/1 | — |
 | metronome | 1/1 | — |
 | offline_ai | 1/1 | — |
-| onboarding | 2/3 | onboarding |
+| onboarding | 3/3 | — |
 | practice | 6/6 | — |
 | practice_generator | 6/6 | — |
 | practice_hub | 1/1 | — |
@@ -391,7 +423,7 @@ of which shipped already migrated).
 | streak | 0/1 | streak (superseded by `gamification`'s hub, see below) |
 | today | 1/1 | — |
 | tuner | 1/1 | — |
-| vision | 1/4 | guitar_calibration, vision_session, vision_setup |
+| vision | 4/4 | — |
 
 **Superseded pairs measured this round** (the legacy screen and its
 migrated successor both still compile and are both still reachable —
