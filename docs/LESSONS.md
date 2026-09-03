@@ -23864,3 +23864,89 @@ lépés, ami a `docs/**`-ot is a teljes fa részeként méri; a mérés MEGTÖRT
 PIROSRA váltott (`33739275972`), a redakció után ugyanaz a parancs a
 munkapéldányon `Secret scan OK (4237 file(s) scanned, 0 finding(s))`. Külön
 őrteszt itt a meglévő kaput duplikálná, nem bővítené.
+
+## L601 — A pin-kereső a NEVET keresi, a router viszont a ROUTE-ot járja: a képernyőt route-on át elérő teszt kimarad a kör kapujából, és a CI-n bukik (E15-R11, 2026-09-03)
+
+**A mérés.** Az E15-R11 pre-flightja az L593 tanulságát következetesen
+alkalmazta: kimérte a migrált képernyők kipinnelt harnesseit, és mindet felvette
+a `gate_tests`-be (R2/R3). A célzott kapu ezért **28/28 zölden** ment. A
+`full-gate` (`33739838255`) mégis PIROS lett, egyetlen cellán:
+
+```
+The following _TypeError was thrown building VisionSessionScreen:
+Null check operator used on a null value
+#0  VisionSessionScreen.build (…/vision_session_screen.dart:51:64)
+    VisionSessionScreen:file:///…/lib/app/routing/app_router.dart:617:36
+test/features/vision/presentation/vision_session_routing_test.dart
+```
+
+**A gyökérok nem a hibaosztály, hanem a KERESÉS.** A defektus maga pontosan az
+L593/ADR 0466 osztálya (témátlan harness + `theme.extension<…>()!`). Ami új: ez
+a harness a képernyőt **soha nem nevezi meg**. Nincs benne
+`find.byType(VisionSessionScreen)`, se import — a `routerProvider`-en át
+`router.go(AppRoutes.visionSession)` hívással jut el hozzá, és a képernyő a
+`app_router.dart:617` sorában épül fel. Az osztálynév-alapú mérés (`grep -rn
+"<Képernyő>" test/`) ezért NULLA találatot ad rá, és ugyanezért nem fogja meg a
+`brief-lint` **S11** szabálya sem: mindkettő ugyanazt a nevet keresi.
+
+**Az általánosítás.** Egy „ki pinneli ezt a képernyőt?" kérdésre a
+névhivatkozás csak az EGYIK válasz. A másik az **elérési út**: route-konstans,
+deep link, `GoRoute` builder, factory. Egy migrációs kör kapuja addig nem
+teljes, amíg a route-on át elérő teszteket is tartalmazza — és ezt nem lehet
+„figyelmesebb pre-flighttal" megoldani, mert a keresés maga vak rájuk.
+A mérce-oldali javítás helye a `brief-lint` S11 szabálya (a kör
+`allowed_paths`-ában szereplő KÉPERNYŐK route-konstansaira is illesztő
+keresés) — az `tools/**` viszont a kör (§4) és az önjavító sáv határa, ezért a
+kör maga csak a saját briefjét javította (§0.0/R9: a fájl `allowed_paths` +
+`gate_tests`, a harness a valódi futásidejű témát kapja, a két `expect`
+változatlan).
+
+**Őrteszt:** `test/features/vision/presentation/vision_session_routing_test.dart`
+:: `Vision session route is registered behind only visionEnabled` — a kör
+`gate_tests`-ébe felvéve, tehát a célzott kapu MOSTANTÓL méri; a témát
+elvéve ugyanez a cella azonnal pirosra vált.
+
+## L602 — Az „nincs túlcsordulás" cella nem a csonkulás mércéje: az ellipszis pontosan azt a kivételt nyomja el, amire a cella épül (E15-R11, 2026-09-03)
+
+**A mérés.** A kör A3-cellái minden migrált képernyőre `textScale 1.5/2.0 ×
+en/hu` mátrixot futtattak, és zöldek voltak. A review mégis mért egy
+információvesztést az onboarding fő CTA-ján — a legelső képernyőn, amit egy új
+felhasználó lát —, `didExceedMaxLines`-műszerezett próbával, 412×915-ön,
+`textScaler 2.0`-n:
+
+```
+HEAD:      TEXT[TRUNCATED] w=340.0 :: Try your first win — 30 seconds
+           TEXT[TRUNCATED] w=340.0 :: Próbáld ki az első győzelmed — 30 mp
+BASELINE:  B[ok] h=120 :: Try your first win — 30 seconds     <- 3 sor, teljes
+           HU-BASELINE[ok] h=160 :: Próbáld ki az első győzelmed — 30 mp
+```
+
+**Két független vakság adódott össze.**
+
+1. **Rossz műszer.** A cellák `expect(tester.takeException(), isNull)`-t
+   állítottak. Ez a `RenderFlex overflowed` KIVÉTELT fogja meg — az `SsButton`
+   viszont `Flexible(child: Text(label, overflow: TextOverflow.ellipsis))`-szel
+   rajzol, ami **soha nem dob**: elipszizál. A cella tehát elvileg sem tudott
+   pirosra menni a mért defektre.
+2. **Rossz felület.** Öt A3-mátrixból három nem állított `physicalSize`-t, tehát
+   a `flutter_test` 800×600-as alapértelmezésén futott — minden telefonnál
+   szélesebben. A KÉT fájl, amelyik 412×915-öt állított, ebben a körben VALÓDI
+   hibát fogott (`RenderFlex overflowed by 118 pixels`, a 3 gombos
+   kalibrációs eszköztár), a három másik elsőre zöld volt — köztük az, amelyik
+   a csonkulást hordozta.
+
+**Az általánosítás.** A „nem csordul túl" és a „teljesen látszik" KÉT külön
+állítás, és a design-rendszerre migrálás pont az elsőt teljesíti a második
+árán: az ellipszis a túlcsordulás megoldása. Ahol egy migráció szélesség-korlátos
+gombra/címkére cserél, ott a mérce `didExceedMaxLines == false`, telefon-
+szélességű felületen, MINDKÉT locale-on — a kivétel-alapú cella ilyenkor
+zöld-hamis. (A repó ugyanezt a döntést már meghozta egyszer: E15-R08 M3,
+`streak_detail_screen.dart:117-126`; a mostani kör ugyanabba a csapdába lépett
+egy hosszabb feliraton, miközben a SAJÁT handoffja egy másik gombnál helyesen
+felismerte a veszélyt.)
+
+**Őrteszt:** `test/features/onboarding/onboarding_test.dart` ::
+`Locale('en'|'hu') CTA renders in full at 2.0x text scale, no ellipsis` — a
+cella `didExceedMaxLines == false`-t állít 412×915-ön, és külön `expect`-tel
+pinneli, hogy a CTA `FilledButton` marad, tehát egy jövőbeli `SsButton`-visszacsere
+azonnal pirosra vált.
