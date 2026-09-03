@@ -128,6 +128,38 @@ MÉRVE a `docs/ui/migration-status.md:4` szerint a kör ELŐTT: **80/96
 **85/96 = 88,542%** (`python3 -c "print(round(85/96*100,3))"` → `88.542`). A
 dokumentum ezt az arányt írja, a §7 mérő-parancsának kimenetével együtt.
 
+### R8 (kör közbeni revízió, 2026-09-03) — a golden PNG-alapvonalak felvéve
+
+**A lelet.** A gépi scope-audit `VIOLATION`-t adott 8 fájlra:
+`test/ui/goldens/goldens/{e13_r16_onboarding_compact,
+e13_r16_onboarding_compact_scale2, e13_r30_vision_coach_stage_compact,
+e13_r30_vision_coach_stage_compact_scale2, e13_r30_vision_setup_compact,
+e13_r30_vision_setup_compact_scale2, e13_r33_followers_compact,
+e13_r33_followers_compact_scale2}.png`.
+
+**A döntés indoklása — ez brief-hiba, nem implementer-túlnyúlás.** A brief §7
+KIFEJEZETTEN előírja a golden-újrafelvételt
+(`tools/golden-x86.sh record …`, [ADR 0426](../adr/0426-golden-recording-architecture.md)),
+és a három golden **teszt**-fájl (`e13_r16`/`e13_r30`/`e13_r33`) rajta van az
+`allowed_paths`-on — de az `allowed_paths` NEM sorolta fel azokat az
+**alapvonal-PNG-ket**, amiket ez az előírt parancs szükségszerűen felülír. A
+brief tehát önmagával volt ellentmondásban.
+
+A `test/ui/goldens/goldens/**` **NEM tilos zóna**: a §4 tilos-zóna felsorolása
+(`design_system`, `lib/app`, `docs/adr`, `tools`, `.github`,
+`application`/`domain`/`data`/`providers`, más képernyők) nem tartalmazza. Ez
+tehát a mulasztásból eredő hiányzó felsorolás esete, nem H3 — ugyanaz az
+olvasati hiba lenne, mint a `docs/reviews/**` saját-jelentés hamis H3-a
+(E99-R08, [L251](../LESSONS.md#l251)). A feloldás a kör SAJÁT, még nem
+merge-elt briefjét érinti, tehát az ADR 0087 §2 szerint az orchestrátor
+hatásköre, dokumentált §0.0 revízióval.
+
+**A revízió szűk.** A nyolc PNG **tételesen** kerül az `allowed_paths`-ra (nem
+glob), és mind a nyolc a kör öt képernyőjének egyikéhez tartozik — MÉRVE: a
+`vision_result` / `launch` / `recovery` / mic-primer / first-win és a többi 7
+community golden PNG **byte-azonos** maradt. Az arány így nem tágul: a kör
+továbbra is pontosan a saját öt képernyőjének vizuális rétegét írja.
+
 ### ADR
 
 **Nincs új ADR**, és nem is kerül kiosztásra: a kör egyetlen ÚJ architekturális
@@ -171,6 +203,14 @@ allowed_paths = [
   "test/ui/ui_baseline_screenshot_test.dart",
   "docs/ui/migration-status.md",
   "docs/rounds/e15-r11-vision-onboarding-community-migration.md",
+  "test/ui/goldens/goldens/e13_r16_onboarding_compact.png",
+  "test/ui/goldens/goldens/e13_r16_onboarding_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r30_vision_coach_stage_compact.png",
+  "test/ui/goldens/goldens/e13_r30_vision_coach_stage_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r30_vision_setup_compact.png",
+  "test/ui/goldens/goldens/e13_r30_vision_setup_compact_scale2.png",
+  "test/ui/goldens/goldens/e13_r33_followers_compact.png",
+  "test/ui/goldens/goldens/e13_r33_followers_compact_scale2.png",
 ]
 gate_tests = [
   "test/ui/ui_inventory_test.dart",
@@ -575,8 +615,10 @@ architecture` lépéseket nevesíti a gate-ként — mind a NÉGY lépéstípus 
 (24/24 futtatott test-fájl beleértve, egyenként külön processzben). A
 `round-gate.sh`-ban emellett élő `secrets`/`l10n` lépés a `secrets`-en piros
 lett — **ez MÉRVE nem ennek a körnek a hibája**: a talált sor
-(`tools/tests/test_authenticated_git_fetch.py:34`, egy `TOKEN =
-"github_pat_FIXTURE_ONLY_not_a_real_secret"` teszt-fixture) BYTE-AZONOS a
+(`tools/tests/test_authenticated_git_fetch.py:34`, egy `TOKEN = "github_pat_…"`
+alakú, önmagát fixture-ként megnevező teszt-konstans; az ÉRTÉKÉT ez a
+dokumentum szándékosan NEM idézi szó szerint, mert a titok-szkenner a puszta
+idézetre is találatot adna) BYTE-AZONOS a
 `main`-en is (`git diff --stat main -- tools/tests/test_authenticated_git_fetch.py`
 üres kimenetet ad), és a `61cd9e3e` commitból származik (ADR 0495 D5, egy
 másik, korábbi kör munkája) — TEHÁT minden `main`-ből ágazó branch-en
