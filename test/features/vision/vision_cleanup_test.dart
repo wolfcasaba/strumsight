@@ -21,6 +21,7 @@ import 'package:strumsight/core/camera/camera_permission.dart';
 import 'package:strumsight/core/camera/camera_providers.dart';
 import 'package:strumsight/core/camera/camera_session_coordinator.dart';
 import 'package:strumsight/core/camera/fake_camera_capture.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/platform/app_lifecycle.dart';
 import 'package:strumsight/core/platform/platform_providers.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
@@ -64,7 +65,11 @@ final class _FakeLifecycleEvents implements AppLifecycleEvents {
   }
 }
 
+// R2 (§0.0, extended measurement): VisionSessionScreen now reads the
+// design-system theme extensions via its migrated SsButton/SsSwitchRow — a
+// themeless MaterialApp null-check crashes (L593-class defect).
 Widget _host(Widget child) => MaterialApp(
+  theme: SsLightTheme.data(),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   home: child,

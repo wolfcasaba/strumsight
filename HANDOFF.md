@@ -1,5 +1,68 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R11 KÉSZ — Vision, onboarding és a maradék közösségi képernyő a design-rendszeren — PR [#548](https://github.com/wolfcasaba/strumsight/pull/548), squash `80846c92` (2026-09-03)
+
+A Chapter 15 **utolsó** migrációs batch-e: a kamera-út három képernyője
+(`vision_setup`, `vision_session`, `guitar_calibration`), az onboarding (az
+ELSŐ, amit egy új felhasználó lát) és az egyetlen maradék közösségi képernyő
+(`followers`) a `core/design_system` komponenseit és tokenjeit használja,
+változatlan viselkedés mellett.
+
+**Mért migrációs arány a MERGE-ELT fán: 91/96 (94,792%)** — a kör saját öt
+képernyője 80/96 → 85/96, és vele egy órán belül landolt az E15-R10 hat
+képernyője is; a 91/96 friss újraszámolás minden
+`lib/features/**/*_screen.dart` fölött, nem a két kör összeadása. A
+`ui_inventory_test.dart` egzakt száma VÁLTOZATLAN (a kör nem hozott létre és
+nem törölt képernyőt).
+
+**A kör két menetben zárult.** Az első implementáció után a független review
+(`docs/reviews/e15-r11-review.md`, `flutter-reviewer` + `flutter-devil-advocate`
++ `security-reviewer`, `risk = "high"`) **2 BLOCKER + 3 MAJOR + 4 MINOR**
+leletet mért, mind zárva EGY javító körben:
+
+- **BLOCKER-1** — a `vision_session_routing_test.dart` null-check crash-e
+  (`VisionSessionScreen.build:51`): a harness csupasz `MaterialApp.router`-t
+  pumpolt. Ez vitte pirosra a CI-t. A fájl a **routeren át** (`router.go`) éri el
+  a képernyőt, ezért sem az osztálynév-alapú pre-flight mérés, sem a
+  `brief-lint` **S11** szabálya nem találta meg → §0.0/**R9** revízió:
+  `allowed_paths` + `gate_tests`, és a harness a valódi futásidejű témát kapja.
+- **BLOCKER-2** — az onboarding fő CTA-ja `SsButton`-ra váltott, ami a feliratot
+  `Flexible(overflow: ellipsis)`-szel EGY sorra vágja: a `hu` „Próbáld ki az
+  első győzelmed — 30 mp" a KÖTELEZŐ 2.0-s szövegskálán telefon-szélességen
+  csonkult. A repó ezt a hibaosztályt már eldöntötte (E15-R08 M3,
+  `streak_detail_screen.dart:117-126`) — a CTA visszatért nyers
+  `FilledButton`-ra, dokumentált kivétel-kommenttel, és **COMMITOLT cella**
+  pinneli (`didExceedMaxLines`, `en`+`hu`, 2.0×, 412×915), amely azt is
+  állítja, hogy a CTA `FilledButton` marad.
+- **MAJOR-1** — három A3 variáns-mátrix a `flutter_test` 800×600-as
+  alapértelmezett felületén futott (minden telefonnál szélesebb), és csak
+  `takeException()`-t állított — amit az ellipszis épp ELNYOM. Mindhárom
+  harness telefon-szélességre állt (412×915), a csonkulást mérő cellával.
+- **MAJOR-2** — a `followers` betöltés-állapota nyers `CircularProgressIndicator`
+  maradt (a §5.2 szó szerint nevesített tiltott gyengítése) → `SsSkeleton`,
+  típus-cellával.
+- **MAJOR-3** — a kör bevezette, hogy az engedély-hiba státusz-szövege
+  `colors.danger`-re vált: a világos témán ez **3,27:1**, a repó saját 4,5:1-es
+  szöveg-küszöbe alatt, és egyetlen létező kapu sem mérte. A szín-döntés
+  visszavéve — a hibát a SZÖVEG mondja ki, nem a szín.
+- **MINOR-1..4** — látensen törött baseline-harness, 2,85:1-es banner-ikon,
+  beleolvadó followers-avatár, elavult doc-komment; mind javítva, mért
+  kontraszt-arányokkal.
+
+**Zöld kapu a `28a94280` merge SHA-n:** Full Gate
+[33747154956](https://github.com/wolfcasaba/strumsight/actions/runs/33747154956)
++ Router CI
+[33748950221](https://github.com/wolfcasaba/strumsight/actions/runs/33748950221),
+mindkettő `success`; gépi scope-audit `ok` (30 fájl, 0 sértés); a
+`tools/round-gate.sh` 28/28 zöld, az orchestrátor célzott újrafuttatása 58/58.
+
+**A CI első pirosának MINDKÉT cellája lezárva:** a routing-crash a kör hibája
+volt (BLOCKER-1, javítva); a `test/features/songs/import/import_flow_test.dart`
+viszont **CI-oldali flake** — lokálisan 2/2 zölden fut, a kör diffje **nulla**
+`songs`-fájlt érint, és a következő futáson már nem jelentkezett.
+
+Motor: implementer `sonnet-impl`, orchestrátor/reviewer Claude Opus 5.
+
 ## ✅ E15-R10 KÉSZ — Audio Analysis + Analyze 6 képernyő migrálása a design-rendszerre — PR [#547](https://github.com/wolfcasaba/strumsight/pull/547), squash `78e2b5dd` (2026-09-03)
 
 A batch mind a **6** képernyője a `core/design_system` komponenseit és tokenjeit

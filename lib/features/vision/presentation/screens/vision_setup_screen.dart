@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart'
     show openAppSettings;
 
 import '../../../../core/camera/camera_providers.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/vision_setup_controller.dart';
 import '../../domain/vision_setup_profile.dart';
@@ -49,7 +50,7 @@ class _VisionSetupScreenState extends ConsumerState<VisionSetupScreen> {
             padding: const EdgeInsets.all(20),
             children: [
               _PrivacyNotice(),
-              const SizedBox(height: 24),
+              const SizedBox(height: SsSpacing.space6),
               const _AudioOnlyStep(unsupportedDevice: true),
             ],
           ),
@@ -87,7 +88,7 @@ class _VisionSetupScreenState extends ConsumerState<VisionSetupScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             _PrivacyNotice(),
-            const SizedBox(height: 24),
+            const SizedBox(height: SsSpacing.space6),
             switch (state.step) {
               VisionSetupStep.profile => _ProfileStep(
                 state: state,
@@ -119,23 +120,25 @@ class _PrivacyNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Semantics(
       container: true,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
+      child: SsCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               l10n.visionSetupPrivacyTitle,
-              style: Theme.of(context).textTheme.titleSmall,
+              style: typography.titleMedium.copyWith(color: colors.textPrimary),
             ),
-            const SizedBox(height: 4),
-            Text(l10n.visionSetupPrivacyBody),
+            const SizedBox(height: SsSpacing.space1),
+            Text(
+              l10n.visionSetupPrivacyBody,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
           ],
         ),
       ),
@@ -157,46 +160,44 @@ class _ProfileStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.visionSetupProfileTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(l10n.visionSetupProfileBody),
-        const SizedBox(height: 16),
-        VisionSetupFrameGuide(profile: state.selectedProfile),
-        const SizedBox(height: 16),
-        Text(
-          l10n.visionSetupProfileRecommended(
-            _profileLabel(l10n, state.recommendedProfile),
+    return SsSection(
+      title: l10n.visionSetupProfileTitle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.visionSetupProfileBody),
+          const SizedBox(height: SsSpacing.space4),
+          VisionSetupFrameGuide(profile: state.selectedProfile),
+          const SizedBox(height: SsSpacing.space4),
+          Text(
+            l10n.visionSetupProfileRecommended(
+              _profileLabel(l10n, state.recommendedProfile),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        RadioGroup<VisionSetupProfile>(
-          groupValue: state.selectedProfile,
-          onChanged: (value) {
-            if (value != null) onSelected(value);
-          },
-          child: Column(
-            children: [
-              for (final profile in VisionSetupProfile.values)
-                RadioListTile<VisionSetupProfile>(
-                  value: profile,
-                  title: Text(_profileLabel(l10n, profile)),
-                ),
-            ],
+          const SizedBox(height: SsSpacing.space2),
+          RadioGroup<VisionSetupProfile>(
+            groupValue: state.selectedProfile,
+            onChanged: (value) {
+              if (value != null) onSelected(value);
+            },
+            child: Column(
+              children: [
+                for (final profile in VisionSetupProfile.values)
+                  RadioListTile<VisionSetupProfile>(
+                    value: profile,
+                    title: Text(_profileLabel(l10n, profile)),
+                  ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        FilledButton(
-          key: const Key('vision-setup-profile-continue'),
-          onPressed: onContinue,
-          child: Text(l10n.visionSetupContinue),
-        ),
-      ],
+          const SizedBox(height: SsSpacing.space4),
+          SsButton(
+            key: const Key('vision-setup-profile-continue'),
+            label: l10n.visionSetupContinue,
+            onPressed: onContinue,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -215,41 +216,39 @@ class _CameraStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.visionSetupCameraTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(l10n.visionSetupCameraBody),
-        const SizedBox(height: 12),
-        RadioGroup<VisionCameraPreference>(
-          groupValue: state.selectedCamera,
-          onChanged: (value) {
-            if (value != null) onSelected(value);
-          },
-          child: Column(
-            children: [
-              RadioListTile<VisionCameraPreference>(
-                value: VisionCameraPreference.back,
-                title: Text(l10n.visionSetupCameraBack),
-              ),
-              RadioListTile<VisionCameraPreference>(
-                value: VisionCameraPreference.front,
-                title: Text(l10n.visionSetupCameraFront),
-              ),
-            ],
+    return SsSection(
+      title: l10n.visionSetupCameraTitle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.visionSetupCameraBody),
+          const SizedBox(height: SsSpacing.space3),
+          RadioGroup<VisionCameraPreference>(
+            groupValue: state.selectedCamera,
+            onChanged: (value) {
+              if (value != null) onSelected(value);
+            },
+            child: Column(
+              children: [
+                RadioListTile<VisionCameraPreference>(
+                  value: VisionCameraPreference.back,
+                  title: Text(l10n.visionSetupCameraBack),
+                ),
+                RadioListTile<VisionCameraPreference>(
+                  value: VisionCameraPreference.front,
+                  title: Text(l10n.visionSetupCameraFront),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        FilledButton(
-          key: const Key('vision-setup-camera-continue'),
-          onPressed: onContinue,
-          child: Text(l10n.visionSetupContinue),
-        ),
-      ],
+          const SizedBox(height: SsSpacing.space4),
+          SsButton(
+            key: const Key('vision-setup-camera-continue'),
+            label: l10n.visionSetupContinue,
+            onPressed: onContinue,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -263,20 +262,13 @@ class _PermissionStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.visionSetupPermissionTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 16),
-        CameraPermissionPanel(
-          state: state.permissionState,
-          onRequest: onRequest,
-          onOpenSettings: openAppSettings,
-        ),
-      ],
+    return SsSection(
+      title: l10n.visionSetupPermissionTitle,
+      child: CameraPermissionPanel(
+        state: state.permissionState,
+        onRequest: onRequest,
+        onOpenSettings: openAppSettings,
+      ),
     );
   }
 }
@@ -285,16 +277,9 @@ class _ReadyStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.visionSetupReadyTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(l10n.visionSetupReadyBody),
-      ],
+    return SsSection(
+      title: l10n.visionSetupReadyTitle,
+      child: Text(l10n.visionSetupReadyBody),
     );
   }
 }
@@ -307,29 +292,27 @@ class _AudioOnlyStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.visionSetupAudioOnlyTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(l10n.visionSetupAudioOnlyBody),
-        if (unsupportedDevice) ...[
-          const SizedBox(height: 8),
-          Text(
-            l10n.visionSetupUnsupportedDeviceNotice,
-            key: const Key('vision-setup-unsupported-notice'),
+    return SsSection(
+      title: l10n.visionSetupAudioOnlyTitle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.visionSetupAudioOnlyBody),
+          if (unsupportedDevice) ...[
+            const SizedBox(height: SsSpacing.space2),
+            Text(
+              l10n.visionSetupUnsupportedDeviceNotice,
+              key: const Key('vision-setup-unsupported-notice'),
+            ),
+          ],
+          const SizedBox(height: SsSpacing.space4),
+          SsButton(
+            key: const Key('vision-audio-only-continue'),
+            label: l10n.visionSetupAudioOnlyContinue,
+            onPressed: () {},
           ),
         ],
-        const SizedBox(height: 16),
-        FilledButton(
-          key: const Key('vision-audio-only-continue'),
-          onPressed: () {},
-          child: Text(l10n.visionSetupAudioOnlyContinue),
-        ),
-      ],
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/vision/application/calibration_loss_machine.dart';
 import 'package:strumsight/features/vision/application/vision_session_controller.dart';
@@ -23,10 +24,14 @@ import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../core/storage/in_memory_key_value_store.dart';
 
+// R2 (§0.0): the migrated screen's SsButton/SsSwitchRow now read the
+// design-system theme extensions — a themeless MaterialApp null-check
+// crashes (L593-class defect).
 Widget _host(Widget child, {List<Override> overrides = const <Override>[]}) =>
     ProviderScope(
       overrides: overrides,
       child: MaterialApp(
+        theme: SsLightTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: child,

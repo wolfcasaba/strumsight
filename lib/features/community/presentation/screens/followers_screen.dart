@@ -18,6 +18,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../data/repositories/relationship_repository_impl.dart';
@@ -165,10 +166,29 @@ class _FollowersScreenState extends ConsumerState<FollowersScreen> {
         appBar: AppBar(title: Text(title)),
         body: SafeArea(
           child: _items.isEmpty
-              ? const Center(child: Text('No one here yet.'))
+              ? Builder(
+                  builder: (context) {
+                    final colors = Theme.of(
+                      context,
+                    ).extension<SsColorScheme>()!;
+                    final typography = Theme.of(
+                      context,
+                    ).extension<SsTypography>()!;
+                    return Center(
+                      child: Text(
+                        'No one here yet.',
+                        style: typography.bodyMedium.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    );
+                  },
+                )
               : ListView.separated(
+                  padding: const EdgeInsets.all(SsSpacing.space4),
                   itemCount: _items.length + 1,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: SsSpacing.space2),
                   itemBuilder: (context, index) {
                     if (index >= _items.length) {
                       // Tail load: kick off the next page when the
@@ -209,22 +229,36 @@ class _FollowerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return SsCard(
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-            child: Text(
-              profile.displayName.isEmpty
-                  ? profile.handle.value.isEmpty
-                        ? '?'
-                        : profile.handle.value[0].toUpperCase()
-                  : profile.displayName[0].toUpperCase(),
+          // MINOR-3 (E15-R11 review): the avatar's own fill (surfaceRaised)
+          // barely differs from the SsCard's raised background it now sits
+          // on (light 1.01:1, dark 1.09:1, measured off the recorded
+          // golden). `borderStrong` gives it a measurable edge (17.25:1
+          // light / 13.04:1 dark, tool/ui_contrast_check.dart) instead of a
+          // new token.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: colors.borderStrong, width: 1.5),
+            ),
+            child: CircleAvatar(
+              radius: 24,
+              backgroundColor: colors.surfaceRaised,
+              child: Text(
+                profile.displayName.isEmpty
+                    ? profile.handle.value.isEmpty
+                          ? '?'
+                          : profile.handle.value[0].toUpperCase()
+                    : profile.displayName[0].toUpperCase(),
+                style: typography.bodyLarge.copyWith(color: colors.textPrimary),
+              ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: SsSpacing.space3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,12 +267,16 @@ class _FollowerTile extends StatelessWidget {
                   profile.displayName.isEmpty
                       ? profile.userId.value
                       : profile.displayName,
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: typography.titleMedium.copyWith(
+                    color: colors.textPrimary,
+                  ),
                 ),
                 if (profile.handle.value.isNotEmpty)
                   Text(
                     '@${profile.handle.value}',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: typography.bodyMedium.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
               ],
             ),
@@ -246,13 +284,13 @@ class _FollowerTile extends StatelessWidget {
           IconButton(
             key: ValueKey('follower-mute-${profile.userId.value}'),
             tooltip: l10n.communityFollowersMuteAction,
-            icon: const Icon(Icons.volume_off_outlined),
+            icon: Icon(Icons.volume_off_outlined, color: colors.textSecondary),
             onPressed: onMute,
           ),
           IconButton(
             key: ValueKey('follower-block-${profile.userId.value}'),
             tooltip: l10n.communityFollowersBlockAction,
-            icon: const Icon(Icons.block_outlined),
+            icon: Icon(Icons.block_outlined, color: colors.danger),
             onPressed: onBlock,
           ),
         ],
@@ -269,13 +307,18 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: SsSpacing.space4),
       child: Center(
+        // MAJOR-2 (E15-R11 review): the footer betöltés-állapot a
+        // design-rendszer betöltés-komponensére vált (§5.2) — raw
+        // CircularProgressIndicator was a documented not-acceptable
+        // weakening.
         child: isLoading
-            ? const SizedBox(
-                height: 18,
+            ? const SsSkeleton(
+                key: Key('followers-footer-loading'),
                 width: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                height: 18,
+                radius: 9,
               )
             : const SizedBox.shrink(),
       ),

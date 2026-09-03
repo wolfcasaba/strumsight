@@ -25,6 +25,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/camera/camera_coordinate_space.dart';
 import '../../../../core/camera/preview_fit.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/calibration/calibration_validity.dart';
 import '../../domain/vision_setup_profile.dart';
@@ -72,17 +73,17 @@ class _GuitarCalibrationScreenState
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(SsSpacing.space4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (state.hasEntryStaleness)
                 _EntryBanner(reason: state.entryEvaluationReason!, l10n: l10n),
-              const SizedBox(height: 12),
+              const SizedBox(height: SsSpacing.space3),
               _GeometryCanvas(precisionMode: _precisionMode),
-              const SizedBox(height: 12),
+              const SizedBox(height: SsSpacing.space3),
               _QualityScorePanel(state: state, l10n: l10n),
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               _Toolbar(
                 state: state,
                 onReset: () => _confirmReset(controller, l10n),
@@ -247,23 +248,22 @@ class _QualityScorePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-    return Container(
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    return SsCard(
       key: const Key('guitar-calibration-quality'),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(8),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             l10n.guitarCalibrationQualityScore(state.qualityScore),
-            style: Theme.of(context).textTheme.titleMedium,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
           ),
-          const SizedBox(height: 4),
-          Text(l10n.guitarCalibrationQualityExplain),
+          const SizedBox(height: SsSpacing.space1),
+          Text(
+            l10n.guitarCalibrationQualityExplain,
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
         ],
       ),
     );
@@ -287,23 +287,30 @@ class _Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    // A3 (§0.0/R5): at 1.5/2.0 textScale three side-by-side buttons overflow
+    // a phone-width Row — Wrap lets the third button drop to its own line
+    // instead, same buttons, same order, no clipped content.
+    return Wrap(
+      alignment: WrapAlignment.spaceEvenly,
+      spacing: SsSpacing.space2,
+      runSpacing: SsSpacing.space2,
       children: [
-        TextButton(
+        SsButton(
           key: const Key('guitar-calibration-reset-button'),
+          variant: SsButtonVariant.tertiary,
+          label: l10n.guitarCalibrationResetAction,
           onPressed: onReset,
-          child: Text(l10n.guitarCalibrationResetAction),
         ),
-        FilledButton(
+        SsButton(
           key: const Key('guitar-calibration-save-button'),
+          label: l10n.guitarCalibrationSaveAction,
           onPressed: state.canSave ? onSave : null,
-          child: Text(l10n.guitarCalibrationSaveAction),
         ),
-        TextButton(
+        SsButton(
           key: const Key('guitar-calibration-recalibrate-button'),
+          variant: SsButtonVariant.tertiary,
+          label: l10n.guitarCalibrationRecalibrateAction,
           onPressed: onRecalibrate,
-          child: Text(l10n.guitarCalibrationRecalibrateAction),
         ),
       ],
     );
@@ -319,18 +326,31 @@ class _EntryBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final message = _messageFor(reason, l10n);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     return Container(
       key: Key('guitar-calibration-entry-staleness-${reason.name}'),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(SsSpacing.space3),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
+        // MINOR-2 (E15-R11 review): the icon paints at full-opacity danger
+        // on top of this blended background — at 0.12 alpha the light-theme
+        // blend measures 2.85:1, below the 3.0 non-text threshold
+        // (tool/ui_contrast_check.dart). 0.05 keeps the tint visible while
+        // measuring 3.09:1 light / 4.89:1 dark.
+        color: colors.danger.withValues(alpha: 0.05),
+        border: Border.all(color: colors.danger),
+        borderRadius: BorderRadius.circular(SsRadius.sm),
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber),
-          const SizedBox(width: 8),
-          Expanded(child: Text(message)),
+          Icon(Icons.warning_amber, color: colors.danger),
+          const SizedBox(width: SsSpacing.space2),
+          Expanded(
+            child: Text(
+              message,
+              style: typography.bodyMedium.copyWith(color: colors.textPrimary),
+            ),
+          ),
         ],
       ),
     );

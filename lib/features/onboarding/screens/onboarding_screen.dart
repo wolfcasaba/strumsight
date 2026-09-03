@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../onboarding_provider.dart';
@@ -61,10 +61,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   /// The checkpoint read, defensive against a Riverpod-free construction
   /// (no ancestor `ProviderScope`) — a bare layout-smoke test builds this
-  /// screen directly under a plain `MaterialApp`. A missing scope degrades
-  /// to the safe default (show the intro from the top), the same
-  /// fail-safe philosophy `OnboardingController.readSeen` already applies
-  /// to a corrupt stored value.
+  /// screen directly under a themed `MaterialApp` with no `ProviderScope`
+  /// (the migrated screen's `SsButton` needs the design-system theme
+  /// extensions, so the harness can no longer be themeless — §0.0/R2). A
+  /// missing scope degrades to the safe default (show the intro from the
+  /// top), the same fail-safe philosophy `OnboardingController.readSeen`
+  /// already applies to a corrupt stored value.
   OnboardingStep _currentStep() {
     try {
       return ref.watch(onboardingStepProvider);
@@ -203,9 +205,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           children: [
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
+              child: SsButton(
+                variant: SsButtonVariant.tertiary,
+                label: l10n.onboardSkip,
                 onPressed: _finish,
-                child: Text(l10n.onboardSkip),
               ),
             ),
             Expanded(
@@ -217,25 +220,42 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
             _Dots(count: pages.length, active: _page),
-            const SizedBox(height: 16),
+            const SizedBox(height: SsSpacing.space4),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              padding: const EdgeInsets.fromLTRB(
+                SsSpacing.space6,
+                0,
+                SsSpacing.space6,
+                SsSpacing.space5,
+              ),
               child: Column(
                 children: [
-                  FilledButton(
-                    onPressed: onLast ? _firstWin : () => _next(last),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(54),
-                    ),
-                    child: Text(
-                      onLast ? l10n.onboardFirstWin : l10n.onboardNext,
+                  // Stays a literal FilledButton (not SsButton): SsButton
+                  // lays its label out in a Flexible(overflow:
+                  // TextOverflow.ellipsis), which caps it to one line — the
+                  // hu "Próbáld ki az első győzelmed — 30 mp" copy truncates
+                  // at the required 2.0x text scale on phone width (E15-R11
+                  // review MAJOR-1). A bare FilledButton's Text has no such
+                  // cap, so it wraps across lines instead of clipping —
+                  // same documented-exception class as the
+                  // streak_detail_screen.dart recovery CTA (E15-R08 review
+                  // M3).
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: onLast ? _firstWin : () => _next(last),
+                      child: Text(
+                        onLast ? l10n.onboardFirstWin : l10n.onboardNext,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
                   // The quieter path for players who just want to explore.
                   if (onLast)
-                    TextButton(
+                    SsButton(
+                      variant: SsButtonVariant.tertiary,
+                      label: l10n.onboardStart,
                       onPressed: () => _finish(requestMic: true),
-                      child: Text(l10n.onboardStart),
                     ),
                 ],
               ),
@@ -262,29 +282,31 @@ class _Page extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     // A9 (golden gate, textScaler 2.0): the intro page must not overflow at
     // a large text size — scrollable rather than clipped/cut off.
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: SsSpacing.space8),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (showArrows)
-            const Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.arrow_downward, size: 64, color: AppColors.primary),
-                SizedBox(width: 12),
+                Icon(Icons.arrow_downward, size: 64, color: colors.brand),
+                const SizedBox(width: SsSpacing.space3),
                 Icon(
                   Icons.arrow_upward,
                   size: 64,
-                  color: AppColors.confidenceHigh,
+                  color: colors.confidenceHigh,
                 ),
               ],
             )
           else
-            Icon(icon, size: 84, color: AppColors.primary),
-          const SizedBox(height: 32),
+            Icon(icon, size: 84, color: colors.brand),
+          const SizedBox(height: SsSpacing.space8),
           Text(
             title,
             textAlign: TextAlign.center,
@@ -294,14 +316,14 @@ class _Page extends StatelessWidget {
               fontSize: 26,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: SsSpacing.space3),
           Text(
             body,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: typography.bodyMedium.copyWith(
               fontSize: 15,
               height: 1.4,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              color: colors.textSecondary,
             ),
           ),
         ],
@@ -316,22 +338,25 @@ class _Dots extends StatelessWidget {
   final int active;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      for (var i = 0; i < count; i++)
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: i == active ? 22 : 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: i == active
-                ? AppColors.primary
-                : AppColors.primary.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(4),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < count; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.symmetric(horizontal: SsSpacing.space1),
+            width: i == active ? 22 : 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: i == active
+                  ? colors.brand
+                  : colors.brand.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(SsRadius.xs),
+            ),
           ),
-        ),
-    ],
-  );
+      ],
+    );
+  }
 }
