@@ -19,14 +19,16 @@ import '../../tool/check_fixture_manifest.dart';
 void main() {
   group('A1 — the corpus is defined by the file tree, not the manifest '
       '(ADR 0473 D1/D2)', () {
-    test('the real test/fixtures/ tree has exactly 51 data files, and the '
+    test('the real test/fixtures/ tree has exactly 52 data files, and the '
         'real manifest is clean against it (E12-R23 §0.0/R2: 48 -> 51, three '
-        'new upgrade-migration fixtures registered)', () {
+        'new upgrade-migration fixtures registered; ADR 0112 self-heal of '
+        'E16-R02/H3: 51 -> 52, the E15-R13 completion-report reachability '
+        'baseline registered, L613)', () {
       final projectRoot = _findProjectRoot();
       final report = checkFixtureManifest(projectRoot: projectRoot);
 
       expect(report.isClean, isTrue, reason: report.format());
-      expect(report.entries, hasLength(51));
+      expect(report.entries, hasLength(52));
     });
 
     test('a fixture file on disk with no manifest entry is flagged — a '
