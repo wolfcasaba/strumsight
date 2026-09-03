@@ -31,7 +31,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools" / "round-pipeline.sh"
 
-TOKEN = "github_pat_FIXTURE_ONLY_not_a_real_secret"
+# A `providerToken` szabálynak nincs `valueGroup`-ja, ezért a szkenner
+# `_placeholder` mentesítése (example/fake/test_only/...) RÁ NEM vonatkozik: a
+# szolgáltatói előtag önmagában találat, akármi áll utána. Egy fixture-token
+# egyetlen dokumentált kimenete a szkenner saját, sor végi markere.
+TOKEN = "github_pat_FIXTURE_ONLY_not_a_real_secret"  # strumsight:allow-secret fixture-token, nem valódi hitelesítő
 
 
 class AuthenticatedGitFetchTest(unittest.TestCase):

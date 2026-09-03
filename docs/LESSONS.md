@@ -23770,3 +23770,51 @@ dokumentáció itt nem kényelem, hanem a mérce második fele — ezért gépi 
 
 **Őrteszt:** `tools/tests/test_lint_rule_contract_parity.py` — a javítás előtti
 fán 2 cella PIROS (4 dokumentált szabály a 14 implementáltból).
+
+## L599 — A repó EGÉSZÉT mérő kapu csak dispatch-re futott, a `tools/**`-ra automatikusan induló kapu viszont nem mérte: a rés egy tools-only ops PR-t engedett `main`-re, ami MINDEN további kört megállított (E15-R10 / H3 önjavító kör, 2026-09-03)
+
+**Mérve.** A `tool/ci/check_secrets.dart` a teljes követett fát vizsgálja
+(4235 fájl), de kizárólag a `.github/actions/flutter-gates` composite **5.**
+lépéseként fut, azt pedig csak a `build-apk.yml` és a `full-gate.yml` hívja —
+**mindkettő `workflow_dispatch`**, tehát kör-dispatch nélkül soha nem indul el
+magától. A `tools/**` útvonalra viszont a `router-ci.yml` indul
+AUTOMATIKUSAN, és annak **nincs** titok-lépése.
+
+Ezen a résen csúszott át a PR #544 (`ops/authenticated-git-fetch`, tools-only,
+egyetlen zöld check: `router-ci`, merge 2026-09-03T08:04:59Z): a `main`-re
+került egy csupasz provider-token literál a szkenner dokumentált markere
+nélkül (`tools/tests/test_authenticated_git_fetch.py:34`). A `git log -S` szerint
+pontosan ez az egy commit hozta. Reprodukció tiszta `main`-en (`45d20193`),
+a kör ága NÉLKÜL: `Secret scan failed (4235 file(s) scanned, 1 finding(s))`.
+
+**Amit a rés kerülete drágává tett.** A `secrets` a composite **5.** lépése,
+ezért utána a full-gate MINDEN további lépése (l10n, asset, test, property,
+coverage) `skipped` lett: az E15-R10 saját, APPROVED munkája **meg sem lett
+mérve**. A defekt nem a köré volt, a kör mégis `H3`-mal állt meg — és az
+ADR 0086 §2 miatt (a kör beemeli a `main`-t) **minden** következő kör ugyanígy
+bukott volna.
+
+**A tanulság iránya.** Egy kapu hatóköre két különböző dolog: MIT vizsgál és
+MIKOR indul. A `check_secrets` hatóköre a teljes fa, a triggere viszont egy
+szűk, kézi dispatch — a kettő különbsége maga a rés, és pontosan azokon az
+útvonalakon nyílik ki, amelyeket a szűk trigger nem lát, de más kapu igen. Ahol
+egy útvonalnak van automatikus kapuja (itt: `router-ci` a `tools/**`-ra), oda a
+teljes-fa-kapu szabályát is be kell húzni, különben a repó „mindent mérünk"
+állítása csak dispatch-elt ágakra igaz.
+
+**Ami NEM volt a mérce gyengítése.** A `providerToken` szabálynak nincs
+`valueGroup`-ja, ezért a szkenner `_placeholder` mentesítése
+(`example|fake|test_only|...`) rá **nem** vonatkozik: a szolgáltatói előtag
+önmagában találat, akármi áll utána — a `FIXTURE_ONLY_not_a_real_secret` szöveg
+sem számít. Egy bizonyított fixture-token egyetlen dokumentált kimenete a
+szkenner **saját, meglévő** sor végi markere. A `.github/workflows/**` az
+ADR 0112 §3 abszolút tiltott zónája, ezért a lefedettség a `tools/**` oldalon
+állt helyre — szigorúan BŐVÍTVE a mércét.
+
+**Őrteszt:** `tools/tests/test_secret_gate_router_paths.py` — a `router-ci`
+saját `pytest tools/tests` lépésében méri ugyanazt a provider-token szabályt a
+router-ci automatikus trigger-útvonalain. A szabályt nem másolja le: a
+`check_secrets.dart` forrásából olvassa ki (marker-konstansok + a regex
+darabkái), ezért a két oldal nem tud szétcsúszni, és a Dart oldal alaki
+változása PIROSRA vált, nem némán zöldre. A javítás előtti fán 1 cella PIROS,
+pontosan ugyanazzal a `path:line` találattal, amit a Dart szkenner adott.
