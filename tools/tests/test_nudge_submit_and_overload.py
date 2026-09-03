@@ -174,3 +174,63 @@ class FeedbackPromptTest(unittest.TestCase):
         dismissal = source.index('dismiss_feedback_prompt_if_present "$tmux_session"')
         nudge = source.index('send_nudge_to_pane "$tmux_session" "$STALL_NUDGE_TEXT"')
         self.assertLess(dismissal, nudge)
+
+
+class PaneActivityGuardTest(unittest.TestCase):
+    """ADR 0499 D1 — a DOLGOZÓ panelt sem ébreszteni, sem megölni nem szabad.
+
+    MÉRT hamis riasztás (2026-09-03 15:02): a napló mtime-ja egy HOSSZÚ forduló
+    alatt is befagy (amíg egy parancs fut, a panel képe nem változik, tehát a
+    `pipe-pane` nem ír új bájtot), a 529-minta pedig a napló végében RAGAD a
+    helyreállás után is. A rövid, 120 mp-es ablak így ÉPPEN DOLGOZÓ sessionbe
+    küldött folytatás-promptot — `ELAKADÁS-ÉBRESZTŐ (5/12)` mindkét körön, míg
+    a panel `esc to interrupt`-ot és `Baking… (10m 32s)`-t mutatott —, és a
+    keret kimerülése után megölte volna a dolgozó kört.
+    """
+
+    WORKING_PANE = (
+        "  ⎿  Running… (5m 54s · timeout 10m)\n"
+        "✢ Baking… (10m 32s · ↓ 4.6k tokens)\n"
+        "❯ \n"
+        "  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ← for ag…\n"
+    )
+    IDLE_PANE = (
+        "● API Error: 529 Overloaded. This is a server-side issue.\n"
+        "✻ Cooked for 3m 41s\n"
+        "❯ \n"
+        "  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents\n"
+    )
+
+    def _working(self, pane_text: str) -> bool:
+        with tempfile.TemporaryDirectory() as directory:
+            pane_file = Path(directory) / "pane"
+            pane_file.write_text(pane_text, encoding="utf-8")
+            shell = (
+                f"source <(sed -n '{PREFIX}' \"$PIPELINE_SCRIPT\")\n"
+                'tmux() { cat "$PANE"; }\n'
+                "pane_is_working pipeline-E15-R12\n"
+            )
+            completed = subprocess.run(
+                ["bash", "-c", shell],
+                cwd=ROOT,
+                env={**os.environ, "PIPELINE_SCRIPT": str(SCRIPT), "PANE": str(pane_file)},
+                capture_output=True,
+            )
+            return completed.returncode == 0
+
+    def test_a_long_running_turn_counts_as_working(self) -> None:
+        self.assertTrue(self._working(self.WORKING_PANE))
+
+    def test_an_idle_pane_after_an_error_does_not(self) -> None:
+        self.assertFalse(self._working(self.IDLE_PANE))
+
+    def test_the_guard_runs_before_the_threshold_decision(self) -> None:
+        """Forrás-szintű őr: az aktivitás ELŐBBRE való a napló mtime-jánál."""
+        source = SCRIPT.read_text(encoding="utf-8")
+        guard = source.index('if pane_is_working "$tmux_session"; then')
+        decision = source.index('if [ "$log_age" -ge "$active_stall_seconds" ]; then')
+        self.assertLess(guard, decision)
+        self.assertIn(
+            '[ "$last_activity_at" -gt "$stall_reference" ] && stall_reference=$last_activity_at',
+            source,
+        )
