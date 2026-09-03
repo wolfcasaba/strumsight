@@ -1,5 +1,31 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 E16-R02 / H3 ÖNJAVÍTÓ KÖR (ADR 0112) — a hiányzó mastery-forrás bekerült a kör scope-jába (2026-09-03)
+
+Az E16-R02 pre-flightja **H3**-mal állt meg: a brief a `/profile/progress`
+átkötését írta elő a Progress V2 dashboardra „valós projekcióval", miközben a
+projekció mastery-oldalának **nincs forrása a fán** (0 produkciós
+`MasteryMilestone`-katalógus, 0 `MasteryEvidence`-előállító, 0 milestone-l10n
+kulcs). Üres milestone-listával az `isNewUser` igaz, tehát a kör a MA valós
+adatot mutató legacy `ProgressScreen`-t egy örökre üres „get started"
+állapotra cserélte volna — **zöld A1–A7 cellák mellett** (a cellák a hívót
+mérik, nem az adat létezését).
+
+**Az önjavítás nem gyengített és nem halasztott:** a hiányzó FORRÁS lett a kör
+része. A brief §0.0.H revíziót kapott, az `allowed_paths` a mastery-katalógussal,
+a practice→`MasteryEvidence` adapterrel és a milestone-l10n szegmenssel (+ a két
+generált aggregátummal) bővült, az §5.4–5.7 pinneli a küszöböket (`0.8`,
+3 session), a leképezést és az eldobási szabályokat, a §6 pedig **öt új cellát**
+kapott (A8–A12) — köztük az **A10**-et, ami pontosan a fenti hibamódot viszi
+pirosra. A régi A1–A7 cellák változatlanok.
+
+**Őrteszt:** `tools/tests/test_e16_r02_mastery_source_scope.py` (a revízió előtti
+briefen 3 cella PIROS) · **Tanulság:** `docs/LESSONS.md` **L606**.
+
+**A kör így újraindítható** — az E16-R02 sora a `pipeline-queue.tsv`-ben
+változatlanul `pending`.
+
+
 ## ✅ E16-R01 KÉSZ — A Gamification kompozíciós rétege: valós adat a felület mögé — PR [#549](https://github.com/wolfcasaba/strumsight/pull/549), squash `8c27bf3a` (2026-09-03)
 
 A **Chapter 16 (Kompozíció és rollout) első köre.** A gamification feature

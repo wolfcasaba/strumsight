@@ -24105,3 +24105,52 @@ felületi elem néhány sorral elnémíthatja az egész őrt.
 
 **Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::FeedbackPromptTest`
 (ADR 0498 D3) — a javítás előtti fán mind a 3 cella PIROS.
+
+## L602 — A saját hamis riasztásunk drágább lett az eredeti bajnál: a napló mtime-ja nem arról szól, dolgozik-e a session (ops, 2026-09-03)
+
+**Mérve.** Az ADR 0498 D2 rövid (120 mp) ébresztési ablakot adott a felismert
+529-re. Az újraindított körökön ez 5-5 alkalommal lőtt bele ÉPPEN DOLGOZÓ
+fordulóba (`ELAKADÁS-ÉBRESZTŐ (5/12)`), miközben a panel `esc to interrupt`-ot
+és `Baking… (10m 32s · ↓ 4.6k tokens)`-t mutatott. Két, egymást erősítő ok:
+(1) a `pipe-pane` a panel KÉPÉT írja, ami egy futó parancs alatt nem változik,
+tehát a napló mtime-ja befagy; (2) a 529-minta a napló utolsó 8000 bájtjában
+MEGRAGAD a helyreállás után is, így a rövid ablak véglegesen bekapcsolva
+maradt. A keret kimerülése után a driver megölte volna a dolgozó kört.
+
+**A tanulság iránya.** Az „elakadt-e" kérdésre a legközvetlenebb ÉLŐ jelet kell
+megkérdezni, nem a legkényelmesebbet. A napló mtime-ja azért volt csábító, mert
+olcsó — és azért volt rossz, mert nem arról szól, amit tudni akartunk. Ehhez
+jön a második fél: egy hiba-MINTÁRA épülő állapotfelismerés soha nem tudja
+megmondani, hogy a hiba MÁR ELMÚLT-e; a jelenlét nem időbélyeg. Az ilyen
+mintát mindig egy pozitív, jelen idejű jellel kell párosítani.
+
+**Őrteszt:** `tools/tests/test_nudge_submit_and_overload.py::PaneActivityGuardTest`
+(ADR 0499 D1) — a javítás előtti fán 2 cella PIROS.
+
+## L606 — A kész felület bekötése előtt a FORRÁST kell mérni: az üres katalógus és a zöld kapu megkülönböztethetetlen (E16-R02 H3 + önjavító kör, 2026-09-03)
+
+**Mérve.** Az E16-R02 briefje (`main @ 11d0d2bb` fán íródott) a `/profile/progress`
+átkötését írta elő a `ProgressDashboardScreen`-re „valós projekcióval", és a §2-ben
+a gamification-profilt meg a ledgert nevezte meg forrásként. A kör pre-flightja
+ezt megcáfolta: `grep -rn "MasteryMilestone(" --include=*.dart lib test` → 9 hely,
+ebből 1 definíció és 8 TESZT (produkciós katalógus: 0); `grep -rln "MasteryEvidence"
+--include=*.dart lib` → 4 fájl, egyetlen `data/` előállító sem; milestone cím/leírás
+ARB-kulcs: 0. Üres `milestones` listával viszont a
+`ProgressOverviewProjection.isNewUser` `[].every(...)` miatt **igaz**, tehát a
+képernyő csak a `_NewUserState`-et rendereli — a kör a MA valós adatot mutató
+legacy `ProgressScreen`-t (`app_router.dart:545`) egy örökre üres „get started"
+állapotra cserélte volna, **miközben mind a hét acceptance-cella zöld marad**, mert
+mindegyik közvetlenül a projekciót eteti (L397/L449 hibaosztály).
+
+**A tanulság iránya.** Egy hívó-adta („caller-fed") szerződésű képernyő
+bekötésekor a cellák a HÍVÓT mérik, nem az adat létezését: aki a projekciót
+tölti, az a tesztben is tölti. Ezért a bekötő kör briefjének a pre-flightja nem
+azt kérdezi, hogy „renderel-e", hanem hogy **melyik mezőnek van a fán MÉRT
+forrása** — mezőnként, kiírva. Ahol nincs, ott két őszinte kimenet van: a forrás
+a kör része lesz (bővített `allowed_paths` + a hiányt piroba vivő új cella), vagy
+a bekötés marad. A cellák gyengítése vagy a hiány „üres állapotnak" nevezése
+nem kimenet.
+
+**Őrteszt:** `tools/tests/test_e16_r02_mastery_source_scope.py` — a revízió
+előtti briefen 3 cella PIROS; az `A10` cella (három küszöb fölötti gyakorlással a
+route NEM a new-user állapotot rendereli) pontosan ezt a hibamódot méri.
