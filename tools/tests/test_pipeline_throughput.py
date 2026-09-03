@@ -793,24 +793,76 @@ class MeasuredPrerequisiteRegimeTest(unittest.TestCase):
         self.assertEqual(paths, frozenset({"lib/features/a/x_screen.dart"}))
 
     def test_the_real_queue_admits_a_second_round_beside_the_running_one(self) -> None:
-        """A MÉRT defekt cellája: E15-R09 futása mellett indulhat egy másik kör."""
+        """A MÉRT defekt cellája: E15-R09 futása mellett indulhat egy másik kör.
+
+        A cella a VAK sorosítást méri — azt, hogy egy előfeltétel-KÉSZ jelöltet
+        egy ál-útvonalütközés zár ki. Ha a nyitott sorban egyetlen
+        előfeltétel-kész jelölt sincs, az nem áteresztő-defekt, hanem a
+        roadmap KIMONDOTT alakja, és a cellának nincs mit mérnie.
+
+        MÉRVE 2026-09-03 (ADR 0112 önjavító kör, E16-R02/H3): a `main` Router
+        CI-je ezen a cellán pirosra váltott (`33802070985`), mert a sor
+        maradéka szigorú előfeltétel-LÁNC — `E16-R02 → R03 → R04 → R05`,
+        mindhárom jelölt `unmet_prerequisites` miatt esik ki, útvonalütközés
+        nélkül. Ez ugyanaz a hibaosztály, amit az `docs/LESSONS.md` L612 mér:
+        az őr a fa/sor egy ÁTMENETI állapotát pinnelte örök igazságként.
+        """
         rows = round_slots.queue_rows(ROOT)
         pending = [row for row in rows if row[4] == "pending"]
         if not pending:
             self.skipTest("nincs nyitott kör a sorban")
         running = pending[0]
-        admitted = []
-        for candidate in pending[1:]:
-            if round_slots.unmet_prerequisites(ROOT, candidate[0], candidate[1], rows):
-                continue
-            if round_slots.paths_conflict(
+        ready = [
+            candidate
+            for candidate in pending[1:]
+            if not round_slots.unmet_prerequisites(ROOT, candidate[0], candidate[1], rows)
+        ]
+        if not ready:
+            self.skipTest(
+                "a nyitott sor maradéka KIMONDOTT előfeltétel-lánc "
+                f"({running[0]} után sorosított) — nincs előfeltétel-kész jelölt, "
+                "tehát vak sorosítás sem lehet"
+            )
+        admitted = [
+            candidate[0]
+            for candidate in ready
+            if not round_slots.paths_conflict(
                 round_slots.load_paths(ROOT, running[1]),
                 round_slots.load_paths(ROOT, candidate[1]),
-            ):
-                continue
-            admitted.append(candidate[0])
+            )
+        ]
         self.assertTrue(
             admitted,
-            "a 2. slot ismét üresen áll: a nyitott sorban egyetlen kör sem indítható "
-            f"a(z) {running[0]} mellett",
+            "a 2. slot ismét üresen áll: van előfeltétel-kész kör "
+            f"({[candidate[0] for candidate in ready]}), de mind útvonalütközésre "
+            f"hivatkozva esik ki a(z) {running[0]} mellett",
         )
+
+    def test_a_prerequisite_ready_candidate_blocked_only_by_paths_is_still_red(self) -> None:
+        """A MÉRT defektet (E15-R09) a fenti `skipTest` NEM engedi át.
+
+        Ez az előző cella ellenpróbája: előfeltétel-kész jelölt + ál-ütközés →
+        a lelet megmarad. A skip kizárólag az előfeltétel-lánc alakra szól.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            first = self._round_brief(repo, "e15-r09.md", "- **Előfeltétel:** `E15-R03` merge-elve")
+            second = self._round_brief(repo, "e15-r10.md", "- **Előfeltétel:** `E15-R03` merge-elve")
+            rows = [
+                ("E15-R03", "docs/rounds/e15-r03.md", "sonnet-impl", "nincs", "done"),
+                ("E15-R09", first, "sonnet-impl", "nincs", "pending"),
+                ("E15-R10", second, "sonnet-impl", "nincs", "pending"),
+            ]
+            pending = [row for row in rows if row[4] == "pending"]
+            ready = [
+                candidate
+                for candidate in pending[1:]
+                if not round_slots.unmet_prerequisites(repo, candidate[0], candidate[1], rows)
+            ]
+
+            self.assertEqual(
+                [candidate[0] for candidate in ready],
+                ["E15-R10"],
+                "a kimondottan KÉSZ előfeltétel után a jelölt előfeltétel-kész — "
+                "a skip-ág itt NEM léphet be, a mérés folytatódik",
+            )

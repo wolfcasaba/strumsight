@@ -1,5 +1,58 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR — E16-R02 / H3 (4.): az őrteszt a saját köre munkájának HIÁNYÁT pinnelte (2026-09-03)
+
+**ADR 0112 önjavító kör. A megállt kör terméke HIBÁTLAN volt** — a merge-et öt
+teszt blokkolta a kör TILOS zónájában (`tools/tests/**`), amelyeket a KORÁBBI
+három önjavító kör (PR #552/#553/#555) írt.
+
+**Mért gyökérok.** Mind az öt cella az ÉLŐ fát olvasta, és a kör munkájának
+**HIÁNYÁT** pinnelte — vagyis a kör **sikere** garantáltan pirosra vitte a
+Router CI-t:
+
+- két `assertNotIn` a termékre: „a `/profile/progress/skills/:skillId`
+  konstans még nem létezik" és „a `PracticeHistoryEntry` még nincs exportálva"
+  — mindkettőt a brief §5.8 ill. §0.0.I/I5 **KÖTELEZŐVÉ** teszi ugyanennek a
+  körnek;
+- három `brief-lint` cella az ÉLŐ briefet szűrte: a kör a §10-be beírta a saját
+  review-leletét a `/profile/library`-ról (MINOR-4), ettől az S11 egy vadonatúj
+  leletet adott a kör SAJÁT dokumentációjától (`grep -c` a briefen: main 1 →
+  kör HEAD 2).
+
+Mérve: bázis (`9ba54399`) **19 passed** · kör HEAD (`7d3430b8`) **5 failed, 19
+passed** · a javítás után ugyanazon a kör-HEAD-en **25 passed**.
+
+**A javítás (nem gyengítés).** Az állapot-mércék arra az invariánsra álltak át,
+ami a landolás MINDKÉT oldalán áll és utána SZIGORÚBB (a katalógus vagy egyet
+sem, vagy PONTOSAN a pinnelt alakot deklarálja; a barrel vagy egyik
+§5.5-adapter-típust sem, vagy MINDET exportálja). A szabály-viselkedést mérő
+`brief-lint` cellák rögzített pillanatképet kaptak
+(`tools/tests/fixtures/e16_r02_route_level_swap/`, szó szerint másolva
+`origin/main @ 4fffa3f1`-ről, `PROVENANCE.md`-vel). Az élő fán futó kimerítő
+mérést változatlanul a Router CI `brief-lint.py --open --level base` lépése
+végzi — az szándékosan CSAK a NYITOTT körök briefjeit linteli.
+**Mutációs próba:** elgépelt útvonal-alak és fél-landolt barrel-export →
+mindkét új mérce PIROS, majd visszaállt. → [L612](docs/LESSONS.md#l612), és a
+kötelező pre-flight lépés bekerült a `docs/execution/pipeline-selfheal-prompt.md`-be.
+
+**MÁSODIK, ÖNÁLLÓ AKADÁLY — MÉRVE, de a javítása NEM ezé a köré.** A
+`full-gate.yml` két futása KÜLÖNBÖZŐ cellával bukott (`33796054904` →
+`song_import_controller_test.dart`, `33798888247` → `import_flow_test.dart`),
+mindkettő lokálisan 8/8 zöld, és a kör diffje 0 `songs/`/`import` fájlt érint.
+Forrás-szintű diagnózis: **mindkét cella FIX SZÁMÚ event-loop fordulóra
+szinkronizál, miközben a mért kód valódi fájlrendszer-I/O-t végez** —
+`ImportWorkspace.open()` (`import_workspace.dart:26-44`) **öt** egymás utáni
+async FS-műveletet futtat (`root.create`, `resolveSymbolicLinks`,
+`directory.create`, `resolveSymbolicLinks`), a tesztek viszont
+`await Future<void>.delayed(Duration.zero)` (egy forduló), illetve
+`pumpEventQueue()` — ami `test_api-0.7.13/lib/src/scaffolding/utils.dart:16`
+szerint **pontosan 20 üres event-loop fordulót** pörget, és NEM vár I/O-ra.
+Terhelt runneren a 20 forduló lefut az 5 syscall előtt → `tempRoot.listSync()`
+üres → `isNotEmpty` bukik. Ez **teszt-determinizmus hiba, nem termék-regresszió**
+(egy regresszió ugyanazt a cellát buktatná). A helyes javítás — feltételre
+várni tick-budget helyett — `test/**` írás, ami az ADR 0112 §2 önjavító
+jogosultságán KÍVÜL esik: **nevesített follow-up kör dolga**.
+
 ## ✅ E15-R13 KÉSZ — a Chapter 15 sáv LEZÁRVA: 72 képernyős záró variáns-mátrix és mért zárójelentés (2026-09-03)
 
 **PR [#556](https://github.com/wolfcasaba/strumsight/pull/556), squash `b968cc4a`; ADR: nincs (mérési/záró kör).**
