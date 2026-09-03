@@ -638,6 +638,19 @@ szándékosan nem szűr semmit (minden builtin definíció `60..90` BPM). Egy
 jövőbeli kör, ha a history-séma bővül a ténylegesen játszott tempóval, ezt a
 hatókört szűkítheti/pontosíthatja.
 
+**Továbbadott hiány (review MINOR-2, egy jövőbeli körnek):** a lecserélt
+`ProgressScreen` a V1 `practiceLogProvider`-t olvasta
+(`progress_screen.dart:48`), amit a Live, az Analyze és a Learn ír
+(`live_screen.dart:198`, `analyze_providers.dart:228`,
+`learn_screen.dart:349`); az új `ProgressDashboardScreen` KIZÁRÓLAG V2
+`PracticeHistoryEntry`-t olvas (`progressPracticeHistoryProvider`,
+`progress_providers.dart:23-28`). Egy csak V1-előzménnyel rendelkező
+felhasználó tehát a „get started" új-felhasználói állapotot látja ott, ahol
+korábban statisztikát látott. Az §5.5 a `PracticeHistoryEntry`-t pinneli, és a
+V1-bejegyzések nem hordoznak metrika-pillanatképet, tehát ez specifikáció
+szerint helyes — de a hiányt egy jövőbeli körnek dokumentálni kell, ugyanabban
+az osztályban, aminek megelőzésére a §0.0.H/A10 létrejött.
+
 **Másodlagos, dokumentált (nem blokkoló) rés:** a `SkillDetailScreen.
 onOpenEvidence` callback a router `context.push(route.replaceFirst(
 ':sessionId', sessionId))`-t hívja `extra` nélkül (a callback szerződése

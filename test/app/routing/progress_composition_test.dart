@@ -13,12 +13,38 @@ import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
+import 'package:strumsight/features/practice/domain/repository/practice_history_repository.dart';
 import 'package:strumsight/features/practice/public.dart';
 import 'package:strumsight/features/progress_v2/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/preference_store.dart';
+
+/// Review MAJOR-2 — the narrower `progressPracticeHistoryProvider.
+/// overrideWithValue(...)` used by every other cell in this file feeds the
+/// dashboard directly, bypassing `progressPracticeHistoryProvider`'s own body
+/// (`ref.watch(practiceHistoryV2ListProvider).value ?? []`,
+/// `progress_providers.dart:23-28`) entirely. The A10 cell overrides one
+/// layer deeper — the repository `practiceHistoryV2ListProvider` itself
+/// reads from — so the real chain (repository → `practiceHistoryV2ListProvider`
+/// → `progressPracticeHistoryProvider` → builder → screen) runs end to end.
+class _FakeHistoryRepository implements PracticeHistoryRepository {
+  const _FakeHistoryRepository(this.entries);
+  final List<PracticeHistoryEntry> entries;
+
+  @override
+  Future<AppResult<List<PracticeHistoryEntry>>> load() async =>
+      Success(entries);
+
+  @override
+  Future<AppResult<void>> save(PracticeHistoryEntry entry) async =>
+      const AppResult.success(null);
+
+  @override
+  Future<AppResult<void>> clear() async => const AppResult.success(null);
+}
 
 PracticeMetricSnapshot _chordSnapshot(double value) => PracticeMetricSnapshot(
   completion: const PracticeMetricDimensionNotApplicable(),
@@ -64,6 +90,7 @@ Future<GoRouter> _pumpRouterTo(
   WidgetTester tester,
   String path, {
   List<Override> extraOverrides = const [],
+  bool adaptiveShellEnabled = true,
 }) async {
   final container = ProviderContainer(
     overrides: [
@@ -74,11 +101,11 @@ Future<GoRouter> _pumpRouterTo(
         AppConfig(
           environment: AppEnvironment.development,
           apiBaseUrl: AppConfig.devApiBaseUrl,
-          flags: const FeatureFlags(
+          flags: FeatureFlags(
             accountEnabled: false,
             diagnosticsEnabled: false,
             labModeAvailable: false,
-            adaptiveShellEnabled: true,
+            adaptiveShellEnabled: adaptiveShellEnabled,
           ),
           diagnosticsToken: AppConfig.devDiagnosticsToken,
           buildMode: 'test',
@@ -254,18 +281,66 @@ void main() {
     },
   );
 
+  group('shell-OFF — the skill-detail route never renders on top of a disabled '
+      'surface and never falls through to the generic /live catch-all (review '
+      'MAJOR-1, §5.8)', () {
+    testWidgets(
+      'a valid skillId does not open SkillDetailScreen and lands on the '
+      'always-registered legacy /progress, not /live',
+      (tester) async {
+        final router = await _pumpRouterTo(
+          tester,
+          AppRoutes.profileProgressSkill.replaceFirst(
+            ':skillId',
+            'chordTransition',
+          ),
+          adaptiveShellEnabled: false,
+          extraOverrides: [
+            progressPracticeHistoryProvider.overrideWithValue(
+              _threeQualifyingChordSessions(),
+            ),
+          ],
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(find.byType(SkillDetailScreen), findsNothing);
+        expect(router.state.uri.path, AppRoutes.progress);
+        expect(router.state.uri.path, isNot(AppRoutes.live));
+      },
+    );
+
+    testWidgets(
+      'an unknown skillId also lands on the legacy /progress, not /live',
+      (tester) async {
+        final router = await _pumpRouterTo(
+          tester,
+          AppRoutes.profileProgressSkill.replaceFirst(
+            ':skillId',
+            'notARealSkill',
+          ),
+          adaptiveShellEnabled: false,
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(router.state.uri.path, AppRoutes.progress);
+        expect(router.state.uri.path, isNot(AppRoutes.live));
+      },
+    );
+  });
+
   group(
     'A10 — three qualifying sessions clear the new-user state (§0.0.H)',
     () {
       testWidgets(
-        'the dashboard shows measured skill rows, never stuck on get-started',
+        'the dashboard shows measured skill rows, never stuck on get-started, '
+        'through the REAL repository chain (review MAJOR-2)',
         (tester) async {
           await _pumpRouterTo(
             tester,
             AppRoutes.profileProgress,
             extraOverrides: [
-              progressPracticeHistoryProvider.overrideWithValue(
-                _threeQualifyingChordSessions(),
+              practiceHistoryRepositoryProvider.overrideWithValue(
+                _FakeHistoryRepository(_threeQualifyingChordSessions()),
               ),
             ],
           );

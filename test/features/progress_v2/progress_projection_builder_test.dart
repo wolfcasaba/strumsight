@@ -7,8 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/gamification/public.dart';
 import 'package:strumsight/features/practice/data/builtin_practice_catalog.dart';
 import 'package:strumsight/features/practice/public.dart';
-import 'package:strumsight/features/progress_v2/application/progress_projection_builder.dart';
 import 'package:strumsight/features/progress_v2/public.dart';
+import 'package:strumsight/l10n/app_localizations_en.dart';
 
 final _practiceCatalog = const BuiltinPracticeCatalog().all();
 const _beginnerDefinitionId = 'builtin.quarterDownstrokes.v1';
@@ -208,6 +208,33 @@ void main() {
       expect(source.contains('Random('), isFalse);
     });
   });
+
+  group(
+    'MINOR-1 (review) — every v1 milestone titleKey/descriptionKey resolves '
+    'to real ARB text, not the raw key',
+    () {
+      test('all 3 catalog milestones resolve both keys through '
+          'progressV2LocalizedText (6 keys total — the silent `_ => key` '
+          'fallback branch stays exercised)', () {
+        final l10n = AppLocalizationsEn();
+        for (final milestone in masteryMilestoneCatalogV1) {
+          final title = progressV2LocalizedText(l10n, milestone.titleKey);
+          final description = progressV2LocalizedText(
+            l10n,
+            milestone.descriptionKey,
+          );
+          expect(title, isNot(milestone.titleKey), reason: milestone.id);
+          expect(
+            description,
+            isNot(milestone.descriptionKey),
+            reason: milestone.id,
+          );
+          expect(title, isNotEmpty, reason: milestone.id);
+          expect(description, isNotEmpty, reason: milestone.id);
+        }
+      });
+    },
+  );
 
   group('A12 — minimumThreshold and minEvidenceSessions boundaries', () {
     test('0.79 (just below 0.8) never achieves, at 3 sessions', () {

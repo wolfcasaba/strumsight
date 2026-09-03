@@ -346,12 +346,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       // above. An unknown/unmapped `:skillId` redirects to the overview
       // rather than 404ing (§5.8) — `tempoStability` has no v1 milestone
       // (§5.4), so it redirects too.
+      // Review MAJOR-1 (shell-OFF): the redirect target this route names,
+      // `AppRoutes.profileProgress`, only exists inside the
+      // `if (adaptiveShellEnabled)` branch below. Left unconditional, an
+      // unknown `skillId` under shell-OFF would hit that missing route and
+      // fall through `onException` to the generic `/live` entry — and a
+      // VALID `skillId` would leak `SkillDetailScreen` through a deep link
+      // into a build where the whole progress_v2 surface is off. Routing
+      // shell-OFF traffic to the always-registered legacy `/progress`
+      // (line ~300) instead keeps both cases landing somewhere deliberate.
       GoRoute(
         path: AppRoutes.profileProgressSkill,
-        redirect: (_, state) =>
-            _hasMasteryMilestoneForSkill(state.pathParameters['skillId'])
-            ? null
-            : AppRoutes.profileProgress,
+        redirect: (_, state) {
+          if (!adaptiveShellEnabled) return AppRoutes.progress;
+          return _hasMasteryMilestoneForSkill(state.pathParameters['skillId'])
+              ? null
+              : AppRoutes.profileProgress;
+        },
         builder: (_, state) => Consumer(
           builder: (context, ref, _) {
             final l10n = AppLocalizations.of(context);
