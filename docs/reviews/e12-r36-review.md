@@ -7,7 +7,11 @@
 - **Review dátuma:** 2026-09-03
 - **Mód:** read-only, izolált klón (`/tmp/review-e12-r36`), saját gate-futtatás + eldobható próbatesztek
 
-## VERDIKT: CHANGES REQUESTED — 1 MAJOR
+## VERDIKT: **APPROVED** (a javító kör után, `bd3f8dc5`)
+
+> **Első kör (`ed50587c`): CHANGES REQUESTED — 1 MAJOR + 1 MINOR.** A javító
+> kör (`bd3f8dc5`) mindkettőt lezárta; a leletenkénti zárás-ellenőrzés a §8-ban,
+> a részletes első jelentés változatlanul alább.
 
 ---
 
@@ -163,7 +167,47 @@ változatlan az `E12-R35` mért alapvonalhoz képest.
 
 ## 7. Merge-döntés
 
-**MAJOR-1 nyitva → merge TILOS.** A javító kör a lánc normál útja: ugyanaz a
-motor (`sonnet-impl`), a fenti leletlistával, ugyanazon a branchen. A javítás
-után a gate-eket friss klónban újra futtatom, a leleteket tételesen lezárom, és
-a CI-t az új HEAD-en újra dispatch-elem (a tesztfájl változik).
+**MAJOR-1 nyitva → merge TILOS** (első kör). A javító kör a lánc normál útja:
+ugyanaz a motor (`sonnet-impl`), a fenti leletlistával, ugyanazon a branchen.
+
+---
+
+## 8. Javító kör — leletenkénti zárás-ellenőrzés (`bd3f8dc5`)
+
+**Diff:** `test/tooling/program_completion_test.dart` (+213/−13) és a brief §10
+„fix1" blokkja. `scope_audit=ok` (a jelzésfájlban, `base=7e218869`,
+2 changed path) — a listán kívüli fájl nincs; a riport és a roadmap tartalma
+**érintetlen** (helyesen: a review azokban hibát nem talált).
+
+**Gate újrafuttatva SAJÁT kézzel, ÚJ, friss klónban** (`/tmp/review-e12-r36b`,
+HEAD `bd3f8dc5`), `prepare-flutter-generated.sh` után:
+
+```
+    format / analyze / program_completion_test.dart / sdd_index_guard_test.dart
+    / architecture / secrets / l10n                             mind ZÖLD
+MINDEN GATE ZÖLD.   GATE_EXIT=0
+```
+
+| Lelet | Zárás | Bizonyíték |
+|---|---|---|
+| **MAJOR-1** | ✅ ZÁRVA | Két új tiszta függvény — `findLanesMissingFromMatrix` (`:157`) és `findMissingHumanGates` (`:296`) + a `humanGateCoverageExpectedRefs` nyolcelemű elvárás-lista —, mindkettőhöz RED-bizonyító cellák (queue-előtag sor nélkül; törölt `E12-R28` sor; törölt, kör-hivatkozás NÉLKÜLI APK-teszt sor), és két új valódi-fa cella. A cellaszám 20 → 27. |
+| **MINOR-1** | ✅ ZÁRVA | A `parseEvidencePaths` doc-commentje már azt állítja, amit a függvény tesz („anywhere in [markdown] (no section-boundary check)"), és kimondja, hogy a mai §7-egyezés a próza tulajdonsága, nem kikényszerített invariáns. |
+| NOTE-1 | nyitva hagyva (nem blokkol) | Az A2 zárás-szótára változatlanul `kész`/`lezárva` — tudatos, a diffet nem hizlaló döntés. |
+| NOTE-2 | infrastruktúra, nem ezé a köré | A fix1 jelzésében a `scope_audit=` kulcs MÁR megjelent (`ok`), tehát az első futás hiánya a megszakadt futáshoz kötődött. |
+
+**A zárást a reviewer MÉRTE, nem a jelentést olvasta** — ugyanaz a három mutáció,
+amely az első körben némán zöld maradt, most piros
+(`/tmp/review-e12-r36b/test/tooling/zz_review_probe2_test.dart`, eldobható,
+merge előtt törölve):
+
+```
+PROBE1 (E15 sora törölve)      old_A1=[]  new_coverage=[queue prefix "E15" has no row in the completion matrix]
+PROBE2 (E10 sora törölve)                 new_coverage=[queue prefix "E10" has no row in the completion matrix]
+PROBE3 (E12-R31 kapu törölve)  old_A5=[]  new_coverage=[expected human gate "E12-R31" has no row in the table]
+PROBE4 (a VALÓDI fa)                      mindkét lefedettség-ellenőrzés üres → a mai riport teljes
+All tests passed!
+```
+
+**Nyitott BLOCKER/MAJOR/MINOR: nincs.** A merge a zöld kapu (ADR 0052)
+teljesülésekor mehet: `full-gate.yml` + `router-ci.yml` a merge SHA-ján
+`success`.
