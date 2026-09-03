@@ -1,5 +1,44 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 E16-R02 / H3 ÖNJAVÍTÓ KÖR, 2. (ADR 0112) — a route-katalógus ownere a scope-ba + négy mért brief-hiba (2026-09-03)
+
+Az E16-R02 **második** pre-flightja (`main @ 18a649ec`, tehát már a lenti
+§0.0.H revízióval) újabb **H3**-mal állt meg: az **A2** cella ÚJ skill-detail
+útvonalat ír elő, de a route-katalógus ownere (`lib/app/routing/app_route.dart`)
+nem volt az `allowed_paths`-on. A fán **0** inline útvonal-literál van (minden
+`GoRoute.path` `AppRoutes`-konstans), a `route_literal_guard_test` tiltja a
+literálokat, a `SkillDetailScreen.onOpenEvidence` szerződése pedig `AppRoutes`
+konstanst vár — a listán belüli feloldás nem létezett. Ugyanaz a hibaosztály,
+mint az **L97** / **L246** / **L90**, és az előző kör (E16-R01) briefje pontosan
+így vette fel a `levelDetail` konstansot.
+
+**A javítás (brief §0.0.I revízió, PR #553):** az `app_route.dart` felkerült az
+`allowed_paths`-ra és a §4 táblára — **KIZÁRÓLAG az új konstans hozzáadására** —,
+az ÚJ **§5.8** pedig pinneli az útvonal alakját (`profileProgressSkill =
+'/profile/progress/skills/:skillId'`, az SDD UI-50 kanonikus route-ja;
+`:skillId` = `MasterySkill.code`; ismeretlen id → átirányítás a
+`/profile/progress`-ra; az `onOpenEvidence` az E13-R31-ben merge-elt
+`profileLibrarySession` szerződést kapja). Ugyanez a revízió rendezte a mellette
+mért **négy** brief-hibát: a §5.4 milestone-id-jei snake_case-re (a domain
+`^[a-z][a-z0-9_]*$` regexe futásidőben dobott volna), a katalógus `const` →
+`final` + `List.unmodifiable` (a publikus konstruktor factory), ÚJ **`difficulty`
+oszlop** (`MasteryDifficulty.beginner` — az evaluator erre SZŰR, e nélkül az A10
+alulspecifikált), és a `practice/public.dart` export-engedély kibővítése a
+`PracticeHistoryEntry` / `PracticeMetricSnapshot` / `PracticeMetricDimension*`
+nevekre (a `check_architecture.dart` csak barrelen át enged kereszt-feature
+importot). A fejléc-ADR `0491` (merge-elt) → **`0500`** (a foglalótól).
+
+**Cellát nem töröltünk és nem lazítottunk** — az A1–A12 változatlan, az A2 csak
+pontosabb lett (nevesített konstans + az ismeretlen-id ág).
+
+**Őrteszt:** `tools/tests/test_e16_r02_route_catalog_scope.py` (a revízió előtti
+briefen mind a 8 cellája PIROS, és minden állítását a KÓDHOZ méri) ·
+**Tanulság:** `docs/LESSONS.md` **L607**.
+
+**A kör így újraindítható** — az E16-R02 sora a `pipeline-queue.tsv`-ben
+változatlanul `pending`.
+
+
 ## 🔧 E16-R02 / H3 ÖNJAVÍTÓ KÖR (ADR 0112) — a hiányzó mastery-forrás bekerült a kör scope-jába (2026-09-03)
 
 Az E16-R02 pre-flightja **H3**-mal állt meg: a brief a `/profile/progress`

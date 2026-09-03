@@ -6,7 +6,10 @@
 - **Branch:** `<motor>/e16-r02-progress-projection-and-router-placeholders`
 - **Előfeltétel:** `E16-R01` merge-elve (a gamification kompozíció mintája és a router-diff ott készül el)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0491` — a szám FOGLALT (Chapter 16 batch-tartomány).
+- **Előre kiosztott ADR:** **`ADR 0500`** — a foglalótól kapott szám
+  (`tools/round-slots.py reserve-adr --round E16-R02` → `.pipeline/inflight/adr/0500`).
+  Az előre megírt brief `0491`-et állított, de az MÉRVE foglalt és merge-elt
+  (`docs/adr/0491-practice-generator-entry-point-and-rollout.md`) — a §0.0.I revízió javította.
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "progress projection dashboard skill detail unreachable screen wiring"` → az `E15-R03` saját mérése (`docs/ui/retirement-plan.md`): „progress_v2 is NOT wired into the router — `/profile/progress` still builds the legacy `ProgressScreen` (app_router.dart:528)", és **[ADR 0353](../adr/0353-caller-fed-compassionate-streak-v2-presentation.md)** (hívó-adta prezentáció). A kör ezt a MÉRT holt ágat élesíti.
 
@@ -51,9 +54,98 @@ tehát TÖBB mércét vett volna el, nem kevesebbet.
 **Őrteszt:** `tools/tests/test_e16_r02_mastery_source_scope.py` — a revízió
 ELŐTTI briefen PIROS.
 
-**Az ADR-szám a foglalóból jön (L603).** A fejlécben álló `ADR 0491` az előre
+**Az ADR-szám a foglalóból jön (L603).** *(§0.0.I: ez az előírás LEFUTOTT — a
+foglaló `0500`-at adott, a fejléc javítva.)* A fejlécben állt szám az előre
 megírt brief állítása; a kör indításakor a hiteles forrás a foglaló — a
 pre-flight kérje le, és ha foglalt, a kapott számot használja.
+
+## 0.0.I Módosítás (ADR 0112 önjavító kör, 2026-09-03) — a route-katalógus ownere a scope-ba kerül + négy mért brief-hiba
+
+A kör MÁSODIK pre-flightja (`main @ 18a649ec`, tehát a §0.0.H revízióval együtt)
+újabb H3-at mért: a `.pipeline/halt-detail-E16-R02.md`. A blokkoló és a mellette
+mért négy hiba ebben az EGY revízióban van rendezve. Minden állítás mérve, a
+mérő paranccsal együtt; ahol a törzs mást mond, **ez a szakasz az erősebb**.
+
+### I1 — BLOKKOLÓ: az `app_route.dart` hiányzott az `allowed_paths`-ból
+
+A §3 scope „a skill-detail útvonal bekötése", az **A2** cella pedig ezt méri —
+ehhez ÚJ `AppRoutes` konstans kell, ami a `lib/app/routing/app_route.dart`
+katalógusban él. A listán csak az `app_router.dart` szerepelt.
+
+| Mért parancs | Eredmény |
+|---|---|
+| `grep -n "skill" lib/app/routing/app_route.dart` | **0** skill-konstans (a `progress` és a `profileProgress` megvan) |
+| `grep -c "path: '" lib/app/routing/app_router.dart` | **0** — a fán EGYETLEN inline útvonal-literál sincs, minden `GoRoute.path` `AppRoutes`-konstans |
+| `grep -rn "SkillDetailScreen" --include=*.dart lib` | csak a saját fájlja — a képernyő ma sehonnan nem érhető el |
+| `sed -n '/```ai-router/,/```/p' docs/rounds/e16-r01-*.md \| grep app_route` | az ELŐZŐ kör (`E16-R01`) listáján **rajta van**, és pontosan így vette fel a `levelDetail` konstanst |
+
+A `test/tooling/route_literal_guard_test.dart` tiltja a navigációs
+útvonal-literálokat, a `SkillDetailScreen.onOpenEvidence` szerződése pedig
+kimondottan „a cél `AppRoutes` konstans"-t vár (`skill_detail_screen.dart:26–29`)
+— a listán belüli feloldás tehát nem létezik. **Ez ugyanaz a hibaosztály, mint
+az [L97](../LESSONS.md#l97) (E03-R17: a wiring engedve, a katalógus nem) és az
+[L246](../LESSONS.md#l246) (E06-R23: hiányzó owner-fájl → listán kívüli írás).**
+
+**Javítás:** az `allowed_paths` és a §4 tábla megkapja a
+`lib/app/routing/app_route.dart`-ot, KIZÁRÓLAG az új konstans HOZZÁADÁSÁRA, és
+az új §5.8 pinneli az útvonal alakját. Cellát nem töröltünk és nem lazítottunk.
+
+### I2 — a §5.4 milestone-azonosítói futásidőben DOBTAK volna
+
+`MasteryMilestone` factory → `_requireStableId` a `^[a-z][a-z0-9_]*$` regexszel
+(`mastery_milestone.dart:161`), és ugyanez köti a `MasteryProgress.milestoneId`-t:
+
+```
+python3 -c "import re;p=re.compile(r'^[a-z][a-z0-9_]*\$');print([(i,bool(p.match(i))) for i in ['mastery.chordTransition.v1','mastery_chord_transition_v1']])"
+→ [('mastery.chordTransition.v1', False), ('mastery_chord_transition_v1', True)]
+```
+
+Mindhárom pontozott id `ArgumentError`-t dobott volna. A §5.4 táblája
+snake_case-re javítva.
+
+### I3 — a `const` katalógus-előírás MÉRHETŐEN teljesíthetetlen
+
+`MasteryMilestone` és `MasteryTempoRange` publikus felülete **factory**
+(`mastery_milestone.dart:39`, `:86`), a `const` konstruktor **privát**
+(`:44`, `:136`) — publikus `const` példányosítás nem lehetséges. A katalógus
+`final` + `List.unmodifiable`. A §6.1 2. próbája (`const <MasteryMilestone>[]`,
+üres konstans lista) VÁLTOZATLANUL érvényes, mert az nem példányosít.
+
+### I4 — hiányzott a `difficulty` oszlop, és ez az A10-et dönti el
+
+`MasteryMilestone.difficulty` **required** (`:92`), és az evaluator az eltérő
+nehézségű bizonyítékot ELDOBJA (`mastery_evaluator.dart:108`
+`if (sample.difficulty != milestone.difficulty) continue;`). Mért forrás-eloszlás:
+
+```
+grep -c "id: 'builtin\."               lib/features/practice/data/builtin_practice_catalog.dart → 10
+grep -n "difficulty: PracticeDifficulty" …                                                      → 2 (mindkettő intermediate, :160 és :214)
+```
+
+Tehát 10 builtin definícióból **8 `beginner`** (a `PracticeDefinition` default-ja)
+és 2 `intermediate`. Oszlop nélkül az implementer olyan nehézséget választhatott
+volna, amellyel az **A10** csak a saját fixture-jén zöld. A §5.4 most pinneli.
+
+### I5 — a `practice/public.dart` export-engedélye szűkebb volt, mint az §5.5
+
+Az §5.5 adapter `PracticeHistoryEntry` → `MasteryEvidence`, de a kereszt-feature
+import GÉPI szabálya barrel-en át engedi csak a típus megnevezését
+(`tool/check_architecture.dart:382`). Mérve a barrelen:
+
+```
+grep -n "practice_history_entry\|practice_metric_snapshot\|practice_catalog\|practice_difficulty" \
+  lib/features/practice/public.dart → 0 találat
+```
+
+A `PracticeMetricDimensionAvailable` ráadásul a `practice_metric_snapshot.dart:104`-ben
+él, NEM a barrel által exportált `practice_metrics.dart`-ban. A §4 sora ezért
+felsorolja a szükséges export-sorokat — ez szöveges pontosítás, a barrel-fájl
+maga MÁR a listán volt.
+
+**Őrteszt:** `tools/tests/test_e16_r02_route_catalog_scope.py` — a revízió ELŐTTI
+briefen mind a 8 cellája PIROS; minden állítását a KÓDHOZ méri (a regexet a
+`mastery_milestone.dart`-ból olvassa ki, az export hiányát a barrelből), nem
+kézzel másolt elváráshoz.
 
 ## 0.0 A MÉRT hiba: kész felület, amihez nincs adatforrás
 
@@ -76,6 +168,7 @@ allowed_paths = [
   "lib/features/progress_v2/application/progress_projection_builder.dart",
   "lib/features/progress_v2/application/progress_providers.dart",
   "lib/features/progress_v2/public.dart",
+  "lib/app/routing/app_route.dart",
   "lib/app/routing/app_router.dart",
   "test/features/gamification/domain/mastery_milestone_catalog_test.dart",
   "test/features/gamification/data/practice_mastery_evidence_adapter_test.dart",
@@ -136,7 +229,7 @@ A `/profile/progress` a Progress V2 dashboardot mutassa, VALÓS, meglévő adato
 
 ## 3. Scope
 
-**Benne van (a §0.0.H revízió szerint):** `domain/mastery/mastery_milestone_catalog.dart` — a v1 mastery-katalógus az §5.4 tábla szerint · `data/practice_mastery_evidence_adapter.dart` — a gyakorlás-történet → `MasteryEvidence` tiszta leképezés az §5.5 szerint · a milestone cím/leírás kulcsok a `lib/l10n/features/gamification_{en,hu}.arb` szegmensbe + a generált aggregátum újragenerálása · a `gamification`/`practice` publikus barrel MINIMÁLIS bővítése (a katalógus, az adapter és a `practiceCatalogProvider` + `PracticeDefinition.difficulty` eléréséhez) · `application/progress_projection_builder.dart` — a `ProgressOverviewProjection` és a `SkillDetailProjection` előállítása a MEGLÉVŐ forrásokból (tiszta Dart, óra és véletlen nélkül) · `application/progress_providers.dart` — a kompozíciós réteg (az `E16-R01` mintájára) · `public.dart` export · a router `/profile/progress` útvonalának átkötése a `ProgressDashboardScreen`-re + a skill-detail útvonal bekötése · a legacy `ProgressScreen` kezelése az `E15-R03` terve szerint (átirányítás; a fájl TÖRLÉSE nem ennek a körnek a dolga) · `migration-status.md` frissítése.
+**Benne van (a §0.0.H revízió szerint):** `domain/mastery/mastery_milestone_catalog.dart` — a v1 mastery-katalógus az §5.4 tábla szerint · `data/practice_mastery_evidence_adapter.dart` — a gyakorlás-történet → `MasteryEvidence` tiszta leképezés az §5.5 szerint · a milestone cím/leírás kulcsok a `lib/l10n/features/gamification_{en,hu}.arb` szegmensbe + a generált aggregátum újragenerálása · a `gamification`/`practice` publikus barrel MINIMÁLIS bővítése (a katalógus, az adapter és a `practiceCatalogProvider` + `PracticeDefinition.difficulty` eléréséhez) · `application/progress_projection_builder.dart` — a `ProgressOverviewProjection` és a `SkillDetailProjection` előállítása a MEGLÉVŐ forrásokból (tiszta Dart, óra és véletlen nélkül) · `application/progress_providers.dart` — a kompozíciós réteg (az `E16-R01` mintájára) · `public.dart` export · a router `/profile/progress` útvonalának átkötése a `ProgressDashboardScreen`-re + a skill-detail útvonal bekötése (az ÚJ `AppRoutes` konstans az `app_route.dart`-ban, az §5.8 szerint — §0.0.I/I1) · a legacy `ProgressScreen` kezelése az `E15-R03` terve szerint (átirányítás; a fájl TÖRLÉSE nem ennek a körnek a dolga) · `migration-status.md` frissítése.
 
 **NINCS benne (tilos):**
 
@@ -144,7 +237,7 @@ A `/profile/progress` a Progress V2 dashboardot mutassa, VALÓS, meglévő adato
 - Szintetikus/„demo" adat bármilyen formában.
 - Más feature képernyőinek átírása.
 - A legacy `ProgressScreen` fájljának törlése.
-- `docs/adr/**` — az ADR 0491-et a Claude írja.
+- `docs/adr/**` — az ADR **0500**-at a Claude írja (§0.0.I).
 
 ## 4. Engedélyezett fájlok
 
@@ -153,7 +246,7 @@ A `/profile/progress` a Progress V2 dashboardot mutassa, VALÓS, meglévő adato
 | `lib/features/gamification/domain/mastery/mastery_milestone_catalog.dart` | ÚJ — a v1 mastery-katalógus (§5.4) |
 | `lib/features/gamification/data/practice_mastery_evidence_adapter.dart` | ÚJ — gyakorlás-történet → `MasteryEvidence` (§5.5) |
 | `lib/features/gamification/public.dart` | a katalógus és az adapter export-sora (barrel-szabály) |
-| `lib/features/practice/public.dart` | KIZÁRÓLAG export-sor: `practiceCatalogProvider` + `PracticeDifficulty` — más változtatás TILOS |
+| `lib/features/practice/public.dart` | KIZÁRÓLAG export-sor, PONTOSAN az §5.5 adapterhez kellő nevekre: `practiceCatalogProvider` (`application/practice_catalog_controller.dart`), `PracticeDifficulty` (`domain/model/practice_difficulty.dart`), `PracticeHistoryEntry` (`domain/model/practice_history_entry.dart`), valamint a `domain/model/practice_metric_snapshot.dart` `PracticeMetricSnapshot` + `PracticeMetricDimension` hierarchiája (`PracticeMetricDimensionAvailable` is — ez NEM a már exportált `practice_metrics.dart`-ban él). A `PracticeDefinition` már exportált. Meglévő export-sor átírása/törlése és minden más változtatás TILOS (§0.0.I/I5) |
 | `lib/l10n/features/gamification_{en,hu}.arb` | a 3 milestone cím + 3 leírás kulcsa, mindkét locale (§5.6) |
 | `lib/l10n/app_{en,hu}.arb` | **generált aggregátum** — `dart run tool/gen_l10n_segments.dart --write` kimenete, kézzel **közvetlenül nem szerkeszthető** |
 | `test/features/gamification/domain/mastery_milestone_catalog_test.dart` | az A8 cella |
@@ -161,7 +254,8 @@ A `/profile/progress` a Progress V2 dashboardot mutassa, VALÓS, meglévő adato
 | `lib/features/progress_v2/application/progress_projection_builder.dart` | ÚJ — a projekció-előállító |
 | `lib/features/progress_v2/application/progress_providers.dart` | ÚJ — a kompozíciós réteg |
 | `lib/features/progress_v2/public.dart` | export |
-| `lib/app/routing/app_router.dart` | a `/profile/progress` átkötése |
+| `lib/app/routing/app_route.dart` | KIZÁRÓLAG az ÚJ skill-detail útvonal-konstans HOZZÁADÁSA az §5.8 szerint (`profileProgressSkill`); meglévő konstans átírása, átnevezése vagy törlése TILOS (§0.0.I/I1) |
+| `lib/app/routing/app_router.dart` | a `/profile/progress` átkötése + az ÚJ skill-detail `GoRoute` regisztrálása |
 | `test/features/progress_v2/progress_projection_builder_test.dart` | a §6 projekció-cellái |
 | `test/app/routing/progress_composition_test.dart` | a §6 útvonal-cellái |
 | `test/app/navigation/*.dart` (három őr) · `test/ui/ui_inventory_test.dart` | regresszió-őrök — a jogosultság PONTOSAN a `/profile/progress` adapter típusának átírása; cella törlése, `skip`-je vagy gyengítése TILOS |
@@ -169,7 +263,7 @@ A `/profile/progress` a Progress V2 dashboardot mutassa, VALÓS, meglévő adato
 
 **Tilos zóna:** `lib/features/progress/**` (a legacy fájl) · `lib/features/progress_v2/domain/**` · `lib/features/{audio_analysis,song_trainer}/**` (olvasás igen, írás nem) · `lib/features/gamification/**` a §4 táblában NEM szereplő minden fájlja (az evaluator, a `mastery_progress.dart` és a `mastery_milestone.dart` VÁLTOZATLAN — a katalógus a MEGLÉVŐ típusokat tölti) · `lib/features/practice/**` a `public.dart` export-során kívül · `docs/adr/**` · `tools/**`
 
-## 5. Kötött architekturális döntések (ADR 0491)
+## 5. Kötött architekturális döntések (ADR 0500)
 
 ### 5.1 A projekció DETERMINISZTIKUS és tiszta
 
@@ -185,13 +279,29 @@ Ha egy készség-tengelyhez nincs mérés, a projekció ezt jelöli, és a képe
 
 ### 5.4 A v1 mastery-katalógus — annyi, amennyire MÉRT forrás van
 
-`masteryMilestoneCatalogV1` (`const List<MasteryMilestone>`, `catalogVersion: 1`):
+`masteryMilestoneCatalogV1` — a **`final List<MasteryMilestone>`**, `List.unmodifiable(...)`-be
+csomagolva, `catalogVersion: 1`. **`const` katalógus TILOS és lehetetlen**
+(§0.0.I/I3): a `MasteryMilestone` és a `MasteryTempoRange` publikus felülete
+factory, a `const` konstruktoruk privát.
 
-| id | skill | metric | forrás-dimenzió (`finalMetricSnapshot`) | `minimumThreshold` | `minEvidenceSessions` | `tempoRange` |
-|---|---|---|---|---|---|---|
-| `mastery.chordTransition.v1` | `chordTransition` | `accuracy` | `.chord` | `0.8` | `3` | `40–240` |
-| `mastery.rhythmAccuracy.v1` | `rhythmAccuracy` | `accuracy` | `.rhythm` | `0.8` | `3` | `40–240` |
-| `mastery.strumConsistency.v1` | `strumConsistency` | `accuracy` | `.direction` | `0.8` | `3` | `40–240` |
+Az id-k **lower snake_case**-ek, mert a domain saját `_requireStableId`-je a
+`^[a-z][a-z0-9_]*$` regexet követeli (§0.0.I/I2) — pontozott id futásidőben dob.
+
+| id | skill | metric | forrás-dimenzió (`finalMetricSnapshot`) | `minimumThreshold` | `minEvidenceSessions` | `difficulty` | `tempoRange` |
+|---|---|---|---|---|---|---|---|
+| `mastery_chord_transition_v1` | `chordTransition` | `accuracy` | `.chord` | `0.8` | `3` | `MasteryDifficulty.beginner` | `40–240` |
+| `mastery_rhythm_accuracy_v1` | `rhythmAccuracy` | `accuracy` | `.rhythm` | `0.8` | `3` | `MasteryDifficulty.beginner` | `40–240` |
+| `mastery_strum_consistency_v1` | `strumConsistency` | `accuracy` | `.direction` | `0.8` | `3` | `MasteryDifficulty.beginner` | `40–240` |
+
+**A `difficulty` MÉRT választás, nem ízlés** (§0.0.I/I4). Az evaluator az eltérő
+nehézségű bizonyítékot ELDOBJA (`mastery_evaluator.dart:108`), a builtin
+katalógus 10 definíciójából pedig **8 `beginner`** és 2 `intermediate`
+(`builtin.cGAmFProgression.v1:160`, `builtin.syncopatedUps.v1:214`). A v1
+milestone-ok ezért `MasteryDifficulty.beginner`-ek, és **az `intermediate`
+definícióból származó session a v1-ben SZÁNDÉKOSAN nem ad bizonyítékot** — ezt
+az A8/A9 cellának ki kell mondania, nem elhallgatnia. **NEM elfogadható
+gyengítés:** a nehézség-szűrő megkerülése azzal, hogy az adapter minden
+sessiont `beginner`-nek jelöl (az §5.5 ezt külön tiltja).
 
 `MasterySkill.tempoStability` a v1-ben **NEM kap milestone-t**: a fán nincs mért
 `tempoAdherence` forrás (a `highestStableTempoBpm` a Speed Builder csúcs-tempója,
@@ -242,12 +352,37 @@ rétegben, EXPLICIT `switch`-csel; dinamikus kulcs-feloldás TILOS (E13-R31 §0.
 - `SkillDetailProjection.recommendation` = `null`: ajánlás-katalógus a fán nincs,
   a mező opcionális — az EXPLICIT hiány a helyes érték. Kitalált ajánlás TILOS.
 
+### 5.8 A skill-detail útvonal alakja KÖTÖTT (§0.0.I/I1)
+
+Az implementer NEM talál ki sémát; a három döntés mérve, forrással:
+
+- **A konstans:** `AppRoutes.profileProgressSkill = '/profile/progress/skills/:skillId'`
+  — az SDD UI-50 kanonikus route-ja (`docs/sdd/13-chapter-13-ui-ux-design-system.md:7780`),
+  amit a `SkillDetailScreen` doc-commentje is néven nevez
+  (`skill_detail_screen.dart:15`: „the SDD's `/profile/progress/skills/:skillId`
+  route does not exist on this tree"). **Paraméteres útvonal-szegmens, NEM
+  `extra`-alapú** — az UI-50 mélylink-alak az SDD-ben pinnelt; az `extra` csak
+  a `profileLibrarySession` precedensének erőforrás-átadási mintája.
+- **A paraméter:** `:skillId` = `MasterySkill.code` (`chordTransition`,
+  `rhythmAccuracy`, `strumConsistency`, `tempoStability`;
+  `mastery_milestone.dart:2–11`). Ismeretlen vagy hiányzó `skillId` →
+  átirányítás az `AppRoutes.profileProgress`-ra (a `profileLibrarySession`
+  hiányzó-`extra` ágának merge-elt mintája, `app_route.dart:107–113`) — 404 vagy
+  dobás TILOS.
+- **A képernyő callbackje:** az `onOpenEvidence` az `AppRoutes.profileLibrarySession`
+  konstanst + a `sessionId`-t kapja — ez az `E13-R31` A2 cellájában MÁR
+  merge-elt szerződés; a `route_literal_guard_test` miatt string-literál TILOS.
+
+A konstans HOZZÁADÁS: meglévő `AppRoutes` konstans átírása, átnevezése vagy
+törlése TILOS, és az `AppRoutes.shellTabs` / `adaptiveShellDestinations` listák
+VÁLTOZATLANOK (a skill-detail nem shell-cél).
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
 | A1 | A `/profile/progress` a `ProgressDashboardScreen`-t rendereli valós projekcióval | `progress_composition_test.dart` |
-| A2 | A skill-detail útvonal a `SkillDetailScreen`-re visz, a kiválasztott készség azonosítójával | `progress_composition_test.dart` |
+| A2 | A skill-detail útvonal (`AppRoutes.profileProgressSkill`, §5.8) a `SkillDetailScreen`-re visz a `:skillId` szerint kiválasztott készséggel, ismeretlen `skillId` esetén pedig a `/profile/progress`-ra irányít át (nem dob, nem 404) | `progress_composition_test.dart` |
 | A3 | A builder determinisztikus: ugyanaz a bemenet kétszer ugyanazt adja | `progress_projection_builder_test.dart` |
 | A4 | Mérés nélküli készség EXPLICIT „nincs adat" jelölést kap (nem nullát) | `progress_projection_builder_test.dart` |
 | A5 | A legacy `/progress` mélylink továbbra is működik (átirányít) | `legacy_route_redirect_test.dart` |
@@ -294,7 +429,9 @@ tools/round-gate.sh test/features/gamification/domain/mastery_milestone_catalog_
 4. `practice_mastery_evidence_adapter.dart` az §5.5 szerint + az A9 teszt (RED-ből); a `practice/public.dart` export-sora.
 5. `progress_projection_builder.dart` (tiszta Dart, RED-ből).
 6. `progress_providers.dart` + a két `public.dart`.
-7. A router átkötése + a legacy átirányítás + az A10 cella.
+7. Az ÚJ `AppRoutes.profileProgressSkill` konstans az `app_route.dart`-ba (§5.8),
+   majd a router átkötése + a skill-detail `GoRoute` + a legacy átirányítás +
+   az A2 és az A10 cella.
 8. `migration-status.md` + a KÉT valódi-sértés próba a §10-be.
 
 ## 9. Kockázatok

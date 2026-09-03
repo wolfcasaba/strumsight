@@ -24154,3 +24154,47 @@ nem kimenet.
 **Őrteszt:** `tools/tests/test_e16_r02_mastery_source_scope.py` — a revízió
 előtti briefen 3 cella PIROS; az `A10` cella (három küszöb fölötti gyakorlással a
 route NEM a new-user állapotot rendereli) pontosan ezt a hibamódot méri.
+
+## L607 — A scope-bővítő önjavítás a HALT tengelyét javítja, a scope többi lyukát nem: az `allowed_paths`-t minden acceptance-cellához újra kell auditálni (E16-R02, két egymást követő H3, 2026-09-03)
+
+**Mérve.** Az E16-R02 első pre-flightja a mastery-FORRÁS hiánya miatt állt meg
+(H3, [L606](#l606)); az önjavító kör a hiányzó forrást tette a scope-ba, és a
+lánc újraindult. A második pre-flight **34 perccel később ismét H3-mal állt meg**
+— ezúttal azért, mert az `A2` cella („a skill-detail útvonal a
+`SkillDetailScreen`-re visz") ÚJ `AppRoutes` konstanst követel, de a
+`lib/app/routing/app_route.dart` nem volt az `allowed_paths`-on:
+
+```
+grep -c "path: '" lib/app/routing/app_router.dart   → 0   (minden GoRoute.path AppRoutes-konstans)
+grep -n "skill"   lib/app/routing/app_route.dart    → 0   (nincs skill-detail konstans)
+sed -n '/```ai-router/,/```/p' docs/rounds/e16-r01-*.md | grep app_route → rajta van
+```
+
+Ez a hiány **az EREDETI briefben is benne volt**, mérhető volt ugyanabban a
+pre-flightban, ami a forráshiányt kimérte, és a hibaosztálya már le volt írva
+([L97](#l97), [L246](#l246)) — az előző kör (E16-R01) briefje ráadásul pontosan
+így vette fel a `levelDetail` konstanst.
+
+**A tanulság iránya.** Egy önjavító kör hatóköre nem a halt SZÖVEGE, hanem a
+kör egésze. Amikor a javítás `allowed_paths`-t bővít, a bővítés után az EGÉSZ
+listát újra végig kell mérni **cellánként**: minden acceptance-cellához fel kell
+sorolni, melyik fájl írása nélkül nem teljesíthető, és a katalógus-/barrel-/
+generátor-tulajdonos fájlok (route-katalógus, `public.dart`, generált
+aggregátumok) különösen könnyen maradnak ki, mert a cella nem őket NEVEZI meg,
+csak rajtuk keresztül teljesíthető. Az egy-tengelyre szűkített javítás ára itt
+egy teljes halt-ciklus volt.
+
+**A második mérés hozadéka.** Ugyanez a pre-flight négy további, GÉPILEG
+ellenőrizhető brief-hibát mért ki, amit egyik korábbi olvasás sem: a §5.4
+milestone-id-jei megbuktak volna a domain saját `^[a-z][a-z0-9_]*$` regexén; a
+`const` katalógus lehetetlen (a publikus konstruktor factory); hiányzott a
+`required difficulty` oszlop, amire az evaluator SZŰR; és a barrel-export
+engedély szűkebb volt, mint amit a `check_architecture.dart` megkövetel. Ezek
+mind a brief KONKRÉT azonosítói és típusai a KÓD ellen — tehát a brief-őrtesztek
+ne kézzel másolt elvárást pinneljenek, hanem **olvassák ki a szabályt a
+forrásból** (a regexet a `mastery_milestone.dart`-ból, az export hiányát a
+`public.dart`-ból); így a lelet akkor is igaz marad, ha a kód változik.
+
+**Őrteszt:** `tools/tests/test_e16_r02_route_catalog_scope.py` — a revízió
+előtti briefen mind a 8 cellája PIROS, és minden állítását a fán lévő kódhoz
+méri.
