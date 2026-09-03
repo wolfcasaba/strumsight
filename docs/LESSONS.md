@@ -24250,3 +24250,52 @@ kívül — a felvétele mérés nélküli jogosultság lenne.
 **Őrtesztek:** `tools/tests/test_brief_lint_route_level_screen_swap.py` (a
 valódi fán mér, a javítás előtt 5 cellája PIROS) és
 `tools/tests/test_e16_r02_hub_navigation_pin_scope.py`.
+
+## L609 — Egy „felcsatolási" kör mércéje nem a route LÉTEZÉSE, hanem a route AUTH-ja: a mintavételes auth-cella 8 hitelesítetlen végpontot engedett át (E15-R12, 2026-09-03)
+
+**Mit mértünk.** Az E15-R12 a 13 Community routert csatolta fel a production
+`create_app()`-ra. Az implementáció zöld volt: 872 backend teszt, ruff, és a
+kör SAJÁT A2 cellája („a felcsatolt routerek hitelesítést kérnek"). A
+`security-reviewer` mégis **6 hitelesítetlen route-ot** talált; az orchestrátor
+független újramérése (minden route `dependant`-fájának bejárása) **48
+route-metódusból 8-at** mutatott ki auth nélkül — köztük egy
+`PUT /community/privacy/{id}`-t, ami MÁS felhasználó láthatóságát írja át, és
+egy `POST /community/handles/claim`-et, ami a nyers belső `community_profiles.id`
+egész PK-ra vesz át handle-t. Futásidejű megerősítés: az anonim `PUT` nem
+401/403-at ad, hanem eljut a handler adatbázis-lekérdezéséig.
+
+**Miért maradt néma a cella.** Az A2 teszt öt, KÉZZEL VÁLOGATOTT route-ot
+próbált a 48-ból (`_AUTH_REQUIRED_PROBES`), és mind az öt véletlenül
+hitelesített volt. A teszt neve maga is hedge-elt
+(`..._and_authenticated_ones_require_auth`) — a megfogalmazás szintjén tette
+igazzá magát arra, amit mért. Ez ugyanaz a hibaosztály, mint az **L556**: egy
+leltár teljesség-ellenőrzője akkor is vak, ha helyesen a fából mér — a
+MINTAOSZTÁLYT kell teljesnek bizonyítani, nem egy mintát.
+
+**A javítás alakja.** (1) Az A2 cella az `app.routes` fából olvassa ki AZ
+ÖSSZES felcsatolt route-metódust, és mindegyiken 401/403-at követel, egy
+RÖVID, tételesen indokolt kivétel-listával — a kivétel a tesztben áll, mért
+indoklással, nem egy router-szintű általános felmentés. (2) Alsó korlát
+(`>=40 route`) véd a néma-üres aggregátum vacuous-truth ága ellen. (3) A
+fail-closed felcsatolási szabály ADR-be került (ADR 0497 **D6**):
+hitelesítetlen router NEM kerül az aggregátumba — a kihagyás teljes egészében
+az `allowed_paths`-on van, tehát nem indokolható a „tilos zóna"-val.
+
+**Az ütköző acceptance-pontok feloldása.** A `GET /community/profiles/{public_id}`
+authless maradt, mert egy TILOS ZÓNÁS teszt
+(`backend/tests/community/test_profile_service.py:351`) UGYANAZON a factory-n
+keresztül, `Authorization` fejléc NÉLKÜL hívja és 200-at vár — a kivétele az A7-et
+sértette volna. A helyes feloldás nem a tilos zóna feloldása és nem is a
+csendes elhallgatás, hanem: **bent marad, felkerül a mért indoklású
+kivétel-listára, és nyitott tartozásként bekerül az ADR Következményeibe.**
+
+**Hogyan alkalmazd.** Ha egy kör felületet NYIT (router-mounting, endpoint-
+expozíció, flag-élesítés), az acceptance-cella soha ne mintát próbáljon:
+sorolja fel a felületet gépileg a futó alkalmazás objektumfájából, és a
+kivételeket egyenként indokolja. A cella jóságának próbája nem a zöldje, hanem
+hogy a lelet VISSZAVÉTELEKOR pirosra vált — ezt a reviewernek magának kell
+lefuttatnia, nem az implementer bemondására elfogadnia (itt mérve: a két
+`include_router` visszatételekor az A2 és az A2b is elbukott).
+
+**Őrtesztek:** `backend/tests/test_community_mounting.py::test_a2_all_eleven_routers_are_mounted_and_every_route_requires_auth_except_documented_exceptions`
+és `::test_a2b_handles_and_privacy_routes_404_even_with_community_enabled`.

@@ -1,5 +1,37 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R12 KÉSZ — a Community backend felcsatolva, 11 hitelesített routerrel (2026-09-03)
+
+**PR [#554](https://github.com/wolfcasaba/strumsight/pull/554), squash `220887e9`; ADR 0497.**
+Az Epic 9 teljes szerver-oldali Community felülete eddig **elérhetetlen** volt: a
+`build_community_router()` csak a `profile` routert adta vissza, és a production
+`create_app()` egyáltalán nem hívta. Ez a kör felcsatolta — **fail-closed**.
+
+- **11 router** a `community_enabled` flag mögött, **regisztráció szinten** (kikapcsolva
+  a route létre sem jön → 404, nem 403 — D1); al-flagek önállóan kapuznak (D2).
+- **`handles` + `privacy` KIMARAD** (**D6**, a review után született döntés): mérve mind
+  a 6 route-metódusuk hitelesítés NÉLKÜL válaszol. A kliens egyiket sem hívja.
+- **`/health/ready`** a bekapcsolt modulra a community readiness-gate-et is futtatja (D4).
+- **Gépi kliens↔szerver szerződés** (D5): `docs/contracts/client-backend-endpoints.json`
+  (34 mért kliens-hívás: 31 `mounted` + 3 őszinte `known_gap`) + parity-teszt az OpenAPI
+  séma ellen, kanárival és valódi-sértés próbával.
+- **Eszközös runbook**: `docs/operations/device-backend-runbook.md`.
+
+**A review megfogta, amit a zöld kapu nem.** Az első mérés **2 BLOCKER + 2 MAJOR +
+1 MINOR** — a kör saját A2 cellája 48 route-metódusból ötöt próbált, ezért 8
+hitelesítetlen végpont mellett is zöld maradt (**L609**). A javító kör mindet lezárta;
+az A2 most az `app.routes` fából mér kimerítően, két tételesen indokolt kivétellel.
+Az újra-review **APPROVED**, 0 nyitott lelet (`docs/reviews/e15-r12-review.md`).
+
+**Zöld kapu:** Full Gate + Router CI + Backend CI mind `success` az `1d7c6924` merge
+SHA-n; lokálisan `tools/round-gate.sh` mind a 10 lépésen zöld, teljes backend suite
+zöld a tilos zóna MÓDOSÍTÁSA NÉLKÜL (A7).
+
+**Nyitott tartozás** (ADR 0400 Következmények (b)/(c), ADR 0497-ben rögzítve): a
+`privacy.py` authz és az E09-R04 TOCTOU; amíg nyitott, a `handles`/`privacy` router
+felcsatolatlan marad, és a `GET /community/profiles/{public_id}` az A2 dokumentált,
+mért indoklású kivétele (egy tilos zónás teszt auth nélkül hívja és 200-at vár).
+
 ## 🔧 E16-R02 / H3 ÖNJAVÍTÓ KÖR, 3. (ADR 0112) — az útvonal-szintű képernyőcserét pinnelő tesztek a scope-ba, és a lint vakfoltja javítva (2026-09-03)
 
 Az E16-R02 **harmadik** pre-flightja (`main @ b685831a`) ismét **H3**: az **A1**
