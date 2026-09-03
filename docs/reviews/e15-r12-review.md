@@ -12,7 +12,10 @@
 > commitként maradt fenn, jelzés nélkül. A jelen review ezt az állapotot méri.
 > A brief §10 (implementation handoff) emiatt **kitöltetlen** — lásd N3.
 
-## 1. VÉGSŐ DÖNTÉS: **CHANGES REQUESTED** — merge tilos
+> **VÉGSŐ DÖNTÉS: APPROVED** (a javító kör után, `70a4ce99` — lásd §7).
+> Az alábbi §1–§6 az ELSŐ mérés állapotát rögzíti, változatlanul.
+
+## 1. Első mérés: **CHANGES REQUESTED** — merge tilos
 
 2 BLOCKER, 2 MAJOR, 2 MINOR, 3 NOTE. A BLOCKER-ek gyökere közös: az
 aggregátor **hitelesítés nélküli írási felületet** csatol fel a production
@@ -264,6 +267,62 @@ tools/round-gate.sh test/app/app_config_test.dart test/app/config/feature_flags_
 7. A §7 HÁROM backend-parancsa + a `tools/round-gate.sh` újrafuttatása, mindkettő
    zölden.
 
-## 7. Újra-review után
+## 7. Újra-review a javító kör után (`70a4ce99`)
 
-Ez a szakasz a javító kör utáni második mérés eredményét kapja.
+### VÉGSŐ DÖNTÉS: **APPROVED** — 0 nyitott lelet
+
+| Lelet | Állapot | Amit én mértem újra |
+|---|---|---|
+| **B1 + B2** | **LEZÁRVA** | Az auth-leltár újrafuttatva: **42 route-metódus, 8 → 2 authless**. A `handles`/`privacy` import ÉS `include_router` sora is kikerült (`__init__.py`), tehát a routerek be sem töltődnek. |
+| **B3** | **LEZÁRVA** | `tools/round-gate.sh`: **mind a 10 lépés zöld**, a `secrets` is (lásd lent). |
+| **M1** | **LEZÁRVA** | Az A2 cella most az `app.routes` fából olvas (nem mintavétel), `>=40` üresség-korláttal és 2 tételes kivétellel. **Magam falszifikáltam** (lásd §7.1). |
+| **M2** | **LEZÁRVA (dokumentált nyitott tartozásként)** | Az implementer indoklását **függetlenül igazoltam**: `backend/tests/community/test_profile_service.py:351` (`test_update_profile_uses_callers_own_row`, tilos zóna) a `community_client_enabled` fixture-ön — vagyis UGYANAZON a `build_community_router()` factory-n — keresztül, `Authorization` fejléc NÉLKÜL hívja a `GET /community/profiles/{public_id}`-t és `200`-at vár. A route kivétele tehát A7-et sértene → a bent hagyás a helyes feloldás, mért indoklással az A2 kivétel-listáján és nyitott tartozásként az ADR 0497-ben. |
+| **N1** | **LEZÁRVA** | A runbook §1 és §6 táblája a mért viselkedést írja (block/mute a `safety` routeren, nincs a writes-kapun), és új sort kapott a `handles`/`privacy` állandó 404-jéről. |
+| **N2** | nyitott tartozásként rögzítve az ADR 0497 Következményeiben (tilos zóna, a kör nem okozza) |
+| **N3** | **LEZÁRVA** — a brief §10 kitöltve, a valódi-sértés próba dokumentálva |
+| **N4** | **LEZÁRVA** — a brief §0.0 R9 + az ADR 0497 D3 helyesbítve (orchestrátor) |
+| **N5** | tárgytalan — a B1/B2 javítása megszüntette a hitelesítetlen írási felületet |
+
+**Új mérések (mind a javított `70a4ce99` HEAD-en):**
+
+```
+auth-leltár:  total community route-methods: 42   AUTHLESS: 2
+              GET /community/ping
+              GET /community/profiles/{public_id}      ← mindkettő az A2 dokumentált kivétel-listáján
+
+ruff check app tests           → All checks passed!
+ruff format --check app tests  → 139 files already formatted
+pytest -q (TELJES suite)       → exit 0 (A7: a tilos zóna MÓDOSÍTÁS NÉLKÜL zöld)
+
+tools/round-gate.sh test/app/app_config_test.dart test/app/config/feature_flags_test.dart
+    format · analyze · test ×2 · architecture · secrets · l10n ·
+    backend ruff format · backend ruff check · backend pytest      → MIND ZÖLD (exit 0)
+
+tools/scope-audit.py --base 4f083759 → OK (4 changed path(s), 0 sértés)
+```
+
+### 7.1 A javítás falszifikálhatósága — SAJÁT próba, nem az implementer bemondása
+
+A két `include_router(handles_router)` / `include_router(privacy_router)` sort
+egy ideiglenes, nem-commitolt módosítással **visszavettem**, és futtattam:
+
+```
+pytest tests/test_community_mounting.py -q -k a2
+FAILED ...::test_a2_all_eleven_routers_are_mounted_and_every_route_requires_auth_except_documented_exceptions
+FAILED ...::test_a2b_handles_and_privacy_routes_404_even_with_community_enabled
+```
+
+Mindkét cella PIROSRA váltott, majd a fájlt visszaállítottam (a munkafa utána
+igazoltan tiszta). Az M1 cella tehát **valóban** megfogja a B1/B2 hibaosztályt
+— nem üres mérce.
+
+### 7.2 Megjegyzés a B3 megoldásához (nem lelet)
+
+Az implementer a review betű szerinti javaslatától (sorvégi
+`# strumsight:allow-secret`) eltért, és **fájl-szintű** jelölőt tett a fájl
+tetejére. Az indoklását igazoltam: a `tool/ci/check_secrets.dart:76-81` SAJÁT,
+mért megjegyzése mondja ki, hogy „a per-line marker is fragile against
+formatters", és nevesíti, hogy a `ruff format` a `backend/tests` fán már
+egyszer elmozdított egy ilyen jelölőt. A fájl kizárólag teszt-fixture
+hitelesítőt tartalmaz, a szélesebb jelölő tehát arányos — az eltérés
+indokolt, nem lelet.
