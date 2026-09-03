@@ -59,6 +59,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -3192,6 +3193,85 @@ const _exclusions = <_ExclusionEntry>[
 ];
 
 // ---------------------------------------------------------------------------
+// The measurement the completion report was written against (A5 below).
+//
+// L613 (ADR 0112 self-heal, 2026-09-03): `docs/ui/chapter-15-completion-
+// report.md` is a DATED historical record — its own header says
+// "Measured against: `main @ 9ba54399` + this round's own tree". A guard
+// that re-measures the LIVE tree and demands the report cite THOSE numbers
+// therefore goes red the moment any later round legitimately changes
+// reachability, and it goes red for a round that cannot fix it (the report
+// is outside that round's allowed paths). E16-R02 is exactly that case: its
+// acceptance criteria ARE +2 reachable screens, so its own success flipped
+// this cell to `does not contain '73'`.
+//
+// The expected numbers come from a recorded snapshot of that base instead
+// (`_baselinePath`, provenance in `test/fixtures/manifest.json`). L588's
+// property is unchanged: every asserted fact is still derived
+// independently of what the report SAYS, so a silently DELETED claim
+// (not just a wrong one) still fails. The LIVE tree keeps its own guard —
+// the A1 completeness group above, whose invariant (measured reachable set
+// ⊆ matrix ∪ exclusion list) survives legitimate reachability growth.
+// ---------------------------------------------------------------------------
+
+const _baselinePath =
+    'test/fixtures/ui/e15_r13_completion_report_baseline.json';
+
+final class _BaselineScreen {
+  const _BaselineScreen({
+    required this.screenPath,
+    required this.isReachable,
+    required this.isFlagGated,
+    required this.isMigrated,
+  });
+
+  final String screenPath;
+  final bool isReachable;
+  final bool isFlagGated;
+  final bool isMigrated;
+}
+
+final class _CompletionReportBaseline {
+  const _CompletionReportBaseline({
+    required this.measuredScreenCount,
+    required this.reachableCount,
+    required this.unreachableCount,
+    required this.flagGatedCount,
+    required this.migratedCount,
+    required this.screens,
+  });
+
+  factory _CompletionReportBaseline.read(String path) {
+    final json =
+        jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+    return _CompletionReportBaseline(
+      measuredScreenCount: json['measuredScreenCount']! as int,
+      reachableCount: json['reachableCount']! as int,
+      unreachableCount: json['unreachableCount']! as int,
+      flagGatedCount: json['flagGatedCount']! as int,
+      migratedCount: json['migratedCount']! as int,
+      screens: [
+        for (final screen
+            in (json['screens']! as List<Object?>).cast<Map<String, Object?>>())
+          _BaselineScreen(
+            screenPath: screen['screenPath']! as String,
+            isReachable: screen['reachable']! as bool,
+            isFlagGated: screen['flagGated']! as bool,
+            isMigrated: screen['migrated']! as bool,
+          ),
+      ],
+    );
+  }
+
+  final int measuredScreenCount;
+  final int reachableCount;
+  final int unreachableCount;
+  final int flagGatedCount;
+  final int migratedCount;
+  final List<_BaselineScreen> screens;
+}
+
+// ---------------------------------------------------------------------------
 // Per-CELL overflow exclusion list (§5.2, mirrors
 // `e13_r36_variant_matrix_test.dart`'s `_ExcludedCell`/`_excludedCells`
 // pattern) — orthogonal to `_exclusions` above (which is about which
@@ -3720,25 +3800,43 @@ void main() {
     // every fact checked here is derived from the LIVE measurement/matrix
     // state, independently of what the report currently says, so a removed
     // claim (not just a wrong one) fails this test.
-    test('cites the current measured migration + reachability numbers', () {
-      final measured = ScreenReachability(Directory.current).render();
-      final migratedCount = measured.verdicts
-          .where(
-            (v) =>
-                File(v.screenPath).readAsStringSync().contains('design_system'),
-          )
-          .length;
+    // L613: measured at the report's OWN base, not on the live tree — see
+    // the `_CompletionReportBaseline` header above for the measured root
+    // cause. The snapshot's four counts are recomputed from its own
+    // per-screen rows first, so the fixture cannot be hand-edited into
+    // agreement with a wrong report without also rewriting all 96 rows.
+    test('cites the migration + reachability numbers measured at its own '
+        'base (recorded snapshot, not the live tree)', () {
+      final baseline = _CompletionReportBaseline.read(_baselinePath);
 
-      expect(report, contains('${measured.verdicts.length}'));
-      expect(report, contains('${measured.reachableCount}'));
-      expect(report, contains('${measured.unreachableCount}'));
-      expect(report, contains('${measured.flagGatedCount}'));
+      expect(baseline.screens, hasLength(baseline.measuredScreenCount));
+      expect(
+        baseline.screens.where((s) => s.isReachable).length,
+        baseline.reachableCount,
+      );
+      expect(
+        baseline.screens.where((s) => !s.isReachable).length,
+        baseline.unreachableCount,
+      );
+      expect(
+        baseline.screens.where((s) => s.isFlagGated).length,
+        baseline.flagGatedCount,
+      );
+      expect(
+        baseline.screens.where((s) => s.isMigrated).length,
+        baseline.migratedCount,
+      );
+
+      expect(report, contains('${baseline.measuredScreenCount}'));
+      expect(report, contains('${baseline.reachableCount}'));
+      expect(report, contains('${baseline.unreachableCount}'));
+      expect(report, contains('${baseline.flagGatedCount}'));
       expect(
         report,
-        contains('$migratedCount / ${measured.verdicts.length}'),
+        contains('${baseline.migratedCount} / ${baseline.measuredScreenCount}'),
         reason:
-            'the migrated/total count must be the LIVE grep result, '
-            'not a stale hand-typed number',
+            'the migrated/total count must be the RECORDED grep result of '
+            'the report\'s own base, not a stale hand-typed number',
       );
     });
 

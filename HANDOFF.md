@@ -1,5 +1,52 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR — E16-R02 / H3 (5.): dátumozott jelentést őrzött ÉLŐ-fás mérés (2026-09-03)
+
+**ADR 0112 önjavító kör. A megállt kör terméke változatlanul HIBÁTLAN** — a
+4. H3 (lásd alább) fel van oldva, a `#557` beépítve, a Router CI zöld
+(`33808400511`), a célzott kapu 21/21, mind a 12 acceptance-cella kész. A
+merge-et EGYETLEN cella blokkolta a `full-gate`-ben (run `33808412804`, SHA
+`73ff5351`), szintén a kör TILOS zónájában:
+
+```
+❌ test/ui/goldens/e15_r13_full_variant_matrix_test.dart:3733
+   A5 — completion-report guard … Expected: contains '73'
+```
+
+**Mért gyökérok.** A cella az ÉLŐ fából mérte újra a reachability-t
+(`ScreenReachability(Directory.current).render()`), és attól követelte meg egy
+**dátumozott, lezárt kör** jelentésének (`docs/ui/chapter-15-completion-report.md`,
+fejléc: *„Measured against: `main @ 9ba54399` + this round's own tree"*,
+`reachableCount=71`) szám-egyezését. Az E16-R02 acceptance-kritériuma PONTOSAN
+két képernyő (`ProgressDashboardScreen`, `SkillDetailScreen`) elérhetővé
+tétele → 71 → 73: **a kör SIKERE vitte pirosra az őrt**, miközben mindkét fájl
+a kör tiltott zónájában van (a lista tágítása ADR 0087 §2 szerint nem az
+orchestrátoré). Ugyanaz a hibaosztály, mint az L612, csak a doc-konzisztencia
+felől — és a következő három kör (`E16-R03/-R04/-R05`) mind reachability-t
+növel, tehát mindegyiküket megállította volna.
+
+**A javítás (nem gyengítés).** A várt számok a jelentés SAJÁT bázisán mért,
+rögzített pillanatképből jönnek
+(`test/fixtures/ui/e15_r13_completion_report_baseline.json`; a mérés
+`dart run tool/check_screen_reachability.dart --format json` a `70b56465`-ön,
+amelynek `lib/`+`tool/` fája byte-azonos a jelentés bázisával — provenance
+gépileg őrizve a `test/fixtures/manifest.json`-ban, ADR 0473). Az L588
+tulajdonsága változatlan: minden állítás a jelentés SZÖVEGÉTŐL függetlenül áll
+elő (némán törölt állítás is bukik), ráadásul a cella a pillanatkép négy
+számát a saját 96 sorából újraszámolva is ellenőrzi. Az élő fát az
+`A1 — completeness` group méri tovább — az az invariáns túléli a jogos
+reachability-növekedést. A cellaszám változatlan (A5: 6), így a `grand total`
+cella és a jelentés 1163-as száma érintetlen.
+
+**Őrteszt:** `tools/tests/test_dated_report_guards.py` (rögzített
+halt-pillanat-fixture a szabály viselkedésére + a KÖVETELT VÉGÁLLAPOT az élő
+`test/` fán: dátumozott jelentést egyetlen group sem őrizhet
+`X(Directory.current)` méréssel). Mérve: `main @ 70b56465` **1 failed**
+(a lelet pontosan `…test.dart:3724`) → javítás után **5 passed**, és — az L612
+kötelező pre-flight lépése szerint — a **kör HEAD-jén is** (`8b76e19a` + heal
+merge): `5 passed`, A5 `6 passed`, A1 `5 passed`.
+→ [L613](docs/LESSONS.md#l613).
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E16-R02 / H3 (4.): az őrteszt a saját köre munkájának HIÁNYÁT pinnelte (2026-09-03)
 
 **ADR 0112 önjavító kör. A megállt kör terméke HIBÁTLAN volt** — a merge-et öt

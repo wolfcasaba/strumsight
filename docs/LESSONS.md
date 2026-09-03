@@ -24447,3 +24447,61 @@ python3 -m pytest tools/tests/<az-új-őrteszt>.py -q
 `tools/tests/test_brief_lint_route_level_screen_swap.py` — a javított alakjuk
 mérve zöld a landolás MINDKÉT oldalán (main @ `4fffa3f1`: 25 passed; kör HEAD @
 `7d3430b8`: 25 passed), a mutációs próba szerint pedig továbbra is harap.
+
+## L613 — Egy DÁTUMOZOTT jelentést nem őrizhet olyan cella, amely a számot az ÉLŐ fából méri újra (E16-R02, ötödik H3 + önjavító kör, 2026-09-03)
+
+**Tünet.** Az E16-R02 kör terméke hibátlan volt (12/12 acceptance-cella,
+gépi scope-audit 0 sértés, Router CI zöld, célzott kapu 21/21), a `full-gate`
+mégis EGYETLEN cellával piros lett a `73ff5351` SHA-n (run `33808412804`):
+
+```
+❌ test/ui/goldens/e15_r13_full_variant_matrix_test.dart:3733
+   A5 — completion-report guard … cites the current measured migration +
+   reachability numbers   Expected: contains '73'
+```
+
+**Mért gyökérok.** A cella az ÉLŐ fából mérte újra a reachability-t
+(`ScreenReachability(Directory.current).render()`), és attól követelte meg egy
+**dátumozott, lezárt kör** jelentésének szám-egyezését. A jelentés a saját
+fejlécében kimondja a bázisát: `docs/ui/chapter-15-completion-report.md`
+*„**Measured against:** `main @ 9ba54399` + this round's own tree"*, és a §2-ben
+a `reachableCount=71`-et rögzíti. Az E16-R02 acceptance-kritériuma PONTOSAN két
+képernyő (`ProgressDashboardScreen`, `SkillDetailScreen`) elérhetővé tétele,
+tehát 71 → 73 — **a kör SIKERE vitte pirosra az őrt.** Ugyanaz a hibaosztály,
+mint az [L612](#l612), csak a doc-konzisztencia felől: a mérce a landolás után
+determinisztikusan pirosra vált, és attól, akinek a scope-ján a jelentés
+KÍVÜL van (mindkét fájl a kör tiltott zónájában → H3, a lista tágítása
+[ADR 0087](adr/0087-round-brief-scope-authority.md) §2 szerint nem az
+orchestrátoré).
+
+**A javítás (nem gyengítés).** A várt számok a jelentés SAJÁT bázisán mért,
+rögzített pillanatképből jönnek
+(`test/fixtures/ui/e15_r13_completion_report_baseline.json`, provenance
+gépileg őrizve a `test/fixtures/manifest.json`-ban, ADR 0473). Az
+[L588](#l588) tulajdonsága változatlan: minden állítás továbbra is a jelentés
+SZÖVEGÉTŐL függetlenül áll elő, tehát egy némán TÖRÖLT állítás is bukik —
+ráadásul a cella a pillanatkép négy számát a saját 96 sorából újraszámolva is
+ellenőrzi, így a fixture nem hangolható kézzel egy hibás jelentéshez. Az élő
+fát az `A1 — completeness` group méri tovább (mért elérhető halmaz ⊆ mátrix ∪
+kizárási lista) — ez az az invariáns, amely a jogos reachability-növekedést
+túléli. A cellaszám változatlan (A5: 6), ezért a `grand total` cella és a
+jelentés 1163-as száma érintetlen.
+
+**Hogyan alkalmazd.** Mielőtt egy `docs/**` jelentést tesztből pinnelsz, döntsd
+el, hogy **élő nyilvántartás** vagy **dátumozott pillanatkép**. Élő
+nyilvántartást (pl. `docs/sdd/program-completion-report.md`, amely a fejlécében
+kimondja, hogy a queue ÉLŐ állapotát tükrözi) szabad az élő fához mérni;
+dátumozott pillanatképet SOHA — annak a bázisát kell rögzíteni. A következő
+három kör (`E16-R03`, `-R04`, `-R05`) mind reachability-t növel, tehát ugyanez
+a cella mindegyiküket megállította volna.
+
+**Őrteszt:** `tools/tests/test_dated_report_guards.py` — a szabály viselkedését
+rögzített halt-pillanat-fixture-ön méri
+(`tools/tests/fixtures/e16_r02_dated_report_guard/`, a valódi A5-ös group a
+javítás előtt és után + az A1 group negatív kontrollnak), az élő `test/` fán
+pedig a KÖVETELT VÉGÁLLAPOTOT pinneli: dátumozott jelentést (`**Measured
+against:**` fejléc) egyetlen teszt-group sem őrizhet `X(Directory.current)`
+méréssel. Mérve piros a javítás előtt (`main @ 70b56465`: 1 failed, a lelet
+pontosan `…test.dart:3724`) és zöld utána — **a kör HEAD-jén is**
+(`sonnet-impl/e16-r02-… @ 8b76e19a` + heal merge: `5 passed`, A5 `6 passed`,
+A1 `5 passed`).
