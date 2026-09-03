@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "round": "E15-R12",
+  "adr": "docs/adr/0497-community-router-mounting-and-client-contract-parity.md",
+  "_description": "Machine-checked client-to-backend endpoint contract (ADR 0497 D5). Every entry below has a MEASURED call site in lib/** (grep, 2026-09-03, main @ 5edd4544) -- this is not a wishlist, per the round brief SS0.0 R6. `backend/tests/test_client_contract_parity.py` asserts every `status: mounted` entry's path+method exists in `app.openapi()['paths']`, and asserts every `status: known_gap` entry is ABSENT (a canary: if a future round implements it, that assertion breaks and forces this file to be updated to `mounted`).",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "source": "lib/features/auth/data/auth_repository.dart:30",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "source": "lib/features/auth/data/auth_repository.dart:38",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "source": "lib/features/auth/data/auth_repository.dart:64",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/settings",
+      "source": "lib/features/settings/data/settings_repository.dart:77",
+      "status": "mounted"
+    },
+    {
+      "method": "PUT",
+      "path": "/settings",
+      "source": "lib/features/settings/data/settings_repository.dart:82",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/diagnostics",
+      "source": "lib/features/diagnostics/data/diagnostics_uploader.dart:72",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/tutor/capability",
+      "source": "lib/features/ai_tutor/data/model_gateway/http_tutor_stream_transport.dart:76",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/tutor/stream",
+      "source": "lib/features/ai_tutor/data/model_gateway/http_tutor_stream_transport.dart:35",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/profiles/me",
+      "source": "lib/features/community/data/repositories/profile_repository_impl.dart:114",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/profiles/search",
+      "source": "lib/features/community/data/repositories/profile_repository_impl.dart:162",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/profiles/me",
+      "source": "lib/features/community/data/repositories/profile_repository_impl.dart:184",
+      "status": "mounted"
+    },
+    {
+      "method": "PUT",
+      "path": "/community/profiles/me",
+      "source": "lib/features/community/data/repositories/profile_repository_impl.dart:212",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/profiles/{public_id}/following",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:158",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/profiles/{public_id}/followers",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:176",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/profiles/{public_id}/follow",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:191",
+      "status": "mounted"
+    },
+    {
+      "method": "DELETE",
+      "path": "/community/profiles/{public_id}/follow",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:214",
+      "status": "mounted"
+    },
+    {
+      "method": "DELETE",
+      "path": "/community/profiles/{public_id}/followers/{follower_id}",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:231",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/follow-requests/{request_id}/accept",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:246",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/follow-requests/{request_id}/decline",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:261",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/profiles/{public_id}/block",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:276",
+      "status": "mounted"
+    },
+    {
+      "method": "DELETE",
+      "path": "/community/profiles/{public_id}/block",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:293",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/profiles/{public_id}/mute",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:308",
+      "status": "mounted"
+    },
+    {
+      "method": "DELETE",
+      "path": "/community/profiles/{public_id}/mute",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:322",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/blocked",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:335",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/muted",
+      "source": "lib/features/community/data/repositories/relationship_repository_impl.dart:347",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/challenges",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:134",
+      "status": "known_gap",
+      "note": "backend/app/community/routers/challenges.py has no GET routes at all (grep-confirmed, 2026-09-03) -- only invite lifecycle (POST/DELETE) and result submission (POST) exist. listChallenges/fetchDefinition/fetchMyParticipation were written client-side (E09-R21/22) ahead of a server-side listing surface that was never built. backend/app/community/routers/** is this round's tilos zona; tracked here for a future round."
+    },
+    {
+      "method": "GET",
+      "path": "/community/challenges/{challenge_public_id}",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:149",
+      "status": "known_gap",
+      "note": "See the /community/challenges known_gap note -- same missing listing/detail surface."
+    },
+    {
+      "method": "GET",
+      "path": "/community/challenges/{challenge_public_id}/me",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:163",
+      "status": "known_gap",
+      "note": "See the /community/challenges known_gap note -- same missing listing/detail surface."
+    },
+    {
+      "method": "POST",
+      "path": "/community/challenges/{challenge_public_id}/invites",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:195",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/challenges/invites/{invite_public_id}/accept",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:212",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/challenges/invites/{invite_public_id}/decline",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:226",
+      "status": "mounted"
+    },
+    {
+      "method": "DELETE",
+      "path": "/community/challenges/invites/{invite_public_id}",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:241",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/challenges/{challenge_public_id}/results",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:264",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/leaderboards/{challenge_public_id}",
+      "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:308",
+      "status": "mounted"
+    }
+  ]
+}
