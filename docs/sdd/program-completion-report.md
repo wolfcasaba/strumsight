@@ -1,7 +1,18 @@
 # StrumSight SDD program — Completion report (E12-R36)
 
 - **Kör:** `E12-R36` — Chapter 12 (Release Roadmap, Sprint Planning & Final Integration) ZÁRÓ köre
-- **Mérés dátuma:** 2026-09-02
+- **Mérés dátuma:** 2026-09-02 (a Ch12 sor `E12-R36` cellái a kör 2026-09-03-i
+  merge-e után frissítve `36 | 0 | 0 | 0`-ra: a záró kör saját queue-sora
+  szükségszerűen a riport megírása UTÁN vált `done`-ná)
+
+> ⚠ **A §3 matrix a queue ÉLŐ állapotát tükrözi, nem befagyasztott
+> pillanatképet.** Az `A1` cella egyenlőséget mér a
+> `docs/execution/pipeline-queue.tsv` ellen, ezért **minden jövőbeli kör,
+> amely egy queue-sort `pending` → `done`-ra vált (E14, E15, E16, E99, és az
+> Epic 8/9/10 `hold`-jainak feloldása), PIROSRA váltja ezt a cellát, amíg a
+> matrix megfelelő sora nem frissül.** Ez a mérce szigorúságának ára; a
+> feloldása (befagyasztott, dátumozott pillanatkép vagy nem-egyenlőség alapú
+> invariáns) egy KÖVETKEZŐ kör feladata — lásd `docs/LESSONS.md` L590.
 - **Mérés forrásai:** `docs/execution/pipeline-queue.tsv` (a queue-státusz EGYETLEN gépi forrása),
   `docs/sdd/00-index.md`, `ls docs/sdd/`, a nyolc létező epic-zárójelentés
   (`docs/sdd/epic-01…epic-08-completion-report.md`).
@@ -82,7 +93,7 @@ szóval.
 | Ch9 | Epic 8: Gamification | E08 | 29 | 0 | 0 | 1 | nyitva (hold: E08-R29 integrity/CI guard kör; a többi 29/30 done, záró E08-R30 CI zöld) | `docs/sdd/epic-08-completion-report.md` |
 | Ch10 | Epic 9: Community Platform | E09 | 27 | 0 | 0 | 5 | nyitva (hold: E09-R28…R32 — privacy export/deletion, offline sync hardening, rate-limit/security, accessibility polish, integration load-eval) | — |
 | Ch11 | Epic 10: Offline AI | E10 | 0 | 0 | 0 | 32 | nyitva (hold: a TELJES sáv, mind a 32 kör) | — |
-| Ch12 | Release Roadmap, Sprint Planning & Final Integration | E12 | 35 | 1 | 0 | 0 | kör-munka: 35/36 queue-sor done, E12-R36 (EZ a kör) pending; EMBERI KAPUK NYITOTT (ld. §5) | `docs/release/program-baseline.md` |
+| Ch12 | Release Roadmap, Sprint Planning & Final Integration | E12 | 36 | 0 | 0 | 0 | kör-munka: 36/36 queue-sor done (a záró E12-R36-tal együtt); **EMBERI KAPUK NYITOTT** (ld. §5) — a sáv kör-munkája teljes, a KIADÁS nem | `docs/release/program-baseline.md` |
 | Ch13 | UI/UX Design System & Screen Specification | E13 | 36 | 0 | 0 | 0 | queue-szinten lezárva (36/36 done) | — |
 | Ch14 | Recognition Accuracy & Useful UI Recovery | E14 | 1 | 0 | 18 | 0 | nyitva (prepared: R02–R19 megírva, nem futtatva; R20–R42 briefjei meg sem íródtak) | — |
 | — | Ch15 UI-migráció (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E15 | 8 | 6 | 0 | 0 | nyitva (pending: R08–R13 hátravan — gamification/AI-tutor/analysis/vision/onboarding/community migráció, backend mounting, release evidence) | — |

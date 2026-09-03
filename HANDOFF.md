@@ -54,6 +54,18 @@ tilos zónája volt, a lista tágítása nem orchestrátori hatáskör — prece
 E12-R35). Részletek:
 [`e12-r36-program-completion-and-next-roadmap.md`](docs/rounds/e12-r36-program-completion-and-next-roadmap.md) §10.
 
+> 🔴 **NYITOTT, a KÖVETKEZŐ kör dolga — a post-merge gate mérte
+> ([L590](docs/LESSONS.md#l590)):** a riport §3 matrixának `A1` cellája
+> EGYENLŐSÉGET mér az ÉLŐ `docs/execution/pipeline-queue.tsv` ellen. A saját
+> záró rituálém (`E12-R36` sor `pending` → `done`) emiatt azonnal pirosra
+> váltotta a `main` gate-jét; a Ch12 sor frissítésével zöld lett. **De minden
+> jövőbeli kör, amely bármely queue-sort `done`-ra vált (E14, E15, E16, E99, az
+> Epic 8/9/10 `hold`-jai), újra pirosra váltja ezt a cellát** — amíg valaki a
+> matrix érintett sorát nem frissíti. A tartós feloldás (befagyasztott,
+> dátumozott pillanatkép a riport mellett, VAGY nem-egyenlőség alapú, „nem
+> overstate" invariáns + a már meglévő lefedettség-cella) normatív döntés:
+> **ADR-t és saját kört érdemel**, nem post-merge javítást.
+
 > ⚠ **A riport a program NYITOTT részeit is kimondja** — ez nem „minden kész"
 > bejegyzés. Nyitva: Epic 8 1 kör, Epic 9 5 kör, **Epic 10 mind a 32 köre**,
 > Chapter 14 41/42 kör (az R20–R42 briefjei MEG SEM ÍRÓDTAK — a program

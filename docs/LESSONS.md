@@ -23527,3 +23527,42 @@ szerkesztéseket ELŐBB commitold, és csak utána szinkronizálj.
 
 **Őrteszt:** nincs — munkamód-szabály, nem kódviselkedés; a mércéje az L587
 hibaosztályának meg nem ismétlődése.
+
+## L590 — Egy ÉLŐ forrás ellen egyenlőséget mérő dokumentum-őr a saját kör zárásától lesz PIROS: a queue-sor `pending` → `done` váltása a riport megírása UTÁN történik (E12-R36, 2026-09-03)
+
+**Mérés.** Az E12-R36 merge-e (`e8686066`) után a KÖTELEZŐ post-merge gate a
+`main`-en PIROS lett, két cellán:
+
+```
+the real tree … A1 — every matrix row matches the measured queue counts
+the real tree … (a) rewriting only Epic 10's status text … A1 stays green
+GATE_EXIT=10
+```
+
+Ok: a záró rituálé a `docs/execution/pipeline-queue.tsv` `E12-R36` sorát
+`pending` → `done`-ra írta (D2, egyetlen `docs(handoff)` commit). Az `E12`
+előtag mért eloszlása ezzel `35 done / 1 pending`-ről `36 done / 0 pending`-re
+változott — a riport §3 matrixa viszont a megíráskori (`35 | 1 | 0 | 0`)
+értéket állította. **A riport igaz volt, amikor megírták, és hamis lett attól,
+hogy a kör lezárult.** A javítás a Ch12 sor és a `00-index.md` Ch12
+státusz-cellájának frissítése volt; a gate ezután zöld.
+
+**A tágabb csapda (NYITOTT, a következő kör dolga).** Az `A1` cella
+EGYENLŐSÉGET mér egy ÉLŐ fájl ellen. Ezért **minden jövőbeli kör**, amely
+bármelyik queue-sort `pending`/`prepared`/`hold` → `done`-ra váltja (E14, E15,
+E16, E99 és az Epic 8/9/10 `hold`-jainak feloldása), PIROSRA váltja ezt a
+cellát a `main` teljes suite-jában — nem a saját hibájából, hanem mert egy
+másik kör dokumentuma pillanatképet állít egy mozgó forrásról. A hibaosztály
+NEM a mérce szigora, hanem a mérce IRÁNYA: pillanatképet élő forrás ellen csak
+akkor szabad egyenlőséggel mérni, ha a pillanatkép is verziózott (befagyasztott
+másolat a riport mellett), vagy ha az invariáns nem egyenlőség, hanem
+monoton/„nem overstate" reláció (`reported_done <= measured_done` és a
+lefedettség-cella). A választás normatív döntés → ADR-t és saját kört érdemel,
+nem post-merge javítást.
+
+**Általános szabály.** Ha egy őr egy dokumentumot egy ÉLŐ, más körök által is
+írt forráshoz köt, kérdezd meg a kör tervezésekor: *ki fogja ezt a forrást
+legközelebb módosítani, és attól piros lesz-e?* Ha igen, a mérce vagy
+pillanatképet kap, vagy nem-egyenlőség alapú invariánst.
+
+**Őrteszt:** `test/tooling/program_completion_test.dart::the real tree … A1 — every matrix row matches the measured queue counts` — ez a cella MAGA a jelzés: ha egy jövőbeli kör pirosra váltja, az ezt a leckét igazolja, nem cáfolja. A tartós feloldás nyitott.
