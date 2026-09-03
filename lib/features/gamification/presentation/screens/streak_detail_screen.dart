@@ -114,11 +114,20 @@ class StreakDetailScreen extends StatelessWidget {
               WeeklyConsistencyCard(days: weeklyConsistencyDays),
               if (reason == StreakEvaluationReason.broken) ...[
                 const SizedBox(height: SsSpacing.space4),
-                SsButton(
+                // Stays a literal FilledButton.icon (not SsButton): SsButton
+                // lays its label out in a Flexible(overflow:
+                // TextOverflow.ellipsis), which caps it to one line — the hu
+                // recovery copy truncates ~55-70% away at 1.0x/2.0x text
+                // scale (E15-R08 review M3). A bare FilledButton.icon's Text
+                // has no such cap, so the label wraps across as many lines
+                // as it needs instead of clipping — same documented-exception
+                // class as `_StreakMetricCard` staying a raw `Card` below
+                // (E13-R32 review NOTE-2).
+                FilledButton.icon(
                   key: const Key('streak-recovery-cta'),
-                  label: l10n.streakV2RecoveryCta,
-                  icon: Icons.play_arrow_outlined,
                   onPressed: onRecoveryPressed,
+                  icon: const Icon(Icons.play_arrow_outlined),
+                  label: Text(l10n.streakV2RecoveryCta),
                 ),
               ],
             ],

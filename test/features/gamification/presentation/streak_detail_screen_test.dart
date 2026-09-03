@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/gamification/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -147,6 +148,57 @@ void main() {
       await _pump(tester, reason: StreakEvaluationReason.broken);
       expect(find.text(_english().streakV2PlannedRestTitle), findsNothing);
     });
+  });
+
+  group('M3 — recovery CTA label is never truncated', () {
+    testWidgets(
+      'hu recovery label renders in full at 2.0x text scale, no ellipsis',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        await _pump(
+          tester,
+          locale: const Locale('hu'),
+          reason: StreakEvaluationReason.broken,
+          textScale: 2.0,
+        );
+
+        final recoveryCta = find.byKey(const Key('streak-recovery-cta'));
+        await tester.scrollUntilVisible(recoveryCta, 100);
+
+        // Scoped through the label's Text (not RichText directly) — the
+        // icon glyph also renders via a RichText, and a bare `.first` over
+        // both would silently grab the icon's (always unclipped) paragraph
+        // instead of the label's.
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(
+            of: find.descendant(of: recoveryCta, matching: find.byType(Text)),
+            matching: find.byType(RichText),
+          ),
+        );
+        expect(
+          paragraph.didExceedMaxLines,
+          isFalse,
+          reason: 'the recovery CTA label must render in full, not ellipsize',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  });
+
+  group('M4 — recovery CTA stays a plain FilledButton', () {
+    testWidgets(
+      'the recovery CTA is a FilledButton, not the ellipsis-prone SsButton',
+      (tester) async {
+        await _pump(tester, reason: StreakEvaluationReason.broken);
+        final recoveryCta = find.byKey(const Key('streak-recovery-cta'));
+        await tester.scrollUntilVisible(recoveryCta, 100);
+        expect(recoveryCta, findsOneWidget);
+        expect(tester.widget(recoveryCta), isA<FilledButton>());
+      },
+    );
   });
 
   group('A4 — caller-fed weekly consistency', () {
