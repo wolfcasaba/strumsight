@@ -68,6 +68,17 @@ a `PIPELINE_GH_TOKEN_WARN_DAYS` (7) napos küszöb alatt szól — két napon be
 `urgent`. Ha a lejárat nem mérhető, a driver CSENDBEN megy tovább: az
 előrejelzés kényelem, nem kapu.
 
+**D5 — A `git fetch` HITELESÍTVE megy (kiegészítés, 2026-09-03 08:05).**
+MÉRVE: a lánc három egymást követő firingen `HIBA: git fetch origin main
+sikertelen`-nel esett ki; a szerver üzenete *„GitHub is temporarily limiting
+some unauthenticated downloads"*. Az ok szerkezeti: a repó PUBLIKUS, ezért a
+szerver a fetch-re nem küld 401-et, a `store` credential-helper viszont
+KIZÁRÓLAG kihívásra tölt — vagyis minden fetch-ünk hitelesítetlen volt (a push
+nem: az mindig hitelesít). A git 2.43 nem ismeri a `http.proactiveAuth`-ot
+(2.46+), ezért a driver a fejlécet KÖRNYEZETEN át adja át (`GIT_CONFIG_COUNT` /
+`GIT_CONFIG_KEY_0` / `GIT_CONFIG_VALUE_0`): a titok se config-fájlba, se
+argv-be nem kerül, és a gyerekfolyamatok öröklik. Token nélkül néma no-op.
+
 ## Mérce
 
 | döntés | őrteszt |
@@ -76,6 +87,7 @@ előrejelzés kényelem, nem kapu.
 | D2 | `…::test_the_migration_journal_is_not_a_collision_surface` + `tools/tests/test_round_land.py` |
 | D3 | `tools/tests/test_halt_reminder_escalation.py` (5 cella; a javítás előtt mind PIROS, a kulcscella `QUIET`-et adott) |
 | D4 | `tools/tests/test_gh_token_expiry_guard.py` (5 cella) |
+| D5 | `tools/tests/test_authenticated_git_fetch.py` (4 cella) |
 
 A `…::test_the_real_queue_admits_a_second_round_beside_the_running_one` cella a
 MÉRT defektet őrzi: ha a nyitott sorból egyetlen kör sem indítható a futó

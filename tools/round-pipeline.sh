@@ -372,6 +372,33 @@ notify() {
 
 die() { log "HIBA: $*"; exit "${2:-4}"; }
 
+# --- Hitelesített git-fetch a PUBLIKUS repóhoz (ADR 0495 D5) ---------------
+# MÉRVE 2026-09-03 07:40–08:05: a lánc három egymást követő firingen
+# `HIBA: git fetch origin main sikertelen`-nel esett ki, a szerver üzenete:
+# „GitHub is temporarily limiting some unauthenticated downloads".
+#
+# Az ok szerkezeti, nem alkalmi: a repó PUBLIKUS, ezért a szerver a fetch-re
+# nem küld 401-et — a `store` credential-helper pedig KIZÁRÓLAG kihívásra tölt.
+# Vagyis MINDEN fetch-ünk hitelesítetlen volt eddig (a push nem: az mindig
+# hitelesít), és a GitHub throttle-ja bármikor megállíthatja a láncot. A git
+# 2.43 nem ismeri a `http.proactiveAuth`-ot (2.46+), ezért a fejlécet
+# KÖRNYEZETEN át adjuk át: a titok se config-fájlba, se argv-be nem kerül, és
+# a gyerekfolyamatok (klón, worktree, implementer-session git-hívásai)
+# öröklik. Nincs token → néma no-op, a lánc a mai, hitelesítetlen úton megy.
+setup_authenticated_git_fetch() {
+  local token auth
+  [ -z "${GIT_CONFIG_COUNT:-}" ] || return 0
+  [ -r "$HOME/.git-credentials" ] || return 0
+  token=$(sed -n 's|^https://[^:]*:\([^@]*\)@github\.com.*|\1|p' "$HOME/.git-credentials" | head -1)
+  [ -n "$token" ] || return 0
+  auth=$(printf 'x-access-token:%s' "$token" | base64 -w0)
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+  export GIT_CONFIG_VALUE_0="Authorization: Basic $auth"
+}
+
+setup_authenticated_git_fetch
+
 # --- Rotáció-döntés a commitolt fájlból (user-döntés 2026-08-20) -----------
 # Ha a docs/execution/orchestrator-rotation nem üres, az Ő értéke a rotáció —
 # az operátori env csak fájl NÉLKÜL él. Üres/hiányzó fájl → env/default;
