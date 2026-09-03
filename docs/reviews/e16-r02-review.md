@@ -231,8 +231,21 @@ pontosabb kód a **H3**.
 ## 5. A javító kör utáni saját gate-futás
 
 Az izolált `/tmp/review2-e16-r02` klónban, a `5420777e` HEAD-en, a §7
-teljes útvonal-listájával — az eredményt a merge-kapu értékeléséhez a
-`.pipeline/round-status-E16-R02` jelzés kíséri.
+teljes útvonal-listájával:
+
+```
+→ [1] format: ZÖLD          → [12] test app/offline_network_guard_test.dart: ZÖLD
+→ [2] analyze: ZÖLD         → [13] test app/routing/app_router_test.dart: ZÖLD
+→ [3]…[11] a 9 cél-teszt: ZÖLD  → [14]…[18] a maradék öt teszt: ZÖLD
+→ [19] architecture: ZÖLD   → [20] secrets: ZÖLD   → [21] l10n: ZÖLD
+
+MINDEN GATE ZÖLD.
+```
+
+**21/21 ZÖLD** — a javító kör egyetlen regressziót sem hozott, és a két MAJOR
+új cellája is zölden fut. (A `[17]` lépés kimenetében látható
+`aggregátum ELÁVULT — PIROS` sor a `gen_l10n_segments_test.dart` SAJÁT
+őr-cellájának várt belső kimenete, nem gate-hiba: maga a lépés ZÖLD.)
 
 ## 6. NOTE-ok (nem blokkolnak)
 
