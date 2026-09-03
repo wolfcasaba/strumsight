@@ -24368,3 +24368,82 @@ elhárítja (dokumentált §0.0 revízióval). H3 akkor marad, ha az átfedő f�
 a mércéhez KELL, vagy ha a másik kör ágához/PR-jéhez kellene nyúlni.
 
 **Őrteszt:** nincs — pre-flight döntési szabály, nem futásidejű viselkedés; a gépi ellenőrzés a merge előtti `tools/scope-audit.py` futása.
+
+## L612 — Az őrteszt a saját köre MUNKÁJÁNAK HIÁNYÁT pinnelte az ÉLŐ fán, ezért a kör SIKERE vitte pirosra a Router CI-t (E16-R02, negyedik H3 + önjavító kör, 2026-09-03)
+
+**A mért eset.** Az E16-R02 terméke kész és mérve jó volt: gépi scope-audit
+`47e062f8..5420777e` → **22 útvonal, 0 sértés**; a kör célzott kapuja izolált
+klónban **21/21 ZÖLD** kétszer; **Full Gate ZÖLD** a `c2b1362a` SHA-n (run
+`33792199608`); mind a 12 acceptance-cella bizonyítékkal teljesült. A merge-et
+mégis öt teszt blokkolta — mind a kör TILOS zónájában, `tools/tests/**` alatt:
+
+```
+tools/tests/test_e16_r02_route_catalog_scope.py::test_new_route_shape_is_pinned_and_matches_the_sdd
+tools/tests/test_e16_r02_route_catalog_scope.py::test_practice_barrel_permission_covers_every_adapter_type
+tools/tests/test_brief_lint_route_level_screen_swap.py::test_the_outside_pin_is_named_by_the_rule
+tools/tests/test_brief_lint_route_level_screen_swap.py::test_the_revised_brief_leaves_no_route_level_pin_open
+tools/tests/test_brief_lint_route_level_screen_swap.py::test_the_rule_is_silent_for_routes_the_brief_never_names
+```
+
+Mérve: a kör bázisán (`main @ 9ba54399`) **19 passed**, a kör HEAD-jén
+(`7d3430b8`) **5 failed, 19 passed**. Ugyanez a mérés a javítás után ugyanazon
+a kör-HEAD-en: **25 passed**.
+
+**A gyökérok.** Mind az öt cellát az ADR 0112 KORÁBBI önjavító körei írták
+(PR #552/#553/#555), és mindegyik az **ÉLŐ fát** olvasta, a kör munkájának
+**HIÁNYÁT** pinnelve. Két mechanizmus:
+
+1. **`assertNotIn` a termékre.** „A konstans még nem létezik"
+   (`/profile/progress/skills/:skillId`), illetve „a típus még nincs
+   exportálva" (`PracticeHistoryEntry` a `practice/public.dart`-ban) — miközben
+   a brief §5.8 és §0.0.I/I5 mindkettőt **KÖTELEZŐVÉ** teszi ugyanennek a
+   körnek. A kör sikere garantáltan pirosra viszi az őrt.
+2. **Az ÉLŐ brief szűrője.** A `route_level_swapped_screens()` a brief SZÖVEGE
+   alapján válogatja az útvonalakat. A kör a §10-be beírta a saját
+   review-leletét, amely szó szerint tartalmazza a `/profile/library`-t
+   (MINOR-4) — ettől a lint egy vadonatúj S11 leletet adott, a kör SAJÁT
+   dokumentációjától: `grep -c "/profile/library"` a briefen **main: 1 → kör
+   HEAD: 2**.
+
+Az irónia mérhető: mindkét `assertNotIn` a saját üzenetében mondta ki a
+teendőt — *„if it lands outside this round, this guard must be rewritten, not
+deleted"*, *„this guard's premise moved; re-measure instead of relaxing it"* —,
+de senki nem futtatta le őket a kör HEAD-jén, csak a bázison.
+
+**A javítás (nem gyengítés).** Két különböző alak, a mérce típusa szerint:
+
+* **Állapot-mérce** → az az invariáns, ami a landolás MINDKÉT oldalán áll, és
+  utána SZIGORÚBB: a katalógus vagy egyetlen skill-detail útvonalat sem
+  deklarál, vagy PONTOSAN a §5-ben pinnelt alakot (elgépelés, átnevezett
+  paraméter, konkurens variáns → piros); a `practice/public.dart` vagy egyik
+  §5.5-adapter-típust sem exportálja, vagy MINDET (a fél-landolt export →
+  piros). Mutációs próbával mérve: mindkét új mérce harap.
+* **Szabály-viselkedés** → RÖGZÍTETT pillanatkép, nem az élő fa. A
+  `brief-lint` S11/S14 cellái a
+  `tools/tests/fixtures/e16_r02_route_level_swap/` alatti, szó szerint másolt
+  halt-pillanatból dolgoznak (`origin/main @ 4fffa3f1`, ahol mérve zöldek
+  voltak). Ez nem szűkítés: az élő fán futó kimerítő mérést a Router CI
+  `brief-lint.py --open --level base` lépése végzi, amely szándékosan CSAK a
+  még NYITOTT körök briefjeit linteli — egy merge-elt kör briefjét az élő fához
+  mérni éppen az, amit a termelési lint NEM csinál.
+
+**Hogyan alkalmazd.** Őrtesztet írva tedd fel a kérdést: *pirosra váltja-e ezt
+az őrt az, ha a kör SIKERÜL?* Ha igen, az őr rossz alakú. A hiányt fixture-ön
+mérd, az élő fán pedig a KÖVETELT VÉGÁLLAPOTOT — vagy azt az invariánst, ami
+mindkét oldalon áll. Egy „szabály helyesen válogat" típusú tesztnek pedig
+rögzített bemenet kell: ha az élő fát ÉS az élő briefet olvassa, a saját köre
+dokumentációja is elmozdíthatja alóla a mércét.
+
+**Kötelező pre-flight lépés (ADR 0112 önjavító kör):** az új őrtesztet nem elég
+a bázison zöldre futtatni — le KELL futtatni a **kör HEAD-jén** is. A négy H3-ból
+kettő (a 4. teljes egészében) elkerülhető lett volna egyetlen paranccsal:
+
+```bash
+git clone --branch <kör-branch> <repo> /tmp/guard-check && cd /tmp/guard-check
+python3 -m pytest tools/tests/<az-új-őrteszt>.py -q
+```
+
+**Őrteszt:** `tools/tests/test_e16_r02_route_catalog_scope.py` és
+`tools/tests/test_brief_lint_route_level_screen_swap.py` — a javított alakjuk
+mérve zöld a landolás MINDKÉT oldalán (main @ `4fffa3f1`: 25 passed; kör HEAD @
+`7d3430b8`: 25 passed), a mutációs próba szerint pedig továbbra is harap.

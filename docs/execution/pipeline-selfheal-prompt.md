@@ -75,6 +75,26 @@ protokoll helyes használata.
    Enélkül a javítás nem kész: ugyanaz a halt vissza fog jönni. A tesztbe a
    **valódi, mért adat** kerüljön (pl. a hibás futás nyers fájllistája), ne
    kitalált fixture.
+
+   **Az őrtesztet a MEGÁLLT KÖR HEAD-jén is le KELL futtatni, nem csak a
+   bázison** (MÉRVE 2026-09-03, `docs/LESSONS.md` L612). Az E16-R02 négy
+   H3-jából a negyediket teljes egészében az okozta, hogy három korábbi
+   önjavító kör őrtesztje az ÉLŐ fán a javított kör MUNKÁJÁNAK HIÁNYÁT
+   pinnelte (`assertNotIn` a kör által KÖTELEZŐVÉ tett konstansra és
+   barrel-exportra) — így a kör **sikere** vitte pirosra a Router CI-t: a kör
+   terméke hibátlan volt (célzott kapu 21/21, Full Gate zöld), mégis a saját
+   őre zárta ki a merge-ből. Egyetlen parancs elkerülte volna:
+
+   ```bash
+   git clone --branch <kör-branch> <repo> /tmp/guard-check && cd /tmp/guard-check
+   python3 -m pytest tools/tests/<az-új-őrteszted>.py -q
+   ```
+
+   A helyes alak ezért: **a hiányt fixture-ön mérd, az élő fán pedig a
+   KÖVETELT VÉGÁLLAPOTOT** — vagy azt az invariánst, ami a landolás mindkét
+   oldalán áll (és utána szigorúbb). Egy „a szabály helyesen válogat" típusú
+   tesztnek rögzített bemenet kell: ha az élő fát ÉS az élő briefet olvassa,
+   a javított kör saját dokumentációja is elmozdíthatja alóla a mércét.
 4. **Gate** — a megfelelő sávot futtasd, külön processzként:
    - Dart-érintés: `tools/round-gate.sh test/<érintett terület>`
    - Python/router-érintés: `python3 -m pytest tools/tests -q`

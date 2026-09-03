@@ -17,8 +17,24 @@ maradt. A csere ugyanis nem fájl-szinten történik: a képernyő forrásfájlj
 érintetlen (sőt, a kör TILOS zónájában van), csak az `app_router.dart`
 `GoRoute.builder`-e mutat máshová.
 
-Ez a teszt a VALÓDI fán mér, a halt tényleges adatával — nem kitalált
-fixture-rel —, és a javítás előtt piros.
+## A bemenet RÖGZÍTETT pillanatkép (ADR 0112 önjavító kör, 4. H3, 2026-09-03)
+
+A guard eredetileg az ÉLŐ fát és az ÉLŐ briefet olvasta — és ezzel a saját köre
+MUNKÁJÁNAK HIÁNYÁT pinnelte. Ettől a kör **sikere** vitte pirosra a Router CI-t:
+a kör terméke hibátlan volt (célzott kapu 21/21 zöld, Full Gate zöld a
+`c2b1362a` SHA-n), mégis a saját őre zárta ki a merge-ből. Három cella bukott
+(`test_the_outside_pin_is_named_by_the_rule`,
+`test_the_revised_brief_leaves_no_route_level_pin_open`,
+`test_the_rule_is_silent_for_routes_the_brief_never_names`), és a további kettő
+ugyanezen az élen állt.
+
+A javítás: a szabály-viselkedést mérő cellák a `fixtures/e16_r02_route_level_swap/`
+alatti, szó szerint másolt halt-pillanatból dolgoznak
+(`origin/main @ 4fffa3f1`, ahol ez a fájl mérve zöld volt). A fixture eredete,
+előállítása és a „miért nem gyengítés" mérése: a fixture `PROVENANCE.md`-je.
+
+Ez a teszt a halt tényleges adatával mér — nem kitalált fixture-rel —, és a
+`brief-lint` javítása előtt piros.
 """
 
 import importlib.util
@@ -30,9 +46,8 @@ from tools.ai_router.brief import load_brief_metadata
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BRIEF = (
-    ROOT / "docs" / "rounds" / "e16-r02-progress-projection-and-router-placeholders.md"
-)
+FIXTURE = ROOT / "tools" / "tests" / "fixtures" / "e16_r02_route_level_swap"
+BRIEF_RELATIVE = "docs/rounds/e16-r02-progress-projection-and-router-placeholders.md"
 ROUTER = "lib/app/routing/app_router.dart"
 SWAPPED_SCREEN = "lib/features/progress/screens/progress_screen.dart"
 
@@ -50,6 +65,10 @@ NON_ROUTE_PINS = (
     "test/features/progress/progress_screen_test.dart",
 )
 
+# A router import-jaiból a `_router_screen_files()` KIZÁRÓLAG az útvonalat
+# használja; a tartalmat sosem olvassa, csak az `is_file()`-t nézi.
+SCREEN_IMPORT_PREFIX = "package:strumsight/"
+
 
 def _brief_lint():
     spec = importlib.util.spec_from_file_location("brief_lint", ROOT / "tools" / "brief-lint.py")
@@ -59,19 +78,82 @@ def _brief_lint():
     return module
 
 
+def _materialise_fixture(destination: Path) -> None:
+    """A `.txt` pillanatképeket az EREDETI fájlnevekre írja ki.
+
+    A képernyő-fájlokat a fixture routerének saját import-listájából, gépiesen
+    hozza létre (üres fájlként) — kitalált tartalom nincs benne.
+    """
+    for source in sorted(FIXTURE.rglob("*.txt")):
+        relative = source.relative_to(FIXTURE).as_posix()
+        assert relative.endswith(".txt")
+        target = destination / relative[: -len(".txt")]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+
+    router_text = (destination / ROUTER).read_text(encoding="utf-8")
+    lint = _brief_lint()
+    for match in lint.SCREEN_IMPORT.finditer(router_text):
+        uri = match.group("uri")
+        # Ugyanaz a feloldás, amit a `_router_screen_files()` végez — a fixture
+        # nem tippel, a router saját import-alakját követi.
+        if uri.startswith(SCREEN_IMPORT_PREFIX):
+            screen = destination / "lib" / uri[len(SCREEN_IMPORT_PREFIX) :]
+        elif uri.startswith("package:") or uri.startswith("dart:"):
+            continue
+        else:
+            screen = (destination / ROUTER).parent / uri
+        if screen.exists():
+            continue
+        screen.parent.mkdir(parents=True, exist_ok=True)
+        screen.touch()
+
+
 class RouteLevelScreenSwapTest(unittest.TestCase):
+    """A halt-pillanat rögzített fáján mér — ld. az osztály-doksit."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._workspace = tempfile.TemporaryDirectory()
+        cls.repo = Path(cls._workspace.name)
+        _materialise_fixture(cls.repo)
+        cls.brief = cls.repo / BRIEF_RELATIVE
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._workspace.cleanup()
+
     def setUp(self) -> None:
         self.lint = _brief_lint()
-        self.text = BRIEF.read_text(encoding="utf-8")
-        self.allowed = list(load_brief_metadata(BRIEF).allowed_paths)
+        self.text = self.brief.read_text(encoding="utf-8")
+        self.allowed = list(load_brief_metadata(self.brief).allowed_paths)
         # A halt pillanatában érvényes lista: a pinnelő tesztek MÉG nincsenek
         # rajta — ezt az állapotot kell a lintnek kimondania.
         self.pre_revision = [
             path for path in self.allowed if not any(path == pin for pin in ROUTE_PINS)
         ]
 
+    def test_the_fixture_is_the_measured_halt_moment(self) -> None:
+        """Ha a pillanatkép elcsúszik, a többi cella mérése értelmét veszti."""
+        self.assertTrue(
+            (self.repo / ROUTER).is_file() and (self.repo / BRIEF_RELATIVE).is_file(),
+            "a fixture materializálása nem írta ki a router forrását és a briefet",
+        )
+        self.assertIn(
+            "const ProgressScreen()",
+            (self.repo / ROUTER).read_text(encoding="utf-8"),
+            "a halt-pillanat premisszája, hogy a router MÉG a legacy képernyőt "
+            "építi; ha a pillanatkép ezt nem hordozza, újra kell mérni, nem "
+            "kikapcsolni (PROVENANCE.md)",
+        )
+        for pin in ROUTE_PINS + NON_ROUTE_PINS:
+            self.assertTrue(
+                (self.repo / pin).is_file(),
+                f"a pillanatképből hiányzik a MÉRT pin: {pin}",
+            )
+
     def test_the_replaced_screen_is_in_scope_through_the_router(self) -> None:
-        screens = self.lint.owned_existing_screens(ROOT, self.pre_revision, self.text)
+        screens = self.lint.owned_existing_screens(self.repo, self.pre_revision, self.text)
 
         self.assertIn(
             SWAPPED_SCREEN,
@@ -82,13 +164,15 @@ class RouteLevelScreenSwapTest(unittest.TestCase):
         )
 
     def test_the_outside_pin_is_named_by_the_rule(self) -> None:
-        screens = self.lint.owned_existing_screens(ROOT, self.pre_revision, self.text)
+        screens = self.lint.owned_existing_screens(self.repo, self.pre_revision, self.text)
         require = self.lint._route_pin_requirement(
-            self.lint.route_level_swapped_screens(ROOT, self.pre_revision, self.text),
-            self.lint.file_owned_screens(ROOT, self.pre_revision),
+            self.lint.route_level_swapped_screens(self.repo, self.pre_revision, self.text),
+            self.lint.file_owned_screens(self.repo, self.pre_revision),
         )
 
-        pins = self.lint.outside_screen_pins(ROOT, screens, self.pre_revision, [], require)
+        pins = self.lint.outside_screen_pins(
+            self.repo, screens, self.pre_revision, [], require
+        )
 
         self.assertEqual(
             pins.get(SWAPPED_SCREEN),
@@ -98,14 +182,14 @@ class RouteLevelScreenSwapTest(unittest.TestCase):
         )
 
     def test_pins_that_never_consult_the_router_stay_out(self) -> None:
-        screens = self.lint.owned_existing_screens(ROOT, self.pre_revision, self.text)
+        screens = self.lint.owned_existing_screens(self.repo, self.pre_revision, self.text)
         require = self.lint._route_pin_requirement(
-            self.lint.route_level_swapped_screens(ROOT, self.pre_revision, self.text),
-            self.lint.file_owned_screens(ROOT, self.pre_revision),
+            self.lint.route_level_swapped_screens(self.repo, self.pre_revision, self.text),
+            self.lint.file_owned_screens(self.repo, self.pre_revision),
         )
 
         listed = self.lint.outside_screen_pins(
-            ROOT, screens, self.pre_revision, [], require
+            self.repo, screens, self.pre_revision, [], require
         ).get(SWAPPED_SCREEN, [])
 
         for pin in NON_ROUTE_PINS:
@@ -120,13 +204,13 @@ class RouteLevelScreenSwapTest(unittest.TestCase):
         without_router = [path for path in self.allowed if path != ROUTER]
 
         self.assertEqual(
-            self.lint.route_level_swapped_screens(ROOT, without_router, self.text),
+            self.lint.route_level_swapped_screens(self.repo, without_router, self.text),
             {},
             "a router forrása nélkül a kör egyetlen buildert sem tud átkötni",
         )
 
     def test_the_rule_is_silent_for_routes_the_brief_never_names(self) -> None:
-        swapped = self.lint.route_level_swapped_screens(ROOT, self.allowed, self.text)
+        swapped = self.lint.route_level_swapped_screens(self.repo, self.allowed, self.text)
 
         self.assertEqual(
             sorted(swapped),
@@ -147,7 +231,7 @@ class RouteLevelScreenSwapTest(unittest.TestCase):
 
     def test_the_revised_brief_leaves_no_route_level_pin_open(self) -> None:
         """A lint javítása és a brief revíziója EGYÜTT zárja a halt-ot."""
-        findings = self.lint.lint_text(self.text, path=BRIEF, repo=ROOT)
+        findings = self.lint.lint_text(self.text, path=self.brief, repo=self.repo)
         screen_findings = [
             finding for finding in findings if finding["code"] in {"S11", "S14"}
         ]
