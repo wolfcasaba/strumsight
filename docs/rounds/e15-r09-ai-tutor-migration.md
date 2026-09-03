@@ -907,4 +907,101 @@ az x86-on újrafelvett Home PNG-kkel (`tools/golden-x86.sh record`, exit 0)
 — a Chat és a Practice Plan Preview PNG-k byte-azonosak maradtak, csak a
 Home 2 PNG-je (compact + `_scale2`) változott, a §10.4-ben leírt módon.
 
+### 10.10 Javító kör #2
+
+**1. BLOCKER-2 javítása (24 mély import → 1 barrel-import fájlonként).**
+Minden fájlban a `core/design_system/...` mély import-sorok helyére EGY
+`import 'package:strumsight/core/design_system/public.dart';`-nak megfelelő
+relatív import került (`../../../../core/design_system/public.dart`). A
+komponens-használat, állapot, token és viselkedés VÁLTOZATLAN — kizárólag
+import-sorok cseréltek.
+
+| Fájl | mély import (előtte) | barrel-import (utána) |
+|---|---|---|
+| `tutor_home_screen.dart` | 4 | 1 |
+| `tutor_chat_screen.dart` | 6 | 1 |
+| `tutor_data_screen.dart` | 8 | 1 |
+| `tutor_profile_screen.dart` | 4 | 1 |
+| `tutor_privacy_screen.dart` | 2 | 1 |
+
+Commit: `23ab00e2` — "E15-R09 javító kör #2: BLOCKER-2 — 24 mély
+design_system import → public.dart barrel (5 fájl)".
+
+**2. Valódi-sértés próba.** A `tutor_privacy_screen.dart` barrel-importját
+ideiglenesen visszaállítottam a két eredeti mély importra
+(`components/surfaces/ss_section.dart`, `foundations/ss_spacing.dart`), majd
+csonkítatlanul lefuttattam a §4 gate-parancsot. A MÉRT piros kimenet:
+
+```
+═══ [16] test test/core/architecture_dependency_test.dart
+...
+  Architecture dependency check failed.
+  Unexpected violation(s) — fix them; adding an allowlist entry requires justification and an ADR:
+  - lib/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart -> lib/core/design_system/components/surfaces/ss_section.dart [design-system imports must target lib/core/design_system/public.dart]
+  - lib/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart -> lib/core/design_system/foundations/ss_spacing.dart [design-system imports must target lib/core/design_system/public.dart]
+...
+00:01 +25 -2: design system boundaries (E13-R02) real production source reaches the design system only via public.dart [E]
+  Expected: empty
+    Actual: [
+              'lib/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart -> ../../../../core/design_system/components/surfaces/ss_section.dart',
+              'lib/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart -> ../../../../core/design_system/foundations/ss_spacing.dart'
+            ]
+...
+Failing tests:
+  test/core/architecture_dependency_test.dart: design system boundaries (E13-R02) real production source reaches the design system only via public.dart
+  test/core/architecture_dependency_test.dart: repository architecture contains exactly the allowlisted dependency deviations
+
+    → [16] test test/core/architecture_dependency_test.dart: PIROS (kilépési kód 1)
+```
+
+A `[15]` (format, analyze, 13 másik teszt-fájl) mind zöld maradt a sértés
+alatt is — a próba pontosan a célzott `test/core/architecture_dependency_test.dart`
+cellát ("real production source reaches the design system only via
+public.dart") vitte pirosra, mérve bizonyítva, hogy az R20-ban bevezetett
+cella ténylegesen méri a BLOCKER-2 mintázatát. Visszaállítva (a `git diff`
+a visszaállítás UTÁN üres a fájlon) → az alábbi teljes gate-futás újra
+19/19 zöld.
+
+**3. Utó-állapot: `grep -c "core/design_system/" <fájl>` mind 1.**
+
+```
+lib/features/ai_tutor/presentation/screens/tutor_home_screen.dart:1
+lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart:1
+lib/features/ai_tutor/presentation/screens/tutor_data_screen.dart:1
+lib/features/ai_tutor/presentation/screens/tutor_profile_screen.dart:1
+lib/features/ai_tutor/presentation/screens/tutor_privacy_screen.dart:1
+```
+
+**Záró GATE — csonkítatlan (a §4 parancs, javító kör #2 után, a
+`test/core/architecture_dependency_test.dart` cellával bővítve):**
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/app/navigation/adaptive_scaffold_test.dart       zöld
+    test test/app/offline_network_guard_test.dart              zöld
+    test test/features/ai_tutor/presentation/tutor_chat_screen_test.dart zöld
+    test test/features/ai_tutor/presentation/tutor_data_screen_test.dart zöld
+    test test/features/ai_tutor/presentation/tutor_privacy_screen_test.dart zöld
+    test test/features/ai_tutor/presentation/tutor_profile_screen_test.dart zöld
+    test test/features/tutor/ai_mode_visibility_test.dart      zöld
+    test test/features/tutor/streaming_announcement_test.dart  zöld
+    test test/ui/goldens/e13_r29_screens_golden_test.dart      zöld
+    test test/features/ai_tutor/presentation/tutor_home_screen_test.dart zöld
+    test test/l10n/arb_parity_test.dart                        zöld
+    test test/l10n/hardcoded_string_guard_test.dart            zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+Golden PNG-k a barrel-csere alatt NEM változtak (várt: import-csere nem
+érint renderelést) — újrafelvétel nem volt szükséges.
+
 ## 11. Review — a Claude tölti ki
