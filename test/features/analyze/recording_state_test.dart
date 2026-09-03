@@ -6,10 +6,12 @@
 // and silence are two distinct, separate action states).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
 import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/core/platform/microphone_permission.dart';
 import 'package:strumsight/features/audio_analysis/data/capture/analysis_recorder.dart';
 import 'package:strumsight/features/audio_analysis/data/capture/recording_run.dart';
 import 'package:strumsight/features/audio_analysis/data/input/input_limits.dart';
@@ -326,6 +328,15 @@ void main() {
           textScale: 2.0,
         );
         expect(tester.takeException(), isNull);
+        // M1 — `takeException` alone is structurally blind to an ellipsis:
+        // TextOverflow.ellipsis swallows the overflow exception it would
+        // otherwise throw. Assert directly that no paragraph — including
+        // the most-recent-analysis title, real user content — was cut off.
+        final truncated = tester
+            .renderObjectList<RenderParagraph>(find.byType(RichText))
+            .where((paragraph) => paragraph.didExceedMaxLines)
+            .toList();
+        expect(truncated, isEmpty);
       });
 
       testWidgets('AnalysisRecordingScreen — ${locale.languageCode}', (
@@ -343,6 +354,68 @@ void main() {
         );
         expect(tester.takeException(), isNull);
       });
+
+      testWidgets(
+        'AnalysisRecordingScreen error body — ${locale.languageCode}',
+        (tester) async {
+          // m6 — the ready/idle body had 2.0 coverage; the error and
+          // permissionDenied bodies (distinct sibling widgets, §10.5 rule)
+          // did not.
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: AnalysisRecordingScreen(
+                recorder: _recorder(
+                  capture: FakeAudioCapture(failWith: Exception('engine down')),
+                ),
+                onFinished: (_, _) {},
+                onCancel: () {},
+              ),
+            ),
+          );
+          await tester.tap(find.byKey(const Key('analysis-recording-start')));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets(
+        'AnalysisRecordingScreen permissionDenied body — ${locale.languageCode}',
+        (tester) async {
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          final recorder = AnalysisRecorder(
+            mic: fakeMicCapture(
+              owner: AudioOwner.analyzeRecorder,
+              coordinator: AudioSessionCoordinator(),
+              permissions: FakeMicrophonePermissionGateway(
+                state: MicrophonePermissionState.denied,
+              ),
+            ),
+          );
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: AnalysisRecordingScreen(
+                recorder: recorder,
+                onFinished: (_, _) {},
+                onCancel: () {},
+              ),
+            ),
+          );
+          await tester.tap(find.byKey(const Key('analysis-recording-start')));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
   });
 }

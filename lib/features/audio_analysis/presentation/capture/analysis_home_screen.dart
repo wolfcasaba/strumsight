@@ -109,7 +109,7 @@ final class _InputModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SsContentCard(
+    return _UntruncatedContentCard(
       icon: icon,
       title: title,
       message: description,
@@ -134,7 +134,7 @@ final class _RecentAnalysisTile extends StatelessWidget {
       child: Semantics(
         label: l10n.analysisHomeOpenAnalysisSemantics(title),
         button: onTapCallback != null,
-        child: SsContentCard(
+        child: _UntruncatedContentCard(
           key: Key('analysis-home-recent-${summary.documentId}'),
           title: title,
           message: _formatDate(summary.createdAt),
@@ -151,5 +151,78 @@ final class _RecentAnalysisTile extends StatelessWidget {
     final month = local.month.toString().padLeft(2, '0');
     final day = local.day.toString().padLeft(2, '0');
     return '${local.year}-$month-$day';
+  }
+}
+
+/// An `SsContentCard` look-alike, built screen-locally with the same
+/// `SsSurface` + `SsCardActionRegion` primitives, but WITHOUT the two/four
+/// line `TextOverflow.ellipsis` limit (review M1): at `textScaler 2.0`,
+/// `SsContentCard`'s fixed `maxLines` silently ellipsizes real user content
+/// (a recent analysis title, the record/import copy) with no overflow
+/// exception the test harness could catch. `SsContentCard` itself is out of
+/// this round's `allowed_paths`, so the fix stays local to this screen
+/// instead of touching the shared component.
+final class _UntruncatedContentCard extends StatelessWidget {
+  const _UntruncatedContentCard({
+    super.key,
+    required this.title,
+    this.message,
+    this.icon,
+    this.actions = const [],
+  });
+
+  final String title;
+  final String? message;
+  final IconData? icon;
+  final List<SsCardAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+
+    final header = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, color: colors.textSecondary, size: 20),
+          const SizedBox(width: SsSpacing.space2),
+        ],
+        Expanded(
+          child: Text(
+            title,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
+          ),
+        ),
+        if (actions.length == 1) ...[
+          const SizedBox(width: SsSpacing.space2),
+          Icon(Icons.chevron_right, color: colors.textSecondary, size: 20),
+        ],
+      ],
+    );
+
+    final body = Padding(
+      padding: const EdgeInsets.all(SsSpacing.space4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          if (message != null) ...[
+            const SizedBox(height: SsSpacing.space1),
+            Text(
+              message!,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    return SsSurface(
+      child: SsCardActionRegion(actions: actions, child: body),
+    );
   }
 }
