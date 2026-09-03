@@ -21,6 +21,9 @@ import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
+import 'package:strumsight/core/design_system/components/actions/ss_button.dart';
+import 'package:strumsight/core/design_system/components/ai/ss_model_status_card.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/ai_tutor/application/controller/tutor_state.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_message.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_providers.dart';
@@ -89,6 +92,7 @@ class _NoopChatController extends ChangeNotifier
 Future<ProviderContainer> _pump(
   WidgetTester tester, {
   bool aiTutorEnabled = true,
+  Locale locale = const Locale('en'),
 }) async {
   final engine = FakeStrumEngine();
   final container = ProviderContainer(
@@ -121,6 +125,8 @@ Future<ProviderContainer> _pump(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp.router(
+        theme: SsLightTheme.data(),
+        locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         routerConfig: router,
@@ -208,4 +214,57 @@ void main() {
     expect(find.byType(LiveScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // -----------------------------------------------------------------
+  // E15-R09 §0.0.B/R15 — per-screen design-system type assertion: the
+  // model-status card and the "Start conversation" CTA are the
+  // theme-extension `Ss*` components, not a screen-local rebuild.
+  // -----------------------------------------------------------------
+  testWidgets(
+    'R18-R5: the model-status card and CTA are the design-system components',
+    (tester) async {
+      final container = await _pump(tester, aiTutorEnabled: true);
+      final router = container.read(routerProvider);
+      router.go(AppRoutes.tutorHome);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.byType(SsModelStatusCard), findsOneWidget);
+      expect(find.byType(SsButton), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  // -----------------------------------------------------------------
+  // E15-R09 §0.0.B/R14 — committed textScaler 2.0 coverage (en + hu),
+  // on the phone viewport the golden lane uses (412x915 — the
+  // flutter_test default 800x600 is wider AND taller than any phone
+  // and hides real overflow). This is the regression guard for the
+  // `_ModeChip`→`SsProvenanceBadge` overflow fix measured in §10.5 of
+  // the round file (`home@2.0hu` was red before that fix).
+  // -----------------------------------------------------------------
+  for (final locale in const [Locale('en'), Locale('hu')]) {
+    testWidgets(
+      'R18-R7: textScaler 2.0, locale=${locale.languageCode} — no overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(412, 915);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final container = await _pump(
+          tester,
+          aiTutorEnabled: true,
+          locale: locale,
+        );
+        final router = container.read(routerProvider);
+        router.go(AppRoutes.tutorHome);
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

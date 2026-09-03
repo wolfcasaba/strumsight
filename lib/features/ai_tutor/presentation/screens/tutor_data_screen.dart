@@ -24,11 +24,33 @@
 /// All write paths funnel through the `tutorMemoryRepositoryProvider`
 /// / `tutorConversationRepositoryProvider` seams so the widgets are
 /// fake-repository testable (R17 + R18 test pattern).
+///
+/// Design-system migration (E15-R09): this screen's own pinned widget test
+/// (`tutor_data_screen_test.dart`) is wired with `theme: SsLightTheme.data()`
+/// (§0.0.A/R3), so theme-extension `Ss*` components are safe here. Both
+/// `FutureProvider.when` error branches are practically unreachable today
+/// (`tutorMemoryFactsProvider`/`tutorConversationsProvider` in
+/// `tutor_privacy_providers.dart` already collapse a repository `Failure`
+/// to an empty list/page rather than rethrowing — measured), but they must
+/// still compile and render something reasonable, so they get the same
+/// [SsFailureState] treatment as a genuinely reachable failure would. Both
+/// branches pass the ACTUAL caught error to [SsFailurePresentation.from]
+/// (falling back to [UnknownFailure] only when it isn't an [AppFailure] —
+/// javító kör #1, §0.0.B/R12): [SsFailurePresentation.from] maps solely on
+/// [AppFailure.code]/`.retryable` (ADR 0277), not on which of the two lists
+/// failed, so the two previously distinct localized strings
+/// (`tutorDataMemoryLoadFailed`/`tutorDataConversationsLoadFailed`) stay
+/// dead ARB keys either way — that per-list distinction isn't expressible
+/// in the shared presentation model without a bespoke widget outside this
+/// round's scope. The empty-list states (`_DataEmptyState`, §0.0.B/R13)
+/// are the [SsEmptyState] "no actionable next step" exception (see the
+/// class's own doc comment) rather than [SsEmptyState] itself.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/storage/storage_keys.dart';
@@ -91,7 +113,7 @@ class TutorDataScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(l10n.tutorDataDeleteAllBody),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SsSpacing.space3),
                   Text(l10n.tutorDataDeleteAllScopePreserved),
                 ],
               ),
@@ -132,7 +154,7 @@ class TutorDataScreen extends ConsumerWidget {
           container: true,
           label: l10n.tutorDataScreenSemantics,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(SsSpacing.space4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
@@ -140,23 +162,30 @@ class TutorDataScreen extends ConsumerWidget {
                   l10n.tutorDataIntro,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  key: const Key('tutorDataExportRedacted'),
-                  onPressed: handleExportRedacted,
-                  icon: const Icon(Icons.download_outlined),
-                  label: Text(l10n.tutorDataExportRedactedAction),
+                const SizedBox(height: SsSpacing.space4),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: SsButton(
+                    key: const Key('tutorDataExportRedacted'),
+                    onPressed: handleExportRedacted,
+                    icon: Icons.download_outlined,
+                    label: l10n.tutorDataExportRedactedAction,
+                  ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: SsSpacing.space6),
                 Text(
                   l10n.tutorDataMemoryTitle,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: SsSpacing.space2),
                 memoryFacts.when(
                   data: (facts) {
                     if (facts.isEmpty) {
-                      return Text(l10n.tutorDataMemoryEmpty);
+                      return _DataEmptyState(
+                        key: const Key('tutorDataMemoryEmpty'),
+                        icon: Icons.fact_check_outlined,
+                        message: l10n.tutorDataMemoryEmpty,
+                      );
                     }
                     return Column(
                       children: <Widget>[
@@ -166,21 +195,40 @@ class TutorDataScreen extends ConsumerWidget {
                     );
                   },
                   loading: () => const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator()),
+                    padding: EdgeInsets.all(SsSpacing.space4),
+                    child: Center(
+                      child: SsSkeleton(width: double.infinity, height: 56),
+                    ),
                   ),
-                  error: (_, _) => Text(l10n.tutorDataMemoryLoadFailed),
+                  error: (error, _) => Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: SsSpacing.space2,
+                    ),
+                    child: SsFailureState(
+                      presentation: SsFailurePresentation.from(
+                        l10n,
+                        error is AppFailure
+                            ? error
+                            : const UnknownFailure(retryable: true),
+                      ),
+                      onRetry: () => ref.invalidate(tutorMemoryFactsProvider),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: SsSpacing.space6),
                 Text(
                   l10n.tutorDataConversationsTitle,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: SsSpacing.space2),
                 conversations.when(
                   data: (page) {
                     if (page.items.isEmpty) {
-                      return Text(l10n.tutorDataConversationsEmpty);
+                      return _DataEmptyState(
+                        key: const Key('tutorDataConversationsEmpty'),
+                        icon: Icons.forum_outlined,
+                        message: l10n.tutorDataConversationsEmpty,
+                      );
                     }
                     return Column(
                       children: <Widget>[
@@ -193,17 +241,32 @@ class TutorDataScreen extends ConsumerWidget {
                     );
                   },
                   loading: () => const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator()),
+                    padding: EdgeInsets.all(SsSpacing.space4),
+                    child: Center(
+                      child: SsSkeleton(width: double.infinity, height: 56),
+                    ),
                   ),
-                  error: (_, _) => Text(l10n.tutorDataConversationsLoadFailed),
+                  error: (error, _) => Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: SsSpacing.space2,
+                    ),
+                    child: SsFailureState(
+                      presentation: SsFailurePresentation.from(
+                        l10n,
+                        error is AppFailure
+                            ? error
+                            : const UnknownFailure(retryable: true),
+                      ),
+                      onRetry: () => ref.invalidate(tutorConversationsProvider),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: SsSpacing.space8),
                 Text(
                   l10n.tutorDataDeleteAllScopeTitle,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: SsSpacing.space2),
                 Container(
                   key: const Key('tutorDataDeleteAllScopeList'),
                   child: Column(
@@ -211,24 +274,28 @@ class TutorDataScreen extends ConsumerWidget {
                     children: <Widget>[
                       for (final key in StorageKeys.tutorAiData)
                         Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: SsSpacing.space1,
+                          ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               const Text('•'),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: SsSpacing.space2),
                               Expanded(child: Text(key)),
                             ],
                           ),
                         ),
                       for (final key in StorageKeys.tutorAiData)
                         Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: SsSpacing.space1,
+                          ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               const Text('•'),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: SsSpacing.space2),
                               Expanded(
                                 child: Text(
                                   StorageKeys.quarantineOf(key),
@@ -241,19 +308,63 @@ class TutorDataScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: SsSpacing.space3),
                 Text(l10n.tutorDataDeleteAllScopePreserved),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  key: const Key('tutorDataDeleteAllTrigger'),
-                  onPressed: confirmAndDeleteAll,
-                  icon: const Icon(Icons.delete_forever_outlined),
-                  label: Text(l10n.tutorDataDeleteAllAction),
+                const SizedBox(height: SsSpacing.space3),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: SsButton(
+                    key: const Key('tutorDataDeleteAllTrigger'),
+                    onPressed: confirmAndDeleteAll,
+                    variant: SsButtonVariant.secondary,
+                    icon: Icons.delete_forever_outlined,
+                    label: l10n.tutorDataDeleteAllAction,
+                  ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The "nothing here yet" row for the memory-facts / conversations lists
+/// (§0.0.A/R6 exception class, same reasoning as `TutorChatScreen`'s
+/// `_EmptyState`): [SsEmptyState] requires a caller-supplied `onAction`
+/// (ADR 0277 §5), but neither list has a real next step to wire here — a
+/// memory fact or conversation is only ever created from an actual tutor
+/// turn on the Chat screen, not from this data-management screen, so an
+/// action button here would either be a no-op or duplicate navigation this
+/// screen doesn't otherwise offer. Fully token-styled via [SsColorScheme]/
+/// [SsTypography]/[SsSpacing] rather than a bare [Text], per §5.2.
+class _DataEmptyState extends StatelessWidget {
+  const _DataEmptyState({super.key, required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: SsSpacing.space4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, color: colors.textSecondary, size: 20),
+          const SizedBox(width: SsSpacing.space2),
+          Expanded(
+            child: Text(
+              message,
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -268,34 +379,32 @@ class _MemoryFactRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(fact.content),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: <Widget>[
-                TextButton(
-                  key: Key('tutorDataMemoryEdit:${fact.id}'),
-                  onPressed: () => _openEditDialog(context, ref),
-                  child: Text(l10n.tutorDataMemoryEdit),
-                ),
-                TextButton(
-                  key: Key('tutorDataMemoryDelete:${fact.id}'),
-                  onPressed: () async {
-                    await repo.delete(fact.id);
-                    ref.invalidate(tutorMemoryFactsProvider);
-                  },
-                  child: Text(l10n.tutorDataMemoryDelete),
-                ),
-              ],
-            ),
-          ],
-        ),
+    return SsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(fact.content),
+          const SizedBox(height: SsSpacing.space2),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: SsSpacing.space2,
+            children: <Widget>[
+              TextButton(
+                key: Key('tutorDataMemoryEdit:${fact.id}'),
+                onPressed: () => _openEditDialog(context, ref),
+                child: Text(l10n.tutorDataMemoryEdit),
+              ),
+              TextButton(
+                key: Key('tutorDataMemoryDelete:${fact.id}'),
+                onPressed: () async {
+                  await repo.delete(fact.id);
+                  ref.invalidate(tutorMemoryFactsProvider);
+                },
+                child: Text(l10n.tutorDataMemoryDelete),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

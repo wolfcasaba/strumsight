@@ -18,6 +18,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/components/actions/ss_button.dart';
+import 'package:strumsight/core/design_system/components/feedback/ss_failure_state.dart';
+import 'package:strumsight/core/design_system/components/surfaces/ss_card.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
@@ -67,12 +71,25 @@ class _FakeMemoryRepository implements TutorMemoryRepository {
   final List<String> deletedFactIds = <String>[];
   final List<TutorMemoryFact> updatedFacts = <TutorMemoryFact>[];
   bool rejectSensitiveUpdates = false;
+  int listCalls = 0;
+
+  /// R22-DA8 (§0.0.A real-violation probe): when true, `list()` throws
+  /// instead of returning an `AppResult`, exercising the
+  /// `memoryFacts.when(error: ...)` branch for real (the provider only
+  /// reaches `error` on a genuine throw — a returned `Failure` is
+  /// swallowed to an empty list, see `tutor_privacy_providers.dart`).
+  bool throwOnList = false;
 
   @override
-  Future<AppResult<List<TutorMemoryFact>>> list() async =>
-      Success<List<TutorMemoryFact>>(
-        List<TutorMemoryFact>.unmodifiable(_facts),
-      );
+  Future<AppResult<List<TutorMemoryFact>>> list() async {
+    listCalls++;
+    if (throwOnList) {
+      throw StateError('memory repository unavailable');
+    }
+    return Success<List<TutorMemoryFact>>(
+      List<TutorMemoryFact>.unmodifiable(_facts),
+    );
+  }
 
   @override
   Future<AppResult<TutorMemoryFact>> saveCandidate(
@@ -144,6 +161,14 @@ class _FakeConversationRepository implements TutorConversationRepository {
 
   final List<TutorConversation> _conversations = <TutorConversation>[];
   final List<TutorConversationId> deletedIds = <TutorConversationId>[];
+  int listCalls = 0;
+
+  /// R22-DA9 (§0.0.B/R15 real-violation probe, mirrors `_FakeMemoryRepository
+  /// .throwOnList`): when true, `list()` throws instead of returning an
+  /// `AppResult`, exercising the `conversations.when(error: ...)` branch for
+  /// real (a returned `Failure` is swallowed to an empty page, see
+  /// `tutor_privacy_providers.dart`).
+  bool throwOnList = false;
 
   @override
   Future<AppResult<void>> save(TutorConversation conversation) async {
@@ -165,6 +190,10 @@ class _FakeConversationRepository implements TutorConversationRepository {
     int offset = 0,
     int limit = 20,
   }) async {
+    listCalls++;
+    if (throwOnList) {
+      throw StateError('conversation repository unavailable');
+    }
     final end = (offset + limit).clamp(0, _conversations.length);
     final page = offset >= _conversations.length
         ? const <TutorConversation>[]
@@ -245,6 +274,7 @@ Future<ProviderContainer> _pump(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        theme: SsLightTheme.data(),
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -429,4 +459,124 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.A/R6 + §6.1 real-violation probe: the memory-facts load
+  // failure is a design-system `SsFailureState`, not raw `Text` — and its
+  // retry action re-invokes the repository (`ref.invalidate`).
+  // -------------------------------------------------------------------
+  testWidgets(
+    'R22-DA8: memory-facts load failure renders SsFailureState with a working retry',
+    (tester) async {
+      final memory = _FakeMemoryRepository()..throwOnList = true;
+      await _pump(tester, memory: memory);
+      expect(find.byType(SsFailureState), findsOneWidget);
+      expect(memory.listCalls, 1);
+
+      await tester.tap(find.byKey(const ValueKey('ss-failure-state-retry')));
+      await tester.pump();
+      expect(memory.listCalls, 2);
+    },
+  );
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R15 real-violation probe (mirrors R22-DA8): the
+  // conversations load failure is ALSO a design-system `SsFailureState`,
+  // not raw `Text` — previously only the memory-facts branch had gate
+  // coverage for this, so a regression on the conversations branch alone
+  // could slip through unmeasured.
+  // -------------------------------------------------------------------
+  testWidgets(
+    'R22-DA9: conversations load failure renders SsFailureState with a working retry',
+    (tester) async {
+      final conversations = _FakeConversationRepository()..throwOnList = true;
+      await _pump(tester, conversations: conversations);
+      expect(find.byType(SsFailureState), findsOneWidget);
+      expect(conversations.listCalls, 1);
+
+      await tester.tap(find.byKey(const ValueKey('ss-failure-state-retry')));
+      await tester.pump();
+      expect(conversations.listCalls, 2);
+    },
+  );
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R15 — per-screen design-system type assertions so
+  // §6.1's first row can go red on every migrated state of THIS screen,
+  // not only the (already-covered) memory-facts error branch.
+  // -------------------------------------------------------------------
+  testWidgets(
+    'R22-DA10: a memory-fact row renders inside the design-system SsCard',
+    (tester) async {
+      final memory = _FakeMemoryRepository(
+        facts: [_fact('f-1', 'Prefers slow warm-ups.')],
+      );
+      await _pump(tester, memory: memory);
+      expect(find.byType(SsCard), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'R22-DA11: the memory-facts empty state is the token-styled design-system row, not a bare Text',
+    (tester) async {
+      await _pump(tester);
+      final finder = find.byKey(const Key('tutorDataMemoryEmpty'));
+      expect(finder, findsOneWidget);
+      expect(tester.widget(finder).runtimeType.toString(), '_DataEmptyState');
+    },
+  );
+
+  testWidgets(
+    'R22-DA12: the conversations empty state is the token-styled design-system row, not a bare Text',
+    (tester) async {
+      await _pump(tester);
+      final finder = find.byKey(const Key('tutorDataConversationsEmpty'));
+      expect(finder, findsOneWidget);
+      expect(tester.widget(finder).runtimeType.toString(), '_DataEmptyState');
+    },
+  );
+
+  testWidgets(
+    'R22-DA13: export and delete-all triggers are the design-system SsButton',
+    (tester) async {
+      await _pump(tester);
+      expect(find.byType(SsButton), findsNWidgets(2));
+    },
+  );
+
+  // -------------------------------------------------------------------
+  // E15-R09 §0.0.B/R14 — committed textScaler 2.0 coverage (en + hu), on
+  // the phone viewport the golden lane uses (412x915). Populated with a
+  // memory fact AND a conversation so `_MemoryFactRow`'s edit/delete
+  // `Wrap` and `_ConversationRow` both render — the regression guard for
+  // the `_MemoryFactRow` Row→Wrap overflow fix measured in §10.5 of the
+  // round file (`data@1.5hu`/`data@2.0hu` were red before that fix).
+  // -------------------------------------------------------------------
+  for (final locale in const [Locale('en'), Locale('hu')]) {
+    testWidgets(
+      'R22-DA14: textScaler 2.0, locale=${locale.languageCode} — no overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(412, 915);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final memory = _FakeMemoryRepository(
+          facts: [_fact('f-1', 'Prefers slow warm-ups.')],
+        );
+        final conversations = _FakeConversationRepository(
+          conversations: [_conversation(TutorConversationId('c-1'))],
+        );
+        await _pump(
+          tester,
+          memory: memory,
+          conversations: conversations,
+          locale: locale,
+        );
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

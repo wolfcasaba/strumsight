@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/ai_tutor/application/controller/tutor_state.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_content_block.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_ids.dart';
@@ -118,11 +119,13 @@ AppConfig _config() => AppConfig.resolve(
 );
 
 // `TutorHomeScreen` reads no provider (see its own file doc comment) — a
-// plain `MaterialApp` is enough, matching how little the pinned
-// `adaptive_scaffold_test.dart` gives it either.
+// themed `MaterialApp` (§0.0.A/R3: `SsLightTheme.data()`, matching the
+// pinned `adaptive_scaffold_test.dart`'s theme) is enough, since this
+// screen resolves design-system tokens straight from the ambient theme.
 Future<void> _pumpHome(WidgetTester tester) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: SsLightTheme.data(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: const TutorHomeScreen(),
@@ -144,6 +147,7 @@ Future<void> _pumpChat(WidgetTester tester, _FakeController controller) async {
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        theme: SsLightTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const TutorChatScreen(),
