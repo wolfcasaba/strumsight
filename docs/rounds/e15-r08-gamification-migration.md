@@ -511,4 +511,95 @@ Teljes arány: **75/96 (78.125%)** — a `docs/ui/migration-status.md`-be felvé
 - **`SsListTile`/`SsMetricTile`/`SsErrorState` konkrét nevű komponensek** — ezek nem léteznek a design-rendszerben (`core/design_system/public.dart` export-listája nem tartalmazza őket); a brief ezeket illusztratív névként használta. A ténylegesen létező, releváns komponenskészletet használtam: `SsCard`, `SsSurface`, `SsButton`, `SsSpacing`/`SsTypography`/`SsColorScheme`/`SsRadius` tokenek. `SsEmptyState`/`SsFailureState` egyik állapotra sem illett (R7 — lásd 10.1), ezért egyik képernyőn sem használtam őket — ez összhangban van az E15-R04/R06/R07 precedenssel.
 - **Viselkedés-változás egyik képernyőn sem történt** — nem kellett STOP-ot jelezni, mert a migráció során egyszer sem merült fel `application/`/`domain/`/`data/`/`providers/` réteg módosításának igénye.
 
-## 11. Review — a Claude tölti ki
+### 10.9 Javító kör (E15-R08 review: 1 BLOCKER, 4 MAJOR, 3 MINOR, 2 NOTE — mind javítva)
+
+Minden leletnél a PIROS mérés a nem javított kódon készült, ugyanazzal a
+cellával, ami utána zöldre vált.
+
+**B1 (BLOCKER) — `_EmptyQuestsState` túlcsordult a kötelező 2.0 küszöbön.**
+Az üres állapot csupasz `Center`→`Padding`→`Column` volt scroll-szülő nélkül a
+`SafeArea` alatt. PIROS (a teljes `{1.5,2.0,2.5}×{en,hu}` ciklus hozzáadása
+után, javítás előtt): `2.0/hu → 68px`, `2.5/en → 130px`, `2.5/hu → 205px`
+(a review 3 mért száma mind pontosan reprodukálva). Javítás:
+`SingleChildScrollView` az üres állapot köré (ugyanaz a minta, mint az
+`achievement_detail` `_notFound`/`_hidden`). ZÖLD: mind a 6 cella (a meglévő
+`2.0/en` cella is megmaradt, nem lett törölve).
+
+**M2 (MAJOR) — a `reward_inbox` látott/olvasatlan háttere azonos színű
+volt.** `colors.surface`/`colors.surfaceRaised` a `ss_colors.dart`-ban
+(TILOS ZÓNA, nem nyúltam hozzá) ugyanarra a `palette.surface`-re mutat —
+mérve `IDENTICAL=true` mindkét brightnesen. Új cella (widget-szintű
+`Material.color` összehasonlítás) PIROS a javítás előtt
+(`Color(1,1,1,1) == Color(1,1,1,1)`). Javítás: `colors.surfaceSunken`
+(`palette.track` — mérve genuinely eltér `palette.surface`-től mindkét
+témán) az olvasott elemekre, `colors.surface` marad az olvasatlanokon. ZÖLD.
+
+**M3+M4 (MAJOR) — a streak recovery CTA felirata csonkolódott, a csere
+kikényszerítetlen volt.** Az `SsButton` felirata egy örökké egysoros
+`Flexible(overflow: TextOverflow.ellipsis)`-ben ül — mérve (saját próba,
+`RenderParagraph.didExceedMaxLines`, a helyes — a label `Text`-jét, NEM az
+ikon `RichText`-jét célzó — finderrel): `hu×2.0 → didExceedMaxLines=true,
+size=Size(270.0, 40.0)`, egyezik a review mérésével. PIROS mindkét új cella
+a nem javított kódon (`M3`: `didExceedMaxLines` igaz; `M4`:
+`isA<FilledButton>()` hamis, mert a widget `SsButton`). Javítás: a CTA
+visszaállt egy dokumentált-kivétel, token-stílusú `FilledButton.icon`-ra
+(ugyanaz az osztály, mint a `_StreakMetricCard` nyers `Card`-ja, E13-R32
+review NOTE-2) — a `Text`-nek nincs sor-korlátja, a felirat annyi sorra tör,
+amennyi kell. ZÖLD mindkét cella; a teljes `streak_detail_screen_test.dart`
+(29 teszt) is zöld marad.
+
+**M5 (MAJOR) — az `achievements_screen`-nek nem volt A3-mátrixa.**
+`achievements_screen_test.dart`-nak egyáltalán nem volt 360×640-es cellája,
+és az üres állapot egyetlen cellában sem renderelődött. Felvéve a teljes
+`{1.5,2.0,2.5}×{en,hu}` mátrix a lista- ÉS az üres állapotra (12+12 cella).
+Mindegyik ZÖLD javítás nélkül is — ezen a képernyőn az üres állapot a
+`ListView` GYERMEKE (nem a `SafeArea` alá helyezett CSERÉJE, mint a
+quests/reward_inbox-nál), tehát sosem volt túlcsordulás-veszélyben; M5
+tisztán mérce-hézag volt, nem élő hiba.
+
+**m1 (MINOR) — az `achievement_detail` `_hidden` állapotára nem volt A3
+cella**, pedig a `SingleChildScrollView`-javítás valódi volt. Felvéve a
+hiányzó cella a meglévő scale/locale ciklusba. Ellenőrizve: a
+`SingleChildScrollView` ideiglenes eltávolításával a `2.5/en` és `2.5/hu`
+cella PIROS lett (a review 149px/29px mérésével egyező hiba-osztály),
+visszaállítás után ismét ZÖLD — a `achievement_detail_screen.dart`
+végleges állapota változatlan (`git diff` üres rá).
+
+**m3 (MINOR) — a `reward-inbox-list` kulcs jelentése kitágult.** A kulcs a
+scroll-javítással (10.3/2. minta) átkerült a `ListView.separated`-ről (csak
+a listás ágon élt) a `CustomScrollView`-re (mindkét ágon jelen van) —
+szükséges változás, mert egyetlen folytonos scroll-területnek kell lennie.
+Nem visszaállítható a régi jelentés kód nélkül; ehelyett DOKUMENTÁLVA és
+próbával rögzítve: a `reward-inbox-list` mostantól a közös scroll-hordozó,
+az ág-azonosságot a `reward-inbox-empty` (csak üresben) és a
+`reward-inbox-entry-*` (csak listásban) kulcsok viszik. Új teszt mindkét
+állapotot lepumpálja és mindkét kulcs-párt ellenőrzi.
+
+**N1 (NOTE) — a §10.0 indoklása fordítva mondta ki a premisszát.** Javítva
+10.0 alatt: a FUTÁSIDEJŰ app (`strumsight_app.dart:33-34`,
+`SsLightTheme.data()`/`SsDarkTheme.data()`) VALÓBAN hordozza a
+kiterjesztéseket — a brief R8 feltétele futásidőben IGAZ. Ami hamis, az a
+teszt-harnesseké (golden `AppTheme.dark()`, csupasz `MaterialApp()` a
+widget-tesztekben). A burkoló megtartásának döntése változatlan (indokolt),
+csak az indoklás lett pontosítva.
+
+**m2 (NOTE-szintű, nincs kódváltozás) — az `achievement_detail` scroll-
+javítását egyetlen (nem kötelező `2.5`) cella őrzi.** Tudatosan elfogadva:
+a `2.0/en`, `2.0/hu`, `2.5/en` cellák a fix nélkül is zöldek maradnak (a
+tartalom rövidebb, mint a `_hidden`/`_notFound` állapotoké), csak a `2.5/hu`
+bukik — ez a meglévő, committolt, futó cella; nem gyengítve, nem törölve.
+
+**Gate.** `tools/round-gate.sh` a brief §4 pontos 13 tesztútvonalával: mind
+a 18 lépés (`format`, `analyze`, 13×`test`, `architecture`, `secrets`,
+`l10n`) ZÖLD, csonkítatlan futással.
+
+**Golden.** `tools/golden-x86.sh record test/ui/goldens/e13_r32_screens_golden_test.dart`
+mind a 10 PNG-t (5 képernyő × 2 skála) újra felvette x86-on — a `git status`/
+`git diff` a `test/ui/goldens/goldens/` alatt UTÁNA üres, azaz mind a 10 PNG
+BÁJTRA azonos maradt a felvétel előtti állapottal (a hub 2 PNG-je is). Ez nem
+hiba: egyik golden-fixture sem pinneli azt az állapotot, amit a B1/M2/M3
+javítások érintettek (`quests` fixture nem-üres; `reward_inbox` fixture
+egyetlen, MINDIG `seen=false` eleme — az unseen ág színe a fix előtt/után
+azonos, mert korábban is `colors.surface`-t (a `surfaceRaised`-del
+megegyező értéket) kapta; `streak_detail` fixture `reason: grace`, a CTA
+`broken`-re kapuzott — lásd N2 a review-ban).
