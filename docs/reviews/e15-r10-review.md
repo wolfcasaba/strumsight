@@ -358,16 +358,37 @@ Mérve, három egymástól független futáson:
 3. **a TISZTA `origin/main` (`45d20193`) ugyanígy PIROS** — a klónt a
    kör-ághoz nem is érintve, önmagában.
 
-A hibás sor `TOKEN = "github_pat_FIXTURE_ONLY_not_a_real_secret"` — nyilvánvaló
-teszt-fixture, amiről hiányzik a scanner saját, dokumentált mentesítő markere.
-A sort a **`61cd9e3e` (PR #544, „a `git fetch` HITELESÍTVE megy", ADR 0495 D5)**
-hozta be a `main`-re; `git log -S'github_pat_FIXTURE_ONLY'` ezt az egy commitot
-adja. Az E15-R10 csak annyit tett, hogy az ADR 0086 §2 által ELŐÍRT
+A hibás sor a fájl `TOKEN` konstansa: egy provider-előtaggal kezdődő
+fixture-token literál, amiről hiányzik a scanner saját, dokumentált sor végi
+mentesítő markere. (Az ÉRTÉKÉT ez a jelentés szándékosan NEM idézi — a kapu
+saját elve az, hogy a találat HELYE szerepel, az értéke soha; a literál
+beidézése magát ezt a jelentést tenné találattá.) A sort a **`61cd9e3e`
+(PR #544, „a `git fetch` HITELESÍTVE megy", ADR 0495 D5)** hozta be a
+`main`-re; a `git log -S` keresés a konstans értékére ezt az egy commitot adja.
+Az E15-R10 csak annyit tett, hogy az ADR 0086 §2 által ELŐÍRT
 upstream-szinkronnal beemelte a `main`-t.
 
 **Miért nem javíthatja ez a kör:** a `tools/tests/test_authenticated_git_fetch.py`
 az `allowed_paths`-on KÍVÜL van, és a `tools/**` a brief §4 tilos zónája; az
 ADR 0087 §4 szerint a mércét nem módosíthatja az, akit mér. Ez **H3**.
+
+### FELOLDVA — az ADR 0112 önjavító kör (PR #546, `d0e21add`)
+
+Az önjavító kör a MÉRT gyökérokot javította: a `tools/**` útvonalra automatikusan
+induló `router-ci.yml`-nek nem volt titok-lépése, ezért a PR #544 egyetlen zöld
+checkkel átcsúszott a kapun. A heal (a) felvette a hiányzó markert a fixture-re,
+(b) a titok-kaput a `tools/**` automatikus sávjára is kiterjesztette
+(`tools/tests/test_secret_gate_router_paths.py`). Ezzel a H3 tárgytalan, a kör a
+merge-lépésnél folytatódott.
+
+**Másodlagos, ugyanebből a gyökérokból eredő találat (MÉRVE a `b2c5fdda` merge
+SHA-n, `full-gate` `33739275972`):** a kiterjesztett kapu ezután MAGÁT EZT A
+JELENTÉST is találatnak vette (`docs/reviews/e15-r10-review.md:361: provider
+token literal`), mert a fenti bekezdés eredetileg szó szerint idézte a fixture
+literált. Ez a kör SAJÁT, még nem merge-elt artefaktuma (ADR 0087 §2; a
+`docs/reviews/**` saját-jelentés hamis-H3-áról: `docs/LESSONS.md` L251), ezért az
+orchestrátor a saját hatáskörében redaktálta az idézetet — marker nélkül, a kapu
+elvét követve. A kör kódját ez NEM érinti.
 
 ## VÉGSŐ DÖNTÉS — a kör saját munkájára: **APPROVED**
 
