@@ -225,6 +225,16 @@ ELEJÉN a legolcsóbb — a review-ban már egy teljes implementer-futás az ár
 | `S2` | falszifikációs cella: minden acceptance-ponthoz írd oda, MELYIK hibás implementációt fogja pirosra, és melyik őr (unit-cella vagy property) méri |
 | `S3` | numerikus küszöbhöz alatta/rajta/fölötte cellahármas, a cellákat `python3 -c`-vel kiszámolva |
 | `S4` | kör-jelzés szakasz |
+| `S5` | ütköző típusnév: az új fájl olyan típust deklarálna, ami már létezik a fában — nevezd át, vagy a §0.0 mondja ki a lecserélést |
+| `S6` | aránytalanul kicsi munka-terület: a brief a saját fájlján kívül alig enged valamit — mérd ki, mit fog tényleg átírni |
+| `S7` | `risk = "high"` sor indoklás nélkül: írd oda a `**Kockázat = high, indoklás:**` sort |
+| `S8` | nincs visszakeresett előzmény: futtasd a `knowledge-rag`-ot, és a találatot írd a brief fejlécébe |
+| `S9` | a képernyő-leltár őre hiányzik az `allowed_paths` **és** a `gate_tests` közül egyszerre |
+| `S10` | a kör a router forrását engedi, de a navigációs őrök nincsenek a listán |
+| `S11` | a lecserélt képernyőt a briefen **kívül** élő teszt pinneli → vedd fel `allowed_paths`-ba **és** `gate_tests`-be (különben H3) |
+| `S12` | a §7 gate-parancs nem tükrözi a `gate_tests` listát — a brief olyan mércét ígér, amit sosem futtat |
+| `S13` | az `allowed_paths` nem létező könyvtár-előtagot sorol fel: nulla fájlt fed, a lint zöldje semmit nem bizonyít |
+| `S14` | a lecserélt képernyőt a briefen **belül** élő teszt pinneli, de az nincs a `gate_tests`-ben → a célzott kapu zölden megy át azon a fán, amit a kör pirosra visz (L593) |
 
 A `strict` leletek javítása **brief-revízió**, tehát a §2 szerint a te
 hatáskörödben van — nem halt-ok, és nem is hagyható ki.
