@@ -12,6 +12,7 @@ import 'package:strumsight/core/camera/camera_permission.dart';
 import 'package:strumsight/core/camera/camera_providers.dart';
 import 'package:strumsight/core/camera/camera_session_coordinator.dart';
 import 'package:strumsight/core/camera/fake_camera_capture.dart';
+import 'package:strumsight/core/design_system/components/actions/ss_button.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
@@ -41,6 +42,27 @@ Widget _host(Widget child) => MaterialApp(
   theme: SsLightTheme.data(),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
+  home: child,
+);
+
+/// A3 (§6/§0.0/R5) variant host: same theme, plus a controllable locale and
+/// textScale so the migrated screen's overflow behaviour can be measured at
+/// the required threshold pair.
+Widget _hostVariant(
+  Widget child, {
+  required double textScale,
+  required Locale locale,
+}) => MaterialApp(
+  theme: SsLightTheme.data(),
+  locale: locale,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  builder: (context, widgetChild) => MediaQuery(
+    data: MediaQuery.of(
+      context,
+    ).copyWith(textScaler: TextScaler.linear(textScale)),
+    child: widgetChild!,
+  ),
   home: child,
 );
 
@@ -227,5 +249,50 @@ void main() {
         );
       },
     );
+  });
+
+  // A3 (§6/§0.0/R5) — the migrated screen must not overflow at the required
+  // 1.5/2.0 textScale threshold pair, in both `en` and `hu`. Lab mode is on
+  // so the SsSwitchRow (the widest content row) is present too.
+  group('A3 — textScale variant matrix (1.5 / 2.0 × en / hu)', () {
+    for (final textScale in [1.5, 2.0]) {
+      for (final locale in [const Locale('en'), const Locale('hu')]) {
+        testWidgets('renders without overflow at $textScale ($locale)', (
+          tester,
+        ) async {
+          final rig = _rig(labModeAvailable: true, labModeOn: true);
+          addTearDown(rig.dispose);
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: rig.container,
+              child: _hostVariant(
+                const VisionSessionScreen(),
+                textScale: textScale,
+                locale: locale,
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('vision-session-begin')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('vision-session-calibrate')));
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('vision-session-start')));
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+
+    testWidgets('the running Stage uses the design-system SsButton', (
+      tester,
+    ) async {
+      final rig = _rig();
+      addTearDown(rig.dispose);
+      await _reachRunning(tester, rig);
+
+      expect(find.byType(SsButton), findsWidgets);
+    });
   });
 }

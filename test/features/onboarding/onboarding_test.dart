@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/components/actions/ss_button.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
@@ -125,5 +126,65 @@ void main() {
         expect(find.text('See what you play'), findsOneWidget);
       },
     );
+
+    // A3 (§6/§0.0/R5) — the migrated screen must not overflow at the
+    // required 1.5/2.0 textScale threshold pair, in both `en` and `hu`.
+    group('A3 — textScale variant matrix (1.5 / 2.0 × en / hu)', () {
+      Future<ProviderContainer> pumpVariant(
+        WidgetTester tester, {
+        required double textScale,
+        required Locale locale,
+      }) async {
+        final container = ProviderContainer(
+          overrides: [
+            ...preferenceOverrides(),
+            onboardingSeenProvider.overrideWith(
+              () => OnboardingController(false),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              theme: SsLightTheme.data(),
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(textScale)),
+                child: child!,
+              ),
+              home: const OnboardingScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        return container;
+      }
+
+      for (final textScale in [1.5, 2.0]) {
+        for (final locale in [const Locale('en'), const Locale('hu')]) {
+          testWidgets('renders without overflow at $textScale ($locale)', (
+            tester,
+          ) async {
+            await pumpVariant(tester, textScale: textScale, locale: locale);
+
+            expect(tester.takeException(), isNull);
+          });
+        }
+      }
+
+      testWidgets('the welcome carousel uses the design-system SsButton', (
+        tester,
+      ) async {
+        await pumpVariant(tester, textScale: 1.0, locale: const Locale('en'));
+
+        expect(find.byType(SsButton), findsWidgets);
+      });
+    });
   });
 }

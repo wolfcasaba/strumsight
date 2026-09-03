@@ -19,6 +19,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:strumsight/core/design_system/components/surfaces/ss_card.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_profile.dart';
@@ -50,6 +51,40 @@ Widget _harness(SocialGraphRepository repo) {
       ],
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('en'),
+      home: FollowersScreen(
+        profileId: PublicUserId('user-viewer'),
+        mode: FollowersMode.followers,
+      ),
+    ),
+  );
+}
+
+/// A3 (§6/§0.0/R5) variant harness: same theme/screen, plus a controllable
+/// locale and textScale so the migrated screen's overflow behaviour can be
+/// measured at the required threshold pair.
+Widget _harnessVariant(
+  SocialGraphRepository repo, {
+  required double textScale,
+  required Locale locale,
+}) {
+  return ProviderScope(
+    overrides: [socialGraphRepositoryProvider.overrideWithValue(repo)],
+    child: MaterialApp(
+      theme: SsLightTheme.data(),
+      locale: locale,
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: FollowersScreen(
         profileId: PublicUserId('user-viewer'),
         mode: FollowersMode.followers,
@@ -235,4 +270,45 @@ void main() {
       expect(repo.muteCalls, <PublicUserId>[PublicUserId('user-bob')]);
     },
   );
+
+  // A3 (§6/§0.0/R5) — the migrated screen must not overflow at the required
+  // 1.5/2.0 textScale threshold pair, in both `en` and `hu`.
+  group('A3 — textScale variant matrix (1.5 / 2.0 × en / hu)', () {
+    CommunityPage<CommunityProfile> page() {
+      final alice = _profile('user-alice', 'alice', 'Alice');
+      final bob = _profile('user-bob', 'bob', 'Bob');
+      return CommunityPage<CommunityProfile>(
+        items: <CommunityProfile>[alice, bob],
+        cursor: const CursorPage.haltedAfterRequest(),
+      );
+    }
+
+    for (final textScale in [1.5, 2.0]) {
+      for (final locale in [const Locale('en'), const Locale('hu')]) {
+        testWidgets('renders without overflow at $textScale ($locale)', (
+          tester,
+        ) async {
+          final repo = _StuckSocialGraphRepository(page());
+          await tester.pumpWidget(
+            _harnessVariant(repo, textScale: textScale, locale: locale),
+          );
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+
+    testWidgets('the follower row uses the design-system SsCard', (
+      tester,
+    ) async {
+      final repo = _StuckSocialGraphRepository(page());
+      await tester.pumpWidget(
+        _harnessVariant(repo, textScale: 1.0, locale: const Locale('en')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SsCard), findsWidgets);
+    });
+  });
 }
