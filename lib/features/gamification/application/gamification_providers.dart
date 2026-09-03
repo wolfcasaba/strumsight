@@ -18,7 +18,9 @@ import '../domain/rewards/reward_ledger_entry.dart';
 import '../domain/rewards/reward_reason.dart';
 import '../domain/streak/streak_state.dart';
 import '../infrastructure/default_achievement_catalog.dart';
+import '../presentation/screens/quests_screen.dart' show QuestViewProjection;
 import 'achievement_evaluator.dart';
+import 'daily_challenge_service.dart' show DailyChallengeInstance;
 import 'streak_service.dart';
 
 /// The gamification feature's own Riverpod composition layer (ADR 0496 §1).
@@ -93,9 +95,24 @@ final gamificationProfileProvider = Provider<GamificationProfile>((ref) {
 /// `GamificationRepository` streak-write method that does not exist yet, and
 /// `data/**` is this round's tilos zona — so every read re-runs the legacy
 /// migration instead of persisting its result once.
+///
+/// A malformed legacy document makes [LegacyStreakMigrator.migrate] throw
+/// [FormatException] (review m5) — caught here and logged rather than
+/// crashing the hub AND the streak-detail screen on the same corrupt read.
 final streakStateProvider = Provider<StreakState>((ref) {
   final store = ref.watch(keyValueStoreProvider);
-  final migrated = LegacyStreakMigrator(store).migrate();
+  StreakState? migrated;
+  try {
+    migrated = LegacyStreakMigrator(store).migrate();
+  } on FormatException catch (error, stackTrace) {
+    ref
+        .read(appLoggerProvider)
+        .error(
+          'gamification.streak.legacy_migration_failed',
+          error: error,
+          stackTrace: stackTrace,
+        );
+  }
   return migrated ??
       StreakState(
         current: 0,
@@ -182,6 +199,41 @@ final masteryUnlockedCountProvider = Provider<GamificationDerivedCount>((_) {
   return const GamificationDerivedCount(value: 0, available: false);
 });
 
+/// Quest-board projection for the Quests screen (review B2) — same
+/// "type-carried gap" as [GamificationDerivedCount]/[activeQuestCountProvider]:
+/// no persisted quest snapshot exists to generate real
+/// `dailyQuests`/`weeklyQuests`/`dailyChallenge` from (ADR 0496 §0.0.A/R2,
+/// BACKLOG `docs/ui/legacy-backlog.md` E16-R01 entry 4), so [available]
+/// stays `false` and every field stays empty. Routing this through a
+/// provider (instead of a bare literal in the router) is the fix itself —
+/// A2 forbids an un-measured literal even when the value happens to be the
+/// screen's own legitimate empty-state contract.
+final class GamificationQuestBoard {
+  const GamificationQuestBoard({
+    required this.dailyChallenge,
+    required this.dailyChallengeAvailable,
+    required this.dailyQuests,
+    required this.weeklyQuests,
+    required this.available,
+  });
+
+  final DailyChallengeInstance? dailyChallenge;
+  final bool dailyChallengeAvailable;
+  final List<QuestViewProjection> dailyQuests;
+  final List<QuestViewProjection> weeklyQuests;
+  final bool available;
+}
+
+final questBoardProvider = Provider<GamificationQuestBoard>((_) {
+  return const GamificationQuestBoard(
+    dailyChallenge: null,
+    dailyChallengeAvailable: false,
+    dailyQuests: <QuestViewProjection>[],
+    weeklyQuests: <QuestViewProjection>[],
+    available: false,
+  );
+});
+
 /// Weekly-consistency day count for the streak-detail screen —
 /// `StreakService.weeklyConsistency` needs a day-by-day qualified-day
 /// history; only the aggregate `totalQualifiedDays` counter is persisted
@@ -190,6 +242,23 @@ final weeklyConsistencyDaysProvider = Provider<GamificationDerivedCount>((_) {
   return const GamificationDerivedCount(value: 0, available: false);
 });
 
+/// Same "type-carried gap" as [GamificationDerivedCount] (ADR 0496 §2 /
+/// §0.0.A/R5), for the one gap value that isn't a plain `int`. See review
+/// M1 — `LevelDetailScreen` has no absence contract for its required
+/// `ExperiencePoints` parameter, so the router still passes [value] through
+/// unconditionally (BACKLOG, `docs/ui/legacy-backlog.md` E16-R01 entry 5);
+/// [available] exists for parity with the three counts above and so a
+/// future round that DOES add a screen-side contract has something to read.
+final class GamificationDerivedExperience {
+  const GamificationDerivedExperience({
+    required this.value,
+    required this.available,
+  });
+
+  final ExperiencePoints value;
+  final bool available;
+}
+
 /// Latest-session XP breakdown for the level-detail screen.
 ///
 /// [RewardLedgerEntry] only persists the collapsed `baseXp`+`bonusXp` view;
@@ -197,8 +266,11 @@ final weeklyConsistencyDaysProvider = Provider<GamificationDerivedCount>((_) {
 /// not persisted anywhere (same gap class as the two counts above). Returning
 /// `.empty()` avoids guessing a false split of `bonusXp` across four
 /// components that were never separately recorded.
-final latestSessionXpProvider = Provider<ExperiencePoints>((_) {
-  return ExperiencePoints.empty();
+final latestSessionXpProvider = Provider<GamificationDerivedExperience>((_) {
+  return GamificationDerivedExperience(
+    value: ExperiencePoints.empty(),
+    available: false,
+  );
 });
 
 final achievementEvaluatorProvider = Provider<AchievementEvaluator>((ref) {
@@ -242,6 +314,14 @@ final rewardInboxItemsProvider = Provider<List<RewardInboxItem>>((ref) {
     for (final entry in page.entries) {
       entriesBySourceEventId[entry.sourceEventId] = entry;
     }
+    // Same non-advancing-cursor guard as
+    // `AchievementEvaluator._buildReceiptIndex` (review m1) — this loop
+    // runs synchronously inside a provider build (UI thread), so a
+    // repository bug that returns a stuck `nextCursor` would otherwise hang
+    // the frame instead of failing loudly.
+    if (page.nextCursor != null && page.nextCursor == cursor) {
+      throw StateError('ledger page cursor did not advance');
+    }
     cursor = page.nextCursor;
   } while (cursor != null);
 
@@ -261,13 +341,20 @@ final rewardInboxItemsProvider = Provider<List<RewardInboxItem>>((ref) {
   return items;
 });
 
+/// Review B3 — `titleKey`/`bodyKey` are never rendered from here. This layer
+/// has no `BuildContext`/`AppLocalizations`, so it cannot resolve real
+/// display text, and it must not invent English literals either (the
+/// composition layer is not the i18n boundary). The placeholder below is
+/// discarded and replaced with an EXISTING ARB string by the router, which
+/// does have `AppLocalizations` — see `_localizedRewardInboxItems` in
+/// `app_router.dart`.
 RewardEvent _rewardEventFor(RewardLedgerEntry entry) {
   final kind = _rewardKindFor(entry.reasonCodes);
   return RewardEvent(
     id: entry.sourceEventId,
     kind: kind,
-    titleKey: _rewardTitleFor(kind),
-    bodyKey: '+${entry.totalXp} XP',
+    titleKey: kind.name,
+    bodyKey: kind.name,
     earnedXp: entry.totalXp,
     earnedAt: entry.createdAt,
     sourceLedgerId: entry.ledgerId,
@@ -284,14 +371,6 @@ RewardKind _rewardKindFor(List<RewardReason> reasonCodes) {
   return RewardKind.dailyReward;
 }
 
-String _rewardTitleFor(RewardKind kind) => switch (kind) {
-  RewardKind.masteryMilestone => 'Achievement unlocked',
-  RewardKind.questCompleted => 'Quest completed',
-  RewardKind.challengeCompleted => 'Challenge completed',
-  RewardKind.levelUp => 'Level up',
-  RewardKind.dailyReward => 'Practice reward',
-};
-
 /// Marks one already-projected inbox entry as seen by writing the matching
 /// [GamificationInboxItem.viewedAt] back through
 /// [GamificationRepository.replaceInbox] (§0.0.A/R3 #8 — the read-side join
@@ -303,11 +382,16 @@ String _rewardTitleFor(RewardKind kind) => switch (kind) {
 /// share no common public supertype — [onWritten] is the caller's own
 /// `invalidate(gamificationInboxProvider)` call, letting either caller reuse
 /// this one write-then-refresh sequence.
+///
+/// [onReplaced] is optional and receives the [GamificationInboxWriteReport]
+/// from [GamificationRepository.replaceInbox] (review m2 — the report,
+/// notably `trimmedCount`, was previously discarded silently).
 Future<void> markGamificationInboxItemSeen({
   required List<GamificationInboxItem> current,
   required GamificationRepository repository,
   required String id,
   required void Function() onWritten,
+  void Function(GamificationInboxWriteReport report)? onReplaced,
 }) async {
   final index = current.indexWhere((item) => item.id == id);
   if (index < 0 || current[index].isViewed) return;
@@ -317,6 +401,7 @@ Future<void> markGamificationInboxItemSeen({
     createdAt: current[index].createdAt,
     viewedAt: DateTime.now().toUtc(),
   );
-  await repository.replaceInbox(updated);
+  final report = await repository.replaceInbox(updated);
+  onReplaced?.call(report);
   onWritten();
 }

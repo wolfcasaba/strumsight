@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
 import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
@@ -12,18 +15,7 @@ import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart
 import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
-import '../../features/gamification/application/gamification_providers.dart';
-import '../../features/gamification/domain/achievements/achievement_progress.dart';
-import '../../features/gamification/domain/profile/reward_inbox_item.dart';
-import '../../features/gamification/infrastructure/default_achievement_catalog.dart';
-import '../../features/gamification/presentation/screens/achievement_detail_screen.dart';
-import '../../features/gamification/presentation/screens/achievements_screen.dart';
-import '../../features/gamification/presentation/screens/gamification_hub_screen.dart';
-import '../../features/gamification/presentation/screens/level_detail_screen.dart';
-import '../../features/gamification/presentation/screens/quests_screen.dart';
-import '../../features/gamification/presentation/screens/reward_inbox_screen.dart';
-import '../../features/gamification/presentation/screens/streak_detail_screen.dart';
-import '../../features/gamification/presentation/widgets/quest_card.dart';
+import '../../features/gamification/public.dart';
 import '../../l10n/app_localizations.dart';
 import '../../features/learn/screens/latency_calibration_screen.dart';
 import '../../features/learn/screens/lesson_list_screen.dart';
@@ -82,6 +74,76 @@ final class _RouterRefreshNotifier extends ChangeNotifier {
 // here (not in [AppRoutes]) because it is only ever referenced from this
 // file by the achievements list callback.
 const String _achievementDetailName = 'achievement-detail';
+
+/// Review B1 — `achievementProgressProvider` is a `FutureProvider`, so its
+/// `AsyncValue.value` is `null` on BOTH loading and error, which previously
+/// collapsed to the SAME `?? const {}` fallback as a genuinely measured
+/// empty achievement set (a transient dobás would then look permanently
+/// like "no badges unlocked"). This routes the three states through
+/// `.when` instead: loading gets its own indicator (never the "0 badges"
+/// screen), error is logged and falls back to empty (the screen has no
+/// richer error contract to degrade to — tilos zona), and only the `data`
+/// branch is the actual measured projection.
+Widget _achievementsAsyncBuilder({
+  required WidgetRef ref,
+  required Widget Function(Map<String, AchievementProgress> progress) onData,
+}) {
+  final progressAsync = ref.watch(achievementProgressProvider);
+  return progressAsync.when(
+    loading: () =>
+        const Scaffold(body: Center(child: CircularProgressIndicator())),
+    error: (error, stackTrace) {
+      ref
+          .read(appLoggerProvider)
+          .error(
+            'gamification.achievement_progress.load_failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+      return onData(const <String, AchievementProgress>{});
+    },
+    data: onData,
+  );
+}
+
+/// Review B3 — resolves each item's `titleKey`/`bodyKey` to an EXISTING ARB
+/// string via [AppLocalizations], since `RewardInboxScreen` renders both
+/// fields raw (no lookup of its own — a pre-existing, tilos-zona screen
+/// pattern) and `gamification_providers.dart` has no `BuildContext` to
+/// resolve them itself. `RewardKind.challengeCompleted`/`.levelUp` are
+/// unreachable from the provider's `_rewardKindFor` this round, but the
+/// switch stays exhaustive.
+List<RewardInboxItem> _localizedRewardInboxItems(
+  Iterable<RewardInboxItem> items,
+  AppLocalizations l10n,
+) => [
+  for (final item in items)
+    RewardInboxItem(
+      id: item.id,
+      addedAt: item.addedAt,
+      seen: item.seen,
+      event: RewardEvent(
+        id: item.event.id,
+        kind: item.event.kind,
+        titleKey: _rewardTitleFor(item.event.kind, l10n),
+        bodyKey: l10n.questRewardAlreadyCredited,
+        earnedXp: item.event.earnedXp,
+        earnedAt: item.event.earnedAt,
+        sourceLedgerId: item.event.sourceLedgerId,
+        crossedLevelNumbers: item.event.crossedLevelNumbers,
+      ),
+    ),
+];
+
+String _rewardTitleFor(RewardKind kind, AppLocalizations l10n) =>
+    switch (kind) {
+      RewardKind.masteryMilestone => l10n.feedCardAchievementUnlocked,
+      RewardKind.questCompleted => l10n.questCompletedBadge,
+      RewardKind.challengeCompleted =>
+        l10n.communityNotificationChallengeCompletedTitle,
+      RewardKind.levelUp => l10n.gamificationHubSkillSectionTitle,
+      RewardKind.dailyReward => l10n.practiceResultRewardTitle,
+    };
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
@@ -627,7 +689,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (context, ref, _) {
             final l10n = AppLocalizations.of(context);
             final profile = ref.watch(gamificationProfileProvider);
-            final latestSessionXp = ref.watch(latestSessionXpProvider);
+            // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 5):
+            // `.value` is passed through unconditionally because
+            // `LevelDetailScreen` has no absence contract for this required
+            // parameter (review M1) — `.available` stays unread until a
+            // future round adds one.
+            final latestSessionXp = ref.watch(latestSessionXpProvider).value;
             return LevelDetailScreen(
               profile: profile,
               latestSessionXp: latestSessionXp,
@@ -639,35 +706,31 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.achievements,
         builder: (_, _) => Consumer(
-          builder: (context, ref, _) {
-            final Map<String, AchievementProgress> progressByAchievement =
-                ref.watch(achievementProgressProvider).value ??
-                const <String, AchievementProgress>{};
-            return AchievementsScreen(
+          builder: (context, ref, _) => _achievementsAsyncBuilder(
+            ref: ref,
+            onData: (progressByAchievement) => AchievementsScreen(
               definitions: defaultAchievementCatalog.definitions,
               progressByAchievement: progressByAchievement,
               onAchievementSelected: (String id) => context.pushNamed(
                 _achievementDetailName,
                 pathParameters: <String, String>{'achievementId': id},
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
       GoRoute(
         name: _achievementDetailName,
         path: AppRoutes.achievementDetail,
         builder: (_, state) => Consumer(
-          builder: (context, ref, _) {
-            final Map<String, AchievementProgress> progressByAchievement =
-                ref.watch(achievementProgressProvider).value ??
-                const <String, AchievementProgress>{};
-            return AchievementDetailScreen(
+          builder: (context, ref, _) => _achievementsAsyncBuilder(
+            ref: ref,
+            onData: (progressByAchievement) => AchievementDetailScreen(
               achievementId: state.pathParameters['achievementId']!,
               definitions: defaultAchievementCatalog.definitions,
               progressByAchievement: progressByAchievement,
-            );
-          },
+            ),
+          ),
         ),
       ),
       GoRoute(
@@ -675,12 +738,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => Consumer(
           builder: (context, ref, _) {
             final l10n = AppLocalizations.of(context);
+            final questBoard = ref.watch(questBoardProvider);
             return QuestsScreen(
               dailyChallengeTitle: l10n.challengeDailyTitle,
-              dailyChallenge: null,
-              dailyChallengeAvailable: false,
-              dailyQuests: const <QuestViewProjection>[],
-              weeklyQuests: const <QuestViewProjection>[],
+              dailyChallenge: questBoard.dailyChallenge,
+              dailyChallengeAvailable: questBoard.dailyChallengeAvailable,
+              dailyQuests: questBoard.dailyQuests,
+              weeklyQuests: questBoard.weeklyQuests,
               onAction: (QuestRouteAction action) {
                 switch (action) {
                   case QuestStartPracticeAction():
@@ -727,20 +791,53 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.rewardInbox,
         builder: (_, _) => Consumer(
-          builder: (context, ref, _) => RewardInboxScreen(
-            items: ref.watch(rewardInboxItemsProvider),
-            onItemSelected: (_) {
-              // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 3): no
-              // reward-detail screen exists on the tree to navigate to —
-              // building one is new scope, not a bekötés.
-            },
-            onMarkSeen: (RewardInboxItem item) => markGamificationInboxItemSeen(
-              current: ref.read(gamificationInboxProvider),
-              repository: ref.read(gamificationRepositoryProvider),
-              id: item.id,
-              onWritten: () => ref.invalidate(gamificationInboxProvider),
-            ),
-          ),
+          builder: (context, ref, _) {
+            final l10n = AppLocalizations.of(context);
+            return RewardInboxScreen(
+              items: _localizedRewardInboxItems(
+                ref.watch(rewardInboxItemsProvider),
+                l10n,
+              ),
+              onItemSelected: (_) {
+                // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 3): no
+                // reward-detail screen exists on the tree to navigate to —
+                // building one is new scope, not a bekötés.
+              },
+              onMarkSeen: (RewardInboxItem item) {
+                // Review m2: the screen's `onMarkSeen` contract is `void`
+                // (tilos zona), so this Future cannot be awaited by the
+                // caller — `unawaited` + `catchError` at least turns a
+                // silently-dropped write failure into a logged one instead
+                // of an unhandled async error.
+                unawaited(
+                  markGamificationInboxItemSeen(
+                    current: ref.read(gamificationInboxProvider),
+                    repository: ref.read(gamificationRepositoryProvider),
+                    id: item.id,
+                    onWritten: () => ref.invalidate(gamificationInboxProvider),
+                    onReplaced: (report) {
+                      if (report.trimmedCount > 0) {
+                        ref
+                            .read(appLoggerProvider)
+                            .warning(
+                              'gamification.reward_inbox.trimmed',
+                              fields: {'trimmedCount': report.trimmedCount},
+                            );
+                      }
+                    },
+                  ).catchError((Object error, StackTrace stackTrace) {
+                    ref
+                        .read(appLoggerProvider)
+                        .error(
+                          'gamification.reward_inbox.mark_seen_failed',
+                          error: error,
+                          stackTrace: stackTrace,
+                        );
+                  }),
+                );
+              },
+            );
+          },
         ),
       ),
     ],
