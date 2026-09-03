@@ -160,6 +160,58 @@ azon az egy helyen futott, ahol az őr amúgy is létezik (a próba maga korrekt
 lánc normál útja (user-döntés 2026-07-31): ugyanaz a motor (`sonnet-impl`), a
 fenti leletlistával, a `§0.0.B` brief-revízió mellett.
 
-## 5. Javító kör után (kitöltés a második menetben)
+## 5. Javító kör #1 utáni review (2026-09-03, `c9409564..c8be6e7d`)
 
-_(a reviewer tölti ki)_
+### 5.1 Az első menet leletei — MIND ZÁRVA (mérve)
+
+| Lelet | Zárás | Mérés |
+|---|---|---|
+| BLOCKER-1 | ZÁRVA | `tutor_home_screen_test.dart:128` `theme: SsLightTheme.data()`; a Home most `SsModelStatusCard` + `SsButton`; saját gate-futásom a fájllal együtt **ZÖLD** |
+| MAJOR-1 | ZÁRVA | a hamis „extension-mentes" állítás javítva a fájl-docban, a `migration-status.md`-ben és a §10.2-ben |
+| MAJOR-2 | ZÁRVA | `error: (error, _)` → `error is AppFailure ? error : …`; a két holt ARB-kulcs korlátja mért indoklással kimondva |
+| MAJOR-3 | ZÁRVA | chat betöltés → `SsSkeleton`; data üres állapotok → tokenizált `_DataEmptyState` (R6 kivétel MINDKÉT feltétele teljesül: `SsColorScheme`/`SsTypography`/`SsSpacing` + §10-dokumentáció); profile validáció → `SsValidationSummary` |
+| MAJOR-4 | ZÁRVA | committolt `textScaler 2.0` × `en`/`hu` cella mind az 5 képernyő saját teszt-fájljában (`R18-R7`, `R18-A19`, `R22-DA14`, `R22-PC7`, `R22-PF7`); a mérés közben egy VALÓDI 1187 px-es `AppBar.actions` túlcsordulást is talált és javított |
+| MAJOR-5 | ZÁRVA | képernyőnkénti design-rendszer típus-állítások (Home, Chat, Data ×4, Privacy, Profile ×3) |
+| m1–m6 / R16–R17 | ZÁRVA vagy dokumentáltan elhagyva | lásd §10.8–10.9 |
+
+Egyetlen teszt-cella sem törölt, `skip`-elt vagy lazított (`git diff ba6be648..HEAD -- test/` → nincs `-` jelű `testWidgets`/`expect`, `skip: true` = 0).
+Saját, izolált klónban futtatott célzott gate (13 útvonal): **ZÖLD, `GATE_EXIT=0`**.
+`tools/scope-audit.py`: **OK** (20 changed path, 1 generated/ignored).
+
+### 5.2 ÚJ, NYITOTT lelet — BLOCKER-2 (a CI mérte, nem a célzott kapu)
+
+**A batch öt képernyője a design-rendszert MÉLY útvonalon importálja, nem a
+`public.dart` barrelen keresztül — ez merge-elt architektúra-szerződést sért
+(E13-R02).**
+
+- Piros cella: `test/core/architecture_dependency_test.dart:754-771` —
+  „design system boundaries (E13-R02) real production source reaches the design
+  system only via public.dart".
+- Sértő importok (24 db): `tutor_home_screen.dart` 4, `tutor_chat_screen.dart` 6,
+  `tutor_data_screen.dart` 8, `tutor_profile_screen.dart` 4,
+  `tutor_privacy_screen.dart` 2 — mind `import '../../../../core/design_system/<alkönyvtár>/<fájl>.dart'` alakú.
+- **Nem a javító kör regressziója:** ugyanez a cella MÁR az első CI-futásban
+  (`33707997183`) is piros volt (6 találat a `--log-failed` kimenetben) — az én
+  első review-m nem fogta meg, mert a kör célzott kapujában nincs benne, és a
+  gate `architecture` lépése (`dart run tool/check_architecture.dart`) ezt a
+  szabályt NEM méri (a lépés zölden ment mindkét saját futásomon).
+- **A javítás mechanikus és a kör fájllistáján belül van:** a 24 mély import
+  helyett fájlonként EGY `import 'package:strumsight/core/design_system/public.dart';`
+  — a `public.dart` mind a 68 szükséges szimbólumot exportálja (ellenőrizve:
+  `ss_card`, `ss_section`, `ss_surface`, `ss_skeleton`, `ss_failure_state`,
+  `failure_presentation`, `ss_button`, `ss_model_status_card`,
+  `ss_provenance_badge`, `ss_validation_summary`, `foundations/*`). A mért
+  precedens: `lib/features/gamification/presentation/screens/achievements_screen.dart:2`
+  (E15-R08) pontosan így importál.
+- **A megismétlődés őre:** a kör `gate_tests` listájába fel kell venni a
+  `test/core/architecture_dependency_test.dart`-ot (a jövőbeli
+  design-rendszer-migrációs briefek sablonjába is), különben a barrel-szabály
+  ismét csak a teljes CI-suite-ban derül ki.
+
+### 5.3 Verdikt: **H5 HALT** — merge TILOS
+
+A kör CI-ja **kétszer piros** (`33707997183` a BLOCKER-1-en, `33711465885` a
+BLOCKER-2-n), ami az ADR 0087 §2 szerint kötelező megállás — a maradék javítás
+önmagában triviális, de a szabály nem a nehézségtől függ. A kör munkája
+(`c8be6e7d`, PR #540) megmarad az ágon; a folytatás az önjavító session dolga a
+fenti, mért javítás-recepttel.
