@@ -141,6 +141,16 @@ barrelt importálja. A többi döntés (D1 képlet-újrahasznosítás, D2–D9)
 `test/core/architecture_dependency_test.dart` — „audio analysis quality
 primitives stay barrel-reachable (E14-R05)".
 
+**D10 — A pillanatkép közzététele a `LivePipeline` saját getterén megy.** A
+`LiveFrame`-nek nincs `signalQuality` mezője, a fájlja
+(`lib/features/live/model/live_frame.dart`) pedig a kör tilos zónájában van, és
+a `live_pipeline.dart` nincs a `RecognitionFrame` V2 szerződésre átkötve.
+A snapshot ezért a `RecognitionRuntimeInfo get runtimeInfo`
+(`live_pipeline.dart:302`) MEGLÉVŐ mintája szerint, csak olvasható getterrel
+kerül ki; a `LiveFrame` szerződése és az `inputLevel` bájtra változatlan (D8).
+A snapshot UI-ba vagy `RecognitionFrame`-be kötése külön kör. (Kör-brief §0.0
+R7, mérve 2026-09-04.)
+
 ## Következmények
 
 - A D1 miatt a kör `allowed_paths`-ának tartalmaznia KELL a

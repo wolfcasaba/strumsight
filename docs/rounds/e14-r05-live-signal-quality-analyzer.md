@@ -126,6 +126,33 @@ Ami ebből következik erre a körre:
    Ellenőrzés egy paranccsal:
    `grep -n signal_quality_math lib/features/audio_analysis/public.dart`.
 
+**R7 — MÉRVE: a snapshot közzététele a pipeline SAJÁT getterén megy, NEM a
+`LiveFrame`-en.** A §3/5. pont („a pipeline megtölti a snapshotot") a mért fán
+kétértelmű, és a naiv olvasata `H3`-at okozna:
+
+| Mérés (`main @ 62e0dce6`, munkapéldány) | Eredmény |
+|---|---|
+| `grep -n "final " lib/features/live/model/live_frame.dart` | a `LiveFrame`-nek **nincs** `signalQuality` mezője (12 mező: `current`, `next`, `latestStrum`, `bar`, `bpm`, `inputLevel`, `tuningHz`, `listening`, `strumSeq`, `latestStrumTime`, `engineTimeSec`) |
+| `grep -rn "SignalQualitySnapshot" lib/features/live --include=*.dart` | csak a `domain/recognition/**` szerződés-fájlokban (`recognition_frame.dart:21/44`) — a `live_pipeline.dart` **nincs** a `RecognitionFrame`-re átkötve (E14-R04 kimondottan nem kötötte át) |
+| `lib/features/live/model/live_frame.dart` | **TILOS zóna** (nincs az `allowed_paths`-on) |
+
+Ebből következik, kötelezően:
+
+1. A `LivePipeline` **új, csak olvasható gettert** publikál a legutóbb mért
+   pillanatképre — a fában MÁR MEGLÉVŐ minta szerint
+   (`RecognitionRuntimeInfo get runtimeInfo`,
+   `lib/features/live/engine/dsp/live_pipeline.dart:302`). Javasolt alak:
+   `SignalQualitySnapshot get signalQuality` (a `_buildFrame()` érintése nélkül).
+2. A `LiveFrame` szerződése és az `inputLevel` **bájtra változatlan** (§5.5, D8).
+   A `live_frame.dart` fájlhoz a kör NEM nyúl — ha az implementer szerint
+   nyúlni KELLENE, az `stopped` jelzés, nem néma lista-tágítás.
+3. A snapshot UI-ba/`RecognitionFrame`-be kötése **nem ez a kör**: az a
+   `live_frame.dart`-ot vagy a V2-átkötést érintené, mindkettő a tilos zónában.
+   Ez a kör az elemzőt és a pipeline-oldali mérést szállítja.
+4. A `signalQuality` getter a puffer feltöltése előtt
+   `SignalQualitySnapshot.unknown`-t ad (acceptance 3.), és a `reset()`
+   (`:322`) is erre állítja vissza.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -199,7 +226,9 @@ az indoklás itt, explicit módon áll.
    után vált, és csak `exitFrames` után enged vissza — a frame-enkénti villogás
    tiltott.
 4. `LiveQualityThresholds` — a Live-specifikus küszöbök EGY helyen, verzióval.
-5. A pipeline megtölti a snapshotot (a `inputLevel` mező VÁLTOZATLAN marad).
+5. A pipeline megtölti a snapshotot, és a `LivePipeline` saját, csak olvasható
+   getterén publikálja (§0.0 R7 — a `LiveFrame`-en NEM, az a tilos zóna); a
+   `inputLevel` mező VÁLTOZATLAN marad.
 6. `docs/rag/chunks/live-signal-quality.md` — a küszöbök és a hiszterézis
    paramétereinek forrása (CLAUDE.md: minden hangolt paraméter a chunkba, ugyanabban a commitban).
 
