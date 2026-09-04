@@ -86,3 +86,8 @@ __pycache__/
 # autonóm láncot ("piszkos munkafa — a lánc nem indul ismeretlen lokális
 # változás fölé"), 14:54-től minden firing kiesett.
 .claude/agent-memory/
+
+# Valódi eszköz-build profil (E16-R04, ADR 0503 D5) — csak a placeholder
+# device_build.example.json trackelt; a valódi profil sosem kerülhet a repóba.
+device_build.json
+device_build.*.json
