@@ -24,6 +24,26 @@ void main() {
       );
     });
 
+    test(
+      'a duplicate task id within an otherwise valid-length list is rejected',
+      () {
+        final tasks = _tasksOfLength(15);
+        final withDuplicate = [
+          ...tasks.sublist(0, 14),
+          LabTask(
+            id: tasks[0].id,
+            family: LabTaskFamily.fastPattern,
+            targetDurationSeconds: 5,
+          ),
+        ];
+
+        expect(
+          () => LabTaskCatalog.validated(withDuplicate),
+          throwsA(isA<LabTaskDuplicateIdException>()),
+        );
+      },
+    );
+
     test('the standard catalog covers all six families and validates', () {
       final catalog = LabTaskCatalog.standard();
       expect(

@@ -124,13 +124,129 @@ void main() {
         returnsNormally,
       );
     });
+
+    test('the manifest consentVersion reflects the actual consent grant, even '
+        'when package.consentVersion disagrees', () {
+      final result = writer.write(
+        root: tempDir,
+        consent: const LabConsentGranted(consentVersion: 'consent-v2-2026'),
+        package: _samplePackage(consentVersion: 'v1-stale'),
+        pcmSamples: _samplePcm(),
+      );
+
+      final manifest =
+          jsonDecode(result.location.manifestFile.readAsStringSync())
+              as Map<String, Object?>;
+      expect(manifest['consentVersion'], 'consent-v2-2026');
+    });
+  });
+
+  group('LabPackageWriter — packageId path-traversal rejection (MAJOR-1)', () {
+    late Directory tempDir;
+    const writer = LabPackageWriter();
+
+    setUp(() {
+      tempDir = Directory.systemTemp.createTempSync(
+        'lab_package_writer_traversal_test_',
+      );
+    });
+
+    tearDown(() {
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    });
+
+    test('locate rejects a packageId containing ".."', () {
+      expect(
+        () => writer.locate(root: tempDir, packageId: '../OUTSIDE_VICTIM'),
+        throwsA(isA<LabPackageIdException>()),
+      );
+    });
+
+    test('locate rejects an empty packageId', () {
+      expect(
+        () => writer.locate(root: tempDir, packageId: ''),
+        throwsA(isA<LabPackageIdException>()),
+      );
+    });
+
+    test('locate rejects a packageId containing a path separator', () {
+      expect(
+        () => writer.locate(root: tempDir, packageId: 'a/b'),
+        throwsA(isA<LabPackageIdException>()),
+      );
+    });
+
+    test('write rejects a ".." packageId and leaves the sibling directory '
+        'untouched', () {
+      final victimDir = Directory.systemTemp.createTempSync(
+        'lab_writer_victim_',
+      );
+      final victimName = victimDir.path.split(Platform.pathSeparator).last;
+      final victimFile = File('${victimDir.path}/precious.txt')
+        ..writeAsStringSync('precious');
+      addTearDown(() {
+        if (victimDir.existsSync()) victimDir.deleteSync(recursive: true);
+      });
+
+      expect(
+        () => writer.write(
+          root: tempDir,
+          consent: const LabConsentGranted(consentVersion: 'v1'),
+          package: _samplePackage(packageId: '../$victimName'),
+          pcmSamples: _samplePcm(),
+        ),
+        throwsA(isA<LabPackageIdException>()),
+      );
+
+      expect(victimDir.existsSync(), isTrue);
+      expect(victimFile.existsSync(), isTrue);
+      expect(victimFile.readAsStringSync(), 'precious');
+    });
+
+    test('status rejects a traversal packageId', () {
+      expect(
+        () => writer.status(root: tempDir, packageId: '../OUTSIDE_VICTIM'),
+        throwsA(isA<LabPackageIdException>()),
+      );
+    });
+
+    test('delete rejects an empty packageId and leaves the root directory '
+        'and its existing packages untouched', () {
+      writer.write(
+        root: tempDir,
+        consent: const LabConsentGranted(consentVersion: 'v1'),
+        package: _samplePackage(),
+        pcmSamples: _samplePcm(),
+      );
+
+      expect(
+        () => writer.delete(root: tempDir, packageId: ''),
+        throwsA(isA<LabPackageIdException>()),
+      );
+
+      expect(tempDir.existsSync(), isTrue);
+      expect(
+        writer.status(root: tempDir, packageId: 'pkg-writer-001'),
+        LabPackageStatus.present,
+      );
+    });
+
+    test('delete rejects a ".." packageId', () {
+      expect(
+        () => writer.delete(root: tempDir, packageId: '../OUTSIDE_VICTIM'),
+        throwsA(isA<LabPackageIdException>()),
+      );
+    });
   });
 }
 
-LabCapturePackage _samplePackage() => LabCapturePackage(
-  packageId: 'pkg-writer-001',
+LabCapturePackage _samplePackage({
+  String packageId = 'pkg-writer-001',
+  String consentVersion = 'v1',
+}) => LabCapturePackage(
+  packageId: packageId,
   capturedAt: DateTime.utc(2026, 9, 4, 12),
-  consentVersion: 'v1',
+  consentVersion: consentVersion,
   device: const LabDeviceMetadata(
     modelName: 'Pixel 9',
     osVersion: 'Android 15',
