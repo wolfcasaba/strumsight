@@ -1103,6 +1103,124 @@ import 'package:flutter/widgets.dart';
       expect(offenders, isEmpty, reason: offenders.join('\n'));
     });
   });
+
+  // E14-R04 — the versioned RecognitionFrame contract enters as a new
+  // domain root inside the existing `live` feature (ADR 0505 D1). The
+  // `tool/check_architecture.dart` shared-domain prefix list is NOT
+  // extended (measured: `_isSharedDomain` offers no extension point,
+  // ADR 0505 §0.0 R3) — this mirrors the `practice_generator/domain`
+  // (`:23`), `gamification/domain` (`:101`) and `community/domain`
+  // (`:982`) self-scanning pattern instead.
+  group('recognition domain stays framework-free (E14-R04)', () {
+    test('no Flutter/Riverpod imports in domain/recognition', () {
+      final domainDir = Directory('lib/features/live/domain/recognition');
+      expect(domainDir.existsSync(), isTrue);
+
+      final offenders = <String>[];
+      for (final entity in domainDir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        offenders.addAll(
+          _forbiddenRecognitionDomainMarkerOffenders(
+            entity.path,
+            entity.readAsStringSync(),
+          ),
+        );
+      }
+
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the boundary detector flags a direct Flutter import', () {
+      const directImport = "import 'package:flutter/foundation.dart';";
+
+      expect(
+        _forbiddenRecognitionDomainMarkerOffenders(
+          'strum_prediction.dart',
+          directImport,
+        ),
+        <String>['strum_prediction.dart contains "package:flutter/"'],
+      );
+    });
+
+    test('the boundary detector allows package:meta (ADR 0505 §0.0 R4)', () {
+      const metaImport = "import 'package:meta/meta.dart';";
+
+      expect(
+        _forbiddenRecognitionDomainMarkerOffenders(
+          'strum_prediction.dart',
+          metaImport,
+        ),
+        isEmpty,
+      );
+    });
+
+    // ADR 0505 D5 / §0.0 R5: the five pure contract files may reach
+    // `model/` ONLY via `recognition_runtime_info.dart`; the adapter is
+    // the SOLE documented legacy boundary and may additionally reach
+    // `live_frame.dart`.
+    test('only the adapter reaches live_frame.dart; the rest reach only '
+        'recognition_runtime_info.dart under model/', () {
+      final domainDir = Directory('lib/features/live/domain/recognition');
+      final offenders = <String>[];
+      for (final entity in domainDir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        offenders.addAll(
+          _forbiddenRecognitionModelImports(
+            entity.path,
+            entity.readAsStringSync(),
+          ),
+        );
+      }
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test(
+      'the boundary detector flags a non-adapter file importing live_frame.dart',
+      () {
+        const directImport = "import '../../model/live_frame.dart';";
+
+        expect(
+          _forbiddenRecognitionModelImports(
+            'lib/features/live/domain/recognition/recognition_frame.dart',
+            directImport,
+          ),
+          <String>[
+            'lib/features/live/domain/recognition/recognition_frame.dart -> '
+                '../../model/live_frame.dart',
+          ],
+        );
+      },
+    );
+
+    test(
+      'the boundary detector allows the adapter importing live_frame.dart',
+      () {
+        const directImport = "import '../../model/live_frame.dart';";
+
+        expect(
+          _forbiddenRecognitionModelImports(
+            'lib/features/live/domain/recognition/live_frame_adapter.dart',
+            directImport,
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test('the boundary detector allows recognition_runtime_info.dart from '
+        'any contract file', () {
+      const allowedImport =
+          "import '../../model/recognition_runtime_info.dart';";
+
+      expect(
+        _forbiddenRecognitionModelImports(
+          'lib/features/live/domain/recognition/recognition_frame.dart',
+          allowedImport,
+        ),
+        isEmpty,
+      );
+    });
+  });
 }
 
 void _write(Directory project, String relativePath, String contents) {
@@ -1427,6 +1545,48 @@ List<String> _forbiddenCommunityOtherFeatureImports(
     for (final match in importMatches)
       if (match.group(1) case final uri?
           when _isCrossFeatureInternalImport(uri: uri, ownFeature: 'community'))
+        '$path -> $uri',
+  ];
+}
+
+// ── E14-R04 helpers (ADR 0505) ──────────────────────────────────────────
+
+/// Forbidden import-URI markers for the recognition domain (ADR 0505 D1).
+/// `package:meta/meta.dart` is deliberately NOT in this list — it is how
+/// the domain's classes stay `@immutable` without pulling in
+/// `package:flutter/foundation.dart` (ADR 0505 §0.0 R4).
+const _recognitionImportUriMarkers = [
+  'package:flutter/',
+  'package:flutter_riverpod/',
+  'package:riverpod/',
+  'dart:ui',
+];
+
+List<String> _forbiddenRecognitionDomainMarkerOffenders(
+  String path,
+  String content,
+) {
+  final withoutComments = _withoutTrivia(content, maskStrings: false);
+  return [
+    for (final marker in _recognitionImportUriMarkers)
+      if (withoutComments.contains(marker)) '$path contains "$marker"',
+  ];
+}
+
+/// Flags any `model/` import from a `domain/recognition/**` file that is
+/// NOT `recognition_runtime_info.dart` — except `live_frame_adapter.dart`,
+/// which may ALSO reach `live_frame.dart`, the sole documented legacy
+/// boundary (ADR 0505 D5, §0.0 R5).
+List<String> _forbiddenRecognitionModelImports(String path, String source) {
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  final isAdapter = path.endsWith('live_frame_adapter.dart');
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when uri.contains('/model/') &&
+              !uri.endsWith('recognition_runtime_info.dart') &&
+              !(isAdapter && uri.endsWith('live_frame.dart')))
         '$path -> $uri',
   ];
 }
