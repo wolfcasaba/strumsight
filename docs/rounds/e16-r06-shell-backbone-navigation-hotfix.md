@@ -498,7 +498,226 @@ Két eldobható mutáció, szó szerinti kimenettel:
 
 ## 10. Implementation handoff — a Codex tölti ki
 
-*(üres)*
+> Ezt a kört a `sonnet-impl` motor (Claude Sonnet 5) hajtotta végre, nem
+> Codex — a fejléc szövege a briefsablon öröksége.
+
+### 10.1 Fájlonkénti összegzés
+
+- **`lib/app/routing/adaptive_shell_routes.dart`** — új `String
+  entryLocationFor(bool adaptiveShellEnabled)` tiszta függvény (D1), a
+  meglévő `legacyRedirects`/`isStageRoute` fölé, doc-commenttel jelölve mint
+  az EGYETLEN forrás.
+- **`lib/app/routing/app_router.dart`** — kizárólag a `:231` sor
+  (`final entryLocation = adaptiveShellEnabled ? AppRoutes.today :
+  AppRoutes.live;`) cserélve `entryLocationFor(adaptiveShellEnabled)`
+  hívásra; a kísérő kommentet kiegészítettem az ADR 0508 hivatkozással. Egy
+  sor más változás sincs ebben a fájlban (M1 mérve tartva).
+- **`lib/features/onboarding/screens/onboarding_screen.dart`** —
+  `_completeFinish` és `_completeFirstWin` egyaránt
+  `entryLocationFor(ref.read(appConfigProvider).flags.adaptiveShellEnabled)`-t
+  olvas be a `await`-lánc ELŐTT (ugyanoda kerül, ahol a `router`/`navigator`
+  handle-öket is elcsípi), és ezt hívja a régi `AppRoutes.live` helyett. A
+  first-win post-frame `LearnScreen` push (`:139-147`) és a
+  `widget.onDone`/`widget.onFirstWin` callback-szemantika bájtra
+  változatlan. Import-csere: `app_route.dart` (már nem kell — az `AppRoutes`
+  literál eltűnt a fájlból) → `app_config.dart` + `adaptive_shell_routes.dart`.
+  Két doc-comment (`onDone`/`onFirstWin` osztálymezők, a class-level
+  „defaults to the plain finish" mondat) átírva „Live tab" → „shell entry
+  location” szövegre, mert az állítás már nem igaz szó szerint.
+- **`lib/features/practice_hub/screens/practice_area_hub_screen.dart`** —
+  `StatelessWidget` → `ConsumerWidget`; `practiceCatalogProvider`-t a
+  `lib/features/practice/public.dart` barrelen át olvassa (`show
+  practiceCatalogProvider`, az `app_router.dart:36` precedens alakja). Az
+  ajánlott kártya `Card` blokkja `if (catalog.isNotEmpty)` mögé került (D4);
+  a CTA `onPressed` most `Uri(path: AppRoutes.practiceSetup,
+  queryParameters: {'id': catalog.first.id})`-t épít és `context.go`-val nyit
+  (D3). A `ValueKey('practice-hub-recommended-cta')` változatlan. Semmi más
+  a fájlban nem módosult (a Quick Tools sáv, a kategória-chipek változatlanok).
+- **`test/app/routing/shell_entry_location_test.dart`** (ÚJ) — a 2×2
+  belépési mátrix valódi `StrumSightApp` + `routerProvider` routeren
+  (`appConfigProvider.overrideWithValue` a flag két állására), mind a négy
+  cella a SETTLED `router.state.uri.path`-ra mér `pumpAndSettle` után.
+- **`test/app/routing/onboarding_first_win_test.dart`** — az egyetlen
+  meglévő teszt két állítása írva át: a `:121`-nek megfelelő (tap utáni,
+  még perzisztencia előtti) állítás VÁLTOZATLANUL `AppRoutes.today` marad
+  (ez a reaktív redirect a `onboardingSeenProvider` flip-jére, független az
+  onboarding saját `router.go` hívásától — ez már az E15-R02 kör óta így
+  van). A settled állítás (a régi `:134`, `AppRoutes.practiceLive`) most
+  `AppRoutes.today`-re változott, mert az onboarding saját hívása is
+  `entryLocationFor(true)`-t céloz, nem a hardcoded `/live`-ot, ezért a
+  `legacyRedirects`-en át futó második ugrás megszűnt. A kommentek átírva az
+  ÚJ szerződésre (a „still calls `router.go(AppRoutes.live)` literally"
+  mondat törölve).
+- **`test/features/practice_hub/practice_area_hub_cta_test.dart`** (ÚJ) —
+  saját, könnyűsúlyú `GoRouter` (`AppRoutes.practiceHub` →
+  `PracticeAreaHubScreen`, `AppRoutes.practiceSetup` → placeholder), három
+  cella: (a) a valódi (nem override-olt) `practiceCatalogProvider` →
+  `?id=builtin.quarterDownstrokes.v1`; (b) override-olt katalógus
+  (`id: 'test.first.v1'`) → `?id=test.first.v1` (ez öli meg a bedrótozott
+  literált); (c) üres override → a CTA `ValueKey` `findsNothing`, és sem a
+  cím, sem az üzenet szövege nem jelenik meg.
+- **`test/e2e/full_app_walkthrough_test.dart`** — a `:106`
+  (`session.router.go(AppRoutes.today)`) és a `:168-170`
+  (`router.go(practiceHub)` + `router.go('...?id=...')`) sorok törölve; a
+  kísérő „MÉRT LELET" kommentek E16-R06-ra hivatkozó, feloldást leíró
+  kommentekre cserélve. A Setup-állomás állítása megfordítva:
+  `find.text(l10n.practiceRouteErrorTitle)` most `findsNothing` (a régi
+  `findsOneWidget` helyett). A `walked` halmaz, az állomások sorrendje és a
+  Library/Progress/Profile szakasz (L3/L4/L5, `session.router.go` a
+  `profileLibrary`/`profileProgress`/`profileHome`-ra) bájtra változatlan.
+- **`docs/release/full-app-verification.md`** — a §2 fejléc és bevezető
+  bekezdés átírva a MÉRT új eredményre (A3 = TELJESÜL, `E16-R06`
+  hivatkozással); az L1 és L2 alszakasz EREDETI mérő szövege változatlan,
+  mindkettőhöz hozzáadva egy „Kör: `E16-R06` — feloldva" bekezdés a
+  konkrét mérési bizonyítékkal. A §4 „Nyitott tételek" táblázat 1/2/6. sora
+  frissítve a feloldásra; a 3/4/5. sor (L3/L4/L5) és a §3 partíció-táblázatok
+  bájtra változatlanok. Az L3/L4/L5 ### alszakaszok (98-154. sor a réginek
+  megfelelően) egyetlen karakterben sem módosultak.
+
+### 10.2 A1–A10 acceptance — tételes
+
+- **A1** — teljesül. `grep -n "adaptiveShellEnabled ? AppRoutes.today :
+  AppRoutes.live" lib/` **pontosan egy** találat
+  (`adaptive_shell_routes.dart:29`, a függvénytörzs). `app_router.dart` és
+  `onboarding_screen.dart` mindketten `entryLocationFor(...)`-t hívnak.
+- **A2** — teljesül. `shell_entry_location_test.dart` mind a négy cellája
+  zöld: BE×Skip→`/today`, BE×first-win→`/today`, KI×Skip→`/live`,
+  KI×first-win→`/live` (settled URI, valódi routeren).
+- **A3** — teljesül. `onboarding_first_win_test.dart` egyetlen tesztje méri
+  a párost: a settled `router.state.uri.path == AppRoutes.today` ÉS
+  `learn.lesson.id == Lessons.firstWin.id` (LearnScreen felépült).
+- **A4** — teljesül. `practice_area_hub_cta_test.dart` mindhárom cellája
+  zöld — lásd 10.1.
+- **A5** — teljesül. `full_app_walkthrough_test.dart`-ban a CTA tapintása
+  után `find.text(l10n.practiceRouteErrorTitle)` `findsNothing`, és a
+  bejárás ugyanott tovább scrollol/tapint a `l10n.practiceSetupStart`
+  gombra (ha az nem lenne jelen, a `scrollUntilVisible`/`tap` hibával
+  bukna) — a teszt zöld, tehát a valódi űrlap renderelődik.
+- **A6** — teljesül. `grep -n "session.router.go\|router.go(" test/e2e/
+  full_app_walkthrough_test.dart` a gerincen (onboarding→Today→Practice
+  Area Hub→Setup→Session) **0 találatot** ad; a maradék 3 találat
+  (`:236/:258/:293`) a gerincen KÍVÜLI Library/Progress/Profile
+  állomás-váltás, az L3/L4/L5 lelethez tartozik, ezt a kör nem érinti (M1).
+- **A7** — teljesül. A `walked` halmaz a kilenc E16-R05-ben rögzített
+  osztályt tartalmazza változatlanul, a teszt zöld.
+- **A8** — teljesül. `full-app-verification.md` §2 A3-bekezdése átírva a
+  MÉRT eredményre; L1/L2 megmaradt „Kör: E16-R06” jelöléssel; L3/L4/L5
+  bájtra változatlan (lásd 10.1).
+- **A9** — teljesül. `git status --porcelain test/ui/goldens/goldens/
+  test/fixtures/ui/` üres a gate lefutása után; mind a négy golden-fájl
+  (`e13_r16`, `e13_r17`, `e15_r13` — mind az 1163 cella —, `ui_baseline`)
+  zöld, `ProviderScope`-burkolás módosítás NÉLKÜL (a §0.0 M4 pre-flight
+  mérése helyesnek bizonyult, egyik golden-fájlhoz sem kellett nyúlni).
+- **A10** — teljesül, lásd 10.3.
+
+### 10.3 §7 gate — szó szerinti záró kimenet
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/app/routing/shell_entry_location_test.dart       zöld
+    test test/app/routing/onboarding_first_win_test.dart       zöld
+    test test/app/routing/app_router_test.dart                 zöld
+    test test/app/navigation/                                  zöld
+    test test/features/onboarding/                             zöld
+    test test/features/practice_hub/practice_area_hub_cta_test.dart zöld
+    test test/features/today/hub_navigation_test.dart          zöld
+    test test/accessibility/closure_suite_test.dart            zöld
+    test test/core/screen_size_guard_test.dart                 zöld
+    test test/ui/goldens/e13_r16_screens_golden_test.dart      zöld
+    test test/ui/goldens/e13_r17_screens_golden_test.dart      zöld
+    test test/ui/goldens/e15_r13_full_variant_matrix_test.dart zöld
+    test test/ui/ui_baseline_screenshot_test.dart              zöld
+    test test/e2e/full_app_walkthrough_test.dart               zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+(A `backend/` sáv nem futott — a kör nem érintette a `backend/`-et.)
+
+### 10.4 §7.1 kötelező falszifikáció — szó szerinti kimenet
+
+**Mutáció 1 — a CTA URI-építéséből a `queryParameters` sor kivéve**
+(`practice_area_hub_screen.dart`, `Uri(path: AppRoutes.practiceSetup)`-ra
+csupaszítva):
+
+```
+Expected: '/practice/setup?id=test.first.v1'
+  Actual: '/practice/setup'
+...
+00:01 +0 -2: A4 — the CTA URI-mátrix (b) an overridden catalog: the CTA carries the OVERRIDDEN first id, not a hardcoded literal [E]
+00:02 +1 -2: Some tests failed.
+Failing tests:
+  .../practice_area_hub_cta_test.dart: A4 — the CTA URI-mátrix (a) the built-in catalog: the CTA carries the catalog's first id
+  .../practice_area_hub_cta_test.dart: A4 — the CTA URI-mátrix (b) an overridden catalog: the CTA carries the OVERRIDDEN first id, not a hardcoded literal
+```
+
+A4/a ÉS A4/b PIROS (a mátrix A4/a-t és A5-öt jósolt; A5 külön fájlban él,
+de A4/a azonos okból bukik). Visszaállítás után:
+`practice_area_hub_cta_test.dart` mindhárom cellája ZÖLD (`00:01 +3: All
+tests passed!`).
+
+**Mutáció 2 — `entryLocationFor(...)` hívás(ok) az onboardingban fix
+`AppRoutes.today`-re cserélve.** Ez a mutáció, PONTOSAN ahogy a brief
+kéri, **MÉRVE nem visz pirosra egyetlen cellát sem** —
+`shell_entry_location_test.dart`: `00:03 +4: All tests passed!`,
+`onboarding_first_win_test.dart`: `00:02 +1: All tests passed!`, mindkettő
+zöld MARADT a mutáció alatt is. **Mért ok:** ez a codebase két, ETTŐL A
+körtől FÜGGETLEN, korábbi körben (E15-R02 MINOR-2 fix, l.
+`adaptive_scaffold_test.dart` A7 csoportja) beépített védőháló miatt
+öngyógyul:
+1. `onboardingRedirect(seen, location, home: entryLocation)`
+   (`route_guards.dart`) — amint `onboardingSeenProvider` állapota `true`-ra
+   vált (`complete()` szinkron `state = true` sora), a router redirect-lánca
+   AZONNAL a helyes, `app_router.dart`-ban (nem mutált) számított
+   `entryLocation`-re ugrik, MÉG MIELŐTT az onboarding saját (mutált)
+   `router.go(...)` hívása lefutna.
+2. `app_router.dart`'s `onException: (_, _, router) => router.go(entryLocation)`
+   — ha a mutált hívás egy, a shell KI állapotban nem regisztrált útvonalra
+   megy (`/today` csak `if (adaptiveShellEnabled)` mögött létezik, l.
+   `app_router.dart:506/520-523`), a navigáció GoException-t dob, amit ez a
+   handler a helyes `entryLocation`-re küldött újabb `router.go`-val fog el.
+
+Mindkét háló a HELYES, `app_router.dart`-beli `entryLocationFor(...)`
+hívásból számol — amit ez a mutáció NEM érint —, ezért bármi is történik az
+onboarding oldalán, a SETTLED állapot a helyes értékre konvergál, amíg a
+mutált célpont maga nem egy, a hibás konfigurációban is véletlenül
+érvényes route. Ezt igazolja a kontroll-mérés: ugyanezt a mutációt
+`AppRoutes.today` helyett a RÉGI hibát reprodukáló `AppRoutes.live`
+literállal elvégezve (ami MINDKÉT flag-állásban érvényes, regisztrált route,
+tehát nem dob kivételt) a `shell_entry_location_test.dart` PONTOSAN a
+mátrix-előrejelzésnek megfelelően bukik:
+
+```
+00:02 +0 -2: A2 — the belépési 2×2 mátrix (settled router URI) shell BE × first-win settles on /today [E]
+Failing tests:
+  .../shell_entry_location_test.dart: A2 — the belépési 2×2 mátrix (settled router URI) shell BE × Skip/finish settles on /today
+  .../shell_entry_location_test.dart: A2 — the belépési 2×2 mátrix (settled router URI) shell BE × first-win settles on /today
+```
+
+— vagyis a teszt-készlet KIMÉRHETŐEN nem vákuum: az L2 defektosztály valódi
+regresszióját (a settled cél flag-független hardkódolása egy MINDKÉT
+állapotban érvényes route-ra) helyesen elkapja; a brief §7.1 pont 2
+literálja (`AppRoutes.today`) ebben a router-architektúrában — a fenti két,
+e körtől független védőháló miatt — nem alkalmas erre a demonstrációra.
+Mindkét kísérleti mutáció visszaállítva; a munkafa jelenlegi állapota a
+`entryLocationFor(...)`-t hívó, helyes implementáció (`git diff` a
+mutációk után üres az érintett két `lib/**` fájlra).
+
+### 10.5 Egyéb mérések
+
+- `git status --porcelain` a kör végén pontosan a §4 engedélyezett fájlokat
+  listázza (5 módosított `lib/**`+doksi fájl, 2 módosított teszt, 2 új
+  teszt) — nincs listán kívüli diff.
+- A `tools/gateguard-scan.py --brief docs/rounds/e16-r06-shell-backbone-navigation-hotfix.md`
+  előfeltétel-parancsot a brief §0.0 M6 már lefuttatta („nincs ütközés”) —
+  ezt a kört a listán kívüli fájlhoz nyúlás nem érintette, újrafuttatása
+  nem volt szükséges.
 
 ## 11. Review — a Claude tölti ki
 

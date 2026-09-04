@@ -21,6 +21,13 @@ const Map<String, String> legacyRedirects = <String, String>{
   AppRoutes.chords: AppRoutes.practiceChords,
 };
 
+/// The adaptive shell's entry location (ADR 0508 D1) — the ONE place the
+/// `adaptiveShellEnabled → belépési útvonal` mapping lives. Both the router
+/// (`app_router.dart`) and the onboarding flow's completion navigation call
+/// this instead of each holding their own copy, so the two can't drift.
+String entryLocationFor(bool adaptiveShellEnabled) =>
+    adaptiveShellEnabled ? AppRoutes.today : AppRoutes.live;
+
 /// The prefix shared by every concrete Song Trainer session URL, derived
 /// from the [AppRoutes.songTrainerSession] template so the two can't drift.
 final String _songTrainerSessionPrefix = AppRoutes.songTrainerSession

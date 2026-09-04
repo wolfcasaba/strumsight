@@ -37,33 +37,40 @@ A §6.1 KÖTELEZŐ valódi-sértés próba mindkét lépésének szó szerinti k
 a `docs/rounds/e16-r05-full-app-verification-and-release.md` §10
 szakaszában van dokumentálva.
 
-## 2. A bejárás mért leletei (NEM javítva — §5.2, `lib/**` tiltott zóna)
+## 2. A bejárás mért leletei — E16-R06 UTÁN (A3 mérhetően pozitívra fordítva)
 
 A `test/e2e/full_app_walkthrough_test.dart` a szállított
 `FeatureFlags.forEnvironment(AppEnvironment.development, accountEnabled:
 false)` BE-készlettel bejárja: indítás → Today → gyakorlás (Practice Area
 Hub → Setup → Session) → eredmény → Library → Progress → Profile →
 Settings. Minden állomás valós adatot vagy explicit állapotot állít — a
-teszt zöld, de öt állomáson a MÉRT explicit állapot (vagy a bejárás saját
-kényszerű lépése, mint az újraindítás) maga is egy
-bekötési hiányt dokumentál. **Fontos:** a bejárás a gerincen KÉT
-teszt-oldali navigációt használ, mert a termék saját navigációja
-megszakad — `full_app_walkthrough_test.dart:106`
-(`session.router.go(AppRoutes.today)`, mert az onboarding Skip-je a
-termékben `/live`-ra fejez be, l. **L2**) és
-`full_app_walkthrough_test.dart:168–170` (`router.go(practiceHub)` +
-`router.go('${AppRoutes.practiceSetup}?id=…')`, mert a shell egyetlen
-hirdetett belépési pontja pontozott gyakorlásba `?id=` nélkül navigál, l.
-**L1**). Emiatt: **A3 — NEM teljesül.** A „BE" besorolású capabilityk core
-útjai a termék SAJÁT navigációjával, e két híd nélkül, mérhetően NEM
-járhatók végig — a mért igazság az, hogy az állomások, oda navigálva, valós
-adatot vagy explicit állapotot mutatnak (A2 ✅), és a mért elérhető halmaz
-partíciója teljes (A4 ✅), de a gerinc navigációja két ponton szakad meg.
+teszt zöld. **`E16-R06` (ADR 0508) feloldotta az alább dokumentált L1 és L2
+leletet, és eltávolította a bejárás mindhárom teszt-oldali `router.go`
+sorát a gerincen** (onboarding → Today → Practice Area Hub → Setup →
+Session): a Skip/finish és a first-win ág egyaránt `entryLocationFor(...)`-ra
+navigál (`onboarding_screen.dart`, a router SAJÁT belépési logikájával azonos
+forrásból), és a Practice Area Hub ajánlott CTA-ja
+`?id=<katalógus első elemének id-je>` URI-t nyit
+(`practice_area_hub_screen.dart`) — ugyanabban az alakban, mint a legacy Hub
+`_openSetup`-ja. `grep -n "session.router.go\|router.go(" test/e2e/full_app_walkthrough_test.dart`
+a gerincen (onboarding → Today → Practice Area Hub → Setup → Session) mérve
+**0 találatot** ad; a fennmaradó három találat (Library/Progress/Profile
+állomás-váltás) a gerincen kívül él és az L3/L4/L5 lelethez tartozik,
+változatlan. Emiatt: **A3 — TELJESÜL.** A „BE" besorolású capabilityk core
+útjai a termék SAJÁT navigációjával, teszt-oldali híd nélkül, mérhetően
+végigjárhatók — az állomások, oda navigálva, valós adatot vagy explicit
+állapotot mutatnak (A2 ✅), a mért elérhető halmaz partíciója teljes
+(A4 ✅), és a gerinc navigációja megszakítás nélküli (A3 ✅, mérve:
+`E16-R06`).
 
-Az öt lelet közül az **L3** más jellegű, mint a másik négy: nem a
-SZÁLLÍTOTT kompozícióról mér semmit, hanem a mérés a harness saját határán
-akad el (l. L3 alatt) — a Library-állomás ezen a bejáráson ezért **nem**
-bizonyítja sem azt, hogy a szállított kompozíció hibás, sem azt, hogy jó.
+Az öt eredetileg dokumentált lelet közül az **L1** és **L2** ezzel a körrel
+feloldva (lásd alant, a saját szakaszuk megmaradt, kiegészítve a feloldás
+körével). Az **L3**, **L4** és **L5** továbbra is nyitott, `E16-R06` egyiket
+sem érinti (§3 a kör allowed-files listáján kívül esnek). Közülük az **L3**
+más jellegű, mint a másik kettő: nem a SZÁLLÍTOTT kompozícióról mér semmit,
+hanem a mérés a harness saját határán akad el (l. L3 alatt) — a
+Library-állomás ezen a bejáráson ezért **nem** bizonyítja sem azt, hogy a
+szállított kompozíció hibás, sem azt, hogy jó.
 
 ### L1 — a Practice Area Hub „ajánlott gyakorlás" CTA-ja nem ad át `id`-t
 
@@ -78,8 +85,11 @@ de az adaptív shell EGYETLEN hirdetett belépési pontja egy pontozott
 gyakorlásba méréssel zsákutca.
 
 - **Gazda:** Practice Area Hub (UI-06, SDD Ch13).
-- **Kör:** nincs — a bekötés javítása a felelős feature kör dolga (`lib/**`
-  ennek a körnek tiltott zónája); a lelet itt van rögzítve.
+- **Kör:** `E16-R06` — feloldva. `PracticeAreaHubScreen` `ConsumerWidget`-té
+  vált, a `practiceCatalogProvider`-t a `lib/features/practice/public.dart`
+  barrelen át olvassa, és a CTA `Uri(path: AppRoutes.practiceSetup,
+  queryParameters: {'id': catalog.first.id})`-t nyit — üres katalógusnál a
+  kártya nem renderelődik (ADR 0508 D3/D4).
 
 ### L2 — az onboarding mindig `/live`-ra fejez be, nem `/today`-ra
 
@@ -92,8 +102,11 @@ fejeződik be, SOHA nem `/today`-ra, pedig a router saját
 belépéskor, ha a shell BE van kapcsolva.
 
 - **Gazda:** Onboarding feature.
-- **Kör:** nincs — a bekötés javítása a felelős feature kör dolga; a lelet
-  itt van rögzítve.
+- **Kör:** `E16-R06` — feloldva. `entryLocationFor(bool
+  adaptiveShellEnabled)` (`lib/app/routing/adaptive_shell_routes.dart`) az
+  EGYETLEN forrás; `_completeFinish` és `_completeFirstWin` egyaránt ezt
+  hívja, ugyanabból a flag-forrásból (`ref.read(appConfigProvider).flags
+  .adaptiveShellEnabled`), amit a router is olvas (ADR 0508 D1/D2).
 
 ### L3 — az Unified Library forrásai olyan repository-kra épülnek, amiket csak a production bootstrap köt be
 
@@ -261,9 +274,9 @@ kimondott `nincs — <indok>`.
 
 | # | Tétel | Gazda | Kör |
 |---|---|---|---|
-| 1 | L1 — Practice Area Hub recommended CTA nem ad át `id`-t | Practice Area Hub | nincs — a bekötés javítása a felelős feature kör dolga (`lib/**` ennek a körnek tiltott zónája); a lelet itt van rögzítve |
-| 2 | L2 — Onboarding mindig `/live`-ra fejez be | Onboarding feature | nincs — a bekötés javítása a felelős feature kör dolga; a lelet itt van rögzítve |
+| 1 | L1 — Practice Area Hub recommended CTA nem ad át `id`-t | Practice Area Hub | **`E16-R06` — feloldva** (ADR 0508 D3/D4, l. a szakasz Kör sorát) |
+| 2 | L2 — Onboarding mindig `/live`-ra fejez be | Onboarding feature | **`E16-R06` — feloldva** (ADR 0508 D1/D2, l. a szakasz Kör sorát) |
 | 3 | L3 — Library V2 forrásai bootstrap-függők, a harness nem köti be | Library V2 / E12-R11 harness | nincs — a harness-nek vagy a Library kompozíciós rétegének kell ezt bekötnie egy jövőbeli körben; a lelet itt van rögzítve |
 | 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | nincs — a két napló összehangolása vagy a mérce forrásának cseréje a felelős feature kör dolga; a lelet itt van rögzítve |
 | 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | nincs — a cache-invalidáció (vagy a provider `.family`/`autoDispose` alakra cserélése) a felelős feature kör dolga; a lelet itt van rögzítve |
-| 6 | A3 — a core utak a termék SAJÁT navigációjával (a két teszt-oldali híd nélkül) mérhetően NEM járhatók végig (l. L1, L2, §2 bevezető) | Practice Area Hub / Onboarding feature | nincs — ugyanaz a két javítás oldaná fel, amit L1/L2 sora már nevez |
+| 6 | A3 — a core utak a termék SAJÁT navigációjával (a két teszt-oldali híd nélkül) mérhetően NEM járhatók végig (l. L1, L2, §2 bevezető) | Practice Area Hub / Onboarding feature | **`E16-R06` — feloldva, A3 mérve TELJESÜL** (l. §2 bevezető) |

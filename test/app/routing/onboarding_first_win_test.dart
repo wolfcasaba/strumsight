@@ -111,13 +111,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(container.read(onboardingSeenProvider), isTrue);
-      // E15-R02 (ADR 0467 D9, measured brief §0.0/c): `onboarding_screen.dart`
-      // (lib/**, out of scope for this round) still calls
-      // `router.go(AppRoutes.live)` literally; with the adaptive shell on
-      // by default the resolved redirect settles on /today (the app's
-      // entry point), not the legacy /live path. The LearnScreen push
-      // below (root-navigator, independent of the current shell tab) is
-      // what actually delivers the first-win lesson either way.
+      // E16-R06 (ADR 0508 D1/D2): `onboarding_screen.dart`'s
+      // `_completeFirstWin` now navigates via `entryLocationFor(...)`, the
+      // SAME source `app_router.dart` reads — with the adaptive shell on by
+      // default this is /today both here (a reactive redirect fires as soon
+      // as `onboardingSeenProvider` flips true, independent of
+      // `_completeFirstWin` itself, which is still mid-persist) and once
+      // settled below. The LearnScreen push (root-navigator, independent of
+      // the current shell tab) is what actually delivers the first-win
+      // lesson either way.
       expect(router.state.uri.path, AppRoutes.today);
       expect(find.byType(OnboardingScreen), findsNothing);
       expect(store.boolWriteCompleted, isFalse);
@@ -127,11 +129,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(store.boolWriteCompleted, isTrue);
-      // E15-R02 (ADR 0467 D9, measured): a second, later redirect
-      // evaluation (the "reactive redirect" this test is named for) lands
-      // on legacyRedirects' target for /live once settled, distinct from
-      // the immediate post-tap snapshot above.
-      expect(router.state.uri.path, AppRoutes.practiceLive);
+      // E16-R06 (ADR 0508 D2, A3): `_completeFirstWin`'s own `router.go`
+      // call — deferred until here by the delayed persistence above — now
+      // targets `entryLocationFor(true)` (/today) instead of the old
+      // hardcoded `AppRoutes.live`, so the settled location matches the
+      // entry point instead of drifting to legacyRedirects' /practice/live
+      // target. The location and the push are asserted together: this is
+      // the "pair" A3 requires, not just one or the other.
+      expect(router.state.uri.path, AppRoutes.today);
       final learn = tester.widget<LearnScreen>(find.byType(LearnScreen));
       expect(learn.lesson.id, Lessons.firstWin.id);
     },
