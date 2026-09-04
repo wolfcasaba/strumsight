@@ -377,4 +377,170 @@ kikapcsolásával (`enterFrames = exitFrames = 1`) a villogás-teszt **PIROS**
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-## 11. Review — a Claude tölti ki
+### 10.1 Mit épített a kör
+
+- `lib/features/live/engine/quality/live_quality_thresholds.dart` — a
+  Live-specifikus küszöbök (`LiveQualityThresholds`, `standard` = `live-quality-v2`).
+- `lib/features/live/engine/quality/live_signal_quality_analyzer.dart` —
+  `LiveSignalQualityAnalyzer`: blokkonkénti gyűjtő (saját `Float64List`
+  akkumulátor, NEM a megosztott `SlidingFramer`-en keresztül — indoklás
+  10.4-ben), gördülő előzmény (`historyBlocks`), állapotgép + hiszterézis,
+  ritkított (throttled) metrikaszámítás.
+- `lib/features/live/engine/dsp/live_pipeline.dart` — additív:
+  `_signalQuality` mező, `addChunk()`-ban egy sor
+  (`_signalQuality.addChunk(chunk);`), az `SignalQualitySnapshot get
+  signalQuality => _signalQuality.snapshot;` getter (a `runtimeInfo` mintája
+  szerint), `reset()`-ben egy sor. A `_buildFrame()`, a `LiveFrame` és az
+  `inputLevel` **érintetlen**.
+- `docs/rag/chunks/live-signal-quality.md` — minden hangolt paraméter
+  forrása és indoklása, a CPU-mérés nyers kimenetével.
+- `test/features/live/live_signal_quality_analyzer_test.dart` — 8-állapotos
+  fixture-mátrix (mind a nyolc `SignalQualityState` legalább egy cellával) +
+  a `clippedSampleRatio` inkluzív határ-cella (alatta/pontosan/fölötte).
+- `test/features/live/live_signal_quality_hysteresis_test.dart` — a
+  villogás-tilalom, a valódi `enterFrames=5`/`exitFrames=8` értékekkel.
+- `lib/features/live/public.dart` — **nem módosult**: az elemző/threshold
+  osztály feature-belső (mint az `engine/dsp/**`), a barrel jegyzete szerint
+  ("the Live DSP/ML engine … is deliberately NOT exported") ezek sem
+  exportálandók; a keresztfunkciós szerződés (`SignalQualitySnapshot`) már
+  E14-R04 óta exportálva van.
+
+### 10.2 A küszöbök forrása
+
+Minden szám mérve a valódi `SignalQualityMath` függvényeken szintetikus
+fixture-ökön (silence, quiet/normal/loud sine, hard-clip square, white
+noise, AM-modulált "speech-like" mix, instabil burst-ök, 6-hangú
+akkord-proxy), NEM becsülve. A teljes táblázat és az indoklás:
+`docs/rag/chunks/live-signal-quality.md`. Rövid összefoglaló:
+
+| Küszöb | Érték | Forrás |
+|---|---:|---|
+| `quietRmsDbfs` | -40.0 dBFS | "good" (-13.5) és a quiet-sine (-43.0) között |
+| `loudPeakDbfs` | -2.0 dBFS | "good" (-10.5) és a loud-sine (-0.9) között |
+| `clippedRatioThreshold` | 0.001 | ÁTVÉVE a batch `QualityThresholds.standard.clippedRatioWarning`-ból (`019-signal-quality-metrics.md`) |
+| `unstableRmsStdDevDb` | 15.0 dB | speech (6.08, NEM szabad triggerelnie) és az instabil burst (47.16) között |
+| `noisyTonalnessMax` | 0.25 | white noise (0.154) alatt, speech (0.350) felett |
+| `speechTonalnessMax` | 0.5 | speech (0.350) felett, minden tonális fixture (≥0.633) alatt |
+
+### 10.3 Falszifikációs cella (brief §7.1) — hiszterézis
+
+A `test/features/live/live_signal_quality_hysteresis_test.dart` a saját,
+`statsStride: 1` / `tonalnessStride: 1` küszöbpéldányát használja (a
+gyártási `statsStride: 64` mellett a 40 blokkos oszcilláció még az ELSŐ
+metrika-frissítést sem éri el újra — lásd 10.5 —, tehát nem a hiszterézist,
+hanem a ritkítást mérné). `enterFrames`/`exitFrames` a teszt saját
+küszöbpéldányában lett ideiglenesen `1`/`1`-re állítva, futtatva, majd
+visszaállítva `5`/`8`-ra:
+
+**PIROS** (`enterFrames: 1, exitFrames: 1`):
+
+```
+00:00 +0 -1: oscillating ±1 dB across the tooQuiet/good boundary changes state at most once over 40 frames [E]
+  Expected: a value less than or equal to <1>
+    Actual: <39>
+     Which: is not a value less than or equal to <1>
+  raw states per oscillating frame: [SignalQualityState.good, SignalQualityState.tooQuiet, ... 40 elem, egyenletesen váltakozva]
+```
+
+**ZÖLD** (visszaállítva `enterFrames: 5, exitFrames: 8`):
+
+```
+00:00 +0: oscillating ±1 dB across the tooQuiet/good boundary changes state at most once over 40 frames
+00:00 +1: All tests passed!
+```
+
+`git diff --stat` a visszaállítás után üres a két érintett fájlra — a
+falszifikáció nem hagyott nyomot a commitban.
+
+### 10.4 CPU-mérés (median 3 futásból) és a tuning-történet
+
+**A mért kiindulási pont ~70% overhead volt** (naiv implementáció: minden
+blokkon számolt `peakDbfs`/`rmsDbfs`/`clippedSampleRatio`, a megosztott
+`SlidingFramer`, redundáns `rmsDbfs`-újraszámolás a `isSilentFrame`/
+`noiseFloorDbfsForFrames` hívásokban) — messze a brief §6 5. pontjának
+(legfeljebb 5%) kereten kívül. Két optimalizáció vitte 5% alá:
+
+1. **Redundancia eltávolítása**: `rmsDbfs` blokkonként PONTOSAN egyszer
+   számolódik az előzmény-ablakra, és ezt használja a csend-arány (a
+   `QualityThresholds.standard.silentSampleDbfs` publikus küszöbön át) ÉS a
+   zajszint-percentilis (saját, a `noiseFloorDbfsForFrames`-szel AZONOS
+   nearest-rank algoritmust futtató segédfüggvény, hogy ne hívja újra a már
+   ismert `rmsDbfs` értékeket).
+2. **A blokk-szintű metrikák (peak/rms/clip) is ritkítva** (`statsStride`),
+   és a megosztott `SlidingFramer` helyett saját, fix `Float64List`
+   akkumulátor (ez az osztály csak nem-átlapolt blokkokat igényel —
+   `frameHop == frameSize` mindig —, tehát nem kell az általános,
+   dobozolt-`List<double>`-alapú `SlidingFramer` gépezete). **Ez a saját
+   gyűjtő NEM `SignalQualityMath`-reimplementáció** — pontosan a brief §2/§3
+   által kért "Live-oldali gyűjtő" mechanikus pufferelése, nem DSP-matek.
+
+Futtatható parancs (a mérés a `_signalQuality.addChunk(chunk);` sor
+[`live_pipeline.dart:185`] ideiglenes ki/bekommentezésével készült — ez a
+brief §7.1-hez hasonló A/B váltás, NEM egy leszállított flag):
+
+```
+flutter test <scratch bench: 8 s szintetikus akkord-szerű PCM
+  LivePipeline.addChunk-on 1024-mintás darabokban, 2 eldobott JIT
+  bemelegítő futás, majd 3 mért futás, Stopwatch.elapsedMilliseconds>
+```
+
+Végső, egymás után futtatott pár (a leszállított `statsStride: 64`,
+`tonalnessStride: 4`, `frameSize: 4096` mellett):
+
+```
+WITHOUT (_signalQuality.addChunk kikommentezve): 304 ms, 305 ms, 293 ms → median 304 ms
+WITH    (_signalQuality.addChunk aktív):         307 ms, 308 ms, 305 ms → median 307 ms
+overhead = (307 − 304) / 304 ≈ 1.0%
+```
+
+A box mérten lassú és a `flutter test` JIT VM-en fut (nem AOT release) — a
+hangolás közben ismételt mérési körök ±5–10 ms-ot szórtak azonos kódon is;
+a végső konfiguráció overheadje konzisztensen ennél a zajszintnél VAGY
+alatta van, jóval az 5%-os keret alatt. A teljes tuning-történet (a
+köztes ~9–20%-os próbálkozásokkal együtt) `docs/rag/chunks/live-signal-quality.md`-ben.
+
+### 10.5 Késleltetési kompromisszum (nyíltan vállalva)
+
+`statsStride: 64` és `frameSize: 4096` mellett egy ÚJ minőségi probléma
+(pl. klippelés kezdete) legrosszabb esetben ~5,95 s alatt jelenik meg a
+`LivePipeline.signalQuality`-ban. Ez a kör KIZÁRÓLAG az elemzőt és a
+pipeline-oldali mérést szállítja (brief §1: "nem UI-t") — egyetlen képernyő
+sem olvassa még ezt a pillanatképet. Amelyik jövőbeli kör UI-ba köti, az
+vizsgálja felül ezt az ütemet valós UX-igény és VALÓDI eszközön (AOT) mért
+profil alapján, ne ennek a boxnak a zajos JIT `flutter test` mérése alapján.
+
+### 10.6 A `speechLike` döntés indoklása (brief §9)
+
+A `speechLike` KIZÁRÓLAG a `tonalness` (spektrális laposság-proxy) sávja
+`(0.25, 0.5]` — sosem hangforrás- vagy beszélő-azonosítás (ADR 0224 §4). A
+hangolás közben előkerült egy VALÓDI kockázat: egy korábbi iteráció a
+`tonalness`-t a LEGUTÓBBI blokk egyetlen 2048-mintás farkából számolta; elég
+nagy ritkítási közzel (a CPU-keret miatt szükséges) ez a pillanatkép
+VÉLETLENÜL egy majdnem-csendes burkológörbe-völgybe eshetett a `speechLike`
+fixture ~6 Hz-es amplitúdó-modulációjában, és tévesen `tooNoisy`-ként
+azonosította. A `tonalnessWindowSamples` 4096-ra szélesítése (2 belső
+elemzési keretre, a gördülő előzményből, nem csak a legutóbbi blokkból) ezt
+javította — a fixture-mátrix teszt igazolja. Ez pontosan a brief §9/§6.1
+6. sorának előre jelzett feszültsége (CPU-keret vs. megbízható
+osztályozás), és SZÉLESÍTÉSSEL, nem a ritkítás visszavételével oldódott meg
+(ami újra a CPU-keret fölé vitte volna).
+
+### 10.7 Eltérések a brief-hez képest
+
+- **`lib/features/live/public.dart` nem módosult**, bár az allowed_paths
+  tartalmazza ("additív export"): a barrel saját dokumentált szabálya
+  szerint a Live DSP/ML engine internals (`engine/dsp/`, és ezzel egy
+  tesztben az `engine/quality/` is) szándékosan NEM exportált — a
+  keresztfunkciós szerződés (`SignalQualitySnapshot`) már E14-R04 óta
+  exportálva van, nincs új export-igény.
+- **A `SlidingFramer` helyett saját `Float64List` akkumulátor** — indoklás
+  10.4-ben; a `lib/core/audio/dsp/sliding_framer.dart` fájlhoz a kör nem
+  nyúlt (nincs is az allowed_paths-on), csak nem importálja többé ez az
+  osztály.
+- **A blokk-szintű `peakDbfs`/`rmsDbfs`/`clippedSampleRatio` is ritkítva
+  van** — a brief §2/§9 csak a `tonalness` FFT ritkítását írta elő
+  kifejezetten (D9); a MÉRÉS mutatta meg, hogy önmagában a "olcsó" szintmérő
+  primitívek blokkonkénti hívása is a CPU-keret fölé vitte az overheadet
+  (10.4). A formulák (D1) változatlanul a reuse-olt `SignalQualityMath`-ból
+  jönnek, csak a hívási gyakoriság csökkent — nem gyengítés, mérve
+  szükséges.
