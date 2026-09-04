@@ -1,0 +1,1 @@
+heal=E15-R07 halt=H3 verdict=fixed lesson=brief-contradicts-own-stop-clause pr=512 test=tools/tests/test_e15_r07_composition_prerequisite.py
