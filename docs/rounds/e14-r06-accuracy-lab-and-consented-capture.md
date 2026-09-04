@@ -1,6 +1,7 @@
 # E14-R06 — Accuracy Lab és engedélyezett adatgyűjtés
 
-- **Státusz:** PREPARED (előre megírva 2026-08-20, kód olvasva: `main @ b0979855`)
+- **Státusz:** READY (pre-flight lefutott 2026-09-04, kód újramérve: `main @ 5dcff18e`;
+  előre megírva 2026-08-20, `main @ b0979855`)
 - **Típus:** Chapter 14 (Recognition Accuracy & Useful UI Recovery), Kör 6
 - **Kör-azonosító:** `E14-R06`
 - **Branch:** `<motor>/e14-r06-accuracy-lab-and-consented-capture`
@@ -68,6 +69,92 @@ csomagformátum, consent-kapu, író/törlő), **képernyő nélkül** — két 
 A UI-bekötés külön kör (`E14-R06b`, brief később), és a jelen kör
 acceptance-e NEM hivatkozhat rá.
 
+### 0.0.1 Pre-flight revíziók (2026-09-04, `main @ 5dcff18e`) — MÉRT állítások
+
+Az alábbiak a MAI fán mértek, és **felülírják** a brief régebbi szövegének
+minden ellentmondó részletét. Forrásuk az ADR
+[`0358`](../adr/0358-consented-on-device-lab-capture-package.md) kontextus-szakasza.
+
+**R1 — ADR-szám: `0358` marad.** A `tools/round-slots.py reserve-adr --round E14-R06`
+a globális számlálóból `0504`-et adott (a lemezen a legnagyobb ADR `0503`), a
+queue-sor és a brief viszont a Chapter 14 előre kiosztott blokkjából `0358`-at
+rendel ehhez a körhöz (`E14-R07…R09` = `0359…0361`). A `0358` a lemezen
+**szabad** (`docs/adr/0358-*` → nincs találat), az egyediség-őr
+(`tools/tests/test_adr_numbering.py`) pedig kizárólag ütközést és névalakot mér,
+folytonosságot nem — így a queue-koordináció a döntő. A `0504` foglalása
+megmarad (nem használjuk), és a pre-flight a `0358`-ra is markert írt, hogy egy
+párhuzamos kör se kaphassa meg.
+
+**R2 — A feladatlista-tartományt futtatható validáció mérje (ADR 0358 D6).**
+A §6/1 „14 → hiba / 15 → elfogadott / 21 → hiba” cellahármas **csak akkor
+írható meg**, ha a 15–20 tartományt egy tetszőleges listát fogadó validáció
+kényszeríti ki, nem egy `const` lista hossza. Elvárt alak (a név szabadon
+választható, de a szemantika kötött):
+
+```dart
+// tetszőleges listára fut, tehát a 14/15/21 cella megírható:
+LabTaskCatalog.validated(List<LabTask> tasks)   // tartományon kívül → típusos hiba
+LabTaskCatalog.standard()                       // a szállított katalógus, maga is validált
+```
+
+A szállított katalógus lefedi a hat feladat-családot, és a hossza a
+tartományban van.
+
+**R3 — A 4. acceptance-pont mércéje ALLOWLIST + érték-oldali kanári, nem
+tiltólista (ADR 0358 D2, forrás: [`docs/LESSONS.md`](../LESSONS.md) L260).**
+Egy fix kulcskészletű DTO fölött a `forbiddenKeys.any(json.contains)` alakú
+teszt **konstrukció szerint mindig zöld**. A kötelező cella ezért: a
+szerializált JSON rekurzívan összegyűjtött kulcshalmaza **EGYENLŐ** a
+dokumentált megengedett halmazzal. Emellé jön egy kanári-cella: a bemenetbe
+tett egyedi minta (pl. eszköznévbe ágyazott token) a kimenetben **csak** azon
+az egy mezőn jelenhet meg, ahová szánták.
+
+**R4 — Nincs újrahasználható WAV-kódoló, a kör a sajátját írja (ADR 0358 D8).**
+`lib/features/learn/audio/wav.dart` és `lib/features/analyze/engine/wav_decoder.dart`
+LÉTEZIK, de egyik feature `public.dart`-ja sem exportálja
+(`grep -rn "wav" lib/features/*/public.dart` → nulla), a cross-feature import
+pedig csak barrelt célozhat (`tool/check_architecture.dart:774`). A PCM → WAV
+bájtsorozat tehát a `lab_package_writer.dart`-ban, `dart:typed_data` fölött
+készül. Idegen barrel bővítése tilos zóna → `stopped`.
+
+**R5 — Nulla kimenő csatorna és nulla plugin-hívás (ADR 0358 D7).** A diff nem
+használhat `share_plus`-t (a fán VAN: `pubspec.yaml:39`), Diót, `ApiClient`-et,
+`HttpClient`-et, `package:http`-t és `path_provider`-t. Mért ok: ezek a minták
+aktiválják a `tool/check_data_inventory.dart` egress-felderítését
+(`:371-438`), ami `docs/privacy/data-inventory.yaml` bejegyzést követelne — az
+pedig ennek a körnek a TILOS zónájában van. A writer a cél-könyvtárat
+**`Directory` paraméterként** kapja, így a teszt ideiglenes könyvtárban mér.
+
+**R6 — A `public.dart` KÉZZEL írott, generátor nem előfeltétel.** A generált
+barrel-frissesség őre (`tool/check_architecture.dart:798`) csak azokra a
+feature-ökre fut, amelyeknek van `lib/features/<f>/public/` fragment-könyvtára
+(`tool/gen_public_barrel.dart:182-199`). Az `accuracy_lab` **nem** hoz létre
+ilyet — ne is hozzon, mert az a barrel-generátor futtatását tenné
+előfeltétellé.
+
+**R7 — A consent-mintát ÚJRAHASZNOSÍTJUK, nem importáljuk.** A
+`tutor_privacy_providers.dart` + `domain/models/tutor_consent.dart`
+tengelyenkénti grant/revoke másoló metódusai a követett minta (ADR 0132), de az
+ai_tutor barrelje nem exportálja a consent modellt, tehát az import
+architektúra-sértés lenne. A `LabConsent` önálló, a kör saját fájljában.
+
+**R8 — A §7 gate-parancs tételesen tükrözi a `gate_tests` listát**
+(brief-lint **S12** lelet, `.pipeline/brief-lint-E14-R06.md`). Javítva a §7-ben.
+
+**R9 — Determinizmus-eszközök a fán: `crypto: ^3.0.7` deklarált**
+(`pubspec.yaml:46`), tehát a checksumhoz nincs szükség új függőségre — és nem
+is vehető fel, a `pubspec.yaml` tilos zóna. Az időbélyeg **bemenet**, a
+kulcsrendezés kanonikus (ADR 0358 D3).
+
+**R10 — Párhuzamos kör fut (`E14-R03`, PR #566).** A fájlhalmazok diszjunktak
+(`lib/features/live/**` vs. `lib/features/accuracy_lab/**`), de a záró
+rituálék és a merge a merge-záron át mennek (prompt §4.1). Az `E14-R03`
+ágához, PR-jéhez és munkapéldányához hozzányúlni tilos.
+
+**R11 — A `LabTask` típusnév szabad.** `grep -rn "class Lab…" lib/ test/` →
+nulla találat a `LabTask`, `LabConsent`, `LabCapturePackage`,
+`LabPackageWriter` nevekre: nincs S5-ütközés a fán.
+
 ## 1. Cél
 
 Legyen a repóban egy **hálózat nélkül is végigfutó**, gépileg ellenőrizhető
@@ -86,6 +173,21 @@ bármi elhagyná az eszközt a felhasználó kifejezett beleegyezése nélkül.
 - **E99-R07 / tutor privacy**: a `tutor_privacy_providers.dart` már bevezette
   a „nincs beleegyezés → nincs kimenő adat" mintát; ezt a kör újrahasznosítja,
   nem talál ki másikat.
+
+**Pre-flight visszakeresés (2026-09-04, `node tools/knowledge-rag.mjs`, előbb
+szűkítve `--corpus lessons,halts,adr`, utána teljes korpuszon):**
+
+- [`lessons/L260`](../LESSONS.md) — a kulcsnév-tiltólistás redakciós teszt
+  konstrukció szerint vakon zöld marad; a szivárgás az ÉRTÉK-oldalon van.
+  Ez alakította a §6/4 acceptance-pontot (allowlist + kanári, §0.0/R3).
+- [`adr/0178`](../adr/0178-vision-privacy-by-default.md) — kimondja, hogy „a Lab
+  capture consent-flow, redakció és tárolási határidő külön kör felelőssége”;
+  ez a kör az az adat-magra nézve.
+- [`adr/0249`](../adr/0249-analysis-evaluation-dataset-governance.md) — nyers
+  felvétel nem kerül a repóba, a determinisztikus artefaktum bájtazonos.
+- [`lessons/L161`](../LESSONS.md) — egy helyesen unit-tesztelt helper hazudhat:
+  a bizonyíték a tényleges hívási lánc. A consent-kapu cellái ezért a
+  csomagot kiadó ÚTON mérnek, nem egy izolált predikátumon.
 
 ## 2. Jelenlegi állapot — mért tények
 
@@ -166,8 +268,11 @@ hiba**, nem néma default (ADR 0054 mintája).
    bemenetből **bájtra azonos** kimenet.
 3. Consent nélkül az export-hívás nem fordul (típushiba) — a teszt a
    `granted`/`revoked`/`unknown` hármas mátrixot méri.
-4. A csomag semmilyen ágon nem tartalmazza a tiltott mezőneveket (teszt egy
-   tiltólistával grepeli a szerializált JSON-t).
+4. A csomag kulcskészlete ZÁRT: a szerializált JSON rekurzívan összegyűjtött
+   kulcshalmaza **egyenlő** a dokumentált megengedett halmazzal (allowlist-cella),
+   és egy érték-oldali kanári-cella igazolja, hogy a bemenetbe tett egyedi minta
+   csak a saját mezőjében jelenik meg (§0.0/R3, L260 — a puszta tiltólista-teszt
+   konstrukció szerint vakon zöld).
 5. Törlés után a csomag könyvtára nem létezik, és a writer `missing` státuszt ad.
 6. Ismeretlen `schemaVersion` olvasása típusos hibát ad, nem `null`-t.
 
@@ -177,16 +282,22 @@ hiba**, nem néma default (ADR 0054 mintája).
 |---|---|
 | A writer belsejében `DateTime.now()` | 2. pont bájtra-azonos cellája |
 | A consent bool paraméter `?? false`-szal | 3. pont `unknown` cellája |
-| Az eszköz-metadata beteszi a hirdetési azonosítót | 4. pont tiltólista-cellája |
+| Az eszköz-metadata beteszi a hirdetési azonosítót | 4. pont **allowlist**-cellája (a kulcshalmaz-egyenlőség sérül) |
+| A metadata egy megengedett mező ÉRTÉKÉBE szivárogtat azonosítót | 4. pont kanári-cellája |
+| A feladatlista-tartomány `const` lista hosszában él, nem validációban | 1. pont 21-elemű cellája (nem megírható → hiányzó mérce) |
 | A törlés csak flaget állít | 5. pont könyvtár-létezés cellája |
 | Ismeretlen séma-verzió → default | 6. pont típusos-hiba cellája |
 | A feladatlista 14 elemű | 1. pont **14 → hiba** cellája |
 
 ## 7. Kötelező ellenőrzések
 
-```bash
-tools/round-gate.sh test/features/accuracy_lab
 ```
+tools/round-gate.sh test/features/accuracy_lab/lab_capture_package_test.dart test/features/accuracy_lab/lab_package_writer_test.dart test/features/accuracy_lab/lab_consent_test.dart test/features/accuracy_lab
+```
+
+(A parancs tételesen tükrözi a `gate_tests` listát — brief-lint **S12**,
+§0.0/R8. A `test/features/accuracy_lab` záró útvonal a könyvtár egészét is
+megméri, ha a kör további tesztfájlt tenne bele.)
 
 Külön processzben futó `format` → `analyze` → célzott teszt → `architecture`
 (AGENTS.md §12). `&&` láncolás tilos (L05/L09). CI-dispatch/PR/merge
