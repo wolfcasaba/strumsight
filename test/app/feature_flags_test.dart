@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
@@ -364,5 +366,197 @@ void main() {
         expect(enabled.usesNetwork, isFalse);
       },
     );
+  });
+
+  group('E16-R03 capability rollout — zero flip (ADR 0492)', () {
+    // A1/A6 — the round's own decision table names, per capability, exactly
+    // one classification and (for every non-BE row) a resolving round or
+    // blocker. This is the ONLY nonProd default this round produced: none —
+    // every capability that was `false` before the round stays `false`
+    // (a documented, accepted "zero flip" outcome, brief §0.0.1 R3).
+    test('the four previously-false capability groups this round evaluated '
+        'stay off in every environment: AI Tutor, Planner Assist, Vision, '
+        'Audio Analysis V2, Recognition recovery', () {
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+
+        expect(
+          flags.aiTutorEnabled,
+          isFalse,
+          reason:
+              '$environment: aiTutorEnabled stays KI — epic-04-completion-'
+              'report.md names the ON decision a separate Termék/User call',
+        );
+        expect(
+          flags.plannerAssistEnabled,
+          isFalse,
+          reason:
+              '$environment: plannerAssistEnabled stays KI (no model '
+              'integration, separate rollout decision, ADR 0491 D2)',
+        );
+        expect(
+          _visionFlags(flags),
+          everyElement(isFalse),
+          reason:
+              '$environment: Vision stays KI pending HORIZON device '
+              'acceptance (docs/sdd/epic-05-completion-report.md)',
+        );
+        expect(
+          _audioAnalysisFlags(flags),
+          everyElement(isFalse),
+          reason:
+              '$environment: Audio Analysis V2 stays KI — Epic 6 '
+              'release blockers remain open (ADR 0220)',
+        );
+        expect(
+          flags.recognitionRecoveryEnabled,
+          isFalse,
+          reason:
+              '$environment: recognitionRecoveryEnabled stays KI — no '
+              'accepted activation package (docs/eval/'
+              'recognition-release-guard.md)',
+        );
+        expect(flags.recognitionShadowModeEnabled, isFalse);
+        expect(flags.newLiveStageEnabled, isFalse);
+      }
+    });
+
+    // A3 — the two named external-resource branches must never become the
+    // nonProd default: cloud Tutor needs the StrumSight backend proxy, and
+    // Community needs its dart-define (no default flip either).
+    test('aiTutorCloudEnabled and the five Community flags never default on '
+        'in any environment (A3 — external resource)', () {
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+
+        expect(
+          flags.aiTutorCloudEnabled,
+          isFalse,
+          reason:
+              '$environment: aiTutorCloudEnabled requires the backend '
+              'proxy and an open R-PRIV-01 precondition',
+        );
+        expect(flags.communityEnabled, isFalse, reason: 'communityEnabled');
+        expect(
+          flags.communityWritesEnabled,
+          isFalse,
+          reason: 'communityWritesEnabled',
+        );
+        expect(
+          flags.communityMediaEnabled,
+          isFalse,
+          reason: 'communityMediaEnabled',
+        );
+        expect(
+          flags.communityLeaderboardEnabled,
+          isFalse,
+          reason: 'communityLeaderboardEnabled',
+        );
+        expect(
+          flags.communityClubsEnabled,
+          isFalse,
+          reason: 'communityClubsEnabled',
+        );
+      }
+    });
+
+    // A2 — the eight capabilities that were already `nonProd` BEFORE this
+    // round stay exactly that: BE in development/lab, off in production.
+    // This round confirmed them (docs/release/capability-rollout.md §2) but
+    // did not move any of their `forEnvironment` branches.
+    test('the eight pre-existing BE capabilities keep their nonProd default '
+        '(A2, unchanged by this round)', () {
+      for (final environment in [
+        AppEnvironment.development,
+        AppEnvironment.lab,
+      ]) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+        expect(flags.diagnosticsEnabled, isTrue, reason: '$environment');
+        expect(flags.labModeAvailable, isTrue, reason: '$environment');
+        expect(flags.practiceEngineV2Enabled, isTrue, reason: '$environment');
+        expect(flags.migratedLearnEnabled, isTrue, reason: '$environment');
+        expect(
+          flags.practiceDetailedHistoryEnabled,
+          isTrue,
+          reason: '$environment',
+        );
+        expect(flags.songTrainerV2Enabled, isTrue, reason: '$environment');
+        expect(flags.practiceGeneratorEnabled, isTrue, reason: '$environment');
+        expect(flags.adaptiveShellEnabled, isTrue, reason: '$environment');
+      }
+
+      final production = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+      expect(production.diagnosticsEnabled, isFalse);
+      expect(production.labModeAvailable, isFalse);
+      expect(production.practiceEngineV2Enabled, isFalse);
+      expect(production.migratedLearnEnabled, isFalse);
+      expect(production.practiceDetailedHistoryEnabled, isFalse);
+      expect(production.songTrainerV2Enabled, isFalse);
+      expect(production.practiceGeneratorEnabled, isFalse);
+      expect(production.adaptiveShellEnabled, isFalse);
+    });
+
+    // A4 — this round moved no production default at all.
+    test('production defaults are byte-identical to every non-production '
+        'default check above, i.e. every field this round evaluated stays '
+        'off in production too (A4)', () {
+      final production = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+      expect(production.aiTutorEnabled, isFalse);
+      expect(production.aiTutorCloudEnabled, isFalse);
+      expect(production.plannerAssistEnabled, isFalse);
+      expect(_visionFlags(production), everyElement(isFalse));
+      expect(_audioAnalysisFlags(production), everyElement(isFalse));
+      expect(production.recognitionRecoveryEnabled, isFalse);
+      expect(production.recognitionShadowModeEnabled, isFalse);
+      expect(production.newLiveStageEnabled, isFalse);
+    });
+
+    // A7 — docs/release/capability-rollout.md is the NON-production
+    // decision: it must disambiguate itself from ga-scope.md (production/GA)
+    // and rollout-decision.md (staged percentage rollout), and it must never
+    // assert its own production default (single source of truth stays
+    // ga-scope.md, ADR 0492 D2) — read the file as a file, following the
+    // test/tooling/rollout_decision_test.dart A5 pattern.
+    test('capability-rollout.md disambiguates itself from ga-scope.md and '
+        'rollout-decision.md and states no production default of its own '
+        '(A7)', () {
+      final text = File(
+        'docs/release/capability-rollout.md',
+      ).readAsStringSync();
+
+      expect(text, contains('NEM-production'));
+      expect(text, contains('docs/release/ga-scope.md'));
+      expect(text, contains('docs/release/rollout-decision.md'));
+      expect(
+        text,
+        contains('saját állítást nem tesz'),
+        reason:
+            'must explicitly disclaim making its own production-default '
+            'claim (ADR 0492 D2)',
+      );
+      expect(
+        text,
+        isNot(contains('production_default')),
+        reason:
+            'the production_default column lives ONLY in ga-scope.md — '
+            'a second occurrence here would be a second source of truth',
+      );
+      expect(text, contains('ZERO FLIP'));
+    });
   });
 }

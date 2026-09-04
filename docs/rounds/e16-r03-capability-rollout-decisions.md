@@ -261,4 +261,135 @@ KÍVÜL él: zöldnek kell maradniuk **módosítás nélkül**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude (Sonnet 5), `sonnet-impl`, branch
+`sonnet-impl/e16-r03-capability-rollout-decisions`.
+
+### 10.1 A négy kritérium mért kiértékelése capabilityenként
+
+A teljes tábla, evidenciával és feloldó kör/blokkolóval:
+[`docs/release/capability-rollout.md`](../release/capability-rollout.md) §2.
+Összegzés:
+
+| Capability-csoport | a | b | c | d | Besorolás |
+|---|---|---|---|---|---|
+| Diagnostics, Lab mode, Practice Engine V2, Migrated Learn, Practice detailed history, Song Trainer V2, Practice Generator, Adaptive shell (8, MÁR `nonProd`) | ✓ | ✓ | ✓ | ✓ | **BE** (változatlan) |
+| `accountEnabled` | — | — | — | — | N/A — hívó-adta átmenő érték, nem `forEnvironment`-döntés |
+| AI Tutor (local), `aiTutorEnabled` | ✓ | ✗ | ✓ | (✓)† | **KI** |
+| AI Tutor (cloud), `aiTutorCloudEnabled` | ✓ | ✗ | — | ✗ | **KI** |
+| Planner Assist, `plannerAssistEnabled` | — | ✗ | — | ✗ | **KI** |
+| Computer Vision (11 flag) | ✓ | ✓ | ✗ | ✗ | **KI** |
+| Audio Analysis V2 (9 flag) | ✓ | ✓ | ✗ | — | **KI** |
+| Recognition recovery (3 flag) | ✓ | ✗ | ✗ | — | **KI** |
+| Community (5 flag, dart-define) | ✓ | (✓)‡ | ✓ | ✗ | **PREVIEW** (változatlan) |
+
+† A helyi fallback szinkron és hálózat nélküli, de a production wirés
+gateway ma `LocalTutorModelGatewayStub` (mindig „capability unavailable"), és
+az epic saját zárójelentése („GA flag-flip döntés | Termék/User | Külön
+döntés") a bekapcsolást egy külön Termék/User döntéshez köti — ez a (b)
+kritériumot bukatja (ADR 0492 D1 „elkészült, tehát menjen" tiltása).
+‡ A backend router fel van csatolva (E15-R12), de a build-idejű
+alapértelmezés enélkül is (d)-n bukna.
+
+### 10.2 Döntés: **ZERO FLIP**
+
+Egyetlen, korábban `false` capability sem teljesíti mind a négy kritériumot
+ma → a `lib/app/config/feature_flags.dart` `forEnvironment` törzse
+**VÁLTOZATLAN** (`git diff` a fájlra üres a kör végén). A nyolc, korábban már
+`nonProd` capability változatlanul BE marad. A `docs/release/
+capability-rollout.md` a kör terméke — a döntési tábla + a besorolásokat
+pinnelő teszt-cellák (`test/app/feature_flags_test.dart`, csoport `E16-R03
+capability rollout — zero flip (ADR 0492)`).
+
+### 10.3 Hatósugár-mérés (§2.2, ADR 0492 D4)
+
+Mivel a végleges döntés zero-flip, nincs ténylegesen finalizált flip, amire a
+D4 protokollt (flip + teljes suite, majd flip nélkül, a különbség mérése)
+alkalmazni kellene. A protokoll ugyanazt a technikát a §6.1 kötelező
+valódi-sértés próba keretében ténylegesen lefuttatta (10.4) — az ott mért
+kimenet (a hatás kizárólag a kör saját `allowed_paths`-on belüli
+`test/app/feature_flags_test.dart`-ot vitte pirosra) az L534-mintájú
+kockázatra nézve is megnyugtató: egy izolált, `aiTutorCloudEnabled`-re
+szűkített flip NEM mozdítja a `appConfigProvider`-t pumpáló widget-teszteket
+(azok a `AdaptiveHomeShell`/`AppRoutes.tutorHome` felületi gate-je
+`aiTutorEnabled`-en fut, nem `aiTutorCloudEnabled`-en) — vagyis a L534-öt
+okozó hatósugár-osztály (widget-fa változása) ebben az esetben nem állt elő.
+
+### 10.4 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+1. `lib/app/config/feature_flags.dart`: `aiTutorCloudEnabled: false,` →
+   `aiTutorCloudEnabled: nonProd,` (ideiglenes, nem commitolt módosítás).
+2. `tools/round-gate.sh` a §7 listával lefuttatva → **PIROS**, kilépőkód 1,
+   a `test test/app/feature_flags_test.dart` lépésen állt meg. A mért piros
+   cellák (mind a kör saját `allowed_paths`-án BELÜL):
+   - `E16-R03 capability rollout — zero flip (ADR 0492) aiTutorCloudEnabled
+     and the five Community flags never default on in any environment (A3 —
+     external resource)` — a pontosan az A3 kritériumra írt, ÚJ cella —
+     `Expected: false / Actual: <true>`, `AppEnvironment.development:
+     aiTutorCloudEnabled requires the backend proxy and an open R-PRIV-01
+     precondition`.
+   - két, MÁR MEGLÉVŐ, e körön kívül élő regressziós cella is pirosra vált
+     (`AI Tutor feature flags forEnvironment leaves both flags off in every
+     environment`, `Song Trainer V2 rollout boundary keeps unrelated rollout
+     flags disabled in every environment`) — ez azt igazolja, hogy a
+     sértés-próba nem csak az új A3-cellát, hanem a meglévő mércét is éri.
+   - a gate a 4. lépésen (`test test/app/feature_flags_test.dart`) elsőre
+     megállt (fail-fast), a §7 lista hátralévő lépései (`app_config_test`,
+     `ga_scope_test`, `analysis_rollout_flags_test`) NEM futottak le ezzel a
+     piros állapottal — ez a hatósugár-mérés szempontjából elég: az A3 catch
+     már a kör saját tesztfájljában megtörtént, nem kellett tovább menni a
+     körön kívüli őrökig.
+3. Visszaállítás: `aiTutorCloudEnabled: nonProd,` → `aiTutorCloudEnabled:
+   false,` — `git diff -- lib/app/config/feature_flags.dart` a visszaállítás
+   után üres (bájtra pontos egyezés a HEAD-del).
+4. A teljes §7 gate a visszaállítás UTÁN újrafuttatva: **MINDEN GATE ZÖLD**
+   (format, analyze, mind a 7 megnevezett teszt-útvonal, architecture,
+   secrets, l10n).
+
+### 10.5 A2/A3/A4/A6/A7 bizonyíték-térkép
+
+- **A2** (minden BE capability mindhárom környezetre cellát kap): a nyolc,
+  már meglévő BE capability meglévő celláin kívül egy ÚJ, konszolidált
+  regressziós cella (`the eight pre-existing BE capabilities keep their
+  nonProd default`) pinneli mindhárom környezetre.
+- **A3** (külső erőforrás nem lesz alapértelmezés): ÚJ nevesített cella a
+  tutor-cloud és a community ágra (`aiTutorCloudEnabled and the five
+  Community flags never default on in any environment`), a §10.4
+  valódi-sértés próba ezt bizonyítottan el is kapja.
+- **A4** (production változatlan): ÚJ cella
+  (`production defaults are byte-identical to every non-production default
+  check above`) + a `git diff` a `feature_flags.dart`-ra üres.
+- **A6** (minden KI/PREVIEW nevesíti a feloldó kört): `docs/release/
+  capability-rollout.md` §2 minden nem-BE sora nevesít kört
+  (`E12-R17`, `E12-R18`, `E14-R02`, `E16-R04`) vagy fán feloldható,
+  nevesített blokkolót (epic-zárójelentés nyitott tétele, HORIZON
+  device-elfogadás, Epic 6 release-blokkolók).
+- **A7** (capability-rollout.md a nem-production döntés): ÚJ cella
+  (`capability-rollout.md disambiguates itself from ga-scope.md and
+  rollout-decision.md and states no production default of its own`), a
+  `rollout_decision_test.dart` A5 mintáját követve (fájlként olvasva).
+
+### 10.6 Kör-gate — végső, tiszta futás
+
+```
+tools/round-gate.sh test/app/config/feature_flags_test.dart test/app/feature_flags_test.dart test/e2e/first_practice_offline_test.dart test/ui/ui_inventory_test.dart test/tooling/ga_scope_test.dart test/app/analysis_rollout_flags_test.dart test/app/app_config_test.dart
+```
+
+Eredmény: **MINDEN GATE ZÖLD** (format, analyze, a hét megnevezett
+teszt-útvonal — a `feature_flags_test.dart` a §10.4 visszaállítás után
+zöld —, architecture, secrets, l10n). A három, a körön kívül élő őr
+(`ui_inventory_test.dart`, `ga_scope_test.dart`,
+`analysis_rollout_flags_test.dart`, `app_config_test.dart`) módosítás
+NÉLKÜL maradt zöld.
+
+### 10.7 Módosított/létrehozott fájlok
+
+- `docs/release/capability-rollout.md` — ÚJ, a döntési tábla.
+- `test/app/feature_flags_test.dart` — kiegészítve az `E16-R03 capability
+  rollout — zero flip (ADR 0492)` csoporttal (5 új teszt).
+- `lib/app/config/feature_flags.dart` — VÁLTOZATLAN (zero flip; a §10.4
+  próba ideiglenes volt, nem maradt a fán).
+- `test/app/config/feature_flags_test.dart` — VÁLTOZATLAN (a Recognition/
+  Community csoportjai már lefedik a mindhárom-környezet cellákat, nem volt
+  szükség kiegészítésre).
+
 ## 11. Review — a Claude tölti ki
