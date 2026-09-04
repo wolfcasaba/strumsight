@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://strumsight.internal/schemas/recognition-annotation-pair-1.0.json",
+  "title": "Recognition annotation pair",
+  "description": "Two-annotator recognition annotation contract (E14-R07, ADR 0359). Contains no raw audio: only onset/strum/chord annotations for a clip, each carrying a required provenance (auto|human|reviewed). Enforced by hand-written validation in RecognitionAnnotationParser (no schema-library dependency, matching ADR 0354 D8's precedent) rather than a generic JSON-Schema library.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "annotatorA", "annotatorB"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "description": "Annotation contract schema version. The parser rejects any value other than the one it supports (currently \"1.0\") as a typed InvalidSchemaVersion failure.",
+      "const": "1.0"
+    },
+    "annotatorA": { "$ref": "#/definitions/annotation" },
+    "annotatorB": { "$ref": "#/definitions/annotation" }
+  },
+  "definitions": {
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotatorId", "events"],
+      "properties": {
+        "annotatorId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifies which annotator produced this set, so an AgreementReport can name both sides."
+        },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/event" },
+          "description": "Point-in-time onset/strum annotations. Two events of the same \"type\" at the same timeMs are a typed overlap failure (ADR 0359 D3)."
+        },
+        "chordSegments": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/chordSegment" },
+          "description": "Chord-label intervals. Two segments whose [startMs, endMs) ranges intersect are a typed overlap failure (ADR 0359 D3); segments that merely touch at a boundary do not overlap."
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "timeMs", "type", "provenance"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "timeMs": { "type": "integer", "minimum": 0 },
+        "type": {
+          "type": "string",
+          "enum": ["onset", "strum"]
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["down", "up"],
+          "description": "Required when type is \"strum\" (a strum event without it is a typed missing-field failure); forbidden for any other type."
+        },
+        "provenance": {
+          "type": "string",
+          "enum": ["auto", "human", "reviewed"],
+          "description": "Required on every event. A missing value is a typed failure, never defaulted to \"human\"; the parser never promotes \"auto\" to \"human\" or \"reviewed\" on its own (ADR 0359 D2)."
+        }
+      }
+    },
+    "chordSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "startMs", "endMs", "label", "provenance"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "startMs": { "type": "integer", "minimum": 0 },
+        "endMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Must be >= startMs."
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "provenance": {
+          "type": "string",
+          "enum": ["auto", "human", "reviewed"]
+        }
+      }
+    }
+  }
+}

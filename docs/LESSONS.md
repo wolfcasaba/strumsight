@@ -25092,3 +25092,109 @@ következő kör halálos akadálya.
 idegen ágon is a main-re landol · a másik kör ága/fája érintetlen · elutasított
 push után a friss main-ből származtat újra · tartós kudarc nem-nulla és hangos
 · idempotencia · a munkapéldány takarít). A fix előtti forráson mind a 8 PIROS.
+
+## L628 — Az „örökölt piros CI" halt-jelentése EGY kaput nevezett meg, miközben KETTŐ volt piros: a folytatás nem a `main` zöldjéből, hanem a MERGE-ELT HEAD saját méréséből tudhatja, hogy a blokkoló elmúlt (E14-R07, 2026-09-04)
+
+**Mit mértem.** Az `E14-R07` kör H3 halttal állt meg egy örökölt, `main`-oldali
+completion-matrix drift miatt. A halt-jelentés (`docs/reviews/e14-r07-review.md`
+§6) a **Router CI** `33861665049` futását nevezte meg blokkolóként, egyetlen
+piros cellával (`test_completion_matrix_sync.py::…::test_the_real_tree_is_in_sync`).
+A jelentés §8 becsületesen kimondta, hogy a Full Gate futását NEM mérte (a
+riport írásakor még futott). A folytatásban megmértem: a Full Gate
+`33861676472` is **piros** volt, **két** job-bal (`full-gate` és `Coverage`),
+és a piros cella a Python-cella DART-IKERPÁRJA volt
+(`test/tooling/program_completion_test.dart` A1 + a mutáns A2-cella,
+`9822 tests passed, 2 failed`). Vagyis a blokkoló nem egy kapu volt, hanem
+kettő — szerencsére azonos gyökérokkal.
+
+**Miért veszélyes ez akkor is, ha a gyökérok azonos.** A folytatást végző
+session a halt-jelentésből dolgozik. Ha az egy kaput nevez meg, kézenfekvő
+következtetés, hogy „a `main` Router CI-ja most zöld → a blokkoló elmúlt →
+mehet a merge". Ez két külön fáról szóló állítást mos össze: a `main` zöldje a
+`main` fájáról szól, a kör merge-kapuja viszont a **kör-branch + `main`**
+egyesítéséről. A kettő között ott van a §0.3 upstream-szinkron, és az abból
+születő ÚJ SHA, amin egyik korábbi futás sem mért semmit.
+
+**Amit a folytatás ténylegesen tett (és a szabály).** A §0.3 `merge --no-ff
+origin/main` után NEM a `main` CI-státuszára hivatkoztam, hanem a merge-elt
+HEAD-en futtattam le a konkrét piros cellát:
+`flutter test test/tooling/program_completion_test.dart` → `+27: All tests
+passed!`. Csak ezután ment a dispatch, és a zöld kapu így a merge SHA-n
+(`7e00287e`) állt össze: Full Gate `33871937135` **success**, Router CI
+`33871930803` **success**, a lokális `tools/round-gate.sh` **GATE_EXIT=0**.
+
+**Szabály.** (1) Örökölt piros CI-ra hivatkozó halt-jelentés sorolja fel a kör
+MINDEN dispatch-elt kapujának konklúzióját, vagy mondja ki tételesen, melyiket
+nem mérte — és a folytatás minden nem mért kaput mérjen újra, ne csak azt, amit
+a jelentés megnevez. (2) A „a `main` már zöld" NEM bizonyíték a kör
+merge-kapujára: a bizonyíték a merge-elt HEAD-en futtatott KONKRÉT korábban
+piros cella, majd a teljes kapu az így kapott SHA-n. Egy `REVIEW-APPROVED`
+folytatásban ez a két mérés az egyetlen dolog, ami a fölösleges újrakezdés
+elmaradását is biztonságossá teszi.
+
+**Őrteszt:** nincs — a lecke az orchestrátor folytatáskori MÉRÉSI SORRENDJÉRŐL
+szól (melyik kaput méri újra és melyik fán), nem egy kódbeli invariánsról; a
+gépi fele már fedve van: a `tools/round-resume-probe.sh` adja a
+`REVIEW-APPROVED` besorolást, az exact-SHA kapu-egyezést pedig a
+`tools/round-land.sh` fail-closed PR-metaadat-ellenőrzése méri.
+
+## L629 — A brief KÖTELEZŐ újrahasznosítási szabálya megvalósíthatatlan, ha a primitívet a cél-feature barrelje nem exportálja: a mély import a kapuban piros, a barrel-import nem oldja fel a nevet (E14-R05 / H3 önjavító kör, ADR 0112, 2026-09-04)
+
+**Mit mértem.** Az `E14-R05` briefje §5.1-ben KÖTELEZŐVÉ tette, hogy a Live
+signal-quality elemző a batch oldal meglévő `SignalQualityMath` primitíveit
+hívja („nem elfogadható gyengítés" a saját RMS/dBFS-implementáció). A kör
+pre-flightja azonban mérve azt kapta, hogy erre az újrahasznosításra
+**egyetlen legális import sem létezett**. Saját reprodukció a heal
+munkapéldányban (`/home/ubuntu/ss-heal-E14-R05-1`, egy eldobható próbafájl a
+`lib/features/live/engine/quality/` alatt):
+
+```
+# mély import: '../../../audio_analysis/engine/quality/signal_quality_math.dart'
+$ dart run tool/check_architecture.dart            → exit 1
+Unexpected violation(s) …
+- lib/features/live/engine/quality/_heal_probe.dart -> lib/features/audio_analysis/engine/quality/signal_quality_math.dart [cross-feature imports must target public.dart]
+
+# barrel-import: 'package:strumsight/features/audio_analysis/public.dart'
+$ dart run tool/check_architecture.dart            → exit 0  (12 allowlisted deviation(s))
+$ flutter analyze …/_heal_probe.dart               → exit 1
+error • Undefined name 'SignalQualityMath'. • …:3:39 • undefined_identifier
+```
+
+A `lib/features/audio_analysis/public.dart` az `engine/quality/` könyvtárból a
+`quality_thresholds.dart`-ot és a `signal_quality_stage.dart`-ot exportálta, a
+köztük fekvő `signal_quality_math.dart`-ot **nem**. A negyedik, exportált
+útvonal (`SignalQualityStage`) nem helyettesíti a primitíveket: `async`,
+stage-kontextust vár, és minden hívásán lefuttatja a `tonalness` FFT-jét —
+a Live forró úton blokkonként hívva pontosan az a hibás implementáció, amit a
+kör saját mérce-mátrixa (§6.1, 6. sor) pirosra visz.
+
+**A hibaosztály.** Nem a kör hibája és nem is scope-sértés: a **brief egy
+olyan újrahasznosítást tett kötelezővé, aminek az útvonala a kód oldalán zárva
+volt**, a feloldás pedig (egy sor a barrelben) az `allowed_paths`-on kívül esik
+— és az orchestrátor a listát az [ADR 0087](docs/adr/0087-round-scope-contract.md)
+§2 szerint csak SZŰKÍTHETI. Ez a fajta halt determinisztikusan visszatér minden
+olyan körben, amelyik ELSŐ cross-feature fogyasztója egy eddig befelé használt
+primitívnek (ugyanez a mintázat egyszer már megjelent: ADR 0176).
+
+**A javítás.** A primitív bekerült a feature nyilvános szerződésébe —
+`export 'engine/quality/signal_quality_math.dart';` a barrelben, a két
+szomszédja közé. A `signal_quality_math.dart` maga **bájtra változatlan**
+(ADR 0224 §3, és a kör 6. acceptance-cellája), a `SignalQualityMath` privát
+konstruktorú, csak statikus metódusokat hordozó `final class`, tehát az export
+nem nyit új mutálható felületet. Az `architectureAllowlist` bővítése NEM volt
+alternatíva: a lista a saját szabálya szerint (`tool/check_architecture.dart:8-10`)
+csak szűkülhet, és a `tool/` a mérce infrastruktúrája (ADR 0087 §4). A kör
+`allowed_paths`-a **változatlan maradt**: az export a `main`-en landolt a kör
+indulása ELŐTT, így az implementernek nincs dolga az `audio_analysis` fában.
+
+**Szabály.** Ha egy brief kötelezővé teszi egy MÁSIK feature primitívének az
+újrahasznosítását, a pre-flight mérje meg, hogy a primitív szerepel-e a cél
+`public.dart` barreljében — a szomszédos fájlok exportáltsága nem bizonyíték.
+Egy „belső használatra" szánt primitív, amit a barrel nem exportál, **nem
+újrahasznosítható primitív**, akármit mond róla a brief.
+
+**Őrteszt:** `test/core/architecture_dependency_test.dart` — „audio analysis
+quality primitives stay barrel-reachable (E14-R05)" csoport: az élő barrel
+export-listája tartalmazza mindhárom `engine/quality/` primitívet (a fix előtti
+forráson PIROS), a detektor-cella pedig fixture-ön méri, hogy a math nélküli
+barrelt észreveszi.

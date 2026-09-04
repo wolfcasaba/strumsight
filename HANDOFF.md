@@ -1,5 +1,101 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR — E14-R05 / H3: a `SignalQualityMath` bekerült az `audio_analysis` nyilvános szerződésébe (2026-09-04)
+
+**ADR 0112 önjavító kör.** Az `E14-R05` pre-flightja `H3`-mal állt meg: a brief
+§5.1 KÖTELEZŐVÉ tette a batch oldali `SignalQualityMath` újrahasznosítását, de
+erre **egyetlen legális import sem létezett**. Saját reprodukció (eldobható
+próbafájl a `lib/features/live/engine/quality/` alatt, heal munkapéldány):
+
+| Út | Mért eredmény |
+|---|---|
+| mély import `…/engine/quality/signal_quality_math.dart` | `dart run tool/check_architecture.dart` **exit 1** — `[cross-feature imports must target public.dart]` |
+| barrel-import `…/audio_analysis/public.dart` | architecture exit 0, de `flutter analyze` **exit 1** — `error • Undefined name 'SignalQualityMath'` |
+| barrel-import a fix UTÁN | architecture exit 0 **és** analyze exit 0 |
+
+A barrel az `engine/quality/` könyvtárból a `quality_thresholds.dart`-ot és a
+`signal_quality_stage.dart`-ot exportálta, a köztük fekvő
+`signal_quality_math.dart`-ot nem. A `SignalQualityStage` nem helyettesíti a
+primitíveket (async, stage-kontextus, feltétel nélküli `tonalness` FFT minden
+híváson — a kör §6.1 mátrixának 6. sora).
+
+**A javítás egyetlen additív sor** a barrelben
+(`export 'engine/quality/signal_quality_math.dart';`). A
+`signal_quality_math.dart` **bájtra változatlan** (ADR 0224 §3 + a kör 6.
+acceptance-cellája), az `architectureAllowlist` nem bővült (a lista csak
+szűkülhet, `tool/check_architecture.dart:8-10`). A kör `allowed_paths`-a
+**változatlan**: az export a kör indulása ELŐTT landol a `main`-en, tehát az
+implementer az `audio_analysis` fához nem nyúl — csak a barrelt importálja.
+
+**Őr:** `test/core/architecture_dependency_test.dart` — „audio analysis quality
+primitives stay barrel-reachable (E14-R05)" (2 cella; a fix előtti forráson az
+élő-fa cella PIROS). Mérés: [L629](docs/LESSONS.md).
+
+**A megállt kör innen folytatható:** a pre-flight KÉSZ és megőrzött — ág
+`sonnet-impl/e14-r05-live-signal-quality-analyzer` (ADR 0507 + §0.0 revízió,
+R6-tal kiegészítve), munkapéldány `/home/ubuntu/ss-sonnet-impl-e14-r05`;
+implementer még nem indult.
+
+## ✅ E14-R07 KÉSZ — Annotációs szerződés: az automatikus címke soha nem lép elő ground truth-szá — PR [#570](https://github.com/wolfcasaba/strumsight/pull/570), squash `80506119` (2026-09-04)
+
+A Chapter 14 sáv hetedik köre megadta a **verziózott, validált és
+visszakövethető felismerési annotációt**: azt a szerződést, amihez az `E14-R08`
+harness és az `E14-R09` baseline-gate egyáltalán mérhet. A kör kötött
+scope-szűkítéssel ment (brief §0.0): az SDD Kör 07 grafikus annotátort ír
+(waveform, húzható onset, undo/redo), de a repónak **nincs desktop/web
+futtatási célja**, és a gate egy GUI-t nem tud vezetni — a bizonyítható rész
+(séma, átfedés-validáció, provenance, két-annotátoros riport) viszont
+közvetlenül mérhető. A szerkesztő külön kör (`E14-R07b`).
+([ADR 0359](docs/adr/0359-recognition-annotation-contract-and-agreement.md), D1–D6.)
+
+**A kör terméke** (8 fájl, 1924 sor):
+
+- `evaluation/recognition/annotation_schema.json` — a séma maga, `schemaVersion`
+  kapuval; `evaluation/recognition/fixtures/annotation_pair.json` — két
+  annotátoros CI-fixture (10+10 esemény, mindhárom `provenance`-értékkel).
+- `lib/features/live/domain/evaluation/recognition_annotation.dart` —
+  Flutter-független modell + egyetértés-számítás (Kuhn-párosítás onset-toleranciával).
+- `lib/features/live/data/evaluation/recognition_annotation_parser.dart` —
+  típusos parser: `InvalidSchemaVersion`, **kötelező** `provenance`
+  (`auto | human | reviewed`, hiány → típusos hiba, **nincs `human` default**),
+  átfedés → hiba **mindkét esemény indexével**, nem csendes összevonás.
+- `tool/recognition_annotate.dart` — validate + agreement CLI, determinisztikus
+  JSON (kanonikus kulcsrend, `DateTime.now()` nélkül); hiányzó fájl → `exit 2`,
+  parse-hiba → `exit 1`, a riport `stdout`-ra, a hiba `stderr`-re.
+- `docs/eval/recognition-annotation.md`, valamint
+  `test/features/live/evaluation/recognition_annotation_test.dart` — 18 cella.
+
+**A mérce, nem a szöveg.** Az onset-tolerancia (50 ms) határa **inkluzív**, és
+mind a három cella mérve: 49 ms → párosít, **pontosan 50 ms → párosít**, 51 ms →
+nem. A fixture szándékosan **nem** túlillesztett: a `b9`/`b10` esemény nem
+párosítható, az `a6`↔`b6` pár irányban eltér — így egy „mindent párosít" és egy
+„minden irány egyezik" implementáció is pirosra vált (`directionAgreement =
+0.875`, `matchedEventCount = 8`).
+
+**Review: APPROVED** (0 BLOCKER / 0 MAJOR / 0 MINOR, 2 NOTE) —
+`docs/reviews/e14-r07-review.md`. A reviewer izolált klónban futtatta a gate-et
+és **három eldobható mutációt**: (M1) a párosítás határa `<=` → `<` → 2 cella
+piros; (M2) hiányzó `provenance` → `human` default → 1 cella piros; (M3)
+`generatedAt: DateTime.now()` a riportba → 2 cella piros. Mind visszaállítva. A
+cellák tehát a VISELKEDÉST mérik, nem a szerkezetet.
+
+**A kör H3 halttal állt meg, és nem a saját hibájából.** Az exact-SHA CI-t egy
+**örökölt, `main`-oldali** completion-matrix drift vitte pirosra — ugyanaz a
+gyökérok, amit az [önjavító kör](docs/LESSONS.md#l627) mért ki és a `#569` PR
+javított. A folytatás nem implementált újra semmit (`REVIEW-APPROVED` fok, ADR
+0112): §0.3 upstream-szinkron (`merge --no-ff origin/main`, konfliktus nélkül) →
+a teljes CI-kapu ÚJRA a merge SHA-n (`7e00287e`: Full Gate
+[33871937135](https://github.com/wolfcasaba/strumsight/actions/runs/33871937135)
+**success**, Router CI `33871930803` **success**) → zöld kapus squash-merge.
+A halt-jelentés EGY piros kaput nevezett meg (Router CI), a valóságban **kettő**
+volt piros — azonos gyökérokkal; a folytatás mindkettőt újramérte
+([L628](docs/LESSONS.md#l628)).
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending`
+sora — a Chapter 14 sávon `E14-R05` (live signal quality analyzer, párhuzamos
+sloton fut) és `E14-R08` (grouped evaluation harness, ADR `0360`), amely az itt
+megépített annotációs szerződésre mér.
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E14-R07 / H3: a merge utáni könyvelés saját munkapéldányban fut, a push újrapróbálható és hangos (2026-09-04)
 
 **ADR 0112 önjavító kör. A megállt kör (E14-R07) terméke HIBÁTLAN** — a gate

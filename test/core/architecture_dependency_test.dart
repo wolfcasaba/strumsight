@@ -1221,7 +1221,76 @@ import 'package:flutter/widgets.dart';
       );
     });
   });
+
+  // ADR 0112 self-heal (2026-09-04): E14-R05 halted (H3) because the ONLY
+  // route to the signal-quality primitives its brief §5.1 mandates reusing
+  // was closed. `signal_quality_math.dart` sat next to two exported
+  // siblings in `engine/quality/`, but was itself missing from the feature
+  // barrel, so a cross-feature consumer had no legal import: the deep one is
+  // rejected by `crossFeatureImportsMustUsePublicApi`
+  // (measured: `... -> lib/features/audio_analysis/engine/quality/
+  // signal_quality_math.dart [cross-feature imports must target public.dart]`),
+  // and the barrel one does not resolve the name (measured:
+  // `error • Undefined name 'SignalQualityMath'`). A quality primitive that
+  // no other feature can reach is not a reusable primitive — the export list
+  // is the contract, so it is pinned here. See docs/LESSONS.md L629.
+  group(
+    'audio analysis quality primitives stay barrel-reachable (E14-R05)',
+    () {
+      const requiredQualityExports = <String>[
+        'engine/quality/quality_thresholds.dart',
+        'engine/quality/signal_quality_math.dart',
+        'engine/quality/signal_quality_stage.dart',
+      ];
+
+      test('the audio_analysis barrel exports every quality primitive', () {
+        final barrelSource = File(
+          'lib/features/audio_analysis/public.dart',
+        ).readAsStringSync();
+
+        expect(
+          _barrelExportPaths(barrelSource),
+          containsAll(requiredQualityExports),
+          reason:
+              'A quality primitive missing from lib/features/audio_analysis/'
+              'public.dart is unreachable from every other feature: the deep '
+              'import fails the architecture gate and the barrel import fails '
+              'to resolve the name.',
+        );
+      });
+
+      test(
+        'the export detector sees a barrel that omits the math primitive',
+        () {
+          const barrelWithoutMath = '''
+/// Public domain contract for cross-feature Audio Analysis consumers.
+library;
+
+export 'engine/quality/quality_thresholds.dart';
+export 'engine/quality/signal_quality_stage.dart';
+''';
+
+          expect(
+            _barrelExportPaths(barrelWithoutMath),
+            isNot(contains('engine/quality/signal_quality_math.dart')),
+          );
+        },
+      );
+    },
+  );
 }
+
+/// Every relative path exported by a `public.dart` barrel.
+Set<String> _barrelExportPaths(String source) {
+  return {
+    for (final match in _barrelExport.allMatches(source)) match.group(1)!,
+  };
+}
+
+final _barrelExport = RegExp(
+  r'''^export\s+['"]([^'"]+)['"]\s*;''',
+  multiLine: true,
+);
 
 void _write(Directory project, String relativePath, String contents) {
   final file = File('${project.path}/$relativePath');
