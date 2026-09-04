@@ -1,5 +1,73 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R03 KÉSZ — Fail-visible modellaktiváció: a néma fallback mostantól KIMONDJA magát — PR [#566](https://github.com/wolfcasaba/strumsight/pull/566), squash `b82f3ab5` (2026-09-04)
+
+A Chapter 14 sáv harmadik köre azt a hibaosztályt zárta a felismerő oldalán,
+amit a `docs/LESSONS.md` [L06](docs/LESSONS.md#l06) a beállítás-szinkronon már
+megmért: **az elnyelt hiba néma no-op**. A Live út eddig
+`catch (_) { return null; }`-nal esett vissza a heurisztikus
+irányosztályozóra, ha a CRNN-súly nem volt betölthető — egy futó buildről
+**nem volt eldönthető, mit mértünk**
+([ADR 0355](docs/adr/0355-fail-visible-model-activation-telemetry.md)).
+
+**A kör terméke:**
+
+- **`lib/features/live/model/recognition_runtime_info.dart`** (ÚJ,
+  Flutter-független): `strumModelId`, `strumModelVersion`, `strumModelSha256`
+  — a hash a **ténylegesen betöltött bájtokból** számolva, nem a
+  `model_manifest.json`-ból másolva (ADR 0355 §4: épp azt az esetet nem fogná
+  meg, amiért a mező létezik) —, `chordEngineId`, `fallbackReason`,
+  `sampleRate`, `frontendVersion`.
+- **`lib/features/live/engine/ml/model_activation.dart`** (ÚJ):
+  `ModelActivation<T>` — `activated` / `fallback` / `disabled`. Az invariánsokat
+  **valódi `throw` őrzi, nem `assert`** (az release-ben eltűnik), és a `fallback`
+  gyártófüggvényből eltűnt a külön `reason` paraméter: az `info` az egyetlen
+  igazságforrás, tehát a „hazug pár" **szerkezetileg sem** állítható elő.
+- **Zárt hibakód-halmaz**: `assetMissing`, `assetUnreadable`, `parseFailed`,
+  `shapeMismatch`, `disabledByFlag`. Kivétel-szöveg SOSEM megy tovább (§5.2) —
+  a `parseFailed`/`shapeMismatch` elválasztását a betöltő a `SSML` fejléc 8
+  bájtjának SAJÁT ellenőrzésével dönti el, nem a `FormatException` üzenetére
+  illesztéssel.
+- **`StrumCrnn.activate` / `activateBytes`** (ÚJ, **additív**) — a `tryLoad`
+  MEGMARADT `StrumCrnn?`-t adó delegálásként, mert **hat, a kör scope-ján
+  kívüli teszt** pinneli a mai visszatérési típust (a pre-flight mérése, §0.0 R1).
+- **`LivePipeline.runtimeInfo`** getter — az aktiváció a `factory`
+  konstruktorban **egyszer** fut, a per-frame útvonalra semmi nem került (§9).
+- **`LiveLabState.runtimeInfo` + `LiveLabController.reportRuntimeInfo`**
+  (additív), `lib/features/live/public.dart` additív export.
+
+**A fallback VISELKEDÉSE bitre változatlan — és ez MÉRVE van, nem állítva.**
+A review egy eldobható próbateszttel a `LivePipeline` teljes frame-sorát
+ujjlenyomatolta (63 frame × chord/irány/konfidencia 9 tizedesig/bpm/level/
+strumSeq/bar) három súly-úton (nincs súly / szemét / valódi
+`strum_crnn_live_3c.bin`), és lefuttatta a **tiszta `main` klónon** és a
+kör-ágon:
+
+```
+$ diff /tmp/probe-main.txt /tmp/probe-round2.txt   # exit 0
+bd90fdc0c8e1dbf748cb3c7ad4c5cb7d67ca9573a3a5127dce26d083aeb2b414  (mindkettő)
+```
+
+**Amit a kör KIMONDOTTAN nem tett meg** (mind az `E14-R04` scope-ja): az
+izolátum → Lab tényleges bekötés (a `LivePipeline` a DSP-izolátumban él, a
+`real_strum_engine.dart` / `strum_engine.dart` a kör tilos zónája volt), a live
+út valódi asset-neve (ma a nevesített `RecognitionRuntimeInfo.isolateLiveModelId`
+konstans megy át), és a `disabledByFlag` flag-olvasása.
+
+**Motor és evidencia.** Implementer `sonnet-impl` (Claude Sonnet 5),
+orchesztrátor/reviewer Claude (Opus 5), **1 javító kör**. Review:
+[`docs/reviews/e14-r03-review.md`](docs/reviews/e14-r03-review.md) — CHANGES
+REQUESTED (0 BLOCKER / 0 MAJOR / 4 MINOR / 4 NOTE) → a fix1 után **APPROVED**,
+0 nyitott lelet. `risk = "high"` → kötelező biztonsági review
+([`docs/reviews/e14-r03-security.md`](docs/reviews/e14-r03-security.md)):
+**CLEAN**. `native_gate = false` → a CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`). Exact-SHA evidencia a `c238ea22` merge SHA-n: Full Gate
+[33853601498](https://github.com/wolfcasaba/strumsight/actions/runs/33853601498)
+`success` + Router CI
+[33853642667](https://github.com/wolfcasaba/strumsight/actions/runs/33853642667)
+`success`. Két új lecke: [L620](docs/LESSONS.md#l620) és
+[L621](docs/LESSONS.md#l621).
+
 ## ✅ E14-R02 KÉSZ — Reprodukálható felismerési baseline: egyetlen manifest, egyetlen szám sem forrás nélkül — PR [#565](https://github.com/wolfcasaba/strumsight/pull/565), squash `2bbd36bd` (2026-09-04)
 
 A Chapter 14 sáv második köre a szétszórt felismerési méréseket **egyetlen,
@@ -11892,290 +11960,67 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-04):** `main` @ `474a6b00` — **E16-R05: teljes
-app-verifikáció és kiadható build**, PR
-[#562](https://github.com/wolfcasaba/strumsight/pull/562), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
-(Opus 5), **1 javító kör** (review: APPROVED a javító kör után, 0 nyitott
-lelet; a review CHANGES REQUESTED verdikttel indult: 0 BLOCKER / 1 MAJOR /
-2 MINOR / 1 NOTE — [`docs/reviews/e16-r05-review.md`](docs/reviews/e16-r05-review.md)).
-**ÚJ ADR: nincs** — mérési/záró kör (165 merge-elt kör precedense, köztük az
-`E15-R13`; a `docs/adr/**` a kör tiltott zónája volt). `risk = "normal"`,
-`native_gate = true` → a CI-tervet a `tools/round-ci-plan.py` adta
-(`build-apk.yml`). Exact-SHA evidencia a `0c6098c0` merge SHA-n: build-apk +
-Coverage
-[33836966766](https://github.com/wolfcasaba/strumsight/actions/runs/33836966766),
-Router CI
-[33836983795](https://github.com/wolfcasaba/strumsight/actions/runs/33836983795)
-— mindkettő `success`. A `lib/**` fa **érintetlen**: a záró kör MÉR, nem javít
-(brief §5.2) — az öt talált lelet dokumentálva, nem elfedve.
-
-**Előző állapot (2026-09-04):** `main` @ `e082b664` — **E16-R04: élő
-backend end-to-end, szerződés-vezérelt bring-up smoke**, PR
-[#561](https://github.com/wolfcasaba/strumsight/pull/561), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
-(Opus 5), **0 javító kör** (review: APPROVED, 0 BLOCKER / 0 MAJOR, 1 MINOR,
-3 NOTE, [`docs/reviews/e16-r04-review.md`](docs/reviews/e16-r04-review.md);
-kötelező `security-reviewer` 0 BLOCKER / 0 MAJOR).
-ÚJ ADR: [**0503**](docs/adr/0503-live-backend-smoke-contract-source-and-device-profile-secret-boundary.md).
-`risk = "high"`, `native_gate = false` → a CI-tervet a `tools/round-ci-plan.py`
-adta (`full-gate.yml`). Exact-SHA evidencia az `f03a34ec` merge SHA-n:
-full-gate
-[33829479990](https://github.com/wolfcasaba/strumsight/actions/runs/33829479990),
-Router CI
-[33829481527](https://github.com/wolfcasaba/strumsight/actions/runs/33829481527)
-— mindkettő `success`. A `lib/**` és a `backend/app/**` fa **érintetlen**: a
-kör terméke egy release-tool, egy profil-sablon, a hozzájuk tartozó gépi
-mérce és a runbook-kiegészítés.
-
-**Előző állapot (2026-09-04):** `main` @ `1bb21b95` — **E16-R03: capability
-rollout-döntések, ZERO FLIP**, PR
-[#560](https://github.com/wolfcasaba/strumsight/pull/560), squash-merge,
-1 javító kör, ADR 0492; exact-SHA evidencia az `513d1191` merge SHA-n
-(full-gate `33822335974` + Router CI `33822337524`, mindkettő `success`).
-
-**Korábbi állapot (2026-09-03):** `main` @ `b968cc4a` — **E15-R13: a Chapter 15
-sáv ZÁRÓ köre**, PR [#556](https://github.com/wolfcasaba/strumsight/pull/556),
-squash-merge. Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude (Opus 5), **1 javító menet** (review: 1 MAJOR +
-1 MINOR + 2 NOTE → APPROVED, 0 nyitott lelet,
-[`docs/reviews/e15-r13-review.md`](docs/reviews/e15-r13-review.md)). ÚJ ADR:
-**nincs** (mérési/záró kör). `risk = "normal"`, `native_gate = true` → a
-CI-tervet a `tools/round-ci-plan.py` adta (`build-apk.yml`). Exact-SHA
-evidencia a `460cbbab` merge SHA-n: Build Android APK
-[33798598939](https://github.com/wolfcasaba/strumsight/actions/runs/33798598939),
-Router CI
-[33798600961](https://github.com/wolfcasaba/strumsight/actions/runs/33798600961)
-— mindkettő `success`. A pre-flight öt MÉRT revíziót írt a briefbe (§0.0.A),
-köztük az `allowed_paths` **szűkítését** (`docs/ui/migration-status.md`
-kivezetése), mert a párhuzamos slot köre (`E16-R02`) ugyanazt a fájlt sorolja —
-a slot-átfedés így nem H3-halt lett, hanem diszjunkt fájlhalmaz
-([L611](docs/LESSONS.md#l611)).
-
-**Előző állapot (2026-09-03):** `main` @ `7259c563` — **E15-R09 AI Tutor 5
-képernyő migrálása a design-rendszerre (80/96, 83,333%)**, PR
-[#540](https://github.com/wolfcasaba/strumsight/pull/540), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude (Opus 5), **2 javító kör + egy közbeékelt ADR 0112
-önjavító kör** (a kör H5-tel halt: a CI kétszer piros — a 2. piros gyökéroka a
-24 mély design-system import volt, amit KIZÁRÓLAG a teljes CI-suite mért). A
-heal (ADR 0494 D2) a barrel-szabályt a gate `architecture` lépésébe tette, a D3
-szerint a piros-számláló nulláról indult, majd a javító kör #2 után a review
-**APPROVED**, 0 nyitott lelet
-([`docs/reviews/e15-r09-review.md`](docs/reviews/e15-r09-review.md) §7).
-ÚJ ADR: **nincs**. `risk = "high"` → `flutter-reviewer` + `flutter-devil-advocate`
-kötelező volt, mindkettő lefutott. Exact-SHA evidencia a merge SHA-n
-(`31e30233`): Full Gate
-[33720016489](https://github.com/wolfcasaba/strumsight/actions/runs/33720016489),
-Router CI
-[33720058092](https://github.com/wolfcasaba/strumsight/actions/runs/33720058092)
-— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
-(`full-gate.yml`, `native_gate = false`).
-
-**Előző állapot (2026-09-03):** `main` @ `e8686066` — **E12-R36 Program
-completion report és következő roadmap: a Chapter 12 sáv ZÁRÓ köre**, PR
-[#538](https://github.com/wolfcasaba/strumsight/pull/538), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** — a review a TELJESEN
-ZÖLD gate mögött 1 MAJOR-t mért próbateszttel: az őr a hamis állítást fogta, az
-ELHALLGATÁST (törölt nyitott sáv / törölt emberi kapu) nem
-([L588](docs/LESSONS.md#l588)). Utána APPROVED, 0 nyitott lelet. ÚJ ADR:
-**nincs** (záró/riport-kör). `risk = "normal"`. Exact-SHA evidencia a merge
-SHA-n (`d47e64fa`): Full Gate
-[33698915230](https://github.com/wolfcasaba/strumsight/actions/runs/33698915230),
-Router CI
-[33698956202](https://github.com/wolfcasaba/strumsight/actions/runs/33698956202).
-Ezzel **mind a 36 `E12` queue-sor `done`** — a program állapotának
-bizonyíték-alapú lezárása a
-[`docs/sdd/program-completion-report.md`](docs/sdd/program-completion-report.md),
-a következő fél év outcome-céljai a
-[`docs/roadmap/next-six-months.md`](docs/roadmap/next-six-months.md).
-
-**Előző állapot (2026-09-02):** `main` @ `d28c79d3` — E15-R14 Practice
-Generator kompozíciós réteg, PR
-[#534](https://github.com/wolfcasaba/strumsight/pull/534), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude (Opus 5), **2 javító kör** — a review **2 BLOCKER
-+ 7 MAJOR**-t talált TELJESEN ZÖLD gate mellett (elnyelt `StorageException` a
-törlés-úton; a production-kompozíció 3/6 képernyőre dobott, miközben az A3
-cella a saját override-jaitól volt zöld — [L583](docs/LESSONS.md#l583)). A két
-javító kör után APPROVED, 0 nyitott lelet
-([`docs/reviews/e15-r14-review.md`](docs/reviews/e15-r14-review.md) §8).
-ÚJ ADR: [0482](docs/adr/0482-practice-generator-composition-layer.md) (D1–D11);
-a D9/D10/D11 az `E15-R07 / F1` KÖTELEZŐ előfeltétele. `risk = "high"` →
-`security-reviewer` kötelező volt, lefutott. Exact-SHA evidencia a merge SHA-n
-(`29aa7b91`): Full Gate
-[33678702648](https://github.com/wolfcasaba/strumsight/actions/runs/33678702648),
-Router CI
-[33678705251](https://github.com/wolfcasaba/strumsight/actions/runs/33678705251)
-— mindkettő `success`.
-
-**Előző kör (2026-09-02):** `main` @ `cf7c6fb6` — E12-R24 store listing,
-privacy és legal package, PR
-[#520](https://github.com/wolfcasaba/strumsight/pull/520), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** — a review **1 MAJOR + 1
-MINOR**-t talált TELJESEN ZÖLD gate mellett: az A3 próza-scan fail-open volt
-(signature nélküli non-GA capability némán kimaradt), amit a reviewer P7 próbája
-mért ki — egy ÚJ non-GA capability „coming soon" ígérete 29/29 zölden átment
-([L571](docs/LESSONS.md#l571)). A javító kör után APPROVED, 0 nyitott lelet
-([`docs/reviews/e12-r24-review.md`](docs/reviews/e12-r24-review.md)); 2 NOTE
-nyitva (placeholder support-cím, Play-taxonómia — mindkettő emberi lépés).
-**ÚJ ADR nincs, szándékosan** (a normatív állítások az ADR 0477 D1 / 0479 / 0247
-alá esnek; precedens E12-R13). `risk = "normal"` → `security-reviewer` nem volt
-kötelező. Exact-SHA evidencia a merge SHA-n (`b3e346d4`): Full Gate
-[33579841775](https://github.com/wolfcasaba/strumsight/actions/runs/33579841775),
-Router CI
-[33579897602](https://github.com/wolfcasaba/strumsight/actions/runs/33579897602)
-— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
-(`full-gate.yml`, `native_gate = false`).
-
-**Előző kör (2026-09-02):** `main` @ `3e6dbbf0` — E12-R23 legacy user
-migration release candidate, PR
-[#519](https://github.com/wolfcasaba/strumsight/pull/519), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude, **1 javító kör** — a review **1 MAJOR + 1 MINOR**-t
-talált 8/8 ZÖLD gate mellett, mert a „korrupt bemenet" cella valójában egy
-injektált írás-hibát mért, a `corrupted_storage.json` pedig hibátlan JSON-t
-tartalmazott ([L570](docs/LESSONS.md#l570)). A javító kör után APPROVED, 0 nyitott
-lelet ([`docs/reviews/e12-r23-review.md`](docs/reviews/e12-r23-review.md)); egy
-ismert, dokumentált korlát (`readBody()` → `null` sérült dokumentum után) cellával
-pinnelve marad nyitva. ÚJ ADR:
-[0487](docs/adr/0487-legacy-upgrade-migration-evidence-contract.md).
-`risk = "high"` → a kötelező `security-reviewer` futott (PASS, 0 lelet, a három
-fixture `sha256`/`bytes` értékét függetlenül újraszámolta). Exact-SHA evidencia a
-merge-elt head SHA-n (`aec92f4b`): Full Gate
-[33574437257](https://github.com/wolfcasaba/strumsight/actions/runs/33574437257),
-Router CI
-[33574439209](https://github.com/wolfcasaba/strumsight/actions/runs/33574439209)
-— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
-(`full-gate.yml`, `native_gate = false`).
-
-**Előző állapot:** `main` @ `3b1855ff` — E12-R22 béta-terjesztés,
-tesztelői consent és redaktált diagnosztikai csomag, PR
-[#518](https://github.com/wolfcasaba/strumsight/pull/518), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — a review **1 BLOCKER +
-3 MAJOR + 2 kért MINOR**-t talált TELJESEN ZÖLD gate (10/10, 44 cella) mellett,
-mert az A3 küszöb-cella csupa-nulla PCM fixture-rel mért, ahol a hibaosztály
-szerkezetileg nem tud előfordulni ([L569](docs/LESSONS.md#l569)). A javító kör
-után APPROVED, 0 nyitott lelet
-([`docs/reviews/e12-r22-review.md`](docs/reviews/e12-r22-review.md)), két
-follow-up NOTE nyitva (IDN e-mail, a titok-osztály szűk kulcslistája). ÚJ ADR:
-[0486](docs/adr/0486-beta-distribution-consent-and-redacted-diagnostics-bundle.md).
-`risk = "high"` → a kötelező `security-reviewer` futott. Exact-SHA evidencia a
-merge SHA-n (`0192cb6b`): Full Gate
-[33566453442](https://github.com/wolfcasaba/strumsight/actions/runs/33566453442),
-Router CI
-[33566455858](https://github.com/wolfcasaba/strumsight/actions/runs/33566455858),
-Backend CI
-[33566457950](https://github.com/wolfcasaba/strumsight/actions/runs/33566457950)
-— mind `success`. A CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml`,
-`native_gate = false`).
-
-**Előző állapot:** `main` @ `1c8e214a` — E15-R06 Setlist +
-Progress képernyők design-rendszer migrációja, PR
-[#510](https://github.com/wolfcasaba/strumsight/pull/510), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — a review **1 BLOCKER +
-2 MAJOR + 3 MINOR**-t talált a kör SAJÁT, zöld A3-cellái mellett, mert azok a
-`flutter_test` alapértelmezett 800×600-as viewportján futottak. A javító kör
-után APPROVED, 0 nyitott lelet
-([`docs/reviews/e15-r06-review.md`](docs/reviews/e15-r06-review.md)); egy
-tudatosan vállalt, PRE-EXISTING `weekly_bars.dart` túlcsordulás nyitva marad
-(lásd a fenti E15-R06 szakasz ⚠ blokkját). Nincs ÚJ ADR. Exact-SHA evidencia a
-merge SHA-n (`8b33c197`): Full Gate
-[33250085852](https://github.com/wolfcasaba/strumsight/actions/runs/33250085852),
-Router CI
-[33250086715](https://github.com/wolfcasaba/strumsight/actions/runs/33250086715)
-— mindkettő `success`.
-
-**Előző állapot:** `main` @ `dd071f7d` — E12-R16 AI és ML
-összesített release gate, PR
-[#507](https://github.com/wolfcasaba/strumsight/pull/507), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
-orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — a review **1 MAJOR +
-1 MINOR**-t talált TELJESEN ZÖLD gate mellett (24/24 cella): a kapu
-követelmény-listája némán törölhető volt (MAJOR-1), és a két importált
-küszöb-név halott volt, így az A4 őr csak a nevek jelenlétét bizonyította
-(MINOR-1). A javító kör után APPROVED, 0 nyitott lelet, 2 NOTE nyitva
-([`docs/reviews/e12-r16-review.md`](docs/reviews/e12-r16-review.md)).
-`risk = "normal"`, a diff nem érint hálózatot, hitelesítést, tárolást vagy
-felhasználói adatot (Python release-eszköz + séma + dokumentum + teszt), ezért
-külön `security-reviewer` nem futott. A kör ADR-je:
-[ADR 0477](docs/adr/0477-ai-release-evidence-aggregation-and-ga-scope-truth.md)
-(D1–D7). Exact-SHA evidencia a merge SHA-n (`cac36271`): Full Gate
-[33244325533](https://github.com/wolfcasaba/strumsight/actions/runs/33244325533),
-Router CI
-[33244323662](https://github.com/wolfcasaba/strumsight/actions/runs/33244323662)
-— mindkettő `success`. A CI-tervet a `tools/round-ci-plan.py` adta
-(`full-gate.yml`, `native_gate = false`); a landolás `tools/round-land.sh`-sal,
-merge-záron keresztül ment, közben az E15-R05 is landolt — a landoló
-sorosított, és a merge head SHA-ja változatlanul a CI-vel igazolt `cac36271`
-maradt.
+**Aktuális állapot (2026-09-04):** `main` @ `b82f3ab5` — **E14-R03: fail-visible
+modellaktiváció**, PR [#566](https://github.com/wolfcasaba/strumsight/pull/566),
+squash-merge. Implementer `sonnet-impl` (Claude Sonnet 5),
+orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** (review: APPROVED a
+javító kör után, 0 nyitott lelet; CHANGES REQUESTED verdikttel indult:
+0 BLOCKER / 0 MAJOR / 4 MINOR / 4 NOTE —
+[`docs/reviews/e14-r03-review.md`](docs/reviews/e14-r03-review.md)).
+**ÚJ ADR: [0355](docs/adr/0355-fail-visible-model-activation-telemetry.md)** —
+a Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt).
+`risk = "high"` → kötelező biztonsági review
+([`docs/reviews/e14-r03-security.md`](docs/reviews/e14-r03-security.md)):
+**CLEAN**. `native_gate = false` → a CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml`). Exact-SHA evidencia a `c238ea22` merge SHA-n: Full Gate
+[33853601498](https://github.com/wolfcasaba/strumsight/actions/runs/33853601498)
+`success` + Router CI
+[33853642667](https://github.com/wolfcasaba/strumsight/actions/runs/33853642667)
+`success`. A pre-flight **tizenkét mért brief-revíziót** írt (§0.0 R1–R12),
+köztük kettő valódi H3-elkerülés.
 
 ## 5. Last completed round
 
-**E16-R05 — A teljes app működésének mérése és kiadható build** (PR
-[#562](https://github.com/wolfcasaba/strumsight/pull/562), squash `474a6b00`).
-A Chapter 16 sáv ZÁRÓ köre. Új: `tool/check_placeholder_wiring.dart` (zárt
-P1/P2/P3 szerződés, 0 lelet, fail-closed üres fájlhalmazra),
-`test/e2e/full_app_walkthrough_test.dart` (a szállított
-`forEnvironment(development)` BE-flagkészlettel), és
-`docs/release/full-app-verification.md` (a 73 elérhető képernyő 9+64-es,
-diszjunkt és teljes partíciója + öt NEM javított lelet). **A kör MÉRT
-verdiktje az A3-ra NEGATÍV:** a core út a termék saját navigációjával nem
-járható végig (L1, L2) — ezt a kör kimondja, nem elfedi. Két új lecke:
-[L617](docs/LESSONS.md#l617) (az orchesztrátor prompt-fájlja a
-munkapéldányban hamis `scope_audit=VIOLATION`-t okoz) és
-[L618](docs/LESSONS.md#l618) (a bejárás teszt-oldali navigációs hídja LELET,
-nem kényelmi lépés — ADR 0470 / L273 hibaosztály).
+**E14-R03 — Model activation telemetry és fail-visible működés** (PR
+[#566](https://github.com/wolfcasaba/strumsight/pull/566), squash `b82f3ab5`).
+A Live út néma CRNN-fallbackja mostantól **kimondja magát**: `RecognitionRuntimeInfo`
+(a modell SHA-256-ja a ténylegesen betöltött bájtokból), `ModelActivation<T>`
+valódi `throw`-val őrzött invariánsokkal, ötelemű zárt hibakód-halmaz, és a
+`LivePipeline.runtimeInfo` getter. A `StrumCrnn.activate` **additív** — a
+`tryLoad` szignatúrája nem változott, mert hat, a kör scope-ján kívüli teszt
+pinneli. A fallback VISELKEDÉSE bitre azonos maradt, és ez **mérve** van: a
+review frame-ujjlenyomata a tiszta `main` klónnal szemben azonos sha256-ot ad
+(63 frame, 3 súly-út). Két új lecke: [L620](docs/LESSONS.md#l620) (a típusos
+visszatérés költsége a HÍVÓI oldalon keletkezik → additív belépő) és
+[L621](docs/LESSONS.md#l621) (a „viselkedés változatlan" ígéret csak
+legacy-referenciás ujjlenyomattal mérés).
 
-**Előző kör: E16-R04 — Élő backend end-to-end: szerződés-vezérelt bring-up smoke** (PR
-[#561](https://github.com/wolfcasaba/strumsight/pull/561), squash `e082b664`).
-A `tool/release/live_backend_smoke.py` a mérendő végpontokat a
-`docs/contracts/client-backend-endpoints.json`-ből OLVASSA (mind a 34
-bejegyzést besorolja; besorolatlan → `exit 2` a hálózati hívás ELŐTT), a
-bring-up láncot pedig az első eltérésnél megállítja
-([ADR 0503](docs/adr/0503-live-backend-smoke-contract-source-and-device-profile-secret-boundary.md)
-D1/D2). Mellé `device_build.example.json` + gitignore-olt valódi pár, 6
-hálózat-mentes backend cella, 7 élő-fás Dart cella, és a
-`device-backend-runbook.md` §8/§9 kiegészítése. A pre-flight HAT mért
-brief-revíziót írt (§0.0.1). Két új lecke:
-[L615](docs/LESSONS.md#l615) (a valódi-sértés próba WRITEUPJA is a
-titok-szkenner útvonalára esik) és [L616](docs/LESSONS.md#l616) (a
-scope-auditot az implementer indulási HEAD-jéről kell futtatni).
+**Előző kör: E14-R02 — Reprodukálható felismerési baseline és evidence index**
+(PR [#565](https://github.com/wolfcasaba/strumsight/pull/565), squash `2bbd36bd`).
+Az `evaluation/recognition/baseline_manifest.json` + generált index: ugyanaz a
+bemenet bájtra azonos reportot ad, minden szám mellett `sourceFile` és
+mező-szintű `command` ([ADR 0354](docs/adr/0354-recognition-baseline-manifest-and-evidence-index.md)).
+Lecke: [L619](docs/LESSONS.md#l619) (a kézzel írt séma-validátor fail-OPEN).
 
 ## 6. Exact next task
 
-> **A PIPELINE-SOR KIÜRÜLT.** Az `E16-R05` volt az utolsó `pending` sor a
-> `docs/execution/pipeline-queue.tsv`-ben — a lánc **nem indít magától**
-> következő kört. A folytatás **user-döntés**: melyik nyitott sáv kapja a
-> következő slotot.
->
-> **Amit a záró mérés a következő tervezés asztalára tett (E16-R05, mind
-> MÉRT, egyikhez sincs ma hozzárendelt kör):**
->
-> | Lelet | Mit mértünk | Hol |
-> |---|---|---|
-> | **L1** | az adaptív shell „ajánlott gyakorlás" CTA-ja `?id=` nélkül navigál → a Setup a `_RouteError` ágát rendereli | `practice_area_hub_screen.dart:55` |
-> | **L2** | az onboarding Skip-je mindig `/live`-ra fejez be, sosem `/today`-ra | `onboarding_screen.dart:106` |
-> | **L3** | a Library V2 forrásai csak a production bootstrapból élnek, a `bootE2eApp` nem köti be őket (harness-határ, nem termékhiba) | `library_v2_providers.dart` |
-> | **L4** | a Profile Hub „sessions" mércéje a V1 „Learn" naplót olvassa, amit a Practice Engine V2 sosem ír | `profile_hub_screen.dart` |
-> | **L5** | a `practiceHistoryV2ListProvider` sima `FutureProvider`, `lib/`-ben SEHOL nem invalidálódik → egy konténer élettartamán belül sosem frissül | `practice_progress_providers.dart` |
->
-> **L1 + L2 együtt zárná az A3-at** („a BE capabilityk core útjai
-> végigjárhatók") — ez a legkisebb, legnagyobb hozadékú következő kör, és a
-> mérője MÁR MEGVAN: a bejárásból kivéve a két teszt-oldali `router.go`
-> hidat, a `full_app_walkthrough_test.dart` azonnal pirosra vált, amíg a
-> bekötés hiányzik.
->
-> **Változatlanul OPERÁTORI (user-) kapuk:** a valós gitáros APK-teszt (a
-> végső elfogadási predikátum) és a backend tényleges futtatása +
-> telefon-ráállítás (`docs/operations/device-backend-runbook.md` §1–§9). A
-> `docs/release/full-app-verification.md` az a dokumentum, amit egy
-> kiadás-döntés előtt el kell olvasni.
+**Következő kör: `E14-R04` — Recognition frame v2 contract**
+(`docs/rounds/e14-r04-recognition-frame-v2-contract.md`, motor `sonnet-impl`,
+előre kiosztott ADR `0356`). A `docs/execution/pipeline-queue.tsv` Chapter 14
+sávja `pending`; a lánc magától viszi tovább.
 
+**Amit az E14-R03 KIMONDOTTAN az E14-R04 asztalára tett** (mind mérve, a
+kör tilos zónája miatt halasztva — a review §9.1 tételesen felsorolja):
+
+| # | Mit hagyott nyitva | Hol |
+|---|---|---|
+| 1 | **izolátum → Lab bekötés**: a `LivePipeline.runtimeInfo` és a `LiveLabController.reportRuntimeInfo` létezik és tesztelt, de production hívó nincs — a `real_strum_engine.dart` / `strum_engine.dart` a kör tilos zónája volt | `lib/features/live/engine/real_strum_engine.dart:167,220` |
+| 2 | **a live út valódi asset-neve**: ma a nevesített `RecognitionRuntimeInfo.isolateLiveModelId` konstans megy át, mert az izolátum-határ csak bájtokat hordoz — a 2 és 3 osztályos live asset id alapján nem különböztethető meg (a `strumModelSha256` viszont igen) | `lib/features/live/engine/dsp/live_pipeline.dart` |
+| 3 | **`disabledByFlag` flag-olvasása**: a gyártófüggvény és a stabil kód él, a három recovery-flag olvasása nincs bekötve (`lib/core/feature_flags/**` tilos zóna volt, ADR 0271 szerint mindhárom `false` marad) | `lib/app/config/feature_flags.dart` |
+
+**Változatlanul OPERÁTORI (user-) kapuk:** a valós gitáros APK-teszt (a végső
+elfogadási predikátum) és a backend tényleges futtatása + telefon-ráállítás
+(`docs/operations/device-backend-runbook.md` §1–§9).
 ## 7. Required verification (before any "done")
 
 A lokális mérce **egyetlen futtatható artefaktum** (GOV-01) — a parancssorban

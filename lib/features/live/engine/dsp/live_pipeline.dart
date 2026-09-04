@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../../core/music/chord.dart';
 import '../../model/live_frame.dart';
+import '../../model/recognition_runtime_info.dart';
 import '../../../../core/music/strum.dart';
 import '../../model/beat_slot.dart';
-import '../ml/crnn_strum_net.dart';
 import '../ml/live_crnn_classifier.dart';
+import '../ml/model_activation.dart';
+import '../ml/strum_crnn.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
@@ -18,16 +20,38 @@ import 'strum_direction_classifier.dart';
 import 'tempo_tracker.dart';
 import 'viterbi_chord_decoder.dart';
 
-StrumDirectionClassifier? _tryLiveCrnn(Uint8List? weights, int sampleRate) {
-  if (weights == null) return null;
-  try {
-    return LiveCrnnStrumClassifier(
-      CrnnStrumNet.parse(ByteData.sublistView(weights)),
-      sampleRate: sampleRate,
+/// Typed activation of the live CRNN from isolate-crossed weight [weights]
+/// (ADR 0355): the caller's BEHAVIOUR is unchanged — a null `model` on the
+/// returned [ModelActivation] still means "use the heuristic" — this only
+/// makes the outcome observable via its `info`. `modelId` stays the neutral
+/// [RecognitionRuntimeInfo.isolateLiveModelId] / `'none'` placeholders: the
+/// isolate boundary doesn't carry the real asset filename yet (E14-R04 wires
+/// it, ADR 0355 R3).
+ModelActivation<StrumDirectionClassifier> _activateLiveCrnn(
+  Uint8List? weights,
+  int sampleRate,
+) {
+  if (weights == null) {
+    return ModelActivation.fallback(
+      RecognitionRuntimeInfo.fallback(
+        FallbackReason.assetMissing,
+        sampleRate: sampleRate,
+      ),
     );
-  } catch (_) {
-    return null; // fall back to the heuristic, never fail the pipeline
   }
+  final netActivation = StrumCrnn.activateBytes(
+    weights,
+    modelId: RecognitionRuntimeInfo.isolateLiveModelId,
+    sampleRate: sampleRate,
+  );
+  final net = netActivation.model;
+  if (net == null) {
+    return ModelActivation.fallback(netActivation.info);
+  }
+  return ModelActivation.activated(
+    LiveCrnnStrumClassifier(net, sampleRate: sampleRate),
+    netActivation.info,
+  );
 }
 
 /// The REAL detection pipeline: PCM chunks in → [LiveFrame]s out (~15 Hz).
@@ -36,13 +60,33 @@ StrumDirectionClassifier? _tryLiveCrnn(Uint8List? weights, int sampleRate) {
 /// — the isolate and mic are plumbing around this class, and tests drive it
 /// directly with synthesized PCM (RAG chunk 010).
 class LivePipeline {
-  LivePipeline({
-    required this.sampleRate,
+  /// Activates the live CRNN (or records why it fell back, ADR 0355) ONCE,
+  /// before delegating to the real constructor — [_activateLiveCrnn] must
+  /// run a single time per pipeline, never per frame.
+  factory LivePipeline({
+    required int sampleRate,
     Uint8List? crnnWeights,
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
-  }) : _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
+  }) {
+    return LivePipeline._(
+      sampleRate: sampleRate,
+      crnnActivation: _activateLiveCrnn(crnnWeights, sampleRate),
+      chordConfRise: chordConfRise,
+      chordConfRelease: chordConfRelease,
+      chordReleaseHoldFrames: chordReleaseHoldFrames,
+    );
+  }
+
+  LivePipeline._({
+    required this.sampleRate,
+    required ModelActivation<StrumDirectionClassifier> crnnActivation,
+    double? chordConfRise,
+    double? chordConfRelease,
+    int? chordReleaseHoldFrames,
+  }) : _crnnActivation = crnnActivation,
+       _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
        _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
        _chordReleaseHoldFrames =
            chordReleaseHoldFrames ?? DspConfig.chordReleaseHoldFrames,
@@ -56,8 +100,9 @@ class LivePipeline {
          // hands the weights-asset BYTES across the isolate boundary
          // (rootBundle is main-isolate-only, same pattern as the r165
          // Analyze wiring); null/unparseable keeps the heuristic — the
-         // model is an upgrade, never a dependency.
-         classifier: _tryLiveCrnn(crnnWeights, sampleRate),
+         // model is an upgrade, never a dependency. Typed observably via
+         // [_crnnActivation] (ADR 0355), computed ONCE by the factory above.
+         classifier: crnnActivation.model,
        ),
        _chordFramer = SlidingFramer(
          window: DspConfig.nnlsWindow,
@@ -70,6 +115,7 @@ class LivePipeline {
        _emitEverySamples = (sampleRate * 0.066).round();
 
   final int sampleRate;
+  final ModelActivation<StrumDirectionClassifier> _crnnActivation;
 
   /// The musical-presence gate (round 176): a Schmitt trigger on the
   /// EMA-smoothed chord-match confidence. A chord is surfaced to the UI once
@@ -247,6 +293,13 @@ class LivePipeline {
       engineTimeSec: nowSec,
     );
   }
+
+  /// Which strum model is behind this pipeline, or why it fell back to the
+  /// heuristic (ADR 0355) — computed ONCE at construction by the factory
+  /// constructor; nothing on the per-frame path reads or recomputes this.
+  /// The Lab surfaces it via `LiveLabController.reportRuntimeInfo`; the
+  /// actual isolate → Lab wiring lands in E14-R04 (R3).
+  RecognitionRuntimeInfo get runtimeInfo => _crnnActivation.info;
 
   /// Chord-match confidence (separate from the strum confidence the pill
   /// shows) — available for future UI use.

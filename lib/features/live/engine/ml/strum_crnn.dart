@@ -1,11 +1,15 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
+
 import '../dsp/log_mel_extractor.dart';
 import '../dsp/strum_direction_classifier.dart';
 import '../../../../core/music/strum.dart';
+import '../../model/recognition_runtime_info.dart';
 import 'crnn_frontend.dart';
 import 'crnn_strum_net.dart';
+import 'model_activation.dart';
 
 /// The deployment facade over [CrnnStrumNet]: raw clip audio in, per-onset
 /// ↓/↑ verdicts out, running the EXACT training-pipeline chain (linear
@@ -23,17 +27,108 @@ class StrumCrnn {
   final CrnnStrumNet _net;
   final LogMelExtractor _logMel;
 
-  /// Loads the weights asset from [path], or null when it is absent or
-  /// unparseable — callers fall back to the heuristic, never crash
-  /// (the model is an upgrade, not a dependency).
-  static StrumCrnn? tryLoad(String path) {
+  /// Output class count of the wrapped net (see [CrnnStrumNet.nClasses]).
+  int get nClasses => _net.nClasses;
+
+  /// Loads the weights asset from [path] and reports the outcome TYPED (ADR
+  /// 0355): [ModelActivation.activated] with the loaded model, or
+  /// [ModelActivation.fallback] with a stable [FallbackReason] — never the
+  /// raw exception text (platform/locale-dependent, can carry a filesystem
+  /// path). The caller's behaviour is unchanged either way: a fallback still
+  /// means "use the heuristic", this only makes the outcome observable.
+  static ModelActivation<StrumCrnn> activate(String path) {
+    final Uint8List bytes;
     try {
-      final bytes = File(path).readAsBytesSync();
-      return StrumCrnn(CrnnStrumNet.parse(ByteData.sublistView(bytes)));
+      bytes = File(path).readAsBytesSync();
+    } on PathNotFoundException {
+      return ModelActivation.fallback(
+        RecognitionRuntimeInfo.fallback(
+          FallbackReason.assetMissing,
+          sampleRate: CrnnFrontend.modelSampleRate,
+        ),
+      );
     } catch (_) {
-      return null;
+      return ModelActivation.fallback(
+        RecognitionRuntimeInfo.fallback(
+          FallbackReason.assetUnreadable,
+          sampleRate: CrnnFrontend.modelSampleRate,
+        ),
+      );
     }
+
+    final netActivation = activateBytes(
+      bytes,
+      modelId: path.split(RegExp(r'[\\/]')).last,
+      sampleRate: CrnnFrontend.modelSampleRate,
+    );
+    final net = netActivation.model;
+    if (net == null) {
+      return ModelActivation.fallback(netActivation.info);
+    }
+    return ModelActivation.activated(StrumCrnn(net), netActivation.info);
   }
+
+  /// Activates a CRNN from already-loaded weight [bytes] under [modelId] —
+  /// shared by [activate]'s file-backed path and the live pipeline's
+  /// isolate-crossed bytes (r169 keeps rootBundle main-isolate-only, so the
+  /// live path never opens files itself). Reads the 8-byte `SSML` header
+  /// itself BEFORE calling [CrnnStrumNet.parse], so a bad magic/version is
+  /// reported as [FallbackReason.parseFailed] rather than folding into
+  /// [FallbackReason.shapeMismatch] — both throw [FormatException] from that
+  /// call otherwise (ADR 0355 "Negative/price": a documented mini-duplication
+  /// of the binary contract [CrnnStrumNet.parse] already enforces).
+  static ModelActivation<CrnnStrumNet> activateBytes(
+    Uint8List bytes, {
+    required String modelId,
+    required int sampleRate,
+  }) {
+    final magicOk =
+        bytes.length >= 8 &&
+        String.fromCharCodes(bytes.sublist(0, 4)) == 'SSML';
+    final version = magicOk
+        ? ByteData.sublistView(bytes, 4, 8).getUint32(0, Endian.little)
+        : -1;
+    if (!magicOk || version != 1) {
+      return ModelActivation.fallback(
+        RecognitionRuntimeInfo.fallback(
+          FallbackReason.parseFailed,
+          sampleRate: sampleRate,
+        ),
+      );
+    }
+
+    final CrnnStrumNet net;
+    try {
+      net = CrnnStrumNet.parse(ByteData.sublistView(bytes));
+    } catch (_) {
+      return ModelActivation.fallback(
+        RecognitionRuntimeInfo.fallback(
+          FallbackReason.shapeMismatch,
+          sampleRate: sampleRate,
+        ),
+      );
+    }
+
+    return ModelActivation.activated(
+      net,
+      RecognitionRuntimeInfo(
+        strumModelId: modelId,
+        strumModelVersion: version,
+        strumModelSha256: crypto.sha256.convert(bytes).toString(),
+        chordEngineId: RecognitionRuntimeInfo.chordEngineNnlsViterbi,
+        sampleRate: sampleRate,
+        frontendVersion: RecognitionRuntimeInfo.frontendCrnnV1,
+      ),
+    );
+  }
+
+  /// Loads the weights asset from [path], or null when it is absent or
+  /// unparseable — callers fall back to the heuristic, never crash (the
+  /// model is an upgrade, not a dependency). A thin delegation kept
+  /// byte-for-byte because six test files outside this round's scope pin
+  /// this exact `StrumCrnn?` return type (ADR 0355 R1); prefer [activate]
+  /// for the observable outcome.
+  static StrumCrnn? tryLoad(String path) => activate(path).model;
 
   /// Classify the strum at each of [onsetTimes] (seconds) in [pcm].
   /// Label order is the training contract: 0 = down, 1 = up (ml/klangio.py).
