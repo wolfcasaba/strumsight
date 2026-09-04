@@ -96,7 +96,7 @@ számok visszamérését a forrás-reportra.
 
 ## 4. Verdikt
 
-**CHANGES REQUESTED** — 1 MAJOR (MAJOR-1), 0 BLOCKER, 0 MINOR.
+**CHANGES REQUESTED** — 1 MAJOR (MAJOR-1), 0 BLOCKER, 0 MINOR. *(A javító kör után lezárva — lásd §5/§6: APPROVED.)*
 
 A kör terméke egyébként erős: a hat fail-closed cella mind valóban pirosra vált,
 a determinizmus bájtra bizonyított, a számok a forrásra visszamérve helyesek. Az
@@ -105,4 +105,31 @@ abban a mechanizmusban, ami a jövőbeli köröket védené.
 
 ## 5. Javító kör után — újra-ellenőrzés
 
-_(a javító kör után tölti ki a reviewer)_
+**Javító kör:** `9dcf6e11` — *„Close the recognition-baseline validator's
+schema-keyword set (ADR 0354 D8, review MAJOR-1)"*, ugyanaz a motor
+(`sonnet-impl`), ugyanaz az ág. Gépi scope-audit a javításra: `scope_audit=ok`,
+`scope_audit_changed=3` (`6d06dbb6..9dcf6e11`).
+
+**MAJOR-1 — ZÁRVA.** Ugyanazt a P1 próbát futtattam újra a javított
+checkerrel, plusz egy mélyebb változatot, amit az eredeti lelet nem is kért
+(ismeretlen kulcs a `definitions` alatt, `$ref`-fel feloldva):
+
+| Próba | Várt | Mért |
+|---|---|---|
+| P0 — szállított állapot | 0 | **0** ✅ |
+| P1 — `maxLength` az `appCommit`-on | ≠0 | **1** — `$.appCommit: schema declares unknown/unsupported keyword "maxLength" — fail-closed rather than silently ignored (ADR 0354 D8)` ✅ |
+| P1b — `allOf` a `definitions.metricEntry`-n (`$ref`-en át) | ≠0 | **1** — a lelet minden érintett metrika-útvonalon megjelenik ✅ |
+| P2 — `n = 0` (regresszió-próba) | ≠0 | **1** ✅ |
+| P6 — üres `models` rationale nélkül (regresszió-próba) | ≠0 | **1** ✅ |
+
+A hibaüzenet megnevezi a kulcsot ÉS az al-séma útvonalát, tehát a jövőbeli
+szigorítás nem némán vész el, hanem megmondja, hol kell a checkert bővíteni.
+A `--check` a szállított sémán változatlanul zöld, tehát a zárt kulcs-halmaz
+a valódi szerződést nem szűkítette. Új őrcella:
+`test/tooling/recognition_baseline_manifest_test.dart` A9 csoport, és a §6.1
+mérce-mátrix új sora.
+
+## 6. VÉGSŐ DÖNTÉS: APPROVED
+
+0 BLOCKER, 0 MAJOR, 0 MINOR nyitva. A kör mércéje a merge-kapunál: a
+`full-gate.yml` ÉS a `router-ci.yml` a merge SHA-n zölden.
