@@ -24710,3 +24710,52 @@ bizonytalanságot a biztonságos irányba döntsd el (vegyes mondat → megtart�
 **Őrteszt:** `tools/tests/test_pipeline_throughput.py::IndependenceClauseTest`
 (ADR 0495 D6) — a javítás előtti eszközzel 3 cella PIROS, köztük a valódi
 E14-sávot mérő regressziós cella.
+
+## L619 — A kézzel írt séma-validátor alapértelmezésben fail-OPEN: a le nem fedett séma-kulcs nem hibás, hanem NEM LÉTEZIK — a séma szigorúbbnak LÁTSZIK, mint amit érvényesít (E14-R02, 2026-09-04)
+
+**Forrás:** [`docs/reviews/e14-r02-review.md`](reviews/e14-r02-review.md) §2 (MAJOR-1)
+és §5; kör: E14-R02, PR [#565](https://github.com/wolfcasaba/strumsight/pull/565),
+squash `2bbd36bd`; ADR [0354](adr/0354-recognition-baseline-manifest-and-evidence-index.md) D8.
+
+**A mérés.** A kör egy draft-07 JSON Schema **részhalmazát** valósította meg
+kézzel (nincs séma-könyvtár a `pubspec.yaml`-ban, és az a kör tilos zónája volt).
+A szállított checker 15 kulcsot érvényesített, és mind a hét fail-closed
+review-próbán helyesen pirosat adott. A nyolcadik próba viszont — egyetlen
+`"maxLength": 3` a sémában, egy 8 karakteres `appCommit` érték mellett — **zöldet**:
+
+```
+$ dart run tool/benchmarks/recognition_baseline_manifest.dart --check --schema s_unknown.json ...
+exit=0
+Recognition baseline manifest OK; idx.md is up to date.
+```
+
+A `maxLength` nem szerepelt a validátor ágai között, ezért a megszorítás
+nyomtalanul eltűnt. Ugyanez állt az `allOf`, `anyOf`, `if`/`then`,
+`uniqueItems`, `exclusiveMinimum`, `maximum`, `multipleOf`, `patternProperties`,
+`format` kulcsokra is.
+
+**Miért ez a fontos.** A hibaosztály nem a mai manifestet rontja el — a mai
+séma minden kulcsa le volt fedve, tehát MA minden helyes. A kár a JÖVŐBEN
+keletkezik: egy későbbi kör szigorítani akar (`uniqueItems: true` a `models`-re),
+a séma-diff meggyőző, a `--check` zöld, a gate zöld, a review zöld — és a
+megszorítás **soha nem érvényesül**. A séma dokumentumnak látszik, ami
+szerződés; a különbség csak akkor derül ki, amikor egy érvénytelen artefaktum
+már beépült egy döntésbe. Ez az [L566](#l566) fail-open parszerének testvére:
+ami nem illeszkedik a mintára, az nem hibás, hanem nem létezik.
+
+**A javítás alakja.** A validátor **zárt, felsorolt** kulcs-halmazt ismer, két
+kimondott csoporttal — a ténylegesen érvényesített megszorító kulcsok, és a
+szándékosan átengedett dokumentációs kulcsok (`$schema`, `$id`, `title`,
+`description`, `definitions`, `examples`, `default`). Minden más kulcs
+**`ManifestIssue`**, útvonallal, nem kivétel: a `--check` nem nulla kóddal áll
+meg, és a hibaüzenet megmondja, MELYIK al-séma MELYIK kulcsánál kell a checkert
+bővíteni. A `$ref`-fel feloldott `definitions`-al-sémákra is érvényes — az
+újra-ellenőrzés ezt külön próbával mérte.
+
+**Az általánosítás.** Ha egy szerződést részhalmaz-értelmezővel érvényesítünk
+(JSON Schema, YAML-policy, saját DSL), a le nem fedett konstrukció alapértelmezett
+sorsa a csendes átengedés. A helyes alapértelmezés a fordítottja: **amit az
+értelmező nem ismer, azt nem hagyja jóvá.**
+
+**Őrteszt:** `test/tooling/recognition_baseline_manifest_test.dart`::`A9 — the
+validator fails closed on schema keywords it does not implement`

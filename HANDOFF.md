@@ -1,5 +1,66 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R02 KÉSZ — Reprodukálható felismerési baseline: egyetlen manifest, egyetlen szám sem forrás nélkül — PR [#565](https://github.com/wolfcasaba/strumsight/pull/565), squash `2bbd36bd` (2026-09-04)
+
+A Chapter 14 sáv második köre a szétszórt felismerési méréseket **egyetlen,
+géppel olvasható manifestbe** és egy **generált, ember-olvasható indexbe** tette
+— úgy, hogy ugyanaz a bemenet **bájtra azonos** reportot ad, és minden szám
+mellett ott a `sourceFile` **és** a mező-szintű `command`
+([ADR 0354](docs/adr/0354-recognition-baseline-manifest-and-evidence-index.md), D1–D9).
+
+Az E14-R01 release guard `Baseline manifest` sora eddig egy **nem létező**
+artefaktumra hivatkozott (`evaluation/recognition/` nem volt a fán) — az
+aktiváláshoz olyan bizonyíték kellett, aminek nem volt formája. Ez a kör megadta.
+
+**A kör terméke:**
+
+- **[`evaluation/recognition/baseline_manifest.json`](evaluation/recognition/baseline_manifest.json)** —
+  a MÁR MEGMÉRT számok (`docs/eval/real-audio-dsp-baseline.md`, E99-R04/R05):
+  `chord` és `onset` **measured**; `direction`, `noChord`, `latency`,
+  `calibration` **not-measured**, mindegyik valódi indoklással; a BPM külön,
+  `retracted: true` blokk — a visszavont szám megőrizve, nem törölve (D4).
+- **[`evaluation/recognition/baseline_manifest_schema.json`](evaluation/recognition/baseline_manifest_schema.json)** —
+  draft-07 séma az `evaluation/analysis/` (ADR 0249) mintájára. A `metricBlock`
+  `oneOf`-ja zárja a köztes állapotot: `measured` → `metrics` kötelező,
+  `notMeasuredReason` tilos; `not-measured` → fordítva (D3).
+- **[`tool/benchmarks/recognition_baseline_manifest.dart`](tool/benchmarks/recognition_baseline_manifest.dart)** —
+  tiszta Dart (`dart:convert` + `dart:io`), **kézzel írt** JSON-Schema-részhalmaz
+  validátor **zárt kulcs-halmazzal**, determinisztikus renderer (rendezett
+  kulcsok, `toStringAsFixed(3)`, `DateTime.now()` sehol), `--check` mód.
+- **[`docs/eval/recognition-baseline-index.md`](docs/eval/recognition-baseline-index.md)** —
+  generált index: a narratív reportra és a release guardra **hivatkozik**, nem
+  másolja őket (D9).
+- `test/tooling/recognition_baseline_manifest_test.dart` — A1–A9, a §6 hat
+  acceptance-pontja és a §6.1 mérce-mátrix minden sora cellánként.
+
+**A pre-flight NYOLC mért brief-revíziót írt (§0.0/R1–R8)**, köztük két olyat,
+ami enélkül a kör közben ütött volna ki: **R3** — nincs JSON-Schema függőség, és
+a `pubspec.yaml` a kör tilos zónája, tehát a validálás csak kézzel írható;
+**R4** — a §5.2 mező-szintű `command`-kötelezettsége és a §6 AC1 „not-measured"
+blokkja **kielégíthetetlen** volt együtt, a séma `oneOf`-ja oldotta fel. Az
+**R7** a manifest legkényesebb sorát mérte ki: a baseline a változatlan
+`const ClipAnalyzer()`-rel futott (`strumRefiner: null`), tehát **egyetlen**
+ML-súly sem vett részt — `models: []` + kötelező `modelsRationale`, mert egy
+„a teljesség kedvéért" bemásolt `chord_crnn.bin` hash hamis állítás lenne arról,
+mi futott a mérés alatt.
+
+**A review 1 MAJOR-t mért a zöld gate mögött** (nyolc futtatott valódi-sértés
+próba, nem diff-olvasás): a kézzel írt validátor a **nem implementált
+séma-kulcsokat némán átengedte** — egy `"maxLength": 3` az `appCommit`-on
+`exit=0`-t adott ott, ahol egy valódi draft-07 validátor piros. Ez a kör SAJÁT
+ADR-je (0354 D8) kimondott fail-closed döntésének megsértése, és pont az a
+csendes rés, aminek a bezárása a kör tárgya. Egy javító körben zárva, zárt
+kulcs-halmazzal; az újra-ellenőrzés a `definitions` alatti, `$ref`-fel feloldott
+esetet is méri ([L619](docs/LESSONS.md#l619)).
+
+**Zöld kapu:** `full-gate.yml` [33850811662](https://github.com/wolfcasaba/strumsight/actions/runs/33850811662)
+és `router-ci.yml` [33850774098](https://github.com/wolfcasaba/strumsight/actions/runs/33850774098)
+— mindkettő `success` a merge SHA-n (`50b2862d`).
+
+**Nyitott munka, amit a manifest most már NÉVEN nevez:** a négy `not-measured`
+blokk (`direction`, `noChord`, `latency`, `calibration`) egy-egy későbbi Chapter
+14 kör tárgya. Következő kör: **E14-R03** (model activation telemetry).
+
 ## ✅ E16-R05 KÉSZ — a Chapter 16 sáv LEZÁRVA: teljes app-verifikáció, **mért negatív A3-verdikttel** — PR [#562](https://github.com/wolfcasaba/strumsight/pull/562), squash `474a6b00` (2026-09-04)
 
 A sáv záró köre gépi bizonyítékot ad arról, hogy a felület és a kód együtt
