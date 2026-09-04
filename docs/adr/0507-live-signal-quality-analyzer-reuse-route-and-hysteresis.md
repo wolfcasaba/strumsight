@@ -128,6 +128,19 @@ mezője ugyanaz a skálázott RMS marad, amíg egy későbbi kör le nem váltja
 tonalness-frissítés ritkított (minden N-edik blokk); az `N` értéke és
 indoklása a chunkban él.
 
+## Módosítás (ADR 0112 önjavító kör, 2026-09-04)
+
+A D1 útvonala **megnyílt, de nem ebben a körben**: a
+`export 'engine/quality/signal_quality_math.dart';` sor az önjavító kör
+PR-jével ([#571](https://github.com/wolfcasaba/strumsight/pull/571), squash
+`62e0dce6`) landolt a `main`-en, a kör indulása ELŐTT. Ezért az alábbi
+„Következmények" első pontja **már nem érvényes**: a kör `allowed_paths`-a
+VÁLTOZATLAN marad, és az `audio_analysis` fához a kör NEM nyúl — csak a
+barrelt importálja. A többi döntés (D1 képlet-újrahasznosítás, D2–D9)
+érintetlen. Mérés: `docs/LESSONS.md` L629; őr:
+`test/core/architecture_dependency_test.dart` — „audio analysis quality
+primitives stay barrel-reachable (E14-R05)".
+
 ## Következmények
 
 - A D1 miatt a kör `allowed_paths`-ának tartalmaznia KELL a

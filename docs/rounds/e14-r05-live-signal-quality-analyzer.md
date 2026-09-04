@@ -103,6 +103,29 @@ korábbi kör ugyanezen a hibaosztályon akadt el („the first cross-feature
 consumer … was flagged and the round could not build in scope", ADR 0176) — ez
 a mostani R4 mért megismétlődése.
 
+**R6 — AZ R4 BLOKKOLÓ FELOLDVA (ADR 0112 önjavító kör, 2026-09-04).** A
+`SignalQualityMath` bekerült az `audio_analysis` **nyilvános szerződésébe**:
+`export 'engine/quality/signal_quality_math.dart';`
+(`lib/features/audio_analysis/public.dart:101`) — PR
+[#571](https://github.com/wolfcasaba/strumsight/pull/571), squash `62e0dce6`,
+mérés: `docs/LESSONS.md` L629, őr: `test/core/architecture_dependency_test.dart`
+(„audio analysis quality primitives stay barrel-reachable (E14-R05)").
+
+Ami ebből következik erre a körre:
+
+1. **Az `allowed_paths` VÁLTOZATLAN.** Az R4-ben javasolt második sor
+   (`"lib/features/audio_analysis/public.dart"`) **NEM kell** és **tilos** is:
+   az export a kör indulása ELŐTT landolt a `main`-en, tehát a kör diffjének
+   nem szabad tartalmaznia az `audio_analysis` fát. A `signal_quality_math.dart`
+   így is **bájtra változatlan** marad (ADR 0224 §3, acceptance 6.).
+2. **A használandó import:**
+   `import 'package:strumsight/features/audio_analysis/public.dart';` — a mély
+   import továbbra is architecture-PIROS.
+3. **A munkapéldány legyen friss `origin/main`-ről származtatva** (ez az ág már
+   tartalmazza a merge-et) — a régi barrelen a §5.1 továbbra sem fordulna.
+   Ellenőrzés egy paranccsal:
+   `grep -n signal_quality_math lib/features/audio_analysis/public.dart`.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
