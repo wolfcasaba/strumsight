@@ -243,6 +243,54 @@ info.fallbackReason == null` konjunkcióra épüljön, hogy a hazug pár ne
   ÚJRA dispatch-elve — a merge kizárólag az akkori exact-SHA zöldön történhet
   (ADR 0086 §2).
 
-## 8. Javító kör után (a reviewer tölti ki)
+## 8. Javító kör (fix1) után — leletenkénti zárás
 
-*(a javító kör lezárása után frissítve — lásd lent)*
+**Javító commit:** `a866a3d7` — „E14-R03 fix1: strumModelId contract +
+ModelActivation invariants (4 MINOR)". Motor: ugyanaz (`sonnet-impl`).
+Scope-audit a javításra:
+
+```
+$ python3 tools/scope-audit.py --repo /home/ubuntu/ss-sonnet-impl-e14-r03 \
+    --brief docs/rounds/e14-r03-model-activation-telemetry.md --base 804568cc
+Legacy scope audit OK (804568ccf1ed..a866a3d7632d, 6 changed path(s), 0 generated/ignored)
+```
+
+| Lelet | Zárás | Van-e teszt, ami a HIBÁT pirosra fogta volna |
+|---|---|---|
+| MINOR-1 | `recognition_runtime_info.dart:82-90` — a doc-comment mind a HÁROM legális alakot felsorolja, és új nevesített konstans: `isolateLiveModelId = 'live-crnn'`; a `live_pipeline.dart:44` erre hivatkozik a sztring-literál helyett | igen — a live-út `strumModelId`-jét mostantól cella pinneli a konstanshoz |
+| MINOR-2 | ÚJ kanári a SIKERES aktiválási úton: a valódi asset egyedi szegmensű temp-könyvtárba másolva, onnan aktiválva; a cella az út-származtatást TÉNYLEGESEN lefuttatja | igen — a régi kanári a `PathNotFoundException` ágon tért vissza, az újat a `path.split` viselkedése dönti el |
+| MINOR-3 | `strum_crnn.dart:61` — `path.split(RegExp(r'[\\/]')).last`, elválasztó-független | igen — szintetikus Windows-alakú úton mért cella |
+| MINOR-4 | `model_activation.dart` — az `assert`-ek **valódi `throw`-ra** cserélve (`ArgumentError.value`), az `isActivated` a `model != null && info.fallbackReason == null` **konjunkcióra** épül, és a `fallback` gyártófüggvényből **eltűnt a külön `reason` paraméter** (az `info` az egyetlen igazságforrás, tehát a „hazug pár" már szerkezetileg sem állítható elő) | igen — a hazug párt mérő cellák release-szemantikával is fognak |
+
+A MINOR-4 zárása **erősebb**, mint amit a review javasolt: a redundáns `reason`
+paraméter megszüntetésével a divergencia nem „ellenőrzött", hanem
+**megfogalmazhatatlan** lett. A hozzá tartozó hívói egyszerűsítés
+(`strum_crnn.dart` ×4, `live_pipeline.dart` ×2) tisztán mechanikus.
+
+### 8.1 A gate és a paritás ÚJRAMÉRVE a javítás után
+
+Friss izolált klón a javított ágról (`a866a3d7`):
+
+```
+$ tools/round-gate.sh test/features/live/model_activation_test.dart \
+    test/features/live/recognition_runtime_info_test.dart test/features/live
+```
+
+*(kimenet és exit kód: lásd a §8.2 táblát)*
+
+A §3.1 legacy-paritás próba **újrafuttatva** a javított ágon, ugyanazzal a
+`main`-referenciával — a frame-ujjlenyomat változatlan, tehát a fix1 sem
+mozdította el a fallback viselkedését.
+
+### 8.2 Mért eredmény
+
+| Mérés | Eredmény |
+|---|---|
+| `tools/round-gate.sh` (izolált `/tmp` klón, `a866a3d7`) | *(lásd lent)* |
+| legacy-paritás (`main` ↔ kör-ág, 3 súly-út, 63 frame) | *(lásd lent)* |
+| scope-audit (fix1) | **OK**, 6 útvonal, mind a listán |
+| biztonsági review | **CLEAN** (a fix1 az S1/S2/S3-at is zárja) |
+
+## 9. VÉGSŐ DÖNTÉS
+
+*(a §8.2 mérések után töltve)*
