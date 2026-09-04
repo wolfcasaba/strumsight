@@ -436,4 +436,101 @@ nem csak állítva.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-09-04, ág:
+`sonnet-impl/e14-r03-model-activation-telemetry`.
+
+### Mit vezettünk be
+
+- `lib/features/live/model/recognition_runtime_info.dart` (ÚJ) —
+  `FallbackReason` (5 zárt kód) + `RecognitionRuntimeInfo` (Flutter-független,
+  `==`/`hashCode`/`toJson`/`fromJson`/`toString`), plusz a
+  `RecognitionRuntimeInfo.fallback(reason, sampleRate:)` gyártófüggvény — az
+  EGYETLEN hely, ahol a "nincs aktivált modell" alak (`strumModelId: 'none'`,
+  `strumModelVersion: 0`, `strumModelSha256: ''`) előáll, így egyetlen
+  fallback-ág sem tud útszegmenst szivárogtatni (R4).
+- `lib/features/live/engine/ml/model_activation.dart` (ÚJ) —
+  `ModelActivation<T>` (`activated`/`fallback`/`disabled` gyártófüggvények,
+  konzisztencia-`assert`-ekkel).
+- `lib/features/live/engine/ml/strum_crnn.dart` — `StrumCrnn.activate(path)`
+  (ÚJ, típusos), `StrumCrnn.activateBytes(bytes, modelId:, sampleRate:)` (ÚJ,
+  a fájl- és a bájt-alapú betöltés közös magja — a fejléc 8 bájtját saját
+  maga ellenőrzi a `CrnnStrumNet.parse` hívása ELŐTT, R8), `nClasses` getter
+  (ÚJ, a betöltött háló osztályszáma), `tryLoad` MEGMARADT
+  `StrumCrnn?`-t adó delegálásként (`activate(path).model`) — a hat, listán
+  kívüli tesztfájl (R1) érintetlen.
+- `lib/features/live/engine/dsp/live_pipeline.dart` — a korábbi
+  `_tryLiveCrnn` helyett `_activateLiveCrnn` (típusos, `ModelActivation`-t ad
+  vissza); a `LivePipeline` konstruktora `factory`-vá vált, ami az
+  aktivációt EGYSZER számolja ki és egy privát `LivePipeline._`
+  konstruktornak adja tovább (a publikus hívási alak — névvel ellátott
+  paraméterek — változatlan, a 6 érintett regressziós tesztfájl nem
+  módosult); ÚJ `RecognitionRuntimeInfo get runtimeInfo` getter (szinkron,
+  a konstruktorban egyszer kiszámolt értéket adja vissza).
+- `lib/features/live/providers/live_lab_provider.dart` — `LiveLabState`
+  additív `runtimeInfo` mező, `LiveLabController.reportRuntimeInfo(info)` ÚJ
+  belépő (csak az állapotot frissíti). A tényleges izolátum → Lab bekötés
+  KIMONDOTTAN elhalasztva E14-R04-re (R3).
+- `lib/features/live/public.dart` — additív `export
+  'model/recognition_runtime_info.dart';` (a meglévő 3 export
+  változatlan).
+
+### Falszifikációs bizonyíték (§7.1, a 3. acceptance-ponthoz)
+
+A `LivePipeline._` konstruktorban a `classifier: crnnActivation.model,` sort
+ideiglenesen `classifier: crnnActivation.model!,` alakra írtam (a
+null-ellenőrzés megfordítása — a fallback ág "elrontása" úgy, hogy sikertelen
+aktivációkor a heurisztika helyett kivétel repedjen ki). Futtatás:
+`flutter test test/features/live/model_activation_test.dart
+test/features/live/ml/live_pipeline_ml_wiring_test.dart`:
+
+```
+00:00 +8 -1: .../model_activation_test.dart: 3. fallback preserves pipeline behaviour (heuristic still verdicts) garbage weights bytes -> heuristic still verdicts a real strum [E]
+  Null check operator used on a null value
+  package:strumsight/features/live/engine/dsp/live_pipeline.dart 108:42  new LivePipeline._
+...
+Failing tests:
+  .../ml/live_pipeline_ml_wiring_test.dart: garbage bytes -> heuristic, never a crash (model is an upgrade)
+  .../ml/live_pipeline_ml_wiring_test.dart: no bytes -> heuristic (mock mode, stripped builds)
+  .../model_activation_test.dart: 3. ... garbage weights bytes -> heuristic still verdicts a real strum
+  .../model_activation_test.dart: 3. ... no weights -> heuristic, runtimeInfo says assetMissing
+```
+
+— PIROS, pontosan a fallback-cellákon (4 teszt bukott, a nem-fallback
+tesztek zöldek maradtak). A sort visszaállítottam
+(`classifier: crnnActivation.model,`), `git diff` üres volt utána, és a
+gate újrafutása (lásd lent) ZÖLD.
+
+### A gate tényleges kimenete
+
+```
+tools/round-gate.sh test/features/live/model_activation_test.dart test/features/live/recognition_runtime_info_test.dart test/features/live
+```
+
+```
+    → [1] format: ZÖLD
+    → [2] analyze: ZÖLD
+    → [3] test test/features/live/model_activation_test.dart: ZÖLD  (12/12)
+    → [4] test test/features/live/recognition_runtime_info_test.dart: ZÖLD  (9/9)
+    → [5] test test/features/live: ZÖLD  (204 passed, 2 golden ~skip)
+    → [6] architecture: ZÖLD
+    → [7] secrets: ZÖLD
+    → [8] l10n: ZÖLD
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+### Amit szándékosan NEM tettünk meg
+
+- A `disabledByFlag` bekötése a feature-flag olvasásához (R8) — a gyártófüggvény
+  (`ModelActivation.disabled`) létezik és tesztelt, de semmilyen production hívó
+  nem használja még.
+- Az izolátum → Lab tényleges bekötés (`real_strum_engine.dart`,
+  `strum_engine.dart` — mindkettő tilos zóna, R3) — `LiveLabController.
+  reportRuntimeInfo` létezik és tesztelt, de production hívó még nincs.
+- A `strumModelId` a live (isolate) úton `'live-crnn'` placeholder marad
+  (nem a valódi asset fájlnév) — az izolát-határ ma nem hordozza a nevet
+  (R3); a `StrumCrnn.activate(path)` úton (batch/Analyze, teszt 1.
+  acceptance-pont) a valódi fájlnév megy át.
+
 ## 11. Review — a Claude tölti ki
