@@ -326,4 +326,91 @@ ideiglenes kikapcsolásával **PIROS**, visszaállítva **ZÖLD**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer motor:** `sonnet-impl` (Claude Sonnet 5). **Státusz:** kész, a
+kör gate-je zöld.
+
+### 10.1 Mit épített a kör
+
+- `lib/features/accuracy_lab/domain/lab_task.dart` — `LabTaskFamily` (6 tag),
+  `LabTask`, `LabTaskRangeException`, `LabTaskCatalog.validated(List<LabTask>)`
+  (futtatható 15–20 tartomány-ellenőrzés tetszőleges listára) +
+  `LabTaskCatalog.standard()` (16 elem, mind a hat család lefedve).
+- `lib/features/accuracy_lab/domain/lab_consent.dart` — `sealed LabConsent`,
+  `LabConsentGranted`/`LabConsentRevoked`/`LabConsentUnknown`.
+- `lib/features/accuracy_lab/domain/lab_capture_package.dart` —
+  `LabDeviceMetadata`, `LabCaptureEvent`, `LabCapturePackage` (`toJson`/
+  `fromJson`, `schemaVersion` const = 1, `LabCapturePackageSchemaVersionException`),
+  `canonicalJsonEncode` (rekurzív kulcsrendezés).
+- `lib/features/accuracy_lab/data/lab_package_writer.dart` — `LabPackageWriter`
+  (`write`/`status`/`delete`), saját `dart:typed_data` PCM→WAV kódoló (ADR
+  0358 D8), `package:crypto` SHA-256 checksum a manifestben. A `write` hívás
+  `consent` paramétere `LabConsentGranted` típusú — a gate a típusban él (D1).
+- `lib/features/accuracy_lab/public.dart` — kézzel írott, additív barrel.
+
+### 10.2 Gate — a tényleges kimenet
+
+```
+tools/round-gate.sh test/features/accuracy_lab/lab_capture_package_test.dart test/features/accuracy_lab/lab_package_writer_test.dart test/features/accuracy_lab/lab_consent_test.dart test/features/accuracy_lab
+```
+
+```
+    → [1] format: ZÖLD
+    → [2] analyze: ZÖLD          (Analyzing 3 items... No issues found!)
+    → [3] test lab_capture_package_test.dart: ZÖLD   (+10 tests)
+    → [4] test lab_package_writer_test.dart: ZÖLD    (+6 tests)
+    → [5] test lab_consent_test.dart: ZÖLD           (+3 tests)
+    → [6] test test/features/accuracy_lab: ZÖLD      (+19 tests, egyben)
+    → [7] architecture: ZÖLD     (12 allowlistelt deviáció, változatlan)
+    → [8] secrets: ZÖLD          (4315 fájl, 0 lelet)
+    → [9] l10n: ZÖLD
+
+MINDEN GATE ZÖLD.
+```
+
+### 10.3 Falszifikációs bizonyíték (§7.1)
+
+**Determinizmus-cella (D3).** `lab_capture_package.dart`,
+`_writeCanonical`-ban a `..sort()` ideiglenes eltávolítása (a kulcsrendezés
+kikapcsolása) után:
+
+```
+$ flutter test test/features/accuracy_lab/lab_capture_package_test.dart \
+    --plain-name "canonical encoding is independent of source key order"
+...
+00:00 +0 -1: ... canonical encoding is independent of source key order [E]
+  Expected: '{"schemaVersion":1,"packageId":"pkg-001",...}'
+    Actual: '{"events":[...],"device":{"appVersion":...},...,"schemaVersion":1}'
+     Which: is different.
+Some tests failed.
+```
+
+→ **PIROS.** A `..sort()` visszaállítása után a teljes gate (fenti 10.2)
+újra zöld — a `git diff` a visszaállított fájlra üres (bájtra az eredeti).
+
+**Allowlist-cella (D2, L260).** `lab_capture_package.dart`,
+`LabDeviceMetadata.toJson()`-ba ideiglenesen felvéve egy
+`'advertisingId': 'temp-falsification-probe'` bejegyzés:
+
+```
+$ flutter test test/features/accuracy_lab/lab_capture_package_test.dart \
+    --plain-name "serialized keyset equals the documented allowlist"
+...
+00:00 +0 -1: ... serialized keyset equals the documented allowlist [E]
+  Expected: Set:[schemaVersion, packageId, ..., endSeconds]   (15 kulcs)
+    Actual: Set:[..., advertisingId, ...]                     (16 kulcs)
+     Which: larger than expected
+Some tests failed.
+```
+
+→ **PIROS.** A sor eltávolítása után a teljes gate újra zöld — a `git diff`
+a visszaállított fájlra üres.
+
+### 10.4 Scope
+
+A diff kizárólag a brief `allowed_paths` listáján szereplő 9 fájlt érinti (5
+production + 3 teszt + ez a dokumentum). Nem nyúlt a `pubspec.yaml`-hoz, a
+`clip_recorder.dart`-hoz, idegen feature barreljéhez, sem hálózati/plugin
+csatornát nyitó csomaghoz (`share_plus`, `Dio`, `http`, `path_provider`) —
+ezeket egyik fájl sem importálja.
+
 ## 11. Review — a Claude tölti ki
