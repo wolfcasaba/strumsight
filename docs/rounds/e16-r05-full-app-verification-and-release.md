@@ -375,4 +375,146 @@ A teljes suite + property gate + APK a CI-ban fut (ADR 0053); a dispatch és a k
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), effort `medium`. **Ág:**
+`sonnet-impl/e16-r05-full-app-verification-and-release`.
+
+### 10.1 Mit épült
+
+| Fájl | Mit csinál |
+|---|---|
+| `tool/check_placeholder_wiring.dart` (ÚJ) | §5.3 zárt szerződés szerinti statikus mérő: H1 (`lib/app/routing/*.dart`, 4 fájl) + H2 (`lib/features/*/{application,providers}/*providers*.dart`, 14 fájl) ellen fut a P1 (screen-konstruktor elnevezett argumentuma), P2 (top-level provider bare arrow-testtel) és P3 (top-level const/final, bool-bővített) szabály. `_CodeScanner` (string/komment-átugró, zárójel-mélység alapú kinyerő) minden szabályhoz a TELJES érték-kifejezést vágja ki és pontos (`^...$`) egyezést vizsgál a zárt literál-halmazzal — soha nem részstring-regex. Kivétel-lista: egyetlen `(fájl, deklaráció-név, indok)` hármas, indok nélküli bejegyzés saját maga is lelet (`vacuousExceptions`). `--format table\|json`, fail-closed exit kód üres fájlhalmazra. |
+| `test/support/e2e_harness.dart` (MÓDOSÍTVA, KIZÁRÓLAG additív) | `bootE2eApp`/`restartE2eApp` opcionális `flags` paramétert kapott, alapértéke bitre a mai `_e2eConfig()` (mostantól `e2eDefaultFlags` néven exportálva). A 4 örökölt hívó (`first_practice_offline_test.dart`, `returning_user_restart_test.dart`, mindkét accessibility fájl) egyetlen sort sem módosított, és zölden fut (A9). |
+| `test/e2e/full_app_walkthrough_test.dart` (ÚJ) | `runCoreWalkthrough(WidgetTester)` — a szállított `FeatureFlags.forEnvironment(AppEnvironment.development, accountEnabled: false)` BE-készlettel bejárja: indítás → Today → gyakorlás (Practice Area Hub → Setup → Session) → eredmény → **app-újraindítás** (L5 miatt szükséges) → Library → Progress → Profile → Settings. Minden állomáson valós adatot vagy explicit állapotot állít (l. 10.2), és a ténylegesen felépült képernyő-osztályok halmazát adja vissza (megfigyelésből, nem kézi listából). Exportált, hogy a placeholder-mérő tesztje ÚJRA le tudja futtatni. |
+| `test/tooling/placeholder_wiring_test.dart` (ÚJ) | A1 (0 lelet a valós fán), A7 (pontosan 1, nem üres indokú kivétel), A8 (H1≥4, H2≥14, fail-closed üres fixture-halmazra) + 4 fixture-teszt (P1/P2/P3 mindegyike tényleg jelez, egy lokális változó NEM jelez) + A4/A5 (a mért 73 elérhető képernyő ∩ bejárt(9) ∪ kimaradó(64) partíció, a `full-app-verification.md` táblájából parse-olva, egy automatizált „egy sor Gazdáját üresre törlöm” piros-próbával). |
+| `docs/release/full-app-verification.md` (ÚJ) | A mérő mért kimenete, öt MÉRT, NEM javított lelet (L1–L5, l. 10.3), a 9 bejárt + 64 kimaradó képernyő teljes, gépileg parse-olható táblája (Screen\|Indok\|Gazda\|Kör). |
+
+### 10.2 A placeholder-mérő mért kimenete (mai fa)
+
+```
+$ dart run tool/check_placeholder_wiring.dart --format table
+H1 (routing) files: 4. H2 (composition provider) files: 14. Findings: 0.
+Suppressed by exception: 1. Vacuous exceptions: 0. Exit code: 0.
+```
+
+Az egyetlen kivétel: `progressV2IsOffline` (P3), indokolt.
+
+### 10.3 A bejárás öt mért, NEM javított lelete (teljes szöveg: `docs/release/full-app-verification.md` §2)
+
+1. **L1** — `PracticeAreaHubScreen`'s recommended CTA (`practice_area_hub_screen.dart:55`) nem ad át `?id=`-t → `PracticeSetupScreen` a saját `_RouteError` ágát rendereli (valós, explicit hibaállapot, §5.1 nem sérül, de a shell egyetlen hirdetett belépési pontja egy pontozott gyakorlásba méréssel zsákutca).
+2. **L2** — `OnboardingScreen._completeFinish` mindig `/live`-ra fejez be, függetlenül `adaptiveShellEnabled`-től (a `legacyRedirects` `/practice/live`-ra tereli, sosem `/today`-ra).
+3. **L3** — `libraryV2SourcesProvider` az `analysisRepositoryProvider`/`songRepositoryProvider`/`setlistRepositoryProvider`-t olvassa, amiket csak a production bootstrap köt be — `bootE2eApp` nem —, ezért `UnifiedLibraryScreen` a saját, valós `libraryV2LoadFailed` hibaállapotát mutatja.
+4. **L4** — `ProfileHubScreen`/`TodayHubScreen` „sessions” mércéje a V1 „Learn” naplót (`practiceLogProvider`) olvassa, amit a Practice Engine V2 quick-start flow sosem ír.
+5. **L5** — `practiceHistoryV2ListProvider` sima `FutureProvider` (nincs `.family`, `grep -rn "invalidate(practiceHistoryV2ListProvider\|refresh(practiceHistoryV2ListProvider" lib/` → 0 találat) — az ELSŐ olvasása (a Today Hub napi-cél gyűrűjén keresztül, MÉG a gyakorlás előtt) örökre gyorsítótárazza az akkori (üres) állapotot a konténer élettartamára. A bejárás emiatt egy valós app-újraindítást végez az eredmény-állomás után — enélkül a Progress-mérce (a §6.1 mutációs célpontja) sosem tudna valós adatot mutatni ebben a konténerben, még helyes forráskód mellett sem.
+
+Egyik lelet sem P1/P2/P3 placeholder-literál — mindegyik a bejárás (A2/A3) saját, dinamikus mérése. A STOP-protokollt (§0/§5.2) ez a kör úgy alkalmazta, hogy a leleteket **rögzítette és dokumentálta** (gazdával, „nincs — <indok>” körrel), a `lib/**`-et nem módosította — a javítás a felelős feature körök öröksége.
+
+### 10.4 Valódi-sértés próba (§6.1, KÖTELEZŐ) — szó szerinti PIROS kimenet
+
+**1. lépés** — `lib/features/progress_v2/application/progress_providers.dart`
+`progressPracticeHistoryProvider` teste ideiglenesen:
+```dart
+final progressPracticeHistoryProvider = Provider<List<PracticeHistoryEntry>>(
+  (ref) => const <PracticeHistoryEntry>[],
+);
+```
+majd `git checkout --` a fájlra a mérés után. A mérő CLI önmagában:
+```
+$ dart run tool/check_placeholder_wiring.dart --format table
+H1 (routing) files: 4. H2 (composition provider) files: 14. Findings: 1.
+Suppressed by exception: 1. Vacuous exceptions: 0. Exit code: 1.
+| P2 | progress_providers.dart:23 | progressPracticeHistoryProvider |
+  top-level provider "progressPracticeHistoryProvider" resolves to the
+  bare placeholder literal "const <PracticeHistoryEntry>[]" |
+```
+
+**A1 cella** (`flutter test test/tooling/placeholder_wiring_test.dart`) PIROS:
+```
+A1 — the router and composition layers are placeholder-free on the real tree
+zero unsuppressed findings, exit code 0 [E]
+  Expected: empty
+    Actual: [Instance of 'PlaceholderFinding']
+  unexpected placeholder-wiring findings: [top-level provider
+  "progressPracticeHistoryProvider" resolves to the bare placeholder
+  literal "const <PracticeHistoryEntry>[]"]
+```
+
+**A2 cella** (`flutter test test/e2e/full_app_walkthrough_test.dart`) PIROS:
+```
+E16-R05 A2/A3 — the BE-flagged core walkthrough asserts real data or an
+explicit state at every stop ... [E]
+Expected: an object with length of <1>
+  Actual: []
+   Which: has length of <0>
+the just-completed session must reach the Progress V2 composition layer
+through progressPracticeHistoryProvider
+```
+
+**2. lépés** — ugyanezt (`progressPracticeHistoryProvider`) felvéve
+`tool/check_placeholder_wiring.dart`'s `placeholderExceptions`
+listájára ÜRES indokkal (a lib/ mutáció változatlanul fennáll), majd
+ismét visszaállítva mindkét fájlt a mérés után:
+
+**A7 cella** PIROS:
+```
+A7 — the exception list is exactly one real, non-vacuous entry
+exactly one exception, non-empty reason, nothing vacuous [E]
+  Expected: an object with length of <1>
+    Actual: [Instance of 'PlaceholderException', Instance of 'PlaceholderException']
+     Which: has length of <2>
+```
+
+A mérő CLI önmagában (`vacuousExceptions` mezője is jelzi a hiányzó
+indokot):
+```
+Vacuous exceptions: 1.
+| lib/features/progress_v2/application/progress_providers.dart | progressPracticeHistoryProvider |
+```
+
+Mindkét lépés után `git checkout --` (lib/) és a `tool/check_placeholder_wiring.dart`
+kézi visszaállítása futott; a `git status --porcelain` a próba után tiszta volt.
+
+### 10.5 A záró gate — teljes, csonkítatlan kimenet
+
+```
+$ tools/round-gate.sh test/e2e/full_app_walkthrough_test.dart test/tooling/placeholder_wiring_test.dart test/ui/ui_inventory_test.dart test/tooling/screen_reachability_test.dart test/e2e/first_practice_offline_test.dart test/e2e/returning_user_restart_test.dart test/accessibility/release_flow_semantics_test.dart test/accessibility/release_flow_text_scale_test.dart
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/e2e/full_app_walkthrough_test.dart               zöld
+    test test/tooling/placeholder_wiring_test.dart             zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/e2e/first_practice_offline_test.dart             zöld
+    test test/e2e/returning_user_restart_test.dart             zöld
+    test test/accessibility/release_flow_semantics_test.dart   zöld
+    test test/accessibility/release_flow_text_scale_test.dart  zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A 8 útvonal PONTOSAN a `gate_tests` lista, ugyanabban a sorrendben. Az
+utolsó négy (`first_practice_offline_test.dart`,
+`returning_user_restart_test.dart`, mindkét accessibility fájl) a
+`test/support/e2e_harness.dart` briefen KÍVÜL élő hívói — zöld futásuk az
+A9 bizonyítéka.
+
+### 10.6 Nyitott tételek / a review figyelmébe
+
+- **L1–L5** (`docs/release/full-app-verification.md` §2/§4) — öt valós,
+  MÉRT bekötési hiányosság, egyik sem javítva ebben a körben (`lib/**`
+  tiltott zóna). Mindegyiknek nincs hozzárendelt javító kör — a review
+  eldöntheti, kell-e ezekhez ÚJ kört nyitni (a döntés a Claude/orchesztrátor
+  hatásköre, nem ezé a záró köré).
+- **A6** (telepíthető APK) — ennek a körnek nincs helyi Android SDK-ja (ADR
+  0053); a CI-dispatch és az APK-link az orchesztrátor dolga.
+- A `docs/release/full-app-verification.md` §3.2 kimaradó táblájának 64
+  sora kategóriánként (KI/PREVIEW capability, legacy/duplikált regisztráció,
+  Quick Tools, Songs tab, Gamification, Song Trainer stb.) sorolja fel az
+  okot — a review érdemes ellenőrizze, hogy egyik sor sem vákuum-indoklás
+  (üres vagy „hamarosan” jellegű).
+
 ## 11. Review — a Claude tölti ki
