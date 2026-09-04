@@ -1,5 +1,40 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR — E14-R07 / H3: a merge utáni könyvelés saját munkapéldányban fut, a push újrapróbálható és hangos (2026-09-04)
+
+**ADR 0112 önjavító kör. A megállt kör (E14-R07) terméke HIBÁTLAN** — a gate
+zöld, a review APPROVED (0 BLOCKER/0 MAJOR/0 MINOR), a 18 saját acceptance-cella
+mindenhol zöld. A merge-et egy ÖRÖKÖLT, `main`-oldali piros CI blokkolta.
+
+**A mért gyökérok** (nem a kör hibája): az E14-R06 merge-e után a driver
+`merged` ága a KÖZÖS munkafában könyvelt, miközben a másik slot köre (E14-R04)
+azt a saját ágán tartotta. Így a `git reset --hard origin/main` az IDEGEN ágat
+mozdította el (az E14-R04 lokális pre-flight commitja, `94f46951`, leesett
+róla), a `chore(pipeline)` commit (`2cd3baef`) is oda került, a
+`git push origin main` pedig a két committal LEMARADT lokális `main` refet
+tolta → non-fast-forward, egyetlen néma `FIGYELEM` sorral
+(`.pipeline/chain.log:26359`). A `main` ezért drifttel maradt
+(`tools/sync-completion-matrix.py --check` → exit 1: Ch14 `reports done=3` vs.
+`queue measures done=4`), és a `program_completion_test.dart` A1 cellája
+pirosra vitte a main gate-jét (`33859597093`).
+
+**A javítás** (`tools/round-pipeline.sh`): a könyvelés a `commit_main_bookkeeping()`
+függvénybe került, és eldobható, a közös fától FÜGGETLEN worktree-ben fut;
+minden próbálkozás a FRISS `origin/main`-ből származtat újra (párhuzamos merge
+sem tehet elavult matrixot a main-re); a push háromszor újrapróbálható; a
+végleges kudarc `HIBA` + telefon-értesítés, nem néma log. A közös fa
+`reset --hard`-ja már csak bizonyítottan `main`-en futhat. A `main` drift
+maga a `docs/sdd/program-completion-report.md` szinkronjával oldódik.
+
+**Őr:** `tools/tests/test_pipeline_bookkeeping_worktree.py` — 8 cella, a fix
+előtti forráson mind PIROS. A D2 fail-safe kar forrás-szintű őre
+(`test_chain_hygiene.py`) a függvénytörzsre horgonyzott, és ÚJ cellával
+követeli, hogy a `merged` ág valóban rá delegáljon. Mérés: [L627](docs/LESSONS.md).
+
+**A megállt kör innen folytatható:** a
+`sonnet-impl/e14-r07-annotation-contract-and-agreement` ág (HEAD `ad729d50`)
+kész és APPROVED, PR még nincs nyitva — a lánc a MERGE-lépésnél veszi fel.
+
 ## ✅ E14-R04 KÉSZ — RecognitionFrame V2: a bizonytalanság végre KIFEJEZHETŐ, a legacy fordítás nem hazudik — PR [#568](https://github.com/wolfcasaba/strumsight/pull/568), squash `f1fced77` (2026-09-04)
 
 A Chapter 14 sáv negyedik köre megadta azt a **verziózott, Flutter-független

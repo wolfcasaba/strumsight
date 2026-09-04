@@ -25047,3 +25047,48 @@ mentessége).
 **Őrteszt:** nincs — a wrapper helyesen mérte, amit mért; a hiba az
 orchestrátor munkamódjában volt, nem az eszközben. A védelem a workflow
 szövegébe került (`.claude/skills/sdd-round-driver`, dispatch-lépés).
+
+## L627 — A közös munkafában futó merge-utáni könyvelés a MÁSIK slot körének ágára commitolt, a `main` push-a pedig némán elbukott (E14-R07 / H3 önjavító kör, ADR 0112, 2026-09-04)
+
+**Mit mértem.** Az E14-R06 merge-e után a driver `merged` ága a KÖZÖS
+munkafában futtatta a könyvelést (`git fetch && git reset --hard origin/main`
+→ sor-fájl `pending → done` → completion-matrix szinkron → `git commit` →
+`git push origin main`). A kétslotos láncban azonban a másik kör (E14-R04)
+09:09:02-kor a saját ágára állította ezt a fát, ezért 09:43:17-kor:
+
+```
+reflog: 94f46951 [E14-R04] Pre-flight …      (09:13, a kör lokális commitja)
+reflog: 1feecc11 reset: moving to origin/main (09:43:17)  ← az IDEGEN ágat mozdította
+reflog: 2cd3baef commit: chore(pipeline): E14-R06 done …  ← az IDEGEN ágra került
+chain.log:26359  FIGYELEM: a sor-fájl push-a nem ment át  (09:43:18)
+```
+
+A `git push origin main` a **lokális `main` refet** tolta, ami két committal
+le volt maradva → non-fast-forward. A kudarc egyetlen `FIGYELEM` sor lett, a
+lánc ment tovább. Következmény: a `main` drifttel maradt
+(`tools/sync-completion-matrix.py --check` → exit 1, „Ch14 (E14): reports
+done=3, queue measures done=4"), a `program_completion_test.dart` A1 cellája
+pirosra vitte a main gate-jét (run 33859597093 PIROS vs. a flip előtti
+33859338063 ZÖLD), és a KÖVETKEZŐ kör (E14-R07) merge-kapuja állt meg — pedig
+annak saját munkája zöld és review-APPROVED volt (a kör 18 saját cellája
+mindenhol zöld; a két piros cella az örökölt main-drifté).
+
+**A három gondolati hiba.** (1) „A driver a main-en áll" — a *firing indulásakor*
+igen (ott van rá `die`-őr), a *kör végén* már nem: a másik slot közben elmozdítja
+a közös fát. (2) „A `reset --hard origin/main` ártalmatlan" — idegen ágon a
+MÁSIK kör lokális commitját dobja el. (3) „A push kudarcát elég logolni" —
+a könyvelés nem kényelmi lépés, hanem a következő kör merge-kapujának
+előfeltétele; a néma kudarca 50 perces halttal jön vissza.
+
+**Szabály.** Megosztott munkafájú láncban a merge utáni könyvelés a fa ágától
+és tartalmától FÜGGETLEN, eldobható munkapéldányban fusson; minden
+push-próbálkozás a FRISS `origin/main`-ből származtasson újra (így a párhuzamos
+merge sem tesz elavult matrixot a main-re); a `reset --hard` csak akkor
+érintheti a közös fát, ha az bizonyítottan a `main`-en áll; a végleges
+push-kudarc pedig HANGOS (`HIBA` + értesítés), mert néma marad a
+következő kör halálos akadálya.
+
+**Őrteszt:** `tools/tests/test_pipeline_bookkeeping_worktree.py` (8 cella:
+idegen ágon is a main-re landol · a másik kör ága/fája érintetlen · elutasított
+push után a friss main-ből származtat újra · tartós kudarc nem-nulla és hangos
+· idempotencia · a munkapéldány takarít). A fix előtti forráson mind a 8 PIROS.
