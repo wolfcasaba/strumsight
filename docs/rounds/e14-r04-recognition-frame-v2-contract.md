@@ -373,4 +373,215 @@ kimenetet), majd eltávolítva **ZÖLD**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-09-04.
+
+### 10.1 Mit épített
+
+Öt szerződés-fájl `lib/features/live/domain/recognition/` alatt +
+az adapter, ADR 0505-nek megfelelően:
+
+- `recognition_decision.dart` — `RecognitionDecision` (6 állapot) és
+  `RecognitionRejectReason` (6 ok) zárt enumok, `toJson`/`fromJson` fail-closed.
+- `strum_prediction.dart` — `StrumPrediction`; `directionMargin` SZÁMÍTOTT
+  getter (`(pDown - pUp).abs()`), `decision` is getter: `margin <= 0.05` →
+  `uncertain`, egyébként `confirmed` (§0.0 R6/R7, ADR 0505 D3/D4). A
+  `calibratedConfidence` nullable, sosem a nyers `pDown`.
+- `chord_prediction.dart` — `ChordPrediction`; `decision`
+  KONSTRUKTORBÓL kapott mező ebben a körben (§0.0 R7), nem levezetett.
+- `signal_quality_snapshot.dart` — `SignalQualityState` (8 állapot, `E14-R05`
+  brief §3-ából) + `SignalQualitySnapshot`, `unknown` const alapértékkel
+  (minden metrika `null`).
+- `recognition_frame.dart` — `RecognitionFrame`: `schemaVersion` (const `1`),
+  `frameTimeSec`, `strum`/`chord` (nullable), `signalQuality`, `runtimeInfo`
+  (`RecognitionRuntimeInfo`, E14-R03-ból importálva, nem újraírva).
+- `live_frame_adapter.dart` — `LiveFrameAdapter.toLiveFrame(RecognitionFrame,
+  LiveFrame base)`: a `chord` csak `confirmed`-nél jelenik meg
+  (`current`), a strum a `calibratedConfidence ?? 0`-t adja legacy
+  `confidence`-ként (sosem a nyers valószínűséget). Az ÖT tiszta
+  szerződés-fájl a `model/`-ből csak a `recognition_runtime_info.dart`-ot
+  importálja; EGYEDÜL ez a fájl éri el a `live_frame.dart`-ot
+  (`import '../../model/live_frame.dart';`).
+- `test/core/architecture_dependency_test.dart` — új, önálló,
+  forrás-szkennelő csoport (`recognition domain stays framework-free
+  (E14-R04)`), a `practice_generator`/`gamification`/`community` minta
+  szerint; `tool/check_architecture.dart`-hoz NEM nyúltam (§0.0 R3).
+- `public.dart` — additív export a 6 új fájlra (a `chord_prediction`,
+  `live_frame_adapter`, `recognition_decision`, `recognition_frame`,
+  `signal_quality_snapshot`, `strum_prediction`); a `LiveFrame` export sora
+  változatlan.
+- `test/features/live/recognition_frame_contract_test.dart` (35 teszt) és
+  `test/features/live/live_frame_adapter_test.dart` (13 teszt) — mindkettő
+  KIZÁRÓLAG a `public.dart` barrelen keresztül importál (ha az export lemarad,
+  a fájl fordítási hibával bukik, nem csendben kihagyja a pontot).
+
+### 10.2 Acceptance criteria → bizonyíték
+
+1. Architektúra-teszt: `test/core/architecture_dependency_test.dart` új
+   csoportja, 7 teszt (44–50. sorszám a gate-futásban), mind zöld.
+2. JSON round-trip mind az 5 modellre:
+   `recognition_frame_contract_test.dart` — decision/rejectReason enumok
+   (loop minden értékre), `StrumPrediction` (null + mért
+   calibratedConfidence), `ChordPrediction` (ua.), `SignalQualitySnapshot`
+   (unknown + teljesen mért), `RecognitionFrame` (strum+chord jelen / mindkettő
+   null).
+3. Backward compat mátrix: `live_frame_adapter_test.dart`, mind a 6
+   `RecognitionDecision` állapotra egy-egy teszt — `confirmed` → `current`
+   jelen, a többi öt → `current: null`.
+4. `calibratedConfidence` null-teszt: `'calibratedConfidence stays null and
+   is never the raw pDown/pNoChord'` mindkét prediction-osztályra.
+5. Külön chord/direction confidence: `'chord- and direction-confidence are
+   carried separately'` teszt, két különböző kalibrált értékkel.
+6. Ismeretlen schemaVersion: `'an unknown schemaVersion throws, never a
+   best-effort read'`.
+7. `public.dart` additív, `LiveFrame` bájtra változatlan — lásd 10.4.
+8. Fail-closed hiányzó-kulcs cellák, MODELLENKÉNT:
+   `RecognitionDecision.fromJson(json['decision'])` hiányzó kulcsra (1/5),
+   `StrumPrediction` hiányzó `calibratedConfidence` KULCS (2/5, külön a
+   null-értéktől), `ChordPrediction` hiányzó `sourceEngine`/`decision` (3/5),
+   `SignalQualitySnapshot` hiányzó `state` (4/5), `RecognitionFrame` hiányzó
+   `runtimeInfo`/`frameTimeSec`/`strum` KULCS (5/5).
+9. Legacy-import határ: `architecture_dependency_test.dart` —
+   `_forbiddenRecognitionModelImports` teszteli, hogy csak az adapter éri el
+   a `live_frame.dart`-ot, a többi öt fájl csak a
+   `recognition_runtime_info.dart`-ot a `model/`-ből.
+
+### 10.3 §7.1 Falszifikációs cella — a bizonyíték
+
+Ideiglenes `import 'package:flutter/foundation.dart';` sort tettem a
+`strum_prediction.dart` tetejére, futtattam
+`flutter test test/core/architecture_dependency_test.dart`-ot — PIROS:
+
+```
+00:01 +44: recognition domain stays framework-free (E14-R04) no Flutter/Riverpod imports in domain/recognition
+00:01 +44 -1: recognition domain stays framework-free (E14-R04) no Flutter/Riverpod imports in domain/recognition [E]
+  Expected: empty
+    Actual: [
+              'lib/features/live/domain/recognition/strum_prediction.dart contains "package:flutter/"'
+            ]
+  lib/features/live/domain/recognition/strum_prediction.dart contains "package:flutter/"
+
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/core/architecture_dependency_test.dart 1130:7  main.<fn>.<fn>
+
+00:01 +50 -1: Some tests failed.
+
+Failing tests:
+  /home/ubuntu/ss-sonnet-impl-e14-r04/test/core/architecture_dependency_test.dart: recognition domain stays framework-free (E14-R04) no Flutter/Riverpod imports in domain/recognition
+```
+
+Eltávolítottam az importot, újra futtattam — ZÖLD:
+
+```
+00:01 +44: recognition domain stays framework-free (E14-R04) no Flutter/Riverpod imports in domain/recognition
+00:01 +45: recognition domain stays framework-free (E14-R04) the boundary detector flags a direct Flutter import
+00:01 +46: recognition domain stays framework-free (E14-R04) the boundary detector allows package:meta (ADR 0505 §0.0 R4)
+00:01 +47: recognition domain stays framework-free (E14-R04) only the adapter reaches live_frame.dart; the rest reach only recognition_runtime_info.dart under model/
+00:01 +48: recognition domain stays framework-free (E14-R04) the boundary detector flags a non-adapter file importing live_frame.dart
+00:01 +49: recognition domain stays framework-free (E14-R04) the boundary detector allows the adapter importing live_frame.dart
+00:01 +50: recognition domain stays framework-free (E14-R04) the boundary detector allows recognition_runtime_info.dart from any contract file
+00:01 +51: All tests passed!
+```
+
+`git diff --stat -- lib/features/live/domain/recognition/strum_prediction.dart`
+üres a revert után — a fájl visszaállt a commitolt állapotára.
+
+### 10.4 `LiveFrame` bájtra változatlan
+
+```
+$ git diff --stat -- lib/features/live/model/live_frame.dart
+(üres kimenet)
+```
+
+A fájlt egyszer sem nyitottam szerkesztésre; a `git status --porcelain` a
+teljes kör alatt sosem sorolta fel.
+
+### 10.5 A záró gate
+
+```
+tools/round-gate.sh test/features/live/recognition_frame_contract_test.dart test/features/live/live_frame_adapter_test.dart test/core/architecture_dependency_test.dart test/features/live test/core
+```
+
+Mind a 10 lépés (`format`, `analyze`, 5×`test`, `architecture`, `secrets`,
+`l10n`) ZÖLD. Összegzés a futásból:
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/live/recognition_frame_contract_test.dart zöld
+    test test/features/live/live_frame_adapter_test.dart       zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    test test/features/live                                    zöld
+    test test/core                                             zöld
+    architecture                                                zöld
+    secrets                                                     zöld
+    l10n                                                        zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+Részletek: a célzott `recognition_frame_contract_test.dart` 35/35, a
+`live_frame_adapter_test.dart` 13/13 (12 saját + a fájl betöltése), az
+`architecture_dependency_test.dart` 51/51, a teljes `test/features/live`
+258/258 (256 pass + 2 skip, a meglévő suite-ból), a teljes `test/core`
+765/765 zöld.
+
+### 10.6 Döntések, amik eltértek a brief betűjétől (indoklással)
+
+1. **`RecognitionFrame.strum`/`chord` NULLABLE**, nem kötelező mező. A brief
+   §3.5 nem mondja ki explicit módon, de a §6.3 mátrix csak a `chord`
+   jelenlétét/hiányát méri egy `RecognitionFrame`-en belül, és az adapter
+   `_chordFor`/`_strumFor` metódusainak logikailag kezelniük kell a "még
+   nincs verdikt" esetet is (motorindítás, első frame előtt) — nemcsak a
+   "van verdikt, de elutasított" esetet. Nullable mezővel mindkettő
+   kifejezhető ellentmondás nélkül.
+2. **`LiveFrameAdapter.toLiveFrame` egy `LiveFrame base` paramétert is kér**,
+   nem csak a `RecognitionFrame`-et. Az ok: `LiveFrame` nyolc mezője
+   (`bar`, `bpm`, `inputLevel`, `tuningHz`, `listening`, `strumSeq`, `next`,
+   részben `latestStrumTime`) NINCS a `RecognitionFrame` szerződésben —
+   ezek a §3 szerint explicit KÍVÜL esnek ezen a körön. A `base` paraméter
+   ezeket viszi át változatlanul, és emiatt az adapter fájl SOSEM importálja
+   a `beat_slot.dart`-ot (a `List<BeatSlot> bar` típus a `base.bar`
+   kifejezésen keresztül implicit marad, `BeatSlot` nevet a fájl nem ír le) —
+   ez szigorúbb import-határt tart, mint amit a §0.0 R5 kifejezetten
+   megkövetelt volna.
+3. **A `LiveFrameAdapter` fordítása EGYIRÁNYÚ ebben a leadásban**
+   (`RecognitionFrame → LiveFrame`), a §3.6 „kétirányú fordítás"
+   megfogalmazásával szemben. Indoklás: az ellenkező irányhoz
+   (`LiveFrame → RecognitionFrame`) a régi `Strum.confidence`-ből
+   `pDown`/`pUp` valószínűség-párt kellene KITALÁLNI — pontosan az a fajta
+   levezetés, amit az ADR 0505 D2 tilt („a nyers valószínűség »ideiglenes«
+   átmásolása … pontosan az a hazugság"), csak fordított irányban (kalibrált
+   adatból nyers valószínűséget hazudni). A ténylegesen tesztelt/mért
+   irányt (D5, §6.3 mátrix) implementáltam; a fordított irányt NEM, mert
+   csak találgatással lett volna megépíthető. Ha a `LiveFrame →
+   RecognitionFrame` irány egy következő körben tényleg kell, azt egy
+   MÉRT forrásból (pl. a strum modell natív kimenetéből, nem a legacy
+   `Strum.confidence`-ből) kell táplálni.
+4. **`SignalQualitySnapshot` mezői** (`peakDbfs`, `rmsDbfs`, `noiseFloorDbfs`,
+   `clippedSampleRatio`, `silentRatio`, `activeRegionRatio`, `tonalness`) —
+   a brief §3.4 nem sorol fel konkrét mezőket („csak a szerződés"). A
+   választott hét mező 1:1 megfelel a MEGLÉVŐ, mért
+   `lib/features/audio_analysis/engine/quality/signal_quality_math.dart`
+   publikus felületének (`peakDbfs`, `rmsDbfs`, `clippedSampleRatio`,
+   `silentRatio`, `activeRegionRatio`, `noiseFloorDbfs`, `tonalness`), amit
+   az `E14-R05` brief §2 is nevesít újrahasznosítandóként — így az `E14-R05`
+   a szerződést kitöltheti új DSP-matek nélkül, hangolt küszöb nélkül ebben
+   a körben.
+5. **A „modellenként egy hiányzó-kulcs cella" (§0.0 R10) `recognition_decision.dart`-ra**
+   nem egy térkép hiányzó KULCSÁN, hanem a hiányzó/`null` ÉRTÉKEN mérve —
+   az enum maga nem térkép, nincs „kulcsa"; a hívó oldalán (pl.
+   `RecognitionFrame.fromJson`) egy hiányzó `'decision'` kulcs ugyanígy
+   `null`-t ad át a `RecognitionDecision.fromJson`-nek, ami a típusos hibát
+   dobja — a fail-closed lánc a hívási oldalon zárva marad.
+
+### 10.7 Amit szándékosan NEM érintettem
+
+`live_pipeline.dart`, `engine/**`, `screens/**`, `widgets/**`,
+`tool/check_architecture.dart`, `docs/adr/**` — egyik fájlt sem nyitottam meg
+íróként. A `LiveFrameAdapter` jelenleg nincs bekötve semmilyen production
+hívóba (ez a következő kör dolga, §9).
+
 ## 11. Review — a Claude tölti ki
