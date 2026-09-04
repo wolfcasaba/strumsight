@@ -7,7 +7,9 @@
 - **ADR:** [`0358`](../adr/0358-consented-on-device-lab-capture-package.md) D1–D8
 - **Kockázat:** `high` → kötelező biztonsági review, külön jelentés:
   [`e14-r06-review-security.md`](e14-r06-review-security.md)
-- **VERDIKT: CHANGES REQUESTED** — 2 MAJOR, 2 MINOR nyitva.
+- **VERDIKT (1. kör): CHANGES REQUESTED** — 2 MAJOR, 2 MINOR.
+- **VÉGSŐ DÖNTÉS: APPROVED** — a fix1 (`8a29373a`, `e4424df9`, `3f2390cc`)
+  mind a négy leletet zárta, saját mutáció-kill próbával igazolva (§6).
 
 ## 1. Formai ellenőrzések (MÉRVE, nem bemondásra)
 
@@ -159,3 +161,50 @@ MAI kódot pirosra viszi** — enélkül a zárás nem bizonyított (L160).
 | MAJOR-2 | a manifest `consentVersion`-je a `consent` paraméterből jön (vagy eltérésre típusos hiba) + cella az ELTÉRŐ esetre |
 | MINOR-1 | a MAJOR-1 validációjának következménye, D2-oldali ellenőrzéssel |
 | MINOR-2 | egyediség-kényszer + cella, VAGY a doc-comment állítás visszavonása |
+
+## 6. Javító kör (fix1) — leletenkénti zárás, saját méréssel
+
+Fix-commitok: `8a29373a` (production), `e4424df9` (cellák), `3f2390cc` (§10.5).
+Reviewelt HEAD: `3f2390cc`, majd `origin/main` (`f7fd7ab0`, E14-R03) beépítve
+a §0.3 upstream-frissesség miatt.
+
+**Saját gate-futás friss izolált klónban** (`/tmp/review-e14-r06-fix1`):
+`tools/round-gate.sh` a brief §7 négy útvonalával → **9/9 ZÖLD**, `GATE_EXIT=0`
+(format, analyze, 4× teszt, architecture, secrets, l10n). Scope-audit a teljes
+körre: `Legacy scope audit OK (cf688a082c6c..3f2390ccfc93, 11 changed path(s),
+2 generated/ignored)` — a két ignorált a saját review-jelentésem.
+
+**Mutáció-kill próba (L160 — a javítás UTÁN is megismételve).** A klónban
+eltávolítottam (a) a `locate` `packageId`-őrét és (b) a manifest
+`'consentVersion': consent.consentVersion` felülírását, majd lefuttattam a
+kör tesztjeit:
+
+```
+$ flutter test test/features/accuracy_lab      # a MUTÁLT kódon
+00:01 +20 -8: Some tests failed.
+  ... locate rejects a packageId containing ".."
+  ... locate rejects a packageId containing a path separator
+  ... delete rejects an empty packageId and leaves the root directory
+      and its existing packages untouched
+  ... delete rejects a ".." packageId            (+ 4 további)
+```
+
+→ a fix nélkül **8 cella PIROS**; a visszaállított (szállított) kódon a gate
+9/9 zöld. A zárás tehát bizonyított, nem állított.
+
+| Lelet | Zárás | Bizonyíték |
+|---|---|---|
+| MAJOR-1 | ✅ `labPackageIdPattern` (`^[A-Za-z0-9_-]+$`) + `LabPackageIdException` a `locate`-ben (`lab_package_writer.dart:76-78`), amin a `write`/`status`/`delete` MIND átmegy | 7 új cella, köztük „a testvérkönyvtár és a `precious.txt` érintetlen marad" és „üres id → a root és a benne lévő csomag megmarad"; mutáció-kill fent |
+| MAJOR-2 | ✅ a manifest `consentVersion`-je a `consent` grantból íródik, felülírva a hívó mezőjét (`lab_package_writer.dart:116-121`) | cella az ELTÉRŐ esetre (`consent-v2-2026` vs. `v1-stale`) → a mai kódon zöld, a mutáltan piros |
+| MINOR-1 | ✅ a MAJOR-1 validációja kizárja a path-szerű id-t, tehát útvonal-töredék nem juthat a szerializált kimenetbe | a `..`/szeparátoros/üres id már a `locate`-ben dob |
+| MINOR-2 | ✅ `LabTaskDuplicateIdException` a `validated`-ben (`lab_task.dart:74-79`) — a doc-comment állítása immár kikényszerített | cella: 15 elemű, érvényes hosszú lista duplikált id-vel → dob |
+| NOTE-1 | nyitva hagyva (nem blokkol): a `capturedAt` UTC-normalizálás a determinizmus ára; a pillanat megmarad |
+
+**Maradék megjegyzés (NOTE-3, nem blokkol):** a grant-alapú `consentVersion`
+a **manifestre** érvényes; a `LabCapturePackage.toCanonicalJson()` továbbra is
+a hívó által megadott mezőt hordozza. A perzisztált artefaktum (a manifest)
+provenance-e ezzel rendben van; ha egy későbbi kör a csomag-objektumot
+önmagában exportálja, ott ugyanezt a forrás-kikötést meg kell ismételni.
+
+**VÉGSŐ DÖNTÉS: APPROVED.** Nyitott BLOCKER/MAJOR/MINOR nincs. A merge a zöld
+kapun (teljes CI-suite + Router CI a merge SHA-n) múlik.
