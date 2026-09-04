@@ -328,4 +328,180 @@ tesztben bizonyított állítás szerepeljen.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5), branch
+`sonnet-impl/e16-r04-live-backend-end-to-end`.
+
+### 10.1 Mit épített a kör
+
+Hat fájl, pontosan az `allowed_paths` szerint:
+
+- **`device_build.example.json`** (ÚJ) — placeholder `--dart-define-from-file`
+  profil: `STRUMSIGHT_ENV=lab`, `STRUMSIGHT_API_URL` egy dokumentáció-célú LAN
+  IP-vel, `STRUMSIGHT_ACCOUNT` + három community flag, mind string érték
+  (ahogy a `--dart-define-from-file` megköveteli). Nincs benne
+  `STRUMSIGHT_DIAG_TOKEN` — a bring-up láncnak nincs rá szüksége, és minél
+  kevesebb kulcs, annál kisebb a titok-szivárgás felülete.
+- **`.gitignore`** — KIZÁRÓLAG hozzáfűzés: `device_build.json` +
+  `device_build.*.json` (a minta neve is illeszkedik erre a mintára —
+  szándékos, ezért a valódi profilt `git add -f`-fel kellett trackelni).
+- **`tool/release/live_backend_smoke.py`** (ÚJ) — a `production_smoke.py`
+  duck-typed kliens-alakját követő (`.get`/`.post`/`.put`) önálló eszköz.
+  `classify_contract()` a `docs/contracts/client-backend-endpoints.json`
+  mind a 34 bejegyzését beolvassa és `exercised` (10, a bring-up lánc maga
+  hívja) / `not_exercised` (21, kimondott indokkal — jellemzően „második
+  fiók kell" vagy „másik alrendszer") / `known_gap` (3, a szerződés saját
+  mezője) kategóriába sorolja; besorolatlan bejegyzésnél `main()` a
+  hálózati hívás ELŐTT 2-es kóddal kilép (D1). `run_chain()` a láncot az
+  ELSŐ eltérésnél megállítja (D2): readiness → register → login → `/auth/me`
+  → settings olvasás/írás → community profil create/read/update → community
+  `/blocked`/`/muted` → a három `known_gap` út (elvárt 404).
+- **`backend/tests/test_live_smoke_contract.py`** (ÚJ) — 6 cella, mind
+  `TestClient`-tel, hálózat nélkül (A5): a valódi 34-es szerződés teljes
+  besorolás-fedése, fail-closed próba egy szintetikus besorolatlan
+  bejegyzésre, `main()` 2-es kilépése hálózat nélkül, a teljes lánc zöld
+  futása egy migrált, `env=lab`, `community_enabled=true` appon, a lánc
+  megállása az ELSŐ eltérésnél (számlálós kliens bizonyítja, hogy a
+  későbbi lépések ténylegesen nem futnak le), és a `known_gap` út
+  jelenlétének piros jelzése.
+- **`test/tooling/device_profile_test.dart`** (ÚJ) — 7 cella az ÉLŐ fából:
+  séma-validáció, a `tool/ci/check_secrets.dart` ÚJRAFELHASZNÁLÁSA
+  `Directory.current` ellen (nem temp-repó), `git check-ignore` a valódi
+  `.gitignore`-szabály ellen, és a runbook §1–§7 címeinek + az új §8/§9
+  jelenlétének strukturális ellenőrzése.
+- **`docs/operations/device-backend-runbook.md`** — a meglévő §1–§7
+  VÁLTOZATLAN; új **§8** (profil-fájl építése a példából) és **§9** (a live
+  smoke futtatása, kilépési kódok) került a végére.
+
+### 10.2 Kötött döntések, amiket a brief nem rögzített
+
+- **A bring-up lánc account-e:** egyetlen, minden futáskor frissen
+  regisztrált fiók (`live-smoke-<uuid>@strumsight.app` + random jelszó) —
+  nincs `--password-env`, mert nincs mit védeni: a fiók eldobható.
+- **`env=lab` a szerződés-cellákban, nem `env=prod`:** az ADR 0503 D3
+  táblázata „fejlesztői/lab példány" célt mond; `env=lab` mellett az
+  ADR 0449 D1 traffic gate (`_TRAFFIC_GATE_ENVIRONMENTS = {staging, prod}`)
+  nem is aktiválódik, és a `community_requires_postgres` ág (csak
+  `env=="prod"`-nál mér) sem — így SQLite mellett is tisztán mérhető a teljes
+  lánc, hálózat nélkül.
+- **10 `exercised` végpont kiválasztása:** minden olyan út, amit EGYETLEN
+  fiók valódi hívással bizonyíthat (auth hármas, settings pár, community
+  profil hármas, `/blocked`+`/muted`). A social-graph/safety/challenge
+  írások mind második fiókot vagy egy előzőleg létrehozott erőforrást
+  (challenge id) igényelnek, amihez a szerződésben nincs create-endpoint —
+  ezek mind `not_exercised`, kimondott indokkal (részletek a
+  `live_backend_smoke.py` `_NOT_EXERCISED` szótárában).
+- **A `known_gap` próbák a láncban maradnak, a hitelesített kliensen:** a
+  `POST /diagnostics`/`/tutor/**` NEM lett bevonva a láncba (más alrendszer,
+  streaming válasz), de a három `known_gap` challenge-út igen — ha egy
+  jövőbeli kör megépíti őket a szerződés frissítése nélkül, ez a lánc azonnal
+  pirosra vált.
+
+### 10.3 A három valódi-sértés próba (mért, visszaállítva)
+
+**1. Végpont átnevezése a smoke SAJÁT fixtúrájában (NEM az éles JSON-ban) → A2 pirosnak kell lennie.**
+A `run_chain()` `/community/blocked` hívási helyét (a hívás ÉS a
+`_record` hívás path-ját, a `_EXERCISED_ORDER` besorolási táblát
+ÉRINTETLENÜL hagyva) `/community/blocked-renamed-for-breach-probe`-ra
+neveztem át, majd:
+
+```
+$ python -m pytest tests/test_live_smoke_contract.py -q
+FAILED tests/test_live_smoke_contract.py::test_full_chain_passes_against_a_freshly_migrated_lab_app
+FAILED tests/test_live_smoke_contract.py::test_known_gap_path_present_turns_the_chain_red_without_running_later_steps
+```
+
+Mért diff: `AssertionError: assert [...] == [...] / Right contains 4 more
+items, first extra item: 'community_muted'` — a lánc pontosan a
+`community_blocked` lépésnél állt meg (404 az átnevezett úton), a
+`community_muted` és utána következő lépések (beleértve mindhárom
+`known_gap` próbát) NEM futottak le. `test_classify_contract_covers_the_real_contract...`
+(A1) ZÖLD maradt — a próba szándékosan csak a láncot, nem a besorolást
+érintette. `git checkout -- tool/release/live_backend_smoke.py`-vel
+visszaállítva; `git status --short` üres.
+
+**2. Besorolatlan bejegyzés a szerződés-fixtúrában → A1 pirosnak kell lennie.**
+A `_NOT_EXERCISED` szótárból ideiglenesen töröltem a
+`("POST", "/diagnostics")` bejegyzést (a valódi 34-es szerződésben ez az
+út megmarad — csak a Python-oldali besorolás tűnt el):
+
+```
+$ python -m pytest tests/test_live_smoke_contract.py::test_classify_contract_covers_the_real_contract_with_no_unclassified_entries -q
+FAILED
+AssertionError: [EndpointClassification(method='POST', path='/diagnostics',
+kind='unclassified', reason='no classification on file for this contract
+entry — add one to _EXERCISED_ORDER or _NOT_EXERCISED in
+tool/release/live_backend_smoke.py')]
+assert 1 == 0
+```
+
+`git checkout -- tool/release/live_backend_smoke.py`-vel visszaállítva.
+
+**3. Valódi alakú token a példa-profilba → A3 pirosnak kell lennie.**
+`device_build.example.json`-hoz hozzáadtam:
+`"STRUMSIGHT_DIAG_TOKEN": "sk-abcdefghijklmnopqrstuvwxyz0123"` (a
+`check_secrets.dart` `providerToken` szabálya szerinti alak):
+
+```
+$ flutter test test/tooling/device_profile_test.dart
+00:05 +2 -1: ... the live tree has no committed secret in the example profile ... [E]
+  Expected: empty
+    Actual: WhereIterable<SecretIssue>:[Instance of 'SecretIssue']
+  device_build.example.json must contain only placeholder values:
+  Secret scan failed (4292 file(s) scanned, 1 finding(s)).
+  - device_build.example.json:8: provider token literal
+```
+
+A sort eltávolítva visszaállítva; `git diff device_build.example.json`
+üres volt a visszaállítás után.
+
+Mindhárom próba után `git status --short` és `git diff --stat` üres volt a
+végleges commit előtt — egyik próba sem maradt a fán.
+
+### 10.4 A záró mérce — csonkítatlan kimenet
+
+**`tools/round-gate.sh test/tooling/device_profile_test.dart test/app/app_config_test.dart`** (10 lépés, mind ZÖLD, kilépési kód **0**):
+
+```
+═══ [1] format                                                              → ZÖLD
+═══ [2] analyze         No issues found! (ran in 6.2s)                      → ZÖLD
+═══ [3] test test/tooling/device_profile_test.dart   (+7, All tests passed) → ZÖLD
+═══ [4] test test/app/app_config_test.dart          (+21, All tests passed) → ZÖLD
+═══ [5] architecture    Architecture dependencies OK (12 allowlisted)       → ZÖLD
+═══ [6] secrets         Secret scan OK (4292 file(s) scanned, 0 finding(s)) → ZÖLD
+═══ [7] l10n            L10n parity OK (en → hu, 2304 message(s))          → ZÖLD
+═══ [8] backend ruff format   140 files already formatted                   → ZÖLD
+═══ [9] backend ruff check    All checks passed!                            → ZÖLD
+═══ [10] backend pytest       350 passed, 1 xfail (full backend/tests suite) → ZÖLD
+
+MINDEN GATE ZÖLD.
+```
+
+**`cd backend && python -m pytest tests/test_live_smoke_contract.py -q`**
+(külön processzként, hálózat nélkül, kilépési kód **0**):
+
+```
+......                                                                   [100%]
+=============================== warnings summary ===============================
+tests/test_live_smoke_contract.py::test_full_chain_passes_against_a_freshly_migrated_lab_app
+tests/test_live_smoke_contract.py::test_known_gap_path_present_turns_the_chain_red_without_running_later_steps
+  .../sqlalchemy/engine/default.py:952: DeprecationWarning: The default
+  datetime adapter is deprecated as of Python 3.12; ...
+6 passed
+```
+
+(`backend ruff format`/`ruff check` a `round-gate.sh` [8]/[9] lépésében már
+lefutott a `backend/tests/test_live_smoke_contract.py`-re is — külön
+`ruff format backend/app backend/tests` futtatás nem volt szükséges, mert a
+gate ezt saját magától, a kör VÉGÉN, a `backend_touched()` észlelés miatt
+lefuttatta.)
+
+### 10.5 Amit NEM ez a kör csinált (tudatosan)
+
+- Nem indított élő backendet és nem futtatta a `live_backend_smoke.py`-t
+  valódi hálózat ellen (§0.0: az operátori lépés a user dolga).
+- Nem módosította a `production_smoke.py`-t, a
+  `test_production_smoke_contract.py`-t, a szerződés-JSON-t vagy a
+  `lab_build.json`-t — mindhárom TILOS zóna, `git diff --stat
+  origin/main..HEAD` üres rájuk.
+
 ## 11. Review — a Claude tölti ki
