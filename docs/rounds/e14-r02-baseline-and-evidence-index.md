@@ -344,4 +344,125 @@ visszaállítva **ZÖLD**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5). **Branch:**
+`sonnet-impl/e14-r02-baseline-and-evidence-index`.
+
+### 10.1 Mit szállít a kör
+
+A brief `ai-router` §0.0/R8 engedélyezett-fájllistájának mind a hét sorát:
+
+- `evaluation/recognition/baseline_manifest_schema.json` — draft-07 séma az
+  `evaluation/analysis/manifest_schema.json` mintájára; hat metrika-blokk
+  (`oneOf` `measured`/`not-measured` alakkal, §0.0/R4), `corpus`,
+  `configuration`, `models`/`modelsRationale` (§0.0/R7), retracted `bpm`
+  blokk (D4 `const true`).
+- `evaluation/recognition/baseline_manifest.json` — a MÉRT számok
+  (`docs/eval/real-audio-dsp-baseline.md`-ből, §3 szerint): `chord` és
+  `onset` `measured` (27, ill. 9 metrika — a 12 per-label precision/recall is
+  felvéve, opcionálisan, mert a report közli és minden számhoz van
+  `sourceFile`+`command`), `direction`/`noChord`/`latency`/`calibration`
+  `not-measured` a §0.0/R5 indoklásaival, `bpm` `retracted: true` a
+  visszavont pengetés-sűrűség számmal ÉS a librosa-referenciás
+  strict/tolerant egyezéssel.
+- `tool/benchmarks/recognition_baseline_manifest.dart` — tiszta Dart
+  (`dart:convert`+`dart:io` only), kézzel írt JSON-Schema-részhalmaz
+  validátor (`type`/`required`/`additionalProperties`/`const`/`enum`/
+  `oneOf`/`not`/`$ref`/`pattern`/`minimum`/`minLength`/`minItems`/
+  `maxItems`/`minProperties`), determinisztikus Markdown-renderer
+  (ábécésorrendbe rendezett kulcsok, `toStringAsFixed(3)`,
+  `DateTime.now()` sehol), `--check` mód.
+- `docs/eval/recognition-baseline-index.md` — a generátorral rendered
+  (SOSEM kézzel írva), a `real-audio-dsp-baseline.md`-re és a
+  `recognition-release-guard.md`-re hivatkozik, nem másolja a tartalmukat.
+- `evaluation/recognition/README.md` — az `evaluation/analysis/README.md`
+  mintájára.
+- `test/tooling/recognition_baseline_manifest_test.dart` — 28 teszt, A1–A8
+  csoport, a §6 mind a hat acceptance-pontjára és a §6.1 mérce-mátrix minden
+  sorára (Map-bejárási sorrend, `DateTime.now()` önellenőrzés, hiányzó
+  `command`/`sourceFile`, `n=0`/`n=1`/`n=82` numerikus küszöb-hármas,
+  visszavont BPM-sor törlése, `models`/`modelsRationale` feltétel).
+
+### 10.2 §7.1 Falszifikációs cella — MÉRT kimenet
+
+A generátor mindkét `..sort()` hívását ideiglenesen eltávolítottam
+(`tool/benchmarks/recognition_baseline_manifest.dart` — `blockKeys` és
+`metricKeys` rendezése), majd lefuttattam a tesztet.
+
+**PIROS** (`flutter test test/tooling/recognition_baseline_manifest_test.dart`,
+sort() nélkül — tényleges terminálkimenet):
+
+```
+00:00 +12 -1: A4 — bitwise-identical re-runs: the renderer sorts, it does not
+trust manifest authoring order (ADR 0354 D5, §6 AC2, §6.1 "Map traversal
+order" / "raw toString()" matrix rows) two temp-directory runs fed the SAME
+data with metric keys in DIFFERENT insertion order render byte-identical
+index files — a generator that writes in Map traversal order instead of
+sorting would fail this [E]
+  ...
+     Which: at location [1571] is <97> instead of <122>
+
+00:00 +26 -2: A8 — the real, shipped manifest and the real, committed index
+agree byte-for-byte right now (ties AC1/AC2/AC3 together on real data — a
+"--check" run against the real repository files) rendering the real manifest
+reproduces docs/eval/recognition-baseline-index.md exactly [E]
+  ...
+     Which: is different.
+            Expected: ... s\n\n### calibration ...
+              Actual: ... s\n\n### chord — mea ...
+                                    ^
+             Differ at offset 2066
+
+00:00 +26 -2: Some tests failed.
+
+Failing tests:
+  test/tooling/recognition_baseline_manifest_test.dart: A4 — bitwise-identical
+  re-runs: ... two temp-directory runs fed the SAME data with metric keys in
+  DIFFERENT insertion order render byte-identical index files ...
+  test/tooling/recognition_baseline_manifest_test.dart: A8 — the real,
+  shipped manifest and the real, committed index agree byte-for-byte right
+  now ... rendering the real manifest reproduces
+  docs/eval/recognition-baseline-index.md exactly
+```
+
+Pontosan a két várt cella vált pirosra: az A4 (szándékosan eltérő
+kulcs-beszúrási sorrendű, de tartalmilag azonos két fixture összevetése) és
+az A8 (a valódi manifest renderelése már nem egyezik a lemezen lévő,
+korábban ábécésorrendben generált indexszel — a `calibration` blokk most a
+`chord` elé kerül, mert a `metricBlocks.keys` beszúrási sorrendje
+`chord, onset, direction, noChord, latency, calibration`, rendezés nélkül).
+
+Ezután mindkét `..sort()` hívást visszaállítottam.
+
+**ZÖLD** (ugyanaz a parancs, visszaállítva):
+
+```
+00:00 +27: A8 — the real, shipped manifest and the real, committed index
+agree byte-for-byte right now (ties AC1/AC2/AC3 together on real data — a
+"--check" run against the real repository files) rendering the real manifest
+reproduces docs/eval/recognition-baseline-index.md exactly
+00:00 +28: All tests passed!
+```
+
+### 10.3 Záró mérce
+
+```
+tools/round-gate.sh test/tooling/recognition_baseline_manifest_test.dart
+```
+
+**Eredmény:** minden lépés ZÖLD — `format`, `analyze`, `test
+test/tooling/recognition_baseline_manifest_test.dart` (28/28), `architecture`,
+`secrets`, `l10n`. A `--result-json` nélküli futás konzolkimenete a fenti
+lépéseket csonkítatlanul mutatta.
+
+### 10.4 Scope-igazolás
+
+`git status --porcelain` a kör végén pontosan az `ai-router` engedélyezett
+hét fájlját mutatja (a `docs/rounds/e14-r02-*.md` ezt a §10-et kapja):
+`evaluation/recognition/README.md`, `baseline_manifest.json`,
+`baseline_manifest_schema.json`, `tool/benchmarks/recognition_baseline_manifest.dart`,
+`test/tooling/recognition_baseline_manifest_test.dart`,
+`docs/eval/recognition-baseline-index.md`. Tilos zónát (`lib/**`, `ml/**`,
+`assets/**`, `docs/adr/**`, `docs/eval/real-audio-dsp-baseline.md`,
+`.github/**`, `tools/**`, `pubspec.yaml`) nem érintettem.
+
 ## 11. Review — a Claude tölti ki

@@ -1,0 +1,200 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://strumsight.internal/schemas/recognition-baseline-manifest-1.0.json",
+  "title": "Recognition baseline manifest",
+  "description": "Single machine-readable record of the legacy-DSP recognition baseline (E14-R02, ADR 0354). Carries no raw audio: only a corpus identity hash/count, the app commit and configuration measured, and per-metric value+n+sourceFile+command evidence. Enforced by hand-written validation in tool/benchmarks/recognition_baseline_manifest.dart (no schema-library dependency, ADR 0354 D8) rather than by a generic JSON-Schema library.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "corpus",
+    "appCommit",
+    "appCommitNote",
+    "configuration",
+    "models",
+    "metricBlocks",
+    "bpm"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0",
+      "description": "Manifest schema contract version. The checker rejects any other value."
+    },
+    "generatedAt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Timestamp the manifest's data was assembled, written by hand into this file. The generator never calls a clock (ADR 0354 D5) — this value is the only source of a timestamp anywhere in the rendered index."
+    },
+    "corpus": { "$ref": "#/definitions/corpus" },
+    "appCommit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "App commit the measured numbers were produced at."
+    },
+    "appCommitNote": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Required free-text note distinguishing which commit produced which number when more than one commit is involved (e.g. a later commit retracting an earlier one). Never empty — a manifest with a single, wholly consistent commit still states that explicitly."
+    },
+    "configuration": { "$ref": "#/definitions/configuration" },
+    "models": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/modelEntry" },
+      "description": "ML weights that participated in the measured configuration. Empty when the configuration used none (ADR 0354 D7) — see modelsRationale."
+    },
+    "modelsRationale": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Required and non-empty when \"models\" is empty (ADR 0354 D7): explains why no model weight participated, so an empty list reads as a stated fact rather than an omission. Optional when \"models\" is non-empty."
+    },
+    "metricBlocks": { "$ref": "#/definitions/metricBlocks" },
+    "bpm": { "$ref": "#/definitions/bpmBlock" }
+  },
+  "oneOf": [
+    {
+      "description": "models is non-empty: modelsRationale is not required.",
+      "properties": { "models": { "minItems": 1 } }
+    },
+    {
+      "description": "models is empty: modelsRationale is required (ADR 0354 D7).",
+      "properties": { "models": { "maxItems": 0 } },
+      "required": ["modelsRationale"]
+    }
+  ],
+  "definitions": {
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpusId",
+        "corpusSha256",
+        "recordingCount",
+        "eventCount",
+        "skippedRecordingCount"
+      ],
+      "properties": {
+        "corpusId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative identifier of the corpus directory (e.g. \"ml/data/klangio\"). The corpus itself is never committed (ADR 0354 D1)."
+        },
+        "corpusSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "recordingCount": { "type": "integer", "minimum": 0 },
+        "eventCount": { "type": "integer", "minimum": 0 },
+        "skippedRecordingCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chunkSize",
+        "strumRefiner",
+        "chromaMedianWindow",
+        "bassWeight"
+      ],
+      "properties": {
+        "chunkSize": { "type": "integer", "minimum": 1 },
+        "strumRefiner": {
+          "type": ["string", "null"],
+          "description": "null when the measurement used the ClipAnalyzer default (no strum refiner model)."
+        },
+        "chromaMedianWindow": { "type": "integer", "minimum": 1 },
+        "bassWeight": { "type": ["number", "null"] }
+      }
+    },
+    "modelEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "metricEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "n", "sourceFile", "command"],
+      "properties": {
+        "value": { "type": "number" },
+        "n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Count of elements the value was measured over. n=0 is never valid (ADR 0354 D6, D2): a metric with nothing behind it is not measured."
+        },
+        "sourceFile": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "unit": {
+          "type": "string",
+          "enum": ["ratio", "bpm", "count", "ms", "other"]
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "metricBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["measured", "not-measured"] },
+        "metrics": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/definitions/metricEntry" }
+        },
+        "notMeasuredReason": { "type": "string", "minLength": 1 },
+        "extra": { "type": "object" }
+      },
+      "oneOf": [
+        {
+          "description": "measured: metrics required, notMeasuredReason forbidden (ADR 0354 D3).",
+          "properties": { "status": { "const": "measured" } },
+          "required": ["metrics"],
+          "not": { "required": ["notMeasuredReason"] }
+        },
+        {
+          "description": "not-measured: notMeasuredReason required, metrics forbidden (ADR 0354 D3).",
+          "properties": { "status": { "const": "not-measured" } },
+          "required": ["notMeasuredReason"],
+          "not": { "required": ["metrics"] }
+        }
+      ]
+    },
+    "metricBlocks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["onset", "direction", "chord", "noChord", "latency", "calibration"],
+      "properties": {
+        "onset": { "$ref": "#/definitions/metricBlock" },
+        "direction": { "$ref": "#/definitions/metricBlock" },
+        "chord": { "$ref": "#/definitions/metricBlock" },
+        "noChord": { "$ref": "#/definitions/metricBlock" },
+        "latency": { "$ref": "#/definitions/metricBlock" },
+        "calibration": { "$ref": "#/definitions/metricBlock" }
+      }
+    },
+    "bpmBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retracted", "retractedReason", "metrics"],
+      "properties": {
+        "retracted": {
+          "const": true,
+          "description": "Always true: BPM is a retracted claim on this corpus (ADR 0354 D4), never an active metric block. A future round that CAN measure BPM adds a new block, it does not flip this one."
+        },
+        "retractedReason": { "type": "string", "minLength": 1 },
+        "metrics": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/definitions/metricEntry" }
+        },
+        "extra": { "type": "object" }
+      }
+    }
+  }
+}
