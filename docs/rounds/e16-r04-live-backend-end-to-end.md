@@ -438,8 +438,12 @@ assert 1 == 0
 
 **3. Valódi alakú token a példa-profilba → A3 pirosnak kell lennie.**
 `device_build.example.json`-hoz hozzáadtam:
-`"STRUMSIGHT_DIAG_TOKEN": "sk-abcdefghijklmnopqrstuvwxyz0123"` (a
-`check_secrets.dart` `providerToken` szabálya szerinti alak):
+`"STRUMSIGHT_DIAG_TOKEN": "sk-abcdefghijklmnopqrstuvwxyz0123"` (a <!-- strumsight:allow-secret -->
+`check_secrets.dart` `providerToken` szabálya szerinti alak). A fenti literál
+az ábécé + `0123`, azaz **bizonyítottan nem titok** — a sor végén ezért a
+szkenner saját inline markere áll (a Router CI
+`tools/tests/test_secret_gate_router_paths.py` cellája ezt írja elő; a
+fájl-szintű `allow-secret-file` jelölés itt túl tág lenne):
 
 ```
 $ flutter test test/tooling/device_profile_test.dart

@@ -158,6 +158,46 @@ orchestrátor a munkafán maradt §10-et (engedélyezett fájl, kész tartalom)
 ellenőrizte és commitolta (`a47e7789`). **Nem H6:** ez az első és egyetlen
 megszakadás ezen a körön, és nem `blocked` jelzés.
 
+## 6.1 Egy MÉRT CI-piros és a javítása (Router CI, secret-gate)
+
+Az `a47e7789` SHA-n a **Full Gate ZÖLD** volt, a **Router CI PIROS**:
+
+```
+FAILED tools/tests/test_secret_gate_router_paths.py::RouterPathSecretScanTest::
+  test_router_triggered_paths_have_no_unmarked_provider_token
+AssertionError: [] != ['docs/rounds/e16-r04-live-backend-end-to-end.md:441']
+1 failed, 907 passed, 3 skipped, 754 subtests passed in 472.32s
+```
+
+**Gyökérok (mért, nem feltételezett):** a §10.3 HARMADIK valódi-sértés
+próbájának dokumentációja szó szerint idézi azt a hamis tokent, amit az
+implementer a próbához beírt (`"sk-" + az ábécé + "0123"`). A szkenner
+helyesen jelezte a literált — a próba dokumentálása hozta be, nem maga a
+termék. A `device_build.example.json` végig tiszta volt (a Full Gate
+`secrets` lépése zöld).
+
+**Javítás:** a szkenner SAJÁT inline markere a sor végén
+(`strumsight:allow-secret`), ahogy a cella hibaüzenete előírja és az L
+(`docs/LESSONS.md`, inline vs. fájl-szintű jelölés) mondja — a fájl-szintű
+`allow-secret-file` itt túl tág lenne, mert az egész briefet mentesítené.
+Lokálisan reprodukálva a javítás után:
+
+```
+$ python3 -m pytest tools/tests/test_secret_gate_router_paths.py -q
+4 passed in 0.54s
+```
+
+**Ez egy piros, nem kettő (H5):** a `2fba59f4`-re indított futásokat a
+diagnózis megszületésekor LEÁLLÍTOTTAM, mert ugyanezt az akkor már ismert,
+még nem javított okot mérték volna újra — vak újrapróbálkozás helyett a
+javítás ment ki. A zöld kapu nem lazul: a merge SHA-n mindkét workflow-nak
+`success`-nek kell lennie.
+
+**Tanulság a körből:** a valódi-sértés próbák DOKUMENTÁLÁSA maga is a
+titok-szkenner útvonalára esik, ha a próba egy token-alakú literált használ.
+A próba-writeupba szánt hamis titok mellé a markert már a kiíráskor oda kell
+tenni.
+
 ## 7. Merge-feltételek
 
 - [x] scope-audit `ok` (a helyes bázison)
