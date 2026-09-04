@@ -24759,3 +24759,110 @@ sorsa a csendes átengedés. A helyes alapértelmezés a fordítottja: **amit az
 
 **Őrteszt:** `test/tooling/recognition_baseline_manifest_test.dart`::`A9 — the
 validator fails closed on schema keywords it does not implement`
+
+## L620 — A típusos visszatérésre átírt betöltő szignatúrája a HÍVÓ OLDALON dől el: a brief szó szerinti előírása hat, scope-on kívüli tesztfájlt vitt volna a tilos zónába (E14-R03, 2026-09-04)
+
+**Forrás:** [`docs/rounds/e14-r03-model-activation-telemetry.md`](rounds/e14-r03-model-activation-telemetry.md)
+§0.0 R1; kör: E14-R03, PR [#566](https://github.com/wolfcasaba/strumsight/pull/566),
+squash `b82f3ab5`; ADR [0355](adr/0355-fail-visible-model-activation-telemetry.md).
+
+**A mérés.** A brief §3.2 szó szerint azt írta elő, hogy „a `tryLoad`/`_tryLiveCrnn`
+ezt [a `ModelActivation`-t] adja vissza `null` helyett". A pre-flight
+grep — nem a célfájlra, hanem a **hívási helyekre** — hat, az `allowed_paths`
+listán KÍVÜL élő tesztfájlt talált, amely a mai `StrumCrnn?` visszatérést
+pinneli:
+
+```
+$ grep -rn "tryLoad" lib/ test/ tool/
+test/property/crnn_ab_property_test.dart:116:  expect(StrumCrnn.tryLoad('assets/ml/nope.bin'), isNull);
+test/tools/crnn_detected_time_probe_test.dart:20:      final crnn = StrumCrnn.tryLoad('assets/ml/strum_crnn.bin')!;
+test/tools/klangio_real_ab_test.dart:82:              …tryLoad(…)!
+test/tools/crnn_cost_and_batch_calibration_test.dart:92:               …tryLoad(…)!
+test/tools/crnn_shift_sweep_test.dart:20:                    …tryLoad(…)!
+```
+
+A brief betű szerinti végrehajtása tehát **H3** lett volna: hat, a körhöz nem
+tartozó fájl átírása — vagy ami rosszabb, a lista csendes tágítása.
+
+**A feloldás alakja: ADDITÍV belépő, nem szignatúra-csere.**
+
+```dart
+static ModelActivation<StrumCrnn> activate(String path) { … }   // ÚJ
+static StrumCrnn? tryLoad(String path) => activate(path).model;  // VÁLTOZATLAN
+```
+
+A megfigyelhetőség így teljes, a hat pinnelő fájl pedig érintetlen maradt — a
+kör diffje 0 listán kívüli útvonalat érintett (`tools/scope-audit.py`: OK).
+
+**Az általánosítás.** Egy „adjon típusos eredményt `null` helyett" jellegű
+előírás a **célfájlban** ártalmatlannak látszik, a költsége viszont a
+hívói oldalon keletkezik, és a brief azt nem méri. A pre-flight kötelező
+lépése ezért nem a célfüggvény újraolvasása, hanem
+`grep -rn "<a függvény neve>" lib/ test/ tool/` — a talált hívók halmazát kell
+az `allowed_paths`-szal összevetni, MIELŐTT az implementer elindul. Ha nem
+diszjunkt, a válasz **additív belépő**, nem lista-tágítás.
+
+**Őrteszt:** `test/features/live/model_activation_test.dart`::`tryLoad keeps
+returning StrumCrnn? unchanged (R1 delegation)` — és maga a hat pinnelő fájl,
+amely a szignatúra-csere pillanatában fordítási hibát adna.
+
+---
+
+## L621 — A „viselkedés változatlan" ígéret csak legacy-referenciás ujjlenyomattal mérés; a kör saját `any(...)`-cellája nagyon sok hibás implementációt is kielégít (E14-R03, 2026-09-04)
+
+**Forrás:** [`docs/reviews/e14-r03-review.md`](reviews/e14-r03-review.md) §3.1
+és §8.2; kör: E14-R03, PR [#566](https://github.com/wolfcasaba/strumsight/pull/566),
+squash `b82f3ab5`.
+
+**A mérés.** A kör központi ígérete (ADR 0355 §5.1): a fallback VISELKEDÉSE
+bitre marad. A szállított acceptance-cella ezt így mérte:
+
+```dart
+expect(frames.any((f) => f.latestStrum != null), isTrue);
+```
+
+Ez igaz marad akkor is, ha az irány megfordul, a konfidencia elcsúszik, a bpm
+más lesz, a bar-slotok máshova kerülnek, vagy a frame-ek száma megváltozik — az
+állítás a viselkedésnek csak egy bináris vetületét fogja meg.
+
+**Amit a review helyette csinált.** Eldobható próbateszt, amely a
+`LivePipeline` **teljes frame-sorát** ujjlenyomatolja (chord label, irány,
+konfidencia 9 tizedesig, bpm, inputLevel, strumSeq, latestStrumTime,
+engineTimeSec, tuningHz, listening, a teljes 8 slotos bar), három súly-úton
+(nincs súly / szemét bájtok / valódi asset), és lefut **két fán**: egy tiszta
+`main` klónon és a kör-ágon.
+
+```
+$ sha256sum /tmp/probe-main.txt /tmp/probe-round2.txt
+bd90fdc0c8e1dbf748cb3c7ad4c5cb7d67ca9573a3a5127dce26d083aeb2b414  /tmp/probe-main.txt
+bd90fdc0c8e1dbf748cb3c7ad4c5cb7d67ca9573a3a5127dce26d083aeb2b414  /tmp/probe-round2.txt
+```
+
+63 frame, bitre azonos — a javító kör után újramérve is. Az ígéret így **tény**,
+nem állítás.
+
+**Két mellékesen mért csapda.**
+
+1. **A redakciós kanári nem érte el a saját célsorát.** Az acceptance-4 cella
+   egy NEM LÉTEZŐ fájlt aktivált, ezért a betöltő a `PathNotFoundException`
+   ágán tért vissza, és a `modelId: path.split(…)` sor **le sem futott** — az
+   `expect(strumModelId, 'none')` konstrukció szerint igaz volt. Ez az
+   [L260](#l260) hibaosztálya egy szinttel beljebb: nem a kulcsnév-lista a baj,
+   hanem hogy a próba nem jut el addig a kódig, amit mérni akar. A javító kör
+   egy SIKERES aktiváláson mérő második kanárit adott hozzá.
+2. **A reviewer eldobható próbafájlja megbuktatja a saját kaput.** A
+   `tools/round-gate.sh` első lépése a `dart format --set-exit-if-changed lib
+   test tool`, tehát egy formázatlan próbateszt a fában **PIROS gate-et** ad,
+   ami könnyen a kör hibájának látszik:
+   `Changed test/features/probe_frame_parity_test.dart → format: PIROS (1)`.
+   A próbafájlt vagy a gate UTÁN kell a fába tenni, vagy `dart format`-tal
+   formázni.
+
+**Az általánosítás.** Ha egy kör azt ígéri, hogy „X viselkedése nem változik",
+a mérce nem lehet X egyetlen tulajdonságára vett `expect` — a mérce a
+**kimenet-ujjlenyomat, a merge ELŐTTI fáról vett referenciával szemben**.
+A próba eldobható, de a mérés nem: a jelentésbe a két sha256 kerül.
+
+**Őrteszt:** nincs — a próba szándékosan eldobható reviewer-artefaktum (a fában
+hagyva a `format` lépést buktatná, lásd fent); a mérés bizonyítéka a review
+§3.1/§8.2 két azonos sha256-ja.
