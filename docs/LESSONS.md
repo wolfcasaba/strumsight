@@ -24560,3 +24560,63 @@ teljesen őrizetlen maradt volna, miközben minden kapu zöld.
 `A1 — every row classification is BE, PREVIEW, KI, or N/A`,
 `A6 — every non-BE row names a resolving round or a real path`
 (mindhárom a marker-blokkot adatként parse-olja, fail-closed módon).
+
+## L615 — A valódi-sértés próba DOKUMENTÁLÁSA maga is a titok-szkenner útvonalára esik (E16-R04, 2026-09-04)
+
+**Mérés.** Az E16-R04 `a47e7789` SHA-ján a **Full Gate ZÖLD** volt, a **Router
+CI PIROS**:
+
+```
+FAILED tools/tests/test_secret_gate_router_paths.py::RouterPathSecretScanTest::
+  test_router_triggered_paths_have_no_unmarked_provider_token
+AssertionError: [] != ['docs/rounds/e16-r04-live-backend-end-to-end.md:441']
+1 failed, 907 passed, 3 skipped, 754 subtests passed in 472.32s
+```
+
+A termék tiszta volt: a `device_build.example.json` végig placeholder, a Full
+Gate `secrets` lépése zöld. A pirosat a kör KÖTELEZŐ valódi-sértés próbájának
+**writeupja** hozta be — a §10.3 harmadik próbája szó szerint idézte azt a
+hamis tokent (`"sk-" + ábécé + "0123"`), amit a próbához a példa-profilba
+írtak. A brief a `docs/rounds/**` alatt él, ami Router-CI trigger-útvonal,
+tehát a próba dokumentálása egy olyan kapun ment át, amit maga a próba
+tárgya (a titok-szkennelés) őriz.
+
+**Javítás.** A szkenner SAJÁT inline markere a sor végén
+(`strumsight:allow-secret`), NEM a fájl-szintű `allow-secret-file` — az az
+egész briefet mentesítette volna a titok-szkennelés alól. Reprodukálva:
+`python3 -m pytest tools/tests/test_secret_gate_router_paths.py -q` →
+`4 passed`.
+
+**Általánosítás.** Ha egy kör valódi-sértés próbája token-, kulcs- vagy
+jelszó-ALAKÚ literált használ, a próba jegyzőkönyvébe a markert már a
+kiíráskor oda kell tenni — különben a kör a SAJÁT bizonyítékán bukik el, egy
+teljesen zöld terméktes fa mellett. A hibaosztály nem a kódban van, hanem a
+bizonyítás csatornájában.
+
+**Őrteszt:** `tools/tests/test_secret_gate_router_paths.py::RouterPathSecretScanTest::test_router_triggered_paths_have_no_unmarked_provider_token`
+
+## L616 — A scope-auditot az implementer INDULÁSI HEAD-jéről kell futtatni, nem `origin/main`-ről (E16-R04, 2026-09-04)
+
+**Mérés.** Ugyanaz az audit, két bázissal, ugyanazon a fán:
+
+```
+$ python3 tools/scope-audit.py --repo … --brief … --base 17df4ed7   # origin/main
+Legacy scope audit FAILED (8 changed path(s))
+- path outside allowed scope: docs/adr/0503-….md
+
+$ python3 tools/scope-audit.py --repo … --brief … --base 740ce22c   # a pre-flight commit
+Legacy scope audit OK (7 changed path(s), 0 generated/ignored)
+```
+
+**Gyökérok.** Az ADR-t az ADR 0055 protokoll szerint az ORCHESZTRÁTOR írja a
+pre-flightban, és a brief `allowed_paths`-a szándékosan NEM tartalmazza a
+`docs/adr/**`-ot (a brief §3 ezt ki is mondja: „az ADR-t a Claude írta meg a
+pre-flightban"). Aki `origin/main`-ről auditál, a SAJÁT pre-flight commitját
+olvassa rá az implementerre, és egy nem létező H3-at mér.
+
+**Javítás.** Az audit bázisa az implementer indulási HEAD-je. A wrapper
+gépi auditja ezt eleve helyesen teszi (`scope_audit_base=740ce22c…`,
+`scope_audit=ok`) — a kézi újrafuttatásnál kell figyelni rá.
+
+**Őrteszt:** nincs — a hiba a kézi audit-hívás paraméterezésében van, nem a
+fában; a wrapper saját `scope_audit_base` mezője a gépi védelem.
