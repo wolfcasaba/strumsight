@@ -376,9 +376,10 @@ tools/round-gate.sh test/app/config/feature_flags_test.dart test/app/feature_fla
 
 Eredmény: **MINDEN GATE ZÖLD** (format, analyze, a hét megnevezett
 teszt-útvonal — a `feature_flags_test.dart` a §10.4 visszaállítás után
-zöld —, architecture, secrets, l10n). A három, a körön kívül élő őr
-(`ui_inventory_test.dart`, `ga_scope_test.dart`,
-`analysis_rollout_flags_test.dart`, `app_config_test.dart`) módosítás
+zöld —, architecture, secrets, l10n). A négy, a körön kívül élő őr
+(`ui_inventory_test.dart` — korábban is a `gate_tests` része —, valamint a
+§0.0.1 R5-ben hozzáadott `ga_scope_test.dart`,
+`analysis_rollout_flags_test.dart` és `app_config_test.dart`) módosítás
 NÉLKÜL maradt zöld.
 
 ### 10.7 Módosított/létrehozott fájlok
@@ -391,5 +392,107 @@ NÉLKÜL maradt zöld.
 - `test/app/config/feature_flags_test.dart` — VÁLTOZATLAN (a Recognition/
   Community csoportjai már lefedik a mindhárom-környezet cellákat, nem volt
   szükség kiegészítésre).
+
+### 10.8 Javító kör — a review 1 MAJOR + 3 MINOR leletére
+
+A teljes review: [`docs/reviews/e16-r03-review.md`](../reviews/e16-r03-review.md).
+
+#### 10.8.1 MAJOR-1 — gépi mérce a döntési tábla marker-blokkjára
+
+`test/app/feature_flags_test.dart`-ba három ÚJ helper és három ÚJ teszt
+került (a `File`-ként beolvasott `docs/release/capability-rollout.md`
+`<!-- capability-rollout-decisions:begin/end -->` blokkját parse-olva,
+fail-closed: hiányzó/üres/rossz-fejlécű blokk vagy hibás oszlopszámú sor
+azonnal `fail()`-t hív, nem csendesen 0 sort ad vissza):
+
+- **A1 — fedettség:** `_forEnvironmentFieldNames()` a
+  `lib/app/config/feature_flags.dart` `return FeatureFlags(` törzséből
+  olvassa ki a 40 mezőnevet (NEM hardkódolva), és a tábla `flags` oszlopában
+  ellenőrzi, hogy mindegyik pontosan egyszer szerepel (hiányzó, duplikált,
+  vagy a kódban nem létező flag → piros).
+- **A1 — zárt besorolás-készlet:** minden sor `classification` cellája a
+  `BE`/`PREVIEW`/`KI`/`N/A` készletből való (a `**` jelölés megengedett).
+- **A6 — feloldó kör:** minden nem-`BE`, nem-`N/A` sor `resolving` cellája
+  vagy `EXX-RYY` mintát, vagy egy ténylegesen létező (`File.existsSync()`),
+  repó-relatív, backtickben írt útvonalat tartalmaz.
+
+A parse escape-eli a cellákon belüli `\|`-t (a táblában valódi cella-tartalom
+része, pl. az AI Tutor (local) sor idézete), különben a hasításuk hamis
+oszlopszámot adna.
+
+**A táblán talált valódi hiányosság (nem a tesztben, a dokumentumban):** a
+Planner Assist sor `resolving` cellája „nevesítetlen jövőbeli rollout-kör
+(…)" szöveget tartalmazott — sem `EXX-RYY`, sem fán feloldható útvonal. Ez
+pontosan az a hibaosztály, amit az A6 mércének el kell kapnia, ezért a
+`docs/release/capability-rollout.md` cellája bővült egy már az evidence
+oszlopban is hivatkozott, ténylegesen létező úttal:
+`` `docs/rounds/e07-r30-evaluation-and-epic-closure.md` §5.1 `` — nem új
+tény, csak a már idézett forrás megismétlése a resolving oszlopban.
+
+**Mutációs bizonyíték (mért kimenet, `flutter test test/app/feature_flags_test.dart --name "..."`, majd visszaállítás):**
+
+(a) A `Recognition recovery` sor `resolving` celláját ideiglenesen
+`` „`E14-R02` (baseline/evidence index, `PREPARED`, nincs lefuttatva) + egy
+jövőbeli, nevesítetlen aktivációs kör" `` helyett `később`-re cseréltem →
+
+```
+00:00 +0 -1: E16-R03 capability rollout — zero flip (ADR 0492) A6 — every non-BE row names a resolving round or a real path [E]
+  Expected: empty
+    Actual: ['Recognition recovery (3 flag): "később"']
+```
+
+— az A6 cella **PIROS**, pontosan a mutált sort nevesítve.
+
+(b) A `Planner Assist` sort teljes egészében töröltem a táblából →
+
+```
+00:00 +0 -1: E16-R03 capability rollout — zero flip (ADR 0492) A1 — every forEnvironment field appears exactly once in the decision table [E]
+  Expected: empty
+    Actual: ['plannerAssistEnabled']
+```
+
+— az A1 fedettség-cella **PIROS**, a hiányzó mezőt nevesítve.
+
+Mindkét mutációt visszaállítottam (`diff` a `docs/release/capability-rollout.md`
+eredeti — a Planner Assist-javítást is tartalmazó — változatával üres), és a
+teljes `test/app/feature_flags_test.dart` újra **ZÖLD** (26/26 teszt).
+
+#### 10.8.2 MINOR-1 — komment igazítva
+
+`test/app/feature_flags_test.dart`, az `E16-R03 capability rollout — zero
+flip` csoport első cellájának kommentje már azt írja le, amit a cella
+ténylegesen mér (flag-boolean regresszió a zero-flip eredményre), és a
+tábla-struktúra mérését (A1/A6) az ÚJ, külön cellákra utalja.
+
+#### 10.8.3 MINOR-2 — szóhiba javítva
+
+`docs/release/capability-rollout.md`: „geometrikusan" → „gépileg".
+
+#### 10.8.4 MINOR-3 — számhiba javítva
+
+§10.6: „három" → „négy", a felsorolás mellé odaírva, melyik őr volt már
+korábban is a `gate_tests` része (`ui_inventory_test.dart`), és melyik három
+került be a §0.0.1 R5-ben.
+
+#### 10.8.5 Záró gate — tiszta futás
+
+```
+tools/round-gate.sh test/app/config/feature_flags_test.dart test/app/feature_flags_test.dart test/e2e/first_practice_offline_test.dart test/ui/ui_inventory_test.dart test/tooling/ga_scope_test.dart test/app/analysis_rollout_flags_test.dart test/app/app_config_test.dart
+```
+
+Eredmény: **MINDEN GATE ZÖLD** (format, analyze, mind a 7 megnevezett
+teszt-útvonal — `feature_flags_test.dart` 26/26 —, architecture, secrets,
+l10n). `lib/app/config/feature_flags.dart` a javító kör alatt is
+VÁLTOZATLAN maradt (`git diff` a fájlra üres).
+
+#### 10.8.6 Módosított fájlok (javító kör)
+
+- `test/app/feature_flags_test.dart` — 3 új parser-helper + 3 új teszt
+  (A1 fedettség, A1 zárt besorolás, A6 feloldó kör) + 1 igazított komment.
+- `docs/release/capability-rollout.md` — „geometrikusan" → „gépileg";
+  a Planner Assist `resolving` cellája kiegészítve egy már idézett,
+  ténylegesen létező úttal.
+- `docs/rounds/e16-r03-capability-rollout-decisions.md` — §10.6 számhiba
+  javítva + ez a §12 szakasz.
 
 ## 11. Review — a Claude tölti ki

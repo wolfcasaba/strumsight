@@ -66,6 +66,132 @@ void _expectAiTutorFlagsOff(Object flags) {
   expect(_aiTutorCloudEnabled(flags), isFalse);
 }
 
+const _rolloutMarkerBegin = '<!-- capability-rollout-decisions:begin -->';
+const _rolloutMarkerEnd = '<!-- capability-rollout-decisions:end -->';
+const _rolloutExpectedHeader =
+    '| capability_group | flags | classification | a | b | c | d | evidence | resolving |';
+const _rolloutClassificationSet = <String>{'BE', 'PREVIEW', 'KI', 'N/A'};
+
+class _RolloutRow {
+  _RolloutRow({
+    required this.group,
+    required this.flags,
+    required this.classification,
+    required this.resolving,
+  });
+
+  final String group;
+  final List<String> flags;
+  final String classification;
+  final String resolving;
+}
+
+/// Reads and parses the `capability-rollout-decisions` marker block in
+/// `docs/release/capability-rollout.md` as data. Fail-closed: a missing,
+/// empty, or header-mismatched block fails the calling test loudly instead
+/// of silently yielding zero rows (the L566 silent-pass pattern) — a `for`
+/// loop over an empty row list would otherwise vacuously pass A1/A6.
+List<_RolloutRow> _parseCapabilityRolloutTable() {
+  final text = File('docs/release/capability-rollout.md').readAsStringSync();
+  final beginIndex = text.indexOf(_rolloutMarkerBegin);
+  final endIndex = text.indexOf(_rolloutMarkerEnd);
+  if (beginIndex == -1 || endIndex == -1 || endIndex <= beginIndex) {
+    fail(
+      'docs/release/capability-rollout.md must contain a well-formed '
+      '$_rolloutMarkerBegin ... $_rolloutMarkerEnd block.',
+    );
+  }
+  final lines = text
+      .substring(beginIndex + _rolloutMarkerBegin.length, endIndex)
+      .split('\n')
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+  if (lines.length < 3) {
+    fail(
+      'capability-rollout-decisions marker block has no '
+      'header/separator/data rows.',
+    );
+  }
+  if (lines.first != _rolloutExpectedHeader) {
+    fail(
+      'capability-rollout-decisions header changed unexpectedly:\n'
+      '${lines.first}',
+    );
+  }
+  if (!RegExp(r'^\|(?:-+\|)+$').hasMatch(lines[1])) {
+    fail(
+      'capability-rollout-decisions table is missing its separator row:\n'
+      '${lines[1]}',
+    );
+  }
+
+  const placeholder = '';
+  final rows = <_RolloutRow>[];
+  for (final line in lines.skip(2)) {
+    final cells = line
+        .replaceAll(r'\|', placeholder)
+        .split('|')
+        .map((cell) => cell.trim().replaceAll(placeholder, '|'))
+        .toList();
+    if (cells.length != 11) {
+      fail(
+        'capability-rollout-decisions row has an unexpected column count '
+        '(${cells.length}): $line',
+      );
+    }
+    final flags = RegExp(
+      r'`(\w+)`',
+    ).allMatches(cells[2]).map((m) => m.group(1)!).toList();
+    rows.add(
+      _RolloutRow(
+        group: cells[1],
+        flags: flags,
+        classification: cells[3],
+        resolving: cells[9],
+      ),
+    );
+  }
+  if (rows.isEmpty) {
+    fail('capability-rollout-decisions table has no data rows.');
+  }
+  return rows;
+}
+
+/// Reads the field names `FeatureFlags.forEnvironment` actually assigns,
+/// from its `return FeatureFlags(` call, so the coverage check never drifts
+/// from the real flag set — a hardcoded list here could silently miss a
+/// newly added flag.
+List<String> _forEnvironmentFieldNames() {
+  final source = File('lib/app/config/feature_flags.dart').readAsStringSync();
+  final returnIndex = source.indexOf('return FeatureFlags(');
+  if (returnIndex == -1) {
+    fail(
+      'lib/app/config/feature_flags.dart: expected a `return '
+      'FeatureFlags(` call inside forEnvironment.',
+    );
+  }
+  final closeIndex = source.indexOf('\n    );', returnIndex);
+  if (closeIndex == -1) {
+    fail('Could not find the closing `);` of the forEnvironment return call.');
+  }
+  final names = RegExp(r'^\s*(\w+):', multiLine: true)
+      .allMatches(source.substring(returnIndex, closeIndex))
+      .map((m) => m.group(1)!)
+      .toList();
+  if (names.isEmpty) {
+    fail('No named arguments found in the forEnvironment return call.');
+  }
+  return names;
+}
+
+String _rolloutClassificationToken(String cell) {
+  final match = RegExp(
+    r'^\*{0,2}(BE|PREVIEW|KI|N/A)\b',
+  ).firstMatch(cell.trim());
+  return match?.group(1) ?? cell.trim();
+}
+
 void main() {
   group('Song Trainer V2 rollout boundary', () {
     test('is enabled in development', () {
@@ -369,11 +495,13 @@ void main() {
   });
 
   group('E16-R03 capability rollout — zero flip (ADR 0492)', () {
-    // A1/A6 — the round's own decision table names, per capability, exactly
-    // one classification and (for every non-BE row) a resolving round or
-    // blocker. This is the ONLY nonProd default this round produced: none —
-    // every capability that was `false` before the round stays `false`
-    // (a documented, accepted "zero flip" outcome, brief §0.0.1 R3).
+    // Pins the round's ZERO FLIP outcome as a flag-boolean regression guard:
+    // every capability this round evaluated that was `false` before the
+    // round stays `false` in every environment (a documented, accepted
+    // "zero flip" outcome, brief §0.0.1 R3). The decision table's own
+    // structure (A1 coverage/classification, A6 resolving round) is
+    // measured separately below, against `docs/release/capability-
+    // rollout.md` as data, not against these flag booleans.
     test('the four previously-false capability groups this round evaluated '
         'stay off in every environment: AI Tutor, Planner Assist, Vision, '
         'Audio Analysis V2, Recognition recovery', () {
@@ -557,6 +685,109 @@ void main() {
             'a second occurrence here would be a second source of truth',
       );
       expect(text, contains('ZERO FLIP'));
+    });
+
+    // A1 — coverage: every field FeatureFlags.forEnvironment assigns (read
+    // from the source, not hardcoded, so a future new flag can't silently
+    // drop off the table) must appear exactly once in the decision table's
+    // `flags` column — no capability may be missing, duplicated, or a
+    // stranger the code doesn't actually have.
+    test('A1 — every forEnvironment field appears exactly once in the '
+        'decision table', () {
+      final expectedFields = _forEnvironmentFieldNames();
+      final rows = _parseCapabilityRolloutTable();
+      final tableFlags = rows.expand((row) => row.flags).toList();
+
+      final counts = <String, int>{};
+      for (final flag in tableFlags) {
+        counts[flag] = (counts[flag] ?? 0) + 1;
+      }
+
+      final missing = expectedFields
+          .where((field) => counts[field] == null)
+          .toList();
+      final duplicated = counts.entries
+          .where((entry) => entry.value > 1)
+          .map((entry) => entry.key)
+          .toList();
+      final unknown = counts.keys
+          .where((flag) => !expectedFields.contains(flag))
+          .toList();
+
+      expect(
+        missing,
+        isEmpty,
+        reason:
+            'forEnvironment field(s) missing from the decision table: '
+            '$missing',
+      );
+      expect(
+        duplicated,
+        isEmpty,
+        reason:
+            'decision table lists these flag(s) more than once: '
+            '$duplicated',
+      );
+      expect(
+        unknown,
+        isEmpty,
+        reason:
+            'decision table names flag(s) forEnvironment does not '
+            'assign: $unknown',
+      );
+      expect(tableFlags.length, expectedFields.length);
+    });
+
+    // A1 — closed classification set: every row's classification must be
+    // BE, PREVIEW, KI, or N/A (a leading `**` marker is allowed) — an
+    // unrecognized value fails instead of silently passing as "some string".
+    test('A1 — every row classification is BE, PREVIEW, KI, or N/A', () {
+      final rows = _parseCapabilityRolloutTable();
+      final invalid = <String>[];
+      for (final row in rows) {
+        final token = _rolloutClassificationToken(row.classification);
+        if (!_rolloutClassificationSet.contains(token)) {
+          invalid.add('${row.group}: "${row.classification}"');
+        }
+      }
+      expect(
+        invalid,
+        isEmpty,
+        reason: 'row(s) with an unrecognized classification: $invalid',
+      );
+    });
+
+    // A6 — every non-BE, non-N/A row must name either a resolving round
+    // (`EXX-RYY`) or a repo-relative path that actually resolves on the
+    // tree; a bare "később"/"later"/"TBD"/empty cell fails this check.
+    test('A6 — every non-BE row names a resolving round or a real path', () {
+      final roundIdPattern = RegExp(r'E\d+-R\d+');
+      final pathPattern = RegExp(r'`([\w.\-]+(?:/[\w.\-]+)+)`');
+      final rows = _parseCapabilityRolloutTable();
+      final unresolved = <String>[];
+
+      for (final row in rows) {
+        final token = _rolloutClassificationToken(row.classification);
+        if (token == 'BE' || token == 'N/A') {
+          continue;
+        }
+        final hasRoundId = roundIdPattern.hasMatch(row.resolving);
+        final hasResolvablePath = pathPattern
+            .allMatches(row.resolving)
+            .map((m) => m.group(1)!)
+            .any((path) => File(path).existsSync());
+        if (!hasRoundId && !hasResolvablePath) {
+          unresolved.add('${row.group}: "${row.resolving}"');
+        }
+      }
+
+      expect(
+        unresolved,
+        isEmpty,
+        reason:
+            'row(s) without a resolving round-id or an existing '
+            'repo-relative path: $unresolved',
+      );
     });
   });
 }
