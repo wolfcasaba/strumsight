@@ -23,14 +23,35 @@ import 'package:strumsight/core/music/strum.dart';
 /// The three kinds of timed events a recognition case can carry.
 enum RecognitionEventKind { onset, strum, chord }
 
-/// One ground-truth (expected) event.
+/// One ground-truth (expected) event. Enforces its own `kind` invariant at
+/// construction — `strum` requires [direction], `chord` requires
+/// [chordLabel] — the same guarantee [RecognitionManifestParseException]
+/// gives a parsed event, so [computeRecognitionMetrics] (a public entry
+/// point that dereferences these fields with `!`) never sees a
+/// hand-built event that violates it and degrades to a raw [TypeError]
+/// (precedent: `AnnotationEvent` in `recognition_annotation.dart`, E14-R07).
 final class RecognitionExpectedEvent {
-  const RecognitionExpectedEvent({
+  RecognitionExpectedEvent({
     required this.timeMs,
     required this.kind,
     this.direction,
     this.chordLabel,
-  });
+  }) {
+    if (kind == RecognitionEventKind.strum && direction == null) {
+      throw ArgumentError.value(
+        direction,
+        'direction',
+        'is required when kind is RecognitionEventKind.strum',
+      );
+    }
+    if (kind == RecognitionEventKind.chord && chordLabel == null) {
+      throw ArgumentError.value(
+        chordLabel,
+        'chordLabel',
+        'is required when kind is RecognitionEventKind.chord',
+      );
+    }
+  }
 
   final int timeMs;
   final RecognitionEventKind kind;
@@ -46,16 +67,32 @@ final class RecognitionExpectedEvent {
 /// internally detected the event but chose not to surface it to the user
 /// (abstained) — an abstained detection is never treated as a false
 /// positive by any metric, but it still counts toward `coverage`'s
-/// denominator.
+/// denominator. Enforces the same `kind` invariant as
+/// [RecognitionExpectedEvent], for the same reason.
 final class RecognitionDetectedEvent {
-  const RecognitionDetectedEvent({
+  RecognitionDetectedEvent({
     required this.timeMs,
     required this.kind,
     required this.accepted,
     required this.confidence,
     this.direction,
     this.chordLabel,
-  });
+  }) {
+    if (kind == RecognitionEventKind.strum && direction == null) {
+      throw ArgumentError.value(
+        direction,
+        'direction',
+        'is required when kind is RecognitionEventKind.strum',
+      );
+    }
+    if (kind == RecognitionEventKind.chord && chordLabel == null) {
+      throw ArgumentError.value(
+        chordLabel,
+        'chordLabel',
+        'is required when kind is RecognitionEventKind.chord',
+      );
+    }
+  }
 
   final int timeMs;
   final RecognitionEventKind kind;
@@ -501,15 +538,26 @@ RecognitionMetrics computeRecognitionMetrics(List<RecognitionCase> cases) {
   final directionDefinition = RecognitionMetricDefinition(
     higherIsBetter: true,
     description:
-        'Macro-averaged per-direction (down/up) F1 among time-matched '
-        'strum pairs: a strum missed or falsely detected in time is '
-        'already penalised by anyStrumF1 and does not enter this metric.',
-    numeratorDescription: 'per-class true-positive direction matches',
+        'Macro-averaged per-direction (down/up) F1: a class\'s true '
+        'positives come only from time-matched strum pairs whose expected '
+        'and detected direction both equal that class, but its false '
+        'positives and false negatives are counted over the FULL accepted-'
+        'detected and expected populations for that class — a strum '
+        'missed or falsely detected in time (never time-matched at all) '
+        'still enters this metric, as a false negative/positive for its '
+        'own class.',
+    numeratorDescription:
+        'per-class true-positive direction matches, from time-matched '
+        'strum pairs',
     denominatorDescription:
-        'per-class: precision over detected-as-class pairs, recall over '
-        'expected-as-class pairs, among the time-matched set',
+        'per-class: FP = (all accepted detections labelled that class) − '
+        'TP; FN = (all expected events labelled that class) − TP — not '
+        'restricted to the time-matched set',
     toleranceMs: onsetToleranceMsPrimary,
-    matchingRule: 'same time-matched strum pairs as anyStrumF1',
+    matchingRule:
+        'true positives from the same time-matched strum pairs as '
+        'anyStrumF1; false positives/negatives from the full per-class '
+        'populations',
   );
   final directionF1 = _labelMacroF1(
     expectedLabels: [for (final e in expectedStrum) e.direction!.name],
@@ -564,14 +612,27 @@ RecognitionMetrics computeRecognitionMetrics(List<RecognitionCase> cases) {
   final chordMacroDefinition = RecognitionMetricDefinition(
     higherIsBetter: true,
     description:
-        'Macro-averaged per-chord-label F1 among time-matched chord pairs; '
-        'a chord label absent from the expected set contributes nothing.',
-    numeratorDescription: 'per-label true-positive label matches',
+        'Macro-averaged per-chord-label F1: a label\'s true positives come '
+        'only from time-matched chord pairs whose expected and detected '
+        'label both equal that label, but its false positives and false '
+        'negatives are counted over the FULL accepted-detected and '
+        'expected populations for that label — a chord missed or falsely '
+        'detected in time (never time-matched at all) still enters this '
+        'metric, as a false negative/positive for its own label. A chord '
+        'label absent from the expected set contributes nothing to the '
+        'macro average.',
+    numeratorDescription:
+        'per-label true-positive label matches, from time-matched chord '
+        'pairs',
     denominatorDescription:
-        'per-label: precision over detected-as-label pairs, recall over '
-        'expected-as-label pairs, among the time-matched set',
+        'per-label: FP = (all accepted detections labelled that label) − '
+        'TP; FN = (all expected events labelled that label) − TP — not '
+        'restricted to the time-matched set',
     toleranceMs: chordToleranceMs,
-    matchingRule: 'same time-matched chord pairs as chordWeightedAccuracy',
+    matchingRule:
+        'true positives from the same time-matched chord pairs as '
+        'chordWeightedAccuracy; false positives/negatives from the full '
+        'per-label populations',
   );
   final chordMacroF1 = _labelMacroF1(
     expectedLabels: [for (final e in expectedChord) e.chordLabel!],

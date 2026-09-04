@@ -44,6 +44,24 @@
         { "rawScore": 0.6, "correct": true }
       ],
       "detectionLatenciesMs": [20]
+    },
+    {
+      "caseId": "case-3",
+      "player": "player-a",
+      "device": "phone-3",
+      "guitar": "guitar-3",
+      "room": "room-2",
+      "durationMs": 15000,
+      "expectedEvents": [
+        { "timeMs": 800, "kind": "onset" }
+      ],
+      "detectedEvents": [
+        { "timeMs": 820, "kind": "onset", "accepted": true, "confidence": 0.7 }
+      ],
+      "confidenceObservations": [
+        { "rawScore": 0.7, "correct": true }
+      ],
+      "detectionLatenciesMs": [20]
     }
   ]
 }

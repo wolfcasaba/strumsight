@@ -483,4 +483,76 @@ determinisztikus JSON-t adott, hibák nélkül.
   környéki kódkommentek); a `perLabel` bontás maga a nyers `null`-t őrzi meg
   (D6).
 
+### 10.8 Javító kör (`docs/reviews/e14-r08-review.md`, 2 MAJOR + MINOR-1)
+
+**MAJOR-1 — a szállított definíció-szöveg ellentmond a számításnak.**
+`recognition_metrics.dart:501-524` (`directionDefinition`) és `:564-586`
+(`chordMacroDefinition`) — a `description`/`denominatorDescription` most
+kimondja, hogy a TP a time-matched párokból jön, az FP/FN viszont a TELJES
+elfogadott/elvárt populációból (`FP = totalAcceptedDetected − TP`,
+`FN = totalExpected − TP`), tehát egy sosem párosított elvárt esemény
+belép a saját osztálya FN-jébe. A `"does not enter this metric"` állítás
+törölve mindkét definícióból. A SZÁM nem változott, csak a szöveg.
+**Új őr:** `recognition_metrics_test.dart` „directionF1/chordMacroF1
+definition text matches the computed behaviour" csoport, 2 cella — a
+PROBE-1/PROBE-3 review-alakot (nulla time-matched pár → `down`/`C` FN=1,
+makró=0.0) EGYÜTT méri a szöveggel: `isNot(contains('does not enter this
+metric'))` és `contains('never time-matched at all')`. Ez a cella pirosra
+váltott volna a javítás előtti szöveg mellett (a `contains` assert bukott
+volna).
+
+**MAJOR-2 — a runner és a commitolt fixture méretlen volt.**
+`recognition_metrics_test.dart`-ba (engedélyezett fájl) három új teszt
+került, mindegyik a VALÓDI `RecognitionEvaluationRunner` úton:
+1. `runFromJsonString` a commitolt `ci_manifest.json`-on, kétszer futtatva,
+   bájtazonos `toDeterministicJson()` — ez az acceptance 6 valódi
+   futtatási úton (nem a kézzel épített report, mint korábban).
+2. Mind a négy `SplitStrategy` a fixture-ből **parszolt** eseteken —
+   acceptance 1 „a fixture-ön". A fixture egy harmadik esettel bővült
+   (`case-3`: `player-a` — osztozik `case-1`-gyel; `room-2` — osztozik
+   `case-2`-vel), hogy a `leaveOnePlayerOut`/`roomHoldout` foldjai NE
+   legyenek triviálisan 1-elemű foldok; a cella külön ellenőrzi, hogy a
+   `player-a` és a `room-2` fold eval-oldala pontosan a két érintett
+   esetet tartalmazza. A `_fixtureCase()`-en álló, kézzel levezetett
+   metrika-értékeket a bővítés nem érinti (külön fájl), a gate ezt
+   megerősítette.
+3. Három tipizált parszer-elutasítás: ismeretlen mezó (`unknownField`),
+   rossz `schemaVersion` (`invalidSchemaVersion`), és `strum` esemény
+   `direction` nélkül (`missingField`, a pontos `path`-tal).
+
+Ezek a cellák pirosra váltottak volna, ha a runner vagy a fixture valaha
+elromlik — korábban egyik sem futott gépi mércén.
+
+**MINOR-1 — a domén-típus most a saját konstruktorában őrzi a
+kind-invariánst.** `RecognitionExpectedEvent`/`RecognitionDetectedEvent`
+(`recognition_metrics.dart:27-92`) a `const` kulcsszót elvesztette (a
+konstruktor törzse most `ArgumentError.value`-t dob `strum` esemény
+`direction` nélkül, illetve `chord` esemény `chordLabel` nélkül — az
+`E14-R07` `AnnotationEvent`-precedensét követve). Az érintett hívási
+helyek (`_fixtureCase()`, `gapCase`, `l269Case` a
+`recognition_metrics_test.dart`-ban) a `const` kulcsszót elveszítették,
+a viselkedésük változatlan. **Új őr:** „enforce their own kind invariant"
+csoport, 3 cella — hiányzó `direction`/`chordLabel` mindkét eseménytípuson
+`ArgumentError`-t dob, `onset` esemény sosem követeli meg egyiket sem.
+
+**Friss gate-kimenet (`tools/round-gate.sh
+test/features/live/evaluation/recognition_split_test.dart
+test/features/live/evaluation/recognition_metrics_test.dart`), csonkítatlan:**
+
+```
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/live/evaluation/recognition_split_test.dart zöld
+    test test/features/live/evaluation/recognition_metrics_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.
+```
+
+`recognition_split_test.dart`: 10/10. `recognition_metrics_test.dart`:
+32/32 (a korábbi 22 + 2 MAJOR-1 cella + 5 MAJOR-2 cella [`acceptance 6` a
+valódi futtatási úton, `acceptance 1` a fixture-ön, 3 tipizált
+parszer-elutasítás] + 3 MINOR-1 cella).
+
 ## 11. Review — a Claude tölti ki

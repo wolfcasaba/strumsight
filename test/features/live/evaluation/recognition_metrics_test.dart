@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/live/data/evaluation/recognition_evaluation_runner.dart';
 import 'package:strumsight/features/live/domain/evaluation/recognition_metrics.dart';
+import 'package:strumsight/features/live/domain/evaluation/recognition_split.dart';
 
 /// One hand-derivable case exercising every metric family at once: two
 /// plain onsets, four strums (one direction-wrong, one entirely missed),
@@ -9,7 +13,7 @@ import 'package:strumsight/features/live/domain/evaluation/recognition_metrics.d
 /// derivation for every literal below is in
 /// `docs/rounds/e14-r08-grouped-evaluation-harness.md` §10, verified with
 /// `python3 -c`.
-RecognitionCase _fixtureCase() => const RecognitionCase(
+RecognitionCase _fixtureCase() => RecognitionCase(
   caseId: 'case-1',
   durationMs: 120000,
   expectedEvents: [
@@ -307,7 +311,7 @@ void main() {
       '0509 D5)', () {
     RecognitionCase gapCase(int detectedTimeMs) => RecognitionCase(
       caseId: 'boundary',
-      expectedEvents: const [
+      expectedEvents: [
         RecognitionExpectedEvent(timeMs: 0, kind: RecognitionEventKind.onset),
       ],
       detectedEvents: [
@@ -344,7 +348,7 @@ void main() {
     test('expected [50,90] vs detected [0,55] @ 50ms tolerance: 2 TP, not '
         '1 — a greedy nearest-pair matcher would take (50,55) first and '
         'strand both 0 and 90 outside tolerance of each other', () {
-      final l269Case = const RecognitionCase(
+      final l269Case = RecognitionCase(
         caseId: 'l269',
         expectedEvents: [
           RecognitionExpectedEvent(
@@ -421,6 +425,262 @@ void main() {
         overall: computeRecognitionMetrics(cases),
       );
       expect(first.toDeterministicJson(), second.toDeterministicJson());
+    });
+  });
+
+  group('directionF1/chordMacroF1 definition text matches the computed '
+      'behaviour (review MAJOR-1 fix)', () {
+    test('zero time-matched strum pairs still gives down FN=1 and macro '
+        'F1=0.0 — the definition text says so, not "does not enter this '
+        'metric"', () {
+      final noMatchCase = RecognitionCase(
+        caseId: 'no-match-strum',
+        expectedEvents: [
+          RecognitionExpectedEvent(
+            timeMs: 1000,
+            kind: RecognitionEventKind.strum,
+            direction: StrumDirection.down,
+          ),
+        ],
+      );
+      final m = computeRecognitionMetrics([noMatchCase]);
+      final down = m.directionF1.perLabel['down']!;
+      expect(down.truePositives, 0);
+      expect(down.falsePositives, 0);
+      expect(down.falseNegatives, 1);
+      expect(m.directionF1.value, 0.0);
+      expect(
+        m.directionF1.definition.description,
+        isNot(contains('does not enter this metric')),
+      );
+      expect(
+        m.directionF1.definition.description,
+        contains('never time-matched at all'),
+      );
+      expect(
+        m.directionF1.definition.denominatorDescription,
+        contains('not restricted to the time-matched set'),
+      );
+    });
+
+    test('zero time-matched chord pairs still gives label FN=1 and macro '
+        'F1=0.0 — same rule on the chord side', () {
+      final noMatchCase = RecognitionCase(
+        caseId: 'no-match-chord',
+        expectedEvents: [
+          RecognitionExpectedEvent(
+            timeMs: 1000,
+            kind: RecognitionEventKind.chord,
+            chordLabel: 'C',
+          ),
+        ],
+      );
+      final m = computeRecognitionMetrics([noMatchCase]);
+      final c = m.chordMacroF1.perLabel['C']!;
+      expect(c.truePositives, 0);
+      expect(c.falsePositives, 0);
+      expect(c.falseNegatives, 1);
+      expect(m.chordMacroF1.value, 0.0);
+      expect(
+        m.chordMacroF1.definition.description,
+        isNot(contains('does not enter this metric')),
+      );
+      expect(
+        m.chordMacroF1.definition.description,
+        contains('never time-matched at all'),
+      );
+    });
+  });
+
+  group('RecognitionEvaluationRunner on the committed CI fixture (review '
+      'MAJOR-2 fix)', () {
+    test('running the committed ci_manifest.json through '
+        'runFromJsonString twice produces byte-identical JSON (acceptance '
+        '6 on the real run path, not a hand-built report)', () async {
+      final source = await File(
+        'evaluation/recognition/fixtures/ci_manifest.json',
+      ).readAsString();
+      const runner = RecognitionEvaluationRunner();
+      final first = runner.runFromJsonString(source);
+      final second = runner.runFromJsonString(source);
+      expect(first.toDeterministicJson(), second.toDeterministicJson());
+      expect(first.caseCount, 3);
+    });
+
+    test('every split strategy folds the fixture-parsed cases into an '
+        'eval union that is exactly the fixture case set (acceptance 1 '
+        'on the fixture)', () async {
+      final source = await File(
+        'evaluation/recognition/fixtures/ci_manifest.json',
+      ).readAsString();
+      const runner = RecognitionEvaluationRunner();
+      final manifest = runner.parseManifestJsonString(source);
+      expect(manifest.cases.map((c) => c.caseId).toSet(), {
+        'case-1',
+        'case-2',
+        'case-3',
+      });
+
+      for (final strategy in SplitStrategy.values) {
+        final folds = const RecognitionSplitBuilder().buildFolds(
+          manifest.cases,
+          strategy,
+        );
+        final evalIdsAcrossFolds = <String>[
+          for (final fold in folds) ...fold.evalCaseIds,
+        ];
+        expect(
+          evalIdsAcrossFolds.toSet(),
+          manifest.cases.map((c) => c.caseId).toSet(),
+          reason:
+              '${strategy.name}: fold union must equal the fixture '
+              'case set',
+        );
+        expect(
+          evalIdsAcrossFolds.length,
+          manifest.cases.length,
+          reason: '${strategy.name}: each case held out exactly once',
+        );
+      }
+
+      // player-a (case-1, case-3) and room-2 (case-2, case-3) are the
+      // non-trivial folds the fixture's third case was added to exercise
+      // (review MAJOR-2, acceptance 1 "on the fixture" must not be trivial).
+      final playerFolds = const RecognitionSplitBuilder().buildFolds(
+        manifest.cases,
+        SplitStrategy.leaveOnePlayerOut,
+      );
+      expect(
+        playerFolds
+            .firstWhere((f) => f.heldOutGroupValue == 'player-a')
+            .evalCaseIds,
+        ['case-1', 'case-3'],
+      );
+      final roomFolds = const RecognitionSplitBuilder().buildFolds(
+        manifest.cases,
+        SplitStrategy.roomHoldout,
+      );
+      expect(
+        roomFolds
+            .firstWhere((f) => f.heldOutGroupValue == 'room-2')
+            .evalCaseIds,
+        ['case-2', 'case-3'],
+      );
+    });
+
+    test('an unknown top-level field is a typed unknownField rejection', () {
+      const runner = RecognitionEvaluationRunner();
+      expect(
+        () => runner.parseManifestJsonString(
+          '{"schemaVersion":"1.0","cases":[],"extra":true}',
+        ),
+        throwsA(
+          isA<RecognitionManifestParseException>().having(
+            (e) => e.kind,
+            'kind',
+            RecognitionManifestParseErrorKind.unknownField,
+          ),
+        ),
+      );
+    });
+
+    test('an unsupported schemaVersion is a typed invalidSchemaVersion '
+        'rejection', () {
+      const runner = RecognitionEvaluationRunner();
+      expect(
+        () => runner.parseManifestJsonString(
+          '{"schemaVersion":"2.0","cases":[]}',
+        ),
+        throwsA(
+          isA<RecognitionManifestParseException>()
+              .having(
+                (e) => e.kind,
+                'kind',
+                RecognitionManifestParseErrorKind.invalidSchemaVersion,
+              )
+              .having((e) => e.path, 'path', 'manifest.schemaVersion'),
+        ),
+      );
+    });
+
+    test('a strum expected event without a direction is a typed '
+        'missingField rejection', () {
+      const runner = RecognitionEvaluationRunner();
+      const source =
+          '{"schemaVersion":"1.0","cases":[{"caseId":"c1","durationMs":0,'
+          '"expectedEvents":[{"timeMs":0,"kind":"strum"}]}]}';
+      expect(
+        () => runner.parseManifestJsonString(source),
+        throwsA(
+          isA<RecognitionManifestParseException>()
+              .having(
+                (e) => e.kind,
+                'kind',
+                RecognitionManifestParseErrorKind.missingField,
+              )
+              .having(
+                (e) => e.path,
+                'path',
+                'manifest.cases[0].expectedEvents[0].direction',
+              ),
+        ),
+      );
+    });
+  });
+
+  group('RecognitionExpectedEvent/RecognitionDetectedEvent enforce their '
+      'own kind invariant (review MINOR-1 fix)', () {
+    test(
+      'a hand-built strum event without a direction throws '
+      'ArgumentError, not a raw TypeError from computeRecognitionMetrics',
+      () {
+        expect(
+          () => RecognitionExpectedEvent(
+            timeMs: 0,
+            kind: RecognitionEventKind.strum,
+          ),
+          throwsArgumentError,
+        );
+        expect(
+          () => RecognitionDetectedEvent(
+            timeMs: 0,
+            kind: RecognitionEventKind.strum,
+            accepted: true,
+            confidence: 1,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test('a hand-built chord event without a chordLabel throws '
+        'ArgumentError', () {
+      expect(
+        () => RecognitionExpectedEvent(
+          timeMs: 0,
+          kind: RecognitionEventKind.chord,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => RecognitionDetectedEvent(
+          timeMs: 0,
+          kind: RecognitionEventKind.chord,
+          accepted: true,
+          confidence: 1,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('an onset event never requires direction or chordLabel', () {
+      expect(
+        () => RecognitionExpectedEvent(
+          timeMs: 0,
+          kind: RecognitionEventKind.onset,
+        ),
+        returnsNormally,
+      );
     });
   });
 }
