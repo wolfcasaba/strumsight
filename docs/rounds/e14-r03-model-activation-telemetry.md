@@ -533,4 +533,94 @@ fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
   (R3); a `StrumCrnn.activate(path)` úton (batch/Analyze, teszt 1.
   acceptance-pont) a valódi fájlnév megy át.
 
+### fix1 — a review 4 MINOR-jának javítása (2026-09-04)
+
+A `docs/reviews/e14-r03-review.md` §5 (MINOR-1…4) és
+`docs/reviews/e14-r03-security.md` (S1, S2, S3) leletei ugyanazt a hibaosztályt
+mérték: a `strumModelId` szerződése nem volt igaz és nem volt kipinnelve, a
+kanári nem érte el az út-származtatást, és a `ModelActivation` invariánsai
+csak `assert`-tel éltek (eltűnnek release buildben).
+
+**MINOR-1 + MINOR-3 (`strumModelId` szerződés + elválasztó-függő vágás):**
+
+- `lib/features/live/model/recognition_runtime_info.dart:82-87` — ÚJ
+  `static const isolateLiveModelId = 'live-crnn';` névvel ellátott konstans; a
+  `strumModelId` doc-comment most a HÁROM legális alakot sorolja fel
+  (fájlnév / `isolateLiveModelId` / `'none'`), mindegyiket a saját tesztje
+  bizonyítja.
+- `lib/features/live/engine/dsp/live_pipeline.dart:44` (korábban :44 a
+  `'live-crnn'` sztring-literál) — most
+  `RecognitionRuntimeInfo.isolateLiveModelId`-re hivatkozik.
+- `lib/features/live/engine/ml/strum_crnn.dart:63` — a vágás
+  `path.split('/').last` helyett `path.split(RegExp(r'[\\/]')).last`, mindkét
+  elválasztóra működik.
+- Melyik cella fogja pirosra a régi kódot: `model_activation_test.dart`
+  ÚJ „basename split is separator-independent” cellája (6.1 mátrix: szintetikus
+  Windows-alakú sztring, `r'C:\Users\Kovacs Csaba\models\strum_crnn.bin'` →
+  `'strum_crnn.bin'`-t vár; a régi `split('/')` a teljes sztringet adta volna
+  vissza, mert nincs `/` benne).
+
+**MINOR-2 (a kanári nem éri el az út-származtatást, L260 / S2):**
+
+- `model_activation_test.dart` ÚJ „a successful activation strips the
+  temp-dir segment down to the bare filename” cellája — a valódi
+  `assets/ml/strum_crnn_live_3c.bin` asset bájtjait egy egyedi szegmensű
+  `strumsight_canary_<n>` temp-könyvtárba másolja, ONNAN aktivál (a
+  `PathNotFoundException`-ágat megkerülve, tehát a `path.split(...).last`
+  sor ténylegesen lefut), és méri, hogy sem a `strumModelId`, sem a
+  `toString()`, sem a `json.encode(toJson())` nem tartalmazza a temp-szegmenst
+  vagy a teljes utat — csak a csupasz fájlnevet.
+- Melyik cella fogja pirosra a régi kódot: ha `strumModelId: modelId` helyett
+  `strumModelId: path`-t adna vissza (a security review S1 mérési módszere),
+  ez az ÚJ cella pirosra váltana, a régi (nem létező fájlos) kanári nem —
+  mert az sosem futtatja le a vágást.
+
+**MINOR-4 (`ModelActivation` invariánsai release-ben eltűntek, S3):**
+
+- `lib/features/live/engine/ml/model_activation.dart` — mindkét `assert` valódi
+  `throw ArgumentError.value(...)`-ra cserélve (release buildben is fut, nem
+  csak `--enable-asserts` alatt). A `fallback` gyártófüggvény elvesztette a
+  külön `reason` paramétert: MOST kizárólag `info`-t fogad, és `info`
+  `fallbackReason`-je az EGYETLEN forrás — a "két forrás szétcsúszhat" hiba
+  (`fallback(assetMissing, parseFailedInfo)`) a típus szintjén lett
+  lehetetlenné téve, nem csak futásidőben ellenőrizve. Az `isActivated` getter
+  `model != null` helyett `model != null && info.fallbackReason == null`
+  konjunkcióra épül, hogy az `activated(model, fallbackInfo)` hazug pár se
+  jelentsen `true`-t.
+- Az ÖSSZES hívási hely frissítve (`strum_crnn.dart` 4 hely,
+  `live_pipeline.dart` 1 hely, `model_activation.dart` saját `disabled`
+  gyártófüggvénye) — a redundáns `reason` argumentum mindenhol eltűnt.
+- Melyik cella fogja pirosra a régi kódot: `model_activation_test.dart` ÚJ „6.
+  ModelActivation invariants” csoportja — két cella `throwsArgumentError`-t vár
+  `activated()`/`fallback()` hívásra ellentmondó info-val (a régi kód `assert`
+  alatt is dobott volna, DE `--no-enable-asserts` alatt csendben létrehozta
+  volna a hazug párt — ezt a különbséget a `throw` teszi mérhetővé bármely
+  build módban), plusz egy harmadik cella, amely az `isActivated`
+  konjunkció-viselkedését méri.
+
+**A gate teljes újrafutása (fix1 után):**
+
+```
+tools/round-gate.sh test/features/live/model_activation_test.dart test/features/live/recognition_runtime_info_test.dart test/features/live
+```
+
+```
+    → [1] format: ZÖLD
+    → [2] analyze: ZÖLD
+    → [3] test test/features/live/model_activation_test.dart: ZÖLD  (17/17, +5 az eredeti 12-höz képest)
+    → [4] test test/features/live/recognition_runtime_info_test.dart: ZÖLD  (9/9, változatlan)
+    → [5] test test/features/live: ZÖLD  (209 passed, 2 golden ~skip — 211 összesen, +5 az eredeti 206-hoz képest)
+    → [6] architecture: ZÖLD
+    → [7] secrets: ZÖLD  (4305 fájl, 0 lelet)
+    → [8] l10n: ZÖLD  (en→hu, 2304 üzenet)
+
+MINDEN GATE ZÖLD.
+```
+
+A fallback VISELKEDÉSE (ADR 0355 §5.1) nem változott: a `ModelActivation`
+konstruktorok szigorítása kizárólag a KONZISZTENS párok kényszerítését
+érinti, egyetlen production hívási hely sem adott át (és ma sem ad át)
+ellentmondó `reason`/`info` párt — a gate `test/features/live` teljes zöld
+futása ezt megerősíti.
+
 ## 11. Review — a Claude tölti ki

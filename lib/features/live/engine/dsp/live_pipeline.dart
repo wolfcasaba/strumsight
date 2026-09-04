@@ -24,15 +24,15 @@ import 'viterbi_chord_decoder.dart';
 /// (ADR 0355): the caller's BEHAVIOUR is unchanged — a null `model` on the
 /// returned [ModelActivation] still means "use the heuristic" — this only
 /// makes the outcome observable via its `info`. `modelId` stays the neutral
-/// 'live-crnn' / 'none' placeholders: the isolate boundary doesn't carry the
-/// real asset filename yet (E14-R04 wires it, ADR 0355 R3).
+/// [RecognitionRuntimeInfo.isolateLiveModelId] / `'none'` placeholders: the
+/// isolate boundary doesn't carry the real asset filename yet (E14-R04 wires
+/// it, ADR 0355 R3).
 ModelActivation<StrumDirectionClassifier> _activateLiveCrnn(
   Uint8List? weights,
   int sampleRate,
 ) {
   if (weights == null) {
     return ModelActivation.fallback(
-      FallbackReason.assetMissing,
       RecognitionRuntimeInfo.fallback(
         FallbackReason.assetMissing,
         sampleRate: sampleRate,
@@ -41,15 +41,12 @@ ModelActivation<StrumDirectionClassifier> _activateLiveCrnn(
   }
   final netActivation = StrumCrnn.activateBytes(
     weights,
-    modelId: 'live-crnn',
+    modelId: RecognitionRuntimeInfo.isolateLiveModelId,
     sampleRate: sampleRate,
   );
   final net = netActivation.model;
   if (net == null) {
-    return ModelActivation.fallback(
-      netActivation.info.fallbackReason!,
-      netActivation.info,
-    );
+    return ModelActivation.fallback(netActivation.info);
   }
   return ModelActivation.activated(
     LiveCrnnStrumClassifier(net, sampleRate: sampleRate),

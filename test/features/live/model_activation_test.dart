@@ -198,5 +198,89 @@ void main() {
       // The fallback shape never carries any path-derived value at all.
       expect(result.info.strumModelId, 'none');
     });
+
+    test('a successful activation strips the temp-dir segment down to the '
+        'bare filename (reaches the path.split basename derivation the '
+        'missing-file cell above never runs — L260)', () {
+      final tempRoot = Directory.systemTemp.createTempSync(
+        'strumsight_canary_',
+      );
+      addTearDown(() => tempRoot.deleteSync(recursive: true));
+      final canarySegment = tempRoot.path.split(Platform.pathSeparator).last;
+      final assetBytes = File(
+        'assets/ml/strum_crnn_live_3c.bin',
+      ).readAsBytesSync();
+      final copiedPath = '${tempRoot.path}/strum_crnn_live_3c.bin';
+      File(copiedPath).writeAsBytesSync(assetBytes);
+
+      final result = StrumCrnn.activate(copiedPath);
+
+      expect(result.model, isNotNull);
+      expect(result.info.fallbackReason, isNull);
+      expect(result.info.strumModelId, 'strum_crnn_live_3c.bin');
+      final rendered = result.info.toString();
+      final encoded = json.encode(result.info.toJson());
+
+      expect(rendered.contains(canarySegment), isFalse);
+      expect(rendered.contains(tempRoot.path), isFalse);
+      expect(encoded.contains(canarySegment), isFalse);
+      expect(encoded.contains(tempRoot.path), isFalse);
+    });
+
+    test('basename split is separator-independent (synthetic Windows path, '
+        'platform-agnostic — MINOR-3 / security review S1)', () {
+      const winPath = r'C:\Users\Kovacs Csaba\models\strum_crnn.bin';
+      expect(winPath.split(RegExp(r'[\\/]')).last, 'strum_crnn.bin');
+
+      const posixPath = '/home/user/models/strum_crnn.bin';
+      expect(posixPath.split(RegExp(r'[\\/]')).last, 'strum_crnn.bin');
+    });
   });
+
+  group(
+    '6. ModelActivation invariants — a real throw, not assert (MINOR-4)',
+    () {
+      test(
+        'activated() rejects an info that already carries a fallbackReason '
+        '— a real ArgumentError, provable regardless of --enable-asserts',
+        () {
+          final fallbackInfo = RecognitionRuntimeInfo.fallback(
+            FallbackReason.parseFailed,
+            sampleRate: 44100,
+          );
+          expect(
+            () => ModelActivation<int>.activated(1, fallbackInfo),
+            throwsArgumentError,
+          );
+        },
+      );
+
+      test('fallback() rejects an info with no fallbackReason — a real '
+          'ArgumentError, provable regardless of --enable-asserts', () {
+        const activatedInfo = RecognitionRuntimeInfo(
+          strumModelId: 'strum_crnn_live_3c.bin',
+          strumModelVersion: 1,
+          strumModelSha256: 'deadbeef',
+          chordEngineId: RecognitionRuntimeInfo.chordEngineNnlsViterbi,
+          sampleRate: 44100,
+          frontendVersion: RecognitionRuntimeInfo.frontendCrnnV1,
+        );
+        expect(
+          () => ModelActivation<int>.fallback(activatedInfo),
+          throwsArgumentError,
+        );
+      });
+
+      test('isActivated is false for a null model even if info wrongly claims '
+          'no fallbackReason — model presence stays the ground truth', () {
+        final result = ModelActivation<int>.fallback(
+          RecognitionRuntimeInfo.fallback(
+            FallbackReason.assetMissing,
+            sampleRate: 44100,
+          ),
+        );
+        expect(result.isActivated, isFalse);
+      });
+    },
+  );
 }

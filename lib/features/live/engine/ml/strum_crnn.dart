@@ -42,7 +42,6 @@ class StrumCrnn {
       bytes = File(path).readAsBytesSync();
     } on PathNotFoundException {
       return ModelActivation.fallback(
-        FallbackReason.assetMissing,
         RecognitionRuntimeInfo.fallback(
           FallbackReason.assetMissing,
           sampleRate: CrnnFrontend.modelSampleRate,
@@ -50,7 +49,6 @@ class StrumCrnn {
       );
     } catch (_) {
       return ModelActivation.fallback(
-        FallbackReason.assetUnreadable,
         RecognitionRuntimeInfo.fallback(
           FallbackReason.assetUnreadable,
           sampleRate: CrnnFrontend.modelSampleRate,
@@ -60,15 +58,12 @@ class StrumCrnn {
 
     final netActivation = activateBytes(
       bytes,
-      modelId: path.split('/').last,
+      modelId: path.split(RegExp(r'[\\/]')).last,
       sampleRate: CrnnFrontend.modelSampleRate,
     );
     final net = netActivation.model;
     if (net == null) {
-      return ModelActivation.fallback(
-        netActivation.info.fallbackReason!,
-        netActivation.info,
-      );
+      return ModelActivation.fallback(netActivation.info);
     }
     return ModelActivation.activated(StrumCrnn(net), netActivation.info);
   }
@@ -95,7 +90,6 @@ class StrumCrnn {
         : -1;
     if (!magicOk || version != 1) {
       return ModelActivation.fallback(
-        FallbackReason.parseFailed,
         RecognitionRuntimeInfo.fallback(
           FallbackReason.parseFailed,
           sampleRate: sampleRate,
@@ -108,7 +102,6 @@ class StrumCrnn {
       net = CrnnStrumNet.parse(ByteData.sublistView(bytes));
     } catch (_) {
       return ModelActivation.fallback(
-        FallbackReason.shapeMismatch,
         RecognitionRuntimeInfo.fallback(
           FallbackReason.shapeMismatch,
           sampleRate: sampleRate,

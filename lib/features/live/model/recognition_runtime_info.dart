@@ -79,8 +79,16 @@ class RecognitionRuntimeInfo {
   /// strum-direction model.
   static const frontendCrnnV1 = 'crnn-frontend-v1';
 
-  /// The activated model's asset FILENAME only — no directory, never a full
-  /// path — or `'none'` while [fallbackReason] is set.
+  /// The neutral id the live (isolate-crossed) path reports while its CRNN
+  /// is activated: the isolate boundary carries only weight bytes, never the
+  /// real asset filename (E14-R04 wires that through, ADR 0355 R3).
+  static const isolateLiveModelId = 'live-crnn';
+
+  /// Which model activated — one of three shapes, each proven by a test
+  /// (`model_activation_test.dart`): the asset FILENAME only (no directory,
+  /// never a full path) on the file-backed [strumModelId] path
+  /// (`StrumCrnn.activate`); the neutral [isolateLiveModelId] constant on the
+  /// isolate-crossed live path; or `'none'` while [fallbackReason] is set.
   final String strumModelId;
 
   /// The weights' binary format version (the `SSML` header's `u32
