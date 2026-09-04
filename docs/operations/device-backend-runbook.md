@@ -151,3 +151,53 @@ that have **no** backend route yet — a real device test against these will
   that was never built (`backend/app/community/routers/challenges.py` only
   has invite-lifecycle + result-submission routes). Outside this round's
   `allowed_paths`; tracked for a future round.
+
+## 8. Build a device profile file instead of a long `--dart-define` command line (E16-R04)
+
+Steps 1–7 above use inline `--dart-define=...` flags. `device_build.example.json`
+(repo root) is a placeholder-only template for the same values, meant to be
+copied to a **gitignored** `device_build.json` and filled in with your own
+LAN IP and flag choices — never commit the real file (ADR 0503 D5; the
+`.gitignore` rule for `device_build.json` / `device_build.*.json` is what
+enforces this, and `test/tooling/device_profile_test.dart` measures both the
+placeholder template and the gitignore coverage from the live tree):
+
+```bash
+cp device_build.example.json device_build.json
+# edit device_build.json: set STRUMSIGHT_API_URL to your laptop's LAN IP
+# (§2 above), and STRUMSIGHT_ENV/STRUMSIGHT_ACCOUNT/community flags as needed.
+
+flutter run --dart-define-from-file=device_build.json
+```
+
+`flutter build apk --dart-define-from-file=device_build.json` works the same
+way for a build artifact instead of a `flutter run` session. `lab_build.json`
+(a separate, already-tracked file used by the Lab APK pipeline) is a
+precedent for the `--dart-define-from-file` shape — its own contents are out
+of this round's scope, and it is not a template to copy verbatim (it carries
+a real diagnostics token, which is exactly the mistake `device_build.json`
+being gitignored prevents).
+
+## 9. Run the live bring-up smoke before trusting a build (E16-R04, ADR 0503)
+
+Once the backend from §1 is reachable and a build from §8 is pointed at it,
+`tool/release/live_backend_smoke.py` walks the SAME chain the app itself
+depends on — reachability → register → login → `/auth/me` → settings
+read/write → Community profile create/read/update → Community safety-list
+read — against the URL you give it, and stops at the first step that
+doesn't match what the client contract expects:
+
+```bash
+python3 tool/release/live_backend_smoke.py --base-url http://192.168.1.42:8000
+```
+
+Exit code `0` means every step in the chain matched; `1` means the chain
+diverged at a specific step (the printed line names the expected vs. the
+measured status); `2` means a usage error, or that
+`docs/contracts/client-backend-endpoints.json` carries an endpoint this tool
+does not yet classify (a tool-completeness problem to fix before trusting
+any result, not a deploy problem). This is a companion to, not a
+replacement for, `tool/release/production_smoke.py` — that tool measures a
+production/internal-cohort deploy; this one measures a dev/lab bring-up
+target over plain `http://`, and registers a fresh throwaway account on
+every run instead of logging into an existing one.
