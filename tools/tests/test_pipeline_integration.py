@@ -275,7 +275,14 @@ class PipelineIntegrationTest(unittest.TestCase):
                 # USER-DÖNTÉS 2026-09-02: a Chapter 16 (Kompozíció és rollout)
                 # sáv ugyanezzel a felállással fut — implementer `sonnet-impl`,
                 # orchestrátor Opus 5.
-                if round_id.startswith(("E12-", "E13-", "E15-", "E16-")):
+                # 2026-09-04: a Chapter 14 (felismerési pontosság) sáv
+                # visszakapcsolásakor ugyanez a felállás. Indok MÉRT és
+                # erősebb, mint a többi sávnál: az E14 munkája maga a MÉRÉS
+                # (küszöbök, baseline-ok, A/B-harness), ahol a MiniMax mért
+                # gyengéje — az invariáns-lazítás — pontosan a mércét rontaná
+                # el. A minimax elérhető marad (99% heti keret), a sáv rá
+                # visszaváltható, ha a Claude-keret szűkül.
+                if round_id.startswith(("E12-", "E13-", "E14-", "E15-", "E16-")):
                     allowed = allowed | {"sonnet-impl"}
                 self.assertIn(
                     engine,
