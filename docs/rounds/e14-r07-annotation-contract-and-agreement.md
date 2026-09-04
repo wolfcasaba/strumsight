@@ -285,4 +285,89 @@ A §10-ben dokumentáld: a párosítás határának `<=` → `<` cserével a 6. 
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`). **Ág:**
+`sonnet-impl/e14-r07-annotation-contract-and-agreement`.
+
+### 10.1 Mit épített a kör
+
+- `evaluation/recognition/annotation_schema.json` — draft-07 séma, két
+  annotátor (`annotatorA`/`annotatorB`), mindegyik `events` (onset/strum,
+  `provenance` kötelező) és `chordSegments` (akkord-intervallum,
+  `provenance` kötelező).
+- `lib/features/live/domain/evaluation/recognition_annotation.dart` —
+  `AnnotationEvent`, `AnnotationChordSegment`, `RecognitionAnnotation`,
+  `RecognitionAnnotationPair`, `AgreementReport`, és
+  `AnnotationAgreementCalculator` (Kuhn-algoritmusos páros-illesztés,
+  ugyanaz a minta, mint az `EvaluationRunner.matchEvents`, de nem importálva
+  — újraírva, ADR 0359 D6). Az irány-enumhoz a `lib/core/music/strum.dart`
+  `StrumDirection`-jét használja (feature→core import, legális).
+- `lib/features/live/data/evaluation/recognition_annotation_parser.dart` —
+  `RecognitionAnnotationParser`, `RecognitionAnnotationParseException`
+  (`kind`, `message`, `path`, `conflictingIndices`).
+- `evaluation/recognition/fixtures/annotation_pair.json` — két annotátor,
+  10-10 esemény, ebből 8 párosítható 50 ms-on belül, 7 egyezik irányban;
+  mindhárom `provenance` érték (`auto`/`human`/`reviewed`) szerepel.
+- `tool/recognition_annotate.dart` — `dart run tool/recognition_annotate.dart
+  [--pair <path>] [--tolerance-ms <ms>]`.
+- `docs/eval/recognition-annotation.md` — használat + a provenance/átfedés/
+  egyetértés szabályok összefoglalója.
+
+### 10.2 Gate — tényleges kimenet (lényegi sorok)
+
+```
+═══ [1] format  → ZÖLD  (Formatted 2265 files (0 changed))
+═══ [2] analyze → ZÖLD  (Analyzing 3 items... No issues found!)
+═══ [3] test test/features/live/evaluation/recognition_annotation_test.dart → ZÖLD
+    00:00 +18: All tests passed!
+═══ [4] architecture → ZÖLD (Architecture dependencies OK (12 allowlisted deviation(s)))
+═══ [5] secrets       → ZÖLD (Secret scan OK (4332 file(s) scanned, 0 finding(s)))
+═══ [6] l10n          → ZÖLD (L10n parity OK (en → hu, 2304 message(s)))
+
+Gate-összegzés: MINDEN GATE ZÖLD.
+```
+
+### 10.3 Falszifikációs bizonyíték (brief §7.1)
+
+**Párosítási határ (`<=` → `<`):** `_matchEvents`-ben a
+`(sortedRight[j].timeMs - leftEvent.timeMs).abs() <= toleranceMs`
+feltételt ideiglenesen `<`-re cserélve:
+
+```
++11 -1: ...onset-tolerance boundary is inclusive... [E]
+  Expected: <1>
+    Actual: <0>
++13 -2: ...the fixture: 10 events each, 8 pairable... [E]
+  Expected: <8>
+    Actual: <7>
+Some tests failed.
+```
+
+A §6/6 **50 ms** cellája PIROS lett (a pontosan 50 ms-os pár már nem
+párosít), és a fixture-mérce is bukott (8 helyett 7 párosítás). Visszaállítva
+`<=`-ra → a teljes gate újra ZÖLD (10.2 fenti kimenete a visszaállítás
+utáni futás).
+
+**Determinizmus (kanonikus kulcsrend):** `AgreementReport.toJson()`-ban a
+`toleranceMs` kulcsot ideiglenesen a lista ELEJÉRE mozgatva (megtörve az
+alfabetikus sorrendet):
+
+```
++16 -1: ...toJson uses a fixed, canonical (alphabetical) key order [E]
+  Expected: [annotatorAId, annotatorBId, ..., toleranceMs]
+    Actual: [toleranceMs, annotatorAId, annotatorBId, ...]
+  Which: at location [0] is 'toleranceMs' instead of 'annotatorAId'
+Some tests failed.
+```
+
+A §6/4 bájtra-azonos/kanonikus-rend cellája PIROS lett. Visszaállítva az
+alfabetikus sorrendre → a teljes gate újra ZÖLD (10.2 fenti kimenete a
+visszaállítás utáni futás).
+
+### 10.4 Scope
+
+A brief `ai-router` blokkjának mind a 8 engedélyezett fájlját érintette,
+azon kívül semmit. `lib/features/live/public.dart`-hoz, az `audio_analysis`
+evaluation kódjához, a `test/fixtures/manifest.json`-hoz és a
+`pubspec.yaml`-hoz nem nyúlt (§0.0.1 R3/R4/R6, §6 tiltott zónák).
+
 ## 11. Review — a Claude tölti ki

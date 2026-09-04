@@ -16,7 +16,7 @@ Map<String, Object?> _event({
   'id': id,
   'timeMs': timeMs,
   'type': type,
-  if (direction != null) 'direction': direction,
+  'direction': ?direction,
   'provenance': provenance,
 };
 
