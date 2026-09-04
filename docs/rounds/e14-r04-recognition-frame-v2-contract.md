@@ -1,18 +1,93 @@
 # E14-R04 — RecognitionFrame V2 domain contract
 
-- **Státusz:** PREPARED (előre megírva 2026-08-20, kód olvasva: `main @ 7b5315b`)
+- **Státusz:** ACTIVE (pre-flight lefutott 2026-09-04, kód mérve: `main @ f7fd7ab0`)
 - **Típus:** Chapter 14 (Recognition Accuracy & Useful UI Recovery), Kör 4
 - **Kör-azonosító:** `E14-R04`
-- **Branch:** `<motor>/e14-r04-recognition-frame-v2-contract`
+- **Branch:** `sonnet-impl/e14-r04-recognition-frame-v2-contract`
 - **Előfeltétel:** `E14-R03` merge-elve — a `RecognitionRuntimeInfo` ott
-  születik meg, és ez a kör HIVATKOZIK rá (nem írja újra).
+  születik meg, és ez a kör HIVATKOZIK rá (nem írja újra). ✅ mérve: `b82f3ab5`.
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `0356` — **a Claude írja meg, a `docs/adr/` a TILOS zónában van.**
+- **ADR:** [`0505`](../adr/0505-versioned-recognition-frame-contract-and-legacy-adapter.md)
+  — a pre-flightban MEGÍRVA és commitolva. A `docs/adr/` az implementer TILOS
+  zónája. (A queue `0356`-ot előlegezett; lásd §0.0 R1.)
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd újra a `LiveFrame` hívóinak
-> számát (`grep -rl "LiveFrame" lib/ test/ | wc -l` — a brief írásakor **19**),
-> és olvasd újra a `live_frame.dart` mezőlistáját. Ha az `E14-R03` átnevezte a
-> `RecognitionRuntimeInfo` mezőit, a §5.4 ahhoz igazodik. Eltérésnél §0.0 revízió.
+## 0.0 Pre-flight revízió (2026-09-04, orchestrátor: Claude Opus 5)
+
+Minden alábbi pont **mért**, a parancs a sor végén áll. Ez a szakasz erősebb a
+brief többi részénél ott, ahol eltér tőle.
+
+**R1 — ADR `0356` → `0505`.** `tools/round-slots.py reserve-adr --round E14-R04`
+→ `0505`. A foglaló `candidate = max(used) + 1`
+(`tools/round-slots.py:357`), tehát **sosem tölt ki hézagot**: a sorszám a brief
+megírása (2026-08-20) óta `0503`-ig futott, a `0356` pedig hézaggá vált (nincs
+lemezen és egyetlen ág története sem hozta létre). A prompt §1.0.1 a foglalót
+teszi mérvadóvá az `ls docs/adr | tail` alakkal szemben, ezért a kör ADR-je
+**0505**. A queue `0356` oszlopa marad — a sor-fájl a driveré (prompt §4), és
+`tools/tests/test_adr_numbering.py` csak névkonvenciót és egyediséget mér, a
+queue-oszloppal nem csatol.
+
+**R2 — `LiveFrame` hívók: 19 → 22.** `grep -rl "LiveFrame" lib/ test/ | wc -l`
+→ `22`. Scope-változás nincs; az adapter-követelmény ettől csak erősebb. A §2 és
+a §9 „19" előfordulásai **22**-t jelentenek.
+
+**R3 — az architektúra-őr NEM igényli a `tool/check_architecture.dart`
+módosítását.** Mérve: `_isSharedDomain` (`tool/check_architecture.dart:419-422`)
+három prefixet drótoz be (`lib/core/music/`, `lib/core/audio/codec/`,
+`lib/features/practice/domain/`), és a `checkArchitecture` nem kínál bővítési
+pontot. A fa bevett mintája feature-domainre az **önálló, forrás-szkennelő
+csoport a tesztben**: `practice_generator/domain`
+(`test/core/architecture_dependency_test.dart:23`), `gamification/domain`
+(`:101`), `community/domain` (`:982`). Ez a kör ezt a mintát követi. A `tool/`
+**tilos zóna** — hozzányúlni H3.
+
+**R4 — `package:meta/meta.dart` MEGENGEDETT a domainben.** A §5.1 a
+`package:flutter/foundation.dart`-ot tiltja; a `@immutable` viszont a
+`package:meta`-ból is jön, és a fa így csinálja (`lib/core/music/chord.dart:1`,
+`lib/features/live/model/recognition_runtime_info.dart:1`), a
+`_isForbiddenDomainDependency` (`:424-437`) pedig nem tiltja. Tiltott marad:
+`package:flutter/*`, `package:flutter_riverpod/*`, `package:riverpod/*`.
+
+**R5 — az adapter az EGYETLEN legacy-import a domainben.** Mérve:
+`lib/features/live/model/live_frame.dart:1` `package:flutter/foundation.dart`-ot
+importál, az adapternek viszont `LiveFrame`-et kell építenie. Az őr ezért a
+`domain/recognition/**` **közvetlen** import-direktíváit méri; az adapter
+`import '../../model/live_frame.dart';` sora legális (ADR 0505 D5). A másik öt
+szerződés-fájl a `model/`-ből CSAK a `recognition_runtime_info.dart`-ot
+importálhatja — külön cella pinneli.
+
+**R6 — `directionMargin` SZÁMÍTOTT getter, nem konstruktor-paraméter:**
+`double get directionMargin => (pDown - pUp).abs();` (ADR 0505 D4). A §3.2
+mezőlistájában szereplő `directionMargin` ezentúl gettert jelent — így nem
+építhető `pDown: 0.9, pUp: 0.1, directionMargin: 0.01` alakú inkonzisztens
+állapot, amitől a §6.1 küszöb-táblázat mérése értelmét vesztené.
+
+**R7 — ebben a körben CSAK a `StrumPrediction.decision` levezetett.**
+`ChordPrediction.decision` és a `SignalQualitySnapshot` mezői
+konstruktorból kapott értékek; akkord-döntést MÉRT kalibráció nélkül levezetni
+a §5.2 tiltotta hazugság lenne (azt az `E14-R05` és az `E14-R11` hozza). A §5.3
+így is teljesül: a döntés a jóslaton ül, sosem a widgetben.
+
+**R8 — `lib/features/live/public.dart` KÉZZEL írt barrel.** Mérve:
+`ls -d lib/features/*/public/` → egyedül a `practice_generator` rendelkezik
+fragmentumokkal. A §9 „generátorral frissítsd" pontja erre a körre **nem**
+alkalmazandó: a `public.dart`-ot közvetlenül szerkeszd.
+
+**R9 — brief-lint S12 javítva.** A §7 gate-parancsa mostantól tételesen
+tükrözi a `gate_tests` listát, és a `test/core/architecture_dependency_test.dart`
+BEKERÜLT a `gate_tests`-be (az 1. acceptance-pontot az méri; az
+`allowed_paths`-on már rajta volt). Ez szigorítás, nem tágítás.
+
+**R10 — `fromJson` fail-CLOSED, minden modellre.** `docs/LESSONS.md` **L619**
+(E14-R02, ugyanez a fejezet, 2026-09-04): *a kézzel írt séma-validátor
+alapértelmezésben fail-OPEN — a le nem fedett kulcs nem hibás, hanem NEM
+LÉTEZIK, ezért a séma szigorúbbnak LÁTSZIK, mint amit érvényesít.* Emiatt a
+boldog-utas round-trip (6. acceptance-pont) önmagában NEM elég: **modellenként**
+kell egy hiányzó-kötelező-kulcs cella is, amely típusos hibát vár, nem `null`-t
+és nem részleges objektumot.
+
+**R11 — párhuzamos kör.** `tools/round-slots.py inflight-list` → `E14-R04` és
+`E14-R06` fut. Az `E14-R06` `allowed_paths`-a (`lib/features/accuracy_lab/**`,
+`test/features/accuracy_lab/**`) a miénkkel **diszjunkt** — átfedés nincs.
 
 ```ai-router
 schema_version = 1
@@ -33,6 +108,7 @@ allowed_paths = [
 gate_tests = [
   "test/features/live/recognition_frame_contract_test.dart",
   "test/features/live/live_frame_adapter_test.dart",
+  "test/core/architecture_dependency_test.dart",
 ]
 native_gate = false
 ```
@@ -136,7 +212,7 @@ konstans (AGENTS.md §9); `docs/adr/**`.
 (nem módosul!), `lib/features/live/engine/**`, `lib/features/live/screens/**`,
 `lib/features/live/widgets/**`, `docs/adr/**`, `.github/workflows/**`.
 
-## 5. Kötött architekturális döntések (ADR 0356)
+## 5. Kötött architekturális döntések (ADR 0505 — lásd §0.0 R1)
 
 ### 5.1 A domain réteg nem lát Fluttert
 
@@ -190,6 +266,14 @@ verzióra TÍPUSOS hibát ad, nem próbál „legjobb tudása szerint" olvasni.
 6. Ismeretlen `schemaVersion` → típusos hiba (nem `null`, nem részleges objektum).
 7. `public.dart` additív; a `LiveFrame` fájl **bájtra változatlan**
    (`git diff --stat` nem tartalmazza).
+8. **Fail-closed parse (§0.0 R10, L619):** MINDEN modell `fromJson`-jére van egy
+   cella, amely egy kötelező kulcsot KIHAGY a bemenetből, és típusos hibát vár —
+   nem `null`-t és nem részleges objektumot. Öt modell = öt cella.
+9. **A szerződés-fájlok legacy-import tilalma (§0.0 R5):** cella bizonyítja, hogy
+   az öt szerződés-fájl (`recognition_decision`, `strum_prediction`,
+   `chord_prediction`, `signal_quality_snapshot`, `recognition_frame`) a
+   `model/`-ből CSAK a `recognition_runtime_info.dart`-ot importálja; egyedül a
+   `live_frame_adapter.dart` érheti el a `live_frame.dart`-ot.
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -206,11 +290,42 @@ verzióra TÍPUSOS hibát ad, nem próbál „legjobb tudása szerint" olvasni.
 **Numerikus küszöb — `directionMargin` (|pDown − pUp|), a határ az
 ELUTASÍTÁSHOZ tartozik (inkluzív):**
 
-| Cella | `directionMargin` | Várt `decision` |
-|---|---|---|
-| alatt | `0.02` | `uncertain` (reject-ok: `lowConfidence`) |
-| pontosan rajta | `0.05` | `uncertain` — a küszöb INKLUZÍV az elutasítás oldalán |
-| fölött | `0.30` | `confirmed` |
+A `directionMargin` **getter** (§0.0 R6), ezért a cellát a `pDown`/`pUp` párral
+kell felépíteni. A konkrét értékeket `python3`-mal számoltam ki (mindhárom
+összeg pontosan `1.000`, `pNoStrum = 0.100`):
+
+| Cella | `pDown` | `pUp` | `directionMargin` | Várt `decision` |
+|---|---|---|---|---|
+| alatt | `0.460` | `0.440` | `0.02` | `uncertain` (reject-ok: `lowConfidence`) |
+| pontosan rajta | `0.475` | `0.425` | `0.05` | `uncertain` — a küszöb INKLUZÍV az elutasítás oldalán |
+| fölött | `0.600` | `0.300` | `0.30` | `confirmed` |
+
+```
+$ python3 -c "
+t = 0.05
+for pd, pu in ((0.460,0.440), (0.475,0.425), (0.600,0.300)):
+    m = abs(pd - pu)
+    print(f'pDown={pd} pUp={pu} margin={m!r} sum={pd+pu+0.1:.3f} m<=t={m<=t}')
+"
+pDown=0.46 pUp=0.44 margin=0.020000000000000018 sum=1.000 m<=t=True
+pDown=0.475 pUp=0.425 margin=0.04999999999999999 sum=1.000 m<=t=True
+pDown=0.6 pUp=0.3 margin=0.3 sum=1.000 m<=t=False
+```
+
+> ⚠ **A határcella lebegőpontos, és ezt MÉRTEM — ne „javítsd" más számpárra.**
+> `0.475 - 0.425 = 0.04999999999999999`, tehát `<= 0.05` **igaz** → `uncertain`,
+> ahogy a táblázat írja. Ellenpélda ugyanerre a szándékolt `0.05` margóra:
+> `0.525 - 0.475 = 0.050000000000000044`, ami `<= 0.05` **hamis** → `confirmed`
+> lenne. A cellát ezért PONTOSAN a fenti `pDown`/`pUp` párokkal írd meg, és ne
+> cseréld le őket egy „szebb" párra: a határ inkluzivitását a getter és a
+> küszöb EGYÜTT adja, és a csere némán átbillentené a várt verdiktet.
+>
+> ```
+> $ python3 -c "print(repr(abs(0.475-0.425)), abs(0.475-0.425)<=0.05)"
+> 0.04999999999999999 True
+> $ python3 -c "print(repr(abs(0.525-0.475)), abs(0.525-0.475)<=0.05)"
+> 0.050000000000000044 False
+> ```
 
 > A `0.05` küszöb ebben a körben a **szerződés alapértéke**, nem hangolt DSP-
 > paraméter: a domain konstansként hordozza, és a későbbi, MÉRT kalibrációs kör
@@ -219,8 +334,12 @@ ELUTASÍTÁSHOZ tartozik (inkluzív):**
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/live test/core
+tools/round-gate.sh test/features/live/recognition_frame_contract_test.dart test/features/live/live_frame_adapter_test.dart test/core/architecture_dependency_test.dart test/features/live test/core
 ```
+
+A parancs tételesen tartalmazza a `gate_tests` **mindhárom** elemét (§0.0 R9,
+brief-lint S12), és utánuk a két tágabb regressziós felületet
+(`test/features/live`, `test/core`), hogy a szomszédos tesztek se csússzanak el.
 
 Külön processzben futó `format` → `analyze` → célzott tesztek → `architecture`
 (AGENTS.md §12). `&&` láncolás tilos (L05/L09).
