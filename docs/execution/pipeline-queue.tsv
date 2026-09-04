@@ -736,26 +736,35 @@ E10-R32	docs/rounds/e10-r32-integration-device-matrix-and-epic-closure.md	minima
 E14-R01	docs/rounds/e14-r01-recovery-kickoff-and-release-guard.md	codex	0271	done
 #
 # CHAPTER 14 (felismerési pontosság) — USER-DÖNTÉS 2026-09-02: „végén menjen az
-# E14 is". A sorok SZÁNDÉKOSAN `prepared` állapotban maradnak (a driver csak
-# `pending` sort admittál), és a Ch16 zárókörének (E16-R05) merge-e UTÁN
-# váltanak `pending`-re, EGY commitban. A sáv 42 kört tervez; brief ma az
-# R01-R19-re van, az R20-R42 megírása a visszakapcsolás előtti feladat.
+# E14 is". A sáv VISSZAKAPCSOLVA 2026-09-04-én: az E16-R05 (Ch16 zárókör,
+# 474a6b00) merge-elve, a sor kiürült (312 done, 0 pending), a `main` full-gate
+# zöld — tehát a kikötés teljesült, és a 18 megírt kör EGY commitban `pending`.
 #
-E14-R02	docs/rounds/e14-r02-baseline-and-evidence-index.md	minimax	0354	prepared
-E14-R03	docs/rounds/e14-r03-model-activation-telemetry.md	minimax	0355	prepared
-E14-R04	docs/rounds/e14-r04-recognition-frame-v2-contract.md	minimax	0356	prepared
-E14-R05	docs/rounds/e14-r05-live-signal-quality-analyzer.md	minimax	0357	prepared
-E14-R06	docs/rounds/e14-r06-accuracy-lab-and-consented-capture.md	minimax	0358	prepared
-E14-R07	docs/rounds/e14-r07-annotation-contract-and-agreement.md	minimax	0359	prepared
-E14-R08	docs/rounds/e14-r08-grouped-evaluation-harness.md	minimax	0360	prepared
-E14-R09	docs/rounds/e14-r09-baseline-dashboard-and-release-gate.md	minimax	0361	prepared
-E14-R10	docs/rounds/e14-r10-direction-abstention-hotfix.md	minimax	0362	prepared
-E14-R11	docs/rounds/e14-r11-chord-uncertainty-and-separate-confidence.md	minimax	0363	prepared
-E14-R12	docs/rounds/e14-r12-recognition-stabilizer.md	minimax	0364	prepared
-E14-R13	docs/rounds/e14-r13-live-ui-truthfulness-hotfix.md	minimax	0365	prepared
-E14-R14	docs/rounds/e14-r14-audio-setup-and-accuracy-check.md	minimax	0366	prepared
-E14-R15	docs/rounds/e14-r15-hard-negative-corpus-and-false-visible-metric.md	minimax	0367	prepared
-E14-R16	docs/rounds/e14-r16-onset-detector-ab-benchmark.md	minimax	0368	prepared
-E14-R17	docs/rounds/e14-r17-reference-model-repro-and-licence-audit.md	minimax	0369	prepared
-E14-R18	docs/rounds/e14-r18-joint-streaming-prototype.md	minimax	0370	prepared
-E14-R19	docs/rounds/e14-r19-augmentation-and-balanced-recipe.md	minimax	0371	prepared
+# MOTOR: `minimax` -> `sonnet-impl`. A sorok motorja a sáv megírásakor (2026-08)
+# minimax volt; a 2026-09-02-i user-döntés („2 sloton, opus 5 orchestrátor és
+# sonnet 5 high implementer") azóta 50+ körön mérten bevált, és az E14 mérési-
+# pontossági munkájában a minimax MÉRT gyengéje („invariánst lazít") a
+# legdrágább hibaosztály lenne. A minimax elérhető marad (99% heti keret) —
+# ha a Claude-keret szűkül, ez a sáv rá visszaváltható.
+#
+# HÁTRALÉVŐ FELADAT: a sáv 42 kört tervez, brief az R01-R19-re van. Az
+# R20-R42 (23 kör) megírása az R19 lezárása ELŐTT esedékes.
+#
+E14-R02	docs/rounds/e14-r02-baseline-and-evidence-index.md	sonnet-impl	0354	pending
+E14-R03	docs/rounds/e14-r03-model-activation-telemetry.md	sonnet-impl	0355	pending
+E14-R04	docs/rounds/e14-r04-recognition-frame-v2-contract.md	sonnet-impl	0356	pending
+E14-R05	docs/rounds/e14-r05-live-signal-quality-analyzer.md	sonnet-impl	0357	pending
+E14-R06	docs/rounds/e14-r06-accuracy-lab-and-consented-capture.md	sonnet-impl	0358	pending
+E14-R07	docs/rounds/e14-r07-annotation-contract-and-agreement.md	sonnet-impl	0359	pending
+E14-R08	docs/rounds/e14-r08-grouped-evaluation-harness.md	sonnet-impl	0360	pending
+E14-R09	docs/rounds/e14-r09-baseline-dashboard-and-release-gate.md	sonnet-impl	0361	pending
+E14-R10	docs/rounds/e14-r10-direction-abstention-hotfix.md	sonnet-impl	0362	pending
+E14-R11	docs/rounds/e14-r11-chord-uncertainty-and-separate-confidence.md	sonnet-impl	0363	pending
+E14-R12	docs/rounds/e14-r12-recognition-stabilizer.md	sonnet-impl	0364	pending
+E14-R13	docs/rounds/e14-r13-live-ui-truthfulness-hotfix.md	sonnet-impl	0365	pending
+E14-R14	docs/rounds/e14-r14-audio-setup-and-accuracy-check.md	sonnet-impl	0366	pending
+E14-R15	docs/rounds/e14-r15-hard-negative-corpus-and-false-visible-metric.md	sonnet-impl	0367	pending
+E14-R16	docs/rounds/e14-r16-onset-detector-ab-benchmark.md	sonnet-impl	0368	pending
+E14-R17	docs/rounds/e14-r17-reference-model-repro-and-licence-audit.md	sonnet-impl	0369	pending
+E14-R18	docs/rounds/e14-r18-joint-streaming-prototype.md	sonnet-impl	0370	pending
+E14-R19	docs/rounds/e14-r19-augmentation-and-balanced-recipe.md	sonnet-impl	0371	pending
