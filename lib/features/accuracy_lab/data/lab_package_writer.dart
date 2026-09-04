@@ -9,6 +9,30 @@ import '../domain/lab_consent.dart';
 /// Whether a previously-written package is still on disk.
 enum LabPackageStatus { present, missing }
 
+/// Only letters, digits, `_` and `-` — no `.`, no `/`, no `\`, never empty.
+/// `packageId` values reach [LabPackageWriter] both freshly-generated and
+/// round-tripped through [LabCapturePackage.fromJson] (an untrusted-manifest
+/// path), so [LabPackageWriter.locate] rejects anything outside this shape
+/// before it is ever interpolated into a filesystem path — an id like
+/// `"../OUTSIDE_VICTIM"` or `""` never reaches [Directory].
+final RegExp labPackageIdPattern = RegExp(r'^[A-Za-z0-9_-]+$');
+
+/// Thrown by [LabPackageWriter.locate] (and therefore by [LabPackageWriter.
+/// write], [LabPackageWriter.status] and [LabPackageWriter.delete], which
+/// all resolve their path through it) when `packageId` does not match
+/// [labPackageIdPattern] — a path-traversal or path-separator id is a typed
+/// failure, never a silent write/delete outside the intended root.
+final class LabPackageIdException implements Exception {
+  const LabPackageIdException(this.packageId);
+
+  final String packageId;
+
+  @override
+  String toString() =>
+      'LabPackageIdException: "$packageId" is not a valid Lab package id '
+      '(expected to match ${labPackageIdPattern.pattern})';
+}
+
 /// The three files one [LabCapturePackage] writes to disk, all under the
 /// same `<root>/<packageId>/` directory.
 final class LabPackageLocation {
@@ -49,6 +73,9 @@ final class LabPackageWriter {
     required Directory root,
     required String packageId,
   }) {
+    if (!labPackageIdPattern.hasMatch(packageId)) {
+      throw LabPackageIdException(packageId);
+    }
     final directory = Directory('${root.path}/$packageId');
     return LabPackageLocation(
       directory: directory,
@@ -86,8 +113,13 @@ final class LabPackageWriter {
     });
     location.annotationFile.writeAsStringSync(annotationJson, flush: true);
 
+    // The manifest's consentVersion is read from the actual `consent` grant,
+    // not from `package.toJson()`'s self-reported field — `consent` is the
+    // only value this call can prove was actually granted, so it overrides
+    // whatever the caller put in `package.consentVersion` (ADR 0358 D1).
     final manifestJson = canonicalJsonEncode(<String, Object?>{
       ...package.toJson(),
+      'consentVersion': consent.consentVersion,
       'audioSha256': audioSha256,
     });
     location.manifestFile.writeAsStringSync(manifestJson, flush: true);

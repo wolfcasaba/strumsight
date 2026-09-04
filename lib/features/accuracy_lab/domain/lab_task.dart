@@ -38,6 +38,19 @@ final class LabTaskRangeException implements Exception {
       '${LabTaskCatalog.minTasks}-${LabTaskCatalog.maxTasks} range';
 }
 
+/// Thrown by [LabTaskCatalog.validated] when two [LabTask]s in the list
+/// share the same [LabTask.id] — the doc-comment promise that an id is
+/// unique within its catalog is enforced here, not just asserted.
+final class LabTaskDuplicateIdException implements Exception {
+  const LabTaskDuplicateIdException(this.duplicateId);
+
+  final String duplicateId;
+
+  @override
+  String toString() =>
+      'LabTaskDuplicateIdException: duplicate LabTask id "$duplicateId"';
+}
+
 /// A validated, immutable list of [LabTask]s.
 final class LabTaskCatalog {
   const LabTaskCatalog._(this.tasks);
@@ -57,6 +70,12 @@ final class LabTaskCatalog {
   factory LabTaskCatalog.validated(List<LabTask> tasks) {
     if (tasks.length < minTasks || tasks.length > maxTasks) {
       throw LabTaskRangeException(tasks.length);
+    }
+    final seenIds = <String>{};
+    for (final task in tasks) {
+      if (!seenIds.add(task.id)) {
+        throw LabTaskDuplicateIdException(task.id);
+      }
     }
     return LabTaskCatalog._(List.unmodifiable(tasks));
   }
