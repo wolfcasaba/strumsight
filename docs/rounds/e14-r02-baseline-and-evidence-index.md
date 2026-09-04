@@ -14,6 +14,112 @@
 > ellenőrizd, hogy az `ml/data/klangio` corpus a boxon elérhető-e. Eltérésnél
 > §0.0 revízió a brief tetején.
 
+## 0.0 Pre-flight revízió (Claude, 2026-09-04, `main @ d26f1958`)
+
+A brief 2026-08-20-án készült (`main @ 7b5315b`). A mai mérés hét ponton
+pontosít; mindegyik a KÖR SAJÁT, még nem merge-elt artefaktumát érinti
+(ADR 0087 §2), tehát az orchestrátor hatásköre. A `brief-lint` egyetlen
+`strict` leletét (S12) az **R1** zárja.
+
+### R1 — S12: a §7 gate-parancs nem tükrözte a `gate_tests` listát
+
+**Mérve:** `gate_tests = ["test/tooling/recognition_baseline_manifest_test.dart"]`,
+a §7 viszont `tools/round-gate.sh test/tooling`-ot írt. A könyvtár-alak
+technikailag lefedi a fájlt, de a lint jogos: a kör olyan mércét ígért, amit a
+PARANCSSOR nem nevesít, és a `test/tooling/` teljes futtatása (49 fájl) ezen a
+boxon fölösleges. **Javítva:** a §7 parancs mostantól szó szerint a `gate_tests`
+egyetlen elemét futtatja.
+
+### R2 — az ADR-szám 0354 marad (a foglaló 0504-et adott)
+
+**Mérve:** `tools/round-slots.py reserve-adr --round E14-R02` → **`0504`**, mert
+az algoritmus `max(használt) + 1`-et ad (a legmagasabb lemezen lévő ADR a
+`0503`). A queue-sor és a pipeline-prompt viszont **`0354`**-et osztott ki. A
+`0354` **szabad**: nincs `docs/adr/0354*.md` a fán, és `git log --all --
+'docs/adr/0354*'` üres. A `.pipeline/inflight/adr/0354` marker **elavult**: a
+`round=E08-R13` sort hordozza, az E08-R13 viszont ténylegesen a
+[`0374`](../adr/0374-achievement-domain-and-catalog-contract.md)-et szállította
+(a queue-ban nála `0310` áll — a marker sem a queue-val, sem a fával nem egyezik).
+**Döntés:** a kör a queue-konzisztens **`0354`**-et használja (az E14-R03..R19
+sorok `0355`..`0371`-et foglalnak, tehát a sáv számozása így marad zárt); a
+mellékesen lefoglalt `0504` marker visszavonva. Ütközés kizárt: a foglaló soha
+nem oszt ki `0503` alatti számot.
+
+### R3 — nincs JSON-Schema könyvtár; a validálás KÉZZEL írt (BLOKKOLÓ lett volna)
+
+**Mérve:** a `pubspec.yaml` nem deklarál `json_schema` (vagy bármely séma-)
+függőséget, és a `pubspec.yaml` a kör **tilos zónájában** van. A meglévő minta
+sem használ ilyet: az `evaluation/analysis/manifest_schema.json` szerződését az
+`evaluation_manifest_parser.dart` **kézzel** kényszeríti ki (`required`,
+`additionalProperties`, `const`), a `tool/check_fixture_manifest.dart` pedig
+ugyanígy tiszta Dart. **Előírás:** a `--check` a sémafájlt BEOLVASSA és a
+`type` / `required` / `additionalProperties: false` / `const` /
+`enum` szabályokat maga érvényesíti. Séma-könyvtár felvétele `pubspec`-módosítást
+igényelne → **`stopped` jelzés, nem lista-tágítás.**
+
+### R4 — a `sourceFile`/`command` és a `not-measured` blokk NEM mondhat ellent
+
+**Mért ellentmondás a briefben:** §5.2 minden metrika-mezőre kötelezővé teszi a
+`value` + `n` + `sourceFile` + `command` négyest, a §6 AC1 viszont üres blokkra
+`status: "not-measured"`-t ír elő — a kettő együtt kielégíthetetlen. **Feloldás
+(kötelező alak):** minden metrika-blokk `status` mezőt kap, és a séma
+`oneOf`-fal két alakot enged:
+
+- `status: "measured"` → kötelező a `metrics` objektum, és **minden** metrikára
+  a `value` + `n` + `sourceFile` + `command` négyes;
+- `status: "not-measured"` → kötelező a `notMeasuredReason` (nem üres sztring),
+  és **tilos** a `metrics` kulcs.
+
+A `--check` mindkét ágat fail-closed méri; a „félig kitöltött" blokk (pl.
+`status: "measured"` üres `metrics`-szel) hiba.
+
+### R5 — mely blokk mérhető MA, és mely nem
+
+**Mérve** (`docs/eval/real-audio-dsp-baseline.md` a MAI fán, és
+`grep -rn "latency|direction|noChord" docs/eval/*.md` → **0 találat**):
+
+| Blokk | Ma | Forrás |
+|---|---|---|
+| `chord` | **measured** | 7 892/11 767 = 67,069%; G-major többségi 2 216/11 767 = 18,832%; moll 185/222 = 83,333%; per-label precision/recall 12 címkére |
+| `onset` | **measured** | 25/50/100 ms tűrés, precision/recall/F1 (38,532/42,517/40,427 · 64,233/70,876/67,391 · 81,208/89,607/85,201 %) |
+| `direction` | **not-measured** | a korpusz `.strums` fájljai pengetés-események; a report nem közöl irány-pontosságot |
+| `noChord` | **not-measured** | a korpusz 98%-ban dúr akkord-felvétel, N.C.-annotáció nincs benne |
+| `latency` | **not-measured** | a baseline offline batch-mérés (`flutter test`), nem valós idejű futás |
+| `calibration` | **not-measured** | nincs konfidencia-annotáció ehhez a korpuszhoz (vö. ADR 0249 §Döntés 4 küszöbei) |
+
+A BPM külön, **`retracted`** blokk (§5.3) — nem a hat metrika-blokk egyike.
+
+### R6 — a korpusz ELÉRHETŐ; a `unavailable-at-authoring` ág ma NEM alkalmazható
+
+**Mérve:** `ml/data/klangio` létezik a boxon, **82** `*_phone.wav`, 167 fájl
+összesen. A hash-t nem kell újraszámolni: a report §Reprodukálhatóság rögzíti —
+`corpusSha256 = 4880faceab27217640701f1b93db477606d5fb3aa2c4434574040b6590315827`,
+`recordingCount = 82`, `eventCount = 11767`, `skippedRecordings = 0`. A §9 első
+kockázata tehát MA tárgytalan: a manifest ezeket a MÉRT értékeket veszi át, a
+`"unavailable-at-authoring"` érték kiírása ebben a körben **hiba**.
+
+### R7 — a mért konfiguráció NEM használt ML-modellt
+
+**Mérve:** a baseline a változatlan `const ClipAnalyzer()`-t futtatta
+(`lib/features/analyze/engine/clip_analyzer.dart:36` — `strumRefiner` alapértéke
+`null`), tehát **egyetlen** `assets/ml/*.bin` súly sem vett részt a mérésben. A
+`recognition-release-guard.md` „model SHA-256" elvárása a JELÖLTRE vonatkozik,
+nem a legacy baseline-ra. **Előírás:** a manifest `models` mezője **üres
+tömb**, és ilyenkor **kötelező** a nem üres `modelsRationale` (a `--check`
+fail-closed méri). Kitalált vagy „a teljesség kedvéért" bemásolt
+`chord_crnn.bin` hash a manifestben **hamis állítás** — a séma sem engedi
+indoklás nélkül.
+
+### R8 — a generátor TISZTA Dart, és a teszt könyvtárként importálja
+
+**Mérve:** `test/tooling/benchmark_budget_test.dart:19` →
+`import '../../tool/benchmarks/benchmark_record.dart';` — ez a bevett minta a
+`tool/`-alatti tiszta Dart forrásra. A testvér `real_audio_dsp_baseline.dart`
+tranzitívan `dart:ui`-t húz (a report külön rögzíti, hogy `dart run`-nal nem
+indul) — az ÚJ generátor ezt **nem** importálhatja, semmit a `lib/**`-ból, és a
+determinizmus-cellának in-process, két temp-könyvtárba írt futással kell
+mérnie.
+
 ```ai-router
 schema_version = 1
 risk = "normal"
@@ -168,7 +274,9 @@ Ha egy metrikához `n == 0` vagy hiányzik a `sourceFile`, a generátor
 1. `baseline_manifest.json` validál a sémára, és tartalmazza mind a hat
    metrika-blokkot (`onset`, `direction`, `chord`, `noChord`, `latency`,
    `calibration`) — az üresen hagyott blokk explicit `status: "not-measured"`
-   értékkel szerepel, indoklással.
+   értékkel szerepel, indoklással (`notMeasuredReason`), a §0.0/R4 két
+   `oneOf`-alakja szerint, és a §0.0/R5 táblázatának megfelelő besorolásban
+   (`chord` + `onset` = `measured`, a másik négy = `not-measured`).
 2. A generátor kétszeri futtatása **bájtra azonos** `docs/eval/recognition-baseline-index.md`-t ad.
 3. Minden számhoz tartozik `sourceFile` + `command`; hiányuk fail-closed hiba.
 4. A BPM-blokk `retracted: true`, és az indexben is visszavontként jelenik meg.
@@ -198,8 +306,10 @@ Ha egy metrikához `n == 0` vagy hiányzik a `sourceFile`, a generátor
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/tooling
+tools/round-gate.sh test/tooling/recognition_baseline_manifest_test.dart
 ```
+
+(§0.0/R1 — a parancs szó szerint a `gate_tests` listát tükrözi.)
 
 A gate önmagában futtatja a `format` → `analyze` → célzott teszt →
 `architecture` lépéseket külön processzként (AGENTS.md §12). **`&&` láncolás
@@ -219,14 +329,14 @@ visszaállítva **ZÖLD**.
 3. Generátor + `--check` mód.
 4. Teszt (determinizmus, fail-closed cellák, séma-validálás).
 5. Index renderelése, README.
-6. `tools/round-gate.sh test/tooling`.
+6. `tools/round-gate.sh test/tooling/recognition_baseline_manifest_test.dart`.
 
 ## 9. Kockázatok
 
-- **A corpus a boxon hiányozhat** (`ml/data/klangio`): a kör NEM futtat új
-  mérést, tehát ez nem blokkoló — a manifest a MÁR MEGMÉRT számokat rögzíti. Ha
-  a hash-eléshez sem érhető el a corpus, a `corpusSha256` mező
-  `"unavailable-at-authoring"` értéket kap, és ezt az index is kimondja.
+- ~~**A corpus a boxon hiányozhat** (`ml/data/klangio`) … `"unavailable-at-authoring"`~~
+  — **TÁRGYTALAN a §0.0/R6 mérés szerint:** a corpus a boxon VAN (82 WAV), és a
+  hash a reportból átvehető. Az `"unavailable-at-authoring"` érték kiírása ebben
+  a körben hiba.
 - A séma túl szigorú `additionalProperties: false`-a a későbbi körök
   metrikáit kizárhatja — ezért minden metrika-blokk `extra` objektumot kap.
 - Az index és a report közti duplikáció drift-forrás — ezért az index
