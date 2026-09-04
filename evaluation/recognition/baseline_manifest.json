@@ -1,0 +1,345 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-09-04T00:00:00Z",
+  "corpus": {
+    "corpusId": "ml/data/klangio",
+    "corpusSha256": "4880faceab27217640701f1b93db477606d5fb3aa2c4434574040b6590315827",
+    "recordingCount": 82,
+    "eventCount": 11767,
+    "skippedRecordingCount": 0
+  },
+  "appCommit": "5ceed22d",
+  "appCommitNote": "Chord and onset numbers were produced at app commit 5ceed22d (E99-R04, GOV-06). The BPM claim from that same run was retracted at app commit c4ce2cc0 (E99-R05, GOV-06b) and replaced by an independent librosa beat-track reference comparison; see the bpm.retractedReason field.",
+  "configuration": {
+    "chunkSize": 2048,
+    "strumRefiner": null,
+    "chromaMedianWindow": 1,
+    "bassWeight": null
+  },
+  "models": [],
+  "modelsRationale": "The measured baseline ran the unmodified const ClipAnalyzer() (lib/features/analyze/engine/clip_analyzer.dart:36 as of app commit 5ceed22d), whose strumRefiner defaults to null. Because no strum-refiner model was configured, no assets/ml/*.bin weight participated in this measurement — the empty models array reflects that fact, not an omission (ADR 0354 D7).",
+  "metricBlocks": {
+    "chord": {
+      "status": "measured",
+      "metrics": {
+        "accuracy": {
+          "value": 0.6706892156029575,
+          "n": 11767,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "7892/11767 correct chord labels across the full corpus."
+        },
+        "majorityClassBaselineAccuracy": {
+          "value": 0.1883232769609926,
+          "n": 11767,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "Always-predict-G-major baseline: 2216/11767 correct."
+        },
+        "minorSubsetAccuracy": {
+          "value": 0.8333333333333334,
+          "n": 222,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "185/222 correct on the minor-chord subset only."
+        },
+        "perLabel.A-major.precision": {
+          "value": 0.8832288401253918,
+          "n": 1546,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.A-major.recall": {
+          "value": 0.7289780077619664,
+          "n": 1546,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.A-minor.precision": {
+          "value": 0.6722689075630253,
+          "n": 98,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.A-minor.recall": {
+          "value": 0.8163265306122449,
+          "n": 98,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.B-major.precision": {
+          "value": 0.9394703656998739,
+          "n": 860,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.B-major.recall": {
+          "value": 0.8662790697674418,
+          "n": 860,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.B-minor.precision": {
+          "value": 0.8823529411764706,
+          "n": 124,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.B-minor.recall": {
+          "value": 0.8467741935483871,
+          "n": 124,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.Bb-major.precision": {
+          "value": 0.9520958083832335,
+          "n": 284,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.Bb-major.recall": {
+          "value": 0.5598591549295775,
+          "n": 284,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.C#-major.precision": {
+          "value": 0.0,
+          "n": 138,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "0/138: the detector never predicted C#-major correctly on this corpus."
+        },
+        "perLabel.C#-major.recall": {
+          "value": 0.0,
+          "n": 138,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "0/138: the detector never predicted C#-major correctly on this corpus."
+        },
+        "perLabel.C-major.precision": {
+          "value": 0.8497772119669,
+          "n": 1982,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.C-major.recall": {
+          "value": 0.6735620585267407,
+          "n": 1982,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.D-major.precision": {
+          "value": 0.8984468339307049,
+          "n": 1804,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.D-major.recall": {
+          "value": 0.41685144124168516,
+          "n": 1804,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.E-major.precision": {
+          "value": 0.8276119402985075,
+          "n": 1283,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.E-major.recall": {
+          "value": 0.8643803585346843,
+          "n": 1283,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.F#-major.precision": {
+          "value": 0.9525222551928784,
+          "n": 408,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.F#-major.recall": {
+          "value": 0.7867647058823529,
+          "n": 408,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.F-major.precision": {
+          "value": 0.7767624020887729,
+          "n": 1024,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.F-major.recall": {
+          "value": 0.5810546875,
+          "n": 1024,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.G-major.precision": {
+          "value": 0.88712422007941,
+          "n": 2216,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        },
+        "perLabel.G-major.recall": {
+          "value": 0.7057761732851986,
+          "n": 2216,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart"
+        }
+      }
+    },
+    "onset": {
+      "status": "measured",
+      "metrics": {
+        "tolerance25000us.precision": {
+          "value": 0.3853203943314849,
+          "n": 12984,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(5003) + falsePositives(7981), the total detected-onset count."
+        },
+        "tolerance25000us.recall": {
+          "value": 0.4251720914421688,
+          "n": 11767,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(5003) + falseNegatives(6764) = the ground-truth event count."
+        },
+        "tolerance25000us.f1": {
+          "value": 0.4042664942830592,
+          "n": 19748,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(5003) + falsePositives(7981) + falseNegatives(6764)."
+        },
+        "tolerance50000us.precision": {
+          "value": 0.6423290203327172,
+          "n": 12984,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(8340) + falsePositives(4644), the total detected-onset count."
+        },
+        "tolerance50000us.recall": {
+          "value": 0.7087617914506671,
+          "n": 11767,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(8340) + falseNegatives(3427) = the ground-truth event count."
+        },
+        "tolerance50000us.f1": {
+          "value": 0.6739121651650438,
+          "n": 16411,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(8340) + falsePositives(4644) + falseNegatives(3427)."
+        },
+        "tolerance100000us.precision": {
+          "value": 0.8120764017252002,
+          "n": 12984,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(10544) + falsePositives(2440), the total detected-onset count."
+        },
+        "tolerance100000us.recall": {
+          "value": 0.8960652672728818,
+          "n": 11767,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(10544) + falseNegatives(1223) = the ground-truth event count."
+        },
+        "tolerance100000us.f1": {
+          "value": 0.8520059795563816,
+          "n": 14207,
+          "unit": "ratio",
+          "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+          "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+          "note": "n = matched(10544) + falsePositives(2440) + falseNegatives(1223)."
+        }
+      }
+    },
+    "direction": {
+      "status": "not-measured",
+      "notMeasuredReason": "This corpus's .strums files record strum (pluck) events only; they carry no up/down direction ground truth, and docs/eval/real-audio-dsp-baseline.md computes no direction-accuracy number for this corpus (grep -rn \"direction\" docs/eval/*.md returns zero hits, ADR 0354 Kontextus). The 80.7% direction figure in recognition-release-guard.md is a different measurement (the live 3-class CRNN's held-out eval fold) and is not part of this 82-recording corpus."
+    },
+    "noChord": {
+      "status": "not-measured",
+      "notMeasuredReason": "This corpus is ~98% major-chord phone recordings with no N.C. (no-chord) segment annotated in the ground truth, so there is no positive/negative label set to compute a no-chord accuracy against."
+    },
+    "latency": {
+      "status": "not-measured",
+      "notMeasuredReason": "The baseline measurement is an offline batch run (flutter test) over pre-recorded WAV files, not a real-time on-device run, so it carries no latency measurement."
+    },
+    "calibration": {
+      "status": "not-measured",
+      "notMeasuredReason": "No confidence-score ground truth exists for this corpus, and it does not meet the 30-per-bin / 300-total minimum ADR 0249 §Döntés 4 requires before a calibration table may be fit — there is nothing to calibrate against."
+    }
+  },
+  "bpm": {
+    "retracted": true,
+    "retractedReason": "The original GOV-06 45.067 BPM figure (meanAbsoluteErrorBpm) measured pluck-density deviation against .strums-derived inter-onset intervals, not validated beat/tempo ground truth: the .strums files record individual pluck events, not tempo annotations, and implied ground-truth tempi above 200 BPM (up to 369.1 BPM) for 20 of the 82 recordings. GOV-06b (E99-R05, app commit c4ce2cc0) retracted this reading and replaced it with an independent librosa 0.11.0 beat_track reference comparison (strictTempoMatch, toleranceLevelTempoMatch below). BPM is not measurable on this corpus without validated tempo annotation. This block is kept, not deleted, so the retraction stays visible (ADR 0354 D4).",
+    "metrics": {
+      "pluckDensityMeanAbsoluteErrorBpm": {
+        "value": 45.06716069579421,
+        "n": 82,
+        "unit": "bpm",
+        "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+        "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+        "note": "RETRACTED reading — see bpm.retractedReason. Not a tempo-quality measurement."
+      },
+      "strictTempoMatch": {
+        "value": 0.13414634146341464,
+        "n": 82,
+        "unit": "ratio",
+        "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+        "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+        "note": "11/82 exact matches against the librosa 0.11.0 beat_track reference. Requires ~/audio-venv/bin/python ml/chords/tempo_reference.py ml/data/klangio --out /tmp/tempo_reference.json to have produced the reference file this command's --dart-define points at."
+      },
+      "toleranceLevelTempoMatch": {
+        "value": 0.3902439024390244,
+        "n": 82,
+        "unit": "ratio",
+        "sourceFile": "docs/eval/real-audio-dsp-baseline.md",
+        "command": "~/flutter/bin/flutter test --dart-define=REAL_AUDIO_DSP_BASELINE_CORPUS=ml/data/klangio --dart-define=REAL_AUDIO_DSP_TEMPO_REFERENCE=/tmp/tempo_reference.json tool/benchmarks/real_audio_dsp_baseline.dart",
+        "note": "32/82 matches within octave/beat-multiple tolerance (1/3, 1/2, 2/3, 1, 3/2, 2, 3) against the same librosa reference. Same two-step pipeline as strictTempoMatch."
+      }
+    }
+  }
+}
