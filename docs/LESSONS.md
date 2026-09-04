@@ -25092,3 +25092,48 @@ következő kör halálos akadálya.
 idegen ágon is a main-re landol · a másik kör ága/fája érintetlen · elutasított
 push után a friss main-ből származtat újra · tartós kudarc nem-nulla és hangos
 · idempotencia · a munkapéldány takarít). A fix előtti forráson mind a 8 PIROS.
+
+## L628 — Az „örökölt piros CI" halt-jelentése EGY kaput nevezett meg, miközben KETTŐ volt piros: a folytatás nem a `main` zöldjéből, hanem a MERGE-ELT HEAD saját méréséből tudhatja, hogy a blokkoló elmúlt (E14-R07, 2026-09-04)
+
+**Mit mértem.** Az `E14-R07` kör H3 halttal állt meg egy örökölt, `main`-oldali
+completion-matrix drift miatt. A halt-jelentés (`docs/reviews/e14-r07-review.md`
+§6) a **Router CI** `33861665049` futását nevezte meg blokkolóként, egyetlen
+piros cellával (`test_completion_matrix_sync.py::…::test_the_real_tree_is_in_sync`).
+A jelentés §8 becsületesen kimondta, hogy a Full Gate futását NEM mérte (a
+riport írásakor még futott). A folytatásban megmértem: a Full Gate
+`33861676472` is **piros** volt, **két** job-bal (`full-gate` és `Coverage`),
+és a piros cella a Python-cella DART-IKERPÁRJA volt
+(`test/tooling/program_completion_test.dart` A1 + a mutáns A2-cella,
+`9822 tests passed, 2 failed`). Vagyis a blokkoló nem egy kapu volt, hanem
+kettő — szerencsére azonos gyökérokkal.
+
+**Miért veszélyes ez akkor is, ha a gyökérok azonos.** A folytatást végző
+session a halt-jelentésből dolgozik. Ha az egy kaput nevez meg, kézenfekvő
+következtetés, hogy „a `main` Router CI-ja most zöld → a blokkoló elmúlt →
+mehet a merge". Ez két külön fáról szóló állítást mos össze: a `main` zöldje a
+`main` fájáról szól, a kör merge-kapuja viszont a **kör-branch + `main`**
+egyesítéséről. A kettő között ott van a §0.3 upstream-szinkron, és az abból
+születő ÚJ SHA, amin egyik korábbi futás sem mért semmit.
+
+**Amit a folytatás ténylegesen tett (és a szabály).** A §0.3 `merge --no-ff
+origin/main` után NEM a `main` CI-státuszára hivatkoztam, hanem a merge-elt
+HEAD-en futtattam le a konkrét piros cellát:
+`flutter test test/tooling/program_completion_test.dart` → `+27: All tests
+passed!`. Csak ezután ment a dispatch, és a zöld kapu így a merge SHA-n
+(`7e00287e`) állt össze: Full Gate `33871937135` **success**, Router CI
+`33871930803` **success**, a lokális `tools/round-gate.sh` **GATE_EXIT=0**.
+
+**Szabály.** (1) Örökölt piros CI-ra hivatkozó halt-jelentés sorolja fel a kör
+MINDEN dispatch-elt kapujának konklúzióját, vagy mondja ki tételesen, melyiket
+nem mérte — és a folytatás minden nem mért kaput mérjen újra, ne csak azt, amit
+a jelentés megnevez. (2) A „a `main` már zöld" NEM bizonyíték a kör
+merge-kapujára: a bizonyíték a merge-elt HEAD-en futtatott KONKRÉT korábban
+piros cella, majd a teljes kapu az így kapott SHA-n. Egy `REVIEW-APPROVED`
+folytatásban ez a két mérés az egyetlen dolog, ami a fölösleges újrakezdés
+elmaradását is biztonságossá teszi.
+
+**Őrteszt:** nincs — a lecke az orchestrátor folytatáskori MÉRÉSI SORRENDJÉRŐL
+szól (melyik kaput méri újra és melyik fán), nem egy kódbeli invariánsról; a
+gépi fele már fedve van: a `tools/round-resume-probe.sh` adja a
+`REVIEW-APPROVED` besorolást, az exact-SHA kapu-egyezést pedig a
+`tools/round-land.sh` fail-closed PR-metaadat-ellenőrzése méri.

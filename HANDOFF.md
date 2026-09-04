@@ -1,5 +1,65 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R07 KÉSZ — Annotációs szerződés: az automatikus címke soha nem lép elő ground truth-szá — PR [#570](https://github.com/wolfcasaba/strumsight/pull/570), squash `80506119` (2026-09-04)
+
+A Chapter 14 sáv hetedik köre megadta a **verziózott, validált és
+visszakövethető felismerési annotációt**: azt a szerződést, amihez az `E14-R08`
+harness és az `E14-R09` baseline-gate egyáltalán mérhet. A kör kötött
+scope-szűkítéssel ment (brief §0.0): az SDD Kör 07 grafikus annotátort ír
+(waveform, húzható onset, undo/redo), de a repónak **nincs desktop/web
+futtatási célja**, és a gate egy GUI-t nem tud vezetni — a bizonyítható rész
+(séma, átfedés-validáció, provenance, két-annotátoros riport) viszont
+közvetlenül mérhető. A szerkesztő külön kör (`E14-R07b`).
+([ADR 0359](docs/adr/0359-recognition-annotation-contract-and-agreement.md), D1–D6.)
+
+**A kör terméke** (8 fájl, 1924 sor):
+
+- `evaluation/recognition/annotation_schema.json` — a séma maga, `schemaVersion`
+  kapuval; `evaluation/recognition/fixtures/annotation_pair.json` — két
+  annotátoros CI-fixture (10+10 esemény, mindhárom `provenance`-értékkel).
+- `lib/features/live/domain/evaluation/recognition_annotation.dart` —
+  Flutter-független modell + egyetértés-számítás (Kuhn-párosítás onset-toleranciával).
+- `lib/features/live/data/evaluation/recognition_annotation_parser.dart` —
+  típusos parser: `InvalidSchemaVersion`, **kötelező** `provenance`
+  (`auto | human | reviewed`, hiány → típusos hiba, **nincs `human` default**),
+  átfedés → hiba **mindkét esemény indexével**, nem csendes összevonás.
+- `tool/recognition_annotate.dart` — validate + agreement CLI, determinisztikus
+  JSON (kanonikus kulcsrend, `DateTime.now()` nélkül); hiányzó fájl → `exit 2`,
+  parse-hiba → `exit 1`, a riport `stdout`-ra, a hiba `stderr`-re.
+- `docs/eval/recognition-annotation.md`, valamint
+  `test/features/live/evaluation/recognition_annotation_test.dart` — 18 cella.
+
+**A mérce, nem a szöveg.** Az onset-tolerancia (50 ms) határa **inkluzív**, és
+mind a három cella mérve: 49 ms → párosít, **pontosan 50 ms → párosít**, 51 ms →
+nem. A fixture szándékosan **nem** túlillesztett: a `b9`/`b10` esemény nem
+párosítható, az `a6`↔`b6` pár irányban eltér — így egy „mindent párosít" és egy
+„minden irány egyezik" implementáció is pirosra vált (`directionAgreement =
+0.875`, `matchedEventCount = 8`).
+
+**Review: APPROVED** (0 BLOCKER / 0 MAJOR / 0 MINOR, 2 NOTE) —
+`docs/reviews/e14-r07-review.md`. A reviewer izolált klónban futtatta a gate-et
+és **három eldobható mutációt**: (M1) a párosítás határa `<=` → `<` → 2 cella
+piros; (M2) hiányzó `provenance` → `human` default → 1 cella piros; (M3)
+`generatedAt: DateTime.now()` a riportba → 2 cella piros. Mind visszaállítva. A
+cellák tehát a VISELKEDÉST mérik, nem a szerkezetet.
+
+**A kör H3 halttal állt meg, és nem a saját hibájából.** Az exact-SHA CI-t egy
+**örökölt, `main`-oldali** completion-matrix drift vitte pirosra — ugyanaz a
+gyökérok, amit az [önjavító kör](docs/LESSONS.md#l627) mért ki és a `#569` PR
+javított. A folytatás nem implementált újra semmit (`REVIEW-APPROVED` fok, ADR
+0112): §0.3 upstream-szinkron (`merge --no-ff origin/main`, konfliktus nélkül) →
+a teljes CI-kapu ÚJRA a merge SHA-n (`7e00287e`: Full Gate
+[33871937135](https://github.com/wolfcasaba/strumsight/actions/runs/33871937135)
+**success**, Router CI `33871930803` **success**) → zöld kapus squash-merge.
+A halt-jelentés EGY piros kaput nevezett meg (Router CI), a valóságban **kettő**
+volt piros — azonos gyökérokkal; a folytatás mindkettőt újramérte
+([L628](docs/LESSONS.md#l628)).
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending`
+sora — a Chapter 14 sávon `E14-R05` (live signal quality analyzer, párhuzamos
+sloton fut) és `E14-R08` (grouped evaluation harness, ADR `0360`), amely az itt
+megépített annotációs szerződésre mér.
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E14-R07 / H3: a merge utáni könyvelés saját munkapéldányban fut, a push újrapróbálható és hangos (2026-09-04)
 
 **ADR 0112 önjavító kör. A megállt kör (E14-R07) terméke HIBÁTLAN** — a gate
