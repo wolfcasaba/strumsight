@@ -60,6 +60,17 @@ class StrumPrediction {
       ? RecognitionDecision.uncertain
       : RecognitionDecision.confirmed;
 
+  /// Derived alongside [decision] (never a separate constructor field, so it
+  /// can never drift from it): `uncertain` pairs with
+  /// [RecognitionRejectReason.lowConfidence], every other decision has no
+  /// reason (`null`). This round's [decision] only ever produces `uncertain`
+  /// or `confirmed`, so `lowConfidence` is the only reason this getter can
+  /// report — richer reasons need signals this contract doesn't carry yet.
+  RecognitionRejectReason? get rejectReason =>
+      decision == RecognitionDecision.uncertain
+      ? RecognitionRejectReason.lowConfidence
+      : null;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'onsetTimeSec': onsetTimeSec,
     'verdictTimeSec': verdictTimeSec,
@@ -70,13 +81,18 @@ class StrumPrediction {
     'directionMargin': directionMargin,
     'modelId': modelId,
     'decision': decision.toJson(),
+    'rejectReason': rejectReason?.toJson(),
   };
 
   /// Decodes without guessing a safe fallback — a missing required key or a
   /// wrong-typed value is a typed [ArgumentError], never a silent `null` or
-  /// a partial object (ADR 0505 D6, `docs/LESSONS.md` L619). [directionMargin]
-  /// and [decision] are NOT read back: they are re-derived from [pDown]/[pUp],
-  /// so a round-trip stays a fixed point without trusting stale wire data.
+  /// a partial object (ADR 0505 D6, `docs/LESSONS.md` L619). [directionMargin],
+  /// [decision] and [rejectReason] are NOT read back: they are re-derived
+  /// from [pDown]/[pUp], so a round-trip stays a fixed point without trusting
+  /// stale wire data. A calibrated confidence outside `0..1` is rejected here
+  /// too — the legacy adapter boundary (`Strum.confidence`) asserts that
+  /// range, and a value outside it must fail loudly at the contract edge,
+  /// not silently in a release-mode assert-free build (ADR 0505 D6).
   factory StrumPrediction.fromJson(Object? json) {
     final object = _requireObject(json, 'json');
     return StrumPrediction(
@@ -85,7 +101,7 @@ class StrumPrediction {
       pDown: _requireDouble(object, 'pDown'),
       pUp: _requireDouble(object, 'pUp'),
       pNoStrum: _requireDouble(object, 'pNoStrum'),
-      calibratedConfidence: _requireNullableDouble(
+      calibratedConfidence: _requireCalibratedConfidence(
         object,
         'calibratedConfidence',
       ),
@@ -145,4 +161,19 @@ double? _requireNullableDouble(Map<String, Object?> object, String field) {
   if (value == null) return null;
   if (value is num) return value.toDouble();
   throw ArgumentError.value(value, field, 'must be null or a number');
+}
+
+/// Like [_requireNullableDouble], but additionally rejects a calibrated
+/// confidence outside `0..1` with a typed error instead of letting it reach
+/// the legacy adapter boundary, where `Strum.confidence`'s assert would only
+/// fire in debug builds (release builds would pass it through silently).
+double? _requireCalibratedConfidence(
+  Map<String, Object?> object,
+  String field,
+) {
+  final value = _requireNullableDouble(object, field);
+  if (value != null && (value < 0 || value > 1)) {
+    throw ArgumentError.value(value, field, 'must be within 0..1');
+  }
+  return value;
 }

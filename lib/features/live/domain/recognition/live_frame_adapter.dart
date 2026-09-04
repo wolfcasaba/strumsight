@@ -11,8 +11,9 @@ import 'strum_prediction.dart';
 /// `chord_timeline_provider.dart`, `live_practice_observation_gateway.dart`,
 /// …) stay untouched (ADR 0505 D5, ADR 0116 pattern). The adapter FORDÍT,
 /// nem DÖNT: it never upgrades a non-[RecognitionDecision.confirmed] chord
-/// to visible "so there's something to show" — that state stays exactly
-/// what today's `_chordLatched == false` produces: `current: null`.
+/// OR strum direction to visible "so there's something to show" — that
+/// state stays exactly what today's `_chordLatched == false` produces:
+/// `current: null` (chord) / `latestStrum: null` (strum).
 ///
 /// This is the ONLY file in `domain/recognition/**` allowed to import
 /// `model/live_frame.dart` (the architecture guard in
@@ -30,17 +31,23 @@ final class LiveFrameAdapter {
   /// the ghosted `next` chord — none of those exist in the new contract
   /// this round).
   static LiveFrame toLiveFrame(RecognitionFrame frame, LiveFrame base) {
+    final strum = _strumFor(frame.strum);
     return LiveFrame(
       current: _chordFor(frame.chord),
       next: base.next,
-      latestStrum: _strumFor(frame.strum),
+      latestStrum: strum,
       bar: base.bar,
       bpm: base.bpm,
       inputLevel: base.inputLevel,
       tuningHz: base.tuningHz,
       listening: base.listening,
       strumSeq: base.strumSeq,
-      latestStrumTime: frame.strum?.onsetTimeSec ?? base.latestStrumTime,
+      // Only a VISIBLE strum's onset time may replace the base fallback —
+      // otherwise a rejected/uncertain prediction's onset time would leak
+      // through even though its direction never became visible.
+      latestStrumTime: strum != null
+          ? frame.strum!.onsetTimeSec
+          : base.latestStrumTime,
       engineTimeSec: frame.frameTimeSec,
     );
   }
@@ -57,6 +64,12 @@ final class LiveFrameAdapter {
     return Chord(chord.label);
   }
 
+  /// `confirmed` shows a directional arrow — PRECISELY the same gate
+  /// [_chordFor] applies; `candidate`, `provisional`, `uncertain`,
+  /// `rejected` and `expired` all produce `null`. Upgrading any of those
+  /// five states to a visible arrow is the exact weakening D5 forbids: an
+  /// `uncertain` direction must never look like a confirmed one.
+  ///
   /// The legacy `Strum.confidence` field is non-nullable — but ADR 0505 D2
   /// forbids copying a raw probability into a confidence-shaped field, even
   /// at this legacy boundary. While [StrumPrediction.calibratedConfidence]
@@ -64,7 +77,9 @@ final class LiveFrameAdapter {
   /// `0`, the same "we don't know anything confident" value
   /// `LiveFrame.empty` already uses.
   static Strum? _strumFor(StrumPrediction? strum) {
-    if (strum == null) return null;
+    if (strum == null || strum.decision != RecognitionDecision.confirmed) {
+      return null;
+    }
     return Strum(
       direction: strum.pDown >= strum.pUp
           ? StrumDirection.down

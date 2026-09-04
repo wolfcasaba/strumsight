@@ -20,6 +20,7 @@ class ChordPrediction {
     required this.stabilityFrames,
     required this.sourceEngine,
     required this.decision,
+    required this.rejectReason,
   });
 
   /// Human display label, e.g. "Am", "F#m7" — same shape as the legacy
@@ -55,6 +56,12 @@ class ChordPrediction {
   /// owns the decision, the widget layer still only displays it.
   final RecognitionDecision decision;
 
+  /// Constructor-received this round, like [decision] (see class doc): a
+  /// MEASURED-calibration-free derivation of "why" a reject-side [decision]
+  /// happened would be the same forbidden hazugság ADR 0505 D2 rejects for
+  /// confidence. `null` for every non-reject-side decision.
+  final RecognitionRejectReason? rejectReason;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'label': label,
     'root': root,
@@ -65,11 +72,14 @@ class ChordPrediction {
     'stabilityFrames': stabilityFrames,
     'sourceEngine': sourceEngine,
     'decision': decision.toJson(),
+    'rejectReason': rejectReason?.toJson(),
   };
 
   /// Decodes without guessing a safe fallback — a missing required key or a
   /// wrong-typed value is a typed [ArgumentError], never a silent `null` or
-  /// a partial object (ADR 0505 D6, `docs/LESSONS.md` L619).
+  /// a partial object (ADR 0505 D6, `docs/LESSONS.md` L619). A calibrated
+  /// confidence outside `0..1` is rejected here too — the legacy adapter
+  /// boundary's assert must not be the first thing to catch it.
   factory ChordPrediction.fromJson(Object? json) {
     final object = _requireObject(json, 'json');
     return ChordPrediction(
@@ -78,13 +88,14 @@ class ChordPrediction {
       quality: _requireString(object, 'quality'),
       pNoChord: _requireDouble(object, 'pNoChord'),
       pUnknown: _requireDouble(object, 'pUnknown'),
-      calibratedConfidence: _requireNullableDouble(
+      calibratedConfidence: _requireCalibratedConfidence(
         object,
         'calibratedConfidence',
       ),
       stabilityFrames: _requireInt(object, 'stabilityFrames'),
       sourceEngine: _requireString(object, 'sourceEngine'),
       decision: RecognitionDecision.fromJson(object['decision']),
+      rejectReason: _requireNullableRejectReason(object, 'rejectReason'),
     );
   }
 
@@ -100,7 +111,8 @@ class ChordPrediction {
           other.calibratedConfidence == calibratedConfidence &&
           other.stabilityFrames == stabilityFrames &&
           other.sourceEngine == sourceEngine &&
-          other.decision == decision;
+          other.decision == decision &&
+          other.rejectReason == rejectReason;
 
   @override
   int get hashCode => Object.hash(
@@ -113,6 +125,7 @@ class ChordPrediction {
     stabilityFrames,
     sourceEngine,
     decision,
+    rejectReason,
   );
 }
 
@@ -150,4 +163,34 @@ double? _requireNullableDouble(Map<String, Object?> object, String field) {
   if (value == null) return null;
   if (value is num) return value.toDouble();
   throw ArgumentError.value(value, field, 'must be null or a number');
+}
+
+/// Like [_requireNullableDouble], but additionally rejects a calibrated
+/// confidence outside `0..1` with a typed error instead of letting it reach
+/// the legacy adapter boundary, where `Strum.confidence`'s assert would only
+/// fire in debug builds (release builds would pass it through silently).
+double? _requireCalibratedConfidence(
+  Map<String, Object?> object,
+  String field,
+) {
+  final value = _requireNullableDouble(object, field);
+  if (value != null && (value < 0 || value > 1)) {
+    throw ArgumentError.value(value, field, 'must be within 0..1');
+  }
+  return value;
+}
+
+/// Requires the KEY to be present (nullable value allowed) — same fail-closed
+/// shape as [_requireNullableDouble], but for the closed
+/// [RecognitionRejectReason] enum.
+RecognitionRejectReason? _requireNullableRejectReason(
+  Map<String, Object?> object,
+  String field,
+) {
+  if (!object.containsKey(field)) {
+    throw ArgumentError.value(null, field, 'is required (key missing)');
+  }
+  final value = object[field];
+  if (value == null) return null;
+  return RecognitionRejectReason.fromJson(value);
 }

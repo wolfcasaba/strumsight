@@ -30,7 +30,22 @@ ChordPrediction _chordWith(RecognitionDecision decision) => ChordPrediction(
   stabilityFrames: 6,
   sourceEngine: RecognitionRuntimeInfo.chordEngineNnlsViterbi,
   decision: decision,
+  rejectReason: null,
 );
+
+// The brief §6.1 BOUND pDown/pUp pairs (measured, not hand-tuned margins —
+// swapping them silently flips the expected decision, see the brief's
+// warning block).
+StrumPrediction _strumWith({required double pDown, required double pUp}) =>
+    StrumPrediction(
+      onsetTimeSec: 3.0,
+      verdictTimeSec: 3.05,
+      pDown: pDown,
+      pUp: pUp,
+      pNoStrum: 0.1,
+      calibratedConfidence: null,
+      modelId: 'strum_crnn_live_3c.bin',
+    );
 
 LiveFrame _baseFrame() => const LiveFrame(
   current: null,
@@ -98,6 +113,74 @@ void main() {
       );
     },
   );
+
+  group('LiveFrameAdapter — strum backward compatibility matrix (MAJOR-1 fix, '
+      'ADR 0505 D5, §6.3)', () {
+    // Unlike ChordPrediction.decision (constructor-received, all six
+    // RecognitionDecision states reachable), StrumPrediction.decision is
+    // DERIVED this round (§0.0 R7) from directionMargin against a single
+    // threshold — so only two of the six states are actually producible:
+    // `uncertain` and `confirmed`. `candidate`/`provisional`/`rejected`/
+    // `expired` have no StrumPrediction constructor path this round, so
+    // there is nothing to build a cell with. Both reachable branches of
+    // `_strumFor`'s `!= confirmed` gate are exercised below with the
+    // brief §6.1 BOUND pDown/pUp pairs — the same pairs the contract test
+    // uses for the numeric threshold.
+    final cases = <String, ({StrumPrediction strum, bool visible})>{
+      'below threshold (uncertain)': (
+        strum: _strumWith(pDown: 0.460, pUp: 0.440),
+        visible: false,
+      ),
+      'exactly on threshold — inclusive on the reject side (uncertain)': (
+        strum: _strumWith(pDown: 0.475, pUp: 0.425),
+        visible: false,
+      ),
+      'above threshold (confirmed)': (
+        strum: _strumWith(pDown: 0.600, pUp: 0.300),
+        visible: true,
+      ),
+    };
+
+    for (final entry in cases.entries) {
+      final strum = entry.value.strum;
+      final visible = entry.value.visible;
+      test('${entry.key} → decision ${strum.decision.name}, latestStrum '
+          '${visible ? 'present' : 'null'}', () {
+        final frame = RecognitionFrame(
+          frameTimeSec: 5.0,
+          runtimeInfo: _runtimeInfo(),
+          strum: strum,
+        );
+
+        final legacy = LiveFrameAdapter.toLiveFrame(frame, _baseFrame());
+
+        if (visible) {
+          expect(strum.decision, RecognitionDecision.confirmed);
+          expect(strum.rejectReason, isNull);
+          expect(legacy.latestStrum, isNotNull);
+          expect(legacy.latestStrumTime, strum.onsetTimeSec);
+        } else {
+          expect(strum.decision, RecognitionDecision.uncertain);
+          expect(strum.rejectReason, RecognitionRejectReason.lowConfidence);
+          expect(legacy.latestStrum, isNull);
+          expect(legacy.latestStrumTime, _baseFrame().latestStrumTime);
+        }
+      });
+    }
+
+    test('a RecognitionFrame with no strum prediction at all → latestStrum '
+        'null', () {
+      final frame = RecognitionFrame(
+        frameTimeSec: 5.0,
+        runtimeInfo: _runtimeInfo(),
+      );
+
+      final legacy = LiveFrameAdapter.toLiveFrame(frame, _baseFrame());
+
+      expect(legacy.latestStrum, isNull);
+      expect(legacy.latestStrumTime, _baseFrame().latestStrumTime);
+    });
+  });
 
   group('LiveFrameAdapter — fields the new contract does not model yet', () {
     test(

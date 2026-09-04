@@ -595,4 +595,105 @@ Részletek: a célzott `recognition_frame_contract_test.dart` 35/35, a
 íróként. A `LiveFrameAdapter` jelenleg nincs bekötve semmilyen production
 hívóba (ez a következő kör dolga, §9).
 
+### 10.8 Javító kör (2026-09-04, `docs/reviews/e14-r04-review.md` alapján)
+
+**MAJOR-1 — `_strumFor` mostantól kapuz a `decision`-re.**
+
+- `live_frame_adapter.dart` `_strumFor`: `if (strum == null ||
+  strum.decision != RecognitionDecision.confirmed) return null;` — pontosan a
+  `_chordFor` szabálya. A `latestStrumTime` fallback ugyanezt a kapuzott
+  értéket követi (`toLiveFrame` egyszer számolja ki a `strum`-ot, és a
+  `frame.strum!.onsetTimeSec`-et csak akkor engedi át, ha `strum != null`) —
+  egy elutasított/bizonytalan jóslat onset-ideje többé nem szivárog ki.
+- A `_strumFor` és a fájl tetején lévő doc-comment frissítve: a leírt
+  viselkedés most már a chordra ÉS a strumra egyaránt igaz.
+- **Melyik teszt fogta volna pirosra a régi viselkedést:**
+  `test/features/live/live_frame_adapter_test.dart`, az új „LiveFrameAdapter —
+  strum backward compatibility matrix" csoport `exactly on threshold` cellája
+  — pontosan a review §2.4 próbatesztjének (`pDown: 0.475, pUp: 0.425`)
+  megfelelő eset. A régi kódon ez a cella `Expected: null / Actual:
+  <Instance of 'Strum'>`-ot adott volna (lásd review §2.4); az új kódon zöld.
+- A mátrixot kiterjesztettem a strum-oldalra, de **nem szó szerint hat
+  cellával**: `StrumPrediction.decision` ebben a körben (§0.0 R7) KIZÁRÓLAG a
+  `directionMargin`-ból származtatott, és csak két értéket vehet fel
+  (`uncertain`/`confirmed`) — a `candidate`/`provisional`/`rejected`/`expired`
+  állapotokhoz nincs `StrumPrediction`-konstruktor-út ebben a körben, tehát
+  nincs mivel felépíteni azt a cellát. A három mért határcella (alatta,
+  pontosan rajta, fölötte — a brief §6.1 KÖTÖTT `pDown`/`pUp` párjaival) a
+  ténylegesen elérhető állapotteret teljesen lefedi, és mindegyik cella a
+  `decision` MELLETT a `rejectReason`-t is méri (lásd MAJOR-2). Ezt a
+  korlátot a tesztfájl doc-commentje is rögzíti.
+
+**MAJOR-2 — `rejectReason` mindkét prediction-ben.**
+
+- `StrumPrediction.rejectReason` — **getter**, a `decision`-nal együtt
+  levezetve (`uncertain` → `RecognitionRejectReason.lowConfidence`, egyébként
+  `null`), sosem külön konstruktor-mező — nem csúszhat szét a `decision`-től.
+  `toJson`-be bekerül; a `fromJson` NEM olvassa vissza (ugyanaz a minta, mint
+  a `decision`/`directionMargin` esetén — a derivált mező sosem drótról jön).
+- `ChordPrediction.rejectReason` — **konstruktorból kapott** nullable mező
+  (`§0.0 R7` logika: a `decision`-hoz hasonlóan, MÉRT kalibráció nélkül nem
+  vezethető le). `toJson`/`fromJson` fail-closed: a `rejectReason` KULCS
+  kötelező, az ÉRTÉK lehet `null` (`_requireNullableRejectReason`, ugyanaz a
+  minta, mint a `_requireNullableDouble`). `==`/`hashCode` bővítve.
+- **Melyik teszt fogta volna pirosra a régi viselkedést:**
+  `recognition_frame_contract_test.dart` — a `directionMargin threshold is
+  inclusive on the rejection side` teszt bővített asszerciói
+  (`below.rejectReason`, `exactlyOn.rejectReason` →
+  `RecognitionRejectReason.lowConfidence`) a régi kódon fordítási hibával
+  buktak volna (`rejectReason` getter nem létezett); a ChordPrediction oldali
+  `rejectReason is constructor-received…` és `a missing rejectReason KEY
+  throws` tesztek szintén fordítási hibával/piros asszercióval buktak volna
+  a régi konstruktoron (nem volt `rejectReason` paraméter).
+- A brief §6.1 három cellája (alatta/pontosan rajta/fölötte) most a PÁROST
+  méri (`decision` + `rejectReason`), nem csak a `decision`-t —
+  `live_frame_adapter_test.dart` strum-mátrixában és
+  `recognition_frame_contract_test.dart`-ban egyaránt.
+
+**MINOR-1 — `calibratedConfidence` tartomány-ellenőrzés a `fromJson`-ben.**
+
+- `_requireCalibratedConfidence` (mindkét fájlban külön-külön, a MINOR-2
+  döntés szerint NEM egy közös helperbe — lásd alább) a
+  `_requireNullableDouble`-re épül, és `0..1`-en kívüli értékre típusos
+  `ArgumentError`-t dob. Csak a KALIBRÁLT mezőre vonatkozik; a nyers
+  valószínűségekre (`pDown`, `pUp`, `pNoStrum`, `pNoChord`, `pUnknown`) nem
+  vezettem be tartomány-ellenőrzést (a lelet kifejezetten ezt kérte).
+- **Melyik teszt fogta volna pirosra a régi viselkedést:**
+  `recognition_frame_contract_test.dart` mindkét modellre új
+  `a calibratedConfidence outside 0..1 throws on decode` cella (`1.4` és
+  `-0.1` érték) — a régi `fromJson` ezeket simán átengedte volna (a
+  `Strum(confidence:)` assert csak a legacy adapter határán, csak debug
+  buildben sült volna el).
+
+**Amit a leletek közül szándékosan NEM érintettem:** MINOR-2 (a négyszer
+duplikált `_require*` helperek) — follow-up marad, a MAJOR-2 mezőbővítésnél
+nem sokszoroztam tovább a készletet (a két új helper — `_requireCalibratedConfidence`,
+`_requireNullableRejectReason` — is fájlonként külön létezik, ugyanúgy, mint
+a meglévő `_requireNullableDouble`). NOTE-1/NOTE-2 → nem nyúltam hozzájuk.
+
+**A záró gate ténylegesen (izolált futás, ugyanaz a parancs, mind a 10 lépés
+ZÖLD):**
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/live/recognition_frame_contract_test.dart zöld
+    test test/features/live/live_frame_adapter_test.dart       zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    test test/features/live                                    zöld
+    test test/core                                             zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+```
+
+A célzott `recognition_frame_contract_test.dart` 41/41 (35 + 6 új cella: 2
+strum rejectReason-asszerció-bővítés + 1 wire-cella + 1 strum
+calibratedConfidence-tartomány + 3 chord rejectReason/tartomány-cella), a
+`live_frame_adapter_test.dart` 16/16 (13 régi + 4 új strum-mátrix cella,
+nettó +3 a fájlbetöltéssel), az `architecture_dependency_test.dart` 51/51
+(változatlan — ez a kör nem érintette az architektúra-őrt), a teljes
+`test/features/live` és `test/core` szintén teljes egészében zöld.
+
 ## 11. Review — a Claude tölti ki

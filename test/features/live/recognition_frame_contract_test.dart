@@ -33,6 +33,7 @@ StrumPrediction _strum({
 ChordPrediction _chord({
   RecognitionDecision decision = RecognitionDecision.confirmed,
   double? calibratedConfidence,
+  RecognitionRejectReason? rejectReason,
 }) => ChordPrediction(
   label: 'Am',
   root: 'A',
@@ -43,6 +44,7 @@ ChordPrediction _chord({
   stabilityFrames: 6,
   sourceEngine: RecognitionRuntimeInfo.chordEngineNnlsViterbi,
   decision: decision,
+  rejectReason: rejectReason,
 );
 
 void main() {
@@ -111,7 +113,9 @@ void main() {
 
   group('StrumPrediction — model 2/5', () {
     // ADR 0505 D4 — the numeric threshold matrix is measured, not chosen for
-    // being "nicer". Do NOT swap these pDown/pUp pairs.
+    // being "nicer". Do NOT swap these pDown/pUp pairs. §6.1 requires the
+    // PAIR (decision + rejectReason) measured on all three cells, not just
+    // decision.
     test('directionMargin threshold is inclusive on the rejection side', () {
       final below = _strum(pDown: 0.460, pUp: 0.440);
       final exactlyOn = _strum(pDown: 0.475, pUp: 0.425);
@@ -119,12 +123,15 @@ void main() {
 
       expect(below.directionMargin, closeTo(0.02, 1e-9));
       expect(below.decision, RecognitionDecision.uncertain);
+      expect(below.rejectReason, RecognitionRejectReason.lowConfidence);
 
       expect(exactlyOn.directionMargin, closeTo(0.05, 1e-9));
       expect(exactlyOn.decision, RecognitionDecision.uncertain);
+      expect(exactlyOn.rejectReason, RecognitionRejectReason.lowConfidence);
 
       expect(above.directionMargin, closeTo(0.30, 1e-9));
       expect(above.decision, RecognitionDecision.confirmed);
+      expect(above.rejectReason, isNull);
     });
 
     test('directionMargin is always |pDown - pUp|, never stored', () {
@@ -161,19 +168,39 @@ void main() {
       },
     );
 
-    test(
-      'decision/directionMargin in the wire payload are re-derived, not trusted',
-      () {
-        final json = _strum(pDown: 0.9, pUp: 0.1).toJson();
-        // Tamper with the derived fields a hostile/stale producer might send.
-        json['decision'] = 'uncertain';
-        json['directionMargin'] = 0.0;
+    test('decision/directionMargin/rejectReason in the wire payload are '
+        're-derived, not trusted', () {
+      final json = _strum(pDown: 0.9, pUp: 0.1).toJson();
+      // Tamper with the derived fields a hostile/stale producer might send.
+      json['decision'] = 'uncertain';
+      json['directionMargin'] = 0.0;
+      json['rejectReason'] = 'lowConfidence';
 
-        final decoded = StrumPrediction.fromJson(json);
-        expect(decoded.decision, RecognitionDecision.confirmed);
-        expect(decoded.directionMargin, closeTo(0.8, 1e-9));
-      },
-    );
+      final decoded = StrumPrediction.fromJson(json);
+      expect(decoded.decision, RecognitionDecision.confirmed);
+      expect(decoded.directionMargin, closeTo(0.8, 1e-9));
+      expect(decoded.rejectReason, isNull);
+    });
+
+    // MAJOR-2 fix-round cell — the wire form carries the derived pairing.
+    test('toJson carries the derived rejectReason paired with decision', () {
+      final uncertain = _strum(pDown: 0.460, pUp: 0.440);
+      final confirmed = _strum(pDown: 0.600, pUp: 0.300);
+      expect(uncertain.toJson()['rejectReason'], 'lowConfidence');
+      expect(confirmed.toJson()['rejectReason'], isNull);
+    });
+
+    // MINOR-1 fix-round cell — a calibrated confidence outside 0..1 must
+    // fail loudly at the contract edge, not silently pass through to the
+    // legacy adapter's debug-only assert.
+    test('a calibratedConfidence outside 0..1 throws on decode', () {
+      final tooHigh = _strum(calibratedConfidence: 0.5).toJson()
+        ..['calibratedConfidence'] = 1.4;
+      final tooLow = _strum(calibratedConfidence: 0.5).toJson()
+        ..['calibratedConfidence'] = -0.1;
+      expect(() => StrumPrediction.fromJson(tooHigh), throwsArgumentError);
+      expect(() => StrumPrediction.fromJson(tooLow), throwsArgumentError);
+    });
 
     // Fail-closed cell 2/5 (ADR 0505 D6, L619).
     test('a missing calibratedConfidence KEY throws — distinct from null', () {
@@ -240,6 +267,49 @@ void main() {
     test('a missing decision key throws, not a default decision', () {
       final json = _chord().toJson()..remove('decision');
       expect(() => ChordPrediction.fromJson(json), throwsArgumentError);
+    });
+
+    // MAJOR-2 fix-round cell — rejectReason is constructor-received (§0.0
+    // R7), not derived: it must round-trip independently of decision.
+    test('rejectReason is constructor-received, paired with the reject-side '
+        'decision the caller supplies', () {
+      final uncertain = _chord(
+        decision: RecognitionDecision.uncertain,
+        rejectReason: RecognitionRejectReason.lowConfidence,
+      );
+      final confirmed = _chord(
+        decision: RecognitionDecision.confirmed,
+        rejectReason: null,
+      );
+      expect(uncertain.rejectReason, RecognitionRejectReason.lowConfidence);
+      expect(confirmed.rejectReason, isNull);
+    });
+
+    test('JSON round-trip is lossless with a non-null rejectReason', () {
+      final prediction = _chord(
+        decision: RecognitionDecision.uncertain,
+        rejectReason: RecognitionRejectReason.lowConfidence,
+      );
+      final decoded = ChordPrediction.fromJson(prediction.toJson());
+      expect(decoded, prediction);
+      expect(decoded.rejectReason, RecognitionRejectReason.lowConfidence);
+    });
+
+    // Fail-closed cell — a missing rejectReason KEY throws, distinct from an
+    // explicit null (ADR 0505 D6, L619).
+    test('a missing rejectReason KEY throws — distinct from null', () {
+      final json = _chord().toJson()..remove('rejectReason');
+      expect(() => ChordPrediction.fromJson(json), throwsArgumentError);
+    });
+
+    // MINOR-1 fix-round cell.
+    test('a calibratedConfidence outside 0..1 throws on decode', () {
+      final tooHigh = _chord(calibratedConfidence: 0.5).toJson()
+        ..['calibratedConfidence'] = 1.4;
+      final tooLow = _chord(calibratedConfidence: 0.5).toJson()
+        ..['calibratedConfidence'] = -0.1;
+      expect(() => ChordPrediction.fromJson(tooHigh), throwsArgumentError);
+      expect(() => ChordPrediction.fromJson(tooLow), throwsArgumentError);
     });
   });
 
