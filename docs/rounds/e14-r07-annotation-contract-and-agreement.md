@@ -1,6 +1,7 @@
 # E14-R07 — Annotációs szerződés, validator és annotátor-egyetértés
 
-- **Státusz:** PREPARED (előre megírva 2026-08-20, kód olvasva: `main @ b0979855`)
+- **Státusz:** READY (pre-flight lefutott 2026-09-04, kód újramérve: `main @ 1feecc11`;
+  előre megírva 2026-08-20, `main @ b0979855`)
 - **Típus:** Chapter 14 (Recognition Accuracy & Useful UI Recovery), Kör 7
 - **Kör-azonosító:** `E14-R07`
 - **Branch:** `<motor>/e14-r07-annotation-contract-and-agreement`
@@ -54,6 +55,81 @@ nincs desktop/web futtatási célja, és a gate egy GUI-t nem tud vezetni —
 a bizonyítható rész (séma, átfedés-validáció, provenance, két-annotátoros
 riport) viszont közvetlenül mérhető. A szerkesztő külön kör (`E14-R07b`),
 és a jelen kör acceptance-e nem hivatkozhat rá.
+
+### 0.0.1 Pre-flight revíziók (2026-09-04, `main @ 1feecc11`) — MÉRT állítások
+
+Az alábbiak a MAI fán mértek, és **felülírják** a brief régebbi szövegének minden
+ellentmondó részletét. Forrásuk az ADR
+[`0359`](../adr/0359-recognition-annotation-contract-and-agreement.md)
+kontextus-szakasza.
+
+**R1 — ADR-szám: `0359` marad.** A `tools/round-slots.py reserve-adr --round E14-R07`
+a globális számlálóból `0506`-ot adott (a lemezen a legnagyobb ADR `0503`), a
+Chapter 14 előre kiosztott blokkja viszont `0359`-et rendel ehhez a körhöz
+(`E14-R06…R09` = `0358…0361`). A `0359` a lemezen **szabad**
+(`ls docs/adr | grep ^0359` → nincs találat), és a foglaló marker-könyvtárában sem
+szerepelt; egyedül ez a brief hivatkozik rá. A `0506` foglalása megmarad (nem
+használjuk), és a pre-flight a `0359`-re is markert írt, hogy egy párhuzamos kör
+se kaphassa meg. Ugyanez a mérés az `E14-R06`-ban (`0358` vs `0504`).
+
+**R2 — `evaluation/recognition/` MÁR LÉTEZIK.** A §2 „az `E14-R02` hozza létre"
+mondata teljesült: a könyvtárban ma `README.md`, `baseline_manifest.json` és
+`baseline_manifest_schema.json` van (ADR 0354). A kör az új `fixtures/`
+alkönyvtárat hozza létre, a meglévő három fájlhoz **nem nyúl** (tilos zóna).
+
+**R3 — A minta a `EvaluationManifestParser`, a FÜGGÉS tilos (ADR 0359 D6).**
+Másolandó alak (`lib/features/audio_analysis/data/evaluation/evaluation_manifest_parser.dart`):
+egy hiba-`enum` (`…ErrorKind`) + egy `…ParseException(kind, message, {path})`
+típus, szigorú ismeretlen-kulcs ellenőrzés, és `parseJsonString` + `parse(Map)`
+páros. A `live` oldalon ez SAJÁT típusnevekkel készül: az `audio_analysis`
+kódjának importja kereszt-feature függés lenne (`tool/check_architecture.dart:774`
+— csak `public.dart` barrel célozható). Idegen barrel bővítése → `stopped`.
+
+**R4 — A `live` barrel nem válik elavulttá, tehát nem kell hozzányúlni.** A
+generált barrel-ellenőrzés (`tool/check_architecture.dart:798`) csak azokra a
+feature-ökre fut, amelyeknek van `lib/features/<f>/public/` fragment-könyvtára
+(`tool/gen_public_barrel.dart:37-45`); a `lib/features/live/public/` **nem
+létezik**, a `public.dart` kézzel írott. Új `domain/`/`data/` fájl tehát nem teszi
+elavulttá. Az új típusok **nem** kerülnek a barrelbe (nem publikus szerződés) —
+a `lib/features/live/public.dart` a tilos zónában marad.
+
+**R5 — A `tool/` CLI és a teszt közvetlen útvonalon importálhat.** Az
+architektúra-őr csak a `lib/`-et járja be (`tool/check_architecture.dart:136`),
+ezért a `tool/recognition_annotate.dart` ugyanúgy importálhatja az új parsert
+közvetlenül, ahogy a `tool/audio_analysis_evaluate.dart` teszi ma
+(`import 'package:strumsight/features/audio_analysis/data/evaluation/…'`). A CLI
+alakja is onnan másolandó: fixture-default útvonal, `--manifest`/`--help`
+kapcsoló, determinisztikus JSON a `stdout`-ra, hiba a `stderr`-re nem nulla
+kilépési kóddal.
+
+**R6 — A fixture NEM a `test/fixtures/` nyilvántartás alá tartozik.** A
+`tool/check_fixture_manifest.dart:10` a `test/fixtures/manifest.json` ellenében
+méri a `test/fixtures/` fát; az `evaluation/recognition/fixtures/annotation_pair.json`
+azon kívül van, tehát sem bejegyzést nem kap, sem hiányzó bejegyzésként nem bukik
+el. Ne írj hozzá manifest-bejegyzést (az a tilos zóna).
+
+**R7 — Nulla hálózati minta a `lib/`-ben.** A `tool/check_data_inventory.dart:431`
+a `lib/` fából deríti fel az egress-útvonalakat, és találat esetén
+`docs/privacy/data-inventory.yaml` bejegyzést követelne — az tilos zóna. A parser
+és a modell ezért `dart:io`-mentes, tiszta érték-kód; a fájlbeolvasás kizárólag a
+`tool/` CLI-ben történik.
+
+**R8 — Irány-címke: a `core` enumja legális, az `audio_analysis`-é nem.** A fán
+`lib/core/music/strum.dart:5` → `enum StrumDirection { down, up }`, és
+`lib/features/audio_analysis/domain/analysis_event.dart:55` →
+`enum StrumDirection { down, up, unknown }`. A `core` importja feature → core
+irány, tehát legális; az `audio_analysis`-beli közvetlen import architektúra-sértés.
+Ha az annotációnak a `down|up`-nál többre van szüksége, a kör SAJÁT enumot
+deklarál az új `domain/` fájlban — idegen feature enumját nem importálja.
+
+**R9 — Nincs S5-típusnév-ütközés.** `RecognitionAnnotation`, `AnnotationEvent`,
+`AnnotationProvenance`, `Provenance`, `AgreementReport` egyike sem létezik ma a
+`lib/`/`tool/` fában.
+
+**R10 — A `dart format` és a `flutter analyze` a `tool/`-ra is fut**
+(`.github/actions/flutter-gates/action.yml:13,17`: `dart format … lib test tool`,
+`flutter analyze lib/ test/ tool/`), tehát a CLI formázása és lint-tisztasága a
+kapu része, nem opció.
 
 ## 1. Cél
 
@@ -153,6 +229,12 @@ Ugyanaz a bemenet bitre ugyanazt a riportot adja (kanonikus kulcsrend, nincs
    (pontosan 50 ms) → párosít, mert a határ az elfogadó oldalhoz tartozik;
    **fölött** (51 ms) → nem párosít.
 
+> **A számok kiszámolva (S3, `python3 -c`, 2026-09-04):**
+> `7/8 = 0.875` (irány-egyetértés a párosított eseményekre),
+> `8/10 = 0.8` (párosítási arány — ez NEM az egyetértés, a kettő nem
+> keverhető), `49 <= 50 → True`, `50 <= 50 → True`, `51 <= 50 → False`
+> (az inkluzív határ három cellája).
+
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
@@ -166,8 +248,15 @@ Ugyanaz a bemenet bitre ugyanazt a riportot adja (kanonikus kulcsrend, nincs
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/live/evaluation
+tools/round-gate.sh test/features/live/evaluation/recognition_annotation_test.dart
 ```
+
+> **S12-revízió (brief-lint, 2026-09-04):** a korábbi parancs a
+> `test/features/live/evaluation` KÖNYVTÁRAT adta át, a `gate_tests` viszont a
+> `test/features/live/evaluation/recognition_annotation_test.dart` FÁJLT sorolja
+> fel. A metaadatot a scope-audit és a CI-terv olvassa, a kaput viszont a
+> parancssor futtatja — a kettő szétcsúszása néma. A fenti parancs mostantól
+> tükrözi a `gate_tests` listát.
 
 Külön processzben futó `format` → `analyze` → célzott teszt → `architecture`
 (AGENTS.md §12). `&&` láncolás tilos (L05/L09). CI-dispatch/PR/merge
