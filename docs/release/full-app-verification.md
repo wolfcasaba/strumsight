@@ -46,7 +46,24 @@ Hub → Setup → Session) → eredmény → Library → Progress → Profile �
 Settings. Minden állomás valós adatot vagy explicit állapotot állít — a
 teszt zöld, de öt állomáson a MÉRT explicit állapot (vagy a bejárás saját
 kényszerű lépése, mint az újraindítás) maga is egy
-bekötési hiányt dokumentál:
+bekötési hiányt dokumentál. **Fontos:** a bejárás a gerincen KÉT
+teszt-oldali navigációt használ, mert a termék saját navigációja
+megszakad — `full_app_walkthrough_test.dart:106`
+(`session.router.go(AppRoutes.today)`, mert az onboarding Skip-je a
+termékben `/live`-ra fejez be, l. **L2**) és
+`full_app_walkthrough_test.dart:168–170` (`router.go(practiceHub)` +
+`router.go('${AppRoutes.practiceSetup}?id=…')`, mert a shell egyetlen
+hirdetett belépési pontja pontozott gyakorlásba `?id=` nélkül navigál, l.
+**L1**). Emiatt: **A3 — NEM teljesül.** A „BE" besorolású capabilityk core
+útjai a termék SAJÁT navigációjával, e két híd nélkül, mérhetően NEM
+járhatók végig — a mért igazság az, hogy az állomások, oda navigálva, valós
+adatot vagy explicit állapotot mutatnak (A2 ✅), és a mért elérhető halmaz
+partíciója teljes (A4 ✅), de a gerinc navigációja két ponton szakad meg.
+
+Az öt lelet közül az **L3** más jellegű, mint a másik négy: nem a
+SZÁLLÍTOTT kompozícióról mér semmit, hanem a mérés a harness saját határán
+akad el (l. L3 alatt) — a Library-állomás ezen a bejáráson ezért **nem**
+bizonyítja sem azt, hogy a szállított kompozíció hibás, sem azt, hogy jó.
 
 ### L1 — a Practice Area Hub „ajánlott gyakorlás" CTA-ja nem ad át `id`-t
 
@@ -244,8 +261,9 @@ kimondott `nincs — <indok>`.
 
 | # | Tétel | Gazda | Kör |
 |---|---|---|---|
-| 1 | L1 — Practice Area Hub recommended CTA nem ad át `id`-t | Practice Area Hub | nincs |
-| 2 | L2 — Onboarding mindig `/live`-ra fejez be | Onboarding feature | nincs |
-| 3 | L3 — Library V2 forrásai bootstrap-függők, a harness nem köti be | Library V2 / E12-R11 harness | nincs |
-| 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | nincs |
-| 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | nincs |
+| 1 | L1 — Practice Area Hub recommended CTA nem ad át `id`-t | Practice Area Hub | nincs — a bekötés javítása a felelős feature kör dolga (`lib/**` ennek a körnek tiltott zónája); a lelet itt van rögzítve |
+| 2 | L2 — Onboarding mindig `/live`-ra fejez be | Onboarding feature | nincs — a bekötés javítása a felelős feature kör dolga; a lelet itt van rögzítve |
+| 3 | L3 — Library V2 forrásai bootstrap-függők, a harness nem köti be | Library V2 / E12-R11 harness | nincs — a harness-nek vagy a Library kompozíciós rétegének kell ezt bekötnie egy jövőbeli körben; a lelet itt van rögzítve |
+| 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | nincs — a két napló összehangolása vagy a mérce forrásának cseréje a felelős feature kör dolga; a lelet itt van rögzítve |
+| 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | nincs — a cache-invalidáció (vagy a provider `.family`/`autoDispose` alakra cserélése) a felelős feature kör dolga; a lelet itt van rögzítve |
+| 6 | A3 — a core utak a termék SAJÁT navigációjával (a két teszt-oldali híd nélkül) mérhetően NEM járhatók végig (l. L1, L2, §2 bevezető) | Practice Area Hub / Onboarding feature | nincs — ugyanaz a két javítás oldaná fel, amit L1/L2 sora már nevez |

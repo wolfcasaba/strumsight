@@ -333,15 +333,28 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   final v1SessionCount = PracticeStats(
     session.container.read(practiceLogProvider),
   ).totalSessions;
+  // Scoped to the "Sessions" _Metric tile's OWN Column (found by walking up
+  // from its label text), not `ProfileHubScreen` at large — a bare
+  // `find.text('$v1SessionCount')` under the whole screen would also match
+  // the streak tile whenever both render `0` (MINOR-2, review §4), which
+  // would pass even if the sessions metric rendered nothing at all.
+  final sessionsMetricColumn = find
+      .ancestor(
+        of: find.text(l10n.progressSessions),
+        matching: find.byType(Column),
+      )
+      .first;
   expect(
     find.descendant(
-      of: find.byType(ProfileHubScreen),
+      of: sessionsMetricColumn,
       matching: find.text('$v1SessionCount'),
     ),
-    findsWidgets,
+    findsOneWidget,
     reason:
         'the sessions metric must reflect its own real (V1 log) source '
-        'value, whatever that measurably is',
+        'value, whatever that measurably is — scoped to the sessions tile '
+        'so the streak tile (which also renders 0 for a fresh install) '
+        'cannot satisfy this assertion',
   );
 
   await tester.tap(find.widgetWithText(OutlinedButton, l10n.settingsTitle));

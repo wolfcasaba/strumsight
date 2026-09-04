@@ -302,7 +302,7 @@ születik.
 |---|---|---|
 | A1 | A router és a kompozíciós rétegek placeholder-mentesek: a mérő az §5.3 P1/P2/P3 szabályaival **0** leletet ad, kilépési kód `0` | `placeholder_wiring_test.dart` |
 | A2 | A teljes bejárás minden lépése valós adatot vagy EXPLICIT üres állapotot mutat — a cella az ADATOT állítja, nem a képernyő jelenlétét | `full_app_walkthrough_test.dart` |
-| A3 | A „BE" besorolású capabilityk core útjai végigjárhatók hálózat nélkül, a **szállított** `forEnvironment(development)` flag-készlettel (§5.5) és sértetlen `FakeNetworkGuard`-dal | `full_app_walkthrough_test.dart` |
+| A3 | A „BE" besorolású capabilityk core útjai végigjárhatók hálózat nélkül, a **szállított** `forEnvironment(development)` flag-készlettel (§5.5) és sértetlen `FakeNetworkGuard`-dal | **NEM teljesül** — a bejárás a gerincen KÉT teszt-oldali navigációval hidalja át a termék saját navigációs hiányát: `full_app_walkthrough_test.dart:106` (`session.router.go(AppRoutes.today)`, **L2** — az onboarding Skip-je `/live`-ra fejez be) és `full_app_walkthrough_test.dart:168–170` (`router.go(practiceHub)` + `router.go('${AppRoutes.practiceSetup}?id=…')`, **L1** — a shell CTA-ja `?id=` nélkül navigál, és `adaptiveShellEnabled=true` mellett egyetlen elérhető képernyő sem állítja elő ezt az URI-t). Amit a kör TÉNYLEG bizonyított: az állomások oda navigálva valós adatot vagy explicit állapotot mutatnak (**A2 ✅**), és a mért elérhető halmaz partíciója teljes (**A4 ✅**) — de a termék saját navigációja a gerincen két ponton megszakad. |
 | A4 | Minden **mért** elérhető képernyő (ma 73) szerepel a bejárásban vagy nevesített indokkal kimarad — a partíció diszjunkt és teljes (§5.4) | `placeholder_wiring_test.dart` (§0.0.1/R4) + a dokumentum |
 | A5 | A dokumentum minden nyitott/kimaradó tétele gazdát ÉS kört nevez, üres cella nélkül | `placeholder_wiring_test.dart` (§5.4/c) |
 | A6 | ZÖLD teljes CI-futás a kör-branchen, telepíthető APK-artefaktummal | orchesztrátor-dispatch linkje a §10-ben |
@@ -504,6 +504,13 @@ A9 bizonyítéka.
 
 ### 10.6 Nyitott tételek / a review figyelmébe
 
+- **A3 — NEM teljesül.** A bejárás a gerincen két teszt-oldali navigációt
+  használ (L2, L1 — l. §6 A3 sora fent és `docs/release/full-app-verification.md`
+  §2), mert a termék saját navigációja a shell CTA-nál és az onboarding
+  Skip-nél megszakad. Amit a kör ténylegesen bizonyított: az állomások oda
+  navigálva valós adatot/explicit állapotot mutatnak (A2 ✅), és a mért
+  elérhető halmaz partíciója teljes (A4 ✅). Egyik mondat sem sugallja, hogy
+  a core út a termék SAJÁT navigációjával végigjárható — az nem.
 - **L1–L5** (`docs/release/full-app-verification.md` §2/§4) — öt valós,
   MÉRT bekötési hiányosság, egyik sem javítva ebben a körben (`lib/**`
   tiltott zóna). Mindegyiknek nincs hozzárendelt javító kör — a review
@@ -516,5 +523,63 @@ A9 bizonyítéka.
   Quick Tools, Songs tab, Gamification, Song Trainer stb.) sorolja fel az
   okot — a review érdemes ellenőrizze, hogy egyik sor sem vákuum-indoklás
   (üres vagy „hamarosan” jellegű).
+
+### 10.7 Javító kör (review-leletek zárása)
+
+A `docs/reviews/e16-r05-review.md` CHANGES REQUESTED verdiktje (0 BLOCKER /
+1 MAJOR / 2 MINOR / 1 NOTE) alapján, doc- és teszt-oldalon, `lib/**`
+érintése nélkül:
+
+- **MAJOR-1** (az A3 verdiktje a méréssel egyezzen) — a §6 A3 sora
+  „Bizonyíték" cellája most kimondja: **NEM teljesül**, hivatkozva L1-re és
+  L2-re, és rögzíti, amit a kör TÉNYLEG bizonyított (A2 ✅, A4 ✅). A §10.6
+  kapott egy dedikált A3 bekezdést, ami ugyanezt vezeti át. A
+  `docs/release/full-app-verification.md` §2 bevezetője kimondja, hogy a
+  bejárás a gerincen két teszt-oldali navigációt használ (melyiket melyik
+  lelet miatt), és kapott egy kimondott **„A3 — NEM teljesül"** sort a mért
+  indokkal; a §4 nyitott tételek táblája egy 6. sorral tükrözi ugyanezt. A
+  cellák egyike sem lett törölve vagy gyengítve — a mérce maradt, a mért
+  eredmény negatív.
+- **MINOR-1** (a §4 „Kör" oszlop csupasz `nincs`) —
+  `docs/release/full-app-verification.md` §4 mind az öt (most hat) sora a
+  `nincs — <indok>` alakot veszi át a §2 L1–L5 szakaszainak szó szerinti
+  indoklásából, ugyanazt a mércét alkalmazva, amit az A5 gépi őr a §3.2
+  táblán már kikényszerít.
+- **MINOR-2** (a Profile Hub „sessions" cellája bármelyik `0`-ra illeszkedik)
+  — `full_app_walkthrough_test.dart` a `l10n.progressSessions` feliratról
+  `find.ancestor(matching: find.byType(Column))` + `.first` alakkal
+  megkeresi a „Sessions" `_Metric` tile SAJÁT `Column`-ját, és CSAK abban
+  keresi a session-számot (`find.descendant`), `findsOneWidget`-tel — a
+  streak-csempe (ami szintén `0`-t renderel egy friss telepítésen) többé nem
+  elégítheti ki a cellát.
+- **NOTE-1** (az L3 harness-eredetű, a §2 bevezetője elmossa) — a §2
+  bevezetője most kimondja, hogy az L3 nem termékhiba, és hogy a
+  Library-állomás a SZÁLLÍTOTT kompozícióról semmit nem bizonyít, mert a
+  mérés a harness határán akadt el.
+
+**A záró gate — teljes, csonkítatlan kimenet (a javítások után, ugyanazon
+nyolc útvonallal, §7):**
+
+```
+$ tools/round-gate.sh test/e2e/full_app_walkthrough_test.dart test/tooling/placeholder_wiring_test.dart test/ui/ui_inventory_test.dart test/tooling/screen_reachability_test.dart test/e2e/first_practice_offline_test.dart test/e2e/returning_user_restart_test.dart test/accessibility/release_flow_semantics_test.dart test/accessibility/release_flow_text_scale_test.dart
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/e2e/full_app_walkthrough_test.dart               zöld
+    test test/tooling/placeholder_wiring_test.dart             zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    test test/e2e/first_practice_offline_test.dart             zöld
+    test test/e2e/returning_user_restart_test.dart             zöld
+    test test/accessibility/release_flow_semantics_test.dart   zöld
+    test test/accessibility/release_flow_text_scale_test.dart  zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
 
 ## 11. Review — a Claude tölti ki
