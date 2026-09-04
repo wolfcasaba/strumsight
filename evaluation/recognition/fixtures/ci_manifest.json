@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "1.0",
+  "cases": [
+    {
+      "caseId": "case-1",
+      "player": "player-a",
+      "device": "phone-1",
+      "guitar": "guitar-1",
+      "room": "room-1",
+      "durationMs": 60000,
+      "expectedEvents": [
+        { "timeMs": 1000, "kind": "onset" },
+        { "timeMs": 2000, "kind": "strum", "direction": "down" },
+        { "timeMs": 3000, "kind": "chord", "chordLabel": "C" }
+      ],
+      "detectedEvents": [
+        { "timeMs": 1020, "kind": "onset", "accepted": true, "confidence": 0.9 },
+        { "timeMs": 2030, "kind": "strum", "accepted": true, "confidence": 0.8, "direction": "down" },
+        { "timeMs": 3040, "kind": "chord", "accepted": true, "confidence": 0.7, "chordLabel": "C" },
+        { "timeMs": 5000, "kind": "onset", "accepted": true, "confidence": 0.4 }
+      ],
+      "confidenceObservations": [
+        { "rawScore": 0.9, "correct": true },
+        { "rawScore": 0.4, "correct": false }
+      ],
+      "detectionLatenciesMs": [30, 45]
+    },
+    {
+      "caseId": "case-2",
+      "player": "player-b",
+      "device": "phone-2",
+      "guitar": "guitar-2",
+      "room": "room-2",
+      "durationMs": 30000,
+      "expectedEvents": [
+        { "timeMs": 500, "kind": "strum", "direction": "up" },
+        { "timeMs": 4000, "kind": "chord", "chordLabel": "noChord" }
+      ],
+      "detectedEvents": [
+        { "timeMs": 520, "kind": "strum", "accepted": true, "confidence": 0.6, "direction": "up" },
+        { "timeMs": 4900, "kind": "chord", "accepted": false, "confidence": 0.2, "chordLabel": "unknown" }
+      ],
+      "confidenceObservations": [
+        { "rawScore": 0.6, "correct": true }
+      ],
+      "detectionLatenciesMs": [20]
+    },
+    {
+      "caseId": "case-3",
+      "player": "player-a",
+      "device": "phone-3",
+      "guitar": "guitar-3",
+      "room": "room-2",
+      "durationMs": 15000,
+      "expectedEvents": [
+        { "timeMs": 800, "kind": "onset" }
+      ],
+      "detectedEvents": [
+        { "timeMs": 820, "kind": "onset", "accepted": true, "confidence": 0.7 }
+      ],
+      "confidenceObservations": [
+        { "rawScore": 0.7, "correct": true }
+      ],
+      "detectionLatenciesMs": [20]
+    }
+  ]
+}

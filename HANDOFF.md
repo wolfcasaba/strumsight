@@ -1,5 +1,42 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R08 KÉSZ — Csoportosított felismerési evaluation harness: a szivárgás HIBA, a párosítás maximális, a definíció a számmal utazik — PR [#573](https://github.com/wolfcasaba/strumsight/pull/573), squash `59372c9c` (2026-09-04)
+
+A felismerési mérés többé nem egyetlen accuracy-szám, és nem szivároghat.
+**ADR [0509](docs/adr/0509-grouped-recognition-evaluation-and-leakage-protection.md)**
+(a Claude írta a pre-flightban; a `docs/adr/**` a kör tilos zónája volt).
+
+| Réteg | Mit ad |
+|---|---|
+| `recognition_split.dart` | `leaveOnePlayerOut` / `leaveOneDeviceOut` / `leaveOneGuitarOut` / `roomHoldout`; a `LeakageDetector` **fail-closed** (D1) és megnevezi az ütköző csoportkulcsot; hiányzó kulcs **tipizált hiba**, nincs `unknown` fold (D2) |
+| `recognition_metrics.dart` | onset P/R/F1 25/50/100 ms, any-strum F1, irány-makró-F1, akkord (weighted accuracy, macro-F1, no-chord F1, unknown false-accept), accepted accuracy + coverage, false visible event/min, latencia p50/p95, ECE (egyenlő SZÉLESSÉGŰ bin, D7), Brier |
+| `recognition_evaluation_runner.dart` + `tool/recognition_evaluate.dart` | tipizált JSON-parszer + CLI, determinisztikus, bájtazonos JSON (D6) |
+| `evaluation/recognition/fixtures/ci_manifest.json` | kicsi, szintetikus CI-fixture, valós felvétel nélkül (D9) |
+
+**A két mért döntés, ami nem ízlés:** a párosítás **Kuhn-féle maximális
+kardinalitású**, inkluzív határral — a mohó „legközelebbi szabad pár" mérten
+alulbecsli a TP-t ([L269](docs/LESSONS.md#l269)); és minden metrika a
+**definíciójával ÉS az irányával** (`higherIsBetter`) együtt utazik a
+reportban — az ECE, a Brier, a false visible event/min és a latencia
+**alacsonyabb = jobb**, amit sablonból konkretizálva csendben meg lehet
+fordítani ([L173](docs/LESSONS.md#l173)).
+
+**Review:** 1. forduló **CHANGES REQUESTED** — 0 BLOCKER / **2 MAJOR** / 1
+MINOR / 3 NOTE ([`docs/reviews/e14-r08-review.md`](docs/reviews/e14-r08-review.md)),
+**1 javító kör**, utána **APPROVED**, 0 nyitott lelet. A két MAJOR:
+(1) a reportban szállított `directionF1`/`chordMacroF1` definíció-szöveg
+ellentmondott a saját számításának (reviewer-próbával reprodukálva), és
+(2) a 389 soros runner meg a commitolt fixture **gépi mérce nélkül** ment
+volna a `main`-re, miközben az acceptance „kétszeri futtatás" cellája
+megkerülte a runnert. Két új lecke: [L630](docs/LESSONS.md#l630),
+[L631](docs/LESSONS.md#l631).
+
+**Kapu:** célzott `tools/round-gate.sh` zöld (mindkét fordulóban, friss
+izolált `/tmp` klónban a reviewer által is újrafuttatva), `full-gate.yml`
+`33883500232` **success** és `router-ci.yml` `33883501106` **success** a merge
+SHA-n (`ef9d332c`). `risk = "normal"` → dedikált biztonsági review nem kellett;
+`native_gate = false` → a CI-tervet a `tools/round-ci-plan.py` adta.
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E14-R05 / H3: a `SignalQualityMath` bekerült az `audio_analysis` nyilvános szerződésébe (2026-09-04)
 
 **ADR 0112 önjavító kör.** Az `E14-R05` pre-flightja `H3`-mal állt meg: a brief
@@ -12193,71 +12230,74 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-04):** `main` @ `f1fced77` — **E14-R04:
-RecognitionFrame V2 domain contract**, PR
-[#568](https://github.com/wolfcasaba/strumsight/pull/568), squash-merge.
-Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
-(Opus 5), **1 javító kör** (review: APPROVED a javító kör után, 0 nyitott
-lelet; CHANGES REQUESTED verdikttel indult: 0 BLOCKER / **2 MAJOR** / 2 MINOR /
-2 NOTE — [`docs/reviews/e14-r04-review.md`](docs/reviews/e14-r04-review.md)).
-**ÚJ ADR: [0505](docs/adr/0505-versioned-recognition-frame-contract-and-legacy-adapter.md)**
+**Aktuális állapot (2026-09-04):** `main` @ `59372c9c` — **E14-R08:
+csoportosított felismerési evaluation harness és leakage-védelem**, PR
+[#573](https://github.com/wolfcasaba/strumsight/pull/573), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** (review: APPROVED a
+javító kör után, 0 nyitott lelet; CHANGES REQUESTED verdikttel indult:
+0 BLOCKER / **2 MAJOR** / 1 MINOR / 3 NOTE —
+[`docs/reviews/e14-r08-review.md`](docs/reviews/e14-r08-review.md)).
+**ÚJ ADR: [0509](docs/adr/0509-grouped-recognition-evaluation-and-leakage-protection.md)**
 — a Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt).
-`risk = "normal"` → dedikált biztonsági review nem kellett (a diff nem érint
-hálózatot, tárolást, engedélyt, hitelesítést). `native_gate = false` → a
-CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml` +
+`risk = "normal"` → dedikált biztonsági review nem kellett. `native_gate =
+false` → a CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml` +
 `router_ci_expected: true`).
 
-> ⚠ **A queue `0356`-ot előlegezett, a kör ADR-je mégis `0505`.** A foglaló
-> (`tools/round-slots.py reserve-adr`) `max(used) + 1`, tehát **sosem tölt ki
-> hézagot**: a sorszám a brief megírása (2026-08-20) óta `0503`-ig futott. A
-> prompt §1.0.1 a foglalót teszi mérvadóvá — a brief §0.0 R1 rögzíti. **Az
-> `E14-R05`…`E14-R19` queue-sorainak ADR-oszlopa (`0357`…`0371`) ugyanígy
-> elavult** — minden további kör a foglalótól kérje a számot, ne a sorból.
+> ⚠ **A queue-sorok ADR-oszlopa elavult, és ez MÉRTEN ismétlődik.** Az
+> `E14-R08` sora `0360`-at előlegezett; a `docs/adr/0360-*.md` **nem létezik**,
+> a fán a legmagasabb szám `0505` volt, és a foglaló
+> (`tools/round-slots.py reserve-adr`) a **`0509`**-et adta. A foglaló
+> `max(used) + 1`, tehát sosem tölt ki hézagot. Az `E14-R09`…`E14-R19` sorok
+> ADR-oszlopa (`0361`…`0371`) ugyanígy elavult — **minden további kör a
+> foglalótól kérje a számot, ne a sorból** (prompt §1.0.1). A kör §0.0 R1
+> revíziója ezt rögzíti.
 
 ## 5. Last completed round
 
-**E14-R04 — RecognitionFrame V2 domain contract** (PR
-[#568](https://github.com/wolfcasaba/strumsight/pull/568), squash `f1fced77`).
-A Live felismerés mostantól **ki tudja fejezni, hogy nem tudja**: hat állapotú
-`RecognitionDecision` + hat zárt `RecognitionRejectReason`, külön akkord- és
-irány-jóslat, `nullable` `calibratedConfidence` (a nyers valószínűség NEM
-confidence — ADR 0216), verziózott `RecognitionFrame` és fail-CLOSED `fromJson`
-minden modellen (az `E14-R02` [L619](docs/LESSONS.md#l619) tanulságának
-alkalmazása: a hiányzó KULCS típusos hiba, nem csendes `null`). A
-`LiveFrameAdapter` a 22 legacy hívót változatlanul szolgálja ki, és **nem
-léptet elő** nem-`confirmed` verdiktet láthatóvá.
+**E14-R08 — Csoportosított felismerési evaluation harness és leakage-védelem**
+(PR [#573](https://github.com/wolfcasaba/strumsight/pull/573), squash
+`59372c9c`). A felismerési mérés mostantól **csoportosított és szivárgás-mentes
+lehet**: négy leave-one-out split-stratégia, fail-closed leakage-detektor
+(ugyanaz a játékos/telefon/gitár/szoba nem kerülhet a tanító és a kiértékelő
+oldalra egyszerre — hiba, nem figyelmeztetés), és a Chapter 14 §7
+metrika-készlete Dart-oldalon, minden metrika mellett a **definíciójával és az
+irányával**. A `ml/honest_eval.py` (a TANÍTÓ oldal saját mérése) érintetlen; a
+két oldal szándékosan nem ugyanaz a bemenet.
 
-Három új lecke: [L624](docs/LESSONS.md#l624) (a szerződés-kör a saját egyetlen
-fogyasztójában nem használta a szótárát — az adapter az akkordot kapuzta, a
-strumot nem), [L625](docs/LESSONS.md#l625) (a zárt indok-enum, amit egyetlen
-jóslat sem hordoz, nem szerződés — a saját tesztjei zöldek voltak, miközben
-elérhetetlen volt) és [L626](docs/LESSONS.md#l626) (az orchestrátor
-dispatch-artefaktuma a munkapéldány gyökerében a gépi scope-auditot buktatja).
+Két új lecke: [L630](docs/LESSONS.md#l630) (a metrika mellé SZÁLLÍTOTT
+definíció-szöveg ellentmondhat a számításnak, és a kör 22 zöld literál-cellája
+mind a SZÁMOT mérte, a MONDATOT egyik sem) és [L631](docs/LESSONS.md#l631)
+(egy „kétszeri futtatás" acceptance-cella, amely a szállított belépési pontot
+megkerülve kézzel épít riportot, egy 389 soros parszert és a commitolt
+fixture-t mérce nélkül engedi a `main`-re — a review olcsó ellenőrzése:
+`grep -rn "<új típus>|<fixture>" test/`).
 
-**Előző kör: E14-R06 — Accuracy Lab adat- és adatvédelmi mag** (PR
-[#567](https://github.com/wolfcasaba/strumsight/pull/567), squash `4a02b959`),
-párhuzamos sávon. Leckék: [L622](docs/LESSONS.md#l622), [L623](docs/LESSONS.md#l623).
+**Előző kör: E14-R05 — Live signal quality analyzer** (párhuzamos sáv;
+az `E14-R05 / H3` önjavító kör előzte meg, PR
+[#571](https://github.com/wolfcasaba/strumsight/pull/571), lecke
+[L629](docs/LESSONS.md#l629)).
 
-**Előtte: E14-R03 — Model activation telemetry** (PR
-[#566](https://github.com/wolfcasaba/strumsight/pull/566), squash `b82f3ab5`).
-Leckék: [L620](docs/LESSONS.md#l620), [L621](docs/LESSONS.md#l621).
+**Előtte: E14-R07 — Annotációs szerződés** (PR
+[#570](https://github.com/wolfcasaba/strumsight/pull/570), squash `80506119`).
+Leckék: [L627](docs/LESSONS.md#l627), [L628](docs/LESSONS.md#l628).
 
 ## 6. Exact next task
 
-**Következő kör: `E14-R05` — Live signal quality analyzer**
-(`docs/rounds/e14-r05-live-signal-quality-analyzer.md`, motor `sonnet-impl`;
-**az ADR-számot a foglalótól kérd, ne a queue `0357` oszlopából** — lásd §4).
-A `docs/execution/pipeline-queue.tsv` Chapter 14 sávja `pending`; a lánc
-magától viszi tovább.
+**A következő kört a lánc választja** a `docs/execution/pipeline-queue.tsv`
+első `pending` sorából — az `E14-R08` sora ezzel a commit-tal `done`. A
+Chapter 14 sávon az `E14-R09` (baseline dashboard) következik, motor
+`sonnet-impl`; **az ADR-számot a foglalótól kérd, ne a queue oszlopából**
+(lásd a §4 figyelmeztetést — a sorok `0361`…`0371` értéke elavult).
 
-**Amit az E14-R04 KIMONDOTTAN a következő körök asztalára tett:**
+**Amit az E14-R08 KIMONDOTTAN a következő körök asztalára tett:**
 
 | # | Mit hagyott nyitva | Hol |
 |---|---|---|
-| 1 | **A `SignalQualitySnapshot` üres** — a szerződés (7 mező + `unknown` default) áll, a kitöltése az `E14-R05`-é. A mezők 1:1 megfelelnek a MEGLÉVŐ `signal_quality_math.dart` publikus felületének, tehát új DSP-matek nélkül tölthető | `lib/features/live/domain/recognition/signal_quality_snapshot.dart` |
-| 2 | **A `LiveFrameAdapter` nincs bekötve production hívóba** — az élő út (`live_pipeline.dart`, `engine/**`) átkötése a kör tilos zónája volt | `lib/features/live/engine/dsp/live_pipeline.dart` |
-| 3 | **`ChordPrediction.decision`/`rejectReason` konstruktorból jön**, nem levezetett — akkord-döntést MÉRT kalibráció nélkül levezetni az ADR 0505 D2 tiltotta hazugság lenne. Az `E14-R11` hozza | `lib/features/live/domain/recognition/chord_prediction.dart` |
-| 4 | **A `_require*` JSON-segédek négy fájlban duplikálódnak** (review MINOR-2, follow-up): közös fájl kellene, ami a kör `allowed_paths`-án kívül esett | `lib/features/live/domain/recognition/*.dart` |
+| 1 | **A runner nem ágazza fold-onként a jelentést** — a `RecognitionSplitBuilder` és a `computeRecognitionMetrics` külön-külön kész és tesztelt, a fold-onkénti riport (és egy `--split` CLI-kapcsoló) egy jövőbeli kör olcsó bekötése (a kör §10.2 szándékos, dokumentált scope-szűkítése) | `lib/features/live/data/evaluation/recognition_evaluation_runner.dart` |
+| 2 | **Dashboard/HTML megjelenítés** — az `E14-R09` köre, a harness JSON-ja a bemenete | `evaluation/recognition/` |
+| 3 | **A `correctAccepted` identitás-halmaz** (review NOTE-1): két `const` módon kanonizált, mezőre azonos detekciót a Dart azonos példánnyá von össze; a parszolt úton nem érhető el, kézzel írt tesztben igen | `recognition_metrics.dart` (`correctAccepted`) |
+| 4 | **A valós korpusz külső marad** (ADR 0509 D9 / ADR 0249): a CI-fixture szintetikus, a valós mérés `--manifest`-tel, kézi futtatással megy | `tool/recognition_evaluate.dart` |
 
 **Változatlanul OPERÁTORI (user-) kapuk:** a valós gitáros APK-teszt (a végső
 elfogadási predikátum) és a backend tényleges futtatása + telefon-ráállítás

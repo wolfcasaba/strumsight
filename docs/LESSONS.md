@@ -25198,3 +25198,102 @@ quality primitives stay barrel-reachable (E14-R05)" csoport: az élő barrel
 export-listája tartalmazza mindhárom `engine/quality/` primitívet (a fix előtti
 forráson PIROS), a detektor-cella pedig fixture-ön méri, hogy a math nélküli
 barrelt észreveszi.
+
+## L630 — A metrika mellé SZÁLLÍTOTT definíció-szöveg ellentmondhat a számításnak, és a kör minden zöld cellája ezt átengedi: a szám mérve volt, a MONDAT nem (E14-R08, review MAJOR-1, 2026-09-04)
+
+**Mit mértem.** Az `E14-R08` harness-e az ADR 0509 D3 szerint minden metrika
+mellé beleírja a definícióját a reportba. A `directionF1` szállított
+definíciója ezt állította:
+
+> „Macro-averaged per-direction (down/up) F1 **among time-matched strum
+> pairs**: a strum **missed or falsely detected in time** … **does not enter
+> this metric**."
+
+A `_labelMacroF1` viszont az FP-t és FN-t a **teljes** elfogadott/elvárt
+populációból számolja (`FN_L = totalExpected_L − TP_L`), nem a párosított
+halmazból. Reviewer-próba (egy elvárt `down` strum, **nulla** detektálás):
+
+```
+PROBE-1 directionF1.value = 0.0
+PROBE-1 down TP/FP/FN = 0/0/1
+```
+
+Nulla párosított pár mellett a szállított definíció szerint nem volna mit
+átlagolni; a kód mégis `0.0`-t ad, amit KIZÁRÓLAG egy sosem párosított elvárt
+esemény hajt. Ugyanez az akkord-oldalon (`chordMacroF1.value = 0.0`,
+`C TP/FP/FN = 0/0/1`).
+
+**Miért csúszott át 22 zöld cellán.** A kör metrika-tesztjei kifogástalanok
+voltak: kézzel levezetett LITERÁL értékeket állítottak (`down.falseNegatives`
+== 1, `up.falsePositives` == 2) — vagyis a tesztek a HELYES számot mérték, és
+közben pontosan azt a viselkedést rögzítették, amit a definíció-szöveg tagad.
+A szöveget egyetlen cella sem nézte. Sőt: a `_labelMacroF1` saját
+kódkommentje a HELYES szabályt írta le, tehát ugyanabban a fájlban két,
+egymásnak ellentmondó állítás élt, és a report a hibásat szállította. Az
+implementer §10.3-ban dokumentálta is, hogy a *képletet* menet közben
+javította — a *definíció-szöveget* viszont a javítás előtti állapotban
+felejtette.
+
+**A szabály.** Ha egy döntés (itt ADR 0509 D3) azt írja elő, hogy a metrika a
+definíciójával EGYÜTT utazik, akkor a definíció ugyanúgy szállított
+artefaktum, mint a szám — és ugyanúgy gépi mércét kíván. Egy szöveg-egyezés
+önmagában gyenge őr; a cella a SZÁMOT és a SZÖVEGET **együtt** mérje: az a
+bemenet, amelyik a definíció szerinti olvasattól eltérő értéket ad, egyszerre
+állítsa a tényleges számot és azt, hogy a definíció ezt (és ne az ellenkezőjét)
+mondja. Ez az L549/L577 („az őr a SZÁMOT védte, a JELENTÉSÉT nem") harmadik
+mérése, most a metrika-definíción.
+
+**Őrteszt:** `test/features/live/evaluation/recognition_metrics_test.dart`::
+`directionF1/chordMacroF1 definition text matches the computed behaviour
+(review MAJOR-1 fix)` — nulla párosítás mellett együtt méri, hogy
+`down.falseNegatives == 1`, `directionF1.value == 0.0`, és hogy a definíció
+`isNot(contains('does not enter this metric'))` + `contains('never
+time-matched at all')`. A régi, hamis szöveg visszaállítása pirosra viszi.
+
+## L631 — Egy „kétszeri futtatás bájtazonos" acceptance-cella, amely a SZÁLLÍTOTT belépési pontot megkerülve kézzel épít riportot, a determinizmust nem a futtatási úton méri — és így egy 389 soros parszer meg a commitolt fixture mérce nélkül kerül a `main`-re (E14-R08, review MAJOR-2, 2026-09-04)
+
+**Mit mértem.** Az `E14-R08` acceptance 6. pontja: „Kétszeri **futtatás**
+bájtra azonos JSON-t ad". A hozzá írt cella ezt tette:
+
+```dart
+final first  = RecognitionEvaluationReport(…, overall: computeRecognitionMetrics(cases));
+final second = RecognitionEvaluationReport(…, overall: computeRecognitionMetrics(cases));
+expect(first.toDeterministicJson(), second.toDeterministicJson());
+```
+
+— kézzel épített riport, kétszer hívott tiszta függvénnyel. A tényleges
+„futtatás" (`RecognitionEvaluationRunner.runFromJsonString`) ebből kimaradt.
+Következmény, `grep`-pel mérve a kör tesztfáján:
+
+```
+grep -rn "RecognitionEvaluationRunner|RecognitionManifestParseException" test/  → 0 találat
+grep -n  "ci_manifest|File("                                           test/…  → 0 találat
+```
+
+A 389 soros, kézzel írt JSON-parszer (négy tipizált hibafajta, szigorú
+ismeretlen-kulcs ellenőrzés, kind-invariáns) és a commitolt
+`evaluation/recognition/fixtures/ci_manifest.json` **egyetlen gépi mércével
+sem rendelkezett**. Hét leszállított fájlból kettő. A fixture elromolhatott,
+kiürülhetett vagy sémát sérthetett volna: minden kapu zöld marad. A brief
+acceptance 1. pontja ráadásul szó szerint „**a fixture-ön**" méri a négy
+split-stratégiát — a split-teszt viszont saját, inline eseteken futott.
+
+**Miért nem fogta meg semmi.** A célzott kapu a `gate_tests` két fájlját
+futtatja, a scope-audit a fájlok LÉTEZÉSÉT és helyét nézi, a CI a teljes
+suite-ot — de egyik sem kérdezi meg, hogy egy leszállított fájlt olvas-e
+BÁRMELYIK teszt. A „kézzel is lefuttattam a CLI-t a fixture-ön" pedig nem
+artefaktum, hanem bemondás (L09 mintája).
+
+**A szabály.** Egy acceptance-cella, amelynek szövegében „futtatás",
+„end-to-end" vagy egy fájlnév szerepel, a SZÁLLÍTOTT belépési ponton és a
+SZÁLLÍTOTT fájlon menjen keresztül — különben a cella egy másik, olcsóbb
+állítást bizonyít, mint amit ígér. A review olcsó mérése ehhez: `grep -rn
+"<az új típus neve>|<a commitolt fixture neve>" test/` — nulla találat egy
+leszállított fájlra mindig lelet, akkor is, ha minden kapu zöld.
+
+**Őrteszt:** `test/features/live/evaluation/recognition_metrics_test.dart`::
+`RecognitionEvaluationRunner on the committed CI fixture (review MAJOR-2 fix)`
+— a commitolt `ci_manifest.json`-t olvassa, `runFromJsonString`-gel KÉTSZER
+futtatja és bájtazonosságot vár (acceptance 6 a valódi úton), mind a négy
+`SplitStrategy`-t a fixture-ből parszolt eseteken futtatja (acceptance 1 „a
+fixture-ön"), és három tipizált parszer-elutasítást mér.
