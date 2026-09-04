@@ -410,6 +410,10 @@ def _record(
         steps.append(StepResult(name, method, path, False, reason))
         return False
     if resp.status_code != expected_status:
+        # Never prints the response body (production_smoke.py's own rule):
+        # an authenticated response body can carry account data, and this
+        # detail string is meant for a human-readable diagnosis, not a data
+        # dump. Status codes and paths are never secret.
         steps.append(
             StepResult(
                 name,
@@ -417,7 +421,7 @@ def _record(
                 path,
                 False,
                 f"expected {method} {path} -> {expected_status}, got "
-                f"{resp.status_code}: {resp.body[:200]!r}",
+                f"{resp.status_code}",
             )
         )
         return False
