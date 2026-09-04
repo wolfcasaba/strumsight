@@ -106,6 +106,34 @@ TILOS** — az ilyen diff review-BLOCKER. A golden **baseline-képek**
 (`test/ui/goldens/goldens/**.png`) és a `test/fixtures/ui/**` a tilos zónában
 maradnak: piros golden → `stopped`, nem baseline-újraírás.
 
+**M4 — pre-flight újramérés (orchestrátor, 2026-09-04, `main @ ddb4c769`).**
+A §2 mért állításai és a fejléc pre-flight kérdései ÚJRA mérve, indítás előtt:
+
+| Állítás | Mért eredmény |
+|---|---|
+| `app_router.dart:231` `final entryLocation = adaptiveShellEnabled ? AppRoutes.today : AppRoutes.live;` | **változatlan, a sorszám is stimmel**; a flag forrása `:222-225`, a felhasználási helyek `:234`, `:236`, `:241` |
+| `onboarding_screen.dart` `_completeFinish` → `(widget.onDone ?? () => router!.go(AppRoutes.live))();` | **változatlan**; a `_completeFirstWin` szintén `router!.go(AppRoutes.live)` + post-frame `LearnScreen` push |
+| `practice_area_hub_screen.dart` — `StatelessWidget`, `onPressed: () => context.go(AppRoutes.practiceSetup)`, kulcs `ValueKey('practice-hub-recommended-cta')` | **változatlan**, `?id=` nélkül |
+| `practiceCatalogProvider` a `lib/features/practice/public.dart` barrelben | **exportálva** (`public.dart:18`); a `practiceCatalogRepositoryProvider`-ből `watch`-ol, tehát a repository-override automatikusan átköti |
+| beépített katalógus első eleme | `id: 'builtin.quarterDownstrokes.v1'` — **változatlan** |
+| **`e15_r13_full_variant_matrix_test.dart:1431` `_practiceAreaHubScreen()` `ProviderScope` alatt pumpál-e?** | **IGEN.** A fájl EGYETLEN `pumpWidget` hívása a `_pumpCell` helper (`:3668-3669`), és az `ProviderScope(overrides: overridesBuilder(), …)`-ba burkol. Ugyanígy `ProviderScope` alatt pumpál az `e13_r17` `_pump` (`:34-36`, a `PracticeAreaHubScreen` cellája `:77`), az `e13_r16` (`:49`) és az `ui_baseline_screenshot_test` (`:148`, `:178`, `:196`). **A `ConsumerWidget` váltás mind a négy golden-fájlban biztonságos → a §4 „kizárólag `ProviderScope`-burkolás" jogosultságra várhatóan nem lesz szükség; ha egy cella mégis pirosra vált, az §0.0 M3 szerint kezelendő.** |
+
+**M5 — a brief-lint S11 lelete MÉRVE tárgytalan.** A lint a
+`live_screen.dart`, `today_hub_screen.dart`, `practice_hub_screen.dart` és
+`practice_setup_screen.dart` briefen kívüli pinjeit sorolta fel. Ezt a négy
+képernyőt a kör **nem cseréli le és nem is szerkeszti** — egyik sincs az
+`allowed_paths`-on, és az M1 kimondja, hogy a §2-beli hivatkozásuk mérési
+forrás, nem tulajdonlás. A lint saját kifutó ága („ha a kör a képernyőt
+bizonyíthatóan nem cseréli le, a §0.0 mondja ki ezt a mérést") ezzel teljesül.
+A ténylegesen átírt két képernyő (`onboarding_screen.dart`,
+`practice_area_hub_screen.dart`) pinjei az M2 szerint MINDKÉT listán rajta
+vannak.
+
+**M6 — az ADR 0508 MÁR merge-elve van** (`fbcf5aa8`, #572), tehát a kör
+pre-flightja ADR-t nem ír és nem szerkeszt: a `docs/adr/**` tilos zóna marad
+(egy merge-elt ADR módosítása H1 lenne). A `tools/gateguard-scan.py` a briefre
+**„nincs ütközés a MÉRCE-őr védett listájával"** eredményt adta.
+
 ## 1. Cél
 
 Az `E16-R05` gépi bejárása **negatív A3-verdiktet** mért: a „BE" besorolású
