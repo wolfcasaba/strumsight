@@ -208,13 +208,13 @@ def test_chain_halts_at_the_first_divergence_and_later_steps_never_run(
 
     with TestClient(app) as raw_client:
         pre_register = raw_client.post(
-            "/auth/register", json={"email": email, "password": "already-here"}
+            "/auth/register", json={"email": email, "password": "fake-already-here"}
         )
         assert pre_register.status_code == 201, pre_register.text
 
         counting_client = _CountingClient(raw_client)
         steps = smoke.run_chain(
-            counting_client, email=email, password="a-different-password"
+            counting_client, email=email, password="fake-a-different-password"
         )
 
     assert [step.name for step in steps] == ["readiness", "register"]
