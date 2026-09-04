@@ -1,0 +1,1 @@
+round=E14-R02 verdict=pass tests=30 lesson=hand-written-schema-validator-is-fail-open engine=sonnet-impl
