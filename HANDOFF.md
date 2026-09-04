@@ -1,5 +1,70 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R06 KÉSZ — Accuracy Lab adat- és adatvédelmi mag: a beleegyezés a TÍPUSBAN, a csomag bájtra azonos — PR [#567](https://github.com/wolfcasaba/strumsight/pull/567), squash `4a02b959` (2026-09-04)
+
+A Chapter 14 sáv hatodik köre megépítette az Accuracy Lab **adat- és
+adatvédelmi magját** — képernyő nélkül (a brief §0.0 kötött scope-szűkítése:
+a felület a Chapter 13 sávé, két sáv ugyanarra a fájlra írva ütközne). A
+későbbi körök (`E14-R07` annotáció, `E14-R08` harness) innen kapnak ground
+trutht, **hálózat nélkül**
+([ADR 0358](docs/adr/0358-consented-on-device-lab-capture-package.md), D1–D8).
+
+**A kör terméke** (`lib/features/accuracy_lab/`, 5 production fájl + 3 teszt):
+
+- **`domain/lab_consent.dart`** — `sealed LabConsent`
+  (`Granted`/`Revoked`/`Unknown`). Az export-kapu a **típusban** él: a writer
+  csak `LabConsentGranted`-et fogad, a „nincs beleegyezés" ág **nem fordul**
+  (D1). A consent-mátrix cellái a TÉNYLEGES hívási láncon mérnek (L161).
+- **`domain/lab_task.dart`** — `LabTaskFamily` (6 család),
+  `LabTaskCatalog.validated(List<LabTask>)`: **futtatható** 15–20
+  tartomány-ellenőrzés tetszőleges listára (D6) + id-egyediség — így a
+  „14 → hiba / 15 → elfogadott / 21 → hiba" cellahármas egyáltalán megírható.
+- **`domain/lab_capture_package.dart`** — `canonicalJsonEncode` (rekurzív
+  kulcsrendezés), az időbélyeg **bemenet**, `schemaVersion` + típusos hiba
+  ismeretlen verzióra (D3, D5).
+- **`data/lab_package_writer.dart`** — saját `dart:typed_data` PCM→WAV kódoló
+  (D8: egyetlen feature-barrel sem exportál WAV-segédet), SHA-256 checksum,
+  **tényleges** fájlrendszeri törlés (D4), validált `packageId`.
+
+**A pre-flight tizenegy mért revíziót írt (§0.0.1/R1–R11)**, köztük olyanokat,
+amik enélkül a kör közben ütöttek volna ki: **R4** — nincs elérhető WAV-kódoló
+(a `learn`/`analyze` fájljai léteznek, de egyik barrel sem exportálja őket);
+**R5** — a `share_plus`/`Dio`/`HttpClient`/`path_provider` bármelyike
+aktiválná a `tool/check_data_inventory.dart` egress-felderítését, ami a tilos
+zónában lévő `docs/privacy/data-inventory.yaml`-t követelné; **R3** — a §6/4
+tiltólistás cellája [L260](docs/LESSONS.md) szerint vakon zöld lenne, ezért
+**allowlist-egyenlőség + érték-oldali kanári** lett belőle.
+
+**A review két MAJOR-t MÉRT, és a kör ezeken javult** (a fix nélkül 8 cella
+piros — mutáció-kill próbával igazolva,
+[`docs/reviews/e14-r06-review.md`](docs/reviews/e14-r06-review.md) §6):
+
+1. **Path traversal** — a `packageId` validálatlanul útvonalba fűződött; a
+   próbában a `delete(recursive: true)` a rooton KÍVÜLI könyvtárat is törölte,
+   üres id mellett pedig az egész gyökeret törölte volna. Javítás:
+   `labPackageIdPattern` + `LabPackageIdException` a `locate`-ben, amin a
+   `write`/`status`/`delete` mind átmegy ([L623](docs/LESSONS.md)).
+2. **Consent-provenance** — a `write()` a `consent` paramétert soha nem
+   olvasta: a manifest a hívó által megadott `consentVersion`-t rögzítette,
+   ami eltérhetett a tényleges engedélytől. A kapu típusban volt, a
+   **rögzített érték** mégsem az engedélyből származott
+   ([L622](docs/LESSONS.md)).
+
+**Mérce:** `tools/round-gate.sh` a brief §7 négy útvonalával, a reviewer által
+izolált klónban újrafuttatva **9/9 zöld** (28 teszt); full-gate CI
+[`33857342530`](https://github.com/wolfcasaba/strumsight/actions/runs/33857342530)
+és Router CI
+[`33857303430`](https://github.com/wolfcasaba/strumsight/actions/runs/33857303430)
+**mindkettő zöld a merge SHA-n** (`15aa6f4e`); scope-audit
+`OK (11 changed path(s), 2 generated/ignored)`.
+
+**Nyitva hagyott, nem blokkoló megjegyzés:** a grant-alapú `consentVersion` a
+**manifestre** érvényes; ha egy későbbi kör a `LabCapturePackage`-et önmagában
+exportálja, ott a forrás-kikötést meg kell ismételni (review NOTE-3). A
+`LabPackageWriter` ma **unwired** — a UI-bekötés az `E14-R06b`.
+
+Következő kör: a `docs/execution/pipeline-queue.tsv` következő `pending` sora.
+
 ## ✅ E14-R03 KÉSZ — Fail-visible modellaktiváció: a néma fallback mostantól KIMONDJA magát — PR [#566](https://github.com/wolfcasaba/strumsight/pull/566), squash `b82f3ab5` (2026-09-04)
 
 A Chapter 14 sáv harmadik köre azt a hibaosztályt zárta a felismerő oldalán,

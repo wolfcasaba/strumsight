@@ -24866,3 +24866,65 @@ A próba eldobható, de a mérés nem: a jelentésbe a két sha256 kerül.
 **Őrteszt:** nincs — a próba szándékosan eldobható reviewer-artefaktum (a fában
 hagyva a `format` lépést buktatná, lásd fent); a mérés bizonyítéka a review
 §3.1/§8.2 két azonos sha256-ja.
+
+## L622 — A típusos consent-kapu azt bizonyítja, KI hívhat, nem azt, MI kerül rögzítésre: a kör saját consent-tesztje épp a konzisztens esetet mérte (E14-R06, review MAJOR-2, 2026-09-04)
+
+**Mit mértem.** Az `E14-R06` `LabPackageWriter.write` szignatúrája
+`required LabConsentGranted consent` — a kapu tehát a típusban él (ADR 0358
+D1), és a `revoked`/`unknown` ág valóban nem fordul. A `write` törzse viszont a
+`consent` paramétert **soha nem olvasta**: a lemezre írt manifest
+`consentVersion` mezője a hívó által összeállított `package.toJson()`-ből jött.
+A biztonsági review eldobható próbája:
+
+```
+actual granted consent.consentVersion = consent-v2-2026
+manifest records: {... "consentVersion":"v1-stale" ...}
+=> manifest consentVersion matches ACTUAL grant? false
+```
+
+A csomag tehát azt állíthatta, hogy a felhasználó olyan consent-verzióhoz
+járult hozzá, amelyhez nem — miközben minden teszt zöld volt.
+
+**Miért maradt rejtve.** A kör consent-mátrixa (`lab_consent_test.dart`) a
+kimerítő `switch` ágából a `granted.consentVersion`-t adta tovább a
+package-be, azaz **pontosan a konzisztens esetet** mérte. Egy „a kapu
+működik" cella szerkezetileg képtelen megfogni azt, hogy a kapun ÁTMENŐ hívás
+mit ír le magáról. Ugyanaz a hibaosztály, mint az L161-nél: a helyes helper
+melletti bizonyíték a hívási lánc, nem a függvénytest — itt egy lépéssel
+tovább: a bizonyíték a **rögzített érték forrása**.
+
+**Szabály.** Ha egy mező azt hivatott rögzíteni, mihez járult hozzá a
+felhasználó, akkor az értéke az engedély-objektumból származzon (vagy eltérésre
+legyen típusos hiba). Egy engedély-mező pontosan attól ér valamit, hogy nem a
+hívó önbevallása.
+
+**Őrteszt:** `test/features/accuracy_lab/lab_package_writer_test.dart`::`the manifest consentVersion reflects the actual consent grant, even when package.consentVersion disagrees`
+
+## L623 — A hívótól kapott azonosító, amit útvonalba fűzünk, a REKURZÍV TÖRLŐ ágon a legdurvább: a „csak generált id jöhet ide" feltevést a `fromJson` már meg is cáfolta (E14-R06, review MAJOR-1, 2026-09-04)
+
+**Mit mértem.** A `LabPackageWriter.locate` a `packageId`-t közvetlenül
+útvonalba fűzte (`Directory('<root>/<packageId>')`). A biztonsági review
+próbája `packageId = "../OUTSIDE_VICTIM"`-mel:
+
+```
+write() SUCCEEDED, manifest at .../lab-root/../OUTSIDE_VICTIM/manifest.json
+delete(recursive) done. victim precious.txt still exists? false
+```
+
+A `delete(recursive: true)` tehát a rooton KÍVÜLI, nem a feature által
+létrehozott könyvtárat is letörölte. **Üres** id mellett a `locate` magát a
+rootot adta vissza — a törlés az összes csomagot vitte volna.
+
+**Két gondolati hiba, amit a mérés cáfolt.** (1) „Az id-t mi generáljuk" — a
+`packageId` a `LabCapturePackage.fromJson`-ből is beérkezik, azaz egy
+visszaolvasott/importált manifest is táplálja. (2) „Nincs production hívó,
+tehát nem éles" — a szerződés őre a bekötő kör ELŐTT olcsó; utána már egy
+CRITICAL javítása.
+
+**Szabály.** Külső eredetű azonosítót fail-closed módon validálj, MIELŐTT
+útvonalba kerül (alak-allowlist vagy feloldott-út-a-rooton-belül), és a
+validáció a közös `locate`-ben legyen, ne belépési pontonként — a `write`, a
+`status` és a `delete` egyaránt rajta megy át. A sértés típusos hiba, nem néma
+művelet.
+
+**Őrteszt:** `test/features/accuracy_lab/lab_package_writer_test.dart`::`write rejects a ".." packageId and leaves the sibling directory untouched`
