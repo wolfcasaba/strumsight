@@ -8,7 +8,14 @@
 - **Implementer:** Claude Sonnet 5 (`sonnet-impl`)
 - **ADR:** [`0505`](../adr/0505-versioned-recognition-frame-contract-and-legacy-adapter.md)
 
-## 1. VÉGSŐ DÖNTÉS: **CHANGES REQUESTED** — 2 MAJOR, 2 MINOR, 2 NOTE
+## 1. VÉGSŐ DÖNTÉS: **APPROVED** (a javító kör után — lásd §8)
+
+> **Első kör (`bd4c36af`): CHANGES REQUESTED** — 2 MAJOR, 2 MINOR, 2 NOTE.
+> **Javító kör (`ab930516`): mindhárom kért lelet zárva, saját méréssel
+> igazolva.** A §2–§7 az EREDETI review szövege (nem írom át visszamenőleg);
+> a zárás bizonyítéka a §8.
+
+### 1.1 Az eredeti verdikt — CHANGES REQUESTED, 2 MAJOR, 2 MINOR, 2 NOTE
 
 A kör formai fegyelme kiváló, a gate zöld, a scope tiszta, és a fail-closed
 `fromJson` réteg érdemben jobb, mint amit a brief betűje megkövetelt volna. A
@@ -254,3 +261,85 @@ eszközével téveszt meg egy későbbi olvasót. Ez a `docs/LESSONS.md`-be megy
 4. MINOR-2 → follow-up, NOTE-1/NOTE-2 → nincs teendő.
 5. A javító kör után: a gate ÚJRA magam futtatom izolált klónban, és a teljes
    CI-kapu (Full Gate + Router CI) ÚJRA az új head SHA-n.
+
+---
+
+## 8. Javító kör — leletenkénti zárás (`ab930516a53491daa1e2b442c7343a04b37b4c41`)
+
+A javító kört ugyanaz a motor (`sonnet-impl`) vitte, a §3 leletlistájával. A
+zárást **nem bemondásra** fogadtam el: friss `/tmp/review2-e14-r04` klónban,
+eldobható próbateszttel mértem, majd a próbát töröltem.
+
+### 8.1 A záró próbateszt kimenete (eldobható, törölve)
+
+```
+00:00 +0: MAJOR-1 CLOSED: uncertain strum -> no arrow, no leaked onset
+00:00 +1: MAJOR-1 control: confirmed strum still visible
+00:00 +2: MAJOR-2 CLOSED: uncertain strum pairs lowConfidence; confirmed -> null
+00:00 +3: MAJOR-2: chord rejectReason key is REQUIRED (fail-closed)
+00:00 +4: MINOR-1 CLOSED: out-of-range calibratedConfidence rejected by fromJson
+00:00 +5: All tests passed!
+```
+
+Mind az öt cella PONTOSAN azt a viselkedést méri, ami az első leadáson
+elbukott volna — a MAJOR-1 cellája `pDown: 0.475 / pUp: 0.425`-tel, a brief
+§6.1 KÖTÖTT számpárjával.
+
+### 8.2 Leletenként
+
+| Lelet | Állapot | Mit mértem |
+|---|---|---|
+| **MAJOR-1** | ✅ **ZÁRVA** | `live_frame_adapter.dart` `_strumFor`: `if (strum == null \|\| strum.decision != RecognitionDecision.confirmed) return null;` — a `_chordFor`-ral azonos szabály. A `latestStrumTime` is követi: csak LÁTHATÓ strum onset-ideje írja felül a base-t, tehát egy elvetett jóslat ideje nem szivárog ki (ezt külön cella méri: `expect(legacy.latestStrumTime, isNot(9.99))`). A kontroll-cella igazolja, hogy a `confirmed` strum továbbra is látszik, `latestStrumTime: 3.0`-val. |
+| **MAJOR-2** | ✅ **ZÁRVA** | `StrumPrediction.rejectReason` LEVEZETETT getter (`:69`), a `decision`-nal együtt: `uncertain` → `RecognitionRejectReason.lowConfidence`, `confirmed` → `null` — mérve. `ChordPrediction.rejectReason` konstruktorból (`:23`, `:63`), fail-closed `_requireNullableRejectReason`-nel (`:98`): a `rejectReason` KULCS hiánya `ArgumentError`, az ÉRTÉK lehet `null` — mérve. A brief §6.1 „reject-ok: `lowConfidence`" acceptance-cellája immár implementált ÉS mért. |
+| **MINOR-1** | ✅ **ZÁRVA** | `_requireCalibratedConfidence` mindkét prediction `fromJson`-jében (`strum_prediction.dart:170-176`, `chord_prediction.dart:172`): `if (value != null && (value < 0 || value > 1)) throw ArgumentError…`. Mérve `1.4`-re és `-0.1`-re is. A nyers valószínűségekre helyesen NEM vezetett be tartomány-ellenőrzést (az túlnyúlt volna a leleten). |
+| **MINOR-2** | ↪ **follow-up** | Szándékosan nem javítva (közös fájl kellene, az `allowed_paths`-on kívül). A javító kör nem sokszorozta tovább a készletet. |
+| **NOTE-1 / NOTE-2** | — | Nincs teendő; a viselkedés változatlan. |
+
+### 8.3 A zárás után MAGAM futtatott mérce
+
+**Scope-audit** (`ab930516`):
+
+```
+Legacy scope audit OK (94f46951aa08..ab930516a534, 12 changed path(s), 1 generated/ignored)
+```
+
+A `1 generated/ignored` a saját review-jelentésem — állandó, kód szintű
+mentesség (`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`), nem
+sértés. A `lib/features/live/model/live_frame.dart` a
+`git diff --stat 94f46951..ab930516` alatt **nem szerepel** — a 7.
+acceptance-pont a javító kör után is áll.
+
+**Gate**, friss `/tmp` klónban (`ab930516`), exit `0`:
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/live/recognition_frame_contract_test.dart zöld
+    test test/features/live/live_frame_adapter_test.dart       zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    test test/features/live                                    zöld
+    test test/core                                             zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+```
+
+### 8.4 Acceptance criteria — a javító kör utáni állapot
+
+A §4 táblázat két nyitott sora zárva:
+
+| # | Kritérium | Verdikt |
+|---|---|---|
+| 3 | 6×2 backward compat mátrix | ✅ a strum-oldal is fedve (MAJOR-1) |
+| — | §6.1 „reject-ok: `lowConfidence`" | ✅ implementálva és mérve (MAJOR-2) |
+
+A többi hét kritérium az első körben már ✅ volt, és a javító kör nem rontotta
+el (a teljes `test/features/live` + `test/core` zöld).
+
+### 8.5 A merge-kapu
+
+A merge SHA-ján (a review-frissítést tartalmazó head) ÚJRA kell futnia a Full
+Gate + Router CI párnak — a `bd4c36af`/`ab930516` zöldjei a review evidenciái,
+nem a merge-éi (ADR 0086 §2). A merge csak azután történhet, hogy mindkettő
+`success` a végleges head SHA-n.
