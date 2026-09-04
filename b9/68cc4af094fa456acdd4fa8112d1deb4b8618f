@@ -1,0 +1,1 @@
+round=E15-R13 verdict=pass tests=1163 lesson=quoted-command-output-needs-its-own-guard engine=sonnet-impl

@@ -1,0 +1,1 @@
+round=E06-R24 verdict=pass tests=483+69 lesson=capability-gate-must-match-data-not-any-capability,measured-exists-needs-actual-test-e engine=terra

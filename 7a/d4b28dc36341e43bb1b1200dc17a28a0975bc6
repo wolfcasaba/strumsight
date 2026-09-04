@@ -1,0 +1,1 @@
+round=E09-R01 verdict=pass tests=13(5_flutter_new+8_backend_new;12_flutter_total+187_backend_total) lesson=L410(round-merge-lock_reset_hard_drops_uncommitted_docs) engine=minimax
