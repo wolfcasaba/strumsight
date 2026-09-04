@@ -300,4 +300,187 @@ cellája **PIROS**, visszaállítva **ZÖLD**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`). **Ág:**
+`sonnet-impl/e14-r08-grouped-evaluation-harness`. Minden módosított/új fájl
+az `allowed_paths`-on van, egy sem kívül.
+
+### 10.1 Létrehozott fájlok
+
+- `lib/features/live/domain/evaluation/recognition_split.dart` —
+  `GroupKey`, `SplitStrategy` (+ `groupKey` extension), `RecognitionSplitFold`,
+  `LeakageDetector`, `RecognitionSplitException`
+  (`RecognitionSplitErrorKind.missingGroupKey|leakage`), `RecognitionSplitBuilder`.
+- `lib/features/live/domain/evaluation/recognition_metrics.dart` —
+  `RecognitionCase`/`RecognitionExpectedEvent`/`RecognitionDetectedEvent`/
+  `RecognitionConfidenceObservation`/`RecognitionManifest` (a doménmodell),
+  `RecognitionMetricDefinition` + a metrika-wrapper típusok
+  (`RecognitionPrecisionRecallF1`, `RecognitionMacroF1`,
+  `RecognitionCountRatioMetric`, `RecognitionRateMetric`,
+  `RecognitionScalarMetric`, `RecognitionCalibrationMetrics`),
+  `RecognitionMetrics`, `RecognitionEvaluationReport`,
+  `computeRecognitionMetrics()`. Kuhn-féle maximális párosítás
+  (`_matchEvents`/`_maxBipartiteMatching`) az `evaluation_runner.dart:227`
+  mintája szerint MÁSOLVA (nem importálva, §5.8/D8).
+- `lib/features/live/data/evaluation/recognition_evaluation_runner.dart` —
+  `RecognitionEvaluationRunner` (kézzel írt, típusos JSON-parszer +
+  `run()`/`runFromJsonString()`), `RecognitionManifestParseException`.
+- `tool/recognition_evaluate.dart` — CLI, `tool/audio_analysis_evaluate.dart`
+  alakja szerint (`--manifest`, fixture-default, determinisztikus stdout).
+- `evaluation/recognition/fixtures/ci_manifest.json` — 2 esetes, kicsi,
+  szintetikus CI-fixture (nem valós felvétel), a CLI/runner füstteszthez.
+- `test/features/live/evaluation/recognition_split_test.dart`,
+  `test/features/live/evaluation/recognition_metrics_test.dart`.
+
+### 10.2 Scope-döntés: a runner NEM ágazza a splitet a jelentésbe
+
+A brief §8 négy lépése ("Fixture → Split-stratégiák+detektor → Metrikák →
+Runner+CLI") a splitet és a metrikákat két külön leszállítható darabként
+sorolja fel. Az acceptance-mátrix (§6) egyike sem követeli meg, hogy a
+`RecognitionEvaluationReport` fold-bontott metrikát tartalmazzon — az 1–2.
+pont a `RecognitionSplitBuilder`/`LeakageDetector` ÖNÁLLÓ, közvetlen
+tesztelését várja el. Ezért a runner/CLI a teljes manifestre számol egyetlen
+`overall` metrikakészletet (az `audio_analysis` minta szerint), a
+split/leakage kód pedig önállóan tesztelt, újrafelhasználható domain-réteg
+marad — nincs `--split` CLI-kapcsoló ebben a körben. Ez szándékos
+scope-szűkítés (§9 kockázat: "ha a kör mérete aránytalannak bizonyul"), nem
+hiányos munka; egy jövőbeli kör könnyen bekötheti (`RecognitionSplitBuilder`
++ `computeRecognitionMetrics` fold-onkénti hívása).
+
+### 10.3 A `_labelMacroF1` egy valódi hibát talált és javított implementáció közben
+
+Az első implementáció a makro-F1-et (irány és akkord) KIZÁRÓLAG a párosított
+párok listáján iterálva számolta — ez pontosan azt a hibaosztályt
+reprodukálta volna, amit a review keres: egy teljesen párosítatlan elvárt
+esemény (pl. egy soha nem detektált akkord) nem járult hozzá SEMMILYEN
+osztály FN-jéhez, mert nem szerepelt egyetlen párban sem. A helyes alak
+(amit a kód most tartalmaz): `FN_L = totalExpectedWithLabelL - TP_L`,
+`FP_L = totalAcceptedDetectedWithLabelL - TP_L` — a TELJES elvárt/elfogadott
+halmazokból vonva ki a párosított TP-t, nem csak a párosított listából
+összegezve. Ez a bug-and-fix menet a `git log`/ebben a fájlban dokumentált,
+mert a kézi levezetés (10.4) is ezt a JAVÍTOTT képletet követi.
+
+### 10.4 Kézi levezetés — 1 eset, minden metrika (recognition_metrics_test.dart)
+
+A fixture (l. a teszt `_fixtureCase()`-ét): 2 onset, 4 strum (1 rossz irány,
+1 sosem párosított), 4 akkord (1 rossz label, 1 sosem párosított, 1
+elutasított/abstained), 10 confidence-megfigyelés (1/bin), 5 latencia-minta.
+
+**Onset-szerű (onset+strum) párosítás, 25/50/100 ms:**
+
+| tol | matched pár | TP | FP | FN | P=R=F1 |
+|---|---|---|---|---|---|
+| 25ms | (EO1@1000,DO1@1020 gap20), (ES3@5000,DS3@5010 gap10) | 2 | 4 | 4 | 1/3 |
+| 50ms | + (ES1@2000,DS1@2045 gap45), (ES4@7000,DS4@7030 gap30) | 4 | 2 | 2 | 2/3 |
+| 100ms | + (ES2@3000,DS2@3090 gap90) | 5 | 1 | 1 | 5/6 |
+
+(6 elvárt: EO1,EO2,ES1,ES2,ES3,ES4; 6 elfogadott detektált: DO1,DO2,DS1,DS2,DS3,DS4.)
+
+**any-strum F1 @50ms** (4 elvárt strum, 4 elfogadott detektált strum):
+matched=(ES1,DS1),(ES3,DS3),(ES4,DS4)=3 → TP=3,FP=1(DS2),FN=1(ES2) →
+P=R=0.75, F1=0.75.
+
+**irány-F1 (makró down/up)**, a JAVÍTOTT képlettel (10.3):
+totalExpectedDown=2(ES1,ES3), totalExpectedUp=2(ES2,ES4),
+totalAcceptedDetectedDown=1(DS1), totalAcceptedDetectedUp=3(DS2,DS3,DS4).
+TP_down=1(ES1/DS1 mindkettő down), TP_up=1(ES4/DS4 mindkettő up).
+FN_down=2-1=1, FP_down=1-1=0 → P=1, R=0.5, F1=2/3.
+FN_up=2-1=1, FP_up=3-1=2 → P=1/3, R=0.5, F1=0.4.
+makró=(2/3+0.4)/2=8/15≈0.5333333333333333.
+
+**Akkord (250 ms tolerancia)**, 4 elvárt (C,G,noChord,Am), 4 elfogadott
+detektált (C,unknown,noChord,unknown — az 5. akkord-detekció `accepted:false`,
+kizárva): matched=(EC1 C↔DC1 C gap50),(EC2 G↔DC2 unknown gap100),
+(EC3 noChord↔DC3 noChord gap80); EC4(Am) és DC4(unknown@6500) párosítatlan.
+`chordWeightedAccuracy` = helyesen párosított/elvárt = 2/4=0.5 (C,noChord
+helyes; G rossz label; Am hiányzik).
+`chordMacroF1`: totalExpected mind az 1 (C,G,noChord,Am); totalAcceptedDetected
+C=1,noChord=1,G=0,Am=0. TP: C=1,noChord=1,G=0,Am=0. C: FN=0,FP=0→F1=1.
+noChord: FN=0,FP=0→F1=1. G: FN=1,FP=0→precision null,recall=0→F1 null→0 a
+makróban (van support). Am: ugyanígy F1 null→0. makró=(1+0+1+0)/4=0.5.
+`chordNoChordF1` = a `noChord` bejegyzés = P=1,R=1,F1=1 (nem null).
+`chordUnknownFalseAccept` = 2(DC2,DC4 label="unknown")/4(elfogadott akkord)=0.5.
+
+**acceptedAccuracy/coverage/falseVisibleEventsPerMinute:** helyes elfogadott
+halmaz = {DO1(onset,párosítva), DS1(strum,irány helyes),
+DS4(strum,irány helyes), DC1(akkord,label helyes), DC3(akkord,label helyes)}
+= 5. Összes elfogadott detekció (bármely fajta) = 10 (a DA1 elutasított,
+kizárva). `acceptedAccuracy`=5/10=0.5. Összes detekció (elfogadott+
+elutasított)=11. `coverage`=10/11≈0.9090909090909091. Rossz elfogadott=10-5=5.
+Időtartam=120000ms=2perc. `falseVisibleEventsPerMinute`=5/2=2.5.
+
+**Latencia p50/p95** (minták `[20,40,60,80,100]`, "nearest-rank",
+`rank=ceil(p/100*n)`, 1-indexelt): p50: rank=ceil(2.5)=3→60. p95:
+rank=ceil(4.75)=5→100.
+
+**ECE/Brier** (10 megfigyelés, 1/bin, `binCount=10`):
+
+```
+python3 -c "
+obs = [(0.05,0),(0.15,1),(0.25,0),(0.35,1),(0.45,1),(0.55,0),(0.65,1),(0.75,1),(0.85,1),(0.95,1)]
+n=len(obs)
+ece = sum((1/n)*abs(s-l) for s,l in obs)
+brier = sum((s-l)**2 for s,l in obs)/n
+print('ece', ece)
+print('brier', brier)
+"
+```
+
+Kimenet: `ece 0.37000000000000005`, `brier 0.20249999999999999` — a teszt
+`closeTo(0.37, 1e-9)` / `closeTo(0.2025, 1e-9)` figyeli (lebegőpontos
+összegzési sorrend miatt nem pontos bitmintájú irodalmi érték).
+
+**L269-ellenpélda** (8. pont): elvárt onset `[50,90]`, elfogadott detektált
+onset `[0,55]`, tolerancia 50ms. Kuhn-lépés: E50 candidatái gap szerint
+[D55(5),D0(50)] → először D55-öt veszi fel. E90 candidatái [D55(35)] → D55
+foglalt, megpróbálja E50-et áthelyezni: E50 következő jelöltje D0(50) →
+szabad → E50↔D0, felszabadítja D55-öt → E90↔D55. Végeredmény: 2 TP (mohó
+"legközelebbi szabad pár" csak 1 TP-t adna: E50↔D55 gap5 lenne az első
+választás, utána E90-nek D0 gap90>50 nem elérhető).
+
+```
+python3 -c "print('onset25', 2/6); print('onset50', 4/6); print('onset100', 5/6); print('anyStrum', 3/4); print('down_f1', 2*1*0.5/1.5); print('up_f1', 2*(1/3)*0.5/((1/3)+0.5)); print('directionMacro', (2/3+0.4)/2, 8/15)"
+```
+
+Kimenet (megerősítve, l. a kör session-naplójában is): `onset25
+0.3333333333333333`, `onset50 0.6666666666666666`, `onset100
+0.8333333333333334`, `anyStrum 0.75`, `down_f1 0.6666666666666666`, `up_f1
+0.4`, `directionMacro 0.5333333333333333 0.5333333333333333`.
+
+### 10.5 Falszifikációs cella (§7.1)
+
+A `LeakageDetector.validate`-ben az `if (trainValues.contains(value))`
+feltételt ideiglenesen `if (false && trainValues.contains(value))`-ra
+cseréltem, majd lefuttattam `flutter test
+test/features/live/evaluation/recognition_split_test.dart`-ot: a 2. pont
+cellája ("the same group value on both sides of a fold throws...") **PIROS**
+lett (`Expected: throws ... Actual: returned null`), a többi 9 teszt zöld
+maradt. Visszaállítás után (`if (trainValues.contains(value))`) újrafuttatva
+mind a 10 teszt **ZÖLD**. A kikapcsolt állapot nem került commitba.
+
+### 10.6 Kapu
+
+```
+tools/round-gate.sh test/features/live/evaluation/recognition_split_test.dart test/features/live/evaluation/recognition_metrics_test.dart
+```
+
+Csonkítatlan kimenet, minden lépés ZÖLD: `format`, `analyze` (1 lint-javítás
+útközben: `prefer_initializing_formals` a `RecognitionSplitBuilder`-ben,
+javítva — a felesleges, senki által nem hívott `detector:` paraméter
+YAGNI-alapon törölve, a `LeakageDetector` most `static const`), `test
+recognition_split_test.dart` (10/10), `test recognition_metrics_test.dart`
+(22/22), `architecture`, `secrets`, `l10n`. A `tool/recognition_evaluate.dart`
+manuálisan is lefutott a fixture-ön (`dart run tool/recognition_evaluate.dart`),
+determinisztikus JSON-t adott, hibák nélkül.
+
+### 10.7 Ismert korlátok / amit a §11 review-nak érdemes néznie
+
+- A CLI/runner nem ágaz splitet a jelentésbe (10.2) — szándékos.
+- A `chordToleranceMs=250` és a `_directionF1`/`_anyStrumF1` 50ms tolerancia
+  saját döntés (a brief nem rögzít konkrét akkord-tolerenciát); mindkettő a
+  reportban a metrika `definition.toleranceMs` mezőjében utazik (D3).
+- A makró-F1 "0 support → kizárva a makróból, support>0 de null F1 → 0
+  helyettesítés a makróban" szabály saját, dokumentált konvenció (10.3
+  környéki kódkommentek); a `perLabel` bontás maga a nyers `null`-t őrzi meg
+  (D6).
+
 ## 11. Review — a Claude tölti ki
