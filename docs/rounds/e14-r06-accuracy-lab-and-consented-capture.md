@@ -413,4 +413,110 @@ production + 3 teszt + ez a dokumentum). Nem nyúlt a `pubspec.yaml`-hoz, a
 csatornát nyitó csomaghoz (`share_plus`, `Dio`, `http`, `path_provider`) —
 ezeket egyik fájl sem importálja.
 
+### 10.5 Javító kör (fix1) — a review 2 MAJOR + 2 MINOR leletének zárása
+
+**MAJOR-1 — path traversal (`lab_package_writer.dart:52` körül).**
+`lib/features/accuracy_lab/data/lab_package_writer.dart:12-26` új, exportált
+`labPackageIdPattern` (`^[A-Za-z0-9_-]+$`) és `LabPackageIdException`; a
+`locate()` (`:76-78`, korábban `:48-52`) a `packageId`-t e minta ellen
+ellenőrzi, MIELŐTT bármi `Directory`/`File` objektumot épít belőle, és
+sértésnél a típusos kivételt dobja. A `write`/`status`/`delete` mindhárom a
+`locate()`-en keresztül fut, tehát a védelem mindhármukra átöröklődik — nem
+csak egy belépési pontot fed.
+
+Új cella (`test/features/accuracy_lab/lab_package_writer_test.dart`, `„LabPackageWriter — packageId path-traversal rejection (MAJOR-1)"` csoport,
+7 teszt): `".."`, üres id, `"a/b"` mind a `locate`/`status`/`delete`-en,
+plusz egy `write`-próba, ami egy VALÓDI testvérkönyvtárat hoz létre
+(`Directory.systemTemp.createTempSync`) és `packageId: '../$victimName'`
+mellett hívja a `write`-ot — a teszt igazolja, hogy a testvérkönyvtár és a
+benne lévő fájl a hívás után is érintetlen marad.
+
+*Régi kódon piros — mért próba:* a fix előtti `lib/` állapotra (a
+mostani commit `HEAD`-je, azaz a review által vizsgált kód) visszaállítva a
+teljes `lab_package_writer_test.dart` és `lab_capture_package_test.dart` NEM
+fordul (a két fájl az új `LabPackageIdException`/`LabTaskDuplicateIdException`
+típusokra hivatkozik, amik a régi `lib/`-ben nem léteznek):
+
+```
+test/features/accuracy_lab/lab_package_writer_test.dart:161:21: Error:
+  'LabPackageIdException' isn't a type.
+test/features/accuracy_lab/lab_capture_package_test.dart:42:23: Error:
+  'LabTaskDuplicateIdException' isn't a type.
+00:00 +0 -2: Some tests failed.
+```
+
+Ez önmagában PIROS bizonyíték: a régi implementáció ténylegesen hiányzik a
+védelem. A fix visszaállítása után (a jelen commit `lib/` állapota) a 10.2
+gate teljes egésze zöld — l. alant.
+
+**MAJOR-2 — a `write()` sosem olvasta a `consent` paramétert
+(`lab_package_writer.dart:89-93` körül).** A manifest összeállítása
+(jelenlegi `:113-121`) most a `'consentVersion': consent.consentVersion`
+kulccsal FELÜLÍRJA a `package.toJson()`-ből örökölt mezőt — a `consent` (a
+ténylegesen megadott grant) az egyetlen forrás, a hívó által összerakott
+`package.consentVersion` a manifestben már nem jelenhet meg eltérő értékkel.
+
+Új cella (`lab_package_writer_test.dart`, „the manifest consentVersion
+reflects the actual consent grant, even when package.consentVersion
+disagrees"): `consent = LabConsentGranted(consentVersion: 'consent-v2-2026')`,
+`package.consentVersion = 'v1-stale'` → `manifest['consentVersion']` ==
+`'consent-v2-2026'`.
+
+*Régi kódon piros — mért próba* (a fix előtti `lab_package_writer.dart`-ra
+visszaállítva, de a teszt-fájlból csak ezt az egy cellát futtatva, mivel a
+traversal-csoport a fenti típushiány miatt a fájlt egyben nem fordítja):
+
+```
+LabPackageWriter — write/checksum/delete (ADR 0358 D3/D4) the manifest
+consentVersion reflects the actual consent grant, even when
+package.consentVersion disagrees [E]
+  Expected: 'consent-v2-2026'
+    Actual: 'v1-stale'
+Some tests failed.
+```
+
+A fix visszaállítása után a cella zöld (l. 10.2 gate).
+
+**MINOR-1 — path-szerű `packageId` a kimenetben.** A MAJOR-1 validációja
+lezárja: mivel a `packageId` most `labPackageIdPattern`-nek megfelel (nincs
+`/`, `\`, `.`), a manifestbe és az annotációba írt `packageId` mező (D2 zárt
+kulcskészlet oldaláról) soha nem hordozhat útvonal-darabot — a
+`lab_capture_package_test.dart` „closed keyset” csoportja (10.2 gate, +9/+10.
+teszt) változatlanul zöld marad, tehát a kulcshalmaz nem bővült.
+
+**MINOR-2 — doc-comment `unique within its catalog` teszttel nem
+bizonyítva.** `lib/features/accuracy_lab/domain/lab_task.dart` — új
+`LabTaskDuplicateIdException` + a `LabTaskCatalog.validated()` (`:57-68`)
+most egy `Set<String>`-tel figyeli az ismétlődő id-t és dob, mielőtt a
+listát visszaadná; a doc-comment állítása (`:19`, „Stable identifier, unique
+within its catalog") ezzel valódi kényszerré vált.
+
+Új cella (`lab_capture_package_test.dart`, „a duplicate task id within an
+otherwise valid-length list is rejected"): 15 elemű lista, ahol az utolsó
+elem id-je megegyezik az első eleméével → `LabTaskDuplicateIdException`.
+
+*Régi kódon piros:* l. a MAJOR-1 alatt idézett compile-hiba — ugyanaz a fájl
+(`lab_capture_package_test.dart`) nem fordul a régi `lib/` ellen, mert a
+`LabTaskDuplicateIdException` típus nem létezik.
+
+**A teljes gate a fix után (10.2-vel megegyező parancs, újrafuttatva):**
+
+```
+    → [1] format: ZÖLD
+    → [2] analyze: ZÖLD          (Analyzing 3 items... No issues found!)
+    → [3] test lab_capture_package_test.dart: ZÖLD   (+11 tests, +1 az eredetihez képest)
+    → [4] test lab_package_writer_test.dart: ZÖLD    (+14 tests, +8 az eredetihez képest)
+    → [5] test lab_consent_test.dart: ZÖLD           (+3 tests, változatlan)
+    → [6] test test/features/accuracy_lab: ZÖLD      (+28 tests, egyben)
+    → [7] architecture: ZÖLD     (12 allowlistelt deviáció, változatlan)
+    → [8] secrets: ZÖLD          (4317 fájl, 0 lelet)
+    → [9] l10n: ZÖLD
+
+MINDEN GATE ZÖLD.
+```
+
+A javító kör nem lazított és nem törölt egy korábbi cellát sem — mind a 19
+eredeti teszt és a 9 új (7 traversal + 1 consent-provenance + 1 duplicate-id)
+zöld.
+
 ## 11. Review — a Claude tölti ki
