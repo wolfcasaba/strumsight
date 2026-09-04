@@ -44,7 +44,8 @@ A `test/e2e/full_app_walkthrough_test.dart` a szállított
 false)` BE-készlettel bejárja: indítás → Today → gyakorlás (Practice Area
 Hub → Setup → Session) → eredmény → Library → Progress → Profile →
 Settings. Minden állomás valós adatot vagy explicit állapotot állít — a
-teszt zöld, de három állomáson a MÉRT explicit állapot maga is egy
+teszt zöld, de öt állomáson a MÉRT explicit állapot (vagy a bejárás saját
+kényszerű lépése, mint az újraindítás) maga is egy
 bekötési hiányt dokumentál:
 
 ### L1 — a Practice Area Hub „ajánlott gyakorlás" CTA-ja nem ad át `id`-t
@@ -112,10 +113,33 @@ placeholder-literál), csak épp egy másik, V2-vak tárolót tükröz.
 - **Kör:** nincs — a két napló összehangolása vagy a mérce forrásának
   cseréje a felelős feature kör dolga; a lelet itt van rögzítve.
 
+### L5 — a `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül
+
+`practiceHistoryV2ListProvider` (`practice_progress_providers.dart`) egy
+sima `FutureProvider` — nem `.family`, és `grep -rn
+"invalidate(practiceHistoryV2ListProvider\|refresh(practiceHistoryV2ListProvider"
+lib/` **0 találatot** ad: a `lib/`-ben SEHOL nem invalidálja/frissíti
+senki. Az ELSŐ olvasása (ezen a bejáráson a Today Hub `dailyGoalActiveSecondsProvider`
+→ `aggregatedPracticeFeedProvider` → `practiceProgressFeedProvider` láncán
+keresztül, MÉG a gyakorlás előtt) a repository AKKORI állapotát
+véglegesen gyorsítótárazza a konténer teljes élettartamára — egy később
+befejezett session SOHA nem jelenik meg `progressPracticeHistoryProvider`-ben
+(sem a Progress dashboardon, sem a Skill Detailben) ugyanabban a
+konténerben. A bejárás emiatt egy VALÓS app-újraindítást (`restartE2eApp`,
+ugyanazon store-on) végez az eredmény-állomás után, mielőtt a
+Library/Progress/Profile állomásokat bejárná — enélkül a Progress-mérce
+(§6.1 mutációs célpontja) sosem tudna valós adatot mutatni ebben a
+konténerben, még a helyes forráskód mellett sem.
+
+- **Gazda:** Practice feature / Progress V2 (V2 history cache invalidáció).
+- **Kör:** nincs — a cache-invalidáció (vagy a provider `.family`/
+  `autoDispose` alakra cserélése) a felelős feature kör dolga; a lelet
+  itt van rögzítve.
+
 **Egyik lelet sem placeholder-literál (P1/P2/P3) — mindegyik a bejárás
 (A2/A3) által mért, valós, explicit állapot vagy valós (de más forrásból
 számított) érték. A STOP-protokoll (§0/§5.2) ezért nem egy hallgatólagos
-placeholder-adatot talált, hanem négy, névvel, gazdával rögzített, NEM itt
+placeholder-adatot talált, hanem öt, névvel, gazdával rögzített, NEM itt
 javítandó bekötési hiányosságot — a kör a mérést és a dokumentálást végzi
 el, a javítást a felelős feature körök öröklik.**
 
@@ -224,3 +248,4 @@ kimondott `nincs — <indok>`.
 | 2 | L2 — Onboarding mindig `/live`-ra fejez be | Onboarding feature | nincs |
 | 3 | L3 — Library V2 forrásai bootstrap-függők, a harness nem köti be | Library V2 / E12-R11 harness | nincs |
 | 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | nincs |
+| 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | nincs |

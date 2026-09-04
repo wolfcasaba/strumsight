@@ -33,6 +33,8 @@ import 'package:strumsight/features/practice_hub/screens/practice_area_hub_scree
 import 'package:strumsight/features/profile_hub/screens/profile_hub_screen.dart';
 import 'package:strumsight/features/progress/public.dart'
     show PracticeStats, practiceLogProvider;
+import 'package:strumsight/features/progress_v2/application/progress_providers.dart'
+    show progressPracticeHistoryProvider;
 import 'package:strumsight/features/progress_v2/screens/progress_dashboard_screen.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/today/screens/today_hub_screen.dart';
@@ -80,7 +82,7 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   final walked = <String>{};
 
   final store = InMemoryKeyValueStore();
-  final session = await bootE2eApp(
+  var session = await bootE2eApp(
     tester,
     store: store,
     onboardingSeen: false,
@@ -230,6 +232,30 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
     reason: 'the finished session must leave exactly one persisted record',
   );
 
+  // MÉRT LELET (recorded in docs/release/full-app-verification.md, §5.2 —
+  // not fixed here): `practiceHistoryV2ListProvider`
+  // (`practice_progress_providers.dart`) is a plain `FutureProvider` —
+  // never `.family`, never invalidated anywhere in `lib/` — so its FIRST
+  // read permanently caches whatever the practice-history repository held
+  // AT THAT MOMENT for the rest of THIS container's life. The Today Hub
+  // stop above already forced that first read (via
+  // `dailyGoalActiveSecondsProvider` -> `aggregatedPracticeFeedProvider` ->
+  // `practiceProgressFeedProvider`), before this session existed — so
+  // `progressPracticeHistoryProvider` (which reads the SAME cached
+  // provider) would stay empty in THIS container even though the session
+  // above genuinely persisted. A real app restart is the only way any
+  // container ever observes a session recorded after its own first Today
+  // Hub render — so this walkthrough restarts here, exactly like a user
+  // relaunching the app, before continuing to Library/Progress/Profile.
+  session = await restartE2eApp(
+    tester,
+    session,
+    store: store,
+    onboardingSeen: true,
+    flags: _shippedBeFlags(),
+  );
+  await tester.pumpAndSettle();
+
   // 5. Library. MÉRT LELET (recorded in
   // docs/release/full-app-verification.md, §5.2 — not fixed here):
   // `libraryV2SourcesProvider` (`library_v2_providers.dart`) unconditionally
@@ -258,13 +284,24 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
 
   // 6. Progress — same practice-history repository, read through
   // `progressPracticeHistoryProvider` (this round's own §6.1 mutation
-  // target). Whichever branch a single completed session actually produces
-  // is asserted explicitly — both are legitimate §5.1 outcomes (real data
-  // vs. an explicit new-user state); neither is skipped.
+  // target). The dashboard's OWN new-user/skills branch depends on whether
+  // any mastery milestone accrued evidence — not merely on the history
+  // list being non-empty — so a screen-only assertion here cannot tell
+  // "real one-session history" apart from "mutated to always-empty" (both
+  // land on the SAME new-user view for this session's practice
+  // definition, MÉRT). The provider-level check below is what actually
+  // falsifies the §6.1 mutation.
   session.router.go(AppRoutes.profileProgress);
   await tester.pumpAndSettle();
   expect(find.byType(ProgressDashboardScreen), findsOneWidget);
   walked.add('ProgressDashboardScreen');
+  expect(
+    session.container.read(progressPracticeHistoryProvider),
+    hasLength(1),
+    reason:
+        'the just-completed session must reach the Progress V2 '
+        'composition layer through progressPracticeHistoryProvider',
+  );
   final isProgressNewUser = find
       .byKey(const Key('progress-dashboard-new-user'))
       .evaluate()
