@@ -13,6 +13,11 @@ export 'engine/strum_engine.dart';
 /// The frame the Practice observation gateway adapts (E02-R08).
 export 'model/live_frame.dart';
 
+/// Which strum model produced a verdict, or why it fell back (E14-R03,
+/// ADR 0355) — Flutter-independent telemetry for the Lab and the local
+/// accuracy export.
+export 'model/recognition_runtime_info.dart';
+
 /// Live frame stream + engine lifecycle providers.
 export 'providers/live_providers.dart';
 

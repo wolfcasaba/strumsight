@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../analyze/public.dart';
 import '../../diagnostics/public.dart';
 import '../../settings/public.dart';
+import '../model/recognition_runtime_info.dart';
 import 'live_providers.dart';
 
 /// Where the Live Lab capture-and-analyze is in its lifecycle (r199).
@@ -13,10 +14,20 @@ enum LiveLabPhase { idle, analyzing, empty, done }
 
 @immutable
 class LiveLabState {
-  const LiveLabState({this.phase = LiveLabPhase.idle, this.result});
+  const LiveLabState({
+    this.phase = LiveLabPhase.idle,
+    this.result,
+    this.runtimeInfo,
+  });
 
   final LiveLabPhase phase;
   final AnalyzeResult? result;
+
+  /// Which strum model is behind the Live pipeline right now, or why it
+  /// fell back (ADR 0355) — set via [LiveLabController.reportRuntimeInfo].
+  /// Null until the first report. The actual isolate → Lab wiring lands in
+  /// E14-R04 (R3): this round only makes the state additively carry it.
+  final RecognitionRuntimeInfo? runtimeInfo;
 
   static const initial = LiveLabState();
 }
@@ -71,6 +82,18 @@ class LiveLabController extends Notifier<LiveLabState> {
 
   /// Back to idle (e.g. when leaving the screen) — clears a stale result.
   void reset() => state = LiveLabState.initial;
+
+  /// Records which strum model is currently active, or why it fell back
+  /// (ADR 0355) — additive telemetry only, leaves [LiveLabState.phase] and
+  /// [LiveLabState.result] untouched. The actual isolate → Lab wiring lands
+  /// in E14-R04 (R3); this entry point only makes the state representable.
+  void reportRuntimeInfo(RecognitionRuntimeInfo? info) {
+    state = LiveLabState(
+      phase: state.phase,
+      result: state.result,
+      runtimeInfo: info,
+    );
+  }
 }
 
 final liveLabProvider = NotifierProvider<LiveLabController, LiveLabState>(
