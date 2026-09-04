@@ -24688,3 +24688,25 @@ amit mérni hivatott.
 **Őrteszt:** nincs — a szabályt a záró kör review-ja tartja (a bejárás minden
 teszt-oldali navigációjához dokumentált lelet tartozzon); gépi őrré akkor
 tehető, ha a bejárás-harness a saját `router.go` hívásait számlálja.
+
+## L610 — A tagadást olvasó gép nélkül a próza-alapú szerződés az ELLENKEZŐJÉT jelenti: a „FÜGGETLEN" kikötés blokkolóvá vált (ops, 2026-09-04)
+
+**Mérve.** Az ADR 0495 D1 a párhuzamot a brief kimondott `Előfeltétel` sorára
+bízta — a kiolvasás viszont minden `E##-R##` tokent előfeltételnek vett. Három
+E14-brief szó szerint ezt írja: *„Az `E14-R02`-től **FÜGGETLEN** — a két kör
+fájlhalmaza diszjunkt, párhuzamosítható"*, a terv mégis **egyetlen** kört
+engedett a 18-ból. Ráadásul a kikötés a KÖVETKEZŐ sorra volt tördelve, amit a
+soronkénti olvasás el sem ért: a parser a mondat felét látta, és abból a felétől
+ellentétes következtetést vont le.
+
+**A tanulság iránya.** Ha egy gépi döntést emberi prózára bízunk, a
+kiolvasásnak a mondat ÉRTELMÉT kell követnie, nem a benne szereplő
+azonosítókat. A puszta token-keresés nem semleges egyszerűsítés: a tagadó
+mondatból pontosan a fordítottját olvassa ki, és annál magabiztosabban, minél
+világosabban fogalmazott a szerző. A javítás iránya ezért mindig
+kétlépcsős — (1) a teljes állítást olvasd (blokk, ne sor), (2) a
+bizonytalanságot a biztonságos irányba döntsd el (vegyes mondat → megtartás).
+
+**Őrteszt:** `tools/tests/test_pipeline_throughput.py::IndependenceClauseTest`
+(ADR 0495 D6) — a javítás előtti eszközzel 3 cella PIROS, köztük a valódi
+E14-sávot mérő regressziós cella.
