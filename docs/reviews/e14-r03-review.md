@@ -11,7 +11,9 @@
 
 ## 1. VERDIKT
 
-**CHANGES REQUESTED** — 0 BLOCKER, 0 MAJOR, **4 MINOR**, 4 NOTE.
+**APPROVED** (a fix1 után — a §9 a végső döntés).
+
+*Első kör verdiktje: CHANGES REQUESTED* — 0 BLOCKER, 0 MAJOR, **4 MINOR**, 4 NOTE.
 
 A kör tartalmi magja helyes és MÉRVE van (lásd §3–§4). A négy MINOR egyetlen,
 koherens hibaosztály: a `strumModelId` **dokumentált szerződése ma nem igaz és
@@ -267,30 +269,87 @@ paraméter megszüntetésével a divergencia nem „ellenőrzött", hanem
 **megfogalmazhatatlan** lett. A hozzá tartozó hívói egyszerűsítés
 (`strum_crnn.dart` ×4, `live_pipeline.dart` ×2) tisztán mechanikus.
 
-### 8.1 A gate és a paritás ÚJRAMÉRVE a javítás után
+### 8.1 Upstream-szinkron (§0.3) — a `main` KÖZBEN mozdult
 
-Friss izolált klón a javított ágról (`a866a3d7`):
+A javítás közben az `E14-R02` landolt (`478a2f64`), tehát a kör-ág már nem
+tartalmazta az aktuális `origin/main`-t:
+
+```
+$ git merge-base --is-ancestor origin/main HEAD   # NO
+$ git merge --no-ff origin/main                   # konfliktus NÉLKÜL
+$ git diff --check                                # tiszta
+$ git merge-base --is-ancestor origin/main HEAD   # YES
+```
+
+A két kör fájlhalmaza mérten diszjunkt volt (R12), ezért a merge mechanikus.
+Publikus ág-történet nem íródott át, force-push nem történt.
+
+### 8.2 A gate és a paritás ÚJRAMÉRVE a KOMBINÁLT HEAD-en (`cc911fb5`)
+
+Friss izolált klón a merge utáni ágról, `prepare-flutter-generated.sh` után:
 
 ```
 $ tools/round-gate.sh test/features/live/model_activation_test.dart \
     test/features/live/recognition_runtime_info_test.dart test/features/live
 ```
 
-*(kimenet és exit kód: lásd a §8.2 táblát)*
+Kilépési kód **0**:
 
-A §3.1 legacy-paritás próba **újrafuttatva** a javított ágon, ugyanazzal a
-`main`-referenciával — a frame-ujjlenyomat változatlan, tehát a fix1 sem
-mozdította el a fallback viselkedését.
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/live/model_activation_test.dart         zöld
+test test/features/live/recognition_runtime_info_test.dart zöld
+test test/features/live                                    zöld
+architecture                                               zöld
+secrets                                                    zöld
+l10n                                                       zöld
+```
 
-### 8.2 Mért eredmény
+A §3.1 legacy-paritás próba **újrafuttatva** ugyanazon a `main`-referencián
+(`/tmp/probe-main.txt`, `4f293403`):
+
+```
+$ diff /tmp/probe-main.txt /tmp/probe-round2.txt   # exit 0
+bd90fdc0c8e1dbf748cb3c7ad4c5cb7d67ca9573a3a5127dce26d083aeb2b414  /tmp/probe-main.txt
+bd90fdc0c8e1dbf748cb3c7ad4c5cb7d67ca9573a3a5127dce26d083aeb2b414  /tmp/probe-round2.txt
+```
+
+**A fix1 sem mozdította el a fallback viselkedését** — 63 frame, három
+súly-úton, bitre azonos. Mindkét próbaklón tiszta állapotban maradt, a
+próbafájl törölve.
+
+### 8.3 Összegzés
 
 | Mérés | Eredmény |
 |---|---|
-| `tools/round-gate.sh` (izolált `/tmp` klón, `a866a3d7`) | *(lásd lent)* |
-| legacy-paritás (`main` ↔ kör-ág, 3 súly-út, 63 frame) | *(lásd lent)* |
-| scope-audit (fix1) | **OK**, 6 útvonal, mind a listán |
-| biztonsági review | **CLEAN** (a fix1 az S1/S2/S3-at is zárja) |
+| `tools/round-gate.sh` (izolált klón, `cc911fb5`) | **zöld**, exit 0 |
+| legacy-paritás (`main` ↔ kör-ág, 3 súly-út, 63 frame) | **bitre azonos** |
+| scope-audit (implementáció + fix1) | **OK**, 0 listán kívüli útvonal |
+| biztonsági review (`risk = "high"`) | **CLEAN** — a fix1 az S1/S2/S3-at is zárja |
+| BLOCKER / MAJOR | **0 / 0** |
+| MINOR | 4 → **mind zárva** (fix1, `a866a3d7`) |
 
-## 9. VÉGSŐ DÖNTÉS
+## 9. VÉGSŐ DÖNTÉS: **APPROVED**
 
-*(a §8.2 mérések után töltve)*
+Nincs nyitott BLOCKER, MAJOR vagy MINOR lelet. A kör a mérce minden elemét
+teljesíti, és a központi ígéretét (a fallback viselkedése bitre változatlan)
+NEM állítja, hanem **méri** a legacy referenciával szemben.
+
+A merge feltétele változatlanul a **zöld kapu az exact merge SHA-n**: Full Gate
++ Router CI `success` — ez a jelentés a kód-oldali mércéről szól, a CI-oldalit
+nem helyettesíti (ADR 0086 §2).
+
+### 9.1 Átadás a következő körnek (`E14-R04`)
+
+A kör kimondottan elhalasztott két bekötést, mindkettőt az `E14-R04` scope-jába:
+
+1. **Izolátum → Lab átvitel.** A `LivePipeline.runtimeInfo` és a
+   `LiveLabController.reportRuntimeInfo` létezik és tesztelt, de production
+   hívó nincs — a `real_strum_engine.dart` / `strum_engine.dart` ennek a
+   körnek tilos zónája volt (R3).
+2. **A live `strumModelId` valódi asset-neve.** Ma a nevesített
+   `RecognitionRuntimeInfo.isolateLiveModelId` konstans megy át, mert az
+   izolátum-határ csak bájtokat hordoz; a 2 és 3 osztályos live asset így ma
+   nem különböztethető meg id alapján (a `strumModelSha256` viszont igen).
+3. **A `disabledByFlag` flag-olvasása** (`lib/core/feature_flags/**`, R8).
