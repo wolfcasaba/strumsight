@@ -109,14 +109,58 @@ ADR_NAME = re.compile(r"^(\d{4})-[a-z0-9-]+\.md$")
 ROUND_ID = re.compile(r"^[A-Z]\d{2}-R\d{2}$")
 ROUND_TOKEN = re.compile(r"E\d{2}-R\d{2}")
 PREREQ_LINE = re.compile(r"(?im)^.*(?:Előfeltétel|Elofeltetel)\b.*$")
+# A brief KIMONDHATJA, hogy egy megnevezett körtől FÜGGETLEN — a mondat ilyenkor
+# épp az ELLENKEZŐJÉT állítja annak, amit a puszta token-keresés kiolvas belőle.
+# MÉRVE 2026-09-04 (E14 sáv): három brief mondja ki szó szerint, hogy
+# párhuzamosítható (`E14-R03` ↔ R02, `E14-R06` ↔ R02…R05, `E14-R11` ↔ R10), a
+# parser mégis blokkolónak vette őket, és a 18 körös sávot egyszálúvá tette.
+INDEPENDENCE = re.compile(r"(?i)f[üu]ggetlen")
+# FAIL-CLOSED: ha a mondat POZITÍV kötést is állít (`merge-elve`, `lezárva`),
+# akkor a benne lévő tokeneket MEGTARTJUK — egy vegyes mondat félreolvasása a
+# veszélyes irányba (két függő kör párhuzamos indítása) vinne.
+POSITIVE_LINK = re.compile(r"(?i)merge-el|lezár|kész\b|szükséges")
+CLAUSE_SPLIT = re.compile(r"(?<=[.;])\s+")
+
+
+def prerequisite_blocks(text: str) -> list[str]:
+    """Az „Előfeltétel" sor ÉS a hozzá tartozó folytatás-sorok, egy sztringgé fűzve.
+
+    MÉRVE 2026-09-04: a briefek a függetlenségi kikötést tipikusan a KÖVETKEZŐ
+    sorra tördelik (a kikötés az `Előfeltétel` sor UTÁNI sorra kerül). A soronkénti
+    olvasás így pont a tagadást veszítette el.
+    """
+    lines = text.splitlines()
+    blocks: list[str] = []
+    index = 0
+    while index < len(lines):
+        if PREREQ_LINE.match(lines[index]):
+            block = [lines[index]]
+            index += 1
+            while index < len(lines):
+                following = lines[index]
+                if not following.strip():
+                    break
+                if re.match(r"^\s*[-*]\s|^#{1,6}\s", following):
+                    break
+                block.append(following.strip())
+                index += 1
+            blocks.append(" ".join(block))
+            continue
+        index += 1
+    return blocks
 
 
 def declared_prerequisites(repo: Path, brief: str | Path) -> frozenset[str]:
-    """A brief „Előfeltétel" sorában nevesített körök.
+    """A brief „Előfeltétel" blokkjában BLOKKOLÓKÉNT nevesített körök.
 
     A fájl-diszjunktság NEM elég a párhuzamhoz: két kör hozzáérhet teljesen
     külön fájlokhoz úgy, hogy a második az elsőben SZÜLETŐ API-t importálja.
     Ezt a brief prózája mondja ki, ezért gépileg innen olvassuk.
+
+    A blokkot MONDATONKÉNT olvassuk, mert ugyanaz a blokk állíthat kötést ÉS
+    függetlenséget is. Egy mondat tokenjeit akkor — és csak akkor — hagyjuk ki,
+    ha a mondat függetlenséget mond ki, és NEM állít mellette pozitív kötést
+    (ADR 0495 D6). A vegyes mondat fail-closed: megtartjuk.
     """
     path = Path(brief)
     if not path.is_absolute():
@@ -126,8 +170,14 @@ def declared_prerequisites(repo: Path, brief: str | Path) -> frozenset[str]:
     except OSError:
         return frozenset()
     tokens: set[str] = set()
-    for line in PREREQ_LINE.findall(text):
-        tokens.update(ROUND_TOKEN.findall(line))
+    for block in prerequisite_blocks(text):
+        for clause in CLAUSE_SPLIT.split(block):
+            found = ROUND_TOKEN.findall(clause)
+            if not found:
+                continue
+            if INDEPENDENCE.search(clause) and not POSITIVE_LINK.search(clause):
+                continue
+            tokens.update(found)
     return frozenset(tokens)
 
 

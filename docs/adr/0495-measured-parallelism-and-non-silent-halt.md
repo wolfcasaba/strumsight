@@ -79,6 +79,29 @@ nem: az mindig hitelesít). A git 2.43 nem ismeri a `http.proactiveAuth`-ot
 `GIT_CONFIG_KEY_0` / `GIT_CONFIG_VALUE_0`): a titok se config-fájlba, se
 argv-be nem kerül, és a gyerekfolyamatok öröklik. Token nélkül néma no-op.
 
+**D6 — A brief KIMONDHATJA, hogy egy megnevezett körtől FÜGGETLEN (kiegészítés,
+2026-09-04).** A D1 a blokkolást a brief `Előfeltétel` sorára bízta, a
+kiolvasás viszont MINDEN kör-tokent előfeltételnek vett — tehát pont az
+ellenkezőjét értette annak, amit a mondat állít. MÉRVE az E14 sáv
+visszakapcsolásakor: három brief szó szerint kimondja, hogy párhuzamosítható
+(`E14-R03` ↔ R02, `E14-R06` ↔ R02…R05, `E14-R11` ↔ R10), a terv mégis
+EGYETLEN kört engedett a 18-ból.
+
+Két javítás:
+
+1. **A blokkot olvassuk, nem a sort.** A kikötés tipikusan a következő sorra
+   van tördelve (`… Az E14-R02-től` / `FÜGGETLEN — …`), amit a soronkénti
+   olvasás el sem ért. A `prerequisite_blocks()` az `Előfeltétel` sort és a
+   folytatás-sorait fűzi össze (a következő felsorolás-elemig vagy üres sorig).
+2. **Mondatonként döntünk, fail-closed.** Egy mondat tokenjeit akkor — és csak
+   akkor — hagyjuk ki, ha a mondat függetlenséget mond ki (`független`), és
+   NEM állít mellette pozitív kötést (`merge-elve`, `lezárva`, `kész`,
+   `szükséges`). A vegyes mondatot MEGTARTJUK: a félreolvasás veszélyes iránya
+   két függő kör párhuzamos indítása volna, egy elmaradt párhuzam csak lassabb.
+
+MÉRT hatás: az E14 sáv eleje egyszálúból kétszálúvá vált (`E14-R02` ∥
+`E14-R03`), és az `E14-R06` is előfeltétel-kész.
+
 ## Mérce
 
 | döntés | őrteszt |
@@ -88,6 +111,7 @@ argv-be nem kerül, és a gyerekfolyamatok öröklik. Token nélkül néma no-op
 | D3 | `tools/tests/test_halt_reminder_escalation.py` (5 cella; a javítás előtt mind PIROS, a kulcscella `QUIET`-et adott) |
 | D4 | `tools/tests/test_gh_token_expiry_guard.py` (5 cella) |
 | D5 | `tools/tests/test_authenticated_git_fetch.py` (4 cella) |
+| D6 | `tools/tests/test_pipeline_throughput.py::IndependenceClauseTest` (6 cella; a javítás előtti eszközzel 3 PIROS) |
 
 A `…::test_the_real_queue_admits_a_second_round_beside_the_running_one` cella a
 MÉRT defektet őrzi: ha a nyitott sorból egyetlen kör sem indítható a futó
