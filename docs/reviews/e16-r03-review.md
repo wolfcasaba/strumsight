@@ -12,6 +12,12 @@
   format, analyze, mind a 7 teszt-útvonal, architecture, secrets, l10n
 - **Router CI:** `success` (`33820152751`, head `96f33805`)
 
+## VÉGSŐ DÖNTÉS: **APPROVED** — 0 nyitott lelet (1 javító kör után), 3 NOTE
+
+A 2. menet mérése a §2-ben. Az 1. menet leletei (1 MAJOR, 3 MINOR) MIND
+zárva, a MAJOR-1 zárását a reviewer SAJÁT, független mutációs próbáival
+igazolta (nem az implementer jelentése alapján).
+
 ## 1. menet — verdikt: **CHANGES REQUESTED** (0 BLOCKER, 1 MAJOR, 3 MINOR)
 
 A kör érdemi döntése — **ZERO FLIP** — MÉRT és helyes. Külön kiemelendő, hogy
@@ -93,6 +99,46 @@ fájlt sorol fel (`ui_inventory_test.dart`, `ga_scope_test.dart`,
 őrt vett fel a `gate_tests`-be, az `ui_inventory_test.dart` korábban is ott
 volt — a mondatot ehhez igazítsd.
 
+## 2. menet — a javító kör ellenőrzése (`4933b8ce`)
+
+- **Diff a javító körben:** 3 fájl, +344 −10
+  (`test/app/feature_flags_test.dart` +241, brief §10, doc-javítás)
+- **Scope-audit:** `ok` —
+  `Legacy scope audit OK (daa3a9a84d61..4933b8cef10b, 4 changed path(s), 1 generated/ignored)`
+- **ZERO FLIP sértetlen:** `git diff --stat origin/main..HEAD --
+  lib/app/config/feature_flags.dart` → **üres**
+- **Célzott kapu a javító HEAD-en (saját futtatás):** MINDEN GATE ZÖLD
+  (format, analyze, mind a 7 teszt-útvonal, architecture, secrets, l10n)
+
+### MAJOR-1 — ZÁRVA, a reviewer SAJÁT mutációs próbáival igazolva
+
+A javítás a marker-blokkot adatként parse-olja, és a mezőneveket a
+`lib/app/config/feature_flags.dart`-ból olvassa ki (nem hardkódolt lista) —
+pontosan a kért alakban. A zárást NEM az implementer jelentése alapján
+fogadtam el: öt független mutációt futtattam a munkapéldányon
+(`flutter test test/app/feature_flags_test.dart`), mindegyiket visszaállítva.
+
+| Próba | Mutáció | MÉRT eredmény |
+|---|---|---|
+| P0 | — (bázis) | **+26 zöld** |
+| P1 | a Vision sor `resolving` cellája → `később` | **A6 PIROS** (`A6 — every non-BE row names a resolving round or a real path`), +25 −1 |
+| P2 | a `Recognition recovery` táblasor törölve | **A1 fedettség PIROS** (`A1 — every forEnvironment field appears exactly once in the decision table`), +25 −1 |
+| P3 | a `:begin` marker eltávolítva | **mind a HÁROM új cella PIROS** (fail-closed, +23 −3) |
+| P4 | egy `**KI**` besorolás → `**TALÁN**` | **A1 besorolás-készlet PIROS** (`A1 — every row classification is BE, PREVIEW, KI, or N/A`), +25 −1 |
+| P5 | teljes visszaállítás | **+26 zöld**, `git status` tiszta |
+
+A brief §6.1 nevesített falszifikációs sora („a tábla »később« bejegyzést
+tartalmaz feloldó kör nélkül → A6 piros") ezzel MÉRTEN teljesül — az 1.
+menetben ez volt a MAJOR lényege.
+
+### MINOR-1/2/3 — ZÁRVA
+
+| Lelet | MÉRT zárás |
+|---|---|
+| MINOR-1 félrecímkézett komment | a group-komment átírva; már kimondja, hogy a cella flag-boolean regressziót pinnel, és hogy az A1/A6 „measured separately below, against `docs/release/capability-rollout.md` as data" |
+| MINOR-2 szóhiba | `grep -c "geometrikusan"` → **0**; a 16. sor most `gépileg visszaellenőrizve` |
+| MINOR-3 számhiba | a §10.6 most `A négy, a körön kívül élő őr` |
+
 ## NOTE-ok (nem igényelnek javítást)
 
 - **NOTE-1.** A §10.3 érvelése — hogy a zero-flip miatt a D4 hatósugár-mérés
@@ -107,4 +153,7 @@ volt — a mondatot ehhez igazítsd.
 - **NOTE-3.** A scope-audit első futása `VIOLATION`-t adott a
   `prompt-e16-r03.md`-re — az az ORCHESZTRÁTOR dispatch-artefaktuma volt a
   munkapéldány gyökerében, nem az implementer munkája. Eltávolítva, az audit
-  újrafuttatva: `ok`, 3 fájl. A kör diffje végig a listán belül volt.
+  újrafuttatva: `ok`. A kör diffje végig a listán belül volt. **Tanulság a
+  láncnak:** a dispatch-prompt a munkapéldány GYÖKERÉBE írva belekerül a
+  scope-audit látókörébe — a következő körökben a prompt a scratchpadbe való,
+  ne a munkapéldányba.
