@@ -85,6 +85,17 @@ boldog-utas round-trip (6. acceptance-pont) önmagában NEM elég: **modellenké
 kell egy hiányzó-kötelező-kulcs cella is, amely típusos hibát vár, nem `null`-t
 és nem részleges objektumot.
 
+**R12 — az adapter EGYIRÁNYÚ (review-döntés, 2026-09-04).** A §3.6 „kétirányú
+fordítás" megfogalmazásából ebben a körben CSAK a `RecognitionFrame →
+LiveFrame` irány készül el. Indoklás (az implementer §10.6/3 érvelése,
+orchestrátorként elfogadva): a fordított irányhoz a legacy `Strum.confidence`
+kalibrált értékéből `pDown`/`pUp` NYERS valószínűséget kellene kitalálni, ami
+az ADR 0505 D2 tiltotta hazugság fordítottja. A §3.6 kimondott célját (`hogy a
+22 hívó ÉRINTETLEN maradjon`) az egyirányú fordítás maradéktalanul teljesíti,
+és egyetlen acceptance-pont sem méri a fordított irányt. Ha a `LiveFrame →
+RecognitionFrame` irány később tényleg kell, MÉRT forrásból (a modell natív
+kimenetéből) kell táplálni, nem a legacy `confidence`-ből.
+
 **R11 — párhuzamos kör.** `tools/round-slots.py inflight-list` → `E14-R04` és
 `E14-R06` fut. Az `E14-R06` `allowed_paths`-a (`lib/features/accuracy_lab/**`,
 `test/features/accuracy_lab/**`) a miénkkel **diszjunkt** — átfedés nincs.
