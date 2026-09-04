@@ -1,6 +1,7 @@
 # E14-R03 — Model activation telemetry és fail-visible működés
 
-- **Státusz:** PREPARED (előre megírva 2026-08-20, kód olvasva: `main @ 7b5315b`)
+- **Státusz:** READY (pre-flight elvégezve 2026-09-04, kód ÚJRAMÉRVE: `main @ 4f293403`;
+  előre megírva 2026-08-20, akkori olvasat: `main @ 7b5315b`)
 - **Típus:** Chapter 14 (Recognition Accuracy & Useful UI Recovery), Kör 3
 - **Kör-azonosító:** `E14-R03`
 - **Branch:** `<motor>/e14-r03-model-activation-telemetry`
@@ -37,6 +38,183 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Pre-flight revíziók (Claude, orchestrátor — 2026-09-04, `main @ 4f293403`)
+
+Minden alábbi pont **mérve** van a fenti fán. A revíziók **szűkítenek** vagy
+pontosítanak; az engedélyezett-fájllista NEM bővült.
+
+### R1 — `StrumCrnn.tryLoad` szignatúrája NEM változhat (H3-elkerülés) — SZŰKÍTÉS
+
+A §3.2 eredeti előírása („a `tryLoad`/`_tryLiveCrnn` ezt adja vissza `null`
+helyett") a mai fán a **tilos zónába** kényszerítene. Mérve — hat, a listán
+KÍVÜL élő teszt pinneli a mai `StrumCrnn?` visszatérést:
+
+| Fájl:sor | Mit pinnel |
+|---|---|
+| `test/property/crnn_ab_property_test.dart:38` | `final crnn = StrumCrnn.tryLoad('assets/ml/strum_crnn.bin');` |
+| `test/property/crnn_ab_property_test.dart:115-116` | `expect(StrumCrnn.tryLoad('assets/ml/nope.bin'), isNull);` |
+| `test/tools/crnn_detected_time_probe_test.dart:20` | `StrumCrnn.tryLoad(…)!` |
+| `test/tools/klangio_real_ab_test.dart:82` | `StrumCrnn.tryLoad(…)!` |
+| `test/tools/crnn_cost_and_batch_calibration_test.dart:92` | `StrumCrnn.tryLoad(…)!` |
+| `test/tools/crnn_shift_sweep_test.dart:20` | `StrumCrnn.tryLoad(…)!` |
+
+**Kötelező alak (ADDITÍV):**
+
+```dart
+static ModelActivation activate(String path) { … }        // ÚJ, típusos belépő
+static StrumCrnn? tryLoad(String path) => activate(path).model;  // MEGMARAD
+```
+
+A `tryLoad` viselkedése bitre változatlan (hiány/sérülés → `null`), tehát a hat
+fenti teszt-fájl **érintetlen** marad. A `tryLoad` átírása, törlése vagy
+szignatúra-változtatása ebben a körben **`stopped`-ot érő scope-sértés**.
+
+### R2 — `_tryLiveCrnn` szabadon átköthető
+
+Mérve (`grep -rn "_tryLiveCrnn" lib/ test/ tool/`): kizárólag
+`live_pipeline.dart:21` (definíció) és `:60` (egyetlen hívó, ugyanabban a
+fájlban). Privát, fájlon kívülről nem pinnelt → typed eredményre cserélhető.
+
+### R3 — A Lab NEM érheti el a pipeline runtime-infóját ebben a körben — SZŰKÍTÉS
+
+Mérve: a `LivePipeline` a **DSP-izolátumban** jön létre
+(`lib/features/live/engine/real_strum_engine.dart:167` `_DspInit`, `:220`
+`_dspEntry` → `LivePipeline(...)`), a `LiveLabController` viszont a
+`strumEngineProvider`-t olvassa, és a `StrumEngine` seam
+(`lib/features/live/engine/strum_engine.dart`) **nem hordoz** runtime-információt
+(mérve: a 6 tagja `frames`, `start`, `stop`, `setExpectedChord`,
+`setDiagnosticsCapture`, `recentPcm`, `dispose`). Az izolátum → UI átvitel a
+`real_strum_engine.dart` **és** a `strum_engine.dart` módosítását kívánná — mindkettő
+a **tilos zónában** van (§4) → H3.
+
+**Ezért a kör hatóköre:**
+
+1. a `LivePipeline` **közzéteszi** a runtime infót egy szinkron getterrel
+   (`RecognitionRuntimeInfo get runtimeInfo`), a konstruktorban EGYSZER
+   kiszámolva — a per-frame útvonalra nem kerül semmi (§9);
+2. a `LiveLabState` **additív** `RecognitionRuntimeInfo? runtimeInfo` mezőt kap,
+   a `LiveLabController` pedig egy `reportRuntimeInfo(RecognitionRuntimeInfo?)`
+   belépőt, amely csak az állapotot frissíti;
+3. a **tényleges izolátum → Lab bekötés KIMONDOTTAN elhalasztva** az
+   `E14-R04`-re (az a kör szabja át a `LiveFrame` szerződését — ez a §3 „Nincs
+   benne" sora), és a `live_lab_panel.dart` megjelenítése szintén nem ezé a köré
+   (a fájl nincs az engedélyezett listán).
+
+A 6/5. acceptance-pont mércéje ennek megfelelően **a Lab-állapot megkülönböztető
+képessége**: az `activated` és a `fallback` infót hordozó `LiveLabState` mérhetően
+különbözik, és az alapállapot `runtimeInfo` mezője `null`.
+
+### R4 — A redakciós cella KANÁRI-próba, nem kulcsnév-lista (L260)
+
+`docs/LESSONS.md` L260 (E06-R26): egy fix kulcskészletű DTO ellen a
+`forbiddenKeys.any((k) => json.contains('"$k"'))` alakú teszt **konstrukció
+szerint mindig zöld** — a tényleges szivárgás az ÉRTÉK-oldalon van.
+
+**Kötelező cella a 4. acceptance-ponthoz:** olyan úton kell fallbacket
+provokálni, amelynek van egy egyedi, felismerhető útszegmense (pl.
+`Directory.systemTemp` alatt létrehozott `strumsight_canary_<n>` könyvtár), és
+a cellának azt kell mérnie, hogy sem a `toString()`, sem a `toJson()`
+**értékei** nem tartalmazzák ezt a szegmenst (és a temp-gyökér nevét sem).
+Kulcsnév-tiltólistás állítás önmagában NEM elégíti ki a 4. pontot.
+
+### R5 — A `public.dart` NEM generált ehhez a feature-höz
+
+A §9 „a `public.dart` barrel generált lehet" kockázata **mérve tárgytalan**:
+`lib/features/live/public/` **nem létezik**, és a `tool/gen_public_barrel.dart`
+kizárólag a `lib/features/<feature>/public/*.dart` fragmentekből dolgozik (a
+fában egyedül a `practice_generator` használja). A `lib/features/live/public.dart`
+tehát **kézzel írt** barrel: additív `export` sort kézzel adj hozzá, generátort
+NE futtass.
+
+### R6 — A release-guard „Activation contract" nem ír elő mezőnevet ehhez a modellhez
+
+A brief fejlécének „az ott rögzített mezőnevek KÖTELEZŐEK" mondata mérve
+szűkebb, mint ahogy hangzik. `docs/eval/recognition-release-guard.md:21-38`
+artefaktumokat sorol (evaluation report, baseline manifest, candidate model
+manifest, corpus identity, rollback recipe); a nevesített mezők
+(`corpus SHA-256`, `model SHA-256`, app commit, konfiguráció, mérési parancs) a
+**baseline manifestre** vonatkoznak, amit az `E14-R02` definiál. Egyetlen kötés
+öröklődik ide: a modell azonosságát **SHA-256** hordozza → `strumModelSha256`,
+a ténylegesen betöltött bájtokból számolva (§5.5). Más mezőnév innen nem
+kötelező.
+
+### R7 — A `strumModelId` / `strumModelVersion` mért forrása
+
+- `assets/ml/model_manifest.json` (`schema_version: 1`) minden modellhez
+  `filename`, `path`, `sha256`, `format`, `format_version`, `input_shape`,
+  `output_classes` mezőt hord.
+- A **live** út a 3 osztályos assetet preferálja
+  (`real_strum_engine.dart:187-196`): `assets/ml/strum_crnn_live_3c.bin`
+  (`output_classes: [down, up, no-strum]`), fallbackje a 2 osztályos
+  `strum_crnn_live.bin`. A **batch/Analyze** út assete `assets/ml/strum_crnn.bin`
+  (`[down, up]`).
+- A bináris fejléc-szerződése (`crnn_strum_net.dart:35-53`):
+  `SSML` magic (4 bájt) | `u32 version` (== 1) | `u32 count` | tömbök.
+  A `CrnnStrumNet.nClasses` (`:32`) a `dense_b` első dimenziója — **ez** a
+  3-osztályosság mért forrása, nem a fájlnév.
+
+**Kötés:** a `strumModelId` az asset FÁJLNEVE (a manifest `filename` kulcsával
+egyező sztring, út NÉLKÜL — lásd R4), a `strumModelVersion` a **bájtokból**
+olvasott `format_version`. Egyik sem a manifestből átvett érték (§5.5).
+Az 1. acceptance-pont „3-osztályos CRNN"-je a live assetre
+(`strum_crnn_live_3c.bin`, `nClasses == 3`) vonatkozik.
+
+### R8 — A hibakód-osztályozás determinisztikus, nem kivétel-szövegre illesztés
+
+Az öt kód mért előállítási szabálya (§5.2 tiltja a kivétel-szöveg
+továbbadását, tehát a `FormatException` üzenetére illeszteni is tilos):
+
+| Kód | Mikor |
+|---|---|
+| `assetMissing` | a bájtok nem állnak elő: a fájl nem létezik, vagy a hívó `null` bájtsort adott |
+| `assetUnreadable` | a fájl létezik, de az olvasás dob (jogosultság, könyvtár, csonka I/O) |
+| `parseFailed` | a fejléc rossz: a magic nem `SSML`, vagy a `version != 1` — a `strum_crnn.dart` a saját maga olvasott 4+4 bájtjából dönti el, a `parse` hívása ELŐTT |
+| `shapeMismatch` | a fejléc rendben van, de a `CrnnStrumNet.parse` dob (hiányzó tömb, rossz dimenzió) |
+| `disabledByFlag` | a hívó KIFEJEZETTEN letiltotta a modellt — a `ModelActivation.disabled(info)` gyártófüggvénnyel |
+
+A fejléc 8 bájtjának ellenőrzése a `strum_crnn.dart`-ban a bináris szerződés
+tudatos, dokumentált mini-duplikációja (ADR 0355 „Negatív / ár").
+
+**A `disabledByFlag` bekötése NEM ezé a köré:** a `lib/app/config/feature_flags.dart`
+és a `lib/core/feature_flags/**` a tilos zónában van, a három recovery-flag
+(`recognitionRecoveryEnabled`, `recognitionShadowModeEnabled`,
+`newLiveStageEnabled`) pedig az `ADR 0271` szerint `false` marad. A kör a
+**stabil kódot és a gyártófüggvényt** vezeti be és méri; a flag-olvasást egy
+későbbi kör köti be.
+
+### R9 — Sorszám-drift a §2-ben (nem tartalmi)
+
+Mérve `main @ 4f293403`-on: `strum_crnn.dart` `tryLoad` **26-36** (a brief 28-35-öt
+ír); `live_pipeline.dart` `_tryLiveCrnn` **21-31** (a brief 21-30-at ír), a
+`classifier:` mező a **60.** sor (a brief `:58-60`-at ír).
+Változatlanul igaz: `live_frame.dart` **11 mező**;
+`strum_direction_classifier.dart:54` `abstract class StrumDirectionClassifier`.
+
+### R10 — ADR-szám: `0355` marad
+
+`docs/adr/0355-*.md` nem létezik (a sávban `0353` a legmagasabb kiadott), a
+foglaló (`tools/round-slots.py reserve-adr`) pedig `0504`-től ad számot, tehát a
+queue-ban a Chapter 14 sávnak előre kiosztott `0354`–`0361` tartomány gépileg
+elérhetetlen bármely másik kör számára — ütközés kizárva. A queue-sor, a brief
+§5 és a kör-prompt egyaránt `0355`-öt mond, ezért az marad. A pre-flight során
+véletlenül létrejött `0504`/`0505` foglaló-markerek törölve.
+**Az ADR megírva:** `docs/adr/0355-fail-visible-model-activation-telemetry.md`.
+
+### R11 — S12 brief-lint (strict): a §7 gate-parancs tükrözi a `gate_tests`-t
+
+A `.pipeline/brief-lint-E14-R03.md` egyetlen leletét a §7 átírása oldja fel; a
+`gate_tests` mindkét eleme szó szerint szerepel a parancsban, kiegészítve a
+`test/features/live` regressziós útvonallal (a kör a `live_pipeline.dart`-hoz és
+a Lab-hoz nyúl, amelyeket a `test/features/live/dsp/*` és
+`test/features/live/ml/*` tesztek pinnelnek).
+
+### R12 — Párhuzamos kör
+
+Az `E14-R02` egyidejűleg fut (`.pipeline/inflight/`). A két `allowed_paths`
+halmaz **mérve diszjunkt** (az R02 az `evaluation/`, `tool/benchmarks/`,
+`test/tooling/`, `docs/eval/recognition-baseline-index.md` és a SAJÁT briefje
+alatt dolgozik). A másik kör ágát, PR-jét és munkapéldányát nem érintjük.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -71,6 +249,19 @@ névből nem fogja meg, ezért az indoklás itt, explicit módon áll.
 - **ADR 0271 §1** (`UNKNOWN > CONFIDENTLY WRONG`): a hiányzó bemenet sosem
   álcázható sikeres eredménynek — a fallback tény, amit ki kell mondani.
 
+**Pre-flight visszakeresés (2026-09-04, `node tools/knowledge-rag.mjs`,
+szűkített → teljes sorrendben):**
+
+- `lessons/L06` — „minden csendes fallback gyanús" (bm25#1 emb#2 a
+  `--corpus lessons,halts,adr` ágon) — ez a kör tárgya.
+- `adr/0292` — „Modell csak igazolt integritással aktiválható" (bm25#3 emb#1):
+  a szomszédos, szigorúbb döntés. A §5.5 mért hash-e ennek a mérési oldala;
+  ez a kör NEM lazítja (a hiány/sérülés után továbbra sincs aktiválás).
+- `lessons/L260` — „a kulcsnév-listás redakciós teszt vakon zöld marad; a
+  szivárgás az ÉRTÉK-oldalon van, és csak célzott kanári-próba fogja meg"
+  (bm25#1 emb#2 a `--corpus lessons,halts` ágon) — a 4. acceptance-pont
+  mércéjét ez írja elő, lásd az R4 revíziót.
+
 ## 2. Jelenlegi állapot — mért tények
 
 - `lib/features/live/engine/ml/strum_crnn.dart:28-35` — `StrumCrnn.tryLoad`:
@@ -96,9 +287,11 @@ névből nem fogja meg, ezért az indoklás itt, explicit módon áll.
    `strumModelVersion`, `strumModelSha256`, `chordEngineId`, `fallbackReason`
    (nullable), `sampleRate`, `frontendVersion`.
 2. `ModelActivation` — a betöltés eredménye TÍPUSOSAN: `activated(model, info)`
-   vagy `fallback(reason, info)`. A `tryLoad`/`_tryLiveCrnn` ezt adja vissza
-   `null` helyett; a **hívó viselkedése változatlan** (fallback esetén a
-   heurisztika fut).
+   vagy `fallback(reason, info)`. Az ÚJ `StrumCrnn.activate` és a privát
+   `_tryLiveCrnn` ezt adja vissza `null` helyett; a **hívó viselkedése
+   változatlan** (fallback esetén a heurisztika fut). **A `tryLoad` MEGMARAD**
+   `StrumCrnn?`-t adó delegálásként — lásd az R1 revíziót (hat, a listán kívüli
+   teszt pinneli).
 3. A `fallbackReason` **stabil, gépi hibakód-halmazból** jön:
    `assetMissing`, `assetUnreadable`, `parseFailed`, `shapeMismatch`,
    `disabledByFlag`. Nem szabad szöveget továbbadni a kivételből.
@@ -163,17 +356,22 @@ manifestből átvett érték.
 ## 6. Acceptance criteria
 
 1. **Teszt bizonyítja, hogy a valós asset betöltésekor a 3-osztályos CRNN
-   aktív:** az aktiváció `activated`, a `strumModelId` a valós modell id-je, és
-   a `fallbackReason` `null`.
+   aktív:** `StrumCrnn.activate('assets/ml/strum_crnn_live_3c.bin')` →
+   `activated`, a betöltött háló `nClasses == 3`, a `strumModelId`
+   `'strum_crnn_live_3c.bin'`, a `strumModelSha256` a fájl bájtjaiból számolt
+   hash, és a `fallbackReason` `null` (R7).
 2. **Hibás asset → `fallback`**: mind az öt hibakódra van cella (hiányzó fájl,
    olvashatatlan fájl, parse-hiba, alak-eltérés, flag-tiltás), és mindegyik
    STABIL kódot ad.
 3. Fallback esetén a pipeline **továbbra is verdiktet ad** (a heurisztika fut) —
    a teszt ugyanazt a kimenetet méri, mint a kör előtt.
 4. A `RecognitionRuntimeInfo` JSON round-trip zöld, és a szerializált alak
-   **nem tartalmaz** abszolút útvonalat, tokent vagy audiomintát.
-5. A `LiveLabState` hordozza a runtime infót; a Lab-teszt megkülönbözteti az
-   `activated` és `fallback` esetet.
+   **nem tartalmaz** abszolút útvonalat, tokent vagy audiomintát — a mércéje a
+   **kanári-próba** (R4), nem kulcsnév-lista.
+5. A `LiveLabState` hordozza a runtime infót (additív, nullable mező +
+   `reportRuntimeInfo` belépő, R3); a teszt megkülönbözteti az `activated` és a
+   `fallback` infót hordozó állapotot, és az alapállapot `runtimeInfo`-ja `null`.
+   A tényleges izolátum → Lab bekötés az `E14-R04` köre.
 6. `lib/features/live/public.dart` additívan exportál — meglévő export nem
    tűnik el.
 
@@ -197,8 +395,14 @@ ez a kör nem vezet be és nem hangol (AGENTS.md §9).
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/live
+tools/round-gate.sh test/features/live/model_activation_test.dart test/features/live/recognition_runtime_info_test.dart test/features/live
 ```
+
+A parancs a `gate_tests` **mindkét** elemét szó szerint tartalmazza (S12), és
+utánuk a `test/features/live` regressziós útvonalat — a kör a
+`live_pipeline.dart`-hoz nyúl, amit a `test/features/live/dsp/live_pipeline_test.dart`,
+`.../dsp/tonalness_test.dart`, `.../dsp/voice_rejection_test.dart` és
+`.../ml/live_pipeline_ml_wiring_test.dart` pinnel.
 
 Külön processzben futó `format` → `analyze` → célzott teszt → `architecture`
 (AGENTS.md §12). `&&` láncolás tilos (L05/L09). CI-dispatch/PR/merge
