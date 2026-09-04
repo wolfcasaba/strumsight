@@ -7,7 +7,8 @@
 - **Előfeltétel:** `E14-R04` merge-elve — a `SignalQualitySnapshot` szerződése
   ott születik, ez a kör TÖLTI MEG.
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `0357` — **a Claude írja meg, a `docs/adr/` a TILOS zónában van.**
+- **Előre kiosztott ADR:** `0507` — **a Claude írja meg, a `docs/adr/` a TILOS zónában van.**
+  (A queue `0357`-et előlegezett; a `tools/round-slots.py reserve-adr` **`0507`**-et foglalta — lásd §0.0 R1.)
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az
 > `lib/features/audio_analysis/engine/quality/signal_quality_math.dart`
@@ -35,6 +36,72 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight brief-revízió (orchestrátor, 2026-09-04)
+
+A pre-flight MÉRÉSEI a `main @ f963af1f` fán és az izolált
+`/home/ubuntu/ss-sonnet-impl-e14-r05` munkapéldányban készültek.
+
+**R1 — ADR-szám: `0357` → `0507`.** A queue ADR-oszlopa a brief megírása
+(2026-08-20) óta elavult; a foglaló (`tools/round-slots.py reserve-adr --round
+E14-R05`) **`0507`**-et adta. A kör ADR-je:
+`docs/adr/0507-live-signal-quality-analyzer-reuse-route-and-hysteresis.md`.
+
+**R2 — S12 (brief-lint): a §7 gate-parancs a `gate_tests` listát tükrözi.** A
+korábbi `tools/round-gate.sh test/features/live` a két kötelező tesztfájlt csak
+könyvtár-szinten fedte. A §7 parancs mostantól tételesen felsorolja mindkettőt,
+és megtartja a könyvtárat is (az acceptance 7. pontjának regressziós mércéje).
+
+**R3 — Mért sorszámok frissítve.** A §2 `live_pipeline.dart:231/242` hivatkozása
+elavult volt; a mért helyek ma `:277` (`final level = (_strums.lastRms * 8)…`)
+és `:288` (`inputLevel: level`).
+
+**R4 — MÉRT BLOKKOLÓ: a §5.1 újrahasznosítási szabály az `allowed_paths`-on
+belül NEM végrehajtható.** Ez a kör pre-flight-`H3` haltjának oka.
+
+A `tool/check_architecture.dart` `crossFeatureImportsMustUsePublicApi` szabálya
+(`:366-392`) szerint cross-feature import CSAK a cél-feature `public.dart`
+barreljét célozhatja; a szabályt a `tools/round-gate.sh:232` `architecture`
+lépése futtatja. A `lib/features/audio_analysis/public.dart` exportálja a
+`quality_thresholds.dart` (`:100`) és a `signal_quality_stage.dart` (`:101`)
+fájlt, a **`signal_quality_math.dart`-ot azonban NEM**.
+
+Mindkét út reprodukálva (`dart run tool/check_architecture.dart`, illetve
+`flutter analyze` a munkapéldányban):
+
+| Út | Mért eredmény |
+|---|---|
+| mély import `…/engine/quality/signal_quality_math.dart` | **architecture PIROS**, exit 1: `lib/features/live/engine/quality/live_signal_quality_analyzer.dart -> lib/features/audio_analysis/engine/quality/signal_quality_math.dart [cross-feature imports must target public.dart]` |
+| `…/audio_analysis/public.dart` barrel-import | architecture ZÖLD (`12 allowlisted deviation(s)`), de **analyze PIROS**: `error • Undefined name 'SignalQualityMath'` |
+
+A harmadik, exportált útvonal (`SignalQualityStage`) nem helyettesíti a
+primitíveket: `async`, `ValidatedPcmAnalysisInput` + `AnalysisStageContext`
+bemenetet vár, és minden hívásán feltétel nélkül lefuttatja a `tonalness`
+FFT-jét és a `noiseFloorDbfs`-t
+(`signal_quality_stage.dart:59-110`) — a Live forró úton blokkonként hívva
+pontosan a §6.1 mátrix 6. sorának hibás implementációja.
+
+**A feloldás két sor**, de MINDKETTŐ az orchestrátor hatáskörén kívül esik
+(ADR 0087 §2: a lista SZŰKÍTÉSE a saját hatásköröm, a TÁGÍTÁSA nem):
+
+1. `lib/features/audio_analysis/public.dart:100` mellé:
+   `export 'engine/quality/signal_quality_math.dart';`
+2. ennek a briefnek az `allowed_paths` blokkjába:
+   `"lib/features/audio_analysis/public.dart",`
+
+Az `architectureAllowlist` bővítése NEM alternatíva: a lista a saját szabálya
+szerint (`tool/check_architecture.dart:8-10`) csak szűkülhet, és a `tool/` a
+gate infrastruktúrája (ADR 0087 §4). A `signal_quality_math.dart` tartalma
+mindkét feloldásban **bájtra változatlan** marad (ADR 0224 §3, acceptance 6.).
+
+**R5 — Visszakeresés (ADR 0312).** `lessons,halts,adr` szűkítve: ADR 0224 §2–§3
+(a merge-elt `SignalQualityReport` nem változik), ADR 0234, ADR 0216;
+`lessons,halts` szűkítve: L104 (a lassú boxon a teszteket KIS csomagokban kell
+futtatni — az implementer-promptba kötelező), L144, L449. Teljes korpuszon a
+döntő találat a `test/core/architecture_dependency_test.dart:501` blokk: egy
+korábbi kör ugyanezen a hibaosztályon akadt el („the first cross-feature
+consumer … was flagged and the round could not build in scope", ADR 0176) — ez
+a mostani R4 mért megismétlődése.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -78,8 +145,8 @@ az indoklás itt, explicit módon áll.
 
 - **Live oldalon egyetlen minőségi jel van**, és az egy skálázott RMS:
   `final level = (_strums.lastRms * 8).clamp(0.0, 1.0).toDouble();`
-  (`lib/features/live/engine/dsp/live_pipeline.dart:231`), amit a frame
-  `inputLevel`-ként visz ki (`:242`). Klipping, zajszint, SNR, csend-arány,
+  (`lib/features/live/engine/dsp/live_pipeline.dart:277`), amit a frame
+  `inputLevel`-ként visz ki (`:288`). Klipping, zajszint, SNR, csend-arány,
   beszéd-jelleg: **nincs**.
 - **A batch oldalon viszont KÉSZ a matematika**:
   `lib/features/audio_analysis/engine/quality/signal_quality_math.dart` —
@@ -141,10 +208,13 @@ UI-változás; hangforrás-, személy- vagy játékminőség-osztályozás; `doc
 
 ### 5.1 A matematika ÚJRAHASZNOSÍTOTT, nem újraírt
 
-A metrikák a meglévő `signal_quality_math` függvényeivel készülnek. **NEM
-elfogadható gyengítés:** „a live úthoz gyorsabb saját RMS kell" indoklású
-duplikátum — ha teljesítmény-okból tényleg kell, az `stopped` jelzés és mért
-javaslat, nem néma másolat.
+A metrikák a meglévő `signal_quality_math` függvényeivel készülnek, és az
+elérési út a **`package:strumsight/features/audio_analysis/public.dart`
+barrel** (ADR 0507 D1) — a mély import az `architecture` kapuban PIROS (§0.0
+R4, mérve). **NEM elfogadható gyengítés:** „a live úthoz gyorsabb saját RMS
+kell" indoklású duplikátum — ha teljesítmény-okból tényleg kell, az `stopped`
+jelzés és mért javaslat, nem néma másolat. Az `architectureAllowlist` bővítése
+szintén tiltott (a lista csak szűkülhet).
 
 ### 5.2 Csak audióminőség — semmi más
 
@@ -215,8 +285,12 @@ mintaszámait):**
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/live
+tools/round-gate.sh test/features/live/live_signal_quality_analyzer_test.dart test/features/live/live_signal_quality_hysteresis_test.dart test/features/live
 ```
+
+A parancs a `gate_tests` MINDKÉT elemét tételesen futtatja (S12), és utánuk a
+teljes `test/features/live` könyvtárat is — ez méri az acceptance 7. pontját
+(az `inputLevel` viselkedése változatlan, a meglévő live-tesztek zöldek).
 
 Külön processzben futó `format` → `analyze` → célzott tesztek → `architecture`
 (AGENTS.md §12). `&&` láncolás tilos (L05/L09).
@@ -234,7 +308,8 @@ kikapcsolásával (`enterFrames = exitFrames = 1`) a villogás-teszt **PIROS**
 3. Állapotgép + hiszterézis.
 4. Fixture-mátrix és villogás-teszt.
 5. Pipeline-bekötés (az `inputLevel` érintetlen).
-6. CPU-mérés (3 futás mediánja), majd `tools/round-gate.sh test/features/live`.
+6. CPU-mérés (3 futás mediánja), majd a §7 gate-parancs (a `gate_tests` mindkét
+   fájlja tételesen + a `test/features/live` könyvtár).
 
 ## 9. Kockázatok
 
