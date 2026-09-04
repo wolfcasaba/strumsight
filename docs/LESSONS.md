@@ -24505,3 +24505,58 @@ méréssel. Mérve piros a javítás előtt (`main @ 70b56465`: 1 failed, a lele
 pontosan `…test.dart:3724`) és zöld utána — **a kör HEAD-jén is**
 (`sonnet-impl/e16-r02-… @ 8b76e19a` + heal merge: `5 passed`, A5 `6 passed`,
 A1 `5 passed`).
+
+## L614 — A gépi feldolgozásra kitett marker-blokk önmagában NEM mérce: ha egyetlen cella sem olvassa, a kör fő artefaktuma őrizetlen marad (E16-R03, review MAJOR-1, 2026-09-04)
+
+**Mit mértünk.** Az E16-R03 terméke egy döntési tábla
+(`docs/release/capability-rollout.md` §2), amely köré az implementer
+kifejezetten gépi feldolgozásra való határolókat tett
+(`<!-- capability-rollout-decisions:begin -->` / `:end`). A célzott kapu,
+a teljes CI-suite és a Router CI MIND zöld volt. A független review mégis
+MAJOR-t mért:
+
+```
+grep -rn "capability-rollout-decisions" --include=*.dart --include=*.py .  → 0 találat a docs/release-en kívül
+grep -n  "A6\|resolving" test/app/feature_flags_test.dart                  → csak KOMMENT
+```
+
+A marker-blokkot **semmi nem olvasta**. A tábla bármely sora törölhető volt,
+a `resolving` cellák „később"-re cserélhetők, egy capability teljesen
+kihagyható — a kapu végig zöld maradt volna. Az első új teszt KOMMENTJE
+„A1/A6"-ot állított, a TÖRZSE viszont kizárólag flag-booleanokat mért, a
+tábla tartalmáról semmit. A brief §6.1 falszifikációs mátrixa ugyanakkor
+nevesítve ígérte: *„a tábla »később« bejegyzést tartalmaz feloldó kör
+nélkül → A6 piros"*.
+
+**Miért fontos.** Ez az [L271](#l271) hibaosztály **dokumentum-oldali** párja:
+ott egy teszt neve ígért többet, mint amit a törzse mért; itt egy
+**affordancia** (a gépi marker) ígérte a mérhetőséget, anélkül hogy bárki
+fogyasztotta volna. A marker jelenléte olvasóként ERŐSEBB bizonyítéknak
+látszik, mint egy sima táblázat — pontosan ezért veszélyesebb: azt sugallja,
+hogy van parser, holott nincs. A kör fő artefaktuma (a döntési tábla) így
+teljesen őrizetlen maradt volna, miközben minden kapu zöld.
+
+**Hogyan alkalmazd.**
+
+1. **Ha egy kör terméke DOKUMENTUM, a review-nak külön kérdése:
+   „melyik cella olvassa?"** Egy `grep` a marker/oszlopnév után a
+   `test/`-ben és a `tool/`-ban egy percbe kerül, és eldönti a kérdést. A
+   zöld kapu erre a hibaosztályra VAK.
+2. **A parser a mezőlistát a FORRÁSBÓL olvassa, ne hardkódolja.** Az
+   E16-R03 javítása a `forEnvironment` mezőneveit a
+   `lib/app/config/feature_flags.dart`-ból nyeri ki — így egy jövőbeli új
+   flag nem maradhat ki némán a táblából. Egy hardkódolt 40-elemű lista
+   ugyanezt a rést nyitná újra egy körrel később.
+3. **A fail-closed parse a mérce része:** hiányzó, üres vagy rossz fejlécű
+   marker-blokk legyen PIROS, ne néma átcsúszás ([L566](#l566)).
+4. **A zárást mutációval igazold, ne a jelentés alapján.** Az E16-R03
+   reviewere öt független mutációt futtatott a munkapéldányon (mindegyiket
+   visszaállítva): `resolving` → „később" ⇒ A6 piros; táblasor törölve ⇒ A1
+   fedettség piros; marker eltávolítva ⇒ mind a három cella piros; ismeretlen
+   besorolás ⇒ A1 besorolás-készlet piros; visszaállítás ⇒ 26/26 zöld.
+
+**Őrteszt:** `test/app/feature_flags_test.dart` —
+`A1 — every forEnvironment field appears exactly once in the decision table`,
+`A1 — every row classification is BE, PREVIEW, KI, or N/A`,
+`A6 — every non-BE row names a resolving round or a real path`
+(mindhárom a marker-blokkot adatként parse-olja, fail-closed módon).

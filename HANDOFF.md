@@ -1,5 +1,63 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E16-R03 KÉSZ — Capability rollout-döntések: **ZERO FLIP** mért evidenciával — PR [#560](https://github.com/wolfcasaba/strumsight/pull/560), squash `1bb21b95` (2026-09-04)
+
+A Chapter 16 harmadik köre capabilityenként MÉRT rollout-besorolást ad, és a
+mérés eredménye **ZERO FLIP**: mind a **40** `forEnvironment` mező
+kiértékelése után egyetlen, korábban `false` capability sem teljesíti mind a
+négy kritériumot, ezért a `lib/app/config/feature_flags.dart` **változatlan**
+(`git diff --stat origin/main..HEAD -- lib/app/config/feature_flags.dart` →
+üres). Ez a brief §0.0.1 R3 és az [ADR 0492](docs/adr/0492-capability-rollout-decision-evidence-and-nonprod-boundary.md)
+D1 szerint **elfogadott, mért kimenet**, nem hiányos kör — a kör terméke a
+döntési tábla és az azt őrző gépi mérce.
+
+**Az új dokumentum:** [`docs/release/capability-rollout.md`](docs/release/capability-rollout.md)
+— a **NEM-production (development/lab)** alapértelmezések döntési táblája.
+Elhatárolva a `ga-scope.md`-től (GA/**production** besorolás, ADR 0489) és a
+`rollout-decision.md`-től (staged **százalékos** rollout, E12-R32); production
+alapértelmezésről saját állítást nem tesz (ADR 0492 D2).
+
+**A besorolások:** 8 capability **BE** (változatlan — Diagnostics, Lab mode,
+Practice Engine V2, Migrated Learn, Practice detailed history, Song Trainer V2,
+Practice Generator, Adaptive shell) · 5 community flag **PREVIEW** (dart-define,
+ADR 0395) · a többi **KI**, mindegyik nevesített feloldó körrel vagy fán
+feloldható blokkolóval (`E12-R17`, `E12-R18`, `E14-R02`, `E16-R04`, HORIZON
+device-elfogadás, Epic 6 release-blokkolók).
+
+**A pre-flight négy MÉRT revíziót írt a briefbe (§0.0.1):** (R1) a brief §2
+három állítása MÉRTEN téves volt — a `practiceGeneratorEnabled` MA `nonProd`
+(ADR 0491 D2 óta), a vision flagek száma 11 (nem 10), az analysis flageké 9
+(nem 10); (R2) a `forEnvironment` törzse a `tool/release/verify_ga_scope.py`
+fail-closed parserének **négy** alakját tarthatja csak (`nonProd`/`true`/
+`false`/`const bool.fromEnvironment(...)`) — bármi más `VerifyError`, ami a
+körön KÍVÜL élő `ga_scope_test.dart`-ot viszi pirosra (H3); (R3) az
+[L534](docs/LESSONS.md#l534) hatósugár-protokoll (flip előtt mérés, különben
+`stopped`); (R5) a `gate_tests` **szigorítva** három, a körön kívül élő őrrel
+(`ga_scope_test.dart`, `analysis_rollout_flags_test.dart`,
+`app_config_test.dart`).
+
+**A review 1 MAJOR-t mért a zöld kapu mögött:** az A1 és az A6
+acceptance-kritériumnak **nem volt gépi mércéje** — a döntési tábla köré gépi
+határolók (`<!-- capability-rollout-decisions:begin/end -->`) kerültek, de
+egyetlen cella sem olvasta őket, így a tábla bármely sora törölhető vagy
+„később"-re cserélhető lett volna a kapu zöldje mellett (a brief §6.1 épp ezt
+ígérte pirosnak). A javító kör a marker-blokkot adatként parse-olja, és a
+mezőneveket a `feature_flags.dart`-ból olvassa ki (nem hardkódolt lista). A
+zárást a reviewer **saját, független mutációs próbái** igazolják, nem az
+implementer jelentése: P1 `resolving` → „később" ⇒ **A6 piros**; P2 táblasor
+törölve ⇒ **A1 fedettség piros**; P3 marker eltávolítva ⇒ **mind a három cella
+piros** (fail-closed); P4 ismeretlen besorolás ⇒ **A1 besorolás-készlet piros**;
+P5 visszaállítás ⇒ **26/26 zöld**.
+→ [L614](docs/LESSONS.md#l614), review: [`docs/reviews/e16-r03-review.md`](docs/reviews/e16-r03-review.md)
+
+**Mérce:** célzott kapu a munkapéldányon MINDEN GATE ZÖLD (format, analyze, 7
+teszt-útvonal, architecture, secrets, l10n); scope-audit `ok`; exact-SHA CI a
+`513d1191` merge SHA-n: full-gate
+[33822335974](https://github.com/wolfcasaba/strumsight/actions/runs/33822335974)
++ Router CI
+[33822337524](https://github.com/wolfcasaba/strumsight/actions/runs/33822337524)
+— mindkettő `success`. Implementer `sonnet-impl` (Claude Sonnet 5), 1 javító kör.
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E16-R02 / H3 (5.): dátumozott jelentést őrzött ÉLŐ-fás mérés (2026-09-03)
 
 **ADR 0112 önjavító kör. A megállt kör terméke változatlanul HIBÁTLAN** — a
@@ -11632,7 +11690,23 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-03):** `main` @ `b968cc4a` — **E15-R13: a Chapter 15
+**Aktuális állapot (2026-09-04):** `main` @ `1bb21b95` — **E16-R03: capability
+rollout-döntések, ZERO FLIP**, PR
+[#560](https://github.com/wolfcasaba/strumsight/pull/560), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
+(Sonnet 5), **1 javító kör** (review: 1 MAJOR + 3 MINOR → APPROVED, 0 nyitott
+lelet, 3 NOTE, [`docs/reviews/e16-r03-review.md`](docs/reviews/e16-r03-review.md)).
+ÚJ ADR: [**0492**](docs/adr/0492-capability-rollout-decision-evidence-and-nonprod-boundary.md).
+`risk = "high"`, `native_gate = false` → a CI-tervet a `tools/round-ci-plan.py`
+adta (`full-gate.yml`). Exact-SHA evidencia az `513d1191` merge SHA-n:
+full-gate
+[33822335974](https://github.com/wolfcasaba/strumsight/actions/runs/33822335974),
+Router CI
+[33822337524](https://github.com/wolfcasaba/strumsight/actions/runs/33822337524)
+— mindkettő `success`. A `lib/**` fa **érintetlen**: a kör terméke a döntési
+tábla (`docs/release/capability-rollout.md`) és az azt őrző gépi mérce.
+
+**Előző állapot (2026-09-03):** `main` @ `b968cc4a` — **E15-R13: a Chapter 15
 sáv ZÁRÓ köre**, PR [#556](https://github.com/wolfcasaba/strumsight/pull/556),
 squash-merge. Implementer `sonnet-impl` (Claude Sonnet 5 `--effort high`),
 orchesztrátor/reviewer Claude (Opus 5), **1 javító menet** (review: 1 MAJOR +
@@ -11814,7 +11888,20 @@ maradt.
 
 ## 5. Last completed round
 
-**E15-R13 — A Chapter 15 sáv lezárása: teljes migrációs mérés, vizuális
+**E16-R03 — Capability rollout-döntések: ZERO FLIP mért evidenciával** (PR
+[#560](https://github.com/wolfcasaba/strumsight/pull/560), squash `1bb21b95`).
+Mind a 40 `forEnvironment` mező MÉRT kiértékelése után egyetlen, korábban
+`false` capability sem teljesíti a négy rollout-kritériumot, ezért a
+`feature_flags.dart` **változatlan** — ez az [ADR 0492](docs/adr/0492-capability-rollout-decision-evidence-and-nonprod-boundary.md)
+D1 szerint elfogadott, mért kimenet. A kör terméke a
+[`docs/release/capability-rollout.md`](docs/release/capability-rollout.md)
+döntési tábla (8 BE · 5 PREVIEW · a többi KI, mind nevesített feloldó körrel)
+és az azt adatként parse-oló, fail-closed gépi mérce. A review a zöld kapu
+mögött 1 MAJOR-t mért: az A1/A6 kritériumnak nem volt gépi mércéje — a
+javítást a reviewer öt független mutációs próbával igazolta
+([L614](docs/LESSONS.md#l614)).
+
+**Előző kör: E15-R13 — A Chapter 15 sáv lezárása: teljes migrációs mérés, vizuális
 regresszió és APK-evidencia** (PR
 [#556](https://github.com/wolfcasaba/strumsight/pull/556), squash `b968cc4a`).
 A sáv **91/96 migrált képernyővel (94,792%)** zárul (indulás: 43/96); a záró
@@ -11977,6 +12064,26 @@ AI-capability bizonyítéka ma géppel olvashatatlan próza — az összesítő 
 `exit=1`-gyel mondja ki.
 
 ## 6. Exact next task
+
+> **KÖVETKEZŐ KÖR: `E16-R04` — Élő backend end-to-end**
+> ([`docs/rounds/e16-r04-live-backend-end-to-end.md`](docs/rounds/e16-r04-live-backend-end-to-end.md),
+> motor `sonnet-impl`, előre kiosztott ADR `0493`). A pipeline indítja, nem
+> kézzel. Utána `E16-R05` (teljes app-verifikáció és release).
+>
+> **Amit az E16-R03 átad neki (bemenet, nem díszítés):** a
+> [`docs/release/capability-rollout.md`](docs/release/capability-rollout.md)
+> döntési táblája nevesíti, mely capability feloldása tartozik az `E16-R04`-hez
+> — a **cloud AI Tutor** (`aiTutorCloudEnabled`, a StrumSight backend-proxy
+> miatt, `E12-R17` privacy-előfeltétellel együtt) és a **Community** öt flagje
+> (`E12-R17` + `E12-R18` mellett). A tábla `resolving` oszlopa ma GÉPILEG
+> őrzött: az `E16-R04` nem törölheti és nem lazíthatja „később"-re a saját
+> sorait anélkül, hogy az A6 cella pirosra váltana.
+>
+> ⚠ **Az `E16-R04` pre-flightjának KÖTELEZŐ mérése (ADR 0492 D3/D4):** ha a kör
+> bármely flag-alapértelmezést mozdítja, (a) a `forEnvironment` törzse csak a
+> `verify_ga_scope.py` négy gépi alakját tarthatja, és (b) a flip hatósugarát
+> MÉRNI kell a véglegesítés ELŐTT ([L534](docs/LESSONS.md#l534)) — az
+> `allowed_paths`-on kívüli pirosodás `stopped`, nem lista-tágítás.
 
 > **A Ch15 (UI-aktiválás és -befejezés) SÁV LEZÁRULT — 2026-09-03, `E15-R13`
 > merge-elve (`b968cc4a`).** Mind a 14 E15 sor `done`. A záró kör mérlege:
