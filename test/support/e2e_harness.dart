@@ -86,19 +86,23 @@ final class E2eSession {
   }
 }
 
-AppConfig _e2eConfig() => AppConfig.resolve(
+/// The E12-R11 default flag set: Practice Engine V2 on (the round's whole
+/// surface); adaptive shell OFF so `/practice` resolves to the legacy
+/// `PracticeHubScreen` the flows below drive — the same choice
+/// `practice_routing_test.dart` makes for the identical reason. Public
+/// (E16-R05 §5.5) so a caller can name it explicitly when threading
+/// [flags] through some but not all of a test's `bootE2eApp` calls.
+const FeatureFlags e2eDefaultFlags = FeatureFlags(
+  accountEnabled: false,
+  diagnosticsEnabled: false,
+  labModeAvailable: false,
+  practiceEngineV2Enabled: true,
+);
+
+AppConfig _e2eConfig({FeatureFlags? flags}) => AppConfig.resolve(
   environment: AppEnvironment.development,
   apiBaseUrl: _apiBaseUrl,
-  // Practice Engine V2 on (the round's whole surface); adaptive shell OFF
-  // (default of this constructor) so `/practice` resolves to the legacy
-  // `PracticeHubScreen` the flows below drive — the same choice
-  // `practice_routing_test.dart` makes for the identical reason.
-  flags: const FeatureFlags(
-    accountEnabled: false,
-    diagnosticsEnabled: false,
-    labModeAvailable: false,
-    practiceEngineV2Enabled: true,
-  ),
+  flags: flags ?? e2eDefaultFlags,
   diagnosticsToken: AppConfig.devDiagnosticsToken,
   buildMode: 'test',
   appVersion: _appVersion,
@@ -115,12 +119,13 @@ Future<E2eSession> bootE2eApp(
   WidgetTester tester, {
   required InMemoryKeyValueStore store,
   required bool onboardingSeen,
+  FeatureFlags? flags,
 }) async {
   final guard = FakeNetworkGuard()..install();
   final clock = HarnessClock();
   final strumEngine = FakeStrumEngine();
   final tunerEngine = FakeTunerEngine();
-  final config = _e2eConfig();
+  final config = _e2eConfig(flags: flags);
 
   final container = ProviderContainer(
     overrides: [
@@ -191,9 +196,15 @@ Future<E2eSession> restartE2eApp(
   E2eSession previous, {
   required InMemoryKeyValueStore store,
   required bool onboardingSeen,
+  FeatureFlags? flags,
 }) async {
   await previous.dispose(tester);
-  return bootE2eApp(tester, store: store, onboardingSeen: onboardingSeen);
+  return bootE2eApp(
+    tester,
+    store: store,
+    onboardingSeen: onboardingSeen,
+    flags: flags,
+  );
 }
 
 final class _NoopPracticeFeedbackOutput implements PracticeFeedbackOutput {
