@@ -18,6 +18,17 @@ export 'model/live_frame.dart';
 /// accuracy export.
 export 'model/recognition_runtime_info.dart';
 
+/// The versioned, Flutter-independent felismerési szerződés — separate
+/// chord- and direction-confidence, typed decision states (E14-R04, ADR
+/// 0505). `live_pipeline.dart` is not rewired to it yet; this is the
+/// contract + the `LiveFrame` compatibility adapter only.
+export 'domain/recognition/chord_prediction.dart';
+export 'domain/recognition/live_frame_adapter.dart';
+export 'domain/recognition/recognition_decision.dart';
+export 'domain/recognition/recognition_frame.dart';
+export 'domain/recognition/signal_quality_snapshot.dart';
+export 'domain/recognition/strum_prediction.dart';
+
 /// Live frame stream + engine lifecycle providers.
 export 'providers/live_providers.dart';
 

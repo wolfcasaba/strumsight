@@ -1,5 +1,77 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR — E14-R07 / H3: a merge utáni könyvelés saját munkapéldányban fut, a push újrapróbálható és hangos (2026-09-04)
+
+**ADR 0112 önjavító kör. A megállt kör (E14-R07) terméke HIBÁTLAN** — a gate
+zöld, a review APPROVED (0 BLOCKER/0 MAJOR/0 MINOR), a 18 saját acceptance-cella
+mindenhol zöld. A merge-et egy ÖRÖKÖLT, `main`-oldali piros CI blokkolta.
+
+**A mért gyökérok** (nem a kör hibája): az E14-R06 merge-e után a driver
+`merged` ága a KÖZÖS munkafában könyvelt, miközben a másik slot köre (E14-R04)
+azt a saját ágán tartotta. Így a `git reset --hard origin/main` az IDEGEN ágat
+mozdította el (az E14-R04 lokális pre-flight commitja, `94f46951`, leesett
+róla), a `chore(pipeline)` commit (`2cd3baef`) is oda került, a
+`git push origin main` pedig a két committal LEMARADT lokális `main` refet
+tolta → non-fast-forward, egyetlen néma `FIGYELEM` sorral
+(`.pipeline/chain.log:26359`). A `main` ezért drifttel maradt
+(`tools/sync-completion-matrix.py --check` → exit 1: Ch14 `reports done=3` vs.
+`queue measures done=4`), és a `program_completion_test.dart` A1 cellája
+pirosra vitte a main gate-jét (`33859597093`).
+
+**A javítás** (`tools/round-pipeline.sh`): a könyvelés a `commit_main_bookkeeping()`
+függvénybe került, és eldobható, a közös fától FÜGGETLEN worktree-ben fut;
+minden próbálkozás a FRISS `origin/main`-ből származtat újra (párhuzamos merge
+sem tehet elavult matrixot a main-re); a push háromszor újrapróbálható; a
+végleges kudarc `HIBA` + telefon-értesítés, nem néma log. A közös fa
+`reset --hard`-ja már csak bizonyítottan `main`-en futhat. A `main` drift
+maga a `docs/sdd/program-completion-report.md` szinkronjával oldódik.
+
+**Őr:** `tools/tests/test_pipeline_bookkeeping_worktree.py` — 8 cella, a fix
+előtti forráson mind PIROS. A D2 fail-safe kar forrás-szintű őre
+(`test_chain_hygiene.py`) a függvénytörzsre horgonyzott, és ÚJ cellával
+követeli, hogy a `merged` ág valóban rá delegáljon. Mérés: [L627](docs/LESSONS.md).
+
+**A megállt kör innen folytatható:** a
+`sonnet-impl/e14-r07-annotation-contract-and-agreement` ág (HEAD `ad729d50`)
+kész és APPROVED, PR még nincs nyitva — a lánc a MERGE-lépésnél veszi fel.
+
+## ✅ E14-R04 KÉSZ — RecognitionFrame V2: a bizonytalanság végre KIFEJEZHETŐ, a legacy fordítás nem hazudik — PR [#568](https://github.com/wolfcasaba/strumsight/pull/568), squash `f1fced77` (2026-09-04)
+
+A Chapter 14 sáv negyedik köre megadta azt a **verziózott, Flutter-független
+felismerési szerződést**, amire az `ADR 0271` §1 (`UNKNOWN > CONFIDENTLY WRONG`)
+követelménye eddig **nem volt ráfordítható**: a régi `LiveFrame` bináris volt
+(`showChord = _lastChord != null && _chordLatched`), és EGYETLEN confidence-t
+közölt — azt is a strumét. „Bizonytalan" állapot a szerződésben nem létezett.
+([ADR 0505](docs/adr/0505-versioned-recognition-frame-contract-and-legacy-adapter.md), D1–D6.)
+
+**A kör terméke** (`lib/features/live/domain/recognition/`, 6 production fájl + 3 teszt):
+
+- `RecognitionDecision` — hat állapot (`candidate`, `provisional`, `confirmed`,
+  `uncertain`, `rejected`, `expired`) + `RecognitionRejectReason` hat zárt okkal.
+- `StrumPrediction` — `directionMargin`, `decision` és `rejectReason`
+  **számított** getterek (`margin <= 0.05` → `uncertain` + `lowConfidence`, a
+  küszöb az elutasítás oldalán INKLUZÍV); `calibratedConfidence` **nullable**,
+  és sosem a nyers `pDown` másolata.
+- `ChordPrediction`, `SignalQualitySnapshot` (az `E14-R05` tölti meg),
+  `RecognitionFrame` (`schemaVersion` 1, `RecognitionRuntimeInfo`-t HORDOZ).
+- `LiveFrameAdapter` — a legacy `LiveFrame` felé fordít, **egyirányúan**
+  (a fordított irányhoz nyers valószínűséget kellene kitalálni: ADR 0505 D2).
+- Architektúra-őr: a `domain/recognition/**` nem lát Fluttert/Riverpodot —
+  forrás-szkennelő teszt-csoport, a `tool/check_architecture.dart` **nem** módosult.
+
+**A `LiveFrame` bájtra változatlan**, a 22 hívó érintetlen, a `live_pipeline.dart`
+és az engine-fájlok nem módosultak — az élő út átkötése a KÖVETKEZŐ kör dolga.
+
+**Két MAJOR a review-ban, mindkettő ugyanabból a mintából:** a kör felépítette a
+bizonytalanság szótárát, majd nem használta. (1) Az adapter az akkordnál
+kapuzott a `decision`-re, a strumnál **nem** — egy `uncertain` irány látható
+nyilat adott ([L624](docs/LESSONS.md#l624)); (2) a `RecognitionRejectReason`
+egyetlen jóslathoz sem kapcsolódott, így a brief §6.1 „reject-ok:
+`lowConfidence`" acceptance-cellája implementálatlan volt
+([L625](docs/LESSONS.md#l625)). Mindkettőt eldobható reviewer-próbateszt mérte
+ki; a javító kör után APPROVED. Harmadik lecke a saját
+orchestrátor-hibámról: [L626](docs/LESSONS.md#l626).
+
 ## ✅ E14-R06 KÉSZ — Accuracy Lab adat- és adatvédelmi mag: a beleegyezés a TÍPUSBAN, a csomag bájtra azonos — PR [#567](https://github.com/wolfcasaba/strumsight/pull/567), squash `4a02b959` (2026-09-04)
 
 A Chapter 14 sáv hatodik köre megépítette az Accuracy Lab **adat- és
@@ -12025,67 +12097,76 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-04):** `main` @ `b82f3ab5` — **E14-R03: fail-visible
-modellaktiváció**, PR [#566](https://github.com/wolfcasaba/strumsight/pull/566),
-squash-merge. Implementer `sonnet-impl` (Claude Sonnet 5),
-orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** (review: APPROVED a
-javító kör után, 0 nyitott lelet; CHANGES REQUESTED verdikttel indult:
-0 BLOCKER / 0 MAJOR / 4 MINOR / 4 NOTE —
-[`docs/reviews/e14-r03-review.md`](docs/reviews/e14-r03-review.md)).
-**ÚJ ADR: [0355](docs/adr/0355-fail-visible-model-activation-telemetry.md)** —
-a Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt).
-`risk = "high"` → kötelező biztonsági review
-([`docs/reviews/e14-r03-security.md`](docs/reviews/e14-r03-security.md)):
-**CLEAN**. `native_gate = false` → a CI-tervet a `tools/round-ci-plan.py` adta
-(`full-gate.yml`). Exact-SHA evidencia a `c238ea22` merge SHA-n: Full Gate
-[33853601498](https://github.com/wolfcasaba/strumsight/actions/runs/33853601498)
-`success` + Router CI
-[33853642667](https://github.com/wolfcasaba/strumsight/actions/runs/33853642667)
-`success`. A pre-flight **tizenkét mért brief-revíziót** írt (§0.0 R1–R12),
-köztük kettő valódi H3-elkerülés.
+**Aktuális állapot (2026-09-04):** `main` @ `f1fced77` — **E14-R04:
+RecognitionFrame V2 domain contract**, PR
+[#568](https://github.com/wolfcasaba/strumsight/pull/568), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
+(Opus 5), **1 javító kör** (review: APPROVED a javító kör után, 0 nyitott
+lelet; CHANGES REQUESTED verdikttel indult: 0 BLOCKER / **2 MAJOR** / 2 MINOR /
+2 NOTE — [`docs/reviews/e14-r04-review.md`](docs/reviews/e14-r04-review.md)).
+**ÚJ ADR: [0505](docs/adr/0505-versioned-recognition-frame-contract-and-legacy-adapter.md)**
+— a Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt).
+`risk = "normal"` → dedikált biztonsági review nem kellett (a diff nem érint
+hálózatot, tárolást, engedélyt, hitelesítést). `native_gate = false` → a
+CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml` +
+`router_ci_expected: true`).
+
+> ⚠ **A queue `0356`-ot előlegezett, a kör ADR-je mégis `0505`.** A foglaló
+> (`tools/round-slots.py reserve-adr`) `max(used) + 1`, tehát **sosem tölt ki
+> hézagot**: a sorszám a brief megírása (2026-08-20) óta `0503`-ig futott. A
+> prompt §1.0.1 a foglalót teszi mérvadóvá — a brief §0.0 R1 rögzíti. **Az
+> `E14-R05`…`E14-R19` queue-sorainak ADR-oszlopa (`0357`…`0371`) ugyanígy
+> elavult** — minden további kör a foglalótól kérje a számot, ne a sorból.
 
 ## 5. Last completed round
 
-**E14-R03 — Model activation telemetry és fail-visible működés** (PR
-[#566](https://github.com/wolfcasaba/strumsight/pull/566), squash `b82f3ab5`).
-A Live út néma CRNN-fallbackja mostantól **kimondja magát**: `RecognitionRuntimeInfo`
-(a modell SHA-256-ja a ténylegesen betöltött bájtokból), `ModelActivation<T>`
-valódi `throw`-val őrzött invariánsokkal, ötelemű zárt hibakód-halmaz, és a
-`LivePipeline.runtimeInfo` getter. A `StrumCrnn.activate` **additív** — a
-`tryLoad` szignatúrája nem változott, mert hat, a kör scope-ján kívüli teszt
-pinneli. A fallback VISELKEDÉSE bitre azonos maradt, és ez **mérve** van: a
-review frame-ujjlenyomata a tiszta `main` klónnal szemben azonos sha256-ot ad
-(63 frame, 3 súly-út). Két új lecke: [L620](docs/LESSONS.md#l620) (a típusos
-visszatérés költsége a HÍVÓI oldalon keletkezik → additív belépő) és
-[L621](docs/LESSONS.md#l621) (a „viselkedés változatlan" ígéret csak
-legacy-referenciás ujjlenyomattal mérés).
+**E14-R04 — RecognitionFrame V2 domain contract** (PR
+[#568](https://github.com/wolfcasaba/strumsight/pull/568), squash `f1fced77`).
+A Live felismerés mostantól **ki tudja fejezni, hogy nem tudja**: hat állapotú
+`RecognitionDecision` + hat zárt `RecognitionRejectReason`, külön akkord- és
+irány-jóslat, `nullable` `calibratedConfidence` (a nyers valószínűség NEM
+confidence — ADR 0216), verziózott `RecognitionFrame` és fail-CLOSED `fromJson`
+minden modellen (az `E14-R02` [L619](docs/LESSONS.md#l619) tanulságának
+alkalmazása: a hiányzó KULCS típusos hiba, nem csendes `null`). A
+`LiveFrameAdapter` a 22 legacy hívót változatlanul szolgálja ki, és **nem
+léptet elő** nem-`confirmed` verdiktet láthatóvá.
 
-**Előző kör: E14-R02 — Reprodukálható felismerési baseline és evidence index**
-(PR [#565](https://github.com/wolfcasaba/strumsight/pull/565), squash `2bbd36bd`).
-Az `evaluation/recognition/baseline_manifest.json` + generált index: ugyanaz a
-bemenet bájtra azonos reportot ad, minden szám mellett `sourceFile` és
-mező-szintű `command` ([ADR 0354](docs/adr/0354-recognition-baseline-manifest-and-evidence-index.md)).
-Lecke: [L619](docs/LESSONS.md#l619) (a kézzel írt séma-validátor fail-OPEN).
+Három új lecke: [L624](docs/LESSONS.md#l624) (a szerződés-kör a saját egyetlen
+fogyasztójában nem használta a szótárát — az adapter az akkordot kapuzta, a
+strumot nem), [L625](docs/LESSONS.md#l625) (a zárt indok-enum, amit egyetlen
+jóslat sem hordoz, nem szerződés — a saját tesztjei zöldek voltak, miközben
+elérhetetlen volt) és [L626](docs/LESSONS.md#l626) (az orchestrátor
+dispatch-artefaktuma a munkapéldány gyökerében a gépi scope-auditot buktatja).
+
+**Előző kör: E14-R06 — Accuracy Lab adat- és adatvédelmi mag** (PR
+[#567](https://github.com/wolfcasaba/strumsight/pull/567), squash `4a02b959`),
+párhuzamos sávon. Leckék: [L622](docs/LESSONS.md#l622), [L623](docs/LESSONS.md#l623).
+
+**Előtte: E14-R03 — Model activation telemetry** (PR
+[#566](https://github.com/wolfcasaba/strumsight/pull/566), squash `b82f3ab5`).
+Leckék: [L620](docs/LESSONS.md#l620), [L621](docs/LESSONS.md#l621).
 
 ## 6. Exact next task
 
-**Következő kör: `E14-R04` — Recognition frame v2 contract**
-(`docs/rounds/e14-r04-recognition-frame-v2-contract.md`, motor `sonnet-impl`,
-előre kiosztott ADR `0356`). A `docs/execution/pipeline-queue.tsv` Chapter 14
-sávja `pending`; a lánc magától viszi tovább.
+**Következő kör: `E14-R05` — Live signal quality analyzer**
+(`docs/rounds/e14-r05-live-signal-quality-analyzer.md`, motor `sonnet-impl`;
+**az ADR-számot a foglalótól kérd, ne a queue `0357` oszlopából** — lásd §4).
+A `docs/execution/pipeline-queue.tsv` Chapter 14 sávja `pending`; a lánc
+magától viszi tovább.
 
-**Amit az E14-R03 KIMONDOTTAN az E14-R04 asztalára tett** (mind mérve, a
-kör tilos zónája miatt halasztva — a review §9.1 tételesen felsorolja):
+**Amit az E14-R04 KIMONDOTTAN a következő körök asztalára tett:**
 
 | # | Mit hagyott nyitva | Hol |
 |---|---|---|
-| 1 | **izolátum → Lab bekötés**: a `LivePipeline.runtimeInfo` és a `LiveLabController.reportRuntimeInfo` létezik és tesztelt, de production hívó nincs — a `real_strum_engine.dart` / `strum_engine.dart` a kör tilos zónája volt | `lib/features/live/engine/real_strum_engine.dart:167,220` |
-| 2 | **a live út valódi asset-neve**: ma a nevesített `RecognitionRuntimeInfo.isolateLiveModelId` konstans megy át, mert az izolátum-határ csak bájtokat hordoz — a 2 és 3 osztályos live asset id alapján nem különböztethető meg (a `strumModelSha256` viszont igen) | `lib/features/live/engine/dsp/live_pipeline.dart` |
-| 3 | **`disabledByFlag` flag-olvasása**: a gyártófüggvény és a stabil kód él, a három recovery-flag olvasása nincs bekötve (`lib/core/feature_flags/**` tilos zóna volt, ADR 0271 szerint mindhárom `false` marad) | `lib/app/config/feature_flags.dart` |
+| 1 | **A `SignalQualitySnapshot` üres** — a szerződés (7 mező + `unknown` default) áll, a kitöltése az `E14-R05`-é. A mezők 1:1 megfelelnek a MEGLÉVŐ `signal_quality_math.dart` publikus felületének, tehát új DSP-matek nélkül tölthető | `lib/features/live/domain/recognition/signal_quality_snapshot.dart` |
+| 2 | **A `LiveFrameAdapter` nincs bekötve production hívóba** — az élő út (`live_pipeline.dart`, `engine/**`) átkötése a kör tilos zónája volt | `lib/features/live/engine/dsp/live_pipeline.dart` |
+| 3 | **`ChordPrediction.decision`/`rejectReason` konstruktorból jön**, nem levezetett — akkord-döntést MÉRT kalibráció nélkül levezetni az ADR 0505 D2 tiltotta hazugság lenne. Az `E14-R11` hozza | `lib/features/live/domain/recognition/chord_prediction.dart` |
+| 4 | **A `_require*` JSON-segédek négy fájlban duplikálódnak** (review MINOR-2, follow-up): közös fájl kellene, ami a kör `allowed_paths`-án kívül esett | `lib/features/live/domain/recognition/*.dart` |
 
 **Változatlanul OPERÁTORI (user-) kapuk:** a valós gitáros APK-teszt (a végső
 elfogadási predikátum) és a backend tényleges futtatása + telefon-ráállítás
 (`docs/operations/device-backend-runbook.md` §1–§9).
+
 ## 7. Required verification (before any "done")
 
 A lokális mérce **egyetlen futtatható artefaktum** (GOV-01) — a parancssorban

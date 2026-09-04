@@ -752,7 +752,7 @@ E14-R01	docs/rounds/e14-r01-recovery-kickoff-and-release-guard.md	codex	0271	don
 #
 E14-R02	docs/rounds/e14-r02-baseline-and-evidence-index.md	sonnet-impl	0354	done
 E14-R03	docs/rounds/e14-r03-model-activation-telemetry.md	sonnet-impl	0355	done
-E14-R04	docs/rounds/e14-r04-recognition-frame-v2-contract.md	sonnet-impl	0356	pending
+E14-R04	docs/rounds/e14-r04-recognition-frame-v2-contract.md	sonnet-impl	0356	done
 E14-R05	docs/rounds/e14-r05-live-signal-quality-analyzer.md	sonnet-impl	0357	pending
 E14-R06	docs/rounds/e14-r06-accuracy-lab-and-consented-capture.md	sonnet-impl	0358	done
 E14-R07	docs/rounds/e14-r07-annotation-contract-and-agreement.md	sonnet-impl	0359	pending

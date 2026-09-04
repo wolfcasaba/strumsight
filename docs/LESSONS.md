@@ -24928,3 +24928,167 @@ validáció a közös `locate`-ben legyen, ne belépési pontonként — a `writ
 művelet.
 
 **Őrteszt:** `test/features/accuracy_lab/lab_package_writer_test.dart`::`write rejects a ".." packageId and leaves the sibling directory untouched`
+
+## L624 — A szerződés-kör felépítheti a bizonytalanság szótárát, majd a SAJÁT egyetlen fogyasztójában nem használja: az adapter az akkordot kapuzta, a strumot nem (E14-R04, review MAJOR-1, 2026-09-04)
+
+**Forrás:** [`docs/reviews/e14-r04-review.md`](reviews/e14-r04-review.md) §3
+(MAJOR-1) és §8.2; kör: E14-R04, PR
+[#568](https://github.com/wolfcasaba/strumsight/pull/568), squash `f1fced77`;
+ADR [0505](adr/0505-versioned-recognition-frame-contract-and-legacy-adapter.md) D5.
+
+**A mérés.** A kör hibátlanul megépítette a `RecognitionDecision` hat állapotát
+és a `StrumPrediction.decision` levezetését (`margin <= 0.05` → `uncertain`), a
+`LiveFrameAdapter` viszont **csak az akkordnál** kapuzott rá:
+
+```dart
+static Chord? _chordFor(ChordPrediction? chord) {          // helyes
+  if (chord == null || chord.decision != RecognitionDecision.confirmed) return null;
+static Strum? _strumFor(StrumPrediction? strum) {          // a decision-t MEG SEM NÉZI
+  if (strum == null) return null;
+```
+
+Egy `pDown: 0.475, pUp: 0.425` jóslat — amit a kör SAJÁT levezetése
+`uncertain`-nek minősít — így **látható, határozott irányú nyilat** adott. Az
+eldobható reviewer-próba ezt kimérte, és ugyanabban a futásban az akkord-oldali
+kontroll-cella átment: az aszimmetria mért, nem következtetett.
+
+```
+PROBE latestStrum=Instance of 'Strum' confidence=0.0
+  Expected: null
+    Actual: <Instance of 'Strum'>
+```
+
+**Miért maradt zöld a kapu.** A `live_frame_adapter_test.dart` MINDEN
+strum-cellája `pDown: 0.95, pUp: 0.05`-tel dolgozott (margin `0.90` →
+`confirmed`), a hatszor kettes mátrix pedig kizárólag a
+`ChordPrediction.decision`-t járta körbe. A kör headline-levezetése így a saját
+egyetlen fogyasztójában halott kód volt — és a fájl doc-commentje közben azt
+állította, hogy „never upgrades a non-`confirmed` … to visible".
+
+**Hogyan alkalmazd.** Ha egy kör állapot-enumot vezet be ÉS adaptert is szállít,
+a mátrix mindkét oldalra kell: minden állapot × minden jóslat-fajta. A
+határcella számpárját a brief kösse meg (itt: `0.475`/`0.425`), különben a
+„szebb" pár némán átbillenti a verdiktet. És minden doc-comment állításhoz
+(„soha nem lépteti elő") tartozzon cella — a bizonyítatlan doc-comment az a
+hely, ahol a szándék és a kód szétcsúszik.
+
+**Őrteszt:** `test/features/live/live_frame_adapter_test.dart`::`LiveFrameAdapter — strum backward compatibility matrix (MAJOR-1 fix, …)` (`:117`)
+
+## L625 — A zárt indok-enum, amit egyetlen jóslat sem hordoz, nem szerződés: deklarálva volt, JSON-ban körbejárt, és sehonnan nem volt kiolvasható (E14-R04, review MAJOR-2, 2026-09-04)
+
+**Forrás:** [`docs/reviews/e14-r04-review.md`](reviews/e14-r04-review.md) §3
+(MAJOR-2) és §8.2; kör: E14-R04, PR
+[#568](https://github.com/wolfcasaba/strumsight/pull/568), squash `f1fced77`;
+ADR [0505](adr/0505-versioned-recognition-frame-contract-and-legacy-adapter.md) D3.
+
+**A mérés.** A `RecognitionRejectReason` hat okkal, `toJson`/`fromJson`-nal,
+sőt saját round-trip cellákkal együtt leszállt — de sem a `StrumPrediction`,
+sem a `ChordPrediction` nem hordozta:
+
+```
+$ grep -rn "RejectReason\|rejectReason" lib/ | grep -v recognition_decision.dart
+(nincs találat a live feature-ben)
+```
+
+A fogyasztó tehát soha nem tudhatta meg, MIÉRT lett bizonytalan vagy elutasított
+egy verdikt. A brief §6.1 küszöb-táblázata kimondottan a párost írta elő —
+`uncertain` **(reject-ok: `lowConfidence`)** —, és ez az acceptance-cella
+implementálatlan ÉS méretlen volt.
+
+**Miért csúszott át.** Az enum SAJÁT tesztjei (értékkészlet, round-trip,
+ismeretlen érték elutasítása) mind zöldek voltak. Egy típus tesztelhető
+teljesen önmagában úgy, hogy közben **elérhetetlen** — a „van rá teszt" nem
+felel a „van hozzá út" kérdésre.
+
+**Hogyan alkalmazd.** Ha egy kör kísérő/indok-típust vezet be, az
+acceptance-hez tartozzon egy cella, ami a HORDOZÓN keresztül éri el
+(`prediction.rejectReason`), ne csak a típuson magán. A `grep -rn <Típus> lib/ |
+grep -v <a deklaráló fájl>` egysoros a legolcsóbb elérhetetlenség-szonda —
+futtasd minden új kísérő-típusra.
+
+**Őrteszt:** `test/features/live/recognition_frame_contract_test.dart`::`toJson carries the derived rejectReason paired with decision` (`:186`) + `a missing rejectReason KEY throws — distinct from null` (`:300`)
+
+## L626 — Az orchestrátor dispatch-artefaktuma a munkapéldány gyökerében a GÉPI scope-auditot buktatja: a kör `stopped`-ot jelez, miközben az implementer diffje hibátlan (E14-R04, 2026-09-04)
+
+**Forrás:** [`docs/reviews/e14-r04-review.md`](reviews/e14-r04-review.md) §2.1 és
+§6; kör: E14-R04, PR [#568](https://github.com/wolfcasaba/strumsight/pull/568).
+
+**A mérés.** Az implementer-promptot (`.round-prompt-e14-r04.md`) a
+munkapéldány GYÖKERÉBE írtam, majd onnan dispatch-eltem. A wrapper kilépés
+utáni gépi scope-auditja ezt szabályosan sértésnek vette:
+
+```
+status=stopped
+implementer_status=done
+scope_audit=VIOLATION
+scope_audit_violations=path outside allowed scope: .round-prompt-e14-r04.md
+```
+
+A kör-jelzés tehát `stopped` lett — a „döntést vár" állapot —, miközben az
+implementer 11 fájlos diffje maradéktalanul az `allowed_paths`-on belül volt.
+A prompt eltávolítása után az audit azonnal tiszta:
+
+```
+Legacy scope audit OK (94f46951aa08..bd4c36af96ae, 11 changed path(s), 0 generated/ignored)
+```
+
+**Miért drága.** A `stopped` a létra egyik döntést-kérő foka. Egy későbbi
+olvasó (vagy egy önjavító session) a jelzésfájlból azt látja, hogy az
+implementer scope-ot sértett, és a kör újraindítása vagy halt felé indul — egy
+olyan lelet miatt, amit az ORCHESTRÁTOR hozott be a saját eszközével.
+
+**Hogyan alkalmazd.** A dispatch-artefaktum (implementer-prompt, javító
+findings-lista) a munkapéldányon KÍVÜL éljen — a session scratchpadjében —, és
+csak abszolút útvonalként add át a wrappernek. A javító kört ebben a körben már
+így indítottam, és a második scope-audit tiszta lett
+(`12 changed path(s), 1 generated/ignored`, ahol az 1 a review-jelentés állandó
+mentessége).
+
+**Őrteszt:** nincs — a wrapper helyesen mérte, amit mért; a hiba az
+orchestrátor munkamódjában volt, nem az eszközben. A védelem a workflow
+szövegébe került (`.claude/skills/sdd-round-driver`, dispatch-lépés).
+
+## L627 — A közös munkafában futó merge-utáni könyvelés a MÁSIK slot körének ágára commitolt, a `main` push-a pedig némán elbukott (E14-R07 / H3 önjavító kör, ADR 0112, 2026-09-04)
+
+**Mit mértem.** Az E14-R06 merge-e után a driver `merged` ága a KÖZÖS
+munkafában futtatta a könyvelést (`git fetch && git reset --hard origin/main`
+→ sor-fájl `pending → done` → completion-matrix szinkron → `git commit` →
+`git push origin main`). A kétslotos láncban azonban a másik kör (E14-R04)
+09:09:02-kor a saját ágára állította ezt a fát, ezért 09:43:17-kor:
+
+```
+reflog: 94f46951 [E14-R04] Pre-flight …      (09:13, a kör lokális commitja)
+reflog: 1feecc11 reset: moving to origin/main (09:43:17)  ← az IDEGEN ágat mozdította
+reflog: 2cd3baef commit: chore(pipeline): E14-R06 done …  ← az IDEGEN ágra került
+chain.log:26359  FIGYELEM: a sor-fájl push-a nem ment át  (09:43:18)
+```
+
+A `git push origin main` a **lokális `main` refet** tolta, ami két committal
+le volt maradva → non-fast-forward. A kudarc egyetlen `FIGYELEM` sor lett, a
+lánc ment tovább. Következmény: a `main` drifttel maradt
+(`tools/sync-completion-matrix.py --check` → exit 1, „Ch14 (E14): reports
+done=3, queue measures done=4"), a `program_completion_test.dart` A1 cellája
+pirosra vitte a main gate-jét (run 33859597093 PIROS vs. a flip előtti
+33859338063 ZÖLD), és a KÖVETKEZŐ kör (E14-R07) merge-kapuja állt meg — pedig
+annak saját munkája zöld és review-APPROVED volt (a kör 18 saját cellája
+mindenhol zöld; a két piros cella az örökölt main-drifté).
+
+**A három gondolati hiba.** (1) „A driver a main-en áll" — a *firing indulásakor*
+igen (ott van rá `die`-őr), a *kör végén* már nem: a másik slot közben elmozdítja
+a közös fát. (2) „A `reset --hard origin/main` ártalmatlan" — idegen ágon a
+MÁSIK kör lokális commitját dobja el. (3) „A push kudarcát elég logolni" —
+a könyvelés nem kényelmi lépés, hanem a következő kör merge-kapujának
+előfeltétele; a néma kudarca 50 perces halttal jön vissza.
+
+**Szabály.** Megosztott munkafájú láncban a merge utáni könyvelés a fa ágától
+és tartalmától FÜGGETLEN, eldobható munkapéldányban fusson; minden
+push-próbálkozás a FRISS `origin/main`-ből származtasson újra (így a párhuzamos
+merge sem tesz elavult matrixot a main-re); a `reset --hard` csak akkor
+érintheti a közös fát, ha az bizonyítottan a `main`-en áll; a végleges
+push-kudarc pedig HANGOS (`HIBA` + értesítés), mert néma marad a
+következő kör halálos akadálya.
+
+**Őrteszt:** `tools/tests/test_pipeline_bookkeeping_worktree.py` (8 cella:
+idegen ágon is a main-re landol · a másik kör ága/fája érintetlen · elutasított
+push után a friss main-ből származtat újra · tartós kudarc nem-nulla és hangos
+· idempotencia · a munkapéldány takarít). A fix előtti forráson mind a 8 PIROS.
