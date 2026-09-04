@@ -1,5 +1,41 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR — E14-R05 / H3: a `SignalQualityMath` bekerült az `audio_analysis` nyilvános szerződésébe (2026-09-04)
+
+**ADR 0112 önjavító kör.** Az `E14-R05` pre-flightja `H3`-mal állt meg: a brief
+§5.1 KÖTELEZŐVÉ tette a batch oldali `SignalQualityMath` újrahasznosítását, de
+erre **egyetlen legális import sem létezett**. Saját reprodukció (eldobható
+próbafájl a `lib/features/live/engine/quality/` alatt, heal munkapéldány):
+
+| Út | Mért eredmény |
+|---|---|
+| mély import `…/engine/quality/signal_quality_math.dart` | `dart run tool/check_architecture.dart` **exit 1** — `[cross-feature imports must target public.dart]` |
+| barrel-import `…/audio_analysis/public.dart` | architecture exit 0, de `flutter analyze` **exit 1** — `error • Undefined name 'SignalQualityMath'` |
+| barrel-import a fix UTÁN | architecture exit 0 **és** analyze exit 0 |
+
+A barrel az `engine/quality/` könyvtárból a `quality_thresholds.dart`-ot és a
+`signal_quality_stage.dart`-ot exportálta, a köztük fekvő
+`signal_quality_math.dart`-ot nem. A `SignalQualityStage` nem helyettesíti a
+primitíveket (async, stage-kontextus, feltétel nélküli `tonalness` FFT minden
+híváson — a kör §6.1 mátrixának 6. sora).
+
+**A javítás egyetlen additív sor** a barrelben
+(`export 'engine/quality/signal_quality_math.dart';`). A
+`signal_quality_math.dart` **bájtra változatlan** (ADR 0224 §3 + a kör 6.
+acceptance-cellája), az `architectureAllowlist` nem bővült (a lista csak
+szűkülhet, `tool/check_architecture.dart:8-10`). A kör `allowed_paths`-a
+**változatlan**: az export a kör indulása ELŐTT landol a `main`-en, tehát az
+implementer az `audio_analysis` fához nem nyúl — csak a barrelt importálja.
+
+**Őr:** `test/core/architecture_dependency_test.dart` — „audio analysis quality
+primitives stay barrel-reachable (E14-R05)" (2 cella; a fix előtti forráson az
+élő-fa cella PIROS). Mérés: [L628](docs/LESSONS.md).
+
+**A megállt kör innen folytatható:** a pre-flight KÉSZ és megőrzött — ág
+`sonnet-impl/e14-r05-live-signal-quality-analyzer` (ADR 0507 + §0.0 revízió,
+R6-tal kiegészítve), munkapéldány `/home/ubuntu/ss-sonnet-impl-e14-r05`;
+implementer még nem indult.
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E14-R07 / H3: a merge utáni könyvelés saját munkapéldányban fut, a push újrapróbálható és hangos (2026-09-04)
 
 **ADR 0112 önjavító kör. A megállt kör (E14-R07) terméke HIBÁTLAN** — a gate

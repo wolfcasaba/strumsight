@@ -98,6 +98,7 @@ export 'engine/harmony/decoder_source.dart';
 export 'engine/legacy/clip_analyzer_stage.dart';
 export 'engine/legacy/legacy_evidence.dart';
 export 'engine/quality/quality_thresholds.dart';
+export 'engine/quality/signal_quality_math.dart';
 export 'engine/quality/signal_quality_stage.dart';
 export 'engine/rhythm/beat_grid_estimator.dart';
 export 'engine/rhythm/tempo_curve_builder.dart';
