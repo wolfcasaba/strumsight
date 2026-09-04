@@ -170,3 +170,35 @@ tehát a „végigjárható" állítás a dokumentumban él, nem a kódban.
 A MAJOR-1 javítása után (mind a három MINOR/NOTE ponttal együtt, doc- és
 teszt-oldalon, `lib/**` érintése NÉLKÜL) a kör merge-elhető, feltéve, hogy a
 teljes CI-kapu (`build-apk.yml` + `router-ci.yml`) a merge SHA-n zöld.
+
+## 9. Javító kör utáni újra-ellenőrzés (2026-09-04, `56f4711f`)
+
+**VÉGSŐ DÖNTÉS: APPROVED** — 0 nyitott BLOCKER / MAJOR / MINOR / NOTE.
+
+Leletenként, saját méréssel:
+
+| Lelet | Zárás | Amit ellenőriztem |
+|---|---|---|
+| **MAJOR-1** | ✅ | A §6 A3 sora most `**NEM teljesül**`-t mond, L1/L2 hivatkozással és a `adaptiveShellEnabled=true` melletti mért indoklással; a `full-app-verification.md` §2 bevezetője kimondja a két teszt-oldali navigációt és az „A3 — NEM teljesül" megállapítást; a §4 tábla 6. sorral tükrözi; a §10.6 dedikált bekezdést kapott. **Egyetlen cella sem lett törölve vagy gyengítve** — a mérce maradt, a mért eredmény negatív. Ez az őszinte verdikt, amit a §5.1 megkövetel. |
+| **MINOR-1** | ✅ | a §4 mind a hat sora a `nincs — <indok>` alakot használja, szó szerint az L1–L5 szakaszok indoklásából |
+| **MINOR-2** | ✅ | `full_app_walkthrough_test.dart:336–357` — `find.ancestor(of: find.text(l10n.progressSessions), matching: find.byType(Column)).first` + `findsOneWidget`: a streak-csempe `0`-ja többé nem elégítheti ki a cellát |
+| **NOTE-1** | ✅ | a §2 bevezetője kimondja, hogy az L3 a harness határán akadt el, és a Library-állomás a szállított kompozícióról **sem jót, sem rosszat** nem bizonyít |
+
+**Független mérések a javítás után:**
+
+- scope-audit (`--base d8ed9726`): **OK**, a diff nem lépett ki az
+  `allowed_paths`-ból;
+- friss izolált klón (`/tmp/ss-review-e16-r05-fix` @ `56f4711f`),
+  `prepare-flutter-generated.sh` után, a brief §7 nyolc útvonalával:
+  **`GATE_EXIT=0`, 13/13 ZÖLD** — a `docs/rounds/…md` §10.7 gate-jelentése
+  reprodukálva.
+
+**A kör mért eredménye (nem a kör hibája, hanem a terméke):** a Chapter 16
+záró mérése szerint a „BE" capabilityk core útja a **termék saját
+navigációjával nem járható végig** — L1 (`practice_area_hub_screen.dart:55`)
+és L2 (`onboarding_screen.dart:106`). Ez a záró kör legértékesebb hozadéka,
+és egy jövőbeli, nevesített javító kört indokol; a `lib/**` javítása ebben a
+körben H3 lett volna (§3, §5.2).
+
+**Merge-feltétel:** a teljes CI-kapu (`build-apk.yml` + `router-ci.yml`)
+`success` a merge SHA-n.
