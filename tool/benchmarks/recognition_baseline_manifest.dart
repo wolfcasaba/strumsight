@@ -132,6 +132,41 @@ RecognitionBaselineManifestReport buildRecognitionBaselineManifestReport({
 
 // --- Hand-written JSON Schema (draft-07 subset) validator ------------------
 
+/// Schema keywords this checker actually enforces. Closed set (ADR 0354 D8):
+/// a keyword outside this set AND [_documentationSchemaKeywords] is treated
+/// as an unknown/unsupported constraint, never as a silent no-op.
+const _restrictiveSchemaKeywords = <String>{
+  'type',
+  'required',
+  'additionalProperties',
+  'properties',
+  'items',
+  'const',
+  'enum',
+  'oneOf',
+  'not',
+  r'$ref',
+  'pattern',
+  'minimum',
+  'minLength',
+  'minItems',
+  'maxItems',
+  'minProperties',
+};
+
+/// Schema keywords this checker deliberately ignores because they carry no
+/// validation semantics (documentation/metadata only). Anything not in this
+/// set and not in [_restrictiveSchemaKeywords] is an unknown keyword.
+const _documentationSchemaKeywords = <String>{
+  r'$schema',
+  r'$id',
+  'title',
+  'description',
+  'definitions',
+  'examples',
+  'default',
+};
+
 List<ManifestIssue> _validate(
   Object? instance,
   Map<String, Object?> schema,
@@ -140,6 +175,20 @@ List<ManifestIssue> _validate(
 ) {
   final resolved = _resolveRef(schema, rootSchema);
   final issues = <ManifestIssue>[];
+
+  for (final key in resolved.keys) {
+    if (!_restrictiveSchemaKeywords.contains(key) &&
+        !_documentationSchemaKeywords.contains(key)) {
+      issues.add(
+        ManifestIssue(
+          path: path,
+          message:
+              'schema declares unknown/unsupported keyword "$key" — '
+              'fail-closed rather than silently ignored (ADR 0354 D8)',
+        ),
+      );
+    }
+  }
 
   if (resolved.containsKey('const')) {
     final constValue = resolved['const'];

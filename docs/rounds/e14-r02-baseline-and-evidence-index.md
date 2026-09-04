@@ -294,6 +294,7 @@ Ha egy metrikához `n == 0` vagy hiányzik a `sourceFile`, a generátor
 | A visszavont BPM-sor törlése a manifestből | 4. pont: az index-renderelő nem talál `retracted` blokkot → hiányzik a „VISSZAVONT" sor |
 | `n: 0` metrika kiírása „n/a"-ként | 6. pont: a `--check` 0-val tér vissza, holott nem nullának kell lennie |
 | Float-értékek nyers `toString()`-gel | 2. pont: platformfüggő formázás → diff |
+| A `_validate` egy le nem fedett séma-kulcsot (pl. `maxLength`) némán átenged, nem `ManifestIssue`-t ad | A9 teszt-csoport: ismeretlen kulcs a sémán → `--check` nem nulla exit-kóddal áll meg, az üzenet megnevezi a kulcsot (ADR 0354 D8, review MAJOR-1) |
 
 **Numerikus küszöb — `n` (mért elemszám), a határ INKLUZÍV a hibaoldalon:**
 

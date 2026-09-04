@@ -522,6 +522,30 @@ void main() {
       expect(report.renderedIndex, onDisk);
     });
   });
+
+  group('A9 — an unrecognized schema keyword fails closed instead of being '
+      'silently ignored (ADR 0354 D8, review MAJOR-1)', () {
+    test('adding "maxLength": 3 to appCommit\'s schema — a keyword this '
+        'hand-written validator does not implement — is rejected, even '
+        'though the real manifest\'s 8-character appCommit would otherwise '
+        'validate cleanly', () {
+      final schema = jsonDecode(_realSchemaText()) as Map<String, Object?>;
+      final properties = schema['properties']! as Map<String, Object?>;
+      final appCommitSchema = properties['appCommit']! as Map<String, Object?>;
+      appCommitSchema['maxLength'] = 3;
+
+      final report = buildRecognitionBaselineManifestReport(
+        schemaJsonText: jsonEncode(schema),
+        manifestJsonText: _realManifestText(),
+      );
+
+      expect(report.isClean, isFalse);
+      expect(
+        report.formatIssues(),
+        contains('unknown/unsupported keyword "maxLength"'),
+      );
+    });
+  });
 }
 
 // --- Fixtures ---------------------------------------------------------
