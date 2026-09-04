@@ -2,11 +2,20 @@
 
 - **Kör:** `E14-R08` · **Ág:** `sonnet-impl/e14-r08-grouped-evaluation-harness`
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5) · **Reviewer:** Claude (Opus 5), read-only
-- **Review-elt commit:** `664a4d1d` (pre-flight: `2f56635f`)
+- **Review-elt commit:** `664a4d1d` (pre-flight: `2f56635f`) → javító kör: `97ad9b7f`
 - **Dátum:** 2026-09-04
 - **ADR:** [0509](../adr/0509-grouped-recognition-evaluation-and-leakage-protection.md)
 
-## VÉGSŐ DÖNTÉS: CHANGES REQUESTED (2 MAJOR)
+## VÉGSŐ DÖNTÉS: APPROVED (a javító kör után, `97ad9b7f`)
+
+**1. forduló: CHANGES REQUESTED (2 MAJOR)** — a leletek alább, változatlanul.
+**2. forduló (`97ad9b7f`): APPROVED** — mindkét MAJOR és a MINOR-1 lezárva, a
+zárás leletenként ellenőrizve (§5), a kaput friss izolált klónban magam
+futtattam újra (§5.1). Nyitott BLOCKER/MAJOR/MINOR: **nincs**.
+
+---
+
+## 1. forduló — CHANGES REQUESTED (2 MAJOR)
 
 A kör terméke érett és nagyrészt kiváló: a párosítás valóban maximális
 kardinalitású, a határ inkluzív, a fixture-értékek kézzel levezetve és
@@ -213,9 +222,68 @@ szerinti szűkítést, és a döntés dokumentált — nem hiányos munka.
 | 9 | Minden metrika hordozza az irányát | ✅ | `:382-408`, mind a négy hiba-metrika tételesen |
 | 10 | Nincs kereszt-feature import | ✅ | gate `architecture` zöld (1.1) |
 
-## 4. Merge-feltétel
+## 4. Merge-feltétel (1. forduló)
 
 A **MAJOR-1** és **MAJOR-2** lezárása után: friss gate + a `full-gate.yml` és a
 `router-ci.yml` `success` a merge SHA-n. A javító kör ugyanazzal a motorral
 (`sonnet-impl`), az `allowed_paths` **tágítása nélkül** — mindkét lelet a már
 engedélyezett fájlokon belül javítható.
+
+---
+
+## 5. 2. forduló — a javító kör ellenőrzése (`97ad9b7f`)
+
+A javító kör diffje: 4 fájl, +433/−22, mind az `allowed_paths`-on
+(`recognition_metrics.dart`, `recognition_metrics_test.dart`,
+`ci_manifest.json`, a brief §10.8). Az `allowed_paths` **nem tágult**.
+
+```
+python3 tools/scope-audit.py --repo … --brief … --base 2f56635f
+→ Legacy scope audit OK (2f56635f940f..97ad9b7f31f1, 9 changed path(s),
+  1 generated/ignored)
+```
+
+(A `1 generated/ignored` a jelen review-fájl — állandó, kód szintű mentesség,
+`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`.)
+
+### 5.1 Gate-újrafuttatás FRISS izolált klónban (`/tmp/review2-e14-r08`)
+
+```
+    format                                                     zöld
+    analyze                                                    zöld
+    test …/recognition_split_test.dart                         zöld
+    test …/recognition_metrics_test.dart                       zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.   GATE_EXIT=0
+```
+
+### 5.2 Leletenkénti zárás
+
+| Lelet | Állás | Mi zárja, és mi fogta volna pirosra |
+|---|---|---|
+| **MAJOR-1** | ✅ zárva | A `directionDefinition` és a `chordMacroDefinition` most a TÉNYLEGES szabályt mondja: „true positives come only from time-matched … pairs, but its false positives and false negatives are counted over the FULL … populations … a strum missed or falsely detected in time (never time-matched at all) **still enters this metric**". Két új cella (`recognition_metrics_test.dart:431-494`) a SZÁMOT és a SZÖVEGET **együtt** méri: nulla párosítás mellett `down.falseNegatives == 1`, `directionF1.value == 0.0`, és a definíció `isNot(contains('does not enter this metric'))` + `contains('never time-matched at all')` + a nevező `contains('not restricted to the time-matched set')`. A régi, hamis szöveg visszaállítása ezt a cellát PIROSRA viszi — pontosan ez hiányzott az 1. fordulóban. |
+| **MAJOR-2** | ✅ zárva | Új csoport (`:495-630`): (a) a **commitolt** `ci_manifest.json` beolvasása és **kétszeri** futtatása `RecognitionEvaluationRunner.runFromJsonString`-gel, bájtazonos JSON-elvárással — az acceptance 6. pontja immár a VALÓDI futtatási úton mér, nem kézzel épített reporton; (b) mind a négy `SplitStrategy` a **fixture-ből parszolt** eseteken, `evalIdsAcrossFolds` uniója = a fixture eset-halmaza és „minden eset pontosan egyszer" — az acceptance 1. pontja „a fixture-ön"; (c) három tipizált parszer-elutasítás (ismeretlen kulcs, rossz `schemaVersion`, `direction` nélküli strum). A fixture harmadik esettel bővült, hogy a fold-mérés ne legyen triviális. A runner és a fixture így nem kerül gépi mérce nélkül a `main`-re. |
+| **MINOR-1** | ✅ zárva | A `RecognitionExpectedEvent`/`RecognitionDetectedEvent` konstruktora most kikényszeríti a kind-invariánst (`strum → direction`, `chord → chordLabel`), az `E14-R07` `AnnotationEvent` precedense szerint; három új cella méri (`:631-690`), köztük az „onset sosem követel direction/chordLabel" negatív eset. |
+| NOTE-1/2/3 | nyitva marad, nem blokkol | Az identitás-halmaz (`correctAccepted`), az onset+strum átfedés és a §10.2 scope-szűkítés dokumentált; egyik sem hibás viselkedés a szállított úton. |
+
+### 5.3 Amit a 2. fordulóban külön ellenőriztem
+
+- A javító kör **nem változtatta meg egyetlen metrika SZÁMÁT sem** — a §10.4
+  kézi levezetés értékei (`onset25 1/3`, `onset50 2/3`, `onset100 5/6`,
+  `anyStrum 0.75`, `directionMacro 8/15`, `ECE 0.37`, `Brier 0.2025`,
+  `coverage 10/11`, `falseVisible 2.5`) változatlanul állnak a
+  `recognition_metrics_test.dart:166-305` literál-celláiban, és a gate zöld.
+  A javítás a *definíción* és a *mércén* történt, nem a mért értéken.
+- A fixture bővítése (3. eset) nem billentette meg a kézzel levezetett
+  értékeket, mert azok a teszt saját `_fixtureCase()`-én állnak, nem a
+  fájlon — a zöld célzott kapu ezt igazolja.
+- Az `architecture` lépés zöld: a kereszt-feature import tilalma (ADR 0509
+  D8 / acceptance 10) a javító kör után is áll.
+
+## 6. Merge-feltétel (végleges)
+
+Nyitott BLOCKER/MAJOR/MINOR nincs. Hátra: a `full-gate.yml` **és** a
+`router-ci.yml` `success` a merge SHA-n (ADR 0086 §2, exact-SHA), majd
+squash-merge a zöld kapun.
