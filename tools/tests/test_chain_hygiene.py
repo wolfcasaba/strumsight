@@ -444,10 +444,26 @@ class PendingDoneFailSafeTest(unittest.TestCase):
         # „státusz pending" eset NEM készít commitot — az elveszett `done`
         # státusz hibaosztálya újraéled. A forrás-szintű regression-védelem
         # a `chore(pipeline)` szó ÉS a `pending` → `done` sed együttes
-        # előfordulását ellenőrzi a `merged)` ágban. Ha bármelyiket
-        # eltávolítják, a fail-safe kar elveszett.
+        # előfordulását ellenőrzi. Ha bármelyiket eltávolítják, a fail-safe
+        # kar elveszett.
+        #
+        # A kar 2026-09-04 (E14-R07 / H3 önjavító kör, ADR 0112) óta a
+        # `commit_main_bookkeeping()` függvényben él — a merge-ág csak HÍVJA.
+        # Ezért a horgony a függvénytörzs, ÉS külön cella követeli, hogy a
+        # `merged)` ág valóban delegáljon rá: a kar így se el nem tűnhet, se
+        # ki nem köthető a merge-ágból. (A helyváltás oka mért: a közös
+        # munkafában futó könyvelés a másik slot körének ágát mozdította el,
+        # és a `main` push-a némán elbukott — l.
+        # `tools/tests/test_pipeline_bookkeeping_worktree.py`.)
         text = SCRIPT.read_text()
         merged_block = text.split("merged)\n", 1)[1].split("\nesac\n", 1)[0]
+        self.assertIn(
+            'commit_main_bookkeeping "$round"',
+            merged_block,
+            "a `merged` ágnak a könyvelő függvényre kell delegálnia — "
+            "különben a fail-safe kar nem fut le a merge után",
+        )
+        arm = text.split("commit_main_bookkeeping() {\n", 1)[1].split("\n}\n", 1)[0]
         # A driver a `$round`-os anchor-ált mintát használja — a `^(.*\t)`
         # általánosabb, és egy megengedőbb regresszió (pl. a `$round` anchor
         # lecserélése `.*`-ra) a lenti assertIn-t kikerülné, de az
@@ -456,19 +472,22 @@ class PendingDoneFailSafeTest(unittest.TestCase):
         # védelem a D2 eredeti, mért megoldását őrzi.
         self.assertIn(
             's|^\\($round\\t.*\\t\\)pending$|\\1done|',
-            merged_block,
-            "a driver `merged` ágában a '$round-anchor-ált pending → done' "
+            arm,
+            "a könyvelő karban a '$round-anchor-ált pending → done' "
             "átírás kötelező, különben a fail-safe elveszett",
         )
         self.assertIn(
             "chore(pipeline):",
-            merged_block,
-            "a driver `merged` ágában a 'chore(pipeline)' commit üzenet "
+            arm,
+            "a könyvelő karban a 'chore(pipeline)' commit üzenet "
             "kötelező — ez a fail-safe kar látható nyoma",
         )
         self.assertIn(
-            "git status --porcelain",
-            merged_block,
+            # a kar a saját munkapéldányát méri (`git -C "$worktree" status …`),
+            # ezért az őr a `-- "${paths[@]}"`-szal együtt horgonyzott: ez
+            # SZŰKEBB minta a réginél, nem megengedőbb
+            'status --porcelain -- "${paths[@]}"',
+            arm,
             "a fail-safe csak VALÓDI piszka során commitol — a "
             "`git status --porcelain` őr kivesztése néma üres commitot "
             "vagy elveszett fail-safe-t okoz",

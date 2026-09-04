@@ -588,6 +588,78 @@ working_tree_dirt() {
   printf '%s' "$status"
 }
 
+# --- Merge utáni könyvelés SAJÁT munkapéldányban (ADR 0112 önjavító kör,
+#     E14-R07 / H3, 2026-09-04) ---------------------------------------------
+# A könyvelés = a sor-fájl `pending → done` fail-safe-je (ADR 0087 D2) + a
+# belőle SZÁRMAZTATOTT completion-matrix (E15-R09 H5). Eddig mindkettő a KÖZÖS
+# munkafában futott, `git reset --hard origin/main` + `git push origin main`
+# párossal — és a kétslotos lánc mellett a közös fa NEM feltétlenül a main-en
+# áll, amikor egy kör merge-el.
+#
+# MÉRVE 2026-09-04T09:43:17 (E14-R06 merge-e): a másik slot köre (E14-R04) a
+# közös fát a saját ágán tartotta (09:09:02 óta), ezért
+#   (1) a `git reset --hard origin/main` az IDEGEN ágat mozdította el — az
+#       E14-R04 lokális pre-flight commitja (`94f46951`) leesett róla;
+#   (2) a `chore(pipeline)` commit (`2cd3baef`) is arra az ágra került;
+#   (3) a `git push origin main` a KÉT COMMITTAL LEMARADT lokális `main` refet
+#       tolta → non-fast-forward, és a kudarc egyetlen néma `FIGYELEM` sor lett.
+# Így a `main` drifttel maradt (`sync-completion-matrix.py --check` → exit 1),
+# a `program_completion_test.dart` A1 cellája pirosra vitte a main gate-jét, és
+# a KÖVETKEZŐ kör (E14-R07) merge-kapuja állt meg (H3, 50 perc).
+#
+# A szerződés innentől: a könyvelés a közös fa ágától és tartalmától
+# FÜGGETLEN, eldobható worktree-ben fut, minden próbálkozás a FRISS
+# `origin/main`-ből származtat újra (tehát a párhuzamos merge sem tesz elavult
+# matrixot a main-re), a push újrapróbálható, a végleges kudarc pedig HANGOS.
+commit_main_bookkeeping() {
+  local round="$1" queue_rel="$2" report_rel="$3" attempts="${4:-3}"
+  local worktree queue_path completion_report_file paths attempt=1 rc=1
+  worktree=$(mktemp -d "${TMPDIR:-/tmp}/pipeline-bookkeeping-XXXXXX") || return 1
+  rmdir "$worktree" 2>/dev/null || true
+  if ! { git fetch -q origin main && git worktree add -q --detach "$worktree" origin/main; }; then
+    log "FIGYELEM: a könyvelés munkapéldánya nem jött létre ($worktree)"
+    rm -rf "$worktree"
+    return 1
+  fi
+  while [ "$attempt" -le "$attempts" ]; do
+    git -C "$worktree" reset -q --hard origin/main
+    queue_path="$worktree/$queue_rel"
+    completion_report_file="$worktree/$report_rel"
+    paths=("$queue_path")
+    sed -i "s|^\($round\t.*\t\)pending$|\1done|" "$queue_path"
+    if [ -n "$report_rel" ] && [ -x "$worktree/tools/sync-completion-matrix.py" ] \
+       && [ -f "$completion_report_file" ]; then
+      if "$worktree/tools/sync-completion-matrix.py" --write \
+           --queue "$queue_path" --report "$completion_report_file" >/dev/null 2>&1; then
+        paths+=("$completion_report_file")
+      else
+        log "FIGYELEM: a completion-matrix szinkron hibára futott — a main gate pirosra válthat"
+      fi
+    fi
+    if [ -z "$(git -C "$worktree" status --porcelain -- "${paths[@]}")" ]; then
+      rc=0   # az orchesztrátor záró commitja már elvégezte — nincs mit írni
+      break
+    fi
+    git -C "$worktree" add -- "${paths[@]}"
+    git -C "$worktree" commit -q -m "chore(pipeline): $round done — fail-safe (ADR 0087, D2 E99-R19)"
+    if git -C "$worktree" push -q origin HEAD:main; then
+      rc=0
+      break
+    fi
+    if [ "$attempt" -ge "$attempts" ]; then
+      log "FIGYELEM: a könyvelés push-a nem ment át ($attempt/$attempts)"
+      break
+    fi
+    log "FIGYELEM: a könyvelés push-a nem ment át ($attempt/$attempts) — újraszármaztatás a friss origin/main-ből"
+    attempt=$((attempt + 1))
+    sleep 2
+    git fetch -q origin main || true
+  done
+  git worktree remove --force "$worktree" >/dev/null 2>&1 || rm -rf "$worktree"
+  git worktree prune >/dev/null 2>&1 || true
+  return "$rc"
+}
+
 # Merge után NE várjunk a következő cron-firingre. A gyerek megvárja, amíg EZ a
 # folyamat elengedi a slot-zárat, és csak utána indul — különben azonnal
 # „zár foglalt"-ra futna, és a lánc-folytatás néma no-op lenne.
@@ -3078,40 +3150,41 @@ case "$outcome" in
   merged)
     log "$round MERGE-ELVE — $summary"
     notify "✅ $round merge-elve" "$summary"
-    git fetch -q origin main && git reset -q --hard origin/main
+    # A KÖZÖS munkafa helyi szinkronja CSAK akkor, ha tényleg a `main` van
+    # kicsekkolva: idegen ágon a `reset --hard` a MÁSIK slot körének munkáját
+    # dobná el (mérve 2026-09-04, l. commit_main_bookkeeping()).
+    if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+      git fetch -q origin main && git reset -q --hard origin/main
+    else
+      log "a közös munkafa nem a main-en áll ($(git rev-parse --abbrev-ref HEAD)) — a helyi szinkron kimarad, a könyvelés saját munkapéldányban fut"
+    fi
     # D2 fail-safe (E99-R19): az orchesztrátor a záró `docs(handoff…)`
     # commitba teszi a sor `pending → done` átírást (lásd
-    # pipeline-orchestrator-prompt.md §5). Ha a fetch már behozza azt a
-    # commitot, a `sed` no-op, nincs `chore(pipeline)` commit és nincs extra
-    # push/CI. Ha viszont a sor a fetch után is `pending` maradt (az
-    # orchesztrátor kihagyta a lépést), EZ az ág pótolja — az elveszett
-    # `done` státusz mért hibaosztály, a fail-safe zártan tartja.
-    sed -i "s|^\($round\t.*\t\)pending$|\1done|" "$queue_file"
+    # pipeline-orchestrator-prompt.md §5). Ha az `origin/main` már tartalmazza
+    # azt a commitot, a `sed` no-op, nincs `chore(pipeline)` commit és nincs
+    # extra push/CI. Ha viszont a sor `pending` maradt (az orchesztrátor
+    # kihagyta a lépést), a könyvelés pótolja — az elveszett `done` státusz
+    # mért hibaosztály, a fail-safe zártan tartja.
+    #
     # A completion-riport §3 matrixa a queue-ból SZÁRMAZTATOTT (E15-R09 H5
     # önjavító kör, ADR 0112, 2026-09-03). A `program_completion_test.dart` A1
     # cellája SZIGORÚ egyenlőséget mér a queue ellen, ezért minden `done`-ra
     # billentett sor elavulttá teszi a matrixot — és a lánc nem indul piros
     # main fölé, tehát a drift a KÖVETKEZŐ kört is megállítja. MÉRVE: az
     # E15-R08 merge (`e9691f74`) 89 percre megállította a láncot (main Full
-    # Gate run 33704424852, 2 piros cella). A szinkron idempotens: ha az
-    # orchesztrátor záró commitja már elvégezte, ez no-op.
+    # Gate run 33704424852, 2 piros cella).
     # A szinkron KIZÁRÓLAG a valódi repó-queue ellen fut: egy tesztből
     # felüldefiniált `PIPELINE_QUEUE_FILE` mellett a riport (ami mindig a
     # repóé) hamis számokat kapna.
-    sync_paths=("$queue_file")
-    if [ "$queue_file" = "$repo_root/docs/execution/pipeline-queue.tsv" ] \
-       && [ -x "$repo_root/tools/sync-completion-matrix.py" ] && [ -f "$completion_report_file" ]; then
-      if "$repo_root/tools/sync-completion-matrix.py" --write \
-           --queue "$queue_file" --report "$completion_report_file" >/dev/null 2>&1; then
-        sync_paths+=("$completion_report_file")
-      else
-        log "FIGYELEM: a completion-matrix szinkron hibára futott — a main gate pirosra válthat"
-      fi
+    bookkeeping_report=""
+    if [ "$queue_file" = "$repo_root/docs/execution/pipeline-queue.tsv" ]; then
+      bookkeeping_report=${completion_report_file#"$repo_root/"}
     fi
-    if [ -n "$(git status --porcelain -- "${sync_paths[@]}")" ]; then
-      git add -- "${sync_paths[@]}"
-      git commit -q -m "chore(pipeline): $round done — fail-safe (ADR 0087, D2 E99-R19)"
-      git push -q origin main || log "FIGYELEM: a sor-fájl push-a nem ment át"
+    if ! commit_main_bookkeeping "$round" "${queue_file#"$repo_root/"}" "$bookkeeping_report"; then
+      # NEM néma: a főkönyv drift a main gate-jét viszi pirosra, és a
+      # KÖVETKEZŐ kör merge-kapuját állítja meg (H3, mérve 2026-09-04).
+      log "HIBA: a $round könyvelése (sor-fájl done + completion-matrix) HÁROM próbálkozás után sem került a main-re — a main drifttel maradhat, a következő kör merge-kapuja megállhat; javítás: tools/sync-completion-matrix.py --write + commit/push a main-en"
+      notify "⚠️ $round: a könyvelés nem került a main-re" "a sor-fájl done / completion-matrix push elbukott — a main gate pirosra válthat" high
     fi
     inflight_remove "$round"
     active_inflight=""
