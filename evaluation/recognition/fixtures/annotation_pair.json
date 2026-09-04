@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "annotatorA": {
+    "annotatorId": "annotator-a",
+    "events": [
+      {"id": "a1", "timeMs": 0, "type": "strum", "direction": "down", "provenance": "auto"},
+      {"id": "a2", "timeMs": 1000, "type": "strum", "direction": "up", "provenance": "human"},
+      {"id": "a3", "timeMs": 2000, "type": "strum", "direction": "down", "provenance": "reviewed"},
+      {"id": "a4", "timeMs": 3000, "type": "strum", "direction": "up", "provenance": "auto"},
+      {"id": "a5", "timeMs": 4000, "type": "strum", "direction": "down", "provenance": "human"},
+      {"id": "a6", "timeMs": 5000, "type": "strum", "direction": "up", "provenance": "reviewed"},
+      {"id": "a7", "timeMs": 6000, "type": "strum", "direction": "down", "provenance": "auto"},
+      {"id": "a8", "timeMs": 7000, "type": "strum", "direction": "up", "provenance": "human"},
+      {"id": "a9", "timeMs": 8000, "type": "strum", "direction": "down", "provenance": "reviewed"},
+      {"id": "a10", "timeMs": 9000, "type": "strum", "direction": "up", "provenance": "auto"}
+    ],
+    "chordSegments": [
+      {"id": "ac1", "startMs": 0, "endMs": 2000, "label": "G", "provenance": "auto"},
+      {"id": "ac2", "startMs": 2000, "endMs": 4000, "label": "C", "provenance": "human"}
+    ]
+  },
+  "annotatorB": {
+    "annotatorId": "annotator-b",
+    "events": [
+      {"id": "b1", "timeMs": 10, "type": "strum", "direction": "down", "provenance": "human"},
+      {"id": "b2", "timeMs": 980, "type": "strum", "direction": "up", "provenance": "reviewed"},
+      {"id": "b3", "timeMs": 2050, "type": "strum", "direction": "down", "provenance": "auto"},
+      {"id": "b4", "timeMs": 2960, "type": "strum", "direction": "up", "provenance": "human"},
+      {"id": "b5", "timeMs": 4030, "type": "strum", "direction": "down", "provenance": "reviewed"},
+      {"id": "b6", "timeMs": 4990, "type": "strum", "direction": "down", "provenance": "auto"},
+      {"id": "b7", "timeMs": 6020, "type": "strum", "direction": "down", "provenance": "human"},
+      {"id": "b8", "timeMs": 6980, "type": "strum", "direction": "up", "provenance": "reviewed"},
+      {"id": "b9", "timeMs": 50000, "type": "strum", "direction": "down", "provenance": "auto"},
+      {"id": "b10", "timeMs": 51000, "type": "strum", "direction": "up", "provenance": "human"}
+    ],
+    "chordSegments": [
+      {"id": "bc1", "startMs": 20, "endMs": 1980, "label": "G", "provenance": "auto"},
+      {"id": "bc2", "startMs": 2010, "endMs": 4050, "label": "D", "provenance": "reviewed"}
+    ]
+  }
+}

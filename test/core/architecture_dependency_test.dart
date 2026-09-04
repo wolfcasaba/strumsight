@@ -1233,7 +1233,7 @@ import 'package:flutter/widgets.dart';
   // and the barrel one does not resolve the name (measured:
   // `error • Undefined name 'SignalQualityMath'`). A quality primitive that
   // no other feature can reach is not a reusable primitive — the export list
-  // is the contract, so it is pinned here. See docs/LESSONS.md L628.
+  // is the contract, so it is pinned here. See docs/LESSONS.md L629.
   group(
     'audio analysis quality primitives stay barrel-reachable (E14-R05)',
     () {
