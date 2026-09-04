@@ -1,5 +1,84 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E16-R05 KÉSZ — a Chapter 16 sáv LEZÁRVA: teljes app-verifikáció, **mért negatív A3-verdikttel** — PR [#562](https://github.com/wolfcasaba/strumsight/pull/562), squash `474a6b00` (2026-09-04)
+
+A sáv záró köre gépi bizonyítékot ad arról, hogy a felület és a kód együtt
+működik-e — és ott, ahol NEM, nevesített leletet hagy maga után ahelyett, hogy
+elfedné. **A kör legfontosabb hozadéka egy negatív mérés:**
+
+> **A3 — NEM teljesül.** A „BE" besorolású capabilityk core útja a termék SAJÁT
+> navigációjával nem járható végig. A bejárás két teszt-oldali `router.go`
+> hidat kényszerül használni: **L2** — az onboarding Skip-je
+> `router.go(AppRoutes.live)`-ot hív (`onboarding_screen.dart:106`), sosem
+> `/today`-t; **L1** — az adaptív shell EGYETLEN hirdetett belépési pontja
+> pontozott gyakorlásba `?id=` nélkül navigál
+> (`practice_area_hub_screen.dart:55`), így a Setup a saját `_RouteError` ágát
+> rendereli. `adaptiveShellEnabled = true` mellett egyetlen ELÉRHETŐ képernyő
+> sem állítja elő az id-t hordozó URI-t (`app_router.dart:541` vs `:394`).
+
+Amit a kör **bizonyított**: az állomások oda navigálva valós adatot vagy
+EXPLICIT állapotot mutatnak (**A2 ✅**), a routing- és kompozíciós réteg
+placeholder-mentes (**A1 ✅**, 0 lelet), és a mért elérhető halmaz partíciója
+teljes (**A4 ✅**, 9 bejárt + 64 kimaradó = 73, mindegyik gazdával és körrel).
+
+**A kör terméke:**
+
+- **[`tool/check_placeholder_wiring.dart`](tool/check_placeholder_wiring.dart)** —
+  statikus mérő ZÁRT szerződéssel (brief §5.3, a pre-flight R3 revíziója): H1
+  `lib/app/routing/*.dart` (4 fájl) + H2 kompozíciós provider-réteg (14 fájl);
+  **P1** képernyő-konstruktor placeholder-argumentuma · **P2** konstans-testű
+  top-level provider · **P3** konstans-értékű top-level deklaráció. Üres
+  fájlhalmazra **fail-closed**. Mai mérés: **0 lelet**, egyetlen indokolt
+  kivétellel (`progressV2IsOffline`, a forrás saját doc-commentje alapján).
+- **[`test/e2e/full_app_walkthrough_test.dart`](test/e2e/full_app_walkthrough_test.dart)** —
+  a **szállított** `FeatureFlags.forEnvironment(development, accountEnabled:
+  false)` BE-készlettel (nem kézzel válogatott flagekkel) járja be a core utat.
+- **[`docs/release/full-app-verification.md`](docs/release/full-app-verification.md)** —
+  a mért eredmény és **öt NEM javított lelet** (L1–L5), gazdával és körrel. Az
+  **L3** külön kategória: harness-eredetű (a `bootE2eApp` nem futtat production
+  bootstrapot), ezért a Library-állomás a szállított kompozícióról sem jót, sem
+  rosszat nem bizonyít.
+- `test/support/e2e_harness.dart` — kizárólag egy **additív** `flags` paraméter,
+  mai alapértékkel; a négy örökölt hívó fájlja érintetlen és zölden fut (A9).
+
+**A pre-flight HÉT mért brief-revíziót írt (§0.0.1)**, köztük a **BLOKKOLÓ R2**-t:
+a harness a nyolc BE-flagből ötöt kikapcsolva bootolt (`_e2eConfig()` négy mezőt
+adott meg), tehát az A3 a brief eredeti alakjában **mérhetetlen** volt — a
+`test/support/e2e_harness.dart` ezért került az `allowed_paths`-ra, és a négy
+örökölt hívó a `gate_tests`-be (S11/S14, [L593](docs/LESSONS.md#l593)). Az **R3**
+az A1 „aminek van valós forrása" feltételét — ami gépileg eldönthetetlen —
+cserélte a zárt P1/P2/P3 szabályhalmazra. Új cellák: **A7** (a kivétel-lista nem
+vákuum), **A8** (a mért fájlhalmaz nem üres és nem szűkült), **A9**.
+
+**A review 1 MAJOR-t mért a 13/13 zöld gate mögött:** a kör az A3-at
+teljesítettként jelentette, miközben a SAJÁT mérése cáfolta — ez az
+[ADR 0470](docs/adr/0470-practice-setup-navigates-to-the-session-route.md) /
+[L273](docs/LESSONS.md#l273) hibaosztálya, amivel az `E12-R11` review **H2**-vel
+állította meg a láncot. A javítás **doc-only** volt (a `lib/**` a kör tiltott
+zónája): a §6 A3 cellája most kimondja, hogy NEM teljesül — **cella törlése vagy
+gyengítése nélkül**. Két MINOR + egy NOTE ugyanabban a javító körben zárva
+(köztük a Profile Hub „sessions" cellája, ami korábban a streak-csempe `0`-jára
+is illeszkedett).
+
+**Mérce:** célzott kapu **13/13 ZÖLD** — a reviewer FRISS, izolált `/tmp`
+klónban a review előtt ÉS a javító kör után is reprodukálta (`GATE_EXIT=0`),
+nem bemondásra fogadta el; scope-audit `ok` (6 útvonal); exact-SHA CI a
+`0c6098c0` merge SHA-n: build-apk + Coverage
+[33836966766](https://github.com/wolfcasaba/strumsight/actions/runs/33836966766)
+és Router CI
+[33836983795](https://github.com/wolfcasaba/strumsight/actions/runs/33836983795)
+— mindkettő `success`. Implementer `sonnet-impl` (Claude Sonnet 5), **1 javító
+kör**. Review: [`docs/reviews/e16-r05-review.md`](docs/reviews/e16-r05-review.md)
+(APPROVED, 0 nyitott lelet). Két új lecke:
+[L617](docs/LESSONS.md#l617) (az orchesztrátor prompt-fájlja a munkapéldányban
+hamis `scope_audit=VIOLATION`-t okoz) és [L618](docs/LESSONS.md#l618) (a
+teszt-oldali navigációs híd LELET, nem kényelmi lépés).
+
+**⚠ Nyitott, gazdátlan tételek a következő tervezéshez:** L1, L2 (a fenti két
+navigációs szakadás — ezek zárnák az A3-at), L4 (a Profile Hub V1-napló
+metrikája), L5 (`practiceHistoryV2ListProvider` sosem invalidálódik), L3
+(harness/Library bootstrap). Egyikhez sincs ma hozzárendelt kör.
+
 ## ✅ E16-R04 KÉSZ — Élő backend end-to-end: **szerződés-vezérelt** bring-up smoke + eszköz-profil titok-határa — PR [#561](https://github.com/wolfcasaba/strumsight/pull/561), squash `e082b664` (2026-09-04)
 
 A Chapter 16 negyedik köre azt teszi **egyetlen paranccsal mérhetővé**, hogy
@@ -11752,7 +11831,25 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-04):** `main` @ `e082b664` — **E16-R04: élő
+**Aktuális állapot (2026-09-04):** `main` @ `474a6b00` — **E16-R05: teljes
+app-verifikáció és kiadható build**, PR
+[#562](https://github.com/wolfcasaba/strumsight/pull/562), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
+(Opus 5), **1 javító kör** (review: APPROVED a javító kör után, 0 nyitott
+lelet; a review CHANGES REQUESTED verdikttel indult: 0 BLOCKER / 1 MAJOR /
+2 MINOR / 1 NOTE — [`docs/reviews/e16-r05-review.md`](docs/reviews/e16-r05-review.md)).
+**ÚJ ADR: nincs** — mérési/záró kör (165 merge-elt kör precedense, köztük az
+`E15-R13`; a `docs/adr/**` a kör tiltott zónája volt). `risk = "normal"`,
+`native_gate = true` → a CI-tervet a `tools/round-ci-plan.py` adta
+(`build-apk.yml`). Exact-SHA evidencia a `0c6098c0` merge SHA-n: build-apk +
+Coverage
+[33836966766](https://github.com/wolfcasaba/strumsight/actions/runs/33836966766),
+Router CI
+[33836983795](https://github.com/wolfcasaba/strumsight/actions/runs/33836983795)
+— mindkettő `success`. A `lib/**` fa **érintetlen**: a záró kör MÉR, nem javít
+(brief §5.2) — az öt talált lelet dokumentálva, nem elfedve.
+
+**Előző állapot (2026-09-04):** `main` @ `e082b664` — **E16-R04: élő
 backend end-to-end, szerződés-vezérelt bring-up smoke**, PR
 [#561](https://github.com/wolfcasaba/strumsight/pull/561), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5), orchesztrátor/reviewer Claude
@@ -11958,7 +12055,22 @@ maradt.
 
 ## 5. Last completed round
 
-**E16-R04 — Élő backend end-to-end: szerződés-vezérelt bring-up smoke** (PR
+**E16-R05 — A teljes app működésének mérése és kiadható build** (PR
+[#562](https://github.com/wolfcasaba/strumsight/pull/562), squash `474a6b00`).
+A Chapter 16 sáv ZÁRÓ köre. Új: `tool/check_placeholder_wiring.dart` (zárt
+P1/P2/P3 szerződés, 0 lelet, fail-closed üres fájlhalmazra),
+`test/e2e/full_app_walkthrough_test.dart` (a szállított
+`forEnvironment(development)` BE-flagkészlettel), és
+`docs/release/full-app-verification.md` (a 73 elérhető képernyő 9+64-es,
+diszjunkt és teljes partíciója + öt NEM javított lelet). **A kör MÉRT
+verdiktje az A3-ra NEGATÍV:** a core út a termék saját navigációjával nem
+járható végig (L1, L2) — ezt a kör kimondja, nem elfedi. Két új lecke:
+[L617](docs/LESSONS.md#l617) (az orchesztrátor prompt-fájlja a
+munkapéldányban hamis `scope_audit=VIOLATION`-t okoz) és
+[L618](docs/LESSONS.md#l618) (a bejárás teszt-oldali navigációs hídja LELET,
+nem kényelmi lépés — ADR 0470 / L273 hibaosztály).
+
+**Előző kör: E16-R04 — Élő backend end-to-end: szerződés-vezérelt bring-up smoke** (PR
 [#561](https://github.com/wolfcasaba/strumsight/pull/561), squash `e082b664`).
 A `tool/release/live_backend_smoke.py` a mérendő végpontokat a
 `docs/contracts/client-backend-endpoints.json`-ből OLVASSA (mind a 34
@@ -11975,27 +12087,34 @@ scope-auditot az implementer indulási HEAD-jéről kell futtatni).
 
 ## 6. Exact next task
 
-> **KÖVETKEZŐ KÖR: `E16-R05` — Teljes app-verifikáció és release**
-> ([`docs/rounds/e16-r05-full-app-verification-and-release.md`](docs/rounds/e16-r05-full-app-verification-and-release.md),
-> motor `sonnet-impl`, ADR: a pre-flight foglalja le). A pipeline indítja, nem
-> kézzel. Ez a Chapter 16 ötödik és — a queue mai állása szerint — utolsó
-> köre.
+> **A PIPELINE-SOR KIÜRÜLT.** Az `E16-R05` volt az utolsó `pending` sor a
+> `docs/execution/pipeline-queue.tsv`-ben — a lánc **nem indít magától**
+> következő kört. A folytatás **user-döntés**: melyik nyitott sáv kapja a
+> következő slotot.
 >
-> **Amit az E16-R04 átad neki (bemenet, nem díszítés):** a
-> `tool/release/live_backend_smoke.py` az ELSŐ eszköz, amely egy VALÓDI
-> példány ellen végigméri a kliens hálózati felületét — az E16-R05
-> release-verifikációja erre építhet ahelyett, hogy kézi kattintgatást írna
-> elő. A smoke besorolás-táblája (`_EXERCISED_ORDER` / `_NOT_EXERCISED`)
-> egyben a MÉRT lista arról, mi az, amit ma EGY fiókkal nem lehet
-> bizonyítani (21 végpont — jellemzően „második fiók kell" vagy „nincs
-> create-endpoint a szerződésben"); ha az E16-R05 teljesebb lefedést akar, ez
-> a lista a kiindulópont, és a bővítés a szerződés-JSON-t NEM írhatja át
-> (ADR 0497 D5 paritás-őr).
+> **Amit a záró mérés a következő tervezés asztalára tett (E16-R05, mind
+> MÉRT, egyikhez sincs ma hozzárendelt kör):**
 >
-> **A backend tényleges futtatása és a telefon ráállítása továbbra is
-> OPERÁTORI (user-) lépés** — ugyanaz a kapu, mint a valós gitáros APK-teszt.
-> A `docs/operations/device-backend-runbook.md` §1–§9 vezet végig rajta; a
-> kör NEM indíthat szervert és nem nyithat tunnelt.
+> | Lelet | Mit mértünk | Hol |
+> |---|---|---|
+> | **L1** | az adaptív shell „ajánlott gyakorlás" CTA-ja `?id=` nélkül navigál → a Setup a `_RouteError` ágát rendereli | `practice_area_hub_screen.dart:55` |
+> | **L2** | az onboarding Skip-je mindig `/live`-ra fejez be, sosem `/today`-ra | `onboarding_screen.dart:106` |
+> | **L3** | a Library V2 forrásai csak a production bootstrapból élnek, a `bootE2eApp` nem köti be őket (harness-határ, nem termékhiba) | `library_v2_providers.dart` |
+> | **L4** | a Profile Hub „sessions" mércéje a V1 „Learn" naplót olvassa, amit a Practice Engine V2 sosem ír | `profile_hub_screen.dart` |
+> | **L5** | a `practiceHistoryV2ListProvider` sima `FutureProvider`, `lib/`-ben SEHOL nem invalidálódik → egy konténer élettartamán belül sosem frissül | `practice_progress_providers.dart` |
+>
+> **L1 + L2 együtt zárná az A3-at** („a BE capabilityk core útjai
+> végigjárhatók") — ez a legkisebb, legnagyobb hozadékú következő kör, és a
+> mérője MÁR MEGVAN: a bejárásból kivéve a két teszt-oldali `router.go`
+> hidat, a `full_app_walkthrough_test.dart` azonnal pirosra vált, amíg a
+> bekötés hiányzik.
+>
+> **Változatlanul OPERÁTORI (user-) kapuk:** a valós gitáros APK-teszt (a
+> végső elfogadási predikátum) és a backend tényleges futtatása +
+> telefon-ráállítás (`docs/operations/device-backend-runbook.md` §1–§9). A
+> `docs/release/full-app-verification.md` az a dokumentum, amit egy
+> kiadás-döntés előtt el kell olvasni.
+
 ## 7. Required verification (before any "done")
 
 A lokális mérce **egyetlen futtatható artefaktum** (GOV-01) — a parancssorban

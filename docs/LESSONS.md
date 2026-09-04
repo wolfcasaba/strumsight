@@ -24620,3 +24620,71 @@ gépi auditja ezt eleve helyesen teszi (`scope_audit_base=740ce22c…`,
 
 **Őrteszt:** nincs — a hiba a kézi audit-hívás paraméterezésében van, nem a
 fában; a wrapper saját `scope_audit_base` mezője a gépi védelem.
+
+## L617 — Az orchesztrátor prompt-fájlja a munkapéldányban `scope_audit=VIOLATION`-t okoz, és a kész kört `stopped`-ra állítja (E16-R05, 2026-09-04)
+
+**Mérve, ugyanabban a körben kétszer.** A javító kör jelzésfájlja:
+
+```
+status=stopped
+summary=scope-sértés: a diff kilógott a brief engedélyezett fájljaiból
+implementer_status=done
+scope_audit=VIOLATION
+scope_audit_changed=4
+scope_audit_violations=path outside allowed scope: .round-fix-prompt-e16-r05.md
+```
+
+Az implementer **készen volt** (`implementer_status=done`, 3 legitim fájl a
+listán belül) — a negyedik „megváltozott útvonal" az orchesztrátor SAJÁT,
+verziókövetetlen prompt-fájlja volt, amit a munkapéldány gyökerébe írtam. A
+wrapper gépi scope-auditja a nem követett fájlokat is számolja, ezért a kör
+`stopped`-ra váltott, és a lánc döntést kért egy nem létező scope-sértésre.
+
+**Gyökérok.** A `tools/mm-round.sh` a prompt-fájlt `readlink -f`-fel
+abszolutizálja, tehát a promptnak **semmi oka a munkapéldányban lennie** — a
+munkapéldányba írás az én kényelmi választásom volt, ami a mérce bemenetét
+szennyezte.
+
+**Javítás (az orchesztrátor eljárásában).** A kör- és javító-prompt a
+munkapéldányon KÍVÜL éljen (pl. `/tmp/round-prompt-<kör>.md`), és a wrapper
+abszolút útvonallal kapja meg. Ha mégis bent van: a jelzés olvasásakor a
+`scope_audit_violations` listát fájlonként kell nézni — ha kizárólag saját
+orchesztrátor-artefaktum szerepel rajta, az **nem** H3, de a fájlt törölni és
+az auditot újra kell futtatni, mielőtt a review elindul.
+
+**Őrteszt:** nincs — a javítás az orchesztrátor eljárásában van; a wrapper
+(`tools/**`) módosítása az ADR 0087 §4 szerint ennek a széknek tiltott zóna.
+
+## L618 — A záró bejárás akkor mond igazat, ha a teszt-oldali navigációs hídját LELETNEK jelenti, nem kényelmi lépésnek (E16-R05, 2026-09-04)
+
+**Mérve.** Az `E16-R05` end-to-end bejárása minden gépi celláján zöld volt,
+miközben a gerincen KÉT teszt-oldali `router.go` hidat használt, mert a termék
+saját navigációja megszakad:
+
+| Híd | Miért kellett |
+|---|---|
+| `full_app_walkthrough_test.dart:106` — `router.go(AppRoutes.today)` | az onboarding Skip-je `router.go(AppRoutes.live)`-ot hív (`onboarding_screen.dart:106`), sosem `/today`-t |
+| `full_app_walkthrough_test.dart:168–170` — `router.go('${AppRoutes.practiceSetup}?id=…')` | az adaptív shell egyetlen hirdetett belépési pontja `?id=` nélkül navigál (`practice_area_hub_screen.dart:55`) → a Setup a `_RouteError` ágát rendereli |
+
+A második hídra írt mentség („a legacy Hub `_openSetup`-ja ilyen URI-t épít")
+`adaptiveShellEnabled = true` mellett **mérhetően nem áll meg**: a `/practice`
+ilyenkor a `PracticeAreaHubScreen`-t építi (`app_router.dart:541`), a legacy Hub
+a `!adaptiveShellEnabled` ágon él (`:394`) — a BE flag-készlet alatt egyetlen
+ELÉRHETŐ képernyő sem állítja elő az id-t hordozó URI-t.
+
+**A hibaosztály** az [ADR 0470](adr/0470-practice-setup-navigates-to-the-session-route.md)
+/ [L273](#l273): az `E12-R11` review pontosan ezért állította meg a láncot
+**H2**-vel. A különbség — és ezért zárult ez a kör merge-dzsel, nem halttal —
+hogy a bejárás a hidat KIMÉRTE és lelettel jelentette (L1, L2), a review pedig
+a **verdiktet** javíttatta ki: a kör §6 A3 cellája most kimondja, hogy **NEM
+teljesül**, a mérce törlése vagy gyengítése nélkül.
+
+**A tanulság általánosan:** egy „a folyam végigjárható" cella csak akkor
+bizonyít, ha a bejárás KIZÁRÓLAG a termék saját affordanciáit használja. Minden
+teszt-oldali `router.go`/`container.read` a gerincen egy **lelet**, amit néven
+kell nevezni — különben a zöld cella pontosan azt a bekötési hiányt fedi el,
+amit mérni hivatott.
+
+**Őrteszt:** nincs — a szabályt a záró kör review-ja tartja (a bejárás minden
+teszt-oldali navigációjához dokumentált lelet tartozzon); gépi őrré akkor
+tehető, ha a bejárás-harness a saját `router.go` hívásait számlálja.
