@@ -866,3 +866,96 @@ class MeasuredPrerequisiteRegimeTest(unittest.TestCase):
                 "a kimondottan KÉSZ előfeltétel után a jelölt előfeltétel-kész — "
                 "a skip-ág itt NEM léphet be, a mérés folytatódik",
             )
+
+
+class IndependenceClauseTest(unittest.TestCase):
+    """ADR 0495 D6 — a brief KIMONDHATJA, hogy egy körtől FÜGGETLEN.
+
+    MÉRVE 2026-09-04 (E14 sáv visszakapcsolása): három brief szó szerint azt
+    állítja, hogy párhuzamosítható —
+
+        `E14-R03`: „Az `E14-R02`-től FÜGGETLEN — a két kör fájlhalmaza
+                    diszjunkt, párhuzamosítható."
+        `E14-R06`: „Az `E14-R02…R05`-től FÜGGETLEN — a fájlhalmaz diszjunkt…"
+        `E14-R11`: „Az `E14-R10`-től független, de ha az előbb landol…"
+
+    — a `declared_prerequisites` viszont MINDEN kör-tokent kiolvasott az
+    `Előfeltétel` sorból, tehát pont az ELLENKEZŐJÉT értette, és a 18 körös
+    sávot egyszálúvá tette. A kikötés ráadásul a KÖVETKEZŐ sorra volt tördelve,
+    amit a soronkénti olvasás el sem ért.
+    """
+
+    def _prereqs(self, body: str) -> set[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "docs" / "rounds").mkdir(parents=True)
+            brief = repo / "docs" / "rounds" / "fixture.md"
+            brief.write_text(body, encoding="utf-8")
+            return set(round_slots.declared_prerequisites(repo, "docs/rounds/fixture.md"))
+
+    def test_a_plain_prerequisite_still_blocks(self) -> None:
+        self.assertEqual(
+            self._prereqs("- **Előfeltétel:** `E14-R04` merge-elve (RecognitionFrame V2).\n"),
+            {"E14-R04"},
+        )
+
+    def test_an_independence_clause_on_the_next_line_is_read(self) -> None:
+        """A MÉRT alak: a kikötés a folytatás-sorra tördelve."""
+        self.assertEqual(
+            self._prereqs(
+                "- **Előfeltétel:** `E14-R01` merge-elve (release guard). Az `E14-R02`-től\n"
+                "  FÜGGETLEN — a két kör fájlhalmaza diszjunkt, párhuzamosítható.\n"
+                "- **Brief szerzője:** Claude (Opus 5)\n"
+            ),
+            {"E14-R01"},
+        )
+
+    def test_a_lowercase_independence_clause_is_read_too(self) -> None:
+        self.assertEqual(
+            self._prereqs(
+                "- **Előfeltétel:** `E14-R04` merge-elve (RecognitionFrame V2). Az `E14-R10`-től\n"
+                "  független, de ha az előbb landol, a §2-t a pre-flight frissíti.\n"
+            ),
+            {"E14-R04"},
+        )
+
+    def test_a_mixed_clause_is_fail_closed(self) -> None:
+        """Pozitív kötés ÉS függetlenség egy mondatban → MEGTARTJUK.
+
+        A félreolvasás veszélyes iránya két függő kör párhuzamos indítása
+        volna; egy elmaradt párhuzam csak lassabb.
+        """
+        self.assertEqual(
+            self._prereqs(
+                "- **Előfeltétel:** `E14-R04` merge-elve, az `E14-R10`-től független.\n"
+            ),
+            {"E14-R04", "E14-R10"},
+        )
+
+    def test_the_block_stops_at_the_next_bullet(self) -> None:
+        """A következő felsorolás-elem kör-hivatkozása NEM előfeltétel."""
+        self.assertEqual(
+            self._prereqs(
+                "- **Előfeltétel:** `E14-R04` merge-elve.\n"
+                "- **Kapcsolódó:** `E14-R09` handoffja.\n"
+            ),
+            {"E14-R04"},
+        )
+
+    def test_the_real_e14_band_is_not_single_threaded(self) -> None:
+        """A MÉRT defekt cellája: a sáv eleje párhuzamosítható."""
+        rows = round_slots.queue_rows(ROOT)
+        open_e14 = [row for row in rows if row[0].startswith("E14-") and row[4] == "pending"]
+        if not open_e14:
+            self.skipTest("az E14 sáv nincs nyitva")
+        ready = [
+            row[0]
+            for row in open_e14
+            if not round_slots.unmet_prerequisites(ROOT, row[0], row[1], rows)
+        ]
+        self.assertGreaterEqual(
+            len(ready),
+            2,
+            "az E14 sáv egyszálú: a briefek KIMONDOTT függetlenségi kikötése nem érvényesül "
+            f"(indítható körök: {ready})",
+        )
