@@ -1,19 +1,25 @@
-# E14-R16 — Canonical SuperFlux A/B benchmark
+# E14-R16 — Onset-detektor variáns-szeám és A/B mérés
 
-- **Státusz:** PREPARED (előre megírva 2026-08-20, kód olvasva: `main @ 6371aa3`)
+- **Státusz:** REVISED (pre-flight, 2026-09-05 — mért alap: `main @ 1e235320`;
+  az eredeti előre-írás 2026-08-20, `main @ 6371aa3`)
 - **Típus:** Chapter 14, Kör 16 (strum recovery blokk)
 - **Kör-azonosító:** `E14-R16`
-- **Branch:** `<motor>/e14-r16-onset-detector-ab-benchmark`
-- **Előfeltétel:** `E14-R08` (grouped harness) és `E14-R15` (hard-negative
-  taxonómia + hamis-esemény metrika) merge-elve.
-- **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `0368` — **a Claude írja meg, a `docs/adr/` a TILOS zónában van.**
+- **Branch:** `sonnet-impl/e14-r16-onset-detector-ab-benchmark`
+- **Előfeltétel:** `E14-R08` (ADR 0509 — a metrika-fa, amit ez a kör FOGYASZT)
+  és `E14-R15` (ADR 0521) merge-elve. Mérve: mindkettő a `main`-en.
+- **Brief szerzője:** Claude (Opus 5) · **revízió:** E14-R16 pre-flight
+- **Előre kiosztott ADR:** `0524` (foglaló:
+  `tools/round-slots.py reserve-adr --round E14-R16`) — **a Claude írta meg**
+  (`docs/adr/0524-onset-detector-variant-seam-and-ab-measurement.md`), a
+  `docs/adr/` a TILOS zónában van. A 2026-08-20-i előre-írás `0368`-at mondott;
+  az a szám elavult (§0.0).
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a
-> `lib/features/live/engine/dsp/superflux_onset_detector.dart` konstansait
-> (mérve: `_floor = -9.0`, `_delta = 12.0`, `_lambda = 1.0`) és a
-> `tool/benchmarks/real_audio_dsp_baseline.dart` alakját — ez a kör azt a
-> mintát követi. Eltérésnél §0.0 revízió.
+> ⚠ **Indítás előtt KÖTELEZŐ:** olvasd el a §0.0 revíziót, majd
+> az **ADR 0524** Döntés-szakaszát, végül
+> `lib/features/live/domain/evaluation/recognition_metrics.dart` 460–530.
+> sorát (`onsetTolerancesMs`, `onsetDefinition`, `_matchEvents` hívása). Ez a
+> kör NEM ír második párosítást/tűrést/P-R-F1-et — a pontozást a merge-elt
+> szerződés végzi. Eltérésnél `stopped` jelzés, nem improvizáció.
 
 ```ai-router
 schema_version = 1
@@ -21,7 +27,6 @@ risk = "normal"
 allowed_paths = [
   "tool/benchmarks/onset_ab_benchmark.dart",
   "lib/features/live/engine/dsp/onset_detector_variant.dart",
-  "lib/features/live/public.dart",
   "test/tooling/onset_ab_benchmark_test.dart",
   "docs/eval/onset-detector-ab.md",
   "docs/rounds/e14-r16-onset-detector-ab-benchmark.md",
@@ -41,141 +46,503 @@ tools/codex-signal.sh stopped "<egy sor>"
 tools/codex-signal.sh blocked "<egy sor>"
 ```
 
-Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+Lezáró jelzés nélkül a kör bukott. **Listán kívüli fájl → `stopped`**, nem
+„gyors javítás": ha a munkához bármi kellene az öt engedélyezett útvonalon
+kívül (pl. `test/fixtures/**`, `lib/features/live/public.dart`,
+`superflux_onset_detector.dart`), az `stopped` + egy soros indoklás.
+
+## 0.0 Revízió — MÉRT tények (pre-flight, 2026-09-05, `main @ 1e235320`)
+
+A brief 2026-08-20-án készült; azóta a mért alapja elmozdult (`brief-lint`
+**S15** + **S12**). A revízió a teljes mérést az
+[ADR 0524](../adr/0524-onset-detector-variant-seam-and-ab-measurement.md)
+Kontextus-szakaszába írta; a rövid tábla:
+
+| Amit a régi brief állított | MA mért igazság |
+|---|---|
+| a 2. acceptance-pont ELDÖNTI, hogy a tűrés-határ inkluzív | **MÁR MERGE-ELT DÖNTÉS.** `recognition_metrics.dart:460-461` + `onsetDefinition` — `[25, 50, 100]`, `boundary inclusive (<=)`, Kuhn-féle **maximális** párosítás (a mohó alulszámol, `L269`). Egy második párosítás a benchmarkban az `L549`/`L636`/`L645` hibaosztály |
+| a report ÚJ P/R/F1-et számol variánsonként | **NEM.** a pontozás a `computeRecognitionMetrics`-é (ADR 0509); a benchmark bemenetet épít és riportot rendez, metrikát nem definiál |
+| 3. pont: bájtra azonos riport **és** 4. pont: CPU-oszlop | **ÜTKÖZIK.** a fal-óra/CPU futásonként és gépenként változik (ADR 0248/0474) → két csatorna kell (ADR 0524 D4) |
+| `lib/features/live/public.dart` — „additív export" | **MERGE-ELT DÖNTÉST ÍRNA FELÜL.** `public.dart:3-7`: a `engine/dsp/` szándékosan NINCS exportálva (SDD Ch2 §10.3/10.4). A `tool/check_architecture.dart` csak a `lib/` fát méri, a benchmark közvetlenül importálhat → az export felesleges. **A fájl kikerült az `allowed_paths`-ból** (szűkítés) |
+| „a harmadik benchmark ide illeszkedik" (§2) | **IGAZ, de** a `real_audio_dsp_baseline.dart` saját, tool-lokális `matchOnsetsUs`-a NEM használható referenciának (nem maximális párosítás); az a fájl tilos zóna |
+| előre kiosztott ADR `0368` | **ELAVULT.** a foglaló `0524`-et ad |
+| a korpusz „az E14-R08 fixture-e" | **NINCS ilyen audio-fixture.** `test/fixtures/audio/` 16 KB, csak `song_trainer`; nyers audio nem kerül a repóba (ADR 0249). A cellák teszt-időben előállított szintetikus jelekkel mérnek, a valódi korpusz CLI-argumentum (ADR 0524 D7) |
+
+**A kör EGYETLEN döntési helye ezért:** az **onset-detektáló függvények
+variáns-szeáma** és az azonos bemeneten futó **A/B mérés** — a pontozás
+delegált, a csoportosítás a merge-elt dashboardé, a production konstans nem
+mozdul.
+
+**A revízió által KIVETT munka (későbbi kör, saját ADR-rel):**
+
+1. **Konstans-átállítás** a mérés eredménye alapján (AGENTS.md §9: külön ADR).
+2. **Per-alcsoport A/B-bontás** — a benchmark manifestet ad át a merge-elt
+   dashboardnak (ADR 0524 D5), második csoportosítást nem épít.
+3. **A tool-lokális `matchOnsetsUs` nyugdíjazása** a `real_audio_dsp_baseline.dart`-ban.
 
 ## 1. Cél
 
-A jelenlegi onset-detektort **össze kell mérni** a canonical változatokkal
-(24 sáv/oktáv SuperFlux, complex-domain, egyszerű spectral flux), ugyanazon a
-csoportosított korpuszon, CPU- és latency-méréssel együtt — és **a production
-konstans NEM mozdul** ebben a körben. A kör kimenete report + ADR-döntés,
-nem hangolás.
+Egy futtatható artefaktum, amely **négy onset-detektáló függvényt** mér össze
+ugyanazon a bemeneten, ugyanazzal a — **merge-elt** — pontozó szerződéssel, és
+a pontosság mellé algoritmikus késleltetést és (külön, gépfüggő csatornán)
+CPU-időt ad. A kör kimenete **mérés + javaslat**; a production konstans NEM
+mozdul.
 
 ### 1.1 Visszakeresett előzmény (ADR 0312)
 
-- **AGENTS.md §9:** shipping DSP-konstans csak mért A/B és ADR után mozdul —
-  ez a kör pontosan azt a mérést állítja elő.
-- **E99-R04/R05 (GOV-06/06b):** a `tool/benchmarks/real_audio_dsp_baseline.dart`
-  + `docs/eval/real-audio-dsp-baseline.md` a bevált alak; a GOV-06b tanulsága
-  szerint a nem validált állítást (BPM) VISSZA kell vonni — ugyanez a szigor.
+- **[L269](../LESSONS.md#l269):** időablakos one-to-one értékelésben a mohó
+  „legközelebbi szabad pár" nem maximális — ezért van a merge-elt szerződésben
+  Kuhn-párosítás, és ezért nem írunk másodikat.
+- **[L549](../LESSONS.md#l549) / [L645](../LESSONS.md#l645):** a metaadat
+  MEGLÉTE nem a jelentése; és egy „legyen rá ÚJ fájl" előírás némán második
+  döntési hellyé válik, ha a képességnek már van megnevezett kiterjesztési
+  pontja.
+- **[L636](../LESSONS.md#l636):** az előre megírt brief mért alapja elmozdul —
+  ezt a §0.0 méri ki.
+- **[L173](../LESSONS.md#l173):** hiba-metrikán a generikus „magasabb=jobb"
+  sablon csendben megfordítja a döntést → a merge-elt metrika a saját
+  `definition.higherIsBetter`-ét hozza, a riport azt olvassa.
+- **ADR 0474 / 0248:** a benchmark-szám gépfüggő; `deviceId`+`buildSha` nélkül
+  értelmetlen, és nem merge-kapu.
+- **AGENTS.md §9:** shipping DSP-konstans csak mért A/B **és** ADR után mozdul.
 
-## 2. Jelenlegi állapot — mért tények
+## 2. Jelenlegi állapot — mért tények (`main @ 1e235320`)
 
 - `lib/features/live/engine/dsp/superflux_onset_detector.dart` — maximum-szűrt
-  log-mel flux, adaptív küszöb; a konstansok: `_floor = -9.0`, `_delta = 12.0`,
-  `_lambda = 1.0`.
-- `tool/benchmarks/` — két benchmark él (`real_audio_dsp_baseline.dart`,
-  `song_trainer_pitch_benchmark.dart`); a harmadik ide illeszkedik.
-- Nincs olyan futtatható artefaktum, amely TÖBB onset-változatot mérne
-  ugyanazon a bemeneten.
+  log-mel flux, adaptív küszöb. **Mérve:** `_floor = -9.0` (60. sor),
+  `_delta = 12.0` (78.), `_lambda = 1.0` (79.), `_medianFrames = 69`,
+  `_postFrames = 2`, `_releaseFrames = 3`, `_peakDecay = 0.985`,
+  `_peakRatio = 0.15`. A publikus konstruktor-mezők: `window = 1024`,
+  `hop = 256`, `bands = 64`, `lag = 2`, `minIoiSec = 0.06`, `delta`, `lambda`.
+  `processFrame(Float64List frame)` a megerősített onset **idejét** adja
+  (másodperc, keret-kezdet) vagy `null`-t.
+- `lib/features/live/domain/evaluation/recognition_metrics.dart` —
+  `onsetTolerancesMs = [25, 50, 100]`, inkluzív határ, Kuhn-féle maximális
+  párosítás, `null ≠ 0`, `RecognitionEvaluationReport.toDeterministicJson`.
+- `lib/features/live/data/evaluation/recognition_evaluation_runner.dart` —
+  `schemaVersion "1.0"` manifest-parszer, tipizált hibákkal.
+- `tool/benchmarks/` — `real_audio_dsp_baseline.dart` (külső korpusz-könyvtár
+  argumentumból, `main([List<String> arguments])`, tiszta függvények +
+  `dart:io` a szélén), `song_trainer_pitch_benchmark.dart`,
+  `benchmark_record.dart`, `recognition_baseline_manifest.dart`.
+- `test/tooling/real_audio_dsp_baseline_test.dart` — a bevált teszt-alak:
+  `import '../../tool/benchmarks/…'`, fixture nélkül, teszt-időben épített
+  adatokkal.
+- `package:fftea/fftea.dart` elérhető (`FFT(nFft).realFft(...)` → komplex
+  spektrum); `LogMelExtractor` a mel-front-end, `CqtExtractor` **NEM
+  használható** (hop 2048 @ 22,05 kHz ≈ 93 ms).
+- Nincs olyan artefaktum, amely TÖBB onset-függvényt mérne egy bemeneten.
 
 ## 3. Scope
 
-**Benne:** variáns-interfész (current / canonical-24 / complex-domain / simple
-flux), benchmark-CLI, per-subgroup report, CPU+latency mérés, doksi.
+**Benne:** variáns-szeám + négy implementáció, közös STFT és közös
+csúcs-kiválasztó, benchmark-CLI, determinisztikus pontossági riport, külön
+gépfüggő időzítés-fájl, variánsonkénti manifest-kiírás, doksi.
 
-**Nincs benne:** a production konstansok módosítása, modellcsere, a live
-pipeline bekötésének megváltoztatása, `ml/**`.
+**Nincs benne:** a production konstansok módosítása (`superflux_onset_detector.dart`,
+`dsp_config.dart`), a live pipeline bekötése, barrel-export, per-alcsoport
+csoportosítás, `ml/**`, `test/fixtures/**`, a `real_audio_dsp_baseline.dart`.
 
 ## 4. Engedélyezett fájlok
 
 | Útvonal | Miért |
 |---|---|
-| `tool/benchmarks/onset_ab_benchmark.dart` | a futtatható A/B |
-| `lib/features/live/engine/dsp/onset_detector_variant.dart` | variáns-interfész (ÚJ, a meglévő detektor változatlan) |
-| `lib/features/live/public.dart` | additív export |
-| `test/tooling/onset_ab_benchmark_test.dart` | determinizmus + variáns-mátrix |
-| `docs/eval/onset-detector-ab.md` | a report és a döntési javaslat |
+| `lib/features/live/engine/dsp/onset_detector_variant.dart` | a variáns-szeám és a négy implementáció (ÚJ fájl; a szállított detektor változatlan) |
+| `tool/benchmarks/onset_ab_benchmark.dart` | a futtatható A/B (tiszta mag + `dart:io` a szélén) |
+| `test/tooling/onset_ab_benchmark_test.dart` | a kör kapuja |
+| `docs/eval/onset-detector-ab.md` | a report-alak, a Pareto-nézet és a javaslat |
 | `docs/rounds/e14-r16-onset-detector-ab-benchmark.md` | §10 handoff |
 
 **Tilos zóna:** minden más — **kiemelten**
 `lib/features/live/engine/dsp/superflux_onset_detector.dart` és
-`dsp_config.dart` (a konstansok!), `lib/features/live/engine/ml/**`,
-`assets/**`, `ml/**`, `docs/adr/**`, `docs/rag/chunks/**`,
-`.github/workflows/**`, `tools/round-gate.sh`.
+`dsp_config.dart` (a konstansok!), `lib/features/live/public.dart`,
+`lib/features/live/domain/evaluation/**` és `data/evaluation/**` (ezeket
+IMPORTÁLOD, nem módosítod), `tool/benchmarks/real_audio_dsp_baseline.dart`,
+`test/fixtures/**`, `lib/features/live/engine/ml/**`, `assets/**`, `ml/**`,
+`docs/adr/**`, `docs/rag/chunks/**`, `.github/workflows/**`,
+`tools/round-gate.sh`.
 
-## 5. Kötött architekturális döntések (ADR 0368)
+## 5. Kötött architekturális döntések (ADR 0524)
 
-### 5.1 A production út érintetlen
+### 5.1 A production út érintetlen (D1)
 
-A meglévő detektor egyetlen konstansa sem változik; a variánsok ÚJ fájlban
-élnek, és csak a benchmark hívja őket. **NEM elfogadható**: „a canonical jobb,
-ezért egyből átállítom".
+A `superflux_onset_detector.dart` és a `dsp_config.dart` diffje a kör végén
+**üres**. **NEM elfogadható:** „a canonical jobb, ezért átállítom".
 
-### 5.2 Azonos bemenet, azonos split
+### 5.2 A `current` variáns a SZÁLLÍTOTT detektort hívja (D1)
 
-Minden variáns ugyanazt a csoportosított korpuszt kapja (E14-R08), különben az
-összehasonlítás értelmetlen.
+Nem másolat, nem újra-implementáció: `SuperFluxOnsetDetector`-t példányosít az
+alapértelmezett konstansokkal, és annak `processFrame`-jét futtatja.
 
-### 5.3 A latency és a CPU is metrika
+### 5.3 A hangoló-értékek a szállított detektor publikus mezőiből jönnek (D2)
 
-Az accuracy önmagában nem dönt: a report Pareto-nézetet ad (accuracy vs
-latency vs CPU), és a javaslatot ezzel indokolja.
+A közös csúcs-kiválasztó a `delta`, `lambda`, `minIoiSec`, `lag`, `window`,
+`hop` értékeket egy `SuperFluxOnsetDetector` példány publikus mezőiből veszi —
+**újragépelt `12.0`/`1.0` literál tilos**. A privát konstansok
+(`_floor`, `_medianFrames`, `_postFrames`, `_releaseFrames`, `_peakDecay`,
+`_peakRatio`) dokumentált, kézi **tükörként** kerülnek a variáns-fájlba, és a
+doc-comment ezt kimondja.
 
-### 5.4 Determinisztikus report
+### 5.4 A pontozás a merge-elt szerződésé (D3)
 
-Ugyanaz a bemenet bitre ugyanazt a reportot adja; nincs `DateTime.now()` a
-riport belsejében.
+A benchmark `RecognitionCase`-eket épít és `computeRecognitionMetrics`-et hív.
+**Tilos:** saját tűrés-lista, saját párosítás, saját P/R/F1, saját kerekítés.
+A hiányzó érték `null` marad, és „nem mért"-ként renderelődik.
 
-### 5.5 A nem validált állítás visszavont
+### 5.5 Két csatorna: determinisztikus pontosság, gépfüggő idő (D4)
 
-Amelyik metrikát a korpusz nem bizonyítja (pl. hiányzó annotáció), az a
-reportban **kifejezetten „nem mért"**-ként szerepel — nem becsülve.
+- determinisztikus riport: se `DateTime.now()`, se fal-óra, se gépnév;
+- időzítés-fájl: külön, kimondottan gépfüggőként jelölve.
+
+Az **algoritmikus késleltetés** determinisztikus, és a merge-elt
+`latencyP50Ms`/`latencyP95Ms` viszi: mintája a `RecognitionCase.detectionLatenciesMs`,
+értéke `döntés_ideje_ms − jelentett_onset_ms`, ahol a döntés ideje a
+`processFrame` hívás keretének VÉGE (`(frameIndex * hop + window) / sampleRate`).
+
+### 5.6 A csoportosítás a dashboardé (D5)
+
+Variánsonként `schemaVersion: "1.0"` manifest íródik ki, amit a merge-elt
+`RecognitionEvaluationRunner.runFromJsonString` visszaolvas. Második
+csoportosítás nem épül.
 
 ## 6. Acceptance criteria
 
-1. A benchmark mind a négy variánst futtatja ugyanazon a fixture-ön, és
-   variánsonként ad onset P/R/F1-et a 25/50/100 ms tűrésekre.
-2. A tűrés-határ **inkluzív**: a hármas cella a 50 ms-ra — a küszöb **alatt**
-   (49 ms eltérés) párosít, pontosan **rajta** (50 ms) párosít (a határ ide
-   tartozik), a küszöb **fölött** (51 ms) nem párosít.
-3. Kétszeri futás bájtra azonos reportot ad.
-4. A report tartalmaz latency- és CPU-oszlopot minden variánsra.
-5. A `superflux_onset_detector.dart` és a `dsp_config.dart` diffje **üres**
-   (a review `git diff --stat`-tal ellenőrzi; a teszt a konstansok értékét
-   is rögzíti).
-6. Hiányzó annotációra a report „nem mért" jelölést ad, nem 0-t.
+1. **Négy variáns egy bemeneten.** A `spectralFlux`, `complexDomain`,
+   `canonicalSuperFlux24` és `current` id mind megjelenik a riportban,
+   mindegyik UGYANAZT az eset-listát kapja, és mindegyikhez a merge-elt
+   metrika-fa tartozik a 25/50/100 ms tűrésekre.
+2. **A `current` a szállított detektor kimenete.** Egy determinisztikus
+   szintetikus jelen a `current` variáns onset-listája **elemre azonos** azzal,
+   amit a közvetlenül példányosított `SuperFluxOnsetDetector` ad ugyanarra a
+   keretezésre.
+3. **A pontozás delegált.** A riport tűrés-kulcsai `== onsetTolerancesMs`, és
+   minden onset-metrika `definition.matchingRule`-ja tartalmazza a
+   `Kuhn's maximum-cardinality` szöveget (ez csak a merge-elt kódból
+   származhat).
+4. **Inkluzív határ a benchmark SAJÁT útján.** Egy kézzel épített esettel, a
+   `onsetToleranceMsPrimary == 50` ms tűrésen, cellahármas: a küszöb **alatt**
+   (49 ms eltérés) párosít (`truePositives == 1`), pontosan **rajta** (50 ms)
+   párosít — a határ ide tartozik —, a küszöb **fölött** (51 ms) nem párosít
+   (`truePositives == 0`, `falsePositives == 1`, `falseNegatives == 1`).
+   A három eltérés az elvárt esemény `timeMs` értékéhez képest
+   (`python3 -c "t=50; print([t-1, t, t+1])"` → `[49, 50, 51]`).
+5. **Determinizmus.** Ugyanarra a bemenetre kétszer futtatva a determinisztikus
+   riport JSON-ja **bájtra azonos**, és nem tartalmaz egyetlen időzítés-kulcsot
+   sem (`elapsed`, `wallClock`, `cpu`, `durationMicros`, `timestamp`).
+6. **Idő- és CPU-mérés van, külön csatornán.** Az időzítés-kimenet
+   variánsonként ad fal-óra/CPU értéket, `deviceId` + `buildSha` mezővel, és
+   kimondottan gépfüggőként jelölve; az **algoritmikus késleltetés** a
+   determinisztikus riportban van (`latencyP50Ms`, `latencyP95Ms`).
+7. **Nem mért ≠ 0.** Annotáció nélküli esetre a riport `null`-t hordoz és „nem
+   mért"-et renderel; egyetlen metrika sem kerekedik `0`-ra emiatt.
+8. **A production konstans nem mozdult.** A `superflux_onset_detector.dart` és
+   a `dsp_config.dart` diffje üres, és a teszt pinneli a mért értékeket
+   (`delta == 12.0`, `lambda == 1.0`, `minIoiSec == 0.06`, `window == 1024`,
+   `hop == 256`, `bands == 64`, `lag == 2`) a szállított detektor publikus
+   alapértékein keresztül.
+9. **A manifest-átadás él.** A kiírt, variánsonkénti manifest
+   `RecognitionEvaluationRunner.runFromJsonString`-gel visszaolvasva
+   **ugyanazokat** az onset-metrikákat adja, mint a riport.
+10. **ODF-skála diagnosztika (fix1, ADR 0524 D8).** A determinisztikus riport
+    variánsonként hordozza az ODF-skála diagnosztikáját (a flux mediánja és
+    p95-e a teljes esethalmazon, valamint az effektív küszöb — `delta +
+    lambda * median(flux)` — mediánja), és a determinizmus-cella (5. pont)
+    ezzel a mezővel együtt is zöld marad (bájtra azonos, nincs benne
+    időzítés-kulcs).
+11. **Gain-függés (fix1, ADR 0524 D8).** Ugyanazon a szintetikus jelen,
+    0,1-szeresére (−20 dB) halkítva: a `current` variáns detektálás-száma
+    **változatlan** marad, míg legalább egy ÚJ variánsé (`canonicalSuperFlux24`,
+    `complexDomain`, `spectralFlux`) **megváltozik**. A cella nem konkrét
+    darabszámot pinnel, csak ezt a két relációt — a review eldobható próbáját
+    állandó őrré alakítva.
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
-| Hibás implementáció | Melyik cella vált PIROSRA |
-|---|---|
-| A production konstans „menet közben" módosul | 5. pont konstans-cellája |
-| A párosítás exkluzív határral | 2. pont **50 ms** cellája |
-| A riportba időbélyeg kerül | 3. pont |
-| Csak accuracy, latency nélkül | 4. pont |
-| Hiányzó annotáció → 0 | 6. pont |
+| Hibás implementáció | Melyik cella vált PIROSRA | Melyik őr |
+|---|---|---|
+| a production konstans „menet közben" módosul | 8. pont | unit-cella + `git diff --stat` a review-ban |
+| a benchmark saját párosítót/tűrést ír | 3. és 4. pont | unit-cella (a `matchingRule` szöveg csak a merge-elt kódból jön) |
+| a párosítás exkluzív határral | 4. pont **50 ms** cellája | unit-cella |
+| a riportba időbélyeg vagy fal-óra kerül | 5. pont | unit-cella (kulcs-tiltó lista + bájt-azonosság) |
+| csak pontosság, idő-mérés nélkül | 6. pont | unit-cella |
+| a `current` variáns újra-implementálja a detektort | 2. pont | unit-cella (elemre azonos onset-lista) |
+| a variáns újragépeli a `12.0`/`1.0` konstanst | 8. pont | unit-cella (a publikus alapértékkel szemben) |
+| hiányzó annotáció → `0` | 7. pont | unit-cella |
+| a kiírt manifest sémája elcsúszik | 9. pont | unit-cella (round-trip) |
+| az ODF-skála diagnosztika hiányzik vagy megtöri a determinizmust | 10. pont | unit-cella (mező jelenléte + kétszeri futás bájt-azonossága) |
+| a gain-függés nem mérve/nem reprodukálható | 11. pont | unit-cella (0,1× jel: `current` változatlan, ≥1 ÚJ variáns megváltozik) |
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/tooling
+tools/round-gate.sh test/tooling/onset_ab_benchmark_test.dart
 ```
 
 Külön processzben futó `format` → `analyze` → célzott teszt → `architecture`
-(AGENTS.md §12). `&&` láncolás tilos (L05/L09). CI-dispatch/PR/merge
-Claude-oldal.
+(AGENTS.md §12). `&&` láncolás tilos (L05/L09). A parancs a `gate_tests`
+listát tükrözi. CI-dispatch/PR/merge Claude-oldal.
 
 ### 7.1 Falszifikációs cella
 
-A §10-ben dokumentáld: a `_delta` konstans ideiglenes megváltoztatásával az
-5. pont konstans-cellája **PIROS**, visszaállítva **ZÖLD**.
+A §10-ben dokumentáld **mért** kimenettel: a variáns-fájl közös
+csúcs-kiválasztójában a `delta` forrását ideiglenesen `12.0` literálra
+cserélve **és** a szállított detektor `delta` alapértékét gondolatban
+elmozdítva a 8. pont cellája **PIROS**; visszaállítva **ZÖLD**. Ugyanígy: a
+párosítás tűrését `<` határra cserélve a 4. pont 50 ms-os cellája **PIROS**.
+A `superflux_onset_detector.dart`-ot a próbához **nem** módosítod — a cella a
+variáns-fájl oldaláról falszifikálható.
 
 ## 8. Implementációs sorrend
 
-1. Variáns-interfész + a négy implementáció (a current a meglévőt HÍVJA).
-2. Benchmark-CLI a `real_audio_dsp_baseline.dart` alakja szerint.
-3. Determinizmus- és variáns-teszt.
-4. Report + javaslat a doksiban (a döntés ADR-je a Claude-é).
+1. **STFT-mag + közös csúcs-kiválasztó** a variáns-fájlban (`fftea`; a
+   hangoló-értékek a `SuperFluxOnsetDetector` publikus mezőiből, ADR 0524 D2).
+2. **A négy variáns:** `current` (a szállított detektort hívja),
+   `spectralFlux`, `complexDomain`, `canonicalSuperFlux24` (24 sáv/oktáv
+   log-frekvenciás háromszög-szűrősor az STFT fölé, max-szűrt lag-flux).
+3. **Benchmark-mag:** esetek → variánsonként onsetek + késleltetés-minták →
+   `RecognitionCase` → `computeRecognitionMetrics` → determinisztikus riport
+   (JSON + Markdown). Tiszta függvények, `dart:io` nélkül.
+4. **CLI-héj** (`main([List<String> arguments])`) a
+   `real_audio_dsp_baseline.dart` alakja szerint: korpusz-könyvtár argumentum,
+   riport + időzítés-fájl + variánsonkénti manifest kiírása.
+5. **Teszt** a §6 kilenc pontjára, fixture nélkül, teszt-időben előállított
+   determinisztikus jelekkel és kézzel épített esemény-listákkal.
+6. **Doksi** (`docs/eval/onset-detector-ab.md`): a riport-alak, a két csatorna
+   közti határ, a Pareto-nézet olvasata és a javaslat — a döntés egy KÉSŐBBI
+   kör ADR-je.
+
+A brief §8 a terved — nincs külön task-lista. Doc-commentben csak tesztben
+bizonyított állítás szerepeljen (`const`, `immutable`, „determinisztikus").
 
 ## 9. Kockázatok
 
-- **Hangolás-csúszás:** a legnagyobb kockázat, hogy a mérés után az implementer
-  „gyorsan" átállítja a production konstansokat — az 5.1 és a tilos zóna ezt
+- **Hangolás-csúszás:** a legnagyobb kockázat, hogy a mérés után a production
+  konstans „gyorsan" átáll — az 5.1, a tilos zóna és a 8. acceptance-pont ezt
   fail-closed tiltja.
-- **Korpusz-hiány:** ha az E14-R08 fixture nem elég, `blocked` a jelzés, nem
-  kitalált szám.
+- **Második metrika-definíció:** a benchmarkba írt saját párosítás/tűrés az
+  `L549`/`L645` hibaosztály — a 3. és 4. pont ezt fogja meg.
+- **Determinizmus-szennyezés:** a CPU-oszlop beszivárgása a riportba — az 5.
+  pont kulcs-tiltó listája fogja meg.
+- **Korpusz-hiány:** valódi korpusz nélkül a CLI nem tud éles számot adni; ez
+  **nem** akadály (a kör a harnesst szállítja), de kitalált szám a doksiba nem
+  kerülhet — ami nem mért, az „nem mért".
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+**Implementer:** `sonnet-impl` (Claude Sonnet 5), `--effort medium`.
+
+### Fájlonként mit épített
+
+- **`lib/features/live/engine/dsp/onset_detector_variant.dart`** (ÚJ) —
+  `OnsetVariantId` (`current`, `canonicalSuperFlux24`, `complexDomain`,
+  `spectralFlux`) + `OnsetDetectorVariant` interfész
+  (`id`/`window`/`hop`/`delta`/`lambda`/`minIoiSec`/`describe()`/`processFrame()`)
+  + `createOnsetDetectorVariant`.
+  - `_shippedTuning(sampleRate)` egy `SuperFluxOnsetDetector(sampleRate:
+    sampleRate)` példányt hoz létre és a publikus mezőiből (`delta`,
+    `lambda`, `minIoiSec`, `lag`, `window`, `hop`) épít egy rekordot (ADR
+    0524 D2) — ez az EGYETLEN forrás mind a négy variánsnak.
+  - `_CurrentVariant` a szállított `SuperFluxOnsetDetector`-t hívja
+    közvetlenül (ADR 0524 D1/5.2); a `delta`/`lambda`/`minIoiSec`/`window`/`hop`
+    gettere is `_detector`-ra delegál.
+  - `_PeakPicker` a szállított detektor csúcs-megerősítő állapotgépének
+    dokumentált, KÉZI tükre (`_medianFrames=69`, `_postFrames=2`,
+    `_releaseFrames=3`, `_peakDecay=0.985`, `_peakRatio=0.15`) — a
+    hangoló-értékeket (`delta`/`lambda`/`minIoiSec`/`hop`) a hívó adja át,
+    sosem újragépelt literál.
+  - `_Stft` (Hann-ablak + `fftea` `realFft`) a közös STFT-mag, a
+    `LogMelExtractor` framing-konvencióját tükrözve.
+  - `_LogFreqFilterbank` a `canonicalSuperFlux24`-hez épített 24 sáv/oktáv,
+    log2-frekvenciás háromszög-szűrősor 27,5 Hz-től Nyquistig — a
+    `LogMelExtractor._buildFilterbank` mintáját követi, de log2-osztással
+    (nem mel-skálával); a `CqtExtractor`-t NEM használja (indoklás: ADR 0524
+    Következmények, ~93 ms hop). `fMin`/`binsPerOctave` végül `static const`
+    lett (nem konstruktor-paraméter), mert a `flutter analyze`
+    `unused_element_parameter`-t jelzett — ez a variáns szándékosan NEM
+    konfigurálható felbontású.
+  - `_CanonicalSuperFlux24Variant` a szállított algoritmus log-power
+    floor+max-filtered lag-flux lépését futtatja a 24-sávos szűrősoron.
+  - `_SpectralFluxVariant` félhullám-egyenirányított magnitúdó-flux
+    (fázis nélkül), `_ComplexDomainVariant` komplex-domain ODF (a
+    magnitúdó+fázis lineáris predikciója az előző két keretből, az eltérés
+    összesített magnitúdója) — mindkettő a közös `_Stft`+`_PeakPicker`-t
+    használja.
+- **`tool/benchmarks/onset_ab_benchmark.dart`** (ÚJ) — tiszta mag +
+  `dart:io`-s CLI-héj a `real_audio_dsp_baseline.dart` alakja szerint.
+  - `runOnsetVariant(id, OnsetAbCase)`: a bemenetet `variant.window`/`hop`
+    szerint keretezi, `RecognitionDetectedEvent`-eket épít, és az
+    algoritmikus késleltetést a brief 5.5 pontja szerinti képlettel számolja
+    (`(frameIndex*hop+window)/sampleRate*1000 − onsetMs`).
+  - `scoreCases(cases)` az EGYETLEN pontozó belépési pont —
+    `computeRecognitionMetrics`-et hívja, nem definiál tűrést/párosítást.
+    `buildOnsetAbReport` és `onsetAbManifestJson` is ezen keresztül fut.
+  - `OnsetAbReport.toJson()` a `onsetTolerancesMs` konstanst literálisan
+    beágyazza (a 3. acceptance-pont ezt ellenőrzi), variánsonként a teljes
+    `RecognitionEvaluationReport.toJson()`-t.
+  - `manifestJson(cases)` a `RecognitionManifest` pontos alakját írja
+    (`schemaVersion`, `cases[].expectedEvents/detectedEvents/…`) —
+    `RecognitionEvaluationRunner.runFromJsonString`-gel visszaolvasható.
+  - `OnsetAbTiming`/`measureOnsetAbTiming` a KÜLÖN, gépfüggő csatorna
+    (`Stopwatch`, `deviceId`, `buildSha`, kimondó `note` mező); egyetlen
+    mezője sem kerül az `OnsetAbReport`-ba.
+  - `main()` egy ÚJ, ebben a körben bevezetett sidecar-formátumot vár
+    (`<stem>.wav` + `<stem>.onsets.json` = `{"onsets": [seconds, ...]}`),
+    mert a repóban nincs commitolt, tiszta onset-only annotáció (a
+    `.strums` chord-eseményeket hordoz). Korpusz hiányában is fut (üres
+    esetlistával), és a kihagyott fájlokat jelzi.
+- **`test/tooling/onset_ab_benchmark_test.dart`** (ÚJ) — a §6 mind a kilenc
+  pontjára egy-egy teszt, fixture nélkül: `test/support/synth.dart`
+  (`strumSignal`/`strumPattern`/`frames`, MÁR létező, nem ehhez a körhöz
+  tartozó segédfájl, csak importált) szintetikus jeleket és kézzel épített
+  `RecognitionCase`/`RecognitionExpectedEvent`/`RecognitionDetectedEvent`
+  eseteket használ.
+- **`docs/eval/onset-detector-ab.md`** (ÚJ) — a riport-alak, a két csatorna
+  határa, a Pareto-nézet olvasata, a `<stem>.onsets.json` sidecar-formátum
+  és a javaslat (a döntés egy KÉSŐBBI kör ADR-je) — mért szám NINCS benne
+  (nincs korpusz, ADR 0249).
+
+### §7.1 falszifikációs próba — MÉRT kimenet
+
+**1. próba (8. pont, D2 — a hangoló-érték a szállított detektorból jön):**
+a `_SpectralFluxVariant` faktorában a `delta: tuning.delta` sort
+`delta: 99.0` literálra cseréltem (ideiglenesen, csak a variáns-fájlban —
+a `superflux_onset_detector.dart`-ot NEM érintettem). Futtatva:
+
+```
+00:00 +7 -1: … 8. the production constants have not moved … [E]
+  Expected: <12.0>
+    Actual: <99.0>
+  spectralFlux
+```
+
+→ **PIROS**, pontosan a 8. ponton. Visszaállítva (`delta: tuning.delta`):
+a teljes `test/tooling/onset_ab_benchmark_test.dart` **9/9 ZÖLD**.
+
+**2. próba (4. pont, D3 — az 50 ms-os határ inkluzív, a benchmark saját
+útján):** a teszt `cellFor` segédfüggvényében a valódi
+`scoreCases([recognitionCase]).overall.onsetTolerance50Ms` hívást
+ideiglenesen egy kézzel írt, EXKLUZÍV (`deviationMs < 50`) szimulált
+matcherre cseréltem (nem a `computeRecognitionMetrics`-et, hanem a
+tesztben szimulált, nem-delegált eredményt). Futtatva:
+
+```
+00:00 +3 -1: … 4. inclusive 50 ms boundary … [E]
+  Expected: <1>
+    Actual: <0>
+  50 ms — ON the boundary, inclusive
+```
+
+→ **PIROS**, pontosan az 50 ms-os cellán. Visszaállítva (`scoreCases`
+hívás): a teljes suite **9/9 ZÖLD** (`git diff` a két fájlon a próbák után
+üres — ellenőrizve `git diff --stat`).
+
+### A gate tényleges eredménye
+
+```
+tools/round-gate.sh test/tooling/onset_ab_benchmark_test.dart
+```
+
+`format` → `analyze` → `test test/tooling/onset_ab_benchmark_test.dart` →
+`architecture` → `secrets` → `l10n`: **mind ZÖLD** („MINDEN GATE ZÖLD”).
+A gate első `analyze` futása két `unused_element_parameter` warningot és
+hat `prefer_initializing_formals` info-t adott (a `_LogFreqFilterbank`
+konfigurálhatatlan `fMin`/`binsPerOctave` paraméterei, illetve a három ÚJ
+variáns privát konstruktorai) — ezeket javítottam (a paramétereket
+`static const`-ra váltottam, a konstruktorokat `this._mező` inicializáló
+formális paraméterre), a második futás tiszta.
+
+### Döntések, amiket a brief nem írt elő
+
+1. **`OnsetDetectorVariant` kiterjesztve `delta`/`lambda`/`minIoiSec`
+   getterrel** (a brief csak `id`/`describe()`/`processFrame()`-et írt elő).
+   Enélkül a 8. acceptance-pont csak `window`/`hop`-ot tudta volna pinnelni
+   — a `delta`/`lambda`/`minIoiSec` újragépelt-literál hibaosztályt (a
+   mérce-mátrix kifejezetten megnevezi) semmilyen teszt nem fogta volna meg.
+   Az 1. falszifikációs próba ezt igazolja.
+2. **`<stem>.onsets.json` sidecar-formátum** a CLI korpusz-bemenetéhez — új
+   formátum, mert a repóban nincs tiszta onset-only annotáció; dokumentálva
+   `docs/eval/onset-detector-ab.md`-ben.
+3. **`deviceId`/`buildSha` szabad string**, NEM a `benchmark_record.dart`
+   zárt eszköz-szótára (ADR 0474 D2) — az a fájl nincs az engedélyezett
+   listán, és ez a kör nem köti be az ADR 0474 összehasonlító csővezetékbe
+   (a timing csatorna kimondottan „sosem merge-kapu”).
+
+### Ismert korlátok (szándékos, a brief szerint)
+
+- A `_medianFrames`/`_postFrames`/`_releaseFrames`/`_peakDecay`/`_peakRatio`/
+  log-power floor kézi tükör — ha a szállított fájl privát konstansai
+  változnak, ezt kézzel kell frissíteni (ADR 0524 D2, dokumentálva a
+  variáns-fájl fejlécében is).
+- Valódi korpuszon mért Pareto-szám ebben a körben NINCS (nincs commitolt
+  audio, ADR 0249) — a `docs/eval/onset-detector-ab.md` ezt kimondja.
+
+## 10.1 fix1 kör — a review leletei nyomán (ADR 0524 D8)
+
+**Implementer:** `sonnet-impl` (Claude Sonnet 5), `--effort medium`.
+
+### MAJOR-1 — mérve, nem csak leírva
+
+- `OnsetDetectorVariant` kapott egy `double get lastFlux` getterrel: a
+  `_CurrentVariant` a szállított `_detector.lastFlux`-ra delegál, a másik
+  három variáns a közös `_PeakPicker`-en tárolt, saját maga számolt utolsó
+  flux-értékét adja vissza (`_PeakPicker.lastFlux`, `confirm()` első sora
+  állítja be).
+- `onset_ab_benchmark.dart`: `runOnsetVariant` mostantól egy `OnsetVariantRun`
+  rekordot ad vissza (`recognitionCase` + `fluxSamples` + `delta`/`lambda`) —
+  egyetlen keretezési átfutásból gyűjti a per-frame flux-nyomot is, nem
+  duplikálja a hurkot. `_computeOdfScaleDiagnostics` ebből számolja
+  variánsonként a `fluxMedian`/`fluxP95`-t (a teljes, esetek közötti pooled
+  flux-mintán) és az `effectiveThresholdMedian`-t (esetenként `delta + lambda
+  * median(esetflux)`, majd ennek mediánja az esethalmazon) — mindhárom
+  `double?`, `null` üres esethalmazon (ADR 0509 D6 mintájára, sosem `0`).
+  `OnsetAbReport.toJson()` variánsonként az `odfScale` kulcs alatt hordozza;
+  a Markdown-renderer egy sort ír ki belőle, kimondva, hogy a szám a
+  skála-illesztés előtt NEM összehasonlítható.
+- Gépi cella (§6 11. pont, `onset_ab_benchmark_test.dart`): ugyanaz a
+  `strumPattern(lowFirstPerStrum: [true, false, true, false], gapSeconds:
+  0.4)` jel 0,1×-ra halkítva — `current` detektálás-száma változatlan
+  (mérve: mindkét futáson egyenlő), és legalább egy ÚJ variánsé megváltozik.
+  A cella NEM pinnel konkrét darabszámot, csak a két relációt.
+- `docs/eval/onset-detector-ab.md`: a „Korlátok" utolsó pontja a review
+  MÉRT táblázatával lett felváltva (a korábbi „ez SZÁNDÉKOS…" mondat
+  visszavonva), a „Javaslat" 2–3. pontja átírva: mért skála-illesztés nélkül
+  a `canonicalSuperFlux24`/`complexDomain`/`spectralFlux` mai F1-értékéből
+  retune-javaslat NEM következik.
+
+### MINOR-1 — doc-comment javítva
+
+`onset_detector_variant.dart` `_PeakPicker.confirm`: a doc-comment mostantól
+a TÉNYLEGES visszatérési értéket írja le (`absC * hop / sampleRate`, a
+csúcs-keret KEZDETE), és külön mondatban utal arra, hogy a `+ window`-os
+képlet a *döntés* pillanatáé (`onset_ab_benchmark.dart`'s `decisionMs`), nem
+ennek a metódusnak a visszatérési értékéé.
+
+### MINOR-2 — `microsPerAudioSecond` nullázva
+
+`OnsetAbVariantTiming.microsPerAudioSecond` mostantól `double?`:
+`audioSeconds == 0` esetén `null` (nem `0`). A `test/tooling/
+onset_ab_benchmark_test.dart` egy külön cellája méri: üres korpuszon
+(`measureOnsetAbTiming(const [], ...)`) minden variáns `microsPerAudioSecond`-ja
+`null`, és a JSON-kimenet nem tartalmaz `"microsPerAudioSecond": 0`-t. A
+`main()` üres-korpusz ága változatlanul fut (a `File.writeAsStringSync`
+hívások nem függnek ettől a mezőtől).
+
+### A gate tényleges eredménye (fix1)
+
+```
+tools/round-gate.sh test/tooling/onset_ab_benchmark_test.dart
+```
+
+`format` → `analyze` → `test test/tooling/onset_ab_benchmark_test.dart`
+(**12/12 PASS** — a §6 tizenegy acceptance-cellája plusz a MINOR-2 timing-null
+cella) → `architecture` → `secrets` → `l10n`: **mind ZÖLD**.
+
+Útközben egy meglévő cella (7. pont, „never a coerced 0") a `markdown, isNot
+(contains('0.0000'))` teljes-buffer keresést használta — ez az ÚJ `odfScale`
+sor legitim `0.0000` flux-mediánjával (teljes csendben ez valódi mérve-nulla,
+nem „nem mért" hányados) hamis pirosat adott. A cellát szűkítettem a
+`current` szakasz precision/recall/f1 TÁBLÁZAT-soraira (ADR 0509 D6 ide
+tartozik, az `odfScale`-hez nem) — a `test/tooling/onset_ab_benchmark_test.dart`
+egyetlen módosítása a fix1 körből az öt engedélyezett fájlon belül.
 
 ## 11. Review — a Claude tölti ki
