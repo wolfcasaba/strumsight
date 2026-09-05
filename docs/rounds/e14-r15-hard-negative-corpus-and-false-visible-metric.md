@@ -491,3 +491,17 @@ tools/round-gate.sh test/features/live/evaluation/negative_taxonomy_test.dart te
   finomíthatja, amíg a ≥10-es darabszám és a típusos hiba-szerződés áll.
 
 ## 11. Review — a Claude tölti ki
+
+**Jelentés:** [`docs/reviews/e14-r15-review.md`](../reviews/e14-r15-review.md)
+(2026-09-05, reviewelt HEAD `e180c0d2`).
+
+**Verdikt: APPROVED** — 0 BLOCKER, 0 MAJOR, 1 MINOR, 2 NOTE. A nyolc
+acceptance-pont mind teljesül; a scope-audit `ok` (13 fájl), a célzott gate a
+reviewer saját izolált klónjában is végig zöld, és a §7.1 két falszifikációját
+a reviewer FÜGGETLENÜL is reprodukálta (a `d.accepted` szűrés kivételével a
+4. cella, a `kind == strum` szűrés kivételével az 5. és 6. cella megy pirosra).
+
+**Nyitva marad (nem blokkol):** MINOR-1 — a `NegativeTaxonomyParser`
+doc-commentje „minden elutasítás típusos"-t állít, de az üres mezőérték és a
+`endMs < startMs` a parse úton bare `ArgumentError`-t dob (L630 osztály).
+Javítási irány a jelentésben; a következő körök asztalára a HANDOFF §6 viszi.
