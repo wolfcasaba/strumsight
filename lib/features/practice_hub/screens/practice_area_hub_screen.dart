@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../features/practice/public.dart' show practiceCatalogProvider;
 import '../../../l10n/app_localizations.dart';
 
 /// The Practice Area Hub (UI-06, SDD Ch13 §UI-06) — every practice tool's
@@ -13,19 +15,22 @@ import '../../../l10n/app_localizations.dart';
 /// Resource-free (A4, ADR 0276): this screen only *navigates* to
 /// `/practice/tuner`, `/practice/metronome`, `/practice/live` and
 /// `/practice/chords` — none of those routes' screens are built inline
-/// here, so no microphone or camera opens on this hub itself.
+/// here, so no microphone or camera opens on this hub itself. Reading
+/// [practiceCatalogProvider] (ADR 0508 D3) is a const-list lookup, not a
+/// resource open.
 ///
 /// Styled with plain Material widgets + [AppColors] (matching
 /// `ProgressScreen`/the legacy `PracticeHubScreen`), not the
 /// `core/design_system` component library — see `today_hub_screen.dart`'s
 /// doc comment for why those widgets aren't safe under the app's current
 /// root theme.
-class PracticeAreaHubScreen extends StatelessWidget {
+class PracticeAreaHubScreen extends ConsumerWidget {
   const PracticeAreaHubScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final catalog = ref.watch(practiceCatalogProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceHubTitle)),
@@ -33,32 +38,44 @@ class PracticeAreaHubScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
-            Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.practiceAreaHubRecommendedTitle,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.practiceAreaHubRecommendedMessage,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      key: const ValueKey('practice-hub-recommended-cta'),
-                      onPressed: () => context.go(AppRoutes.practiceSetup),
-                      child: Text(l10n.practiceAreaHubRecommendedCta),
-                    ),
-                  ],
+            // ADR 0508 D4 — an empty catalog means no recommended card at
+            // all (no title, no message, no button), not a CTA that
+            // navigates without a definition id.
+            if (catalog.isNotEmpty)
+              Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.practiceAreaHubRecommendedTitle,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.practiceAreaHubRecommendedMessage,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        key: const ValueKey('practice-hub-recommended-cta'),
+                        onPressed: () {
+                          final uri = Uri(
+                            path: AppRoutes.practiceSetup,
+                            queryParameters: <String, String>{
+                              'id': catalog.first.id,
+                            },
+                          );
+                          context.go(uri.toString());
+                        },
+                        child: Text(l10n.practiceAreaHubRecommendedCta),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: 24),
             Semantics(
               header: true,

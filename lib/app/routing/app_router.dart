@@ -227,8 +227,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   // E13-R08 (brief §0.0 D14/4) — the flag BE entry point is `/today`; the
   // KI entry point is unchanged (`/live`). `onboardingRedirect`'s `home`
   // parameter carries the same choice so a seen-onboarding user landing on
-  // `/welcome` resolves to the right destination.
-  final entryLocation = adaptiveShellEnabled ? AppRoutes.today : AppRoutes.live;
+  // `/welcome` resolves to the right destination. ADR 0508 D1 — the mapping
+  // itself lives in `entryLocationFor`, the ONE source the onboarding flow's
+  // completion navigation also calls.
+  final entryLocation = entryLocationFor(adaptiveShellEnabled);
 
   final router = GoRouter(
     initialLocation: entryLocation,

@@ -94,17 +94,10 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   walked.add('OnboardingScreen');
   await walkOnboardingViaSkip(tester);
 
-  // MÉRT LELET: `OnboardingScreen._completeFinish` (`onboarding_screen.dart`)
-  // always calls `router.go(AppRoutes.live)` after Skip/finish, regardless
-  // of `adaptiveShellEnabled` — under this build's redirect table that
-  // becomes `/practice/live` (a Stage route, no primary navigation), never
-  // `/today`, even though the router's OWN `initialLocation` logic
-  // (`app_router.dart`) picks `/today` first whenever the shell is on. A
-  // direct `router.go(AppRoutes.today)` reaches the real Today experience
-  // this walkthrough is chartered to measure — recorded in
-  // docs/release/full-app-verification.md, not fixed here (§5.2).
-  session.router.go(AppRoutes.today);
-  await tester.pumpAndSettle();
+  // E16-R06 (ADR 0508 D1/D2, L2 feloldva) — `OnboardingScreen._completeFinish`
+  // now navigates via `entryLocationFor(adaptiveShellEnabled)`, the SAME
+  // source `app_router.dart`'s own entry-point logic reads, so Skip lands
+  // directly on the real Today experience with no teszt-oldali híd.
 
   // 2. Today Hub — a fresh install is the REAL "new user" state (zero
   // sessions, zero streak, no plan) — its own doc-comment (A8) requires
@@ -132,48 +125,19 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('practice-hub-recommended-cta')));
   await tester.pumpAndSettle();
 
-  // MÉRT LELET (recorded in docs/release/full-app-verification.md, §5.2 —
-  // NOT fixed here, lib/** is this round's forbidden zone): the adaptive
-  // shell's "start recommended practice" CTA calls
-  // `context.go(AppRoutes.practiceSetup)` with NO `?id=` query parameter
-  // (`practice_area_hub_screen.dart:55`), unlike the legacy Hub's
-  // `_openSetup` (`practice_hub_screen.dart:370-375`), which always builds
-  // the URI with `id: definition.id`. `PracticeSetupScreen._readArgs`
-  // therefore resolves `PracticeSetupRequest.missing` and the screen
-  // renders its own `_RouteError` branch — a real, localized, EXPLICIT
-  // error state (not a placeholder literal; §5.1 still holds), but the
-  // shell's only advertised entry point into a scored practice session is
-  // measurably a dead end today.
+  // E16-R06 (ADR 0508 D3, L1 feloldva) — the adaptive shell's "start
+  // recommended practice" CTA now builds the SAME `?id=<definíció id>` URI
+  // shape as the legacy Hub's `_openSetup`, using the catalog's first entry
+  // (`e2eQuickStartDefinitionId`). Setup therefore renders the real form
+  // directly off the CTA tap — no teszt-oldali híd.
   expect(find.byType(PracticeSetupScreen), findsOneWidget);
   walked.add('PracticeSetupScreen');
   expect(
     find.text(l10n.practiceRouteErrorTitle),
-    findsOneWidget,
-    reason:
-        'MÉRT LELET: PracticeAreaHubScreen\'s recommended CTA never passes '
-        '?id=, so Setup renders its explicit "not found" error branch — '
-        'see docs/release/full-app-verification.md',
-  );
-
-  // Complete a REAL session anyway, through the same URL shape the legacy
-  // Hub's own Quick Start already uses in production
-  // (`practice_hub_screen.dart`'s `_openSetup`) — real, supported
-  // navigation, not a test-only shortcut — so the downstream
-  // Library/Progress/Profile stops have real, persisted data to show.
-  // Bounces off `/practice` first: go_router keeps a query-only change to
-  // the SAME path on the SAME page (no rebuild of `PracticeSetupScreen`,
-  // which reads its args straight from `routeInformationProvider` on
-  // build), so navigating straight from the id-less `/practice/setup` to
-  // the id-bearing one would render the stale `_RouteError` forever.
-  session.router.go(AppRoutes.practiceHub);
-  await tester.pumpAndSettle();
-  session.router.go('${AppRoutes.practiceSetup}?id=$e2eQuickStartDefinitionId');
-  await tester.pumpAndSettle();
-  expect(find.byType(PracticeSetupScreen), findsOneWidget);
-  expect(
-    find.text(l10n.practiceRouteErrorTitle),
     findsNothing,
-    reason: 'with a real id, Setup must render the form, not the error branch',
+    reason:
+        'the CTA now carries a real id, so Setup must render the form, '
+        'not the error branch',
   );
 
   final setupStart = find.widgetWithText(FilledButton, l10n.practiceSetupStart);

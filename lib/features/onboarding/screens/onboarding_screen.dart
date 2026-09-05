@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/routing/app_route.dart';
+import '../../../app/config/app_config.dart';
+import '../../../app/routing/adaptive_shell_routes.dart';
 import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
@@ -26,15 +27,18 @@ import 'permission_primer_screen.dart';
 /// re-requests if still ungranted. A build that resumes mid-flow (checkpoint
 /// already at [OnboardingStep.permission], e.g. the app was killed right
 /// there) has no pending completion to resume, so it defaults to the plain
-/// finish (Live tab, no forced first-win lesson) rather than guessing.
+/// finish (shell entry location, no forced first-win lesson) rather than
+/// guessing.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key, this.onDone, this.onFirstWin});
 
-  /// Where to go when finished; defaults to the Live tab (overridable in tests).
+  /// Where to go when finished; defaults to the shell entry location
+  /// (`entryLocationFor`, ADR 0508 D1 — overridable in tests).
   final VoidCallback? onDone;
 
-  /// Where the "first win" CTA lands (chunk 017 rec #4); defaults to the Live
-  /// tab with the [Lessons.firstWin] mini-lesson pushed on top.
+  /// Where the "first win" CTA lands (chunk 017 rec #4); defaults to the
+  /// shell entry location with the [Lessons.firstWin] mini-lesson pushed on
+  /// top.
   final VoidCallback? onFirstWin;
 
   @override
@@ -101,9 +105,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Future<void> _completeFinish() async {
     final router = widget.onDone == null ? GoRouter.of(context) : null;
+    final entryLocation = entryLocationFor(
+      ref.read(appConfigProvider).flags.adaptiveShellEnabled,
+    );
     await ref.read(onboardingSeenProvider.notifier).complete();
     await _advanceStep(OnboardingStep.done);
-    (widget.onDone ?? () => router!.go(AppRoutes.live))();
+    (widget.onDone ?? () => router!.go(entryLocation))();
   }
 
   /// The activation shortcut (chunk 017 rec #4, r155): straight from the last
@@ -122,11 +129,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final navigator = useDefaultNavigation
         ? Navigator.of(context, rootNavigator: true)
         : null;
+    final entryLocation = entryLocationFor(
+      ref.read(appConfigProvider).flags.adaptiveShellEnabled,
+    );
     await ref.read(onboardingSeenProvider.notifier).complete();
     await _advanceStep(OnboardingStep.done);
     (widget.onFirstWin ??
         () {
-          router!.go(AppRoutes.live);
+          router!.go(entryLocation);
           // Push AFTER the route swap lands: a pageless route pushed now
           // would anchor to the outgoing /welcome page and be disposed with
           // it (r156 rig catch #2 — the first fix still lost the push).
