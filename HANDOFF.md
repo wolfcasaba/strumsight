@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R13 / H3 feloldva: a kör a MERGE-ELT felismerési szótárat fogyasztja, és a kulcsokat a FORRÁS szegmensbe írja; + `brief-lint` S16 az osztályra (2026-09-05)
+
+Az `E14-R13` a **dispatch előtt** H3-ra futott. A briefje 2026-08-20-án, a
+`88e08e65` commiton készült, és azóta a fa elmozdult alatta. Négy mért lelet
+(teljes diagnózis: `.pipeline/halt-detail-E14-R13.md`; lecke: **L646**):
+
+| Lelet | Mérés |
+|---|---|
+| a §2 „tíz widget" ELAVULT | a képernyő az **ADR 0276** `SsStageScaffold`-jára migrált (`+375` sor `88e08e65` óta, **négy** `../widgets/` import) — a §5.1/5.2/5.3 és a 6. acceptance-pont MÁR MERGE-ELT döntés |
+| a §5.4 **négyelemű** ok-taxonómiája ütközik | a merge-elt `RecognitionRejectReason` **zárt, hatelemű** (ADR 0505 D3/D6) — második definíció ugyanarra a kérdésre (`L549`/`L636`) |
+| a kör VALÓDI hiánya megvan | `LiveFrame.chordDecision`/`.chordRejectReason` termelője bekötve (`live_pipeline.dart:405-406`), UI-fogyasztója **NULLA**; a képernyő ma `inputLevel`-heurisztikából mondja meg, mi a baj |
+| **a haltot okozó scope-hiba** | a lista `lib/l10n/app_{en,hu}.arb`-ot engedte — ezek a `gen_l10n_segments.dart` **generált aggregátumai**, a forrás a `lib/l10n/base/` szegmens: a kör a saját listáján belül EGYETLEN kulcsot sem tudott volna felvenni |
+
+**A revízió** (`docs/rounds/e14-r13-live-ui-truthfulness-hotfix.md` §0.0):
+
+- a kör EGYETLEN döntési helye a **felismerési ok megjelenítése** lett — a banner
+  a merge-elt hatelemű enumot fogyasztja **kimerítő `switch`-csel** (`default:`
+  ág tiltva), a heurisztikus ág a „nincs döntés" esetre marad, érintetlenül;
+- `allowed_paths` **tágítva**: `lib/l10n/base/app_{en,hu}.arb` (a FORRÁS) és az a
+  három listán kívüli teszt, amelynek az állításait a kör elmozdítja
+  (`live_stage_test`, `live_screen_test`, az aktív `e13_r18` pixel-golden + a két
+  PNG). Cella törlése/`skip`-je/gyengítése TILOS (`L593`);
+- **szűkítve**: `live_status_bar.dart` és `chord_timeline.dart` kikerült (a kör
+  nem nyúl hozzájuk); a Stage-hierarchia, a history-összecsukás, a `reduce
+  motion` és a CTA-állapotok kikerültek a körből — mindegyikhez merge-elt, futó
+  mérce tartozik, és az új acceptance-pontok azt pinnelik, hogy **zöldek
+  maradnak** (szigorítás, nem gyengítés);
+- ADR-szám `0365` → **`0520`** (a foglaló a mérvadó) a briefben és a queue-sorban;
+- a `--level strict` lint az `S12`/`S15`/`S16` leleteket megszünteti; az `S11`
+  marad, és a §0.0 R4(b) mondja ki a mérést, amit maga az S11 üzenete kér (a kör
+  a képernyőt NEM cseréli le).
+
+**Gépi őr az osztályra — `brief-lint` `S16`:** ha az `allowed_paths` a GENERÁLT
+`lib/l10n/app_<locale>.arb`-ot engedi a forrás-szegmens
+(`lib/l10n/base/app_<locale>.arb` vagy `lib/l10n/features/<feature>_<locale>.arb`)
+nélkül, az lelet — **locale-onként** mérve. `strict`, `done` körre néma.
+
+**Regressziós őrök:** `tools/tests/test_e14_r13_live_reason_source_scope.py`
+(6 cella; a revízió ELŐTTI briefen **4 PIROS**, mérve `origin/main` eldobható
+worktree-ben) és `tools/tests/test_brief_generated_l10n_source_scope.py`
+(6 cella az S16-ra). Mindkettő a KÖVETELT VÉGÁLLAPOTOT pinneli, nem a kör
+munkájának hiányát (`L612`) — a §10/§11 egyetlen állítás alá sem esik.
+
+Teszt nem törlődött, küszöb nem lazult, `tools/round-gate.sh` és
+`.github/workflows/` érintetlen.
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R15 / H3 feloldva: a szűkített false-visible metrika a MERGE-ELT harness kiterjesztése, nem egy második metrika-fájl mellette (2026-09-05)
 
 Az `E14-R15` a **dispatch előtt** H3-ra futott. A briefje 2026-08-20-án,
