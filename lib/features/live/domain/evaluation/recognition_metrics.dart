@@ -367,6 +367,8 @@ final class RecognitionMetrics {
     required this.acceptedAccuracy,
     required this.coverage,
     required this.falseVisibleEventsPerMinute,
+    required this.falseVisibleDirectionEventsPerMinute,
+    required this.falseVisibleChordEventsPerMinute,
     required this.latencyP50Ms,
     required this.latencyP95Ms,
     required this.calibration,
@@ -386,6 +388,16 @@ final class RecognitionMetrics {
   final RecognitionCountRatioMetric acceptedAccuracy;
   final RecognitionCountRatioMetric coverage;
   final RecognitionRateMetric falseVisibleEventsPerMinute;
+
+  /// Partition of [falseVisibleEventsPerMinute] to `kind ==
+  /// RecognitionEventKind.strum` (ADR 0521 D1) — same `correctAccepted`
+  /// set, same `durationMinutes` denominator, no new measurement.
+  final RecognitionRateMetric falseVisibleDirectionEventsPerMinute;
+
+  /// Partition of [falseVisibleEventsPerMinute] to `kind ==
+  /// RecognitionEventKind.chord` (ADR 0521 D1) — same `correctAccepted`
+  /// set, same `durationMinutes` denominator, no new measurement.
+  final RecognitionRateMetric falseVisibleChordEventsPerMinute;
   final RecognitionScalarMetric latencyP50Ms;
   final RecognitionScalarMetric latencyP95Ms;
   final RecognitionCalibrationMetrics calibration;
@@ -405,6 +417,10 @@ final class RecognitionMetrics {
     'acceptedAccuracy': acceptedAccuracy.toJson(),
     'coverage': coverage.toJson(),
     'falseVisibleEventsPerMinute': falseVisibleEventsPerMinute.toJson(),
+    'falseVisibleDirectionEventsPerMinute': falseVisibleDirectionEventsPerMinute
+        .toJson(),
+    'falseVisibleChordEventsPerMinute': falseVisibleChordEventsPerMinute
+        .toJson(),
     'latencyP50Ms': latencyP50Ms.toJson(),
     'latencyP95Ms': latencyP95Ms.toJson(),
     'calibration': calibration.toJson(),
@@ -745,6 +761,59 @@ RecognitionMetrics computeRecognitionMetrics(List<RecognitionCase> cases) {
     ),
   );
 
+  // Partition of falsePositiveAcceptedCount by RecognitionEventKind (ADR
+  // 0521 D1/D4): onset + strum + chord is the type's full partition, so
+  // these two counts plus the (uncomputed here) onset-kind false-visible
+  // count sum to exactly falsePositiveAcceptedCount above.
+  final falseVisibleDirectionCount = acceptedDetections
+      .where(
+        (d) =>
+            d.kind == RecognitionEventKind.strum &&
+            !correctAccepted.contains(d),
+      )
+      .length;
+  final falseVisibleChordCount = acceptedDetections
+      .where(
+        (d) =>
+            d.kind == RecognitionEventKind.chord &&
+            !correctAccepted.contains(d),
+      )
+      .length;
+  final falseVisibleDirectionEventsPerMinute = RecognitionRateMetric(
+    value: durationMinutes == 0
+        ? null
+        : falseVisibleDirectionCount / durationMinutes,
+    eventCount: falseVisibleDirectionCount,
+    durationMinutes: durationMinutes,
+    definition: const RecognitionMetricDefinition(
+      higherIsBetter: false,
+      description:
+          'Rate of accepted (visible) strum detections that are wrong — '
+          'unmatched, or matched with the wrong direction — per minute of '
+          'recorded audio. A partition of falseVisibleEventsPerMinute to '
+          'kind == RecognitionEventKind.strum (ADR 0521 D1).',
+      numeratorDescription: 'accepted strum detections that are not correct',
+      denominatorDescription: 'total case duration, in minutes',
+    ),
+  );
+  final falseVisibleChordEventsPerMinute = RecognitionRateMetric(
+    value: durationMinutes == 0
+        ? null
+        : falseVisibleChordCount / durationMinutes,
+    eventCount: falseVisibleChordCount,
+    durationMinutes: durationMinutes,
+    definition: const RecognitionMetricDefinition(
+      higherIsBetter: false,
+      description:
+          'Rate of accepted (visible) chord detections that are wrong — '
+          'unmatched, or matched with the wrong chord label — per minute '
+          'of recorded audio. A partition of falseVisibleEventsPerMinute '
+          'to kind == RecognitionEventKind.chord (ADR 0521 D1).',
+      numeratorDescription: 'accepted chord detections that are not correct',
+      denominatorDescription: 'total case duration, in minutes',
+    ),
+  );
+
   final latencyDefinition = const RecognitionMetricDefinition(
     higherIsBetter: false,
     description:
@@ -804,6 +873,8 @@ RecognitionMetrics computeRecognitionMetrics(List<RecognitionCase> cases) {
     acceptedAccuracy: acceptedAccuracy,
     coverage: coverage,
     falseVisibleEventsPerMinute: falseVisibleEventsPerMinute,
+    falseVisibleDirectionEventsPerMinute: falseVisibleDirectionEventsPerMinute,
+    falseVisibleChordEventsPerMinute: falseVisibleChordEventsPerMinute,
     latencyP50Ms: latencyP50Ms,
     latencyP95Ms: latencyP95Ms,
     calibration: calibration,

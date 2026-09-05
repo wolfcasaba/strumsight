@@ -110,20 +110,44 @@ report:
 | Chord macro-F1 | `overall.chordMacroF1.value` | 0.70 |
 | N.C./unknown F1 | `overall.chordNoChordF1.f1` | 0.88 |
 
-\* Event-kind-agnostic stand-in — see below.
+\* Event-kind-agnostic stand-in — the gate still evaluates these two Ch14
+lines against the agnostic metric; see [Now mechanised](#now-mechanised-adr-0521)
+below for the genuinely scoped rates this round adds alongside it.
 
-**Four Ch14 Alpha lines have no corresponding metric in the E14-R08 report
-and are deliberately absent from v1** (ADR 0511 D8) — none of them is
-replaced by a similarly named but differently scoped metric (that
-substitution is exactly the `docs/LESSONS.md` L549 failure class):
+### Now mechanised (ADR 0521)
 
-- **Accepted direction accuracy** and **false visible arrow hard-negative**
-  are, strictly, direction-scoped metrics. The report's `acceptedAccuracy`
-  and `falseVisibleEventsPerMinute` are event-kind-agnostic (onset + strum +
-  chord combined) — there is no direction-only variant in the E14-R08
-  output. The table above still gates on them, at the Ch14 threshold, but
-  labelled as the agnostic version (ADR 0511 R6) rather than silently
-  presented as the direction-scoped number.
+Two of the six Ch14 Alpha lines that used to have no corresponding metric
+now do, via `lib/features/live/domain/evaluation/recognition_metrics.dart`'s
+partition of `falseVisibleEventsPerMinute` into two event-kind-scoped rates
+(ADR 0521 D1) — a genuine extension of the E14-R08 harness, not a
+similarly-named-but-differently-scoped replacement (the `docs/LESSONS.md`
+L549 failure class this document has warned against since E14-R09):
+
+- **False visible arrow hard-negative** → `overall.falseVisibleDirectionEventsPerMinute.value`
+  (accepted strum detections that are not correct, per minute).
+- **False confident chord hard-negative** → `overall.falseVisibleChordEventsPerMinute.value`
+  (accepted chord detections that are not correct, per minute).
+
+Both are named in `recognitionMetricExtractors` and render in all three
+dashboard formats. **The shipped `recognition_release_gate.json` is
+unchanged** (ADR 0521 D6): the table above still gates the Ch14 §7.2 line on
+the agnostic `falseVisibleEventsPerMinute.value`. Rewiring the gate itself
+to the direction-scoped rate is a separate, reviewed decision (ADR 0511
+D9) — out of this round's scope. See `docs/eval/recognition-hard-negatives.md`
+for the taxonomy these rates pair with and the external capture workflow
+that feeds them real hard-negative material.
+
+**Four Ch14 Alpha lines still have no corresponding metric in the E14-R08
+report and remain deliberately absent from v1** (ADR 0511 D8) — none of
+them is replaced by a similarly named but differently scoped metric:
+
+- **Accepted direction accuracy** is, strictly, a direction-scoped metric.
+  The report's `acceptedAccuracy` is event-kind-agnostic (onset + strum +
+  chord combined) — there is no direction-only accepted-accuracy in the
+  E14-R08 output (only the *false-visible rate* has a direction-scoped
+  variant now, not the accepted-accuracy ratio). The table above still
+  gates on the agnostic version (ADR 0511 R6) rather than silently
+  presenting it as the direction-scoped number.
 - **Weakest supported chord recall** — the report's `chordMacroF1` exposes
   per-label F1 (`perLabel`), not a per-label recall the dashboard can name
   as "weakest."
@@ -133,11 +157,6 @@ substitution is exactly the `docs/LESSONS.md` L549 failure class):
   measure accepted-detection latency across all event kinds, not the time
   between confirmed chord transitions; no chord-transition-specific latency
   is computed anywhere in the E14-R08 harness.
-- **False confident chord hard-negative** — same combined-metric problem as
-  accepted direction accuracy above, but for chords: gating it on the
-  already-used `falseVisibleEventsPerMinute` a second time under a
-  chord-specific name would be exactly the metric/label mismatch this
-  document exists to avoid.
 
 Mechanising any of these requires extending the E14-R08 harness
 (`recognition_metrics.dart`) with a genuinely scoped metric — out of this

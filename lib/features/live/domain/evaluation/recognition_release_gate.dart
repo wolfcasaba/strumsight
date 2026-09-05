@@ -80,6 +80,22 @@ recognitionMetricExtractors =
         higherIsBetter:
             metrics.falseVisibleEventsPerMinute.definition.higherIsBetter,
       ),
+      'falseVisibleDirectionEventsPerMinute.value': (metrics) =>
+          RecognitionMetricSample(
+            value: metrics.falseVisibleDirectionEventsPerMinute.value,
+            higherIsBetter: metrics
+                .falseVisibleDirectionEventsPerMinute
+                .definition
+                .higherIsBetter,
+          ),
+      'falseVisibleChordEventsPerMinute.value': (metrics) =>
+          RecognitionMetricSample(
+            value: metrics.falseVisibleChordEventsPerMinute.value,
+            higherIsBetter: metrics
+                .falseVisibleChordEventsPerMinute
+                .definition
+                .higherIsBetter,
+          ),
       'latencyP50Ms.value': (metrics) => RecognitionMetricSample(
         value: metrics.latencyP50Ms.value,
         higherIsBetter: metrics.latencyP50Ms.definition.higherIsBetter,

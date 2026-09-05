@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1",
+  "categories": [
+    {
+      "id": "speech",
+      "label": "Speech",
+      "description": "Human speech or conversation near the microphone. Broadband, non-periodic transients can trip an onset detector that keys on sudden energy, and a confidence-only classifier is not reliably lower on speech than on a real strum (ml/negatives.py root cause)."
+    },
+    {
+      "id": "tapping",
+      "label": "Body/percussive tapping",
+      "description": "Finger or palm taps on the guitar body (not a strum across the strings). Shares the sharp, short-decay onset shape of a real strum onset."
+    },
+    {
+      "id": "deskKnock",
+      "label": "Desk/table knock",
+      "description": "A knuckle or object knock on the table or surface the guitar rests near. Produces a broadband transient similar in shape to a pick attack."
+    },
+    {
+      "id": "pickClick",
+      "label": "Pick click",
+      "description": "The pick clicking against a string edge or the guitar body without a full strum across the strings. Carries the pick's characteristic high-frequency click without the harmonic content of a real chord strum."
+    },
+    {
+      "id": "stringNoise",
+      "label": "String noise",
+      "description": "String squeak or rattle produced by hand movement (repositioning, muting) rather than an intended strum. Overlaps in frequency content with a real down/up strum onset."
+    },
+    {
+      "id": "fretSqueak",
+      "label": "Fret squeak",
+      "description": "The fretting hand sliding along a wound string between chord shapes. A short, high-pitched transient that can register as onset energy between confirmed chords."
+    },
+    {
+      "id": "metronome",
+      "label": "Metronome click",
+      "description": "An audible click-track or metronome tick playing in the room or through headphones bleed. Regular, sharp transients that can alias with onset detection at a steady tempo."
+    },
+    {
+      "id": "backgroundMusic",
+      "label": "Background music",
+      "description": "Recorded or streamed music playing in the room, not produced by the guitar being evaluated. Can carry real guitar-like onset and chord energy from another instrument."
+    },
+    {
+      "id": "tv",
+      "label": "Television audio",
+      "description": "Television dialogue or soundtrack audio bleeding into the capture. Speech-like and music-like content mixed together, both hard-negative-relevant on their own."
+    },
+    {
+      "id": "fan",
+      "label": "Fan/HVAC noise",
+      "description": "Continuous fan, air conditioner or other HVAC white noise. Mostly a false-negative risk for onset masking, but its edges (fan turning on/off) can register as spurious onsets."
+    },
+    {
+      "id": "phoneHandling",
+      "label": "Phone handling",
+      "description": "Picking up, moving, or vibrating a phone near the microphone. A short, often broadband thump or buzz that resembles a percussive guitar-body tap."
+    }
+  ]
+}

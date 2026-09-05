@@ -307,6 +307,151 @@ void main() {
     });
   });
 
+  group('Partitioned false-visible-event rates (acceptance 3-6, ADR 0521 '
+      'D1-D4)', () {
+    RecognitionCase directionOnlyCase({required bool abstainThirdEvent}) =>
+        RecognitionCase(
+          caseId: 'direction-only',
+          durationMs: 120000,
+          detectedEvents: [
+            RecognitionDetectedEvent(
+              timeMs: 1000,
+              kind: RecognitionEventKind.strum,
+              accepted: true,
+              confidence: 0.9,
+              direction: StrumDirection.down,
+            ),
+            RecognitionDetectedEvent(
+              timeMs: 2000,
+              kind: RecognitionEventKind.strum,
+              accepted: true,
+              confidence: 0.9,
+              direction: StrumDirection.up,
+            ),
+            RecognitionDetectedEvent(
+              timeMs: 3000,
+              kind: RecognitionEventKind.strum,
+              accepted: !abstainThirdEvent,
+              confidence: 0.9,
+              direction: StrumDirection.down,
+            ),
+          ],
+        );
+
+    test('3 false-visible direction events over 120s of audio -> 1.5/min '
+        '(acceptance 3)', () {
+      final m = computeRecognitionMetrics([
+        directionOnlyCase(abstainThirdEvent: false),
+      ]);
+      expect(m.falseVisibleDirectionEventsPerMinute.eventCount, 3);
+      expect(m.falseVisibleDirectionEventsPerMinute.durationMinutes, 2.0);
+      expect(m.falseVisibleDirectionEventsPerMinute.value, 1.5);
+    });
+
+    test('abstaining one of the three -> 1.0/min: an abstained (accepted == '
+        'false) detection is never a false positive (acceptance 4)', () {
+      final m = computeRecognitionMetrics([
+        directionOnlyCase(abstainThirdEvent: true),
+      ]);
+      expect(m.falseVisibleDirectionEventsPerMinute.eventCount, 2);
+      expect(m.falseVisibleDirectionEventsPerMinute.value, 1.0);
+    });
+
+    RecognitionCase mixedKindCase({required bool includeFalseOnset}) =>
+        RecognitionCase(
+          caseId: 'mixed-kind',
+          durationMs: 60000,
+          detectedEvents: [
+            RecognitionDetectedEvent(
+              timeMs: 1000,
+              kind: RecognitionEventKind.strum,
+              accepted: true,
+              confidence: 0.9,
+              direction: StrumDirection.down,
+            ),
+            RecognitionDetectedEvent(
+              timeMs: 2000,
+              kind: RecognitionEventKind.strum,
+              accepted: true,
+              confidence: 0.9,
+              direction: StrumDirection.up,
+            ),
+            RecognitionDetectedEvent(
+              timeMs: 3000,
+              kind: RecognitionEventKind.chord,
+              accepted: true,
+              confidence: 0.9,
+              chordLabel: 'C',
+            ),
+            RecognitionDetectedEvent(
+              timeMs: 4000,
+              kind: RecognitionEventKind.chord,
+              accepted: true,
+              confidence: 0.9,
+              chordLabel: 'G',
+            ),
+            if (includeFalseOnset)
+              RecognitionDetectedEvent(
+                timeMs: 5000,
+                kind: RecognitionEventKind.onset,
+                accepted: true,
+                confidence: 0.9,
+              ),
+          ],
+        );
+
+    test('closed partition: direction + chord counts equal the agnostic '
+        'count when there is no false-visible onset (acceptance 5, ADR '
+        '0521 D4a)', () {
+      final m = computeRecognitionMetrics([
+        mixedKindCase(includeFalseOnset: false),
+      ]);
+      expect(
+        m.falseVisibleDirectionEventsPerMinute.eventCount +
+            m.falseVisibleChordEventsPerMinute.eventCount,
+        m.falseVisibleEventsPerMinute.eventCount,
+      );
+      expect(m.falseVisibleEventsPerMinute.eventCount, 4);
+    });
+
+    test(
+      'anti-alias: adding a false-visible onset makes the partitioned sum '
+      'strictly less than the agnostic count, proving the scoped rate is '
+      'not a relabelled agnostic rate (acceptance 6, ADR 0521 D4b, L549)',
+      () {
+        final m = computeRecognitionMetrics([
+          mixedKindCase(includeFalseOnset: true),
+        ]);
+        final partitionedSum =
+            m.falseVisibleDirectionEventsPerMinute.eventCount +
+            m.falseVisibleChordEventsPerMinute.eventCount;
+        expect(
+          partitionedSum,
+          lessThan(m.falseVisibleEventsPerMinute.eventCount),
+        );
+        expect(
+          m.falseVisibleDirectionEventsPerMinute.value,
+          isNot(m.falseVisibleEventsPerMinute.value),
+        );
+      },
+    );
+
+    test('both scoped rates are lower-is-better, read from their own '
+        'definition, not a shared constant (ADR 0521 D5)', () {
+      final m = computeRecognitionMetrics([
+        mixedKindCase(includeFalseOnset: false),
+      ]);
+      expect(
+        m.falseVisibleDirectionEventsPerMinute.definition.higherIsBetter,
+        isFalse,
+      );
+      expect(
+        m.falseVisibleChordEventsPerMinute.definition.higherIsBetter,
+        isFalse,
+      );
+    });
+  });
+
   group('Onset-tolerance boundary is inclusive at 50ms (acceptance 3, ADR '
       '0509 D5)', () {
     RecognitionCase gapCase(int detectedTimeMs) => RecognitionCase(

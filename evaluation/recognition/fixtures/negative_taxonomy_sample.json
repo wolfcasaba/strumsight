@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "1",
+  "segments": [
+    {
+      "id": "seg-001",
+      "categoryId": "speech",
+      "startMs": 0,
+      "endMs": 3200,
+      "sourceRef": "external://hard-negative-capture-log#001"
+    },
+    {
+      "id": "seg-002",
+      "categoryId": "tapping",
+      "startMs": 3200,
+      "endMs": 5400,
+      "sourceRef": "external://hard-negative-capture-log#002"
+    },
+    {
+      "id": "seg-003",
+      "categoryId": "deskKnock",
+      "startMs": 5400,
+      "endMs": 6100,
+      "sourceRef": "external://hard-negative-capture-log#003"
+    },
+    {
+      "id": "seg-004",
+      "categoryId": "pickClick",
+      "startMs": 6100,
+      "endMs": 6900,
+      "sourceRef": "external://hard-negative-capture-log#004"
+    },
+    {
+      "id": "seg-005",
+      "categoryId": "stringNoise",
+      "startMs": 6900,
+      "endMs": 7500,
+      "sourceRef": "external://hard-negative-capture-log#005"
+    },
+    {
+      "id": "seg-006",
+      "categoryId": "fretSqueak",
+      "startMs": 7500,
+      "endMs": 8100,
+      "sourceRef": "external://hard-negative-capture-log#006"
+    },
+    {
+      "id": "seg-007",
+      "categoryId": "metronome",
+      "startMs": 8100,
+      "endMs": 12000,
+      "sourceRef": "external://hard-negative-capture-log#007"
+    },
+    {
+      "id": "seg-008",
+      "categoryId": "backgroundMusic",
+      "startMs": 12000,
+      "endMs": 18000,
+      "sourceRef": "external://hard-negative-capture-log#008"
+    },
+    {
+      "id": "seg-009",
+      "categoryId": "tv",
+      "startMs": 18000,
+      "endMs": 24000,
+      "sourceRef": "external://hard-negative-capture-log#009"
+    },
+    {
+      "id": "seg-010",
+      "categoryId": "fan",
+      "startMs": 24000,
+      "endMs": 30000,
+      "sourceRef": "external://hard-negative-capture-log#010"
+    },
+    {
+      "id": "seg-011",
+      "categoryId": "phoneHandling",
+      "startMs": 30000,
+      "endMs": 31200,
+      "sourceRef": "external://hard-negative-capture-log#011"
+    }
+  ]
+}
