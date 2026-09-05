@@ -1,5 +1,45 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R16 KÉSZ — Onset-detektor A/B: a mérés MEGVAN, és a harness a SAJÁT konfundját is méri — PR [#592](https://github.com/wolfcasaba/strumsight/pull/592), squash `735fc4a7` (2026-09-05)
+
+Négy onset-detektáló függvény (`current`, `canonicalSuperFlux24`,
+`complexDomain`, `spectralFlux`) fut ugyanazon a bemeneten, és a pontozást
+**teljes egészében** a merge-elt `computeRecognitionMetrics` (E14-R08 /
+ADR 0509) végzi — a benchmark nem deklarál tűrést, párosítást vagy P/R/F1-et.
+A **production konstans nem mozdult**: a `superflux_onset_detector.dart` és a
+`dsp_config.dart` a diffben nem szerepel.
+
+| Fájl | Mit ad |
+|---|---|
+| `lib/features/live/engine/dsp/onset_detector_variant.dart` | a variáns-szeám; a `current` a SZÁLLÍTOTT detektort hívja, a három új variáns a hangoló-értékeit annak PUBLIKUS mezőiből olvassa (nincs újragépelt `12.0`/`1.0`) |
+| `tool/benchmarks/onset_ab_benchmark.dart` | tiszta mag + `dart:io` CLI-héj; **két csatorna**: determinisztikus (bájtra azonos) pontossági riport, és külön, kimondottan gépfüggő időzítés-fájl (`deviceId`+`buildSha`) |
+| `test/tooling/onset_ab_benchmark_test.dart` | 12 cella, fixture nélkül (szintetikus jelek + kézzel épített esetek) |
+| `docs/eval/onset-detector-ab.md` · [ADR 0524](docs/adr/0524-onset-detector-variant-seam-and-ab-measurement.md) | a riport-alak, a Pareto-nézet olvasata, a korlátok |
+
+**Pre-flight (a `brief-lint` S12/S15 feloldása).** A 2026-08-20-i brief mért
+alapja elmozdult: az onset-pontozás szerződése (25/50/100 ms, INKLUZÍV határ,
+Kuhn-féle MAXIMÁLIS párosítás, `null ≠ 0`) az ADR 0509 óta merge-elve van, a
+`public.dart` pedig szándékosan NEM exportálja a DSP-motort. A §0.0 revízió ezt
+rögzítette, az `allowed_paths` **szűkült** (a `public.dart` kikerült), az
+ADR-szám `0368` → **`0524`** (a foglaló a mérvadó).
+
+**A review MAJOR-1 lelete és a javító kör.** A review MÉRTE, hogy mind a négy
+variáns egyetlen ABSZOLÚT `delta`-val fut, holott a flux-uk más egységben él
+(log-power vs lineáris magnitúdó, 64 vs ~200 sáv): ugyanarra a 4 valódi
+strumra 4 / 7 / 10 / 15 detektálás, és a jelet 0,1-szeresére halkítva
+4 / 14 / 5 / 3. A javító kör ezt **mérhetővé** tette — variánsonkénti
+`odfScale` diagnosztika (flux-medián, p95, effektív küszöb-medián) a
+determinisztikus riportban, plusz egy gain-függést pinnelő cella —, és a
+doksi nem validált „melyik flux-definíció teljesít jobban" értelmezését
+**visszavonta** (ADR 0524 D8, GOV-06b/`L173` osztály). Következmény: ebből a
+körből semmilyen retune-javaslat NEM következik; a skála-illesztett küszöb
+külön kör, külön ADR.
+
+Kapuk: `tools/round-gate.sh test/tooling/onset_ab_benchmark_test.dart` friss,
+izolált klónban **12/12 PASS + minden lépés zöld**; `full-gate.yml` és
+`router-ci.yml` `success` a `7e7cecf8` HEAD-en; review:
+`docs/reviews/e14-r16-review.md` → **APPROVED**.
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R13 / H3 feloldva: a kör a MERGE-ELT felismerési szótárat fogyasztja, és a kulcsokat a FORRÁS szegmensbe írja; + `brief-lint` S16 az osztályra (2026-09-05)
 
 Az `E14-R13` a **dispatch előtt** H3-ra futott. A briefje 2026-08-20-án, a

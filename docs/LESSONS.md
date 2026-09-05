@@ -26072,3 +26072,48 @@ három elmozdított pin a listán ÉS a kapun van, a §5 a merge-elt szótárat
 fogyasztja, az ADR-szám a foglalt), nem a kör munkájának hiányát; a §10/§11 —
 az egyetlen két szakasz, amit az implementer és a reviewer tölt ki — egyetlen
 állítás alá sem esik, így a kör sikere nem viheti pirosra ([[L612]]).
+
+## L647 — Egy A/B harness, amely MINDEN variánsnak UGYANAZT az abszolút küszöböt adja, a küszöb–skála illesztetlenséget méri, nem az algoritmust — és a „szándékos, a meglévő hangolás mellett mérünk" mondat ezt validált állításnak tünteti fel (E14-R16, review MAJOR-1, 2026-09-05)
+
+**Mit mértünk.** Az E14-R16 négy onset-detektáló függvényt mér össze
+(`current`, `canonicalSuperFlux24`, `complexDomain`, `spectralFlux`). A kör
+ADR-je (0524 D2) helyesen tiltotta az újragépelt konstansokat: a három ÚJ
+variáns a `delta`/`lambda` értéket a szállított `SuperFluxOnsetDetector`
+PUBLIKUS mezőiből olvassa. A `delta = 12,0` viszont a szállított út
+**log-power** flux-egységeiben értelmezett szám, a `spectralFlux`/
+`complexDomain` pedig **lineáris magnitúdóban** számol, a
+`canonicalSuperFlux24` pedig ~200 sávon összegez 64 helyett. A review
+eldobható próbája ugyanazon a szintetikus 4-strum mintán:
+
+| variáns | detektálás (4 valódi strum) | ugyanaz −20 dB-en (0,1× jel) |
+|---|---|---|
+| `current` | 4 | 4 (változatlan) |
+| `canonicalSuperFlux24` | 7 | 14 |
+| `complexDomain` | 10 | 5 |
+| `spectralFlux` | 15 | 3 |
+
+A `current` amplitúdó-invariáns (log-domain flux = teljesítmény-arány), a
+másik három nem — egy valós korpuszon kapott F1-sor tehát a küszöb és az ODF
+skálájának illesztetlenségét méri, nem az ODF minőségét.
+
+**Miért volt ez MAJOR és nem NOTE.** A kör doksija ezt eredetileg így írta le:
+„ez SZÁNDÉKOS: az A/B azt méri, hogy a MEGLÉVŐ hangolás mellett melyik
+flux-definíció teljesít jobban". Ez ugyanaz a hibaosztály, mint a GOV-06b
+BPM-mérce és az [[L173]]: a szám a definíciója nélkül félrevezet, és a
+következő kör ebből írna ADR-t („a SuperFlux mérhetően jobb az egyszerű
+fluxnál"), miközben a mérés ezt nem bizonyítja.
+
+**Hogyan alkalmazd.** Ha egy A/B harness több, KÜLÖNBÖZŐ egységű
+döntésfüggvényt hasonlít össze egyetlen abszolút küszöbbel:
+
+1. a küszöb–skála viszonyt **mérd ki és írd a riportba** (itt: variánsonkénti
+   flux-medián, flux-p95 és effektív küszöb-medián — `odfScale`), ne csak a
+   korlátok közé;
+2. tedd **gépi cellává** a konfundot (itt: 0,1× bemeneten a log-domain variáns
+   detektálás-száma változatlan, legalább egy másiké megváltozik) — reláció,
+   nem darabszám, hogy a cella ne legyen törékeny;
+3. a doksi mondja ki, hogy a keresztvariáns összevetés a skála-illesztésig
+   **NEM érvényes**, és hogy a skála-illesztés külön kör, külön ADR
+   ([ADR 0524](adr/0524-onset-detector-variant-seam-and-ab-measurement.md) D8).
+
+**Őrteszt:** `test/tooling/onset_ab_benchmark_test.dart`::`11. gain dependence (ADR 0524 D8)`
