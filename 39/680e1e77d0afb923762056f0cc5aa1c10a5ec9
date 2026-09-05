@@ -1,0 +1,1 @@
+heal=E14-R10 halt=H3 verdict=fixed lesson=prepared-brief-base-sha-drift tests=7 rule=brief-lint-S15 pr=577 squash=39680e1e
