@@ -46,6 +46,11 @@ import '../../domain/repositories/notification_repository.dart';
 import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
 
+import '../../data/repositories/notification_repository_impl.dart'
+    show communityNotificationRepositoryProvider;
+export '../../data/repositories/notification_repository_impl.dart'
+    show communityNotificationRepositoryProvider;
+
 /// The three preference levels the Kör 5
 /// ``CommunityNotificationRepository`` contract exposes
 /// (brief §3, A6 cell). ``disabled`` is the highest restriction
@@ -172,19 +177,10 @@ class NotificationInboxState {
 
 const Object _sentinel = Object();
 
-/// Provider for the [CommunityNotificationRepository]. The
-/// production wiring lands in a future round (the brief
-/// §0.0 D2 scope-shrink — the HTTP data-layer is NOT in this
-/// round's ``allowed_paths``); the widget test in
-/// ``community_notifications_test.dart`` overrides this
-/// provider with a recording fake.
-final communityNotificationRepositoryProvider =
-    Provider<CommunityNotificationRepository>((ref) {
-      throw UnimplementedError(
-        'communityNotificationRepositoryProvider must be overridden in '
-        'production wiring; the test overrides it with a recording fake.',
-      );
-    });
+// A `communityNotificationRepositoryProvider` EGYETLEN definíciója a
+// `data/repositories/notification_repository_impl.dart`-ban él.
+// Ugyanaz az egy-definíció szabály, mint a feed- és a
+// kihívás-repositorynál — l. az ottani indoklást.
 
 /// The community notification inbox + preference state machine.
 class NotificationController extends AsyncNotifier<NotificationInboxState> {

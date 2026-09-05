@@ -102,7 +102,16 @@ final class FeatureFlags {
       visionAnalysisIntegrationEnabled: false,
       visionExperimentalFineFretEnabled: false,
       visionLabCaptureEnabled: false,
-      audioAnalysisV2Enabled: false,
+      // 2026-09-05: dart-define-olható, DE az alapérték változatlanul
+      // hamis — a `bool.fromEnvironment` define nélkül `false`, tehát a
+      // szállított viselkedés bájtra ugyanaz. A kapcsolóra azért van
+      // szükség, mert a felvételi folyamat (`presentation/capture/`) e
+      // nélkül EGYETLEN buildben sem volt bekapcsolható, így a
+      // kézi teszteléshez sem. Az Epic 6 rollout-döntését ez NEM előlegzi
+      // meg: a `false` marad az alapértelmezés minden környezetben.
+      audioAnalysisV2Enabled: const bool.fromEnvironment(
+        'STRUMSIGHT_ANALYSIS_V2',
+      ),
       analysisBeatGridEnabled: false,
       analysisPitchEnabled: false,
       analysisPreprocessingExperimentalEnabled: false,

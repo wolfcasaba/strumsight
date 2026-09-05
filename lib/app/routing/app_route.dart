@@ -31,6 +31,14 @@ abstract final class AppRoutes {
   // providers transitively depend on (ADR 0491 D5).
   static const String practiceGeneratorSetup = '/practice/generator/setup';
   static const String practiceGeneratorToday = '/practice/generator/today';
+  // A tervező további négy képernyője (2026-09-05). Eddig azért nem volt
+  // útvonaluk, mert két provider élesben dobott — nem azért, mert a route
+  // hiányzott.
+  static const String practiceGeneratorWeekly = '/practice/generator/weekly';
+  static const String practiceGeneratorPrivacy = '/practice/generator/privacy';
+  static const String practiceGeneratorPreview = '/practice/generator/preview';
+  static const String practiceGeneratorChangeReview =
+      '/practice/generator/change-review';
   static const String songTrainerLibrary = '/song-trainer';
   static const String songTrainerImport = '/song-trainer/import';
   static const String songTrainerNewEditor = '/song-trainer/editor/new';
@@ -51,6 +59,12 @@ abstract final class AppRoutes {
   // Audio Analysis V2 (E06-R23) — overview and metric detail screens.
   // Both routes are flag-gated in app_router.dart and are intentionally
   // unreachable while `audioAnalysisV2Enabled == false`.
+  // A felvételi folyamat (2026-09-05). Három lépés, három cím: a
+  // kezdőlap → felvétel → feldolgozás sorrend így mély-linkelhető és
+  // visszalépéskor is értelmes.
+  static const String analysisCapture = '/analysis/capture';
+  static const String analysisRecord = '/analysis/record';
+  static const String analysisProcessing = '/analysis/processing';
   static const String analysisOverview = '/analysis/overview';
   static const String analysisMetricDetail = '/analysis/metric-detail';
   static const String analysisTimeline = '/analysis/timeline';
@@ -80,6 +94,30 @@ abstract final class AppRoutes {
   // only when `adaptiveShellEnabled` is on. `practiceHub` and `songs` above
   // are reused as the Practice and Songs destinations; `today`, `coachHome`,
   // and `profileHome` are new paths with no legacy equivalent.
+  // ---------------------------------------------------------------------
+  // Community (2026-09-05). A belépési pont a `/community` gate-képernyő:
+  // az minden al-útvonal ELŐTT álló szűrő, ami a fiók- és kapu-állapotot
+  // ellenőrzi. A mély-linkek ettől függetlenül közvetlenül is nyílnak — a
+  // gate nem navigációs kényszer, hanem belépési felület.
+  // ---------------------------------------------------------------------
+  static const String community = '/community';
+  static const String communityFeed = '/community/feed';
+  static const String communityCompose = '/community/compose';
+  static const String communityComments = '/community/posts/:postId/comments';
+  static const String communityBookmarks = '/community/bookmarks';
+  static const String communityNotifications = '/community/notifications';
+  static const String communitySearch = '/community/search';
+  static const String communityFollowers =
+      '/community/profiles/:profileId/followers';
+  static const String communityFollowing =
+      '/community/profiles/:profileId/following';
+  static const String communityChallenges = '/community/challenges';
+  static const String communityLeaderboard =
+      '/community/challenges/:challengeId/leaderboard';
+  static const String communitySafety = '/community/safety';
+  static const String communityClubs = '/community/clubs';
+  static const String communityClubDetail = '/community/clubs/:clubId';
+
   static const String today = '/today';
   static const String coachHome = '/coach';
   static const String profileHome = '/profile';

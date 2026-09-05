@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../onboarding_provider.dart';
 import 'permission_primer_screen.dart';
+import 'first_win_stage_screen.dart';
 
 /// First-run onboarding: three glanceable pages that teach the moat (↓/↑),
 /// tease the streak, and prime the mic permission before dropping into Live.
@@ -141,7 +142,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           // would anchor to the outgoing /welcome page and be disposed with
           // it (r156 rig catch #2 — the first fix still lost the push).
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            // A First-Win ÁLLOMÁS megy be ELŐSZÖR, a mini-lecke fölé. Amikor
+            // a lecke lezárul, az állomás kerül elő, és a valós
+            // `onboardingFirstWinConfidenceProvider`-ből megmutatja, sikerült-e
+            // a kísérlet.
+            //
+            // Miért nem kap saját top-level route-ot (E17-R01, ADR 0520 §5.1):
+            // az állomás a FOLYAMAT egy lépése. Egy `/first-win` cím két
+            // belépési pontot adna ugyanahhoz az állapothoz, és megsértené az
+            // `entryLocationFor(...)` egy-forrás szabályát (ADR 0508 D1).
             navigator!.push(
+              MaterialPageRoute<void>(
+                builder: (_) => FirstWinStageScreen(
+                  // Egyik ág sem navigál literál útvonalra: mindkettő
+                  // ugyanabból a forrásból veszi a célt, amit a Skip/finish
+                  // ág is használ.
+                  onContinue: () => router.go(entryLocation),
+                  onSkip: () => router.go(entryLocation),
+                ),
+              ),
+            );
+            navigator.push(
               MaterialPageRoute<void>(
                 builder: (_) => LearnScreen(lesson: Lessons.firstWin),
               ),

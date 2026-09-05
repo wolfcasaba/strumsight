@@ -217,6 +217,24 @@ routes:
     rides: "account_api"
     fields: []
 
+  - id: account_api_community_feed_repository
+    source: "HttpCommunityFeedRepository"
+    file: "lib/features/community/data/repositories/feed_repository_impl.dart:86"
+    wired: true
+    gate: "rides account_api via communityFeedApiClientProvider, which re-exports accountApiClientProvider verbatim (feed_repository_impl.dart:40-42)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_community_notification_repository
+    source: "HttpCommunityNotificationRepository"
+    file: "lib/features/community/data/repositories/notification_repository_impl.dart:91"
+    wired: true
+    gate: "rides account_api via communityNotificationApiClientProvider, which re-exports accountApiClientProvider verbatim (notification_repository_impl.dart:27-29)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
   - id: diagnostics_upload_uploader
     source: "DiagnosticsUploader"
     file: "lib/features/diagnostics/data/diagnostics_uploader.dart:20"

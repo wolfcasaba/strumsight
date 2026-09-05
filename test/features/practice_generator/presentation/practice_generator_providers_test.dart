@@ -13,20 +13,12 @@ import '../../../fixtures/practice_generator/validation/validation_fixtures.dart
 /// The B2 guard cells below care about the ROOT cause
 /// (`UnimplementedError`, the deliberate open-seam signal — round brief
 /// §10.9 / ADR 0482 / D9), not how many wrapping layers Riverpod added.
-Object _rootCause(Object error) {
-  var current = error;
-  while (current is ProviderException) {
-    current = current.exception;
-  }
-  return current;
-}
 
-final Matcher _throwsUnimplementedSeam = throwsA(
-  predicate<Object>(
-    (error) => _rootCause(error) is UnimplementedError,
-    'unwraps (through any ProviderException wrapping) to an UnimplementedError',
-  ),
-);
+// 2026-09-05: a `_throwsUnimplementedSeam` matcher MEGSZŰNT, mert nincs
+// többé nyitott seam ebben a fájlban — a katalógus-feloldó és a
+// terv-bemenet építő is be van kötve. A matchert nem `ignore`-ral
+// hagytuk bent: egy „dobásra váró" segéd egy bekötött rendszerben azt
+// sugallná, hogy még van mire várni.
 
 /// E15-R14 §6/A3: every MANDATORY constructor dependency of the 6 plan
 /// screens (round brief §0.0.B/R4) resolves from ONE `ProviderScope`, with
@@ -268,25 +260,30 @@ void main() {
         );
       });
 
-      test('2/6 PlanPreview: planPreviewControllerFactoryProvider throws — '
-          'no production ExerciseCandidateResolver seam yet', () {
+      // 2026-09-05: a cella MEGFORDULT. Korábban azt rögzítette, hogy a
+      // provider DOB, mert nem volt éles `ExerciseCandidateResolver`. Az a
+      // seam azóta be van kötve (beépített katalógus + tervezői metaadat),
+      // ezért a mért tény most az ellenkezője. A cella nem törlődött: a
+      // hibaosztály ugyanaz marad, csak az elvárt irány fordult.
+      test('2/6 PlanPreview: planPreviewControllerFactoryProvider builds — '
+          'az éles ExerciseCandidateResolver be van kötve', () {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(planPreviewControllerFactoryProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
         );
       });
 
       test('3/6 PlanPrivacy: deletePracticePlanningDataProvider and '
-          'exportPracticePlanningDataProvider both throw', () {
+          'exportPracticePlanningDataProvider both build', () {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(deletePracticePlanningDataProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
         );
         expect(
           () => container.read(exportPracticePlanningDataProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
         );
       });
 
@@ -306,32 +303,34 @@ void main() {
         );
       });
 
-      test('6/6 WeeklyPlan: practiceGeneratorTodayProvider builds, but '
-          'activePracticePlanProvider throws — it needs the plan '
-          'repository, which needs the resolver seam', () async {
+      test('6/6 WeeklyPlan: a nap ÉS az aktív terv is felold — a terv '
+          'hiánya `null`, nem kivétel', () async {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(practiceGeneratorTodayProvider),
           returnsNormally,
         );
+        // Üres tárolón NINCS mentett terv. A helyes válasz `null` — az a
+        // „még nincs terv" állapot, amit a képernyő maga is kezel —, nem
+        // kivétel és nem kitalált üres terv.
         await expectLater(
           container.read(activePracticePlanProvider.future),
-          _throwsUnimplementedSeam,
+          completion(isNull),
         );
       });
 
       test(
-        'GEN: generationOrchestratorProvider and startPlanGenerationProvider '
-        'both throw — the resolver AND the input-builder seam are both open',
+        'GEN: generationOrchestratorProvider és startPlanGenerationProvider '
+        'egyaránt felépül — mindkét seam be van kötve',
         () {
           final container = buildProductionShapeContainer();
           expect(
             () => container.read(generationOrchestratorProvider),
-            _throwsUnimplementedSeam,
+            returnsNormally,
           );
           expect(
             () => container.read(startPlanGenerationProvider),
-            _throwsUnimplementedSeam,
+            returnsNormally,
           );
         },
       );

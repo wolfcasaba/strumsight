@@ -236,6 +236,12 @@ void main() {
           'HttpCommunityProfileRepository',
           'HttpSocialGraphRepository',
           'HttpCommunityChallengeRepository',
+          // 2026-09-05: a feed- és az értesítés-repository bekötésekor
+          // KÉT új egress-útvonal keletkezett. Mindkettő az `account_api`-t
+          // lovagolja — a saját provideré szó szerint tovább-exportálja az
+          // `accountApiClientProvider`-t.
+          'HttpCommunityFeedRepository',
+          'HttpCommunityNotificationRepository',
           'DiagnosticsUploader',
         ]),
       );
@@ -497,6 +503,42 @@ final class ApiClient {
 
   group('MAJOR-2 — the ApiClient-consuming walk is a real discovery, not a '
       'hardcoded list', () {
+    test('a BEÁGYAZOTT generikus típus-argumentum is felfedezésre kerül', () {
+      // MÉRT vakfolt (2026-09-05): a verb-minta `<[^>]*>` alakja az ELSŐ
+      // `>`-nél megállt, ezért egy `getJson<Page<Item>>(` hívás nem
+      // illeszkedett, és az egész osztály egress-útvonala LÁTHATATLAN
+      // maradt a leltár számára. Egy adatvédelmi detektor, ami a hívás
+      // típus-argumentumának alakjától függően vak, zöldet mutat egy nem
+      // leltározott kimenő útvonalra.
+      final temp = _writeTempRepo({
+        'lib/features/fixture/nested_generic_repository.dart': """
+import '../../core/network/api_client.dart';
+
+class NestedGenericRepository {
+  NestedGenericRepository(this._client);
+  final ApiClient _client;
+
+  Future<void> load() =>
+      _client.getJson<List<Map<String, Object?>>>('/fixture', decode: (j) => j);
+}
+""",
+      });
+      addTearDown(() => temp.deleteSync(recursive: true));
+
+      final discovered = discoverEgressRoutes(temp);
+
+      expect(
+        discovered.where(
+          (r) =>
+              r.kind == EgressPatternKind.apiClientConsumingClass &&
+              r.source == 'NestedGenericRepository',
+        ),
+        isNotEmpty,
+        reason:
+            'a beágyazott generikus hívás nem tűnhet el a leltár elől',
+      );
+    });
+
     test('a synthetic class fielding an ApiClient and calling a request '
         'verb is discovered as apiClientConsumingClass', () {
       final temp = _writeTempRepo({

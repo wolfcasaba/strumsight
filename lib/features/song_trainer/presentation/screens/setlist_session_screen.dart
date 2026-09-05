@@ -249,6 +249,7 @@ String _itemStatus(
   }
   return switch (result.status) {
     SetlistItemResultStatus.completed => l10n.setlistSessionCompleted,
+    SetlistItemResultStatus.partial => l10n.setlistSessionPartial,
     SetlistItemResultStatus.skipped => l10n.setlistSessionSkipped,
     SetlistItemResultStatus.failed => l10n.setlistSessionFailed,
   };

@@ -132,6 +132,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     if (cursorValue != null) params['cursor'] = cursorValue;
     final result = await _client.getJson<dynamic>(
       '/community/challenges',
+      queryParameters: params,
       decode: decodeChallengeListPage,
     );
     return switch (result) {

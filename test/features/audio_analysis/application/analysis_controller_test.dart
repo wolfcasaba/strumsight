@@ -17,7 +17,7 @@ void main() {
         final credit = _FakeCreditRecorder();
         final controller = _controller(run, credit: credit);
 
-        final future = controller.analyze(_document());
+        final future = controller.analyze(_document(), audio: _audio());
         run.complete(_result(runId: 'run-1', value: _document()));
         await future;
 
@@ -31,7 +31,7 @@ void main() {
       final credit = _FakeCreditRecorder();
       final controller = _controller(run, credit: credit);
 
-      final future = controller.analyze(_document());
+      final future = controller.analyze(_document(), audio: _audio());
       run.complete(
         _result(
           runId: 'run-1',
@@ -52,7 +52,7 @@ void main() {
         final credit = _FakeCreditRecorder();
         final controller = _controller(run, credit: credit);
 
-        final future = controller.analyze(_document());
+        final future = controller.analyze(_document(), audio: _audio());
         run.complete(
           _result(
             runId: 'run-1',
@@ -74,7 +74,7 @@ void main() {
         final credit = _FakeCreditRecorder();
         final controller = _controller(run, credit: credit);
 
-        final future = controller.analyze(_document(eventful: false));
+        final future = controller.analyze(_document(eventful: false), audio: _audio());
         run.complete(
           _result(runId: 'run-1', value: _document(eventful: false)),
         );
@@ -93,10 +93,10 @@ void main() {
         final runner = _QueueRunner(<_FakeRun>[first, second]);
         final controller = _controllerWithRunner(runner);
 
-        final firstFuture = controller.analyze(_document());
+        final firstFuture = controller.analyze(_document(), audio: _audio());
         await _flush();
         await controller.cancel();
-        final secondFuture = controller.analyze(_document());
+        final secondFuture = controller.analyze(_document(), audio: _audio());
         await _flush();
         first.progressController.add(
           AnalysisPhaseProgressEvent(
@@ -120,9 +120,9 @@ void main() {
         _QueueRunner(<_FakeRun>[first, second]),
       );
 
-      final firstFuture = controller.analyze(_document());
+      final firstFuture = controller.analyze(_document(), audio: _audio());
       await _flush();
-      final secondFuture = controller.analyze(_document());
+      final secondFuture = controller.analyze(_document(), audio: _audio());
 
       expect(first.disposed, isTrue);
       first.complete(
@@ -137,7 +137,7 @@ void main() {
       () async {
         final run = _FakeRun('run-1');
         final controller = _controller(run);
-        final future = controller.analyze(_document());
+        final future = controller.analyze(_document(), audio: _audio());
         await _flush();
 
         for (var index = 0; index < 4; index++) {
@@ -207,7 +207,7 @@ void main() {
       test('${lifecycle.name} cancels the active run', () async {
         final run = _FakeRun('run-1', completeOnCancel: true);
         final controller = _controller(run);
-        final future = controller.analyze(_document());
+        final future = controller.analyze(_document(), audio: _audio());
         await _flush();
 
         lifecycle.leave(controller);
@@ -373,4 +373,17 @@ AnalysisDocument _document({bool eventful = true}) => AnalysisDocument(
   insights: const <AnalysisInsight>[],
   warnings: const <AnalysisWarning>[],
   completion: AnalysisCompletion(status: AnalysisCompletionStatus.complete),
+);
+
+/// A VALÓDI hangbemenet a hívótól jön (2026-09-05): az `AnalyzeAudioUseCase`
+/// korábban maga gyártott egy üres minta-listát, és így a felvételi folyamat
+/// csendet elemzett volna. A paraméter azért kötelező, hogy ez fordítási
+/// hibaként jöjjön elő, ne néma viselkedésként.
+ValidatedPcmAnalysisInput _audio() => ValidatedPcmAnalysisInput(
+  input: PcmAnalysisInput(
+    samples: List<double>.filled(4800, 0.1),
+    sampleRate: 48000,
+    channelCount: 1,
+    source: AnalysisInputSource.microphone,
+  ),
 );

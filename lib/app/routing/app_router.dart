@@ -6,7 +6,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
+import '../../features/audio_analysis/application/analysis_providers.dart';
+import '../../features/audio_analysis/application/capture_seed.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
+import '../../features/audio_analysis/domain/analysis_input.dart';
+import '../../features/audio_analysis/domain/analysis_mode.dart';
+import '../../features/audio_analysis/domain/analysis_summary.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
 import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
 import '../../features/audio_analysis/presentation/analysis_compare_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_metric_detail_screen.dart';
@@ -34,7 +42,14 @@ import '../../features/practice/presentation/screens/practice_result_screen.dart
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
 import '../../features/practice/public.dart' show practiceCatalogProvider;
+import '../../features/practice_generator/application/usecase/revise_practice_plan.dart'
+    show PlanRevisionProposal;
+import '../../features/practice_generator/presentation/plan_preview_args.dart';
 import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
+import '../../features/practice_generator/presentation/screens/plan_change_review_screen.dart';
+import '../../features/practice_generator/presentation/screens/plan_preview_screen.dart';
+import '../../features/practice_generator/presentation/screens/plan_privacy_screen.dart';
+import '../../features/practice_generator/presentation/screens/weekly_plan_screen.dart';
 import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
 import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
 import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
@@ -67,6 +82,7 @@ import '../home_shell.dart';
 import 'adaptive_shell_routes.dart';
 import 'app_route.dart';
 import 'route_guards.dart';
+import 'package:strumsight/features/community/public.dart';
 
 final class _RouterRefreshNotifier extends ChangeNotifier {
   void refresh() => notifyListeners();
@@ -219,6 +235,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .analysisComparisonEnabled;
+  // E17 (Ch17 teljes bekötés) — a 13 community képernyő a `communityEnabled`
+  // kapu alatt regisztrálódik. Kapu KI: az útvonalak NEM léteznek, tehát egy
+  // `/community*` cím az alábbi `onException`-re fut és a belépési pontra
+  // esik vissza — ugyanaz a mintázat, amit a Practice és a Vision kapuja
+  // használ, és a szerver-oldali ADR 0497 D1 („a route nincs regisztrálva,
+  // nem futásidejű 403") kliens-oldali párja.
+  final communityEnabled = ref.read(appConfigProvider).flags.communityEnabled;
   final adaptiveShellEnabled = ref
       .read(appConfigProvider)
       .flags
@@ -386,6 +409,81 @@ final routerProvider = Provider<GoRouter>((ref) {
           },
         ),
       ),
+      if (communityEnabled) ...[
+        // A belépési szűrő. Ő maga is a 13 elérhetetlen képernyő közt volt —
+        // a feature kapuja sem volt elérhető.
+        GoRoute(
+          path: AppRoutes.community,
+          builder: (_, _) => const CommunityGateScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityFeed,
+          builder: (_, _) => const FollowingFeedScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityCompose,
+          builder: (_, _) => const PostComposerScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityComments,
+          builder: (_, state) => CommentsScreen(
+            postId: ContentId(state.pathParameters['postId']!),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityBookmarks,
+          builder: (_, _) => const BookmarksScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityNotifications,
+          builder: (_, _) => const CommunityNotificationsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communitySearch,
+          builder: (_, _) => const CommunitySearchScreen(),
+        ),
+        // A követők és a követettek KÉT útvonal, egy képernyővel: a lista
+        // iránya nem query-paraméter, mert egy elhagyott paraméter némán a
+        // másik listát mutatná.
+        GoRoute(
+          path: AppRoutes.communityFollowers,
+          builder: (_, state) => FollowersScreen(
+            profileId: PublicUserId(state.pathParameters['profileId']!),
+            mode: FollowersMode.followers,
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityFollowing,
+          builder: (_, state) => FollowersScreen(
+            profileId: PublicUserId(state.pathParameters['profileId']!),
+            mode: FollowersMode.following,
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityChallenges,
+          builder: (_, _) => const CommunityChallengesScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityLeaderboard,
+          builder: (_, state) => LeaderboardScreen(
+            challengeId: ContentId(state.pathParameters['challengeId']!),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communitySafety,
+          builder: (_, _) => const SafetyRelationshipsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityClubs,
+          builder: (_, _) => const ClubListScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityClubDetail,
+          builder: (_, state) => ClubDetailScreen(
+            clubId: ContentId(state.pathParameters['clubId']!),
+          ),
+        ),
+      ],
       if (practiceEnabled) ...[
         // E13-R08 (D6) — excluded when the adaptive shell owns `/practice`
         // as a destination root below, to avoid a silently-shadowed
@@ -428,6 +526,70 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, _) => Consumer(
             builder: (context, ref, _) => TodayPlanScreen(
               controller: ref.watch(todayPlanControllerProvider),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorWeekly,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final plan = ref.watch(activePracticePlanProvider);
+              // A `plan` a képernyő szerződésében NULLAZHATÓ, és a `null`
+              // ott a „még nincs terv" állapot — nem hiányzó adat. Betöltés
+              // közben tehát nem hazudunk üres tervet: ugyanaz a `null`
+              // megy be, amit a képernyő maga is kezel.
+              return WeeklyPlanScreen(
+                plan: plan.value,
+                today: ref.watch(practiceGeneratorTodayProvider)(),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorPrivacy,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => PlanPrivacyScreen(
+              deleteUseCase: ref.watch(deletePracticePlanningDataProvider),
+              exportUseCase: ref.watch(exportPracticePlanningDataProvider),
+            ),
+          ),
+        ),
+        // Az előnézet és a változás-áttekintés a generálási folyamat
+        // LÉPÉSEI: a megjelenítendő tervet, illetve javaslatot a hívó adja
+        // át. `extra` nélkül nincs mit mutatni — ilyenkor a mai tervre
+        // esünk vissza, nem rajzolunk kitalált tervet. Ugyanaz a
+        // redirect-őr, amit az elemzés-áttekintés használ.
+        GoRoute(
+          path: AppRoutes.practiceGeneratorPreview,
+          redirect: (_, state) => state.extra is PracticePlanPreviewArgs
+              ? null
+              : AppRoutes.practiceGeneratorToday,
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) {
+              final args = state.extra! as PracticePlanPreviewArgs;
+              return PlanPreviewScreen(
+                controller: ref.watch(planPreviewControllerFactoryProvider)(
+                  initialPlan: args.plan,
+                  validationContext: args.validationContext,
+                ),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorChangeReview,
+          redirect: (_, state) => state.extra is PlanRevisionProposal
+              ? null
+              : AppRoutes.practiceGeneratorToday,
+          builder: (_, state) => Builder(
+            builder: (context) => PlanChangeReviewScreen(
+              proposal: state.extra! as PlanRevisionProposal,
+              // Mindkét ág a mai tervre visz vissza. A javaslat
+              // ELFOGADÁSA a `RevisePracticePlan` dolga, és azt a hívó
+              // folyamat végzi el — a route nem ír tervet, mert akkor a
+              // döntés két helyen születne.
+              onAccepted: () => context.go(AppRoutes.practiceGeneratorToday),
+              onRejected: () => context.go(AppRoutes.practiceGeneratorToday),
             ),
           ),
         ),
@@ -695,6 +857,100 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ],
       if (audioAnalysisV2Enabled) ...[
+        // A felvételi folyamat (2026-09-05). A három képernyő azért volt
+        // elérhetetlen, mert HÁROM darab hiányzott alóla: a vezérlőnek nem
+        // volt providere, a felvevőnek sem, és az `AnalyzeAudioUseCase`
+        // ÜRES mintákat adott tovább — bekötve tehát csendet elemzett volna.
+        GoRoute(
+          path: AppRoutes.analysisCapture,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final recent = ref.watch(analysisRecentSummariesProvider);
+              final l10n = AppLocalizations.of(context);
+              return AnalysisHomeScreen(
+                // Betöltés / hiba alatt ÜRES lista megy be — a képernyő
+                // szerződése nem ismer köztes állapotot. A hiba NEM
+                // csendben nyelődik el: a provider hibaága megmarad, és a
+                // lista üres volta itt nem állítás, hanem a még be nem
+                // töltött állapot.
+                recentAnalyses: recent.value ?? const <AnalysisSummary>[],
+                onStartRecording: () => context.go(AppRoutes.analysisRecord),
+                onImportFile: () {
+                  // A hang-importálásnak NINCS folyamata a fában (se
+                  // képernyő, se útvonal). Egy néma no-op itt halott gombot
+                  // adna; a felhasználó azt hinné, elromlott. Ezért a
+                  // hiányt kimondjuk.
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.analysisHomeImportUnavailable),
+                    ),
+                  );
+                },
+                onOpenAnalysis: (summary) => context.go(
+                  AppRoutes.analysisTimeline,
+                  extra: summary,
+                ),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisRecord,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              // `watch`, nem `read`: az autoDispose felvevőt a widget
+              // életciklusa tartja életben, és a képernyő elhagyásakor
+              // eldobódik — a következő felvétel FRISS példányt kap. Egy
+              // `read` azonnal eldobná, egy nem-autoDispose provider pedig
+              // a képernyő által már lezárt felvevőt adná vissza másodszor.
+              final recorder = ref.watch(analysisCaptureRecorderProvider);
+              return AnalysisRecordingScreen(
+                recorder: recorder,
+                onCancel: () => context.go(AppRoutes.analysisCapture),
+                onFinished: (run, samples) {
+                  final pcm = PcmAnalysisInput(
+                    samples: samples,
+                    sampleRate: run.sampleRate,
+                    channelCount: 1,
+                    source: AnalysisInputSource.microphone,
+                  );
+                  unawaited(
+                    ref
+                        .read(analysisControllerProvider.notifier)
+                        .analyze(
+                          captureSeedDocument(
+                            runId: run.id,
+                            audio: pcm,
+                            createdAt: DateTime.now(),
+                          ),
+                          audio: ValidatedPcmAnalysisInput(input: pcm),
+                        ),
+                  );
+                  context.go(AppRoutes.analysisProcessing);
+                },
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisProcessing,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final state = ref.watch(analysisControllerProvider);
+              return AnalysisProcessingScreen(
+                state: state,
+                onCancel: () => unawaited(
+                  ref.read(analysisControllerProvider.notifier).cancel(),
+                ),
+                onRestart: () => context.go(AppRoutes.analysisRecord),
+                onViewResult: (document) => context.go(
+                  AppRoutes.analysisOverview,
+                  extra: document,
+                ),
+              );
+            },
+          ),
+        ),
         GoRoute(
           path: AppRoutes.analysisOverview,
           redirect: (_, state) =>

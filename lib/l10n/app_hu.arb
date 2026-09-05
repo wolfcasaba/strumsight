@@ -674,6 +674,8 @@
   "@analysisExportTitle": {},
   "analysisHomeImportCta": "Fájl importálása",
   "@analysisHomeImportCta": {},
+  "analysisHomeImportUnavailable": "A fájl-importálás még nem elérhető — vegyél fel helyette.",
+  "@analysisHomeImportUnavailable": {},
   "analysisHomeImportDescription": "Meglévő felvétel elemzése, legfeljebb {limitMb} MB.",
   "@analysisHomeImportDescription": {
     "placeholders": {
@@ -3171,6 +3173,8 @@
   "profileHubAchievementsSectionTitle": "Eredmények",
   "profileHubCommunityDisabledReason": "A közösségi funkciók ebben a buildben még nem érhetők el.",
   "profileHubCommunityEnabledMessage": "Kapcsolódj más játékosokhoz, és oszd meg a fejlődésed.",
+  "profileHubCommunityOpen": "Közösség megnyitása",
+  "@profileHubCommunityOpen": {},
   "profileHubCommunitySectionTitle": "Közösség",
   "profileHubLocalOnlyMessage": "Fiók nélkül használod a StrumSightot — minden ezen az eszközön marad.",
   "profileHubLocalOnlyTitle": "Helyi profil",
@@ -3676,6 +3680,8 @@
   },
   "setlistSessionCompleted": "Teljesítve",
   "setlistSessionFailed": "Nem fejezhető be",
+  "setlistSessionPartial": "Félbehagyva — az addigi eredményed számít.",
+  "@setlistSessionPartial": {},
   "setlistSessionPerformanceDescription": "Játszd le a dalokat sorrendben mikrofonos pontozás nélkül.",
   "setlistSessionPerformanceSemantics": "Csak lejátszásos dalcsomag-előadás. A mikrofonos pontozás ki van kapcsolva.",
   "setlistSessionPerformanceTitle": "Dalcsomag-előadás",

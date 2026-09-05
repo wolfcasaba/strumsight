@@ -84,6 +84,19 @@ class ProfileHubScreen extends ConsumerWidget {
                   : l10n.profileHubCommunityDisabledReason,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            // A közösség BELÉPÉSI PONTJA (2026-09-05). A 13 community
+            // képernyő route-jai léteztek, de a szállított felületről SEMMI
+            // nem vezetett hozzájuk — a felhasználó számára ez ugyanaz,
+            // mintha nem lennének. A gomb a kapu-képernyőre visz, ami a
+            // feature saját belépési szűrője.
+            if (communityEnabled) ...[
+              const SizedBox(height: 12),
+              FilledButton(
+                key: const ValueKey('profile-hub-community-entry'),
+                onPressed: () => context.go(AppRoutes.community),
+                child: Text(l10n.profileHubCommunityOpen),
+              ),
+            ],
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: () => context.go(AppRoutes.profileLibrary),

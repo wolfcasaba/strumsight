@@ -3,9 +3,15 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_input.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_event.dart';
 
+import 'analysis_providers.dart'
+    show
+        analysisPracticeCreditRecorderProvider,
+        analyzeAudioUseCaseProvider,
+        cancelAnalysisUseCaseProvider;
 import 'analyze_audio_use_case.dart';
 import 'analysis_isolate_runner.dart';
 import 'analysis_state.dart';
@@ -20,20 +26,41 @@ abstract interface class AnalysisPracticeCreditRecorder {
 /// Coordinates one analysis run. It owns the authoritative active run ID;
 /// runner- and pipeline-local counters are never used for stale-event checks.
 final class AnalysisController extends Notifier<AnalysisState> {
+  /// A három függőség OPCIONÁLIS (2026-09-05).
+  ///
+  /// Korábban mindhárom kötelező konstruktor-paraméter volt, és ezért a
+  /// vezérlőnek NEM lehetett providere: a `NotifierProvider` gyártó
+  /// callbackje `ref` nélkül fut, tehát a függőségeket ott nem lehet
+  /// feloldani. A vezérlő így soha nem épült fel élesben — ez tartotta
+  /// elérhetetlenül a `capture/` képernyőket.
+  ///
+  /// Megoldás: a `late final` mezők a KOMPOZÍCIÓBÓL oldódnak fel, az első
+  /// hozzáféréskor (akkor már van `ref`). A teszt továbbra is átadhatja a
+  /// sajátját — a paraméterek neve változatlan.
   AnalysisController({
-    required this.analyzeAudio,
-    required this.cancelAnalysis,
-    required this.practiceCredit,
+    AnalyzeAudioUseCase? analyzeAudio,
+    CancelAnalysisUseCase? cancelAnalysis,
+    AnalysisPracticeCreditRecorder? practiceCredit,
     this.minEventsBetweenEmits = 5,
-  }) {
+  }) : _analyzeAudioOverride = analyzeAudio,
+       _cancelAnalysisOverride = cancelAnalysis,
+       _practiceCreditOverride = practiceCredit {
     if (minEventsBetweenEmits <= 0) {
       throw ArgumentError.value(minEventsBetweenEmits, 'minEventsBetweenEmits');
     }
   }
 
-  final AnalyzeAudioUseCase analyzeAudio;
-  final CancelAnalysisUseCase cancelAnalysis;
-  final AnalysisPracticeCreditRecorder practiceCredit;
+  final AnalyzeAudioUseCase? _analyzeAudioOverride;
+  final CancelAnalysisUseCase? _cancelAnalysisOverride;
+  final AnalysisPracticeCreditRecorder? _practiceCreditOverride;
+
+  late final AnalyzeAudioUseCase analyzeAudio =
+      _analyzeAudioOverride ?? ref.read(analyzeAudioUseCaseProvider);
+  late final CancelAnalysisUseCase cancelAnalysis =
+      _cancelAnalysisOverride ?? ref.read(cancelAnalysisUseCaseProvider);
+  late final AnalysisPracticeCreditRecorder practiceCredit =
+      _practiceCreditOverride ??
+      ref.read(analysisPracticeCreditRecorderProvider);
   final int minEventsBetweenEmits;
   final Set<String> _creditedRunIds = <String>{};
   String? _activeRunId;
@@ -67,13 +94,16 @@ final class AnalysisController extends Notifier<AnalysisState> {
   void inputError(AppFailure failure) => state = AnalysisInputError(failure);
 
   /// Starts an explicit user-requested analysis. There is no automatic retry.
-  Future<void> analyze(AnalysisDocument input) async {
+  Future<void> analyze(
+    AnalysisDocument input, {
+    required ValidatedPcmAnalysisInput audio,
+  }) async {
     final previousRun = _activeRun;
     if (previousRun != null) {
       unawaited(cancelAnalysis(previousRun));
     }
     validating();
-    final run = analyzeAudio(input);
+    final run = analyzeAudio(input, audio: audio);
     final runId = run.runId;
     _activeRun = run;
     _activeRunId = runId;

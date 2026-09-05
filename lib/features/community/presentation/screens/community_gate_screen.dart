@@ -157,14 +157,21 @@ class _StatusView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(24),
+      // Görgethető, `min` fő-tengellyel (2026-09-05): fekvő tájolásban,
+      // 2.0-s szöveg-méretnél a szöveg magasabb, mint a képernyő, és a
+      // `Center > Column` 8px-et túlcsordult. Egy túlcsorduló
+      // akadálymentességi állapot nem „csúnya", hanem OLVASHATATLAN: a
+      // szöveg alja levágódik.
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Text(body, textAlign: TextAlign.center),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text(body, textAlign: TextAlign.center),
+            ],
+          ),
         ),
       ),
     );
@@ -188,16 +195,20 @@ class _CtaView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(24),
+      // Ugyanaz a görgethető alak, mint a `_StatusView`-ban — itt a
+      // gomb miatt még korábban csordul túl.
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Text(body, textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            SsButton(onPressed: onCta, label: ctaLabel),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text(body, textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              SsButton(onPressed: onCta, label: ctaLabel),
+            ],
+          ),
         ),
       ),
     );
