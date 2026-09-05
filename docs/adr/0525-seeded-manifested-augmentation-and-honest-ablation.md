@@ -107,6 +107,27 @@ listázza a valós fát ezeken az útvonalakon). A
 fixture-ök, nem valós-fa enumeráció. A kör új fájljai tehát a listán KÍVÜL
 semmit nem visznek pirosra (L164 osztálya kizárva).
 
+### 8. A címke-transzponálás osztály-matematikája MÁR MERGE-ELVE VAN
+
+`ml/chords/labels.py::transpose_class` és `ml/chords/augment.py::_transpose_labels`
+/ `transpose_window` egész-félhangos, címke-transzponáló augmentációt szállít a
+25-osztályos majmin térben (`0 = N.C.` invariáns, dúr/moll csoport mod 12
+gördül), és a `.github/workflows/chord-train.yml` a `chords/test_augment.py`-vel
+CI-ban futtatja. A chord-track a CQT-tengelyen transzponál
+(`BINS_PER_SEMITONE = 2`, zero-fill, nem `np.roll`) `max_semi=5`-tel — más
+közeg, más korlát, mint ennek a körnek a PCM/varispeed útja.
+
+Az akkord-címke a strum-adat-úton is JELEN VAN:
+`ml/klangio.py::parse_strums` a `.strums` harmadik oszlopát akkord-címkeként
+olvassa, a `windows_for_recording` viszont eldobja (`_chord`). A `klangio.py`
+tilos zóna, tehát a bekötés nem ennek a körnek a dolga — de a §5.1 emiatt nem
+elméleti.
+
+### 9. Az `ml/honest_results.json` gitignore-olt
+
+`ml/.gitignore:14`. A 2. és 3. pont számai tehát **doboz-lokálisak**, a repóból
+nem ellenőrizhetők.
+
 ## Döntés
 
 ### D1 — A címke-transzponáló pitch shift EGÉSZ félhangos, és külön belépési pont
@@ -186,6 +207,26 @@ változatlanok. A recept VÉGLEGESÍTÉSE (mely transzformáció marad benne) a
 mért ablationnel együtt az `E14-R20` dolga; ez a kör a szerződést, a
 mérőeszközt és az őröket szállítja.
 
+### D10 — Az osztály-matematika a merge-elt forrásból jön, nem újraírásból
+
+A címke-transzponálás osztály-logikája **kizárólag** a merge-elt
+`ml/chords/labels.py::transpose_class`-ból származhat: importált, read-only
+függőség. Egy második, párhuzamos akkord-osztály-logika a fában a
+[L164](../LESSONS.md#l164) és az E14-R15 „második metrika-fájl mellette"
+hibaosztálya — MAJOR lelet. Az `ml/chords/**` fájljait a kör nem módosítja.
+
+A két út félhang-korlátja szándékosan KÜLÖNBÖZIK, és a manifestnek meg kell
+mondania, melyik melyikre vonatkozik: CQT/chord-track `max_semi = 5`
+(biztonságos zero-fill), PCM/varispeed-track `|semitones| <= 6` (ISMIR-optimum,
+D3).
+
+### D11 — Doboz-lokális szám nem állítható repo-szintűnek
+
+Az `ml/honest_results.json` gitignore-olt, ezért a riport a belőle idézett
+számokat mérés-forrással és reprodukáló paranccsal, **doboz-lokálisként**
+jelöli. Egy „lásd `ml/honest_results.json`" hivatkozás önmagában, a
+gitignore-oltság kimondása nélkül, félrevezető.
+
 ## Következmények
 
 - **Pozitív:** az augmentáció innentől auditálható artefaktum (seed +
@@ -210,4 +251,10 @@ mérőeszközt és az őröket szállítja.
 - **A per-transzformációs tréning erőltetése ebben a körben:** mérve 3,0 óra
   KEZELÉSENKÉNT a 3600 s-os burkoló-korláttal szemben — halt lenne, nem mérés.
 - **A `logo_aug` romlásának elhallgatása vagy „kevesebb epoch" magyarázata:**
-  a szám a repóban van; a riport tartozik vele.
+  a szám mérve van; a riport tartozik vele.
+- **A `transpose_class` újraírása a PCM-oldalon:** két, egymástól függetlenül
+  romolható akkord-osztály-logika ugyanabban a fában (L164, E14-R15).
+- **A chord-track `max_semi=5` korlátjának ráerőltetése a PCM-útra (vagy
+  fordítva):** a zero-fill CQT-korlát és a varispeed ISMIR-optimum két
+  különböző közeg két különböző korlátja; az összemosás mérés nélküli
+  szigorítás vagy lazítás lenne.

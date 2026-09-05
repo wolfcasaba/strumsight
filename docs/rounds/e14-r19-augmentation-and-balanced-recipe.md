@@ -121,6 +121,46 @@ szintetikus fixture-ök, nem valós-fa enumeráció. (L164 osztálya mérve
 kizárva.) Ha az implementer mégis a listán kívüli fájlt találna pirosnak:
 **`stopped` jelzés + jelentés**, nem lista-tágítás.
 
+### R11 — A címke-transzponálás osztály-matematikája MÁR MERGE-ELVE VAN — újraírni tilos
+
+A pre-flight grepje megtalálta a kör legfontosabb előzményét, amit az eredeti
+brief nem ismert:
+
+- `ml/chords/labels.py::transpose_class` + `ml/chords/augment.py::_transpose_labels`
+  / `transpose_window` — **egész-félhangos, címke-transzponáló** augmentáció a
+  25-osztályos majmin térben (`0 = N.C.` invariáns; dúr/moll csoport mod 12
+  gördül). Pure NumPy, seedelhető.
+- Ez a szerződés **CI-fedett**: `.github/workflows/chord-train.yml` futtatja a
+  `chords/test_augment.py`-t (a `chords/test_labels.py`-vel együtt).
+- A chord-track a **CQT-tengelyen** transzponál (`BINS_PER_SEMITONE = 2`,
+  zero-fill, nem `np.roll`), és `max_semi=5`-öt használ (a biztonságos
+  zero-fill tartomány). Ez **más közeg, más korlát**, mint ennek a körnek a
+  PCM/varispeed útja a ±6-os ISMIR-optimummal — a kettő nem mond ellent
+  egymásnak, de a manifestnek meg kell mondania, MELYIK korlát MELYIK útra
+  vonatkozik.
+
+**Kötelező következmény:** a címke-transzponálás osztály-matematikáját
+**importálni és újrahasználni** kell (`ml/chords/labels.py::transpose_class`),
+**nem újraírni**. Az `ml/chords/**` a TILOS zóna marad: read-only függőség,
+egyetlen fájlját sem módosítod. Egy második, párhuzamos akkord-osztály-logika
+a fában **MAJOR lelet** (ugyanaz a hibaosztály, mint [L164](../LESSONS.md#l164)
+és az „egy második metrika-fájl mellette" E14-R15 halt).
+
+**Az akkord-címke tényleg létezik a strum-adat-úton is:**
+`ml/klangio.py::parse_strums` a `.strums` fájl HARMADIK oszlopát akkord-címkeként
+olvassa (`time_s \t D|U \t chord-label`), a `windows_for_recording` viszont
+eldobja (`for t, direction, _chord in events`). A `klangio.py` TILOS zóna, tehát
+ezt a kör NEM köti be — de a §5.1 emiatt nem elméleti: a manifest egy
+adatkészletet ír le, amelyben az akkord-címke JELEN VAN.
+
+### R12 — Az `ml/honest_results.json` **gitignore-olt**, tehát a szám doboz-lokális
+
+`ml/.gitignore:14` → `honest_results.json`. Az R4/R5 számai ezért a repóból
+**nem ellenőrizhetők**. Az ablation-riport a számokat **doboz-lokális,
+r173-as mérésként** idézze, a reprodukáló paranccsal együtt, és **ne** állítsa,
+hogy a fájl a repóban van. Ugyanez vonatkozik a `_timing` 10 769,7 s-os
+értékére.
+
 > **A prompt §1 két kötelező mérése.** (1) *Elérhetetlen cél-státusz:* a kör
 > egyetlen acceptance-cellája sem ír elő állapotgép-státuszt — nincs reducer
 > vagy átmenettábla az útban, a mérés tárgytalan. (2) *Erőforrás-tulajdonlás:*
@@ -200,6 +240,15 @@ NINCS automatikus elfogadás.
   hiányzik, és mérten nem is fut le itt (R5).
 - `ml/synth.py`, `ml/prepare_dataset.py`, `ml/negatives.py` — a tanító adat-út
   többi darabja; a kör ezeket NEM írja át.
+- `ml/chords/augment.py` + `ml/chords/labels.py` — **MÁR MERGE-ELT**,
+  CI-fedett (`chord-train.yml`), egész-félhangos **címke-transzponáló**
+  augmentáció a 25-osztályos majmin térben. A kör ezt **újrahasználja**, nem
+  írja újra (R11), és nem módosítja.
+- `ml/klangio.py::parse_strums` — a `.strums` HARMADIK oszlopa akkord-címke,
+  amit a `windows_for_recording` ma eldob (`_chord`). A `klangio.py` tilos
+  zóna; a kör nem köti be, csak tudomásul veszi (R11).
+- `ml/honest_results.json` — **gitignore-olt** (`ml/.gitignore:14`), tehát az
+  R4/R5 számai doboz-lokálisak (R12).
 - `ml/test_pipeline.py` — a meglévő Python-teszt belépési pont (24 cella),
   köztük `test_augment_pcm_is_stochastic_but_deterministic_per_seed` — ezek
   **változatlanul zöldek** kell maradjanak (§9 regresszió).
@@ -228,7 +277,8 @@ ablation-riport.
 | `docs/eval/augmentation-ablation.md` | ablation-riport |
 | `docs/rounds/e14-r19-augmentation-and-balanced-recipe.md` | §10 handoff |
 
-**Tilos zóna:** minden más — kiemelten `ml/klangio.py`, `ml/honest_eval.py`,
+**Tilos zóna:** minden más — kiemelten `ml/chords/**` (R11: **importálni
+igen, módosítani nem**), `ml/klangio.py`, `ml/honest_eval.py`,
 `ml/honest_results.json`, `ml/test_pipeline.py`, `ml/export_*`, `assets/**`,
 `lib/**`, `tool/**`, `docs/adr/**`, `docs/rag/chunks/**`,
 `.github/workflows/**`, `tools/round-gate.sh`.
@@ -241,6 +291,11 @@ Félhang-eltolásnál az akkord-címke együtt mozog. **NEM elfogadható**: „a
 direction-fejnek úgyis mindegy" — a manifest egy adatkészletet ír le, nem egy
 fejet. A címke-transzponáló út bemenete **egész** félhang; törtérték típusos
 hiba, nem csendes kerekítés (ADR 0525 D1/D2).
+
+Az osztály-matematikát **a MÁR MERGE-ELT `ml/chords/labels.py::transpose_class`
+adja** — importálni és újrahasználni kell, nem újraírni (R11). Az
+`ml/chords/**` read-only függőség; egy párhuzamos, második akkord-osztály-logika
+a fában MAJOR lelet.
 
 ### 5.2 Minden augmentáció seedelt és kikapcsolható
 
@@ -278,7 +333,9 @@ kiegyensúlyozott arányt is rögzíti (ADR 0525 D8).
 1. A `ml/test_augmentation_labels.py` bizonyítja, hogy ±N **egész** félhang
    pitch shift után a címke pontosan N félhanggal tolódik (a mátrix ±1, ±3,
    ±6 esetre fut), és hogy nem-egész bemenet **típusos hibát** ad (nem
-   kerekítést).
+   kerekítést). Az osztály-matematika a MERGE-ELT
+   `ml/chords/labels.py::transpose_class`-ból jön (R11) — a cella azt is
+   bizonyítja, hogy az `N.C.` osztály invariáns marad.
 2. A pitch-shift tartomány határa **inkluzív**: a hármas cella a ±6-ra — a
    határ **alatt** (±5) elfogadott, pontosan **rajta** (±6) elfogadott (a
    határ ide tartozik), a határ **fölött** (±7) a validátor hibát ad.
@@ -319,6 +376,7 @@ kiegyensúlyozott arányt is rögzíti (ADR 0525 D8).
 | `"nem mért"` sor `accepted` státusszal | 6. pont státusz-cellája | Python **és** Dart |
 | A romló összetett recept `accepted`/eltüntetve | 7. pont | Python **és** Dart |
 | A bővítés megváltoztatja a meglévő `augment_pcm`-et | 8. pont kipinnelt regressziós cellája | Python |
+| Újraírt, párhuzamos akkord-osztály-matematika | 1. pont — a cella a MERGE-ELT `transpose_class`-szal szemben mér (R11) | Python |
 
 ## 7. Kötelező ellenőrzések
 
@@ -361,9 +419,14 @@ bitazonos kikapcsolás (4. pont) és a `"nem mért"` + `accepted` tiltás
   0525 D6). A kör akkor `blocked`, ha a RIPORT SZERKEZETE nem építhető meg.
 - **Osztály-arány torzítás:** a kiegyensúlyozás nem törölhet valós adatot,
   csak súlyoz/mintavételez — a manifest ezt rögzíti (5.6).
-- **Lista-tágítás kísértése:** a `.github/**` (R7) és a `tool/**` (R8) a tilos
-  zónában van; ha a kör ezekre szorulna, az `stopped` + jelentés, nem
-  önkezű tágítás.
+- **Lista-tágítás kísértése:** a `.github/**` (R7), a `tool/**` (R8) és az
+  `ml/chords/**` (R11) a tilos zónában van; ha a kör ezekre szorulna, az
+  `stopped` + jelentés, nem önkezű tágítás. Az `ml/chords/**` **importálása**
+  viszont nem módosítás — az kifejezetten elvárt (R11).
+- **Az akkord-osztály-logika újraírása:** MAJOR lelet; a merge-elt
+  `transpose_class` az egyetlen forrás (R11).
+- **Doboz-lokális szám repo-szintűnek állítása:** az `ml/honest_results.json`
+  gitignore-olt (R12) — a riport ezt mondja ki, nem hallgatja el.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
