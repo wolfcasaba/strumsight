@@ -25785,3 +25785,47 @@ itt SOHA NEM LÉTEZETT — mindkettő a brief szava és a fa közti rés.
 **Őrteszt:** nincs — a lelet a brief szövegének és a fának a viszonyáról szól,
 nem futtatható kódról; a védelem a pre-flight §1 kibővített olvasata (az
 artefaktum-hivatkozásokat útvonalra kell váltani), amit ez a lecke rögzít.
+
+## L642 — Egy „additív export" briefsor takarhatja azt, hogy a hivatkozott barrel NEM LÉTEZIK — és a cross-feature import szabálya emiatt egy tilos zónás allowlist-bővítés felé sodorná a kört (E14-R14, pre-flight, 2026-09-05)
+
+**Mit mértünk.** Az `E14-R14` briefje (előre írva 2026-08-20) a
+`lib/features/onboarding/public.dart`-ot „additív export" indoklással sorolta
+az `allowed_paths` közé. A pre-flight mérése: a fájl **nem létezett** — 20
+feature-nek volt `public.dart`-ja, az onboardingnak nem. A sor tehát nem
+bővítést, hanem **létrehozást** írt le, más névvel.
+
+**Miért nem kozmetika ez.** A kör mérőeszköze a `SignalQualitySnapshot`, ami a
+`live` feature-ben él, és a `tool/check_architecture.dart:382-392`
+`crossFeatureImportsMustUsePublicApi` szabálya a mély importot sértésként
+jelenti. A szabály allowlistje a `tool/check_architecture.dart`-ban lakik, ami
+a kör **tilos zónája** — ha az implementer a kézenfekvő mély importot írja meg,
+a kötelező `architecture` gate-lépés pirosra megy, a feloldás pedig
+`allowed_paths`-tágítást kívánna, azaz **H3**. A kör tehát egy nem létező
+fájl + egy gépi architektúra-szabály metszetében állt volna meg, jóval a
+dispatch után.
+
+**Mi fogta meg.** A pre-flight KÉT mérése együtt: (1) `ls lib/features/*/public.dart`
+— a hivatkozott barrel hiánya; (2) `grep -n "public.dart" tool/check_architecture.dart`
++ `grep -n "signal_quality" lib/features/live/public.dart` — hogy a legális út
+MA IS JÁRHATÓ, mert a `live` barrel a `:29` sorában már exportálja a
+snapshotot. A §0.0 revízió R3 pontja ezt az import-alakot kötelezővé tette
+(`import '../../live/public.dart';`), az ADR 0519 D6 pedig rögzítette.
+A review mutációs próbája utólag igazolta, hogy a kapu valódi: a mély útra
+cserélt import kimenete szó szerint
+`lib/features/onboarding/audio_setup/audio_profile.dart -> lib/features/live/domain/recognition/signal_quality_snapshot.dart [cross-feature imports must target public.dart]`.
+
+**A szabály.** Ha egy brief `allowed_paths` sora meglévő fájl **módosítását**
+sugallja („additív", „bővítés", „kiegészítés"), a pre-flight ellenőrizze,
+hogy a fájl **létezik-e**. Ha nem, a §0.0 revízió mondja ki, hogy a kör
+létrehozza — és ha a fájl egy GÉPI architektúra-szabály (barrel, allowlist,
+generált artefaktum) hatálya alá esik, a revízió írja le a **legális
+import-alakot is**, ne az implementerre bízza. Ez az [[L636]] (a mért alap
+elmozdul) és az [[L641]] (a hivatkozott artefaktum sosem létezett) harmadik
+változata: ott a brief SZAVA csúszott el a fától, itt a brief IGÉJE
+(„exportál" vs. „létrehoz").
+
+**Őrteszt:** nincs — a `brief-lint` `S13` foka a nem létező könyvtár-**előtagot**
+méri, egy nem létező, de a listán szereplő **fájlt** viszont nem tekint
+leletnek (helyesen: az új fájl a körök normál terméke). A védelem a pre-flight
+kibővített olvasata, amit ez a lecke rögzít; a gépi hátvéd a kötelező
+`architecture` gate-lépés, ami a hibás import-alakot mérten pirosra viszi.
