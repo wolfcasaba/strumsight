@@ -251,4 +251,201 @@ A gate a `format` → `analyze` → `test <minden útvonal külön>` → `archit
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5). **Kiindulás:** `main @ 5fbb4937`.
+
+### 10.1 Mit szállít a kör
+
+1. **Produkciós konfidencia-forrás** (D3/A4/A8) — `lib/features/onboarding/first_win_engine.dart`:
+   új `LiveFirstWinEngine implements OnboardingFirstWinEngine`, ami a
+   `StrumEngine.frames` (`lib/features/live/public.dart` felületén elért
+   `strumEngineProvider`) folyamát `.map((frame) => frame.confidence)`-szel
+   alakítja konfidencia-stream-mé — a hibaesemények a `Stream.map`
+   szemantikája miatt VÁLTOZATLANUL átfutnak (D5 előfeltétele). `start()`/
+   `stop()` a becsomagolt `StrumEngine`-re delegál, sosem `dispose()`-olja
+   (osztott példány, A9). `lib/features/onboarding/first_win_providers.dart`:
+   `onboardingFirstWinEngineFactoryProvider` default gyára mostantól
+   `(ref) => () => LiveFirstWinEngine(ref.watch(strumEngineProvider))` —
+   NEM `FakeOnboardingFirstWinEngine.new`.
+2. **A Stage bekötése** (D1/D2/A2/A3) —
+   `lib/features/onboarding/screens/onboarding_screen.dart`:
+   `_completeFirstWin`-ben a `router.go(entryLocation)` utáni
+   `addPostFrameCallback` mostantól `FirstWinStageScreen`-t pusholja (a
+   korábbi közvetlen `LearnScreen`-push helyett). A Stage `onContinue`-ja
+   `router.go(entryLocation)` + `LearnScreen(lesson: Lessons.firstWin)`
+   push-ot végez (pontosan a RÉGI `_completeFirstWin` viselkedése), az
+   `onSkip` csak `router.go(entryLocation)`-t hív — mindkettő ugyanazt az
+   előre kiszámolt `entryLocation` (`entryLocationFor(...)`) változót
+   olvassa, literál útvonal egyikben sincs. A `widget.onFirstWin` override
+   (tesztek) útja VÁLTOZATLAN — a Stage csak a default navigációs ágban jelenik meg.
+3. **Az őszinte hiba-ág** (D5/A10) —
+   `lib/features/onboarding/screens/first_win_stage_screen.dart`: a widget
+   mostantól a TELJES `AsyncValue`-t figyeli (`.hasError`), és hiba esetén a
+   MEGLÉVŐ `micPermissionBody`/`micPermissionAction` kulcsokból épülő
+   külön ágat mutat (`onboard-first-win-open-settings` gomb,
+   `openAppSettings` — pontosan az `analyze_screen.dart:181-183` precedens),
+   a "Not now" gomb VÁLTOZATLANUL, feltétel nélkül renderelt marad.
+4. **Új gate-tesztfájl** —
+   `test/features/onboarding/first_win_production_engine_test.dart`: A8
+   (a default gyár típusa + a konfidencia valós forrásból jön), A5-A7 (a
+   pontos 0.59/0.60/0.61 határ, EXPLICIT `FakeOnboardingFirstWinEngine`
+   override-dal — szándékosan függetlenül a default gyártól, lásd §10.2/3.
+   próba), A9 (stop a dispose-on + a megosztott motor újraindul a
+   következő figyelőnek), A10 (stream-hiba `AsyncValue` hibaként jelenik
+   meg + a Stage kimondja és a skip elérhető marad).
+5. **Pin-őrök típus-átírása** (§4 pin-guard):
+   - `test/app/routing/onboarding_first_win_test.dart` — a delayed-persist
+     teszt a CTA megnyomása után mostantól a `FirstWinStageScreen`-t várja
+     (nem közvetlenül a `LearnScreen`-t), egy erős `LiveFrame`-et emittál a
+     MÁR meglévő `strumEngineProvider`/`FakeStrumEngine` override-on át, és
+     a Continue gombbal jut el a `LearnScreen`-ig.
+   - `test/app/routing/shell_entry_location_test.dart` — a `pumpOnboarding`
+     helper mostantól `(GoRouter, FakeStrumEngine)` rekordot ad vissza; az
+     "A2" 2×2 mátrix mindkét first-win cellája új `passThroughFirstWinStage`
+     helperrel megy át a Stage-en; ÚJ cella: "shell BE × first-win Stage
+     'Not now' ALSO settles on /today" — ez az A3 tényleges widget-teszt
+     bizonyítéka (lásd §10.2/1. próba).
+   - `test/ui/goldens/e15_r13_full_variant_matrix_test.dart` — új
+     `'first_win_stage'` `_ScreenFixture` bejegyzés (build +
+     `FakeOnboardingFirstWinEngine` override, az e13_r16 golden fixture
+     mintáját követve) — az A1-completeness cella ELVÁRJA, hogy minden
+     MÉRTEN elérhető screen szerepeljen a mátrixban vagy a kizárási
+     listán; lásd §10.3 a maradék piros két cellához.
+
+### 10.2 Falszifikációs próbák (§6.1, mind a NÉGY, ténylegesen lefuttatva és visszaállítva)
+
+**1. próba — literál `/live` az `onSkip` ágban.**
+`onboarding_screen.dart`: `onSkip: () => router.go('/live')`.
+`flutter test test/app/routing/shell_entry_location_test.dart --plain-name "Not now"`
+→ **PIROS**: `Expected: <'/today'> Actual: <'/live'>` az új A3-cellán
+("shell BE × first-win Stage \"Not now\" ALSO settles on /today").
+Visszaállítva `onSkip: () => router.go(entryLocation)`-ra → **ZÖLD**
+(újramérve: `+1: ... All tests passed!`).
+
+**2. próba — exkluzív küszöb.**
+`first_win_providers.dart`: `isFirstWinSuccess` `>=` → `>`.
+`flutter test test/features/onboarding/first_win_production_engine_test.dart --plain-name "A5-A7"`
+→ **A6 (0.60) PIROS** (`onboard-first-win-continue` nem található,
+`onboard-first-win-retry` igen), **A5 (0.59) és A7 (0.61) ZÖLD**
+maradt — a hármas ténylegesen a HATÁRT méri. Visszaállítva `>=`-ra →
+mindhárom ZÖLD.
+
+**3. próba — a default gyár vissza `FakeOnboardingFirstWinEngine.new`-ra.**
+`first_win_providers.dart`:
+`onboardingFirstWinEngineFactoryProvider = Provider(( _) =>
+FakeOnboardingFirstWinEngine.new)`.
+`flutter test test/features/onboarding/first_win_production_engine_test.dart`
+→ **A8 mindkét cellája PIROS** (a `LiveFirstWinEngine` típus-ellenőrzés és a
+`strumEngineProvider`-ből jövő konfidencia egyaránt elbukik — a fake
+default sosem emittál a `FakeStrumEngine.emit(...)`-re), **az A5-A7 hármas
+(explicit `FakeOnboardingFirstWinEngine` override-dal, a default gyártól
+FÜGGETLENÜL) mindhárom cellája ZÖLD maradt** — pontosan ez bizonyítja, hogy
+a hármas a SZÁLLÍTOTT forrást méri (A8), nem a tesztbeli felülírást.
+(Mellékhatásként az A9/A10 is pirosra vált, mert azok is a default
+gyáron/`strumEngineProvider`-en át mérnek — ez helyes, nem tiltott
+mellékhatás.) Visszaállítva a produkciós gyárra → mind a 8 teszt ZÖLD.
+
+**4. próba — a hiba-ág elnémítása.**
+`first_win_stage_screen.dart`: `final hasError = false; //
+asyncConfidence.hasError;`.
+`flutter test test/features/onboarding/first_win_production_engine_test.dart --plain-name "A10"`
+→ **A10 widget-cellája PIROS** ("the Stage states the error and keeps
+\"Not now\" reachable" — a `micPermissionBody` szöveg nem jelenik meg,
+helyette a "Listening…" cím marad), a stream-szintű A10-teszt továbbra is
+ZÖLD (az `AsyncValue.hasError` maga nem hamisítható a widget szintjén).
+Visszaállítva `final hasError = asyncConfidence.hasError;`-re → mindkét
+A10-cella ZÖLD.
+
+### 10.3 A §7 gate — csonkítatlan futtatás, MEGTALÁLT lelet
+
+A pontos §7 parancs (mind a 15 tesztútvonal egy hívásban) **PIROS**-sal állt
+meg a 15. lépésnél (`test/ui/goldens/e15_r13_full_variant_matrix_test.dart`,
+kilépési kód 1), a format/analyze és mind a 14 megelőző tesztlépés ZÖLD
+volt. A gate script (`round-gate.sh`) az ELSŐ piros lépésnél megáll, ezért a
+záró `architecture`/`secrets`/`l10n` lépések ebben az EGY hívásban nem
+futottak le — emiatt külön futtattam ugyanazt a `round-gate.sh`-t a
+maradék két útvonallal (`test/ui/ui_baseline_screenshot_test.dart`,
+`test/app/navigation/`), ami a `architecture`/`secrets`/`l10n` lépésekkel
+együtt **MINDET ZÖLDRE** hozta (`MINDEN GATE ZÖLD`, kilépési kód 0).
+
+**A talált lelet, MÉRT gyökérokkal (pin-guard, brief §4: "ha egy cella a
+típus-átíráson túl válik pirossá, az a kör BLOKKOLÓ lelete, nem a cella
+hibája"):** a `FirstWinStageScreen` A1 miatt MOST vált elérhetővé
+(`check_screen_reachability` → `reachable: true`, lásd alább) — a fájl saját
+"A1 — completeness" cellája ezért MEGKÖVETELI, hogy a screen szerepeljen a
+`_screens` mátrixban vagy a kizárási listán (§10.1/5. pont: felvettem a
+mátrixba, `FakeOnboardingFirstWinEngine` override-dal). Ez viszont a
+`_screens.length`/`totalCells` LIVE értékét eggyel/16-tal megemeli, és az
+"A5 — completion-report guard" csoport KÉT cellája
+(`cites the matrix screen/cell counts…`, `cites the grand total test
+count…`) ezt az élő számot szó szerint keresi `docs/ui/chapter-15-completion-report.md`
+szövegében — az a fájl NINCS ezen kör `allowed_paths`-án, tehát nem
+frissíthető. Ez PONTOSAN a fájl saját, korábbi review-ból (MAJOR-1) örökölt,
+és a fájl saját kommentjében (L613/ADR 0112, az E16-R02 precedens) MÁR
+dokumentált hibaosztály: *"it goes red for a round that cannot fix it (the
+report is outside that round's allowed paths)"*. Ellenpróbát is futtattam:
+ha a mátrix-bejegyzést NEM veszem fel, az "A1 — completeness" cella vált
+pirosra helyette (kevesebb piros cella összesen, de valódi lefedettségi
+hiányt hagyna nyitva) — a mátrixba-vétel a helyesebb mérnöki döntés (valódi
+regressziós lefedettség > egy elavult szöveg-egyeztetés), ezért ezt
+tartottam meg. **A `docs/ui/chapter-15-completion-report.md` frissítése egy
+követő HEAL/kör dolga** (a §4 allowed_paths bővítésével).
+
+Mért kimenet:
+
+```
+$ dart run tool/check_screen_reachability.dart --format json
+...
+{
+  "screenPath": "lib/features/onboarding/screens/first_win_stage_screen.dart",
+  "className": "FirstWinStageScreen",
+  "declaredAt": {...},
+  "reachable": true,
+  ...
+}
+```
+
+```
+$ tools/round-gate.sh <mind a 15 útvonal egy hívásban>
+[1] format: ZÖLD
+[2] analyze: ZÖLD
+[3]  test test/features/onboarding/: ZÖLD
+[4]  test test/features/onboarding/first_win_production_engine_test.dart: ZÖLD
+[5]  test test/e2e/full_app_walkthrough_test.dart: ZÖLD
+[6]  test test/app/routing/app_router_test.dart: ZÖLD
+[7]  test test/app/routing/onboarding_first_win_test.dart: ZÖLD
+[8]  test test/app/routing/shell_entry_location_test.dart: ZÖLD
+[9]  test test/core/screen_size_guard_test.dart: ZÖLD
+[10] test test/features/onboarding/first_win_test.dart: ZÖLD
+[11] test test/features/onboarding/onboarding_resume_test.dart: ZÖLD
+[12] test test/features/onboarding/onboarding_test.dart: ZÖLD
+[13] test test/features/onboarding/permission_primer_test.dart: ZÖLD
+[14] test test/ui/goldens/e13_r16_screens_golden_test.dart: ZÖLD
+[15] test test/ui/goldens/e15_r13_full_variant_matrix_test.dart: PIROS (kilépési kód 1)
+  Failing tests:
+    ...A5 — completion-report guard... cites the grand total test count...
+    ...A5 — completion-report guard... cites the matrix screen/cell counts...
+exit 10
+```
+
+```
+$ tools/round-gate.sh test/ui/ui_baseline_screenshot_test.dart test/app/navigation/
+[1] format: ZÖLD
+[2] analyze: ZÖLD
+[3] test test/ui/ui_baseline_screenshot_test.dart: ZÖLD
+[4] test test/app/navigation/: ZÖLD
+[5] architecture: ZÖLD
+[6] secrets: ZÖLD
+[7] l10n: ZÖLD
+MINDEN GATE ZÖLD.
+exit 0
+```
+
+### 10.4 Érintetlen szerződések (ellenőrizve)
+
+`kFirstWinConfidenceThreshold` (0.60) és az `isFirstWinSuccess` inkluzív
+predikátuma VÁLTOZATLAN (csak a 2. falszifikációs próba idejére, majd
+azonnal visszaállítva). Nincs új `AudioOwner` variáns, nincs
+`lib/core/audio/**` módosítás, nincs új l10n kulcs, nincs új
+`OnboardingStep` érték, nincs új top-level route.
+
 ## 11. Review — a Claude tölti ki
