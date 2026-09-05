@@ -25703,3 +25703,85 @@ tehát egy naiv „nem üres → rendben" ellenőrzés átengedné — [L546](#l
 **Őrteszt:** `test/tooling/reference_model_licence_guard_test.dart` → az A
 csoport `a null spdx WITHOUT a "blocking" verdict is rejected…` cellája, plusz
 a hat placeholder-változat (`unknown`/`n/a`/`""`) mind a három artefaktumra.
+
+## L640 — A `gate_shape` őr a log BÁRMELY `round-gate.sh`-t tartalmazó sorára illeszkedik, ezért a script ELOLVASÁSA is `VIOLATION` — a jelzés így akkor is sértést mond, ha a gate-et helyesen futtatták (E14-R18, review N2, 2026-09-05)
+
+**Mit mértem.** Az `E14-R18` jelzésfájlja `gate_shape=VIOLATION`-t hordozott,
+miközben a kör mindkét gate-futtatása szabályos volt:
+
+```
+tools/round-gate.sh test/tooling/joint_io_schema_test.dart      # 2. hívás
+tools/round-gate.sh test/tooling/joint_io_schema_test.dart      # 4. hívás
+```
+
+A sértést az implementer ELSŐ Bash-hívása okozta, amely a scriptet csak
+**elolvasta**:
+
+```
+which flutter dart 2>&1; ls ~/flutter/bin 2>&1 | head; cat …/tools/round-gate.sh | head -60
+```
+
+A `tools/mm-round.sh:381-383` (és a `tools/codex-round.sh:332-334`) mintája
+
+```
+round-gate\.sh[^\n]*(\| *(tail|head)|&&)
+```
+
+a teljes logra fut, és nem különbözteti meg a `round-gate.sh` **futtatását** a
+puszta említésétől: a `cat …/round-gate.sh | head -60` alak mindkét feltételt
+kielégíti (`round-gate.sh` … `| head`). A minta ráadásul `[^\n]*`-gal a sor
+végéig fut, tehát egy `;`-vel elválasztott, teljesen független későbbi parancs
+csővezetéke is elég.
+
+**Miért számít.** A `gate_shape` az L05/L09 őre — pontosan azt hivatott
+megfogni, hogy a gate kilépési kódját elrejti-e egy csővezeték. Egy false
+positive itt drágább a hiányzó jelzésnél: az orchestrátornak minden `VIOLATION`
+esetén ki kell nyomoznia a logból a tényleges hívásokat, és ha ezt egyszer
+kihagyja, egy szabályos kört utasít el — vagy fordítva, hozzászokik a
+`VIOLATION`-höz, és a VALÓDI sértést engedi át. A mérce őre nem lehet zajos.
+
+**A javítás iránya (önjavító kör dolga, a kör maga nem nyúlhat a `tools/`-hoz,
+ADR 0087 §4):** a minta a `round-gate.sh` **hívását** ismerje fel, ne az
+említését — pl. sorkezdet/`$`-prompt utáni pozícióhoz kötve, és a `cat`/`less`/
+`head`/`grep <fájl>` alakokat kizárva; a `[^\n]*` helyett a `;`/`&&` határig
+tartó szegmensen belül keresve.
+
+**Őrteszt:** nincs — az őr a `tools/` alatt él, amit ez a kör nem módosíthat; a
+javító körnek kell hoznia a cellát (a `cat …round-gate.sh | head` alak
+`gate_shape=ok`, a `tools/round-gate.sh x | tail` alak `VIOLATION`).
+
+## L641 — Egy acceptance-cella hivatkozhat olyan artefaktumra, ami az adott korpuszhoz NEM létezik („a splitet a manifestből veszi"), és a pre-flight revízió ezt a szót nem oldotta fel (E14-R18, review N1, 2026-09-05)
+
+**Mit mértem.** Az `E14-R18` brief §6 AC1-e ezt írta elő: „A prototípus
+futtatható egyetlen paranccsal, és a splitet **a manifestből** veszi (nem
+beégetve)." A fában viszont az `ml/data/klangio` korpuszhoz **nincs**
+split-manifest: a `evaluation/recognition/baseline_manifest.json` (E14-R02,
+ADR 0354) mérési baseline, nem split-leírás, és a grouped split-stratégiák
+(E14-R08, ADR 0509) Dart-oldalon élnek, a Python tanítóoldalon nem.
+
+A `main @ 6371aa3` alapú, 2026-08-20-i briefet a pre-flight tíz ponton
+újramérte (R1–R11) — de a „manifest" szót nem: a revízió az AC2-t (legacy sor)
+és az AC5-öt (küszöb-hármas) átírta, az AC1-et érintetlenül hagyta. Az
+implementer a kritérium **tartalmát** teljesítette (a split a korpuszból
+származik `guitarist_of`/`logo_folds` alapján, a foldot a futás provenance
+JSON-je hordozza, és az evaluate oldal FÜGGETLENÜL újraszámolja és
+leakage-ellenőrzi), de a betű szerinti „manifest" referens nélkül maradt.
+
+**Miért csúszott át.** A brief-lint `S15` foka a mért alap SHA-ja óta módosult
+**fájlokat** méri; egy olyan szót, amely SOSEM létezett artefaktumra hivatkozik,
+egyetlen gépi fok sem fogja meg. A pre-flight §1 szabálya („minden briefben
+hivatkozott enum-értéket, mezőt, metódust grep-elj ki a kódból") pontosan erre
+való — de a „manifest" köznév, nem azonosító, ezért nem grep-elhető
+mechanikusan.
+
+**A szabály.** Ha egy acceptance-cella egy **artefaktumra** hivatkozik (manifest,
+fixture, séma, tábla), a pre-flight mondja meg, MELYIK FÁJL az — útvonallal.
+Ha nincs ilyen fájl, a §0.0 revízió írja át a cellát arra a mérhető
+tulajdonságra, amit valójában kér (itt: „a split a korpuszból származik, nem
+beégetett felvétel-lista, és a kiértékelő oldal függetlenül újraszámolja"). Ez
+az L636 („a mért alap elmozdul") párja: ott a hivatkozott fájl MEGVÁLTOZOTT,
+itt SOHA NEM LÉTEZETT — mindkettő a brief szava és a fa közti rés.
+
+**Őrteszt:** nincs — a lelet a brief szövegének és a fának a viszonyáról szól,
+nem futtatható kódról; a védelem a pre-flight §1 kibővített olvasata (az
+artefaktum-hivatkozásokat útvonalra kell váltani), amit ez a lecke rögzít.
