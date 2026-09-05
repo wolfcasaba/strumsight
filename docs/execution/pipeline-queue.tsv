@@ -49,6 +49,25 @@
 # A prepared sorokat a driver nem indítja el; az Epic 2 lezárása és emberi
 # jóváhagyás után az első indítható kör státusza kézzel pendingre állítható.
 #
+# USER-DÖNTÉS 2026-09-05: „ne minimaxal fusson, minden fusson Sonnet 5
+# high-al és Opus 5 orchestrátorral." MINDEN nyitott (pending | prepared |
+# hold) sor engine-je ezzel `sonnet-impl` (claude-sonnet-5, `--effort high`),
+# az orchestrátor pedig Opus 5 — ez a 2026-08-23 óta E12–E16-on futó felállás,
+# most a TELJES hátralévő mezőnyre kiterjesztve.
+#
+# Ez feloldja a fenti 2026-08-21-es bekezdés `sonnet-impl`-re vonatkozó
+# H-INDEP aggályát: az MÉRVE elavult. Az `orchestrator_conflicts_with_implementer`
+# claude-ága 2026-08-23 óta MODELL-azonosságon mér, nem kvóta-azonosságon
+# (round-pipeline.sh), tehát Opus 5 (orchestrátor) ≠ Sonnet 5 (implementer)
+# NEM ütközés. A közös Claude-előfizetés vállalt kockázat, amit a 85%-os fék
+# (PIPELINE_CLAUDE_SESSION_PCT_MAX) változatlanul kezel.
+#
+# Indok: a MiniMax MÉRT gyengéje az invariáns-lazítás (engine-registry:
+# „9/10; mért gyengéje: invariánst lazít"), a hátralévő mezőny mércéje viszont
+# végig invariáns-sűrű — típus-pinnelő őrök, gate-cellák, fail-closed kapuk.
+# A `minimax` NEM tiltott, csak nem alapértelmezett: bármely sor visszaáll rá,
+# ha a Claude heti keret szűkül. A Codex-oldali tiltás VÁLTOZATLAN.
+#
 # Az E02 sorok motorját nem írjuk át visszamenőleg.
 E02-R12	docs/rounds/e02-r12-practice-hub-and-setup.md	minimax	0078	done
 E02-R13	docs/rounds/e02-r13-session-ui-shell.md	minimax	0079	done
@@ -363,9 +382,9 @@ E99-R20	docs/rounds/e99-r20-gov-14-round-landing-automation.md	terra	0313	done
 E07-R23	docs/rounds/e07-r23-plan-compiler-and-execution.md	codex	0268	done
 E07-R24	docs/rounds/e07-r24-song-goal-integration.md	codex	nincs	done
 E07-R25	docs/rounds/e07-r25-analysis-and-vision-evidence.md	codex	0319	done
-E99-R21	docs/rounds/e99-r21-gov-15-gate-step-taxonomy.md	minimax	0314	hold
+E99-R21	docs/rounds/e99-r21-gov-15-gate-step-taxonomy.md	sonnet-impl	0314	hold
 E99-R22	docs/rounds/e99-r22-gov-16-halt-guard-ledger.md	terra	0315	done
-E99-R23	docs/rounds/e99-r23-gov-17-gate-edit-policy.md	minimax	0372	hold
+E99-R23	docs/rounds/e99-r23-gov-17-gate-edit-policy.md	sonnet-impl	0372	hold
 E07-R26	docs/rounds/e07-r26-outcome-ingestion-and-revision.md	codex	nincs	done
 E07-R27	docs/rounds/e07-r27-missed-day-and-pause.md	codex	0269	done
 E07-R28	docs/rounds/e07-r28-planner-assist-gateway.md	codex	0270	done
@@ -410,7 +429,7 @@ E08-R25	docs/rounds/e08-r25-song-trainer-and-setlist-integration.md	minimax	ninc
 E08-R26	docs/rounds/e08-r26-cross-feature-gamification-integration.md	minimax	nincs	done
 E08-R27	docs/rounds/e08-r27-gamification-accessibility-and-settings.md	minimax	0318	done
 E08-R28	docs/rounds/e08-r28-ledger-sync-contract-and-merge.md	minimax	0319	done
-E08-R29	docs/rounds/e08-r29-integrity-balance-and-ci-guards.md	minimax	0320	hold
+E08-R29	docs/rounds/e08-r29-integrity-balance-and-ci-guards.md	sonnet-impl	0320	hold
 E08-R30	docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md	minimax	nincs	done
 #
 # SORREND-VÁLTÁS 2026-08-23 (user-döntés, JAVÍTVA ugyanaznap): a Chapter 13 sáv
@@ -659,11 +678,11 @@ E09-R24	docs/rounds/e09-r24-club-domain-membership-and-roles.md	minimax	0413	don
 E09-R25	docs/rounds/e09-r25-club-feed-pinned-post-and-challenge.md	minimax	nincs	done
 E09-R26	docs/rounds/e09-r26-user-report-and-immediate-safety-flow.md	minimax	0414	done
 E09-R27	docs/rounds/e09-r27-moderation-queue-enforcement-and-appeal.md	minimax	0425	done
-E09-R28	docs/rounds/e09-r28-privacy-center-export-and-deletion.md	minimax	0416	hold
-E09-R29	docs/rounds/e09-r29-offline-sync-conflict-and-outbox-hardening.md	minimax	0417	hold
-E09-R30	docs/rounds/e09-r30-rate-limit-observability-and-security-hardening.md	minimax	0418	hold
-E09-R31	docs/rounds/e09-r31-accessibility-localization-and-ux-polish.md	minimax	0419	hold
-E09-R32	docs/rounds/e09-r32-integration-load-evaluation-and-release-readiness.md	minimax	nincs	hold
+E09-R28	docs/rounds/e09-r28-privacy-center-export-and-deletion.md	sonnet-impl	0416	hold
+E09-R29	docs/rounds/e09-r29-offline-sync-conflict-and-outbox-hardening.md	sonnet-impl	0417	hold
+E09-R30	docs/rounds/e09-r30-rate-limit-observability-and-security-hardening.md	sonnet-impl	0418	hold
+E09-R31	docs/rounds/e09-r31-accessibility-localization-and-ux-polish.md	sonnet-impl	0419	hold
+E09-R32	docs/rounds/e09-r32-integration-load-evaluation-and-release-readiness.md	sonnet-impl	nincs	hold
 #
 # ===== EPIC 10 — Offline AI (Chapter 11, 32 kör) =====
 # Batch-előkészítve 2026-08-22 (user-döntés: ha az Epic 9 elkészül, a lánc NE
@@ -685,38 +704,38 @@ E09-R32	docs/rounds/e09-r32-integration-load-evaluation-and-release-readiness.md
 # oldali, fake/fixture-alapú szerződésre — a natív pár nyitott tartozásként
 # dokumentált (nem hallgatólagosan elejtve), a megfelelő `hold` kör mellett
 # veendő fel egy jövőbeli native-infrastruktúra körben.
-E10-R01	docs/rounds/e10-r01-offline-ai-baseline-and-adr-framework.md	minimax	nincs	hold
-E10-R02	docs/rounds/e10-r02-local-ai-domain-contracts.md	minimax	0420	hold
-E10-R03	docs/rounds/e10-r03-execution-modes-and-routing-policy.md	minimax	0421	hold
-E10-R04	docs/rounds/e10-r04-device-benchmark-harness.md	minimax	nincs	hold
-E10-R05	docs/rounds/e10-r05-model-candidates-and-evaluation-corpus.md	minimax	nincs	hold
-E10-R06	docs/rounds/e10-r06-runtime-bakeoff-spike.md	minimax	nincs	hold
-E10-R07	docs/rounds/e10-r07-runtime-adr-and-plugin-skeleton.md	minimax	0422	hold
-E10-R08	docs/rounds/e10-r08-signed-model-package-and-verifier.md	minimax	0423	hold
-E10-R09	docs/rounds/e10-r09-model-download-and-offline-import.md	minimax	0424	hold
-E10-R10	docs/rounds/e10-r10-activation-rollback-and-storage-quota.md	minimax	0425	hold
-E10-R11	docs/rounds/e10-r11-device-capability-and-tier-resolver.md	minimax	0426	hold
-E10-R12	docs/rounds/e10-r12-local-ai-resource-coordinator.md	minimax	0427	hold
-E10-R13	docs/rounds/e10-r13-native-model-lifecycle-and-process-isolation.md	minimax	0428	hold
-E10-R14	docs/rounds/e10-r14-token-streaming-and-cancellation.md	minimax	0429	hold
-E10-R15	docs/rounds/e10-r15-tokenizer-and-generation-profiles.md	minimax	nincs	hold
-E10-R16	docs/rounds/e10-r16-context-token-budgeter.md	minimax	0430	hold
-E10-R17	docs/rounds/e10-r17-conversation-repository-and-memory.md	minimax	0431	hold
-E10-R18	docs/rounds/e10-r18-knowledge-package-and-lexical-retrieval.md	minimax	0432	hold
-E10-R19	docs/rounds/e10-r19-local-embedding-runtime-and-index.md	minimax	0433	hold
-E10-R20	docs/rounds/e10-r20-hybrid-retrieval-and-provenance.md	minimax	0434	hold
-E10-R21	docs/rounds/e10-r21-prompt-assembly-and-injection-boundary.md	minimax	0435	hold
-E10-R22	docs/rounds/e10-r22-structured-output-and-tool-calling.md	minimax	0436	hold
-E10-R23	docs/rounds/e10-r23-local-tutor-model-gateway.md	minimax	0437	hold
-E10-R24	docs/rounds/e10-r24-gateway-routing-integration.md	minimax	0438	hold
-E10-R25	docs/rounds/e10-r25-safety-preflight-and-output-guardrails.md	minimax	0439	hold
-E10-R26	docs/rounds/e10-r26-bilingual-evaluation.md	minimax	nincs	hold
-E10-R27	docs/rounds/e10-r27-performance-thermal-and-battery-policy.md	minimax	0440	hold
-E10-R28	docs/rounds/e10-r28-lifecycle-and-crash-recovery.md	minimax	0441	hold
-E10-R29	docs/rounds/e10-r29-model-export-and-package-build-pipeline.md	minimax	nincs	hold
-E10-R30	docs/rounds/e10-r30-backend-manifest-and-release-channel.md	minimax	0442	hold
-E10-R31	docs/rounds/e10-r31-offline-ai-settings-and-model-manager-ui.md	minimax	nincs	hold
-E10-R32	docs/rounds/e10-r32-integration-device-matrix-and-epic-closure.md	minimax	nincs	hold
+E10-R01	docs/rounds/e10-r01-offline-ai-baseline-and-adr-framework.md	sonnet-impl	nincs	hold
+E10-R02	docs/rounds/e10-r02-local-ai-domain-contracts.md	sonnet-impl	0420	hold
+E10-R03	docs/rounds/e10-r03-execution-modes-and-routing-policy.md	sonnet-impl	0421	hold
+E10-R04	docs/rounds/e10-r04-device-benchmark-harness.md	sonnet-impl	nincs	hold
+E10-R05	docs/rounds/e10-r05-model-candidates-and-evaluation-corpus.md	sonnet-impl	nincs	hold
+E10-R06	docs/rounds/e10-r06-runtime-bakeoff-spike.md	sonnet-impl	nincs	hold
+E10-R07	docs/rounds/e10-r07-runtime-adr-and-plugin-skeleton.md	sonnet-impl	0422	hold
+E10-R08	docs/rounds/e10-r08-signed-model-package-and-verifier.md	sonnet-impl	0423	hold
+E10-R09	docs/rounds/e10-r09-model-download-and-offline-import.md	sonnet-impl	0424	hold
+E10-R10	docs/rounds/e10-r10-activation-rollback-and-storage-quota.md	sonnet-impl	0425	hold
+E10-R11	docs/rounds/e10-r11-device-capability-and-tier-resolver.md	sonnet-impl	0426	hold
+E10-R12	docs/rounds/e10-r12-local-ai-resource-coordinator.md	sonnet-impl	0427	hold
+E10-R13	docs/rounds/e10-r13-native-model-lifecycle-and-process-isolation.md	sonnet-impl	0428	hold
+E10-R14	docs/rounds/e10-r14-token-streaming-and-cancellation.md	sonnet-impl	0429	hold
+E10-R15	docs/rounds/e10-r15-tokenizer-and-generation-profiles.md	sonnet-impl	nincs	hold
+E10-R16	docs/rounds/e10-r16-context-token-budgeter.md	sonnet-impl	0430	hold
+E10-R17	docs/rounds/e10-r17-conversation-repository-and-memory.md	sonnet-impl	0431	hold
+E10-R18	docs/rounds/e10-r18-knowledge-package-and-lexical-retrieval.md	sonnet-impl	0432	hold
+E10-R19	docs/rounds/e10-r19-local-embedding-runtime-and-index.md	sonnet-impl	0433	hold
+E10-R20	docs/rounds/e10-r20-hybrid-retrieval-and-provenance.md	sonnet-impl	0434	hold
+E10-R21	docs/rounds/e10-r21-prompt-assembly-and-injection-boundary.md	sonnet-impl	0435	hold
+E10-R22	docs/rounds/e10-r22-structured-output-and-tool-calling.md	sonnet-impl	0436	hold
+E10-R23	docs/rounds/e10-r23-local-tutor-model-gateway.md	sonnet-impl	0437	hold
+E10-R24	docs/rounds/e10-r24-gateway-routing-integration.md	sonnet-impl	0438	hold
+E10-R25	docs/rounds/e10-r25-safety-preflight-and-output-guardrails.md	sonnet-impl	0439	hold
+E10-R26	docs/rounds/e10-r26-bilingual-evaluation.md	sonnet-impl	nincs	hold
+E10-R27	docs/rounds/e10-r27-performance-thermal-and-battery-policy.md	sonnet-impl	0440	hold
+E10-R28	docs/rounds/e10-r28-lifecycle-and-crash-recovery.md	sonnet-impl	0441	hold
+E10-R29	docs/rounds/e10-r29-model-export-and-package-build-pipeline.md	sonnet-impl	nincs	hold
+E10-R30	docs/rounds/e10-r30-backend-manifest-and-release-channel.md	sonnet-impl	0442	hold
+E10-R31	docs/rounds/e10-r31-offline-ai-settings-and-model-manager-ui.md	sonnet-impl	nincs	hold
+E10-R32	docs/rounds/e10-r32-integration-device-matrix-and-epic-closure.md	sonnet-impl	nincs	hold
 #
 # ===== 2. FEJLESZTÉSI SÁV — Chapter 14 (Recognition Recovery) =====
 # User-döntés 2026-08-15: az Epic 7 MELLETT fusson egy második sáv, ami előbb a
