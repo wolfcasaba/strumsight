@@ -13,6 +13,14 @@
 
 ## 1. Verdikt
 
+**VÉGSŐ DÖNTÉS: APPROVED** (javító kör után, `93ed3ea6`).
+
+Az első fordulóban **CHANGES REQUESTED** volt 1 MAJOR-ral; a javító kör azt
+lezárta, és a zárást a reviewer FÜGGETLENÜL újramérte (§9). A három NOTE
+tudatosan nyitva marad — mind a kör tilos zónáján kívülre esik, follow-up.
+
+### Az első forduló verdiktje (megőrizve)
+
 **CHANGES REQUESTED** — 1 MAJOR nyitva.
 
 A kör tartalmi magja **hűen teljesíti** a briefet és az ADR 0520 D1–D7-et: a
@@ -278,7 +286,7 @@ próbatesztet sem tartalmaz.
 | Scope-audit | OK — 10 útvonal, 0 sértés |
 | `full-gate.yml` a merge SHA-n (`6146c33d`) | lásd §8 |
 | `router-ci.yml` a merge SHA-n (`6146c33d`) | lásd §8 |
-| Review | **CHANGES REQUESTED** — MAJOR-1 nyitva |
+| Review | **APPROVED** — MAJOR-1 lezárva, 0 nyitott BLOCKER/MAJOR/MINOR |
 
 ## 8. CI
 
@@ -289,7 +297,66 @@ próbatesztet sem tartalmaz.
   a §9 rögzíti.
 - **`router-ci.yml`:** run `33967128196`, head SHA `6146c33d`.
 
-## 9. Javító kör után — zárás
+## 9. Javító kör után — zárás (`93ed3ea6`)
 
-*(A javító kör után frissítendő: a MAJOR-1 zárása, az újrafuttatott gate, a
-friss CI-run SHA-ja és a végső verdikt.)*
+### 9.1 MAJOR-1 — LEZÁRVA
+
+A javító kör **kizárólag** a kifogásolt cellát írta át (`git diff --stat
+2fbcb214..93ed3ea6`: `live_screen_truthfulness_test.dart` **+7/-5**, a brief §10
+handoffja **+169**; production kód **nulla sor**):
+
+```diff
+-        // Above 200% the round makes no overflow promise — consume whatever
+-        // rendering error may have been reported so it doesn't auto-fail the
+-        // test; a genuine crash would still surface as a thrown exception
+-        // from the pump above, which this cell does not catch.
+-        tester.takeException();
++        // Above 200% the round makes no overflow promise, but it DOES still
++        // guarantee no crash: only a layout-overflow exception is acceptable
++        // here — anything else (e.g. a StateError) must fail this cell.
++        final taken = tester.takeException();
++        if (taken != null) {
++          expect(taken.toString(), contains('overflowed'));
++        }
+```
+
+A cáfolt doc-comment-állítás eltűnt, helyette a tényleges viselkedés leírása
+áll — a §7 doc-comment-fegyelme teljesül.
+
+### 9.2 A zárás FÜGGETLEN újramérése (reviewer, nem az implementer bemondása)
+
+Az implementer §10.7-ben leír egy saját falszifikációt. A protokoll szerint ezt
+**nem fogadom el bemondásra**: friss klónban (`/tmp/review-e14-r13-fix`) magam
+kényszerítettem egy nem-túlcsordulás jellegű kivételt a 250%-os fába —
+szándékosan MÁS mechanizmussal, mint az implementer (`FlutterError.reportError`
+egy `StateError`-ral, nem `build`-ban dobó `Builder`):
+
+```
+00:03 +6: textscale threshold triple (ADR 0520 D8) 250% (above the ceiling) …
+Expected: contains 'overflowed'
+  Actual: 'Bad state: reviewer probe: a real crash, not layout'
+00:04 +6 -1: Some tests failed.
+```
+
+A cella **PIROSRA VÁLT** egy valódi crashre — a hibát, amit a MAJOR-1 leírt,
+mostantól elkapja. Ugyanez a cella a próba visszavonása után zöld. Ez az a
+teszt, „ami a hibát pirosra fogta volna" — **MAJOR-1 zárva**.
+
+### 9.3 Ami NEM változott a javító körben
+
+`uncertainty_reason_banner.dart`, `live_screen.dart`, mind a négy ARB-fájl,
+`uncertainty_reason_banner_test.dart`, `live_stage_test.dart`,
+`live_screen_test.dart`, `e13_r18_screens_golden_test.dart` és a két golden PNG:
+**nulla sor**. A 150%/200%-os cellák érintetlenek. A javító kör tehát nem
+hizlalta a diffet és nem nyitott új felületet.
+
+### 9.4 Maradék NOTE-ok
+
+NOTE-1/2/3 tudatosan **nyitva marad** — mindhárom a kör `allowed_paths`-án
+KÍVÜLI fájlt igényelne (`chord_timeline.dart`, design-system, accessibility-
+cellák), tehát a körben javítani őket H3 volna. A HANDOFF §6 viszi tovább őket.
+
+### 9.5 Végső verdikt
+
+**APPROVED.** 0 nyitott BLOCKER / MAJOR / MINOR. A merge a zöld kapu (§7)
+teljesülésekor mehet.
