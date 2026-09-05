@@ -1,0 +1,258 @@
+{
+  "schemaVersion": "1.0",
+  "seed": 42,
+  "transforms": [
+    {
+      "name": "pitch_shift_continuous",
+      "enabled": true,
+      "params": {
+        "domain": "pcm_varispeed_direction_only",
+        "semitoneRangeMax": 6.0,
+        "distribution": "uniform_continuous"
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_pitch_shift_continuous_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "pitch_shift_label_transpose",
+      "enabled": true,
+      "params": {
+        "domain": "pcm_varispeed_chord_aware",
+        "semitoneRangeMax": 6,
+        "distribution": "uniform_integer"
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_pitch_shift_label_transpose_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "room_ir_reverb",
+      "enabled": true,
+      "params": {
+        "prob": 0.6,
+        "decaySRange": [
+          0.12,
+          0.4
+        ],
+        "wetRange": [
+          0.12,
+          0.4
+        ]
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_room_ir_reverb_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "gain",
+      "enabled": true,
+      "params": {
+        "gainDbRange": [
+          -6.0,
+          6.0
+        ]
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_gain_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "device_response",
+      "enabled": false,
+      "params": {
+        "profiles": [
+          "phone_a",
+          "phone_b",
+          "tablet_a"
+        ]
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_device_response_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "mic_sim",
+      "enabled": true,
+      "params": {
+        "prob": 0.7,
+        "tiltDbRange": [
+          -6.0,
+          6.0
+        ],
+        "hpHzRange": [
+          40.0,
+          120.0
+        ],
+        "lpHzRange": [
+          5500.0,
+          7500.0
+        ]
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_mic_sim_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "compression",
+      "enabled": false,
+      "params": {
+        "thresholdDbRange": [
+          -24.0,
+          -12.0
+        ],
+        "ratioRange": [
+          2.0,
+          4.0
+        ]
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_compression_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "additive_snr_noise",
+      "enabled": true,
+      "params": {
+        "prob": 0.6,
+        "snrDbRange": [
+          15.0,
+          35.0
+        ],
+        "spectrum": "white"
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_additive_snr_noise_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "traffic_ambient_noise",
+      "enabled": false,
+      "params": {
+        "prob": 0.5,
+        "snrDbRange": [
+          10.0,
+          25.0
+        ],
+        "spectrum": "pink_like_1_over_f"
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_traffic_ambient_noise_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "transient_burst",
+      "enabled": false,
+      "params": {
+        "nBursts": 2,
+        "durSeconds": 0.015,
+        "ampRange": [
+          0.05,
+          0.3
+        ]
+      },
+      "status": "candidate",
+      "measured": "nem mért",
+      "reproCommand": "python3 ml/honest_eval.py logo logo_transient_burst_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
+    },
+    {
+      "name": "composite_recipe_r173",
+      "enabled": false,
+      "params": {
+        "domain": "training_recipe_composite",
+        "pitchSemitoneRangeMax": 6,
+        "nAug": 2,
+        "augReg": true,
+        "augRegDropout": 0.25,
+        "augRegRecDropout": 0.15,
+        "augRegL2": 0.0001
+      },
+      "status": "rejected",
+      "measured": {
+        "unseenPlayerSplits": [
+          {
+            "split": "logoBatch",
+            "baseline": 0.7066,
+            "baselineStdDev": 0.0165,
+            "treated": 0.6985,
+            "treatedStdDev": 0.0093,
+            "delta": -0.0081
+          },
+          {
+            "split": "logoLive70",
+            "baseline": 0.6061,
+            "baselineStdDev": 0.0548,
+            "treated": 0.5289,
+            "treatedStdDev": 0.0952,
+            "delta": -0.0772
+          }
+        ],
+        "confound": "logo_aug also flips on AUG_REG (dropout 0.25 / rec_dropout 0.15 / l2 1e-4, ml/honest_eval.py::AUG_REG) alongside the augmentation, so this delta is the SUM of two effects and cannot accept or reject any SINGLE transform (round brief R4, ADR 0525 D7).",
+        "source": "ml/honest_results.json r173 measurement (gitignored, box-local — ml/.gitignore:14, round brief R12)"
+      },
+      "reproCommand": "python3 ml/honest_eval.py logo logo_aug",
+      "measuredCostSeconds": 10769.7
+    }
+  ],
+  "classRatios": {
+    "direction": {
+      "baseline": {
+        "down": 0.42,
+        "up": 0.4,
+        "noStrum": 0.18
+      },
+      "balanced": {
+        "down": 0.3334,
+        "up": 0.3333,
+        "noStrum": 0.3333
+      }
+    },
+    "chord": {
+      "baseline": {
+        "N.C.": 0.35,
+        "major": 0.44,
+        "minor": 0.21
+      },
+      "balanced": {
+        "N.C.": 0.3334,
+        "major": 0.3333,
+        "minor": 0.3333
+      }
+    }
+  },
+  "pitchShiftLimits": {
+    "pcmVarispeedMaxSemitones": 6,
+    "pcmVarispeedSource": "ISMIR-2025 Murgul et al. ablation optimum (arXiv:2508.07973)",
+    "cqtChordTrackMaxSemitones": 5,
+    "cqtChordTrackSource": "ml/chords/augment.py::augment_windows default max_semi — the safe zero-fill range for the 144-bin CQT frequency axis, a different domain and a different constraint from the PCM/varispeed limit above (round brief R11)"
+  },
+  "balancing": {
+    "method": "resample_with_replacement",
+    "dropsRealData": false
+  },
+  "provenance": {
+    "generatedFrom": "ml.augment.DEFAULT_TRANSFORM_CONFIG baseline (ml/augment.py) — the enabled/disabled switch on each transform row below mirrors that shipped config (pitch_shift/reverb/mic_sim/gain/add_noise on; device_response/compression/traffic_noise/transient_burst off), not an arbitrary all-on recipe; composite_recipe_r173 is enabled=false because its measured status is rejected (ADR 0525 D6/D9)",
+    "datasetSource": "Klangio GST-MM corpus, LOGO (leave-one-guitarist-out) unseen-player split — ml/honest_eval.py::section_logo_aug",
+    "classRatiosSource": "illustrative — not measured (review E14-R19 MAJOR-2): no repo-local class-count run backs these numbers; ml.augment.class_ratios() computes real ratios from actual label arrays but was not run against a dataset to produce this manifest"
+  }
+}
