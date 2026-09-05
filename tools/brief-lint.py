@@ -517,6 +517,77 @@ def existing_nav_guards(repo: Path) -> list[str]:
     return [path for path in NAV_GUARD_TESTS if (repo / path).is_file()]
 
 
+BASE_SHA = re.compile(r"main @ ([0-9a-f]{7,40})\b")
+REFERENCED_PATH = re.compile(r"`((?:lib|test)/[A-Za-z0-9_./-]+\.dart)`")
+# Hány fájlt soroljon fel az S15 üzenete, mielőtt „…"-tal zár. A lelet a
+# pre-flight TEENDŐJE, tehát olvashatónak kell maradnia; a teljes lista a
+# `git diff --name-only <sha>..HEAD` paranccsal bármikor előhívható.
+DRIFT_LIST_LIMIT = 6
+
+
+def _git_lines(repo: Path, *arguments: str) -> list[str] | None:
+    """`git` kimenet sorokra bontva — `None`, ha a parancs nem futtatható.
+
+    A `None` és az üres lista SZÁNDÉKOSAN különbözik: „nem tudom megmérni"
+    (nincs git, sekély klón, ismeretlen SHA) nem ugyanaz, mint „mértem, és
+    nincs sodródás" — az előbbi néma, az utóbbi zöld.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo), *arguments],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if completed.returncode != 0:
+        return None
+    return [line for line in completed.stdout.splitlines() if line]
+
+
+def _listed(paths: list[str]) -> str:
+    """Olvasható, CSONKÍTOTT fájllista az S15 üzenetébe — a szám mindig teljes."""
+    shown = ", ".join(f"`{path}`" for path in paths[:DRIFT_LIST_LIMIT])
+    if len(paths) <= DRIFT_LIST_LIMIT:
+        return shown
+    return f"{shown} és még {len(paths) - DRIFT_LIST_LIMIT}"
+
+
+def brief_base_sha(text: str, repo: Path) -> str | None:
+    """A brief `main @ <sha>` mért alapja, ha a fa ISMERI is azt a commitot."""
+    match = BASE_SHA.search(text)
+    if match is None:
+        return None
+    sha = match.group(1)
+    if _git_lines(repo, "cat-file", "-t", sha) != ["commit"]:
+        return None
+    return sha
+
+
+def referenced_tree_files(text: str, allowed_paths, repo: Path) -> list[str]:
+    """A brief által MEGNEVEZETT, a fán létező `lib/`–`test/` fájlok.
+
+    Két forrás uniója, mert a brief kétféleképpen hivatkozik a mért alapra: az
+    `allowed_paths` a birtokolt fájlokat sorolja, a §2 „mért tények" pedig
+    backtickes útvonalakkal mutat rájuk (gyakran olyanokra is, amiket a kör NEM
+    írhat át — épp ezek a legveszélyesebbek, mert a kör feltevése rájuk épül).
+    """
+    candidates = {path for path in allowed_paths if path.startswith(("lib/", "test/"))}
+    candidates.update(REFERENCED_PATH.findall(text))
+    return sorted(path for path in candidates if (repo / path).is_file())
+
+
+def feature_roots(allowed_paths) -> list[str]:
+    """A kör által érintett `lib/features/<feature>/` gyökerek."""
+    roots = set()
+    for path in allowed_paths:
+        parts = PurePosixPath(path).parts
+        if len(parts) >= 3 and parts[0] == "lib" and parts[1] == "features":
+            roots.add(f"lib/features/{parts[2]}/")
+    return sorted(roots)
+
+
 def queue_rows(repo: Path) -> list[tuple[str, str, str]]:
     """(kör, brief, státusz) hármasok a sor-fájlból, sorrendben."""
     path = repo / QUEUE_RELATIVE
@@ -1230,6 +1301,82 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                     "teszteket a `gate_tests`-be ÉS a §7 gate-parancsba (az S12 ezt "
                     "külön méri). Ha a kör a képernyőt bizonyíthatóan nem cseréli le, "
                     "a §0.0 mondja ki ezt a mérést",
+                )
+            )
+
+    # S15 — az ELŐRE MEGÍRT brief mért alapja azóta ELMOZDULT (E14-R10 / H3,
+    # [L636](../LESSONS.md#l636)). MÉRT ok: az E14-R10 briefje 2026-08-20-án,
+    # `main @ 88e08e65`-en készült, és egy ÚJ irány-abstention kaput írt elő
+    # (margó 0,150, elfogadás-oldalon inkluzív) — miközben 2026-09-04-én
+    # ugyanez a döntés MERGE-ELVE landolt az E14-R04 / ADR 0505 szerződésében
+    # (`StrumPrediction.decision`, 0,05, ELUTASÍTÁS-oldalon inkluzív). A kör
+    # célja így csak a brief tilos zónáján KÍVÜL volt teljesíthető: H3, egy
+    # teljes orchestrátor-session árán, a dispatch előtt.
+    #
+    # Miért volt néma: az S9–S14 mind a brief és a JELEN fa viszonyát méri,
+    # tehát egy önmagában konzisztens, csak ELAVULT brief mindet kielégíti. A
+    # brief maga előírja a pre-flightot („olvasd újra … eltérésnél §0.0
+    # revízió"), de ezt eddig csak FEGYELEM tartotta be — a szabály ebből
+    # mércét csinál (ugyanaz a lépés, mint az S12-nél: gépi őr kell rá).
+    #
+    # A predikátum a brief SAJÁT hivatkozási felületére szűkít (birtokolt +
+    # §2-ben megnevezett fájlok), és KÜLÖN jelzi a feature-gyökerek alatt
+    # landolt ÚJ fájlokat — az E14-R10-et pontosan ez a második jel fogta volna
+    # meg: a szerződés ÚJ fájlként érkezett, nem a megnevezettek módosításaként.
+    # `strict`, `done` körre néma, és mérés hiányában (nincs git, sekély klón,
+    # ismeretlen SHA) szintén néma — a CI-kapu `--level base`, tehát ez sosem
+    # vált pirosra egy lezárt kört.
+    round_status_for_s15 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(
+        brief.task_id, ""
+    )
+    base_sha = brief_base_sha(text, repo) if round_status_for_s15 != "done" else None
+    if base_sha is not None:
+        referenced = referenced_tree_files(text, metadata.allowed_paths, repo)
+        drifted = (
+            _git_lines(repo, "diff", "--name-only", f"{base_sha}..HEAD", "--", *referenced)
+            if referenced
+            else []
+        ) or []
+        roots = feature_roots(metadata.allowed_paths)
+        landed = (
+            _git_lines(
+                repo,
+                "diff",
+                "--name-only",
+                "--diff-filter=A",
+                f"{base_sha}..HEAD",
+                "--",
+                *roots,
+            )
+            if roots
+            else []
+        ) or []
+        if drifted or landed:
+            parts = []
+            if drifted:
+                parts.append(
+                    f"a hivatkozott fájljai közül {len(drifted)} MÓDOSULT "
+                    f"({_listed(drifted)})"
+                )
+            if landed:
+                parts.append(
+                    f"a kör feature-gyökerei alatt {len(landed)} ÚJ fájl landolt "
+                    f"({_listed(landed)})"
+                )
+            findings.append(
+                Finding(
+                    "strict",
+                    "S15",
+                    f"a brief a `main @ {base_sha}` állapotra hivatkozik mért alapként, "
+                    f"de azóta {' és '.join(parts)} — a §2 „mért tények” és a rájuk "
+                    "épülő acceptance-cellák tehát ELAVULTAK lehetnek, és egy időközben "
+                    "MERGE-ELT szerződés ugyanarra a döntésre már megszülethetett "
+                    "(mérve: E14-R10 / H3, [L636](../LESSONS.md#l636) — a kör egy ÚJ "
+                    "kaput írt elő egy két héttel korábban választott küszöbbel, "
+                    "miközben a döntés már élt máshol, más értékkel és más "
+                    "inkluzivitással). Olvasd újra a felsorolt fájlokat, és a §0.0 "
+                    "revízió mondja ki a mérést: mi maradt igaz, mi nem, és hol van a "
+                    "kör EGYETLEN döntési helye",
                 )
             )
 

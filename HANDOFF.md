@@ -1,5 +1,43 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R10 / H3 feloldva: a kör nem ÚJ kaput épít, hanem a MÁR MERGE-ELT szerződést köti be; + `brief-lint` S15 az osztályra (2026-09-05)
+
+Az `E14-R10` a **dispatch előtt** H3-ra futott: a briefje 2026-08-20-án,
+`main @ 88e08e65`-en készült, és egy ÚJ irány-abstention kaput írt elő
+(`strum_direction_gate.dart`, margó **0,150**, elfogadás-oldalon inkluzív) —
+miközben 2026-09-04-én ugyanez a döntés MERGE-ELVE landolt az E14-R04 / ADR 0505
+szerződésében (`StrumPrediction.decision`, **0,05**, ELUTASÍTÁS-oldalon
+inkluzív). A kör célja csak a tilos zóna megnyitásával volt teljesíthető, ami az
+orchestrátornak nem hatásköre (ADR 0087 §2). Mért diagnózis:
+`.pipeline/halt-detail-E14-R10.md`; lecke: **L636**.
+
+| Amit a revízió megváltoztat | Miért |
+|---|---|
+| a `strum_direction_gate.dart` **törölve a scope-ból** | két versengő döntési hely ugyanarra a kérdésre — a brief SAJÁT §5.4-ét sértette |
+| a kör munkája a **BEKÖTÉS** | az ADR 0505 D5 nevezi meg („that is a later round's job"); mérve: a szerződésnek **nulla termelője** van a `lib/`-ben |
+| `allowed_paths` **tágítva** a három termelő-fájllal (`live_crnn_classifier`, `strum_direction_classifier`, `strum_analyzer`) | a `pDown`/`pUp` ma a `classifyProbs`-ban megszületik és **eldobódik** — enélkül a kör teljesíthetetlen. A tágítás az önjavító kör hatásköre |
+| a **küszöb változatlan** (`0.05`), a `strum_prediction.dart` **nincs** a listán | a kért coverage/accuracy pár a fából nem olvasható ki (`baseline_manifest.json` → `calibration: not-measured`), tehát a `0,150` VÁLASZTOTT szám lett volna — amit a brief §5.2 tilt |
+| a gyakorlás-pontozás és a user-küszöb **külön körbe** | mérve: a gateway egyetlen in-scope eszköze a scorer felől `wrong`/`scorePerMille: 0` — épp az, amit a pont tiltani akart; a `confidenceThresholdProvider`-t a felismerési út ma **egyáltalán nem olvassa** |
+
+**Az osztály gépi őre — `brief-lint` S15.** Egy nem-`done` brief, amely
+`main @ <sha>` alakban rögzíti a mért alapját, leletet kap, ha azóta a
+hivatkozott fájljai közül bármelyik MÓDOSULT, vagy a feature-gyökerei alatt ÚJ
+fájl landolt. Az E14-R10-et a **második** jel fogta volna meg: a szerződés ÚJ
+fájlként érkezett. **A korpuszon mérve** (`main @ cc936bde`): 89 leletes briefből
+**33** kap S15-öt — köztük az **E14-R11…R16**, ugyanannak az előre-írás-hullámnak
+a tagjai, amelyek ma mind ugyanabba a H3-ba futnának. `strict`, `done` körre és
+mérés hiányában néma; a CI `--open --level base`, tehát pirosra sosem vált.
+
+**A mérce.** `python3 -m pytest tools/tests -q` (a router teljes suite-ja);
+őrteszt: `tools/tests/test_brief_base_sha_drift.py` (7 cella, fixture-alapú
+git-repókon — élő-fa állapotot nem olvas, L612). Falszifikáció mérve: az
+`origin/main` `brief-lint.py`-jével a 7-ből **3 cella PIROS**, a javítással
+mind a 7 ZÖLD. A revideált brief `--level strict` lintje: **nincs lelet**
+(az eredeti S12 + az új S15 egyaránt tisztázva).
+
+**Ami NEM változott:** egyetlen Dart-sor sem, egyetlen teszt sem törölve/skipelve,
+a `tools/round-gate.sh` és a `.github/workflows/**` érintetlen, a queue
+`E14-R10` sora `pending` maradt — a kör újraindul.
 ## ✅ E14-R09 KÉSZ — A Chapter 14 „mérési és bizonyítási alap" (R01–R09) LEZÁRVA: fail-closed release-kapu + egy-forrás dashboard — PR [#576](https://github.com/wolfcasaba/strumsight/pull/576), squash `cc936bde` (2026-09-05)
 
 A release-döntés innentől **futtatható artefaktumon** áll, nem egy doksi-mondaton:
