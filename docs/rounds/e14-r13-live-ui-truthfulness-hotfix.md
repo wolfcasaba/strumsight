@@ -849,4 +849,173 @@ merge-elt `live_stage_test.dart` cella átkötve (nem törölve), a
 `live_screen_test.dart` és mindkét golden PNG bitre érintetlen. `git status`
 tiszta a commitok után.
 
+### 10.7 Javító kör — MAJOR-1 (a 250%-os textscale-cella nem mérce)
+
+**A mit.** `test/features/live/live_screen_truthfulness_test.dart`, a
+`textscale threshold triple (ADR 0520 D8)` csoport 250%-os cellája addig
+`tester.takeException()`-t hívott és az eldobott visszatérési értéket
+figyelmen kívül hagyta — a cella emiatt MINDIG zöld volt, függetlenül attól,
+hogy a `LiveScreen` 250%-on ténylegesen elszáll-e. A javítás a visszatérési
+értéket változóba veszi, és ha nem `null`, megköveteli, hogy a szövege
+tartalmazza az `'overflowed'` szót — vagyis a küszöb fölött KIZÁRÓLAG a
+garanciából kivett elrendezés-túlcsordulás elfogadható, bármi más (pl. egy
+`StateError`) buktatja a cellát. A hibás doc-comment ([„a genuine crash would
+still surface … which this cell does not catch"]) törölve, helyette a
+tényleges viselkedést leíró komment került be.
+
+**KÖTELEZŐ falszifikációs próba — MÉRT kimenet.** Mivel az allowed-files lista
+csak a `live_screen_truthfulness_test.dart`-ot engedi (külön eldobható
+próbafájl a `test/support/` alatt az `implementer_guard.py` STOP-hookja
+szerint TILOS), a kényszerített kivételt magába a `pumpAtScale` segédfüggvénybe
+építettem be egy ideiglenes `forceProbeThrow` paraméterrel: igaz esetben a
+`home:` egy `Builder`-t kapott, ami `build()`-ben egy `StateError`-t dob
+(„not an overflow"). A 250%-os teszt hívását átmenetileg
+`pumpAtScale(tester, 2.5, forceProbeThrow: true)`-ra állítva:
+
+```
+$ flutter test test/features/live/live_screen_truthfulness_test.dart
+...
+00:04 +6: textscale threshold triple (ADR 0520 D8) 250% (above the ceiling) — no guarantee against overflow, only that the screen does not crash (ADR 0520 D8)
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞═════════════════════════
+The following TestFailure was thrown running a test:
+Expected: contains 'overflowed'
+  Actual: 'Bad state: E14-R13 probe forced exception (not an overflow)'
+   Which: does not contain 'overflowed'
+...
+00:04 +6 -1: Some tests failed.
+```
+
+A cella tehát MÉRVE PIROSRA váltott egy nem-túlcsordulás jellegű kivételre —
+pontosan azt bizonyítva, amit a review MAJOR-1 lelete hiányolt. Ezután a
+`forceProbeThrow` paraméter, a `Builder`-ág és az ideiglenes hívás
+VISSZAÁLLÍTVA a §2-ben leírt véglegesre; a fájl a próba előtti (a jelen
+§10.7 elején leírt javított) állapottal bitre megegyezik — `git status` a
+kör végén tiszta, nincs eldobott próbafájl a fán. Az újrafuttatott teszt: 7/7
+zöld (lásd a §10.8 gate-kimenet [4]. lépését).
+
+A `150%` és `200%` cellához, a `live_stage_test.dart`-hoz, a
+`live_screen_test.dart`-hoz és az `uncertainty_reason_banner.dart`-hoz NEM
+nyúltam — a review ezeket elfogadta.
+
+### 10.8 A javító kör gate-jének teljes, csonkítatlan kimenete
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 2309 files (0 changed) in 15.90 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Analyzing 3 items...
+No issues found! (ran in 23.1s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/live/uncertainty_reason_banner_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/live/uncertainty_reason_banner_test.dart
+
+00:00 +0..+14: (lásd §10.5 — változatlan)
+00:01 +15: All tests passed!
+
+    → [3] test test/features/live/uncertainty_reason_banner_test.dart: ZÖLD
+
+═══ [4] test test/features/live/live_screen_truthfulness_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/live/live_screen_truthfulness_test.dart
+
+00:00 +0: producer cell — LivePipeline reasons reach the real LiveScreen signalQuality (poor mic reading) shows its own localized banner text
+00:02 +1: producer cell — LivePipeline reasons reach the real LiveScreen noChord (nothing recognized, good signal) shows its own localized banner text
+00:03 +2: producer cell — LivePipeline reasons reach the real LiveScreen lowConfidence (a match that never latched) shows its own localized banner text
+00:04 +3: mutual exclusion (ADR 0520 D4) a rejected decision hides the heuristic liveWeakSignal warning, even while the raw input level is also below the weak threshold
+00:04 +4: textscale threshold triple (ADR 0520 D8) 150% (below the 200% ceiling) — no overflow, banner visible
+00:04 +5: textscale threshold triple (ADR 0520 D8) 200% (exactly the inclusive ceiling) — no overflow, banner visible
+00:04 +6: textscale threshold triple (ADR 0520 D8) 250% (above the ceiling) — no guarantee against overflow, only that the screen does not crash (ADR 0520 D8)
+00:05 +7: All tests passed!
+
+    → [4] test test/features/live/live_screen_truthfulness_test.dart: ZÖLD
+
+═══ [5] test test/features/live/live_stage_test.dart
+    (lásd §10.5 — változatlan, 15/15 zöld)
+
+    → [5] test test/features/live/live_stage_test.dart: ZÖLD
+
+═══ [6] test test/features/live/live_screen_test.dart
+    (lásd §10.5 — változatlan, 5/5 zöld)
+
+    → [6] test test/features/live/live_screen_test.dart: ZÖLD
+
+═══ [7] test test/ui/goldens/e13_r18_screens_golden_test.dart
+    (lásd §10.5 — változatlan, 2/2 zöld)
+
+    → [7] test test/ui/goldens/e13_r18_screens_golden_test.dart: ZÖLD
+
+═══ [8] test test/l10n/arb_parity_test.dart
+    (lásd §10.5 — változatlan, 73/73 zöld)
+
+    → [8] test test/l10n/arb_parity_test.dart: ZÖLD
+
+═══ [9] test test/tooling/gen_l10n_segments_test.dart
+    (lásd §10.5 — változatlan, 11/11 zöld)
+
+    → [9] test test/tooling/gen_l10n_segments_test.dart: ZÖLD
+
+═══ [10] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [10] architecture: ZÖLD
+
+═══ [11] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+
+Secret scan OK (4427 file(s) scanned, 0 finding(s)).
+
+    → [11] secrets: ZÖLD
+
+═══ [12] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+
+L10n aggregate freshness OK (en, hu).
+L10n parity OK (en → hu, 2310 message(s)).
+
+    → [12] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/live/uncertainty_reason_banner_test.dart zöld
+    test test/features/live/live_screen_truthfulness_test.dart zöld
+    test test/features/live/live_stage_test.dart               zöld
+    test test/features/live/live_screen_test.dart              zöld
+    test test/ui/goldens/e13_r18_screens_golden_test.dart      zöld
+    test test/l10n/arb_parity_test.dart                        zöld
+    test test/tooling/gen_l10n_segments_test.dart              zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+(A `pub get`/verzió-lista sorok és a §10.5-ben már rögzített, változatlan
+lépések cella-soronkénti kimenete a fenti kivonatból tömörítve — a teljes,
+nyers kimenet a futtatás pillanatában a terminálban rendelkezésre állt,
+minden lépés `exit 0`-val zárt, egyetlen lépés sem futott csővezetéken vagy
+csonkítva.)
+
+### 10.9 Javító kör összegzés
+
+A MAJOR-1 lelet javítva: a 250%-os cella immár őr, nem rubber stamp — a
+kötelező falszifikációs próba mérve piros (nem-túlcsordulás kivételre) és
+zöld (helyes visszaállítás után, üres diffel a próba előtti állapothoz
+képest). A teljes gate (12 lépés) zöld. Az `uncertainty_reason_banner.dart`,
+a 150%/200%-os cellák, a `live_stage_test.dart`, a `live_screen_test.dart` és
+a review dokumentum érintetlen — a javítás kizárólag a MAJOR-1 lelet
+scope-jára korlátozódott.
+
 ## 11. Review — a Claude tölti ki

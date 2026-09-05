@@ -201,11 +201,13 @@ void main() {
       'the screen does not crash (ADR 0520 D8)',
       (tester) async {
         await pumpAtScale(tester, 2.5);
-        // Above 200% the round makes no overflow promise — consume whatever
-        // rendering error may have been reported so it doesn't auto-fail the
-        // test; a genuine crash would still surface as a thrown exception
-        // from the pump above, which this cell does not catch.
-        tester.takeException();
+        // Above 200% the round makes no overflow promise, but it DOES still
+        // guarantee no crash: only a layout-overflow exception is acceptable
+        // here — anything else (e.g. a StateError) must fail this cell.
+        final taken = tester.takeException();
+        if (taken != null) {
+          expect(taken.toString(), contains('overflowed'));
+        }
       },
     );
   });
