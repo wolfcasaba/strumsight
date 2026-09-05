@@ -290,4 +290,120 @@ elhelyezésével a 4. pont **PIROS**, a fájl törlésével **ZÖLD**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Kifutás: `done`** (§0.0 C — a hiányzó PyTorch nem `blocked` ok; a §0.0 A)
+mért tényei a futás közben nem dőltek meg).
+
+### Amit építettem — a hat fájl
+
+1. **`ml/reference/reference_manifest.json`** — a §0.0 A) táblázat mind a
+   nyolc mért értéke szó szerint benne (repó-URL, pinelt commit
+   `929e403f3256b055c1eea27064ae39f36905359e`, checkpoint útvonal + sha256 +
+   134 344 202 bájt, dataset útvonal + 330 blob + 913 163 829 bájt). Három
+   KÜLÖN `artifacts.{code,checkpoint,dataset}.license` blokk, mindegyik
+   `spdx`+`source`+`evidence`+`verdict` néggyessel. A checkpoint/dataset
+   `spdx` mezője JSON **`null`** (nem az `"unknown"` sztring) + `verdict:
+   "blocking"` — ezt a séma-ellenőrzés (mindkét oldalon: Dart guard ÉS a
+   Python script `validate_manifest`) kényszerként ismeri fel, és `null`
+   spdx `"blocking"`-tól eltérő verdikttel típusos hibát dob. `audit_registry`
+   üres lista (D2 NO-GO → nincs jóváhagyott artefaktum).
+
+2. **`ml/reference/run_reference_eval.py`** — egyparancsos belépő,
+   `--manifest` + `--workdir` (kötelező a teljes futáshoz, repón-kívüli útvonal
+   kényszerítve — `WorkdirInsideRepositoryError` típusos hiba, valóban
+   lefuttatva és piros lett a repón belüli próbával, lásd lent) + `--verify-only`
+   (hálózat nélkül ellenőrzi a manifest sémáját). Hiányzó függőségnél
+   `MissingDependencyError`: pontos `pip install` sor + a reprodukáló parancs.
+   A tényleges klónozás/checkpoint-verifikáció/kiértékelés kódja megvan
+   (`clone_pinned_commit`, `verify_checkpoint`), de a `run_official_fixture_eval`
+   / `run_strumsight_holdout_eval` `NotImplementedError`-t dob — ez a kör nem
+   futtat le semmit hálózatról (§0.0 B/tiltás), és a hiányzó PyTorch miatt a
+   futás ma sosem jut el idáig (a függőség-ellenőrzés korábban bukik).
+
+3. **`ml/reference/README.md`** — környezet (a hét upstream függőség), a
+   pinelt commit, a pontos parancsok, és a mai le-nem-futás mért oka.
+
+4. **`test/tooling/reference_model_licence_guard_test.dart`** — RED-del
+   kezdtem (a fájl és az `ml/reference/` könyvtár nem létezett, a teszt
+   `_realManifest()`/`_realReportMarkdown()` hívása `PathNotFoundException`-t
+   dobott volna). Három csoport: A) manifest-séma (a fenti háromas licenc-
+   szerződés, beleértve az `"unknown"`/`"n/a"`/üres placeholder-tiltást
+   mindhárom artefaktumra, kis- és nagybetűs változatban is — L546
+   regressziós őr), B) fail-closed fa-bejárás (ADR 0369 D5) — `git ls-files`-ből
+   indul, NEM a manifest listájából, és öt KÜLÖN lokáción bizonyítja a
+   PIROS→ZÖLD párt egy szintetikus temp git-repóban (`assets/`, `ml/`, `tool/`,
+   `test/fixtures/`, gyökér) — ez a §7.1 falszifikációs cella tétele. C) a
+   report-struktúra (két külön tábla, D4) mind szintetikus, mind a valódi
+   `docs/eval/reference-model-audit.md` ellen. Önálló fájl, mert a kör
+   `allowed_paths`-a nem tartalmaz `tool/**` segédkönyvtárat.
+
+5. **`docs/eval/reference-model-audit.md`** — KÉT külön tábla (hivatalos
+   fixture / StrumSight held-out), mindkettő korpusz-hash mezővel, minden
+   nem-mért cella szó szerint `NEM MÉRT` + mért ok + reprodukáló parancs. A
+   §3 licenc-audit táblája a három ítélettel, a §4 go/no-go kizárólag mért
+   tényekre hivatkozik (három licenc-státusz + 134 344 202 bájt), a §5 a
+   falszifikációs cellát dokumentálja.
+
+6. **Ez a §10 handoff.**
+
+### Ténylegesen lefuttatott parancsok — VALÓDI kimenettel
+
+```
+$ python3 ml/reference/run_reference_eval.py --manifest ml/reference/reference_manifest.json --verify-only
+{
+  "manifest": "ml/reference/reference_manifest.json",
+  "schema": "ok",
+  "pinned_commit": "929e403f3256b055c1eea27064ae39f36905359e",
+  "go_no_go": "NO-GO"
+}
+(exit 0)
+
+$ python3 ml/reference/run_reference_eval.py --manifest ml/reference/reference_manifest.json --workdir /tmp/klangio-repro-e14r17
+error: missing Python dependencies for the reference reproduction: torch, lightning, note-seq, torchlibrosa, librosa==0.10.1, hydra-core, wandb
+  pip install torch lightning note-seq torchlibrosa librosa==0.10.1 hydra-core wandb
+then rerun:
+  python3 ml/reference/run_reference_eval.py --manifest ml/reference/reference_manifest.json --workdir <path outside this repository>
+(exit 1, semmi nem íródott lemezre — a workdir.mkdir() a függőség-ellenőrzés UTÁN fut)
+
+$ python3 ml/reference/run_reference_eval.py --manifest ml/reference/reference_manifest.json --workdir ml/reference/inside-repo-should-fail
+error: --workdir /home/ubuntu/ss-sonnet-impl-e14-r17/ml/reference/inside-repo-should-fail resolves inside this repository (/home/ubuntu/ss-sonnet-impl-e14-r17); ADR 0369 D3 requires the reproduction to run entirely outside the repo tree — pick a path such as /tmp/klangio-repro
+(exit 1)
+```
+
+Gate (csonkítás nélkül, saját processz-lépésenként):
+
+```
+$ tools/round-gate.sh test/tooling/reference_model_licence_guard_test.dart
+[1] format     → ZÖLD (Formatted 2291 files (0 changed))
+[2] analyze    → ZÖLD (No issues found!)
+[3] test …     → ZÖLD (42 tests, „All tests passed!”)
+[4] architecture → ZÖLD (12 allowlisted deviation(s), változatlan)
+[5] secrets    → ZÖLD (4376 file(s) scanned, 0 finding(s))
+[6] l10n       → ZÖLD
+MINDEN GATE ZÖLD.
+```
+
+```
+$ python3 -m pytest ml -q
+115 passed in 20.92s
+```
+
+(A 115 a kör előtti alap — ehhez a körhöz nem tartozott új Python-tesztfájl,
+az `allowed_paths` nem sorol `ml/reference/test_*.py`-t; a Python-oldali
+kényszert a `run_reference_eval.py::validate_manifest` hordozza, ténylegesen
+lefuttatva a fenti `--verify-only` híváson keresztül.)
+
+### `NEM MÉRT` — mi maradt és miért
+
+A hivatalos fixture és a StrumSight held-out mérés MINDKÉT cellája `NEM MÉRT`
+(`docs/eval/reference-model-audit.md` §1–2): a mért ok a hiányzó PyTorch/
+Lightning/note-seq/torchlibrosa/librosa==0.10.1/hydra-core/wandb futtatókör
+ezen a boxon (sem a `/home/ubuntu/tf-venv`, sem a rendszer-Python nem hordozza
+őket — ténylegesen lefuttatva a `check_dependencies` hívással fent), plusz az
+upstream kiértékelés notebook-formája (`scripts/evaluate.ipynb`), aminek a
+cella-kimenet szerződését a pre-flight nem olvasta el (nincs PyTorch-képes gép
+hozzá). Ez a §0.0 C szerint NEM `blocked`-kifutás — a licenc-ítélet ezektől
+függetlenül konkluzív.
+
 ## 11. Review — a Claude tölti ki
+
+
