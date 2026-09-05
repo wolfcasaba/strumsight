@@ -6,7 +6,7 @@ E09-R02, ADR 0396; wired live E15-R12, ADR 0497. This module owns:
   (BigInteger internal PK + ``Uuid`` public_id, see ADR 0396 §1),
 * the Pydantic response contract that whitelists only ``public_id`` and never
   leaks the internal ``id`` (A2),
-* a ``build_community_router`` factory that aggregates 11 of the 13 router
+* a ``build_community_router`` factory that aggregates 12 of the 14 router
   modules behind ``settings.community_enabled`` (registration-level gate,
   ADR 0497 D1 — the module simply does not exist in the route table when
   off, no runtime 403) plus the sub-flags (D2), in the deterministic order
@@ -58,7 +58,7 @@ __all__ = [
 ]
 
 # ADR 0497 D2/D1: the write-method branch (POST/PUT/PATCH/DELETE) of the
-# posts + social-graph (follow-request) routers is a REGISTRATION-level
+# posts + comments + social-graph (follow-request) routers is a REGISTRATION-level
 # gate on ``community_writes_enabled`` — same fail-closed strength as the
 # top-level module flag (D1: "route-ok nem regisztrálódnak", not a runtime
 # 403). GET/HEAD/OPTIONS on those same routers stay registered either way
@@ -84,7 +84,7 @@ def _reads_only(router: APIRouter) -> APIRouter:
 
 
 def build_community_router(settings) -> APIRouter | None:
-    """Aggregate 11 of the 13 Community router modules into one
+    """Aggregate 12 of the 14 Community router modules into one
     ``APIRouter``, or return ``None`` when the module is disabled.
 
     Registration-level gating (ADR 0497 D1): a disabled module — or a
@@ -112,7 +112,10 @@ def build_community_router(settings) -> APIRouter | None:
     Sub-flags (D2, independent of the master flag and of each other):
 
     * ``community_writes_enabled`` — gates the write-method routes of
-      ``posts`` and ``social_graph`` (see ``_reads_only`` above). Not
+      ``posts``, ``comments`` and ``social_graph`` (see ``_reads_only``
+      above). A ``comments`` router 2026-09-05-én került a listára: a
+      komment az ADR 0395 §6 írás-domainjének NEVESÍTETT tagja, és a
+      service-e a Kör 12 óta tesztelt volt HTTP-felület nélkül. Not
       applied to ``bookmarks``/``challenges``/``moderation``/``reports``/
       ``safety``: none of those are named by ADR 0395 §6's write-domain
       list ("poszt, komment, reakció, follow-request"), and none are
@@ -126,8 +129,11 @@ def build_community_router(settings) -> APIRouter | None:
     * ``community_leaderboard_enabled`` — gates the whole ``leaderboards``
       router (an all-or-nothing competitive surface, not a read/write
       split).
-    * ``community_clubs_enabled`` — no clubs router exists among the 13
-      yet; nothing to gate here either.
+    * ``community_clubs_enabled`` — no clubs router exists among the 14
+      yet; nothing to gate here either. (A ``club_service.py`` és a
+      ``club_content_service.py`` LÉTEZIK és tesztelt — csak a HTTP-felület
+      hiányzik fölülük, ugyanaz a rés, amit a ``comments`` router
+      2026-09-05-én zárt be a maga domainjében.)
 
     Router order is NOT alphabetical — it is the ADR 0497 D3 contract:
     ``search`` (a literal ``/community/profiles/search`` route) MUST be
@@ -150,6 +156,7 @@ def build_community_router(settings) -> APIRouter | None:
     # the docstring above (ADR 0497 D6).
     from .routers.bookmarks import router as bookmarks_router
     from .routers.challenges import router as challenges_router
+    from .routers.comments import router as comments_router
     from .routers.feed import router as feed_router
     from .routers.leaderboards import router as leaderboards_router
     from .routers.moderation import router as moderation_router
@@ -165,6 +172,14 @@ def build_community_router(settings) -> APIRouter | None:
 
     aggregate.include_router(bookmarks_router)
     aggregate.include_router(challenges_router)
+    # A komment az ADR 0395 §6 írás-domainjének NEVESÍTETT tagja („poszt,
+    # komment, reakció, follow-request"), ezért — a `posts` és a
+    # `social_graph` mintájára — az írási ága a `community_writes_enabled`
+    # regisztrációs kapuja alatt áll, az olvasási (GET) ág viszont a
+    # kapu állásától függetlenül regisztrálódik.
+    aggregate.include_router(
+        comments_router if writes_on else _reads_only(comments_router)
+    )
     aggregate.include_router(feed_router)
     if settings.community_leaderboard_enabled:
         aggregate.include_router(leaderboards_router)
