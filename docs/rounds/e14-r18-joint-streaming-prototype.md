@@ -371,4 +371,203 @@ A §10-ben dokumentáld: a séma-verzió ellenőrzésének ideiglenes kivételé
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5, `--effort high`), 2026-09-05.
+
+### 10.1 Mit épített
+
+- `evaluation/recognition/joint_io_schema.json` — verziózott IO-séma (D1
+  lookahead frame+ms, D2 split/leakage invariánsok, D4 inkluzív
+  go/no-go-hármas, D6 legacy `bound:"upper"` sor, D7 metrika+definíció
+  együtt-utazás).
+- `evaluation/recognition/fixtures/joint_io_sample.json` — CI-fixture.
+- `test/tooling/joint_io_schema_test.dart` — kézzel írt draft-07-részhalmaz
+  validátor A TESZTBEN (D8, mert ehhez a körhöz nincs szállított Dart
+  belépési pont), plusz a séma nem-fejezhető kereszt-mező szemantikák
+  (lookahead-konzisztencia, literál küszöb-hármas, higherIsBetter-tábla,
+  bound-jelölés). **23/23 teszt zöld** (`tools/round-gate.sh
+  test/tooling/joint_io_schema_test.dart` — format/analyze/test/
+  architecture/secrets/l10n mind ZÖLD, első futásra).
+- `ml/joint_prototype/train_prototype.py` — a joint fej tanítása: 3-osztályú
+  (down/up/no-event) CRNN, ugyanaz a conv+GRU törzs mint
+  `ml/train.py::build_model` (importálva, nem újraírva), `PRE_FRAMES=3` +
+  `LOOKAHEAD_FRAMES=4` (7 keret, 70 ms) ablak, audio nullázva
+  onset+lookahead után (`joint_window`, az `experiment_deadline.py` mintája).
+  Split: leave-one-guitarist-out (`ml/klangio.py::guitarist_of`/
+  `logo_folds`), EGY reprezentatív fold (a sorba rendezett gitáros-id-k
+  közül az első — determinisztikus, nem szelektált), 3-osztályú
+  trainability-őr (`assert_fold_trainable_3class` — az örökölt
+  `assert_folds_trainable` a legacy 2-osztályú `{0,1}` halmazra van
+  kőbe vésve, 3 osztályra MINDIG bukna) + explicit
+  `assert_no_guitarist_leakage`. Minden futási artefaktum (súly,
+  provenance JSON) a `--workdir`-be megy, a repóba SEMMI.
+- `ml/joint_prototype/evaluate_prototype.py` — a mérés: korpusz-hash
+  ellenőrzés a `baseline_manifest.json` ellen (eltérésnél hiba, NINCS
+  report — ténylegesen kipróbálva, ld. 10.3), a split FÜGGETLEN
+  újraszámolása és leakage-ellenőrzése (nem bízik a train provenance-ban),
+  teljes idővonal-pásztázás minden TESZT felvételen 10 ms-onként
+  (`detect_events`, csúcskeresés `1-P(no-event)`-en, ugyanaz a
+  csúcskeresési fegyelem mint `ml/features.py::spectral_flux_onsets`),
+  50 ms-os toleranciájú mohó legközelebbi-párosítás, onset F1 + irány
+  macro-F1 (a `recognition_metrics.dart::directionF1` definíciójával
+  megegyező szemantika), és a sémának megfelelő JSON-dokumentum
+  nyomtatása/mentése.
+- `ml/joint_prototype/README.md` — környezet, architektúra, split, futtatás,
+  mért konfiguráció+wall-clock, az ismert korlát (lásd 10.4) leírása.
+- `docs/eval/joint-strum-prototype.md` — a teljes összehasonlító report,
+  a valós mért JSON-dokumentummal, a két fail-closed kapu VALÓS
+  kimenetével, és a korlátok/ajánlás szakasszal.
+
+### 10.2 Mért számok (egy dokumentált, determinisztikus futás)
+
+- **Interpreter:** `/home/ubuntu/tf-venv/bin/python` (TF 2.21.0) — a
+  rendszer `python3`-ban nincs TensorFlow (mérve, `ModuleNotFoundError`).
+- **Korpusz-hash:** `4880faceab27217640701f1b93db477606d5fb3aa2c4434574040b6590315827`
+  — EGYEZIK a `baseline_manifest.json` `corpusSha256`-jával (mérve, a
+  `_corpusChecksum` Dart-algoritmus Python-reprodukciójával, byte-azonos).
+- **Lookahead:** 4 keret = 40 ms (+ 3 keret = 30 ms kauzális kontextus, 7
+  keret / 70 ms össz-ablak) — a sémában ÉS a reportban ugyanaz a szám.
+- **Split:** leave-one-guitarist-out, held-out gitáros `'1'` (55 tanító / 27
+  teszt felvétel), a `logo_folds` sorba rendezett első foldja.
+- **Konfiguráció:** epochs 12 konfigurált / 6 lefutott (EarlyStopping,
+  patience 4), batch 32, seed 42, 363 891 paraméter.
+- **Wall-clock:** tanítás 137,9 s + kiértékelés (teljes idővonal-pásztázás,
+  27 felvétel) 125,7 s = **~4,4 perc összesen** (a 20 perces keret alatt).
+- **Prototípus onset F1 @50ms = 0,3824146481022315** (n=16 962; TP 4010, FP
+  12 893, FN 59; precision 0,237, recall 0,986).
+- **Prototípus end-to-end irány macro-F1 = 0,22403434521366614** (n=20 972;
+  down F1 0,299, up F1 0,149).
+- **Prototípus algoritmikus latencia = 40 ms** (csak a lookahead; nem valós
+  idejű eszközmérés).
+- **Legacy onset F1 @50ms = 0,6739121651650438** (n=16 411) — átvéve a
+  `baseline_manifest.json`-ból, forrás-mezőkkel.
+- **Legacy end-to-end irány = NEM mérhető ezen a korpuszon** — a report
+  `bound:"upper"` jelöléssel közli a legacy onset F1-et mint felső korlátot
+  (`0,6739121651650438`), kiírt származtatással (`TP_direction ⊆
+  TP_onset` ⇒ az irány-F1 sosem lehet nagyobb az onset F1-nél); ez a szám
+  NEM ad alapot „a prototípus jobb" következtetésre.
+
+### 10.3 Falszifikáció (§7.1, kötelező)
+
+**A séma-verzió-ellenőrzés ideiglenes kikapcsolása → PIROS, majd
+visszaállítás → ZÖLD, a tényleges parancs+kimenet:**
+
+Kikapcsolás (`test/tooling/joint_io_schema_test.dart`, a `const` kulcsszó
+kezelésének ideiglenes letiltása: `if (resolved.containsKey('const'))` →
+`if (false && resolved.containsKey('const'))`), majd:
+
+```
+$ /home/ubuntu/flutter/bin/flutter test test/tooling/joint_io_schema_test.dart
+...
+00:00 +1 -1: A2 … schemaVersion "2.0" is rejected [E]
+  Expected: false
+    Actual: <true>
+...
+00:00 +18 -2: A7 … matchesBaselineManifest: false fails schema validation … [E]
+  Expected: false
+    Actual: <true>
+...
+00:00 +18 -3: A7 … leakageCheckPassed: false fails schema validation … [E]
+  Expected: false
+    Actual: <true>
+...
+00:00 +20 -3: Some tests failed.
+```
+
+Pontosan a három `const`-ra támaszkodó teszt (schemaVersion,
+matchesBaselineManifest, leakageCheckPassed) vált PIROSSÁ, a többi 20
+(beleértve a küszöb-hármas és a higherIsBetter szemantikai teszteket, amik
+NEM a `const` ágon mennek át) zöld maradt — pontosan azt méri, amit kellett.
+Visszaállítás után (`if (resolved.containsKey('const'))`):
+
+```
+$ /home/ubuntu/flutter/bin/flutter test test/tooling/joint_io_schema_test.dart
+...
+00:00 +23: All tests passed!
+```
+
+**A player-leakage és a korpusz-hash fail-closed kapu VALÓS kipróbálása**
+(a §6 AC6 és a D6 mércéje — nem csak kódolvasással állítva):
+
+```
+$ /home/ubuntu/tf-venv/bin/python -c "
+import sys; sys.path.insert(0, 'ml/joint_prototype')
+import evaluate_prototype as ep
+ep.assert_no_leakage(['1001','1002'], ['4001','2001'], '4')
+"
+GuitaristLeakageError: guitarist/recording leakage detected: ...
+test_guitarists=['2', '4'] (expected only '4') — aborting before any
+document is written (ADR 0517 D2)
+```
+
+```
+$ /home/ubuntu/tf-venv/bin/python ml/joint_prototype/evaluate_prototype.py \
+    --workdir /tmp/e14r18-work \
+    --baseline-manifest /tmp/fake_baseline_manifest.json \
+    --output /tmp/e14r18-work/leakage_probe_output.json
+error: corpus hash mismatch: ... refusing to compare against a different
+corpus (ADR 0517 D6); no document written
+exit=1
+$ ls /tmp/e14r18-work/leakage_probe_output.json
+ls: cannot access '...': No such file or directory
+```
+
+Mindkét kapu hibával áll meg, és egyik sem ír fájlt — a valós `main()`
+végponton át kipróbálva, nem csak a belső függvényen.
+
+### 10.4 Ahol el kellett térni a brief szövegétől (mérve, nem becsülve)
+
+- **A teljes idővonal-pásztázásos kiértékelés kívül esik a tanítási
+  eloszláson** — a modell bányászott negatívokon (flux-csúcs + könnyű
+  belső) tanult, nem "minden 10 ms-os kereten". Ez MÉRT tény (precision
+  0,237 / recall 0,986 a pásztázáson) és a `docs/eval/
+  joint-strum-prototype.md` §8 kimondja: ez a tanítási recept korlátja, nem
+  a mérés hibája. A brief nem írt elő konkrét kiértékelési protokollt a
+  "streaming-stílusú pásztázásra" — ez az implementer döntése volt, és a
+  §8-ban dokumentálva van, miért nem próbáltam meg utólag hangolni a
+  küszöböt egy jobb számért (az a p-hacking lenne, amit a repó kultúrája
+  kifejezetten tilt).
+- **A párosítás mohó, nem Kuhn-algoritmus** — a
+  `recognition_metrics.dart::_matchEvents` maximális-számosságú
+  párosítójának dokumentált egyszerűsítése; a §8 kimondja.
+- **Az `assert_folds_trainable` (ml/klangio.py) nem újrafelhasználható
+  változatlanul** — 2-osztályú `{0,1}`-re van kőbe vésve, egy 3-osztályú
+  (down/up/no-event) foldon MINDIG bukna. Írtam egy `assert_
+  fold_trainable_3class` függvényt `train_prototype.py`-ban (ADR/brief nem
+  mondta ki explicit módon, hogy ez a függvény nem újrafelhasználható —
+  mérve a tényleges kóddal).
+- **`ml/data/klangio` a munkapéldányból hiányzott** — a korpusz (423 MB,
+  gitignore-olt) a `/home/ubuntu/music-theory` főkönyvtárban élt, nem a
+  `/home/ubuntu/ss-sonnet-impl-e14-r18` munkapéldányban. Egy szimbolikus
+  linket hoztam létre (`ml/data/klangio -> /home/ubuntu/music-theory/ml/
+  data/klangio`) — a `.gitignore` `ml/data/` mintája fedi, `git status`
+  tisztán marad, nincs commitolt hivatkozás. Ez az implementer saját
+  hatásköre volt (nem production fájl, nem az allowed_paths listán, nem
+  git-nyomon-követett), és a §10-ben mondom ki, miért volt szükséges.
+
+### 10.5 Go/no-go javaslat
+
+**NO-GO** a Chapter 14 §7.2 Strum Alpha kapuhoz mérve — mindkét metrika
+messze a küszöb alatt (onset F1 0,3824 < 0,82; irány macro-F1 0,2240 <
+0,80), nem "majdnem elérte" eset. A joint-fej architekturális ötlete (a
+kétlépcsős hibaterjedés elkerülése, ADR 0312) ezzel a méréssel NEM cáfolt —
+amit ez az EGY dokumentált futás cáfol, az *ez a konkrét tanítási recept*
+(bányászott negatívokon tanítva, folytonos idővonalon mérve). Egy
+esetleges következő kör konkrét, mérhető javaslata: tanítás folytonos-
+idővonal negatívokon (nem csak bányászott csúcsokon), vagy időbeli
+hiszterézis/magasabb döntési küszöb hozzáadása a pásztázáshoz — nem
+egyszerűen ugyanennek a konfigurációnak az újrafuttatása más
+hiperparaméterekkel.
+
+### 10.6 A Dart-oldali validátor helye (D8, kimondva)
+
+Ebben a körben NINCS szállított Dart belépési pont: az `allowed_paths`
+egyetlen Dart fájlt enged (`test/tooling/joint_io_schema_test.dart`), a
+`lib/` és a `tool/` tilos zóna, és az 5.5 szakasz szerint a prototípus nem
+szállítható artefaktum. Ezért a kézzel írt draft-07-részhalmaz validátor
+(és a hozzá tartozó szemantikai kereszt-ellenőrzések) TELJES EGÉSZÉBEN a
+tesztfájlban élnek — ez tudatos, határolt eltérés az L631 mintájától ("a
+cella a szállított belépési pontot mérje"), ADR 0517 D8 szerint. A
+productizálás köre mozgatja a validátort `tool/` alá, és a teszt onnan
+importálja majd.
+
 ## 11. Review — a Claude tölti ki
