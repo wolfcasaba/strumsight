@@ -132,6 +132,9 @@ import 'package:strumsight/features/offline_ai/data/offline_model_source.dart';
 import 'package:strumsight/features/offline_ai/model/offline_model.dart';
 import 'package:strumsight/features/offline_ai/providers/offline_model_controller.dart';
 import 'package:strumsight/features/offline_ai/screens/model_manager_screen.dart';
+import 'package:strumsight/features/onboarding/first_win_engine.dart';
+import 'package:strumsight/features/onboarding/first_win_providers.dart';
+import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/features/onboarding/screens/permission_primer_screen.dart';
 import 'package:strumsight/core/audio/audio_providers.dart';
@@ -1170,6 +1173,17 @@ List<Override> _permissionPrimerOverrides() => [
   ...preferenceOverrides(),
   microphonePermissionGatewayProvider.overrideWithValue(
     FakeMicrophonePermissionGateway(state: MicrophonePermissionState.denied),
+  ),
+];
+
+// E17-R01 (ADR 0534): newly reachable via `OnboardingScreen._completeFirstWin`
+// — the same `FakeOnboardingFirstWinEngine` override the merged
+// `test/ui/goldens/e13_r16_screens_golden_test.dart` fixture uses.
+Widget _firstWinStageScreen() => const FirstWinStageScreen();
+List<Override> _firstWinStageOverrides() => [
+  ...preferenceOverrides(),
+  onboardingFirstWinEngineFactoryProvider.overrideWithValue(
+    FakeOnboardingFirstWinEngine.new,
   ),
 ];
 
@@ -2864,6 +2878,11 @@ final _screens = <String, _ScreenFixture>{
     screenPath: 'lib/features/offline_ai/screens/model_manager_screen.dart',
     build: _modelManagerScreen,
     overridesBuilder: _modelManagerOverrides,
+  ),
+  'first_win_stage': _ScreenFixture(
+    screenPath: 'lib/features/onboarding/screens/first_win_stage_screen.dart',
+    build: _firstWinStageScreen,
+    overridesBuilder: _firstWinStageOverrides,
   ),
   'onboarding': _ScreenFixture(
     screenPath: 'lib/features/onboarding/screens/onboarding_screen.dart',

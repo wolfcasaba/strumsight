@@ -12,13 +12,30 @@ import 'package:strumsight/app/strumsight_app.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/learn/public.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
+import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
+
+/// A strong strum reading — drives the Stage's production engine
+/// (`LiveFirstWinEngine`, ADR 0534 D3) to its success branch via the SAME
+/// `strumEngineProvider` override this file already installs.
+LiveFrame _strongStrumFrame() => const LiveFrame(
+  current: null,
+  next: null,
+  latestStrum: Strum(direction: StrumDirection.down, confidence: 0.85),
+  bar: [],
+  bpm: 0,
+  inputLevel: 0.5,
+  tuningHz: 440,
+  listening: true,
+);
 
 /// ADR 0508 D1/D2 — the belépési 2×2 mátrix (brief §6 A2):
 /// `adaptiveShellEnabled` × completion branch (Skip/finish, first-win), on a
@@ -29,7 +46,7 @@ import '../../support/preference_store.dart';
 /// at the tap — the redirect table's second evaluation is what actually
 /// decided the old L2 defect (brief §6.1).
 void main() {
-  Future<GoRouter> pumpOnboarding(
+  Future<(GoRouter, FakeStrumEngine)> pumpOnboarding(
     WidgetTester tester, {
     required bool adaptiveShellEnabled,
   }) async {
@@ -72,7 +89,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(router.state.uri.path, AppRoutes.welcome);
-    return router;
+    return (router, engine);
   }
 
   Future<void> tapThroughToLastPage(WidgetTester tester) async {
@@ -82,9 +99,28 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// E17-R01 (ADR 0534 D1): the Stage now sits between the first-win CTA and
+  /// the scored mini-lesson — pin-guard retype (brief §4): drives a strong
+  /// reading through the SAME `strumEngineProvider` override already in
+  /// play and continues, landing on `LearnScreen` exactly as before.
+  Future<void> passThroughFirstWinStage(
+    WidgetTester tester,
+    FakeStrumEngine engine,
+  ) async {
+    expect(find.byType(FirstWinStageScreen), findsOneWidget);
+    engine.emit(_strongStrumFrame());
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('onboard-first-win-continue')));
+    await tester.pumpAndSettle();
+  }
+
   group('A2 — the belépési 2×2 mátrix (settled router URI)', () {
     testWidgets('shell BE × Skip/finish settles on /today', (tester) async {
-      final router = await pumpOnboarding(tester, adaptiveShellEnabled: true);
+      final (router, _) = await pumpOnboarding(
+        tester,
+        adaptiveShellEnabled: true,
+      );
 
       await tester.tap(find.text('Skip'));
       await tester.pumpAndSettle();
@@ -93,11 +129,15 @@ void main() {
     });
 
     testWidgets('shell BE × first-win settles on /today', (tester) async {
-      final router = await pumpOnboarding(tester, adaptiveShellEnabled: true);
+      final (router, engine) = await pumpOnboarding(
+        tester,
+        adaptiveShellEnabled: true,
+      );
 
       await tapThroughToLastPage(tester);
       await tester.tap(find.text('Try your first win — 30 seconds'));
       await tester.pumpAndSettle();
+      await passThroughFirstWinStage(tester, engine);
 
       expect(router.state.uri.path, AppRoutes.today);
       expect(find.byType(LearnScreen), findsOneWidget);
@@ -107,10 +147,39 @@ void main() {
       );
     });
 
+    testWidgets(
+      'shell BE × first-win Stage "Not now" ALSO settles on /today — A3, no '
+      'literal route in either branch',
+      (tester) async {
+        final (router, _) = await pumpOnboarding(
+          tester,
+          adaptiveShellEnabled: true,
+        );
+
+        await tapThroughToLastPage(tester);
+        await tester.tap(find.text('Try your first win — 30 seconds'));
+        await tester.pumpAndSettle();
+        expect(find.byType(FirstWinStageScreen), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('onboard-first-win-skip')));
+        await tester.pumpAndSettle();
+
+        expect(router.state.uri.path, AppRoutes.today);
+        expect(
+          find.byType(LearnScreen),
+          findsNothing,
+          reason: '"Not now" abandons the attempt — no mini-lesson push',
+        );
+      },
+    );
+
     testWidgets('shell KI × Skip/finish settles on /live (non-redirected)', (
       tester,
     ) async {
-      final router = await pumpOnboarding(tester, adaptiveShellEnabled: false);
+      final (router, _) = await pumpOnboarding(
+        tester,
+        adaptiveShellEnabled: false,
+      );
 
       await tester.tap(find.text('Skip'));
       await tester.pumpAndSettle();
@@ -121,11 +190,15 @@ void main() {
     testWidgets('shell KI × first-win settles on /live (non-redirected)', (
       tester,
     ) async {
-      final router = await pumpOnboarding(tester, adaptiveShellEnabled: false);
+      final (router, engine) = await pumpOnboarding(
+        tester,
+        adaptiveShellEnabled: false,
+      );
 
       await tapThroughToLastPage(tester);
       await tester.tap(find.text('Try your first win — 30 seconds'));
       await tester.pumpAndSettle();
+      await passThroughFirstWinStage(tester, engine);
 
       expect(router.state.uri.path, AppRoutes.live);
       expect(find.byType(LearnScreen), findsOneWidget);

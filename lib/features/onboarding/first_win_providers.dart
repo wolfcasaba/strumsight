@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../live/public.dart';
 import 'first_win_engine.dart';
 
 /// The round-local success threshold (ADR 0281 §2 Döntés-pont 2; P1
@@ -13,13 +14,16 @@ const double kFirstWinConfidenceThreshold = 0.60;
 bool isFirstWinSuccess(double confidence) =>
     confidence >= kFirstWinConfidenceThreshold;
 
-/// Builds the engine for one first-win attempt. Overridden in tests/preview
-/// with a controllable [FakeOnboardingFirstWinEngine] instance; the default
-/// factory also returns the fake motor (P2 — no production engine exists
-/// yet).
+/// Builds the engine for one first-win attempt. The shipped default builds
+/// the production [LiveFirstWinEngine] over the shared `strumEngineProvider`
+/// (ADR 0534 D3, cross-feature access via `live/public.dart`, precedent
+/// `lib/features/practice/data/practice_observation_gateway_provider.dart:31`).
+/// Overridden in tests/preview with a controllable
+/// [FakeOnboardingFirstWinEngine] instance.
 final onboardingFirstWinEngineFactoryProvider =
     Provider<OnboardingFirstWinEngine Function()>(
-      (_) => FakeOnboardingFirstWinEngine.new,
+      (ref) =>
+          () => LiveFirstWinEngine(ref.watch(strumEngineProvider)),
     );
 
 /// One engine per mount of the first-win Stage. `ref.onDispose(engine.stop)`

@@ -8,6 +8,7 @@ import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../onboarding_provider.dart';
+import 'first_win_stage_screen.dart';
 import 'permission_primer_screen.dart';
 
 /// First-run onboarding: three glanceable pages that teach the moat (↓/↑),
@@ -140,10 +141,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           // Push AFTER the route swap lands: a pageless route pushed now
           // would anchor to the outgoing /welcome page and be disposed with
           // it (r156 rig catch #2 — the first fix still lost the push).
+          // The Stage precedes the SCORED mini-lesson (ADR 0534 D1) rather
+          // than replacing it: `onContinue` pushes it on top; `onSkip`
+          // leaves the flow at the `entryLocation` the `go` above already
+          // landed on. Both re-derive from the same `entryLocation` value
+          // (ADR 0534 D2) — neither branch names a literal route.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             navigator!.push(
               MaterialPageRoute<void>(
-                builder: (_) => LearnScreen(lesson: Lessons.firstWin),
+                builder: (_) => FirstWinStageScreen(
+                  onContinue: () {
+                    router.go(entryLocation);
+                    navigator.push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => LearnScreen(lesson: Lessons.firstWin),
+                      ),
+                    );
+                  },
+                  onSkip: () => router.go(entryLocation),
+                ),
               ),
             );
           });

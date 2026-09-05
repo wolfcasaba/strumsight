@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart'
+    show openAppSettings;
 
 import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
@@ -8,7 +10,10 @@ import '../first_win_providers.dart';
 /// The first-win mini Stage (ADR 0281 §2, A3/A5): a single scored attempt on
 /// the round's own fake motor (P2). A weak or uncertain reading is stated
 /// plainly and offers a retry — it is never presented as success (A3, the
-/// round's real-violation probe is in `docs/rounds/e13-r16-…md` §10).
+/// round's real-violation probe is in `docs/rounds/e13-r16-…md` §10). A
+/// confidence-SOURCE failure (denied permission, busy mic, motor error) is a
+/// separate, honest state (ADR 0534 D5) — it never collapses into the
+/// "Listening…" state, and "Not now" stays reachable either way.
 class FirstWinStageScreen extends ConsumerWidget {
   const FirstWinStageScreen({super.key, this.onContinue, this.onSkip});
 
@@ -25,9 +30,11 @@ class FirstWinStageScreen extends ConsumerWidget {
     final typography = Theme.of(context).extension<SsTypography>();
     // Riverpod 3.3.2: AsyncValue exposes `.value` (nullable), not
     // `.valueOrNull`.
-    final confidence = ref.watch(onboardingFirstWinConfidenceProvider).value;
+    final asyncConfidence = ref.watch(onboardingFirstWinConfidenceProvider);
+    final confidence = asyncConfidence.value;
     final hasAttempt = confidence != null;
     final success = hasAttempt && isFirstWinSuccess(confidence);
+    final hasError = asyncConfidence.hasError;
 
     return Scaffold(
       body: SafeArea(
@@ -38,7 +45,9 @@ class FirstWinStageScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  !hasAttempt
+                  hasError
+                      ? Icons.mic_off_outlined
+                      : !hasAttempt
                       ? Icons.mic_outlined
                       : success
                       ? Icons.celebration_outlined
@@ -48,7 +57,9 @@ class FirstWinStageScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: SsSpacing.space4),
                 Text(
-                  !hasAttempt
+                  hasError
+                      ? l10n.micPermissionBody
+                      : !hasAttempt
                       ? l10n.onboardFirstWinListening
                       : success
                       ? l10n.onboardFirstWinSuccessTitle
@@ -59,7 +70,7 @@ class FirstWinStageScreen extends ConsumerWidget {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                if (hasAttempt) ...[
+                if (!hasError && hasAttempt) ...[
                   const SizedBox(height: SsSpacing.space2),
                   Text(
                     success
@@ -73,7 +84,13 @@ class FirstWinStageScreen extends ConsumerWidget {
                   ),
                 ],
                 const SizedBox(height: SsSpacing.space6),
-                if (success)
+                if (hasError)
+                  FilledButton(
+                    key: const ValueKey('onboard-first-win-open-settings'),
+                    onPressed: openAppSettings,
+                    child: Text(l10n.micPermissionAction),
+                  )
+                else if (success)
                   FilledButton(
                     key: const ValueKey('onboard-first-win-continue'),
                     onPressed: onContinue,
