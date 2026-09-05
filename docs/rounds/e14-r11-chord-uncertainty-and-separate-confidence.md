@@ -1,18 +1,82 @@
-# E14-R11 — Chord uncertainty, no-chord és külön confidence a UI-ban
+# E14-R11 — A chord-döntés bekötése a merge-elt felismerési szerződésbe
 
-- **Státusz:** PREPARED (előre megírva 2026-08-20, kód olvasva: `main @ 88e08e65`)
+- **Státusz:** REVIDÁLVA a pre-flightban (2026-09-05, kód olvasva: `main @ 744797b8`)
 - **Típus:** Chapter 14, Kör 11 (truthfulness hotfix blokk)
 - **Kör-azonosító:** `E14-R11`
-- **Branch:** `<motor>/e14-r11-chord-uncertainty-and-separate-confidence`
-- **Előfeltétel:** `E14-R04` merge-elve (RecognitionFrame V2). Az `E14-R10`-től
-  független, de ha az előbb landol, a §2-t a pre-flight frissíti.
-- **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `0363` — **a Claude írja meg, a `docs/adr/` a TILOS zónában van.**
+- **Branch:** `sonnet-impl/e14-r11-chord-uncertainty-and-separate-confidence`
+- **Előfeltétel:** `E14-R04` (RecognitionFrame V2), `E14-R05` (SignalQuality),
+  `E14-R10` (irány-abstention bekötés) — mind merge-elve.
+- **Brief szerzője:** Claude (Opus 5) · **§0.0 revízió:** Claude (Opus 5), orchestrátor
+- **ADR:** `0516` (`docs/adr/0516-live-chord-decision-wiring.md`) — a pre-flightban
+  MEGÍRVA és commitolva. A `docs/adr/` az implementernek TILOS zóna.
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a
-> `lib/features/live/engine/dsp/live_pipeline.dart` `chordConfidence` getterét
-> (a 251–261. sorok környéke) és a `lib/features/live/widgets/confidence_pill.dart`-t.
-> A §2 ezekre mutat. Eltérésnél §0.0 revízió.
+---
+
+## 0.0 Pre-flight revízió (ADR 0087 §2 — az orchestrátor hatásköre)
+
+A `brief-lint` két `strict` leletet adott (**S12**, **S15**). Mindkettő javítva;
+a revízió MÉRT indoklása az **ADR 0516 „Kontextus"** szakaszában van tételesen.
+A rövid változat — **mi maradt igaz, mi nem, és hol van a kör EGYETLEN
+döntési helye**:
+
+**Ami MÁR NEM igaz** (a brief 2026-08-20-i alapja azóta elmozdult):
+
+1. *„A `noChord`/`unknownChord`/`lowSignal` megkülönböztetés nincs a
+   frame-ben"* → **elavult**. A `RecognitionDecision` (6 állapot) és a
+   `RecognitionRejectReason` (6 ok, köztük `noChord`, `signalQuality`,
+   `lowConfidence`) MERGE-ELVE él. Egy új enum második, divergens szótár
+   volna ugyanarra a döntésre — ez az E14-R10 H3 / [L636](../LESSONS.md#l636)
+   hibaosztálya. **A kör a merge-elt szótárat KÖTI BE, nem épít másodikat.**
+2. *„Két külön confidence-mező a `LiveFrame`-ben"* → a szétválasztást az
+   **ADR 0505 már kimondta** (`RecognitionFrame`: „the chord- and
+   direction-confidence are carried SEPARATELY"). Ez a kör beköti.
+3. *A nyers `chordConfidence` double a frame-en* → **tilos**: az
+   ADR 0505 D2 szerint kalibrálatlan valószínűség nem kerülhet
+   confidence-alakú mezőbe. Nincs mért akkord-kalibráció a fában.
+4. *Az előre kiosztott `0363` ADR-szám* → **elavult**; a foglaló a
+   **`0516`**-ot adta (a legmagasabb létező szám `0512`).
+
+**Ami KIKERÜLT a körből — és miért (S15 → a feloldás lista-tágítást kívánna, ADR 0087 §2 H3):**
+
+A brief UI-céljai (`confidence_pill.dart`, `chord_display.dart`) **halott
+kódra** mutatnak. Mérve: e két widgetnek a `lib/` fában **nulla** használója
+van, egyedül a `test/features/live/live_widgets_test.dart` importálja őket. A
+SZÁLLÍTOTT Live felület a `live_screen.dart` → `SsChordHero` úton rajzol, és
+ott (`live_screen.dart:350`), illetve a `chord_timeline_card.dart:225`-ben írja
+ki a kalibrálatlan százalékot. A két widget átírása tehát **semmit nem
+változtatna azon, amit a felhasználó lát** — a valódi javítás a
+`lib/features/live/screens/**`-ot kívánná, amit ez a brief maga sorol a TILOS
+zónába. Ráadásul a pill százalékát a listán KÍVÜLI
+`live_widgets_test.dart:50` (`find.textContaining('94%')`) pinneli ki, tehát a
+§5.2 változtatása egy nem engedélyezett fájlt vinne pirosra (S14-osztály).
+
+Ezért a `confidence_pill.dart`, a `chord_display.dart`, a két ARB és a
+`confidence_pill_test.dart` **kikerült** az engedélyezett listáról (a lista
+SZŰKÍTÉSE az orchestrátor hatásköre; a tágítás nem az). A kör a **domain-felet**
+szállítja hiánytalanul.
+
+> ⚠ **NYITVA MARAD, nevesítve:** a Chapter 14 §9/6 („kalibrálatlan
+> valószínűséget tilos százalékként mutatni") UI-adóssága **NEM teljesül**
+> ebben a körben. Külön kör kell rá, amelynek `allowed_paths`-a tartalmazza a
+> `lib/features/live/screens/live_screen.dart`-ot és a
+> `lib/features/live/widgets/chord_timeline_card.dart`-ot. Lásd ADR 0516 D6.
+
+**A kör EGYETLEN döntési helye:** `lib/features/live/engine/dsp/live_pipeline.dart` —
+ott, ahol az E14-R10 az irányt kötötte be (`_isDirectionConfirmed`).
+
+**S12 javítva:** a §7 gate-parancs mostantól szó szerint tükrözi a `gate_tests`
+listát.
+
+**Visszakeresett előzmény (ADR 0312, kötelező):** `knowledge-rag` szűkítve
+(`lessons,halts,adr`) + teljes korpuszon lefuttatva. Releváns találatok:
+[ADR 0271](../adr/0271-recognition-recovery-program.md) (a gyökérok:
+„a `LiveFrame` túl kevés információt visz a UI-nak"),
+[L624](../LESSONS.md#l624) (a szerződés-kör felépítheti a bizonytalanság
+szótárát, majd a saját fogyasztójában nem használja — ez a kör pontosan ezt a
+hézagot zárja az akkord-oldalon),
+[L636](../LESSONS.md#l636) (az előre írt brief mért alapja elmozdul alatta).
+
+---
 
 ```ai-router
 schema_version = 1
@@ -20,18 +84,13 @@ risk = "normal"
 allowed_paths = [
   "lib/features/live/model/live_frame.dart",
   "lib/features/live/engine/dsp/live_pipeline.dart",
-  "lib/features/live/widgets/confidence_pill.dart",
-  "lib/features/live/widgets/chord_display.dart",
   "lib/features/live/public.dart",
-  "lib/l10n/app_en.arb",
-  "lib/l10n/app_hu.arb",
   "test/features/live/chord_uncertainty_test.dart",
-  "test/features/live/confidence_pill_test.dart",
   "docs/rounds/e14-r11-chord-uncertainty-and-separate-confidence.md",
 ]
 gate_tests = [
   "test/features/live/chord_uncertainty_test.dart",
-  "test/features/live/confidence_pill_test.dart",
+  "test/features/live",
 ]
 native_gate = false
 ```
@@ -45,144 +104,200 @@ tools/codex-signal.sh stopped "<egy sor>"
 tools/codex-signal.sh blocked "<egy sor>"
 ```
 
-Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+**A kör-jelzés kötelező: lezáró jelzés nélkül a kör bukott.** Ha bármilyen
+munka a fenti `allowed_paths` listán KÍVÜLI fájlt kívánna, **NE írd át**:
+adj `stopped` jelzést, és a jelentésben mondd meg, melyik fájl és miért.
+A `docs/adr/**` ebben a körben is TILOS — az ADR 0516 már meg van írva.
+
+**A brief §8 a terved — nincs külön task-lista.** Doc-commentben csak olyan
+állítás szerepelhet, amit teszt bizonyít (`const`, `immutable`, küszöbérték).
 
 ## 1. Cél
 
-A chord- és a strum-confidence **soha ne keveredjen**, és bizonytalan/ismeretlen
-akkordnál a UI ne mutasson akkordnevet. A százalék helyett szöveges állapot
-(„Biztos / Ellenőrzés / Nem biztos") jelenjen meg — kalibrálatlan valószínűséget
-tilos százalékként mutatni (Chapter 14 §9/6).
+A Live pipeline akkord-verdiktje **tipizált, merge-elt szótárú döntéssé**
+váljon: a `RecognitionDecision` + `RecognitionRejectReason` páros mondja meg,
+hogy az akkord megerősített, bizonytalan vagy elutasított — és ha elutasított,
+**miért** (`noChord` / `signalQuality` / `lowConfidence`). Ez az információ
+additívan jusson el a `LiveFrame`-ig, hogy egy későbbi UI-kör a bizonytalanságot
+meg tudja jeleníteni (ADR 0271 gyökérok).
 
-### 1.1 Visszakeresett előzmény (ADR 0312)
+**A felhasználó által látott viselkedés ebben a körben NEM változik** — a kör
+additív. A `showChord` kapu, a `current` mező és a küszöbök változatlanok.
 
-- **Chapter 14 §4.3 (mért audit):** a `LiveFrame` egyetlen confidence-t visz, és
-  az a strumé — a UI-ban mégis akkord-bizonyosságnak látszik. Ez a kör zárja.
-- **E14-R01 release guard:** kalibrálatlan szám nem mutatható bizonyosságként.
+## 2. Jelenlegi állapot — mért tények (`main @ 744797b8`)
 
-## 2. Jelenlegi állapot — mért tények
-
-- `lib/features/live/engine/dsp/live_pipeline.dart:253` — `double get
-  chordConfidence => _lastChord?.confidence ?? 0;` — a getter LÉTEZIK, de a
-  frame nem viszi tovább.
-- `lib/features/live/model/live_frame.dart` — `confidence` = a STRUM confidence-e.
-- `lib/features/live/widgets/confidence_pill.dart` — a pill ma ezt az egyetlen
-  értéket mutatja.
-- A `noChord` / `unknownChord` / `lowSignal` megkülönböztetés **nincs** a
-  frame-ben.
+- `live_pipeline.dart:368` — `double get chordConfidence => _lastChord?.confidence ?? 0;`
+  — létezik, de a frame nem viszi tovább, és ez **kalibrálatlan** szám.
+- `live_pipeline.dart:338-341` — `final showChord = _lastChord != null && _chordLatched;`
+  → `current: showChord ? Chord(...) : null`. A döntés ma egy `bool`.
+- `live_pipeline.dart:244-268` — a Schmitt-kapu: `_chordConfEma >= _chordConfRise`
+  → latch; `< _chordConfRelease` → (debounce után) elenged.
+- `dsp_config.dart:75,76,81` — `chordConfRise = 0.54`, `chordConfRelease = 0.22`,
+  `chordConfEmaAlpha = 0.35`; `:55` — `chordMinTonalness = 0.7`.
+- `live_pipeline.dart:364` — `SignalQualitySnapshot get signalQuality` (E14-R05).
+- `live_frame.dart:70` — `double get confidence => latestStrum?.confidence ?? 0;`
+  — ez a STRUM confidence-e.
+- `ChordPrediction(` termelő a `lib/` fában: **nulla** (a saját konstruktorán és
+  a `fromJson`-on kívül).
+- `live_pipeline.dart:299-313` — `_isDirectionConfirmed` (E14-R10, ADR 0512):
+  **ez a követendő alak** az akkord-oldalon.
 
 ## 3. Scope
 
-**Benne:** külön chord- és strum-confidence (raw, EMA, kalibrált) a frame-ben,
-`noChord`/`unknownChord`/`lowSignal` állapotok, a pill szöveges állapotra
-váltása, a chord-név elrejtése bizonytalan döntésnél, l10n kulcsok.
+**Benne:** a `ChordPrediction` legyártása a pipeline-ban a merge-elt szótárral;
+a `decision` + `rejectReason` levezetése a MÁR SZÁLLÍTOTT kapuból; a tipizált
+döntés additív továbbadása a `LiveFrame`-ben; a `public.dart` additív exportja;
+a mérce-tesztek.
 
-**Nincs benne:** DSP-küszöb hangolása, layout-redesign (R13), stabilizátor
-(R12), a generált l10n fájlok kézi szerkesztése.
+**Nincs benne:** DSP-küszöb hangolása, ÚJ enum vagy állapotnév, nyers
+százalék bárhol, UI/képernyő-változtatás, l10n, a `live_frame_adapter.dart`
+átkötése, a `chord_prediction.dart` módosítása.
 
 ## 4. Engedélyezett fájlok
 
 | Útvonal | Miért |
 |---|---|
-| `lib/features/live/model/live_frame.dart` | külön confidence-mezők + állapotok |
-| `lib/features/live/engine/dsp/live_pipeline.dart` | a meglévő getter továbbadása |
-| `lib/features/live/widgets/confidence_pill.dart` | szöveges állapot |
-| `lib/features/live/widgets/chord_display.dart` | bizonytalanságnál nincs név |
-| `lib/features/live/public.dart` | additív export |
-| `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` | a három állapot szövege |
-| `test/features/live/chord_uncertainty_test.dart` | állapot-mátrix |
-| `test/features/live/confidence_pill_test.dart` | a pill szemantikája |
-| `docs/rounds/e14-r11-chord-uncertainty-and-separate-confidence.md` | §10 handoff |
+| `lib/features/live/engine/dsp/live_pipeline.dart` | **a kör egyetlen döntési helye**: a `ChordPrediction` levezetése |
+| `lib/features/live/model/live_frame.dart` | additív, tipizált `chordDecision` + `chordRejectReason` |
+| `lib/features/live/public.dart` | additív export, ha kell |
+| `test/features/live/chord_uncertainty_test.dart` | a kör mércéje (ÚJ fájl) |
+| `docs/rounds/e14-r11-…md` | §10 handoff |
 
-**Tilos zóna:** minden más — kiemelten a **generált** l10n kimenet
-(`lib/l10n/app_localizations*.dart`), `lib/features/live/screens/**`,
-`lib/features/live/engine/ml/**`, `assets/**`, `ml/**`, `docs/adr/**`,
-`docs/rag/chunks/**`, `.github/workflows/**`, `tools/round-gate.sh`.
+**Tilos zóna:** minden más — kiemelten `docs/adr/**`,
+`lib/features/live/screens/**`, `lib/features/live/widgets/**`,
+`lib/features/live/domain/recognition/**` (a szerződés MERGE-ELT: olvasd és
+használd, ne írd át), `lib/l10n/**`, `lib/features/live/engine/dsp/dsp_config.dart`
+(küszöb-hangolás tilos), `.github/workflows/**`, `tools/**`.
 
-## 5. Kötött architekturális döntések (ADR 0363)
+## 5. Kötött architekturális döntések (ADR 0516)
 
-### 5.1 Két külön mező, nem egy „confidence"
+### 5.1 A merge-elt szótár kötelező, második nem épül
 
-A frame-ben `chordConfidence` és `strumConfidence` külön mező. **NEM
-elfogadható**: egy mező + „a hívó tudja, melyikről van szó" komment.
+A `decision` értéke `RecognitionDecision`, az ok `RecognitionRejectReason`.
+**NEM elfogadható:** új enum, `String` állapotnév, `bool`-hármas vagy bármilyen
+saját „uncertainty" típus.
 
-### 5.2 Kalibrálatlan érték nem százalék
+### 5.2 A `calibratedConfidence` marad `null`
 
-A UI alapértelmezetten szöveges állapotot mutat. A nyers százalék csak
-diagnosztikai (Lab) felületen jelenhet meg, ott is „kalibrálatlan" jelöléssel.
+Nincs mért akkord-kalibráció. **NEM elfogadható** az EMA, a match-confidence
+vagy bármely nyers valószínűség bemásolása ebbe a mezőbe (ADR 0505 D2).
 
-### 5.3 Bizonytalan döntésnél nincs akkordnév
+### 5.3 Küszöb nem duplikálódik és nem hangolódik
 
-`uncertain` vagy `rejected` esetén a `chord_display` nem ír ki labelt; a
-helyére a semleges állapot kerül. **NEM elfogadható**: halványított akkordnév.
+A levezetés a `DspConfig` MEGLÉVŐ értékeit és a pipeline MEGLÉVŐ
+`_chordLatched` / `_chordConfEma` állapotát használja. **NEM elfogadható** új
+számliterál küszöbként a `live_pipeline.dart`-ban.
 
-### 5.4 A három ok-állapot megkülönböztetett
+**Inkluzivitás:** a rise-oldal **megerősítés-oldalon inkluzív**
+(`_chordConfEma >= _chordConfRise` → latch) — ez a ma szállított viselkedés.
 
-`noChord` (nincs akkord), `unknownChord` (van, de nem ismerjük fel) és
-`lowSignal` (a jel nem elég) külön állapot, külön szöveggel.
+### 5.4 A `rejectReason` a `decision`-nal EGYÜTT keletkezik
+
+Soha nem külön tárolt mező, ami eldriftelhet (ez a
+`StrumPrediction.rejectReason` merge-elt mintája). Leképezés:
+
+| Mért helyzet | `decision` | `rejectReason` |
+|---|---|---|
+| a kapu latch-elt, van akkord-match | `confirmed` | `null` |
+| a jel-minőség nem `good` és nem `unknown` | `rejected` | `signalQuality` |
+| tonalness-kapuzott / nincs akkord-match | `rejected` | `noChord` |
+| van match, de a kapu alatt | `uncertain` | `lowConfidence` |
+
+A jel-minőség ELŐBB dönt, mint a kapu.
 
 ### 5.5 Additív szerződés
 
-A meglévő `LiveFrame`-hívók a régi mezőkkel tovább fordulnak (deprecation
-komment igen, törlés nem).
+A `LiveFrame` új mezői alapértelmezett `null`-osak; a meglévő `confidence`
+getter és minden meglévő mező marad (deprecation-komment igen, törlés nem).
+A `LiveFrame.empty` és a `copyWith` viselkedése nem romolhat el.
+
+### 5.6 A viselkedés nem változik
+
+A `showChord` kapu és a `current` mező kimenete bit-azonos marad. Ez a kör
+**csak hozzáad**.
 
 ## 6. Acceptance criteria
 
-1. Beszéd/zaj fixture-ön a frame `lowSignal`-t ad, és a display nem mutat
-   akkordnevet.
-2. A chord- és strum-confidence külön mérhető: a teszt eltérő értékeket ad a
-   kettőnek, és mindkettő a saját forrásából származik.
-3. A pill szemantikája a három szöveges állapotot adja (a teszt a semantics
-   labelt olvassa, nem a pixelt).
-4. `noChord` / `unknownChord` / `lowSignal` külön szöveget kap mindkét
-   nyelven; hiányzó kulcs → a teszt piros.
-5. A régi `LiveFrame` hívók fordulnak (kompatibilitási cella).
-6. A `lowSignal` állapotot kiváltó jel-küszöb hármas cellája (a határ
-   **inkluzív**, az érték az `E14-R05` `SignalQualitySnapshot`-jából jön):
-   a küszöb **alatt** → `lowSignal` (nincs akkordnév), pontosan **rajta** →
-   `lowSignal` (a határ ide tartozik), a küszöb **fölött** → a normál
-   chord-döntés fut.
+Minden pont a `test/features/live/chord_uncertainty_test.dart`-ban mérve.
+
+1. **A pipeline tipizált akkord-verdiktet ad.** Van egy elérhető
+   `ChordPrediction?` (getter a pipeline-on), amelynek `decision`-je a merge-elt
+   `RecognitionDecision` értéke. `ChordPrediction` termelő a `lib/`-ben:
+   már nem nulla.
+2. **A `decision == confirmed` PONTOSAN akkor, amikor a mai `showChord`.**
+   Ugyanaz a bemenet, amire a frame `current != null`, `confirmed`-et ad; és
+   fordítva, `current == null` mellett soha nem `confirmed`.
+3. **A négy leképezési sor (5.4) mind mérve** — külön cella a `confirmed`, a
+   `signalQuality`, a `noChord` és a `lowConfidence` sorra.
+4. **Küszöb-hármas a rise-kapun** (a határ **megerősítés-oldalon inkluzív**,
+   `chordConfRise = 0.54`):
+   - EMA `0.53` (a küszöb **alatt**) → **nem** `confirmed`;
+   - EMA `0.54` (pontosan **rajta**) → `confirmed` (a határ ide tartozik);
+   - EMA `0.55` (a küszöb **fölött**) → `confirmed`.
+   A levezetésnek unit-szinten elérhetőnek kell lennie (pl.
+   `@visibleForTesting` belépési pont), hogy a hármas EXAKT EMA-értékkel
+   mérhető legyen, ne audio-vezérléssel közelítve.
+5. **A `calibratedConfidence` `null`** minden legyártott `ChordPrediction`-ön.
+6. **Chord ≠ strum forrás.** A `LiveFrame.confidence` (strum) és a
+   `chordDecision` (akkord) külön forrásból jön: olyan cella, ahol a strum
+   confidence magas, de az akkord-döntés `uncertain`/`rejected` — és fordítva.
+7. **Kompatibilitás.** A `LiveFrame` régi hívói fordulnak; `LiveFrame.empty`
+   új mezői `null`-ok; a `copyWith` megőrzi őket.
+8. **Az adapter-hézag KIMONDVA pinnelve (ADR 0516 D7).** A
+   `LiveFrameAdapter.toLiveFrame` kimenetén a `chordDecision` `null` marad —
+   a teszt ezt a hézagot rögzíti, hogy ne néma legyen.
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| A frame a strum-confidence-t adja vissza chordként | 2. pont |
-| `uncertain` mellett halványítva kiírja a labelt | 1. és 3. pont |
-| A három ok-állapot egyetlen „unknown"-ba olvad | 4. pont |
-| A pill százalékot mutat | 3. pont semantics-cellája |
-| A régi mező törlése | 5. pont fordítási cellája |
-| A jel-küszöb exkluzív határral | 6. pont „pontosan rajta" cellája |
+| Új saját enum a merge-elt `RecognitionDecision` helyett | 1. pont (fordítási cella: a teszt a merge-elt típust várja) |
+| A chord-döntésbe a STRUM confidence kerül | 6. pont |
+| A `confirmed` a mai `showChord`-tól eltér | 2. pont |
+| A `signalQuality` és a `lowConfidence` ok összeolvad | 3. pont |
+| A rise-küszöb exkluzívvá válik (`>`) | 4. pont „pontosan rajta" cellája |
+| Az EMA bemásolása `calibratedConfidence`-be | 5. pont |
+| A régi `LiveFrame` mező törlése | 7. pont fordítási cellája |
+| Az adapter némán tölteni kezdi az új mezőt | 8. pont |
 
 ## 7. Kötelező ellenőrzések
 
+A `gate_tests` listát szó szerint tükröző, EGYETLEN gate-hívás
+(`&&`-láncolás tilos, L05/L09):
+
 ```bash
-tools/round-gate.sh test/features/live
+tools/round-gate.sh test/features/live/chord_uncertainty_test.dart test/features/live
 ```
 
-Külön processzben futó `format` → `analyze` → célzott tesztek → `architecture`
-(AGENTS.md §12). `&&` láncolás tilos (L05/L09). Az ARB-módosítás után a
-generált l10n frissítése a gate dolga — kézzel szerkeszteni TILOS (mért eset:
-E08-R12/H6). CI-dispatch/PR/merge Claude-oldal.
+Külön processzben futó `format` → `analyze` → célzott tesztek →
+`architecture` (AGENTS.md §12). CI-dispatch/PR/merge Claude-oldal.
 
-### 7.1 Falszifikációs cella
+### 7.1 Falszifikációs cella (a §10-ben dokumentáld)
 
-A §10-ben dokumentáld: a `chordConfidence` ideiglenes visszacserélésével a
-strum-értékre a 2. pont **PIROS**, visszaállítva **ZÖLD**.
+A `decision` levezetésében a `_chordConfEma` ideiglenes lecserélésével a strum
+confidence-re a **6. pont PIROS**, visszaállítva **ZÖLD**. Írd le a
+tényleges kimenetet (teszt-név + `flutter test` sor), ne csak az állítást.
 
 ## 8. Implementációs sorrend
 
-1. Frame-mezők + állapotok, teszttel.
-2. Pipeline-bekötés (a meglévő getter).
-3. ARB-kulcsok, majd a gate generálja az l10n-t.
-4. Pill és display.
+1. `live_pipeline.dart`: a `decision` + `rejectReason` levezetése az 5.4
+   táblázat szerint, unit-szinten elérhető belépési ponttal; a
+   `ChordPrediction` legyártása; a félrevezető `chordConfidence` getter
+   doksijának pontosítása (kalibrálatlan!).
+2. `live_frame.dart`: additív `chordDecision` + `chordRejectReason` mezők
+   (alapértelmezett `null`), `copyWith` és `empty` karbantartása.
+3. A pipeline `_buildFrame()`-je tölti az új mezőket.
+4. `public.dart`: additív export, ha a teszt a barrelen át importál.
+5. `test/features/live/chord_uncertainty_test.dart`: a §6 mind a 8 pontja.
 
 ## 9. Kockázatok
 
-- **Generált l10n scope-csapda:** a kör csak az ARB-t írja (E08-R12/H6 lecke).
-- **Hívó-drift:** 19 `LiveFrame`-hívó van a fában; a kompatibilitási cella
-  védje őket.
-- **Túl korai UI-átszabás:** a layout az R13 dolga; itt csak a tartalom változik.
+- **Második szótár (fő kockázat):** a legkönnyebb hiba egy saját enum. Az 5.1
+  és a 6.1 első sora ezt fogja meg.
+- **Kalibrálatlan szám becsúszása:** az 5. acceptance-pont őrzi.
+- **Viselkedés-drift:** az 5.6 + 2. pont pinneli, hogy a `showChord` kapu nem
+  mozdul.
+- **Hívó-drift:** 19+ `LiveFrame`-hívó; a 7. pont a kompatibilitási cella.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
