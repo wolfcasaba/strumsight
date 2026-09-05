@@ -16,11 +16,24 @@ class StrumEvent {
     required this.timeSec,
     required this.direction,
     required this.confidence,
+    this.pDown,
+    this.pUp,
+    this.pNoStrum,
   });
 
   final double timeSec;
   final StrumDirection? direction;
   final double confidence;
+
+  /// Carried verbatim from [StrumClassification.pDown] — `null` unless the
+  /// CRNN produced it (ADR 0512 D1). The pipeline is the only reader.
+  final double? pDown;
+
+  /// See [pDown]; carried from [StrumClassification.pUp].
+  final double? pUp;
+
+  /// See [pDown]; carried from [StrumClassification.pNoStrum].
+  final double? pNoStrum;
 }
 
 /// Onset detection (SuperFlux, chunk 015 rec #3 — round 136) + strum-direction
@@ -162,6 +175,9 @@ class StrumAnalyzer {
         timeSec: (onsetFrame + _attackOffsetFrames) * _frameSec,
         direction: c.direction,
         confidence: c.confidence,
+        pDown: c.pDown,
+        pUp: c.pUp,
+        pNoStrum: c.pNoStrum,
       );
     }
     return null;

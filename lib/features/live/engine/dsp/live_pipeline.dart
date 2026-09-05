@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../../core/music/chord.dart';
+import '../../domain/recognition/recognition_decision.dart';
 import '../../domain/recognition/signal_quality_snapshot.dart';
+import '../../domain/recognition/strum_prediction.dart';
 import '../../model/live_frame.dart';
 import '../../model/recognition_runtime_info.dart';
 import '../../../../core/music/strum.dart';
@@ -78,6 +80,31 @@ class LivePipeline {
       chordConfRise: chordConfRise,
       chordConfRelease: chordConfRelease,
       chordReleaseHoldFrames: chordReleaseHoldFrames,
+    );
+  }
+
+  /// Test-only seam (the [debugStrumClassifier] getter's counterpart): lets a
+  /// test inject a [StrumDirectionClassifier] with FIXED probabilities in
+  /// place of a real model activation, so the margin-threshold decision
+  /// (ADR 0512 D6) can be exercised end-to-end without a trained asset.
+  @visibleForTesting
+  factory LivePipeline.debugWithClassifier(
+    StrumDirectionClassifier classifier, {
+    required int sampleRate,
+  }) {
+    return LivePipeline._(
+      sampleRate: sampleRate,
+      crnnActivation: ModelActivation<StrumDirectionClassifier>.activated(
+        classifier,
+        RecognitionRuntimeInfo(
+          strumModelId: 'debug-fixed-classifier',
+          strumModelVersion: 0,
+          strumModelSha256: '',
+          chordEngineId: RecognitionRuntimeInfo.chordEngineNnlsViterbi,
+          sampleRate: sampleRate,
+          frontendVersion: RecognitionRuntimeInfo.frontendCrnnV1,
+        ),
+      ),
     );
   }
 
@@ -193,7 +220,7 @@ class LivePipeline {
       if (_strums.onsetJustFired) _chordDecoder.noteOnset();
       if (event == null) continue;
       _tempo.addOnset(event.timeSec);
-      if (event.direction != null) {
+      if (event.direction != null && _isDirectionConfirmed(event)) {
         _latestStrum = Strum(
           direction: event.direction!,
           confidence: event.confidence,
@@ -246,6 +273,28 @@ class LivePipeline {
       out.add(_buildFrame());
     }
     return out;
+  }
+
+  /// ADR 0512 D2/D3 — the ONLY place this round decides whether a direction
+  /// surfaces: a probability-less [event] (the heuristic ladder, which has
+  /// no probability to report) keeps today's behaviour unconditionally; a
+  /// probability-bearing [event] (the CRNN) builds the ALREADY-MERGED
+  /// [StrumPrediction] and defers to its [StrumPrediction.decision] getter —
+  /// this pipeline never reimplements the margin threshold itself.
+  bool _isDirectionConfirmed(StrumEvent event) {
+    final pDown = event.pDown;
+    final pUp = event.pUp;
+    if (pDown == null || pUp == null) return true;
+    final prediction = StrumPrediction(
+      onsetTimeSec: event.timeSec,
+      verdictTimeSec: event.timeSec,
+      pDown: pDown,
+      pUp: pUp,
+      pNoStrum: event.pNoStrum ?? 0.0,
+      calibratedConfidence: null,
+      modelId: _crnnActivation.info.strumModelId,
+    );
+    return prediction.decision == RecognitionDecision.confirmed;
   }
 
   void _placeInBar(StrumEvent event) {
