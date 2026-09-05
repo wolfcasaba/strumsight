@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../../core/music/chord.dart';
+import '../../domain/recognition/signal_quality_snapshot.dart';
 import '../../model/live_frame.dart';
 import '../../model/recognition_runtime_info.dart';
 import '../../../../core/music/strum.dart';
@@ -10,6 +11,7 @@ import '../../model/beat_slot.dart';
 import '../ml/live_crnn_classifier.dart';
 import '../ml/model_activation.dart';
 import '../ml/strum_crnn.dart';
+import '../quality/live_signal_quality_analyzer.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
@@ -142,6 +144,11 @@ class LivePipeline {
   );
   final StrumAnalyzer _strums;
 
+  /// The Live-side signal-quality analyzer (E14-R05, ADR 0507) — fed the raw
+  /// chunk alongside the DSP pipeline, exposed read-only via [signalQuality].
+  /// Does not touch [LiveFrame] or [_buildFrame] (brief §0.0 R7).
+  final LiveSignalQualityAnalyzer _signalQuality = LiveSignalQualityAnalyzer();
+
   static final Float64List _silentChroma = Float64List(12);
   final TempoTracker _tempo = TempoTracker();
   final SlidingFramer _chordFramer;
@@ -175,6 +182,7 @@ class LivePipeline {
   List<LiveFrame> addChunk(List<double> chunk) {
     final out = <LiveFrame>[];
     _samplesSeen += chunk.length;
+    _signalQuality.addChunk(chunk);
 
     // Fast path: onsets + direction.
     for (final frame in _onsetFramer.add(chunk)) {
@@ -301,6 +309,11 @@ class LivePipeline {
   /// actual isolate → Lab wiring lands in E14-R04 (R3).
   RecognitionRuntimeInfo get runtimeInfo => _crnnActivation.info;
 
+  /// The latest confirmed Live audio-quality snapshot (E14-R05, ADR 0507
+  /// D10) — a read-only getter in the same shape as [runtimeInfo]; the
+  /// `LiveFrame` contract and `inputLevel` are untouched by this round.
+  SignalQualitySnapshot get signalQuality => _signalQuality.snapshot;
+
   /// Chord-match confidence (separate from the strum confidence the pill
   /// shows) — available for future UI use.
   double get chordConfidence => _lastChord?.confidence ?? 0;
@@ -324,6 +337,7 @@ class LivePipeline {
     _onsetFramer.reset();
     _chordDecoder.reset();
     _tempo.reset();
+    _signalQuality.reset();
     _lastChord = null;
     _chordConfEma = 0;
     _chordLatched = false;
