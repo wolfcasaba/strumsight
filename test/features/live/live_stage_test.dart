@@ -15,9 +15,11 @@ import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/music/chord.dart';
 import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/live/domain/recognition/recognition_decision.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
+import 'package:strumsight/features/live/widgets/uncertainty_reason_banner.dart';
 import 'package:strumsight/features/today/screens/today_hub_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/main.dart';
@@ -72,6 +74,7 @@ LiveFrame _frame({
   bool listening = true,
   double bpm = 96,
   double engineTimeSec = 1.0,
+  RecognitionRejectReason? chordRejectReason,
 }) => LiveFrame(
   current: current,
   next: null,
@@ -82,6 +85,7 @@ LiveFrame _frame({
   tuningHz: 440,
   listening: listening,
   engineTimeSec: engineTimeSec,
+  chordRejectReason: chordRejectReason,
 );
 
 void main() {
@@ -121,12 +125,19 @@ void main() {
               confidence: 0.9,
             ),
             inputLevel: 0.02,
+            // ADR 0520 D5: this cell is the "no decision" branch of the
+            // MERGED reject-reason source — chordRejectReason is explicitly
+            // null (not merely defaulted), so the heuristic weak-signal
+            // warning is the one displaying, and the new decision-based
+            // banner (E14-R13) stays out of the tree.
+            chordRejectReason: null,
           ),
         );
         await tester.pumpAndSettle();
 
         expect(find.text(l10n.liveWeakSignal), findsOneWidget);
         expect(find.text(l10n.liveWaitingForChord), findsNothing);
+        expect(find.byType(UncertaintyReasonBanner), findsNothing);
         await tester.pump(const Duration(milliseconds: 400));
       },
     );
@@ -137,11 +148,21 @@ void main() {
       (tester) async {
         final engine = await _pumpLive(tester);
         final l10n = lookupAppLocalizations(const Locale('en'));
-        engine.emit(_frame(current: null, inputLevel: 0.6));
+        engine.emit(
+          _frame(
+            current: null,
+            inputLevel: 0.6,
+            // ADR 0520 D5: no decision yet — the merged source agrees with
+            // the heuristic's "no chord" reading, so the decision-based
+            // banner stays out of the tree here too.
+            chordRejectReason: null,
+          ),
+        );
         await tester.pumpAndSettle();
 
         expect(find.text(l10n.liveWaitingForChord), findsWidgets);
         expect(find.text(l10n.liveWeakSignal), findsNothing);
+        expect(find.byType(UncertaintyReasonBanner), findsNothing);
         await tester.pump(const Duration(milliseconds: 400));
       },
     );
