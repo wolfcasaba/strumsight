@@ -1,107 +1,87 @@
 # A maradék bekötési akadályok — mérve 2026-09-05
 
-Elérhetetlen képernyők: **23 → 6** (`dart run tool/check_screen_reachability.dart`).
-
-Ez a dokumentum a HÁTRALÉVŐ hatot írja le. Mindegyik közös vonása: **nem
-route hiányzik alóluk.** Mindegyik mögött egy megnevezett, hiányzó darab
-áll, és mindegyik hiány egy TERMÉK-döntést kíván, nem bekötést. Ezért nem
-kaptak route-ot: egy útvonal ma mind a hat esetben olyan képernyőt
-szállítana, ami működőnek látszik, de nem az.
+Elérhetetlen képernyők: **23 → 2** (`dart run tool/check_screen_reachability.dart`).
 
 ---
 
-## 1–4. Gyakorlástervező (4 képernyő)
+## A LEGFONTOSABB LELET: a mérce nem azt méri, amit a felhasználó tapasztal
 
-`plan_preview_screen.dart`, `plan_privacy_screen.dart`,
-`plan_change_review_screen.dart`, `weekly_plan_screen.dart`
+A `check_screen_reachability` egy REGISZTRÁLT `GoRoute`-ot elérhetőnek
+számol — akkor is, ha a szállított felületről semmi nem navigál oda.
 
-**Az akadály:** a `exerciseCandidateResolverProvider` és a
-`generationPlanInputBuilderProvider` élesben `UnimplementedError`-t dob
-(`practice_generator_providers.dart`). Mindkettő az EXERCISE-KATALÓGUSRA
-vár.
+**Mért tény: a 87 útvonal-konstansból 39-re SEMMI nem hivatkozik** a
+router-fájlokon kívül. Ezek úgy szerepelnek „elérhetőként", hogy a
+felhasználó csak mély-linkkel jutna el hozzájuk.
 
-**Miért nem lehet egyszerűen feltölteni.** A katalógus-adapterek
-(`practice_engine_catalog_adapter.dart`,
-`legacy_lesson_candidate_adapter.dart`) minden jelöltnél NÉGY, a hívótól
-származó mezőt követelnek, és a hiányzót nem pótolják alapértékkel, hanem
-**kizárják a jelöltet** egy figyelmeztetéssel. Ez szándékos őr — a kód
-kifejezetten megtagadja a kitalált adatot.
+Ez pontosan az a hibaosztály, ami miatt a fejlesztés „késznek látszik, de
+nem használható": a kör lezárja a route-ot, a mérce zöld, és senki nem
+kérdezi meg, hogy a felületről el lehet-e oda jutni.
 
-A négy mezőből három levezethető a gyakorlat saját definíciójából
-(`offlineAvailable`: a beépített gyakorlatok a csomagban vannak;
-`contentRevision`: a `schemaVersion`-ből; `skillTargets`: a `skillTags`-ből
-jön). A negyedik nem:
+Ez a saját munkámban is előfordult: a 13 community route megszületett, de a
+Profil hubról nem vezetett hozzájuk semmi. Javítva (`profile-hub-community-entry`),
+és a `community_routing_test.dart` E6 cellája őrzi.
 
-**`ExerciseLoadProfile` — hat pedagógiai dimenzió** (kognitív, fogó kéz,
-pengető kéz, ismétlés, újdonság, koncentráció), gyakorlatonként, három
-szinten. A fában SEHOL nincs ilyen adat. Ez tartalom: azt határozza meg,
-mit ajánl az app gyakorlásra. Kitalálni annyi lenne, mint kitalált
-számokból valódi gyakorlási javaslatokat adni.
+**Ami még belépési pont nélkül áll az ÚJ folyamatokból:**
+`/analysis/capture`, `/practice/generator/weekly`, `/practice/generator/privacy`.
+A route-jaik és a mögöttes adatréteg élnek; a felületről vezető gomb hiányzik.
 
-**Egy további, önálló hiba ugyanitt:** az adapter üres `prerequisites`
-listát is elutasít. Egy kezdő gyakorlatnak viszont IGAZ állítása, hogy
-nincs előfeltétele — ezt a modell ma nem tudja kifejezni. A „nincs
-előfeltétel" ábrázolása külön döntés.
+**Javasolt mérce-bővítés:** a `check_screen_reachability` mellé egy cella,
+ami az útvonal-konstansok BEJÖVŐ hivatkozásait számolja. Enélkül az
+`Unreachable: 0` cél teljesíthető úgy is, hogy a felhasználó semmit nem lát
+belőle.
 
-**Amit a döntés igényel:** a 10 beépített gyakorlat terhelési profilja és
-előfeltételei, plusz a „nincs előfeltétel" ábrázolása.
+### A mérce populációja is hiányos
+
+96 képernyőt mér, a fában **99** van. A háromból kettő ártalmatlan
+(`LaunchScreen`, `RecoveryScreen`), a harmadik valódi árva:
+**`SetlistListScreenV2`** — semmi nem hivatkozza, és a detektor
+osztálynév-mintája nem fogja a `V2` utótagot.
 
 ---
 
-## 5. Dalcsomag-munkamenet
+## A két hátralévő képernyő
+
+### 1. Dalcsomag-munkamenet
 
 `song_trainer/presentation/screens/setlist_session_screen.dart`
 
-**Az akadály:** a `SetlistItemRunner` egy typedef
-(`Future<SetlistItemResult> Function(SongSetlistItem)`), és a fában NINCS
-éles implementációja — csak a tesztek adnak ilyet.
+**Az akadály:** a `SetlistItemRunner` typedefnek nincs éles
+implementációja. Egy futtató a dal-tréner munkamenetét indítaná el —
+**csakhogy arra az útvonalra sem navigál semmi a fában**, és
+`SongTrainerControllerInputs`-ot vár `extra`-ként, amit a beállító
+folyamat állítana elő. A dalcsomag-futtató tehát egy olyan folyamatra
+épülne, ami maga sincs bekötve.
 
-Egy futtató megírása két ponton dönt:
+**Ami MEGVAN (2026-09-05, felhasználói döntés):** a félbehagyott tétel
+ábrázolása. Új `SetlistItemResultStatus.partial` + `SetlistItemResult.partial`
+gyártó: az addigi eredmény számít, és az `activeDuration` mutatja, meddig
+jutott a tanuló. A `completed` hamis állítás lenne (mintha végigjátszotta
+volna), a `failed` szintén (nem bukott el, abbahagyta).
 
-1. **A dal elindítása** a `songTrainerSession` útvonalon megy, ami
-   `SongTrainerControllerInputs`-t vár `extra`-ként — azt a beállító
-   képernyő állítja elő. A futtatónak tehát egy TÖBBLÉPÉSES navigációt
-   kellene levezényelnie és megvárnia.
-2. **Mit jelent a „kész".** A `SetlistItemResultStatus` ismer `failed`
-   állapotot, de **nincs hozzá gyártó függvény** — a modell ki tudja
-   fejezni, de semmi nem tudja előállítani. Egy félbehagyott dal ma csak
-   `completed`-ként rögzíthető, ami hamis állítás lenne.
-
-**Amit a döntés igényel:** mi számít befejezett tételnek, és kell-e
-`failed` gyártó.
-
----
-
-## 6. Tutor gyakorlásterv-előnézet
+### 2. Tutor gyakorlásterv-előnézet
 
 `ai_tutor/presentation/screens/practice_plan_preview_screen.dart`
 
-**Az akadály:** a képernyő `draft` + `validationContext` párt kér. A
-`PracticePlanCompiler` elő tudja állítani mindkettőt, de **nincs
-providere**, és a `PracticePlanCompilationContext` hat bemenetet kér
-(dalok, gyakorlási célok, kerülendő lista, hangolás, képességek,
-elérhető skill-azonosítók) — ezek összeállítása maga a hiányzó kompozíció.
-
-**Amit a döntés igényel:** honnan jönnek a gyakorlási célok és a kerülendő
-lista.
+**Az akadály:** a képernyő `PracticePlanDraft` + `PracticePlanValidationContext`
+párt kér. A `PracticePlanCompiler` elő tudná állítani, de **a teljes tutor
+tervezési útvonal hivatkozatlan**: sem a fordítót, sem a
+`PracticePlanDraft.deterministicTemplate`-et nem hívja semmi a `lib/`-ben.
+A `PracticePlanCompilationContext` hat bemenete közül a
+`practiceTargets`-nek (`PracticePlanTargetInput`) egyáltalán nincs
+előállítója.
 
 ---
 
-## A mérce vakfoltja
+## Amit ez a sáv lezárt
 
-A `check_screen_reachability` **96 képernyőt mér, a fában viszont 99 van.**
-A háromból kettő ártalmatlan (`LaunchScreen`, `RecoveryScreen` — utóbbi
-route-olt), a harmadik viszont valódi árva:
+| | |
+|---|---|
+| Community: 13 képernyő + belépési pont | ✅ |
+| First-Win állomás az onboarding folyamatban | ✅ |
+| Hangelemzés felvételi folyamat (3 képernyő) | ✅ |
+| Gyakorlástervező (4 képernyő) | ✅ |
 
-**`SetlistListScreenV2`** — a fában SEMMI nem hivatkozza, és a mérce nem
-látja. A detektor osztálynév-mintája nem fogja a `V2` utótagot.
-
-Ez azt jelenti, hogy az `Unreachable: 0` cél ma egy HIÁNYOS populáción
-mérne. A mérce kiterjesztése előfeltétele annak, hogy a nulla valóban
-nullát jelentsen.
-
-**Külön termék-kérdés:** két párhuzamos dalcsomag-rendszer él egymás
-mellett — a route-olt `features/songs/SetlistListScreen` és a nem
-route-olt `features/song_trainer/SetlistListScreenV2` a `SongSetlist` V2
-modellel. A V2 lista bekötése azt a kérdést veti fel, melyik a
-„a" dalcsomag-képernyő; ez nem bekötés, hanem döntés.
+A hangelemzésnél az `AnalyzeAudioUseCase` üres mintákat adott tovább —
+bekötve csendet elemzett volna. A tervezőnél két provider dobott élesben;
+a katalógus tervezői metaadata (`builtin_catalog_metadata.dart`) hiányzott,
+és azt a kód szándékos őre nem engedte kitalálni.
