@@ -70,11 +70,21 @@ final class FeatureFlags {
   /// - [songTrainerV2Enabled] is available outside production through the
   ///   same `nonProd` rollout boundary as Practice V2. The default constructor
   ///   remains OFF, so manually created flags still require an explicit opt-in.
+  /// **Build-only ELŐNÉZET-kapcsoló — NEM termékdöntés, NEM merge-elendő.**
+  ///
+  /// `--dart-define=STRUMSIGHT_PREVIEW_ALL=true` mellett a rollout-kapu mögött
+  /// álló képességek együtt kapcsolódnak be, hogy EGY oldalról telepíthető
+  /// build megmutassa a teljes alkalmazást. A define hiányában `false`, tehát
+  /// minden meglévő elvárás és a production alapértelmezés változatlan.
+  static const bool previewAll = bool.fromEnvironment('STRUMSIGHT_PREVIEW_ALL');
+
   factory FeatureFlags.forEnvironment(
     AppEnvironment environment, {
     required bool accountEnabled,
   }) {
     final nonProd = environment != AppEnvironment.production;
+    // Az előnézeti kapcsoló SOSEM él productionben.
+    final preview = nonProd && previewAll;
     return FeatureFlags(
       accountEnabled: accountEnabled,
       diagnosticsEnabled: nonProd,
@@ -83,34 +93,34 @@ final class FeatureFlags {
       migratedLearnEnabled: nonProd,
       practiceDetailedHistoryEnabled: nonProd,
       songTrainerV2Enabled: nonProd,
-      aiTutorEnabled: false,
+      aiTutorEnabled: preview,
       aiTutorCloudEnabled: false,
       // E15-R07 F1 (ADR 0491 D2) — same `nonProd` rollout boundary as
       // `practiceEngineV2Enabled`: ON outside production, OFF in
       // production. `plannerAssistEnabled` (model-assisted suggestions) is
       // a separate rollout decision and stays OFF everywhere.
       practiceGeneratorEnabled: nonProd,
-      plannerAssistEnabled: false,
-      visionEnabled: false,
-      visionSetupEnabled: false,
-      visionHandTrackingEnabled: false,
-      visionPoseTrackingEnabled: false,
-      visionGuitarGeometryEnabled: false,
-      visionPracticeIntegrationEnabled: false,
-      visionSongIntegrationEnabled: false,
-      visionTutorIntegrationEnabled: false,
-      visionAnalysisIntegrationEnabled: false,
+      plannerAssistEnabled: preview,
+      visionEnabled: preview,
+      visionSetupEnabled: preview,
+      visionHandTrackingEnabled: preview,
+      visionPoseTrackingEnabled: preview,
+      visionGuitarGeometryEnabled: preview,
+      visionPracticeIntegrationEnabled: preview,
+      visionSongIntegrationEnabled: preview,
+      visionTutorIntegrationEnabled: preview,
+      visionAnalysisIntegrationEnabled: preview,
       visionExperimentalFineFretEnabled: false,
       visionLabCaptureEnabled: false,
-      audioAnalysisV2Enabled: false,
-      analysisBeatGridEnabled: false,
-      analysisPitchEnabled: false,
+      audioAnalysisV2Enabled: preview,
+      analysisBeatGridEnabled: preview,
+      analysisPitchEnabled: preview,
       analysisPreprocessingExperimentalEnabled: false,
       analysisExperimentalFusionEnabled: false,
-      analysisTechniqueProxiesEnabled: false,
-      analysisComparisonEnabled: false,
-      analysisPracticeIntegrationEnabled: false,
-      analysisTutorIntegrationEnabled: false,
+      analysisTechniqueProxiesEnabled: preview,
+      analysisComparisonEnabled: preview,
+      analysisPracticeIntegrationEnabled: preview,
+      analysisTutorIntegrationEnabled: preview,
       recognitionRecoveryEnabled: false,
       recognitionShadowModeEnabled: false,
       newLiveStageEnabled: false,
@@ -118,19 +128,17 @@ final class FeatureFlags {
       // read directly here so app_config.dart stays untouched — without a
       // dart-define, every environment resolves to `false`, which keeps the
       // feature completely absent from production until a deliberate flip.
-      communityEnabled: const bool.fromEnvironment('STRUMSIGHT_COMMUNITY'),
-      communityWritesEnabled: const bool.fromEnvironment(
-        'STRUMSIGHT_COMMUNITY_WRITES',
-      ),
-      communityMediaEnabled: const bool.fromEnvironment(
-        'STRUMSIGHT_COMMUNITY_MEDIA',
-      ),
-      communityLeaderboardEnabled: const bool.fromEnvironment(
-        'STRUMSIGHT_COMMUNITY_LEADERBOARD',
-      ),
-      communityClubsEnabled: const bool.fromEnvironment(
-        'STRUMSIGHT_COMMUNITY_CLUBS',
-      ),
+      communityEnabled:
+          preview || const bool.fromEnvironment('STRUMSIGHT_COMMUNITY'),
+      communityWritesEnabled:
+          preview || const bool.fromEnvironment('STRUMSIGHT_COMMUNITY_WRITES'),
+      communityMediaEnabled:
+          preview || const bool.fromEnvironment('STRUMSIGHT_COMMUNITY_MEDIA'),
+      communityLeaderboardEnabled:
+          preview ||
+          const bool.fromEnvironment('STRUMSIGHT_COMMUNITY_LEADERBOARD'),
+      communityClubsEnabled:
+          preview || const bool.fromEnvironment('STRUMSIGHT_COMMUNITY_CLUBS'),
       // E15-R02 (ADR 0467) — the five-area adaptive shell is now the
       // non-production default (`development`/`lab` on, `production` still
       // off; the GA-scope decision for production is Chapter 12 Kör 28).
