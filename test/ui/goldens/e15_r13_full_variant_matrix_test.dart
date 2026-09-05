@@ -3217,6 +3217,47 @@ const _exclusions = <_ExclusionEntry>[
 const _baselinePath =
     'test/fixtures/ui/e15_r13_completion_report_baseline.json';
 
+// E17-R01 (ADR 0112 self-heal, 2026-09-05): the SAME failure class reached
+// the matrix-count cells too. The E16-R02 heal above moved only the
+// reachability/migration numbers onto the recorded snapshot; the screen /
+// cell / grand-total cells kept deriving their expectation from the LIVE
+// `_screens` map, so any round that legitimately ADDS a screen to the matrix
+// (72 → 73 screens, 1152 → 1168 cells, 1163 → 1179 tests) again turned its
+// own success into a red guard over a DATED report it may not edit. Those
+// counts are therefore recorded here too, measured at the report's base —
+// the live matrix keeps its own guards (the A1 completeness group and
+// `_runCell`'s STALE exclusion-list branch), so nothing is weakened.
+final class _MatrixBaseline {
+  const _MatrixBaseline({
+    required this.screenCount,
+    required this.viewportCount,
+    required this.totalCells,
+    required this.excludedCellCount,
+    required this.a1CellCount,
+    required this.a5CellCount,
+    required this.grandTotalTests,
+  });
+
+  factory _MatrixBaseline.fromJson(Map<String, Object?> json) =>
+      _MatrixBaseline(
+        screenCount: json['screenCount']! as int,
+        viewportCount: json['viewportCount']! as int,
+        totalCells: json['totalCells']! as int,
+        excludedCellCount: json['excludedCellCount']! as int,
+        a1CellCount: json['a1CellCount']! as int,
+        a5CellCount: json['a5CellCount']! as int,
+        grandTotalTests: json['grandTotalTests']! as int,
+      );
+
+  final int screenCount;
+  final int viewportCount;
+  final int totalCells;
+  final int excludedCellCount;
+  final int a1CellCount;
+  final int a5CellCount;
+  final int grandTotalTests;
+}
+
 final class _BaselineScreen {
   const _BaselineScreen({
     required this.screenPath,
@@ -3239,6 +3280,7 @@ final class _CompletionReportBaseline {
     required this.flagGatedCount,
     required this.migratedCount,
     required this.screens,
+    required this.matrix,
   });
 
   factory _CompletionReportBaseline.read(String path) {
@@ -3250,6 +3292,7 @@ final class _CompletionReportBaseline {
       unreachableCount: json['unreachableCount']! as int,
       flagGatedCount: json['flagGatedCount']! as int,
       migratedCount: json['migratedCount']! as int,
+      matrix: _MatrixBaseline.fromJson(json['matrix']! as Map<String, Object?>),
       screens: [
         for (final screen
             in (json['screens']! as List<Object?>).cast<Map<String, Object?>>())
@@ -3269,6 +3312,7 @@ final class _CompletionReportBaseline {
   final int flagGatedCount;
   final int migratedCount;
   final List<_BaselineScreen> screens;
+  final _MatrixBaseline matrix;
 }
 
 // ---------------------------------------------------------------------------
@@ -3840,24 +3884,37 @@ void main() {
       );
     });
 
-    test('cites the matrix screen/cell counts derived from THIS file, not '
-        'hand-typed', () {
+    // L613/E17-R01: the counts come from the RECORDED snapshot of the
+    // report's own base (`_baselinePath`), not from the live `_screens` map
+    // — the report is dated, the matrix is not. The snapshot's own product
+    // is recomputed first, so the fixture cannot be hand-edited into
+    // agreement with a wrong report one number at a time.
+    test('cites the matrix screen/cell counts measured at its own base '
+        '(recorded snapshot, not the live matrix)', () {
+      final matrix = _CompletionReportBaseline.read(_baselinePath).matrix;
+
       expect(
-        report,
-        contains('${_screens.length}'),
-        reason: 'matrix screen count (${_screens.length}) missing/stale',
+        matrix.screenCount * 2 * 2 * matrix.viewportCount * 2,
+        matrix.totalCells,
+        reason:
+            'the recorded cell count must be the product of the recorded '
+            'matrix axes',
       );
-      final totalCells =
-          _screens.length * 2 * 2 * _ViewportProfile.values.length * 2;
       expect(
         report,
-        contains('$totalCells'),
-        reason: 'total cell count ($totalCells) missing/stale',
+        contains('${matrix.screenCount}'),
+        reason: 'matrix screen count (${matrix.screenCount}) missing/stale',
       );
       expect(
         report,
-        contains('${_excludedCells.length}'),
-        reason: '_ExcludedCell count (${_excludedCells.length}) missing/stale',
+        contains('${matrix.totalCells}'),
+        reason: 'total cell count (${matrix.totalCells}) missing/stale',
+      );
+      expect(
+        report,
+        contains('${matrix.excludedCellCount}'),
+        reason:
+            '_ExcludedCell count (${matrix.excludedCellCount}) missing/stale',
       );
     });
 
@@ -3867,27 +3924,33 @@ void main() {
     // above pin the GRAND TOTAL (cells + this file's own structural
     // groups), only their individual components, so the wrong number
     // slipped through undetected.
-    test('cites the grand total test count this file itself produces '
-        '(cells + A1 + A5 structural groups) — catches a hand-typed, '
-        'non-reproducible "All tests passed!" count (review MAJOR-1)', () {
-      final totalCells =
-          _screens.length * 2 * 2 * _ViewportProfile.values.length * 2;
-      // Structural group sizes are pinned as literals (there is no
-      // reflection-based way to count `test()` calls at runtime) and MUST
-      // be kept in sync with the actual number of test() calls in the
-      // 'A1 — completeness' and 'A5 — completion-report guard' groups
-      // above — a1CellCount below is the A1 group's own test count; a5
-      // includes this very test.
-      const a1CellCount = 5;
-      const a5CellCount = 6;
-      final grandTotal = totalCells + a1CellCount + a5CellCount;
+    test('cites the grand total test count the file produced AT THE '
+        'REPORT\'S BASE (cells + A1 + A5 structural groups) — catches a '
+        'hand-typed, non-reproducible "All tests passed!" count '
+        '(review MAJOR-1)', () {
+      // The recorded A1/A5 group sizes are the `test()` counts of the
+      // report's own base (there is no reflection-based way to count
+      // `test()` calls at runtime); the grand total is recomputed from the
+      // recorded parts, so a fixture edited to match a wrong report has to
+      // stay internally consistent as well.
+      final matrix = _CompletionReportBaseline.read(_baselinePath).matrix;
+      final grandTotal =
+          matrix.totalCells + matrix.a1CellCount + matrix.a5CellCount;
+
+      expect(
+        grandTotal,
+        matrix.grandTotalTests,
+        reason:
+            'the recorded grand total must be the sum of the recorded parts',
+      );
       expect(
         report,
-        contains('$grandTotal'),
+        contains('${matrix.grandTotalTests}'),
         reason:
-            'grand total test count ($grandTotal = $totalCells matrix '
-            'cells + $a1CellCount A1 + $a5CellCount A5) missing/stale — the '
-            'report must cite the number `flutter test` actually produces',
+            'grand total test count (${matrix.grandTotalTests} = '
+            '${matrix.totalCells} matrix cells + ${matrix.a1CellCount} A1 + '
+            '${matrix.a5CellCount} A5) missing/stale — the report must cite '
+            'the number `flutter test` produced at its own base',
       );
     });
 
