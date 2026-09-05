@@ -1,5 +1,65 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R14 KÉSZ — Automatikus Audio Setup: a profil BEMENET, nem kalibráció; a rossz felvételi környezet nem hazudható zöldre — PR [#583](https://github.com/wolfcasaba/strumsight/pull/583), squash `4fd8ff11` (2026-09-05)
+
+A Chapter 14 Kör 14 az **audio-setup lépés-gépét, a profil-modellt és a
+tárolót** szállítja, **képernyő nélkül** (ADR 0519 D8 — a képernyők helye a
+Chapter 13 sáv; a UI-bekötés a `E14-R14b`). **ADR
+[0519](docs/adr/0519-audio-setup-profile-as-input-not-calibration.md).**
+
+**Mi került a fára (4 új `lib/` fájl + a feature első publikus barrelje):**
+
+| Fájl | Mit hoz |
+|---|---|
+| `audio_setup/audio_setup_step.dart` | a rögzített 8 lépéses SDD-szekvencia (csend → erős down → up → E/Am/G/C → pozíció-javaslat) + a `30–60 s` **inkluzív** elfogadási ablak |
+| `audio_setup/audio_profile.dart` | immutable, verziózott eszköz+route profil; fail-closed `decode`, tesztelt v0 → v1 migráció mezővesztés nélkül, `isStaleFor` |
+| `audio_setup/audio_profile_store.dart` | feature-lokális tárolókulcs, **egyetlen atomikus** `save`, elavulás-szűrt `readValid`, valódi `remove`-os `clear` |
+| `audio_setup/audio_setup_controller.dart` | explicit állapotgép (`notStarted/inProgress/completed/aborted`), megszakítható; a rossz jel SOSEM ad `success`-t |
+| `onboarding/public.dart` | a feature ELSŐ publikus barrelje (kézzel írt, additív) |
+
+**A kör lényege egy mondatban:** a profil a döntési réteg **BEMENETE** — nem
+ír felül egyetlen shipping DSP/ML konstanst sem (ADR 0519 D1, a Chapter 14
+§9/4–5 tiltása gépileg tartva), és egy `tooQuiet`/`clipping`/`tooNoisy`/…
+környezet `needsAttention`-t kap konkrét tanáccsal, sosem `success`-t (D2).
+
+**Amit a review MÉRT, nem bemondásra fogadott el** (Claude/Opus 5, read-only,
+izolált klón — [`docs/reviews/e14-r14-review.md`](docs/reviews/e14-r14-review.md),
+**APPROVED**, 0 BLOCKER / 0 MAJOR):
+
+- a §7.1 falszifikáció **reprodukálva**: lépésenkénti mentést beszúrva a 2. ÉS
+  a 3. acceptance-cella PIROSRA vált, visszaállítva zöld;
+- a mély import mutációja `crossFeatureImportsMustUsePublicApi` sértést ad — a
+  §0.0/R3 kapu **valódi**, nem papír-előírás;
+- az inkluzív felső határ `<`-re rontva pirosra viszi a „pontosan rajta" (60 s)
+  cellát;
+- a D2 osztályozás a **teljes** `SignalQualityState` enumon mérve: mind a hét
+  nem-`good` érték `needsAttention` + nem üres tanács + nincs mentett profil —
+  az `unknown` is;
+- **biztonsági review** (`risk = high`, `privacy`): **nincs lelet** — a diff nem
+  nyit hálózatot, nem naplóz, nem nyúl platform-csatornához, engedélyhez vagy
+  hangfelvételhez; a tárolt mezők közt nincs hangminta vagy azonosító, és a
+  `clear()` ténylegesen `remove`-ol (a backing store `contains`-e is mérve).
+
+> ⚠ **A kör NEM nyit mikrofont.** A brief „mikrofon-felvételt vezérel"
+> kockázat-indoklása ebben a körben nem realizálódik: a jelminőség kívülről,
+> `SignalQualitySnapshot` **értékként** érkezik. A valódi mikrofon-tulajdonlás
+> (`AudioOwner`/lease szerződés) a `E14-R14b` UI-körének kérdése lesz.
+
+**Nyitva hagyva (nem blokkoló, a `E14-R14b` bemenete):** MINOR-1 — a
+`toJson()` a `currentSchemaVersion` konstanst írja ki a példány
+`schemaVersion` mezője helyett (ma egyetlen producer sem tud nem-current
+értéket előállítani); NOTE-1 sérült blob → `FormatException` (továbbra is
+fail-closed); NOTE-2 a `confidenceProfile` ma mindig `1.0`; NOTE-3 a
+`schemaVersion: 0` legacy alak feltételezett — a §10 ezt kimondja.
+
+**Pre-flight (a `brief-lint` két `strict` lelete):** **S12** — a §7
+gate-parancs nem tükrözte a `gate_tests` listát, javítva; **S15** — a brief
+`main @ 88e08e65` alapja elmozdult, a §0.0/R2 újramérte, mi maradt igaz
+(`public.dart` NEM létezett → a kör hozza létre; nincs időközben merge-elt
+szerződés ugyanerre a döntésre; nincs típusütközés). Az előre kiosztott
+`0366` ADR-szám elavult volt — a foglaló a **`0519`**-et adta (**HETEDIK**
+egymást követő kör, ahol a queue ADR-oszlopa elavult).
+
 ## ✅ E14-R18 KÉSZ — A streaming joint onset+irány prototípus: **NO-GO**, és a szám független futáson BÁJTAZONOSAN reprodukálódott — PR [#581](https://github.com/wolfcasaba/strumsight/pull/581), squash `2e6aaed9` (2026-09-05)
 
 A Chapter 14 §4.4/§5.1 azt kérdezte, jobb-e egy **joint** fej (külön down/up
@@ -12560,7 +12620,26 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-05):** `main` @ `2e6aaed9` — **E14-R18: streaming
+**Aktuális állapot (2026-09-05):** `main` @ `4fd8ff11` — **E14-R14: automatikus
+audio-setup lépés-gép + elavuló eszközprofil + verziózott tároló**, PR
+[#583](https://github.com/wolfcasaba/strumsight/pull/583), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **0 javító kör** (review: APPROVED
+első nekifutásra, 0 BLOCKER / 0 MAJOR / 1 MINOR / 3 NOTE —
+[`docs/reviews/e14-r14-review.md`](docs/reviews/e14-r14-review.md)).
+**ÚJ ADR: [0519](docs/adr/0519-audio-setup-profile-as-input-not-calibration.md)** —
+a Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt); az
+előre kiosztott `0366` elavult volt, a foglaló a `0519`-et adta.
+`risk = "high"` (`privacy`) → **dedikált biztonsági review elvégezve, lelet
+nélkül**. `native_gate = false` → a CI-tervet a `tools/round-ci-plan.py` adta
+(`full-gate.yml` + `router_ci_expected: true`); **mindkettő `success` a merge
+SHA-n (`1604a9a7`)**. A landolás a merge-záron át ment
+(`tools/round-land.sh --pr 583`), mert a másik sáv (`E14-R12`, PR #582) nyitva volt.
+
+<details>
+<summary>Korábbi állapot — E14-R18 (2026-09-05)</summary>
+
+**`main` @ `2e6aaed9`** — **E14-R18: streaming
 joint onset+irány prototípus, mérve → NO-GO**, PR
 [#581](https://github.com/wolfcasaba/strumsight/pull/581), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -12589,7 +12668,23 @@ hibáját is javította (**L637**).
 > foglalótól kérje a számot, ne a sorból** (prompt §1.0.1). A kör §0.0 R1
 > revíziója ezt rögzíti.
 
+</details>
+
 ## 5. Last completed round
+
+**E14-R14 — Automatikus Audio Setup és Accuracy Check** (PR
+[#583](https://github.com/wolfcasaba/strumsight/pull/583), squash `4fd8ff11`,
+ADR [0519](docs/adr/0519-audio-setup-profile-as-input-not-calibration.md)).
+A lépés-gép, a profil-modell és a tároló képernyő nélkül; a profil BEMENET,
+nem kalibráció. Célzott gate függetlenül újrafuttatva izolált klónban
+(`GATE_EXIT=0`): format · analyze · **8/8 + 9/9** teszt · architecture (12
+allowlistelt deviáció, **változatlan** — a kör nem vett fel újat) · secrets ·
+l10n. A CI (`full-gate.yml` + `router-ci.yml`) mindkettő `success` a merge
+SHA-n. Mind a 6 acceptance-pont teljesült, mindegyik mutációs próbával
+igazolt mércével.
+
+<details>
+<summary>Korábbi kör — E14-R18</summary>
 
 **E14-R18 — Streaming joint onset+irány prototípus: mérve, reprodukálva, NO-GO**
 (PR [#581](https://github.com/wolfcasaba/strumsight/pull/581), squash
@@ -12662,7 +12757,29 @@ az `E14-R05 / H3` önjavító kör előzte meg, PR
 [#570](https://github.com/wolfcasaba/strumsight/pull/570), squash `80506119`).
 Leckék: [L627](docs/LESSONS.md#l627), [L628](docs/LESSONS.md#l628).
 
+</details>
+
 ## 6. Exact next task
+
+**A következő kört a lánc választja** a `docs/execution/pipeline-queue.tsv`
+első `pending` sorából — az `E14-R14` sora ezzel a commit-tal `done`. A
+Chapter 14 sávon az `E14-R12` következik (PR #582 már nyitva), motor
+`sonnet-impl`; **az ADR-számot a foglalótól kérd, ne a queue oszlopából** (az
+E14-R14 sora `0366`-ot előlegezett, a foglaló a **`0519`**-et adta; ez a
+HETEDIK egymást követő kör, ahol az oszlop elavult volt).
+
+**Amit az E14-R14 a következő körök asztalára tett:**
+
+| # | Mit hagyott nyitva | Hol |
+|---|---|---|
+| 1 | **A UI-bekötés (`E14-R14b`)** — a lépés-gép ma képernyő nélkül él; a UI-kör köti be, ÉS ott dől el a valódi mikrofon-tulajdonlás (`AudioOwner`/lease) is, ami ebben a körben szándékosan nem történt meg | `lib/features/onboarding/screens/**` |
+| 2 | **A latency-mezők valódi forrása** — a controller ma konstruktor-paraméterként kapja (alapérték 0); a UI-kör a meglévő `inputLatencyProvider`/`visualLatencyProvider` értékeivel hívja majd | `audio_setup_controller.dart:44-45` |
+| 3 | **MINOR-1: a `schemaVersion` silent felülíródik mentéskor** — a `toJson()` a konstanst írja, nem a példány mezőjét; vagy vegyük ki a mezőt a publikus konstruktorból, vagy a `decode` ellenőrizze fail-closed | `audio_profile.dart:78-88` |
+| 4 | **NOTE-2: a `confidenceProfile` ma mindig `1.0`** (a D2 miatt `success` csak végig-`good` futásból születik) — vagy kapjon értelmes tartalmat, vagy mondjuk ki, hogy konstans | `audio_setup_controller.dart:198-204` |
+| 5 | **NOTE-3: a `schemaVersion: 0` legacy alak feltételezett** — ha sosem kerül élesbe, a v0 ág törölhető | `audio_profile.dart:129-145` |
+
+<details>
+<summary>Korábbi kör nyitott pontjai — E14-R18</summary>
 
 **A következő kört a lánc választja** a `docs/execution/pipeline-queue.tsv`
 első `pending` sorából — az `E14-R18` sora ezzel a commit-tal `done`. A
@@ -12702,6 +12819,8 @@ adta; ez a HATODIK egymást követő kör, ahol az oszlop elavult volt).
 **Változatlanul OPERÁTORI (user-) kapuk:** a valós gitáros APK-teszt (a végső
 elfogadási predikátum) és a backend tényleges futtatása + telefon-ráállítás
 (`docs/operations/device-backend-runbook.md` §1–§9).
+
+</details>
 
 ## 7. Required verification (before any "done")
 
