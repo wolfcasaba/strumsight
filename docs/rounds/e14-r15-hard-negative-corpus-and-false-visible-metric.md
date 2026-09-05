@@ -1,20 +1,24 @@
-# E14-R15 — Hard-negative taxonómia és false-visible-event metrika
+# E14-R15 — Hard-negative taxonómia és SZŰKÍTETT false-visible-event metrika
 
-- **Státusz:** PREPARED (előre megírva 2026-08-20, kód olvasva: `main @ 6371aa3`)
+- **Státusz:** REVISED (ADR 0112 önjavító kör, 2026-09-05 — mért alap: `main @ 8180c9dc`;
+  az eredeti előre-írás 2026-08-20, `main @ 6371aa3`)
 - **Típus:** Chapter 14, Kör 15 — a „strum onset + direction recovery" blokk (SDD §8: R15–R24) nyitó köre
 - **Kör-azonosító:** `E14-R15`
 - **Branch:** `<motor>/e14-r15-hard-negative-corpus-and-false-visible-metric`
-- **Előfeltétel:** `E14-R08` merge-elve (a harness, amibe a metrika kerül) és
-  `E14-R07` (annotációs szerződés, amivel a negatív anyag címkézhető).
-- **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `0367` — **a Claude írja meg, a `docs/adr/` a TILOS zónában van.**
+- **Előfeltétel:** `E14-R08` (ADR 0509 — a harness, amit a metrika KITERJESZT),
+  `E14-R09` (ADR 0511 — a dashboard és a release-kapu szerződése) és
+  `E14-R07` (annotációs szerződés, amivel a negatív anyag címkézhető) — mind merge-elve.
+- **Brief szerzője:** Claude (Opus 5) · **revízió:** ADR 0112 önjavító kör
+- **Előre kiosztott ADR:** `0521` (foglaló: `tools/round-slots.py reserve-adr --round E14-R15`,
+  marker `.pipeline/inflight/adr/0521`) — **a Claude írja meg, a `docs/adr/` a TILOS zónában van.**
+  A 2026-08-20-i előre-írás `0367`-et mondott; az a szám elavult (lásd §0.0).
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az `ml/negatives.py`
-> fejlécét — a hard-negative BÁNYÁSZAT (r174) MÁR LÉTEZIK, és a mért állítása
-> (a heurisztikus onset-detektor ~minden hatodik onsetje hamis, és a
-> direction-CRNN ezekre ugyanolyan magabiztos: medián raw 0,94 vs 0,97) a §2
-> alapja. Ez a kör NEM írja újra, hanem taxonómiát és termék-oldali metrikát
-> ad hozzá. Eltérésnél §0.0 revízió.
+> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd el a §0.0 revíziót, majd
+> a `lib/features/live/domain/evaluation/recognition_metrics.dart`
+> `computeRecognitionMetrics` végét (`falseVisibleEventsPerMinute`, ~731–746) és
+> a `docs/eval/recognition-dashboard.md` „Four Ch14 Alpha lines" szakaszát
+> (ADR 0511 D8). Ez a kör azt a szakaszt zárja le — nem ír mellé második
+> metrikát. Eltérésnél `stopped` jelzés, nem improvizáció.
 
 ```ai-router
 schema_version = 1
@@ -22,14 +26,23 @@ risk = "normal"
 allowed_paths = [
   "evaluation/recognition/negative_taxonomy.json",
   "evaluation/recognition/fixtures/negative_taxonomy_sample.json",
-  "lib/features/live/domain/evaluation/false_visible_event_metric.dart",
+  "lib/features/live/domain/evaluation/negative_taxonomy.dart",
+  "lib/features/live/domain/evaluation/recognition_metrics.dart",
+  "lib/features/live/domain/evaluation/recognition_release_gate.dart",
   "lib/features/live/public.dart",
-  "test/features/live/evaluation/false_visible_event_metric_test.dart",
+  "test/features/live/evaluation/negative_taxonomy_test.dart",
+  "test/features/live/evaluation/recognition_metrics_test.dart",
+  "test/features/live/evaluation/recognition_release_gate_test.dart",
+  "test/features/live/evaluation/recognition_report_renderer_test.dart",
   "docs/eval/recognition-hard-negatives.md",
+  "docs/eval/recognition-dashboard.md",
   "docs/rounds/e14-r15-hard-negative-corpus-and-false-visible-metric.md",
 ]
 gate_tests = [
-  "test/features/live/evaluation/false_visible_event_metric_test.dart",
+  "test/features/live/evaluation/negative_taxonomy_test.dart",
+  "test/features/live/evaluation/recognition_metrics_test.dart",
+  "test/features/live/evaluation/recognition_release_gate_test.dart",
+  "test/features/live/evaluation/recognition_report_renderer_test.dart",
 ]
 native_gate = false
 ```
@@ -45,7 +58,37 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
-## 0.0 Kötött scope-szűkítés a SDD-hez képest (drift, KÖTELEZŐ így)
+## 0.0 Revízió — MÉRT tények (ADR 0112 önjavító kör, 2026-09-05, `main @ 8180c9dc`)
+
+A brief 2026-08-20-án készült; azóta a mért alapja elmozdult (`brief-lint` **S15**),
+és a kör az eredeti alakjában **H3**-mal megállt még dispatch ELŐTT. A mérés
+(reprodukálható parancsokkal, `.pipeline/halt-detail-E14-R15.md`):
+
+| Amit a régi brief állított | MA mért igazság |
+|---|---|
+| „A termék oldalán nincs a MEGMUTATOTT hamis eseményeket számoló metrika" | **HAMIS.** `recognition_metrics.dart:731–746` — `falseVisibleEventsPerMinute` merge-elve (E14-R08 / ADR 0509) |
+| a metrika ÚJ, különálló fájlba kerül (`false_visible_event_metric.dart`) | **TILOS.** ADR 0511 D8 (`docs/eval/recognition-dashboard.md`) kimondja: a szűkített változatot a **`recognition_metrics.dart` kiterjesztésével** kell megépíteni; a mellé írt második definíció pontosan az `L549` hibaosztály |
+| a Ch14 §7.2 „false visible arrow" sor még nincs kapuzva | **HAMIS.** `evaluation/recognition/recognition_release_gate.json:36–39` — 2,0/perc küszöb, `event-kind-agnostic` címkével (E14-R09 / ADR 0511) |
+| a 6. acceptance-pont `sourceId`-leakage-et kér | **TELJESÍTHETETLEN ITT.** `GroupKey` = `{player, device, guitar, room}` (`recognition_split.dart:18`), a `RecognitionCase`-ben nincs `sourceId`, és a `GroupKey` bővítése kimerítő `switch`-eket, a manifest-sémát és a renderer csoport-celláit is mozgatja → **külön kör, saját ADR-rel** |
+| előre kiosztott ADR `0367` | **ELAVULT.** a foglaló `0521`-et ad; az E14 sáv valós ADR-jei `0505`/`0509`/`0511`/`0518` körül járnak (ugyanez mérve az E14-R12-nél: sor `0364`, valós `0518`) |
+
+**A kör EGYETLEN döntési helye ezért:** a merge-elt
+`recognition_metrics.dart` report-fája. A kör **kiterjeszti** azt két, valóban
+szűkített rátával, és ezzel az ADR 0511 D8 „deliberately absent" listájából
+kettőt lezár. Nem épít párhuzamos metrika-fát, nem köti át a release-kaput.
+
+**A revízió által a körből KIVETT munka (külön körbe tartozik, saját ADR-rel):**
+
+1. **`sourceId` group-key + klip-leakage gépiesítése** — a merge-elt
+   `GroupKey`/`SplitStrategy`/manifest-séma bővítése (a régi 6. acceptance-pont).
+2. **A taxonómia-kategória manifest-hordozása** és a metrika kategória-bontása —
+   ehhez a `RecognitionCase` és a `baseline_manifest_schema.json` bővülne, ami
+   ADR 0354 szerint reviewed evidencia-artefaktum.
+3. **A Ch14 §7.2 sor átkötése** az agnosztikus rátáról a szűkítettre a
+   `recognition_release_gate.json`-ban — ADR 0511 D9 szerint az a fájl reviewed
+   artefaktum, az átkötés ADR-döntés, nem mellékhatás.
+
+## 0.1 Kötött scope-szűkítés a SDD-hez képest (drift, KÖTELEZŐ így)
 
 A SDD Kör 15 „legalább 60 perc negatív anyagot" is kér. **Hangfelvétel nem
 kerül a repóba** (ADR 0249 óta álló határ), és a felvételt a `E14-R06`
@@ -57,12 +100,18 @@ részre vonatkozik.
 
 ## 1. Cél
 
-Legyen **gépi fogalma** a terméknek arról, hogy mennyi hamis eseményt mutat a
-felhasználónak: `false visible arrow / min` és `false visible chord / min`.
-Emellé kerüljön egy legalább tíz kategóriás hard-negative taxonómia (beszéd,
-taps, asztalkoppanás, pengető-kattintás, húrzaj, fret squeak, metronóm,
-háttérzene, tévé, ventilátor, telefonmozgatás), amellyel a negatív anyag
-címkézhető és a leakage kizárható.
+1. Legyen a terméknek **valóban szűkített** gépi fogalma arról, mennyi hamis
+   eseményt mutat a felhasználónak **eseményfajtánként**:
+   `false visible **direction** event / min` és
+   `false visible **chord** event / min` — a merge-elt, eseményfajta-agnosztikus
+   `falseVisibleEventsPerMinute` UGYANAZON report-fájában, annak partícionálásaként.
+   Ezzel az ADR 0511 D8 négy „deliberately absent" Ch14 Alpha sorából kettő
+   („false visible arrow hard-negative", „false confident chord hard-negative")
+   gépiesíthetővé válik.
+2. Legyen legalább tíz kategóriás hard-negative **taxonómia** (beszéd, taps,
+   asztalkoppanás, pengető-kattintás, húrzaj, fret squeak, metronóm,
+   háttérzene, tévé, ventilátor, telefonmozgatás), amellyel a negatív anyag
+   címkézhető — gépi listaként és típusos validátorral.
 
 ### 1.1 Visszakeresett előzmény (ADR 0312)
 
@@ -70,66 +119,140 @@ címkézhető és a leakage kizárható.
   szűri a zajt, mert a modell a hamis onsetre is magabiztos. Ezért kell külön
   no-strum osztály ÉS termék-oldali hamis-esemény metrika.
 - **ADR 0249:** nyers audio nem kerül a repóba — a manifest igen.
-- **E14-R10:** az abstention csökkenti a hamis nyilakat; ez a kör adja a
-  mérőszámot, amivel ez bizonyítható.
+- **ADR 0509 (E14-R08):** a report-fa, a `correctAccepted` halmaz és az
+  `accepted` (nem abstained) szűrés — a kör ezekre épít, nem melléjük.
+- **ADR 0511 D8 (E14-R09):** a szűkített metrika helye kimondva
+  `recognition_metrics.dart`; az azonos nevű, más hatókörű metrika
+  helyettesítése az `L549` hibaosztály.
+- **E14-R10:** az abstention csökkenti a hamis nyilakat; ez a kör adja azt a
+  mérőszámot, amivel ez IRÁNY-szinten bizonyítható.
 
-## 2. Jelenlegi állapot — mért tények
+## 2. Jelenlegi állapot — mért tények (`main @ 8180c9dc`)
 
+- `lib/features/live/domain/evaluation/recognition_metrics.dart`
+  - `enum RecognitionEventKind { onset, strum, chord }` (24. sor);
+  - `computeRecognitionMetrics` a `correctAccepted` halmazból és az
+    `acceptedDetections` listából számolja a
+    `falsePositiveAcceptedCount = acceptedDetections.length - correctAcceptedCount`
+    értéket, majd `durationMinutes = totalDurationMs / 60000`-rel osztja
+    (~684–746). A szűkítéshez tehát **nincs szükség új adatra**: az
+    eseményfajta már a `RecognitionDetectedEvent.kind`-ben ott van.
+- `lib/features/live/domain/evaluation/recognition_release_gate.dart:60` —
+  `recognitionMetricExtractors`: minden nevezhető metrika-út innen jön (ADR 0511 D2:
+  az irány MINDIG a metrika saját `definition.higherIsBetter`-éből, sosem külön
+  konstansból). A `recognition_report_renderer.dart:62` ezt a kulcshalmazt
+  rendereli mindhárom formátumban.
+- `evaluation/recognition/recognition_release_gate.json` — a szállított
+  küszöbfájl; a `recognition_release_gate_test.dart` a TELJES bejegyzés-listáját
+  pinneli (~251–266). Ez a kör **nem** módosítja (§0.0/3).
 - `ml/negatives.py` — a tanító oldal hard-negative bányászata LÉTEZIK; a
   fejléce rögzíti a ~1/6 hamis onset arányt és a 0,94/0,97 medián
-  confidence-párt.
-- A **termék** oldalán nincs olyan metrika, amely a felhasználónak MEGMUTATOTT
-  hamis eseményeket számolná — csak modell-szintű pontosság van.
-- `evaluation/recognition/` — az `E14-R02` hozza létre; a taxonómia ide kerül.
+  confidence-párt. Ez a kör nem írja át.
+- `evaluation/recognition/` — létezik (`README.md`, sémák, `fixtures/`); a
+  taxonómia ide kerül.
 
 ## 3. Scope
 
-**Benne:** taxonómia (JSON + doksi), capture-lista, a manifest kategória-mezője,
-`FalseVisibleEventMetric` (esemény/perc, kategória-bontással), fixture, doksi.
+**Benne:** taxonómia (JSON + Dart validátor + fixture + doksi), capture-lista,
+két SZŰKÍTETT hamis-esemény ráta a merge-elt report-fában, a hozzájuk tartozó
+extractor-bejegyzések, a dashboard „deliberately absent" listájának igazra
+hozása.
 
 **Nincs benne:** hangfájl a repóban, modelltanítás, DSP-konstans, a
-`ml/negatives.py` átírása, UI.
+`ml/negatives.py` átírása, UI, a `recognition_release_gate.json` küszöbeinek
+átkötése, a `GroupKey`/`sourceId` bővítés, a manifest-séma bővítése.
 
 ## 4. Engedélyezett fájlok
 
 | Útvonal | Miért |
 |---|---|
 | `evaluation/recognition/negative_taxonomy.json` | a tíz+ kategória gépi listája |
-| `evaluation/recognition/fixtures/negative_taxonomy_sample.json` | CI-fixture |
-| `lib/features/live/domain/evaluation/false_visible_event_metric.dart` | esemény/perc metrika |
+| `evaluation/recognition/fixtures/negative_taxonomy_sample.json` | CI-fixture (annotáció-only) |
+| `lib/features/live/domain/evaluation/negative_taxonomy.dart` | taxonómia-modell + típusos validátor (ÚJ fogalom, nincs merge-elt megfelelője) |
+| `lib/features/live/domain/evaluation/recognition_metrics.dart` | a két SZŰKÍTETT ráta — ADR 0511 D8 kimondott helye |
+| `lib/features/live/domain/evaluation/recognition_release_gate.dart` | a két új metrika-út felvétele a `recognitionMetricExtractors`-ba |
 | `lib/features/live/public.dart` | additív export |
-| `test/features/live/evaluation/false_visible_event_metric_test.dart` | metrika-mátrix |
+| `test/features/live/evaluation/negative_taxonomy_test.dart` | taxonómia-cellák |
+| `test/features/live/evaluation/recognition_metrics_test.dart` | a metrika-mátrix cellái |
+| `test/features/live/evaluation/recognition_release_gate_test.dart` | a `_metrics` segéd új mezői + extractor-cella |
+| `test/features/live/evaluation/recognition_report_renderer_test.dart` | a három formátum új metrika-sora |
 | `docs/eval/recognition-hard-negatives.md` | taxonómia + capture-lista + külső workflow |
+| `docs/eval/recognition-dashboard.md` | az ADR 0511 D8 „deliberately absent" lista igazra hozása |
 | `docs/rounds/e14-r15-hard-negative-corpus-and-false-visible-metric.md` | §10 handoff |
 
-**Tilos zóna:** minden más — kiemelten `ml/**`, `assets/**`,
+**Tilos zóna:** minden más — kiemelten `evaluation/recognition/recognition_release_gate.json`,
+`lib/features/live/domain/evaluation/recognition_split.dart`,
+`evaluation/recognition/baseline_manifest*.json`, `ml/**`, `assets/**`,
 `lib/features/live/engine/**`, `docs/adr/**`, `docs/rag/chunks/**`,
 `.github/workflows/**`, `tools/round-gate.sh`.
 
-## 5. Kötött architekturális döntések (ADR 0367)
+**A meglévő tesztfájlokban (`recognition_metrics_test`,
+`recognition_release_gate_test`, `recognition_report_renderer_test`) KIZÁRÓLAG
+ÚJ cella adható hozzá, illetve a `_metrics` segéd bővíthető az új kötelező
+mezőkkel. Meglévő cella törlése, `skip`-elése vagy elvárt értékének lazítása a
+kör bukása** (AGENTS.md §12, a mérce-őrszem a teszt-cellák számát is méri).
 
-### 5.1 A metrika a MEGMUTATOTT eseményt számolja
+## 5. Kötött architekturális döntések (ADR 0521)
 
-A `false visible event` az, amit a felhasználó ténylegesen látott (elfogadott,
-nem `uncertain`, nem `rejected`). **NEM elfogadható**: a modell nyers
-kimenetének számolása — épp az a különbség, amiért ez a metrika létezik.
+### 5.1 A szűkített metrika a MERGE-ELT metrika partíciója, nem második definíciója
 
-### 5.2 Percre normalizált, nem eseményre
+A két új ráta a `RecognitionMetrics`-be kerül, ugyanabban a
+`computeRecognitionMetrics` menetben, ugyanabból a `correctAccepted` halmazból
+és ugyanazzal a `durationMinutes` nevezővel, mint a merge-elt
+`falseVisibleEventsPerMinute`:
 
-Az érték `esemény / perc`, mert a felhasználói bosszúság időarányos. Az
-osztás nevezője a NEGATÍV anyag hossza, nem az összes anyagé.
+- `falseVisibleDirectionEventsPerMinute` — `accepted && kind == RecognitionEventKind.strum && !correctAccepted`;
+- `falseVisibleChordEventsPerMinute` — `accepted && kind == RecognitionEventKind.chord && !correctAccepted`.
 
-### 5.3 Kategória kötelező
+**NEM elfogadható:** külön fájlban élő, saját nevezővel/saját elfogadás-fogalommal
+dolgozó második metrika (`false_visible_event_metric.dart`) — ez az `L549` /
+ADR 0511 D8 hibaosztály, és pontosan ezért állt meg a kör az eredeti alakjában.
+
+### 5.2 A metrika a MEGMUTATOTT eseményt számolja
+
+A `false visible event` az, amit a felhasználó ténylegesen látott
+(`accepted == true`). Az abstained (`accepted == false`) detektálás **soha** nem
+hamis pozitív — ez a merge-elt szerződés (ADR 0509), a kör nem definiálja újra.
+**NEM elfogadható**: a modell nyers kimenetének számolása.
+
+### 5.3 Percre normalizált, nem eseményre
+
+Az érték `esemény / perc`; a nevező a `totalDurationMs / 60000`, azaz a
+kiértékelt anyag hossza — ugyanaz, mint az agnosztikus rátáé. `durationMinutes == 0`
+esetén az érték `null` (a merge-elt viselkedés), nem `0`.
+
+### 5.4 A partíció ÖSSZEGE zárt, és a szűkített ráta NEM alias
+
+`onset + strum + chord` a `RecognitionEventKind` teljes partíciója, ezért
+a három fajta hamis-esemény darabszámának összege **pontosan** az agnosztikus
+`falseVisibleEventsPerMinute.eventCount`. Ebből két kötelező következmény:
+
+- olyan fixture-ön, ahol csak `strum` és `chord` fajtájú hamis látható esemény
+  van, `direction.eventCount + chord.eventCount == agnosztikus.eventCount`;
+- olyan fixture-ön, ahol `onset` fajtájú hamis látható esemény IS van, az összeg
+  **szigorúan kisebb** az agnosztikusnál. Ez az anti-`L549` cella: bizonyítja,
+  hogy a szűkített ráta nem az agnosztikus átcímkézése.
+
+### 5.5 A metrika NEVEZHETŐ — extractor nélkül nincs metrika
+
+Mindkét új ráta bekerül a `recognitionMetricExtractors`-ba
+(`falseVisibleDirectionEventsPerMinute.value`,
+`falseVisibleChordEventsPerMinute.value`), az irányt a metrika SAJÁT
+`definition.higherIsBetter`-éből olvasva (ADR 0511 D2). Enélkül a metrika nem
+jelenik meg a report három renderelésében és nem hivatkozható küszöbfájlból.
+
+**A szállított `recognition_release_gate.json` küszöbei VÁLTOZATLANOK.** A Ch14
+§7.2 sor a kör után is az agnosztikus rátán áll; az átkötés külön kör külön
+ADR-rel (ADR 0511 D9 — reviewed artefaktum).
+
+### 5.6 Kategória kötelező — a taxonómiában
 
 Minden negatív felvétel-szegmens pontosan egy taxonómia-kategóriát kap;
-ismeretlen kategória **típusos hiba**, nem `other`-be söprés.
+ismeretlen kategória **típusos hiba** (saját `Exception`-alosztály), nem
+`other`-be söprés és nem bare `ArgumentError`/`StateError`. A kategória
+manifest-hordozása és a metrika kategória-bontása külön kör (§0.0).
 
-### 5.4 Nincs klip-leakage
-
-Ugyanaz a forrásfelvétel nem szerepelhet train és eval oldalon; a manifest
-`sourceId`-t hordoz, és a leakage-detektor (E14-R08) ezt is nézi.
-
-### 5.5 Nyers audio nem kerül a repóba
+### 5.7 Nyers audio nem kerül a repóba
 
 A manifest hivatkozik, nem tartalmaz. **NEM elfogadható**: „csak egy rövid
 minta a fixture-höz" — a fixture szintetikus vagy annotáció-only.
@@ -139,54 +262,84 @@ minta a fixture-höz" — a fixture szintetikus vagy annotáció-only.
 1. A taxonómia legalább **10** kategóriát tartalmaz: a hármas cella a határra —
    a küszöb **alatt** (9 kategória) a validátor hibát ad, pontosan **rajta**
    (10) elfogadott (a határ inkluzív), a küszöb **fölött** (11) elfogadott.
-2. Ismeretlen kategória a manifestben típusos hibát ad.
-3. A metrika kézzel ellenőrzött értéket ad a fixture-ön: 3 megmutatott hamis
-   nyíl 120 másodperc negatív anyagon → **1,5 esemény/perc**.
-4. `uncertain`/`rejected` esemény NEM számít bele (ugyanaz a fixture, a három
-   esemény egyike `uncertain` → **1,0 esemény/perc**).
-5. A metrika kategória-bontást is ad, és a bontás összege egyezik a
-   teljes értékkel.
-6. Azonos `sourceId` két splitben → a leakage-ellenőrzés hibát jelez.
+2. Ismeretlen kategória a fixture-annotációban **típusos** hibát ad (a kör saját
+   `Exception`-alosztálya, `kind`-del), nem `other`-be sorolást és nem bare
+   `StateError`-t.
+3. `falseVisibleDirectionEventsPerMinute` kézzel ellenőrzött értéket ad: **3**
+   megmutatott hamis IRÁNY-esemény **120 s** anyagon → **1,5 esemény/perc**.
+4. `uncertain`/abstained (`accepted == false`) esemény NEM számít bele: ugyanaz
+   a fixture, a három esemény egyike `accepted: false` → **1,0 esemény/perc**.
+5. **Partíció-cella (5.4):** olyan fixture-ön, amelyen `strum` és `chord`
+   fajtájú hamis látható esemény is van,
+   `falseVisibleDirectionEventsPerMinute.eventCount +
+   falseVisibleChordEventsPerMinute.eventCount ==
+   falseVisibleEventsPerMinute.eventCount`.
+6. **Anti-alias cella (5.4):** ugyanaz a fixture egy hamis, elfogadott `onset`
+   fajtájú eseménnyel kiegészítve — a két szűkített darabszám összege
+   **szigorúan kisebb**, mint az agnosztikus `eventCount`, és a
+   `falseVisibleDirectionEventsPerMinute.value != falseVisibleEventsPerMinute.value`.
+7. **Nevezhetőség (5.5):** mindkét új metrika-út szerepel a
+   `recognitionMetricExtractors` kulcsai között, az `higherIsBetter` értéke a
+   metrika saját definíciójából jön (`false`), és a két metrika sora megjelenik
+   a report **mindhárom** renderelésében (JSON, Markdown, HTML) azonos értékkel.
+8. **A küszöbfájl változatlan:** a `recognition_release_gate_test.dart` meglévő,
+   a szállított `recognition_release_gate.json` bejegyzés-listáját pinnelő
+   cellája MÓDOSÍTÁS NÉLKÜL zöld.
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| A nyers modell-kimenetet számolja | 4. pont |
+| A nyers modell-kimenetet (abstained is) számolja | 4. pont |
 | Eseményre normalizál, nem percre | 3. pont `1,5` cellája |
+| A szűkített ráta valójában az agnosztikus átcímkézése (`L549`) | 6. pont |
+| A partíció nem zárt (kimarad egy fajta / duplán számol) | 5. pont |
 | Ismeretlen kategória → `other` | 2. pont |
-| A kategória-bontás külön számol | 5. pont összeg-cellája |
 | 9 kategóriás taxonómiát elfogad | 1. pont „pontosan rajta" cellája |
-| A `sourceId` nem kerül a manifestbe | 6. pont |
+| A metrika nem kerül be az extractor-térképbe (nem nevezhető, nem renderelődik) | 7. pont |
+| A kör „egyszerűsítésként" átköti a Ch14 §7.2 küszöböt | 8. pont |
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/live/evaluation
+tools/round-gate.sh test/features/live/evaluation/negative_taxonomy_test.dart test/features/live/evaluation/recognition_metrics_test.dart test/features/live/evaluation/recognition_release_gate_test.dart test/features/live/evaluation/recognition_report_renderer_test.dart
 ```
 
-Külön processzben futó `format` → `analyze` → célzott teszt → `architecture`
+Külön processzben futó `format` → `analyze` → célzott tesztek → `architecture`
 (AGENTS.md §12). `&&` láncolás tilos (L05/L09). CI-dispatch/PR/merge
 Claude-oldal.
 
 ### 7.1 Falszifikációs cella
 
-A §10-ben dokumentáld: az `uncertain` szűrés ideiglenes kikapcsolásával a
-4. pont **PIROS**, visszaállítva **ZÖLD**.
+A §10-ben dokumentáld: az `accepted == false` szűrés ideiglenes kikapcsolásával
+a 4. pont **PIROS**, visszaállítva **ZÖLD**; továbbá a `kind` szűrés
+`RecognitionEventKind.strum`-ról „minden fajtá"-ra rontásával a 6. pont
+**PIROS**, visszaállítva **ZÖLD**.
 
 ## 8. Implementációs sorrend
 
-1. Taxonómia JSON + validáció + fixture.
-2. `FalseVisibleEventMetric` + mátrix-teszt.
-3. Kategória-bontás és leakage-mező.
-4. Doksi: capture-lista és a külső (repón kívüli) workflow.
+1. `negative_taxonomy.json` + `negative_taxonomy.dart` (modell + típusos
+   validátor) + fixture + cellák (1–2. acceptance).
+2. A két szűkített ráta a `recognition_metrics.dart`-ban + a 3–6. cella.
+3. Extractor-bejegyzések (`recognition_release_gate.dart`) + a 7–8. cella
+   (gate- és renderer-teszt).
+4. `public.dart` export; doksi: capture-lista és a külső (repón kívüli)
+   workflow (`recognition-hard-negatives.md`), valamint a
+   `recognition-dashboard.md` „deliberately absent" listájából a két lezárt sor
+   átvezetése (a maradék kettő — „weakest supported chord recall",
+   „chord transition p50" — MARAD a listán).
 
 ## 9. Kockázatok
 
-- **Hangfájl-szivárgás:** az 5.5 tiltja; a review a diffben grepeli a
+- **Hangfájl-szivárgás:** az 5.7 tiltja; a review a diffben grepeli a
   bináris kiterjesztéseket.
+- **Második definíciós hely (`L549`):** az 5.1 és a 6. acceptance-pont zárja ki;
+  ez a kockázat MÉRT — az eredeti brief pontosan ebbe futott bele (§0.0).
+- **A küszöbfájl néma átkötése:** a 8. acceptance-pont és a tilos zóna zárja ki.
 - **Duplikáció az `ml/negatives.py`-vel:** a kör termék-oldali metrikát ad,
   nem tanító-oldali bányászatot; az `ml/**` tilos zóna.
+- **Scope-túlnyúlás a `GroupKey`/manifest felé:** a §0.0 kiveszi a körből; ha az
+  implementer úgy találja, hogy egy cella csak ezekkel teljesíthető → `stopped`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
