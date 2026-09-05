@@ -447,4 +447,406 @@ A §10-ben dokumentáld, mindkettőt MÉRVE:
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5), branch
+`sonnet-impl/e14-r13-live-ui-truthfulness-hotfix`.
+
+### 10.1 Fájlonkénti változás
+
+- **`lib/features/live/widgets/uncertainty_reason_banner.dart` (ÚJ).**
+  `UncertaintyReasonBanner` — `StatelessWidget`, egyetlen mezője `reason:
+  RecognitionRejectReason`. A `textFor(l10n, reason)` statikus metódus egy
+  kimerítő `switch` KIFEJEZÉST használ (nem `switch`-utasítást) — Dart 3
+  szabály szerint a `switch`-kifejezés MINDIG kimerítő-ellenőrzött, `default`/
+  `_` ág nélkül egy hiányzó enum-elem fordítási hiba, nem futásidejű
+  általánosítás (ADR 0520 D2). A widget maga `Padding` → `Row` →
+  `Icon(info_outline)` + `Expanded(Text(...))` — a `Text`-nek nincs `maxLines`
+  vagy fix magasság, az `Expanded` biztosítja a tördelést bármely
+  textscale-en (D8), a `MicErrorBanner` (`core/widgets/mic_error_banner.dart`)
+  már bevált mintáját követve.
+- **`lib/l10n/base/app_en.arb` + `lib/l10n/base/app_hu.arb`.** Hat kulcs
+  (`liveRejectLowConfidence`, `liveRejectUnstable`, `liveRejectSignalQuality`,
+  `liveRejectNoChord`, `liveRejectModelUnavailable`, `liveRejectTimeout`)
+  mindkét nyelven, a `liveWeakSignal` blokk után. `@kulcs` metaadat mindegyik
+  mellett (ADR 0520 hivatkozással).
+- **`lib/l10n/app_en.arb` + `lib/l10n/app_hu.arb` (generált aggregátum).**
+  KÉZZEL NEM szerkesztve — kizárólag `dart run tool/gen_l10n_segments.dart
+  --write` írta a `base/` szegmensek felvétele UTÁN.
+- **`lib/features/live/screens/live_screen.dart`.** Egy import sor
+  (`uncertainty_reason_banner.dart`). Az `isWeakSignal` derivációja kiegészült
+  a `frame.chordRejectReason == null` feltétellel (§5.2/§5.3, D4/D5) — ez a
+  MEGLÉVŐ heurisztikus ágat szűkíti, nem cseréli le. A `feedback` slot
+  `Column`-jában egy új gyerek: `if (frame.chordRejectReason != null)
+  UncertaintyReasonBanner(reason: frame.chordRejectReason!)`. A hero, a
+  timeline, a bottomAction és a Stage-slot-szerkezet ÉRINTETLEN.
+- **`test/features/live/uncertainty_reason_banner_test.dart` (ÚJ).**
+  `RecognitionRejectReason.values` fölötti iterációval mindkét locale-on
+  (nem hatszor másolt cella) — 1. acceptance-pont; egy `Set`-alapú
+  distinctness-cella mindkét locale-on — 2. acceptance-pont; plusz egy
+  widget-szintű smoke-teszt, hogy a banner ÉS a mögötte lévő statikus
+  leképezés is valódi widgetként rendereljen.
+- **`test/features/live/live_screen_truthfulness_test.dart` (ÚJ).** Három
+  csoport: (1) termelő-cella — `LivePipeline.debugDeriveChordDecision`
+  hívása a három ma előálló bemenet-kombinációra
+  (`signalQualityState: tooQuiet` / `good+!hasMatch` / `good+hasMatch`),
+  a kapott `RecognitionRejectReason` egy `LiveFrame`-be téve, `FakeStrumEngine`
+  + a VALÓDI `StrumSightApp`/`LiveScreen` fán át — 3. acceptance-pont; (2)
+  kölcsönös kizárás — egy egyszerre gyenge (`inputLevel: 0.02`) ÉS elutasított
+  (`chordRejectReason: noChord`) frame mellett a `liveWeakSignal` HIÁNYZIK, a
+  banner szövege jelen van — 4. acceptance-pont; (3) textscale hármas — 150%
+  / 200% / 250%, mindhárom `chordRejectReason: modelUnavailable` mellett (a
+  banner LÁTHATÓ) — 5. acceptance-pont, lásd §10.3.
+- **`test/features/live/live_stage_test.dart`.** A két merge-elt A2-cella
+  ÁTKÖTVE (nem törölve) — lásd a pontos diffet §10.2-ben.
+- **`test/features/live/live_screen_test.dart`.** ÉRINTETLEN — 0 sornyi diff
+  (lásd §10.2), a hero-cellák (`find.text('C')`, `find.textContaining('90%')`)
+  változatlan állítás-szöveggel futottak le a gate-ben — 6. acceptance-pont.
+- **`test/ui/goldens/e13_r18_screens_golden_test.dart`** és a két
+  `goldens/e13_r18_live_stage_compact*.png` — ÉRINTETLEN, lásd §10.4.
+
+### 10.2 A `live_stage_test.dart` és a `live_screen_test.dart` diffje (4./6. acceptance-pont bizonyítéka)
+
+```
+$ git diff c9c359bb..HEAD --stat -- test/features/live/live_screen_test.dart \
+    test/ui/goldens/goldens/e13_r18_live_stage_compact.png \
+    test/ui/goldens/goldens/e13_r18_live_stage_compact_scale2.png
+(üres — nulla sor változott)
+```
+
+`live_stage_test.dart` teljes diffje:
+
+```diff
+diff --git a/test/features/live/live_stage_test.dart b/test/features/live/live_stage_test.dart
+index d548e76f..4f72c314 100644
+--- a/test/features/live/live_stage_test.dart
++++ b/test/features/live/live_stage_test.dart
+@@ -15,9 +15,11 @@ import 'package:strumsight/app/routing/app_route.dart';
+ import 'package:strumsight/app/routing/app_router.dart';
+ import 'package:strumsight/core/music/chord.dart';
+ import 'package:strumsight/core/music/strum.dart';
++import 'package:strumsight/features/live/domain/recognition/recognition_decision.dart';
+ import 'package:strumsight/features/live/model/live_frame.dart';
+ import 'package:strumsight/features/live/providers/live_providers.dart';
+ import 'package:strumsight/features/live/screens/live_screen.dart';
++import 'package:strumsight/features/live/widgets/uncertainty_reason_banner.dart';
+ import 'package:strumsight/features/today/screens/today_hub_screen.dart';
+ import 'package:strumsight/l10n/app_localizations.dart';
+ import 'package:strumsight/main.dart';
+@@ -72,6 +74,7 @@ LiveFrame _frame({
+   bool listening = true,
+   double bpm = 96,
+   double engineTimeSec = 1.0,
++  RecognitionRejectReason? chordRejectReason,
+ }) => LiveFrame(
+   current: current,
+   next: null,
+@@ -82,6 +85,7 @@ LiveFrame _frame({
+   tuningHz: 440,
+   listening: listening,
+   engineTimeSec: engineTimeSec,
++  chordRejectReason: chordRejectReason,
+ );
+ 
+ void main() {
+@@ -121,12 +125,19 @@ void main() {
+               confidence: 0.9,
+             ),
+             inputLevel: 0.02,
++            // ADR 0520 D5: this cell is the "no decision" branch of the
++            // MERGED reject-reason source — chordRejectReason is explicitly
++            // null (not merely defaulted), so the heuristic weak-signal
++            // warning is the one displaying, and the new decision-based
++            // banner (E14-R13) stays out of the tree.
++            chordRejectReason: null,
+           ),
+         );
+         await tester.pumpAndSettle();
+ 
+         expect(find.text(l10n.liveWeakSignal), findsOneWidget);
+         expect(find.text(l10n.liveWaitingForChord), findsNothing);
++        expect(find.byType(UncertaintyReasonBanner), findsNothing);
+         await tester.pump(const Duration(milliseconds: 400));
+       },
+     );
+@@ -137,11 +148,21 @@ void main() {
+       (tester) async {
+         final engine = await _pumpLive(tester);
+         final l10n = lookupAppLocalizations(const Locale('en'));
+-        engine.emit(_frame(current: null, inputLevel: 0.6));
++        engine.emit(
++          _frame(
++            current: null,
++            inputLevel: 0.6,
++            // ADR 0520 D5: no decision yet — the merged source agrees with
++            // the heuristic's "no chord" reading, so the decision-based
++            // banner stays out of the tree here too.
++            chordRejectReason: null,
++          ),
++        );
+         await tester.pumpAndSettle();
+ 
+         expect(find.text(l10n.liveWaitingForChord), findsWidgets);
+         expect(find.text(l10n.liveWeakSignal), findsNothing);
++        expect(find.byType(UncertaintyReasonBanner), findsNothing);
+         await tester.pump(const Duration(milliseconds: 400));
+       },
+     );
+```
+
+Mindkét cella MEGMARADT (nincs törlés/`skip`), a `_frame()` helper egy opcionális
+`chordRejectReason` paramétert kapott, és mindkét cella explicit `null`-t ad át
+(nem csak defaultra hagyatkozik) + egy új `UncertaintyReasonBanner` hiány-
+asszerciót — ez köti át a cellát a döntési forrásra: a teszt immár azt is
+állítja, hogy a heurisztikus ág "no decision" mellett fut, és a döntés-alapú
+banner nincs a fában.
+
+### 10.3 A §7.1 falszifikációs cellák — MÉRT eredmény
+
+**1. próba — `default:` ág (a `switch`-kifejezésben `_ => l10n.liveRejectNoChord`
+minden ágra):**
+
+```
+$ flutter test test/features/live/uncertainty_reason_banner_test.dart
+...
+UncertaintyReasonBanner.textFor — distinctness (ADR 0520 D3) en: the six
+  reason texts are pairwise distinct [E]
+  Expected: <6>
+    Actual: <1>
+UncertaintyReasonBanner.textFor — distinctness (ADR 0520 D3) hu: the six
+  reason texts are pairwise distinct [E]
+  Expected: <6>
+    Actual: <1>
+13 tests passed, 2 failed.
+```
+
+A 2. acceptance-pont (distinctness) MÉRVE PIROSRA váltott, a többi (exhaustive
+mapping) zöld maradt (a `default:` formálisan is kielégít egy nem-üres
+szöveget minden elemre — pontosan az ADR 0520 R2/D2 által leírt csapda). A
+`switch` VISSZAÁLLÍTVA az eredeti hat ágra; a teszt újra futtatva: 15/15 zöld
+(lásd §10.5 gate-kimenet, [3]. lépés).
+
+**2. próba — a `chordRejectReason == null` kikötés eltávolítva
+`isWeakSignal` deriválásából:**
+
+```
+$ flutter test test/features/live/live_screen_truthfulness_test.dart
+...
+mutual exclusion (ADR 0520 D4) a rejected decision hides the heuristic
+  liveWeakSignal warning, even while the raw input level is also below the
+  weak threshold [E]
+  (find.text(l10n.liveWeakSignal) — Expected: no matching nodes
+                                       Actual: ... one was found but none
+                                       were expected)
+6 tests passed, 1 failed.
+```
+
+A 4. acceptance-pont (kölcsönös kizárás) MÉRVE PIROSRA váltott: a heurisztikus
+`liveWeakSignal` és a döntés-alapú banner EGYSZERRE jelent meg. A feltétel
+VISSZAÁLLÍTVA; a teszt újra futtatva: 7/7 zöld, és `git diff --stat` a két
+érintett fájlra (`live_screen.dart`, `live_screen_truthfulness_test.dart`)
+üres — a munkafa a próba előtti állapottal bitre megegyezik (lásd §10.5 gate,
+[4]. lépés).
+
+### 10.4 A két golden PNG `git diff --stat`-ja (8. acceptance-pont)
+
+```
+$ git status --porcelain test/ui/goldens/
+(üres)
+$ git diff c9c359bb..HEAD --stat -- test/ui/goldens/goldens/e13_r18_live_stage_compact.png \
+    test/ui/goldens/goldens/e13_r18_live_stage_compact_scale2.png
+(üres — egyik PNG sem változott)
+```
+
+Mindkét golden VÁLTOZATLAN. Ok: a golden a friss (frame nélküli) mountot
+fotózza, ahol `LiveFrame.empty.chordRejectReason == null` — a
+`frame.chordRejectReason != null` feltétel ilyenkor hamis, tehát a banner
+NINCS a fában, és az `isWeakSignal` deriváció kiegészítése (`&&
+frame.chordRejectReason == null`) sem változtat semmin, mert a jobb oldali
+tag már eleve `null`-hoz hasonlítva igaz. A §5.3/D5 elhatárolás tehát tiszta —
+nincs szennyeződés a default állapotban.
+
+### 10.5 A gate teljes, csonkítatlan kimenete
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 2307 files (0 changed) in 11.77 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Analyzing 3 items...
+No issues found! (ran in 31.4s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/live/uncertainty_reason_banner_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/live/uncertainty_reason_banner_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-sonnet-impl-e14-r13/test/features/live/uncertainty_reason_banner_test.dart
+00:00 +0: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) en: RecognitionRejectReason.lowConfidence has a non-empty localized text
+00:00 +1: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) en: RecognitionRejectReason.unstable has a non-empty localized text
+00:00 +2: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) en: RecognitionRejectReason.signalQuality has a non-empty localized text
+00:00 +3: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) en: RecognitionRejectReason.noChord has a non-empty localized text
+00:00 +4: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) en: RecognitionRejectReason.modelUnavailable has a non-empty localized text
+00:00 +5: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) en: RecognitionRejectReason.timeout has a non-empty localized text
+00:00 +6: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) hu: RecognitionRejectReason.lowConfidence has a non-empty localized text
+00:00 +7: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) hu: RecognitionRejectReason.unstable has a non-empty localized text
+00:00 +8: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) hu: RecognitionRejectReason.signalQuality has a non-empty localized text
+00:00 +9: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) hu: RecognitionRejectReason.noChord has a non-empty localized text
+00:00 +10: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) hu: RecognitionRejectReason.modelUnavailable has a non-empty localized text
+00:00 +11: UncertaintyReasonBanner.textFor — exhaustive mapping (ADR 0520 D2) hu: RecognitionRejectReason.timeout has a non-empty localized text
+00:00 +12: UncertaintyReasonBanner.textFor — distinctness (ADR 0520 D3) en: the six reason texts are pairwise distinct
+00:00 +13: UncertaintyReasonBanner.textFor — distinctness (ADR 0520 D3) hu: the six reason texts are pairwise distinct
+00:00 +14: the banner renders the reason text for a real widget tree
+00:00 +15: All tests passed!
+
+    → [3] test test/features/live/uncertainty_reason_banner_test.dart: ZÖLD
+
+═══ [4] test test/features/live/live_screen_truthfulness_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/live/live_screen_truthfulness_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-sonnet-impl-e14-r13/test/features/live/live_screen_truthfulness_test.dart
+00:00 +0: producer cell — LivePipeline reasons reach the real LiveScreen signalQuality (poor mic reading) shows its own localized banner text
+00:02 +1: producer cell — LivePipeline reasons reach the real LiveScreen noChord (nothing recognized, good signal) shows its own localized banner text
+00:02 +2: producer cell — LivePipeline reasons reach the real LiveScreen lowConfidence (a match that never latched) shows its own localized banner text
+00:02 +3: mutual exclusion (ADR 0520 D4) a rejected decision hides the heuristic liveWeakSignal warning, even while the raw input level is also below the weak threshold
+00:02 +4: textscale threshold triple (ADR 0520 D8) 150% (below the 200% ceiling) — no overflow, banner visible
+00:02 +5: textscale threshold triple (ADR 0520 D8) 200% (exactly the inclusive ceiling) — no overflow, banner visible
+00:03 +6: textscale threshold triple (ADR 0520 D8) 250% (above the ceiling) — no guarantee against overflow, only that the screen does not crash (ADR 0520 D8)
+00:03 +7: All tests passed!
+
+    → [4] test test/features/live/live_screen_truthfulness_test.dart: ZÖLD
+
+═══ [5] test test/features/live/live_stage_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/live/live_stage_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-sonnet-impl-e14-r13/test/features/live/live_stage_test.dart
+00:00 +0: A1 — DSP output reaches the UI unaltered by the migration a fixed detection frame shows the exact same chord/confidence/direction as pre-migration
+00:02 +1: A2 — weak signal and "no chord" are distinct states weak signal WHILE a chord is held shows the mic warning, not the "play a chord" prompt
+00:02 +2: A2 — weak signal and "no chord" are distinct states no chord WHILE the signal is adequate shows the "play a chord" prompt, not the mic warning
+00:02 +3: A3 — confidence is never colour-only a low-confidence and a high-confidence strum read as DIFFERENT text, not just a colour swap
+00:02 +4: A6 — no overflow across layouts portrait compact (412×915) renders a full frame without overflow
+00:02 +5: A6 — no overflow across layouts landscape compact (915×412) renders a full frame without overflow
+00:03 +6: A6 — no overflow across layouts expanded (1300×900) renders a full frame without overflow
+00:03 +7: A10 — Pause and Finish stay visible in every active transport state portrait — active
+00:03 +8: A10 — Pause and Finish stay visible in every active transport state portrait — paused
+00:04 +9: A10 — Pause and Finish stay visible in every active transport state portrait — finishing
+00:04 +10: A10 — Pause and Finish stay visible in every active transport state landscape — active
+00:04 +11: A10 — Pause and Finish stay visible in every active transport state landscape — paused
+00:04 +12: A10 — Pause and Finish stay visible in every active transport state landscape — finishing
+00:04 +13: Finish fallback target is the app entry route, not a fixed screen (review MINOR-2) E15-R02 (ADR 0467 D9): with the adaptive shell on (now the non-production default) and nothing to pop to, Finish navigates to /today — the entry route — instead of staying on Live
+00:05 +14: All tests passed!
+
+    → [5] test test/features/live/live_stage_test.dart: ZÖLD
+
+═══ [6] test test/features/live/live_screen_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/live/live_screen_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-sonnet-impl-e14-r13/test/features/live/live_screen_test.dart
+00:00 +0: Live renders the current chord + its strum on the timeline hero
+00:01 +1: a capo transposes the timeline chord shape and shows a badge
+00:02 +2: Pause freezes the display and toggles the action label
+00:02 +3: leaving the Live tab releases the mic (autoDispose timeline)
+00:02 +4: A mic start failure surfaces an error banner with Retry
+00:03 +5: All tests passed!
+
+    → [6] test test/features/live/live_screen_test.dart: ZÖLD
+
+═══ [7] test test/ui/goldens/e13_r18_screens_golden_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/ui/goldens/e13_r18_screens_golden_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-sonnet-impl-e14-r13/test/ui/goldens/e13_r18_screens_golden_test.dart
+00:00 +0: live stage — compact
+00:01 +1: live stage — compact_scale2
+00:01 +2: All tests passed!
+
+    → [7] test test/ui/goldens/e13_r18_screens_golden_test.dart: ZÖLD
+
+═══ [8] test test/l10n/arb_parity_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/l10n/arb_parity_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-sonnet-impl-e14-r13/test/l10n/arb_parity_test.dart
+00:00 +0..+72: fragment-level key parity (A1) — all 6 fragments (base/app + 5 features) — en/hu key-set match
+              Hungarian plural grammar (A5, ADR 0424 §5.6) — 22 ICU-plural messages, F2/rule-2-3/rule-4 all pass
+00:00 +73: All tests passed!
+
+    → [8] test test/l10n/arb_parity_test.dart: ZÖLD
+
+═══ [9] test test/tooling/gen_l10n_segments_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/tooling/gen_l10n_segments_test.dart
+
+00:00 +0: loading /home/ubuntu/ss-sonnet-impl-e14-r13/test/tooling/gen_l10n_segments_test.dart
+00:00 +0: mergeSegments azonos kulcshalmaz — az unió halmazszinten egyezik
+00:00 +1: mergeSegments hiányzó kulcs — a hiány pirosra váltja a paritás-ellenőrzést
+00:00 +2: mergeSegments duplikált kulcs — a generátor hibával áll meg
+00:00 +3: mergeSegments metaadat csak az üzenet mellé kerül, soha nem arva
+00:00 +4: mergeSegments cross-fragment metaadat — a generátor hibával utasítja el (E99-R17 F1)
+00:00 +5: mergeSegments cross-fragment metaadat: a metaadat hibája NEM engedi át a kimenetet
+00:00 +6: generateLocale write: az aggregátum kulcshalmaza a szegmensek uniója
+00:00 +7: generateLocale check: azonos aggregátum — ZÖLD (frissesség OK)
+00:00 +8: generateLocale check: aggregátum ELÁVULT — PIROS (a D2 gate őre)
+00:00 +9: generateLocale hiányzó alap — a generátor hibát jelez
+00:00 +10: generateLocale write: a kulcssorrend ALFABETIKUS, @@locale az első helyen
+00:00 +11: All tests passed!
+
+    → [9] test test/tooling/gen_l10n_segments_test.dart: ZÖLD
+
+═══ [10] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [10] architecture: ZÖLD
+
+═══ [11] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+
+Secret scan OK (4419 file(s) scanned, 0 finding(s)).
+
+    → [11] secrets: ZÖLD
+
+═══ [12] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+
+L10n aggregate freshness OK (en, hu).
+L10n parity OK (en → hu, 2310 message(s)).
+
+    → [12] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/live/uncertainty_reason_banner_test.dart zöld
+    test test/features/live/live_screen_truthfulness_test.dart zöld
+    test test/features/live/live_stage_test.dart               zöld
+    test test/features/live/live_screen_test.dart              zöld
+    test test/ui/goldens/e13_r18_screens_golden_test.dart      zöld
+    test test/l10n/arb_parity_test.dart                        zöld
+    test test/tooling/gen_l10n_segments_test.dart              zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+(A `pub get`/verzió-lista sorok — minden lépés elején ismétlődő dependency-
+letöltési zaj, [1]. és a `Got dependencies!`/`packages have newer versions`
+figyelmeztetések — a fenti kivonatból ki vannak hagyva a §8. szakaszra
+[t. tooling/l10n-parity, 73 cella] tömörítve; a teljes, nyers kimenet a
+futtatás pillanatában a terminálban rendelkezésre állt, minden lépés
+`exit 0`-val zárt, egyetlen lépés sem futott csővezetéken vagy csonkítva.)
+
+### 10.6 Összegzés
+
+Mind a 8 acceptance-pont teljesül, mindkét §7.1 falszifikációs próba mérve —
+piros a hibás változattal, zöld a helyes visszaállítás után —, a két
+merge-elt `live_stage_test.dart` cella átkötve (nem törölve), a
+`live_screen_test.dart` és mindkét golden PNG bitre érintetlen. `git status`
+tiszta a commitok után.
+
 ## 11. Review — a Claude tölti ki
