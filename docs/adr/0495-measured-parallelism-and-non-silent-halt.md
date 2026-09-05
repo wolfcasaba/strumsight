@@ -117,6 +117,28 @@ A `…::test_the_real_queue_admits_a_second_round_beside_the_running_one` cella 
 MÉRT defektet őrzi: ha a nyitott sorból egyetlen kör sem indítható a futó
 mellett, a cella PIROS — a 2. slot néma kiesése többé nem maradhat észrevétlen.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-09-05)
+
+A fenti cella az ÉLŐ sort mérte, és 2026-09-05-én a `main`-en is pirosra váltott
+egy szabálykövető állapoton: a sor-fej (`E14-R12`) és az egyetlen
+előfeltétel-kész jelölt (`E14-R15`) `allowed_paths`-a VALÓDIBAN átfedett egy
+termékfájlban (`lib/features/live/public.dart`, az ADR 0336 / L343 óta teljes
+értékű ütközési felület). Mivel a sor-fej maga a mért kör volt, a piros csak a
+saját merge-e után szűnt volna meg — amit ugyanez a piros zárt ki (holtpont,
+`docs/LESSONS.md` L643, Router CI `33956694997`).
+
+A döntés (D1/D2) VÁLTOZATLAN; a MÉRCE alakja pontosodott, nem gyengült:
+
+| mit | hol |
+| --- | --- |
+| élő soron mért INVARIÁNS: ál-ütközés nem zárhat ki előfeltétel-kész jelöltet | `…::test_the_real_queue_is_never_blindly_serialised` |
+| a MÉRT defekt-alak (vak sorosítás) rögzített bemeneten | `…::test_a_pseudo_collision_is_still_reported_as_blind_serialisation` |
+| a szabálykövető alak (valódi termékfájl-átfedés) rögzített bemeneten | `…::test_a_real_product_file_overlap_is_the_rule_working_not_a_defect` |
+
+Az élő cella a nem-defekt alakokat (`empty-queue`, `prerequisite-chain`,
+`real-collision`) `skipTest`-tel, a metsző fájl nevével jelenti — a 2. slot
+kiesése tehát továbbra sem néma.
+
 ## Következmények
 
 - A hátralévő sáv (10 kör) sorosan ~16 óra lánc-idő; valódi kettes párhuzammal

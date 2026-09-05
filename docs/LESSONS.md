@@ -25829,3 +25829,73 @@ méri, egy nem létező, de a listán szereplő **fájlt** viszont nem tekint
 leletnek (helyesen: az új fájl a körök normál terméke). A védelem a pre-flight
 kibővített olvasata, amit ez a lecke rögzít; a gépi hátvéd a kötelező
 `architecture` gate-lépés, ami a hibás import-alakot mérten pirosra viszi.
+
+## L643 — Az élő SORT mérő őr a sor-fej SAJÁT ütközését defektnek minősítette: a piros csak a mért kör merge-e után szűnt volna meg, a merge-et viszont épp a piros zárta ki (E14-R12 / H5, önjavító kör, 2026-09-05)
+
+**Mit mértünk.** Az E14-R12 kész és APPROVED volt, a Full Gate ZÖLDEN futott a
+merge-jelölt `13f8040d`-n (`33956693955`), a Router CI viszont PIROSAN
+(`33956694997`) — egyetlen cellán:
+
+```
+FAILED tools/tests/test_pipeline_throughput.py::MeasuredPrerequisiteRegimeTest::
+       test_the_real_queue_admits_a_second_round_beside_the_running_one
+AssertionError: [] is not true : a 2. slot ismét üresen áll: van előfeltétel-kész
+kör (['E14-R15']), de mind útvonalütközésre hivatkozva esik ki a(z) E14-R12 mellett
+```
+
+Ugyanez a `main`-en (`c0d2c35a`) is piros volt, a kör egyetlen sora nélkül — a
+cella ugyanis a fa GLOBÁLIS állapotát méri (`round_slots.queue_rows(ROOT)` + a
+briefek `allowed_paths`-a), nem a kör diffjét.
+
+**A gyökérok (mért).** Amíg az E14-R14 `pending` volt, ő volt a 2. slot
+útvonal-diszjunkt jelöltje. Miután 09:04-kor `done` lett, a sor egyetlen
+előfeltétel-kész jelöltje az **E14-R15** maradt, amelynek `allowed_paths`-a
+PONTOSAN EGY termékfájlban fed át a sor-fejjel:
+
+```
+E14-R12: lib/features/live/public.dart
+E14-R15: lib/features/live/public.dart
+```
+
+Az ütközés **VALÓDI**: a `live` barrel az [[L343]] / ADR 0336 óta teljes értékű
+ütközési felület (a blanket `lib/features/*/public.dart` glob épp azért lett
+visszavéve, mert elnémított egy regressziós őrt). A cella tehát a
+diszjunkt-szabály MŰKÖDÉSÉT (ADR 0171 §1) minősítette áteresztő-defektnek.
+
+**Miért volt holtpont.** A cella addig piros, amíg az E14-R12 a sor ELSŐ
+`pending` sora — ez pedig csak a kör merge-e után, a sor `done`-ra írásával
+szűnik meg. A merge-et viszont épp ez a piros Router CI zárta ki. A kör a saját
+hatáskörében nem oldhatta fel: `tools/tests/**` a mérce (ADR 0112 §3), a queue a
+driveré, az `allowed_paths` szűkítése pedig hamis scope-állítás lett volna, mert
+a kör a barrelt TÉNYLEGESEN módosította.
+
+**A javítás.** A cella két, külön mérhető dologra bomlott
+(`tools/tests/test_pipeline_throughput.py`):
+
+* az ÉLŐ soron egy INVARIÁNS marad —
+  `test_the_real_queue_is_never_blindly_serialised`: ál-ütközés (a merge-zár
+  által sorosított vagy bármely kör által újragenerált útvonal) SOHA nem
+  zárhat ki előfeltétel-kész jelöltet. A többi alak (`empty-queue`,
+  `prerequisite-chain`, `real-collision`) `skipTest` a konkrét okkal és a
+  metsző fájl nevével;
+* a defekt- és a szabálykövető alakot rögzített bemenetű FIXTURE méri
+  (`test_a_real_product_file_overlap_is_the_rule_working_not_a_defect`,
+  `test_a_pseudo_collision_is_still_reported_as_blind_serialisation`) — a
+  fixture a 2026-09-05-i, MÉRT sor-pillanatkép két briefjének szó szerinti
+  `allowed_paths`-a. A régi predikátum ezen a fixture-ön szó szerint ugyanazt
+  az AssertionError-t adja, mint a CI-ban; a szűrő-regressziót
+  (`effective_paths` kiiktatva) a második cella `blind-serialisation`-ként
+  fogja meg.
+
+**A szabály.** Ez az [[L612]] harmadik változata: az élő fát/sort mérő őr a
+pillanatnyi állapotot pinneli örök igazságként. Az ilyen cella helyes alakja —
+**a hiányt fixture-ön mérd, az élő fán csak azt az invariánst, ami a landolás
+MINDKÉT oldalán áll.** Külön csapda, ha a mért állapot FEJE maga a mért kör: ott
+a piros feloldása a kör merge-étől függ, amit ugyanaz a piros zár ki (holtpont),
+és a halt így nem is a kör hibájából áll elő.
+
+**Őrteszt:** `tools/tests/test_pipeline_throughput.py::MeasuredPrerequisiteRegimeTest`
+(63 cella; a javítás előtti eszközzel az új fixture-cella PIROS, a mért
+üzenettel). A javítás után a cella a megállt kör HEAD-jén (`13f8040d`) is
+lefutott — a merge utáni sor-állapotot szimulálva pedig a `skipTest` megszűnik
+és az élő cella újra ÉRDEMBEN mér (`admits`).
