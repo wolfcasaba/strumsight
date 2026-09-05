@@ -183,7 +183,9 @@ timeline-ig. **NEM elfogadható**: „utólagos korrekció jobb élményt ad".
 
 A `confirmed` átmenet feltétele `agreeFrames >= profile.minAgreeFrames`
 (**inkluzív**) — nem `Future.delayed`, `Timer` vagy `DateTime.now()`.
-(ADR 0518 D3.)
+(ADR 0518 D3.) A küszöb tárgya az **elmozdítás**: a legelső valaha látott
+eldöntött címke ránézésre megerősül (cold-start kivétel, **ADR 0518 D11** —
+mért indoklással), és a kivétel példányonként pontosan egyszer tüzel.
 
 ### 5.3 A profil paraméter, nem elágazás
 
@@ -252,6 +254,12 @@ mást nem mond. A bemenet kézzel épített `LiveFrame`-sorozat (nincs audio).
 7. **A reducer szerződése változatlan:** a
    `test/property/chord_timeline_property_test.dart` (a kör kapujában fut,
    módosítani tilos) **zöld** marad.
+8. **Cold-start kivétel (ADR 0518 D11) — saját cella:** friss stabilizátoron
+   (a) `chordState == RecognitionDecision.candidate` MÉG EGYETLEN keret
+   előtt; (b) az első eldöntött címke **ránézésre** `confirmed` (a keret
+   átmegy); (c) a kivétel **csak egyszer** tüzel: a MÁSODIK, ELTÉRŐ címke a
+   teljes `minAgreeFrames`-t kéri (2 kereten még `null` + `provisional`,
+   a 3.-on megy át).
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -265,6 +273,8 @@ mást nem mond. A bemenet kézzel épített `LiveFrame`-sorozat (nincs audio).
 | A profil nem paraméter, hanem másolt kódág / azonos küszöb | 5. pont (a két profil azonos párt ad) |
 | A számláló nem nullázódik eltérésre (befagy) | 6. pont |
 | A `reduceChordTimeline` szemantikáját írja át | 7. pont (a property-teszt) |
+| A cold-start kivétel az ELMOZDÍTÁSRA is kiterjed (minden új címke ránézésre megerősül) | 8. pont (c) + 3b |
+| A friss stabilizátor nem `candidate` állapotból indul | 8. pont (a) |
 | Új állapot-enum a merge-elt `RecognitionDecision` helyett | a fordítás/`analyze` + az 1–2. pont típusa (a getter `RecognitionDecision`-t ad) |
 
 ## 7. Kötelező ellenőrzések

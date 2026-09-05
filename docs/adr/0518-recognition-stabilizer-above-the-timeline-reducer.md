@@ -89,7 +89,8 @@ duplikálja az ADR 0516 D3-at.
 
 `agreeFrames >= profile.minAgreeFrames`, **inkluzív** határ. `Future.delayed`,
 `Timer`, `DateTime.now()` vagy fal-óra alapú megerősítés tilos — a mérce a
-keretek száma, ami audio nélkül, determinisztikusan tesztelhető.
+keretek száma, ami audio nélkül, determinisztikusan tesztelhető. A küszöb
+tárgya az **elmozdítás** (D11).
 
 ### D4 — A profil paraméter, nem kódág
 
@@ -155,6 +156,54 @@ látogatás friss állapotgéppel induljon, és semmilyen úton ne pinnelhesse a
 közvetlenül a pipeline döntését mutatja. A kör kizárólag az **előzmény**
 (timeline) stabilitását szállítja. A hero és a timeline így egy keretig
 eltérhet — ez tudatos: a hero „most mit hallok", a timeline „mi történt".
+
+### D11 — Cold-start kivétel: a küszöb az ELMOZDÍTÁST kapuzza, nem a legelső észlelést
+
+*(Kiegészítés a kör implementációja során, 2026-09-05 — az ADR ennek a körnek
+a MÉG NEM merge-elt saját artefaktuma, a kiegészítés az orchestrátor
+hatásköre; ADR 0087 §2.)*
+
+A legelső valaha látott, MÁR eldöntött címkének **nincs mihez képest egyet
+nem értenie**: a timeline üres, nincs megállapított alapállapot, tehát nincs
+mit elmozdítani. Ezért:
+
+- az első valaha látott eldöntött címke **ránézésre megerősül** (a keret
+  átmegy, `chordState = confirmed`), és
+- **kizárólag** egy MÁR megerősített címke **elmozdítása** (átállás egy ÚJ,
+  ELTÉRŐ címkére) igényli a `profile.minAgreeFrames` egybehangzó keretet.
+
+Ez a kivétel **példányonként pontosan egyszer** tüzel (a `_confirmedLabel`
+soha nem áll vissza `null`-ra), és a `chordState` `candidate` állapota
+továbbra is a „még egyetlen eldöntött keret sem érkezett" állapot (D1).
+
+**MÉRT indok (a reviewer által függetlenül reprodukálva).** A kivétel nélküli
+változat — minden címke, az első is, `minAgreeFrames` keretet kér — a kör
+`allowed_paths`-án KÍVÜL eső **három** meglévő cellát visz pirosra, mert azok
+egyetlen keretet emittálnak és azonnali timeline-visszajelzést várnak:
+
+```
+flutter test test/features/live/live_screen_test.dart test/features/live/live_stage_test.dart
+  ✗ live_screen_test.dart: Live renders the current chord + its strum on the timeline hero
+  ✗ live_stage_test.dart:  A1 — DSP output reaches the UI unaltered by the migration
+  ✗ live_stage_test.dart:  A2 — weak signal … chord held → mic warning
+```
+
+(Reprodukció: a `50dcca56` klónjában a `_confirmedLabel == null` ág törlése,
+majd a fenti parancs → `+13 -3`.) A listán kívüli teszt átírása H3 volna, a
+kivétel viszont a kör saját fájljain belül marad, és a churn-mércét nem
+gyengíti: a §7.1 falszifikációs cella `minAgreeFrames = 1`-nél továbbra is
+PIROS.
+
+**Ár, kimondva:** a Live megnyitása utáni ELSŐ előzmény-kártya nulla
+stabilitás-evidenciával jelenik meg. Ezt a keretet a pipeline saját kapuja
+(Schmitt-trigger `chordConfRise = 0.54`, debounce-olt release + tonalness +
+jel-minőség, ADR 0516) már megszűrte, tehát nem szűretlen nyers címke — de
+egy téves első felismerés egy (és pontosan egy) fölösleges kártyát adhat.
+
+**Gépi mérce (kötelező):** a kivételt saját cella pinneli — kezdeti
+`candidate` állapot; az első eldöntött címke ránézésre `confirmed`; a
+MÁSODIK, ELTÉRŐ címke viszont a teljes `minAgreeFrames`-t kéri. Szöveges
+előírás gépi mérce nélkül ebben a körben nem elfogadható.
 
 ## Következmények
 
