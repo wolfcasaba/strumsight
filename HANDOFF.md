@@ -1,5 +1,38 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R13 / H5 feloldva: a `router-ci` suite 850,85 s → 289,94 s, a plafonhoz nem nyúltunk (2026-09-05)
+
+Az `E14-R13` KÉSZ és APPROVED volt (`full-gate.yml` `success` a `08c17390`
+merge SHA-n), de a `router-ci.yml` a **saját 10 perces job-plafonjába** futott
+(`10m 06s` → `cancelled`, run 33973215326; a pytest maga `582,56 s`). A plafon
+emelése a self-heal abszolút tiltott zónája (ADR 0112 §3), és **gépi őr** is
+védi (`heal_pr_gate_violation()`), ezért a javítás a MÉRT költség-tételeket
+szüntette meg a `tools/**`-ban.
+
+| Mit | Mért ár a javítás előtt | Javítás |
+|---|---|---|
+| `brief-lint.py::predecessor_paths()` négyzetes brief-elemzése | 75 149 `load_brief` hívás 413 briefre (a 77,5 s-os korpusz-menetből 63,1 s) | fájl-identitáshoz (`mtime_ns` + méret) kötött memoizálás; a 413 brief lelet-listája **bájtra azonos** előtte/utána |
+| `attempt_selfheal` halt-RAG lekérdezése | 27,0 s / hívás (24,9 s CPU) × 9 cella | `PIPELINE_HEAL_RAG` kapcsoló, **alapérték `1`** — élesben változatlan; a motorválasztást mérő cellák kapcsolják ki |
+| `mm-round.sh` SIGTERM→SIGKILL türelme | bedrótozott `sleep 5` × ~20 cella | `MM_KILL_GRACE_SECONDS`, **alapérték `5`** — élesben változatlan |
+
+**Mérce:** `python3 -m pytest tools/tests -q` ugyanazon a boxon,
+**850,85 s → 289,94 s (−66%)**, `949 passed, 1 skipped` mindkét oldalon; a
+teszt-fájlok száma NŐTT (+1 fájl, +5 cella).
+
+**Őrteszt:** `tools/tests/test_router_ci_suite_cost.py` — determinisztikus (óra
+nélküli) invariáns: egy korpusz-menet minden brief-fájlt legfeljebb egyszer
+elemez. A javítás előtti alakon **9 325 / korlát 410** → PIROS, utána ZÖLD.
+Mellette a gyorsítótár invalidálása (inverz próba) és a két kapcsoló éles
+alapértelmezése. Lecke: **L649**.
+
+**A folytatás az `E14-R13`-on kizárólag a merge-lépés** — a kör kész, a branch
+`sonnet-impl/e14-r13-live-ui-truthfulness-hotfix` a CI-zöld `08c17390`-on áll,
+PR [#590](https://github.com/wolfcasaba/strumsight/pull/590) nyitva marad. NE
+implementáld újra: upstream-szinkron → a teljes kapu az így kapott merge SHA-n
+(a Router CI ekkor már a gyorsított suite-tal fut) → zöld kapus squash-merge.
+Teljes diagnózis: `.pipeline/halt-detail-E14-R13.md`.
+
+
 ## ✅ E14-R16 KÉSZ — Onset-detektor A/B: a mérés MEGVAN, és a harness a SAJÁT konfundját is méri — PR [#592](https://github.com/wolfcasaba/strumsight/pull/592), squash `735fc4a7` (2026-09-05)
 
 Négy onset-detektáló függvény (`current`, `canonicalSuperFlux24`,

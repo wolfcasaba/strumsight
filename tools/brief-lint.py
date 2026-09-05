@@ -592,9 +592,61 @@ def feature_roots(allowed_paths) -> list[str]:
     return sorted(roots)
 
 
+# --- Fájl-identitáshoz kötött gyorsítótár (E14-R13/H5 önjavító kör, ADR 0112,
+# 2026-09-05) ---------------------------------------------------------------
+# MÉRT gyökérok: a `predecessor_paths()` a sorban KORÁBBI körök briefjeit MINDEN
+# hívásnál újra beolvassa és TOML-t elemez, ezért egy teljes korpusz-lint
+# NÉGYZETESEN sok brief-elemzést végez. Profilozva a `main @ 9632a96d`-en, 413
+# briefen: 75 149 `load_brief` hívás — a 77,5 s-os korpusz-menetből 63,1 s. Ez
+# volt a `router-ci.yml` 10 perces job-plafonjába futó Python-suite legnagyobb
+# egyetlen tétele (`.pipeline/halt-detail-E14-R13.md`).
+#
+# A kulcs a fájl IDENTITÁSA — `(útvonal, st_mtime_ns, st_size)`, ugyanaz a
+# szerződés, amivel a CPython a `.pyc`-t érvényteleníti —, ezért egy menet
+# közben átírt brief azonnal újraelemződik. A gyorsítótár tehát NEM változtat
+# egyetlen lelet-döntésen sem, csak az ISMÉTLÉST szünteti meg.
+_QUEUE_ROWS_CACHE: dict[tuple[str, int, int], list[tuple[str, str, str]]] = {}
+_BRIEF_CACHE: dict[tuple[str, int, int], object] = {}
+
+
+def _file_identity(path: Path) -> tuple[str, int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return (str(path), stat.st_mtime_ns, stat.st_size)
+
+
+def _cached_load_brief(path: Path):
+    """`load_brief`, fájl-identitáshoz kötött memoizálással.
+
+    A kivétel is gyorsítótárazódik: egy elemezhetetlen brief a korpusz minden
+    későbbi körénél ugyanazt a hibát adná, és az újraelemzése ugyanolyan drága,
+    mint a sikeresé.
+    """
+    identity = _file_identity(path)
+    if identity is None:
+        return load_brief(path)  # a hiányzó fájl hibáját a hívó kezeli
+    cached = _BRIEF_CACHE.get(identity)
+    if cached is None:
+        try:
+            cached = load_brief(path)
+        except (BriefMetadataError, OSError) as error:
+            cached = error
+        _BRIEF_CACHE[identity] = cached
+    if isinstance(cached, BaseException):
+        raise cached
+    return cached
+
+
 def queue_rows(repo: Path) -> list[tuple[str, str, str]]:
     """(kör, brief, státusz) hármasok a sor-fájlból, sorrendben."""
     path = repo / QUEUE_RELATIVE
+    identity = _file_identity(path)
+    if identity is not None:
+        cached = _QUEUE_ROWS_CACHE.get(identity)
+        if cached is not None:
+            return list(cached)
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
@@ -606,6 +658,8 @@ def queue_rows(repo: Path) -> list[tuple[str, str, str]]:
         parts = line.split("\t")
         if len(parts) >= 5:
             rows.append((parts[0], parts[1], parts[4]))
+    if identity is not None:
+        _QUEUE_ROWS_CACHE[identity] = list(rows)
     return rows
 
 
@@ -623,7 +677,7 @@ def predecessor_paths(repo: Path, task_id: str) -> frozenset[str]:
         if round_id.upper() == task_id.upper():
             break
         try:
-            metadata = load_brief(repo / brief).metadata
+            metadata = _cached_load_brief(repo / brief).metadata
         except (BriefMetadataError, OSError):
             continue
         collected.update(metadata.allowed_paths)
