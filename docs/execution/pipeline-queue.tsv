@@ -797,12 +797,12 @@ E14-R19	docs/rounds/e14-r19-augmentation-and-balanced-recipe.md	sonnet-impl	0371
 #     épül, vagy (R07–R13) külső függősége van: futó, elérhető `backend/`.
 #     Az ADR-oszlop ELŐZETES — a foglaló a kör indulásakor adja a véglegeset.
 E17-R01	docs/rounds/e17-r01-onboarding-first-win-stage-wiring.md	sonnet-impl	0520	pending
-E17-R02	docs/rounds/e17-r02-analysis-v2-capture-wiring.md	sonnet-impl	0521	hold
-E17-R03	docs/rounds/e17-r03-setlist-session-wiring.md	sonnet-impl	0522	hold
-E17-R04	docs/rounds/e17-r04-tutor-practice-plan-preview-wiring.md	sonnet-impl	0523	hold
-E17-R05	docs/rounds/e17-r05-practice-generator-seams.md	sonnet-impl	0524	hold
+E17-R02	docs/rounds/e17-r02-analysis-v2-capture-wiring.md	sonnet-impl	0521	pending
+E17-R03	docs/rounds/e17-r03-setlist-session-wiring.md	sonnet-impl	0522	pending
+E17-R04	docs/rounds/e17-r04-tutor-practice-plan-preview-wiring.md	sonnet-impl	0523	pending
+E17-R05	docs/rounds/e17-r05-practice-generator-seams.md	sonnet-impl	0524	pending
 E17-R06	docs/rounds/e17-r06-practice-generator-screen-wiring.md	sonnet-impl	0525	hold
-E17-R07	docs/rounds/e17-r07-community-http-foundation.md	sonnet-impl	0526	hold
+E17-R07	docs/rounds/e17-r07-community-http-foundation.md	sonnet-impl	0526	pending
 E17-R08	docs/rounds/e17-r08-community-feed-repository.md	sonnet-impl	0527	hold
 E17-R09	docs/rounds/e17-r09-community-post-repository.md	sonnet-impl	0528	hold
 E17-R10	docs/rounds/e17-r10-community-club-repository.md	sonnet-impl	0529	hold

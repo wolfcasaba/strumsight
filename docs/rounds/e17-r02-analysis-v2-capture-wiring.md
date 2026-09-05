@@ -1,6 +1,6 @@
 # E17-R02 — Az Analysis V2 felvevő-ág bekötése (3 képernyő)
 
-- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`hold`: A kör az `audioAnalysisV2Enabled` kapu MÖGÉ köt be. A kapu `forEnvironment`-ben MINDEN környezetben `false` — a bekötés tehát mérhető (flag-gated route), de a felhasználó számára csak egy külön rollout-döntés után látszik**
+- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`pending`** (a `hold` 2026-09-05-én feloldva, l. §0.0)
 - **Típus:** Chapter 17 (Teljes bekötés), Kör 2
 - **Kör-azonosító:** `E17-R02`
 - **Branch:** `<motor>/e17-r02-analysis-v2-capture-wiring`
@@ -10,9 +10,11 @@
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "az analysis v2 felvevő-ág bekötése (3 képernyő)"` — a kör pre-flightjának KÖTELEZŐ lefuttatnia és a találatokat a §2-be beépítenie; a brief előre megírt állapotában a §2 a `main @ b17e08ef` mérésein áll.
 
-## 0.0 MIÉRT `hold`
+## 0.0 A `hold` FELOLDVA (2026-09-05)
 
-A kör az `audioAnalysisV2Enabled` kapu MÖGÉ köt be. A kapu `forEnvironment`-ben MINDEN környezetben `false` — a bekötés tehát mérhető (flag-gated route), de a felhasználó számára csak egy külön rollout-döntés után látszik. **Mi oldja fel:** ez a kör route-szinten bekötheti a hármat a meglévő `audioAnalysisV2Enabled` kapu alatt; a `hold` oka, hogy előbb az `E17-R01` mintája (kompozíciós bekötés + reachability-cella) záruljon le mértként.
+A kör az `audioAnalysisV2Enabled` kapu MÖGÉ köt be. A kapu `forEnvironment`-ben MINDEN környezetben `false`, ezért a bekötés mérhető (flag-gated route), de a felhasználó számára csak egy külön rollout-döntés után látszik — az a döntés NEM ennek a körnek a tárgya.
+
+Az eredeti `hold` indoka az volt, hogy előbb az `E17-R01` kompozíciós mintája záruljon le. **2026-09-05-én feloldva:** ez SORRENDI preferencia volt, nem függőség — a kör `lib/` halmaza (`app_router.dart`, `audio_analysis/`) nem metszi az R01-ét (`onboarding/`).
 
 ```ai-router
 schema_version = 1

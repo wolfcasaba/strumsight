@@ -1,6 +1,6 @@
 # E17-R04 — Az AI Tutor gyakorlóterv-előnézet bekötése
 
-- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`hold`: A kör az `aiTutorEnabled` kapu MÖGÉ köt be, ami `forEnvironment`-ben minden környezetben `false`**
+- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`pending`** (a `hold` 2026-09-05-én feloldva, l. §0.0)
 - **Típus:** Chapter 17 (Teljes bekötés), Kör 4
 - **Kör-azonosító:** `E17-R04`
 - **Branch:** `<motor>/e17-r04-tutor-practice-plan-preview-wiring`
@@ -10,9 +10,11 @@
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "az ai tutor gyakorlóterv-előnézet bekötése"` — a kör pre-flightjának KÖTELEZŐ lefuttatnia és a találatokat a §2-be beépítenie; a brief előre megírt állapotában a §2 a `main @ b17e08ef` mérésein áll.
 
-## 0.0 MIÉRT `hold`
+## 0.0 A `hold` FELOLDVA (2026-09-05)
 
-A kör az `aiTutorEnabled` kapu MÖGÉ köt be, ami `forEnvironment`-ben minden környezetben `false`. **Mi oldja fel:** az `E17-R01` mintájának lezárása; a kapu alapértéke NEM ennek a körnek a tárgya.
+A kör az `aiTutorEnabled` kapu MÖGÉ köt be, ami `forEnvironment`-ben minden környezetben `false`. A kapu alapértéke NEM ennek a körnek a tárgya.
+
+Az eredeti `hold` indoka az `E17-R01` mintájára hivatkozott. **2026-09-05-én feloldva:** sorrendi preferencia volt, nem függőség.
 
 ```ai-router
 schema_version = 1
