@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/music/chord.dart';
 import '../../../core/music/strum.dart';
+import '../domain/recognition/recognition_decision.dart';
 import 'beat_slot.dart';
 
 /// An immutable snapshot the engine emits many times per second, driving the
@@ -20,6 +21,8 @@ class LiveFrame {
     this.strumSeq = 0,
     this.latestStrumTime = -1,
     this.engineTimeSec = -1,
+    this.chordDecision,
+    this.chordRejectReason,
   });
 
   /// Currently sounding chord (null before the first detection).
@@ -66,6 +69,16 @@ class LiveFrame {
   /// absorb (r147; the live twin of the r145 Analyze fix).
   final double engineTimeSec;
 
+  /// The typed chord verdict (ADR 0516 D1/D5) — `null` until a producer
+  /// fills it in (the `LiveFrameAdapter` boundary keeps it `null` today,
+  /// D7). Carried SEPARATELY from [confidence] (the STRUM confidence, ADR
+  /// 0505): the two never share a source.
+  final RecognitionDecision? chordDecision;
+
+  /// Why [chordDecision] rejected or stayed uncertain, or `null` when
+  /// [chordDecision] is `confirmed`/`null` (ADR 0516 D1/D5).
+  final RecognitionRejectReason? chordRejectReason;
+
   /// Confidence of the latest strum, or 0 if none.
   double get confidence => latestStrum?.confidence ?? 0;
 
@@ -91,6 +104,8 @@ class LiveFrame {
       strumSeq: strumSeq,
       latestStrumTime: latestStrumTime,
       engineTimeSec: engineTimeSec,
+      chordDecision: chordDecision,
+      chordRejectReason: chordRejectReason,
     );
   }
 

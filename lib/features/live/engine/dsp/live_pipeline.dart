@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../../core/music/chord.dart';
+import '../../domain/recognition/chord_prediction.dart';
 import '../../domain/recognition/recognition_decision.dart';
 import '../../domain/recognition/signal_quality_snapshot.dart';
 import '../../domain/recognition/strum_prediction.dart';
@@ -252,19 +253,9 @@ class LivePipeline {
       // brief speech spike cannot. A gated/no-chord frame feeds 0, decaying the
       // EMA back down so a phantom chord fades out.
       final conf = _lastChord?.confidence ?? 0.0;
-      _chordConfEma += DspConfig.chordConfEmaAlpha * (conf - _chordConfEma);
-      if (_chordConfEma >= _chordConfRise) {
-        _chordLatched = true;
-        _belowReleaseFrames = 0;
-      } else if (_chordConfEma < _chordConfRelease) {
-        // Debounced release: blank only after the confidence has stayed low for
-        // a few frames, so a mid-strum dip doesn't flicker a sustained chord.
-        if (++_belowReleaseFrames >= _chordReleaseHoldFrames) {
-          _chordLatched = false;
-        }
-      } else {
-        _belowReleaseFrames = 0; // between release and rise: still supported
-      }
+      _applyChordConfEma(
+        _chordConfEma + DspConfig.chordConfEmaAlpha * (conf - _chordConfEma),
+      );
     }
 
     // Sample-clock emission (~15 Hz).
@@ -295,6 +286,65 @@ class LivePipeline {
       modelId: _crnnActivation.info.strumModelId,
     );
     return prediction.decision == RecognitionDecision.confirmed;
+  }
+
+  /// The musical-presence Schmitt trigger (round 176), factored out of the
+  /// per-frame loop above so a test can drive the EXACT rise/release compare
+  /// with a controlled [ema] value — ADR 0516 §6 pt.4 needs the rise
+  /// boundary (`chordConfRise = 0.54`, inclusive) measured without audio.
+  /// The comparison itself is UNCHANGED: this is a behaviour-preserving
+  /// extraction, not a new threshold (D3).
+  void _applyChordConfEma(double ema) {
+    _chordConfEma = ema;
+    if (_chordConfEma >= _chordConfRise) {
+      _chordLatched = true;
+      _belowReleaseFrames = 0;
+    } else if (_chordConfEma < _chordConfRelease) {
+      // Debounced release: blank only after the confidence has stayed low for
+      // a few frames, so a mid-strum dip doesn't flicker a sustained chord.
+      if (++_belowReleaseFrames >= _chordReleaseHoldFrames) {
+        _chordLatched = false;
+      }
+    } else {
+      _belowReleaseFrames = 0; // between release and rise: still supported
+    }
+  }
+
+  /// ADR 0516 D1/D3/D4 — the ONLY place the chord verdict is typed, mirroring
+  /// [_isDirectionConfirmed]'s pattern for direction: derives the ALREADY-
+  /// MERGED [RecognitionDecision] + [RecognitionRejectReason] from the
+  /// ALREADY-SHIPPED [chordLatched] gate, the tonalness-gated [hasMatch] and
+  /// [signalQualityState] — no new threshold, no second enum. `confirmed`
+  /// is checked FIRST and is EXACTLY [_buildFrame]'s `showChord` condition
+  /// (`chordLatched && hasMatch`), so it can never diverge from it (§6 pt.2);
+  /// among the remaining cases the jel-minőség reason takes priority over
+  /// `noChord`/`lowConfidence` (D4: a bad mic reading is never blamed on the
+  /// player's fingers). Public + static so a test can drive it directly,
+  /// without a full pipeline (§6 pt.3/4).
+  @visibleForTesting
+  static (RecognitionDecision, RecognitionRejectReason?)
+  debugDeriveChordDecision({
+    required bool chordLatched,
+    required bool hasMatch,
+    required SignalQualityState signalQualityState,
+  }) {
+    if (chordLatched && hasMatch) {
+      return (RecognitionDecision.confirmed, null);
+    }
+    if (signalQualityState != SignalQualityState.good &&
+        signalQualityState != SignalQualityState.unknown) {
+      return (
+        RecognitionDecision.rejected,
+        RecognitionRejectReason.signalQuality,
+      );
+    }
+    if (!hasMatch) {
+      return (RecognitionDecision.rejected, RecognitionRejectReason.noChord);
+    }
+    return (
+      RecognitionDecision.uncertain,
+      RecognitionRejectReason.lowConfidence,
+    );
   }
 
   void _placeInBar(StrumEvent event) {
@@ -336,6 +386,10 @@ class LivePipeline {
     // musical-presence gate: below it we're almost certainly hearing speech /
     // noise, not a guitar, so show nothing rather than a phantom chord.
     final showChord = _lastChord != null && _chordLatched;
+    // ADR 0516 D5: additive only — [current] keeps deriving from the SAME
+    // `showChord` bit (bit-identical, §5.6), [chordPrediction] is a second,
+    // typed view of the SAME state, never a second decision.
+    final chord = chordPrediction;
     return LiveFrame(
       current: showChord ? Chord(_lastChord!.chord.label) : null,
       next: null, // the real engine cannot know the future
@@ -348,6 +402,8 @@ class LivePipeline {
       strumSeq: _strumSeq,
       latestStrumTime: _latestStrumTime,
       engineTimeSec: nowSec,
+      chordDecision: chord?.decision,
+      chordRejectReason: chord?.rejectReason,
     );
   }
 
@@ -363,9 +419,43 @@ class LivePipeline {
   /// `LiveFrame` contract and `inputLevel` are untouched by this round.
   SignalQualitySnapshot get signalQuality => _signalQuality.snapshot;
 
-  /// Chord-match confidence (separate from the strum confidence the pill
-  /// shows) — available for future UI use.
+  /// Raw, UNCALIBRATED chord-match confidence (separate from the strum
+  /// confidence the pill shows) — NOT the same shape as
+  /// [ChordPrediction.calibratedConfidence], which stays `null` until a
+  /// MEASURED calibration exists (ADR 0505 D2, ADR 0516 D2). Available for
+  /// future UI use.
   double get chordConfidence => _lastChord?.confidence ?? 0;
+
+  /// The pipeline's typed chord verdict (ADR 0516 D1) — derived from the
+  /// SAME latch/tonalness/signal-quality gates [_buildFrame] uses for
+  /// [LiveFrame.current], never a second derivation (D3).
+  /// [ChordPrediction.calibratedConfidence] stays `null` (D2): no measured
+  /// chord calibration exists in this tree. `pNoChord`/`pUnknown` reflect
+  /// this decoder's actual (hard, deterministic) match/no-match state, not a
+  /// fabricated probability — the dictionary path never reports an "unknown
+  /// chord" state, so `pUnknown` is always 0.
+  ChordPrediction? get chordPrediction {
+    final match = _lastChord;
+    final (decision, rejectReason) = debugDeriveChordDecision(
+      chordLatched: _chordLatched,
+      hasMatch: match != null,
+      signalQualityState: signalQuality.state,
+    );
+    final label = match?.chord.label ?? 'N.C.';
+    final (root, quality) = _splitChordLabel(label);
+    return ChordPrediction(
+      label: label,
+      root: root,
+      quality: quality,
+      pNoChord: match == null ? 1.0 : 0.0,
+      pUnknown: 0.0,
+      calibratedConfidence: null,
+      stabilityFrames: 0,
+      sourceEngine: RecognitionRuntimeInfo.chordEngineNnlsViterbi,
+      decision: decision,
+      rejectReason: rejectReason,
+    );
+  }
 
   /// The most recent chroma tonalness (top-3 pitch-class energy) — the value
   /// the non-guitar gate tests. Exposed for the offline real-audio probe
@@ -376,6 +466,19 @@ class LivePipeline {
   /// The EMA-smoothed chord-match confidence the musical-presence gate tests.
   @visibleForTesting
   double get debugChordConfEma => _chordConfEma;
+
+  /// Whether the musical-presence gate is currently latched — the same bit
+  /// [_buildFrame]'s `showChord` reads.
+  @visibleForTesting
+  bool get debugChordLatched => _chordLatched;
+
+  /// Test-only entry point (ADR 0516 §6 pt.4): applies the Schmitt trigger's
+  /// rise/release compare to an EXACT [ema] value, skipping the per-frame
+  /// smoothing — the pt.4 boundary is about the `>=` inclusivity of
+  /// [_chordConfRise], not the smoothing, so approximating it via repeated
+  /// [addChunk] calls would measure the wrong thing.
+  @visibleForTesting
+  void debugApplyChordConfEma(double ema) => _applyChordConfEma(ema);
 
   /// The strum classifier actually behind the seam (r169 wiring proof).
   @visibleForTesting
@@ -399,4 +502,15 @@ class LivePipeline {
     _samplesSeen = 0;
     _lastEmitAt = 0;
   }
+}
+
+/// Splits a display [label] into `(root, quality)` for [ChordPrediction] —
+/// the same convention `Chord.transposeLabel` uses (root = first letter plus
+/// an optional accidental), except the no-chord label `'N.C.'`, which has no
+/// root to isolate.
+(String, String) _splitChordLabel(String label) {
+  if (label == 'N.C.') return ('N.C.', '');
+  var rootLen = 1;
+  if (label.length > 1 && (label[1] == '#' || label[1] == 'b')) rootLen = 2;
+  return (label.substring(0, rootLen), label.substring(rootLen));
 }
