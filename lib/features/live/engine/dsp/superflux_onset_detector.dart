@@ -28,6 +28,7 @@ class SuperFluxOnsetDetector {
     this.minIoiSec = 0.06,
     this.delta = _delta,
     this.lambda = _lambda,
+    this.minRiseBands = _minRiseBands,
   }) : _mel = LogMelExtractor(
          sampleRate: sampleRate,
          nFft: window,
@@ -54,6 +55,14 @@ class SuperFluxOnsetDetector {
   final double delta;
   final double lambda;
 
+  /// Band-spread gate: how many of the [bands] log-mel bands must RISE against
+  /// the max-filtered reference for a candidate to count as an attack. A pluck
+  /// excites the whole spectrum at once; ring-out beating between two already
+  /// sounding partials moves energy in a handful of neighbouring bands only.
+  /// Injectable for the same reason [delta]/[lambda] are — the real-recording
+  /// sweep owns the value; production paths pass nothing.
+  final int minRiseBands;
+
   // The log-mel floor: bands below this are treated as silent so noise-floor
   // log-ratios (log of tiny power fluctuations) cannot register as flux.
   // -9.0 in log-power ≈ per-band amplitude ~1e-2 — well under any real pluck.
@@ -77,6 +86,35 @@ class SuperFluxOnsetDetector {
   // ring-out silence) re-verified green at the new values.
   static const double _delta = 12.0;
   static const double _lambda = 1.0;
+
+  // Band-spread gate (HEAL E14-R19, ADR 0112 self-heal; chunk 005).
+  // WHY it exists: the r166 real-data retune dropped `delta` 20 → 12 to buy
+  // back 18 pts of recall, and that put the threshold UNDER the ring-out
+  // beating bumps this file's own comment describes. Measured consequence on
+  // clean main@4e633b80: a SINGLE strum that is still sounding ~0.63 s after
+  // the attack fires a PHANTOM second onset — a spurious strum arrow / scoring
+  // event for a user who just holds the chord. 31 of 1458 grid points
+  // (lowFirst × stagger 6–14 ms × ring 0.5–0.9 s) doubled; that ~2 % is what
+  // made the randomized property gate flip red on PROPERTY_SEED=33975939211.
+  // WHY a band COUNT and not a higher delta: magnitude and spread separate the
+  // two populations very differently. Measured at the phantom frames — attack
+  // = 64/64 bands rise (flux 325–483), beating peak = 11–13 bands (flux
+  // 12.5–16.8). Magnitude overlaps the soft real attacks delta=12 was lowered
+  // for; spread does not, because a pluck excites the whole spectrum at once
+  // while beating only moves energy between neighbouring partials.
+  // MEASURED sweep, 2 013 labeled strums on the Klangio eval takes
+  // (test/tools/klangio_real_ab_test.dart data) + the 246-point synth grid:
+  //   gate  0 (off): real recall 89.6 % / precision 76.2 % · synth doubled 6
+  //   gate 12      : real recall 89.6 % / precision 76.2 % · synth doubled 2
+  //   gate 14      : real recall 89.5 % / precision 76.3 % · synth doubled 0
+  //   gate 16      : real recall 89.6 % / precision 76.7 % · synth doubled 0 ←
+  //   gate 20      : real recall 89.0 % / precision 77.4 % · synth doubled 0
+  //   gate 24      : real recall 87.2 % / precision 79.6 % (recall starts to pay)
+  // 16 = a quarter of the bands: zero real-recall cost, 16 fewer false
+  // detections, and 2 bands of headroom over the loudest measured beating bump
+  // (13). Above 20 the gate starts eating real soft attacks, so it is NOT a
+  // free knob to keep raising.
+  static const int _minRiseBands = 16;
   static const int _medianFrames = 69; // ~0.4 s @ 44.1 kHz / 256 hop
 
   // Local-max confirmation: the candidate must top ±2 neighbouring frames.
@@ -93,6 +131,7 @@ class SuperFluxOnsetDetector {
   final ListQueue<double> _fluxWindow = ListQueue();
   final List<double> _fluxHist = [];
   final List<double> _thrHist = [];
+  final List<int> _riseBandsHist = [];
   int _lastOnsetFrame = -1 << 30;
   int _belowStreak = _releaseFrames;
   bool _eligible = true;
@@ -127,6 +166,7 @@ class SuperFluxOnsetDetector {
       if (_fluxWindow.length > _medianFrames) _fluxWindow.removeFirst();
       _fluxHist.add(0);
       _thrHist.add(double.infinity); // a gated frame can never be a peak
+      _riseBandsHist.add(0);
       // Silence still advances the release + peak state machines (r142 audit:
       // a staccato stab hard-cut to silence must re-arm eligibility, and a
       // frozen flux peak must not suppress a later soft strum).
@@ -143,6 +183,7 @@ class SuperFluxOnsetDetector {
     }
 
     var flux = 0.0;
+    var riseBands = 0;
     if (_ring.length >= lag) {
       final ref = _ring.first; // the frame `lag` hops back
       for (var m = 0; m < bands; m++) {
@@ -150,7 +191,10 @@ class SuperFluxOnsetDetector {
         if (m > 0 && ref[m - 1] > maxRef) maxRef = ref[m - 1];
         if (m < bands - 1 && ref[m + 1] > maxRef) maxRef = ref[m + 1];
         final rise = banded[m] - maxRef;
-        if (rise > 0) flux += rise;
+        if (rise > 0) {
+          flux += rise;
+          riseBands++;
+        }
       }
     }
     _ring.addLast(banded);
@@ -163,6 +207,7 @@ class SuperFluxOnsetDetector {
 
     _fluxHist.add(flux);
     _thrHist.add(thr);
+    _riseBandsHist.add(riseBands);
     _fluxPeak = math.max(flux, _peakDecay * _fluxPeak);
     if (flux < thr) {
       _belowStreak++;
@@ -178,6 +223,7 @@ class SuperFluxOnsetDetector {
     final fc = _fluxHist[c];
     if (fc <= _thrHist[c]) return null;
     if (fc < _peakRatio * _fluxPeak) return null;
+    if (_riseBandsHist[c] < minRiseBands) return null;
     for (var i = math.max(0, c - _postFrames); i <= c + _postFrames; i++) {
       if (_fluxHist[i] > fc) return null;
     }
@@ -194,6 +240,7 @@ class SuperFluxOnsetDetector {
       final drop = _fluxHist.length - 2 * _medianFrames;
       _fluxHist.removeRange(0, drop);
       _thrHist.removeRange(0, drop);
+      _riseBandsHist.removeRange(0, drop);
       _dropped += drop;
     }
     return absC * hop / sampleRate;
