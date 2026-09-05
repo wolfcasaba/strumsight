@@ -108,7 +108,7 @@ szóval.
 | Ch14 | Recognition Accuracy & Useful UI Recovery | E14 | 19 | 0 | 0 | 0 | nyitva (pending: R13, R19; R20–R42 briefjei meg sem íródtak) | — |
 | — | Ch15 UI-migráció (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E15 | 14 | 0 | 0 | 0 | nyitva (pending: R09–R13 hátravan — AI-tutor/analysis/vision/onboarding/community migráció, backend mounting, release evidence; R08 gamification merge-elve) | — |
 | — | Ch16 kompozíció és rollout (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E16 | 6 | 0 | 0 | 0 | nyitva (pending: mind az 5 kör — kompozíció, progress-projekció, capability rollout, live backend E2E, teljes-app verifikáció) | — |
-| — | Ch17 teljes bekötés (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E17 | 0 | 1 | 0 | 13 | nyitva (E17-R01 pending, R02–R14 hold — a 23 sehonnan sem hivatkozott képernyő bekötése, `docs/plans/chapter-17-full-wiring.md`) | — |
+| — | Ch17 teljes bekötés (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E17 | 1 | 0 | 0 | 13 | nyitva (E17-R01 pending, R02–R14 hold — a 23 sehonnan sem hivatkozott képernyő bekötése, `docs/plans/chapter-17-full-wiring.md`) | — |
 | — | governance (pszeudoepic) | E99 | 18 | 0 | 0 | 2 | nyitva (hold: E99-R21, E99-R23) | — |
 
 ## 4. Eltérések a tervtől (mért, nem becsült)
