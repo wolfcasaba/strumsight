@@ -787,7 +787,7 @@ E14-R15	docs/rounds/e14-r15-hard-negative-corpus-and-false-visible-metric.md	son
 E14-R16	docs/rounds/e14-r16-onset-detector-ab-benchmark.md	sonnet-impl	0524	done
 E14-R17	docs/rounds/e14-r17-reference-model-repro-and-licence-audit.md	sonnet-impl	0369	done
 E14-R18	docs/rounds/e14-r18-joint-streaming-prototype.md	sonnet-impl	0370	done
-E14-R19	docs/rounds/e14-r19-augmentation-and-balanced-recipe.md	sonnet-impl	0371	pending
+E14-R19	docs/rounds/e14-r19-augmentation-and-balanced-recipe.md	sonnet-impl	0371	done
 # --- Chapter 17 (Teljes bekötés) — terv: docs/plans/chapter-17-full-wiring.md
 #     Nyitva 2026-09-05 a felhasználó jelzésére. Mért alap (main @ b17e08ef):
 #     `check_screen_reachability` → 96 képernyő, 73 elérhető, 23 SEHONNAN nem
