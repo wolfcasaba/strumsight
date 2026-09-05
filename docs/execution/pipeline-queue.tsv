@@ -759,7 +759,7 @@ E14-R06	docs/rounds/e14-r06-accuracy-lab-and-consented-capture.md	sonnet-impl	03
 E14-R07	docs/rounds/e14-r07-annotation-contract-and-agreement.md	sonnet-impl	0359	done
 E14-R08	docs/rounds/e14-r08-grouped-evaluation-harness.md	sonnet-impl	0360	done
 E14-R09	docs/rounds/e14-r09-baseline-dashboard-and-release-gate.md	sonnet-impl	0361	done
-E14-R10	docs/rounds/e14-r10-direction-abstention-hotfix.md	sonnet-impl	0362	pending
+E14-R10	docs/rounds/e14-r10-direction-abstention-hotfix.md	sonnet-impl	0362	done
 E14-R11	docs/rounds/e14-r11-chord-uncertainty-and-separate-confidence.md	sonnet-impl	0363	pending
 E14-R12	docs/rounds/e14-r12-recognition-stabilizer.md	sonnet-impl	0364	pending
 E14-R13	docs/rounds/e14-r13-live-ui-truthfulness-hotfix.md	sonnet-impl	0365	pending
