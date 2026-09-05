@@ -25615,3 +25615,91 @@ futásidejű bemenetet.
 **Őrteszt:** [`test/features/live/strum_direction_abstention_test.dart`](../test/features/live/strum_direction_abstention_test.dart)`::exactly on the threshold ((2*T, T), egzakt) -> uncertain`
 (az `expect(pDown - pUp, 0.05)` assert a cellán belül gépileg tartja az
 egzaktságot).
+
+## L638 — A fail-closed őr felismerő-szignatúrája a PINELT FORRÁS saját formátum-listájából következik, nem intuícióból: a kimaradt `.h5` épp az az alak, amit az upstream a licenc-blokkolt adathalmazból ELŐÁLLÍT (E14-R17, review MAJOR-1, 2026-09-05)
+
+**Mit mértünk.** Az E14-R17 licenc-őre (ADR 0369 D5) a fát járja, és a
+„referencia-eredetű artefaktum" felismerését kiterjesztés-halmazra alapozta:
+
+```dart
+const _referenceCheckpointExtensions = <String>{'ckpt','pt','pth','safetensors'};
+```
+
+A halmaz ésszerűnek látszik — de a manifest által **pinelt** upstream commit
+(`929e403f`, `Klangio/guitar-strumming-transcription`) SAJÁT `.gitattributes`-a
+**hat** formátumot tart Git-LFS alatt:
+
+```
+*.pth  *.pt  *.ckpt  *.cpkt  *.h5  *.pkl
+```
+
+A `cpkt` (az upstream saját elgépelés-variánsa, amit ők maguk is védenek), a
+`h5` és a `pkl` **kimaradt**. A rés nem elméleti: az upstream `README.md`
+szerint a `scripts/prepare_data_for_training.ipynb` „creates the **`.h5`**
+files required for training" — vagyis a **licenc-blokkolt adathalmazból
+származtatott**, legvalószínűbben a fába tévedő artefaktum PONTOSAN az, amit az
+őr nem ismert fel. A `safetensors` viszont bent volt, holott az upstream nem
+használja: a halmaz nem a forrásból, hanem általános ML-intuícióból készült.
+
+**A csapda.** A „fail-closed" jelző a *hiányzó engedélyre* vonatkozó
+viselkedést írja le (nincs `approved` bejegyzés → piros), nem a *felismerésre*.
+Ha a szignatúra nem fedi le a valós artefaktum-alakokat, az őr fail-closed
+**marad**, csak épp sosem néz oda — és a zöldje semmit nem bizonyít. A hiba
+néma: a valós-fa cella zöld, mert a fán ma amúgy sincs ilyen fájl, a
+falszifikációs cellák pedig azokat a kiterjesztéseket próbálják, amiket a
+szignatúra már ismer. **Az őr saját tesztje nem tudja megfogni a szignatúra
+hézagját** — az csak a pinelt forrás formátum-listájával összevetve látszik.
+
+**A szabály.** Ha egy őr külső forrásból származó artefaktumot ismer fel, a
+felismerő-szignatúrát a forrás SAJÁT, verziózott deklarációjából vezesd le
+(`.gitattributes`, `MANIFEST`, package-metaadat), és a kommentben hivatkozz rá
+mint mért forrásra. A manifest `measured_via` mezője már úgyis azt a mérést
+dokumentálja — a szignatúrának ugyanabból kell jönnie.
+
+**Mérve, hogy a javítás nem visz pirosra semmit:**
+`git ls-files | grep -Ei '\.(h5|pkl|cpkt)$'` → **nulla** találat a fán.
+
+**Őrteszt:** `test/tooling/reference_model_licence_guard_test.dart` → a B
+csoport `falsification cell (§7.1): an unaudited checkpoint at
+"ml/scratch/prepared_dataset.h5" turns the guard RED…` cellája (a lokáció-lista
+bővítése egy teljes ZÖLD→PIROS→ZÖLD cellát generál).
+
+## L639 — A repo-szintű SPDX-mező NEM a checkpoint és NEM az adathalmaz licence: a GitHub API `Apache-2.0`-t mond, a README grantja viszont szó szerint a „software"-re szűkül (E14-R17, 2026-09-05)
+
+**Mit mértünk.** Az E14-R17 licenc-auditja a
+`Klangio/guitar-strumming-transcription` repóra futott. Egy gépi olvasó, amely
+a GitHub API-t kérdezi, ezt kapja:
+
+```json
+"license": {"spdx_id": "Apache-2.0", "name": "Apache License 2.0"}
+```
+
+Ebből a mezőből a „go" következne. A repó `README.md`-jének „License" szakasza
+viszont szó szerint ezt mondja:
+
+> Copyright © 2025 Klangio GmbH
+> This **software** is licensed under the **Apache License, Version 2.0**.
+
+A grant tehát **a szoftverre** szól. A „Pretrained Checkpoint" (134 344 202 B,
+Git-LFS) és a „Dataset" (330 blob, 913 163 829 B) szakaszban **nincs
+licenc-mondat**, és sem a `checkpoints/`, sem a `dataset/` alatt nincs
+LICENSE-fájl. A `Citation` szakasz kutatási idézést kér („If you use this code,
+data, or models in your **research**…") — ez nem termék-engedély.
+
+**A csapda.** A `LICENSE` fájl a repó gyökerében van, tehát a repo-szintű
+metaadat pontos; a hiba a **hatókör** elhallgatása. Aki a repo-szintű SPDX-et
+olvassa (API-mező, badge, SBOM-generátor), egy olyan engedélyre hivatkozik,
+amit a jogosult a saját README-jében a kódra szűkített. Kutatási artefaktumoknál
+ez a tipikus alak: a kód permissive, a súly és az adat nyilatkozat nélkül.
+
+**A szabály.** Külső artefaktum átvételénél a kód, a súly és az adat licencét
+**külön** kell megítélni, és a repo-szintű SPDX **nem** öröklődik lefelé. A
+nyilatkozat hiánya a szerzői jog alapfeltevése szerint **fenntartott jog**, nem
+szabad felhasználás, és nem is jelölhető `"unknown"` sztringgel (az nem üres,
+tehát egy naiv „nem üres → rendben" ellenőrzés átengedné — [L546](#l546),
+[ADR 0473](adr/0473-release-fixture-corpus-manifest.md) D4). A gépi alak:
+`spdx: null` + `verdict: "blocking"`, és a séma CSAK ezt a párt fogadja el.
+
+**Őrteszt:** `test/tooling/reference_model_licence_guard_test.dart` → az A
+csoport `a null spdx WITHOUT a "blocking" verdict is rejected…` cellája, plusz
+a hat placeholder-változat (`unknown`/`n/a`/`""`) mind a három artefaktumra.
