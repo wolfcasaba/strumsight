@@ -15,6 +15,7 @@ saját sora (``test_club_service.py``). Amit itt mérünk: a wire-alak
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from conftest import _build_app, _make_test_engine, make_authenticated_user
@@ -27,6 +28,8 @@ from sqlalchemy.orm import sessionmaker
 from app.community import build_community_router
 from app.community.models.club import CommunityClub  # noqa: F401
 from app.community.models.profile import CommunityProfile
+from app.community.models.reaction import CommunityReaction  # noqa: F401
+from app.community.services.club_content_service import pin_post
 from app.config import Settings
 from app.database import Base
 
@@ -204,6 +207,225 @@ class TestClubRouterEndToEnd:
         )
 
         assert response.status_code == 422, response.text
+
+
+@pytest.fixture
+def club_feed_client():
+    """Klub-kapu + ÍRÁS-kapu + VALÓDI kurzus-aláíró kulcs.
+
+    A klub-feed HMAC-cel írja alá a kurzort, és FAIL-CLOSED módon 503-at ad
+    a fejlesztői alapértékre. A teszt ezért valódi kulcsot ad — nem kerüli
+    meg az őrt.
+    """
+    settings = Settings(
+        community_enabled=True,
+        community_clubs_enabled=True,
+        community_writes_enabled=True,
+        secret_key="a-real-32-char-test-secret-key-value",
+    )
+    engine = _make_test_engine()
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    app = _build_app(engine, session_factory, settings)
+    with TestClient(app) as client:
+        _, owner_headers = make_authenticated_user(
+            session_factory, email="owner@strumsight.app"
+        )
+        _profile_for(session_factory, "owner@strumsight.app")
+        try:
+            yield client, owner_headers, session_factory
+        finally:
+            Base.metadata.drop_all(bind=engine)
+            engine.dispose()
+
+
+def _internal_club_id(session_factory, public_id: str) -> int:
+    db = session_factory()
+    try:
+        row = (
+            db.query(CommunityClub)
+            .filter(CommunityClub.public_id == uuid.UUID(public_id))
+            .first()
+        )
+        assert row is not None
+        return int(row.id)
+    finally:
+        db.close()
+
+
+def _owner_profile_pk(session_factory) -> int:
+    db = session_factory()
+    try:
+        user_id = int(
+            db.execute(
+                _sa_text("SELECT id FROM users WHERE email = :e"),
+                {"e": "owner@strumsight.app"},
+            ).first()[0]
+        )
+        profile = (
+            db.query(CommunityProfile)
+            .filter(CommunityProfile.user_id == user_id)
+            .first()
+        )
+        assert profile is not None
+        return int(profile.id)
+    finally:
+        db.close()
+
+
+def _club_post(client, headers, *, club_id: int, key: str) -> str:
+    response = client.post(
+        "/community/posts",
+        headers=headers,
+        json={
+            "audience": "public",
+            "body": "klub-poszt",
+            "club_id": club_id,
+            "idempotency_key": key,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["public_id"]
+
+
+class TestClubFeedEndpoint:
+    """A `GET /community/clubs/{id}/feed` — a `list_club_feed` service
+    HTTP-felülete, a KÖZÖS poszt-projekcióval."""
+
+    def test_a13_the_club_feed_carries_full_items_with_counts(self, club_feed_client):
+        client, owner, session_factory = club_feed_client
+        club = _create_club(client, owner)
+        club_id = _internal_club_id(session_factory, club["public_id"])
+        post_public_id = _club_post(client, owner, club_id=club_id, key="cp-1")
+
+        response = client.get(
+            f"/community/clubs/{club['public_id']}/feed", headers=owner
+        )
+
+        assert response.status_code == 200, response.text
+        items = response.json()["items"]
+        assert [item["public_id"] for item in items] == [post_public_id]
+        item = items[0]
+        # A klub-feed UGYANAZT a wire-alakot adja, mint a következés-feed —
+        # számlálóstul, néző-állapotostul. A nulla itt IGAZ (nincs
+        # interakció), és ez a kontroll az A14-hez.
+        assert item["reaction_count"] == 0
+        assert item["comment_count"] == 0
+        assert item["viewer_reaction"] is None
+        assert "resource_version" in item
+
+    def test_a14_the_club_feed_counts_reflect_real_interactions(self, club_feed_client):
+        """A közös projekció a klub-feeden IS valódi számot ad.
+
+        Ez a cella zárja azt, hogy a klub-router külön úton, kitalált
+        nullákkal töltse a számlálókat.
+        """
+        client, owner, session_factory = club_feed_client
+        club = _create_club(client, owner)
+        club_id = _internal_club_id(session_factory, club["public_id"])
+        post_public_id = _club_post(client, owner, club_id=club_id, key="cp-2")
+
+        reacted = client.put(
+            f"/community/posts/{post_public_id}/reaction",
+            headers=owner,
+            json={"kind": "support"},
+        )
+        assert reacted.status_code == 200, reacted.text
+
+        item = client.get(
+            f"/community/clubs/{club['public_id']}/feed", headers=owner
+        ).json()["items"][0]
+
+        assert item["reaction_count"] == 1
+        assert item["viewer_reaction"] == "support"
+
+    def test_a15_a_pinned_post_is_a_full_item_not_a_four_field_stub(
+        self, club_feed_client
+    ):
+        """A kitűzött poszt UGYANOLYAN teljes elem, mint a feedé.
+
+        Egy szűkebb alak arra kényszerítené a klienst, hogy nullákat
+        rajzoljon a kitűzött poszt alá, miközben a feedben ugyanaz a poszt
+        a valódi számokat mutatja.
+        """
+        client, owner, session_factory = club_feed_client
+        club = _create_club(client, owner)
+        club_id = _internal_club_id(session_factory, club["public_id"])
+        post_public_id = _club_post(client, owner, club_id=club_id, key="cp-3")
+        client.put(
+            f"/community/posts/{post_public_id}/reaction",
+            headers=owner,
+            json={"kind": "celebrate"},
+        )
+        db = session_factory()
+        try:
+            pin_post(
+                db,
+                actor_profile_id=_owner_profile_pk(session_factory),
+                club_public_id=uuid.UUID(club["public_id"]),
+                post_public_id=uuid.UUID(post_public_id),
+                now=datetime.now(timezone.utc),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        response = client.get(
+            f"/community/clubs/{club['public_id']}/pinned", headers=owner
+        )
+
+        assert response.status_code == 200, response.text
+        items = response.json()["items"]
+        assert len(items) == 1
+        item = items[0]
+        assert item["public_id"] == post_public_id
+        assert item["reaction_count"] == 1
+        assert item["viewer_reaction"] == "celebrate"
+        assert item["moderation_state"] == "visible"
+        # NINCS lapozás: a kitűzhető posztok száma korlátos.
+        assert "next_cursor" not in response.json()
+
+
+class TestClubPinnedEndpoint:
+    """A `GET /community/clubs/{id}/pinned` — a `list_club_pinned` service
+    HTTP-felülete.
+
+    A service a Kör 24 óta létezik és tesztelt; router nélkül a Flutter
+    `CommunityFeedRepository.clubPinned` metódusának nem volt mit hívnia.
+    """
+
+    def test_a11_a_member_sees_the_pinned_posts(self, clubs_client):
+        client, owner, _, _, _ = clubs_client
+        created = _create_club(client, owner)
+
+        response = client.get(
+            f"/community/clubs/{created['public_id']}/pinned", headers=owner
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        # Frissen létrehozott klub: még nincs kitűzött poszt. Ez a
+        # kontroll-cella — az üres lista IGAZ, és nélküle az A12 nem
+        # bizonyítaná, hogy a 404 a tagságról szól.
+        assert body["items"] == []
+        # NINCS `next_cursor`: a kitűzhető posztok száma korlátos, a lista
+        # definíció szerint egyoldalas.
+        assert "next_cursor" not in body
+
+    def test_a12_a_non_member_gets_404_not_403(self, clubs_client):
+        """A nem tag 404-et kap, nem 403-at.
+
+        Egy 403 elárulná, hogy a klub létezik, csak nem látható —
+        ugyanaz a leak-guard, amit a komment-lista üres oldala visz. A
+        kontroll az A11: ugyanez az útvonal a TAGNAK 200-at ad.
+        """
+        client, owner, other, _, _ = clubs_client
+        created = _create_club(client, owner, visibility="private")
+
+        response = client.get(
+            f"/community/clubs/{created['public_id']}/pinned", headers=other
+        )
+
+        assert response.status_code == 404, response.text
 
 
 class TestClubsGate:

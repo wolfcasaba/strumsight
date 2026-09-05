@@ -46,7 +46,17 @@ from sqlalchemy import text as _sa_text
 from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
+from ..feed.club_feed import (
+    DEFAULT_PAGE_SIZE as CLUB_FEED_DEFAULT_PAGE_SIZE,
+)
+from ..feed.club_feed import (
+    MAX_PAGE_SIZE as CLUB_FEED_MAX_PAGE_SIZE,
+)
+from ..feed.club_feed import ClubNotVisible, list_club_feed
 from ..models.club import CommunityClub
+from ..models.post import CommunityPost
+from ..post_projection import SimplePostRow, project_page
+from ..routers.feed import _resolve_cursor_secret
 from ..schemas.club import (
     CLUB_MEMBER_PAGE_SIZE_MAX,
     CLUB_PAGE_SIZE_DEFAULT,
@@ -60,6 +70,8 @@ from ..schemas.club import (
     TargetProfileRequest,
     UpdateClubRequest,
 )
+from ..schemas.feed import FeedPage, PinnedPostList
+from ..services.club_content_service import list_club_pinned
 from ..services.club_service import (
     BlockedClubRelationship,
     ClubIdempotencyCollision,
@@ -376,6 +388,143 @@ def list_members_endpoint(
                 for view in views
             ],
             next_cursor=None,
+        )
+    finally:
+        next(db_gen, None)
+
+
+# ---------------------------------------------------------------------------
+# GET /community/clubs/{public_id}/feed  —  a klub posztfolyama
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{public_id}/feed", status_code=status.HTTP_200_OK)
+def club_feed_endpoint(
+    public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+    cursor: str | None = Query(default=None, max_length=512),
+    page_size: int | None = Query(default=None, ge=1),
+) -> FeedPage:
+    """A klub posztfolyama — ugyanaz a wire-alak, mint a következés-feedé.
+
+    A tagsági kapu, a blokk/némítás szűrő és a kurzor aláírása a
+    ``list_club_feed`` service-é. A router a KÖZÖS projekciót hívja
+    (``post_projection.project_page``), így a klub-feed kártyái ugyanazokat
+    a számlálókat és néző-állapotot kapják, mint a következés-feedéi.
+    """
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_pk = _resolve_internal_profile_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        cursor_secret = _resolve_cursor_secret(request.app.state.settings)
+        effective = page_size or CLUB_FEED_DEFAULT_PAGE_SIZE
+        if effective > CLUB_FEED_MAX_PAGE_SIZE:
+            effective = CLUB_FEED_MAX_PAGE_SIZE
+        try:
+            repo_page = list_club_feed(
+                db,
+                viewer_profile_id=viewer_pk,
+                club_public_id=public_id,
+                cursor=cursor,
+                page_size=effective,
+                cursor_secret=cursor_secret,
+            )
+        except ClubNotVisible as exc:
+            raise HTTPException(status_code=404, detail="club not found") from exc
+        return FeedPage(
+            items=project_page(db, list(repo_page.items), viewer_profile_id=viewer_pk),
+            next_cursor=repo_page.next_cursor,
+        )
+    finally:
+        next(db_gen, None)
+
+
+# ---------------------------------------------------------------------------
+# GET /community/clubs/{public_id}/pinned
+# ---------------------------------------------------------------------------
+
+
+def _projectable_pinned_rows(db: Session, rows) -> list[SimplePostRow]:
+    """A ``PinnedPostRow`` négy mezőjéből + a poszt saját sorából teljes alak.
+
+    A service a KITŰZÉS tényét méri (poszt, szerző, törzs, kitűzés ideje),
+    nem a poszt teljes állapotát. A hiányzó mezőket a poszt sorából
+    olvassuk ki — egyetlen ``IN``-lekérdezéssel, nem soronként —, hogy a
+    kitűzött poszt ugyanazon az úton kapjon számlálót és néző-állapotot,
+    mint a feed elemei. A KITŰZÉSI SORREND a service-é marad.
+    """
+    if not rows:
+        return []
+    public_ids = [row.post_public_id for row in rows]
+    posts = {
+        post.public_id: post
+        for post in db.query(CommunityPost)
+        .filter(CommunityPost.public_id.in_(public_ids))
+        .all()
+    }
+    projectable: list[SimplePostRow] = []
+    for row in rows:
+        post = posts.get(row.post_public_id)
+        if post is None:  # pragma: no cover — FK garantálja
+            continue
+        projectable.append(
+            SimplePostRow(
+                post_id=post.id,
+                post_public_id=post.public_id,
+                author_public_id=row.author_public_id,
+                audience=post.audience,
+                body=post.body,
+                artifact_type=post.artifact_type,
+                artifact_schema_version=post.artifact_schema_version,
+                artifact_payload=post.artifact_payload,
+                moderation_state=post.moderation_state,
+                created_at=post.created_at,
+                updated_at=post.updated_at,
+                deleted_at=post.deleted_at,
+            )
+        )
+    return projectable
+
+
+@router.get("/{public_id}/pinned", status_code=status.HTTP_200_OK)
+def list_pinned_endpoint(
+    public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+) -> PinnedPostList:
+    """A klubban kitűzött posztok — a NÉZŐ tagsága szerint.
+
+    A tagsági kapu a service-é (``ClubNotVisible``), nem ezé a
+    felületé. A router 404-re fordítja, nem 403-ra: egy 403 elárulná,
+    hogy a klub létezik, csak nem látható — ugyanaz a leak-guard, amit
+    a komment-lista üres oldala és a reakció-törlés visz.
+    """
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_pk = _resolve_internal_profile_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            rows = list_club_pinned(
+                db, viewer_profile_id=viewer_pk, club_public_id=public_id
+            )
+        except ClubNotVisible as exc:
+            raise HTTPException(status_code=404, detail="club not found") from exc
+        except _SERVICE_ERRORS as exc:
+            _raise_for_service_error(exc)
+            raise
+        return PinnedPostList(
+            items=project_page(
+                db,
+                _projectable_pinned_rows(db, list(rows)),
+                viewer_profile_id=viewer_pk,
+            )
         )
     finally:
         next(db_gen, None)

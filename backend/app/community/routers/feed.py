@@ -56,13 +56,13 @@ from ...config import Settings
 from ...deps import CurrentUser
 from ..feed.following_feed import (
     DEFAULT_PAGE_SIZE,
-    FeedItemRow,
     list_following_feed,
 )
 from ..feed.following_feed import (
     FeedPage as FeedPageRepo,
 )
-from ..schemas.feed import FEED_PAGE_SIZE_MAX, FeedPage, FeedPageQuery, FeedPostItem
+from ..post_projection import project_page
+from ..schemas.feed import FEED_PAGE_SIZE_MAX, FeedPage, FeedPageQuery
 
 router = APIRouter(prefix="/community", tags=["community-feed"])
 
@@ -104,7 +104,6 @@ def _resolve_viewer_profile_pk(db: Session, user_id: int) -> int:
     ``_resolve_internal_profile_id`` patterns from
     ``routers/social_graph.py`` and ``routers/posts.py``.
     """
-    from sqlalchemy import text as _sa_text
 
     row = db.execute(
         _sa_text("SELECT id FROM community_profiles WHERE user_id = :uid"),
@@ -140,119 +139,6 @@ def _resolve_cursor_secret(settings: Settings) -> str:
             detail="feed cursor signing key is the development placeholder",
         )
     return secret
-
-
-def _interaction_counts(
-    db: Session, post_ids: list[int]
-) -> dict[int, tuple[int, int, int]]:
-    """Reakció / komment / könyvjelző szám poszt-azonosítónként.
-
-    HÁROM csoportosított lekérdezés az OLDALRA, nem poszt-onként három —
-    egy 50-es oldalon az N+1 alak 150 kört jelentene. Üres oldalon egy
-    lekérdezés sem fut.
-    """
-    if not post_ids:
-        return {}
-    counts: dict[int, tuple[int, int, int]] = {pid: (0, 0, 0) for pid in post_ids}
-    placeholders = ", ".join(f":p{i}" for i in range(len(post_ids)))
-    params = {f"p{i}": pid for i, pid in enumerate(post_ids)}
-
-    def _grouped(sql: str) -> dict[int, int]:
-        return {
-            int(r[0]): int(r[1]) for r in db.execute(_sa_text(sql), params).fetchall()
-        }
-
-    reactions = _grouped(
-        "SELECT post_id, COUNT(*) FROM community_reactions "
-        f"WHERE post_id IN ({placeholders}) GROUP BY post_id"
-    )
-    # A törölt és a nem látható komment NEM számít bele — különben a
-    # kártya többet ígérne, mint amennyit a komment-lista megnyitva ad.
-    comments = _grouped(
-        "SELECT post_id, COUNT(*) FROM community_comments "
-        f"WHERE post_id IN ({placeholders}) AND deleted_at IS NULL "
-        "AND moderation_state = 'visible' GROUP BY post_id"
-    )
-    bookmarks = _grouped(
-        "SELECT post_id, COUNT(*) FROM community_bookmarks "
-        f"WHERE post_id IN ({placeholders}) GROUP BY post_id"
-    )
-    for pid in post_ids:
-        counts[pid] = (
-            reactions.get(pid, 0),
-            comments.get(pid, 0),
-            bookmarks.get(pid, 0),
-        )
-    return counts
-
-
-def _viewer_state(
-    db: Session, viewer_profile_id: int, post_ids: list[int]
-) -> dict[int, tuple[bool, str | None]]:
-    """A NÉZŐ saját könyvjelzője és reakciója poszt-azonosítónként.
-
-    Külön a számlálóktól, mert néző-függő: ugyanaz a poszt más
-    felhasználónak MÁS értéket ad, ezért sosem oszthatja a cache-t.
-    """
-    if not post_ids:
-        return {}
-    placeholders = ", ".join(f":p{i}" for i in range(len(post_ids)))
-    params: dict[str, object] = {f"p{i}": pid for i, pid in enumerate(post_ids)}
-    params["viewer"] = viewer_profile_id
-    bookmarked = {
-        int(r[0])
-        for r in db.execute(
-            _sa_text(
-                "SELECT post_id FROM community_bookmarks "
-                f"WHERE profile_id = :viewer AND post_id IN ({placeholders})"
-            ),
-            params,
-        ).fetchall()
-    }
-    reactions = {
-        int(r[0]): str(r[1])
-        for r in db.execute(
-            _sa_text(
-                "SELECT post_id, kind FROM community_reactions "
-                f"WHERE profile_id = :viewer AND post_id IN ({placeholders})"
-            ),
-            params,
-        ).fetchall()
-    }
-    return {pid: (pid in bookmarked, reactions.get(pid)) for pid in post_ids}
-
-
-def _row_to_item(
-    row: FeedItemRow,
-    counts: tuple[int, int, int] = (0, 0, 0),
-    viewer: tuple[bool, str | None] = (False, None),
-) -> FeedPostItem:
-    """Map a repository ``FeedItemRow`` to the wire-shape item.
-
-    Centralised so the §6.1 leak-guard (no internal id on the wire)
-    is structural — adding a field to the response still routes
-    through here. ``resource_version`` mirrors the Kör 11
-    ``PostOut`` (the ``updated_at`` token).
-    """
-    return FeedPostItem(
-        public_id=row.post_public_id,
-        author_public_id=row.author_public_id,
-        audience=row.audience,  # type: ignore[arg-type]
-        club_id=None,
-        body=row.body,
-        artifact_type=row.artifact_type,
-        artifact_schema_version=row.artifact_schema_version,
-        artifact_payload=row.artifact_payload,
-        moderation_state=row.moderation_state,  # type: ignore[arg-type]
-        reaction_count=counts[0],
-        comment_count=counts[1],
-        bookmark_count=counts[2],
-        viewer_bookmarked=viewer[0],
-        viewer_reaction=viewer[1],
-        created_at=row.created_at,
-        resource_version=row.updated_at,
-        deleted_at=row.deleted_at,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -337,17 +223,10 @@ def get_following_feed(
             cursor_secret=cursor_secret,
         )
 
-        post_ids = [row.post_id for row in repo_page.items]
-        counts = _interaction_counts(db, post_ids)
-        viewer_state = _viewer_state(db, viewer_pk, post_ids)
-        items = [
-            _row_to_item(
-                row,
-                counts.get(row.post_id, (0, 0, 0)),
-                viewer_state.get(row.post_id, (False, None)),
-            )
-            for row in repo_page.items
-        ]
+        # A projekció KÖZÖS a klub-feeddel és a kitűzött posztokkal
+        # (``post_projection.py``) — így a „törölt komment nem számít
+        # bele" szabály nem tud két felület között szétcsúszni.
+        items = project_page(db, list(repo_page.items), viewer_profile_id=viewer_pk)
         return FeedPage(items=items, next_cursor=repo_page.next_cursor)
     finally:
         try:

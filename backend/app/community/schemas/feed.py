@@ -152,10 +152,31 @@ class FeedPage(BaseModel):
     next_cursor: str | None = None
 
 
+class PinnedPostList(BaseModel):
+    """A klubban kitűzött posztok — TELJES elemekkel.
+
+    Az elem ugyanaz a :class:`FeedPostItem`, amit a feed ad: számlálóstul,
+    néző-állapotostul. Egy szűkebb, négymezős alak kényszerítené a klienst,
+    hogy nullákat rajzoljon a kitűzött poszt alá, miközben a feedben
+    ugyanaz a poszt a valódi számokat mutatja — ugyanaz a „magabiztos hamis
+    állítás", amit a feed-számlálók bevezetése zárt.
+
+    NINCS ``next_cursor``: a kitűzhető posztok száma klubonként korlátos
+    (a ``club_content_service`` pin-limit őre tartja be), tehát a lista
+    definíció szerint egyoldalas. Egy mindig ``None`` kurzor-mező azt
+    sugallná, hogy van lapozás.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[FeedPostItem]
+
+
 __all__ = [
     "FEED_PAGE_SIZE_DEFAULT",
     "FEED_PAGE_SIZE_MAX",
     "FeedPage",
     "FeedPageQuery",
     "FeedPostItem",
+    "PinnedPostList",
 ]

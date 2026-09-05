@@ -6,7 +6,7 @@ E09-R02, ADR 0396; wired live E15-R12, ADR 0497. This module owns:
   (BigInteger internal PK + ``Uuid`` public_id, see ADR 0396 §1),
 * the Pydantic response contract that whitelists only ``public_id`` and never
   leaks the internal ``id`` (A2),
-* a ``build_community_router`` factory that aggregates 14 of the 16 router
+* a ``build_community_router`` factory that aggregates 15 of the 17 router
   modules behind ``settings.community_enabled`` (registration-level gate,
   ADR 0497 D1 — the module simply does not exist in the route table when
   off, no runtime 403) plus the sub-flags (D2), in the deterministic order
@@ -84,7 +84,7 @@ def _reads_only(router: APIRouter) -> APIRouter:
 
 
 def build_community_router(settings) -> APIRouter | None:
-    """Aggregate 14 of the 16 Community router modules into one
+    """Aggregate 15 of the 17 Community router modules into one
     ``APIRouter``, or return ``None`` when the module is disabled.
 
     Registration-level gating (ADR 0497 D1): a disabled module — or a
@@ -164,6 +164,7 @@ def build_community_router(settings) -> APIRouter | None:
     from .routers.notifications import router as notifications_router
     from .routers.posts import router as posts_router
     from .routers.profile import router as profile_router
+    from .routers.reactions import router as reactions_router
     from .routers.reports import router as reports_router
     from .routers.safety import router as safety_router
     from .routers.search import router as search_router
@@ -199,6 +200,16 @@ def build_community_router(settings) -> APIRouter | None:
     # alapon maradtak all-or-nothing viszonyban a fő kapuval.
     aggregate.include_router(notifications_router)
     aggregate.include_router(posts_router if writes_on else _reads_only(posts_router))
+    # A `reactions` az ADR 0395 §6 írás-domainjének NEVESÍTETT tagja
+    # („poszt, komment, reakció, follow-request"), ezért a
+    # `community_writes_enabled` regisztrációs kapuja alatt áll. Itt NEM a
+    # `_reads_only` szűrőt használjuk, mint a `posts`/`comments` esetén: a
+    # router MINDEN útvonala írás (PUT/DELETE), így a szűrt változat egy
+    # ÜRES routert adna — a feltételes regisztráció mondja ki ugyanezt
+    # olvashatóan. A reakció-számlálót a feed-elem továbbra is viszi, a
+    # kapu állásától függetlenül: az olvasás nem ezen a felületen megy.
+    if writes_on:
+        aggregate.include_router(reactions_router)
     aggregate.include_router(reports_router)
     aggregate.include_router(safety_router)
     aggregate.include_router(search_router)  # before profile — D3
