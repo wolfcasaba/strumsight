@@ -1,6 +1,6 @@
 # E14-R13 — Live UI truthfulness hotfix
 
-- **Státusz:** PREPARED — **REVIDEÁLVA 2026-09-05, mért alap: `main @ b17e08ef`**
+- **Státusz:** READY — **REVIDEÁLVA 2026-09-05, mért alap: `main @ b17e08ef`; pre-flight újramérve `main @ 190a83e7` (§0.0.1)**
   (lásd §0.0). Az eredeti, előre megírt változat 2026-08-20-án a `88e08e65`
   commiton készült; azt a mérést a §0.0 pontról pontra leváltja.
 - **Típus:** Chapter 14, Kör 13 (truthfulness hotfix blokk)
@@ -169,6 +169,50 @@ A jogosultság PONTOSAN az ok-banner megjelenése miatti elmozdulás átvezetés
 ([L593](../LESSONS.md#l593)). Kikerült a listáról a
 `live_status_bar.dart` és a `chord_timeline.dart` (a kör nem nyúl hozzájuk) —
 ez szűkítés.
+
+## 0.0.1 Pre-flight újramérés — orchestrátor, 2026-09-05 (`main @ 190a83e7`)
+
+A §0.0 revízió a `b17e08ef` alapon mért; azóta EGYETLEN commit landolt
+(`190a83e7` — maga a revíziót szállító heal-PR #587). A §0.0 mérései tehát
+érvényben vannak, és a pre-flight mindegyiket ÚJRAMÉRTE a `190a83e7` fán:
+
+| Mérés | Parancs | Eredmény |
+|---|---|---|
+| a szótár zárt, hatelemű | `sed -n '/^enum RecognitionRejectReason/,/^}/p' lib/features/live/domain/recognition/recognition_decision.dart` | `lowConfidence · unstable · signalQuality · noChord · modelUnavailable · timeout` — **változatlan** |
+| UI-fogyasztó | `grep -rn "RecognitionRejectReason" lib/ --include=*.dart \| grep -v "domain/recognition\|model/live_frame\|public.dart\|live_pipeline"` | **üres** — változatlanul NULLA |
+| termelő | `grep -n "chordDecision:\|chordRejectReason:" lib/features/live/engine/dsp/live_pipeline.dart` | `405,406` — változatlan |
+| a MA előálló három ok | `live_pipeline.dart:334-348` (`debugDeriveChordDecision`) | `signalQuality` · `noChord` · `lowConfidence` — változatlan |
+| Stage-slotok | `grep -n "statusHeader\|hero:\|feedback:\|timeline:\|bottomAction" lib/features/live/screens/live_screen.dart` | `299 · 336 · 362 · 377 · 402` — öt slot, változatlan |
+| a heurisztikus ág | `live_screen.dart:265-269` → `weakLabel` a `373`-on | változatlan |
+| a banner fájlja | `ls lib/features/live/widgets/uncertainty_reason_banner.dart` | **nem létezik** — ez a kör hozza létre |
+| ARB-forrás | `grep -l '"liveWeakSignal"' lib/l10n/app_en.arb lib/l10n/base/app_en.arb` | mindkettő; a `base/` a FORRÁS |
+
+**ADR `0520` MEGÍRVA:** `docs/adr/0520-live-uncertainty-reason-from-the-merged-recognition-vocabulary.md`
+(D1 egyetlen szótár · D2 kimerítő `switch`, `default:` tilos · D3 distinctness ·
+D4 `feedback` slot, egyidejűség tiltva · D5 a heurisztikus ág érintetlen ·
+D6 a UI nem dönt · D7 a `base/` szegmens a forrás · D8 tördelés, 200% inkluzív).
+A foglaló (`.pipeline/inflight/adr/0520` → `round=E14-R13`) a mérvadó.
+
+**Hivatkozás-javítás (mérve).** A §0.0/R4(a) és a HANDOFF a generált
+l10n-aggregátum szerződését „**ADR 0307 §4**" néven hivatkozza. A pre-flight
+kimérte, hogy ez téves cím: `docs/adr/0307-pipeline-throughput-program-v2.md` a
+kör-pipeline áteresztő-programja, §4-e „Miért nem gyengül ettől a mérce". A
+tényleges szerződés az
+[ADR 0424](../adr/0424-localization-resilience-contract.md) (`:16-17` — „a
+`lib/l10n/app_<locale>.arb` **generált aggregátum**, a szerkeszthető forrás a
+`lib/l10n/base/` + `lib/l10n/features/<feature>_<locale>.arb`"). Az ADR 0520 a
+`0424`-et hivatkozza; a mért ELŐÍRÁS (csak a `base/` szegmens írható kézzel)
+változatlan, csak a hivatkozási szám javult.
+
+**`brief-lint` S11 — a kimondott kivétel-ág él.** A lint a `190a83e7` fán
+változatlanul jelzi az S11-et (12 briefen kívüli teszt pinneli a `LiveScreen`
+típusát). A szabály saját kivétele: „*Ha a kör a képernyőt bizonyíthatóan nem
+cseréli le, a §0.0 mondja ki ezt a mérést*" — a §0.0/R4(b) pontosan ezt teszi,
+és a pre-flight újramérte: a kör a képernyő **típusát, route-ját, publikus
+API-ját és Stage-slot-szerkezetét nem érinti**, kizárólag a `feedback` slot kap
+egy új gyereket. A 12 teszt felvétele `allowed_paths`-**tágítás** volna, ami
+nem az orchestrátor hatásköre (H3) — a lint lelete tehát a kivétel-ággal
+lezárva, nem figyelmen kívül hagyva.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
