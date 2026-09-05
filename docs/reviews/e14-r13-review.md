@@ -356,6 +356,42 @@ NOTE-1/2/3 tudatosan **nyitva marad** — mindhárom a kör `allowed_paths`-án
 KÍVÜLI fájlt igényelne (`chord_timeline.dart`, design-system, accessibility-
 cellák), tehát a körben javítani őket H3 volna. A HANDOFF §6 viszi tovább őket.
 
+### 9.45 CI-addendum — egy MÉRT flake, nem a kör hibája
+
+A landolás előtti exact-SHA futás (`33969635992`, head `9dc86618`) **pirosra**
+váltott: `10141 tests passed, 1 failed, 21 skipped`. Az egyetlen bukó cella
+
+```
+test/features/song_trainer/application/import/song_import_controller_test.dart:
+  SongImportController cancellation during import closes the workspace without a record (failed)
+  Expected: empty
+    Actual: [_Directory:Directory: '/tmp/song-import-controller-STXLNL/import-1']
+```
+
+**Nem ennek a körnek a diffje.** A kör teljes fájlhalmaza az aktuális `main`-hez
+képest 12 útvonal (3 doc + `live_screen.dart` + a banner + 4 ARB + 3
+live-teszt) — `song_trainer` nincs köztük, és a scope-audit is 0 sértést mért.
+
+**Mért bizonyíték, hogy flake:**
+
+1. **UGYANEZ a kör-kód zölden ment** a `63ce10ac` SHA-n (full-gate
+   `33967927330` `success`) — a két SHA között kizárólag upstream commitok
+   vannak.
+2. Az upstream delta a zöld futás óta: `a09248ce` **tisztán `docs/`**
+   (`git show --name-only | grep -v '^docs/'` → üres) és `0eb14f01`
+   (`docs/execution/pipeline-queue.tsv` + `tools/tests/test_pipeline_integration.py`).
+   Egyik sem ér `song_trainer`-t.
+3. A bukó cella **async-verseny**: `cancel()` után azonnal állít a workspace
+   ürességére (`song_import_controller_test.dart:82-90`), miközben a takarítás
+   még futhat — a maradék `import-1` könyvtár épp ezt mutatja.
+4. **Újramérve UGYANAZON a SHA-n** (`33970821329`, head `9dc86618`):
+   **`success`**. Azonos bemenet, eltérő kimenet ⇒ nem determinisztikus cella.
+
+A piros tehát **nem** a kör kódjára vonatkozó bizonyíték, és nem a mérce
+gyengítése: a merge-kapu ugyanazon a SHA-n, zölden teljesült. A flake maga
+**follow-up** — a `song_trainer` cella determinisztikussá tétele a kör tilos
+zónáján kívül esik; a HANDOFF §6 viszi tovább.
+
 ### 9.5 Végső verdikt
 
 **APPROVED.** 0 nyitott BLOCKER / MAJOR / MINOR. A merge a zöld kapu (§7)
