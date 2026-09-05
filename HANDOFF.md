@@ -1,5 +1,41 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
+
+A Chapter 17 (Teljes bekötés) **első köre**: a `FirstWinStageScreen` eddig
+SEHONNAN nem volt elérhető (`check_screen_reachability` → `reachable: false`),
+most az onboarding first-win ága vezet rá, a rá következő pontozott
+mini-lecke pedig változatlanul megmarad (a Stage ELÉ kerül, nem helyette).
+
+- **Produkciós konfidencia-forrás** (`LiveFirstWinEngine`, ADR
+  [0534](docs/adr/0534-first-win-stage-entry-and-production-confidence-source.md) D3):
+  a szállított default gyár többé NEM a `FakeOnboardingFirstWinEngine`, hanem a
+  megosztott `strumEngineProvider` frame-folyamát (`LiveFrame.confidence`)
+  adaptálja — új `AudioOwner` variáns és `lib/core/audio/**` módosítás NÉLKÜL.
+- **Őszinte hiba-ág** (D5): a megtagadott engedély / foglalt mikrofon KIMONDVA
+  jelenik meg (meglévő `micPermissionBody`/`micPermissionAction` kulcsok), és a
+  továbblépés mindig elérhető marad — soha nem néma „Listening…".
+- **Egy navigációs forrás** (D2): a Stage `onContinue`/`onSkip` ága a saját
+  imperatív route-ját bontja le, literál útvonal egyikben sincs.
+
+**Három javító lépés kellett hozzá, mind MÉRT lelet nyomán:**
+
+1. **H3 → önjavító kör a `main`-en** (PR #598, #599): a kör SIKERE vitte pirosra
+   előbb a fake-forrás felismerését, majd egy dátumozott jelentés darabszám-őrét.
+2. **Review #2 — BLOCKER-1 / MAJOR-1** (a ZÖLD célzott kapu MÖGÖTT, eldobható
+   próbatesztekkel mérve): a „Not now" nem hagyta el a Stage-et (a felhasználó
+   ott ragadt), a pontozott lecke elhagyása pedig visszavitt a Stage-re. Mindkettő
+   javítva (`navigator.pop()` / `pushReplacement`), gépi cellákkal.
+3. **CI-lelet — BLOCKER-2**: a `placeholder_wiring_test.dart` partíció-őre
+   (walked ∪ kizárási tábla ⊇ elérhető képernyők) pirosra váltott, mert a
+   `runCoreWalkthrough` az onboardingot a Skip ágon hagyta el. A walkthrough
+   mostantól VALÓDI tapokkal járja be a first-win ágat és a Stage-et.
+
+**Zöld kapu a merge SHA-n (`f6e3b1f4`):** [full-gate 33996785448](https://github.com/wolfcasaba/strumsight/actions/runs/33996785448)
++ [router-ci 33996782145](https://github.com/wolfcasaba/strumsight/actions/runs/33996782145),
+mindkettő `success`; lokális §7 gate 16 tesztútvonalon zöld. Leckék:
+[L654](docs/LESSONS.md#l654), [L655](docs/LESSONS.md#l655).
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E17-R01 / H3 (2.) feloldva: a dátumozott jelentés DARABSZÁM-celláit is a rögzített pillanatkép őrzi (2026-09-05)
 
 A kör MUNKÁJA hibátlan volt (A1–A10 zöld, gépi scope-audit 0 sértés, 14
@@ -13084,7 +13120,23 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-05):** `main` @ `4fd8ff11` — **E14-R14: automatikus
+**Aktuális állapot (2026-09-05):** `main` @ `c455e8ae` — **E17-R01: az
+onboarding First-Win állomásának bekötése + produkciós konfidencia-forrás**, PR
+[#600](https://github.com/wolfcasaba/strumsight/pull/600), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude (Opus 5), **2 javító kör** (review #2: 1 BLOCKER
++ 1 MAJOR a zöld célzott kapu mögött; CI-lelet: 1 BLOCKER — mind zárva, a
+review a brief §11-ben: **VÉGSŐ DÖNTÉS APPROVED**).
+**ÚJ ADR: [0534](docs/adr/0534-first-win-stage-entry-and-production-confidence-source.md)**
+— a Claude írta a pre-flightban. `risk = "normal"` → dedikált biztonsági review
+nem kellett. `native_gate = false` → a CI-tervet a `tools/round-ci-plan.py`
+adta (`full-gate.yml` + `router_ci_expected: true`); **mindkettő `success` a
+merge SHA-n (`f6e3b1f4`)**.
+
+<details>
+<summary>Korábbi állapot — E14-R14 (2026-09-05)</summary>
+
+**`main` @ `4fd8ff11`** — **E14-R14: automatikus
 audio-setup lépés-gép + elavuló eszközprofil + verziózott tároló**, PR
 [#583](https://github.com/wolfcasaba/strumsight/pull/583), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -13099,6 +13151,8 @@ nélkül**. `native_gate = false` → a CI-tervet a `tools/round-ci-plan.py` adt
 (`full-gate.yml` + `router_ci_expected: true`); **mindkettő `success` a merge
 SHA-n (`1604a9a7`)**. A landolás a merge-záron át ment
 (`tools/round-land.sh --pr 583`), mert a másik sáv (`E14-R12`, PR #582) nyitva volt.
+
+</details>
 
 <details>
 <summary>Korábbi állapot — E14-R18 (2026-09-05)</summary>
@@ -13136,6 +13190,21 @@ hibáját is javította (**L637**).
 
 ## 5. Last completed round
 
+**E17-R01 — Az onboarding First-Win állomásának bekötése** (PR
+[#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae`,
+ADR [0534](docs/adr/0534-first-win-stage-entry-and-production-confidence-source.md)).
+A `FirstWinStageScreen` a szállított kompozícióból elérhető (A1), a
+konfidenciája a MEGOSZTOTT `strumEngineProvider`-ből jön (A8), a forrás hibája
+kimondva jelenik meg (A10), és a Stage elhagyása elengedi a motort úgy, hogy a
+rá következő mini-lecke továbbra is detektál (A9). A küszöb-hármas (0,59 /
+0,60 / 0,61) az INKLUZÍV határt méri (A5–A7). A §7 gate 16 tesztútvonalon
+zöld, a CI (`full-gate.yml` + `router-ci.yml`) mindkettő `success` a merge
+SHA-n. A kör három MÉRT leletet zárt le (2 review + 1 CI), mindegyikhez gépi
+cella + falszifikációs próba tartozik (brief §10.5, §10.6, §11.5–11.8).
+
+<details>
+<summary>Korábbi kör — E14-R14</summary>
+
 **E14-R14 — Automatikus Audio Setup és Accuracy Check** (PR
 [#583](https://github.com/wolfcasaba/strumsight/pull/583), squash `4fd8ff11`,
 ADR [0519](docs/adr/0519-audio-setup-profile-as-input-not-calibration.md)).
@@ -13146,6 +13215,8 @@ allowlistelt deviáció, **változatlan** — a kör nem vett fel újat) · secr
 l10n. A CI (`full-gate.yml` + `router-ci.yml`) mindkettő `success` a merge
 SHA-n. Mind a 6 acceptance-pont teljesült, mindegyik mutációs próbával
 igazolt mércével.
+
+</details>
 
 <details>
 <summary>Korábbi kör — E14-R18</summary>
@@ -13226,7 +13297,24 @@ Leckék: [L627](docs/LESSONS.md#l627), [L628](docs/LESSONS.md#l628).
 ## 6. Exact next task
 
 **A következő kört a lánc választja** a `docs/execution/pipeline-queue.tsv`
-első `pending` sorából — az `E14-R14` sora ezzel a commit-tal `done`. A
+első `pending` sorából — az `E17-R01` sora ezzel a commit-tal `done`. A
+Chapter 17 sávon még 13 kör van hátra; **az ADR-számot a foglalótól kérd, ne a
+queue oszlopából**.
+
+**Amit az E17-R01 a következő E17-körök asztalára tett:**
+
+| # | Mit hagyott nyitva / mit tanult a sáv | Hol |
+|---|---|---|
+| 1 | **A bekötő kör SIKERE globális leltár-őröket visz pirosra.** Minden további E17-kör `gate_tests`-ébe kell a `test/tooling/placeholder_wiring_test.dart` partíció-őre (walked ∪ kizárási tábla ⊇ elérhető képernyők) — különben a lelet csak a CI-ben derül ki ([L655](docs/LESSONS.md#l655)) | `docs/rounds/e17-r*.md` `gate_tests` |
+| 2 | **Az imperatív (pageless) route bekötése nem navigációs kérdés.** Ha a bekötött képernyő `Navigator.push`-sal kerül a helyére, a router-URI-t állító cella ZÖLD marad akkor is, ha a képernyő nem elhagyható — a kilépő ágra KELL egy „a képernyő eltűnt" cella ([L654](docs/LESSONS.md#l654)) | `test/app/routing/**` |
+| 3 | **A `runCoreWalkthrough` mostantól a first-win ágon megy** (a Skip ág helyett). Ha egy későbbi kör a Skip-ág e2e lefedettségét hiányolja, az külön cella, nem a walk visszaállítása | `test/e2e/full_app_walkthrough_test.dart:93-128` |
+| 4 | **Az `AudioOwner`/lease kérdés továbbra is nyitott**: az onboarding a Live motorját használja (ADR 0534 D3, egy tulajdonos). Ha egy jövőbeli kör párhuzamos mikrofon-fogyasztót vezet be, az a lease-szerződés bővítése lesz | `lib/core/audio/**` |
+
+<details>
+<summary>Korábbi kör következő lépései — E14-R14</summary>
+
+**A következő kört a lánc választja** a `docs/execution/pipeline-queue.tsv`
+első `pending` sorából — az `E14-R14` sora `done`. A
 Chapter 14 sávon az `E14-R12` következik (PR #582 már nyitva), motor
 `sonnet-impl`; **az ADR-számot a foglalótól kérd, ne a queue oszlopából** (az
 E14-R14 sora `0366`-ot előlegezett, a foglaló a **`0519`**-et adta; ez a
@@ -13241,6 +13329,8 @@ HETEDIK egymást követő kör, ahol az oszlop elavult volt).
 | 3 | **MINOR-1: a `schemaVersion` silent felülíródik mentéskor** — a `toJson()` a konstanst írja, nem a példány mezőjét; vagy vegyük ki a mezőt a publikus konstruktorból, vagy a `decode` ellenőrizze fail-closed | `audio_profile.dart:78-88` |
 | 4 | **NOTE-2: a `confidenceProfile` ma mindig `1.0`** (a D2 miatt `success` csak végig-`good` futásból születik) — vagy kapjon értelmes tartalmat, vagy mondjuk ki, hogy konstans | `audio_setup_controller.dart:198-204` |
 | 5 | **NOTE-3: a `schemaVersion: 0` legacy alak feltételezett** — ha sosem kerül élesbe, a v0 ág törölhető | `audio_profile.dart:129-145` |
+
+</details>
 
 <details>
 <summary>Korábbi kör nyitott pontjai — E14-R18</summary>

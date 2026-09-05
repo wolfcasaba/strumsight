@@ -26526,3 +26526,78 @@ megállt kör HEAD-jén is** (`sonnet-impl/e17-r01-… @ accb1e51` + heal merge:
 normalizedName)` alakú cellát (élő `_ExcludedCell`-nevek) — ott nincs
 interpolált várt szám, és a lista a saját szabálya szerint csak ZSUGORODHAT
 ([L180](#l180)), zsugorodáskor pedig a cella zöld marad.
+
+### L654 — Az imperatív (pageless) route bekötése: a router-URI-t állító cella ZÖLD marad, miközben a felhasználó a képernyőn ragad (E17-R01, 2026-09-05)
+
+**Mérve.** Az E17-R01 a `FirstWinStageScreen`-t az onboarding folyamatába
+kötötte be egy `Navigator.push(MaterialPageRoute(...))` hívással, a cél-oldal
+(`entryLocation`) FÖLÉ. A kilépő ágak a kör egyetlen navigációs forrását
+használták (`router.go(entryLocation)`, ADR 0534 D2), a kör célzott kapuja
+(15 tesztútvonal) TELJESEN ZÖLD volt — az orchestrátor eldobható próbatesztje
+mégis ezt mérte:
+
+```
+PROBE 1 — "Not now" leaves the Stage (screen is dismissed)
+  ✔ router.state.uri.path == '/today'
+  ✘ expect(find.byType(FirstWinStageScreen), findsNothing)
+      Actual: Found 1 widget with type "FirstWinStageScreen"
+```
+
+**A hibaosztály.** A `go` a location-t állítja; a pageless route-ot a
+Navigator tartja. Ha a kilépő ág ugyanarra a location-re navigál, amin a
+router MÁR áll, nincs oldal-csere, tehát a pushed route-ot SEMMI nem zárja be
+— a felhasználó a képernyőn ragad, a router-URI-t állító cella pedig zölden
+megy át. Ugyanez a párja: a képernyő FÖLÉ pusholt következő lépés
+(`push` a `pushReplacement` helyett) a vissza-gesztust egy elavult állapotra
+ejti vissza.
+
+**A szabály.** Imperatívan (pageless route-tal) bekötött képernyő MINDEN
+kilépő ágához kell egy cella, amely a KÉPERNYŐ ELTŰNÉSÉT állítja
+(`find.byType(<Screen>), findsNothing`), nem csak a settled router-URI-t. A
+navigációs egy-forrás szabály (ADR 0508 D1/D2) és a „a képernyő elhagyható"
+tulajdonság KÉT KÜLÖN állítás — az elsőt mérő cella a másodikról semmit nem
+mond.
+
+**Őrteszt:** `test/app/routing/shell_entry_location_test.dart::shell BE ×
+first-win Stage "Not now" ALSO settles on /today — A3, no literal route in
+either branch` (a `findsNothing` állítással) és `::shell BE × first-win Stage
+Continue: popping the scored mini-lesson does not fall back to the Stage —
+review MAJOR-1`. Mindkettő MÉRTEN piros a javítás előtti kódon.
+
+### L655 — A bekötő kör SIKERE globális leltár-őröket visz pirosra: a partíció-őrnek a `gate_tests`-en a helye (E17-R01, 2026-09-05)
+
+**Mérve.** Az E17-R01 A1 acceptance-e az, hogy a `FirstWinStageScreen`
+`reachable: true` lesz. Ez a siker HÁROM globális őrt mozdított el, mindet a
+kör lokális kapuján KÍVÜL:
+
+1. az `e15_r13` mátrix darabszám-cellái (a `main`-en önjavító kör oldotta fel,
+   [L653](#l653));
+2. a `e15_r13` „A1 — completeness" cella (a kör a mátrixba vétellel oldotta);
+3. a `test/tooling/placeholder_wiring_test.dart` **partíció-őre** — *walked ∪
+   kizárási tábla ⊇ minden mért elérhető képernyő* —, ami CSAK a teljes
+   CI-suite-ban futott le:
+
+```
+❌ the walked set (from actually RUNNING the walkthrough) and the excluded
+   table are disjoint, and their union covers every measured reachable screen
+Expected: empty
+  Actual: Set:['lib/features/onboarding/screens/first_win_stage_screen.dart']
+```
+
+**A szabály.** Ha egy kör a `check_screen_reachability` mérésén VÁLTOZTAT (a
+Chapter 17 mind a 14 köre pontosan ezt teszi), akkor a képernyő-leltár
+partíció-őre (`test/tooling/placeholder_wiring_test.dart`) a `gate_tests`
+listára VALÓ — különben a lelet egy teljes CI-fordulóval később derül ki. Ez
+**mérce-szigorítás, nem lista-tágítás**: az `allowed_paths` változatlan marad,
+a kör az őrt nem írhatja.
+
+**A helyes feloldás iránya.** A partíció két ága közül a bekötő kör a
+**walkot** bővítse (`runCoreWalkthrough`, `test/e2e/full_app_walkthrough_test.dart`
+— a kör listáján), ne a `docs/release/full-app-verification.md` kizárási
+tábláját: a most bekötött képernyő a szállított út RÉSZE, nem kivétele. A
+walk bővítése valódi tapokkal megy, teszt-oldali híd nélkül.
+
+**Őrteszt:** `test/tooling/placeholder_wiring_test.dart::A4/A5 — the walked
+set and the documented exclusion table exactly partition the measured-reachable
+screen set` (a kör `gate_tests`-én, brief §0.0.2), falszifikálva: a
+`walked.add('FirstWinStageScreen')` kivételére MÉRTEN piros.
