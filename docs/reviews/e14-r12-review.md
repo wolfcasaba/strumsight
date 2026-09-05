@@ -103,7 +103,33 @@ fában (a pipeline eseményenként egyszer állítja a `latestStrum`-ot, a
   (16 keretnyi váltakozó zaj után is megerősít) — ADR 0518 D6, L165.
 - **`autoDispose` provider**, a UI-fájlok érintetlenek — D9/D10.
 
-## Verdikt
+## Verdikt (1. menet)
 
 **CHANGES REQUESTED** — a MAJOR-1 (b) pontja (a cold-start cella) a javító
 kör feladata; az (a) pont és a normatív szöveg (ADR D11 + brief) már kész.
+
+## 2. menet — a javító kör ellenőrzése (`320689d3`)
+
+| Lelet | Állapot | Bizonyíték |
+|---|---|---|
+| **MAJOR-1(b)** cold-start őr-cella | **ZÁRVA** | `brief §6 pt.8 — cold-start exception fires once (ADR 0518 D11)` — 3 cella: kezdeti `candidate`; az első címke ránézésre `confirmed`; a MÁSODIK, ELTÉRŐ címke 2 kereten `null`+`provisional`, csak a 3.-on megy át |
+| **MINOR-1** `candidate` sosem mérve | **ZÁRVA** | ugyanannak a csoportnak az (a) cellája |
+| **MINOR-2** `flipRate` doksi | **ZÁRVA** | `recognition_stabilizer.dart` `flipRate` doc-comment: kimondja, hogy a cold-start alapállapot-felvétel is flipnek számít (D11) |
+| NOTE-1 / NOTE-2 | tudomásul véve | nem kértek változtatást |
+
+**Külön ellenőrizve a javító körön:**
+
+- a stabilizátor **viselkedése nem változott**: a `lib/` diff a javító körben
+  kizárólag doc-comment (`git diff 49a35ea7..320689d3 -- lib` → 5 sor, mind
+  `///`);
+- a brief **normatív szakaszai** (a §10 handoff ELŐTTI teljes szöveg)
+  bájtra azonosak a review-kori állapottal (`python3` összehasonlítás:
+  `True`, 15 503 bájt mindkét oldalon) — az implementer nem nyúlt a
+  szerződéshez;
+- a `test/property/**`, `live_screen_test.dart`, `live_stage_test.dart`
+  változatlan.
+
+## VÉGSŐ DÖNTÉS: APPROVED
+
+0 nyitott BLOCKER/MAJOR/MINOR. A merge feltétele a változatlan zöld kapu: a
+Full Gate és a Router CI a merge SHA-n `success`.
