@@ -448,6 +448,105 @@ azonnal visszaállítva). Nincs új `AudioOwner` variáns, nincs
 `lib/core/audio/**` módosítás, nincs új l10n kulcs, nincs új
 `OnboardingStep` érték, nincs új top-level route.
 
+### 10.4 Javító kör #1 — BLOCKER-1 / MAJOR-1 feloldása (`sonnet-impl`, 2026-09-05)
+
+**A lelet gyökéroka (mérve, `.pipeline/E17-R01-review-findings.md`).**
+`_completeFirstWin` a Stage-et pageless `MaterialPageRoute`-ként pusholta a
+CÉL-oldal (`entryLocation`) fölé. Az `onSkip` ág ezután `router.go
+(entryLocation)`-t hívott — UGYANARRA a location-re, amin a router már állt —,
+ezért a pushed route-ot semmi nem zárta be (BLOCKER-1: a felhasználó a "Not
+now" után is a Stage-en ragadt). Az `onContinue` ág a `LearnScreen`-t a Stage
+FÖLÉ pusholta a Stage bezárása nélkül, ezért a lecke poppolása egy elavult
+"siker" Stage-re esett vissza, nem a shellre (MAJOR-1).
+
+**A javítás.** `lib/features/onboarding/screens/onboarding_screen.dart`:
+mindkét ág immár a Stage-et pusholó UGYANAZT a `navigator` referenciát
+használja a route imperatív bezárására, nem a router-t:
+- `onSkip: () => navigator.pop()` — bezárja a Stage saját pushed route-ját,
+  felfedve az `entryLocation`-t, amin a router már áll.
+- `onContinue: () => navigator.pushReplacement(MaterialPageRoute(builder:
+  (_) => LearnScreen(lesson: Lessons.firstWin)))` — LECSERÉLI a Stage
+  route-ját a leckére (nem fölé pusholja), így a lecke az `entryLocation`-ra
+  van horgonyozva, és a vissza-gesztus a shellre visz.
+
+Literál útvonal egyik ágban sem jelent meg (ADR 0534 D2 változatlan).
+
+**Gépi őrök (`test/app/routing/shell_entry_location_test.dart`).**
+1. A MEGLÉVŐ "Not now" A3-cella bővült:
+   `expect(find.byType(FirstWinStageScreen), findsNothing)`.
+2. ÚJ cella: *"shell BE × first-win Stage Continue: popping the scored
+   mini-lesson does not fall back to the Stage — review MAJOR-1"* — Continue
+   → `LearnScreen`, a leckét a root-navigatoron poppolva → `FirstWinStageScreen`
+   `findsNothing`, `LearnScreen` `findsNothing`, és a settled router-URI
+   `entryLocationFor(true)`.
+
+**Falszifikáció (tényleges kimenet, nem parafrázis).**
+
+*Próba 1 — `onSkip` visszaállítva `router.go(entryLocation)`-ra
+(a bezárás nélkül):*
+
+```
+$ flutter test test/app/routing/shell_entry_location_test.dart --plain-name "Not now"
+Expected: no matching candidates
+  Actual: _TypeWidgetFinder:<Found 1 widget with type "FirstWinStageScreen": [...]>
+   Which: means one was found but none were expected
+review BLOCKER-1: "Not now" must actually dismiss the Stage, not just settle
+the router on a location it was already on
+00:02 +0 -1: Some tests failed.
+```
+
+→ **PIROS**, a többi cella nem futott ebben a szűkített hívásban (a
+`--plain-name` csak az érintett cellát futtatta). Visszaállítva
+`onSkip: () => navigator.pop()`-ra.
+
+*Próba 2 — `onContinue` visszaállítva `navigator.push(...)`-ra (a Stage
+bezárása/lecserélése nélkül, a lecke a Stage FÖLÉ kerül):*
+
+```
+$ flutter test test/app/routing/shell_entry_location_test.dart --plain-name "MAJOR-1"
+Expected: no matching candidates
+  Actual: _TypeWidgetFinder:<Found 1 widget with type "FirstWinStageScreen": [...]>
+   Which: means one was found but none were expected
+the back gesture after the scored lesson must land on the shell, not
+re-enter a stale "success" Stage
+00:02 +2 -1: Some tests failed.
+```
+
+→ **PIROS** az új MAJOR-1 cellán. Visszaállítva
+`onContinue: () => navigator.pushReplacement(...)`-ra — a visszaállítás után
+a fájl teljes 8 cellája ZÖLD (`00:03 +8: All tests passed!`).
+
+**A §7 gate — csonkítatlan, mind a 17 tesztútvonal + format/analyze/
+architecture/secrets/l10n EGY hívásban:**
+
+```
+[1] format: ZÖLD
+[2] analyze: ZÖLD
+[3]  test test/features/onboarding/: ZÖLD
+[4]  test test/features/onboarding/first_win_production_engine_test.dart: ZÖLD
+[5]  test test/e2e/full_app_walkthrough_test.dart: ZÖLD
+[6]  test test/app/routing/app_router_test.dart: ZÖLD
+[7]  test test/app/routing/onboarding_first_win_test.dart: ZÖLD
+[8]  test test/app/routing/shell_entry_location_test.dart: ZÖLD
+[9]  test test/core/screen_size_guard_test.dart: ZÖLD
+[10] test test/features/onboarding/first_win_test.dart: ZÖLD
+[11] test test/features/onboarding/onboarding_resume_test.dart: ZÖLD
+[12] test test/features/onboarding/onboarding_test.dart: ZÖLD
+[13] test test/features/onboarding/permission_primer_test.dart: ZÖLD
+[14] test test/ui/goldens/e13_r16_screens_golden_test.dart: ZÖLD
+[15] test test/ui/goldens/e15_r13_full_variant_matrix_test.dart: ZÖLD
+[16] test test/ui/ui_baseline_screenshot_test.dart: ZÖLD
+[17] test test/app/navigation/: ZÖLD
+[18] architecture: ZÖLD
+[19] secrets: ZÖLD
+[20] l10n: ZÖLD
+MINDEN GATE ZÖLD.
+```
+
+A korábbi H3 halt gyökéroka (`e15_r13_full_variant_matrix_test.dart` A5
+completion-report guard) a `origin/main @ b1abed91` heal beolvasztása után
+(l. `b148f7dc`) ezen a fán is ZÖLD — a javító kör ezt nem érintette.
+
 ## 11. Review — a Claude tölti ki
 
 **Verdikt: HALT — H3 (a feloldás az `allowed_paths` TÁGÍTÁSÁT kívánja).** A kör

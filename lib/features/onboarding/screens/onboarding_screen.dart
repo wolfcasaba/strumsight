@@ -141,24 +141,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           // Push AFTER the route swap lands: a pageless route pushed now
           // would anchor to the outgoing /welcome page and be disposed with
           // it (r156 rig catch #2 — the first fix still lost the push).
-          // The Stage precedes the SCORED mini-lesson (ADR 0534 D1) rather
-          // than replacing it: `onContinue` pushes it on top; `onSkip`
-          // leaves the flow at the `entryLocation` the `go` above already
-          // landed on. Both re-derive from the same `entryLocation` value
-          // (ADR 0534 D2) — neither branch names a literal route.
+          // The Stage precedes the SCORED mini-lesson (ADR 0534 D1): both
+          // `onContinue` and `onSkip` dismiss the Stage's OWN pushed route
+          // (via the SAME `navigator` reference), landing back on the
+          // `entryLocation` the `go` above already reached — neither branch
+          // names a literal route (ADR 0534 D2).
           WidgetsBinding.instance.addPostFrameCallback((_) {
             navigator!.push(
               MaterialPageRoute<void>(
                 builder: (_) => FirstWinStageScreen(
-                  onContinue: () {
-                    router.go(entryLocation);
-                    navigator.push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => LearnScreen(lesson: Lessons.firstWin),
-                      ),
-                    );
-                  },
-                  onSkip: () => router.go(entryLocation),
+                  // Replaces the Stage's OWN pageless route rather than
+                  // stacking the lesson on top of it: the lesson must anchor
+                  // to `entryLocation` (below both), so its back gesture
+                  // lands on the shell, not on a stale "success" Stage
+                  // (review MAJOR-1 — the earlier `push` left the Stage
+                  // route alive underneath).
+                  onContinue: () => navigator.pushReplacement(
+                    MaterialPageRoute<void>(
+                      builder: (_) => LearnScreen(lesson: Lessons.firstWin),
+                    ),
+                  ),
+                  // Pops the Stage's OWN pageless route: `router.go` here
+                  // would target the location the router already landed on
+                  // above, so it never dismisses the still-alive pushed
+                  // route (review BLOCKER-1 — the user was stuck on the
+                  // Stage after "Not now").
+                  onSkip: () => navigator.pop(),
                 ),
               ),
             );

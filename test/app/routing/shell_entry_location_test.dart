@@ -170,6 +170,47 @@ void main() {
           findsNothing,
           reason: '"Not now" abandons the attempt — no mini-lesson push',
         );
+        expect(
+          find.byType(FirstWinStageScreen),
+          findsNothing,
+          reason:
+              'review BLOCKER-1: "Not now" must actually dismiss the Stage, '
+              'not just settle the router on a location it was already on',
+        );
+      },
+    );
+
+    testWidgets(
+      'shell BE × first-win Stage Continue: popping the scored mini-lesson '
+      'does not fall back to the Stage — review MAJOR-1',
+      (tester) async {
+        final (router, engine) = await pumpOnboarding(
+          tester,
+          adaptiveShellEnabled: true,
+        );
+
+        await tapThroughToLastPage(tester);
+        await tester.tap(find.text('Try your first win — 30 seconds'));
+        await tester.pumpAndSettle();
+        await passThroughFirstWinStage(tester, engine);
+
+        expect(find.byType(LearnScreen), findsOneWidget);
+
+        Navigator.of(
+          tester.element(find.byType(LearnScreen)),
+          rootNavigator: true,
+        ).pop();
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byType(FirstWinStageScreen),
+          findsNothing,
+          reason:
+              'the back gesture after the scored lesson must land on the '
+              'shell, not re-enter a stale "success" Stage',
+        );
+        expect(find.byType(LearnScreen), findsNothing);
+        expect(router.state.uri.path, entryLocationFor(true));
       },
     );
 
