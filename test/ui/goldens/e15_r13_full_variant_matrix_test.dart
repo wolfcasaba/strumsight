@@ -293,6 +293,54 @@ import '../../support/fake_auth.dart';
 import '../../support/fake_engines.dart';
 import '../../support/fake_settings.dart';
 import '../../support/preference_store.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
+import 'package:strumsight/features/auth/model/auth_user.dart';
+import 'package:strumsight/features/community/application/controllers/feed_controller.dart';
+import 'package:strumsight/features/community/application/controllers/post_composer_controller.dart';
+import 'package:strumsight/features/community/data/local/feed_cache.dart';
+import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
+import 'package:strumsight/features/community/domain/entities/community_comment.dart';
+import 'package:strumsight/features/community/domain/entities/community_post.dart';
+import 'package:strumsight/features/community/domain/entities/moderation_state.dart';
+import 'package:strumsight/features/community/domain/entities/share_artifact.dart';
+import 'package:strumsight/features/community/domain/repositories/feed_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/post_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/social_graph_repository.dart';
+import 'package:strumsight/features/community/presentation/screens/bookmarks_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/comments_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_gate_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_search_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/followers_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/following_feed_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/post_composer_screen.dart';
+import 'package:strumsight/features/community/application/controllers/notification_controller.dart';
+import 'package:strumsight/features/community/domain/entities/community_challenge.dart';
+import 'package:strumsight/features/community/domain/entities/notification_item.dart';
+import 'package:strumsight/features/community/domain/repositories/challenge_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/notification_repository.dart';
+import 'package:strumsight/features/community/presentation/screens/clubs/club_detail_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_challenges_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_notifications_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/leaderboard_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/safety_relationships_screen.dart';
+
+import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
+import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
+import 'package:strumsight/features/audio_analysis/application/analysis_state.dart';
+import 'package:strumsight/features/audio_analysis/data/capture/analysis_recorder.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
+import 'package:strumsight/features/onboarding/first_win_engine.dart';
+import 'package:strumsight/features/onboarding/first_win_providers.dart';
+import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
+
+import '../../fixtures/practice_generator/plan/plan_fixtures.dart';
+import 'package:strumsight/features/community/application/controllers/challenge_controller.dart'
+    as challenge_controller;
+import 'package:strumsight/features/community/data/repositories/challenge_repository_impl.dart'
+    show communityChallengeRepositoryProvider;
 
 // ---------------------------------------------------------------------------
 // Size profiles (§0.0.A/R3 — two, not e13_r36's four: compact portrait +
@@ -2746,6 +2794,131 @@ List<Override> _guitarCalibrationOverrides() => [
 // ---------------------------------------------------------------------------
 
 final _screens = <String, _ScreenFixture>{
+  'e17_analysis_capture_home': _ScreenFixture(
+    screenPath:
+        'lib/features/audio_analysis/presentation/capture/analysis_home_screen.dart',
+    build: _e17AnalysisHomeScreen,
+    overridesBuilder: _e17NoOverrides,
+  ),
+  'e17_analysis_capture_recording': _ScreenFixture(
+    screenPath:
+        'lib/features/audio_analysis/presentation/capture/analysis_recording_screen.dart',
+    build: _e17AnalysisRecordingScreen,
+    overridesBuilder: _e17NoOverrides,
+  ),
+  'e17_analysis_capture_processing': _ScreenFixture(
+    screenPath:
+        'lib/features/audio_analysis/presentation/capture/analysis_processing_screen.dart',
+    build: _e17AnalysisProcessingScreen,
+    overridesBuilder: _e17NoOverrides,
+  ),
+  'e17_first_win_stage': _ScreenFixture(
+    screenPath: 'lib/features/onboarding/screens/first_win_stage_screen.dart',
+    build: _e17FirstWinStageScreen,
+    overridesBuilder: _e17FirstWinOverrides,
+  ),
+  'e17_weekly_plan': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart',
+    build: _e17WeeklyPlanScreen,
+    overridesBuilder: _e17NoOverrides,
+  ),
+  'e17_plan_privacy': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart',
+    build: _e17PlanPrivacyScreen,
+    overridesBuilder: _e17NoOverrides,
+  ),
+  'e17_plan_preview': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/plan_preview_screen.dart',
+    build: _e17PlanPreviewScreen,
+    overridesBuilder: _e17NoOverrides,
+  ),
+  'e17_plan_change_review': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart',
+    build: _e17PlanChangeReviewScreen,
+    overridesBuilder: _e17NoOverrides,
+  ),
+  'community_gate': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/community_gate_screen.dart',
+    build: _r33GateScreen,
+    overridesBuilder: _r33GateOverrides,
+  ),
+  'community_following_feed': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/following_feed_screen.dart',
+    build: _r33FollowingFeedScreen,
+    overridesBuilder: _r33FollowingFeedOverrides,
+  ),
+  'community_search': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/community_search_screen.dart',
+    build: _r33SearchScreen,
+    overridesBuilder: _r33SearchOverrides,
+  ),
+  'community_followers': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/followers_screen.dart',
+    build: _r33FollowersScreen,
+    overridesBuilder: _r33FollowersOverrides,
+  ),
+  'community_bookmarks': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/bookmarks_screen.dart',
+    build: _r33BookmarksScreen,
+    overridesBuilder: _r33BookmarksOverrides,
+  ),
+  'community_comments': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/comments_screen.dart',
+    build: _r33CommentsScreen,
+    overridesBuilder: _r33CommentsOverrides,
+  ),
+  'community_post_composer': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/post_composer_screen.dart',
+    build: _r33ComposerScreen,
+    overridesBuilder: _r33ComposerOverrides,
+  ),
+  'community_challenges': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/community_challenges_screen.dart',
+    build: _r34ChallengesScreen,
+    overridesBuilder: _r34ChallengesOverrides,
+  ),
+  'community_leaderboard': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/leaderboard_screen.dart',
+    build: _r34LeaderboardScreen,
+    overridesBuilder: _r34LeaderboardOverrides,
+  ),
+  'community_club_list': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/clubs/club_list_screen.dart',
+    build: _r34ClubListScreen,
+    overridesBuilder: _r34ClubListOverrides,
+  ),
+  'community_club_detail': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/clubs/club_detail_screen.dart',
+    build: _r34ClubDetailScreen,
+    overridesBuilder: _r34ClubDetailOverrides,
+  ),
+  'community_notifications': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/community_notifications_screen.dart',
+    build: _r34NotificationsScreen,
+    overridesBuilder: _r34NotificationsOverrides,
+  ),
+  'community_safety': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/safety_relationships_screen.dart',
+    build: _r34SafetyScreen,
+    overridesBuilder: _r34SafetyOverrides,
+  ),
   'tutor_chat': _ScreenFixture(
     screenPath:
         'lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart',
@@ -3993,3 +4166,1225 @@ void main() {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// E17 (Ch17) — a 2026-09-05-én elérhetővé tett képernyők fixture-ei.
+//
+// A route-jaik bekötésével ezek `reachable: true`-vá váltak, és az A1
+// teljességi invariáns (mért elérhető halmaz ⊆ mátrix ∪ kizárás) azonnal
+// pirosra váltott — helyesen: egy elérhető képernyőnek variáns-alapvonala
+// kell legyen.
+//
+// A fixture-ök a MÁR MŰKÖDŐ e13_r33 / e13_r34 golden-tesztekből származnak,
+// `_r33` / `_r34` előtaggal (típusoknál `_R33` / `_R34`), hogy ne ütközzenek
+// a fájl saját privát neveivel. Nem új fixture-írás: ugyanaz a pump-alak,
+// amit azok a körök már mérnek.
+// ---------------------------------------------------------------------------
+
+
+const _r33CompactPortrait = Size(412, 915);
+
+// ---------------------------------------------------------------------------
+// Shared fixtures
+// ---------------------------------------------------------------------------
+
+class _R33FakeCommunityProfileRepository implements CommunityProfileRepository {
+  _R33FakeCommunityProfileRepository({this.profile});
+  CommunityProfile? profile;
+
+  @override
+  Future<CommunityProfile?> fetchMyProfile() async => profile;
+  @override
+  Future<CommunityProfile> fetchById(PublicUserId userId) =>
+      throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityProfile?> fetchByHandle(CommunityHandle handle) =>
+      throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPage<CommunityProfile>> searchProfiles({
+    required String query,
+    required Object cursor,
+  }) async => const CommunityPage<CommunityProfile>(
+    items: <CommunityProfile>[],
+    cursor: CursorPage.haltedAfterRequest(),
+  );
+  @override
+  Future<AppResult<CommunityProfile>> createProfile({
+    required CommunityHandle handle,
+    required String displayName,
+    required ProfileVisibility visibility,
+    required CommunityAudience audienceDefault,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<AppResult<CommunityProfile>> updateProfile({
+    required String displayName,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+List<Override> _r33AuthOverrides({CommunityProfile? profile}) => [
+  appConfigProvider.overrideWith(
+    (ref) => AppConfig.resolve(
+      environment: AppEnvironment.development,
+      apiBaseUrl: AppConfig.devApiBaseUrl,
+      flags: FeatureFlags.forEnvironment(
+        AppEnvironment.development,
+        accountEnabled: true,
+      ),
+      diagnosticsToken: AppConfig.devDiagnosticsToken,
+      buildMode: 'test',
+      appVersion: 'test',
+    ),
+  ),
+  tokenStoreProvider.overrideWithValue(FakeTokenStore('golden-token')),
+  authRepositoryProvider.overrideWithValue(
+    FakeAuthRepository(
+      user: const AuthUser(id: 1, email: 'golden@strumsight.app'),
+    ),
+  ),
+  communityProfileRepositoryProvider.overrideWithValue(
+    _R33FakeCommunityProfileRepository(profile: profile),
+  ),
+];
+
+CommunityProfile _r33ProfileFixture() => CommunityProfile(
+  userId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f60'),
+  handle: CommunityHandle('wolfcasaba'),
+  displayName: 'Wolf Casaba',
+  visibility: ProfileVisibility.followers,
+  avatarUrl: null,
+  bio: null,
+  skillInterests: const <String>[],
+  badges: const <String>[],
+  relationship: CommunityRelationshipToViewer.notRelated,
+  createdAt: DateTime.utc(2026, 8, 1),
+);
+
+// ---------------------------------------------------------------------------
+// 1 — community_gate_screen.dart (UI-53)
+// ---------------------------------------------------------------------------
+
+Widget _r33GateScreen() => const CommunityGateScreen();
+List<Override> _r33GateOverrides() => _r33AuthOverrides(profile: null);
+
+// ---------------------------------------------------------------------------
+// 2 — edit_profile_screen.dart (UI-53)
+// ---------------------------------------------------------------------------
+
+// ignore: unused_element
+Widget _r33EditProfileScreen() =>
+    const EditProfileScreen(mode: EditProfileMode.create, initialProfile: null);
+// ignore: unused_element
+List<Override> _r33EditProfileOverrides() => _r33AuthOverrides(profile: null);
+
+// ---------------------------------------------------------------------------
+// 3 — following_feed_screen.dart (UI-54)
+// ---------------------------------------------------------------------------
+
+class _R33FakeFeedRepository implements CommunityFeedRepository {
+  @override
+  Future<CommunityPage<CommunityPost>> followingFeed({
+    required Object cursor,
+    required int limit,
+  }) async {
+    final artifact = PracticeSummaryArtifact(
+      schemaVersion: shareArtifactSchemaVersion,
+      sourceId: 'sess-golden-1',
+      createdAt: DateTime.utc(2026, 8, 23, 12),
+      activeSeconds: 620,
+      pausedSeconds: 40,
+      attemptCount: 3,
+      finishReasonCode: 'userFinished',
+      bestScore: 0.82,
+      coachingCodes: const <String>['strongDownBeats'],
+    );
+    return CommunityPage<CommunityPost>(
+      items: <CommunityPost>[
+        CommunityPost(
+          id: ContentId('post-golden-1'),
+          authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a10'),
+          audience: CommunityAudience.followers,
+          body: 'Ma sikerült végre a barré akkordos váltás!',
+          artifact: artifact,
+          createdAt: DateTime.utc(2026, 8, 23, 9),
+          moderationState: ModerationState.visible,
+          counts: CommunityPostCounts(
+            reactionCount: 4,
+            commentCount: 2,
+            bookmarkCount: 1,
+          ),
+          viewerState: const CommunityViewerPostState.empty(),
+        ),
+      ],
+      cursor: const CursorPage.haltedAfterRequest(),
+    );
+  }
+
+  @override
+  Future<CommunityPage<CommunityPost>> profilePosts({
+    required PublicUserId userId,
+    required Object cursor,
+    required int limit,
+  }) => throw UnsupportedError('golden fixture');
+
+  @override
+  Future<CommunityPage<CommunityPost>> clubPinned({
+    required ContentId clubId,
+    required Object cursor,
+    required int limit,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+Widget _r33FollowingFeedScreen() => const FollowingFeedScreen();
+List<Override> _r33FollowingFeedOverrides() => [
+  communityFeedRepositoryProvider.overrideWithValue(_R33FakeFeedRepository()),
+  feedCacheProvider.overrideWithValue(
+    FeedCache.open(
+      store: InMemoryKeyValueStore(),
+      logger: const NoopAppLogger(),
+      userId: 1,
+    ),
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// 4 — community_search_screen.dart (UI-55)
+// ---------------------------------------------------------------------------
+
+Widget _r33SearchScreen() => const CommunitySearchScreen();
+List<Override> _r33SearchOverrides() => [
+  communityProfileRepositoryProvider.overrideWithValue(
+    _R33FakeCommunityProfileRepository(),
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// 5 — followers_screen.dart / bookmarks_screen.dart (UI-56)
+// ---------------------------------------------------------------------------
+
+class _R33FakeSocialGraphRepository implements SocialGraphRepository {
+  @override
+  Future<CommunityPage<CommunityProfile>> followersPage({
+    required PublicUserId userId,
+    required Object cursor,
+  }) async => CommunityPage<CommunityProfile>(
+    items: <CommunityProfile>[
+      _r33ProfileFixture(),
+      CommunityProfile(
+        userId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a20'),
+        handle: CommunityHandle('szitakoto'),
+        displayName: 'Szita Kóto',
+        visibility: ProfileVisibility.followers,
+        avatarUrl: null,
+        bio: null,
+        skillInterests: const <String>[],
+        badges: const <String>[],
+        relationship: CommunityRelationshipToViewer.notRelated,
+        createdAt: DateTime.utc(2026, 7, 15),
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<CommunityPage<CommunityProfile>> followingPage({
+    required PublicUserId userId,
+    required Object cursor,
+  }) => throw UnsupportedError('golden fixture');
+
+  @override
+  Future<ContentId> follow({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> unfollow({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> removeFollower({
+    required PublicUserId follower,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> acceptFollowRequest({
+    required ContentId requestId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> declineFollowRequest({
+    required ContentId requestId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> block({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> unblock({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> mute({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> unmute({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPage<CommunityProfile>> blockedProfilesPage({
+    required Object cursor,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
+    required Object cursor,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+Widget _r33FollowersScreen() => FollowersScreen(
+  profileId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f60'),
+  mode: FollowersMode.followers,
+);
+List<Override> _r33FollowersOverrides() => [
+  socialGraphRepositoryProvider.overrideWithValue(_R33FakeSocialGraphRepository()),
+];
+
+Widget _r33BookmarksScreen() => const BookmarksScreen();
+List<Override> _r33BookmarksOverrides() => [
+  bookmarksProvider.overrideWith(
+    (ref) => Stream.value(
+      BookmarksState(
+        rows: <BookmarkRow>[
+          BookmarkRow(
+            id: 1,
+            postId: ContentId('post-golden-1'),
+            createdAt: DateTime.utc(2026, 8, 20),
+            isTombstone: false,
+          ),
+          BookmarkRow(
+            id: 2,
+            postId: ContentId('post-golden-2'),
+            createdAt: DateTime.utc(2026, 8, 18),
+            isTombstone: true,
+          ),
+        ],
+        nextCursor: const CursorPage.haltedAfterRequest(),
+        isLoadingMore: false,
+        isRemoving: false,
+      ),
+    ),
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// 6 — post_composer_screen.dart (UI-57)
+// ---------------------------------------------------------------------------
+
+class _R33FakeCommunityPostRepository implements CommunityPostRepository {
+  @override
+  Future<CommunityPost> createPost({
+    required CommunityAudience audience,
+    required String? body,
+    required Object artifact,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPost?> fetchPost({required ContentId postId}) =>
+      throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPost> updatePost({
+    required ContentId postId,
+    required String? body,
+    required CommunityAudience audience,
+    required Object resourceVersion,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> deletePost({
+    required ContentId postId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> setReaction({
+    required ContentId postId,
+    required Object? kind,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> setBookmark({
+    required ContentId postId,
+    required bool bookmarked,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPage<CommunityComment>> comments({
+    required ContentId postId,
+    required Object cursor,
+    required int limit,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityComment> createComment({
+    required ContentId postId,
+    required ContentId? parentCommentId,
+    required String body,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityComment> updateComment({
+    required ContentId commentId,
+    required String body,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> deleteComment({
+    required ContentId commentId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+class _R33GoldenAuthController extends AuthController {
+  @override
+  Future<AuthUser?> build() async =>
+      const AuthUser(id: 1, email: 'golden@strumsight.app');
+}
+
+Map<String, Object?> _r33ComposerArtifactFixture() {
+  return PracticeSummaryArtifact(
+    schemaVersion: shareArtifactSchemaVersion,
+    sourceId: 'sess-golden-composer',
+    createdAt: DateTime.utc(2026, 8, 23, 12),
+    activeSeconds: 300,
+    pausedSeconds: 10,
+    attemptCount: 2,
+    finishReasonCode: 'userFinished',
+    bestScore: 0.7,
+    coachingCodes: const <String>[],
+  ).toJson();
+}
+
+Widget _r33ComposerScreen() => const PostComposerScreen();
+List<Override> _r33ComposerOverrides() => [
+  communityKeyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+  communityLoggerProvider.overrideWithValue(const NoopAppLogger()),
+  communityPostRepositoryProvider.overrideWithValue(
+    _R33FakeCommunityPostRepository(),
+  ),
+  composerSourceArtifactProvider.overrideWithValue(_r33ComposerArtifactFixture()),
+  authControllerProvider.overrideWith(() => _R33GoldenAuthController()),
+];
+
+// ---------------------------------------------------------------------------
+// 7 — comments_screen.dart (UI-58)
+// ---------------------------------------------------------------------------
+
+class _R33ScriptedCommentRepository implements CommunityPostRepository {
+  @override
+  Future<CommunityPage<CommunityComment>> comments({
+    required ContentId postId,
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<CommunityComment>(
+    items: <CommunityComment>[
+      CommunityComment(
+        id: ContentId('comment-golden-1'),
+        authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a30'),
+        postId: ContentId('post-golden-1'),
+        parentCommentId: null,
+        body: 'Szuper, gratulálok!',
+        createdAt: DateTime.utc(2026, 8, 23, 10),
+        moderationState: ModerationState.visible,
+      ),
+      CommunityComment(
+        id: ContentId('comment-golden-2'),
+        authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a31'),
+        postId: ContentId('post-golden-1'),
+        parentCommentId: null,
+        body: 'Ez a komment el lett távolítva moderálás miatt.',
+        createdAt: DateTime.utc(2026, 8, 23, 11),
+        moderationState: ModerationState.removed,
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<CommunityPost> createPost({
+    required CommunityAudience audience,
+    required String? body,
+    required Object artifact,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPost?> fetchPost({required ContentId postId}) =>
+      throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPost> updatePost({
+    required ContentId postId,
+    required String? body,
+    required CommunityAudience audience,
+    required Object resourceVersion,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> deletePost({
+    required ContentId postId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> setReaction({
+    required ContentId postId,
+    required Object? kind,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> setBookmark({
+    required ContentId postId,
+    required bool bookmarked,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityComment> createComment({
+    required ContentId postId,
+    required ContentId? parentCommentId,
+    required String body,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityComment> updateComment({
+    required ContentId commentId,
+    required String body,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> deleteComment({
+    required ContentId commentId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+Widget _r33CommentsScreen() => CommentsScreen(postId: ContentId('post-golden-1'));
+List<Override> _r33CommentsOverrides() => [
+  communityPostRepositoryProvider.overrideWithValue(
+    _R33ScriptedCommentRepository(),
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// Pump / golden helpers
+// ---------------------------------------------------------------------------
+
+// ignore: unused_element
+Future<void> _r33Pump(
+  WidgetTester tester,
+  Widget home,
+  List<Override> overrides, {
+  double textScale = 1.0,
+}) async {
+  tester.view.physicalSize = _r33CompactPortrait;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: overrides,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.dark(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+        home: home,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+// ignore: unused_element
+Future<void> _r33ExpectGolden(WidgetTester tester, String name) => expectLater(
+  find.byType(MaterialApp),
+  matchesGoldenFile('goldens/$name.png'),
+);
+
+
+
+const _r34CompactPortrait = Size(412, 915);
+
+// ---------------------------------------------------------------------------
+// 1 — community_challenges_screen.dart (UI-59)
+// ---------------------------------------------------------------------------
+
+class _R34FakeChallengeRepository implements CommunityChallengeRepository {
+  @override
+  Future<CommunityPage<CommunityChallengeDefinition>> listChallenges({
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<CommunityChallengeDefinition>(
+    items: <CommunityChallengeDefinition>[
+      CommunityChallengeDefinition(
+        id: ContentId('golden-challenge-1'),
+        version: 1,
+        type: ChallengeType.personalBest,
+        metric: 'score',
+        difficulty: 2,
+        startsAt: DateTime.utc(2026, 8, 20),
+        endsAt: DateTime.utc(2026, 8, 27),
+        authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5c01'),
+        clubId: null,
+      ),
+      CommunityChallengeDefinition(
+        id: ContentId('golden-challenge-2'),
+        version: 1,
+        type: ChallengeType.friends,
+        metric: 'accuracy',
+        difficulty: 1,
+        startsAt: DateTime.utc(2026, 8, 22),
+        endsAt: DateTime.utc(2026, 8, 29),
+        authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5c02'),
+        clubId: null,
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<CommunityChallengeDefinition> fetchDefinition({
+    required ContentId challengeId,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<CommunityChallengeParticipantState?> fetchMyParticipation({
+    required ContentId challengeId,
+  }) async => null;
+
+  @override
+  Future<void> invite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> acceptInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> declineInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> cancelInvite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> submitResult({
+    required ContentId challengeId,
+    required int metricValue,
+    required String sourceEventId,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<CommunityPage<Object>> leaderboard({
+    required ContentId challengeId,
+    required Object cursor,
+    required int limit,
+  }) async => throw UnimplementedError('golden fixture');
+}
+
+Widget _r34ChallengesScreen() => const CommunityChallengesScreen();
+List<Override> _r34ChallengesOverrides() => [
+  challenge_controller.communityChallengeRepositoryProvider.overrideWithValue(
+    _R34FakeChallengeRepository(),
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// 2 — leaderboard_screen.dart (UI-59)
+// ---------------------------------------------------------------------------
+
+class _R34FakeLeaderboardRepository implements CommunityChallengeRepository {
+  @override
+  Future<CommunityPage<CommunityChallengeDefinition>> listChallenges({
+    required Object cursor,
+    required int limit,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<CommunityChallengeDefinition> fetchDefinition({
+    required ContentId challengeId,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<CommunityChallengeParticipantState?> fetchMyParticipation({
+    required ContentId challengeId,
+  }) async => null;
+
+  @override
+  Future<void> invite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> acceptInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> declineInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> cancelInvite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> submitResult({
+    required ContentId challengeId,
+    required int metricValue,
+    required String sourceEventId,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<CommunityPage<Object>> leaderboard({
+    required ContentId challengeId,
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<LeaderboardEntry>(
+    items: <LeaderboardEntry>[
+      LeaderboardEntry(
+        publicId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5d01'),
+        rank: 1,
+        displayName: 'Wolf Casaba',
+        handle: '@wolfcasaba',
+        metricValue: 980,
+        submittedAt: DateTime.utc(2026, 8, 24),
+        verifiedBadge: true,
+      ),
+      LeaderboardEntry(
+        publicId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5d02'),
+        rank: 2,
+        displayName: 'Szita Kóto',
+        handle: '@szitakoto',
+        metricValue: 860,
+        submittedAt: DateTime.utc(2026, 8, 23),
+        verifiedBadge: true,
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+}
+
+Widget _r34LeaderboardScreen() =>
+    LeaderboardScreen(challengeId: ContentId('golden-challenge-1'));
+List<Override> _r34LeaderboardOverrides() => [
+  communityChallengeRepositoryProvider.overrideWithValue(
+    _R34FakeLeaderboardRepository(),
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// 3 — clubs/club_list_screen.dart (UI-60)
+// ---------------------------------------------------------------------------
+
+class _R34FakeClubsRepository implements CommunityClubRepository {
+  final CommunityClub seedClub = CommunityClub(
+    id: ContentId('golden-club-1'),
+    name: 'Blues Lovers',
+    description: 'Weekly blues jam sessions and setlist sharing.',
+    visibility: ClubVisibility.discoverable,
+    tags: const <String>['blues', 'jam'],
+    ownerId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5e01'),
+    memberCount: 24,
+    myRole: ClubRole.owner,
+    createdAt: DateTime.utc(2026, 6, 1),
+  );
+
+  @override
+  Future<CommunityPage<CommunityClub>> listClubs({
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<CommunityClub>(
+    items: <CommunityClub>[
+      seedClub,
+      CommunityClub(
+        id: ContentId('golden-club-2'),
+        name: 'Jazz Standards Circle',
+        description: 'Practicing jazz standards together.',
+        visibility: ClubVisibility.private,
+        tags: const <String>[],
+        ownerId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5e02'),
+        memberCount: 8,
+        myRole: ClubRole.member,
+        createdAt: DateTime.utc(2026, 5, 12),
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<CommunityClub> fetchClub({required ContentId clubId}) async =>
+      seedClub;
+
+  @override
+  Future<CommunityClub> createClub({
+    required String name,
+    required String description,
+    required ClubVisibility visibility,
+    required List<String> tags,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<CommunityClub> updateClub({
+    required ContentId clubId,
+    required String description,
+    required ClubVisibility visibility,
+    required List<String> tags,
+    required Object resourceVersion,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<void> requestJoin({
+    required ContentId clubId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> invite({
+    required ContentId clubId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> leave({
+    required ContentId clubId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> removeMember({
+    required ContentId clubId,
+    required PublicUserId memberId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> transferOwnership({
+    required ContentId clubId,
+    required PublicUserId newOwnerId,
+    required String idempotencyKey,
+  }) async {}
+}
+
+Widget _r34ClubListScreen() => const ClubListScreen();
+List<Override> _r34ClubListOverrides() => [
+  communityClubRepositoryProvider.overrideWithValue(_R34FakeClubsRepository()),
+];
+
+// ---------------------------------------------------------------------------
+// 4 — clubs/club_detail_screen.dart (UI-60)
+// ---------------------------------------------------------------------------
+
+Widget _r34ClubDetailScreen() =>
+    ClubDetailScreen(clubId: ContentId('golden-club-1'));
+List<Override> _r34ClubDetailOverrides() {
+  final fakeRepo = _R34FakeClubsRepository();
+  return <Override>[
+    communityClubRepositoryProvider.overrideWithValue(fakeRepo),
+    clubFeedProvider.overrideWith(
+      (ref, clubId) async => const CommunityPagePlaceholder<CommunityPost>(
+        items: <CommunityPost>[],
+      ),
+    ),
+    clubPinnedProvider.overrideWith(
+      (ref, clubId) async => const <CommunityPost>[],
+    ),
+    clubChallengesProvider.overrideWith(
+      (ref, clubId) async => <CommunityChallengeSummaryPlaceholder>[
+        CommunityChallengeSummaryPlaceholder(
+          challengePublicId: 'golden-club-challenge-1',
+          metric: 'score',
+          difficulty: 2,
+          startsAt: DateTime.utc(2026, 8, 20),
+          endsAt: DateTime.utc(2026, 8, 27),
+        ),
+      ],
+    ),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// 5 — clubs/club_member_management_screen.dart (UI-60)
+// ---------------------------------------------------------------------------
+
+// ignore: unused_element
+Widget _r34ClubMemberManagementScreen() =>
+    ClubMemberManagementScreen(clubId: ContentId('golden-club-1'));
+// ignore: unused_element
+List<Override> _r34ClubMemberManagementOverrides() => [
+  communityClubRepositoryProvider.overrideWithValue(_R34FakeClubsRepository()),
+  clubMemberListProvider.overrideWith(
+    (ref, clubId) async => <ClubMemberRow>[
+      ClubMemberRow(
+        memberPublicId: 'row-1',
+        profilePublicId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f01'),
+        role: ClubRole.owner,
+        joinedAt: DateTime.utc(2026, 6, 1),
+      ),
+      ClubMemberRow(
+        memberPublicId: 'row-2',
+        profilePublicId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f02'),
+        role: ClubRole.member,
+        joinedAt: DateTime.utc(2026, 7, 3),
+      ),
+    ],
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// 6 — community_notifications_screen.dart (UI-61)
+// ---------------------------------------------------------------------------
+
+class _R34FakeNotificationRepository implements CommunityNotificationRepository {
+  @override
+  Future<CommunityPage<CommunityNotificationItem>> inboxPage({
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<CommunityNotificationItem>(
+    items: <CommunityNotificationItem>[
+      CommunityNotificationItem(
+        id: ContentId('golden-notification-1'),
+        kind: CommunityNotificationKind.challengeInvite,
+        titleKey: 'communityNotificationChallengeInviteTitle',
+        createdAt: DateTime.utc(2026, 8, 24, 9),
+        isRead: false,
+        relatedContentId: ContentId('golden-challenge-1'),
+      ),
+      CommunityNotificationItem(
+        id: ContentId('golden-notification-2'),
+        kind: CommunityNotificationKind.comment,
+        titleKey: 'communityNotificationCommentTitle',
+        bodyKey: 'communityNotificationCommentBody',
+        createdAt: DateTime.utc(2026, 8, 23, 14),
+        isRead: true,
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<void> markRead({
+    required ContentId notificationId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> markAllReadUpTo({
+    required ContentId upToId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<Object> preferences() async => const <String, String>{};
+
+  @override
+  Future<void> updatePreference({
+    required String category,
+    required String level,
+    required String idempotencyKey,
+  }) async {}
+}
+
+Widget _r34NotificationsScreen() => const CommunityNotificationsScreen();
+List<Override> _r34NotificationsOverrides() => [
+  communityNotificationRepositoryProvider.overrideWithValue(
+    _R34FakeNotificationRepository(),
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// 7 — safety_relationships_screen.dart (UI-61)
+// ---------------------------------------------------------------------------
+
+CommunityProfile _r34GoldenProfile(String suffix, String name) => CommunityProfile(
+  userId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5$suffix'),
+  handle: CommunityHandle('handle-$suffix'),
+  displayName: name,
+  visibility: ProfileVisibility.public,
+  avatarUrl: null,
+  bio: null,
+  skillInterests: const <String>[],
+  badges: const <String>[],
+  relationship: CommunityRelationshipToViewer.notRelated,
+  createdAt: DateTime.utc(2026, 7, 1),
+);
+
+class _R34FakeSocialGraphRepository implements SocialGraphRepository {
+  @override
+  Future<CommunityPage<CommunityProfile>> blockedProfilesPage({
+    required Object cursor,
+  }) async => CommunityPage<CommunityProfile>(
+    items: <CommunityProfile>[_r34GoldenProfile('a01', 'Noisy Neighbour')],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
+    required Object cursor,
+  }) async => CommunityPage<CommunityProfile>(
+    items: <CommunityProfile>[_r34GoldenProfile('a02', 'Quiet Muted User')],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<void> block({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> mute({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> unblock({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> unmute({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<CommunityPage<CommunityProfile>> followingPage({
+    required PublicUserId userId,
+    required Object cursor,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<CommunityPage<CommunityProfile>> followersPage({
+    required PublicUserId userId,
+    required Object cursor,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<ContentId> follow({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<void> unfollow({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<void> removeFollower({
+    required PublicUserId follower,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<void> acceptFollowRequest({
+    required ContentId requestId,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+
+  @override
+  Future<void> declineFollowRequest({
+    required ContentId requestId,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('golden fixture');
+}
+
+Widget _r34SafetyScreen() => const SafetyRelationshipsScreen();
+List<Override> _r34SafetyOverrides() => [
+  socialGraphRepositoryProvider.overrideWithValue(_R34FakeSocialGraphRepository()),
+];
+
+// ---------------------------------------------------------------------------
+// Pump / golden helpers
+// ---------------------------------------------------------------------------
+
+// ignore: unused_element
+Future<void> _r34Pump(
+  WidgetTester tester,
+  Widget home,
+  List<Override> overrides, {
+  double textScale = 1.0,
+}) async {
+  tester.view.physicalSize = _r34CompactPortrait;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: overrides,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.dark(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+        home: home,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+// ignore: unused_element
+Future<void> _r34ExpectGolden(WidgetTester tester, String name) => expectLater(
+  find.byType(MaterialApp),
+  matchesGoldenFile('goldens/$name.png'),
+);
+
+// ---------------------------------------------------------------------------
+// E17 — a nyolc további, 2026-09-05-én elérhetővé tett képernyő fixture-e.
+//
+// A community tizenhármassal ellentétben ezekhez nem volt egyetlen forrásból
+// átemelhető golden-fixture, ezért a lehető LEGEGYSZERŰBB, valós konstrukció
+// szerepel: a variáns-mátrix a világos/sötét és a szöveg-méret renderelést
+// méri, nem az adatgazdagságot.
+// ---------------------------------------------------------------------------
+
+/// Nincs szükség provider-felülírásra: ezek a képernyők a
+/// konstruktorukból kapnak mindent.
+List<Override> _e17NoOverrides() => const <Override>[];
+
+Widget _e17AnalysisHomeScreen() => AnalysisHomeScreen(
+  // Üres lista: a „még nincs korábbi elemzés" állapot a felvételi folyamat
+  // valódi kiindulópontja.
+  recentAnalyses: const <AnalysisSummary>[],
+  onStartRecording: () {},
+  onImportFile: () {},
+);
+
+Widget _e17AnalysisRecordingScreen() => AnalysisRecordingScreen(
+  recorder: AnalysisRecorder(
+    mic: fakeMicCapture(
+      owner: AudioOwner.analyzeRecorder,
+      coordinator: AudioSessionCoordinator(),
+    ),
+  ),
+  onFinished: (_, _) {},
+  onCancel: () {},
+);
+
+Widget _e17AnalysisProcessingScreen() => AnalysisProcessingScreen(
+  state: const AnalysisAnalyzing(
+    runId: 'e17-golden-run',
+    phase: AnalysisProgressPhase.computingMetrics,
+    completedUnits: 3,
+    totalUnits: 5,
+  ),
+  onCancel: () {},
+);
+
+Widget _e17FirstWinStageScreen() => const FirstWinStageScreen();
+List<Override> _e17FirstWinOverrides() => [
+  onboardingFirstWinEngineFactoryProvider.overrideWithValue(
+    FakeOnboardingFirstWinEngine.new,
+  ),
+];
+
+Widget _e17WeeklyPlanScreen() => WeeklyPlanScreen(
+  // `null` a „még nincs terv" állapot — a képernyő szerződése nullazható
+  // tervet vár, és ez a friss telepítés valódi állapota.
+  plan: null,
+  today: LocalDate(2026, 9, 5),
+);
+
+Widget _e17PlanPrivacyScreen() {
+  final store = InMemoryKeyValueStore();
+  final planRepository = LocalPracticePlanRepository(
+    keyValueStore: store,
+    resolveCandidate: resolveCandidate,
+  );
+  final evidenceRepository = LocalPracticeEvidenceRepository(
+    keyValueStore: store,
+  );
+  return PlanPrivacyScreen(
+    deleteUseCase: DeletePracticePlanningData(
+      planRepository: planRepository,
+      draftRepository: GenerationDraftRepository(keyValueStore: store),
+      evidenceRepository: evidenceRepository,
+    ),
+    exportUseCase: ExportPracticePlanningData(
+      planRepository: planRepository,
+      evidenceRepository: evidenceRepository,
+      cacheDirectory: () async => Directory.systemTemp,
+      clock: () => DateTime.utc(2026, 9, 5),
+    ),
+  );
+}
+
+Widget _e17PlanPreviewScreen() => PlanPreviewScreen.withPlan(
+  plan: plan(),
+  validationContext: buildContext(),
+  buildController: (initialPlan, context) => PlanPreviewController(
+    initialPlan: initialPlan,
+    validationContext: context,
+    activation: LocalPracticePlanRepository(
+      keyValueStore: InMemoryKeyValueStore(),
+      resolveCandidate: resolveCandidate,
+    ),
+  ),
+);
+
+Widget _e17PlanChangeReviewScreen() => PlanChangeReviewScreen(
+  proposal: PlanRevisionProposal(
+    changeSet: PlanChangeSet(
+      fromRevisionId: RevisionId('revision.1'),
+      toRevisionId: RevisionId('revision.2'),
+      changes: const <PlanChange>[],
+    ),
+    confirmation: PlanChangeConfirmation.pending,
+    requiresUserConfirmation: true,
+    revision: null,
+  ),
+  onAccepted: () {},
+  onRejected: () {},
+);

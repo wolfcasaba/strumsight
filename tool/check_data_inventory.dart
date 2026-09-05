@@ -401,8 +401,20 @@ final _apiClientTypedMemberPattern = RegExp(
 /// — deliberately its own list, not [_requestVerbCallPattern]'s Dio verbs,
 /// since `ApiClient` exposes typed wrappers (`getJson`/`postJson`/`putJson`)
 /// plus the two body-less `post`/`delete` methods, not Dio's raw verbs.
+// A típus-argumentum BEÁGYAZOTT generikus is lehet (2026-09-05).
+//
+// MÉRT vakfolt: a korábbi `<[^>]*>` az ELSŐ `>`-nél megállt, ezért egy
+// `getJson<CommunityPage<CommunityPost>>(` hívás NEM illeszkedett — a
+// `HttpCommunityFeedRepository` egész egress-útvonala láthatatlan maradt a
+// adatvédelmi leltár számára. Egy adatvédelmi detektor, ami a hívás
+// TÍPUS-ARGUMENTUMÁNAK alakjától függően vak, rosszabb, mint egy hiányzó
+// detektor: zöldet mutat.
+//
+// A minta két beágyazási szintet enged meg — ennyi fedi a fában előforduló
+// alakokat (`CommunityPage<CommunityPost>`, `Map<String, String>`).
 final _apiClientRequestVerbCallPattern = RegExp(
-  r'\.(getJson|postJson|putJson|post|delete)\s*(<[^>]*>)?\s*\(',
+  r'\.(getJson|postJson|putJson|post|delete)\s*'
+  r'(<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\s*\(',
 );
 
 /// MAJOR-1's pattern (d): a `share_plus` share-sheet call. `SharePlus` is a

@@ -13,20 +13,12 @@ import '../../../fixtures/practice_generator/validation/validation_fixtures.dart
 /// The B2 guard cells below care about the ROOT cause
 /// (`UnimplementedError`, the deliberate open-seam signal — round brief
 /// §10.9 / ADR 0482 / D9), not how many wrapping layers Riverpod added.
-Object _rootCause(Object error) {
-  var current = error;
-  while (current is ProviderException) {
-    current = current.exception;
-  }
-  return current;
-}
 
-final Matcher _throwsUnimplementedSeam = throwsA(
-  predicate<Object>(
-    (error) => _rootCause(error) is UnimplementedError,
-    'unwraps (through any ProviderException wrapping) to an UnimplementedError',
-  ),
-);
+// 2026-09-05: a `_throwsUnimplementedSeam` matcher MEGSZŰNT, mert nincs
+// többé nyitott seam ebben a fájlban — a katalógus-feloldó és a
+// terv-bemenet építő is be van kötve. A matchert nem `ignore`-ral
+// hagytuk bent: egy „dobásra váró" segéd egy bekötött rendszerben azt
+// sugallná, hogy még van mire várni.
 
 /// E15-R14 §6/A3: every MANDATORY constructor dependency of the 6 plan
 /// screens (round brief §0.0.B/R4) resolves from ONE `ProviderScope`, with

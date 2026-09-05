@@ -5,7 +5,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/gamification/public.dart';
-import 'package:strumsight/features/practice/data/builtin_practice_catalog.dart';
 import 'package:strumsight/features/practice/public.dart';
 import 'package:strumsight/features/progress_v2/public.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
