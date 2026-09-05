@@ -88,6 +88,53 @@ kettőt lezár. Nem épít párhuzamos metrika-fát, nem köti át a release-kap
    `recognition_release_gate.json`-ban — ADR 0511 D9 szerint az a fájl reviewed
    artefaktum, az átkötés ADR-döntés, nem mellékhatás.
 
+## 0.0.1 Kiegészítő pre-flight mérés (2026-09-05, `main @ b17e08ef`, orchestrátor)
+
+A dispatch előtti újramérés három ponton pontosítja a fentieket. Mindhárom a
+kör SAJÁT, még nem merge-elt artefaktumát érinti (ADR 0087 §2), tehát
+brief-revízió, nem H3.
+
+1. **A renderer forrása NEM a `domain/` alatt van, és nem is kell módosítani.**
+   A §2 „`recognition_report_renderer.dart:62`" hivatkozás tényleges útvonala
+   `lib/features/live/data/evaluation/recognition_report_renderer.dart`. A
+   `_summarize` (`:59–73`) **generikusan** a `recognitionMetricExtractors`
+   rendezett kulcslistáján megy végig — nincs benne kipinnelt metrika-névsor.
+   Ezért a renderer FORRÁSA szándékosan nincs az `allowed_paths`-on: az
+   extractor-bejegyzés önmagában megjeleníti a metrikát mindhárom
+   renderelésben. Csak a renderer TESZTJE van a listán (a 7. acceptance-pont
+   új sorai miatt).
+
+2. **A `recognition-dashboard.md` „deliberately absent" szakasza a fejlécében
+   „Four"-t mond, de HAT nevesített Ch14 Alpha sort sorol fel** (a 106–144.
+   sorok: accepted direction accuracy, false visible arrow hard-negative,
+   weakest supported chord recall, confirmed chord accepted accuracy, chord
+   transition p50, false confident chord hard-negative). A §8/4. lépés
+   szövegének „a maradék kettő" állítása ezért **pontatlan**: ez a kör
+   PONTOSAN KETTŐT zár le (a két hard-negative sort), és utána **négy** marad
+   — accepted direction accuracy, weakest supported chord recall, confirmed
+   chord accepted accuracy, chord transition p50 —, mert azok accuracy-,
+   recall- és latency-szűkítések, amiket ez a kör nem ad meg. A szakasz saját
+   darabszám-szavát a maradék listával EGYÜTT kell átírni (ADR 0521 D9). A két
+   hard-negative sor lezárása a lista tartalmi állítását is helyesbíti: a
+   „substitution is exactly the L549 failure class" mondat érvényben marad, de
+   e két sorra már nem helyettesítés, hanem valódi, szűkített metrika felel.
+
+3. **Az ADR-szám `0521`, és a foglaló NEM idempotens.** A
+   `.pipeline/inflight/adr/0521` marker tartalma `round=E14-R15` (a revíziós
+   önjavító kör foglalta le), a queue-sor is `0521`. A pre-flightban futtatott
+   `tools/round-slots.py reserve-adr --round E14-R15` ettől függetlenül ÚJ
+   számot (`0523`) adott — a foglaló a körazonosítót csak beleírja a markerbe,
+   nem keresi vissza. A fölösleges `0523` marker azonnal fel lett szabadítva; a
+   kör ADR-je a `docs/adr/0521-scoped-false-visible-event-rates-and-hard-negative-taxonomy.md`.
+
+**Amit a mérés MEGERŐSÍTETT (nem változott):** a `RecognitionMetrics` két
+konstrukciós helye (`recognition_metrics.dart:797` és
+`recognition_release_gate_test.dart:413`) MINDKETTŐ az `allowed_paths`-on van,
+tehát a két új kötelező mező felvétele nem lép ki a listából; a
+`recognitionMetricExtractors` kulcshalmazát a körön KÍVÜL egyetlen teszt sem
+pinneli; a partíció zártsága a merge-elt `correctAccepted` / `acceptedDetections`
+párból következik (`:676–689`), új adat nélkül.
+
 ## 0.1 Kötött scope-szűkítés a SDD-hez képest (drift, KÖTELEZŐ így)
 
 A SDD Kör 15 „legalább 60 perc negatív anyagot" is kér. **Hangfelvétel nem
@@ -326,8 +373,11 @@ a 4. pont **PIROS**, visszaállítva **ZÖLD**; továbbá a `kind` szűrés
 4. `public.dart` export; doksi: capture-lista és a külső (repón kívüli)
    workflow (`recognition-hard-negatives.md`), valamint a
    `recognition-dashboard.md` „deliberately absent" listájából a két lezárt sor
-   átvezetése (a maradék kettő — „weakest supported chord recall",
-   „chord transition p50" — MARAD a listán).
+   átvezetése (§0.0.1/2 és ADR 0521 D9: a lezárt kettő a „false visible arrow
+   hard-negative" és a „false confident chord hard-negative"; a listán MARAD
+   NÉGY — „accepted direction accuracy", „weakest supported chord recall",
+   „confirmed chord accepted accuracy", „chord transition p50" —, és a szakasz
+   fejlécének darabszám-szava ezzel EGYÜTT írandó át).
 
 ## 9. Kockázatok
 
