@@ -23,11 +23,14 @@ enum StabilizerProfile {
 /// This is NOT a second confirmation gate over the pipeline's own chord
 /// decision (ADR 0516): it never re-derives presence, tonalness, or signal
 /// quality. Its input is a frame the pipeline already decided
-/// (`frame.current != null`); its only question is how many consecutive
-/// such frames agree on the same label. [stabilize] therefore only passes a
-/// frame through or drops it — it never rewrites one, since `LiveFrame`'s
-/// `copyWith` cannot clear a nullable field and the model file is out of
-/// this round's scope.
+/// (`frame.current != null`). The very first label ever seen has no
+/// established baseline to disagree with, so it confirms immediately; every
+/// later, DIFFERENT label must sustain `profile.minAgreeFrames` consecutive
+/// agreeing frames before it can displace the established one — this is
+/// what turns A→B→A frame-level flicker into a single stable card instead
+/// of three. [stabilize] therefore only passes a frame through or drops it —
+/// it never rewrites one, since `LiveFrame`'s `copyWith` cannot clear a
+/// nullable field and the model file is out of this round's scope.
 class RecognitionStabilizer {
   RecognitionStabilizer({this.profile = StabilizerProfile.free});
 
@@ -69,6 +72,29 @@ class RecognitionStabilizer {
     final current = frame.current;
     if (current == null) return frame;
 
+    // Already the established label — reaffirm immediately, even right
+    // after an aborted displacement attempt: recovering to a label that is
+    // ALREADY confirmed never needs to re-accumulate agreement (ADR 0518 D6).
+    if (current.label == _confirmedLabel) {
+      _pendingLabel = null;
+      _agreeFrames = 0;
+      _chordState = RecognitionDecision.confirmed;
+      return frame;
+    }
+
+    // The very first decided label ever seen has no established baseline to
+    // disagree with, so it confirms on sight (ADR 0518 D1: `candidate` is
+    // the state before any label has been seen at all).
+    if (_confirmedLabel == null) {
+      _confirmedLabel = current.label;
+      _confirmedFlips++;
+      _confirmationLatencyFrames = 1;
+      _chordState = RecognitionDecision.confirmed;
+      return frame;
+    }
+
+    // A displacement attempt against an established label needs sustained
+    // agreement before it can override it (ADR 0518 D3).
     if (current.label == _pendingLabel) {
       _agreeFrames++;
     } else {
@@ -82,11 +108,11 @@ class RecognitionStabilizer {
       return null;
     }
 
-    if (_confirmedLabel != current.label) {
-      _confirmedFlips++;
-      _confirmationLatencyFrames = _framesProcessed - _pendingFirstFrame + 1;
-      _confirmedLabel = current.label;
-    }
+    _confirmedFlips++;
+    _confirmationLatencyFrames = _framesProcessed - _pendingFirstFrame + 1;
+    _confirmedLabel = current.label;
+    _pendingLabel = null;
+    _agreeFrames = 0;
     _chordState = RecognitionDecision.confirmed;
     return frame;
   }
