@@ -26225,7 +26225,69 @@ alakon mérve **9 325 elemzés / 385 különböző fájl / 25 lintelt brief**
 invalidálást, a `ProductionDefaultsAreUnchangedTest` a két kapcsoló éles
 alapértelmezését köti le.
 
-## L650 — Egy VALÓS-adatra hangolt küszöb csendben a SZINTETIKUS zaj-populáció alá kerül: a randomizált kapu ~2 %-os seed-bukása nem flake volt, hanem egy fantom onset a szállított DSP-ben (E14-R19 / H3, önjavító kör, 2026-09-05)
+---
+
+## L650 — A merge-zár fájlja a HÍVÓ fa gyökeréhez kötött: egy izolált munkapéldányból landolt kör MÁS zárat vesz fel, mint a fő fában futó párhuzamos kör (E14-R13, merge-lépés, 2026-09-05)
+
+**Mit mértünk.** Az E14-R13 landolásakor a `.pipeline/inflight/` két futó sávot
+mutatott (`E14-R13` és a `heal:H3` `E14-R19`), tehát az ADR 0171 §1 szerint a
+záró rituálék és a merge a **merge-záron** keresztül mennek. A landolót viszont
+a kör IZOLÁLT munkapéldányából kellett hívni (`/home/ubuntu/ss-sonnet-impl-e14-r13`),
+mert a `tools/round-land.sh` a `repo_root`-ot a `BASH_SOURCE` saját útvonalából
+számolja. A zárfájl feloldása ugyanezt a gyökeret követi:
+
+```bash
+# tools/round-merge-lock.sh:20-23
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
+lock_file=${ROUND_MERGE_LOCK:-"$state_dir/merge.lock"}
+```
+
+Mérve, a munkapéldányból, override NÉLKÜL:
+
+```
+repo_root=/home/ubuntu/ss-sonnet-impl-e14-r13
+lock=/home/ubuntu/ss-sonnet-impl-e14-r13/.pipeline/merge.lock     ← NEM a fő fáé
+```
+
+És a lemezen **két külön zárfájl** él — a munkapéldányé egy KORÁBBI, override
+nélküli landolási kísérletből:
+
+```
+-rw-rw-r-- … Sep  5 13:30 /home/ubuntu/ss-sonnet-impl-e14-r13/.pipeline/merge.lock
+-rw-rw-r-- … Sep  5 16:50 /home/ubuntu/music-theory/.pipeline/merge.lock
+```
+
+**Miért.** A `flock` a zárat a fájl-inode-hoz köti. Két külön fájl = két külön
+zár, azaz a sorosítás NÉMÁN elmarad: a landoló hibátlanul lefut, „megszerzi a
+zárat", és közben a másik sáv ugyanabban a másodpercben írhatja a `HANDOFF.md`-t,
+a `docs/LESSONS.md`-t vagy a sor-fájlt. A hiba nem ad jelet — nincs hibaüzenet,
+nincs piros kapu; csak akkor derül ki, ha a két záró commit ténylegesen
+összeér. Ez ugyanaz a hibaosztály, mint az L232 (`prepare-flutter-generated.sh`
+némán a forrásfát készíti elő, mert a scriptek a SAJÁT útvonalukból számolnak
+gyökeret), csak itt a következmény nem egy hiányzó előfeltétel, hanem egy
+kiiktatott kölcsönös kizárás.
+
+**Hogyan alkalmazd.** Ha a landolást a kör munkapéldányából hívod, a zárat
+KÉZZEL kösd a fő fához, és a fő fa `.pipeline`-ját add meg:
+
+```bash
+ROUND_MERGE_LOCK=/home/ubuntu/music-theory/.pipeline/merge.lock \
+  tools/round-land.sh --pr <PR> --round <kör> --gate-test <útvonal>…
+```
+
+Ugyanez a záró rituálék kézi szakaszára is áll (`flock -w 1800
+/home/ubuntu/music-theory/.pipeline/merge.lock -c '…'`). Általánosan: minden
+`repo_root`-ból származtatott állapot-útvonalnál mérd ki, MELYIK fához tartozik
+— a munkapéldány a fájlhalmazra izolál, a lánc-szintű állapotra (zár, sor-fájl,
+inflight) NEM.
+
+**Őrteszt:** nincs — az őr helye a `tools/tests/` volna, ami ennek a körnek
+tilos zónája (ADR 0087 §4: a mérce nem módosulhat attól, akit mér). A lecke az
+önjavító kör bemenete: egy cella, amely a munkapéldányból hívott
+`round-merge-lock.sh` zárfájlját a fő fáéhoz méri (vagy a landolót a
+`PIPELINE_STATE_DIR`/`ROUND_MERGE_LOCK` explicit átadására kötelezi).
+## L651 — Egy VALÓS-adatra hangolt küszöb csendben a SZINTETIKUS zaj-populáció alá kerül: a randomizált kapu ~2 %-os seed-bukása nem flake volt, hanem egy fantom onset a szállított DSP-ben (E14-R19 / H3, önjavító kör, 2026-09-05)
 
 **A halt.** Az E14-R19 kész és APPROVED volt (impl + javító kör + review, PR
 #595), de a randomizált property gate PIROSAT adott a

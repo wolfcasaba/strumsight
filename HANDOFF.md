@@ -1,5 +1,43 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R13 KÉSZ — a Live „miért nem sikerült" állítása a MERGE-ELT felismerési szótárból jön — PR [#590](https://github.com/wolfcasaba/strumsight/pull/590), squash `e5724b5d` (2026-09-05)
+
+A képernyő eddig egy **saját, képernyő-lokális `inputLevel`-heurisztikából**
+mondta meg, mi a baj, miközben a `LiveFrame.chordRejectReason` (ADR 0516 D1/D5)
+be volt kötve, de **nulla UI-fogyasztója** volt. A kör ezt az egyetlen döntési
+helyet zárta be: az új `UncertaintyReasonBanner` a merge-elt, **zárt hatelemű**
+`RecognitionRejectReason`-t (ADR 0505 D3) fogyasztja **kimerítő `switch`-csel**
+(`default:` ág nélkül, hogy egy jövőbeli enum-elem fordítási hibát adjon), a
+banner a `feedback` Stage-slotba (ADR 0276) kerül, és amíg látszik, az
+általános `liveWeakSignal` szöveg **nem jelenhet meg mellette**.
+
+| Fájl | Mit ad |
+|---|---|
+| `lib/features/live/widgets/uncertainty_reason_banner.dart` (ÚJ) | a hat okhoz tartozó honosított szöveg, kimerítő `switch` |
+| `lib/features/live/screens/live_screen.dart` | a banner bekötése a `feedback` slotba + a heurisztikus ág elhatárolása `chordRejectReason == null`-ra |
+| `lib/l10n/base/app_{en,hu}.arb` (+ a generált aggregátum) | a hat ok-szöveg **FORRÁS** szegmensben; az aggregátumot a generátor írja (ADR 0307 §4) |
+| `test/features/live/uncertainty_reason_banner_test.dart`, `.../live_screen_truthfulness_test.dart` (ÚJ) | `RecognitionRejectReason.values` fölött ITERÁLÓ mátrix + páronkénti distinctness mindkét locale-on; termelő-cella, kölcsönös kizárás, textscale-hármas (150 / 200 / 250 %) |
+| [ADR 0520](docs/adr/0520-live-uncertainty-reason-from-the-merged-recognition-vocabulary.md) | a kötött döntések: egyetlen ok-szótár, egy hely mondja meg a „miért", a heurisztika a „nincs döntés" ág marad |
+
+**A merge-elt viselkedés nem sérült:** a `live_stage_test.dart` két cellája
+**átkötve** (nem törölve) a döntési forrásra, a `live_screen_test.dart`
+hero-cellái (akkord-címke + `90%`) változatlan állítás-szöveggel zöldek, és a
+két pixel-golden (`textScale 1.0` és `2.0`) **nem mozdult** — a frame nélküli
+default állapotban `chordRejectReason == null`, tehát a banner nem látszik.
+
+**Pre-flight-történet.** A kör kétszer halt, mindkétszer az ELŐRE MEGÍRT brief
+elavult alapja miatt, és mindkettőt önjavító kör oldotta fel: **H3** (a brief a
+GENERÁLT l10n-aggregátumot engedte a FORRÁS szegmens helyett + egy MÁSODIK,
+négyelemű ok-taxonómiát írt elő a merge-elt zárt enum mellé → PR #587, `brief-lint`
+**S16**, [L646](docs/LESSONS.md)) és **H5** (a `router-ci` a saját 10 perces
+job-plafonjába futott, a javítás a MÉRT költség-tételeket szüntette meg, nem a
+plafont → PR #596, [L649](docs/LESSONS.md)).
+
+Kapuk a `95fa6aab` merge SHA-n: `full-gate.yml` [33977845092](https://github.com/wolfcasaba/strumsight/actions/runs/33977845092)
+`success`, `router-ci.yml` [33977840619](https://github.com/wolfcasaba/strumsight/actions/runs/33977840619)
+`success`; a kombinált-HEAD célzott kapu (`tools/round-land.sh`, 7 teszt-útvonal)
+minden lépésre ZÖLD; review: `docs/reviews/e14-r13-review.md` → **APPROVED**
+(0 nyitott lelet).
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R19 / H3 feloldva: nem a küszöb volt rossz, hanem a szállított DSP adott FANTOM onsetet (2026-09-05)
 
 Az `E14-R19` KÉSZ és APPROVED volt (impl + javító kör + review, PR
@@ -47,7 +85,7 @@ recall-ellensúly (egy „semmit nem detektál" javítás ne mehessen át) és a
 mért sávjának (14–20) lekötése. Tiszta `main@4e633b80`-on PIROS, a javítással
 ZÖLD; a property gate **15 seeden** zöld (köztük a bukó `33975939211`).
 Hangolási forrás frissítve: `docs/rag/chunks/005-onset-spectral-flux.md`.
-Lecke: **L650**.
+Lecke: **L651**.
 
 **A folytatás az `E14-R19`-en kizárólag a merge-lépés** — a kör kész és
 APPROVED, a branch (`sonnet-impl/e14-r19-augmentation-and-balanced-recipe`,
