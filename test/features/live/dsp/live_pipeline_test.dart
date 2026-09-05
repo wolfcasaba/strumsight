@@ -2,12 +2,31 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/engine/dsp/live_pipeline.dart';
+import 'package:strumsight/features/live/engine/dsp/strum_direction_classifier.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/core/music/strum.dart';
 
 import '../../../support/synth.dart';
 
 const sr = 44100;
+
+/// A [StrumDirectionClassifier] returning a FIXED verdict — E14-R10's
+/// regression cell for "confirmed keeps today's behaviour" needs a
+/// controlled, above-threshold probability pair, which no shipped model
+/// asset can guarantee deterministically.
+class _FixedVerdictClassifier implements StrumDirectionClassifier {
+  _FixedVerdictClassifier(this.verdict);
+  final StrumClassification verdict;
+
+  @override
+  void observe(Float64List frame, StrumFrameFeatures features) {}
+
+  @override
+  StrumClassification classifyAt({
+    required int onsetFrame,
+    required int currentFrame,
+  }) => verdict;
+}
 
 /// Feed a signal in mic-like chunks (~23 ms) and collect every emitted frame.
 List<LiveFrame> run(Float64List signal, {int chunkSize = 1024}) {
@@ -86,4 +105,36 @@ void main() {
       reason: 'the arrow must fade after 2 s of silence',
     );
   });
+
+  // E14-R10 (ADR 0512 acceptance §6/4): a confirmed CRNN margin must produce
+  // EXACTLY the direction/confidence/strumSeq stepping the pre-R10 path
+  // produced unconditionally — the decision only ever WITHHOLDS an
+  // uncertain arrow, it never changes a confirmed one.
+  test(
+    'E14-R10: a confirmed direction margin keeps today\'s arrow behaviour',
+    () {
+      final pipeline = LivePipeline.debugWithClassifier(
+        _FixedVerdictClassifier(
+          const StrumClassification(
+            direction: StrumDirection.up,
+            confidence: 0.83,
+            pDown: 0.4745,
+            pUp: 0.5255, // margin 0.05099999999999999 > 0.05 -> confirmed
+          ),
+        ),
+        sampleRate: sr,
+      );
+      final frames = <LiveFrame>[];
+      final signal = strumSignal(lowFirst: true);
+      for (var i = 0; i < signal.length; i += 1024) {
+        final end = (i + 1024 < signal.length) ? i + 1024 : signal.length;
+        frames.addAll(pipeline.addChunk(signal.sublist(i, end)));
+      }
+      final withArrow = frames.where((f) => f.latestStrum != null).toList();
+      expect(withArrow, isNotEmpty);
+      expect(withArrow.first.latestStrum!.direction, StrumDirection.up);
+      expect(withArrow.first.latestStrum!.confidence, 0.83);
+      expect(frames.last.strumSeq, 1);
+    },
+  );
 }
