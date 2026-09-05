@@ -28,6 +28,30 @@
   "@liveWeakSignal": {
     "description": "Shown next to the input-level meter when listening but the raw mic level is below the presentation threshold."
   },
+  "liveRejectLowConfidence": "Not quite clear — play it again",
+  "@liveRejectLowConfidence": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.lowConfidence (ADR 0520)."
+  },
+  "liveRejectUnstable": "Still settling — hold the chord steady",
+  "@liveRejectUnstable": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.unstable (ADR 0520)."
+  },
+  "liveRejectSignalQuality": "Signal too weak to tell — move closer to the mic",
+  "@liveRejectSignalQuality": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalQuality (ADR 0520)."
+  },
+  "liveRejectNoChord": "No chord detected yet",
+  "@liveRejectNoChord": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.noChord (ADR 0520)."
+  },
+  "liveRejectModelUnavailable": "Chord detection is unavailable right now",
+  "@liveRejectModelUnavailable": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.modelUnavailable (ADR 0520)."
+  },
+  "liveRejectTimeout": "Took too long to decide — try again",
+  "@liveRejectTimeout": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.timeout (ADR 0520)."
+  },
   "navLive": "Live",
   "navAnalyze": "Analyze",
   "navLibrary": "Library",

@@ -2393,6 +2393,30 @@
   "liveListening": "Figyelek…",
   "liveNext": "Következő",
   "livePause": "Szünet",
+  "liveRejectLowConfidence": "Nem eléggé tiszta — pengesd meg újra",
+  "@liveRejectLowConfidence": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.lowConfidence (ADR 0520)."
+  },
+  "liveRejectModelUnavailable": "Az akkordfelismerés jelenleg nem elérhető",
+  "@liveRejectModelUnavailable": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.modelUnavailable (ADR 0520)."
+  },
+  "liveRejectNoChord": "Még nem érzékeltünk akkordot",
+  "@liveRejectNoChord": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.noChord (ADR 0520)."
+  },
+  "liveRejectSignalQuality": "Túl gyenge a jel — menj közelebb a mikrofonhoz",
+  "@liveRejectSignalQuality": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalQuality (ADR 0520)."
+  },
+  "liveRejectTimeout": "Túl sokáig tartott a döntés — próbáld újra",
+  "@liveRejectTimeout": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.timeout (ADR 0520)."
+  },
+  "liveRejectUnstable": "Még ingadozik — tartsd stabilan az akkordot",
+  "@liveRejectUnstable": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.unstable (ADR 0520)."
+  },
   "liveResume": "Folytatás",
   "liveStarting": "Indul…",
   "@liveStarting": {
