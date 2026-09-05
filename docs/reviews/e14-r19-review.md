@@ -8,7 +8,12 @@
 - **Dátum:** 2026-09-05
 - **ADR:** [`0525`](../adr/0525-seeded-manifested-augmentation-and-honest-ablation.md)
 
-## VÉGSŐ DÖNTÉS: **CHANGES REQUESTED** — 2 MAJOR, 2 MINOR, 1 NOTE
+## VÉGSŐ DÖNTÉS: **APPROVED** (javító kör #1 után, `55cb94f9`)
+
+> Az alábbi §1–§8 az ELSŐ review (`ff3ae59c`) jelentése, változatlanul. A
+> javító kör utáni újra-ellenőrzés leletenként a **§9**-ben.
+
+## Első verdikt (`ff3ae59c`): **CHANGES REQUESTED** — 2 MAJOR, 2 MINOR, 1 NOTE
 
 A kör minősége magas: az additív bővítés fegyelmezett, a validátor fail-closed,
 az ablation-riport becsületes, és a `docs/eval/augmentation-ablation.md` a kör
@@ -262,3 +267,109 @@ review nem módosított.
 3. `tools/round-gate.sh test/tooling/augmentation_manifest_test.dart` és
    `python3 -m pytest ml -q` újra zöld (reviewer-oldalon is).
 4. Full Gate **és** Router CI `success` a merge SHA-n (exact-SHA, ADR 0086 §2).
+
+---
+
+# 9. Újra-ellenőrzés a javító kör #1 után — HEAD `55cb94f9`
+
+Javító commit: `55cb94f9` „E14-R19 javító kör #1: manifest/fixture pin,
+provenance, rejected+enabled tiltás, költség-mező szétválasztás".
+`scope_audit=ok`, base `7eb7c4ac`, 7 változott fájl — saját `git diff
+--name-only` kereszt-ellenőrzés: pontosan a hét engedélyezett útvonal, az
+`ml/chords/**` továbbra is érintetlen.
+
+## 9.1 Kapuk — friss izolált klónban, saját kézzel
+
+```
+$ tools/round-gate.sh test/tooling/augmentation_manifest_test.dart
+  [1] format ZÖLD · [2] analyze ZÖLD · [3] test 37/37 ZÖLD ·
+  [4] architecture ZÖLD · [5] secrets ZÖLD · [6] l10n ZÖLD
+  MINDEN GATE ZÖLD   (exit 0)
+
+$ python3 -m pytest ml -q
+169 passed in 22.28s
+```
+
+(27 → **37** Dart cella, 157 → **169** Python cella — a javítás mércét hozott,
+nem csak kódot.)
+
+## 9.2 Leletenkénti zárás — mind saját próbával ellenőrizve
+
+### MAJOR-1 — **ZÁRVA**
+
+Új cella: **A11** — „the shipped `ml/augmentation_manifest.json` is pinned to
+this CI fixture … `ml/augmentation_manifest.json` equals the CI fixture,
+normalized JSON-for-JSON". Ugyanaz a párosítás a Python oldalon is.
+
+**Saját próba (P3), a MAJOR-1-et kiváltó mutáció megismételve** — csak
+`ml/augmentation_manifest.json` rontva (`composite_recipe_r173` →
+`accepted`/`enabled=true`), a fixture érintetlen:
+
+```
+$ flutter test test/tooling/augmentation_manifest_test.dart
+00:00 +36 -1: Some tests failed.
+Failing tests:
+  … A11 — the shipped ml/augmentation_manifest.json is pinned to this CI
+    fixture (review E14-R19 MAJOR-1) … equals the CI fixture, normalized
+    JSON-for-JSON
+```
+
+Az első review-ban ugyanez a mutáció **ZÖLD 27/27**-et adott. A rés zárva: a
+CI-oldali egyetlen mérce innentől a SZÁLLÍTOTT manifestet is védi.
+
+### MAJOR-2 — **ZÁRVA** mind a négy alponton
+
+| Alpont | Ma mérve (`55cb94f9`) |
+|---|---|
+| nincs provenance | ✅ `provenance` blokk: `generatedFrom` (megnevezi a `DEFAULT_TRANSFORM_CONFIG` baseline-t és a be/ki kapcsolókat), `datasetSource` (Klangio GST-MM, LOGO unseen-player), `classRatiosSource` |
+| `enabled` ellentmond a konfignak | ✅ `device_response`, `compression`, `traffic_ambient_noise`, `transient_burst` most `enabled=false` — pontosan a `DEFAULT_TRANSFORM_CONFIG` tükre |
+| `rejected` + `enabled=true` | ✅ `composite_recipe_r173` most `enabled=false`; **és új szabály tiltja** a párosítást |
+| fabrikált `classRatios` | ✅ `classRatiosSource: "illustrative — not measured (review E14-R19 MAJOR-2): no repo-local class-count run backs these numbers; ml.augment.class_ratios() computes real ratios … but was not run against a dataset to produce this manifest"` — kimondva, nem elfedve |
+
+**Saját próba (P4), a szállított validátort hívva:**
+
+```
+  PASS rejected row with enabled=true: ValueError: transforms[10].name='composite_recipe_r173'
+       status='rejected' but enabled=True — a measured-regressing row can…
+  PASS provenance removed:      TypeError: manifest missing required field: provenance
+  PASS classRatiosSource removed: TypeError: manifest.provenance missing required field(s): ['classRatiosSource']
+```
+
+Mindhárom szabály **fail-closed**, és a `docs/eval/augmentation-ablation.md`
+„Osztály-kiegyensúlyozás" szakasza sem hivatkozik többé mértként az
+illusztratív arányokra.
+
+A handoff „TÉNYLEGESEN generált" állítása a valóságra javítva.
+
+### MINOR-1 — **ZÁRVA**
+
+A költség-mező szétválasztva: a tíz „nem mért" sor `costBasisSeconds` +
+`costBasisSource` mezőt hord (a forrás megnevezve: `ml/honest_results.json`
+r173 `_timing`, gitignore-olt), és `measuredCostSeconds` **kizárólag** a
+ténylegesen mért `composite_recipe_r173` soron marad. A „hiányzó mérés
+számnak látszik" olvasat megszűnt.
+
+### MINOR-2 — **ZÁRVA**
+
+**Saját próba (P5):**
+
+```
+$ augment_pcm_with_chord_labels(…, config={"pitch_shift": {"semitone_range": 6.5}})
+TypeError: pitch_shift.semitone_range must be a whole number for the
+label-transposing path — got 6.5 (a fractional confi…
+```
+
+Nincs több néma csonkítás; a szerződés következetes a D2-vel.
+
+### NOTE-1 — nyitva marad, a kör-diffhez nincs köze
+
+A `.claude/hooks/protect_factory_files.py` egy **read-only**
+`tools/scope-audit.py` hívást is megtagad. Egy jövőbeli ADR 0112 önjavító kör
+tárgya; a jelen review a gépi auditot + `git diff --name-only`
+kereszt-ellenőrzést használta, a következtetés nem gyengült.
+
+## 9.3 Verdikt
+
+**APPROVED.** Nyitott BLOCKER/MAJOR/MINOR: **nincs**. A merge a
+zöld kapu (Full Gate + Router CI `success` a merge SHA-n) teljesülésével
+mehet.
