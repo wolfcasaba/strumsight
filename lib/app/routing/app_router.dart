@@ -42,7 +42,14 @@ import '../../features/practice/presentation/screens/practice_result_screen.dart
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
 import '../../features/practice/public.dart' show practiceCatalogProvider;
+import '../../features/practice_generator/application/usecase/revise_practice_plan.dart'
+    show PlanRevisionProposal;
+import '../../features/practice_generator/presentation/plan_preview_args.dart';
 import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
+import '../../features/practice_generator/presentation/screens/plan_change_review_screen.dart';
+import '../../features/practice_generator/presentation/screens/plan_preview_screen.dart';
+import '../../features/practice_generator/presentation/screens/plan_privacy_screen.dart';
+import '../../features/practice_generator/presentation/screens/weekly_plan_screen.dart';
 import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
 import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
 import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
@@ -519,6 +526,70 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, _) => Consumer(
             builder: (context, ref, _) => TodayPlanScreen(
               controller: ref.watch(todayPlanControllerProvider),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorWeekly,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final plan = ref.watch(activePracticePlanProvider);
+              // A `plan` a képernyő szerződésében NULLAZHATÓ, és a `null`
+              // ott a „még nincs terv" állapot — nem hiányzó adat. Betöltés
+              // közben tehát nem hazudunk üres tervet: ugyanaz a `null`
+              // megy be, amit a képernyő maga is kezel.
+              return WeeklyPlanScreen(
+                plan: plan.value,
+                today: ref.watch(practiceGeneratorTodayProvider)(),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorPrivacy,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => PlanPrivacyScreen(
+              deleteUseCase: ref.watch(deletePracticePlanningDataProvider),
+              exportUseCase: ref.watch(exportPracticePlanningDataProvider),
+            ),
+          ),
+        ),
+        // Az előnézet és a változás-áttekintés a generálási folyamat
+        // LÉPÉSEI: a megjelenítendő tervet, illetve javaslatot a hívó adja
+        // át. `extra` nélkül nincs mit mutatni — ilyenkor a mai tervre
+        // esünk vissza, nem rajzolunk kitalált tervet. Ugyanaz a
+        // redirect-őr, amit az elemzés-áttekintés használ.
+        GoRoute(
+          path: AppRoutes.practiceGeneratorPreview,
+          redirect: (_, state) => state.extra is PracticePlanPreviewArgs
+              ? null
+              : AppRoutes.practiceGeneratorToday,
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) {
+              final args = state.extra! as PracticePlanPreviewArgs;
+              return PlanPreviewScreen(
+                controller: ref.watch(planPreviewControllerFactoryProvider)(
+                  initialPlan: args.plan,
+                  validationContext: args.validationContext,
+                ),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorChangeReview,
+          redirect: (_, state) => state.extra is PlanRevisionProposal
+              ? null
+              : AppRoutes.practiceGeneratorToday,
+          builder: (_, state) => Builder(
+            builder: (context) => PlanChangeReviewScreen(
+              proposal: state.extra! as PlanRevisionProposal,
+              // Mindkét ág a mai tervre visz vissza. A javaslat
+              // ELFOGADÁSA a `RevisePracticePlan` dolga, és azt a hívó
+              // folyamat végzi el — a route nem ír tervet, mert akkor a
+              // döntés két helyen születne.
+              onAccepted: () => context.go(AppRoutes.practiceGeneratorToday),
+              onRejected: () => context.go(AppRoutes.practiceGeneratorToday),
             ),
           ),
         ),

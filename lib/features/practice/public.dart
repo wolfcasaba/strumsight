@@ -106,3 +106,8 @@ export 'domain/model/speed_builder_state.dart'
         SpeedBuilderState,
         SpeedBuilderStatus;
 export 'domain/service/speed_builder_engine.dart' show SpeedBuilderEngine;
+
+// A beépített gyakorlat-katalógus (2026-09-05). A `practice_generator`
+// katalógus-metaadata ezt olvassa, és az architektúra-szabály szerint egy
+// másik feature CSAK a `public.dart`-on át nyúlhat ide.
+export 'data/builtin_practice_catalog.dart' show BuiltinPracticeCatalog;

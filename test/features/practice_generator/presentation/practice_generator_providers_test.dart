@@ -268,25 +268,30 @@ void main() {
         );
       });
 
-      test('2/6 PlanPreview: planPreviewControllerFactoryProvider throws — '
-          'no production ExerciseCandidateResolver seam yet', () {
+      // 2026-09-05: a cella MEGFORDULT. Korábban azt rögzítette, hogy a
+      // provider DOB, mert nem volt éles `ExerciseCandidateResolver`. Az a
+      // seam azóta be van kötve (beépített katalógus + tervezői metaadat),
+      // ezért a mért tény most az ellenkezője. A cella nem törlődött: a
+      // hibaosztály ugyanaz marad, csak az elvárt irány fordult.
+      test('2/6 PlanPreview: planPreviewControllerFactoryProvider builds — '
+          'az éles ExerciseCandidateResolver be van kötve', () {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(planPreviewControllerFactoryProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
         );
       });
 
       test('3/6 PlanPrivacy: deletePracticePlanningDataProvider and '
-          'exportPracticePlanningDataProvider both throw', () {
+          'exportPracticePlanningDataProvider both build', () {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(deletePracticePlanningDataProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
         );
         expect(
           () => container.read(exportPracticePlanningDataProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
         );
       });
 
@@ -306,32 +311,34 @@ void main() {
         );
       });
 
-      test('6/6 WeeklyPlan: practiceGeneratorTodayProvider builds, but '
-          'activePracticePlanProvider throws — it needs the plan '
-          'repository, which needs the resolver seam', () async {
+      test('6/6 WeeklyPlan: a nap ÉS az aktív terv is felold — a terv '
+          'hiánya `null`, nem kivétel', () async {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(practiceGeneratorTodayProvider),
           returnsNormally,
         );
+        // Üres tárolón NINCS mentett terv. A helyes válasz `null` — az a
+        // „még nincs terv" állapot, amit a képernyő maga is kezel —, nem
+        // kivétel és nem kitalált üres terv.
         await expectLater(
           container.read(activePracticePlanProvider.future),
-          _throwsUnimplementedSeam,
+          completion(isNull),
         );
       });
 
       test(
-        'GEN: generationOrchestratorProvider and startPlanGenerationProvider '
-        'both throw — the resolver AND the input-builder seam are both open',
+        'GEN: generationOrchestratorProvider és startPlanGenerationProvider '
+        'egyaránt felépül — mindkét seam be van kötve',
         () {
           final container = buildProductionShapeContainer();
           expect(
             () => container.read(generationOrchestratorProvider),
-            _throwsUnimplementedSeam,
+            returnsNormally,
           );
           expect(
             () => container.read(startPlanGenerationProvider),
-            _throwsUnimplementedSeam,
+            returnsNormally,
           );
         },
       );

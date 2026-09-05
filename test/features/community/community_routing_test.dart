@@ -12,6 +12,8 @@
 // 403") kliens-oldali párja.
 library;
 
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -104,6 +106,23 @@ void main() {
 
       expect(on.difference(off), unorderedEquals(_communityPaths));
       expect(off.difference(on), isEmpty);
+    });
+  });
+
+  group('a belépési pont', () {
+    test('E6 — a Profil hub a community kapu-képernyőre visz', () {
+      // MÉRT hiba a saját munkámban (2026-09-05): a 13 route létezett, de a
+      // szállított felületről SEMMI nem vezetett hozzájuk. A
+      // `check_screen_reachability` ezt NEM fogja meg: az egy regisztrált
+      // GoRoute-ot elérhetőnek számol akkor is, ha semmi nem navigál oda.
+      final source = File(
+        'lib/features/profile_hub/screens/profile_hub_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('AppRoutes.community'));
+      // Az entry a kapu alatt áll: kikapcsolt community mellett nincs
+      // gomb egy nem létező útvonalra.
+      expect(source, contains('if (communityEnabled)'));
     });
   });
 

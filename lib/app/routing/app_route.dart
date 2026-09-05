@@ -31,6 +31,14 @@ abstract final class AppRoutes {
   // providers transitively depend on (ADR 0491 D5).
   static const String practiceGeneratorSetup = '/practice/generator/setup';
   static const String practiceGeneratorToday = '/practice/generator/today';
+  // A tervező további négy képernyője (2026-09-05). Eddig azért nem volt
+  // útvonaluk, mert két provider élesben dobott — nem azért, mert a route
+  // hiányzott.
+  static const String practiceGeneratorWeekly = '/practice/generator/weekly';
+  static const String practiceGeneratorPrivacy = '/practice/generator/privacy';
+  static const String practiceGeneratorPreview = '/practice/generator/preview';
+  static const String practiceGeneratorChangeReview =
+      '/practice/generator/change-review';
   static const String songTrainerLibrary = '/song-trainer';
   static const String songTrainerImport = '/song-trainer/import';
   static const String songTrainerNewEditor = '/song-trainer/editor/new';
