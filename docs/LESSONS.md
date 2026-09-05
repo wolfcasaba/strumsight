@@ -25899,3 +25899,47 @@ a piros feloldása a kör merge-étől függ, amit ugyanaz a piros zár ki (holt
 üzenettel). A javítás után a cella a megállt kör HEAD-jén (`13f8040d`) is
 lefutott — a merge utáni sor-állapotot szimulálva pedig a `skipTest` megszűnik
 és az élő cella újra ÉRDEMBEN mér (`admits`).
+
+## L644 — A küszöb-alapú megerősítő szűrő cold-start kivétele a scope-on KÍVÜLI teszteket tartja életben, de a saját scope-ján BELÜL nincs, ami pinnelje — az implementer becsületes jelzése nem mérce (E14-R12, review MAJOR-1, 2026-09-05)
+
+**Mit mértünk.** Az E14-R12 stabilizátora (`recognition_stabilizer.dart:88-94`)
+a legelső valaha látott eldöntött címkét **ránézésre** megerősíti, miközben az
+ADR 0518 D1/D3 szövege egységes `agreeFrames >= minAgreeFrames` küszöböt írt
+elő MINDEN címkére. Az implementer ezt a §10.2-ben kimondta — de a kivételt
+**egyetlen cella sem mérte**: a mátrix-cellák `bootstrapped()` segédfüggvénye
+HASZNÁLTA, nem pinnelte, a 3b cella pedig egy MÁR megerősített címke ellen mér,
+tehát a „minden ÚJ címke ránézésre megerősül" hibát nem fogta volna meg.
+
+A reviewer izolált klónban (`/tmp/e14r12-verify`) törölte a `_confirmedLabel ==
+null` ágat (`+13 -3`), és három cella ment pirosra — **mind a kör
+`allowed_paths`-án KÍVÜL**: `live_screen_test.dart` („Live renders the current
+chord + its strum on the timeline hero"), `live_stage_test.dart` A1 és A2.
+Mindhárom EGYETLEN keretet emittál és azonnali timeline-visszajelzést vár.
+
+**A szabály (két, egymást kizáró következtetés helyett a HELYES kettő).**
+
+1. **A kivétel visszaállítása H3 volna, nem javítás.** A küszöb tárgya az
+   **elmozdítás**; üres előzmény mellett nincs mit elmozdítani, és az a keret a
+   pipeline saját kapuját (ADR 0516) már megjárta. A kivétel nélkül a kör a
+   scope-ján KÍVÜLI, élő cellákat vinne pirosra — ez ugyanaz az osztály, mint
+   [[L593]] és [[L636]]: a kör szerződése ütközik egy már merge-elt,
+   kipinnelt viselkedéssel.
+2. **De a „védhető" nem azonos a „mérttel".** A helyes feloldás a normatív
+   szöveg (ADR 0518 **D11** — a kivétel kimondva a MÉRT indoklással és az
+   árával) **ÉS** egy saját őr-cella, ami azt is méri, hogy a kivétel **csak
+   egyszer** tüzel. Enélkül egy jövőbeli refaktor kiterjeszthetné a kivételt az
+   elmozdításra is anélkül, hogy bármi pirosra menne. Az implementer §10-es,
+   becsületes jelzése a review BEMENETE, nem a mérce helyettesítője.
+
+**Az általánosítás.** Ha egy küszöb-alapú szűrő **alapállapot-felvételre**
+kivételt tesz, a kivétel a kör szerződésének RÉSZE (ADR-döntés), és három
+cellát kíván: (a) a kezdőállapot még egyetlen bemenet előtt; (b) az első bemenet
+ránézésre átmegy; (c) a MÁSODIK, eltérő bemenet **már a teljes küszöböt** futja
+végig. Ugyanez a metrikákra is áll: ha az alapállapot-felvétel beleszámít a
+flip-számlálóba, azt a getter doksijának ki kell mondania, különben a
+downstream release-gate egy „0 elmozdítás" mérést „1 flip"-ként olvas
+(MINOR-2).
+
+**Őrteszt:** `test/features/live/recognition_stabilizer_test.dart` — a
+`brief §6 pt.8 — cold-start exception fires once (ADR 0518 D11)` csoport 3
+cellája; a `_confirmedLabel == null` ág törlésével a (c) cella PIROS.

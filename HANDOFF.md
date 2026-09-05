@@ -1,5 +1,88 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R12 KÉSZ — Provisional → confirmed stabilizátor: a timeline többé nem kártyásít minden felismerési rezdülést — PR [#582](https://github.com/wolfcasaba/strumsight/pull/582), squash `607715b1` (2026-09-05)
+
+A Chapter 14 Kör 12 a **címke-stabilizátort** szállítja a MÁR merge-elt
+keret-döntés (ADR 0516) **fölé**: egy eldöntött keret címkéje csak N egymást
+követő egyező kereten mozdíthatja el az előzményt, a pengetés-esemény pedig
+immutábilis marad. **ADR
+[0518](docs/adr/0518-recognition-stabilizer-above-the-timeline-reducer.md).**
+
+**Mi került a fára (1 új `lib/` fájl + 3 bekötés + 2 új tesztfájl):**
+
+| Fájl | Mit hoz |
+|---|---|
+| `live/engine/recognition_stabilizer.dart` (ÚJ) | `RecognitionStabilizer` + `StabilizerProfile` (`free.minAgreeFrames = 3`, `guided = 5`); `stabilize(LiveFrame) → LiveFrame?` — **átenged vagy eldob, sosem ír át**; `chordState` / `confirmationLatencyFrames` / `flipRate` getterek |
+| `live/providers/chord_timeline_provider.dart` | csak a `build()`: a stabilizátor a `liveFrameProvider` és a **VÁLTOZATLAN** `reduceChordTimeline` közé került (ADR 0518 D5) |
+| `live/providers/live_providers.dart` | `recognitionStabilizerProvider` (`Provider.autoDispose`, D9) |
+| `live/public.dart` | additív export |
+| `test/features/live/recognition_stabilizer_test.dart` (ÚJ) | az állapotgép-mátrix (§6 1., 2., 4., 5., 6., 8. pont) |
+| `test/features/live/chord_timeline_churn_test.dart` (ÚJ) | a churn-mérés (3a/3b) valódi `ProviderContainer`-bekötéssel |
+
+**A kör lényege egy mondatban:** ez **nem** második megerősítési kapu — a
+stabilizátor nem olvas konfidenciát, tonalness-t vagy jelminőséget, bemenete a
+MÁR eldöntött keret (`frame.current != null`), egyetlen döntése a **CÍMKE-
+stabilitás** (ADR 0518 D1/D2). Nincs időzítő: a mérce a keret-számláló (D3),
+és nincs új állapot-szótár — a merge-elt `RecognitionDecision`
+(`candidate`/`provisional`/`confirmed`) hordozza az állapotot.
+
+**Mért késleltetés, UGYANAZON a 13 keretes bemeneten** (§10.4): `FREE`
+`confirmationLatencyFrames=3`, `flipRate=0.385` (5/13) vs `GUIDED` `=1`,
+`0.077` (1/13) — a pár mindkét komponensben eltér, tehát a profil valóban
+paraméter, nem elágazás (D4). Az elmozdítás ára 15 fps mellett Free ≈2 keret
+(~133 ms), Guided ≈4 keret (~267 ms).
+
+**Amit a review MÉRT, nem bemondásra fogadott el** (Claude/Opus 5, read-only,
+izolált klón — [`docs/reviews/e14-r12-review.md`](docs/reviews/e14-r12-review.md),
+2 menet, végül **APPROVED**, 0 nyitott lelet):
+
+- **MAJOR-1 (1. menet):** a **cold-start kivétel** (a legelső valaha látott
+  címke ránézésre megerősül) a kör szerződésén KÍVÜL született, és **egyetlen
+  cella sem pinnelte**. A reviewer izolált klónban törölte a `_confirmedLabel
+  == null` ágat: pontosan a §10.2-ben megnevezett **három, a scope-on KÍVÜLI**
+  cella ment pirosra (`live_screen_test.dart` hero + `live_stage_test.dart`
+  A1/A2) — azaz a kivétel **védhető**, a visszaállítása H3 volna. Feloldás:
+  **ADR 0518 D11** (orchestrátor, a mért indoklással) + a javító kör saját
+  őr-cellája, ami azt is méri, hogy a kivétel **csak egyszer** tüzel;
+- **MINOR-1** a `candidate` állapot addig egyetlen cellában sem volt mérve,
+  **MINOR-2** a `flipRate` doksija nem mondta ki, hogy az alapállapot-felvétel
+  is flipnek számít — mindkettő ZÁRVA a javító körben;
+- a javító kör `lib/` diffje **kizárólag doc-comment** (5 sor, mind `///`), a
+  brief normatív szakasza pedig **bájtra azonos** maradt (15 503 bájt) — az
+  implementer nem nyúlt a szerződéshez;
+- a `test/property/chord_timeline_property_test.dart` (a kör `gate_tests`-ében,
+  de a scope-on kívül) **módosítatlan és zöld** (9/9) — a reducer bit-azonos.
+
+**Nyitva hagyva (nem blokkoló, az R13/R09 bemenete):** NOTE-1 — az idle keret
+nem szakítja meg a futó egyezés-sorozatot (`B, [idle ×100], B, B` megerősít, és
+a latency az üres kereteket is számolja; konzisztens a getter doksijával és a
+reducer 1. szabályával); NOTE-2 — az azonos `strumSeq`-ű, ellentétes irányú
+keret a TELJES keretet ejti (a D7 tudatos ára; ma nincs ilyen termelő).
+
+**Pre-flight (a `brief-lint` két `strict` lelete):** **S12** — a §7
+gate-parancs nem tükrözte a `gate_tests` listát, javítva; **S15** — a brief
+2026-08-20-i alapja elmozdult, a §0.0 újramérte (`main @ 16b101f7`) és **öt
+tényt** talált: a `RecognitionDecision` szótár és a keret-szintű döntési hely
+(ADR 0516) MÁR merge-elve van, a `LiveFrame` már hordozza a döntést, a reducer
+szemantikáját a körön KÍVÜL élő property-teszt pinneli (→ `gate_tests`, L593),
+és a §7 parancs javítva. Az előre kiosztott `0364` ADR-szám elavult volt — a
+foglaló a **`0518`**-at adta (**NYOLCADIK** egymást követő kör, ahol a queue
+ADR-oszlopa elavult).
+
+**A kör egy H5 halton át jutott ide:** a Full Gate a merge-jelölt `13f8040d`-n
+ZÖLD volt, a Router CI viszont piros egy INFRASTRUKTÚRA-őrön, ami a `main`-en
+is piros volt — a feloldás a [#584](https://github.com/wolfcasaba/strumsight/pull/584)
+önjavító kör ([L643](docs/LESSONS.md#l643)), utána a kör a §0.2
+`REVIEW-APPROVED` fokon a **merge-lépésnél** folytatódott. A zöld kapu az ÚJ
+merge SHA-n (`aba6bdaf`) újra lefutott: Full Gate
+[`33960209745`](https://github.com/wolfcasaba/strumsight/actions/runs/33960209745)
+`success`, Router CI
+[`33960190436`](https://github.com/wolfcasaba/strumsight/actions/runs/33960190436)
+`success`.
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending`
+sora (a Ch14 sávból ma `E14-R13`, `E14-R15`, `E14-R16`, `E14-R19` van nyitva).
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R12 / H5 feloldva: az élő SORT mérő őr a sor-fej SAJÁT, VALÓDI ütközését minősítette defektnek (2026-09-05)
 
 **A halt.** Az E14-R12 kész és APPROVED, a Full Gate ZÖLD a merge-jelölt
