@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/audio/lifecycle/audio_session_lease.dart';
 import '../engine/real_strum_engine.dart';
+import '../engine/recognition_stabilizer.dart';
 import '../engine/strum_engine.dart';
 import '../model/live_frame.dart';
 
@@ -22,6 +23,14 @@ final liveFrameProvider = StreamProvider.autoDispose<LiveFrame>((ref) {
   ref.onDispose(engine.stop);
   return engine.frames;
 });
+
+/// The chord-timeline's label-stability gate (ADR 0518). `autoDispose` so
+/// every Live visit gets a fresh state machine and this never outlives the
+/// timeline that owns it (D9).
+final recognitionStabilizerProvider =
+    Provider.autoDispose<RecognitionStabilizer>(
+      (ref) => RecognitionStabilizer(),
+    );
 
 /// Whether mic permission is granted (requests it on first read).
 ///

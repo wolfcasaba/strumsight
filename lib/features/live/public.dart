@@ -7,6 +7,10 @@
 /// stable contract for code that is about to move to `core/`.
 library;
 
+/// The chord-timeline label-stability gate above the pipeline's own chord
+/// decision (E14-R12, ADR 0518).
+export 'engine/recognition_stabilizer.dart';
+
 /// The strum-engine seam (real/mock) Learn drives during a lesson.
 export 'engine/strum_engine.dart';
 
