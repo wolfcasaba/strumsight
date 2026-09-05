@@ -392,6 +392,54 @@ gyengítése: a merge-kapu ugyanazon a SHA-n, zölden teljesült. A flake maga
 **follow-up** — a `song_trainer` cella determinisztikussá tétele a kör tilos
 zónáján kívül esik; a HANDOFF §6 viszi tovább.
 
+### 9.46 CI-addendum 2 — a MÁSODIK piros egy ÖRÖKÖLT alap-drift, szintén nem a kör
+
+A `0a964310` SHA-n mindkét kapu pirosra váltott, és MINDKETTŐ **ugyanaz az
+egyetlen gyökérok**: a completion-matrix drift.
+
+```
+router-ci 33972014841 → tools/tests/test_completion_matrix_sync.py::test_the_real_tree_is_in_sync
+full-gate 33972014063 → test/tooling/program_completion_test.dart (3 cella)
+
+  Ch14 (E14): reports done=16,    queue measures done=17
+  Ch14 (E14): reports pending=3,  queue measures pending=2
+```
+
+A két érintett fájl — `docs/sdd/program-completion-report.md` és
+`docs/execution/pipeline-queue.tsv` — a kör diffjében **nem szerepel** (a
+queue-t az ADR 0087 §4 szerint kifejezetten a driver vezeti, nem a kör).
+
+**Mért gyökérok — a drift az ALAP commiton él, nem a körön:**
+
+```
+$ git merge-base origin/main HEAD          →  ff9027b5   (a rebase-alap, egy main-commit)
+$ cd <plain main klón> && git checkout ff9027b5
+$ python3 tools/sync-completion-matrix.py --check
+  2 drifted cell(s) …                                    EXIT=1     ← az ALAP már drifteles
+$ git reset --hard origin/main             →  9632a96d
+$ python3 tools/sync-completion-matrix.py --check
+  completion matrix is in sync with the queue            EXIT=0     ← a KÖVETKEZŐ main-commit javította
+```
+
+A kör tehát egy olyan pillanatnyi `main`-állapotra rebase-elt, amelyben egy
+másik sáv már `done`-ra írta a queue-sorát, de a completion-matrix
+szinkronizálása még nem landolt. A megoldás **kizárólag** újra-rebase az
+azóta javított `main`-re — a kör egyetlen sorát sem kellett módosítani:
+
+```
+$ git rebase origin/main                   →  9632a96d alapon
+$ python3 tools/sync-completion-matrix.py --check
+  completion matrix is in sync with the queue            EXIT=0
+```
+
+**H5-megfontolás.** A körön két piros CI-futás van, de EGYIK SEM a kör kódjára
+vonatkozó bizonyíték, és egyik sem vak újrapróbálkozás: mindkettőnek kimért,
+a körön KÍVÜLI gyökéroka van (1. egy nem-determinisztikus `song_trainer` cella,
+ugyanazon a SHA-n újramérve zöld; 2. egy örökölt alap-drift, a rebase-alap
+commiton reprodukálva és a friss `main`-en eltűnve). A zöld kapu változatlanul
+áll: a merge kizárólag olyan SHA-n történhet, amelyen a `full-gate` ÉS a
+`router-ci` `success`.
+
 ### 9.5 Végső verdikt
 
 **APPROVED.** 0 nyitott BLOCKER / MAJOR / MINOR. A merge a zöld kapu (§7)
