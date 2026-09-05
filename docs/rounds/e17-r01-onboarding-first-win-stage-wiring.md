@@ -92,6 +92,49 @@ forrás és a zöld kapu megkülönböztethetetlen*).
 **Regressziós őr:** `tools/tests/test_e17_r01_first_win_source_scope.py` — a
 revízió ELŐTTI briefen piros, utána zöld.
 
+## 0.0.1 Pre-flight újramérés — a kör indulása (`main @ 5fbb4937`, 2026-09-05)
+
+Az orchestrátor a §2 MINDEN mért állítását újramérte a kör indulási HEAD-jén
+(`5fbb4937`, az önjavító kör merge-e). **Eredmény: a §2 teljes egészében áll, brief-revízió
+nem kellett** — az alábbi mérésekkel:
+
+| Állítás | Mérés | Eredmény |
+|---|---|---|
+| A Stage-et se route, se imperatív hívás nem éri el | `grep -rn "FirstWinStageScreen" lib/ test/ tool/` | csak a saját deklarációja + 2 TESZT-hivatkozás (`first_win_test.dart:156`, `e13_r16_screens_golden_test.dart:132`) — `lib/`-ből NULLA fogyasztó |
+| A szállított gyár fake | `first_win_providers.dart:20-23` | `(_) => FakeOnboardingFirstWinEngine.new` — változatlan |
+| A fake sosem emittál produkcióban | `grep -rn "\.emit(" lib/features/onboarding/` | 0 találat; `FakeOnboardingFirstWinEngine.start()` = `_started = true` (`first_win_engine.dart:32`) |
+| Nincs produkciós override | `grep -rn "onboardingFirstWinEngineFactoryProvider.overrideWith" lib/` | 0 találat |
+| A `strumEngineProvider` a `live/public.dart` felületén elérhető | `lib/features/live/public.dart:41` → `export 'providers/live_providers.dart'` | ÁLL (a symbol nem külön exportsor, a **fájl** exportált); a kereszt-feature szabályt a `tool/check_architecture.dart:382-392` a `public.dart`-végződésre méri → az onboarding `../../live/public.dart` importja legális |
+| Precedens ugyanerre | `practice_observation_gateway_provider.dart:31` | `ref.watch(strumEngineProvider)` a `../../live/public.dart` importon át |
+| `LiveFrame.confidence` | `live_frame.dart:83` | `double get confidence => latestStrum?.confidence ?? 0` |
+| Küszöb-hármas mérhető (A5/A6/A7) | `first_win_providers.dart:10-14` | `kFirstWinConfidenceThreshold = 0.60`, `isFirstWinSuccess` = `>=` (INKLUZÍV) → alatta `0.59`, rajta `0.60`, fölötte `0.61` |
+| **Erőforrás-tulajdonlás a TÉNYLEGES hívási láncon** (prompt §1/2. szabály) | `grep -rn "\.acquire(" lib/` + `grep -rn "createMicCapture" lib/` | a mikrofon-lease-t a `mic_capture.dart:82` `_coordinator.acquire(...)` szerzi, a `strumEngineProvider` `createMicCapture(ref, AudioOwner.live)` hívásából (`live_providers.dart:13`) — **az `AudioOwner` enumnak ma öt variánsa van** (`audio_session_lease.dart:5-11`), onboarding NINCS köztük, és a §5.3 szerint nem is kell |
+| **Cél-állapot elérhetősége** (prompt §1/1. szabály) | a Stage állapotai nem enumból jönnek, hanem az `AsyncValue` ágaiból (`first_win_stage_screen.dart:28-30`) | mindhárom ág elérhető: `.value == null` → Listening, `hasAttempt && !success` → Retry, `success` → Continue; a **hiba-ág ma NEM létezik** — ezt a kör építi (A10) |
+| A D5 hiba-ág l10n kulcsai megvannak | `lib/l10n/base/app_en.arb:6-7` + `app_localizations_hu.dart:4061,4064` | `micPermissionBody` és `micPermissionAction` MINDKÉT locale-ban él, produkciós használattal (`analyze_screen.dart:181-182`) → **új l10n kulcs nem kell, az [L646](../LESSONS.md#l646) csapdája elkerülve** |
+| `entryLocationFor` egy-forrás | `adaptive_shell_routes.dart:28`, `onboarding_screen.dart:108,132` | ÁLL |
+| Az `OnboardingStep` switch teljes | `onboarding_screen.dart:176-186` | `welcome` / `permission` / `done` — a `build` egy kimerítő `switch`; **új enum-érték tilos** (§3), tehát a Stage a folyamaton BELÜL renderelt/pusholt képernyő |
+
+**ADR-szám.** A foglaló (`tools/round-slots.py reserve-adr --round E17-R01`) `0527`-et adott,
+mert a lemezen/ágakon a legmagasabb ADR a `0526`. A kör mégis a **`0534`**-et használja: a
+merge-elt őr (`tools/tests/test_e17_r01_first_win_source_scope.py::AdrNumberIsFreeTest`) a
+brief fejlécének és a `docs/execution/pipeline-queue.tsv` ADR-oszlopának EGYEZÉSÉT méri, a
+queue pedig `0534`-et tartalmaz és a driver tulajdona (ADR 0087 §4 — az orchestrátor nem
+írja). A `0527` a foglalóban kiégetve marad, a `0534`-re pedig az orchestrátor külön markert
+írt, tehát párhuzamos kör egyiket sem kaphatja meg. A `test_adr_numbering.py` csak
+EGYEDISÉGET mér (nem folytonosságot), ezért a hézag szabályos.
+
+**Visszakeresés (ADR 0312, KÖTELEZŐ).** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr`
+(szűkítve, majd teljes korpuszon):
+[L606](../LESSONS.md#l606) (*az üres forrás és a zöld kapu megkülönböztethetetlen* — ez a
+halt osztálya), [L498](../LESSONS.md#l498) (*a „gyártott mérés": szintetikus bemenet a
+VALÓDI motoron át hitelesnek látszik* — az A8 pontosan ezt zárja ki),
+[L644](../LESSONS.md#l644) (*a saját scope-on belüli kivételt semmi nem pinneli; az
+implementer becsületes jelzése nem mérce* — az A9/A10 cellák ezért gépi őrök, nem §10-es
+mondatok), [L612](../LESSONS.md#l612) (*az őr ne a kör munkájának HIÁNYÁT pinnelje*),
+[adr/0281](../adr/0281-permission-primer-and-honest-first-win.md) §2 (a tiltott
+feltétel-nélküli siker-képernyő), valamint a saját halt-jelzése
+(`halts/E17-R01 H3`). Új, a §2-t cáfoló előzmény NINCS.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 Scope-ütközés esetén a kimenet a brief-REVÍZIÓ, nem a scope önkényes tágítása: állítsd meg a kört (`stopped`), és írd le, melyik §-t kell módosítani.
