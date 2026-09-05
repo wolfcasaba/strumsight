@@ -145,6 +145,10 @@ class WrapperModeTest(unittest.TestCase):
                 "FAKE_SIGNAL": str(workdir / ".codex-round-status"),
                 "FAKE_WORKFILE": str(workdir / "munka.txt"),
                 "MM_POLL_SECONDS": "1",
+                # A SIGTERM→SIGKILL türelmi idő élesben 5 mp; ez a suite hamis,
+                # azonnal kilépő binárissal mér, ezért ott tiszta fali óra
+                # (E14-R13/H5 önjavító kör, 2026-09-05).
+                "MM_KILL_GRACE_SECONDS": "1",
             }
         )
         environment.pop("ROUND_BRIEF", None)

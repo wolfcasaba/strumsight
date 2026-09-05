@@ -28,6 +28,27 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+
+def band_parallelism_verdict(open_ids, ready_ids):
+    """`None`, ha a sáv párhuzamossága rendben; különben a hibaüzenet.
+
+    A követelmény `min(2, nyitott)` — a párhuzamosság igénye ahhoz kötött,
+    HÁNY kör van egyáltalán nyitva, nem egy fix kettőhöz. Lásd a
+    `IndependenceClauseTest` fixture-celláinak indoklását.
+    """
+    if not open_ids:
+        return None
+    required = min(2, len(open_ids))
+    if len(ready_ids) >= required:
+        return None
+    blocked = [rid for rid in open_ids if rid not in ready_ids]
+    return (
+        "a sáv egyszálú: a briefek KIMONDOTT függetlenségi kikötése nem "
+        f"érvényesül — {len(open_ids)} nyitott körből {len(ready_ids)} "
+        f"indítható (kell: {required}); indítható: {sorted(ready_ids)}, "
+        f"blokkolt: {sorted(blocked)}"
+    )
+
 import importlib.util
 
 
@@ -1119,9 +1140,44 @@ class IndependenceClauseTest(unittest.TestCase):
             for row in open_e14
             if not round_slots.unmet_prerequisites(ROOT, row[0], row[1], rows)
         ]
-        self.assertGreaterEqual(
-            len(ready),
-            2,
-            "az E14 sáv egyszálú: a briefek KIMONDOTT függetlenségi kikötése nem érvényesül "
-            f"(indítható körök: {ready})",
+        verdict = band_parallelism_verdict([row[0] for row in open_e14], ready)
+        self.assertIsNone(verdict, verdict)
+
+    # --- a küszöb-szabály fixture-ön, az ÉLŐ sortól függetlenül ---
+    #
+    # HEAL E14-R19/H3 (2026-09-05): a cella fix `>= 2`-t követelt, ezért a sáv
+    # KIFUTÁSAKOR — amikor egyetlen `pending` kör maradt — strukturálisan nem
+    # lehetett zöld. MÉRVE az `origin/main@00b12485`-ön (az E14-R13 merge-e
+    # után, saját klónban, üres diffel): 19 E14-sorból 18 `done`, az egyetlen
+    # nyitott az `E14-R19`, és a Router CI emiatt PIROS lett a `main`-en — a
+    # sor VÉGÁLLAPOTA minősült szerializációs defektnek (L643 osztály).
+    #
+    # A szabály ezért a nyitott körök számához kötött, és NEM skip: egyetlen
+    # nyitott körnél is állítja, hogy annak indíthatónak KELL lennie (a sor
+    # feje nem lehet blokkolt). Kettő vagy több nyitott körnél a ≥2-es
+    # párhuzamossági bar változatlan.
+
+    def test_the_last_open_round_only_has_to_be_startable(self) -> None:
+        """A MÉRT eset: egy nyitott, indítható kör → nem defekt."""
+        self.assertIsNone(band_parallelism_verdict(["E14-R19"], ["E14-R19"]))
+
+    def test_a_blocked_last_open_round_is_still_a_defect(self) -> None:
+        """A kifutás NEM ürügy: egy blokkolt sor-fejet továbbra is elkapunk."""
+        verdict = band_parallelism_verdict(["E14-R19"], [])
+        self.assertIsNotNone(verdict)
+        self.assertIn("E14-R19", verdict)
+
+    def test_two_or_more_open_rounds_keep_the_parallelism_bar(self) -> None:
+        """Az EREDETI defekt változatlanul piros: 3 nyitott, 1 indítható."""
+        self.assertIsNotNone(
+            band_parallelism_verdict(["E14-R03", "E14-R04", "E14-R05"], ["E14-R03"])
         )
+        self.assertIsNone(
+            band_parallelism_verdict(
+                ["E14-R03", "E14-R04", "E14-R05"], ["E14-R03", "E14-R04"]
+            )
+        )
+
+    def test_a_closed_band_is_never_a_defect(self) -> None:
+        """Nyitott kör nélkül nincs mit párhuzamosítani."""
+        self.assertIsNone(band_parallelism_verdict([], []))

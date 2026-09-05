@@ -26153,3 +26153,251 @@ fail-safe ága helyett):
    a lane-coverage cella különben a mainen áll pirosra, nem a kör ágán.
 
 **Őrteszt:** `tools/tests/test_completion_matrix_sync.py`::`test_the_real_tree_is_in_sync` és `test/tooling/program_completion_test.dart`::`lane-coverage — every queue prefix has a row in the completion matrix`
+
+## L649 — A `router-ci` job-plafonjába nem egy kör futott bele, hanem a suite lassulásának LÁNC-SZINTŰ hozadéka — és a plafon a self-heal tiltott zónája, ezért a javítás helye a MÉRT költség-tétel, nem a `timeout-minutes` (E14-R13 / H5, önjavító kör, 2026-09-05)
+
+**Mit mértünk.** Az `E14-R13` KÉSZ volt (review APPROVED, célzott gate 12/12,
+`full-gate.yml` `success` a `08c17390` merge SHA-n), a merge mégis tilos maradt:
+a `router-ci.yml` a **saját 10 perces job-plafonjába** futott.
+
+```
+33967924666  63ce10ac  9m 26s  success
+33969617963  9dc86618  9m 35s  success
+33972014841  0a964310  9m 54s  failure (külön, körön kívüli drift)
+33973215326  08c17390  10m 06s CANCELLED   ← a plafon
+pytest saját bemondása az utolsó végigfutó mérésen:
+  1 failed, 947 passed, 2 skipped, 768 subtests passed in 582.56s (0:09:42)
+```
+
+A kör diffje 12 fájl (3 doc + `live_screen.dart` + banner + 4 ARB + 3 live
+teszt), **egyetlen Python tesztet sem ad hozzá**. A plafon és a suite-hossz
+különbsége nem egy körön fogyott el, hanem a lánc együttes hozadékaként —
+és minden újabb router-teszttel tovább fogy.
+
+**Miért nem a `timeout-minutes` a javítás.** A `.github/workflows/**` az
+ADR 0112 §3 abszolút tiltott zónája, és ez **nem prompt-szöveg, hanem gépi őr**:
+a `heal_pr_gate_violation()` (`tools/round-pipeline.sh`) a heal SAJÁT,
+squash-merge-elt PR-jének diffjét nézi meg a három gate-artefaktumra
+(`tools/round-gate.sh`, `build-apk.yml`, `router-ci.yml`), és találat esetén
+`H-GATEGUARD`-dal ember elé viszi a láncot. Egy „csak megemelem a plafont"
+javítás tehát a lánc feloldása helyett egy MÁSIK halttal állt volna meg.
+
+**Amit a profilozás talált** (`main @ 9632a96d`, `pytest -q --durations=40`,
+949 passed / 1 skipped, **850,85 s** ezen a boxon):
+
+| tétel | mért ár | gyökérok |
+|---|---|---|
+| `brief-lint.py::predecessor_paths()` | **75 149** `load_brief` hívás 413 briefre; a 77,5 s-os korpusz-menetből **63,1 s** | négyzetes alak: minden brief lintje ÚJRA beolvassa és TOML-t elemez minden korábbi kör briefjét |
+| `attempt_selfheal` halt-RAG lekérdezése | **27,0 s / hívás** (ebből 24,9 s **CPU**, nem hálózat) × 9 cella | a motorválasztást mérő cellák is végigfuttatták a visszakeresést |
+| `mm-round.sh` SIGTERM→SIGKILL türelme | bedrótozott `sleep 5` × ~20 cella | a hamis, azonnal kilépő binárissal mérő cellák is kivárták az éles türelmi időt |
+
+Mind a három javítása a `tools/**`-ban van, ami az önjavító kör ENGEDÉLYEZETT
+zónája (ADR 0112 §2). Eredmény ugyanazon a boxon, azonos teszt-halmazon:
+**850,85 s → 289,94 s (−66%)**, `949 passed, 1 skipped` mindkét oldalon; a
+413 brief teljes lelet-listája bájtra azonos a javítás előtt és után (mérve:
+0 eltérő brief).
+
+**Hogyan alkalmazd.**
+
+1. **Egy CI-plafonba futó suite nem „flake", hanem strukturális mérés.** Ha a
+   job-időtartamok monoton nőnek és beérik a `timeout-minutes`-t, a vak
+   újrapróbálkozás pontosan az a hurok, ami ellen a H5 véd. A harmadik
+   `gh run rerun` nem bizonyíték — a `--durations` az.
+2. **A tiltott zóna nem zsákutca.** Ha a legkézenfekvőbb javítás gate-artefaktum,
+   keresd meg a MÉRT költség-tételt az engedélyezett zónában. Itt három tétel
+   adta a futásidő kétharmadát.
+3. **A gyorsítás kapcsolóval megy, az alapértelmezés az ÉLES viselkedés.**
+   `MM_KILL_GRACE_SECONDS` (alap 5) és `PIPELINE_HEAL_RAG` (alap 1) — ugyanaz a
+   minta, mint a `PIPELINE_STATUS_CHECK=0`: a teszt csak azt hagyja ki, amit
+   NEM ő mér. Ez az egyetlen alak, ami nem csúszik át termék-viselkedés
+   halk megváltoztatásába.
+4. **Gyorsítótár csak fájl-IDENTITÁSHOZ kötve.** A kulcs `(útvonal, st_mtime_ns,
+   st_size)` — ugyanaz a szerződés, amivel a CPython a `.pyc`-t érvényteleníti —,
+   és az invalidálást INVERZ próbával kell igazolni (ugyanaz az útvonal, más
+   tartalom → más eredmény), különben a gyorsítás csendben helyességi hibává
+   válik.
+
+**Őrteszt:** `tools/tests/test_router_ci_suite_cost.py` — a
+`BriefLintCorpusCostTest` determinisztikusan (óra nélkül) méri, hogy egy
+korpusz-menet minden brief-fájlt legfeljebb egyszer elemez; a javítás ELŐTTI
+alakon mérve **9 325 elemzés / 385 különböző fájl / 25 lintelt brief**
+(korlát: 410) → PIROS, utána ZÖLD. A `BriefLintCacheFreshnessTest` az
+invalidálást, a `ProductionDefaultsAreUnchangedTest` a két kapcsoló éles
+alapértelmezését köti le.
+
+---
+
+## L650 — A merge-zár fájlja a HÍVÓ fa gyökeréhez kötött: egy izolált munkapéldányból landolt kör MÁS zárat vesz fel, mint a fő fában futó párhuzamos kör (E14-R13, merge-lépés, 2026-09-05)
+
+**Mit mértünk.** Az E14-R13 landolásakor a `.pipeline/inflight/` két futó sávot
+mutatott (`E14-R13` és a `heal:H3` `E14-R19`), tehát az ADR 0171 §1 szerint a
+záró rituálék és a merge a **merge-záron** keresztül mennek. A landolót viszont
+a kör IZOLÁLT munkapéldányából kellett hívni (`/home/ubuntu/ss-sonnet-impl-e14-r13`),
+mert a `tools/round-land.sh` a `repo_root`-ot a `BASH_SOURCE` saját útvonalából
+számolja. A zárfájl feloldása ugyanezt a gyökeret követi:
+
+```bash
+# tools/round-merge-lock.sh:20-23
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
+lock_file=${ROUND_MERGE_LOCK:-"$state_dir/merge.lock"}
+```
+
+Mérve, a munkapéldányból, override NÉLKÜL:
+
+```
+repo_root=/home/ubuntu/ss-sonnet-impl-e14-r13
+lock=/home/ubuntu/ss-sonnet-impl-e14-r13/.pipeline/merge.lock     ← NEM a fő fáé
+```
+
+És a lemezen **két külön zárfájl** él — a munkapéldányé egy KORÁBBI, override
+nélküli landolási kísérletből:
+
+```
+-rw-rw-r-- … Sep  5 13:30 /home/ubuntu/ss-sonnet-impl-e14-r13/.pipeline/merge.lock
+-rw-rw-r-- … Sep  5 16:50 /home/ubuntu/music-theory/.pipeline/merge.lock
+```
+
+**Miért.** A `flock` a zárat a fájl-inode-hoz köti. Két külön fájl = két külön
+zár, azaz a sorosítás NÉMÁN elmarad: a landoló hibátlanul lefut, „megszerzi a
+zárat", és közben a másik sáv ugyanabban a másodpercben írhatja a `HANDOFF.md`-t,
+a `docs/LESSONS.md`-t vagy a sor-fájlt. A hiba nem ad jelet — nincs hibaüzenet,
+nincs piros kapu; csak akkor derül ki, ha a két záró commit ténylegesen
+összeér. Ez ugyanaz a hibaosztály, mint az L232 (`prepare-flutter-generated.sh`
+némán a forrásfát készíti elő, mert a scriptek a SAJÁT útvonalukból számolnak
+gyökeret), csak itt a következmény nem egy hiányzó előfeltétel, hanem egy
+kiiktatott kölcsönös kizárás.
+
+**Hogyan alkalmazd.** Ha a landolást a kör munkapéldányából hívod, a zárat
+KÉZZEL kösd a fő fához, és a fő fa `.pipeline`-ját add meg:
+
+```bash
+ROUND_MERGE_LOCK=/home/ubuntu/music-theory/.pipeline/merge.lock \
+  tools/round-land.sh --pr <PR> --round <kör> --gate-test <útvonal>…
+```
+
+Ugyanez a záró rituálék kézi szakaszára is áll (`flock -w 1800
+/home/ubuntu/music-theory/.pipeline/merge.lock -c '…'`). Általánosan: minden
+`repo_root`-ból származtatott állapot-útvonalnál mérd ki, MELYIK fához tartozik
+— a munkapéldány a fájlhalmazra izolál, a lánc-szintű állapotra (zár, sor-fájl,
+inflight) NEM.
+
+**Őrteszt:** nincs — az őr helye a `tools/tests/` volna, ami ennek a körnek
+tilos zónája (ADR 0087 §4: a mérce nem módosulhat attól, akit mér). A lecke az
+önjavító kör bemenete: egy cella, amely a munkapéldányból hívott
+`round-merge-lock.sh` zárfájlját a fő fáéhoz méri (vagy a landolót a
+`PIPELINE_STATE_DIR`/`ROUND_MERGE_LOCK` explicit átadására kötelezi).
+## L651 — Egy VALÓS-adatra hangolt küszöb csendben a SZINTETIKUS zaj-populáció alá kerül: a randomizált kapu ~2 %-os seed-bukása nem flake volt, hanem egy fantom onset a szállított DSP-ben (E14-R19 / H3, önjavító kör, 2026-09-05)
+
+**A halt.** Az E14-R19 kész és APPROVED volt (impl + javító kör + review, PR
+#595), de a randomizált property gate PIROSAT adott a
+`test/property/dsp_property_test.dart:438` „a strum must merge into ONE onset"
+celláján: 17/20 a ≥18 küszöbbel, `PROPERTY_SEED=33975939211`. A kör
+orchestrátora helyesen MÉRTE, hogy ugyanaz a seed a kör diffje NÉLKÜL, tiszta
+`origin/main`-en is bukik — és helyesen NEM dispatch-elt újra másik seedre
+(az reward-hacking lett volna).
+
+**A gyökérok — nem a küszöb, hanem a termék.** A cellát nem egy szerencsétlen
+véletlen buktatta: a szállított onset-detektor egyetlen, még kicsengő
+pengetésre **fantom MÁSODIK onsetet** adott ~0,63 s-mal a valódi attack után.
+Az appban ez egy hamis strum-nyíl és egy hamis Learn-pontozási esemény annak,
+aki csak TARTJA az akkordot. A property-cella mintavételi dobozában
+(`lowFirst` × stagger 6–14 ms × kicsengés 0,5–0,9 s) az **1458 rácspontból 31**
+duplázott — ez a ~2 % pontosan az a bukási ráta, amit a random seedek mutattak.
+
+**Miért csúszott be.** A r166 valós-adatos hangolás a SuperFlux `delta`-t
+20 → 12-re vitte (a Klangio felvételeken 72 % → 90 % recall), és ezzel a
+küszöb a saját fájlja által dokumentált „ring-out beating bump" populáció
+**alá** került (mért csúcsok: 12,5–16,8). A r166 jelentése szerint „minden
+szintetikus pin zöld maradt" — és ez igaz is volt: a determinisztikus pinek
+FIX stagger/kicsengés értékeken futnak, a hézag csak a randomizált doboz
+belsejében nyílt ki. **A valós-adatos nyereség árát a szintetikus oldalon egy
+hónapig senki nem fizette ki, mert a fix fixture-ök nem is látták.**
+
+**A javítás alakja — magnitúdó helyett SZÓRÁS.** A két populáció a
+flux-nagyságban ÁTFED (a fantom 12,5–16,8 vs. a lágy valós attackek, amikért a
+delta-csökkentés történt), a sáv-SZÓRÁSBAN viszont nem:
+
+| | flux | emelkedő sáv (64-ből) |
+|---|---|---|
+| valódi attack | 325–483 | **64** |
+| kicsengési lebegés | 12,5–16,8 | **11–13** |
+
+Egy pengetés az egész spektrumot egyszerre gerjeszti; a lebegés csak szomszédos
+parciálisok között mozgat energiát. Ezért a kapu **sávszám**, nem szint:
+`SuperFluxOnsetDetector.minRiseBands = 16` (a sávok negyede).
+
+**A választás MÉRVE, nem becsülve** — 2 013 címkézett Klangio-strum (valós) +
+246 pontos szintetikus rács:
+
+| minRiseBands | valós recall@0,12 | valós precision | szintetikus duplázás |
+|---|---|---|---|
+| 0 (javítás előtt) | 89,6 % | 76,2 % | 6 |
+| 14 | 89,5 % | 76,3 % | 0 |
+| **16 (szállított)** | **89,6 %** | **76,7 %** | **0** |
+| 20 | 89,0 % | 77,4 % | 0 |
+| 24 | 87,2 % | 79,6 % | 0 |
+
+Nulla valós-recall költség, 16-tal kevesebb hamis detektálás, és 2 sáv
+tartalék a legerősebb mért lebegés (13) felett. 20 felett a kapu MÁR eszi a
+lágy valós attackeket — nem ingyen csavarható tovább.
+
+**Hogyan alkalmazd.**
+
+1. **A randomizált kapu ~2 %-os seed-bukása nem flake — mérd meg a rácsot.**
+   A „másik seeddel zöld" nem bizonyíték; a mintavételi doboz teljes
+   bejárása az. Itt 31/1458 rácspont adta pontosan a megfigyelt rátát.
+   A küszöb újraszármaztatása (n és a bar hangolása) itt a TÜNETET tüntette
+   volna el — a fantom onset a felhasználónál maradt volna.
+2. **Amikor valós adatra hangolsz le egy küszöböt, futtasd ÚJRA a szintetikus
+   oldalt a RANDOMIZÁLT dobozban, nem csak a fix pineken.** A r166 „minden pin
+   zöld" állítása igaz volt és mégis félrevezetett: a fix fixture-ök nem
+   fedték le azt a (stagger, kicsengés) tartományt, ahol az ár megjelent.
+3. **Ha két populáció a hangolt dimenzióban átfed, keress ORTOGONÁLIS
+   dimenziót.** A magnitúdó itt zsákutca volt (bármelyik irányba mozdítva vagy
+   a fantom marad, vagy a valós recall esik); a sáv-szórás egyetlen
+   paraméterrel, valós-recall költség NÉLKÜL választotta szét őket.
+4. **Az őrteszt a MÉRT rácspontokat pinelje, plusz egy recall-ellensúlyt.**
+   Egy „ne duplázz" teszten az a javítás is átmenne, ami SEMMIT nem detektál —
+   ezért a `superflux_ring_out_phantom_test.dart` harmadik cellája külön köti
+   le, hogy minden valódi attack tüzel, és hogy a kapu a mért sávban
+   (14–20) marad.
+
+**Őrteszt:** `test/features/live/dsp/superflux_ring_out_phantom_test.dart` — a
+31 MÉRT rácspont, detektor- és `StrumAnalyzer`-szinten is; tiszta
+`main@4e633b80`-on mindkét cella PIROS, a javítással ZÖLD. A property gate
+15 különböző seeden (köztük a bukó `33975939211`-en) zöld.
+
+**Ugyanennek a healnek a MÁSODIK, a merge-lépésen előkerült akadálya — és
+ugyanaz a hibaosztály egy másik őrben.** Miközben ez a javítás CI-ra várt, a
+`main`-be beérkezett az `E14-R13`, és a Router CI a `main`-en is pirosra
+váltott:
+`test_pipeline_throughput.py::IndependenceClauseTest::test_the_real_e14_band_is_not_single_threaded`
+fix `>= 2` indítható E14-kört követelt. Üres diffel, saját klónban mérve az
+`origin/main@00b12485`-ön: 19 E14-sorból **18 `done`**, egyetlen nyitott az
+`E14-R19` — a cella a sáv **kifutását** minősítette szerializációs defektnek.
+Ez pontosan az **L643** osztály (az élő SORT mérő őr a sor saját, valódi
+állapotát hívja hibának), most nem a sor-fej ütközésén, hanem a sor VÉGÉN.
+
+**A javítás alakja itt is „pontosítsd a hatókört, ne szüntesd meg" (ADR 0112
+§3).** A küszöb `min(2, nyitott)`, és nem `skipTest`: egyetlen nyitott körnél
+is állítja, hogy annak indíthatónak KELL lennie — így a kifutás nem válik
+ürüggyé egy blokkolt sor-fej elnézésére. A szabály tiszta függvény
+(`band_parallelism_verdict`), fixture-cellákkal, tehát az ÉLŐ sortól
+függetlenül mérhető — épp az, ami az eredeti cellából hiányzott.
+
+**Az általánosítható tanulság:** *egy őr, amely az ÉLŐ sort olvassa, fix
+abszolút küszöbbel, előbb-utóbb a sor egy legitim életciklus-állapotát fogja
+defektnek minősíteni.* A küszöbnek a mért populáció méretéből kell
+származnia. Ez a kör kettőt is talált ebből az osztályból egyszerre — az egyik
+a DSP-ben (fix property-bar egy 20 elemű mintán), a másik a sorban (fix `>= 2`
+egy kifutó sávon).
+
+**Mellékes, NEM ehhez a halthoz tartozó lelet:** a
+`test/tooling/freeze_policy_test.dart` két cellája a tiszta `main`-en is
+piros (üres diffel, saját klónban mérve) — az E12-R30 feature-freeze óta
+**142** útvonal osztályozatlan a `verify_freeze.py` szerint, mert a lánc E13
+óta folyamatosan szállít `lib/**` kódot. CI-ban a cella a sekély klón ágán
+`exit 2`-vel elmegy, ezért a `main` zöld marad. A freeze feloldása vagy a
+bázis újra-rögzítése a release manager döntése (ADR 0489), nem egy önjavító
+köré — itt jelentve, nem javítva.

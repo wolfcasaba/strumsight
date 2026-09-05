@@ -1,5 +1,161 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R13 KÉSZ — a Live „miért nem sikerült" állítása a MERGE-ELT felismerési szótárból jön — PR [#590](https://github.com/wolfcasaba/strumsight/pull/590), squash `e5724b5d` (2026-09-05)
+
+A képernyő eddig egy **saját, képernyő-lokális `inputLevel`-heurisztikából**
+mondta meg, mi a baj, miközben a `LiveFrame.chordRejectReason` (ADR 0516 D1/D5)
+be volt kötve, de **nulla UI-fogyasztója** volt. A kör ezt az egyetlen döntési
+helyet zárta be: az új `UncertaintyReasonBanner` a merge-elt, **zárt hatelemű**
+`RecognitionRejectReason`-t (ADR 0505 D3) fogyasztja **kimerítő `switch`-csel**
+(`default:` ág nélkül, hogy egy jövőbeli enum-elem fordítási hibát adjon), a
+banner a `feedback` Stage-slotba (ADR 0276) kerül, és amíg látszik, az
+általános `liveWeakSignal` szöveg **nem jelenhet meg mellette**.
+
+| Fájl | Mit ad |
+|---|---|
+| `lib/features/live/widgets/uncertainty_reason_banner.dart` (ÚJ) | a hat okhoz tartozó honosított szöveg, kimerítő `switch` |
+| `lib/features/live/screens/live_screen.dart` | a banner bekötése a `feedback` slotba + a heurisztikus ág elhatárolása `chordRejectReason == null`-ra |
+| `lib/l10n/base/app_{en,hu}.arb` (+ a generált aggregátum) | a hat ok-szöveg **FORRÁS** szegmensben; az aggregátumot a generátor írja (ADR 0307 §4) |
+| `test/features/live/uncertainty_reason_banner_test.dart`, `.../live_screen_truthfulness_test.dart` (ÚJ) | `RecognitionRejectReason.values` fölött ITERÁLÓ mátrix + páronkénti distinctness mindkét locale-on; termelő-cella, kölcsönös kizárás, textscale-hármas (150 / 200 / 250 %) |
+| [ADR 0520](docs/adr/0520-live-uncertainty-reason-from-the-merged-recognition-vocabulary.md) | a kötött döntések: egyetlen ok-szótár, egy hely mondja meg a „miért", a heurisztika a „nincs döntés" ág marad |
+
+**A merge-elt viselkedés nem sérült:** a `live_stage_test.dart` két cellája
+**átkötve** (nem törölve) a döntési forrásra, a `live_screen_test.dart`
+hero-cellái (akkord-címke + `90%`) változatlan állítás-szöveggel zöldek, és a
+két pixel-golden (`textScale 1.0` és `2.0`) **nem mozdult** — a frame nélküli
+default állapotban `chordRejectReason == null`, tehát a banner nem látszik.
+
+**Pre-flight-történet.** A kör kétszer halt, mindkétszer az ELŐRE MEGÍRT brief
+elavult alapja miatt, és mindkettőt önjavító kör oldotta fel: **H3** (a brief a
+GENERÁLT l10n-aggregátumot engedte a FORRÁS szegmens helyett + egy MÁSODIK,
+négyelemű ok-taxonómiát írt elő a merge-elt zárt enum mellé → PR #587, `brief-lint`
+**S16**, [L646](docs/LESSONS.md)) és **H5** (a `router-ci` a saját 10 perces
+job-plafonjába futott, a javítás a MÉRT költség-tételeket szüntette meg, nem a
+plafont → PR #596, [L649](docs/LESSONS.md)).
+
+Kapuk a `95fa6aab` merge SHA-n: `full-gate.yml` [33977845092](https://github.com/wolfcasaba/strumsight/actions/runs/33977845092)
+`success`, `router-ci.yml` [33977840619](https://github.com/wolfcasaba/strumsight/actions/runs/33977840619)
+`success`; a kombinált-HEAD célzott kapu (`tools/round-land.sh`, 7 teszt-útvonal)
+minden lépésre ZÖLD; review: `docs/reviews/e14-r13-review.md` → **APPROVED**
+(0 nyitott lelet).
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R19 / H3 feloldva: nem a küszöb volt rossz, hanem a szállított DSP adott FANTOM onsetet (2026-09-05)
+
+Az `E14-R19` KÉSZ és APPROVED volt (impl + javító kör + review, PR
+[#595](https://github.com/wolfcasaba/strumsight/pull/595)), a merge-et a
+randomizált property gate PIROSA zárta ki:
+`test/property/dsp_property_test.dart:438` „a strum must merge into ONE onset"
+— **17/20** a ≥18 küszöbbel, `PROPERTY_SEED=33975939211`. A kör orchestrátora
+helyesen mérte, hogy ugyanez a seed a kör diffje NÉLKÜL, tiszta `main`-en is
+bukik, és helyesen NEM dispatch-elt újra másik seedre.
+
+**A gyökérok nem statisztikai.** A szállított onset-detektor egyetlen, még
+kicsengő pengetésre **fantom MÁSODIK onsetet** ad ~0,63 s-mal a valódi attack
+után — az appban hamis strum-nyíl és hamis Learn-pontozás annak, aki csak
+tartja az akkordot. A property-cella mintavételi dobozában (`lowFirst` ×
+stagger 6–14 ms × kicsengés 0,5–0,9 s) az **1458 rácspontból 31 duplázott** —
+ez a ~2 % a megfigyelt seed-bukási ráta.
+
+Miért csúszott be: a r166 valós-adatos hangolás a SuperFlux `delta`-t 20 → 12-re
+vitte (Klangio recall 72 % → 90 %), és a küszöb ezzel a saját fájlja által
+dokumentált kicsengési lebegés-populáció **alá** került (mért csúcsok
+12,5–16,8). A determinisztikus pinek FIX stagger/kicsengés értékeken futnak,
+ezért zöldek maradtak — a hézag csak a randomizált dobozban nyílt ki.
+
+**A javítás: magnitúdó helyett SÁV-SZÓRÁS.** A két populáció a flux-nagyságban
+átfed, a sávszámban nem — valódi attack **64/64** sáv, kicsengési lebegés
+**11–13**. Ezért `SuperFluxOnsetDetector.minRiseBands = 16` (a sávok negyede),
+ctor-injektálható, mint a `delta`/`lambda`.
+
+| minRiseBands | valós recall@0,12 (2013 Klangio-strum) | valós precision | szintetikus duplázás |
+|---|---|---|---|
+| 0 (javítás előtt) | 89,6 % | 76,2 % | 6 |
+| 14 | 89,5 % | 76,3 % | 0 |
+| **16 (szállított)** | **89,6 %** | **76,7 %** | **0** |
+| 20 | 89,0 % | 77,4 % | 0 |
+| 24 | 87,2 % | 79,6 % | 0 |
+
+Nulla valós-recall költség, 16-tal kevesebb hamis detektálás, 2 sáv tartalék a
+legerősebb mért lebegés felett; 20 fölött a kapu MÁR eszi a lágy valós
+attackeket. A küszöb újraszármaztatása (n és a bar hangolása) csak a tünetet
+tüntette volna el, a fantom onset a felhasználónál maradt volna.
+
+**Őrteszt:** `test/features/live/dsp/superflux_ring_out_phantom_test.dart` — a
+31 MÉRT rácspont detektor- és `StrumAnalyzer`-szinten, plusz egy
+recall-ellensúly (egy „semmit nem detektál" javítás ne mehessen át) és a kapu
+mért sávjának (14–20) lekötése. Tiszta `main@4e633b80`-on PIROS, a javítással
+ZÖLD; a property gate **15 seeden** zöld (köztük a bukó `33975939211`).
+Hangolási forrás frissítve: `docs/rag/chunks/005-onset-spectral-flux.md`.
+Lecke: **L651**.
+
+### Második, a merge-lépésen ELŐKERÜLT akadály (ugyanez a heal oldotta meg)
+
+A `main`-be közben beérkezett `E14-R13` merge után a **Router CI a `main`-en
+is PIROSRA váltott**, és ez minden további merge-et zárt volna:
+`tools/tests/test_pipeline_throughput.py::IndependenceClauseTest::test_the_real_e14_band_is_not_single_threaded`
+fix **`>= 2`** indítható E14-kört követelt. MÉRVE az `origin/main@00b12485`-ön,
+saját klónban, ÜRES diffel: a 19 E14-sorból **18 `done`**, az egyetlen nyitott
+az `E14-R19` — a cella tehát a sáv **KIFUTÁSÁT** minősítette szerializációs
+defektnek (L643 osztály: az élő SORT mérő őr a sor saját, valódi állapotát
+hívja hibának).
+
+Javítás: a küszöb a nyitott körök számához kötött — **`min(2, nyitott)`** —,
+és NEM skip: egyetlen nyitott körnél is állítja, hogy annak **indíthatónak
+kell lennie** (a sor feje nem lehet blokkolt), kettő vagy több nyitottnál a
+≥2-es párhuzamossági bar változatlan. A szabály tiszta függvénybe került
+(`band_parallelism_verdict`), és **négy fixture-cella** köti le: a mért eset
+(1 nyitott / 1 indítható → rendben), a kifutás mint ürügy elzárása
+(1 nyitott / 0 indítható → továbbra is defekt), az EREDETI defekt
+(3 nyitott / 1 indítható → továbbra is piros) és a zárt sáv.
+Router-suite: **958 passed / 1 skipped**.
+
+
+**A folytatás az `E14-R19`-en kizárólag a merge-lépés** — a kör kész és
+APPROVED, a branch (`sonnet-impl/e14-r19-augmentation-and-balanced-recipe`,
+PR #595) a friss `main`-re rebase/merge után újra CI-t kap, és a property gate
+immár nem seed-szerencse kérdése.
+
+**NEM ehhez a halthoz tartozó, jelentett lelet:** a
+`test/tooling/freeze_policy_test.dart` két cellája a tiszta `main`-en is piros
+(üres diffel, saját klónban mérve) — az E12-R30 feature-freeze óta **142**
+útvonal osztályozatlan a `verify_freeze.py` szerint, mert a lánc E13 óta
+folyamatosan szállít `lib/**` kódot. CI-ban a cella a sekély klón ágán
+`exit 2`-vel elmegy, ezért a `main` zöld marad. A freeze feloldása vagy a bázis
+újra-rögzítése a release manager döntése (ADR 0489), nem egy önjavító köré.
+
+
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R13 / H5 feloldva: a `router-ci` suite 850,85 s → 289,94 s, a plafonhoz nem nyúltunk (2026-09-05)
+
+Az `E14-R13` KÉSZ és APPROVED volt (`full-gate.yml` `success` a `08c17390`
+merge SHA-n), de a `router-ci.yml` a **saját 10 perces job-plafonjába** futott
+(`10m 06s` → `cancelled`, run 33973215326; a pytest maga `582,56 s`). A plafon
+emelése a self-heal abszolút tiltott zónája (ADR 0112 §3), és **gépi őr** is
+védi (`heal_pr_gate_violation()`), ezért a javítás a MÉRT költség-tételeket
+szüntette meg a `tools/**`-ban.
+
+| Mit | Mért ár a javítás előtt | Javítás |
+|---|---|---|
+| `brief-lint.py::predecessor_paths()` négyzetes brief-elemzése | 75 149 `load_brief` hívás 413 briefre (a 77,5 s-os korpusz-menetből 63,1 s) | fájl-identitáshoz (`mtime_ns` + méret) kötött memoizálás; a 413 brief lelet-listája **bájtra azonos** előtte/utána |
+| `attempt_selfheal` halt-RAG lekérdezése | 27,0 s / hívás (24,9 s CPU) × 9 cella | `PIPELINE_HEAL_RAG` kapcsoló, **alapérték `1`** — élesben változatlan; a motorválasztást mérő cellák kapcsolják ki |
+| `mm-round.sh` SIGTERM→SIGKILL türelme | bedrótozott `sleep 5` × ~20 cella | `MM_KILL_GRACE_SECONDS`, **alapérték `5`** — élesben változatlan |
+
+**Mérce:** `python3 -m pytest tools/tests -q` ugyanazon a boxon,
+**850,85 s → 289,94 s (−66%)**, `949 passed, 1 skipped` mindkét oldalon; a
+teszt-fájlok száma NŐTT (+1 fájl, +5 cella).
+
+**Őrteszt:** `tools/tests/test_router_ci_suite_cost.py` — determinisztikus (óra
+nélküli) invariáns: egy korpusz-menet minden brief-fájlt legfeljebb egyszer
+elemez. A javítás előtti alakon **9 325 / korlát 410** → PIROS, utána ZÖLD.
+Mellette a gyorsítótár invalidálása (inverz próba) és a két kapcsoló éles
+alapértelmezése. Lecke: **L649**.
+
+**A folytatás az `E14-R13`-on kizárólag a merge-lépés** — a kör kész, a branch
+`sonnet-impl/e14-r13-live-ui-truthfulness-hotfix` a CI-zöld `08c17390`-on áll,
+PR [#590](https://github.com/wolfcasaba/strumsight/pull/590) nyitva marad. NE
+implementáld újra: upstream-szinkron → a teljes kapu az így kapott merge SHA-n
+(a Router CI ekkor már a gyorsított suite-tal fut) → zöld kapus squash-merge.
+Teljes diagnózis: `.pipeline/halt-detail-E14-R13.md`.
+
+
 ## ✅ E14-R16 KÉSZ — Onset-detektor A/B: a mérés MEGVAN, és a harness a SAJÁT konfundját is méri — PR [#592](https://github.com/wolfcasaba/strumsight/pull/592), squash `735fc4a7` (2026-09-05)
 
 Négy onset-detektáló függvény (`current`, `canonicalSuperFlux24`,
