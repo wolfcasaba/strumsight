@@ -104,7 +104,8 @@ final class RecognitionEventCategories {
             metrics.acceptedAccuracy.numerator,
         rejected: metrics.coverage.denominator - metrics.coverage.numerator,
         uncertainCorrect: null,
-        uncertainCorrectUnavailableReason: _uncertainCorrectUnavailableReasonText,
+        uncertainCorrectUnavailableReason:
+            _uncertainCorrectUnavailableReasonText,
       );
 
   /// Accepted (surfaced) detections that are not correct — identical to
