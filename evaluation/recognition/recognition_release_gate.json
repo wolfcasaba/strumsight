@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "1",
+  "thresholdsVersion": "ch14-alpha-v1",
+  "thresholds": [
+    {
+      "metricPath": "overall.acceptedAccuracy.value",
+      "threshold": 0.9,
+      "label": "Accepted accuracy (event-kind-agnostic; stands in for SDD Ch14 §7.2 \"accepted direction accuracy\" per ADR 0511 R6 — acceptedAccuracy is not restricted to direction events)"
+    },
+    {
+      "metricPath": "overall.chordMacroF1.value",
+      "threshold": 0.7,
+      "label": "Chord macro-F1 (SDD Ch14 §7.4)"
+    },
+    {
+      "metricPath": "overall.chordNoChordF1.f1",
+      "threshold": 0.88,
+      "label": "N.C./unknown F1 (SDD Ch14 §7.4)"
+    },
+    {
+      "metricPath": "overall.chordWeightedAccuracy.value",
+      "threshold": 0.8,
+      "label": "Chord weighted accuracy (SDD Ch14 §7.4)"
+    },
+    {
+      "metricPath": "overall.coverage.value",
+      "threshold": 0.7,
+      "label": "Coverage alongside accepted accuracy (SDD Ch14 §7.2)"
+    },
+    {
+      "metricPath": "overall.directionF1.value",
+      "threshold": 0.8,
+      "label": "End-to-end direction macro-F1 (SDD Ch14 §7.2)"
+    },
+    {
+      "metricPath": "overall.falseVisibleEventsPerMinute.value",
+      "threshold": 2.0,
+      "label": "False visible event rate, event-kind-agnostic (SDD Ch14 §7.2 \"false visible arrow hard-negative\")"
+    },
+    {
+      "metricPath": "overall.latencyP50Ms.value",
+      "threshold": 180.0,
+      "label": "Verdict latency p50 (SDD Ch14 §7.2)"
+    },
+    {
+      "metricPath": "overall.latencyP95Ms.value",
+      "threshold": 280.0,
+      "label": "Verdict latency p95 (SDD Ch14 §7.2)"
+    },
+    {
+      "metricPath": "overall.onsetTolerance50Ms.f1",
+      "threshold": 0.82,
+      "label": "Onset F1 @50 ms (SDD Ch14 §7.2)"
+    }
+  ]
+}
