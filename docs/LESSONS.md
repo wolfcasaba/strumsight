@@ -25426,3 +25426,66 @@ dolga, mielőtt a besorolás kifutójára hallgatna.
 **Őrteszt:** nincs — a javítás helye a `tools/round-resume-probe.sh` (a
 munkapéldányok lokális `HEAD`-jének mérése és a besorolásba emelése), ami ennek
 a körnek tiltott zónája; önjavító kör tárgya.
+
+---
+
+## L635 — A landoló MÁSODIK hívása „rebase kihagyva"-ként látja a SAJÁT első hívása által rebase-elt ágat, és merge-el — az exact-SHA CI-kapu így a rebase-elt HEAD-en kimarad (E14-R09, 2026-09-05)
+
+**Mit mértünk.** Az E14-R09 zöld kapuval állt merge előtt: Full Gate
+(`33939712545`) és Router CI (`33939713669`) egyaránt `success` a `d8de1f54`
+HEAD-en. A merge pillanatában a `main` közben elmozdult (`3b9a744c`, az E16-R06
+landolása), ezért a protokoll szerint `tools/round-land.sh` következett.
+
+A landoló **kétszer** futott:
+
+1. **Első hívás** (`… | tail -40`, `EXIT=1`): elvégezte a rebase-t
+   (`d8de1f54` → **`a5c579ac`**, `3b9a744c` fölé), safe force push-sal
+   publikálta, és a prompt §4.1 szerinti `blocked` úton kilépett — „új
+   exact-SHA CI-dispatch kell, ebben az invokációban nincs merge".
+2. **Második hívás**: a naplója első érdemi sora
+   `round-land: a branch már tartalmazza a friss origin/main-et; rebase kihagyva`
+   — és mivel rebase-t nem kellett végeznie, a **saját, egy perccel korábbi
+   rebase-e** által előállt `a5c579ac` HEAD-et már „stabilnak" vette: lefuttatta
+   a kombinált-HEAD célzott kaput (zöld), majd **squash-merge-elt**
+   (`cc936bde`, PR #576, 03:02:11Z).
+
+Az `a5c579ac` SHA-n tehát **soha nem futott Full Gate** — a `gh run list`
+mérése szerint azon a SHA-n csak a push-triggerelt Router CI indult el. Az
+exact-SHA merge-kapu (ADR 0086 §2) ezen a körön a rebase-elt HEAD-re nem
+teljesült; a `d8de1f54` zöldje egy MÁS, a rebase által átírt commit-láncra
+vonatkozott.
+
+**Miért maradt néma.** Az első hívás teljes kimenete a
+`<munkapéldány>/.pipeline/land-E14-R09.log` fájlba ment, a hívó `stdout`/`stderr`
+üres maradt (`/tmp/land-e14r09.out` és `.err` egyaránt **0 bájt**) — a `blocked`
+kérés tehát az orchestrátornak láthatatlan volt. Ráadásul a **második hívás
+felülírta ugyanazt a naplófájlt**, így az első hívás indoklása utólag sem volt
+kiolvasható. Az orchestrátor `EXIT=1` + üres kimenet alapján „valami korán
+elhasalt"-ra következtetett, és megismételte a hívást — pontosan azt a lépést,
+amit a protokoll a CI-dispatch UTÁNRA ír elő.
+
+**A kettős ok.** (a) Eljárási: a `blocked` kimenetel után a hívás megismétlése
+előtt KÖTELEZŐ a friss HEAD-re dispatch-elt, zölden lezárult exact-SHA CI — ezt
+a kör orchestrátora kihagyta. (b) Gépi: a landoló a „kell-e rebase" kérdésből
+következtet a „van-e igazolt CI" kérdésre, holott a kettő független — egy általa
+MOST rebase-elt ág is „tartalmazza a friss origin/main-et", miközben az új SHA-n
+egyetlen futás sincs. A napló egyetlen, felülírható fájlba írása ezt a hézagot
+diagnosztizálhatatlanná is teszi.
+
+**Utólagos mérés (a kör nem hagyta bizonyítatlanul).** A merge után az
+orchestrátor a `main` merge-SHA-jára (`cc936bde`) dispatch-elte a
+`full-gate.yml`-t, és a post-merge lokális `tools/round-gate.sh` is lefutott a
+merge-elt fán (format/analyze/mindkét célzott teszt/architecture/secrets/l10n →
+ZÖLD). A merge-elt állapot tehát mérve van; ami hiányzott, az a **merge ELŐTTI**
+exact-SHA bizonyíték a rebase-elt HEAD-en.
+
+**A szabály.** A landoló `blocked` kimenetele nem „próbáld újra" — a következő
+lépés MINDIG a friss HEAD SHA-jára dispatch-elt CI, annak zöld lezárulta, és
+csak azután a landoló második hívása. Ha a landoló kimenete üres, a
+`<munkapéldány>/.pipeline/land-<kör>.log` fájlt kell elolvasni **a következő
+hívás előtt** — az felülíródik.
+
+**Őrteszt:** nincs — a javítás helye a `tools/round-land.sh` (a merge előtt a
+saját, MÉRT head SHA-jára kérjen le exact-SHA CI-konklúziót, és a naplót
+körönként-invokációnként külön fájlba írja), ami ennek a körnek tiltott zónája;
+önjavító kör tárgya.

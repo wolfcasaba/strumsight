@@ -1,5 +1,62 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R09 KÉSZ — A Chapter 14 „mérési és bizonyítási alap" (R01–R09) LEZÁRVA: fail-closed release-kapu + egy-forrás dashboard — PR [#576](https://github.com/wolfcasaba/strumsight/pull/576), squash `cc936bde` (2026-09-05)
+
+A release-döntés innentől **futtatható artefaktumon** áll, nem egy doksi-mondaton:
+a `recognition_release_gate.json` v1 a Chapter 14 §7.2/§7.4 Alpha-értékeit
+hordozza, és a kapu **fail-closed** — hiányzó vagy `null` metrika **FAIL**, a
+metrika nevével az indoklásban. **ADR
+[0511](docs/adr/0511-recognition-release-gate-and-single-source-report.md).**
+
+| Döntés | Mit véd |
+|---|---|
+| **D1** hiányzó/`null` metrika → FAIL, megnevezve | „nincs adat, átengedjük" nem lehet zöld (ADR 0473 mintája) |
+| **D2** az irány a report `definition.higherIsBetter` mezőjéből jön | két irány-forrás széttartana, és a szétcsúszás néma (L549) |
+| **D3** a határ az elfogadó oldalhoz tartozik, epszilon nélkül | a kerekítés nem engedhet át küszöb alatti értéket |
+| **D4** `confidentWrong`/`rejected` pontos képlet, `uncertainCorrect` **`null` + indoklás** | a `0` hamis állítás lenne — a helyesség-halmaz privát, a párosító lemásolása második számítási forrást hozna (L269) |
+| **D5** egy köztes modell → JSON/MD/HTML, egyetlen kerekítési pont | a három formátum nem csúszhat szét |
+| **D6/D9** verziózott séma, kipinnelt v1 küszöbök | ismeretlen séma → típusos hiba; a lazítás csak a teszt látható átírásával (L613) |
+
+**Mit épített a kör (8 fájl, 2339 sor):** `RecognitionReleaseGate` +
+`recognitionMetricExtractors` regiszter · `RecognitionDashboardReport` egy-forrás
+modell **négy `GroupKey` szerinti bontással** (a hiányzó kulcsú esetek megnevezett
+`(unknown)` csoportban, sosem eldobva) · `RecognitionReportRenderer`
+(JSON/MD/HTML) · `evaluation/recognition/recognition_release_gate.json` v1 (10
+bejegyzés) · `tool/recognition_report.dart` CLI (exit `3` bukott kapunál) ·
+`docs/eval/recognition-dashboard.md`.
+
+**A kapu MA FAIL-t ad** a legacy-DSP baseline-nal szemben (akkord 67,1%, onset F1
+67,4%, irány 80,7% — `docs/eval/recognition-release-guard.md`). Ez a kapu HELYES
+viselkedése, nem hiba: az Alpha-szintet rögzíti, és a release-döntés emberi
+(E14-R01 aktivációs szerződés).
+
+**Pre-flight §0.0 revíziók (mérve, `main @ 20736577`):** a `technique` bontás
+KIESETT (a `GroupKey` négy értéket ismer, a bővítése az E14-R08 tilos zónája) ·
+az E14-R08 reportja **nem** tartalmaz csoport-bontást, ezért ez a kör particionál
+és a **nyilvános** `computeRecognitionMetrics`-et hívja csoportonként · az
+`uncertainCorrect` a nyilvános kimenetből nem vezethető le · a Ch14 14
+Alpha-sorából **10** képezhető le hűen, a maradék 4 **kimondva** kimarad (L549).
+
+**Review:** [`docs/reviews/e14-r09-review.md`](docs/reviews/e14-r09-review.md) —
+**APPROVED**, 0 nyitott lelet (3 NOTE). **6/6 valódi-sértés próba pirosra vitte**
+a célzott suite-ot: szigorú határ, hiányzó-metrika átengedés, fix `>=` irány,
+`uncertainCorrect: 0`, időbélyeg a JSON-ban, lazított v1 küszöb.
+
+**Az ADR-szám sodródása (harmadszor mérve):** a queue előjegyzése `0361`, a
+foglaló `0511`-et adott — ugyanaz, mint E14-R05 (`0357`→`0507`) és E14-R08
+(`0360`→`0509`). A foglaló a mérvadó (ADR 0171 §1.0.1); a queue ADR-oszlopa az
+egész E14-sávban elavult.
+
+**Mérce:** célzott kapu ZÖLD (27/27) · gépi scope-audit `0 sértés` (8 fájl,
+pontosan az `allowed_paths`) · Full Gate + Router CI ZÖLD a `d8de1f54`-en ·
+**a merge SHA-n a Full Gate csak UTÓLAG futott le** — a hézagot és az okát az
+[L635](docs/LESSONS.md) rögzíti.
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending`
+sora — `E14-R10` (direction abstention hotfix).
+
+---
+
 ## ✅ E16-R06 KÉSZ — A shell gerince a termék SAJÁT navigációjával járható: az A3-verdikt negatívból pozitívba fordult — PR [#575](https://github.com/wolfcasaba/strumsight/pull/575), squash `c67816f5` (2026-09-05)
 
 Az `E16-R05` zárókör **negatív A3-verdiktet** mért: a „BE" besorolású
