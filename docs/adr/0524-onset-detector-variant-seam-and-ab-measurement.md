@@ -189,6 +189,40 @@ jelekkel és kézzel épített esemény-listákkal dolgoznak; a valódi korpusz 
 CLI külső könyvtár-argumentuma (`real_audio_dsp_baseline.dart` alakja).
 `test/fixtures/**` ennek a körnek tilos zónája.
 
+### D8 — A keresztvariáns pontosság-összevetés SKÁLA-KONFUNDÁLT, és ezt a harness MÉRI, nem csak leírja
+
+*(a kör review-jában mért kiegészítés, 2026-09-05 — `docs/reviews/e14-r16-review.md`
+MAJOR-1; az ADR a kör saját, még nem merge-elt artefaktuma, ADR 0087 §2)*
+
+A D2 szerint mind a négy variáns UGYANAZT az abszolút `delta`-t kapja
+(a szállított detektor publikus alapértékét, `12.0`). A `delta` viszont a
+szállított út **log-power** flux-egységeiben értelmezett konstans — a
+`spectralFlux` és a `complexDomain` lineáris magnitúdóban számol, a
+`canonicalSuperFlux24` pedig ~200 sávon összegez 64 helyett. Mérve, ugyanazon a
+szintetikus 4-strum mintán (review-próba):
+
+| variáns | detektálás (4 valódi strum) | ugyanaz −20 dB-en |
+|---|---|---|
+| `current` | 4 | 4 (változatlan) |
+| `canonicalSuperFlux24` | 7 | 14 |
+| `complexDomain` | 10 | 5 |
+| `spectralFlux` | 15 | 3 |
+
+**A döntés:** a harness kimenete ebben a körben **nem** hordoz keresztvariáns
+minőségi állítást. Ezért
+
+1. a determinisztikus riport variánsonként kiírja az ODF **skála-diagnosztikáját**
+   (a flux mediánja és p95-e, az effektív küszöb mediánja) — a konfund mérhető
+   szám, nem lábjegyzet;
+2. gépi cella pinneli a gain-függést (0,1× bemenet: a `current` detektálás-száma
+   változatlan, legalább egy ÚJ variánsé megváltozik);
+3. a `docs/eval/onset-detector-ab.md` kimondja, hogy a keresztvariáns
+   pontosság-összevetés a **skála-illesztett küszöb** megszületéséig NEM
+   érvényes.
+
+A skála-illesztett (ODF-enkénti) küszöb megválasztása **külön kör, külön ADR** —
+ez a kör a szeámot, a delegált pontozást és a konfund MÉRÉSÉT szállítja.
+
 ## Következmények
 
 - A kör kimenete **mérés és javaslat**, nem hangolás: a
