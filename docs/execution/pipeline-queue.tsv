@@ -788,3 +788,25 @@ E14-R16	docs/rounds/e14-r16-onset-detector-ab-benchmark.md	sonnet-impl	0368	pend
 E14-R17	docs/rounds/e14-r17-reference-model-repro-and-licence-audit.md	sonnet-impl	0369	done
 E14-R18	docs/rounds/e14-r18-joint-streaming-prototype.md	sonnet-impl	0370	done
 E14-R19	docs/rounds/e14-r19-augmentation-and-balanced-recipe.md	sonnet-impl	0371	pending
+# --- Chapter 17 (Teljes bekötés) — terv: docs/plans/chapter-17-full-wiring.md
+#     Nyitva 2026-09-05 a felhasználó jelzésére. Mért alap (main @ b17e08ef):
+#     `check_screen_reachability` → 96 képernyő, 73 elérhető, 23 SEHONNAN nem
+#     hivatkozott. A fejezet ezt a 23-at köti be; a befejezési mérce a záró kör
+#     gépi cellája: `Unreachable: 0`.
+#     Az R01 `pending`; a többi `hold`, mert vagy az előző kör mért mintájára
+#     épül, vagy (R07–R13) külső függősége van: futó, elérhető `backend/`.
+#     Az ADR-oszlop ELŐZETES — a foglaló a kör indulásakor adja a véglegeset.
+E17-R01	docs/rounds/e17-r01-onboarding-first-win-stage-wiring.md	sonnet-impl	0520	pending
+E17-R02	docs/rounds/e17-r02-analysis-v2-capture-wiring.md	sonnet-impl	0521	hold
+E17-R03	docs/rounds/e17-r03-setlist-session-wiring.md	sonnet-impl	0522	hold
+E17-R04	docs/rounds/e17-r04-tutor-practice-plan-preview-wiring.md	sonnet-impl	0523	hold
+E17-R05	docs/rounds/e17-r05-practice-generator-seams.md	sonnet-impl	0524	hold
+E17-R06	docs/rounds/e17-r06-practice-generator-screen-wiring.md	sonnet-impl	0525	hold
+E17-R07	docs/rounds/e17-r07-community-http-foundation.md	sonnet-impl	0526	hold
+E17-R08	docs/rounds/e17-r08-community-feed-repository.md	sonnet-impl	0527	hold
+E17-R09	docs/rounds/e17-r09-community-post-repository.md	sonnet-impl	0528	hold
+E17-R10	docs/rounds/e17-r10-community-club-repository.md	sonnet-impl	0529	hold
+E17-R11	docs/rounds/e17-r11-community-notification-and-social-graph.md	sonnet-impl	0530	hold
+E17-R12	docs/rounds/e17-r12-community-routes-and-shell-entry.md	sonnet-impl	0531	hold
+E17-R13	docs/rounds/e17-r13-community-backend-enablement.md	sonnet-impl	0532	hold
+E17-R14	docs/rounds/e17-r14-full-wiring-closure.md	sonnet-impl	0533	hold
