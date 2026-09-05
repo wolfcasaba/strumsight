@@ -449,3 +449,85 @@ azonnal visszaállítva). Nincs új `AudioOwner` variáns, nincs
 `OnboardingStep` érték, nincs új top-level route.
 
 ## 11. Review — a Claude tölti ki
+
+**Verdikt: HALT — H3 (a feloldás az `allowed_paths` TÁGÍTÁSÁT kívánja).** A kör
+implementációja MÉRTEN kész és jó (A1–A10 zöld, 4/4 falszifikációs próba
+dokumentálva), a §7 gate mégsem hozható zöldre a kör engedélyezett fájllistáján
+belül. A halt tehát NEM az implementáció hibája — a scope-audit is `ok`
+(`scope_audit_base=24c21e25`, `scope_audit_changed=9`, minden fájl a listán).
+
+### 11.1 A lelet — az orchestrátor FÜGGETLEN mérése (nem az implementer bemondása)
+
+```
+$ cd /home/ubuntu/ss-sonnet-impl-e17-r01
+$ flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart
+00:58 +1177 -2: Some tests failed.
+
+Failing tests:
+  …e15_r13_full_variant_matrix_test.dart: A5 — completion-report guard …
+      cites the grand total test count this file itself produces …
+  …e15_r13_full_variant_matrix_test.dart: A5 — completion-report guard …
+      cites the matrix screen/cell counts derived from THIS file, not hand-typed
+```
+
+**Gyökérok.** A két cella a MÁTRIX ÉLŐ számait keresi szó szerint a
+`docs/ui/chapter-15-completion-report.md` szövegében
+(`e15_r13_full_variant_matrix_test.dart:3862-3911`):
+
+| Mit vár a cella | A report ma | A kör után |
+|---|---|---|
+| `_screens.length` | `72 screens` (report:22) | **73** |
+| `_screens.length * 16` | `1152 cells` (report:24) | **1168** |
+| `totalCells + 5 (A1) + 6 (A5)` | `1163 tests total` (report:27,89,92) | **1179** |
+
+A `docs/ui/chapter-15-completion-report.md` **NINCS a kör `allowed_paths`-án**
+(és a kör-brief §4 pin-őr bekezdése kifejezetten csak a *lecserélt képernyő
+típusának* átírására jogosít a pin-cellákban).
+
+### 11.2 Miért nincs a listán belüli feloldás — mind a HÁROM ág mérve
+
+1. **Mátrixba vétel** (amit az implementer választott): a fenti két cella piros.
+2. **A kizárási listára tétel:** a
+   `test('names WrappedPreviewScreen as the sole coverage exclusion')` cella
+   `expect(_exclusions, hasLength(1))`-et ír elő
+   (`e15_r13_full_variant_matrix_test.dart:3937-3944`), és a report is a
+   `WrappedPreviewScreen`-t nevezi meg EGYETLEN kizárásként → két új piros, és a
+   feloldásukhoz megint a report kell.
+3. **Lefedetlenül hagyás:** az „A1 — completeness" cella
+   (`:3735-3754`, *measured reachable set ⊆ matrix ∪ exclusion list*) vált
+   pirosra — és ez a kör A1 acceptance-kritériumának a párja, tehát a
+   lefedetlenség a kör SIKERÉNEK a tagadása lenne.
+
+Cella törlése/`skip`-je/gyengítése a brief §4 szerint TILOS, tehát nem opció.
+
+### 11.3 Ez a kör SIKERE váltja pirosra a kaput — L612/L613 hibaosztály, 14 körön át ismétlődne
+
+A guard-fájl SAJÁT fejléce már kimondja ezt a hibaosztályt
+(`e15_r13_full_variant_matrix_test.dart:3217-3233`, L613 / ADR 0112 önjavító kör):
+
+> „A guard that re-measures the LIVE tree and demands the report cite THOSE
+> numbers therefore goes red the moment any later round legitimately changes
+> reachability, and **it goes red for a round that cannot fix it (the report is
+> outside that round's allowed paths)**."
+
+Az E16-R02-re szánt önjavítás a *migration + reachability* cellát átvitte egy
+rögzített baseline-snapshotra (`_baselinePath`), a **mátrix-darabszám** celláit
+viszont ÉLŐ mérésen hagyta. Az E17 sáv MINDEN köre (14 kör) épp a
+reachability növelése, tehát ez a fal körönként újra elő fog jönni.
+
+### 11.4 Javasolt feloldás az önjavító körnek (két alak, sorrendben)
+
+1. **Szerkezeti (ajánlott):** a `_screens.length` / `totalCells` / grand-total
+   celláit is a rögzített baseline-hoz mérni (a `_baselinePath` snapshot
+   mintájára, `e15_r13_full_variant_matrix_test.dart:3227-3233` indoklása
+   szerint) — a report DÁTUMOZOTT történeti feljegyzés, nem élő mérce. Az élő
+   fát az A1-completeness csoport őrzi tovább, tehát a mérce NEM gyengül.
+   Ez egyszer old fel 14 kört.
+2. **Pontszerű:** az E17-R01 `allowed_paths` + `gate_tests` bővítése a
+   `docs/ui/chapter-15-completion-report.md`-vel, és a 72/1152/1163 →
+   73/1168/1179 átírása a kör diffjében.
+
+A kör implementációs commitjai (`74288e86`, `e1631db3`) a
+`sonnet-impl/e17-r01-onboarding-first-win-stage-wiring` ágon állnak, az
+originra pusholva — az önjavítás után a kör a review + CI + merge lépésnél
+folytatható, nem kell újraimplementálni.
