@@ -237,6 +237,53 @@ void main() {
     });
   });
 
+  group('scoped false-visible-event metrics are nameable via the extractor '
+      'map (acceptance 7, ADR 0521 D5)', () {
+    test('both new metric paths exist in recognitionMetricExtractors', () {
+      expect(
+        recognitionMetricExtractors.containsKey(
+          'falseVisibleDirectionEventsPerMinute.value',
+        ),
+        isTrue,
+      );
+      expect(
+        recognitionMetricExtractors.containsKey(
+          'falseVisibleChordEventsPerMinute.value',
+        ),
+        isTrue,
+      );
+    });
+
+    test('the gate evaluates a threshold against the direction-scoped rate, '
+        'direction read from its own definition (lower-is-better)', () {
+      final thresholds = gate.parseThresholds(
+        _thresholdsJson([
+          _entry('overall.falseVisibleDirectionEventsPerMinute.value', 2.0),
+        ]),
+      );
+      final verdict = gate.evaluate(
+        _metrics(falseVisibleDirectionEventsPerMinute: _rate(value: 1.5)),
+        thresholds,
+      );
+      expect(verdict.findings.single.higherIsBetter, isFalse);
+      expect(verdict.passed, isTrue);
+    });
+
+    test('the gate evaluates a threshold against the chord-scoped rate and '
+        'fails it above the boundary', () {
+      final thresholds = gate.parseThresholds(
+        _thresholdsJson([
+          _entry('overall.falseVisibleChordEventsPerMinute.value', 1.0),
+        ]),
+      );
+      final verdict = gate.evaluate(
+        _metrics(falseVisibleChordEventsPerMinute: _rate(value: 2.0)),
+        thresholds,
+      );
+      expect(verdict.findings.single.passed, isFalse);
+    });
+  });
+
   group('shipped v1 threshold file (ADR 0511 D9 — pinned, not remeasured)', () {
     test('carries exactly the Ch14 §7.2/§7.4 Alpha values this round maps', () {
       final source = File(
@@ -404,6 +451,8 @@ RecognitionMetrics _metrics({
   RecognitionCountRatioMetric? acceptedAccuracy,
   RecognitionCountRatioMetric? coverage,
   RecognitionRateMetric? falseVisibleEventsPerMinute,
+  RecognitionRateMetric? falseVisibleDirectionEventsPerMinute,
+  RecognitionRateMetric? falseVisibleChordEventsPerMinute,
   RecognitionScalarMetric? latencyP50,
   RecognitionScalarMetric? latencyP95,
   RecognitionCountRatioMetric? chordWeightedAccuracy,
@@ -420,6 +469,9 @@ RecognitionMetrics _metrics({
   acceptedAccuracy: acceptedAccuracy ?? _ratio(),
   coverage: coverage ?? _ratio(),
   falseVisibleEventsPerMinute: falseVisibleEventsPerMinute ?? _rate(),
+  falseVisibleDirectionEventsPerMinute:
+      falseVisibleDirectionEventsPerMinute ?? _rate(),
+  falseVisibleChordEventsPerMinute: falseVisibleChordEventsPerMinute ?? _rate(),
   latencyP50Ms: latencyP50 ?? _scalar(),
   latencyP95Ms: latencyP95 ?? _scalar(),
   calibration: _calib(),

@@ -132,6 +132,47 @@ void main() {
     });
   });
 
+  group('scoped false-visible-event metrics render identically across formats '
+      '(acceptance 7, ADR 0521 D5)', () {
+    test('falseVisibleDirectionEventsPerMinute.value and '
+        'falseVisibleChordEventsPerMinute.value agree across JSON, '
+        'Markdown and HTML', () {
+      final report = buildReport();
+      final json = renderer.renderJson(report);
+      final markdown = renderer.renderMarkdown(report);
+      final html = renderer.renderHtml(report);
+
+      for (final metricName in [
+        'falseVisibleDirectionEventsPerMinute.value',
+        'falseVisibleChordEventsPerMinute.value',
+      ]) {
+        final expectedValue = report.overallMetrics
+            .firstWhere((entry) => entry.name == metricName)
+            .value!;
+
+        expect(_jsonOverallMetric(json, metricName), expectedValue);
+        expect(
+          _mdTableCell(
+            markdown,
+            heading: 'Overall metrics',
+            matchColumns: {'Metric': metricName},
+            readColumn: 'Value',
+          ),
+          expectedValue.toStringAsFixed(4),
+        );
+        expect(
+          _htmlTableCell(
+            html,
+            heading: 'Overall metrics',
+            matchColumns: {'Metric': metricName},
+            readColumn: 'Value',
+          ),
+          expectedValue.toStringAsFixed(4),
+        );
+      }
+    });
+  });
+
   group('determinism (ADR 0511 D7)', () {
     test('two independent builds of the same manifest render byte-identical '
         'JSON, Markdown and HTML', () {
