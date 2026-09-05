@@ -461,3 +461,45 @@ def test_openapi_contract_is_deterministic():
     tuning = update_properties["tuning_a4"]["anyOf"][0]
     assert tuning["minimum"] == 400
     assert tuning["maximum"] == 480
+
+
+def test_boolean_columns_never_use_an_integer_server_default():
+    """A ``sa.Boolean()`` oszlop server_default-ja SOSEM egész literál.
+
+    MÉRT hibaosztály (2026-09-05, első valódi Postgres-deploy): három community
+    migráció ``server_default=sa.text("0")`` / ``sa.text("1")`` alakot használt.
+    SQLite-on ez működik (nincs natív bool), Postgres viszont elutasítja::
+
+        psycopg.errors.DatatypeMismatch: column "is_read" is of type boolean
+        but default expression is of type integer
+
+    Ezért az ``alembic upgrade head`` a repó SAJÁT ajánlott adatbázisán
+    (``backend/README.md``: "Production database: PostgreSQL is recommended")
+    a legelső deployon elhasalt — a meglévő migrációs tesztek mind SQLite-on
+    futnak, tehát a rés NÉMA volt.
+
+    A guard SZÁNDÉKOSAN statikus és dialektus-független: nem igényel futó
+    Postgrest, ezért CI-ben is fut. A helyes alak ``sa.false()`` / ``sa.true()``
+    — a SQLAlchemy dialektusonként rendereli.
+    """
+    offenders: list[str] = []
+    versions = _ALEMBIC_SCRIPTS / "versions"
+    for path in sorted(versions.glob("*.py")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped.startswith("server_default=sa.text("):
+                continue
+            literal = stripped[len("server_default=sa.text(") :].rstrip("),")
+            if literal.strip("\"'") not in {"0", "1"}:
+                continue
+            # A megelőző néhány sor mondja meg az oszlop típusát.
+            window = " ".join(lines[max(0, index - 4) : index])
+            if "sa.Boolean(" in window:
+                offenders.append(f"{path.name}:{index + 1} → {stripped}")
+
+    assert offenders == [], (
+        "Boolean oszlop egész literál server_default-tal — Postgresen "
+        "DatatypeMismatch. Használj sa.false() / sa.true() alakot:\n  "
+        + "\n  ".join(offenders)
+    )

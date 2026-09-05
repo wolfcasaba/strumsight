@@ -147,7 +147,7 @@ def upgrade() -> None:
             "is_read",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("0"),
+            server_default=sa.false(),
         ),
         sa.Column("read_at", sa.DateTime(timezone=True), nullable=True),
         # A7 dedup key. UNIQUE per (recipient, dedup_key) — a

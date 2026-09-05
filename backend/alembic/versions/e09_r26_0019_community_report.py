@@ -103,7 +103,7 @@ def upgrade() -> None:
             "target_deleted_at_submit",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("0"),
+            server_default=sa.false(),
         ),
         sa.ForeignKeyConstraint(
             ["reporter_profile_id"],

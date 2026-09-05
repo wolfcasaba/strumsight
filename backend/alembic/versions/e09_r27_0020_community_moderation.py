@@ -119,7 +119,7 @@ def upgrade() -> None:
             "is_open",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("1"),
+            server_default=sa.true(),
         ),
         sa.Column(
             "opened_at",
