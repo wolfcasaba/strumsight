@@ -1,12 +1,14 @@
 # E14-R14 — Automatikus Audio Setup és Accuracy Check
 
-- **Státusz:** PREPARED (előre megírva 2026-08-20, kód olvasva: `main @ 88e08e65`)
+- **Státusz:** READY (pre-flight lefutott 2026-09-05, kód újraolvasva: `main @ 5f772a20`)
 - **Típus:** Chapter 14, Kör 14 (a truthfulness hotfix blokk záró köre)
 - **Kör-azonosító:** `E14-R14`
-- **Branch:** `<motor>/e14-r14-audio-setup-and-accuracy-check`
+- **Branch:** `sonnet-impl/e14-r14-audio-setup-and-accuracy-check`
 - **Előfeltétel:** `E14-R05` (signal quality analyzer) és `E14-R11` merge-elve.
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `0366` — **a Claude írja meg, a `docs/adr/` a TILOS zónában van.**
+- **Kiosztott ADR:** `0519` (a foglalótól, `tools/round-slots.py reserve-adr --round E14-R14`)
+  — **a Claude írta meg a pre-flightban, a `docs/adr/` a TILOS zónában van.**
+  Az előre beírt `0366` ELAVULT, lásd §0.0/R1.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a
 > `lib/features/settings/providers/input_latency_provider.dart`-ot és a
@@ -48,7 +50,69 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
-## 0.0 Kötött scope-szűkítés a SDD-hez képest (drift, KÖTELEZŐ így)
+## 0.0 Pre-flight brief-revízió (2026-09-05, `main @ 5f772a20`) — KÖTELEZŐ
+
+A brief 2026-08-20-án készült; a `brief-lint` két `strict` leletet adott
+(**S12**, **S15**). A pre-flight újraolvasta a hivatkozott fájlokat. Az alábbi
+revíziók **kötik** az implementert; a teljes mérés az
+[ADR 0519](../adr/0519-audio-setup-profile-as-input-not-calibration.md)
+„Kontextus" szakaszában van.
+
+**R1 (S15 → ADR-szám). Az előre kiosztott `0366` ELAVULT.** A foglaló
+(`tools/round-slots.py reserve-adr --round E14-R14`) a **`0519`**-et adta; a fán
+a legmagasabb szám `0517`. Az ADR megírva: `docs/adr/0519-audio-setup-profile-as-input-not-calibration.md`.
+A brief §5 mostantól erre hivatkozik.
+
+**R2 (S15 → mi maradt igaz a §2-ből).** A `main` a brief alapja óta elmozdult:
+`lib/features/onboarding/onboarding_provider.dart` MÓDOSULT, és négy ÚJ fájl
+landolt a feature-gyökér alatt (`first_win_engine.dart`,
+`first_win_providers.dart`, `screens/first_win_stage_screen.dart`,
+`screens/permission_primer_screen.dart`). Újramérve:
+
+- **IGAZ marad:** `lib/features/onboarding/audio_setup/` **nem létezik**; a
+  `settings` latency-providerek megvannak és a profil nem írja felül őket; a
+  wizard az onboarding modulja lesz.
+- **NEM IGAZ tovább:** `lib/features/onboarding/public.dart` **nem létezik** —
+  a §4 „additív export" sora félrevezető: a fájlt a kör **létrehozza**. A
+  generált-barrel őr (`tool/check_architecture.dart:804`) csak azokra a
+  feature-ökre fut, amelyeknek van `lib/features/<f>/public/` fragmentum-
+  könyvtára (mérve: ma egyedül a `practice_generator`), ezért a kézzel írt
+  barrel szabályos.
+- **NINCS időközben merge-elt szerződés ugyanerre a döntésre.** Mérve:
+  `grep -rln "AudioProfile\|audio_profile\|micRoute\|audioRoute" lib/ test/` →
+  az onboarding és a live fában nulla találat. A négy új fájl egyike sem
+  deklarálja az `AudioSetupStep` / `AudioProfile` / `AudioProfileStore` /
+  `AudioSetupController` típust → nincs S5 típusütközés. Az `OnboardingStep`
+  (`welcome, permission, done`) egy MÁSIK, a
+  `test/features/onboarding/onboarding_resume_test.dart` által kipinnelt enum,
+  amelyhez ez a kör **nem nyúl**.
+- **A kör EGYETLEN döntési helye** az új `lib/features/onboarding/audio_setup/`
+  könyvtár. A meglévő `onboarding_provider.dart`-ot, a `screens/**`-ot és a
+  `settings/**`-ot a kör NEM módosítja.
+
+**R3 (új, kötelező — architektúra-kapu). A `SignalQualitySnapshot` KIZÁRÓLAG a
+`lib/features/live/public.dart` barrelen át importálható.** Mérve:
+`tool/check_architecture.dart:382-392` — a `crossFeatureImportsMustUsePublicApi`
+szabály a mély importot (`.../live/domain/recognition/signal_quality_snapshot.dart`)
+architektúra-sértésként jelenti, és a kapu a `tools/round-gate.sh` `architecture`
+lépése. Az allowlist a kör TILOS zónájában lévő `tool/check_architecture.dart`-ban
+él → bővítése **H3**. Az export MÁR LÉTEZIK (`lib/features/live/public.dart:29`),
+tehát a legális út ma is járható. Ugyanez a kikötés az ADR 0519 D6.
+
+**R4 (új, kötelező — tárolókulcs). Az `AudioProfileStore` feature-lokális
+`static const String storageKey`-t használ, NEM vesz fel `StorageKeys`
+bejegyzést** — `lib/core/storage/` a tilos zónában van. Ez a merge-elt
+precedens folytatása: `OnboardingStepController.storageKey = 'ss.onboarding.step'`
+(`lib/features/onboarding/onboarding_provider.dart:64`), a doc-commentbe írt
+indoklással együtt. Javasolt érték: `ss.onboarding.audio_profile`. Az elérhető
+tároló-API: `KeyValueStore.readString/writeString/remove/contains`
+(`lib/core/storage/key_value_store.dart`), szinkron olvasással.
+
+**R5 (S12 → a §7 gate-parancs).** A §7 parancsa nem tükrözte a `gate_tests`
+listát; javítva — a §7 mostantól mindkét gate-tesztet külön útvonalként
+sorolja fel.
+
+## 0.1 Kötött scope-szűkítés a SDD-hez képest (drift, KÖTELEZŐ így)
 
 A SDD Kör 14 a wizard **képernyőjét** is kéri. Ez a kör a **lépés-gépet, a
 profilt és a tárolót** építi, képernyő nélkül — ugyanaz a mért ok, mint az
@@ -71,6 +135,17 @@ input gain / latency / minőségi elvárás és személyes confidence-profil.
   BEMENET a döntési rétegnek, nem konstans-felülírás.
 - **E14-R05:** a `SignalQualitySnapshot` a wizard mérőeszköze — a kör nem ír
   új jelminőség-számítást.
+- **[L305](../LESSONS.md#l305) (pre-flight visszakeresés, `--corpus lessons,halts,adr`):**
+  egy wizard folytatási pontját NEM szabad az adat JELENLÉTÉBŐL következtetni —
+  az E07-R20 `PlanSetupController._resumeStep`-je így nem tudta megkülönböztetni
+  az explicit „nem tudom" választ a meg sem nyitott lépéstől. Ide fordítva: az
+  `AudioSetupController` állapotát EXPLICIT lépés-állapot hordozza, nem az
+  „ennek a mezőnek már van értéke" következtetés — ez a D4 (megszakítás →
+  nincs részleges profil) másik oldala.
+- **[L70](../LESSONS.md#l70) (`--corpus lessons,halts`):** a hiányzó mezők
+  visszaolvasáskor valódi adatvesztésnek minősülnek, nem elfogadható migrációs
+  normalizációnak — az 5. acceptance-pont migrációs cellája ezért mezőnkénti
+  egyezést mér, nem csak „nem dobott hibát".
 
 ## 2. Jelenlegi állapot — mért tények
 
@@ -87,7 +162,7 @@ input gain / latency / minőségi elvárás és személyes confidence-profil.
 (mentés/olvasás/migráció/törlés), elavulás mic-route vagy mintavétel változásra,
 javaslat-szöveg kiszámítása.
 
-**Nincs benne:** képernyő (§0.0), modellhangolás, DSP-konstans, hálózat,
+**Nincs benne:** képernyő (§0.1), modellhangolás, DSP-konstans, hálózat,
 felvétel-export (az az `E14-R06` consent-kapuja mögött él).
 
 ## 4. Engedélyezett fájlok
@@ -108,7 +183,7 @@ felvétel-export (az az `E14-R06` consent-kapuja mögött él).
 `ml/**`, `docs/adr/**`, `docs/rag/chunks/**`, `.github/workflows/**`,
 `tools/round-gate.sh`.
 
-## 5. Kötött architekturális döntések (ADR 0366)
+## 5. Kötött architekturális döntések ([ADR 0519](../adr/0519-audio-setup-profile-as-input-not-calibration.md))
 
 ### 5.1 A profil bemenet, nem felülírás
 
@@ -165,7 +240,7 @@ tesztelt út (ADR 0054 mintája).
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/onboarding
+tools/round-gate.sh test/features/onboarding/audio_setup_controller_test.dart test/features/onboarding/audio_profile_store_test.dart
 ```
 
 Külön processzben futó `format` → `analyze` → célzott tesztek → `architecture`
@@ -188,7 +263,7 @@ a 3. pont **PIROS**, visszaállítva **ZÖLD**.
 
 - **Mikrofon a tesztben:** a controller-teszt fake jelminőség-forrást kapjon;
   valódi mikrofon a CI-n nincs.
-- **Scope-csúszás a UI felé:** a §0.0 tiltja.
+- **Scope-csúszás a UI felé:** a §0.1 tiltja.
 - **Profil-alapú „kalibrálás" kísértése:** az 5.1 tiltja; igény esetén `stopped`.
 
 ## 10. Implementation handoff — az implementer tölti ki
