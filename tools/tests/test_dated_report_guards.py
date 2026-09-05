@@ -33,7 +33,7 @@ cella a KÖVETELT VÉGÁLLAPOTOT pinneli (nulla lelet), nem egy kör munkájána
 hiányát — azt csak úgy lehet pirosra vinni, ha valaki újra bevezeti a
 hibaosztályt.
 
-MÁSODIK ELŐFORDULÁS — E17-R01 / H3 (2026-09-05, L614). A fenti szabály CSAK az
+MÁSODIK ELŐFORDULÁS — E17-R01 / H3 (2026-09-05, L653). A fenti szabály CSAK az
 `X(Directory.current)` alakú élő-fa mérést látta, ezért az E16-R02 javítása a
 reachability-cellát átvitte a rögzített pillanatképre, a DARABSZÁM-cellákat
 viszont élőn hagyta:
@@ -312,7 +312,7 @@ class DatedReportGuardRuleTest(unittest.TestCase):
 
 
 class LiveExpectationRuleTest(unittest.TestCase):
-    """A VÁRT ÉRTÉK eredetének szabálya RÖGZÍTETT bemeneten (L614)."""
+    """A VÁRT ÉRTÉK eredetének szabálya RÖGZÍTETT bemeneten (L653)."""
 
     DOCS = {"docs/ui/chapter-15-completion-report.md"}
     RECORDED = {"_baselinePath"}
@@ -386,7 +386,7 @@ class DatedReportGuardTreeTest(unittest.TestCase):
             {},
             "the value a dated snapshot report is required to cite must come "
             "from a RECORDED snapshot of its own base, never from the live "
-            "matrix/tree state (L614)",
+            "matrix/tree state (L653)",
         )
 
 
