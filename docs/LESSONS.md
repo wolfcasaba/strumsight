@@ -26117,3 +26117,39 @@ döntésfüggvényt hasonlít össze egyetlen abszolút küszöbbel:
    ([ADR 0524](adr/0524-onset-detector-variant-seam-and-ab-measurement.md) D8).
 
 **Őrteszt:** `test/tooling/onset_ab_benchmark_test.dart`::`11. gain dependence (ADR 0524 D8)`
+
+## L648 — A KÉZI queue-flip (`pending` → `done`) a záró rituáléban kihagyja a completion-matrix szinkront, amit a driver merge-ága futtatna — és a main két külön kapun megy pirosra (E14-R16, 2026-09-05)
+
+**Mit mértünk.** Az E14-R16 záró commitja (`ff9027b5`) az ADR 0087 §5 szerinti
+KÉZI úton billentette a queue-sort `done`-ra (`sed -i` + `docs(handoff)`
+commit). A `tools/sync-completion-matrix.py` — amit az [[L590]]/[[L591]] óta a
+**driver merge-ága** futtat ugyanabban a lépésben — így NEM futott le, és a
+Router CI azonnal pirosra ment:
+
+```
+tools/tests/test_completion_matrix_sync.py::CompletionMatrixSyncTest::test_the_real_tree_is_in_sync
+AssertionError: 1 != 0 : Ch14 (E14): reports done=16, queue measures done=17
+```
+
+A feloldás egy parancs volt (`python3 tools/sync-completion-matrix.py --write`,
+majd a `--check` zöldje), de a hibaosztály rendszerszintű: a §5 lépéssora a
+queue-flipet és a HANDOFF-ot EGY commitba köti, a matrix-szinkront viszont nem
+nevezi meg — aki kézzel zár (mert a merge-lockos ágon megy), az kihagyja.
+
+**Ugyanabban a mérésben egy MÁSIK, független piros is kiderült:** a `#586`-tal
+érkezett **E17** queue-előtagnak egyáltalán nem volt sora a matrixban, ezért a
+`test/tooling/program_completion_test.dart` lane-coverage cellája a **mainen**
+volt piros (`queue prefix "E17" has no row in the completion matrix`) — ez a
+kör előtt keletkezett, és a `--write` sem pótolja: ÚJ sávnál a sort (a prózás
+oszloppal együtt) kézzel kell felvenni, a négy szám-oszlopot utána szinkronizálja
+a script.
+
+**Hogyan alkalmazd.** Ha kézzel zársz egy kört (merge-lock alatt, a driver
+fail-safe ága helyett):
+
+1. a queue-flip UTÁN, MÉG a commit előtt: `python3 tools/sync-completion-matrix.py --write`;
+2. `--check` zöld, majd a `docs(handoff)` commitba a matrix is menjen bele;
+3. ha ÚJ queue-előtag jelent meg (új sáv), előbb vedd fel a matrix sorát —
+   a lane-coverage cella különben a mainen áll pirosra, nem a kör ágán.
+
+**Őrteszt:** `tools/tests/test_completion_matrix_sync.py`::`test_the_real_tree_is_in_sync` és `test/tooling/program_completion_test.dart`::`lane-coverage — every queue prefix has a row in the completion matrix`
