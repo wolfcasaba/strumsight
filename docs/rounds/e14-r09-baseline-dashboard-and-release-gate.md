@@ -346,4 +346,117 @@ a piros cella nevét.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5), 2026-09-05.
+
+### 10.1 Mit építettem
+
+A nyolc engedélyezett fájl mindegyike elkészült:
+
+- `lib/features/live/domain/evaluation/recognition_release_gate.dart` —
+  `RecognitionReleaseGate` (küszöb-parser + `evaluate`), `RecognitionGateThresholds`/
+  `RecognitionGateThresholdEntry`, `RecognitionGateVerdict`/`RecognitionGateFinding`,
+  `RecognitionGateConfigException` (típusos hibák: `unknownSchemaVersion`,
+  `directionDeclared`, `unknownMetricPath`, …), és a
+  `recognitionMetricExtractors` regiszter — minden metrika-útvonalhoz egyetlen
+  extraktor, amely a `value`-t ÉS a `higherIsBetter`-t is UGYANARRÓL a
+  `RecognitionMetrics`-példányról olvassa (R5). A kapu csak `overall.*`
+  útvonalakat fogad el (a `evaluate()` ellenőrzi az `overall.` prefixet, majd a
+  regiszterben a metrika nevét).
+- `evaluation/recognition/recognition_release_gate.json` — `schemaVersion: "1"`,
+  `thresholdsVersion: "ch14-alpha-v1"`, 10 küszöb-bejegyzés (lásd 10.3).
+- `lib/features/live/data/evaluation/recognition_report_renderer.dart` —
+  `RecognitionDashboardReport.build(...)` particionálja a `cases`-t mind a
+  négy `GroupKey` szerint (hiányzó kulcs → `"(unknown)"` csoport, sosem
+  eldobva), csoportonként meghívja a nyilvános `computeRecognitionMetrics`-et,
+  a metrikákat EGYSZER kerekíti (`toStringAsFixed(4)` → `double.parse`), és
+  ugyanabból a modellből rendereli a JSON/MD/HTML-t (`RecognitionReportRenderer`).
+  `RecognitionEventCategories.fromMetrics` számolja a `confidentWrong`/`rejected`-et
+  a pontos D4-képlettel, `uncertainCorrect` mindig `null` + kimondott
+  `uncertainCorrectUnavailableReason`.
+- `tool/recognition_report.dart` — CLI: `--manifest`, `--thresholds`, `--format
+  json|markdown|html`; kilépési kód `0` (kapu PASS) vagy `3` (kapu FAIL,
+  fail-closed — sosem `0` bukott kapunál).
+- `docs/eval/recognition-dashboard.md` — olvasási útmutató: csoport-bontás,
+  három esemény-kategória, fail-closed szemantika, a kimaradó 4 Ch14
+  Alpha-sor és indoklásuk, a küszöb-lazítás emberi-döntés szabálya.
+
+### 10.2 Acceptance-cella → teszt megfeleltetés (§6, §6.1)
+
+| # | Acceptance | Teszt |
+|---|---|---|
+| 1 | hiányzó/`null` metrika → FAIL, megnevezve | `recognition_release_gate_test.dart`: „fail-closed: missing/null metric” csoport (2 teszt) |
+| 2 | határ az elfogadó oldalon, mindkét irány | „boundary belongs to the accepting side” csoport: `0.899/0.9/0.901` és `2.001/2.0/1.999` |
+| 3 | 3 formátum ugyanaz a szám (fejléc-alapú MD/HTML olvasás) | `recognition_report_renderer_test.dart`: „single source, three formats” csoport (overall + csoport-metrika) |
+| 4 | `confidentWrong`/`rejected`/`uncertainCorrect` külön, pontos képlet, `null` | „event categories” csoport (3 teszt) |
+| 5 | bájtra azonos kétszeri futtatásra, nincs időbélyeg/útvonal | „determinism” csoport (2 teszt) |
+| 6 | `thresholdsVersion` mindhárom formátumban | „every format names the gate thresholds version” |
+| 7 | ismeretlen `schemaVersion` / irány-deklaráció → típusos hiba | „typed configuration errors” csoport (5 teszt) |
+| 8 | 4 `GroupKey`, determinisztikus sorrend, „ismeretlen” csoport számmal | „determinism: groups are sorted…” + „unknown group naming” csoport (3 teszt) |
+| 9 | a szállított JSON a Ch14 Alpha-értékeket hordozza, kipinnelve | „shipped v1 threshold file” csoport (2 teszt) |
+
+### 10.3 A v1 küszöbfájl 10 bejegyzése és a 4 kimaradó Ch14 Alpha-sor
+
+A `recognition_release_gate.json` a 14 Ch14 §7.2/§7.4 Alpha-sorból 10-et
+képez le (lásd `docs/eval/recognition-dashboard.md` táblázatát a pontos
+metrika-útvonalakkal). A **4 kimaradó sor** — mert egyiknek sincs hű
+metrika-útvonala a nyilvános `RecognitionMetrics`-ben, és egyik sem
+helyettesíthető egy hasonló nevű, de más jelentésű metrikával (L549, ADR
+0511 D8): *leggyengébb támogatott chord recall*, *confirmed chord accepted
+accuracy*, *chord transition p50*, *false confident chord hard-negative*.
+Az *„accepted direction accuracy"* és a *„false visible arrow hard-negative"*
+sorok az esemény-fajta-agnosztikus `overall.acceptedAccuracy.value` és
+`overall.falseVisibleEventsPerMinute.value` útvonalakon vannak leképezve
+(§0.0 R6), a dokumentumban és a küszöbfájl `label` mezőjében kimondva.
+
+### 10.4 A gate tényleges kimenete
+
+```
+tools/round-gate.sh test/features/live/evaluation/recognition_release_gate_test.dart test/features/live/evaluation/recognition_report_renderer_test.dart
+```
+
+`format` → ZÖLD, `analyze` → ZÖLD (0 hiba), mindkét célzott teszt → ZÖLD (16,
+majd 13 teszt), `architecture` → ZÖLD, `secrets` → ZÖLD, `l10n` → ZÖLD.
+**MINDEN GATE ZÖLD.**
+
+A CLI a szállított v1 küszöbfájllal és a `ci_manifest.json` fixture-rel
+FAIL-t ad (`dart run tool/recognition_report.dart --format markdown`, exit
+code `3`) — ez a kapu helyes viselkedése a jelenlegi (Alpha alatti) legacy
+DSP-baseline-nal szemben, nem hiba (9. kockázat, ADR 0511 „Következmények”).
+
+### 10.5 Falszifikációs bizonyíték (§7.1)
+
+`lib/features/live/domain/evaluation/recognition_release_gate.dart`
+`_evaluateEntry`-jében a hiányzó-metrika ágon a `passed: false`-t
+ideiglenesen `passed: true`-ra állítottam (a „skip” egyenértékű
+gyengítése), majd lefuttattam:
+
+```
+flutter test test/features/live/evaluation/recognition_release_gate_test.dart
+```
+
+**Eredmény: PIROS** — pontosan a 6.1-es mérce-mátrix „Hiányzó metrika →
+`skip`” sorának megfelelő 1. acceptance-pont FAIL-cellája bukott, két teszt:
+„fail-closed: missing/null metric a null-valued metric is FAIL and names the
+metric” és „…skipping the missing-metric branch would turn this cell green”
+(mindkettő `Expected: false / Actual: <true>` a `verdict.passed`/
+`finding.passed` mezőn). A többi 13 teszt változatlanul ZÖLD maradt (a hiba
+lokális volt a hiányzó-metrika ághoz).
+
+Ezután a módosítást visszaállítottam (`passed: false`), és
+`tools/round-gate.sh test/features/live/evaluation/recognition_release_gate_test.dart
+test/features/live/evaluation/recognition_report_renderer_test.dart` teljes
+kapuja **ZÖLD**-re futott (10.4). `git diff --stat` a visszaállítás után
+üres volt — a fán nem maradt nyoma a kísérletnek.
+
+### 10.6 Amit tudatosan NEM csináltam
+
+A `GroupKey`-t nem bővítettem `technique`-kel (R2, tilos zóna). Nem
+importáltam és nem használtam a `RecognitionSplitBuilder`/`LeakageDetector`-t
+(train/eval fold-okhoz való, nem csoport-bontáshoz) — a
+`recognition_report_renderer.dart` saját, egyszerű
+`SplayTreeMap`-particionálást ír, amely a hiányzó kulcsot `"(unknown)"`-ra
+képezi ahelyett, hogy (mint a `RecognitionSplitBuilder`) dobna. Nem
+módosítottam a `pubspec.yaml`-t, a `public.dart` barrelt, sem az E14-R08
+fájljait.
+
 ## 11. Review — a Claude tölti ki
