@@ -27,11 +27,33 @@ fát az A1 completeness-group méri, amelynek invariánsa (mért elérhető halm
 ⊆ mátrix ∪ kizárási lista) a jogos növekedést túléli.
 
 A szabály-VISELKEDÉST rögzített bemeneten mérjük (L612): a
-`fixtures/e16_r02_dated_report_guard/` alatti három `.txt` a valódi, szó
+`fixtures/e16_r02_dated_report_guard/` alatti négy `.txt` a valódi, szó
 szerint másolt A5 (javítás előtti és utáni) és A1 group. A `test/` fát végigfutó
 cella a KÖVETELT VÉGÁLLAPOTOT pinneli (nulla lelet), nem egy kör munkájának
 hiányát — azt csak úgy lehet pirosra vinni, ha valaki újra bevezeti a
 hibaosztályt.
+
+MÁSODIK ELŐFORDULÁS — E17-R01 / H3 (2026-09-05, L614). A fenti szabály CSAK az
+`X(Directory.current)` alakú élő-fa mérést látta, ezért az E16-R02 javítása a
+reachability-cellát átvitte a rögzített pillanatképre, a DARABSZÁM-cellákat
+viszont élőn hagyta:
+
+    contains('${_screens.length}')                       # 72 → 73
+    contains('$totalCells')   // _screens.length * … * 2 # 1152 → 1168
+    contains('$grandTotal')   // totalCells + A1 + A5    # 1163 → 1179
+
+Az E17-R01 acceptance-kritériuma a `FirstWinStageScreen` elérhetővé tétele,
+tehát a mátrix EGGYEL nő — ugyanaz a hibaosztály, csak nem a fából, hanem a
+teszt-fájl ÉLŐ kollekcióiból (`_screens`, `_excludedCells`,
+`_ViewportProfile.values`) származó várt értéken keresztül. Az E17 sáv mind a
+14 köre növeli a reachability-t, tehát körönként visszatért volna.
+
+A kibővített szabály ezért az ÉRTÉK EREDETÉT nézi: egy dátumozott jelentést
+olvasó group-ban a `contains(...)`-be interpolált VÁRT ÉRTÉK csak RÖGZÍTETT
+pillanatképből (`test/fixtures/**`-ból olvasott érték) vagy literálból jöhet.
+Nem érinti a `normalizedReport.contains(normalizedName)` alakú cellát: ott
+nincs interpolált várt szám, és a mögötte álló `_excludedCells` lista a saját
+szabálya szerint CSAK ZSUGORODHAT (L180) — zsugorodáskor a cella zöld marad.
 """
 
 import re
@@ -145,6 +167,115 @@ def live_tree_pins(source: str, dated_doc_paths: set[str]) -> list[str]:
     return findings
 
 
+# `contains('${matrix.screenCount}')`, `contains('$grandTotal')`
+CONTAINS_CALL = re.compile(r"\bcontains\s*\(")
+# `${...}` és `$ident` a Dart string-interpolációban
+INTERPOLATION = re.compile(r"\$\{([^{}]*)\}|\$([A-Za-z_]\w*)")
+# Egy kifejezés GYÖKÉR-azonosítói: a pont utáni tagnevek nem számítanak
+# (`matrix.screenCount` gyökere `matrix`).
+ROOT_IDENTIFIER = re.compile(r"(?<![\w.$])([A-Za-z_]\w*)")
+# `final totalCells = …;`, `const a1CellCount = 5;`, `var x = …;`
+LOCAL_DECLARATION = re.compile(
+    r"\b(?:final|const|var)\s+(?:[\w<>,\s?\[\]]+?\s+)?(\w+)\s*=\s*([^;]*);"
+)
+# `for (final name in excludedScreenNames)`
+LOOP_DECLARATION = re.compile(r"\bfor\s*\(\s*(?:final|var)\s+(\w+)\s+in\s+([^)]*)\)")
+# `const _baselinePath =\n    'test/fixtures/…';`
+FILE_LEVEL_PATH_CONST = re.compile(
+    r"^const\s+(\w+)\s*=\s*\n?\s*'([^']*)'\s*;", re.MULTILINE
+)
+RECORDED_FIXTURE_PREFIX = "test/fixtures/"
+
+
+def recorded_path_constants(source: str) -> set[str]:
+    """A fájl-szintű konstansok, amelyek RÖGZÍTETT fixture-útvonalat tartanak."""
+    return {
+        name
+        for name, value in FILE_LEVEL_PATH_CONST.findall(source)
+        if value.startswith(RECORDED_FIXTURE_PREFIX)
+    }
+
+
+def _declarations(masked_block: str) -> dict[str, str]:
+    """A blokk lokális deklarációi: név → a jobb oldal (maszkolt) szövege."""
+    declarations = {
+        name: rhs for name, rhs in LOCAL_DECLARATION.findall(masked_block)
+    }
+    declarations.update(dict(LOOP_DECLARATION.findall(masked_block)))
+    return declarations
+
+
+def _live_roots(
+    expression: str,
+    declarations: dict[str, str],
+    recorded: set[str],
+    seen: frozenset[str] = frozenset(),
+) -> set[str]:
+    """A kifejezés azon gyökerei, amelyek NEM rögzített pillanatképből jönnek.
+
+    Egy lokális RÖGZÍTETT, ha a jobb oldala bárhol hivatkozik rögzített
+    fixture-re: `_CompletionReportBaseline.read(_baselinePath)` értéke a
+    pillanatkép, akárhány tagon keresztül olvassák tovább.
+    """
+    live: set[str] = set()
+    for name in ROOT_IDENTIFIER.findall(expression):
+        if name in recorded or name in seen:
+            continue
+        if name in declarations:
+            nested = ROOT_IDENTIFIER.findall(declarations[name])
+            if any(root in recorded for root in nested):
+                continue
+            live |= _live_roots(
+                declarations[name], declarations, recorded, seen | {name}
+            )
+            continue
+        live.add(name)
+    return live
+
+
+def report_expectation_pins(
+    source: str, dated_doc_paths: set[str], recorded: set[str] | None = None
+) -> list[str]:
+    """Az élő állapotból származó VÁRT ÉRTÉKEK egy dátumozott jelentés őrében.
+
+    A `recorded` a fájl-szintű, rögzített-fixture-útvonalat tartó konstansok
+    halmaza; group-részletet vizsgálva a hívó adja meg (a részletben nincsenek
+    fájl-szintű deklarációk), teljes fájlnál magából a fájlból mérjük.
+    """
+    if recorded is None:
+        recorded = recorded_path_constants(source)
+    masked = mask_strings_and_comments(source)
+    findings: list[str] = []
+    for start, end in group_blocks(masked):
+        block = source[start:end]
+        if not any(doc in block for doc in dated_doc_paths):
+            continue
+        declarations = _declarations(masked[start:end])
+        for call in CONTAINS_CALL.finditer(masked[start:end]):
+            depth = 0
+            cursor = call.end() - 1
+            while cursor < end - start:
+                if masked[start + cursor] == "(":
+                    depth += 1
+                elif masked[start + cursor] == ")":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                cursor += 1
+            argument = block[call.end() : cursor]
+            for braced, bare in INTERPOLATION.findall(argument):
+                expression = braced or bare
+                for root in sorted(
+                    _live_roots(expression, declarations, recorded)
+                ):
+                    line = source.count("\n", 0, start + call.start()) + 1
+                    findings.append(
+                        f"{line}: contains('…${{{expression}}}…') expects a "
+                        f"value derived from the live `{root}`"
+                    )
+    return findings
+
+
 def dated_snapshot_docs(root: Path) -> set[str]:
     """A `docs/` alatti, saját bázisukat kimondó pillanatkép-jelentések."""
     return {
@@ -180,6 +311,45 @@ class DatedReportGuardRuleTest(unittest.TestCase):
         )
 
 
+class LiveExpectationRuleTest(unittest.TestCase):
+    """A VÁRT ÉRTÉK eredetének szabálya RÖGZÍTETT bemeneten (L614)."""
+
+    DOCS = {"docs/ui/chapter-15-completion-report.md"}
+    RECORDED = {"_baselinePath"}
+
+    def test_the_live_matrix_counts_are_flagged(self) -> None:
+        """Az E16-R02 javítása utáni alak: a DARABSZÁM-cellák még élők."""
+        source = (FIXTURE / "a5_guard_recorded_baseline.dart.txt").read_text(
+            encoding="utf-8"
+        )
+        findings = report_expectation_pins(source, self.DOCS, self.RECORDED)
+        roots = {finding.rsplit("`", 2)[1] for finding in findings}
+        self.assertEqual(roots, {"_screens", "_ViewportProfile", "_excludedCells"}, findings)
+
+    def test_the_recorded_matrix_counts_are_clean(self) -> None:
+        source = (FIXTURE / "a5_guard_recorded_matrix_counts.dart.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(
+            report_expectation_pins(source, self.DOCS, self.RECORDED), []
+        )
+
+    def test_a_live_expectation_without_a_dated_report_is_not_flagged(self) -> None:
+        """A szabály nem tiltja az élő állapotból származó várt értéket —
+        csak DÁTUMOZOTT jelentés őrében."""
+        source = (FIXTURE / "a1_completeness_group.dart.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(report_expectation_pins(source, self.DOCS, self.RECORDED), [])
+
+    def test_the_recorded_constant_is_measured_from_the_file(self) -> None:
+        """Teljes fájlon a rögzített gyökereket magából a fájlból mérjük."""
+        source = (
+            ROOT / "test" / "ui" / "goldens" / "e15_r13_full_variant_matrix_test.dart"
+        ).read_text(encoding="utf-8")
+        self.assertIn("_baselinePath", recorded_path_constants(source))
+
+
 class DatedReportGuardTreeTest(unittest.TestCase):
     """A KÖVETELT VÉGÁLLAPOT az élő fán."""
 
@@ -200,6 +370,23 @@ class DatedReportGuardTreeTest(unittest.TestCase):
             {},
             "a dated snapshot report may only be guarded against a RECORDED "
             "measurement of its own base, never against the live tree (L613)",
+        )
+
+    def test_no_dart_test_expects_a_dated_report_to_cite_a_live_value(self) -> None:
+        docs = dated_snapshot_docs(ROOT)
+        offenders: dict[str, list[str]] = {}
+        for path in sorted((ROOT / "test").rglob("*.dart")):
+            findings = report_expectation_pins(
+                path.read_text(encoding="utf-8"), docs
+            )
+            if findings:
+                offenders[path.relative_to(ROOT).as_posix()] = findings
+        self.assertEqual(
+            offenders,
+            {},
+            "the value a dated snapshot report is required to cite must come "
+            "from a RECORDED snapshot of its own base, never from the live "
+            "matrix/tree state (L614)",
         )
 
 
