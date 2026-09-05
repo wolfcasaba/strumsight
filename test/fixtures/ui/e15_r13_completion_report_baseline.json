@@ -8,6 +8,17 @@
   "unreachableCount": 25,
   "flagGatedCount": 27,
   "migratedCount": 91,
+  "matrix": {
+    "measuredAtCommit": "70b5646558b83e88049879d7358ae71fe80ad157",
+    "command": "structural count of test/ui/goldens/e15_r13_full_variant_matrix_test.dart (screens/exclusions/viewports + the A1/A5 test() calls); identical at main 5fbb4937b8568046a2b8bc2a9d9fe67336f5a64f",
+    "screenCount": 72,
+    "viewportCount": 2,
+    "totalCells": 1152,
+    "excludedCellCount": 32,
+    "a1CellCount": 5,
+    "a5CellCount": 6,
+    "grandTotalTests": 1163
+  },
   "screens": [
     {
       "screenPath": "lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart",

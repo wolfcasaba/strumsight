@@ -26465,3 +26465,64 @@ pedig az E17 sáv többi köre foglalta — a kör ütköző sorszámmal indult 
 amit a `test_adr_numbering.py` csak MERGE UTÁN buktatott volna le. Az őr
 (`tools/tests/test_e17_r01_first_win_source_scope.py`) ezért a brief és a
 queue ADR-oszlopának EGYEZÉSÉT is méri, nem csak a scope-ot.
+
+## L653 — Egy hibaosztály javítása CSAK a mért alakot szüntette meg: a dátumozott jelentés darabszám-cellái az ÉLŐ mátrixon maradtak, és a következő kör sikere ugyanoda vitte a lánccal (E17-R01 / H3, önjavító kör, 2026-09-05)
+
+**Tünet.** Az E17-R01 terméke hibátlan volt (A1–A10 zöld, gépi scope-audit 0
+sértés, 14 gate-tesztútvonal + format/analyze/architecture/secrets/l10n zöld),
+a célzott kapu mégis `+1177 -2`-vel piros lett, ugyanabban a group-ban, mint
+[L613](#l613) — csak két MÁSIK cellán:
+
+```
+❌ A5 — completion-report guard … cites the matrix screen/cell counts
+   derived from THIS file      Expected: contains '73'   (a jelentés: 72)
+❌ A5 — completion-report guard … cites the grand total test count this
+   file itself produces        Expected: contains '1179' (a jelentés: 1163)
+```
+
+**Mért gyökérok.** Az L613 javítása a szabályt az `X(Directory.current)`
+alakra szabta, és a cellák közül csak azt vitte át a rögzített pillanatképre,
+amelyik ilyen volt. A darabszám-cellák viszont a teszt-fájl SAJÁT ÉLŐ
+kollekcióiból származtatták a várt értéket:
+
+```dart
+contains('${_screens.length}')                        // 72 → 73
+contains('$totalCells')  // _screens.length * … * 2   // 1152 → 1168
+contains('$grandTotal')  // totalCells + A1 + A5      // 1163 → 1179
+```
+
+Ez ugyanaz a hibaosztály (dátumozott jelentés őrzése elmozduló mércével), csak
+nem a FÁBÓL, hanem a TESZT-FÁJL élő állapotából. Az E17-R01 acceptance-e a
+`FirstWinStageScreen` elérhetővé tétele → a mátrix eggyel nő → **a kör sikere
+vitte pirosra a saját kapuját**, egy olyan fájlon
+(`docs/ui/chapter-15-completion-report.md`), amely a kör `allowed_paths`-án
+kívül van (H3, [ADR 0087](adr/0087-round-brief-scope-authority.md) §2). Az E17
+sáv mind a 14 köre reachability-t növel, tehát körönként visszatért volna.
+
+**A javítás (nem gyengítés).** A `matrix` blokk bekerült a rögzített
+pillanatképbe (`test/fixtures/ui/e15_r13_completion_report_baseline.json`:
+72 screen / 2 viewport / 1152 cella / 32 `_ExcludedCell` / 5 A1 + 6 A5 /
+1163 teszt, a jelentés bázisán — `70b56465` — mérve, main-en újramérve
+azonos, provenance a `manifest.json`-ban), és a két cella innen veszi a várt
+értéket. Mindkettő ELŐBB a pillanatkép belső konzisztenciáját méri (a cellák
+száma a rögzített tengelyek szorzata; a grand total a rögzített részek
+összege), tehát a fixture nem hangolható kézzel egy hibás jelentéshez egy
+számon keresztül. Az [L588](#l588) tulajdonsága áll: minden állítás a jelentés
+SZÖVEGÉTŐL függetlenül keletkezik, a némán TÖRÖLT állítás is bukik. Az élő
+mátrixot az `A1 — completeness` group és a `_runCell` STALE-ága őrzi tovább.
+
+**Az őrteszt tanulsága (a lecke lényege).** Egy hibaosztály őre a MÉRT ALAKOT
+szokta rögzíteni; ha az osztály általánosabb, a következő előfordulás
+akadálytalanul jön. A `tools/tests/test_dated_report_guards.py` ezért már nem
+egy szintaktikai alakot tilt, hanem az ÉRTÉK EREDETÉT méri: dátumozott
+jelentést olvasó group-ban a `contains(...)`-be interpolált várt érték csak
+rögzített fixture-ből olvasott értékből vagy literálból származhat (a lokális
+változókat a szabály visszavezeti a gyökereikig). Mérve piros a javítás előtt
+(`main @ 5fbb4937`: 1 failed, a lelet a három élő gyökér) és zöld utána — **a
+megállt kör HEAD-jén is** (`sonnet-impl/e17-r01-… @ accb1e51` + heal merge:
+`10 passed`, és a célzott Dart-kapu ott is zöld).
+
+**Amit a szabály szándékosan NEM tilt:** a `normalizedReport.contains(
+normalizedName)` alakú cellát (élő `_ExcludedCell`-nevek) — ott nincs
+interpolált várt szám, és a lista a saját szabálya szerint csak ZSUGORODHAT
+([L180](#l180)), zsugorodáskor pedig a cella zöld marad.

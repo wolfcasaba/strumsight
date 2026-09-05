@@ -1,5 +1,40 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E17-R01 / H3 (2.) feloldva: a dátumozott jelentés DARABSZÁM-celláit is a rögzített pillanatkép őrzi (2026-09-05)
+
+A kör MUNKÁJA hibátlan volt (A1–A10 zöld, gépi scope-audit 0 sértés, 14
+gate-tesztútvonal zöld) — a célzott kapu mégis `+1177 -2`, mert a kör SIKERE
+(a `FirstWinStageScreen` mátrixba vétele) elmozdította azokat a számokat,
+amelyeket az `e15_r13` A5-ös őre egy DÁTUMOZOTT jelentéstől
+(`docs/ui/chapter-15-completion-report.md`, a kör tilos zónája) szó szerint
+megkövetelt: 72 → 73 screen, 1152 → 1168 cella, 1163 → 1179 teszt.
+
+Ugyanaz a hibaosztály, mint az [L613](docs/LESSONS.md) — de az akkori javítás
+CSAK az `X(Directory.current)` alakot vitte át a rögzített pillanatképre; a
+darabszám-cellák a teszt-fájl ÉLŐ `_screens` / `_excludedCells` /
+`_ViewportProfile` kollekcióiból dolgoztak tovább. Az E17 sáv mind a 14 köre
+reachability-t növel, tehát ez körönként visszatért volna
+([L653](docs/LESSONS.md)).
+
+**A javítás (nem gyengítés).** A pillanatkép-fixture kapott egy `matrix`
+blokkot (72 / 2 viewport / 1152 / 32 `_ExcludedCell` / 5 A1 + 6 A5 / 1163 — a
+jelentés bázisán, `70b56465`-en mérve, main-en újramérve azonos, provenance a
+`test/fixtures/manifest.json`-ban), és a két cella innen veszi a várt értéket
+— előbb a pillanatkép belső szorzatát/összegét ellenőrizve, hogy a fixture ne
+legyen kézzel egyetlen számra igazítható. Az élő mátrixot az `A1 —
+completeness` group és a `_runCell` STALE-ága őrzi tovább, az L588
+tulajdonsága (némán törölt állítás is bukik) áll.
+
+**Regressziós őr:** `tools/tests/test_dated_report_guards.py` — már nem egy
+szintaktikai alakot tilt, hanem az ÉRTÉK EREDETÉT méri (a `contains(...)`-be
+interpolált várt érték csak rögzített fixture-ből vagy literálból jöhet, a
+lokálisokat a gyökerükig visszavezetve). Mérve piros a javítás előtt
+(`main @ 5fbb4937`) és zöld utána — a megállt kör HEAD-jén is
+(`sonnet-impl/e17-r01-… @ accb1e51` + heal merge).
+
+**A kör NEM újraimplementálandó:** a munka pusholva (`accb1e51`), a review +
+CI + merge lépésnél folytatható.
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E17-R01 / H3 feloldva: a bekötendő provider LÉTEZETT, de a szállított gyára a TESZT-FAKE volt (2026-09-05)
 
 Az `E17-R01` (Chapter 17, „Onboarding First-Win állomás bekötése") a SAJÁT
