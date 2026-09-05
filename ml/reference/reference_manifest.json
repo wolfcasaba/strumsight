@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-09-05",
+  "measured_via": [
+    "GitHub API /repos/Klangio/guitar-strumming-transcription/git/trees/<sha>?recursive=1 (truncated=false, 358 entries)",
+    "raw.githubusercontent.com (LICENSE, README.md, .gitattributes, LFS pointer)"
+  ],
+  "publication": {
+    "title": "Joint Transcription of Acoustic Guitar Strumming Directions and Chords",
+    "authors": "S. Murgul, J. Schimper, M. Heizmann",
+    "venue": "ISMIR 2025",
+    "arxiv": "https://arxiv.org/abs/2508.07973"
+  },
+  "source": {
+    "repository": "https://github.com/Klangio/guitar-strumming-transcription",
+    "default_branch": "main",
+    "pinned_commit": "929e403f3256b055c1eea27064ae39f36905359e",
+    "pinned_commit_date": "2025-09-21T14:31:50Z",
+    "repo_level_license_spdx_id": "Apache-2.0"
+  },
+  "artifacts": {
+    "code": {
+      "paths": [
+        "klangio/modules/strumming_crnn/",
+        "scripts/",
+        "requirements.txt",
+        "pylintrc"
+      ],
+      "license": {
+        "spdx": "Apache-2.0",
+        "source": "LICENSE (full Apache-2.0 text) and README.md \"License\" section",
+        "evidence": "README.md \"License\" section, verbatim: \"Copyright © 2025 Klangio GmbH — This software is licensed under the Apache License, Version 2.0.\"",
+        "verdict": "permissive_for_research_reproduction"
+      }
+    },
+    "checkpoint": {
+      "path": "checkpoints/wc/step=19000-f1=0.8225.ckpt",
+      "storage": "git-lfs",
+      "sha256": "80297850d7d2150093d5ae2bcb090466566ad24fa835a5c1e67f16ca38a3ea44",
+      "bytes": 134344202,
+      "license": {
+        "spdx": null,
+        "source": "NOT_DECLARED",
+        "evidence": "README.md \"License\" section scopes the Apache-2.0 grant to \"software\" only. No license statement exists in the \"Pretrained Checkpoint\" section, and no LICENSE file exists under checkpoints/. The \"Citation\" section requests attribution for research use, which is not a product license grant.",
+        "verdict": "blocking"
+      }
+    },
+    "dataset": {
+      "path": "dataset/klangio-gst-mm-2025/",
+      "blob_count": 330,
+      "bytes": 913163829,
+      "license": {
+        "spdx": null,
+        "source": "NOT_DECLARED",
+        "evidence": "README.md \"License\" section scopes the Apache-2.0 grant to \"software\" only. No license statement exists in the \"Dataset\" section, and no LICENSE file exists under dataset/. The \"Citation\" section requests attribution for research use, which is not a product license grant.",
+        "verdict": "blocking"
+      }
+    }
+  },
+  "go_no_go": {
+    "product_use": "NO-GO",
+    "rationale": "The checkpoint and dataset licenses are NOT_DECLARED (verdict=blocking on both). An undeclared license is a reserved right, never a permissive default (ADR 0369 D1/D2); the repo-level Apache-2.0 grant does not inherit downward onto the checkpoint or dataset (ADR 0473 D4 precedent for the same weakening pattern).",
+    "measured_lower_bound": {
+      "checkpoint_bytes": 134344202,
+      "note": "Mobile memory-cost lower bound if this checkpoint were ever shipped. It will not be shipped, per the NO-GO verdict above."
+    }
+  },
+  "audit_registry": [],
+  "requirements": [
+    "torch",
+    "lightning",
+    "note-seq",
+    "torchlibrosa",
+    "librosa==0.10.1",
+    "hydra-core",
+    "wandb"
+  ],
+  "reproduction": {
+    "official_form": "scripts/evaluate.ipynb (upstream notebook; no single-command form exists upstream)",
+    "single_command": "python3 ml/reference/run_reference_eval.py --manifest ml/reference/reference_manifest.json --workdir <path outside this repository>",
+    "verify_only_command": "python3 ml/reference/run_reference_eval.py --manifest ml/reference/reference_manifest.json --verify-only"
+  }
+}
