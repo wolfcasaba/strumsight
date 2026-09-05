@@ -199,4 +199,101 @@ nem igényelnek.
 
 ## Javító kör után — újra-ellenőrzés
 
-*(a javító kör után az orchestrátor tölti ki)*
+- **Javító commit:** `c7aec8c5` (+ `434c62c5` upstream-merge, tartalmilag üres a körre nézve)
+- **Reviewer:** Claude (Opus 5), független read-only újra-ellenőrzés (ADR 0055)
+- **Dátum:** 2026-09-05
+
+### Mérce (mit olvastam)
+
+READ-ONLY, statikus. A `tools/round-gate.sh`-t / `flutter analyze`-t /
+`flutter test`-et a reviewer **nem futtatta** (az orchestrátor ugyanabban a
+munkamásolatban futtatta — párhuzamos Flutter-futás OOM).
+
+- `git show c7aec8c5` teljes egészében (`--stat`: **4 fájl, mind `test/**` +
+  `docs/**`, `lib/**` érintetlen**);
+- `test/app/routing/shell_entry_location_test.dart` **teljes** (255 sor),
+  `lib/features/onboarding/screens/onboarding_screen.dart` **teljes**,
+  `lib/app/routing/adaptive_shell_routes.dart` **teljes**,
+  `lib/app/routing/app_route.dart`,
+  `test/features/practice_hub/practice_area_hub_cta_test.dart:1-131`,
+  `lib/features/practice_hub/screens/practice_area_hub_screen.dart:45-80`,
+  `lib/l10n/app_en.arb:2684-2686` és `:2524`;
+- a brief `§7.1`, `§10.4`, az új `§10.6`;
+- mért ellenőrzések: `git diff origin/main...HEAD -- docs/release/full-app-verification.md`
+  (**4 hunk**: `:8-10` bevezető, §2 törzs, L1/L2 „Kör" sorai, §4 tábla 1/2/6 sora
+  — a §3 partíció-táblák és az L3/L4/L5 szakaszok **egyik hunkban sem**);
+  `cmp` az L3–L5 blokkra (66 sor) az `origin/main` verziójával → **azonos**;
+  `grep -c testWidgets` → **6**; `skip:` a négy tesztfájlban → **0**;
+  `git status --porcelain` → **üres**.
+
+### Leletenkénti zárás
+
+| Lelet | Állapot | Bizonyíték (file:line + idézet) |
+|---|---|---|
+| **MAJOR-1** — az A2 „shell KI" cellái nem falszifikálják a D2 szerződést | **ZÁRVA** | `test/app/routing/shell_entry_location_test.dart:139-254` új `'A2 — isolated onboarding-only rig (review MAJOR-1, falszifikáció)'` csoport. A rig **mindkét védőhálót eltávolítja**: `:188-204` csupasz `GoRouter(initialLocation: AppRoutes.welcome, routes: [...])` — **nincs `redirect` és nincs `onException`**, sem a routeren, sem a három `GoRoute`-on; `/today` (`:195-198`) **és** `/live` (`:199-202`) egyaránt regisztrált `SizedBox.shrink()` placeholderrel **minden flag-álláson**, tehát mutált cél sem dob `GoException`-t. A flag override eléri a képernyőt: `:171-185` `appConfigProvider.overrideWithValue(…)` a `ProviderContainer`-en, amit `:211` `UncontrolledProviderScope(container: container, child: MaterialApp.router(…))` a router-navigátor **fölé** húz. Az állítás a **settled** URI-ra megy: `:235` `pumpAndSettle()` → `:237` `expect(router.state.uri.path, entryLocationFor(true));`, illetve `:249-251` `entryLocationFor(false)`. |
+| **MINOR-1** — nyers angol literálok a negatív állításokban | **ZÁRVA** | `practice_area_hub_cta_test.dart:118` `final l10n = lookupAppLocalizations(const Locale('en'));`, `:125-126` `expect(find.text(l10n.practiceAreaHubRecommendedTitle), findsNothing);` + `…RecommendedMessage`. A kulcsok azonosak a képernyő által renderelttel (`practice_area_hub_screen.dart:53`, `:58`). Új ARB-kulcs **nincs**. |
+| **MINOR-2** — a verification-dokumentum önellentmondása | **ZÁRVA** | `docs/release/full-app-verification.md:9` `…tiltott zónája; L1/L2 azóta \`E16-R06\`-ban feloldva, l. §2)…`; `:283` `… mérhetően NEM **voltak** végigjárhatók …`. Az L3/L4/L5 alszakaszok **bájtra azonosak** az `origin/main` verziójával; a §3 partíció-táblákat egyetlen hunk sem érinti. |
+| **MINOR-3** — az A3 „páros" csak a BE flag-álláson teljes | **ZÁRVA** | `shell_entry_location_test.dart:103-107` (BE) és `:131-135` (KI): `expect(find.byType(LearnScreen), findsOneWidget);` + `expect(tester.widget<LearnScreen>(…).lesson.id, Lessons.firstWin.id);` — belépési hely ÉS push mindkét flag-álláson. |
+
+**A falszifikáció végigkövetve (a MAJOR-1 döntő kérdése).** A `Skip`
+(`onboarding_screen.dart:218-222`) `requestMic` nélkül hívja a `_finish`-t, tehát
+a permission-checkpoint nem kerül közbe. A rig `const OnboardingScreen()`-t épít
+(`:193`) → `onDone == null` → a **default** ág fut, `GoRouter.of(context)` a
+csupasz routert adja. A `router.go(entryLocation)` után semmi nem szólhat bele:
+nincs `refreshListenable`, nincs `redirect`, nincs `onException`, a cél
+regisztrált. Egy flag-vak `final entryLocation = AppRoutes.today;` mutációnál a
+KI cella settled URI-ja `/today`, az elvárás `entryLocationFor(false)` = `/live`
+(`adaptive_shell_routes.dart:29`) → **PIROS**. A rig vákuum-mentes is: `:222`
+`expect(router.state.uri.path, AppRoutes.welcome);` a tap ELŐTT rögzíti a
+kiindulást.
+
+**A §10.6 mutációs kimenetek hitelessége.** A három futás számai a rigből
+**levezethetők**: (1) fix `/today` → `+5 -1`, egyedül az izolált KI cella bukik
+(a négy valódi routeres cellát az `onException` megvédi); (2) visszaállítás →
+`+6` (a fájlban pontosan 6 `testWidgets` van — mérve); (3) fix `/live` **csak a
+`_completeFinish`-ben** → `+4 -2`: izolált BE cella + valódi routeres „shell BE ×
+Skip/finish"; a valódi „BE × first-win" zöld marad, mert a `_completeFirstWin`
+ebben a futásban nem volt mutálva — épp ez különbözteti meg a §10.4
+kontroll-mérésétől. Kézzel írt kimenet ezt a különbséget nem szokta eltalálni.
+
+**Anti-gaming audit.** `git show --stat c7aec8c5` → `lib/**` **nulla sor**. A négy
+eredeti „valódi routeres" cella (`:85-137`) megvan és **erősödött** (MINOR-3);
+egyetlen assertion sem lazult; `skip:`, kikommentelt teszt, `reason`-nel lazított
+állítás: **0**. Golden/fixture: 0 fájl. A merge-commit (`434c62c5`) diffje az
+`origin/main`-hez képest 0 sor a két érintett doksin → tisztán upstream.
+
+### Új leletek
+
+**NOTE-4 (nem blokkoló) — az izolált rig a first-win ágra nem terjed ki.** Az új
+csoport két cellája kizárólag a `Skip/finish` ágat méri (`:226`, `:240`) — pontosan
+úgy, ahogy a review előírta. Következmény: egy flag-vak `_completeFirstWin`
+(`onboarding_screen.dart:126-151`) KI állapotban továbbra sem vinne pirosra
+cellát. A kockázat alacsony (a két ág ugyanazt a két sort futtatja, egymás
+szomszédságában, és a D1-et az A1 grep + az izolált Skip-pár együtt őrzi).
+Zárása két további cella lenne ugyanabban a rigben — **javasolt jövőbeli körre,
+nem e kör visszatartására.**
+
+**NOTE-5 (kozmetikai) — az izolált cellák állítása az `entryLocationFor`-ra
+hivatkozik** (`:237`/`:251`), tehát magának a függvénynek a mutációját
+tautologikusan zölden hagynák. Nem hézag: a négy valódi routeres cella
+**literált** állít (`:92/:102/:118/:130`), és az `app_router.dart` ugyanezt a
+forrást hívja, tehát ilyen mutáció ott bukna.
+
+**Riverpod/Flutter higiénia — tiszta.** `UncontrolledProviderScope` megvan
+(`:211`), `addTearDown` a `pumpWidget(SizedBox.shrink())` + `container.dispose()`
+párral (`:205-208`). A csupasz `GoRouter` nincs `dispose()`-olva — a repóban
+egyetlen teszt sem `dispose()`-ol routert, és leak-tracking nincs bekapcsolva →
+nem lelet. `test/support/` duplikáció nincs (a rig a meglévő
+`preferenceOverrides()`-t használja újra).
+
+### VÉGSŐ DÖNTÉS: APPROVED
+
+Mind a négy lelet érdemben zárva. A MAJOR-1 nem kozmetikai zárás: a rig valóban
+mindkét védőhálót kiiktatja, a mutáció nem tud rejtve maradni, a cella nem tud
+vákuumban zöldülni, és a jelentett három mutációs futás számai a rigből
+levezethetők. Teszt-gyengítés nincs, `lib/**` nem változott a javító körben, a
+scope makulátlan, az L3/L4/L5 szakaszok bájtra azonosak. A NOTE-4/NOTE-5
+javítást nem igényel a merge-hez; a NOTE-4 érdemes egy jövőbeli kör backlogjára.
+
+**Orchestrátor-oldali mérce:** `tools/round-gate.sh` a javított fán
+(`--result-json`, csonkítatlan) **19/19 zöld, `gate_exit=0`**.
