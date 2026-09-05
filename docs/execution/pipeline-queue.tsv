@@ -764,7 +764,7 @@ E14-R11	docs/rounds/e14-r11-chord-uncertainty-and-separate-confidence.md	sonnet-
 E14-R12	docs/rounds/e14-r12-recognition-stabilizer.md	sonnet-impl	0364	done
 E14-R13	docs/rounds/e14-r13-live-ui-truthfulness-hotfix.md	sonnet-impl	0520	pending
 E14-R14	docs/rounds/e14-r14-audio-setup-and-accuracy-check.md	sonnet-impl	0366	done
-E14-R15	docs/rounds/e14-r15-hard-negative-corpus-and-false-visible-metric.md	sonnet-impl	0521	pending
+E14-R15	docs/rounds/e14-r15-hard-negative-corpus-and-false-visible-metric.md	sonnet-impl	0521	done
 E14-R16	docs/rounds/e14-r16-onset-detector-ab-benchmark.md	sonnet-impl	0368	pending
 E14-R17	docs/rounds/e14-r17-reference-model-repro-and-licence-audit.md	sonnet-impl	0369	done
 E14-R18	docs/rounds/e14-r18-joint-streaming-prototype.md	sonnet-impl	0370	done
