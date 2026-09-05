@@ -190,12 +190,20 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
       return StrumClassification(
         direction: up ? StrumDirection.up : StrumDirection.down,
         confidence: calibrate(up ? pUp : pDown),
+        // Additive export (ADR 0512 D1): the caller pipeline builds its
+        // decision from these — direction/confidence above are unchanged.
+        pDown: pDown,
+        pUp: pUp,
+        pNoStrum: probs[2],
       );
     }
     final up = probs[1] > probs[0];
     return StrumClassification(
       direction: up ? StrumDirection.up : StrumDirection.down,
       confidence: calibrate(up ? probs[1] : probs[0]),
+      // The 2-class softmax already sums to 1 — no renormalisation needed.
+      pDown: probs[0],
+      pUp: probs[1],
     );
   }
 

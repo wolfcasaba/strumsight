@@ -29,6 +29,9 @@ class StrumClassification {
     required this.direction,
     required this.confidence,
     this.suppressed = false,
+    this.pDown,
+    this.pUp,
+    this.pNoStrum,
   });
 
   final StrumDirection? direction;
@@ -41,6 +44,19 @@ class StrumClassification {
   /// ever sets this; the heuristic and the 2-class model never do (a null
   /// direction there still means "ambiguous strum", not "no strum").
   final bool suppressed;
+
+  /// Raw CRNN probability the strum was a downstroke, renormalised over the
+  /// down/up mass — `null` on [HeuristicStrumClassifier], whose confidence is
+  /// a fixed ladder, not a probability (ADR 0512 D1/D2). NOT a confidence:
+  /// never fed into [confidence] (ADR 0505 D2).
+  final double? pDown;
+
+  /// Raw CRNN probability the strum was an upstroke — see [pDown].
+  final double? pUp;
+
+  /// Raw CRNN probability there was no strum at all (3-class model only) —
+  /// `null` on the 2-class model and the heuristic.
+  final double? pNoStrum;
 }
 
 /// The ↓/↑ decision seam (docs/plans/ml-track.md P1.1, chunk 018 step 2).
