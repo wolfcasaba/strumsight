@@ -114,6 +114,34 @@ későbbi kör lesz — ott kell majd parszer-cellát kapnia.
 értelmezés a doksiban), 2 MINOR. A gate és a scope zöld, a kör architektúrája
 (delegált pontozás, érintetlen production út, két kimeneti csatorna) helyes.
 
-## 4. Verdikt (2. forduló — a javító kör után)
+## 4. Verdikt (2. forduló — a javító kör után, `7e7cecf8`)
 
-_(a javító kör után töltöm ki)_
+Leletenként ellenőrizve:
+
+| Lelet | Zárás | Mérve |
+|---|---|---|
+| **MAJOR-1** | **ZÁRVA** | (a) `OnsetDetectorVariant.lastFlux` + `OnsetOdfScaleDiagnostics` (`fluxMedian`, `fluxP95`, `effectiveThresholdMedian`) a **determinisztikus** riportban, variánsonként (`odfScale` kulcs); (b) **11. cella**: 0,1× bemeneten a `current` detektálás-száma változatlan, legalább egy ÚJ variánsé megváltozik — reláció-alapú, nem darabszám-pinnelt; (c) a `docs/eval/onset-detector-ab.md` „Korlátok" szakasza a nem validált „melyik flux-definíció teljesít jobban" értelmezést **kimondottan visszavonja**, a mért 4/7/10/15 és −20 dB-es 4/14/5/3 táblázattal, és a „Javaslat" 2–3. pontja is skála-illesztés-feltételes lett |
+| **MINOR-1** | **ZÁRVA** | a `_PeakPicker.confirm` doc-commentje most `absC * hop / sampleRate`-et (keret-KEZDET) állít, és külön mondja ki, hogy a `+ window`-os képlet a benchmark `decisionMs`-e |
+| **MINOR-2** | **ZÁRVA** | `microsPerAudioSecond` `double?`, üres korpuszon `null`; új cella pinneli, hogy a JSON-ban nem jelenik meg `"microsPerAudioSecond": 0` |
+| NOTE-1 / NOTE-2 | rögzítve | nem igényelt javítást |
+
+A 7. cella szűkítése (a `0.0000`-tiltás mostantól a P/R/F1 **táblázatsorokra**
+vonatkozik, nem az egész Markdownra) **nem** mércegyengítés: a csendre mért
+flux-medián valódi, mért nulla, nem definiálatlan arány — az ADR 0509 D6 a
+nulla nevezőjű arányokat védi, és azokat a cella változatlanul `null`-ként
+követeli.
+
+**Mért kapuk a javító kör HEAD-jén (`7e7cecf8`):**
+
+- `tools/round-gate.sh test/tooling/onset_ab_benchmark_test.dart` **friss,
+  izolált klónban** (`/tmp/rev2-e14-r16`): `format`, `analyze`, a célzott
+  teszt (**12/12 PASS**), `architecture`, `secrets`, `l10n`, backend
+  `ruff format`/`ruff check`/`pytest` — **MINDEN GATE ZÖLD** (`gate_exit=0`);
+- `full-gate.yml` run `33969923831` → `conclusion=success`, `headSha=7e7cecf8`;
+- `router-ci.yml` → `success`, `headSha=7e7cecf8`;
+- scope-audit: `ok` (5 fájl, mind az `allowed_paths`-on); `gate_shape=ok`.
+
+### VÉGSŐ DÖNTÉS: APPROVED
+
+Nyitott BLOCKER/MAJOR/MINOR nincs. A merge a `main` elmozdulása miatt
+rebase-elt HEAD-en, ÚJRA dispatch-elt exact-SHA CI-vel történik (ADR 0086 §2).
