@@ -1,5 +1,40 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R12 / H5 feloldva: az élő SORT mérő őr a sor-fej SAJÁT, VALÓDI ütközését minősítette defektnek (2026-09-05)
+
+**A halt.** Az E14-R12 kész és APPROVED, a Full Gate ZÖLD a merge-jelölt
+`13f8040d`-n ([`33956693955`](https://github.com/wolfcasaba/strumsight/actions/runs/33956693955)),
+a Router CI viszont PIROS ugyanezen a SHA-n
+([`33956694997`](https://github.com/wolfcasaba/strumsight/actions/runs/33956694997))
+— és a `main`-en (`c0d2c35a`) is, a kör egyetlen sora nélkül.
+
+**Gyökérok (MÉRVE).** A `test_the_real_queue_admits_a_second_round_beside_the_running_one`
+cella az élő sort méri. Miután az E14-R14 `done` lett, a sor egyetlen
+előfeltétel-kész jelöltje az `E14-R15` maradt, aminek `allowed_paths`-a PONTOSAN
+EGY termékfájlban fed át a sor-fejjel: `lib/features/live/public.dart`. Az
+ütközés VALÓDI (a barrel az ADR 0336 / L343 óta teljes értékű ütközési felület),
+tehát a cella a diszjunkt-szabály MŰKÖDÉSÉT minősítette áteresztő-defektnek.
+Mivel a sor feje maga a mért kör volt, a piros csak a saját merge-e után szűnt
+volna meg — amit ugyanez a piros zárt ki: **holtpont**.
+
+**A javítás (a mérce NEM gyengült).** Az élő fán INVARIÁNS marad
+(`test_the_real_queue_is_never_blindly_serialised`: ál-ütközés SOHA nem zárhat ki
+előfeltétel-kész jelöltet); a defekt- és a szabálykövető alakot két, rögzített
+bemenetű fixture-cella méri a 2026-09-05-i sor-pillanatkép SZÓ SZERINTI
+`allowed_paths`-aival. A nem-defekt alakokat az élő cella `skipTest`-tel, a
+metsző fájl nevével jelenti. Részletek: `docs/LESSONS.md` **L643**, ADR 0495
+„Módosítás (ADR 0112 önjavító kör, 2026-09-05)".
+
+**Bizonyíték.** `tools/tests/test_pipeline_throughput.py` 63 cella zöld — a
+`main`-en, a megállt kör HEAD-jén (`13f8040d`, L612 előírása) és a merge utáni
+sor-állapotot szimulálva is (ott a `skipTest` megszűnik, a cella érdemben mér).
+A régi predikátum ugyanezen a fixture-ön szó szerint a CI hibaüzenetét adja.
+
+**Hol folytatódik az E14-R12.** A §0.2 létrán **REVIEW-APPROVED** — nincs
+újrakezdés: `fetch`+merge a friss `main`-nel, ÚJRA teljes CI-kapu az így kapott
+SHA-n, majd zöld kapus squash-merge a PR
+[#582](https://github.com/wolfcasaba/strumsight/pull/582)-n.
+
 ## ✅ E14-R14 KÉSZ — Automatikus Audio Setup: a profil BEMENET, nem kalibráció; a rossz felvételi környezet nem hazudható zöldre — PR [#583](https://github.com/wolfcasaba/strumsight/pull/583), squash `4fd8ff11` (2026-09-05)
 
 A Chapter 14 Kör 14 az **audio-setup lépés-gépét, a profil-modellt és a

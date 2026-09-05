@@ -21,6 +21,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -724,6 +725,69 @@ if __name__ == "__main__":
     unittest.main()
 
 
+def second_slot_finding(
+    repo: Path, rows: list[tuple[str, str, str, str, str]]
+) -> tuple[str, dict]:
+    """A 2. slot állapotát KLASSZIFIKÁLJA egy tetszőleges sor-pillanatképen.
+
+    Négy, egymást kizáró alak — csak az egyik defekt:
+
+    * ``empty-queue`` / ``prerequisite-chain`` — nincs mit mérni: a sorban nincs
+      nyitott kör, vagy a maradék KIMONDOTT előfeltétel-lánc (a roadmap alakja);
+    * ``admits`` — van előfeltétel-kész, diszjunkt jelölt: a program célja teljesül;
+    * ``blind-serialisation`` — **a MÉRT defekt** (ADR 0495 D1/D2): a jelöltet
+      ÁL-ütközés zárja ki, vagyis olyan útvonal, amit a merge-zár sorosít
+      (``SERIALIZED_PATHS``) vagy amit bármely kör újragenerál
+      (``GENERATED_PATHS`` / ``GENERATED_PATH_PATTERNS``);
+    * ``real-collision`` — a jelöltek mind VALÓDI, termékfájl-átfedésre esnek ki:
+      ez a diszjunkt-szabály MŰKÖDÉSE (ADR 0171 §1), nem áteresztő-defekt.
+
+    A klasszifikáció azért függvény, mert a sor élő pillanatképe MÚLIK: az élő
+    fán az invariáns mérhető (``blind-serialisation`` soha), a defekt- és a
+    szabálykövető alak pedig rögzített bemenetű fixture-ön (docs/LESSONS.md L612).
+    """
+    pending = [row for row in rows if row[4] == "pending"]
+    if not pending:
+        return ("empty-queue", {})
+    running = pending[0]
+    ready = [
+        candidate
+        for candidate in pending[1:]
+        if not round_slots.unmet_prerequisites(repo, candidate[0], candidate[1], rows)
+    ]
+    if not ready:
+        return ("prerequisite-chain", {"running": running[0]})
+
+    running_paths = round_slots.load_paths(repo, running[1])
+    admitted: list[str] = []
+    blocked: dict[str, list[str]] = {}
+    for candidate in ready:
+        pairs = round_slots.paths_conflict(
+            running_paths, round_slots.load_paths(repo, candidate[1])
+        )
+        if pairs:
+            blocked[candidate[0]] = sorted({path for pair in pairs for path in pair})
+        else:
+            admitted.append(candidate[0])
+    if admitted:
+        return ("admits", {"running": running[0], "admitted": admitted})
+
+    pseudo = {
+        round_id: [
+            path
+            for path in paths
+            if path in round_slots.SERIALIZED_PATHS
+            or path in round_slots.GENERATED_PATHS
+            or round_slots.is_generated_path(path)
+        ]
+        for round_id, paths in blocked.items()
+    }
+    pseudo = {round_id: paths for round_id, paths in pseudo.items() if paths}
+    if pseudo:
+        return ("blind-serialisation", {"running": running[0], "pseudo": pseudo})
+    return ("real-collision", {"running": running[0], "blocked": blocked})
+
+
 class MeasuredPrerequisiteRegimeTest(unittest.TestCase):
     """ADR 0495 D1/D2 — a párhuzamot a KIMONDOTT előfeltétel dönti el.
 
@@ -792,51 +856,153 @@ class MeasuredPrerequisiteRegimeTest(unittest.TestCase):
         )
         self.assertEqual(paths, frozenset({"lib/features/a/x_screen.dart"}))
 
-    def test_the_real_queue_admits_a_second_round_beside_the_running_one(self) -> None:
-        """A MÉRT defekt cellája: E15-R09 futása mellett indulhat egy másik kör.
+    def test_the_real_queue_is_never_blindly_serialised(self) -> None:
+        """Az ÉLŐ soron mért INVARIÁNS: ál-ütközés nem zárhat ki jelöltet.
 
         A cella a VAK sorosítást méri — azt, hogy egy előfeltétel-KÉSZ jelöltet
-        egy ál-útvonalütközés zár ki. Ha a nyitott sorban egyetlen
-        előfeltétel-kész jelölt sincs, az nem áteresztő-defekt, hanem a
-        roadmap KIMONDOTT alakja, és a cellának nincs mit mérnie.
+        egy ÁL-útvonalütközés (merge-zár által sorosított vagy generált fájl)
+        zár ki. A többi alak nem defekt, hanem a sor pillanatnyi, LEGITIM
+        állapota, ezért `skipTest` a konkrét okkal.
 
-        MÉRVE 2026-09-03 (ADR 0112 önjavító kör, E16-R02/H3): a `main` Router
-        CI-je ezen a cellán pirosra váltott (`33802070985`), mert a sor
-        maradéka szigorú előfeltétel-LÁNC — `E16-R02 → R03 → R04 → R05`,
-        mindhárom jelölt `unmet_prerequisites` miatt esik ki, útvonalütközés
-        nélkül. Ez ugyanaz a hibaosztály, amit az `docs/LESSONS.md` L612 mér:
-        az őr a fa/sor egy ÁTMENETI állapotát pinnelte örök igazságként.
+        MÉRVE 2026-09-03 (E16-R02/H3): a sor maradéka szigorú előfeltétel-LÁNC
+        volt (`E16-R02 → R03 → R04 → R05`), útvonalütközés nélkül.
+
+        MÉRVE 2026-09-05 (E14-R12/H5, Router CI `33956694997` és a `main`
+        `c0d2c35a`): a HARMADIK alak — az `E14-R12` (sor-fej) és az `E14-R15`
+        (egyetlen előfeltétel-kész jelölt) `allowed_paths`-a PONTOSAN EGY
+        termékfájlban fed át, a `lib/features/live/public.dart` barrelben,
+        amely az ADR 0336 / L343 óta TELJES ÉRTÉKŰ ütközési felület. A régi
+        `assertTrue(admitted)` ezt defektnek minősítette, pedig a
+        diszjunkt-szabály MŰKÖDÉSE — és mivel a sor-fej maga a piros kör volt,
+        a piros csak a saját merge-e után szűnt volna meg: holtpont.
+        Ugyanaz a hibaosztály, amit a `docs/LESSONS.md` L612 mér: az őr a
+        sor egy ÁTMENETI állapotát pinnelte örök igazságként. A defekt- és a
+        szabálykövető alak mérése ezért rögzített bemenetű fixture-re került
+        (lásd a két következő cellát), az élő fán az invariáns marad.
         """
-        rows = round_slots.queue_rows(ROOT)
-        pending = [row for row in rows if row[4] == "pending"]
-        if not pending:
-            self.skipTest("nincs nyitott kör a sorban")
-        running = pending[0]
-        ready = [
-            candidate
-            for candidate in pending[1:]
-            if not round_slots.unmet_prerequisites(ROOT, candidate[0], candidate[1], rows)
-        ]
-        if not ready:
-            self.skipTest(
-                "a nyitott sor maradéka KIMONDOTT előfeltétel-lánc "
-                f"({running[0]} után sorosított) — nincs előfeltétel-kész jelölt, "
-                "tehát vak sorosítás sem lehet"
-            )
-        admitted = [
-            candidate[0]
-            for candidate in ready
-            if not round_slots.paths_conflict(
-                round_slots.load_paths(ROOT, running[1]),
-                round_slots.load_paths(ROOT, candidate[1]),
-            )
-        ]
-        self.assertTrue(
-            admitted,
-            "a 2. slot ismét üresen áll: van előfeltétel-kész kör "
-            f"({[candidate[0] for candidate in ready]}), de mind útvonalütközésre "
-            f"hivatkozva esik ki a(z) {running[0]} mellett",
+        kind, detail = second_slot_finding(ROOT, round_slots.queue_rows(ROOT))
+        self.assertNotEqual(
+            kind,
+            "blind-serialisation",
+            "ÁL-ütközés zár ki egy előfeltétel-kész jelöltet a(z) "
+            f"{detail.get('running')} mellől: {detail.get('pseudo')} — "
+            "ezeket a merge-zár sorosítja vagy bármely kör újragenerálja, "
+            "tehát nem lehetnek ütközési felületek (ADR 0495 D1/D2)",
         )
+        if kind != "admits":
+            self.skipTest(f"a 2. slot állapota nem defekt: {kind} — {detail}")
+
+    # A 2026-09-05-én MÉRT sor-pillanatkép (`main` = `c0d2c35a`): a sor-fej
+    # `E14-R12` és az egyetlen előfeltétel-kész jelölt, az `E14-R15`. A listák
+    # a két brief `ai-router` blokkjának SZÓ SZERINTI `allowed_paths`-a — nem
+    # kitalált fixture (ADR 0112 önjavító kör, E14-R12/H5).
+    E14_R12_PATHS = (
+        "docs/rounds/e14-r12-recognition-stabilizer.md",
+        "lib/features/live/engine/recognition_stabilizer.dart",
+        "lib/features/live/providers/chord_timeline_provider.dart",
+        "lib/features/live/providers/live_providers.dart",
+        "lib/features/live/public.dart",
+        "test/features/live/chord_timeline_churn_test.dart",
+        "test/features/live/recognition_stabilizer_test.dart",
+    )
+    E14_R15_PATHS = (
+        "evaluation/recognition/negative_taxonomy.json",
+        "evaluation/recognition/fixtures/negative_taxonomy_sample.json",
+        "lib/features/live/domain/evaluation/false_visible_event_metric.dart",
+        "lib/features/live/public.dart",
+        "test/features/live/evaluation/false_visible_event_metric_test.dart",
+        "docs/eval/recognition-hard-negatives.md",
+        "docs/rounds/e14-r15-hard-negative-corpus-and-false-visible-metric.md",
+    )
+
+    def _queue_brief(
+        self, repo: Path, name: str, prerequisite_line: str | None, allowed_paths: tuple[str, ...]
+    ) -> str:
+        """Brief `ai-router` blokkal — a `load_paths` ezt olvassa."""
+        rounds = repo / "docs" / "rounds"
+        rounds.mkdir(parents=True, exist_ok=True)
+        lines = ["# fixture", ""]
+        if prerequisite_line is not None:
+            lines.append(prerequisite_line)
+            lines.append("")
+        lines.append("```ai-router")
+        lines.append("schema_version = 1")
+        lines.append('risk = "normal"')
+        lines.append("allowed_paths = [")
+        lines.extend(f'  "{path}",' for path in allowed_paths)
+        lines.append("]")
+        lines.append("gate_tests = [")
+        lines.append('  "test/features/live/placeholder_test.dart",')
+        lines.append("]")
+        lines.append("native_gate = false")
+        lines.append("```")
+        (rounds / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return f"docs/rounds/{name}"
+
+    def _measured_e14_queue(self, repo: Path) -> list[tuple[str, str, str, str, str]]:
+        prerequisite = "- **Előfeltétel:** `E14-R11` merge-elve"
+        head = self._queue_brief(repo, "e14-r12.md", prerequisite, self.E14_R12_PATHS)
+        candidate = self._queue_brief(repo, "e14-r15.md", prerequisite, self.E14_R15_PATHS)
+        return [
+            ("E14-R11", "docs/rounds/e14-r11.md", "sonnet-impl", "nincs", "done"),
+            ("E14-R12", head, "sonnet-impl", "0364", "pending"),
+            ("E14-R15", candidate, "sonnet-impl", "nincs", "pending"),
+        ]
+
+    def test_a_real_product_file_overlap_is_the_rule_working_not_a_defect(self) -> None:
+        """MÉRVE 2026-09-05: valódi barrel-átfedés → `real-collision`, nem defekt.
+
+        A régi cella (`assertTrue(admitted)`) pontosan ezen a bemeneten váltott
+        pirosra a `main`-en és a kör merge-jelöltjén is (Router CI
+        `33956694997`), holott a két brief `allowed_paths`-a TÉNYLEGESEN
+        átfed egy termékfájlban — a `lib/features/live/public.dart` barrel az
+        ADR 0336 / L343 óta teljes értékű ütközési felület, nem generált.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            rows = self._measured_e14_queue(repo)
+            kind, detail = second_slot_finding(repo, rows)
+            self.assertEqual(kind, "real-collision", detail)
+            self.assertEqual(detail["running"], "E14-R12")
+            self.assertEqual(detail["blocked"], {"E14-R15": ["lib/features/live/public.dart"]})
+
+    def test_a_pseudo_collision_is_still_reported_as_blind_serialisation(self) -> None:
+        """A defekt-alak ellenpróbája: ál-ütközés → `blind-serialisation`.
+
+        A MÉRT E14 sor-pillanatképéből kivéve a barrelt, az EGYETLEN átfedés a
+        migrációs napló marad. Ép szűrővel ez befér (`admits`) — az
+        `effective_paths` regressziója viszont visszahozza az E15-R09-en MÉRT
+        vak sorosítást, és a cella ezt defektnek jelenti.
+        """
+        head = tuple(p for p in self.E14_R12_PATHS if not p.endswith("public.dart"))
+        candidate = tuple(p for p in self.E14_R15_PATHS if not p.endswith("public.dart"))
+        journal = "docs/ui/migration-status.md"
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            prerequisite = "- **Előfeltétel:** `E14-R11` merge-elve"
+            rows = [
+                ("E14-R11", "docs/rounds/e14-r11.md", "sonnet-impl", "nincs", "done"),
+                (
+                    "E14-R12",
+                    self._queue_brief(repo, "e14-r12.md", prerequisite, head + (journal,)),
+                    "sonnet-impl",
+                    "0364",
+                    "pending",
+                ),
+                (
+                    "E14-R15",
+                    self._queue_brief(repo, "e14-r15.md", prerequisite, candidate + (journal,)),
+                    "sonnet-impl",
+                    "nincs",
+                    "pending",
+                ),
+            ]
+            self.assertEqual(second_slot_finding(repo, rows)[0], "admits")
+
+            with mock.patch.object(round_slots, "effective_paths", frozenset):
+                kind, detail = second_slot_finding(repo, rows)
+            self.assertEqual(kind, "blind-serialisation", detail)
+            self.assertEqual(detail["pseudo"], {"E14-R15": [journal]})
 
     def test_a_prerequisite_ready_candidate_blocked_only_by_paths_is_still_red(self) -> None:
         """A MÉRT defektet (E15-R09) a fenti `skipTest` NEM engedi át.
