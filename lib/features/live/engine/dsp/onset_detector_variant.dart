@@ -50,6 +50,17 @@ abstract class OnsetDetectorVariant {
   double get lambda;
   double get minIoiSec;
 
+  /// The most recent frame's raw ODF value, BEFORE thresholding — mirrors
+  /// the shipped detector's public `lastFlux` field. `current` delegates to
+  /// it directly; the three NEW variants return their own, just-computed
+  /// flux. These numbers are a function of the input only, so they belong
+  /// in the deterministic report, not the machine-dependent timing channel
+  /// (ADR 0524 D8) — the four variants share one absolute `delta`, but
+  /// their flux lives in different units (log-power vs. linear magnitude,
+  /// 64 vs. ~200 bands), so this field is what lets the benchmark MEASURE
+  /// that scale confound instead of only describing it.
+  double get lastFlux;
+
   /// Human-readable description of the algorithm — surfaced in the report,
   /// not only in source comments (mirrors `RecognitionMetricDefinition`'s
   /// "definition travels with the number" pattern, ADR 0509 D3).
@@ -123,6 +134,9 @@ final class _CurrentVariant implements OnsetDetectorVariant {
   double get minIoiSec => _detector.minIoiSec;
 
   @override
+  double get lastFlux => _detector.lastFlux;
+
+  @override
   String describe() =>
       'The shipped SuperFluxOnsetDetector, instantiated with its default '
       'constants — not copied or reimplemented (ADR 0524 D1/5.2).';
@@ -177,10 +191,19 @@ final class _PeakPicker {
   double _fluxPeak = 0;
   int _dropped = 0;
 
-  /// Feed one frame's flux value; returns the confirmed onset time
-  /// (seconds, `(frameIndex * hop + window) / sampleRate` referenced to the
-  /// PEAK frame, same convention as the shipped detector) or `null`.
+  /// The flux value most recently fed to [confirm] — mirrors the shipped
+  /// detector's public `lastFlux` (ADR 0524 D8).
+  double lastFlux = 0;
+
+  /// Feed one frame's flux value; returns the confirmed onset TIME in
+  /// seconds (`absC * hop / sampleRate`, the PEAK frame's START — same
+  /// convention as the shipped detector's `processFrame`) or `null`. The
+  /// DECISION instant (peak frame end plus the `_postFrames` confirmation
+  /// delay) is a separate quantity the benchmark computes for algorithmic
+  /// latency (`onset_ab_benchmark.dart`'s `decisionMs`), not this method's
+  /// return value.
   double? confirm(double flux) {
+    lastFlux = flux;
     _fluxWindow.addLast(flux);
     if (_fluxWindow.length > _medianFrames) _fluxWindow.removeFirst();
     final thr = delta + lambda * _median(_fluxWindow);
@@ -395,6 +418,9 @@ final class _CanonicalSuperFlux24Variant implements OnsetDetectorVariant {
   final ListQueue<Float64List> _ring = ListQueue();
 
   @override
+  double get lastFlux => _picker.lastFlux;
+
+  @override
   String describe() =>
       'SuperFlux (Böck–Widmer 2013) over a 24-band/octave log-frequency '
       'triangular filterbank built directly on the STFT — the canonical '
@@ -489,6 +515,9 @@ final class _SpectralFluxVariant implements OnsetDetectorVariant {
   Float64List? _prevMag;
 
   @override
+  double get lastFlux => _picker.lastFlux;
+
+  @override
   String describe() =>
       'Half-wave rectified magnitude spectral flux: the sum of positive '
       'per-bin magnitude increases frame-over-frame, no phase term (Bello '
@@ -574,6 +603,9 @@ final class _ComplexDomainVariant implements OnsetDetectorVariant {
   Float64List? _prevMag;
   Float64List? _prevPhase;
   Float64List? _prevPrevPhase;
+
+  @override
+  double get lastFlux => _picker.lastFlux;
 
   @override
   String describe() =>

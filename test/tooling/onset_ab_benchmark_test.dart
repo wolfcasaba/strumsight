@@ -229,7 +229,18 @@ void main() {
 
         final markdown = renderOnsetAbMarkdown(report);
         expect(markdown, contains('not measured'));
-        expect(markdown, isNot(contains('0.0000')));
+        // Scope this to the precision/recall/f1 TABLE rows only: the ODF
+        // scale diagnostic (10. pont) legitimately reports a flux median of
+        // 0.0000 on true silence (a real measured zero, not an undefined
+        // ratio) — ADR 0509 D6 guards precision/recall/f1, not that field.
+        final currentSection = markdown.substring(
+          markdown.indexOf('## current'),
+          markdown.indexOf('## canonicalSuperFlux24'),
+        );
+        final tableRows = currentSection.substring(
+          currentSection.indexOf('|---|---|---|---|---|---|---|'),
+        );
+        expect(tableRows, isNot(contains('0.0000')));
       },
     );
 
@@ -288,6 +299,100 @@ void main() {
       );
 
       expect(reparsed.toJson(), equals(directReport.toJson()));
+    });
+
+    test('10. the deterministic report carries an ODF-scale diagnostic per '
+        'variant (flux median, flux p95, effective-threshold median), and '
+        'stays byte-identical across repeated runs (ADR 0524 D8)', () {
+      final cases = [_strumCase()];
+      final report = buildOnsetAbReport(cases);
+
+      for (final id in OnsetVariantId.values) {
+        final odf = report.perVariantOdfScale[id]!;
+        expect(odf.fluxMedian, isNotNull, reason: id.name);
+        expect(odf.fluxP95, isNotNull, reason: id.name);
+        expect(odf.effectiveThresholdMedian, isNotNull, reason: id.name);
+        expect(
+          odf.fluxP95!,
+          greaterThanOrEqualTo(odf.fluxMedian!),
+          reason: id.name,
+        );
+
+        final variantJson =
+            (report.toJson()['variants']! as Map)[id.name]! as Map;
+        expect(variantJson['odfScale'], isNotNull, reason: id.name);
+      }
+
+      final first = buildOnsetAbReport(cases).toDeterministicJson();
+      final second = buildOnsetAbReport(cases).toDeterministicJson();
+      expect(first, second);
+    });
+
+    test('11. gain dependence (ADR 0524 D8): scaling the SAME synthetic signal '
+        'to 0.1x amplitude leaves the `current` detection count UNCHANGED, '
+        'while at least one NEW variant\'s count CHANGES — the harness\'s own '
+        'reproducible evidence that one absolute delta is not scale-invariant '
+        'across ODF definitions', () {
+      final signal = strumPattern(
+        lowFirstPerStrum: [true, false, true, false],
+        gapSeconds: 0.4,
+      );
+      final quiet = Float64List.fromList([
+        for (final sample in signal) sample * 0.1,
+      ]);
+
+      int detectionCount(OnsetVariantId id, Float64List pcm) {
+        final variant = createOnsetDetectorVariant(id, sampleRate: _sr);
+        var count = 0;
+        for (final frame in frames(pcm, variant.window, variant.hop)) {
+          if (variant.processFrame(frame) != null) count++;
+        }
+        return count;
+      }
+
+      final currentFull = detectionCount(OnsetVariantId.current, signal);
+      final currentQuiet = detectionCount(OnsetVariantId.current, quiet);
+      expect(
+        currentQuiet,
+        currentFull,
+        reason:
+            'current runs on log-power flux — amplitude-invariant by '
+            'construction',
+      );
+
+      final gainDependentVariants = OnsetVariantId.values
+          .where((id) => id != OnsetVariantId.current)
+          .where(
+            (id) => detectionCount(id, quiet) != detectionCount(id, signal),
+          );
+      expect(
+        gainDependentVariants,
+        isNotEmpty,
+        reason:
+            'at least one NEW variant must be gain-dependent — this is '
+            'the measured scale confound (ADR 0524 D8), not a flaky '
+            'assertion',
+      );
+    });
+
+    test('timing: a zero-length corpus renders microsPerAudioSecond as null, '
+        'never a coerced 0 (ADR 0509 D6)', () {
+      final timing = measureOnsetAbTiming(
+        const [],
+        deviceId: 'ci_host',
+        buildSha: 'deadbeef',
+      );
+      for (final id in OnsetVariantId.values) {
+        expect(
+          timing.perVariant[id]!.microsPerAudioSecond,
+          isNull,
+          reason: id.name,
+        );
+      }
+      expect(
+        timing.toJsonString(),
+        isNot(contains('"microsPerAudioSecond": 0')),
+      );
     });
   });
 }

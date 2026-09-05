@@ -51,6 +51,15 @@ Egy `RecognitionPrecisionRecallF1` cella `precision`/`recall`/`f1` mezője
 detekció (ADR 0509 D6) — a Markdown-renderer ezt **„not measured"**-ként
 írja ki, sosem `0.0000`-ként.
 
+Ide tartozik variánsonként az **ODF-skála diagnosztika** is (`odfScale` —
+`fluxMedian`, `fluxP95`, `effectiveThresholdMedian`, ADR 0524 D8): a
+variáns `lastFlux` mezőjének mintáján (a szállított detektor publikus
+`lastFlux`-ának megfelelője, kiterjesztve a három ÚJ variánsra) számolt
+medián/p95 flux-érték, valamint a `delta + lambda * median(flux)` effektív
+küszöb esetenkénti értékének mediánja. Mindhárom a bemenet függvénye —
+determinisztikus, nem gépfüggő —, és pontosan azt a skála-konfundot teszi
+mérhetővé, amit a „Korlátok" szakasz alább kimond.
+
 ### 2. `onset-ab-timing.json` — kimondottan gépfüggő
 
 Variánsonként teljes feldolgozási idő (`totalProcessingMicros`,
@@ -100,18 +109,22 @@ körben (nincs a repóban meglévő tiszta onset-annotáció formátum; a
 
 1. **Futtasd a harnesst egy valódi, annotált korpuszon** (a Klangio-készlet
    onset-only kivonata, vagy egy új, kifejezetten erre annotált részhalmaz)
-   és töltsd ki a Pareto-táblázatot mért számokkal.
-2. Ha a `canonicalSuperFlux24` (a kanonikus 24 sáv/oktáv felbontás) mérhetően
-   jobb `onsetTolerance50Ms.f1`-et ad a szállított 64 mel-sávos
-   `current`-nél **és** a késleltetés/CPU-költsége elfogadható, az a
-   `dsp_config.dart`/`superflux_onset_detector.dart` retune-jának jelöltje —
-   de az átállítás ÖNÁLLÓ kör, önálló ADR-rel (AGENTS.md §9), nem ennek a
-   körnek a folytatása.
-3. A `complexDomain` és a `spectralFlux` elsődlegesen REFERENCIA-pontok: ha a
-   `current`/`canonicalSuperFlux24` nem múlja felül egyértelműen a
-   `spectralFlux` egyszerű baseline-t egy adott tűrésen, az önmagában jelzés,
-   hogy a mérés vagy a korpusz gyanús, mielőtt bármilyen hangolási
-   következtetést levonnánk.
+   és töltsd ki a Pareto-táblázatot mért számokkal — az `odfScale`
+   diagnosztikával együtt (mert az F1-oszlop önmagában, skála-illesztés
+   nélkül nem értelmezhető, lásd „Korlátok").
+2. **Skála-illesztés ELŐBB, mint bármilyen retune-javaslat** (ADR 0524 D8):
+   a `canonicalSuperFlux24`/`complexDomain`/`spectralFlux` mai
+   `onsetTolerance50Ms.f1`-értéke nem hasonlítható össze a `current`-tel,
+   amíg mindegyik a saját flux-skálájára illesztett küszöböt nem kap. Ez egy
+   KÜLÖN kör, KÜLÖN ADR-je (a jelöltet a mért `odfScale.effectiveThresholdMedian`
+   variánsonkénti szórása jelöli ki) — ebből a körből semmilyen
+   `dsp_config.dart`/`superflux_onset_detector.dart` retune-javaslat NEM
+   következik.
+3. A `complexDomain` és a `spectralFlux` elsődlegesen REFERENCIA-pontok, de
+   csak a skála-illesztés UTÁN: a mai, egyetlen abszolút `delta`-val mért
+   F1-különbség (lásd a „Korlátok" táblázatát) a küszöb–skála
+   illesztetlenségét méri, nem az ODF minőségét, ezért belőle sem az, hogy
+   „a `spectralFlux` jobb", sem az, hogy „rosszabb", NEM olvasható ki.
 4. A gépfüggő időzítés-fájlt eszközmátrixon (`docs/testing/device-matrix.yaml`
    mintájára) érdemes megismételni, mielőtt bármilyen CPU-alapú állítás
    bekerül egy ADR-be — egyetlen fejlesztői gépen mért `microsPerAudioSecond`
@@ -126,8 +139,33 @@ körben (nincs a repóban meglévő tiszta onset-annotáció formátum; a
 - A `canonicalSuperFlux24` saját 24 sáv/oktáv szűrősort épít az STFT fölé —
   a `CqtExtractor` erre NEM használható (`hop = 2048` @ 22,05 kHz ≈ 93 ms,
   onset-felbontásnak nagyságrendekkel durva, ADR 0524 Következmények).
-- A `complexDomain`/`spectralFlux` a `delta`/`lambda` küszöböt a `current`
-  LOG-domain flux-ára hangolt értékekkel kapja (ADR 0524 D2 — nincs
-  újragépelt literál); ez SZÁNDÉKOS: az A/B azt méri, hogy a MEGLÉVŐ hangolás
-  mellett melyik flux-definíció teljesít jobban, nem azt, hogy egy
-  újrahangolt küszöb mit tudna.
+- **A keresztvariáns pontosság-összevetés MA NEM érvényes (ADR 0524 D8).**
+  Mind a négy variáns UGYANAZT az abszolút `delta`-t kapja (ADR 0524 D2 — a
+  `current` LOG-domain flux-ára hangolt `12.0`/`1.0`), de a `delta` a
+  szállított út **log-power** flux-egységeiben értelmezett konstans; a
+  `spectralFlux`/`complexDomain` **lineáris magnitúdóban** számol, a
+  `canonicalSuperFlux24` pedig ~200 sávon összegez a szállított 64 helyett.
+  Ugyanaz az abszolút küszöb tehát mindegyiknél MÁS szigorúságot jelent, és
+  a detektálás-szám a bemenet erősítésétől is függ — mérve, ugyanazon a
+  szintetikus 4-strum mintán (`strumPattern(lowFirstPerStrum: [true, false,
+  true, false], gapSeconds: 0.4)`):
+
+  | variáns | detektálás (4 valódi strum) | ugyanaz −20 dB-en (0,1× jel) |
+  |---|---|---|
+  | `current` | 4 | 4 (változatlan) |
+  | `canonicalSuperFlux24` | 7 | 14 |
+  | `complexDomain` | 10 | 5 |
+  | `spectralFlux` | 15 | 3 |
+
+  Emiatt egy valós korpuszon mért F1-sor NEM azt méri, hogy „melyik
+  flux-definíció teljesít jobban a meglévő hangolás mellett" — ez a korábbi,
+  NEM validált értelmezés (GOV-06b/`L173` osztály) volt, és ezzel a
+  szöveggel visszavonva. Amit mér: a küszöb–skála illesztetlenséget. A
+  harness ezért írja ki variánsonként az `odfScale` diagnosztikát
+  (flux-medián, flux-p95, effektív küszöb-medián — fent, „A jelentés alakja"
+  1. pont) és pinneli gépi cellával a gain-függést
+  (`test/tooling/onset_ab_benchmark_test.dart` 11. pont: 0,1× bemeneten a
+  `current` detektálás-száma változatlan, legalább egy ÚJ variánsé
+  megváltozik). A keresztvariáns pontosság-összevetés a
+  **skála-illesztett küszöb** megszületéséig NEM érvényes; a skála-illesztés
+  KÉSŐBBI kör, KÜLÖN ADR (ADR 0524 D8).

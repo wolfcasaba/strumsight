@@ -52,6 +52,24 @@ class OnsetAbCase {
   final List<RecognitionExpectedEvent> expectedEvents;
 }
 
+/// One variant's run over one [OnsetAbCase]: the scored [recognitionCase]
+/// plus the raw per-frame [fluxSamples] trace and the [delta]/[lambda] the
+/// variant ran with — the ingredients [_computeOdfScaleDiagnostics] needs to
+/// MEASURE the cross-variant scale confound (ADR 0524 D8), never to score.
+class OnsetVariantRun {
+  const OnsetVariantRun({
+    required this.recognitionCase,
+    required this.fluxSamples,
+    required this.delta,
+    required this.lambda,
+  });
+
+  final RecognitionCase recognitionCase;
+  final List<double> fluxSamples;
+  final double delta;
+  final double lambda;
+}
+
 /// Runs [id] over [abCase], framing its PCM into consecutive
 /// `variant.window`-sample frames advanced by `variant.hop` (identical
 /// framing for every variant). Each confirmed onset becomes an accepted
@@ -59,20 +77,24 @@ class OnsetAbCase {
 /// `decisionMs - onsetMs`, where the decision instant is the END of the
 /// frame whose `processFrame` call returned the onset — deterministic and
 /// input-only (ADR 0524 D4/5.5), matching
-/// `RecognitionCase.detectionLatenciesMs`'s convention.
-RecognitionCase runOnsetVariant(OnsetVariantId id, OnsetAbCase abCase) {
+/// `RecognitionCase.detectionLatenciesMs`'s convention. Also collects the
+/// per-frame `variant.lastFlux` trace (ADR 0524 D8) — read alongside, never
+/// fed into scoring.
+OnsetVariantRun runOnsetVariant(OnsetVariantId id, OnsetAbCase abCase) {
   final variant = createOnsetDetectorVariant(id, sampleRate: abCase.sampleRate);
   final window = variant.window;
   final hop = variant.hop;
   final pcm = abCase.pcm;
   final detectedEvents = <RecognitionDetectedEvent>[];
   final detectionLatenciesMs = <int>[];
+  final fluxSamples = <double>[];
 
   var frameIndex = 0;
   var offset = 0;
   while (offset + window <= pcm.length) {
     final frame = Float64List.sublistView(pcm, offset, offset + window);
     final onsetSec = variant.processFrame(frame);
+    fluxSamples.add(variant.lastFlux);
     if (onsetSec != null) {
       final onsetMs = onsetSec * 1000;
       final decisionMs = (frameIndex * hop + window) * 1000 / abCase.sampleRate;
@@ -90,12 +112,17 @@ RecognitionCase runOnsetVariant(OnsetVariantId id, OnsetAbCase abCase) {
     frameIndex++;
   }
 
-  return RecognitionCase(
-    caseId: abCase.caseId,
-    durationMs: abCase.durationMs,
-    expectedEvents: abCase.expectedEvents,
-    detectedEvents: detectedEvents,
-    detectionLatenciesMs: detectionLatenciesMs,
+  return OnsetVariantRun(
+    recognitionCase: RecognitionCase(
+      caseId: abCase.caseId,
+      durationMs: abCase.durationMs,
+      expectedEvents: abCase.expectedEvents,
+      detectedEvents: detectedEvents,
+      detectionLatenciesMs: detectionLatenciesMs,
+    ),
+    fluxSamples: fluxSamples,
+    delta: variant.delta,
+    lambda: variant.lambda,
   );
 }
 
@@ -111,21 +138,101 @@ RecognitionEvaluationReport scoreCases(List<RecognitionCase> cases) =>
       overall: computeRecognitionMetrics(cases),
     );
 
+/// ODF-scale diagnostic (ADR 0524 D8). All four variants share ONE absolute
+/// `delta`, but their flux is NOT in comparable units — log-power vs. linear
+/// magnitude, 64 vs. ~200 filterbank bands — so the same `delta` is a
+/// different effective strictness for each, and a cross-variant precision/
+/// recall/F1 comparison does not (yet) measure ODF quality, only this
+/// threshold–scale mismatch. These three numbers make the confound a
+/// measured quantity in the deterministic report, not a footnote: they are
+/// pure functions of the input (the flux trace), so they carry NO
+/// timestamp/wall-clock and belong beside the accuracy tree, not the
+/// machine-dependent timing channel.
+class OnsetOdfScaleDiagnostics {
+  const OnsetOdfScaleDiagnostics({
+    required this.fluxMedian,
+    required this.fluxP95,
+    required this.effectiveThresholdMedian,
+  });
+
+  /// Median flux value pooled across every frame of every case. `null` if no
+  /// case produced a single frame (ADR 0509 D6 — "not measured" is never a
+  /// coerced `0`).
+  final double? fluxMedian;
+
+  /// 95th-percentile flux value over the same pooled trace.
+  final double? fluxP95;
+
+  /// Median, across cases, of `delta + lambda * median(that case's flux)` —
+  /// an approximation of `_PeakPicker`'s sliding-window adaptive threshold
+  /// using only the public per-frame flux trace (the shipped detector's
+  /// internal sliding window is private and this file cannot read it).
+  /// `null` on an empty case set.
+  final double? effectiveThresholdMedian;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'fluxMedian': fluxMedian,
+    'fluxP95': fluxP95,
+    'effectiveThresholdMedian': effectiveThresholdMedian,
+  };
+}
+
+double? _median(List<double> values) {
+  if (values.isEmpty) return null;
+  final sorted = [...values]..sort();
+  return sorted[sorted.length ~/ 2];
+}
+
+double? _percentile95(List<double> values) {
+  if (values.isEmpty) return null;
+  final sorted = [...values]..sort();
+  final index = ((sorted.length - 1) * 0.95).round();
+  return sorted[index];
+}
+
+/// Computes the ODF-scale diagnostic for one variant from its [runs] over
+/// the full case set (ADR 0524 D8) — never fed into [scoreCases].
+OnsetOdfScaleDiagnostics _computeOdfScaleDiagnostics(
+  List<OnsetVariantRun> runs,
+) {
+  final pooledFlux = [for (final run in runs) ...run.fluxSamples];
+  final perCaseEffectiveThreshold = [
+    for (final run in runs)
+      if (_median(run.fluxSamples) case final double caseMedian)
+        run.delta + run.lambda * caseMedian,
+  ];
+  return OnsetOdfScaleDiagnostics(
+    fluxMedian: _median(pooledFlux),
+    fluxP95: _percentile95(pooledFlux),
+    effectiveThresholdMedian: _median(perCaseEffectiveThreshold),
+  );
+}
+
 /// The full deterministic A/B report: one merge-elt
-/// [RecognitionEvaluationReport] per variant, over the SAME [caseCount]
-/// cases (ADR 0524 D1/D3). Byte-identical across repeated runs on the same
-/// input (ADR 0524 D4) — carries no timestamp, wall-clock, or CPU value.
+/// [RecognitionEvaluationReport] plus one [OnsetOdfScaleDiagnostics] per
+/// variant, over the SAME [caseCount] cases (ADR 0524 D1/D3/D8).
+/// Byte-identical across repeated runs on the same input (ADR 0524 D4) —
+/// carries no timestamp, wall-clock, or CPU value.
 class OnsetAbReport {
-  const OnsetAbReport({required this.caseCount, required this.perVariant});
+  const OnsetAbReport({
+    required this.caseCount,
+    required this.perVariant,
+    required this.perVariantOdfScale,
+  });
 
   final int caseCount;
   final Map<OnsetVariantId, RecognitionEvaluationReport> perVariant;
+  final Map<OnsetVariantId, OnsetOdfScaleDiagnostics> perVariantOdfScale;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'caseCount': caseCount,
     'onsetTolerancesMs': onsetTolerancesMs,
     'variants': <String, Object?>{
-      for (final id in onsetAbVariantIds) id.name: perVariant[id]!.toJson(),
+      for (final id in onsetAbVariantIds)
+        id.name: <String, Object?>{
+          ...perVariant[id]!.toJson(),
+          'odfScale': perVariantOdfScale[id]!.toJson(),
+        },
     },
   };
 
@@ -136,13 +243,21 @@ class OnsetAbReport {
 }
 
 /// Builds the deterministic report by running every variant over every case
-/// (ADR 0524 D1: same case list, same tolerances, same matcher).
+/// (ADR 0524 D1: same case list, same tolerances, same matcher), alongside
+/// each variant's ODF-scale diagnostic (ADR 0524 D8).
 OnsetAbReport buildOnsetAbReport(List<OnsetAbCase> cases) {
-  final perVariant = <OnsetVariantId, RecognitionEvaluationReport>{
-    for (final id in onsetAbVariantIds)
-      id: scoreCases([for (final abCase in cases) runOnsetVariant(id, abCase)]),
-  };
-  return OnsetAbReport(caseCount: cases.length, perVariant: perVariant);
+  final perVariant = <OnsetVariantId, RecognitionEvaluationReport>{};
+  final perVariantOdfScale = <OnsetVariantId, OnsetOdfScaleDiagnostics>{};
+  for (final id in onsetAbVariantIds) {
+    final runs = [for (final abCase in cases) runOnsetVariant(id, abCase)];
+    perVariant[id] = scoreCases([for (final run in runs) run.recognitionCase]);
+    perVariantOdfScale[id] = _computeOdfScaleDiagnostics(runs);
+  }
+  return OnsetAbReport(
+    caseCount: cases.length,
+    perVariant: perVariant,
+    perVariantOdfScale: perVariantOdfScale,
+  );
 }
 
 String _fmt(double? value) =>
@@ -161,10 +276,18 @@ String renderOnsetAbMarkdown(OnsetAbReport report) {
     ..writeln();
   for (final id in onsetAbVariantIds) {
     final r = report.perVariant[id]!;
+    final odf = report.perVariantOdfScale[id]!;
     buffer
       ..writeln('## ${id.name}')
       ..writeln()
       ..writeln(createOnsetDetectorVariant(id, sampleRate: 44100).describe())
+      ..writeln()
+      ..writeln(
+        '- ODF scale — flux median: ${_fmt(odf.fluxMedian)}, flux p95: '
+        '${_fmt(odf.fluxP95)}, effective threshold median: '
+        '${_fmt(odf.effectiveThresholdMedian)} (ADR 0524 D8 — NOT '
+        'comparable across variants until a scale-matched threshold ships)',
+      )
       ..writeln()
       ..writeln('| tolerance (ms) | precision | recall | f1 | TP | FP | FN |')
       ..writeln('|---|---|---|---|---|---|---|');
@@ -251,7 +374,9 @@ Map<String, Object?> manifestJson(List<RecognitionCase> cases) =>
 Map<String, Object?> onsetAbManifestJson(
   OnsetVariantId id,
   List<OnsetAbCase> cases,
-) => manifestJson([for (final abCase in cases) runOnsetVariant(id, abCase)]);
+) => manifestJson([
+  for (final abCase in cases) runOnsetVariant(id, abCase).recognitionCase,
+]);
 
 // ---------------------------------------------------------------------
 // Timing channel (ADR 0524 D4) — explicitly machine-dependent, never a
@@ -269,8 +394,10 @@ class OnsetAbVariantTiming {
   final int totalProcessingMicros;
   final double audioSeconds;
 
-  double get microsPerAudioSecond =>
-      audioSeconds == 0 ? 0 : totalProcessingMicros / audioSeconds;
+  /// `null` on a zero-length corpus — "not measured", never a coerced `0`
+  /// (ADR 0509 D6 house convention on a zero denominator).
+  double? get microsPerAudioSecond =>
+      audioSeconds == 0 ? null : totalProcessingMicros / audioSeconds;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'totalProcessingMicros': totalProcessingMicros,

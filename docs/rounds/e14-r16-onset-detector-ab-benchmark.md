@@ -243,6 +243,18 @@ csoportosítás nem épül.
 9. **A manifest-átadás él.** A kiírt, variánsonkénti manifest
    `RecognitionEvaluationRunner.runFromJsonString`-gel visszaolvasva
    **ugyanazokat** az onset-metrikákat adja, mint a riport.
+10. **ODF-skála diagnosztika (fix1, ADR 0524 D8).** A determinisztikus riport
+    variánsonként hordozza az ODF-skála diagnosztikáját (a flux mediánja és
+    p95-e a teljes esethalmazon, valamint az effektív küszöb — `delta +
+    lambda * median(flux)` — mediánja), és a determinizmus-cella (5. pont)
+    ezzel a mezővel együtt is zöld marad (bájtra azonos, nincs benne
+    időzítés-kulcs).
+11. **Gain-függés (fix1, ADR 0524 D8).** Ugyanazon a szintetikus jelen,
+    0,1-szeresére (−20 dB) halkítva: a `current` variáns detektálás-száma
+    **változatlan** marad, míg legalább egy ÚJ variánsé (`canonicalSuperFlux24`,
+    `complexDomain`, `spectralFlux`) **megváltozik**. A cella nem konkrét
+    darabszámot pinnel, csak ezt a két relációt — a review eldobható próbáját
+    állandó őrré alakítva.
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -257,6 +269,8 @@ csoportosítás nem épül.
 | a variáns újragépeli a `12.0`/`1.0` konstanst | 8. pont | unit-cella (a publikus alapértékkel szemben) |
 | hiányzó annotáció → `0` | 7. pont | unit-cella |
 | a kiírt manifest sémája elcsúszik | 9. pont | unit-cella (round-trip) |
+| az ODF-skála diagnosztika hiányzik vagy megtöri a determinizmust | 10. pont | unit-cella (mező jelenléte + kétszeri futás bájt-azonossága) |
+| a gain-függés nem mérve/nem reprodukálható | 11. pont | unit-cella (0,1× jel: `current` változatlan, ≥1 ÚJ variáns megváltozik) |
 
 ## 7. Kötelező ellenőrzések
 
@@ -461,5 +475,74 @@ formális paraméterre), a második futás tiszta.
   variáns-fájl fejlécében is).
 - Valódi korpuszon mért Pareto-szám ebben a körben NINCS (nincs commitolt
   audio, ADR 0249) — a `docs/eval/onset-detector-ab.md` ezt kimondja.
+
+## 10.1 fix1 kör — a review leletei nyomán (ADR 0524 D8)
+
+**Implementer:** `sonnet-impl` (Claude Sonnet 5), `--effort medium`.
+
+### MAJOR-1 — mérve, nem csak leírva
+
+- `OnsetDetectorVariant` kapott egy `double get lastFlux` getterrel: a
+  `_CurrentVariant` a szállított `_detector.lastFlux`-ra delegál, a másik
+  három variáns a közös `_PeakPicker`-en tárolt, saját maga számolt utolsó
+  flux-értékét adja vissza (`_PeakPicker.lastFlux`, `confirm()` első sora
+  állítja be).
+- `onset_ab_benchmark.dart`: `runOnsetVariant` mostantól egy `OnsetVariantRun`
+  rekordot ad vissza (`recognitionCase` + `fluxSamples` + `delta`/`lambda`) —
+  egyetlen keretezési átfutásból gyűjti a per-frame flux-nyomot is, nem
+  duplikálja a hurkot. `_computeOdfScaleDiagnostics` ebből számolja
+  variánsonként a `fluxMedian`/`fluxP95`-t (a teljes, esetek közötti pooled
+  flux-mintán) és az `effectiveThresholdMedian`-t (esetenként `delta + lambda
+  * median(esetflux)`, majd ennek mediánja az esethalmazon) — mindhárom
+  `double?`, `null` üres esethalmazon (ADR 0509 D6 mintájára, sosem `0`).
+  `OnsetAbReport.toJson()` variánsonként az `odfScale` kulcs alatt hordozza;
+  a Markdown-renderer egy sort ír ki belőle, kimondva, hogy a szám a
+  skála-illesztés előtt NEM összehasonlítható.
+- Gépi cella (§6 11. pont, `onset_ab_benchmark_test.dart`): ugyanaz a
+  `strumPattern(lowFirstPerStrum: [true, false, true, false], gapSeconds:
+  0.4)` jel 0,1×-ra halkítva — `current` detektálás-száma változatlan
+  (mérve: mindkét futáson egyenlő), és legalább egy ÚJ variánsé megváltozik.
+  A cella NEM pinnel konkrét darabszámot, csak a két relációt.
+- `docs/eval/onset-detector-ab.md`: a „Korlátok" utolsó pontja a review
+  MÉRT táblázatával lett felváltva (a korábbi „ez SZÁNDÉKOS…" mondat
+  visszavonva), a „Javaslat" 2–3. pontja átírva: mért skála-illesztés nélkül
+  a `canonicalSuperFlux24`/`complexDomain`/`spectralFlux` mai F1-értékéből
+  retune-javaslat NEM következik.
+
+### MINOR-1 — doc-comment javítva
+
+`onset_detector_variant.dart` `_PeakPicker.confirm`: a doc-comment mostantól
+a TÉNYLEGES visszatérési értéket írja le (`absC * hop / sampleRate`, a
+csúcs-keret KEZDETE), és külön mondatban utal arra, hogy a `+ window`-os
+képlet a *döntés* pillanatáé (`onset_ab_benchmark.dart`'s `decisionMs`), nem
+ennek a metódusnak a visszatérési értékéé.
+
+### MINOR-2 — `microsPerAudioSecond` nullázva
+
+`OnsetAbVariantTiming.microsPerAudioSecond` mostantól `double?`:
+`audioSeconds == 0` esetén `null` (nem `0`). A `test/tooling/
+onset_ab_benchmark_test.dart` egy külön cellája méri: üres korpuszon
+(`measureOnsetAbTiming(const [], ...)`) minden variáns `microsPerAudioSecond`-ja
+`null`, és a JSON-kimenet nem tartalmaz `"microsPerAudioSecond": 0`-t. A
+`main()` üres-korpusz ága változatlanul fut (a `File.writeAsStringSync`
+hívások nem függnek ettől a mezőtől).
+
+### A gate tényleges eredménye (fix1)
+
+```
+tools/round-gate.sh test/tooling/onset_ab_benchmark_test.dart
+```
+
+`format` → `analyze` → `test test/tooling/onset_ab_benchmark_test.dart`
+(**12/12 PASS** — a §6 tizenegy acceptance-cellája plusz a MINOR-2 timing-null
+cella) → `architecture` → `secrets` → `l10n`: **mind ZÖLD**.
+
+Útközben egy meglévő cella (7. pont, „never a coerced 0") a `markdown, isNot
+(contains('0.0000'))` teljes-buffer keresést használta — ez az ÚJ `odfScale`
+sor legitim `0.0000` flux-mediánjával (teljes csendben ez valódi mérve-nulla,
+nem „nem mért" hányados) hamis pirosat adott. A cellát szűkítettem a
+`current` szakasz precision/recall/f1 TÁBLÁZAT-soraira (ADR 0509 D6 ide
+tartozik, az `odfScale`-hez nem) — a `test/tooling/onset_ab_benchmark_test.dart`
+egyetlen módosítása a fix1 körből az öt engedélyezett fájlon belül.
 
 ## 11. Review — a Claude tölti ki
