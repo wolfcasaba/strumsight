@@ -1,0 +1,1 @@
+round=E17-R01 verdict=pass tests=16-path-gate+full-gate lesson=imperative-route-exit-and-inventory-partition-guard engine=sonnet-impl
