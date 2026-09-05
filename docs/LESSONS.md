@@ -25297,3 +25297,35 @@ leszállított fájlra mindig lelet, akkor is, ha minden kapu zöld.
 futtatja és bájtazonosságot vár (acceptance 6 a valódi úton), mind a négy
 `SplitStrategy`-t a fixture-ből parszolt eseteken futtatja (acceptance 1 „a
 fixture-ön"), és három tipizált parszer-elutasítást mér.
+
+## L632 — A záró rituálé a kör legsérülékenyebb lépése: a merge UTÁN fut, ezért egy kvótazárlat pontosan ott kaphatja el, ahol a lánc már nem tudja magát feloldani (E14-R05, 10 óra állásidő, 2026-09-05)
+
+**A mért lánc.** `E14-R05` PR #574 **15:21:56 UTC**-kor merge-elt: review
+APPROVED, `full-gate.yml` + `router-ci.yml` zöld a merge SHA-n. A munka tehát
+a `main`-en volt. **15:23**-kor a driver a session-naplóból `pct=99`-et mért
+és `claude-blocked-until`-t írt (`reset` 16:50 UTC). **15:25**-kor a következő
+cron-firing a soron következő `E16-R06`-ot próbálta folytatni: az ágán már
+`sonnet-impl` commitolt (D2 pin), az orchestrátor-jelölt `claude` a zárlat
+miatt NEM elérhető, a `terra`/`sol` a `PIPELINE_FALLBACK_ENGINE=none` miatt
+NEM elérhető → fail-closed **`H-INDEP`**.
+
+**A két kár, amit egyetlen zárlat okozott.** (1) `E14-R05` záró rituáléja
+elmaradt: a `pipeline-queue.tsv` sora `pending` maradt egy MÁR MERGE-ELT
+körre, és a HANDOFF-ba nem került kész-szakasz. (2) A `H-INDEP` önjavítása
+szándékosan tiltott (körben oldana fel), ezért a lánc **emberi `--resume`-ig
+állt** — a zárlat 16:50-kor lejárt, a lánc mégis 01:35-ig nem mozdult.
+**~10 óra állásidő egy zöld, kész kör fölött.**
+
+**A veszélyes maradvány.** Egy merge-elt kör `pending` sora nem csendes
+kozmetika: a `resolve_branch_implementer` a kör távoli ágát megtalálja, tehát
+a driver a MÁR MERGE-ELT kört folytatandó körként veszi fel. A queue-sor
+flipje ezért a rituálé kritikus fele, nem a HANDOFF-próza.
+
+**A szabály.** A záró rituálé sorrendje kötött és a legolcsóbb lépés az első:
+**`queue pending → done` MEGY ELŐSZÖR**, a HANDOFF/LESSONS próza utána. Ha a
+rituálé félbeszakad, a lánc állapota így is konzisztens marad. Diagnózis
+állásnál mindig ugyanaz a három fájl mérendő, ebben a sorrendben:
+`.pipeline/HALTED` (mi és mikor), `.pipeline/claude-blocked-until` +
+`.pipeline/claude-usage` (lejárt-e már az ok), majd a legutóbbi merge-elt PR
+queue-sora (elmaradt-e rituálé). A zárlat lejárta önmagában NEM oldja a
+haltot — a `H-INDEP` kilépési feltétele emberi döntés, nem idő.

@@ -1,5 +1,48 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R05 KÉSZ — Live jelminőség-elemző: a Live út meg tudja mondani, MIÉRT nem megbízható a mérés — PR [#574](https://github.com/wolfcasaba/strumsight/pull/574), squash `bec95352` (2026-09-04)
+
+A Live út többé nem csak egy szintmérőt mutat. A kör **elemzőt szállít, nem
+UI-t**: az `E14-R04`-ben szerződésbe tett `SignalQualitySnapshot` megtelik, a
+képernyők bájtra változatlanok. **ADR [0507](docs/adr/0507-live-signal-quality-analyzer.md)**.
+
+| Réteg | Mit ad |
+|---|---|
+| `LiveSignalQualityAnalyzer` | streaming elemző a **meglévő** `SignalQualityMath` primitívekre, az `audio_analysis` **nyilvános barreljén** át (D1) — új DSP-matek NEM született |
+| `LiveQualityThresholds` | verziózott Live-küszöbök egy helyen (D3) |
+| állapotgép | **hiszterézis** `enterFrames=5` / `exitFrames=8` (D4), valódi `unknown` kezdőállapot (D5), `null` ott, ahol nincs mérés (D6) |
+| `LivePipeline.signalQuality` | csak olvasható getter a `runtimeInfo` mintájára (D10); a `LiveFrame` és az `inputLevel` **érintetlen** |
+| `docs/rag/chunks/live-signal-quality.md` | minden hangolt paraméter forrása, a CPU-mérés nyers kimenetével (CLAUDE.md HORIZON-szabály) |
+
+**A kör mért állítása:** a hiszterézis nem ízlés. A §7.1 falszifikáció
+`enterFrames=exitFrames=1` mellett a villogás-tesztet **PIROSRA** vitte
+(39 váltás), visszaállítva ZÖLD — a nyers kimenet a brief §10.3-ban. A
+reviewer próbatesztje szerint a Live zajszint-percentilis **bitre azonos** a
+`SignalQualityMath.noiseFloorDbfsForFrames` referenciával, tehát a
+újrahasznosítás valódi, nem másolt matek.
+
+**Előzmény:** a kör pre-flightja `H3`-mal állt meg (a brief kötelező
+`SignalQualityMath` importjához nem létezett legális út) — a lentebbi
+önjavító kör tette a primitíveket barrel-elérhetővé, csak utána indult az
+implementer.
+
+**Review:** [`docs/reviews/e14-r05-review.md`](docs/reviews/e14-r05-review.md)
+— **APPROVED** az első fordulóban, 0 BLOCKER / 0 MAJOR, 2 MINOR + 2 NOTE
+(mind mért és dokumentált). Scope-audit:
+`Legacy scope audit OK (16edfb1f..4697f6f4, 7 changed path(s))`.
+
+**Kapu:** célzott `tools/round-gate.sh` zöld, `full-gate.yml` + `router-ci.yml`
+a merge SHA-n (a CI-tervet a `tools/round-ci-plan.py` adta: natív/release-diff
+nincs). Acceptance 5. (CPU ≤ 5%): 304 ms → 307 ms (median/3) ≈ **1,0%**.
+**Implementer:** `sonnet-impl` (Claude Sonnet 5, `--effort high`);
+**orchestrátor/reviewer:** Claude (Opus 5).
+
+> ⚠️ A kör **záró rituáléja 10 órát csúszott**: a merge (15:21 UTC) után két
+> perccel a Claude session-keret 99%-ra futott, a lánc `H-INDEP`-be halt
+> (2026-09-04 15:25), és a `queue done` + ez a HANDOFF-szakasz elmaradt.
+> A `H-INDEP` önjavítása tiltott (körben oldana fel), ezért a lánc emberi
+> `--resume`-ig állt. Lecke: [L632](docs/LESSONS.md#l632).
+
 ## ✅ E14-R08 KÉSZ — Csoportosított felismerési evaluation harness: a szivárgás HIBA, a párosítás maximális, a definíció a számmal utazik — PR [#573](https://github.com/wolfcasaba/strumsight/pull/573), squash `59372c9c` (2026-09-04)
 
 A felismerési mérés többé nem egyetlen accuracy-szám, és nem szivároghat.
@@ -68,10 +111,11 @@ implementer az `audio_analysis` fához nem nyúl — csak a barrelt importálja.
 primitives stay barrel-reachable (E14-R05)" (2 cella; a fix előtti forráson az
 élő-fa cella PIROS). Mérés: [L629](docs/LESSONS.md).
 
-**A megállt kör innen folytatható:** a pre-flight KÉSZ és megőrzött — ág
-`sonnet-impl/e14-r05-live-signal-quality-analyzer` (ADR 0507 + §0.0 revízió,
-R6-tal kiegészítve), munkapéldány `/home/ubuntu/ss-sonnet-impl-e14-r05`;
-implementer még nem indult.
+**A megállt kör ezután FUTOTT és LANDOLT:** a pre-flight (ág
+`sonnet-impl/e14-r05-live-signal-quality-analyzer`, ADR 0507 + §0.0 revízió,
+R6-tal kiegészítve) alapján az implementer elindult, és a kör PR
+[#574](https://github.com/wolfcasaba/strumsight/pull/574) / squash `bec95352`
+alatt zöld kapuval merge-elt — lásd a fenti kész-szakaszt.
 
 ## ✅ E14-R07 KÉSZ — Annotációs szerződés: az automatikus címke soha nem lép elő ground truth-szá — PR [#570](https://github.com/wolfcasaba/strumsight/pull/570), squash `80506119` (2026-09-04)
 
