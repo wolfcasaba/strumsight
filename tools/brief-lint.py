@@ -523,6 +523,10 @@ REFERENCED_PATH = re.compile(r"`((?:lib|test)/[A-Za-z0-9_./-]+\.dart)`")
 # pre-flight TEENDŐJE, tehát olvashatónak kell maradnia; a teljes lista a
 # `git diff --name-only <sha>..HEAD` paranccsal bármikor előhívható.
 DRIFT_LIST_LIMIT = 6
+# Az S16 tárgya: a `tool/gen_l10n_segments.dart` GENERÁLT aggregátumai. A
+# `lib/l10n/base/` és a `lib/l10n/features/` szegmensek a FORRÁSOK — csak azok
+# szerkeszthetők kézzel (ADR 0307 §4).
+GENERATED_ARB = re.compile(r"lib/l10n/app_([a-z]{2}(?:_[A-Za-z0-9]+)?)\.arb")
 
 
 def _git_lines(repo: Path, *arguments: str) -> list[str] | None:
@@ -1377,6 +1381,76 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                     "inkluzivitással). Olvasd újra a felsorolt fájlokat, és a §0.0 "
                     "revízió mondja ki a mérést: mi maradt igaz, mi nem, és hol van a "
                     "kör EGYETLEN döntési helye",
+                )
+            )
+
+    # S16 — az `allowed_paths` a GENERÁLT l10n-aggregátumot engedi, a FORRÁS
+    # szegmenst nem (E14-R13 / H3, ADR 0112 önjavító kör, 2026-09-05).
+    #
+    # MÉRT ok: az E14-R13 briefje `lib/l10n/app_{en,hu}.arb`-ot sorolt fel a négy
+    # ok-szöveghez. Ezek viszont a `tool/gen_l10n_segments.dart` GENERÁLT
+    # aggregátumai (ADR 0307 §4, `GENERATED-FILE-MARKER` a fájl fejlécében): a
+    # forrás a `lib/l10n/base/app_<locale>.arb` szegmens (Live-kulcsokra mérve:
+    # `grep -l '"liveWeakSignal"' lib/l10n/app_en.arb lib/l10n/base/app_en.arb`
+    # MINDKETTŐT adja). A kör tehát a saját listáján belül nem tudott volna
+    # kulcsot felvenni: minden kézzel írt aggregátum-diff a `--check` módban
+    # elavul, a forrás pedig a TILOS zónában volt. A feloldás lista-TÁGÍTÁS,
+    # ami nem az orchestrátor hatásköre → H3, a dispatch előtt.
+    #
+    # Miért volt néma a többi szabály: az S13 csak nemlétező KÖNYVTÁR-előtagra
+    # lő (ezek a fájlok léteznek), az S5 új `.dart` fájl típusnevére, az S11/S14
+    # tesztekre, az S15 pedig a mért alap elmozdulására — egy önmagában
+    # konzisztens, csak FORRÁS NÉLKÜLI l10n-lista mindet kielégíti. A hiány egy
+    # triviális kétirányú ellenőrzés: aki a generált uniót írhatja, írhassa azt
+    # is, amiből az union készül.
+    #
+    # `strict`, `done` körre néma — a CI-kapu `--level base`, tehát ez sosem vált
+    # pirosra egy lezárt kört.
+    round_status_for_s16 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(
+        brief.task_id, ""
+    )
+    if round_status_for_s16 != "done":
+        orphan_locales = []
+        for locale in sorted(
+            {
+                match.group(1)
+                for match in (
+                    GENERATED_ARB.fullmatch(item) for item in metadata.allowed_paths
+                )
+                if match
+            }
+        ):
+            base_source = f"lib/l10n/base/app_{locale}.arb"
+            fragment = re.compile(rf"^lib/l10n/features/[^/]+_{re.escape(locale)}\.arb$")
+            has_source = any(
+                item == base_source
+                or fragment.fullmatch(item)
+                or item in {"lib/l10n/", "lib/l10n/base/", "lib/l10n/features/"}
+                for item in metadata.allowed_paths
+            )
+            if not has_source:
+                orphan_locales.append((locale, base_source))
+        if orphan_locales:
+            details = "; ".join(
+                f"`lib/l10n/app_{locale}.arb` → a forrása `{source}` "
+                f"(vagy egy `lib/l10n/features/<feature>_{locale}.arb` fragmentum)"
+                for locale, source in orphan_locales
+            )
+            findings.append(
+                Finding(
+                    "strict",
+                    "S16",
+                    "az `allowed_paths` a GENERÁLT l10n-aggregátumot engedi, a FORRÁS "
+                    "szegmensét viszont nem: " + details + " — a `lib/l10n/app_*.arb` "
+                    "fájlokat a `tool/gen_l10n_segments.dart` írja (ADR 0307 §4), "
+                    "kézzel szerkeszteni tilos, és a `--check` mód a frissességüket "
+                    "kapuzza, tehát a kör a saját listáján belül EGYETLEN kulcsot sem "
+                    "tud felvenni (mérve: E14-R13 / H3 a dispatch előtt, "
+                    "[L646](../LESSONS.md#l646)). Vedd fel a forrás-szegmenst az "
+                    "`allowed_paths`-ba (a generált aggregátum MARADJON rajta, mert a "
+                    "generátor kimenete a diffben megjelenik), és a §8 sorrend mondja "
+                    "ki, hogy a kulcsfelvétel UTÁN `dart run tool/gen_l10n_segments.dart "
+                    "--write` fut a gate ELŐTT",
                 )
             )
 

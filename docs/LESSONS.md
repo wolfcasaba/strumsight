@@ -25994,3 +25994,81 @@ agnosztikus rátáról a szűkítettre (ADR 0511 D9).
 revízió ELŐTTI briefen 4-ből 3 cella PIROS. A guard a KÖVETELT VÉGÁLLAPOTOT
 pinneli (a merge-elt harness az allowed_paths-on van, versengő fájl nincs),
 nem a kör munkájának hiányát — így a kör sikere nem viheti pirosra ([[L612]]).
+
+## L646 — Az ELŐRE MEGÍRT brief a GENERÁLT l10n-aggregátumot engedte, a FORRÁS szegmenst nem: a kör egyetlen kulcsot sem tudott volna felvenni a saját listáján belül (E14-R13 / H3, önjavító kör, 2026-09-05)
+
+**Mit mértünk.** Az E14-R13 („Live UI truthfulness hotfix") briefje 2026-08-20-án,
+a `88e08e65` commiton készült, és a dispatch ELŐTT H3-ra futott. Négy különálló
+lelet, egy közös gyökérrel — az előre megírt brief alatt elmozdult a fa:
+
+1. **A §2 „mért tényei" elavultak.** A brief tíz egyidejű widgetet írt le a
+   `live_screen.dart`-on; a képernyő azóta az **ADR 0276** `SsStageScaffold`-jára
+   migrált, öt nevesített slottal (`git diff --stat 88e08e65..HEAD` → `+375`
+   sor; a `../widgets/` importok száma **négy**, nem tíz). Emiatt a brief §5.1
+   („egy fő üzenet"), §5.2 („a history másodlagos"), §5.3 („reduce motion") és a
+   6. acceptance-pontja (a CTA három állapota) **már merge-elt döntés** volt —
+   a kör ezeket nem dönthette el újra.
+2. **A §5.4 négyelemű ok-taxonómiája ütközött** a merge-elt, **zárt hatelemű**
+   `RecognitionRejectReason`-nel (ADR 0505 D3/D6). Ez az [[L549]]/[[L636]]
+   osztály: második definíció ugyanarra a kérdésre.
+3. **A kör VALÓDI hiánya viszont megvolt:** a `LiveFrame.chordDecision` /
+   `.chordRejectReason` termelője be van kötve (`live_pipeline.dart:405-406`,
+   ADR 0516 D1/D5), UI-fogyasztója **nulla** — a képernyő a „miért" szövegét
+   MA egy képernyő-lokális `inputLevel`-heurisztikából vezeti
+   (`live_screen.dart:266-269`).
+4. **A scope-hiba, ami a haltot okozta:** az `allowed_paths` a négy ok-szöveghez
+   `lib/l10n/app_{en,hu}.arb`-ot engedte. Ezek a `tool/gen_l10n_segments.dart`
+   **generált aggregátumai** (ADR 0307 §4), a forrás a `lib/l10n/base/` szegmens:
+
+   ```bash
+   grep -l '"liveWeakSignal"' lib/l10n/app_en.arb lib/l10n/base/app_en.arb
+   #   mindkettő → a base a FORRÁS, az app_en.arb a generált unió
+   ```
+
+   A kör tehát a saját listáján belül **egyetlen kulcsot sem tudott volna
+   felvenni**: a kézzel írt aggregátum-diff a `--check` módban azonnal elavul,
+   a forrás pedig a TILOS zónában volt. Ehhez jött három, a listán KÍVÜL élő
+   teszt, amelynek az állításait a kör elmozdítja (`live_stage_test.dart`,
+   `live_screen_test.dart` és egy **aktív pixel-golden** `LiveScreen`-re,
+   `textScale 1.0`+`2.0`).
+
+**Miért volt néma a meglévő mérce.** Az `S11` és az `S15` egyaránt TÜZELT erre a
+briefre, de mindkettő **tanácsadó**: „vedd fel a pinnelő teszteket", illetve
+„olvasd újra és revideálj". Az l10n-hézagra viszont **egyik szabály sem lő**: az
+`S13` csak nemlétező KÖNYVTÁR-előtagra (ezek a fájlok léteznek), az `S5` új
+`.dart` fájl típusnevére, az `S11`/`S14` tesztekre. Egy önmagában konzisztens, csak
+FORRÁS NÉLKÜLI l10n-lista mindet kielégíti. A szűkítés az orchestrátor saját
+hatásköre, a **tágítás** nem — a kör ezért csak megállni tudott (H3), a
+dispatch előtt, egy teljes orchestrátor-session árán.
+
+**Ez a hibaosztály HARMADIK előfordulása ugyanabban a sávban, ugyanarról a
+`88e08e65` alapról:** E14-R10 (H3, heal `39680e1e`, [[L636]]), E14-R15 (H3, heal
+`b17e08ef`, [[L645]]), most E14-R13. Az előre-írás-hullám többi tagja (E14-R11…R16)
+ugyanabban a kockázatban van.
+
+**A szabály (gépi, nem fegyelmi).** Aki a generált uniót írhatja, írhassa azt is,
+amiből az unió készül. Új `brief-lint` szabály: **`S16`** — ha az `allowed_paths`
+`lib/l10n/app_<locale>.arb`-ot enged a hozzá tartozó forrás-szegmens
+(`lib/l10n/base/app_<locale>.arb` vagy `lib/l10n/features/<feature>_<locale>.arb`)
+nélkül, az lelet, **locale-onként mérve**. `strict`, `done` körre néma, mint az
+S13/S15 — a CI-kapu `--level base`, tehát egy lezárt kört sosem vált pirosra.
+Őrteszt: `tools/tests/test_brief_generated_l10n_source_scope.py` (6 cella,
+köztük a MÉRT E14-R13 alak és a részleges-forrás locale-hézag).
+
+**Amit a revízió KIVETT a körből** (mert merge-elt döntést mozgatna, tehát saját
+kört kíván): a Stage-slot-hierarchia, a history összecsukhatósága, a
+`reduce motion` mechanizmus és a CTA-állapotok. Mindegyikhez merge-elt, futó
+mérce tartozik, és a revideált kör acceptance-pontjai azt pinnelik, hogy
+**változatlanul zöldek maradnak** — ez szigorítás, nem gyengítés. A kör
+EGYETLEN döntési helye ezzel a felismerési ok megjelenítése lett: a banner a
+merge-elt hatelemű enumot fogyasztja **kimerítő `switch`-csel** (`default:`
+ág tiltva, hogy egy jövőbeli enum-elem fordítási hibát adjon), a heurisztikus ág
+pedig a „nincs döntés" esetre marad — érintetlenül.
+
+**Őrteszt:** `tools/tests/test_e14_r13_live_reason_source_scope.py` — a revízió
+ELŐTTI briefen 6-ból **4 cella PIROS** (mérve `origin/main` eldobható
+worktree-ben). A guard a KÖVETELT VÉGÁLLAPOTOT pinneli (a forrás-szegmens és a
+három elmozdított pin a listán ÉS a kapun van, a §5 a merge-elt szótárat
+fogyasztja, az ADR-szám a foglalt), nem a kör munkájának hiányát; a §10/§11 —
+az egyetlen két szakasz, amit az implementer és a reviewer tölt ki — egyetlen
+állítás alá sem esik, így a kör sikere nem viheti pirosra ([[L612]]).
