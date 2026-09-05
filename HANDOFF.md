@@ -1,5 +1,50 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E16-R06 KÉSZ — A shell gerince a termék SAJÁT navigációjával járható: az A3-verdikt negatívból pozitívba fordult — PR [#575](https://github.com/wolfcasaba/strumsight/pull/575), squash `c67816f5` (2026-09-05)
+
+Az `E16-R05` zárókör **negatív A3-verdiktet** mért: a „BE" besorolású
+capabilityk core útja a termék saját navigációjával nem volt végigjárható, mert
+a gépi bejárás **két teszt-oldali `router.go` hidat** kényszerült használni. Ez
+a kör mindkét okot (L1, L2) kijavította, a hidakat törölte, és az A3-at a MÁR
+MEGLÉVŐ bejárással — nem új mérőeszközzel — mérhetően pozitívra fordította.
+**ADR [0508](docs/adr/0508-shell-entry-location-and-recommended-practice-handoff.md)**.
+
+| Lelet | Mi volt | Mi lett |
+|---|---|---|
+| **L2** — belépési hely | az onboarding mindkét befejező ága hardkódolt `router.go(AppRoutes.live)`-ot hívott, a router flagjétől függetlenül; a `legacyRedirects` ezt `/practice/live` stage-route-ra vitte | új, Flutter-független `entryLocationFor(bool)` tiszta függvény (`adaptive_shell_routes.dart`), és **mind** az `app_router.dart`, **mind** az onboarding két ága ezt hívja, **ugyanabból** a flag-forrásból (D1/D2) |
+| **L1** — ajánlott-gyakorlás CTA | `context.go(AppRoutes.practiceSetup)` `?id=` **nélkül** → a Setup a `_RouteError` ágát rendereltette | `PracticeAreaHubScreen` → `ConsumerWidget`, a `practiceCatalogProvider`-t a `practice/public.dart` **barrelen** át olvassa, és `?id=<katalógus első elemének id-je>` URI-t nyit; üres katalógusnál a kártya **nem renderelődik** (D3/D4) |
+| **A3** — a gerinc | három teszt-oldali `router.go` híd tartotta össze | mind törölve; onboarding → Today → Practice Area Hub → Setup → Session **kizárólag** `tester.tap`/`scrollUntilVisible` úton járható; a Setup-állomás állítása megfordítva (`practiceRouteErrorTitle` → `findsNothing`); a `walked` halmaz változatlanul a kilenc `E16-R05`-ös osztály (D5) |
+
+**A kör mért állítása — és ami ezt majdnem meghiúsította.** A brief §7.1 második
+kötelező falszifikációja (az onboardingban `entryLocationFor(...)` → fix
+`AppRoutes.today`) **mérve NEM vitt pirosra egyetlen cellát sem**. Az implementer
+ezt becsületesen jelentette, helyes mechanizmus-magyarázattal: két, e körtől
+független védőháló fedte el — az `app_router.dart:238` `onException`-fallbackje,
+és hogy a `/today` csak `if (adaptiveShellEnabled)` mögött regisztrált, tehát KI
+állapotban a mutált navigáció `GoException`-t dobott, amit a fallback a HELYES
+célra terelt. A review ezt **MAJOR-1**-ként vette fel: a szerződésnek így
+egyetlen automatizált őre sem lett volna, csak az A1 kézi grepje. A javító kör
+(`lib/**` **nulla sor**) izolált, védőháló nélküli `GoRouter` riget épített
+(`test/app/routing/shell_entry_location_test.dart:139-254`) — abban a flag-vak
+implementáció mérve PIROSRA vált, a visszaállítás ZÖLDRE.
+
+**A mérce.** Orchestrátor-oldali `tools/round-gate.sh` a javított fán,
+csonkítatlan artefaktum-futás: **19/19 zöld** (`gate_exit=0`). CI a merge SHA-n
+(`deeb7660`): `full-gate.yml` (`33938604745`, `full-gate` + `Coverage` egyaránt
+`success`) és `router-ci.yml` (`33938626456`, `success`). Golden-baseline és
+`test/fixtures/ui/**` érintés: **0 fájl**. Review:
+[`docs/reviews/e16-r06-review.md`](docs/reviews/e16-r06-review.md) — első kör
+CHANGES REQUESTED (MAJOR-1 + 3 MINOR), javító kör után **APPROVED**.
+
+**Nyitva hagyva, szándékosan:** az izolált rig csak a `Skip/finish` ágat méri, a
+first-win ágat nem (review NOTE-4) — egy flag-vak `_completeFirstWin` KI
+állapotban továbbra sem vinne pirosra cellát. Alacsony kockázat (a két ág
+ugyanazt a két sort futtatja); két további cella ugyanabban a rigben zárná.
+Szintén e körön kívül maradt a `full-app-verification.md` **L3/L4/L5** lelete
+(Library harness-határ, Profile V1/V2 napló-szétválás,
+`practiceHistoryV2ListProvider` cache-invalidáció) — más gazda, más kör; ezek a
+szakaszok bájtra változatlanok.
+
 ## ✅ E14-R05 KÉSZ — Live jelminőség-elemző: a Live út meg tudja mondani, MIÉRT nem megbízható a mérés — PR [#574](https://github.com/wolfcasaba/strumsight/pull/574), squash `bec95352` (2026-09-04)
 
 A Live út többé nem csak egy szintmérőt mutat. A kör **elemzőt szállít, nem

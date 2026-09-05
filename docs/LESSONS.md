@@ -25343,3 +25343,86 @@ lánc állapota így is konzisztens marad. Diagnózis
 `.pipeline/claude-usage` (lejárt-e már az ok), majd a legutóbbi merge-elt PR
 queue-sora (elmaradt-e rituálé). A zárlat lejárta önmagában NEM oldja a
 haltot — a `H-INDEP` kilépési feltétele emberi döntés, nem idő.
+
+## L633 — Egy briefelt falszifikációs mutáció lehet ARCHITEKTURÁLISAN kivitelezhetetlen: a védőhálók elfedik, és a becsületes „nem vitt pirosra" jelentés önmagában NEM zárja a hézagot — a szerződés őr nélkül maradna (E16-R06, review MAJOR-1, 2026-09-05)
+
+**A mért tény.** Az `E16-R06` briefjének §7.1 pont 2. kötelező falszifikációja
+azt írta elő: az onboardingban cseréld az `entryLocationFor(...)` hívást fix
+`AppRoutes.today`-re → az A2 „shell KI" cellájának PIROSRA kell váltania. Az
+implementer elvégezte, és **egyetlen cella sem vált pirosra** — a
+`shell_entry_location_test.dart` `00:03 +4: All tests passed!`, az
+`onboarding_first_win_test.dart` `00:02 +1: All tests passed!` a mutáció ALATT is.
+
+**A gyökérok — két, e körtől független védőháló.** (1)
+`lib/app/routing/app_router.dart:238` —
+`onException: (_, _, router) => router.go(entryLocation)`, ahol az
+`entryLocation` a router SAJÁT, nem mutált számítása. (2) A `/today` route csak
+`if (adaptiveShellEnabled)` mögött regisztrált (`app_router.dart:506`,
+`:520-523`), tehát shell-KI állapotban a mutált `router.go('/today')`
+`GoException`-t dob — amit az (1) pontosan a HELYES célra terel. A settled URI
+ezért a hibás implementáció mellett is a helyes értékre konvergál.
+
+**Miért nem elég a becsületes jelentés.** Az implementer a kudarcot jelentette,
+és érvényes kontroll-mutációt is mért (`AppRoutes.live`-val a két „shell BE"
+cella pirosra vált, mert a `legacyRedirects` `/practice/live`-ra viszi). A
+maradék hézag mégis valós és pontosan körülhatárolható: **a flag-VAK
+implementáció — a D1/D2 duplikátum-tilalom megsértésének legvalószínűbb jövőbeli
+alakja — a TELJES gate mellett is zöld maradt volna.** A szerződésnek egyetlen
+automatizált őre sem lett volna, csak az A1 **kézi** grepje. A „jóindulatú"
+regresszió (az `onException` a helyes célra terel) nem mentség: a következő
+refaktor, ami a fallbackhez hozzányúl, néma viselkedésváltozást szabadítana fel.
+
+**A javítás alakja — izolált rig, nem gyengébb elvárás.** A javító kör
+(`lib/**` NULLA sor) a MÁR engedélyezett tesztfájlba egy csupasz `GoRouter`-t
+épített, amely **mindkét védőhálót kiiktatja**: nincs `redirect`, nincs
+`onException`, és `/today` **és** `/live` egyaránt regisztrált placeholderrel
+**minden** flag-álláson, tehát a mutált cél sem dob kivételt. A cella a settled
+URI-ra mér, és a tap ELŐTT rögzíti a kiindulást (`AppRoutes.welcome`), tehát
+„navigáció nélkül" sem tud zölden átcsúszni. Ebben a rigben a fix `/today` a KI
+cellát, a fix `/live` a BE cellát viszi pirosra — a mutációk mérve elvégezhetők.
+A négy eredeti, valódi routeres cella **megmaradt** mellette: azok az
+integrációs igazságot mérik, az izolált pár a szerződést szögezi le.
+
+**A szabály.** Ha egy briefelt mutáció nem visz pirosra, három kimenet van, és
+csak az első kettő elfogadható: (1) a rig hibás → javítsd a riget; (2) a mérce
+architekturálisan elfedett → **építs izolált riget a védőhálók nélkül**, és a
+mutációt ott végezd el; (3) az elvárás lazítása → **TILOS**. A „nem vitt pirosra,
+de itt egy magyarázat" jelentés a review bemenete, nem a lelet zárása. A brief
+§6.1 mátrixának sorai maguk is MÉRT állítások — ha egy sor hamisnak bizonyul, az
+a brief hibája, és a köre javítja.
+
+**Őrteszt:** `test/app/routing/shell_entry_location_test.dart`::`A2 — isolated onboarding-only rig (review MAJOR-1, falszifikáció)`
+
+## L634 — A hagyaték-szonda csak az ORIGIN ágát méri, ezért egy sosem pusholt, KÉSZ implementációt `PRE-FLIGHT`-nak sorol be — a besorolás kifutója („indíts tisztán") itt 618 sort ejtett volna el (E16-R06, 2026-09-05)
+
+**A mért helyzet.** Az `E16-R06` orchestrátora a
+`.pipeline/resume-state-E16-R06.md`-t `ÁLLAPOT: PRE-FLIGHT` besorolással kapta:
+„kör-ág az `origin`-on `e49657118b75` (**1 commit** a `origin/main` felett)",
+„Review: nincs az ágon". A hagyaték-munkapéldányban (`/home/ubuntu/ss-sonnet-impl-e16-r06`)
+viszont a `git log` **két** commitot mutatott: a pushed pre-flight fölött egy
+`692062a1` implementációs commitot — 10 fájl, 618 beszúrt sor —, és a
+`.codex-round-status` `status=done`, `scope_audit=ok` jelzést. Az implementer
+tehát KÉSZ munkát hagyott hátra, csak **push nélkül** halt meg a session.
+
+**Miért nem fogta meg a szonda.** A `tools/round-resume-probe.sh` a besorolást a
+távoli ágról és a review-fájl létéről méri; a munkapéldányt csak felsorolja
+(„Hagyaték-munkapéldány(ok): …"), a benne lévő **lokális commitokat nem méri**.
+A `PRE-FLIGHT` fok szövege („az ADR + §0.0 brief-revízió újrahasznosítása, majd
+implementer") egy friss implementer-dispatchre visz — ami ezt a 618 sort
+eldobta, vagy ütköző második implementációt írt volna rá.
+
+**Ami megfogta.** A prompt §0.2 kézi ellenőrző parancsa
+(`git -C <talált munkapéldány> log --oneline -3`) — pontosan az a lépés, amit a
+jelentés „nem helyettesít". Ez a sor nem formalitás: a szonda kimenete a
+munkapéldány-listával **együtt** olvasandó, és a lista minden elemén futtatandó
+egy `git log` + `.codex-round-status` mérés, MIELŐTT bármit dispatch-elsz.
+
+**A szabály.** A `resume-state` `ÁLLAPOT:` sora a távoli fa besorolása, nem a
+teljes hagyatéké. A hagyaték-munkapéldány lokális, sosem pusholt commitja
+ugyanolyan megőrzendő munka, mint egy távoli ág — a besorolást a saját mérésed
+felülírja (ezt a §0.2 minden foknál kimondja). A pusholás az orchestrátor első
+dolga, mielőtt a besorolás kifutójára hallgatna.
+
+**Őrteszt:** nincs — a javítás helye a `tools/round-resume-probe.sh` (a
+munkapéldányok lokális `HEAD`-jének mérése és a besorolásba emelése), ami ennek
+a körnek tiltott zónája; önjavító kör tárgya.
