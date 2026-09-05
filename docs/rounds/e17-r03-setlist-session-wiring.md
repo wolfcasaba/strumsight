@@ -1,6 +1,6 @@
 # E17-R03 — A Song Trainer setlist-session bekötése
 
-- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`hold`: Az `E17-R01` kompozíciós mintájára épül (reachability-cella + literál-útvonal tilalom)**
+- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`pending`** (a `hold` 2026-09-05-én feloldva, l. §0.0)
 - **Típus:** Chapter 17 (Teljes bekötés), Kör 3
 - **Kör-azonosító:** `E17-R03`
 - **Branch:** `<motor>/e17-r03-setlist-session-wiring`
@@ -10,9 +10,11 @@
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "a song trainer setlist-session bekötése"` — a kör pre-flightjának KÖTELEZŐ lefuttatnia és a találatokat a §2-be beépítenie; a brief előre megírt állapotában a §2 a `main @ b17e08ef` mérésein áll.
 
-## 0.0 MIÉRT `hold`
+## 0.0 A `hold` FELOLDVA (2026-09-05)
 
-Az `E17-R01` kompozíciós mintájára épül (reachability-cella + literál-útvonal tilalom). **Mi oldja fel:** az `E17-R01` lezárása.
+A kör kompozíciót köt be egy MÁR LÉTEZŐ application-réteg fölé (`SetlistSessionController`); a `song_trainer` feature-ben `0` db `UnimplementedError` van.
+
+Az eredeti `hold` indoka az `E17-R01` mintájára hivatkozott. **2026-09-05-én feloldva:** sorrendi preferencia volt, nem függőség — a `lib/` halmazok diszjunktak.
 
 ```ai-router
 schema_version = 1
