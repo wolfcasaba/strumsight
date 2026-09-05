@@ -51,3 +51,36 @@ export 'domain/repositories/feed_repository.dart';
 export 'domain/repositories/notification_repository.dart';
 export 'domain/repositories/post_repository.dart';
 export 'domain/repositories/social_graph_repository.dart';
+
+// ---------------------------------------------------------------------------
+// Presentation — a route-olható képernyők (2026-09-05).
+//
+// Az `architecture_dependency_test.dart` „community is reachable only through
+// public.dart" szabálya miatt a routernek IDE kell nyúlnia: a képernyők
+// közvetlen importálása a `lib/features/community/presentation/...` útvonalról
+// a gate-en elbukna. A fenti „framework-free" szabály KIZÁRÓLAG a
+// `domain/` alkönyvtárra vonatkozik (a teszt azt a könyvtárat járja be), a
+// presentation-réteg természetesen Fluttert használ.
+// ---------------------------------------------------------------------------
+export 'presentation/screens/bookmarks_screen.dart' show BookmarksScreen;
+export 'presentation/screens/clubs/club_detail_screen.dart'
+    show ClubDetailScreen;
+export 'presentation/screens/clubs/club_list_screen.dart' show ClubListScreen;
+export 'presentation/screens/comments_screen.dart' show CommentsScreen;
+export 'presentation/screens/community_challenges_screen.dart'
+    show CommunityChallengesScreen;
+export 'presentation/screens/community_gate_screen.dart'
+    show CommunityGateScreen;
+export 'presentation/screens/community_notifications_screen.dart'
+    show CommunityNotificationsScreen;
+export 'presentation/screens/community_search_screen.dart'
+    show CommunitySearchScreen;
+export 'presentation/screens/followers_screen.dart'
+    show FollowersMode, FollowersScreen;
+export 'presentation/screens/following_feed_screen.dart'
+    show FollowingFeedScreen;
+export 'presentation/screens/leaderboard_screen.dart' show LeaderboardScreen;
+export 'presentation/screens/post_composer_screen.dart'
+    show PostComposerScreen;
+export 'presentation/screens/safety_relationships_screen.dart'
+    show SafetyRelationshipsScreen;

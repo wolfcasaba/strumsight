@@ -67,6 +67,7 @@ import '../home_shell.dart';
 import 'adaptive_shell_routes.dart';
 import 'app_route.dart';
 import 'route_guards.dart';
+import 'package:strumsight/features/community/public.dart';
 
 final class _RouterRefreshNotifier extends ChangeNotifier {
   void refresh() => notifyListeners();
@@ -219,6 +220,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .analysisComparisonEnabled;
+  // E17 (Ch17 teljes bekötés) — a 13 community képernyő a `communityEnabled`
+  // kapu alatt regisztrálódik. Kapu KI: az útvonalak NEM léteznek, tehát egy
+  // `/community*` cím az alábbi `onException`-re fut és a belépési pontra
+  // esik vissza — ugyanaz a mintázat, amit a Practice és a Vision kapuja
+  // használ, és a szerver-oldali ADR 0497 D1 („a route nincs regisztrálva,
+  // nem futásidejű 403") kliens-oldali párja.
+  final communityEnabled = ref.read(appConfigProvider).flags.communityEnabled;
   final adaptiveShellEnabled = ref
       .read(appConfigProvider)
       .flags
@@ -386,6 +394,81 @@ final routerProvider = Provider<GoRouter>((ref) {
           },
         ),
       ),
+      if (communityEnabled) ...[
+        // A belépési szűrő. Ő maga is a 13 elérhetetlen képernyő közt volt —
+        // a feature kapuja sem volt elérhető.
+        GoRoute(
+          path: AppRoutes.community,
+          builder: (_, _) => const CommunityGateScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityFeed,
+          builder: (_, _) => const FollowingFeedScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityCompose,
+          builder: (_, _) => const PostComposerScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityComments,
+          builder: (_, state) => CommentsScreen(
+            postId: ContentId(state.pathParameters['postId']!),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityBookmarks,
+          builder: (_, _) => const BookmarksScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityNotifications,
+          builder: (_, _) => const CommunityNotificationsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communitySearch,
+          builder: (_, _) => const CommunitySearchScreen(),
+        ),
+        // A követők és a követettek KÉT útvonal, egy képernyővel: a lista
+        // iránya nem query-paraméter, mert egy elhagyott paraméter némán a
+        // másik listát mutatná.
+        GoRoute(
+          path: AppRoutes.communityFollowers,
+          builder: (_, state) => FollowersScreen(
+            profileId: PublicUserId(state.pathParameters['profileId']!),
+            mode: FollowersMode.followers,
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityFollowing,
+          builder: (_, state) => FollowersScreen(
+            profileId: PublicUserId(state.pathParameters['profileId']!),
+            mode: FollowersMode.following,
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityChallenges,
+          builder: (_, _) => const CommunityChallengesScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityLeaderboard,
+          builder: (_, state) => LeaderboardScreen(
+            challengeId: ContentId(state.pathParameters['challengeId']!),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communitySafety,
+          builder: (_, _) => const SafetyRelationshipsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityClubs,
+          builder: (_, _) => const ClubListScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityClubDetail,
+          builder: (_, state) => ClubDetailScreen(
+            clubId: ContentId(state.pathParameters['clubId']!),
+          ),
+        ),
+      ],
       if (practiceEnabled) ...[
         // E13-R08 (D6) — excluded when the adaptive shell owns `/practice`
         // as a destination root below, to avoid a silently-shadowed
