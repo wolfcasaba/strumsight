@@ -386,4 +386,118 @@ cellája **PIROS**, visszaállítva **ZÖLD**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`), 2026-09-05.
+
+### Mit építettem
+
+1. **Additív kivezetés a CRNN ágon** (`strum_direction_classifier.dart`,
+   `strum_analyzer.dart`, `live_crnn_classifier.dart`): `StrumClassification`
+   és `StrumEvent` három új, nullázható mezőt kapott — `pDown`, `pUp`,
+   `pNoStrum` — alapértelmezett `null`-lal. `classifyProbs` a már kiszámolt,
+   renormalizált `pDown`/`pUp`-ot (3-osztályos ágon a `pNoStrum`-ot is)
+   mostantól a visszaadott `StrumClassification`-ön keresztül is közli; a
+   `direction`/`confidence` számítása **egyetlen sort sem változott** (a
+   meglévő `live_crnn_classifier_test.dart` cellái módosítás nélkül zöldek
+   maradtak — mérve, lásd lent). A heurisztikus ág (`HeuristicStrumClassifier`)
+   nem lett módosítva: a három mező nála örökre `null` marad, mert nem
+   valószínűség, amit visszaadhatna (D2).
+2. **`StrumPrediction` építése + a döntés érvényesítése** (`live_pipeline.dart`):
+   új `_isDirectionConfirmed(StrumEvent)` privát metódus — ha
+   `event.pDown`/`event.pUp` `null` (heurisztikus ág), visszaad `true`-t
+   (mai viselkedés, nincs kapu); ha nem `null` (CRNN ág), felépíti a MÁR
+   MERGE-ELT `StrumPrediction`-t (`onsetTimeSec`/`verdictTimeSec` =
+   `event.timeSec`, `calibratedConfidence: null`, `modelId:
+   _crnnActivation.info.strumModelId`, `pNoStrum: event.pNoStrum ?? 0.0` —
+   ez utóbbi egy 2-osztályos modellnél, ahol nincs harmadik osztály,
+   ÁRTALMATLAN helykitöltő: a `decision`/`directionMargin` getter kizárólag
+   `pDown`/`pUp`-ot olvassa, ez a `StrumPrediction`-példány sosem szerializálódik
+   vagy jut túl ezen a függvényen) és a `decision` gettert kérdezi. A pipeline
+   **nem** implementál saját küszöböt (D3) — a `strum_prediction.dart` NINCS
+   az `allowed_paths`-on, és a diffben sem szerepel (lásd lent, 6. pont).
+3. **Teszt-varrat** (`live_pipeline.dart`, additív, `@visibleForTesting`):
+   `LivePipeline.debugWithClassifier(classifier, {sampleRate})` — a meglévő
+   `debugStrumClassifier`/`debugTonalness` mintát követve egy determinisztikus
+   `StrumDirectionClassifier`-t lehet befűzni valós modell-asset nélkül, mert
+   a küszöb-hármas cellái (D6) egzakt `pDown`/`pUp` párokat követelnek, amit
+   egy betanított modell kimenete nem garantálhat.
+4. **`docs/eval/recognition-direction-abstention.md`** (ÚJ) — a szállított
+   `0.05` forrása (ADR 0505 D4), a hiányzó coverage/accuracy mérés pontos
+   megnevezése (`evaluation/recognition/baseline_manifest.json` →
+   `calibration.status: not-measured`, ADR 0249 §D4 minimum), a
+   `ml/honest_eval.py` held-out fold recept egy KÜLÖN kalibrációs körhöz, és a
+   mért tény, hogy a `calibrate()` 0,55-ös alsó knotja miatt a felhasználói
+   `0,45`-ös alapérték ma egyetlen CRNN-pengetést sem utasítana el.
+5. **Tesztek:**
+   - ÚJ `test/features/live/strum_direction_abstention_test.dart` — a §6/2
+     mérce-mátrix mindhárom cellája (`(0.5245, 0.4755)` → `uncertain`,
+     `(2·T, T)` → `uncertain` egzaktan, `(0.5255, 0.4745)` → `confirmed`) +
+     egy külön csoport a heurisztikus ág null-valószínűség viselkedésére
+     (D2). Mind a `LivePipeline.debugWithClassifier` varraton át fut, valódi
+     `strumSignal` onset-tel (a SuperFlux detektor valós audión fut, csak a
+     ↓/↑ verdiktet fixálja a teszt).
+   - `test/features/live/dsp/live_pipeline_test.dart` — egy ÚJ regressziós
+     cella (`E14-R10: a confirmed direction margin keeps today's arrow
+     behaviour`) a 4. acceptance-pontra: `direction`/`confidence`/`strumSeq`
+     bájtra ugyanaz, mint egy `confirmed` margóra a döntési réteg nélkül
+     lenne. A fájl 4 meglévő tesztje változtatás nélkül zöld maradt.
+
+### Falszifikáció (§7.1, ténylegesen lefuttatva)
+
+A `_isDirectionConfirmed` elejére ideiglenesen `return true;`-t szúrtam
+(a döntés-lekérdezés megkerülése), majd lefuttattam
+`flutter test test/features/live/strum_direction_abstention_test.dart`-ot:
+
+- **PIROS** (a várt módon): a „below the threshold" és az „exactly on the
+  threshold" cella mindkettő elbukott (`Expected: true, Actual: <false>` —
+  a `latestStrum`/`latestStrumTime` null/-1 elvárás sérült, mert a döntés
+  nélkül minden esemény azonnal nyilat kapott).
+- Visszaállítva (`git`/`Edit` a próba-sor törlésével): mind a 4 teszt
+  **ZÖLD** — `00:00 +4: All tests passed!`.
+
+### Coverage-kockázat (§9) — számszerűsítve
+
+A körnek MÉRHETŐEN nulla adatpontja van a meglévő fixture-öntesteken, mert
+azelőtt a `StrumPrediction`-nek nulla termelője volt (§0.0/2): egyetlen
+meglévő, ebben a körben nem módosított teszt sem futtatott CRNN-valószínűséget
+a `LivePipeline`-on át valódi `crnnWeights`-szel ÉS `addChunk`-kal egyszerre
+(`live_pipeline_ml_wiring_test.dart` csak a klasszifikátor TÍPUSÁT ellenőrzi,
+audiót nem küld be). A `test/tools/real_audio_probe_test.dart` (heavy,
+dev-only, `DSP_PROBE=1` mögött, ezen a gépen a `ml/corpus/wav` és
+`ml/data/klangio` bemeneti könyvtárak nem léteznek, tehát no-op-ol) tudna
+valós korpuszon mért coverage-számot adni — ez a hotfix nem futtatta, mert
+nincs a `gate_tests`-en és a bemenet hiányzik. A körön belül mérhető szám: a
+saját 5 új teszt-cellából 2 (a „below" és a „rajta" cella) vezet `uncertain`
+döntéshez, azaz DE-facto abstentiont a saját fixture-szetten — ez a
+kialakítás bizonyítéka, nem egy korpusz-szintű coverage-becslés.
+
+### Szerződés-érintetlenség (6. acceptance pont) — mérve
+
+`git diff --name-only` (ág: `sonnet-impl/e14-r10-direction-abstention-hotfix`):
+
+```
+lib/features/live/engine/dsp/live_pipeline.dart
+lib/features/live/engine/dsp/strum_analyzer.dart
+lib/features/live/engine/dsp/strum_direction_classifier.dart
+lib/features/live/engine/ml/live_crnn_classifier.dart
+test/features/live/dsp/live_pipeline_test.dart
+```
+
+plusz két ÚJ fájl: `docs/eval/recognition-direction-abstention.md`,
+`test/features/live/strum_direction_abstention_test.dart`. A
+`lib/features/live/domain/recognition/` egyetlen fájlja sem szerepel — a
+szerződés érintetlen. Minden módosított/új fájl az `allowed_paths` listán
+van; a `public.dart`-ot nem kellett bővíteni (a teszt a meglévő
+`StrumPrediction`-exportot használja).
+
+### Gate
+
+```
+tools/round-gate.sh test/features/live/strum_direction_abstention_test.dart test/features/live/dsp/live_pipeline_test.dart test/features/live/live_frame_adapter_test.dart test/features/live test/features/audio_analysis
+```
+
+`format` → `analyze` → mind az 5 célzott/sáv-teszt → `architecture` →
+`secrets` → `l10n`: **MINDEN GATE ZÖLD** (`test/features/live` sáv: 372 teszt
+zöld, 2 skip — meglévő, ehhez a körhöz nem tartozó skip-marker;
+`test/features/audio_analysis` sáv: 683 teszt zöld, a D1 additivitást méri).
+
 ## 11. Review — a Claude tölti ki
