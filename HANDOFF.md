@@ -87,6 +87,28 @@ ZÖLD; a property gate **15 seeden** zöld (köztük a bukó `33975939211`).
 Hangolási forrás frissítve: `docs/rag/chunks/005-onset-spectral-flux.md`.
 Lecke: **L651**.
 
+### Második, a merge-lépésen ELŐKERÜLT akadály (ugyanez a heal oldotta meg)
+
+A `main`-be közben beérkezett `E14-R13` merge után a **Router CI a `main`-en
+is PIROSRA váltott**, és ez minden további merge-et zárt volna:
+`tools/tests/test_pipeline_throughput.py::IndependenceClauseTest::test_the_real_e14_band_is_not_single_threaded`
+fix **`>= 2`** indítható E14-kört követelt. MÉRVE az `origin/main@00b12485`-ön,
+saját klónban, ÜRES diffel: a 19 E14-sorból **18 `done`**, az egyetlen nyitott
+az `E14-R19` — a cella tehát a sáv **KIFUTÁSÁT** minősítette szerializációs
+defektnek (L643 osztály: az élő SORT mérő őr a sor saját, valódi állapotát
+hívja hibának).
+
+Javítás: a küszöb a nyitott körök számához kötött — **`min(2, nyitott)`** —,
+és NEM skip: egyetlen nyitott körnél is állítja, hogy annak **indíthatónak
+kell lennie** (a sor feje nem lehet blokkolt), kettő vagy több nyitottnál a
+≥2-es párhuzamossági bar változatlan. A szabály tiszta függvénybe került
+(`band_parallelism_verdict`), és **négy fixture-cella** köti le: a mért eset
+(1 nyitott / 1 indítható → rendben), a kifutás mint ürügy elzárása
+(1 nyitott / 0 indítható → továbbra is defekt), az EREDETI defekt
+(3 nyitott / 1 indítható → továbbra is piros) és a zárt sáv.
+Router-suite: **958 passed / 1 skipped**.
+
+
 **A folytatás az `E14-R19`-en kizárólag a merge-lépés** — a kör kész és
 APPROVED, a branch (`sonnet-impl/e14-r19-augmentation-and-balanced-recipe`,
 PR #595) a friss `main`-re rebase/merge után újra CI-t kap, és a property gate

@@ -26368,6 +26368,31 @@ lágy valós attackeket — nem ingyen csavarható tovább.
 `main@4e633b80`-on mindkét cella PIROS, a javítással ZÖLD. A property gate
 15 különböző seeden (köztük a bukó `33975939211`-en) zöld.
 
+**Ugyanennek a healnek a MÁSODIK, a merge-lépésen előkerült akadálya — és
+ugyanaz a hibaosztály egy másik őrben.** Miközben ez a javítás CI-ra várt, a
+`main`-be beérkezett az `E14-R13`, és a Router CI a `main`-en is pirosra
+váltott:
+`test_pipeline_throughput.py::IndependenceClauseTest::test_the_real_e14_band_is_not_single_threaded`
+fix `>= 2` indítható E14-kört követelt. Üres diffel, saját klónban mérve az
+`origin/main@00b12485`-ön: 19 E14-sorból **18 `done`**, egyetlen nyitott az
+`E14-R19` — a cella a sáv **kifutását** minősítette szerializációs defektnek.
+Ez pontosan az **L643** osztály (az élő SORT mérő őr a sor saját, valódi
+állapotát hívja hibának), most nem a sor-fej ütközésén, hanem a sor VÉGÉN.
+
+**A javítás alakja itt is „pontosítsd a hatókört, ne szüntesd meg" (ADR 0112
+§3).** A küszöb `min(2, nyitott)`, és nem `skipTest`: egyetlen nyitott körnél
+is állítja, hogy annak indíthatónak KELL lennie — így a kifutás nem válik
+ürüggyé egy blokkolt sor-fej elnézésére. A szabály tiszta függvény
+(`band_parallelism_verdict`), fixture-cellákkal, tehát az ÉLŐ sortól
+függetlenül mérhető — épp az, ami az eredeti cellából hiányzott.
+
+**Az általánosítható tanulság:** *egy őr, amely az ÉLŐ sort olvassa, fix
+abszolút küszöbbel, előbb-utóbb a sor egy legitim életciklus-állapotát fogja
+defektnek minősíteni.* A küszöbnek a mért populáció méretéből kell
+származnia. Ez a kör kettőt is talált ebből az osztályból egyszerre — az egyik
+a DSP-ben (fix property-bar egy 20 elemű mintán), a másik a sorban (fix `>= 2`
+egy kifutó sávon).
+
 **Mellékes, NEM ehhez a halthoz tartozó lelet:** a
 `test/tooling/freeze_policy_test.dart` két cellája a tiszta `main`-en is
 piros (üres diffel, saját klónban mérve) — az E12-R30 feature-freeze óta
