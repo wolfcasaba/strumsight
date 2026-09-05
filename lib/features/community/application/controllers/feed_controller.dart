@@ -73,6 +73,11 @@ import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 
+import '../../data/repositories/feed_repository_impl.dart'
+    show communityFeedRepositoryProvider;
+export '../../data/repositories/feed_repository_impl.dart'
+    show communityFeedRepositoryProvider;
+
 /// The seven discrete states the following-feed UI can be in.
 ///
 /// The discriminated enum is the source of truth — UI code switches on this
@@ -216,17 +221,17 @@ final feedCacheProvider = Provider<FeedCache>((ref) {
   );
 });
 
-/// Provider for the [CommunityFeedRepository]. Same wiring note as
-/// [feedCacheProvider] — the production override lands with the future
-/// HTTP repository round.
-final communityFeedRepositoryProvider = Provider<CommunityFeedRepository>((
-  ref,
-) {
-  throw UnimplementedError(
-    'communityFeedRepositoryProvider must be overridden in production '
-    'wiring; the test overrides it with a recording fake.',
-  );
-});
+// A `communityFeedRepositoryProvider` EGYETLEN definíciója a
+// `data/repositories/feed_repository_impl.dart`-ban él, és onnan
+// exportáljuk tovább.
+//
+// MÉRT hibaosztály (2026-09-05): itt korábban egy MÁSODIK, dobó
+// provider állt ugyanezen a néven („must be overridden in production
+// wiring"). A képernyő ezt a fájlt importálja, tehát a valódi
+// implementáció megírása UTÁN is a dobó változatot kapta volna — a
+// bekötés némán hatástalan marad. Ugyanez a hiba a kihívás-repositorynál
+// már egyszer előfordult; az egy-definíció szabály az orvosság.
+
 
 /// The following-feed state machine.
 class FeedController extends Notifier<FeedState> {

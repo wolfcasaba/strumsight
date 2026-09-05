@@ -23,6 +23,8 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:strumsight/features/community/data/repositories/challenge_repository_impl.dart';
+import 'package:strumsight/features/community/data/repositories/feed_repository_impl.dart';
+import 'package:strumsight/features/community/data/repositories/notification_repository_impl.dart';
 import 'package:strumsight/features/community/data/repositories/profile_repository_impl.dart';
 import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
 
@@ -47,6 +49,29 @@ void main() {
           returnsNormally,
         );
         expect(container.read(communityChallengeRepositoryProvider), isNotNull);
+      });
+
+      test('communityFeedRepositoryProvider nem dob', () {
+        // 2026-09-05: itt UGYANAZ a duplikált seam állt, mint a
+        // kihívásoknál — a `feed_controller.dart` egy dobó providert
+        // definiált ugyanezen a néven, tehát a feed-képernyő a valódi
+        // implementáció megírása UTÁN is azt kapta volna.
+        expect(
+          () => container.read(communityFeedRepositoryProvider),
+          returnsNormally,
+        );
+        expect(container.read(communityFeedRepositoryProvider), isNotNull);
+      });
+
+      test('communityNotificationRepositoryProvider nem dob', () {
+        expect(
+          () => container.read(communityNotificationRepositoryProvider),
+          returnsNormally,
+        );
+        expect(
+          container.read(communityNotificationRepositoryProvider),
+          isNotNull,
+        );
       });
 
       test('communityProfileRepositoryProvider nem dob', () {
