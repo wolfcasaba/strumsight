@@ -430,4 +430,173 @@ bitazonos kikapcsolás (4. pont) és a `"nem mért"` + `accepted` tiltás
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5). Minden acceptance-pont
+zöld gépi cellával mérve; a §7 két kapuja külön, csővezeték nélkül futott.
+
+### Fájlonként mit és miért
+
+- **`ml/augment.py`** — additív bővítés, a meglévő `augment_pcm` és az
+  általa hívott hat transzformáció (`pitch_shift`, `add_noise`, `gain`,
+  `synth_rir`, `reverb`, `mic_sim`) **egyetlen sora sem változott** (lásd a
+  8. pont regressziós bizonyítékát). Új tartalom:
+  - `_validate_whole_semitone` + `transpose_pcm_and_chord_labels` +
+    `random_label_transposing_shift` — az egész-félhangos,
+    címke-transzponáló pitch-shift út (R6/D1/D2/D3). A címke-aritmetikát
+    a MÁR MERGE-ELT `chords.labels.transpose_class`-ból importálja
+    (`from chords.labels import NO_CHORD, transpose_class`) — nem írja
+    újra (R11/D10). `ml/chords/**`-hoz egyetlen írás sem történt.
+  - `DEVICE_PROFILES` + `device_response`, `compress`, `traffic_noise`,
+    `transient_burst` — a brief §1-ben hiányzóként megnevezett
+    transzformációk (eszköz-válasz, kompresszió, forgalom/nappali zaj,
+    fret/pick/tap burst). Mind seedelt (rng-paraméterezett) és pure NumPy.
+  - `DEFAULT_TRANSFORM_CONFIG` + `_merged_config` +
+    `_apply_secondary_transforms` + `augment_pcm_configurable` +
+    `augment_pcm_with_chord_labels` — a kapcsolható, manifestelt
+    komponálás (D4). A két komponáló függvény UGYANAZT a
+    `_apply_secondary_transforms`-t hívja, hogy a bitazonos-kikapcsolás
+    garanciája ne tudjon szétcsúszni a két út között.
+  - `balance_indices` + `class_ratios` — az osztály-kiegyensúlyozás: csak
+    visszamintavételez (ismétléssel), soha nem dob el eredeti indexet
+    (D8).
+  - `PITCH_SHIFT_LIMITS`, `validate_manifest`, `build_manifest` — a
+    manifest-szerződés (D5/D6/D8/D10) Python-oldali forrása és őre.
+- **`ml/augmentation_manifest.json`** — a `build_manifest`-tel TÉNYLEGESEN
+  generált (nem kézzel írt JSON-dict) manifest; a 11 transzformáció-sor
+  közül 10 `candidate` (nem mért), a `composite_recipe_r173` `rejected`
+  (mért, romló LOGO-delták). Egy Python-cella
+  (`test_the_shipped_ml_augmentation_manifest_json_validates_cleanly`)
+  betölti és validálja — a fájl NEM kerülhet ki szinkronból a
+  validátortól.
+- **`ml/test_augmentation_labels.py`** — 42 cella: címke-transzponálás
+  mátrix + N.C.-invariancia + típusos hibák (1. pont), ±6 inkluzív határ
+  (2. pont), seed-determinizmus a SZÁLLÍTOTT komponáló belépési pontokon
+  keresztül (3. pont, L631), bitazonos kikapcsolás mindkét komponáló
+  útra (4. pont), manifest-kontraktus + „nem mért"/`accepted` tiltás
+  (5–6. pont), osztály-kiegyensúlyozás (5.6), és a kipinnelt
+  `augment_pcm` regresszió (8. pont).
+- **`evaluation/recognition/fixtures/augmentation_manifest_sample.json`**
+  — az `ml/augmentation_manifest.json` másolata, a Dart-őr CI-fixture-je
+  (R7/R8: CI-nak nincs Python/TF interpretere).
+- **`test/tooling/augmentation_manifest_test.dart`** — 27 cella, a
+  `joint_io_schema_test.dart` (E14-R18, ADR 0517 D8) mintáját követve: a
+  validátor teljes egészében a tesztfájlban él (nincs `lib/`/`tool/` a
+  listán). A Python `validate_manifest`-tel PÁRHUZAMOS, nem azt hívó,
+  szabálykészletet valósít meg (kötelező mezők, státusz-enum, „nem mért"
+  ≠ numerikus 0, „nem mért" + `accepted` tiltás, delta-visszaszámolás a
+  mért splitekből, két KÜLÖNBÖZŐ félhang-korlát, `dropsRealData==false`).
+- **`docs/eval/augmentation-ablation.md`** — a becsületes ablation-riport:
+  soronként vagy „nem mért" (repro parancs + a mért 10 769,7 s/pár
+  költség-alap), vagy a ma szállított recept TÉNYLEGES, romló LOGO-számai
+  a regularizációs konfund kimondásával; explicit szakasz arról, hogy az
+  `ml/honest_results.json` gitignore-olt (R12/D11) és miért nem futtatható
+  ebben a körben egy teljes leave-one-transform-out ablation (R5).
+
+### Acceptance-pontonként a MÉRT bizonyíték
+
+1. **Címke-transzponálás mátrix + N.C.-invariancia + típusos hiba** —
+   `ml/test_augmentation_labels.py::test_label_transpose_matrix_moves_class_by_exactly_n_semitones`
+   (±1/±3/±6, parametrizált), `test_label_transpose_uses_the_merged_transpose_class_not_a_reimplementation`
+   (A-moll −1 félhang → G#-moll, a MERGE-ELT `transpose_class`-szal
+   szemben mérve), `test_nc_class_is_invariant_under_label_transpose`,
+   `test_non_whole_semitone_raises_typeerror_not_silently_rounded`,
+   `test_bool_semitone_is_rejected_as_a_typed_error`. Mind ZÖLD.
+2. **±6 inkluzív határ** —
+   `test_below_the_boundary_is_accepted` (±5),
+   `test_exactly_on_the_boundary_is_accepted_inclusive` (±6),
+   `test_above_the_boundary_is_a_typed_error` (±7 → `ValueError`). ZÖLD.
+3. **Seed-determinizmus a szállított belépési ponton** —
+   `test_random_label_transposing_shift_is_deterministic_per_seed`,
+   `test_augment_pcm_with_chord_labels_is_deterministic_per_seed`,
+   `test_augment_pcm_configurable_is_deterministic_per_seed` — mindhárom
+   ugyanazzal a seeddel bitazonos, más seeddel eltérő kimenetet mér a
+   TÉNYLEGES komponáló függvényen (nem kézzel épített dicten, L631).
+4. **Bitazonos kikapcsolás** —
+   `test_configurable_augmentor_all_disabled_is_bit_identical_to_input`,
+   `test_label_aware_augmentor_all_disabled_is_bit_identical_to_input`
+   (mindkét komponáló út, minden kapcsoló hamis → `np.array_equal`),
+   `test_only_pitch_shift_enabled_still_moves_the_signal` (ellenőrző
+   pozitív eset: egy kapcsoló visszakapcsolva MÉGIS változtat).
+5. **Manifest kötelező mezők** — 6 cella
+   (`test_missing_seed_is_a_typed_error`,
+   `test_missing_transforms_is_a_typed_error`,
+   `test_transform_missing_status_is_a_typed_error`,
+   `test_missing_class_ratios_group_is_a_typed_error`,
+   `test_missing_balanced_phase_is_a_typed_error`,
+   `test_a_well_formed_manifest_validates_cleanly`) Python oldalon;
+   Dart oldalon az A2/A3/A6 csoport (11 cella).
+6. **„nem mért" ≠ 0, „nem mért" soha `accepted`** —
+   `test_numeric_zero_for_a_missing_measurement_is_rejected`,
+   `test_not_measured_row_with_accepted_status_is_rejected`,
+   `test_not_measured_row_with_candidate_or_rejected_status_is_fine`
+   Python oldalon; Dart A4 csoport (5 cella, ebből egy a kör kötelező
+   falszifikációs cellája, lásd lent).
+7. **A ma szállított recept `rejected` + idézett LOGO-delták** —
+   `test_the_shipped_ml_augmentation_manifest_json_validates_cleanly`
+   (Python, betölti a valós fájlt és leellenőrzi a `composite_recipe_r173`
+   sor `status`-át), Dart A1/A5 csoport (a valós fixture-ön mér, és a
+   `-0.0081`/`-0.0772` delták jelenlétét is ellenőrzi).
+8. **Regresszió: `augment_pcm` bitre változatlan** —
+   `test_existing_augment_pcm_is_byte_identical_for_a_pinned_seed`
+   (SHA-256 digest egy rögzített szintetikus bemenetre + seed=1234-re);
+   `python3 -m pytest ml -q` **157/157 ZÖLD** (115 meglévő + 42 új,
+   egyetlen meglévő cella sem módosult vagy bukott).
+
+### A §7.1 falszifikációs cellák (L563) — mind a négy kötelező
+
+Mindegyiknél: a javítást ideiglenesen visszavettem → cella PIROS →
+`git checkout -- <fájl>` → cella ZÖLD. Egyik mutáció sem maradt a
+munkafában (`git status --porcelain` üres a kör alatt és most is).
+
+| # | Cella | Mutáció | PIROS (idézet) | ZÖLD visszaállítás után |
+|---|---|---|---|---|
+| 1 | Címke-transzponálás | `transposed = classes` (elfelejtett transzponálás) `transpose_pcm_and_chord_labels`-ben | 7 teszt bukott: `assert False … array([1, 1]) == 7`, `assert 'Am' == 'G#m'` | `python3 -m pytest ml/test_augmentation_labels.py -k "label_transpose_matrix or uses_the_merged" -q` → 7 passed |
+| 2 | ±6 inkluzív határ | `_validate_whole_semitone`: `>` → `>=` | `ValueError: semitones=6 exceeds the inclusive range [-6, 6]` (±6-nál is elszáll) | `-k boundary` → 6 passed |
+| 3 | Bitazonos kikapcsolás | `_apply_secondary_transforms`: `if cfg["gain"]["enabled"]:` → `if True:` | mindkét komponáló-út cellája bukott: `assert np.array_equal(out, pcm)` → `False` | `-k all_disabled_is_bit_identical` → 2 passed |
+| 4a | „nem mért" + `accepted` tiltás (Python) | `validate_manifest`: az `if status == "accepted": raise …` ág `pass`-re cserélve | `Failed: DID NOT RAISE <class 'ValueError'>` | `-k not_measured_row_with_accepted` → 1 passed |
+| 4b | „nem mért" + `accepted` tiltás (Dart) | a Dart-guard ugyanezen ága komment-re cserélve | `flutter test … --plain-name "falsification cell"` → `Expected: false / Actual: <true>` (1 failed) | ugyanaz a parancs → `+1: All tests passed!` |
+
+### A két kapu tényleges kimenete
+
+```
+tools/round-gate.sh test/tooling/augmentation_manifest_test.dart
+→ format zöld · analyze zöld · test (27/27) zöld · architecture zöld ·
+  secrets zöld · l10n zöld — MINDEN GATE ZÖLD
+```
+
+```
+python3 -m pytest ml -q
+→ 157 passed in 21.22s
+```
+
+Mindkettő külön, csővezeték nélküli parancsként futott (L05/L09).
+
+### Amit nem futtattam, és miért
+
+- **Per-transzformációs leave-one-transform-out ablation** — mérten nem
+  fér a körbe (R5: 1 kezelés-pár = 10 769,7 s ≈ 3,0 óra, hét
+  transzformációra 20+ óra a 3600 s-os burkoló-korláttal szemben). A
+  `docs/eval/augmentation-ablation.md` minden ilyen sort „nem mért"-ként
+  jelöl a reprodukáló paranccsal.
+- **CI-workflow bővítés** a `ml/test_augmentation_labels.py`
+  lefuttatására — `.github/**` a tilos zóna (R7); a Python-cella lokálisan
+  és ebben a handoffban reprodukálva mér, a CI-oldali mérce a Dart-őr.
+- **`gh workflow run` / PR / merge** — nem az implementer dolga (§7).
+
+### Nyitott kockázatok
+
+- A `docs/eval/augmentation-ablation.md`-ben idézett `10 769,7 s` és a
+  LOGO-delták az `ml/honest_results.json` r173 futásából származnak, ami
+  gitignore-olt (`ml/.gitignore:14`) — egy jövőbeli reviewer ezeket a
+  számokat csak akkor tudja saját maga reprodukálni, ha van hozzáférése
+  egy TensorFlow-interpreteres dobozhoz + a Klangio GST-MM korpuszhoz.
+- A `DEVICE_PROFILES` táblázat (`phone_a`/`phone_b`/`tablet_a`) és a
+  `compress`/`traffic_noise`/`transient_burst` paraméter-tartományai
+  ÉSZSZERŰ, de nem irodalomból idézett alapértékek (a `pitch_shift`
+  ±6-tal szemben, ami az ISMIR-2025 Murgul et al. mért optimuma) — ezek
+  finomhangolása a recept-végleges ítő E14-R20 dolga lehet.
+- A `balance_indices` felső korlát nélkül mintavételez vissza (a
+  legkisebb és legnagyobb osztály aránya tetszőlegesen nagy lehet); ha egy
+  jövőbeli adatkészletben ez a torzítás extrém, egy felső korlát (pl.
+  max 5×-ös felszorzás) hozzáadása E14-R20 döntése.
+
 ## 11. Review — a Claude tölti ki
