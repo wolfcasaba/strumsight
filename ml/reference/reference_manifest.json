@@ -67,13 +67,22 @@
   },
   "audit_registry": [],
   "requirements": [
-    "torch",
-    "lightning",
-    "note-seq",
-    "torchlibrosa",
     "librosa==0.10.1",
+    "numpy",
+    "numba",
+    "resampy",
+    "mir-eval",
+    "tqdm",
+    "torch",
+    "pandas",
+    "note-seq",
+    "scipy",
+    "scikit-learn",
+    "h5py",
     "hydra-core",
-    "wandb"
+    "lightning",
+    "wandb",
+    "torchlibrosa"
   ],
   "reproduction": {
     "official_form": "scripts/evaluate.ipynb (upstream notebook; no single-command form exists upstream)",

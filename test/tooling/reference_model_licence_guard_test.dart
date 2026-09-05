@@ -210,6 +210,7 @@ void main() {
 
     test('a clean synthetic tree with no reference-origin artifact passes', () {
       final projectRoot = _newTempRepo();
+      addTearDown(() => projectRoot.deleteSync(recursive: true));
       _track(projectRoot, 'lib/main.dart', 'void main() {}\n');
 
       final report = _auditReferenceArtifacts(projectRoot);
@@ -223,6 +224,7 @@ void main() {
       'tool/cache/weights.pt',
       'test/fixtures/model.pth',
       'weights.ckpt',
+      'ml/scratch/prepared_dataset.h5',
     ]) {
       test('falsification cell (§7.1): an unaudited checkpoint at "$location" '
           'turns the guard RED, and removing it turns it GREEN again — proves '
@@ -608,10 +610,17 @@ class ArtifactAuditReport {
       issues.map((issue) => '${issue.path}: ${issue.reason}').join('\n');
 }
 
+// Measured against the pinned upstream commit's `.gitattributes`, which puts
+// SIX extensions under Git-LFS: `*.pth *.pt *.ckpt *.cpkt *.h5 *.pkl` (`cpkt`
+// is upstream's own misspelling variant, also LFS-tracked). `safetensors` is
+// kept as a general reference-checkpoint signature beyond this one upstream.
 const _referenceCheckpointExtensions = <String>{
   'ckpt',
+  'cpkt',
   'pt',
   'pth',
+  'h5',
+  'pkl',
   'safetensors',
 };
 const _referenceDatasetSlug = 'klangio-gst-mm-2025';

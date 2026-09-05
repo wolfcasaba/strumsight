@@ -48,6 +48,7 @@ _REQUIRED_LICENSE_FIELDS = ("spdx", "source", "evidence", "verdict")
 _IMPORT_NAME_OVERRIDES = {
     "note-seq": "note_seq",
     "hydra-core": "hydra",
+    "scikit-learn": "sklearn",
 }
 
 _RERUN_COMMAND = (
@@ -218,16 +219,28 @@ def clone_pinned_commit(document: dict, workdir: Path) -> Path:
     repo_url = document["source"]["repository"]
     pinned_commit = document["source"]["pinned_commit"]
     clone_dir = workdir / "guitar-strumming-transcription"
-    if not clone_dir.exists():
-        subprocess.run(["git", "clone", repo_url, str(clone_dir)], check=True)
-    subprocess.run(["git", "checkout", pinned_commit], check=True, cwd=clone_dir)
-    actual_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        check=True,
-        cwd=clone_dir,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    try:
+        if not clone_dir.exists():
+            subprocess.run(["git", "clone", repo_url, str(clone_dir)], check=True)
+        subprocess.run(["git", "checkout", pinned_commit], check=True, cwd=clone_dir)
+        actual_commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=True,
+            cwd=clone_dir,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        raise MissingArtifactError(
+            f"'{' '.join(error.cmd)}' failed (exit {error.returncode}) while "
+            f"cloning {repo_url} at {pinned_commit}. Remove {clone_dir} if it "
+            "exists and rerun:\n  " + _RERUN_COMMAND
+        ) from error
+    except OSError as error:
+        raise MissingArtifactError(
+            f"could not run git while cloning {repo_url}: {error}. Confirm "
+            "git is installed, then rerun:\n  " + _RERUN_COMMAND
+        ) from error
     if actual_commit != pinned_commit:
         raise MissingArtifactError(
             f"checked out {actual_commit}, expected the manifest's pinned "
@@ -240,11 +253,23 @@ def clone_pinned_commit(document: dict, workdir: Path) -> Path:
 def verify_checkpoint(document: dict, clone_dir: Path) -> Path:
     checkpoint = document["artifacts"]["checkpoint"]
     checkpoint_path = clone_dir / checkpoint["path"]
-    subprocess.run(
-        ["git", "lfs", "pull", "--include", checkpoint["path"]],
-        check=True,
-        cwd=clone_dir,
-    )
+    try:
+        subprocess.run(
+            ["git", "lfs", "pull", "--include", checkpoint["path"]],
+            check=True,
+            cwd=clone_dir,
+        )
+    except subprocess.CalledProcessError as error:
+        raise MissingArtifactError(
+            f"'git lfs pull --include {checkpoint['path']}' failed (exit "
+            f"{error.returncode}). Confirm network access and rerun:\n  "
+            + _RERUN_COMMAND
+        ) from error
+    except OSError as error:
+        raise MissingArtifactError(
+            f"could not run 'git lfs pull': {error}. Confirm git-lfs is "
+            "installed, then rerun:\n  " + _RERUN_COMMAND
+        ) from error
     if not checkpoint_path.is_file():
         raise MissingArtifactError(
             f"{checkpoint_path} was not materialized by 'git lfs pull'. "

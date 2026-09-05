@@ -28,17 +28,28 @@ reports it.
 | F1 (any-direction) | NEM MÉRT | NEM MÉRT |
 | F1 (up-strum) | NEM MÉRT | NEM MÉRT |
 
-**Miért NEM MÉRT:** a reprodukció `torch`/`lightning`/`note-seq`/
-`torchlibrosa`/`librosa==0.10.1`/`hydra-core`/`wandb` függőségeket igényel
-(`ml/reference/reference_manifest.json` → `requirements`); ezek egyike sem
+**Miért NEM MÉRT:** a reprodukció mind a 16, a pinelt commit `requirements.txt`
+fájlában szereplő függőséget igényli (`ml/reference/reference_manifest.json` →
+`requirements`: `librosa==0.10.1`, `numpy`, `numba`, `resampy`, `mir-eval`,
+`tqdm`, `torch`, `pandas`, `note-seq`, `scipy`, `scikit-learn`, `h5py`,
+`hydra-core`, `lightning`, `wandb`, `torchlibrosa`); ezek egyike sem
 importálható ezen a boxon sem az egyetlen ML-venvből (`/home/ubuntu/tf-venv`
 — TensorFlow 2.21.0/Keras 3.15.0, NEM PyTorch), sem a rendszer-Pythonból
 (mérve 2026-09-05, lásd `ml/reference/README.md`). Az upstream kiértékelés
 ma is csak notebook (`scripts/evaluate.ipynb`), aminek a cella-kimenet
 szerződését a pre-flight nem tudta elolvasni (nincs PyTorch a mérő gépen).
 
+**A script mai állapota — stub, nem futtatható kiértékelés:** a
+`run_official_fixture_eval` és a `run_strumsight_holdout_eval`
+(`ml/reference/run_reference_eval.py`) ma `NotImplementedError`-t dob a fenti
+notebook cella-kimenet szerződésének hiánya miatt — ez a PyTorch-képes gépen
+futtatva SEM adna számot ebben a körben, a kiolvasás a következő,
+PyTorch-képes kör dolga (`ml/reference/README.md`).
+
 **Reprodukáló parancs** (miután a fenti függőségek telepítve vannak egy
-PyTorch-képes gépen):
+PyTorch-képes gépen — a fenti stub-státusz miatt ma ez a parancs is
+`NotImplementedError`-ral állna meg a klónozás és a checksum-ellenőrzés
+után):
 
 ```bash
 python3 ml/reference/run_reference_eval.py \
@@ -62,10 +73,13 @@ korpuszon.
 a checkpoint az upstream `klangio/modules/strumming_crnn` modellosztályaival
 tölthető csak be — ez a betöltés maga is a hiányzó függőségektől függ.
 
-**Reprodukáló parancs:** ugyanaz, mint fent — a script mindkét mérést egy
-futásban állítja elő, de KÜLÖN struktúrában (`official_fixture` /
+**Reprodukáló parancs:** ugyanaz, mint fent. **A script mai állapota:** a
+`run_official_fixture_eval` és a `run_strumsight_holdout_eval` ma
+`NotImplementedError`-t dob (lásd fent) — a script CÉLZOTT szerkezete a két
+mérést KÜLÖN struktúrában adná vissza (`official_fixture` /
 `strumsight_held_out`), soha nem egy közös táblában vagy átlagban (ADR 0369
-D4).
+D4), de ezt a szerkezetet ma egyik mérés sem tölti ki ténylegesen; a
+kiolvasás a következő, PyTorch-képes kör dolga (`ml/reference/README.md`).
 
 ## 3. Licenc-audit — HÁROM külön ítélet (ADR 0369 D1/D2)
 

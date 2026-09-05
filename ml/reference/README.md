@@ -17,16 +17,25 @@ the report and the go/no-go.
 
 ## Environment (measured 2026-09-05, not installed on this box)
 
-The upstream `requirements.txt` needs:
+The upstream `requirements.txt` needs (measured, pinned commit, all 16 lines):
 
 ```
-torch
-lightning
-note-seq
-torchlibrosa
 librosa==0.10.1
+numpy
+numba
+resampy
+mir-eval
+tqdm
+torch
+pandas
+note-seq
+scipy
+scikit-learn
+h5py
 hydra-core
+lightning
 wandb
+torchlibrosa
 ```
 
 This box's only ML virtualenv (`/home/ubuntu/tf-venv`) carries TensorFlow
