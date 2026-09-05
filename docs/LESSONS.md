@@ -25943,3 +25943,54 @@ downstream release-gate egy „0 elmozdítás" mérést „1 flip"-ként olvas
 **Őrteszt:** `test/features/live/recognition_stabilizer_test.dart` — a
 `brief §6 pt.8 — cold-start exception fires once (ADR 0518 D11)` csoport 3
 cellája; a `_confirmedLabel == null` ág törlésével a (c) cella PIROS.
+
+## L645 — Egy ELŐRE MEGÍRT brief „legyen rá ÚJ fájl" előírása némán MÁSODIK döntési hellyé válik, ha közben egy merge-elt szerződés megnevezte ugyanannak a képességnek az EGYETLEN kiterjesztési pontját (E14-R15 / H3, önjavító kör, 2026-09-05)
+
+**A mérés** (`main @ 8180c9dc`, dispatch ELŐTT, ág nem készült):
+
+```bash
+grep -n "falseVisibleEventsPerMinute" lib/features/live/domain/evaluation/recognition_metrics.dart
+#   731: a metrika, amit a brief §2 „nincs ilyen"-ként írt le (E14-R08 / ADR 0509)
+grep -n -A2 falseVisibleEventsPerMinute evaluation/recognition/recognition_release_gate.json
+#   36-38: már kapuzva 2,0/perc küszöbön (E14-R09 / ADR 0511)
+sed -n '118,140p' docs/eval/recognition-dashboard.md
+#   ADR 0511 D8: "Mechanising any of these requires extending the E14-R08
+#   harness (recognition_metrics.dart) with a genuinely scoped metric"
+```
+
+A 2026-08-20-án előre megírt E14-R15 brief `allowed_paths`-a ezt a fájlt NEM
+tartalmazta; helyette egy ÚJ, különálló
+`lib/features/live/domain/evaluation/false_visible_event_metric.dart`-ot írt
+elő. A listája szerint épített kör tehát a Ch14 §7.2 „false visible arrow
+hard-negative" sorra **második, versengő definíciót** szállított volna a
+merge-elt mellé — pontosan az az [[L549]] hibaosztály, aminek a megelőzésére az
+ADR 0511 D8 szakasza létezik, és ugyanaz az osztály, ami az E14-R10-et
+megállította ([[L636]]).
+
+**Miért volt néma a meglévő mérce.** Az `S15` (`test_brief_base_sha_drift.py`)
+TÜZELT erre a briefre — a mért alap elmozdulását méri. De egy elavult-alap
+lelet **tanácsadó**: azt mondja, „olvasd újra és revideálj", nem azt, hogy „ez a
+lista pont azt az egy fájlt nem tartalmazza, amit a merge-elt szerződés
+megnevez". A szűkítés az orchestrátor saját hatásköre, a **tágítás** nem — a
+kör ezért csak megállni tudott (H3), egy teljes orchestrátor-session árán.
+
+**A szabály.** Ha egy előre megírt brief ÚJ fájlt ír elő egy képességnek, a
+pre-flight KÖTELEZŐ kérdése nem az, hogy „létezik-e már a fájl", hanem hogy
+**megnevezte-e időközben egy merge-elt döntés ugyanennek a képességnek a
+kiterjesztési pontját**. Ha igen, a brief `allowed_paths`-át ahhoz a ponthoz
+kell tágítani (heal/emberi hatáskör), és a §5-öt ki kell mondatni, hogy az új
+metrika a merge-elt **partíciója**, nem a szomszédja. A „szűkített" metrikának
+ilyenkor mindig jár egy **anti-alias cella** is: olyan fixture, amelyen a
+szűkített érték BIZONYÍTHATÓAN eltér az agnosztikustól — enélkül az
+átcímkézés zölden átmegy.
+
+**Amit a revízió KIVETT a körből** (mert merge-elt, reviewed artefaktumot
+mozgatna, tehát saját ADR-t kíván): a `sourceId` group-key +
+klip-leakage gépiesítése (`GroupKey` kimerítő `switch`-ek, manifest-séma), a
+taxonómia-kategória manifest-hordozása, és a Ch14 §7.2 küszöb átkötése az
+agnosztikus rátáról a szűkítettre (ADR 0511 D9).
+
+**Őrteszt:** `tools/tests/test_e14_r15_false_visible_metric_home.py` — a
+revízió ELŐTTI briefen 4-ből 3 cella PIROS. A guard a KÖVETELT VÉGÁLLAPOTOT
+pinneli (a merge-elt harness az allowed_paths-on van, versengő fájl nincs),
+nem a kör munkájának hiányát — így a kör sikere nem viheti pirosra ([[L612]]).

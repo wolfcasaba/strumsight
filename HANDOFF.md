@@ -1,5 +1,36 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R15 / H3 feloldva: a szűkített false-visible metrika a MERGE-ELT harness kiterjesztése, nem egy második metrika-fájl mellette (2026-09-05)
+
+Az `E14-R15` a **dispatch előtt** H3-ra futott. A briefje 2026-08-20-án,
+`main @ 6371aa3`-on készült, és a §2-ben azt mérte, hogy „a termék oldalán nincs
+a MEGMUTATOTT hamis eseményeket számoló metrika" — ez ma **hamis**: az E14-R08
+(ADR 0509) merge-elte a `falseVisibleEventsPerMinute`-ot
+(`recognition_metrics.dart:731-746`), az E14-R09 (ADR 0511) pedig 2,0/perc
+küszöbön ki is kapuzta (`recognition_release_gate.json:36-39`). A merge-elt
+**ADR 0511 D8** ráadásul kimondja, hogy a hiányzó, valóban SZŰKÍTETT
+(direction-/chord-scoped) változatot a `recognition_metrics.dart`
+KITERJESZTÉSÉVEL kell megépíteni — az pedig a kör tilos zónája volt. Mért
+diagnózis: `.pipeline/halt-detail-E14-R15.md`; lecke: **L645**.
+
+| Amit a revízió megváltoztat | Miért |
+|---|---|
+| a `false_visible_event_metric.dart` **törölve a scope-ból** | különálló fájlban a Ch14 §7.2 sorra **második, versengő definíció** született volna a merge-elt mellé — az `L549` / ADR 0511 D8 hibaosztály (ugyanaz, mint `L636`) |
+| `allowed_paths` **tágítva** a merge-elt harness-re (`recognition_metrics.dart`, `recognition_release_gate.dart` + a három érintett tesztfájl) | a D8 ezt a fájlt nevezi meg egyetlen kiterjesztési pontként; a `RecognitionMetrics` kötelező-mezős konstruktorát a `recognition_release_gate_test.dart:413` közvetlenül építi, tehát az új mezők nélküle NEM fordulnak |
+| a metrika **partíció**, nem szomszéd (§5.1/§5.4) | `onset+strum+chord` a `RecognitionEventKind` teljes partíciója, ezért a szűkített darabszámok összege PONTOSAN az agnosztikus `eventCount` — és van **anti-alias cella** is (onset-fajtájú hamis eseménnyel az összeg szigorúan kisebb) |
+| a `recognition_release_gate.json` **NINCS a listán**, a Ch14 §7.2 sor a kör után is az agnosztikus rátán áll | ADR 0511 D9: a küszöbfájl reviewed artefaktum; az átkötés külön kör külön ADR-rel. A 8. acceptance-pont pinneli, hogy a szállított küszöblista módosítás nélkül zöld |
+| a régi 6. acceptance-pont (`sourceId`-leakage) **kivéve** | a merge-elt `GroupKey = {player, device, guitar, room}` bővítése kimerítő `switch`-eket (`recognition_report_renderer.dart:243-246`), a manifest-sémát és a renderer csoport-celláit is mozgatja — saját kör, saját ADR |
+| a taxonómia-kategória **manifest-hordozása** és a metrika kategória-bontása kivéve | a `RecognitionCase` + `baseline_manifest_schema.json` bővülne, ami ADR 0354 szerint reviewed evidencia-artefaktum |
+| ADR-szám `0367` → **`0521`**, a briefben és a sor ADR-oszlopában | a foglaló (`tools/round-slots.py reserve-adr --round E14-R15`) a mérvadó; a queue ADR-oszlopa az egész E14 sávra elavult (mérve az E14-R12-nél is: sor `0364`, valós `0518`) |
+
+**A mérce.** `python3 -m pytest tools/tests -q` (a router teljes suite-ja);
+őrteszt: `tools/tests/test_e14_r15_false_visible_metric_home.py` (4 cella).
+Falszifikáció mérve: az `origin/main` briefjén a 4-ből **3 cella PIROS**, a
+revízióval mind a 4 ZÖLD. A guard a KÖVETELT VÉGÁLLAPOTOT pinneli (a merge-elt
+harness rajta van az `allowed_paths`-on, versengő metrika-fájl nincs), nem a kör
+munkájának hiányát — a kör sikere nem viheti pirosra (`L612`). A revideált brief
+`--level strict` lintje: **nincs lelet** (az eredeti S12 és S15 egyaránt tisztázva).
+
 ## ✅ E14-R12 KÉSZ — Provisional → confirmed stabilizátor: a timeline többé nem kártyásít minden felismerési rezdülést — PR [#582](https://github.com/wolfcasaba/strumsight/pull/582), squash `607715b1` (2026-09-05)
 
 A Chapter 14 Kör 12 a **címke-stabilizátort** szállítja a MÁR merge-elt
