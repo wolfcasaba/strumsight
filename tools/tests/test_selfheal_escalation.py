@@ -91,6 +91,11 @@ attempt_selfheal
             PIPELINE_STATE_DIR=str(state),
             PIPELINE_ENGINE_REGISTRY=str(registry),
             PIPELINE_SELFHEAL_MAX="3",
+            # A halt-aláírás RAG-visszakeresése (ADR 0312) MÉRVE 27,0 s / hívás,
+            # ebből 24,9 s CPU; ez a cella a MOTORVÁLASZTÁST méri, nem a
+            # visszakeresést. A driver élesben változatlanul futtatja
+            # (E14-R13/H5 önjavító kör, 2026-09-05).
+            PIPELINE_HEAL_RAG="0",
             PIPELINE_HALT_REMINDER_MIN="60",
             PIPELINE_HALT_REMINDER_MAX_H="24",
             PIPELINE_TEST_NOW=str(now),
@@ -193,6 +198,11 @@ attempt_selfheal
                 PIPELINE_STATE_DIR=str(state),
                 PIPELINE_ENGINE_REGISTRY=str(registry),
                 PIPELINE_SELFHEAL_MAX="3",
+            # A halt-aláírás RAG-visszakeresése (ADR 0312) MÉRVE 27,0 s / hívás,
+            # ebből 24,9 s CPU; ez a cella a MOTORVÁLASZTÁST méri, nem a
+            # visszakeresést. A driver élesben változatlanul futtatja
+            # (E14-R13/H5 önjavító kör, 2026-09-05).
+            PIPELINE_HEAL_RAG="0",
                 PIPELINE_TEST_NOW=str(now),
                 PIPELINE_ORCH_ROTATION_FILE="/dev/null",
                 PIPELINE_ORCH_ROTATION="alternate",

@@ -245,6 +245,15 @@ terminal_signal_seen=""
 has_terminal_signal() { grep -qE '^status=(done|stopped|blocked)$' "$signal" 2>/dev/null; }
 
 poll_seconds=${MM_POLL_SECONDS:-20}
+# A SIGTERM és a SIGKILL közti türelmi idő. ÉLESBEN változatlanul 5 másodperc —
+# egy valódi `claude -p` folyamatnak kell ennyi, hogy a saját takarítását
+# befejezze. A burkolót MÉRŐ tesztek viszont hamis, azonnal kilépő binárissal
+# dolgoznak, ezért ott ez az 5 mp tiszta, gépfüggetlen fali óra: 20 cellán
+# ~100 másodperc a `router-ci` 10 perces job-plafonjából (E14-R13/H5 önjavító
+# kör, ADR 0112, 2026-09-05 — `.pipeline/halt-detail-E14-R13.md`). A kapcsoló
+# ugyanaz a minta, mint a fenti `MM_POLL_SECONDS`: az ALAPÉRTELMEZÉS az éles
+# viselkedés, a teszt csak felgyorsítja azt, amit nem ő mér.
+kill_grace_seconds=${MM_KILL_GRACE_SECONDS:-5}
 # MÉRT hibaminta (E06-R23 self-heal, ADR 0112, 2026-08-12): a Claude a saját
 # STOP-protokollja szerint helyesen megírta a jelzésfájlt
 # (`tools/codex-signal.sh stopped ...`, H3 scope-sértés, 22:17:39Z), de a
@@ -273,7 +282,7 @@ while kill -0 "$mm_pid" 2>/dev/null; do
 
   if [ -n "$killed_reason" ] || [ -n "$terminal_signal_seen" ]; then
     kill "$mm_pid" 2>/dev/null || true
-    sleep 5
+    sleep "$kill_grace_seconds"
     kill -9 "$mm_pid" 2>/dev/null || true
     break
   fi
