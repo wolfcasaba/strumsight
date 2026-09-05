@@ -373,3 +373,101 @@ kereszt-ellenőrzést használta, a következtetés nem gyengült.
 **APPROVED.** Nyitott BLOCKER/MAJOR/MINOR: **nincs**. A merge a
 zöld kapu (Full Gate + Router CI `success` a merge SHA-n) teljesülésével
 mehet.
+
+---
+
+# 10. CI-addendum — a merge-et KÉT, a körön KÍVÜLI ok blokkolja (HALT/H3)
+
+A kör munkája kész és **APPROVED** (§9). A merge mégsem mehet: a zöld kapu két
+eleme piros, és **egyik ok sem ennek a körnek a diffjében van**. Mindkettőt
+saját méréssel igazoltam.
+
+## 10.1 Full Gate — a randomizált property gate egy MÁR MEGLÉVŐ DSP-hibát fogott
+
+Run [`33975939211`](https://github.com/wolfcasaba/strumsight/actions/runs/33975939211)
+a merge SHA-n (`fcf04005`):
+
+```
+🎉 10169 tests passed, 21 skipped.          # a TELJES suite ZÖLD
+…
+Property gate (randomized seed)  PROPERTY_SEED=33975939211
+Expected: a value greater than or equal to <18>
+  Actual: <17>
+seed=33975939211: a strum must merge into ONE onset
+test/property/dsp_property_test.dart 438:5
+##[error]121 tests passed, 1 failed.
+```
+
+**A hiba NEM ennek a körnek a műve — mérve.** Ugyanaz a seed a kör diffje
+NÉLKÜL, tiszta `origin/main`-en (`9632a96d`) is bukik:
+
+```
+$ git checkout 9632a96d && PROPERTY_SEED=33975939211 flutter test test/property/dsp_property_test.dart
+Failing tests:
+  …/test/property/dsp_property_test.dart: property: random strums — one onset, correct direction (20 trials)
+```
+
+A kör diffje `ml/**` (Python), két JSON, egy `test/tooling/` Dart-teszt és két
+dokumentum — **egyetlen `lib/` sort sem** érint, tehát a DSP onset-összevonáshoz
+semmi köze.
+
+**A hiba jellege (a javítás bemenete).** A cella 20 próbából `singleOnset >= 18`
+(90%) küszöböt vár (`test/property/dsp_property_test.dart:437-441`). Ez a seed
+**17/20**-at (85%) adott. Seed-mintavétel ugyanezen a fán:
+
+| `PROPERTY_SEED` | eredmény |
+|---|---|
+| 42 (dev-alapértelmezés) | ZÖLD |
+| 1, 2, 3 | ZÖLD |
+| 33975939211 (CI run id) | **PIROS, 17/20** |
+
+Tehát a szállított onset-összevonás valós rátája a 18/20-as küszöb KÖZVETLEN
+közelében van, és ez a seed átvitte alatta. Ez pontosan az a jel, amiért a
+randomizált kapu létezik (HORIZON-konvenció) — **újra-dispatch-csel más seedre
+„zöldre pörgetni" a kaput reward-hacking volna**, ezért nem tettem.
+
+**A javítás helye:** `lib/features/live/**` onset-összevonás (a
+`StrumAnalyzer.process` út), és/vagy a küszöb + próbaszám MÉRT újraszármaztatása
+`test/property/dsp_property_test.dart:437`-ben (20 próbánál a 18-as küszöb
+grid-je durva: egyetlen extra szétesett onset alá viszi). **Mindkettő ennek a
+körnek a TILOS zónájában van** (`allowed_paths`: `ml/**`, két JSON, egy
+`test/tooling/` fájl, két doc) → §4 / **H3**.
+
+## 10.2 Router CI — a „Round brief lint gate" lépés beragad, MÁR fut rá önjavítás
+
+A `router-ci.yml` **minden** ágon, nem csak ezen, ~10 perc után megszakad
+ugyanabban a lépésben:
+
+```
+$ gh run view 33976499490 --json jobs
+job=router-ci completed/cancelled
+   step 5 Router test gate:           success
+   step 6 Router CLI smoke gate:      success
+   step 7 Round brief lint gate (open rounds): CANCELLED   (~10 perc után)
+```
+
+Ugyanez mérve az `e14-r13`, `e14-r19` és `ops/e17-parallel` ágakon is. A lépés
+parancsa (`python3 tools/brief-lint.py --open --level base`) **lokálisan
+azonnal, tisztán lefut** ezen a fán:
+
+```
+$ python3 tools/brief-lint.py --open --level base
+# Brief-lint (base) — nincs lelet          (azonnal, exit 0)
+```
+
+Erre **már fut önjavító kör**: PR [#596](https://github.com/wolfcasaba/strumsight/pull/596)
+`heal/E14-R13-H5-1` — „[HEAL E14-R13/H5] A router-suite MÉRT költség-tételeit
+szüntetjük meg, nem a job-plafont (ADR 0112 §3)", a `9632a96d` main-ről ágazva.
+A `tools/**` és a `.github/**` ennek a körnek is tilos zónája.
+
+## 10.3 Amit a folytatásnak tudnia kell
+
+- A kör-ág (`fcf04005`) **kész**: implementáció + javító kör #1 + APPROVED
+  review. Nem kell újraimplementálni, és nem kell új review.
+- A célzott kapu reviewer-oldalon **zöld** (`round-gate` exit 0, 37/37 Dart
+  cella; `pytest ml -q` 169 passed), és a CI **teljes suite-ja is zöld**
+  (10169 passed) — csak a randomizált property gate egy seedje piros, meglévő
+  DSP-kód miatt.
+- A merge-hez: (1) a 10.1 DSP/küszöb-kérdés eldöntése és javítása a `main`-en,
+  (2) a #596 heal merge-e, majd rebase erre a két javításra, (3) friss
+  exact-SHA dispatch (Full Gate + Router CI), és csak zöld után squash-merge.
