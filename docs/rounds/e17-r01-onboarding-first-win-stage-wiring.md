@@ -808,3 +808,43 @@ $ flutter test test/app/routing/shell_entry_location_test.dart
 
 Nyitott BLOCKER/MAJOR/MINOR nincs. A kör a CI-kapun (`full-gate.yml` +
 `router-ci.yml`, exact-SHA) mehet merge-re.
+
+### 11.8 3. review — a CI-lelet (BLOCKER-2) és a javító kör #2 ellenőrzése
+
+**A lelet forrása a CI, nem bemondás:** `full-gate.yml` `33994934171` (head
+`4ffac86d`) → `10219 tests passed, 1 failed`; a piros cella a
+`test/tooling/placeholder_wiring_test.dart` A4 partíció-őre volt
+(`missing from both the walk and the exclusion table:
+{lib/features/onboarding/screens/first_win_stage_screen.dart}`). A `router-ci.yml`
+ugyanazon a SHA-n zöld volt (`33994930760`).
+
+**Ez a kör SIKERÉNEK a következménye** (A1: a Stage most lett elérhető) — a
+harmadik ilyen a körben (a `e15_r13` mátrix-őr, majd a completion-report
+darabszám-cellák után). A feloldás azonban ezúttal a kör listáján BELÜL volt:
+az őr a walked halmazt a `runCoreWalkthrough`-ból veszi
+(`test/e2e/full_app_walkthrough_test.dart`, `allowed_paths`), ezért **H3 NEM
+áll fenn** — a `gate_tests` szigorítása (§0.0.2) és a walkthrough bővítése a
+helyes válasz, nem a kizárási tábla (ami a listán kívül van, és a Stage nem
+kivétel, hanem a szállított út része).
+
+**Ellenőrzés leletenként — BLOCKER-2 → ZÁRVA.**
+
+- A walk VALÓDI tapokkal megy a first-win CTA-n és a Stage-en át (nem
+  teszt-oldali híd), majd a „Not now"-val vissza az `entryLocation`-re; a
+  walk további nyolc állomása változatlanul fut.
+- A `expect(walked, {...})` pontos halmaz-elvárása 9 → 10 elem
+  (`'FirstWinStageScreen'`), tehát a bővülés kimondott, nem elnyelt.
+- `test/support/e2e_harness.dart` (nincs a listán) érintetlen — a scope tartott.
+- **Független orchestrátor-mérés (nem implementer-bemondás):**
+
+```
+$ flutter test test/tooling/placeholder_wiring_test.dart test/e2e/full_app_walkthrough_test.dart
+00:08 +13: All tests passed!
+```
+
+**A CI-piros számláló:** ez a kör folytatásának ELSŐ pirosa (a gyökérokot
+javító önjavító kör merge-e után indul újra a számlálás, ADR 0112 / H5
+pontosítás) — a következő futásnak zöldnek kell lennie.
+
+**VÉGSŐ DÖNTÉS változatlan: APPROVED**, nyitott BLOCKER/MAJOR/MINOR nincs; a
+merge-kapu a `full-gate.yml` + `router-ci.yml` exact-SHA zöldje.
