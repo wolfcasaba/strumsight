@@ -4,17 +4,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/app/strumsight_app.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/learn/public.dart';
+import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
+import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 
 import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
+
+/// A strong strum reading (ADR 0534, A2/A8-line integration coverage): the
+/// Stage's production engine (`LiveFirstWinEngine`) reads `LiveFrame
+/// .confidence` off the SAME `strumEngineProvider` this test already
+/// overrides with [FakeStrumEngine] — no separate first-win-engine override
+/// needed to drive the Stage to its success branch.
+LiveFrame _strongStrumFrame() => const LiveFrame(
+  current: null,
+  next: null,
+  latestStrum: Strum(direction: StrumDirection.down, confidence: 0.85),
+  bar: [],
+  bpm: 0,
+  inputLevel: 0.5,
+  tuningHz: 440,
+  listening: true,
+);
 
 class _DelayedBoolWriteStore implements KeyValueStore {
   _DelayedBoolWriteStore(this._delegate);
@@ -134,8 +153,25 @@ void main() {
       // targets `entryLocationFor(true)` (/today) instead of the old
       // hardcoded `AppRoutes.live`, so the settled location matches the
       // entry point instead of drifting to legacyRedirects' /practice/live
-      // target. The location and the push are asserted together: this is
-      // the "pair" A3 requires, not just one or the other.
+      // target.
+      expect(router.state.uri.path, AppRoutes.today);
+      // E17-R01 (ADR 0534 D1): the Stage now sits between the checkpoint
+      // resolving and the scored mini-lesson — pin-guard retype (brief §4):
+      // the replaced screen's TYPE is `FirstWinStageScreen`, not
+      // `LearnScreen`, but the "pair" A3 requires (location + push) is
+      // still asserted, one step later.
+      expect(find.byType(FirstWinStageScreen), findsOneWidget);
+      expect(find.byType(LearnScreen), findsNothing);
+
+      engine.emit(_strongStrumFrame());
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('onboard-first-win-continue')),
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+
       expect(router.state.uri.path, AppRoutes.today);
       final learn = tester.widget<LearnScreen>(find.byType(LearnScreen));
       expect(learn.lesson.id, Lessons.firstWin.id);

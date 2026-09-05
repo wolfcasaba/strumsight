@@ -1,10 +1,9 @@
 import 'dart:async';
 
+import '../live/public.dart';
+
 /// The first-win mini Stage's confidence source (SDD Ch13 Kör 16, brief §3/
-/// P2). Onboarding has no `AudioOwner` variant of its own yet
-/// (`lib/core/audio/**` is out of this round's allowed paths), so [start]
-/// and [stop] never touch the real microphone this round — a later round
-/// wires a production engine once an onboarding-owned audio path exists.
+/// P2).
 ///
 /// The lifecycle contract mirrors `liveFrameProvider`
 /// (`lib/features/live/providers/live_providers.dart:19-24`): [stop] is
@@ -16,6 +15,45 @@ abstract interface class OnboardingFirstWinEngine {
   void start();
 
   Future<void> stop();
+}
+
+/// The production engine (ADR 0534 D3): adapts the shared
+/// `strumEngineProvider` instance's frame stream into the Stage's
+/// per-attempt confidence stream (`LiveFrame.confidence`,
+/// `lib/features/live/model/live_frame.dart:83`). Errors on the underlying
+/// frame stream (denied permission, busy mic, motor failure) pass through
+/// unchanged — `Stream.map` forwards error events — so the Stage's
+/// `AsyncValue` sees them too (D5).
+///
+/// [start]/[stop] delegate straight to the wrapped [StrumEngine] without
+/// disposing it: the engine instance is shared with the Live feature
+/// (`strumEngineProvider` is NOT `autoDispose`), and the mini-lesson that
+/// follows the Stage restarts the SAME instance on its own mount
+/// (`learn_screen.dart` → `liveFrameProvider`) — this class only ever
+/// starts/stops it, never disposes it.
+class LiveFirstWinEngine implements OnboardingFirstWinEngine {
+  LiveFirstWinEngine(this._engine);
+
+  final StrumEngine _engine;
+  bool _started = false;
+
+  @override
+  Stream<double> get confidence =>
+      _engine.frames.map((LiveFrame frame) => frame.confidence);
+
+  @override
+  void start() {
+    if (_started) return;
+    _started = true;
+    unawaited(_engine.start());
+  }
+
+  @override
+  Future<void> stop() async {
+    if (!_started) return;
+    _started = false;
+    await _engine.stop();
+  }
 }
 
 /// The round's own fake motor (P2) — never reaches a platform channel.
