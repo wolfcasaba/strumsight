@@ -25489,3 +25489,81 @@ hívás előtt** — az felülíródik.
 saját, MÉRT head SHA-jára kérjen le exact-SHA CI-konklúziót, és a naplót
 körönként-invokációnként külön fájlba írja), ami ennek a körnek tiltott zónája;
 önjavító kör tárgya.
+## L636 — Az előre megírt brief mért alapja elmozdul alatta: az E14-R10 egy ÚJ döntési kaput írt elő arra, ami közben MERGE-ELVE landolt máshol, más értékkel — H3 a dispatch előtt (E14-R10 / H3, önjavító kör, 2026-09-05)
+
+**Forrás:** `.pipeline/halt-detail-E14-R10.md` (teljes mért diagnózis
+reprodukáló parancsokkal); a megállt kör: `E14-R10`, brief
+[`docs/rounds/e14-r10-direction-abstention-hotfix.md`](rounds/e14-r10-direction-abstention-hotfix.md);
+az ütköző szerződés: E14-R04, PR
+[#568](https://github.com/wolfcasaba/strumsight/pull/568), squash `f1fced77`,
+ADR [0505](adr/0505-versioned-recognition-frame-contract-and-legacy-adapter.md) D4.
+
+**A mérés.** Az E14-R10 briefje **2026-08-20-án, `main @ 88e08e65`-en** készült,
+és egy ÚJ irány-abstention kaput írt elő: `strum_direction_gate.dart`, margó
+**0,150**, ELFOGADÁS-oldalon inkluzív. Két héttel később, **2026-09-04-én**
+ugyanaz a döntés MERGE-ELVE landolt — más helyen, más értékkel, más
+inkluzivitással:
+
+```
+$ sed -n '53,60p' lib/features/live/domain/recognition/strum_prediction.dart
+  static const double uncertainMarginThreshold = 0.05;
+  RecognitionDecision get decision =>
+      directionMargin <= uncertainMarginThreshold   # ELUTASÍTÁS-oldalon inkluzív
+      ? RecognitionDecision.uncertain : RecognitionDecision.confirmed;
+
+$ grep -rn "StrumPrediction(\|RecognitionFrame(" lib/ --include=*.dart
+  # → csak a saját ctor + fromJson: a merge-elt szerződésnek NULLA termelője van
+```
+
+A kör tehát **második, versengő döntési helyet** épített volna ugyanarra a
+kérdésre — megsértve a saját briefje §5.4-ét („egy eseményre egy végleges
+irány"). A bekötéshez ráadásul `pDown`/`pUp` kellett volna, ami a
+`LiveCrnnStrumClassifier.classifyProbs`-ban megszületik és **eldobódik**
+(`live_crnn_classifier.dart:186-193`), a három termelő-fájl pedig mind a brief
+TILOS ZÓNÁJÁBAN volt. A kör célja így az `allowed_paths` tágítása nélkül
+teljesíthetetlen: **H3**, egy teljes orchestrátor-session árán, még a dispatch
+ELŐTT.
+
+**Miért volt néma.** A `brief-lint` S9–S14 szabályai mind a brief és a **jelen
+fa** viszonyát mérik (leltár, típus-pin, gate-parancs, létező előtagok) — egy
+önmagában konzisztens, csak ELAVULT brief mindegyiket kielégíti. A brief maga
+előírta a pre-flightot („olvasd újra … eltérésnél §0.0 revízió"), de ezt eddig
+kizárólag FEGYELEM tartotta be. Ugyanaz a hézag, amiért az S12 megszületett:
+**gépi őr kell rá, nem fegyelem.**
+
+**A javítás.** (1) A brief §0.0 revíziója: a döntés EGY helyen marad
+(`StrumPrediction.decision`, érintetlenül — a fájl szándékosan NINCS az
+`allowed_paths`-on, tehát a szétcsúszás gépileg lehetetlen), a kör valódi munkája
+a szerződés **BEKÖTÉSE** (amit az ADR 0505 D5 „a later round's job"-ként nevez
+meg), az `allowed_paths` pedig az önjavító kör hatáskörében kibővült a három
+termelő-fájllal. A küszöböt a kör **nem** változtatja: a kért coverage/accuracy
+pár a jelen fából nem olvasható ki (`baseline_manifest.json` →
+`calibration: not-measured`), tehát a `0,150` VÁLASZTOTT szám lett volna —
+pontosan az, amit a brief §5.2 tilt. (2) Két acceptance-pont KIVÉVE külön körbe,
+mert az engedélyezett fájllal az ELLENKEZŐ eredményt adták volna: a
+gyakorlás-gateway egyetlen in-scope eszköze (az observation elnyomása) a scorer
+felől nézve `wrong`/`scorePerMille: 0` — épp az a „hibás irány", amit a pont
+tiltani akart.
+
+**Az őr (`brief-lint` S15).** Egy nem-`done` brief, amely `main @ <sha>`
+alakban rögzíti a mért alapját, leletet kap, ha azóta (a) a hivatkozott fájljai
+közül bármelyik MÓDOSULT, vagy (b) a feature-gyökerei alatt ÚJ fájl landolt. Az
+E14-R10-et a **második** jel fogta volna meg: a szerződés ÚJ FÁJLKÉNT érkezett,
+nem a megnevezettek módosításaként. `strict`, `done` körre néma, és mérés
+hiányában (nincs git, sekély klón, ismeretlen SHA) is néma — a CI-kapu
+`--open --level base`, tehát sosem vált pirosra egy lezárt kört.
+
+**A korpuszon mérve** (`main @ cc936bde`): 89 leletes briefből **33** kap S15-öt
+— köztük az **E14-R11…R16**, vagyis ugyanannak a 2026-08-20-i előre-írás-hullámnak
+a többi tagja. Ezek ma mind ugyanabba a H3-ba futnának bele; mostantól a kör
+pre-flightja kapja teendőként, nem egy elégetett session.
+
+**A szabály.** Egy előre megírt brief `main @ <sha>` sora nem dekoráció, hanem a
+**lejárati ideje**. A pre-flight nem azt kérdezi, „konzisztens-e a brief", hanem
+azt, hogy **„áll-e még, amire épült"** — és ha közben egy merge-elt szerződés
+ugyanarra a döntésre megszületett, akkor a kör dolga a BEKÖTÉSE, nem egy második,
+versengő kapu.
+
+**Őrteszt:** [`tools/tests/test_brief_base_sha_drift.py`](../tools/tests/test_brief_base_sha_drift.py)
+(7 cella, fixture-alapú eldobható git-repókon — élő-fa állapotot nem olvas, ezért
+az L612 csapdájába nem eshet).
