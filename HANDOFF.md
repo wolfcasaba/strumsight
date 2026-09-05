@@ -38,6 +38,90 @@ Kapuk a `95fa6aab` merge SHA-n: `full-gate.yml` [33977845092](https://github.com
 `success`; a kombinált-HEAD célzott kapu (`tools/round-land.sh`, 7 teszt-útvonal)
 minden lépésre ZÖLD; review: `docs/reviews/e14-r13-review.md` → **APPROVED**
 (0 nyitott lelet).
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R19 / H3 feloldva: nem a küszöb volt rossz, hanem a szállított DSP adott FANTOM onsetet (2026-09-05)
+
+Az `E14-R19` KÉSZ és APPROVED volt (impl + javító kör + review, PR
+[#595](https://github.com/wolfcasaba/strumsight/pull/595)), a merge-et a
+randomizált property gate PIROSA zárta ki:
+`test/property/dsp_property_test.dart:438` „a strum must merge into ONE onset"
+— **17/20** a ≥18 küszöbbel, `PROPERTY_SEED=33975939211`. A kör orchestrátora
+helyesen mérte, hogy ugyanez a seed a kör diffje NÉLKÜL, tiszta `main`-en is
+bukik, és helyesen NEM dispatch-elt újra másik seedre.
+
+**A gyökérok nem statisztikai.** A szállított onset-detektor egyetlen, még
+kicsengő pengetésre **fantom MÁSODIK onsetet** ad ~0,63 s-mal a valódi attack
+után — az appban hamis strum-nyíl és hamis Learn-pontozás annak, aki csak
+tartja az akkordot. A property-cella mintavételi dobozában (`lowFirst` ×
+stagger 6–14 ms × kicsengés 0,5–0,9 s) az **1458 rácspontból 31 duplázott** —
+ez a ~2 % a megfigyelt seed-bukási ráta.
+
+Miért csúszott be: a r166 valós-adatos hangolás a SuperFlux `delta`-t 20 → 12-re
+vitte (Klangio recall 72 % → 90 %), és a küszöb ezzel a saját fájlja által
+dokumentált kicsengési lebegés-populáció **alá** került (mért csúcsok
+12,5–16,8). A determinisztikus pinek FIX stagger/kicsengés értékeken futnak,
+ezért zöldek maradtak — a hézag csak a randomizált dobozban nyílt ki.
+
+**A javítás: magnitúdó helyett SÁV-SZÓRÁS.** A két populáció a flux-nagyságban
+átfed, a sávszámban nem — valódi attack **64/64** sáv, kicsengési lebegés
+**11–13**. Ezért `SuperFluxOnsetDetector.minRiseBands = 16` (a sávok negyede),
+ctor-injektálható, mint a `delta`/`lambda`.
+
+| minRiseBands | valós recall@0,12 (2013 Klangio-strum) | valós precision | szintetikus duplázás |
+|---|---|---|---|
+| 0 (javítás előtt) | 89,6 % | 76,2 % | 6 |
+| 14 | 89,5 % | 76,3 % | 0 |
+| **16 (szállított)** | **89,6 %** | **76,7 %** | **0** |
+| 20 | 89,0 % | 77,4 % | 0 |
+| 24 | 87,2 % | 79,6 % | 0 |
+
+Nulla valós-recall költség, 16-tal kevesebb hamis detektálás, 2 sáv tartalék a
+legerősebb mért lebegés felett; 20 fölött a kapu MÁR eszi a lágy valós
+attackeket. A küszöb újraszármaztatása (n és a bar hangolása) csak a tünetet
+tüntette volna el, a fantom onset a felhasználónál maradt volna.
+
+**Őrteszt:** `test/features/live/dsp/superflux_ring_out_phantom_test.dart` — a
+31 MÉRT rácspont detektor- és `StrumAnalyzer`-szinten, plusz egy
+recall-ellensúly (egy „semmit nem detektál" javítás ne mehessen át) és a kapu
+mért sávjának (14–20) lekötése. Tiszta `main@4e633b80`-on PIROS, a javítással
+ZÖLD; a property gate **15 seeden** zöld (köztük a bukó `33975939211`).
+Hangolási forrás frissítve: `docs/rag/chunks/005-onset-spectral-flux.md`.
+Lecke: **L651**.
+
+### Második, a merge-lépésen ELŐKERÜLT akadály (ugyanez a heal oldotta meg)
+
+A `main`-be közben beérkezett `E14-R13` merge után a **Router CI a `main`-en
+is PIROSRA váltott**, és ez minden további merge-et zárt volna:
+`tools/tests/test_pipeline_throughput.py::IndependenceClauseTest::test_the_real_e14_band_is_not_single_threaded`
+fix **`>= 2`** indítható E14-kört követelt. MÉRVE az `origin/main@00b12485`-ön,
+saját klónban, ÜRES diffel: a 19 E14-sorból **18 `done`**, az egyetlen nyitott
+az `E14-R19` — a cella tehát a sáv **KIFUTÁSÁT** minősítette szerializációs
+defektnek (L643 osztály: az élő SORT mérő őr a sor saját, valódi állapotát
+hívja hibának).
+
+Javítás: a küszöb a nyitott körök számához kötött — **`min(2, nyitott)`** —,
+és NEM skip: egyetlen nyitott körnél is állítja, hogy annak **indíthatónak
+kell lennie** (a sor feje nem lehet blokkolt), kettő vagy több nyitottnál a
+≥2-es párhuzamossági bar változatlan. A szabály tiszta függvénybe került
+(`band_parallelism_verdict`), és **négy fixture-cella** köti le: a mért eset
+(1 nyitott / 1 indítható → rendben), a kifutás mint ürügy elzárása
+(1 nyitott / 0 indítható → továbbra is defekt), az EREDETI defekt
+(3 nyitott / 1 indítható → továbbra is piros) és a zárt sáv.
+Router-suite: **958 passed / 1 skipped**.
+
+
+**A folytatás az `E14-R19`-en kizárólag a merge-lépés** — a kör kész és
+APPROVED, a branch (`sonnet-impl/e14-r19-augmentation-and-balanced-recipe`,
+PR #595) a friss `main`-re rebase/merge után újra CI-t kap, és a property gate
+immár nem seed-szerencse kérdése.
+
+**NEM ehhez a halthoz tartozó, jelentett lelet:** a
+`test/tooling/freeze_policy_test.dart` két cellája a tiszta `main`-en is piros
+(üres diffel, saját klónban mérve) — az E12-R30 feature-freeze óta **142**
+útvonal osztályozatlan a `verify_freeze.py` szerint, mert a lánc E13 óta
+folyamatosan szállít `lib/**` kódot. CI-ban a cella a sekély klón ágán
+`exit 2`-vel elmegy, ezért a `main` zöld marad. A freeze feloldása vagy a bázis
+újra-rögzítése a release manager döntése (ADR 0489), nem egy önjavító köré.
+
 
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R13 / H5 feloldva: a `router-ci` suite 850,85 s → 289,94 s, a plafonhoz nem nyúltunk (2026-09-05)
 

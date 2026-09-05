@@ -80,3 +80,47 @@ alarms" on real takes include unlabeled real sounds (fret noise, ghosts) —
 an upper bound. Locked by the real-A/B harness: matched/labels ≥ 0.85 when
 the local dataset is present. delta/lambda are now ctor-injectable for future
 sweeps (production passes nothing). Real-device feel remains the final gate.
+
+## HEAL E14-R19 — band-spread gate: the price the r166 retune left unpaid (2026-09-05)
+
+The r166 retune above bought 18 pts of real recall by dropping delta 20 → 12,
+and that put the threshold UNDER the ring-out beating bumps this chunk's own
+"attack-relative peak gate" section describes. MEASURED on clean
+main@4e633b80, without any round diff: a SINGLE strum still sounding ~0.63 s
+after the attack fires a **phantom second onset** — a spurious strum arrow and
+a spurious Learn scoring event for a user who just holds the chord. On the
+(lowFirst × stagger 6–14 ms × ring 0.5–0.9 s) grid the randomized property gate
+draws from, **31 of 1458 points double-fire**; that ~2 % is why
+`PROPERTY_SEED=33975939211` scored 17/20 against the ≥18 bar.
+
+**Magnitude cannot fix it, spread can.** At the phantom frames:
+
+| | flux | bands that rise (of 64) |
+|---|---|---|
+| true attack | 325–483 | **64** |
+| ring-out beating peak | 12.5–16.8 | **11–13** |
+
+Flux overlaps the soft real attacks delta=12 was lowered for; band SPREAD does
+not — a pluck excites the whole spectrum at once, beating only moves energy
+between neighbouring partials. So the gate is a **band count**, not a level:
+`SuperFluxOnsetDetector.minRiseBands`.
+
+Sweep, 2 013 labeled Klangio strums (real) + the 246-point synth grid:
+
+| minRiseBands | real recall@0.12 | real precision | synth double-fires |
+|---|---|---|---|
+| 0 (pre-heal) | 89.6 % | 76.2 % | 6 |
+| 12 | 89.6 % | 76.2 % | 2 |
+| 14 | 89.5 % | 76.3 % | 0 |
+| **16 (shipped)** | **89.6 %** | **76.7 %** | **0** |
+| 20 | 89.0 % | 77.4 % | 0 |
+| 24 | 87.2 % | 79.6 % | 0 |
+| 32 | 69.4 % | 87.4 % | 0 |
+
+**16 = a quarter of the bands.** Zero real-recall cost, 16 fewer false
+detections, and 2 bands of headroom over the loudest measured beating bump
+(13). This is NOT a free knob: past 20 it starts eating soft real attacks, and
+at 64 it detects nothing at all. Ctor-injectable like delta/lambda; production
+passes nothing. Pinned by `test/features/live/dsp/superflux_ring_out_phantom_test.dart`
+(the 31 measured grid points, plus a recall counter-weight so a
+detect-nothing "fix" cannot pass). Real-device feel remains the final gate.
