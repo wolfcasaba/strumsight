@@ -460,13 +460,22 @@ zöld gépi cellával mérve; a §7 két kapuja külön, csővezeték nélkül f
     (D8).
   - `PITCH_SHIFT_LIMITS`, `validate_manifest`, `build_manifest` — a
     manifest-szerződés (D5/D6/D8/D10) Python-oldali forrása és őre.
-- **`ml/augmentation_manifest.json`** — a `build_manifest`-tel TÉNYLEGESEN
-  generált (nem kézzel írt JSON-dict) manifest; a 11 transzformáció-sor
-  közül 10 `candidate` (nem mért), a `composite_recipe_r173` `rejected`
-  (mért, romló LOGO-delták). Egy Python-cella
-  (`test_the_shipped_ml_augmentation_manifest_json_validates_cleanly`)
-  betölti és validálja — a fájl NEM kerülhet ki szinkronból a
-  validátortól.
+- **`ml/augmentation_manifest.json`** — **javítás (Javító kör #1, MAJOR-2
+  helyesbítés):** az eredeti §10 itt azt állította, hogy a fájl a
+  `build_manifest`-tel „TÉNYLEGESEN generált (nem kézzel írt JSON-dict)"
+  — ez TÚLZÁS volt: a diffben nincs generáló szkript vagy a fájlt előállító
+  cella, csak a betöltő-validáló `test_the_shipped_ml_augmentation_manifest_json_validates_cleanly`.
+  A helyes állítás: a fájl kézzel szerkesztett JSON, amit a
+  `validate_manifest` (a `build_manifest` ÁLTAL IS meghívott ugyanaz a
+  validátor) ellenőriz gépi cellával; a `build_manifest` maga csak az
+  ÖSSZERAKÁS szerződését (a top-level kulcsok alakját, most már a
+  `provenance` blokkal együtt) bizonyítja `test_build_manifest_requires_provenance`
+  révén, nem magát a fájlt regenerálva. 11 transzformáció-sor közül 10
+  `candidate` (nem mért), a `composite_recipe_r173` `rejected` (mért, romló
+  LOGO-delták, `enabled: false`). A fájl a CI-oldali Dart-fixture
+  bájtazonos párja — ezt most gépi cella pinneli mindkét oldalon
+  (`test_shipped_manifest_matches_the_dart_guard_ci_fixture_byte_for_byte`
+  Python, A11 csoport Dart, lásd lent MAJOR-1).
 - **`ml/test_augmentation_labels.py`** — 42 cella: címke-transzponálás
   mátrix + N.C.-invariancia + típusos hibák (1. pont), ±6 inkluzív határ
   (2. pont), seed-determinizmus a SZÁLLÍTOTT komponáló belépési pontokon
@@ -598,5 +607,136 @@ Mindkettő külön, csővezeték nélküli parancsként futott (L05/L09).
   legkisebb és legnagyobb osztály aránya tetszőlegesen nagy lehet); ha egy
   jövőbeli adatkészletben ez a torzítás extrém, egy felső korlát (pl.
   max 5×-ös felszorzás) hozzáadása E14-R20 döntése.
+
+## 10.1 Javító kör #1 (`docs/reviews/e14-r19-review.md`, CHANGES REQUESTED)
+
+A független review 2 MAJOR + 2 MINOR + 1 NOTE leletet talált. A NOTE
+(scope-audit hook-ütközés) a review saját protokoll-megjegyzése, nem
+production-lelet — nincs hozzá implementer-oldali javítás. A négy érdemi
+lelet, fájlonként és a mérő cellával:
+
+### MAJOR-1 — a szállított manifestet a CI-ban semmi nem védte
+
+**Javítás:** két új, egymást tükröző cella pinneli a két fájlt egymáshoz.
+- `ml/test_augmentation_labels.py::test_shipped_manifest_matches_the_dart_guard_ci_fixture_byte_for_byte` —
+  betölti mindkét fájlt (`ml/augmentation_manifest.json` és
+  `evaluation/recognition/fixtures/augmentation_manifest_sample.json`) és
+  dict-egyenlőséget követel.
+- `test/tooling/augmentation_manifest_test.dart` A11 csoport — ugyanez
+  Dart oldalon (`_findProjectRoot()` mindkét fájlt eléri, `expect(shipped,
+  equals(fixture))` mély egyenlőséget mér).
+
+**Melyik cella fogta volna PIROSRA:** a review saját P1a/P1b próbája
+(`composite_recipe_r173.enabled` csak a szállított manifestben `true`-ra
+állítva, a fixture érintetlenül) most MINDKÉT oldalon PIROS — korábban a
+Dart-őr (a CI-oldali egyetlen mérce) zölden átengedte.
+
+**Mutáció → PIROS → visszaállítás → ZÖLD (mérve, ebben a körben):**
+```
+$ python3 -c "... device_response.enabled = True in ml/augmentation_manifest.json only ..."
+$ flutter test test/tooling/augmentation_manifest_test.dart --plain-name "A11"
+  A11 … ml/augmentation_manifest.json equals the CI fixture, normalized JSON-for-JSON [E]
+    Which: at location ['transforms'][4]['enabled'] is <true> instead of <false>
+$ <restore> && flutter test test/tooling/augmentation_manifest_test.dart
+  00:00 +37: All tests passed!
+```
+
+### MAJOR-2 — a manifest nem egy ténylegesen futott halmazt írt le
+
+**Javítás, a review 4 alpontja szerint:**
+1. **Provenance-blokk, kötelező mezőként.** `ml/augment.py::validate_manifest`
+   és a Dart `_validateProvenance` most megköveteli a `provenance.
+   generatedFrom`/`datasetSource`/`classRatiosSource` nem-üres string
+   mezőket; a `build_manifest` szignatúrája bővült egy kötelező
+   `provenance` paraméterrel. A manifest `classRatiosSource` mezője
+   kimondottan `"illustrative — not measured"`.
+2. **Az `enabled` mezők igazítva a szállított `DEFAULT_TRANSFORM_CONFIG`-hoz:**
+   `device_response`/`compression`/`traffic_ambient_noise`/`transient_burst`
+   most `enabled: false` (a config ezeket kikapcsolva szállítja). Új gépi
+   cella (`test_shipped_manifest_enabled_flags_mirror_default_transform_config`
+   Python, A12 csoport Dart) mindkét oldalon MEGAKADÁLYOZZA a jövőbeli
+   visszacsúszást.
+3. **Új szabály: `status == "rejected"` mellett `enabled` nem lehet `true`**
+   — mindkét validátorban (`ml/augment.py::validate_manifest`,
+   `test/tooling/augmentation_manifest_test.dart` A9 csoport). A
+   `composite_recipe_r173` sor emiatt `enabled: false`.
+4. **A `docs/eval/augmentation-ablation.md`** most kimondja, hogy a
+   `classRatios` táblázat számai illusztratívak, nem mértek, és hogy a
+   `measuredCostSeconds`/`costBasisSeconds` megkülönböztetés miért létezik
+   (lásd MINOR-1). A §10 e dokumentumban javítva: a „TÉNYLEGESEN generált"
+   túlzó állítás helyesbítve (lásd a `ml/augmentation_manifest.json`
+   bekezdést fent).
+
+**Melyik cella fogta volna PIROSRA (mérve, ebben a körben):**
+```
+$ python3 -c "... composite_recipe_r173.status = 'accepted' in ml/augmentation_manifest.json ..."
+$ python3 -m pytest ml/test_augmentation_labels.py -k shipped_ml_augmentation_manifest_json_validates_cleanly -q
+FAILED … ValueError: transforms[10].name='composite_recipe_r173' status='accepted' requires at least one improving split …
+$ <restore> && python3 -m pytest ml -q
+  169 passed
+```
+```
+$ # rejected+enabled=true mutáció (a Dart validátorban, ideiglenesen kikapcsolva az `if`-ág)
+$ flutter test test/tooling/augmentation_manifest_test.dart --plain-name "A9"
+  … status "rejected" with enabled: true is rejected [E]
+    Expected: false
+      Actual: <true>
+$ <visszaállítás> && flutter test test/tooling/augmentation_manifest_test.dart
+  00:00 +37: All tests passed!
+```
+
+### MINOR-1 — `measuredCostSeconds` minden „nem mért" soron ugyanaz volt
+
+**Javítás:** a mezőnév kettévált. A 10 „nem mért" sor most `costBasisSeconds`
+(10 769,7, változatlan szám) + `costBasisSource` (string, kimondja: ez egy
+REPREZENTATÍV alap, nem per-transzformációs mérés) mezőpárt hordoz; a
+`measuredCostSeconds` mezőnév KIZÁRÓLAG a ténylegesen mért
+`composite_recipe_r173` soron maradt. Mindkét validátor (Python: feltételes
+ág `measured == "nem mért"` vs. `isinstance(measured, dict)` szerint; Dart:
+ugyanaz a feltételes ág) megköveteli a megfelelő mezőpárt a `measured` mező
+típusa szerint. `docs/eval/augmentation-ablation.md` kimondja a
+megkülönböztetést.
+
+**Melyik cella fogta volna PIROSRA:**
+`test_missing_cost_basis_seconds_on_a_not_measured_row_is_a_typed_error` /
+`test_missing_cost_basis_source_on_a_not_measured_row_is_a_typed_error`
+(Python), A3 csoport két új cellája + a measuredCostSeconds-on-a-measured-row
+cella (Dart) — mindegyik PIROS, ha a megfelelő mező hiányzik.
+
+### MINOR-2 — csendes csonkítás a konfigurált félhang-tartományon
+
+**Javítás:** `ml/augment.py::_whole_semitone_range` — ugyanaz a fail-closed
+mintázat, mint `_validate_whole_semitone`-nál: egész szám vagy egész értékű
+float átmegy, minden más (pl. `6.5`) `TypeError`. Az
+`augment_pcm_with_chord_labels` most ezt hívja `int(...)` helyett.
+
+**Mutáció → PIROS → visszaállítás → ZÖLD (mérve):**
+```
+$ python3 -m pytest ml/test_augmentation_labels.py -k fractional_configured_semitone_range -q
+  1 passed   # a javítással már ZÖLD; ideiglenesen visszaállítva `int(...)`-ra:
+$ # `semitone_range = int(cfg["pitch_shift"]["semitone_range"])` (visszaállítva)
+$ python3 -m pytest ml/test_augmentation_labels.py -k fractional_configured_semitone_range -q
+FAILED … Failed: DID NOT RAISE <class 'TypeError'>
+$ <visszaállítva a javításra> && python3 -m pytest ml -q
+  169 passed
+```
+
+### A két kapu tényleges kimenete (javító kör #1, ezen a diffen)
+
+```
+tools/round-gate.sh test/tooling/augmentation_manifest_test.dart
+→ format zöld · analyze zöld · test (37/37) zöld · architecture zöld ·
+  secrets zöld · l10n zöld — MINDEN GATE ZÖLD
+```
+
+```
+python3 -m pytest ml -q
+→ 169 passed in 20.73s   (157 korábbi + 12 új: MAJOR-1/-2/MINOR-1/-2 cellák)
+```
+
+Mindkettő külön, csővezeték nélküli parancsként futott (L05/L09). A
+`ml/augmentation_manifest.json` és a
+`evaluation/recognition/fixtures/augmentation_manifest_sample.json` a javító
+kör után is bájtazonosak (`diff` üres kimenetet ad).
 
 ## 11. Review — a Claude tölti ki

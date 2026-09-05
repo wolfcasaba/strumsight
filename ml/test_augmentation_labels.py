@@ -203,16 +203,23 @@ def test_only_pitch_shift_enabled_still_moves_the_signal():
 # ---------------------------------------------------------------------------
 
 def _valid_transform(name="pitch_shift_label_transpose", status="candidate",
-                     measured="nem mért", cost=10769.7):
-    return {
+                     measured="nem mért", cost=10769.7, enabled=True):
+    transform = {
         "name": name,
-        "enabled": True,
+        "enabled": enabled,
         "params": {"semitoneRangeMax": 6},
         "status": status,
         "measured": measured,
         "reproCommand": "python3 ml/honest_eval.py logo <transform>_only",
-        "measuredCostSeconds": cost,
     }
+    if measured == A._NOT_MEASURED:
+        transform["costBasisSeconds"] = cost
+        transform["costBasisSource"] = (
+            "ml/honest_results.json r173 _timing (gitignored, box-local) — a "
+            "representative basis, not a per-transform measured cost")
+    else:
+        transform["measuredCostSeconds"] = cost
+    return transform
 
 
 def _valid_manifest(**overrides):
@@ -232,6 +239,11 @@ def _valid_manifest(**overrides):
         },
         "pitchShiftLimits": dict(A.PITCH_SHIFT_LIMITS),
         "balancing": {"method": "resample_with_replacement", "dropsRealData": False},
+        "provenance": {
+            "generatedFrom": "unit-test fixture, not a real run",
+            "datasetSource": "unit-test fixture, not a real dataset",
+            "classRatiosSource": "illustrative — not measured (unit-test fixture)",
+        },
     }
     manifest.update(overrides)
     return manifest
@@ -294,6 +306,7 @@ def test_not_measured_row_with_accepted_status_is_rejected():
 def test_not_measured_row_with_candidate_or_rejected_status_is_fine():
     manifest = _valid_manifest()
     manifest["transforms"][0]["status"] = "rejected"
+    manifest["transforms"][0]["enabled"] = False
     manifest["transforms"][0]["measured"] = "nem mért"
     A.validate_manifest(manifest)  # no raise
 
@@ -301,6 +314,7 @@ def test_not_measured_row_with_candidate_or_rejected_status_is_fine():
 def test_measured_row_claiming_accepted_without_improvement_is_rejected():
     manifest = _valid_manifest()
     manifest["transforms"][0]["status"] = "accepted"
+    manifest["transforms"][0]["measuredCostSeconds"] = 10769.7
     manifest["transforms"][0]["measured"] = {
         "unseenPlayerSplits": [
             {"split": "logoBatch", "baseline": 0.7066, "baselineStdDev": 0.0165,
@@ -314,6 +328,8 @@ def test_measured_row_claiming_accepted_without_improvement_is_rejected():
 def test_measured_row_with_clean_improvement_cannot_be_rejected():
     manifest = _valid_manifest()
     manifest["transforms"][0]["status"] = "rejected"
+    manifest["transforms"][0]["enabled"] = False
+    manifest["transforms"][0]["measuredCostSeconds"] = 10769.7
     manifest["transforms"][0]["measured"] = {
         "unseenPlayerSplits": [
             {"split": "logoBatch", "baseline": 0.60, "baselineStdDev": 0.01,
@@ -327,6 +343,7 @@ def test_measured_row_with_clean_improvement_cannot_be_rejected():
 def test_measured_row_with_clean_improvement_can_be_accepted():
     manifest = _valid_manifest()
     manifest["transforms"][0]["status"] = "accepted"
+    manifest["transforms"][0]["measuredCostSeconds"] = 10769.7
     manifest["transforms"][0]["measured"] = {
         "unseenPlayerSplits": [
             {"split": "logoBatch", "baseline": 0.60, "baselineStdDev": 0.01,
@@ -339,6 +356,8 @@ def test_measured_row_with_clean_improvement_can_be_accepted():
 def test_inconsistent_delta_is_rejected():
     manifest = _valid_manifest()
     manifest["transforms"][0]["status"] = "rejected"
+    manifest["transforms"][0]["enabled"] = False
+    manifest["transforms"][0]["measuredCostSeconds"] = 10769.7
     manifest["transforms"][0]["measured"] = {
         "unseenPlayerSplits": [
             {"split": "logoBatch", "baseline": 0.60, "baselineStdDev": 0.01,
@@ -347,6 +366,54 @@ def test_inconsistent_delta_is_rejected():
     }
     with pytest.raises(ValueError):
         A.validate_manifest(manifest)
+
+
+def test_status_rejected_with_enabled_true_is_rejected():
+    # MAJOR-2 (review E14-R19): a measured-regressing row cannot claim to be
+    # a member of the actually-running set.
+    manifest = _valid_manifest()
+    manifest["transforms"][0]["status"] = "rejected"
+    manifest["transforms"][0]["enabled"] = True
+    manifest["transforms"][0]["measured"] = "nem mért"
+    with pytest.raises(ValueError):
+        A.validate_manifest(manifest)
+
+
+def test_missing_cost_basis_seconds_on_a_not_measured_row_is_a_typed_error():
+    manifest = _valid_manifest()
+    del manifest["transforms"][0]["costBasisSeconds"]
+    with pytest.raises(TypeError):
+        A.validate_manifest(manifest)
+
+
+def test_missing_cost_basis_source_on_a_not_measured_row_is_a_typed_error():
+    manifest = _valid_manifest()
+    del manifest["transforms"][0]["costBasisSource"]
+    with pytest.raises(TypeError):
+        A.validate_manifest(manifest)
+
+
+def test_fractional_configured_semitone_range_is_a_typed_error_not_silently_truncated():
+    # MINOR-2 (review E14-R19): `int(cfg["pitch_shift"]["semitone_range"])`
+    # used to silently truncate a fractional configured range (e.g. 6.5 -> 6).
+    pcm = _tone()
+    onsets = np.array([0.2, 0.6])
+    classes = np.array([1, 5])
+    cfg = copy.deepcopy(A.DEFAULT_TRANSFORM_CONFIG)
+    cfg["pitch_shift"] = {"enabled": True, "semitone_range": 6.5}
+    with pytest.raises(TypeError):
+        A.augment_pcm_with_chord_labels(
+            pcm, onsets.copy(), classes.copy(), np.random.default_rng(1), config=cfg)
+
+
+def test_whole_configured_semitone_range_still_works():
+    pcm = _tone()
+    onsets = np.array([0.2, 0.6])
+    classes = np.array([1, 5])
+    cfg = copy.deepcopy(A.DEFAULT_TRANSFORM_CONFIG)
+    cfg["pitch_shift"] = {"enabled": True, "semitone_range": 6.0}
+    A.augment_pcm_with_chord_labels(
+        pcm, onsets.copy(), classes.copy(), np.random.default_rng(1), config=cfg)  # no raise
 
 
 def test_dropping_real_data_during_balancing_is_rejected():
@@ -363,6 +430,53 @@ def test_pitch_shift_limits_must_carry_the_two_distinct_literal_bounds():
         A.validate_manifest(manifest)
 
 
+# ---------------------------------------------------------------------------
+# Provenance (review E14-R19 MAJOR-2): the manifest must say WHICH run/config
+# it describes, and must not be silent about an illustrative classRatios.
+# ---------------------------------------------------------------------------
+
+def test_missing_provenance_block_is_a_typed_error():
+    manifest = _valid_manifest()
+    del manifest["provenance"]
+    with pytest.raises(TypeError):
+        A.validate_manifest(manifest)
+
+
+def test_missing_generated_from_is_a_typed_error():
+    manifest = _valid_manifest()
+    del manifest["provenance"]["generatedFrom"]
+    with pytest.raises(TypeError):
+        A.validate_manifest(manifest)
+
+
+def test_missing_class_ratios_source_is_a_typed_error():
+    manifest = _valid_manifest()
+    del manifest["provenance"]["classRatiosSource"]
+    with pytest.raises(TypeError):
+        A.validate_manifest(manifest)
+
+
+def test_empty_dataset_source_is_a_typed_error():
+    manifest = _valid_manifest()
+    manifest["provenance"]["datasetSource"] = ""
+    with pytest.raises(TypeError):
+        A.validate_manifest(manifest)
+
+
+def test_build_manifest_requires_provenance():
+    with pytest.raises(TypeError):
+        A.build_manifest(
+            seed=42, transforms=[_valid_transform()],
+            direction_ratios={"baseline": {"a": 1.0}, "balanced": {"a": 1.0}},
+            chord_ratios={"baseline": {"a": 1.0}, "balanced": {"a": 1.0}},
+            provenance={"generatedFrom": "x"})  # missing datasetSource/classRatiosSource
+
+
+# ---------------------------------------------------------------------------
+# The shipped manifest (round brief AC7) and its CI-side twin (review
+# E14-R19 MAJOR-1: nothing else pins these two files to each other)
+# ---------------------------------------------------------------------------
+
 def test_the_shipped_ml_augmentation_manifest_json_validates_cleanly():
     import json
     import pathlib
@@ -373,6 +487,52 @@ def test_the_shipped_ml_augmentation_manifest_json_validates_cleanly():
     composite = next(
         t for t in manifest["transforms"] if t["name"] == "composite_recipe_r173")
     assert composite["status"] == "rejected"  # round brief AC7
+    assert composite["enabled"] is False  # ADR 0525 D6/D9, review MAJOR-2
+
+
+def test_shipped_manifest_matches_the_dart_guard_ci_fixture_byte_for_byte():
+    # MAJOR-1 (review E14-R19): the CI-side Dart guard only ever reads the
+    # fixture copy, never the real ml/augmentation_manifest.json — nothing
+    # else pins the two together. This cell (and its Dart-side twin in
+    # test/tooling/augmentation_manifest_test.dart) is that pin.
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).parent.parent
+    manifest = json.loads((root / "ml" / "augmentation_manifest.json").read_text())
+    fixture = json.loads((root / "evaluation" / "recognition" / "fixtures"
+                          / "augmentation_manifest_sample.json").read_text())
+    assert manifest == fixture, (
+        "ml/augmentation_manifest.json and the CI-side Dart-guard fixture "
+        "have drifted apart")
+
+
+_MANIFEST_NAME_TO_CONFIG_KEY = {
+    "pitch_shift_continuous": "pitch_shift",
+    "pitch_shift_label_transpose": "pitch_shift",
+    "room_ir_reverb": "reverb",
+    "gain": "gain",
+    "device_response": "device_response",
+    "mic_sim": "mic_sim",
+    "compression": "compression",
+    "additive_snr_noise": "add_noise",
+    "traffic_ambient_noise": "traffic_noise",
+    "transient_burst": "transient_burst",
+}
+
+
+def test_shipped_manifest_enabled_flags_mirror_default_transform_config():
+    # MAJOR-2 (review E14-R19): the manifest must describe the shipped
+    # baseline config, not an arbitrary all-on recipe.
+    import json
+    import pathlib
+    manifest_path = pathlib.Path(__file__).parent / "augmentation_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    by_name = {t["name"]: t for t in manifest["transforms"]}
+    for name, config_key in _MANIFEST_NAME_TO_CONFIG_KEY.items():
+        expected = A.DEFAULT_TRANSFORM_CONFIG[config_key]["enabled"]
+        assert by_name[name]["enabled"] == expected, (
+            f"{name}.enabled={by_name[name]['enabled']!r} does not match "
+            f"DEFAULT_TRANSFORM_CONFIG[{config_key!r}]['enabled']={expected!r}")
 
 
 # ---------------------------------------------------------------------------

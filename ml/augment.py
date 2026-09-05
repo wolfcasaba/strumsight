@@ -274,6 +274,25 @@ def random_label_transposing_shift(pcm, onsets_s, chord_classes, rng,
                                           semitone_range=semitone_range)
 
 
+def _whole_semitone_range(value):
+    """Validate a CONFIGURED label-transpose range (not a drawn shift, see
+    `_validate_whole_semitone` for that). A fractional range (e.g. `6.5`)
+    must never be silently truncated by `int()` — that is the same
+    reward-hacking-adjacent silent-rounding class D2 forbids for individual
+    shifts (review E14-R19 MINOR-2)."""
+    if isinstance(value, bool):
+        raise TypeError(f"pitch_shift.semitone_range must be a whole number, got bool {value!r}")
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)) and float(value).is_integer():
+        return int(value)
+    raise TypeError(
+        f"pitch_shift.semitone_range must be a whole number for the "
+        f"label-transposing path — got {value!r} (a fractional configured "
+        f"range would silently truncate via int(), ADR 0525 D2)"
+    )
+
+
 # --- The missing transforms named in the round brief §1 --------------------
 
 #: A small table of canonical device frequency-response curves, distinct from
@@ -457,7 +476,7 @@ def augment_pcm_with_chord_labels(pcm, onsets_s, chord_classes, rng, config=None
     out = pcm
 
     if cfg["pitch_shift"]["enabled"]:
-        semitone_range = int(cfg["pitch_shift"]["semitone_range"])
+        semitone_range = _whole_semitone_range(cfg["pitch_shift"]["semitone_range"])
         out, onsets, classes = random_label_transposing_shift(
             out, onsets, classes, rng, semitone_range=semitone_range)
 
@@ -507,8 +526,8 @@ def class_ratios(labels):
 
 _REQUIRED_TRANSFORM_FIELDS = {
     "name", "enabled", "params", "status", "measured", "reproCommand",
-    "measuredCostSeconds",
 }
+_REQUIRED_PROVENANCE_FIELDS = {"generatedFrom", "datasetSource", "classRatiosSource"}
 _VALID_STATUSES = {"accepted", "candidate", "rejected"}
 _NOT_MEASURED = "nem mért"
 
@@ -553,8 +572,13 @@ def validate_manifest(manifest):
     silently ignore, fail-closed) on: a missing required field, an unknown
     `status`, a numeric `0` standing in for a missing measurement, an
     `"accepted"` status paired with `measured == "nem mért"`, an `"accepted"`
-    status whose measured splits do not actually show an improvement, or
-    `balancing.dropsRealData` not being `False`.
+    status whose measured splits do not actually show an improvement,
+    a `"rejected"` status paired with `enabled == True` (a measured-regressing
+    row cannot be a member of the "actually running" set, review E14-R19
+    MAJOR-2), a missing/incomplete `provenance` block (MAJOR-2 — the manifest
+    must say WHICH run/config it describes, and must not be silent about an
+    illustrative, unmeasured `classRatios`), or `balancing.dropsRealData` not
+    being `False`.
     """
     if not isinstance(manifest, dict):
         raise TypeError("manifest must be an object")
@@ -588,6 +612,18 @@ def validate_manifest(manifest):
                 f"transforms[{i}].name={t['name']!r}.status must be one of "
                 f"{sorted(_VALID_STATUSES)}, got {status!r}")
 
+        if not isinstance(t["reproCommand"], str) or not t["reproCommand"]:
+            raise TypeError(
+                f"transforms[{i}].name={t['name']!r}.reproCommand must be a "
+                f"non-empty string")
+
+        if status == "rejected" and t["enabled"] is True:
+            raise ValueError(
+                f"transforms[{i}].name={t['name']!r} status='rejected' but "
+                f"enabled=True — a measured-regressing row cannot be a "
+                f"member of the actually-running set (ADR 0525 D6/D9, "
+                f"review E14-R19 MAJOR-2)")
+
         measured = t["measured"]
         if isinstance(measured, (int, float)) and not isinstance(measured, bool):
             raise TypeError(
@@ -596,24 +632,32 @@ def validate_manifest(manifest):
                 f"{_NOT_MEASURED!r}, never numeric 0, ADR 0525 D6) — got "
                 f"{measured!r}")
 
-        cost = t["measuredCostSeconds"]
-        if not isinstance(cost, (int, float)) or isinstance(cost, bool):
-            raise TypeError(
-                f"transforms[{i}].name={t['name']!r}.measuredCostSeconds must "
-                f"be a number (ADR 0525 D6: a 'nem mért' row still carries its "
-                f"measured cost)")
-        if not isinstance(t["reproCommand"], str) or not t["reproCommand"]:
-            raise TypeError(
-                f"transforms[{i}].name={t['name']!r}.reproCommand must be a "
-                f"non-empty string")
-
         if measured == _NOT_MEASURED:
+            cost_basis = t.get("costBasisSeconds")
+            if not isinstance(cost_basis, (int, float)) or isinstance(cost_basis, bool):
+                raise TypeError(
+                    f"transforms[{i}].name={t['name']!r}.costBasisSeconds must "
+                    f"be a number (ADR 0525 D6: a 'nem mért' row still carries "
+                    f"a cost basis — this is a REPRESENTATIVE basis, not a "
+                    f"per-transform measured cost, review E14-R19 MINOR-1)")
+            if (not isinstance(t.get("costBasisSource"), str)
+                    or not t["costBasisSource"]):
+                raise TypeError(
+                    f"transforms[{i}].name={t['name']!r}.costBasisSource must "
+                    f"be a non-empty string naming where the cost basis comes "
+                    f"from (review E14-R19 MINOR-1)")
             if status == "accepted":
                 raise ValueError(
                     f"transforms[{i}].name={t['name']!r} status='accepted' "
                     f"but measured=={_NOT_MEASURED!r} — ADR 0525 D6 forbids "
                     f"accepting an unmeasured transform")
         elif isinstance(measured, dict):
+            cost = t.get("measuredCostSeconds")
+            if not isinstance(cost, (int, float)) or isinstance(cost, bool):
+                raise TypeError(
+                    f"transforms[{i}].name={t['name']!r}.measuredCostSeconds "
+                    f"must be a number for an actually-measured row (review "
+                    f"E14-R19 MINOR-1)")
             splits = _splits_of(measured)
             if not splits:
                 raise TypeError(
@@ -680,13 +724,31 @@ def validate_manifest(manifest):
     if not isinstance(balancing.get("method"), str) or not balancing["method"]:
         raise TypeError("manifest.balancing.method must be a non-empty string")
 
+    provenance = manifest.get("provenance")
+    if not isinstance(provenance, dict):
+        raise TypeError(
+            "manifest missing required field: provenance (review E14-R19 "
+            "MAJOR-2 — the manifest must say WHICH run/config it describes)")
+    missing_provenance = _REQUIRED_PROVENANCE_FIELDS - set(provenance)
+    if missing_provenance:
+        raise TypeError(
+            f"manifest.provenance missing required field(s): "
+            f"{sorted(missing_provenance)}")
+    for field in _REQUIRED_PROVENANCE_FIELDS:
+        if not isinstance(provenance[field], str) or not provenance[field]:
+            raise TypeError(f"manifest.provenance.{field} must be a non-empty string")
 
-def build_manifest(seed, transforms, direction_ratios, chord_ratios,
+
+def build_manifest(seed, transforms, direction_ratios, chord_ratios, provenance,
                    balancing_method="resample_with_replacement"):
     """Assemble + validate a manifest dict from already-computed pieces
     (ADR 0525 D5). `direction_ratios`/`chord_ratios` are each
-    `{"baseline": {...}, "balanced": {...}}`. Raises on any contract
-    violation (see `validate_manifest`) — never returns an invalid manifest."""
+    `{"baseline": {...}, "balanced": {...}}`. `provenance` must carry
+    `generatedFrom`/`datasetSource`/`classRatiosSource` (review E14-R19
+    MAJOR-2 — never leave a reader to guess which run/config a manifest
+    describes, or whether its class ratios are measured or illustrative).
+    Raises on any contract violation (see `validate_manifest`) — never
+    returns an invalid manifest."""
     manifest = {
         "schemaVersion": "1.0",
         "seed": int(seed),
@@ -694,6 +756,7 @@ def build_manifest(seed, transforms, direction_ratios, chord_ratios,
         "classRatios": {"direction": direction_ratios, "chord": chord_ratios},
         "pitchShiftLimits": dict(PITCH_SHIFT_LIMITS),
         "balancing": {"method": balancing_method, "dropsRealData": False},
+        "provenance": dict(provenance),
     }
     validate_manifest(manifest)
     return manifest

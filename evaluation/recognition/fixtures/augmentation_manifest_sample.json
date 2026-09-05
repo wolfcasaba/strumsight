@@ -13,7 +13,8 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_pitch_shift_continuous_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "pitch_shift_label_transpose",
@@ -26,7 +27,8 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_pitch_shift_label_transpose_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "room_ir_reverb",
@@ -45,7 +47,8 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_room_ir_reverb_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "gain",
@@ -59,11 +62,12 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_gain_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "device_response",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "profiles": [
           "phone_a",
@@ -74,7 +78,8 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_device_response_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "mic_sim",
@@ -97,11 +102,12 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_mic_sim_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "compression",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "thresholdDbRange": [
           -24.0,
@@ -115,7 +121,8 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_compression_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "additive_snr_noise",
@@ -131,11 +138,12 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_additive_snr_noise_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "traffic_ambient_noise",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "prob": 0.5,
         "snrDbRange": [
@@ -147,11 +155,12 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_traffic_ambient_noise_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "transient_burst",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "nBursts": 2,
         "durSeconds": 0.015,
@@ -163,11 +172,12 @@
       "status": "candidate",
       "measured": "nem mért",
       "reproCommand": "python3 ml/honest_eval.py logo logo_transient_burst_only  # leave-one-transform-out section NOT YET IMPLEMENTED (round brief R5)",
-      "measuredCostSeconds": 10769.7
+      "costBasisSeconds": 10769.7,
+      "costBasisSource": "ml/honest_results.json r173 _timing (gitignored, box-local) — the only measured cost data point this round has, cited as a representative order-of-magnitude basis, NOT a per-transform measured cost (review E14-R19 MINOR-1)"
     },
     {
       "name": "composite_recipe_r173",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "domain": "training_recipe_composite",
         "pitchSemitoneRangeMax": 6,
@@ -239,5 +249,10 @@
   "balancing": {
     "method": "resample_with_replacement",
     "dropsRealData": false
+  },
+  "provenance": {
+    "generatedFrom": "ml.augment.DEFAULT_TRANSFORM_CONFIG baseline (ml/augment.py) — the enabled/disabled switch on each transform row below mirrors that shipped config (pitch_shift/reverb/mic_sim/gain/add_noise on; device_response/compression/traffic_noise/transient_burst off), not an arbitrary all-on recipe; composite_recipe_r173 is enabled=false because its measured status is rejected (ADR 0525 D6/D9)",
+    "datasetSource": "Klangio GST-MM corpus, LOGO (leave-one-guitarist-out) unseen-player split — ml/honest_eval.py::section_logo_aug",
+    "classRatiosSource": "illustrative — not measured (review E14-R19 MAJOR-2): no repo-local class-count run backs these numbers; ml.augment.class_ratios() computes real ratios from actual label arrays but was not run against a dataset to produce this manifest"
   }
 }

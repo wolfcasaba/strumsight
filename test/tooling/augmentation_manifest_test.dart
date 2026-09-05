@@ -130,10 +130,36 @@ void main() {
       expect(report.isClean, isFalse);
     });
 
-    test('a missing measuredCostSeconds is rejected — even a "nem mert" row '
-        'carries its measured cost (ADR 0525 D6)', () {
+    test(
+      'a missing costBasisSeconds is rejected — even a "nem mert" row '
+      'carries a representative cost basis (ADR 0525 D6, review MINOR-1)',
+      () {
+        final doc = _fixture();
+        _firstTransform(doc).remove('costBasisSeconds');
+        final report = validateAugmentationManifest(
+          documentJsonText: jsonEncode(doc),
+        );
+        expect(report.isClean, isFalse);
+      },
+    );
+
+    test('a missing costBasisSource is rejected', () {
       final doc = _fixture();
-      _firstTransform(doc).remove('measuredCostSeconds');
+      _firstTransform(doc).remove('costBasisSource');
+      final report = validateAugmentationManifest(
+        documentJsonText: jsonEncode(doc),
+      );
+      expect(report.isClean, isFalse);
+    });
+
+    test('a missing measuredCostSeconds is rejected on an actually-measured '
+        'row (review MINOR-1: the field name now implies a REAL per-'
+        'transform measurement, so only a measured row may carry it)', () {
+      final doc = _fixture();
+      _transformNamed(
+        doc,
+        'composite_recipe_r173',
+      ).remove('measuredCostSeconds');
       final report = validateAugmentationManifest(
         documentJsonText: jsonEncode(doc),
       );
@@ -184,10 +210,134 @@ void main() {
       final transform = _firstTransform(doc);
       transform['measured'] = 'nem mért';
       transform['status'] = 'rejected';
+      transform['enabled'] = false;
       final report = validateAugmentationManifest(
         documentJsonText: jsonEncode(doc),
       );
       expect(report.isClean, isTrue, reason: report.formatIssues());
+    });
+  });
+
+  group('A9 — a "rejected" transform cannot be enabled (review E14-R19 '
+      'MAJOR-2): a measured-regressing row cannot claim to be a member of '
+      'the actually-running set', () {
+    test('status "rejected" with enabled: true is rejected', () {
+      final doc = _fixture();
+      final composite = _transformNamed(doc, 'composite_recipe_r173');
+      composite['enabled'] = true;
+      final report = validateAugmentationManifest(
+        documentJsonText: jsonEncode(doc),
+      );
+      expect(report.isClean, isFalse);
+      expect(report.formatIssues(), contains('enabled'));
+    });
+
+    test('status "rejected" with enabled: false is fine (the shipped fixture '
+        'default)', () {
+      final doc = _fixture();
+      final composite = _transformNamed(doc, 'composite_recipe_r173');
+      expect(composite['enabled'], isFalse);
+      final report = validateAugmentationManifest(
+        documentJsonText: jsonEncode(doc),
+      );
+      expect(report.isClean, isTrue, reason: report.formatIssues());
+    });
+  });
+
+  group('A10 — provenance (review E14-R19 MAJOR-2): the manifest must say '
+      'WHICH run/config it describes, and must not be silent about an '
+      'illustrative classRatios', () {
+    test('a missing provenance block is rejected', () {
+      final doc = _fixture()..remove('provenance');
+      final report = validateAugmentationManifest(
+        documentJsonText: jsonEncode(doc),
+      );
+      expect(report.isClean, isFalse);
+      expect(report.formatIssues(), contains('provenance'));
+    });
+
+    test('a missing provenance.generatedFrom is rejected', () {
+      final doc = _fixture();
+      (doc['provenance']! as Map<String, Object?>).remove('generatedFrom');
+      final report = validateAugmentationManifest(
+        documentJsonText: jsonEncode(doc),
+      );
+      expect(report.isClean, isFalse);
+    });
+
+    test('a missing provenance.classRatiosSource is rejected', () {
+      final doc = _fixture();
+      (doc['provenance']! as Map<String, Object?>).remove('classRatiosSource');
+      final report = validateAugmentationManifest(
+        documentJsonText: jsonEncode(doc),
+      );
+      expect(report.isClean, isFalse);
+    });
+
+    test('an empty provenance.datasetSource is rejected', () {
+      final doc = _fixture();
+      (doc['provenance']! as Map<String, Object?>)['datasetSource'] = '';
+      final report = validateAugmentationManifest(
+        documentJsonText: jsonEncode(doc),
+      );
+      expect(report.isClean, isFalse);
+    });
+  });
+
+  group('A11 — the shipped ml/augmentation_manifest.json is pinned to this '
+      'CI fixture (review E14-R19 MAJOR-1): nothing else stops the two '
+      'files from drifting apart, since CI only ever runs this Dart guard '
+      'against the fixture copy', () {
+    test('ml/augmentation_manifest.json equals the CI fixture, normalized '
+        'JSON-for-JSON', () {
+      final shipped = jsonDecode(
+        File(
+          '${_findProjectRoot().path}/ml/augmentation_manifest.json',
+        ).readAsStringSync(),
+      );
+      final fixture = jsonDecode(_realFixtureText());
+      expect(shipped, equals(fixture));
+    });
+  });
+
+  group('A12 — enabled flags mirror the shipped baseline config (review '
+      'E14-R19 MAJOR-2): a manifest describing an all-on recipe when the '
+      'shipped ml/augment.py::DEFAULT_TRANSFORM_CONFIG ships four switches '
+      'OFF is a self-contradiction', () {
+    test('the real fixture enabled flags match '
+        'ml/augment.py::DEFAULT_TRANSFORM_CONFIG', () {
+      final doc = _fixture();
+      final byName = <String, Map<String, Object?>>{
+        for (final t
+            in (doc['transforms']! as List).cast<Map<String, Object?>>())
+          t['name']! as String: t,
+      };
+      const expected = <String, bool>{
+        'pitch_shift_continuous': true,
+        'pitch_shift_label_transpose': true,
+        'room_ir_reverb': true,
+        'gain': true,
+        'device_response': false,
+        'mic_sim': true,
+        'compression': false,
+        'additive_snr_noise': true,
+        'traffic_ambient_noise': false,
+        'transient_burst': false,
+      };
+      for (final entry in expected.entries) {
+        expect(
+          byName[entry.key]!['enabled'],
+          entry.value,
+          reason:
+              '${entry.key}.enabled must mirror '
+              'ml/augment.py::DEFAULT_TRANSFORM_CONFIG',
+        );
+      }
+      expect(
+        byName['composite_recipe_r173']!['enabled'],
+        isFalse,
+        reason: 'status=rejected must not be enabled',
+      );
     });
   });
 
@@ -447,6 +597,7 @@ AugmentationManifestReport validateAugmentationManifest({
   _validateClassRatios(document, issues);
   _validatePitchShiftLimits(document, issues);
   _validateBalancing(document, issues);
+  _validateProvenance(document, issues);
 
   return AugmentationManifestReport(issues);
 }
@@ -505,7 +656,6 @@ void _validateTransforms(
       'status',
       'measured',
       'reproCommand',
-      'measuredCostSeconds',
     ]) {
       if (!entry.containsKey(field)) {
         issues.add(
@@ -560,13 +710,14 @@ void _validateTransforms(
         ),
       );
     }
-    if (entry['measuredCostSeconds'] is! num) {
+    if (status == 'rejected' && entry['enabled'] == true) {
       issues.add(
         AugmentationManifestIssue(
-          path: '$path.measuredCostSeconds',
+          path: '$path.enabled',
           message:
-              'must be a number — even a "$_notMeasured" row carries '
-              'its measured cost (ADR 0525 D6)',
+              'status is "rejected" but enabled=true — a measured-'
+              'regressing row cannot be a member of the actually-running '
+              'set (ADR 0525 D6/D9, review E14-R19 MAJOR-2)',
         ),
       );
     }
@@ -583,6 +734,28 @@ void _validateTransforms(
         ),
       );
     } else if (measured == _notMeasured) {
+      if (entry['costBasisSeconds'] is! num) {
+        issues.add(
+          AugmentationManifestIssue(
+            path: '$path.costBasisSeconds',
+            message:
+                'must be a number — even a "$_notMeasured" row carries a '
+                'cost basis; this is a REPRESENTATIVE basis, not a '
+                'per-transform measured cost (review E14-R19 MINOR-1)',
+          ),
+        );
+      }
+      if (entry['costBasisSource'] is! String ||
+          (entry['costBasisSource'] as String).isEmpty) {
+        issues.add(
+          AugmentationManifestIssue(
+            path: '$path.costBasisSource',
+            message:
+                'must be a non-empty string naming where the cost basis '
+                'comes from (review E14-R19 MINOR-1)',
+          ),
+        );
+      }
       if (status == 'accepted') {
         issues.add(
           AugmentationManifestIssue(
@@ -594,6 +767,16 @@ void _validateTransforms(
         );
       }
     } else if (measured is Map<String, Object?>) {
+      if (entry['measuredCostSeconds'] is! num) {
+        issues.add(
+          AugmentationManifestIssue(
+            path: '$path.measuredCostSeconds',
+            message:
+                'must be a number for an actually-measured row (review '
+                'E14-R19 MINOR-1)',
+          ),
+        );
+      }
       _validateMeasuredSplits(measured, status, path, issues);
     } else {
       issues.add(
@@ -808,5 +991,40 @@ void _validateBalancing(
         message: 'must be a non-empty string',
       ),
     );
+  }
+}
+
+const _requiredProvenanceFields = <String>{
+  'generatedFrom',
+  'datasetSource',
+  'classRatiosSource',
+};
+
+/// review E14-R19 MAJOR-2: the manifest must say WHICH run/config it
+/// describes, and must not be silent about an illustrative classRatios.
+void _validateProvenance(
+  Map<String, Object?> doc,
+  List<AugmentationManifestIssue> issues,
+) {
+  final provenance = doc['provenance'];
+  if (provenance is! Map<String, Object?>) {
+    issues.add(
+      const AugmentationManifestIssue(
+        path: r'$.provenance',
+        message: 'missing required field: provenance',
+      ),
+    );
+    return;
+  }
+  for (final field in _requiredProvenanceFields) {
+    final value = provenance[field];
+    if (value is! String || value.isEmpty) {
+      issues.add(
+        AugmentationManifestIssue(
+          path: '\$.provenance.$field',
+          message: 'must be a non-empty string',
+        ),
+      );
+    }
   }
 }

@@ -6,13 +6,36 @@ Ez a dokumentum **nem** egy teljes leave-one-transform-out ablation eredménye
 — egy ilyen mérés ebben a körben **bizonyítottan nem futtatható** (lásd
 alább, „Miért nem mérünk most"). Amit szállít: a `ml/augmentation_manifest.json`
 (és a CI-fixture, `evaluation/recognition/fixtures/
-augmentation_manifest_sample.json`) minden egyes transzformáció-sorára
+augmentation_manifest_sample.json` — a két fájlt gépi cella pinneli egymáshoz
+mindkét oldalon, review E14-R19 MAJOR-1) minden egyes transzformáció-sorára
 kimondja, hogy **MÉRT** javulás/romlás áll mögötte, vagy a literális
-**„nem mért"** érték a reprodukáló paranccsal és a mért költséggel együtt
-(ADR 0525 D6) — numerikus `0` egyik esetben sem szerepelhet, és „nem mért"
-sor **soha** nem kaphat `accepted` státuszt. Mindkét szabályt gépi cella méri,
-Python (`ml/augment.py::validate_manifest`) **és** Dart
-(`test/tooling/augmentation_manifest_test.dart`) oldalon is.
+**„nem mért"** érték a reprodukáló paranccsal és egy **költség-alappal**
+együtt (ADR 0525 D6) — numerikus `0` egyik esetben sem szerepelhet, és „nem
+mért" sor **soha** nem kaphat `accepted` státuszt, és **soha** nem lehet
+`enabled: true` egy `rejected` sorral párosítva (review E14-R19 MAJOR-2).
+Mindkét szabályt gépi cella méri, Python (`ml/augment.py::validate_manifest`)
+**és** Dart (`test/tooling/augmentation_manifest_test.dart`) oldalon is.
+
+A manifest emellett egy **`provenance`** blokkot is hordoz
+(`generatedFrom`/`datasetSource`/`classRatiosSource`, kötelező mindkét
+validátorban) — kimondja, MELYIK konfigurációt írja le (a szállított
+`ml.augment.DEFAULT_TRANSFORM_CONFIG` alapot: `pitch_shift`/`reverb`/
+`mic_sim`/`gain`/`add_noise` bekapcsolva, `device_response`/`compression`/
+`traffic_noise`/`transient_burst` kikapcsolva), és — mert az alábbi
+`classRatios` táblázat számai **nem mértek** — a `classRatiosSource` mezőben
+kimondottan `"illustrative — not measured"`-ként jelöli őket (review E14-R19
+MAJOR-2). Ugyanezért a `composite_recipe_r173` sor `enabled` mezője is
+`false`: egy mérten romló (`rejected`) sor nem lehet a „ténylegesen futó"
+halmaz tagja — ezt mindkét validátor gépi cellával kényszeríti ki.
+
+**Költség-mező elnevezés (review E14-R19 MINOR-1).** A `measuredCostSeconds`
+mezőnév egy per-transzformációs MÉRT költséget sugallna; mivel a 10 „nem
+mért" sor mindegyike ugyanazt az EGYETLEN mért adatpontot (10 769,7 s) idézi
+reprezentatív alapként, ezek a sorok most a `costBasisSeconds` +
+`costBasisSource` mezőpárt hordozzák (nem `measuredCostSeconds`-t) — a
+`measuredCostSeconds` mezőnév ezután KIZÁRÓLAG a ténylegesen mért
+`composite_recipe_r173` soron szerepel, ahol ez a szám a TÉNYLEGES, ehhez a
+pontos futáshoz mért költség.
 
 ## Miért nem mérünk most egyetlen ÚJ transzformációt sem
 
@@ -31,26 +54,34 @@ ablationnel együtt az `E14-R20` dolga (ADR 0525 D9).
 ## Transzformáció-soronkénti státusz
 
 Minden alábbi sor a `ml/augmentation_manifest.json`-ban ténylegesen szereplő
-bejegyzés tükre. A `reproCommand` oszlop az a parancs, ami — ha lefutna —
-mérné az adott transzformáció ÖNMAGÁBAN vett hatását (leave-one-transform-out,
+bejegyzés tükre. Az `Enabled` oszlop a manifest `provenance.generatedFrom`
+által megnevezett alapkonfigurációt (`ml.augment.DEFAULT_TRANSFORM_CONFIG`)
+tükrözi — nem egy tetszőleges összes-bekapcsolva receptet (review E14-R19
+MAJOR-2); a `composite_recipe_r173` sor `enabled: false`, mert a státusza
+`rejected` (egy mérten romló sor nem lehet a „ténylegesen futó" halmaz
+tagja). A `reproCommand` oszlop az a parancs, ami — ha lefutna — mérné az
+adott transzformáció ÖNMAGÁBAN vett hatását (leave-one-transform-out,
 `ml/honest_eval.py` egy ma még NEM létező, egy-transzformációs szekciójával);
-a `mért költség` minden „nem mért" sorra a fenti, EGYETLEN mért adatpontot
-(10 769,7 s/kezelés-pár) idézi mint reprezentatív alapot, mert ez az egyetlen
-valós mérés, ami a nagyságrendet megalapozza.
+a `költség-alap` minden „nem mért" sorra a fenti, EGYETLEN mért adatpontot
+(10 769,7 s/kezelés-pár) idézi mint reprezentatív alapot (`costBasisSeconds`
++ `costBasisSource`, review E14-R19 MINOR-1), mert ez az egyetlen valós
+mérés, ami a nagyságrendet megalapozza — ez NEM ugyanaz, mint a
+`composite_recipe_r173` sor `measuredCostSeconds` mezője, ami a TÉNYLEGES,
+ehhez a pontos futáshoz mért költség.
 
-| Transzformáció | Domén | Státusz | Mérés | Repro parancs | Mért költség |
-|---|---|---|---|---|---|
-| `pitch_shift_continuous` | PCM/varispeed, irány-only (meglévő, változatlan) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_pitch_shift_continuous_only` — a per-transzformációs szekció még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `pitch_shift_label_transpose` | PCM/varispeed, akkord-címke-tudatos (ÚJ, E14-R19) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_pitch_shift_label_transpose_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `room_ir_reverb` | szoba-IR konvolúció (meglévő, most kapcsolható) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_room_ir_reverb_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `gain` | globális erősítés (meglévő, most kapcsolható) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_gain_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `device_response` | névvel ellátott eszköz-frekvenciaválasz (ÚJ, E14-R19, a `mic_sim` szűrőjét használja fel) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_device_response_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `mic_sim` | folytonos véletlen EQ-tilt + sávhatárolás (meglévő, most kapcsolható) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_mic_sim_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `compression` | RMS-burkológörbés dinamika-kompresszor (ÚJ, E14-R19) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_compression_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `additive_snr_noise` | fehérzaj célzott SNR-en (meglévő, most kapcsolható) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_additive_snr_noise_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `traffic_ambient_noise` | 1/f-szerű, forgalom/nappali-zaj-jellegű zaj célzott SNR-en (ÚJ, E14-R19) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_traffic_ambient_noise_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `transient_burst` | fret-zaj/pengetés-kattanás/koppintás-jellegű tranziens zajburst (ÚJ, E14-R19) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_transient_burst_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
-| `composite_recipe_r173` | a MA szállított, összetett recept (pitch ±6 varispeed + reverb + mic-sim + gain/zaj, `n_aug=2`, `AUG_REG`) | **`rejected`** | **MÉRT** (lásd lent) | `python3 ml/honest_eval.py logo logo_aug` | 10 769,7 s (ez a TÉNYLEGES, ehhez a pontos futáshoz mért érték) |
+| Transzformáció | Domén | Enabled | Státusz | Mérés | Repro parancs | Költség-alap |
+|---|---|---|---|---|---|---|
+| `pitch_shift_continuous` | PCM/varispeed, irány-only (meglévő, változatlan) | igaz | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_pitch_shift_continuous_only` — a per-transzformációs szekció még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `pitch_shift_label_transpose` | PCM/varispeed, akkord-címke-tudatos (ÚJ, E14-R19) | igaz | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_pitch_shift_label_transpose_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `room_ir_reverb` | szoba-IR konvolúció (meglévő, most kapcsolható) | igaz | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_room_ir_reverb_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `gain` | globális erősítés (meglévő, most kapcsolható) | igaz | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_gain_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `device_response` | névvel ellátott eszköz-frekvenciaválasz (ÚJ, E14-R19, a `mic_sim` szűrőjét használja fel) | **hamis** (`DEFAULT_TRANSFORM_CONFIG` kikapcsolva szállítja) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_device_response_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `mic_sim` | folytonos véletlen EQ-tilt + sávhatárolás (meglévő, most kapcsolható) | igaz | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_mic_sim_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `compression` | RMS-burkológörbés dinamika-kompresszor (ÚJ, E14-R19) | **hamis** (`DEFAULT_TRANSFORM_CONFIG` kikapcsolva szállítja) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_compression_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `additive_snr_noise` | fehérzaj célzott SNR-en (meglévő, most kapcsolható) | igaz | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_additive_snr_noise_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `traffic_ambient_noise` | 1/f-szerű, forgalom/nappali-zaj-jellegű zaj célzott SNR-en (ÚJ, E14-R19) | **hamis** (`DEFAULT_TRANSFORM_CONFIG` kikapcsolva szállítja) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_traffic_ambient_noise_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `transient_burst` | fret-zaj/pengetés-kattanás/koppintás-jellegű tranziens zajburst (ÚJ, E14-R19) | **hamis** (`DEFAULT_TRANSFORM_CONFIG` kikapcsolva szállítja) | `candidate` | „nem mért" | `python3 ml/honest_eval.py logo logo_transient_burst_only` — még NEM létezik | 10 769,7 s/kezelés-pár (r173, doboz-lokális) |
+| `composite_recipe_r173` | a MA szállított, összetett recept (pitch ±6 varispeed + reverb + mic-sim + gain/zaj, `n_aug=2`, `AUG_REG`) | **hamis** (a `rejected` státusz miatt, ADR 0525 D6/D9) | **`rejected`** | **MÉRT** (lásd lent) | `python3 ml/honest_eval.py logo logo_aug` | 10 769,7 s — ez a `measuredCostSeconds` mezőben a TÉNYLEGES, ehhez a pontos futáshoz mért érték (nem költség-alap) |
 
 ## A ma szállított összetett recept — MÉRT, és `rejected`
 
@@ -101,6 +132,18 @@ rögzíti (kiinduló ÉS kiegyensúlyozott), irány- (down/up/noStrum) és
 akkord-csoport (N.C./major/minor) szinten egyaránt; a `balancing.dropsRealData`
 mező mindig `false` — ezt mindkét oldali validátor (Python és Dart) gépi
 cellával kényszeríti ki.
+
+**A `classRatios` számai illusztratívak, NEM mértek (review E14-R19
+MAJOR-2).** A `down 0.42/up 0.40/noStrum 0.18` és az `N.C. 0.35/major
+0.44/minor 0.21` kerek, kézzel választott számok — nincs mögöttük repo-lokális
+osztály-számlálási futás. A kör szállít egy `ml.augment.class_ratios()`
+függvényt, ami egy VALÓS címke-tömbből tényleges arányt számol, de ez a
+manifest generálásakor nem futott adatkészleten. A manifest
+`provenance.classRatiosSource` mezője ezt kimondottan `"illustrative — not
+measured"`-ként rögzíti, és mindkét validátor (Python és Dart) megköveteli
+ennek a mezőnek a jelenlétét — a `classRatios` blokk tehát a KÍVÁNT, kerek
+kiegyensúlyozott célt szemlélteti (`0.3333`/`0.3334` egyenlő harmadok), nem
+egy mért kiinduló/kiegyensúlyozott állapotpárt.
 
 ## Két KÜLÖNBÖZŐ félhang-korlát — nem ugyanaz a szám (R11)
 
