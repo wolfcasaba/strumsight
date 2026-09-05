@@ -105,7 +105,7 @@ szóval.
 | Ch11 | Epic 10: Offline AI | E10 | 0 | 0 | 0 | 32 | nyitva (hold: a TELJES sáv, mind a 32 kör) | — |
 | Ch12 | Release Roadmap, Sprint Planning & Final Integration | E12 | 36 | 0 | 0 | 0 | kör-munka: 36/36 queue-sor done (a záró E12-R36-tal együtt); **EMBERI KAPUK NYITOTT** (ld. §5) — a sáv kör-munkája teljes, a KIADÁS nem | `docs/release/program-baseline.md` |
 | Ch13 | UI/UX Design System & Screen Specification | E13 | 36 | 0 | 0 | 0 | queue-szinten lezárva (36/36 done) | — |
-| Ch14 | Recognition Accuracy & Useful UI Recovery | E14 | 10 | 9 | 0 | 0 | nyitva (prepared: R02–R19 megírva, nem futtatva; R20–R42 briefjei meg sem íródtak) | — |
+| Ch14 | Recognition Accuracy & Useful UI Recovery | E14 | 11 | 8 | 0 | 0 | nyitva (prepared: R02–R19 megírva, nem futtatva; R20–R42 briefjei meg sem íródtak) | — |
 | — | Ch15 UI-migráció (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E15 | 14 | 0 | 0 | 0 | nyitva (pending: R09–R13 hátravan — AI-tutor/analysis/vision/onboarding/community migráció, backend mounting, release evidence; R08 gamification merge-elve) | — |
 | — | Ch16 kompozíció és rollout (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E16 | 6 | 0 | 0 | 0 | nyitva (pending: mind az 5 kör — kompozíció, progress-projekció, capability rollout, live backend E2E, teljes-app verifikáció) | — |
 | — | governance (pszeudoepic) | E99 | 18 | 0 | 0 | 2 | nyitva (hold: E99-R21, E99-R23) | — |

@@ -1,5 +1,69 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R17 KÉSZ — A Klangio ISMIR-2025 referencia-modell: **NO-GO**, mert a súly és az adat licence NEM NYILATKOZOTT — PR [#579](https://github.com/wolfcasaba/strumsight/pull/579), squash `82463868` (2026-09-05)
+
+A Chapter 14 §5.1 azt kérdezte, átvehető-e a publikált joint
+onset+direction+chord modell. **A válasz mérve: nem.** A kör a pinelt
+reprodukciós infrastruktúrát és a licenc-auditot szállítja — **nulla külső
+bájt** a fában, `lib/**` és `assets/**` érintetlen. **ADR
+[0369](docs/adr/0369-reference-model-repro-and-licence-audit.md).**
+
+**A mért licenc-ítélet (a kör lényege):**
+
+| Artefaktum | Mért licenc | Ítélet |
+|---|---|---|
+| Kód (`klangio/modules/strumming_crnn/`, `scripts/`) | `Apache-2.0` | megengedő — kutatási reprodukcióra |
+| Checkpoint (`step=19000-f1=0.8225.ckpt`, sha256 `80297850…`, **134 344 202 B**) | **NEM NYILATKOZOTT** | **blokkoló** |
+| Adathalmaz (`dataset/klangio-gst-mm-2025/`, 330 blob, 913 163 829 B) | **NEM NYILATKOZOTT** | **blokkoló** |
+
+A GitHub API repo-szintű mezője `Apache-2.0`-t mond — a README grantja viszont
+szó szerint a **„software"-re** szűkül, és sem a „Pretrained Checkpoint", sem a
+„Dataset" szakaszban nincs licenc-mondat. A repo-szintű SPDX **nem öröklődik
+lefelé**; a nyilatkozat hiánya fenntartott jog, nem szabad felhasználás (**L639**).
+
+| Döntés (ADR 0369) | Mit véd |
+|---|---|
+| **D1** három KÜLÖN licenc-mező, `spdx`+`source`+`evidence`+`verdict` | egy összevont „MIT-nek tűnik" mező elrejtené, hogy a grant csak a kódra szól |
+| **D2** a NEM NYILATKOZOTT = blokkoló → **NO-GO** | „csak kísérletnek betesszük" nem elfogadható; a kétség nem engedély |
+| **D3** nulla külső artefaktum a fában, a repro a repón KÍVÜL fut | a `--workdir` a repón belül **típusos hiba**; a manifest checksummal azonosít, nem bemásolt bájttal |
+| **D4** a két mérés soha nem keveredik | külön tábla + saját korpusz-hash; egy összevont sor gépileg piros |
+| **D5** fail-closed őr, ami a FÁT járja (ADR 0473 D1 minta) | nem a manifest listájából indul, és **nem** korlátozódik `assets/`-re |
+| **D6** ami nem futott, az `NEM MÉRT` — becsülni tilos | a go/no-go a licenc-státuszra és a checkpoint MÉRT méretére hivatkozik, nem becsült latency-re |
+
+**Mit épített a kör (6 fájl, ~1 700 sor):** `ml/reference/reference_manifest.json`
+(pinelt commit `929e403f`, LFS-checksum, három licenc-blokk, `audit_registry`) ·
+`ml/reference/run_reference_eval.py` (egyparancsos, repón kívül futó reprodukció
++ `--verify-only`, típusos hibák) · `ml/reference/README.md` ·
+`test/tooling/reference_model_licence_guard_test.dart` (**43 cella**) ·
+`docs/eval/reference-model-audit.md` (két KÜLÖN tábla + go/no-go).
+
+**Ami szándékosan NEM készült el:** teljesítmény-szám. A boxon nincs
+PyTorch/Lightning (egyetlen ML-venv: `/home/ubuntu/tf-venv` → TensorFlow 2.21.0),
+ezért a report minden mérési cellája szó szerint **`NEM MÉRT`**, mellette a mért
+ok és a reprodukáló parancs. A `run_official_fixture_eval` /
+`run_strumsight_holdout_eval` ma `NotImplementedError` — a report ÉS a README
+ezt kimondja. A brief §0.0 C) revíziója ezt `done` kifutásnak minősítette
+(nem `blocked`), mert a checkpoint mérhetően elérhető és a licenc-ítélet
+önmagában konkluzív.
+
+**Review: APPROVED** — 1 MAJOR + 3 MINOR + 1 NOTE, mind zárva a javító kör után
+([`docs/reviews/e14-r17-review.md`](docs/reviews/e14-r17-review.md)). A
+**MAJOR-1 valódi rés volt**: az őr kiterjesztés-halmaza
+(`ckpt/pt/pth/safetensors`) szűkebb volt, mint a pinelt upstream
+`.gitattributes` hat LFS-formátuma — épp a `.h5` maradt ki, amit az upstream
+saját `prepare_data_for_training.ipynb`-je a **licenc-blokkolt adathalmazból
+állít elő** (**L638**).
+
+**Zöld kapu az exact merge SHA-n** (`1a224425`): Full Gate `success`, Router CI
+`success` (×2). A `main` a kör alatt **kétszer** mozdult (E14-R10 landolt) — a
+gate mindkétszer újra futott az új SHA-n (ADR 0086 §2).
+
+**Következmény a Chapter 14 §5.1 irányra:** a joint irány folytatása a
+StrumSight **saját** modellje (Kör 18 — streaming joint onset + direction
+prototípus), nem az átvétel. Ha a Klangio kimondott licencet ad a súlyra
+és/vagy az adatra, a döntés új ADR-rel újranyitható: a manifest mezői és az
+`audit_registry` menekülőút készen állnak.
+
 ## ✅ E14-R10 KÉSZ — Az irány-abstention BEKÖTVE: a bizonytalan pengetés többé nem kap magabiztos nyilat — PR [#578](https://github.com/wolfcasaba/strumsight/pull/578), squash `1127c22d` (2026-09-05)
 
 Az E14-R04 megépítette a bizonytalanság szótárát (`StrumPrediction.decision`,
