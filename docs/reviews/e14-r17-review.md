@@ -159,4 +159,25 @@ semmit pirosra. Javító kör indul a fenti leletlistával.
 
 ## 4. Javító kör utáni újra-ellenőrzés
 
-*(a javító kör után töltendő)*
+Javító kör: `2f89e4db` (`sonnet-impl`, ugyanaz a motor, a fenti leletlistával).
+Scope-audit a javító körre: **OK** (`39ce0201..2f89e4db`, 5 útvonal, mind az
+`allowed_paths`-on). Leletenként:
+
+| Lelet | Állapot | Mérve |
+|---|---|---|
+| **MAJOR-1** | **ZÁRVA** | `_referenceCheckpointExtensions` = `{ckpt, cpkt, pt, pth, h5, pkl, safetensors}` — az upstream `.gitattributes` mind a hat LFS-formátuma benne, forrás-hivatkozó kommenttel. Új falszifikációs cella: `ml/scratch/prepared_dataset.h5` (a B csoport lokáció-listájába felvéve, tehát a teljes ZÖLD→PIROS→ZÖLD mintát futtatja). Cellaszám 42 → **43**. A valós-fa cella zöld maradt, ahogy a review előre megmérte. |
+| **MINOR-1** | **ZÁRVA** | A manifest `requirements` mezője **16** elem, betű szerint az upstream `requirements.txt`. `_IMPORT_NAME_OVERRIDES` kiegészítve: `"scikit-learn": "sklearn"` — a két javítás EGY commitban, ahogy a lelet előírta. |
+| **MINOR-2** | **ZÁRVA** | `clone_pinned_commit` és `verify_checkpoint` is `try/except`-be zárva: `subprocess.CalledProcessError` **és** `OSError` → `MissingArtifactError`, a hiány megnevezésével és a `_RERUN_COMMAND`-dal. A hiányzó `git-lfs` és a hálózati hiba is a szerződés szerinti típusos hiba. |
+| **MINOR-3** | **ZÁRVA** | A report §1 és §2 is kimondja a stub-státuszt („ez a PyTorch-képes gépen futtatva SEM adna számot ebben a körben"), és a reprodukáló parancs mellé is odakerült. A README-vel immár konzisztens. |
+| **NOTE-1** | **ZÁRVA** | `addTearDown(() => projectRoot.deleteSync(recursive: true))` a `:212` cellában is. |
+
+**Zöld kapu az EXACT merge SHA-n** (`acd61ff2`, ADR 0086 §2 — a `main` a kör
+alatt kétszer mozdult, a gate mindkétszer újra futott az új SHA-n):
+
+| Kapu | Run | Eredmény |
+|---|---|---|
+| Full Gate (no APK) | lásd a PR build-evidenciáját | `success` |
+| Router CI | lásd a PR build-evidenciáját | `success` |
+| Scope-audit (teljes kör, `39680e1e..HEAD`) | `tools/scope-audit.py` | OK |
+
+**VÉGSŐ DÖNTÉS: APPROVED.** Nyitott BLOCKER/MAJOR/MINOR: **0**.
