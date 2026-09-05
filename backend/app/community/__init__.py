@@ -6,7 +6,7 @@ E09-R02, ADR 0396; wired live E15-R12, ADR 0497. This module owns:
   (BigInteger internal PK + ``Uuid`` public_id, see ADR 0396 §1),
 * the Pydantic response contract that whitelists only ``public_id`` and never
   leaks the internal ``id`` (A2),
-* a ``build_community_router`` factory that aggregates 12 of the 14 router
+* a ``build_community_router`` factory that aggregates 13 of the 15 router
   modules behind ``settings.community_enabled`` (registration-level gate,
   ADR 0497 D1 — the module simply does not exist in the route table when
   off, no runtime 403) plus the sub-flags (D2), in the deterministic order
@@ -84,7 +84,7 @@ def _reads_only(router: APIRouter) -> APIRouter:
 
 
 def build_community_router(settings) -> APIRouter | None:
-    """Aggregate 12 of the 14 Community router modules into one
+    """Aggregate 13 of the 15 Community router modules into one
     ``APIRouter``, or return ``None`` when the module is disabled.
 
     Registration-level gating (ADR 0497 D1): a disabled module — or a
@@ -129,7 +129,7 @@ def build_community_router(settings) -> APIRouter | None:
     * ``community_leaderboard_enabled`` — gates the whole ``leaderboards``
       router (an all-or-nothing competitive surface, not a read/write
       split).
-    * ``community_clubs_enabled`` — no clubs router exists among the 14
+    * ``community_clubs_enabled`` — no clubs router exists among the 15
       yet; nothing to gate here either. (A ``club_service.py`` és a
       ``club_content_service.py`` LÉTEZIK és tesztelt — csak a HTTP-felület
       hiányzik fölülük, ugyanaz a rés, amit a ``comments`` router
@@ -160,6 +160,7 @@ def build_community_router(settings) -> APIRouter | None:
     from .routers.feed import router as feed_router
     from .routers.leaderboards import router as leaderboards_router
     from .routers.moderation import router as moderation_router
+    from .routers.notifications import router as notifications_router
     from .routers.posts import router as posts_router
     from .routers.profile import router as profile_router
     from .routers.reports import router as reports_router
@@ -184,6 +185,12 @@ def build_community_router(settings) -> APIRouter | None:
     if settings.community_leaderboard_enabled:
         aggregate.include_router(leaderboards_router)
     aggregate.include_router(moderation_router)
+    # A `notifications` NEM áll a `community_writes_enabled` kapu alatt: az
+    # olvasottra-jelölés és a beállítás-írás nem tagja az ADR 0395 §6
+    # írás-domainjének („poszt, komment, reakció, follow-request"), és a
+    # bookmarks/challenges/moderation/reports/safety routerek ugyanezen az
+    # alapon maradtak all-or-nothing viszonyban a fő kapuval.
+    aggregate.include_router(notifications_router)
     aggregate.include_router(posts_router if writes_on else _reads_only(posts_router))
     aggregate.include_router(reports_router)
     aggregate.include_router(safety_router)
