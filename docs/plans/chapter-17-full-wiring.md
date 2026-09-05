@@ -52,9 +52,31 @@ BEFEJEZETLEN peremvidék, amit a Community (13) ural.
 
 **A sorrend kötött:** a kompozíciós gyorsnyereségek (R01–R04) mennek előre,
 mert a domain/application rétegük MÁR kész — csak provider + route hiányzik.
-A Community sáv (R07–R13) a legnagyobb, és **külső függősége van**: a
-`backend/` FastAPI szolgáltatásnak futnia kell, és a telefonnak elérnie
-(a Lab-mód cloudflared-alagútjának mintájára).
+A Community sáv (R07–R13) a legnagyobb.
+
+### 2.1 A Community sáv külső függősége — 2026-09-05 óta TELJESÜLT
+
+A sáv eredeti feltétele az volt, hogy a `backend/` FastAPI szolgáltatás
+fusson és a készülék elérje. **Ez megvan:** a backend a `casaba.app` boxon
+él, dedikált Postgres 17 mögött, a Caddy `handle_path /strumsight/*`
+útvonal-prefixén át:
+
+```
+https://casaba.app/strumsight/health        → {"status":"ok","version":"0.1.0"}
+https://casaba.app/strumsight/health/ready  → {"status":"ready"}
+```
+
+Mérve 2026-09-05: `alembic upgrade head` → `e09_r27_0020 (head)`, 29 tábla;
+a `POST /auth/register` → JWT → `GET /auth/me` → `GET/PUT /settings` lánc
+végigmegy, és a `PUT` utáni `GET` visszaadja az írt értéket.
+
+A cloudflared quick-tunnel tehát **nem kell többé** — az alagút helyett
+állandó, TLS-terminált útvonal áll. A telepítés részletei:
+[`docs/operations/backend-live-deploy.md`](../operations/backend-live-deploy.md).
+
+**Ami a sáv indulásához MÉG kell:** a `STRUMSIGHT_COMMUNITY_ENABLED` a
+szolgáltatásban ma `false` — a bekapcsolás az `E17-R13` tárgya, a Flutter-
+oldali repository-k (R08–R11) elkészülte UTÁN.
 
 | Kör | Tárgy | Csoport |
 |---|---|---|
