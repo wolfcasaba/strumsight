@@ -26401,3 +26401,67 @@ piros (üres diffel, saját klónban mérve) — az E12-R30 feature-freeze óta
 `exit 2`-vel elmegy, ezért a `main` zöld marad. A freeze feloldása vagy a
 bázis újra-rögzítése a release manager döntése (ADR 0489), nem egy önjavító
 köré — itt jelentve, nem javítva.
+
+## L652 — Egy „a provider MÁR LÉTEZIK" premisszájú bekötő kör a FORRÁS MÖGÖTTI GYÁRAT nem mérte: a szállított default a teszt-fake volt, és a bekötés egy örökké „Listening…" képernyőt tett volna a működő útra (E17-R01 / H3, önjavító kör, 2026-09-05)
+
+**A halt.** Az E17-R01 (Chapter 17, „Onboarding First-Win állomás bekötése")
+a SAJÁT pre-flightján állt meg, dispatch előtt: a brief §2 mért állítása —
+„a képernyő adatforrása MÁR LÉTEZIK: `onboardingFirstWinConfidenceProvider`"
+— igaz volt a provider LÉTÉRE, és félrevezető a provider TARTALMÁRA.
+
+**A gyökérok — a provider létezik, a forrása fake.** Mérve (`main @ 0b2feb43`):
+
+```
+first_win_providers.dart:20-23  →  (_) => FakeOnboardingFirstWinEngine.new   # a SZÁLLÍTOTT default gyár
+grep -rn "\.emit(" lib/features/onboarding/        →  0 találat              # a fake csak teszt-hookból emittál
+grep -rn "…FactoryProvider.overrideWith" lib/       →  0 találat              # nincs produkciós felülírás
+```
+
+A `FakeOnboardingFirstWinEngine.start()` egyetlen boolt állít; a stream a
+produkcióban SOHA nem kap értéket. A Stage `confidence == null` ágán se
+Continue, se Retry nincs — csak a „Not now". A bekötés tehát egy néma,
+átugrandó képernyőt tett volna a MÁR MŰKÖDŐ first-win út (engedély-primer →
+pontozott `LearnScreen(lesson: Lessons.firstWin)`) ELÉ.
+
+**Miért lett volna ZÖLD a kapu.** A brief A1 cellája azt mérte, hogy a
+képernyő elérhetővé válik (igaz), az A4 azt, hogy a VALÓS providert olvassa
+(igaz), az A5–A7 a küszöb-hármast — override-olt fake motoron (igaz). Egyik
+cella sem kérdezte meg, hogy a szállított kompozícióban mi hajtja a providert.
+Ez az [L606](#l606) (E16-R02 / H3) hibaosztályának pontos ismétlődése: *az üres
+forrás és a zöld kapu megkülönböztethetetlen* — a különbség csak annyi, hogy
+ott az adat-KATALÓGUS hiányzott, itt a MOTOR mögötti gyár mutatott a
+teszt-fake-re.
+
+**Az általánosítható szabály:** *egy bekötő kör premisszája nem a provider
+LÉTE, hanem a provider PRODUKCIÓS GYÁRA.* A `Provider<X Function()>` alakú
+seam-eknél a mérés egy sor:
+
+```bash
+grep -rn "FactoryProvider" lib/ --include=*.dart | grep -i "fake\|mock\|stub"
+```
+
+Ha a default gyár teszt-osztályt ad, a képernyő bekötése FORRÁS-kör, nem
+kompozíciós kör — akkor is, ha a provider, a küszöb és a képernyő már kész.
+
+**A javítás alakja (ADR 0112 §2, a brief REVÍZIÓJA).** Nem cella-gyengítés és
+nem a bekötés elhalasztása: a hiányzó forrás bekerült a körbe (produkciós
+`OnboardingFirstWinEngine` a MEGLÉVŐ `strumEngineProvider` fölött, a
+`live/public.dart` keresztfeature-felületén — precedens:
+`practice_observation_gateway_provider.dart:31`), és három új, gépi cella
+mérni fogja: **A8** (a szállított gyár nem `FakeOnboardingFirstWinEngine`),
+**A9** (a Stage elhagyása elengedi az osztott motort, a rá következő
+mini-lecke továbbra is detektál), **A10** (a forrás hibája — megtagadott
+engedély — kimondva jelenik meg, nem néma „Listening…"). Az A1–A7 változatlan.
+
+**Amit a javítás NEM vett el:** a `lib/core/audio/**` (új `AudioOwner`
+variáns, lease-szerződés) kívül maradt — az onboarding a Stage alatt az
+egyetlen mikrofon-fogyasztó, és a rá következő lecke UGYANAZT a
+`strumEngineProvider`-t használja, tehát egy tulajdonos elég. A halt saját
+javaslata négy fájlt kért; a mérés kettővel (+ a képernyő hiba-ága) megoldotta.
+
+**Mellékesen mért, ugyanabból a családból:** a brief `ADR 0520` száma egy
+MEGÍRT, más körhöz tartozó ADR-é volt (E14-R13), a queue 0520–0533 sávját
+pedig az E17 sáv többi köre foglalta — a kör ütköző sorszámmal indult volna,
+amit a `test_adr_numbering.py` csak MERGE UTÁN buktatott volna le. Az őr
+(`tools/tests/test_e17_r01_first_win_source_scope.py`) ezért a brief és a
+queue ADR-oszlopának EGYEZÉSÉT is méri, nem csak a scope-ot.

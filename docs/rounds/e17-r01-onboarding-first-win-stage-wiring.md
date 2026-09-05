@@ -1,11 +1,11 @@
 # E17-R01 — Onboarding First-Win állomás bekötése
 
-- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`)
+- **Státusz:** PREPARED · **REVIDEÁLVA** (ADR 0112 önjavító kör, 2026-09-05 — lásd §0.0; kód újramérve: `main @ 0b2feb43`)
 - **Típus:** Chapter 17 (Teljes bekötés), Kör 1
 - **Kör-azonosító:** `E17-R01`
 - **Branch:** `<motor>/e17-r01-onboarding-first-win-stage-wiring`
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0520` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset (mérve: nyolc egymást követő körön át a queue ADR-oszlopa elavult volt).
+- **Előre kiosztott ADR:** `ADR 0534` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset (mérve: nyolc egymást követő körön át a queue ADR-oszlopa elavult volt). *(Az eredeti `0520` MEGÍRT, más körhöz tartozó ADR — `docs/adr/0520-live-uncertainty-reason-from-the-merged-recognition-vocabulary.md`; a queue 0520–0533 sávját az E17 sáv többi köre foglalja, ezért a szabad `0534` jött ide.)*
 - **Fejezet-terv:** [`docs/plans/chapter-17-full-wiring.md`](../plans/chapter-17-full-wiring.md)
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "onboarding first-win állomás bekötése"` — a kör pre-flightjának KÖTELEZŐ lefuttatnia és a találatokat a §2-be beépítenie; a brief előre megírt állapotában a §2 a `main @ b17e08ef` mérésein áll.
@@ -15,8 +15,12 @@ schema_version = 1
 risk = "normal"
 allowed_paths = [
   "lib/features/onboarding/screens/onboarding_screen.dart",
+  "lib/features/onboarding/screens/first_win_stage_screen.dart",
+  "lib/features/onboarding/first_win_engine.dart",
+  "lib/features/onboarding/first_win_providers.dart",
   "lib/features/onboarding/public.dart",
   "test/features/onboarding/first_win_stage_wiring_test.dart",
+  "test/features/onboarding/first_win_production_engine_test.dart",
   "docs/rounds/e17-r01-onboarding-first-win-stage-wiring.md",
   "test/app/routing/app_router_test.dart",
   "test/app/routing/onboarding_first_win_test.dart",
@@ -35,6 +39,7 @@ allowed_paths = [
 native_gate = false
 gate_tests = [
   "test/features/onboarding/",
+  "test/features/onboarding/first_win_production_engine_test.dart",
   "test/e2e/full_app_walkthrough_test.dart",
   "test/app/routing/app_router_test.dart",
   "test/app/routing/onboarding_first_win_test.dart",
@@ -51,6 +56,42 @@ gate_tests = [
 ]
 ```
 
+## 0.0 Revízió — ADR 0112 önjavító kör (2026-09-05, H3 / 1. kísérlet)
+
+**Miért.** A kör a saját pre-flightján `H3`-mal állt meg (`.pipeline/HALTED`,
+`halted_at=2026-09-05T19:05:09+00:00`; dispatch NEM történt, kör-ág nincs). A
+teljes mérés: [`.pipeline/halt-E17-R01-preflight.md`](../../.pipeline/halt-E17-R01-preflight.md).
+A halt MÉRTEN indokolt volt, és az önjavító kör függetlenül reprodukálta
+(`main @ 0b2feb43`): a §2 eredeti állítása („a képernyő adatforrása MÁR
+LÉTEZIK") a bekötés szempontjából félrevezető — a provider létezik, de a
+**szállított default gyára a `FakeOnboardingFirstWinEngine`**, ami a
+produkcióban soha nem emittál. A bekötés így egy örökké „Listening…"
+képernyőt tett volna a MÁR MŰKÖDŐ first-win út elé, miközben az A1/A4 cella
+zölden ment volna át — ez az [L606](../LESSONS.md#l606) hibaosztálya (*az üres
+forrás és a zöld kapu megkülönböztethetetlen*).
+
+**Mi változott.**
+
+1. `allowed_paths` + `gate_tests` **TÁGÍTVA** a hiányzó FORRÁSSAL:
+   `first_win_engine.dart`, `first_win_providers.dart`,
+   `screens/first_win_stage_screen.dart`, és az új
+   `test/features/onboarding/first_win_production_engine_test.dart`.
+2. A §3 tiltása **PONTOSÍTVA**, nem törölve: a forrás átkötése ettől a körtől a
+   kör CÉLJA, de a siker-küszöb őszinteség-szerződése
+   (`kFirstWinConfidenceThreshold`, `isFirstWinSuccess`, ADR 0281 §2)
+   TOVÁBBRA IS érinthetetlen, és a `lib/core/audio/**` (lease-szerződés, új
+   `AudioOwner` variáns) TOVÁBBRA IS kívül van.
+3. Új acceptance-cellák: **A8** (a szállított gyár nem `FakeOnboardingFirstWinEngine`),
+   **A9** (a Stage elhagyása elengedi a motort, és az utána következő mini-lecke
+   továbbra is detektál), **A10** (a forrás hibája — megtagadott engedély,
+   foglalt mikrofon — kimondva jelenik meg, nem néma „Listening…").
+   Az A1–A7 cella VÁLTOZATLAN.
+4. ADR-szám `0520` → `0534` (a `0520` megírt, más körhöz tartozó ADR; a queue
+   sora is javítva).
+
+**Regressziós őr:** `tools/tests/test_e17_r01_first_win_source_scope.py` — a
+revízió ELŐTTI briefen piros, utána zöld.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 Scope-ütközés esetén a kimenet a brief-REVÍZIÓ, nem a scope önkényes tágítása: állítsd meg a kört (`stopped`), és írd le, melyik §-t kell módosítani.
@@ -66,21 +107,28 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 A `FirstWinStageScreen` a szállított kompozícióból elérhető: az onboarding folyamat a first-win kísérlet után erre az állomásra lép, valós konfidencia-forrásból.
 
-## 2. Jelenlegi állapot — mért tények (`main @ b17e08ef`)
+## 2. Jelenlegi állapot — mért tények (`main @ 0b2feb43`, önjavító kör újramérése)
 
-- A `FirstWinStageScreen` a fában él (`lib/features/onboarding/screens/first_win_stage_screen.dart`), de a `check_screen_reachability` mérése szerint SEM route, SEM imperatív hívás nem éri el.
-- A képernyő adatforrása MÁR LÉTEZIK: `onboardingFirstWinConfidenceProvider` (`lib/features/onboarding/first_win_providers.dart:39`, `StreamProvider.autoDispose<double>`), és a siker-küszöb az `isFirstWinSuccess(confidence)` predikátumban él.
-- Az `OnboardingScreen` routolt és működik; a `PermissionPrimerScreen`-t MÁR imperatívan hívja (`onboarding_screen.dart:181`) — ez a bekötés MÉRT mintája.
+- A `FirstWinStageScreen` a fában él (`lib/features/onboarding/screens/first_win_stage_screen.dart`), de a `check_screen_reachability` mérése szerint SEM route, SEM imperatív hívás nem éri el (`reachable: false`, csak teszt- és golden-hivatkozás).
+- A provider-váz létezik — `onboardingFirstWinConfidenceProvider` (`first_win_providers.dart:39`, `StreamProvider.autoDispose<double>`), küszöb az `isFirstWinSuccess(confidence)` predikátumban —, **de a szállított forrás FAKE**:
+  - `first_win_providers.dart:20-23` — a default gyár `(_) => FakeOnboardingFirstWinEngine.new`;
+  - `grep -rn "\.emit(" lib/features/onboarding/ --include=*.dart` → **0 találat**: a fake kizárólag teszt/preview hookból emittál (`first_win_engine.dart:45-49`), a `start()` csak egy boolt állít;
+  - `grep -rn "onboardingFirstWinEngineFactoryProvider.overrideWith" lib/` → **0 találat**: nincs produkciós felülírás a kompozícióban.
+  - Következmény: bekötve a képernyő VÉGIG az `onboardFirstWinListening` ágon állna (`first_win_stage_screen.dart:41-52`) — se Continue, se Retry, csak a „Not now". **Ez a kör tehát a FORRÁST is szállítja** (§5.3).
+- Van produkciós hangforrás, amit a Stage a `public.dart` felületén elér: `strumEngineProvider` (`lib/features/live/providers/live_providers.dart:12-16`, `RealStrumEngine(mic: createMicCapture(ref, AudioOwner.live))`), exportálva a `lib/features/live/public.dart:41`-ben. Keresztfeature-precedens ugyanerre: `lib/features/practice/data/practice_observation_gateway_provider.dart:31`. A `LiveFrame` már hordoz strum-konfidenciát: `live_frame.dart:83` (`double get confidence => latestStrum?.confidence ?? 0`).
+- Az `OnboardingScreen` routolt és működik; a `PermissionPrimerScreen`-t MÁR imperatívan hívja (`onboarding_screen.dart:181`) — ez a bekötés MÉRT mintája. A first-win ág ma az engedély-primer után a valós, pontozott `LearnScreen(lesson: Lessons.firstWin)`-re pushol (`onboarding_screen.dart:127-151`) — **ez a működő út, amit a Stage nem ronthat el** (a Stage elé kerül, nem helyette).
 
 ## 3. Scope
 
-**Benne van:** A First-Win állomás belépési pontja az onboarding folyamatból · a képernyő `onContinue` / `onSkip` visszahívásainak valós navigációhoz kötése · a folyamat kimenete az `entryLocationFor(...)` EGYETLEN forráson át (ADR 0508 D1).
+**Benne van:** A First-Win állomás belépési pontja az onboarding folyamatból · a képernyő `onContinue` / `onSkip` visszahívásainak valós navigációhoz kötése · a folyamat kimenete az `entryLocationFor(...)` EGYETLEN forráson át (ADR 0508 D1) · **a produkciós konfidencia-forrás** (`OnboardingFirstWinEngine` implementáció a `strumEngineProvider` fölött + a default gyár átkötése) · **a forrás-hiba őszinte ága** a Stage-en (§5.3, A8–A10 — az önjavító kör revíziója).
 
 **NINCS benne (tilos):**
 
-- Az `OnboardingScreen` lépés-gépének átírása.
+- Az `OnboardingScreen` lépés-gépének átírása; új `OnboardingStep` enum-érték (az enum ordinálisa a lemezen perzisztált checkpoint, `onboarding_provider.dart:59`, pinneli `test/features/onboarding/onboarding_resume_test.dart`).
 - Új képernyő létrehozása.
-- A first-win konfidencia-forrás (`first_win_providers.dart`) szemantikájának módosítása.
+- A first-win **siker-szemantikájának** módosítása: a `kFirstWinConfidenceThreshold` értéke és az `isFirstWinSuccess` inkluzív predikátuma VÁLTOZATLAN (ADR 0281 §2 őszinteség-szerződés). A forrás (a gyár mögötti motor) átkötése ezzel szemben a kör CÉLJA — ezt a különbséget az önjavító kör revíziója rögzítette.
+- A `lib/core/audio/**` bármely fájlja: új `AudioOwner` variáns, lease-szerződés vagy `createMicCapture` módosítás. A produkciós motor a MEGLÉVŐ `strumEngineProvider`-t használja a `lib/features/live/public.dart` felületén át.
+- Új l10n kulcs: a forrás-hiba ága a MEGLÉVŐ `micPermissionBody` / `micPermissionAction` kulcsokból él (a generált ARB-aggregátum és a forrás-szegmens együtt-mozgatása külön kör, [L646](../LESSONS.md#l646)).
 
 ## 4. Engedélyezett fájlok
 
@@ -89,7 +137,7 @@ A `FirstWinStageScreen` a szállított kompozícióból elérhető: az onboardin
 **A pin-őrök jogosultsága (S10/S11, mérve: E13-R16/F9 full-gate 32867296946, E13-R17/H3 `test/app/navigation/` +33 → +30 −3):** a fenti listán szereplő, a briefen KÍVÜL élő pin-tesztek azért kerültek az `allowed_paths`-ba ÉS a `gate_tests`-be, mert a bekötés a route által renderelt képernyő TÍPUSÁT mozdíthatja el. A jogosultság PONTOSAN ennyi: a lecserélt képernyő típusának átírása a pinnelő cellában. **Cella törlése, `skip`-je vagy gyengítése TILOS** — ha egy cella a típus-átíráson túl válik pirossá, az a kör BLOKKOLÓ lelete, nem a cella hibája.
 
 
-## 5. Kötött architekturális döntések (ADR 0520)
+## 5. Kötött architekturális döntések (ADR 0534)
 
 ### 5.1 A belépés az onboarding folyamatból megy, nem új top-level route-ból
 
@@ -98,6 +146,16 @@ A First-Win állomás a folyamat egy LÉPÉSE. Külön `/first-win` route két b
 ### 5.2 A `onContinue` / `onSkip` SOSEM navigál közvetlenül literál útvonalra
 
 Mindkettő az `entryLocationFor(adaptiveShellEnabled)` eredményét használja — ugyanaz a forrás, amit az `onboarding_screen.dart` Skip/finish ága már ma is (E16-R06 mérése).
+
+### 5.3 A produkciós konfidencia a MEGLÉVŐ live motorból jön, nem új mikrofon-tulajdonosból *(önjavító kör, 2026-09-05)*
+
+A `FakeOnboardingFirstWinEngine` teszt-infrastruktúra marad (override-ból élő, `emit`-tel vezérelt), de a **default gyár produkciós motort ad**: egy `OnboardingFirstWinEngine` implementációt, amely a `strumEngineProvider` frame-folyamából (`LiveFrame.confidence`, `live_frame.dart:83`) állítja elő a kísérletenkénti konfidenciát, és a `liveFrameProvider` életciklus-precedensét követi (`start()` a mountra, `stop()` a `ref.onDispose`-ra, idempotens).
+
+Miért NEM új `AudioOwner.onboarding`: a lease-szerződés (`lib/core/audio/**`) bővítése a kör mérete fölött van, és nem is szükséges — az onboarding a Stage alatt az egyetlen mikrofon-fogyasztó, a rá következő mini-lecke (`LearnScreen`) pedig UGYANEZT a `strumEngineProvider`-t használja (`learn_screen.dart:125,241`). Egy tulajdonos, egy lease, nulla arbitrációs kockázat. Ha a mérés mégis külön tulajdonost kíván, az a kör BLOKKOLÓ lelete (`stopped`), nem csendes scope-tágítás.
+
+### 5.4 A forrás hibája kimondva jelenik meg *(önjavító kör, 2026-09-05)*
+
+A konfidencia-stream hibája (megtagadott mikrofon-engedély — az engedély-primer `onSkipped` ága a szállított út! —, foglalt mikrofon, motor-hiba) a Stage-en NEM olvadhat bele a „Listening…" állapotba: a képernyő a `AsyncValue` hibaágát kimondja (meglévő `micPermissionBody` / `micPermissionAction` kulcsokkal), és a „Not now" mellett a folyamat továbbvitele mindig elérhető marad. Ez ugyanannak az őszinteség-szerződésnek a folytatása, amit az ADR 0281 §2 a gyenge jelre már kimond.
 
 ## 6. Acceptance criteria
 
@@ -110,17 +168,22 @@ Mindkettő az `entryLocationFor(adaptiveShellEnabled)` eredményét használja �
 | A5 | A siker-küszöb **alatt** lévő konfidencia a „még nem sikerült" ágra visz | widget-teszt a küszöb alatti értékkel |
 | A6 | A küszöbön **rajta** álló konfidencia a siker-ágra visz (a predikátum inkluzív határa mérve) | widget-teszt pontosan a küszöb-értékkel |
 | A7 | A küszöb **fölött** lévő konfidencia ugyanarra a siker-ágra visz — a határ fölött nincs harmadik viselkedés | widget-teszt a küszöb fölötti értékkel |
+| A8 | A SZÁLLÍTOTT kompozícióban a `onboardingFirstWinEngineFactoryProvider` default gyára NEM `FakeOnboardingFirstWinEngine`-t ad, hanem a produkciós motort, és az a `strumEngineProvider` frame-folyamából kap konfidenciát (override nélküli `ProviderContainer`) | `test/features/onboarding/first_win_production_engine_test.dart` — a default gyár típusa + fake `StrumEngine` override-dal adott frame → a Stage siker-ága |
+| A9 | A Stage elhagyása elengedi a motort (`stop()` a `ref.onDispose`-on), és az utána következő mini-lecke UGYANAZON a `strumEngineProvider`-en továbbra is kap frame-et — nincs holt motor | widget/provider-teszt fake `StrumEngine`-nel: `start`/`stop` számláló + a lecke-út újraindulása |
+| A10 | A konfidencia-forrás HIBÁJA (megtagadott engedély / foglalt mikrofon) kimondva jelenik meg a Stage-en, és a továbblépés elérhető marad — a hiba SOHA nem néma `onboardFirstWinListening` | widget-teszt hibát emittáló fake motorral: a hiba-szöveg és a skip-akció jelen van |
 
 ### 6.1 Falszifikációs próba
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** Cseréld a `onSkip` ágat literál `'/live'` útvonalra, futtasd a gate-et → az A3 cellának PIROSNAK kell lennie → állítsd vissza. Második próba a küszöb-hármasra: fordítsd a határt exkluzívra, futtasd → az A6 cellának PIROSNAK kell lennie (az A5 és A7 zöld marad, tehát a hármas tényleg a HATÁRT méri) → állítsd vissza.
+
+**Harmadik próba (a halt hibamódja, KÖTELEZŐ):** állítsd vissza a default gyárat `FakeOnboardingFirstWinEngine.new`-ra, futtasd a gate-et → az **A8**-nak PIROSNAK kell lennie (és vele a Stage siker-ága a produkciós konfidenciából), az A5–A7 (override-os) cellák közben ZÖLDEK maradnak — ez bizonyítja, hogy a hármas tényleg a SZÁLLÍTOTT forrást méri, nem a tesztbeli felülírást → állítsd vissza. Ugyanígy: némítsd el a hiba-ágat (a hibát „Listening…"-ként kezelve) → az **A10**-nek pirosnak kell lennie.
 
 Minden fenti acceptance-cella MÉRT állítás: a §7 gate-parancsa futtatja őket, és a falszifikációs próba bizonyítja, hogy a cellák tényleg pirosra váltanak a hibás implementáción.
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/onboarding/ test/e2e/full_app_walkthrough_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/app/routing/shell_entry_location_test.dart test/core/screen_size_guard_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e15_r13_full_variant_matrix_test.dart test/ui/ui_baseline_screenshot_test.dart test/app/navigation/
+tools/round-gate.sh test/features/onboarding/ test/features/onboarding/first_win_production_engine_test.dart test/e2e/full_app_walkthrough_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/app/routing/shell_entry_location_test.dart test/core/screen_size_guard_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e15_r13_full_variant_matrix_test.dart test/ui/ui_baseline_screenshot_test.dart test/app/navigation/
 ```
 
 A gate a `format` → `analyze` → `test <minden útvonal külön>` → `architecture` lépéseket KÜLÖN processzként futtatja (a box mért OOM-csapdája miatt a `flutter analyze && flutter test` lánc tilos).
@@ -139,6 +202,9 @@ A gate a `format` → `analyze` → `test <minden útvonal külön>` → `archit
 - **A kettős belépési pont.** Egy külön route ugyanahhoz az állapothoz az ADR 0508 D1 egy-forrás szabályát sérti (5.1).
 - **A literál útvonal.** Az E16-R06 pont ezt a hibaosztályt mérte és távolította el a gerincről (5.2).
 - **A folyamat megszakadása.** Ha az állomás a konfidencia-stream első értéke előtt navigál, a felhasználó üres állapotot lát (A4).
+- **A néma forrás (a halt gyökéroka).** Fake vagy soha nem emittáló motorral a Stage örökké „Listening…" — és a kapu ZÖLD marad, mert a képernyő tényleg a valós providert olvassa. Ezt kizárólag az A8 méri (§6.1 harmadik próba).
+- **Az osztott motor életciklusa.** A Stage és a rá következő `LearnScreen` UGYANAZT a `strumEngineProvider`-t használja; a Stage `stop()`-ja aszinkron. Ha a lecke a leállás közben indul, „detektál, de nem hall" állapot áll elő — az A9 pontosan ezt a sorrendet méri.
+- **Az engedély nélküli út.** Az engedély-primer `onSkipped` ága a szállított folyamat része: a Stage ilyenkor hibát kap a forrástól, nem adatot (A10).
 
 ## 10. Implementation handoff — az implementer tölti ki
 
