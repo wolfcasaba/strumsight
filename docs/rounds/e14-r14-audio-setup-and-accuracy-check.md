@@ -268,4 +268,123 @@ a 3. pont **PIROS**, visszaállítva **ZÖLD**.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`). Az ADR 0519-et
+nem módosítottam, csak követtem.
+
+### Fájlonként mit építettem
+
+- **`lib/features/onboarding/audio_setup/audio_setup_step.dart`** — az
+  `AudioSetupStepKind` enum (silence, strongDownStrum, upStrum, chordCheck,
+  positionSuggestion), az `AudioSetupStep` típus (`kind` + `expectedDuration`
+  + opcionális `expectedChord`), a rögzített `AudioSetupStep.sequence` (8
+  lépés: csend → erős down → up → E/Am/G/C → pozíció-javaslat, egyenként
+  5s-os tervezett résszel, összesen 40s), és a hossz-elfogadási ablak
+  önálló, tiszta függvénye: `isAudioSetupDurationAccepted(Duration)` a
+  `kAudioSetupMinDuration`/`kAudioSetupMaxDuration` (30s/60s, mindkettő
+  inkluzív) konstansokkal. A mérce-mátrix 1. pontjának cellái ide kerültek,
+  mert ez a lépés-gép **statikus alakja**, nem a controller futásideje —
+  a teszt egész literálból (`Duration(seconds: 59/60/61)`) hívja a
+  függvényt, nem összegzett/számolt értékből.
+- **`lib/features/onboarding/audio_setup/audio_profile.dart`** — az
+  `AudioProfile` immutable modell (`schemaVersion`, `micRouteId`,
+  `sampleRateHz`, `suggestedInputGainDb`, `inputLatencyMsAtCapture`,
+  `visualLatencyMsAtCapture`, `qualityExpectation` [`SignalQualityState`,
+  a `live/public.dart` barrelen át importálva, D6], `confidenceProfile`,
+  `recordedAt`), `toJson`/`AudioProfile.decode` (fail-closed: hiányzó mező
+  vagy ismeretlen `schemaVersion` → típusos `ArgumentError`, sosem default
+  vagy `null` — a `SignalQualitySnapshot.fromJson` mintáját követve), és a
+  `isStaleFor({currentMicRouteId, currentSampleRateHz})` predikátum (D3). A
+  migráció egy feltételezett, a kör előtti prototípus-alakú `schemaVersion:
+  0`-t old fel a jelenlegi (`1`) alakra — mezőnkénti átnevezéssel (`route` →
+  `micRouteId`, `gainDb` → `suggestedInputGainDb`, `recordedAtEpochMs`
+  epoch-ms → `recordedAt` ISO-8601, stb.), egyetlen mező elvesztése nélkül
+  (L70).
+- **`lib/features/onboarding/audio_setup/audio_profile_store.dart`** — az
+  `AudioProfileStore` a `KeyValueStore`-ra épül, feature-lokális
+  `storageKey = 'ss.onboarding.audio_profile'` konstanssal (R4/D7,
+  `OnboardingStepController.storageKey` precedens). API: `read()` (fail-
+  closed decode), `readValid({currentMicRouteId, currentSampleRateHz})`
+  (elavulás-szűrt getter, D3), `save(AudioProfile)` (EGYETLEN atomikus
+  `writeString` hívás — nincs lépésenkénti write API a store-on, D4), és
+  `clear()` (valódi `remove`, nem flag).
+- **`lib/features/onboarding/audio_setup/audio_setup_controller.dart`** —
+  az `AudioSetupController` explicit `AudioSetupRunStatus` állapotgéppel
+  (`notStarted, inProgress, completed, aborted` — sosem az „van-e már adat"
+  következtetéséből, L305). `start()` / `recordStep(SignalQualitySnapshot)`
+  / `abort()`. A `recordStep` az UTOLSÓ lépésnél hívja az egyetlen
+  `_finish()`-t, ami az EGYETLEN helyen menti a store-ba (D4). Az
+  eredmény-osztályozás (D2): bármely nem-`good` állapot a futás bármely
+  lépésén `needsAttention`-t ad nem üres tanáccsal, és NEM ment profilt;
+  csak egy végig `good` futás termel `success`-t és profilt. A
+  `suggestedInputGainDb` egyszerű heurisztika a strum/akkord lépések
+  `peakDbfs` átlagából (a csend-lépés kizárva), a `confidenceProfile` a
+  `good` lépések aránya — egyik sem ír felül semmilyen DSP/ML konstanst
+  (D1), tisztán az `audio_setup` réteg saját, tájékoztató mezője.
+- **`lib/features/onboarding/public.dart`** — új, kézzel írt barrel (a
+  feature első publikus felülete), a négy `audio_setup/*.dart` fájlt
+  exportálja. Nincs `lib/features/onboarding/public/` fragmentum-könyvtár,
+  tehát a generált-barrel frissesség-őr (`tool/check_architecture.dart:804`)
+  nem fut rá — mérve az `architecture` gate-lépés zöld kimenetén.
+
+### §7.1 Falszifikációs próba — MÉRT kimenet
+
+Ideiglenesen (nem commitolva) a `recordStep`-be egy lépésenkénti
+`store.save(...)` hívást szúrtam be minden rögzített lépés után (a
+`_finish()` előtti ág elé), majd lefuttattam:
+
+```
+flutter test test/features/onboarding/audio_setup_controller_test.dart
+```
+
+**PIROS** — 2 teszt bukott:
+
+```
+acceptance #2 — ... a tooQuiet fixture ... [E]
+  Expected: null
+    Actual: <Instance of 'AudioProfile'>
+acceptance #3 — ... abort() after a few recorded steps leaves the store empty [E]
+  Expected: null
+    Actual: <Instance of 'AudioProfile'>
+```
+
+(A #2 is bukott, mert a lépésenkénti mentés a `tooQuiet` felismerése előtt
+már beírt egy jó-minőségű profilt — ez a D2 másik oldala: a lépésenkénti
+mentés nemcsak a megszakítást, hanem a rossz-jelminőségű zárást is elrontja.)
+
+Ezután a beszúrt kódot szó szerint visszaállítottam az eredeti
+`_stepIndex`-increment + `_finish()` alakra (`git diff` a visszaállítás után
+üres volt a controller fájlra), és újra lefuttatva: **ZÖLD**, mind a 8 teszt
+(lásd a gate lenti kimenete).
+
+### Gate — tényleges eredmény
+
+```
+tools/round-gate.sh test/features/onboarding/audio_setup_controller_test.dart test/features/onboarding/audio_profile_store_test.dart
+```
+
+`format` → ZÖLD, `analyze` → ZÖLD (0 lelet), `test
+audio_setup_controller_test.dart` → ZÖLD (8/8), `test
+audio_profile_store_test.dart` → ZÖLD (9/9), `architecture` → ZÖLD (12
+allowlistelt deviáció, változatlan), `secrets` → ZÖLD, `l10n` → ZÖLD.
+
+### Döntések, amiket a brief nem írt elő explicit
+
+- A `qualityExpectation`/`confidenceProfile`/`suggestedInputGainDb` konkrét
+  formuláit a brief nem specifikálta számszerűen (csak azt, hogy a profil
+  ezeket „hordozza", D1) — az implementáció egyszerű, kizárólag az
+  `audio_setup` rétegben élő heurisztikákat használ (lásd fent), amelyeket
+  egyetlen acceptance-pont sem mér számértékben; a mátrix csak a
+  `needsAttention`/`success` osztályozást és a mentett/nem-mentett profil
+  jelenlétét méri.
+- Az `inputLatencyMsAtCapture`/`visualLatencyMsAtCapture` mezőket a
+  controller konstruktor-paraméterként kapja (alapérték 0), NEM olvassa be
+  közvetlenül a `settings` provider-eiből — a `lib/features/settings/**` a
+  kör tilos zónájában van, és egy jövőbeli UI-kör (E14-R14b) fogja ezeket a
+  meglévő `inputLatencyProvider`/`visualLatencyProvider` értékeivel
+  meghívni a controllert.
+- A schemaVersion 0 „legacy" alak feltételezett (ez egy vadonatúj feature,
+  nincs valós régi mentés) — a migrációs útvonal a brief 5. acceptance-
+  pontjának demonstrálására készült, ugyanazzal a mintával, mint a
+  `PracticePlanMigrator` (ADR 0054).
+
 ## 11. Review — a Claude tölti ki
