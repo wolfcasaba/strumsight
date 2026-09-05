@@ -236,6 +236,7 @@ ELEJÉN a legolcsóbb — a review-ban már egy teljes implementer-futás az ár
 | `S13` | az `allowed_paths` nem létező könyvtár-előtagot sorol fel: nulla fájlt fed, a lint zöldje semmit nem bizonyít |
 | `S14` | a lecserélt képernyőt a briefen **belül** élő teszt pinneli, de az nincs a `gate_tests`-ben → a célzott kapu zölden megy át azon a fán, amit a kör pirosra visz (L593) |
 | `S15` | az ELŐRE MEGÍRT brief `main @ <sha>` mért alapja azóta ELMOZDULT: a hivatkozott fájljai módosultak, vagy a feature-gyökerei alatt ÚJ fájl landolt → a §2 „mért tények" és a rájuk épülő acceptance-cellák elavulhattak, és egy időközben MERGE-ELT szerződés ugyanarra a döntésre már megszülethetett. Olvasd újra a felsorolt fájlokat, és a §0.0 revízió mondja ki: mi maradt igaz, mi nem, és hol van a kör **egyetlen** döntési helye. Ha a feloldás `allowed_paths`-**tágítást** kíván, az nem a te hatásköred → **H3** (E14-R10, L636) |
+| `S16` | az `allowed_paths` a GENERÁLT l10n-aggregátumot (`lib/l10n/app_<locale>.arb`) engedi, a FORRÁS szegmenst (`lib/l10n/base/app_<locale>.arb` vagy `lib/l10n/features/<feature>_<locale>.arb`) viszont nem → a kör a saját listáján belül EGYETLEN kulcsot sem tud felvenni: az aggregátumot a `tool/gen_l10n_segments.dart` írja (ADR 0307 §4), a `--check` mód a frissességét kapuzza. A feloldás lista-**tágítás**, ami nem a te hatásköröd → **H3** (E14-R13, L646) |
 
 A `strict` leletek javítása **brief-revízió**, tehát a §2 szerint a te
 hatáskörödben van — nem halt-ok, és nem is hagyható ki.
