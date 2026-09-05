@@ -796,7 +796,7 @@ E14-R19	docs/rounds/e14-r19-augmentation-and-balanced-recipe.md	sonnet-impl	0371
 #     Az R01 `pending`; a többi `hold`, mert vagy az előző kör mért mintájára
 #     épül, vagy (R07–R13) külső függősége van: futó, elérhető `backend/`.
 #     Az ADR-oszlop ELŐZETES — a foglaló a kör indulásakor adja a véglegeset.
-E17-R01	docs/rounds/e17-r01-onboarding-first-win-stage-wiring.md	sonnet-impl	0520	pending
+E17-R01	docs/rounds/e17-r01-onboarding-first-win-stage-wiring.md	sonnet-impl	0534	pending
 E17-R02	docs/rounds/e17-r02-analysis-v2-capture-wiring.md	sonnet-impl	0521	hold
 E17-R03	docs/rounds/e17-r03-setlist-session-wiring.md	sonnet-impl	0522	hold
 E17-R04	docs/rounds/e17-r04-tutor-practice-plan-preview-wiring.md	sonnet-impl	0523	hold

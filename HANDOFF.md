@@ -1,5 +1,43 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E17-R01 / H3 feloldva: a bekötendő provider LÉTEZETT, de a szállított gyára a TESZT-FAKE volt (2026-09-05)
+
+Az `E17-R01` (Chapter 17, „Onboarding First-Win állomás bekötése") a SAJÁT
+pre-flightján állt meg, dispatch előtt. A brief §2 premisszája — „a képernyő
+adatforrása MÁR LÉTEZIK: `onboardingFirstWinConfidenceProvider`" — a provider
+LÉTÉRE igaz, a TARTALMÁRA félrevezető volt. Újramérve (`main @ 0b2feb43`):
+
+| Mérés | Eredmény |
+|---|---|
+| `first_win_providers.dart:20-23` | a SZÁLLÍTOTT default gyár `(_) => FakeOnboardingFirstWinEngine.new` |
+| `grep -rn "\.emit(" lib/features/onboarding/` | **0 találat** — a fake csak teszt/preview hookból emittál |
+| `grep -rn "…FactoryProvider.overrideWith" lib/` | **0 találat** — nincs produkciós felülírás |
+
+A bekötés tehát egy örökké „Listening…" (se Continue, se Retry) képernyőt tett
+volna a MÁR MŰKÖDŐ first-win út (engedély-primer → pontozott
+`LearnScreen(lesson: Lessons.firstWin)`) ELÉ — miközben az A1/A4 cella ZÖLD
+maradt volna. Ez az [L606](docs/LESSONS.md) hibaosztálya, most a motor-gyár
+oldaláról ([L652](docs/LESSONS.md)).
+
+**A javítás: a brief REVÍZIÓJA (ADR 0112 §2), nem cella-gyengítés.** A hiányzó
+FORRÁS bekerült a körbe — produkciós `OnboardingFirstWinEngine` a MEGLÉVŐ
+`strumEngineProvider` fölött, a `lib/features/live/public.dart`
+keresztfeature-felületén (precedens:
+`practice_observation_gateway_provider.dart:31`) —, és három ÚJ, gépi cella
+méri: **A8** (a szállított gyár nem `FakeOnboardingFirstWinEngine`), **A9** (a
+Stage elhagyása elengedi az osztott motort, a rá következő mini-lecke
+továbbra is detektál), **A10** (a forrás hibája — megtagadott engedély —
+kimondva jelenik meg). Az A1–A7 cella VÁLTOZATLAN; a `lib/core/audio/**`
+(új `AudioOwner` variáns, lease-szerződés) KÍVÜL maradt: egy tulajdonos elég.
+A brief ADR-száma `0520` → **`0534`** (a 0520 megírt, más körhöz tartozó ADR;
+a 0520–0533 sávot az E17 többi köre foglalja) — a queue sora is javítva.
+
+**Regressziós őr:** `tools/tests/test_e17_r01_first_win_source_scope.py` — a
+revízió előtti briefen 7 cellán PIROS, utána zöld; a landolás után is áll
+(kizárólag a brief listáit/celláit méri, nem a kör munkájának hiányát,
+[L612](docs/LESSONS.md)).
+
+
 ## ✅ E14-R13 KÉSZ — a Live „miért nem sikerült" állítása a MERGE-ELT felismerési szótárból jön — PR [#590](https://github.com/wolfcasaba/strumsight/pull/590), squash `e5724b5d` (2026-09-05)
 
 A képernyő eddig egy **saját, képernyő-lokális `inputLevel`-heurisztikából**
