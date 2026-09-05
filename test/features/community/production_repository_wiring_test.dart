@@ -27,50 +27,52 @@ import 'package:strumsight/features/community/data/repositories/profile_reposito
 import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
 
 void main() {
-  group('a szállított kompozíció minden bekötött community-repository-t felold',
-      () {
-    late ProviderContainer container;
+  group(
+    'a szállított kompozíció minden bekötött community-repository-t felold',
+    () {
+      late ProviderContainer container;
 
-    setUp(() {
-      // Override NÉLKÜL: pontosan azt olvassuk, amit egy éles build kapna.
-      container = ProviderContainer();
-    });
+      setUp(() {
+        // Override NÉLKÜL: pontosan azt olvassuk, amit egy éles build kapna.
+        container = ProviderContainer();
+      });
 
-    tearDown(() => container.dispose());
+      tearDown(() => container.dispose());
 
-    test('communityChallengeRepositoryProvider nem dob', () {
-      // A hibaosztály mércéje: a duplikált seam visszavezetése esetén ez a
-      // cella `UnimplementedError`-ral pirosra vált.
-      expect(
-        () => container.read(communityChallengeRepositoryProvider),
-        returnsNormally,
+      test('communityChallengeRepositoryProvider nem dob', () {
+        // A hibaosztály mércéje: a duplikált seam visszavezetése esetén ez a
+        // cella `UnimplementedError`-ral pirosra vált.
+        expect(
+          () => container.read(communityChallengeRepositoryProvider),
+          returnsNormally,
+        );
+        expect(container.read(communityChallengeRepositoryProvider), isNotNull);
+      });
+
+      test('communityProfileRepositoryProvider nem dob', () {
+        expect(
+          () => container.read(communityProfileRepositoryProvider),
+          returnsNormally,
+        );
+      });
+
+      test('socialGraphRepositoryProvider nem dob', () {
+        expect(
+          () => container.read(socialGraphRepositoryProvider),
+          returnsNormally,
+        );
+      });
+
+      test(
+        'a fiók-réteg nélküli buildben a Disabled* változat jön, nem kivétel',
+        () {
+          // A `Disabled*` repository a HELYES válasz kikapcsolt fiók-rétegnél:
+          // a hívó egyenletes kódúton marad (ConfigurationFailure), nem kell
+          // külön ágat írnia a kikapcsolt buildre.
+          final repo = container.read(communityChallengeRepositoryProvider);
+          expect(repo, isA<DisabledCommunityChallengeRepository>());
+        },
       );
-      expect(container.read(communityChallengeRepositoryProvider), isNotNull);
-    });
-
-    test('communityProfileRepositoryProvider nem dob', () {
-      expect(
-        () => container.read(communityProfileRepositoryProvider),
-        returnsNormally,
-      );
-    });
-
-    test('socialGraphRepositoryProvider nem dob', () {
-      expect(
-        () => container.read(socialGraphRepositoryProvider),
-        returnsNormally,
-      );
-    });
-
-    test(
-      'a fiók-réteg nélküli buildben a Disabled* változat jön, nem kivétel',
-      () {
-        // A `Disabled*` repository a HELYES válasz kikapcsolt fiók-rétegnél:
-        // a hívó egyenletes kódúton marad (ConfigurationFailure), nem kell
-        // külön ágat írnia a kikapcsolt buildre.
-        final repo = container.read(communityChallengeRepositoryProvider);
-        expect(repo, isA<DisabledCommunityChallengeRepository>());
-      },
-    );
-  });
+    },
+  );
 }
