@@ -25,6 +25,7 @@ import '../widgets/beat_counter.dart';
 import '../widgets/chord_timeline.dart';
 import '../widgets/live_lab_panel.dart';
 import '../widgets/live_status_bar.dart';
+import '../widgets/uncertainty_reason_banner.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
 
@@ -263,9 +264,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // ---- Derived Stage state (§0.0/R8 — LiveFrame carries no state enum;
     // every state below is derived from a measured input). ----
     final isLoading = !_paused && liveAsync.isLoading;
+    // The heuristic weak-signal warning is the "no decision" fallback (ADR
+    // 0520 D5): once the merged recognizer HAS a reject reason, the banner
+    // below is the one place that states why, and this generic warning steps
+    // aside (D4) rather than doubling up on the same failure.
     final isWeakSignal =
         !_paused &&
         frame.listening &&
+        frame.chordRejectReason == null &&
         frame.inputLevel < SsSignalQualityIndicator.defaultWeakThreshold;
     final hasChord = frame.current != null;
 
@@ -372,6 +378,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             levelSemanticLabel: l10n.liveInputLevel,
             weakLabel: isWeakSignal ? l10n.liveWeakSignal : null,
           ),
+          if (frame.chordRejectReason != null)
+            UncertaintyReasonBanner(reason: frame.chordRejectReason!),
         ],
       ),
       timeline: Column(
