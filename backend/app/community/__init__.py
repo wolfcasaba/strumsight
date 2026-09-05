@@ -6,7 +6,7 @@ E09-R02, ADR 0396; wired live E15-R12, ADR 0497. This module owns:
   (BigInteger internal PK + ``Uuid`` public_id, see ADR 0396 §1),
 * the Pydantic response contract that whitelists only ``public_id`` and never
   leaks the internal ``id`` (A2),
-* a ``build_community_router`` factory that aggregates 13 of the 15 router
+* a ``build_community_router`` factory that aggregates 14 of the 16 router
   modules behind ``settings.community_enabled`` (registration-level gate,
   ADR 0497 D1 — the module simply does not exist in the route table when
   off, no runtime 403) plus the sub-flags (D2), in the deterministic order
@@ -84,7 +84,7 @@ def _reads_only(router: APIRouter) -> APIRouter:
 
 
 def build_community_router(settings) -> APIRouter | None:
-    """Aggregate 13 of the 15 Community router modules into one
+    """Aggregate 14 of the 16 Community router modules into one
     ``APIRouter``, or return ``None`` when the module is disabled.
 
     Registration-level gating (ADR 0497 D1): a disabled module — or a
@@ -129,11 +129,11 @@ def build_community_router(settings) -> APIRouter | None:
     * ``community_leaderboard_enabled`` — gates the whole ``leaderboards``
       router (an all-or-nothing competitive surface, not a read/write
       split).
-    * ``community_clubs_enabled`` — no clubs router exists among the 15
-      yet; nothing to gate here either. (A ``club_service.py`` és a
-      ``club_content_service.py`` LÉTEZIK és tesztelt — csak a HTTP-felület
-      hiányzik fölülük, ugyanaz a rés, amit a ``comments`` router
-      2026-09-05-én zárt be a maga domainjében.)
+    * ``community_clubs_enabled`` — gates the whole ``clubs`` router
+      (an all-or-nothing surface, like ``leaderboards``). 2026-09-05 óta
+      van mit kapuznia: a router addig HIÁNYZOTT, holott a
+      ``club_service.py`` és a ``club_content_service.py`` a Kör 24 óta
+      létezett és tesztelt volt.
 
     Router order is NOT alphabetical — it is the ADR 0497 D3 contract:
     ``search`` (a literal ``/community/profiles/search`` route) MUST be
@@ -156,6 +156,7 @@ def build_community_router(settings) -> APIRouter | None:
     # the docstring above (ADR 0497 D6).
     from .routers.bookmarks import router as bookmarks_router
     from .routers.challenges import router as challenges_router
+    from .routers.clubs import router as clubs_router
     from .routers.comments import router as comments_router
     from .routers.feed import router as feed_router
     from .routers.leaderboards import router as leaderboards_router
@@ -173,6 +174,12 @@ def build_community_router(settings) -> APIRouter | None:
 
     aggregate.include_router(bookmarks_router)
     aggregate.include_router(challenges_router)
+    # A `clubs` a `community_clubs_enabled` al-kapu alatt áll — egész
+    # felület, nem olvas/ír bontás, mint a `leaderboards`. A kapu eddig
+    # üresen állt („no clubs router exists yet"); 2026-09-05 óta van mit
+    # kapuznia.
+    if settings.community_clubs_enabled:
+        aggregate.include_router(clubs_router)
     # A komment az ADR 0395 §6 írás-domainjének NEVESÍTETT tagja („poszt,
     # komment, reakció, follow-request"), ezért — a `posts` és a
     # `social_graph` mintájára — az írási ága a `community_writes_enabled`
