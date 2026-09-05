@@ -1,0 +1,1 @@
+round=E14-R10 verdict=pass tests=5 lesson=threshold-cell-ieee754-exact-pair engine=sonnet-impl adr=0512 pr=578 squash=1127c22d review=APPROVED probes=4/4-red
