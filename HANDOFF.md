@@ -1,5 +1,44 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R10 KÉSZ — Az irány-abstention BEKÖTVE: a bizonytalan pengetés többé nem kap magabiztos nyilat — PR [#578](https://github.com/wolfcasaba/strumsight/pull/578), squash `1127c22d` (2026-09-05)
+
+Az E14-R04 megépítette a bizonytalanság szótárát (`StrumPrediction.decision`,
+ADR 0505), de a fában **nulla termelője** volt: a felhasználó ugyanúgy kapott
+magabiztos ↓/↑ nyilat bizonytalan pengetésre, mint a szerződés előtt. Ez a kör
+megadta a termelőt. **ADR
+[0512](docs/adr/0512-live-direction-abstention-wiring.md).**
+
+| Döntés | Mit véd |
+|---|---|
+| **D1** additív, `double?` + `null` default `pDown`/`pUp`/`pNoStrum` | a `StrumEvent` **23** és a `StrumClassification` **8** hívója (köztük a tilos zónás `clip_analyzer`, `strum_crnn`, `dsp_property_test`) változtatás nélkül fordul |
+| **D2** a heurisztikus ág `null`-t kap, `null` → MAI viselkedés | a rögzített confidence-létra „inverziója" kitalált szám volna — épp a `CONFIDENTLY WRONG`, amit a kör megszüntet |
+| **D3** a döntés helye EGY: a pipeline a `decision` gettert kérdezi | a `domain/recognition/**` nincs az `allowed_paths`-on → a második küszöb gépileg lehetetlen (L624 hibaosztálya fordítva) |
+| **D4** `uncertain`-re a `latestStrumTime` sem lép | különben a bizonytalanság CSENDBEN nyújtaná meg egy korábbi magabiztos nyíl 2 s-os életét |
+| **D5** a `0.05` változatlan, a hiányzó mérés DOKUMENTÁLT hiány | a `baseline_manifest.json` `direction`+`calibration` egyaránt `not-measured`; per-margó-bin coverage-tábla a fában nincs |
+| **D6** a küszöb-cellák IEEE-754-ben mértek | a naiv `(0.525, 0.475)` pár `0.050000000000000044` → a cella a HELYES kódon lett volna piros (**L637**) |
+
+**Mit épített a kör (8 fájl, 462 sor):** additív `pDown`/`pUp`/`pNoStrum`
+kivezetés a CRNN ágon (`classifyProbs` → `StrumClassification` → `StrumEvent`)
+· `_isDirectionConfirmed` a `live_pipeline.dart`-ban, amely a MÁR MERGE-ELT
+`StrumPrediction`-t építi és a `decision` getterét kérdezi ·
+`LivePipeline.debugWithClassifier` teszt-varrat · `docs/eval/recognition-direction-abstention.md`
+(a szállított küszöb provenienciája + a HIÁNYZÓ mérés receptje).
+
+**Review: APPROVED**, 0 BLOCKER / 0 MAJOR (2 MINOR + 1 NOTE, nem blokkoló) —
+[`docs/reviews/e14-r10-review.md`](docs/reviews/e14-r10-review.md). **Négy
+valódi-sértés próba** izolált klónban, mind a négy a célzott cellát vitte
+pirosra; a **P2** (elfogadás-oldalon inkluzív határ) **kizárólag** a „rajta"
+cellát — ez igazolja a D6 javítást. Célzott gate saját futtatásból: mind a 10
+lépés zöld. Full Gate + Router CI a merge SHA-n (`0a0a7ddf`) `success`.
+
+**Nyitva hagyva (nem blokkoló, a következő `docs/eval/**`-t érintő körnek):**
+a `recognition-direction-abstention.md` a 80,7 %-os irány-pontosságot rossz
+fájlra hivatkozza (a literál `docs/eval/recognition-release-guard.md:15`-ben
+él), és az „only direction-accuracy number in the repo" állítás téves
+(`docs/rag/chunks/018-strum-ml-pipeline.md:232` `79.8 %`/`79.9 %`-ot közöl) —
+a szakasz ÉRDEMI következtetése ettől függetlenül igazolt. Részletek:
+review §6 MINOR-1.
+
 ## 🔧 ÖNJAVÍTÓ KÖR (ADR 0112) — E14-R10 / H3 feloldva: a kör nem ÚJ kaput épít, hanem a MÁR MERGE-ELT szerződést köti be; + `brief-lint` S15 az osztályra (2026-09-05)
 
 Az `E14-R10` a **dispatch előtt** H3-ra futott: a briefje 2026-08-20-án,
@@ -12414,19 +12453,23 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-04):** `main` @ `59372c9c` — **E14-R08:
-csoportosított felismerési evaluation harness és leakage-védelem**, PR
-[#573](https://github.com/wolfcasaba/strumsight/pull/573), squash-merge.
+**Aktuális állapot (2026-09-05):** `main` @ `1127c22d` — **E14-R10: az
+irány-abstention bekötése a Live úton**, PR
+[#578](https://github.com/wolfcasaba/strumsight/pull/578), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
-orchesztrátor/reviewer Claude (Opus 5), **1 javító kör** (review: APPROVED a
-javító kör után, 0 nyitott lelet; CHANGES REQUESTED verdikttel indult:
-0 BLOCKER / **2 MAJOR** / 1 MINOR / 3 NOTE —
-[`docs/reviews/e14-r08-review.md`](docs/reviews/e14-r08-review.md)).
-**ÚJ ADR: [0509](docs/adr/0509-grouped-recognition-evaluation-and-leakage-protection.md)**
-— a Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt).
+orchesztrátor/reviewer Claude (Opus 5), **0 javító kör** (review: APPROVED
+első nekifutásra, 0 BLOCKER / 0 MAJOR / 2 MINOR / 1 NOTE —
+[`docs/reviews/e14-r10-review.md`](docs/reviews/e14-r10-review.md)).
+**ÚJ ADR: [0512](docs/adr/0512-live-direction-abstention-wiring.md)** — a
+Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt).
 `risk = "normal"` → dedikált biztonsági review nem kellett. `native_gate =
 false` → a CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml` +
-`router_ci_expected: true`).
+`router_ci_expected: true`); mindkettő `success` a merge SHA-n (`0a0a7ddf`).
+
+A kört egy **ADR 0112 önjavító kör** (PR
+[#577](https://github.com/wolfcasaba/strumsight/pull/577)) előzte meg, amely a
+brief H3-ját oldotta fel; a pre-flight ezen felül a küszöb-cellák IEEE-754
+hibáját is javította (**L637**).
 
 > ⚠ **A queue-sorok ADR-oszlopa elavult, és ez MÉRTEN ismétlődik.** Az
 > `E14-R08` sora `0360`-at előlegezett; a `docs/adr/0360-*.md` **nem létezik**,
@@ -12439,7 +12482,26 @@ false` → a CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml` +
 
 ## 5. Last completed round
 
-**E14-R08 — Csoportosított felismerési evaluation harness és leakage-védelem**
+**E14-R10 — Az irány-abstention BEKÖTÉSE a Live úton** (PR
+[#578](https://github.com/wolfcasaba/strumsight/pull/578), squash `1127c22d`).
+A `StrumPrediction.decision` szerződés (ADR 0505, E14-R04) végre **termelőt
+kapott**: a CRNN renormalizált `pDown`/`pUp`-ja additívan eljut a
+`live_pipeline.dart`-ig, ott `StrumPrediction` épül belőle, és `uncertain`
+döntésnél a frame **nem hordoz irányt, és a 2 s-os fade-óra sem lép előre**.
+A heurisztikus ág érintetlen (`null` valószínűség → mai viselkedés) — a kör
+egyetlen DSP/ML konstanst sem hangolt.
+
+Egy új lecke: [L637](docs/LESSONS.md#l637) — egy „a küszöbön" acceptance-cella
+kerek tizedessel felírva a HELYES implementáción piros
+(`|0.525 − 0.475| = 0.050000000000000044`, a `<= 0.05` kaput nem éri el); a
+cellát a küszöb-konstansból származtatott, egzakt `(2·T, T)` párral kell írni.
+
+**Előző kör: E14-R09 — Fail-closed felismerési release-kapu + egy-forrás
+dashboard** (PR [#576](https://github.com/wolfcasaba/strumsight/pull/576),
+squash `cc936bde`, ADR
+[0511](docs/adr/0511-recognition-release-gate-and-single-source-report.md)).
+
+**Előtte: E14-R08 — Csoportosított felismerési evaluation harness és leakage-védelem**
 (PR [#573](https://github.com/wolfcasaba/strumsight/pull/573), squash
 `59372c9c`). A felismerési mérés mostantól **csoportosított és szivárgás-mentes
 lehet**: négy leave-one-out split-stratégia, fail-closed leakage-detektor
@@ -12469,19 +12531,30 @@ Leckék: [L627](docs/LESSONS.md#l627), [L628](docs/LESSONS.md#l628).
 ## 6. Exact next task
 
 **A következő kört a lánc választja** a `docs/execution/pipeline-queue.tsv`
-első `pending` sorából — az `E14-R08` sora ezzel a commit-tal `done`. A
-Chapter 14 sávon az `E14-R09` (baseline dashboard) következik, motor
-`sonnet-impl`; **az ADR-számot a foglalótól kérd, ne a queue oszlopából**
-(lásd a §4 figyelmeztetést — a sorok `0361`…`0371` értéke elavult).
+első `pending` sorából — az `E14-R10` sora ezzel a commit-tal `done`. A
+Chapter 14 sávon az `E14-R11` (akkord-bizonytalanság és külön confidence)
+következik, motor `sonnet-impl`; **az ADR-számot a foglalótól kérd, ne a queue
+oszlopából** (a sorok `0363`…`0371` értéke elavult — az E14-R10 sora `0362`-t
+előlegezett, a foglaló a **`0512`**-t adta).
 
-**Amit az E14-R08 KIMONDOTTAN a következő körök asztalára tett:**
+> ⚠ **Az `E14-R11`…`E14-R16` briefek ugyanabból a 2026-08-20-i előre-írt
+> hullámból valók, mint az E14-R10, amelyik H3-ra futott.** A `brief-lint`
+> **S15** foka (`tools/tests/test_brief_base_sha_drift.py`, L636) most már
+> méri ezt az osztályt, és a korpuszon mérve mind a hatra jelez. A pre-flight
+> KÖTELEZŐ teendője: a brief `main @ <sha>` alapja óta módosult fájlokat
+> újraolvasni, és a §0.0 revízió kimondani, mi maradt igaz. Ha a feloldás
+> `allowed_paths`-**tágítást** kívánna, az **H3** (nem az orchestrátor
+> hatásköre).
+
+**Amit az E14-R10 KIMONDOTTAN a következő körök asztalára tett:**
 
 | # | Mit hagyott nyitva | Hol |
 |---|---|---|
-| 1 | **A runner nem ágazza fold-onként a jelentést** — a `RecognitionSplitBuilder` és a `computeRecognitionMetrics` külön-külön kész és tesztelt, a fold-onkénti riport (és egy `--split` CLI-kapcsoló) egy jövőbeli kör olcsó bekötése (a kör §10.2 szándékos, dokumentált scope-szűkítése) | `lib/features/live/data/evaluation/recognition_evaluation_runner.dart` |
-| 2 | **Dashboard/HTML megjelenítés** — az `E14-R09` köre, a harness JSON-ja a bemenete | `evaluation/recognition/` |
-| 3 | **A `correctAccepted` identitás-halmaz** (review NOTE-1): két `const` módon kanonizált, mezőre azonos detekciót a Dart azonos példánnyá von össze; a parszolt úton nem érhető el, kézzel írt tesztben igen | `recognition_metrics.dart` (`correctAccepted`) |
-| 4 | **A valós korpusz külső marad** (ADR 0509 D9 / ADR 0249): a CI-fixture szintetikus, a valós mérés `--manifest`-tel, kézi futtatással megy | `tool/recognition_evaluate.dart` |
+| 1 | **A küszöb MÉRT kalibrációja** — a `0.05` szállított default (ADR 0505 D4), nem mért optimum; a per-margó-bin coverage/accuracy sweep (`ml/honest_eval.py` held-out fold, ADR 0249 §D4 minimummal) egy KÜLÖN kör dolga | `docs/eval/recognition-direction-abstention.md` §(c) |
+| 2 | **A gyakorlás-pontozás bekötése** — a gateway egyetlen in-scope eszköze a scorer felől `wrong`/`scorePerMille: 0`; a helyes megoldáshoz a `practice_direction_scorer` + `practice_event_matcher` + `practice_observation` (a `StrumObservation.direction` ma nem nullable) EGYÜTT kell | `lib/features/practice/**` |
+| 3 | **A felhasználói confidence-küszöb bekötése** — a `confidenceThresholdProvider`-t a felismerési út **nem olvassa**; ráadásul a `calibrate()` 0,55-ös alsó knotja miatt a `0,45`-ös alapérték ma egyetlen CRNN-pengetést sem utasítana el | `confidence_threshold_provider.dart` |
+| 4 | **MINOR-1 (proveniencia-hivatkozás)** és **MINOR-2** (`pNoStrum: … ?? 0.0` lokalitási kikötése a kódba) | review §6 |
+| 5 | **NOTE-1:** a `_placeInBar` kihagyása `uncertain`-re helyes, de sem §10, sem cella nem rögzíti a szándékot | `live_pipeline.dart` |
 
 **Változatlanul OPERÁTORI (user-) kapuk:** a valós gitáros APK-teszt (a végső
 elfogadási predikátum) és a backend tényleges futtatása + telefon-ráállítás

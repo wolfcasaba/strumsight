@@ -25567,3 +25567,51 @@ versengő kapu.
 **Őrteszt:** [`tools/tests/test_brief_base_sha_drift.py`](../tools/tests/test_brief_base_sha_drift.py)
 (7 cella, fixture-alapú eldobható git-repókon — élő-fa állapotot nem olvas, ezért
 az L612 csapdájába nem eshet).
+
+## L637 — Egy „a küszöbön" acceptance-cella kerek tizedessel felírva a HELYES implementáción piros: `|0.525 − 0.475|` IEEE-754-ben `0.050000000000000044`, tehát a `<= 0.05` kaput NEM éri el (E14-R10, pre-flight, 2026-09-05)
+
+**Forrás:** kör `E14-R10`, PR
+[#578](https://github.com/wolfcasaba/strumsight/pull/578), squash `1127c22d`;
+ADR [0512](adr/0512-live-direction-abstention-wiring.md) D6; a brief
+§0.0b/9 és a review
+[`docs/reviews/e14-r10-review.md`](reviews/e14-r10-review.md) §4 (P2 próba).
+
+**Mit mértünk.** Az E14-R10 briefje a `brief-lint` **S3** előírását követve
+alatta/rajta/fölötte cellahármast kért az
+`StrumPrediction.uncertainMarginThreshold = 0.05` küszöbre, és a cellákat
+tizedes margóként adta meg: `0.049 → uncertain`, **`0.050 → uncertain`**,
+`0.051 → confirmed`. A pre-flight `python3`-mal kiszámolta, mit ad a
+`|pDown − pUp|` a természetes, 1-re összegző párokkal:
+
+| `(pDown, pUp)` | `abs(pDown - pUp)` | `margin <= 0.05` |
+|---|---|---|
+| `(0.5245, 0.4755)` | `0.04899999999999999` | igen → `uncertain` ✅ |
+| `(0.525, 0.475)` | **`0.050000000000000044`** | **nem → `confirmed`** ❌ |
+| `(0.55, 0.50)` | `0.050000000000000044` | nem ❌ |
+| `(1.0, 0.95)` | `0.050000000000000044` | nem ❌ |
+| `(2·T, T)` = `(0.1, 0.05)` | `0.05` (egzakt) | igen → `uncertain` ✅ |
+
+`double(0.05) = 0.05000000000000000277…`, és az `a + b == 1.0` megkötés mellett
+a küszöb **egzaktan elérhetetlen**: a `2a − 1 == double(0.05)` megoldása,
+`a = (1 + T)/2`, nem reprezentálható double-ként. A `(2·T, T)` pár azért
+egzakt, mert `double(0.1) == 2 × double(0.05)` bitre igaz.
+
+**Miért fontos.** A „rajta" cella EGYETLEN dolgot mér: hogy a határ az
+ELUTASÍTÁS-oldalon inkluzív-e (`<=`) vagy az elfogadás-oldalon (`<`). A naiv
+párral felírva mindkét implementáción `confirmed`-et adna — a cella tehát a
+helyes kódon PIROS lett volna, a hibás kódon meg zöld: nemcsak haszontalan,
+hanem **fordítva mérő** őr. A javított cellával a review P2 próbája (a getter
+lecserélése `directionMargin >= threshold`-ra) **kizárólag** ezt a cellát vitte
+pirosra — pontosan a briefelt mérce-mátrix ígérete.
+
+**Hogyan alkalmazd.** Az S3 cellahármast ne a KÜLÖNBSÉG kerek tizedesével írd
+fel, hanem a küszöb-KONSTANSBÓL származtatott, `python3`-mal ellenőrzött
+operandus-párral, és a tesztben `expect(pDown - pUp, T)` alakban állítsd is
+róla, hogy egzakt. Ahol a valós bemenet normalizált (itt: a CRNN
+renormalizált `pDown + pUp == 1`), ott mondd ki, hogy a küszöb-egyenlőség a
+valós úton **elérhetetlen**, és a cella a szerződés getterét méri, nem a
+futásidejű bemenetet.
+
+**Őrteszt:** [`test/features/live/strum_direction_abstention_test.dart`](../test/features/live/strum_direction_abstention_test.dart)`::exactly on the threshold ((2*T, T), egzakt) -> uncertain`
+(az `expect(pDown - pUp, 0.05)` assert a cellán belül gépileg tartja az
+egzaktságot).
