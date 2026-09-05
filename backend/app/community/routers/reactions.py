@@ -48,6 +48,7 @@ from sqlalchemy import text as _sa_text
 from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
+from ..notifications.emitters import notify_post_reaction
 from ..schemas.reaction import ReactionStateOut, SetReactionRequest
 from ..services.reaction_service import (
     InvalidReactionKind,
@@ -164,6 +165,14 @@ def set_reaction_endpoint(
             # írjuk felül egy általános „invalid kind" szöveggel.
             db.rollback()
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # A szerző értesítése — ÖSSZEVONVA: tíz reakció egy tételt ad
+        # tízes számlálóval, nem tíz sort.
+        notify_post_reaction(
+            db,
+            post_public_id=post_public_id,
+            actor_public_id=viewer_public_id,
+            now=_utcnow(),
+        )
         db.commit()
         return _state_after(
             db, viewer_public_id=viewer_public_id, post_public_id=post_public_id

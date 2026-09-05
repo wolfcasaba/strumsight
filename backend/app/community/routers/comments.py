@@ -44,6 +44,7 @@ from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
 from ..models.comment import CommunityComment
+from ..notifications.emitters import notify_post_commented
 from ..schemas.comment import (
     COMMENT_PAGE_SIZE_DEFAULT,
     COMMENT_PAGE_SIZE_MAX,
@@ -257,6 +258,15 @@ def create_comment_endpoint(
             raise HTTPException(status_code=404, detail="post not found") from None
         except CommentValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # A poszt szerzőjének értesítése. SAVEPOINT-ban fut: ha elhasal, a
+        # komment akkor is létrejön — a kibocsátás sosem buktathatja el az
+        # elsődleges műveletet.
+        notify_post_commented(
+            db,
+            post_public_id=post_public_id,
+            actor_public_id=author_public_id,
+            now=_utcnow(),
+        )
         db.commit()
         return _row_to_out(db, comment)
     finally:

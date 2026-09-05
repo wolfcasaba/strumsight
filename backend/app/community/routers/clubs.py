@@ -55,6 +55,7 @@ from ..feed.club_feed import (
 from ..feed.club_feed import ClubNotVisible, list_club_feed
 from ..models.club import CommunityClub
 from ..models.post import CommunityPost
+from ..notifications.emitters import notify_club_invite
 from ..post_projection import SimplePostRow, project_page
 from ..routers.feed import _resolve_cursor_secret
 from ..schemas.club import (
@@ -627,6 +628,16 @@ def invite_endpoint(
             )
         except _SERVICE_ERRORS as exc:
             _raise_for_service_error(exc)
+        # A meghívott értesítése. Enélkül a meghívó SOSEM érne el hozzá: a
+        # klub-lista csak a saját klubjait mutatja, tehát egy függő meghívó
+        # a felületen sehol nem jelenne meg.
+        notify_club_invite(
+            db,
+            club_public_id=public_id,
+            target_public_id=payload.target_public_id,
+            actor_public_id=_resolve_public_id_by_profile_id(db, actor_id),
+            now=_utcnow(),
+        )
         db.commit()
         return {"invite_public_id": str(invite_row.public_id)}
     finally:
