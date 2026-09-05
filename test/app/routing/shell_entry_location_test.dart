@@ -5,11 +5,16 @@ import 'package:go_router/go_router.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/adaptive_shell_routes.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/app/strumsight_app.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
+import 'package:strumsight/features/learn/public.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
+import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
@@ -95,6 +100,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(router.state.uri.path, AppRoutes.today);
+      expect(find.byType(LearnScreen), findsOneWidget);
+      expect(
+        tester.widget<LearnScreen>(find.byType(LearnScreen)).lesson.id,
+        Lessons.firstWin.id,
+      );
     });
 
     testWidgets('shell KI × Skip/finish settles on /live (non-redirected)', (
@@ -118,6 +128,128 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(router.state.uri.path, AppRoutes.live);
+      expect(find.byType(LearnScreen), findsOneWidget);
+      expect(
+        tester.widget<LearnScreen>(find.byType(LearnScreen)).lesson.id,
+        Lessons.firstWin.id,
+      );
     });
   });
+
+  group(
+    'A2 — isolated onboarding-only rig (review MAJOR-1, falszifikáció)',
+    () {
+      // The `pumpOnboarding` cells above run under the REAL `routerProvider`,
+      // which has two guard rails unrelated to this round's D1/D2 contract:
+      // (1) `onboardingRedirect`'s reactive redirect, which fires the instant
+      // `onboardingSeenProvider` flips true and lands on the router's OWN
+      // (unmutated) `entryLocation`; (2) `app_router.dart`'s
+      // `onException: (_, _, router) => router.go(entryLocation)`, which
+      // catches the `GoException` a mutated `router.go('/today')` throws when
+      // `/today` isn't registered under the current flag (shell KI) and
+      // redirects to the correct target anyway. Both converge on the
+      // CORRECT entry location regardless of what the onboarding screen's
+      // OWN navigation call targets, so a flag-blind regression in
+      // `_completeFinish`/`_completeFirstWin` (the D1/D2 duplicate-source
+      // ban's most likely future break) stays green through the real router
+      // (brief §7.1 pont 2, review MAJOR-1). This rig removes BOTH nets on
+      // purpose — a bare `GoRouter` with NEITHER `redirect` NOR `onException`
+      // wired, and BOTH `/today` and `/live` registered under every flag
+      // state so a mutated call never throws — so the only thing left
+      // deciding the settled URI is the onboarding screen's own
+      // `entryLocationFor(...)` call.
+      Future<GoRouter> pumpBareOnboarding(
+        WidgetTester tester, {
+        required bool adaptiveShellEnabled,
+      }) async {
+        final container = ProviderContainer(
+          overrides: [
+            ...preferenceOverrides(),
+            onboardingSeenProvider.overrideWith(
+              () => OnboardingController(false),
+            ),
+            appConfigProvider.overrideWithValue(
+              AppConfig(
+                environment: AppEnvironment.development,
+                apiBaseUrl: AppConfig.devApiBaseUrl,
+                flags: FeatureFlags(
+                  accountEnabled: false,
+                  diagnosticsEnabled: true,
+                  labModeAvailable: true,
+                  adaptiveShellEnabled: adaptiveShellEnabled,
+                ),
+                diagnosticsToken: AppConfig.devDiagnosticsToken,
+                buildMode: 'test',
+                appVersion: 'test',
+              ),
+            ),
+          ],
+        );
+        final router = GoRouter(
+          initialLocation: AppRoutes.welcome,
+          routes: [
+            GoRoute(
+              path: AppRoutes.welcome,
+              builder: (_, _) => const OnboardingScreen(),
+            ),
+            GoRoute(
+              path: AppRoutes.today,
+              builder: (_, _) => const SizedBox.shrink(),
+            ),
+            GoRoute(
+              path: AppRoutes.live,
+              builder: (_, _) => const SizedBox.shrink(),
+            ),
+          ],
+        );
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox.shrink());
+          container.dispose();
+        });
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(
+              routerConfig: router,
+              theme: SsLightTheme.data(),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(router.state.uri.path, AppRoutes.welcome);
+        return router;
+      }
+
+      testWidgets('shell BE × Skip/finish: bare rig settles on /today', (
+        tester,
+      ) async {
+        final router = await pumpBareOnboarding(
+          tester,
+          adaptiveShellEnabled: true,
+        );
+
+        await tester.tap(find.text('Skip'));
+        await tester.pumpAndSettle();
+
+        expect(router.state.uri.path, entryLocationFor(true));
+      });
+
+      testWidgets('shell KI × Skip/finish: bare rig settles on /live', (
+        tester,
+      ) async {
+        final router = await pumpBareOnboarding(
+          tester,
+          adaptiveShellEnabled: false,
+        );
+
+        await tester.tap(find.text('Skip'));
+        await tester.pumpAndSettle();
+
+        expect(router.state.uri.path, entryLocationFor(false));
+      });
+    },
+  );
 }

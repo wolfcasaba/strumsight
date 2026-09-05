@@ -719,6 +719,91 @@ mutációk után üres az érintett két `lib/**` fájlra).
   ezt a kört a listán kívüli fájlhoz nyúlás nem érintette, újrafuttatása
   nem volt szükséges.
 
+### 10.6 Javító forduló (review-findings)
+
+A review (`docs/reviews/e16-r06-review.md`) egy MAJOR és három MINOR leletet
+adott. Mind a négy zárva — kizárólag a MÁR engedélyezett fájlokon belül,
+`lib/**` érintése nélkül a MAJOR-1-nél, `lib/**` egy eldobható, visszaállított
+mutációjával a falszifikációnál.
+
+**MAJOR-1** — `test/app/routing/shell_entry_location_test.dart:139-254` —
+felvett egy új `'A2 — isolated onboarding-only rig (review MAJOR-1,
+falszifikáció)'` csoportot, két cellával (`shell BE × Skip/finish: bare rig
+settles on /today`, `shell KI × Skip/finish: bare rig settles on /live`). A
+rig egy csupasz `GoRouter`-t épít (`/welcome` → `OnboardingScreen`, `/today`
+és `/live` egyaránt regisztrált placeholderrel), `redirect`/`onException`
+NÉLKÜL, `appConfigProvider` override-dal mindkét flag-állásra — a
+`pumpOnboarding` fölötti két védőháló (`onboardingRedirect` reaktív
+redirectje, `app_router.dart`'s `onException`) így nem tudja elfedni az
+onboarding SAJÁT navigációs döntését. A meglévő négy „valódi routeres" cella
+változatlan maradt. (A `SsButton` a design-system `SsColorScheme`
+theme-extension nélkül `Null check operator used on a null value` hibával
+bukik egy sima `AppTheme.dark()` alatt — a rig ezért `SsLightTheme.data()`-t
+használ, ugyanazt, amit `test/features/onboarding/onboarding_test.dart` már
+használ egy témátlan `MaterialApp` helyett.)
+
+Ellenőrzés (szó szerinti kimenet, a brief §7.1 pont 2 mutációjával az
+`_completeFinish`-ben, a `entryLocationFor(...)` hívást fix literálra cserélve):
+
+1. `final entryLocation = '/today';` → `flutter test
+   test/app/routing/shell_entry_location_test.dart`:
+   ```
+   00:03 +5 -1: A2 — isolated onboarding-only rig (review MAJOR-1, falszifikáció) shell KI × Skip/finish: bare rig settles on /live [E]
+   Failing tests:
+     .../shell_entry_location_test.dart: A2 — isolated onboarding-only rig (review MAJOR-1, falszifikáció) shell KI × Skip/finish: bare rig settles on /live
+   ```
+   Az ÖT másik cella (a négy valódi routeres + az izolált BE cella) ZÖLD
+   maradt — a fix `/today` csak a KI izolált cellát viszi pirosra, pontosan
+   ahogy a review kérte.
+2. Visszaállítás (`entryLocationFor(ref.read(appConfigProvider).flags.adaptiveShellEnabled)`)
+   → `00:03 +6: All tests passed!` (mind a hat cella ZÖLD).
+3. `final entryLocation = '/live';` (kontroll a másik flag-irányra) →
+   ```
+   00:03 +4 -2: Some tests failed.
+   Failing tests:
+     .../shell_entry_location_test.dart: A2 — isolated onboarding-only rig (review MAJOR-1, falszifikáció) shell BE × Skip/finish: bare rig settles on /today
+     .../shell_entry_location_test.dart: A2 — the belépési 2×2 mátrix (settled router URI) shell BE × Skip/finish settles on /today
+   ```
+   Az izolált BE cella PIROSRA vált (a fix `/live` a shell BE állapotban is
+   érvényes route, tehát nem dob `GoException`-t, és a rig védőháló nélkül
+   nem tereli vissza `/today`-ra) — a valódi routeres BE cella is pirosra
+   vált ugyanezen okból (ezt a §10.4 kontroll-mérése már dokumentálta). A
+   `git diff` a mutációk után üres `lib/features/onboarding/screens/onboarding_screen.dart`-ra
+   (visszaállítva).
+
+A D1 szerződésnek ezzel MÁR van automatizált őre az A1 kézi grepje mellett: az
+izolált KI cella pontosan a review által megnevezett „flag-vak, hardkódolt
+belépési hely" regressziót kapja el.
+
+**MINOR-1** — `test/features/practice_hub/practice_area_hub_cta_test.dart:115-123`
+— a két nyers angol literál (`'Recommended for you'`,
+`'Jump into a practice session picked for where you are right now.'`)
+`lookupAppLocalizations(const Locale('en'))`-re cserélve, a
+`practiceAreaHubRecommendedTitle`/`practiceAreaHubRecommendedMessage` kulcsokra
+mérve (precedens: `full_app_walkthrough_test.dart:81`). A cella zöld maradt
+(`flutter test test/features/practice_hub/practice_area_hub_cta_test.dart`:
+`00:01 +3: All tests passed!`).
+
+**MINOR-2** — `docs/release/full-app-verification.md`:
+- `:8-10` — a bevezető mondat kiegészítve: „…(§5.2 — a `lib/**` ennek a
+  körnek tiltott zónája; L1/L2 azóta `E16-R06`-ban feloldva, l. §2)…”.
+- `:282` — a „## 4. Nyitott tételek” tábla 6. sorának Tétel-cellája múlt
+  időbe téve: „…mérhetően NEM voltak végigjárhatók…”.
+Az L3/L4/L5 `###` alszakaszok és a §3 partíció-táblázatok érintetlenek.
+
+**MINOR-3** — `test/app/routing/shell_entry_location_test.dart:95-108` és
+`:121-136` — mindkét first-win cellába felkerült két sor:
+`expect(find.byType(LearnScreen), findsOneWidget);` és
+`expect(tester.widget<LearnScreen>(find.byType(LearnScreen)).lesson.id,
+Lessons.firstWin.id);` — az A3 „páros" mérése (belépési hely ÉS push) most a
+KI flag-álláson is teljes, nem csak a BE-n.
+
+**Gate a javító kör végén** (§7 artefaktum, csonkítatlan, `&&`/`| tail`
+nélkül) — 19/19 zöld, `git status --porcelain test/ui/goldens/goldens/
+test/fixtures/ui/` üres, nincs listán kívüli diff (kizárólag
+`shell_entry_location_test.dart`, `practice_area_hub_cta_test.dart` és
+`full-app-verification.md` módosult).
+
 ## 11. Review — a Claude tölti ki
 
 *(üres)*

@@ -6,7 +6,8 @@
 Ez a dokumentum a kör MÉRT eredményét rögzíti: (1) a placeholder-mérő
 (`tool/check_placeholder_wiring.dart`) kimenete, (2) a bejárás
 (`test/e2e/full_app_walkthrough_test.dart`) által talált, **NEM javított**
-leletek (§5.2 — a `lib/**` ennek a körnek tiltott zónája), és (3) a mért
+leletek (§5.2 — a `lib/**` ennek a körnek tiltott zónája; L1/L2 azóta
+`E16-R06`-ban feloldva, l. §2), és (3) a mért
 elérhető képernyő-halmaz (73) diszjunkt, teljes partíciója a bejárt (9) és a
 kimaradó (64) képernyők között, gazdával és körrel.
 
@@ -279,4 +280,4 @@ kimondott `nincs — <indok>`.
 | 3 | L3 — Library V2 forrásai bootstrap-függők, a harness nem köti be | Library V2 / E12-R11 harness | nincs — a harness-nek vagy a Library kompozíciós rétegének kell ezt bekötnie egy jövőbeli körben; a lelet itt van rögzítve |
 | 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | nincs — a két napló összehangolása vagy a mérce forrásának cseréje a felelős feature kör dolga; a lelet itt van rögzítve |
 | 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | nincs — a cache-invalidáció (vagy a provider `.family`/`autoDispose` alakra cserélése) a felelős feature kör dolga; a lelet itt van rögzítve |
-| 6 | A3 — a core utak a termék SAJÁT navigációjával (a két teszt-oldali híd nélkül) mérhetően NEM járhatók végig (l. L1, L2, §2 bevezető) | Practice Area Hub / Onboarding feature | **`E16-R06` — feloldva, A3 mérve TELJESÜL** (l. §2 bevezető) |
+| 6 | A3 — a core utak a termék SAJÁT navigációjával (a két teszt-oldali híd nélkül) mérhetően NEM voltak végigjárhatók (l. L1, L2, §2 bevezető) | Practice Area Hub / Onboarding feature | **`E16-R06` — feloldva, A3 mérve TELJESÜL** (l. §2 bevezető) |

@@ -115,19 +115,15 @@ void main() {
     testWidgets('(c) an empty catalog: no recommended card at all', (
       tester,
     ) async {
+      final l10n = lookupAppLocalizations(const Locale('en'));
       await _pumpHub(
         tester,
         overrides: [practiceCatalogProvider.overrideWithValue(const [])],
       );
 
       expect(find.byKey(_ctaKey), findsNothing);
-      expect(find.text('Recommended for you'), findsNothing);
-      expect(
-        find.text(
-          'Jump into a practice session picked for where you are right now.',
-        ),
-        findsNothing,
-      );
+      expect(find.text(l10n.practiceAreaHubRecommendedTitle), findsNothing);
+      expect(find.text(l10n.practiceAreaHubRecommendedMessage), findsNothing);
     });
   });
 }
