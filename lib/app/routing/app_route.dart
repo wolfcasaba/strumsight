@@ -51,6 +51,12 @@ abstract final class AppRoutes {
   // Audio Analysis V2 (E06-R23) — overview and metric detail screens.
   // Both routes are flag-gated in app_router.dart and are intentionally
   // unreachable while `audioAnalysisV2Enabled == false`.
+  // A felvételi folyamat (2026-09-05). Három lépés, három cím: a
+  // kezdőlap → felvétel → feldolgozás sorrend így mély-linkelhető és
+  // visszalépéskor is értelmes.
+  static const String analysisCapture = '/analysis/capture';
+  static const String analysisRecord = '/analysis/record';
+  static const String analysisProcessing = '/analysis/processing';
   static const String analysisOverview = '/analysis/overview';
   static const String analysisMetricDetail = '/analysis/metric-detail';
   static const String analysisTimeline = '/analysis/timeline';

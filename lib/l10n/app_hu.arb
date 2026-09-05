@@ -674,6 +674,8 @@
   "@analysisExportTitle": {},
   "analysisHomeImportCta": "Fájl importálása",
   "@analysisHomeImportCta": {},
+  "analysisHomeImportUnavailable": "A fájl-importálás még nem elérhető — vegyél fel helyette.",
+  "@analysisHomeImportUnavailable": {},
   "analysisHomeImportDescription": "Meglévő felvétel elemzése, legfeljebb {limitMb} MB.",
   "@analysisHomeImportDescription": {
     "placeholders": {

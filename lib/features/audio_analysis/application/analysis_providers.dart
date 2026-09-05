@@ -19,7 +19,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/audio/audio_providers.dart';
+import '../../../core/audio/lifecycle/audio_session_lease.dart';
+import '../../../core/foundation/app_result.dart';
 import '../data/cache/analysis_cache.dart';
+import '../data/capture/analysis_recorder.dart';
+import '../domain/analysis_summary.dart';
 import '../data/local/file_analysis_repository.dart';
 import '../data/migration/analysis_migration_version_store.dart';
 import '../data/migration/legacy_library_migrator.dart';
@@ -33,6 +38,7 @@ import '../../progress/public.dart'
 import '../../streak/public.dart' show StreakLogic, streakProvider;
 import 'analysis_controller.dart';
 import 'analysis_isolate_runner.dart';
+import 'analysis_state.dart';
 import 'analyze_audio_use_case.dart';
 import 'cancel_analysis_use_case.dart';
 import 'save_analysis_use_case.dart';
@@ -264,3 +270,48 @@ final class _RiverpodAnalysisPracticeCreditRecorder
         );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Capture flow (2026-09-05) — a `presentation/capture/` hármas bekötése.
+//
+// A három képernyő (kezdőlap, felvétel, feldolgozás) `reachable: false` volt,
+// mert a `AnalysisController`-nek NEM volt providere, a felvevőnek sem, és a
+// `AnalyzeAudioUseCase` üres mintákat adott tovább. Mindhárom hiány itt zárul
+// (a harmadik a use case-ben).
+// ---------------------------------------------------------------------------
+
+/// A futó elemzés állapotgépe. A `capture/` képernyők ezt figyelik.
+final analysisControllerProvider =
+    NotifierProvider<AnalysisController, AnalysisState>(
+      AnalysisController.new,
+    );
+
+/// A felvevő. `autoDispose`, és a lezárását MAGA végzi: aki a mikrofont
+/// birtokló objektumot építi, az engedi is el (a `liveFrameProvider`
+/// precedense — egy le nem zárt felvevő bekapcsolva hagyná a mikrofont).
+final analysisCaptureRecorderProvider = Provider.autoDispose<AnalysisRecorder>((
+  ref,
+) {
+  final recorder = AnalysisRecorder(
+    mic: createMicCapture(ref, AudioOwner.analyzeRecorder),
+  );
+  ref.onDispose(recorder.dispose);
+  return recorder;
+});
+
+/// A legutóbbi elemzések a kezdőlaphoz.
+///
+/// A képernyő SZÁNDÉKOSAN nem olvas repository-t („This screen never reads
+/// the analysis repository itself" — a saját docstringje), ezért a lista
+/// betöltése a kompozíciós gyökér dolga.
+final analysisRecentSummariesProvider =
+    FutureProvider.autoDispose<List<AnalysisSummary>>((ref) async {
+      final result = await ref.watch(analysisRepositoryProvider).list();
+      return switch (result) {
+        Success<List<AnalysisSummary>>(:final value) => value,
+        // A hiba NEM üres listaként jelenik meg: az azt állítaná, hogy nincs
+        // korábbi elemzés. A `FutureProvider` hibaága a képernyőn megkülön-
+        // böztethető állapot.
+        Failure<List<AnalysisSummary>>(:final error) => throw error,
+      };
+    });

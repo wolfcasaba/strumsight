@@ -6,7 +6,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
+import '../../features/audio_analysis/application/analysis_providers.dart';
+import '../../features/audio_analysis/application/capture_seed.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
+import '../../features/audio_analysis/domain/analysis_input.dart';
+import '../../features/audio_analysis/domain/analysis_mode.dart';
+import '../../features/audio_analysis/domain/analysis_summary.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
 import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
 import '../../features/audio_analysis/presentation/analysis_compare_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_metric_detail_screen.dart';
@@ -778,6 +786,100 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ],
       if (audioAnalysisV2Enabled) ...[
+        // A felvételi folyamat (2026-09-05). A három képernyő azért volt
+        // elérhetetlen, mert HÁROM darab hiányzott alóla: a vezérlőnek nem
+        // volt providere, a felvevőnek sem, és az `AnalyzeAudioUseCase`
+        // ÜRES mintákat adott tovább — bekötve tehát csendet elemzett volna.
+        GoRoute(
+          path: AppRoutes.analysisCapture,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final recent = ref.watch(analysisRecentSummariesProvider);
+              final l10n = AppLocalizations.of(context);
+              return AnalysisHomeScreen(
+                // Betöltés / hiba alatt ÜRES lista megy be — a képernyő
+                // szerződése nem ismer köztes állapotot. A hiba NEM
+                // csendben nyelődik el: a provider hibaága megmarad, és a
+                // lista üres volta itt nem állítás, hanem a még be nem
+                // töltött állapot.
+                recentAnalyses: recent.value ?? const <AnalysisSummary>[],
+                onStartRecording: () => context.go(AppRoutes.analysisRecord),
+                onImportFile: () {
+                  // A hang-importálásnak NINCS folyamata a fában (se
+                  // képernyő, se útvonal). Egy néma no-op itt halott gombot
+                  // adna; a felhasználó azt hinné, elromlott. Ezért a
+                  // hiányt kimondjuk.
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.analysisHomeImportUnavailable),
+                    ),
+                  );
+                },
+                onOpenAnalysis: (summary) => context.go(
+                  AppRoutes.analysisTimeline,
+                  extra: summary,
+                ),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisRecord,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              // `watch`, nem `read`: az autoDispose felvevőt a widget
+              // életciklusa tartja életben, és a képernyő elhagyásakor
+              // eldobódik — a következő felvétel FRISS példányt kap. Egy
+              // `read` azonnal eldobná, egy nem-autoDispose provider pedig
+              // a képernyő által már lezárt felvevőt adná vissza másodszor.
+              final recorder = ref.watch(analysisCaptureRecorderProvider);
+              return AnalysisRecordingScreen(
+                recorder: recorder,
+                onCancel: () => context.go(AppRoutes.analysisCapture),
+                onFinished: (run, samples) {
+                  final pcm = PcmAnalysisInput(
+                    samples: samples,
+                    sampleRate: run.sampleRate,
+                    channelCount: 1,
+                    source: AnalysisInputSource.microphone,
+                  );
+                  unawaited(
+                    ref
+                        .read(analysisControllerProvider.notifier)
+                        .analyze(
+                          captureSeedDocument(
+                            runId: run.id,
+                            audio: pcm,
+                            createdAt: DateTime.now(),
+                          ),
+                          audio: ValidatedPcmAnalysisInput(input: pcm),
+                        ),
+                  );
+                  context.go(AppRoutes.analysisProcessing);
+                },
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisProcessing,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final state = ref.watch(analysisControllerProvider);
+              return AnalysisProcessingScreen(
+                state: state,
+                onCancel: () => unawaited(
+                  ref.read(analysisControllerProvider.notifier).cancel(),
+                ),
+                onRestart: () => context.go(AppRoutes.analysisRecord),
+                onViewResult: (document) => context.go(
+                  AppRoutes.analysisOverview,
+                  extra: document,
+                ),
+              );
+            },
+          ),
+        ),
         GoRoute(
           path: AppRoutes.analysisOverview,
           redirect: (_, state) =>

@@ -681,6 +681,8 @@
   "@analysisExportTitle": {},
   "analysisHomeImportCta": "Import a file",
   "@analysisHomeImportCta": {},
+  "analysisHomeImportUnavailable": "File import is not available yet — record instead.",
+  "@analysisHomeImportUnavailable": {},
   "analysisHomeImportDescription": "Analyze an existing recording, up to {limitMb} MB.",
   "@analysisHomeImportDescription": {
     "placeholders": {
