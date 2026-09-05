@@ -80,10 +80,17 @@ List<ChordEvent> reduceChordTimeline(
 class ChordTimelineController extends Notifier<List<ChordEvent>> {
   @override
   List<ChordEvent> build() {
+    // ADR 0518 D5/D2: the stabilizer sits between the raw frame stream and
+    // the reducer, gating label-flicker before it can spawn a card. The
+    // reducer itself stays untouched (its own contract is pinned by
+    // test/property/chord_timeline_property_test.dart, outside this round).
+    final stabilizer = ref.watch(recognitionStabilizerProvider);
     ref.listen(liveFrameProvider, (prev, next) {
       final frame = next.value;
-      if (frame != null) {
-        state = reduceChordTimeline(state, frame);
+      if (frame == null) return;
+      final stabilized = stabilizer.stabilize(frame);
+      if (stabilized != null) {
+        state = reduceChordTimeline(state, stabilized);
       }
     });
     return const [];
