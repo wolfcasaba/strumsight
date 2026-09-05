@@ -2,5 +2,6 @@
   "STRUMSIGHT_ENV": "development",
   "STRUMSIGHT_PREVIEW_ALL": "true",
   "STRUMSIGHT_ACCOUNT": "true",
-  "STRUMSIGHT_BUILD_TAG": "preview-full-ui-e14"
+  "STRUMSIGHT_API_URL": "https://casaba.app/strumsight",
+  "STRUMSIGHT_BUILD_TAG": "preview-full-ui-e14-api"
 }
