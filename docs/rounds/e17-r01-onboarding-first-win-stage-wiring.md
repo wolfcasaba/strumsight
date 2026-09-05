@@ -53,6 +53,7 @@ gate_tests = [
   "test/ui/goldens/e15_r13_full_variant_matrix_test.dart",
   "test/ui/ui_baseline_screenshot_test.dart",
   "test/app/navigation/",
+  "test/tooling/placeholder_wiring_test.dart",
 ]
 ```
 
@@ -91,6 +92,28 @@ forrás és a zöld kapu megkülönböztethetetlen*).
 
 **Regressziós őr:** `tools/tests/test_e17_r01_first_win_source_scope.py` — a
 revízió ELŐTTI briefen piros, utána zöld.
+
+## 0.0.2 Revízió — a `gate_tests` a képernyő-leltár PARTÍCIÓ-őrével bővült (orchestrátor, 2026-09-05, CI-piros után)
+
+**Miért.** A `full-gate.yml` (`33994934171`, head `4ffac86d`) EGY cellán bukott:
+`test/tooling/placeholder_wiring_test.dart` → *„the walked set (from actually
+RUNNING the walkthrough) and the excluded table are disjoint, and their union
+covers every measured reachable screen"* →
+`reachable screens missing from both the walk and the exclusion table (A4):
+{lib/features/onboarding/screens/first_win_stage_screen.dart}`.
+
+Ez ismét a kör SIKERÉNEK a következménye (A1: a Stage MOST lett elérhető), és a
+kör lokális §7 gate-je azért nem fogta meg, mert ez az őr sem az
+`allowed_paths`-on, sem a `gate_tests`-en nem volt rajta (brief-lint S9
+hibaosztály).
+
+**Mi változott.** A `gate_tests` bővült a
+`test/tooling/placeholder_wiring_test.dart` útvonallal. Ez **mérce-szigorítás,
+nem lista-tágítás**: az `allowed_paths` VÁLTOZATLAN, a kör ezt a fájlt nem
+írhatja. A feloldás a listán BELÜL van: az őr a walked halmazt a
+`test/e2e/full_app_walkthrough_test.dart` `runCoreWalkthrough` függvényéből
+veszi, ami a kör `allowed_paths`-án VAN — a bekötött Stage-et tehát a
+walkthroughnak ténylegesen végig kell járnia (§10.6).
 
 ## 0.0.1 Pre-flight újramérés — a kör indulása (`main @ 5fbb4937`, 2026-09-05)
 
@@ -226,7 +249,7 @@ Minden fenti acceptance-cella MÉRT állítás: a §7 gate-parancsa futtatja ők
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/onboarding/ test/features/onboarding/first_win_production_engine_test.dart test/e2e/full_app_walkthrough_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/app/routing/shell_entry_location_test.dart test/core/screen_size_guard_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e15_r13_full_variant_matrix_test.dart test/ui/ui_baseline_screenshot_test.dart test/app/navigation/
+tools/round-gate.sh test/features/onboarding/ test/features/onboarding/first_win_production_engine_test.dart test/e2e/full_app_walkthrough_test.dart test/app/routing/app_router_test.dart test/app/routing/onboarding_first_win_test.dart test/app/routing/shell_entry_location_test.dart test/core/screen_size_guard_test.dart test/features/onboarding/first_win_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/onboarding_test.dart test/features/onboarding/permission_primer_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/goldens/e15_r13_full_variant_matrix_test.dart test/ui/ui_baseline_screenshot_test.dart test/app/navigation/ test/tooling/placeholder_wiring_test.dart
 ```
 
 A gate a `format` → `analyze` → `test <minden útvonal külön>` → `architecture` lépéseket KÜLÖN processzként futtatja (a box mért OOM-csapdája miatt a `flutter analyze && flutter test` lánc tilos).
