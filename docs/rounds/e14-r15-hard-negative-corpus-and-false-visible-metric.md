@@ -393,4 +393,101 @@ a 4. pont **PIROS**, visszaállítva **ZÖLD**; továbbá a `kind` szűrés
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5). **Státusz:** `done`.
+
+### Mit épített
+
+1. **Hard-negative taxonómia** — `evaluation/recognition/negative_taxonomy.json`
+   (schemaVersion `"1"`, 11 kategória: `speech`, `tapping`, `deskKnock`,
+   `pickClick`, `stringNoise`, `fretSqueak`, `metronome`, `backgroundMusic`,
+   `tv`, `fan`, `phoneHandling`) + a típusos modell/validátor
+   `lib/features/live/domain/evaluation/negative_taxonomy.dart`-ban
+   (`NegativeTaxonomy`, `NegativeTaxonomyCategory`, `NegativeTaxonomySample`,
+   `NegativeTaxonomySegment`, `NegativeTaxonomyParser`,
+   `NegativeTaxonomyException` a `NegativeTaxonomyErrorKind` enummal —
+   `malformedValue`, `missingField`, `unknownField`, `unknownSchemaVersion`,
+   `tooFewCategories`, `duplicateCategoryId`, `unknownCategory`). A ≥10-es
+   küszöb `NegativeTaxonomy` konstruktorában van (inkluzív határ), az
+   ismeretlen-kategória hiba `NegativeTaxonomy.categoryById` / a
+   `parseSample` segéd hívja. CI-fixture:
+   `evaluation/recognition/fixtures/negative_taxonomy_sample.json` (11
+   szegmens, mindegyik `sourceRef`-fel a repón kívüli anyagra mutat, nincs
+   hangfájl).
+2. **A két szűkített ráta** — `RecognitionMetrics` két új mezőt kapott
+   (`falseVisibleDirectionEventsPerMinute`, `falseVisibleChordEventsPerMinute`,
+   mindkettő `RecognitionRateMetric`), a `computeRecognitionMetrics` UGYANAZON
+   menetében, a meglévő `correctAccepted`/`acceptedDetections`
+   halmazokból, `kind`-szerinti szűréssel (ADR 0521 D1–D4). A meglévő
+   `falseVisibleEventsPerMinute` számítása és mezője változatlan.
+3. **Extractor-bejegyzések** — `recognitionMetricExtractors`
+   (`recognition_release_gate.dart`) két új kulcsot kapott
+   (`falseVisibleDirectionEventsPerMinute.value`,
+   `falseVisibleChordEventsPerMinute.value`), az irány mindkettőnél a
+   metrika saját `definition.higherIsBetter`-éből jön. A renderer forrását
+   (`recognition_report_renderer.dart`) NEM módosítottam — a §0.0.1/1 mérés
+   szerint generikus, kulcslista nélküli, ezért a két új sor automatikusan
+   megjelenik mindhárom formátumban.
+4. **`public.dart`** — additív export:
+   `export 'domain/evaluation/negative_taxonomy.dart';`.
+5. **Doksi** — új `docs/eval/recognition-hard-negatives.md` (taxonómia +
+   capture-lista + a repón kívüli, kézi 60 perces workflow leírása);
+   `docs/eval/recognition-dashboard.md` „deliberately absent” szakasza
+   frissítve — a „false visible arrow hard-negative” és a „false confident
+   chord hard-negative” sor most `## Now mechanised (ADR 0521)` alatt van
+   dokumentálva a két új metrika-úttal, a maradék NÉGY sor (accepted
+   direction accuracy, weakest supported chord recall, confirmed chord
+   accepted accuracy, chord transition p50) a „still … deliberately absent”
+   bekezdésben maradt, a „Four” szó immár ténylegesen pontos.
+
+### Amit szándékosan NEM érintettem
+
+- `evaluation/recognition/recognition_release_gate.json` — változatlan (8.
+  acceptance, a pinnelt teszt módosítás nélkül zöld).
+- `recognition_report_renderer.dart` forrása — nem az allowed-listán, és a
+  §0.0.1/1 mérés szerint nem is szükséges hozzá módosítás.
+- A `GroupKey`/`sourceId`/manifest-séma bővítés és a taxonómia-kategória
+  manifest-hordozása — a §0.0 kifejezetten kiveszi a körből.
+
+### Falszifikáció (§7.1, ténylegesen lefuttatva és visszaállítva)
+
+1. Az `acceptedDetections` szűrőjéből ideiglenesen kivettem a `d.accepted`
+   feltételt (`.where((d) => true)`). Eredmény:
+   `flutter test test/features/live/evaluation/recognition_metrics_test.dart`
+   — a 4. acceptance cellája (**„abstaining one of the three -> 1.0/min"**)
+   **PIROS** lett (`Expected: <2> Actual: <3>`), és vele együtt három
+   meglévő cella is (`accepted accuracy`, `coverage`,
+   `false visible events/min` — ugyanaz a gyökér-adat). Visszaállítás
+   után (`d.accepted` visszatéve) a teljes fájl **ZÖLD** (37/37), és a
+   `git diff --stat` üres — a forrás bájt-azonos a commitolt állapottal.
+2. A `falseVisibleDirectionCount` szűrőjéből ideiglenesen kivettem a
+   `d.kind == RecognitionEventKind.strum` feltételt (`true &&` maradt csak).
+   Eredmény: a **6. (anti-alias) cella PIROS** lett
+   (`Expected: a value less than <5> Actual: <7>`), és vele együtt az **5.
+   (zárt partíció) cella is PIROS** — pontosan az L549 hibaosztály, amit a
+   cella bizonyítani hivatott. Visszaállítás után a fájl ismét **ZÖLD**
+   (37/37), `git diff --stat` üres.
+
+### Gate — a mért eredmény
+
+```
+tools/round-gate.sh test/features/live/evaluation/negative_taxonomy_test.dart test/features/live/evaluation/recognition_metrics_test.dart test/features/live/evaluation/recognition_release_gate_test.dart test/features/live/evaluation/recognition_report_renderer_test.dart
+```
+
+`format` → ZÖLD, `analyze` → ZÖLD, mind a négy célzott teszt → ZÖLD
+(11/37/18/13 zöld cella soronként), `architecture` → ZÖLD, `secrets` → ZÖLD,
+`l10n` → ZÖLD. **MINDEN GATE ZÖLD.**
+
+### Amit a review-nak látnia kell
+
+- A négy tesztfájl közül háromban (`recognition_metrics_test.dart`,
+  `recognition_release_gate_test.dart`, `recognition_report_renderer_test.dart`)
+  kizárólag ÚJ `group`/`test` cellák kerültek be, egyetlen meglévő cella
+  szövege/elvárása sem változott; a `_metrics` segéd
+  (`recognition_release_gate_test.dart`) két új opcionális paramétert kapott
+  `_rate()` alapértelmezéssel.
+  `negative_taxonomy_test.dart` teljes egészében új fájl.
+- A taxonómia-JSON és a fixture tartalma (kategória-nevek, leírások,
+  szegmens-számok) design-döntés, nem mért érték — a review szabadon
+  finomíthatja, amíg a ≥10-es darabszám és a típusos hiba-szerződés áll.
+
 ## 11. Review — a Claude tölti ki
