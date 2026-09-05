@@ -448,7 +448,7 @@ azonnal visszaállítva). Nincs új `AudioOwner` variáns, nincs
 `lib/core/audio/**` módosítás, nincs új l10n kulcs, nincs új
 `OnboardingStep` érték, nincs új top-level route.
 
-### 10.4 Javító kör #1 — BLOCKER-1 / MAJOR-1 feloldása (`sonnet-impl`, 2026-09-05)
+### 10.5 Javító kör #1 — BLOCKER-1 / MAJOR-1 feloldása (`sonnet-impl`, 2026-09-05)
 
 **A lelet gyökéroka (mérve, `.pipeline/E17-R01-review-findings.md`).**
 `_completeFirstWin` a Stage-et pageless `MaterialPageRoute`-ként pusholta a
@@ -549,7 +549,12 @@ completion-report guard) a `origin/main @ b1abed91` heal beolvasztása után
 
 ## 11. Review — a Claude tölti ki
 
-**Verdikt: HALT — H3 (a feloldás az `allowed_paths` TÁGÍTÁSÁT kívánja).** A kör
+> **VÉGSŐ VERDIKT (2026-09-05, 2. review a javító kör után): APPROVED.**
+> A 11.1–11.4 az ELSŐ review (H3 halt) történeti feljegyzése; a halt gyökérokát
+> az ADR 0112 önjavító kör a `main`-en feloldotta (`b1abed91`), a kör a
+> §11.5–11.7 szerint folytatódott. Nyitott BLOCKER/MAJOR/MINOR: **nincs**.
+
+**Verdikt (1. review, SUPERSEDED): HALT — H3 (a feloldás az `allowed_paths` TÁGÍTÁSÁT kívánja).** A kör
 implementációja MÉRTEN kész és jó (A1–A10 zöld, 4/4 falszifikációs próba
 dokumentálva), a §7 gate mégsem hozható zöldre a kör engedélyezett fájllistáján
 belül. A halt tehát NEM az implementáció hibája — a scope-audit is `ok`
@@ -630,3 +635,75 @@ A kör implementációs commitjai (`74288e86`, `e1631db3`) a
 `sonnet-impl/e17-r01-onboarding-first-win-stage-wiring` ágon állnak, az
 originra pusholva — az önjavítás után a kör a review + CI + merge lépésnél
 folytatható, nem kell újraimplementálni.
+
+### 11.5 A halt feloldása és az upstream-szinkron (2026-09-05, folytatás)
+
+Az önjavító kör a `main`-en a **szerkezeti** feloldást választotta (a §11.4/1.
+javaslat): `b1abed91` — „A dátumozott jelentés darabszám-celláit is a RÖGZÍTETT
+pillanatkép őrzi" (L653; a `test/fixtures/ui/e15_r13_completion_report_baseline.json`
+`matrix` blokkja + a két A5-cella a snapshotból veszi a várt értéket). A kör-ág
+ezért NEM indult újra: az orchestrátor a §0.3 szerint mérte és építette be az
+upstreamet.
+
+```
+$ git -C /home/ubuntu/ss-sonnet-impl-e17-r01 merge-base --is-ancestor origin/main HEAD
+ANCESTOR: NEEDS MERGE
+$ git merge --no-ff origin/main
+Auto-merging test/ui/goldens/e15_r13_full_variant_matrix_test.dart
+Merge made by the 'ort' strategy.   (b148f7dc — konfliktus nélkül)
+```
+
+A `b148f7dc` fán a §7 gate ÚJRA lefutott, csonkítatlanul:
+
+```
+$ tools/round-gate.sh <a §7 mind a 15 tesztútvonala>
+    test test/ui/goldens/e15_r13_full_variant_matrix_test.dart zöld
+    architecture / secrets / l10n                              zöld
+MINDEN GATE ZÖLD
+```
+
+— azaz a H3-at okozó két cella a heal után zöld, a kör mércéje NEM gyengült.
+
+### 11.6 2. review — két lelet a zöld kapu MÖGÖTT (eldobható próbatesztek)
+
+A gate zöldje nem review: a `b148f7dc` fáról készült izolált klónban
+(`/tmp/review-e17-r01`) két ELDOBHATÓ próba mérte a szállított felhasználói
+utat. Mindkettő PIROS lett — a kör celláival zölden.
+
+| Lelet | Mit mértem | Gyökérok |
+|---|---|---|
+| **BLOCKER-1** | „Not now" után `FirstWinStageScreen` `findsOneWidget` (a router közben `/today`-en) | a Stage pageless route-ját a `router.go(entryLocation)` NEM zárja be, mert a router már azon a location-ön áll → a felhasználó a Stage-en ragad |
+| **MAJOR-1** | a pontozott mini-lecke poppolása után `FirstWinStageScreen` `findsOneWidget` | az `onContinue` a leckét a Stage FÖLÉ pusholta → a vissza-gesztus egy elavult „siker" Stage-re esik vissza (a kör ELŐTT a shellre vitt) |
+
+A leletlista: [`.pipeline/E17-R01-review-findings.md`](../../.pipeline/E17-R01-review-findings.md).
+A javító kört ugyanaz a motor (`sonnet-impl`) vitte, a leletlistával — a
+javítás és a falszifikáció a §10.5-ben, tényleges kimenettel.
+
+### 11.7 A javító kör ellenőrzése leletenként — VÉGSŐ DÖNTÉS: APPROVED
+
+- **BLOCKER-1 → ZÁRVA.** `onSkip: () => navigator.pop()` (ugyanaz a
+  `navigator` referencia, amelyik a Stage-et pusholta). Az őr a MEGLÉVŐ A3
+  cellába került (`shell_entry_location_test.dart`), és pontosan azt az
+  állítást használja, amellyel a próbám pirosat mért.
+- **MAJOR-1 → ZÁRVA.** `onContinue: () => navigator.pushReplacement(...)` — a
+  lecke az `entryLocation`-ra horgonyzódik. Új cella méri, hogy a lecke
+  poppolása után sem a Stage, sem a lecke nincs a fán, és a settled URI
+  `entryLocationFor(true)`.
+- **ADR 0534 D2 érintetlen:** literál útvonal EGYIK ágban sem szerepel, és a
+  landolási hely továbbra is az `entryLocationFor(...)` EGYETLEN forrása — az
+  új ágak nem navigálnak külön location-re, hanem az imperatív route-ot
+  bontják le, ami alatt már az a location áll. Az A3 cella ezt SETTLED
+  router-URI-ként állítja, nem a hívás alakjából következteti.
+- **Független ellenőrzés (orchestrátor, nem implementer-bemondás):**
+
+```
+$ flutter test test/app/routing/shell_entry_location_test.dart
+00:03 +8: All tests passed!
+```
+
+- **Scope:** a javító kör 3 fájlt írt (`onboarding_screen.dart`,
+  `shell_entry_location_test.dart`, ez a brief) — mind az `allowed_paths`-on;
+  cella nem lett törölve, `skip`-elve vagy gyengítve.
+
+Nyitott BLOCKER/MAJOR/MINOR nincs. A kör a CI-kapun (`full-gate.yml` +
+`router-ci.yml`, exact-SHA) mehet merge-re.
