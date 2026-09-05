@@ -17,6 +17,10 @@ export 'engine/strum_engine.dart';
 /// The frame the Practice observation gateway adapts (E02-R08).
 export 'model/live_frame.dart';
 
+/// The hard-negative sound-category taxonomy captured negative material is
+/// labelled with (E14-R15, ADR 0521).
+export 'domain/evaluation/negative_taxonomy.dart';
+
 /// Which strum model produced a verdict, or why it fell back (E14-R03,
 /// ADR 0355) — Flutter-independent telemetry for the Lab and the local
 /// accuracy export.
