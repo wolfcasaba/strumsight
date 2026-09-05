@@ -388,3 +388,32 @@ allowlistelt deviáció, változatlan), `secrets` → ZÖLD, `l10n` → ZÖLD.
   `PracticePlanMigrator` (ADR 0054).
 
 ## 11. Review — a Claude tölti ki
+
+**VÉGSŐ DÖNTÉS: APPROVED** — nyitott BLOCKER: 0, MAJOR: 0. A teljes jelentés:
+[`docs/reviews/e14-r14-review.md`](../reviews/e14-r14-review.md).
+
+- **Scope-audit:** `ok` (8 fájl, mind az `allowed_paths` listáján; új
+  allowlist-bejegyzés nincs — az `architecture` deviáció-szám változatlanul 12).
+- **Gate függetlenül újrafuttatva** izolált klónban, `HEAD = 6d34fa65`:
+  `format`/`analyze`/`architecture`/`secrets`/`l10n` zöld, `8/8` + `9/9` teszt,
+  `GATE_EXIT=0`.
+- **Valódi-sértés próbák (eldobható mutációk):** a §7.1 falszifikáció
+  REPRODUKÁLVA (lépésenkénti mentés → a 2. és 3. acceptance PIROS); a mély
+  import → `crossFeatureImportsMustUsePublicApi` sértés (a §0.0/R3 kapu
+  valódi); az inkluzív felső határ `<`-re rontva → az 1. pont „pontosan
+  rajta" cellája PIROS. A D2 osztályozás a TELJES `SignalQualityState` enumon
+  mérve (mind a hét nem-`good` érték → `needsAttention`, nem üres tanács,
+  nincs mentett profil — az `unknown` is).
+- **Biztonsági review (`risk = high`, `privacy`): nincs lelet.** A diff nem
+  nyit hálózatot, nem naplóz, nem nyúl platform-csatornához, engedélyhez vagy
+  felvételhez; a tárolt mezők között nincs hangminta vagy azonosító; a
+  `clear()` valódi `remove` (a backing store `contains`-e is mérve).
+- **Nyitva hagyva (nem merge-blokkoló):** MINOR-1 — a `toJson()` a
+  `currentSchemaVersion` konstanst írja ki a példány `schemaVersion` mezője
+  helyett, így egy nem-current verzióval épített profil mentés után csendben
+  `1`-esként jön vissza (ma egyetlen producer sem tud ilyet előállítani).
+  NOTE-1 sérült blob → `FormatException` (továbbra is fail-closed);
+  NOTE-2 a `confidenceProfile` ma mindig `1.0`; NOTE-3 a `schemaVersion: 0`
+  legacy alak feltételezett (a §10 ezt kimondja). Mindhárom a `E14-R14b`
+  bemenete.
+
