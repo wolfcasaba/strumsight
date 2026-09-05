@@ -1,0 +1,284 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://strumsight.internal/schemas/joint-strum-prototype-io-1.0.json",
+  "title": "Joint strum-prototype IO document",
+  "description": "Machine-readable record of one E14-R18 joint onset+direction prototype run (ADR 0517). Carries no raw audio and no model weights (D5): only the corpus identity hash, the causal/lookahead contract the model was trained under (D1), the grouped split + leakage evidence (D2), the training configuration and measured wall-clock, and the prototype-vs-legacy metric comparison with its go/no-go verdict against the Chapter 14 Strum Alpha gate (D4). Enforced by hand-written validation inside test/tooling/joint_io_schema_test.dart (no schema-library dependency, ADR 0517 D8/D3) rather than a generic JSON-Schema library — this round ships no production Dart entry point for the validator to live in.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "corpus",
+    "lookahead",
+    "splitStrategy",
+    "config",
+    "metrics",
+    "verdict"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0",
+      "description": "IO document schema contract version. The checker rejects any other value as a typed error — never a silent default (ADR 0517 D3)."
+    },
+    "generatedAt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Timestamp the document's data was assembled, written by the evaluate script from the run clock. Not re-derived by the checker."
+    },
+    "corpus": { "$ref": "#/definitions/corpus" },
+    "lookahead": { "$ref": "#/definitions/lookahead" },
+    "splitStrategy": { "$ref": "#/definitions/splitStrategy" },
+    "config": { "$ref": "#/definitions/config" },
+    "metrics": { "$ref": "#/definitions/metrics" },
+    "verdict": { "$ref": "#/definitions/verdict" }
+  },
+  "definitions": {
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpusId",
+        "corpusSha256",
+        "recordingCount",
+        "matchesBaselineManifest",
+        "baselineManifestPath"
+      ],
+      "properties": {
+        "corpusId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative identifier of the corpus directory (e.g. \"ml/data/klangio\"). The corpus itself is never committed."
+        },
+        "corpusSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Hash the evaluate script computed over the corpus directory it actually ran against (same algorithm as evaluation/recognition/baseline_manifest.json's corpusSha256: sorted *.wav then sorted *.strums, each preceded by \"<basename>\\n\")."
+        },
+        "recordingCount": { "type": "integer", "minimum": 1 },
+        "matchesBaselineManifest": {
+          "const": true,
+          "description": "Always true: the evaluate script compares its own computed corpusSha256 against baselineManifestPath's corpusSha256 BEFORE writing anything, and aborts with no document written on a mismatch (ADR 0517 D6) — so a document that exists always carries this as true, never false."
+        },
+        "baselineManifestPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path of the anchored legacy manifest the corpus hash was checked against."
+        }
+      }
+    },
+    "lookahead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preFrames",
+        "lookaheadFrames",
+        "hopMs",
+        "lookaheadMs",
+        "causal",
+        "note"
+      ],
+      "properties": {
+        "preFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Causal context frames the model sees BEFORE the decision point. Never counted as lookahead."
+        },
+        "lookaheadFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Frames of audio AFTER the decision point the model requires before it commits to an onset+direction verdict (ADR 0517 D1). Zero means strictly causal."
+        },
+        "hopMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Milliseconds per frame hop the log-mel frontend uses (feature-extraction constant, not a measured result)."
+        },
+        "lookaheadMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "lookaheadFrames * hopMs — the same lookahead restated in milliseconds so the number reads without doing the arithmetic (ADR 0517 D1: the report and the schema must carry the SAME number in both units)."
+        },
+        "causal": {
+          "type": "boolean",
+          "description": "True only when lookaheadFrames is 0."
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text statement of what the lookahead buys architecturally (e.g. why it is smaller than the legacy direction classifier's post-onset window)."
+        }
+      }
+    },
+    "splitStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "heldOutGuitarist",
+        "trainRecordingCount",
+        "testRecordingCount",
+        "leakageCheckPassed",
+        "leakageCheckMethod"
+      ],
+      "properties": {
+        "method": {
+          "const": "leave-one-guitarist-out",
+          "description": "Grouped split by player id (ml/klangio.py::guitarist_of / logo_folds, ADR 0517 D2) — one representative fold of the LOGO sweep, not the full multi-fold sweep (compute budget, §0.0/R8)."
+        },
+        "heldOutGuitarist": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The guitarist id (leading digit of the recording ids) held out entirely from training."
+        },
+        "trainRecordingCount": { "type": "integer", "minimum": 1 },
+        "testRecordingCount": { "type": "integer", "minimum": 1 },
+        "leakageCheckPassed": {
+          "const": true,
+          "description": "Always true: the evaluate script asserts the train and test guitarist-id sets are disjoint and aborts with no document written when they are not (ADR 0517 D2 fail-closed) — a document that exists always carries this as true."
+        },
+        "leakageCheckMethod": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text description of the assertion that produced leakageCheckPassed."
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["epochs", "batchSize", "seed", "modelParamCount", "wallClockSeconds"],
+      "properties": {
+        "epochs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Epochs actually run (EarlyStopping may stop before the configured cap)."
+        },
+        "batchSize": { "type": "integer", "minimum": 1 },
+        "seed": { "type": "integer" },
+        "modelParamCount": { "type": "integer", "minimum": 1 },
+        "wallClockSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Measured wall-clock of the documented run this document reports on (§0.0/R8: the whole run must be <= 1200s)."
+        }
+      }
+    },
+    "metricDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "higherIsBetter"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the metric means and how it was computed — travels with the number, not only in a source comment (ADR 0517 D7)."
+        },
+        "higherIsBetter": {
+          "type": "boolean",
+          "description": "Direction of improvement for this metric (ADR 0517 D7)."
+        }
+      }
+    },
+    "metricEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "n", "definition"],
+      "properties": {
+        "value": { "type": "number" },
+        "n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Count of elements the value was measured/derived over. n=0 is never valid: a metric with nothing behind it is not measured."
+        },
+        "sourceFile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the value was measured/anchored, when it did not come from this run's own evaluate script."
+        },
+        "bound": {
+          "enum": ["upper"],
+          "description": "Present only on a metric that is NOT a direct measurement but a derived ceiling (ADR 0517 D6) — e.g. the legacy end-to-end direction row, which does not exist as a measured number on this corpus."
+        },
+        "derivation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required together with \"bound\": the explicit reasoning that produced the ceiling, so it can never be read as a measurement (ADR 0517 D6)."
+        },
+        "definition": { "$ref": "#/definitions/metricDefinition" }
+      },
+      "oneOf": [
+        {
+          "description": "A directly measured/derived value: no bound marker.",
+          "not": { "required": ["bound"] }
+        },
+        {
+          "description": "A derived ceiling: bound and its derivation are both required together.",
+          "required": ["bound", "derivation"]
+        }
+      ]
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prototypeOnsetF1At50ms",
+        "prototypeDirectionMacroF1",
+        "prototypeAlgorithmicLatencyMs",
+        "legacyOnsetF1At50ms",
+        "legacyDirectionF1UpperBound"
+      ],
+      "properties": {
+        "prototypeOnsetF1At50ms": { "$ref": "#/definitions/metricEntry" },
+        "prototypeDirectionMacroF1": { "$ref": "#/definitions/metricEntry" },
+        "prototypeAlgorithmicLatencyMs": { "$ref": "#/definitions/metricEntry" },
+        "legacyOnsetF1At50ms": { "$ref": "#/definitions/metricEntry" },
+        "legacyDirectionF1UpperBound": { "$ref": "#/definitions/metricEntry" }
+      }
+    },
+    "alphaThresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["onsetF1At50ms", "directionMacroF1"],
+      "properties": {
+        "onsetF1At50ms": {
+          "const": 0.82,
+          "description": "Chapter 14 §7.2 Strum Alpha gate literal (docs/sdd/14-chapter-14-recognition-ui-recovery.md). A literal, never computed by arithmetic (ADR 0517 D4, L637)."
+        },
+        "directionMacroF1": {
+          "const": 0.8,
+          "description": "Chapter 14 §7.2 Strum Alpha gate literal. A literal, never computed by arithmetic (ADR 0517 D4, L637)."
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alphaThresholds",
+        "onsetF1Comparison",
+        "directionF1Comparison",
+        "decision",
+        "rationale"
+      ],
+      "properties": {
+        "alphaThresholds": { "$ref": "#/definitions/alphaThresholds" },
+        "onsetF1Comparison": {
+          "enum": ["below", "at", "above"],
+          "description": "metrics.prototypeOnsetF1At50ms.value compared to verdict.alphaThresholds.onsetF1At50ms."
+        },
+        "directionF1Comparison": {
+          "enum": ["below", "at", "above"],
+          "description": "metrics.prototypeDirectionMacroF1.value compared to verdict.alphaThresholds.directionMacroF1."
+        },
+        "decision": {
+          "enum": ["go", "no-go"],
+          "description": "\"go\" iff BOTH comparisons are \"at\" or \"above\" (the threshold is inclusive, ADR 0517 D4) — \"below\" on either metric is \"no-go\", including a near-miss."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
