@@ -26153,3 +26153,74 @@ fail-safe ága helyett):
    a lane-coverage cella különben a mainen áll pirosra, nem a kör ágán.
 
 **Őrteszt:** `tools/tests/test_completion_matrix_sync.py`::`test_the_real_tree_is_in_sync` és `test/tooling/program_completion_test.dart`::`lane-coverage — every queue prefix has a row in the completion matrix`
+
+## L649 — A `router-ci` job-plafonjába nem egy kör futott bele, hanem a suite lassulásának LÁNC-SZINTŰ hozadéka — és a plafon a self-heal tiltott zónája, ezért a javítás helye a MÉRT költség-tétel, nem a `timeout-minutes` (E14-R13 / H5, önjavító kör, 2026-09-05)
+
+**Mit mértünk.** Az `E14-R13` KÉSZ volt (review APPROVED, célzott gate 12/12,
+`full-gate.yml` `success` a `08c17390` merge SHA-n), a merge mégis tilos maradt:
+a `router-ci.yml` a **saját 10 perces job-plafonjába** futott.
+
+```
+33967924666  63ce10ac  9m 26s  success
+33969617963  9dc86618  9m 35s  success
+33972014841  0a964310  9m 54s  failure (külön, körön kívüli drift)
+33973215326  08c17390  10m 06s CANCELLED   ← a plafon
+pytest saját bemondása az utolsó végigfutó mérésen:
+  1 failed, 947 passed, 2 skipped, 768 subtests passed in 582.56s (0:09:42)
+```
+
+A kör diffje 12 fájl (3 doc + `live_screen.dart` + banner + 4 ARB + 3 live
+teszt), **egyetlen Python tesztet sem ad hozzá**. A plafon és a suite-hossz
+különbsége nem egy körön fogyott el, hanem a lánc együttes hozadékaként —
+és minden újabb router-teszttel tovább fogy.
+
+**Miért nem a `timeout-minutes` a javítás.** A `.github/workflows/**` az
+ADR 0112 §3 abszolút tiltott zónája, és ez **nem prompt-szöveg, hanem gépi őr**:
+a `heal_pr_gate_violation()` (`tools/round-pipeline.sh`) a heal SAJÁT,
+squash-merge-elt PR-jének diffjét nézi meg a három gate-artefaktumra
+(`tools/round-gate.sh`, `build-apk.yml`, `router-ci.yml`), és találat esetén
+`H-GATEGUARD`-dal ember elé viszi a láncot. Egy „csak megemelem a plafont"
+javítás tehát a lánc feloldása helyett egy MÁSIK halttal állt volna meg.
+
+**Amit a profilozás talált** (`main @ 9632a96d`, `pytest -q --durations=40`,
+949 passed / 1 skipped, **850,85 s** ezen a boxon):
+
+| tétel | mért ár | gyökérok |
+|---|---|---|
+| `brief-lint.py::predecessor_paths()` | **75 149** `load_brief` hívás 413 briefre; a 77,5 s-os korpusz-menetből **63,1 s** | négyzetes alak: minden brief lintje ÚJRA beolvassa és TOML-t elemez minden korábbi kör briefjét |
+| `attempt_selfheal` halt-RAG lekérdezése | **27,0 s / hívás** (ebből 24,9 s **CPU**, nem hálózat) × 9 cella | a motorválasztást mérő cellák is végigfuttatták a visszakeresést |
+| `mm-round.sh` SIGTERM→SIGKILL türelme | bedrótozott `sleep 5` × ~20 cella | a hamis, azonnal kilépő binárissal mérő cellák is kivárták az éles türelmi időt |
+
+Mind a három javítása a `tools/**`-ban van, ami az önjavító kör ENGEDÉLYEZETT
+zónája (ADR 0112 §2). Eredmény ugyanazon a boxon, azonos teszt-halmazon:
+**850,85 s → 289,94 s (−66%)**, `949 passed, 1 skipped` mindkét oldalon; a
+413 brief teljes lelet-listája bájtra azonos a javítás előtt és után (mérve:
+0 eltérő brief).
+
+**Hogyan alkalmazd.**
+
+1. **Egy CI-plafonba futó suite nem „flake", hanem strukturális mérés.** Ha a
+   job-időtartamok monoton nőnek és beérik a `timeout-minutes`-t, a vak
+   újrapróbálkozás pontosan az a hurok, ami ellen a H5 véd. A harmadik
+   `gh run rerun` nem bizonyíték — a `--durations` az.
+2. **A tiltott zóna nem zsákutca.** Ha a legkézenfekvőbb javítás gate-artefaktum,
+   keresd meg a MÉRT költség-tételt az engedélyezett zónában. Itt három tétel
+   adta a futásidő kétharmadát.
+3. **A gyorsítás kapcsolóval megy, az alapértelmezés az ÉLES viselkedés.**
+   `MM_KILL_GRACE_SECONDS` (alap 5) és `PIPELINE_HEAL_RAG` (alap 1) — ugyanaz a
+   minta, mint a `PIPELINE_STATUS_CHECK=0`: a teszt csak azt hagyja ki, amit
+   NEM ő mér. Ez az egyetlen alak, ami nem csúszik át termék-viselkedés
+   halk megváltoztatásába.
+4. **Gyorsítótár csak fájl-IDENTITÁSHOZ kötve.** A kulcs `(útvonal, st_mtime_ns,
+   st_size)` — ugyanaz a szerződés, amivel a CPython a `.pyc`-t érvényteleníti —,
+   és az invalidálást INVERZ próbával kell igazolni (ugyanaz az útvonal, más
+   tartalom → más eredmény), különben a gyorsítás csendben helyességi hibává
+   válik.
+
+**Őrteszt:** `tools/tests/test_router_ci_suite_cost.py` — a
+`BriefLintCorpusCostTest` determinisztikusan (óra nélkül) méri, hogy egy
+korpusz-menet minden brief-fájlt legfeljebb egyszer elemez; a javítás ELŐTTI
+alakon mérve **9 325 elemzés / 385 különböző fájl / 25 lintelt brief**
+(korlát: 410) → PIROS, utána ZÖLD. A `BriefLintCacheFreshnessTest` az
+invalidálást, a `ProductionDefaultsAreUnchangedTest` a két kapcsoló éles
+alapértelmezését köti le.

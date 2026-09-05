@@ -1934,7 +1934,18 @@ attempt_selfheal() {
   # korábban le volt írva a HANDOFF-ban, csak nem került elő — egy halt és
   # három önjavító kísérlet ára. A találatok a prompt VÉGÉRE mennek,
   # bizonyítékként, nem utasításként; hiba esetén a heal változatlanul indul.
-  if [ -f "$repo_root/tools/knowledge-rag.mjs" ] && command -v node >/dev/null 2>&1; then
+  #
+  # A `PIPELINE_HEAL_RAG=0` kapcsoló ÉLESBEN soha nem szól közbe (alapérték 1) —
+  # a MÉRŐ tesztek kapcsolják ki, amelyek a motorválasztást mérik, nem a
+  # visszakeresést. MÉRVE 2026-09-05 (E14-R13/H5 önjavító kör): egy lekérdezés
+  # 27,0 s ezen a boxon, ebből 24,9 s CPU (nem hálózat), és a suite KILENCSZER
+  # futtatja le — ez a `router-ci.yml` 10 perces job-plafonjába futó pytest
+  # második legnagyobb tétele. Ugyanaz a minta, mint a `PIPELINE_STATUS_CHECK`:
+  # az alapértelmezés az éles viselkedés, a teszt csak azt hagyja ki, amit nem ő
+  # mér. A blokk MEGLÉTÉT a `tools/tests/test_knowledge_rag.py`
+  # `PipelineWiringTest` a driver forrásán méri, azt ez nem érinti.
+  if [ "${PIPELINE_HEAL_RAG:-1}" = "1" ] \
+    && [ -f "$repo_root/tools/knowledge-rag.mjs" ] && command -v node >/dev/null 2>&1; then
     halt_query=$(grep -m1 '^summary=' "$halt_file" 2>/dev/null | cut -d= -f2- | cut -c1-300)
     [ -z "$halt_query" ] && halt_query="$halt_code halt"
     {

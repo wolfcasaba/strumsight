@@ -55,6 +55,11 @@ class PipelineIntegrationTest(unittest.TestCase):
         # méri, továbbra is beállíthatja explicit `"1"`-re.
         if env is not None:
             env.setdefault("PIPELINE_STATUS_CHECK", "0")
+            # A halt-aláírás RAG-visszakeresése (ADR 0312) MÉRVE 27,0 s / hívás,
+            # ebből 24,9 s CPU. Ezek a cellák a driver ÁG-választását mérik, nem a
+            # visszakeresést; a driver élesben változatlanul futtatja
+            # (E14-R13/H5 önjavító kör, 2026-09-05).
+            env.setdefault("PIPELINE_HEAL_RAG", "0")
         return subprocess.run(
             argv,
             cwd=cwd,
