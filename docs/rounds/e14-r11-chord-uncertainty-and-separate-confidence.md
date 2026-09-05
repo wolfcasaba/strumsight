@@ -301,4 +301,114 @@ tényleges kimenetet (teszt-név + `flutter test` sor), ne csak az állítást.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`, `--effort high`).
+
+### Mit változtattam, fájlonként
+
+- **`lib/features/live/engine/dsp/live_pipeline.dart`**
+  - Új import: `../../domain/recognition/chord_prediction.dart`.
+  - A Schmitt-kapu EMA-frissítő blokkja (korábban inline az `addChunk`
+    chord-hurokjában) kiemelve egy privát `_applyChordConfEma(double ema)`
+    metódusba — VISELKEDÉS-AZONOS refaktor (D3): a `>=`/`<` összehasonlítás
+    szó szerint ugyanaz, csak nevesítve, hogy a rise-küszöb egzakt EMA-
+    értékkel, audio nélkül tesztelhető legyen (§6 pt.4).
+  - Új `debugDeriveChordDecision({chordLatched, hasMatch,
+    signalQualityState})` — `static`, `@visibleForTesting` — az EGYETLEN
+    levezetési hely (D1/D3/D4): a `confirmed` ág `chordLatched && hasMatch`,
+    bit-azonos a mai `showChord`-dal (§6 pt.2); a maradék három ágban a
+    jel-minőség dönt előbb, mint a `noChord`/`lowConfidence` megkülönböztetés
+    (D4).
+  - Új `chordPrediction` getter: legyártja a `ChordPrediction`-t a fenti
+    levezetésből + a meglévő `_lastChord`/`_chordLatched`/`signalQuality`
+    állapotból. `calibratedConfidence` mindig `null` (D2). `pNoChord`/
+    `pUnknown` a dekóder TÉNYLEGES (hard, determinisztikus) állapotát
+    tükrözi (1.0/0.0 a `_lastChord == null` szerint; `pUnknown` mindig 0,
+    mert a szótár-alapú dekóder sosem jelent "ismeretlen akkord" állapotot)
+    — nem kalibrált szám, a D2 tiltása erre nem vonatkozik.
+    `stabilityFrames` `0` (nincs mérve ebben a pipeline-ban — a Viterbi-
+    dekóder nem számol streaket).
+  - `_buildFrame()`: a `LiveFrame`-be additívan bekerül `chordDecision`/
+    `chordRejectReason` a `chordPrediction`-ből; a `current`/`showChord`
+    számítás **nem változott** (5.6).
+  - `chordConfidence` getter doksija pontosítva: kifejezetten
+    "UNCALIBRATED" és elhatárolva a `ChordPrediction.calibratedConfidence`-
+    től.
+  - Új teszt-belépési pontok: `debugApplyChordConfEma(double ema)`,
+    `debugChordLatched` getter (mindkettő `@visibleForTesting`).
+  - Új privát top-level `_splitChordLabel(String label)` — root/quality
+    szétválasztás a `ChordPrediction` kötelező mezőihez, a
+    `Chord.transposeLabel` konvencióját követve (első betű + opcionális
+    módosítójel), a `'N.C.'` speciális eset kivételével.
+- **`lib/features/live/model/live_frame.dart`**
+  - Új import: `../domain/recognition/recognition_decision.dart`.
+  - Két additív, opcionális mező: `chordDecision` (`RecognitionDecision?`),
+    `chordRejectReason` (`RecognitionRejectReason?`), alapértelmezett `null`.
+  - `copyWith` mindkettőt megőrzi (nem cserélhető, csak megtartható — a
+    meglévő mintát követve).
+  - `LiveFrame.empty` változatlan (az új mezők a konstruktor default
+    `null`-jából jönnek).
+- **`test/features/live/chord_uncertainty_test.dart`** (ÚJ) — a §6 mind a 8
+  acceptance-pontja, 17 teszt.
+
+### §7.1 falszifikációs cella — TÉNYLEGES kimenet
+
+A `live_pipeline.dart` `addChunk`-jában ideiglenesen lecseréltem az EMA
+bemenetét a chord-match confidence-ről a STRUM confidence-re:
+
+```dart
+// előtte:
+final conf = _lastChord?.confidence ?? 0.0;
+// ideiglenesen erre:
+final conf = _latestStrum?.confidence ?? 0.0; // TEMP falsification §7.1
+```
+
+Futtatás (`flutter test test/features/live/chord_uncertainty_test.dart`)
+ezzel a törléssel — **PIROS**, pontosan a §6 pt.6 cellák (és két másik, ami
+ugyanerre az útra épül):
+
+```
+00:00 +10 -3: E14-R11: chord and strum confidence come from different sources (§6 pt.6) high strum confidence while the chord stays NOT confirmed [E]
+  Expected: not RecognitionDecision:<RecognitionDecision.confirmed>
+    Actual: RecognitionDecision:<RecognitionDecision.confirmed>
+00:00 +10 -4: E14-R11: chord and strum confidence come from different sources (§6 pt.6) chord confirmed while the strum confidence stays at its "nothing detected" floor [E]
+  Expected: RecognitionDecision:<RecognitionDecision.confirmed>
+    Actual: RecognitionDecision:<RecognitionDecision.uncertain>
+Failing tests:
+  ...pt.6) chord confirmed while the strum confidence stays at its "nothing detected" floor
+  ...pt.6) high strum confidence while the chord stays NOT confirmed
+  ...pt.2) confirmed cell: the frame shows a chord -> decision confirmed
+  ...pt.1) a sustained, tonal chord confirms with the merged RecognitionDecision
+```
+
+(4 teszt bukott — a strum-confidence-re épülő szubsztitúció a chord-oldali
+kaput soha nem tudja átlépni sustained chord jelre, így a pt.1/pt.2 cellák
+is elbuktak, a pt.6 mellett.) Visszaállítva az eredeti sort —
+**ZÖLD, mind a 17 teszt**:
+
+```
+00:00 +17: All tests passed!
+```
+
+### A gate tényleges kimenete
+
+```bash
+tools/round-gate.sh test/features/live/chord_uncertainty_test.dart test/features/live
+```
+
+```
+    → [1] format: ZÖLD
+    → [2] analyze: ZÖLD
+    → [3] test test/features/live/chord_uncertainty_test.dart: ZÖLD
+    → [4] test test/features/live: ZÖLD
+    → [5] architecture: ZÖLD
+    → [6] secrets: ZÖLD
+    → [7] l10n: ZÖLD
+
+MINDEN GATE ZÖLD.
+```
+
+`[3]`: 17/17 teszt zöld (az új fájl). `[4]`: 389/389 teszt zöld
+(`test/features/live` teljes fája, a meglévő E14-R10 stb. tesztekkel
+együtt — nincs regresszió).
+
 ## 11. Review — a Claude tölti ki
