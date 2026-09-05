@@ -58,7 +58,10 @@ class RecognitionStabilizer {
   /// not just the profile's `minAgreeFrames` (ADR 0518 D8).
   int get confirmationLatencyFrames => _confirmationLatencyFrames;
 
-  /// Confirmed label changes divided by frames processed, `0..1` (ADR 0518 D8).
+  /// Confirmed label changes divided by frames processed, `0..1` (ADR 0518
+  /// D8). Includes the cold-start baseline confirmation (the very first
+  /// label ever seen, raised from `null` — ADR 0518 D11), not only later
+  /// displacements.
   double get flipRate =>
       _framesProcessed == 0 ? 0 : _confirmedFlips / _framesProcessed;
 

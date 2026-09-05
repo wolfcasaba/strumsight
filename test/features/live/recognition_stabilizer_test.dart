@@ -64,6 +64,36 @@ void main() {
     });
   });
 
+  group('brief §6 pt.8 — cold-start exception fires once (ADR 0518 D11)', () {
+    test('fresh stabilizer starts in candidate, before any frame', () {
+      final s = RecognitionStabilizer();
+      expect(s.chordState, RecognitionDecision.candidate);
+    });
+
+    test('the very first ever decided label confirms on sight', () {
+      final s = RecognitionStabilizer();
+      final first = s.stabilize(_frame('A'));
+      expect(first, isNotNull);
+      expect(first!.current?.label, 'A');
+      expect(s.chordState, RecognitionDecision.confirmed);
+    });
+
+    test('the exception fires only once: the second, different label needs '
+        'the full threshold, not another free pass', () {
+      final s = RecognitionStabilizer();
+      s.stabilize(_frame('A')); // cold-start bootstrap, confirms on sight
+
+      expect(s.stabilize(_frame('B')), isNull);
+      expect(s.chordState, RecognitionDecision.provisional);
+      expect(s.stabilize(_frame('B')), isNull);
+      expect(s.chordState, RecognitionDecision.provisional);
+      final third = s.stabilize(_frame('B'));
+      expect(third, isNotNull);
+      expect(third!.current?.label, 'B');
+      expect(s.chordState, RecognitionDecision.confirmed);
+    });
+  });
+
   group('brief §6 pt.2 — confirmed resists weak counter-evidence, yields to '
       'strong (both directions)', () {
     test('A confirmed: 1 foreign B frame does not flip; 3 consecutive do', () {
