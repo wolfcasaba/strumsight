@@ -1,5 +1,48 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R18 KÉSZ — A streaming joint onset+irány prototípus: **NO-GO**, és a szám független futáson BÁJTAZONOSAN reprodukálódott — PR [#581](https://github.com/wolfcasaba/strumsight/pull/581), squash `2e6aaed9` (2026-09-05)
+
+A Chapter 14 §4.4/§5.1 azt kérdezte, jobb-e egy **joint** fej (külön down/up
+onset-regresszió + no-event confidence) a mai kétlépcsős láncnál, ahol az
+onset-hiba továbbterjed. **A válasz erre a tanítási receptre mérve: nem.**
+A prototípus **nem került a termékbe** — súly, checkpoint és minden futási
+artefaktum a repón KÍVÜL (`/tmp/e14r18-work`), `lib/**` és `assets/**`
+érintetlen. **ADR [0517](docs/adr/0517-joint-strum-prototype-measurement-contract.md).**
+
+**A mért összehasonlítás (a kör lényege) — egy tábla, azonos korpusz-hash:**
+
+| Metrika | Prototípus | Legacy | Alpha kapu | Ítélet |
+|---|---:|---:|---:|---|
+| Onset F1 @50 ms | **0,3824** (n=16 962) | 0,6739 (horgonyzott, n=16 411) | 0,82 | alatta |
+| End-to-end irány macro-F1 | **0,2240** (n=20 972) | *not-measured* — csak 0,6739 felső korlát | 0,80 | alatta |
+| Algoritmikus latencia | 40 ms (lookahead) | nincs valós idejű legacy szám | — | — |
+
+- **A NO-GO hatálya szűkített, és ezt a report maga mondja ki:** ami cáfolt, az
+  *ez a tanítási recept* (bányászott negatívokon tanítva, folytonos idővonalon
+  mérve — precision 0,237 / recall 0,986), nem a joint architektúra ötlete.
+- **A legacy irány-sor becsületesen HIÁNYZIK.** A merge-elt E14-R02 manifest
+  szerint `metricBlocks.direction.status = "not-measured"`, ezért a tábla csak
+  explicit **felső korlátot** közöl (`bound: "upper"`, kiírt származtatással:
+  `TP_direction ⊆ TP_onset`) — és kimondja, hogy ez NEM alapoz meg „a
+  prototípus jobb" következtetést. Gépi őr védi (`A6`).
+- **Két fail-closed kapu élesben:** a korpusz-hash egyezése a manifesttel és a
+  player-leakage — mindkettő hibával áll meg és **nem ír reportot**.
+- **A lookahead nem ígéret, hanem geometria:** ugyanaz a `joint_window`
+  nullázza az `onset+40 ms` utáni audiót tanításkor ÉS a teljes idővonal
+  pásztázásakor — a modell a mérésben sem lát több jövőt, mint a szerződésben.
+
+**A review döntő próbája:** a mérést független `/tmp` klónban újrafuttattam a
+szállított súlyok ellen — a kapott IO-dokumentum a szállítottal **bájtazonos**
+(0 eltérő mező). A `done` jelentés tehát nem bemondás.
+[`docs/reviews/e14-r18-review.md`](docs/reviews/e14-r18-review.md) — **APPROVED**,
+0 BLOCKER / 0 MAJOR / 0 MINOR / 4 NOTE.
+
+Két új lecke: [L640](docs/LESSONS.md#l640) (a `gate_shape` őr a log BÁRMELY
+`round-gate.sh`-t tartalmazó sorára illeszkedik, ezért a script ELOLVASÁSA
+`VIOLATION`-t jelent) és [L641](docs/LESSONS.md#l641) (egy acceptance-cella
+olyan artefaktumra hivatkozott — „a splitet a **manifestből** veszi" —, ami
+ehhez a korpuszhoz nem létezik).
+
 ## ✅ E14-R17 KÉSZ — A Klangio ISMIR-2025 referencia-modell: **NO-GO**, mert a súly és az adat licence NEM NYILATKOZOTT — PR [#579](https://github.com/wolfcasaba/strumsight/pull/579), squash `82463868` (2026-09-05)
 
 A Chapter 14 §5.1 azt kérdezte, átvehető-e a publikált joint
@@ -12517,18 +12560,20 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-09-05):** `main` @ `1127c22d` — **E14-R10: az
-irány-abstention bekötése a Live úton**, PR
-[#578](https://github.com/wolfcasaba/strumsight/pull/578), squash-merge.
+**Aktuális állapot (2026-09-05):** `main` @ `2e6aaed9` — **E14-R18: streaming
+joint onset+irány prototípus, mérve → NO-GO**, PR
+[#581](https://github.com/wolfcasaba/strumsight/pull/581), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
 orchesztrátor/reviewer Claude (Opus 5), **0 javító kör** (review: APPROVED
-első nekifutásra, 0 BLOCKER / 0 MAJOR / 2 MINOR / 1 NOTE —
-[`docs/reviews/e14-r10-review.md`](docs/reviews/e14-r10-review.md)).
-**ÚJ ADR: [0512](docs/adr/0512-live-direction-abstention-wiring.md)** — a
-Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt).
+első nekifutásra, 0 BLOCKER / 0 MAJOR / 0 MINOR / 4 NOTE —
+[`docs/reviews/e14-r18-review.md`](docs/reviews/e14-r18-review.md)).
+**ÚJ ADR: [0517](docs/adr/0517-joint-strum-prototype-measurement-contract.md)** —
+a Claude írta a pre-flightban (a `docs/adr/**` a kör tiltott zónája volt); az
+előre kiosztott `0370` elavult volt, a foglaló a `0517`-et adta.
 `risk = "normal"` → dedikált biztonsági review nem kellett. `native_gate =
 false` → a CI-tervet a `tools/round-ci-plan.py` adta (`full-gate.yml` +
-`router_ci_expected: true`); mindkettő `success` a merge SHA-n (`0a0a7ddf`).
+`router_ci_expected: true`); **mindkettő `success` a merge SHA-n (`104b93b8`)**,
+az `origin/main` időközbeni elmozdulása után újra-dispatchelve (ADR 0086 §2).
 
 A kört egy **ADR 0112 önjavító kör** (PR
 [#577](https://github.com/wolfcasaba/strumsight/pull/577)) előzte meg, amely a
@@ -12546,7 +12591,32 @@ hibáját is javította (**L637**).
 
 ## 5. Last completed round
 
-**E14-R10 — Az irány-abstention BEKÖTÉSE a Live úton** (PR
+**E14-R18 — Streaming joint onset+irány prototípus: mérve, reprodukálva, NO-GO**
+(PR [#581](https://github.com/wolfcasaba/strumsight/pull/581), squash
+`2e6aaed9`, ADR
+[0517](docs/adr/0517-joint-strum-prototype-measurement-contract.md)).
+Kutatási kör: a joint fej offline mérése a mai kétlépcsős lánc ellen,
+verziózott IO-sémával és Dart-oldali séma-őrrel (23/23 cella). Onset F1 @50 ms
+**0,3824** és irány macro-F1 **0,2240** — mindkettő messze a Chapter 14 §7.2
+Alpha kapu (0,82 / 0,80) alatt, tehát **NO-GO**, nem „majdnem elérte". A
+prototípus nem szállítható artefaktum: nulla bájt a repó fájában.
+
+Két új lecke: [L640](docs/LESSONS.md#l640) (a `gate_shape` őr false
+positive-ja) és [L641](docs/LESSONS.md#l641) (nem létező artefaktumra
+hivatkozó acceptance-cella).
+
+**Előző kör: E14-R17 — Klangio referencia-modell reprodukció + licenc-audit**
+(PR [#579](https://github.com/wolfcasaba/strumsight/pull/579), squash
+`82463868`, ADR [0369](docs/adr/0369-reference-model-repro-and-licence-audit.md)) —
+**NO-GO** licenc okból. Leckék: [L638](docs/LESSONS.md#l638),
+[L639](docs/LESSONS.md#l639).
+
+**Előtte: E14-R11 — Akkord-bizonytalanság és külön confidence** (squash
+`16b101f7` sorral zárva, ADR
+[0516](docs/adr/0516-live-chord-decision-wiring.md), review
+[`docs/reviews/e14-r11-review.md`](docs/reviews/e14-r11-review.md)).
+
+**Előtte: E14-R10 — Az irány-abstention BEKÖTÉSE a Live úton** (PR
 [#578](https://github.com/wolfcasaba/strumsight/pull/578), squash `1127c22d`).
 A `StrumPrediction.decision` szerződés (ADR 0505, E14-R04) végre **termelőt
 kapott**: a CRNN renormalizált `pDown`/`pUp`-ja additívan eljut a
@@ -12595,11 +12665,20 @@ Leckék: [L627](docs/LESSONS.md#l627), [L628](docs/LESSONS.md#l628).
 ## 6. Exact next task
 
 **A következő kört a lánc választja** a `docs/execution/pipeline-queue.tsv`
-első `pending` sorából — az `E14-R10` sora ezzel a commit-tal `done`. A
-Chapter 14 sávon az `E14-R11` (akkord-bizonytalanság és külön confidence)
-következik, motor `sonnet-impl`; **az ADR-számot a foglalótól kérd, ne a queue
-oszlopából** (a sorok `0363`…`0371` értéke elavult — az E14-R10 sora `0362`-t
-előlegezett, a foglaló a **`0512`**-t adta).
+első `pending` sorából — az `E14-R18` sora ezzel a commit-tal `done`. A
+Chapter 14 sávon az `E14-R12` következik, motor `sonnet-impl`; **az ADR-számot
+a foglalótól kérd, ne a queue oszlopából** (a sorok `0364`…`0371` értéke
+elavult — az E14-R18 sora `0370`-et előlegezett, a foglaló a **`0517`**-et
+adta; ez a HATODIK egymást követő kör, ahol az oszlop elavult volt).
+
+**Amit az E14-R18 a következő körök asztalára tett:**
+
+| # | Mit hagyott nyitva | Hol |
+|---|---|---|
+| 1 | **A joint fej ÉRDEMI próbája még hátravan** — a NO-GO *ezt a tanítási receptet* cáfolja (bányászott negatívok ↔ folytonos idővonal eloszlás-eltérés), nem az architektúrát. Konkrét, mérhető javaslat: tanítás folytonos-idővonal negatívokon, vagy időbeli hiszterézis / magasabb döntési küszöb — NEM ugyanennek a konfigurációnak az újrafuttatása más hiperparaméterekkel | `docs/eval/joint-strum-prototype.md` §8–§9 |
+| 2 | **A séma-validátor a TESZTBEN él** (ADR 0517 D8, tudatos és határolt): ehhez a körhöz nem volt szállított Dart belépési pont. A productizálás köre mozgassa `tool/` alá, és a teszt onnan importálja | `test/tooling/joint_io_schema_test.dart` |
+| 3 | **Hiányzó korpusz → az ÜRES bemenet hash-e** a hibaüzenetben (review N3): fail-closed marad, de a diagnosztika félrevezető; külön beszélő hiba kell | `ml/joint_prototype/evaluate_prototype.py::check_corpus_matches_baseline` |
+| 4 | **A `gate_shape` őr false positive-ja** (review N2, [L640](docs/LESSONS.md#l640)) — infrastruktúra, önjavító kör dolga | `tools/mm-round.sh:381` |
 
 > ⚠ **Az `E14-R11`…`E14-R16` briefek ugyanabból a 2026-08-20-i előre-írt
 > hullámból valók, mint az E14-R10, amelyik H3-ra futott.** A `brief-lint`

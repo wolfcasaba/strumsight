@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-01-01T00:00:00Z",
+  "corpus": {
+    "corpusId": "ml/data/klangio",
+    "corpusSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "recordingCount": 10,
+    "matchesBaselineManifest": true,
+    "baselineManifestPath": "evaluation/recognition/baseline_manifest.json"
+  },
+  "lookahead": {
+    "preFrames": 3,
+    "lookaheadFrames": 4,
+    "hopMs": 10,
+    "lookaheadMs": 40,
+    "causal": false,
+    "note": "Synthetic CI fixture: 30ms causal context + 40ms controlled lookahead, far below the legacy direction classifier's 120ms post-onset window."
+  },
+  "splitStrategy": {
+    "method": "leave-one-guitarist-out",
+    "heldOutGuitarist": "4",
+    "trainRecordingCount": 8,
+    "testRecordingCount": 2,
+    "leakageCheckPassed": true,
+    "leakageCheckMethod": "Synthetic CI fixture: asserted disjoint guitarist-id sets between train and test masks."
+  },
+  "config": {
+    "epochs": 10,
+    "batchSize": 32,
+    "seed": 42,
+    "modelParamCount": 50000,
+    "wallClockSeconds": 120.5
+  },
+  "metrics": {
+    "prototypeOnsetF1At50ms": {
+      "value": 0.5,
+      "n": 100,
+      "definition": {
+        "text": "Precision/recall/F1 of peak-picked joint-model onset events against expected onset events, matched within an inclusive 50ms tolerance, ignoring predicted direction.",
+        "higherIsBetter": true
+      }
+    },
+    "prototypeDirectionMacroF1": {
+      "value": 0.5,
+      "n": 50,
+      "definition": {
+        "text": "Macro-averaged per-direction (down/up) F1 over time-matched onset pairs; a strum missed or falsely detected in time still counts as a false negative/positive for its own class.",
+        "higherIsBetter": true
+      }
+    },
+    "prototypeAlgorithmicLatencyMs": {
+      "value": 40,
+      "n": 1,
+      "definition": {
+        "text": "Algorithmic verdict latency: preFrames*hopMs context plus lookaheadFrames*hopMs lookahead the model must observe before it can commit to a verdict. Not a real-time on-device measurement.",
+        "higherIsBetter": false
+      }
+    },
+    "legacyOnsetF1At50ms": {
+      "value": 0.6739121651650438,
+      "n": 16411,
+      "sourceFile": "evaluation/recognition/baseline_manifest.json",
+      "definition": {
+        "text": "Legacy two-stage pipeline's SuperFlux onset detector F1 at 50ms tolerance, anchored from the merged baseline manifest (ADR 0354), same corpus.",
+        "higherIsBetter": true
+      }
+    },
+    "legacyDirectionF1UpperBound": {
+      "value": 0.6739121651650438,
+      "n": 16411,
+      "sourceFile": "evaluation/recognition/baseline_manifest.json",
+      "bound": "upper",
+      "derivation": "The legacy end-to-end direction macro-F1 is not measured on this corpus (baseline_manifest.json metricBlocks.direction.status = not-measured). A correct end-to-end direction call requires a correctly time-matched onset first, so end-to-end direction macro-F1 cannot exceed onset F1 @50ms \u2014 this row restates that onset F1 as an explicit ceiling, not a direction measurement.",
+      "definition": {
+        "text": "Upper bound on the legacy pipeline's end-to-end direction macro-F1, derived from its onset F1 @50ms via the onset-precedes-direction inequality. Never a measured direction number.",
+        "higherIsBetter": true
+      }
+    }
+  },
+  "verdict": {
+    "alphaThresholds": {
+      "onsetF1At50ms": 0.82,
+      "directionMacroF1": 0.8
+    },
+    "onsetF1Comparison": "below",
+    "directionF1Comparison": "below",
+    "decision": "no-go",
+    "rationale": "Synthetic CI fixture: both prototype metrics are below the Chapter 14 Strum Alpha gate, so the verdict is no-go."
+  }
+}
