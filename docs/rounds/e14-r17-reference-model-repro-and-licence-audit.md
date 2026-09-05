@@ -13,6 +13,108 @@
 > környezet elérhető-e ezen a boxon (`ml/README.md` + a TF-venv útvonala). Ha
 > nincs, a kör jelzése `blocked` — sikeres verifikációt állítani tilos
 > (Chapter 14 §9/9). Eltérésnél §0.0 revízió.
+>
+> **A pre-flight LEFUTOTT (2026-09-05) — a §0.0 revízió KÖTI a kört.** A
+> `blocked` kifutást a §0.0 D-pontja **felülírja**: a mérés szerint nem
+> „elérhetetlen a checkpoint", hanem a **licenc-audit önmagában konkluzív**.
+
+## 0.0 Pre-flight revízió (2026-09-05, orchestrátor: Claude — ADR 0087 §2)
+
+**Alap:** `main @ 39680e1e`. A brief `main @ 6371aa3`-on készült; a `git diff
+--name-only 6371aa3..HEAD -- ml/ assets/ test/tooling/ docs/eval/` mérés
+szerint az **`ml/` és az `assets/` érintetlen**, a `test/tooling/` és a
+`docs/eval/` bővült, de a §2 mért tényei **mind érvényben maradtak**:
+`ml/reference/` nem létezik, külső referencia-checkpoint nincs a fában,
+licenc-őr nincs. (S15-mérés, ADR 0171 §4.)
+
+**Visszakeresés (ADR 0312, kötelező — a talált előzmények):**
+`adr/0473` (fa-bejárás + tartalom-checksum + **fail-closed licenc**:
+„ismeretlen licenc = megállás, nem »unknown«"), `adr/0447` (release manifest,
+provenance, SBOM), `lessons/L546` (az implementer a falszifikációs cellát
+MEGFORDÍTOTTA — a licenc-hiányt „valid"-dá tette), `lessons/L530` (generált
+artefaktum a generáló gép abszolút útvonalával, zöld gate mellett),
+`lessons/L118` (az őr tesztje ne az ambiens repó-állapotra támaszkodjon).
+
+### A) A referencia-modell NEVESÍTVE — mért, nem feltételezett
+
+A brief „publikált joint referencia-modell"-t ír, de nem nevezi meg. A
+Chapter 14 Kör 17 címe és a `docs/research/recognition-research-sources.md`
+alapján ez a **Klangio ISMIR 2025** rendszer. A pre-flight **hálózatról
+mérte** (GitHub API + `raw.githubusercontent.com`, 2026-09-05):
+
+| Mért tény | Érték |
+|---|---|
+| Repó | `Klangio/guitar-strumming-transcription` |
+| **Pinelendő commit** | `929e403f3256b055c1eea27064ae39f36905359e` (2025-09-21T14:31:50Z) |
+| Repo-szintű licenc | `Apache-2.0` (`LICENSE`, teljes szöveg) |
+| Kód | `klangio/modules/strumming_crnn/` (9 `.py`) + `scripts/` (3 `.ipynb` + `train_phone.py`) |
+| **Checkpoint** | `checkpoints/wc/step=19000-f1=0.8225.ckpt` — **Git-LFS pointer** (134 B a fában), `sha256:80297850d7d2150093d5ae2bcb090466566ad24fa835a5c1e67f16ca38a3ea44`, valódi méret **134 344 202 B** |
+| **Adathalmaz** | `dataset/klangio-gst-mm-2025/` — **330 blob, 913 163 829 B** a fában (nem LFS) |
+| Reprodukció ma | **notebook** (`scripts/evaluate.ipynb`) — egyparancsos futtatás NINCS |
+| Függőségek | `requirements.txt`: `torch`, `lightning`, `note-seq`, `torchlibrosa`, `librosa==0.10.1`, `hydra-core`, `wandb` |
+
+**A licenc-nyilatkozat mért terjedelme.** A `README.md` „License" szakasza szó
+szerint: *„Copyright © 2025 Klangio GmbH — This **software** is licensed under
+the Apache License, Version 2.0."* A nyilatkozat tehát **a szoftverre** szól;
+a „Pretrained Checkpoint" és a „Dataset" szakaszban **nincs licenc**, és a
+`checkpoints/` illetve `dataset/` alatt sincs licenc-fájl. A README `Citation`
+szakasza kutatási használatra utaló idézési kötelezettséget ír elő, ami **nem
+termék-engedély**.
+
+### B) A research környezet mért állapota ezen a boxon
+
+- Egyetlen ML-venv: `/home/ubuntu/tf-venv` → `tensorflow 2.21.0`, `keras 3.15.0`.
+  **`torch` NINCS benne** (`pip list` mérve), a rendszer-Pythonban sem.
+- Hálózat elérhető (`github.com`, `huggingface.co`, `zenodo.org` → HTTP 200).
+- A teljes reprodukció tehát a PyTorch-lánc telepítését **plusz** ~1,05 GB
+  letöltést (134 MB LFS-checkpoint + 871 MB adathalmaz) igényelne.
+
+### C) **D — A kör kifutása: `done`, NEM `blocked`** (ez köti az implementert)
+
+A brief §0 és a 6/5. acceptance-pont `blocked`-ot ír „letölthetetlen
+checkpoint" esetén. A mérés szerint **a checkpoint letölthető** (publikus
+LFS-objektum), tehát ez a kifutás **nem áll fenn**. Ami hiányzik, az a
+PyTorch futtatókörnyezet — de a kör **elsődleges kérdését, a licenc-go/no-go-t
+ez nem érinti**: az ítélet a fenti mért nyilatkozatokból **konkluzív**
+(`ADR 0369` D2 → **NO-GO**), és NO-GO alatt a teljesítmény-mérés a
+termék-döntés szempontjából tárgytalan.
+
+Ezért — az ADR 0087 §2 szerinti brief-revíziós hatáskörben:
+
+1. **A kör `done` jelzéssel zárul**, ha a §6 1–4. és 6. pontja teljesül.
+2. A **nem futtatott** méréseket a report szó szerinti **`NEM MÉRT`** cellával
+   jelöli, mellé a hiány **mért okát** és a **reprodukáló parancsot**.
+   Becsült szám a reportban **tiltott** — ez a §5/9. „nem becsült értékek"
+   kikötésének betartása, nem a lazítása.
+3. `blocked` jelzés **kizárólag** akkor, ha a fenti A) táblázat bármely mért
+   ténye a kör futása közben megdől (a repó/commit eltűnik, a licenc-szöveg
+   más, mint amit a pre-flight mért) — akkor a mérce, nem a kifutás változott.
+
+### D) A 6/6. acceptance-pont pontosítása
+
+Az eredeti szöveg mért **latency- és memória-értéket** kér a go/no-go mellé.
+Mivel a futtatás nem történik meg (B), a go/no-go a következő **MÉRT** tényekre
+hivatkozik: (a) a három licenc-státusz (A), és (b) a checkpoint **mért mérete,
+134 344 202 bájt**, ami a mobil memória-költség **alsó korlátja**. A latency
+cellája `NEM MÉRT` + reprodukáló parancs. Egyéb becslés tilos.
+
+### E) Brief-lint S12 (strict) — javítva
+
+A §7 gate-parancsa `test/tooling` könyvtárat futtatott, a `gate_tests` viszont
+a konkrét fájlt sorolja; a `brief-lint` a **szó szerinti egyezést** méri
+(`tools/brief-lint.py:1151`). A §7 parancsa átírva a `gate_tests` listát
+tükrözve. A `tools/round-gate.sh` fájl-útvonalat elfogad
+(`tools/round-gate.sh:228` → `flutter test "$test_path"`).
+
+### F) ADR-szám
+
+`0369` — a foglaló (`tools/round-slots.py reserve-adr`) csak a legmagasabb szám
+FÖLÉ oszt (`0514`, `0515`), ezért az alacsonyabb, **committolt sor-fájlbeli
+előfoglalást** nem tudja igazolni. Külön mérve, hogy `0369` szabad: nincs
+`docs/adr/0369*` fájl, nincs `.pipeline/inflight/adr/0369` marker, és a
+`git log --all --diff-filter=A -- docs/adr` egyetlen ágon sem hozott létre
+`0369`-et. A `docs/execution/pipeline-queue.tsv` egyetlen sora hivatkozik rá
+(E14-R17). Az ADR megírva: `docs/adr/0369-reference-model-repro-and-licence-audit.md`.
 
 ```ai-router
 schema_version = 1
@@ -129,10 +231,14 @@ artefaktum, amelyhez ne tartozna `approved` audit-bejegyzés.
    mindkettőnél korpusz-hash-sel.
 4. A licenc-őr teszt PIROS, ha egy referencia-eredetű fájl audit-bejegyzés
    nélkül jelenik meg a fán (a teszt ideiglenes fixture-fájllal méri).
-5. `blocked` jelzés, ha a research-környezet vagy a checkpoint nem elérhető —
-   a report ilyenkor „nem mért", nem becsült értékeket tartalmaz.
-6. A go/no-go javaslat a reportban a mért latency- és memória-értékre is
-   hivatkozik.
+5. **(§0.0 C) által felülírva:** a checkpoint MÉRHETŐEN elérhető, a PyTorch
+   futtatókörnyezet nem — ezért a kör **`done`**-nal zárul, és a report a nem
+   futtatott számokat szó szerinti **`NEM MÉRT`** cellával, a hiány mért okával
+   és a reprodukáló paranccsal jelöli. Becsült érték tiltott. `blocked` csak
+   akkor, ha a §0.0 A) mért tényei a futás közben megdőlnek.
+6. **(§0.0 D) által pontosítva:** a go/no-go a MÉRT tényekre hivatkozik — a
+   három licenc-státusz és a checkpoint mért mérete (**134 344 202 B**) mint
+   memória-alsókorlát; a latency cellája `NEM MÉRT` + reprodukáló parancs.
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -147,7 +253,7 @@ artefaktum, amelyhez ne tartozna `approved` audit-bejegyzés.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/tooling
+tools/round-gate.sh test/tooling/reference_model_licence_guard_test.dart
 ```
 
 Külön processzben futó `format` → `analyze` → célzott teszt → `architecture`
@@ -169,7 +275,10 @@ elhelyezésével a 4. pont **PIROS**, a fájl törlésével **ZÖLD**.
 1. Manifest-séma (három licenc, commit-hash, checksum).
 2. Licenc-őr teszt (RED-del kezdve).
 3. Reprodukciós script + README.
-4. Mérés és report — ha a környezet hiányzik: `blocked`.
+4. Report — a §0.0 A) mért tényeivel, a két KÜLÖN táblával, és a nem futtatott
+   cellákban szó szerinti `NEM MÉRT` + reprodukáló parancs (§0.0 C/D).
+   **Ne jelezz `blocked`-ot a hiányzó PyTorch miatt** — az a §0.0 C) szerint
+   nem a kör kifutása.
 
 ## 9. Kockázatok
 
