@@ -570,6 +570,84 @@ A korábbi H3 halt gyökéroka (`e15_r13_full_variant_matrix_test.dart` A5
 completion-report guard) a `origin/main @ b1abed91` heal beolvasztása után
 (l. `b148f7dc`) ezen a fán is ZÖLD — a javító kör ezt nem érintette.
 
+### 10.6 Javító kör #2 — BLOCKER-2 feloldása (`sonnet-impl`, 2026-09-05)
+
+**A lelet (`.pipeline/E17-R01-review-findings-2.md`, `full-gate.yml`
+`33994934171`, head `4ffac86d`).** `test/tooling/placeholder_wiring_test.dart`
+A4/A5 cellája pirosra váltott: a bekötött `FirstWinStageScreen` MÉRTEN
+elérhető (`check_screen_reachability`), de a `runCoreWalkthrough`
+(`test/e2e/full_app_walkthrough_test.dart`) az onboardingot mindig a Skip
+ágon hagyta el, a first-win ágra sosem lépett — a Stage se a walked
+halmazban, se a `docs/release/full-app-verification.md` kizárási táblájában
+nem szerepelt.
+
+**A javítás.** `runCoreWalkthrough` 1. lépése mostantól a Skip helyett a
+first-win CTA-t járja be VALÓDI tapokkal: `Next` → `Next` → a first-win CTA
+(`l10n.onboardFirstWin`) → a (`fakeAudioOverrides()` alapértelmezetten
+grantelt) engedély-checkpoint → `_completeFirstWin` hand-off, ami a bekötött
+`FirstWinStageScreen`-t pusholja az `entryLocation` fölé. A Stage
+felépülése után `walked.add('FirstWinStageScreen')`, majd a "Not now"
+(`onboard-first-win-skip`) VALÓDI tapja popolja a Stage saját pushed
+route-ját, visszaadva az `entryLocation`-t (Today Hub) — a walk további
+állomásai (Today → gyakorlás → eredmény → Library → Progress → Profile →
+Settings) VÁLTOZATLANUL futnak tovább. A záró `expect(walked, {...})`
+kilenc eleme tízre bővült `'FirstWinStageScreen'`-nel. `test/support/
+e2e_harness.dart` érintetlen (nem is volt az `allowed_paths`-on).
+
+A `gate_tests` a brief §0.0.2 revíziója óta tartalmazza a
+`test/tooling/placeholder_wiring_test.dart` őrt — a §7 gate-parancs ehhez
+lett igazítva (16 tesztútvonal, l. §7 kódblokkja).
+
+**Falszifikáció (tényleges kimenet).** A `walked.add('FirstWinStageScreen')`
+sor kivétele után (a first-win ág bejárása változatlanul fut):
+
+```
+$ flutter test test/tooling/placeholder_wiring_test.dart --plain-name "A4/A5"
+Expected: empty
+  Actual: Set:['lib/features/onboarding/screens/first_win_stage_screen.dart']
+reachable screens missing from both the walk and the exclusion table (A4):
+{lib/features/onboarding/screens/first_win_stage_screen.dart}
+00:04 +2 -1: Some tests failed.
+```
+
+→ **PIROS**, szó szerint a review-lelet üzenetével. Visszaállítva
+`walked.add('FirstWinStageScreen')`-re:
+
+```
+$ flutter test test/tooling/placeholder_wiring_test.dart --plain-name "A4/A5"
+00:04 +3: All tests passed!
+```
+
+→ **ZÖLD**.
+
+**A §7 gate — csonkítatlan, mind a 16 tesztútvonal + format/analyze/
+architecture/secrets/l10n EGY hívásban:**
+
+```
+[1]  format: ZÖLD
+[2]  analyze: ZÖLD
+[3]  test test/features/onboarding/: ZÖLD
+[4]  test test/features/onboarding/first_win_production_engine_test.dart: ZÖLD
+[5]  test test/e2e/full_app_walkthrough_test.dart: ZÖLD
+[6]  test test/app/routing/app_router_test.dart: ZÖLD
+[7]  test test/app/routing/onboarding_first_win_test.dart: ZÖLD
+[8]  test test/app/routing/shell_entry_location_test.dart: ZÖLD
+[9]  test test/core/screen_size_guard_test.dart: ZÖLD
+[10] test test/features/onboarding/first_win_test.dart: ZÖLD
+[11] test test/features/onboarding/onboarding_resume_test.dart: ZÖLD
+[12] test test/features/onboarding/onboarding_test.dart: ZÖLD
+[13] test test/features/onboarding/permission_primer_test.dart: ZÖLD
+[14] test test/ui/goldens/e13_r16_screens_golden_test.dart: ZÖLD
+[15] test test/ui/goldens/e15_r13_full_variant_matrix_test.dart: ZÖLD
+[16] test test/ui/ui_baseline_screenshot_test.dart: ZÖLD
+[17] test test/app/navigation/: ZÖLD
+[18] test test/tooling/placeholder_wiring_test.dart: ZÖLD
+[19] architecture: ZÖLD
+[20] secrets: ZÖLD
+[21] l10n: ZÖLD
+MINDEN GATE ZÖLD.
+```
+
 ## 11. Review — a Claude tölti ki
 
 > **VÉGSŐ VERDIKT (2026-09-05, 2. review a javító kör után): APPROVED.**

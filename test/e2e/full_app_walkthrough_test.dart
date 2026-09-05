@@ -22,6 +22,7 @@ import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
+import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/features/practice/domain/model/practice_session_state.dart';
 import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
@@ -89,14 +90,43 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
     flags: _shippedBeFlags(),
   );
 
-  // 1. Indítás -> onboarding (real welcome carousel, explicit "Skip" exit).
+  // 1. Indítás -> onboarding (real welcome carousel), THROUGH the "first
+  // win" CTA rather than the quiet Skip exit (ADR 0534, E17-R01): Next ->
+  // Next -> the first-win CTA -> the (auto-granted, `fakeAudioOverrides()`'s
+  // default) permission checkpoint -> `_completeFirstWin`'s hand-off, which
+  // pushes the bekötött `FirstWinStageScreen` on top of `entryLocation`. Real
+  // taps throughout, no test-side bridge (§4/allowed_paths — this file, not
+  // `e2e_harness.dart`, owns the flow-specific steps not already shared).
   expect(find.byType(OnboardingScreen), findsOneWidget);
   walked.add('OnboardingScreen');
-  await walkOnboardingViaSkip(tester);
+  await tester.tap(find.text(l10n.onboardNext));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(l10n.onboardNext));
+  await tester.pumpAndSettle();
+
+  expect(find.text(l10n.onboardFirstWin), findsOneWidget);
+  await tester.tap(find.text(l10n.onboardFirstWin));
+  await tester.pump();
+  await tester.pumpAndSettle();
+
+  expect(
+    find.byType(FirstWinStageScreen),
+    findsOneWidget,
+    reason: 'the first-win CTA must land on the bekötött Stage (ADR 0534 D1)',
+  );
+  walked.add('FirstWinStageScreen');
+
+  // "Not now" — the Stage's OWN dismissal (real tap), popping its pushed
+  // route and landing back on `entryLocation` (already reached by
+  // `_completeFirstWin`'s `router.go` before the push) — so every stop below
+  // continues exactly as the Skip path used to leave it.
+  await tester.tap(find.byKey(const ValueKey('onboard-first-win-skip')));
+  await tester.pumpAndSettle();
 
   // E16-R06 (ADR 0508 D1/D2, L2 feloldva) — `OnboardingScreen._completeFinish`
-  // now navigates via `entryLocationFor(adaptiveShellEnabled)`, the SAME
-  // source `app_router.dart`'s own entry-point logic reads, so Skip lands
+  // (and, since E17-R01, `_completeFirstWin`) navigates via
+  // `entryLocationFor(adaptiveShellEnabled)`, the SAME source
+  // `app_router.dart`'s own entry-point logic reads, so this walk lands
   // directly on the real Today experience with no teszt-oldali híd.
 
   // 2. Today Hub — a fresh install is the REAL "new user" state (zero
@@ -347,6 +377,7 @@ void main() {
           walked,
           {
             'OnboardingScreen',
+            'FirstWinStageScreen',
             'TodayHubScreen',
             'PracticeAreaHubScreen',
             'PracticeSetupScreen',
