@@ -282,8 +282,24 @@ class PipelineIntegrationTest(unittest.TestCase):
                 # gyengéje — az invariáns-lazítás — pontosan a mércét rontaná
                 # el. A minimax elérhető marad (99% heti keret), a sáv rá
                 # visszaváltható, ha a Claude-keret szűkül.
-                if round_id.startswith(("E12-", "E13-", "E14-", "E15-", "E16-")):
-                    allowed = allowed | {"sonnet-impl"}
+                # USER-DÖNTÉS 2026-09-05: „ne minimaxal fusson, minden fusson
+                # Sonnet 5 high-al és Opus 5 orchestrátorral." A carve-out
+                # ezzel megszűnik sáv-listának lenni: MINDEN nyitott kör
+                # mehet `sonnet-impl`-re. Indok — a korábbi sáv-bővítések
+                # indoklása általánosodott: a MiniMax MÉRT gyengéje az
+                # invariáns-lazítás (engine-registry: „9/10; mért gyengéje:
+                # invariánst lazít"), a hátralévő mezőny (E17 bekötési sáv,
+                # E09/E10 sávok) mércéje viszont végig invariáns-sűrű —
+                # típus-pinnelő őrök, gate-cellák, fail-closed kapuk.
+                #
+                # A `minimax` NEM tiltott: a `expected` szabály változatlanul
+                # kiszámolódik, és a minimax mindkét ágon `allowed` marad,
+                # tehát a sor bármikor visszaállítható rá (pl. ha a Claude
+                # heti keret szűkül). Ami megszűnt, az a sáv-előtag
+                # feltétele — nem a mért motor-szabály.
+                #
+                # A Codex-oldali tiltás (a ciklus utáni assert) VÁLTOZATLAN.
+                allowed = allowed | {"sonnet-impl"}
                 self.assertIn(
                     engine,
                     allowed,
