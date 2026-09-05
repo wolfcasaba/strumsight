@@ -25321,9 +25321,23 @@ kozmetika: a `resolve_branch_implementer` a kör távoli ágát megtalálja, teh
 a driver a MÁR MERGE-ELT kört folytatandó körként veszi fel. A queue-sor
 flipje ezért a rituálé kritikus fele, nem a HANDOFF-próza.
 
+**A queue-flip NEM áll egyedül — a mérce ezt is méri.** A javítás első
+próbálkozása PIROSRA vitte a `main`-t: a `router-ci.yml`
+`test_completion_matrix_sync::test_the_real_tree_is_in_sync` bukott
+(`Ch14 (E14): reports done=7, queue measures done=8`), mert a
+`docs/sdd/program-completion-report.md` mátrixa a queue-ból SZÁRMAZTATOTT
+adat. Egy `pending → done` flip tehát MINDIG kétfájlos: a queue-sor és a
+`tools/sync-completion-matrix.py --write` kimenete UGYANABBAN a commitban.
+Ugyanez a drift buktatta a `2c447722` (E14-R08 záró rituálé) router-CI-ját is
+— vagyis nem egyszeri figyelmetlenség, hanem a rituálé rendszeres hézaga.
+A piros `main` ára közvetlen: a driver „nem indul piros main fölé", tehát a
+**második slot azonnal blokkolt** — a javító commit egyben lánc-blokkoló is,
+ha hiányos.
+
 **A szabály.** A záró rituálé sorrendje kötött és a legolcsóbb lépés az első:
-**`queue pending → done` MEGY ELŐSZÖR**, a HANDOFF/LESSONS próza utána. Ha a
-rituálé félbeszakad, a lánc állapota így is konzisztens marad. Diagnózis
+**`queue pending → done` + `sync-completion-matrix.py --write` MEGY ELŐSZÖR,
+egy commitban**, a HANDOFF/LESSONS próza utána. Ha a rituálé félbeszakad, a
+lánc állapota így is konzisztens marad. Diagnózis
 állásnál mindig ugyanaz a három fájl mérendő, ebben a sorrendben:
 `.pipeline/HALTED` (mi és mikor), `.pipeline/claude-blocked-until` +
 `.pipeline/claude-usage` (lejárt-e már az ok), majd a legutóbbi merge-elt PR
