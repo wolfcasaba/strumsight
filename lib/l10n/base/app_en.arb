@@ -1426,6 +1426,7 @@
   "trainerSetupFailure": "Trainer setup could not be loaded.",
   "trainerNoTracks": "No trainable track is available.",
   "trainerNoConfig": "Choose a valid track, mode, and range first.",
+  "songTrainerLaunchFailed": "Couldn't start the session — the song changed since setup. Open it again.",
   "songTrainerTitle": "Song Trainer",
   "songTrainerOverlayCountIn": "Count-in",
   "songTrainerLoading": "Loading song trainer…",

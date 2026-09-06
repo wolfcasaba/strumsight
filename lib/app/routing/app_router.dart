@@ -69,6 +69,7 @@ import '../../features/song_trainer/presentation/screens/song_overview_screen.da
 import '../../features/song_trainer/presentation/screens/song_result_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
+import '../../features/song_trainer/presentation/song_trainer_launch.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_data_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_home_screen.dart';
@@ -640,14 +641,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
         GoRoute(
           path: AppRoutes.songTrainerSetup,
-          builder: (_, state) =>
-              TrainerSetupScreen(songId: state.pathParameters['songId']!),
+          // Javító sáv 2026-09-06 (R3): Start had no handler here — the
+          // completed config went nowhere and the session route was never
+          // pushed. `launchSongTrainerSession` builds the inputs and pushes.
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) => TrainerSetupScreen(
+              songId: state.pathParameters['songId']!,
+              onComplete: (config) =>
+                  launchSongTrainerSession(context, ref, config),
+            ),
+          ),
         ),
         GoRoute(
           path: AppRoutes.songTrainerSession,
           builder: (_, state) => SongTrainerScreen(
             songId: state.pathParameters['songId']!,
             inputs: state.extra! as SongTrainerControllerInputs,
+            autoStart: true,
           ),
         ),
         GoRoute(

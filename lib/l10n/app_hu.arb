@@ -4094,6 +4094,7 @@
       }
     }
   },
+  "songTrainerLaunchFailed": "A menet nem indult el — a dal megváltozott a beállítás óta. Nyisd meg újra.",
   "songTrainerLoading": "Song Trainer betöltése…",
   "songTrainerLoopIndex": "Ismétlés {current}/{total}",
   "@songTrainerLoopIndex": {

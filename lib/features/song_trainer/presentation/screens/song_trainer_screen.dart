@@ -25,7 +25,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../settings/public.dart';
@@ -61,6 +63,7 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
     this.onABClear,
     this.feedback = const [],
     this.loopRangeEnd,
+    this.autoStart = false,
   });
 
   /// Route song identifier. Direct widget tests may omit it and inject [state].
@@ -89,6 +92,13 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
   /// the audible one (§5.2/A3).
   final Duration? loopRangeEnd;
 
+  /// Route mode only (javító sáv 2026-09-06, R3): when true the Stage runs
+  /// `prepare()` then `start()` on the controller it owns as soon as it is
+  /// on screen — the shipped session route used to build the controller
+  /// and then wait forever on the loading body, because nothing called
+  /// either. Tests that drive the controller by hand keep the default.
+  final bool autoStart;
+
   @override
   ConsumerState<SongTrainerScreen> createState() => _SongTrainerScreenState();
 }
@@ -96,6 +106,8 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
 final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
   SongTrainerController? _ownedController;
   Stream<SongTrainerState>? _ownedControllerStates;
+  StreamSubscription<SongTrainerEffect>? _ownedEffects;
+  bool _autoStarted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +122,14 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         // instance instead.
         _ownedController = controller;
         _ownedControllerStates = controller.states;
+        unawaited(_ownedEffects?.cancel());
+        _ownedEffects = controller.effects.listen(_onOwnedEffect);
+        if (widget.autoStart && !_autoStarted) {
+          _autoStarted = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            unawaited(_autoStartOwned(controller, routeInputs));
+          });
+        }
       }
       return StreamBuilder<SongTrainerState>(
         stream: _ownedControllerStates,
@@ -123,11 +143,58 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
 
   @override
   void dispose() {
+    unawaited(_ownedEffects?.cancel());
     // §0.0/B/B7 — the Stage does not own the transport/practice resource; it
     // notifies the owner's exit path on every route exit rather than relying
     // solely on Riverpod's own provider-teardown timing.
     unawaited(_ownedController?.dispose());
     super.dispose();
+  }
+
+  Future<void> _autoStartOwned(
+    SongTrainerController controller,
+    SongTrainerControllerInputs inputs,
+  ) async {
+    if (!mounted) return;
+    await controller.prepare(backingAsset: inputs.backingAsset);
+    if (!mounted || !identical(_ownedController, controller)) return;
+    await controller.start();
+  }
+
+  /// The controller's `NavigateToSongTrainerResult` effect is the ONLY
+  /// place the mapped result is handed out (`_finishAndFinalize`). Before
+  /// the javító sáv nothing listened to it, so the result route — which
+  /// needs the result as `extra` — was never reached.
+  void _onOwnedEffect(SongTrainerEffect effect) {
+    if (!mounted || effect is! NavigateToSongTrainerResult) return;
+    final songId = widget.songId;
+    if (songId == null) return;
+    final location = AppRoutes.songTrainerResult.replaceFirst(
+      ':songId',
+      Uri.encodeComponent(songId),
+    );
+    unawaited(context.push<void>(location, extra: effect.result));
+  }
+
+  // Route mode: the transport buttons drive the owned controller unless the
+  // caller injected its own callbacks (the test harnesses do). Before the
+  // javító sáv the route passed none, so pause / resume / seek were inert.
+  VoidCallback? _ownedPause() {
+    final owned = _ownedController;
+    if (owned == null) return null;
+    return () => unawaited(owned.pause());
+  }
+
+  VoidCallback? _ownedResume() {
+    final owned = _ownedController;
+    if (owned == null) return null;
+    return () => unawaited(owned.resume());
+  }
+
+  ValueChanged<Duration>? _ownedSeek() {
+    final owned = _ownedController;
+    if (owned == null) return null;
+    return (position) => unawaited(owned.seek(position));
   }
 
   Widget _buildScaffold(BuildContext context, SongTrainerState? current) {
@@ -148,9 +215,9 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         strumEvents: widget.strumEvents,
         noteEvents: widget.noteEvents,
         sections: widget.sections,
-        onPause: widget.onPause,
-        onResume: widget.onResume,
-        onSeek: widget.onSeek,
+        onPause: widget.onPause ?? _ownedPause(),
+        onResume: widget.onResume ?? _ownedResume(),
+        onSeek: widget.onSeek ?? _ownedSeek(),
         onSectionSelected: widget.onSectionSelected,
         onABEntered: widget.onABEntered,
         onABClear: widget.onABClear,
@@ -162,10 +229,10 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         chordEvents: widget.chordEvents,
         strumEvents: widget.strumEvents,
         noteEvents: widget.noteEvents,
-        onPlay: widget.onPlay,
-        onPause: widget.onPause,
-        onResume: widget.onResume,
-        onSeek: widget.onSeek,
+        onPlay: widget.onPlay ?? _ownedResume(),
+        onPause: widget.onPause ?? _ownedPause(),
+        onResume: widget.onResume ?? _ownedResume(),
+        onSeek: widget.onSeek ?? _ownedSeek(),
       ),
       SongTrainerStatus.completed ||
       SongTrainerStatus.cancelled => _CompletedBody(state: current!),

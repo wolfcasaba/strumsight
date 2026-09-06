@@ -4140,6 +4140,7 @@
       }
     }
   },
+  "songTrainerLaunchFailed": "Couldn't start the session — the song changed since setup. Open it again.",
   "songTrainerLoading": "Loading song trainer…",
   "songTrainerLoopIndex": "Loop {current}/{total}",
   "@songTrainerLoopIndex": {

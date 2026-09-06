@@ -1381,6 +1381,7 @@
   "trainerSetupFailure": "A trainer beállításait nem sikerült betölteni.",
   "trainerNoTracks": "Nincs gyakorlásra használható sáv.",
   "trainerNoConfig": "Először válassz érvényes sávot, módot és tartományt.",
+  "songTrainerLaunchFailed": "A menet nem indult el — a dal megváltozott a beállítás óta. Nyisd meg újra.",
   "songTrainerTitle": "Song Trainer",
   "songTrainerOverlayCountIn": "Bevezető",
   "songTrainerLoading": "Song Trainer betöltése…",
