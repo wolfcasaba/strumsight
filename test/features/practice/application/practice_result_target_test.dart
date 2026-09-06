@@ -69,10 +69,7 @@ void main() {
 
     test('T1 — navigate then record ends on the recorded session', () {
       controller.expect('s1');
-      expect(
-        state(),
-        const PracticeResultTargetSession('s1', recorded: false),
-      );
+      expect(state(), const PracticeResultTargetSession('s1', recorded: false));
 
       controller.recorded('s1');
 
@@ -109,8 +106,8 @@ void main() {
     final older = _entry('old', createdAt: DateTime.utc(2026, 9, 1));
     final newer = _entry('new', createdAt: DateTime.utc(2026, 9, 6));
     final loaded = AsyncValue<List<PracticeHistoryEntry>>.data([older, newer]);
-    final refreshing = const AsyncValue<List<PracticeHistoryEntry>>.loading()
-        .copyWithPrevious(loaded);
+    final loading = const AsyncValue<List<PracticeHistoryEntry>>.loading();
+    final refreshing = loading.copyWithPrevious(loaded);
 
     test('V1 — a named, present session renders even while refreshing', () {
       for (final history in [loaded, refreshing]) {

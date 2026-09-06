@@ -158,30 +158,27 @@ void main() {
     expect(controller.state.rows.map((r) => r.id), <int>[1]);
   });
 
-  test(
-    'B5 — a failed remove restores the row in place and rethrows',
-    () async {
-      script.pages[null] = CommunityPage<CommunityBookmark>(
-        items: <CommunityBookmark>[_row(1), _row(2), _row(3)],
-        cursor: const CursorPage.haltedAfterRequest(),
-      );
-      await controller.load();
-      script.removeError = const NetworkFailure();
+  test('B5 — a failed remove restores the row in place and rethrows', () async {
+    script.pages[null] = CommunityPage<CommunityBookmark>(
+      items: <CommunityBookmark>[_row(1), _row(2), _row(3)],
+      cursor: const CursorPage.haltedAfterRequest(),
+    );
+    await controller.load();
+    script.removeError = const NetworkFailure();
 
-      await expectLater(
-        controller.remove(bookmarkId: 2),
-        throwsA(isA<NetworkFailure>()),
-      );
+    await expectLater(
+      controller.remove(bookmarkId: 2),
+      throwsA(isA<NetworkFailure>()),
+    );
 
-      expect(controller.state.rows.map((r) => r.id), <int>[1, 2, 3]);
-      expect(controller.state.isRemoving, isFalse);
-      // The row is removable again after the failure — not stuck as pending.
-      script.removeError = null;
-      await controller.remove(bookmarkId: 2);
-      expect(script.removes, hasLength(2));
-      expect(controller.state.rows.map((r) => r.id), <int>[1, 3]);
-    },
-  );
+    expect(controller.state.rows.map((r) => r.id), <int>[1, 2, 3]);
+    expect(controller.state.isRemoving, isFalse);
+    // The row is removable again after the failure — not stuck as pending.
+    script.removeError = null;
+    await controller.remove(bookmarkId: 2);
+    expect(script.removes, hasLength(2));
+    expect(controller.state.rows.map((r) => r.id), <int>[1, 3]);
+  });
 
   test('B6 — a failed load is a stream error, not an empty list', () async {
     script.readError = const ConfigurationFailure();
