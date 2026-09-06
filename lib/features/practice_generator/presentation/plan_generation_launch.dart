@@ -43,9 +43,7 @@ Future<void> launchPlanGeneration(
           );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            AppLocalizations.of(context).planSetupGenerationFailed,
-          ),
+          content: Text(AppLocalizations.of(context).planSetupGenerationFailed),
         ),
       );
   }

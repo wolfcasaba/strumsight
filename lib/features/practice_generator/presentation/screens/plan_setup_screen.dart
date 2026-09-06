@@ -9,11 +9,7 @@ import '../widgets/practice_goal_picker.dart';
 
 /// Five-step, locally resumable plan-input wizard.
 class PlanSetupScreen extends StatefulWidget {
-  const PlanSetupScreen({
-    required this.controller,
-    this.onFinished,
-    super.key,
-  });
+  const PlanSetupScreen({required this.controller, this.onFinished, super.key});
 
   final PlanSetupController controller;
 
