@@ -1,0 +1,1 @@
+round=E06-R16-correction2 verdict=pass tests=348 lesson=clip-ratio-thresholds-need-upper-bound-not-just-finite

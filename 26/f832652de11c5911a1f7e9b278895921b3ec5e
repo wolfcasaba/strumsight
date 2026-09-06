@@ -1,0 +1,1 @@
+round=E08-R21 verdict=pass tests=21 lesson=l399-monotonic-guard-must-clamp-not-throw-on-shrinking-evidence-batch engine=minimax

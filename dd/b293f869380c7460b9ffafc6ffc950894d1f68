@@ -1,0 +1,1 @@
+heal=E05-R15 halt=H6 verdict=fixed lesson=codex-cli-usage-limit-vs-router-terra-budget cause=terra_hold_if_exhausted-only-checks-router-internal-daily-counter-not-upstream-codex-cli-account-quota fix=codex_usage_limit_hold_sibling-mechanism-parses-reset-time-from-cli-error-text pr=186

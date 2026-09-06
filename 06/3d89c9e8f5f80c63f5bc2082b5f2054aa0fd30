@@ -1,0 +1,1 @@
+round=17 verdict=pass tests=65 lesson=devil-advocate-caught-register-clobber(C1)+offline-silent-lost-write(H1)-both-green-in-mocks;fix=typed-AuthEvent-login-vs-register+signature-only-after-confirm+explicit-applyingPull-guard;resume-must-invalidate-provider-to-clear-AsyncError

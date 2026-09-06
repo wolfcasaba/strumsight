@@ -1,0 +1,1 @@
+heal=E04-R16 halt=H6 verdict=retry lesson=leaked-engine-override-qwen38max cause=experimental-gitignored-override-pinned-chain-to-completion-unreliable-kilo-qwen fix=engine-profile-clear+branch-cleanup engine=codex/terra

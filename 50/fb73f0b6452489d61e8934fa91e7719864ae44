@@ -1,0 +1,1 @@
+round=123 verdict=pass tests=502+25 lesson=retry-must-classify-transient-vs-permanent-or-loop-forever

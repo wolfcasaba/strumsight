@@ -1,0 +1,1 @@
+round=173 verdict=fail tests=pytest lesson=audio-augmentation-hurts-timing-based-strum-direction-varispeed-smears-onset-envelope

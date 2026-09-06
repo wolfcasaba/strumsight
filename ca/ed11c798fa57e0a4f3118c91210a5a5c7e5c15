@@ -1,0 +1,1 @@
+round=E09-R09 verdict=pass tests=29 lesson=cursor-block-filter-must-derive-from-kept-rows-not-raw-rows engine=minimax

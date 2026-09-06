@@ -1,0 +1,1 @@
+round=E12-R20 verdict=pass tests=8 lesson=presence-based-a11y-guard-blind-to-split-semantics-node engine=sonnet-impl

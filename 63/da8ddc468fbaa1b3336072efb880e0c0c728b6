@@ -1,0 +1,1 @@
+round=E06-R27 verdict=pass tests=audio_analysis:556,property:114,app:73,share:34 lesson=L264,L265,L266 engine=sonnet-impl

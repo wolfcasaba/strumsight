@@ -1,0 +1,1 @@
+heal=E06-R05 halt=H-NOSIGNAL verdict=retry lesson=L213-session-limit-leftover-pr-blocks-chain attempt=2/3

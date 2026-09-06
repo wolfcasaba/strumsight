@@ -1,0 +1,1 @@
+round=177 verdict=pass tests=637 lesson=voice-safe-release-debounce-fixes-chord-dropout; strum-on-speech residual needs CRNN speech-negatives retrain

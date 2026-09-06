@@ -1,0 +1,1 @@
+round=E15-R02 verdict=halt halt=H3 tests=68-failures-measured lesson=allowed-paths-blast-radius engine=sonnet-impl(not-dispatched)

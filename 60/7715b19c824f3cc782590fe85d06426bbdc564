@@ -1,0 +1,1 @@
+round=E14-R12 verdict=pass tests=full-gate-33960209745 lesson=cold-start-exemption-needs-its-own-guard-cell engine=sonnet-impl

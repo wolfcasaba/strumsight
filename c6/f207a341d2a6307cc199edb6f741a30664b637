@@ -1,0 +1,1 @@
+round=E02-R21 verdict=halt halt=H6 tests=0 lesson=L42-bash-timeout-consumes-m3-attempt-and-codex-signal-cwd-bug engine=auto

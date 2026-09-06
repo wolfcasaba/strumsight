@@ -1,0 +1,1 @@
+round=E16-R06 verdict=pass tests=19 lesson=isolated-falsification-rig engine=sonnet-impl

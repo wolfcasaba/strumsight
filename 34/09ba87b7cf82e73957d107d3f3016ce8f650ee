@@ -1,0 +1,2 @@
+round=E01-R10 verdict=pass tests=993 lesson=verify-a-guard-by-breaking-it
+round=E01-R10B verdict=pass tests=211 lesson=guard-uri-canonicalization

@@ -1,0 +1,1 @@
+round=120 verdict=pass tests=498+24 lesson=prune-after-append-or-unthrottle-everyone; global-state-needs-autouse-reset

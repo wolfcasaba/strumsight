@@ -1,0 +1,1 @@
+heal=E99-R19 halt=H3 verdict=fixed lesson=L352 pr=352 squash=c4104234 test=tools/tests/test_pipeline_file_governance_round_exemption_docs.py

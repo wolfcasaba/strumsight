@@ -1,0 +1,1 @@
+round=e12-r34-fix1 verdict=pass tests=41 lesson=gha-static-gate-must-check-job-level-not-only-step-level-and-content-not-only-name

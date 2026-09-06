@@ -1,0 +1,1 @@
+round=E12-R27 verdict=pass tests=18 lesson=checklist-guard-fail-open-on-checked-lines engine=sonnet-impl

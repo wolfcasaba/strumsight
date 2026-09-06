@@ -1,0 +1,1 @@
+round=E15-R06 verdict=pass tests=180 lesson=test-viewport-is-part-of-the-layout-assertion engine=sonnet-impl
