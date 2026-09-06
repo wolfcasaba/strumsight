@@ -10,7 +10,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/music/tuning.dart';
-import 'package:strumsight/features/practice/public.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_launcher.dart';
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';

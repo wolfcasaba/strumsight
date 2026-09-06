@@ -31,7 +31,7 @@ abstract final class SongTrainerLaunchFailureCode {
 /// needs. Pure application logic over the song repository — no navigation.
 final class SongTrainerLauncher {
   const SongTrainerLauncher({required SongRepository songRepository})
-    : _songRepository = songRepository;
+    : _songRepository = songRepository; // ignore: prefer_initializing_formals
 
   final SongRepository _songRepository;
 

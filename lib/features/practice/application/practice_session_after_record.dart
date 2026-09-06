@@ -54,10 +54,10 @@ final class PracticeSessionRecorderWithHooks
     required PracticeDefinition definition,
     required List<PracticeSessionRecordedHook> hooks,
     required AppLogger logger,
-  }) : _inner = inner,
-       _definition = definition,
-       _hooks = hooks,
-       _logger = logger;
+  }) : _inner = inner, // ignore: prefer_initializing_formals
+       _definition = definition, // ignore: prefer_initializing_formals
+       _hooks = hooks, // ignore: prefer_initializing_formals
+       _logger = logger; // ignore: prefer_initializing_formals
 
   final PracticeSessionRecorder _inner;
   final PracticeDefinition _definition;
