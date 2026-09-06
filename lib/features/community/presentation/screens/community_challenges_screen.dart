@@ -61,9 +61,12 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../app/config/app_config.dart';
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/challenge_controller.dart';
@@ -255,11 +258,19 @@ class _ChallengeRow extends ConsumerWidget {
                   ? null
                   : () => _openDeepLink(deepLinkTarget),
             ),
-      onTap: () => _showActions(context),
+      onTap: () => _showActions(context, ref),
     );
   }
 
-  void _showActions(BuildContext context) {
+  void _showActions(BuildContext context, WidgetRef ref) {
+    // MÉRT hiba (2026-09-06 review, MINOR-6): a ranglista-belépő akkor is
+    // látszott, amikor a `communityLeaderboardEnabled` KI volt — a route
+    // pedig (a javítás óta) ilyenkor nincs regisztrálva, tehát a gomb a
+    // belépési pontra dobta volna vissza a felhasználót.
+    final leaderboardEnabled = ref
+        .read(appConfigProvider)
+        .flags
+        .communityLeaderboardEnabled;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -310,6 +321,26 @@ class _ChallengeRow extends ConsumerWidget {
                     onCancel(challenge.id.value, challenge.authorId);
                   },
                 ),
+                // WP-C (2026-09-06) — a kihívás ranglistája. A
+                // `/community/challenges/:challengeId/leaderboard`
+                // útvonalhoz eddig SEMMI nem vezetett a felületről.
+                if (leaderboardEnabled)
+                  ListTile(
+                    key: const Key('challenge-action-leaderboard'),
+                    leading: const Icon(Icons.leaderboard_outlined),
+                    title: Text(
+                      AppLocalizations.of(sheetContext).communityHubLeaderboard,
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      context.push(
+                        AppRoutes.communityLeaderboard.replaceFirst(
+                          ':challengeId',
+                          challenge.id.value,
+                        ),
+                      );
+                    },
+                  ),
                 const Divider(height: 1),
                 ListTile(
                   key: const Key('challenge-action-block-author'),

@@ -202,28 +202,49 @@ final class _ReadyBody extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(
-          l10n.analysisRecordingReadyTitle,
-          style: typography.titleLarge.copyWith(color: colors.textPrimary),
+    // Görgethető, de a `Spacer` megtartva (2026-09-05): fekvő tájolásban,
+    // 2.0-s szöveg-méretnél a tartalom 64 pixellel túlcsordult, és az
+    // indítás-gomb levágódott — pont a képernyő egyetlen művelete.
+    // A `LayoutBuilder` + `IntrinsicHeight` együtt azt adja, hogy amíg VAN
+    // hely, a `Spacer` lenyomja a gombot az aljára; amint nincs, a tartalom
+    // görgethetővé válik ahelyett, hogy levágódna.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  l10n.analysisRecordingReadyTitle,
+                  style: typography.titleLarge.copyWith(
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: SsSpacing.space2),
+                Text(
+                  l10n.analysisRecordingReadyDescription(
+                    maximumDuration.inMinutes,
+                  ),
+                  key: const Key('analysis-recording-capacity-limit'),
+                  style: typography.bodyMedium.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: SsSpacing.space2),
+                _RetentionNotice(retentionPolicy: retentionPolicy),
+                const Spacer(),
+                SsButton(
+                  key: const Key('analysis-recording-start'),
+                  label: l10n.analysisRecordingStart,
+                  onPressed: starting ? null : onStart,
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: SsSpacing.space2),
-        Text(
-          l10n.analysisRecordingReadyDescription(maximumDuration.inMinutes),
-          key: const Key('analysis-recording-capacity-limit'),
-          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
-        ),
-        const SizedBox(height: SsSpacing.space2),
-        _RetentionNotice(retentionPolicy: retentionPolicy),
-        const Spacer(),
-        SsButton(
-          key: const Key('analysis-recording-start'),
-          label: l10n.analysisRecordingStart,
-          onPressed: starting ? null : onStart,
-        ),
-      ],
+      ),
     );
   }
 }

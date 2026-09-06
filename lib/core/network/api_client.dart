@@ -16,9 +16,19 @@ final class ApiClient {
 
   final Dio _dio;
 
+  /// GET egy JSON-objektumot adó végpontról.
+  ///
+  /// A [queryParameters] 2026-09-05-ig HIÁNYZOTT ebből a primitívből, és ez
+  /// MÉRT hibát okozott: a `challenge_repository_impl` és a
+  /// `relationship_repository_impl` felépítette a `{'limit': …, 'cursor': …}`
+  /// térképet, majd NEM adta át sehova — a lapozás minden community-listán
+  /// némán az első alapértelmezett oldalt kérte újra. A paraméter opcionális
+  /// és `null`-alapértelmezett, tehát minden meglévő hívó viselkedése
+  /// bájtra változatlan.
   Future<AppResult<T>> getJson<T>(
     String path, {
     required JsonObjectDecoder<T> decode,
+    Map<String, Object?>? queryParameters,
     bool requiresAuthentication = true,
     String unauthorizedCode = FailureCode.authSessionExpired,
     String conflictCode = FailureCode.validationInvalidInput,
@@ -26,6 +36,7 @@ final class ApiClient {
     method: 'GET',
     path: path,
     decode: decode,
+    queryParameters: queryParameters,
     requiresAuthentication: requiresAuthentication,
     unauthorizedCode: unauthorizedCode,
     conflictCode: conflictCode,
@@ -57,6 +68,38 @@ final class ApiClient {
     String conflictCode = FailureCode.validationInvalidInput,
   }) => _requestJson(
     method: 'PUT',
+    path: path,
+    data: data,
+    decode: decode,
+    requiresAuthentication: requiresAuthentication,
+    unauthorizedCode: unauthorizedCode,
+    conflictCode: conflictCode,
+  );
+
+  /// PATCH egy JSON-objektumot adó végpontra — a [putJson] pontos párja.
+  ///
+  /// A primitív 2026-09-06-ig HIÁNYZOTT, és ez MÉRT hibát okozott: a
+  /// szerver HÁROM szerkesztő végpontja `PATCH` igét vár
+  /// (`PATCH /community/posts/{id}`, `PATCH /community/comments/{id}`,
+  /// `PATCH /community/clubs/{id}`), a kliens viszont csak
+  /// `getJson` / `postJson` / `putJson` / `post` / `delete` közül
+  /// választhatott. A három repository-metódus ezért dokumentált
+  /// `UnimplementedError`-t dobott, és a komment szerkesztése
+  /// (`comment_controller.dart` `editComment`) ÉLESEN ebbe futott bele.
+  ///
+  /// A `PUT` NEM helyettesíti: a FastAPI útvonalak igére illesztenek, egy
+  /// `PUT /community/posts/{id}` 405-öt adna. A hibaleképezés ugyanazon a
+  /// privát [_requestJson]-on megy át, mint a többi primitívé — a 401 / 403
+  /// / 409 / 422 / 5xx osztályozás bájtra azonos.
+  Future<AppResult<T>> patchJson<T>(
+    String path, {
+    required Map<String, Object?> data,
+    required JsonObjectDecoder<T> decode,
+    bool requiresAuthentication = true,
+    String unauthorizedCode = FailureCode.authSessionExpired,
+    String conflictCode = FailureCode.validationInvalidInput,
+  }) => _requestJson(
+    method: 'PATCH',
     path: path,
     data: data,
     decode: decode,
@@ -134,12 +177,22 @@ final class ApiClient {
     required String unauthorizedCode,
     required String conflictCode,
     Map<String, Object?>? data,
+    Map<String, Object?>? queryParameters,
   }) async {
     final Response<Object?> response;
     try {
       response = await _dio.request<Object?>(
         path,
         data: data,
+        // A `null` értékű kulcsok kihagyása szándékos: a szerver
+        // `extra="forbid"` sémái egy `cursor=null` query-paramétert
+        // ismeretlen bemenetként utasítanának el.
+        queryParameters: queryParameters == null
+            ? null
+            : <String, Object?>{
+                for (final entry in queryParameters.entries)
+                  if (entry.value != null) entry.key: entry.value,
+              },
         options: Options(
           method: method,
           extra: {

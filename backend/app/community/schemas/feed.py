@@ -114,6 +114,20 @@ class FeedPostItem(BaseModel):
     artifact_schema_version: int | None = None
     artifact_payload: dict[str, Any] | None = None
     moderation_state: Literal["visible", "removed"]
+    #: Interakció-számlálók. 2026-09-05-ig HIÁNYOZTAK a wire-alakból,
+    #: miközben a Flutter feed-kártya (`feed_card_registry.dart:211,219,223`
+    #: és `reaction_bar.dart:87`) KIÍRJA őket — a kliens tehát minden
+    #: poszton nullát mutatott volna. A projekt saját elve
+    #: (`UNKNOWN > CONFIDENTLY WRONG`) tiltja ezt: egy „0 reakció" felirat
+    #: nem hiányzó adat, hanem egy magabiztos állítás, ami hamis.
+    reaction_count: int = 0
+    comment_count: int = 0
+    bookmark_count: int = 0
+    #: A NÉZŐ saját viszonya a poszthoz — a UI ebből rajzolja a
+    #: könyvjelző- és reakció-gomb állapotát. Néző-függő, ezért SOSEM
+    #: cache-elhető a poszttal együtt más néző számára.
+    viewer_bookmarked: bool = False
+    viewer_reaction: str | None = None
     created_at: datetime
     #: The Kör 11 ``updated_at`` resource-version token (ADR 0398 §6
     #: precedent). Echoed back on PATCH for optimistic concurrency.
@@ -138,10 +152,31 @@ class FeedPage(BaseModel):
     next_cursor: str | None = None
 
 
+class PinnedPostList(BaseModel):
+    """A klubban kitűzött posztok — TELJES elemekkel.
+
+    Az elem ugyanaz a :class:`FeedPostItem`, amit a feed ad: számlálóstul,
+    néző-állapotostul. Egy szűkebb, négymezős alak kényszerítené a klienst,
+    hogy nullákat rajzoljon a kitűzött poszt alá, miközben a feedben
+    ugyanaz a poszt a valódi számokat mutatja — ugyanaz a „magabiztos hamis
+    állítás", amit a feed-számlálók bevezetése zárt.
+
+    NINCS ``next_cursor``: a kitűzhető posztok száma klubonként korlátos
+    (a ``club_content_service`` pin-limit őre tartja be), tehát a lista
+    definíció szerint egyoldalas. Egy mindig ``None`` kurzor-mező azt
+    sugallná, hogy van lapozás.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[FeedPostItem]
+
+
 __all__ = [
     "FEED_PAGE_SIZE_DEFAULT",
     "FEED_PAGE_SIZE_MAX",
     "FeedPage",
     "FeedPageQuery",
     "FeedPostItem",
+    "PinnedPostList",
 ]

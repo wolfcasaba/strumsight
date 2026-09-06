@@ -421,6 +421,18 @@ def create_notification(
         created_at=now,
         updated_at=now,
     )
+    # A SAVEPOINT a ``db.add`` ELŐTT nyílik: a ``begin_nested()`` maga is
+    # flush-ol a SAVEPOINT kiadása előtt, tehát egy előre hozzáadott sor
+    # ütközése MÁR ITT eldobná az ``IntegrityError``-t — a lenti kezelő
+    # mellett, nem benne.
+    # SAVEPOINT az INSERT köré (2026-09-05). Korábban a dedup-ág
+    # ``db.rollback()``-ot hívott, ami a TELJES tranzakciót gördíti
+    # vissza — tehát a HÍVÓ elsődleges műveletét is. Amíg a service-nek
+    # nem volt hívója, ez nem látszott; az első valódi kibocsátó (egy
+    # klub-meghívó) esetén viszont a duplikált értesítés magát a
+    # meghívót is eldobta volna. A savepoint csak a sikertelen INSERT-et
+    # gördíti vissza.
+    savepoint = db.begin_nested()
     db.add(new_row)
     try:
         db.flush()
@@ -428,7 +440,7 @@ def create_notification(
         # A7 dedup — a concurrent writer landed between our
         # read and our INSERT. Re-read the existing row by
         # the (recipient, dedup_key) UNIQUE.
-        db.rollback()
+        savepoint.rollback()
         if dedup_key is None:
             # A non-dedup-key IntegrityError is a real bug —
             # the table's only UNIQUE that isn't ``public_id``
@@ -452,6 +464,8 @@ def create_notification(
             # Re-raise so the caller surfaces a 500.
             raise
         return again
+    else:
+        savepoint.commit()
 
     db.refresh(new_row)
 

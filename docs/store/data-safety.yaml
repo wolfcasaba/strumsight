@@ -13,9 +13,18 @@
 #   2) minden `leaves_device: true` leltár-mező szerepel legalább egy itteni
 #      kategória references-listájában (nincs "elfelejtett" kategória).
 #
-# A `rides:` route-ok (account_api_auth_repository, stb.) saját `fields`
-# nélküliek a leltárban — a fedezetük az `account_api`/`diagnostics_upload`
+# A `rides:` route-ok TÖBBSÉGE (account_api_auth_repository, stb.) saját `fields`
+# nélküli a leltárban — a fedezetük az `account_api`/`diagnostics_upload`
 # célroute-on keresztül automatikus, nincs hozzájuk külön kategória (§0.0 R4).
+#
+# KIVÉTEL (2026-09-06, WP-B): `account_api_community_post_repository` és
+# `account_api_community_club_repository` a transzportot ugyan az `account_api`-tól
+# lovagolja, de SAJÁT `fields` listát is deklarál, mert ez a két repository az
+# egyetlen hely a fában, ahol felhasználó által ÍRT szabad szöveg (poszt-törzs,
+# komment-törzs, klub-név/leírás) hagyja el az eszközt. Ezek `leaves_device: true`
+# mezők, tehát a fenti 2) irány kategóriát KÖVETEL rájuk — lásd a fájl végén a
+# `community_post_*` / `community_club_*` / `community_write_integrity`
+# kategóriákat.
 #
 # `wired: false` route-ok mezői (`tutor_stream`.tutor_turn_message,
 # `community_media`.community_media_bytes) `leaves_device: false` — ma
@@ -154,3 +163,104 @@ categories:
     references:
       - route: share_export
         field: "redacted_analysis_export_json (RedactionPolicy-filtered allowlist view of an AnalysisDocument)"
+
+  # 2026-09-06 (WP-B) — a poszt- és klub-repository bekötésével keletkezett
+  # 12 új `leaves_device: true` leltár-mező fedezete. A két route a
+  # transzportot az `account_api`-tól lovagolja, de saját mezői vannak, ezért
+  # saját kategóriákat is követel (lásd a fejléc KIVÉTEL bekezdését).
+
+  - id: community_post_content
+    label: "Community posts and comments"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Free-text post and comment bodies the user writes in Community — the only user-authored prose the app sends to the backend. Created only by an explicit compose/send action while signed in."
+    references:
+      - route: account_api_community_post_repository
+        field: "post_body (a poszt szabad szövege — createPost/updatePost `body`)"
+      - route: account_api_community_post_repository
+        field: "comment_body (a komment szabad szövege + `parent_public_id` — createComment/updateComment)"
+
+  - id: community_post_audience
+    label: "Community post audience setting"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "The visibility/audience value the user picks for a post; the server uses it to decide who may see that post."
+    references:
+      - route: account_api_community_post_repository
+        field: "post_audience (a poszt láthatósága — `audience` wire-érték)"
+
+  - id: community_post_artifact
+    label: "Community post attachment descriptor"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "The practice/analysis artifact descriptor a user attaches to a post (a JSON payload describing the attached session, not raw audio)."
+    references:
+      - route: account_api_community_post_repository
+        field: "post_artifact (a poszthoz csatolt artefaktum JSON-payloadja — `artifact`)"
+
+  - id: community_post_reaction
+    label: "Community reactions"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Which reaction kind the user set on which post — an explicit tap, sent only while signed in."
+    references:
+      - route: account_api_community_post_repository
+        field: "reaction_kind (a reakció típusa — PUT /community/posts/{id}/reaction `kind`)"
+
+  - id: community_club_identity
+    label: "Community club name and description"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "Free-text club name and description the user writes when creating or editing a club."
+    references:
+      - route: account_api_community_club_repository
+        field: "club_name (a klub neve — createClub `name`)"
+      - route: account_api_community_club_repository
+        field: "club_description (a klub szabad szövegű leírása — createClub/updateClub `description`)"
+
+  - id: community_club_audience
+    label: "Community club visibility setting"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "The visibility value the user picks for a club; the server uses it to decide who may see and join that club."
+    references:
+      - route: account_api_community_club_repository
+        field: "club_visibility (a klub láthatósága — `visibility` wire-érték)"
+
+  - id: community_club_membership_targets
+    label: "Community club membership target profile ids"
+    play_category: "Personal info"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "The public profile id of the person a user invites, promotes to owner, or removes from a club, plus the club-membership action targets carried in the request path (join/leave/member removal)."
+    references:
+      - route: account_api_community_club_repository
+        field: "target_public_id (meghívott, illetve új tulajdonos publikus profil-azonosítója — inviteMember `target_public_id`, transferOwnership `target_public_id`)"
+      - route: account_api_community_club_repository
+        field: "club_membership_action (csatlakozás/kilépés/tag-eltávolítás cél-azonosítói az útvonalban — /join, /leave, /members/{id})"
+
+  - id: community_write_integrity
+    label: "Community write-integrity identifiers"
+    play_category: "App info and performance"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "App-functionality identifiers only: a per-attempt idempotency key (double-submit protection) and an optimistic resource version (lost-update protection). They identify the write attempt, not the user."
+    references:
+      - route: account_api_community_post_repository
+        field: "idempotency_key / resource_version (írás-kísérlet azonosítója és optimista verzió)"
+      - route: account_api_community_club_repository
+        field: "idempotency_key (írás-kísérlet azonosítója)"

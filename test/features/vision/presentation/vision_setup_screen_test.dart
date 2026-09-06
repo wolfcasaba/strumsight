@@ -14,7 +14,9 @@ import 'package:strumsight/core/design_system/components/actions/ss_button.dart'
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
+import 'package:strumsight/features/vision/application/vision_setup_controller.dart';
 import 'package:strumsight/features/vision/domain/vision_setup_profile.dart';
+import 'package:strumsight/features/vision/presentation/providers/vision_setup_providers.dart';
 import 'package:strumsight/features/vision/presentation/screens/vision_setup_screen.dart';
 import 'package:strumsight/features/vision/presentation/widgets/camera_permission_panel.dart';
 import 'package:strumsight/features/vision/presentation/widgets/vision_setup_frame_guide.dart';
@@ -326,6 +328,129 @@ void main() {
       expect(find.byType(SsButton), findsWidgets);
     });
   });
+
+  // -------------------------------------------------------------------
+  // WP-D (2026-09-06) — a gitár-geometria belépési pontja.
+  //
+  // MÉRT hiány: a `/vision/guitar-geometry` útvonalra a szállított
+  // felületről SEMMI nem mutatott — a képernyőre csak a legacy
+  // `/calibrate` címen lehetett eljutni, magára az útvonalra sehogy.
+  // -------------------------------------------------------------------
+  group('WP-D — the guitar-geometry entry point', () {
+    testWidgets('the ready step opens /vision/guitar-geometry', (tester) async {
+      await _pumpReadyStep(tester, visionGuitarGeometryEnabled: true);
+
+      await tester.tap(
+        find.byKey(const Key('vision-setup-open-guitar-geometry')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('STUB ${AppRoutes.visionGuitarGeometry}'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the entry is absent when visionGuitarGeometryEnabled is off '
+        '(the route is not registered either)', (tester) async {
+      await _pumpReadyStep(tester, visionGuitarGeometryEnabled: false);
+
+      expect(
+        find.byKey(const Key('vision-setup-open-guitar-geometry')),
+        findsNothing,
+      );
+      // Kontroll: a KÉSZ lépés maga renderelődik — a hiányzó gomb nem
+      // azért hiányzik, mert a képernyő máshol tart.
+      expect(find.text('Camera setup is ready'), findsOneWidget);
+    });
+  });
+}
+
+/// WP-D — a beállítás KÉSZ lépését közvetlenül állítja be, hogy a
+/// geometria-belépési pont mérhető legyen a teljes engedély- és
+/// kamera-lánc lefuttatása nélkül. A `refreshPermissionState` no-op: a
+/// képernyő `initState`-je hívja, és a valós változat felülírná az itt
+/// beállított állapotot.
+final class _ReadyVisionSetupController extends VisionSetupController {
+  @override
+  VisionSetupState build() => const VisionSetupState(
+    step: VisionSetupStep.ready,
+    leftHanded: false,
+    selectedProfile: VisionSetupProfile.leftHandFocus,
+    selectedCamera: VisionCameraPreference.back,
+    permissionState: CameraPermissionState.granted,
+    cameraSessionActive: true,
+  );
+
+  @override
+  Future<void> refreshPermissionState() async {}
+}
+
+/// WP-D harness — a valós beállítás-képernyő egy MINIMÁLIS go_router
+/// alatt; a geometria helyén `STUB <path>` áll.
+Future<void> _pumpReadyStep(
+  WidgetTester tester, {
+  required bool visionGuitarGeometryEnabled,
+}) async {
+  final store = InMemoryKeyValueStore({StorageKeys.onboardingSeen: true});
+  final container = ProviderContainer(
+    overrides: [
+      keyValueStoreProvider.overrideWithValue(store),
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: false,
+            diagnosticsEnabled: false,
+            labModeAvailable: false,
+            visionEnabled: true,
+            visionSetupEnabled: true,
+            visionGuitarGeometryEnabled: visionGuitarGeometryEnabled,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
+      cameraPermissionGatewayProvider.overrideWithValue(
+        _DeniedPermissionGateway(),
+      ),
+      cameraSessionCoordinatorProvider.overrideWithValue(
+        CameraSessionCoordinator(),
+      ),
+      visionSetupControllerProvider.overrideWith(
+        _ReadyVisionSetupController.new,
+      ),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  final router = GoRouter(
+    initialLocation: AppRoutes.visionSetup,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.visionSetup,
+        builder: (_, _) => const VisionSetupScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.visionGuitarGeometry,
+        builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+      ),
+    ],
+  );
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        theme: SsLightTheme.data(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ),
+  );
+  await tester.pump();
 }
 
 void _noop() {}

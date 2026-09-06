@@ -220,11 +220,21 @@ class SafetyRelationshipsScreen extends ConsumerWidget {
         child: Scaffold(
           appBar: AppBar(
             title: Text(localizations.safetyBlockedMutedTitle),
-            bottom: TabBar(
-              tabs: <Widget>[
-                Tab(text: localizations.safetyBlockedTab),
-                Tab(text: localizations.safetyMutedTab),
-              ],
+            // A fül-sáv magassága a SZÖVEG-MÉRETTEL nő (2026-09-05).
+            // A `TabBar` alapértelmezett magassága fix; 2.0-s szöveg-
+            // méretnél a fül felirata túlcsordult, azaz pont azoknak
+            // vágódott le, akik a nagy betűt bekapcsolták. A
+            // `PreferredSize` a mért méretezővel skálázza a magasságot.
+            bottom: PreferredSize(
+              preferredSize: Size.fromHeight(
+                MediaQuery.textScalerOf(context).scale(kTextTabBarHeight),
+              ),
+              child: TabBar(
+                tabs: <Widget>[
+                  Tab(text: localizations.safetyBlockedTab),
+                  Tab(text: localizations.safetyMutedTab),
+                ],
+              ),
             ),
           ),
           body: const TabBarView(
@@ -301,26 +311,44 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
                 ? profile.userId.value
                 : profile.displayName,
           ),
-          subtitle: Text(profile.handle.value),
-          trailing: SsButton(
-            variant: SsButtonVariant.secondary,
-            onPressed: () async {
-              try {
-                if (widget.tab == SafetyTab.blocked) {
-                  await notifier.unblock(profile.userId);
-                } else {
-                  await notifier.unmute(profile.userId);
-                }
-              } on AppFailure catch (failure) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(_formatFailure(context, failure))),
-                );
-              }
-            },
-            label: widget.tab == SafetyTab.blocked
-                ? localizations.safetyUnblock
-                : localizations.safetyUnmute,
+          // A művelet-gomb a felirat ALÁ kerül, nem mellé (2026-09-05).
+          // A `trailing` pozícióban 2.0-s szöveg-méretnél a gomb az EGÉSZ
+          // sor szélességét elvette (a Flutter saját hibaüzenete mondta
+          // ki), és a név eltűnt mögüle. Alatta minden szöveg-méreten
+          // elfér, és a gomb továbbra is egy koppintásra van.
+          isThreeLine: true,
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(profile.handle.value),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SsButton(
+                  variant: SsButtonVariant.secondary,
+                  onPressed: () async {
+                    try {
+                      if (widget.tab == SafetyTab.blocked) {
+                        await notifier.unblock(profile.userId);
+                      } else {
+                        await notifier.unmute(profile.userId);
+                      }
+                    } on AppFailure catch (failure) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(_formatFailure(context, failure)),
+                        ),
+                      );
+                    }
+                  },
+                  label: widget.tab == SafetyTab.blocked
+                      ? localizations.safetyUnblock
+                      : localizations.safetyUnmute,
+                ),
+              ),
+            ],
           ),
         );
       },

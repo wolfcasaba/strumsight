@@ -41,6 +41,18 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
 | share_export | strum_card_png (rendered on-screen 'Strum Card' capture) |
 | share_export | share_caption (chords, strum-glyph sequence, BPM, optional session title only if includeTitle=true, install link, hashtags) |
 | share_export | redacted_analysis_export_json (RedactionPolicy-filtered allowlist view of an AnalysisDocument) |
+| account_api_community_post_repository | post_body (a poszt szabad szövege — createPost/updatePost `body`) |
+| account_api_community_post_repository | post_audience (a poszt láthatósága — `audience` wire-érték) |
+| account_api_community_post_repository | post_artifact (a poszthoz csatolt artefaktum JSON-payloadja — `artifact`) |
+| account_api_community_post_repository | comment_body (a komment szabad szövege + `parent_public_id` — createComment/updateComment) |
+| account_api_community_post_repository | reaction_kind (a reakció típusa — PUT /community/posts/{id}/reaction `kind`) |
+| account_api_community_post_repository | idempotency_key / resource_version (írás-kísérlet azonosítója és optimista verzió) |
+| account_api_community_club_repository | club_name (a klub neve — createClub `name`) |
+| account_api_community_club_repository | club_description (a klub szabad szövegű leírása — createClub/updateClub `description`) |
+| account_api_community_club_repository | club_visibility (a klub láthatósága — `visibility` wire-érték) |
+| account_api_community_club_repository | target_public_id (meghívott, illetve új tulajdonos publikus profil-azonosítója — inviteMember `target_public_id`, transferOwnership `target_public_id`) |
+| account_api_community_club_repository | club_membership_action (csatlakozás/kilépés/tag-eltávolítás cél-azonosítói az útvonalban — /join, /leave, /members/{id}) |
+| account_api_community_club_repository | idempotency_key (írás-kísérlet azonosítója) |
 <!-- data-inventory-crosscheck:end -->
 
 ### Reading the table
@@ -60,6 +72,19 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
 - **share_export** — whatever you explicitly choose to hand to the OS share sheet (a practice
   card image, a caption, or a redacted analysis export you previewed and confirmed first). Not
   Lab-mode-specific; it is the same share path every user has.
+- **account_api_community_post_repository** — Community posts, comments and reactions. This route
+  rides the very same account transport and session gate as `account_api` (its provider re-exports
+  `accountApiClientProvider` verbatim), but it is listed separately because it carries fields of
+  its own: the **free text you write** in a post or a comment, the audience you pick for a post,
+  the practice/analysis artifact you attach, the reaction kind you tap, and a per-attempt
+  idempotency key / resource version that exists only to stop a double submit or a lost update.
+  Nothing here is sent unless you are signed in and you explicitly compose, edit or react — with
+  no signed-in account, the repository resolves to the disabled variant, which sends nothing.
+- **account_api_community_club_repository** — Community clubs. Same transport and session gate as
+  above, with its own fields: the **club name and free-text description** you write, the club's
+  visibility setting, the public profile id of whoever you invite or hand ownership to, the
+  membership actions you take (join, leave, remove a member), and the same write-integrity
+  idempotency key. Again: signed out, nothing on this route leaves the device.
 
 ## The diagnostics report you can send us — two independent layers
 

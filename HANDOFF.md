@@ -1,5 +1,78 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ JAVÍTÓ SÁV (ops/community-data-layer, PR #594) — „minden eddigi fejlesztés fusson az APK-ban": két kompozíciós hibaosztály zárva, teszt-APK kiadva — CI `build-apk.yml` run 34022459707 **zöld** a `4489307` HEAD-en (2026-09-06)
+
+**Teszt-APK:** [Release `test-2026-09-06-4489307`](https://github.com/wolfcasaba/strumsight/releases/tag/test-2026-09-06-4489307)
+(fejlesztői build; SHA-256 eleje `555e326c3b3ceaf2`). **A Lab-APK KIESETT**
+(felhasználói döntés 2026-09-06): a teszt-APK a sima `build-apk.yml` artefaktuma,
+és a `development` környezet KÓDBÓL hordozza a teljes tesztkonfigurációt
+(`FeatureFlags.forShippedBuild` + `AppConfig.apiBaseUrlFor`, commit `1eb751f`):
+fiók BE, élő backend `https://casaba.app/strumsight`, community(+writes/clubs/
+leaderboard) BE, preview-all BE (AI Tutor helyi, Vision, Analysis V2, …),
+média KI. Explicit define mindig nyer; kill switch `STRUMSIGHT_COMMUNITY=false`.
+`lab`/`production` bájtra változatlan (tesztcellák pinnelik).
+
+**A mért hibaosztály (terv: `docs/ui/repair-plan-2026-09-06.md`):** a `main.dart`
+8 providert kötött be, a fában **17** dobott override nélkül. A Library fül
+(`UnifiedLibraryScreen`) a fejlesztői buildben is `StateError`-t kapott
+(`analysisRepositoryProvider`, `setlistRepositoryProvider`); a community feed
+a `feedCacheProvider`-en dőlt volna el. Mind bekötve, őrteszt mindre
+(`test/app/production_composition_test.dart`, `production_repository_wiring_test.dart`).
+
+| Csomag | Commit | Mit zárt |
+|---|---|---|
+| WP-A bootstrap | `0987ab2` | analysis V2 repo/cache/migráció, setlist + dal-haladás tároló a kompozíciós gyökérben |
+| WP-B/B2 community adatréteg | `9758ad7`, `ac6caed` | `HttpCommunityPostRepository` (10), `HttpCommunityClubRepository` (9), feed-cache/kv/logger, klub-részlet seamek; **PATCH primitív az ApiClientben** (a komment-szerkesztés eddig kérést sem küldött) |
+| WP-C navigáció | `2d2aac8` | a community kapu HUB, 13 képernyő elérhető; bejövő-hivatkozás mérce a reachability eszközben |
+| WP-D belépési pontok | `aaf68a5` | analysis V2 felvétel, tervező (Today/Setup), tutor, vision geometria; klub-kihívás őszinte állapot; adatleltár |
+| WP-E flag-ek | `26100d9` | `STRUMSIGHT_PREVIEW_ALL` overlay nem-production buildre |
+| review-javítás | `8506557` | bootstrap hibatűrés + sérült tároló karantén (fekete képernyő helyett hibaképernyő), migrátor app-scope-ban, tervező-belépés az ADAPTÍV hubon, sub-flag route-kapuk, `_screen_v2` a populációban, data-safety + tester-consent a 12 új kimenő mezővel |
+| WP-G config | `1eb751f` | a development env teljes tesztkonfigurációja (fent) |
+| goldenek | `9afc551` | 10 szándékos UI-változás x86-on újra felvéve (`tools/golden-x86.sh record`) |
+
+Mérce: `dart run tool/check_screen_reachability.dart` → 97 képernyő, 94 elérhető,
+3 elérhetetlen; útvonal-konstans bejövő hivatkozás nélkül **39 → 17**.
+
+**Nyitott, FOLYAMATBAN (5 párhuzamos ügynök, 2026-09-06):** WP-H1 dalcsomag-
+munkamenet futtató + Setlist V2 + dal-eredmény effekt; WP-H2 tutor
+gyakorlásterv-előnézet folyamat; WP-H3 tervező előnézet/változás-áttekintés;
+WP-H4 kihívás GET-végpontok + klub-kihívás fül; WP-H5 community média-feltöltés
++ fenyegetés-modell. Utána: router-hunkok egyesítése, második CI-build, új Release.
+
+**Csapdák, amiket ez a sáv mért:** (1) három ARB-kulcs csak a GENERÁLT
+aggregátumban élt (regenerálás törölte) — a forrás a `lib/l10n/base|features`;
+(2) a `check_screen_reachability` a REGISZTRÁCIÓT mérte, nem az elérhetőséget;
+(3) a goldenek CSAK x86-on vehetők fel (ADR 0426), a box aarch64;
+(4) a CI titok-szkenner a teszt-fixture kulcsokra is fut (`# strumsight:allow-secret`).
+
+
+## ✅ JAVÍTÓ SÁV (2026-09-06) — „minden eddigi fejlesztés fusson az APK-ban": két kompozíciós hibaosztály zárva, teszt-APK CI-zölden — ág `ops/community-data-layer`, PR [#594](https://github.com/wolfcasaba/strumsight/pull/594), HEAD `4489307`
+
+Terv és mérés: [`docs/ui/repair-plan-2026-09-06.md`](docs/ui/repair-plan-2026-09-06.md)
+(alap: `docs/ui/remaining-work.md`). **A felhasználó döntése:** a Lab-APK
+NEM kell többé; a teszt-APK a `build-apk.yml` fejlesztői buildje.
+
+| Csomag | Mit zárt | Commit |
+|---|---|---|
+| WP-A | `lib/main.dart` csak 8 providert kötött be; az analysis V2 + setlist/haladás **boot-providereit semmi nem hívta** → a Library fül `StateError`-t kapott. `lib/app/production_overrides.dart` + őr (`test/app/production_composition_test.dart`) | `0987ab2` |
+| WP-B/B2 | 9 dobó community seam bekötve: `HttpCommunityPostRepository` (10 met.), `HttpCommunityClubRepository` (9 met.), feed-cache, kv-store, logger, klub-részlet; **`ApiClient.patchJson`** (PATCH nem létezett → a komment-szerkesztés nem küldött kérést) | `9758ad7`, `ac6caed` |
+| WP-C | A community kapu HUB lett; 13 képernyő a felületről elérhető; reachability eszközben BEJÖVŐ-hivatkozás cella (39 → 17 hivatkozatlan útvonal); 3 ARB-kulcs, ami csak a GENERÁLT aggregátumban élt, a forrás-szegmensbe került | `2d2aac8` |
+| WP-D | Belépési pontok: analysis V2 capture, tervező (heti/adatvédelem, adaptív hub), tutor (profil/adatvédelem/adat), vision geometria; klub-kihívás őszinte „nem elérhető" állapot; adatleltár + Play data-safety + tesztelői hozzájárulás 12 új mezővel | `aaf68a5`, `8506557` |
+| WP-E/G | `STRUMSIGHT_PREVIEW_ALL` (23 hardkódolt-false UI-flag nem-production alatt); **`FeatureFlags.forShippedBuild` + `AppConfig.apiBaseUrlFor`: a `development` env kódból hordozza a teljes tesztkonfigot** (fiók BE, `https://casaba.app/strumsight`, community BE, media KI); explicit define mindig nyer; `lab`/`production` bájtra változatlan | `26100d9`, `1eb751f` |
+| review | Ördög-ügyvéd review 10 lelete javítva: bootstrap hibatűrés (`ProductionComposition`, korrupt tároló karanténja), migrátor app-scope-ban (eldobott Ref), sub-flag route-kapuk, `go`→`push` | `8506557` |
+| goldens | 10 szándékosan változott PNG x86-on újra felvéve (`tools/golden-x86.sh record`) | `9afc551` |
+
+**Kapu:** `build-apk.yml` run `34022459707` a `4489307` HEAD-en **success** —
+10656 teszt zöld, 21 skip; format/analyze/architecture/secrets/l10n mind zöld.
+APK: a run artefaktuma és a `e17-full-wiring-4489307` prerelease.
+
+**Ami tudottan nyitva maradt (mérve):** klub-poszt írás kliensről (belső
+`club_id`), `profilePosts` végpont, hang-import folyamat, `songTrainerResult`
+effect-listener, tervező preview/change-review `extra` nélkül, a 3 elérhetetlen
+képernyő (`setlist_session`, `practice_plan_preview`, `SetlistListScreenV2`),
+community media (R-SEC-01/R-PRIV-01). A **végső mérce a valós-gitár APK-teszt**
+— a merge a felhasználó visszajelzése után.
+
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 
 A Chapter 17 (Teljes bekötés) **első köre**: a `FirstWinStageScreen` eddig

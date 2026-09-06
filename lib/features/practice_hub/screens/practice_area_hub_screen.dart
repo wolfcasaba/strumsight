@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../features/practice/public.dart' show practiceCatalogProvider;
@@ -31,6 +32,16 @@ class PracticeAreaHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final catalog = ref.watch(practiceCatalogProvider);
+    // MÉRT hiba (2026-09-06 review, MAJOR-3): a tervező belépési pontjait
+    // csak a LEGACY `PracticeHubScreen` kapta meg, azt viszont a router
+    // kizárólag `!adaptiveShellEnabled` mellett regisztrálja. A szállított
+    // (Lab) buildben a shell BE van kapcsolva, tehát a `/practice` ezt a
+    // képernyőt rendereli — belépő nélkül a tervező megint elérhetetlen.
+    // Ugyanaz a zászló kapuz, mint a route-okat: `practiceGeneratorEnabled`.
+    final practiceGeneratorEnabled = ref
+        .watch(appConfigProvider)
+        .flags
+        .practiceGeneratorEnabled;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceHubTitle)),
@@ -111,6 +122,37 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            if (practiceGeneratorEnabled) ...[
+              const SizedBox(height: 24),
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.planSetupTitle,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _QuickTool(
+                    key: const ValueKey('practice-area-hub-plan-builder'),
+                    icon: Icons.auto_awesome_outlined,
+                    label: l10n.planSetupGoalTitle,
+                    onPressed: () =>
+                        context.push(AppRoutes.practiceGeneratorSetup),
+                  ),
+                  _QuickTool(
+                    key: const ValueKey('practice-area-hub-today-plan'),
+                    icon: Icons.today_outlined,
+                    label: l10n.todayPlanTitle,
+                    onPressed: () =>
+                        context.push(AppRoutes.practiceGeneratorToday),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 24),
             Semantics(
               header: true,
@@ -151,6 +193,7 @@ class _QuickTool extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    super.key,
   });
 
   final IconData icon;

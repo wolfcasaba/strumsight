@@ -23,6 +23,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/features/community/application/controllers/challenge_controller.dart';
@@ -159,9 +162,31 @@ class _RecordingChallengeRepository implements CommunityChallengeRepository {
   }
 }
 
-Widget _wrap(Widget child, _RecordingChallengeRepository fake) {
+Widget _wrap(
+  Widget child,
+  _RecordingChallengeRepository fake, {
+  bool leaderboardEnabled = true,
+}) {
   return ProviderScope(
-    overrides: [communityChallengeRepositoryProvider.overrideWithValue(fake)],
+    overrides: [
+      communityChallengeRepositoryProvider.overrideWithValue(fake),
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: true,
+            diagnosticsEnabled: true,
+            labModeAvailable: true,
+            communityEnabled: true,
+            communityLeaderboardEnabled: leaderboardEnabled,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
+    ],
     child: MaterialApp(
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
         AppLocalizations.delegate,
@@ -177,9 +202,16 @@ Widget _wrap(Widget child, _RecordingChallengeRepository fake) {
 
 Future<void> _pumpScreen(
   WidgetTester tester,
-  _RecordingChallengeRepository fake,
-) async {
-  await tester.pumpWidget(_wrap(const CommunityChallengesScreen(), fake));
+  _RecordingChallengeRepository fake, {
+  bool leaderboardEnabled = true,
+}) async {
+  await tester.pumpWidget(
+    _wrap(
+      const CommunityChallengesScreen(),
+      fake,
+      leaderboardEnabled: leaderboardEnabled,
+    ),
+  );
   for (var i = 0; i < 3; i += 1) {
     await tester.pump();
   }
@@ -402,5 +434,53 @@ void main() {
         );
       },
     );
+  });
+
+  // MÉRT hiba (2026-09-06 review, MINOR-6): a ranglista-belépő a zászló
+  // állásától függetlenül látszott, a route pedig kikapcsolt zászlónál —
+  // a router javítása óta — nincs regisztrálva. Egy látható gomb egy nem
+  // létező útvonalra a `onException` visszaesésén landolna.
+  group('a ranglista-belépő a communityLeaderboardEnabled alatt áll', () {
+    testWidgets('bekapcsolt zászlónál a sor-akciók közt OTT van', (
+      tester,
+    ) async {
+      final fake = _RecordingChallengeRepository()
+        ..listResult = CommunityPage<CommunityChallengeDefinition>(
+          items: <CommunityChallengeDefinition>[
+            _challenge(id: 'c-1', type: ChallengeType.personalBest),
+          ],
+          cursor: const CursorPage.haltedAfterRequest(),
+        );
+      await _pumpScreen(tester, fake);
+
+      await tester.tap(find.text('score'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('challenge-action-leaderboard')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('kikapcsolt zászlónál a sor-akciók közt NINCS ott', (
+      tester,
+    ) async {
+      final fake = _RecordingChallengeRepository()
+        ..listResult = CommunityPage<CommunityChallengeDefinition>(
+          items: <CommunityChallengeDefinition>[
+            _challenge(id: 'c-1', type: ChallengeType.personalBest),
+          ],
+          cursor: const CursorPage.haltedAfterRequest(),
+        );
+      await _pumpScreen(tester, fake, leaderboardEnabled: false);
+
+      await tester.tap(find.text('score'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('challenge-action-leaderboard')),
+        findsNothing,
+      );
+    });
   });
 }

@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from typing import Protocol
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -58,6 +59,10 @@ from sqlalchemy.orm import Session
 from ...deps import CurrentUser
 from ..models.profile import CommunityProfile
 from ..models.social_graph import CommunityFollow
+from ..notifications.emitters import (
+    notify_follow_accepted_by_request,
+    notify_follow_request,
+)
 from ..policies.query_filters import (
     filter_public_ids_against_viewer_blocks,
     is_blocked_pair,
@@ -115,6 +120,15 @@ def _commit_via(request: Request, db: Session) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _notification_now() -> datetime:
+    """Az értesítés időbélyege.
+
+    Külön függvény, hogy a két kibocsátási pont ugyanazt az órát olvassa,
+    és a teszt egy helyen tudja rögzíteni.
+    """
+    return datetime.now(timezone.utc)
+
+
 @router.post(
     "/profiles/{public_id}/follow",
     status_code=status.HTTP_200_OK,
@@ -143,12 +157,26 @@ def post_follow(
     db = next(db_gen)
     try:
         try:
+            follower_public_id = _caller_profile_public_id(db, current_user.id)
             result = follow(
                 db,
-                follower_public_id=_caller_profile_public_id(db, current_user.id),
+                follower_public_id=follower_public_id,
                 target_public_id=public_id,
                 idempotency_key=idempotency_key,
             )
+            if result.status == "requested":
+                # Csak a KÉRELEM szül értesítést. Egy nyílt profil közvetlen
+                # követésére nincs megengedett értesítés-típus: a
+                # `follow_accepted` az ELLENKEZŐ irányt jelenti („elfogadták
+                # a kérelmedet"), és arra felhasználva a címzett azt hinné,
+                # hogy az ő kérelmét fogadták el. A hiány dokumentált —
+                # egy `follow_started` típus felvétele külön kör.
+                notify_follow_request(
+                    db,
+                    target_public_id=public_id,
+                    actor_public_id=follower_public_id,
+                    now=_notification_now(),
+                )
             _commit_via(request, db)
         except ValueError as exc:
             db.rollback()
@@ -207,11 +235,21 @@ def post_accept_follow_request(
     db = next(db_gen)
     try:
         try:
+            acceptor_public_id = _caller_profile_public_id(db, current_user.id)
             result = accept_follow_request(
                 db,
                 request_public_id=request_id,
-                target_public_id=_caller_profile_public_id(db, current_user.id),
+                target_public_id=acceptor_public_id,
                 idempotency_key=idempotency_key,
+            )
+            # A kérelmező értesítése — enélkül sosem tudná meg, hogy
+            # elfogadták: a felületen nincs olyan lista, ami a saját
+            # kimenő kérelmei állapotát mutatná.
+            notify_follow_accepted_by_request(
+                db,
+                request_public_id=request_id,
+                actor_public_id=acceptor_public_id,
+                now=_notification_now(),
             )
             _commit_via(request, db)
         except FollowRequestNotFound as exc:

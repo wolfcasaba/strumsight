@@ -4,11 +4,14 @@ import 'dart:typed_data';
 
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/logging/app_logger.dart';
+import 'package:strumsight/core/logging/logger_provider.dart';
 
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_practice_record.dart';
 import '../../domain/repositories/song_progress_repository.dart';
 import 'atomic_file_writer.dart';
+import 'corrupt_store_quarantine.dart';
 
 abstract final class SongProgressRepositoryFailureCode {
   static const String read = 'songProgressRepository.read';
@@ -22,8 +25,14 @@ final class FileSongProgressRepository implements SongProgressRepository {
   final File _file;
   final Map<String, SongPracticeRecord> _records;
 
+  /// Opens (or creates) the store. A file that cannot be decoded is
+  /// QUARANTINED (renamed beside itself) and the store starts empty —
+  /// opening must never throw, because on the shipped path this call runs
+  /// before `runApp` (BLOCKER-1, 2026-09-06 review).
   static Future<FileSongProgressRepository> openAtDirectory({
     required Directory directory,
+    AppLogger? logger,
+    DateTime Function() clock = DateTime.now,
   }) async {
     await directory.create(recursive: true);
     final file = File(
@@ -32,10 +41,22 @@ final class FileSongProgressRepository implements SongProgressRepository {
     if (!await file.exists()) {
       return FileSongProgressRepository._(file, <String, SongPracticeRecord>{});
     }
-    final records = _decodeRecords(await file.readAsString());
-    return FileSongProgressRepository._(file, <String, SongPracticeRecord>{
-      for (final record in records) record.id: record,
-    });
+    try {
+      final records = _decodeRecords(await file.readAsString());
+      return FileSongProgressRepository._(file, <String, SongPracticeRecord>{
+        for (final record in records) record.id: record,
+      });
+    } on Object catch (error, stackTrace) {
+      await quarantineCorruptStore(
+        file: file,
+        document: 'song_progress',
+        error: error,
+        stackTrace: stackTrace,
+        logger: logger ?? createDefaultAppLogger(),
+        clock: clock,
+      );
+      return FileSongProgressRepository._(file, <String, SongPracticeRecord>{});
+    }
   }
 
   @override

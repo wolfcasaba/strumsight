@@ -41,9 +41,12 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     risk: FeatureFlagRisk.high,
     failClosedDefault: false,
     killSwitchPath:
-        'STRUMSIGHT_ACCOUNT dart-define, read at '
-        'lib/core/api/api_config.dart:19; already off by default — omit '
-        'the define at build time to keep it off.',
+        'STRUMSIGHT_ACCOUNT dart-define, resolved at '
+        'lib/app/config/feature_flags.dart (FeatureFlags.forShippedBuild). '
+        'Off by default in lab and production. WP-G (2026-09-06): the '
+        'development tester build defaults it ON, so its kill switch is an '
+        'EXPLICIT --dart-define=STRUMSIGHT_ACCOUNT=false (an explicit '
+        'define always wins), not an omitted define.',
   ),
   FeatureFlagDefinition(
     key: 'diagnosticsEnabled',
@@ -430,9 +433,12 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0395',
     killSwitchPath:
-        'STRUMSIGHT_COMMUNITY dart-define at feature_flags.dart:113; '
-        'already off by default — omit the define at build time to keep '
-        'the whole Community surface off.',
+        'STRUMSIGHT_COMMUNITY dart-define, resolved in feature_flags.dart. '
+        'Off by default in lab and production (omit the define). WP-G '
+        '(2026-09-06): the development tester build defaults it ON, so '
+        'there the kill switch is an EXPLICIT '
+        '--dart-define=STRUMSIGHT_COMMUNITY=false, which turns the whole '
+        'Community surface off again.',
   ),
   FeatureFlagDefinition(
     key: 'communityWritesEnabled',
@@ -441,9 +447,11 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0395',
     killSwitchPath:
-        'STRUMSIGHT_COMMUNITY_WRITES dart-define at '
-        'feature_flags.dart:114-116; already off by default — omit the '
-        'define at build time.',
+        'STRUMSIGHT_COMMUNITY_WRITES dart-define, resolved in '
+        'feature_flags.dart. Off by default in lab and production (omit the '
+        'define). WP-G (2026-09-06): ON by default in the development '
+        'tester build — turn it off with an EXPLICIT '
+        '--dart-define=STRUMSIGHT_COMMUNITY_WRITES=false.',
   ),
   FeatureFlagDefinition(
     key: 'communityMediaEnabled',
@@ -452,9 +460,11 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0395',
     killSwitchPath:
-        'STRUMSIGHT_COMMUNITY_MEDIA dart-define at '
-        'feature_flags.dart:117-119; already off by default — omit the '
-        'define at build time.',
+        'STRUMSIGHT_COMMUNITY_MEDIA dart-define, resolved in '
+        'feature_flags.dart; already off by default in EVERY environment — '
+        'omit the define at build time. WP-G (2026-09-06) deliberately left '
+        'this one out of the development tester defaults (open R-SEC-01 / '
+        'R-PRIV-01 media blockers).',
   ),
   FeatureFlagDefinition(
     key: 'communityLeaderboardEnabled',
@@ -463,9 +473,11 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0395',
     killSwitchPath:
-        'STRUMSIGHT_COMMUNITY_LEADERBOARD dart-define at '
-        'feature_flags.dart:120-122; already off by default — omit the '
-        'define at build time.',
+        'STRUMSIGHT_COMMUNITY_LEADERBOARD dart-define, resolved in '
+        'feature_flags.dart. Off by default in lab and production (omit the '
+        'define). WP-G (2026-09-06): ON by default in the development '
+        'tester build — turn it off with an EXPLICIT '
+        '--dart-define=STRUMSIGHT_COMMUNITY_LEADERBOARD=false.',
   ),
   FeatureFlagDefinition(
     key: 'communityClubsEnabled',
@@ -474,9 +486,11 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0395',
     killSwitchPath:
-        'STRUMSIGHT_COMMUNITY_CLUBS dart-define at '
-        'feature_flags.dart:123-125; already off by default — omit the '
-        'define at build time.',
+        'STRUMSIGHT_COMMUNITY_CLUBS dart-define, resolved in '
+        'feature_flags.dart. Off by default in lab and production (omit the '
+        'define). WP-G (2026-09-06): ON by default in the development '
+        'tester build — turn it off with an EXPLICIT '
+        '--dart-define=STRUMSIGHT_COMMUNITY_CLUBS=false.',
   ),
 
   // ---------------------------------------------------------------------

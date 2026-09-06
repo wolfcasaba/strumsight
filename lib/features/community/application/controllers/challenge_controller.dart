@@ -41,6 +41,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/logging/logger_provider.dart';
+// A `communityChallengeRepositoryProvider` EGYETLEN definíciója a Kör 21
+// data-rétegében él. Ez a fájl korábban egy MÁSODIK, `UnimplementedError`-t
+// dobó providert definiált ugyanazzal a névvel; a saját doc-commentje mondta
+// ki, hogy „the production wiring lands in challenge_repository_impl.dart" —
+// csak a leváltása maradt el. Az `export` azért van itt, hogy a fájlból
+// importáló hívók (öt teszt + a CommunityChallengesScreen) UGYANAZT a
+// provider-objektumot lássák, amit a képernyő figyel.
+import '../../data/repositories/challenge_repository_impl.dart'
+    show communityChallengeRepositoryProvider;
+export '../../data/repositories/challenge_repository_impl.dart'
+    show communityChallengeRepositoryProvider;
 import '../../domain/entities/community_challenge.dart';
 import '../../domain/repositories/challenge_repository.dart';
 import '../../domain/value_objects/content_id.dart';
@@ -121,20 +132,6 @@ class ChallengeListState {
 }
 
 const Object _sentinel = Object();
-
-/// Provider for the [CommunityChallengeRepository]. The
-/// production wiring lands in this file (the Kör 21
-/// ``challenge_repository_impl.dart``). The widget test in
-/// ``community_challenges_test.dart`` overrides this provider
-/// with a recording fake.
-final communityChallengeRepositoryProvider =
-    Provider<CommunityChallengeRepository>(
-      (ref) => throw UnimplementedError(
-        'communityChallengeRepositoryProvider must be overridden via the '
-        'production wiring (challenge_repository_impl.dart) or via a '
-        'recording fake in tests.',
-      ),
-    );
 
 /// The community challenge list + invite state machine.
 class ChallengeController extends AsyncNotifier<ChallengeListState> {

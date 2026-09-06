@@ -62,6 +62,13 @@ door today, not dead code.
 | Verdict: `retire` (reachable, legacy, superseded) | 6 |
 | Verdict: `unreachable` | 26 |
 
+**Population update (2026-09-06, review MAJOR-4):** the measured population
+is now **97**, not 96 — `tool/ui_inventory.dart`'s filter was widened from
+`_screen.dart` to `_screen(_v\d+)?.dart`, which admitted
+`setlist_list_screen_v2.dart`. It measures `unreachable` (§3.4, §6). The
+counts in the table above are the E15-R03 snapshot and are NOT re-derived
+here; the machine-measured §6 table below is the live one.
+
 **E15-R07 F1 update (2026-09-02, ADR 0491):** `PlanSetupScreen` and
 `TodayPlanScreen` moved from `unreachable` to `keep` (reachable, flag-gated
 behind `practiceGeneratorEnabled`, already design-system migrated) — see the
@@ -153,6 +160,12 @@ round, unscheduled.
   (`LevelDetailScreen`, legacy) — no measured reference anywhere in `lib/`.
 - `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart`
   (`SetlistSessionScreen`, legacy) — same.
+- `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart`
+  (`SetlistListScreenV2`, legacy) — same. It was INVISIBLE to the tool until
+  2026-09-06: `tool/ui_inventory.dart`'s population filter matched only
+  `_screen.dart`, so a `_screen_v2.dart` file never entered the measurement
+  at all. Widening the filter is what made this row honest — the screen did
+  not become unreachable, it had simply never been counted.
 - `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart`
   (`PracticePlanPreviewScreen`, already migrated) — same.
 - `lib/features/onboarding/screens/first_win_stage_screen.dart`
@@ -195,7 +208,7 @@ name. They are `migrate` (`E15-R10`) instead — proposing `retire` without a
 real successor would be exactly the fabricated-reason failure A4 exists to
 catch.
 
-## 6. Full per-screen table (all 96, machine-measured)
+## 6. Full per-screen table (all 97, machine-measured)
 
 | Screen | Class | Reachable | Flag-gated | Verdict | Owner round | Successor | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -275,6 +288,7 @@ catch.
 | `lib/features/share/screens/share_preview_screen.dart` | `SharePreviewScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/share/screens/strum_reel_screen.dart` | `StrumReelScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/share/screens/wrapped_preview_screen.dart` | `WrappedPreviewScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
+| `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart` | `SetlistListScreenV2` | no | no | unreachable | — | — | Entered the measured population on 2026-09-06 when the inventory filter was widened to `_screen(_v\d+)?.dart`; legacy, with no route and no measured construction site anywhere in lib/. |
 | `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart` | `SetlistSessionScreen` | no | no | unreachable | — | — | No route and no measured construction site anywhere in lib/. |
 | `lib/features/song_trainer/presentation/screens/song_editor_screen.dart` | `SongEditorScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart` | `SongImportPreviewScreen` | yes | no | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |

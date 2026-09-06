@@ -112,8 +112,17 @@ mic (audio_streamer) ──▶ DSP ISOLATE                         ┌─ Live s
 `--dart-define=STRUMSIGHT_ENV=development|staging|production` (validated, fail-closed
 `AppConfig` at bootstrap). Key flags:
 
-- `STRUMSIGHT_API_URL` — account backend base URL (default `http://10.0.2.2:8000` for emulators).
-- `STRUMSIGHT_ACCOUNT_ENABLED` — opt-in account layer; disabled ⇒ zero account requests.
+- `STRUMSIGHT_API_URL` — account backend base URL. **Default depends on the environment**
+  (WP-G, 2026-09-06): a `development` build with no define talks to the live backend
+  `https://casaba.app/strumsight`; `lab`/`production` keep `http://10.0.2.2:8000`. On an
+  emulator pass the loopback explicitly:
+  `--dart-define=STRUMSIGHT_API_URL=http://10.0.2.2:8000`.
+- `STRUMSIGHT_ACCOUNT` — the account layer; disabled ⇒ zero account requests. It defaults
+  **on** in `development` (the tester APK `build-apk.yml` produces) and off elsewhere.
+- The `development` build is the tester configuration in code: account, `STRUMSIGHT_PREVIEW_ALL`
+  and the four text-only Community surfaces default ON (media stays off — open R-SEC-01 /
+  R-PRIV-01). An explicit define always wins, so `--dart-define=STRUMSIGHT_COMMUNITY=false`
+  is the kill switch. Full table: [`docs/release/environment-matrix.md`](docs/release/environment-matrix.md) §1/b.
 - Diagnostics (Lab) has its own flag + consent gate; disabled ⇒ the client is never created.
 - Production APK: `release-apk.yml` only — **fail-closed signing** (missing secrets stop the
   first step; no debug-signing fallback, ADR 0062). Local `flutter build apk --release`

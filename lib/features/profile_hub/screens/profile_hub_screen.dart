@@ -33,6 +33,12 @@ class ProfileHubScreen extends ConsumerWidget {
         .flags
         .communityEnabled;
     final accountEnabled = ref.watch(accountEnabledProvider);
+    // Az AI Tanár belépési pontja. A `/tutor/*` útvonalak az `aiTutorEnabled`
+    // kapu alatt regisztrálódnak (`app_router.dart`), ezért a gomb PONTOSAN
+    // ugyanazzal a flaggel kapuzott — kikapcsolt kapunál nem mutat
+    // regisztrálatlan címre. (A `/coach` héj-célpont csak az adaptív héj
+    // bekapcsolt állásán látszik; ez a gomb attól függetlenül elérhető.)
+    final aiTutorEnabled = ref.watch(appConfigProvider).flags.aiTutorEnabled;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.profileHubTitle)),
@@ -64,6 +70,14 @@ class ProfileHubScreen extends ConsumerWidget {
               onPressed: () => context.go(AppRoutes.gamificationHub),
               child: Text(l10n.profileHubAchievementsSectionTitle),
             ),
+            if (aiTutorEnabled) ...[
+              const SizedBox(height: 12),
+              OutlinedButton(
+                key: const ValueKey('profile-hub-tutor-entry'),
+                onPressed: () => context.push(AppRoutes.tutorHome),
+                child: Text(l10n.aiTutorHomeTitle),
+              ),
+            ],
             const SizedBox(height: 24),
             if (accountEnabled)
               _AccountSection(l10n: l10n)
@@ -84,6 +98,19 @@ class ProfileHubScreen extends ConsumerWidget {
                   : l10n.profileHubCommunityDisabledReason,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            // A közösség BELÉPÉSI PONTJA (2026-09-05). A 13 community
+            // képernyő route-jai léteztek, de a szállított felületről SEMMI
+            // nem vezetett hozzájuk — a felhasználó számára ez ugyanaz,
+            // mintha nem lennének. A gomb a kapu-képernyőre visz, ami a
+            // feature saját belépési szűrője.
+            if (communityEnabled) ...[
+              const SizedBox(height: 12),
+              FilledButton(
+                key: const ValueKey('profile-hub-community-entry'),
+                onPressed: () => context.go(AppRoutes.community),
+                child: Text(l10n.profileHubCommunityOpen),
+              ),
+            ],
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: () => context.go(AppRoutes.profileLibrary),

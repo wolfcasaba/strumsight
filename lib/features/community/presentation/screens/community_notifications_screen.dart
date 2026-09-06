@@ -357,37 +357,47 @@ class _PreferenceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A legördülő MEGOSZTOTT szélességen (2026-09-05): korábban a
+    // `DropdownButton` a leghosszabb tételének BELSŐ szélességét kérte, és
+    // 2.0-s szöveg-méretnél a sor 2310 pixelt csordult túl — a beállítás
+    // olvashatatlanná és állíthatatlanná vált pont azoknak, akik a nagy
+    // betűt bekapcsolták. Az `isExpanded` a rendelkezésre álló helyre
+    // szorítja, a `Flexible` pedig megosztja a helyet a felirattal.
     return Row(
       children: <Widget>[
-        Expanded(child: Text(_labelFor(context, kind))),
+        Expanded(flex: 3, child: Text(_labelFor(context, kind))),
         const SizedBox(width: 8),
-        DropdownButton<NotificationPreferenceLevel>(
-          value: level,
-          onChanged: enabled
-              ? (next) {
-                  if (next != null) onChanged(next);
-                }
-              : null,
-          items: <DropdownMenuItem<NotificationPreferenceLevel>>[
-            DropdownMenuItem(
-              value: NotificationPreferenceLevel.inApp,
-              child: Text(
-                _levelLabel(context, NotificationPreferenceLevel.inApp),
+        Flexible(
+          flex: 4,
+          child: DropdownButton<NotificationPreferenceLevel>(
+            isExpanded: true,
+            value: level,
+            onChanged: enabled
+                ? (next) {
+                    if (next != null) onChanged(next);
+                  }
+                : null,
+            items: <DropdownMenuItem<NotificationPreferenceLevel>>[
+              DropdownMenuItem(
+                value: NotificationPreferenceLevel.inApp,
+                child: Text(
+                  _levelLabel(context, NotificationPreferenceLevel.inApp),
+                ),
               ),
-            ),
-            DropdownMenuItem(
-              value: NotificationPreferenceLevel.push,
-              child: Text(
-                _levelLabel(context, NotificationPreferenceLevel.push),
+              DropdownMenuItem(
+                value: NotificationPreferenceLevel.push,
+                child: Text(
+                  _levelLabel(context, NotificationPreferenceLevel.push),
+                ),
               ),
-            ),
-            DropdownMenuItem(
-              value: NotificationPreferenceLevel.disabled,
-              child: Text(
-                _levelLabel(context, NotificationPreferenceLevel.disabled),
+              DropdownMenuItem(
+                value: NotificationPreferenceLevel.disabled,
+                child: Text(
+                  _levelLabel(context, NotificationPreferenceLevel.disabled),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
