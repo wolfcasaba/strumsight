@@ -1,3 +1,21 @@
+A sáv záró, teljesen zöld futása: `build-apk.yml` run
+[34057751434](https://github.com/wolfcasaba/strumsight/actions/runs/34057751434)
+az `a060a86` fejen — **format, analyze, architecture, secrets, l10n, asset,
+teszt-suite és a véletlen-magos property-kapu mind ZÖLD**, a development APK
+a run artefaktuma. (Ez a záró docs-commit közvetlenül utána következik, kódot
+nem érint.) Az odáig vezető piros futások mért leletei, sorrendben: 5
+formázó-iteráció (`dart format` tall-stílus), 1 analyze-lelet (hiányzó
+import, csomag-belső `copyWithPrevious`, `Override` típus-argumentum), majd
+a teszt-kapu 11 → 8 → 5 → 0: `practice_a11y_audit_test` A1.5 (setState-build
+közben a valódi jutalom-ledgeren át), `practice_session_after_record_test`
+A5 („ledger page cursor did not advance" a `ProfileProjector.rebuild`-ben),
+`bookmarks_controller_test` B1 (aszinkron stream-kézbesítés), a négy
+folyamat-teszt régi „mindig `PracticeResultFallback`" pinje (walkthrough,
+placeholder-őr A4, release-flow semantics/text-scale), a
+`practiceHistoryV2ListProvider` lusta flush-e a `PracticeResultRoute`
+buildjében (`setState() called during build`), és az eredmény-fejléc
+túlcsordulása 412 px-es nézeten en/2.0 + hu/1.5 + hu/2.0 szövegnagyításnál.
+
 # Audit — „APK build után minden működjön az appban" (2026-09-06)
 
 Mérce: a `build-apk.yml` által szállított `development` APK-ban minden
@@ -175,15 +193,23 @@ kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
 
 ### 5.3 CI-bizonyíték
 
-Az ág utolsó, e dokumentum írásakor mért teljes futása a `build-apk.yml` run
-34039797808 az `e460cc3` fejen: a **format, analyze, architecture, secrets,
-l10n és asset kapuk ZÖLDEK**; a teszt-kapu viszont **piros** volt —
-„10759 tests passed, 11 failed, 21 skipped". A három bukó cella javítása
-ekkor folyamatban van: `practice_a11y_audit_test` A1.5 (setState-build közben,
-a valódi jutalom-ledgeren keresztül), `practice_session_after_record_test` A5
-(„ledger page cursor did not advance" a `ProfileProjector.rebuild`-ben) és
-`bookmarks_controller_test` B1 (aszinkron stream-kézbesítés). **A sáv záró,
-teljesen zöld futása: `build-apk.yml` run `<<FINAL_RUN_ID>>`.**
+A sáv záró, teljesen zöld futása: `build-apk.yml` run
+[34057751434](https://github.com/wolfcasaba/strumsight/actions/runs/34057751434)
+az `a060a86` fejen — **format, analyze, architecture, secrets, l10n, asset,
+teszt-suite és a véletlen-magos property-kapu mind ZÖLD**, a development APK
+a run artefaktuma. (Ez a záró docs-commit közvetlenül utána következik, kódot
+nem érint.) Az odáig vezető piros futások mért leletei, sorrendben: 5
+formázó-iteráció (`dart format` tall-stílus), 1 analyze-lelet (hiányzó
+import, csomag-belső `copyWithPrevious`, `Override` típus-argumentum), majd
+a teszt-kapu 11 → 8 → 5 → 0: `practice_a11y_audit_test` A1.5 (setState-build
+közben a valódi jutalom-ledgeren át), `practice_session_after_record_test`
+A5 („ledger page cursor did not advance" a `ProfileProjector.rebuild`-ben),
+`bookmarks_controller_test` B1 (aszinkron stream-kézbesítés), a négy
+folyamat-teszt régi „mindig `PracticeResultFallback`" pinje (walkthrough,
+placeholder-őr A4, release-flow semantics/text-scale), a
+`practiceHistoryV2ListProvider` lusta flush-e a `PracticeResultRoute`
+buildjében (`setState() called during build`), és az eredmény-fejléc
+túlcsordulása 412 px-es nézeten en/2.0 + hu/1.5 + hu/2.0 szövegnagyításnál.
 
-**A végső mérce változatlan:** a felhasználó valós-gitár tesztje a
-`development` APK-n — a szintetikus zöld sosem „kész".
+**A végső mérce változatlan:** a valós-gitár APK-teszt a felhasználónál; a
+szintetikus zöld nem „kész".

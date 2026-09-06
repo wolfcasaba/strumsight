@@ -32,16 +32,20 @@ session (ADR 0471 D6 őr → E15-tulajdonos-kör), a tutor
 retry/next callbackjei, a klub-poszt `club_id` + `profilePosts` (a backendnek
 nincs útvonala) és a community média-feltöltés.
 
-**CI-bizonyíték:** az írás pillanatában az utolsó mért teljes futás a
-`build-apk.yml` run 34039797808 (`e460cc3`): format, analyze, architecture,
-secrets, l10n és asset kapu ZÖLD, a teszt-kapu PIROS — „10759 tests passed,
-11 failed, 21 skipped"; a három bukó cella javítása ekkor folyamatban
-(`practice_a11y_audit_test` A1.5 setState-build közben a valódi
-jutalom-ledgeren át, `practice_session_after_record_test` A5 „ledger page
-cursor did not advance" a `ProfileProjector.rebuild`-ben,
-`bookmarks_controller_test` B1 aszinkron stream-kézbesítés). A sáv záró,
-teljesen zöld futása: **run `<<FINAL_RUN_ID>>`**. **Végső mérce:** a felhasználó
-valós-gitár tesztje a `development` APK-n — a szintetikus zöld nem „kész".
+**CI-bizonyíték:** a sáv záró, teljesen zöld futása a `build-apk.yml`
+run [34057751434](https://github.com/wolfcasaba/strumsight/actions/runs/34057751434)
+az `a060a86` fejen — format, analyze, architecture, secrets, l10n, asset,
+teszt-suite és a véletlen-magos property-kapu mind ZÖLD, a development APK
+a run artefaktuma (ez a docs-commit közvetlenül utána következik, kódot nem
+érint). Az odáig vezető piros futások mind mért leletek voltak: 5 formázó-
+iteráció, 1 analyze-lelet, majd a teszt-kapu 11 → 8 → 5 → 0 bukó cellája
+(a11y A1.5 setState-build közben a valódi jutalom-ledgeren át; after-record
+A5 „ledger page cursor did not advance"; bookmarks B1 aszinkron stream; a
+4 folyamat-teszt régi „mindig PracticeResultFallback" pinje; a
+`practiceHistoryV2ListProvider` lusta flush-e a `PracticeResultRoute`
+buildjében; az eredmény-fejléc túlcsordulása 412 px-en nagy szövegnél).
+**Végső mérce:** a felhasználó valós-gitár tesztje a `development` APK-n —
+a szintetikus zöld nem „kész".
 
 **Csapdák, amiket ez a sáv mért (5 CI-iterációba kerültek):**
 - a `dart format` „tall" stílusa **minden 80 oszlopba beleférő hívást
