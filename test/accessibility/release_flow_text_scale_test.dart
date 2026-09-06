@@ -35,7 +35,7 @@ import 'package:strumsight/features/practice/domain/model/practice_session_state
 import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart'
-    show PracticeResultFallback;
+    show PracticeResultScreen;
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../support/e2e_harness.dart';
@@ -129,17 +129,17 @@ Future<void> _walkCoreFlow(
   );
   await tester.pumpAndSettle();
 
-  // MÉRT (2026-09-01): the router's `AppRoutes.practiceResult` route always
-  // builds `PracticeResultFallback`, never `PracticeResultScreen` directly
-  // (`lib/app/routing/app_router.dart:346-348`) — the detailed result view
-  // is reached only via a `Navigator.push` with an explicit
-  // `PracticeHistoryEntry` (from `PracticeHistoryScreen` / the "next step"
-  // action), not through this round-trip. `PracticeResultFallback` is the
-  // documented, intentional landing state for the `NavigateToResult` effect
-  // in this flow shape (practice_result_screen.dart:765-775) — this is the
-  // real "eredmény" step the brief's §1 core flow reaches, not a defect.
+  // MÉRT (javító sáv 2026-09-06): the `AppRoutes.practiceResult` route
+  // builds `PracticeResultRoute` (`practice_result_route.dart`), which
+  // resolves the ending session's own history entry (the
+  // `practice_result_target.dart` hand-off plus the after-record hook's
+  // `practiceHistoryV2ListProvider` invalidation) and renders the real
+  // `PracticeResultScreen`. Until then the route unconditionally built
+  // `PracticeResultFallback` ("result unavailable") even for a session that
+  // had just been recorded — so the "eredmény" step of the brief's §1 core
+  // flow is now the detailed result view, measured at this text scale.
   expect(
-    find.byType(PracticeResultFallback),
+    find.byType(PracticeResultScreen),
     findsOneWidget,
     reason:
         'the NavigateToResult effect (practice_effect_listener.dart) must '

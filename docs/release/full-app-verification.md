@@ -179,7 +179,7 @@ el, a javítást a felelős feature körök öröklik.**
 `dart run tool/check_screen_reachability.dart --format table` →
 **Measured screens: 96. Reachable: 73. Unreachable: 23. Flag-gated: 27.**
 
-### 3.1 Bejárt halmaz (9) — a `full_app_walkthrough_test.dart` FUTÁSÁBÓL
+### 3.1 Bejárt halmaz (11) — a `full_app_walkthrough_test.dart` FUTÁSÁBÓL
 
 A `runCoreWalkthrough` által ténylegesen felépített (és `find.byType`-pal
 megfigyelt) képernyő-osztályok:
@@ -187,16 +187,18 @@ megfigyelt) képernyő-osztályok:
 | # | Screen (mért osztály) | Forrás-útvonal |
 |---|---|---|
 | 1 | `OnboardingScreen` | `lib/features/onboarding/screens/onboarding_screen.dart` |
-| 2 | `TodayHubScreen` | `lib/features/today/screens/today_hub_screen.dart` |
-| 3 | `PracticeAreaHubScreen` | `lib/features/practice_hub/screens/practice_area_hub_screen.dart` |
-| 4 | `PracticeSetupScreen` | `lib/features/practice/presentation/screens/practice_setup_screen.dart` |
-| 5 | `PracticeSessionScreen` | `lib/features/practice/presentation/screens/practice_session_screen.dart` |
-| 6 | `UnifiedLibraryScreen` | `lib/features/library_v2/screens/unified_library_screen.dart` |
-| 7 | `ProgressDashboardScreen` | `lib/features/progress_v2/screens/progress_dashboard_screen.dart` |
-| 8 | `ProfileHubScreen` | `lib/features/profile_hub/screens/profile_hub_screen.dart` |
-| 9 | `SettingsScreen` | `lib/features/settings/screens/settings_screen.dart` |
+| 2 | `FirstWinStageScreen` | `lib/features/onboarding/screens/first_win_stage_screen.dart` |
+| 3 | `TodayHubScreen` | `lib/features/today/screens/today_hub_screen.dart` |
+| 4 | `PracticeAreaHubScreen` | `lib/features/practice_hub/screens/practice_area_hub_screen.dart` |
+| 5 | `PracticeSetupScreen` | `lib/features/practice/presentation/screens/practice_setup_screen.dart` |
+| 6 | `PracticeSessionScreen` | `lib/features/practice/presentation/screens/practice_session_screen.dart` |
+| 7 | `PracticeResultScreen` | `lib/features/practice/presentation/screens/practice_result_screen.dart` |
+| 8 | `UnifiedLibraryScreen` | `lib/features/library_v2/screens/unified_library_screen.dart` |
+| 9 | `ProgressDashboardScreen` | `lib/features/progress_v2/screens/progress_dashboard_screen.dart` |
+| 10 | `ProfileHubScreen` | `lib/features/profile_hub/screens/profile_hub_screen.dart` |
+| 11 | `SettingsScreen` | `lib/features/settings/screens/settings_screen.dart` |
 
-### 3.2 Kimaradó halmaz (85) — gazdával és körrel
+### 3.2 Kimaradó halmaz (83) — gazdával és körrel
 
 | Screen | Indok | Gazda | Kör |
 | --- | --- | --- | --- |
@@ -233,9 +235,8 @@ megfigyelt) képernyő-osztályok:
 | `lib/features/metronome/screens/metronome_screen.dart` | A Practice Area Hub Quick Tools egy érintéssel elérhető gombjai (`practice_area_hub_screen.dart`) — a kör mag-útja (§1) nem nevezi meg őket, saját adat-bekötésüket a `hub_navigation_test.dart` A2 cellája már méri. | Practice feature (quick tools) | E13-R17 |
 | `lib/features/offline_ai/screens/model_manager_screen.dart` | Offline AI modellkezelő felület — nem szerepel a `docs/release/capability-rollout.md` táblájában (nem `forEnvironment`-döntés tárgya), nincs hozzárendelt BE/KI besorolás vagy kör. | Offline AI feature | nincs — nincs hozzárendelt kör, a capability-rollout.md táblája nem sorolja fel |
 | `lib/features/onboarding/screens/permission_primer_screen.dart` | A mikrofon-engedély primer az onboarding „first win” gyorsútjának állomása; a bejárás a Skip-utat méri (offline mag-út), nem a gyorsutat. | Onboarding feature | nincs — a bejárás a Skip-utat méri, a first-win gyorsút külön eval tárgya (Chapter 14) |
-| `lib/features/practice/presentation/screens/practice_history_screen.dart` | MÉRT mérőeszköz-limit (ADR 0471 D7, csak szöveges class-name egyezés): a két osztály csak EGYMÁST hivatkozza imperatíven (`PracticeHistoryScreen` nyitja `PracticeResultScreen`-t, ami vissza `PracticeHistoryScreen`-re mutat) — a valós felület (PracticeAreaHubScreen, ProfileHubScreen, legacy PracticeHubScreen) egyike sem nyit `PracticeHistoryScreen`-t. A statikus mérő ezért reachable-nek jelzi őket, de a bejárható magistrálisról nincs hozzájuk valós belépési pont. | Practice feature | nincs — a bekötés (mélylink a valós felületről) a felelős feature kör dolga |
+| `lib/features/practice/presentation/screens/practice_history_screen.dart` | MÉRT mérőeszköz-limit (ADR 0471 D7, csak szöveges class-name egyezés): egyedül a `PracticeResultScreen` gyorslink-sora hivatkozza imperatíven — a valós felület (PracticeAreaHubScreen, ProfileHubScreen, legacy PracticeHubScreen) egyike sem nyit `PracticeHistoryScreen`-t, és a bejárás mag-útja (§1) az eredmény-képernyőn nem lép tovább a gyorslinkekre. A statikus mérő ezért reachable-nek jelzi, de a bejárható magistrálisról nincs hozzá valós belépési pont. | Practice feature | nincs — a bekötés (mélylink a valós felületről) a felelős feature kör dolga |
 | `lib/features/practice/presentation/screens/practice_hub_screen.dart` | Legacy (nem-adaptív-shell) regisztráció; ebben az összeállításban (`adaptiveShellEnabled=true`) vagy kizárt a routerből (`if (!adaptiveShellEnabled)`), vagy a `legacyRedirects` a shell-megfelelőjére tereli — a saját adat-bekötését más kör tesztje már méri. | Practice/Progress/Library legacy felület | E13-R08 |
-| `lib/features/practice/presentation/screens/practice_result_screen.dart` | MÉRT mérőeszköz-limit (ADR 0471 D7, csak szöveges class-name egyezés): a két osztály csak EGYMÁST hivatkozza imperatíven (`PracticeHistoryScreen` nyitja `PracticeResultScreen`-t, ami vissza `PracticeHistoryScreen`-re mutat) — a valós felület (PracticeAreaHubScreen, ProfileHubScreen, legacy PracticeHubScreen) egyike sem nyit `PracticeHistoryScreen`-t. A statikus mérő ezért reachable-nek jelzi őket, de a bejárható magistrálisról nincs hozzájuk valós belépési pont. | Practice feature | nincs — a bekötés (mélylink a valós felületről) a felelős feature kör dolga |
 | `lib/features/practice/presentation/screens/speed_builder_screen.dart` | Külön Learn-mód alfelület, dokumentált „provably actionless informational state” (ld. `practice_hub_screen.dart` hivatkozása a saját `_UnavailableLayout`-jára) — a bejárás mag-útján kívül esik. | Learn feature | nincs — külön feature-kör tárgya, dokumentált info-állapot |
 | `lib/features/practice_generator/presentation/screens/plan_setup_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba (nincs „Plan setup” vagy „Today plan” gomb) — a kör mag-útja nem éri el. | Practice Generator feature | E15-R07 |
 | `lib/features/practice_generator/presentation/screens/today_plan_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba (nincs „Plan setup” vagy „Today plan” gomb) — a kör mag-útja nem éri el. | Practice Generator feature | E15-R07 |

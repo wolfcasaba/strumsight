@@ -24,7 +24,7 @@ import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/features/practice/domain/model/practice_session_state.dart';
 import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart'
-    show PracticeResultFallback;
+    show PracticeResultScreen;
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../support/e2e_harness.dart';
@@ -51,13 +51,14 @@ Future<void> _setPhoneViewport(WidgetTester tester) async {
 /// `NavigateToResult` effect lands the flow on the result route — shared
 /// by both locale cells in `main()` below.
 ///
-/// MÉRT (2026-09-01): the router's `AppRoutes.practiceResult` route always
-/// builds `PracticeResultFallback`, never `PracticeResultScreen` directly
-/// (`lib/app/routing/app_router.dart:346-348`) — the detailed result view
-/// is reached only via a `Navigator.push` with an explicit
-/// `PracticeHistoryEntry`, not through this round-trip. This is the
-/// documented, intentional landing state (practice_result_screen.dart:
-/// 765-775), not a defect.
+/// MÉRT (javító sáv 2026-09-06): the `AppRoutes.practiceResult` route now
+/// builds `PracticeResultRoute` (`practice_result_route.dart`), which
+/// resolves the ending session's own history entry through
+/// `practiceResultTargetProvider` and the after-record hooks, and renders
+/// the real `PracticeResultScreen`. Until then the route unconditionally
+/// built `PracticeResultFallback` ("result unavailable") even for a session
+/// that had just been recorded — that state is gone, so the audit now walks
+/// the detailed result view.
 Future<void> _finishToResult(
   WidgetTester tester,
   E2eSession session,
@@ -73,7 +74,7 @@ Future<void> _finishToResult(
     (status) => status == PracticeSessionStatus.completed,
   );
   await tester.pumpAndSettle();
-  expect(find.byType(PracticeResultFallback), findsOneWidget);
+  expect(find.byType(PracticeResultScreen), findsOneWidget);
 }
 
 /// The `docs/accessibility/known-exceptions.yaml` entry `id` this file's
@@ -626,16 +627,15 @@ void main() {
         final resultTraversal = tester.semantics
             .simulatedAccessibilityTraversal()
             .toList();
-        // `PracticeResultFallback` (practice_result_screen.dart:776-815) is
-        // a static icon+title+body message with NO interactive control at
-        // all — `requireAtLeastOneTappable: false` reflects that measured
-        // fact rather than masking a real gap; the unlabeled-count check
-        // below still runs (trivially 0/0) so a FUTURE unlabeled control
-        // added to this screen would still be caught.
+        // Javító sáv 2026-09-06: the route now lands on the real
+        // `PracticeResultScreen`, which DOES carry interactive controls
+        // (next step, share, history / speed-builder quick links), so the
+        // `requireAtLeastOneTappable: false` tolerance the static
+        // `PracticeResultFallback` needed is gone — every tappable node
+        // here must carry a label, with no known-unlabeled allowance.
         _expectEveryTappableNodeIsLabeled(
           resultTraversal,
-          screen: 'practice result fallback ($localeCode)',
-          requireAtLeastOneTappable: false,
+          screen: 'practice result ($localeCode)',
         );
 
         await session.dispose(tester);

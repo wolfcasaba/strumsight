@@ -27,13 +27,13 @@ import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/features/practice/domain/model/practice_session_state.dart';
 import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart'
-    show PracticeResultFallback;
+    show PracticeResultScreen;
 import 'package:strumsight/features/practice/presentation/screens/practice_session_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
 import 'package:strumsight/features/profile_hub/screens/profile_hub_screen.dart';
 import 'package:strumsight/features/progress/public.dart'
-    show PracticeStats, practiceLogProvider;
+    show PracticeStats, aggregatedPracticeStatsProvider, practiceLogProvider;
 import 'package:strumsight/features/progress_v2/application/progress_providers.dart'
     show progressPracticeHistoryProvider;
 import 'package:strumsight/features/progress_v2/screens/progress_dashboard_screen.dart';
@@ -208,16 +208,17 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  // 4. "Eredmény" — the NavigateToResult effect lands on `/practice/result`,
-  // which always builds `PracticeResultFallback` — an explicit, already
-  // MÉRT (E12-R20) "no detailed result on this route" state, not a
-  // placeholder. `PracticeResultFallback`'s class name does not end in
-  // "Screen" (it is not one of the 96 `tool/ui_inventory.dart`-measured
-  // classes), so it is intentionally NOT added to [walked] — the A4
-  // partition tracks the measured `PracticeResultScreen` class separately
-  // (see the round doc's exclusion table).
-  expect(find.byType(PracticeResultFallback), findsOneWidget);
-  expect(find.text(l10n.practiceResultUnavailableTitle), findsOneWidget);
+  // 4. "Eredmény" — the NavigateToResult effect lands on `/practice/result`.
+  // Javító sáv 2026-09-06: the route no longer builds
+  // `PracticeResultFallback` unconditionally — `PracticeResultRoute`
+  // resolves the ending session's OWN entry (the `practice_result_target.dart`
+  // hand-off plus the after-record hook's `practiceHistoryV2ListProvider`
+  // invalidation) and builds the real `PracticeResultScreen`. That class IS
+  // one of the measured `tool/ui_inventory.dart` classes, so this stop now
+  // joins [walked], and `practice_result_screen.dart` is no longer an
+  // excluded row in `docs/release/full-app-verification.md` §3.2.
+  expect(find.byType(PracticeResultScreen), findsOneWidget);
+  walked.add('PracticeResultScreen');
 
   final history = await loadPracticeHistory(session.container);
   expect(
@@ -225,22 +226,35 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
     hasLength(1),
     reason: 'the finished session must leave exactly one persisted record',
   );
+  expect(
+    find.byWidgetPredicate(
+      (widget) =>
+          widget is PracticeResultScreen &&
+          widget.entry.id == history.single.id,
+    ),
+    findsOneWidget,
+    reason:
+        'the result route must render the entry the just-finished session '
+        'actually persisted — real data, never an empty fallback',
+  );
 
-  // MÉRT LELET (recorded in docs/release/full-app-verification.md, §5.2 —
-  // not fixed here): `practiceHistoryV2ListProvider`
-  // (`practice_progress_providers.dart`) is a plain `FutureProvider` —
-  // never `.family`, never invalidated anywhere in `lib/` — so its FIRST
-  // read permanently caches whatever the practice-history repository held
+  // MÉRT LELET (recorded in docs/release/full-app-verification.md, §5.2).
+  // The javító sáv 2026-09-06 fixed HALF of it: the after-record hook
+  // (`practice_session_after_record.dart`) now invalidates
+  // `practiceHistoryV2ListProvider` once a V2 session is durably written.
+  // The provider itself is still a plain `FutureProvider` —
+  // never `.family`, and nothing else in `lib/` invalidates it — so its
+  // read otherwise caches whatever the practice-history repository held
   // AT THAT MOMENT for the rest of THIS container's life. The Today Hub
   // stop above already forced that first read (via
   // `dailyGoalActiveSecondsProvider` -> `aggregatedPracticeFeedProvider` ->
   // `practiceProgressFeedProvider`), before this session existed — so
   // `progressPracticeHistoryProvider` (which reads the SAME cached
-  // provider) would stay empty in THIS container even though the session
-  // above genuinely persisted. A real app restart is the only way any
-  // container ever observes a session recorded after its own first Today
-  // Hub render — so this walkthrough restarts here, exactly like a user
-  // relaunching the app, before continuing to Library/Progress/Profile.
+  // provider) is only as fresh as the last invalidation. A real app restart
+  // is the shape a user actually produces, and it proves the record is
+  // DURABLE rather than merely cached — so this walkthrough restarts here,
+  // exactly like a user relaunching the app, before continuing to
+  // Library/Progress/Profile.
   session = await restartE2eApp(
     tester,
     session,
@@ -306,20 +320,16 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
     expect(find.text(l10n.progressV2SkillsSectionTitle), findsOneWidget);
   }
 
-  // 7. Profile. MÉRT LELET (recorded in
-  // docs/release/full-app-verification.md, §5.2 — not fixed here):
-  // `ProfileHubScreen`'s "sessions" metric reads `practiceLogProvider`
-  // (`lib/features/progress/providers/practice_log_provider.dart`) — the V1
-  // "Learn" practice log (`PracticeSessionRecording`,
-  // `practice_session_recording.dart`) — which is a DIFFERENT store from
-  // the Practice Engine V2 history repository this walkthrough's session
-  // just wrote to (`practiceHistoryRepositoryProvider`, read by Library/
-  // Progress above). A completed V2 quick-start session never appends to
-  // the V1 log, so this metric's value is REAL (a genuinely computed read
-  // of its own real source, §5.1 — not a P1/P2/P3 placeholder literal) but
-  // stays exactly what it was before the session: this round's own
-  // `progressPracticeHistoryProvider`/Library read the V2 store correctly;
-  // this metric simply reads a different, V2-blind store.
+  // 7. Profile. The MÉRT LELET recorded in
+  // docs/release/full-app-verification.md §5.2 — `ProfileHubScreen`'s
+  // "sessions" metric read `practiceLogProvider` alone, the V1 "Learn" log
+  // (`practice_session_recording.dart`), a DIFFERENT store from the
+  // Practice Engine V2 history this walkthrough's session wrote to, so a
+  // finished V2 quick-start session never moved the number — was closed by
+  // the javító sáv 2026-09-06 (E16-R05 L4): the hub now reads
+  // `aggregatedPracticeStatsProvider` (V1 ∪ V2). This stop therefore
+  // asserts the metric against THAT source, and proves the V2 session this
+  // very walk finished is actually counted in it.
   session.router.go(AppRoutes.profileHome);
   await tester.pumpAndSettle();
   expect(find.byType(ProfileHubScreen), findsOneWidget);
@@ -327,11 +337,22 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   final v1SessionCount = PracticeStats(
     session.container.read(practiceLogProvider),
   ).totalSessions;
+  final sessionCount = session.container
+      .read(aggregatedPracticeStatsProvider)
+      .totalSessions;
+  expect(
+    sessionCount,
+    greaterThan(v1SessionCount),
+    reason:
+        'the V2 session this walk finished must reach the hub metric '
+        'through its own aggregated source — the V1 "Learn" log alone '
+        'never sees it (E16-R05 L4)',
+  );
   // Scoped to the "Sessions" _Metric tile's OWN Column (found by walking up
   // from its label text), not `ProfileHubScreen` at large — a bare
-  // `find.text('$v1SessionCount')` under the whole screen would also match
-  // the streak tile whenever both render `0` (MINOR-2, review §4), which
-  // would pass even if the sessions metric rendered nothing at all.
+  // `find.text('$sessionCount')` under the whole screen could also match
+  // the streak tile whenever both render the same number (MINOR-2, review
+  // §4), which would pass even if the sessions metric rendered nothing.
   final sessionsMetricColumn = find
       .ancestor(
         of: find.text(l10n.progressSessions),
@@ -341,14 +362,13 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   expect(
     find.descendant(
       of: sessionsMetricColumn,
-      matching: find.text('$v1SessionCount'),
+      matching: find.text('$sessionCount'),
     ),
     findsOneWidget,
     reason:
-        'the sessions metric must reflect its own real (V1 log) source '
+        'the sessions metric must reflect its own real (V1 ∪ V2) source '
         'value, whatever that measurably is — scoped to the sessions tile '
-        'so the streak tile (which also renders 0 for a fresh install) '
-        'cannot satisfy this assertion',
+        'so the streak tile cannot satisfy this assertion',
   );
 
   await tester.tap(find.widgetWithText(OutlinedButton, l10n.settingsTitle));
@@ -382,6 +402,7 @@ void main() {
             'PracticeAreaHubScreen',
             'PracticeSetupScreen',
             'PracticeSessionScreen',
+            'PracticeResultScreen',
             'UnifiedLibraryScreen',
             'ProgressDashboardScreen',
             'ProfileHubScreen',
