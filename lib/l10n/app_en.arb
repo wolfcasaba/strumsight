@@ -681,8 +681,6 @@
   "@analysisExportTitle": {},
   "analysisHomeImportCta": "Import a file",
   "@analysisHomeImportCta": {},
-  "analysisHomeImportUnavailable": "File import is not available yet — record instead.",
-  "@analysisHomeImportUnavailable": {},
   "analysisHomeImportDescription": "Analyze an existing recording, up to {limitMb} MB.",
   "@analysisHomeImportDescription": {
     "placeholders": {
@@ -690,6 +688,10 @@
         "type": "int"
       }
     }
+  },
+  "analysisHomeImportUnavailable": "File import is not available yet — record instead.",
+  "@analysisHomeImportUnavailable": {
+    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
   },
   "analysisHomeOpenAnalysisSemantics": "Open analysis: {title}",
   "@analysisHomeOpenAnalysisSemantics": {
@@ -1723,6 +1725,32 @@
   "communityGateProfileMissingCta": "Create profile",
   "communityGateProfileMissingTitle": "Create your Community profile",
   "@communityGateProfileMissingTitle": {},
+  "communityHubBookmarks": "Bookmarks",
+  "communityHubChallenges": "Challenges",
+  "communityHubClubs": "Clubs",
+  "communityHubComments": "Comments",
+  "@communityHubComments": {
+    "description": "Feed-card / bookmark-row action that opens the post's comment thread."
+  },
+  "communityHubCompose": "New post",
+  "communityHubEditProfile": "Edit profile",
+  "@communityHubEditProfile": {
+    "description": "Opens the Community profile editor from the hub."
+  },
+  "communityHubFeed": "Feed",
+  "communityHubFollowers": "Followers",
+  "communityHubFollowing": "Following",
+  "communityHubLeaderboard": "Leaderboard",
+  "communityHubNotifications": "Notifications",
+  "communityHubSafety": "Blocked & muted",
+  "@communityHubSafety": {
+    "description": "Opens the safety screen listing the people the user blocked or muted."
+  },
+  "communityHubSearch": "Search",
+  "communityHubSectionTitle": "Community",
+  "@communityHubSectionTitle": {
+    "description": "Section heading above the Community hub's navigation entries (E17 / WP-C)."
+  },
   "communityModerationRemovedPlaceholder": "This content was removed.",
   "@communityModerationRemovedPlaceholder": {},
   "communityNotificationChallengeCompletedTitle": "Challenge completed",
@@ -3189,7 +3217,9 @@
   "profileHubCommunityDisabledReason": "Community features aren't available in this build yet.",
   "profileHubCommunityEnabledMessage": "Connect with other players and share your progress.",
   "profileHubCommunityOpen": "Open Community",
-  "@profileHubCommunityOpen": {},
+  "@profileHubCommunityOpen": {
+    "description": "Profile hub button opening the Community gate. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
   "profileHubCommunitySectionTitle": "Community",
   "profileHubLocalOnlyMessage": "You're using StrumSight without an account — everything stays on this device.",
   "profileHubLocalOnlyTitle": "Local profile",
@@ -3696,7 +3726,9 @@
   "setlistSessionCompleted": "Completed",
   "setlistSessionFailed": "Could not finish",
   "setlistSessionPartial": "Stopped partway — your score so far counts.",
-  "@setlistSessionPartial": {},
+  "@setlistSessionPartial": {
+    "description": "Setlist session ended before the last song. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
   "setlistSessionPerformanceDescription": "Play each song in order without microphone scoring.",
   "setlistSessionPerformanceSemantics": "Playback-only setlist performance. Microphone scoring is off.",
   "setlistSessionPerformanceTitle": "Setlist performance",

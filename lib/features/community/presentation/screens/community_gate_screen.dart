@@ -17,9 +17,10 @@
 /// * ``profileMissing`` — the user is signed in but has no
 ///   profile. Show the CTA that opens the edit-profile screen in
 ///   create mode.
-/// * ``ready`` — the user is signed in AND has a profile. Show a
-///   minimal read-only summary and an "Edit" CTA that opens the
-///   edit-profile screen in edit mode.
+/// * ``ready`` — the user is signed in AND has a profile. The state
+///   is the Community HUB (WP-C, 2026-09-06): the read-only summary,
+///   the "Edit profile" CTA, and a named entry to every one of the
+///   thirteen registered community routes.
 ///
 /// The screen holds no local state of its own — the controller is
 /// the single source of truth (the four states, the loaded profile,
@@ -29,9 +30,12 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../app/config/app_config.dart';
+import '../../../../app/routing/app_route.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/profile_controller.dart';
 import '../widgets/community_theme_scope.dart';
@@ -215,6 +219,22 @@ class _CtaView extends StatelessWidget {
   }
 }
 
+/// The ``ready`` state — the Community HUB.
+///
+/// MÉRT hiba (2026-09-06, WP-C): a 13 community képernyő route-ja
+/// létezett, de a szállított felületről SEMMI nem vezetett hozzájuk —
+/// a kapu `ready` állapota egyetlen „Edit profile" gombot mutatott. A
+/// funkció tehát a felhasználó számára nem létezett.
+///
+/// A hub ezért NEVESÍTETT belépési pontot ad mind a tizenháromhoz. A
+/// navigáció `context.push` (go_router), NEM `context.go`: a vissza-
+/// gomb a hubra tér vissza, nem a fa gyökerére. A `Navigator.push` a
+/// profil-szerkesztőnél marad — az nem regisztrált útvonal.
+///
+/// Két belépő zászló alatt áll, ugyanazzal a mintázattal, amivel a
+/// router is kapuz: az író-felület a `communityWritesEnabled`, a
+/// klubok a `communityClubsEnabled` alatt. Egy kikapcsolt zászlónál a
+/// route sincs regisztrálva, tehát a gomb egy 404-re vinne.
 class _ReadyView extends ConsumerWidget {
   const _ReadyView({required this.state});
 
@@ -223,50 +243,148 @@ class _ReadyView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final localizations = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     final profile = state.profile;
-    return Padding(
-      padding: const EdgeInsets.all(24),
+    final flags = ref.watch(appConfigProvider).flags;
+    // A saját profil nyilvános azonosítója — a követők / követettek
+    // listája ezzel a paraméterrel nyílik. Profil nélkül (elvileg
+    // elérhetetlen a `ready` ágon) a két bejegyzés kimarad, nem egy
+    // üres azonosítóval navigál.
+    final profileId = profile?.userId.value;
+    return SingleChildScrollView(
+      // A7 — 2.0-s szöveg-méretnél a hub végig görgethető marad.
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 24),
           Text(
             profile?.handle.value ?? '—',
-            style: Theme.of(context).textTheme.titleLarge,
+            style: theme.textTheme.titleLarge,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             profile?.displayName ?? '—',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: theme.textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 32),
-          SsButton(
-            onPressed: () => Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => EditProfileScreen(
-                  mode: EditProfileMode.edit,
-                  initialProfile: profile,
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: SsButton(
+              onPressed: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => EditProfileScreen(
+                    mode: EditProfileMode.edit,
+                    initialProfile: profile,
+                  ),
                 ),
               ),
+              label: localizations.communityHubEditProfile,
             ),
-            label: 'Edit profile',
           ),
-          const SizedBox(height: 12),
-          // A7 — 2.0 text scale must not break the read-only view.
-          // The layout is scrollable + single-column so a 2× font
-          // size does not push the CTA off the screen.
-          Expanded(
-            child: SingleChildScrollView(
-              child: Text(
-                localizations.communityEditBadgesBody,
-                textAlign: TextAlign.center,
+          const SizedBox(height: 24),
+          Text(
+            localizations.communityHubSectionTitle,
+            style: theme.textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          _HubEntry(
+            icon: Icons.dynamic_feed,
+            label: localizations.communityHubFeed,
+            route: AppRoutes.communityFeed,
+          ),
+          if (flags.communityWritesEnabled)
+            _HubEntry(
+              icon: Icons.edit_note,
+              label: localizations.communityHubCompose,
+              route: AppRoutes.communityCompose,
+            ),
+          if (flags.communityClubsEnabled)
+            _HubEntry(
+              icon: Icons.groups_outlined,
+              label: localizations.communityHubClubs,
+              route: AppRoutes.communityClubs,
+            ),
+          _HubEntry(
+            icon: Icons.notifications_none,
+            label: localizations.communityHubNotifications,
+            route: AppRoutes.communityNotifications,
+          ),
+          _HubEntry(
+            icon: Icons.search,
+            label: localizations.communityHubSearch,
+            route: AppRoutes.communitySearch,
+          ),
+          _HubEntry(
+            icon: Icons.bookmark_border,
+            label: localizations.communityHubBookmarks,
+            route: AppRoutes.communityBookmarks,
+          ),
+          _HubEntry(
+            icon: Icons.emoji_events_outlined,
+            label: localizations.communityHubChallenges,
+            route: AppRoutes.communityChallenges,
+          ),
+          if (profileId != null) ...[
+            _HubEntry(
+              icon: Icons.people_outline,
+              label: localizations.communityHubFollowers,
+              route: AppRoutes.communityFollowers.replaceFirst(
+                ':profileId',
+                profileId,
               ),
             ),
+            _HubEntry(
+              icon: Icons.person_add_alt,
+              label: localizations.communityHubFollowing,
+              route: AppRoutes.communityFollowing.replaceFirst(
+                ':profileId',
+                profileId,
+              ),
+            ),
+          ],
+          _HubEntry(
+            icon: Icons.shield_outlined,
+            label: localizations.communityHubSafety,
+            route: AppRoutes.communitySafety,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            localizations.communityEditBadgesBody,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall,
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One hub row. A `key` a cella-azonosító a widget-tesztnek: a
+/// felirat fordítás-függő, a `Key` nem.
+class _HubEntry extends StatelessWidget {
+  const _HubEntry({
+    required this.icon,
+    required this.label,
+    required this.route,
+  });
+
+  final IconData icon;
+  final String label;
+
+  /// A már behelyettesített útvonal (a paraméteres útvonalaknál a
+  /// hívó cseréli ki a `:profileId`-t).
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      key: Key('community-hub-entry-$route'),
+      leading: Icon(icon),
+      title: Text(label),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => context.push(route),
     );
   }
 }

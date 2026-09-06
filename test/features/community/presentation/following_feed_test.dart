@@ -26,7 +26,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -806,6 +811,75 @@ void main() {
       },
     );
   });
+
+  group('WP-C — a feed navigációs varratai', () {
+    testWidgets('a kártya kommentek-akciója a poszt komment-útvonalára visz', (
+      tester,
+    ) async {
+      final h = _buildHarness();
+      h.repository.scriptedPages.add(
+        CommunityPage<CommunityPost>(
+          items: <CommunityPost>[
+            _post(id: 'post-42', artifact: _practiceArtifact()),
+          ],
+          cursor: const CursorPage.haltedAfterRequest(),
+        ),
+      );
+      await tester.pumpWidget(_routerHarness(h, writesEnabled: true));
+      await tester.pumpAndSettle();
+
+      final action = find.byKey(const Key('feed-card-comments-post-42'));
+      expect(action, findsOneWidget);
+      await tester.ensureVisible(action);
+      await tester.pumpAndSettle();
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('STUB /community/posts/post-42/comments'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a FAB a szerkesztőre visz, ha az írás be van kapcsolva', (
+      tester,
+    ) async {
+      final h = _buildHarness();
+      h.repository.scriptedPages.add(
+        CommunityPage<CommunityPost>(
+          items: <CommunityPost>[
+            _post(id: 'post-1', artifact: _practiceArtifact()),
+          ],
+          cursor: const CursorPage.haltedAfterRequest(),
+        ),
+      );
+      await tester.pumpWidget(_routerHarness(h, writesEnabled: true));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('feed-compose-fab')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('STUB /community/compose'), findsOneWidget);
+    });
+
+    testWidgets('kikapcsolt írásnál NINCS FAB — a route sincs regisztrálva', (
+      tester,
+    ) async {
+      final h = _buildHarness();
+      h.repository.scriptedPages.add(
+        CommunityPage<CommunityPost>(
+          items: <CommunityPost>[
+            _post(id: 'post-1', artifact: _practiceArtifact()),
+          ],
+          cursor: const CursorPage.haltedAfterRequest(),
+        ),
+      );
+      await tester.pumpWidget(_routerHarness(h, writesEnabled: false));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('feed-compose-fab')), findsNothing);
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -850,4 +924,67 @@ Object? _artifactEnvelopeForTest(CommunityShareArtifact artifact) {
     'sourceId': artifact.sourceId,
     'createdAt': artifact.createdAt.toIso8601String(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// WP-C (2026-09-06) — a feed NAVIGÁCIÓS varratai.
+//
+// MÉRT hiány: a `/community/posts/:postId/comments` és a
+// `/community/compose` útvonalra a szállított felületről SEMMI nem
+// vezetett. Ezek a cellák a `context.push` célját mérik — a
+// cél-képernyők helyén `STUB <path>` áll, mert a cella a navigációt
+// méri, nem a kommentek képernyő tartalmát.
+// ---------------------------------------------------------------------------
+
+Widget _routerHarness(_Harness h, {required bool writesEnabled}) {
+  final router = GoRouter(
+    initialLocation: AppRoutes.communityFeed,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.communityFeed,
+        builder: (_, _) => const FollowingFeedScreen(),
+      ),
+      for (final path in <String>[
+        AppRoutes.communityComments,
+        AppRoutes.communityCompose,
+      ])
+        GoRoute(
+          path: path,
+          builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+        ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      communityFeedRepositoryProvider.overrideWithValue(h.repository),
+      feedCacheProvider.overrideWithValue(h.cache),
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: true,
+            diagnosticsEnabled: true,
+            labModeAvailable: true,
+            communityEnabled: true,
+            communityWritesEnabled: writesEnabled,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      routerConfig: router,
+    ),
+  );
 }

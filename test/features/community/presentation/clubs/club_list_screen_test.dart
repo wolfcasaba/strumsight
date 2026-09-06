@@ -25,6 +25,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:strumsight/app/routing/app_route.dart';
 
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/features/community/domain/entities/community_club.dart';
@@ -295,8 +298,72 @@ void main() {
     );
   });
 
+  // -------------------------------------------------------------------
+  // WP-C (2026-09-06) — a lista → részletek navigáció.
+  //
+  // MÉRT hiány: a `/community/clubs/:clubId` útvonalhoz a szállított
+  // felületről SEMMI nem vezetett — a sorok nem voltak kattinthatók.
+  // -------------------------------------------------------------------
+  group('WP-C — a klub-sor a részletekre visz', () {
+    testWidgets('a sorra koppintás a klub azonosítójával navigál', (
+      tester,
+    ) async {
+      final fake = _RecordingClubsRepository();
+      fake.result = CommunityPage<CommunityClub>(
+        items: <CommunityClub>[
+          _club(
+            publicId: 'club-7',
+            name: 'Blues Lovers',
+            visibility: ClubVisibility.discoverable,
+            memberCount: 12,
+          ),
+        ],
+        cursor: const CursorPage.haltedAfterRequest(),
+      );
+      await tester.pumpWidget(_routerWrap(fake));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await tester.tap(find.byKey(const Key('club-row-club-7')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('STUB /community/clubs/club-7'), findsOneWidget);
+    });
+  });
   // Avoid "unused" warnings on internal helpers when the test
   // suite is reduced to a single case in a future round.
   _pumpScreen;
   UnknownFailure(code: FailureCode.unknown);
+}
+
+/// WP-C harness — a valós lista-képernyő egy MINIMÁLIS go_router alatt.
+/// A klub-részlet helyén `STUB <path>` áll: a cella a NAVIGÁCIÓT méri,
+/// nem a részlet-képernyő tartalmát (annak saját widget-tesztje van).
+Widget _routerWrap(_RecordingClubsRepository fake) {
+  final router = GoRouter(
+    initialLocation: AppRoutes.communityClubs,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.communityClubs,
+        builder: (_, _) => const ClubListScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.communityClubDetail,
+        builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [communityClubRepositoryProvider.overrideWithValue(fake)],
+    child: MaterialApp.router(
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const <Locale>[Locale('en')],
+      routerConfig: router,
+    ),
+  );
 }

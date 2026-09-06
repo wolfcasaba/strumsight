@@ -20,9 +20,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
@@ -229,4 +231,197 @@ void main() {
       expect(repo.createCalls, 0);
     });
   });
+
+  // -------------------------------------------------------------------
+  // WP-C (2026-09-06) — the `ready` state is the HUB.
+  //
+  // MÉRT hiba: a tizenhárom community útvonal REGISZTRÁLVA volt, de a
+  // szállított felületről semmi nem vezetett hozzájuk. A kapu `ready`
+  // állapota egyetlen „Edit profile" gombot mutatott. Ezek a cellák a
+  // NAVIGÁCIÓT mérik: a hub sora tényleg a cél-útvonalra visz.
+  // -------------------------------------------------------------------
+  group('WP-C — a kapu ready állapota HUB', () {
+    testWidgets('minden bekapcsolt zászló mellett kilenc bejegyzést mutat', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _hubApp(repo: _readyRepo(), writes: true, clubs: true),
+      );
+      await tester.pumpAndSettle();
+
+      for (final label in <String>[
+        'Feed',
+        'New post',
+        'Clubs',
+        'Notifications',
+        'Search',
+        'Bookmarks',
+        'Challenges',
+        'Followers',
+        'Following',
+        'Blocked & muted',
+      ]) {
+        expect(
+          find.text(label),
+          findsOneWidget,
+          reason: 'hiányzó belépő: $label',
+        );
+      }
+      expect(find.text('Edit profile'), findsOneWidget);
+    });
+
+    testWidgets('a Feed sor a /community/feed útvonalra visz', (tester) async {
+      await tester.pumpWidget(
+        _hubApp(repo: _readyRepo(), writes: true, clubs: true),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Feed'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Feed'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('STUB ${AppRoutes.communityFeed}'), findsOneWidget);
+    });
+
+    testWidgets('a szerkesztő belépő a communityWritesEnabled alatt áll', (
+      tester,
+    ) async {
+      // Kikapcsolt írás mellett a router a `/community/compose`
+      // útvonalat sem regisztrálja — egy látható gomb 404-re vinne.
+      await tester.pumpWidget(
+        _hubApp(repo: _readyRepo(), writes: false, clubs: true),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('New post'), findsNothing);
+      expect(find.text('Clubs'), findsOneWidget);
+    });
+
+    testWidgets('a klubok belépő a communityClubsEnabled alatt áll', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _hubApp(repo: _readyRepo(), writes: true, clubs: false),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Clubs'), findsNothing);
+      expect(find.text('New post'), findsOneWidget);
+    });
+
+    testWidgets('a követők sora a SAJÁT profil azonosítóját viszi', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _hubApp(repo: _readyRepo(), writes: true, clubs: true),
+      );
+      await tester.pumpAndSettle();
+
+      // A hub görgethető — a sor a 800px-es teszt-nézeten kívül eshet.
+      await tester.ensureVisible(find.text('Followers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Followers'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('STUB /community/profiles/$_readyProfileId/followers'),
+        findsOneWidget,
+      );
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// WP-C harness — a valódi kapu-képernyő egy MINIMÁLIS go_router alatt.
+//
+// A cél-útvonalak `STUB <path>` szövegre képződnek: a cella a
+// NAVIGÁCIÓT méri, nem a cél-képernyők tartalmát (azoknak saját
+// widget-tesztjük van, és a valós példányuk providereket kérne).
+// ---------------------------------------------------------------------------
+
+const String _readyProfileId = '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f60';
+
+_FakeCommunityProfileRepository _readyRepo() {
+  return _FakeCommunityProfileRepository(
+    profile: CommunityProfile(
+      userId: PublicUserId(_readyProfileId),
+      handle: CommunityHandle('wolfcasaba'),
+      displayName: 'Wolf Casaba',
+      visibility: ProfileVisibility.followers,
+      avatarUrl: null,
+      bio: null,
+      skillInterests: const <String>[],
+      badges: const <String>[],
+      relationship: CommunityRelationshipToViewer.notRelated,
+      createdAt: DateTime.utc(2026),
+    ),
+  );
+}
+
+Widget _hubApp({
+  required _FakeCommunityProfileRepository repo,
+  required bool writes,
+  required bool clubs,
+}) {
+  final destinations = <String>[
+    AppRoutes.communityFeed,
+    AppRoutes.communityCompose,
+    AppRoutes.communityClubs,
+    AppRoutes.communityNotifications,
+    AppRoutes.communitySearch,
+    AppRoutes.communityBookmarks,
+    AppRoutes.communityChallenges,
+    AppRoutes.communityFollowers,
+    AppRoutes.communityFollowing,
+    AppRoutes.communitySafety,
+  ];
+  final router = GoRouter(
+    initialLocation: AppRoutes.community,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.community,
+        builder: (_, _) => const CommunityGateScreen(),
+      ),
+      for (final path in destinations)
+        GoRoute(
+          path: path,
+          builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+        ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: true,
+            diagnosticsEnabled: true,
+            labModeAvailable: true,
+            communityEnabled: true,
+            communityWritesEnabled: writes,
+            communityClubsEnabled: clubs,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
+      tokenStoreProvider.overrideWithValue(FakeTokenStore('test-token')),
+      authRepositoryProvider.overrideWithValue(
+        FakeAuthRepository(
+          user: const AuthUser(id: 1, email: 'player@strumsight.app'),
+        ),
+      ),
+      communityProfileRepositoryProvider.overrideWithValue(repo),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      routerConfig: router,
+    ),
+  );
 }

@@ -351,6 +351,110 @@ final routes = [
       expect(_retireRowsMissingSuccessorOrReason(mutated), [target.screenPath]);
     });
   });
+
+  // -------------------------------------------------------------------
+  // A5 (WP-C, 2026-09-06) — bejövő hivatkozás az útvonal-konstansokra.
+  //
+  // A reachability MÁSIK iránya: egy regisztrált `GoRoute`, amire semmi
+  // nem navigál, ajtó kilincs nélkül. A cella a mérőeszközt méri, nem a
+  // valós fát — annak a száma körről körre változik.
+  // -------------------------------------------------------------------
+  group('A5 — route-konstans bejövő hivatkozás (fixture)', () {
+    late Directory fixture;
+
+    setUp(() {
+      fixture = Directory.systemTemp.createTempSync('route_refs_');
+      _write(fixture, 'lib/app/routing/app_route.dart', r"""
+abstract final class AppRoutes {
+  static const String reached = '/reached';
+  static const String orphan = '/orphan';
+}
+""");
+      // A router-tábla NEM számít bejövő hivatkozásnak: ott a konstans
+      // nevezése hozza LÉTRE a route-ot, nem az éri el.
+      _write(fixture, 'lib/app/routing/app_router.dart', r"""
+final routes = [
+  GoRoute(path: AppRoutes.reached),
+  GoRoute(path: AppRoutes.orphan),
+];
+""");
+      _write(fixture, 'lib/features/fixture/screens/hub_screen.dart', r"""
+class HubScreen {
+  void open(BuildContext context) => context.push(AppRoutes.reached);
+}
+""");
+    });
+
+    tearDown(() => fixture.deleteSync(recursive: true));
+
+    test('a router-tábla önmagában nem tesz egy konstanst elértté', () {
+      final result = RouteConstantReferences(fixture).render();
+      final orphan = result.verdicts.singleWhere((v) => v.name == 'orphan');
+
+      expect(orphan.hasIncomingReference, isFalse);
+      expect(orphan.path, '/orphan');
+    });
+
+    test('egy képernyő context.push-a bejövő hivatkozásnak számít', () {
+      final result = RouteConstantReferences(fixture).render();
+      final reached = result.verdicts.singleWhere((v) => v.name == 'reached');
+
+      expect(reached.hasIncomingReference, isTrue);
+      expect(
+        reached.incomingReferences.single.path,
+        'lib/features/fixture/screens/hub_screen.dart',
+      );
+    });
+
+    test('az összegző sor a hivatkozatlan konstansokat számolja', () {
+      final result = RouteConstantReferences(fixture).render();
+
+      expect(result.verdicts, hasLength(2));
+      expect(result.withoutIncomingCount, 1);
+      expect(
+        result.summaryLine,
+        'Route constants without incoming reference: 1',
+      );
+      expect(result.toMarkdownTable(), contains(result.summaryLine));
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // A6 (WP-C) — a `V<n>` utótagú képernyő-osztály neve is látszik.
+  //
+  // MÉRT hiba: a `Screen\b` minta nem tud illeszkedni a
+  // `SetlistListScreenV2` névre, ezért annak MINDEN hivatkozása nullának
+  // számított minden csatornán.
+  // -------------------------------------------------------------------
+  group('A6 — V-utótagú képernyő-osztály (fixture)', () {
+    late Directory fixture;
+
+    setUp(() {
+      fixture = Directory.systemTemp.createTempSync('reachability_v2_');
+      _write(fixture, 'lib/features/fixture/screens/legacy_screen.dart', r"""
+class LegacyScreenV2 {
+  const LegacyScreenV2();
+}
+""");
+      _write(fixture, 'lib/features/fixture/pusher.dart', r"""
+void openLegacy() => const LegacyScreenV2();
+""");
+      _writeRoutingSkeleton(fixture);
+    });
+
+    tearDown(() => fixture.deleteSync(recursive: true));
+
+    test(
+      'a V2 osztálynév felismerhető, és a konstrukciója elérhetővé teszi',
+      () {
+        final result = ScreenReachability(fixture).render();
+        final verdict = result.verdicts.single;
+
+        expect(verdict.className, 'LegacyScreenV2');
+        expect(verdict.isImperativelyReachable, isTrue);
+      },
+    );
+  });
 }
 
 void _writeRoutingSkeleton(Directory fixture) {

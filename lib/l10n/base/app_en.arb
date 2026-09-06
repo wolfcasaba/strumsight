@@ -3263,5 +3263,43 @@
   "libraryV2SyncConflictMessage": "This item changed in two places. Choose which version to keep — the other is discarded.",
   "libraryV2SyncConflictLocalLabel": "On this device",
   "libraryV2SyncConflictRemoteLabel": "In the cloud",
-  "libraryV2SyncConflictKeepThis": "Keep this version"
+  "libraryV2SyncConflictKeepThis": "Keep this version",
+  "analysisHomeImportUnavailable": "File import is not available yet — record instead.",
+  "@analysisHomeImportUnavailable": {
+    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
+  },
+  "profileHubCommunityOpen": "Open Community",
+  "@profileHubCommunityOpen": {
+    "description": "Profile hub button opening the Community gate. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
+  "setlistSessionPartial": "Stopped partway — your score so far counts.",
+  "@setlistSessionPartial": {
+    "description": "Setlist session ended before the last song. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
+  "communityHubSectionTitle": "Community",
+  "@communityHubSectionTitle": {
+    "description": "Section heading above the Community hub's navigation entries (E17 / WP-C)."
+  },
+  "communityHubEditProfile": "Edit profile",
+  "@communityHubEditProfile": {
+    "description": "Opens the Community profile editor from the hub."
+  },
+  "communityHubFeed": "Feed",
+  "communityHubCompose": "New post",
+  "communityHubClubs": "Clubs",
+  "communityHubNotifications": "Notifications",
+  "communityHubSearch": "Search",
+  "communityHubBookmarks": "Bookmarks",
+  "communityHubChallenges": "Challenges",
+  "communityHubSafety": "Blocked & muted",
+  "@communityHubSafety": {
+    "description": "Opens the safety screen listing the people the user blocked or muted."
+  },
+  "communityHubFollowers": "Followers",
+  "communityHubFollowing": "Following",
+  "communityHubComments": "Comments",
+  "@communityHubComments": {
+    "description": "Feed-card / bookmark-row action that opens the post's comment thread."
+  },
+  "communityHubLeaderboard": "Leaderboard"
 }

@@ -61,9 +61,11 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/challenge_controller.dart';
@@ -308,6 +310,25 @@ class _ChallengeRow extends ConsumerWidget {
                     // surfaces the action with the row's
                     // author_id as a placeholder for the wire.
                     onCancel(challenge.id.value, challenge.authorId);
+                  },
+                ),
+                // WP-C (2026-09-06) — a kihívás ranglistája. A
+                // `/community/challenges/:challengeId/leaderboard`
+                // útvonalhoz eddig SEMMI nem vezetett a felületről.
+                ListTile(
+                  key: const Key('challenge-action-leaderboard'),
+                  leading: const Icon(Icons.leaderboard_outlined),
+                  title: Text(
+                    AppLocalizations.of(sheetContext).communityHubLeaderboard,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.push(
+                      AppRoutes.communityLeaderboard.replaceFirst(
+                        ':challengeId',
+                        challenge.id.value,
+                      ),
+                    );
                   },
                 ),
                 const Divider(height: 1),

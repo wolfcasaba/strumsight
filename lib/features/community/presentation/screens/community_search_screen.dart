@@ -35,9 +35,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/storage/key_value_store.dart';
 import '../../data/local/recent_search_store.dart';
@@ -45,7 +47,6 @@ import '../../data/repositories/profile_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/value_objects/cursor_page.dart';
-import '../../domain/value_objects/public_user_id.dart';
 import '../widgets/community_theme_scope.dart';
 
 /// Debounce window for the typed query — long enough to swallow
@@ -388,6 +389,7 @@ class _ResultsList extends StatelessWidget {
       itemBuilder: (context, index) {
         final profile = items[index];
         return ListTile(
+          key: Key('search-result-${profile.userId.value}'),
           leading: CircleAvatar(
             child: Text(
               profile.displayName.isEmpty
@@ -399,27 +401,27 @@ class _ResultsList extends StatelessWidget {
           subtitle: profile.handle.value.isNotEmpty
               ? Text('@${profile.handle.value}')
               : null,
+          // WP-C (2026-09-06) — a találat MEGNYIT valamit.
+          //
+          // MÉRT tény: a fában NINCS kanonikus profil-nézet képernyő
+          // (a `/community/profiles/:profileId` útvonal sem létezik,
+          // csak a `.../followers` és `.../following`). A találat
+          // ezért a profil KÖVETŐI listáját nyitja meg — ez a
+          // legközelebbi létező, a profilhoz kötött nézet. Amint a
+          // profil-képernyő megszületik, ez a cél cserélendő.
           onTap: () {
-            // Brief §A2 — taps open the canonical profile view
-            // (Kör 5 fetchById surface). The route is wired by
-            // a future Kör 10 round; this onTap is a no-op
-            // marker so the navigation hook is obvious in code
-            // review.
-            unawaited(_noopOnTap(profile.userId));
+            HapticFeedback.selectionClick();
+            context.push(
+              AppRoutes.communityFollowers.replaceFirst(
+                ':profileId',
+                profile.userId.value,
+              ),
+            );
           },
         );
       },
     );
   }
-}
-
-Future<void> _noopOnTap(PublicUserId userId) async {
-  // Anchor for the Kör 10 navigation hook. Intentionally empty:
-  // the canonical profile view is not in scope for E09-R09.
-  HapticFeedback.selectionClick();
-  // The unused parameter keeps the signature obvious in grep
-  // for the future round.
-  assert(userId.value.isNotEmpty);
 }
 
 class _ErrorState extends StatelessWidget {

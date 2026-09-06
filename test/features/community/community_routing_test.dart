@@ -147,4 +147,81 @@ void main() {
       expect(paths, contains(AppRoutes.communityFollowing));
     });
   });
+
+  group('a bejövő hivatkozások — a felület tényleg elér oda', () {
+    test('E7 — mind a 14 community útvonal-konstansra mutat a felületről '
+        'legalább egy hivatkozás', () {
+      // MÉRT hiba (2026-09-06, WP-C): a 14 útvonal REGISZTRÁLVA volt, a
+      // `check_screen_reachability` mind a 13 képernyőt `reachable: true`
+      // -nek mérte — miközben a szállított felületről EGYETLEN
+      // `context.push` sem vezetett hozzájuk. Egy regisztrált route,
+      // amire semmi nem navigál, ajtó kilincs nélkül.
+      //
+      // A cella a MÁSIK irányt méri: a `lib/` fában — a konstans-fájlt és
+      // magát a router-táblát kizárva — van-e `AppRoutes.<név>` említés.
+      final names = <String, String>{
+        'community': AppRoutes.community,
+        'communityFeed': AppRoutes.communityFeed,
+        'communityCompose': AppRoutes.communityCompose,
+        'communityComments': AppRoutes.communityComments,
+        'communityBookmarks': AppRoutes.communityBookmarks,
+        'communityNotifications': AppRoutes.communityNotifications,
+        'communitySearch': AppRoutes.communitySearch,
+        'communityFollowers': AppRoutes.communityFollowers,
+        'communityFollowing': AppRoutes.communityFollowing,
+        'communityChallenges': AppRoutes.communityChallenges,
+        'communityLeaderboard': AppRoutes.communityLeaderboard,
+        'communitySafety': AppRoutes.communitySafety,
+        'communityClubs': AppRoutes.communityClubs,
+        'communityClubDetail': AppRoutes.communityClubDetail,
+      };
+      final sources = _libSourcesOutsideRouting();
+      final withoutIncoming = <String>[
+        for (final name in names.keys)
+          if (!sources.any((source) => source.contains('AppRoutes.$name')))
+            name,
+      ];
+
+      expect(
+        withoutIncoming,
+        isEmpty,
+        reason:
+            'ezekre az útvonal-konstansokra a felületről semmi nem mutat: '
+            '$withoutIncoming',
+      );
+    });
+
+    test('E8 — a próba valódi sértést fog: egy kitalált konstansra '
+        'nincs hivatkozás', () {
+      // Kontroll-cella: e nélkül az E7 akkor is zöld lenne, ha a
+      // forrás-beolvasás üres halmazt adna vissza.
+      final sources = _libSourcesOutsideRouting();
+      expect(sources, isNotEmpty);
+      expect(
+        sources.any((s) => s.contains('AppRoutes.communityNoSuchRoute')),
+        isFalse,
+      );
+    });
+  });
+}
+
+/// Minden `lib/` alatti Dart forrás, KIVÉVE az útvonal-konstansok
+/// deklarációját és magát a router-táblát: azokban a konstanst nevezni
+/// az, ami LÉTREHOZZA a route-ot, nem az, ami ELÉRI.
+List<String> _libSourcesOutsideRouting() {
+  const excluded = <String>{
+    'lib/app/routing/app_route.dart',
+    'lib/app/routing/app_router.dart',
+  };
+  final root = Directory.current.path;
+  return <String>[
+    for (final entity in Directory('lib').listSync(recursive: true))
+      if (entity is File && entity.path.endsWith('.dart'))
+        if (!excluded.contains(
+          entity.absolute.path
+              .substring(root.length + 1)
+              .replaceAll(r'\\', '/'),
+        ))
+          entity.readAsStringSync(),
+  ];
 }
