@@ -22,12 +22,14 @@ import 'package:strumsight/features/community/domain/repositories/community_page
 import 'package:strumsight/features/community/domain/value_objects/content_id.dart';
 import 'package:strumsight/features/community/domain/value_objects/cursor_page.dart';
 
-CommunityBookmark _row(int id, {bool tombstone = false}) => CommunityBookmark(
-  id: id,
-  postId: ContentId('post-$id'),
-  createdAt: DateTime.utc(2026, 9, 6, 10, id),
-  isTombstone: tombstone,
-);
+CommunityBookmark _row(int id, {bool tombstone = false}) {
+  return CommunityBookmark(
+    id: id,
+    postId: ContentId('post-$id'),
+    createdAt: DateTime.utc(2026, 9, 6, 10, id),
+    isTombstone: tombstone,
+  );
+}
 
 final class _Script {
   final List<({Object cursor, int limit})> reads = [];
@@ -43,12 +45,12 @@ final class _Script {
     reads.add((cursor: cursor, limit: limit));
     final error = readError;
     if (error != null) throw error;
-    final key = (cursor as CursorPage).cursor;
-    return pages[key] ??
-        const CommunityPage<CommunityBookmark>(
-          items: <CommunityBookmark>[],
-          cursor: CursorPage.haltedAfterRequest(),
-        );
+    final page = pages[(cursor as CursorPage).cursor];
+    if (page != null) return page;
+    return const CommunityPage<CommunityBookmark>(
+      items: <CommunityBookmark>[],
+      cursor: CursorPage.haltedAfterRequest(),
+    );
   }
 
   Future<void> remove({
