@@ -82,6 +82,14 @@ music-theory/
   [`docs/execution/remote-container-environment.md`](docs/execution/remote-container-environment.md)
   ([L481](docs/LESSONS.md)). Az alábbi pontok a FELHASZNÁLÓ SAJÁT boxára igazak.
 
+- **Az Oracle box (free-tier-arm) a fejlesztő gép, MÉRVE 2026-09-06:** Flutter 3.44.2 = a
+  `build-apk.yml` pinje; a Dart MCP él; Android SDK 36 a `~/android-sdk`-ban, az `adb` a Debian
+  `android-sdk-platform-tools` ARM64-csomagjából van szimlinkelve (a Google platform-tools x86-os);
+  `CHROME_EXECUTABLE` = a Playwright-Chromium; az env a `~/.profile`-ban (a `.bashrc` nem-interaktív
+  shellben korán return-öl). **NEM megy helyben:** `flutter build apk` (x86 build-tools/aapt2),
+  emulátor (nincs `/dev/kvm`), fizikai telefon — ezek maradnak CI + a felhasználó gépe. A backend
+  itt fut dockerben: `docker logs strumsight-deploy-api-1` a login-hibák naplója.
+
 - **Run `flutter analyze` and `flutter test` as SEPARATE calls — never chain `analyze && test`** (OOM on this box).
 - **Keep ONE win32 major across the tree** (required for `flutter test` host-compile). This is why
   `flutter_secure_storage` is pinned to **v10** (win32 ^6, matching `wakelock_plus`) — v9 pulls win32 ^5
