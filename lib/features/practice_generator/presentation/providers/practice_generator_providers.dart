@@ -22,6 +22,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/i18n/locale_provider.dart';
 import '../../../../core/storage/storage_providers.dart';
+import '../../application/controller/active_plan_controller.dart';
 import '../../application/controller/today_plan_controller.dart';
 import '../../application/service/generation_orchestrator.dart';
 import '../../application/usecase/delete_practice_planning_data.dart';
@@ -31,6 +32,7 @@ import '../../application/usecase/start_plan_generation.dart';
 import '../../data/local/generation_draft_repository.dart';
 import '../../data/local/local_practice_evidence_repository.dart';
 import '../../data/local/local_practice_plan_repository.dart';
+import '../../domain/id/planner_ids.dart' show RevisionId;
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_block.dart' show ExerciseCandidateResolver;
 import '../../domain/model/weekly_availability.dart' show LocalDate;
@@ -287,6 +289,20 @@ final todayPlanControllerProvider = Provider<TodayPlanController>(
   (ref) =>
       TodayPlanController(clock: ref.watch(practiceGeneratorClockProvider)),
 );
+
+/// The learner-side reschedules (skip / shorten / pause) over the ACTIVE
+/// plan (javító sáv 2026-09-06 — until then the controller had zero callers
+/// in `lib/`, so the Today screen's buttons stayed disabled). The block's
+/// `exerciseId` is the catalog key, resolved through the same fail-loud
+/// resolver the repository uses.
+final activePlanControllerProvider = Provider<ActivePlanController>((ref) {
+  final generateId = ref.watch(practiceGeneratorIdGeneratorProvider);
+  final resolve = ref.watch(exerciseCandidateResolverProvider);
+  return ActivePlanController(
+    generateRevisionId: () => RevisionId.generate(generateId),
+    resolveCandidate: (block) => resolve(block.prescription.exerciseId),
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Screen 6/6 — WeeklyPlanScreen

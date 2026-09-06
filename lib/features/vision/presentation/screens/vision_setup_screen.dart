@@ -326,6 +326,15 @@ class _AudioOnlyStep extends StatelessWidget {
 
   final bool unsupportedDevice;
 
+  void _leaveAudioOnly(BuildContext context) {
+    final router = GoRouter.of(context);
+    if (router.canPop()) {
+      router.pop();
+    } else {
+      router.go(AppRoutes.today);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -346,7 +355,11 @@ class _AudioOnlyStep extends StatelessWidget {
           SsButton(
             key: const Key('vision-audio-only-continue'),
             label: l10n.visionSetupAudioOnlyContinue,
-            onPressed: () {},
+            // Javító sáv 2026-09-06 (R4): this was `() {}` — an enabled
+            // button that did nothing. "Continue audio-only" leaves the
+            // vision setup: back to where it was opened from, or to Today
+            // when the setup was the first location (a `go` from the hub).
+            onPressed: () => _leaveAudioOnly(context),
           ),
         ],
       ),

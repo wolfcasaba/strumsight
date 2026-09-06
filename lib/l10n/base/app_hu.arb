@@ -2874,6 +2874,8 @@
   "@planSetupNext": {},
   "planSetupBack": "Vissza",
   "@planSetupBack": {},
+  "planSetupGenerationFailed": "A tervet nem sikerült elkészíteni. A válaszaid megvannak — próbáld újra a Befejezést.",
+  "todayPlanActionFailed": "A módosítást nem sikerült menteni. A terv változatlan.",
   "planSetupFinish": "Beállítás befejezése",
   "@planSetupFinish": {},
   "planSetupGoalRhythm": "Ritmus",

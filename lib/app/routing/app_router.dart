@@ -44,6 +44,9 @@ import '../../features/practice/presentation/screens/practice_session_screen.dar
 import '../../features/practice/public.dart' show practiceCatalogProvider;
 import '../../features/practice_generator/application/usecase/revise_practice_plan.dart'
     show PlanRevisionProposal;
+import '../../features/practice_generator/application/controller/today_plan_controller.dart'
+    show TodayPlanRouteRequest;
+import '../../features/practice_generator/presentation/plan_generation_launch.dart';
 import '../../features/practice_generator/presentation/plan_preview_args.dart';
 import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
 import '../../features/practice_generator/presentation/screens/plan_change_review_screen.dart';
@@ -52,6 +55,7 @@ import '../../features/practice_generator/presentation/screens/plan_privacy_scre
 import '../../features/practice_generator/presentation/screens/weekly_plan_screen.dart';
 import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
 import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
+import '../../features/practice_generator/presentation/today_plan_actions.dart';
 import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
 import '../../features/profile_hub/screens/profile_hub_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
@@ -538,16 +542,42 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.practiceGeneratorSetup,
           builder: (_, _) => Consumer(
-            builder: (context, ref, _) => PlanSetupScreen(
-              controller: ref.watch(planSetupControllerProvider),
-            ),
+            builder: (context, ref, _) {
+              // Javító sáv 2026-09-06 (R4): watched, not read — the
+              // generation use case is autoDispose and must outlive the
+              // wizard's last step (its own doc-comment's rule).
+              final startGeneration = ref.watch(startPlanGenerationProvider);
+              return PlanSetupScreen(
+                controller: ref.watch(planSetupControllerProvider),
+                onFinished: (request) => launchPlanGeneration(
+                  context,
+                  ref,
+                  startGeneration,
+                  request,
+                ),
+              );
+            },
           ),
         ),
         GoRoute(
           path: AppRoutes.practiceGeneratorToday,
-          builder: (_, _) => Consumer(
+          // Javító sáv 2026-09-06 (R4): the screen used to be built WITHOUT
+          // the plan (always "no active plan") and WITHOUT callbacks (every
+          // action button disabled). `swap` stays unbound on purpose — the
+          // merged reschedule controller has no swap operation.
+          builder: (_, state) => Consumer(
             builder: (context, ref, _) => TodayPlanScreen(
               controller: ref.watch(todayPlanControllerProvider),
+              plan: ref.watch(activePracticePlanProvider).value,
+              launchRequest: TodayPlanRouteRequest.tryParse(state.extra),
+              isTodayRouteEnabled: true,
+              onStart: (block) => openPracticeForBlock(context, block),
+              onSkip: (_) =>
+                  runTodayPlanAction(context, ref, TodayPlanAction.skip),
+              onShorten: () =>
+                  runTodayPlanAction(context, ref, TodayPlanAction.shorten),
+              onPause: () =>
+                  runTodayPlanAction(context, ref, TodayPlanAction.pause),
             ),
           ),
         ),

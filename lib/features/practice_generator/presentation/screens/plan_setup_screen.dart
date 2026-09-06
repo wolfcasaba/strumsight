@@ -2,15 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../domain/model/practice_generation_request.dart';
 import '../controller/plan_setup_controller.dart';
 import '../widgets/availability_editor.dart';
 import '../widgets/practice_goal_picker.dart';
 
 /// Five-step, locally resumable plan-input wizard.
 class PlanSetupScreen extends StatefulWidget {
-  const PlanSetupScreen({required this.controller, super.key});
+  const PlanSetupScreen({
+    required this.controller,
+    this.onFinished,
+    super.key,
+  });
 
   final PlanSetupController controller;
+
+  /// Fires once "Finish setup" (the last step's Next) has advanced the
+  /// wizard past its final page, with the request the wizard persisted.
+  /// The router hands it to plan generation (javító sáv 2026-09-06 — until
+  /// then finishing the wizard led nowhere: no plan was ever generated).
+  final ValueChanged<PracticeGenerationRequest>? onFinished;
 
   @override
   State<PlanSetupScreen> createState() => _PlanSetupScreenState();
@@ -115,9 +126,7 @@ class _PlanSetupScreenState extends State<PlanSetupScreen> {
                   const Spacer(),
                   SsButton(
                     key: const Key('plan-setup-next'),
-                    onPressed: state.hasHardConflict
-                        ? null
-                        : () => widget.controller.next(),
+                    onPressed: state.hasHardConflict ? null : _next,
                     label: state.currentStep == 4
                         ? l10n.planSetupFinish
                         : l10n.planSetupNext,
@@ -129,6 +138,15 @@ class _PlanSetupScreenState extends State<PlanSetupScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _next() async {
+    await widget.controller.next();
+    if (!mounted) return;
+    final state = widget.controller.state;
+    final request = state.request;
+    if (state.currentStep < 5 || request == null) return;
+    widget.onFinished?.call(request);
   }
 
   Widget _stepBody(BuildContext context, PlanSetupState state) {

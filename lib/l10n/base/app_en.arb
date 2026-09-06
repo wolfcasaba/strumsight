@@ -2952,6 +2952,8 @@
   "@planSetupNext": {},
   "planSetupBack": "Back",
   "@planSetupBack": {},
+  "planSetupGenerationFailed": "The plan could not be generated. Your answers are saved — try Finish again.",
+  "todayPlanActionFailed": "That change could not be saved. The plan is unchanged.",
   "planSetupFinish": "Finish setup",
   "@planSetupFinish": {},
   "planSetupGoalRhythm": "Rhythm",
