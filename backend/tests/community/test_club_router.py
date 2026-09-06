@@ -221,7 +221,7 @@ def club_feed_client():
         community_enabled=True,
         community_clubs_enabled=True,
         community_writes_enabled=True,
-        secret_key="a-real-32-char-test-secret-key-value",
+        secret_key="a-real-32-char-test-secret-key-value",  # strumsight:allow-secret teszt-fixture Settings, nem éles kulcs
     )
     engine = _make_test_engine()
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
