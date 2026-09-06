@@ -34,9 +34,20 @@ const int _rewardLookupMaxPages = 20;
 /// wrote). This is a pure read: it never calls [RewardLedgerRepository.appendIfAbsent],
 /// so reopening the same session's result always returns the same answer —
 /// the A5 idempotency guarantee at the UI boundary.
+///
+/// The ledger seam is taken with `ref.read`, NOT `ref.watch`: the answer is a
+/// snapshot of a MUTABLE repository (an `appendIfAbsent` moves no provider
+/// state), so a subscription would buy no refresh — it would only make this
+/// lookup recompute whenever the ledger INSTANCE changes. Since the javító
+/// sáv 2026-09-06 the seam resolves to the real
+/// `LocalRewardLedgerRepository`, which depends on `keyValueStoreProvider`;
+/// a container whose store override changes therefore hands this provider a
+/// NEW ledger instance, and the resulting listener notification would land
+/// while `_RewardSection` is building (`markNeedsBuild() called during
+/// build`). Reading keeps the reward lookup a pure read on the build path.
 final practiceRewardForSessionProvider =
     Provider.family<RewardLedgerEntry?, String>((ref, sessionId) {
-      final ledger = ref.watch(rewardLedgerRepositoryProvider);
+      final ledger = ref.read(rewardLedgerRepositoryProvider);
       final eventId = GamificationPracticeAdapter.stableEventId(sessionId);
       String? cursor;
       for (var page = 0; page < _rewardLookupMaxPages; page++) {

@@ -1,37 +1,59 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔧 JAVÍTÓ SÁV 2 (2026-09-06) — „APK build után MINDEN működjön": audit + 6 javító kör az `claude/mit-audit-javitasok-v432t5` ágon (a #594 integrálva, PR #593 tartalma ezzel szuperszedált)
+## ✅ JAVÍTÓ SÁV 2 (2026-09-06) — audit + 6 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, és a §1.3 „routolt, de nem működik" osztály nagy része zárva
 
-Audit és mért eredmény: [`docs/ui/apk-functionality-audit-2026-09-06.md`](docs/ui/apk-functionality-audit-2026-09-06.md)
-(§5 a körök táblája, §5.1 a hibák soronkénti állapota, §5.2 ami tudottan nyitva
-maradt — indokkal). A felhasználó mércéje: a `build-apk.yml` `development`
-APK-jában minden fejlesztés fusson.
+A mérce a felhasználóé: **„APK build után minden működjön"** — a `build-apk.yml`
+`development` APK-jában minden fejlesztett képernyő legyen elérhető ÉS
+működjön. Az audit és a soronkénti mért eredmény:
+[`docs/ui/apk-functionality-audit-2026-09-06.md`](docs/ui/apk-functionality-audit-2026-09-06.md)
+(§1.3 a hibatábla, §5 a körök, §5.1 a soronkénti állapot, §5.2 ami tudottan
+nyitva maradt). Bázis: `main`, az audit commitja `f154139`.
 
-| Kör | Mit zárt | Commit |
-|---|---|---|
-| R1 | a #594 (`ops/community-data-layer`, 33 commit) merge a mai `main`-nel; 2 textuális + 3 szemantikus ütközés; CI zöld (run 34034973105) | `b9f3da6` |
-| R2 | a befejezett gyakorlás LÁTSZIK: történet-nézetek frissítése, streak, XP (`PracticeSessionRecorderWithHooks`), valódi jutalom-ledger, összesített statisztika a Today/Profile hubon | `99c3837` |
-| R3 | a Song Trainer VÉGIGFUT a felületről: `SongTrainerLauncher`, setup → session (`autoStart`) → eredmény effekt | `3ba298a` |
-| R4 | a tervező Today képernyője valódi tervet mutat, Skip/Shorten/Pause működik, a Setup Finish tervet generál; vision audio-only CTA | `cee142b` |
-| R5 | Könyvjelzők valódi lista/lapozás/törlés; klub Members fül + tagkezelő a szerver taglistájával; követő-sorok valódi profillal (`fetchById`) | `a24fff6` |
-| R6 | a `practiceResult` route a MOST befejezett gyakorlás eredményét mutatja (`PracticeResultTarget` kézfogás) | HEAD |
+| Kör | Commit | Mit zárt | Teszt |
+|---|---|---|---|
+| R1 | `b9f3da6` | a `ops/community-data-layer` (PR #594, 33 commit) merge-e a mai `main`-nel; ütközések: onboarding (a `main` változata), HANDOFF (mindkét szekció), variáns-mátrix (duplikált `e17_first_win_stage` sor), completion-report (a `main` számai), full-app-verification (`first_win_stage_screen` kizárási sor) | `build-apk.yml` run 34034973105 **zöld** |
+| R2 | `99c3837` | a befejezett V2 gyakorlás LÁTSZIK: történet-nézetek invalidálása, streak-jóváírás, XP a `GamificationPracticeAdapter` → `ActivityEventIngestor.drain` → `LocalRewardLedgerRepository` → `ProfileProjector` láncon; valódi jutalom-ledger a `_NoopRewardLedgerRepository` helyett; összesített statisztika a Today/Profile hubon | `practice_session_after_record_test.dart` |
+| R3 | `3ba298a` | a Song Trainer VÉGIGFUT a felületről: `SongTrainerLauncher` (setup `TrainerConfig` → `SongTrainerControllerInputs`), setup-route `onComplete`, session-route `autoStart`, pause/resume/seek fallback, `NavigateToSongTrainerResult` → eredmény-képernyő, hiba snackbarként (`songTrainerLaunchFailed`) | `song_trainer_launcher_test.dart` A1–A4 |
+| R4 | `cee142b` | a tervező Today-képernyője a VALÓDI aktív tervet mutatja (`activePracticePlanProvider`), a Start/Skip/Shorten/Pause működik (`TodayPlanActions`), a Setup „Finish" tervet generál és aktivál; a vision „Continue audio-only" CTA elhagyja a beállítást | `today_plan_actions_test.dart` A1–A4 |
+| R5 | `a24fff6` | Könyvjelzők valódi lista/kurzoros lapozás/optimista törlés (`GET /community/bookmarks`), klub Members fül a szerver taglistájával (`GET /community/clubs/{public_id}/members`), követő-sorok valódi profillal (`GET /community/profiles/{public_id}`) | `bookmarks_controller_test` B1–B6, `post_repository_bookmarks_test` K1–K4, `club_repository_members_test` M1–M3, `profile_repository_fetch_by_id_test` P1–P3 |
+| R6 | `68ba51f`, `0451ff9` | a `practiceResult` route a MOST befejezett gyakorlás eredményét mutatja: `PracticeResultTargetController` a kézfogás a navigációs sink (a tartós rögzítés BEFEJEZŐDÉSE ELŐTT tüzel) és az after-record hook között; fallback csak, ha a rögzítés elbukott vagy nincs mit mutatni | `practice_result_target_test.dart` T1–T4, V1–V4 |
 
-**Csapdák, amiket ez a sáv mért:** (1) a CI format-kapu a formázó „magas"
-alakját kéri — `test('hosszú név',\n () async {` NEM stabil, a `test(\n 'név',\n () async {` az; egy rövid hívás, ami 80 oszlopba belefér, EGY sorra megy
-(a konténerben nincs Dart SDK, a formázót kézzel kell emulálni); (2) a
-`prefer_initializing_formals` info a CI-n fatális → `// ignore:` per sor;
-(3) a `practice/public.dart` és a song_trainer `tempo_map/meter_map` ugyanazokat
-a neveket exportálja — a teszt csak az egyiket importálja; (4) a
-`CommunityPostRepository`/`CommunityClubRepository` szerződést 12 + 6 teszt-fake
-valósítja meg — új olvasó metódus a HTTP-implementációra megy (a `clubFeed`
-precedense), nem a szerződésre.
+**Nyitva maradt (indokkal, audit §5.2):** song-resume persistálás
+(`_InMemorySongResumeRepository` — a checkpoint app-újraindításkor elvész),
+a sebesség-slider (a controllernek nincs backing-rate művelete → őszintén
+tiltva), a **tutor felhő-gateway — DÖNTÉSSEL nyitva** (az adatleltár MAJOR-3
+szerint a transport bekötése azelőtt, hogy a `_previewTurnRequest` olvasná a
+`tutorConsentControllerProvider`-t, visszavont hozzájárulás mellett is a
+felhőbe küldene; `test/privacy/consent_enforcement_test.dart` pinneli), a
+poszt-szerkesztő média-csatolása (R-SEC-01 / R-PRIV-01), Setlist V2 + setlist-
+session (ADR 0471 D6 őr → E15-tulajdonos-kör), a tutor
+`PracticePlanPreviewScreen` előállítója, a hang-import folyamat, a dal-tréner
+ütemenkénti haladás-commitja, a Today-terv `onSwap`-ja, a `SongResultScreen`
+retry/next callbackjei, a klub-poszt `club_id` + `profilePosts` (a backendnek
+nincs útvonala) és a community média-feltöltés.
 
-**Nyitva (indokkal, audit §5.2):** Setlist V2 + setlist-session (ADR 0471 D6
-őr), song-resume persistálás, sebesség-slider (nincs rate-művelet), tutor
-felhő-gateway (előbb a hozzájárulás bekötése — adatleltár MAJOR-3), klub-poszt
-`club_id` / `profilePosts` / kihívás GET-ek (szerver-oldali felület hiányzik),
-hang-import, community média. **Végső mérce:** a felhasználó valós-gitár
-tesztje az APK-n.
+**CI-bizonyíték:** az írás pillanatában az utolsó mért teljes futás a
+`build-apk.yml` run 34039797808 (`e460cc3`): format, analyze, architecture,
+secrets, l10n és asset kapu ZÖLD, a teszt-kapu PIROS — „10759 tests passed,
+11 failed, 21 skipped"; a három bukó cella javítása ekkor folyamatban
+(`practice_a11y_audit_test` A1.5 setState-build közben a valódi
+jutalom-ledgeren át, `practice_session_after_record_test` A5 „ledger page
+cursor did not advance" a `ProfileProjector.rebuild`-ben,
+`bookmarks_controller_test` B1 aszinkron stream-kézbesítés). A sáv záró,
+teljesen zöld futása: **run `<<FINAL_RUN_ID>>`**. **Végső mérce:** a felhasználó
+valós-gitár tesztje a `development` APK-n — a szintetikus zöld nem „kész".
+
+**Csapdák, amiket ez a sáv mért (5 CI-iterációba kerültek):**
+- a `dart format` „tall" stílusa **minden 80 oszlopba beleférő hívást
+  egysorosra húz** — egy pontosan 80 karakteres `test('…', () async {` fejnek
+  EGY sorban kell lennie; a tördelt `test(\n  'név',\n  () async {` alak csak
+  akkor helyes, ha nem fér ki;
+- a `prefer_initializing_formals` **info a CI analyze-kapuján fatális** →
+  soronkénti `// ignore:`;
+- az `AsyncValue.copyWithPrevious` **csomag-belső** (analyzer-figyelmeztetés);
+- a remote konténerben **nincs Dart SDK**, ezért a formázóra az EGYETLEN
+  orákulum a CI — a formázó alakját kézzel kell emulálni, és a leletet
+  körönként a CI adja.
 
 ## ✅ JAVÍTÓ SÁV (ops/community-data-layer, PR #594) — „minden eddigi fejlesztés fusson az APK-ban": két kompozíciós hibaosztály zárva, teszt-APK kiadva — CI `build-apk.yml` run 34022459707 **zöld** a `4489307` HEAD-en (2026-09-06)
 

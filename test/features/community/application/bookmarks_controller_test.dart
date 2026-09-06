@@ -31,6 +31,12 @@ CommunityBookmark _row(int id, {bool tombstone = false}) {
   );
 }
 
+/// The controller publishes through a NON-sync broadcast
+/// `StreamController`, which delivers events asynchronously: right after an
+/// awaited controller call the listener has not run yet. Every assertion
+/// about `states` / `errors` waits for that delivery first.
+Future<void> _settle() => Future<void>.delayed(Duration.zero);
+
 final class _Script {
   final List<({Object cursor, int limit})> reads = [];
   final List<({ContentId postId, String idempotencyKey})> removes = [];
@@ -95,6 +101,7 @@ void main() {
     );
 
     await controller.load();
+    await _settle();
 
     expect(script.reads.single.cursor, const CursorPage.initial());
     expect(script.reads.single.limit, 2);
@@ -184,7 +191,7 @@ void main() {
     script.readError = const ConfigurationFailure();
 
     await controller.load();
-    await Future<void>.delayed(Duration.zero);
+    await _settle();
 
     expect(errors.single, isA<ConfigurationFailure>());
     expect(states, isEmpty);

@@ -96,18 +96,30 @@ final class PracticeSessionRecorderWithHooks
 
 /// The production hook list, in execution order:
 ///
-/// 1. refresh the V2 history views (L5),
+/// 1. award XP through the merged gamification chain (backlog §6.6),
 /// 2. credit the streak when the session qualifies (L4 — the V1 log is NOT
 ///    written: `aggregatedPracticeFeedProvider` already unions V1 + V2, so a
 ///    V1 copy would double-count the daily goal),
-/// 3. award XP through the merged gamification chain (backlog §6.6).
+/// 3. refresh the V2 history views LAST (L5).
+///
+/// The order is load-bearing, not cosmetic: the hooks run sequentially with
+/// `await`, and hook 3 is what RELEASES the result screen — it names the
+/// entry on `practiceResultTargetProvider` and invalidates
+/// `practiceHistoryV2ListProvider`, so `PracticeResultRoute` builds
+/// `PracticeResultScreen` as soon as the reloaded list carries the entry.
+/// `_RewardSection` then reads `practiceRewardForSessionProvider`, which is
+/// a one-shot ledger lookup cached for the container's lifetime. Refreshing
+/// first would let that lookup run BEFORE `_awardGamification` appended the
+/// ledger entry, and the session would show "no reward" forever. Awarding
+/// first means the ledger entry — and the invalidated profile / achievement
+/// / inbox projections — are already in place when the screen appears.
 final practiceSessionRecordedHooksProvider =
     Provider<List<PracticeSessionRecordedHook>>((ref) {
       return <PracticeSessionRecordedHook>[
-        (result, definition) async => _refreshHistoryViews(ref, result),
-        (result, definition) async => _creditStreak(ref, result),
         (result, definition) async =>
             _awardGamification(ref, result, definition),
+        (result, definition) async => _creditStreak(ref, result),
+        (result, definition) async => _refreshHistoryViews(ref, result),
       ];
     });
 
