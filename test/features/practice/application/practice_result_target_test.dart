@@ -64,7 +64,8 @@ void main() {
       controller = container.read(practiceResultTargetProvider.notifier);
     });
 
-    PracticeResultTarget state() => container.read(practiceResultTargetProvider);
+    PracticeResultTarget state() =>
+        container.read(practiceResultTargetProvider);
 
     test('T1 — navigate then record ends on the recorded session', () {
       controller.expect('s1');
