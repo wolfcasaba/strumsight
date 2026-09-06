@@ -1,17 +1,26 @@
 name: Publish test release
 
 # Egy ZÖLD build-apk.yml futás APK-artefaktumából prerelease-t készít, amelyben
-# az .apk tömörítetlenül, közvetlen letöltési linkkel szerepel. Kézi indítás.
-# A korábbi teszt-release-ek (pl. test-2026-09-06-4489307) ugyanezt a fejlesztő
-# gépéről, `gh`-val csinálták; ez a workflow ugyanazt a mintát futtatja a CI-ben.
+# az .apk tömörítetlenül, közvetlen letöltési linkkel szerepel.
+#
+# Indítás (két út):
+#   1. kérésfájl: commitolj egy `.github/release-requests/<run_id>.txt` fájlt
+#      (a tartalma opcionális megjegyzés a release-szöveghez) — a push
+#      elindítja a publikálást azon az ágon, ahol a workflow él. Ez a MÉRT
+#      működő út egy csak az ágon létező workflow-ra: a GitHub a
+#      `workflow_dispatch` triggert a default ág definíciójából olvassa, a
+#      push-triggert viszont a pusholt commitéból.
+#   2. workflow_dispatch (run_id + notes input) — akkor, ha a fájl a main-en van.
 #
 # Mércék:
-#   * csak `success` befejezésű build-apk.yml futásból publikál (a piros vagy
-#     megszakított futás artefaktuma nem kerülhet release-be),
+#   * csak `success` befejezésű build-apk.yml futásból publikál,
 #   * a címke `test-<UTC dátum>-<rövid head sha>`; létező címkére NEM ír rá,
 #   * a release a futás head-sha-jára mutat, prerelease, a leírásban a futás
-#     azonosítója és az APK SHA-256 ujjlenyomatának eleje.
+#     azonosítója és az APK SHA-256 ujjlenyomata.
 on:
+  push:
+    paths:
+      - '.github/release-requests/*.txt'
   workflow_dispatch:
     inputs:
       run_id:
@@ -34,18 +43,58 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Resolve the request (run_id + notes)
+        id: request
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+          INPUT_NOTES: ${{ inputs.notes }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            run_id="$INPUT_RUN_ID"
+            notes="$INPUT_NOTES"
+          else
+            if git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+              changed="$(git diff --name-only --diff-filter=AM "$BEFORE_SHA" "$AFTER_SHA" -- '.github/release-requests/*.txt')"
+            else
+              changed="$(git show --name-only --diff-filter=AM --format= "$AFTER_SHA" -- '.github/release-requests/*.txt')"
+            fi
+            request_file="$(printf '%s\n' "$changed" | grep -E '^\.github/release-requests/[0-9]+\.txt$' | tail -n 1 || true)"
+            if [[ -z "$request_file" ]]; then
+              echo "No new release request file in this push; nothing to publish."
+              printf 'skip=true\n' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            run_id="$(basename "$request_file" .txt)"
+            notes="$(cat "$request_file")"
+          fi
+          if ! [[ "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::run_id must be numeric, got: $run_id"
+            exit 1
+          fi
+          {
+            printf 'skip=false\n'
+            printf 'run_id=%s\n' "$run_id"
+            printf 'notes<<EOF_NOTES\n%s\nEOF_NOTES\n' "$notes"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Resolve the build run
+        if: steps.request.outputs.skip != 'true'
         id: run
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ inputs.run_id }}
+          RUN_ID: ${{ steps.request.outputs.run_id }}
         run: |
           set -euo pipefail
-          if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo "::error::run_id must be numeric, got: $RUN_ID"
-            exit 1
-          fi
           run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")"
           workflow_path="$(jq -r '.path' <<<"$run_json")"
           conclusion="$(jq -r '.conclusion' <<<"$run_json")"
@@ -73,10 +122,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Download the APK artifact
+        if: steps.request.outputs.skip != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ inputs.run_id }}
+          RUN_ID: ${{ steps.request.outputs.run_id }}
         run: |
           set -euo pipefail
           gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -p '*-development.apk' -D dist
@@ -88,11 +138,12 @@ jobs:
           printf 'apk=%s\n' "$apk" >> "$GITHUB_ENV"
 
       - name: Create the prerelease
+        if: steps.request.outputs.skip != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ inputs.run_id }}
-          NOTES: ${{ inputs.notes }}
+          RUN_ID: ${{ steps.request.outputs.run_id }}
+          NOTES: ${{ steps.request.outputs.notes }}
           HEAD_SHA: ${{ steps.run.outputs.head_sha }}
           SHORT_SHA: ${{ steps.run.outputs.short_sha }}
           HEAD_BRANCH: ${{ steps.run.outputs.head_branch }}
@@ -105,7 +156,7 @@ jobs:
           body="Fejlesztői teszt-build (development env: fiók + élő backend + community + preview-all).
 CI: build-apk.yml run ${RUN_ID} zöld. Ág: ${HEAD_BRANCH}. HEAD: ${HEAD_SHA}.
 APK: ${asset_name} (${size_mb} MB). SHA-256: ${sha256}."
-          if [[ -n "$NOTES" ]]; then
+          if [[ -n "${NOTES// /}" ]]; then
             body="${body}
 
 ${NOTES}"
