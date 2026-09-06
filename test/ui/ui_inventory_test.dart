@@ -23,7 +23,17 @@ void main() {
     // center (`lib/features/settings/screens/privacy_center_screen.dart`) and
     // the offline AI model manager, on a brand-new feature root
     // (`lib/features/offline_ai/screens/model_manager_screen.dart`): 94 -> 96.
-    expect(first.screenPaths, hasLength(96));
+    // 2026-09-06 (repair-plan WP-D review #4) — the population filter now
+    // accepts the `_screen_v2.dart` suffix, so the previously invisible
+    // `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart`
+    // is counted (it was never measured before, not newly added): 96 -> 97.
+    expect(first.screenPaths, hasLength(97));
+    expect(
+      first.screenPaths,
+      contains(
+        'lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart',
+      ),
+    );
     expect(
       first.screenPaths,
       contains('lib/features/settings/screens/privacy_center_screen.dart'),
