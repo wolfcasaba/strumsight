@@ -173,16 +173,15 @@ PracticeRewardHistorySnapshot practiceRewardHistorySnapshot({
 /// Whether the terminal reason describes practice that happened (as opposed
 /// to a session the user abandoned or one that failed to run).
 @visibleForTesting
-bool practiceSessionCountsAsPractice(
-  PracticeFinishReason reason,
-) => switch (reason) {
-  PracticeFinishReason.completedAllTargets ||
-  PracticeFinishReason.userFinished ||
-  PracticeFinishReason.timedOut => true,
-  PracticeFinishReason.cancelled ||
-  PracticeFinishReason.interrupted ||
-  PracticeFinishReason.failed => false,
-};
+bool practiceSessionCountsAsPractice(PracticeFinishReason reason) =>
+    switch (reason) {
+      PracticeFinishReason.completedAllTargets ||
+      PracticeFinishReason.userFinished ||
+      PracticeFinishReason.timedOut => true,
+      PracticeFinishReason.cancelled ||
+      PracticeFinishReason.interrupted ||
+      PracticeFinishReason.failed => false,
+    };
 
 Future<void> _refreshHistoryViews(Ref ref) async {
   if (!ref.mounted) return;
@@ -249,13 +248,12 @@ Future<void> _awardGamification(
   ref.invalidate(rewardInboxItemsProvider);
 }
 
-ActivityOutcome _activityOutcomeOf(
-  PracticeFinishReason reason,
-) => switch (reason) {
-  PracticeFinishReason.completedAllTargets ||
-  PracticeFinishReason.userFinished ||
-  PracticeFinishReason.timedOut => ActivityOutcome.completed,
-  PracticeFinishReason.cancelled ||
-  PracticeFinishReason.interrupted => ActivityOutcome.cancelled,
-  PracticeFinishReason.failed => ActivityOutcome.failed,
-};
+ActivityOutcome _activityOutcomeOf(PracticeFinishReason reason) =>
+    switch (reason) {
+      PracticeFinishReason.completedAllTargets ||
+      PracticeFinishReason.userFinished ||
+      PracticeFinishReason.timedOut => ActivityOutcome.completed,
+      PracticeFinishReason.cancelled ||
+      PracticeFinishReason.interrupted => ActivityOutcome.cancelled,
+      PracticeFinishReason.failed => ActivityOutcome.failed,
+    };
