@@ -1262,6 +1262,10 @@
   "analyzeMyRecording": "My recording",
   "analyzeNewRecording": "New recording",
   "analyzeNoChords": "No chords detected. Try again, a bit closer to the mic.",
+  "analyzeOpenDetailedAnalysis": "Detailed analysis",
+  "@analyzeOpenDetailedAnalysis": {
+    "description": "Analyze home entry point that opens the on-device analysis capture flow (/analysis/capture). Shown only when audioAnalysisV2Enabled is on, the same gate the router registers those routes under."
+  },
   "analyzeRecord": "Record",
   "analyzeRecordingHint": "Playing — StrumSight is listening…",
   "analyzeSave": "Save",
@@ -1523,6 +1527,10 @@
   "@communityClubChallengesDifficultyPrefix": {},
   "communityClubChallengesEmpty": "No active challenges.",
   "@communityClubChallengesEmpty": {},
+  "communityClubChallengesUnavailableBody": "This build cannot list a club's challenges — the server has no endpoint for it yet. This does not mean the club has none.",
+  "@communityClubChallengesUnavailableBody": {},
+  "communityClubChallengesUnavailableTitle": "Club challenges are not available yet",
+  "@communityClubChallengesUnavailableTitle": {},
   "communityClubDetailError": "The club couldn't load.",
   "@communityClubDetailError": {},
   "communityClubDetailJoin": "Request to join",

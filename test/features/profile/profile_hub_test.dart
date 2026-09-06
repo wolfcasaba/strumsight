@@ -3,10 +3,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/features/auth/model/auth_user.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/profile_hub/screens/profile_hub_screen.dart';
@@ -57,6 +59,50 @@ Widget _host({
     home: ProfileHubScreen(),
   ),
 );
+
+/// WP-D harness — a valós Profil hub egy MINIMÁLIS go_router alatt. Az
+/// AI Tanár helyén `STUB <path>` áll: a cella a NAVIGÁCIÓT méri, nem a
+/// tutor-képernyő tartalmát (annak saját widget-tesztje van).
+Widget _routerHost({required bool aiTutorEnabled}) {
+  final router = GoRouter(
+    initialLocation: AppRoutes.profileHome,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.profileHome,
+        builder: (_, _) => const ProfileHubScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.tutorHome,
+        builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      ...preferenceOverrides(),
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: false,
+            diagnosticsEnabled: false,
+            labModeAvailable: false,
+            aiTutorEnabled: aiTutorEnabled,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: router,
+    ),
+  );
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -140,6 +186,39 @@ void main() {
       );
       expect(
         find.text("Community features aren't available in this build yet."),
+        findsNothing,
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // WP-D (2026-09-06) — az AI Tanár belépési pontja.
+  //
+  // MÉRT hiány: a `/tutor/*` útvonalak regisztrálva voltak, de a
+  // szállított felületről SEMMI nem vezetett rájuk. A `/coach` héj-célpont
+  // csak az adaptív héj bekapcsolt állásán látszik; a Profil hub gombja
+  // attól függetlenül elérhető.
+  // -------------------------------------------------------------------
+  group('WP-D — the AI Tutor entry point', () {
+    testWidgets('aiTutorEnabled on: the entry navigates to /tutor/home', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_routerHost(aiTutorEnabled: true));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('profile-hub-tutor-entry')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('STUB ${AppRoutes.tutorHome}'), findsOneWidget);
+    });
+
+    testWidgets('aiTutorEnabled off: the entry is absent (the route is not '
+        'registered either)', (tester) async {
+      await tester.pumpWidget(_routerHost(aiTutorEnabled: false));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('profile-hub-tutor-entry')),
         findsNothing,
       );
     });

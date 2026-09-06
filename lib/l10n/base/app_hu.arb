@@ -38,6 +38,10 @@
   "analyzeRecordingHint": "Játék közben — a StrumSight figyel…",
   "analyzeAnalyzing": "Elemzés…",
   "analyzeNewRecording": "Új felvétel",
+  "analyzeOpenDetailedAnalysis": "Részletes elemzés",
+  "@analyzeOpenDetailedAnalysis": {
+    "description": "Analyze home entry point that opens the on-device analysis capture flow (/analysis/capture). Shown only when audioAnalysisV2Enabled is on, the same gate the router registers those routes under."
+  },
   "analyzeNoChords": "Nem érzékeltem akkordot. Próbáld újra, közelebb a mikrofonhoz.",
   "analyzeSave": "Mentés",
   "analyzeSaved": "Elmentve a Könyvtárba",

@@ -242,6 +242,12 @@ void main() {
           // `accountApiClientProvider`-t.
           'HttpCommunityFeedRepository',
           'HttpCommunityNotificationRepository',
+          // 2026-09-06: a poszt- és a klub-repository bekötésével KÉT
+          // további `ApiClient`-fogyasztó egress-útvonal keletkezett.
+          // Mindkettő az `account_api`-t lovagolja, ugyanazzal a
+          // provider-tovább-exportálással.
+          'HttpCommunityPostRepository',
+          'HttpCommunityClubRepository',
           'DiagnosticsUploader',
         ]),
       );

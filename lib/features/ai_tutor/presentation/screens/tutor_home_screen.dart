@@ -80,6 +80,36 @@ class TutorHomeScreen extends StatelessWidget {
                 label: l10n.aiTutorHomeStart,
                 onPressed: () => context.go(AppRoutes.tutorChat),
               ),
+              // A tutor három MELLÉK-képernyője (profil, adatvédelem,
+              // adatok) be volt kötve a routerbe, de a szállított felületről
+              // SEMMI nem vezetett hozzájuk — a Chat CTA volt az egyetlen
+              // kimenő él. Mindhárom `extra` nélkül épül fel, és mindhárom
+              // ugyanazon `aiTutorEnabled` kapu alatt van regisztrálva, mint
+              // ez a képernyő, tehát innen mindig regisztrált címre mutatnak.
+              const SizedBox(height: SsSpacing.space6),
+              SsButton(
+                key: const Key('tutorHomeProfileCta'),
+                variant: SsButtonVariant.secondary,
+                icon: Icons.person_outline,
+                label: l10n.tutorProfileTitle,
+                onPressed: () => context.go(AppRoutes.tutorProfile),
+              ),
+              const SizedBox(height: SsSpacing.space3),
+              SsButton(
+                key: const Key('tutorHomePrivacyCta'),
+                variant: SsButtonVariant.tertiary,
+                icon: Icons.privacy_tip_outlined,
+                label: l10n.tutorPrivacyTitle,
+                onPressed: () => context.go(AppRoutes.tutorPrivacy),
+              ),
+              const SizedBox(height: SsSpacing.space3),
+              SsButton(
+                key: const Key('tutorHomeDataCta'),
+                variant: SsButtonVariant.tertiary,
+                icon: Icons.folder_outlined,
+                label: l10n.tutorDataTitle,
+                onPressed: () => context.go(AppRoutes.tutorData),
+              ),
             ],
           ),
         ),

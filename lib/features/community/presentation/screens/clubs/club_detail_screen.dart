@@ -147,33 +147,52 @@ final clubPinnedProvider = FutureProvider.autoDispose
       return page.items;
     });
 
-/// A klub aktív kihívásai — **NINCS SZERVER-OLDALI VÉGPONTJA.**
+/// A Kihívások fül mért állapota.
+///
+/// Két, egymást kizáró eset — és a „nem tudjuk" NEM az üres lista egyik
+/// változata, hanem SAJÁT állapot. Ezért sealed típus, nem
+/// `List<...>?`: egy nullable lista hívási helyenként újra és újra
+/// eldönthetővé (és elfelejthetővé) tenné, hogy a `null` most „üres" vagy
+/// „ismeretlen" — a `switch` viszont fordítási hibát ad, ha egy jövőbeli
+/// hívó kifelejti a nem-elérhető ágat.
+sealed class ClubChallengesState {
+  const ClubChallengesState();
+}
+
+/// **NINCS SZERVER-OLDALI VÉGPONT.**
 ///
 /// A `backend/app/community/routers/challenges.py` öt útvonalat visz, és
 /// MIND írás (`POST` ×4, `DELETE` ×1): nincs olyan felület, ami egy klub
-/// kihívásait listázná. A provider ezért HIBÁT ad, és NEM üres listát: az
-/// üres lista azt ÁLLÍTANÁ, hogy ennek a klubnak nincs aktív kihívása,
-/// holott az igazság az, hogy nem tudjuk (`UNKNOWN > CONFIDENTLY WRONG`,
-/// a `feed_repository_impl.dart` `profilePosts` precedense).
+/// kihívásait listázná. A fül ezt KIMONDJA
+/// (`communityClubChallengesUnavailableTitle/Body`), és nem üres listát
+/// rajzol: az üres lista azt ÁLLÍTANÁ, hogy ennek a klubnak nincs aktív
+/// kihívása, holott az igazság az, hogy nem tudjuk
+/// (`UNKNOWN > CONFIDENTLY WRONG`, a `feed_repository_impl.dart`
+/// `profilePosts` precedense).
+final class ClubChallengesUnavailable extends ClubChallengesState {
+  const ClubChallengesUnavailable();
+}
+
+/// A szerver által ténylegesen visszaadott kihívás-sorok. Az ÜRES lista itt
+/// állítás: a klubnak nincs aktív kihívása.
+final class ClubChallengesLoaded extends ClubChallengesState {
+  const ClubChallengesLoaded(this.challenges);
+
+  final List<CommunityChallengeSummaryPlaceholder> challenges;
+}
+
+/// A klub aktív kihívásai.
 ///
-/// A fül a hiba-ágon a „nincs kihívás" szöveget rajzolja — a képernyőnek
-/// ma nincs külön „nem elérhető" állapota, és új ARB-kulcs nem tartozik
-/// ehhez a munkacsomaghoz. A HIBA-ÁLLAPOT viszont megmarad: a fül nem
-/// állít semmit az adatról, és egy jövőbeli, pontosabb üzenetnek van hova
-/// bekötnie.
+/// 2026-09-06-ig ez a provider `UnimplementedError`-t DOBOTT, és a fül a
+/// hiba-ágon a „nincs kihívás" szöveget rajzolta — vagyis a felhasználó egy
+/// hiányzó végpontot „ez a klub nem hirdetett kihívást" üzenetként olvasott.
+/// A hiányt most a VISSZATÉRÉSI ÉRTÉK viszi: nem kivétel (mert nem hiba
+/// történt — a képesség hiányzik), és nem üres lista (mert az hazugság
+/// lenne).
 final clubChallengesProvider = FutureProvider.autoDispose
-    .family<List<CommunityChallengeSummaryPlaceholder>, ContentId>((
-      ref,
-      clubId,
-    ) async {
-      throw UnimplementedError(
-        'A klub-kihívások listájának nincs szerver-oldali végpontja: a '
-        'challenges.py minden útvonala írás (POST/DELETE), GET nincs '
-        'közöttük. Üres listát szándékosan NEM adunk — az azt állítaná, '
-        'hogy ennek a klubnak nincs kihívása, holott az igazság az, hogy '
-        'nem tudjuk.',
-      );
-    });
+    .family<ClubChallengesState, ContentId>(
+      (ref, clubId) async => const ClubChallengesUnavailable(),
+    );
 
 /// A klub-feed és a kitűzöttek egyoldalas lapmérete. A szerver 100-nál
 /// vág; a fül ennél kevesebbet kér, mert nem lapoz.
@@ -589,24 +608,34 @@ class _ClubChallengesTab extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       children: <Widget>[
         ...challengesAsync.when(
-          data: (challenges) => challenges.isEmpty
-              ? <Widget>[Text(localizations.communityClubChallengesEmpty)]
-              : <Widget>[
-                  for (final c in challenges)
-                    ListTile(
-                      title: Text(
-                        '${c.metric} • '
-                        '${localizations.communityClubChallengesDifficultyPrefix} '
-                        '${c.difficulty}',
-                      ),
-                      subtitle: Text(
-                        '${c.startsAt.toIso8601String()} → ${c.endsAt.toIso8601String()}',
-                      ),
-                    ),
-                ],
+          data: (state) => switch (state) {
+            // A hiányzó képesség kimondva — NEM „nincs kihívás".
+            ClubChallengesUnavailable() => <Widget>[
+              _ClubChallengesUnavailableNotice(localizations: localizations),
+            ],
+            ClubChallengesLoaded(:final challenges) =>
+              challenges.isEmpty
+                  ? <Widget>[Text(localizations.communityClubChallengesEmpty)]
+                  : <Widget>[
+                      for (final c in challenges)
+                        ListTile(
+                          title: Text(
+                            '${c.metric} • '
+                            '${localizations.communityClubChallengesDifficultyPrefix} '
+                            '${c.difficulty}',
+                          ),
+                          subtitle: Text(
+                            '${c.startsAt.toIso8601String()} → ${c.endsAt.toIso8601String()}',
+                          ),
+                        ),
+                    ],
+          },
           loading: () => const <Widget>[CircularProgressIndicator()],
+          // A provider ma nem tud hibázni, de a fül nem hazudik akkor sem,
+          // ha egy jövőbeli lekérdezés elszáll: ugyanaz a „nem tudjuk"
+          // üzenet megy ki, nem az „üres" állítás.
           error: (_, _) => <Widget>[
-            Text(localizations.communityClubChallengesEmpty),
+            _ClubChallengesUnavailableNotice(localizations: localizations),
           ],
         ),
       ],
@@ -720,6 +749,36 @@ class _ErrorView extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A „klub-kihívások még nem elérhetők" állapot — cím + magyarázat.
+///
+/// Két külön ARB-kulcs (cím + törzs), mert a felhasználónak nem elég azt
+/// látnia, hogy valami nincs: azt is meg kell tudnia, hogy ez a felület
+/// hiánya, nem az ő klubjáé.
+class _ClubChallengesUnavailableNotice extends StatelessWidget {
+  const _ClubChallengesUnavailableNotice({required this.localizations});
+
+  final AppLocalizations localizations;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      child: Column(
+        key: const Key('club-challenges-unavailable'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            localizations.communityClubChallengesUnavailableTitle,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(localizations.communityClubChallengesUnavailableBody),
+        ],
+      ),
     );
   }
 }

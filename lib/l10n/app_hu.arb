@@ -1255,6 +1255,10 @@
   "analyzeMyRecording": "A felvételem",
   "analyzeNewRecording": "Új felvétel",
   "analyzeNoChords": "Nem érzékeltem akkordot. Próbáld újra, közelebb a mikrofonhoz.",
+  "analyzeOpenDetailedAnalysis": "Részletes elemzés",
+  "@analyzeOpenDetailedAnalysis": {
+    "description": "Analyze home entry point that opens the on-device analysis capture flow (/analysis/capture). Shown only when audioAnalysisV2Enabled is on, the same gate the router registers those routes under."
+  },
   "analyzeRecord": "Felvétel",
   "analyzeRecordingHint": "Játék közben — a StrumSight figyel…",
   "analyzeSave": "Mentés",
@@ -1495,6 +1499,10 @@
   "@communityClubChallengesDifficultyPrefix": {},
   "communityClubChallengesEmpty": "Nincs aktív kihívás.",
   "@communityClubChallengesEmpty": {},
+  "communityClubChallengesUnavailableBody": "Ez a build nem tudja listázni egy klub kihívásait — a szervernek még nincs hozzá végpontja. Ez NEM azt jelenti, hogy a klubnak nincs kihívása.",
+  "@communityClubChallengesUnavailableBody": {},
+  "communityClubChallengesUnavailableTitle": "A klub kihívásai még nem érhetők el",
+  "@communityClubChallengesUnavailableTitle": {},
   "communityClubDetailError": "A klub nem tölthető be.",
   "@communityClubDetailError": {},
   "communityClubDetailJoin": "Csatlakozás kérése",

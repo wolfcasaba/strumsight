@@ -5032,15 +5032,16 @@ List<Override> _r34ClubDetailOverrides() {
       (ref, clubId) async => const <CommunityPost>[],
     ),
     clubChallengesProvider.overrideWith(
-      (ref, clubId) async => <CommunityChallengeSummaryPlaceholder>[
-        CommunityChallengeSummaryPlaceholder(
-          challengePublicId: 'golden-club-challenge-1',
-          metric: 'score',
-          difficulty: 2,
-          startsAt: DateTime.utc(2026, 8, 20),
-          endsAt: DateTime.utc(2026, 8, 27),
-        ),
-      ],
+      (ref, clubId) async =>
+          ClubChallengesLoaded(<CommunityChallengeSummaryPlaceholder>[
+            CommunityChallengeSummaryPlaceholder(
+              challengePublicId: 'golden-club-challenge-1',
+              metric: 'score',
+              difficulty: 2,
+              startsAt: DateTime.utc(2026, 8, 20),
+              endsAt: DateTime.utc(2026, 8, 27),
+            ),
+          ]),
     ),
   ];
 }

@@ -38,6 +38,10 @@
   "analyzeRecordingHint": "Playing — StrumSight is listening…",
   "analyzeAnalyzing": "Analysing…",
   "analyzeNewRecording": "New recording",
+  "analyzeOpenDetailedAnalysis": "Detailed analysis",
+  "@analyzeOpenDetailedAnalysis": {
+    "description": "Analyze home entry point that opens the on-device analysis capture flow (/analysis/capture). Shown only when audioAnalysisV2Enabled is on, the same gate the router registers those routes under."
+  },
   "analyzeNoChords": "No chords detected. Try again, a bit closer to the mic.",
   "analyzeSave": "Save",
   "analyzeSaved": "Saved to Library",
