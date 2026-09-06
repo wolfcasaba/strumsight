@@ -16,6 +16,12 @@ import '../domain/library_item_source.dart';
 /// Each wraps an existing repository provider — no new storage is opened
 /// here (§5.4).
 final libraryV2SourcesProvider = Provider<List<LibraryItemSource>>((ref) {
+  // Javító sáv 2026-09-06 (E16-R05 L5): a recorded practice session
+  // invalidates `practiceHistoryV2ListProvider`; depending on it here makes
+  // the sources — and through them `LibraryV2Controller.build` — reload in
+  // the same container instead of after an app restart. The practice source
+  // below still reads the repository itself so its failure path is kept.
+  ref.watch(practiceHistoryV2ListProvider);
   return [
     AnalysisItemSource(ref.watch(analysisRepositoryProvider)),
     PracticeItemSource(() async {

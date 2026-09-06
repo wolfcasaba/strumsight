@@ -36,7 +36,7 @@ class TodayHubScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final snapshot = ref.watch(todayPlanSnapshotProvider);
     final streak = ref.watch(streakProvider);
-    final stats = PracticeStats(ref.watch(practiceLogProvider));
+    final stats = ref.watch(aggregatedPracticeStatsProvider);
     final goalMinutes = ref.watch(dailyGoalProvider);
     final nowDate = now ?? DateTime.now();
     final today = StreakLogic.epochDayOf(nowDate);

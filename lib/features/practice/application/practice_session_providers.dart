@@ -45,6 +45,7 @@ import '../domain/repository/practice_history_repository.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_target_compiler.dart';
 import 'practice_observation_gateway.dart';
+import 'practice_session_after_record.dart';
 import 'practice_session_clock.dart';
 import 'practice_session_controller.dart';
 import 'practice_tick_source.dart';
@@ -242,21 +243,30 @@ final practiceSessionControllerProvider = Provider.autoDispose
           (cfg) => cfg.flags.practiceDetailedHistoryEnabled,
         ),
       );
-      final recorder = PracticeHistoryRecorder(
-        repository: repository,
-        mapperFactory: () => PracticeSessionResultHistoryMapper(
-          now: DateTime.now,
-          detailEnabled: detailed,
-          modeCode: inputs.definition.mode.code,
-          sourceCode: inputs.definition.source.code,
-          definitionId: inputs.definition.id,
-          displayTitle: inputs.definition.displayTitle ?? '',
-          skillTags: inputs.definition.skillTags,
+      final logger = ref.watch(practiceSessionLoggerProvider);
+      // Javító sáv 2026-09-06: the durable write is unchanged; the hooks
+      // (history-view refresh, streak credit, XP) run only after it
+      // succeeded, and never fail the session
+      // (`practice_session_after_record.dart`).
+      final recorder = PracticeSessionRecorderWithHooks(
+        inner: PracticeHistoryRecorder(
+          repository: repository,
+          mapperFactory: () => PracticeSessionResultHistoryMapper(
+            now: DateTime.now,
+            detailEnabled: detailed,
+            modeCode: inputs.definition.mode.code,
+            sourceCode: inputs.definition.source.code,
+            definitionId: inputs.definition.id,
+            displayTitle: inputs.definition.displayTitle ?? '',
+            skillTags: inputs.definition.skillTags,
+          ),
         ),
+        definition: inputs.definition,
+        hooks: ref.watch(practiceSessionRecordedHooksProvider),
+        logger: logger,
       );
       final clock = ref.watch(practiceSessionClockProvider);
       final tickSource = ref.watch(practiceTickSourceProvider);
-      final logger = ref.watch(practiceSessionLoggerProvider);
       final permissions = ref.watch(practiceMicrophonePermissionProvider);
       final observationConfig = ref.watch(practiceObservationConfigProvider);
       final sessionIdFactory = ref.watch(practiceSessionIdFactoryProvider);

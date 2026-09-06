@@ -13,30 +13,14 @@ import '../../data/local_practice_history_repository.dart';
 import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_mode.dart';
 
-/// Production-default [RewardLedgerRepository] until a later round wires the
-/// app's real gamification composition root into the practice screens (ADR
-/// 0283 §Döntés 4). [GamificationPracticeAdapter] is never invoked in
-/// production today (dual-write defaults to
-/// [GamificationDualWriteMode.off]), so an empty ledger is the honest
-/// current state — not a stand-in estimate.
-final class _NoopRewardLedgerRepository implements RewardLedgerRepository {
-  const _NoopRewardLedgerRepository();
-
-  @override
-  Future<bool> appendIfAbsent(RewardLedgerEntry entry) async => false;
-
-  @override
-  bool hasProcessedEvent(String sourceEventId) => false;
-
-  @override
-  RewardLedgerPage readPage({required int limit, String? cursor}) =>
-      RewardLedgerPage(entries: const <RewardLedgerEntry>[], nextCursor: null);
-}
-
-/// Seam the result screen reads the reward ledger through — overridden by
-/// tests (and by a future round's real composition root).
+/// The reward ledger the result screen reads — the gamification feature's
+/// own composition (`gamificationRewardLedgerRepositoryProvider`, ADR 0496
+/// §1). Until the javító sáv 2026-09-06 this defaulted to an always-empty
+/// ledger, so the screen could never show a reward; the V2 session now
+/// writes the ledger through `practice_session_after_record.dart`, and the
+/// screen reads the SAME instance. Tests override this seam.
 final rewardLedgerRepositoryProvider = Provider<RewardLedgerRepository>(
-  (ref) => const _NoopRewardLedgerRepository(),
+  (ref) => ref.watch(gamificationRewardLedgerRepositoryProvider),
 );
 
 /// Ledger pages scanned per lookup. Bounded so a lookup can never loop

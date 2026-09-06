@@ -27,7 +27,7 @@ class ProfileHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final streak = ref.watch(streakProvider);
-    final stats = PracticeStats(ref.watch(practiceLogProvider));
+    final stats = ref.watch(aggregatedPracticeStatsProvider);
     final communityEnabled = ref
         .watch(appConfigProvider)
         .flags

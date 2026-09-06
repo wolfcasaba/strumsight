@@ -3,11 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/storage/storage_providers.dart';
 import '../application/achievement_evaluator.dart';
+import '../application/activity_event_ingestor.dart';
 import '../application/daily_challenge_service.dart'
     show DailyChallengeInstance;
+import '../application/profile_projector.dart';
 import '../application/streak_service.dart';
+import '../data/activity_outbox_repository.dart';
 import '../data/gamification_repository.dart';
 import '../data/gamification_storage_schema.dart';
+import '../data/local_activity_outbox_repository.dart';
 import '../data/local_gamification_repository.dart';
 import '../data/local_reward_ledger_repository.dart';
 import '../data/migration/legacy_streak_migrator.dart';
@@ -46,6 +50,41 @@ final gamificationRewardLedgerRepositoryProvider =
         logger: ref.watch(appLoggerProvider),
       );
     });
+
+/// The bounded local outbox between a feature's session save and the
+/// append-only ledger (javító sáv 2026-09-06 — until then
+/// `ActivityEventIngestor` had zero callers in `lib/`, E16-R01 backlog §6.6).
+/// The bounds mirror the integration fixtures: a full queue quarantines the
+/// oldest record, it never deletes it (A7).
+final activityOutboxRepositoryProvider = Provider<ActivityOutboxRepository>((
+  ref,
+) {
+  return LocalActivityOutboxRepository(
+    ledger: ref.watch(gamificationRewardLedgerRepositoryProvider),
+    store: ref.watch(keyValueStoreProvider),
+    logger: ref.watch(appLoggerProvider),
+    capacity: 64,
+    maxAttempts: 3,
+  );
+});
+
+/// The feature-facing entry point of the reward chain: enqueue a saved
+/// activity, then `drain()` into the ledger.
+final activityEventIngestorProvider = Provider<ActivityEventIngestor>((ref) {
+  return ActivityEventIngestor(
+    outbox: ref.watch(activityOutboxRepositoryProvider),
+    logger: ref.watch(appLoggerProvider),
+  );
+});
+
+/// Rebuilds the profile (total XP + level) from the ledger, the only source
+/// the profile snapshot may be written from.
+final gamificationProfileProjectorProvider = Provider<ProfileProjector>((ref) {
+  return ProfileProjector(
+    curve: ref.watch(levelCurveProvider),
+    ledger: ref.watch(gamificationRewardLedgerRepositoryProvider),
+  );
+});
 
 /// Single source of truth for level thresholds (moved verbatim out of the
 /// router — ADR 0496 §1 forbids a baked `LevelCurve` living in the router).
