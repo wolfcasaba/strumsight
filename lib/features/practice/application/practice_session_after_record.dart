@@ -103,10 +103,12 @@ final class PracticeSessionRecorderWithHooks
 /// 3. refresh the V2 history views LAST (L5).
 ///
 /// The order is load-bearing, not cosmetic: the hooks run sequentially with
-/// `await`, and hook 3 is what RELEASES the result screen — it names the
-/// entry on `practiceResultTargetProvider` and invalidates
-/// `practiceHistoryV2ListProvider`, so `PracticeResultRoute` builds
-/// `PracticeResultScreen` as soon as the reloaded list carries the entry.
+/// `await`, and hook 3 is what RELEASES the result screen — it invalidates
+/// AND re-loads `practiceHistoryV2ListProvider` and only then names the
+/// entry on `practiceResultTargetProvider`, so `PracticeResultRoute` builds
+/// `PracticeResultScreen` against a list that already carries the entry
+/// (the internal order of hook 3 is itself load-bearing — see
+/// `_refreshHistoryViews`).
 /// `_RewardSection` then reads `practiceRewardForSessionProvider`, which is
 /// a one-shot ledger lookup cached for the container's lifetime. Refreshing
 /// first would let that lookup run BEFORE `_awardGamification` appended the
@@ -205,15 +207,45 @@ bool practiceSessionCountsAsPractice(PracticeFinishReason reason) =>
       PracticeFinishReason.failed => false,
     };
 
+/// Re-loads the V2 history views, then releases the result route.
+///
+/// The step ORDER is load-bearing, not cosmetic (CI 2026-09-06:
+/// "setState() or markNeedsBuild() called during build", thrown while
+/// `PracticeResultRoute` was building):
+///
+/// 1. invalidate `practiceHistoryV2ListProvider` FIRST. It is a plain,
+///    non-autoDispose `FutureProvider`, so an invalidation that no widget
+///    is watching leaves it merely DIRTY — nothing re-loads it eagerly.
+/// 2. force that re-load HERE, from this async hook, by awaiting `.future`.
+///    Flushing the dirty provider notifies its PROVIDER-level listeners
+///    (`practiceProgressFeedProvider` → `aggregatedPracticeFeedProvider`,
+///    `libraryV2SourcesProvider`), each of which invalidates itself and
+///    makes the `UncontrolledProviderScope` schedule a refresh through
+///    `setState`. Started from this hook that is an ordinary asynchronous
+///    notification. Left to the route's own
+///    `ref.watch(practiceHistoryV2ListProvider)` the very same flush would
+///    happen INSIDE `PracticeResultRoute.build` — a `setState` during a
+///    descendant's build, which Flutter forbids.
+/// 3. only THEN name the entry, so the rebuild `recorded` triggers reads an
+///    already-flushed, clean provider. `recorded` staying `false` until
+///    here is what keeps the route on its spinner (never on "unavailable")
+///    while the list re-loads — see `resolvePracticeResultView`.
+///
+/// The `finally` swallows nothing: a failure still propagates to
+/// [PracticeSessionRecorderWithHooks]'s logger. It only keeps step 3
+/// unconditional, so a container WITHOUT the composition root (a widget
+/// test with no `keyValueStoreProvider` override, where reading the list
+/// throws) still releases the route instead of stranding it on the spinner.
 Future<void> _refreshHistoryViews(Ref ref, PracticeSessionResult result) async {
   if (!ref.mounted) return;
-  // The result route may already be waiting for THIS entry (the navigation
-  // sink fires before the record completes) — name it before the list
-  // re-loads, so the route never settles on "unavailable" in between.
-  ref.read(practiceResultTargetProvider.notifier).recorded(result.id);
-  // A later read re-loads the repository the recorder just wrote to; every
-  // dependent (Progress dashboard, Today ring, Library sources) rebuilds.
   ref.invalidate(practiceHistoryV2ListProvider);
+  try {
+    await ref.read(practiceHistoryV2ListProvider.future);
+  } finally {
+    if (ref.mounted) {
+      ref.read(practiceResultTargetProvider.notifier).recorded(result.id);
+    }
+  }
 }
 
 Future<void> _creditStreak(Ref ref, PracticeSessionResult result) async {

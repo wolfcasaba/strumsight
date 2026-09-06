@@ -114,20 +114,36 @@ class _Header extends StatelessWidget {
           style: typography.titleLarge.copyWith(color: colors.textPrimary),
         ),
         const SizedBox(height: SsSpacing.space1),
-        Row(
+        // A `Row` here overflowed at large text scales (CI 2026-09-06,
+        // phone viewport 412x915: en/2.0 by 68px, hu/1.5 by 48px, hu/2.0
+        // by more). A non-flexible child of a `Row` is laid out with an
+        // UNBOUNDED main-axis constraint, so `_Badge` measured its whole
+        // single-line intrinsic width — wider than the viewport on its own
+        // — while the `Flexible` reason label was squeezed to nothing and
+        // could not absorb any of it.
+        //
+        // `Wrap` bounds every child to the available width and moves the
+        // badge onto its own run instead of overflowing, and the badge's
+        // own label then soft-wraps inside the pill. At textScale 1.0 —
+        // where the label and the badge fit on one line — a `Wrap` run is
+        // laid out exactly like this `Row` was: children start-aligned from
+        // x = 0, `spacing` between them (the removed `SizedBox`), centred
+        // on the cross axis. The `practice_result` goldens (which fixture a
+        // `completedAllTargets` entry, i.e. no badge at all) therefore do
+        // not move.
+        Wrap(
+          spacing: SsSpacing.space2,
+          runSpacing: SsSpacing.space1,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Flexible(
-              child: Text(
-                _finishReasonLabel(l10n, entry.finishReasonCode),
-                style: typography.bodyMedium.copyWith(
-                  color: colors.textSecondary,
-                ),
+            Text(
+              _finishReasonLabel(l10n, entry.finishReasonCode),
+              style: typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
               ),
             ),
-            if (practiceResultIsPartial(entry)) ...[
-              const SizedBox(width: SsSpacing.space2),
+            if (practiceResultIsPartial(entry))
               _Badge(label: l10n.practiceResultPartialBadge),
-            ],
           ],
         ),
       ],
