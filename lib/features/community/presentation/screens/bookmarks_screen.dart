@@ -44,9 +44,16 @@ import 'package:go_router/go_router.dart';
 import 'package:strumsight/core/design_system/public.dart';
 
 import '../../../../app/routing/app_route.dart';
+import '../../../../core/foundation/app_failure.dart';
+import '../../application/controllers/bookmarks_controller.dart';
+import '../../data/repositories/post_repository_impl.dart';
+import '../../domain/entities/community_bookmark.dart';
+import '../../domain/repositories/community_page.dart';
 import '../../domain/value_objects/content_id.dart';
-import '../../domain/value_objects/cursor_page.dart';
 import '../widgets/community_theme_scope.dart';
+
+export '../../application/controllers/bookmarks_controller.dart'
+    show BookmarkRow, BookmarksController, BookmarksState;
 
 // ---------------------------------------------------------------------------
 // L10n placeholders — to be lifted into app_en.arb / app_hu.arb in a
@@ -64,131 +71,59 @@ const String _l10nBookmarkLoadMore = 'Load more';
 const String _l10nBookmarksErrorTitle = "The bookmarks couldn't load.";
 
 // ---------------------------------------------------------------------------
-// Domain shapes — local-only, the screen does NOT import the
-// backend router (the wire contract is the controller's job).
+// Controller wiring (javító sáv R5, 2026-09-06).
+//
+// The row / state / controller shapes moved to
+// `application/controllers/bookmarks_controller.dart` together with the
+// production controller; they are re-exported here so the golden fixtures
+// keep their historical import. Until this round the default controller
+// was a no-op and the state stream never emitted — the route sat on its
+// loading spinner forever.
 // ---------------------------------------------------------------------------
 
-/// One row in the caller's bookmark list. The ``is_tombstone``
-/// flag is the §A3 surface the screen reads to switch into the
-/// placeholder render — the post side is gone, the bookmark
-/// stays.
-@immutable
-class BookmarkRow {
-  const BookmarkRow({
-    required this.id,
-    required this.postId,
-    required this.createdAt,
-    required this.isTombstone,
-  });
-
-  /// The internal row id (the cursor key).
-  final int id;
-  final ContentId postId;
-  final DateTime createdAt;
-
-  /// ``true`` when the joined post is soft-deleted or
-  /// moderation-removed. The screen renders the placeholder
-  /// card; the bookmark row stays.
-  final bool isTombstone;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is BookmarkRow &&
-          other.id == id &&
-          other.postId == postId &&
-          other.createdAt == createdAt &&
-          other.isTombstone == isTombstone);
-
-  @override
-  int get hashCode => Object.hash(id, postId, createdAt, isTombstone);
-}
-
-// ---------------------------------------------------------------------------
-// State — the controller's snapshot.
-// ---------------------------------------------------------------------------
-
-/// The single Bookmarks-screen state (loading / loaded / error).
-///
-/// Mirrors the Kör 14 feed / Kör 16 comment controllers — an
-/// ``AsyncValue`` carrying the page items, the next-cursor key,
-/// and the load-more / pending flags. The screen reactively
-/// rebuilds on every state transition.
-@immutable
-class BookmarksState {
-  const BookmarksState({
-    required this.rows,
-    required this.nextCursor,
-    required this.isLoadingMore,
-    required this.isRemoving,
-  });
-
-  const BookmarksState.initial()
-    : rows = const <BookmarkRow>[],
-      nextCursor = const CursorPage.haltedAfterRequest(),
-      isLoadingMore = false,
-      isRemoving = false;
-
-  final List<BookmarkRow> rows;
-  final CursorPage nextCursor;
-  final bool isLoadingMore;
-  final bool isRemoving;
-}
-
-// ---------------------------------------------------------------------------
-// Controller interface — the screen does NOT couple to a
-// concrete repository. The test injects a fake controller; the
-// production wire is the responsibility of a future round that
-// owns the full Community / backend integration surface.
-// ---------------------------------------------------------------------------
-
-/// The contract the screen expects from the controller. The
-/// production implementation reads from
-/// ``CommunityPostRepository``; the test wires an in-memory
-/// fake. The screen is reactive — it watches ``bookmarksProvider``
-/// and rebuilds on every state transition.
-abstract class BookmarksController {
-  BookmarksState get state;
-  Stream<BookmarksState> get stream;
-
-  /// Initial load. Resets the list to the first page.
-  Future<void> load();
-
-  /// Load the next page (cursor-paginated, D4 keyset).
-  Future<void> loadMore();
-
-  /// Remove the bookmark with the given row id. Idempotent: a
-  /// second call is a no-op (the A1 invariant the Kör 16
-  /// comment controller respects).
-  Future<void> remove({required int bookmarkId});
-}
-
-/// The reactive provider the screen watches. The default
-/// factory returns an in-memory fake — the test overrides the
-/// provider via Riverpod's ``overrideWith`` (the same seam the
-/// Kör 14 / Kör 16 tests use).
+/// The reactive provider the screen watches — the production controller's
+/// state stream. Tests override it with a scripted stream (the same seam
+/// the Kör 14 / Kör 16 tests use).
 final bookmarksProvider = StreamProvider<BookmarksState>(
-  (ref) => const Stream<BookmarksState>.empty(),
+  (ref) => ref.watch(bookmarksControllerProvider).stream,
 );
 
-/// The controller factory — production wires the real
-/// repository here; tests inject a fake.
-final bookmarksControllerProvider = Provider<BookmarksController>(
-  (ref) => _NoopBookmarksController(),
-);
+/// The controller factory — production pages through
+/// `GET /community/bookmarks` and removes through the existing bookmark
+/// toggle (`DELETE /community/bookmarks/{post_id}`). Without an account
+/// layer the read fails with `ConfigurationFailure`, which the screen
+/// renders as its error card — the honest answer, not an empty list.
+final bookmarksControllerProvider = Provider<BookmarksController>((ref) {
+  final repository = ref.watch(communityPostRepositoryProvider);
 
-class _NoopBookmarksController implements BookmarksController {
-  @override
-  BookmarksState get state => const BookmarksState.initial();
-  @override
-  Stream<BookmarksState> get stream => const Stream<BookmarksState>.empty();
-  @override
-  Future<void> load() async {}
-  @override
-  Future<void> loadMore() async {}
-  @override
-  Future<void> remove({required int bookmarkId}) async {}
-}
+  Future<CommunityPage<CommunityBookmark>> readPage({
+    required Object cursor,
+    required int limit,
+  }) {
+    if (repository is! HttpCommunityPostRepository) {
+      throw const ConfigurationFailure();
+    }
+    return repository.listBookmarks(cursor: cursor, limit: limit);
+  }
+
+  Future<void> removeBookmark({
+    required ContentId postId,
+    required String idempotencyKey,
+  }) {
+    return repository.setBookmark(
+      postId: postId,
+      bookmarked: false,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  final controller = RepositoryBookmarksController(
+    readPage: readPage,
+    removeBookmark: removeBookmark,
+  );
+  ref.onDispose(controller.dispose);
+  return controller;
+});
 
 // ---------------------------------------------------------------------------
 // The screen widget.

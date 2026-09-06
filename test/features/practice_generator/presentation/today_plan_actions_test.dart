@@ -80,28 +80,32 @@ void main() {
       expect(await activePlan(container), isNull);
     });
 
-    test('A4 — shorten with nothing pending leaves the revision alone',
-        () async {
-      final container = buildContainer();
-      final allSkipped = plan().copyWith(
-        days: <PracticeDay>[
-          day().replaceContent(
-            blocks: <PracticeBlock>[block(status: PracticeItemStatus.skipped)],
-          ),
-        ],
-      );
-      await container
-          .read(localPracticePlanRepositoryProvider)
-          .activate(allSkipped);
+    test(
+      'A4 — shorten with nothing pending leaves the revision alone',
+      () async {
+        final container = buildContainer();
+        final allSkipped = plan().copyWith(
+          days: <PracticeDay>[
+            day().replaceContent(
+              blocks: <PracticeBlock>[
+                block(status: PracticeItemStatus.skipped),
+              ],
+            ),
+          ],
+        );
+        await container
+            .read(localPracticePlanRepositoryProvider)
+            .activate(allSkipped);
 
-      final outcome = await container
-          .read(todayPlanActionsProvider)
-          .apply(TodayPlanAction.shorten);
+        final outcome = await container
+            .read(todayPlanActionsProvider)
+            .apply(TodayPlanAction.shorten);
 
-      expect(outcome, TodayPlanActionOutcome.nothingToChange);
-      final stored = (await activePlan(container))!;
-      expect(stored.activeRevisionId, RevisionId('revision.1'));
-    });
+        expect(outcome, TodayPlanActionOutcome.nothingToChange);
+        final stored = (await activePlan(container))!;
+        expect(stored.activeRevisionId, RevisionId('revision.1'));
+      },
+    );
   });
 
   test('the repository round-trips the fixture plan (guards the fixtures '

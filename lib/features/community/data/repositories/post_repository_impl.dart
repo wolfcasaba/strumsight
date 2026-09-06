@@ -77,6 +77,7 @@ import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../features/auth/public.dart';
+import '../../domain/entities/community_bookmark.dart';
 import '../../domain/entities/community_comment.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
@@ -330,6 +331,33 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
         : await _client.delete(path);
     return switch (result) {
       Success() => null,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  /// A néző mentett bejegyzései — `GET /community/bookmarks` (javító sáv
+  /// R5, 2026-09-06).
+  ///
+  /// SZÁNDÉKOSAN nem része a `CommunityPostRepository` szerződésnek (a
+  /// `clubFeed` precedense): a szerződést tizenkét teszt-fake valósítja
+  /// meg, egy új absztrakt metódus mindet eltörné, miközben a lista
+  /// egyetlen fogyasztója a könyvjelző-képernyő vezérlője. A végpont a
+  /// `limit` nevű lapméretet olvassa (NEM `page_size`-t, mint a komment-
+  /// lista) — egy `page_size` itt némán eldobott paraméter volna.
+  Future<CommunityPage<CommunityBookmark>> listBookmarks({
+    required Object cursor,
+    required int limit,
+  }) async {
+    final result = await _client.getJson<CommunityPage<CommunityBookmark>>(
+      '/community/bookmarks',
+      queryParameters: <String, Object?>{
+        'limit': limit,
+        'cursor': communityCursorQueryValue(cursor),
+      },
+      decode: decodeCommunityBookmarkPage,
+    );
+    return switch (result) {
+      Success(:final value) => value,
       Failure(:final error) => throw error,
     };
   }

@@ -510,7 +510,7 @@ class _Body extends ConsumerWidget {
             children: <Widget>[
               _ClubFeedTab(clubId: clubId, localizations: localizations),
               _ClubChallengesTab(clubId: clubId, localizations: localizations),
-              _ClubMembersTab(localizations: localizations),
+              _ClubMembersTab(clubId: clubId, localizations: localizations),
               _ClubAboutTab(club: club, localizations: localizations),
             ],
           ),
@@ -647,24 +647,52 @@ class _ClubChallengesTab extends ConsumerWidget {
 /// surface reuses the ``ClubMemberManagementScreen`` push from
 /// the Kör 24 detail screen.
 class _ClubMembersTab extends ConsumerWidget {
-  const _ClubMembersTab({required this.localizations});
+  const _ClubMembersTab({required this.clubId, required this.localizations});
 
+  final ContentId clubId;
   final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The Members tab defers the read to the Kör 24
-    // ``clubMemberManagement_screen`` push so this round does
-    // not need a new repository method (the brief §0.0 #3
-    // structural precedent). The placeholder body just nudges
-    // the user to the manage screen.
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Center(
-        child: Text(
-          localizations.communityClubMembersTabHint,
-          textAlign: TextAlign.center,
-        ),
+    // Javító sáv R5 (2026-09-06): the tab used to be a hint-only
+    // placeholder ("open the manage screen") while the roster endpoint
+    // already existed. It now reads the same `clubMemberListProvider` the
+    // management screen renders from — one server-side truth for both
+    // surfaces; the hint stays as the footer so owners still find the
+    // role-mutating surface from here.
+    final membersAsync = ref.watch(clubMemberListProvider(clubId));
+    return membersAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => _ErrorView(
+        failure: error is AppFailure
+            ? error
+            : UnknownFailure(code: FailureCode.unknown, cause: error),
+        localizations: localizations,
+        onRetry: () async {
+          ref.invalidate(clubMemberListProvider(clubId));
+          await ref.read(clubMemberListProvider(clubId).future);
+        },
+      ),
+      data: (members) => ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          if (members.isEmpty)
+            Text(localizations.communityClubManageEmpty)
+          else
+            for (final member in members)
+              ListTile(
+                key: Key('club-member-${member.memberPublicId}'),
+                leading: const Icon(Icons.person_outline),
+                title: Text(member.profilePublicId.value),
+                subtitle: Text(_roleLabel(localizations, member.role)),
+              ),
+          const SizedBox(height: 16),
+          Text(
+            localizations.communityClubMembersTabHint,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }

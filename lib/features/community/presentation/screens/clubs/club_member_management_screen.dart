@@ -52,6 +52,8 @@ import 'package:strumsight/core/design_system/public.dart';
 
 import '../../../../../core/foundation/app_failure.dart';
 import '../../../../../l10n/app_localizations.dart';
+import '../../../data/repositories/club_repository_impl.dart'
+    show HttpCommunityClubRepository;
 import '../../../data/repositories/relationship_repository_impl.dart';
 import '../../../domain/entities/community_club.dart';
 import '../../../domain/repositories/club_repository.dart';
@@ -81,16 +83,36 @@ class ClubMemberRow {
   final DateTime joinedAt;
 }
 
-/// Local members cache (in-memory only — the Kör 24 server
-/// endpoint is a future surface; the screen renders from this
-/// projection so the widget test is independent of the wire).
+/// A klub taglistája — `GET /community/clubs/{id}/members` (javító sáv R5,
+/// 2026-09-06).
+///
+/// Eddig ez a provider MINDIG üres listát adott („a Kör 24 wire egy
+/// jövőbeli felület"), pedig a végpont a szerveren megvolt: a tagkezelő
+/// képernyő minden klubra a „nincs tag" állapotot rajzolta, a tulajdonos
+/// a saját klubjának tagjait sem látta. A bekötés a MEGLÉVŐ
+/// [HttpCommunityClubRepository.members] hívása; a `Disabled*` (fiók
+/// nélküli) ágon `ConfigurationFailure` a válasz — ugyanaz a hiba, amit a
+/// repository maga adna. A képernyő-lokális [ClubMemberRow] vetület
+/// marad: a tesztek és a golden-fixtúrák ezt írják felül.
 final clubMemberListProvider = FutureProvider.autoDispose
     .family<List<ClubMemberRow>, ContentId>((ref, clubId) async {
-      // The Kör 24 wire for member-list is reserved for a future
-      // round; the screen renders from the in-memory cache that
-      // the owner populates via the manage actions. Returning
-      // an empty list keeps the test surface deterministic.
-      return const <ClubMemberRow>[];
+      final repository = ref.watch(communityClubRepositoryProvider);
+      if (repository is! HttpCommunityClubRepository) {
+        throw const ConfigurationFailure();
+      }
+      final members = await repository.members(
+        clubId: clubId,
+        pageSize: kCommunityClubMaxMembers,
+      );
+      return <ClubMemberRow>[
+        for (final member in members)
+          ClubMemberRow(
+            memberPublicId: member.memberPublicId,
+            profilePublicId: member.profilePublicId,
+            role: member.role,
+            joinedAt: member.joinedAt,
+          ),
+      ];
     });
 
 /// Public screen — ``ConsumerWidget``.

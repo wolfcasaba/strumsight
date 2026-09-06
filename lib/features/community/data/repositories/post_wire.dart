@@ -13,6 +13,7 @@
 /// `created_at` `FormatException` — az a válasz nem poszt.
 library;
 
+import '../../domain/entities/community_bookmark.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
 import '../../domain/entities/moderation_state.dart';
@@ -176,4 +177,54 @@ DateTime? _resourceVersionAsEditedAt(Map<String, Object?> json) {
 int _count(Object? raw) {
   if (raw is int) return raw < 0 ? 0 : raw;
   return 0;
+}
+
+// ---- könyvjelzők (javító sáv R5, 2026-09-06) ----------------------------
+
+/// Egy `BookmarkOut` → [CommunityBookmark].
+///
+/// A `bookmark_id` a kurzor-kulcs (belső sor-azonosító), a
+/// `post_public_id` a mélylink kulcsa, az `is_tombstone` a §A3 felület. A
+/// hiányzó kötelező mező `FormatException` — az a válasz nem könyvjelző.
+CommunityBookmark decodeCommunityBookmark(Map<String, Object?> json) {
+  final id = json['bookmark_id'];
+  final postId = json['post_public_id'];
+  if (id is! int || postId is! String || postId.isEmpty) {
+    throw const FormatException(
+      'community bookmark wire: bookmark_id and post_public_id are required',
+    );
+  }
+  return CommunityBookmark(
+    id: id,
+    postId: ContentId(postId),
+    createdAt: _requiredTime(json['created_at'], 'created_at'),
+    // A hiányzó zászló NEM sírkő: a szerver mindig küldi, egy régi vagy
+    // hiányos válasz a bejegyzést élőként mutatja — a sírkő-render a
+    // szigorúbb, nem a biztonságosabb irány (a sor eltávolítható marad).
+    isTombstone: json['is_tombstone'] == true,
+  );
+}
+
+/// Egy `BookmarkListResponse` boríték → [CommunityPage].
+CommunityPage<CommunityBookmark> decodeCommunityBookmarkPage(
+  Map<String, Object?> json,
+) {
+  final rawItems = json['items'];
+  if (rawItems is! List) {
+    throw const FormatException(
+      'community bookmark page wire: items must be a list',
+    );
+  }
+  return CommunityPage<CommunityBookmark>(
+    items: [
+      for (final raw in rawItems)
+        if (raw is Map<String, Object?>)
+          decodeCommunityBookmark(raw)
+        else
+          throw const FormatException(
+            'community bookmark page wire: every item must be a JSON object',
+          ),
+    ],
+    cursor: communityCursorFromWire(json['next_cursor']),
+  );
 }

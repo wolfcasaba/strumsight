@@ -210,6 +210,18 @@
       "path": "/community/leaderboards/{challenge_public_id}",
       "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:308",
       "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/bookmarks",
+      "source": "lib/features/community/data/repositories/post_repository_impl.dart:352",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/clubs/{public_id}/members",
+      "source": "lib/features/community/data/repositories/club_repository_impl.dart:325",
+      "status": "mounted"
     }
   ]
 }
