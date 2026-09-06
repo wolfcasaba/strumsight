@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/features/audio_analysis/domain/rollout/analysis_rollout_stage.dart';
 
 void main() {
   // WP-E (repair plan 2026-09-06) — `STRUMSIGHT_PREVIEW_ALL`.
@@ -140,6 +141,269 @@ void main() {
       expect(flags.recognitionShadowModeEnabled, isFalse);
       expect(flags.newLiveStageEnabled, isFalse);
       _expectCommunityFlagsOff(flags);
+    });
+  });
+
+  // WP-G (repair plan 2026-09-06) — the SHIPPED resolution.
+  //
+  // The tester APK is what `.github/workflows/build-apk.yml` builds, and that
+  // protected workflow passes exactly ONE define
+  // (`--dart-define=STRUMSIGHT_ENV=development`). `flutter test` likewise
+  // passes none, so calling `forShippedBuild` with no arguments measures the
+  // REAL shipped resolution: every `bool? …Define` parameter defaults to the
+  // compile-time define, which is `null` (ABSENT) here — exactly what the
+  // tester APK's build command produces.
+  group('WP-G — FeatureFlags.forShippedBuild', () {
+    test('development without any define carries the full tester '
+        'configuration', () {
+      final flags = FeatureFlags.forShippedBuild(AppEnvironment.development);
+
+      // The account layer is ON, so the app offers login + settings sync
+      // against the live backend.
+      expect(flags.accountEnabled, isTrue, reason: 'accountEnabled');
+      expect(flags.usesNetwork, isTrue);
+
+      // The four text-only Community surfaces are ON…
+      expect(flags.communityEnabled, isTrue, reason: 'communityEnabled');
+      expect(
+        flags.communityWritesEnabled,
+        isTrue,
+        reason: 'communityWritesEnabled',
+      );
+      expect(
+        flags.communityLeaderboardEnabled,
+        isTrue,
+        reason: 'communityLeaderboardEnabled',
+      );
+      expect(
+        flags.communityClubsEnabled,
+        isTrue,
+        reason: 'communityClubsEnabled',
+      );
+      // …and media stays OFF (open R-SEC-01 / R-PRIV-01 blockers).
+      expect(
+        flags.communityMediaEnabled,
+        isFalse,
+        reason: 'communityMediaEnabled must stay define-only',
+      );
+
+      // The preview overlay is on, which is what turns Audio Analysis V2 and
+      // its nine sub-capabilities, Vision and the AI Tutor's local half on.
+      expect(flags.aiTutorEnabled, isTrue, reason: 'previewAll overlay');
+      expect(flags.plannerAssistEnabled, isTrue);
+      expect(
+        flags.audioAnalysisV2Enabled,
+        isTrue,
+        reason: 'audioAnalysisV2Enabled is implied by the previewAll overlay',
+      );
+      expect(
+        flags.analysisRolloutStage,
+        AnalysisRolloutStage.v2OptIn,
+        reason: 'the V2 route must actually be the resolved stage',
+      );
+      for (final entry in _previewOnVisionFlags(flags).entries) {
+        expect(entry.value, isTrue, reason: entry.key);
+      }
+      for (final entry in _previewOnAnalysisFlags(flags).entries) {
+        expect(entry.value, isTrue, reason: entry.key);
+      }
+      expect(flags.recognitionRecoveryEnabled, isTrue);
+      expect(flags.newLiveStageEnabled, isTrue);
+
+      // Unchanged non-production capabilities.
+      expect(flags.diagnosticsEnabled, isTrue);
+      expect(flags.labModeAvailable, isTrue);
+      expect(flags.practiceEngineV2Enabled, isTrue);
+      expect(flags.migratedLearnEnabled, isTrue);
+      expect(flags.practiceDetailedHistoryEnabled, isTrue);
+      expect(flags.songTrainerV2Enabled, isTrue);
+      expect(flags.practiceGeneratorEnabled, isTrue);
+      expect(flags.adaptiveShellEnabled, isTrue);
+
+      // The three surfaces the preview overlay refuses to open, unchanged by
+      // WP-G: data egress, raw-frame persistence, cost without a surface.
+      expect(flags.aiTutorCloudEnabled, isFalse);
+      expect(flags.visionLabCaptureEnabled, isFalse);
+      expect(flags.recognitionShadowModeEnabled, isFalse);
+    });
+
+    // Production is the fail-closed environment: WP-G must be invisible
+    // there. Equality pins EVERY field at once (the operator compares all
+    // 40), and toString pins them by name.
+    test('production without any define is byte-identical to the pre-WP-G '
+        'forEnvironment resolution', () {
+      final shipped = FeatureFlags.forShippedBuild(AppEnvironment.production);
+      final pinned = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+
+      expect(shipped, equals(pinned));
+      expect(shipped.hashCode, equals(pinned.hashCode));
+      expect(shipped.toString(), equals(pinned.toString()));
+
+      // Spelled out as well, so a future change to `forEnvironment` cannot
+      // make this cell vacuously true by moving both sides together.
+      expect(shipped.accountEnabled, isFalse);
+      expect(shipped.diagnosticsEnabled, isFalse);
+      expect(shipped.labModeAvailable, isFalse);
+      expect(shipped.practiceEngineV2Enabled, isFalse);
+      expect(shipped.migratedLearnEnabled, isFalse);
+      expect(shipped.practiceDetailedHistoryEnabled, isFalse);
+      expect(shipped.songTrainerV2Enabled, isFalse);
+      expect(shipped.practiceGeneratorEnabled, isFalse);
+      expect(shipped.adaptiveShellEnabled, isFalse);
+      expect(shipped.aiTutorEnabled, isFalse);
+      expect(shipped.aiTutorCloudEnabled, isFalse);
+      expect(shipped.plannerAssistEnabled, isFalse);
+      for (final entry in _previewOnVisionFlags(shipped).entries) {
+        expect(entry.value, isFalse, reason: entry.key);
+      }
+      expect(shipped.visionLabCaptureEnabled, isFalse);
+      for (final entry in _previewOnAnalysisFlags(shipped).entries) {
+        expect(entry.value, isFalse, reason: entry.key);
+      }
+      expect(shipped.recognitionRecoveryEnabled, isFalse);
+      expect(shipped.recognitionShadowModeEnabled, isFalse);
+      expect(shipped.newLiveStageEnabled, isFalse);
+      _expectCommunityFlagsOff(shipped);
+    });
+
+    // WP-G adds NO production default: production stays purely
+    // define-driven, exactly as ADR 0395's audited kill switch specifies. A
+    // define passed to a production build resolves as it did before (that is
+    // the pre-existing, deliberate way to build a Community-carrying
+    // production artifact) — and the preview overlay still never applies.
+    test('production has no WP-G default: it stays define-driven and never '
+        'takes the preview overlay', () {
+      final withDefines = FeatureFlags.forShippedBuild(
+        AppEnvironment.production,
+        previewAllDefine: true,
+        communityDefine: true,
+        communityWritesDefine: true,
+        communityLeaderboardDefine: true,
+        communityClubsDefine: true,
+      );
+
+      expect(
+        withDefines.aiTutorEnabled,
+        isFalse,
+        reason: 'previewAll never applies in production',
+      );
+      expect(withDefines.visionEnabled, isFalse);
+      expect(withDefines.audioAnalysisV2Enabled, isFalse);
+      expect(withDefines.communityEnabled, isTrue, reason: 'ADR 0395 define');
+      expect(withDefines.communityMediaEnabled, isFalse);
+
+      // …while the ABSENT-define production build — the real release
+      // artifact — resolves every one of them off.
+      _expectCommunityFlagsOff(
+        FeatureFlags.forShippedBuild(AppEnvironment.production),
+      );
+    });
+
+    // …but the account define itself is NOT a WP-G default: it is the
+    // pre-existing production build switch and must keep working.
+    test('production still honours an explicit STRUMSIGHT_ACCOUNT define', () {
+      final flags = FeatureFlags.forShippedBuild(
+        AppEnvironment.production,
+        accountDefine: true,
+      );
+
+      expect(flags.accountEnabled, isTrue);
+      expect(flags.usesNetwork, isTrue);
+    });
+
+    test('lab without any define is byte-identical to the pre-WP-G '
+        'forEnvironment resolution', () {
+      final shipped = FeatureFlags.forShippedBuild(AppEnvironment.lab);
+      final pinned = FeatureFlags.forEnvironment(
+        AppEnvironment.lab,
+        accountEnabled: false,
+      );
+
+      expect(shipped, equals(pinned));
+      expect(shipped.hashCode, equals(pinned.hashCode));
+      expect(shipped.toString(), equals(pinned.toString()));
+
+      expect(shipped.accountEnabled, isFalse, reason: 'lab stays define-only');
+      expect(shipped.aiTutorEnabled, isFalse, reason: 'no preview overlay');
+      expect(shipped.audioAnalysisV2Enabled, isFalse);
+      _expectCommunityFlagsOff(shipped);
+
+      // Lab keeps its own define-driven path in both directions.
+      final labWithDefines = FeatureFlags.forShippedBuild(
+        AppEnvironment.lab,
+        accountDefine: true,
+        previewAllDefine: true,
+        communityDefine: true,
+        communityWritesDefine: true,
+        communityLeaderboardDefine: true,
+        communityClubsDefine: true,
+      );
+      expect(labWithDefines.accountEnabled, isTrue);
+      expect(labWithDefines.aiTutorEnabled, isTrue);
+      expect(labWithDefines.communityEnabled, isTrue);
+      expect(labWithDefines.communityWritesEnabled, isTrue);
+      expect(labWithDefines.communityLeaderboardEnabled, isTrue);
+      expect(labWithDefines.communityClubsEnabled, isTrue);
+      expect(labWithDefines.communityMediaEnabled, isFalse);
+    });
+
+    // An explicit define beats the development default — this is the kill
+    // switch ADR 0395 requires, now spelled `=false` instead of "omit it".
+    test('an explicit define wins over every development default', () {
+      final flags = FeatureFlags.forShippedBuild(
+        AppEnvironment.development,
+        accountDefine: false,
+        previewAllDefine: false,
+        communityDefine: false,
+        communityWritesDefine: false,
+        communityLeaderboardDefine: false,
+        communityClubsDefine: false,
+      );
+
+      expect(flags.accountEnabled, isFalse);
+      expect(flags.aiTutorEnabled, isFalse, reason: 'no preview overlay');
+      expect(flags.audioAnalysisV2Enabled, isFalse);
+      _expectCommunityFlagsOff(flags);
+
+      // With every WP-G default explicitly refused, the shipped resolution
+      // collapses onto the unchanged rollout boundary.
+      expect(
+        flags,
+        equals(
+          FeatureFlags.forEnvironment(
+            AppEnvironment.development,
+            accountEnabled: false,
+          ),
+        ),
+      );
+    });
+
+    test('one explicit define turns off exactly one surface', () {
+      final flags = FeatureFlags.forShippedBuild(
+        AppEnvironment.development,
+        communityWritesDefine: false,
+      );
+
+      expect(flags.communityEnabled, isTrue);
+      expect(flags.communityWritesEnabled, isFalse, reason: 'read-only feed');
+      expect(flags.communityLeaderboardEnabled, isTrue);
+      expect(flags.communityClubsEnabled, isTrue);
+      expect(flags.accountEnabled, isTrue);
+    });
+
+    // Media is the one Community flag WP-G leaves alone: it has no
+    // development default at all, so it can only ever be a define.
+    test('communityMediaEnabled has no development default and stays off', () {
+      for (final environment in AppEnvironment.values) {
+        expect(
+          FeatureFlags.forShippedBuild(environment).communityMediaEnabled,
+          isFalse,
+          reason: '$environment',
+        );
+      }
     });
   });
 

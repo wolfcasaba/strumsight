@@ -78,6 +78,51 @@ kívül: 0 találat). A Library fül tehát a fejlesztői buildben is a
 
 ### Kész: WP-F — a CI titok-szkenner két teszt-fixture találata jelölve (04e3b44).
 
+### WP-G — a fejlesztői APK a teljes teszt-konfigurációt hordozza (lab kiváltva)
+
+**Felhasználói döntés (2026-09-06):** a Lab APK (`lab-apk.yml`,
+`lab_build.json`, diagnosztikai alagút) már NEM kell — csak a fejlesztéshez
+létezett. A teszter-APK az, amit a **védett** `.github/workflows/build-apk.yml`
+állít elő, és az EGYETLEN define-ja
+`--dart-define=STRUMSIGHT_ENV=development`. Ezért a `development` környezetnek
+KÓDBAN kell hordoznia a teljes teszt-konfigurációt, a production érintetlenül
+hagyásával.
+
+- `FeatureFlags.forShippedBuild` (új gyár, `lib/app/config/feature_flags.dart`):
+  a define HIÁNYA esetén a `development` build `accountEnabled`,
+  `previewAll` (→ `audioAnalysisV2Enabled` + a 9 analysis, 10 vision, lokális
+  AI Tutor, recognition recovery, új Live stage), valamint
+  `communityEnabled` / `…Writes` / `…Leaderboard` / `…Clubs` értéke **BE**;
+  `communityMediaEnabled` marad KI (nyitott R-SEC-01 / R-PRIV-01).
+- `AppConfig.apiBaseUrlFor` + `liveApiBaseUrl`: a `development` build
+  alapértelmezett backendje az **élő** `https://casaba.app/strumsight`; lab és
+  production változatlanul `http://10.0.2.2:8000`. Az emulátoros fejlesztő
+  explicit `--dart-define=STRUMSIGHT_API_URL=http://10.0.2.2:8000`-t ad.
+- **Hiányzó vs. explicit define ŐSZINTÉN:** a `bool.fromEnvironment` a
+  hiányzó define-t és az explicit `false`-t azonosan olvassa, ezért a jelenlét
+  mérése `bool.hasEnvironment` (const-kompatibilis), és minden define `bool?`,
+  ahol a `null` = HIÁNYZIK. Egy explicit define MINDEN környezetben nyer →
+  a kill switch a fejlesztői buildben `=false`, nem a define elhagyása
+  (a `feature_flag_registry.dart` kill-switch prózája ehhez igazítva).
+- **`forEnvironment` érintetlen** (a rollout-határ: `ga-scope.md`,
+  `verify_ga_scope.py`, a capability-rollout lefedettségi cellák és a 26
+  hívó teszt-fájl mind ezt olvassa), és az `appConfigProvider` alapértéke is
+  az marad — az a teszt-állvány, nem a szállított konfiguráció. A szállított
+  utat kizárólag `AppBootstrap.run` járja: `forShippedBuild` +
+  `apiBaseUrlFor`.
+- **Lab és production bájtazonos** a WP-G előtti feloldással (egyenlőség +
+  `hashCode` + `toString` cellák); production semmilyen új BE-utat nem kap.
+- `lab_build.json` és `lab-apk.yml` NEM törölve (a workflow védett) — a json
+  a korábbi lab-build dokumentációja marad.
+- Őr: `test/app/config/feature_flags_test.dart` „WP-G —
+  FeatureFlags.forShippedBuild", `test/app/app_config_test.dart` „WP-G —
+  apiBaseUrlFor" (az élő URL fejlesztésben átmegy, a loopback ELUTASÍTÁSA
+  productionben változatlan), `test/app/app_bootstrap_test.dart` „WP-G — the
+  shipped development build" (a valódi boot-út).
+- Dokumentáció: `docs/release/environment-matrix.md` §1/b (új
+  development-oszlop), `README.md` „Build environments" (a korábbi,
+  nemlétező `STRUMSIGHT_ACCOUNT_ENABLED` név is javítva `STRUMSIGHT_ACCOUNT`-ra).
+
 ## Sorrend és kapu
 1. A, B, C párhuzamosan (fájl-diszjunkt) → 2. D, E → 3. `build-apk.yml` +
 `lab-apk.yml` zöld → 4. valós-gitár APK-teszt (a felhasználó kapuja).

@@ -46,14 +46,20 @@ abstract final class AppBootstrap {
         ]);
       }
 
-      final flags = FeatureFlags.forEnvironment(
+      // WP-G (2026-09-06): the SHIPPED resolution. `forShippedBuild` applies
+      // the development tester defaults (account, preview overlay, the four
+      // text-only Community surfaces) ONLY where the corresponding
+      // dart-define is absent; `lab` and `production` resolve exactly what
+      // they resolved before. An `accountEnabled` passed in here is an
+      // explicit choice and always wins, as an explicit define does.
+      final flags = FeatureFlags.forShippedBuild(
         environment,
-        accountEnabled: accountEnabled ?? AppConfig.rawAccountEnabled,
+        accountDefine: accountEnabled ?? AppConfig.definedAccountEnabled,
       );
 
       final config = AppConfig.resolve(
         environment: environment,
-        apiBaseUrl: apiBaseUrl ?? AppConfig.rawApiBaseUrl,
+        apiBaseUrl: apiBaseUrl ?? AppConfig.apiBaseUrlFor(environment),
         flags: flags,
         diagnosticsToken: diagnosticsToken ?? AppConfig.rawDiagnosticsToken,
         buildMode: buildMode ?? _buildMode,

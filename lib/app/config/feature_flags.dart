@@ -1,6 +1,49 @@
 import 'app_environment.dart';
 import '../../features/audio_analysis/domain/rollout/analysis_rollout_stage.dart';
 
+// ---------------------------------------------------------------------------
+// The dart-defines whose ABSENCE the shipped development build resolves
+// differently from an explicit `false` (WP-G, 2026-09-06 —
+// `docs/ui/repair-plan-2026-09-06.md`).
+//
+// `bool.fromEnvironment` alone CANNOT tell an absent define from
+// `--dart-define=X=false`: both read `false`. Presence is therefore measured
+// with the const-compatible `bool.hasEnvironment`, and every define below is
+// exposed as a `bool?` where **`null` means the define is ABSENT** — the only
+// state in which [FeatureFlags.forShippedBuild] may apply an environment
+// default. An explicitly passed define always wins, in every environment.
+// ---------------------------------------------------------------------------
+
+const String _accountDefineName = 'STRUMSIGHT_ACCOUNT';
+const String _previewAllDefineName = 'STRUMSIGHT_PREVIEW_ALL';
+const String _communityDefineName = 'STRUMSIGHT_COMMUNITY';
+const String _communityWritesDefineName = 'STRUMSIGHT_COMMUNITY_WRITES';
+const String _communityLeaderboardDefineName =
+    'STRUMSIGHT_COMMUNITY_LEADERBOARD';
+const String _communityClubsDefineName = 'STRUMSIGHT_COMMUNITY_CLUBS';
+
+const bool? _accountDefine = bool.hasEnvironment(_accountDefineName)
+    ? bool.fromEnvironment(_accountDefineName)
+    : null;
+const bool? _previewAllDefine = bool.hasEnvironment(_previewAllDefineName)
+    ? bool.fromEnvironment(_previewAllDefineName)
+    : null;
+const bool? _communityDefine = bool.hasEnvironment(_communityDefineName)
+    ? bool.fromEnvironment(_communityDefineName)
+    : null;
+const bool? _communityWritesDefine =
+    bool.hasEnvironment(_communityWritesDefineName)
+    ? bool.fromEnvironment(_communityWritesDefineName)
+    : null;
+const bool? _communityLeaderboardDefine =
+    bool.hasEnvironment(_communityLeaderboardDefineName)
+    ? bool.fromEnvironment(_communityLeaderboardDefineName)
+    : null;
+const bool? _communityClubsDefine =
+    bool.hasEnvironment(_communityClubsDefineName)
+    ? bool.fromEnvironment(_communityClubsDefineName)
+    : null;
+
 /// Compile-time feature availability (E01-R03, SDD Ch2 Kör 3 §3.2).
 ///
 /// These are *availability* switches, not user preferences: whether the
@@ -98,6 +141,89 @@ final class FeatureFlags {
       return defaults;
     }
     return defaults._withPreviewSurfacesEnabled();
+  }
+
+  /// The flag set the SHIPPED artifact resolves for [environment] (WP-G,
+  /// 2026-09-06 — `docs/ui/repair-plan-2026-09-06.md`).
+  ///
+  /// [forEnvironment] answers a different question: *what does this
+  /// environment allow at the rollout boundary*, with every dart-define it
+  /// reads resolving to `false` when absent. That is the right answer for a
+  /// rollout audit (`docs/release/ga-scope.md`,
+  /// `tool/release/verify_ga_scope.py` and the capability-rollout coverage
+  /// tests all read it), and it stays byte-identical.
+  ///
+  /// It was the wrong answer for the artifact a tester actually installs.
+  /// The tester APK is what `.github/workflows/build-apk.yml` produces, and
+  /// that workflow is protected: it passes exactly ONE define,
+  /// `--dart-define=STRUMSIGHT_ENV=development`. The retired Lab APK
+  /// (`lab_build.json`, `lab-apk.yml`) used to carry the full tester define
+  /// list; it exists only as documentation now, so the development build's
+  /// tester configuration lives HERE, in code:
+  ///
+  /// | resolved | development | lab | production |
+  /// |---|---|---|---|
+  /// | `accountEnabled` | **true** | define (`false` when absent) | define |
+  /// | `previewAll` overlay | **true** | define | ignored (never applies) |
+  /// | `communityEnabled` | **true** | define | define |
+  /// | `communityWritesEnabled` | **true** | define | define |
+  /// | `communityLeaderboardEnabled` | **true** | define | define |
+  /// | `communityClubsEnabled` | **true** | define | define |
+  /// | `communityMediaEnabled` | define (`false`) | define | define |
+  ///
+  /// `communityMediaEnabled` deliberately stays OFF: user-uploaded media is
+  /// the one Community surface with open R-SEC-01 / R-PRIV-01 blockers
+  /// (`docs/release/blockers.md`), so it keeps its define-only path in every
+  /// environment. `audioAnalysisV2Enabled` needs no separate development
+  /// default — the `previewAll` overlay already forces it on (and with it the
+  /// nine analysis sub-capabilities), which the tests pin.
+  ///
+  /// **An explicit define always wins**, in every environment: each
+  /// parameter is `null` ONLY when its define was absent from the build
+  /// (measured with `bool.hasEnvironment`, see the file header), so
+  /// `--dart-define=STRUMSIGHT_COMMUNITY=false` on a development build turns
+  /// Community off again. That is the kill switch ADR 0395 requires — it is
+  /// now an explicit `false` rather than an omitted define.
+  ///
+  /// **`lab` and `production` are byte-identical to [forEnvironment].** Every
+  /// development default above is applied only under `isDevelopment`;
+  /// everywhere else each parameter falls back to the value
+  /// `_environmentDefaults` already read from the same dart-define. A
+  /// production artifact therefore resolves exactly what it resolved before
+  /// WP-G — ADR 0395's audited kill switch and the `environment ==
+  /// production` early return in [forEnvironment] are both untouched, and
+  /// WP-G adds no way to turn anything on in production.
+  factory FeatureFlags.forShippedBuild(
+    AppEnvironment environment, {
+    bool? accountDefine = _accountDefine,
+    bool? previewAllDefine = _previewAllDefine,
+    bool? communityDefine = _communityDefine,
+    bool? communityWritesDefine = _communityWritesDefine,
+    bool? communityLeaderboardDefine = _communityLeaderboardDefine,
+    bool? communityClubsDefine = _communityClubsDefine,
+  }) {
+    final isDevelopment = environment == AppEnvironment.development;
+    final base = FeatureFlags.forEnvironment(
+      environment,
+      accountEnabled: accountDefine ?? isDevelopment,
+      previewAll: previewAllDefine ?? isDevelopment,
+    );
+    // Outside development the fallback is `base` — the value
+    // `_environmentDefaults` already read out of the same dart-define — so
+    // lab and production resolve exactly what they resolved before WP-G,
+    // while an explicitly passed define still wins everywhere.
+    return base._withCommunitySurfacesEnabled(
+      communityEnabled:
+          communityDefine ?? (isDevelopment || base.communityEnabled),
+      communityWritesEnabled:
+          communityWritesDefine ??
+          (isDevelopment || base.communityWritesEnabled),
+      communityLeaderboardEnabled:
+          communityLeaderboardDefine ??
+          (isDevelopment || base.communityLeaderboardEnabled),
+      communityClubsEnabled:
+          communityClubsDefine ?? (isDevelopment || base.communityClubsEnabled),
+    );
   }
 
   /// The per-environment defaults, unchanged by [previewAll].
@@ -264,6 +390,64 @@ final class FeatureFlags {
     // Define-driven kill switch (ADR 0395) — passed through untouched.
     communityEnabled: communityEnabled,
     communityWritesEnabled: communityWritesEnabled,
+    communityMediaEnabled: communityMediaEnabled,
+    communityLeaderboardEnabled: communityLeaderboardEnabled,
+    communityClubsEnabled: communityClubsEnabled,
+    adaptiveShellEnabled: adaptiveShellEnabled,
+  );
+
+  /// The WP-G Community resolution: the four text-only surfaces the tester
+  /// APK must be able to reach. Reached ONLY from
+  /// [FeatureFlags.forShippedBuild], which passes the already-resolved values
+  /// (a development default, or the build's own define). Outside development
+  /// those values equal this instance's own, so the result is an equal
+  /// object. `communityMediaEnabled` is copied through untouched (open
+  /// R-SEC-01 / R-PRIV-01), as is every non-Community flag.
+  FeatureFlags _withCommunitySurfacesEnabled({
+    required bool communityEnabled,
+    required bool communityWritesEnabled,
+    required bool communityLeaderboardEnabled,
+    required bool communityClubsEnabled,
+  }) => FeatureFlags(
+    accountEnabled: accountEnabled,
+    diagnosticsEnabled: diagnosticsEnabled,
+    labModeAvailable: labModeAvailable,
+    practiceEngineV2Enabled: practiceEngineV2Enabled,
+    migratedLearnEnabled: migratedLearnEnabled,
+    practiceDetailedHistoryEnabled: practiceDetailedHistoryEnabled,
+    songTrainerV2Enabled: songTrainerV2Enabled,
+    aiTutorEnabled: aiTutorEnabled,
+    aiTutorCloudEnabled: aiTutorCloudEnabled,
+    practiceGeneratorEnabled: practiceGeneratorEnabled,
+    plannerAssistEnabled: plannerAssistEnabled,
+    visionEnabled: visionEnabled,
+    visionSetupEnabled: visionSetupEnabled,
+    visionHandTrackingEnabled: visionHandTrackingEnabled,
+    visionPoseTrackingEnabled: visionPoseTrackingEnabled,
+    visionGuitarGeometryEnabled: visionGuitarGeometryEnabled,
+    visionPracticeIntegrationEnabled: visionPracticeIntegrationEnabled,
+    visionSongIntegrationEnabled: visionSongIntegrationEnabled,
+    visionTutorIntegrationEnabled: visionTutorIntegrationEnabled,
+    visionAnalysisIntegrationEnabled: visionAnalysisIntegrationEnabled,
+    visionExperimentalFineFretEnabled: visionExperimentalFineFretEnabled,
+    visionLabCaptureEnabled: visionLabCaptureEnabled,
+    audioAnalysisV2Enabled: audioAnalysisV2Enabled,
+    analysisBeatGridEnabled: analysisBeatGridEnabled,
+    analysisPitchEnabled: analysisPitchEnabled,
+    analysisPreprocessingExperimentalEnabled:
+        analysisPreprocessingExperimentalEnabled,
+    analysisExperimentalFusionEnabled: analysisExperimentalFusionEnabled,
+    analysisTechniqueProxiesEnabled: analysisTechniqueProxiesEnabled,
+    analysisComparisonEnabled: analysisComparisonEnabled,
+    analysisPracticeIntegrationEnabled: analysisPracticeIntegrationEnabled,
+    analysisTutorIntegrationEnabled: analysisTutorIntegrationEnabled,
+    recognitionRecoveryEnabled: recognitionRecoveryEnabled,
+    recognitionShadowModeEnabled: recognitionShadowModeEnabled,
+    newLiveStageEnabled: newLiveStageEnabled,
+    communityEnabled: communityEnabled,
+    communityWritesEnabled: communityWritesEnabled,
+    // OFF by design — user-uploaded media has open R-SEC-01 / R-PRIV-01
+    // blockers, so it stays define-only in every environment.
     communityMediaEnabled: communityMediaEnabled,
     communityLeaderboardEnabled: communityLeaderboardEnabled,
     communityClubsEnabled: communityClubsEnabled,

@@ -195,6 +195,77 @@ void main() {
     expect(store.readInt(LegacyStorageKeys.capoFret), 4);
   });
 
+  // WP-G (repair plan 2026-09-06) — the artifact a tester installs.
+  //
+  // `.github/workflows/build-apk.yml` is protected and passes exactly ONE
+  // define (`--dart-define=STRUMSIGHT_ENV=development`). These two cells
+  // therefore call `AppBootstrap.run` the way that APK's `main()` does —
+  // with NO apiBaseUrl and NO accountEnabled — so the full shipped
+  // resolution (defines absent) is what gets measured.
+  group('WP-G — the shipped development build', () {
+    Future<BootstrapResult> runShipped(String rawEnvironment) =>
+        AppBootstrap.run(
+          rawEnvironment: rawEnvironment,
+          buildMode: 'release',
+          loadVersion: () async => '1.0.0+1',
+          loadOnboardingSeen: () async => true,
+          openStore: () async => Success(InMemoryKeyValueStore()),
+        );
+
+    test('development boots on the live backend with the account, the '
+        'preview overlay and the four Community surfaces on', () async {
+      final success = await runShipped('development') as BootstrapSuccess;
+      final config = success.config;
+
+      expect(config.environment, AppEnvironment.development);
+      expect(config.apiBaseUrl, AppConfig.liveApiBaseUrl);
+      expect(config.flags.accountEnabled, isTrue);
+      expect(config.flags.communityEnabled, isTrue);
+      expect(config.flags.communityWritesEnabled, isTrue);
+      expect(config.flags.communityLeaderboardEnabled, isTrue);
+      expect(config.flags.communityClubsEnabled, isTrue);
+      expect(
+        config.flags.communityMediaEnabled,
+        isFalse,
+        reason: 'media stays off — open R-SEC-01 / R-PRIV-01',
+      );
+      expect(config.flags.audioAnalysisV2Enabled, isTrue);
+      expect(config.flags.aiTutorEnabled, isTrue);
+      expect(config.flags.visionEnabled, isTrue);
+      expect(config.flags.aiTutorCloudEnabled, isFalse);
+      expect(config.flags.visionLabCaptureEnabled, isFalse);
+    });
+
+    test('lab boots exactly as it did before WP-G', () async {
+      final success = await runShipped('lab') as BootstrapSuccess;
+      final config = success.config;
+
+      expect(config.apiBaseUrl, AppConfig.devApiBaseUrl);
+      expect(config.flags.accountEnabled, isFalse);
+      expect(config.flags.aiTutorEnabled, isFalse);
+      expect(config.flags.audioAnalysisV2Enabled, isFalse);
+      expect(config.flags.communityEnabled, isFalse);
+      expect(
+        config.flags,
+        equals(
+          FeatureFlags.forEnvironment(
+            AppEnvironment.lab,
+            accountEnabled: false,
+          ),
+        ),
+      );
+    });
+
+    test('an explicitly passed accountEnabled still wins over the '
+        'development default', () async {
+      final success =
+          await _run(rawEnvironment: 'development', accountEnabled: false)
+              as BootstrapSuccess;
+
+      expect(success.config.flags.accountEnabled, isFalse);
+    });
+  });
+
   test('appConfigProvider is fully overridable (§3.5) and drives '
       'accountEnabledProvider', () async {
     final config = AppConfig.resolve(
