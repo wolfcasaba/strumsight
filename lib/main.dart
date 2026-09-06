@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'app/bootstrap/app_bootstrap.dart';
 import 'app/bootstrap/bootstrap_result.dart';
 import 'app/config/app_config.dart';
+import 'app/production_overrides.dart';
 import 'app/strumsight_app.dart';
 import 'core/logging/logger_provider.dart';
 import 'core/storage/key_value_store.dart';
@@ -74,13 +75,21 @@ Future<void> _runAppWithSongTrainerRepositories({
   required bool onboardingSeen,
   required KeyValueStore keyValueStore,
 }) async {
-  final bootstrapContainer = ProviderContainer();
+  final bootstrapContainer = ProviderContainer(
+    overrides: storageBootstrapContainerOverrides(keyValueStore: keyValueStore),
+  );
   try {
     final SongRepository repository = await bootstrapContainer.read(
       songRepositoryBootProvider.future,
     );
     final SongAssetRepository assetRepository = await bootstrapContainer.read(
       songAssetRepositoryBootProvider.future,
+    );
+    // Az analysis V2 + song_trainer tárolók bekötése: override nélkül ezek a
+    // providerek `StateError`-t dobtak, és a Library fül a forráslista helyett
+    // kivételt kapott (WP-A).
+    final storageOverrides = await buildStorageProductionOverrides(
+      bootstrapContainer,
     );
     final tutorOverrides = await buildTutorProductionOverrides(
       keyValueStore: keyValueStore,
@@ -98,6 +107,7 @@ Future<void> _runAppWithSongTrainerRepositories({
           onboardingSeenProvider.overrideWith(
             () => OnboardingController(onboardingSeen),
           ),
+          ...storageOverrides,
           ...tutorOverrides,
         ],
         child: const StrumSightApp(),
