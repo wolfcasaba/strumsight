@@ -7,6 +7,7 @@
   "STRUMSIGHT_COMMUNITY_CLUBS": "true",
   "STRUMSIGHT_COMMUNITY_LEADERBOARD": "true",
   "STRUMSIGHT_ANALYSIS_V2": "true",
+  "STRUMSIGHT_PREVIEW_ALL": "true",
   "STRUMSIGHT_DIAG_TOKEN": "lab-qc-6vofaJntx4dRvW9hZRA",
-  "STRUMSIGHT_BUILD_TAG": "e17-full-wiring-community-analysis-planner"
+  "STRUMSIGHT_BUILD_TAG": "e17-preview-all-community-analysis-planner"
 }

@@ -70,7 +70,43 @@ final class FeatureFlags {
   /// - [songTrainerV2Enabled] is available outside production through the
   ///   same `nonProd` rollout boundary as Practice V2. The default constructor
   ///   remains OFF, so manually created flags still require an explicit opt-in.
+  /// - [previewAll] mirrors the `STRUMSIGHT_PREVIEW_ALL` dart-define (WP-E,
+  ///   2026-09-06). It is a **non-production preview switch only**: see
+  ///   [_withPreviewSurfacesEnabled] for the exact list of what it turns on,
+  ///   what it deliberately leaves off, and why production ignores it. The
+  ///   parameter exists so the semantics are testable — a `const
+  ///   bool.fromEnvironment` cannot be varied at runtime — and it defaults to
+  ///   the define, so no caller has to pass it.
+  ///
+  /// **Production is unaffected by [previewAll] on purpose.** A release APK
+  /// must never ship experimental / unevaluated surfaces because a stray
+  /// `--dart-define` leaked into a release build command; the production
+  /// rollout gate is `docs/release/ga-scope.md` plus the per-capability ADRs
+  /// (ADR 0220 Analysis V2, ADR 0271 recognition recovery, ADR 0395
+  /// Community, ADR 0492 capability rollout), never a build-time convenience
+  /// flag. The `environment == production` early return below is that rule.
   factory FeatureFlags.forEnvironment(
+    AppEnvironment environment, {
+    required bool accountEnabled,
+    bool previewAll = const bool.fromEnvironment('STRUMSIGHT_PREVIEW_ALL'),
+  }) {
+    final defaults = _environmentDefaults(
+      environment,
+      accountEnabled: accountEnabled,
+    );
+    if (environment == AppEnvironment.production || !previewAll) {
+      return defaults;
+    }
+    return defaults._withPreviewSurfacesEnabled();
+  }
+
+  /// The per-environment defaults, unchanged by [previewAll].
+  ///
+  /// This is the single canonical assignment list for every flag; the
+  /// preview overlay is applied on top of its result, never inside it, so
+  /// `tool/release/verify_ga_scope.py` and the capability-rollout coverage
+  /// test keep reading the real production defaults out of this source.
+  static FeatureFlags _environmentDefaults(
     AppEnvironment environment, {
     required bool accountEnabled,
   }) {
@@ -147,6 +183,92 @@ final class FeatureFlags {
       adaptiveShellEnabled: nonProd,
     );
   }
+
+  /// The `STRUMSIGHT_PREVIEW_ALL` overlay: every hard-coded-`false` UI
+  /// capability becomes available so ONE non-production build (the Lab APK,
+  /// `lab_build.json`) can actually show what the tree has built. Reached
+  /// only from [FeatureFlags.forEnvironment] and only outside production.
+  ///
+  /// **Turned ON** (all on-device, no egress, no cost): the local AI Tutor
+  /// ([aiTutorEnabled] — ADR 0132 §4 keeps the *cloud* half separate; the
+  /// local deterministic fallback is network-free), [plannerAssistEnabled],
+  /// the ten non-capture Vision capabilities (ADR 0178 §1: processing is
+  /// on-device, raw frames never leave), the nine Audio Analysis V2
+  /// capabilities (ADR 0220 — a parallel V1 stays intact), and
+  /// [recognitionRecoveryEnabled] + [newLiveStageEnabled] (ADR 0271).
+  ///
+  /// **Deliberately left OFF even under the define:**
+  /// - [aiTutorCloudEnabled] — the only flag here that sends user data off
+  ///   device (and costs model money). ADR 0132 §1/§3 requires separate
+  ///   explicit consent, and `docs/release/capability-rollout.md` records
+  ///   the open R-PRIV-01 blocker. A build-time convenience switch must not
+  ///   stand in for consent.
+  /// - [visionLabCaptureEnabled] — the one documented exception to ADR 0178
+  ///   §2's no-raw-frame-persistence rule. It writes raw camera frames
+  ///   (face, room) to disk and ADR 0178 §4 allows that only through an
+  ///   explicit, consented Lab capture action, never as a blanket flip. It
+  ///   is a diagnostics path, so leaving it off hides no product surface.
+  /// - [recognitionShadowModeEnabled] — runs a second recognition pipeline
+  ///   with zero UI change (pure battery/CPU cost during a real-guitar
+  ///   test) and ADR 0271's activation contract (evaluation report,
+  ///   baseline + candidate manifests, rollback recipe) is not met.
+  /// - The five Community flags and [audioAnalysisV2Enabled]'s own define
+  ///   are *define-driven*, not hard-coded `false`: ADR 0395 makes
+  ///   `STRUMSIGHT_COMMUNITY*` the single audited kill switch, so the
+  ///   overlay passes them through untouched and `lab_build.json` sets them
+  ///   explicitly. ([audioAnalysisV2Enabled] is additionally forced on here
+  ///   because the nine analysis sub-capabilities are meaningless while
+  ///   their master route is unregistered.)
+  ///
+  /// Flags already `nonProd` (diagnostics, Lab, Practice V2, Learn, detailed
+  /// history, Song Trainer V2, Practice Generator, adaptive shell) and the
+  /// caller-supplied [accountEnabled] pass through unchanged.
+  FeatureFlags _withPreviewSurfacesEnabled() => FeatureFlags(
+    accountEnabled: accountEnabled,
+    diagnosticsEnabled: diagnosticsEnabled,
+    labModeAvailable: labModeAvailable,
+    practiceEngineV2Enabled: practiceEngineV2Enabled,
+    migratedLearnEnabled: migratedLearnEnabled,
+    practiceDetailedHistoryEnabled: practiceDetailedHistoryEnabled,
+    songTrainerV2Enabled: songTrainerV2Enabled,
+    aiTutorEnabled: true,
+    // OFF by design — data egress + cost (ADR 0132, R-PRIV-01).
+    aiTutorCloudEnabled: aiTutorCloudEnabled,
+    practiceGeneratorEnabled: practiceGeneratorEnabled,
+    plannerAssistEnabled: true,
+    visionEnabled: true,
+    visionSetupEnabled: true,
+    visionHandTrackingEnabled: true,
+    visionPoseTrackingEnabled: true,
+    visionGuitarGeometryEnabled: true,
+    visionPracticeIntegrationEnabled: true,
+    visionSongIntegrationEnabled: true,
+    visionTutorIntegrationEnabled: true,
+    visionAnalysisIntegrationEnabled: true,
+    visionExperimentalFineFretEnabled: true,
+    // OFF by design — raw-frame persistence (ADR 0178 §2/§4).
+    visionLabCaptureEnabled: visionLabCaptureEnabled,
+    audioAnalysisV2Enabled: true,
+    analysisBeatGridEnabled: true,
+    analysisPitchEnabled: true,
+    analysisPreprocessingExperimentalEnabled: true,
+    analysisExperimentalFusionEnabled: true,
+    analysisTechniqueProxiesEnabled: true,
+    analysisComparisonEnabled: true,
+    analysisPracticeIntegrationEnabled: true,
+    analysisTutorIntegrationEnabled: true,
+    recognitionRecoveryEnabled: true,
+    // OFF by design — cost without a visible surface (ADR 0271).
+    recognitionShadowModeEnabled: recognitionShadowModeEnabled,
+    newLiveStageEnabled: true,
+    // Define-driven kill switch (ADR 0395) — passed through untouched.
+    communityEnabled: communityEnabled,
+    communityWritesEnabled: communityWritesEnabled,
+    communityMediaEnabled: communityMediaEnabled,
+    communityLeaderboardEnabled: communityLeaderboardEnabled,
+    communityClubsEnabled: communityClubsEnabled,
+    adaptiveShellEnabled: adaptiveShellEnabled,
+  );
 
   /// Whether the optional account layer (login + settings cloud sync) is
   /// offered. The app is fully usable with this off.

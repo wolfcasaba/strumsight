@@ -3,6 +3,146 @@ import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 
 void main() {
+  // WP-E (repair plan 2026-09-06) — `STRUMSIGHT_PREVIEW_ALL`.
+  //
+  // The define itself is a compile-time constant, so the *semantics* can
+  // only be exercised through the `previewAll` parameter seam. `flutter
+  // test` never passes the define, so `previewAll` defaults to false here
+  // and every pre-existing cell in this file keeps measuring the shipped
+  // defaults.
+  group('STRUMSIGHT_PREVIEW_ALL preview overlay', () {
+    test('development + previewAll turns the listed UI capabilities on and '
+        'keeps the four excluded ones off', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.development,
+        accountEnabled: true,
+        previewAll: true,
+      );
+
+      // ON — on-device surfaces the Lab APK must be able to show.
+      expect(flags.aiTutorEnabled, isTrue, reason: 'aiTutorEnabled');
+      expect(
+        flags.plannerAssistEnabled,
+        isTrue,
+        reason: 'plannerAssistEnabled',
+      );
+      for (final entry in _previewOnVisionFlags(flags).entries) {
+        expect(entry.value, isTrue, reason: entry.key);
+      }
+      for (final entry in _previewOnAnalysisFlags(flags).entries) {
+        expect(entry.value, isTrue, reason: entry.key);
+      }
+      expect(
+        flags.recognitionRecoveryEnabled,
+        isTrue,
+        reason: 'recognitionRecoveryEnabled',
+      );
+      expect(flags.newLiveStageEnabled, isTrue, reason: 'newLiveStageEnabled');
+
+      // Already-`nonProd` capabilities are untouched by the overlay.
+      expect(flags.diagnosticsEnabled, isTrue);
+      expect(flags.labModeAvailable, isTrue);
+      expect(flags.practiceEngineV2Enabled, isTrue);
+      expect(flags.migratedLearnEnabled, isTrue);
+      expect(flags.practiceDetailedHistoryEnabled, isTrue);
+      expect(flags.songTrainerV2Enabled, isTrue);
+      expect(flags.practiceGeneratorEnabled, isTrue);
+      expect(flags.adaptiveShellEnabled, isTrue);
+      expect(flags.accountEnabled, isTrue, reason: 'caller-supplied');
+
+      // OFF by design — data egress / raw-frame persistence / cost.
+      expect(
+        flags.aiTutorCloudEnabled,
+        isFalse,
+        reason: 'aiTutorCloudEnabled sends user data off device (ADR 0132)',
+      );
+      expect(
+        flags.visionLabCaptureEnabled,
+        isFalse,
+        reason: 'visionLabCaptureEnabled persists raw frames (ADR 0178 §4)',
+      );
+      expect(
+        flags.recognitionShadowModeEnabled,
+        isFalse,
+        reason: 'shadow mode has no UI surface, only cost (ADR 0271)',
+      );
+
+      // Community stays define-driven (ADR 0395) — the overlay must not
+      // become a second way to open the audited kill switch.
+      _expectCommunityFlagsOff(flags);
+    });
+
+    test('production ignores previewAll entirely (identical flag set)', () {
+      final withoutPreview = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: true,
+      );
+      final withPreview = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: true,
+        previewAll: true,
+      );
+
+      expect(withPreview, equals(withoutPreview));
+      expect(withPreview.hashCode, equals(withoutPreview.hashCode));
+      expect(withPreview.toString(), equals(withoutPreview.toString()));
+    });
+
+    test(
+      'lab + previewAll is a real change, i.e. the overlay is not a no-op',
+      () {
+        final plain = FeatureFlags.forEnvironment(
+          AppEnvironment.lab,
+          accountEnabled: false,
+        );
+        final preview = FeatureFlags.forEnvironment(
+          AppEnvironment.lab,
+          accountEnabled: false,
+          previewAll: true,
+        );
+
+        expect(preview, isNot(equals(plain)));
+        expect(preview.aiTutorEnabled, isTrue);
+        expect(plain.aiTutorEnabled, isFalse);
+      },
+    );
+
+    // Pins TODAY's development defaults so the parameter seam cannot
+    // silently flip one of them: without the define, `forEnvironment` must
+    // resolve exactly as it did before WP-E.
+    test('development without previewAll is unchanged (pinned defaults)', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.development,
+        accountEnabled: false,
+      );
+
+      expect(flags.accountEnabled, isFalse);
+      expect(flags.diagnosticsEnabled, isTrue);
+      expect(flags.labModeAvailable, isTrue);
+      expect(flags.practiceEngineV2Enabled, isTrue);
+      expect(flags.migratedLearnEnabled, isTrue);
+      expect(flags.practiceDetailedHistoryEnabled, isTrue);
+      expect(flags.songTrainerV2Enabled, isTrue);
+      expect(flags.practiceGeneratorEnabled, isTrue);
+      expect(flags.adaptiveShellEnabled, isTrue);
+
+      expect(flags.aiTutorEnabled, isFalse);
+      expect(flags.aiTutorCloudEnabled, isFalse);
+      expect(flags.plannerAssistEnabled, isFalse);
+      for (final entry in _previewOnVisionFlags(flags).entries) {
+        expect(entry.value, isFalse, reason: entry.key);
+      }
+      expect(flags.visionLabCaptureEnabled, isFalse);
+      for (final entry in _previewOnAnalysisFlags(flags).entries) {
+        expect(entry.value, isFalse, reason: entry.key);
+      }
+      expect(flags.recognitionRecoveryEnabled, isFalse);
+      expect(flags.recognitionShadowModeEnabled, isFalse);
+      expect(flags.newLiveStageEnabled, isFalse);
+      _expectCommunityFlagsOff(flags);
+    });
+  });
+
   group('Practice Generator feature flags', () {
     test('constructor defaults are off at the rollout boundary', () {
       const flags = FeatureFlags(
@@ -204,6 +344,36 @@ void main() {
     });
   });
 }
+
+/// The ten Vision capabilities the preview overlay turns on —
+/// `visionLabCaptureEnabled` is deliberately NOT in this map.
+Map<String, bool> _previewOnVisionFlags(FeatureFlags flags) => <String, bool>{
+  'visionEnabled': flags.visionEnabled,
+  'visionSetupEnabled': flags.visionSetupEnabled,
+  'visionHandTrackingEnabled': flags.visionHandTrackingEnabled,
+  'visionPoseTrackingEnabled': flags.visionPoseTrackingEnabled,
+  'visionGuitarGeometryEnabled': flags.visionGuitarGeometryEnabled,
+  'visionPracticeIntegrationEnabled': flags.visionPracticeIntegrationEnabled,
+  'visionSongIntegrationEnabled': flags.visionSongIntegrationEnabled,
+  'visionTutorIntegrationEnabled': flags.visionTutorIntegrationEnabled,
+  'visionAnalysisIntegrationEnabled': flags.visionAnalysisIntegrationEnabled,
+  'visionExperimentalFineFretEnabled': flags.visionExperimentalFineFretEnabled,
+};
+
+/// The nine Audio Analysis V2 capabilities the preview overlay turns on.
+Map<String, bool> _previewOnAnalysisFlags(FeatureFlags flags) => <String, bool>{
+  'audioAnalysisV2Enabled': flags.audioAnalysisV2Enabled,
+  'analysisBeatGridEnabled': flags.analysisBeatGridEnabled,
+  'analysisPitchEnabled': flags.analysisPitchEnabled,
+  'analysisPreprocessingExperimentalEnabled':
+      flags.analysisPreprocessingExperimentalEnabled,
+  'analysisExperimentalFusionEnabled': flags.analysisExperimentalFusionEnabled,
+  'analysisTechniqueProxiesEnabled': flags.analysisTechniqueProxiesEnabled,
+  'analysisComparisonEnabled': flags.analysisComparisonEnabled,
+  'analysisPracticeIntegrationEnabled':
+      flags.analysisPracticeIntegrationEnabled,
+  'analysisTutorIntegrationEnabled': flags.analysisTutorIntegrationEnabled,
+};
 
 void _expectRecognitionRecoveryFlagsOff(FeatureFlags flags) {
   expect(flags.recognitionRecoveryEnabled, isFalse);
