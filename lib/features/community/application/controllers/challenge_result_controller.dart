@@ -103,16 +103,23 @@ class ChallengeResultState {
 
 const Object _sentinel = Object();
 
-/// Provider for the [CommunityChallengeRepository]. The production
-/// wiring lands in ``challenge_repository_impl.dart`` (the Kör 5 +
-/// Kör 22 surface).
+/// Provider for the [CommunityChallengeRepository] used by the
+/// eredmény-beküldési folyam.
+///
+/// 2026-09-06-ig ez `UnimplementedError`-t dobott, és a szállított
+/// kompozícióban SENKI nem írta felül — a kihívás-eredmény beküldése az
+/// első hívásnál elszállt volna. A bekötés nem új implementáció, hanem a
+/// Kör 21 `challenge_repository_impl.dart` EGYETLEN provideréé: a
+/// `CommunityChallengeRepository` szerződés ugyanaz mindkét folyamban
+/// (a `submitResult` is annak a metódusa), tehát két külön példány csak
+/// két külön bekötési pontot jelentene — pontosan azt a duplikált-seam
+/// hibaosztályt, amit a `production_repository_wiring_test.dart` mér.
+///
+/// A provider továbbra is sima [Provider], tehát a
+/// `challenge_result_controller_test.dart` rögzítő fake-je felülírhatja.
 final communityChallengeResultRepositoryProvider =
     Provider<CommunityChallengeRepository>(
-      (ref) => throw UnimplementedError(
-        'communityChallengeResultRepositoryProvider must be overridden via '
-        'the production wiring (challenge_repository_impl.dart) or via a '
-        'recording fake in tests.',
-      ),
+      (ref) => ref.watch(communityChallengeRepositoryProvider),
     );
 
 /// The community challenge result submission state machine.
@@ -259,11 +266,13 @@ final communityChallengeSubmissionControllerProvider =
 /// intact — the two are different Riverpod scopes (the
 /// result-submission flow is a separate concern from the
 /// invite-lifecycle read shape).
+///
+/// 2026-09-06: a provider a saját `Http*`/`Disabled*` példányát építette
+/// fel, azaz a Kör 21 bekötésének MÁSOLATA volt. Két példány ugyanabból a
+/// repositoryból két külön bekötési pont — a `feed`/`challenge` seamnél
+/// mért duplikált-provider hibaosztály. Innentől ugyanarra a definícióra
+/// mutat, mint [communityChallengeResultRepositoryProvider].
 final challengeResultRepositoryProvider =
     Provider<CommunityChallengeRepository>(
-      (ref) => ref.watch(communityChallengeApiClientProvider) == null
-          ? const DisabledCommunityChallengeRepository()
-          : HttpCommunityChallengeRepository(
-              ref.watch(communityChallengeApiClientProvider)!,
-            ),
+      (ref) => ref.watch(communityChallengeRepositoryProvider),
     );

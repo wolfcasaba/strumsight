@@ -50,16 +50,31 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../../app/routing/app_route.dart';
 import '../../../../../core/foundation/app_failure.dart';
 import '../../../../../l10n/app_localizations.dart';
+import '../../../data/repositories/club_repository_impl.dart'
+    show communityClubRepositoryProvider;
 import '../../../domain/entities/community_club.dart';
-import '../../../domain/repositories/club_repository.dart';
 import '../../../domain/repositories/community_page.dart';
 import '../../../domain/value_objects/cursor_page.dart';
 import '../../widgets/community_theme_scope.dart';
+
+// A `communityClubRepositoryProvider` EGYETLEN definíciója a
+// `data/repositories/club_repository_impl.dart`-ban él, és onnan
+// exportáljuk tovább — a `club_detail_screen.dart` és a
+// `club_member_management_screen.dart` ezt a fájlt importálja.
+//
+// MÉRT hibaosztály (2026-09-05): itt korábban egy `UnimplementedError`-t
+// dobó seam állt ugyanezen a néven. A valódi implementáció megírása után
+// is a dobó változat jutott volna a képernyőkhöz — a bekötés némán
+// hatástalan marad. Az egy-definíció szabály az orvosság.
+export '../../../data/repositories/club_repository_impl.dart'
+    show communityClubRepositoryProvider;
 
 /// Map a wire visibility to its localized label (E13-R34, A10).
 String communityClubVisibilityLabel(
@@ -80,19 +95,6 @@ String communityClubVisibilityLabel(
 /// shape. The future wire implementation can re-tune against
 /// the cursor-stability invariants.
 const int _kClubListPageSize = 25;
-
-/// Repository provider stub — the Kör 24 wire-backed
-/// implementation is a future round (``data/repositories/
-/// club_repository_impl.dart`` is NOT on this round's
-/// ``allowed_paths``). The provider is the override seam:
-/// widget tests inject a recording fake via ``ProviderScope``,
-/// production code will inject the http impl once it lands.
-final communityClubRepositoryProvider = Provider<CommunityClubRepository>(
-  (ref) => throw UnimplementedError(
-    'communityClubRepositoryProvider: Kör 24 wire impl not in scope; '
-    'override via ProviderScope in tests.',
-  ),
-);
 
 /// FutureProvider for the first page of the visible-clubs list.
 /// ``autoDispose`` so the screen is cheap to enter / leave;
@@ -293,38 +295,50 @@ class _ClubRow extends StatelessWidget {
     );
     return Semantics(
       container: true,
+      button: true,
       label: '${club.name}. $memberCountLabel.',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor,
-              width: 0.5,
-            ),
-          ),
+      child: InkWell(
+        // WP-C (2026-09-06) — a sor a klub-részletre visz. A
+        // `context.push` (NEM `go`) miatt a vissza-gomb a listára tér
+        // vissza. A privát / nem-tag sorok ide már el sem jutnak: a
+        // `_Body` kiszűri őket a render előtt.
+        key: Key('club-row-${club.id.value}'),
+        onTap: () => context.push(
+          AppRoutes.communityClubDetail.replaceFirst(':clubId', club.id.value),
         ),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    club.name,
-                    style: nameStyle,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    memberCountLabel,
-                    style: TextStyle(fontSize: textScaler.scale(14)),
-                  ),
-                ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
               ),
             ),
-          ],
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      club.name,
+                      style: nameStyle,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      memberCountLabel,
+                      style: TextStyle(fontSize: textScaler.scale(14)),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
         ),
       ),
     );

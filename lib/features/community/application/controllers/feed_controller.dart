@@ -61,6 +61,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/logging/logger_provider.dart';
+import '../../../../core/storage/storage_providers.dart';
+import '../../../auth/public.dart';
 import '../../data/local/feed_cache.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
@@ -210,14 +212,28 @@ const Object _sentinel = Object();
 /// Provider for the per-user [FeedCache]. Reads the signed-in user's id
 /// and opens the cache against that partition (A2 — account isolation).
 ///
-/// **This provider is wired in production via an override** (a future
-/// round's scope, D6). The widget test in `following_feed_test.dart`
-/// overrides it with a cache bound to an in-memory store; the production
-/// wiring lives next to the real HTTP repository (Kör 15/16).
+/// 2026-09-06-ig ez a provider `UnimplementedError`-t dobott („must be
+/// overridden in production wiring"), és a szállított kompozícióban SENKI
+/// nem írta felül — a feed-képernyő az első `load()` első során
+/// (`_cache.read()`) elszállt. A bekötés most itt él, a piszkozat-tár
+/// (`communityDraftStoreProvider`) mintájára.
+///
+/// **A kijelentkezett ág `userId: 0`.** Ugyanaz a döntés és ugyanaz az
+/// indoklás, mint a piszkozat-tárnál: a feed-képernyő az
+/// `isSignedInProvider` kapuja mögött van, de egy tranziens
+/// „auth még tölt" állapotban a 0-s partíció egy SOSEM OLVASOTT kulcsra
+/// ír, ahelyett hogy az előző felhasználó gyorsítótárát adná vissza (A2 —
+/// a fiók-váltás soha nem szivárogtat). A provider `watch`-ol az auth
+/// állapotra, tehát bejelentkezéskor a cache újraépül a helyes kulcson.
+///
+/// A provider továbbra is sima [Provider] — a `following_feed_test.dart`
+/// és a golden-tesztek felülírhatják egy in-memory tárra kötött cache-sel.
 final feedCacheProvider = Provider<FeedCache>((ref) {
-  throw UnimplementedError(
-    'feedCacheProvider must be overridden in production wiring; the test '
-    'overrides it with a cache bound to an InMemoryKeyValueStore.',
+  final user = ref.watch(authControllerProvider).value;
+  return FeedCache.open(
+    store: ref.watch(keyValueStoreProvider),
+    logger: ref.watch(appLoggerProvider),
+    userId: user?.id ?? 0,
   );
 });
 

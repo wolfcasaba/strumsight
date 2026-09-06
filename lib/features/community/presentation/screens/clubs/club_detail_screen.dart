@@ -78,10 +78,11 @@ import 'package:strumsight/core/design_system/public.dart';
 
 import '../../../../../core/foundation/app_failure.dart';
 import '../../../../../l10n/app_localizations.dart';
+import '../../../data/repositories/feed_repository_impl.dart';
 import '../../../domain/entities/community_club.dart';
 import '../../../domain/entities/community_post.dart';
-import '../../../domain/repositories/club_repository.dart';
 import '../../../domain/value_objects/content_id.dart';
+import '../../../domain/value_objects/cursor_page.dart';
 import '../../widgets/community_theme_scope.dart';
 import 'club_list_screen.dart'
     show communityClubRepositoryProvider, communityClubVisibilityLabel;
@@ -94,46 +95,89 @@ final clubDetailProvider = FutureProvider.autoDispose
       return repo.fetchClub(clubId: clubId);
     });
 
-/// Screen-local provider for the club feed (Kör 25 §0.0 #3 — no
-/// new repository methods; the screen builds the projection on
-/// top of the existing ``CommunityFeedRepository.clubPinned``
-/// stub).
+/// A klub posztfolyama — `GET /community/clubs/{id}/feed`.
 ///
-/// The provider throws ``UnimplementedError`` in production
-/// until the wire-backed implementation lands (a follow-up
-/// round) — the Kör 24 ``communityClubRepositoryProvider``
-/// pattern. Widget tests override the provider with a stub
-/// future that resolves to a fixed ``CommunityPage`` shape.
+/// 2026-09-06-ig ez a provider `UnimplementedError`-t dobott, és a
+/// szállított kompozícióban senki nem írta felül: a Feed fül minden
+/// megnyitáskor a hiba-ágat rajzolta. A bekötés a MEGLÉVŐ
+/// [HttpCommunityFeedRepository.clubFeed] hívása — a klub-feed
+/// wire-alakja bájtra ugyanaz, mint a következés-feedé.
+///
+/// A `clubFeed` szándékosan NEM része a `CommunityFeedRepository`
+/// szerződésnek (a Kör 5 még nem ismerte a klub-feedet), ezért a
+/// provider a konkrét HTTP-implementációra illeszt. A fiók nélküli
+/// (`Disabled*`) ágon `ConfigurationFailure` a válasz — ugyanaz a hiba,
+/// amit a repository maga adna.
 final clubFeedProvider = FutureProvider.autoDispose
     .family<CommunityPagePlaceholder<CommunityPost>, ContentId>((
       ref,
       clubId,
     ) async {
-      throw UnimplementedError(
-        'clubFeedProvider is a screen-local seam; override it in tests',
+      final repository = ref.watch(communityFeedRepositoryProvider);
+      if (repository is! HttpCommunityFeedRepository) {
+        throw const ConfigurationFailure();
+      }
+      final page = await repository.clubFeed(
+        clubId: clubId,
+        cursor: const CursorPage.initial(),
+        limit: _kClubFeedPageSize,
       );
+      // A képernyő-lokális vetület csak az elemeket viszi; a kurzort a
+      // fül ma nem lapozza (nincs „továbbiak" gomb ezen a felületen).
+      return CommunityPagePlaceholder<CommunityPost>(items: page.items);
     });
 
-/// Screen-local provider for the club's pinned posts (Kör 25
-/// §0.0 #3 — same pattern as [clubFeedProvider]).
+/// A klubban kitűzött posztok — `GET /community/clubs/{id}/pinned`.
+///
+/// A `clubPinned` a `CommunityFeedRepository` szerződés része, tehát itt
+/// nincs szükség típus-illesztésre: a `Disabled*` változat magától
+/// `ConfigurationFailure`-t dob.
 final clubPinnedProvider = FutureProvider.autoDispose
     .family<List<CommunityPost>, ContentId>((ref, clubId) async {
-      throw UnimplementedError(
-        'clubPinnedProvider is a screen-local seam; override it in tests',
-      );
+      final page = await ref
+          .watch(communityFeedRepositoryProvider)
+          .clubPinned(
+            clubId: clubId,
+            // A szerver felülete egyoldalas (a kitűzhető posztok száma
+            // korlátos), a repository ezért a `cursor`/`limit` értékét
+            // nem küldi ki. A szerződés viszont kéri őket.
+            cursor: const CursorPage.initial(),
+            limit: _kClubFeedPageSize,
+          );
+      return page.items;
     });
 
-/// Screen-local provider for the club's active challenges (Kör
-/// 25 §0.0 #3).
+/// A klub aktív kihívásai — **NINCS SZERVER-OLDALI VÉGPONTJA.**
+///
+/// A `backend/app/community/routers/challenges.py` öt útvonalat visz, és
+/// MIND írás (`POST` ×4, `DELETE` ×1): nincs olyan felület, ami egy klub
+/// kihívásait listázná. A provider ezért HIBÁT ad, és NEM üres listát: az
+/// üres lista azt ÁLLÍTANÁ, hogy ennek a klubnak nincs aktív kihívása,
+/// holott az igazság az, hogy nem tudjuk (`UNKNOWN > CONFIDENTLY WRONG`,
+/// a `feed_repository_impl.dart` `profilePosts` precedense).
+///
+/// A fül a hiba-ágon a „nincs kihívás" szöveget rajzolja — a képernyőnek
+/// ma nincs külön „nem elérhető" állapota, és új ARB-kulcs nem tartozik
+/// ehhez a munkacsomaghoz. A HIBA-ÁLLAPOT viszont megmarad: a fül nem
+/// állít semmit az adatról, és egy jövőbeli, pontosabb üzenetnek van hova
+/// bekötnie.
 final clubChallengesProvider = FutureProvider.autoDispose
     .family<List<CommunityChallengeSummaryPlaceholder>, ContentId>((
       ref,
       clubId,
     ) async {
       throw UnimplementedError(
-        'clubChallengesProvider is a screen-local seam; override it in tests',
+        'A klub-kihívások listájának nincs szerver-oldali végpontja: a '
+        'challenges.py minden útvonala írás (POST/DELETE), GET nincs '
+        'közöttük. Üres listát szándékosan NEM adunk — az azt állítaná, '
+        'hogy ennek a klubnak nincs kihívása, holott az igazság az, hogy '
+        'nem tudjuk.',
       );
     });
+
+/// A klub-feed és a kitűzöttek egyoldalas lapmérete. A szerver 100-nál
+/// vág; a fül ennél kevesebbet kér, mert nem lapoz.
+const int _kClubFeedPageSize = 25;
 
 /// Lightweight projection of a single club challenge row —
 /// binds to the ``clubChallengesProvider`` future shape. The

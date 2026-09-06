@@ -34,14 +34,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/logging/app_logger.dart';
+import '../../../../core/logging/logger_provider.dart';
 import '../../../../core/storage/key_value_store.dart';
+import '../../../../core/storage/storage_providers.dart';
 import '../../../auth/public.dart';
 import '../../data/local/community_draft_store.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
-import '../../domain/repositories/post_repository.dart';
 import '../outbox/community_outbox.dart';
+
+// A `communityPostRepositoryProvider` EGYETLEN definíciója a
+// `data/repositories/post_repository_impl.dart`-ban él, és onnan
+// exportáljuk tovább.
+//
+// MÉRT hibaosztály (2026-09-05, kihívások és feed): itt korábban egy
+// `StateError`-t dobó seam állt ugyanezen a néven. Aki ezt a fájlt
+// importálta (a komment- és reakció-controller, a szerkesztő), az a dobó
+// változatot kapta volna a valódi implementáció megírása UTÁN is — a
+// bekötés némán hatástalan marad. Az egy-definíció szabály az orvosság.
+import '../../data/repositories/post_repository_impl.dart'
+    show communityPostRepositoryProvider;
+export '../../data/repositories/post_repository_impl.dart'
+    show communityPostRepositoryProvider;
 
 /// The four discrete states the composer UI can be in. The
 /// discriminated enum is the source of truth — UI code switches on
@@ -449,35 +464,27 @@ final composerSourceArtifactProvider = Provider<Map<String, Object?>>(
   (ref) => const <String, Object?>{},
 );
 
-/// Provider for the [CommunityPostRepository] — overridden in tests
-/// with a fake; production wires the Kör 11
-/// ``HttpCommunityPostRepository`` (not yet on disk).
-final communityPostRepositoryProvider = Provider<CommunityPostRepository>((
-  ref,
-) {
-  throw StateError(
-    'communityPostRepositoryProvider must be overridden in production '
-    'with the Kör 11 HttpCommunityPostRepository; tests inject a fake '
-    'via dependency_overrides.',
-  );
-});
-
-/// Provider for the shared [KeyValueStore] — overridden in tests
-/// with an in-memory implementation; production wires the platform
-/// SharedPreferences-backed store.
-final communityKeyValueStoreProvider = Provider<KeyValueStore>((ref) {
-  throw StateError(
-    'communityKeyValueStoreProvider must be overridden in production '
-    'with the platform SharedPreferences-backed store; tests inject an '
-    'in-memory implementation via dependency_overrides.',
-  );
-});
+/// A community-réteg [KeyValueStore]-ja — az ALKALMAZÁS-SZINTŰ tár.
+///
+/// 2026-09-06-ig ez a provider `StateError`-t dobott („must be overridden
+/// in production"), és a szállított kompozícióban SENKI nem írta felül: a
+/// `main.dart` a `keyValueStoreProvider`-t köti be, ezt nem. A szerkesztő
+/// és a kimenő sor így az első piszkozat-mentésnél elszállt volna.
+///
+/// A community NEM saját tárat kap, hanem a meglévő app-szintűt olvassa: a
+/// piszkozat- és kimenő-sor kulcsai már névtérrel elválasztottak
+/// (`ss.community.*`), tehát egy külön tár csak egy második, felülírandó
+/// bekötési pontot jelentene. A provider továbbra is sima [Provider],
+/// tehát a widget-tesztek `InMemoryKeyValueStore`-ral felülírhatják.
+final communityKeyValueStoreProvider = Provider<KeyValueStore>(
+  (ref) => ref.watch(keyValueStoreProvider),
+);
 
 /// Provider for the [AppLogger] used by the draft store and outbox.
-final communityLoggerProvider = Provider<AppLogger>((ref) {
-  throw StateError(
-    'communityLoggerProvider must be overridden in production with the '
-    'shared AppLogger; tests inject a recording implementation via '
-    'dependency_overrides.',
-  );
-});
+///
+/// Ugyanaz a bekötési hiba állt itt is: a dobó seam helyett az
+/// app-szintű [appLoggerProvider]-t olvassuk (debug builden redaktált
+/// naplózó, release-en `NoopAppLogger`). Tesztek felülírhatják.
+final communityLoggerProvider = Provider<AppLogger>(
+  (ref) => ref.watch(appLoggerProvider),
+);
