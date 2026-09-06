@@ -80,10 +80,7 @@ void main() {
     );
     states = <BookmarksState>[];
     errors = <Object>[];
-    subscription = controller.stream.listen(
-      states.add,
-      onError: (Object error) => errors.add(error),
-    );
+    subscription = controller.stream.listen(states.add, onError: errors.add);
   });
 
   tearDown(() async {

@@ -222,6 +222,12 @@
       "path": "/community/clubs/{public_id}/members",
       "source": "lib/features/community/data/repositories/club_repository_impl.dart:325",
       "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/profiles/{public_id}",
+      "source": "lib/features/community/data/repositories/profile_repository_impl.dart:136",
+      "status": "mounted"
     }
   ]
 }

@@ -1,5 +1,38 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 JAVÍTÓ SÁV 2 (2026-09-06) — „APK build után MINDEN működjön": audit + 6 javító kör az `claude/mit-audit-javitasok-v432t5` ágon (a #594 integrálva, PR #593 tartalma ezzel szuperszedált)
+
+Audit és mért eredmény: [`docs/ui/apk-functionality-audit-2026-09-06.md`](docs/ui/apk-functionality-audit-2026-09-06.md)
+(§5 a körök táblája, §5.1 a hibák soronkénti állapota, §5.2 ami tudottan nyitva
+maradt — indokkal). A felhasználó mércéje: a `build-apk.yml` `development`
+APK-jában minden fejlesztés fusson.
+
+| Kör | Mit zárt | Commit |
+|---|---|---|
+| R1 | a #594 (`ops/community-data-layer`, 33 commit) merge a mai `main`-nel; 2 textuális + 3 szemantikus ütközés; CI zöld (run 34034973105) | `b9f3da6` |
+| R2 | a befejezett gyakorlás LÁTSZIK: történet-nézetek frissítése, streak, XP (`PracticeSessionRecorderWithHooks`), valódi jutalom-ledger, összesített statisztika a Today/Profile hubon | `99c3837` |
+| R3 | a Song Trainer VÉGIGFUT a felületről: `SongTrainerLauncher`, setup → session (`autoStart`) → eredmény effekt | `3ba298a` |
+| R4 | a tervező Today képernyője valódi tervet mutat, Skip/Shorten/Pause működik, a Setup Finish tervet generál; vision audio-only CTA | `cee142b` |
+| R5 | Könyvjelzők valódi lista/lapozás/törlés; klub Members fül + tagkezelő a szerver taglistájával; követő-sorok valódi profillal (`fetchById`) | `a24fff6` |
+| R6 | a `practiceResult` route a MOST befejezett gyakorlás eredményét mutatja (`PracticeResultTarget` kézfogás) | HEAD |
+
+**Csapdák, amiket ez a sáv mért:** (1) a CI format-kapu a formázó „magas"
+alakját kéri — `test('hosszú név',\n () async {` NEM stabil, a `test(\n 'név',\n () async {` az; egy rövid hívás, ami 80 oszlopba belefér, EGY sorra megy
+(a konténerben nincs Dart SDK, a formázót kézzel kell emulálni); (2) a
+`prefer_initializing_formals` info a CI-n fatális → `// ignore:` per sor;
+(3) a `practice/public.dart` és a song_trainer `tempo_map/meter_map` ugyanazokat
+a neveket exportálja — a teszt csak az egyiket importálja; (4) a
+`CommunityPostRepository`/`CommunityClubRepository` szerződést 12 + 6 teszt-fake
+valósítja meg — új olvasó metódus a HTTP-implementációra megy (a `clubFeed`
+precedense), nem a szerződésre.
+
+**Nyitva (indokkal, audit §5.2):** Setlist V2 + setlist-session (ADR 0471 D6
+őr), song-resume persistálás, sebesség-slider (nincs rate-művelet), tutor
+felhő-gateway (előbb a hozzájárulás bekötése — adatleltár MAJOR-3), klub-poszt
+`club_id` / `profilePosts` / kihívás GET-ek (szerver-oldali felület hiányzik),
+hang-import, community média. **Végső mérce:** a felhasználó valós-gitár
+tesztje az APK-n.
+
 ## ✅ JAVÍTÓ SÁV (ops/community-data-layer, PR #594) — „minden eddigi fejlesztés fusson az APK-ban": két kompozíciós hibaosztály zárva, teszt-APK kiadva — CI `build-apk.yml` run 34022459707 **zöld** a `4489307` HEAD-en (2026-09-06)
 
 **Teszt-APK:** [Release `test-2026-09-06-4489307`](https://github.com/wolfcasaba/strumsight/releases/tag/test-2026-09-06-4489307)

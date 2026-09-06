@@ -45,6 +45,7 @@ import '../domain/repository/practice_history_repository.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_target_compiler.dart';
 import 'practice_observation_gateway.dart';
+import 'practice_result_target.dart';
 import 'practice_session_after_record.dart';
 import 'practice_session_clock.dart';
 import 'practice_session_controller.dart';
@@ -264,6 +265,10 @@ final practiceSessionControllerProvider = Provider.autoDispose
         definition: inputs.definition,
         hooks: ref.watch(practiceSessionRecordedHooksProvider),
         logger: logger,
+        onRecordFailed: (result) {
+          if (!ref.mounted) return;
+          ref.read(practiceResultTargetProvider.notifier).recordFailed();
+        },
       );
       final clock = ref.watch(practiceSessionClockProvider);
       final tickSource = ref.watch(practiceTickSourceProvider);

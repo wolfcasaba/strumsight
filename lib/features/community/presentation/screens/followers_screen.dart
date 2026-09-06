@@ -20,7 +20,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/public.dart';
 import '../../../../core/foundation/app_failure.dart';
+import '../../../../core/logging/logger_provider.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../data/repositories/profile_repository_impl.dart';
 import '../../data/repositories/relationship_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
 import '../../domain/repositories/social_graph_repository.dart';
@@ -29,6 +31,33 @@ import '../../domain/value_objects/public_user_id.dart';
 import '../widgets/community_theme_scope.dart';
 
 enum FollowersMode { followers, following }
+
+/// The full profile behind one follow-list row (javító sáv R5, 2026-09-06).
+///
+/// The follow-list wire carries only `public_id`s, so the repository hands
+/// the screen placeholder rows; the canonical follow-up — the Kör 8
+/// `fetchById` call — was never wired (the HTTP repository threw
+/// `UnsupportedError`). A row that cannot be resolved (offline, disabled
+/// account layer, a profile the viewer may not see) keeps its placeholder;
+/// the miss is logged, never silently swallowed.
+final followerProfileProvider = FutureProvider.autoDispose
+    .family<CommunityProfile?, PublicUserId>((ref, userId) async {
+      final repository = ref.watch(communityProfileRepositoryProvider);
+      try {
+        return await repository.fetchById(userId);
+      } on Object catch (error) {
+        ref
+            .read(appLoggerProvider)
+            .warning(
+              'follower_profile_fetch_failed',
+              fields: <String, Object?>{
+                'userId': userId.value,
+                'error': error.toString(),
+              },
+            );
+        return null;
+      }
+    });
 
 class FollowersScreen extends ConsumerStatefulWidget {
   const FollowersScreen({
@@ -202,10 +231,17 @@ class _FollowersScreenState extends ConsumerState<FollowersScreen> {
                       return _Footer(isLoading: _isLoadingMore);
                     }
                     final profile = _items[index];
-                    return _FollowerTile(
-                      profile: profile,
-                      onBlock: () => _blockUser(profile.userId),
-                      onMute: () => _muteUser(profile.userId),
+                    return Consumer(
+                      builder: (context, ref, _) {
+                        final resolved = ref.watch(
+                          followerProfileProvider(profile.userId),
+                        );
+                        return _FollowerTile(
+                          profile: resolved.value ?? profile,
+                          onBlock: () => _blockUser(profile.userId),
+                          onMute: () => _muteUser(profile.userId),
+                        );
+                      },
                     );
                   },
                 ),

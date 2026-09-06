@@ -118,3 +118,49 @@ A CI az egyetlen Dart-evidencia innen: minden kör a munka-ágra dispatchelt
 
 **A végső mérce változatlan:** a valós-gitár APK-teszt a felhasználónál; a
 szintetikus zöld nem „kész".
+
+## 5. Eredmény — a körök mérve (2026-09-06, ág `claude/mit-audit-javitasok-v432t5`)
+
+A körök tárgya a §4 tervhez képest a MÉRT hibákhoz igazodott: ami a §1.3
+táblában szerepelt, azt zártuk, ami a tervben csak feltételezés volt (pl. a
+tutor-gateway), azt a mérés után dokumentált hiányként hagytuk (§5.2).
+
+| Kör | Commit | Mit zárt |
+|---|---|---|
+| **R1** | `b9f3da6` | a #594 (33 commit) merge a mai `main`-nel; 2 textuális + 3 szemantikus ütközés feloldva (§3 + a duplikált `e17_first_win_stage` mátrix-sor, a completion-report számai, a `first_win_stage_screen.dart` kizárási sor). CI `build-apk.yml` run 34034973105 **success**. |
+| **R2** | `99c3837` | a befejezett V2 gyakorlás **látszik**: `PracticeSessionRecorderWithHooks` (történet-nézetek invalidálása, streak-jóváírás, XP a gamification-láncon), `aggregatedPracticeStatsProvider` a Today/Profile hubon, a jutalom-ledger a valódi `gamificationRewardLedgerRepositoryProvider` (a `_NoopRewardLedgerRepository` törölve). |
+| **R3** | `3ba298a` | a Song Trainer **végigfut a felületről**: `SongTrainerLauncher` (dokumentum → kompiláció → controller-bemenet, `songMissing`/`staleConfig` hibakódok), a setup `onComplete` bekötve, a session route `autoStart`, a képernyő saját pause/resume/seek fallbackja és a `NavigateToSongTrainerResult` effekt-hallgató. |
+| **R4** | `cee142b` | a tervező **Today képernyője valódi tervet mutat**, Skip/Shorten/Pause működik (`TodayPlanActions`), a Setup „Finish" tervet generál és aktivál (`launchPlanGeneration`), a Start a blokk gyakorlását nyitja; a vision „audio-only" CTA elhagyja a beállítást. |
+| **R5** | `a24fff6` | a **Könyvjelzők** képernyő valódi listát tölt/lapoz/töröl (`RepositoryBookmarksController` a `GET /community/bookmarks` felett), a klub **Members fül és a tagkezelő** a szerver taglistáját mutatja (`GET /community/clubs/{id}/members`), a **követő-sorok** a valódi profilt kérik le (`fetchById` → `GET /community/profiles/{public_id}`). |
+| **R6** | (ez a commit) | a `practiceResult` route **a most befejezett gyakorlás eredményét mutatja** (`PracticeResultTarget` kézfogás a navigációs sink és az after-record hook között; fallback csak, ha tényleg nincs mit mutatni). |
+| format-javítások | `974d78e`, `c472b93`, `9ee46a8` | a CI format-kapu leletei (a formázó „magas" alakja); a CI az egyetlen Dart-evidencia ebben a konténerben. |
+
+### 5.1 A §1.3 tábla sorai — állapot a HEAD-en
+
+| §1.3 sor | Állapot | Hol |
+|---|---|---|
+| `main.dart` 6 override / 17 dobó provider | **zárva** (#594 WP-A, R1) | `lib/app/production_overrides.dart` |
+| metaadat-kódok placeholderek → `NoopPracticeSessionRecorder` | **téves lelet**: a család-provider VALÓDI kódokat ad; a valódi rés a történet-nézetek frissítése + streak + XP volt → **zárva** (R2) | `practice_session_after_record.dart` |
+| `_NoopRewardLedgerRepository` | **zárva** (R2) | `practice_result_providers.dart` |
+| `practiceResult` route `PracticeResultFallback` | **zárva** (R6) | `practice_result_route.dart`, `practice_result_target.dart` |
+| `_InMemorySongResumeRepository` | **nyitva** — a folytatási pont app-újraindításkor elvész; fájl-alapú tároló + kodek kell (`SongResumeCheckpoint`: songId/revision/range/attemptCounter/resumedFrom/recordedAt) | `song_trainer_providers.dart:432` |
+| sebesség-`Slider` `onChanged: null`; `onPlay: () {}` | **részben**: a paused-ág play/pause/resume/seek a képernyő saját controller-hívásaira esik vissza (R3). A sebesség-slider **őszintén tiltott marad**: a controllernek nincs rate-művelete (`backingRateSupported` csak jelző). | `song_trainer_screen.dart:345` |
+| tutor `LocalTutorModelGatewayStub` | **nyitva, szándékosan**: a felhő-transport (`RemoteTutorModelGateway` + `HttpTutorStreamTransport`) létezik, de az adatleltár MAJOR-3 lelete szerint az egyetlen produkciós `TutorTurnRequest`-építő (`_previewTurnRequest`) nem olvassa a `tutorConsentControllerProvider`-t; a transport bekötése ELŐBB a hozzájárulás bekötését kívánja (`test/privacy/consent_enforcement_test.dart` őrzi). | `data-inventory.yaml` `tutor_stream` |
+| vision `vision-audio-only-continue` `() {}` | **zárva** (R4) | `vision_setup_screen.dart` |
+| `_NoopBookmarksController` | **zárva** (R5) | `bookmarks_controller.dart` |
+| „Attach media" snackbar | **nyitva** (R-SEC-01 / R-PRIV-01, fenyegetés-modell kör) | `post_composer_screen.dart` |
+| tagok-fül tipp-szöveg; követő-sorok placeholder | **zárva** (R5) | `club_detail_screen.dart`, `followers_screen.dart` |
+
+### 5.2 Tudottan nyitva (mérve, indokkal)
+
+- **Setlist V2 lista + setlist-session** (`SetlistListScreenV2`, `setlist_session`): a képernyő nincs a design-rendszeren; az ADR 0471 D6 őr (elérhető-és-legacy képernyő E15-Rxx tulajdonos-kört kér) hamis tulajdonos-sort kívánna — ez saját kör.
+- **Song resume persistálás** és **sebesség-slider** — fent.
+- **Tutor felhő-gateway** — fent (hozzájárulás-bekötés az előfeltétel).
+- **Klub-poszt írás kliensről** (belső `club_id`), **`profilePosts`** és a **kihívás GET-végpontok** (`known_gap` a szerződésben) — szerver-oldali felület hiányzik.
+- **Hang-import folyamat**, a dal-tréner **ütemenkénti haladás-commit** és a `SongResultScreen` retry/next callbackjei.
+
+### 5.3 Mérce
+
+A körök CI-evidenciája a `build-apk.yml` futás a HEAD-en (a §4 szerint az
+egyetlen Dart-evidencia innen). **A végső mérce változatlan:** a felhasználó
+valós-gitár tesztje a `development` APK-n — a szintetikus zöld nem „kész".

@@ -33,6 +33,7 @@ import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_session_eligibility.dart';
 import 'gamification_practice_adapter.dart';
 import 'practice_progress_providers.dart';
+import 'practice_result_target.dart';
 import 'practice_session_recording.dart';
 
 /// One side effect to run after a V2 session was durably recorded.
@@ -54,20 +55,29 @@ final class PracticeSessionRecorderWithHooks
     required PracticeDefinition definition,
     required List<PracticeSessionRecordedHook> hooks,
     required AppLogger logger,
+    void Function(PracticeSessionResult result)? onRecordFailed,
   }) : _inner = inner, // ignore: prefer_initializing_formals
        _definition = definition, // ignore: prefer_initializing_formals
        _hooks = hooks, // ignore: prefer_initializing_formals
-       _logger = logger; // ignore: prefer_initializing_formals
+       _logger = logger, // ignore: prefer_initializing_formals
+       _onRecordFailed = onRecordFailed; // ignore: prefer_initializing_formals
 
   final PracticeSessionRecorder _inner;
   final PracticeDefinition _definition;
   final List<PracticeSessionRecordedHook> _hooks;
   final AppLogger _logger;
 
+  /// Told when the durable write itself failed (no hook runs then) — the
+  /// result route stops waiting for an entry that will never arrive.
+  final void Function(PracticeSessionResult result)? _onRecordFailed;
+
   @override
   Future<AppResult<void>> record(PracticeSessionResult result) async {
     final outcome = await _inner.record(result);
-    if (outcome case Failure()) return outcome;
+    if (outcome case Failure()) {
+      _onRecordFailed?.call(result);
+      return outcome;
+    }
     for (var index = 0; index < _hooks.length; index++) {
       try {
         await _hooks[index](result, _definition);
@@ -94,7 +104,7 @@ final class PracticeSessionRecorderWithHooks
 final practiceSessionRecordedHooksProvider =
     Provider<List<PracticeSessionRecordedHook>>((ref) {
       return <PracticeSessionRecordedHook>[
-        (result, definition) async => _refreshHistoryViews(ref),
+        (result, definition) async => _refreshHistoryViews(ref, result),
         (result, definition) async => _creditStreak(ref, result),
         (result, definition) async =>
             _awardGamification(ref, result, definition),
@@ -183,8 +193,12 @@ bool practiceSessionCountsAsPractice(PracticeFinishReason reason) =>
       PracticeFinishReason.failed => false,
     };
 
-Future<void> _refreshHistoryViews(Ref ref) async {
+Future<void> _refreshHistoryViews(Ref ref, PracticeSessionResult result) async {
   if (!ref.mounted) return;
+  // The result route may already be waiting for THIS entry (the navigation
+  // sink fires before the record completes) — name it before the list
+  // re-loads, so the route never settles on "unavailable" in between.
+  ref.read(practiceResultTargetProvider.notifier).recorded(result.id);
   // A later read re-loads the repository the recorder just wrote to; every
   // dependent (Progress dashboard, Today ring, Library sources) rebuilds.
   ref.invalidate(practiceHistoryV2ListProvider);

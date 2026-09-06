@@ -37,8 +37,8 @@ import '../../features/live/screens/live_screen.dart';
 import '../../features/metronome/screens/metronome_screen.dart';
 import '../../features/onboarding/onboarding_provider.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
+import '../../features/practice/presentation/practice_result_route.dart';
 import '../../features/practice/presentation/screens/practice_hub_screen.dart';
-import '../../features/practice/presentation/screens/practice_result_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
 import '../../features/practice/public.dart' show practiceCatalogProvider;
@@ -529,7 +529,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
         GoRoute(
           path: AppRoutes.practiceResult,
-          builder: (_, _) => const PracticeResultFallback(),
+          builder: (_, _) => const PracticeResultRoute(),
         ),
       ],
       // E15-R07 F1 (ADR 0491 D1) — the two MEASURED-constructible Practice

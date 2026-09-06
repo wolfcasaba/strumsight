@@ -122,15 +122,30 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
     };
   }
 
+  /// `GET /community/profiles/{public_id}` (javító sáv R5, 2026-09-06).
+  ///
+  /// Eddig `UnsupportedError`-t dobott („Kör 7+ implementáció"), pedig a
+  /// végpont a szerveren megvolt — a követő-listák ezért csak a
+  /// `public_id`-ből képzett helyőrző sorokat tudták mutatni. A wire-alak
+  /// (`CommunityProfileOut`) nem hordoz láthatóságot, ezért a szigorúbb
+  /// `private` a fallback; a hiányzó `display_name` (nullable oszlop) a
+  /// handle-re esik vissza, hogy a sor ne dőljön el egy üres néven.
   @override
-  Future<CommunityProfile> fetchById(PublicUserId userId) =>
-      // Out of scope for E09-R06 — Kör 5 contract, Kör 7+
-      // implementation. Throw an explicit unsupported so the
-      // ``Future<CommunityProfile>`` (non-nullable) return type is
-      // honest: the call site is wrong, not the data.
-      throw UnsupportedError(
-        'CommunityProfileRepository.fetchById is not yet implemented',
-      );
+  Future<CommunityProfile> fetchById(PublicUserId userId) async {
+    final result = await _client.getJson<CommunityProfileDto?>(
+      '/community/profiles/${userId.value}',
+      decode: (json) => CommunityProfileDto.fromJson(json),
+      conflictCode: FailureCode.validationInvalidInput,
+    );
+    return switch (result) {
+      Success(:final value) => _dtoToDomain(
+        value,
+        displayName: value?.displayName ?? value?.handle,
+        visibility: ProfileVisibility.private,
+      ),
+      Failure(:final error) => throw error,
+    };
+  }
 
   @override
   Future<CommunityProfile?> fetchByHandle(CommunityHandle handle) =>

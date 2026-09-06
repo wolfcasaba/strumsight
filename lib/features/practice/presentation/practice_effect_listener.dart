@@ -12,6 +12,7 @@ import '../../../../app/routing/app_router.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/platform/app_lifecycle.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../application/practice_result_target.dart';
 import '../application/practice_session_command.dart';
 import '../application/practice_session_effect.dart';
 import '../application/practice_session_controller.dart';
@@ -115,6 +116,14 @@ final practiceResultNavigationSinkProvider =
       // has somewhere to land. Production wires the screen's router-aware
       // navigation here; tests override with a recording stub.
       return () {
+        // Javító sáv 2026-09-06 (R6): name the ending session for the result
+        // route BEFORE navigating — the durable record is still in flight at
+        // this point, so the route must know what to wait for.
+        final inputs = ref.read(practiceActiveSessionInputsProvider);
+        final sessionId = inputs == null
+            ? null
+            : ref.read(practiceSessionControllerProvider(inputs)).result?.id;
+        ref.read(practiceResultTargetProvider.notifier).expect(sessionId);
         final router = ref.read(routerProvider);
         router.go(AppRoutes.practiceResult);
       };
