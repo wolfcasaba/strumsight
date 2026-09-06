@@ -93,7 +93,7 @@ final class ScreenVerdict {
   /// The first known source reference for this screen — used as the
   /// evidence citation when a human-readable table needs exactly one
   /// location per row. Falls back to the class declaration site when the
-  /// screen has no measured reference at all, so every one of the 96
+  /// screen has no measured reference at all, so every one of the 97
   /// verdicts still carries a source location (ADR 0471 D1).
   SourceRef get primaryReference {
     if (declarativeReferences.isNotEmpty) {
@@ -231,8 +231,15 @@ final class ScreenReachability {
   ScreenReachabilityResult render() {
     final screenPaths = UiInventory(repository).render().screenPaths;
 
+    // Comment lines are stripped (kept as blank lines so every line NUMBER
+    // stays truthful). MÉRT hiba (2026-09-06 review, MAJOR-4b): a router
+    // egy magyarázó kommentje NEVET ejtett (`PracticeHubScreen`), és a
+    // tool azt VALÓDI, kapu nélküli deklaratív hivatkozásnak számolta —
+    // a képernyő `isFlagGated` értéke ettől hamisan `false` lett. Egy
+    // komment nem regisztrál route-ot.
     final routingLines = {
-      for (final path in routingSources) path: _readLines(path),
+      for (final path in routingSources)
+        path: _withoutCommentLines(_readLines(path)),
     };
     final flagScopes = {
       for (final entry in routingLines.entries)
@@ -377,7 +384,7 @@ final class ScreenReachability {
   /// to find declarative/test mentions of any of the 96 screen classes in
   /// one pass; the caller intersects the captured names against the known
   /// class-name set, so a token that merely SHAPE-matches (ends in
-  /// `Screen`) but isn't one of the 96 real classes is a harmless no-op.
+  /// `Screen`) but isn't one of the 97 real classes is a harmless no-op.
   static final RegExp _referenceToken = RegExp(
     r'\b([A-Za-z0-9_]*Screen(?:V\d+)?)\b',
   );
@@ -428,6 +435,17 @@ final class ScreenReachability {
     }
     return scopes;
   }
+
+  /// Blanks every whole-line `//` comment, preserving the line count so a
+  /// [SourceRef]'s line number still points at the real source line.
+  ///
+  /// Deliberately line-based, matching the rest of this tool: a trailing
+  /// comment after real code stays (the code on that line is what counts),
+  /// and block comments (`/* ... */`) are not used in the routing sources.
+  static List<String> _withoutCommentLines(List<String> lines) => [
+    for (final line in lines)
+      if (line.trimLeft().startsWith('//')) '' else line,
+  ];
 
   List<String> _readLines(String relativePath) => File(
     '${repository.path}${Platform.pathSeparator}$relativePath',

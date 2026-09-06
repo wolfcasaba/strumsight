@@ -43,7 +43,24 @@ const List<String> _communityPaths = <String>[
   AppRoutes.communityClubDetail,
 ];
 
-Set<String> _registeredPaths({required bool communityEnabled}) {
+/// A `communityEnabled` alatt SAJÁT al-zászlóval regisztrált útvonalak.
+/// MÉRT hiba (2026-09-06 review, MINOR-6): a képernyők doc-kommentjei ezt
+/// ÁLLÍTOTTÁK, a router viszont mindhármat pusztán `communityEnabled` alatt
+/// hozta létre — egy kikapcsolt al-zászló mellett a gomb eltűnt, az útvonal
+/// viszont maradt.
+const String _writesPath = AppRoutes.communityCompose;
+const List<String> _clubsPaths = <String>[
+  AppRoutes.communityClubs,
+  AppRoutes.communityClubDetail,
+];
+const String _leaderboardPath = AppRoutes.communityLeaderboard;
+
+Set<String> _registeredPaths({
+  required bool communityEnabled,
+  bool writesEnabled = true,
+  bool clubsEnabled = true,
+  bool leaderboardEnabled = true,
+}) {
   final container = ProviderContainer(
     overrides: [
       onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
@@ -56,6 +73,9 @@ Set<String> _registeredPaths({required bool communityEnabled}) {
             diagnosticsEnabled: true,
             labModeAvailable: true,
             communityEnabled: communityEnabled,
+            communityWritesEnabled: writesEnabled,
+            communityClubsEnabled: clubsEnabled,
+            communityLeaderboardEnabled: leaderboardEnabled,
           ),
           diagnosticsToken: AppConfig.devDiagnosticsToken,
           buildMode: 'test',
@@ -106,6 +126,52 @@ void main() {
 
       expect(on.difference(off), unorderedEquals(_communityPaths));
       expect(off.difference(on), isEmpty);
+    });
+  });
+
+  group('az al-zászlók saját kapui (2026-09-06 review, MINOR-6)', () {
+    test('E9 — kikapcsolt communityWritesEnabled: a /community/compose NINCS '
+        'regisztrálva, a többi marad', () {
+      final paths = _registeredPaths(
+        communityEnabled: true,
+        writesEnabled: false,
+      );
+
+      expect(paths, isNot(contains(_writesPath)));
+      for (final path in _communityPaths) {
+        if (path == _writesPath) continue;
+        expect(paths, contains(path), reason: 'túlkapuzott útvonal: $path');
+      }
+    });
+
+    test('E10 — kikapcsolt communityClubsEnabled: a klub-lista ÉS a '
+        'klub-részlet is eltűnik, a többi marad', () {
+      final paths = _registeredPaths(
+        communityEnabled: true,
+        clubsEnabled: false,
+      );
+
+      for (final path in _clubsPaths) {
+        expect(paths, isNot(contains(path)), reason: 'szivárgó útvonal: $path');
+      }
+      for (final path in _communityPaths) {
+        if (_clubsPaths.contains(path)) continue;
+        expect(paths, contains(path), reason: 'túlkapuzott útvonal: $path');
+      }
+    });
+
+    test('E11 — kikapcsolt communityLeaderboardEnabled: a ranglista NINCS '
+        'regisztrálva, a többi marad', () {
+      final paths = _registeredPaths(
+        communityEnabled: true,
+        leaderboardEnabled: false,
+      );
+
+      expect(paths, isNot(contains(_leaderboardPath)));
+      for (final path in _communityPaths) {
+        if (path == _leaderboardPath) continue;
+        expect(paths, contains(path), reason: 'túlkapuzott útvonal: $path');
+      }
     });
   });
 

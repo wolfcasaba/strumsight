@@ -253,16 +253,37 @@ void main() {
     test('a rides-only route (no fields of its own) is not spuriously '
         'demanded a category (§0.0 R4)', () {
       final inventory = realInventory();
-      final ridesRoutes = inventory.routes.where(
-        (r) => r.rides.trim().isNotEmpty,
-      );
+      final ridesRoutes = inventory.routes
+          .where((r) => r.rides.trim().isNotEmpty)
+          .toList();
       expect(ridesRoutes, isNotEmpty);
-      for (final route in ridesRoutes) {
-        expect(route.fields, isEmpty);
+
+      // A `rides:` route inherits another route's transport and consent
+      // gate. Most declare NO fields of their own — those must not be
+      // demanded a category, which is what this cell guards.
+      final ridesOnly = ridesRoutes.where((r) => r.fields.isEmpty).toList();
+      expect(
+        ridesOnly,
+        isNotEmpty,
+        reason: 'no field-less rides route left to measure the rule on',
+      );
+
+      // `rides:` is NOT a blanket "declares nothing" claim, though: the
+      // two community write repositories (2026-09-06) ride `account_api`'s
+      // transport while carrying their own `leaves_device: true` fields.
+      // Those DO owe a category — and the A2 cell above proves every one
+      // of them has one, so this cell only pins that the two facts are
+      // consistent rather than forbidding the combination outright.
+      final ridesWithFields = ridesRoutes
+          .where((r) => r.fields.isNotEmpty)
+          .toList();
+      if (ridesWithFields.isNotEmpty) {
+        final report = checkDataSafety(
+          categories: realDataSafety(),
+          inventory: realInventory(),
+        );
+        expect(report.isClean, isTrue, reason: report.violations.join('\n'));
       }
-      // The real A2 cell above already proves the full real tree is
-      // clean, which is only possible if rides-only routes are not
-      // separately demanded — this cell documents WHY (fields: []).
     });
   });
 

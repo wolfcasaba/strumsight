@@ -92,7 +92,7 @@ class TutorHomeScreen extends StatelessWidget {
                 variant: SsButtonVariant.secondary,
                 icon: Icons.person_outline,
                 label: l10n.tutorProfileTitle,
-                onPressed: () => context.go(AppRoutes.tutorProfile),
+                onPressed: () => context.push(AppRoutes.tutorProfile),
               ),
               const SizedBox(height: SsSpacing.space3),
               SsButton(
@@ -100,7 +100,7 @@ class TutorHomeScreen extends StatelessWidget {
                 variant: SsButtonVariant.tertiary,
                 icon: Icons.privacy_tip_outlined,
                 label: l10n.tutorPrivacyTitle,
-                onPressed: () => context.go(AppRoutes.tutorPrivacy),
+                onPressed: () => context.push(AppRoutes.tutorPrivacy),
               ),
               const SizedBox(height: SsSpacing.space3),
               SsButton(
@@ -108,7 +108,7 @@ class TutorHomeScreen extends StatelessWidget {
                 variant: SsButtonVariant.tertiary,
                 icon: Icons.folder_outlined,
                 label: l10n.tutorDataTitle,
-                onPressed: () => context.go(AppRoutes.tutorData),
+                onPressed: () => context.push(AppRoutes.tutorData),
               ),
             ],
           ),

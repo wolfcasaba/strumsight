@@ -289,7 +289,13 @@ void main() {
 
       // A mérce: a router TÉNYLEG a cél-útvonalon áll — nem az
       // `onException` esett vissza a Live-ra.
-      expect(router.routerDelegate.currentConfiguration.uri.path, entry.path);
+      //
+      // `state.uri`, NEM `currentConfiguration.uri` (2026-09-06 review,
+      // MINOR-7): a belépők `context.go` helyett `context.push`-t hívnak,
+      // hogy a Vissza a Home-ra térjen vissza a fa gyökere helyett. Push
+      // után a `currentConfiguration.uri` a stack ALJÁT (`/tutor/home`)
+      // adja vissza, a `state.uri` a tetejét — a felhasználó azt látja.
+      expect(router.state.uri.path, entry.path);
       if (entry.destinationNeedsBootLayer) {
         expect(
           tester.takeException(),
@@ -301,6 +307,17 @@ void main() {
       } else {
         expect(tester.takeException(), isNull);
       }
+
+      // A `push` ÉRTELME: a Vissza a Home-ra tér vissza, nem a fa
+      // gyökerére. `go` mellett a stack egyelemű lenne, tehát nem lenne
+      // hova visszalépni.
+      expect(router.canPop(), isTrue);
+      router.pop();
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(router.state.uri.path, AppRoutes.tutorHome);
+      tester.takeException();
     });
   }
 

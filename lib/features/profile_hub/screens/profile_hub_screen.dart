@@ -74,7 +74,7 @@ class ProfileHubScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               OutlinedButton(
                 key: const ValueKey('profile-hub-tutor-entry'),
-                onPressed: () => context.go(AppRoutes.tutorHome),
+                onPressed: () => context.push(AppRoutes.tutorHome),
                 child: Text(l10n.aiTutorHomeTitle),
               ),
             ],

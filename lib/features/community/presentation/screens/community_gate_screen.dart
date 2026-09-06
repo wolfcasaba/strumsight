@@ -80,7 +80,7 @@ class CommunityGateScreen extends ConsumerWidget {
                     onPressed: () => ref
                         .read(communityProfileControllerProvider.notifier)
                         .refresh(),
-                    label: 'Retry',
+                    label: localizations.communityGateRetry,
                   ),
                 ],
               ),

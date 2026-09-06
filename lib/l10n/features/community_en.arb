@@ -24,6 +24,8 @@
 
   "communityGateErrorBody": "Could not load your Community profile. Pull to refresh, or check your connection.",
 
+  "communityGateRetry": "Retry",
+
   "communityEditCreateTitle": "Create your Community profile",
   "@communityEditCreateTitle": {},
 

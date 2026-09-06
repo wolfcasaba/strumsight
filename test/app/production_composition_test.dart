@@ -24,6 +24,7 @@ import 'package:strumsight/features/library/model/analyzed_session.dart';
 import 'package:strumsight/features/library_v2/providers/library_v2_providers.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 
 import '../support/preference_store.dart';
 
@@ -48,6 +49,8 @@ void main() {
   });
 
   tearDown(() async {
+    // A BLOCKER-2 cellái szándékosan KORÁBBAN dobják el — a Riverpod
+    // `dispose`-ja idempotens, de a szándék legyen olvasható.
     bootstrapContainer.dispose();
     if (root.existsSync()) {
       await root.delete(recursive: true);
@@ -110,6 +113,105 @@ void main() {
 
       expect(sessions, hasLength(1));
       expect(sessions.single.id, 'legacy-1');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // BLOCKER-2 (2026-09-06 review) — a migrátor NEM a bootstrap
+  // konténerben épülhet fel.
+  //
+  // MÉRT hiba: a `legacyLibraryMigratorBootProvider` a bootstrap `Ref`-jén
+  // keresztül olvasta ki a suppliert, a `main` viszont a `finally` ágon
+  // eldobja azt a konténert. Az app-scope-ba publikált migrátor suppliere
+  // ezért az ELSŐ hívásnál „Cannot use the Ref after it has been disposed"
+  // -zal dobott volna. A cella pontosan ezt a sorrendet játssza le.
+  // ---------------------------------------------------------------
+  group('a migrátor túléli a bootstrap konténer eldobását', () {
+    test('a supplier az eldobás UTÁN is olvassa a legacy libraryt', () async {
+      final container = appContainer();
+      await container.read(libraryRepositoryProvider).save([_session()]);
+
+      // A `main.dart` `finally` ága — a mért hiba kiváltó lépése.
+      bootstrapContainer.dispose();
+
+      final supplier = container.read(legacyLibrarySupplierProvider);
+      final sessions = await supplier();
+
+      expect(sessions, hasLength(1));
+      expect(sessions.single.id, 'legacy-1');
+    });
+
+    test('a migrátor az eldobás UTÁN oldódik fel', () {
+      final container = appContainer();
+
+      bootstrapContainer.dispose();
+
+      expect(container.read(legacyLibraryMigratorProvider), isNotNull);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // BLOCKER-1 (2026-09-06 review) — a kompozíció hibája ADAT, nem
+  // kiszökő kivétel: különben a `runApp` sohasem futna le.
+  // ---------------------------------------------------------------
+  group('composeProductionOverridesOrFailure', () {
+    test('sikeres úton felülírás-listát ad', () async {
+      final result = await composeProductionOverridesOrFailure(
+        bootstrapContainer: bootstrapContainer,
+        buildTutorOverrides: () async => const <Override>[],
+      );
+
+      expect(result, isA<ProductionCompositionSuccess>());
+      final overrides = (result as ProductionCompositionSuccess).overrides;
+      expect(overrides, isNotEmpty);
+
+      final container = ProviderContainer(
+        overrides: [
+          preferenceStoreOverride(store),
+          ..._tempRootResolverOverrides(root),
+          ...overrides,
+        ],
+      );
+      addTearDown(container.dispose);
+      expect(container.read(songRepositoryProvider), isA<SongRepository>());
+      expect(container.read(setlistRepositoryProvider), isNotNull);
+    });
+
+    test('egy dobó tároló-lépés HIBÁT ad vissza, nem kivételt', () async {
+      // A tároló-oldali lépés bukása. Eldobott bootstrap konténerrel a
+      // `read` `StateError`-t dob — ugyanúgy KIVÉTEL, mint egy sérült
+      // fájl `FormatException`-je, és a `main`-ből kiszökve ugyanúgy azt
+      // jelentené, hogy a `runApp` sohasem fut le.
+      final disposed = ProviderContainer(
+        overrides: [
+          ...storageBootstrapContainerOverrides(keyValueStore: store),
+          ..._tempRootResolverOverrides(root),
+        ],
+      )..dispose();
+
+      final result = await composeProductionOverridesOrFailure(
+        bootstrapContainer: disposed,
+        buildTutorOverrides: () async => const <Override>[],
+      );
+
+      expect(result, isA<ProductionCompositionFailure>());
+      final problems = (result as ProductionCompositionFailure).problems;
+      expect(problems, hasLength(1));
+      expect(problems.single, contains('nem indult el'));
+    });
+
+    test('a tutor-lépés kivétele is HIBÁT ad vissza', () async {
+      final result = await composeProductionOverridesOrFailure(
+        bootstrapContainer: bootstrapContainer,
+        buildTutorOverrides: () async =>
+            throw StateError('tutor asset bundle missing'),
+      );
+
+      expect(result, isA<ProductionCompositionFailure>());
+      expect(
+        (result as ProductionCompositionFailure).problems.single,
+        contains('tutor asset bundle missing'),
+      );
     });
   });
 

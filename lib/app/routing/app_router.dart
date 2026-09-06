@@ -242,6 +242,23 @@ final routerProvider = Provider<GoRouter>((ref) {
   // használ, és a szerver-oldali ADR 0497 D1 („a route nincs regisztrálva,
   // nem futásidejű 403") kliens-oldali párja.
   final communityEnabled = ref.read(appConfigProvider).flags.communityEnabled;
+  // A community AL-zászlói. A képernyők doc-kommentjei eddig azt ÁLLÍTOTTÁK,
+  // hogy egy kikapcsolt al-zászló mellett a route sincs regisztrálva — a
+  // tábla viszont mindhármat pusztán `communityEnabled` alatt hozta létre
+  // (MÉRT hiba, 2026-09-06 review, MINOR-6). Az állítás itt válik igazzá:
+  // az író-felület, a klubok és a ranglista saját kapuval regisztrálódik.
+  final communityWritesEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .communityWritesEnabled;
+  final communityClubsEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .communityClubsEnabled;
+  final communityLeaderboardEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .communityLeaderboardEnabled;
   final adaptiveShellEnabled = ref
       .read(appConfigProvider)
       .flags
@@ -420,10 +437,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.communityFeed,
           builder: (_, _) => const FollowingFeedScreen(),
         ),
-        GoRoute(
-          path: AppRoutes.communityCompose,
-          builder: (_, _) => const PostComposerScreen(),
-        ),
+        if (communityWritesEnabled)
+          GoRoute(
+            path: AppRoutes.communityCompose,
+            builder: (_, _) => const PostComposerScreen(),
+          ),
         GoRoute(
           path: AppRoutes.communityComments,
           builder: (_, state) => CommentsScreen(
@@ -463,26 +481,29 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.communityChallenges,
           builder: (_, _) => const CommunityChallengesScreen(),
         ),
-        GoRoute(
-          path: AppRoutes.communityLeaderboard,
-          builder: (_, state) => LeaderboardScreen(
-            challengeId: ContentId(state.pathParameters['challengeId']!),
+        if (communityLeaderboardEnabled)
+          GoRoute(
+            path: AppRoutes.communityLeaderboard,
+            builder: (_, state) => LeaderboardScreen(
+              challengeId: ContentId(state.pathParameters['challengeId']!),
+            ),
           ),
-        ),
         GoRoute(
           path: AppRoutes.communitySafety,
           builder: (_, _) => const SafetyRelationshipsScreen(),
         ),
-        GoRoute(
-          path: AppRoutes.communityClubs,
-          builder: (_, _) => const ClubListScreen(),
-        ),
-        GoRoute(
-          path: AppRoutes.communityClubDetail,
-          builder: (_, state) => ClubDetailScreen(
-            clubId: ContentId(state.pathParameters['clubId']!),
+        if (communityClubsEnabled) ...[
+          GoRoute(
+            path: AppRoutes.communityClubs,
+            builder: (_, _) => const ClubListScreen(),
           ),
-        ),
+          GoRoute(
+            path: AppRoutes.communityClubDetail,
+            builder: (_, state) => ClubDetailScreen(
+              clubId: ContentId(state.pathParameters['clubId']!),
+            ),
+          ),
+        ],
       ],
       if (practiceEnabled) ...[
         // E13-R08 (D6) — excluded when the adaptive shell owns `/practice`

@@ -20,7 +20,7 @@ final class UiInventory {
             .toList()
           ..sort();
     final screenPaths = featureFiles
-        .where((path) => path.endsWith('_screen.dart'))
+        .where((path) => _screenFileName.hasMatch(path))
         .toList();
     final reusableWidgetPaths = featureFiles
         .where((path) => path.contains('/widgets/') || path.contains('/views/'))
@@ -38,6 +38,13 @@ final class UiInventory {
       List.unmodifiable(overlayPaths),
     );
   }
+
+  /// A production screen source's file name. The `(_v\d+)?` tail is
+  /// MEASURED, not cosmetic: `setlist_list_screen_v2.dart` fell outside a
+  /// plain `endsWith('_screen.dart')` filter, so it never entered the
+  /// population at all — and the tool's V-suffix class-name fix therefore
+  /// had nothing to act on (2026-09-06 review, MAJOR-4a).
+  static final RegExp _screenFileName = RegExp(r'_screen(_v\d+)?\.dart$');
 
   bool _hasOverlay(File file) {
     final source = file.readAsStringSync();

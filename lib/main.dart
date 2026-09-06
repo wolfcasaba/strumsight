@@ -17,9 +17,6 @@ import 'features/ai_tutor/presentation/providers/tutor_providers.dart';
 import 'features/diagnostics/providers/diagnostics_providers.dart';
 import 'features/onboarding/onboarding_provider.dart';
 import 'features/settings/providers/lab_mode_provider.dart';
-import 'features/song_trainer/application/song_trainer_providers.dart';
-import 'features/song_trainer/domain/repositories/song_asset_repository.dart';
-import 'features/song_trainer/domain/repositories/song_repository.dart';
 
 export 'app/strumsight_app.dart' show StrumSightApp;
 
@@ -78,42 +75,42 @@ Future<void> _runAppWithSongTrainerRepositories({
   final bootstrapContainer = ProviderContainer(
     overrides: storageBootstrapContainerOverrides(keyValueStore: keyValueStore),
   );
+  // Az analysis V2 + song_trainer tárolók bekötése: override nélkül ezek a
+  // providerek `StateError`-t dobtak, és a Library fül a forráslista helyett
+  // kivételt kapott (WP-A). A lépés MINDEN kivételét a composer adattá
+  // alakítja (BLOCKER-1, 2026-09-06 review): egy sérült helyi fájl nem
+  // szökhet ki a `main`-ből, mert akkor a `runApp` sohasem futna le és a
+  // felhasználó örökre fekete képernyőt kapna.
+  final ProductionComposition composition;
   try {
-    final SongRepository repository = await bootstrapContainer.read(
-      songRepositoryBootProvider.future,
-    );
-    final SongAssetRepository assetRepository = await bootstrapContainer.read(
-      songAssetRepositoryBootProvider.future,
-    );
-    // Az analysis V2 + song_trainer tárolók bekötése: override nélkül ezek a
-    // providerek `StateError`-t dobtak, és a Library fül a forráslista helyett
-    // kivételt kapott (WP-A).
-    final storageOverrides = await buildStorageProductionOverrides(
-      bootstrapContainer,
-    );
-    final tutorOverrides = await buildTutorProductionOverrides(
-      keyValueStore: keyValueStore,
-    );
-    runApp(
-      ProviderScope(
-        overrides: [
-          appConfigProvider.overrideWithValue(config),
-          keyValueStoreProvider.overrideWithValue(keyValueStore),
-          songRepositoryProvider.overrideWithValue(repository),
-          songAssetRepositoryProvider.overrideWithValue(assetRepository),
-          diagnosticsConsentProvider.overrideWith(
-            (ref) => ref.watch(labModeProvider),
-          ),
-          onboardingSeenProvider.overrideWith(
-            () => OnboardingController(onboardingSeen),
-          ),
-          ...storageOverrides,
-          ...tutorOverrides,
-        ],
-        child: const StrumSightApp(),
-      ),
+    composition = await composeProductionOverridesOrFailure(
+      bootstrapContainer: bootstrapContainer,
+      buildTutorOverrides: () =>
+          buildTutorProductionOverrides(keyValueStore: keyValueStore),
     );
   } finally {
     bootstrapContainer.dispose();
+  }
+
+  switch (composition) {
+    case ProductionCompositionFailure(:final problems):
+      runApp(BootstrapFailureApp(problems: problems));
+    case ProductionCompositionSuccess(:final overrides):
+      runApp(
+        ProviderScope(
+          overrides: [
+            appConfigProvider.overrideWithValue(config),
+            keyValueStoreProvider.overrideWithValue(keyValueStore),
+            diagnosticsConsentProvider.overrideWith(
+              (ref) => ref.watch(labModeProvider),
+            ),
+            onboardingSeenProvider.overrideWith(
+              () => OnboardingController(onboardingSeen),
+            ),
+            ...overrides,
+          ],
+          child: const StrumSightApp(),
+        ),
+      );
   }
 }

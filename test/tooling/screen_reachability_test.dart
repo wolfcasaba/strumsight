@@ -82,15 +82,15 @@ List<String> _retireRowsMissingSuccessorOrReason(List<_PlanRow> retireRows) {
 void main() {
   final repository = Directory.current;
 
-  group('A1 — every one of the 96 real screens gets a verdict with a source '
+  group('A1 — every one of the 97 real screens gets a verdict with a source '
       'reference', () {
-    test('measures all 96, each with a non-empty source location, '
+    test('measures all 97, each with a non-empty source location, '
         'deterministically', () {
       final checker = ScreenReachability(repository);
       final first = checker.render();
       final second = checker.render();
 
-      expect(first.verdicts, hasLength(96));
+      expect(first.verdicts, hasLength(97));
       expect(first.toJsonString(), second.toJsonString());
       for (final verdict in first.verdicts) {
         expect(verdict.primaryReference.path, isNotEmpty);
@@ -240,7 +240,7 @@ final routes = [
     });
 
     test('the plan has exactly one row per measured screen', () {
-      expect(planRows.map((r) => r.screenPath).toSet(), hasLength(96));
+      expect(planRows.map((r) => r.screenPath).toSet(), hasLength(97));
       expect(
         planByPath.keys.toSet(),
         measured.verdicts.map((v) => v.screenPath).toSet(),
@@ -352,6 +352,8 @@ final routes = [
     });
   });
 
+  _reviewFixtureCells();
+
   // -------------------------------------------------------------------
   // A5 (WP-C, 2026-09-06) — bejövő hivatkozás az útvonal-konstansokra.
   //
@@ -454,6 +456,76 @@ void openLegacy() => const LegacyScreenV2();
         expect(verdict.isImperativelyReachable, isTrue);
       },
     );
+  });
+}
+
+// ---------------------------------------------------------------------
+// A7 (2026-09-06 review, MAJOR-4) — a router KOMMENTJEI nem hivatkozások,
+// és a `_screen_v<n>.dart` fájlnév is beleszámít a populációba.
+// ---------------------------------------------------------------------
+void _reviewFixtureCells() {
+  group('A7a — komment-sor nem deklaratív hivatkozás', () {
+    late Directory fixture;
+
+    setUp(() {
+      fixture = Directory.systemTemp.createTempSync('reachability_comment_');
+      _write(fixture, 'lib/features/fixture/screens/gated_screen.dart', r"""
+class GatedScreen {
+  const GatedScreen();
+}
+""");
+      // A route KAPU alatt van; a kapun KÍVÜL egy komment NEVEZI az
+      // osztályt. MÉRT hiba: ez kapu nélküli hivatkozásnak számított, és a
+      // képernyő `isFlagGated` értékét hamisan `false`-ra billentette.
+      _write(fixture, 'lib/app/routing/app_router.dart', r"""
+final routes = [
+  // GatedScreen is registered below; this line is prose, not a route.
+  if (someFeatureEnabled) ...[
+    GoRoute(path: '/gated', builder: (_, __) => const GatedScreen()),
+  ],
+];
+""");
+      _write(fixture, 'lib/app/routing/adaptive_shell_routes.dart', '');
+      _write(fixture, 'lib/app/routing/route_guards.dart', '');
+    });
+
+    tearDown(() => fixture.deleteSync(recursive: true));
+
+    test('a kommentet NEM számolja hivatkozásnak, a kapu megmarad', () {
+      final result = ScreenReachability(fixture).render();
+      final verdict = result.verdicts.singleWhere(
+        (v) => v.className == 'GatedScreen',
+      );
+
+      expect(verdict.isReachable, isTrue);
+      expect(verdict.isFlagGated, isTrue);
+      expect(verdict.declarativeReferences, hasLength(1));
+      expect(verdict.flagConditions, ['someFeatureEnabled']);
+    });
+  });
+
+  group('A7b — a `_screen_v<n>.dart` fájl is a populáció része', () {
+    late Directory fixture;
+
+    setUp(() {
+      fixture = Directory.systemTemp.createTempSync('reachability_pop_v2_');
+      _write(fixture, 'lib/features/fixture/screens/list_screen_v2.dart', r"""
+class ListScreenV2 {
+  const ListScreenV2();
+}
+""");
+      _writeRoutingSkeleton(fixture);
+    });
+
+    tearDown(() => fixture.deleteSync(recursive: true));
+
+    test('bekerül a mérésbe (a régi `_screen.dart` szűrő kihagyta)', () {
+      final result = ScreenReachability(fixture).render();
+
+      expect(result.verdicts, hasLength(1));
+      expect(result.verdicts.single.className, 'ListScreenV2');
+      expect(result.verdicts.single.isReachable, isFalse);
+    });
   });
 }
 

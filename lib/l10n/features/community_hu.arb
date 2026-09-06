@@ -24,6 +24,8 @@
 
   "communityGateErrorBody": "Nem sikerült betölteni a Közösség-profilodat. Húzd le a frissítéshez, vagy ellenőrizd a kapcsolatot.",
 
+  "communityGateRetry": "Újra",
+
   "communityEditCreateTitle": "Közösség-profilod létrehozása",
   "@communityEditCreateTitle": {},
 

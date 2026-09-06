@@ -108,8 +108,16 @@ void main() {
   );
 }
 
-/// `lab_build.json`'s flag set: the preview overlay plus the five Community
-/// defines. `aiTutorCloudEnabled`, `visionLabCaptureEnabled` and
+/// `lab_build.json`'s flag set: the preview overlay plus the FOUR Community
+/// defines the shipped artifact actually carries
+/// (`STRUMSIGHT_COMMUNITY`, `_WRITES`, `_CLUBS`, `_LEADERBOARD`).
+///
+/// `communityMediaEnabled` is deliberately FALSE — `lab_build.json` has no
+/// `STRUMSIGHT_COMMUNITY_MEDIA` define, because media upload still carries
+/// the open security blockers R-SEC-01 / R-PRIV-01. This fixture previously
+/// claimed "five Community defines" and switched media ON, so it measured a
+/// build that is not the one we ship (2026-09-06 review, MAJOR-5).
+/// `aiTutorCloudEnabled`, `visionLabCaptureEnabled` and
 /// `recognitionShadowModeEnabled` stay OFF exactly as the overlay leaves
 /// them (data egress / raw-frame persistence / cost).
 FeatureFlags _labBuildFlags() => const FeatureFlags(
@@ -146,7 +154,7 @@ FeatureFlags _labBuildFlags() => const FeatureFlags(
   newLiveStageEnabled: true,
   communityEnabled: true,
   communityWritesEnabled: true,
-  communityMediaEnabled: true,
+  communityMediaEnabled: false,
   communityLeaderboardEnabled: true,
   communityClubsEnabled: true,
   adaptiveShellEnabled: true,
