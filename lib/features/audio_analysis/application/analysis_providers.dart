@@ -282,9 +282,7 @@ final class _RiverpodAnalysisPracticeCreditRecorder
 
 /// A futó elemzés állapotgépe. A `capture/` képernyők ezt figyelik.
 final analysisControllerProvider =
-    NotifierProvider<AnalysisController, AnalysisState>(
-      AnalysisController.new,
-    );
+    NotifierProvider<AnalysisController, AnalysisState>(AnalysisController.new);
 
 /// A felvevő. `autoDispose`, és a lezárását MAGA végzi: aki a mikrofont
 /// birtokló objektumot építi, az engedi is el (a `liveFrameProvider`

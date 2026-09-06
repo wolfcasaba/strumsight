@@ -232,7 +232,6 @@ final feedCacheProvider = Provider<FeedCache>((ref) {
 // bekötés némán hatástalan marad. Ugyanez a hiba a kihívás-repositorynál
 // már egyszer előfordult; az egy-definíció szabály az orvosság.
 
-
 /// The following-feed state machine.
 class FeedController extends Notifier<FeedState> {
   @override

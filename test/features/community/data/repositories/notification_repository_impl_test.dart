@@ -178,10 +178,7 @@ void main() {
 
       expect(adapter.lastRequest!.path, '/community/notifications/n-1/read');
       expect(adapter.lastRequest!.method, 'POST');
-      expect(
-        (adapter.lastRequest!.data as Map)['idempotency_key'],
-        'key-1',
-      );
+      expect((adapter.lastRequest!.data as Map)['idempotency_key'], 'key-1');
     });
 
     test('C7 — a tömeges jelölés KÜLÖN útvonal', () async {

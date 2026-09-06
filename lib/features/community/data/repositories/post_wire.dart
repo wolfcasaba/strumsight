@@ -95,10 +95,14 @@ CommunityPost decodeCommunityPost(Map<String, Object?> json) {
 }
 
 /// Egy `{items, next_cursor}` boríték → [CommunityPage].
-CommunityPage<CommunityPost> decodeCommunityPostPage(Map<String, Object?> json) {
+CommunityPage<CommunityPost> decodeCommunityPostPage(
+  Map<String, Object?> json,
+) {
   final rawItems = json['items'];
   if (rawItems is! List) {
-    throw const FormatException('community post page wire: items must be a list');
+    throw const FormatException(
+      'community post page wire: items must be a list',
+    );
   }
   return CommunityPage<CommunityPost>(
     items: [

@@ -534,8 +534,7 @@ class NestedGenericRepository {
               r.source == 'NestedGenericRepository',
         ),
         isNotEmpty,
-        reason:
-            'a beágyazott generikus hívás nem tűnhet el a leltár elől',
+        reason: 'a beágyazott generikus hívás nem tűnhet el a leltár elől',
       );
     });
 

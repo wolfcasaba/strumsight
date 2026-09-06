@@ -74,7 +74,10 @@ void main() {
         final credit = _FakeCreditRecorder();
         final controller = _controller(run, credit: credit);
 
-        final future = controller.analyze(_document(eventful: false), audio: _audio());
+        final future = controller.analyze(
+          _document(eventful: false),
+          audio: _audio(),
+        );
         run.complete(
           _result(runId: 'run-1', value: _document(eventful: false)),
         );

@@ -101,7 +101,10 @@ void main() {
       expect(adapter.lastRequest!.queryParameters['page_size'], 25);
       // A `null` kurzus-kulcs KIMARAD: a szerver `extra="forbid"` sémája
       // egy `cursor=null` paramétert ismeretlen bemenetként utasítana el.
-      expect(adapter.lastRequest!.queryParameters.containsKey('cursor'), isFalse);
+      expect(
+        adapter.lastRequest!.queryParameters.containsKey('cursor'),
+        isFalse,
+      );
     });
 
     test('B2 — a folytatólagos kurzor TÉNYLEGESEN kimegy', () async {
@@ -169,22 +172,25 @@ void main() {
   });
 
   group('a wire-alak értelmezése', () {
-    test('B6 — az ismeretlen közönség a LEGSZŰKEBB értelmezést kapja', () async {
-      // Egy jövőbeli, szűkebb közönség `public`-ra kerekítése azt
-      // jelentené, hogy a régi kliens nyilvánosnak MUTAT egy nem
-      // nyilvános posztot. A kontroll a B3, ahol a `public` végig public.
-      adapter.body = {
-        'items': [_postJson(audience: 'club_members_only_future_value')],
-        'next_cursor': null,
-      };
+    test(
+      'B6 — az ismeretlen közönség a LEGSZŰKEBB értelmezést kapja',
+      () async {
+        // Egy jövőbeli, szűkebb közönség `public`-ra kerekítése azt
+        // jelentené, hogy a régi kliens nyilvánosnak MUTAT egy nem
+        // nyilvános posztot. A kontroll a B3, ahol a `public` végig public.
+        adapter.body = {
+          'items': [_postJson(audience: 'club_members_only_future_value')],
+          'next_cursor': null,
+        };
 
-      final page = await repository.followingFeed(
-        cursor: const CursorPage.initial(),
-        limit: 25,
-      );
+        final page = await repository.followingFeed(
+          cursor: const CursorPage.initial(),
+          limit: 25,
+        );
 
-      expect(page.items.single.audience, CommunityAudience.private);
-    });
+        expect(page.items.single.audience, CommunityAudience.private);
+      },
+    );
 
     test('B7 — a nem szerkesztett poszt editedAt-ja null marad', () async {
       // A szerver MINDEN poszthoz ad `resource_version`-t (optimista

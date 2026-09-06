@@ -4181,7 +4181,6 @@ void main() {
 // amit azok a körök már mérnek.
 // ---------------------------------------------------------------------------
 
-
 const _r33CompactPortrait = Size(412, 915);
 
 // ---------------------------------------------------------------------------
@@ -4451,7 +4450,9 @@ Widget _r33FollowersScreen() => FollowersScreen(
   mode: FollowersMode.followers,
 );
 List<Override> _r33FollowersOverrides() => [
-  socialGraphRepositoryProvider.overrideWithValue(_R33FakeSocialGraphRepository()),
+  socialGraphRepositoryProvider.overrideWithValue(
+    _R33FakeSocialGraphRepository(),
+  ),
 ];
 
 Widget _r33BookmarksScreen() => const BookmarksScreen();
@@ -4574,7 +4575,9 @@ List<Override> _r33ComposerOverrides() => [
   communityPostRepositoryProvider.overrideWithValue(
     _R33FakeCommunityPostRepository(),
   ),
-  composerSourceArtifactProvider.overrideWithValue(_r33ComposerArtifactFixture()),
+  composerSourceArtifactProvider.overrideWithValue(
+    _r33ComposerArtifactFixture(),
+  ),
   authControllerProvider.overrideWith(() => _R33GoldenAuthController()),
 ];
 
@@ -4667,7 +4670,8 @@ class _R33ScriptedCommentRepository implements CommunityPostRepository {
   }) => throw UnsupportedError('golden fixture');
 }
 
-Widget _r33CommentsScreen() => CommentsScreen(postId: ContentId('post-golden-1'));
+Widget _r33CommentsScreen() =>
+    CommentsScreen(postId: ContentId('post-golden-1'));
 List<Override> _r33CommentsOverrides() => [
   communityPostRepositoryProvider.overrideWithValue(
     _R33ScriptedCommentRepository(),
@@ -4716,8 +4720,6 @@ Future<void> _r33ExpectGolden(WidgetTester tester, String name) => expectLater(
   find.byType(MaterialApp),
   matchesGoldenFile('goldens/$name.png'),
 );
-
-
 
 const _r34CompactPortrait = Size(412, 915);
 
@@ -5075,7 +5077,8 @@ List<Override> _r34ClubMemberManagementOverrides() => [
 // 6 — community_notifications_screen.dart (UI-61)
 // ---------------------------------------------------------------------------
 
-class _R34FakeNotificationRepository implements CommunityNotificationRepository {
+class _R34FakeNotificationRepository
+    implements CommunityNotificationRepository {
   @override
   Future<CommunityPage<CommunityNotificationItem>> inboxPage({
     required Object cursor,
@@ -5136,18 +5139,19 @@ List<Override> _r34NotificationsOverrides() => [
 // 7 — safety_relationships_screen.dart (UI-61)
 // ---------------------------------------------------------------------------
 
-CommunityProfile _r34GoldenProfile(String suffix, String name) => CommunityProfile(
-  userId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5$suffix'),
-  handle: CommunityHandle('handle-$suffix'),
-  displayName: name,
-  visibility: ProfileVisibility.public,
-  avatarUrl: null,
-  bio: null,
-  skillInterests: const <String>[],
-  badges: const <String>[],
-  relationship: CommunityRelationshipToViewer.notRelated,
-  createdAt: DateTime.utc(2026, 7, 1),
-);
+CommunityProfile _r34GoldenProfile(String suffix, String name) =>
+    CommunityProfile(
+      userId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5$suffix'),
+      handle: CommunityHandle('handle-$suffix'),
+      displayName: name,
+      visibility: ProfileVisibility.public,
+      avatarUrl: null,
+      bio: null,
+      skillInterests: const <String>[],
+      badges: const <String>[],
+      relationship: CommunityRelationshipToViewer.notRelated,
+      createdAt: DateTime.utc(2026, 7, 1),
+    );
 
 class _R34FakeSocialGraphRepository implements SocialGraphRepository {
   @override
@@ -5235,7 +5239,9 @@ class _R34FakeSocialGraphRepository implements SocialGraphRepository {
 
 Widget _r34SafetyScreen() => const SafetyRelationshipsScreen();
 List<Override> _r34SafetyOverrides() => [
-  socialGraphRepositoryProvider.overrideWithValue(_R34FakeSocialGraphRepository()),
+  socialGraphRepositoryProvider.overrideWithValue(
+    _R34FakeSocialGraphRepository(),
+  ),
 ];
 
 // ---------------------------------------------------------------------------

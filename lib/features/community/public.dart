@@ -80,7 +80,6 @@ export 'presentation/screens/followers_screen.dart'
 export 'presentation/screens/following_feed_screen.dart'
     show FollowingFeedScreen;
 export 'presentation/screens/leaderboard_screen.dart' show LeaderboardScreen;
-export 'presentation/screens/post_composer_screen.dart'
-    show PostComposerScreen;
+export 'presentation/screens/post_composer_screen.dart' show PostComposerScreen;
 export 'presentation/screens/safety_relationships_screen.dart'
     show SafetyRelationshipsScreen;

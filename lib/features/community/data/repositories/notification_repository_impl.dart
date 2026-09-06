@@ -31,7 +31,9 @@ final communityNotificationApiClientProvider = Provider<ApiClient?>(
 final communityNotificationRepositoryProvider =
     Provider<CommunityNotificationRepository>((ref) {
       final client = ref.watch(communityNotificationApiClientProvider);
-      if (client == null) return const DisabledCommunityNotificationRepository();
+      if (client == null) {
+        return const DisabledCommunityNotificationRepository();
+      }
       return HttpCommunityNotificationRepository(client);
     });
 
@@ -94,10 +96,8 @@ final class HttpCommunityNotificationRepository
   Future<CommunityPage<CommunityNotificationItem>> inboxPage({
     required Object cursor,
     required int limit,
-  }) async => (await inboxPageWithUnreadCount(
-    cursor: cursor,
-    limit: limit,
-  )).page;
+  }) async =>
+      (await inboxPageWithUnreadCount(cursor: cursor, limit: limit)).page;
 
   /// Ugyanaz a hívás, de az olvasatlan-számot is visszaadja.
   ///
@@ -182,7 +182,9 @@ final class HttpCommunityNotificationRepository
 CommunityInboxPage _decodeInboxPage(Map<String, Object?> json) {
   final rawItems = json['items'];
   if (rawItems is! List) {
-    throw const FormatException('notification inbox wire: items must be a list');
+    throw const FormatException(
+      'notification inbox wire: items must be a list',
+    );
   }
   final unreadCount = json['unread_count'];
   if (unreadCount is! int) {

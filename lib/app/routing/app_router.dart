@@ -881,15 +881,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                   // adna; a felhasználó azt hinné, elromlott. Ezért a
                   // hiányt kimondjuk.
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(l10n.analysisHomeImportUnavailable),
-                    ),
+                    SnackBar(content: Text(l10n.analysisHomeImportUnavailable)),
                   );
                 },
-                onOpenAnalysis: (summary) => context.go(
-                  AppRoutes.analysisTimeline,
-                  extra: summary,
-                ),
+                onOpenAnalysis: (summary) =>
+                    context.go(AppRoutes.analysisTimeline, extra: summary),
               );
             },
           ),
@@ -943,10 +939,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ref.read(analysisControllerProvider.notifier).cancel(),
                 ),
                 onRestart: () => context.go(AppRoutes.analysisRecord),
-                onViewResult: (document) => context.go(
-                  AppRoutes.analysisOverview,
-                  extra: document,
-                ),
+                onViewResult: (document) =>
+                    context.go(AppRoutes.analysisOverview, extra: document),
               );
             },
           ),

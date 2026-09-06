@@ -319,21 +319,18 @@ void main() {
         );
       });
 
-      test(
-        'GEN: generationOrchestratorProvider és startPlanGenerationProvider '
-        'egyaránt felépül — mindkét seam be van kötve',
-        () {
-          final container = buildProductionShapeContainer();
-          expect(
-            () => container.read(generationOrchestratorProvider),
-            returnsNormally,
-          );
-          expect(
-            () => container.read(startPlanGenerationProvider),
-            returnsNormally,
-          );
-        },
-      );
+      test('GEN: generationOrchestratorProvider és startPlanGenerationProvider '
+          'egyaránt felépül — mindkét seam be van kötve', () {
+        final container = buildProductionShapeContainer();
+        expect(
+          () => container.read(generationOrchestratorProvider),
+          returnsNormally,
+        );
+        expect(
+          () => container.read(startPlanGenerationProvider),
+          returnsNormally,
+        );
+      });
     },
   );
 

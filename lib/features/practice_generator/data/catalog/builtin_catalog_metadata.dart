@@ -159,11 +159,7 @@ final Map<String, _Profile> _metadata = <String, _Profile>{
       novelty: _low,
       concentration: _mid,
     ),
-    const <String>[
-      prerequisiteTunedGuitar,
-      'chord.gMajor',
-      'chord.dMajor',
-    ],
+    const <String>[prerequisiteTunedGuitar, 'chord.gMajor', 'chord.dMajor'],
   ),
 
   // 5. Em ↔ C váltás. KÖZEPES fogó-kéz terhelés: a váltásnak van horgony-
@@ -179,11 +175,7 @@ final Map<String, _Profile> _metadata = <String, _Profile>{
       novelty: _low,
       concentration: _mid,
     ),
-    const <String>[
-      prerequisiteTunedGuitar,
-      'chord.eMinor',
-      'chord.cMajor',
-    ],
+    const <String>[prerequisiteTunedGuitar, 'chord.eMinor', 'chord.cMajor'],
   ),
 
   // 6. C / G / Am / F akkordmenet. A fogó kéz terhelése MAGAS az F miatt: az
