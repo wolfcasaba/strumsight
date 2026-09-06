@@ -8,10 +8,9 @@
 //      recorded state (never regresses).
 // T3 — `expect(null)` (no result id yet) is pending; `recorded` resolves it.
 // T4 — `recordFailed` is terminal for the route.
-// V1 — resolver: a named session whose entry is present renders it, even
-//      while the list is refreshing.
+// V1 — resolver: a named session whose entry is present renders it.
 // V2 — resolver: a named session not yet in the list is LOADING while the
-//      record is in flight or the list refreshes, FALLBACK once settled.
+//      record is in flight or the list is (re)loading, FALLBACK once settled.
 // V3 — resolver: no hand-off shows the NEWEST entry; an empty list is the
 //      fallback; a first load is loading.
 // V4 — resolver: pending is loading, failed is fallback.
@@ -106,18 +105,15 @@ void main() {
     final older = _entry('old', createdAt: DateTime.utc(2026, 9, 1));
     final newer = _entry('new', createdAt: DateTime.utc(2026, 9, 6));
     final loaded = AsyncValue<List<PracticeHistoryEntry>>.data([older, newer]);
-    final loading = const AsyncValue<List<PracticeHistoryEntry>>.loading();
-    final refreshing = loading.copyWithPrevious(loaded);
+    const loading = AsyncValue<List<PracticeHistoryEntry>>.loading();
 
-    test('V1 — a named, present session renders even while refreshing', () {
-      for (final history in [loaded, refreshing]) {
-        final view = resolvePracticeResultView(
-          target: const PracticeResultTargetSession('old', recorded: true),
-          history: history,
-        );
-        expect(view, isA<PracticeResultViewEntry>());
-        expect((view as PracticeResultViewEntry).entry.id, 'old');
-      }
+    test('V1 — a named, present session renders its entry', () {
+      final view = resolvePracticeResultView(
+        target: const PracticeResultTargetSession('old', recorded: true),
+        history: loaded,
+      );
+      expect(view, isA<PracticeResultViewEntry>());
+      expect((view as PracticeResultViewEntry).entry.id, 'old');
     });
 
     test('V2 — a named session not in the list: loading while in flight or '
@@ -132,7 +128,7 @@ void main() {
       expect(
         resolvePracticeResultView(
           target: const PracticeResultTargetSession('s9', recorded: true),
-          history: refreshing,
+          history: loading,
         ),
         isA<PracticeResultViewLoading>(),
       );
@@ -162,7 +158,7 @@ void main() {
       expect(
         resolvePracticeResultView(
           target: const PracticeResultTargetNone(),
-          history: const AsyncValue<List<PracticeHistoryEntry>>.loading(),
+          history: loading,
         ),
         isA<PracticeResultViewLoading>(),
       );

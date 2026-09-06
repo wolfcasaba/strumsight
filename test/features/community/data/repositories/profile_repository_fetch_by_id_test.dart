@@ -19,6 +19,7 @@ import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/features/community/data/repositories/profile_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_profile.dart';
+import 'package:strumsight/features/community/domain/policies/community_audience.dart';
 import 'package:strumsight/features/community/domain/value_objects/public_user_id.dart';
 
 class _RecordingAdapter implements HttpClientAdapter {

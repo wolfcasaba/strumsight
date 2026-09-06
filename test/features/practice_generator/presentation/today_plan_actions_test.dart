@@ -18,7 +18,7 @@ import '../../../support/preference_store.dart';
 void main() {
   ProviderContainer buildContainer() {
     final container = ProviderContainer(
-      overrides: <Override>[
+      overrides: [
         ...preferenceOverrides(),
         practiceGeneratorClockProvider.overrideWithValue(
           () => DateTime(2026, 8, 17, 10),
