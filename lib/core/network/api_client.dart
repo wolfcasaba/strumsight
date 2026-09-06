@@ -76,6 +76,38 @@ final class ApiClient {
     conflictCode: conflictCode,
   );
 
+  /// PATCH egy JSON-objektumot adó végpontra — a [putJson] pontos párja.
+  ///
+  /// A primitív 2026-09-06-ig HIÁNYZOTT, és ez MÉRT hibát okozott: a
+  /// szerver HÁROM szerkesztő végpontja `PATCH` igét vár
+  /// (`PATCH /community/posts/{id}`, `PATCH /community/comments/{id}`,
+  /// `PATCH /community/clubs/{id}`), a kliens viszont csak
+  /// `getJson` / `postJson` / `putJson` / `post` / `delete` közül
+  /// választhatott. A három repository-metódus ezért dokumentált
+  /// `UnimplementedError`-t dobott, és a komment szerkesztése
+  /// (`comment_controller.dart` `editComment`) ÉLESEN ebbe futott bele.
+  ///
+  /// A `PUT` NEM helyettesíti: a FastAPI útvonalak igére illesztenek, egy
+  /// `PUT /community/posts/{id}` 405-öt adna. A hibaleképezés ugyanazon a
+  /// privát [_requestJson]-on megy át, mint a többi primitívé — a 401 / 403
+  /// / 409 / 422 / 5xx osztályozás bájtra azonos.
+  Future<AppResult<T>> patchJson<T>(
+    String path, {
+    required Map<String, Object?> data,
+    required JsonObjectDecoder<T> decode,
+    bool requiresAuthentication = true,
+    String unauthorizedCode = FailureCode.authSessionExpired,
+    String conflictCode = FailureCode.validationInvalidInput,
+  }) => _requestJson(
+    method: 'PATCH',
+    path: path,
+    data: data,
+    decode: decode,
+    requiresAuthentication: requiresAuthentication,
+    unauthorizedCode: unauthorizedCode,
+    conflictCode: conflictCode,
+  );
+
   /// Sends a request whose successful response body is intentionally ignored.
   Future<AppResult<void>> post(
     String path, {

@@ -15,7 +15,9 @@
 //      `initial`),
 //   4. az ismeretlen `visibility` / `my_role` NYITOTTABB értelmezése — ez
 //      a szivárgás iránya,
-//   5. a `PATCH` hiánya: a klub szerkesztése nem hazudhat sikert.
+//   5. a szerkesztés (`PATCH`): az `UpdateClubRequest` (`extra="forbid"`)
+//      HÁROM mezőt deklarál — sem `tags`, sem `resource_version` nincs
+//      köztük —, és a 409 a `community.conflict` kódot kapja.
 library;
 
 import 'dart:convert';
@@ -23,6 +25,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/features/community/data/repositories/club_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_club.dart';
@@ -270,22 +273,75 @@ void main() {
       expect(adapter.requests, isEmpty);
     });
 
-    test('D13 — a klub szerkesztése HIBA, nem hamis siker', () async {
-      // A végpont `PATCH`, a megosztott `ApiClient`-nek nincs ilyen
-      // primitívje; a fájl nem tartozik ehhez a munkacsomaghoz.
+    test('D13 — a klub szerkesztése PATCH-et küld a klub útvonalára', () async {
+      adapter.body = _clubJson(visibility: 'public');
+
+      final club = await repository.updateClub(
+        clubId: ContentId(_clubId),
+        description: 'új',
+        visibility: ClubVisibility.public,
+        tags: const <String>[],
+        resourceVersion: '2026-09-06T10:00:00Z',
+        idempotencyKey: 'key-3',
+      );
+
+      expect(adapter.last.method, 'PATCH');
+      expect(adapter.last.path, '/community/clubs/$_clubId');
+      // Az `UpdateClubRequest` (`extra="forbid"`) HÁROM mezőt deklarál. A
+      // `resource_version` NINCS köztük — a szerver a klub-szerkesztést vak
+      // írásként végzi, tehát a token kiküldése 422 lenne. A `tags`-nek
+      // szintén nincs oszlopa.
+      expect(sentBody(), <String, Object?>{
+        'description': 'új',
+        'visibility': 'public',
+        'idempotency_key': 'key-3',
+      });
+      expect(club.id.value, _clubId);
+    });
+
+    test('D13b — a nem üres címke-lista a PATCH-en is HIBA', () async {
       await expectLater(
         repository.updateClub(
           clubId: ContentId(_clubId),
           description: 'új',
           visibility: ClubVisibility.public,
-          tags: const <String>[],
+          tags: const <String>['rock'],
           resourceVersion: '2026-09-06T10:00:00Z',
-          idempotencyKey: 'key-3',
+          idempotencyKey: 'key-3b',
         ),
-        throwsA(isA<UnimplementedError>()),
+        throwsA(isA<ArgumentError>()),
       );
       expect(adapter.requests, isEmpty);
     });
+
+    test(
+      'D13c — a klub-PATCH 409-e community.conflict, nem néma siker',
+      () async {
+        // A `clubs.py` `_raise_for_service_error` 409-et ad az érvénytelen
+        // állapot-átmenetre és az idempotencia-ütközésre is.
+        adapter.status = 409;
+        adapter.body = const <String, Object?>{'detail': 'invalid transition'};
+
+        await expectLater(
+          repository.updateClub(
+            clubId: ContentId(_clubId),
+            description: 'új',
+            visibility: ClubVisibility.private,
+            tags: const <String>[],
+            resourceVersion: '2026-09-06T10:00:00Z',
+            idempotencyKey: 'key-3c',
+          ),
+          throwsA(
+            isA<ValidationFailure>().having(
+              (failure) => failure.code,
+              'code',
+              FailureCode.communityConflict,
+            ),
+          ),
+        );
+        expect(adapter.last.method, 'PATCH');
+      },
+    );
   });
 
   group('tagsági műveletek', () {

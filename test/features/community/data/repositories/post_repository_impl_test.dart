@@ -18,7 +18,11 @@
 //   4. a reakció TÖRLÉSE külön ige-e (`DELETE`), vagy egy `kind: null`
 //      törzs (amit a szerver `extra="forbid"` sémája elutasítana),
 //   5. az ÜRES artefaktum-térkép kiküldése (422 lenne),
-//   6. a `PATCH` hiánya: a szerkesztés NEM hazudhat sikert.
+//   6. a szerkesztés (`PATCH`): a séma HÁROM mezőt fogad (`extra="forbid"`),
+//      az `idempotency_key` NEM deklarált — elküldve minden szerkesztés
+//      422 lenne —, az `artifact` kulcs kiküldése pedig a megosztott
+//      tartalom néma törlése. A 409 (elavult `resource_version`) a
+//      `community.conflict` kódot kapja.
 library;
 
 import 'dart:convert';
@@ -26,6 +30,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/features/community/domain/entities/community_reaction.dart';
 import 'package:strumsight/features/community/domain/entities/moderation_state.dart';
@@ -456,35 +461,154 @@ void main() {
     });
   });
 
-  group('a PATCH-hiány', () {
-    test('C22 — a poszt szerkesztése HIBA, nem hamis siker', () async {
-      // A `lib/core/network/api_client.dart`-nak nincs PATCH primitívje, és
-      // az a fájl nem tartozik ehhez a munkacsomaghoz. Egy csendben
-      // eldobott szerkesztés néma adatvesztés lenne.
-      await expectLater(
-        repository.updatePost(
+  group('a szerkesztés (PATCH)', () {
+    test(
+      'C22 — a poszt szerkesztése PATCH-et küld a poszt útvonalára',
+      () async {
+        adapter.body = _postJson(createdAt: '2026-09-06T11:00:00Z');
+
+        final post = await repository.updatePost(
           postId: ContentId(_postId),
           body: 'új törzs',
           audience: CommunityAudience.public,
-          resourceVersion: '2026-09-06T10:00:00Z',
+          resourceVersion: '2026-09-06T10:00:00.000Z',
           idempotencyKey: 'key-13',
-        ),
-        throwsA(isA<UnimplementedError>()),
-      );
-      // A kérés EL SEM INDULT — nincs olyan primitív, amivel elindulhatna.
-      expect(adapter.requests, isEmpty);
-    });
+        );
 
-    test('C23 — a komment szerkesztése is HIBA', () async {
+        expect(adapter.last.method, 'PATCH');
+        expect(adapter.last.path, '/community/posts/$_postId');
+        // A `PatchPostRequest` (`extra="forbid"`) HÁROM mezőt fogad ebből a
+        // hívásból; bármelyik plusz kulcs 422 lenne.
+        expect(sentBody(), <String, Object?>{
+          'audience': 'public',
+          'body': 'új törzs',
+          'resource_version': '2026-09-06T10:00:00.000Z',
+        });
+        expect(post.id.value, _postId);
+      },
+    );
+
+    test(
+      'C23 — az idempotency_key és az artifact NEM megy ki a poszt-PATCH-ben',
+      () async {
+        // MÉRT séma-igazság: a `PatchPostRequest` nem deklarál
+        // `idempotency_key`-t, tehát elküldve MINDEN poszt-szerkesztés
+        // 422-vel bukna. Az `artifact` kulcs kiküldése pedig — a
+        // `model_fields_set` explicit-clear szemantikája miatt — a
+        // megosztott tartalom néma törlése lenne.
+        adapter.body = _postJson();
+
+        await repository.updatePost(
+          postId: ContentId(_postId),
+          body: 'új törzs',
+          audience: CommunityAudience.followers,
+          resourceVersion: DateTime.utc(2026, 9, 6, 10),
+          idempotencyKey: 'key-13b',
+        );
+
+        expect(sentBody().containsKey('idempotency_key'), isFalse);
+        expect(sentBody().containsKey('artifact'), isFalse);
+        // A `DateTime` alak ISO-8601 UTC sztringként megy ki.
+        expect(sentBody()['resource_version'], '2026-09-06T10:00:00.000Z');
+      },
+    );
+
+    test(
+      'C24 — a poszt-PATCH 409-e community.conflict, nem néma siker',
+      () async {
+        // A szerver elavult `resource_version`-re 409-et ad
+        // (`StalePostUpdateError`); a hívónak ezt meg kell tudnia
+        // különböztetni egy sima validációs hibától.
+        adapter.status = 409;
+        adapter.body = const <String, Object?>{
+          'detail': {'error': 'stale_resource_version'},
+        };
+
+        await expectLater(
+          repository.updatePost(
+            postId: ContentId(_postId),
+            body: 'új törzs',
+            audience: CommunityAudience.public,
+            resourceVersion: '2026-09-06T10:00:00.000Z',
+            idempotencyKey: 'key-13c',
+          ),
+          throwsA(
+            isA<ValidationFailure>().having(
+              (failure) => failure.code,
+              'code',
+              FailureCode.communityConflict,
+            ),
+          ),
+        );
+        expect(adapter.last.method, 'PATCH');
+      },
+    );
+
+    test(
+      'C25 — az érvénytelen resource_version HIBA, nem toString()',
+      () async {
+        await expectLater(
+          repository.updatePost(
+            postId: ContentId(_postId),
+            body: 'új törzs',
+            audience: CommunityAudience.public,
+            resourceVersion: 42,
+            idempotencyKey: 'key-13d',
+          ),
+          throwsA(isA<ArgumentError>()),
+        );
+        expect(adapter.requests, isEmpty);
+      },
+    );
+
+    test(
+      'C26 — a komment szerkesztése PATCH-et küld a komment útvonalára',
+      () async {
+        const commentId = '33333333-3333-4333-8333-333333333333';
+        adapter.body = _commentJson(resourceVersion: '2026-09-06T12:00:00Z');
+
+        final comment = await repository.updateComment(
+          commentId: ContentId(commentId),
+          body: 'javított komment',
+          idempotencyKey: 'key-14',
+        );
+
+        expect(adapter.last.method, 'PATCH');
+        expect(adapter.last.path, '/community/comments/$commentId');
+        // A `PatchCommentRequest` HÁROM mezőt deklarál; a `resource_version`
+        // `null`-ja a szerveren „nincs konkurencia-ellenőrzés", és a kulcs
+        // deklarált, tehát az `extra="forbid"` átengedi.
+        expect(sentBody(), <String, Object?>{
+          'body': 'javított komment',
+          'resource_version': null,
+          'idempotency_key': 'key-14',
+        });
+        expect(comment.body, 'komment');
+        // A KÉSŐBBI `resource_version` szerkesztés-időpontot ad.
+        expect(comment.editedAt, isNotNull);
+      },
+    );
+
+    test('C27 — a komment-PATCH 409-e community.conflict', () async {
+      adapter.status = 409;
+      adapter.body = const <String, Object?>{
+        'detail': {'code': 'stale_resource_version'},
+      };
+
       await expectLater(
         repository.updateComment(
           commentId: ContentId('33333333-3333-4333-8333-333333333333'),
-          body: 'új törzs',
-          idempotencyKey: 'key-14',
+          body: 'javított komment',
+          idempotencyKey: 'key-14b',
         ),
-        throwsA(isA<UnimplementedError>()),
+        throwsA(
+          isA<ValidationFailure>().having(
+            (failure) => failure.code,
+            'code',
+            FailureCode.communityConflict,
+          ),
+        ),
       );
-      expect(adapter.requests, isEmpty);
     });
   });
 }

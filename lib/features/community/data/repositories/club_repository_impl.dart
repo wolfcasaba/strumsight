@@ -29,12 +29,17 @@
 ///   ugyanaz a néma hibaosztály, amit a feed lapozásánál már megmértünk. A
 ///   válasz `haltedAfterRequest` kurzort ad — a lista egyoldalas.
 ///
-/// **`updateClub` NEM köthető be ebben a sávban.** A végpont `PATCH
-/// /community/clubs/{id}`, a megosztott `ApiClient`-nek viszont nincs
-/// `PATCH` primitívje, és a `lib/core/network/api_client.dart` nem
-/// tartozik ehhez a munkacsomaghoz. A metódus dokumentált
-/// `UnimplementedError`-t dob — l. a `post_repository_impl.dart` azonos
-/// résének indoklását.
+/// **`updateClub` BEKÖTVE (2026-09-06).** A végpont `PATCH
+/// /community/clubs/{id}`; a megosztott `ApiClient`-nek eddig nem volt
+/// `PATCH` primitívje, ezért a metódus dokumentált `UnimplementedError`-t
+/// dobott. Az `ApiClient.patchJson` pótolja a rést. A kimenő törzs az
+/// `UpdateClubRequest` = `{description, visibility, idempotency_key?}`
+/// (`extra="forbid"`) — a `tags` és a `resource_version` továbbra sem megy
+/// ki, mert a séma nem deklarálja őket, l. fentebb. A 409-et
+/// (`_raise_for_service_error`: tagsági / meghívási limit, érvénytelen
+/// állapot-átmenet, idempotencia-ütközés) `FailureCode.communityConflict`
+/// kódra képezzük, hogy a hívó meg tudja különböztetni egy 422-es
+/// validációs hibától.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -205,16 +210,31 @@ final class HttpCommunityClubRepository implements CommunityClubRepository {
     required Object resourceVersion,
     required String idempotencyKey,
   }) async {
-    throw UnimplementedError(
-      'A klub szerkesztésének végpontja `PATCH /community/clubs/{id}`, a '
-      'megosztott `ApiClient`-nek viszont nincs PATCH primitívje (getJson / '
-      'postJson / putJson / post / delete). A hiány pótlása a '
-      '`lib/core/network/api_client.dart` fájlt érinti, ami nem tartozik '
-      'ehhez a munkacsomaghoz. Egy PUT-tal helyettesített PATCH 405-öt '
-      'kapna, egy csendben eldobott szerkesztés pedig néma adatvesztés '
-      'lenne — ezért ez a metódus HIBÁT ad, nem hamis sikert. (A felület '
-      'ráadásul sem `tags`-et, sem `resource_version`-t nem fogad.)',
+    // A `tags` itt ugyanaz a szerződés-rés, mint a `createClub`-nál: a
+    // szervernek nincs tags oszlopa, tehát ÜRES listát csendben elfogadunk,
+    // nem üreset viszont nem nyelünk el.
+    _rejectUnsupportedTags(tags);
+    // A `resourceVersion` SZÁNDÉKOSAN felhasználatlan: az
+    // `UpdateClubRequest`-nek nincs `resource_version` mezője
+    // (`extra="forbid"` — elküldve 422 lenne), a `update_club` szolgáltatás
+    // vak írást végez. Optimista konkurencia-ellenőrzés tehát NINCS a
+    // klub-szerkesztésen; a paramétert elfogadjuk, hogy a szerződés egységes
+    // maradjon, de a huzalon nem jelenik meg. Ez NEM néma adatvesztés: a
+    // token gépi eredetű, nem a felhasználó bevitele.
+    final result = await _client.patchJson<CommunityClub>(
+      '/community/clubs/${clubId.value}',
+      data: <String, Object?>{
+        'description': description,
+        'visibility': clubVisibilityToWire(visibility),
+        'idempotency_key': idempotencyKey,
+      },
+      decode: decodeCommunityClub,
+      conflictCode: FailureCode.communityConflict,
     );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
   }
 
   @override

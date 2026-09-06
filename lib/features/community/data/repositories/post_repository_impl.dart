@@ -20,15 +20,44 @@
 ///   különbséget. A szerződés `null`-ja pontosan ezt jelenti.
 /// * `deletePost`, `setReaction`, `setBookmark`, `comments`,
 ///   `createComment`, `deleteComment` — kész.
-/// * `updatePost`, `updateComment` — **NEM köthető be ebben a sávban.**
-///   A szerver mindkettőhöz `PATCH`-et vár (`PATCH /community/posts/{id}`,
-///   `PATCH /community/comments/{id}`), a megosztott `ApiClient`-nek
-///   viszont NINCS `PATCH` primitívje (`lib/core/network/api_client.dart`:
-///   `getJson` / `postJson` / `putJson` / `post` / `delete`), és az a fájl
-///   nem tartozik ehhez a munkacsomaghoz. A két metódus ezért dokumentált
-///   `UnimplementedError`-t dob, és NEM hazudik: egy `PUT`-tal
-///   helyettesített `PATCH` 405-öt kapna, egy csendben elhagyott
-///   szerkesztés pedig a mért néma-no-op hibaosztály lenne.
+/// * `updatePost`, `updateComment` — **BEKÖTVE (2026-09-06).** Mindkettő
+///   `PATCH`-et vár (`PATCH /community/posts/{id}`,
+///   `PATCH /community/comments/{id}`); a megosztott `ApiClient`-nek eddig
+///   nem volt `PATCH` primitívje, ezért a két metódus dokumentált
+///   `UnimplementedError`-t dobott — a `comment_controller.editComment`
+///   ÉLESEN ebbe futott bele. Az `ApiClient.patchJson` pótolja a rést, és
+///   a két metódus innentől valódi kérést küld.
+///
+///   **A két kimenő törzs a sémákból van kimérve, nem feltételezve**
+///   (`backend/app/community/schemas/{post,comment}.py`, mindkettő
+///   `extra="forbid"`):
+///
+///   * `PatchPostRequest` = `{audience?, body?, artifact?, resource_version}`
+///     — **NINCS benne `idempotency_key`**. A szerződés `idempotencyKey`
+///     paraméterét ezért NEM küldjük ki: elküldve a `extra="forbid"` 422-t
+///     adna, azaz minden poszt-szerkesztés elbukna. A kulcs elhagyása itt
+///     NEM néma adatvesztés (gépi dedup-token, nem felhasználói bevitel) —
+///     a szerkesztés maga a `resource_version` optimista ellenőrzésén
+///     keresztül védett.
+///   * Az `artifact` kulcsot SEM küldjük: a `patch_post` szolgáltatás
+///     `model_fields_set` szemantikája szerint az EXPLICIT `artifact: null`
+///     TÖRLI a poszt artefaktumát, a kulcs hiánya hagyja érintetlenül. A
+///     szerződésnek nincs artefaktum-paramétere a szerkesztéshez, tehát a
+///     kulcs kiküldése a megosztott tartalom néma törlése lenne.
+///   * `PatchCommentRequest` = `{body, resource_version?, idempotency_key?}`
+///     — itt a kulcs deklarált, tehát megy. A `resource_version` `null`-t
+///     kap: a szerződés `updateComment`-je nem visz verziót, a szolgáltatás
+///     pedig a `None`-t „nincs konkurencia-ellenőrzés"-ként kezeli
+///     (`comment_service.edit_comment_with_resource_version` docstring).
+///
+///   **A 409 leképezése.** A szerver mindkét felületen 409-et ad elavult
+///   `resource_version`-re (`StalePostUpdateError` / `StaleCommentUpdateError`,
+///   a törzsben a JELENLEGI verzióval). Ezt `FailureCode.communityConflict`
+///   kódú `ValidationFailure`-ré képezzük — a `profile_repository_impl.dart`
+///   precedense —, hogy a hívó meg tudja különböztetni a „valaki más
+///   szerkesztette / lejárt a szerkesztési ablak" esetet egy sima 422-es
+///   validációs hibától. A `comment_controller.editComment` `AppFailure`-t
+///   kap el, tehát a hiba a `lastError`-ba kerül, nem robban ki.
 ///
 /// **A DELETE végpontok nem visznek idempotencia-kulcsot.** A
 /// `routers/posts.py`, `routers/comments.py`, `routers/reactions.py` és
@@ -219,7 +248,25 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
     required Object resourceVersion,
     required String idempotencyKey,
   }) async {
-    throw UnimplementedError(_patchGapMessage('PATCH /community/posts/{id}'));
+    final result = await _client.patchJson<CommunityPost>(
+      '/community/posts/${postId.value}',
+      data: <String, Object?>{
+        'audience': audience.wireValue,
+        // A `null` törzs a szerveren „hagyd békén" (`patch_post`:
+        // `if "body" in payload and payload["body"] is not None`), NEM
+        // ürítés — ezen a felületen nincs mód a törzs törlésére.
+        'body': body,
+        'resource_version': _resourceVersionWireValue(resourceVersion),
+        // `idempotency_key` és `artifact` SZÁNDÉKOSAN kimarad — l. a
+        // fájl fejlécének indoklását (422, illetve néma artefaktum-törlés).
+      },
+      decode: decodeCommunityPost,
+      conflictCode: FailureCode.communityConflict,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
   }
 
   @override
@@ -342,9 +389,23 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
     required String body,
     required String idempotencyKey,
   }) async {
-    throw UnimplementedError(
-      _patchGapMessage('PATCH /community/comments/{id}'),
+    final result = await _client.patchJson<CommunityComment>(
+      '/community/comments/${commentId.value}',
+      data: <String, Object?>{
+        'body': body,
+        // A szerződés nem visz `resourceVersion`-t a kommentre; a szerver
+        // a `null`-t „nincs konkurencia-ellenőrzés"-ként kezeli. A kulcs
+        // deklarált és nullable, tehát az `extra="forbid"` átengedi.
+        'resource_version': null,
+        'idempotency_key': idempotencyKey,
+      },
+      decode: decodeCommunityComment,
+      conflictCode: FailureCode.communityConflict,
     );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
   }
 
   @override
@@ -362,18 +423,28 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
   }
 }
 
-/// A `PATCH`-hiány EGYETLEN, szó szerinti megfogalmazása.
+/// Az optimista konkurencia-token wire-alakja.
 ///
-/// Külön függvény, hogy a két hívási hely üzenete ne csúszhasson szét, és
-/// hogy a rés megszűnésekor egy helyen kelljen törölni.
-String _patchGapMessage(String endpoint) =>
-    'A szerkesztés végpontja `$endpoint`, a megosztott `ApiClient`-nek '
-    'viszont nincs PATCH primitívje (getJson / postJson / putJson / post / '
-    'delete). A hiány pótlása a `lib/core/network/api_client.dart` fájlt '
-    'érinti, ami nem tartozik ehhez a munkacsomaghoz. Egy PUT-tal '
-    'helyettesített PATCH 405-öt kapna, egy csendben eldobott szerkesztés '
-    'pedig néma adatvesztés lenne — ezért ez a metódus HIBÁT ad, nem '
-    'hamis sikert.';
+/// A szerződés `Object`-et enged (a `CommunityPost.editedAt` egy
+/// `DateTime`, a nyers wire-érték egy ISO-8601 sztring), a
+/// `PatchPostRequest.resource_version` viszont KÖTELEZŐ `datetime`. Egy
+/// `toString()`-gel „megmentett" ismeretlen típus itt 422-t adna a
+/// szerveren — és mivel a token az egyetlen védelem a felülírás ellen, a
+/// félreértett érték csendben MÁS szerkesztését dobná el. Ezért csak a két
+/// értelmes alakot fogadjuk el.
+String _resourceVersionWireValue(Object resourceVersion) {
+  if (resourceVersion is DateTime) {
+    return resourceVersion.toUtc().toIso8601String();
+  }
+  if (resourceVersion is String && resourceVersion.isNotEmpty) {
+    return resourceVersion;
+  }
+  throw ArgumentError.value(
+    resourceVersion,
+    'resourceVersion',
+    'resource version must be a DateTime or its ISO-8601 wire string',
+  );
+}
 
 /// A poszt-artefaktum wire-alakja, vagy `null`, ha nincs mit küldeni.
 ///
