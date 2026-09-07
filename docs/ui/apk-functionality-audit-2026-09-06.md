@@ -275,7 +275,7 @@ túlcsordulása 412 px-es nézeten en/2.0 + hu/1.5 + hu/2.0 szövegnagyításná
 
 **Javító sáv 3, második szakasz (R12–R13):** a képernyőn lévő belépési pontok, a community kegyes „nincs engedélyezve ezen a szerveren" állapota (`74e4515`) és a pontozott munkamenetbeli sebesség-slider (`42973ef`).
 
-**CI-bizonyíték (R12–R13):** run <KITÖLTENDŐ> a <sha> fejen
+**CI-bizonyíték (R12–R13):** `build-apk.yml` run [34145358157](https://github.com/wolfcasaba/strumsight/actions/runs/34145358157) az `ebd68b7` fejen — kapuk, teljes suite, property-kapu, Coverage és APK mind ZÖLD. Az odáig vezető leletek: analyze ×2 (`prefer_initializing_formals` a matcher privát konstruktorában — pozicionális `this._…`, mert named paraméter nem lehet privát), majd 1 teszt (`song_trainer_screen_test` R13: a family-kulcs identitás-alapú, a felülíráshoz és a képernyőhöz ugyanaz a `SongTrainerControllerInputs` példány kell), a neve a napló-ablakon kívül esett — két megszakított futás (5,3 és 11 perc) ablakaiból mérve.
 
 ### 5.4 Bejelentkezés — mért állapot (2026-09-07)
 
