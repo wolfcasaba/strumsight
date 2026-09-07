@@ -334,6 +334,21 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
         "SECOND account's profile; GET /community/profiles/me already proves "
         "this device's authenticated profile read"
     ),
+    # Javító sáv 2026-09-06 R11 — the two client call sites wired that round
+    # (`docs/ui/apk-functionality-audit-2026-09-06.md` §5.2: club posts and
+    # the profilePosts endpoint).
+    ("POST", "/community/posts"): (
+        "publishing a post writes durable, user-visible content into the "
+        "target deploy's community feed; a bring-up probe must not leave "
+        "content behind, and this chain has no delete-back step to undo it"
+    ),
+    ("GET", "/community/profiles/{public_id}/posts"): (
+        "meaningful only against a SECOND account's profile (the caller's "
+        "own posts are read through the same route with the owner "
+        "short-circuit, and a fresh account has none); GET "
+        "/community/profiles/me already proves this device's authenticated "
+        "community read access"
+    ),
 }
 
 

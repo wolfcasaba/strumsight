@@ -80,6 +80,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..models.club import CommunityClub, CommunityClubMember
 from ..models.post import (
     MODERATION_STATE_VISIBLE,
     POST_BODY_MAX_LENGTH,
@@ -123,6 +124,26 @@ class StalePostUpdateError(Exception):
             f"stale resource_version; current={current_updated_at.isoformat()}"
         )
         self.current_updated_at = current_updated_at
+
+
+class ClubPostNotAllowed(Exception):
+    """The author may not place this post into the named club.
+
+    Raised on every "you cannot post here" branch — the club does not
+    exist by that id, the club is soft-deleted, or the author is not a
+    member of it. The router collapses all three into the SAME 404 the
+    club-feed endpoint uses (``routers/clubs.py::club_feed_endpoint``),
+    so a non-member cannot tell "no such club" from "exists, you are
+    not in it" (the §A1 / D7 uniform-404 IDOR guarantee, extended from
+    the read path to the write path).
+
+    Before E17-R11 the ``club_id`` request field was written straight
+    onto the row with NO club-side check: any authenticated caller
+    could place a post into any club by guessing the internal integer,
+    and the club feed — which selects on ``club_id`` — would then serve
+    it to that club's members. The membership probe below is what
+    closes that hole; this exception is its wire shape.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +306,83 @@ def _audience_from_value(value: str) -> CommunityAudience:
         return CommunityAudience.PRIVATE
 
 
+def _resolve_club_for_author(
+    db: Session,
+    *,
+    author_profile_id: int,
+    club_id: int | None,
+    club_public_id: uuid.UUID | None,
+) -> int | None:
+    """Return the internal club id the post belongs to, or ``None``.
+
+    Both addressing forms are accepted (``club_id`` is the internal PK
+    the existing server-side callers use; ``club_public_id`` is the
+    public wire identity the Flutter client knows), and BOTH are
+    membership-checked. When both are supplied they must name the same
+    club — a mismatch is a ``ValueError`` (400), not a silent pick of
+    one of the two.
+
+    Raises :class:`ClubPostNotAllowed` when the club does not exist, is
+    soft-deleted, or the author is not one of its members.
+    """
+    if club_id is None and club_public_id is None:
+        return None
+
+    club: CommunityClub | None = None
+    if club_public_id is not None:
+        club = (
+            db.query(CommunityClub)
+            .filter_by(public_id=club_public_id, deleted_at=None)
+            .one_or_none()
+        )
+    if club is None and club_id is not None:
+        club = (
+            db.query(CommunityClub).filter_by(id=club_id, deleted_at=None).one_or_none()
+        )
+    if club is None:
+        raise ClubPostNotAllowed("club not found")
+    if club_id is not None and club_public_id is not None and club.id != club_id:
+        raise ValueError("club_id and club_public_id name different clubs")
+
+    member = (
+        db.query(CommunityClubMember.id)
+        .filter(
+            CommunityClubMember.club_id == club.id,
+            CommunityClubMember.profile_id == author_profile_id,
+        )
+        .limit(1)
+        .first()
+    )
+    if member is None:
+        raise ClubPostNotAllowed("club not found")
+    return int(club.id)
+
+
+def resolve_club_public_id(db: Session, club_id: int | None) -> uuid.UUID | None:
+    """Return the public id of the club with internal id ``club_id``.
+
+    The router calls this to fill ``PostOut.club_public_id`` — the
+    response must carry the PUBLIC identity, because the internal
+    bigint is not a wire identity (ADR 0396 §1). A ``club_id`` that
+    no longer resolves (a hard-deleted club row) yields ``None``
+    rather than raising: the post itself is still readable, and the
+    honest answer for "which club" is then "we cannot say".
+    """
+    if club_id is None:
+        return None
+    row = (
+        db.query(CommunityClub.public_id)
+        .filter(CommunityClub.id == club_id)
+        .one_or_none()
+    )
+    if row is None:
+        return None
+    raw = row[0]
+    if isinstance(raw, uuid.UUID):
+        return raw
+    return uuid.UUID(hex=str(raw))
+
+
 # ---------------------------------------------------------------------------
 # Public service surface.
 # ---------------------------------------------------------------------------
@@ -298,6 +396,7 @@ def create_post(
     body: str,
     idempotency_key: str | None,
     club_id: int | None = None,
+    club_public_id: uuid.UUID | None = None,
     artifact: dict[str, Any] | None = None,
     now: datetime,
     on_invalidate: Callable[[CachedInvalidationEvent], None] | None = None,
@@ -321,7 +420,13 @@ def create_post(
 
     Raises :class:`ValueError` when the author's community profile
     is missing (no JWT-resolvable profile → the onboarding flow is
-    upstream).
+    upstream), or when ``club_id`` and ``club_public_id`` are both
+    supplied and name different clubs.
+
+    Raises :class:`ClubPostNotAllowed` when a club is named but the
+    author may not post into it (unknown club, soft-deleted club, or
+    the author is not a member). Both addressing forms go through the
+    same gate — see :func:`_resolve_club_for_author`.
     """
     if len(body) > POST_BODY_MAX_LENGTH:
         # Defensive — the Pydantic layer should already have
@@ -331,6 +436,16 @@ def create_post(
     author = _resolve_profile_by_public_id(db, author_public_id)
     if author is None:
         raise ValueError("author community profile not found")
+
+    # Club addressing + membership gate. Runs BEFORE the idempotency
+    # probe so a non-member's retry cannot resurrect an earlier row
+    # either.
+    effective_club_id = _resolve_club_for_author(
+        db,
+        author_profile_id=author.id,
+        club_id=club_id,
+        club_public_id=club_public_id,
+    )
 
     existing = _existing_post_by_idempotency_key(
         db, profile_id=author.id, idempotency_key=idempotency_key
@@ -362,7 +477,7 @@ def create_post(
     post = CommunityPost(
         profile_id=author.id,
         audience=audience.value,
-        club_id=club_id,
+        club_id=effective_club_id,
         body=body,
         artifact_type=artifact_type,
         artifact_schema_version=artifact_schema_version,
@@ -598,10 +713,12 @@ def soft_delete_post(
 
 __all__ = [
     "CachedInvalidationEvent",
+    "ClubPostNotAllowed",
     "PostNotFound",
     "StalePostUpdateError",
     "create_post",
     "get_post",
     "patch_post",
+    "resolve_club_public_id",
     "soft_delete_post",
 ]

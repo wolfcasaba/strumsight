@@ -76,14 +76,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../../app/config/app_config.dart';
 import '../../../../../core/foundation/app_failure.dart';
 import '../../../../../l10n/app_localizations.dart';
+import '../../../application/controllers/post_composer_controller.dart';
 import '../../../data/repositories/feed_repository_impl.dart';
 import '../../../domain/entities/community_club.dart';
 import '../../../domain/entities/community_post.dart';
 import '../../../domain/value_objects/content_id.dart';
 import '../../../domain/value_objects/cursor_page.dart';
 import '../../widgets/community_theme_scope.dart';
+import '../post_composer_screen.dart';
 import 'club_list_screen.dart'
     show communityClubRepositoryProvider, communityClubVisibilityLabel;
 import 'club_member_management_screen.dart';
@@ -452,6 +455,10 @@ class _Body extends ConsumerWidget {
     final roleLabel = _roleLabel(localizations, role);
     final canLeave = role != null;
     final canManage = role == ClubRole.owner || role == ClubRole.moderator;
+    final writesEnabled = ref
+        .watch(appConfigProvider)
+        .flags
+        .communityWritesEnabled;
     return Column(
       children: <Widget>[
         // Capped + internally scrollable so a long name/description at a
@@ -500,6 +507,19 @@ class _Body extends ConsumerWidget {
                       },
                       label: localizations.communityClubDetailManage,
                     ),
+                  // Klub-poszt írása (E17-R11). Ugyanaz a kapu, ami a hub
+                  // „Új poszt" bejegyzését és a `/community/compose`
+                  // útvonalat is kapuzza: kikapcsolt írás-zászlónál a
+                  // szerkesztő route sem létezik, tehát a gomb egy nem
+                  // létező felületre vinne. A tagság a másik feltétel — a
+                  // szerver úgyis elutasítja a nem-tag posztját.
+                  if (canLeave && writesEnabled)
+                    SsButton(
+                      key: const Key('club-detail-compose'),
+                      variant: SsButtonVariant.secondary,
+                      onPressed: () => _compose(context, ref),
+                      label: localizations.communityClubComposeCta,
+                    ),
                 ],
               ),
             ),
@@ -534,6 +554,40 @@ class _Body extends ConsumerWidget {
       // screen-local providers added in E09-R25.
       _invalidateClubContentProviders(ref);
     }
+  }
+
+  /// Megnyitja a poszt-szerkesztőt EBBEN a klubban.
+  ///
+  /// A klub azonosítója a [composerClubIdProvider] holderen keresztül jut
+  /// a szerkesztőhöz: `enter` a push ELŐTT, `leave` a visszatérés után —
+  /// navigációs argumentum, nem tartós állapot. A `leave` a `finally`-ben
+  /// fut, hogy egy elszálló push se hagyjon klub-kontextust a következő,
+  /// globális szerkesztőnek.
+  ///
+  /// A piszkozat-tár és a kimenő sor változatlan, tehát a klub-poszt
+  /// ugyanazon az offline-retry úton megy ki, mint bármelyik másik.
+  ///
+  /// Visszatéréskor a klub tartalmi providerei elavulnak: az imént
+  /// közzétett poszt csak akkor látszik a Feed fülön, ha a lista újra
+  /// lekérdez.
+  Future<void> _compose(BuildContext context, WidgetRef ref) async {
+    // A holdert a `push` ELŐTT olvassuk ki és tartjuk meg: a `finally`
+    // ág az `await` UTÁN fut, ahol ez a képernyő már el is tűnhetett a
+    // fából, és egy eldobott `WidgetRef`-en olvasni hiba volna. A holder
+    // a gyökér-konténerben él (nem `autoDispose`), tehát a hivatkozás
+    // végig érvényes marad.
+    final composerClub = ref.read(composerClubIdProvider.notifier);
+    composerClub.enter(clubId.value);
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(builder: (_) => const PostComposerScreen()),
+      );
+    } finally {
+      composerClub.leave();
+    }
+    if (!context.mounted) return;
+    ref.invalidate(clubFeedProvider(clubId));
+    ref.invalidate(clubPinnedProvider(clubId));
   }
 
   void _invalidateClubContentProviders(WidgetRef ref) {

@@ -38,11 +38,13 @@ from sqlalchemy.orm import Session
 from ...deps import CurrentUser
 from ..schemas.post import CreatePostRequest, PatchPostRequest, PostOut
 from ..services.post_service import (
+    ClubPostNotAllowed,
     PostNotFound,
     StalePostUpdateError,
     create_post,
     get_post,
     patch_post,
+    resolve_club_public_id,
     soft_delete_post,
 )
 
@@ -159,18 +161,28 @@ def _resolve_public_id_by_profile_id(db: Session, profile_id: int) -> uuid.UUID:
     return raw
 
 
-def _row_to_out(post, author_public_id: uuid.UUID) -> PostOut:
+def _row_to_out(
+    post,
+    author_public_id: uuid.UUID,
+    club_public_id: uuid.UUID | None = None,
+) -> PostOut:
     """Map a ``CommunityPost`` ORM row + author public_id to ``PostOut``.
 
     Centralised so the §6.1 leak-guard (no internal id on the wire)
     is structural — adding a field to the response still routes
     through here.
+
+    ``club_public_id`` is the club's PUBLIC identity, resolved by the
+    caller from ``post.club_id``. The internal ``club_id`` stays on
+    the wire for the existing server-side callers, but the client
+    reads the public form (ADR 0396 §1).
     """
     return PostOut(
         public_id=post.public_id,
         author_public_id=author_public_id,
         audience=post.audience,  # type: ignore[arg-type]
         club_id=post.club_id,
+        club_public_id=club_public_id,
         body=post.body,
         artifact_type=post.artifact_type,
         artifact_schema_version=post.artifact_schema_version,
@@ -215,10 +227,18 @@ def post_post(
                     body=payload.body,
                     idempotency_key=payload.idempotency_key,
                     club_id=payload.club_id,
+                    club_public_id=payload.club_public_id,
                     artifact=payload.artifact,
                     now=datetime_now(),
                     on_invalidate=_on_invalidate(request),
                 )
+            except ClubPostNotAllowed as exc:
+                # Unknown club / soft-deleted club / the author is not
+                # a member — all three collapse to the SAME 404 the
+                # club-feed read path returns, so a non-member cannot
+                # probe club existence through the write surface.
+                db.rollback()
+                raise HTTPException(status_code=404, detail="club not found") from exc
             except ValueError as exc:
                 # Author has no community profile / body too long /
                 # a service-layer invariant violation.
@@ -232,7 +252,9 @@ def post_post(
             _commit_via(request, db)
         except HTTPException:
             raise
-        return _row_to_out(post, author_public_id)
+        return _row_to_out(
+            post, author_public_id, resolve_club_public_id(db, post.club_id)
+        )
     finally:
         try:
             next(db_gen, None)
@@ -273,7 +295,9 @@ def get_post_endpoint(
             # néző saját public_id-jából — a _row_to_out itt kapja
             # meg a helyes azonosítót.
             author_public_id = _resolve_public_id_by_profile_id(db, post.profile_id)
-            return _row_to_out(post, author_public_id)
+            return _row_to_out(
+                post, author_public_id, resolve_club_public_id(db, post.club_id)
+            )
         except HTTPException:
             raise
     finally:
@@ -346,7 +370,9 @@ def patch_post_endpoint(
         # jövőben nem-tulajdonos PATCH-et is átengedne valamilyen
         # okból, a válasz akkor is a valódi szerzőt mutatná).
         author_public_id = _resolve_public_id_by_profile_id(db, post.profile_id)
-        return _row_to_out(post, author_public_id)
+        return _row_to_out(
+            post, author_public_id, resolve_club_public_id(db, post.club_id)
+        )
     finally:
         try:
             next(db_gen, None)

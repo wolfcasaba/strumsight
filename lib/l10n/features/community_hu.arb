@@ -789,5 +789,23 @@
   "communityChallengeResultVerifiedIcon": "Ellenőrizve",
   "@communityChallengeResultVerifiedIcon": {},
 
-  "communityChallengeMyResultAction": "Saját eredmény megtekintése"
+  "communityChallengeMyResultAction": "Saját eredmény megtekintése",
+
+  "communityClubComposeCta": "Új poszt",
+  "@communityClubComposeCta": {},
+
+  "communityComposerClubTarget": "Ez a poszt a klubba kerül, nem a saját feededbe.",
+  "@communityComposerClubTarget": {},
+
+  "communityHubMyPostsTitle": "A posztjaid",
+  "@communityHubMyPostsTitle": {},
+
+  "communityHubMyPostsEmpty": "Még nem posztoltál semmit.",
+  "@communityHubMyPostsEmpty": {},
+
+  "communityHubMyPostsError": "A posztjaid nem töltődtek be.",
+  "@communityHubMyPostsError": {},
+
+  "communityHubMyPostsRetry": "Újra",
+  "@communityHubMyPostsRetry": {}
 }

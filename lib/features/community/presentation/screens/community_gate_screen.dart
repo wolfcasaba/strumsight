@@ -38,6 +38,11 @@ import '../../../../app/config/app_config.dart';
 import '../../../../app/routing/app_route.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/profile_controller.dart';
+import '../../data/repositories/feed_repository_impl.dart';
+import '../../domain/entities/community_post.dart';
+import '../../domain/repositories/community_page.dart';
+import '../../domain/value_objects/cursor_page.dart';
+import '../../domain/value_objects/public_user_id.dart';
 import '../widgets/community_theme_scope.dart';
 import 'edit_profile_screen.dart';
 
@@ -349,6 +354,10 @@ class _ReadyView extends ConsumerWidget {
             label: localizations.communityHubSafety,
             route: AppRoutes.communitySafety,
           ),
+          if (profile != null) ...[
+            const SizedBox(height: 24),
+            _MyPostsSection(profileId: profile.userId),
+          ],
           const SizedBox(height: 16),
           Text(
             localizations.communityEditBadgesBody,
@@ -357,6 +366,93 @@ class _ReadyView extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A megnevezett profil posztjai — `GET /community/profiles/{id}/posts`
+/// (E17-R11).
+///
+/// A végpont 2026-09-06-ig NEM létezett, ezért a repository-metódus
+/// `UnimplementedError`-t dobott, és a kliensben egyetlen felület sem
+/// hívta. A hub „A posztjaid" szakasza az első valódi fogyasztója.
+///
+/// A hiba SZÁNDÉKOSAN kibukik a providerből: a szerver egyetlen, egyforma
+/// 404-et ad a nem létező, a blokkolt és a nem látható profilra, tehát a
+/// kliens nem tudja (és nem is szabad tudnia) melyik történt — üres listát
+/// adni viszont azt ÁLLÍTANÁ, hogy a profilnak nincs posztja.
+final communityProfilePostsProvider = FutureProvider.autoDispose
+    .family<CommunityPage<CommunityPost>, PublicUserId>((ref, userId) async {
+      final repository = ref.watch(communityFeedRepositoryProvider);
+      return repository.profilePosts(
+        userId: userId,
+        cursor: const CursorPage.initial(),
+        limit: _kProfilePostsPageSize,
+      );
+    });
+
+/// A hub poszt-szakaszának lapmérete. A szakasz nem lapoz — az utolsó
+/// néhány poszt a cél, nem a teljes archívum.
+const int _kProfilePostsPageSize = 10;
+
+/// A hub „A posztjaid" szakasza.
+///
+/// Három, egymást KIZÁRÓ állapot, mindhárom kimondva: töltés, hiba
+/// (újrapróbálás-gombbal), és adat — ahol az üres lista VALÓDI állítás,
+/// mert a szerver válaszolt.
+class _MyPostsSection extends ConsumerWidget {
+  const _MyPostsSection({required this.profileId});
+
+  final PublicUserId profileId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
+    final postsAsync = ref.watch(communityProfilePostsProvider(profileId));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          localizations.communityHubMyPostsTitle,
+          style: theme.textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        ...postsAsync.when(
+          data: (page) => page.items.isEmpty
+              ? <Widget>[
+                  Text(
+                    localizations.communityHubMyPostsEmpty,
+                    key: const Key('community-hub-my-posts-empty'),
+                  ),
+                ]
+              : <Widget>[
+                  for (final post in page.items)
+                    ListTile(
+                      key: Key('community-hub-my-post-${post.id.value}'),
+                      title: Text(post.body ?? ''),
+                    ),
+                ],
+          loading: () => const <Widget>[
+            Center(child: CircularProgressIndicator()),
+          ],
+          // A hiba NEM üres listaként jelenik meg: az azt állítaná, hogy
+          // nincs posztod, holott az igazság az, hogy nem tudjuk.
+          error: (_, _) => <Widget>[
+            Text(
+              localizations.communityHubMyPostsError,
+              key: const Key('community-hub-my-posts-error'),
+            ),
+            const SizedBox(height: 8),
+            SsButton(
+              variant: SsButtonVariant.secondary,
+              onPressed: () =>
+                  ref.invalidate(communityProfilePostsProvider(profileId)),
+              label: localizations.communityHubMyPostsRetry,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

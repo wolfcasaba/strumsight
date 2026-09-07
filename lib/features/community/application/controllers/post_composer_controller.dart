@@ -94,6 +94,7 @@ class PostComposerState {
     required this.lastError,
     required this.lastSubmittedAt,
     required this.isSubmitting,
+    this.clubId,
   });
 
   /// Build the initial composer state for a fresh composer session.
@@ -101,6 +102,7 @@ class PostComposerState {
     required Map<String, Object?> sourceArtifactJson,
     CommunityAudience audience = CommunityAudience.followers,
     SharePreview sharePreview = const SharePreview(),
+    String? clubId,
   }) {
     return PostComposerState(
       body: null,
@@ -112,6 +114,7 @@ class PostComposerState {
       lastError: null,
       lastSubmittedAt: null,
       isSubmitting: false,
+      clubId: clubId,
     );
   }
 
@@ -148,6 +151,16 @@ class PostComposerState {
   /// invariant.
   final bool isSubmitting;
 
+  /// The PUBLIC id of the club this post is being written into, or
+  /// `null` for an ordinary post (E17-R11).
+  ///
+  /// Read from [composerClubIdProvider], which the entry point sets
+  /// (`enter`) immediately before it pushes the composer. The value
+  /// travels into the persisted draft and from there into the outbox
+  /// record, so a club-scoped post that survives an app restart still
+  /// reaches the club.
+  final String? clubId;
+
   PostComposerState copyWith({
     Object? body = _sentinel,
     CommunityAudience? audience,
@@ -158,6 +171,7 @@ class PostComposerState {
     Object? lastError = _sentinel,
     DateTime? lastSubmittedAt,
     bool? isSubmitting,
+    Object? clubId = _sentinel,
   }) {
     return PostComposerState(
       body: identical(body, _sentinel) ? this.body : body as String?,
@@ -173,6 +187,7 @@ class PostComposerState {
           : lastError as AppFailure?,
       lastSubmittedAt: lastSubmittedAt ?? this.lastSubmittedAt,
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      clubId: identical(clubId, _sentinel) ? this.clubId : clubId as String?,
     );
   }
 }
@@ -184,6 +199,11 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
   @override
   Future<PostComposerState> build() async {
     final sourceArtifactJson = ref.read(composerSourceArtifactProvider);
+    // A klub-kontextus a belépési ponté: a klub-részletek képernyő az
+    // `enter`-rel állítja be, mielőtt a szerkesztőt megnyitja.
+    // Alapértéken `null` — a globális szerkesztő viselkedése bájtra
+    // változatlan.
+    final clubId = ref.read(composerClubIdProvider);
     // Wait for the auth provider to settle before reading the
     // draft — otherwise the draft store would bind to userId 0
     // (the "logged-out" placeholder) and miss the persisted draft.
@@ -193,7 +213,10 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
     final store = ref.read(communityDraftStoreProvider);
     final draft = store.readDraft();
     if (draft == null) {
-      return PostComposerState.initial(sourceArtifactJson: sourceArtifactJson);
+      return PostComposerState.initial(
+        sourceArtifactJson: sourceArtifactJson,
+        clubId: clubId,
+      );
     }
     // Restore the persisted draft — including its stable idempotency
     // key (brief §5.2, A4). A user who typed, killed the app, and
@@ -201,6 +224,12 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
     // and the same key, so the next submit is the same mutation.
     return PostComposerState.initial(
       sourceArtifactJson: sourceArtifactJson,
+      // A MEGNYITÁS kontextusa nyer a piszkozatéval szemben: aki a klubból
+      // nyitja a szerkesztőt, a klubba ír, akkor is, ha a visszatöltött
+      // piszkozat globálisként (vagy másik klubban) készült. A fordított
+      // sorrend azt jelentené, hogy a klub-gomb némán a globális feedbe
+      // posztol.
+      clubId: clubId ?? draft.clubId,
     ).copyWith(
       body: draft.body,
       audience: draft.audience,
@@ -293,6 +322,10 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
         state = AsyncData(
           PostComposerState.initial(
             sourceArtifactJson: next.sourceArtifactJson,
+            // A siker után is a KLUBBAN maradunk: a képernyő nyitva van,
+            // a következő poszt ugyanoda megy, amíg a felhasználó vissza
+            // nem lép.
+            clubId: next.clubId,
           ).copyWith(
             status: PostComposerStatus.success,
             lastSubmittedAt: DateTime.now(),
@@ -348,7 +381,10 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
     if (current.isSubmitting) return;
     await ref.read(communityDraftStoreProvider).clearDraft();
     state = AsyncData(
-      PostComposerState.initial(sourceArtifactJson: current.sourceArtifactJson),
+      PostComposerState.initial(
+        sourceArtifactJson: current.sourceArtifactJson,
+        clubId: current.clubId,
+      ),
     );
   }
 
@@ -373,6 +409,7 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
         sourceArtifactJson: sourceArtifactJson,
         sharePreview: current.sharePreview,
         lastEditedAt: now,
+        clubId: current.clubId,
       );
     }
     return CommunityDraft.fresh(
@@ -381,6 +418,7 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
       sourceArtifactJson: sourceArtifactJson,
       sharePreview: current.sharePreview,
       now: now,
+      clubId: current.clubId,
     );
   }
 
@@ -462,6 +500,46 @@ final postComposerControllerProvider =
 /// The default below is an empty map.
 final composerSourceArtifactProvider = Provider<Map<String, Object?>>(
   (ref) => const <String, Object?>{},
+);
+
+/// A szerkesztő klub-kontextusa — NAVIGÁCIÓS ARGUMENTUM, nem tartós
+/// állapot (E17-R11).
+///
+/// A belépési pont a szerkesztő megnyitása ELŐTT hívja az [enter]-t, és a
+/// visszatéréskor a [leave]-t; a [PostComposerController] a felépítésekor
+/// olvassa ki az értéket. Alapértéke `null`, tehát a globális szerkesztő
+/// minden meglévő hívási helye változatlan marad.
+///
+/// **Miért nem beágyazott `ProviderScope`-override.** Egy gyerek-scope
+/// override-ja csak azokat a providereket éri el, amelyeket a Riverpod
+/// ÚJRA is épít abban a scope-ban; a szerkesztő-controller nincs
+/// scope-függőként megjelölve, tehát az override némán hatástalan
+/// maradhatna — és egy némán hatástalan klub-kontextus pontosan az a
+/// rossz-célpont hiba, amit ez a kör zár. A gyökér-szintű holder ezt a
+/// kérdést nem veti fel.
+///
+/// Az érték NEM persistált: app-újraindítás után `null`. A klub-cél a
+/// PISZKOZATBAN él tovább (`CommunityDraft.clubId`), és a szerkesztő
+/// felépítése a kettőt a megnyitás javára oldja fel.
+final class ComposerClubContext extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  /// A klub-részletek képernyő hívja, közvetlenül a szerkesztő push-a
+  /// előtt.
+  void enter(String clubPublicId) {
+    state = clubPublicId;
+  }
+
+  /// A push visszatérése után hívandó, hogy a következő — globális —
+  /// szerkesztő ne örökölje a klubot.
+  void leave() {
+    state = null;
+  }
+}
+
+final composerClubIdProvider = NotifierProvider<ComposerClubContext, String?>(
+  ComposerClubContext.new,
 );
 
 /// A community-réteg [KeyValueStore]-ja — az ALKALMAZÁS-SZINTŰ tár.

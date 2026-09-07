@@ -12,7 +12,9 @@
 ///
 /// **A tíz szerződés-metódus NEM egyforma állapotú, és ezt a kód kimondja:**
 ///
-/// * `createPost` — `POST /community/posts`. Kész.
+/// * `createPost` — `POST /community/posts`. Kész. A klub-kontextusban
+///   indított szerkesztő a szerződésen KÍVÜLI `createClubPost`-ot hívja
+///   (E17-R11) — ugyanaz a végpont, plusz a klub publikus azonosítója.
 /// * `fetchPost` — `GET /community/posts/{id}`. Kész. A 404 és a 403
 ///   egyaránt `null`-t ad: a szerver SZÁNDÉKOSAN egyforma 404-et küld a
 ///   „nincs ilyen poszt" és a „van, de nem látod" ágra (leak-guard,
@@ -211,6 +213,44 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
         // `extra="forbid"`: az ÜRES artefaktum-térkép nem küldhető el,
         // mert a `parse_share_artifact` diszkriminátort vár. A szerkesztő
         // alapértelmezése épp az üres térkép (`composerSourceArtifactProvider`).
+        'artifact': ?_artifactPayload(artifact),
+        'idempotency_key': idempotencyKey,
+      },
+      decode: decodeCommunityPost,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  /// Klub-poszt írása — `POST /community/posts` a klub PUBLIKUS
+  /// azonosítójával (E17-R11).
+  ///
+  /// SZÁNDÉKOSAN nem része a `CommunityPostRepository` szerződésnek (a
+  /// `listBookmarks` / `clubFeed` precedense): a szerződést tizenkét
+  /// teszt-fake valósítja meg, és egy új absztrakt metódus mindet eltörné,
+  /// miközben az egyetlen hívó a klub-kontextusban indított szerkesztő
+  /// kiürítése (`community_outbox.dart`).
+  ///
+  /// A klubot a PUBLIKUS azonosítója nevezi meg, nem a belső egész:
+  /// a kliens az utóbbit nem ismeri (ADR 0396 §1), és a szerver E17-R11
+  /// óta mindkét cím-formára lefuttatja a tagsági kaput. A nem-tag /
+  /// ismeretlen / törölt klub egyforma 404-et kap — a hívó ezért NEM tud
+  /// (és nem is szabad tudnia) a három eset között különbséget tenni.
+  Future<CommunityPost> createClubPost({
+    required ContentId clubId,
+    required CommunityAudience audience,
+    required String? body,
+    required Object artifact,
+    required String idempotencyKey,
+  }) async {
+    final result = await _client.postJson<CommunityPost>(
+      '/community/posts',
+      data: <String, Object?>{
+        'audience': audience.wireValue,
+        'body': body,
+        'club_public_id': clubId.value,
         'artifact': ?_artifactPayload(artifact),
         'idempotency_key': idempotencyKey,
       },

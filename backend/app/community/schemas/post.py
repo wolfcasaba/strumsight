@@ -118,10 +118,20 @@ class CreatePostRequest(BaseModel):
 
     audience: CommunityAudience
     body: Annotated[str, Field(min_length=1, max_length=POST_BODY_MAX_LENGTH)]
-    # Optional ``club_id`` — the column exists on the row (brief
-    # §0.0 D6) but the value is not yet constrained by membership
-    # (Kör 24). Nullable; absent in the JSON body means "no club".
+    # Optional internal ``club_id``. Kept for the existing server-side
+    # callers and tests that already address a club by its internal PK;
+    # a CLIENT should send ``club_public_id`` instead (the internal
+    # bigint is not part of the public wire identity — ADR 0396 §1).
+    # Since E17-R11 BOTH forms are membership-checked in the service
+    # layer: the column used to be written from the request body with
+    # no club-side check at all, so any authenticated caller could
+    # place a post into any club by guessing an integer.
     club_id: int | None = Field(default=None, ge=1)
+    # Optional ``club_public_id`` — the PUBLIC wire identity of the
+    # club the post belongs to. This is the field the Flutter client
+    # sends (it only ever knows public ids). When both are present
+    # they must name the same club, otherwise the request is a 400.
+    club_public_id: uuid.UUID | None = None
     # Artifact payload — the validated ``ShareArtifactEnvelope`` is
     # computed at parse time via ``parse_share_artifact`` (ADR 0404,
     # brief §0.0 D10). Unknown discriminators, unknown
@@ -210,6 +220,10 @@ class PostOut(BaseModel):
     )
     audience: CommunityAudience
     club_id: int | None = None
+    #: The club's PUBLIC id, resolved from ``club_id`` by the router.
+    #: ``None`` for a post that does not belong to a club. The client
+    #: reads THIS field, never the internal ``club_id`` above.
+    club_public_id: uuid.UUID | None = None
     body: str
     artifact_type: str | None = None
     artifact_schema_version: int | None = None

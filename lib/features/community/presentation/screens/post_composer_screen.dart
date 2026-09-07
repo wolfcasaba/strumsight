@@ -217,6 +217,7 @@ class _ComposerBody extends StatelessWidget {
       );
     }
 
+    final l10n = AppLocalizations.of(context);
     final canSubmit =
         !state.isSubmitting &&
         state.status != PostComposerStatus.submitting &&
@@ -236,6 +237,14 @@ class _ComposerBody extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
+                  // Klub-kontextus (E17-R11). A sáv CSAK akkor jelenik meg,
+                  // ha a szerkesztőt egy klubból nyitották: a poszt akkor
+                  // nem a globális feedbe, hanem a klubéba megy, és ezt a
+                  // felhasználónak látnia kell, mielőtt közzétesz.
+                  if (state.clubId != null) ...<Widget>[
+                    _ClubTargetBanner(label: l10n.communityComposerClubTarget),
+                    const SizedBox(height: 16),
+                  ],
                   const _SectionLabel(label: _ComposerLabels.bodyLabel),
                   const SizedBox(height: 8),
                   TextField(
@@ -285,6 +294,44 @@ class _ComposerBody extends StatelessWidget {
               onPressed: canSubmit ? onSubmit : null,
               loading: state.status == PostComposerStatus.submitting,
               label: _ComposerLabels.publish,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A klub-célt kimondó sáv a szerkesztő tetején.
+///
+/// Külön widget, hogy a `Key` stabil azonosítót adjon a widget-tesztnek
+/// (a felirat fordítás-függő, a kulcs nem).
+class _ClubTargetBanner extends StatelessWidget {
+  const _ClubTargetBanner({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const Key('composer-club-target'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            Icons.groups_outlined,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: theme.colorScheme.onSecondaryContainer),
             ),
           ),
         ],

@@ -228,6 +228,18 @@
       "path": "/community/profiles/{public_id}",
       "source": "lib/features/community/data/repositories/profile_repository_impl.dart:136",
       "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/posts",
+      "source": "lib/features/community/data/repositories/post_repository_impl.dart:204",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/profiles/{public_id}/posts",
+      "source": "lib/features/community/data/repositories/feed_repository_impl.dart:122",
+      "status": "mounted"
     }
   ]
 }

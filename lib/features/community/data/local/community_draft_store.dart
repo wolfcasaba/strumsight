@@ -73,6 +73,7 @@ class CommunityDraft {
     required this.sourceArtifactJson,
     required this.sharePreview,
     required this.lastEditedAt,
+    this.clubId,
   });
 
   /// Build the *first* draft for a new composer session. Generates a
@@ -87,6 +88,7 @@ class CommunityDraft {
     required SharePreview sharePreview,
     DateTime? now,
     int monotonicCounter = 0,
+    String? clubId,
   }) {
     final stamp = (now ?? DateTime.now()).microsecondsSinceEpoch;
     final key = 'e09-r12-draft-$stamp-$monotonicCounter';
@@ -97,6 +99,7 @@ class CommunityDraft {
       sourceArtifactJson: sourceArtifactJson,
       sharePreview: sharePreview,
       lastEditedAt: now ?? DateTime.now(),
+      clubId: clubId,
     );
   }
 
@@ -126,12 +129,23 @@ class CommunityDraft {
   /// future rounds.
   final DateTime lastEditedAt;
 
+  /// The PUBLIC id of the club this draft is being written into, or
+  /// `null` for an ordinary post (E17-R11).
+  ///
+  /// Persisted with the draft on purpose: the composer can be opened
+  /// from a club, killed before submit, and re-opened later. Keeping the
+  /// club only in memory would mean the recovered draft silently
+  /// published to the global feed instead of the club — a wrong
+  /// destination the user has no way to notice.
+  final String? clubId;
+
   CommunityDraft copyWith({
     String? body,
     CommunityAudience? audience,
     Map<String, Object?>? sourceArtifactJson,
     SharePreview? sharePreview,
     DateTime? lastEditedAt,
+    String? clubId,
   }) {
     return CommunityDraft(
       idempotencyKey: idempotencyKey,
@@ -140,6 +154,7 @@ class CommunityDraft {
       sourceArtifactJson: sourceArtifactJson ?? this.sourceArtifactJson,
       sharePreview: sharePreview ?? this.sharePreview,
       lastEditedAt: lastEditedAt ?? this.lastEditedAt,
+      clubId: clubId ?? this.clubId,
     );
   }
 
@@ -157,6 +172,11 @@ class CommunityDraft {
     'sourceArtifactJson': sourceArtifactJson,
     'sharePreview': _sharePreviewToJson(sharePreview),
     'lastEditedAt': lastEditedAt.toIso8601String(),
+    // Csak akkor kerül a dokumentumba, ha van klub-kontextus: a régi,
+    // kulcs nélküli bájtok így változatlanul olvashatók maradnak (nincs
+    // séma-verzió emelés, mert a hiányzó kulcs jelentése egyértelmű:
+    // „nem klubba írjuk").
+    if (clubId != null) 'clubId': clubId,
   };
 
   static CommunityDraft fromJson(Map<String, Object?> object) {
@@ -211,6 +231,17 @@ class CommunityDraft {
         field: 'lastEditedAt',
       );
     }
+    // A hiányzó kulcs „nincs klub"; egy ROSSZ típusú (vagy üres) érték
+    // viszont nem olvasható úgy, hogy „akkor globális" — az a piszkozatot
+    // csendben más célra küldené —, ezért az egész rekord elbukik, és a
+    // `JsonObjectStore` karanténba teszi a bájtokat.
+    final clubIdRaw = object['clubId'];
+    if (clubIdRaw != null && (clubIdRaw is! String || clubIdRaw.isEmpty)) {
+      throw JsonRecordException(
+        'clubId must be a non-empty string when present',
+        field: 'clubId',
+      );
+    }
     return CommunityDraft(
       idempotencyKey: key,
       body: body is String ? body : null,
@@ -218,6 +249,7 @@ class CommunityDraft {
       sourceArtifactJson: sourceArtifactRaw,
       sharePreview: _sharePreviewFromJson(previewRaw),
       lastEditedAt: lastEdited,
+      clubId: clubIdRaw as String?,
     );
   }
 }
@@ -360,6 +392,7 @@ class CommunityDraftStore {
       sourceArtifactJson: previous.sourceArtifactJson,
       sharePreview: const SharePreview(),
       lastEditedAt: previous.lastEditedAt,
+      clubId: previous.clubId,
     );
   }
 }

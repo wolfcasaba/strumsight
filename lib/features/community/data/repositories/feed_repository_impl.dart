@@ -12,14 +12,14 @@
 /// * `clubPinned` — `GET /community/clubs/{id}/pinned`. Kész. A lista
 ///   egyoldalas (a kitűzhető posztok száma korlátos), ezért a válasz
 ///   `haltedAfterRequest` kurzort ad, nem `initial`-t.
-/// * `profilePosts` — **NINCS végpontja.** Se route, se service: a
-///   profil-posztok láthatósági szűrése (közönség + blokk + némítás)
-///   sosem készült el. A metódus ezért `UnimplementedError`-t dob, és
-///   NEM ad üres oldalt: az üres lista azt állítaná, hogy ennek a
-///   felhasználónak nincs posztja — magabiztos hamis állítás, miközben
-///   az igazság az, hogy nem tudjuk. A hiány a
-///   `docs/contracts/client-backend-endpoints.json` `known_gap` sorában
-///   is szerepel.
+/// * `profilePosts` — `GET /community/profiles/{id}/posts`. **Bekötve
+///   (E17-R11).** 2026-09-06-ig ennek a metódusnak nem volt szerver-oldali
+///   végpontja (se route, se service), ezért `UnimplementedError`-t dobott
+///   — szándékosan, mert az üres oldal azt ÁLLÍTOTTA volna, hogy ennek a
+///   profilnak nincs posztja. A végpont most létezik
+///   (`backend/app/community/feed/profile_posts.py`), a láthatósági
+///   szűrés — profil-láthatóság, blokk, közönség-engedélylista,
+///   moderáció, lágy törlés — a SZERVERÉ; a kliens csak a lapozást viszi.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,13 +113,28 @@ final class HttpCommunityFeedRepository implements CommunityFeedRepository {
     required Object cursor,
     required int limit,
   }) async {
-    throw UnimplementedError(
-      'A profil-posztok listájának nincs szerver-oldali végpontja '
-      '(se route, se service): a láthatósági szűrés — közönség, blokk, '
-      'némítás — sosem készült el. Üres oldalt szándékosan NEM adunk: az '
-      'azt állítaná, hogy ennek a profilnak nincs posztja, holott az '
-      'igazság az, hogy nem tudjuk.',
+    // A wire-alak bájtra ugyanaz, mint a következés- és a klub-feedé (a
+    // szerver mindhármat a KÖZÖS poszt-projekción engedi át), ezért
+    // ugyanaz a dekóder olvassa. A `null` kurzort az `ApiClient` kihagyja
+    // — a szerver `extra="forbid"` sémája egy `cursor=null`-t ismeretlen
+    // bemenetként utasítana el.
+    final result = await _client.getJson<CommunityPage<CommunityPost>>(
+      '/community/profiles/${userId.value}/posts',
+      queryParameters: <String, Object?>{
+        'page_size': limit,
+        'cursor': communityCursorQueryValue(cursor),
+      },
+      decode: decodeCommunityPostPage,
     );
+    return switch (result) {
+      Success(:final value) => value,
+      // A 404 itt NEM „nincs posztja": a szerver egyetlen, egyforma 404-et
+      // ad a nem létező, a blokkolt, a privát és a csak-követőknek szóló
+      // profilra (leak-guard, `feed/profile_posts.py`). A hívó ezért
+      // hibát kap, nem üres listát — az üres lista azt állítaná, hogy a
+      // profilnak nincs posztja, holott azt nem tudjuk.
+      Failure(:final error) => throw error,
+    };
   }
 
   @override

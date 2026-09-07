@@ -790,5 +790,23 @@
   "@communityChallengeResultVerifiedIcon": {},
 
   "communityChallengeMyResultAction": "View my result",
-  "@communityChallengeMyResultAction": {}
+  "@communityChallengeMyResultAction": {},
+
+  "communityClubComposeCta": "New post",
+  "@communityClubComposeCta": {},
+
+  "communityComposerClubTarget": "This post goes to the club, not to your own feed.",
+  "@communityComposerClubTarget": {},
+
+  "communityHubMyPostsTitle": "Your posts",
+  "@communityHubMyPostsTitle": {},
+
+  "communityHubMyPostsEmpty": "You haven't posted anything yet.",
+  "@communityHubMyPostsEmpty": {},
+
+  "communityHubMyPostsError": "Your posts couldn't load.",
+  "@communityHubMyPostsError": {},
+
+  "communityHubMyPostsRetry": "Retry",
+  "@communityHubMyPostsRetry": {}
 }
