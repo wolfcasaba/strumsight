@@ -75,7 +75,7 @@ ProviderContainer _container({
   String? clubId,
 }) {
   final container = ProviderContainer(
-    overrides: <Override>[
+    overrides: [
       communityKeyValueStoreProvider.overrideWithValue(store),
       communityLoggerProvider.overrideWithValue(const NoopAppLogger()),
       communityPostRepositoryProvider.overrideWithValue(repository),

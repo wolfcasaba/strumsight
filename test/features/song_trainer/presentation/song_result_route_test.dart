@@ -139,7 +139,7 @@ Future<_RouteHarness> _pump(
   addTearDown(router.dispose);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: <Override>[
+      overrides: [
         ...preferenceOverrides(),
         songRepositoryProvider.overrideWithValue(repository),
       ],
