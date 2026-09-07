@@ -3104,6 +3104,8 @@
   "@todayPlanStart": {},
   "todayPlanSwap": "Swap",
   "@todayPlanSwap": {},
+  "todayPlanSwapNoAlternative": "No same-skill alternative for today's exercise.",
+  "@todayPlanSwapNoAlternative": {},
   "todayPlanSkip": "Skip",
   "@todayPlanSkip": {},
   "todayPlanShorten": "Make today shorter",
@@ -3332,5 +3334,18 @@
   "@communityHubComments": {
     "description": "Feed-card / bookmark-row action that opens the post's comment thread."
   },
-  "communityHubLeaderboard": "Leaderboard"
+  "communityHubLeaderboard": "Leaderboard",
+  "tutorPlanCatalogEmpty": "No exercises are available on this device yet, so no practice plan can be built.",
+  "tutorPlanDraftRationale": "Built from the exercises available on this device, for the practice length you chose.",
+  "tutorPlanDraftTitle": "{minutes}-minute practice plan",
+  "@tutorPlanDraftTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "tutorPlanNotBuildable": "This practice plan cannot be prepared right now.",
+  "tutorPlanSaveFailed": "The practice plan could not be saved.",
+  "tutorPlanSaved": "Practice plan saved and made active."
 }

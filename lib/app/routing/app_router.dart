@@ -67,10 +67,13 @@ import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
 import '../../features/song_trainer/public.dart';
 import '../../features/song_trainer/application/song_trainer_providers.dart';
-import '../../features/song_trainer/application/trainer/song_trainer_result.dart';
+import '../../features/song_trainer/domain/models/song_setlist.dart';
+import '../../features/song_trainer/presentation/screens/setlist_list_screen_v2.dart';
+import '../../features/song_trainer/presentation/screens/setlist_session_route.dart';
+import '../../features/song_trainer/presentation/screens/setlist_session_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_editor_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_overview_screen.dart';
-import '../../features/song_trainer/presentation/screens/song_result_screen.dart';
+import '../../features/song_trainer/presentation/screens/song_result_route.dart';
 import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import '../../features/song_trainer/presentation/song_trainer_launch.dart';
@@ -359,6 +362,39 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.setlists,
         builder: (_, _) => const SetlistListScreen(),
       ),
+      // Setlist V2 (R10, audit §5.2). Until now `SetlistListScreenV2` and
+      // `SetlistSessionScreen` had no route and no construction site
+      // anywhere in `lib/` — measured `unreachable` by
+      // `tool/check_screen_reachability.dart`. Tapping a setlist opens the
+      // ordered session; the session's per-item runner launches the real
+      // Song Trainer session for each item and waits for it, which is what
+      // makes the setlist advance item by item.
+      GoRoute(
+        path: AppRoutes.setlistsV2,
+        builder: (_, _) => Consumer(
+          builder: (context, ref, _) => SetlistListScreenV2(
+            controller: ref.watch(setlistControllerProvider),
+            clock: DateTime.now,
+            onOpenSetlist: (setlist) => openSetlistSession(context, setlist),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.setlistSession,
+        redirect: (_, state) =>
+            state.extra is SongSetlist ? null : AppRoutes.setlistsV2,
+        builder: (_, state) => Consumer(
+          builder: (context, ref, _) => SetlistSessionScreen(
+            setlist: state.extra! as SongSetlist,
+            // Practice is the only mode the shipped app can honestly run:
+            // every song session the trainer offers is the scored one.
+            mode: SetlistSessionMode.practice,
+            availability: (item) => item.initialAvailability,
+            performanceRunner: unavailableSetlistPerformanceRunner,
+            createPracticeRunner: () => setlistItemRunner(context, ref),
+          ),
+        ),
+      ),
       GoRoute(
         path: AppRoutes.chords,
         builder: (_, _) => const ChordLibraryScreen(),
@@ -563,8 +599,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.practiceGeneratorToday,
           // Javító sáv 2026-09-06 (R4): the screen used to be built WITHOUT
           // the plan (always "no active plan") and WITHOUT callbacks (every
-          // action button disabled). `swap` stays unbound on purpose — the
-          // merged reschedule controller has no swap operation.
+          // action button disabled). R10 (2026-09-07) binds `swap` too —
+          // `ActivePlanController.swap` now rewrites today's first pending
+          // block to a same-skill catalog alternative.
           builder: (_, state) => Consumer(
             builder: (context, ref, _) => TodayPlanScreen(
               controller: ref.watch(todayPlanControllerProvider),
@@ -572,6 +609,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               launchRequest: TodayPlanRouteRequest.tryParse(state.extra),
               isTodayRouteEnabled: true,
               onStart: (block) => openPracticeForBlock(context, block),
+              onSwap: (_) =>
+                  runTodayPlanAction(context, ref, TodayPlanAction.swap),
               onSkip: (_) =>
                   runTodayPlanAction(context, ref, TodayPlanAction.skip),
               onShorten: () =>
@@ -692,8 +731,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
         GoRoute(
           path: AppRoutes.songTrainerResult,
-          builder: (_, state) =>
-              SongResultScreen(result: state.extra! as SongTrainerResult),
+          // Javító sáv 2026-09-06 (R8): the screen used to be built with the
+          // result alone, which left both of its CTAs permanently disabled.
+          // `SongTrainerResultRoute` supplies the retry / next handlers and
+          // the stored per-measure progress projection.
+          builder: (_, state) => SongTrainerResultRoute(
+            args: SongTrainerResultArgs.from(state.extra),
+          ),
         ),
       ],
       // E13-R08 (D14 fix round) — `/practice/live` moved OUT of the shell

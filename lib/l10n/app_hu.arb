@@ -1503,6 +1503,8 @@
   "@communityClubChallengesUnavailableBody": {},
   "communityClubChallengesUnavailableTitle": "A klub kihívásai még nem érhetők el",
   "@communityClubChallengesUnavailableTitle": {},
+  "communityClubComposeCta": "Új poszt",
+  "@communityClubComposeCta": {},
   "communityClubDetailError": "A klub nem tölthető be.",
   "@communityClubDetailError": {},
   "communityClubDetailJoin": "Csatlakozás kérése",
@@ -1636,6 +1638,8 @@
   "@communityCommentsSend": {},
   "communityCommentsTitle": "Hozzászólások",
   "@communityCommentsTitle": {},
+  "communityComposerClubTarget": "Ez a poszt a klubba kerül, nem a saját feededbe.",
+  "@communityComposerClubTarget": {},
   "communityEditAddInterestCta": "Címke hozzáadása",
   "communityEditAvatarLabel": "Profilkép",
   "@communityEditAvatarLabel": {},
@@ -1722,6 +1726,14 @@
   "communityHubFollowers": "Követők",
   "communityHubFollowing": "Követettek",
   "communityHubLeaderboard": "Ranglista",
+  "communityHubMyPostsEmpty": "Még nem posztoltál semmit.",
+  "@communityHubMyPostsEmpty": {},
+  "communityHubMyPostsError": "A posztjaid nem töltődtek be.",
+  "@communityHubMyPostsError": {},
+  "communityHubMyPostsRetry": "Újra",
+  "@communityHubMyPostsRetry": {},
+  "communityHubMyPostsTitle": "A posztjaid",
+  "@communityHubMyPostsTitle": {},
   "communityHubNotifications": "Értesítések",
   "communityHubSafety": "Letiltva és némítva",
   "@communityHubSafety": {
@@ -4417,6 +4429,8 @@
   "@todayPlanStart": {},
   "todayPlanSwap": "Csere",
   "@todayPlanSwap": {},
+  "todayPlanSwapNoAlternative": "A mai gyakorlathoz nincs azonos készségű alternatíva.",
+  "@todayPlanSwapNoAlternative": {},
   "todayPlanTitle": "Ma",
   "@todayPlanTitle": {},
   "todayPlanUnavailableBody": "A terved mára nem ütemez gyakorlást.",
@@ -4541,6 +4555,19 @@
   "tutorDataMemoryTitle": "Megjegyzett tények",
   "tutorDataScreenSemantics": "Tutor adatok képernyő",
   "tutorDataTitle": "Tutor adatok",
+  "tutorPlanCatalogEmpty": "Ezen az eszközön még nincs elérhető gyakorlat, ezért nem építhető gyakorlási terv.",
+  "tutorPlanDraftRationale": "Az eszközön elérhető gyakorlatokból, a választott gyakorlási hosszra építve.",
+  "tutorPlanDraftTitle": "{minutes} perces gyakorlási terv",
+  "@tutorPlanDraftTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "tutorPlanNotBuildable": "Ez a gyakorlási terv most nem készíthető elő.",
+  "tutorPlanSaveFailed": "A gyakorlási tervet nem sikerült elmenteni.",
+  "tutorPlanSaved": "A gyakorlási terv elmentve és aktiválva.",
   "tutorPrivacyIntro": "Ez a három kapcsoló szabályozza, hogy a tutor mit tehet az adataiddal. Egymástól függetlenül kapcsolhatod őket.",
   "tutorPrivacyScopeBody": "A törlés pontosan ezeket a kulcsokat (és a karanténjaikat) érinti.",
   "tutorPrivacyScopePreserved": "A beleegyezésed, a profilod és a bejelentkezésed megmarad.",

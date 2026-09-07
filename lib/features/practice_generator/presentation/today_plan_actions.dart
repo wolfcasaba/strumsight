@@ -21,10 +21,12 @@ import '../domain/model/practice_block.dart';
 import 'providers/practice_generator_providers.dart';
 
 /// The learner-side reschedules the Today screen offers on the ACTIVE plan.
-/// `swap` is deliberately absent: the merged [ActivePlanController] has no
-/// swap operation, so the screen keeps that button disabled rather than
-/// pretending (the honest-unavailability rule of ADR 0496).
-enum TodayPlanAction { skip, shorten, pause }
+///
+/// `swap` joined the set on 2026-09-07 (R10): [ActivePlanController.swap]
+/// now rewrites today's first pending block to a same-skill alternative
+/// from the generator's own catalog snapshot, so the button is no longer
+/// an honestly-disabled placeholder.
+enum TodayPlanAction { swap, skip, shorten, pause }
 
 /// What [TodayPlanActions.apply] did.
 enum TodayPlanActionOutcome {
@@ -34,6 +36,12 @@ enum TodayPlanActionOutcome {
   /// There is no active plan, or the day has nothing left to reschedule —
   /// nothing was written.
   nothingToChange,
+
+  /// A swap found today's pending block but NO alternative the current
+  /// prescription's contract accepts. Distinct from [nothingToChange]: the
+  /// learner pressed a live button on a real block, so the screen owes them
+  /// a spoken answer rather than silence.
+  noAlternative,
 
   /// The repository refused the activation; the previous revision stays.
   failed,
@@ -55,6 +63,17 @@ final class TodayPlanActions {
     final day = today.day;
     final ActivePlanUpdate update;
     switch (action) {
+      case TodayPlanAction.swap:
+        if (day == null) return TodayPlanActionOutcome.nothingToChange;
+        if (controller.nextPendingBlock(day) == null) {
+          return TodayPlanActionOutcome.nothingToChange;
+        }
+        update = controller.swap(plan: plan, day: day);
+        // The block IS pending, so an empty change set can only mean the
+        // catalog offered no usable alternative — reported, never silent.
+        if (update.changeSet.changes.isEmpty) {
+          return TodayPlanActionOutcome.noAlternative;
+        }
       case TodayPlanAction.skip:
         if (day == null) return TodayPlanActionOutcome.nothingToChange;
         update = controller.skip(plan: plan, day: day);
@@ -98,10 +117,17 @@ Future<void> runTodayPlanAction(
   TodayPlanAction action,
 ) async {
   final outcome = await ref.read(todayPlanActionsProvider).apply(action);
-  if (outcome != TodayPlanActionOutcome.failed || !context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(AppLocalizations.of(context).todayPlanActionFailed)),
-  );
+  if (!context.mounted) return;
+  final l10n = AppLocalizations.of(context);
+  final String? message = switch (outcome) {
+    TodayPlanActionOutcome.applied => null,
+    TodayPlanActionOutcome.nothingToChange => null,
+    TodayPlanActionOutcome.noAlternative => l10n.todayPlanSwapNoAlternative,
+    TodayPlanActionOutcome.failed => l10n.todayPlanActionFailed,
+  };
+  if (message == null) return;
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(SnackBar(content: Text(message)));
 }
 
 /// "Start" on a planned block opens the Practice setup for the block's

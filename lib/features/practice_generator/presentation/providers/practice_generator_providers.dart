@@ -295,12 +295,25 @@ final todayPlanControllerProvider = Provider<TodayPlanController>(
 /// in `lib/`, so the Today screen's buttons stayed disabled). The block's
 /// `exerciseId` is the catalog key, resolved through the same fail-loud
 /// resolver the repository uses.
+/// The pool a learner-initiated SWAP draws from: the very catalog snapshot
+/// the generator itself planned with (javító sáv 2026-09-07 — until then
+/// `ActivePlanController` had no swap operation at all, so the Today
+/// screen's Swap button stayed disabled). The same-skill and contract
+/// filters live in `ActivePlanController.swap`, so this provider hands over
+/// the snapshot as-is instead of duplicating that rule here.
+final activePlanAlternativeResolverProvider =
+    Provider<ActivePlanAlternativeResolver>((ref) {
+      final snapshot = ref.watch(practiceCatalogSnapshotProvider);
+      return (_) => snapshot.candidates;
+    });
+
 final activePlanControllerProvider = Provider<ActivePlanController>((ref) {
   final generateId = ref.watch(practiceGeneratorIdGeneratorProvider);
   final resolve = ref.watch(exerciseCandidateResolverProvider);
   return ActivePlanController(
     generateRevisionId: () => RevisionId.generate(generateId),
     resolveCandidate: (block) => resolve(block.prescription.exerciseId),
+    resolveAlternatives: ref.watch(activePlanAlternativeResolverProvider),
   );
 });
 

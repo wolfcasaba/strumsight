@@ -16,6 +16,22 @@ abstract final class AppRoutes {
   static const String progress = '/progress';
   static const String songs = '/songs';
   static const String setlists = '/setlists';
+
+  // Setlist V2 (R10, 2026-09-07 — audit §5.2). The V2 list and its ordered
+  // session had no route at all, so a Setlist V2 could never be played.
+  // They get their OWN paths rather than replacing [setlists] /
+  // [songsSetlists]: those two still render the legacy `SetlistListScreen`
+  // and both mappings are pinned by
+  // `test/app/navigation/legacy_route_redirect_test.dart` and
+  // `test/app/navigation/adaptive_scaffold_test.dart`. `/setlists/v2` is
+  // NOT a redirect source either — `legacyRedirects` is an exact-path map,
+  // so the adaptive shell leaves it alone.
+  static const String setlistsV2 = '/setlists/v2';
+
+  /// The ordered Setlist run. The `SongSetlist` travels as `extra`; the
+  /// route redirects to [setlistsV2] when it is absent, so a deep link
+  /// cannot land on a session with no setlist behind it.
+  static const String setlistSession = '/setlists/v2/session';
   static const String chords = '/chords';
   static const String login = '/login';
   static const String librarySession = '/library/session';

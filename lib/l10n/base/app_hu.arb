@@ -3026,6 +3026,8 @@
   "@todayPlanStart": {},
   "todayPlanSwap": "Csere",
   "@todayPlanSwap": {},
+  "todayPlanSwapNoAlternative": "A mai gyakorlathoz nincs azonos készségű alternatíva.",
+  "@todayPlanSwapNoAlternative": {},
   "todayPlanSkip": "Kihagyás",
   "@todayPlanSkip": {},
   "todayPlanShorten": "Ma rövidebben",
@@ -3254,5 +3256,18 @@
   "@communityHubComments": {
     "description": "Feed-card / bookmark-row action that opens the post's comment thread."
   },
-  "communityHubLeaderboard": "Ranglista"
+  "communityHubLeaderboard": "Ranglista",
+  "tutorPlanCatalogEmpty": "Ezen az eszközön még nincs elérhető gyakorlat, ezért nem építhető gyakorlási terv.",
+  "tutorPlanDraftRationale": "Az eszközön elérhető gyakorlatokból, a választott gyakorlási hosszra építve.",
+  "tutorPlanDraftTitle": "{minutes} perces gyakorlási terv",
+  "@tutorPlanDraftTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "tutorPlanNotBuildable": "Ez a gyakorlási terv most nem készíthető elő.",
+  "tutorPlanSaveFailed": "A gyakorlási tervet nem sikerült elmenteni.",
+  "tutorPlanSaved": "A gyakorlási terv elmentve és aktiválva."
 }

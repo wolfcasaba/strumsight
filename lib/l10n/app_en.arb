@@ -1531,6 +1531,8 @@
   "@communityClubChallengesUnavailableBody": {},
   "communityClubChallengesUnavailableTitle": "Club challenges are not available yet",
   "@communityClubChallengesUnavailableTitle": {},
+  "communityClubComposeCta": "New post",
+  "@communityClubComposeCta": {},
   "communityClubDetailError": "The club couldn't load.",
   "@communityClubDetailError": {},
   "communityClubDetailJoin": "Request to join",
@@ -1664,6 +1666,8 @@
   "@communityCommentsSend": {},
   "communityCommentsTitle": "Comments",
   "@communityCommentsTitle": {},
+  "communityComposerClubTarget": "This post goes to the club, not to your own feed.",
+  "@communityComposerClubTarget": {},
   "communityEditAddInterestCta": "Add tag",
   "communityEditAvatarLabel": "Profile photo",
   "@communityEditAvatarLabel": {},
@@ -1750,6 +1754,14 @@
   "communityHubFollowers": "Followers",
   "communityHubFollowing": "Following",
   "communityHubLeaderboard": "Leaderboard",
+  "communityHubMyPostsEmpty": "You haven't posted anything yet.",
+  "@communityHubMyPostsEmpty": {},
+  "communityHubMyPostsError": "Your posts couldn't load.",
+  "@communityHubMyPostsError": {},
+  "communityHubMyPostsRetry": "Retry",
+  "@communityHubMyPostsRetry": {},
+  "communityHubMyPostsTitle": "Your posts",
+  "@communityHubMyPostsTitle": {},
   "communityHubNotifications": "Notifications",
   "communityHubSafety": "Blocked & muted",
   "@communityHubSafety": {
@@ -4463,6 +4475,8 @@
   "@todayPlanStart": {},
   "todayPlanSwap": "Swap",
   "@todayPlanSwap": {},
+  "todayPlanSwapNoAlternative": "No same-skill alternative for today's exercise.",
+  "@todayPlanSwapNoAlternative": {},
   "todayPlanTitle": "Today",
   "@todayPlanTitle": {},
   "todayPlanUnavailableBody": "Your plan does not schedule practice for today.",
@@ -4608,6 +4622,19 @@
   "tutorDataMemoryTitle": "Remembered facts",
   "tutorDataScreenSemantics": "Tutor data screen",
   "tutorDataTitle": "Tutor data",
+  "tutorPlanCatalogEmpty": "No exercises are available on this device yet, so no practice plan can be built.",
+  "tutorPlanDraftRationale": "Built from the exercises available on this device, for the practice length you chose.",
+  "tutorPlanDraftTitle": "{minutes}-minute practice plan",
+  "@tutorPlanDraftTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "tutorPlanNotBuildable": "This practice plan cannot be prepared right now.",
+  "tutorPlanSaveFailed": "The practice plan could not be saved.",
+  "tutorPlanSaved": "Practice plan saved and made active.",
   "tutorPrivacyIntro": "These three switches control what the tutor may do with your data. Toggle them independently.",
   "tutorPrivacyScopeBody": "Delete-all touches exactly these keys (and their corruption quarantines).",
   "tutorPrivacyScopePreserved": "Your consent choices, profile and account sign-in are kept.",
