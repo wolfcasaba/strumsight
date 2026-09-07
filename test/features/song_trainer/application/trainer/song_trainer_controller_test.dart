@@ -12,6 +12,8 @@ import 'package:strumsight/features/song_trainer/application/trainer/song_transp
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_clock.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_state.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/transport_effect.dart';
+import 'package:strumsight/features/song_trainer/application/trainer/song_resume_repository.dart';
+import 'package:strumsight/features/song_trainer/data/local/key_value_song_resume_repository.dart';
 import 'package:strumsight/features/song_trainer/data/playback/fake_backing_audio_player.dart';
 import 'package:strumsight/features/song_trainer/domain/models/loop_config.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_asset_reference.dart';
@@ -34,6 +36,7 @@ import '../../../../support/fake_practice_observation_gateway.dart';
 import '../../../../support/fake_practice_session_clock.dart';
 import '../../../../support/fake_practice_session_recorder.dart';
 import '../../../../support/fake_practice_tick_source.dart';
+import '../../../../support/preference_store.dart';
 
 void main() {
   test(
@@ -163,6 +166,9 @@ void main() {
       var microphoneProviderReads = 0;
       final container = ProviderContainer(
         overrides: [
+          // The resume repository is persisted since R8, so every container
+          // that builds the trainer controller needs the preference store.
+          ...preferenceOverrides(),
           songTransportProvider.overrideWithValue(transport),
           practiceMicrophonePermissionProvider.overrideWith((ref) {
             microphoneProviderReads++;
@@ -187,6 +193,45 @@ void main() {
       expect(microphoneProviderReads, 0);
     },
   );
+
+  // Javító sáv 2026-09-06 (R8, audit §5.2).
+  test('a scored session refuses a backing-rate change', () async {
+    final harness = _Harness.scored();
+    addTearDown(harness.dispose);
+
+    final applied = await harness.controller.setPlaybackRate(0.75);
+
+    expect(harness.controller.canChangeBackingRate, isFalse);
+    expect(applied.isFailure, isTrue);
+    expect(
+      applied.failureOrNull!.code,
+      SongTrainerRateFailureCode.scoredSession,
+    );
+    expect(harness.controller.state.playbackRate, 1);
+    expect(harness.transport.state.speed, 1);
+  });
+
+  test('a pause leaves a checkpoint the next session restores', () async {
+    final store = InMemoryKeyValueStore();
+    final first = _Harness.scored(
+      resumeRepository: KeyValueSongResumeRepository(keyValueStore: store),
+    );
+    addTearDown(first.dispose);
+    await first.controller.prepare(backingAsset: _asset);
+    await first.controller.start();
+    await first.controller.seek(const Duration(milliseconds: 250));
+    expect(first.controller.state.attemptId, 1);
+    await first.controller.pause();
+
+    // A brand-new controller over the SAME store == the next app start.
+    final second = _Harness.scored(
+      resumeRepository: KeyValueSongResumeRepository(keyValueStore: store),
+    );
+    addTearDown(second.dispose);
+    await second.controller.prepare(backingAsset: _asset);
+
+    expect(second.controller.state.attemptId, 1);
+  });
 }
 
 final SongAssetReference _asset = SongAssetReference(
@@ -223,6 +268,7 @@ final class _Harness {
     int countInBars = 1,
     MicrophonePermissionState permissionState =
         MicrophonePermissionState.granted,
+    SongResumeRepository? resumeRepository,
   }) {
     final compilation = _scoredCompilation(countInBars: countInBars);
     final player = FakeBackingAudioPlayer();
@@ -251,6 +297,7 @@ final class _Harness {
         transport: transport,
         compilation: compilation,
         practiceSession: practice,
+        resumeRepository: resumeRepository,
       ),
       practice: practice,
       transport: transport,

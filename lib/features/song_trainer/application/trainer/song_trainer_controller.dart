@@ -14,6 +14,10 @@ import '../../domain/models/song_id.dart';
 import '../../domain/models/note_scoring_models.dart';
 import '../../domain/models/trainer_range.dart';
 import '../../domain/services/monophonic_note_scorer.dart';
+import '../../../../core/foundation/app_failure.dart';
+import '../../../../core/foundation/app_result.dart';
+import '../../data/playback/backing_audio_player.dart';
+import '../progress/song_measure_progress_committer.dart';
 import 'song_progress_committer.dart';
 import 'song_resume_repository.dart';
 import 'song_practice_compiler.dart';
@@ -22,6 +26,21 @@ import 'song_trainer_state.dart';
 import 'song_transport.dart';
 import 'song_transport_command.dart';
 import 'song_transport_state.dart';
+import 'transport_effect.dart';
+
+/// Stable failure codes returned by [SongTrainerController.setPlaybackRate].
+abstract final class SongTrainerRateFailureCode {
+  /// The controller has already been disposed.
+  static const String disposed = 'songTrainer.rate.disposed';
+
+  /// A scored session compiles its Practice target ONCE, at the setup speed
+  /// ([SongPracticeCompiler] scales `effectiveTempo` by `config.targetSpeed`),
+  /// and the Practice state machine accepts a tempo change only before an
+  /// attempt (`ChangeTempoBeforeAttempt`, rejected from `running`/`paused`).
+  /// Moving the backing rate mid-session would therefore judge the user
+  /// against a timeline they no longer hear — refused instead.
+  static const String scoredSession = 'songTrainer.rate.scoredSession';
+}
 
 /// Coordinates SongTransport with the public Practice session runtime.
 ///
@@ -38,12 +57,14 @@ final class SongTrainerController {
     PracticeSessionController? practiceSession,
     MonophonicPitchSession? pitchSession,
     SongProgressCommitter? progressCommitter,
+    SongMeasureProgressCommitter? measureProgressCommitter,
     SongResumeRepository? resumeRepository,
     int maxLoops = 1,
     double? targetSpeed,
   }) : _practiceSession = practiceSession,
        _pitchSession = pitchSession,
        _progressCommitter = progressCommitter,
+       _measureProgressCommitter = measureProgressCommitter,
        _resumeRepository = resumeRepository,
        _maxLoops = maxLoops < 1 ? 1 : maxLoops,
        _targetSpeed = targetSpeed {
@@ -82,6 +103,7 @@ final class SongTrainerController {
   final PracticeSessionController? _practiceSession;
   final MonophonicPitchSession? _pitchSession;
   final SongProgressCommitter? _progressCommitter;
+  final SongMeasureProgressCommitter? _measureProgressCommitter;
   final SongResumeRepository? _resumeRepository;
   final int _maxLoops;
   final double? _targetSpeed;
@@ -117,6 +139,62 @@ final class SongTrainerController {
   bool get isPlaybackOnly => compilation.isPlaybackOnly;
   int get maxLoops => _maxLoops;
 
+  /// Whether a live backing-rate change can actually take effect.
+  ///
+  /// Three conditions, all measured, none assumed: the session must be
+  /// playback-only (see [SongTrainerRateFailureCode.scoredSession] for why a
+  /// scored one cannot move), a backing track must actually be prepared —
+  /// there is nothing to re-rate otherwise — and the player must advertise
+  /// rate support. The presentation layer reads this to decide whether the
+  /// speed slider is a real control or an honestly disabled one.
+  bool get canChangeBackingRate =>
+      compilation.isPlaybackOnly &&
+      _backingPrepared &&
+      transport.player.capabilities.canChangeRate;
+
+  /// Applies [rate] to the backing transport and mirrors it into the state.
+  ///
+  /// Returns a failure rather than throwing or silently ignoring the request:
+  /// an unsupported rate, a scored session, and a transport-level refusal are
+  /// all things the coach surface has to be able to say out loud.
+  Future<AppResult<void>> setPlaybackRate(double rate) async {
+    if (_disposed) {
+      return const Failure<void>(
+        AudioFailure(code: SongTrainerRateFailureCode.disposed),
+      );
+    }
+    if (!compilation.isPlaybackOnly) {
+      return const Failure<void>(
+        AudioFailure(code: SongTrainerRateFailureCode.scoredSession),
+      );
+    }
+    if (!transport.player.capabilities.supportsRate(rate)) {
+      return const Failure<void>(
+        AudioFailure(code: BackingAudioPlayerFailureCode.unsupportedRate),
+      );
+    }
+    // `SongTransport` accepts `SetSongTransportSpeed` only while `ready` or
+    // `paused` (its own transition table). Bracketing the change with a
+    // pause/resume keeps the audio clock's anchor honest: the transport
+    // re-anchors `activePosition` on a successful rate change.
+    final wasPlaying = transport.state.phase == SongTransportPhase.playing;
+    if (wasPlaying) await transport.dispatch(const PauseSongTransport());
+    final applied = await transport.dispatch(SetSongTransportSpeed(rate));
+    if (wasPlaying) await transport.dispatch(const ResumeSongTransport());
+    for (final effect in applied.effects) {
+      if (effect is TransportFailureEffect) {
+        return Failure<void>(AudioFailure(code: effect.code));
+      }
+    }
+    if (_disposed) {
+      return const Failure<void>(
+        AudioFailure(code: SongTrainerRateFailureCode.disposed),
+      );
+    }
+    _emit(_state.copyWith(playbackRate: rate));
+    return const Success<void>(null);
+  }
+
   /// Prepares the optional backing transport and the scored Practice session.
   Future<void> prepare({SongAssetReference? backingAsset}) async {
     if (_disposed) return;
@@ -132,6 +210,8 @@ final class SongTrainerController {
       if (!_isCurrent(operation)) return;
       _backingPrepared = transport.state.phase == SongTransportPhase.ready;
     }
+    await _restoreCheckpoint();
+    if (!_isCurrent(operation)) return;
     final practice = _practiceSession;
     if (practice == null) {
       await _startPitchScoring();
@@ -312,6 +392,49 @@ final class SongTrainerController {
     } else {
       _syncPracticeState();
     }
+    // The checkpoint is written on EVERY pause (user or interruption) — a
+    // resume point that only exists in memory is the bug the persisted
+    // repository was added for (audit §5.2).
+    await _persistResumeCheckpoint();
+  }
+
+  /// Rolls the attempt counter forward from a checkpoint left behind by an
+  /// earlier run of the same song revision, when one is stored.
+  Future<void> _restoreCheckpoint() async {
+    final reference = compilation.eventReferences.values.firstOrNull;
+    if (_resumeRepository == null || reference == null) return;
+    await reenter(songId: reference.songId, revision: reference.songRevision);
+  }
+
+  /// Writes the current attempt / position as a resume checkpoint, when the
+  /// compiled session carries song coordinates to key it by.
+  Future<void> _persistResumeCheckpoint() async {
+    final reference = compilation.eventReferences.values.firstOrNull;
+    final range = _sessionRange();
+    if (_resumeRepository == null || reference == null || range == null) {
+      return;
+    }
+    await persistResume(
+      songId: reference.songId,
+      revision: reference.songRevision,
+      range: range,
+      resumedFrom: transport.state.activePosition,
+    );
+  }
+
+  /// The measure interval the compiled session actually covers, derived from
+  /// the compiler's own event references — the controller never re-reads the
+  /// document.
+  MeasureRange? _sessionRange() {
+    var start = -1;
+    var endExclusive = -1;
+    for (final reference in compilation.eventReferences.values) {
+      final index = reference.measureIndex;
+      if (start < 0 || index < start) start = index;
+      if (index + 1 > endExclusive) endExclusive = index + 1;
+    }
+    if (start < 0) return null;
+    return MeasureRange(start: start, endExclusive: endExclusive);
   }
 
   Future<void> _startPlaybackOnly() async {
@@ -379,6 +502,14 @@ final class SongTrainerController {
       await _progressCommitter?.commit(
         idempotencyKey: idempotencyKey,
         sessionResult: result,
+      );
+      // Per-measure progress is what the heatmap and the "Song progress"
+      // card read back; without this commit `SongProgressRepository` stayed
+      // empty for every session (audit §5.2).
+      await _measureProgressCommitter?.commit(
+        attemptKey: idempotencyKey,
+        result: mapped,
+        activeDuration: result.activeDuration,
       );
       _emit(
         _state.copyWith(status: SongTrainerStatus.completed, result: mapped),

@@ -384,7 +384,12 @@ final class _EditorBody extends ConsumerWidget {
     WidgetRef ref,
     SongEditorController controller,
   ) async {
-    final source = await ref.read(songFilePickerAdapterProvider).pickSongFile();
+    // Javító sáv 2026-09-06 (audit §5.2, "Hang-import folyamat"): this used
+    // to open the NOTATION picker (`pickSongFile`), whose accepted-type list
+    // is json/musicxml/mxl/midi — so "Attach backing" could never actually
+    // select a backing track on a platform that honours the type filter.
+    final picker = ref.read(songBackingAudioPickerProvider);
+    final source = await picker.pickBackingAudioFile();
     if (source == null) return;
     final bytes = <int>[];
     await for (final chunk in source.openRead()) {

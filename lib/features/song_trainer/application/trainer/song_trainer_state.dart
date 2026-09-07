@@ -29,6 +29,7 @@ final class SongTrainerState {
     this.loopIndex = 1,
     this.maxLoops = 1,
     this.backingRateSupported = false,
+    this.playbackRate = 1,
     this.speedBuilderState,
   });
 
@@ -41,6 +42,7 @@ final class SongTrainerState {
       loopIndex = 1,
       maxLoops = 1,
       backingRateSupported = false,
+      playbackRate = 1,
       speedBuilderState = null;
 
   final SongTrainerStatus status;
@@ -61,6 +63,11 @@ final class SongTrainerState {
   /// as disabled with a reason.
   final bool backingRateSupported;
 
+  /// Backing playback rate currently applied to the transport, as a factor of
+  /// the authored tempo (`1` == as written). Only a playback-only session can
+  /// move it — see [SongTrainerController.setPlaybackRate].
+  final double playbackRate;
+
   /// Optional Speed Builder state mirror. `null` when the session does not
   /// use Speed Builder.
   final SpeedBuilderState? speedBuilderState;
@@ -76,6 +83,7 @@ final class SongTrainerState {
     int? loopIndex,
     int? maxLoops,
     bool? backingRateSupported,
+    double? playbackRate,
     SpeedBuilderState? speedBuilderState,
     bool clearSpeedBuilderState = false,
   }) => SongTrainerState(
@@ -89,6 +97,7 @@ final class SongTrainerState {
     loopIndex: loopIndex ?? this.loopIndex,
     maxLoops: maxLoops ?? this.maxLoops,
     backingRateSupported: backingRateSupported ?? this.backingRateSupported,
+    playbackRate: playbackRate ?? this.playbackRate,
     speedBuilderState: clearSpeedBuilderState
         ? null
         : (speedBuilderState ?? this.speedBuilderState),

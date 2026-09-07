@@ -12,9 +12,23 @@ abstract interface class FilePickerAdapter {
   Future<void> dispose();
 }
 
+/// Platform boundary for choosing a BACKING-AUDIO file.
+///
+/// Deliberately a separate port from [FilePickerAdapter] (javító sáv
+/// 2026-09-06, audit §5.2 "Hang-import folyamat"): the song-import flow must
+/// not accept audio — no importer can parse it — and the backing-track
+/// attachment must not accept notation. One picker with one accepted-type
+/// list can only be right for one of the two, which is why the shipped
+/// "Attach backing" button opened a notation-only picker and could never
+/// actually import a backing track.
+abstract interface class BackingAudioPickerAdapter {
+  Future<ImportSourceFile?> pickBackingAudioFile();
+}
+
 /// Production adapter. Platform picker objects are converted immediately to
 /// the reopenable [ImportSourceFile] contract and never reach widget state.
-final class PlatformFilePickerAdapter implements FilePickerAdapter {
+final class PlatformFilePickerAdapter
+    implements FilePickerAdapter, BackingAudioPickerAdapter {
   const PlatformFilePickerAdapter();
 
   static const List<String> supportedExtensions = <String>[
@@ -26,15 +40,40 @@ final class PlatformFilePickerAdapter implements FilePickerAdapter {
     'midi',
   ];
 
+  /// Container formats `audioplayers` can decode on the shipped platforms.
+  /// Kept next to the notation list so the two are never confused.
+  static const List<String> supportedAudioExtensions = <String>[
+    'mp3',
+    'm4a',
+    'aac',
+    'wav',
+    'ogg',
+    'opus',
+    'flac',
+  ];
+
   static const XTypeGroup _songTypeGroup = XTypeGroup(
     label: 'StrumSight song files',
     extensions: supportedExtensions,
+  );
+
+  static const XTypeGroup _audioTypeGroup = XTypeGroup(
+    label: 'StrumSight backing audio',
+    extensions: supportedAudioExtensions,
   );
 
   @override
   Future<ImportSourceFile?> pickSongFile() async {
     final file = await openFile(
       acceptedTypeGroups: const <XTypeGroup>[_songTypeGroup],
+    );
+    return file == null ? null : await fromXFile(file);
+  }
+
+  @override
+  Future<ImportSourceFile?> pickBackingAudioFile() async {
+    final file = await openFile(
+      acceptedTypeGroups: const <XTypeGroup>[_audioTypeGroup],
     );
     return file == null ? null : await fromXFile(file);
   }

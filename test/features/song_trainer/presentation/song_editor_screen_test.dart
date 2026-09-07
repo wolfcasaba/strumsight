@@ -41,7 +41,7 @@ void main() {
         overrides: [
           songRepositoryProvider.overrideWithValue(repository),
           songAssetRepositoryProvider.overrideWithValue(assetRepository),
-          songFilePickerAdapterProvider.overrideWithValue(_BackingPicker()),
+          songBackingAudioPickerProvider.overrideWithValue(_BackingPicker()),
         ],
       );
       addTearDown(container.dispose);
@@ -127,7 +127,7 @@ void main() {
         overrides: [
           songRepositoryProvider.overrideWithValue(repository),
           songAssetRepositoryProvider.overrideWithValue(assetRepository),
-          songFilePickerAdapterProvider.overrideWithValue(_BackingPicker()),
+          songBackingAudioPickerProvider.overrideWithValue(_BackingPicker()),
         ],
       );
       addTearDown(container.dispose);
@@ -283,12 +283,9 @@ final class _RecordingAssetRepository implements SongAssetRepository {
       const AppResult<void>.success(null);
 }
 
-final class _BackingPicker implements FilePickerAdapter {
+final class _BackingPicker implements BackingAudioPickerAdapter {
   @override
-  Future<void> dispose() async {}
-
-  @override
-  Future<ImportSourceFile?> pickSongFile() async => ImportSourceFile(
+  Future<ImportSourceFile?> pickBackingAudioFile() async => ImportSourceFile(
     displayName: 'backing.mp3',
     byteLength: 1,
     mimeType: 'audio/mpeg',

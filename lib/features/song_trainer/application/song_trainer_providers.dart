@@ -21,7 +21,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:strumsight/features/practice/public.dart';
 import 'package:strumsight/features/progress/public.dart' as progress;
 
-import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/platform/platform_providers.dart';
@@ -46,6 +45,7 @@ import '../data/local/file_song_asset_repository.dart';
 import '../data/local/file_song_repository.dart';
 import '../data/local/file_setlist_repository.dart';
 import '../data/local/file_song_progress_repository.dart';
+import '../data/local/key_value_song_resume_repository.dart';
 import '../data/local/in_memory_song_repository.dart';
 import '../data/local/song_repository_recovery.dart';
 import '../data/migration/song_migration_version_store.dart';
@@ -55,6 +55,7 @@ import '../domain/repositories/setlist_repository.dart';
 import '../domain/repositories/song_progress_repository.dart';
 import '../domain/models/song_id.dart';
 import '../domain/models/song_asset_reference.dart';
+import '../domain/models/trainer_config.dart';
 import 'migration/song_migration_state.dart';
 import 'migration/song_storage_migrator.dart';
 import 'trainer/song_transport.dart';
@@ -63,6 +64,7 @@ import 'trainer/song_practice_compiler.dart';
 import 'trainer/song_progress_committer.dart';
 import 'trainer/song_resume_repository.dart';
 import 'trainer/song_trainer_controller.dart';
+import 'progress/song_measure_progress_committer.dart';
 import 'progress/song_progress_aggregator.dart';
 import 'setlists/setlist_controller.dart';
 
@@ -255,6 +257,15 @@ final songFilePickerAdapterProvider = Provider.autoDispose<FilePickerAdapter>((
   return adapter;
 });
 
+/// Production backing-audio picker boundary (javító sáv 2026-09-06, audit
+/// §5.2 "Hang-import folyamat"). Separate from [songFilePickerAdapterProvider]
+/// so the notation import and the backing attachment can never offer each
+/// other's file types.
+final songBackingAudioPickerProvider =
+    Provider.autoDispose<BackingAudioPickerAdapter>(
+      (_) => const PlatformFilePickerAdapter(),
+    );
+
 /// Reactive import state for presentation consumers. The state itself contains
 /// only phase, operation ID, preview metadata and a stable failure code.
 final songImportStateProvider = StreamProvider.autoDispose<SongImportState>(
@@ -378,10 +389,17 @@ final class SongTrainerControllerInputs {
   const SongTrainerControllerInputs({
     required this.compilation,
     this.backingAsset,
+    this.config,
   });
 
   final SongPracticeCompilation compilation;
   final SongAssetReference? backingAsset;
+
+  /// The setup configuration these inputs were compiled from, when the
+  /// launcher built them (R8): the result screen needs it to restart the
+  /// SAME song + config on "Retry" and to move on to the next section.
+  /// `null` for hand-assembled test inputs.
+  final TrainerConfig? config;
 }
 
 /// Production Song Trainer orchestration wiring.
@@ -410,6 +428,9 @@ final songTrainerControllerProvider = Provider.autoDispose
         progressCommitter: definition == null
             ? null
             : ref.watch(songProgressCommitterProvider),
+        measureProgressCommitter: definition == null
+            ? null
+            : ref.watch(songMeasureProgressCommitterProvider),
         resumeRepository: ref.watch(songResumeRepositoryProvider),
       );
       ref.onDispose(() => unawaited(controller.dispose()));
@@ -427,11 +448,31 @@ final songProgressCommitterProvider = Provider<SongProgressCommitter>((ref) {
   return committer;
 });
 
-/// Resume-checkpoint repository. The in-memory default is replaced by a
-/// file-backed persistence layer in the R22 round.
+/// Resume-checkpoint repository.
+///
+/// Javító sáv 2026-09-06 (audit §5.2): the in-memory default lost the
+/// checkpoint on every app restart — the exact case resume exists for. The
+/// production binding is now the persisted [KeyValueSongResumeRepository]
+/// over the same [KeyValueStore] the rest of the app writes through.
 final songResumeRepositoryProvider = Provider<SongResumeRepository>((ref) {
-  return _InMemorySongResumeRepository();
+  return KeyValueSongResumeRepository(
+    keyValueStore: ref.watch(keyValueStoreProvider),
+  );
 });
+
+/// Per-measure progress commit boundary for scored sessions (audit §5.2).
+///
+/// Separate from [songProgressCommitterProvider]: that one writes ONE
+/// practice-history entry per session, this one writes one durable
+/// [SongPracticeRecord] per measure so [SongProgressAggregator] has records
+/// to project at all.
+final songMeasureProgressCommitterProvider =
+    Provider<SongMeasureProgressCommitter>((ref) {
+      return SongMeasureProgressCommitter(
+        repository: ref.watch(songProgressRepositoryProvider),
+        clock: ref.watch(songTrainerClockProvider),
+      );
+    });
 
 final songProgressSessionRecorderProvider = Provider<PracticeSessionRecorder>((
   ref,
@@ -469,49 +510,39 @@ final songProgressTerminalIntegratorProvider =
       );
     });
 
-final class _InMemorySongResumeRepository implements SongResumeRepository {
-  final Map<String, SongResumeCheckpoint> _store =
-      <String, SongResumeCheckpoint>{};
-
-  String _key(SongId songId, int revision) => '${songId.value}@$revision';
-
-  @override
-  Future<AppResult<SongResumeCheckpoint>> load({
-    required SongId songId,
-    required int revision,
-  }) async {
-    final exact = _store[_key(songId, revision)];
-    if (exact != null) {
-      return AppResult<SongResumeCheckpoint>.success(exact);
-    }
-    // Song id matches but a different revision was requested — explicit
-    // invalidation rather than a silent noCheckpoint, so the caller can
-    // distinguish "stale" from "never existed".
-    final otherRevision = _store.values
-        .where((checkpoint) => checkpoint.songId == songId)
-        .firstOrNull;
-    if (otherRevision != null) {
-      return AppResult<SongResumeCheckpoint>.failure(
-        const StorageFailure(code: SongResumeFailureCode.revisionMismatch),
+/// Revision-scoped progress projection for one song (audit §5.2).
+///
+/// Reads the records [SongMeasureProgressCommitter] writes and folds them
+/// with [SongProgressAggregator]. A repository failure degrades to the empty
+/// aggregate — the result screen then simply shows no progress card rather
+/// than an invented one.
+final songProgressAggregateProvider = FutureProvider.autoDispose
+    .family<SongProgressAggregate, SongProgressKey>((ref, key) async {
+      final repository = ref.watch(songProgressRepositoryProvider);
+      final loaded = await repository.load(
+        songId: key.songId,
+        revision: key.revision,
       );
-    }
-    return AppResult<SongResumeCheckpoint>.failure(
-      const StorageFailure(code: SongResumeFailureCode.noCheckpoint),
-    );
-  }
+      return switch (loaded) {
+        Success(:final value) => SongProgressAggregator.aggregate(value),
+        Failure() => const SongProgressAggregate.empty(),
+      };
+    });
+
+/// Family key of [songProgressAggregateProvider]. A value type, so Riverpod
+/// caches one projection per (song, revision) pair.
+final class SongProgressKey {
+  const SongProgressKey({required this.songId, required this.revision});
+
+  final SongId songId;
+  final int revision;
 
   @override
-  Future<AppResult<void>> save(SongResumeCheckpoint checkpoint) async {
-    _store[_key(checkpoint.songId, checkpoint.songRevision)] = checkpoint;
-    return const AppResult<void>.success(null);
-  }
+  bool operator ==(Object other) =>
+      other is SongProgressKey &&
+      other.songId == songId &&
+      other.revision == revision;
 
   @override
-  Future<AppResult<void>> discard({
-    required SongId songId,
-    required int revision,
-  }) async {
-    _store.remove(_key(songId, revision));
-    return const AppResult<void>.success(null);
-  }
+  int get hashCode => Object.hash(songId, revision);
 }

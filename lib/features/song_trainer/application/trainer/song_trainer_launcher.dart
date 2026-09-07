@@ -77,6 +77,7 @@ final class SongTrainerLauncher {
       SongTrainerControllerInputs(
         compilation: compilation,
         backingAsset: backingAssetOf(document),
+        config: config,
       ),
     );
   }

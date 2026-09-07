@@ -35,6 +35,7 @@ import '../../application/song_trainer_providers.dart';
 import '../../application/trainer/song_trainer_controller.dart';
 import '../../application/trainer/song_trainer_state.dart';
 import '../../domain/models/song_id.dart';
+import '../song_trainer_launch.dart';
 import '../widgets/chord_lane.dart';
 import '../widgets/loop_controls.dart';
 import '../widgets/measure_heatmap.dart';
@@ -58,6 +59,7 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
     this.onPause,
     this.onResume,
     this.onSeek,
+    this.onSpeedChanged,
     this.onSectionSelected,
     this.onABEntered,
     this.onABClear,
@@ -81,6 +83,12 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
   final VoidCallback? onPause;
   final VoidCallback? onResume;
   final ValueChanged<Duration>? onSeek;
+
+  /// Live backing-rate handler. `null` renders the speed slider inert — the
+  /// route supplies one only when the owned controller can actually honour a
+  /// rate change ([SongTrainerController.canChangeBackingRate]).
+  final ValueChanged<double>? onSpeedChanged;
+
   final ValueChanged<SongSectionId>? onSectionSelected;
   final ValueChanged<List<int>>? onABEntered;
   final VoidCallback? onABClear;
@@ -173,7 +181,13 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
       ':songId',
       Uri.encodeComponent(songId),
     );
-    unawaited(context.push<void>(location, extra: effect.result));
+    // R8: the result travels with the configuration the session ran with, so
+    // the result screen's Retry / Next CTAs have something real to act on.
+    final args = SongTrainerResultArgs(
+      result: effect.result,
+      config: widget.inputs?.config,
+    );
+    unawaited(context.push<void>(location, extra: args));
   }
 
   // Route mode: the transport buttons drive the owned controller unless the
@@ -197,6 +211,17 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
     return (position) => unawaited(owned.seek(position));
   }
 
+  /// Javító sáv 2026-09-06 (audit §5.2): the speed slider shipped with
+  /// `onChanged: null`, so it was an inert control. It gets a real handler
+  /// exactly when the owned controller can honour one — a scored session's
+  /// judged timeline is compiled at the setup speed and must not drift away
+  /// from what the user hears, so it stays honestly disabled there.
+  ValueChanged<double>? _ownedSpeed() {
+    final owned = _ownedController;
+    if (owned == null || !owned.canChangeBackingRate) return null;
+    return (rate) => unawaited(owned.setPlaybackRate(rate));
+  }
+
   Widget _buildScaffold(BuildContext context, SongTrainerState? current) {
     final status = current?.status ?? SongTrainerStatus.idle;
     final leftHanded = ref.read(leftHandedProvider);
@@ -218,6 +243,7 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         onPause: widget.onPause ?? _ownedPause(),
         onResume: widget.onResume ?? _ownedResume(),
         onSeek: widget.onSeek ?? _ownedSeek(),
+        onSpeedChanged: widget.onSpeedChanged ?? _ownedSpeed(),
         onSectionSelected: widget.onSectionSelected,
         onABEntered: widget.onABEntered,
         onABClear: widget.onABClear,
@@ -286,6 +312,7 @@ final class _RunningBody extends StatelessWidget {
     required this.onPause,
     required this.onResume,
     required this.onSeek,
+    required this.onSpeedChanged,
     required this.onSectionSelected,
     required this.onABEntered,
     required this.onABClear,
@@ -301,6 +328,7 @@ final class _RunningBody extends StatelessWidget {
   final VoidCallback? onPause;
   final VoidCallback? onResume;
   final ValueChanged<Duration>? onSeek;
+  final ValueChanged<double>? onSpeedChanged;
   final ValueChanged<SongSectionId>? onSectionSelected;
   final ValueChanged<List<int>>? onABEntered;
   final VoidCallback? onABClear;
@@ -336,13 +364,13 @@ final class _RunningBody extends StatelessWidget {
         if (state.backingRateSupported)
           Semantics(
             label: AppLocalizations.of(context).songTrainerSpeedLabel,
-            child: const Slider(
-              key: Key('song-trainer-speed'),
-              value: 1,
+            child: Slider(
+              key: const Key('song-trainer-speed'),
+              value: state.playbackRate.clamp(0.5, 1.5).toDouble(),
               min: 0.5,
               max: 1.5,
               divisions: 20,
-              onChanged: null,
+              onChanged: onSpeedChanged,
             ),
           )
         else
