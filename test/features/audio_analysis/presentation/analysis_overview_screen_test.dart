@@ -145,6 +145,21 @@ Widget _routedHarness(
           return const AnalysisMetricDetailScreen();
         },
       ),
+      // R22 (audit MI3) — the insight CTA's destinations, stubbed so a tap
+      // can be asserted here without pulling the real screens (and their
+      // audio/practice providers) into this file.
+      GoRoute(
+        path: AppRoutes.practiceHub,
+        builder: (_, _) => const Scaffold(key: Key('stub-practice-hub')),
+      ),
+      GoRoute(
+        path: AppRoutes.metronome,
+        builder: (_, _) => const Scaffold(key: Key('stub-metronome')),
+      ),
+      GoRoute(
+        path: AppRoutes.analysisCapture,
+        builder: (_, _) => const Scaffold(key: Key('stub-analysis-capture')),
+      ),
     ],
   );
   return MaterialApp.router(
@@ -530,6 +545,44 @@ void main() {
         expect(detailInsightMatches.evaluate().length, 5);
       },
     );
+
+    // R22 (re-audit 2026-09-07 §3, MI3): the CTA was `onPressed: null` on
+    // every card. It now pushes the route the persisted coarse action maps
+    // to — proven by navigation, not by a callback spy.
+    testWidgets('MI3 — the insight CTA navigates to the mapped route', (
+      tester,
+    ) async {
+      await _pumpAt(
+        tester,
+        _routedHarness(
+          _document(
+            insights: <AnalysisInsight>[
+              AnalysisInsight(
+                id: 'i-slow',
+                ruleId: 'r',
+                ruleVersion: '1',
+                priority: AnalysisInsightPriority.high,
+                kind: AnalysisInsightKind.recommendation,
+                factIds: const <String>[],
+                messageKey: 'analysisInsightRushBias',
+                messageArgs: const <String, String>{'milliseconds': '12'},
+                recommendedAction: AnalysisRecommendedAction.slowDown,
+              ),
+            ],
+          ),
+        ),
+        size: const Size(400, 2400),
+      );
+
+      final cta = find.byKey(const Key('insight-action-slowDown'));
+      expect(cta, findsOneWidget);
+      await tester.ensureVisible(cta);
+      await tester.pumpAndSettle();
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('stub-metronome')), findsOneWidget);
+    });
   });
 
   group('AnalysisMetricDetailScreen — §0.0.A/R9/R12', () {
@@ -582,6 +635,7 @@ void main() {
           kindLabel: 'Recommendation',
           actionLabel: 'Slow down',
           actionTooltip: 'Slow down',
+          action: AnalysisRecommendedAction.slowDown,
         );
         tester.platformDispatcher.textScaleFactorTestValue = 2.0;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -683,6 +737,7 @@ void main() {
       'lib/features/audio_analysis/presentation/widgets/signal_quality_card.dart',
       'lib/features/audio_analysis/presentation/widgets/confidence_badge.dart',
       'lib/features/audio_analysis/presentation/widgets/labels_adapter.dart',
+      'lib/features/audio_analysis/presentation/insight_action_route.dart',
     ];
     for (final file in files) {
       final contents = File(file).readAsStringSync();
@@ -707,6 +762,7 @@ void main() {
       'lib/features/audio_analysis/presentation/widgets/signal_quality_card.dart',
       'lib/features/audio_analysis/presentation/widgets/confidence_badge.dart',
       'lib/features/audio_analysis/presentation/widgets/labels_adapter.dart',
+      'lib/features/audio_analysis/presentation/insight_action_route.dart',
     ];
     for (final file in files) {
       final contents = File(file).readAsStringSync();

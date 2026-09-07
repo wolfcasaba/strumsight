@@ -1,20 +1,31 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/analysis_insight.dart';
 import '../controllers/overview_view_model.dart';
 
-/// Single insight card. The action button is intentionally **disabled** —
-/// the perzisztált document only carries the coarse [AnalysisRecommendedAction]
-/// enum and not the full [RecommendedAnalysisAction] payload the rule
-/// produced, so the overview cannot navigate or perform anything yet
-/// (brief §5 döntés 7). The [actionTooltip] explains the disabled state.
+/// Single insight card.
+///
+/// R22 (audit MI3): the action button is LIVE whenever the caller wires
+/// [onAction]. The perzisztált document keeps only the coarse
+/// [AnalysisRecommendedAction] — not the rule's full payload — which is
+/// still enough to reach the tool the insight asks for
+/// (`presentation/insight_action_route.dart`). A caller with no destination
+/// to offer leaves [onAction] null; the button then stays disabled behind
+/// the [OverviewInsightCard.actionTooltip] explanation instead of
+/// pretending to act.
 final class InsightCard extends StatelessWidget {
-  const InsightCard({required this.card, super.key});
+  const InsightCard({required this.card, this.onAction, super.key});
 
   final OverviewInsightCard card;
+
+  /// Invoked with [OverviewInsightCard.action] when the CTA is tapped.
+  /// `null` keeps the CTA disabled and tooltip-explained.
+  final ValueChanged<AnalysisRecommendedAction>? onAction;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final onAction = this.onAction;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -47,13 +58,20 @@ final class InsightCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(card.body, style: theme.textTheme.bodyMedium),
               const SizedBox(height: 8),
-              Tooltip(
-                message: card.actionTooltip,
-                child: OutlinedButton(
-                  onPressed: null,
+              if (onAction == null)
+                Tooltip(
+                  message: card.actionTooltip,
+                  child: OutlinedButton(
+                    onPressed: null,
+                    child: Text(card.actionLabel),
+                  ),
+                )
+              else
+                OutlinedButton(
+                  key: Key('insight-action-${card.action.name}'),
+                  onPressed: () => onAction(card.action),
                   child: Text(card.actionLabel),
                 ),
-              ),
             ],
           ),
         ),

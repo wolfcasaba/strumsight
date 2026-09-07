@@ -87,6 +87,7 @@ final class OverviewInsightCard {
     required this.kindLabel,
     required this.actionLabel,
     required this.actionTooltip,
+    required this.action,
   });
 
   final String title;
@@ -94,11 +95,15 @@ final class OverviewInsightCard {
   final String kindLabel;
   final String actionLabel;
 
-  /// Explanation shown when the action is disabled — the overview never
-  /// performs an action because the perzisztált document carries only the
-  /// coarse [AnalysisRecommendedAction] enum and not the full
-  /// [RecommendedAnalysisAction] payload the rule produced.
+  /// Explanation shown when no caller wired a handler for [action] — the
+  /// card then renders the button disabled instead of pretending to act.
   final String actionTooltip;
+
+  /// R22 (audit MI3): the coarse action the perzisztált document carries.
+  /// The rule's full [RecommendedAnalysisAction] payload (hotspot / metric
+  /// id) is NOT persisted, so this enum is all the truth there is — the
+  /// card forwards it verbatim and the screen maps it to a destination.
+  final AnalysisRecommendedAction action;
 }
 
 /// Navigation payload for the "Részletek" entry point: every metric card
@@ -422,6 +427,7 @@ final class OverviewViewModel {
       kindLabel: labels.insightKindLabel(kind),
       actionLabel: labels.actionLabel(insight.recommendedAction),
       actionTooltip: labels.actionDisabledTooltip(insight.recommendedAction),
+      action: insight.recommendedAction,
     );
   }
 }

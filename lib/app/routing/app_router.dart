@@ -1343,13 +1343,18 @@ final routerProvider = Provider<GoRouter>((ref) {
               state: evaluation.state,
               reason: evaluation.reason,
               weeklyConsistencyDays: weeklyConsistencyDays.value,
-              onRecoveryPressed: () {
-                // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 2):
-                // no repository method exists to purchase/apply a streak
-                // recovery, and `StreakDetailScreen` has no "recovery
-                // unavailable" contract to fall back to (screens are this
-                // round's tilos zona) — the button stays rendered but inert.
-              },
+              // R22 (audit MI1): the CTA's own copy is "Start a recovery
+              // practice" (`streakV2RecoveryCta`), and the ONLY recovery
+              // concept this domain has is `StreakEvaluationRequest`'s
+              // `recoveryEligible` — a lower qualification threshold for a
+              // practice session, never a purchasable token or a grace-day
+              // claim. So the honest behaviour is the one the label
+              // promises: take the user to the practice hub where such a
+              // session starts. Same precedent as `QuestStartPracticeAction`
+              // above; no ledger, freeze count, or streak state is mutated
+              // here, because nothing in the domain grants a recovery
+              // without a real qualified day.
+              onRecoveryPressed: () => context.push(AppRoutes.practiceHub),
             );
           },
         ),
@@ -1364,10 +1369,30 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ref.watch(rewardInboxItemsProvider),
                 l10n,
               ),
-              onItemSelected: (_) {
-                // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 3): no
-                // reward-detail screen exists on the tree to navigate to —
-                // building one is new scope, not a bekötés.
+              // R22 (audit MI2): opening a row shows the already-built
+              // `RewardSummarySheet` — a bottom sheet, not a new route, so
+              // no matrix fixture or §3.2 row is needed. The sheet renders a
+              // drained `CelebrationSummary`, so the single tapped item is
+              // wrapped into a one-event summary; `addedAt` is used for both
+              // window bounds because a postaláda row IS the whole batch.
+              // The item is the already-localized one (see
+              // `_localizedRewardInboxItems`), so the sheet's raw
+              // `titleKey`/`bodyKey` render as real copy.
+              onItemSelected: (RewardInboxItem item) {
+                final preferences = ref.read(gamificationPreferencesProvider);
+                unawaited(
+                  RewardSummarySheet.show<void>(
+                    context,
+                    summary: CelebrationSummary(
+                      events: <RewardEvent>[item.event],
+                      totalXp: item.event.earnedXp,
+                      startedAt: item.addedAt,
+                      endedAt: item.addedAt,
+                    ),
+                    feedback: gamificationFeedbackFor(preferences),
+                    reduceMotion: preferences.reduceMotion,
+                  ),
+                );
               },
               onMarkSeen: (RewardInboxItem item) {
                 // Review m2: the screen's `onMarkSeen` contract is `void`

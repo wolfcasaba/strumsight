@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import 'controllers/overview_view_model.dart';
+import 'insight_action_route.dart';
 import 'widgets/insight_card.dart';
 import 'widgets/metric_card.dart';
 
@@ -78,7 +80,12 @@ class AnalysisMetricDetailScreen extends StatelessWidget {
                       ),
                     ),
                     for (final insight in insights) ...<Widget>[
-                      InsightCard(card: insight),
+                      // R22 (audit MI3) — same live CTA as the overview.
+                      InsightCard(
+                        card: insight,
+                        onAction: (action) =>
+                            context.push(insightActionRoute(action)),
+                      ),
                       const SizedBox(height: SsSpacing.space2),
                     ],
                   ],
