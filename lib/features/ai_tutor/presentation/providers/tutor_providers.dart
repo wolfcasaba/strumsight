@@ -18,6 +18,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/foundation/app_failure.dart';
+import '../../../../core/foundation/app_result.dart';
 import '../../../../core/storage/key_value_store.dart';
 import '../../application/context/context_purpose.dart';
 import '../../application/context/tutor_context_assembler.dart';
@@ -41,6 +43,7 @@ import '../../domain/models/tutor_response_mode.dart';
 import '../../domain/repositories/tutor_conversation_repository.dart';
 import '../../domain/tools/tutor_tool.dart';
 import '../../domain/tools/tutor_tool_request.dart';
+import 'tutor_privacy_providers.dart';
 
 // ---------------------------------------------------------------------------
 // Banner taxonomy — kept here because the providers and the banner widget
@@ -66,6 +69,47 @@ enum TutorBannerKind {
   cancelled,
 }
 
+// ---------------------------------------------------------------------------
+// Consent gate on the request path (data-inventory MAJOR-3).
+//
+// Before this, `_previewTurnRequest` hardcoded `modelUseGranted: true`, so a
+// revocation written by the privacy screen into
+// `tutorConsentControllerProvider` was a value nothing in `lib/**` ever read
+// back into a turn request. The producer below closes that: it reads the
+// LIVE consent on every send and refuses to build a request at all when
+// model use is not granted, so no gateway — local or cloud — is ever asked
+// to start a turn for a revoked student.
+// ---------------------------------------------------------------------------
+
+/// Failure code for a turn refused because model-use consent is absent or
+/// was revoked. The chat surface localises it through the
+/// [TutorBannerKind.consent] banner; the code itself never reaches the user.
+const String tutorModelUseConsentMissingCode =
+    'tutor.consent.model_use_missing';
+
+/// Builds the request for one turn, or refuses it with a typed failure.
+typedef TutorTurnRequestProducer =
+    AppResult<TutorTurnRequest> Function(String message);
+
+/// The production turn-request producer: consent-gated by construction.
+///
+/// Returns a [Failure] carrying [tutorModelUseConsentMissingCode] when
+/// [consent] does not grant model use — the request object is never even
+/// built, so there is nothing for a caller to accidentally send.
+AppResult<TutorTurnRequest> buildTutorTurnRequest({
+  required String message,
+  required TutorConsent consent,
+}) {
+  if (!consent.modelUseGranted) {
+    return const AppResult<TutorTurnRequest>.failure(
+      ValidationFailure(code: tutorModelUseConsentMissingCode),
+    );
+  }
+  return AppResult<TutorTurnRequest>.success(
+    _previewTurnRequest(message, consent),
+  );
+}
+
 /// Immutable snapshot consumed by both the chat screen and the banners.
 @immutable
 class TutorChatState {
@@ -76,6 +120,7 @@ class TutorChatState {
     required this.isOnline,
     this.draft = '',
     this.messages = const <TutorMessage>[],
+    this.failureCode,
   });
 
   final TutorTurnStatus status;
@@ -85,6 +130,10 @@ class TutorChatState {
   final String draft;
   final List<TutorMessage> messages;
 
+  /// Stable failure code of the last refused/failed turn, or null. The UI
+  /// localises by this code — it never carries user-facing English text.
+  final String? failureCode;
+
   TutorChatState copyWith({
     TutorTurnStatus? status,
     String? responseText,
@@ -92,6 +141,8 @@ class TutorChatState {
     bool? isOnline,
     String? draft,
     List<TutorMessage>? messages,
+    String? failureCode,
+    bool clearFailureCode = false,
   }) => TutorChatState(
     status: status ?? this.status,
     responseText: responseText ?? this.responseText,
@@ -99,6 +150,7 @@ class TutorChatState {
     isOnline: isOnline ?? this.isOnline,
     draft: draft ?? this.draft,
     messages: messages ?? this.messages,
+    failureCode: clearFailureCode ? null : (failureCode ?? this.failureCode),
   );
 }
 
@@ -213,7 +265,10 @@ class DefaultTutorChatController extends ChangeNotifier
   final TutorConversationRepository repository;
   final TutorConversationId conversationId;
   final TutorRequestId Function() requestIdFactory;
-  final TutorTurnRequest Function(String message) turnRequestFactory;
+
+  /// Consent-gated request producer. A [Failure] here means the turn is
+  /// refused before anything is sent — see [buildTutorTurnRequest].
+  final TutorTurnRequestProducer turnRequestFactory;
 
   final List<TutorMessage> _messages = <TutorMessage>[];
   final StreamController<TutorChatState> _statesController =
@@ -238,6 +293,10 @@ class DefaultTutorChatController extends ChangeNotifier
   @override
   List<TutorBannerKind> banners = const <TutorBannerKind>[];
 
+  /// Stable code of the last refused/failed turn, mirrored into
+  /// [TutorChatState.failureCode]. Null once a turn is accepted again.
+  String? failureCode;
+
   @override
   Stream<TutorChatState> get states => _statesController.stream;
 
@@ -249,6 +308,7 @@ class DefaultTutorChatController extends ChangeNotifier
       isOnline: isOnline,
       draft: draft,
       messages: List<TutorMessage>.unmodifiable(_messages),
+      failureCode: failureCode,
     );
     _statesController.add(snapshot);
     onChanged(snapshot);
@@ -258,6 +318,7 @@ class DefaultTutorChatController extends ChangeNotifier
   void _consume(TutorState next) {
     status = next.status;
     responseText = next.responseText;
+    failureCode = next.failureCode;
     final nextBanners = <TutorBannerKind>[];
     if (!isOnline) nextBanners.add(TutorBannerKind.offline);
     switch (next.status) {
@@ -294,15 +355,23 @@ class DefaultTutorChatController extends ChangeNotifier
   void send() {
     final text = draft.trim();
     if (text.isEmpty) return;
+    final produced = turnRequestFactory(text);
+    if (produced case Failure<TutorTurnRequest>(:final error)) {
+      // Refused on the request path: nothing is dispatched, so the
+      // orchestrator never creates a gateway. The draft is kept on
+      // purpose — the student can grant consent and resend the text.
+      _refuse(error.code);
+      return;
+    }
+    final request = produced.valueOrNull!;
     final userMessage = _userMessage(text);
     _messages.add(userMessage);
     draft = '';
     status = TutorTurnStatus.assemblingContext;
     responseText = '';
+    failureCode = null;
     _emit();
-    unawaited(
-      orchestrator.dispatch(SendTutorMessage(turnRequestFactory(text))),
-    );
+    unawaited(orchestrator.dispatch(SendTutorMessage(request)));
   }
 
   @override
@@ -333,6 +402,26 @@ class DefaultTutorChatController extends ChangeNotifier
   @override
   void setBanners(List<TutorBannerKind> value) {
     banners = List<TutorBannerKind>.unmodifiable(value);
+    _emit();
+  }
+
+  /// Surfaces a request-path refusal ([turnRequestFactory] returned a
+  /// [Failure]) as terminal, localisable state. The orchestrator is never
+  /// touched, because nothing was — or could be — sent.
+  void _refuse(String code) {
+    final isConsent = code == tutorModelUseConsentMissingCode;
+    final kind = isConsent ? TutorBannerKind.consent : TutorBannerKind.error;
+    if (isConsent) {
+      status = TutorTurnStatus.consentRevoked;
+    } else {
+      status = TutorTurnStatus.failed;
+    }
+    responseText = '';
+    failureCode = code;
+    final nextBanners = <TutorBannerKind>[];
+    if (!isOnline) nextBanners.add(TutorBannerKind.offline);
+    nextBanners.add(kind);
+    banners = List<TutorBannerKind>.unmodifiable(nextBanners);
     _emit();
   }
 
@@ -411,7 +500,13 @@ final tutorChatControllerProvider = Provider<TutorChatController>((ref) {
     repository: repository,
     conversationId: TutorConversationId('preview'),
     requestIdFactory: _defaultRequestId,
-    turnRequestFactory: (text) => _previewTurnRequest(text),
+    // `ref.read`, not `ref.watch`: the consent value is re-read on EVERY
+    // send, so a revocation made mid-session takes effect on the next turn
+    // without rebuilding the controller (and losing the conversation).
+    turnRequestFactory: (text) => buildTutorTurnRequest(
+      message: text,
+      consent: ref.read(tutorConsentControllerProvider),
+    ),
     onChanged: (_) {},
   );
   controller.attach();
@@ -430,28 +525,34 @@ final tutorChatStateProvider = StreamProvider<TutorChatState>((ref) {
 TutorRequestId _defaultRequestId() =>
     TutorRequestId('r-${DateTime.now().microsecondsSinceEpoch}');
 
-TutorTurnRequest _previewTurnRequest(String text) => TutorTurnRequest(
-  requestId: _defaultRequestId(),
-  conversationId: TutorConversationId('preview'),
-  message: text,
-  createdAt: DateTime.now().toUtc(),
-  consent: const TutorConsent(modelUseGranted: true),
-  purpose: ContextPurpose.generalQuestion,
-  contextFields: const <TutorContextField>[],
-  retrievalQuery: KnowledgeRetrievalQuery(queryText: text, locale: 'en'),
-  responseLocale: 'en',
-  responseMode: TutorResponseMode.concise,
-  toolPolicy: TutorToolTurnPolicy(
-    allowedToolNames: const <String>{'getContextField'},
-    allowedPermissions: const <TutorToolPermission>[],
-  ),
-  actionContext: TutorActionValidationContext(
-    now: DateTime.now().toUtc(),
-    availableCapabilities: const <TutorActionCapability>[],
-    activeSessionIds: const <String>[],
-    songRevisions: const <String, TutorActionRevisionToken>{},
-  ),
-);
+/// Builds the preview conversation's turn request with the CALLER's consent
+/// value. It is deliberately private and only reachable through
+/// [buildTutorTurnRequest], so no call site can construct a turn request
+/// with a consent value the student did not actually give.
+TutorTurnRequest _previewTurnRequest(String text, TutorConsent consent) {
+  return TutorTurnRequest(
+    requestId: _defaultRequestId(),
+    conversationId: TutorConversationId('preview'),
+    message: text,
+    createdAt: DateTime.now().toUtc(),
+    consent: consent,
+    purpose: ContextPurpose.generalQuestion,
+    contextFields: const <TutorContextField>[],
+    retrievalQuery: KnowledgeRetrievalQuery(queryText: text, locale: 'en'),
+    responseLocale: 'en',
+    responseMode: TutorResponseMode.concise,
+    toolPolicy: TutorToolTurnPolicy(
+      allowedToolNames: const <String>{'getContextField'},
+      allowedPermissions: const <TutorToolPermission>[],
+    ),
+    actionContext: TutorActionValidationContext(
+      now: DateTime.now().toUtc(),
+      availableCapabilities: const <TutorActionCapability>[],
+      activeSessionIds: const <String>[],
+      songRevisions: const <String, TutorActionRevisionToken>{},
+    ),
+  );
+}
 
 /// Build a `TutorContextAssembler` for the preview conversation. The
 /// fields list is empty — the preview path does not surface real

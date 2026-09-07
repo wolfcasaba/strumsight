@@ -22,6 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/core/network/dio_factory.dart';
@@ -44,6 +45,7 @@ import 'package:strumsight/features/ai_tutor/domain/models/tutor_ids.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_response_mode.dart';
 import 'package:strumsight/features/ai_tutor/domain/tools/tutor_tool.dart';
 import 'package:strumsight/features/ai_tutor/domain/tools/tutor_tool_request.dart';
+import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_providers.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
@@ -339,23 +341,25 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // MAJOR-3 (E12-R17 javító kör #1) — the machine guard against the measured
-  // gap: reduceTutorTurn's consent gate is sound, but the ONLY production
+  // MAJOR-3 (E12-R17 javító kör #1, CLOSED on the request-builder side in
+  // R9) — the machine guard against the measured gap: reduceTutorTurn's
+  // consent gate was always sound, but the ONLY production
   // TutorTurnRequest builder (`_previewTurnRequest`,
-  // lib/features/ai_tutor/presentation/providers/tutor_providers.dart:433,438)
-  // hardcodes `consent: const TutorConsent(modelUseGranted: true)` instead of
-  // reading `tutorConsentControllerProvider`. Today that is a latent gap, not
-  // a leak, because nothing in lib/** also constructs an
-  // HttpTutorStreamTransport (`wired: false` in the inventory). This group
-  // pins BOTH measured facts and proves the guard's own logic turns red for
-  // exactly the regression a future round could introduce (wiring the cloud
-  // transport without also fixing the request builder) — lib/** itself is
-  // out of scope for this round (§2), so the guard cannot be exercised by
-  // actually flipping production code; it is exercised as a pure function
-  // fed synthetic booleans, plus a real-tree cell that measures today's
-  // actual values.
+  // lib/features/ai_tutor/presentation/providers/tutor_providers.dart)
+  // used to hardcode `consent: const TutorConsent(modelUseGranted: true)`
+  // instead of reading `tutorConsentControllerProvider` — a revocation was
+  // a value nothing in lib/** ever read back into a turn.
+  //
+  // R9 removed the hardcode: `buildTutorTurnRequest` takes the consent as a
+  // parameter and `tutorChatControllerProvider` feeds it the LIVE provider
+  // value on every send. The cloud transport is still unwired
+  // (`wired: false` in the inventory, no HttpTutorStreamTransport
+  // construction site in lib/**), so both axes are pinned below: the guard's
+  // pure logic (fed synthetic booleans, including the regression it exists
+  // to catch), a real-tree cell measuring today's actual values, and two
+  // cells exercising the production producer itself.
   group('MAJOR-3 guard — the tutor cloud gateway must not become reachable '
-      'while the production request-builder still hardcodes '
+      'while the production request-builder hardcodes '
       'modelUseGranted: true', () {
     test('pure guard: wiring the cloud gateway while the hardcode is still '
         'present is UNSOUND (the exact MAJOR-3 regression)', () {
@@ -391,9 +395,9 @@ void main() {
     });
 
     test('real tree: HttpTutorStreamTransport has no construction site outside '
-        'its own declaring file, and _previewTurnRequest still hardcodes '
-        'modelUseGranted: true — both measured facts are pinned so either '
-        'silently changing trips this cell', () {
+        'its own declaring file, and the production request builder no longer '
+        'hardcodes modelUseGranted: true — both measured facts are pinned so '
+        'either silently changing trips this cell', () {
       final repository = Directory.current;
       final libDir = Directory('${repository.path}/lib');
       final declaringFile = File(
@@ -416,16 +420,24 @@ void main() {
         r'consent:\s*const\s+TutorConsent\(modelUseGranted:\s*true\)',
       ).hasMatch(providersSource);
 
-      // Pin today's exact measured state (E12-R17 javító kör #1 §2 —
-      // fixing THIS gap is explicitly out of scope; the pin is what makes
-      // a silent regression loud instead of invisible).
+      // MAJOR-3 is CLOSED on the request-builder side (R9): the hardcode is
+      // gone and the only production producer reads the live consent
+      // provider. The cloud transport is still unwired, so the tree is
+      // sound on both axes — and a regression on EITHER trips this cell.
       expect(gatewayConstructedElsewhere, isFalse);
-      expect(hardcodesGrantedTrue, isTrue);
+      expect(hardcodesGrantedTrue, isFalse);
+      expect(
+        providersSource.contains('ref.read(tutorConsentControllerProvider)'),
+        isTrue,
+        reason:
+            'the production turn-request producer must read the live '
+            'consent provider on every send — a snapshot taken at '
+            'controller-build time would not see a mid-session revocation',
+      );
 
       // ...and feeding those exact measured values through the pure guard
-      // must be sound today, and would stop being sound the moment
-      // gatewayConstructedElsewhere flips to true without
-      // hardcodesGrantedTrue also flipping to false.
+      // must be sound today. It stays sound even when the cloud gateway is
+      // finally wired, precisely because the hardcode is gone.
       expect(
         tutorTurnConsentWiringIsSound(
           cloudGatewayHasConstructionSite: gatewayConstructedElsewhere,
@@ -433,6 +445,30 @@ void main() {
         ),
         isTrue,
       );
+    });
+
+    test('production producer: revoked model-use consent yields a typed '
+        'failure and NO request object at all', () {
+      final refused = buildTutorTurnRequest(
+        message: 'How can I improve my rhythm?',
+        consent: const TutorConsent(),
+      );
+
+      expect(refused, isA<Failure<TutorTurnRequest>>());
+      expect(refused.failureOrNull?.code, tutorModelUseConsentMissingCode);
+      expect(refused.valueOrNull, isNull);
+    });
+
+    test('production producer: granted model-use consent builds a request '
+        'that carries the student\'s ACTUAL consent value', () {
+      final granted = buildTutorTurnRequest(
+        message: 'How can I improve my rhythm?',
+        consent: const TutorConsent(modelUseGranted: true),
+      );
+
+      expect(granted, isA<Success<TutorTurnRequest>>());
+      expect(granted.valueOrNull?.consent.modelUseGranted, isTrue);
+      expect(granted.valueOrNull?.consent.persistentStorageGranted, isFalse);
     });
   });
 }
