@@ -546,27 +546,26 @@ void main() {
     expect(harness.practice.state.status, PracticeSessionStatus.running);
     expect(harness.controller.canChangeBackingRate, isTrue);
 
+    // The family key is identity-based (no `==` on the inputs): the SAME
+    // instance must reach the override and the screen, otherwise the real
+    // provider builds and reads the bootstrap-only asset repository.
+    final inputs = SongTrainerControllerInputs(
+      compilation: _scoredCompilation(),
+      backingAsset: _asset,
+    );
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
           ..._preferenceOverridesForScreen(),
           songTrainerControllerProvider(
-            SongTrainerControllerInputs(
-              compilation: _scoredCompilation(),
-              backingAsset: _asset,
-            ),
+            inputs,
           ).overrideWith((ref) => harness.controller),
         ],
         child: MaterialApp(
           theme: SsLightTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: SongTrainerScreen(
-            inputs: SongTrainerControllerInputs(
-              compilation: _scoredCompilation(),
-              backingAsset: _asset,
-            ),
-          ),
+          home: SongTrainerScreen(inputs: inputs),
         ),
       ),
     );
