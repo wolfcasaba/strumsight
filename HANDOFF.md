@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + 16 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, és a §1.3 „routolt, de nem működik" osztály nagy része zárva
+## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + újra-audit + 19 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, a §1.3 „routolt, de nem működik" osztály nagy része zárva, és a navigációs zsákutcák + a hiányzó belépési pontok is
 
 A mérce a felhasználóé: **„APK build után minden működjön"** — a `build-apk.yml`
 `development` APK-jában minden fejlesztett képernyő legyen elérhető ÉS
@@ -29,6 +29,9 @@ nyitva maradt). Bázis: `main`, az audit commitja `f154139`.
 | R15 | `999f03c` (a `3d2f0e3` ELŐTT landolt) | **két hazug UI-állapot zárva.** Login: nincs ELAVULT hiba mód-váltás/mezőszerkesztés után — képernyő-helyi elvetés a **beküldés-számlálóhoz** kötve, nem hiba-identitáshoz (a fake-ek és a `const` failure-ök két próbálkozásra ugyanazt a példányt adhatják, amit egy identitás-jelölő némán elnyelne), az `AuthController` érintetlen, 409-nél `authEmailTakenHint` („van már fiókod? jelentkezz be"). Klub-feed: mindkét `error:` ág `_ClubFeedErrorCard` újrapróbálással (`club-feed-error` / `club-feed-pinned-error`) a korábbi „nincs poszt" helyett; a goldenek pixelre változatlanok | `login_error_lifecycle_test` (5 cella), `club_detail_screen_test` (+2) |
 | R16 | `2dd4fc9` | **contract-lefedettség + community throttle-kulcs.** `client-backend-endpoints.json` **41 → 67** bejegyzés, mind `mounted`: az R14 ~24-et becsült, mérve 26 hiányzott (clubs 9, posts/comments/reactions/bookmarks 11, notifications 5, feed 1); a mérő regex (`_client\.(getJson\|postJson\|putJson\|patchJson\|post\|delete)…` a `lib/` felett) 65 `ApiClient` hívóhely + 3 nyers Dio (`/tutor/stream`, `/tutor/capability`, `/diagnostics`) + 2 auth-token POST = 67 method+path pár; a régi 41-ből 23 `source` sor elcsúszott → újramérve; mind a 26 új sor jelen van a `create_app(...).openapi()["paths"]`-ban, kiszolgálatlan csak a 3 `known_gap` challenge-olvasás. Smoke: 26 új `_NOT_EXERCISED` (flag-gated clubs / egy fiókkal elő nem állítható id / durable írás törlés nélkül), számlálók **67 / 10 / 54 / 3**. Backend: a `handles.py` (30/min, 5/h) és `search.py` (60/min) `_client_key`-je a közös `client_ip_for_throttle`-re — e keretek eddig a deploy MINDEN hívójára közösek voltak; `client_ip.py` CALLERS szakasz. NOTE: a `handles.py` router NINCS felcsatolva (ADR 0497 D6), a javítás így ma elérhetetlen felületen helyes; a `challenge_repository_impl.dart` `challengeId` paraméterneve az invite-hívásoknál csak névadási zavar (a képernyő a valódi meghívó-id-t adja: `community_challenges_screen.dart:196-198`) | `test_community_trusted_proxy_throttle` (10 cella), `test_live_smoke_contract` számlálók; helyben pytest 986 passed + 1 xfailed, ruff tiszta |
 | R12–R13 zárás | `ebd68b7` | `build-apk.yml` run [34145358157](https://github.com/wolfcasaba/strumsight/actions/runs/34145358157) **teljesen zöld**; leletek: analyze ×2 (initializing formals), 1 teszt (family-kulcs identitás) | — |
+| R17 | `8e454f6` | **kijutás minden képernyőről** (újra-audit B5/B6/B7 + M7): a sikeres login nem dob `GoError: There is nothing to pop`-ot egyoldalas stacken (a siker-ág a közös `_leaveScreen`-t kapta: `maybePop`, különben `go(profileHome)`) — ez a felhasználó „nem működik a bejelentkezés" jelzésének legvalószínűbb KÓDBELI oka; az eredmény-képernyő mindkét változata `BackButton`-t és „Kész" CTA-t kap PONTOSAN akkor, ha van `GoRouter` és nincs mit poppolni (router nélkül a golden-keretek bájtra változatlanok); tutor-home→chat, Profil-hub→community/gamification/login és Ma-fül→vision `push`-ra váltott, a tutor-chat vissza-nyila `maybePop`, különben `go(tutorHome)`; a munkamenet-megszakítás `canPop ? pop : go(practiceHub)` | `login_success_navigation_test` (3), `practice_result_screen_test` R17 (5), `profile_hub_test` (3), `tutor_chat` (2), `tutor_home` (1), `today_hub` (2), `practice_session` (1) |
+| R19 | `d0fc96c` (az R18 ELŐTT landolt) | **igazmondó állapotok** (újra-audit M3, M4): a produkciós Dio `receiveDataWhenStatusError: false`-a miatt a `_notFoundDetail` MINDEN 404-en `null`-t látott, tehát bekapcsolt community mellett senki nem kapott volna profil-létrehozást — `ApiClient.getJson(readsErrorDetail: true)` kérésenkénti opt-in (`ResponseType.plain`, a 401 mérvadó marad, a globális alapérték változatlan), a pin a VALÓDI `DioFactory`-kliensre újraírva; a `todayPlanRepositoryProvider` az `activePracticePlanProvider`-t figyeli → `ActivePlanTodayPlanRepository` / `unavailable` / új `unreadable` (olvasási hiba ≠ „nincs terv") | `profile_repository_unavailable_test` U1–U4b, `active_plan_today_plan_repository_test` T1–T5 |
+| R18 | `0207d5a` | **belépési pontok** (újra-audit B1–B4, B8 + M5, M6 router-oldala, M10): az öt kategória-csip a szűrt katalógusra `push`-ol (`/practice/catalog?category=<code>`, új `PracticeCategory` + `practiceCategoryLabel`; a Skálák csip marad és őszintén üres listát nyit — az eltávolítása golden-pinelt pixelt mozdítana), a `/practice/catalog` **top-level, shell-flagtől független** route → **10/10 beépített gyakorlat elérhető**; „További eszközök" a hub-lista végén (Összes gyakorlat, Analyze, Learn) a golden-nézetablakon kívül, Dalok fül AppBar-akció a `/song-trainer`-re (`songTrainerV2Enabled`), Vision `ready` lépés indító CTA-ja; a készség-bizonyíték sor `LibraryItem`-et ad `extra`-ként (feloldhatatlan id → snackbar), a TodayPlan/WeeklyPlan/AnalysisHome építők `.when`-nel külön loading/hiba-keretet kapnak, `navSongs`/`navProfile` kulcsok; új `l10n/features/shell_{en,hu}.arb` szegmens (9 kulcs, aggregátumok újragenerálva) | `r18_entry_points_test`, `practice_category_test`, `song_trainer_entry_test`, `vision_setup_screen_test` (+2), `progress_composition_test` (+2), nav-címke cellák, `arb_parity_test` |
 
 **Nyitva maradt (indokkal, audit §5.2):** az R8–R16 zárta a korábbi lista
 egészét egy tételen kívül (song-resume, ütemenkénti haladás-commit,
@@ -58,6 +61,43 @@ saját `_client_key` helperei (`search.py`, `handles.py` →
    egész idővonalon, ezért az R13 szakaszonként affin újraidőzítése után
    KÖZELÍTŐ — a `lib/`-ben nincs fogyasztója (mérve), így nem sürgős, de az
    első kiíró felület előtt pontosítani kell.
+
+**Újra-audit a HEAD-en (2026-09-07)** — forrás-olvasásos átvizsgálás a
+SZÁLLÍTOTT `development` APK zászló-képére: `adaptiveShellEnabled == true`,
+tehát az öt célpontos adaptív héj épül fel, amiben **nincs Analyze és nincs
+Learn** célpont, és a héjon belüli képernyők `go`-val ugrottak top-level
+route-okra (stack-csere → nincs vissza-nyíl). Ez adta a 8 BLOCKER-t és a 10
+MAJOR-t; az R17–R19 mind a nyolc BLOCKER-t és hét MAJOR-t zárt. A jelentés a
+session-scratchpadban készült (**efemer**), a lényege — a zászló-kép, a B1–B8 /
+M1–M10 sorok a sorsukkal, a §5.2 tételek újramérése és a „rendben találtam"
+lista — az audit **§5.5** szakaszában van rögzítve. Az onnan MEGMARADÓ,
+egyik kör által sem érintett tételek (részletek: audit §5.2):
+
+6. a **Vision munkamenet nem végez felismerést** (M1) — a belépés az R18 óta
+   megvan (B8), de a controller doc-kommentje kimondja, hogy nincs inferencia, a
+   `reportQuality`/`reportRealtimeCue` hívó nélkül van, az eredmény-listener
+   `(_) {}`; vagy a felismerés kerül be, vagy a Ma-fül kártyája mondja ki, hogy
+   előnézet;
+7. az **AI Tanár felhő-kapuja és a szerver gateway-e** (M2) — az
+   `aiTutorCloudEnabled`-nek nulla fogyasztója van, a szerveren
+   `tutor_enabled=False` (a `/tutor/*` nincs felcsatolva → a Coach célpont
+   minden üzenetre hibát ad), és bekapcsolva is `FakeProviderGateway` épülne
+   (`backend/app/main.py:240`);
+8. **community l10n** (M8–M9) — a poszt-szerkesztő hardkódolt MAGYAR, a
+   Könyvjelzők és a Közösségi keresés hardkódolt ANGOL, a mentett posztok nyers
+   UUID-ként és ISO-időbélyegként jelennek meg;
+9. a **Ma-fül `unreadable` állapotának vizuálja** — az R19 az adatréteget
+   szétválasztotta, de a `today_hub_screen.dart` az olvashatatlan tervre
+   ugyanazt a hőst rajzolja, mint a „nincs terv"-re;
+10. a **`profile_controller` hibaága** (M6/3) — minden nem-`unavailable`
+    `AppFailure` a `profileMissing` állapotra képződik, tehát hálózati hibánál a
+    kapu „Hozz létre profilt"-ot ajánl; az R19 ezt a fájlt nem érintette (mérve),
+    az R18 csak a router-oldali két helyet zárta;
+11. a MINOR-lista (MI1–MI10: üres `onRecoveryPressed` / `onItemSelected`, tiltott
+    insight-akciógombok, „Import file" snackbar, a `communityMediaEnabled`
+    fogyasztó nélkül, CTA nélküli `loggedOut` community-kapu, három hub elavult
+    „crash on first frame" doc-kommentje, `LaunchScreen` holt kód, a holt
+    placeholder-kódos `practiceSessionRecorderProvider`-ág).
 
 **CI-bizonyíték:** a sáv záró, teljesen zöld futása a `build-apk.yml`
 run [34057751434](https://github.com/wolfcasaba/strumsight/actions/runs/34057751434)
