@@ -287,6 +287,8 @@ túlcsordulása 412 px-es nézeten en/2.0 + hu/1.5 + hu/2.0 szövegnagyításná
 
 **CI-bizonyíték (R12–R13):** `build-apk.yml` run [34145358157](https://github.com/wolfcasaba/strumsight/actions/runs/34145358157) az `ebd68b7` fejen — kapuk, teljes suite, property-kapu, Coverage és APK mind ZÖLD. Az odáig vezető leletek: analyze ×2 (`prefer_initializing_formals` a matcher privát konstruktorában — pozicionális `this._…`, mert named paraméter nem lehet privát), majd 1 teszt (`song_trainer_screen_test` R13: a family-kulcs identitás-alapú, a felülíráshoz és a képernyőhöz ugyanaz a `SongTrainerControllerInputs` példány kell), a neve a napló-ablakon kívül esett — két megszakított futás (5,3 és 11 perc) ablakaiból mérve.
 
+**CI-bizonyíték (R14–R16):** `build-apk.yml` run [34152080647](https://github.com/wolfcasaba/strumsight/actions/runs/34152080647) az `f30cf4c` fejen — kapuk, teljes suite, property-kapu, Coverage és APK mind ZÖLD; a `backend-ci.yml` run [34152146643](https://github.com/wolfcasaba/strumsight/actions/runs/34152146643) a `2dd4fc9` (R16) fejen ZÖLD. Az odáig vezető leletek (R15, mindkettő a `club_detail_screen_test`-ben): a klub-feed hibacellák a fül aszinkron providereit `pumpAndSettle`-lel várják be, a pinned-cella a valódi `clubPinnedProvider`-t hajtja dobó feed-repóval (`cff2f41`); majd az `autoDispose` feed-provider a fül újraépítésekor másodszor is lefut, ezért a dobás a teszt által engedélyezett újratöltésig áll fenn (`f30cf4c`). A szakasz kiadott artefaktuma: a `test-2026-09-07-f30cf4c` release-tag.
+
 ### 5.4 Bejelentkezés — mért állapot (2026-09-07)
 
 A felhasználó jelzése: „nem működik a bejelentkezés"; az élő docker-napló
