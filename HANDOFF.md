@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + 15 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, és a §1.3 „routolt, de nem működik" osztály nagy része zárva
+## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + 16 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, és a §1.3 „routolt, de nem működik" osztály nagy része zárva
 
 A mérce a felhasználóé: **„APK build után minden működjön"** — a `build-apk.yml`
 `development` APK-jában minden fejlesztett képernyő legyen elérhető ÉS
@@ -27,9 +27,10 @@ nyitva maradt). Bázis: `main`, az audit commitja `f154139`.
 | R13 | `42973ef` | a **sebesség-slider pontozott munkamenetben is valódi**: `PracticeTargetRescaler` — pivot az ütemhatáron (ugyanaz, ahova a `ResumePractice` visszalép), `map(t)=t` előtte (a már pontozott verdiktek befagyasztva), `pivot+(t−pivot)·ratio` utána; folytonos és szigorúan monoton, `countIn+musical+ringOut == total` pontosan, az egymás utáni újraidőzítések komponálódnak. Új `RescheduleTempo` parancs CSAK `ready`/`paused` állapotból (futó próbálkozás alatt a reducer elutasít), a célt NEM törli, a lejátszófej nem ugrik, a státusz nem változik; a controller pause → újraidőzítés → hang-sebesség → resume EGY zárójelben alkalmazza, a `setPlaybackRate` single-flight latest-wins sorral (az átlapolt zárójelek voltak az egyetlen út, ahol hang és cél más tempón végezhetett volna). `PracticeEventMatcher.rescheduled`: a feloldott rekordok maradnak, csak a feloldatlanok nyílnak újra. DSP-paraméter nem változott | `practice_target_rescaler_test` S0–S4, `practice_event_matcher_rescheduled_test` M1–M4, `practice_session_tempo_rescale_test` T0–T5, reducer-mátrix +2 cella, `song_trainer_controller_test` E1–E5, `song_trainer_screen_test` |
 | R14 | `3d2f0e3` | **backend + szerződés.** Contract-drift: a klub `/pinned` és `/feed` mounted sorai (mért kliens-hívóhelyek), smoke-besorolás, számláló **41 / 28**. **Throttle a Caddy mögött** (a §5.4 mellékes lelete zárva): `client_ip_for_throttle` + `Settings.trusted_proxy_ips` (`STRUMSIGHT_TRUSTED_PROXY_IPS`) — socket-peer, KIVÉVE megbízható proxy esetén az első `X-Forwarded-For` ugrás; a fejléc feltétel nélkül SOHA nem megbízható; a Dockerfile CMD ugyanabból az env-ből ad `--proxy-headers --forwarded-allow-ips`-t; runbook §5.1 (hop-mérés + a KÖTELEZŐ Caddy `header_up X-Forwarded-For {remote_host}`, mert a gyári `reverse_proxy` hozzáfűz). **Login-diagnosztika a 401 gyengítése nélkül:** `auth.login_failed reason=unknown_email\|bad_password client=… email_hash=…` INFO + `auth.register_conflict`, a válasz bájtra azonos, e-mail nem kerül naplóba; mért csapda: az uvicorn kezelő nélkül hagyja a root loggert → `_configure_app_logging()`, és az alembic `fileConfig(..., disable_existing_loggers=False)`. Runbook §7.1: a community átbillentése az élő stacken | `test_trusted_proxy_throttle` (13), `test_auth_failure_logging` (9); helyben pytest 976 passed + 1 xfailed, ruff tiszta |
 | R15 | `999f03c` (a `3d2f0e3` ELŐTT landolt) | **két hazug UI-állapot zárva.** Login: nincs ELAVULT hiba mód-váltás/mezőszerkesztés után — képernyő-helyi elvetés a **beküldés-számlálóhoz** kötve, nem hiba-identitáshoz (a fake-ek és a `const` failure-ök két próbálkozásra ugyanazt a példányt adhatják, amit egy identitás-jelölő némán elnyelne), az `AuthController` érintetlen, 409-nél `authEmailTakenHint` („van már fiókod? jelentkezz be"). Klub-feed: mindkét `error:` ág `_ClubFeedErrorCard` újrapróbálással (`club-feed-error` / `club-feed-pinned-error`) a korábbi „nincs poszt" helyett; a goldenek pixelre változatlanok | `login_error_lifecycle_test` (5 cella), `club_detail_screen_test` (+2) |
+| R16 | `2dd4fc9` | **contract-lefedettség + community throttle-kulcs.** `client-backend-endpoints.json` **41 → 67** bejegyzés, mind `mounted`: az R14 ~24-et becsült, mérve 26 hiányzott (clubs 9, posts/comments/reactions/bookmarks 11, notifications 5, feed 1); a mérő regex (`_client\.(getJson\|postJson\|putJson\|patchJson\|post\|delete)…` a `lib/` felett) 65 `ApiClient` hívóhely + 3 nyers Dio (`/tutor/stream`, `/tutor/capability`, `/diagnostics`) + 2 auth-token POST = 67 method+path pár; a régi 41-ből 23 `source` sor elcsúszott → újramérve; mind a 26 új sor jelen van a `create_app(...).openapi()["paths"]`-ban, kiszolgálatlan csak a 3 `known_gap` challenge-olvasás. Smoke: 26 új `_NOT_EXERCISED` (flag-gated clubs / egy fiókkal elő nem állítható id / durable írás törlés nélkül), számlálók **67 / 10 / 54 / 3**. Backend: a `handles.py` (30/min, 5/h) és `search.py` (60/min) `_client_key`-je a közös `client_ip_for_throttle`-re — e keretek eddig a deploy MINDEN hívójára közösek voltak; `client_ip.py` CALLERS szakasz. NOTE: a `handles.py` router NINCS felcsatolva (ADR 0497 D6), a javítás így ma elérhetetlen felületen helyes; a `challenge_repository_impl.dart` `challengeId` paraméterneve az invite-hívásoknál csak névadási zavar (a képernyő a valódi meghívó-id-t adja: `community_challenges_screen.dart:196-198`) | `test_community_trusted_proxy_throttle` (10 cella), `test_live_smoke_contract` számlálók; helyben pytest 986 passed + 1 xfailed, ruff tiszta |
 | R12–R13 zárás | `ebd68b7` | `build-apk.yml` run [34145358157](https://github.com/wolfcasaba/strumsight/actions/runs/34145358157) **teljesen zöld**; leletek: analyze ×2 (initializing formals), 1 teszt (family-kulcs identitás) | — |
 
-**Nyitva maradt (indokkal, audit §5.2):** az R8–R15 zárta a korábbi lista
+**Nyitva maradt (indokkal, audit §5.2):** az R8–R16 zárta a korábbi lista
 egészét egy tételen kívül (song-resume, ütemenkénti haladás-commit,
 `SongResultScreen` retry/next, hang-import, a Today-terv `onSwap`-ja, a Setlist
 V2 lista + session **és mindkét belépési pontja** (R12), a tutor felhő-gateway
@@ -37,7 +38,10 @@ V2 lista + session **és mindkét belépési pontja** (R12), a tutor felhő-gate
 végpont, a community kegyes „nincs engedélyezve ezen a szerveren" állapota
 (R12), a sebesség-slider **pontozott munkamenetben is** (R13), a Caddy mögötti
 **közös throttle-kulcs** (R14) és két hazug UI-állapot — elavult login-hiba,
-„nincs poszt" a klub-feed betöltési hibájára (R15)). MÉRHETŐEN nyitva:
+„nincs poszt" a klub-feed betöltési hibájára (R15), a **contract gépi
+lefedettsége** (41 → 67 bejegyzés, mind `mounted`) és a community-routerek
+saját `_client_key` helperei (`search.py`, `handles.py` →
+`client_ip_for_throttle`) (R16)). MÉRHETŐEN nyitva:
 
 1. a Setlist V2 lista **teljes SsCard/SsButton-migrációja** (golden-újrarögzítés
    az x86 boxon, ADR 0471 D6 → tulajdonos-kör);
@@ -50,12 +54,7 @@ végpont, a community kegyes „nincs engedélyezve ezen a szerveren" állapota
 4. az élő deploy üzemeltetői művelete (`STRUMSIGHT_COMMUNITY_ENABLED=true`
    átbillentése — a lépéssor runbook §7.1; az app az R12 óta kegyesen viseli a
    kikapcsolt állapotot);
-5. a **contract gépi lefedettsége**: az R14 két drift-sort zárt, de még ~24
-   valódi hívóhely hiányzik (mind létezik az OpenAPI-ban) — **R16 folyamatban**;
-6. a community-routerek saját `_client_key` helperei (`search.py`,
-   `handles.py`) még a socket-peerre kulcsolnak, nem az R14 közös
-   `client_ip_for_throttle`-jére (mérve a HEAD-en);
-7. NOTE: a `PracticeSessionState.musicalPosition` egyetlen tempóval számol az
+5. NOTE: a `PracticeSessionState.musicalPosition` egyetlen tempóval számol az
    egész idővonalon, ezért az R13 szakaszonként affin újraidőzítése után
    KÖZELÍTŐ — a `lib/`-ben nincs fogyasztója (mérve), így nem sürgős, de az
    első kiíró felület előtt pontosítani kell.
