@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ JAVÍTÓ SÁV 2 (2026-09-06) — audit + 6 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, és a §1.3 „routolt, de nem működik" osztály nagy része zárva
+## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + 11 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, és a §1.3 „routolt, de nem működik" osztály nagy része zárva
 
 A mérce a felhasználóé: **„APK build után minden működjön"** — a `build-apk.yml`
 `development` APK-jában minden fejlesztett képernyő legyen elérhető ÉS
@@ -18,20 +18,29 @@ nyitva maradt). Bázis: `main`, az audit commitja `f154139`.
 | R5 | `a24fff6` | Könyvjelzők valódi lista/kurzoros lapozás/optimista törlés (`GET /community/bookmarks`), klub Members fül a szerver taglistájával (`GET /community/clubs/{public_id}/members`), követő-sorok valódi profillal (`GET /community/profiles/{public_id}`) | `bookmarks_controller_test` B1–B6, `post_repository_bookmarks_test` K1–K4, `club_repository_members_test` M1–M3, `profile_repository_fetch_by_id_test` P1–P3 |
 | R6 | `68ba51f`, `0451ff9` | a `practiceResult` route a MOST befejezett gyakorlás eredményét mutatja: `PracticeResultTargetController` a kézfogás a navigációs sink (a tartós rögzítés BEFEJEZŐDÉSE ELŐTT tüzel) és az after-record hook között; fallback csak, ha a rögzítés elbukott vagy nincs mit mutatni | `practice_result_target_test.dart` T1–T4, V1–V4 |
 | R7 | (2026-09-07) | a `live_backend_smoke.py` fail-closed leállása az R5 három besorolatlan contract-sora miatt (a `backend-ci.yml` `backend/**` path-szűrője NEM mérte) — besorolva, a számláló-teszt 37/24; a bejelentkezési hiba mért állapota: audit §5.4 (a kódban nincs hiba, a 401/409 hitelesítési ítélet; a döntéshez a docker-napló 409 előtti szakasza kell) | `test_live_smoke_contract.py` 10 passed, smoke 14/14 a helyi backend ellen |
+| R8 | `acdf73c` (+ `61de4e3`, `22b904b`) | Song Trainer öt rése: tartós resume-checkpoint (`KeyValueSongResumeRepository` a `KeyValueStore` felett, verziózott boríték, 20 checkpoint; a pause ír, a `prepare()` visszaolvas — az `_InMemorySongResumeRepository` törölve), ütemenkénti haladás-commit (`SongMeasureProgressCommitter`, idempotencia-kulcs, replay-biztos → „Song progress" kártya), valódi Retry/Next az eredmény-képernyőn (`SongTrainerResultRoute` + `SongTrainerResultArgs`), sebesség-slider LEJÁTSZÁS-módban (`setPlaybackRate`, pause → rate → resume; pontozottban tiltva), hang-import a backing-trackhez (`BackingAudioPickerAdapter`, mp3/m4a/aac/wav/ogg/opus/flac — eddig a dal-fájl-picker futott) | `key_value_song_resume_repository_test` A1–A6, `song_measure_progress_committer_test` B1–B5, `song_trainer_playback_rate_test` C1–C5, `song_result_route_test` D1–D4 |
+| R9 | `0f4e026` (/1), `f98a601` (/2), `4a0e1bf` (/3) | AI-tanár: /1 a hozzájárulás a KÉRÉS-ÚTVONALON érvényesül (`buildTutorTurnRequest`, MAJOR-3 teljesítve; visszavont consent → típusos `ValidationFailure`, gateway nem jön létre), valódi `TutorPracticePlanProducer.propose` + `compileActivePlan` (FNV-1a revision-id, idempotens újra-elfogadás); /2 a felhő-gateway bekötve a hozzájárulás + fiókréteg + élő stream-kliens hármas kapuja mögött (`selectTutorModelGateway`, egyébként helyi stub), `createTutorStreamClient`, `/tutor/plan-preview` route, adatleltár `tutor_stream` **wired: true**; /3 a stream-kliens az auth `accountStreamClientProvider` seamjén (egy credential-holder, egy generáció, egy 401-invalidáció; a tutor sosem látja a tokent) | `tutor_turn_consent_test` (5), `tutor_practice_plan_producer_test` (10), `practice_plan_preview_route_test` (5, +2), `tutor_gateway_selection_test` (9), `consent_enforcement_test` (+2, A3' 4) |
+| R10 | `67b6052` (+ `4b68f05`) | a Today-terv **Swap gombja valódi csere** (`ActivePlanController.swap`: azonos készség-célú alternatíva a generátor `PracticeCatalogSnapshot`-jából, nevesített elutasítások try/catch nélkül, `noAlternative` külön snackbarral, a router `onSwap`-ot köt); **Setlist V2** routolva (`/setlists/v2`, `/setlists/v2/session`), a lista a valódi `setlistControllerProvider`-ből épül, a `SetlistSessionCoordinator` + `setlistItemRunner` a `SongTrainerLauncher.prepare`-rel indít és `await context.push`-sal várja meg a session végét — ettől halad tételenként; `4b68f05`: a két új képernyő a variáns-mátrixba (CI-lelet, Coverage) | `today_plan_actions_test` A5–A6, `setlist_session_launch_test` B1–B4, `e15_r13_full_variant_matrix_test` A1 |
+| R11 | `a26b408` | Community: **mért biztonsági rés zárva** — a `CreatePostRequest.club_id` (belső bigint) eddig ellenőrzés nélkül került a sorra (bármely hitelesített hívó bármely klubba posztolhatott), most `club_public_id` + tagság-ellenőrzés mindkét címzési formára, minden elutasítás ugyanaz a 404; kliens `createClubPost` (composer-állapot → tartós piszkozat → outbox → kérés), „New post" CTA a klub-részleten. `GET /community/profiles/{public_id}/posts` kurzorosan, kapuval (blokk/privát/followers-only/ismeretlen → egységes 404, `club_id IS NULL`) → `profilePosts` valódi + „Your posts" szekció. Contract +2 sor, smoke-számláló 39 / 26. Média-feltöltés NEM indult — mért rés-jelentés (nincs média-router, A6.2.1/A6.2.4/A6.2.5 hiányzik, nincs `image_picker`) | `post_repository_club_post_test` N1–N4, `community_outbox_club_test` O1–O4, `post_composer_club_test` Q1–Q5, `feed_repository_impl_test` B11–B13; backend `test_club_post_create` C1–C8, `test_profile_posts_router` P1–P9 |
 
-**Nyitva maradt (indokkal, audit §5.2):** song-resume persistálás
-(`_InMemorySongResumeRepository` — a checkpoint app-újraindításkor elvész),
-a sebesség-slider (a controllernek nincs backing-rate művelete → őszintén
-tiltva), a **tutor felhő-gateway — DÖNTÉSSEL nyitva** (az adatleltár MAJOR-3
-szerint a transport bekötése azelőtt, hogy a `_previewTurnRequest` olvasná a
-`tutorConsentControllerProvider`-t, visszavont hozzájárulás mellett is a
-felhőbe küldene; `test/privacy/consent_enforcement_test.dart` pinneli), a
-poszt-szerkesztő média-csatolása (R-SEC-01 / R-PRIV-01), Setlist V2 + setlist-
-session (ADR 0471 D6 őr → E15-tulajdonos-kör), a tutor
-`PracticePlanPreviewScreen` előállítója, a hang-import folyamat, a dal-tréner
-ütemenkénti haladás-commitja, a Today-terv `onSwap`-ja, a `SongResultScreen`
-retry/next callbackjei, a klub-poszt `club_id` + `profilePosts` (a backendnek
-nincs útvonala) és a community média-feltöltés.
+**Nyitva maradt (indokkal, audit §5.2):** az R8–R11 zárta a korábbi lista nagy
+részét (song-resume persistálás, ütemenkénti haladás-commit, `SongResultScreen`
+retry/next, hang-import, a Today-terv `onSwap`-ja, a Setlist V2 lista + session,
+a tutor felhő-gateway és a terv-előnézet előállítója, a klub-poszt `club_id` és
+a `profilePosts` végpont). MÉRHETŐEN nyitva: a sebesség-slider **pontozott**
+munkamenetben (a Practice célütemterv egyszer, a beállítási tempón fordul le —
+Practice-kör tárgya; lejátszás-módban működik); a Setlist V2 lista **teljes
+SsCard/SsButton-migrációja** (golden-újrarögzítés az x86 boxon, ADR 0471 D6 →
+tulajdonos-kör); a **képernyőn lévő belépési pont** a Setlist V2 listához és a
+tutor terv-előnézethez (mindkét route él, de minden jelölt felület
+golden-pinelt, a legacy `setlist_list_screen.dart` a körök listáján kívül volt);
+a **community média-feltöltés** (R11 mért rés-jelentés: nincs média HTTP-router,
+threat-model §6.2 A6.2.1/A6.2.4/A6.2.5 hiányzik, `image_picker` nincs a
+pubspecben — R-SEC-01 / R-PRIV-01 P1 változatlan); és a **bejelentkezési hiba
+döntése** (audit §5.4: a kódban programhiba nem mérhető, a docker-napló 409
+előtti szakasza kell) + az élő deploy üzemeltetői művelete
+(`STRUMSIGHT_COMMUNITY_ENABLED=false`, emiatt a smoke a community-lépéseknél
+megáll).
 
 **CI-bizonyíték:** a sáv záró, teljesen zöld futása a `build-apk.yml`
 run [34057751434](https://github.com/wolfcasaba/strumsight/actions/runs/34057751434)
@@ -48,7 +57,7 @@ buildjében; az eredmény-fejléc túlcsordulása 412 px-en nagy szövegnél).
 **Végső mérce:** a felhasználó valós-gitár tesztje a `development` APK-n —
 a szintetikus zöld nem „kész".
 
-**Csapdák, amiket ez a sáv mért (5 CI-iterációba kerültek):**
+**Csapdák, amiket ez a sáv mért (sáv 2: 5 CI-iteráció; sáv 3: 4 lelet eddig):**
 - a `dart format` „tall" stílusa **minden 80 oszlopba beleférő hívást
   egysorosra húz** — egy pontosan 80 karakteres `test('…', () async {` fejnek
   EGY sorban kell lennie; a tördelt `test(\n  'név',\n  () async {` alak csak
@@ -58,7 +67,19 @@ a szintetikus zöld nem „kész".
 - az `AsyncValue.copyWithPrevious` **csomag-belső** (analyzer-figyelmeztetés);
 - a remote konténerben **nincs Dart SDK**, ezért a formázóra az EGYETLEN
   orákulum a CI — a formázó alakját kézzel kell emulálni, és a leletet
-  körönként a CI adja.
+  körönként a CI adja;
+- **(sáv 3)** a `<Override>[` / `List<Override>` típusargumentum a
+  `import 'package:flutter_riverpod/misc.dart' show Override;` NÉLKÜL nem típus
+  (analyze-lelet két új teszten) — a sima `overrides: [` alak elkerüli;
+- **(sáv 3)** a `lib/l10n/app_*.arb` fájlok **GENERÁLT aggregátumok**: az új
+  kulcs a `lib/l10n/base/` vagy a `lib/l10n/features/*` szegmensbe megy, majd az
+  aggregátumot a generátorral kell újraépíteni **bájtra azonosan** — az elavult
+  aggregátumon a paritás-kapu bukik;
+- **(sáv 3)** a `tool/release/live_backend_smoke.py` besorolásait és a
+  `backend/tests/test_live_smoke_contract.py` számlálóit MINDEN alkalommal
+  frissíteni kell, amikor a `docs/contracts/client-backend-endpoints.json`
+  bővül — a `backend-ci.yml` `backend/**` path-szűrője a contract-only
+  változásra NEM fut, tehát a CI ezt nem méri.
 
 ## ✅ JAVÍTÓ SÁV (ops/community-data-layer, PR #594) — „minden eddigi fejlesztés fusson az APK-ban": két kompozíciós hibaosztály zárva, teszt-APK kiadva — CI `build-apk.yml` run 34022459707 **zöld** a `4489307` HEAD-en (2026-09-06)
 

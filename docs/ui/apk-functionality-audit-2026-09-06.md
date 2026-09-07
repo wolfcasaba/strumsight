@@ -140,7 +140,7 @@ szintetikus zöld nem „kész".
 ## 5. Eredmények — a javító körök mért állapota
 
 Ág: `claude/mit-audit-javitasok-v432t5` (bázis: `main`, az audit commitja
-`f154139`). Hat kör futott le rajta. A körök tárgya a §4 tervhez képest a MÉRT
+`f154139`). Tizenegy kör futott le rajta (az R9 három részletben: /1, /2, /3). A körök tárgya a §4 tervhez képest a MÉRT
 hibákhoz igazodott: amit a §1.3 tábla sora állított, azt vagy bezártuk, vagy —
 ahol a mérés mást mondott, mint a terv — a valódi rést zártuk, és a maradékot
 itt, indokkal hagytuk nyitva (§5 „Nyitva maradt"). Dart-evidencia innen
@@ -155,7 +155,12 @@ kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
 | **R5** | `a24fff6` (+ `9ee46a8`) | a **Könyvjelzők** képernyő valódi: `HttpCommunityPostRepository.listBookmarks` a `GET /community/bookmarks` felett (`limit` + `cursor` query), `CommunityBookmark` domain-entitás, `RepositoryBookmarksController` (`lib/features/community/application/controllers/bookmarks_controller.dart`: első oldal, kurzoros lapozás duplikátum nélkül, optimista és idempotens törlés visszaállítással hibára, a betöltési hiba stream-hibaként újrapróbáló kártyát ad — fiókréteg nélkül `ConfigurationFailure`, nem üres lista). **Klub-taglista**: `HttpCommunityClubRepository.members` a `GET /community/clubs/{public_id}/members` felett (`ClubMembership` entitás; az ismeretlen szerep eldobódik, nem kerekedik `member`-re), a `clubMemberListProvider` ezt olvassa (eddig mindig üres listát adott), a klub-részlet Members füle a szerepcímkés listát rendereli (eddig csak tipp-szöveg). **Követők**: `HttpCommunityProfileRepository.fetchById` a `GET /community/profiles/{public_id}` felett (eddig `UnsupportedError`; hiányzó `display_name` → handle, hiányzó láthatóság → `private`), a `followerProfileProvider` minden követő-sorhoz a valódi profilt oldja fel (placeholder-sor csak sikertelen lekérésnél marad, naplózva). A `docs/contracts/client-backend-endpoints.json` három bekötött GET-sorral bővült. | `bookmarks_controller_test` (B1–B6), `post_repository_bookmarks_test` (K1–K4), `club_repository_members_test` (M1–M3), `profile_repository_fetch_by_id_test` (P1–P3) |
 | **R6** | `68ba51f`, `0451ff9` (+ követő javítások) | a `practiceResult` route nem épít többé mindig `PracticeResultFallback`-et („az eredmény nem érhető el"): a `PracticeResultTargetController` (`lib/features/practice/application/practice_result_target.dart`) a kézfogás a munkamenet navigációs sinkje (ami a tartós rögzítés BEFEJEZŐDÉSE ELŐTT tüzel) és az after-record hook között; a `PracticeResultRoute` (`lib/features/practice/presentation/practice_result_route.dart`) feloldja a megnevezett munkamenet történet-bejegyzését (töltés, amíg úton van; fallback csak ha a rögzítés elbukott vagy nincs mit mutatni; hideg deep link a legfrissebb bejegyzést mutatja). | `practice_result_target_test.dart` T1–T4, V1–V4 |
 | **R7** | (ez a commit) | a `tool/release/live_backend_smoke.py` **fail-closed leállt** (exit 2, hálózati hívás nélkül) az R5 három új contract-sora miatt (`GET /community/bookmarks`, `GET /community/clubs/{public_id}/members`, `GET /community/profiles/{public_id}` — besorolatlan), és a `backend/tests/test_live_smoke_contract.py` számláló-tesztje is bukott (37 ≠ 34). A CI ezt NEM mérte: a `backend-ci.yml` csak `backend/**` változásra fut, a contract a `docs/contracts/` alatt van. Javítás: a három sor `not_exercised` besorolása indokkal, a teszt 37 / 24-re. | `test_live_smoke_contract.py` (10 passed helyben, venv), smoke-lánc 14/14 PASS a helyi backend ellen (§5.4) |
+| **R8** | `acdf73c` (+ `61de4e3`, `22b904b`) | a Song Trainer öt mért rése: `KeyValueSongResumeRepository` a `KeyValueStore` felett (verziózott boríték, 20 legfrissebb checkpoint, sérült dokumentum = olvasási hiba, ami a KÖVETKEZŐ mentést nem blokkolja; a `_InMemorySongResumeRepository` törölve) — a pause (felhasználói és háttér-megszakítás) checkpointot ír, a `prepare()` visszaolvassa; `SongMeasureProgressCommitter`: a terminális ticknél ütemenként EGY `SongPracticeRecord` (idempotencia-kulcs, replay-biztos, az aktív idő a verdiktek száma szerint osztva), a `songProgressAggregateProvider` táplálja az eredmény-képernyő „Song progress" kártyáját; `SongTrainerResultRoute` + `SongTrainerResultArgs`: a Retry ugyanazt a dalt és konfigurációt indítja újra (`pushReplacement`), a Next a következő szakaszt — ha nincs, a dal áttekintőjére lép —, konfiguráció nélkül a CTA-k tiltva maradnak; `SongTrainerController.setPlaybackRate` + `canChangeBackingRate`: valódi sebességváltás **lejátszás-módban** (pause → rate → resume), pontozott munkamenetben tiltva, mert a Practice célütemterv egyszer, a beállítási tempón fordul le; hang-import: új `BackingAudioPickerAdapter` port (mp3/m4a/aac/wav/ogg/opus/flac) a meglévő `file_selector` felett (`songBackingAudioPickerProvider`) — a „Attach backing" CTA eddig a dal-fájl-pickert hívta (csak json/musicxml/midi), ezért hangfájl SOSEM volt kiválasztható. | `key_value_song_resume_repository_test` A1–A6, `song_measure_progress_committer_test` B1–B5, `song_trainer_playback_rate_test` C1–C5, `song_result_route_test` D1–D4, a controller-teszt bővítve |
+| **R9** (/1, /2, /3) | `0f4e026`, `f98a601`, `4a0e1bf` | **/1 — a hozzájárulás a KÉRÉS-ÚTVONALON érvényesül (MAJOR-3 teljesítve):** a `_previewTurnRequest` nem drótozza be a `TutorConsent(modelUseGranted: true)` értéket, az új `buildTutorTurnRequest({message, consent})` a `tutorConsentControllerProvider` élő állapotát kapja (read, nem watch — a munkamenet közbeni visszavonás a KÖVETKEZŐ küldésnél hat, a beszélgetés nem vész el); hiányzó/visszavont model-use hozzájárulásnál típusos `ValidationFailure(tutor.consent.model_use_missing)`, kérés-objektum nem épül, gateway nem jön létre. Valódi `TutorPracticePlanProducer.propose` (max 4 blokk, egész perces, a célhosszra pontosan összegző felosztás, minden blokk valódi `ExerciseCandidate`-et nevez; üres katalógus / perc alatti hossz típusos hiba, sosem üres terv) és `compileActivePlan` → `AdaptivePracticePlan`, tartalom-alapú FNV-1a revision-id (a változatlan terv újra-elfogadása idempotens — a repó ismert silent-no-op csapdája ellen); a `PracticePlanPreviewRoute` mindkét elfogadó művelete a `LocalPracticePlanRepository.activateAndReport` úton ment. **/2 — a felhő-gateway BEKÖTVE** a hozzájárulás + fiókréteg + élő stream-kliens hármas kapuja mögött (`selectTutorModelGateway`, minden más eset `LocalTutorModelGatewayStub`; a factory minden próbánál újraolvas, így a visszavonás a KÖVETKEZŐ próbánál hat újraépítés nélkül); `DioFactory.createTutorStreamClient` ugyanazon a `_createDio` úton (auth-interceptor → bearer, korrelációs id, redaktált napló), `Accept: text/event-stream`, 60 s chunk-közi receive-timeout; `/tutor/plan-preview` route az `aiTutorEnabled` blokk alatt; `data-inventory.yaml` `tutor_stream` **wired: true** + új `tutor_stream_client` sor. **/3 — a tutor stream-kliens az auth seamjén:** `_authSessionClosures(ref)` egy helyen adja a readToken / readSessionGeneration / onUnauthorized hármast, az `accountApiClientProvider` és az új `accountStreamClientProvider` ugyanazt kapja (egy credential-holder, egy generáció, egy 401-invalidáció); a `tutorAccessTokenReaderProvider` és a core secure-kulcs olvasása törölve — a tutor feature sosem látja a tokent. | `tutor_turn_consent_test` (5), `consent_enforcement_test` (+2 cella, majd A3' 4 kiválasztási cella), `tutor_practice_plan_producer_test` (10), `practice_plan_preview_route_test` (5, majd +2), `tutor_gateway_selection_test` (9 + a hitelesített 401 az egész fiók-sessiont kijelentkezteti) |
+| **R10** | `67b6052` (+ `4b68f05`) | a Today-terv **Swap gombja valódi csere**: az `ActivePlanController.swap` a mai első függő blokkot a generátor saját `PracticeCatalogSnapshot`-jából vett, azonos készség-célú alternatívára cseréli (mérhető sikerkritérium, tempó-támogatás, időkorlátok — minden elutasítás NEVESÍTETT ellenőrzés, nincs try/catch), determinisztikus rangsor, tartós írás a változatlan `TodayPlanActions` → `activateAndReport` úton; a „nincs alternatíva" külön `noAlternative` kimenet saját snackbarral (`todayPlanSwapNoAlternative`), a router `onSwap`-ot köt. **Setlist V2**: `/setlists/v2` és `/setlists/v2/session` route, a lista a valódi `setlistControllerProvider`-ből épül, a tétel érintése a session-képernyőt nyitja; `SetlistSessionCoordinator` + `setlistItemRunner` a meglévő `SongTrainerLauncher.prepare`-rel építi a bemenetet és `await context.push`-sal VÁRJA MEG a Song Trainer session végét — ettől halad tételenként; a nem előkészíthető tétel nevesített availability-vel `skipped`. A `4b68f05` a CI-leletet zárja (run 34104053120, Coverage): a két újonnan elérhető setlist-képernyő bekerült a variáns-mátrixba (A1: elérhető halmaz ⊆ mátrix ∪ kizárási lista), a kizárási lista változatlanul egyelemű, PNG-rögzítés nélkül (a mátrix túlcsordulást mér, nem pixelt). | `today_plan_actions_test` A5–A6, `setlist_session_launch_test` B1–B4, `e15_r13_full_variant_matrix_test` A1 (a `setlist_list_screen_v2.dart` és a `setlist_session_screen.dart` fixture-je) |
+| **R11** | `a26b408` | **mért biztonsági rés zárva:** a `CreatePostRequest.club_id` (belső bigint) eddig ellenőrzés NÉLKÜL került a sorra — bármely hitelesített hívó bármely klubba posztolhatott az egész szám kitalálásával, és a klub tagjai klub-tartalomként olvasták; most `club_public_id` (a kliens által ismert azonosító), mindkét címzési forma tagság-ellenőrzött, soft-deleted klub elutasítva, eltérő pár → 400, minden elutasítás ugyanaz a 404, amit a klub-feed olvasás ad (`ClubPostNotAllowed`, `resolve_club_public_id`). Kliens: `HttpCommunityPostRepository.createClubPost`, a klub-azonosító a composer-állapoton → tartós piszkozaton → outbox-rekordon → kérésen át utazik; „New post" CTA a klub-részleten (csak tagnak, `communityWritesEnabled` mögött). Duplikált `/posts` alias NEM készült — a `GET /community/clubs/{public_id}/feed` már létezett és a Feed fül fogyasztotta. **`GET /community/profiles/{public_id}/posts`**: kurzoros (saját HMAC-verzió, közös `project_page` wire-alak), kapu tulajdonos → minden audience, blokk (bármely irány) / privát / followers-only nem-követőnek / ismeretlen profil → egységes 404, sorszűrők: explicit audience-allowlist, moderáció + soft-delete, `club_id IS NULL` (különben a tagsági kapu a szerző profilján át megkerülhető lenne); kliens: `profilePosts` valódi, „Your posts" szekció a community hub `_ReadyView`-jában. Contract +2 mounted sor, smoke-besorolás, számláló-teszt 39 / 26. **Média-feltöltés NEM indult** — mért rés-jelentés: nincs média HTTP-router, a threat-model §6.2 A6.2.1 (magic-byte), A6.2.4 (transcode) és A6.2.5 (valódi scanner) hiányzik, `image_picker` nincs a pubspecben; R-SEC-01 / R-PRIV-01 P1 blokkolók változatlanok. | `post_repository_club_post_test` N1–N4, `community_outbox_club_test` O1–O4, `post_composer_club_test` Q1–Q5, `feed_repository_impl_test` B11–B13; backend `test_club_post_create` C1–C8, `test_profile_posts_router` P1–P9 (helyben mérve: pytest 958 passed + 1 xfail, ruff tiszta, `classify_contract` 39 sor / 0 unclassified) |
 | formázó/analyze-javítások | `974d78e`, `8c29fe6`, `c472b93`, `9ee46a8`, `d3d10be`, `98d4b74`, `e460cc3` | a CI format- és analyze-kapujának leletei (lásd a HANDOFF „Csapdák" listáját) — a CI az egyetlen formázó-orákulum ebben a konténerben. | — |
+| formázó/analyze-javítások (sáv 3) | `61de4e3`, `22b904b` (+ a FeatureFlags-javítás a `4a0e1bf`-ben) | az R8/R11 CI-leletei: a stub-overview builder `=>`-törzse EGY sorba fér a nyíl utáni tördeléssel (a format-kapu az egyetlen fájlt jelölte, `61de4e3`); az `Override` típusargumentum a `misc.dart` import nélkül nem típus (két új teszt) és a felesleges `meta` import a `song_trainer_launch`-ban (`22b904b`); a `FeatureFlags(aiTutorEnabled:)` a három kötelező paraméter nélkül a `practice_plan_preview_route_test`-ben (run 34107003755, a `4a0e1bf`-en belül javítva). A CI itt is az egyetlen formázó- és analyze-orákulum. | — |
 
 ### 5.1 A §1.3 tábla sorai — állapot az ág HEAD-jén
 
@@ -165,32 +170,63 @@ kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
 | practice-munkamenet metaadat-kódok (`practice.mode.unknown`…) | **a merge-elt fában már valódiak voltak** (mérve); a tényleges rés a hiányzó hookok voltak → **zárva** (R2) | `practice_session_after_record.dart` |
 | `_NoopRewardLedgerRepository` | **zárva** (R2) | `practice_result_providers.dart` |
 | `practiceResult` route `PracticeResultFallback` | **zárva** (R6) | `practice_result_route.dart`, `practice_result_target.dart` |
-| `_InMemorySongResumeRepository` | **NYITVA** — a folytatási pont app-újraindításkor továbbra is elvész; a folytatás egy fájl-alapú `SongResumeRepository` | `song_trainer_providers.dart` |
-| sebesség-`Slider` `onChanged: null`; play/pause no-opok | **részben**: a paused-állapot Play/Pause/Resume/Seek no-opjai **zárva** (R3); a **sebesség-slider NYITVA marad**, őszintén tiltva — a controllernek nincs backing-rate művelete | `song_trainer_screen.dart` |
-| tutor `LocalTutorModelGatewayStub` | **NYITVA, DÖNTÉSSEL**: a `docs/privacy/data-inventory.yaml` (`tutor_stream` útvonal, MAJOR-3) rögzíti, hogy a felhő-transport bekötése azelőtt, hogy a `_previewTurnRequest` olvasná a `tutorConsentControllerProvider`-t, egy visszavont hozzájárulású felhasználó üzeneteit küldené a felhőbe; a `test/privacy/consent_enforcement_test.dart` pinneli ezt — ezért ebben a sávban a felhő-gateway szándékosan NEM lett bekötve | `data-inventory.yaml` `tutor_stream` |
+| `_InMemorySongResumeRepository` | **zárva** (R8, `acdf73c`; `key_value_song_resume_repository_test` A1–A6) — `KeyValueSongResumeRepository` a `KeyValueStore` felett (verziózott boríték, 20 legfrissebb checkpoint, sérült dokumentum = olvasási hiba, ami a KÖVETKEZŐ mentést nem blokkolja); a pause (felhasználói és háttér-megszakítás) checkpointot ír, a `prepare()` visszaolvassa; az `_InMemorySongResumeRepository` törölve | `song_trainer_providers.dart` |
+| sebesség-`Slider` `onChanged: null`; play/pause no-opok | **részben zárva**: a paused-állapot Play/Pause/Resume/Seek no-opjai **zárva** (R3); a sebesség-slider **lejátszás-módban zárva** (R8, `acdf73c`; `song_trainer_playback_rate_test` C1–C5 — `SongTrainerController.setPlaybackRate` + `canChangeBackingRate`, pause → rate → resume), **pontozott munkamenetben NYITVA marad**, szándékosan tiltva: a Practice célütemterv EGYSZER, a beállítási tempón fordul le | `song_trainer_screen.dart` |
+| tutor `LocalTutorModelGatewayStub` | **zárva** (R9/2–3, `f98a601` + `4a0e1bf`; `tutor_gateway_selection_test` 9 cella) — a MAJOR-3 feltétel az R9/1-gyel teljesült (a hozzájárulás a KÉRÉS-ÚTVONALON érvényesül, `consent_enforcement_test`), ezért a bekötés legitimmé vált: a felhő-gateway KIZÁRÓLAG model-use hozzájárulás ÉS engedélyezett fiókréteg ÉS élő stream-kliens mellett áll fel (`selectTutorModelGateway`), minden más eset `LocalTutorModelGatewayStub`; a factory minden próbánál újraolvas, így a visszavonás a KÖVETKEZŐ próbánál hat; `data-inventory.yaml` `tutor_stream` **wired: true** | `tutor_gateway_providers.dart`, `dio_factory.dart`, `data-inventory.yaml` |
 | vision `vision-audio-only-continue` CTA | **zárva** (R4) | `vision_setup_screen.dart` |
 | `_NoopBookmarksController`, üres stream | **zárva** (R5) | `bookmarks_controller.dart` |
-| poszt-szerkesztő „Attach media" snackbar | **NYITVA** (R-SEC-01 / R-PRIV-01, változatlanul) | `post_composer_screen.dart` |
+| poszt-szerkesztő „Attach media" snackbar | **NYITVA** (R-SEC-01 / R-PRIV-01, változatlanul) — az R11 mért RÉS-JELENTÉST adott, nem kódot: nincs média HTTP-router, a threat-model §6.2 A6.2.1 / A6.2.4 / A6.2.5 hiányzik, `image_picker` nincs a pubspecben | `post_composer_screen.dart` |
 | klub tagok-fül tipp-szöveg; követő-sorok placeholder | **zárva** (R5) | `club_detail_screen.dart`, `followers_screen.dart` |
+
+**A §2 „amit a #594 is nyitva hagyott" listája és a korábbi §5.2-tételek —
+állapot az R8–R11 után** (ugyanaz az oszlop-forma):
+
+| Sor | Állapot | Hol |
+|---|---|---|
+| dal-tréner ütemenkénti haladás-commit | **zárva** (R8, `acdf73c`; `song_measure_progress_committer_test` B1–B5) — a terminális ticknél ütemenként EGY `SongPracticeRecord` (idempotencia-kulcs, replay-biztos, az aktív idő a verdiktek száma szerint osztva); a `songProgressAggregateProvider` táplálja az eredmény-képernyő „Song progress" kártyáját | `song_measure_progress_committer.dart` |
+| `SongResultScreen` retry/next callbackjei | **zárva** (R8, `acdf73c`; `song_result_route_test` D1–D4) — `SongTrainerResultRoute` + `SongTrainerResultArgs`: a Retry ugyanazt a dalt és konfigurációt indítja újra (`pushReplacement`), a Next a következő szakaszt, ha nincs, a dal áttekintőjére lép; konfiguráció nélkül a CTA-k tiltva | `song_trainer_result_route.dart` |
+| hang-import folyamat | **zárva** (R8, `acdf73c`) — új `BackingAudioPickerAdapter` port (mp3/m4a/aac/wav/ogg/opus/flac) a meglévő `file_selector` felett; a „Attach backing" CTA eddig a dal-fájl-pickert hívta (json/musicxml/midi), ezért hangfájl SOSEM volt kiválasztható. Dedikált cella a kör listáján NINCS — az adapter a port mögött, a controller-teszt bővítve | `song_trainer_providers.dart` (`songBackingAudioPickerProvider`) |
+| tutor `PracticePlanPreviewScreen` előállítója | **zárva** (R9/1, `0f4e026`; `tutor_practice_plan_producer_test` 10, `practice_plan_preview_route_test` 5 + 2) — valódi `TutorPracticePlanProducer.propose` (max 4 blokk, egész perces, a célhosszra pontosan összegző felosztás, sosem üres terv) és `compileActivePlan` → `AdaptivePracticePlan`, tartalom-alapú FNV-1a revision-id (idempotens újra-elfogadás); a route `/tutor/plan-preview` néven él (R9/2). **A képernyőn lévő belépési pont NYITVA** (minden jelölt felület golden-pinelt) | `tutor_practice_plan_producer.dart`, `practice_plan_preview_route.dart` |
+| a Today-terv `onSwap`-ja | **zárva** (R10, `67b6052`; `today_plan_actions_test` A5–A6) — `ActivePlanController.swap`: a mai első függő blokk cseréje azonos készség-célú alternatívára a generátor `PracticeCatalogSnapshot`-jából (nevesített elutasítások, nincs try/catch), tartós írás az `activateAndReport` úton; a „nincs alternatíva" külön `noAlternative` kimenet saját snackbarral | `active_plan_controller.dart`, `today_plan_actions.dart` |
+| Setlist V2 lista + setlist-session bekötés | **zárva** (R10, `67b6052` + `4b68f05`; `setlist_session_launch_test` B1–B4, `e15_r13_full_variant_matrix_test` A1) — `/setlists/v2` és `/setlists/v2/session` route, a lista a valódi `setlistControllerProvider`-ből épül, a `SetlistSessionCoordinator` + `setlistItemRunner` a `SongTrainerLauncher.prepare`-rel indít és `await context.push`-sal várja meg a session végét. **NYITVA:** a képernyőn lévő belépési pont és a teljes SsCard/SsButton-migráció (golden-újrarögzítés az x86 boxon) | `setlist_list_screen_v2.dart`, `setlist_session_screen.dart` |
+| klub-poszt `club_id` + `profilePosts` végpont | **zárva** (R11, `a26b408`; `post_repository_club_post_test` N1–N4, `community_outbox_club_test` O1–O4, `post_composer_club_test` Q1–Q5, `feed_repository_impl_test` B11–B13; backend `test_club_post_create` C1–C8, `test_profile_posts_router` P1–P9) — `club_public_id` + tagság-ellenőrzés mindkét címzési formára (a korábbi ellenőrizetlen belső bigint MÉRT biztonsági rés volt), `GET /community/profiles/{public_id}/posts` kurzorosan és kapuval, kliens-oldalon „New post" CTA a klub-részleten és „Your posts" szekció | `post_repository.dart`, `posts.py`, `profile_posts_router` |
+| community média-feltöltés | **NYITVA** — az R11 mért rés-jelentése (nincs média HTTP-router, A6.2.1 / A6.2.4 / A6.2.5 hiányzik, nincs `image_picker`); R-SEC-01 / R-PRIV-01 P1 blokkolók változatlanok | lásd a §1.3 „Attach media" sorát |
 
 ### 5.2 Nyitva maradt (mérve, indokkal)
 
-- **Song resume persistálás** (`_InMemorySongResumeRepository`) — a checkpoint
-  app-újraindításkor elvész; fájl-alapú `SongResumeRepository` a folytatás.
-- **Song trainer sebesség-slider** — a controllernek nincs backing-rate
-  művelete, ezért a slider őszintén tiltva marad (inert, de nem hazug vezérlő).
-- **Tutor felhő-gateway** — döntéssel nyitva: előbb a hozzájárulás olvasása
-  kell a `_previewTurnRequest`-ben (adatleltár MAJOR-3, `consent_enforcement_test`).
-- **Poszt-szerkesztő média-csatolás** — R-SEC-01 / R-PRIV-01, változatlan.
-- **Setlist V2 lista + setlist-session bekötés** — a képernyő nincs a
-  design-rendszeren; az ADR 0471 D6 őr E15-tulajdonos-kört kívánna.
-- **Tutor `PracticePlanPreviewScreen` előállítója** — nincs `PracticePlanDraft`-forrás.
-- **Hang-import folyamat.**
-- **Dal-tréner ütemenkénti haladás-commit.**
-- **A Today-terv `onSwap`-ja** — a controllernek nincs swap-művelete.
-- **A `SongResultScreen` retry/next callbackjei.**
-- **Klub-poszt `club_id` és a `profilePosts` végpont** — a backendnek nincs útvonala.
-- **Community média-feltöltés.**
+Az R8–R11 körök zárták a korábbi lista nagy részét (song-resume persistálás,
+ütemenkénti haladás-commit, `SongResultScreen` retry/next, hang-import, a
+Today-terv `onSwap`-ja, a Setlist V2 lista + session, a tutor felhő-gateway és
+a terv-előnézet előállítója, a klub-poszt `club_id` és a `profilePosts`
+végpont). Ami MÉRHETŐEN nyitva maradt, indokkal:
+
+- **Song trainer sebesség-slider PONTOZOTT munkamenetben** — a lejátszás-módú
+  sebességváltás az R8-ban megvan (`setPlaybackRate`, pause → rate → resume),
+  de pontozott munkamenetben szándékosan tiltva: a Practice célütemterv EGYSZER,
+  a beállítási tempón fordul le, így a menet közbeni tempóváltás a pontozást
+  hazuggá tenné. Ez Practice-kör tárgya, nem trainer-köré.
+- **A Setlist V2 lista teljes SsCard/SsButton-migrációja** — az R10 a képernyő
+  térközeit `SsSpacing` tokenekre vitte (a golden-pinelt renderelés
+  pixel-semlegesen), a teljes design-rendszer-migráció golden-újrarögzítést
+  kíván az x86 boxon (ADR 0471 D6 őr) — tulajdonos-kör.
+- **Képernyőn lévő belépési pont a Setlist V2 listához és a tutor
+  terv-előnézethez** — mindkét route él (`/setlists/v2`, `/tutor/plan-preview`,
+  a kizárási sorok a `full-app-verification.md` §3.2-ben), de minden jelölt
+  felület golden-pinelt (a legacy `setlist_list_screen.dart` a körök listáján
+  kívül volt; a tutor oldalon TutorHome/Chat/Data/Privacy/Profile mind pinelt),
+  ezért a CTA elhelyezése tulajdonos-kört kíván egy nem-pinelt felületen.
+- **Community média-feltöltés** — az R11 mért RÉS-JELENTÉST adott, nem kódot:
+  nincs média HTTP-router, a threat-model §6.2 A6.2.1 (magic-byte-ellenőrzés),
+  A6.2.4 (transcode) és A6.2.5 (valódi scanner) hiányzik, az `image_picker`
+  nincs a pubspecben. Az R-SEC-01 / R-PRIV-01 P1 blokkolók változatlanok, a
+  poszt-szerkesztő „Attach media" CTA-ja őszintén snackbart ad.
+- **A bejelentkezési hiba DÖNTÉSE** — a kódban programhiba nem mérhető (§5.4:
+  a 401 hitelesítési ítélet, a 409 létező fiók); a döntéshez a docker-napló a
+  409-ek ELŐTTI szakaszról kell. Mellékesen ott mért, még nyitott üzemeltetői
+  lelet a Caddy mögötti közös throttle-kulcs.
+- **Üzemeltetői művelet az élő deployon:** `STRUMSIGHT_COMMUNITY_ENABLED=false`
+  — emiatt a `live_backend_smoke.py` lánc a community-lépéseknél megáll, és az
+  R5/R11 community-funkciói az élő backenden nem gyakorolhatók.
 
 ### 5.3 CI-bizonyíték
 
@@ -211,6 +247,24 @@ placeholder-őr A4, release-flow semantics/text-scale), a
 `practiceHistoryV2ListProvider` lusta flush-e a `PracticeResultRoute`
 buildjében (`setState() called during build`), és az eredmény-fejléc
 túlcsordulása 412 px-es nézeten en/2.0 + hu/1.5 + hu/2.0 szövegnagyításnál.
+
+**Javító sáv 3 (2026-09-07) — az R8–R11 mért CI-leletei, sorrendben:**
+1. **format:** egyetlen fájl — a stub-overview builder `=>`-törzse a nyíl utáni
+   tördeléssel egy sorba fér (`61de4e3`); a CI format-kapuja az EGYETLEN
+   formázó-orákulum ebben a konténerben.
+2. **analyze:** az `Override` típusargumentum a `misc.dart` import nélkül nem
+   típus — **két új tesztben**; felesleges `meta` import a
+   `song_trainer_launch`-ban (`22b904b`); `FeatureFlags(aiTutorEnabled:)` a
+   három kötelező paraméter nélkül a `practice_plan_preview_route_test`-ben
+   (run 34107003755, a `4a0e1bf`-en belül javítva).
+3. **teszt:** `e15_r13_full_variant_matrix_test` **A1** (run 34104053120,
+   Coverage) — a `setlist_list_screen_v2.dart` és a `setlist_session_screen.dart`
+   az R10 routolása után elérhető, de sem a `_screens` mátrixban, sem az
+   `_exclusions` listán nem volt; mindkettő fixture-t kapott (`4b68f05`), a
+   kizárási lista változatlanul egyelemű (L180: a lista csak zsugorodhat).
+4. A **maradék coverage-bukások mérése folyamatban** — a leletek ide kerülnek.
+
+**CI-bizonyíték (sáv 3):** run <KITÖLTENDŐ> a <sha> fejen
 
 ### 5.4 Bejelentkezés — mért állapot (2026-09-07)
 
