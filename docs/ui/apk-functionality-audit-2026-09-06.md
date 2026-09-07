@@ -161,6 +161,8 @@ kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
 | **R11** | `a26b408` | **mért biztonsági rés zárva:** a `CreatePostRequest.club_id` (belső bigint) eddig ellenőrzés NÉLKÜL került a sorra — bármely hitelesített hívó bármely klubba posztolhatott az egész szám kitalálásával, és a klub tagjai klub-tartalomként olvasták; most `club_public_id` (a kliens által ismert azonosító), mindkét címzési forma tagság-ellenőrzött, soft-deleted klub elutasítva, eltérő pár → 400, minden elutasítás ugyanaz a 404, amit a klub-feed olvasás ad (`ClubPostNotAllowed`, `resolve_club_public_id`). Kliens: `HttpCommunityPostRepository.createClubPost`, a klub-azonosító a composer-állapoton → tartós piszkozaton → outbox-rekordon → kérésen át utazik; „New post" CTA a klub-részleten (csak tagnak, `communityWritesEnabled` mögött). Duplikált `/posts` alias NEM készült — a `GET /community/clubs/{public_id}/feed` már létezett és a Feed fül fogyasztotta. **`GET /community/profiles/{public_id}/posts`**: kurzoros (saját HMAC-verzió, közös `project_page` wire-alak), kapu tulajdonos → minden audience, blokk (bármely irány) / privát / followers-only nem-követőnek / ismeretlen profil → egységes 404, sorszűrők: explicit audience-allowlist, moderáció + soft-delete, `club_id IS NULL` (különben a tagsági kapu a szerző profilján át megkerülhető lenne); kliens: `profilePosts` valódi, „Your posts" szekció a community hub `_ReadyView`-jában. Contract +2 mounted sor, smoke-besorolás, számláló-teszt 39 / 26. **Média-feltöltés NEM indult** — mért rés-jelentés: nincs média HTTP-router, a threat-model §6.2 A6.2.1 (magic-byte), A6.2.4 (transcode) és A6.2.5 (valódi scanner) hiányzik, `image_picker` nincs a pubspecben; R-SEC-01 / R-PRIV-01 P1 blokkolók változatlanok. | `post_repository_club_post_test` N1–N4, `community_outbox_club_test` O1–O4, `post_composer_club_test` Q1–Q5, `feed_repository_impl_test` B11–B13; backend `test_club_post_create` C1–C8, `test_profile_posts_router` P1–P9 (helyben mérve: pytest 958 passed + 1 xfail, ruff tiszta, `classify_contract` 39 sor / 0 unclassified) |
 | **R12** | `74e4515` | **képernyőn lévő belépési pont** mindkét eddig csak route-on élő felülethez, mindkettő NEM pixel-pinelt képernyőn: a legacy `setlist_list_screen.dart` görgető törzsének első sora egy `SsContentCard` (`setlist-open-v2`) → `/setlists/v2` (kártya, nem AppBar-akció, hogy a hu címke 2.0 szövegnagyításnál görgessen, ne szorítsa a címsort; a `setlist_flow_test` pinjei változatlanul zöldek), a `tutor_profile_screen.dart` egy `SsContentCard` (`tutorProfilePlanPreview`) → `/tutor/plan-preview`, csak `aiTutorEnabled` mellett (kártya, nem SsSection+SsButton, mert az R22-PF6 pin pontosan 3 SsSection + 1 SsButton-t számol; TutorHome/TutorChat érintetlen). **Community „nincs engedélyezve ezen a szerveren":** a `/health/ready` nem közli a community elérhetőségét, a használható jel a 404 TÖRZSE — a felcsatolt router `profile_missing` részletet ad, a le nem csatolt a FastAPI csupasz `Not Found`-ját; a `fetchMyProfile` eddig MINDEN 404-et `null`-ra képezett, így a community nélküli szerver pont úgy nézett ki, mint a profil nélküli felhasználó („Create profile", majd a POST általános hibája). Új feature-lokális `CommunityFailureCode.unavailable` (`community.unavailable` a `NetworkFailure` felett — a core taxonómia érintetlen), `CommunityGateStatus.unavailable`, a gate `_UnavailableView` (kártya + újrapróbálás); a goldenek fixture-ei sosem érik el az új állapotot, a pixel változatlan. l10n: kulcsok a szegmensekben, aggregátum bájtra azonos (en/hu IDENTICAL, paritás 2353/2353). | `setlist_v2_entry_test` V1–V3, `tutor_plan_preview_entry_test` T1–T3, `profile_repository_unavailable_test` U1–U3, `community_gate_unavailable_test` G1–G3 |
 | **R13** | `42973ef` | a sebesség-slider **pontozott munkamenetben is valódi**: új `PracticeTargetRescaler` — a pivot az aktuális pozíció előtti/alatti ütemhatár (ugyanaz, ahova a `ResumePractice` visszalép), `map(t)=t` a pivot ELŐTT (a történet, azaz a már pontozott verdiktek befagyasztva) és `pivot+(t−pivot)·ratio` utána; a leképezés folytonos és szigorúan monoton, így az esemény-sorrend és a matcher bináris keresése él, `countIn+musical+ringOut == total` pontosan, az egymás utáni újraidőzítések komponálódnak. Motor-határ: új `RescheduleTempo` parancs CSAK `ready` és `paused` állapotból (futó próbálkozás alatt a reducer elutasít), NEM törli a célt (ellentétben a `ChangeTempoBeforeAttempt`-tel), az `effectiveTempo`/`timelineBase`/`activeBase`/`pausedAtTimeline` egy lépésben áll át, a lejátszófej nem ugrik, a státusz nem változik (egyelemű statusPath — property-kapu-biztos). A Song Trainer controller ezért előbb megállít: pause → újraidőzítés → hang-sebesség → resume EGY zárójelben, a motor szokásos együtemes visszaszámlálásával, már az új tempón. `PracticeEventMatcher.rescheduled`: a feloldott rekordok szó szerint megmaradnak, csak a feloldatlanok nyílnak újra. A slider-húzás `setPlaybackRate`-je single-flight, latest-wins sorral (az átlapolt zárójelek voltak az EGYETLEN út, ahol hang és cél más tempón végezhette volna), azonos érték no-op; a DSP/hangolási paraméterek nem változtak (`docs/rag/chunks/` érintetlen). | `practice_target_rescaler_test` S0–S4, `practice_event_matcher_rescheduled_test` M1–M4, `practice_session_tempo_rescale_test` T0–T5, reducer-mátrix +2 cella, `song_trainer_controller_test` E1–E5 (a „scored session refuses" cella helyett), `song_trainer_screen_test` (futó pontozott munkamenet élő `Slider.onChanged`-del) |
+| **R14** | `3d2f0e3` | **backend + szerződés.** Contract-drift: a `GET /community/clubs/{public_id}/pinned` és `/feed` mounted sorok (mért kliens-hívóhelyekkel), smoke-besorolás, számláló **41 / 28** not_exercised. **Throttle a Caddy mögött** (a §5.4 mellékes lelete zárva): `Settings.trusted_proxy_ips` (`STRUMSIGHT_TRUSTED_PROXY_IPS`, JSON-lista) + `client_ip_for_throttle` — a socket-peer, KIVÉVE ha az megbízható, akkor az első `X-Forwarded-For` ugrás; a fejléc FELTÉTEL NÉLKÜL soha nem megbízható (hamisítható); a Dockerfile CMD ugyanabból az env-ből ad `--proxy-headers --forwarded-allow-ips`-t az uvicornnak (üres → az uvicorn saját 127.0.0.1 alapja, nincs új bizalom); a runbook §5.1 a hop mérését és a KÖTELEZŐ Caddy `header_up X-Forwarded-For {remote_host}`-ot írja le (a gyári `reverse_proxy` HOZZÁFŰZ, e nélkül egy hívó hamis első hopot tehetne elé). **Login-diagnosztika a 401 gyengítése nélkül:** egy INFO rekord `auth.login_failed reason=unknown_email` / `reason=bad_password`, `client=<kulcs>`, `email_hash=<sha256 első 12 hex>` és `auth.register_conflict` — a válasz bájtra azonos, e-mail a naplóba nem kerül. MÉRT csapda: az uvicorn alapból kezelő nélkül hagyja a root loggert (az INFO eldobódik) → `_configure_app_logging()` a main-ben, és az alembic `fileConfig(..., disable_existing_loggers=False)` (az alapértelmezett `True` a folyamat hátralevő részére letiltotta az `app.routers.auth` loggert — ez a `test_migrations.py:248` régi workaroundjának oka). Runbook §7.1: a `STRUMSIGHT_COMMUNITY_ENABLED=true` (+ writes/clubs/leaderboard) átbillentése az élő stacken, readiness + mount-próba (404 → 403), az APK viselkedése előtte/utána. Helyben mérve: pytest 976 passed + 1 xfailed, ruff tiszta; falszifikációs próbák — a feltétel nélküli XFF-bizalom 3 cellát, az alembic egysoros visszavonása 2 cellát tesz pirosra. | `test_trusted_proxy_throttle` (13), `test_auth_failure_logging` (9) |
+| **R15** | `999f03c` (a commit a `3d2f0e3` ELŐTT landolt) | **két hazug UI-állapot zárva.** Login: a képernyő nem mutat ELAVULT hibát mód-váltás vagy mezőszerkesztés után — képernyő-helyi elvetés a **beküldés-számlálóhoz** kötve, nem hiba-identitáshoz (mérve: a fake-ek és a `const` failure-ök két próbálkozásra UGYANAZT a példányt adhatják vissza, amit egy identitás-jelölő némán elnyelne, így egy új bukás láthatatlan maradna); az `AuthController` érintetlen (őszinte `AsyncError`, nincs hamis `AsyncData(null)`), új bukás mindig látszik; 409-nél a `authEmailTakenHint` második sor („van már fiókod? jelentkezz be") — ez a §5.4 mért 409-ei mellé való felhasználói irány. Klub-feed: a `_ClubFeedTab` MINDKÉT `error:` ága `_ClubFeedErrorCard`-ot ad (`club-feed-error` / `club-feed-pinned-error`) újrapróbálással (`ref.invalidate(clubFeedProvider/clubPinnedProvider)`) — eddig a betöltési hiba „nincs poszt"-ként látszott; a meglévő `_ErrorView` törzse `_ErrorCardBody`-ba emelve, a tag-fül hibaállapota bájtra azonos widget-sorrend. Goldenek: a login-goldenek alapállapotot renderelnek (nincs új widget), az e13_r34 klub-fixture-ök sikeres üres eredményt adnak (csak a `data:` ág fut) — pixel változatlan. | `login_error_lifecycle_test` (5 cella), `club_detail_screen_test` (+2) |
 | formázó/analyze-javítások | `974d78e`, `8c29fe6`, `c472b93`, `9ee46a8`, `d3d10be`, `98d4b74`, `e460cc3` | a CI format- és analyze-kapujának leletei (lásd a HANDOFF „Csapdák" listáját) — a CI az egyetlen formázó-orákulum ebben a konténerben. | — |
 | formázó/analyze-javítások (sáv 3) | `61de4e3`, `22b904b` (+ a FeatureFlags-javítás a `4a0e1bf`-ben) | az R8/R11 CI-leletei: a stub-overview builder `=>`-törzse EGY sorba fér a nyíl utáni tördeléssel (a format-kapu az egyetlen fájlt jelölte, `61de4e3`); az `Override` típusargumentum a `misc.dart` import nélkül nem típus (két új teszt) és a felesleges `meta` import a `song_trainer_launch`-ban (`22b904b`); a `FeatureFlags(aiTutorEnabled:)` a három kötelező paraméter nélkül a `practice_plan_preview_route_test`-ben (run 34107003755, a `4a0e1bf`-en belül javítva). A CI itt is az egyetlen formázó- és analyze-orákulum. | — |
 
@@ -215,14 +217,18 @@ pontozott munkamenetben (R13)). Ami MÉRHETŐEN nyitva maradt, indokkal:
   nincs a pubspecben. Az R-SEC-01 / R-PRIV-01 P1 blokkolók változatlanok, a
   poszt-szerkesztő „Attach media" CTA-ja őszintén snackbart ad.
 - **A bejelentkezési hiba DÖNTÉSE** — a kódban programhiba nem mérhető (§5.4:
-  a 401 hitelesítési ítélet, a 409 létező fiók); a döntéshez a docker-napló a
-  409-ek ELŐTTI szakaszáról kell. Mellékesen ott mért, még nyitott üzemeltetői
-  lelet a Caddy mögötti közös throttle-kulcs.
+  a 401 hitelesítési ítélet, a 409 létező fiók). Az R14 óta a döntés MÉRHETŐ:
+  az `auth.login_failed reason=unknown_email|bad_password …` INFO rekord
+  szétválasztja a két forgatókönyvet (olvasás: runbook §5.2) — a szerveren
+  össze kell gyűjteni. A korábban itt jelzett közös throttle-kulcs **zárva**
+  (R14, `client_ip_for_throttle` + `STRUMSIGHT_TRUSTED_PROXY_IPS`, runbook §5.1).
 - **Üzemeltetői művelet az élő deployon:** `STRUMSIGHT_COMMUNITY_ENABLED=false`
   — a `live_backend_smoke.py` lánc emiatt a community-lépéseknél megáll, és az
   R5/R11 community-funkciói az élő backenden nem gyakorolhatók. **Az app ezt az
   R12 óta KEGYESEN viseli** („nincs engedélyezve ezen a szerveren", nem hamis
-  „Create profile"), de a funkciók bekapcsolása üzemeltetői döntés.
+  „Create profile"), de a funkciók bekapcsolása üzemeltetői döntés — a lépéssor
+  (átbillentés, readiness + mount-próba 404 → 403, az APK viselkedése
+  előtte/utána) az R14-ben leírva: runbook **§7.1**.
 - **`musicalPosition` a `PracticeSessionState`-en KÖZELÍTŐ újraidőzítés után** —
   a getter egyetlen `BeatTimeConverter(tempo: target.tempo)`-val számol az
   EGÉSZ idővonalon, az R13 újraidőzítése viszont szakaszonként affin (a pivot
@@ -230,6 +236,16 @@ pontozott munkamenetben (R13)). Ami MÉRHETŐEN nyitva maradt, indokkal:
   definíció és a teszt hivatkozik rá), ezért a pontosítás nem sürgős — de
   amint egy felület kiírja az ütem/ütés pozíciót, a getternek a rescaler
   szakaszos leképezését kell használnia.
+- **A contract gépi lefedettsége hiányos** — az R14 két drift-sort zárt
+  (`/community/clubs/{public_id}/pinned` és `/feed`, számláló 41 / 28
+  not_exercised), de a jelentése szerint még ~24 VALÓDI hívóhely hiányzik a
+  `docs/contracts/client-backend-endpoints.json`-ból; mindegyik LÉTEZIK az
+  OpenAPI-ban, csak gépi lefedettség nincs rájuk. **R16 folyamatban.**
+- **A community-routerek saját `_client_key` helperei** (`search.py`,
+  `handles.py`) még a socket-peerre kulcsolnak, nem az R14 közös
+  `client_ip_for_throttle`-jére — mérve az ág HEAD-jén; a Caddy mögött ezek a
+  keretek tehát továbbra is az ÖSSZES hívóra közösek (a login/register kerete
+  már nem).
 
 ### 5.3 CI-bizonyíték
 
@@ -312,6 +328,29 @@ címén lát — a keret így az ÖSSZES felhasználóra közös, és a 429 a k�
 hibának tűnhet. Javítási irány: uvicorn `--proxy-headers
 --forwarded-allow-ips` a Caddy címére, vagy az `X-Forwarded-For` olvasása a
 throttle kulcsához.
+
+**R14 óta a döntés MÉRHETŐ a szerveren** (`3d2f0e3`): a backend minden bukott
+bejelentkezésre egy INFO rekordot ír —
+`auth.login_failed reason=unknown_email|bad_password client=<throttle-kulcs>
+email_hash=<sha256 első 12 hex>` —, és a regisztrációs ütközésre
+`auth.register_conflict`-ot; a HTTP-válasz bájtra azonos maradt, e-mail a
+naplóba NEM kerül. Ezzel a fenti két forgatókönyv szétválasztható: a
+`reason=unknown_email` azt jelenti, az e-mail nincs a Postgres-ben (tehát a
+409-ek egy MÁSIK e-mailre vagy egy korábbi mérésből maradtak), a
+`reason=bad_password` azt, hogy a fiók létezik és a jelszó nem egyezik. Az
+olvasás menete: `docs/operations/backend-live-deploy.md` **§5.2**. (Ha az INFO
+nem látszik, az a mért uvicorn-csapda: a root logger kezelő nélkül marad —
+a `_configure_app_logging()` javítja.)
+
+**A mellékes lelet (közös throttle-kulcs) zárva** — R14: a throttle
+kulcsa `client_ip_for_throttle`, ami a socket-peert használja, KIVÉVE ha az
+megbízható proxy (`STRUMSIGHT_TRUSTED_PROXY_IPS`), és akkor az első
+`X-Forwarded-For` ugrást; így a Caddy mögött minden hívó SAJÁT keretet kap.
+A fejléc feltétel nélkül soha nem megbízható. Az üzembe helyezés lépései (a
+hop mérése és a kötelező Caddy `header_up X-Forwarded-For {remote_host}`, mert
+a gyári `reverse_proxy` hozzáfűz): runbook **§5.1**. A community-routerek saját
+`_client_key` helperei (`search.py`, `handles.py`) EGYELŐRE még a socket-peerre
+kulcsolnak (mérve az ág HEAD-jén) — §5.2.
 
 **A végső mérce változatlan:** a valós-gitár APK-teszt a felhasználónál; a
 szintetikus zöld nem „kész".
