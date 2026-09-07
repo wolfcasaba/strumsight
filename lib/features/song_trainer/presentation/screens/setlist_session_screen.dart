@@ -104,17 +104,13 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
             isPractice
                 ? l10n.setlistSessionPracticeDescription
                 : l10n.setlistSessionPerformanceDescription,
-            style: typography.bodyMedium.copyWith(
-              color: colors.textPrimary,
-            ),
+            style: typography.bodyMedium.copyWith(color: colors.textPrimary),
           ),
         ),
       ),
       if (tuningChangesAhead.isNotEmpty)
         Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: SsSpacing.space4,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: SsSpacing.space4),
           child: Semantics(
             key: const Key('setlist-session-tuning-ahead'),
             container: true,
