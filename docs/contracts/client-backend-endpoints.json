@@ -240,6 +240,18 @@
       "path": "/community/profiles/{public_id}/posts",
       "source": "lib/features/community/data/repositories/feed_repository_impl.dart:122",
       "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/clubs/{public_id}/pinned",
+      "source": "lib/features/community/data/repositories/feed_repository_impl.dart:152",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/clubs/{public_id}/feed",
+      "source": "lib/features/community/data/repositories/feed_repository_impl.dart:173",
+      "status": "mounted"
     }
   ]
 }

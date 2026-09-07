@@ -98,7 +98,7 @@ class _CountingClient:
 
 def test_classify_contract_covers_the_real_contract_with_no_unclassified_entries():
     entries = smoke.load_contract(_REAL_CONTRACT_PATH)
-    assert len(entries) == 39
+    assert len(entries) == 41
 
     classifications = smoke.classify_contract(entries)
     by_kind: dict[str, int] = {}
@@ -109,7 +109,7 @@ def test_classify_contract_covers_the_real_contract_with_no_unclassified_entries
     assert by_kind.get("unclassified", 0) == 0, [
         c for c in classifications if c.kind == "unclassified"
     ]
-    assert by_kind == {"exercised": 10, "not_exercised": 26, "known_gap": 3}
+    assert by_kind == {"exercised": 10, "not_exercised": 28, "known_gap": 3}
 
 
 def test_classify_contract_fails_closed_on_an_uncovered_mounted_entry():

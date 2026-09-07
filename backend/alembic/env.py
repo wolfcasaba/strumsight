@@ -13,7 +13,14 @@ from app.database import Base, enable_sqlite_foreign_keys
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # `disable_existing_loggers=False` is NOT cosmetic (R14, measured): the
+    # default `True` switches OFF every logger that already exists and is not
+    # named in `alembic.ini` — `app.routers.auth` included. Any in-process
+    # migration (the test suite runs several) therefore silenced the
+    # application's own records, `auth.login_failed` among them, for the rest
+    # of the process. Alembic's logging config is for alembic's output; it has
+    # no business muting the application.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

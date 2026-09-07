@@ -63,6 +63,21 @@ class Settings(BaseSettings):
     # CORS origins for the Flutter web/dev client. "*" is fine for dev.
     cors_origins: list[str] = ["*"]
 
+    # Reverse-proxy awareness for the auth throttles (R14, javító sáv
+    # 2026-09-06 §5.4). EMPTY by default: `X-Forwarded-For` is caller-supplied
+    # and therefore spoofable, so `client_ip_for_throttle()` reads it ONLY when
+    # the direct socket peer is listed here. On the live deploy
+    # (`docs/operations/backend-live-deploy.md`) Caddy is the single hop and
+    # the container sees it as the docker-bridge gateway address (or
+    # 127.0.0.1 in host-network mode) — that MEASURED address is what belongs
+    # here, never a range and never a wildcard.
+    #
+    # Like `cors_origins`, this is a JSON list in the environment
+    # (`STRUMSIGHT_TRUSTED_PROXY_IPS=["172.18.0.1"]`). An empty *string* value
+    # is a JSON parse error at boot, so omit the key entirely — or write `[]`
+    # — to keep the default.
+    trusted_proxy_ips: list[str] = []
+
     # Lab services stay zero-setup in dev, but are absent from production
     # unless explicitly enabled. The validator supplies environment-sensitive
     # defaults while preserving explicit kwargs and STRUMSIGHT_* overrides.

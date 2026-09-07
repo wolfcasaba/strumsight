@@ -128,6 +128,47 @@ isolated temporary SQLite database. It can also be started manually.
   them. The single-process target is intentional; production scaling requires
   Redis or another shared store. The attempt is counted BEFORE the credential
   check, so a 429 never confirms a password guess.
+- **Throttling behind a reverse proxy (R14):** the bucket key comes from
+  `app/client_ip.py::client_ip_for_throttle`. It is the direct socket peer,
+  EXCEPT when that peer is listed in `STRUMSIGHT_TRUSTED_PROXY_IPS` (a JSON
+  list, empty by default) — then the first `X-Forwarded-For` hop. Without
+  this, a proxied deploy gives every caller the same key and the budgets
+  become global: measured on `casaba.app/strumsight`, where the container
+  sees the docker-bridge address for every phone and the shared 429 reaches
+  the app as a generic network error. The header is never trusted from an
+  unlisted peer (that would let anyone pick their own bucket), and the image
+  `CMD` hands the same variable to uvicorn's `--forwarded-allow-ips`, so the
+  ASGI and application layers cannot disagree. The reverse proxy must
+  OVERWRITE the header (Caddy: `header_up X-Forwarded-For {remote_host}`) —
+  the runbook is `docs/operations/backend-live-deploy.md` §5.1/§7.
+- **Login-failure diagnostics (R14):** a failed login answers a uniform
+  `401 Incorrect email or password` — deliberately identical for an unknown
+  address and a wrong password, so the response never reveals which e-mails
+  are registered. The operator gets the distinction SERVER-SIDE instead: one
+  INFO record per failure on the `app.routers.auth` logger, e.g.
+  `auth.login_failed reason=unknown_email client=203.0.113.7
+  email_hash=0748ebb7f38a` (`reason=bad_password` for the other branch, and
+  `auth.register_conflict reason=email_exists …` for a 409). The record
+  carries no e-mail and no password — `email_hash` is the first 12 hex
+  characters of `sha256(lowercased email)`, enough to see the same address
+  failing repeatedly, and comparable against a specific suspected address by
+  hashing it. `client=` is the throttle bucket key above, so failures and a
+  429 line up. Read it on a compose deploy with:
+
+  ```bash
+  docker compose --env-file runtime.env logs api | grep auth.login_failed
+  docker compose --env-file runtime.env logs --since 30m api | grep auth.
+  ```
+
+  `create_app()` attaches a stderr handler to the `app` package logger for
+  exactly this reason: uvicorn's own log config handles only `uvicorn*`
+  loggers and leaves the root without a handler, so an INFO record from the
+  application would otherwise be dropped before it ever reached
+  `docker compose logs`. For the same reason `alembic/env.py` calls
+  `fileConfig(..., disable_existing_loggers=False)` — with the default `True`,
+  one in-process migration switched off every `app.*` logger for the rest of
+  the process (measured; guarded by
+  `tests/test_auth_failure_logging.py::test_an_in_process_migration_does_not_silence_the_diagnostics`).
 - **Production database:** PostgreSQL is recommended. Set a
   `postgresql+psycopg://...` `STRUMSIGHT_DATABASE_URL` and install a compatible
   Psycopg driver in the deployment image (the driver is intentionally not a
@@ -148,6 +189,8 @@ backend/
 │   ├── models.py      # User, UserSettings
 │   ├── schemas.py     # Pydantic contracts
 │   ├── security.py    # bcrypt + JWT
+│   ├── ratelimit.py   # in-memory sliding-window limiter
+│   ├── client_ip.py   # trusted-proxy-aware throttle key
 │   ├── deps.py        # get_current_user (HTTP bearer)
 │   └── routers/       # auth.py, settings.py
 ├── alembic/           # versioned production schema

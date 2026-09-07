@@ -32,6 +32,31 @@ _DEV_DIAGNOSTICS_TOKEN = Settings.model_fields["diag_token"].default
 _DEV_TUTOR_KEY = Settings.model_fields["tutor_api_key"].default
 _ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 _logger = logging.getLogger(__name__)
+_APP_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+
+def _configure_app_logging() -> None:
+    """Make `app.*` INFO records actually reach the container's log stream.
+
+    MEASURED (R14): uvicorn's default logging config attaches handlers only
+    to its OWN `uvicorn*` loggers and leaves the root logger without any, so
+    an `app.routers.auth` INFO record propagates to a handler-less root and
+    is dropped — `logging.lastResort` only emits WARNING and above. Without
+    this, the operator-facing `auth.login_failed` diagnostics would be a
+    silent no-op in `docker compose logs api`.
+
+    Deliberately narrow: one stderr handler on the `app` package logger,
+    installed at most once, and the ROOT logger is never touched — a host
+    that configures logging itself (or pytest's `caplog`) keeps working.
+    """
+    package_logger = logging.getLogger(__package__ or "app")
+    if package_logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(_APP_LOG_FORMAT))
+    package_logger.addHandler(handler)
+    package_logger.setLevel(logging.INFO)
+
 
 # ADR 0449 D1/D3: the gate is active only for the two deploy environments —
 # dev/lab keep the create_all-based dev path unblocked (ADR 0060).
@@ -147,6 +172,7 @@ def _traffic_gate(request: Request) -> None:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    _configure_app_logging()
     _guard_prod(settings)
     engine = create_database_engine(settings.database_url)
     session_factory = create_session_factory(engine)

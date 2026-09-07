@@ -349,6 +349,19 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
         "/community/profiles/me already proves this device's authenticated "
         "community read access"
     ),
+    # Javito sav 2026-09-06 R14 — the club feed/pinned call sites measured by
+    # R11 (`docs/ui/apk-functionality-audit-2026-09-06.md` §5.2), missing from
+    # the contract until this round.
+    ("GET", "/community/clubs/{public_id}/pinned"): (
+        "requires an existing club id; no club-creation step is part of the "
+        "single-account bring-up chain (same reason as GET "
+        "/community/clubs/{public_id}/members)"
+    ),
+    ("GET", "/community/clubs/{public_id}/feed"): (
+        "requires an existing club id; no club-creation step is part of the "
+        "single-account bring-up chain (same reason as GET "
+        "/community/clubs/{public_id}/members)"
+    ),
 }
 
 
