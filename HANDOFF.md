@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + újra-audit + 19 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, a §1.3 „routolt, de nem működik" osztály nagy része zárva, és a navigációs zsákutcák + a hiányzó belépési pontok is
+## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + újra-audit + 20 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, a §1.3 „routolt, de nem működik" osztály nagy része zárva, és a navigációs zsákutcák + a hiányzó belépési pontok is
 
 A mérce a felhasználóé: **„APK build után minden működjön"** — a `build-apk.yml`
 `development` APK-jában minden fejlesztett képernyő legyen elérhető ÉS
@@ -32,6 +32,7 @@ nyitva maradt). Bázis: `main`, az audit commitja `f154139`.
 | R17 | `8e454f6` | **kijutás minden képernyőről** (újra-audit B5/B6/B7 + M7): a sikeres login nem dob `GoError: There is nothing to pop`-ot egyoldalas stacken (a siker-ág a közös `_leaveScreen`-t kapta: `maybePop`, különben `go(profileHome)`) — ez a felhasználó „nem működik a bejelentkezés" jelzésének legvalószínűbb KÓDBELI oka; az eredmény-képernyő mindkét változata `BackButton`-t és „Kész" CTA-t kap PONTOSAN akkor, ha van `GoRouter` és nincs mit poppolni (router nélkül a golden-keretek bájtra változatlanok); tutor-home→chat, Profil-hub→community/gamification/login és Ma-fül→vision `push`-ra váltott, a tutor-chat vissza-nyila `maybePop`, különben `go(tutorHome)`; a munkamenet-megszakítás `canPop ? pop : go(practiceHub)` | `login_success_navigation_test` (3), `practice_result_screen_test` R17 (5), `profile_hub_test` (3), `tutor_chat` (2), `tutor_home` (1), `today_hub` (2), `practice_session` (1) |
 | R19 | `d0fc96c` (az R18 ELŐTT landolt) | **igazmondó állapotok** (újra-audit M3, M4): a produkciós Dio `receiveDataWhenStatusError: false`-a miatt a `_notFoundDetail` MINDEN 404-en `null`-t látott, tehát bekapcsolt community mellett senki nem kapott volna profil-létrehozást — `ApiClient.getJson(readsErrorDetail: true)` kérésenkénti opt-in (`ResponseType.plain`, a 401 mérvadó marad, a globális alapérték változatlan), a pin a VALÓDI `DioFactory`-kliensre újraírva; a `todayPlanRepositoryProvider` az `activePracticePlanProvider`-t figyeli → `ActivePlanTodayPlanRepository` / `unavailable` / új `unreadable` (olvasási hiba ≠ „nincs terv") | `profile_repository_unavailable_test` U1–U4b, `active_plan_today_plan_repository_test` T1–T5 |
 | R18 | `0207d5a` | **belépési pontok** (újra-audit B1–B4, B8 + M5, M6 router-oldala, M10): az öt kategória-csip a szűrt katalógusra `push`-ol (`/practice/catalog?category=<code>`, új `PracticeCategory` + `practiceCategoryLabel`; a Skálák csip marad és őszintén üres listát nyit — az eltávolítása golden-pinelt pixelt mozdítana), a `/practice/catalog` **top-level, shell-flagtől független** route → **10/10 beépített gyakorlat elérhető**; „További eszközök" a hub-lista végén (Összes gyakorlat, Analyze, Learn) a golden-nézetablakon kívül, Dalok fül AppBar-akció a `/song-trainer`-re (`songTrainerV2Enabled`), Vision `ready` lépés indító CTA-ja; a készség-bizonyíték sor `LibraryItem`-et ad `extra`-ként (feloldhatatlan id → snackbar), a TodayPlan/WeeklyPlan/AnalysisHome építők `.when`-nel külön loading/hiba-keretet kapnak, `navSongs`/`navProfile` kulcsok; új `l10n/features/shell_{en,hu}.arb` szegmens (9 kulcs, aggregátumok újragenerálva) | `r18_entry_points_test`, `practice_category_test`, `song_trainer_entry_test`, `vision_setup_screen_test` (+2), `progress_composition_test` (+2), nav-címke cellák, `arb_parity_test` |
+| R20 | `88ae617` | **community-l10n és két igazmondó állapot** (újra-audit M8, M9 részben, M6/3 és az M4-nél nyitva hagyott `unreadable` vizuál): a poszt-szerkesztő 21 hardkódolt MAGYAR literálja `communityComposer*` ARB-kulcsokra (a hibabanner egyetlen ICU-kulcs a hibakóddal), a Könyvjelzők és a Közösségi keresés minden CÍMKÉJE ARB-ból — a könyvjelző-SOR szövege (`Post <id>` a nyers ISO-időbélyeg fölött) MARAD, mert az emberi szöveg a pixel-pinelt E13-R33 goldent mozdítaná (x86-on újrarögzítendő, ADR 0471 D6 → audit §5.2 nyitott tétel); új `CommunityGateStatus.error` a `profile_controller`-ben (időtúllépés/5xx ≠ „nincs profil", a `profileMissing` csak SIKERES null-eredményre) + `_GateErrorView` (`community-gate-error`, `community-gate-error-retry`); a Ma-fülön `_PlanUnreadableNotice` KIZÁRÓLAG az `unreadable` állapotra (retry → `activePracticePlanProvider` invalidálás), az `unavailable` út bájtra változatlanul rajzol → az e13_r17 / e13_r36 / e15_r01 / e15_r13 Today-goldenek érintetlenek; `'$todayMinutes min'` → `todayHubMinutesShort`; l10n: `community_{en,hu}.arb` +40 kulcs, ÚJ `today_{en,hu}.arb` szegmens (4 kulcs), aggregátumok **2364 → 2408**; az `e13_r33` golden composer-cellája `hu` lokálban pumpál (`pinnedLocales`; a PNG-k eleve a magyar literálokat rögzítették, a hu ARB-értékek bájtra azonosak), a többi cella `en` | `community_gate_error_test` E1–E5, `today_hub_test` `unreadable` csoport (+A1 cella), `composer_audience_test` + `community_search_test` ARB-lookupokra |
 
 **Nyitva maradt (indokkal, audit §5.2):** az R8–R16 zárta a korábbi lista
 egészét egy tételen kívül (song-resume, ütemenkénti haladás-commit,
@@ -67,7 +68,8 @@ SZÁLLÍTOTT `development` APK zászló-képére: `adaptiveShellEnabled == true`
 tehát az öt célpontos adaptív héj épül fel, amiben **nincs Analyze és nincs
 Learn** célpont, és a héjon belüli képernyők `go`-val ugrottak top-level
 route-okra (stack-csere → nincs vissza-nyíl). Ez adta a 8 BLOCKER-t és a 10
-MAJOR-t; az R17–R19 mind a nyolc BLOCKER-t és hét MAJOR-t zárt. A jelentés a
+MAJOR-t; az R17–R20 mind a nyolc BLOCKER-t és tíz MAJOR-ból hetet TELJESEN
+zárt (M3–M8, M10), az M9-et részben. A jelentés a
 session-scratchpadban készült (**efemer**), a lényege — a zászló-kép, a B1–B8 /
 M1–M10 sorok a sorsukkal, a §5.2 tételek újramérése és a „rendben találtam"
 lista — az audit **§5.5** szakaszában van rögzítve. Az onnan MEGMARADÓ,
@@ -83,21 +85,21 @@ egyik kör által sem érintett tételek (részletek: audit §5.2):
    `tutor_enabled=False` (a `/tutor/*` nincs felcsatolva → a Coach célpont
    minden üzenetre hibát ad), és bekapcsolva is `FakeProviderGateway` épülne
    (`backend/app/main.py:240`);
-8. **community l10n** (M8–M9) — a poszt-szerkesztő hardkódolt MAGYAR, a
-   Könyvjelzők és a Közösségi keresés hardkódolt ANGOL, a mentett posztok nyers
-   UUID-ként és ISO-időbélyegként jelennek meg;
-9. a **Ma-fül `unreadable` állapotának vizuálja** — az R19 az adatréteget
-   szétválasztotta, de a `today_hub_screen.dart` az olvashatatlan tervre
-   ugyanazt a hőst rajzolja, mint a „nincs terv"-re;
-10. a **`profile_controller` hibaága** (M6/3) — minden nem-`unavailable`
-    `AppFailure` a `profileMissing` állapotra képződik, tehát hálózati hibánál a
-    kapu „Hozz létre profilt"-ot ajánl; az R19 ezt a fájlt nem érintette (mérve),
-    az R18 csak a router-oldali két helyet zárta;
-11. a MINOR-lista (MI1–MI10: üres `onRecoveryPressed` / `onItemSelected`, tiltott
-    insight-akciógombok, „Import file" snackbar, a `communityMediaEnabled`
-    fogyasztó nélkül, CTA nélküli `loggedOut` community-kapu, három hub elavult
-    „crash on first frame" doc-kommentje, `LaunchScreen` holt kód, a holt
-    placeholder-kódos `practiceSessionRecorderProvider`-ág).
+8. a **könyvjelző-SOR szövege és a maradék community-literálok** (az M9
+   maradéka) — az R20 a poszt-szerkesztőt (M8) és a Könyvjelzők / Közösségi
+   keresés címkéit ARB-ba vitte, de a mentett poszt sora továbbra is a szerver
+   azonosítóit írja ki (`Post <id>` a nyers ISO-időbélyeg fölött): az emberi
+   szöveg a pixel-pinelt E13-R33 goldent mozdítaná, ami csak az x86 boxon
+   rögzíthető újra (ADR 0471 D6) → **golden-újrarögzítő kör**; ugyanígy nyitva
+   a kisebb literálok a `reaction_bar.dart`, `community_media_player.dart`,
+   `edit_profile_screen.dart`, `loop_controls.dart` és a
+   `reward_summary_sheet.dart` fájlokban;
+9. a MINOR-lista (MI1–MI10: üres `onRecoveryPressed` / `onItemSelected`, tiltott
+   insight-akciógombok, „Import file" snackbar, a `communityMediaEnabled`
+   fogyasztó nélkül, CTA nélküli `loggedOut` community-kapu (a
+   `communityGateLoggedOutCta` kulcs az ARB-ban megvan, fogyasztó nélkül),
+   három hub elavult „crash on first frame" doc-kommentje, `LaunchScreen` holt
+   kód, a holt placeholder-kódos `practiceSessionRecorderProvider`-ág).
 
 **CI-bizonyíték:** a sáv záró, teljesen zöld futása a `build-apk.yml`
 run [34057751434](https://github.com/wolfcasaba/strumsight/actions/runs/34057751434)
