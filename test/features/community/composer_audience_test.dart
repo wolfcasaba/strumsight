@@ -277,7 +277,10 @@ void main() {
         await tester.pumpAndSettle();
 
         await tester.tap(
-          find.widgetWithText(ChoiceChip, _en().communityComposerAudiencePublic),
+          find.widgetWithText(
+            ChoiceChip,
+            _en().communityComposerAudiencePublic,
+          ),
         );
         await tester.pumpAndSettle();
 
@@ -312,7 +315,10 @@ void main() {
         await tester.pumpAndSettle();
 
         await tester.tap(
-          find.widgetWithText(ChoiceChip, _hu().communityComposerAudiencePublic),
+          find.widgetWithText(
+            ChoiceChip,
+            _hu().communityComposerAudiencePublic,
+          ),
         );
         await tester.pumpAndSettle();
 
@@ -331,7 +337,10 @@ void main() {
         await tester.pumpAndSettle();
 
         await tester.tap(
-          find.widgetWithText(ChoiceChip, _en().communityComposerAudiencePublic),
+          find.widgetWithText(
+            ChoiceChip,
+            _en().communityComposerAudiencePublic,
+          ),
         );
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('ss-confirmation-cancel')));

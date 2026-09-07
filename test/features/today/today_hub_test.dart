@@ -171,6 +171,13 @@ void main() {
         ),
       );
     });
+
+    testWidgets('plan unreadable (R20)', (tester) async {
+      await expectOnePrimaryCta(
+        tester,
+        const TodayPlanSnapshot(availability: TodayPlanAvailability.unreadable),
+      );
+    });
   });
 
   group('A4 — the hub never touches a microphone/camera/wakelock API', () {
@@ -323,5 +330,63 @@ void main() {
         expect(router.state.uri.path, AppRoutes.today);
       });
     }
+  });
+
+  // -------------------------------------------------------------------
+  // R20 (2026-09-07 audit) — `unreadable` is its OWN visual state.
+  //
+  // R19 added `TodayPlanAvailability.unreadable` plus the repository that
+  // produces it, precisely so "we could not read your plan" would stop
+  // masquerading as "you have no plan". The hub then rendered BOTH the
+  // same way, so on screen the distinction still did not exist. These
+  // cells pin the notice to `unreadable` ALONE — which is also why the
+  // e13_r17 / e13_r36 / e15_r01 / e15_r13 fixtures (empty store =>
+  // `unavailable`) keep rendering exactly as before.
+  // -------------------------------------------------------------------
+  group('R20 — an unreadable plan is not a missing plan', () {
+    const notice = ValueKey('today-hub-plan-unreadable');
+    const retry = ValueKey('today-hub-plan-unreadable-retry');
+
+    testWidgets('unreadable renders the notice and a working retry', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          plan: const TodayPlanSnapshot(
+            availability: TodayPlanAvailability.unreadable,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(notice), findsOneWidget);
+      expect(find.byKey(retry), findsOneWidget);
+
+      await tester.tap(find.byKey(retry));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('unavailable renders no notice', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          plan: const TodayPlanSnapshot(
+            availability: TodayPlanAvailability.unavailable,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(notice), findsNothing);
+    });
+
+    testWidgets('the production default on an empty store shows no notice', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(notice), findsNothing);
+    });
   });
 }

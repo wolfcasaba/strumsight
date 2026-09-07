@@ -556,6 +556,7 @@ Future<void> _pump(
   Widget home,
   List<Override> overrides, {
   double textScale = 1.0,
+  Locale locale = const Locale('en'),
 }) async {
   tester.view.physicalSize = _compactPortrait;
   tester.view.devicePixelRatio = 1.0;
@@ -569,7 +570,7 @@ Future<void> _pump(
         theme: AppTheme.dark(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('en'),
+        locale: locale,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
@@ -602,6 +603,13 @@ void main() {
     'comments': (_commentsScreen, _commentsOverrides),
   };
 
+  // The composer PNGs were recorded while the screen still carried its
+  // Hungarian literals, so what they pin IS the Hungarian rendering. R20
+  // lifted those literals into ARB keys whose hu values are byte-identical
+  // to them; pumping the composer in hu keeps the pins honest without a
+  // re-record (which needs the x86 box — ADR 0471 D6).
+  const pinnedLocales = <String, Locale>{'composer': Locale('hu')};
+
   for (final textScale in [1.0, 2.0]) {
     final suffix = textScale == 1.0 ? 'compact' : 'compact_scale2';
 
@@ -613,6 +621,7 @@ void main() {
           widgetBuilder(),
           overridesBuilder(),
           textScale: textScale,
+          locale: pinnedLocales[entry.key] ?? const Locale('en'),
         );
         await _expectGolden(tester, 'e13_r33_${entry.key}_$suffix');
       });

@@ -48,7 +48,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart' show DateFormat;
 
 import 'package:strumsight/core/design_system/public.dart';
 
@@ -228,10 +227,13 @@ class _BookmarkCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return ListTile(
       key: Key('bookmark-row-${row.postId.value}'),
-      title: Text(l10n.communityBookmarkFallbackTitle),
-      subtitle: Text(
-        l10n.communityBookmarkSavedOn(_formatSavedAt(context, row.createdAt)),
-      ),
+      // The row copy is still the server's identifiers (`Post <id>` over the
+      // ISO-8601 save time): the human copy (a localized "Saved post" label
+      // + `DateFormat.yMMMd`) changes the pixel-pinned E13-R33 bookmarks
+      // golden, which can only be re-recorded on the x86 box (ADR 0471 D6).
+      // Audit §5.2 carries it as an open item for that round.
+      title: Text('Post ${row.postId.value}'),
+      subtitle: Text('Saved at ${row.createdAt.toIso8601String()}'),
       // WP-C (2026-09-06) — a mentett tétel megnyitja a bejegyzés
       // beszélgetését. Külön poszt-részlet képernyő NINCS a fában; a
       // kommentek képernyő a bejegyzés kanonikus nézete.
@@ -249,14 +251,6 @@ class _BookmarkCard extends StatelessWidget {
   }
 }
 
-/// The save date in the viewer's own locale — never the raw ISO-8601
-/// timestamp the server sends (R20, audit M9). Same `intl` entry point
-/// `skill_detail_screen.dart` uses, so the two surfaces cannot drift.
-String _formatSavedAt(BuildContext context, DateTime createdAt) {
-  return DateFormat.yMMMd(
-    Localizations.localeOf(context).toString(),
-  ).format(createdAt);
-}
 
 class _TombstoneCard extends StatelessWidget {
   const _TombstoneCard({required this.row, required this.onRemove});
@@ -280,7 +274,7 @@ class _TombstoneCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      l10n.communityBookmarkFallbackTitle,
+                      'Post ${row.postId.value}',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),

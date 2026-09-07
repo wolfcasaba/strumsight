@@ -1,78 +1,52 @@
 {
   "@@locale": "hu",
-
   "communityGateDisabledTitle": "A Közösség nem elérhető ebben a buildben",
   "@communityGateDisabledTitle": {},
-
   "communityGateDisabledBody": "A Közösség funkció konfigurációban ki van kapcsolva. A StrumSight többi része — felismerés, gyakorlás, beállítások — a szokásos módon működik.",
-
   "communityGateLoggedOutTitle": "Jelentkezz be a Közösség használatához",
   "@communityGateLoggedOutTitle": {},
-
   "communityGateLoggedOutBody": "A Közösség-profilod a StrumSight-fiókodhoz kötődik, hogy eszközök között megtaláljanak az emberek.",
-
   "communityGateLoggedOutCta": "Bejelentkezés vagy fiók létrehozása",
-
   "communityGateProfileMissingTitle": "Hozd létre a Közösség-profilod",
   "@communityGateProfileMissingTitle": {},
-
   "communityGateProfileMissingBody": "A profilod explicit jóváhagyással jön létre — a StrumSight soha nem tölti ki helyetted.",
-
   "communityGateProfileMissingCta": "Profil létrehozása",
-
   "communityGateLoadingBody": "Közösség-profilod ellenőrzése…",
-
   "communityGateErrorBody": "Nem sikerült betölteni a Közösség-profilodat. Húzd le a frissítéshez, vagy ellenőrizd a kapcsolatot.",
-
   "communityGateRetry": "Újra",
-
   "communityGateUnavailableTitle": "A Közösség még nincs bekapcsolva ezen a szerveren",
   "@communityGateUnavailableTitle": {},
-
   "communityGateUnavailableBody": "Ez a szerver kikapcsolt Közösség-modullal fut, ezért még nincs hova bejelentkezni. A StrumSight többi része változatlanul működik.",
   "@communityGateUnavailableBody": {},
-
   "communityEditCreateTitle": "Közösség-profilod létrehozása",
   "@communityEditCreateTitle": {},
-
   "communityEditEditTitle": "Közösség-profilod szerkesztése",
   "@communityEditEditTitle": {},
-
   "communityEditHandleLabel": "Azonosító",
   "@communityEditHandleLabel": {},
   "communityEditHandleHelper": "3–24 karakter. Betűk, számok, '_' vagy '-'. Ebben a buildben később nem módosítható.",
   "@communityEditHandleHelper": {},
-
   "communityEditDisplayNameLabel": "Megjelenő név",
   "@communityEditDisplayNameLabel": {},
   "communityEditDisplayNameHelper": "Max. 40 karakter. Az azonosítód mellett jelenik meg.",
-
   "communityEditBioLabel": "Bemutatkozás",
   "@communityEditBioLabel": {},
   "communityEditBioHelper": "Max. 500 karakter. Csak ezen az eszközön tárolódik — a Közösség-szerver még nem menti.",
-
   "communityEditInterestLabel": "Érdeklődési címkék",
   "@communityEditInterestLabel": {},
   "communityEditInterestHelper": "Adj hozzá max. 16 címkét (pl. fingerstyle, blues). Koppints egy címkére az eltávolításhoz. Csak ezen az eszközön tárolódik.",
-
   "communityEditAddInterestCta": "Címke hozzáadása",
-
   "communityEditPrivacyTitle": "Ki láthatja a profilodat",
   "@communityEditPrivacyTitle": {},
   "communityEditPrivacyBody": "Ezt később bármikor módosíthatod, amint elérhető lesz az adatvédelmi beállítások oldal. A StrumSight alapértelmezetten az új profilokat nem teszi nyilvános listába.",
-
   "communityEditPrivacyOptionPublic": "Nyilvános",
   "communityEditPrivacyOptionPublicBody": "Bárki — bejelentkezve vagy anélkül — megtalálhatja és megtekintheti a profilodat.",
-
   "communityEditPrivacyOptionFollowers": "Követők",
   "communityEditPrivacyOptionFollowersBody": "Csak azok láthatják a profilodat, akiket követőként elfogadtál.",
-
   "communityEditPrivacyOptionPrivate": "Privát",
   "communityEditPrivacyOptionPrivateBody": "Csak te látod a profilodat. A profil a tiéd, nem a felfedezhetőségért van.",
-
   "communityEditPrivacyAudienceLabel": "Új bejegyzések alapértelmezett közönsége",
   "@communityEditPrivacyAudienceLabel": {},
-
   "communityEditSubmit": "Profil létrehozása",
   "@communityEditSubmit": {},
   "communityEditSubmitting": "Létrehozás…",
@@ -81,399 +55,329 @@
   "@communityEditUpdate": {},
   "communityEditUpdating": "Mentés…",
   "@communityEditUpdating": {},
-
   "communityEditHandleTaken": "Ez az azonosító már foglalt. Próbálj egy másikat.",
-
   "communityEditDisplayNameRequired": "A megjelenő név nem lehet üres.",
-
   "communityEditHandleRequired": "Az azonosító megadása kötelező.",
-
   "communityEditHandleTooShort": "Az azonosító legalább 3 karakter hosszú legyen.",
-
   "communityEditHandleTooLong": "Az azonosító legfeljebb 24 karakter hosszú lehet.",
-
   "communityEditHandleBadChars": "Az azonosító csak betűket, számokat, '_' vagy '-' karaktert tartalmazhat, és betűvel vagy számmal kell kezdődnie és végződnie.",
-
   "communityEditHandleReserved": "Ez az azonosító foglalt — válassz másikat.",
-
   "communityEditNetworkError": "Hálózati hiba — a változtatásaid megmaradtak. Próbáld újra, ha online vagy.",
-
   "communityEditServerError": "Szerverhiba — próbáld újra rövidesen.",
-
   "communityEditAvatarLabel": "Profilkép",
   "@communityEditAvatarLabel": {},
   "communityEditAvatarNotUploaded": "A profilkép feltöltése ebben a buildben nem elérhető.",
   "communityEditBadgesLabel": "Szerzett jelvények",
   "@communityEditBadgesLabel": {},
   "communityEditBadgesBody": "A jelvények ebben a buildben csak olvashatók — a gyakorlási előzményekből származnak.",
-
   "safetyBlockedMutedTitle": "Letiltottak és némítottak",
   "@safetyBlockedMutedTitle": {},
-
   "safetyBlockedTab": "Letiltottak",
   "@safetyBlockedTab": {},
-
   "safetyMutedTab": "Némítottak",
   "@safetyMutedTab": {},
-
   "safetyUnblock": "Letiltás feloldása",
   "@safetyUnblock": {},
-
   "safetyUnmute": "Némítás feloldása",
   "@safetyUnmute": {},
-
   "safetyEmptyBlocked": "Még nem tiltottál le senkit.",
   "@safetyEmptyBlocked": {},
-
   "safetyEmptyMuted": "Még senkit nem némítottál el.",
   "@safetyEmptyMuted": {},
-
   "safetyErrorNetwork": "Nincs hálózati kapcsolat",
   "@safetyErrorNetwork": {},
-
   "safetyErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra",
   "@safetyErrorSessionExpired": {},
-
   "safetyErrorForbidden": "Nincs jogosultságod a lista megtekintéséhez",
   "@safetyErrorForbidden": {},
-
   "safetyErrorInvalidInput": "Érvénytelen kérés",
   "@safetyErrorInvalidInput": {},
-
   "followingFeedTitle": "Követési feed",
   "@followingFeedTitle": {},
-
   "followingFeedLoadingInitial": "Feed betöltése…",
   "@followingFeedLoadingInitial": {},
-
   "followingFeedEmptyState": "Még nincs poszt a feedben.",
   "@followingFeedEmptyState": {},
-
   "followingFeedEmptyStateCta": "Gyakorlás indítása",
   "@followingFeedEmptyStateCta": {},
-
   "followingFeedLoadMore": "Továbbiak betöltése",
   "@followingFeedLoadMore": {},
-
   "followingFeedLoadingMore": "Betöltés…",
   "@followingFeedLoadingMore": {},
-
   "followingFeedEndOfFeed": "Elérted a feed végét.",
   "@followingFeedEndOfFeed": {},
-
   "followingFeedOfflineBanner": "Offline · a helyi másolat jelenik meg.",
   "@followingFeedOfflineBanner": {},
-
   "followingFeedErrorTitle": "A feed nem tölthető be.",
   "@followingFeedErrorTitle": {},
-
   "followingFeedRetry": "Újrapróbálkozás",
   "@followingFeedRetry": {},
-
   "followingFeedRefresh": "Frissítés",
   "@followingFeedRefresh": {},
-
   "followingFeedPracticeNotAvailable": "A gyakorlás indítása a jövőbeli körökben érhető el.",
   "@followingFeedPracticeNotAvailable": {},
-
   "feedCardPracticeSummaryTitle": "Gyakorlás összegzés",
   "@feedCardPracticeSummaryTitle": {},
-
   "feedCardPracticeSummaryBody": "Aktív idő: {active}s · Szünet: {paused}s · Próbálkozások: {attempts}",
   "@feedCardPracticeSummaryBody": {
     "placeholders": {
-      "active": {"type": "int"},
-      "paused": {"type": "int"},
-      "attempts": {"type": "int"}
+      "active": {
+        "type": "int"
+      },
+      "paused": {
+        "type": "int"
+      },
+      "attempts": {
+        "type": "int"
+      }
     }
   },
-
   "feedCardPracticeSummaryBestScore": "Legjobb pontszám: {score}%",
   "@feedCardPracticeSummaryBestScore": {
     "placeholders": {
-      "score": {"type": "int"}
+      "score": {
+        "type": "int"
+      }
     }
   },
-
   "feedCardSongBpmBeats": "{bpm} BPM · {beats}/4 · {chords}",
   "@feedCardSongBpmBeats": {
     "placeholders": {
-      "bpm": {"type": "int"},
-      "beats": {"type": "int"},
-      "chords": {"type": "String"}
+      "bpm": {
+        "type": "int"
+      },
+      "beats": {
+        "type": "int"
+      },
+      "chords": {
+        "type": "String"
+      }
     }
   },
-
   "feedCardStrumPattern": "Strumminta: {pattern}",
   "@feedCardStrumPattern": {
     "placeholders": {
-      "pattern": {"type": "String"}
+      "pattern": {
+        "type": "String"
+      }
     }
   },
-
   "feedCardOriginalProgressionTitle": "{name} (saját progresszió)",
   "@feedCardOriginalProgressionTitle": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
-
   "feedCardPlanTemplateTitle": "Tervsablon: {name}",
   "@feedCardPlanTemplateTitle": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
-
   "feedCardAnalysisImprovementTitle": "Elemzés – előtte/utána",
   "@feedCardAnalysisImprovementTitle": {},
-
   "feedCardAnalysisImprovementMetric": "{metric}: {direction} ({before} → {after})",
   "@feedCardAnalysisImprovementMetric": {
     "placeholders": {
-      "metric": {"type": "String"},
-      "direction": {"type": "String"},
-      "before": {"type": "String"},
-      "after": {"type": "String"}
+      "metric": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      },
+      "before": {
+        "type": "String"
+      },
+      "after": {
+        "type": "String"
+      }
     }
   },
-
   "feedCardAchievementUnlocked": "Achievement unlocked",
   "@feedCardAchievementUnlocked": {},
-
   "feedCardAchievementCatalogVersion": "{id} · {category} · v{version}",
   "@feedCardAchievementCatalogVersion": {
     "placeholders": {
-      "id": {"type": "String"},
-      "category": {"type": "String"},
-      "version": {"type": "int"}
+      "id": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String"
+      },
+      "version": {
+        "type": "int"
+      }
     }
   },
-
   "feedCardAchievementCompletedAt": "Befejezve: {at}",
   "@feedCardAchievementCompletedAt": {
     "placeholders": {
-      "at": {"type": "String"}
+      "at": {
+        "type": "String"
+      }
     }
   },
-
   "feedCardChallengeTitle": "Napi kihívás: {name}",
   "@feedCardChallengeTitle": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
-
   "feedCardChallengeReward": "{type} · jutalom: {reward}",
   "@feedCardChallengeReward": {
     "placeholders": {
-      "type": {"type": "String"},
-      "reward": {"type": "String"}
+      "type": {
+        "type": "String"
+      },
+      "reward": {
+        "type": "String"
+      }
     }
   },
-
   "feedCardChallengeXp": "XP: {xp}",
   "@feedCardChallengeXp": {
     "placeholders": {
-      "xp": {"type": "int"}
+      "xp": {
+        "type": "int"
+      }
     }
   },
-
   "feedCardFallbackUnfilled": "Ehhez a poszthoz nincs megjeleníthető tartalom.",
   "@feedCardFallbackUnfilled": {},
-
   "feedCardFallbackUnknown": "Ez a tartalomtípus jelenleg nem jeleníthető meg.",
   "@feedCardFallbackUnknown": {},
-
   "communityModerationRemovedPlaceholder": "Ezt a tartalmat eltávolították.",
   "@communityModerationRemovedPlaceholder": {},
-
   "communityPublicConfirmTitle": "Nyilvánossá teszed?",
   "@communityPublicConfirmTitle": {},
-
   "communityPublicConfirmBody": "Ezt bárki látni fogja, nem csak a követőid. A beállítást később megváltoztathatod, de amit már nyilvánossá tettél, azt mások addigra láthatták vagy megoszthatták.",
   "@communityPublicConfirmBody": {},
-
   "communityPublicConfirmCta": "Nyilvánossá tétel",
   "@communityPublicConfirmCta": {},
-
   "communityPublicConfirmCancel": "Mégse",
   "@communityPublicConfirmCancel": {},
-
   "communityFollowersBlockAction": "Letiltás",
   "@communityFollowersBlockAction": {},
-
   "communityFollowersMuteAction": "Némítás",
   "@communityFollowersMuteAction": {},
-
   "communityCommentsTitle": "Hozzászólások",
   "@communityCommentsTitle": {},
-
   "communityCommentsEmpty": "Még nincsenek hozzászólások.",
   "@communityCommentsEmpty": {},
-
   "communityCommentsLoadMore": "Továbbiak betöltése",
   "@communityCommentsLoadMore": {},
-
   "communityCommentsComposerHint": "Írj egy hozzászólást…",
   "@communityCommentsComposerHint": {},
-
   "communityCommentsSend": "Küldés",
   "@communityCommentsSend": {},
-
   "communityNotificationsTitle": "Értesítések",
   "@communityNotificationsTitle": {},
-
   "communityNotificationsMarkAllRead": "Összes olvasottnak jelölése",
   "@communityNotificationsMarkAllRead": {},
-
   "communityNotificationsEmpty": "Még nincsenek értesítések.",
   "@communityNotificationsEmpty": {},
-
   "communityNotificationsPreferencesTitle": "Értesítési kategóriák",
   "@communityNotificationsPreferencesTitle": {},
-
   "communityNotificationsQuietHours": "Csendes időszak",
   "@communityNotificationsQuietHours": {},
-
   "communityNotificationsQuietHoursBody": "Az alkalmazáson belüli felugró értesítések elnémítása ezen az eszközön. A push érintetlen.",
   "@communityNotificationsQuietHoursBody": {},
-
   "communityNotificationsRetry": "Újra",
   "@communityNotificationsRetry": {},
-
   "communityNotificationErrorNetwork": "Nincs hálózati kapcsolat",
   "@communityNotificationErrorNetwork": {},
-
   "communityNotificationErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra",
   "@communityNotificationErrorSessionExpired": {},
-
   "communityNotificationErrorForbidden": "Nincs jogosultságod megtekinteni ezeket az értesítéseket",
   "@communityNotificationErrorForbidden": {},
-
   "communityNotificationErrorInvalidInput": "Érvénytelen kérés",
   "@communityNotificationErrorInvalidInput": {},
-
   "communityNotificationKindFollowRequest": "Követési kérések",
   "@communityNotificationKindFollowRequest": {},
-
   "communityNotificationKindFollowAccepted": "Elfogadott követések",
   "@communityNotificationKindFollowAccepted": {},
-
   "communityNotificationKindReactionSummary": "Reakciók",
   "@communityNotificationKindReactionSummary": {},
-
   "communityNotificationKindComment": "Kommentek",
   "@communityNotificationKindComment": {},
-
   "communityNotificationKindMention": "Megemlítések",
   "@communityNotificationKindMention": {},
-
   "communityNotificationKindChallengeInvite": "Kihívás meghívók",
   "@communityNotificationKindChallengeInvite": {},
-
   "communityNotificationKindChallengeCompleted": "Teljesített kihívások",
   "@communityNotificationKindChallengeCompleted": {},
-
   "communityNotificationKindClubInvite": "Klub meghívók",
   "@communityNotificationKindClubInvite": {},
-
   "communityNotificationKindModerationDecision": "Moderációs döntések",
   "@communityNotificationKindModerationDecision": {},
-
   "communityNotificationKindSecurityAlert": "Biztonsági riasztások",
   "@communityNotificationKindSecurityAlert": {},
-
   "communityNotificationLevelInApp": "Alkalmazáson belül",
   "@communityNotificationLevelInApp": {},
-
   "communityNotificationLevelPush": "Push",
   "@communityNotificationLevelPush": {},
-
   "communityNotificationLevelDisabled": "Ki",
   "@communityNotificationLevelDisabled": {},
-
   "communityNotificationCommentTitle": "Új komment",
   "@communityNotificationCommentTitle": {},
-
   "communityNotificationCommentBody": "Valaki kommentelt a bejegyzésednél.",
   "@communityNotificationCommentBody": {},
-
   "communityNotificationReactionSummaryTitle": "Új reakciók",
   "@communityNotificationReactionSummaryTitle": {},
-
   "communityNotificationMentionTitle": "Megemlítettek",
   "@communityNotificationMentionTitle": {},
-
   "communityNotificationMentionBody": "Nyisd meg a komment megtekintéséhez.",
   "@communityNotificationMentionBody": {},
-
   "communityNotificationFollowRequestTitle": "Új követési kérés",
   "@communityNotificationFollowRequestTitle": {},
-
   "communityNotificationFollowAcceptedTitle": "Követés elfogadva",
   "@communityNotificationFollowAcceptedTitle": {},
-
   "communityNotificationChallengeInviteTitle": "Kihívás meghívó",
   "@communityNotificationChallengeInviteTitle": {},
-
   "communityNotificationChallengeCompletedTitle": "Kihívás teljesítve",
   "@communityNotificationChallengeCompletedTitle": {},
-
   "communityNotificationClubInviteTitle": "Klub meghívó",
   "@communityNotificationClubInviteTitle": {},
-
   "communityNotificationModerationDecisionTitle": "Moderációs döntés",
   "@communityNotificationModerationDecisionTitle": {},
-
   "communityNotificationSecurityAlertTitle": "Biztonsági riasztás",
   "@communityNotificationSecurityAlertTitle": {},
-
   "communityChallengeAccept": "Elfogad",
   "@communityChallengeAccept": {},
-
   "communityChallengeCancel": "Meghívás visszavonása",
   "@communityChallengeCancel": {},
-
   "communityChallengeDecline": "Elutasítás",
   "@communityChallengeDecline": {},
-
   "communityChallengeDeepLinkPractice": "Gyakorlás megnyitása",
   "@communityChallengeDeepLinkPractice": {},
-
   "communityChallengeDeepLinkSong": "Dal megnyitása",
   "@communityChallengeDeepLinkSong": {},
-
   "communityChallengeEmpty": "Jelenleg nincs aktív kihívás.",
   "@communityChallengeEmpty": {},
-
   "communityChallengeErrorConflict": "Ezt a meghívást már kezelték.",
   "@communityChallengeErrorConflict": {},
-
   "communityChallengeErrorForbidden": "Ehhez a kihíváshoz nincs jogosultságod.",
   "@communityChallengeErrorForbidden": {},
-
   "communityChallengeErrorInvalidInput": "Érvénytelen meghívás-kérés.",
   "@communityChallengeErrorInvalidInput": {},
-
   "communityChallengeErrorNetwork": "A kihívások nem tölthetők be — ellenőrizd a kapcsolatot.",
   "@communityChallengeErrorNetwork": {},
-
   "communityChallengeErrorRateLimited": "Túl sok meghívás — lassíts egy pillanatra.",
   "@communityChallengeErrorRateLimited": {},
-
   "communityChallengeErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra.",
   "@communityChallengeErrorSessionExpired": {},
-
   "communityChallengeInviteAction": "Meghívás a kihívásra",
   "@communityChallengeInviteAction": {},
-
   "communityChallengeListHeader": "Nyílt kihívások",
   "@communityChallengeListHeader": {},
-
   "communityChallengeLoadMore": "Továbbiak betöltése",
   "@communityChallengeLoadMore": {},
-
   "communityChallengeMetricLabel": "Mérték: {metric}",
   "@communityChallengeMetricLabel": {
     "placeholders": {
@@ -482,10 +386,8 @@
       }
     }
   },
-
   "communityChallengeTitle": "Kihívások",
   "@communityChallengeTitle": {},
-
   "communityChallengeWindowLabel": "Ablak: {startsAt} – {endsAt}",
   "@communityChallengeWindowLabel": {
     "placeholders": {
@@ -497,133 +399,90 @@
       }
     }
   },
-
   "reportSheetTitle": "Tartalom bejelentése",
   "@reportSheetTitle": {},
-
   "reportSheetBody": "Mondd el, mi a probléma. A bejelentést nem mutatjuk meg a másik félnek.",
   "@reportSheetBody": {},
-
   "reportSheetCategoryLabel": "Ok",
   "@reportSheetCategoryLabel": {},
-
   "reportSheetCategorySpam": "Spam vagy megtévesztés",
   "@reportSheetCategorySpam": {},
-
   "reportSheetCategoryHarassment": "Zaklatás vagy bántalmazás",
   "@reportSheetCategoryHarassment": {},
-
   "reportSheetCategoryHateSpeech": "Gyűlöletbeszéd",
   "@reportSheetCategoryHateSpeech": {},
-
   "reportSheetCategoryViolence": "Erőszak vagy fenyegetés",
   "@reportSheetCategoryViolence": {},
-
   "reportSheetCategorySexualContent": "Szexuális tartalom",
   "@reportSheetCategorySexualContent": {},
-
   "reportSheetCategorySelfHarmConcern": "Önkárosítás (valaki más miatti aggodalom)",
   "@reportSheetCategorySelfHarmConcern": {},
-
   "reportSheetCategoryCopyright": "Szerzői jogsértés",
   "@reportSheetCategoryCopyright": {},
-
   "reportSheetCategoryPrivacy": "Adatvédelmi jogsértés",
   "@reportSheetCategoryPrivacy": {},
-
   "reportSheetCategoryMisinformation": "Félretájékoztatás",
   "@reportSheetCategoryMisinformation": {},
-
   "reportSheetCategoryOther": "Valami más",
   "@reportSheetCategoryOther": {},
-
   "reportSheetSubmit": "Bejelentés elküldése",
   "@reportSheetSubmit": {},
-
   "reportSheetSubmitting": "Küldés…",
   "@reportSheetSubmitting": {},
-
   "reportSheetCancel": "Mégse",
   "@reportSheetCancel": {},
-
   "reportSheetThanksTitle": "Bejelentés megérkezett — köszönjük",
   "@reportSheetThanksTitle": {},
-
   "reportSheetThanksBody": "Átnézzük. Nem kell tovább nézegetned. Mit szeretnél tenni?",
   "@reportSheetThanksBody": {},
-
   "reportSheetActionHide": "Elrejtés a feedből",
   "@reportSheetActionHide": {},
-
   "reportSheetActionMute": "Személy némítása",
   "@reportSheetActionMute": {},
-
   "reportSheetActionBlock": "Személy letiltása",
   "@reportSheetActionBlock": {},
-
   "reportSheetActionDone": "Bezárás",
   "@reportSheetActionDone": {},
-
   "reportSheetSelfHarmHelper": "Ha valaki közvetlen veszélyben van, hívd a helyi segélyhívót. Az itteni bejelentések a moderációs csapathoz jutnak — nem helyettesítik a vészhívást.",
   "@reportSheetSelfHarmHelper": {},
-
   "reportSheetSemanticsTitle": "Tartalom bejelentése párbeszédablak",
   "@reportSheetSemanticsTitle": {},
-
   "reportSheetSemanticsCategoryHint": "Válaszd ki a bejelentés okát",
   "@reportSheetSemanticsCategoryHint": {},
-
   "reportSheetErrorRateLimited": "Elérted a bejelentési limitet. Kérjük, próbáld újra egy óra múlva.",
   "@reportSheetErrorRateLimited": {},
-
   "reportSheetErrorInvalid": "A bejelentést nem sikerült elküldeni. Próbáld újra.",
   "@reportSheetErrorInvalid": {},
-
   "reportSheetErrorNetwork": "Nincs hálózati kapcsolat",
   "@reportSheetErrorNetwork": {},
-
   "communityClubListTitle": "Klubok",
   "@communityClubListTitle": {},
-
   "communityClubListEmpty": "Még nincs klub. Hozz létre egyet a kezdéshez.",
   "@communityClubListEmpty": {},
-
   "communityClubListError": "A klubok nem tölthetők be.",
   "@communityClubListError": {},
-
   "communityClubListRetry": "Újra",
   "@communityClubListRetry": {},
-
   "communityClubListCreate": "Klub létrehozása",
   "@communityClubListCreate": {},
-
   "communityClubListCreateName": "Klub neve",
   "@communityClubListCreateName": {},
-
   "communityClubListCreateDescription": "Leírás",
   "@communityClubListCreateDescription": {},
-
   "communityClubListCreateVisibility": "Láthatóság",
   "@communityClubListCreateVisibility": {},
-
   "communityClubListCreateSubmit": "Létrehozás",
   "@communityClubListCreateSubmit": {},
-
   "communityClubListCreateCancel": "Mégse",
   "@communityClubListCreateCancel": {},
-
   "communityClubListLoadMore": "Továbbiak betöltése",
   "@communityClubListLoadMore": {},
-
   "communityClubVisibilityPrivate": "Privát",
   "@communityClubVisibilityPrivate": {},
-
   "communityClubVisibilityDiscoverable": "Felfedezhető",
   "@communityClubVisibilityDiscoverable": {},
-
   "communityClubVisibilityPublic": "Nyilvános",
   "@communityClubVisibilityPublic": {},
-
   "communityClubMemberCountLabel": "{visibility} · {count} tag",
   "@communityClubMemberCountLabel": {
     "placeholders": {
@@ -635,37 +494,26 @@
       }
     }
   },
-
   "communityClubDetailTitle": "Klub",
   "@communityClubDetailTitle": {},
-
   "communityClubDetailError": "A klub nem tölthető be.",
   "@communityClubDetailError": {},
-
   "communityClubDetailRetry": "Újra",
   "@communityClubDetailRetry": {},
-
   "communityClubDetailJoin": "Csatlakozás kérése",
   "@communityClubDetailJoin": {},
-
   "communityClubDetailLeave": "Klub elhagyása",
   "@communityClubDetailLeave": {},
-
   "communityClubDetailManage": "Tagok kezelése",
   "@communityClubDetailManage": {},
-
   "communityClubDetailRoleOwner": "Tulajdonos",
   "@communityClubDetailRoleOwner": {},
-
   "communityClubDetailRoleModerator": "Moderátor",
   "@communityClubDetailRoleModerator": {},
-
   "communityClubDetailRoleMember": "Tag",
   "@communityClubDetailRoleMember": {},
-
   "communityClubDetailRoleNone": "Nem vagy tag",
   "@communityClubDetailRoleNone": {},
-
   "communityClubDetailRoleSemanticLabel": "Szerep: {role}",
   "@communityClubDetailRoleSemanticLabel": {
     "placeholders": {
@@ -674,117 +522,80 @@
       }
     }
   },
-
   "communityClubTabFeed": "Hírfolyam",
   "@communityClubTabFeed": {},
-
   "communityClubTabChallenges": "Kihívások",
   "@communityClubTabChallenges": {},
-
   "communityClubTabMembers": "Tagok",
   "@communityClubTabMembers": {},
-
   "communityClubTabAbout": "Névjegy",
   "@communityClubTabAbout": {},
-
   "communityClubFeedEmpty": "Ebben a klubban még nincs poszt.",
   "@communityClubFeedEmpty": {},
   "communityClubFeedError": "A klub posztjai nem tölthetők be.",
   "@communityClubFeedError": {},
-
   "communityClubFeedPinnedHeader": "Kitűzött",
   "@communityClubFeedPinnedHeader": {},
-
   "communityClubFeedRecentHeader": "Legutóbbi",
   "@communityClubFeedRecentHeader": {},
-
   "communityClubChallengesEmpty": "Nincs aktív kihívás.",
   "@communityClubChallengesEmpty": {},
-
   "communityClubChallengesUnavailableTitle": "A klub kihívásai még nem érhetők el",
   "@communityClubChallengesUnavailableTitle": {},
-
   "communityClubChallengesUnavailableBody": "Ez a build nem tudja listázni egy klub kihívásait — a szervernek még nincs hozzá végpontja. Ez NEM azt jelenti, hogy a klubnak nincs kihívása.",
   "@communityClubChallengesUnavailableBody": {},
-
   "communityClubChallengesDifficultyPrefix": "Nehézség",
   "@communityClubChallengesDifficultyPrefix": {},
-
   "communityClubAboutEmpty": "Nincs leírás.",
   "@communityClubAboutEmpty": {},
-
   "communityClubMembersTabHint": "A taglista megtekintéséhez nyisd meg a tagkezelő képernyőt.",
   "@communityClubMembersTabHint": {},
-
   "communityClubPrivateRestrictedTitle": "Ez a klub privát",
   "@communityClubPrivateRestrictedTitle": {},
-
   "communityClubPrivateRestrictedBody": "A klub tartalmát csak a tagok láthatják.",
   "@communityClubPrivateRestrictedBody": {},
-
   "communityClubJoinToSeeMore": "Csatlakozz a klubhoz, hogy lásd a hírfolyamot, a kihívásokat és a tagokat.",
   "@communityClubJoinToSeeMore": {},
-
   "communityClubManageTitle": "Klub kezelése",
   "@communityClubManageTitle": {},
-
   "communityClubManageError": "A tagok nem tölthetők be.",
   "@communityClubManageError": {},
-
   "communityClubManageErrorNetwork": "A művelet nem hajtható végre — ellenőrizd a kapcsolatot.",
   "@communityClubManageErrorNetwork": {},
-
   "communityClubManageErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra.",
   "@communityClubManageErrorSessionExpired": {},
-
   "communityClubManageErrorForbidden": "Nincs jogosultságod ehhez a művelethez.",
   "@communityClubManageErrorForbidden": {},
-
   "communityClubManageErrorInvalidInput": "Érvénytelen kérés.",
   "@communityClubManageErrorInvalidInput": {},
-
   "communityClubManageRetry": "Újra",
   "@communityClubManageRetry": {},
-
   "communityClubManageEmpty": "Még nincs tag.",
   "@communityClubManageEmpty": {},
-
   "communityClubManageActionPromote": "Előléptetés moderátorrá",
   "@communityClubManageActionPromote": {},
-
   "communityClubManageActionDemote": "Visszaminősítés taggá",
   "@communityClubManageActionDemote": {},
-
   "communityClubManageActionRemove": "Eltávolítás",
   "@communityClubManageActionRemove": {},
-
   "communityClubManageActionTransfer": "Tulajdonjog átadása",
   "@communityClubManageActionTransfer": {},
-
   "communityClubManageActionBlock": "Tag tiltása",
   "@communityClubManageActionBlock": {},
-
   "communityClubManageActionMute": "Tag némítása",
   "@communityClubManageActionMute": {},
-
   "communityClubManageRoleOwner": "Tulajdonos",
   "@communityClubManageRoleOwner": {},
-
   "communityClubManageRoleModerator": "Moderátor",
   "@communityClubManageRoleModerator": {},
-
   "communityClubManageRoleMember": "Tag",
   "@communityClubManageRoleMember": {},
-
   "communityChallengeActionBlockAuthor": "Szerző tiltása",
   "@communityChallengeActionBlockAuthor": {},
-
   "communityChallengeActionMuteAuthor": "Szerző némítása",
   "@communityChallengeActionMuteAuthor": {},
-
   "communityChallengeResultPending": "Az eredmény beküldve — ellenőrzés folyamatban.",
   "@communityChallengeResultPending": {},
-
   "communityChallengeResultVerified": "Ellenőrzött eredmény: {value}",
   "@communityChallengeResultVerified": {
     "placeholders": {
@@ -793,66 +604,45 @@
       }
     }
   },
-
   "communityChallengeResultVerifiedIcon": "Ellenőrizve",
   "@communityChallengeResultVerifiedIcon": {},
-
   "communityChallengeMyResultAction": "Saját eredmény megtekintése",
-
   "communityClubComposeCta": "Új poszt",
   "@communityClubComposeCta": {},
-
   "communityComposerClubTarget": "Ez a poszt a klubba kerül, nem a saját feededbe.",
   "@communityComposerClubTarget": {},
-
   "communityHubMyPostsTitle": "A posztjaid",
   "@communityHubMyPostsTitle": {},
-
   "communityHubMyPostsEmpty": "Még nem posztoltál semmit.",
   "@communityHubMyPostsEmpty": {},
-
   "communityHubMyPostsError": "A posztjaid nem töltődtek be.",
   "@communityHubMyPostsError": {},
-
   "communityHubMyPostsRetry": "Újra",
   "@communityHubMyPostsRetry": {},
-
   "communityComposerTitle": "Új poszt",
   "@communityComposerTitle": {},
-
   "communityComposerDiscard": "Elvetés",
   "@communityComposerDiscard": {},
-
   "communityComposerBodyLabel": "Szöveg",
   "@communityComposerBodyLabel": {},
-
   "communityComposerBodyHint": "Mit szeretnél megosztani?",
   "@communityComposerBodyHint": {},
-
   "communityComposerAttachMedia": "Média csatolása",
   "@communityComposerAttachMedia": {},
-
   "communityComposerMediaLater": "A média csatolása később érhető el.",
   "@communityComposerMediaLater": {},
-
   "communityComposerAudienceLabel": "Kik láthatják",
   "@communityComposerAudienceLabel": {},
-
   "communityComposerPreviewLabel": "Megosztott mezők",
   "@communityComposerPreviewLabel": {},
-
   "communityComposerPublish": "Közzététel",
   "@communityComposerPublish": {},
-
   "communityComposerSubmitting": "Közzététel…",
   "@communityComposerSubmitting": {},
-
   "communityComposerSuccess": "Sikeresen közzétéve.",
   "@communityComposerSuccess": {},
-
   "communityComposerFailure": "A poszt nem került elküldésre — próbáld újra.",
   "@communityComposerFailure": {},
-
   "communityComposerFailureWithCode": "A poszt nem került elküldésre — próbáld újra. ({code})",
   "@communityComposerFailureWithCode": {
     "placeholders": {
@@ -861,97 +651,58 @@
       }
     }
   },
-
   "communityComposerAudiencePublic": "Nyilvános",
   "@communityComposerAudiencePublic": {},
-
   "communityComposerAudienceFollowers": "Követők",
   "@communityComposerAudienceFollowers": {},
-
   "communityComposerAudiencePrivate": "Privát",
   "@communityComposerAudiencePrivate": {},
-
   "communityComposerPreviewChordTimeline": "Akkord-idővonal",
   "@communityComposerPreviewChordTimeline": {},
-
   "communityComposerPreviewStrumPattern": "Strumminta",
   "@communityComposerPreviewStrumPattern": {},
-
   "communityComposerPreviewTempo": "Tempó",
   "@communityComposerPreviewTempo": {},
-
   "communityComposerPreviewStreakDays": "Aktív napok",
   "@communityComposerPreviewStreakDays": {},
-
   "communityComposerPreviewBestScore": "Legjobb pontszám",
   "@communityComposerPreviewBestScore": {},
-
   "communityBookmarksTitle": "Könyvjelzők",
   "@communityBookmarksTitle": {},
-
   "communityBookmarksEmpty": "Még nincs mentett poszt.",
   "@communityBookmarksEmpty": {},
-
   "communityBookmarksErrorTitle": "A könyvjelzők nem töltődtek be.",
   "@communityBookmarksErrorTitle": {},
-
   "communityBookmarksRetry": "Újra",
   "@communityBookmarksRetry": {},
-
   "communityBookmarkTombstoneBody": "Ez a poszt már nem érhető el. A könyvjelző a listádban marad, amíg el nem távolítod.",
   "@communityBookmarkTombstoneBody": {},
-
   "communityBookmarkRemoveAction": "Eltávolítás",
   "@communityBookmarkRemoveAction": {},
-
   "communityBookmarkLoadMore": "Több betöltése",
   "@communityBookmarkLoadMore": {},
-
-  "communityBookmarkFallbackTitle": "Mentett poszt",
-  "@communityBookmarkFallbackTitle": {},
-
-  "communityBookmarkSavedOn": "Mentve: {date}",
-  "@communityBookmarkSavedOn": {
-    "placeholders": {
-      "date": {
-        "type": "String"
-      }
-    }
-  },
-
   "communitySearchHint": "Keresés felhasználónév szerint",
   "@communitySearchHint": {},
-
   "communitySearchClear": "Törlés",
   "@communitySearchClear": {},
-
   "communitySearchRecentTitle": "Korábbi keresések",
   "@communitySearchRecentTitle": {},
-
   "communitySearchClearAll": "Összes törlése",
   "@communitySearchClearAll": {},
-
   "communitySearchRemoveRecent": "Eltávolítás",
   "@communitySearchRemoveRecent": {},
-
   "communitySearchEmptyHint": "Írj be egy felhasználónév-kezdetet, hogy játékosokat találj.",
   "@communitySearchEmptyHint": {},
-
   "communitySearchNoMatches": "Nincs találat.",
   "@communitySearchNoMatches": {},
-
   "communitySearchRetry": "Újra",
   "@communitySearchRetry": {},
-
   "communitySearchNetworkError": "Hálózati hiba",
   "@communitySearchNetworkError": {},
-
   "communitySearchServerError": "Szerverhiba",
   "@communitySearchServerError": {},
-
   "communitySearchRecentStorageError": "A korábbi keresések frissítése nem sikerült",
   "@communitySearchRecentStorageError": {},
-
   "communityGateErrorTitle": "A Közösség nem tölthető be",
   "@communityGateErrorTitle": {}
 }
