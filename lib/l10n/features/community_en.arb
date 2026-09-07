@@ -705,5 +705,51 @@
   "communitySearchRecentStorageError": "Could not update recent searches",
   "@communitySearchRecentStorageError": {},
   "communityGateErrorTitle": "Community could not be loaded",
-  "@communityGateErrorTitle": {}
+  "@communityGateErrorTitle": {},
+  "communityReactionBarSemantics": "Reactions",
+  "@communityReactionBarSemantics": {},
+  "communityReactionCountSemantics": "{count, plural, =1{1 reaction} other{{count} reactions}}",
+  "@communityReactionCountSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "communityReactWithSemantics": "React with {reaction}",
+  "@communityReactWithSemantics": {
+    "placeholders": {
+      "reaction": {"type": "String"}
+    }
+  },
+  "communityReactionSupport": "Support",
+  "@communityReactionSupport": {},
+  "communityReactionCelebrate": "Celebrate",
+  "@communityReactionCelebrate": {},
+  "communityReactionInspiring": "Inspiring",
+  "@communityReactionInspiring": {},
+  "communityReactionHelpful": "Helpful",
+  "@communityReactionHelpful": {},
+  "communityMediaPlay": "Play",
+  "@communityMediaPlay": {},
+  "communityMediaPendingQueued": "Media is queued for processing.",
+  "@communityMediaPendingQueued": {},
+  "communityMediaPendingScanning": "Scanning for malware…",
+  "@communityMediaPendingScanning": {},
+  "communityMediaPendingTranscoding": "Preparing playback…",
+  "@communityMediaPendingTranscoding": {},
+  "communityMediaPendingReview": "Awaiting review.",
+  "@communityMediaPendingReview": {},
+  "communityMediaStateReady": "Ready",
+  "@communityMediaStateReady": {},
+  "communityMediaStateRejected": "Rejected",
+  "@communityMediaStateRejected": {},
+  "communityMediaStateDeleted": "Deleted",
+  "@communityMediaStateDeleted": {},
+  "communityMediaRejectedBody": "This media was rejected and cannot be played.",
+  "@communityMediaRejectedBody": {},
+  "communityMediaDeletedBody": "This media has been removed.",
+  "@communityMediaDeletedBody": {},
+  "communityEditAddInterestCancel": "Cancel",
+  "@communityEditAddInterestCancel": {},
+  "communityEditAddInterestConfirm": "Add",
+  "@communityEditAddInterestConfirm": {}
 }

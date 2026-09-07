@@ -7,6 +7,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_section.dart';
 
@@ -35,12 +36,16 @@ final class LoopControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       key: const Key('song-trainer-loop-controls'),
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: <Widget>[
         Semantics(
-          label: 'Loop ${currentLoopIndex + 1} of $totalLoops',
+          label: l10n.songTrainerLoopCounterSemantics(
+            currentLoopIndex + 1,
+            totalLoops,
+          ),
           child: Text(
             '${currentLoopIndex + 1}/$totalLoops',
             key: const Key('song-trainer-loop-index'),
@@ -64,13 +69,13 @@ final class LoopControls extends StatelessWidget {
           ElevatedButton(
             key: const Key('song-trainer-loop-ab-set'),
             onPressed: () => onABEntered(<int>[0, 0]),
-            child: const Text('A–B'),
+            child: Text(l10n.songTrainerLoopAbSet),
           )
         else
           TextButton(
             key: const Key('song-trainer-loop-ab-clear'),
             onPressed: onABClear,
-            child: const Text('Clear A–B'),
+            child: Text(l10n.songTrainerLoopAbClear),
           ),
       ],
     );

@@ -704,5 +704,51 @@
   "communitySearchRecentStorageError": "A korábbi keresések frissítése nem sikerült",
   "@communitySearchRecentStorageError": {},
   "communityGateErrorTitle": "A Közösség nem tölthető be",
-  "@communityGateErrorTitle": {}
+  "@communityGateErrorTitle": {},
+  "communityReactionBarSemantics": "Reakciók",
+  "@communityReactionBarSemantics": {},
+  "communityReactionCountSemantics": "{count} reakció",
+  "@communityReactionCountSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "communityReactWithSemantics": "Reagálás ezzel: {reaction}",
+  "@communityReactWithSemantics": {
+    "placeholders": {
+      "reaction": {"type": "String"}
+    }
+  },
+  "communityReactionSupport": "Támogatás",
+  "@communityReactionSupport": {},
+  "communityReactionCelebrate": "Ünneplés",
+  "@communityReactionCelebrate": {},
+  "communityReactionInspiring": "Inspiráló",
+  "@communityReactionInspiring": {},
+  "communityReactionHelpful": "Hasznos",
+  "@communityReactionHelpful": {},
+  "communityMediaPlay": "Lejátszás",
+  "@communityMediaPlay": {},
+  "communityMediaPendingQueued": "A média feldolgozásra vár.",
+  "@communityMediaPendingQueued": {},
+  "communityMediaPendingScanning": "Kártevő-ellenőrzés…",
+  "@communityMediaPendingScanning": {},
+  "communityMediaPendingTranscoding": "Lejátszás előkészítése…",
+  "@communityMediaPendingTranscoding": {},
+  "communityMediaPendingReview": "Ellenőrzésre vár.",
+  "@communityMediaPendingReview": {},
+  "communityMediaStateReady": "Kész",
+  "@communityMediaStateReady": {},
+  "communityMediaStateRejected": "Elutasítva",
+  "@communityMediaStateRejected": {},
+  "communityMediaStateDeleted": "Törölve",
+  "@communityMediaStateDeleted": {},
+  "communityMediaRejectedBody": "Ezt a médiát elutasítottuk, ezért nem játszható le.",
+  "@communityMediaRejectedBody": {},
+  "communityMediaDeletedBody": "Ezt a médiát eltávolítottuk.",
+  "@communityMediaDeletedBody": {},
+  "communityEditAddInterestCancel": "Mégse",
+  "@communityEditAddInterestCancel": {},
+  "communityEditAddInterestConfirm": "Hozzáadás",
+  "@communityEditAddInterestConfirm": {}
 }

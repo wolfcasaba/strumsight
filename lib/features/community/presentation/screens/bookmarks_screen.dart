@@ -251,7 +251,6 @@ class _BookmarkCard extends StatelessWidget {
   }
 }
 
-
 class _TombstoneCard extends StatelessWidget {
   const _TombstoneCard({required this.row, required this.onRemove});
   final BookmarkRow row;

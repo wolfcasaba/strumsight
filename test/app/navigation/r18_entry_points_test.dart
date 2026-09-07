@@ -164,6 +164,12 @@ Future<void> _tapOnHub(WidgetTester tester, Finder target) async {
     120,
     scrollable: _scrollableOf(PracticeAreaHubScreen),
   );
+  // `scrollUntilVisible` stops as soon as the target is BUILT, which for a
+  // `ListView` happens inside the cache extent — below the viewport (and
+  // under the shell's bottom bar), where a tap would not hit it (measured:
+  // CI run 552). `ensureVisible` scrolls the render object itself into view.
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
   await tester.tap(target);
   await tester.pumpAndSettle();
 }

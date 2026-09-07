@@ -588,5 +588,13 @@
   "masteryRhythmAccuracyTitle": "Rhythm accuracy",
   "masteryRhythmAccuracyDescription": "Steady strums that land on the beat.",
   "masteryStrumConsistencyTitle": "Strum consistency",
-  "masteryStrumConsistencyDescription": "Reliable up/down strum direction on every pattern."
+  "masteryStrumConsistencyDescription": "Reliable up/down strum direction on every pattern.",
+  "rewardSummaryDismiss": "Dismiss",
+  "@rewardSummaryDismiss": {},
+  "rewardSummaryEventXp": "{xp} XP",
+  "@rewardSummaryEventXp": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  }
 }

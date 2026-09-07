@@ -220,9 +220,9 @@ void _openLibrarySession(
     }
   }
   if (match == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.progressEvidenceUnavailable)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.progressEvidenceUnavailable)));
     return;
   }
   context.push(route.replaceFirst(':sessionId', sessionId), extra: match);

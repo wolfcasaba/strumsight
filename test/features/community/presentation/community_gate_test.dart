@@ -16,6 +16,13 @@
 //   status view, NOT the create CTA.
 // * A6 — logout clears the gate cache (the screen re-renders with
 //   the logged-out state, NOT the previous user's profile).
+//
+// R21 (audit MI6) adds the `logged-out` CTA cells: the state used to
+// render a bare status view that told the user to sign in and gave them
+// no control that could take them there, while `communityGateLoggedOutCta`
+// sat unused in the ARB. The cells pin the button's presence, its ARB
+// label, the destination, and — the part that matters — that it `push`es,
+// so the gate is still under the login screen and the back gesture works.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -330,6 +337,133 @@ void main() {
       );
     });
   });
+
+  // -------------------------------------------------------------------
+  // R21 / audit MI6 — the `logged-out` state offers a way IN.
+  // -------------------------------------------------------------------
+  group('MI6 — a kijelentkezett kapu bejelentkezésre visz', () {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+
+    testWidgets('a kijelentkezett állapot mutatja a bejelentkezés CTA-t', (
+      tester,
+    ) async {
+      final harness = _loggedOutApp();
+      await tester.pumpWidget(harness.app);
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.communityGateLoggedOutTitle), findsOneWidget);
+      expect(find.byKey(_signInCtaKey), findsOneWidget);
+      expect(find.text(l10n.communityGateLoggedOutCta), findsOneWidget);
+      // A `profile-missing` CTA-nak NEM szabad megjelennie: nincs
+      // felhasználó, akinek profilt lehetne létrehozni.
+      expect(find.text(l10n.communityGateProfileMissingCta), findsNothing);
+    });
+
+    testWidgets('a CTA a /login útvonalra visz', (tester) async {
+      final harness = _loggedOutApp();
+      await tester.pumpWidget(harness.app);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(_signInCtaKey));
+      await tester.pumpAndSettle();
+
+      expect(find.text('STUB ${AppRoutes.login}'), findsOneWidget);
+    });
+
+    testWidgets('a CTA push-ol, nem go-zik: a login képernyő poppolható', (
+      tester,
+    ) async {
+      // A mért R17-lelet: a `go` lecseréli a stacket, a login-képernyő
+      // sikeres bejelentkezéskor `pop`-ol, és egyoldalas navigátoron ez
+      // `GoError`. A push tartja a kaput a login ALATT.
+      final harness = _loggedOutApp();
+      await tester.pumpWidget(harness.app);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(_signInCtaKey));
+      await tester.pumpAndSettle();
+      expect(harness.router.canPop(), isTrue);
+
+      harness.router.pop();
+      await tester.pumpAndSettle();
+      expect(find.byKey(_signInCtaKey), findsOneWidget);
+    });
+
+    testWidgets('a kikapcsolt fiók-réteg NEM kínál bejelentkezést', (
+      tester,
+    ) async {
+      // `accountEnabled: false` mellett a vezérlő a `disabled` állapotot
+      // adja, és a routerben `/login` sincs regisztrálva — egy gomb ott
+      // 404-re vinne.
+      final repo = _FakeCommunityProfileRepository();
+      await tester.pumpWidget(
+        _scope(repo: repo, accountEnabled: false, user: null),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(_signInCtaKey), findsNothing);
+    });
+  });
+}
+
+/// A `logged-out` kapu kulcsa — a felirat fordítás-függő, a `Key` nem.
+const Key _signInCtaKey = Key('community-gate-sign-in');
+
+/// A kijelentkezett kapu egy MINIMÁLIS go_routeren, `/login` cél-csonkkal.
+///
+/// A `router` azért jön vissza a widget mellett, mert a push-vs-go
+/// megkülönböztetés CSAK a navigátor mélységén mérhető: a látható
+/// képernyő mindkét esetben ugyanaz.
+({Widget app, GoRouter router}) _loggedOutApp() {
+  final router = GoRouter(
+    initialLocation: AppRoutes.community,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.community,
+        builder: (_, _) => const CommunityGateScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.login,
+        builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+      ),
+    ],
+  );
+  final app = ProviderScope(
+    overrides: [
+      appConfigProvider.overrideWithValue(
+        const AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: true,
+            diagnosticsEnabled: true,
+            labModeAvailable: true,
+            communityEnabled: true,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
+      // Nincs token → nincs bejelentkezett felhasználó → `loggedOut`.
+      tokenStoreProvider.overrideWithValue(FakeTokenStore(null)),
+      authRepositoryProvider.overrideWithValue(
+        FakeAuthRepository(
+          user: const AuthUser(id: 1, email: 'player@strumsight.app'),
+        ),
+      ),
+      communityProfileRepositoryProvider.overrideWithValue(
+        _FakeCommunityProfileRepository(),
+      ),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      routerConfig: router,
+    ),
+  );
+  return (app: app, router: router);
 }
 
 // ---------------------------------------------------------------------------

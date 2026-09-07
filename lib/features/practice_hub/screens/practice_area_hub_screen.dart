@@ -24,8 +24,8 @@ import '../../../l10n/app_localizations.dart';
 /// Styled with plain Material widgets + [AppColors] (matching
 /// `ProgressScreen`/the legacy `PracticeHubScreen`), not the
 /// `core/design_system` component library — see `today_hub_screen.dart`'s
-/// doc comment for why those widgets aren't safe under the app's current
-/// root theme.
+/// doc comment. The old "not safe under the app's root theme" reason is
+/// obsolete (R21, audit MI8); the migration itself is still open.
 class PracticeAreaHubScreen extends ConsumerWidget {
   const PracticeAreaHubScreen({super.key});
 

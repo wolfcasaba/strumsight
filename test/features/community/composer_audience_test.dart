@@ -163,9 +163,32 @@ Map<String, Object?> _practiceSummaryArtifactJson() {
   ).toJson();
 }
 
-Widget _harness({Locale locale = const Locale('en')}) {
+/// [mediaEnabled] drives `communityMediaEnabled` (R21, audit MI5). The
+/// default is `false` — that is what EVERY shipped build resolves to, since
+/// the flag is define-only in every environment (`feature_flags.dart`) — so
+/// the untouched harness measures the real composer.
+Widget _harness({
+  Locale locale = const Locale('en'),
+  bool mediaEnabled = false,
+}) {
   return ProviderScope(
     overrides: [
+      if (mediaEnabled)
+        appConfigProvider.overrideWithValue(
+          const AppConfig(
+            environment: AppEnvironment.development,
+            apiBaseUrl: AppConfig.devApiBaseUrl,
+            flags: FeatureFlags(
+              accountEnabled: false,
+              diagnosticsEnabled: false,
+              labModeAvailable: false,
+              communityMediaEnabled: true,
+            ),
+            diagnosticsToken: AppConfig.devDiagnosticsToken,
+            buildMode: 'test',
+            appVersion: 'test',
+          ),
+        ),
       communityKeyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
       communityLoggerProvider.overrideWithValue(const NoopAppLogger()),
       communityPostRepositoryProvider.overrideWithValue(
@@ -483,6 +506,45 @@ void main() {
         expect(audienceGroup.groupValue, isNot(CommunityAudience.public));
       },
     );
+  });
+
+  // -------------------------------------------------------------------
+  // R21 / audit MI5 — the stub "Attach media" CTA follows its own flag.
+  // -------------------------------------------------------------------
+  group('MI5 — a média-csatolás a communityMediaEnabled mögött áll', () {
+    testWidgets('a kikapcsolt zászló mellett NINCS média-gomb', (
+      tester,
+    ) async {
+      // Ez a SZÁLLÍTOTT állapot: a `communityMediaEnabled` define-only
+      // minden környezetben (nyitott R-SEC-01 / R-PRIV-01), tehát a
+      // felhasználó eddig egy olyan gombot látott, ami sosem tölthetett
+      // fel semmit.
+      await tester.pumpWidget(_harness());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('composer-attach-media')), findsNothing);
+      expect(find.text(_en().communityComposerAttachMedia), findsNothing);
+      // A szerkesztő többi része érintetlen marad — a gomb helyén nem
+      // maradt lyuk, a következő szekció ott van.
+      expect(find.text(_en().communityComposerAudienceLabel), findsOneWidget);
+    });
+
+    testWidgets('a bekapcsolt zászló mellett a gomb ott van és őszinte', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(mediaEnabled: true));
+      await tester.pumpAndSettle();
+
+      final button = find.byKey(const Key('composer-attach-media'));
+      expect(button, findsOneWidget);
+      expect(find.text(_en().communityComposerAttachMedia), findsOneWidget);
+
+      // A koppintás a „később" snackbart adja — a stub megmarad, csak már
+      // nem ígér semmit a zászló nélküli buildekben.
+      await tester.tap(button);
+      await tester.pump();
+      expect(find.text(_en().communityComposerMediaLater), findsOneWidget);
+    });
   });
 }
 

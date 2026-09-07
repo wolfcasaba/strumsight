@@ -588,5 +588,13 @@
   "masteryRhythmAccuracyTitle": "Ritmuspontosság",
   "masteryRhythmAccuracyDescription": "Egyenletes pengetés, pontosan az ütemre.",
   "masteryStrumConsistencyTitle": "Pengetésirány-stabilitás",
-  "masteryStrumConsistencyDescription": "Megbízható le/fel pengetésirány minden mintában."
+  "masteryStrumConsistencyDescription": "Megbízható le/fel pengetésirány minden mintában.",
+  "rewardSummaryDismiss": "Bezárás",
+  "@rewardSummaryDismiss": {},
+  "rewardSummaryEventXp": "{xp} XP",
+  "@rewardSummaryEventXp": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  }
 }

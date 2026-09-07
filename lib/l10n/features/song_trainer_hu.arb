@@ -1,0 +1,14 @@
+{
+  "@@locale": "hu",
+  "songTrainerLoopCounterSemantics": "Ismétlés: {current}/{total}",
+  "@songTrainerLoopCounterSemantics": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "songTrainerLoopAbSet": "A–B",
+  "@songTrainerLoopAbSet": {},
+  "songTrainerLoopAbClear": "A–B törlése",
+  "@songTrainerLoopAbClear": {}
+}

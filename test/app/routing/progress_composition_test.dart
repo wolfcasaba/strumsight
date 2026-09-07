@@ -426,13 +426,11 @@ void main() {
           progressPracticeHistoryProvider.overrideWithValue(
             _threeQualifyingChordSessions(),
           ),
-          libraryV2SourcesProvider.overrideWithValue(
-            <LibraryItemSource>[
-              PracticeItemSource(
-                () async => LibrarySourceLoad.success(const <LibraryItem>[]),
-              ),
-            ],
-          ),
+          libraryV2SourcesProvider.overrideWithValue(<LibraryItemSource>[
+            PracticeItemSource(
+              () async => LibrarySourceLoad.success(const <LibraryItem>[]),
+            ),
+          ]),
         ],
       );
 

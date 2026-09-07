@@ -22,10 +22,16 @@ import '../providers/today_providers.dart';
 ///
 /// Styled with plain Material widgets + [AppColors] (the same convention
 /// `ProgressScreen`/`SettingsScreen` use) rather than the `core/design_system`
-/// component library: those widgets require `SsDarkTheme`/`SsLightTheme` to
-/// be the app's active `ThemeData`, which the running app does not yet wire
-/// up (`StrumSightApp` still applies `AppTheme`) — using them here would
-/// crash on first frame.
+/// component library.
+///
+/// The reason this comment used to give — "those widgets require
+/// `SsDarkTheme`/`SsLightTheme` to be the app's active `ThemeData`, which
+/// `StrumSightApp` does not wire up, so using them here would crash on
+/// first frame" — is OBSOLETE (R21, audit MI8): `strumsight_app.dart`
+/// passes `SsLightTheme.data()` / `SsDarkTheme.data()` to `MaterialApp`,
+/// so the `Ss*` components are safe on this screen. What is left is a
+/// plain, still-open migration — until it happens this hub simply looks
+/// different from the `Ss*`-built screens.
 class TodayHubScreen extends ConsumerWidget {
   const TodayHubScreen({super.key, this.now});
 

@@ -8,12 +8,16 @@
 ///
 /// * ``disabled`` — the account layer is off; show a "feature not
 ///   available" message. No further interaction.
-/// * ``loggedOut`` — the user is not signed in. Show a CTA to sign
-///   in / sign up. (The CTA does not launch the auth screen
-///   directly — that is owned by the auth feature; the gate
-///   mirrors the existing ``accountEnabledProvider`` /
-///   ``authControllerProvider`` pattern from ``lib/features/auth/
-///   public.dart`` and only shows the right message.)
+/// * ``loggedOut`` — the user is not signed in. Shows the message
+///   AND (R21, audit MI6) the sign-in CTA that was missing: until
+///   this round the state rendered a bare ``_StatusView``, so a
+///   logged-out learner was told to sign in with no control that
+///   could take them there. The CTA ``push``-es ``/login`` — a
+///   ``go`` would replace the stack and strand the user on a
+///   one-page navigator (the R17 finding). It only renders while
+///   ``accountEnabled`` is on: with the account layer off there is
+///   nothing to sign in to, and the router does not register
+///   ``/login`` at all.
 /// * ``profileMissing`` — the user is signed in but has no
 ///   profile. Show the CTA that opens the edit-profile screen in
 ///   create mode.
@@ -112,14 +116,15 @@ class _GateBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final localizations = AppLocalizations.of(context);
+    final accountEnabled = ref.watch(appConfigProvider).flags.accountEnabled;
     return switch (state.status) {
       CommunityGateStatus.disabled => _StatusView(
         title: localizations.communityGateDisabledTitle,
         body: localizations.communityGateDisabledBody,
       ),
-      CommunityGateStatus.loggedOut => _StatusView(
-        title: localizations.communityGateLoggedOutTitle,
-        body: localizations.communityGateLoggedOutBody,
+      CommunityGateStatus.loggedOut => _LoggedOutView(
+        accountEnabled: accountEnabled,
+        onSignIn: () => context.push(AppRoutes.login),
       ),
       CommunityGateStatus.profileMissing => _CtaView(
         title: localizations.communityGateProfileMissingTitle,
@@ -207,12 +212,17 @@ class _CtaView extends StatelessWidget {
     required this.body,
     required this.ctaLabel,
     required this.onCta,
+    this.ctaKey,
   });
 
   final String title;
   final String body;
   final String ctaLabel;
   final VoidCallback onCta;
+
+  /// Stable identifier for the button, so a widget test can name the
+  /// CTA without depending on the translated label.
+  final Key? ctaKey;
 
   @override
   Widget build(BuildContext context) {
@@ -229,11 +239,53 @@ class _CtaView extends StatelessWidget {
               const SizedBox(height: 12),
               Text(body, textAlign: TextAlign.center),
               const SizedBox(height: 24),
-              SsButton(onPressed: onCta, label: ctaLabel),
+              SsButton(key: ctaKey, onPressed: onCta, label: ctaLabel),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The ``loggedOut`` state (R21, audit MI6).
+///
+/// MÉRT hiba: the state rendered a bare [_StatusView] — "Sign in to use
+/// Community" with no control that could take the user anywhere. The
+/// ``communityGateLoggedOutCta`` string had been sitting in the ARB
+/// unused since E09-R06.
+///
+/// The CTA ``push``-es ``/login``, it does not ``go``: ``go`` replaces the
+/// whole stack, and the login screen pops itself on success (the R17
+/// finding), so a ``go`` would strand the user on a one-page navigator.
+///
+/// With [accountEnabled] off the CTA is dropped — there is no account
+/// layer to sign in to, and the router does not register ``/login`` at
+/// all, so the button could only lead to a 404. (That combination is not
+/// reachable today: the controller answers ``disabled`` before it ever
+/// answers ``loggedOut``. The guard is the belt-and-braces that keeps the
+/// two flags' relationship from becoming an implicit invariant.)
+class _LoggedOutView extends StatelessWidget {
+  const _LoggedOutView({required this.accountEnabled, required this.onSignIn});
+
+  final bool accountEnabled;
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    if (!accountEnabled) {
+      return _StatusView(
+        title: localizations.communityGateLoggedOutTitle,
+        body: localizations.communityGateLoggedOutBody,
+      );
+    }
+    return _CtaView(
+      ctaKey: const Key('community-gate-sign-in'),
+      title: localizations.communityGateLoggedOutTitle,
+      body: localizations.communityGateLoggedOutBody,
+      ctaLabel: localizations.communityGateLoggedOutCta,
+      onCta: onSignIn,
     );
   }
 }

@@ -1733,6 +1733,10 @@
   "@communityComposerSuccess": {},
   "communityComposerTitle": "New post",
   "@communityComposerTitle": {},
+  "communityEditAddInterestCancel": "Cancel",
+  "@communityEditAddInterestCancel": {},
+  "communityEditAddInterestConfirm": "Add",
+  "@communityEditAddInterestConfirm": {},
   "communityEditAddInterestCta": "Add tag",
   "communityEditAvatarLabel": "Profile photo",
   "@communityEditAvatarLabel": {},
@@ -1843,6 +1847,26 @@
   "@communityHubSectionTitle": {
     "description": "Section heading above the Community hub's navigation entries (E17 / WP-C)."
   },
+  "communityMediaDeletedBody": "This media has been removed.",
+  "@communityMediaDeletedBody": {},
+  "communityMediaPendingQueued": "Media is queued for processing.",
+  "@communityMediaPendingQueued": {},
+  "communityMediaPendingReview": "Awaiting review.",
+  "@communityMediaPendingReview": {},
+  "communityMediaPendingScanning": "Scanning for malware…",
+  "@communityMediaPendingScanning": {},
+  "communityMediaPendingTranscoding": "Preparing playback…",
+  "@communityMediaPendingTranscoding": {},
+  "communityMediaPlay": "Play",
+  "@communityMediaPlay": {},
+  "communityMediaRejectedBody": "This media was rejected and cannot be played.",
+  "@communityMediaRejectedBody": {},
+  "communityMediaStateDeleted": "Deleted",
+  "@communityMediaStateDeleted": {},
+  "communityMediaStateReady": "Ready",
+  "@communityMediaStateReady": {},
+  "communityMediaStateRejected": "Rejected",
+  "@communityMediaStateRejected": {},
   "communityModerationRemovedPlaceholder": "This content was removed.",
   "@communityModerationRemovedPlaceholder": {},
   "communityNotificationChallengeCompletedTitle": "Challenge completed",
@@ -1925,6 +1949,32 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Make this public?",
   "@communityPublicConfirmTitle": {},
+  "communityReactWithSemantics": "React with {reaction}",
+  "@communityReactWithSemantics": {
+    "placeholders": {
+      "reaction": {
+        "type": "String"
+      }
+    }
+  },
+  "communityReactionBarSemantics": "Reactions",
+  "@communityReactionBarSemantics": {},
+  "communityReactionCelebrate": "Celebrate",
+  "@communityReactionCelebrate": {},
+  "communityReactionCountSemantics": "{count, plural, =1{1 reaction} other{{count} reactions}}",
+  "@communityReactionCountSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "communityReactionHelpful": "Helpful",
+  "@communityReactionHelpful": {},
+  "communityReactionInspiring": "Inspiring",
+  "@communityReactionInspiring": {},
+  "communityReactionSupport": "Support",
+  "@communityReactionSupport": {},
   "communitySearchClear": "Clear",
   "@communitySearchClear": {},
   "communitySearchClearAll": "Clear all",
@@ -3832,6 +3882,8 @@
       }
     }
   },
+  "rewardSummaryDismiss": "Dismiss",
+  "@rewardSummaryDismiss": {},
   "rewardSummaryEntrySemantics": "{title}. {body}",
   "@rewardSummaryEntrySemantics": {
     "placeholders": {
@@ -3840,6 +3892,14 @@
       },
       "body": {
         "type": "String"
+      }
+    }
+  },
+  "rewardSummaryEventXp": "{xp} XP",
+  "@rewardSummaryEventXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
       }
     }
   },
@@ -4287,6 +4347,21 @@
   },
   "songTrainerLaunchFailed": "Couldn't start the session — the song changed since setup. Open it again.",
   "songTrainerLoading": "Loading song trainer…",
+  "songTrainerLoopAbClear": "Clear A–B",
+  "@songTrainerLoopAbClear": {},
+  "songTrainerLoopAbSet": "A–B",
+  "@songTrainerLoopAbSet": {},
+  "songTrainerLoopCounterSemantics": "Loop {current} of {total}",
+  "@songTrainerLoopCounterSemantics": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "songTrainerLoopIndex": "Loop {current}/{total}",
   "@songTrainerLoopIndex": {
     "placeholders": {

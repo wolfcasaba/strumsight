@@ -1,0 +1,14 @@
+{
+  "@@locale": "en",
+  "songTrainerLoopCounterSemantics": "Loop {current} of {total}",
+  "@songTrainerLoopCounterSemantics": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "songTrainerLoopAbSet": "A–B",
+  "@songTrainerLoopAbSet": {},
+  "songTrainerLoopAbClear": "Clear A–B",
+  "@songTrainerLoopAbClear": {}
+}

@@ -21,11 +21,10 @@
 /// reaction chips AND the count — it does NOT include any
 /// learning XP indicator (the E08-R26 cross-feature invariant).
 ///
-/// **i18n note (F1):** the chip labels in this file are English
-/// placeholders. The English ARB does not yet carry the reaction
-/// strings; lifting them into ``lib/l10n/app_en.arb`` /
-/// ``app_hu.arb`` is the next round's call (the ARB files are
-/// outside this round's ``allowed_paths``).
+/// **i18n (R21):** every label the bar renders or announces comes
+/// from ``lib/l10n/features/community_{en,hu}.arb`` — the four
+/// reaction names, the container label and the two semantic
+/// sentences. The R15 English placeholders are gone.
 library;
 
 import 'package:flutter/material.dart';
@@ -33,6 +32,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/reaction_controller.dart';
 import '../../domain/entities/community_reaction.dart';
 import '../../domain/entities/community_post.dart';
@@ -56,6 +56,7 @@ class ReactionBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final reactionState = ref.watch(reactionControllerProvider);
     final controller = ref.read(reactionControllerProvider.notifier);
     final view =
@@ -70,7 +71,7 @@ class ReactionBar extends ConsumerWidget {
 
     return Semantics(
       container: true,
-      label: 'Reactions',
+      label: l10n.communityReactionBarSemantics,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
@@ -88,7 +89,9 @@ class ReactionBar extends ConsumerWidget {
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
-            semanticsLabel: '${post.counts.reactionCount} reactions',
+            semanticsLabel: l10n.communityReactionCountSemantics(
+              post.counts.reactionCount,
+            ),
           ),
         ],
       ),
@@ -116,13 +119,14 @@ class _ReactionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final label = _labelFor(kind);
+    final l10n = AppLocalizations.of(context);
+    final label = _labelFor(l10n, kind);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Semantics(
         button: true,
         selected: selected,
-        label: 'React with $label',
+        label: l10n.communityReactWithSemantics(label),
         child: Material(
           color: selected
               ? theme.colorScheme.primaryContainer
@@ -155,18 +159,16 @@ class _ReactionChip extends StatelessWidget {
     );
   }
 
-  String _labelFor(ReactionKind kind) {
-    // English-only placeholders — the next round lifts these
-    // into the ARB files (out of this round's ``allowed_paths``).
+  String _labelFor(AppLocalizations l10n, ReactionKind kind) {
     switch (kind) {
       case ReactionKind.support:
-        return 'Support';
+        return l10n.communityReactionSupport;
       case ReactionKind.celebrate:
-        return 'Celebrate';
+        return l10n.communityReactionCelebrate;
       case ReactionKind.inspiring:
-        return 'Inspiring';
+        return l10n.communityReactionInspiring;
       case ReactionKind.helpful:
-        return 'Helpful';
+        return l10n.communityReactionHelpful;
     }
   }
 

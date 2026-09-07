@@ -1705,6 +1705,10 @@
   "@communityComposerSuccess": {},
   "communityComposerTitle": "Új poszt",
   "@communityComposerTitle": {},
+  "communityEditAddInterestCancel": "Mégse",
+  "@communityEditAddInterestCancel": {},
+  "communityEditAddInterestConfirm": "Hozzáadás",
+  "@communityEditAddInterestConfirm": {},
   "communityEditAddInterestCta": "Címke hozzáadása",
   "communityEditAvatarLabel": "Profilkép",
   "@communityEditAvatarLabel": {},
@@ -1815,6 +1819,26 @@
   "@communityHubSectionTitle": {
     "description": "Section heading above the Community hub's navigation entries (E17 / WP-C)."
   },
+  "communityMediaDeletedBody": "Ezt a médiát eltávolítottuk.",
+  "@communityMediaDeletedBody": {},
+  "communityMediaPendingQueued": "A média feldolgozásra vár.",
+  "@communityMediaPendingQueued": {},
+  "communityMediaPendingReview": "Ellenőrzésre vár.",
+  "@communityMediaPendingReview": {},
+  "communityMediaPendingScanning": "Kártevő-ellenőrzés…",
+  "@communityMediaPendingScanning": {},
+  "communityMediaPendingTranscoding": "Lejátszás előkészítése…",
+  "@communityMediaPendingTranscoding": {},
+  "communityMediaPlay": "Lejátszás",
+  "@communityMediaPlay": {},
+  "communityMediaRejectedBody": "Ezt a médiát elutasítottuk, ezért nem játszható le.",
+  "@communityMediaRejectedBody": {},
+  "communityMediaStateDeleted": "Törölve",
+  "@communityMediaStateDeleted": {},
+  "communityMediaStateReady": "Kész",
+  "@communityMediaStateReady": {},
+  "communityMediaStateRejected": "Elutasítva",
+  "@communityMediaStateRejected": {},
   "communityModerationRemovedPlaceholder": "Ezt a tartalmat eltávolították.",
   "@communityModerationRemovedPlaceholder": {},
   "communityNotificationChallengeCompletedTitle": "Kihívás teljesítve",
@@ -1897,6 +1921,32 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Nyilvánossá teszed?",
   "@communityPublicConfirmTitle": {},
+  "communityReactWithSemantics": "Reagálás ezzel: {reaction}",
+  "@communityReactWithSemantics": {
+    "placeholders": {
+      "reaction": {
+        "type": "String"
+      }
+    }
+  },
+  "communityReactionBarSemantics": "Reakciók",
+  "@communityReactionBarSemantics": {},
+  "communityReactionCelebrate": "Ünneplés",
+  "@communityReactionCelebrate": {},
+  "communityReactionCountSemantics": "{count} reakció",
+  "@communityReactionCountSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "communityReactionHelpful": "Hasznos",
+  "@communityReactionHelpful": {},
+  "communityReactionInspiring": "Inspiráló",
+  "@communityReactionInspiring": {},
+  "communityReactionSupport": "Támogatás",
+  "@communityReactionSupport": {},
   "communitySearchClear": "Törlés",
   "@communitySearchClear": {},
   "communitySearchClearAll": "Összes törlése",
@@ -3793,6 +3843,8 @@
       }
     }
   },
+  "rewardSummaryDismiss": "Bezárás",
+  "@rewardSummaryDismiss": {},
   "rewardSummaryEntrySemantics": "{title}. {body}",
   "@rewardSummaryEntrySemantics": {
     "placeholders": {
@@ -3801,6 +3853,14 @@
       },
       "body": {
         "type": "String"
+      }
+    }
+  },
+  "rewardSummaryEventXp": "{xp} XP",
+  "@rewardSummaryEventXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
       }
     }
   },
@@ -4241,6 +4301,21 @@
   },
   "songTrainerLaunchFailed": "A menet nem indult el — a dal megváltozott a beállítás óta. Nyisd meg újra.",
   "songTrainerLoading": "Song Trainer betöltése…",
+  "songTrainerLoopAbClear": "A–B törlése",
+  "@songTrainerLoopAbClear": {},
+  "songTrainerLoopAbSet": "A–B",
+  "@songTrainerLoopAbSet": {},
+  "songTrainerLoopCounterSemantics": "Ismétlés: {current}/{total}",
+  "@songTrainerLoopCounterSemantics": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "songTrainerLoopIndex": "Ismétlés {current}/{total}",
   "@songTrainerLoopIndex": {
     "placeholders": {

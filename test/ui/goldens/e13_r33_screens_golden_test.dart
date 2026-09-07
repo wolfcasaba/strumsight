@@ -441,7 +441,39 @@ Map<String, Object?> _composerArtifactFixture() {
 }
 
 Widget _composerScreen() => const PostComposerScreen();
+
+/// R21 (audit MI5) gated the composer's stub "Attach media" button behind
+/// `communityMediaEnabled`, which the default test `appConfigProvider`
+/// resolves to `false` (it is define-only in EVERY environment —
+/// `feature_flags.dart`). The composer PNGs were recorded WITH that button,
+/// so this override pins the flag ON and keeps the pixels byte-identical
+/// without a re-record (which needs the x86 box — ADR 0471 D6). The same
+/// manoeuvre as the R20 `pinnedLocales` map below.
+///
+/// DEBT: what these two PNGs pin is therefore a configuration no shipped
+/// build has. Both flag states are covered by
+/// `test/features/community/composer_audience_test.dart` (the MI5 group);
+/// when the goldens are next re-recorded on the x86 box this override
+/// should be dropped so the pins follow the shipped build again.
 List<Override> _composerOverrides() => [
+  appConfigProvider.overrideWithValue(
+    const AppConfig(
+      environment: AppEnvironment.development,
+      apiBaseUrl: AppConfig.devApiBaseUrl,
+      // The composer reads exactly ONE flag (`communityMediaEnabled`);
+      // the rest mirror the default test `appConfigProvider`, so nothing
+      // else about the cell moves.
+      flags: FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        communityMediaEnabled: true,
+      ),
+      diagnosticsToken: AppConfig.devDiagnosticsToken,
+      buildMode: 'test',
+      appVersion: 'test',
+    ),
+  ),
   communityKeyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
   communityLoggerProvider.overrideWithValue(const NoopAppLogger()),
   communityPostRepositoryProvider.overrideWithValue(

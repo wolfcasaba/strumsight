@@ -63,18 +63,25 @@ final practiceTickSourceProvider = Provider<PracticeTickSource>(
   (_) => TimerPracticeTickSource(),
 );
 
-/// Default persistence boundary. Kör 18 ships the real recorder backed by
-/// the versioned [PracticeHistoryRepository]; the controller's finish path
-/// reads through this provider.
+/// The Kör 18 persistence boundary — **no longer on the live path** (R21,
+/// audit MI10). It is kept as the B2 write-then-drop guard and is read by
+/// `test/features/practice/data/practice_history_recorder_test.dart`; `lib/`
+/// has no other reader.
 ///
-/// The recorder is wired with **placeholder** mode/source/definition codes
-/// today — the controller does not surface the session's
-/// `PracticeSessionConfig`, so the real metadata plumbing belongs to R19.
-/// Until then, the persistence layer MUST NOT write records the serializer
-/// would reject on read (a write-then-drop trap, see brief B2): the provider
-/// resolves to a [NoopPracticeSessionRecorder] whenever the wired codes are
-/// still the placeholders, so a production record() returns `Success` without
-/// writing anything that would be discarded by the reader.
+/// The session that actually runs builds its recorder inside
+/// [practiceSessionControllerProvider] from the session's own
+/// `PracticeDefinition` — REAL mode/source/definition codes, wrapped in
+/// `PracticeSessionRecorderWithHooks`. So the "placeholder metadata" the
+/// branch below guards against is a property of THIS provider only; do not
+/// read it as a statement about what a finished practice session persists.
+///
+/// The guard itself: the recorder here is wired with **placeholder**
+/// mode/source/definition codes, and the persistence layer MUST NOT write
+/// records the serializer would reject on read (the B2 write-then-drop
+/// trap). The provider therefore resolves to a
+/// [NoopPracticeSessionRecorder] whenever the wired codes are still the
+/// placeholders, so a `record()` returns `Success` without writing anything
+/// the reader would discard.
 final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>((
   ref,
 ) {
@@ -90,11 +97,12 @@ final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>((
     sourceCode: sourceCode,
     definitionId: definitionId,
   )) {
-    // R19: real session metadata plumbing — when the controller exposes
-    // `PracticeSessionConfig`, this branch disappears and the real recorder
-    // writes loadable records. Today, the real recorder would emit records
-    // the reader drops (unknown enum code → JsonRecordException), so we
-    // intentionally return the no-op recorder instead.
+    // Always taken today: the three codes above ARE the placeholders, so
+    // this provider is a no-op recorder in every configuration. The live
+    // path never gets here — it builds its recorder from the session's own
+    // `PracticeDefinition` (see `practiceSessionControllerProvider`). The
+    // real recorder here would emit records the reader drops (unknown enum
+    // code → JsonRecordException), so the no-op is the honest answer.
     return const NoopPracticeSessionRecorder();
   }
   return PracticeHistoryRecorder(

@@ -29,11 +29,16 @@
 /// English build rendered a Hungarian composer — measured on the
 /// shipped development APK, where ``communityWritesEnabled`` is on.
 ///
-/// **Média placeholder (brief §3 / Kör 18):** the composer ships a
-/// stub "Attach media" placeholder button that does NOT upload
-/// anything yet — it is the explicit Kör 12 boundary. The button is
-/// wired to surface a non-fatal snackbar so the user sees the
-/// affordance and knows it is "later" rather than broken.
+/// **Média placeholder (brief §3 / Kör 18, R21 audit MI5):** the
+/// composer carries a stub "Attach media" button that does NOT upload
+/// anything yet — the explicit Kör 12 boundary. Until R21 it rendered
+/// unconditionally, so every shipped build (where
+/// ``communityMediaEnabled`` is ``false`` — the flag has open
+/// R-SEC-01 / R-PRIV-01 blockers and is define-only in EVERY
+/// environment, ``feature_flags.dart``) offered an affordance that
+/// could never do its job. It is now behind that same flag: with the
+/// flag off the button is absent, with it on the honest "later"
+/// snackbar is kept.
 library;
 
 import 'package:flutter/material.dart';
@@ -41,6 +46,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../app/config/app_config.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/post_composer_controller.dart';
@@ -79,6 +85,9 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(postComposerControllerProvider);
     final l10n = AppLocalizations.of(context);
+    final mediaEnabled = ref.watch(
+      appConfigProvider.select((cfg) => cfg.flags.communityMediaEnabled),
+    );
 
     return CommunityThemeScope(
       child: Scaffold(
@@ -131,6 +140,7 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
             onSubmit: () =>
                 ref.read(postComposerControllerProvider.notifier).submit(),
             onAttachMediaPressed: _onAttachMediaPressed,
+            mediaEnabled: mediaEnabled,
           ),
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text(error.toString())),
@@ -161,6 +171,7 @@ class _ComposerBody extends StatelessWidget {
     required this.onToggleField,
     required this.onSubmit,
     required this.onAttachMediaPressed,
+    required this.mediaEnabled,
   });
 
   final PostComposerState state;
@@ -170,6 +181,12 @@ class _ComposerBody extends StatelessWidget {
   final void Function(_PreviewFlag flag, bool value) onToggleField;
   final VoidCallback onSubmit;
   final VoidCallback onAttachMediaPressed;
+
+  /// ``communityMediaEnabled`` (R21, audit MI5). The attach-media button
+  /// is a stub that cannot upload; rendering it while the flag is off
+  /// promises a capability the build does not have, so the whole
+  /// affordance is dropped instead of merely being disabled.
+  final bool mediaEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -231,13 +248,18 @@ class _ComposerBody extends StatelessWidget {
                     ),
                     onChanged: onBodyChanged,
                   ),
-                  const SizedBox(height: 16),
-                  SsButton(
-                    variant: SsButtonVariant.secondary,
-                    icon: Icons.attach_file,
-                    label: l10n.communityComposerAttachMedia,
-                    onPressed: state.isSubmitting ? null : onAttachMediaPressed,
-                  ),
+                  if (mediaEnabled) ...<Widget>[
+                    const SizedBox(height: 16),
+                    SsButton(
+                      key: const Key('composer-attach-media'),
+                      variant: SsButtonVariant.secondary,
+                      icon: Icons.attach_file,
+                      label: l10n.communityComposerAttachMedia,
+                      onPressed: state.isSubmitting
+                          ? null
+                          : onAttachMediaPressed,
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   _SectionLabel(label: l10n.communityComposerAudienceLabel),
                   const SizedBox(height: 8),

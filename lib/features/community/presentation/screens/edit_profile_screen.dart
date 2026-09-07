@@ -384,11 +384,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
+              child: Text(l.communityEditAddInterestCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-              child: const Text('Add'),
+              child: Text(l.communityEditAddInterestConfirm),
             ),
           ],
         );
