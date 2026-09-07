@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + 11 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, és a §1.3 „routolt, de nem működik" osztály nagy része zárva
+## ✅ JAVÍTÓ SÁV 2 (2026-09-06 → 09-07) — audit + 13 kör az `claude/mit-audit-javitasok-v432t5` ágon: a #594 integrálva, és a §1.3 „routolt, de nem működik" osztály nagy része zárva
 
 A mérce a felhasználóé: **„APK build után minden működjön"** — a `build-apk.yml`
 `development` APK-jában minden fejlesztett képernyő legyen elérhető ÉS
@@ -23,25 +23,28 @@ nyitva maradt). Bázis: `main`, az audit commitja `f154139`.
 | R10 | `67b6052` (+ `4b68f05`) | a Today-terv **Swap gombja valódi csere** (`ActivePlanController.swap`: azonos készség-célú alternatíva a generátor `PracticeCatalogSnapshot`-jából, nevesített elutasítások try/catch nélkül, `noAlternative` külön snackbarral, a router `onSwap`-ot köt); **Setlist V2** routolva (`/setlists/v2`, `/setlists/v2/session`), a lista a valódi `setlistControllerProvider`-ből épül, a `SetlistSessionCoordinator` + `setlistItemRunner` a `SongTrainerLauncher.prepare`-rel indít és `await context.push`-sal várja meg a session végét — ettől halad tételenként; `4b68f05`: a két új képernyő a variáns-mátrixba (CI-lelet, Coverage) | `today_plan_actions_test` A5–A6, `setlist_session_launch_test` B1–B4, `e15_r13_full_variant_matrix_test` A1 |
 | R11 | `a26b408` | Community: **mért biztonsági rés zárva** — a `CreatePostRequest.club_id` (belső bigint) eddig ellenőrzés nélkül került a sorra (bármely hitelesített hívó bármely klubba posztolhatott), most `club_public_id` + tagság-ellenőrzés mindkét címzési formára, minden elutasítás ugyanaz a 404; kliens `createClubPost` (composer-állapot → tartós piszkozat → outbox → kérés), „New post" CTA a klub-részleten. `GET /community/profiles/{public_id}/posts` kurzorosan, kapuval (blokk/privát/followers-only/ismeretlen → egységes 404, `club_id IS NULL`) → `profilePosts` valódi + „Your posts" szekció. Contract +2 sor, smoke-számláló 39 / 26. Média-feltöltés NEM indult — mért rés-jelentés (nincs média-router, A6.2.1/A6.2.4/A6.2.5 hiányzik, nincs `image_picker`) | `post_repository_club_post_test` N1–N4, `community_outbox_club_test` O1–O4, `post_composer_club_test` Q1–Q5, `feed_repository_impl_test` B11–B13; backend `test_club_post_create` C1–C8, `test_profile_posts_router` P1–P9 |
 | sáv-3 zárás | `d581ca7` | a hét CI-lelet javítva (audit §5.3); `build-apk.yml` run [34135635783](https://github.com/wolfcasaba/strumsight/actions/runs/34135635783) **teljesen zöld** (kapuk + suite + property + Coverage + APK) | — |
+| R12 | `74e4515` | **képernyőn lévő belépési pont** mindkét eddig csak route-on élő felülethez, nem pixel-pinelt képernyőkön: `SsContentCard` (`setlist-open-v2`) a legacy `setlist_list_screen.dart` görgető törzsének első soraként → `/setlists/v2`, és `SsContentCard` (`tutorProfilePlanPreview`) a `tutor_profile_screen.dart`-on → `/tutor/plan-preview` (csak `aiTutorEnabled` mellett; kártya, nem AppBar-akció / SsSection+SsButton, mert a hu címke 2.0-n görögjön, és mert az R22-PF6 pin pontosan 3 SsSection + 1 SsButton-t számol). **Community „nincs engedélyezve ezen a szerveren":** a használható jel a 404 TÖRZSE (`profile_missing` ≠ csupasz `Not Found`) — a `fetchMyProfile` eddig minden 404-et `null`-ra képezett, ezért a community nélküli szerver a profil nélküli felhasználóval volt azonos; új `CommunityFailureCode.unavailable` + `CommunityGateStatus.unavailable` + `_UnavailableView` (a goldenek pixelre változatlanok) | `setlist_v2_entry_test` V1–V3, `tutor_plan_preview_entry_test` T1–T3, `profile_repository_unavailable_test` U1–U3, `community_gate_unavailable_test` G1–G3 |
+| R13 | `42973ef` | a **sebesség-slider pontozott munkamenetben is valódi**: `PracticeTargetRescaler` — pivot az ütemhatáron (ugyanaz, ahova a `ResumePractice` visszalép), `map(t)=t` előtte (a már pontozott verdiktek befagyasztva), `pivot+(t−pivot)·ratio` utána; folytonos és szigorúan monoton, `countIn+musical+ringOut == total` pontosan, az egymás utáni újraidőzítések komponálódnak. Új `RescheduleTempo` parancs CSAK `ready`/`paused` állapotból (futó próbálkozás alatt a reducer elutasít), a célt NEM törli, a lejátszófej nem ugrik, a státusz nem változik; a controller pause → újraidőzítés → hang-sebesség → resume EGY zárójelben alkalmazza, a `setPlaybackRate` single-flight latest-wins sorral (az átlapolt zárójelek voltak az egyetlen út, ahol hang és cél más tempón végezhetett volna). `PracticeEventMatcher.rescheduled`: a feloldott rekordok maradnak, csak a feloldatlanok nyílnak újra. DSP-paraméter nem változott | `practice_target_rescaler_test` S0–S4, `practice_event_matcher_rescheduled_test` M1–M4, `practice_session_tempo_rescale_test` T0–T5, reducer-mátrix +2 cella, `song_trainer_controller_test` E1–E5, `song_trainer_screen_test` |
 
-**Nyitva maradt (indokkal, audit §5.2):** az R8–R11 zárta a korábbi lista nagy
-részét (song-resume persistálás, ütemenkénti haladás-commit, `SongResultScreen`
-retry/next, hang-import, a Today-terv `onSwap`-ja, a Setlist V2 lista + session,
-a tutor felhő-gateway és a terv-előnézet előállítója, a klub-poszt `club_id` és
-a `profilePosts` végpont). MÉRHETŐEN nyitva: a sebesség-slider **pontozott**
-munkamenetben (a Practice célütemterv egyszer, a beállítási tempón fordul le —
-Practice-kör tárgya; lejátszás-módban működik); a Setlist V2 lista **teljes
-SsCard/SsButton-migrációja** (golden-újrarögzítés az x86 boxon, ADR 0471 D6 →
-tulajdonos-kör); a **képernyőn lévő belépési pont** a Setlist V2 listához és a
-tutor terv-előnézethez (mindkét route él, de minden jelölt felület
-golden-pinelt, a legacy `setlist_list_screen.dart` a körök listáján kívül volt);
-a **community média-feltöltés** (R11 mért rés-jelentés: nincs média HTTP-router,
-threat-model §6.2 A6.2.1/A6.2.4/A6.2.5 hiányzik, `image_picker` nincs a
-pubspecben — R-SEC-01 / R-PRIV-01 P1 változatlan); és a **bejelentkezési hiba
-döntése** (audit §5.4: a kódban programhiba nem mérhető, a docker-napló 409
-előtti szakasza kell) + az élő deploy üzemeltetői művelete
-(`STRUMSIGHT_COMMUNITY_ENABLED=false`, emiatt a smoke a community-lépéseknél
-megáll).
+**Nyitva maradt (indokkal, audit §5.2):** az R8–R13 zárta a korábbi lista
+egészét egy tételen kívül (song-resume persistálás, ütemenkénti haladás-commit,
+`SongResultScreen` retry/next, hang-import, a Today-terv `onSwap`-ja, a Setlist
+V2 lista + session **és mindkét belépési pontja** (R12), a tutor felhő-gateway
+és a terv-előnézet előállítója, a klub-poszt `club_id` és a `profilePosts`
+végpont, a community kegyes „nincs engedélyezve ezen a szerveren" állapota
+(R12), a sebesség-slider **pontozott munkamenetben is** (R13)). MÉRHETŐEN
+nyitva: a Setlist V2 lista **teljes SsCard/SsButton-migrációja**
+(golden-újrarögzítés az x86 boxon, ADR 0471 D6 → tulajdonos-kör); a **community
+média-feltöltés** (R11 mért rés-jelentés: nincs média HTTP-router, threat-model
+§6.2 A6.2.1/A6.2.4/A6.2.5 hiányzik, `image_picker` nincs a pubspecben —
+R-SEC-01 / R-PRIV-01 P1 változatlan); a **bejelentkezési hiba döntése** (audit
+§5.4: a kódban programhiba nem mérhető, a docker-napló 409 előtti szakasza
+kell); az élő deploy üzemeltetői művelete (`STRUMSIGHT_COMMUNITY_ENABLED=false`
+— az app ezt az R12 óta kegyesen viseli, de a funkciók bekapcsolása
+üzemeltetői döntés); és egy mért NOTE: a `PracticeSessionState.musicalPosition`
+egyetlen tempóval számol az egész idővonalon, ezért az R13 szakaszonként affin
+újraidőzítése után KÖZELÍTŐ — a `lib/`-ben nincs fogyasztója (mérve), így nem
+sürgős, de az első kiíró felület előtt pontosítani kell.
 
 **CI-bizonyíték:** a sáv záró, teljesen zöld futása a `build-apk.yml`
 run [34057751434](https://github.com/wolfcasaba/strumsight/actions/runs/34057751434)
@@ -58,7 +61,7 @@ buildjében; az eredmény-fejléc túlcsordulása 412 px-en nagy szövegnél).
 **Végső mérce:** a felhasználó valós-gitár tesztje a `development` APK-n —
 a szintetikus zöld nem „kész".
 
-**Csapdák, amiket ez a sáv mért (sáv 2: 5 CI-iteráció; sáv 3: 4 lelet eddig):**
+**Csapdák, amiket ez a sáv mért (sáv 2: 5 CI-iteráció; sáv 3, első szakasz: 7 lelet):**
 - a `dart format` „tall" stílusa **minden 80 oszlopba beleférő hívást
   egysorosra húz** — egy pontosan 80 karakteres `test('…', () async {` fejnek
   EGY sorban kell lennie; a tördelt `test(\n  'név',\n  () async {` alak csak
@@ -81,6 +84,13 @@ a szintetikus zöld nem „kész".
   frissíteni kell, amikor a `docs/contracts/client-backend-endpoints.json`
   bővül — a `backend-ci.yml` `backend/**` path-szűrője a contract-only
   változásra NEM fut, tehát a CI ezt nem méri.
+- **(sáv 3, mérve)** a `dart format` a BEHÚZÁS csökkenése után **újra
+  egysorosra húzza** a 80 oszlopba immár beleférő hívásokat — egy blokk
+  átmozgatása (pl. fejléc a görgethető listába) formázó-leletet szül a
+  változatlanul hagyott hívásokon is; és a CI napló-eszköze CSAK az utolsó
+  **5000 sort** adja vissza, ezért a tail-en kívülre eső bukó tesztneveket a
+  futás különböző pontjain MEGSZAKÍTOTT futások ablakaiból kellett kimérni
+  (a módszer az audit §5.3-ban).
 
 ## ✅ JAVÍTÓ SÁV (ops/community-data-layer, PR #594) — „minden eddigi fejlesztés fusson az APK-ban": két kompozíciós hibaosztály zárva, teszt-APK kiadva — CI `build-apk.yml` run 34022459707 **zöld** a `4489307` HEAD-en (2026-09-06)
 
