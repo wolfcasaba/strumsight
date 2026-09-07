@@ -25,6 +25,8 @@
 /// ``Failure.code`` channel only.
 library;
 
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -119,9 +121,17 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
     // from a user without a profile: the gate offered "Create profile",
     // and the create call then failed with a generic error. The two are
     // now separate verdicts.
+    //
+    // R19: `readsErrorDetail` is what MAKES that distinction observable on a
+    // real client. The production Dio drops every error body
+    // (`receiveDataWhenStatusError: false`), so before this flag existed
+    // [_notFoundDetail] read `null` on EVERY 404 and answered "the module is
+    // missing" even for the router's own `profile_missing` — i.e. a server
+    // WITH Community would have refused to offer profile creation.
     final result = await _client.getJson<CommunityProfileDto?>(
       '/community/profiles/me',
       decode: (json) => CommunityProfileDto.fromJson(json),
+      readsErrorDetail: true,
       conflictCode: FailureCode.validationInvalidInput,
     );
     return switch (result) {
@@ -306,16 +316,36 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
   /// ``profile_missing`` 404 apart from the bare 404 an unmounted router
   /// returns. Only that two-value distinction is read — never logged,
   /// never rendered.
+  ///
+  /// The body arrives as an UNDECODED string, because the request opts into
+  /// ``ResponseType.plain`` (see `ApiClient.getJson`'s ``readsErrorDetail``):
+  /// that is what guarantees a malformed error body can never destroy the
+  /// response object. Decoding it is therefore this method's job, and a body
+  /// that is not a JSON object — empty, HTML, a bare string — is simply "no
+  /// usable detail", i.e. the empty string.
   static String? _notFoundDetail(AppFailure error) {
     if (error is! NetworkFailure) return null;
     final cause = error.cause;
     if (cause is! DioException) return null;
     final response = cause.response;
     if (response == null || response.statusCode != 404) return null;
-    final data = response.data;
-    if (data is! Map) return '';
+    final data = _decodeDetailBody(response.data);
+    if (data == null) return '';
     final detail = data['detail'];
     return detail is String ? detail : '';
+  }
+
+  /// The 404 body as a JSON object, or `null` when it is not one.
+  static Map<Object?, Object?>? _decodeDetailBody(Object? data) {
+    if (data is Map) return data;
+    if (data is! String || data.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is Map) return decoded;
+      return null;
+    } on FormatException {
+      return null;
+    }
   }
 
   /// The router IS mounted; the caller simply has no profile row yet.

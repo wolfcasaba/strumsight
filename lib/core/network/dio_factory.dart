@@ -103,9 +103,18 @@ final class DioFactory {
         connectTimeout: connectTimeout,
         sendTimeout: sendTimeout,
         receiveTimeout: receiveTimeout,
-        // Error bodies are never consumed. Skipping their transformation keeps
-        // the HTTP status authoritative even if a proxy returns malformed JSON
-        // (notably, a 401 must still expire the authenticated session).
+        // Error bodies are not consumed by default. Skipping their
+        // transformation keeps the HTTP status authoritative even if a proxy
+        // returns malformed JSON (notably, a 401 must still expire the
+        // authenticated session), and keeps a body that may carry credentials
+        // out of memory.
+        //
+        // A single request may opt out per call: `ApiClient.getJson`'s
+        // `readsErrorDetail` sets `receiveDataWhenStatusError` AND
+        // `ResponseType.plain` on that one request, so its error body is
+        // readable while the transformer still never runs `jsonDecode` — a
+        // malformed body cannot become a transform exception that would
+        // strip the response, and its status, from the failure.
         receiveDataWhenStatusError: false,
         contentType: Headers.jsonContentType,
         headers: {

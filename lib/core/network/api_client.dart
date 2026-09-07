@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../foundation/app_failure.dart';
@@ -25,11 +27,29 @@ final class ApiClient {
   /// némán az első alapértelmezett oldalt kérte újra. A paraméter opcionális
   /// és `null`-alapértelmezett, tehát minden meglévő hívó viselkedése
   /// bájtra változatlan.
+  ///
+  /// [readsErrorDetail] opts THIS request into keeping the error-status body
+  /// (R19). `DioFactory` sets `receiveDataWhenStatusError: false` globally
+  /// because an error body is never needed to classify a failure and may
+  /// carry credentials — but one caller does need two-value information the
+  /// status alone cannot carry: `GET /community/profiles/me` answers 404
+  /// `profile_missing` when the router IS mounted and the caller merely has
+  /// no row, and the framework's bare 404 when `/community/**` is not
+  /// mounted at all. Opting in also switches the response to
+  /// [ResponseType.plain], so Dio's transformer never calls `jsonDecode`:
+  /// a malformed body can therefore never become a transform exception that
+  /// replaces the response — and with it the HTTP status — on the way out.
+  /// A 401 on an opted-in request stays exactly as authoritative as on every
+  /// other one, and [mapNetworkFailure] keeps classifying by status alone.
+  /// The JSON decoding of a successful body moves here instead, into the
+  /// same `try` that already turns a malformed payload into
+  /// [FailureCode.networkBadResponse].
   Future<AppResult<T>> getJson<T>(
     String path, {
     required JsonObjectDecoder<T> decode,
     Map<String, Object?>? queryParameters,
     bool requiresAuthentication = true,
+    bool readsErrorDetail = false,
     String unauthorizedCode = FailureCode.authSessionExpired,
     String conflictCode = FailureCode.validationInvalidInput,
   }) => _requestJson(
@@ -38,6 +58,7 @@ final class ApiClient {
     decode: decode,
     queryParameters: queryParameters,
     requiresAuthentication: requiresAuthentication,
+    readsErrorDetail: readsErrorDetail,
     unauthorizedCode: unauthorizedCode,
     conflictCode: conflictCode,
   );
@@ -176,6 +197,7 @@ final class ApiClient {
     required bool requiresAuthentication,
     required String unauthorizedCode,
     required String conflictCode,
+    bool readsErrorDetail = false,
     Map<String, Object?>? data,
     Map<String, Object?>? queryParameters,
   }) async {
@@ -195,6 +217,10 @@ final class ApiClient {
               },
         options: Options(
           method: method,
+          // Both stay `null` unless the caller opted in, so every other
+          // request keeps the base options byte-for-byte (see [getJson]).
+          responseType: readsErrorDetail ? ResponseType.plain : null,
+          receiveDataWhenStatusError: readsErrorDetail ? true : null,
           extra: {
             NetworkRequestMetadata.requiresAuthentication:
                 requiresAuthentication,
@@ -215,7 +241,13 @@ final class ApiClient {
     }
 
     try {
-      final body = response.data;
+      var body = response.data;
+      // The opted-in request asked for `ResponseType.plain`, so the SUCCESS
+      // body arrives as an undecoded string; decoding it here keeps a
+      // malformed payload on the existing bad-response path.
+      if (readsErrorDetail && body is String) {
+        body = jsonDecode(body);
+      }
       if (body is! Map) {
         throw const FormatException('Expected a JSON object response.');
       }
