@@ -7,6 +7,7 @@ export 'providers/auth_providers.dart'
     show
         accountApiClientProvider,
         accountEnabledProvider,
+        accountStreamClientProvider,
         authControllerProvider,
         authEventProvider,
         AuthController,

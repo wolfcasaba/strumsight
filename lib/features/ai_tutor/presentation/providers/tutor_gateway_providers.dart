@@ -19,13 +19,8 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/config/app_config.dart';
-import '../../../../core/logging/logger_provider.dart';
-import '../../../../core/network/auth_interceptor.dart';
-import '../../../../core/network/dio_factory.dart';
-import '../../../../core/storage/storage_keys.dart';
-import '../../../../core/storage/storage_providers.dart';
-import '../../../auth/public.dart' show accountEnabledProvider;
+import '../../../auth/public.dart'
+    show accountEnabledProvider, accountStreamClientProvider;
 import '../../application/orchestration/tutor_orchestrator.dart';
 import '../../data/model_gateway/http_tutor_stream_transport.dart';
 import '../../data/model_gateway/local_tutor_model_gateway_stub.dart';
@@ -35,52 +30,18 @@ import '../../domain/models/tutor_consent.dart';
 import 'tutor_privacy_providers.dart';
 import 'tutor_providers.dart';
 
-/// Builds the SSE transport client. Split out so tests can inject a Dio
-/// carrying a recording `HttpClientAdapter` without reaching the network.
-final tutorStreamDioFactoryProvider = Provider<DioFactory>((ref) {
-  final config = ref.watch(appConfigProvider);
-  return DioFactory(
-    baseUrl: config.apiBaseUrl,
-    appVersion: config.appVersion,
-    logger: ref.watch(appLoggerProvider),
-  );
-});
-
-/// Reads the stored bearer token for the tutor stream's [AuthInterceptor].
+/// The authenticated SSE client the cloud gateway rides, or null when this
+/// build has no account layer.
 ///
-/// REVIEW NOTE (R9/2): the auth feature owns [StorageKeys.secureAuthToken]
-/// (`lib/features/auth/data/token_store.dart`), and its `tokenStoreProvider`
-/// is NOT part of `lib/features/auth/public.dart`. Reaching that provider
-/// from here would be a cross-feature deep import the architecture gate
-/// rejects, so this reads the same CORE secure-store key directly. It is a
-/// deliberate, declared duplication of one key, not an accident: the clean
-/// replacement is a six-line `accountStreamClientProvider` next to
-/// `accountApiClientProvider` in the auth feature, after which this provider
-/// is overridden with it and deleted. A missing/emptied token (signed out,
-/// or cleared on logout) makes `AuthInterceptor` reject the request BEFORE
-/// the transport adapter, so the path is fail-closed either way.
-final tutorAccessTokenReaderProvider = Provider<AccessTokenReader>((ref) {
-  final store = ref.watch(secureStoreProvider);
-  return () => store.read(StorageKeys.secureAuthToken);
-});
-
-/// The authenticated SSE client, or null when this build has no account
-/// layer (there is then nothing to authenticate a cloud turn with).
-final tutorStreamClientProvider = Provider<Dio?>((ref) {
-  if (!ref.watch(accountEnabledProvider)) return null;
-  final factory = ref.watch(tutorStreamDioFactoryProvider);
-  final client = factory.createTutorStreamClient(
-    accountEnabled: true,
-    readToken: ref.watch(tutorAccessTokenReaderProvider),
-    // The tutor stream does not own the account session: it never advances
-    // a generation, and a 401 here must not silently sign the student out
-    // of the whole app (the account client owns that).
-    readSessionGeneration: () => 0,
-    onUnauthorized: (_) {},
-  );
-  ref.onDispose(client.close);
-  return client;
-});
+/// A thin alias over the auth feature's [accountStreamClientProvider] on
+/// purpose: the session — token, generation, 401 invalidation — belongs to
+/// auth, and the tutor must never grow its own copy of it (R9/2 briefly read
+/// the secure-store key directly; R9/3 replaced that with this seam). It
+/// stays a separate provider only so a tutor test can substitute a client
+/// without standing up the whole auth graph.
+final tutorStreamClientProvider = Provider<Dio?>(
+  (ref) => ref.watch(accountStreamClientProvider),
+);
 
 /// The selection rule itself, as a pure function of the three inputs — so
 /// the "cloud only with consent AND account" property is provable without a

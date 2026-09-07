@@ -213,7 +213,12 @@ void main() {
 AppConfig _tutorConfig({bool aiTutor = true}) => AppConfig(
   environment: AppEnvironment.development,
   apiBaseUrl: AppConfig.devApiBaseUrl,
-  flags: FeatureFlags(aiTutorEnabled: aiTutor),
+  flags: FeatureFlags(
+    accountEnabled: false,
+    diagnosticsEnabled: false,
+    labModeAvailable: false,
+    aiTutorEnabled: aiTutor,
+  ),
   diagnosticsToken: AppConfig.devDiagnosticsToken,
   buildMode: 'test',
   appVersion: 'test',

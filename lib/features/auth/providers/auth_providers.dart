@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/config/app_config.dart';
@@ -8,6 +9,7 @@ import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/auth_interceptor.dart';
 import '../../../core/network/dio_factory.dart';
 import '../data/auth_repository.dart';
 import '../data/token_store.dart';
@@ -83,32 +85,83 @@ final _authTokenMutationQueueProvider = Provider<_AuthTokenMutationQueue>(
   (_) => _AuthTokenMutationQueue(),
 );
 
+/// The three session closures EVERY account-authenticated transport rides.
+///
+/// Factored out so [accountApiClientProvider] and
+/// [accountStreamClientProvider] cannot drift: one credential holder, one
+/// session generation, one invalidation path. A second, hand-copied triple
+/// would silently keep a revoked session alive on whichever client was not
+/// updated — the exact shape of a privacy regression this layer exists to
+/// prevent.
+final class _AuthSessionClosures {
+  const _AuthSessionClosures({
+    required this.readToken,
+    required this.readSessionGeneration,
+    required this.onUnauthorized,
+  });
+
+  final AccessTokenReader readToken;
+  final SessionGenerationReader readSessionGeneration;
+  final UnauthorizedCallback onUnauthorized;
+}
+
+_AuthSessionClosures _authSessionClosures(Ref ref) {
+  final generation = ref.watch(_authSessionGenerationProvider);
+  final credentials = ref.watch(_authSessionCredentialsProvider);
+  return _AuthSessionClosures(
+    readToken: () async => Success(credentials.accessToken),
+    readSessionGeneration: () => generation.value,
+    // Use an event-queue turn, not the interceptor's request stack. During
+    // session restore `/auth/me` is itself awaited by AuthController.build;
+    // mutating that provider inline would be Riverpod reentrancy.
+    onUnauthorized: (rejectedGeneration) {
+      Timer.run(() {
+        if (!ref.mounted) return;
+        if (generation.value != rejectedGeneration) return;
+        unawaited(
+          ref.read(authControllerProvider.notifier).invalidateSession(),
+        );
+      });
+    },
+  );
+}
+
 /// Lazily creates the account transport only for account-enabled builds.
 final accountApiClientProvider = Provider<ApiClient?>((ref) {
   final config = ref.watch(appConfigProvider);
   if (!config.flags.accountEnabled) return null;
 
-  final generation = ref.watch(_authSessionGenerationProvider);
-  final credentials = ref.watch(_authSessionCredentialsProvider);
-  final client = ref
-      .watch(accountDioFactoryProvider)
-      .createAccountClient(
-        accountEnabled: true,
-        readToken: () async => Success(credentials.accessToken),
-        readSessionGeneration: () => generation.value,
-        // Use an event-queue turn, not the interceptor's request stack. During
-        // session restore `/auth/me` is itself awaited by AuthController.build;
-        // mutating that provider inline would be Riverpod reentrancy.
-        onUnauthorized: (rejectedGeneration) {
-          Timer.run(() {
-            if (!ref.mounted) return;
-            if (generation.value != rejectedGeneration) return;
-            unawaited(
-              ref.read(authControllerProvider.notifier).invalidateSession(),
-            );
-          });
-        },
-      );
+  final session = _authSessionClosures(ref);
+  final factory = ref.watch(accountDioFactoryProvider);
+  final client = factory.createAccountClient(
+    accountEnabled: true,
+    readToken: session.readToken,
+    readSessionGeneration: session.readSessionGeneration,
+    onUnauthorized: session.onUnauthorized,
+  );
+  ref.onDispose(client.close);
+  return client;
+});
+
+/// The server-sent-events transport the AI tutor's cloud gateway rides.
+///
+/// Null for account-disabled builds — there is nothing to authenticate a
+/// cloud turn with, and the tutor then falls back to its local gateway.
+/// It shares [accountApiClientProvider]'s session closures, so a logout, a
+/// rotated token or a 401 moves BOTH clients at once; the tutor feature
+/// never sees the token, the store key, or the generation holder.
+final accountStreamClientProvider = Provider<Dio?>((ref) {
+  final config = ref.watch(appConfigProvider);
+  if (!config.flags.accountEnabled) return null;
+
+  final session = _authSessionClosures(ref);
+  final factory = ref.watch(accountDioFactoryProvider);
+  final client = factory.createTutorStreamClient(
+    accountEnabled: true,
+    readToken: session.readToken,
+    readSessionGeneration: session.readSessionGeneration,
+    onUnauthorized: session.onUnauthorized,
+  );
   ref.onDispose(client.close);
   return client;
 });
