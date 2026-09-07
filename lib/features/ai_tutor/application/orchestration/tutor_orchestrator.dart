@@ -221,6 +221,25 @@ final class TutorOrchestrator {
   Stream<TutorState> get states => _states.stream;
   Stream<TutorEffect> get effects => _effects.stream;
 
+  /// A new orchestrator sharing this one's collaborators but resolving its
+  /// gateway through [gatewayForAttempt].
+  ///
+  /// The boot layer builds ONE orchestrator with the local stub; the
+  /// presentation layer needs the same context/knowledge/prompt pipeline
+  /// with a gateway chosen per attempt from the live consent and account
+  /// state. Copying the collaborators keeps that a pure re-composition —
+  /// the field itself stays `final`, so nothing can swap a gateway factory
+  /// under a turn that is already running.
+  TutorOrchestrator withGatewayFactory(
+    TutorModelGateway Function(int repairCount) gatewayForAttempt,
+  ) => TutorOrchestrator(
+    contextAssembler: contextAssembler,
+    knowledgeRetriever: knowledgeRetriever,
+    promptBuilder: promptBuilder,
+    gatewayForAttempt: gatewayForAttempt,
+    outputValidator: outputValidator,
+  );
+
   Future<TutorTransition> dispatch(TutorInput input) async {
     if (_disposed) {
       return TutorTransition(state: _state, isRejected: true);

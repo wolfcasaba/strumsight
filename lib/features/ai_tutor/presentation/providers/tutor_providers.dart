@@ -43,6 +43,7 @@ import '../../domain/models/tutor_response_mode.dart';
 import '../../domain/repositories/tutor_conversation_repository.dart';
 import '../../domain/tools/tutor_tool.dart';
 import '../../domain/tools/tutor_tool_request.dart';
+import 'tutor_gateway_providers.dart';
 import 'tutor_privacy_providers.dart';
 
 // ---------------------------------------------------------------------------
@@ -493,7 +494,10 @@ final tutorConversationRepositoryProvider =
 /// from the controller's [TutorChatController.states] stream (see
 /// [tutorChatStateProvider]) so they rebuild on every mutation.
 final tutorChatControllerProvider = Provider<TutorChatController>((ref) {
-  final orchestrator = ref.watch(tutorOrchestratorProvider);
+  // NOT `tutorOrchestratorProvider` (the boot value, whose gateway factory
+  // is the local stub): the turn orchestrator re-composes the same pipeline
+  // with the consent- and account-aware gateway selection (R9/2).
+  final orchestrator = ref.watch(tutorTurnOrchestratorProvider);
   final repository = ref.watch(tutorConversationRepositoryProvider);
   final controller = DefaultTutorChatController(
     orchestrator: orchestrator,

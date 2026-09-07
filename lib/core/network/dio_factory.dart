@@ -20,6 +20,11 @@ final class DioFactory {
   static const Duration sendTimeout = Duration(seconds: 8);
   static const Duration receiveTimeout = Duration(seconds: 8);
 
+  /// Inter-chunk budget for the tutor's SSE stream (see
+  /// [createTutorStreamClient]). Long enough for a slow first model token,
+  /// short enough that a dead stream still fails instead of hanging.
+  static const Duration tutorStreamReceiveTimeout = Duration(seconds: 60);
+
   final String baseUrl;
   final String appVersion;
   final AppLogger logger;
@@ -53,6 +58,42 @@ final class DioFactory {
       throw StateError('The diagnostics API is disabled for this build.');
     }
     return ApiClient(_createDio());
+  }
+
+  /// The server-sent-events client the AI tutor's stream transport rides.
+  ///
+  /// It returns a raw [Dio] rather than an [ApiClient] on purpose: the tutor
+  /// turn is a long-lived `ResponseType.stream` response, and [ApiClient]'s
+  /// primitives all decode a single JSON object. Everything else is the
+  /// account client's own pipeline — the same [_createDio] path, so the
+  /// bearer token (via [AuthInterceptor]) and the correlation id travel on
+  /// every request, and the redacting log interceptor is attached.
+  ///
+  /// The one deliberate difference is [tutorStreamReceiveTimeout]: Dio's
+  /// receive timeout is the budget BETWEEN two received chunks, and the
+  /// shared 8s account budget would abort a turn whose first model token is
+  /// merely slow. The timeout is longer, never absent — a hung stream must
+  /// still fail, not hang forever.
+  Dio createTutorStreamClient({
+    required bool accountEnabled,
+    required AccessTokenReader readToken,
+    required SessionGenerationReader readSessionGeneration,
+    required UnauthorizedCallback onUnauthorized,
+  }) {
+    if (!accountEnabled) {
+      throw StateError('The tutor stream API is disabled for this build.');
+    }
+    final dio = _createDio(
+      authInterceptor: AuthInterceptor(
+        readToken: readToken,
+        readSessionGeneration: readSessionGeneration,
+        onUnauthorized: onUnauthorized,
+        logger: logger,
+      ),
+    );
+    dio.options.receiveTimeout = tutorStreamReceiveTimeout;
+    dio.options.headers['Accept'] = 'text/event-stream';
+    return dio;
   }
 
   Dio _createDio({AuthInterceptor? authInterceptor}) {

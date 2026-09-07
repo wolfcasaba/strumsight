@@ -121,7 +121,14 @@ final class HttpTutorStreamTransport implements TutorStreamTransport {
   static bool _isSuccessful(int? statusCode) =>
       statusCode != null && statusCode >= 200 && statusCode < 300;
 
-  static NetworkFailure _failureFor(DioException error, StackTrace stackTrace) {
+  static AppFailure _failureFor(DioException error, StackTrace stackTrace) {
+    // An interceptor that rejected the request before the wire already put
+    // a typed failure on the exception — most importantly the signed-out
+    // `AuthInterceptor`'s `auth.session_expired`. Re-classifying that as a
+    // transport problem would tell the student "no network" when the real
+    // answer is "sign in" (same rule as `mapNetworkFailure`).
+    final embedded = error.error;
+    if (embedded is AppFailure) return embedded;
     final code = switch (error.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||

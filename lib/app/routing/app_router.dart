@@ -77,6 +77,7 @@ import '../../features/song_trainer/presentation/screens/song_result_route.dart'
 import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import '../../features/song_trainer/presentation/song_trainer_launch.dart';
+import '../../features/ai_tutor/presentation/practice_plan_preview_route.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_data_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_home_screen.dart';
@@ -941,6 +942,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.tutorData,
           builder: (_, _) => const TutorDataScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.tutorPlanPreview,
+          builder: (_, _) => const PracticePlanPreviewRoute(),
         ),
       ],
       if (visionEnabled && visionSetupEnabled) ...[

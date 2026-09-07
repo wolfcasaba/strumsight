@@ -7,6 +7,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/ai_tutor/presentation/practice_plan_preview_route.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_plan_providers.dart';
@@ -17,6 +23,7 @@ import 'package:strumsight/features/practice_generator/public.dart'
         localPracticePlanRepositoryProvider,
         practiceCatalogSnapshotProvider,
         practiceGeneratorClockProvider;
+import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
 
@@ -168,4 +175,55 @@ void main() {
 
     expect(find.text(_l10n().aiTutorPlanTotalDuration(10)), findsOneWidget);
   });
+
+  test('the /tutor/plan-preview route is registered behind the tutor flag', () {
+    final container = ProviderContainer(
+      overrides: [
+        ...preferenceOverrides(),
+        onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
+        appConfigProvider.overrideWithValue(_tutorConfig()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final router = container.read(routerProvider);
+    final paths = _routePaths(router.configuration.routes);
+
+    expect(paths, contains(AppRoutes.tutorPlanPreview));
+  });
+
+  test('the route disappears with the tutor flag off — a KI build must not '
+      'expose the preview at all', () {
+    final container = ProviderContainer(
+      overrides: [
+        ...preferenceOverrides(),
+        onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
+        appConfigProvider.overrideWithValue(_tutorConfig(aiTutor: false)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final router = container.read(routerProvider);
+    final paths = _routePaths(router.configuration.routes);
+
+    expect(paths, isNot(contains(AppRoutes.tutorPlanPreview)));
+  });
+}
+
+AppConfig _tutorConfig({bool aiTutor = true}) => AppConfig(
+  environment: AppEnvironment.development,
+  apiBaseUrl: AppConfig.devApiBaseUrl,
+  flags: FeatureFlags(aiTutorEnabled: aiTutor),
+  diagnosticsToken: AppConfig.devDiagnosticsToken,
+  buildMode: 'test',
+  appVersion: 'test',
+);
+
+List<String> _routePaths(List<RouteBase> routes) {
+  final paths = <String>[];
+  for (final route in routes) {
+    if (route is GoRoute) paths.add(route.path);
+    paths.addAll(_routePaths(route.routes));
+  }
+  return paths;
 }

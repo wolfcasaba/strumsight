@@ -68,6 +68,7 @@ abstract final class AppRoutes {
   static const String tutorProfile = '/tutor/profile';
   static const String tutorPrivacy = '/tutor/privacy';
   static const String tutorData = '/tutor/data';
+  static const String tutorPlanPreview = '/tutor/plan-preview';
   static const String visionSetup = '/vision/setup';
   static const String visionGuitarGeometry = '/vision/guitar-geometry';
   static const String visionSession = '/vision/session';

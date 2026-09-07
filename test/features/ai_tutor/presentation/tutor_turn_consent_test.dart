@@ -26,9 +26,11 @@ import 'package:strumsight/features/ai_tutor/application/prompts/tutor_prompt_bu
 import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_index.dart';
 import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_retriever.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/fake_tutor_model_gateway.dart';
+import 'package:strumsight/features/ai_tutor/data/model_gateway/local_tutor_model_gateway_stub.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/tutor_model_gateway.dart';
 import 'package:strumsight/features/ai_tutor/data/repositories/local_tutor_conversation_repository.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_consent.dart';
+import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_gateway_providers.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_privacy_providers.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_providers.dart';
 
@@ -157,6 +159,12 @@ final class _Harness {
       overrides: [
         ...preferenceOverrides(),
         tutorOrchestratorProvider.overrideWithValue(orchestrator),
+        // R9/2: the chat controller runs the SELECTING orchestrator, so the
+        // gateway a turn creates comes from this provider, not from the
+        // boot orchestrator's own factory. Counting here keeps this file's
+        // measurement — "did a turn create a gateway at all" — on the seam
+        // production actually uses.
+        tutorModelGatewayFactoryProvider.overrideWithValue(_gateway),
         tutorConversationRepositoryProvider.overrideWithValue(
           LocalTutorConversationRepository(
             keyValueStore: InMemoryKeyValueStore(),
@@ -180,7 +188,8 @@ final class _Harness {
     contextAssembler: const TutorContextAssembler(),
     knowledgeRetriever: KnowledgeRetriever(index: const KnowledgeIndex.empty()),
     promptBuilder: TutorPromptBuilder(templateLoader: _TemplateLoader()),
-    gatewayForAttempt: _gateway,
+    // Never used: the controller runs `withGatewayFactory` over this one.
+    gatewayForAttempt: (_) => LocalTutorModelGatewayStub(),
   );
 
   TutorModelGateway _gateway(int attempt) {

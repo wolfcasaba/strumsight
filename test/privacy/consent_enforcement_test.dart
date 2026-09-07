@@ -39,12 +39,15 @@ import 'package:strumsight/features/ai_tutor/application/prompts/tutor_prompt_bu
 import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_index.dart';
 import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_retriever.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/fake_tutor_model_gateway.dart';
+import 'package:strumsight/features/ai_tutor/data/model_gateway/local_tutor_model_gateway_stub.dart';
+import 'package:strumsight/features/ai_tutor/data/model_gateway/remote_tutor_model_gateway.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/tutor_model_gateway.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_consent.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_ids.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_response_mode.dart';
 import 'package:strumsight/features/ai_tutor/domain/tools/tutor_tool.dart';
 import 'package:strumsight/features/ai_tutor/domain/tools/tutor_tool_request.dart';
+import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_gateway_providers.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_providers.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
@@ -394,10 +397,10 @@ void main() {
       );
     });
 
-    test('real tree: HttpTutorStreamTransport has no construction site outside '
-        'its own declaring file, and the production request builder no longer '
-        'hardcodes modelUseGranted: true — both measured facts are pinned so '
-        'either silently changing trips this cell', () {
+    test('real tree: the cloud transport IS constructed now, and the '
+        'production request builder no longer hardcodes modelUseGranted: '
+        'true — both measured facts are pinned so either silently changing '
+        'trips this cell', () {
       final repository = Directory.current;
       final libDir = Directory('${repository.path}/lib');
       final declaringFile = File(
@@ -420,11 +423,15 @@ void main() {
         r'consent:\s*const\s+TutorConsent\(modelUseGranted:\s*true\)',
       ).hasMatch(providersSource);
 
-      // MAJOR-3 is CLOSED on the request-builder side (R9): the hardcode is
-      // gone and the only production producer reads the live consent
-      // provider. The cloud transport is still unwired, so the tree is
-      // sound on both axes — and a regression on EITHER trips this cell.
-      expect(gatewayConstructedElsewhere, isFalse);
+      // MAJOR-3 is CLOSED (R9/1 + R9/2), and the ORDER it demanded was
+      // honoured: the hardcode went first, the cloud transport second. The
+      // transport now HAS a production construction site
+      // (tutor_gateway_providers.dart — `wired: true` in the inventory), and
+      // the only production request builder reads the live consent
+      // provider. Re-introducing the hardcode while the transport is wired
+      // is exactly the unsound state the pure guard above rejects, and this
+      // cell measures both axes on the real tree.
+      expect(gatewayConstructedElsewhere, isTrue);
       expect(hardcodesGrantedTrue, isFalse);
       expect(
         providersSource.contains('ref.read(tutorConsentControllerProvider)'),
@@ -436,8 +443,8 @@ void main() {
       );
 
       // ...and feeding those exact measured values through the pure guard
-      // must be sound today. It stays sound even when the cloud gateway is
-      // finally wired, precisely because the hardcode is gone.
+      // must be sound: the gateway is wired AND the hardcode is gone, which
+      // is the one combination of those two that is safe.
       expect(
         tutorTurnConsentWiringIsSound(
           cloudGatewayHasConstructionSite: gatewayConstructedElsewhere,
@@ -469,6 +476,60 @@ void main() {
       expect(granted, isA<Success<TutorTurnRequest>>());
       expect(granted.valueOrNull?.consent.modelUseGranted, isTrue);
       expect(granted.valueOrNull?.consent.persistentStorageGranted, isFalse);
+    });
+  });
+
+  // The second half of the same gate (R9/2). The request builder decides
+  // whether a turn exists at all; the selector decides which gateway runs
+  // it. Both must refuse the cloud independently — either one alone would
+  // leave a revoked student one refactor away from the network.
+  group('A3\' (R9/2) — gateway selection never returns the cloud gateway '
+      'without model-use consent AND an enabled account layer', () {
+    test('consent + account + a client is the ONLY combination that selects '
+        'the cloud gateway', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        accountEnabled: true,
+        streamClient: Dio(),
+      );
+
+      expect(gateway, isA<RemoteTutorModelGateway>());
+    });
+
+    test('revoked model-use consent selects the local stub even when a '
+        'client and an account layer are both available', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(
+          persistentStorageGranted: true,
+          evaluationWithRedactionGranted: true,
+        ),
+        accountEnabled: true,
+        streamClient: Dio(),
+      );
+
+      expect(gateway, isA<LocalTutorModelGatewayStub>());
+    });
+
+    test('an account-disabled build selects the local stub even with '
+        'consent granted', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        accountEnabled: false,
+        streamClient: Dio(),
+      );
+
+      expect(gateway, isA<LocalTutorModelGatewayStub>());
+    });
+
+    test('no stream client selects the local stub — never a half-built '
+        'cloud gateway', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        accountEnabled: true,
+        streamClient: null,
+      );
+
+      expect(gateway, isA<LocalTutorModelGatewayStub>());
     });
   });
 }
