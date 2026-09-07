@@ -26,6 +26,8 @@ from collections.abc import Iterator
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
+from ...client_ip import client_ip_for_throttle
+from ...config import Settings
 from ...ratelimit import RateLimiter
 from ..policies.handle_policy import (
     classify_reason,
@@ -90,17 +92,27 @@ def _session_factory(request: Request) -> Iterator[Session]:
 
 
 def _client_key(request: Request) -> str:
-    """Client key for rate limiting — the direct socket peer.
+    """Client key for rate limiting — the reverse-proxy-aware client identity.
 
-    No trusted-proxy configuration exists yet (auth lands in Kör 6), so a
-    client-supplied X-Forwarded-For header MUST NOT be trusted here — it
-    would let any caller pick its own rate-limit bucket and defeat the
-    limiter entirely (measured: E09-R03 review F1, 60/60 requests bypassed
-    the 30/min limit by rotating the header).
+    Delegates to :func:`app.client_ip.client_ip_for_throttle` (R14), the same
+    helper the login/register throttles use, so the whole process has ONE
+    trusted-proxy rule instead of a per-router one.
+
+    The E09-R03 review F1 finding this docstring used to record still holds:
+    a client-supplied ``X-Forwarded-For`` MUST NOT be trusted on its own —
+    60/60 requests bypassed the 30/min limit by rotating the header. The
+    helper does not trust it on its own either. It reads the header ONLY when
+    the direct socket peer is one of the explicitly configured
+    ``Settings.trusted_proxy_ips``, whose default is an empty list, so a
+    deployment that has not measured its proxy hop keeps the exact
+    socket-peer behaviour this function had before R16.
+
+    What R16 fixes: behind Caddy every caller arrives from the same
+    docker-bridge address, so the 30/min availability budget and the 5/hour
+    change budget were shared by ALL callers of the deploy.
     """
-    if request.client is not None:
-        return request.client.host
-    return "unknown"
+    settings: Settings = request.app.state.settings
+    return client_ip_for_throttle(request, settings)
 
 
 # --------------------------------------------------------------------------

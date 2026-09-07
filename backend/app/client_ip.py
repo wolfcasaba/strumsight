@@ -11,9 +11,7 @@ docker-bridge address — one shared budget for all users, and the resulting
 The fix is deliberately narrow and fail-closed. `X-Forwarded-For` is
 caller-supplied, so trusting it unconditionally hands every caller a free
 rate-limit bypass — measured precedent in this codebase: E09-R03 review F1,
-60/60 requests slipped past a 30/min limit by rotating the header (see the
-`_client_key` docstrings in `app/community/routers/handles.py` and
-`search.py`, which for that reason still key on the socket peer). Here the
+60/60 requests slipped past a 30/min limit by rotating the header. Here the
 header is read ONLY when the direct socket peer is one of the explicitly
 configured `Settings.trusted_proxy_ips`, and the DEFAULT is an empty list,
 so a deployment that has not measured its proxy hop keeps the exact
@@ -32,6 +30,16 @@ therefore OVERWRITE the header — for Caddy:
 `docs/operations/backend-live-deploy.md` §7 carries this as part of the
 runbook. Without that line, list no proxy here at all: the shared-bucket
 throttle is a smaller problem than a throttle anyone can dodge.
+
+CALLERS (R16). `app/routers/auth.py::_throttle` (login 10/min, register
+5/min) and the two Community routers that carry their own limiters —
+`app/community/routers/handles.py::_client_key` (availability 30/min,
+handle change 5/hour) and `app/community/routers/search.py::_client_key`
+(profile search 60/min). Those two kept keying on the raw socket peer until
+R16, which is the same shared-bucket bug R14 fixed for auth; they now share
+this one rule. Every caller reads `request.app.state.settings`, so any app
+that mounts these routers must set it (`create_app` and every router test
+fixture already do).
 """
 
 from __future__ import annotations
