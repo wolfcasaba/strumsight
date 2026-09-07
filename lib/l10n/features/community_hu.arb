@@ -815,5 +815,143 @@
   "@communityHubMyPostsError": {},
 
   "communityHubMyPostsRetry": "Újra",
-  "@communityHubMyPostsRetry": {}
+  "@communityHubMyPostsRetry": {},
+
+  "communityComposerTitle": "Új poszt",
+  "@communityComposerTitle": {},
+
+  "communityComposerDiscard": "Elvetés",
+  "@communityComposerDiscard": {},
+
+  "communityComposerBodyLabel": "Szöveg",
+  "@communityComposerBodyLabel": {},
+
+  "communityComposerBodyHint": "Mit szeretnél megosztani?",
+  "@communityComposerBodyHint": {},
+
+  "communityComposerAttachMedia": "Média csatolása",
+  "@communityComposerAttachMedia": {},
+
+  "communityComposerMediaLater": "A média csatolása később érhető el.",
+  "@communityComposerMediaLater": {},
+
+  "communityComposerAudienceLabel": "Kik láthatják",
+  "@communityComposerAudienceLabel": {},
+
+  "communityComposerPreviewLabel": "Megosztott mezők",
+  "@communityComposerPreviewLabel": {},
+
+  "communityComposerPublish": "Közzététel",
+  "@communityComposerPublish": {},
+
+  "communityComposerSubmitting": "Közzététel…",
+  "@communityComposerSubmitting": {},
+
+  "communityComposerSuccess": "Sikeresen közzétéve.",
+  "@communityComposerSuccess": {},
+
+  "communityComposerFailure": "A poszt nem került elküldésre — próbáld újra.",
+  "@communityComposerFailure": {},
+
+  "communityComposerFailureWithCode": "A poszt nem került elküldésre — próbáld újra. ({code})",
+  "@communityComposerFailureWithCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+
+  "communityComposerAudiencePublic": "Nyilvános",
+  "@communityComposerAudiencePublic": {},
+
+  "communityComposerAudienceFollowers": "Követők",
+  "@communityComposerAudienceFollowers": {},
+
+  "communityComposerAudiencePrivate": "Privát",
+  "@communityComposerAudiencePrivate": {},
+
+  "communityComposerPreviewChordTimeline": "Akkord-idővonal",
+  "@communityComposerPreviewChordTimeline": {},
+
+  "communityComposerPreviewStrumPattern": "Strumminta",
+  "@communityComposerPreviewStrumPattern": {},
+
+  "communityComposerPreviewTempo": "Tempó",
+  "@communityComposerPreviewTempo": {},
+
+  "communityComposerPreviewStreakDays": "Aktív napok",
+  "@communityComposerPreviewStreakDays": {},
+
+  "communityComposerPreviewBestScore": "Legjobb pontszám",
+  "@communityComposerPreviewBestScore": {},
+
+  "communityBookmarksTitle": "Könyvjelzők",
+  "@communityBookmarksTitle": {},
+
+  "communityBookmarksEmpty": "Még nincs mentett poszt.",
+  "@communityBookmarksEmpty": {},
+
+  "communityBookmarksErrorTitle": "A könyvjelzők nem töltődtek be.",
+  "@communityBookmarksErrorTitle": {},
+
+  "communityBookmarksRetry": "Újra",
+  "@communityBookmarksRetry": {},
+
+  "communityBookmarkTombstoneBody": "Ez a poszt már nem érhető el. A könyvjelző a listádban marad, amíg el nem távolítod.",
+  "@communityBookmarkTombstoneBody": {},
+
+  "communityBookmarkRemoveAction": "Eltávolítás",
+  "@communityBookmarkRemoveAction": {},
+
+  "communityBookmarkLoadMore": "Több betöltése",
+  "@communityBookmarkLoadMore": {},
+
+  "communityBookmarkFallbackTitle": "Mentett poszt",
+  "@communityBookmarkFallbackTitle": {},
+
+  "communityBookmarkSavedOn": "Mentve: {date}",
+  "@communityBookmarkSavedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+
+  "communitySearchHint": "Keresés felhasználónév szerint",
+  "@communitySearchHint": {},
+
+  "communitySearchClear": "Törlés",
+  "@communitySearchClear": {},
+
+  "communitySearchRecentTitle": "Korábbi keresések",
+  "@communitySearchRecentTitle": {},
+
+  "communitySearchClearAll": "Összes törlése",
+  "@communitySearchClearAll": {},
+
+  "communitySearchRemoveRecent": "Eltávolítás",
+  "@communitySearchRemoveRecent": {},
+
+  "communitySearchEmptyHint": "Írj be egy felhasználónév-kezdetet, hogy játékosokat találj.",
+  "@communitySearchEmptyHint": {},
+
+  "communitySearchNoMatches": "Nincs találat.",
+  "@communitySearchNoMatches": {},
+
+  "communitySearchRetry": "Újra",
+  "@communitySearchRetry": {},
+
+  "communitySearchNetworkError": "Hálózati hiba",
+  "@communitySearchNetworkError": {},
+
+  "communitySearchServerError": "Szerverhiba",
+  "@communitySearchServerError": {},
+
+  "communitySearchRecentStorageError": "A korábbi keresések frissítése nem sikerült",
+  "@communitySearchRecentStorageError": {},
+
+  "communityGateErrorTitle": "A Közösség nem tölthető be",
+  "@communityGateErrorTitle": {}
 }

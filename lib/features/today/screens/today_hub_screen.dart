@@ -6,6 +6,7 @@ import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../practice_generator/public.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
 import '../domain/today_plan_snapshot.dart';
@@ -67,6 +68,18 @@ class TodayHubScreen extends ConsumerWidget {
                 icon: Icons.sync_outlined,
                 label: l10n.dsStatusBadgeSyncPending,
               ),
+            // R20 — `unreadable` is NOT `unavailable`. R19 introduced the
+            // state and the repository that produces it, but the hub still
+            // drew it exactly like "you have no plan yet", so the one thing
+            // the state exists to say was invisible again. The notice is
+            // conditional on `unreadable` alone, so every other state —
+            // including the empty-store `unavailable` the golden fixtures
+            // pump — renders byte-identically to before.
+            if (snapshot.availability == TodayPlanAvailability.unreadable)
+              _PlanUnreadableNotice(
+                l10n: l10n,
+                onRetry: () => ref.invalidate(activePracticePlanProvider),
+              ),
             // A1 — the ONLY primary (filled) button on this screen; every
             // other action below is outlined/text-styled.
             Card(
@@ -108,7 +121,7 @@ class TodayHubScreen extends ConsumerWidget {
                 Expanded(
                   child: _Metric(
                     label: l10n.progressDailyGoal,
-                    value: '$todayMinutes min',
+                    value: l10n.todayHubMinutesShort(todayMinutes),
                   ),
                 ),
               ],
@@ -202,6 +215,75 @@ class _StatusBanner extends StatelessWidget {
           const SizedBox(width: 6),
           Text(label, style: Theme.of(context).textTheme.bodySmall),
         ],
+      ),
+    );
+  }
+}
+
+/// R20 — the `unreadable` plan state gets its OWN small notice: a plan the
+/// store could not read is not a missing plan, and the R19 distinction is
+/// only real once the user can see it. Deliberately NOT the offline/sync
+/// `_StatusBanner` shape: those are informational and carry no action,
+/// while this one is an error with the single honest next step (retry the
+/// read). The retry invalidates `activePracticePlanProvider` — the exact
+/// provider `todayPlanRepositoryProvider` projects — so a transient read
+/// failure resolves without leaving the tab.
+///
+/// Lives inside the hub's scrolling `ListView` and wraps its text, so hu +
+/// textScale 2.0 + landscape (the E15-R13 matrix cells) cannot overflow it.
+class _PlanUnreadableNotice extends StatelessWidget {
+  const _PlanUnreadableNotice({required this.l10n, required this.onRetry});
+
+  final AppLocalizations l10n;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onContainer = theme.colorScheme.onErrorContainer;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        key: const ValueKey('today-hub-plan-unreadable'),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error_outline, size: 18, color: onContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.todayHubPlanUnreadableTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: onContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.todayHubPlanUnreadableMessage,
+              style: theme.textTheme.bodySmall?.copyWith(color: onContainer),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey('today-hub-plan-unreadable-retry'),
+                onPressed: onRetry,
+                child: Text(l10n.todayHubPlanUnreadableRetry),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

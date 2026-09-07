@@ -1,0 +1,21 @@
+{
+  "@@locale": "en",
+
+  "todayHubMinutesShort": "{minutes} min",
+  "@todayHubMinutesShort": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+
+  "todayHubPlanUnreadableTitle": "Your plan could not be read",
+  "@todayHubPlanUnreadableTitle": {},
+
+  "todayHubPlanUnreadableMessage": "Your practice plan is stored on this device but could not be read. That is not the same as having no plan — nothing was lost, the read simply failed.",
+  "@todayHubPlanUnreadableMessage": {},
+
+  "todayHubPlanUnreadableRetry": "Try again",
+  "@todayHubPlanUnreadableRetry": {}
+}

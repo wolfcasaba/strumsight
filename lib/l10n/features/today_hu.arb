@@ -1,0 +1,21 @@
+{
+  "@@locale": "hu",
+
+  "todayHubMinutesShort": "{minutes} perc",
+  "@todayHubMinutesShort": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+
+  "todayHubPlanUnreadableTitle": "A terved nem olvasható",
+  "@todayHubPlanUnreadableTitle": {},
+
+  "todayHubPlanUnreadableMessage": "A gyakorlási terved ezen az eszközön van, de nem sikerült beolvasni. Ez nem ugyanaz, mint hogy nincs terved — semmi nem veszett el, csak az olvasás bukott meg.",
+  "@todayHubPlanUnreadableMessage": {},
+
+  "todayHubPlanUnreadableRetry": "Újra",
+  "@todayHubPlanUnreadableRetry": {}
+}

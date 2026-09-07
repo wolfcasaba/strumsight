@@ -189,6 +189,13 @@ Widget _harness({Locale locale = const Locale('en')}) {
   );
 }
 
+/// The composer's labels come from the ARB catalogue (R20, audit M8) —
+/// asserting on the literal Hungarian strings the screen used to hardcode
+/// would re-freeze exactly the bug this round removed.
+AppLocalizations _en() => lookupAppLocalizations(const Locale('en'));
+
+AppLocalizations _hu() => lookupAppLocalizations(const Locale('hu'));
+
 PostComposerState _state(WidgetTester tester) {
   final element = tester.element(find.byType(PostComposerScreen));
   return ProviderScope.containerOf(
@@ -203,10 +210,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(_state(tester).audience, CommunityAudience.followers);
-      // The chip rendered as selected must be "Követők" (followers), not
-      // "Nyilvános" (public) — the default is visible, not just internal.
+      // The chip rendered as selected must be the FOLLOWERS one, not the
+      // public one — the default is visible, not just internal.
       final chip = tester.widget<ChoiceChip>(
-        find.widgetWithText(ChoiceChip, 'Követők'),
+        find.widgetWithText(
+          ChoiceChip,
+          _en().communityComposerAudienceFollowers,
+        ),
       );
       expect(chip.selected, isTrue);
     });
@@ -223,7 +233,7 @@ void main() {
     });
 
     testWidgets(
-      'on threshold — picking "Követők" applies immediately and is visible before submit',
+      'on threshold — picking followers applies immediately and is visible before submit',
       (tester) async {
         await tester.pumpWidget(_harness());
         await tester.pumpAndSettle();
@@ -238,7 +248,12 @@ void main() {
         await tester.pumpAndSettle();
         expect(_state(tester).audience, CommunityAudience.private);
 
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Követők'));
+        await tester.tap(
+          find.widgetWithText(
+            ChoiceChip,
+            _en().communityComposerAudienceFollowers,
+          ),
+        );
         await tester.pumpAndSettle();
 
         // No confirmation sheet for a non-public pick.
@@ -246,19 +261,24 @@ void main() {
         // The choice applies immediately and is visible before any submit.
         expect(_state(tester).audience, CommunityAudience.followers);
         final chip = tester.widget<ChoiceChip>(
-          find.widgetWithText(ChoiceChip, 'Követők'),
+          find.widgetWithText(
+            ChoiceChip,
+            _en().communityComposerAudienceFollowers,
+          ),
         );
         expect(chip.selected, isTrue);
       },
     );
 
     testWidgets(
-      'above threshold — picking "Nyilvános" holds behind an irreversibility confirmation',
+      'above threshold — picking public holds behind an irreversibility confirmation',
       (tester) async {
         await tester.pumpWidget(_harness());
         await tester.pumpAndSettle();
 
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Nyilvános'));
+        await tester.tap(
+          find.widgetWithText(ChoiceChip, _en().communityComposerAudiencePublic),
+        );
         await tester.pumpAndSettle();
 
         // The pick does NOT apply yet — a spelled-out confirmation is
@@ -291,7 +311,9 @@ void main() {
         await tester.pumpWidget(_harness(locale: const Locale('hu')));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Nyilvános'));
+        await tester.tap(
+          find.widgetWithText(ChoiceChip, _hu().communityComposerAudiencePublic),
+        );
         await tester.pumpAndSettle();
 
         final huLabels = lookupAppLocalizations(const Locale('hu'));
@@ -308,7 +330,9 @@ void main() {
         await tester.pumpWidget(_harness());
         await tester.pumpAndSettle();
 
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Nyilvános'));
+        await tester.tap(
+          find.widgetWithText(ChoiceChip, _en().communityComposerAudiencePublic),
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('ss-confirmation-cancel')));
         await tester.pumpAndSettle();
@@ -325,11 +349,11 @@ void main() {
 
       expect(find.byType(SsSwitchRow), findsNWidgets(5));
       for (final label in <String>[
-        'Akkord-idővonal',
-        'Strumminta',
-        'Tempó',
-        'Aktív napok',
-        'Legjobb pontszám',
+        _en().communityComposerPreviewChordTimeline,
+        _en().communityComposerPreviewStrumPattern,
+        _en().communityComposerPreviewTempo,
+        _en().communityComposerPreviewStreakDays,
+        _en().communityComposerPreviewBestScore,
       ]) {
         final row = tester.widget<SsSwitchRow>(
           find.widgetWithText(SsSwitchRow, label),
@@ -339,7 +363,10 @@ void main() {
 
       // Flipping a toggle reflects the real field value, not a hardcoded
       // label — the row's `value` tracks the controller's SharePreview.
-      final strumRow = find.widgetWithText(SsSwitchRow, 'Strumminta');
+      final strumRow = find.widgetWithText(
+        SsSwitchRow,
+        _en().communityComposerPreviewStrumPattern,
+      );
       await tester.scrollUntilVisible(
         strumRow,
         300,
@@ -351,7 +378,10 @@ void main() {
       expect(_state(tester).sharePreview.includeStrumPattern, isTrue);
       expect(_state(tester).sharePreview.includeChordTimeline, isFalse);
       final flipped = tester.widget<SsSwitchRow>(
-        find.widgetWithText(SsSwitchRow, 'Strumminta'),
+        find.widgetWithText(
+          SsSwitchRow,
+          _en().communityComposerPreviewStrumPattern,
+        ),
       );
       expect(flipped.value, isTrue);
     });

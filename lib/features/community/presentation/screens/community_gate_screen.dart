@@ -1,5 +1,5 @@
-/// Community gate — the four-state entry screen (E09-R06, ADR 0400
-/// §5, brief §5.1).
+/// Community gate — the entry screen (E09-R06, ADR 0400 §5, brief
+/// §5.1), one view per [CommunityGateStatus].
 ///
 /// The gate is intentionally minimal. The brief §5.1 invariant is
 /// that a Community profile is NEVER created implicitly — the gate
@@ -21,6 +21,12 @@
 ///   is the Community HUB (WP-C, 2026-09-06): the read-only summary,
 ///   the "Edit profile" CTA, and a named entry to every one of the
 ///   thirteen registered community routes.
+/// * ``unavailable`` — the server does not host the Community module
+///   (R12); a card + Retry, no create CTA.
+/// * ``error`` — the profile probe failed for a reason that says
+///   nothing about whether a profile exists (R20, audit M6.3: a
+///   timeout, a 500). Its own card + Retry — NEVER the
+///   ``profileMissing`` create CTA.
 ///
 /// The screen holds no local state of its own — the controller is
 /// the single source of truth (the four states, the loaded profile,
@@ -123,6 +129,10 @@ class _GateBody extends ConsumerWidget {
       ),
       CommunityGateStatus.ready => _ReadyView(state: state),
       CommunityGateStatus.unavailable => _UnavailableView(
+        onRetry: () =>
+            ref.read(communityProfileControllerProvider.notifier).refresh(),
+      ),
+      CommunityGateStatus.error => _GateErrorView(
         onRetry: () =>
             ref.read(communityProfileControllerProvider.notifier).refresh(),
       ),
@@ -265,6 +275,51 @@ class _UnavailableView extends StatelessWidget {
               const SizedBox(height: 24),
               SsButton(
                 key: const Key('community-gate-unavailable-retry'),
+                onPressed: onRetry,
+                label: localizations.communityGateRetry,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The ``error`` state (R20, audit M6.3) — the profile probe failed for a
+/// reason that says nothing about whether a profile exists (a timeout, a
+/// 500, a dropped connection).
+///
+/// MÉRT hiba: every such failure used to render the ``profile-missing``
+/// CTA, so a learner who already owns a profile was invited to create a
+/// second one the moment their connection blinked. This view says what
+/// actually happened and offers the only honest next step — try again.
+/// Deliberately mirrors [_UnavailableView]: same card + retry shape, its
+/// own keys, and its own copy, so a test can tell the two apart.
+class _GateErrorView extends StatelessWidget {
+  const _GateErrorView({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SsContentCard(
+                key: const Key('community-gate-error'),
+                icon: Icons.error_outline,
+                title: localizations.communityGateErrorTitle,
+                message: localizations.communityGateErrorBody,
+              ),
+              const SizedBox(height: 24),
+              SsButton(
+                key: const Key('community-gate-error-retry'),
                 onPressed: onRetry,
                 label: localizations.communityGateRetry,
               ),

@@ -90,7 +90,9 @@ void main() {
         status: PracticeItemStatus.planned,
         timeBudget: const Duration(minutes: 20),
         blocks: const <PracticeBlock>[],
-        primaryFocusSkillIds: const <String>[],
+        // A rest day has no blocks, but the model still requires the plan's
+        // focus skills to be named (`PracticeDay` rejects an empty list).
+        primaryFocusSkillIds: const <String>['rhythm.quarterNotes'],
         reasonCodes: [ScheduleDecisionReason.restDay.code],
       );
       final plan = fixtures.plan().copyWith(days: [rest]);

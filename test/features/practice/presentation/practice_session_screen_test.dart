@@ -1100,7 +1100,9 @@ void main() {
       await tester.tap(
         find.widgetWithText(ElevatedButton, l10nEn().practiceSessionExit),
       );
-      for (var i = 0; i < 6; i++) {
+      // The replaced page stays in the tree until its exit transition has
+      // fully played out, so the pump budget covers the whole animation.
+      for (var i = 0; i < 16; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
 

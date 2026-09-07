@@ -816,5 +816,143 @@
   "@communityHubMyPostsError": {},
 
   "communityHubMyPostsRetry": "Retry",
-  "@communityHubMyPostsRetry": {}
+  "@communityHubMyPostsRetry": {},
+
+  "communityComposerTitle": "New post",
+  "@communityComposerTitle": {},
+
+  "communityComposerDiscard": "Discard",
+  "@communityComposerDiscard": {},
+
+  "communityComposerBodyLabel": "Text",
+  "@communityComposerBodyLabel": {},
+
+  "communityComposerBodyHint": "What would you like to share?",
+  "@communityComposerBodyHint": {},
+
+  "communityComposerAttachMedia": "Attach media",
+  "@communityComposerAttachMedia": {},
+
+  "communityComposerMediaLater": "Attaching media will be available later.",
+  "@communityComposerMediaLater": {},
+
+  "communityComposerAudienceLabel": "Who can see it",
+  "@communityComposerAudienceLabel": {},
+
+  "communityComposerPreviewLabel": "Shared fields",
+  "@communityComposerPreviewLabel": {},
+
+  "communityComposerPublish": "Publish",
+  "@communityComposerPublish": {},
+
+  "communityComposerSubmitting": "Publishing…",
+  "@communityComposerSubmitting": {},
+
+  "communityComposerSuccess": "Published successfully.",
+  "@communityComposerSuccess": {},
+
+  "communityComposerFailure": "The post was not sent — try again.",
+  "@communityComposerFailure": {},
+
+  "communityComposerFailureWithCode": "The post was not sent — try again. ({code})",
+  "@communityComposerFailureWithCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+
+  "communityComposerAudiencePublic": "Public",
+  "@communityComposerAudiencePublic": {},
+
+  "communityComposerAudienceFollowers": "Followers",
+  "@communityComposerAudienceFollowers": {},
+
+  "communityComposerAudiencePrivate": "Private",
+  "@communityComposerAudiencePrivate": {},
+
+  "communityComposerPreviewChordTimeline": "Chord timeline",
+  "@communityComposerPreviewChordTimeline": {},
+
+  "communityComposerPreviewStrumPattern": "Strum pattern",
+  "@communityComposerPreviewStrumPattern": {},
+
+  "communityComposerPreviewTempo": "Tempo",
+  "@communityComposerPreviewTempo": {},
+
+  "communityComposerPreviewStreakDays": "Active days",
+  "@communityComposerPreviewStreakDays": {},
+
+  "communityComposerPreviewBestScore": "Best score",
+  "@communityComposerPreviewBestScore": {},
+
+  "communityBookmarksTitle": "Bookmarks",
+  "@communityBookmarksTitle": {},
+
+  "communityBookmarksEmpty": "No saved posts yet.",
+  "@communityBookmarksEmpty": {},
+
+  "communityBookmarksErrorTitle": "The bookmarks couldn't load.",
+  "@communityBookmarksErrorTitle": {},
+
+  "communityBookmarksRetry": "Retry",
+  "@communityBookmarksRetry": {},
+
+  "communityBookmarkTombstoneBody": "This post is no longer available. The bookmark stays in your list until you remove it.",
+  "@communityBookmarkTombstoneBody": {},
+
+  "communityBookmarkRemoveAction": "Remove",
+  "@communityBookmarkRemoveAction": {},
+
+  "communityBookmarkLoadMore": "Load more",
+  "@communityBookmarkLoadMore": {},
+
+  "communityBookmarkFallbackTitle": "Saved post",
+  "@communityBookmarkFallbackTitle": {},
+
+  "communityBookmarkSavedOn": "Saved on {date}",
+  "@communityBookmarkSavedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+
+  "communitySearchHint": "Search by handle",
+  "@communitySearchHint": {},
+
+  "communitySearchClear": "Clear",
+  "@communitySearchClear": {},
+
+  "communitySearchRecentTitle": "Recent searches",
+  "@communitySearchRecentTitle": {},
+
+  "communitySearchClearAll": "Clear all",
+  "@communitySearchClearAll": {},
+
+  "communitySearchRemoveRecent": "Remove",
+  "@communitySearchRemoveRecent": {},
+
+  "communitySearchEmptyHint": "Type a handle prefix to discover players.",
+  "@communitySearchEmptyHint": {},
+
+  "communitySearchNoMatches": "No matches.",
+  "@communitySearchNoMatches": {},
+
+  "communitySearchRetry": "Retry",
+  "@communitySearchRetry": {},
+
+  "communitySearchNetworkError": "Network error",
+  "@communitySearchNetworkError": {},
+
+  "communitySearchServerError": "Server error",
+  "@communitySearchServerError": {},
+
+  "communitySearchRecentStorageError": "Could not update recent searches",
+  "@communitySearchRecentStorageError": {},
+
+  "communityGateErrorTitle": "Community could not be loaded",
+  "@communityGateErrorTitle": {}
 }

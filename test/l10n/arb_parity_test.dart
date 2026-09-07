@@ -44,6 +44,11 @@ void main() {
       'lib/l10n/features/shell_hu.arb',
     ),
     (
+      'features/today',
+      'lib/l10n/features/today_en.arb',
+      'lib/l10n/features/today_hu.arb',
+    ),
+    (
       'features/tuner',
       'lib/l10n/features/tuner_en.arb',
       'lib/l10n/features/tuner_hu.arb',

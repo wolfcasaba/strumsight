@@ -21,14 +21,13 @@
 /// 5. The status banner — explicit visible state per
 ///    [PostComposerStatus].
 ///
-/// **Strings:** most composer labels are kept in this file as
-/// constants — a future i18n round migrates the remainder to the
-/// ARB catalogue in lockstep with the screen. The public-audience
-/// confirmation sheet is the exception: it reads
-/// ``communityPublicConfirm*`` from [AppLocalizations], same as the
-/// sibling confirmation in ``edit_profile_screen.dart``, because
-/// this round already added those ARB keys to
-/// ``lib/l10n/features/community_{en,hu}.arb``.
+/// **Strings (R20, audit M8):** every user-facing label on this
+/// screen now comes from [AppLocalizations]
+/// (``communityComposer*`` in
+/// ``lib/l10n/features/community_{en,hu}.arb``). Until this round
+/// the labels were Hungarian ``const`` literals in this file, so an
+/// English build rendered a Hungarian composer — measured on the
+/// shipped development APK, where ``communityWritesEnabled`` is on.
 ///
 /// **Média placeholder (brief §3 / Kör 18):** the composer ships a
 /// stub "Attach media" placeholder button that does NOT upload
@@ -49,35 +48,6 @@ import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
 import '../widgets/community_theme_scope.dart';
-
-/// Composer-screen labels. Kept here (not in the ARB) because the
-/// l10n catalogue for the composer is a future round's scope; a
-/// later round moves these to ``lib/l10n/features/community_en.arb``
-/// in lockstep with the screen.
-abstract final class _ComposerLabels {
-  static const String title = 'Új poszt';
-  static const String bodyLabel = 'Szöveg';
-  static const String bodyHint = 'Mit szeretnél megosztani?';
-  static const String attachMedia = 'Média csatolása';
-  static const String mediaLater = 'A média csatolása később érhető el.';
-  static const String audienceLabel = 'Kik láthatják';
-  static const String previewLabel = 'Megosztott mezők';
-  static const String publish = 'Közzététel';
-  static const String submitting = 'Közzététel…';
-  static const String success = 'Sikeresen közzétéve.';
-  static const String failure = 'A poszt nem került elküldésre — próbáld újra.';
-  static const String discard = 'Elvetés';
-
-  static const String audiencePublic = 'Nyilvános';
-  static const String audienceFollowers = 'Követők';
-  static const String audiencePrivate = 'Privát';
-
-  static const String previewChordTimeline = 'Akkord-idővonal';
-  static const String previewStrumPattern = 'Strumminta';
-  static const String previewTempo = 'Tempó';
-  static const String previewStreakDays = 'Aktív napok';
-  static const String previewBestScore = 'Legjobb pontszám';
-}
 
 /// The composer route. The entry-point that pushes this route
 /// supplies the [ShareArtifact.toJson] of the artifact the user is
@@ -108,14 +78,15 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(postComposerControllerProvider);
+    final l10n = AppLocalizations.of(context);
 
     return CommunityThemeScope(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(_ComposerLabels.title),
+          title: Text(l10n.communityComposerTitle),
           actions: <Widget>[
             IconButton(
-              tooltip: _ComposerLabels.discard,
+              tooltip: l10n.communityComposerDiscard,
               icon: const Icon(Icons.delete_outline),
               onPressed: state.value?.isSubmitting ?? false
                   ? null
@@ -169,10 +140,11 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
   }
 
   void _onAttachMediaPressed() {
+    final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(_ComposerLabels.mediaLater),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text(l10n.communityComposerMediaLater),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -245,7 +217,7 @@ class _ComposerBody extends StatelessWidget {
                     _ClubTargetBanner(label: l10n.communityComposerClubTarget),
                     const SizedBox(height: 16),
                   ],
-                  const _SectionLabel(label: _ComposerLabels.bodyLabel),
+                  _SectionLabel(label: l10n.communityComposerBodyLabel),
                   const SizedBox(height: 8),
                   TextField(
                     controller: bodyController,
@@ -253,9 +225,9 @@ class _ComposerBody extends StatelessWidget {
                     minLines: 4,
                     maxLines: 8,
                     maxLength: kCommunityPostBodyMaxLength,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: _ComposerLabels.bodyHint,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      hintText: l10n.communityComposerBodyHint,
                     ),
                     onChanged: onBodyChanged,
                   ),
@@ -263,11 +235,11 @@ class _ComposerBody extends StatelessWidget {
                   SsButton(
                     variant: SsButtonVariant.secondary,
                     icon: Icons.attach_file,
-                    label: _ComposerLabels.attachMedia,
+                    label: l10n.communityComposerAttachMedia,
                     onPressed: state.isSubmitting ? null : onAttachMediaPressed,
                   ),
                   const SizedBox(height: 24),
-                  const _SectionLabel(label: _ComposerLabels.audienceLabel),
+                  _SectionLabel(label: l10n.communityComposerAudienceLabel),
                   const SizedBox(height: 8),
                   _AudienceSelector(
                     audience: state.audience,
@@ -275,7 +247,7 @@ class _ComposerBody extends StatelessWidget {
                     onChanged: onAudienceChanged,
                   ),
                   const SizedBox(height: 24),
-                  const _SectionLabel(label: _ComposerLabels.previewLabel),
+                  _SectionLabel(label: l10n.communityComposerPreviewLabel),
                   const SizedBox(height: 8),
                   _SharePreviewPanel(
                     preview: state.sharePreview,
@@ -293,7 +265,7 @@ class _ComposerBody extends StatelessWidget {
             child: SsButton(
               onPressed: canSubmit ? onSubmit : null,
               loading: state.status == PostComposerStatus.submitting,
-              label: _ComposerLabels.publish,
+              label: l10n.communityComposerPublish,
             ),
           ),
         ],
@@ -364,6 +336,7 @@ class _AudienceSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SsChoice<CommunityAudience>(
       style: SsChoiceStyle.chip,
       value: audience,
@@ -371,7 +344,7 @@ class _AudienceSelector extends StatelessWidget {
         for (final value in CommunityAudience.values)
           SsChoiceOption<CommunityAudience>(
             value: value,
-            label: _audienceLabel(value),
+            label: _audienceLabel(l10n, value),
           ),
       ],
       onChanged: enabled ? (value) => _onSelected(context, value) : null,
@@ -397,14 +370,14 @@ class _AudienceSelector extends StatelessWidget {
     );
   }
 
-  String _audienceLabel(CommunityAudience value) {
+  String _audienceLabel(AppLocalizations l10n, CommunityAudience value) {
     switch (value) {
       case CommunityAudience.public:
-        return _ComposerLabels.audiencePublic;
+        return l10n.communityComposerAudiencePublic;
       case CommunityAudience.followers:
-        return _ComposerLabels.audienceFollowers;
+        return l10n.communityComposerAudienceFollowers;
       case CommunityAudience.private:
-        return _ComposerLabels.audiencePrivate;
+        return l10n.communityComposerAudiencePrivate;
     }
   }
 }
@@ -422,38 +395,39 @@ class _SharePreviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: <Widget>[
         SsSwitchRow(
-          label: _ComposerLabels.previewChordTimeline,
+          label: l10n.communityComposerPreviewChordTimeline,
           value: preview.includeChordTimeline,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.chordTimeline, v)
               : null,
         ),
         SsSwitchRow(
-          label: _ComposerLabels.previewStrumPattern,
+          label: l10n.communityComposerPreviewStrumPattern,
           value: preview.includeStrumPattern,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.strumPattern, v)
               : null,
         ),
         SsSwitchRow(
-          label: _ComposerLabels.previewTempo,
+          label: l10n.communityComposerPreviewTempo,
           value: preview.includeTempo,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.tempo, v)
               : null,
         ),
         SsSwitchRow(
-          label: _ComposerLabels.previewStreakDays,
+          label: l10n.communityComposerPreviewStreakDays,
           value: preview.includeStreakDays,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.streakDays, v)
               : null,
         ),
         SsSwitchRow(
-          label: _ComposerLabels.previewBestScore,
+          label: l10n.communityComposerPreviewBestScore,
           value: preview.includeBestScore,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.bestScore, v)
@@ -473,25 +447,26 @@ class _StatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     late final Color background;
     late final String text;
     switch (status) {
       case PostComposerStatus.submitting:
         background = theme.colorScheme.secondaryContainer;
-        text = _ComposerLabels.submitting;
+        text = l10n.communityComposerSubmitting;
       case PostComposerStatus.success:
         background = theme.colorScheme.tertiaryContainer;
-        text = _ComposerLabels.success;
+        text = l10n.communityComposerSuccess;
       case PostComposerStatus.failure:
         background = theme.colorScheme.errorContainer;
-        // AppFailure does not carry a user-facing message — the
-        // composer maps the failure code via the ARB in a future
-        // round. For now the screen surfaces a generic banner; the
-        // structured `error.code` is logged for diagnostics.
+        // AppFailure does not carry a user-facing message — the banner
+        // is the localized generic copy, and the structured
+        // `error.code` is appended (also localized, so the parentheses
+        // stay part of the translated sentence) for diagnostics.
         final failureCode = error?.code;
         text = failureCode != null
-            ? '${_ComposerLabels.failure} ($failureCode)'
-            : _ComposerLabels.failure;
+            ? l10n.communityComposerFailureWithCode(failureCode)
+            : l10n.communityComposerFailure;
       case PostComposerStatus.editing:
         return const SizedBox.shrink();
     }

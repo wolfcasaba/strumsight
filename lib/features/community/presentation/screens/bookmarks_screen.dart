@@ -27,24 +27,34 @@
 /// following feed, the pagination button is the only entry
 /// point to ``loadMore()`` (the Kör 14 invariant).
 ///
-/// **Localization note (l10n).** This round ships the screen
-/// with hardcoded English labels — the ARB file is not on
-/// this round's ``allowed_paths``. A follow-up round (Kör 18
-/// — community surface l10n) will lift the labels into
-/// ``lib/l10n/app_en.arb`` / ``app_hu.arb`` (the F1 lesson the
-/// Kör 14 brief called out). The label constants live at the
-/// top of the screen file so the future ARB migration is a
-/// one-pass search-and-replace.
+/// **Localization (R20, audit M9).** Every label on this screen
+/// now reads from [AppLocalizations] (``communityBookmark*`` /
+/// ``communityBookmarks*`` in
+/// ``lib/l10n/features/community_{en,hu}.arb``); the file-level
+/// ``_l10n*`` constants that stood in for the catalogue are gone.
+///
+/// **Rows say something a human can read (R20, audit M9).** The
+/// row used to render ``Post <uuid>`` over ``Saved at
+/// <ISO-8601>`` — the server's identifiers, verbatim. The bookmark
+/// row the server returns
+/// ([CommunityBookmark]) carries no post title, author or excerpt,
+/// so the honest human copy is the localized "Saved post" label
+/// plus the save date rendered through ``intl``'s
+/// [DateFormat.yMMMd] in the CURRENT locale — the same helper
+/// ``progress_v2/screens/skill_detail_screen.dart`` uses. Inventing
+/// a title the API never sent would be worse than a generic one.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import 'package:strumsight/core/design_system/public.dart';
 
 import '../../../../app/routing/app_route.dart';
 import '../../../../core/foundation/app_failure.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/bookmarks_controller.dart';
 import '../../data/repositories/post_repository_impl.dart';
 import '../../domain/entities/community_bookmark.dart';
@@ -54,21 +64,6 @@ import '../widgets/community_theme_scope.dart';
 
 export '../../application/controllers/bookmarks_controller.dart'
     show BookmarkRow, BookmarksController, BookmarksState;
-
-// ---------------------------------------------------------------------------
-// L10n placeholders — to be lifted into app_en.arb / app_hu.arb in a
-// future round. The keys are named to match the future ARB
-// identifiers.
-// ---------------------------------------------------------------------------
-
-const String _l10nBookmarksTitle = 'Bookmarks';
-const String _l10nBookmarksEmpty = 'No saved posts yet.';
-const String _l10nBookmarkTombstoneBody =
-    'This post is no longer available. The bookmark stays in your list '
-    'until you remove it.';
-const String _l10nBookmarkRemoveAction = 'Remove';
-const String _l10nBookmarkLoadMore = 'Load more';
-const String _l10nBookmarksErrorTitle = "The bookmarks couldn't load.";
 
 // ---------------------------------------------------------------------------
 // Controller wiring (javító sáv R5, 2026-09-06).
@@ -158,9 +153,10 @@ class _BookmarksScreenState extends ConsumerState<BookmarksScreen> {
     // stream, the screen rebuilds. A failure renders the
     // error card; the user retries via the explicit button.
     final asyncState = ref.watch(bookmarksProvider);
+    final l10n = AppLocalizations.of(context);
     return CommunityThemeScope(
       child: Scaffold(
-        appBar: AppBar(title: const Text(_l10nBookmarksTitle)),
+        appBar: AppBar(title: Text(l10n.communityBookmarksTitle)),
         body: SafeArea(
           child: asyncState.when(
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -176,11 +172,15 @@ class _BookmarksScreenState extends ConsumerState<BookmarksScreen> {
   }
 
   Widget _renderBody(BookmarksState state) {
+    final l10n = AppLocalizations.of(context);
     if (state.rows.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(_l10nBookmarksEmpty, textAlign: TextAlign.center),
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            l10n.communityBookmarksEmpty,
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
@@ -225,10 +225,13 @@ class _BookmarkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return ListTile(
       key: Key('bookmark-row-${row.postId.value}'),
-      title: Text('Post ${row.postId.value}'),
-      subtitle: Text('Saved at ${row.createdAt.toIso8601String()}'),
+      title: Text(l10n.communityBookmarkFallbackTitle),
+      subtitle: Text(
+        l10n.communityBookmarkSavedOn(_formatSavedAt(context, row.createdAt)),
+      ),
       // WP-C (2026-09-06) — a mentett tétel megnyitja a bejegyzés
       // beszélgetését. Külön poszt-részlet képernyő NINCS a fában; a
       // kommentek képernyő a bejegyzés kanonikus nézete.
@@ -238,12 +241,21 @@ class _BookmarkCard extends StatelessWidget {
         AppRoutes.communityComments.replaceFirst(':postId', row.postId.value),
       ),
       trailing: IconButton(
-        tooltip: _l10nBookmarkRemoveAction,
+        tooltip: l10n.communityBookmarkRemoveAction,
         icon: const Icon(Icons.bookmark_remove_outlined),
         onPressed: onRemove,
       ),
     );
   }
+}
+
+/// The save date in the viewer's own locale — never the raw ISO-8601
+/// timestamp the server sends (R20, audit M9). Same `intl` entry point
+/// `skill_detail_screen.dart` uses, so the two surfaces cannot drift.
+String _formatSavedAt(BuildContext context, DateTime createdAt) {
+  return DateFormat.yMMMd(
+    Localizations.localeOf(context).toString(),
+  ).format(createdAt);
 }
 
 class _TombstoneCard extends StatelessWidget {
@@ -253,6 +265,7 @@ class _TombstoneCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: SsSurface(
@@ -267,19 +280,19 @@ class _TombstoneCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Post ${row.postId.value}',
+                      l10n.communityBookmarkFallbackTitle,
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _l10nBookmarkTombstoneBody,
+                      l10n.communityBookmarkTombstoneBody,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),
               ),
               IconButton(
-                tooltip: _l10nBookmarkRemoveAction,
+                tooltip: l10n.communityBookmarkRemoveAction,
                 icon: const Icon(Icons.close),
                 onPressed: onRemove,
               ),
@@ -315,7 +328,7 @@ class _LoadMoreFooter extends StatelessWidget {
         child: SsButton(
           variant: SsButtonVariant.secondary,
           onPressed: onPressed,
-          label: _l10nBookmarkLoadMore,
+          label: AppLocalizations.of(context).communityBookmarkLoadMore,
         ),
       ),
     );
@@ -329,20 +342,24 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(_l10nBookmarksErrorTitle, textAlign: TextAlign.center),
+            Text(
+              l10n.communityBookmarksErrorTitle,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(failure.toString(), textAlign: TextAlign.center),
             const SizedBox(height: 16),
             SsButton(
               variant: SsButtonVariant.secondary,
               onPressed: onRetry,
-              label: 'Retry',
+              label: l10n.communityBookmarksRetry,
             ),
           ],
         ),

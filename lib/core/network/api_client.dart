@@ -201,32 +201,43 @@ final class ApiClient {
     Map<String, Object?>? data,
     Map<String, Object?>? queryParameters,
   }) async {
+    // A `null` értékű kulcsok kihagyása szándékos: a szerver
+    // `extra="forbid"` sémái egy `cursor=null` query-paramétert
+    // ismeretlen bemenetként utasítanának el.
+    final query = queryParameters == null
+        ? null
+        : <String, Object?>{
+            for (final entry in queryParameters.entries)
+              if (entry.value != null) entry.key: entry.value,
+          };
+    final options = Options(
+      method: method,
+      // Both stay `null` unless the caller opted in, so every other
+      // request keeps the base options byte-for-byte (see [getJson]).
+      responseType: readsErrorDetail ? ResponseType.plain : null,
+      receiveDataWhenStatusError: readsErrorDetail ? true : null,
+      extra: {
+        NetworkRequestMetadata.requiresAuthentication: requiresAuthentication,
+      },
+    );
     final Response<Object?> response;
     try {
-      response = await _dio.request<Object?>(
-        path,
-        data: data,
-        // A `null` értékű kulcsok kihagyása szándékos: a szerver
-        // `extra="forbid"` sémái egy `cursor=null` query-paramétert
-        // ismeretlen bemenetként utasítanának el.
-        queryParameters: queryParameters == null
-            ? null
-            : <String, Object?>{
-                for (final entry in queryParameters.entries)
-                  if (entry.value != null) entry.key: entry.value,
-              },
-        options: Options(
-          method: method,
-          // Both stay `null` unless the caller opted in, so every other
-          // request keeps the base options byte-for-byte (see [getJson]).
-          responseType: readsErrorDetail ? ResponseType.plain : null,
-          receiveDataWhenStatusError: readsErrorDetail ? true : null,
-          extra: {
-            NetworkRequestMetadata.requiresAuthentication:
-                requiresAuthentication,
-          },
-        ),
-      );
+      // Dio overrides `responseType` to JSON for every generic argument other
+      // than `dynamic` or `String`, so the opted-in request has to be issued
+      // as `request<String>` for `ResponseType.plain` to survive.
+      response = readsErrorDetail
+          ? await _dio.request<String>(
+              path,
+              data: data,
+              queryParameters: query,
+              options: options,
+            )
+          : await _dio.request<Object?>(
+              path,
+              data: data,
+              queryParameters: query,
+              options: options,
+            );
     } on DioException catch (error, stackTrace) {
       return Failure(
         mapNetworkFailure(

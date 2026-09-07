@@ -1,9 +1,10 @@
 /// Community profile controller — the four-state gate + write surface
 /// (E09-R06, ADR 0400 §5).
 ///
-/// The controller is the ONLY place the four states
-/// (``disabled`` / ``logged-out`` / ``profile-missing`` / ``ready``)
-/// collapse into a single value the UI can branch on. It is built
+/// The controller is the ONLY place the gate states
+/// (``disabled`` / ``logged-out`` / ``profile-missing`` / ``ready`` /
+/// ``unavailable`` / ``error``) collapse into a single value the UI can
+/// branch on. It is built
 /// on top of three orthogonal providers:
 ///
 /// * ``accountEnabledProvider`` — Kör 1 / Kör 2 master switch. When
@@ -49,7 +50,8 @@ import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_profile_repository.dart';
 import '../../domain/value_objects/community_handle.dart';
 
-/// The four gate states the brief §5.1 names.
+/// The gate states the brief §5.1 names, plus the two the audit rounds
+/// added ([unavailable], R12; [error], R20).
 enum CommunityGateStatus {
   /// The account layer (or the Community module flag) is off for
   /// this build — the gate shows the "feature not available" view.
@@ -77,6 +79,19 @@ enum CommunityGateStatus {
   /// so and keeps a Retry — an operator flipping that switch makes the
   /// next attempt succeed.
   unavailable,
+
+  /// The profile probe FAILED for a reason that says nothing about whether
+  /// the user has a profile (R20, audit M6.3): a timeout, a 5xx, a dropped
+  /// connection.
+  ///
+  /// Until this round every non-[unavailable] failure collapsed into
+  /// [profileMissing], so a learner who already owns a profile was offered
+  /// "Create profile" the moment their connection blinked — and the create
+  /// POST would then 409 against the profile they already had. "We could
+  /// not ask" is not "you have none": this state renders an error card with
+  /// a Retry, and [profileMissing] is now reserved for the ONE result that
+  /// actually means it — a successful fetch returning `null`.
+  error,
 }
 
 /// The snapshot the controller publishes to the UI. The gate is
@@ -179,10 +194,16 @@ class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
       // profile yet". Routing it to `profileMissing` (what this catch did
       // until now) offered a Create CTA whose POST could only fail again,
       // and the failure surfaced as the generic error copy.
+      //
+      // R20 (audit M6.3) — and NEITHER is a timeout or a 500. Every other
+      // failure now maps to [CommunityGateStatus.error], which carries the
+      // failure to the gate's error card. `profileMissing` is reachable
+      // ONLY from the `null` above: a fetch that SUCCEEDED and said "no
+      // profile row".
       return CommunityProfileState(
         status: isCommunityUnavailable(failure)
             ? CommunityGateStatus.unavailable
-            : CommunityGateStatus.profileMissing,
+            : CommunityGateStatus.error,
         profile: null,
         error: failure,
         isSubmitting: false,
