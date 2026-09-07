@@ -689,6 +689,8 @@
 
   "communityClubFeedEmpty": "No posts in this club yet.",
   "@communityClubFeedEmpty": {},
+  "communityClubFeedError": "The club's posts couldn't load.",
+  "@communityClubFeedError": {},
 
   "communityClubFeedPinnedHeader": "Pinned",
   "@communityClubFeedPinnedHeader": {},

@@ -625,7 +625,18 @@ class _ClubFeedTab extends ConsumerWidget {
                     ListTile(title: Text(post.body ?? '')),
                 ],
           loading: () => const <Widget>[CircularProgressIndicator()],
-          error: (_, _) => <Widget>[Text(localizations.communityClubFeedEmpty)],
+          // R15/B — a betöltési HIBA nem „nincs poszt". Az üres állapot
+          // ÁLLÍTÁS a klubról; a hiba viszont annyit tud, hogy NEM TUDJUK,
+          // mi van a klubban (`UNKNOWN > CONFIDENTLY WRONG`, ugyanaz az
+          // elv, amit a Kihívások fül már követ). Ezért hiba-kártya megy
+          // ki, újrapróbálkozással — nem az üres-állapot szövege.
+          error: (_, _) => <Widget>[
+            _ClubFeedErrorCard(
+              key: const Key('club-feed-pinned-error'),
+              localizations: localizations,
+              onRetry: () => ref.invalidate(clubPinnedProvider(clubId)),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         Text(
@@ -641,9 +652,47 @@ class _ClubFeedTab extends ConsumerWidget {
                     ListTile(title: Text(post.body ?? '')),
                 ],
           loading: () => const <Widget>[CircularProgressIndicator()],
-          error: (_, _) => <Widget>[Text(localizations.communityClubFeedEmpty)],
+          // Ugyanaz az ok, mint a kitűzötteknél: a hibaág soha nem
+          // állíthatja, hogy a klubnak nincs posztja.
+          error: (_, _) => <Widget>[
+            _ClubFeedErrorCard(
+              key: const Key('club-feed-error'),
+              localizations: localizations,
+              onRetry: () => ref.invalidate(clubFeedProvider(clubId)),
+            ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+/// Hiba-kártya a Feed fül BELSŐ (a fül `ListView`-ján BELÜLI) szakaszaihoz.
+///
+/// A fül-szintű [_ErrorView] saját görgethető törzset (`ListView`) rajzol,
+/// ezért egy lista GYEREKEKÉNT nem használható. A közös rész — ikon,
+/// üzenet, újrapróbálás-gomb — a [_ErrorCardBody]: egy vizuális nyelv a
+/// képernyő minden hiba-állapotára.
+class _ClubFeedErrorCard extends StatelessWidget {
+  const _ClubFeedErrorCard({
+    super.key,
+    required this.localizations,
+    required this.onRetry,
+  });
+
+  final AppLocalizations localizations;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: _ErrorCardBody(
+        message: localizations.communityClubFeedError,
+        // Ugyanaz az „Újra" felirat, amit a képernyő többi hiba-ága visel.
+        retryLabel: localizations.communityClubDetailRetry,
+        onRetry: onRetry,
+      ),
     );
   }
 }
@@ -812,25 +861,45 @@ class _ErrorView extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       children: <Widget>[
         const SizedBox(height: 32),
-        Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 16),
-              Text(
-                localizations.communityClubDetailError,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              SsButton(
-                onPressed: () => onRetry(),
-                label: localizations.communityClubDetailRetry,
-              ),
-            ],
-          ),
+        _ErrorCardBody(
+          message: localizations.communityClubDetailError,
+          retryLabel: localizations.communityClubDetailRetry,
+          onRetry: () => onRetry(),
         ),
       ],
+    );
+  }
+}
+
+/// A hiba-kártya TÖRZSE: ikon + üzenet + újrapróbálás-gomb.
+///
+/// A fül-szintű [_ErrorView] és a Feed fül beágyazott hiba-ágai
+/// ([_ClubFeedErrorCard]) UGYANEZT rajzolják — a különbség csak az, hogy
+/// ki adja a görgethető keretet köré.
+class _ErrorCardBody extends StatelessWidget {
+  const _ErrorCardBody({
+    required this.message,
+    required this.retryLabel,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String retryLabel;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+          const SizedBox(height: 16),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          SsButton(onPressed: onRetry, label: retryLabel),
+        ],
+      ),
     );
   }
 }

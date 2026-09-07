@@ -29,8 +29,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/features/community/domain/entities/community_club.dart';
 import 'package:strumsight/features/community/domain/entities/community_post.dart';
+import 'package:strumsight/features/community/domain/entities/moderation_state.dart';
+import 'package:strumsight/features/community/domain/policies/community_audience.dart';
 import 'package:strumsight/features/community/domain/repositories/club_repository.dart';
 import 'package:strumsight/features/community/domain/repositories/community_page.dart';
 import 'package:strumsight/features/community/domain/value_objects/content_id.dart';
@@ -168,6 +171,27 @@ CommunityClub _club({
     memberCount: memberCount,
     myRole: myRole,
     createdAt: DateTime.utc(2026, 8, 24),
+  );
+}
+
+/// A poszt-sor, amit a Feed fül kirajzol — a `body` az egyetlen mező, amit
+/// a fül ma megjelenít, a többi a `CommunityPost` szerződésének kötelező
+/// része.
+CommunityPost _post(String publicId, String body) {
+  return CommunityPost(
+    id: ContentId(publicId),
+    authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a01'),
+    audience: CommunityAudience.public,
+    body: body,
+    artifact: UnfilledCommunityShareArtifact(),
+    createdAt: DateTime.utc(2026, 9, 6, 12),
+    moderationState: ModerationState.visible,
+    counts: CommunityPostCounts(
+      reactionCount: 0,
+      commentCount: 0,
+      bookmarkCount: 0,
+    ),
+    viewerState: const CommunityViewerPostState.empty(),
   );
 }
 
@@ -417,6 +441,99 @@ void main() {
       // ref.invalidate(clubDetailProvider(...)) is the
       // §A2 anchor.
       expect(detailRevisions, greaterThan(1));
+    });
+
+    // R15/B (2026-09-07) — a Feed fül `error:` ága a „nincs poszt" ÜRES
+    // állapotot rajzolta egy BETÖLTÉSI HIBÁRA, vagyis a felhasználó egy
+    // hálózati hibát „ez a klub üres" állításként olvasott. Az üres lista
+    // állítás a klubról; a hiba csak annyit tud, hogy NEM TUDJUK — ezért
+    // hiba-kártya megy ki, újrapróbálkozással (`UNKNOWN > CONFIDENTLY
+    // WRONG`, ugyanaz az elv, amit a Kihívások fül már követ).
+    testWidgets('a failing feed shows an error, retry works', (tester) async {
+      final fake = _RecordingClubRepository.build(
+        _club(
+          publicId: 'club-1',
+          name: 'Blues Lovers',
+          visibility: ClubVisibility.discoverable,
+          memberCount: 12,
+          myRole: ClubRole.member,
+        ),
+      );
+      var feedAttempts = 0;
+
+      await tester.pumpWidget(
+        _wrap(
+          fake,
+          extraOverrides: <Override>[
+            clubPinnedProvider.overrideWith((ref, arg) async {
+              return <CommunityPost>[_post('pin-1', 'Pinned post.')];
+            }),
+            clubFeedProvider.overrideWith((ref, arg) async {
+              feedAttempts++;
+              // Az első lekérés elszáll, a másodikat (az újrapróbálás)
+              // már kiszolgáljuk — ez méri, hogy a gomb tényleg ÚJRA
+              // olvassa a providert, nem csak elrejti a kártyát.
+              if (feedAttempts == 1) throw const NetworkFailure();
+              return CommunityPagePlaceholder<CommunityPost>(
+                items: <CommunityPost>[_post('post-1', 'Reloaded post.')],
+              );
+            }),
+          ],
+        ),
+      );
+      await _pumpScreen(tester);
+
+      expect(find.byKey(const Key('club-feed-error')), findsOneWidget);
+      expect(find.text("The club's posts couldn't load."), findsOneWidget);
+      // A hazug üres-állapot sehol nem jelenhet meg.
+      expect(find.text('No posts in this club yet.'), findsNothing);
+
+      final retry = find.descendant(
+        of: find.byKey(const Key('club-feed-error')),
+        matching: find.text('Retry'),
+      );
+      await tester.ensureVisible(retry);
+      await tester.pump();
+      await tester.tap(retry);
+      await _pumpScreen(tester);
+
+      expect(feedAttempts, 2);
+      expect(find.byKey(const Key('club-feed-error')), findsNothing);
+      expect(find.text('Reloaded post.'), findsOneWidget);
+    });
+
+    // A kitűzött posztok szakasza ugyanezt a szerződést viseli.
+    testWidgets('a failing pinned list shows an error', (tester) async {
+      final fake = _RecordingClubRepository.build(
+        _club(
+          publicId: 'club-1',
+          name: 'Blues Lovers',
+          visibility: ClubVisibility.discoverable,
+          memberCount: 12,
+          myRole: ClubRole.member,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          fake,
+          extraOverrides: <Override>[
+            clubPinnedProvider.overrideWith((ref, arg) async {
+              throw const NetworkFailure();
+            }),
+            clubFeedProvider.overrideWith((ref, arg) async {
+              return CommunityPagePlaceholder<CommunityPost>(
+                items: <CommunityPost>[_post('post-1', 'Feed post.')],
+              );
+            }),
+          ],
+        ),
+      );
+      await _pumpScreen(tester);
+
+      expect(find.byKey(const Key('club-feed-pinned-error')), findsOneWidget);
+      expect(find.text('No posts in this club yet.'), findsNothing);
+      expect(find.text('Feed post.'), findsOneWidget);
     });
   });
 }

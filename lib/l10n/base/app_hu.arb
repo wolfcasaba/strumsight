@@ -156,6 +156,7 @@
   "authPasswordTooShort": "A jelszó legalább 8 karakter legyen",
   "authErrorInvalidCredentials": "Hibás email vagy jelszó",
   "authErrorEmailTaken": "Ez az email már regisztrálva van",
+  "authEmailTakenHint": "Van már fiókod? Válts alább bejelentkezésre.",
   "authErrorNetwork": "Nem érhető el a szerver. Ellenőrizd a kapcsolatot.",
   "authErrorUnknown": "Hiba történt. Kérlek próbáld újra.",
   "authContinueWithoutAccount": "Folytatás fiók nélkül",

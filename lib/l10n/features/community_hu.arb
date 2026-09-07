@@ -689,6 +689,8 @@
 
   "communityClubFeedEmpty": "Ebben a klubban még nincs poszt.",
   "@communityClubFeedEmpty": {},
+  "communityClubFeedError": "A klub posztjai nem tölthetők be.",
+  "@communityClubFeedError": {},
 
   "communityClubFeedPinnedHeader": "Kitűzött",
   "@communityClubFeedPinnedHeader": {},

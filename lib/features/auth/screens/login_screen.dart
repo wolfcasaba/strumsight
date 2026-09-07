@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
+import '../../../core/foundation/app_failure.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../presentation/auth_failure_message.dart';
@@ -23,6 +24,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _isSignUp = false;
+
+  /// How many submissions THIS screen has started. Every failure the
+  /// controller publishes belongs to exactly one of them.
+  int _submissions = 0;
+
+  /// The submission whose failure the user has already answered — by
+  /// toggling the mode, or by editing a field after the attempt failed.
+  ///
+  /// [AuthController] keeps its honest `AsyncError` (this screen never fakes
+  /// an `AsyncData(null)` "logged out fine" state); only the SCREEN stops
+  /// repainting a message the user has moved on from — the measured defect
+  /// was a sign-up 409 still shown on the sign-in form, and vice versa.
+  /// Because a new attempt raises [_submissions], the marker can never
+  /// outlive the submission it dismissed: the NEXT failure is always shown,
+  /// even one carrying the same code or the very same (const-canonical)
+  /// failure instance.
+  int? _dismissedSubmission;
 
   @override
   void dispose() {
@@ -44,9 +62,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /// Hides the failure currently on screen WITHOUT touching the controller.
+  ///
+  /// Called when the user changes what they are doing (mode toggle, or an
+  /// edit in either field): the visible message answers the PREVIOUS attempt
+  /// and from here on would only contradict the form in front of the user.
+  void _dismissVisibleError() {
+    if (_dismissedSubmission == _submissions) return;
+    if (!ref.read(authControllerProvider).hasError) return;
+    setState(() => _dismissedSubmission = _submissions);
+  }
+
+  void _toggleMode() {
+    _dismissVisibleError();
+    setState(() => _isSignUp = !_isSignUp);
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
+    // A fresh attempt — whatever was dismissed belonged to an older one, so
+    // this attempt's outcome is shown no matter what came before it.
+    setState(() => _submissions++);
     final controller = ref.read(authControllerProvider.notifier);
     final email = _email.text.trim();
     final password = _password.text;
@@ -63,6 +100,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final palette = context.palette;
     final auth = ref.watch(authControllerProvider);
     final loading = auth.isLoading;
+    final showError = auth.hasError && _dismissedSubmission != _submissions;
 
     // Pop back to Settings the moment a session exists.
     ref.listen(authControllerProvider, (_, next) {
@@ -111,6 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               TextFormField(
                                 controller: _email,
                                 enabled: !loading,
+                                onChanged: (_) => _dismissVisibleError(),
                                 keyboardType: TextInputType.emailAddress,
                                 autofillHints: const [AutofillHints.email],
                                 textInputAction: TextInputAction.next,
@@ -130,6 +169,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               TextFormField(
                                 controller: _password,
                                 enabled: !loading,
+                                onChanged: (_) => _dismissVisibleError(),
                                 obscureText: true,
                                 autofillHints: const [AutofillHints.password],
                                 textInputAction: TextInputAction.done,
@@ -143,7 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ? null
                                     : l10n.authPasswordTooShort,
                               ),
-                              if (auth.hasError) ...[
+                              if (showError) ...[
                                 const SizedBox(height: 16),
                                 // Only the stable, localised failure code ever
                                 // reaches the UI (authFailureMessage) — no raw
@@ -157,6 +197,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     color: colors.danger,
                                   ),
                                 ),
+                                if (_isEmailTaken(auth.error)) ...[
+                                  const SizedBox(height: 8),
+                                  // A 409 has exactly ONE obvious next step,
+                                  // and the toggle right below performs it —
+                                  // say so instead of leaving a dead end.
+                                  Text(
+                                    l10n.authEmailTakenHint,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 13,
+                                      color: palette.ink,
+                                    ),
+                                  ),
+                                ],
                               ],
                               const SizedBox(height: 24),
                               SsButton(
@@ -172,11 +227,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 label: _isSignUp
                                     ? l10n.authToggleToSignIn
                                     : l10n.authToggleToSignUp,
-                                onPressed: loading
-                                    ? null
-                                    : () => setState(
-                                        () => _isSignUp = !_isSignUp,
-                                      ),
+                                onPressed: loading ? null : _toggleMode,
                               ),
                             ],
                           ),
@@ -202,3 +253,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
+
+/// True when the visible failure is the sign-up 409 — "that e-mail is already
+/// registered". The one failure on this screen with an obvious next step.
+bool _isEmailTaken(Object? error) =>
+    error is AppFailure && error.code == FailureCode.validationEmailTaken;
