@@ -317,6 +317,23 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
     ("GET", "/community/leaderboards/{challenge_public_id}"): (
         "requires an existing challenge id; see the results endpoint above"
     ),
+    # Javító sáv 2026-09-06 R5 — the three client call sites wired that
+    # round (`docs/ui/apk-functionality-audit-2026-09-06.md` §5).
+    ("GET", "/community/bookmarks"): (
+        "a fresh account has nothing bookmarked, and no post to bookmark "
+        "exists without a second account's content; GET /community/blocked "
+        "and GET /community/muted already prove the authenticated list-read "
+        "shape"
+    ),
+    ("GET", "/community/clubs/{public_id}/members"): (
+        "requires an existing club id; no club-creation step is part of the "
+        "single-account bring-up chain"
+    ),
+    ("GET", "/community/profiles/{public_id}"): (
+        "the by-id read is the followers/following list's row lookup for a "
+        "SECOND account's profile; GET /community/profiles/me already proves "
+        "this device's authenticated profile read"
+    ),
 }
 
 

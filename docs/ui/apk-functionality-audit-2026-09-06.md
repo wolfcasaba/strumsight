@@ -154,6 +154,7 @@ kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
 | **R4** | `cee142b` (+ `c472b93`) | a tervező Today-képernyője a VALÓDI aktív tervet kapja (`activePracticePlanProvider`), a Start/Skip/Shorten/Pause gombjai működnek (`today_plan_actions.dart`: `TodayPlanActions` az `ActivePlanController` + `LocalPracticePlanRepository.activateAndReport` felett; a Start a gyakorlás-setupot nyitja `?id=<exerciseId>`-vel; a Swap **szándékosan tiltott marad**, mert a merge-elt controllernek nincs swap-művelete), a setup-varázsló „Finish"-e tervet generál és aktivál (`plan_generation_launch.dart` → `StartPlanGeneration` → Today), új `activePlanControllerProvider`; a vision setup „Continue audio-only" CTA-ja elhagyja a beállítást (pop vagy go Today). l10n: `planSetupGenerationFailed`, `todayPlanActionFailed`. | `today_plan_actions_test.dart` A1–A4 |
 | **R5** | `a24fff6` (+ `9ee46a8`) | a **Könyvjelzők** képernyő valódi: `HttpCommunityPostRepository.listBookmarks` a `GET /community/bookmarks` felett (`limit` + `cursor` query), `CommunityBookmark` domain-entitás, `RepositoryBookmarksController` (`lib/features/community/application/controllers/bookmarks_controller.dart`: első oldal, kurzoros lapozás duplikátum nélkül, optimista és idempotens törlés visszaállítással hibára, a betöltési hiba stream-hibaként újrapróbáló kártyát ad — fiókréteg nélkül `ConfigurationFailure`, nem üres lista). **Klub-taglista**: `HttpCommunityClubRepository.members` a `GET /community/clubs/{public_id}/members` felett (`ClubMembership` entitás; az ismeretlen szerep eldobódik, nem kerekedik `member`-re), a `clubMemberListProvider` ezt olvassa (eddig mindig üres listát adott), a klub-részlet Members füle a szerepcímkés listát rendereli (eddig csak tipp-szöveg). **Követők**: `HttpCommunityProfileRepository.fetchById` a `GET /community/profiles/{public_id}` felett (eddig `UnsupportedError`; hiányzó `display_name` → handle, hiányzó láthatóság → `private`), a `followerProfileProvider` minden követő-sorhoz a valódi profilt oldja fel (placeholder-sor csak sikertelen lekérésnél marad, naplózva). A `docs/contracts/client-backend-endpoints.json` három bekötött GET-sorral bővült. | `bookmarks_controller_test` (B1–B6), `post_repository_bookmarks_test` (K1–K4), `club_repository_members_test` (M1–M3), `profile_repository_fetch_by_id_test` (P1–P3) |
 | **R6** | `68ba51f`, `0451ff9` (+ követő javítások) | a `practiceResult` route nem épít többé mindig `PracticeResultFallback`-et („az eredmény nem érhető el"): a `PracticeResultTargetController` (`lib/features/practice/application/practice_result_target.dart`) a kézfogás a munkamenet navigációs sinkje (ami a tartós rögzítés BEFEJEZŐDÉSE ELŐTT tüzel) és az after-record hook között; a `PracticeResultRoute` (`lib/features/practice/presentation/practice_result_route.dart`) feloldja a megnevezett munkamenet történet-bejegyzését (töltés, amíg úton van; fallback csak ha a rögzítés elbukott vagy nincs mit mutatni; hideg deep link a legfrissebb bejegyzést mutatja). | `practice_result_target_test.dart` T1–T4, V1–V4 |
+| **R7** | (ez a commit) | a `tool/release/live_backend_smoke.py` **fail-closed leállt** (exit 2, hálózati hívás nélkül) az R5 három új contract-sora miatt (`GET /community/bookmarks`, `GET /community/clubs/{public_id}/members`, `GET /community/profiles/{public_id}` — besorolatlan), és a `backend/tests/test_live_smoke_contract.py` számláló-tesztje is bukott (37 ≠ 34). A CI ezt NEM mérte: a `backend-ci.yml` csak `backend/**` változásra fut, a contract a `docs/contracts/` alatt van. Javítás: a három sor `not_exercised` besorolása indokkal, a teszt 37 / 24-re. | `test_live_smoke_contract.py` (10 passed helyben, venv), smoke-lánc 14/14 PASS a helyi backend ellen (§5.4) |
 | formázó/analyze-javítások | `974d78e`, `8c29fe6`, `c472b93`, `9ee46a8`, `d3d10be`, `98d4b74`, `e460cc3` | a CI format- és analyze-kapujának leletei (lásd a HANDOFF „Csapdák" listáját) — a CI az egyetlen formázó-orákulum ebben a konténerben. | — |
 
 ### 5.1 A §1.3 tábla sorai — állapot az ág HEAD-jén
@@ -210,6 +211,42 @@ placeholder-őr A4, release-flow semantics/text-scale), a
 `practiceHistoryV2ListProvider` lusta flush-e a `PracticeResultRoute`
 buildjében (`setState() called during build`), és az eredmény-fejléc
 túlcsordulása 412 px-es nézeten en/2.0 + hu/1.5 + hu/2.0 szövegnagyításnál.
+
+### 5.4 Bejelentkezés — mért állapot (2026-09-07)
+
+A felhasználó jelzése: „nem működik a bejelentkezés"; az élő docker-napló
+(`casaba.app` → `127.0.0.1:8010`) egy `POST /auth/login 401`-et és két
+`POST /auth/register 409`-et mutatott. A remote konténerből a `casaba.app`
+a proxy policy-ja miatt NEM érhető el (CONNECT 403, mérve), a docker-napló
+pedig az Oracle-boxon van — ezért a mérés itt a KÓDRA és az ARTEFAKTUMRA
+szorítkozott:
+
+| Mérés | Eredmény |
+|---|---|
+| a release-APK (`test-2026-09-06-2f1f76f`, sha256 `137b282c…`) `libapp.so`-ja mindhárom ABI-n | tartalmazza a `https://casaba.app/strumsight` konstanst; a `build-apk.yml` csak `STRUMSIGHT_ENV=development`-et ad, így `AppConfig.apiBaseUrlFor` ezt oldja fel (`test/app/app_config_test.dart`, `app_bootstrap_test.dart` pinneli) |
+| a WP-G commit (`1eb751f`, élő URL alapból) | benne van a kiadott `2f1f76f`-ben; a `main`-en NINCS — a `main`-ről épített APK a `10.0.2.2:8000` loopbackre menne |
+| backend ugyanerről a kódról helyben (SQLite, `lab`, community BE, port 8001) | `live_backend_smoke.py`: **14/14 PASS** (register → login → `/auth/me` → settings → community-profil → known_gap 404-ek) |
+| reprodukált napló-ujjlenyomat | `register 201` → `register 409` → `register 409` (más jelszóval is 409) → `login 401` (rossz jelszó) → `login 401` (ismeretlen e-mail) → `login 200` → `/auth/me 200` → `/settings 200`; fejléc nélkül `/auth/me` **403**, rossz tokennel **401** |
+
+**Következtetés:** a 401 a `/auth/login`-on a kódban KIZÁRÓLAG hitelesítési
+ítélet (nincs ilyen e-mail, vagy nem egyezik a jelszó); a 409 azt jelenti, a
+fiók már létezik a Postgres-ben. Programhiba a bejelentkezési láncban nem
+mérhető. A döntéshez a docker-napló a 409-ek ELŐTTI időszakról kell: ha van
+ugyanarról a kliensről egy `register 201` + `GET /auth/me`, a regisztráció
+sikerült és a kliens nem mutatta sikerként; ha nincs, az e-mail egy korábbi
+mérésből maradt ott, és a jelszó nem egyezik. A boxon futtatható mérés:
+`python3 tool/release/live_backend_smoke.py --base-url http://127.0.0.1:8010`
+(a community-lépéseknél a lánc megáll, mert az élő deployon
+`STRUMSIGHT_COMMUNITY_ENABLED=false`).
+
+**Mellékes lelet (nem a 401 oka):** a login/register throttle
+(`backend/app/routers/auth.py`, 10/perc és 5/perc) `request.client.host`
+szerint számol, és a Caddy mögötti konténer minden klienst a docker-bridge
+címén lát — a keret így az ÖSSZES felhasználóra közös, és a 429 a képernyőn
+„hálózati hiba" (`authErrorNetwork`). Több tesztelőnél ez bejelentkezési
+hibának tűnhet. Javítási irány: uvicorn `--proxy-headers
+--forwarded-allow-ips` a Caddy címére, vagy az `X-Forwarded-For` olvasása a
+throttle kulcsához.
 
 **A végső mérce változatlan:** a valós-gitár APK-teszt a felhasználónál; a
 szintetikus zöld nem „kész".
