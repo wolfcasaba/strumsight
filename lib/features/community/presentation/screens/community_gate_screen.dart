@@ -122,6 +122,10 @@ class _GateBody extends ConsumerWidget {
         onCta: () => _openEditProfile(context, ref, mode: _EditMode.create),
       ),
       CommunityGateStatus.ready => _ReadyView(state: state),
+      CommunityGateStatus.unavailable => _UnavailableView(
+        onRetry: () =>
+            ref.read(communityProfileControllerProvider.notifier).refresh(),
+      ),
     };
   }
 
@@ -216,6 +220,54 @@ class _CtaView extends StatelessWidget {
               Text(body, textAlign: TextAlign.center),
               const SizedBox(height: 24),
               SsButton(onPressed: onCta, label: ctaLabel),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The ``unavailable`` state — the server does not host Community (R12,
+/// audit §5.2).
+///
+/// Deliberately NOT the generic error view: that copy blames the
+/// connection ("check your connection") and invites a reload that can only
+/// fail again, while the measured truth is a server-side switch
+/// (``STRUMSIGHT_COMMUNITY_ENABLED=false``) that no amount of retrying from
+/// the phone changes. The card says which of the two it is; Retry stays,
+/// because the moment an operator flips that switch the next attempt does
+/// succeed.
+///
+/// Same scrollable shape as [_StatusView] / [_CtaView] — landscape at 2.0
+/// text scale is taller than the viewport.
+class _UnavailableView extends StatelessWidget {
+  const _UnavailableView({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SsContentCard(
+                key: const Key('community-gate-unavailable'),
+                icon: Icons.cloud_off_outlined,
+                title: localizations.communityGateUnavailableTitle,
+                message: localizations.communityGateUnavailableBody,
+              ),
+              const SizedBox(height: 24),
+              SsButton(
+                key: const Key('community-gate-unavailable-retry'),
+                onPressed: onRetry,
+                label: localizations.communityGateRetry,
+              ),
             ],
           ),
         ),

@@ -1738,6 +1738,10 @@
   "communityGateProfileMissingTitle": "Create your Community profile",
   "@communityGateProfileMissingTitle": {},
   "communityGateRetry": "Retry",
+  "communityGateUnavailableBody": "The server this build talks to runs with the Community module turned off, so there is nothing to sign in to yet. Everything else in StrumSight keeps working.",
+  "@communityGateUnavailableBody": {},
+  "communityGateUnavailableTitle": "Community is not enabled on this server yet",
+  "@communityGateUnavailableTitle": {},
   "communityHubBookmarks": "Bookmarks",
   "communityHubChallenges": "Challenges",
   "communityHubClubs": "Clubs",
@@ -3761,6 +3765,8 @@
   "setlistPlayAll": "Play set",
   "setlistRemoveSong": "Remove from set",
   "setlistRename": "Rename",
+  "setlistRunnerBody": "Play a set in order — each song opens in the Song Trainer, and the set moves on when you finish it.",
+  "setlistRunnerTitle": "Run a setlist",
   "setlistSessionCapo": "Capo {capo}",
   "@setlistSessionCapo": {
     "placeholders": {
@@ -4633,6 +4639,8 @@
     }
   },
   "tutorPlanNotBuildable": "This practice plan cannot be prepared right now.",
+  "tutorPlanPreviewEntryBody": "Turn your goals into a draft practice plan you can review, edit and activate.",
+  "tutorPlanPreviewEntryTitle": "Suggest a practice plan",
   "tutorPlanSaveFailed": "The practice plan could not be saved.",
   "tutorPlanSaved": "Practice plan saved and made active.",
   "tutorPrivacyIntro": "These three switches control what the tutor may do with your data. Toggle them independently.",

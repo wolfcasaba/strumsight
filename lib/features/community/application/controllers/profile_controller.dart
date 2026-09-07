@@ -44,6 +44,7 @@ import '../../../../core/foundation/app_result.dart';
 import '../../../../features/auth/public.dart';
 import '../../data/repositories/profile_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
+import '../../domain/failures/community_availability.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_profile_repository.dart';
 import '../../domain/value_objects/community_handle.dart';
@@ -65,6 +66,17 @@ enum CommunityGateStatus {
   /// The user is signed in AND owns a profile — the gate shows the
   /// read-only or edit-profile screen.
   ready,
+
+  /// The server this build talks to does not host the Community module
+  /// at all (R12, audit §5.2) — measured on the live deploy, which runs
+  /// with ``STRUMSIGHT_COMMUNITY_ENABLED=false`` and therefore never
+  /// registers a single ``/community/**`` path.
+  ///
+  /// Distinct from [disabled], which is the CLIENT's own flag being off:
+  /// here the client is willing and the server is not, so the gate says
+  /// so and keeps a Retry — an operator flipping that switch makes the
+  /// next attempt succeed.
+  unavailable,
 }
 
 /// The snapshot the controller publishes to the UI. The gate is
@@ -163,8 +175,14 @@ class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
         isSubmitting: false,
       );
     } on AppFailure catch (failure) {
+      // R12 — "the server does not host Community" is NOT "you have no
+      // profile yet". Routing it to `profileMissing` (what this catch did
+      // until now) offered a Create CTA whose POST could only fail again,
+      // and the failure surfaced as the generic error copy.
       return CommunityProfileState(
-        status: CommunityGateStatus.profileMissing,
+        status: isCommunityUnavailable(failure)
+            ? CommunityGateStatus.unavailable
+            : CommunityGateStatus.profileMissing,
         profile: null,
         error: failure,
         isSubmitting: false,

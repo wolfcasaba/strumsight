@@ -26,6 +26,12 @@
 
   "communityGateRetry": "Újra",
 
+  "communityGateUnavailableTitle": "A Közösség még nincs bekapcsolva ezen a szerveren",
+  "@communityGateUnavailableTitle": {},
+
+  "communityGateUnavailableBody": "Ez a szerver kikapcsolt Közösség-modullal fut, ezért még nincs hova bejelentkezni. A StrumSight többi része változatlanul működik.",
+  "@communityGateUnavailableBody": {},
+
   "communityEditCreateTitle": "Közösség-profilod létrehozása",
   "@communityEditCreateTitle": {},
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/setlists_provider.dart';
@@ -26,6 +28,31 @@ class SetlistListScreen extends ConsumerWidget {
     );
   }
 
+  /// The Setlist V2 entry point (audit §5.2, R12).
+  ///
+  /// [AppRoutes.setlistsV2] has been registered since R10, but NO shipped
+  /// surface pushed it — measured, and the reason the ordered setlist run
+  /// (each item launching the real Song Trainer session and waiting for it)
+  /// did not exist for the user at all. This card is that entry, and it
+  /// lives in the scrolling body rather than the AppBar so a long label at
+  /// 2.0 text scale scrolls instead of squeezing the title row.
+  ///
+  /// `context.push`, not `go`: Back returns to this list.
+  Widget _runnerEntry(BuildContext context, AppLocalizations l10n) {
+    return SsContentCard(
+      key: const Key('setlist-open-v2'),
+      icon: Icons.playlist_play,
+      title: l10n.setlistRunnerTitle,
+      message: l10n.setlistRunnerBody,
+      actions: [
+        SsCardAction(
+          label: l10n.setlistRunnerTitle,
+          onPressed: () => context.push(AppRoutes.setlistsV2),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -43,21 +70,31 @@ class SetlistListScreen extends ConsumerWidget {
       body: SafeArea(
         child: setlists.isEmpty
             ? _ScrollableIfShort(
-                child: SsEmptyState(
-                  icon: Icons.queue_music,
-                  title: l10n.setlistsEmptyTitle,
-                  message: l10n.setlistsEmpty,
-                  actionLabel: l10n.setlistNew,
-                  onAction: () => _create(context, ref),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _runnerEntry(context, l10n),
+                    ),
+                    SsEmptyState(
+                      icon: Icons.queue_music,
+                      title: l10n.setlistsEmptyTitle,
+                      message: l10n.setlistsEmpty,
+                      actionLabel: l10n.setlistNew,
+                      onAction: () => _create(context, ref),
+                    ),
+                  ],
                 ),
               )
             : ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                itemCount: setlists.length,
+                itemCount: setlists.length + 1,
                 separatorBuilder: (_, _) =>
                     const SizedBox(height: SsSpacing.space2),
                 itemBuilder: (context, i) {
-                  final set = setlists[i];
+                  if (i == 0) return _runnerEntry(context, l10n);
+                  final set = setlists[i - 1];
                   return SsContentCard(
                     icon: Icons.queue_music,
                     title: set.name,
@@ -111,10 +148,11 @@ Future<String?> promptSetlistName(
   String initial = '',
 }) => _promptName(context, initial: initial);
 
-/// Lets [child] (an [SsEmptyState], always `Center`-wrapped internally)
-/// scroll instead of overflow when the viewport is too short for it —
-/// measured need: at `textScaler` 2.5 + `hu`, the empty state's icon +
-/// title + message + action button outgrows a short test viewport by 39px.
+/// Lets [child] (the runner-entry card above an [SsEmptyState], which is
+/// always `Center`-wrapped internally) scroll instead of overflow when the
+/// viewport is too short for it — measured need: at `textScaler` 2.5 +
+/// `hu`, the empty state's icon + title + message + action button outgrows
+/// a short test viewport by 39px, and the R12 entry card adds to that.
 class _ScrollableIfShort extends StatelessWidget {
   const _ScrollableIfShort({required this.child});
   final Widget child;

@@ -1710,6 +1710,10 @@
   "communityGateProfileMissingTitle": "Hozd létre a Közösség-profilod",
   "@communityGateProfileMissingTitle": {},
   "communityGateRetry": "Újra",
+  "communityGateUnavailableBody": "Ez a szerver kikapcsolt Közösség-modullal fut, ezért még nincs hova bejelentkezni. A StrumSight többi része változatlanul működik.",
+  "@communityGateUnavailableBody": {},
+  "communityGateUnavailableTitle": "A Közösség még nincs bekapcsolva ezen a szerveren",
+  "@communityGateUnavailableTitle": {},
   "communityHubBookmarks": "Könyvjelzők",
   "communityHubChallenges": "Kihívások",
   "communityHubClubs": "Klubok",
@@ -3722,6 +3726,8 @@
   "setlistPlayAll": "Szett lejátszása",
   "setlistRemoveSong": "Eltávolítás a szettből",
   "setlistRename": "Átnevezés",
+  "setlistRunnerBody": "Játszd le a szettet sorban — minden dal a Dal-trénerben nyílik meg, és a szett a befejezés után lép tovább.",
+  "setlistRunnerTitle": "Szettlista lejátszása",
   "setlistSessionCapo": "Capo {capo}",
   "@setlistSessionCapo": {
     "placeholders": {
@@ -4566,6 +4572,8 @@
     }
   },
   "tutorPlanNotBuildable": "Ez a gyakorlási terv most nem készíthető elő.",
+  "tutorPlanPreviewEntryBody": "A céljaidból tervvázlatot készít, amit átnézhetsz, szerkeszthetsz és aktiválhatsz.",
+  "tutorPlanPreviewEntryTitle": "Gyakorlásterv javaslata",
   "tutorPlanSaveFailed": "A gyakorlási tervet nem sikerült elmenteni.",
   "tutorPlanSaved": "A gyakorlási terv elmentve és aktiválva.",
   "tutorPrivacyIntro": "Ez a három kapcsoló szabályozza, hogy a tutor mit tehet az adataiddal. Egymástól függetlenül kapcsolhatod őket.",

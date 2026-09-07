@@ -26,6 +26,12 @@
 
   "communityGateRetry": "Retry",
 
+  "communityGateUnavailableTitle": "Community is not enabled on this server yet",
+  "@communityGateUnavailableTitle": {},
+
+  "communityGateUnavailableBody": "The server this build talks to runs with the Community module turned off, so there is nothing to sign in to yet. Everything else in StrumSight keeps working.",
+  "@communityGateUnavailableBody": {},
+
   "communityEditCreateTitle": "Create your Community profile",
   "@communityEditCreateTitle": {},
 

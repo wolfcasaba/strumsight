@@ -25,6 +25,7 @@
 /// ``Failure.code`` channel only.
 library;
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/foundation/app_failure.dart';
@@ -32,6 +33,7 @@ import '../../../../core/foundation/app_result.dart';
 import '../../../../features/auth/public.dart';
 import '../../../../core/network/api_client.dart';
 import '../../domain/entities/community_profile.dart';
+import '../../domain/failures/community_availability.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/repositories/community_profile_repository.dart';
@@ -105,11 +107,18 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
   @override
   Future<CommunityProfile?> fetchMyProfile() async {
     // The Kör 5 contract: ``GET /community/profiles/me`` returns the
-    // caller's own profile, or 404 when none exists. The Kör 6
-    // endpoints (POST/PUT) read the same row, so the gate's
-    // "profile-missing" state maps to a 404 here. The repository
-    // maps 404 -> null silently so the controller can branch on
-    // the value alone.
+    // caller's own profile, or 404 ``profile_missing`` when none exists.
+    // The Kör 6 endpoints (POST/PUT) read the same row, so the gate's
+    // "profile-missing" state maps to that 404 here, and the repository
+    // maps it to null so the controller can branch on the value alone.
+    //
+    // R12 (audit §5.2): a 404 that is NOT that verdict means the router is
+    // not mounted at all (``STRUMSIGHT_COMMUNITY_ENABLED=false`` on the
+    // live deploy). Collapsing it to null too — which is what this method
+    // did until now — made a server WITHOUT Community indistinguishable
+    // from a user without a profile: the gate offered "Create profile",
+    // and the create call then failed with a generic error. The two are
+    // now separate verdicts.
     final result = await _client.getJson<CommunityProfileDto?>(
       '/community/profiles/me',
       decode: (json) => CommunityProfileDto.fromJson(json),
@@ -117,7 +126,9 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
     );
     return switch (result) {
       Success(:final value) => _dtoToDomain(value),
-      Failure(:final error) when _isNotFound(error) => null,
+      Failure(:final error) when _isProfileMissing(error) => null,
+      Failure(:final error) when _isModuleMissing(error) =>
+        throw communityUnavailableFailure(error),
       Failure(:final error) => throw error,
     };
   }
@@ -281,11 +292,41 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
     );
   }
 
-  static bool _isNotFound(AppFailure error) {
-    if (error is NetworkFailure) {
-      return error.code == FailureCode.networkBadResponse;
-    }
-    return false;
+  /// The 404 detail the mounted router returns for "you have no profile
+  /// row yet" (``backend/app/community/routers/profile.py``).
+  static const String _profileMissingDetail = 'profile_missing';
+
+  /// The ``detail`` string of a 404 answer, or `null` when [error] is not a
+  /// 404 at all. A 404 whose body carries no usable ``detail`` yields the
+  /// empty string — present, but not the router's own verdict.
+  ///
+  /// Reading the body here is deliberate and narrow. The shared
+  /// `mapNetworkFailure` ignores response bodies by design (they may carry
+  /// credentials), which is exactly why it cannot tell the router's own
+  /// ``profile_missing`` 404 apart from the bare 404 an unmounted router
+  /// returns. Only that two-value distinction is read — never logged,
+  /// never rendered.
+  static String? _notFoundDetail(AppFailure error) {
+    if (error is! NetworkFailure) return null;
+    final cause = error.cause;
+    if (cause is! DioException) return null;
+    final response = cause.response;
+    if (response == null || response.statusCode != 404) return null;
+    final data = response.data;
+    if (data is! Map) return '';
+    final detail = data['detail'];
+    return detail is String ? detail : '';
+  }
+
+  /// The router IS mounted; the caller simply has no profile row yet.
+  static bool _isProfileMissing(AppFailure error) =>
+      _notFoundDetail(error) == _profileMissingDetail;
+
+  /// A 404 that is not the router's own verdict: the ``/community/**``
+  /// prefix is not registered on this server at all.
+  static bool _isModuleMissing(AppFailure error) {
+    final detail = _notFoundDetail(error);
+    return detail != null && detail != _profileMissingDetail;
   }
 
   /// Decode the Kör 9 ``GET /community/profiles/search`` envelope.
