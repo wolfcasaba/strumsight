@@ -2,6 +2,10 @@
 
 Elérhetetlen képernyők: **23 → 2** (`dart run tool/check_screen_reachability.dart`).
 
+> **Frissítés — R10, 2026-09-07:** az itt leírt kettőből az egyik
+> (`SetlistSessionScreen`, és vele a `SetlistListScreenV2`) bekötve — l. az
+> 1. szakaszt. A fenti szám a 2026-09-05-i mérés, nem újraszámolva.
+
 ---
 
 ## A LEGFONTOSABB LELET: a mérce nem azt méri, amit a felhasználó tapasztal
@@ -33,24 +37,47 @@ belőle.
 ### A mérce populációja is hiányos
 
 96 képernyőt mér, a fában **99** van. A háromból kettő ártalmatlan
-(`LaunchScreen`, `RecoveryScreen`), a harmadik valódi árva:
-**`SetlistListScreenV2`** — semmi nem hivatkozza, és a detektor
-osztálynév-mintája nem fogja a `V2` utótagot.
+(`LaunchScreen`, `RecoveryScreen`), a harmadik valódi árva volt:
+**`SetlistListScreenV2`** — semmi nem hivatkozta, és a detektor
+osztálynév-mintája nem fogta a `V2` utótagot.
+
+**Frissítés 2026-09-06/07:** mindkét fele megoldva. A populáció-szűrő
+`_screen(_v\d+)?.dart`-ra bővült (96 → 97) és a detektor osztálynév-mintája
+felismeri a `V2` utótagot, R10 (2026-09-07) pedig regisztrálta a
+`/setlists/v2` útvonalat — a képernyő azóta MÉRTEN elérhető.
 
 ---
 
-## A két hátralévő képernyő
+## A két hátralévő képernyő (2026-09-05-i állapot)
 
-### 1. Dalcsomag-munkamenet
+### 1. Dalcsomag-munkamenet — MEGOLDVA (R10, 2026-09-07)
 
 `song_trainer/presentation/screens/setlist_session_screen.dart`
 
-**Az akadály:** a `SetlistItemRunner` typedefnek nincs éles
+**Az akadály VOLT:** a `SetlistItemRunner` typedefnek nem volt éles
 implementációja. Egy futtató a dal-tréner munkamenetét indítaná el —
-**csakhogy arra az útvonalra sem navigál semmi a fában**, és
+csakhogy arra az útvonalra sem navigált semmi a fában, és
 `SongTrainerControllerInputs`-ot vár `extra`-ként, amit a beállító
-folyamat állítana elő. A dalcsomag-futtató tehát egy olyan folyamatra
-épülne, ami maga sincs bekötve.
+folyamat állít elő. A dalcsomag-futtató tehát egy olyan folyamatra épült
+volna, ami maga sem volt bekötve.
+
+**Ami R10-ben elkészült:** a beállító folyamat R3 óta bekötött
+(`song_trainer_launch.dart`), erre épül az új
+`SetlistSessionCoordinator`
+(`song_trainer/application/setlist/setlist_session_launch.dart`): egy
+dalcsomag-tételből + a tétel felülbírálataiból érvényesített
+`TrainerConfig`-ot, abból `SongTrainerControllerInputs`-ot állít elő. Az
+éles `SetlistItemRunner`
+(`song_trainer/presentation/screens/setlist_session_route.dart`) ezt
+tolja a dal-tréner munkamenet-útvonalára, és MEGVÁRJA a visszatérést —
+ettől halad a dalcsomag tételről tételre. Az előkészíthetetlen tétel
+`skipped` lesz a MEGNEVEZETT okkal (`missingSong` / `unsupportedTrack` /
+`invalidConfig`), nem tűnik el némán.
+
+**Ami nyitva maradt:** a Performance mód. A szállított appban minden
+dal-munkamenet a PONTOZOTT tréner; egy lejátszás-csak felület nincs, ezért
+a route Practice módban fut, a performance-futtató pedig hangos
+`StateError` marad.
 
 **Ami MEGVAN (2026-09-05, felhasználói döntés):** a félbehagyott tétel
 ábrázolása. Új `SetlistItemResultStatus.partial` + `SetlistItemResult.partial`

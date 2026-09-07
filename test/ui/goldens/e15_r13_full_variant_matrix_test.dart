@@ -182,6 +182,7 @@ import 'package:strumsight/features/share/share_service.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/song_trainer/application/import/import_preview.dart';
 import 'package:strumsight/features/song_trainer/application/import/song_import_controller.dart';
+import 'package:strumsight/features/song_trainer/application/setlists/setlist_controller.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_result.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_state.dart';
@@ -190,6 +191,7 @@ import 'package:strumsight/features/song_trainer/data/importers/importer_registr
 import 'package:strumsight/features/song_trainer/data/importers/song_importer.dart';
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/models/meter_map.dart';
+import 'package:strumsight/features/song_trainer/domain/models/setlist_result.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_event.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
@@ -197,11 +199,15 @@ import 'package:strumsight/features/song_trainer/domain/models/song_instrument.d
 import 'package:strumsight/features/song_trainer/domain/models/song_measure.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_metadata.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_section.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_source.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_track.dart';
 import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/setlist_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/setlist_session_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_preview_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_screen.dart';
@@ -1617,6 +1623,92 @@ Widget _skillDetailScreen() => SkillDetailScreen(
 List<Override> _skillDetailOverrides() => [...preferenceOverrides()];
 
 // ── song_trainer (test/ui/goldens/e13_r23/24/25_screens_golden_test.dart) ──
+
+// R10 (2026-09-07) — Setlist V2. Registering `/setlists/v2` and
+// `/setlists/v2/session` (audit §5.2) flipped both screens from
+// `unreachable` to reachable, so the A1 completeness invariant requires a
+// variant baseline for each. Neither fixture is new test authoring: the
+// list one is `_GoldenSetlistRepository` from
+// `test/ui/goldens/e13_r23_screens_golden_test.dart`, the session one is
+// `_setlistFixture()` from `e13_r25_screens_golden_test.dart` — the exact
+// shapes those two rounds already pump at 412×915, textScale 1.0 and 2.0.
+// The session runs in Practice mode here (the mode the shipped route
+// builds), which needs a `createPracticeRunner`; the runner is never
+// invoked, because no cell taps Start.
+
+final class _SetlistV2Repository implements SetlistRepository {
+  const _SetlistV2Repository();
+
+  @override
+  Future<AppResult<List<SongSetlist>>> list() async {
+    final now = DateTime.utc(2026, 8, 1);
+    return AppResult<List<SongSetlist>>.success(<SongSetlist>[
+      SongSetlist(
+        id: 'golden-setlist',
+        name: 'Saturday Gig',
+        createdAt: now,
+        updatedAt: now,
+        items: <SongSetlistItem>[
+          SongSetlistItem(id: 'item-1', songId: SongId('opener')),
+          SongSetlistItem(
+            id: 'item-2',
+            songId: SongId('no-backing'),
+            initialAvailability: SetlistItemAvailability.missingAsset,
+          ),
+          SongSetlistItem(
+            id: 'item-3',
+            songId: SongId('gone'),
+            initialAvailability: SetlistItemAvailability.missingSong,
+          ),
+        ],
+      ),
+    ]);
+  }
+
+  @override
+  Future<AppResult<SongSetlist?>> get(String id) => throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> save(SongSetlist setlist) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> delete(String id) => throw UnimplementedError();
+}
+
+Widget _setlistListV2Screen() => SetlistListScreenV2(
+  controller: const SetlistController(_SetlistV2Repository()),
+  clock: () => DateTime.utc(2026, 8, 1),
+);
+List<Override> _setlistListV2Overrides() => [...preferenceOverrides()];
+
+SongSetlist _setlistSessionFixture() => SongSetlist(
+  id: 'golden-setlist',
+  name: 'Golden Setlist',
+  createdAt: DateTime.utc(2026, 8, 26),
+  updatedAt: DateTime.utc(2026, 8, 26),
+  items: <SongSetlistItem>[
+    SongSetlistItem(id: 'first', songId: SongId('song-a')),
+    SongSetlistItem(
+      id: 'second',
+      songId: SongId('song-b'),
+      overrides: const SetlistItemOverrides(tuningOverrideCode: 'dropD'),
+    ),
+  ],
+);
+
+Future<SetlistItemResult> _setlistCompletedRunner(SongSetlistItem item) async {
+  return SetlistItemResult.completed(itemId: item.id);
+}
+
+Widget _setlistSessionScreen() => SetlistSessionScreen(
+  setlist: _setlistSessionFixture(),
+  mode: SetlistSessionMode.practice,
+  availability: (_) => SetlistItemAvailability.ready,
+  createPracticeRunner: () => _setlistCompletedRunner,
+  performanceRunner: _setlistCompletedRunner,
+);
+List<Override> _setlistSessionOverrides() => [...preferenceOverrides()];
 
 final class _NoopAssetRepository implements SongAssetRepository {
   const _NoopAssetRepository();
@@ -3114,6 +3206,18 @@ final _screens = <String, _ScreenFixture>{
     screenPath: 'lib/features/share/screens/share_preview_screen.dart',
     build: _sharePreviewScreen,
     overridesBuilder: _sharePreviewOverrides,
+  ),
+  'setlist_list_v2': _ScreenFixture(
+    screenPath:
+        'lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart',
+    build: _setlistListV2Screen,
+    overridesBuilder: _setlistListV2Overrides,
+  ),
+  'setlist_session': _ScreenFixture(
+    screenPath:
+        'lib/features/song_trainer/presentation/screens/setlist_session_screen.dart',
+    build: _setlistSessionScreen,
+    overridesBuilder: _setlistSessionOverrides,
   ),
   'song_editor': _ScreenFixture(
     screenPath:
