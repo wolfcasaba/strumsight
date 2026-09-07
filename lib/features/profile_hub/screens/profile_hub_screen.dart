@@ -67,7 +67,14 @@ class ProfileHubScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             OutlinedButton(
-              onPressed: () => context.go(AppRoutes.gamificationHub),
+              key: const ValueKey('profile-hub-achievements-entry'),
+              // `push`, not `go` (2026-09-07 audit): every destination
+              // below is a TOP-LEVEL route, so a `go` REPLACES the stack —
+              // the arriving screen has `canPop == false`, its AppBar shows
+              // no back arrow and the adaptive shell's bottom bar is gone,
+              // so the only way back is leaving the app. Pushed, the same
+              // route pops straight back to this hub.
+              onPressed: () => context.push(AppRoutes.gamificationHub),
               child: Text(l10n.profileHubAchievementsSectionTitle),
             ),
             if (aiTutorEnabled) ...[
@@ -107,7 +114,7 @@ class ProfileHubScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton(
                 key: const ValueKey('profile-hub-community-entry'),
-                onPressed: () => context.go(AppRoutes.community),
+                onPressed: () => context.push(AppRoutes.community),
                 child: Text(l10n.profileHubCommunityOpen),
               ),
             ],
@@ -172,7 +179,13 @@ class _AccountSection extends ConsumerWidget {
                 child: Text(l10n.profileHubSignOutCta),
               )
             : OutlinedButton(
-                onPressed: () => context.go(AppRoutes.login),
+                key: const ValueKey('profile-hub-sign-in-entry'),
+                // `push` (2026-09-07 audit): `/login` is a top-level route,
+                // and the login screen leaves itself by popping on success.
+                // Reached with a `go` the stack was one page deep, so that
+                // pop threw `GoError: There is nothing to pop` — the
+                // measured "login does not work" defect.
+                onPressed: () => context.push(AppRoutes.login),
                 child: Text(l10n.profileHubSignInCta),
               ),
       ],

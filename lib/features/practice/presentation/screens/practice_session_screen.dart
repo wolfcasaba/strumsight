@@ -313,7 +313,18 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
     // the next pop will go through). For no-op exit taps (preparing,
     // failed, …) the screen stays put.
     if (_canPop || sentCommand) {
-      Navigator.of(context).pop();
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
+        return;
+      }
+      // `/practice/session` is reached with `context.go`
+      // (`practice_setup_screen.dart`), so the stack is ONE page deep and
+      // the pop above had nothing to pop — the abort left the user on the
+      // very screen they were leaving (2026-09-07 audit). The hub is the
+      // session's own parent surface. Pumped without a router (the widget
+      // cells) there is nowhere to go, exactly as before.
+      GoRouter.maybeOf(context)?.go(AppRoutes.practiceHub);
     }
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';
 import 'package:strumsight/features/practice/domain/model/practice_metric_snapshot.dart';
 import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
@@ -208,6 +210,135 @@ void main() {
       );
     }
   });
+
+  // -------------------------------------------------------------------
+  // R17 (2026-09-07 audit) — a way OUT of the result screen.
+  //
+  // MÉRT hiba: a `/practice/result` útvonalra a hatás-figyelő
+  // `router.go`-val érkezik (szándékosan: a befejezett munkamenet
+  // képernyője így eltűnik), tehát az érkező oldal az EGYETLEN a
+  // stacken — `canPop == false`, az AppBar nem rajzol vissza-nyilat, és
+  // a képernyő végén sem volt semmilyen záró CTA. A kör a KIVEZETŐ utat
+  // javítja, a `go`-t nem.
+  // -------------------------------------------------------------------
+  group('R17 — a way out of the result screen', () {
+    testWidgets('the back leading returns to the hub', (tester) async {
+      final router = await _pumpRouted(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.chordProgression)),
+      );
+      expect(router.canPop(), isFalse);
+
+      await tester.tap(find.byKey(const Key('practiceResultBack')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(router.state.uri.path, AppRoutes.practiceHub);
+    });
+
+    testWidgets('the Done CTA returns to the hub', (tester) async {
+      final router = await _pumpRouted(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.chordProgression)),
+      );
+
+      final cta = find.byKey(const Key('practiceResultDoneCta'));
+      await tester.scrollUntilVisible(
+        cta,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(router.state.uri.path, AppRoutes.practiceHub);
+    });
+
+    // The fallback is shown exactly when the result could NOT be resolved
+    // — the one state where being stranded is most likely.
+    testWidgets('the fallback offers the same way out', (tester) async {
+      final router = await _pumpRouted(tester, const PracticeResultFallback());
+
+      await tester.tap(find.byKey(const Key('practiceResultDoneCta')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(router.state.uri.path, AppRoutes.practiceHub);
+    });
+
+    testWidgets('a PUSHED result keeps the plain AppBar', (tester) async {
+      final router = await _pumpRouted(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.chordProgression)),
+        pushed: true,
+      );
+
+      // Nothing is added where `AppBar` already draws a working back
+      // button, so the pushed frame is unchanged by this round.
+      expect(find.byKey(const Key('practiceResultBack')), findsNothing);
+      expect(find.byKey(const Key('practiceResultDoneCta')), findsNothing);
+      expect(router.canPop(), isTrue);
+    });
+
+    // The frame the E13-R22 pixel goldens pump: no router above the
+    // screen at all, so there is no hub route to leave for and NOTHING is
+    // added — which is why those goldens stay byte-identical.
+    testWidgets('no router: no exit affordance is added', (tester) async {
+      await pumpResult(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.chordProgression)),
+      );
+
+      expect(find.byKey(const Key('practiceResultBack')), findsNothing);
+      expect(find.byKey(const Key('practiceResultDoneCta')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// R17 (2026-09-07 audit) — the result screen under a real router
+// ---------------------------------------------------------------------------
+
+/// `/practice/result` with the practice hub behind it. [pushed] chooses the
+/// two ways the screen is entered: the shipped one is a stack-replacing
+/// `go` (nothing to pop), the other a push (the AppBar's own back arrow).
+GoRouter _resultRouter(Widget screen, {required bool pushed}) => GoRouter(
+  initialLocation: pushed ? AppRoutes.practiceHub : AppRoutes.practiceResult,
+  routes: <RouteBase>[
+    GoRoute(path: AppRoutes.practiceResult, builder: (_, _) => screen),
+    GoRoute(path: AppRoutes.practiceHub, builder: _stub),
+  ],
+);
+
+Widget _stub(BuildContext _, GoRouterState state) =>
+    Scaffold(body: Text('STUB ${state.uri.path}'));
+
+Future<GoRouter> _pumpRouted(
+  WidgetTester tester,
+  Widget screen, {
+  bool pushed = false,
+}) async {
+  final router = _resultRouter(screen, pushed: pushed);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: preferenceOverrides(),
+      child: MaterialApp.router(
+        theme: SsLightTheme.data(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  if (pushed) {
+    router.push(AppRoutes.practiceResult);
+    await tester.pumpAndSettle();
+  }
+  return router;
 }
 
 PracticeHistoryEntry _entry(PracticeMode mode) {

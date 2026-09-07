@@ -285,7 +285,13 @@ class _VisionCard extends StatelessWidget {
             if (visionEnabled) ...[
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () => context.go(
+                key: const ValueKey('today-hub-vision-entry'),
+                // `push`, not `go` (2026-09-07 audit): both vision routes
+                // are TOP-LEVEL, so a `go` REPLACED the stack — the camera
+                // screen arrived with `canPop == false`, no back arrow and
+                // no shell bottom bar, and the system back button was the
+                // only way out of the app.
+                onPressed: () => context.push(
                   visionSetupEnabled
                       ? AppRoutes.visionSetup
                       : AppRoutes.visionSession,

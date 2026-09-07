@@ -11,7 +11,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/platform/platform_providers.dart';
 import 'package:strumsight/core/widgets/mic_permission_banner.dart';
@@ -200,6 +202,53 @@ Future<void> _pumpScreen(
     ),
   );
   await tester.pump();
+}
+
+/// The same screen under a MINIMAL go_router, entered exactly the way the
+/// app enters it: `/practice/setup` calls `context.go(practiceSession)`,
+/// so the session page is the ONLY one on the stack.
+Future<GoRouter> _pumpRoutedScreen(
+  WidgetTester tester,
+  _FakeSessionHost host,
+) async {
+  tester.view.physicalSize = const Size(412, 915);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  final router = GoRouter(
+    initialLocation: AppRoutes.practiceSession,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.practiceSession,
+        builder: (_, _) => const PracticeSessionScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.practiceHub,
+        builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+      ),
+    ],
+  );
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        practiceSessionHostProvider.overrideWithValue(host),
+        practiceFeedbackOutputProvider.overrideWithValue(_RecordingFeedback()),
+        practiceResultNavigationSinkProvider.overrideWithValue(
+          _RecordingNavigationSink().call,
+        ),
+        practiceHapticsEnabledProvider.overrideWithValue(true),
+        appLifecycleEventsProvider.overrideWithValue(FakeAppLifecycleEvents()),
+      ],
+      child: MaterialApp.router(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ),
+  );
+  for (var i = 0; i < 3; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  return router;
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,6 +1078,39 @@ void main() {
       host.emitEffect(const NavigateToResult());
       await tester.pump(const Duration(milliseconds: 10));
       expect(nav.calls, 1);
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // R17 (2026-09-07 audit) — aborting leaves the screen for real.
+  //
+  // MÉRT hiba: a megszakítás `Navigator.of(context).pop()`-ot hívott, de
+  // a `/practice/session` útvonalra `context.go`-val érkezünk, tehát a
+  // stack EGYELEMŰ — a pop nem vitt sehova, a felhasználó azon a
+  // képernyőn maradt, amit épp elhagyni próbált.
+  // -----------------------------------------------------------------
+  group('R17 — the abort has somewhere to go', () {
+    testWidgets('a go()-landed abort lands on the hub', (tester) async {
+      final host = _FakeSessionHost();
+      addTearDown(host.close);
+      host.emitState(_stateFor(PracticeSessionStatus.ready));
+      final router = await _pumpRoutedScreen(tester, host);
+      expect(router.canPop(), isFalse);
+
+      await tester.tap(
+        find.widgetWithText(ElevatedButton, l10nEn().practiceSessionExit),
+      );
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      // `ready` needs no confirmation and DOES send the cancel — the two
+      // halves of a real abort, followed by an actual departure.
+      expect(host.sent.length, 1);
+      expect(host.sent.single, isA<CancelPractice>());
+      expect(router.state.uri.path, AppRoutes.practiceHub);
+      expect(find.byType(PracticeSessionScreen), findsNothing);
+      expect(tester.takeException(), isNull);
     });
   });
 }

@@ -27,7 +27,9 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controller/tutor_state.dart';
@@ -38,6 +40,22 @@ import '../providers/tutor_providers.dart';
 import '../widgets/tutor_banners.dart';
 import '../widgets/tutor_composer.dart';
 import '../widgets/tutor_message_bubble.dart';
+
+/// The Chat's way back (2026-09-07 audit).
+///
+/// The screen is reached two ways: PUSHED from the Tutor Home (a route to
+/// pop back to) and via a `/tutor/chat` deep link, which leaves nothing to
+/// pop. There the bare `maybePop` this button used to call silently
+/// no-ops — a back arrow that does nothing at all. The fallback goes to
+/// the Tutor Home, which is registered under the very same `aiTutorEnabled`
+/// gate as this screen, so it can never point at an unregistered path.
+Future<void> _leaveChat(BuildContext context) async {
+  final navigator = Navigator.of(context);
+  final router = GoRouter.maybeOf(context);
+  final popped = await navigator.maybePop();
+  if (popped || router == null) return;
+  router.go(AppRoutes.tutorHome);
+}
 
 class TutorChatScreen extends ConsumerStatefulWidget {
   const TutorChatScreen({super.key});
@@ -118,7 +136,7 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: () => _leaveChat(context),
           ),
           title: Text(l10n.aiTutorChatTitle),
           actions: <Widget>[

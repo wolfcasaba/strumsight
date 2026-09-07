@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/features/today/domain/today_plan_repository.dart';
 import 'package:strumsight/features/today/domain/today_plan_snapshot.dart';
 import 'package:strumsight/features/today/providers/today_providers.dart';
@@ -62,6 +64,53 @@ Widget _host({
     home: TodayHubScreen(now: now ?? DateTime(2026, 8, 25)),
   ),
 );
+
+/// The hub under a MINIMAL go_router, so the Vision entry's real stack
+/// effect can be measured. The target is a `STUB <path>` page — this cell
+/// measures the NAVIGATION, not the camera screen.
+Widget _routerHost(GoRouter router, {bool visionSetupEnabled = false}) {
+  return ProviderScope(
+    overrides: [
+      ...preferenceOverrides(),
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: false,
+            diagnosticsEnabled: false,
+            labModeAvailable: false,
+            visionEnabled: true,
+            visionSetupEnabled: visionSetupEnabled,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: router,
+    ),
+  );
+}
+
+GoRouter _visionRouter() => GoRouter(
+  initialLocation: AppRoutes.today,
+  routes: <RouteBase>[
+    GoRoute(
+      path: AppRoutes.today,
+      builder: (_, _) => TodayHubScreen(now: DateTime(2026, 8, 25)),
+    ),
+    GoRoute(path: AppRoutes.visionSetup, builder: _stub),
+    GoRoute(path: AppRoutes.visionSession, builder: _stub),
+  ],
+);
+
+Widget _stub(BuildContext _, GoRouterState state) =>
+    Scaffold(body: Text('STUB ${state.uri.path}'));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -237,5 +286,42 @@ void main() {
         findsOneWidget,
       );
     });
+  });
+
+  // -------------------------------------------------------------------
+  // R17 (2026-09-07 audit) — the Vision entry PUSHES.
+  //
+  // MÉRT hiba: `context.go` egy TOP-LEVEL útvonalra lépett, tehát
+  // KICSERÉLTE a stacket: a kamerás képernyő `canPop == false`-szal
+  // érkezett, vissza-nyíl és héj-alsósáv nélkül — csak a rendszer
+  // vissza-gombja (az appból kilépve) vezetett vissza.
+  // -------------------------------------------------------------------
+  group('R17 — the Vision entry can be returned from', () {
+    for (final cell in const <({bool setupEnabled, String path})>[
+      (setupEnabled: true, path: AppRoutes.visionSetup),
+      (setupEnabled: false, path: AppRoutes.visionSession),
+    ]) {
+      testWidgets('the entry pushes ${cell.path}', (tester) async {
+        final router = _visionRouter();
+        await tester.pumpWidget(
+          _routerHost(router, visionSetupEnabled: cell.setupEnabled),
+        );
+        await tester.pumpAndSettle();
+
+        final cta = find.byKey(const ValueKey('today-hub-vision-entry'));
+        await tester.ensureVisible(cta);
+        await tester.pumpAndSettle();
+        await tester.tap(cta);
+        await tester.pumpAndSettle();
+
+        expect(router.state.uri.path, cell.path);
+        expect(tester.takeException(), isNull);
+        // The measure: the camera screen HAS a way back.
+        expect(router.canPop(), isTrue);
+        router.pop();
+        await tester.pumpAndSettle();
+        expect(router.state.uri.path, AppRoutes.today);
+      });
+    }
   });
 }

@@ -11,7 +11,9 @@ import '../presentation/auth_failure_message.dart';
 import '../providers/auth_providers.dart';
 import '../theme/auth_theme_scope.dart';
 
-/// Sign-in / create-account screen. Pushed from Settings; pops on success.
+/// Sign-in / create-account screen. Pushed from Settings and from the
+/// Profile hub; on success it pops back there, or — when it was reached by
+/// a stack-replacing `go()` — lands on the profile home instead.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -49,13 +51,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  /// "Continue without an account" (A1, ADR 0292 norm) always has to leave
-  /// this screen — but it is reached two ways: PUSHED (from Settings, a real
-  /// route to pop back to) and via a `go()` that REPLACED the stack (from the
-  /// profile hub), which leaves nothing to pop (javító kör 1, F4). `maybePop`
-  /// alone silently no-ops on the second path, stranding the user here; a
-  /// `go()` fallback only fires when there genuinely was nothing to pop.
-  Future<void> _continueWithoutAccount() async {
+  /// The single way OUT of this screen, shared by both exits: "continue
+  /// without an account" (A1, ADR 0292 norm) and a successful sign-in.
+  ///
+  /// The screen is reached two ways: PUSHED (from Settings and from the
+  /// Profile hub, a real route to pop back to) and via a `go()` that
+  /// REPLACED the stack (a `/login` deep link), which leaves nothing to pop
+  /// (javító kör 1, F4). `maybePop` alone silently no-ops on the second
+  /// path, stranding the user here — and a bare `pop()` there throws
+  /// `GoError: There is nothing to pop`, which is exactly what a successful
+  /// sign-in did. The `go()` fallback only fires when there genuinely was
+  /// nothing to pop.
+  Future<void> _leaveScreen() async {
     final popped = await Navigator.of(context).maybePop();
     if (!popped && mounted) {
       context.go(AppRoutes.profileHome);
@@ -102,9 +109,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final loading = auth.isLoading;
     final showError = auth.hasError && _dismissedSubmission != _submissions;
 
-    // Pop back to Settings the moment a session exists.
+    // Leave the moment a session exists — back to whatever pushed this
+    // screen, or to the profile home when nothing did.
     ref.listen(authControllerProvider, (_, next) {
-      if (next.value != null && context.mounted) context.pop();
+      if (next.value != null && context.mounted) _leaveScreen();
     });
 
     return AuthThemeScope(
@@ -240,7 +248,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         key: const Key('authContinueWithoutAccount'),
                         variant: SsButtonVariant.tertiary,
                         label: l10n.authContinueWithoutAccount,
-                        onPressed: loading ? null : _continueWithoutAccount,
+                        onPressed: loading ? null : _leaveScreen,
                       ),
                     ],
                   ),

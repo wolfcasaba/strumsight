@@ -60,23 +60,36 @@ Widget _host({
   ),
 );
 
+/// Every destination the hub links to, as `STUB <path>`: these cells
+/// measure the NAVIGATION, not the target screens (each has its own
+/// widget test). R17 (2026-09-07 audit) added the three that were reached
+/// with a stack-replacing `go`.
+GoRouter _hubRouter() => GoRouter(
+  initialLocation: AppRoutes.profileHome,
+  routes: <RouteBase>[
+    GoRoute(
+      path: AppRoutes.profileHome,
+      builder: (_, _) => const ProfileHubScreen(),
+    ),
+    GoRoute(path: AppRoutes.tutorHome, builder: _stub),
+    GoRoute(path: AppRoutes.gamificationHub, builder: _stub),
+    GoRoute(path: AppRoutes.community, builder: _stub),
+    GoRoute(path: AppRoutes.login, builder: _stub),
+  ],
+);
+
+Widget _stub(BuildContext _, GoRouterState state) =>
+    Scaffold(body: Text('STUB ${state.uri.path}'));
+
 /// WP-D harness — a valós Profil hub egy MINIMÁLIS go_router alatt. Az
 /// AI Tanár helyén `STUB <path>` áll: a cella a NAVIGÁCIÓT méri, nem a
 /// tutor-képernyő tartalmát (annak saját widget-tesztje van).
-Widget _routerHost({required bool aiTutorEnabled}) {
-  final router = GoRouter(
-    initialLocation: AppRoutes.profileHome,
-    routes: <RouteBase>[
-      GoRoute(
-        path: AppRoutes.profileHome,
-        builder: (_, _) => const ProfileHubScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.tutorHome,
-        builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
-      ),
-    ],
-  );
+Widget _routerHost({
+  required bool aiTutorEnabled,
+  bool accountEnabled = false,
+  bool communityEnabled = false,
+  GoRouter? router,
+}) {
   return ProviderScope(
     overrides: [
       ...preferenceOverrides(),
@@ -85,9 +98,10 @@ Widget _routerHost({required bool aiTutorEnabled}) {
           environment: AppEnvironment.development,
           apiBaseUrl: AppConfig.devApiBaseUrl,
           flags: FeatureFlags(
-            accountEnabled: false,
+            accountEnabled: accountEnabled,
             diagnosticsEnabled: false,
             labModeAvailable: false,
+            communityEnabled: communityEnabled,
             aiTutorEnabled: aiTutorEnabled,
           ),
           diagnosticsToken: AppConfig.devDiagnosticsToken,
@@ -95,11 +109,13 @@ Widget _routerHost({required bool aiTutorEnabled}) {
           appVersion: 'test',
         ),
       ),
+      if (accountEnabled)
+        authControllerProvider.overrideWith(() => _FakeAuthController(null)),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      routerConfig: router,
+      routerConfig: router ?? _hubRouter(),
     ),
   );
 }
@@ -222,5 +238,53 @@ void main() {
         findsNothing,
       );
     });
+  });
+
+  // -------------------------------------------------------------------
+  // R17 (2026-09-07 audit) — the hub's outgoing edges PUSH.
+  //
+  // MÉRT hiba: mind a három belépő `context.go`-val nyílt, ami TOP-LEVEL
+  // útvonalra lépve KICSERÉLI a stacket — az érkező képernyőn nincs
+  // vissza-nyíl (`canPop == false`, az AppBar nem rajzol leadinget) és az
+  // adaptív héj alsó sávja sincs ott, tehát csak a rendszer
+  // vissza-gombja — az appból kilépve — vezetett vissza.
+  // -------------------------------------------------------------------
+  group('R17 — the hub entries push, so the target can come back', () {
+    for (final entry in const <({String key, String path})>[
+      (key: 'profile-hub-achievements-entry', path: AppRoutes.gamificationHub),
+      (key: 'profile-hub-community-entry', path: AppRoutes.community),
+      (key: 'profile-hub-sign-in-entry', path: AppRoutes.login),
+    ]) {
+      testWidgets('${entry.key} pushes ${entry.path}', (tester) async {
+        final router = _hubRouter();
+        await tester.pumpWidget(
+          _routerHost(
+            aiTutorEnabled: false,
+            accountEnabled: true,
+            communityEnabled: true,
+            router: router,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final cta = find.byKey(ValueKey(entry.key));
+        await tester.ensureVisible(cta);
+        await tester.pumpAndSettle();
+        await tester.tap(cta);
+        await tester.pumpAndSettle();
+
+        // `state.uri`, NOT `currentConfiguration.uri` — after a push the
+        // latter reports the BOTTOM of the stack (see the WP-D cells).
+        expect(router.state.uri.path, entry.path);
+        expect(tester.takeException(), isNull);
+
+        // The measure: the arriving screen HAS a way back. Under `go`
+        // the stack was one page deep and this was false.
+        expect(router.canPop(), isTrue);
+        router.pop();
+        await tester.pumpAndSettle();
+        expect(router.state.uri.path, AppRoutes.profileHome);
+      });
+    }
   });
 }

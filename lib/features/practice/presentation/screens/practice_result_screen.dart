@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/model/practice_history_entry.dart';
@@ -60,7 +62,10 @@ class PracticeResultScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final mode = _modeFor(entry.modeCode);
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.practiceResultTitle)),
+      appBar: AppBar(
+        title: Text(l10n.practiceResultTitle),
+        leading: _exitLeading(context),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -81,6 +86,10 @@ class PracticeResultScreen extends ConsumerWidget {
             _ShareSection(entry: entry),
             const SizedBox(height: 12),
             _QuickLinksRow(entry: entry),
+            if (_needsExplicitExit(context)) ...[
+              const SizedBox(height: 16),
+              _exitCta(context, l10n),
+            ],
           ],
         ),
       ),
@@ -785,10 +794,18 @@ class PracticeMetricKind {
 /// component mandates an `onAction` (§5.2), but this fallback never
 /// navigated pre-migration (measured: `git show 0ba14f5b:…
 /// practice_result_screen.dart` — the legacy `EmptyState` took no action at
-/// all). Adding a `practiceHub` navigation here would be a behaviour change
-/// in an appearance-only round (E15-R04 review MAJOR-3b) — this mirrors
-/// [SpeedBuilderScreen]'s `_UnavailableLayout`, the same documented §5.2
-/// exception used for [PracticeHubScreen]'s empty-catalog state.
+/// all), and E15-R04 (review MAJOR-3b) kept it that way because that round
+/// was appearance-only — this mirrored [SpeedBuilderScreen]'s
+/// `_UnavailableLayout`, the same documented §5.2 exception used for
+/// [PracticeHubScreen]'s empty-catalog state.
+///
+/// 2026-09-07 audit: that exception now has a measured cost. `/practice/`
+/// `result` is reached with a stack-replacing `go`, so this screen — the
+/// one shown exactly when the result could NOT be resolved — was a dead
+/// end with neither a back arrow nor an action. It therefore gets the same
+/// [_exitLeading] / [_exitCta] pair as [PracticeResultScreen], under the
+/// same [_needsExplicitExit] condition: nothing is added where there is
+/// nothing to leave for.
 class PracticeResultFallback extends StatelessWidget {
   const PracticeResultFallback({super.key});
 
@@ -798,7 +815,10 @@ class PracticeResultFallback extends StatelessWidget {
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.practiceResultTitle)),
+      appBar: AppBar(
+        title: Text(l10n.practiceResultTitle),
+        leading: _exitLeading(context),
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(SsSpacing.space6),
@@ -822,10 +842,76 @@ class PracticeResultFallback extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
+              if (_needsExplicitExit(context)) ...[
+                const SizedBox(height: SsSpacing.space6),
+                _exitCta(context, l10n),
+              ],
             ],
           ),
         ),
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// The way OUT of the result screen (2026-09-07 audit)
+// ---------------------------------------------------------------------------
+
+/// True when this screen has to offer an EXPLICIT way out.
+///
+/// `/practice/result` is reached with `context.go`
+/// (`practice_effect_listener.dart`) — deliberately, so the finished
+/// session screen is gone — which means the arriving page is the ONLY one
+/// on the stack: `canPop` is false, `AppBar` implies no back arrow, and the
+/// adaptive shell's bottom bar is not there either. The affordances below
+/// are rendered exactly then.
+///
+/// Without a [GoRouter] above this screen there is no hub route to leave
+/// for at all, so nothing is added — which is also why the frames pumped
+/// bare (the E13-R22 pixel goldens, the a11y and screen-size cells) are
+/// unchanged by this round.
+bool _needsExplicitExit(BuildContext context) =>
+    GoRouter.maybeOf(context) != null && !Navigator.of(context).canPop();
+
+/// Leaves the result screen: back to whatever pushed it when there is such
+/// a route (the live navigator is re-read at TAP time, not at build time),
+/// otherwise to the practice hub — the surface this session started from.
+void _leaveResult(BuildContext context) {
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.pop();
+    return;
+  }
+  GoRouter.maybeOf(context)?.go(AppRoutes.practiceHub);
+}
+
+/// The AppBar's back affordance, or `null` to keep `AppBar`'s own implied
+/// leading — which already works whenever there is something to pop.
+///
+/// A [BackButton] (not a bare [IconButton]): it carries the platform's own
+/// localised back tooltip, the same widget `practice_setup_screen.dart:74`
+/// already uses for exactly this situation — a screen entered with a
+/// stack-replacing `go`.
+Widget? _exitLeading(BuildContext context) {
+  if (!_needsExplicitExit(context)) return null;
+  return BackButton(
+    key: const Key('practiceResultBack'),
+    onPressed: () => _leaveResult(context),
+  );
+}
+
+/// The primary "done" CTA. A back arrow alone is easy to miss at the end of
+/// a long scroll, so the same action is repeated where the reading ends.
+Widget _exitCta(BuildContext context, AppLocalizations l10n) {
+  return SizedBox(
+    width: double.infinity,
+    child: FilledButton.icon(
+      key: const Key('practiceResultDoneCta'),
+      onPressed: () => _leaveResult(context),
+      icon: const Icon(Icons.check),
+      label: Text(l10n.practiceResultUnavailableAction),
+      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+    ),
+  );
 }
