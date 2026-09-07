@@ -131,10 +131,8 @@ Future<_RouteHarness> _pump(
       ),
       GoRoute(
         path: AppRoutes.songTrainerOverview,
-        builder: (_, _) => const Scaffold(
-          key: Key('stub-overview'),
-          body: SizedBox.shrink(),
-        ),
+        builder: (_, _) =>
+            const Scaffold(key: Key('stub-overview'), body: SizedBox.shrink()),
       ),
     ],
   );
