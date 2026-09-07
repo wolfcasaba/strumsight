@@ -1110,11 +1110,14 @@ void main() {
     // device. The pinned counts grow accordingly: 12 → 24 pairs. The
     // breakdown stays per-route rather than collapsing into the total, so a
     // field silently moving between routes is still caught.
+    // 2026-09-07 (javító sáv 3, R9/2): the tutor cloud gateway is wired
+    // behind the consent + account + session gate, so `tutor_stream`'s one
+    // field leaves the device too: 24 → 25 pairs.
     test('the measured route/field counts are exactly account_api (6), '
         'diagnostics_upload (3), share_export (3), '
         'account_api_community_post_repository (6), '
-        'account_api_community_club_repository (6) — 24 pairs total (round '
-        'brief §0.0.A R2)', () {
+        'account_api_community_club_repository (6), tutor_stream (1) — 25 '
+        'pairs total (round brief §0.0.A R2)', () {
       final expected = leavesDevicePairs(realInventory());
       expect(
         expected.where((p) => p.startsWith('account_api\u0000')).length,
@@ -1146,7 +1149,11 @@ void main() {
             .length,
         6,
       );
-      expect(expected.length, 24);
+      expect(
+        expected.where((p) => p.startsWith('tutor_stream\u0000')).length,
+        1,
+      );
+      expect(expected.length, 25);
     });
 
     test('a synthetic doc block missing one real row is caught (the '

@@ -53,6 +53,7 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
 | account_api_community_club_repository | target_public_id (meghívott, illetve új tulajdonos publikus profil-azonosítója — inviteMember `target_public_id`, transferOwnership `target_public_id`) |
 | account_api_community_club_repository | club_membership_action (csatlakozás/kilépés/tag-eltávolítás cél-azonosítói az útvonalban — /join, /leave, /members/{id}) |
 | account_api_community_club_repository | idempotency_key (írás-kísérlet azonosítója) |
+| tutor_stream | tutor_turn_message (student free-text message + the assembled, redacted context snapshot the prompt builder renders) |
 <!-- data-inventory-crosscheck:end -->
 
 ### Reading the table
@@ -85,6 +86,14 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
   visibility setting, the public profile id of whoever you invite or hand ownership to, the
   membership actions you take (join, leave, remove a member), and the same write-integrity
   idempotency key. Again: signed out, nothing on this route leaves the device.
+- **tutor_stream** — the AI tutor's cloud turn (javító sáv 3, 2026-09-07). When you send a
+  message to the tutor, the message text and a redacted, on-device-assembled context snapshot
+  go to the StrumSight backend's `/tutor/stream` endpoint and from there to the configured model
+  provider. Three gates, all re-checked on every turn and all fail-closed: your explicit
+  **model-use consent** on the Tutor privacy screen (the request object is never even built
+  without it), an enabled account layer, and a live signed-in session (the same bearer token
+  and 401 handling as `account_api`). With any gate closed the tutor answers from the local,
+  on-device gateway and nothing leaves the phone.
 
 ## The diagnostics report you can send us — two independent layers
 
