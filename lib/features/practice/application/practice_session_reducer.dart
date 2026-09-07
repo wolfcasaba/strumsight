@@ -7,6 +7,7 @@ import '../domain/model/practice_definition.dart';
 import '../domain/model/practice_session_config.dart';
 import '../domain/model/practice_session_state.dart';
 import '../domain/model/tempo.dart';
+import '../domain/service/practice_target_rescaler.dart';
 import 'practice_session_clock.dart';
 import 'practice_session_command.dart';
 import 'practice_session_effect.dart';
@@ -188,6 +189,7 @@ PracticeSessionTransition reducePracticeSession(
       state,
       tempo,
     ),
+    RescheduleTempo(:final tempo) => _reduceRescheduleTempo(state, tempo),
     AcceptAdaptiveSuggestion(:final tempo) => _reduceAcceptAdaptiveSuggestion(
       state,
       tempo,
@@ -535,6 +537,69 @@ PracticeSessionTransition _reduceChangeTempoBeforeAttempt(
       config: config.copyWith(effectiveTempo: tempo),
       clearTarget: true,
     ),
+    effects: const [],
+    statusPath: [state.status], // status doesn't change — single-element path
+  );
+}
+
+PracticeSessionTransition _reduceRescheduleTempo(
+  PracticeSessionState state,
+  Tempo tempo,
+) {
+  // The two statuses with no attempt in flight. `countIn` / `running` are
+  // deliberately absent: the caller pauses first (the transition table
+  // already allows it), which is what fixes the boundary the rescale is
+  // anchored to. `completed` / `cancelled` keep the older
+  // [ChangeTempoBeforeAttempt] path, which invalidates the target instead.
+  if (state.status != PracticeSessionStatus.ready &&
+      state.status != PracticeSessionStatus.paused) {
+    return _rejected(state, state.status, 'RescheduleTempo');
+  }
+  final config = state.config;
+  final target = state.target;
+  if (config == null || target == null) {
+    return _rejected(
+      state,
+      state.status,
+      'RescheduleTempo',
+      message: 'RescheduleTempo requires a compiled target and a config.',
+    );
+  }
+  if (tempo.validate().isNotEmpty) {
+    return _rejected(
+      state,
+      state.status,
+      'RescheduleTempo',
+      message: 'RescheduleTempo requires a valid tempo.',
+    );
+  }
+  final pausedAt = state.pausedAtTimeline;
+  if (state.status == PracticeSessionStatus.paused && pausedAt == null) {
+    return _rejected(
+      state,
+      state.status,
+      'RescheduleTempo',
+      message: 'RescheduleTempo from paused requires pausedAtTimeline.',
+    );
+  }
+  final rescaled = rescalePracticeTarget(
+    target: target,
+    tempo: tempo,
+    position: pausedAt ?? Duration.zero,
+  );
+  // Re-anchoring `timelineBase` on the image of the pause position (and
+  // `activeBase` on the frozen active accumulator) keeps `timelinePosition`
+  // exactly where the playhead stands, in the re-timed domain — otherwise
+  // the derived playhead would jump the moment the target moved.
+  final next = state.copyWith(
+    config: config.copyWith(effectiveTempo: tempo),
+    target: rescaled.target,
+    pausedAtTimeline: pausedAt == null ? null : rescaled.position,
+    timelineBase: rescaled.position,
+    activeBase: state.activeElapsed,
+  );
+  return PracticeSessionTransition(
+    state: next,
     effects: const [],
     statusPath: [state.status], // status doesn't change — single-element path
   );

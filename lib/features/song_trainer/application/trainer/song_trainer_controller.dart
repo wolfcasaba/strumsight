@@ -33,14 +33,31 @@ abstract final class SongTrainerRateFailureCode {
   /// The controller has already been disposed.
   static const String disposed = 'songTrainer.rate.disposed';
 
-  /// A scored session compiles its Practice target ONCE, at the setup speed
-  /// ([SongPracticeCompiler] scales `effectiveTempo` by `config.targetSpeed`),
-  /// and the Practice state machine accepts a tempo change only before an
-  /// attempt (`ChangeTempoBeforeAttempt`, rejected from `running`/`paused`).
-  /// Moving the backing rate mid-session would therefore judge the user
-  /// against a timeline they no longer hear — refused instead.
-  static const String scoredSession = 'songTrainer.rate.scoredSession';
+  /// The scored session is not at a boundary where the judged timeline can
+  /// be re-timed. The Practice engine accepts `RescheduleTempo` from `ready`
+  /// and `paused` only, and this controller pauses a `countIn` / `running`
+  /// session on the caller's behalf — every other status (preparing,
+  /// permissionRequired, finishing, completed, cancelled, failed) is out of
+  /// reach and says so instead of pretending the change landed.
+  static const String notRescalable = 'songTrainer.rate.notRescalable';
+
+  /// The requested rate maps to a Practice tempo outside the domain range
+  /// (`Tempo.minimumBpm` … `Tempo.maximumBpm`) for this song's tempo.
+  static const String tempoOutOfRange = 'songTrainer.rate.tempoOutOfRange';
 }
+
+/// Practice statuses at which a scored session's timeline can be re-timed.
+///
+/// `countIn` and `running` are in the set because [SongTrainerController]
+/// pauses first: the pause is what fixes the bar boundary the rescale is
+/// anchored to, and the session re-enters through its usual one-bar resume
+/// count-in — already at the new tempo.
+const Set<PracticeSessionStatus> _rescalableStatuses = <PracticeSessionStatus>{
+  PracticeSessionStatus.ready,
+  PracticeSessionStatus.countIn,
+  PracticeSessionStatus.running,
+  PracticeSessionStatus.paused,
+};
 
 /// Coordinates SongTransport with the public Practice session runtime.
 ///
@@ -94,7 +111,15 @@ final class SongTrainerController {
       );
     }
     _refreshBackingRateSupport();
-    _state = _state.copyWith(maxLoops: _maxLoops);
+    // A scored session's compiled target already runs at `targetSpeed` —
+    // `SongPracticeCompiler` scales the authored tempo by it — so the speed
+    // control has to OPEN where the session actually is. A playback-only
+    // transport starts at 1x, and the state says exactly that.
+    final speed = _targetSpeed ?? 1.0;
+    _state = _state.copyWith(
+      maxLoops: _maxLoops,
+      playbackRate: compilation.isPlaybackOnly ? 1.0 : speed,
+    );
   }
 
   final SongTransport transport;
@@ -130,6 +155,8 @@ final class SongTrainerController {
   int? _finalizedOperationId;
   bool _backingPrepared = false;
   bool _disposed = false;
+  bool _applyingRate = false;
+  double? _queuedRate;
 
   Stream<SongTrainerState> get states => _states.stream;
   Stream<SongTrainerEffect> get effects => _effects.stream;
@@ -139,33 +166,50 @@ final class SongTrainerController {
   bool get isPlaybackOnly => compilation.isPlaybackOnly;
   int get maxLoops => _maxLoops;
 
-  /// Whether a live backing-rate change can actually take effect.
+  /// Whether a live speed change can actually take effect.
   ///
-  /// Three conditions, all measured, none assumed: the session must be
-  /// playback-only (see [SongTrainerRateFailureCode.scoredSession] for why a
-  /// scored one cannot move), a backing track must actually be prepared —
-  /// there is nothing to re-rate otherwise — and the player must advertise
-  /// rate support. The presentation layer reads this to decide whether the
-  /// speed slider is a real control or an honestly disabled one.
-  bool get canChangeBackingRate =>
-      compilation.isPlaybackOnly &&
-      _backingPrepared &&
-      transport.player.capabilities.canChangeRate;
+  /// Playback-only: a backing track must actually be prepared — there is
+  /// nothing to re-rate otherwise — and the player must advertise rate
+  /// support.
+  ///
+  /// Scored: the Practice session must sit at a status whose judged timeline
+  /// can be re-timed ([_rescalableStatuses]); and when a backing track IS
+  /// prepared the player must be able to follow, because a session that
+  /// re-times its targets while the audio keeps the old rate is exactly the
+  /// desync this control must never produce.
+  ///
+  /// The presentation layer reads this to decide whether the speed slider is
+  /// a real control or an honestly disabled one.
+  bool get canChangeBackingRate {
+    if (_disposed) return false;
+    final practice = _practiceSession;
+    if (practice == null) {
+      return _backingPrepared && transport.player.capabilities.canChangeRate;
+    }
+    if (_backingPrepared && !transport.player.capabilities.canChangeRate) {
+      return false;
+    }
+    return compilation.definition != null &&
+        _rescalableStatuses.contains(practice.state.status);
+  }
 
-  /// Applies [rate] to the backing transport and mirrors it into the state.
+  /// Applies [rate] to the session and mirrors it into the state.
   ///
   /// Returns a failure rather than throwing or silently ignoring the request:
-  /// an unsupported rate, a scored session, and a transport-level refusal are
-  /// all things the coach surface has to be able to say out loud.
+  /// an unsupported rate, a session that is not at a boundary, and a
+  /// transport-level refusal are all things the coach surface has to be able
+  /// to say out loud.
+  ///
+  /// A slider drag fires one call per notch, so the calls are serialised
+  /// here: while one is in flight the newest requested rate is queued and
+  /// applied by that run when it finishes. Two pause/resume brackets
+  /// interleaving over one session is how the audio and the judged timeline
+  /// would end up on different tempi — the exact desync this operation
+  /// exists to prevent.
   Future<AppResult<void>> setPlaybackRate(double rate) async {
     if (_disposed) {
       return const Failure<void>(
         AudioFailure(code: SongTrainerRateFailureCode.disposed),
-      );
-    }
-    if (!compilation.isPlaybackOnly) {
-      return const Failure<void>(
-        AudioFailure(code: SongTrainerRateFailureCode.scoredSession),
       );
     }
     if (!transport.player.capabilities.supportsRate(rate)) {
@@ -173,6 +217,37 @@ final class SongTrainerController {
         AudioFailure(code: BackingAudioPlayerFailureCode.unsupportedRate),
       );
     }
+    if (rate == _state.playbackRate) return const Success<void>(null);
+    if (_applyingRate) {
+      _queuedRate = rate;
+      return const Success<void>(null);
+    }
+    _applyingRate = true;
+    try {
+      var requested = rate;
+      while (true) {
+        final applied = await _applyRate(requested);
+        final queued = _queuedRate;
+        _queuedRate = null;
+        if (applied.isFailure || queued == null || queued == requested) {
+          return applied;
+        }
+        requested = queued;
+      }
+    } finally {
+      _applyingRate = false;
+      _queuedRate = null;
+    }
+  }
+
+  Future<AppResult<void>> _applyRate(double rate) {
+    final practice = _practiceSession;
+    if (practice != null) return _setScoredRate(practice, rate);
+    return _setBackingRate(rate);
+  }
+
+  /// Playback-only: the audio transport is the only timeline in the session.
+  Future<AppResult<void>> _setBackingRate(double rate) async {
     // `SongTransport` accepts `SetSongTransportSpeed` only while `ready` or
     // `paused` (its own transition table). Bracketing the change with a
     // pause/resume keeps the audio clock's anchor honest: the transport
@@ -181,11 +256,8 @@ final class SongTrainerController {
     if (wasPlaying) await transport.dispatch(const PauseSongTransport());
     final applied = await transport.dispatch(SetSongTransportSpeed(rate));
     if (wasPlaying) await transport.dispatch(const ResumeSongTransport());
-    for (final effect in applied.effects) {
-      if (effect is TransportFailureEffect) {
-        return Failure<void>(AudioFailure(code: effect.code));
-      }
-    }
+    final failed = _transportFailureIn(applied);
+    if (failed != null) return Failure<void>(AudioFailure(code: failed));
     if (_disposed) {
       return const Failure<void>(
         AudioFailure(code: SongTrainerRateFailureCode.disposed),
@@ -193,6 +265,90 @@ final class SongTrainerController {
     }
     _emit(_state.copyWith(playbackRate: rate));
     return const Success<void>(null);
+  }
+
+  /// Scored: the judged timeline moves WITH the audio, at a safe boundary.
+  ///
+  /// The Practice target is compiled once, at the setup speed, and the
+  /// engine only re-times it while no attempt is in flight. So the change
+  /// runs as one bracket — pause → re-time the target → re-rate the audio →
+  /// resume — which is also the musically honest thing to do, since a tempo
+  /// cannot change mid-bar. Everything already played keeps its placement
+  /// (and with it every verdict already earned); only what is still to come
+  /// moves, and the one-bar resume count-in already ticks at the new tempo.
+  Future<AppResult<void>> _setScoredRate(
+    PracticeSessionController practice,
+    double rate,
+  ) async {
+    final tempo = _scoredTempoFor(rate);
+    if (tempo == null) {
+      return const Failure<void>(
+        AudioFailure(code: SongTrainerRateFailureCode.tempoOutOfRange),
+      );
+    }
+    final status = practice.state.status;
+    if (!_rescalableStatuses.contains(status)) {
+      return const Failure<void>(
+        AudioFailure(code: SongTrainerRateFailureCode.notRescalable),
+      );
+    }
+    final wasRunning =
+        status == PracticeSessionStatus.countIn ||
+        status == PracticeSessionStatus.running;
+    if (wasRunning) await pause();
+    if (_disposed) {
+      return const Failure<void>(
+        AudioFailure(code: SongTrainerRateFailureCode.disposed),
+      );
+    }
+    await practice.dispatch(RescheduleTempo(tempo));
+    if (practice.state.target?.tempo != tempo) {
+      // The reducer refused (and logged) the input: put the session back
+      // where the caller had it instead of leaving it half-applied.
+      if (wasRunning) await resume();
+      return const Failure<void>(
+        AudioFailure(code: SongTrainerRateFailureCode.notRescalable),
+      );
+    }
+    // The transport only accepts a speed while `ready` or `paused`; a
+    // session with no backing track has no transport timeline to move.
+    final phase = transport.state.phase;
+    if (phase == SongTransportPhase.ready ||
+        phase == SongTransportPhase.paused) {
+      final applied = await transport.dispatch(SetSongTransportSpeed(rate));
+      final failed = _transportFailureIn(applied);
+      if (failed != null) return Failure<void>(AudioFailure(code: failed));
+    }
+    if (_disposed) {
+      return const Failure<void>(
+        AudioFailure(code: SongTrainerRateFailureCode.disposed),
+      );
+    }
+    _emit(
+      _state.copyWith(
+        playbackRate: rate,
+        practiceState: practice.state,
+        status: _statusForPractice(practice.state.status),
+      ),
+    );
+    if (wasRunning) await resume();
+    return const Success<void>(null);
+  }
+
+  /// The Practice tempo a scored session runs at for [rate], or null when
+  /// the song's authored tempo cannot carry it.
+  Tempo? _scoredTempoFor(double rate) {
+    final definition = compilation.definition;
+    if (definition == null) return null;
+    final tempo = Tempo(definition.defaultTempo.bpm * rate);
+    return tempo.validate().isEmpty ? tempo : null;
+  }
+
+  String? _transportFailureIn(SongTransportDispatchResult result) {
+    for (final effect in result.effects) {
+      if (effect is TransportFailureEffect) return effect.code;
+    }
+    return null;
   }
 
   /// Prepares the optional backing transport and the scored Practice session.

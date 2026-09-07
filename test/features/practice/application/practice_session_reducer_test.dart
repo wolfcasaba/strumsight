@@ -401,6 +401,12 @@ void main() {
           PracticeSessionStatus.completed,
       (PracticeSessionStatus.cancelled, ChangeTempoBeforeAttempt):
           PracticeSessionStatus.cancelled,
+      // RescheduleTempo — accepted at the two statuses with no attempt in
+      // flight; it re-times the target instead of clearing it (R13).
+      (PracticeSessionStatus.ready, RescheduleTempo):
+          PracticeSessionStatus.ready,
+      (PracticeSessionStatus.paused, RescheduleTempo):
+          PracticeSessionStatus.paused,
       // AcceptAdaptiveSuggestion — same as ChangeTempoBeforeAttempt.
       (PracticeSessionStatus.ready, AcceptAdaptiveSuggestion):
           PracticeSessionStatus.ready,
@@ -458,6 +464,7 @@ void main() {
         'ChangeTempoBeforeAttempt',
         () => const ChangeTempoBeforeAttempt(Tempo(90)),
       ),
+      ('RescheduleTempo', () => const RescheduleTempo(Tempo(90))),
       (
         'AcceptAdaptiveSuggestion',
         () => const AcceptAdaptiveSuggestion(Tempo(90)),
@@ -589,6 +596,53 @@ void main() {
     expect(transition.state.status, PracticeSessionStatus.ready);
     expect(transition.state.config!.effectiveTempo, const Tempo(90));
     expect(transition.state.target, isNull);
+  });
+
+  test('RescheduleTempo re-times the target instead of clearing it', () {
+    final state = PracticeSessionState.initial.copyWith(
+      status: PracticeSessionStatus.paused,
+      config: _config(),
+      target: _testTarget,
+      pausedAtTimeline: const Duration(seconds: 5),
+      activeElapsed: const Duration(seconds: 5),
+    );
+
+    final transition = reducePracticeSession(
+      state,
+      const RescheduleTempo(Tempo(60)),
+    );
+
+    expect(transition.isAccepted, isTrue);
+    expect(transition.state.status, PracticeSessionStatus.paused);
+    expect(transition.state.config!.effectiveTempo, const Tempo(60));
+    expect(transition.state.target, isNotNull);
+    expect(transition.state.target!.tempo, const Tempo(60));
+    // Pivot = the 4 s bar boundary the pause sits in: the 8 s timeline keeps
+    // its first four seconds and doubles the remaining four.
+    expect(transition.state.target!.totalDuration, const Duration(seconds: 12));
+    expect(transition.state.pausedAtTimeline, const Duration(seconds: 6));
+    expect(transition.state.timelineBase, const Duration(seconds: 6));
+    expect(transition.statusPath, const <PracticeSessionStatus>[
+      PracticeSessionStatus.paused,
+    ]);
+  });
+
+  test('RescheduleTempo is rejected for a tempo outside the domain range', () {
+    final state = PracticeSessionState.initial.copyWith(
+      status: PracticeSessionStatus.ready,
+      config: _config(),
+      target: _testTarget,
+    );
+
+    final transition = reducePracticeSession(
+      state,
+      const RescheduleTempo(Tempo(400)),
+    );
+
+    expect(transition.isRejected, isTrue);
+    expect(transition.rejection!.input, 'RescheduleTempo');
+    expect(transition.rejection!.message, contains('valid tempo'));
+    expect(transition.state, equals(state));
   });
 
   // ------------------------------------------------------------------

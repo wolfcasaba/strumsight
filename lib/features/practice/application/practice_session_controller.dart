@@ -241,6 +241,9 @@ final class PracticeSessionController {
       clock.resetAttempt();
       _resetAttemptObservation();
     }
+    if (input is RescheduleTempo && !transition.isRejected) {
+      _onTempoRescheduled(transition.state);
+    }
 
     // Terminal-state cleanup. Per A15, `PracticeSessionResult` and the
     // `recorder.record()` call are reserved for the `completed` branch; the
@@ -389,6 +392,33 @@ final class PracticeSessionController {
       case Failure(:final error):
         await dispatch(PreparationFailed(error));
     }
+  }
+
+  /// Re-times the live matcher after an accepted [RescheduleTempo].
+  ///
+  /// The reducer owns the compiled target; the controller owns the matcher,
+  /// and the two have to move together — a matcher left on the old timeline
+  /// would keep judging what is still to come against a tempo the user
+  /// stopped hearing. Targets already resolved keep their records verbatim,
+  /// so no verdict earned before the change can move (see
+  /// [PracticeEventMatcher.rescheduled]).
+  void _onTempoRescheduled(PracticeSessionState next) {
+    final target = next.target;
+    if (target == null) return;
+    _currentTarget = target;
+    final previous = _matcher;
+    if (previous == null) return;
+    if (previous.target.events.length != target.events.length) {
+      logger.warning(
+        'practice_session_tempo_rescale_matcher_mismatch',
+        fields: <String, Object?>{'events': target.events.length},
+      );
+      return;
+    }
+    _matcher = PracticeEventMatcher.rescheduled(
+      previous: previous,
+      target: target,
+    );
   }
 
   void _resetAttemptObservation() {

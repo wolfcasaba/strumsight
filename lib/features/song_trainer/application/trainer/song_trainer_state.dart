@@ -63,9 +63,12 @@ final class SongTrainerState {
   /// as disabled with a reason.
   final bool backingRateSupported;
 
-  /// Backing playback rate currently applied to the transport, as a factor of
-  /// the authored tempo (`1` == as written). Only a playback-only session can
-  /// move it — see [SongTrainerController.setPlaybackRate].
+  /// Session speed as a factor of the authored tempo (`1` == as written).
+  ///
+  /// Playback-only: the rate applied to the backing transport. Scored: the
+  /// factor the compiled Practice target is timed at — it OPENS at the setup
+  /// speed, not at 1, and a live change moves the target and the audio
+  /// together. See [SongTrainerController.setPlaybackRate].
   final double playbackRate;
 
   /// Optional Speed Builder state mirror. `null` when the session does not

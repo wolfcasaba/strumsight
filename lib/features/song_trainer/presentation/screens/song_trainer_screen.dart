@@ -213,9 +213,10 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
 
   /// Javító sáv 2026-09-06 (audit §5.2): the speed slider shipped with
   /// `onChanged: null`, so it was an inert control. It gets a real handler
-  /// exactly when the owned controller can honour one — a scored session's
-  /// judged timeline is compiled at the setup speed and must not drift away
-  /// from what the user hears, so it stays honestly disabled there.
+  /// exactly when the owned controller can honour one — which, since R13,
+  /// includes a SCORED session: the controller re-times the judged Practice
+  /// target and the backing audio together, at a bar boundary, so the two
+  /// cannot drift apart ([SongTrainerController.canChangeBackingRate]).
   ValueChanged<double>? _ownedSpeed() {
     final owned = _ownedController;
     if (owned == null || !owned.canChangeBackingRate) return null;

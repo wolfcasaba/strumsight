@@ -107,8 +107,76 @@ final class PracticeEventMatcher {
              targetIndex: index,
              target: target.events[index],
            ),
-       ] {
+       ],
+       _scanTimes = [for (final event in target.events) event.time] {
     _resultsView = UnmodifiableListView(_results);
+  }
+
+  PracticeEventMatcher._continued({
+    required this.target,
+    required this.scoringProfile,
+    required this.inputLatency,
+    required List<PracticeEventMatchResult> results,
+    required List<Duration> scanTimes,
+  }) : _results = results,
+       _scanTimes = scanTimes {
+    _resultsView = UnmodifiableListView(_results);
+  }
+
+  /// A matcher that continues [previous] against a re-timed [target].
+  ///
+  /// Every target already RESOLVED keeps its record verbatim — the compiled
+  /// event it was judged against, its observation sequence, its timing
+  /// offset. That is what makes a mid-session tempo change honest: a verdict
+  /// already earned cannot change value because the timeline moved
+  /// underneath it (the chord scorer and the aggregator both re-read
+  /// `match.target.time` on every scoring pass).
+  ///
+  /// Every target still OPEN is re-opened on the re-timed event, so what is
+  /// still to come is matched against the tempo the user now hears.
+  ///
+  /// Matching SCANS the re-timed target's own (nondecreasing) event times,
+  /// which is what keeps the binary search's ordering invariant intact even
+  /// where a resolved record deliberately kept an older placement.
+  factory PracticeEventMatcher.rescheduled({
+    required PracticeEventMatcher previous,
+    required CompiledPracticeTarget target,
+  }) {
+    final events = target.events;
+    if (events.length != previous._results.length) {
+      throw ArgumentError.value(
+        target,
+        'target',
+        'A rescheduled target must keep the compiled event count.',
+      );
+    }
+    final results = <PracticeEventMatchResult>[];
+    for (var index = 0; index < events.length; index++) {
+      final existing = previous._results[index];
+      if (existing.isResolved) {
+        results.add(existing);
+      } else {
+        results.add(
+          PracticeEventMatchResult._open(
+            targetIndex: index,
+            target: events[index],
+          ),
+        );
+      }
+    }
+    final matcher = PracticeEventMatcher._continued(
+      target: target,
+      scoringProfile: previous.scoringProfile,
+      inputLatency: previous.inputLatency,
+      results: results,
+      scanTimes: <Duration>[for (final event in events) event.time],
+    );
+    matcher._openCursor = previous._openCursor;
+    matcher._lastAdvancedPlayedAt = previous._lastAdvancedPlayedAt;
+    matcher._resolvedTargetCount = previous._resolvedTargetCount;
+    matcher._extraStrumCount = previous._extraStrumCount;
+    matcher._examinedTargetRecordCount = previous._examinedTargetRecordCount;
+    return matcher;
   }
 
   final CompiledPracticeTarget target;
@@ -116,6 +184,10 @@ final class PracticeEventMatcher {
   final Duration inputLatency;
 
   final List<PracticeEventMatchResult> _results;
+
+  /// Time key each record is SCANNED by — always the current target's own
+  /// event times, even for a resolved record that kept an earlier one.
+  final List<Duration> _scanTimes;
   late final UnmodifiableListView<PracticeEventMatchResult> _resultsView;
 
   var _openCursor = 0;
@@ -155,12 +227,11 @@ final class PracticeEventMatcher {
 
     for (var index = firstCandidate; index < _results.length; index++) {
       final candidate = _examine(index);
-      if (candidate.target.time > maximumTime) break;
+      final targetTime = _scanTimes[index];
+      if (targetTime > maximumTime) break;
       if (candidate.isResolved) continue;
 
-      final deltaMicroseconds = (candidate.target.time - playedAt)
-          .inMicroseconds
-          .abs();
+      final deltaMicroseconds = (targetTime - playedAt).inMicroseconds.abs();
       if (deltaMicroseconds <= matchWindow.inMicroseconds &&
           (bestDeltaMicroseconds == null ||
               deltaMicroseconds < bestDeltaMicroseconds)) {
@@ -200,7 +271,7 @@ final class PracticeEventMatcher {
         _openCursor++;
         continue;
       }
-      if (!(result.target.time + scoringProfile.matchWindow < playedAt)) {
+      if (!(_scanTimes[_openCursor] + scoringProfile.matchWindow < playedAt)) {
         break;
       }
 
@@ -233,8 +304,7 @@ final class PracticeEventMatcher {
     var high = _results.length;
     while (low < high) {
       final middle = low + ((high - low) >> 1);
-      final result = _examine(middle);
-      if (result.target.time < minimumTime) {
+      if (_scanTimeAt(middle) < minimumTime) {
         low = middle + 1;
       } else {
         high = middle;
@@ -253,5 +323,12 @@ final class PracticeEventMatcher {
   PracticeEventMatchResult _examine(int index) {
     _examinedTargetRecordCount++;
     return _results[index];
+  }
+
+  /// Reads one record's scan time, booking the same inspection cost as
+  /// [_examine] — the binary search inspects a record either way.
+  Duration _scanTimeAt(int index) {
+    _examinedTargetRecordCount++;
+    return _scanTimes[index];
   }
 }
