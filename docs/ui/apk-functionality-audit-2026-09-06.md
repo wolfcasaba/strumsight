@@ -264,7 +264,7 @@ túlcsordulása 412 px-es nézeten en/2.0 + hu/1.5 + hu/2.0 szövegnagyításná
    kizárási lista változatlanul egyelemű (L180: a lista csak zsugorodhat).
 4. A **maradék coverage-bukások mérése folyamatban** — a leletek ide kerülnek.
 
-**CI-bizonyíték (sáv 3):** run <KITÖLTENDŐ> a <sha> fejen
+**CI-bizonyíték (sáv 3):** `build-apk.yml` run [34135635783](https://github.com/wolfcasaba/strumsight/actions/runs/34135635783) a `d581ca7` fejen — format, analyze, architecture, secrets, l10n, asset, teljes teszt-suite, véletlen-magos property-kapu és Coverage mind ZÖLD, a development APK a run artefaktuma. Az odáig vezető sáv-3 leletek (időrendben): 1 formázó (arrow-törzs), analyze ×2 (`Override` típusargumentum, felesleges `meta` import), analyze ×1 (`FeatureFlags` kötelező paraméterei), majd a teszt-kapu 7 → 0: mátrix A1 (két setlist-képernyő), setlist_session túlcsordulás (2 cella, hu/2.0/landscape), mátrix A1 (terv-előnézet képernyő), `beta_release_notes_test` A6 ×2 és `store_package_test` A2 ×2 (a `tutor_stream` mező adatvédelmi közzététele), végül 1 formázó (behúzás-csökkenés utáni egysoros hívások). A bukó tesztek neve a naplóeszköz 5000 soros ablakán kívül esett; a futás különböző pontjain megszakított három futás ablakaiból lett kimérve.
 
 ### 5.4 Bejelentkezés — mért állapot (2026-09-07)
 
