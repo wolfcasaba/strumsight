@@ -39,6 +39,11 @@ void main() {
       'lib/l10n/features/onboarding_hu.arb',
     ),
     (
+      'features/shell',
+      'lib/l10n/features/shell_en.arb',
+      'lib/l10n/features/shell_hu.arb',
+    ),
+    (
       'features/tuner',
       'lib/l10n/features/tuner_en.arb',
       'lib/l10n/features/tuner_hu.arb',

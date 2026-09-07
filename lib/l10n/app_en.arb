@@ -2578,7 +2578,15 @@
   "navLearn": "Learn",
   "navLibrary": "Library",
   "navLive": "Live",
+  "navProfile": "Profile",
+  "@navProfile": {
+    "description": "Adaptive shell navigation label for the Profile destination (the destination renders the profile hub, not the tutor profile)."
+  },
   "navSettings": "Settings",
+  "navSongs": "Songs",
+  "@navSongs": {
+    "description": "Adaptive shell navigation label for the Songs destination (the destination renders the songbook list, not the Song Trainer library)."
+  },
   "nudgeBody": "A few minutes of strumming keeps the streak going.",
   "nudgeBodyFriday": "Start the weekend with a strum — your streak will thank you.",
   "nudgeBodyWeekend": "A lazy strum still counts — keep the streak rolling.",
@@ -2757,18 +2765,35 @@
   "@planSetupUnavailable": {},
   "planSetupUnknown": "I don't know",
   "@planSetupUnknown": {},
+  "practiceAreaHubAllPractices": "All practices",
+  "@practiceAreaHubAllPractices": {
+    "description": "Opens the full practice catalog list from the practice area hub."
+  },
   "practiceAreaHubCategoriesHeading": "Browse by goal",
   "practiceAreaHubCategoryChords": "Chords",
   "practiceAreaHubCategoryRhythm": "Rhythm",
   "practiceAreaHubCategoryScales": "Scales",
   "practiceAreaHubCategoryTechnique": "Technique",
   "practiceAreaHubCategoryWarmup": "Warm-up",
+  "practiceAreaHubMoreHeading": "More tools",
+  "@practiceAreaHubMoreHeading": {
+    "description": "Section heading on the practice area hub above the entries that open the full practice catalog, the analysis tool and the lesson library."
+  },
   "practiceAreaHubQuickToolsHeading": "Quick tools",
   "practiceAreaHubRecommendedCta": "Start recommended practice",
   "practiceAreaHubRecommendedMessage": "Jump into a practice session picked for where you are right now.",
   "practiceAreaHubRecommendedTitle": "Recommended for you",
   "practiceCatalogAlternatingEighthsTitle": "Alternating eighths",
   "practiceCatalogCGAmFProgressionTitle": "C–G–Am–F progression",
+  "practiceCatalogCategoryHeading": "Category: {category}",
+  "@practiceCatalogCategoryHeading": {
+    "description": "Heading of the practice catalog list when it is filtered to one goal category.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
   "practiceCatalogEmToCChangesTitle": "Em ↔ C chord changes",
   "practiceCatalogFirstWaltzTitle": "First waltz",
   "practiceCatalogFolkPatternTitle": "Folk syncopation",
@@ -3298,6 +3323,10 @@
   "progressDailyGoal": "Daily goal",
   "progressDaysPracticed": "Days played",
   "progressEmpty": "Play in Live, analyse a riff, or pass a lesson — your progress shows up here.",
+  "progressEvidenceUnavailable": "This session is not in your library.",
+  "@progressEvidenceUnavailable": {
+    "description": "Shown when a skill-detail evidence row cannot be resolved to a library item, instead of silently opening the library list."
+  },
   "progressGoalMet": "Goal reached today 🎉",
   "progressGoalOption": "{count} min",
   "@progressGoalOption": {
@@ -3923,6 +3952,14 @@
   "shareRedactionTitle": "What you're sharing",
   "shareTextButton": "Share as text",
   "shareTitle": "Share",
+  "shellDataErrorMessage": "This could not be loaded right now.",
+  "@shellDataErrorMessage": {
+    "description": "Shown by a route that failed to load its data, instead of an empty state that would claim there is nothing to show."
+  },
+  "shellDataRetry": "Retry",
+  "@shellDataRetry": {
+    "description": "Retry action next to shellDataErrorMessage."
+  },
   "songAddChord": "Add a chord",
   "songBpm": "{count} BPM",
   "@songBpm": {
@@ -4803,6 +4840,10 @@
   "visionSetupReadyTitle": "Camera setup is ready",
   "visionSetupRequestPermission": "Allow camera",
   "visionSetupSkipAction": "Continue without camera",
+  "visionSetupStartSession": "Start camera session",
+  "@visionSetupStartSession": {
+    "description": "Primary call to action on the camera setup ready step; opens the vision session."
+  },
   "visionSetupTitle": "Camera setup",
   "visionSetupUnsupportedDeviceNotice": "This device does not support the camera view. You can continue with audio only.",
   "weeklyPlanScheduled": "{count} blocks scheduled",

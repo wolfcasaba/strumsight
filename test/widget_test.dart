@@ -31,7 +31,10 @@ void main() {
     // aiTutorEnabled defaults to false, so only 4 of the 5 areas show.
     expect(find.text('Today'), findsWidgets);
     expect(find.text('Practice hub'), findsWidgets);
-    expect(find.text('Song library'), findsWidgets);
-    expect(find.text('Tutor profile'), findsWidgets);
+    // R18 (audit M10) — dedicated nav keys: the Songs destination used to
+    // be labelled "Song library" (the Song Trainer library's title) and
+    // Profile "Tutor profile", both naming a screen the tap does not open.
+    expect(find.text('Songs'), findsWidgets);
+    expect(find.text('Profile'), findsWidgets);
   });
 }

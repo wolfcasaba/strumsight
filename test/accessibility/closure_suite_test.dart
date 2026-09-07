@@ -434,7 +434,7 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.byType(ChordLibraryScreen), findsOneWidget);
 
-        await tester.tap(find.text('Song library'));
+        await tester.tap(find.text('Songs'));
         await tester.pumpAndSettle();
         expect(find.byType(ChordLibraryScreen), findsNothing);
 

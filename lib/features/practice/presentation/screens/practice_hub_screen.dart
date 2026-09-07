@@ -27,20 +27,26 @@ import '../../../../core/foundation/app_result.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../streak/public.dart';
 import '../../data/adapters/daily_challenge_practice_adapter.dart';
+import '../../domain/model/practice_category.dart';
 import '../../domain/model/practice_definition.dart';
 import '../../domain/model/practice_mode.dart';
 import '../../application/practice_catalog_controller.dart';
+import '../practice_category_label.dart';
 import '../widgets/practice_mode_card.dart';
 
 /// The Hub.
 class PracticeHubScreen extends ConsumerWidget {
-  const PracticeHubScreen({super.key, this.now, this.dailyChallenge})
-    : assert(
-        // The Hub reads the wall clock exactly once, as the default for
-        // the injectable `now` (A9 — see ADR 0078 §8).
-        now == null || true,
-        'now is injectable for tests; one clock read lives in the default',
-      );
+  const PracticeHubScreen({
+    super.key,
+    this.now,
+    this.dailyChallenge,
+    this.category,
+  }) : assert(
+         // The Hub reads the wall clock exactly once, as the default for
+         // the injectable `now` (A9 — see ADR 0078 §8).
+         now == null || true,
+         'now is injectable for tests; one clock read lives in the default',
+       );
 
   /// Injectable clock for tests. Defaults to the real now.
   final DateTime? now;
@@ -51,6 +57,15 @@ class PracticeHubScreen extends ConsumerWidget {
   /// exercise the failure path of the adapter.
   final DailyChallenge? dailyChallenge;
 
+  /// Optional goal category the catalog list is narrowed to (R18, audit
+  /// B1/B2). `null` — the default, and everything the app rendered before
+  /// this round — means "the whole catalog, plus the Hub's own cards".
+  /// A non-null value turns the screen into the category listing the
+  /// Practice Area Hub's chips open: the Quick Start / Daily Challenge /
+  /// plan cards belong to the Hub itself, not to a filtered view, so they
+  /// are not repeated there.
+  final PracticeCategory? category;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -59,11 +74,19 @@ class PracticeHubScreen extends ConsumerWidget {
     final challenge = dailyChallenge ?? DailyChallenge.forDay(today);
     final definitionResult = practiceDefinitionFromDailyChallenge(challenge);
     final catalog = ref.watch(practiceCatalogProvider);
-    final repository = ref.watch(practiceCatalogRepositoryProvider);
     final activeMode = ref.watch(_practiceHubModeFilterProvider);
-    final filtered = activeMode == null
+    // R18 (audit B1) — the goal category, when the caller opened this screen
+    // through the Practice Area Hub's category chips. The mode filter then
+    // narrows what is left, so the two filters compose instead of one
+    // silently discarding the other.
+    final categoryFilter = category;
+    final scoped = categoryFilter == null
         ? catalog
-        : repository.byMode(activeMode);
+        : categoryFilter.filter(catalog);
+    final filtered = <PracticeDefinition>[
+      for (final definition in scoped)
+        if (activeMode == null || definition.mode == activeMode) definition,
+    ];
     // E15-R07 F1 (ADR 0491 D1/D3) — the ONE entry point into the Practice
     // Generator flow. Flag-gated independently of the catalog above; the
     // card's copy is deliberately "build a plan", never "your plan is
@@ -86,36 +109,47 @@ class PracticeHubScreen extends ConsumerWidget {
                   SsSpacing.space8,
                 ),
                 children: [
-                  Text(
-                    l10n.practiceHubSubtitle,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: SsSpacing.space4),
-                  if (catalog.isNotEmpty) ...[
-                    _QuickStartCard(
-                      definition: catalog.first,
-                      onOpen: () => _openSetup(context, catalog.first),
+                  if (categoryFilter != null)
+                    Text(
+                      l10n.practiceCatalogCategoryHeading(
+                        practiceCategoryLabel(l10n, categoryFilter),
+                      ),
+                      key: const Key('practice-catalog-category-heading'),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    )
+                  else ...[
+                    Text(
+                      l10n.practiceHubSubtitle,
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: SsSpacing.space3),
-                  ],
-                  _DailyChallengeCard(
-                    result: definitionResult,
-                    onOpen: () {
-                      if (definitionResult case Success(:final value)) {
-                        _openSetup(context, value);
-                      }
-                    },
-                  ),
-                  if (practiceGeneratorEnabled) ...[
-                    const SizedBox(height: SsSpacing.space3),
-                    _PlanBuilderCard(onOpen: () => _openPlanBuilder(context)),
-                    const SizedBox(height: SsSpacing.space3),
-                    // A tervező „ma" képernyője (`/practice/generator/today`)
-                    // eddig CSAK a folyamat belső visszaesési célpontja volt
-                    // — semmi nem nyitotta meg szándékosan. Ugyanaz a kapu
-                    // gondoskodik róla, mint a terv-építőről: a route a
-                    // `practiceGeneratorEnabled` ág alatt regisztrálódik.
-                    _TodayPlanCard(onOpen: () => _openTodayPlan(context)),
+                    const SizedBox(height: SsSpacing.space4),
+                    if (catalog.isNotEmpty) ...[
+                      _QuickStartCard(
+                        definition: catalog.first,
+                        onOpen: () => _openSetup(context, catalog.first),
+                      ),
+                      const SizedBox(height: SsSpacing.space3),
+                    ],
+                    _DailyChallengeCard(
+                      result: definitionResult,
+                      onOpen: () {
+                        if (definitionResult case Success(:final value)) {
+                          _openSetup(context, value);
+                        }
+                      },
+                    ),
+                    if (practiceGeneratorEnabled) ...[
+                      const SizedBox(height: SsSpacing.space3),
+                      _PlanBuilderCard(onOpen: () => _openPlanBuilder(context)),
+                      const SizedBox(height: SsSpacing.space3),
+                      // A tervező „ma" képernyője
+                      // (`/practice/generator/today`) eddig CSAK a folyamat
+                      // belső visszaesési célpontja volt — semmi nem nyitotta
+                      // meg szándékosan. Ugyanaz a kapu gondoskodik róla,
+                      // mint a terv-építőről: a route a
+                      // `practiceGeneratorEnabled` ág alatt regisztrálódik.
+                      _TodayPlanCard(onOpen: () => _openTodayPlan(context)),
+                    ],
                   ],
                   const SizedBox(height: SsSpacing.space5),
                   _ModeFilterRow(active: activeMode, all: catalog),

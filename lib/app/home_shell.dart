@@ -101,11 +101,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 }
 
 /// The adaptive five-area shell (Today/Practice/Songs/Coach/Profile,
-/// E13-R08, ADR 0275), reachable only behind `adaptiveShellEnabled`. Every
-/// destination's label comes from an existing [AppLocalizations] key —
-/// there are no dedicated navigation strings yet (brief §0.0 D10).
+/// E13-R08, ADR 0275), reachable only behind `adaptiveShellEnabled`.
 ///
-/// TODO(E13-R16): dedicated nav ARB keys once l10n is in scope.
+/// R18 (audit M10) resolves the E13-R08 D10 borrow: the Songs destination
+/// used `songLibraryTitle` ("Song library") while the branch renders
+/// `SongListScreen` ("Songs"), and Profile used `tutorProfileTitle`
+/// ("Tutor profile") while the branch renders `ProfileHubScreen` — two
+/// labels that named a DIFFERENT screen than the one the tap opens. Both
+/// now use dedicated `navSongs`/`navProfile` keys. The remaining three
+/// destinations keep the keys whose screens they actually open.
 class AdaptiveHomeShell extends StatelessWidget {
   const AdaptiveHomeShell({
     super.key,
@@ -147,7 +151,7 @@ class AdaptiveHomeShell extends StatelessWidget {
         SsAdaptiveDestination(
           icon: const Icon(Icons.library_music_outlined),
           selectedIcon: const Icon(Icons.library_music),
-          label: l10n.songLibraryTitle,
+          label: l10n.navSongs,
         ),
         if (showCoachDestination)
           SsAdaptiveDestination(
@@ -158,7 +162,7 @@ class AdaptiveHomeShell extends StatelessWidget {
         SsAdaptiveDestination(
           icon: const Icon(Icons.person_outline),
           selectedIcon: const Icon(Icons.person),
-          label: l10n.tutorProfileTitle,
+          label: l10n.navProfile,
         ),
       ],
     );

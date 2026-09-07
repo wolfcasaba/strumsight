@@ -7,6 +7,7 @@
 /// not registered, so importing them here does NOT make them reachable.
 library;
 
+export 'presentation/practice_category_label.dart' show practiceCategoryLabel;
 export 'presentation/practice_route_args.dart';
 export 'presentation/screens/practice_history_screen.dart';
 export 'presentation/screens/practice_hub_screen.dart';
@@ -54,6 +55,8 @@ export 'domain/model/practice_metrics.dart'
 export 'domain/model/beat_position.dart' show BeatPosition;
 export 'domain/model/compiled_practice_target.dart' show CompiledPracticeTarget;
 export 'domain/model/meter.dart' show Meter;
+export 'domain/model/practice_category.dart'
+    show PracticeCategory, practiceCategoryFromCode;
 export 'domain/model/practice_definition.dart' show PracticeDefinition;
 export 'domain/model/practice_difficulty.dart' show PracticeDifficulty;
 export 'domain/model/practice_event.dart' show PracticeEvent;

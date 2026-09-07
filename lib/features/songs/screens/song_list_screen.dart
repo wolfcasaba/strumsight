@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
+import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
@@ -73,11 +76,28 @@ class SongListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final songs = ref.watch(songsProvider);
+    // R18 (audit B4) — MÉRT hiba: a Song Trainer V2 könyvtárára (`/song-
+    // trainer`, és rajta keresztül a hét további Song Trainer képernyőre)
+    // a szállított felületről SEMMI nem mutatott: az egyetlen belépő a
+    // `LessonListScreen` volt, amit viszont maga sem nyitott meg senki.
+    // Ugyanaz a kapu, mint a route-é (`app_router.dart`): a gomb sosem
+    // mutat regisztrálatlan címre.
+    final songTrainerEnabled = ref
+        .watch(appConfigProvider)
+        .flags
+        .songTrainerV2Enabled;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.songsTitle),
         actions: [
+          if (songTrainerEnabled)
+            IconButton(
+              key: const Key('song-list-open-song-trainer'),
+              icon: const Icon(Icons.school_outlined),
+              tooltip: l10n.songTrainerTitle,
+              onPressed: () => context.push(AppRoutes.songTrainerLibrary),
+            ),
           IconButton(
             icon: const Icon(Icons.queue_music),
             tooltip: l10n.setlistsTitle,

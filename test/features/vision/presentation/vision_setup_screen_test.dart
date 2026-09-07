@@ -364,6 +364,43 @@ void main() {
       expect(find.text('Camera setup is ready'), findsOneWidget);
     });
   });
+
+  // -------------------------------------------------------------------
+  // R18 (audit B8) — a munkamenet belépési pontja.
+  //
+  // MÉRT hiány: a KÉSZ lépés egyetlen gombja a geometria-kalibráció volt,
+  // magára a `/vision/session` címre SEMMI nem vezetett, a Today hub pedig
+  // `visionSetupEnabled` mellett mindig a beállításra megy — a munkamenet
+  // így a szállított felületről elérhetetlen volt.
+  // -------------------------------------------------------------------
+  group('R18 — the vision session entry point', () {
+    testWidgets('the ready step opens /vision/session', (tester) async {
+      await _pumpReadyStep(tester, visionGuitarGeometryEnabled: true);
+
+      expect(
+        find.byKey(const Key('vision-setup-start-session')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('vision-setup-start-session')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('STUB ${AppRoutes.visionSession}'), findsOneWidget);
+    });
+
+    testWidgets('the session CTA is present even when the geometry step is '
+        'off — the two are independent doors', (tester) async {
+      await _pumpReadyStep(tester, visionGuitarGeometryEnabled: false);
+
+      expect(
+        find.byKey(const Key('vision-setup-open-guitar-geometry')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const Key('vision-setup-start-session')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('STUB ${AppRoutes.visionSession}'), findsOneWidget);
+    });
+  });
 }
 
 /// WP-D — a beállítás KÉSZ lépését közvetlenül állítja be, hogy a
@@ -435,6 +472,11 @@ Future<void> _pumpReadyStep(
       ),
       GoRoute(
         path: AppRoutes.visionGuitarGeometry,
+        builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+      ),
+      // R18 (audit B8) — the session the whole setup exists to prepare.
+      GoRoute(
+        path: AppRoutes.visionSession,
         builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
       ),
     ],

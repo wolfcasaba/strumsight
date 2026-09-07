@@ -36,6 +36,15 @@ abstract final class AppRoutes {
   static const String login = '/login';
   static const String librarySession = '/library/session';
   static const String practiceHub = '/practice';
+
+  /// The full practice catalog list (R18, audit B1/B2). Registered
+  /// independently of `adaptiveShellEnabled`: the shell's own `/practice`
+  /// destination renders the Practice AREA hub, which offers exactly one
+  /// definition (`catalog.first`), so without this route the other nine
+  /// built-in practices had no on-screen entry point at all. An optional
+  /// `?category=<PracticeCategory.code>` query narrows the list to one goal
+  /// category; an unknown code simply means "no filter" (never an error).
+  static const String practiceCatalog = '/practice/catalog';
   static const String practiceSetup = '/practice/setup';
   static const String practiceSession = '/practice/session';
   static const String practiceResult = '/practice/result';

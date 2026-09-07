@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../features/practice/public.dart' show practiceCatalogProvider;
+import '../../../features/practice/public.dart'
+    show PracticeCategory, practiceCatalogProvider, practiceCategoryLabel;
 import '../../../l10n/app_localizations.dart';
 
 /// The Practice Area Hub (UI-06, SDD Ch13 §UI-06) — every practice tool's
@@ -162,27 +163,84 @@ class PracticeAreaHubScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
+            // MÉRT hiba (R18 audit, B1): mind az öt kategória-csip a puszta
+            // `/practice/setup` címre ment, `?id=` NÉLKÜL — a Setup ilyenkor
+            // a saját route-hiba ágát rajzolja ki („ez a gyakorlat nem
+            // érhető el"). A csip mostantól a KATALÓGUST nyitja meg az adott
+            // célra szűrve; a `PracticeCategory.values` sorrendje szó szerint
+            // a korábbi felirat-lista sorrendje, és a feliratok ugyanazok az
+            // ARB-kulcsok, tehát a képernyő rajzolata változatlan.
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final label in [
-                  l10n.practiceAreaHubCategoryWarmup,
-                  l10n.practiceAreaHubCategoryChords,
-                  l10n.practiceAreaHubCategoryRhythm,
-                  l10n.practiceAreaHubCategoryScales,
-                  l10n.practiceAreaHubCategoryTechnique,
-                ])
+                for (final category in PracticeCategory.values)
                   ActionChip(
-                    label: Text(label),
-                    onPressed: () => context.go(AppRoutes.practiceSetup),
+                    key: ValueKey('practice-hub-category-${category.code}'),
+                    label: Text(practiceCategoryLabel(l10n, category)),
+                    onPressed: () => _openCatalog(context, category: category),
                   ),
+              ],
+            ),
+            // R18 (audit B2/B3/B4) — a katalógus, az elemzés és a leckék
+            // belépési pontjai. MIÉRT ITT, a lista VÉGÉN: a képernyő
+            // pixelre rögzített golden-teszttel bír
+            // (`e13_r17_practice_area_hub_compact*.png`), amit ezen a boxon
+            // nem lehet újra felvenni; a látható területen bármi máshová
+            // tett vezérlő elmozdítaná a rajzolatot. A lista aljára fűzött
+            // szakasz a golden nézetablakán KÍVÜL kezdődik, tehát a mérce
+            // változatlan marad, a három cél viszont elérhetővé válik.
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.practiceAreaHubMoreHeading,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _QuickTool(
+                  key: const ValueKey('practice-hub-all-practices'),
+                  icon: Icons.list_alt,
+                  label: l10n.practiceAreaHubAllPractices,
+                  onPressed: () => _openCatalog(context),
+                ),
+                _QuickTool(
+                  key: const ValueKey('practice-hub-analyze'),
+                  icon: Icons.multitrack_audio_outlined,
+                  label: l10n.navAnalyze,
+                  onPressed: () => context.push(AppRoutes.practiceAnalyze),
+                ),
+                _QuickTool(
+                  key: const ValueKey('practice-hub-learn'),
+                  icon: Icons.school_outlined,
+                  label: l10n.navLearn,
+                  onPressed: () => context.push(AppRoutes.practiceLearn),
+                ),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// Opens the full practice catalog list, optionally narrowed to one goal
+  /// [category]. `push`, not `go`: the catalog is a top-level route (not a
+  /// shell branch), so `go` would replace the shell stack and leave the user
+  /// with no way back to the hub.
+  void _openCatalog(BuildContext context, {PracticeCategory? category}) {
+    final uri = Uri(
+      path: AppRoutes.practiceCatalog,
+      queryParameters: category == null
+          ? null
+          : <String, String>{'category': category.code},
+    );
+    context.push(uri.toString());
   }
 }
 

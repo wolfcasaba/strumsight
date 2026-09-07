@@ -11,7 +11,6 @@ import '../../features/audio_analysis/application/capture_seed.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
 import '../../features/audio_analysis/domain/analysis_input.dart';
 import '../../features/audio_analysis/domain/analysis_mode.dart';
-import '../../features/audio_analysis/domain/analysis_summary.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
@@ -31,6 +30,7 @@ import '../../features/library/public.dart';
 import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/session_detail_screen.dart';
 import '../../features/library_v2/domain/library_item.dart';
+import '../../features/library_v2/providers/library_v2_providers.dart';
 import '../../features/library_v2/screens/library_item_detail_screen.dart';
 import '../../features/library_v2/screens/unified_library_screen.dart';
 import '../../features/live/screens/live_screen.dart';
@@ -41,7 +41,8 @@ import '../../features/practice/presentation/practice_result_route.dart';
 import '../../features/practice/presentation/screens/practice_hub_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
-import '../../features/practice/public.dart' show practiceCatalogProvider;
+import '../../features/practice/public.dart'
+    show practiceCatalogProvider, practiceCategoryFromCode;
 import '../../features/practice_generator/application/usecase/revise_practice_plan.dart'
     show PlanRevisionProposal;
 import '../../features/practice_generator/application/controller/today_plan_controller.dart'
@@ -193,6 +194,39 @@ bool _hasMasteryMilestoneForSkill(String? skillId) =>
     masteryMilestoneCatalogV1.any(
       (milestone) => milestone.skill.code == skillId,
     );
+
+/// R18 (audit M5) — opens one unified-library session detail from a Progress
+/// V2 evidence row.
+///
+/// [AppRoutes.profileLibrarySession]'s redirect requires an `extra` of type
+/// [LibraryItem]; a push without one silently lands on the library LIST,
+/// which is the wrong page dressed up as a working link. This resolves the
+/// item out of the already-aggregated library and passes it as `extra`. When
+/// it cannot be resolved — the aggregation has not finished, failed, or the
+/// session is genuinely not in the library — the miss is SPOKEN (a snackbar)
+/// instead of navigating somewhere the row did not name.
+void _openLibrarySession(
+  BuildContext context, {
+  required AppLocalizations l10n,
+  required List<LibraryItem>? items,
+  required String route,
+  required String sessionId,
+}) {
+  LibraryItem? match;
+  for (final item in items ?? const <LibraryItem>[]) {
+    if (item.id == sessionId) {
+      match = item;
+      break;
+    }
+  }
+  if (match == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.progressEvidenceUnavailable)),
+    );
+    return;
+  }
+  context.push(route.replaceFirst(':sessionId', sessionId), extra: match);
+}
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
@@ -458,10 +492,23 @@ final routerProvider = Provider<GoRouter>((ref) {
               now: ref.watch(progressNowProvider),
               localize: (key) => progressV2LocalizedText(l10n, key),
             )!;
+            // R18 (audit M5) — the unified library's items, WATCHED here so
+            // the aggregation starts loading while the user reads the skill
+            // detail. MÉRT hiba: the evidence rows used to push
+            // `/profile/library/session/:sessionId` with NO `extra`, and that
+            // route's own redirect requires `state.extra is LibraryItem` —
+            // so every evidence tap silently landed on the library LIST
+            // instead of the session it named.
+            final libraryItems = ref.watch(libraryV2ItemsProvider);
             return SkillDetailScreen(
               projection: projection,
-              onOpenEvidence: (route, sessionId) =>
-                  context.push(route.replaceFirst(':sessionId', sessionId)),
+              onOpenEvidence: (route, sessionId) => _openLibrarySession(
+                context,
+                l10n: l10n,
+                items: libraryItems.value,
+                route: route,
+                sessionId: sessionId,
+              ),
               onStartRecommendedPractice: () =>
                   context.push(AppRoutes.practiceHub),
             );
@@ -556,6 +603,22 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.practiceHub,
             builder: (_, _) => const PracticeHubScreen(),
           ),
+        // R18 (audit B2) — the catalog LIST, registered regardless of the
+        // shell flag. Measured defect: with the shell on, `/practice` renders
+        // the Practice AREA hub, whose only definition-carrying control is
+        // the recommended CTA (`catalog.first`); the registration above is
+        // `!adaptiveShellEnabled`-only, so nine of the ten built-in practices
+        // had NO on-screen entry point in the shipped build. Declared here
+        // (before the shell below) so it stays a top-level, pushable route:
+        // the hub `push`es it and the user pops straight back.
+        GoRoute(
+          path: AppRoutes.practiceCatalog,
+          builder: (_, state) => PracticeHubScreen(
+            category: practiceCategoryFromCode(
+              state.uri.queryParameters['category'],
+            ),
+          ),
+        ),
         GoRoute(
           path: AppRoutes.practiceSetup,
           builder: (_, _) => const PracticeSetupScreen(),
@@ -604,21 +667,38 @@ final routerProvider = Provider<GoRouter>((ref) {
           // `ActivePlanController.swap` now rewrites today's first pending
           // block to a same-skill catalog alternative.
           builder: (_, state) => Consumer(
-            builder: (context, ref, _) => TodayPlanScreen(
-              controller: ref.watch(todayPlanControllerProvider),
-              plan: ref.watch(activePracticePlanProvider).value,
-              launchRequest: TodayPlanRouteRequest.tryParse(state.extra),
-              isTodayRouteEnabled: true,
-              onStart: (block) => openPracticeForBlock(context, block),
-              onSwap: (_) =>
-                  runTodayPlanAction(context, ref, TodayPlanAction.swap),
-              onSkip: (_) =>
-                  runTodayPlanAction(context, ref, TodayPlanAction.skip),
-              onShorten: () =>
-                  runTodayPlanAction(context, ref, TodayPlanAction.shorten),
-              onPause: () =>
-                  runTodayPlanAction(context, ref, TodayPlanAction.pause),
-            ),
+            builder: (context, ref, _) {
+              // R18 (audit M6) — `.value` alone made BOTH loading and error
+              // read as `null`, and `null` is this screen's measured "no
+              // active plan" state. A user whose stored plan failed to load
+              // was told they have no plan at all. The three states are
+              // distinct here now.
+              final planAsync = ref.watch(activePracticePlanProvider);
+              return planAsync.when(
+                loading: () => const _RouteLoadingScaffold(
+                  key: Key('today-plan-route-loading'),
+                ),
+                error: (_, _) => _RouteErrorScaffold(
+                  key: const Key('today-plan-route-error'),
+                  onRetry: () => ref.invalidate(activePracticePlanProvider),
+                ),
+                data: (plan) => TodayPlanScreen(
+                  controller: ref.watch(todayPlanControllerProvider),
+                  plan: plan,
+                  launchRequest: TodayPlanRouteRequest.tryParse(state.extra),
+                  isTodayRouteEnabled: true,
+                  onStart: (block) => openPracticeForBlock(context, block),
+                  onSwap: (_) =>
+                      runTodayPlanAction(context, ref, TodayPlanAction.swap),
+                  onSkip: (_) =>
+                      runTodayPlanAction(context, ref, TodayPlanAction.skip),
+                  onShorten: () =>
+                      runTodayPlanAction(context, ref, TodayPlanAction.shorten),
+                  onPause: () =>
+                      runTodayPlanAction(context, ref, TodayPlanAction.pause),
+                ),
+              );
+            },
           ),
         ),
         GoRoute(
@@ -627,12 +707,23 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, ref, _) {
               final plan = ref.watch(activePracticePlanProvider);
               // A `plan` a képernyő szerződésében NULLAZHATÓ, és a `null`
-              // ott a „még nincs terv" állapot — nem hiányzó adat. Betöltés
-              // közben tehát nem hazudunk üres tervet: ugyanaz a `null`
-              // megy be, amit a képernyő maga is kezel.
-              return WeeklyPlanScreen(
-                plan: plan.value,
-                today: ref.watch(practiceGeneratorTodayProvider)(),
+              // ott a „még nincs terv" állapot — nem hiányzó adat.
+              // R18 (audit M6): éppen EZÉRT nem mehet be a `.value` nyersen.
+              // A betöltés és a hiba is `null`-lá lapult, tehát a képernyő
+              // mindkettőt „nincs terved"-ként mondta ki. A `null` csak a
+              // `data` ágon jelenthet hiányzó tervet.
+              return plan.when(
+                loading: () => const _RouteLoadingScaffold(
+                  key: Key('weekly-plan-route-loading'),
+                ),
+                error: (_, _) => _RouteErrorScaffold(
+                  key: const Key('weekly-plan-route-error'),
+                  onRetry: () => ref.invalidate(activePracticePlanProvider),
+                ),
+                data: (value) => WeeklyPlanScreen(
+                  plan: value,
+                  today: ref.watch(practiceGeneratorTodayProvider)(),
+                ),
               );
             },
           ),
@@ -977,25 +1068,38 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, ref, _) {
               final recent = ref.watch(analysisRecentSummariesProvider);
               final l10n = AppLocalizations.of(context);
-              return AnalysisHomeScreen(
-                // Betöltés / hiba alatt ÜRES lista megy be — a képernyő
-                // szerződése nem ismer köztes állapotot. A hiba NEM
-                // csendben nyelődik el: a provider hibaága megmarad, és a
-                // lista üres volta itt nem állítás, hanem a még be nem
-                // töltött állapot.
-                recentAnalyses: recent.value ?? const <AnalysisSummary>[],
-                onStartRecording: () => context.go(AppRoutes.analysisRecord),
-                onImportFile: () {
-                  // A hang-importálásnak NINCS folyamata a fában (se
-                  // képernyő, se útvonal). Egy néma no-op itt halott gombot
-                  // adna; a felhasználó azt hinné, elromlott. Ezért a
-                  // hiányt kimondjuk.
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l10n.analysisHomeImportUnavailable)),
-                  );
-                },
-                onOpenAnalysis: (summary) =>
-                    context.go(AppRoutes.analysisTimeline, extra: summary),
+              // R18 (audit M6) — a `recent.value ?? const []` a provider
+              // SZÁNDÉKOS hibaágát (`analysis_providers.dart`: a `Failure`
+              // dob, hogy a hiba megkülönböztethető maradjon) pontosan azzá
+              // az üres listává lapította, amit a képernyő „nincs korábbi
+              // elemzés"-ként mond ki. A három állapot innentől három
+              // különböző felület.
+              return recent.when(
+                loading: () => const _RouteLoadingScaffold(
+                  key: Key('analysis-home-route-loading'),
+                ),
+                error: (_, _) => _RouteErrorScaffold(
+                  key: const Key('analysis-home-route-error'),
+                  onRetry: () =>
+                      ref.invalidate(analysisRecentSummariesProvider),
+                ),
+                data: (summaries) => AnalysisHomeScreen(
+                  recentAnalyses: summaries,
+                  onStartRecording: () => context.go(AppRoutes.analysisRecord),
+                  onImportFile: () {
+                    // A hang-importálásnak NINCS folyamata a fában (se
+                    // képernyő, se útvonal). Egy néma no-op itt halott
+                    // gombot adna; a felhasználó azt hinné, elromlott.
+                    // Ezért a hiányt kimondjuk.
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(l10n.analysisHomeImportUnavailable),
+                      ),
+                    );
+                  },
+                  onOpenAnalysis: (summary) =>
+                      context.go(AppRoutes.analysisTimeline, extra: summary),
+                ),
               );
             },
           ),
@@ -1310,3 +1414,58 @@ final routerProvider = Provider<GoRouter>((ref) {
   });
   return router;
 });
+
+/// R18 (audit M6) — the loading frame a route shows while the data it is
+/// composed from is still being read.
+///
+/// MÉRT hiba: three route builders read `AsyncValue.value` directly, so
+/// loading AND error both collapsed into the SAME `null`/empty-list value
+/// the screens below render as a measured "you have nothing here" state.
+/// A spinner is not a richer contract — it is the ABSENCE of the claim.
+class _RouteLoadingScaffold extends StatelessWidget {
+  const _RouteLoadingScaffold({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
+}
+
+/// R18 (audit M6) — the failure frame for the same three routes.
+///
+/// Shape borrowed from `club_detail_screen.dart`'s `_ClubFeedErrorCard`
+/// (icon + message + retry), rebuilt locally rather than imported: that one
+/// is a private widget of a Community screen, and the router must not reach
+/// into a feature's presentation internals.
+class _RouteErrorScaffold extends StatelessWidget {
+  const _RouteErrorScaffold({required this.onRetry, super.key});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.error_outline, size: 48),
+                const SizedBox(height: 16),
+                Text(l10n.shellDataErrorMessage, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: onRetry,
+                  child: Text(l10n.shellDataRetry),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

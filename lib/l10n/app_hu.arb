@@ -2539,7 +2539,15 @@
   "navLearn": "Tanulás",
   "navLibrary": "Könyvtár",
   "navLive": "Élő",
+  "navProfile": "Profil",
+  "@navProfile": {
+    "description": "Adaptive shell navigation label for the Profile destination (the destination renders the profile hub, not the tutor profile)."
+  },
   "navSettings": "Beállítások",
+  "navSongs": "Dalok",
+  "@navSongs": {
+    "description": "Adaptive shell navigation label for the Songs destination (the destination renders the songbook list, not the Song Trainer library)."
+  },
   "nudgeBody": "Pár perc pengetés, és megy tovább a sorozat.",
   "nudgeBodyFriday": "Indítsd a hétvégét egy pengetéssel — a sorozatod hálás lesz.",
   "nudgeBodyWeekend": "Egy laza pengetés is számít — pörögjön a sorozat.",
@@ -2718,18 +2726,35 @@
   "@planSetupUnavailable": {},
   "planSetupUnknown": "Nem tudom",
   "@planSetupUnknown": {},
+  "practiceAreaHubAllPractices": "Összes gyakorlat",
+  "@practiceAreaHubAllPractices": {
+    "description": "Opens the full practice catalog list from the practice area hub."
+  },
   "practiceAreaHubCategoriesHeading": "Böngészés cél szerint",
   "practiceAreaHubCategoryChords": "Akkordok",
   "practiceAreaHubCategoryRhythm": "Ritmus",
   "practiceAreaHubCategoryScales": "Skálák",
   "practiceAreaHubCategoryTechnique": "Technika",
   "practiceAreaHubCategoryWarmup": "Bemelegítés",
+  "practiceAreaHubMoreHeading": "További eszközök",
+  "@practiceAreaHubMoreHeading": {
+    "description": "Section heading on the practice area hub above the entries that open the full practice catalog, the analysis tool and the lesson library."
+  },
   "practiceAreaHubQuickToolsHeading": "Gyors eszközök",
   "practiceAreaHubRecommendedCta": "Ajánlott gyakorlás indítása",
   "practiceAreaHubRecommendedMessage": "Indíts egy, a jelenlegi szintedhez válogatott gyakorlást.",
   "practiceAreaHubRecommendedTitle": "Neked ajánlott",
   "practiceCatalogAlternatingEighthsTitle": "Váltakozó nyolcadok",
   "practiceCatalogCGAmFProgressionTitle": "C–G–Am–F akkordmenet",
+  "practiceCatalogCategoryHeading": "Kategória: {category}",
+  "@practiceCatalogCategoryHeading": {
+    "description": "Heading of the practice catalog list when it is filtered to one goal category.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
   "practiceCatalogEmToCChangesTitle": "Em ↔ C akkordváltás",
   "practiceCatalogFirstWaltzTitle": "Első keringő",
   "practiceCatalogFolkPatternTitle": "Folk szinkópa",
@@ -3259,6 +3284,10 @@
   "progressDailyGoal": "Napi cél",
   "progressDaysPracticed": "Játéknap",
   "progressEmpty": "Játssz élőben, elemezz egy riffet, vagy teljesíts egy leckét — itt jelenik meg a haladásod.",
+  "progressEvidenceUnavailable": "Ez a munkamenet nincs a könyvtáradban.",
+  "@progressEvidenceUnavailable": {
+    "description": "Shown when a skill-detail evidence row cannot be resolved to a library item, instead of silently opening the library list."
+  },
   "progressGoalMet": "Mai cél teljesítve 🎉",
   "progressGoalOption": "{count} perc",
   "@progressGoalOption": {
@@ -3877,6 +3906,14 @@
   "shareRedactionTitle": "Amit megosztasz",
   "shareTextButton": "Megosztás szövegként",
   "shareTitle": "Megosztás",
+  "shellDataErrorMessage": "Ezt most nem sikerült betölteni.",
+  "@shellDataErrorMessage": {
+    "description": "Shown by a route that failed to load its data, instead of an empty state that would claim there is nothing to show."
+  },
+  "shellDataRetry": "Újra",
+  "@shellDataRetry": {
+    "description": "Retry action next to shellDataErrorMessage."
+  },
   "songAddChord": "Akkord hozzáadása",
   "songBpm": "{count} BPM",
   "@songBpm": {
@@ -4703,6 +4740,10 @@
   "visionSetupReadyTitle": "A kamera beállítása kész",
   "visionSetupRequestPermission": "Kamera engedélyezése",
   "visionSetupSkipAction": "Folytatás kamera nélkül",
+  "visionSetupStartSession": "Kamerás munkamenet indítása",
+  "@visionSetupStartSession": {
+    "description": "Primary call to action on the camera setup ready step; opens the vision session."
+  },
   "visionSetupTitle": "Kamera beállítása",
   "visionSetupUnsupportedDeviceNotice": "Ez az eszköz nem támogatja a kamera nézetet. Folytathatod csak hanggal.",
   "weeklyPlanScheduled": "{count} blokk ütemezve",

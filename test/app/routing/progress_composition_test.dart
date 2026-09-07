@@ -14,6 +14,12 @@ import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/features/library_v2/data/practice_item_source.dart';
+import 'package:strumsight/features/library_v2/domain/library_item.dart';
+import 'package:strumsight/features/library_v2/domain/library_item_source.dart';
+import 'package:strumsight/features/library_v2/providers/library_v2_providers.dart';
+import 'package:strumsight/features/library_v2/screens/library_item_detail_screen.dart';
+import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/practice/domain/repository/practice_history_repository.dart';
 import 'package:strumsight/features/practice/public.dart';
@@ -359,4 +365,117 @@ void main() {
       );
     },
   );
+
+  // -------------------------------------------------------------------
+  // R18 (audit M5) — an evidence row opens the SESSION it names.
+  //
+  // MÉRT hiba: `SkillDetailScreen.onOpenEvidence` pushed
+  // `/profile/library/session/:sessionId` with NO `extra`, while that
+  // route's own redirect requires `state.extra is LibraryItem` — so every
+  // evidence tap silently landed on the library LIST instead.
+  // -------------------------------------------------------------------
+  group('R18/M5 — skill-detail evidence rows carry their LibraryItem', () {
+    testWidgets('tapping an evidence row opens the session detail with the '
+        'resolved item as extra', (tester) async {
+      await _pumpRouterTo(
+        tester,
+        AppRoutes.profileProgressSkill.replaceFirst(
+          ':skillId',
+          'chordTransition',
+        ),
+        extraOverrides: [
+          progressPracticeHistoryProvider.overrideWithValue(
+            _threeQualifyingChordSessions(),
+          ),
+          libraryV2SourcesProvider.overrideWithValue(_practiceLibrary()),
+        ],
+      );
+
+      expect(find.byType(SkillDetailScreen), findsOneWidget);
+      final detail = tester.widget<SkillDetailScreen>(
+        find.byType(SkillDetailScreen),
+      );
+      final sessionId = detail.projection.evidence.first.sessionId;
+
+      final row = find.byKey(ValueKey('event-list-row-$sessionId'));
+      await tester.scrollUntilVisible(row, 160, scrollable: _skillDetailList());
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LibraryItemDetailScreen), findsOneWidget);
+      final opened = tester.widget<LibraryItemDetailScreen>(
+        find.byType(LibraryItemDetailScreen),
+      );
+      expect(opened.item.id, sessionId);
+      expect(
+        find.byType(UnifiedLibraryScreen),
+        findsNothing,
+        reason: 'the redirect used to swallow every evidence tap',
+      );
+    });
+
+    testWidgets('an evidence row the library cannot resolve says so instead '
+        'of opening the wrong page', (tester) async {
+      await _pumpRouterTo(
+        tester,
+        AppRoutes.profileProgressSkill.replaceFirst(
+          ':skillId',
+          'chordTransition',
+        ),
+        extraOverrides: [
+          progressPracticeHistoryProvider.overrideWithValue(
+            _threeQualifyingChordSessions(),
+          ),
+          libraryV2SourcesProvider.overrideWithValue(
+            <LibraryItemSource>[
+              PracticeItemSource(
+                () async => LibrarySourceLoad.success(const <LibraryItem>[]),
+              ),
+            ],
+          ),
+        ],
+      );
+
+      final detail = tester.widget<SkillDetailScreen>(
+        find.byType(SkillDetailScreen),
+      );
+      final sessionId = detail.projection.evidence.first.sessionId;
+      final row = find.byKey(ValueKey('event-list-row-$sessionId'));
+      await tester.scrollUntilVisible(row, 160, scrollable: _skillDetailList());
+      await tester.tap(row);
+      await tester.pump();
+
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.byType(LibraryItemDetailScreen), findsNothing);
+      expect(find.byType(UnifiedLibraryScreen), findsNothing);
+      expect(find.byType(SkillDetailScreen), findsOneWidget);
+    });
+  });
 }
+
+/// The skill-detail screen's OWN outer list. `find.byType(Scrollable).first`
+/// would pick a scrollable of the shell page still mounted underneath the
+/// pushed skill-detail route.
+Finder _skillDetailList() {
+  final matches = find.descendant(
+    of: find.byType(SkillDetailScreen),
+    matching: find.byType(Scrollable),
+  );
+  return matches.first;
+}
+
+/// The unified library, seeded with exactly the three practice sessions the
+/// skill-detail evidence rows name — the real aggregation runs over it.
+List<LibraryItemSource> _practiceLibrary() => <LibraryItemSource>[
+  PracticeItemSource(
+    () async => LibrarySourceLoad.success(<LibraryItem>[
+      for (final entry in _threeQualifyingChordSessions())
+        PracticeLibraryItem(
+          id: entry.id,
+          title: 'Chord changes',
+          createdAt: entry.createdAt,
+          syncStatus: LibrarySyncStatus.synced,
+        ),
+    ]),
+  ),
+];
