@@ -501,6 +501,12 @@ void main() {
         ),
       );
       var feedAttempts = 0;
+      // A feed provider `autoDispose`: a fül újraépítése (a klub-részlet
+      // megérkezése után) ÚJRA lefuttatja, tehát „az első kísérlet dob"
+      // nem elég — a második, magától jövő kísérlet már sikerrel járna, és
+      // a hiba-kártya sosem látszana (mért, run 34149856851). A hiba addig
+      // áll, amíg a teszt maga nem engedi a sikeres újratöltést.
+      var serveFeed = false;
 
       await tester.pumpWidget(
         _wrap(
@@ -511,10 +517,7 @@ void main() {
             }),
             clubFeedProvider.overrideWith((ref, arg) async {
               feedAttempts++;
-              // Az első lekérés elszáll, a másodikat (az újrapróbálás)
-              // már kiszolgáljuk — ez méri, hogy a gomb tényleg ÚJRA
-              // olvassa a providert, nem csak elrejti a kártyát.
-              if (feedAttempts == 1) throw const NetworkFailure();
+              if (!serveFeed) throw const NetworkFailure();
               return CommunityPagePlaceholder<CommunityPost>(
                 items: <CommunityPost>[_post('post-1', 'Reloaded post.')],
               );
@@ -541,10 +544,14 @@ void main() {
       );
       await tester.ensureVisible(retry);
       await tester.pumpAndSettle();
+      final attemptsBeforeRetry = feedAttempts;
+      serveFeed = true;
       await tester.tap(retry);
       await tester.pumpAndSettle();
 
-      expect(feedAttempts, 2);
+      // Az újrapróbálás tényleg ÚJRA olvassa a providert, nem csak
+      // elrejti a kártyát.
+      expect(feedAttempts, greaterThan(attemptsBeforeRetry));
       expect(find.byKey(const Key('club-feed-error')), findsNothing);
       expect(find.text('Reloaded post.'), findsOneWidget);
     });
