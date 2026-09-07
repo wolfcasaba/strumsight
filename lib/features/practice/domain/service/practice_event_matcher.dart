@@ -112,14 +112,13 @@ final class PracticeEventMatcher {
     _resultsView = UnmodifiableListView(_results);
   }
 
-  PracticeEventMatcher._continued({
+  PracticeEventMatcher._continued(
+    this._results,
+    this._scanTimes, {
     required this.target,
     required this.scoringProfile,
     required this.inputLatency,
-    required List<PracticeEventMatchResult> results,
-    required List<Duration> scanTimes,
-  }) : _results = results,
-       _scanTimes = scanTimes {
+  }) {
     _resultsView = UnmodifiableListView(_results);
   }
 
@@ -165,11 +164,11 @@ final class PracticeEventMatcher {
       }
     }
     final matcher = PracticeEventMatcher._continued(
+      results,
+      <Duration>[for (final event in events) event.time],
       target: target,
       scoringProfile: previous.scoringProfile,
       inputLatency: previous.inputLatency,
-      results: results,
-      scanTimes: <Duration>[for (final event in events) event.time],
     );
     matcher._openCursor = previous._openCursor;
     matcher._lastAdvancedPlayedAt = previous._lastAdvancedPlayedAt;
