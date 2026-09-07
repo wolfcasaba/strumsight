@@ -30,12 +30,14 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/features/community/data/repositories/feed_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_club.dart';
 import 'package:strumsight/features/community/domain/entities/community_post.dart';
 import 'package:strumsight/features/community/domain/entities/moderation_state.dart';
 import 'package:strumsight/features/community/domain/policies/community_audience.dart';
 import 'package:strumsight/features/community/domain/repositories/club_repository.dart';
 import 'package:strumsight/features/community/domain/repositories/community_page.dart';
+import 'package:strumsight/features/community/domain/repositories/feed_repository.dart';
 import 'package:strumsight/features/community/domain/value_objects/content_id.dart';
 import 'package:strumsight/features/community/domain/value_objects/cursor_page.dart';
 import 'package:strumsight/features/community/domain/value_objects/public_user_id.dart';
@@ -146,6 +148,45 @@ class _RecordingClubRepository implements CommunityClubRepository {
     required String idempotencyKey,
   }) async {
     throw UnimplementedError('transferOwnership is unused.');
+  }
+}
+
+/// Feed-repository fake, amelynek a `clubPinned`-je ELSZÁLL.
+///
+/// Ez a cella NEM írja felül a [clubPinnedProvider]-t: a VALÓDI provider
+/// fut, és a valódi `communityFeedRepositoryProvider` seamen kapja a
+/// hibát — így a teszt azt méri, hogy egy repository-hiba tényleg
+/// `AsyncError`-ként ér a felületre (a `HttpCommunityFeedRepository`
+/// minden metódusa `throw error`-ral zárja a `Failure` ágat, tehát nincs
+/// hibát elnyelő, „üres lapot" visszaadó út).
+class _ThrowingPinnedFeedRepository implements CommunityFeedRepository {
+  int pinnedCalls = 0;
+
+  @override
+  Future<CommunityPage<CommunityPost>> followingFeed({
+    required Object cursor,
+    required int limit,
+  }) async {
+    throw UnimplementedError('followingFeed is unused.');
+  }
+
+  @override
+  Future<CommunityPage<CommunityPost>> profilePosts({
+    required PublicUserId userId,
+    required Object cursor,
+    required int limit,
+  }) async {
+    throw UnimplementedError('profilePosts is unused.');
+  }
+
+  @override
+  Future<CommunityPage<CommunityPost>> clubPinned({
+    required ContentId clubId,
+    required Object cursor,
+    required int limit,
+  }) async {
+    pinnedCalls++;
+    throw const NetworkFailure();
   }
 }
 
@@ -481,7 +522,13 @@ void main() {
           ],
         ),
       );
-      await _pumpScreen(tester);
+      // A fül SAJÁT providerei csak azután indulnak, hogy a klub-részlet
+      // megjött és a `TabBarView` felépítette a Feed lapot — ez több
+      // képkocka, mint amennyit a `_pumpScreen` ad (a meglévő
+      // Kihívások-cellák is `pumpAndSettle`-lel mérnek, és a
+      // `following_feed_test.dart` végig ezt használja). A két képkockás
+      // változat ezért 0 találatot adott a CI-on (run 34147461771).
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('club-feed-error')), findsOneWidget);
       expect(find.text("The club's posts couldn't load."), findsOneWidget);
@@ -493,17 +540,21 @@ void main() {
         matching: find.text('Retry'),
       );
       await tester.ensureVisible(retry);
-      await tester.pump();
+      await tester.pumpAndSettle();
       await tester.tap(retry);
-      await _pumpScreen(tester);
+      await tester.pumpAndSettle();
 
       expect(feedAttempts, 2);
       expect(find.byKey(const Key('club-feed-error')), findsNothing);
       expect(find.text('Reloaded post.'), findsOneWidget);
     });
 
-    // A kitűzött posztok szakasza ugyanezt a szerződést viseli.
-    testWidgets('a failing pinned list shows an error', (tester) async {
+    // A kitűzött posztok szakasza ugyanezt a szerződést viseli — és ez a
+    // cella a VALÓDI [clubPinnedProvider]-t hajtja meg: a hiba a
+    // `communityFeedRepositoryProvider` seamen jön, nem egy felülírt
+    // providerből. Ez méri, hogy a repository-hiba tényleg `AsyncError`
+    // lesz (és nem egy hibát elnyelő, „üres lap" adat-állapot).
+    testWidgets('a failing pinned load shows an error', (tester) async {
       final fake = _RecordingClubRepository.build(
         _club(
           publicId: 'club-1',
@@ -513,14 +564,13 @@ void main() {
           myRole: ClubRole.member,
         ),
       );
+      final feedRepository = _ThrowingPinnedFeedRepository();
 
       await tester.pumpWidget(
         _wrap(
           fake,
           extraOverrides: <Override>[
-            clubPinnedProvider.overrideWith((ref, arg) async {
-              throw const NetworkFailure();
-            }),
+            communityFeedRepositoryProvider.overrideWithValue(feedRepository),
             clubFeedProvider.overrideWith((ref, arg) async {
               return CommunityPagePlaceholder<CommunityPost>(
                 items: <CommunityPost>[_post('post-1', 'Feed post.')],
@@ -529,8 +579,10 @@ void main() {
           ],
         ),
       );
-      await _pumpScreen(tester);
+      await tester.pumpAndSettle();
 
+      // A valódi provider tényleg a repositoryt hívta.
+      expect(feedRepository.pinnedCalls, isPositive);
       expect(find.byKey(const Key('club-feed-pinned-error')), findsOneWidget);
       expect(find.text('No posts in this club yet.'), findsNothing);
       expect(find.text('Feed post.'), findsOneWidget);
