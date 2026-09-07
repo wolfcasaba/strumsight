@@ -72,10 +72,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/ai_tutor/application/controller/tutor_state.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/practice_plan_block.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/practice_plan_draft.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/skill_node.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_content_block.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_ids.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_message.dart';
+import 'package:strumsight/features/ai_tutor/domain/services/practice_plan_validator.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_providers.dart';
+import 'package:strumsight/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart';
 import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
 import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_home_screen.dart';
 import 'package:strumsight/features/audio_analysis/application/analysis_providers.dart';
@@ -385,6 +390,47 @@ final class _ScreenFixture {
 }
 
 // ── ai_tutor (test/ui/goldens/e13_r29_screens_golden_test.dart) ────────────
+
+// Javító sáv 3 (2026-09-07, R9/2): `PracticePlanPreviewScreen` became
+// reachable through `/tutor/plan-preview`; the A1 completeness cell needs
+// it pumped here. Fixture = the e13_r29 golden's draft + validation context.
+PracticePlanValidationContext _planValidationContext() =>
+    PracticePlanValidationContext(
+      songIds: const <String>{},
+      practiceTargetIds: const <String>{},
+      userAvoidList: const <String>{},
+      activeTuning: const <String>[],
+      capabilities: const <PracticePlanCapability>{},
+      availableSkillIds: const <SkillId>{},
+    );
+
+PracticePlanDraft _planDraft() => PracticePlanDraft(
+  id: 'matrix-plan',
+  title: 'Rhythm focus',
+  targetDuration: const Duration(minutes: 10),
+  blocks: <PracticePlanBlock>[
+    PracticePlanBlock.basic(
+      id: 'warmup',
+      type: PracticePlanBlockType.warmup,
+      duration: const Duration(minutes: 2),
+    ),
+    PracticePlanBlock.basic(
+      id: 'rhythm',
+      type: PracticePlanBlockType.rhythm,
+      duration: const Duration(minutes: 8),
+      tempoBpm: 92,
+    ),
+  ],
+  goalIds: const <String>[],
+  rationale: 'You have been rushing chord changes in the last two sessions.',
+  source: PracticePlanSource.aiSuggestion,
+);
+
+Widget _practicePlanPreviewScreen() => PracticePlanPreviewScreen(
+  draft: _planDraft(),
+  validationContext: _planValidationContext(),
+);
+List<Override> _practicePlanPreviewOverrides() => [...preferenceOverrides()];
 
 class _GoldenChatController extends ChangeNotifier
     implements TutorChatController {
@@ -3016,6 +3062,12 @@ final _screens = <String, _ScreenFixture>{
         'lib/features/community/presentation/screens/safety_relationships_screen.dart',
     build: _r34SafetyScreen,
     overridesBuilder: _r34SafetyOverrides,
+  ),
+  'practice_plan_preview': _ScreenFixture(
+    screenPath:
+        'lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart',
+    build: _practicePlanPreviewScreen,
+    overridesBuilder: _practicePlanPreviewOverrides,
   ),
   'tutor_chat': _ScreenFixture(
     screenPath:

@@ -92,6 +92,63 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
     // §5.4/A5 — every upcoming tuning/capo change is announced BEFORE the
     // run starts, not only once the affected song begins.
     final tuningChangesAhead = _tuningChangesAhead(widget.setlist.items);
+    final headerChildren = <Widget>[
+      Padding(
+        padding: const EdgeInsets.all(SsSpacing.space4),
+        child: Semantics(
+          liveRegion: true,
+          label: isPractice
+              ? l10n.setlistSessionPracticeSemantics
+              : l10n.setlistSessionPerformanceSemantics,
+          child: Text(
+            isPractice
+                ? l10n.setlistSessionPracticeDescription
+                : l10n.setlistSessionPerformanceDescription,
+            style: typography.bodyMedium.copyWith(
+              color: colors.textPrimary,
+            ),
+          ),
+        ),
+      ),
+      if (tuningChangesAhead.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: SsSpacing.space4,
+          ),
+          child: Semantics(
+            key: const Key('setlist-session-tuning-ahead'),
+            container: true,
+            child: SsCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Icon(Icons.tune, color: colors.textPrimary),
+                      const SizedBox(width: SsSpacing.space2),
+                      Expanded(
+                        child: Text(
+                          l10n.setlistSessionTuningAheadTitle,
+                          style: typography.labelLarge.copyWith(
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  for (final item in tuningChangesAhead)
+                    Text(
+                      _reminderText(l10n, item),
+                      style: typography.bodyMedium.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+    ];
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -103,67 +160,24 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.all(SsSpacing.space4),
-              child: Semantics(
-                liveRegion: true,
-                label: isPractice
-                    ? l10n.setlistSessionPracticeSemantics
-                    : l10n.setlistSessionPerformanceSemantics,
-                child: Text(
-                  isPractice
-                      ? l10n.setlistSessionPracticeDescription
-                      : l10n.setlistSessionPerformanceDescription,
-                  style: typography.bodyMedium.copyWith(
-                    color: colors.textPrimary,
-                  ),
-                ),
-              ),
-            ),
-            if (tuningChangesAhead.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: SsSpacing.space4,
-                ),
-                child: Semantics(
-                  key: const Key('setlist-session-tuning-ahead'),
-                  container: true,
-                  child: SsCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Icon(Icons.tune, color: colors.textPrimary),
-                            const SizedBox(width: SsSpacing.space2),
-                            Expanded(
-                              child: Text(
-                                l10n.setlistSessionTuningAheadTitle,
-                                style: typography.labelLarge.copyWith(
-                                  color: colors.textPrimary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        for (final item in tuningChangesAhead)
-                          Text(
-                            _reminderText(l10n, item),
-                            style: typography.bodyMedium.copyWith(
-                              color: colors.textSecondary,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
             Expanded(
               child: ListView.builder(
                 key: const Key('setlist-session-window'),
-                itemCount: widget.setlist.items.length,
+                // The description and the tuning-ahead card scroll WITH the
+                // items (javító sáv 3, 2026-09-07): as fixed Column children
+                // they pushed the Expanded list into negative height at large
+                // text scales in landscape (measured: 4 px RenderFlex overflow
+                // at hu / 2.0 / 915×412). Hosting them as the first list item
+                // keeps every pixel where it was whenever the content fits.
+                itemCount: widget.setlist.items.length + 1,
                 itemBuilder: (context, index) {
-                  final item = widget.setlist.items[index];
+                  if (index == 0) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: headerChildren,
+                    );
+                  }
+                  final item = widget.setlist.items[index - 1];
                   final result = resultByItem[item.id];
                   return ListTile(
                     title: Text(item.songId.value),
