@@ -57,7 +57,7 @@ minden környezetben `false`).
 | Adaptive shell | `adaptiveShellEnabled` | **BE** (változatlan) | ✓ | ✓ | ✓ | ✓ | `lib/app/config/feature_flags.dart:138` (`nonProd`, ADR 0467, E15-R02) | — (már BE) |
 | Account layer | `accountEnabled` | N/A — nem `forEnvironment`-döntés | — | — | — | — | `lib/app/config/feature_flags.dart:79` (hívó-adta átmenő érték, forrás: `lib/core/api/api_config.dart:19`, `STRUMSIGHT_ACCOUNT` dart-define) | ez a kör nem dönt róla — a `ga-scope.md` `disabled` sora fedi |
 | AI Tutor (local) | `aiTutorEnabled` | **KI** | ✓ | ✗ | ✓ | (✓)† | `lib/app/routing/app_router.dart:190,583,655` (route-gate, E04-R18); `lib/features/ai_tutor/application/offline/local_tutor_fallback.dart` (szinkron, hálózat nélküli deterministic fallback) | `docs/sdd/epic-04-completion-report.md` §„Nyitott tételek": **„GA flag-flip döntés \| Termék/User \| Külön döntés"** — az epic saját zárójelentése nevesíti, hogy a bekapcsolás egy külön, ezen a körön kívüli Termék/User döntés, nem mérnöki készenlét kérdése (D1 „elkészült, tehát menjen" tiltása) |
-| AI Tutor (cloud) | `aiTutorCloudEnabled` | **KI** | ✓ | ✗ | — | ✗ | `lib/features/ai_tutor/data/model_gateway/remote_tutor_model_gateway.dart` (StrumSight backend proxy szükséges); `docs/release/blockers.md` R-PRIV-01 (nincs release-szintű privacy policy adat-egressre) | `E12-R17` (privacy/data inventory, `pending`) + `E16-R04` (élő backend end-to-end, `PREPARED`) |
+| AI Tutor (cloud) | `aiTutorCloudEnabled` | **PREVIEW** (E-R29a — `STRUMSIGHT_AI_TUTOR_CLOUD` dart-define, a szállított `development` artefaktumban alapértelmezés) | ✓ | ✗ | — | ✗ | `lib/features/ai_tutor/data/model_gateway/remote_tutor_model_gateway.dart` (StrumSight backend proxy szükséges); `docs/release/blockers.md` R-PRIV-01 (nincs release-szintű privacy policy adat-egressre) | `E12-R17` (privacy/data inventory, `pending`) + `E16-R04` (élő backend end-to-end, `PREPARED`). E-R29a: a `forEnvironment` törzs VÁLTOZATLAN (`false` minden környezetben) — az opt-in mechanizmus a `FeatureFlags.forShippedBuild` `STRUMSIGHT_AI_TUTOR_CLOUD` paramétere, amit a szállított `development` artefaktum alapértelmezésben BE-re old fel (kill switch: explicit `=false`), `production` pedig egyáltalán nem tud vele nyitni. A zászló KIZÁRÓLAG rollout-kapu, NEM hozzájárulás (ADR 0132 §1/§3): a fordulót továbbra is négy fail-closed feltétel dönti el — a `modelUseGranted` consent, a bekapcsolt account-réteg, egy hitelesített stream-kliens és a `/tutor/capability` VALÓDI providert nevező válasza (a `fake` adapter nem az). A valódi provider bekapcsolása üzemeltetői lépés: a konfigurált felhő-provider (`docs/operations/backend-live-deploy.md` §7.2) |
 | Planner Assist | `plannerAssistEnabled` | **KI** | — | ✗ | — | ✗ | `lib/app/config/feature_flags.dart:182-184` (doc-comment: „remains OFF … until its rollout decision is recorded"); `docs/rounds/e07-r30-evaluation-and-epic-closure.md` §5.1 „A ROLLOUT emberi döntés" — modell-asszisztált javaslat, nincs modell-integráció | nevesítetlen jövőbeli rollout-kör (Termék döntés) — ld. `docs/rounds/e07-r30-evaluation-and-epic-closure.md` §5.1; ADR 0491 D2 külön tartja a `practiceGeneratorEnabled`-től |
 | Computer Vision (11 flag) | `visionEnabled`, `visionSetupEnabled`, `visionHandTrackingEnabled`, `visionPoseTrackingEnabled`, `visionGuitarGeometryEnabled`, `visionPracticeIntegrationEnabled`, `visionSongIntegrationEnabled`, `visionTutorIntegrationEnabled`, `visionAnalysisIntegrationEnabled`, `visionExperimentalFineFretEnabled`, `visionLabCaptureEnabled` | **KI** | ✓ | ✓ | ✗ | ✗ | `docs/sdd/epic-05-completion-report.md:5`: „implementation evidence complete; all Vision user capabilities remain flag-OFF pending HORIZON device acceptance" — 86 PENDING valós-eszköz sor (kamera, thermal/soak, latency) | HORIZON valós-eszköz elfogadás (`docs/sdd/epic-05-completion-report.md`, program-szintű kapu, nincs hozzárendelt kör-szám) |
 | Audio Analysis V2 (9 flag) | `audioAnalysisV2Enabled`, `analysisBeatGridEnabled`, `analysisPitchEnabled`, `analysisPreprocessingExperimentalEnabled`, `analysisExperimentalFusionEnabled`, `analysisTechniqueProxiesEnabled`, `analysisComparisonEnabled`, `analysisPracticeIntegrationEnabled`, `analysisTutorIntegrationEnabled` | **KI** | ✓ | ✓ | ✗ | — | `docs/sdd/epic-06-completion-report.md:5`: „implementation evidence recorded; rollout stays at shadow, release blockers remain" (ADR 0220); `ShadowAnalysisRunner` élő hívó nélkül, csak contract-teszt | Epic 6 release-blokkolók feloldása (`docs/sdd/epic-06-completion-report.md`, nincs hozzárendelt kör-szám) |
@@ -101,3 +101,38 @@ A round brief §6.1 kötelező próbája — `aiTutorCloudEnabled` ideiglenes
 brief `docs/rounds/e16-r03-capability-rollout-decisions.md` §10
 „Implementation handoff" szakaszában van dokumentálva a mért kimenettel
 együtt.
+
+## 5. E-R29a — `aiTutorCloudEnabled` PREVIEW-ra sorolása
+
+**Mit mozdított ez a kör, és mit nem.** A `FeatureFlags.forEnvironment`
+törzse **VÁLTOZATLAN**: `aiTutorCloudEnabled` ott továbbra is `false` minden
+környezetben, tehát a §2 tábla „nem-`nonProd`" alapállása áll. Ami változott:
+a `FeatureFlags.forShippedBuild` kapott egy nevesített
+`STRUMSIGHT_AI_TUTOR_CLOUD` paramétert, és a szállított `development`
+tesztelői artefaktumban ezt alapértelmezésben BE-re oldja fel. A `lab` csak
+explicit define-ra kapcsol; a `production` **egyáltalán nem** — ott a
+`ga-scope.md` `postponed` besorolása és a mért `false` alapértelmezés
+érintetlen (a besorolás egyetlen normatív forrása változatlanul az a
+dokumentum, ez itt saját production-állítást nem tesz).
+
+**Miért kellett.** A 2026-09-08 újra-audit BLOKKOLÓJA (B1): a zászló minden
+szállított buildben `false` volt, ezért `selectTutorModelGateway` MINDIG a
+`LocalTutorModelGatewayStub`-ot választotta, amelynek a `start()`-ja mindig
+hibát ad — a Coach tehát egyetlen kérdésre sem tudott válaszolni, miközben a
+felülete a helyi futásról beszélt. Egy rollout-kapu, amit semmilyen build
+nem tud kinyitni, nem rollout-kapu, hanem halott kód.
+
+**Amit a zászló NEM ad meg** (ADR 0132 §1/§3): a hozzájárulást. A kapu
+kinyitása után is négy fail-closed feltétel dönt minden egyes fordulóról
+(`lib/features/ai_tutor/presentation/providers/tutor_gateway_providers.dart`):
+a diák `modelUseGranted` consentje, a bekapcsolt account-réteg, egy
+hitelesített stream-kliens, és a `/tutor/capability` válasza, amelyik VALÓDI
+providert nevez meg — a backend konzerv `fake` adaptere nem az. A valódi
+providerre állítás üzemeltetői lépés: a konfigurált felhő-provider
+bekapcsolása a `docs/operations/backend-live-deploy.md` §7.2 lépéssora
+szerint történik, és a runbook a `docs/privacy/data-inventory.yaml`
+`tutor_stream` sorának kitöltését blokkolóként jelöli (azt az R24 elvégezte).
+
+**Kill switch.** Mivel a `development` alapértelmezés BE, a kikapcsolás itt
+EXPLICIT: `--dart-define=STRUMSIGHT_AI_TUTOR_CLOUD=false`. Ez ugyanaz a
+minta, amit ADR 0395 a Community-zászlókra ír elő a WP-G óta.

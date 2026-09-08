@@ -15,12 +15,21 @@
 // exactly as it does for the account API client.
 //
 // R24: two more conditions. `FeatureFlags.aiTutorCloudEnabled` — which had
-// ZERO consumers before this round, so a consenting, signed-in student on
-// the shipped development build would have streamed to a cloud the build's
-// own flag says is not rolled out — and the server's OWN answer at
-// `/tutor/capability`: a deployment still running the backend's canned
-// `fake` adapter must never have its scripted reply presented as a cloud
-// tutor's answer.
+// ZERO consumers before that round, so a consenting, signed-in student
+// would have streamed to a cloud the build's own flag says is not rolled
+// out — and the server's OWN answer at `/tutor/capability`: a deployment
+// still running the backend's canned `fake` adapter must never have its
+// scripted reply presented as a cloud tutor's answer.
+//
+// E-R29a: the flag itself is now OPEN in the shipped development build
+// (`FeatureFlags.forShippedBuild`), because with it closed every artifact
+// resolved the stub — whose `start()` always fails — and the Coach could
+// not answer anything at all (2026-09-08 re-audit, BLOCKER B1). So the
+// cells below flip around: the SHIPPED resolution is the cloud one, and
+// each single missing precondition (no consent, no account, no client, a
+// `fake` server, the explicit kill-switch define) is what still falls back
+// to the stub. The capability check stays provider-AGNOSTIC — the rule is
+// `provider != fake`, never a vendor name.
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -54,6 +63,7 @@ import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 
 import '../../../support/fake_auth.dart';
+import '../../../support/preference_store.dart';
 
 /// A near-wire probe: it only ever sees a request the interceptor chain has
 /// already let through.
@@ -90,40 +100,50 @@ DioFactory _factory(_WireProbe probe) => DioFactory(
   correlationIdGenerator: () => 'tutor-stream-probe',
 );
 
-AppConfig _config({required bool accountEnabled}) => AppConfig.resolve(
+AppConfig _configOf(FeatureFlags flags) => AppConfig.resolve(
   environment: AppEnvironment.development,
   apiBaseUrl: AppConfig.devApiBaseUrl,
-  flags: FeatureFlags.forEnvironment(
-    AppEnvironment.development,
-    accountEnabled: accountEnabled,
-  ),
+  flags: flags,
   diagnosticsToken: AppConfig.devDiagnosticsToken,
   buildMode: 'debug',
   appVersion: 'test',
 );
 
-/// The SHIPPED development build resolves `aiTutorCloudEnabled: false` —
-/// the cloud tutor is `postponed` in `docs/release/ga-scope.md` behind the
-/// open `R-PRIV-01` blocker, and `_withPreviewSurfacesEnabled` leaves it off
-/// even under `STRUMSIGHT_PREVIEW_ALL`. The ON half of the rule therefore
-/// has to be constructed explicitly: this is the post-flip flag set.
-AppConfig _cloudConfig({required bool accountEnabled}) => AppConfig.resolve(
-  environment: AppEnvironment.development,
-  apiBaseUrl: AppConfig.devApiBaseUrl,
-  flags: FeatureFlags(
-    accountEnabled: accountEnabled,
-    diagnosticsEnabled: true,
-    labModeAvailable: true,
-    aiTutorEnabled: true,
-    aiTutorCloudEnabled: true,
+/// The build with the E-R29a kill switch thrown — the shipped development
+/// resolution PLUS an explicit `--dart-define=STRUMSIGHT_AI_TUTOR_CLOUD=
+/// false`, which is now the only shipped way to get `aiTutorCloudEnabled:
+/// false`. It is spelled out as a define rather than left to
+/// `forEnvironment`, because "the flag is off" must be measured against the
+/// configuration a build command can actually produce.
+AppConfig _cloudDisabledConfig({required bool accountEnabled}) => _configOf(
+  FeatureFlags.forShippedBuild(
+    AppEnvironment.development,
+    accountDefine: accountEnabled,
+    aiTutorCloudDefine: false,
   ),
-  diagnosticsToken: AppConfig.devDiagnosticsToken,
-  buildMode: 'debug',
-  appVersion: 'test',
+);
+
+/// The SHIPPED development build, exactly as `AppBootstrap.run` resolves it
+/// for the tester APK (E-R29a): `aiTutorCloudEnabled` is TRUE there.
+///
+/// Until E-R29a it was false in every artifact anyone could install, so
+/// [selectTutorModelGateway] returned `LocalTutorModelGatewayStub` for every
+/// student, and that stub's `start()` always fails — the Coach could not
+/// answer a single question (2026-09-08 re-audit, BLOCKER B1). Opening the
+/// gate changes NOTHING about consent: the cells below measure that the
+/// other four fail-closed conditions still decide each turn on their own.
+AppConfig _shippedConfig({required bool accountEnabled}) => _configOf(
+  FeatureFlags.forShippedBuild(
+    AppEnvironment.development,
+    accountDefine: accountEnabled,
+  ),
 );
 
 /// The capability body a deployment answers with once its operator has
-/// flipped `STRUMSIGHT_TUTOR_PROVIDER` (`backend/app/tutor/schemas.py`).
+/// flipped `STRUMSIGHT_TUTOR_PROVIDER` (`backend/app/tutor/schemas.py`,
+/// step list: `docs/operations/backend-live-deploy.md` §7.2). The provider
+/// NAME here is incidental — `TutorCloudCapability.servesRealModel` only
+/// asks whether it is the canned `fake` adapter.
 const String _realCapabilityBody =
     '{"enabled":true,"version":"v1","streaming":false,'
     '"provider":"anthropic","model":"claude-sonnet-5"}';
@@ -136,6 +156,12 @@ const String _fakeCapabilityBody =
 /// A container whose auth session is RESTORED from [token] (null = signed
 /// out), so the stream client rides the same credential holder the account
 /// API client does.
+///
+/// [cloudEnabled] picks between the two shipped development configurations:
+/// `true` is the tester APK's own resolution (E-R29a: the rollout gate is
+/// open), `false` is that same build with the explicit
+/// `STRUMSIGHT_AI_TUTOR_CLOUD=false` kill switch. It defaults to the CLOSED
+/// gate so a cell has to ask for the cloud on purpose.
 Future<ProviderContainer> _container({
   required bool accountEnabled,
   required _WireProbe probe,
@@ -143,10 +169,11 @@ Future<ProviderContainer> _container({
   String? token = 'jwt-token',
 }) async {
   final config = cloudEnabled
-      ? _cloudConfig(accountEnabled: accountEnabled)
-      : _config(accountEnabled: accountEnabled);
+      ? _shippedConfig(accountEnabled: accountEnabled)
+      : _cloudDisabledConfig(accountEnabled: accountEnabled);
   final container = ProviderContainer(
     overrides: [
+      ...preferenceOverrides(),
       appConfigProvider.overrideWithValue(config),
       accountDioFactoryProvider.overrideWithValue(_factory(probe)),
       tokenStoreProvider.overrideWithValue(FakeTokenStore(token)),
@@ -388,20 +415,101 @@ void main() {
       expect(gateway, isA<RemoteTutorModelGateway>());
     });
 
-    test('the shipped development build selects the local stub even with '
-        'consent and a live client', () async {
+    // E-R29a (re-audit BLOCKER B1) — the cell R24 left behind said the
+    // SHIPPED development build always lands on the stub. That was true, and
+    // it was the bug: `LocalTutorModelGatewayStub.start()` always fails, so
+    // the Coach in the only artifact a tester can install could not answer
+    // anything. The build's own resolution is measured here, not a
+    // hand-built flag set — `FeatureFlags.forShippedBuild(development)` is
+    // literally what `AppBootstrap.run` hands `appConfigProvider`.
+    test('the shipped development build streams to the CLOUD with consent, '
+        'an account, a live client and a real server capability', () async {
       final probe = _WireProbe(body: _realCapabilityBody);
-      final container = await _container(accountEnabled: true, probe: probe);
+      final container = await _container(
+        accountEnabled: true,
+        probe: probe,
+        cloudEnabled: true,
+      );
+      final capability = await container.read(
+        tutorCloudCapabilityProvider.future,
+      );
+      container.read(tutorConsentControllerProvider.notifier).grantModelUse();
+
+      expect(container.read(tutorStreamClientProvider), isNotNull);
+      expect(capability?.servesRealModel, isTrue);
+      expect(
+        container.read(tutorModelGatewayFactoryProvider)(0),
+        isA<RemoteTutorModelGateway>(),
+        reason:
+            'all five conditions hold — this is the turn that must actually '
+            'reach the backend gateway in the tester APK',
+      );
+      expect(
+        probe.requests.map((request) => request.path),
+        contains('/tutor/capability'),
+        reason: 'a rolled-out build DOES ask the server what it runs',
+      );
+    });
+
+    // …and each single missing precondition still lands on the stub, on that
+    // very same shipped build. The rollout gate is not a consent, and it is
+    // not a substitute for a real provider either.
+    test('the same shipped build with no consent granted selects the local '
+        'stub', () async {
+      final probe = _WireProbe(body: _realCapabilityBody);
+      final container = await _container(
+        accountEnabled: true,
+        probe: probe,
+        cloudEnabled: true,
+      );
+      await container.read(tutorCloudCapabilityProvider.future);
+
+      expect(
+        container.read(tutorModelGatewayFactoryProvider)(0),
+        isA<LocalTutorModelGatewayStub>(),
+        reason:
+            'ADR 0132 §1/§3: the build-time rollout gate never stands in '
+            'for the student\'s own model-use consent',
+      );
+    });
+
+    test('the same shipped build whose server answers `fake` selects the '
+        'local stub', () async {
+      final container = await _container(
+        accountEnabled: true,
+        probe: _WireProbe(body: _fakeCapabilityBody),
+        cloudEnabled: true,
+      );
+      await container.read(tutorCloudCapabilityProvider.future);
+      container.read(tutorConsentControllerProvider.notifier).grantModelUse();
+
+      expect(
+        container.read(tutorModelGatewayFactoryProvider)(0),
+        isA<LocalTutorModelGatewayStub>(),
+        reason:
+            'a deployment still running the canned adapter must not have '
+            'its scripted reply presented as a cloud tutor answer',
+      );
+    });
+
+    // The kill switch: the shipped build PLUS an explicit
+    // `--dart-define=STRUMSIGHT_AI_TUTOR_CLOUD=false`. This is the flag-off
+    // configuration a build command can actually produce, and a build whose
+    // cloud tutor is not rolled out must not even probe the endpoint.
+    test('an explicitly flag-off build selects the local stub and issues no '
+        'capability request at all', () async {
+      final probe = _WireProbe(body: _realCapabilityBody);
+      final container = await _container(
+        accountEnabled: true,
+        probe: probe,
+        cloudEnabled: false,
+      );
       container.read(tutorConsentControllerProvider.notifier).grantModelUse();
 
       expect(container.read(tutorStreamClientProvider), isNotNull);
       expect(
         container.read(tutorModelGatewayFactoryProvider)(0),
         isA<LocalTutorModelGatewayStub>(),
-        reason:
-            'aiTutorCloudEnabled is false in the shipped development build '
-            '(docs/release/ga-scope.md: postponed, open R-PRIV-01) — before '
-            'R24 the flag had no consumer and this turn went to the cloud',
       );
       expect(
         await container.read(tutorCloudCapabilityProvider.future),
@@ -432,7 +540,8 @@ void main() {
       );
     });
 
-    test('the default (no consent granted) selects the local stub', () async {
+    test('the default (no consent granted, gate closed) selects the local '
+        'stub', () async {
       final container = await _container(
         accountEnabled: true,
         probe: _WireProbe(),

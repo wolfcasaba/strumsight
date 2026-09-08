@@ -13,6 +13,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -242,6 +243,82 @@ extension TutorTurnStatusActiveX on TutorTurnStatus {
 }
 
 // ---------------------------------------------------------------------------
+// The answer itself (E-R29a). The orchestrator streams the model's raw
+// output into `TutorState.responseText` and, once
+// `TutorOutputValidator` accepts it, reaches `TutorTurnStatus.completed`.
+// Nothing then turned that text into a message, so the reply vanished with
+// the streaming bubble. This is the narrowest decoder that makes it stay.
+// ---------------------------------------------------------------------------
+
+/// Decodes one validated model turn into the blocks the chat bubble renders.
+///
+/// [output] is the v1 output envelope (`answerBlocks`, `claims`, … — see
+/// `tutor_output_schema.dart`). Only the three block shapes the schema's own
+/// `answerBlocks` uses are mapped structurally; anything else is preserved
+/// as a [TutorUnknownContentBlock], which the bubble already renders
+/// verbatim rather than dropping. A payload that is not the envelope at all
+/// (a provider that answered in plain prose) becomes a single text block, so
+/// the student still reads the answer instead of nothing.
+///
+/// Returns an empty list when there is nothing to show — an empty
+/// `answerBlocks` appends no message rather than an empty bubble.
+List<TutorContentBlock> tutorAnswerBlocksFrom(String output) {
+  final trimmed = output.trim();
+  if (trimmed.isEmpty) return const <TutorContentBlock>[];
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(trimmed);
+  } on FormatException {
+    return <TutorContentBlock>[TutorTextBlock(text: trimmed)];
+  }
+  if (decoded is! Map<String, Object?>) {
+    return <TutorContentBlock>[TutorTextBlock(text: trimmed)];
+  }
+  final raw = decoded['answerBlocks'];
+  if (raw is! List) return const <TutorContentBlock>[];
+  final blocks = <TutorContentBlock>[];
+  for (final entry in raw) {
+    final block = _answerBlockFrom(entry);
+    if (block != null) blocks.add(block);
+  }
+  return List<TutorContentBlock>.unmodifiable(blocks);
+}
+
+TutorContentBlock? _answerBlockFrom(Object? entry) {
+  if (entry is String) {
+    return entry.trim().isEmpty ? null : TutorTextBlock(text: entry);
+  }
+  if (entry is! Map<String, Object?>) return null;
+  final type = entry['type'];
+  final text = entry['text'];
+  if (type == 'text' && text is String && text.trim().isNotEmpty) {
+    return TutorTextBlock(text: text);
+  }
+  final level = entry['level'];
+  if (type == 'heading' &&
+      text is String &&
+      text.trim().isNotEmpty &&
+      level is int &&
+      level >= 1 &&
+      level <= 6) {
+    return TutorHeadingBlock(text: text, level: level);
+  }
+  final items = entry['items'];
+  if (type == 'bulletList' &&
+      items is List &&
+      items.isNotEmpty &&
+      items.every((item) => item is String && item.trim().isNotEmpty)) {
+    return TutorBulletListBlock(items: items.cast<String>());
+  }
+  if (type is! String || type.trim().isEmpty) return null;
+  try {
+    return TutorUnknownContentBlock(originalType: type, rawJson: entry);
+  } on TutorContentBlockValidationException {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Production controller — owns a TutorOrchestrator supplied by the boot
 // overrides. The orchestrator is shared with the gateway factory so a single
 // turn maps to a single streaming session.
@@ -275,6 +352,20 @@ class DefaultTutorChatController extends ChangeNotifier
   final StreamController<TutorChatState> _statesController =
       StreamController<TutorChatState>.broadcast();
   StreamSubscription<TutorState>? _stateSubscription;
+
+  /// The text of the last turn the student actually submitted.
+  ///
+  /// [send] clears [draft] the moment a turn is dispatched, so by the time
+  /// the error banner appears there is nothing left to re-send — that is
+  /// exactly why the banner's "Retry" was a silent no-op (2026-09-08
+  /// re-audit, MAJOR M2). Keeping the submitted text here is what makes
+  /// [retry] able to do the thing its label promises.
+  String _lastSubmittedText = '';
+
+  /// Whether the current turn's answer has already been appended, so a
+  /// re-emission of the same terminal state (e.g. [setOnline] replaying the
+  /// orchestrator's state) cannot append the tutor's reply twice.
+  bool _answerAppended = false;
 
   @override
   List<TutorMessage> get messages => List<TutorMessage>.unmodifiable(_messages);
@@ -320,6 +411,17 @@ class DefaultTutorChatController extends ChangeNotifier
     status = next.status;
     responseText = next.responseText;
     failureCode = next.failureCode;
+    // The answer itself. Until E-R29a the streaming bubble was the ONLY
+    // place a reply was ever rendered, and it is built from
+    // `TutorTurnStatus.streaming` alone — so the moment the turn completed
+    // the tutor's answer disappeared from the screen and the conversation
+    // held nothing but the student's own question. Appending it here is
+    // what makes a completed cloud turn actually readable.
+    if (next.status == TutorTurnStatus.completed && !_answerAppended) {
+      final blocks = tutorAnswerBlocksFrom(next.responseText);
+      if (blocks.isNotEmpty) _messages.add(_tutorMessage(blocks));
+      _answerAppended = true;
+    }
     final nextBanners = <TutorBannerKind>[];
     if (!isOnline) nextBanners.add(TutorBannerKind.offline);
     switch (next.status) {
@@ -353,9 +455,13 @@ class DefaultTutorChatController extends ChangeNotifier
   }
 
   @override
-  void send() {
-    final text = draft.trim();
+  void send() => _submit(draft.trim());
+
+  /// Dispatches one turn for [text], remembering it so [retry] can re-send
+  /// the same question after the draft has been cleared.
+  void _submit(String text) {
     if (text.isEmpty) return;
+    _lastSubmittedText = text;
     final produced = turnRequestFactory(text);
     if (produced case Failure<TutorTurnRequest>(:final error)) {
       // Refused on the request path: nothing is dispatched, so the
@@ -371,6 +477,7 @@ class DefaultTutorChatController extends ChangeNotifier
     status = TutorTurnStatus.assemblingContext;
     responseText = '';
     failureCode = null;
+    _answerAppended = false;
     _emit();
     unawaited(orchestrator.dispatch(SendTutorMessage(request)));
   }
@@ -386,11 +493,23 @@ class DefaultTutorChatController extends ChangeNotifier
   @override
   void retry() {
     if (status.isTerminal || status == TutorTurnStatus.idle) {
-      send();
+      _resend();
       return;
     }
     cancel();
-    Future<void>.delayed(Duration.zero, send);
+    Future<void>.delayed(Duration.zero, _resend);
+  }
+
+  /// What "Retry" re-sends: whatever the student has typed since the
+  /// failure, and otherwise the question that failed.
+  ///
+  /// The second half is the fix for MAJOR M2 — every terminal status is a
+  /// state in which [draft] has already been cleared by [_submit], so the
+  /// old `send()` fell straight through its own `text.isEmpty` guard and
+  /// the button did nothing, said nothing, forever.
+  void _resend() {
+    final typed = draft.trim();
+    _submit(typed.isEmpty ? _lastSubmittedText : typed);
   }
 
   @override
@@ -435,6 +554,18 @@ class DefaultTutorChatController extends ChangeNotifier
       sequence: _messages.length,
       deliveryState: TutorMessageDeliveryState.complete,
       blocks: <TutorContentBlock>[TutorTextBlock(text: text)],
+    );
+  }
+
+  TutorMessage _tutorMessage(List<TutorContentBlock> blocks) {
+    final createdAt = DateTime.now().toUtc();
+    return TutorMessage(
+      id: TutorMessageId('t-${createdAt.microsecondsSinceEpoch}'),
+      role: TutorMessageRole.tutor,
+      createdAt: createdAt,
+      sequence: _messages.length,
+      deliveryState: TutorMessageDeliveryState.complete,
+      blocks: blocks,
     );
   }
 

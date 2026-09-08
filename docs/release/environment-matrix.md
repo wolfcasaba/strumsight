@@ -49,7 +49,8 @@ az explicit `false`-t azonosan olvassa).
 | `previewAll` overlay (`STRUMSIGHT_PREVIEW_ALL`) | **`true`** → AI Tutor (lokális), Planner Assist, 10 Vision, 9 Analysis V2 (`audioAnalysisV2Enabled` is), recognition recovery, új Live stage | define | **soha nem alkalmazódik** (`forEnvironment` production-ág, változatlan) |
 | `communityEnabled` / `…Writes` / `…Leaderboard` / `…Clubs` | **`true`** | define | define (ADR 0395 kill switch, változatlan) |
 | `communityMediaEnabled` | define (**`false`**) — nyitott R-SEC-01 / R-PRIV-01 | define | define |
-| `aiTutorCloudEnabled`, `visionLabCaptureEnabled`, `recognitionShadowModeEnabled` | `false` (a preview overlay szándékosan nem nyitja) | ua. | `false` |
+| `aiTutorCloudEnabled` (`STRUMSIGHT_AI_TUTOR_CLOUD`) | **`true`** (E-R29a rollout-kapu; kill switch: explicit `=false`) | define (`false`) | **`false`** — a define-ot a `forShippedBuild` production-ágon eldobja (`ga-scope.md`: `postponed`) |
+| `visionLabCaptureEnabled`, `recognitionShadowModeEnabled` | `false` (a preview overlay szándékosan nem nyitja) | ua. | `false` |
 | `diagnosticsToken` | dev-alapértelmezés (a diagnosztikai alagút kivezetve) | ua. | fail-closed (változatlan) |
 
 **Emulátoros fejlesztő:** a loopback címet explicit define-nal kell kérni —

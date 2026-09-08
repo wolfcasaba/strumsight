@@ -232,7 +232,15 @@ void main() {
       expect(config.flags.audioAnalysisV2Enabled, isTrue);
       expect(config.flags.aiTutorEnabled, isTrue);
       expect(config.flags.visionEnabled, isTrue);
-      expect(config.flags.aiTutorCloudEnabled, isFalse);
+      expect(
+        config.flags.aiTutorCloudEnabled,
+        isTrue,
+        reason:
+            'E-R29a: the shipped tester build carries the cloud tutor '
+            'ROLLOUT gate open — before it, every artifact resolved false '
+            'and the Coach could never answer (re-audit BLOCKER B1). It is '
+            'still not a consent: see tutor_gateway_selection_test.dart',
+      );
       expect(config.flags.visionLabCaptureEnabled, isFalse);
     });
 

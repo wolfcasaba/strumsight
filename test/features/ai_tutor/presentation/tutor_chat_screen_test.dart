@@ -211,15 +211,17 @@ Future<ProviderContainer> _pump(
   return container;
 }
 
-/// The Chat under a MINIMAL go_router, so the back button's real target
-/// can be measured. `/tutor/home` and `/tutor/profile` are `STUB <path>`
-/// pages — these cells measure the NAVIGATION, not those screens.
+/// The Chat under a MINIMAL go_router, so the back button's real target —
+/// and, since E-R29a, the consent banner's — can be measured.
+/// `/tutor/home`, `/tutor/profile` and `/tutor/privacy` are `STUB <path>`
+/// pages: these cells measure the NAVIGATION, not those screens.
 Future<GoRouter> _pumpRouted(
   WidgetTester tester, {
   required String initialLocation,
   bool pushChat = false,
+  List<TutorBannerKind> banners = const <TutorBannerKind>[],
 }) async {
-  final fake = _FakeController();
+  final fake = _FakeController(banners: banners);
   addTearDown(fake.close);
   final container = ProviderContainer(
     overrides: [
@@ -239,6 +241,7 @@ Future<GoRouter> _pumpRouted(
       ),
       GoRoute(path: AppRoutes.tutorHome, builder: _stub),
       GoRoute(path: AppRoutes.tutorProfile, builder: _stub),
+      GoRoute(path: AppRoutes.tutorPrivacy, builder: _stub),
     ],
   );
   await tester.pumpWidget(
@@ -656,6 +659,72 @@ void main() {
       // way where there genuinely was something to pop.
       expect(router.state.uri.path, AppRoutes.tutorProfile);
       expect(find.byType(TutorChatScreen), findsNothing);
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // E-R29a (2026-09-08 re-audit, MAJOR M3) — the consent banner's CTA.
+  //
+  // MEASURED failure: `TutorBanner` renders a "Grant consent" button for
+  // `TutorBannerKind.consent`, but the chat screen only ever passed
+  // `onRetry`. `onConsent` stayed null, so the `TextButton` was built with
+  // a null `onPressed` — permanently disabled, on the exact screen where
+  // the student is told their consent is missing.
+  // -----------------------------------------------------------------
+  group('E-R29a — the consent banner CTA', () {
+    testWidgets('is enabled and opens the privacy (consent) screen', (
+      tester,
+    ) async {
+      final router = await _pumpRouted(
+        tester,
+        initialLocation: AppRoutes.tutorChat,
+        banners: const <TutorBannerKind>[TutorBannerKind.consent],
+      );
+
+      final cta = find.widgetWithText(
+        TextButton,
+        l10nEn().aiTutorBannerConsentAction,
+      );
+      expect(cta, findsOneWidget);
+      expect(
+        tester.widget<TextButton>(cta).onPressed,
+        isNotNull,
+        reason: 'a disabled consent CTA is the whole of MAJOR M3',
+      );
+
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(router.state.uri.path, AppRoutes.tutorPrivacy);
+      expect(
+        router.canPop(),
+        isTrue,
+        reason:
+            'push, not go — the student returns to the conversation they '
+            'were already in',
+      );
+    });
+
+    // The banner must not grant consent by itself (ADR 0132 §1/§3): it
+    // routes to the axis switch and stops there.
+    testWidgets('the error banner keeps its own, separate Retry action', (
+      tester,
+    ) async {
+      await _pumpRouted(
+        tester,
+        initialLocation: AppRoutes.tutorChat,
+        banners: const <TutorBannerKind>[TutorBannerKind.error],
+      );
+
+      expect(
+        find.widgetWithText(TextButton, l10nEn().aiTutorChatRetry),
+        findsOneWidget,
+      );
+      expect(
+        find.widgetWithText(TextButton, l10nEn().aiTutorBannerConsentAction),
+        findsNothing,
+      );
     });
   });
 }

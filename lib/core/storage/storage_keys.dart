@@ -105,6 +105,18 @@ abstract final class StorageKeys {
   static const String tutorConversationIndex = 'ss.tutor.conversation_index';
   static const String tutorMemoryFacts = 'ss.tutor.memory_facts';
 
+  /// The student's granular model-use consent, their profile pair and their
+  /// learning goals (E-R29a, re-audit MAJOR M8).
+  ///
+  /// These are SETTINGS, not conversation content: they are deliberately
+  /// NOT part of [tutorAiData], because "Delete all AI data" must not
+  /// silently rewrite a consent decision or the profile the student typed —
+  /// consent is revoked on the privacy screen, which clears
+  /// [tutorConsent] on its own.
+  static const String tutorConsent = 'ss.tutor.consent';
+  static const String tutorStudentProfile = 'ss.tutor.student_profile';
+  static const String tutorGuitarProfile = 'ss.tutor.guitar_profile';
+  static const String tutorLearningGoals = 'ss.tutor.learning_goals';
 
   /// Every local AI tutor document. Delete-all must visit this exact list and
   /// the quarantine of each key because [KeyValueStore] cannot enumerate keys.
@@ -162,6 +174,10 @@ abstract final class StorageKeys {
     tutorConversationDocuments,
     tutorConversationIndex,
     tutorMemoryFacts,
+    tutorConsent,
+    tutorStudentProfile,
+    tutorGuitarProfile,
+    tutorLearningGoals,
     analysisMigrationState,
     analysisCache,
   ];

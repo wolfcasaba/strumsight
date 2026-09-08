@@ -16,6 +16,7 @@ import '../../features/audio_analysis/domain/rollout/analysis_rollout_stage.dart
 
 const String _accountDefineName = 'STRUMSIGHT_ACCOUNT';
 const String _previewAllDefineName = 'STRUMSIGHT_PREVIEW_ALL';
+const String _aiTutorCloudDefineName = 'STRUMSIGHT_AI_TUTOR_CLOUD';
 const String _communityDefineName = 'STRUMSIGHT_COMMUNITY';
 const String _communityWritesDefineName = 'STRUMSIGHT_COMMUNITY_WRITES';
 const String _communityLeaderboardDefineName =
@@ -27,6 +28,9 @@ const bool? _accountDefine = bool.hasEnvironment(_accountDefineName)
     : null;
 const bool? _previewAllDefine = bool.hasEnvironment(_previewAllDefineName)
     ? bool.fromEnvironment(_previewAllDefineName)
+    : null;
+const bool? _aiTutorCloudDefine = bool.hasEnvironment(_aiTutorCloudDefineName)
+    ? bool.fromEnvironment(_aiTutorCloudDefineName)
     : null;
 const bool? _communityDefine = bool.hasEnvironment(_communityDefineName)
     ? bool.fromEnvironment(_communityDefineName)
@@ -170,6 +174,25 @@ final class FeatureFlags {
   /// | `communityLeaderboardEnabled` | **true** | define | define |
   /// | `communityClubsEnabled` | **true** | define | define |
   /// | `communityMediaEnabled` | define (`false`) | define | define |
+  /// | `aiTutorCloudEnabled` | **true** | define (`false`) | never |
+  ///
+  /// `aiTutorCloudEnabled` is the E-R29a rollout decision: the Coach is one
+  /// of the five shell destinations, and with this flag off
+  /// `selectTutorModelGateway` picked `LocalTutorModelGatewayStub` in EVERY
+  /// shipped artifact — a stub whose `start()` always fails — so the Coach
+  /// could never answer anything (2026-09-08 re-audit, BLOCKER B1). The
+  /// development tester build therefore ships the rollout gate ON; its kill
+  /// switch is an explicit `--dart-define=STRUMSIGHT_AI_TUTOR_CLOUD=false`.
+  ///
+  /// **The flag is a rollout gate, never a consent** (ADR 0132 §1/§3): four
+  /// further fail-closed conditions still decide every single turn
+  /// (`tutor_gateway_providers.dart`) — the student's `modelUseGranted`
+  /// consent, an enabled account layer, an authenticated stream client, and
+  /// a `/tutor/capability` answer that names a REAL provider rather than the
+  /// backend's canned `fake` adapter. Production is the one environment this
+  /// parameter cannot open at all: `docs/release/ga-scope.md` keeps the
+  /// capability `postponed` behind the open `R-PRIV-01` blocker, so
+  /// production falls back to `base` (i.e. `false`) even with the define.
   ///
   /// `communityMediaEnabled` deliberately stays OFF: user-uploaded media is
   /// the one Community surface with open R-SEC-01 / R-PRIV-01 blockers
@@ -201,8 +224,10 @@ final class FeatureFlags {
     bool? communityWritesDefine = _communityWritesDefine,
     bool? communityLeaderboardDefine = _communityLeaderboardDefine,
     bool? communityClubsDefine = _communityClubsDefine,
+    bool? aiTutorCloudDefine = _aiTutorCloudDefine,
   }) {
     final isDevelopment = environment == AppEnvironment.development;
+    final isProduction = environment == AppEnvironment.production;
     final base = FeatureFlags.forEnvironment(
       environment,
       accountEnabled: accountDefine ?? isDevelopment,
@@ -212,7 +237,13 @@ final class FeatureFlags {
     // `_environmentDefaults` already read out of the same dart-define — so
     // lab and production resolve exactly what they resolved before WP-G,
     // while an explicitly passed define still wins everywhere.
-    return base._withCommunitySurfacesEnabled(
+    return base._withShippedSurfacesEnabled(
+      // E-R29a: ON in the development tester artifact, OFF everywhere else
+      // unless a define asks for it — and NEVER openable in production,
+      // where `docs/release/ga-scope.md` keeps the capability `postponed`.
+      aiTutorCloudEnabled: isProduction
+          ? base.aiTutorCloudEnabled
+          : (aiTutorCloudDefine ?? isDevelopment),
       communityEnabled:
           communityDefine ?? (isDevelopment || base.communityEnabled),
       communityWritesEnabled:
@@ -328,7 +359,11 @@ final class FeatureFlags {
   ///   device (and costs model money). ADR 0132 §1/§3 requires separate
   ///   explicit consent, and `docs/release/capability-rollout.md` records
   ///   the open R-PRIV-01 blocker. A build-time convenience switch must not
-  ///   stand in for consent.
+  ///   stand in for consent. E-R29a rolls the capability out to the
+  ///   development tester artifact through [FeatureFlags.forShippedBuild]'s
+  ///   own `STRUMSIGHT_AI_TUTOR_CLOUD` parameter instead — a NAMED rollout
+  ///   decision with its own kill switch, not a side effect of
+  ///   `STRUMSIGHT_PREVIEW_ALL`, and still not a consent.
   /// - [visionLabCaptureEnabled] — the one documented exception to ADR 0178
   ///   §2's no-raw-frame-persistence rule. It writes raw camera frames
   ///   (face, room) to disk and ADR 0178 §4 allows that only through an
@@ -396,14 +431,16 @@ final class FeatureFlags {
     adaptiveShellEnabled: adaptiveShellEnabled,
   );
 
-  /// The WP-G Community resolution: the four text-only surfaces the tester
-  /// APK must be able to reach. Reached ONLY from
-  /// [FeatureFlags.forShippedBuild], which passes the already-resolved values
-  /// (a development default, or the build's own define). Outside development
-  /// those values equal this instance's own, so the result is an equal
-  /// object. `communityMediaEnabled` is copied through untouched (open
-  /// R-SEC-01 / R-PRIV-01), as is every non-Community flag.
-  FeatureFlags _withCommunitySurfacesEnabled({
+  /// The shipped-artifact resolution: the four text-only Community surfaces
+  /// (WP-G) plus the cloud-tutor rollout gate (E-R29a) the tester APK must
+  /// be able to reach. Reached ONLY from [FeatureFlags.forShippedBuild],
+  /// which passes the already-resolved values (a development default, or the
+  /// build's own define). Outside development those values equal this
+  /// instance's own, so the result is an equal object.
+  /// `communityMediaEnabled` is copied through untouched (open R-SEC-01 /
+  /// R-PRIV-01), as is every other flag.
+  FeatureFlags _withShippedSurfacesEnabled({
+    required bool aiTutorCloudEnabled,
     required bool communityEnabled,
     required bool communityWritesEnabled,
     required bool communityLeaderboardEnabled,
@@ -417,6 +454,9 @@ final class FeatureFlags {
     practiceDetailedHistoryEnabled: practiceDetailedHistoryEnabled,
     songTrainerV2Enabled: songTrainerV2Enabled,
     aiTutorEnabled: aiTutorEnabled,
+    // The PARAMETER, not this instance's field: the caller resolved it (a
+    // development default, an explicit define, or production's untouched
+    // `false`) — E-R29a.
     aiTutorCloudEnabled: aiTutorCloudEnabled,
     practiceGeneratorEnabled: practiceGeneratorEnabled,
     plannerAssistEnabled: plannerAssistEnabled,
@@ -484,7 +524,17 @@ final class FeatureFlags {
   /// Whether the AI Tutor feature is available. Defaults to OFF.
   final bool aiTutorEnabled;
 
-  /// Whether cloud AI Tutor capabilities are available. Defaults to OFF.
+  /// Whether cloud AI Tutor capabilities are ROLLED OUT in this build.
+  ///
+  /// Defaults to OFF, and [forEnvironment] leaves it OFF in every
+  /// environment. [forShippedBuild] turns it on for the `development` tester
+  /// artifact (E-R29a) unless `--dart-define=STRUMSIGHT_AI_TUTOR_CLOUD=false`
+  /// refuses it; production can never be opened from there.
+  ///
+  /// It is a rollout gate, NOT a consent (ADR 0132): a turn still needs the
+  /// student's `modelUseGranted`, an account layer, an authenticated stream
+  /// client and a server that answers with a real provider — see
+  /// `selectTutorModelGateway`.
   final bool aiTutorCloudEnabled;
 
   /// Whether deterministic practice-plan generation is available. Available

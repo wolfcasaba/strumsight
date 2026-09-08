@@ -250,6 +250,14 @@ final class TutorOrchestrator {
     }
     if (input is SendTutorMessage) {
       _request = input.request;
+      // A NEW turn asks a NEW question, so the prompt built for the previous
+      // one must not be reused (E-R29a, re-audit B1). `_startModel`'s
+      // `_prompt ??=` exists for the ONE bounded repair attempt — re-sending
+      // the IDENTICAL prompt is what makes it a repair rather than a second
+      // question — but the cache outlived its turn: every question after the
+      // first reached the model as the FIRST question's prompt, so the
+      // student got an answer to something they had already asked.
+      _prompt = null;
     }
     _state = transition.state;
     _states.add(_state);

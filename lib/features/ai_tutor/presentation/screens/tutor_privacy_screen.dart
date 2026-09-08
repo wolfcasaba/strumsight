@@ -10,7 +10,10 @@
 /// the user can see what "Delete all AI data" actually deletes.
 ///
 /// Pure presentation: the screen reads/writes the consent controller
-/// only. Persistence is a future cross-feature concern (§0.0).
+/// only. Since E-R29a (re-audit MAJOR M8) that controller PERSISTS every
+/// axis it is given — a grant and a revocation alike survive a restart —
+/// so this screen is also the surface a student uses to take model-use
+/// consent back for good; the chat's consent banner links here (MAJOR M3).
 ///
 /// The three [SwitchListTile] consent axes are the batch brief's own named
 /// exception (§3: "a privacy- és adat-képernyő consent-kapcsolói és

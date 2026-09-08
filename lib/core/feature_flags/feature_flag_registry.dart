@@ -135,9 +135,15 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0213',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:83; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'STRUMSIGHT_AI_TUTOR_CLOUD dart-define, resolved at '
+        'lib/app/config/feature_flags.dart (FeatureFlags.forShippedBuild). '
+        '`forEnvironment` still hardcodes `false` in every environment, and '
+        'production ignores the define entirely (ga-scope.md: postponed, '
+        'open R-PRIV-01). E-R29a: the development tester build defaults it '
+        'ON, so its kill switch is an EXPLICIT '
+        '--dart-define=STRUMSIGHT_AI_TUTOR_CLOUD=false. The flag is a '
+        'rollout gate only — consent, account, an authenticated client and '
+        'a real server capability still gate every turn (ADR 0132).',
   ),
 
   // ---------------------------------------------------------------------

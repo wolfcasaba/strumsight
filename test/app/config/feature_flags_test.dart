@@ -220,9 +220,25 @@ void main() {
       expect(flags.practiceGeneratorEnabled, isTrue);
       expect(flags.adaptiveShellEnabled, isTrue);
 
-      // The three surfaces the preview overlay refuses to open, unchanged by
-      // WP-G: data egress, raw-frame persistence, cost without a surface.
-      expect(flags.aiTutorCloudEnabled, isFalse);
+      // E-R29a: the cloud tutor's ROLLOUT GATE is on in the tester build.
+      // Before this it was false in every shipped artifact, so
+      // `selectTutorModelGateway` always chose `LocalTutorModelGatewayStub`
+      // — a gateway whose `start()` always fails — and the Coach could not
+      // answer a single question (2026-09-08 re-audit, BLOCKER B1).
+      //
+      // This is NOT a consent (ADR 0132 §1/§3): four fail-closed conditions
+      // still decide every turn (`tutor_gateway_providers.dart`), which is
+      // what `test/features/ai_tutor/presentation/
+      // tutor_gateway_selection_test.dart` measures.
+      expect(
+        flags.aiTutorCloudEnabled,
+        isTrue,
+        reason: 'the rollout gate is open in the development tester build',
+      );
+
+      // The two surfaces the preview overlay still refuses to open,
+      // unchanged by WP-G and by E-R29a: raw-frame persistence, and cost
+      // without a visible surface.
       expect(flags.visionLabCaptureEnabled, isFalse);
       expect(flags.recognitionShadowModeEnabled, isFalse);
     });
@@ -361,10 +377,16 @@ void main() {
         communityWritesDefine: false,
         communityLeaderboardDefine: false,
         communityClubsDefine: false,
+        aiTutorCloudDefine: false,
       );
 
       expect(flags.accountEnabled, isFalse);
       expect(flags.aiTutorEnabled, isFalse, reason: 'no preview overlay');
+      expect(
+        flags.aiTutorCloudEnabled,
+        isFalse,
+        reason: 'E-R29a kill switch: an explicit `=false` refuses the gate',
+      );
       expect(flags.audioAnalysisV2Enabled, isFalse);
       _expectCommunityFlagsOff(flags);
 
@@ -404,6 +426,84 @@ void main() {
           reason: '$environment',
         );
       }
+    });
+
+    // E-R29a — the full `aiTutorCloudEnabled` rollout matrix in ONE cell, so
+    // the three environments cannot drift apart one test at a time.
+    //
+    // The old pin was "no dart-define or environment boundary can turn it
+    // on"; that made the Coach unable to answer in every artifact anyone
+    // could install (2026-09-08 re-audit, BLOCKER B1). The new truth is
+    // narrower, not looser: development ON, lab define-only, production
+    // closed to the define entirely.
+    test('aiTutorCloudEnabled: development ON, lab define-only, production '
+        'never — and production ignores the define outright', () {
+      expect(
+        FeatureFlags.forShippedBuild(AppEnvironment.development)
+            .aiTutorCloudEnabled,
+        isTrue,
+        reason: 'the tester APK passes no define — this IS its resolution',
+      );
+      expect(
+        FeatureFlags.forShippedBuild(AppEnvironment.lab).aiTutorCloudEnabled,
+        isFalse,
+        reason: 'lab keeps its define-only path, exactly as before E-R29a',
+      );
+      expect(
+        FeatureFlags.forShippedBuild(
+          AppEnvironment.lab,
+          aiTutorCloudDefine: true,
+        ).aiTutorCloudEnabled,
+        isTrue,
+        reason: 'and an explicit define opens it there',
+      );
+      expect(
+        FeatureFlags.forShippedBuild(
+          AppEnvironment.production,
+        ).aiTutorCloudEnabled,
+        isFalse,
+      );
+      expect(
+        FeatureFlags.forShippedBuild(
+          AppEnvironment.production,
+          aiTutorCloudDefine: true,
+        ).aiTutorCloudEnabled,
+        isFalse,
+        reason:
+            'production is the fail-closed environment: ga-scope.md keeps '
+            'the capability postponed behind the open R-PRIV-01 blocker, so '
+            'a define leaked into a release build command cannot open it',
+      );
+
+      // The rollout boundary itself is untouched: `forEnvironment` — what
+      // `tool/release/verify_ga_scope.py` and the capability-rollout
+      // coverage tests read — still resolves the flag off everywhere.
+      for (final environment in AppEnvironment.values) {
+        expect(
+          FeatureFlags.forEnvironment(
+            environment,
+            accountEnabled: false,
+          ).aiTutorCloudEnabled,
+          isFalse,
+          reason: '$environment: forEnvironment is unchanged by E-R29a',
+        );
+      }
+    });
+
+    // The flag is a ROLLOUT gate, not a consent, and nothing about the
+    // student's consent lives in `FeatureFlags` at all — the type carries no
+    // consent field to confuse it with (ADR 0132 §1/§3).
+    test('the cloud rollout gate is not, and cannot be read as, a consent', () {
+      final shipped = FeatureFlags.forShippedBuild(AppEnvironment.development);
+
+      expect(shipped.toString(), contains('aiTutorCloudEnabled: true'));
+      expect(
+        shipped.toString(),
+        isNot(contains('consent')),
+        reason:
+            'consent is a per-student runtime value in '
+            'tutorConsentControllerProvider, never a build-time flag',
+      );
     });
   });
 

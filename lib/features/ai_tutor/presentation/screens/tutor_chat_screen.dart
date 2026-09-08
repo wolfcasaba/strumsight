@@ -218,6 +218,30 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
   }
 }
 
+/// Where the consent banner's call to action goes (2026-09-08 re-audit,
+/// MAJOR M3).
+///
+/// [TutorBanner] has always rendered a "Grant consent" button for
+/// [TutorBannerKind.consent], but the chat screen never passed
+/// `onConsent` — so that [TextButton] was built with a null `onPressed`
+/// and was PERMANENTLY DISABLED. The student was told, on the one screen
+/// where it matters, that model use is not granted, and given a greyed-out
+/// button as the way to fix it.
+///
+/// The destination is the app's single consent surface, the Tutor Privacy
+/// screen, whose `tutorConsentAxisModelUse` switch is the only thing in
+/// `lib/**` that calls `TutorConsentController.grantModelUse` — the banner
+/// deliberately does NOT grant consent by itself: ADR 0132 §1/§3 requires
+/// the student to read the axis and decide, not to tap a chat banner.
+///
+/// `push`, not `go`: the student returns to the conversation they were
+/// already in. The route is registered under the very same `aiTutorEnabled`
+/// gate as this screen (`app_router.dart`), so it can never be an
+/// unregistered path.
+void _openConsent(BuildContext context) {
+  GoRouter.maybeOf(context)?.push(AppRoutes.tutorPrivacy);
+}
+
 class _BannerSlot extends StatelessWidget {
   const _BannerSlot({required this.kind, required this.controller});
 
@@ -226,7 +250,11 @@ class _BannerSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TutorBanner(kind: kind, onRetry: controller.retry);
+    return TutorBanner(
+      kind: kind,
+      onRetry: controller.retry,
+      onConsent: () => _openConsent(context),
+    );
   }
 }
 
