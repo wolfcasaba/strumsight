@@ -34,10 +34,17 @@ class TutorTurnResponse(BaseModel):
 
 
 class TutorCapabilityResponse(BaseModel):
-    """Tutor capability metadata."""
+    """Tutor capability metadata.
+
+    `provider` / `model` report which adapter the server actually runs, so an
+    operator can verify a provider flip from outside the container. Neither is
+    a secret; the API key is never exposed on any surface.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool
     version: str = "v1"
     streaming: bool = False
+    provider: str = "fake"
+    model: str = "fake-model"

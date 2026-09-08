@@ -208,6 +208,11 @@ A próba-fiók a mérés után törölve; a `POST /auth/login` vele `401`-et ad.
 - **`STRUMSIGHT_COMMUNITY_ENABLED=false`** — a community routerek nincsenek
   felcsatolva. A Flutter-oldali repository-k (`E17-R08`..`E17-R11`) azóta
   elkészültek, a bekapcsolás pontos lépéssora a lenti **§7.1**.
+- **`STRUMSIGHT_TUTOR_ENABLED=false`** — az AI tutor útvonalai
+  (`/tutor/capability`, `/tutor/stream`, `/tutor/turn`) nincsenek felcsatolva,
+  a kliens 404-et kap. A bekapcsolás pontos lépéssora a lenti **§7.2**; ez az
+  EGYETLEN felület, amelyhez harmadik fél (a modellszolgáltató) is hozzájut
+  adathoz, ezért külön kulcsot ÉS külön adatvédelmi döntést igényel.
 - **`STRUMSIGHT_DIAGNOSTICS_ENABLED=false`** és
   **`STRUMSIGHT_APK_DOWNLOAD_ENABLED=false`** — a Lab-felületek sötétek.
   A diagnosztika bekapcsolása nem-alapértelmezett `STRUMSIGHT_DIAG_TOKEN`-t is
@@ -285,6 +290,162 @@ jön, a router nem csatolódott fel: a 3. lépés `curl`-je 404-et ad, és a
 **Visszakapcsolás** ugyanígy: a kulcsokat `false`-ra, `up -d`, és a kliens
 visszaesik az „on this server yet" kártyára — adat nem vész el, csak a
 felület tűnik el.
+
+### 7.2 Az AI tutor provider bekapcsolása — pontos lépéssor
+
+**R23 előtt ez a kapcsoló félrevezető volt:** a `main.py` FELTÉTEL NÉLKÜL
+`FakeProviderGateway()`-t épített, tehát a tutor bekapcsolva is konzervdobozos
+választ adott, akárhogy állt a `STRUMSIGHT_TUTOR_PROVIDER`. R23 óta a
+composition root (`backend/app/main.py::_build_tutor_gateway`) a konfigurált
+adaptert építi, a `fake` pedig az alapértelmezés és a visszaesési út marad.
+
+**Négy kulcsot kell állítani, és mind a négy kötelező** — bármelyik hiánya
+bootolás közben elhasal (`_guard_tutor_provider`), nem futásidőben, nem
+csendben:
+
+| Kulcs | Érték | Miért |
+|---|---|---|
+| `STRUMSIGHT_TUTOR_PROVIDER` | `anthropic` (vagy `openai`) | melyik ADAPTER épül; `fake` az alapértelmezés |
+| `STRUMSIGHT_TUTOR_MODEL` | `claude-sonnet-5` | a konkrét modell-azonosító |
+| `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` | `{"anthropic": ["claude-sonnet-5"]}` | a JSON allowlist — a registry ehhez validál |
+| `STRUMSIGHT_TUTOR_API_KEY` | a szolgáltató kulcsa | a szerveren marad, a kliens SOSEM látja |
+
+A provider és az allowlist szándékosan KÉT külön kulcs: az első azt mondja meg,
+melyik adapter létezik, a második azt, mi van engedélyezve. Az allowlist
+alapértéke `{"fake": ["fake-model"]}` marad — egy elgépelt provider- vagy
+modellnév tehát nem „majdnem működik", hanem meg sem indul.
+
+**1. Kulcsok a `runtime.env`-be** (a fájl `0600`, nem verziókövetett):
+
+```
+STRUMSIGHT_TUTOR_PROVIDER=anthropic
+STRUMSIGHT_TUTOR_MODEL=claude-sonnet-5
+STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS={"anthropic": ["claude-sonnet-5"]}
+STRUMSIGHT_TUTOR_API_KEY=…            # a titokkezelőből, sosem kézzel ide
+STRUMSIGHT_TUTOR_ENABLED=true
+```
+
+A négy kulcs egyetlen `up -d`-ben megy fel; ha mégis lépésenként haladsz,
+**a kulcs + a provider + az allowlist megy előbb, és a
+`STRUMSIGHT_TUTOR_ENABLED=true` legutoljára.** A veszélyes köztes állapot az
+`ENABLED=true` + `PROVIDER=anthropic` **kulcs nélkül**: ilyenkor a
+`_guard_tutor_provider` `RuntimeError`-t dob, a folyamat el sem indul, és mivel
+a `docker compose up -d` a régi konténert már leállította, nem „csak a tutor"
+esik ki, hanem a bejelentkezés is. (Az `ENABLED=true` önmagában, még `fake`
+providerrel, ártalmatlan: a konzervdobozos válasz jön fel.)
+
+**2. Újraindítás** — módosított env új konténert igényel:
+
+```bash
+cd /home/ubuntu/strumsight-deploy
+docker compose --env-file runtime.env up -d
+docker compose --env-file runtime.env logs --since 2m api | tail -20
+```
+
+Ha a folyamat nem jön fel, a napló utolsó sora MEGMONDJA, melyik kulcs
+hiányzik — a hibaüzenetek a kulcs NEVÉT írják ki, az ÉRTÉKÉT soha.
+
+**3. Ellenőrzés — a capability-végpont most őszintén válaszol:**
+
+```bash
+curl -s http://127.0.0.1:8010/tutor/capability
+# {"enabled":true,"version":"v1","streaming":false,
+#  "provider":"anthropic","model":"claude-sonnet-5"}
+#
+# flip ELŐTT: 404 (a router fel sem csatolódik)
+# flip UTÁN, de fake providerrel: "provider":"fake","model":"fake-model"
+```
+
+A válasz a kulcsot **nem** tartalmazza, és nem is tartalmazhatja: a
+`TutorCapabilityResponse` egy zárt allowlist-séma, a kulcs egyetlen mezőjének
+sem forrása. A `provider`/`model` nem titok — pont attól használható a flip
+ellenőrzésére kívülről is:
+
+```bash
+curl -s https://casaba.app/strumsight/tutor/capability
+```
+
+Egy valódi turn hitelesítést kíván (`POST /tutor/stream`, bearer JWT), tehát a
+végponti füst-próba a telefonról vagy egy próba-fiókkal megy — a
+`tool/release/live_backend_smoke.py` szándékosan kihagyja a tutort.
+
+**4. Ha a provider hibázik: mit mond a napló.** A kliens felé minden
+provider-hiba UGYANAZ marad (`502` / `provider_error` SSE-keret, időtúllépésnél
+`504` / `provider_timeout`) — a hibatest, a kulcs és a prompt SOSEM megy ki és
+naplóba sem kerül. Az operátor viszont osztályozva látja, mi történt:
+
+```bash
+docker compose --env-file runtime.env logs api | grep 'Tutor provider call failed'
+# Tutor provider call failed (classification=configuration, http_status=401)
+```
+
+| `classification` | Mi váltja ki | Teendő |
+|---|---|---|
+| `configuration` | HTTP `401`/`403` (kulcs rossz vagy visszavont), `404` (rossz modell-azonosító vagy base URL), illetve az `authentication_error`/`permission_error`/`not_found_error`/`billing_error` stream-keretek | operátori hiba — újrapróbálás NEM segít; ellenőrizd a kulcsot és a `STRUMSIGHT_TUTOR_MODEL`-t |
+| `busy` | HTTP `429`, `529` és minden `5xx`, illetve a `rate_limit_error`/`overloaded_error`/`api_error` keret | átmeneti — a felhasználó újrapróbálhatja; ha tartós, a provider-oldali kvótát nézd |
+| `invalid_request` | HTTP `400`/`413`/`422`, illetve `invalid_request_error`/`request_too_large` | a kérés alakja/mérete — a lenti 5. pont limitkulcsait nézd |
+| `timeout` | `STRUMSIGHT_TUTOR_TIMEOUT_SECONDS` letelt, vagy a provider `timeout_error` keretet küldött | emeld a timeoutot vagy csökkentsd a `MAX_OUTPUT_BYTES`-t |
+| `transport` | kapcsolat/TLS/protokoll hiba (a cél-URL-t tartalmazó kivételszöveg eldobva) | hálózat/DNS a konténerből |
+| `malformed_response` / `incomplete_response` | nem SSE-válasz, hibás JSON-keret, vagy `message_stop` nélkül záruló stream | a csonka válasz zárt hibával esik el, nem rövid válaszként megy ki |
+
+A `http_status=None` azt jelenti, hogy HTTP-státusz nem is született (időtúllépés,
+kapcsolat-hiba), nem azt, hogy elveszett.
+
+**5. Költség és korlátok.** A meglévő kapuk a providertől függetlenül élnek, és
+a flip után VALÓDI pénzt védenek — érdemes a bekapcsolással egy menetben
+átnézni őket:
+
+| Kulcs | Alapérték | Mit korlátoz |
+|---|---|---|
+| `STRUMSIGHT_TUTOR_MAX_OUTPUT_BYTES` | `2000` | a válasz hossza; ebből számolódik a provider `max_tokens` értéke is (~4 bájt/token, tehát 500 token) |
+| `STRUMSIGHT_TUTOR_MAX_REQUEST_BYTES` | `4000` | egy üzenet mérete |
+| `STRUMSIGHT_TUTOR_MAX_HISTORY_MESSAGES` | `20` | a felküldött előzmény hossza |
+| `STRUMSIGHT_TUTOR_MAX_CONTEXT_BYTES` | `8000` | az összeállított kontextus mérete |
+| `STRUMSIGHT_TUTOR_RATE_LIMIT_MAX` / `_WINDOW` | `30` / `60` | kérés/perc felhasználónként |
+| `STRUMSIGHT_TUTOR_DAILY_TOKEN_LIMIT` | `50000` | napi token-budget felhasználónként |
+| `STRUMSIGHT_TUTOR_TIMEOUT_SECONDS` | `30.0` | a provider-hívás időkorlátja (túllépve zárt hibával, `provider_timeout` SSE-kerettel esik el) |
+
+A limiterek **folyamat-lokálisak** (ugyanaz a mérés, mint az auth-throttle-nál,
+`backend/README.md`): több worker esetén nem osztoznak a számlálón, tehát a
+tényleges napi plafon ~worker-számszor nagyobb. Egyetlen workerre méretezz,
+vagy tedd a limitet közös tárba, mielőtt a számla ezt méri meg helyetted.
+A tényleges provider-oldali `output_tokens` minden turn után egy INFO sorba
+kerül (`Tutor provider stream completed (output_tokens=…)`) — szám, semmi más:
+
+```bash
+docker compose --env-file runtime.env logs api | grep 'Tutor provider stream'
+```
+
+**6. Adatvédelem — mi hagyja el a szervert.** Ez a flip a StrumSight EGYETLEN
+olyan útvonala, ahol felhasználói szöveg harmadik félhez kerül. A
+`docs/privacy/data-inventory.yaml` `tutor_stream` sora írja le, mi megy fel a
+kliensről: a tanuló szabadszöveges üzenete + a prompt-építő által
+összeállított, redaktált kontextus-pillanatkép, `legal_basis: consent`, a
+kliensoldali kapu a `TutorConsent.modelUseGranted`. A szerver ezt a két dolgot
+adja tovább a providernek — a kontextus a Messages API `system` mezőjében, az
+üzenet és az előzmény a `messages` tömbben —, semmi mást: nincs benne
+felhasználó-azonosító, e-mail, eszközazonosító vagy hangadat (a detektálás
+100%-ban on-device marad, §7).
+
+A backend a prompt-tartalmat SEHOL nem naplózza (a napló csak a felhasználó
+azonosítóját és token-számokat lát), és a provider hibatestje sosem kerül sem
+naplóba, sem a kliens felé — a `ProviderError`/`ProviderTimeoutError`
+provider-semleges, redaktált kivétel, amit a router `502`/`504`-re, a
+stream-transzport pedig `provider_error`/`provider_timeout` SSE-keretre képez.
+
+> **Nyitott tétel a flip előtt (R23 lelet, NEM ebben a körben javítva):** az
+> adat-leltár `tutor_stream` sorának `storage` mezője ma még csak
+> „backend (the configured STRUMSIGHT_API_URL host)"-ot mond. Amint a
+> `STRUMSIGHT_TUTOR_PROVIDER` nem `fake`, ez hiányos: a harmadik fél
+> (modellszolgáltató) mint adatfeldolgozó és a nála érvényes megőrzés
+> hiányzik a sorból. A `docs/privacy/**` szerkesztése ezen a körön kívül
+> esett — a flip ELŐTT a leltárt ki kell egészíteni, különben a beleegyezési
+> szöveg nem fedi a valóságot.
+
+**Visszakapcsolás:** `STRUMSIGHT_TUTOR_ENABLED=false`, `up -d` — a routerek
+eltűnnek, a kliens a `/tutor/capability` 404-jéből tudja, hogy nincs
+felhő-tutor, és a helyi stub-ra esik vissza. A providert visszaállítani
+`fake`-re önmagában is elég ahhoz, hogy egyetlen bájt se hagyja el a szervert.
 
 ## 8. Egy MÉRT hibaosztály, amit ez a telepítés tárt fel
 

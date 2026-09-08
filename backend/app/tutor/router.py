@@ -4,7 +4,7 @@ The provider secret stays on the server — the client only sees the
 redacted response. Errors are normalized to provider-neutral HTTP errors.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from ..deps import CurrentUser
 from .provider_gateway import ProviderError, ProviderTimeoutError
@@ -32,9 +32,22 @@ def get_service() -> TutorService:
 
 
 @router.get("/capability", response_model=TutorCapabilityResponse)
-def capability() -> TutorCapabilityResponse:
-    """Return tutor capability metadata."""
-    return TutorCapabilityResponse(enabled=True, version="v1", streaming=False)
+def capability(request: Request) -> TutorCapabilityResponse:
+    """Return tutor capability metadata.
+
+    Provider and model come from the MOUNTED app's settings
+    (`request.app.state.settings`), not from the module-global service, so the
+    answer describes this process's real configuration. The API key is never
+    part of the response.
+    """
+    settings = request.app.state.settings
+    return TutorCapabilityResponse(
+        enabled=True,
+        version="v1",
+        streaming=False,
+        provider=settings.tutor_provider,
+        model=settings.tutor_model,
+    )
 
 
 @router.post("/turn", response_model=TutorTurnResponse)

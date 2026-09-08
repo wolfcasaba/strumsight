@@ -122,6 +122,30 @@ isolated temporary SQLite database. It can also be started manually.
   `STRUMSIGHT_DIAG_TOKEN`; otherwise the process refuses to boot. Configure
   upload storage with `STRUMSIGHT_DIAG_DIR` and stage the optional APK with
   `STRUMSIGHT_APK_PATH`.
+- **AI Tutor proxy (ADR 0131 / 0142, wired R23):** off by default
+  (`STRUMSIGHT_TUTOR_ENABLED=false` ⇒ `/tutor/*` is not mounted, the client
+  gets a plain 404). When enabled, `STRUMSIGHT_TUTOR_PROVIDER` selects the
+  adapter the composition root builds — `fake` (the default and the fallback:
+  a canned reply, no socket), `anthropic` (Anthropic Messages API, streaming,
+  `app/tutor/provider_gateway.py::AnthropicProviderGateway`) or `openai`
+  (Chat Completions). `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` is the SEPARATE
+  JSON allowlist the registry validates the provider/model pair against; it
+  stays fail-closed at `{"fake": ["fake-model"]}`. A real provider also needs
+  a non-empty, non-development `STRUMSIGHT_TUTOR_API_KEY`. All three failure
+  modes — unknown provider, allowlist miss, unusable key — refuse to BOOT in
+  every environment, not just prod, so a misconfigured tutor never serves a
+  fake answer that looks real. `GET /tutor/capability` reports the live
+  `provider` and `model` (never the key) so a flip is verifiable from outside
+  the container. The provider secret stays on the server; provider failures
+  are normalized to redacted `ProviderError`/`ProviderTimeoutError` and the
+  prompt, the reply and the key are never logged. The client-facing answer is
+  the same for every provider failure (`502`, or `504` on a timeout), while the
+  SERVER log carries a one-line classification — `configuration` (401/403/404),
+  `busy` (429/529/5xx), `invalid_request` (400/413/422), `timeout`, `transport`,
+  `malformed_response`, `incomplete_response` — plus at most the HTTP status,
+  never the provider body. Flip sequence, the classification table, cost/limit
+  knobs and the privacy statement:
+  `docs/operations/backend-live-deploy.md` §7.2.
 - **Auth throttling (round 120):** per-IP sliding-window rate limits on
   `/auth/login` (10/min) and `/auth/register` (5/min) → `429` +
   `Retry-After`. The counters are process-local: multiple workers do not share

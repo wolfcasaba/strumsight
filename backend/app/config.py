@@ -88,14 +88,27 @@ class Settings(BaseSettings):
 
     # AI Tutor proxy (ADR 0131) — feature-flagged, config-driven provider selection.
     # The provider secret stays on the server; the client never sees it.
-    # Production may extend the allowlist with an "openai" provider and its
-    # configured model IDs; the default remains fail-closed for that provider.
+    #
+    # `tutor_provider` names which ADAPTER `main.py::_build_tutor_gateway`
+    # constructs: "fake" (the default — a canned reply, no network), "openai"
+    # or "anthropic". `tutor_allowed_providers` is the independent ALLOWLIST
+    # the registry validates the provider/model pair against, and it stays
+    # fail-closed at `{"fake": ["fake-model"]}`: switching to a real provider
+    # requires the operator to extend it explicitly, e.g.
+    #   STRUMSIGHT_TUTOR_PROVIDER=anthropic
+    #   STRUMSIGHT_TUTOR_MODEL=claude-sonnet-5
+    #   STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS={"anthropic": ["claude-sonnet-5"]}
+    #   STRUMSIGHT_TUTOR_API_KEY=<the provider key>
+    # A real provider with an empty or dev-default key REFUSES to boot in every
+    # environment (`main.py::_guard_tutor_provider`), not only in prod.
+    # The runbook is docs/operations/backend-live-deploy.md §7.2.
     tutor_enabled: bool = False
     tutor_provider: str = "fake"
     tutor_model: str = "fake-model"
     tutor_api_key: str = "dev-tutor-key"
     tutor_allowed_providers: dict[str, list[str]] = {"fake": ["fake-model"]}
     tutor_openai_base_url: str = "https://api.openai.com/v1"
+    tutor_anthropic_base_url: str = "https://api.anthropic.com/v1"
     tutor_max_request_bytes: int = 4000
     tutor_max_history_messages: int = 20
     tutor_max_context_bytes: int = 8000
