@@ -21,6 +21,13 @@ import '../../../core/foundation/app_result.dart';
 /// (`progressPracticeHistoryProvider`). Same shape as
 /// `analysisRecentSummariesProvider`, which has thrown its `Failure` since
 /// E06.
+///
+/// `retry: (_, _) => null` — Riverpod 3 auto-retries a throwing
+/// `FutureProvider` with a growing backoff, which keeps `.future` pending
+/// for minutes instead of surfacing the error (measured: CI run 560,
+/// `history_unavailable_test` B1/B2 timed out at 30 s). A storage read
+/// failure is not retryable by construction; the dashboard's Retry button
+/// re-reads on demand. Same precedent as `activePracticePlanProvider`.
 final practiceHistoryV2ListProvider =
     FutureProvider<List<PracticeHistoryEntry>>((ref) async {
       final repository = ref.watch(practiceHistoryRepositoryProvider);
@@ -29,7 +36,7 @@ final practiceHistoryV2ListProvider =
         Success(:final value) => value,
         Failure(:final error) => throw error,
       };
-    });
+    }, retry: (retryCount, error) => null);
 
 /// The V1+V2 unified feed, surface as plain entries (the same shape the
 /// progress dashboard and the daily-goal provider consume).

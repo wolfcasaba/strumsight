@@ -65,7 +65,11 @@ class _AnalysisOverviewBody extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.list_alt),
             tooltip: l10n.analysisOverviewSeeAllInsights,
-            onPressed: () => context.go(
+            // R30 (re-audit #2 B2) — `push`, NEM `go`: a részletek az
+            // áttekintés FÖLÉ kerülnek, tehát a vissza-út ide vezet. A `go`
+            // az áttekintést is eldobta, és a részletek „Bezárás" gombjának
+            // már nem volt mit poppolnia.
+            onPressed: () => context.push(
               AppRoutes.analysisMetricDetail,
               extra: OverviewDetailsPayload(
                 metrics: viewModel.details,
@@ -117,7 +121,7 @@ class _AnalysisOverviewBody extends StatelessWidget {
                   metricSemanticLabel: (label, value, status) =>
                       l10n.analysisOverviewMetricSemantic(label, value, status),
                   detailLabel: l10n.analysisOverviewSeeDetails,
-                  onOpenDetail: () => context.go(
+                  onOpenDetail: () => context.push(
                     AppRoutes.analysisMetricDetail,
                     extra: <OverviewMetricCard>[metric],
                   ),
@@ -142,7 +146,7 @@ class _AnalysisOverviewBody extends StatelessWidget {
               OutlinedButton.icon(
                 key: const Key('overview-see-details'),
                 icon: const Icon(Icons.tune),
-                onPressed: () => context.go(
+                onPressed: () => context.push(
                   AppRoutes.analysisMetricDetail,
                   extra: OverviewDetailsPayload(
                     metrics: viewModel.details,

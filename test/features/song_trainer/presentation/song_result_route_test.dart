@@ -83,6 +83,37 @@ void main() {
     expect(find.byKey(const Key('stub-overview')), findsOneWidget);
   });
 
+  // R30 (re-audit #2 §2/M7) — D3 proves WHERE "next section" lands when no
+  // section follows; this proves the learner can leave that screen. The
+  // overview's own app bar carries no back control, so a stack-replacing
+  // `go` made it the end of the app.
+  testWidgets('D5 — the overview REPLACES the finished result, and the screen '
+      'that opened the session is still underneath', (tester) async {
+    final document = _document();
+    final config = _config(document, MeasureRange(start: 1, endExclusive: 2));
+    final harness = await _pump(
+      tester,
+      document: document,
+      config: config,
+      pushed: true,
+    );
+
+    await tester.tap(find.byKey(const Key('song-result-next-section')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('stub-overview')), findsOneWidget);
+    expect(
+      find.byType(SongTrainerResultRoute),
+      findsNothing,
+      reason: 'a finished result is not a place to return to',
+    );
+    expect(harness.router.canPop(), isTrue);
+
+    harness.router.pop();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('stub-opener')), findsOneWidget);
+  });
+
   testWidgets('D4 — no config keeps both CTAs disabled', (tester) async {
     final document = _document();
     await _pump(tester, document: document, config: null);
@@ -100,19 +131,29 @@ void main() {
 
 final class _RouteHarness {
   Object? sessionExtra;
+  late final GoRouter router;
 }
 
 Future<_RouteHarness> _pump(
   WidgetTester tester, {
   required SongDocument document,
   required TrainerConfig? config,
+  bool pushed = false,
 }) async {
   final harness = _RouteHarness();
   final repository = InMemorySongRepository();
   await repository.create(document);
   final router = GoRouter(
-    initialLocation: '/result',
+    initialLocation: pushed ? '/opener' : '/result',
     routes: <RouteBase>[
+      // D5 stands in for whatever opened the session (the song overview, a
+      // setlist, the trainer setup). Its identity does not matter — only
+      // that it is still there once the result hands off.
+      GoRoute(
+        path: '/opener',
+        builder: (_, _) =>
+            const Scaffold(key: Key('stub-opener'), body: SizedBox.shrink()),
+      ),
       GoRoute(
         path: '/result',
         builder: (_, _) => SongTrainerResultRoute(
@@ -152,6 +193,11 @@ Future<_RouteHarness> _pump(
     ),
   );
   await tester.pumpAndSettle();
+  if (pushed) {
+    router.push('/result');
+    await tester.pumpAndSettle();
+  }
+  harness.router = router;
   return harness;
 }
 

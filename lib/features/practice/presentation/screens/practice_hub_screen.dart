@@ -183,6 +183,14 @@ class PracticeHubScreen extends ConsumerWidget {
     );
   }
 
+  // R30 (re-audit #2 MI-E) — SZÁNDÉKOSAN marad `go`. A Setup a definíció
+  // azonosítóját a `routeInformationProvider` ÉRTÉKÉBŐL olvassa
+  // (`practice_setup_screen.dart`), amit a `go` szinkron állít be, egy
+  // `push` viszont csak a keret UTÁN (a `Router` a route-információt
+  // post-frame jelenti vissza) — a pusholt Setup ezért az első képkockán a
+  // „nincs ilyen gyakorlat" ágat rajzolná. A vissza-gomb kijárata ettől
+  // függetlenül `canPop`-őrzött lett (`_backToHub`), tehát amint egy hívó
+  // pusholni tud, a helyes viselkedés már ott van.
   void _openSetup(BuildContext context, PracticeDefinition definition) {
     final uri = Uri(
       path: AppRoutes.practiceSetup,
@@ -191,12 +199,17 @@ class PracticeHubScreen extends ConsumerWidget {
     context.go(uri.toString());
   }
 
+  // R30 (re-audit #2 B3) — `push`, NEM `go`. Ez a képernyő az R18 óta a
+  // katalógus-útvonalon PUSHOLVA is elérhető, és sem a varázslónak, sem a
+  // mai tervnek nincs saját vissza-vezérlője: egy `go` eldobta a katalógust
+  // alóluk, tehát a két kártya zsákutcába vitt. Ugyanaz a minta, amit a
+  // gyakorlás-terület hubja már használ.
   void _openPlanBuilder(BuildContext context) {
-    context.go(AppRoutes.practiceGeneratorSetup);
+    context.push(AppRoutes.practiceGeneratorSetup);
   }
 
   void _openTodayPlan(BuildContext context) {
-    context.go(AppRoutes.practiceGeneratorToday);
+    context.push(AppRoutes.practiceGeneratorToday);
   }
 }
 

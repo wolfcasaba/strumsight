@@ -278,6 +278,22 @@ Future<void> _startAnalysisImport(BuildContext context, WidgetRef ref) async {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
+/// R30 (re-audit #2 B2) — leaves one step of the Analysis V2 capture chain.
+///
+/// Every step of that chain is now `push`ed, so the previous one is still
+/// underneath and popping is exactly what "cancel" / "start over" mean.
+/// [fallback] covers the one case a pop cannot: a step reached with nothing
+/// under it (a deep link, a redirect target). A bare `maybePop` there would
+/// be a silent no-op — the dead-control class this round closes.
+void _leaveAnalysisStep(BuildContext context, String fallback) {
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.pop();
+    return;
+  }
+  GoRouter.maybeOf(context)?.go(fallback);
+}
+
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
 final routerProvider = Provider<GoRouter>((ref) {
@@ -725,11 +741,13 @@ final routerProvider = Provider<GoRouter>((ref) {
               // distinct here now.
               final planAsync = ref.watch(activePracticePlanProvider);
               return planAsync.when(
-                loading: () => const _RouteLoadingScaffold(
-                  key: Key('today-plan-route-loading'),
+                loading: () => _RouteLoadingScaffold(
+                  key: const Key('today-plan-route-loading'),
+                  exitLocation: entryLocation,
                 ),
                 error: (_, _) => _RouteErrorScaffold(
                   key: const Key('today-plan-route-error'),
+                  exitLocation: entryLocation,
                   onRetry: () => ref.invalidate(activePracticePlanProvider),
                 ),
                 data: (plan) => TodayPlanScreen(
@@ -763,11 +781,13 @@ final routerProvider = Provider<GoRouter>((ref) {
               // mindkettőt „nincs terved"-ként mondta ki. A `null` csak a
               // `data` ágon jelenthet hiányzó tervet.
               return plan.when(
-                loading: () => const _RouteLoadingScaffold(
-                  key: Key('weekly-plan-route-loading'),
+                loading: () => _RouteLoadingScaffold(
+                  key: const Key('weekly-plan-route-loading'),
+                  exitLocation: entryLocation,
                 ),
                 error: (_, _) => _RouteErrorScaffold(
                   key: const Key('weekly-plan-route-error'),
+                  exitLocation: entryLocation,
                   onRetry: () => ref.invalidate(activePracticePlanProvider),
                 ),
                 data: (value) => WeeklyPlanScreen(
@@ -951,9 +971,39 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: AppRoutes.practiceHub,
                     builder: (_, _) => const PracticeAreaHubScreen(),
                   ),
+                // R30 (re-audit #2 M4) — the tile that opens this route
+                // PUSHES it, but the screen builds no `Scaffold` of its own
+                // and the adaptive shell supplies none with an app bar: the
+                // pushed page carried no visible way back at all (only the
+                // system gesture). Same adapter idea as `/practice/live`
+                // above — a route-level `Scaffold` for a screen that brings
+                // none — plus the exit this one needs. The bar repeats the
+                // screen's own headline on purpose: that headline lives
+                // outside this round's files, and a titleless bar would
+                // render as an empty strip whenever this route is the
+                // branch's own first page.
                 GoRoute(
                   path: AppRoutes.practiceAnalyze,
-                  builder: (_, _) => const AnalyzeScreen(),
+                  builder: (_, _) => Builder(
+                    builder: (context) => Scaffold(
+                      appBar: AppBar(
+                        // The router's own pop-ability, not the branch
+                        // navigator's: this route lives INSIDE a shell
+                        // branch, and a pushed branch route is a second
+                        // shell instance whose inner navigator holds a
+                        // single page — an implied leading would be absent
+                        // there, and a plain back control would pop a
+                        // navigator with nothing on it. No leading at all
+                        // when the route is the branch's own first page,
+                        // so no dead control is ever drawn.
+                        leading: context.canPop()
+                            ? BackButton(onPressed: () => context.pop())
+                            : null,
+                        title: Text(AppLocalizations.of(context).navAnalyze),
+                      ),
+                      body: const AnalyzeScreen(),
+                    ),
+                  ),
                 ),
                 GoRoute(
                   path: AppRoutes.practiceLearn,
@@ -1124,17 +1174,25 @@ final routerProvider = Provider<GoRouter>((ref) {
               // elemzés"-ként mond ki. A három állapot innentől három
               // különböző felület.
               return recent.when(
-                loading: () => const _RouteLoadingScaffold(
-                  key: Key('analysis-home-route-loading'),
+                loading: () => _RouteLoadingScaffold(
+                  key: const Key('analysis-home-route-loading'),
+                  exitLocation: entryLocation,
                 ),
                 error: (_, _) => _RouteErrorScaffold(
                   key: const Key('analysis-home-route-error'),
+                  exitLocation: entryLocation,
                   onRetry: () =>
                       ref.invalidate(analysisRecentSummariesProvider),
                 ),
                 data: (summaries) => AnalysisHomeScreen(
                   recentAnalyses: summaries,
-                  onStartRecording: () => context.go(AppRoutes.analysisRecord),
+                  // R30 (re-audit #2 B2) — `push`, NEM `go`: minden lépés a
+                  // kezdőlap FÖLÉ kerül, tehát a rendszer-vissza és az
+                  // érkező keret saját vissza-nyila is ide vezet vissza. A
+                  // `go` a stacket eldobta, és az érkező képernyőn
+                  // `canPop == false` maradt — kijárat nélkül.
+                  onStartRecording: () =>
+                      context.push(AppRoutes.analysisRecord),
                   // R26 (audit MI4) — a CTA VALÓDI importot nyit. A
                   // korábbi őszinte hiány-üzenet helyére a folyamat lépett;
                   // a „nem tudom dekódolni" eset megmaradt, de már a
@@ -1142,7 +1200,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   onImportFile: () =>
                       unawaited(_startAnalysisImport(context, ref)),
                   onOpenAnalysis: (summary) =>
-                      context.go(AppRoutes.analysisTimeline, extra: summary),
+                      context.push(AppRoutes.analysisTimeline, extra: summary),
                 ),
               );
             },
@@ -1160,7 +1218,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               final recorder = ref.watch(analysisCaptureRecorderProvider);
               return AnalysisRecordingScreen(
                 recorder: recorder,
-                onCancel: () => context.go(AppRoutes.analysisCapture),
+                onCancel: () =>
+                    _leaveAnalysisStep(context, AppRoutes.analysisCapture),
                 onFinished: (run, samples) {
                   final pcm = PcmAnalysisInput(
                     samples: samples,
@@ -1183,7 +1242,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                           audio: ValidatedPcmAnalysisInput(input: pcm),
                         ),
                   );
-                  context.go(AppRoutes.analysisProcessing);
+                  context.push(AppRoutes.analysisProcessing);
                 },
               );
             },
@@ -1219,13 +1278,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                 // Egy importált futás után a felvevő képernyő HAZUDNA a
                 // bemenetről; a „kezdés elölről" oda visz vissza, ahonnan
                 // ez a futás indult.
-                onRestart: () => context.go(
+                // R30 — a lépés a felvevő (mikrofon) vagy a kezdőlap
+                // (import) FÖLÖTT áll, tehát a „kezdés elölről" ugyanoda
+                // POPPOL vissza, ahonnan ez a futás indult; a `go`-s cím
+                // csak akkor kell, ha nincs mit poppolni (mély link).
+                onRestart: () => _leaveAnalysisStep(
+                  context,
                   imported
                       ? AppRoutes.analysisCapture
                       : AppRoutes.analysisRecord,
                 ),
                 onViewResult: (document) =>
-                    context.go(AppRoutes.analysisOverview, extra: document),
+                    context.push(AppRoutes.analysisOverview, extra: document),
               );
             },
           ),
@@ -1519,11 +1583,46 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// the screens below render as a measured "you have nothing here" state.
 /// A spinner is not a richer contract — it is the ABSENCE of the claim.
 class _RouteLoadingScaffold extends StatelessWidget {
-  const _RouteLoadingScaffold({super.key});
+  const _RouteLoadingScaffold({required this.exitLocation, super.key});
+
+  /// Where the frame's back control goes when there is nothing to pop.
+  final String exitLocation;
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    return Scaffold(
+      appBar: AppBar(leading: _RouteFrameBackButton(exitLocation)),
+      body: const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+/// R30 (re-audit #2 B3/3) — the way out of a router-owned frame.
+///
+/// The two router-owned frames in this file replace a whole screen — while
+/// its data is loading, or after that read failed. Neither carried an
+/// `AppBar`, so a frame reached with `go` (a redirect target, a deep link)
+/// showed a spinner or an error with NO control on it at all: the system
+/// back left the app. This one pops when there is a stack and otherwise
+/// returns to the shell entry point, so it is never a silent no-op.
+class _RouteFrameBackButton extends StatelessWidget {
+  const _RouteFrameBackButton(this.exitLocation);
+
+  final String exitLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    return BackButton(
+      key: const Key('route-frame-back'),
+      onPressed: () {
+        final navigator = Navigator.of(context);
+        if (navigator.canPop()) {
+          navigator.pop();
+          return;
+        }
+        GoRouter.maybeOf(context)?.go(exitLocation);
+      },
+    );
   }
 }
 
@@ -1534,14 +1633,22 @@ class _RouteLoadingScaffold extends StatelessWidget {
 /// is a private widget of a Community screen, and the router must not reach
 /// into a feature's presentation internals.
 class _RouteErrorScaffold extends StatelessWidget {
-  const _RouteErrorScaffold({required this.onRetry, super.key});
+  const _RouteErrorScaffold({
+    required this.onRetry,
+    required this.exitLocation,
+    super.key,
+  });
 
   final VoidCallback onRetry;
+
+  /// Where the frame's back control goes when there is nothing to pop.
+  final String exitLocation;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
+      appBar: AppBar(leading: _RouteFrameBackButton(exitLocation)),
       body: SafeArea(
         child: Center(
           child: Padding(

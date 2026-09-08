@@ -120,13 +120,20 @@ Future<void> advanceSongTrainerSession(
   );
 }
 
-/// Replaces the stack with the song's overview route.
+/// Opens the song's overview route IN PLACE OF the result screen.
+///
+/// R30 (re-audit #2 M7) — this used to `go`, which replaced the whole stack:
+/// the overview screen's own app bar carries no back control, so a learner
+/// who ran out of sections on "next section" reached a screen the system
+/// back button could only leave by leaving the app. `pushReplacement` drops
+/// the finished result (there is nothing to return to there) and keeps
+/// whatever opened the session underneath.
 void returnToSongOverview(BuildContext context, SongId songId) {
   final location = AppRoutes.songTrainerOverview.replaceFirst(
     ':songId',
     Uri.encodeComponent(songId.value),
   );
-  context.go(location);
+  context.pushReplacement(location);
 }
 
 /// The first section that starts at or after [range]'s end, or `null`.

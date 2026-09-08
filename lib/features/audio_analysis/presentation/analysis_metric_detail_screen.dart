@@ -4,10 +4,27 @@ import 'package:go_router/go_router.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../../app/routing/app_route.dart';
 import 'controllers/overview_view_model.dart';
 import 'insight_action_route.dart';
 import 'widgets/insight_card.dart';
 import 'widgets/metric_card.dart';
+
+/// R30 (re-audit #2 B2) — leaves the detail screen.
+///
+/// The empty state's "Close" used to be a bare `maybePop`, and the screen
+/// was reached with a stack-replacing `go`: there was nothing to pop, so the
+/// only control on that state did NOTHING. The overview now pushes this
+/// screen, so the pop is real; the analysis home is the fallback for a
+/// detail page reached with no stack under it.
+void _closeMetricDetail(BuildContext context) {
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.pop();
+    return;
+  }
+  GoRouter.maybeOf(context)?.go(AppRoutes.analysisCapture);
+}
 
 /// Single-metric detail screen — lists every metric card the document
 /// publishes, plus (when reached via the overview's "Részletek" entry
@@ -53,7 +70,7 @@ class AnalysisMetricDetailScreen extends StatelessWidget {
                 title: l10n.analysisOverviewUnavailable,
                 message: l10n.analysisOverviewNotApplicable,
                 actionLabel: l10n.commonClose,
-                onAction: () => Navigator.of(context).maybePop(),
+                onAction: () => _closeMetricDetail(context),
               )
             : ListView(
                 padding: const EdgeInsets.all(SsSpacing.space4),

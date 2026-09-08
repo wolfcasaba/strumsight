@@ -16,8 +16,10 @@ import '../domain/model/practice_generation_request.dart';
 import 'providers/practice_generator_providers.dart';
 
 /// Generates (and, through the orchestrator, activates) the plan for the
-/// finished [request], then lands on Today. A failure is said out loud and
-/// logged; the learner stays on the wizard with the draft intact.
+/// finished [request], then lands on Today IN PLACE OF the wizard, so the
+/// surface the wizard was opened from stays reachable underneath. A failure
+/// is said out loud and logged; the learner stays on the wizard with the
+/// draft intact.
 ///
 /// [startGeneration] is passed in (not read here) because its provider is
 /// `autoDispose`: the caller `ref.watch`es it for as long as the wizard is on
@@ -33,7 +35,12 @@ Future<void> launchPlanGeneration(
   switch (generated) {
     case Success():
       ref.invalidate(activePracticePlanProvider);
-      context.go(AppRoutes.practiceGeneratorToday);
+      // R30 (re-audit #2 B3) — `pushReplacement`, NEM `go`: a mai terv a
+      // VARÁZSLÓ helyére lép (oda visszatérni értelmetlen — a terv már
+      // elkészült), de minden, ami a varázsló ALATT volt, marad. A `go`
+      // az egész stacket eldobta, és a terv-képernyőnek nincs saját
+      // vissza-vezérlője: a varázsló végigvitele az appból vezetett ki.
+      context.pushReplacement(AppRoutes.practiceGeneratorToday);
     case Failure(:final error):
       ref
           .read(appLoggerProvider)

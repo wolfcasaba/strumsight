@@ -109,8 +109,22 @@ class PracticeSetupScreen extends ConsumerWidget {
     return _SetupForm(definition: definition, controller: controller);
   }
 
+  /// R30 (re-audit #2 MI-E) — leaves Setup.
+  ///
+  /// The back control was ALWAYS a stack-replacing `go` to the hub: reached
+  /// from a pushed page it threw that page away, so the learner lost their
+  /// place in whatever list they came from. Popping is what "back" means
+  /// whenever there is a stack. The hub stays the fallback — and today it
+  /// is still the only branch the shipped callers take, because both of
+  /// them navigate here with a `go` (the definition id is read from the
+  /// route information that `go` sets synchronously).
   void _backToHub(BuildContext context) {
-    context.go(AppRoutes.practiceHub);
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    GoRouter.maybeOf(context)?.go(AppRoutes.practiceHub);
   }
 }
 

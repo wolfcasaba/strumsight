@@ -46,6 +46,7 @@ import 'package:strumsight/features/practice_generator/domain/model/adaptive_pra
 import 'package:strumsight/features/practice_generator/presentation/providers/practice_generator_providers.dart';
 import 'package:strumsight/features/practice_generator/presentation/screens/today_plan_screen.dart';
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
+import 'package:strumsight/features/today/screens/today_hub_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
@@ -173,6 +174,13 @@ Future<void> _tapOnHub(WidgetTester tester, Finder target) async {
   await tester.tap(target);
   await tester.pumpAndSettle();
 }
+
+/// The Setup screen's app-bar back control (its error branch's own CTA is a
+/// [FilledButton], so this stays unambiguous in both branches).
+Finder _setupBackControl() => find.descendant(
+  of: find.byType(PracticeSetupScreen),
+  matching: find.byType(BackButton),
+);
 
 Future<_Rig> _openHub(WidgetTester tester) async {
   final rig = await _pumpShell(tester);
@@ -427,6 +435,173 @@ void main() {
       // Riverpod 3 auto-retries a `FutureProvider` that throws; tearing the
       // tree down inside the cell disposes the autoDispose provider (and its
       // pending retry) before the binding checks for leftover timers.
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  });
+
+  // R30 (re-audit #2 §1/B3, §2/M4, §3/MI-E) — R18 opened these doors; the
+  // frames behind them still had no way back. Every cell below drives the
+  // REAL router and leaves the arriving frame the way a user can: by
+  // tapping a control that is actually on the screen.
+  group('R30 — every frame R18 opened has a visible way out', () {
+    testWidgets('M4 — the pushed Analyze page carries a back control, and '
+        'tapping it returns to the hub', (tester) async {
+      await _openHub(tester);
+
+      await _tapOnHub(
+        tester,
+        find.byKey(const ValueKey('practice-hub-analyze')),
+      );
+      expect(find.byType(AnalyzeScreen), findsOneWidget);
+
+      // The screen brings no `Scaffold`/`AppBar` of its own and the adaptive
+      // shell supplies none, so the ROUTE has to: without it the pushed page
+      // had no on-screen exit at all (only the system gesture).
+      final frame = find
+          .ancestor(
+            of: find.byType(AnalyzeScreen),
+            matching: find.byType(Scaffold),
+          )
+          .first;
+      final back = find.descendant(
+        of: frame,
+        matching: find.byType(BackButton),
+      );
+      expect(back, findsOneWidget);
+
+      await tester.tap(back);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AnalyzeScreen), findsNothing);
+      expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
+    });
+
+    testWidgets('B3 — the catalog\'s today-plan card PUSHES, so the catalog '
+        'is still underneath to come back to', (tester) async {
+      final rig = await _pumpShell(tester, practiceGeneratorEnabled: true);
+      rig.router.go(AppRoutes.practiceCatalog);
+      await tester.pumpAndSettle();
+      expect(find.byType(PracticeHubScreen), findsOneWidget);
+
+      final card = find.byKey(const Key('practice-hub-today-plan'));
+      await tester.scrollUntilVisible(
+        card,
+        120,
+        scrollable: _scrollableOf(PracticeHubScreen),
+      );
+      await tester.ensureVisible(card);
+      await tester.pumpAndSettle();
+      await tester.tap(card);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TodayPlanScreen), findsOneWidget);
+      expect(
+        rig.router.canPop(),
+        isTrue,
+        reason:
+            'the plan screen has no back control of its own — a `go` here '
+            'left the system back button as the only way off it, and that '
+            'leaves the app',
+      );
+
+      rig.router.pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(PracticeHubScreen), findsOneWidget);
+    });
+
+    testWidgets('MI-E — the Setup back control POPS when there is a stack, '
+        'and still reaches the hub when there is not', (tester) async {
+      final rig = await _pumpShell(tester);
+      rig.router.go(AppRoutes.practiceCatalog);
+      await tester.pumpAndSettle();
+      expect(find.byType(PracticeHubScreen), findsOneWidget);
+
+      // MÉRT: no shipped caller PUSHES Setup today — both `_openSetup`
+      // sites navigate with a stack-replacing `go`, because the screen
+      // resolves its definition id from the route information a `go` sets
+      // synchronously (a `push` reports it one frame later). That stays as
+      // it is; what MI-E is about is the control itself, which used to eat
+      // whatever page was underneath.
+      rig.router.push(AppRoutes.practiceSetup);
+      await tester.pumpAndSettle();
+      expect(find.byType(PracticeSetupScreen), findsOneWidget);
+
+      await tester.tap(_setupBackControl());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byType(PracticeHubScreen),
+        findsOneWidget,
+        reason:
+            'the back control used to be an unconditional `go` to the hub, '
+            'which threw the catalog page away',
+      );
+      expect(find.byType(PracticeSetupScreen), findsNothing);
+
+      // The shipped path — Setup reached WITH a `go`, nothing under it —
+      // still lands on the hub rather than doing nothing.
+      rig.router.go(AppRoutes.practiceSetup);
+      await tester.pumpAndSettle();
+      expect(find.byType(PracticeSetupScreen), findsOneWidget);
+
+      await tester.tap(_setupBackControl());
+      await tester.pumpAndSettle();
+      expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
+    });
+
+    testWidgets('B3 — the plan route\'s ERROR frame can be left', (
+      tester,
+    ) async {
+      final rig = await _pumpShell(
+        tester,
+        practiceGeneratorEnabled: true,
+        seed: _corruptPlanPointer,
+      );
+      rig.router.go(AppRoutes.practiceGeneratorToday);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('today-plan-route-error')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('route-frame-back')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('today-plan-route-error')), findsNothing);
+      expect(
+        find.byType(TodayHubScreen),
+        findsOneWidget,
+        reason:
+            'reached with a stack-replacing `go` there is nothing to pop, '
+            'so the control falls back to the shell entry point',
+      );
+    });
+
+    testWidgets('B3 — the analysis home\'s ERROR frame can be left', (
+      tester,
+    ) async {
+      final rig = await _pumpShell(
+        tester,
+        audioAnalysisV2Enabled: true,
+        extraOverrides: [
+          analysisRecentSummariesProvider.overrideWith(_failingAnalyses),
+        ],
+      );
+      rig.router.go(AppRoutes.analysisCapture);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        find.byKey(const Key('analysis-home-route-error')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('route-frame-back')));
+      await tester.pump();
+      // Bounded pumps, never `pumpAndSettle`: Riverpod 3 auto-retries a
+      // `FutureProvider` that throws, and a settle would chase that retry.
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(TodayHubScreen), findsOneWidget);
+      // Tearing the tree down inside the cell disposes the autoDispose
+      // provider (and its pending retry) before the binding checks for
+      // leftover timers.
       await tester.pumpWidget(const SizedBox.shrink());
     });
   });
