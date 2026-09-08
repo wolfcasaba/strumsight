@@ -135,10 +135,8 @@ Widget _app({
   );
 }
 
-Finder _appBarTitle(String text) => find.descendant(
-  of: find.byType(AppBar),
-  matching: find.text(text),
-);
+Finder _appBarTitle(String text) =>
+    find.descendant(of: find.byType(AppBar), matching: find.text(text));
 
 void main() {
   final l10n = AppLocalizationsEn();

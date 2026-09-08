@@ -186,10 +186,7 @@ void main() {
         _summary('older', day: 1),
         _summary('newer', day: 2),
       ],
-      documents: <String, AnalysisDocument>{
-        'older': before,
-        'newer': after,
-      },
+      documents: <String, AnalysisDocument>{'older': before, 'newer': after},
     );
 
     await _compare(tester, <String>['older', 'newer']);

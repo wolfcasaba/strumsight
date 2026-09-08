@@ -128,8 +128,7 @@ class CommunityGateScreen extends ConsumerWidget {
     final value = state.value;
     if (value == null) return localizations.communityGateAppBarTitle;
     return switch (value.status) {
-      CommunityGateStatus.disabled ||
-      CommunityGateStatus.unavailable =>
+      CommunityGateStatus.disabled || CommunityGateStatus.unavailable =>
         localizations.communityGateAppBarUnavailableTitle,
       CommunityGateStatus.loggedOut =>
         localizations.communityGateAppBarLoggedOutTitle,
