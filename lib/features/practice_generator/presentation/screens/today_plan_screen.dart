@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,9 +9,15 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/controller/today_plan_controller.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_block.dart';
+import '../widgets/catch_up_sheet.dart';
 
 /// The local, offline Today projection of the learner's active plan.
-class TodayPlanScreen extends StatelessWidget {
+///
+/// Stateful only because of the catch-up offer (ADR 0269, below): the
+/// acknowledgement has to leave the frame on the same gesture that made it,
+/// before the persisted write lands. Every rendered state is still a pure
+/// function of [TodayPlanController.resolve].
+class TodayPlanScreen extends StatefulWidget {
   const TodayPlanScreen({
     required this.controller,
     this.plan,
@@ -41,13 +49,39 @@ class TodayPlanScreen extends StatelessWidget {
   final VoidCallback? onPause;
 
   @override
+  State<TodayPlanScreen> createState() => _TodayPlanScreenState();
+}
+
+class _TodayPlanScreenState extends State<TodayPlanScreen> {
+  /// Flipped by the gesture that takes up or dismisses the catch-up offer,
+  /// so the notice leaves this frame immediately. The DURABLE record is
+  /// `TodayPlanController.markCatchUpOffered`; this flag only covers the
+  /// gap until the next mount reads that log back.
+  bool _catchUpAcknowledged = false;
+
+  Future<void> _openCatchUp(AdaptivePracticePlan plan) async {
+    await CatchUpSheet.show(context);
+    await _acknowledgeCatchUp(plan);
+  }
+
+  Future<void> _acknowledgeCatchUp(AdaptivePracticePlan plan) async {
+    if (mounted) {
+      setState(() => _catchUpAcknowledged = true);
+    }
+    await widget.controller.markCatchUpOffered(plan);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDeepLinkContext = isDeepLinkLaunch || launchRequest != null;
+    final controller = widget.controller;
+    final plan = widget.plan;
+    final launchRequest = widget.launchRequest;
+    final isDeepLinkContext = widget.isDeepLinkLaunch || launchRequest != null;
     final planForState = isDeepLinkContext
         ? launchRequest?.permits(
                     activePlan: plan,
-                    isFeatureEnabled: isTodayRouteEnabled,
+                    isFeatureEnabled: widget.isTodayRouteEnabled,
                   ) ==
                   true
               ? plan
@@ -84,46 +118,79 @@ class TodayPlanScreen extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(SsSpacing.space5),
-          child: _ScrollableIfShort(
-            child: switch (state.mode) {
-              TodayPlanMode.noActivePlan => _EmptyState(l10n: l10n),
-              TodayPlanMode.restDay => _MessageState(
-                stateKey: const Key('today-plan-rest-day'),
-                title: l10n.todayPlanRestTitle,
-                body: l10n.todayPlanRestBody,
-                statusLabel: l10n.practicePlanStatusRestLabel,
-              ),
-              TodayPlanMode.unavailableDay => _MessageState(
-                stateKey: const Key('today-plan-unavailable-day'),
-                title: l10n.todayPlanUnavailableTitle,
-                body: l10n.todayPlanUnavailableBody,
-                statusLabel: l10n.practicePlanStatusUnavailableLabel,
-              ),
-              TodayPlanMode.completedDay => _MessageState(
-                stateKey: const Key('today-plan-completed-day'),
-                title: l10n.todayPlanCompletedTitle,
-                body: l10n.todayPlanCompletedBody,
-                statusLabel: l10n.practicePlanStatusCompletedLabel,
-              ),
-              TodayPlanMode.notScheduled => _MessageState(
-                stateKey: const Key('today-plan-not-scheduled'),
-                title: l10n.todayPlanNotScheduledTitle,
-                body: l10n.todayPlanNotScheduledBody,
-                statusLabel: l10n.practicePlanStatusNotScheduledLabel,
-              ),
-              TodayPlanMode.plannedDay => _PlannedDay(
-                state: state,
-                onStart: onStart,
-                onSwap: onSwap,
-                onSkip: onSkip,
-                onShorten: onShorten,
-                onPause: onPause,
-              ),
-            },
-          ),
+          child: _ScrollableIfShort(child: _body(l10n, state)),
         ),
       ),
     );
+  }
+
+  /// The day's own state, with the catch-up offer above it when — and ONLY
+  /// when — the real `MissedDayPolicy` counted a missed day for this plan
+  /// and this revision's offer has not been acknowledged yet.
+  ///
+  /// The wrapping `Column` exists solely for that case: without an offer
+  /// the day state is handed to [_ScrollableIfShort] exactly as before, so
+  /// its vertical centring (and every pinned render of it) is untouched.
+  Widget _body(AppLocalizations l10n, TodayPlanState state) {
+    final dayState = _dayState(l10n, state);
+    final plan = state.plan;
+    // Four gates, all honest: an active plan, the POLICY's own missed-day
+    // count, this frame's acknowledgement, and the persisted one.
+    if (plan == null ||
+        !state.hasMissedDays ||
+        _catchUpAcknowledged ||
+        widget.controller.hasOfferedCatchUp(plan)) {
+      return dayState;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _CatchUpNotice(
+          onOpen: () => unawaited(_openCatchUp(plan)),
+          onDismiss: () => unawaited(_acknowledgeCatchUp(plan)),
+        ),
+        const SizedBox(height: SsSpacing.space5),
+        dayState,
+      ],
+    );
+  }
+
+  Widget _dayState(AppLocalizations l10n, TodayPlanState state) {
+    return switch (state.mode) {
+      TodayPlanMode.noActivePlan => _EmptyState(l10n: l10n),
+      TodayPlanMode.restDay => _MessageState(
+        stateKey: const Key('today-plan-rest-day'),
+        title: l10n.todayPlanRestTitle,
+        body: l10n.todayPlanRestBody,
+        statusLabel: l10n.practicePlanStatusRestLabel,
+      ),
+      TodayPlanMode.unavailableDay => _MessageState(
+        stateKey: const Key('today-plan-unavailable-day'),
+        title: l10n.todayPlanUnavailableTitle,
+        body: l10n.todayPlanUnavailableBody,
+        statusLabel: l10n.practicePlanStatusUnavailableLabel,
+      ),
+      TodayPlanMode.completedDay => _MessageState(
+        stateKey: const Key('today-plan-completed-day'),
+        title: l10n.todayPlanCompletedTitle,
+        body: l10n.todayPlanCompletedBody,
+        statusLabel: l10n.practicePlanStatusCompletedLabel,
+      ),
+      TodayPlanMode.notScheduled => _MessageState(
+        stateKey: const Key('today-plan-not-scheduled'),
+        title: l10n.todayPlanNotScheduledTitle,
+        body: l10n.todayPlanNotScheduledBody,
+        statusLabel: l10n.practicePlanStatusNotScheduledLabel,
+      ),
+      TodayPlanMode.plannedDay => _PlannedDay(
+        state: state,
+        onStart: widget.onStart,
+        onSwap: widget.onSwap,
+        onSkip: widget.onSkip,
+        onShorten: widget.onShorten,
+        onPause: widget.onPause,
+      ),
+    };
   }
 }
 
@@ -366,6 +433,87 @@ class _PlannedDay extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// ADR 0269's non-shaming catch-up explainer, offered from the ONE surface
+/// that knows a day was missed.
+///
+/// Three rules the ADR makes acceptance criteria, all visible here:
+///
+///   * It never states a number. No missed count, no streak, no "you are N
+///     days behind" — the gate reads `missedDayCount`, the copy does not
+///     (§5, A8).
+///   * It never asks for more work. There is no "do extra today" CTA; the
+///     only two controls are "read the explanation" and "Got it".
+///   * It is offered once per plan revision, not on every visit — the
+///     dismiss action is a real, persisted acknowledgement
+///     (`TodayPlanController.markCatchUpOffered`), not a per-frame hide.
+///
+/// Every string is an EXISTING `practicePlanCatchUpSheet*` key: this notice
+/// is the explainer's own headline, so inventing a second wording for it
+/// would be a second tone to review and keep non-shaming.
+class _CatchUpNotice extends StatelessWidget {
+  const _CatchUpNotice({required this.onOpen, required this.onDismiss});
+
+  final VoidCallback onOpen;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return SsCard(
+      child: Column(
+        key: const Key('today-plan-catch-up'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          InkWell(
+            key: const Key('today-plan-catch-up-open'),
+            onTap: onOpen,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(Icons.info_outline, size: 20, color: colors.textPrimary),
+                const SizedBox(width: SsSpacing.space2),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        l10n.practicePlanCatchUpSheetTitle,
+                        style: typography.titleMedium.copyWith(
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: SsSpacing.space1),
+                      Text(
+                        l10n.practicePlanCatchUpSheetBody,
+                        style: typography.bodyMedium.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: colors.textSecondary),
+              ],
+            ),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: SsButton(
+              key: const Key('today-plan-catch-up-dismiss'),
+              variant: SsButtonVariant.tertiary,
+              onPressed: onDismiss,
+              label: l10n.practicePlanCatchUpSheetDismiss,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

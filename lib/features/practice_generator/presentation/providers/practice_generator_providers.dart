@@ -29,6 +29,8 @@ import '../../application/usecase/delete_practice_planning_data.dart';
 import '../../application/usecase/export_practice_planning_data.dart';
 import '../../application/usecase/revise_practice_plan.dart';
 import '../../application/usecase/start_plan_generation.dart';
+import '../../application/port/catch_up_notice_log.dart';
+import '../../data/local/catch_up_notice_store.dart';
 import '../../data/local/generation_draft_repository.dart';
 import '../../data/local/local_practice_evidence_repository.dart';
 import '../../data/local/local_practice_plan_repository.dart';
@@ -290,9 +292,23 @@ final revisePracticePlanProvider = Provider<RevisePracticePlan>(
 // Screen 5/6 — TodayPlanScreen
 // ---------------------------------------------------------------------------
 
-final todayPlanControllerProvider = Provider<TodayPlanController>(
+/// Where "this plan revision's catch-up explainer was already offered"
+/// lives (ADR 0269 §5 — offered once, never nagged).
+///
+/// The PERSISTENT binding, never the in-memory default that ships with
+/// `TodayPlanController`: an offer that is forgotten on every app start
+/// would put the notice back on the Today screen every single launch,
+/// which is the pressure the ADR's tone rule exists to prevent.
+final catchUpNoticeLogProvider = Provider<CatchUpNoticeLog>(
   (ref) =>
-      TodayPlanController(clock: ref.watch(practiceGeneratorClockProvider)),
+      StoredCatchUpNoticeLog(keyValueStore: ref.watch(keyValueStoreProvider)),
+);
+
+final todayPlanControllerProvider = Provider<TodayPlanController>(
+  (ref) => TodayPlanController(
+    clock: ref.watch(practiceGeneratorClockProvider),
+    catchUpNoticeLog: ref.watch(catchUpNoticeLogProvider),
+  ),
 );
 
 /// The learner-side reschedules (skip / shorten / pause) over the ACTIVE

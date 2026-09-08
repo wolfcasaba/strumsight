@@ -17,13 +17,31 @@ import 'widgets/metric_card.dart';
 /// only control on that state did NOTHING. The overview now pushes this
 /// screen, so the pop is real; the analysis home is the fallback for a
 /// detail page reached with no stack under it.
+///
+/// R35 (run 562 lelet): the `canPop`/`pop` pair is the ROUTER's, not the
+/// nearest `Navigator`'s. This route is registered ABOVE the
+/// `StatefulShellRoute`, so the `go` fallback below rebuilds the shell
+/// while this page is still animating out — the one production path left
+/// that can reparent a live `StatefulNavigationShell` (two shells in the
+/// tree at once means a duplicated `GlobalKey`). `GoRouter.canPop()` reads
+/// go_router's OWN match list, shell-branch stacks included, so the
+/// fallback is taken only when go_router itself agrees nothing sits under
+/// this page; and `GoRouter.pop()` keeps that match list in step, which a
+/// raw `Navigator.pop()` on a go_router page does not.
 void _closeMetricDetail(BuildContext context) {
-  final navigator = Navigator.of(context);
-  if (navigator.canPop()) {
-    navigator.pop();
+  final router = GoRouter.maybeOf(context);
+  if (router == null) {
+    // Pumped as a bare `home:` (widget tests, golden fixtures): there is
+    // no shell to reparent and no router stack to keep in step, so the
+    // local navigator is the only exit that exists.
+    Navigator.of(context).maybePop();
     return;
   }
-  GoRouter.maybeOf(context)?.go(AppRoutes.analysisCapture);
+  if (router.canPop()) {
+    router.pop();
+    return;
+  }
+  router.go(AppRoutes.analysisCapture);
 }
 
 /// Single-metric detail screen — lists every metric card the document

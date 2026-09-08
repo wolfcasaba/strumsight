@@ -307,6 +307,19 @@ final analysisCaptureRecorderProvider = Provider.autoDispose<AnalysisRecorder>((
 /// A képernyő SZÁNDÉKOSAN nem olvas repository-t („This screen never reads
 /// the analysis repository itself" — a saját docstringje), ezért a lista
 /// betöltése a kompozíciós gyökér dolga.
+///
+/// `retry: (retryCount, error) => null` (R35) — a Riverpod 3 alapból
+/// ÚJRAPRÓBÁLJA a dobó `FutureProvider`-t, növekvő várakozással. Emiatt ez a
+/// provider hiba után soha nem áll le: kb. 200 ms-onként újraolvas, a
+/// hibakeret alatt végtelen időzítő fut, és egy widget-teszt sem tud rajta
+/// `pumpAndSettle`-t hívni. Egy olvasási hiba itt nem is retryable
+/// önmagától (a tár nem lesz olvashatóvá attól, hogy megint megnézzük), és
+/// a felhasználónak VAN saját újrapróbálás-vezérlője: a `/analysis/capture`
+/// hibakerete (`app_router.dart`, `analysis-home-route-error`) egy
+/// `_RouteErrorScaffold`-ot rajzol, aminek a látható „Újra" gombja
+/// `ref.invalidate(analysisRecentSummariesProvider)`-t hív — MÉRT, nem
+/// feltételezett. Ugyanaz a precedens, mint az `activePracticePlanProvider`
+/// és a `practiceHistoryV2ListProvider`.
 final analysisRecentSummariesProvider =
     FutureProvider.autoDispose<List<AnalysisSummary>>((ref) async {
       final result = await ref.watch(analysisRepositoryProvider).list();
@@ -317,7 +330,7 @@ final analysisRecentSummariesProvider =
         // böztethető állapot.
         Failure<List<AnalysisSummary>>(:final error) => throw error,
       };
-    });
+    }, retry: (retryCount, error) => null);
 
 // ---------------------------------------------------------------------------
 // Hang-import (R26, audit MI4) — a „Fájl importálása" belépő.
