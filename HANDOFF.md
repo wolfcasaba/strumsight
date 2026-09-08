@@ -202,8 +202,8 @@ Flutter/Dart SDK, és a proxy a pub.dev-et + minden modell-CDN-t 403-mal tilt):*
   nevesített tartalék, saját körrel;
 - **a valós-gitár APK-teszt** — a végső mérce változatlanul ez.
 
-**A sávra ZÖLD `build-apk` bizonyíték MÉG NINCS — de a run 561 → 567 út mérhető:**
-a `d721003` fejen indított **run 561**
+**A sávra ZÖLD `build-apk` bizonyíték MEGVAN (run 568) — az odáig vezető
+561 → 568 út mérve:** a `d721003` fejen indított **run 561**
 ([34207809354](https://github.com/wolfcasaba/strumsight/actions/runs/34207809354))
 PIROS volt (format 10 fájlon, Coverage **5639 passed / 460 failed** az R28a
 fordítási hibája miatt, plusz az A6 composer 10 perces időtúllépése); onnan hat
@@ -213,25 +213,48 @@ Coverage **11 260 / 10 failed** (a naplóban 4 látszott), **run 563** (34232252
 format 3 + a suite KÖZEPÉN álló 4 bukás, **run 565** (34238812821, `efa36ec`) a
 suite ELEJÉN álló 3 bukás, **run 567** (34241803142, `0f05221`) **format ZÖLD**,
 Analyze-kapu 17 lelet és Coverage **11 335 passed / 1 failed** (az az egy az
-`<Override>` típus-import). Az utolsó Analyze-kört a `3102673` zárja, és ezen a
-fejen 2026-09-08 ~15:30 UTC-kor indult a **run 568** — az eredményét az audit
-§5.3-ba a koordinátor tölti ki. A backend-oldali kapu ZÖLD három fejen:
+`<Override>` típus-import). Az utolsó Analyze-kört a `3102673` zárta, és ezen a
+fejen 2026-09-08 15:27 UTC-kor indult a **run 568**
+([34244853752](https://github.com/wolfcasaba/strumsight/actions/runs/34244853752)),
+ami **TELJESEN ZÖLD**: a `quality-gates` job **15:27:47 → 15:44:12** között
+sikeres (format, analyze, architecture, titok-pásztázás, l10n-paritás,
+asset-kapu, Test gate, véletlen-magos Property gate, valamint a dal-séma és a
+fixture-provenancia kapuja), a **development APK 15:44 → 15:51 között épült és
+feltöltve**, a **Coverage job pedig szintén sikeres** (teszt-lefedettségi kapu
+**15:28:08 → 15:49:41**, a jelentés feltöltve; 11 336 teszt — a run 567 egyetlen
+bukása ezzel zárva). **Ez az R26–R36 sáv ELSŐ teljesen zöld futása.** A
+backend-oldali kapu ZÖLD három fejen:
 `backend-ci` run
 [34207284271](https://github.com/wolfcasaba/strumsight/actions/runs/34207284271)
 a `2690aa7` (R27), run
 [34210063591](https://github.com/wolfcasaba/strumsight/actions/runs/34210063591)
 az `ad9e81a` (R29b) és run
 [34242533176](https://github.com/wolfcasaba/strumsight/actions/runs/34242533176)
-a `817bded` (R36) fejen. Az utolsó teljesen zöld és KIADOTT fej változatlanul az
-`f59f9ef` (R17–R24). Az alábbi CI-bizonyíték a sáv KORÁBBI, lezárt szakaszára
-vonatkozik.
+a `817bded` (R36) fejen. Az addig utolsó teljesen zöld és KIADOTT fej az
+`f59f9ef` volt (run 559, R17–R24); a `3102673` kiadása a commitolt
+`.github/release-requests/34244853752.txt` kérésfájllal megtörtént, a címke a
+repó konvenciója szerint **`test-2026-09-08-3102673`** (mérve:
+`git ls-remote --tags origin` — a címke a `3102673`-ra mutat). Az alábbi
+CI-bizonyíték a sáv KORÁBBI, lezárt szakaszára vonatkozik.
 
-**Mi jön:** **a run 568 eredménye.** Ha zöld — format, analyze, architecture,
-secrets, l10n, asset, teljes suite, véletlen-magos property-kapu, Coverage és
-APK —, akkor a sáv kiadható: **release-tag + teszt-APK**, majd a **valódi
-gitáros teszt** a `development` APK-n, ami a végső mérce. Ha piros, a lelet a
-`3102673` fejen mért ÚJ lelet (a run 567 egyetlen bukását ez a commit zárja), és
-a fenti log-ablak módszerrel kell kimérni. Futó fejlesztői kör NINCS.
+**Mi jön:** a run 568 zöld, tehát a sáv KIADHATÓ és ki is van adva —
+**release-tag + teszt-APK:** a commitolt
+`.github/release-requests/34244853752.txt` kérésre a `publish-test-release` a
+`3102673` fejen a **`test-2026-09-08-3102673`** címkét hozta létre (mérve:
+`git ls-remote --tags origin`), a teszt-APK ennek a release-nek az artefaktuma:
+<https://github.com/wolfcasaba/strumsight/releases/tag/test-2026-09-08-3102673>.
+**A soron következő és VÉGSŐ elfogadási mérce a felhasználó valós-gitár tesztje
+ezen a `development` APK-n — a szintetikus zöld nem „kész".** Utána (illetve azzal párhuzamosan) a §5.2 máig
+nyitott tételei maradnak, mind KÍVÜL azon, amit ebből a konténerből be lehet
+zárni: **(A)** a golden-újrarögzítő kör az x86 boxon (`e13_r29`, `e15_r13`,
+`e13_r33`, a Setlist V2 cellák és az R30 mozdította `_analyzeScreen()`
+fixture); **(B)** az üzemeltetői flipek a runbook **§7.1 / §7.2 / §7.3** szerint
+(élő backend-URL, MiniMax-tutor, community média-feltöltés); **(C)** az R28b
+modell-commitja (`hand_landmarker.tflite` + LICENSE, manifest `active`,
+`tflite_flutter`, aktivációs ADR + modellkártya); továbbá az **M12 tulajdonosi
+döntése**, a **`musicalPosition`** tervezési kérdése, valamint az **MI-G**
+(lokalizálatlan `semanticLabel`-ek) és **MI-H** (angol megosztó-kártyák).
+Futó fejlesztői kör NINCS.
 
 **CI-bizonyíték:** a sáv záró, teljesen zöld futása a `build-apk.yml`
 run [34057751434](https://github.com/wolfcasaba/strumsight/actions/runs/34057751434)

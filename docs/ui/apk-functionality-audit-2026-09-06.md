@@ -154,15 +154,19 @@ kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
 **Az R33–R36 LANDOLT** (`50944a3`, `daae77f`, `78db123`, `817bded`): a §5.2 (D)
 csoport négy halott felületéből három bekötve (M10, M11, M13), az M12 mért
 tervezői döntésre vár, az MI-K az R35-tel zárva, a `recoveryEligible` az
-R34-gyel. **Dart-oldali ZÖLD `build-apk` futás a sávra MÉG NINCS:** a run 561
-(`d721003`) óta hat futás mérte ki a sávot (561 → 567), a leletek osztályai és a
+R34-gyel. **Dart-oldali ZÖLD `build-apk` futás a sávra MOST VAN:** a run 561
+(`d721003`) óta hét futás mérte ki a sávot (561 → 568), a leletek osztályai és a
 számai a §5.3-ban állnak; a **run 567** (`0f05221`) fejen a format-kapu már ZÖLD
-és a Coverage **11 335 passed / 1 failed**, azt az egyet a `3102673`
-Analyze-kapu-köre zárja. A `3102673` fejen 2026-09-08 ~15:30 UTC-kor indult a
-**run 568** — az eredménye a §5.3-ban vár kitöltésre. Az utolsó teljesen zöld és
-kiadott fej változatlanul az `f59f9ef` (R17–R24, §5.3). A backend-oldali kapu
-viszont ZÖLD: `backend-ci` run 34207284271 a `2690aa7` (R27), run 34210063591 az
-`ad9e81a` (R29b) és run 34242533176 a `817bded` (R36) fejen.
+volt és a Coverage **11 335 passed / 1 failed**, azt az egyet a `3102673`
+Analyze-kapu-köre zárta. A `3102673` fejen 2026-09-08 15:27 UTC-kor indított
+**run 568** ([34244853752](https://github.com/wolfcasaba/strumsight/actions/runs/34244853752))
+**TELJESEN ZÖLD** — minden kapu, a teljes suite, a véletlen-magos property-kapu,
+a Coverage és a development APK (job-időzítések: §5.3). Ez a **sáv első teljesen
+zöld futása**; az addig utolsó zöld és kiadott fej az `f59f9ef` volt (run 559,
+R17–R24, §5.3), a `3102673`-at a `test-2026-09-08-3102673` címke adja ki. A
+backend-oldali kapu szintén ZÖLD: `backend-ci` run 34207284271 a `2690aa7`
+(R27), run 34210063591 az `ad9e81a` (R29b) és run 34242533176 a `817bded` (R36)
+fejen.
 
 | Kör | Commit | Mit zárt | Teszt |
 |---|---|---|---|
@@ -458,10 +462,15 @@ döntés nincs meg, belépőt írni HAZUG felületet szülne.
 Ma egyetlen kör sem fut: az R33–R36 landolt, a §5.2 nyitott tételei (az (A)
 golden-kör, a (B) üzemeltetői flipek, a (C) R28b-előfeltételek, az M12 tulajdonosi
 döntése, MI-G, MI-H és a `musicalPosition` tervezési kérdése) mind KÍVÜL esnek
-azon, amit ebből a konténerből be lehet zárni. **A következő lépés: a teljes
-`build-apk` ZÖLD → release → valódi gitáros teszt** — a run 568 eredménye (§5.3)
-dönti el, hogy a sáv kiadható-e; utána release-tag + teszt-APK, és a végső mérce
-változatlanul a felhasználó valós-gitár tesztje a `development` APK-n.
+azon, amit ebből a konténerből be lehet zárni. **A `build-apk` ZÖLD → release →
+valódi gitáros teszt** lánc első két szeme MEGVAN: a **run 568**
+([34244853752](https://github.com/wolfcasaba/strumsight/actions/runs/34244853752))
+a `3102673` fejen teljesen zöld (§5.3), a kiadás pedig kérve — a commitolt
+`.github/release-requests/34244853752.txt` kérésfájlra a `publish-test-release`
+a repó konvenciója szerint a **`test-2026-09-08-3102673`** címkét hozta létre
+(mérve: `git ls-remote --tags origin`, a címke a `3102673`-ra mutat), a teszt-APK
+ennek a release-nek az artefaktuma. **A soron következő lépés a felhasználó
+valós-gitár tesztje a `development` APK-n — a végső mérce változatlanul ez.**
 
 **A backend-tesztsor futásideje** a `backend-ci` időkorlátjához képest **ZÁRVA
 (R25)**: 928,21 s → 126,25 s (−86 %, 1052 passed + 1 xfailed), állítás- és
@@ -566,7 +575,7 @@ leletei az R17–R20 fejen (a javításuk az R21 commitjában van):**
    await-tel), a `921b694` pedig visszavonja a `feature_flags_test` egyik
    formázó-mérését (a `forShippedBuild(production)` lánc 84 oszlop → marad
    szétválasztva).
-3. **A run 562–567 sáv — hat futás, a Coverage 5639/460-ról 11 335/1-re.**
+3. **A run 562–568 sáv — hét futás, a Coverage 5639/460-ról a teljes zöldig.**
    Sorrendben, mind mért:
    - **run 562** ([34229393151](https://github.com/wolfcasaba/strumsight/actions/runs/34229393151)),
      `921b694` fej, dispatch 2026-09-08 13:00 UTC — **format 4 lelet**
@@ -603,10 +612,24 @@ leletei az R17–R20 fejen (a javításuk az R21 commitjában van):**
      típus-import a `report_entry_points` tesztben — javítás: `3102673`), a
      **Coverage 11 335 passed / 1 failed**, és az az EGY a fenti `<Override>`
      típus-lelet.
-   - **run 568**, a `3102673` fejen, dispatch 2026-09-08 ~15:30 UTC —
-     *eredmény: FUT, a koordinátor tölti ki*. Amíg ez nincs zölden, a sávra
-     Dart-oldali CI-bizonyíték NINCS, és az utolsó teljesen zöld, KIADOTT fej
-     változatlanul az `f59f9ef` (R17–R24).
+   - **run 568** ([34244853752](https://github.com/wolfcasaba/strumsight/actions/runs/34244853752)),
+     `3102673` fej, dispatch 2026-09-08 15:27 UTC — **TELJESEN ZÖLD: ez a sáv
+     UTOLSÓ és egyben ELSŐ teljesen zöld futása.** A `quality-gates` job
+     **15:27:47 → 15:44:12** között sikeres — format, analyze, architecture,
+     titok-pásztázás, l10n-paritás, asset-kapu, **Test gate** és a
+     véletlen-magos **Property gate** —, mellette a dal-séma és a
+     fixture-provenancia kapuja is sikeres; a **development APK 15:44 → 15:51
+     között épült és feltöltve**. A **Coverage job szintén sikeres** (a
+     teszt-lefedettségi kapu **15:28:08 → 15:49:41**, a coverage-jelentés
+     feltöltve): a run 567 EGYETLEN bukása (`<Override>` típus-import) ezzel
+     zárva, 11 336 teszt. Az addig utolsó teljesen zöld, KIADOTT fej az
+     `f59f9ef` volt (run 559 —
+     [34190326707](https://github.com/wolfcasaba/strumsight/actions/runs/34190326707),
+     R17–R24); a `3102673` kiadása a commitolt
+     `.github/release-requests/34244853752.txt` kérésfájllal megtörtént, a
+     címke a repó konvenciója szerint **`test-2026-09-08-3102673`** (mérve:
+     `git ls-remote --tags origin` — a címke a `3102673`-ra mutat), a teszt-APK
+     ennek a release-nek az artefaktuma.
 
 **A „log-ablak" módszer (mérve, run 564–565).** A job-napló API CSAK az utolsó
 **5000 sort** adja vissza, ezért egy VÉGIGFUTÓ piros futásban a suite elején és
