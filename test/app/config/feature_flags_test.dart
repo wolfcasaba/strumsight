@@ -458,7 +458,9 @@ void main() {
         reason: 'and an explicit define opens it there',
       );
       expect(
-        FeatureFlags.forShippedBuild(AppEnvironment.production).aiTutorCloudEnabled,
+        FeatureFlags.forShippedBuild(
+          AppEnvironment.production,
+        ).aiTutorCloudEnabled,
         isFalse,
       );
       expect(
