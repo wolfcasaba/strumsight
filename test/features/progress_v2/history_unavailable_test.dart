@@ -86,7 +86,7 @@ ProviderContainer _containerWith(PracticeHistoryRepository repository) {
 /// The router's own composition, verbatim (`app_router.dart`'s
 /// `profileProgress` builder) — the failure has to travel this exact path.
 class _DashboardHost extends ConsumerWidget {
-  const _DashboardHost({super.key});
+  const _DashboardHost();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

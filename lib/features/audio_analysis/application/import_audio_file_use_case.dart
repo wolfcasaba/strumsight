@@ -55,10 +55,9 @@ final class AudioFileImportReady extends AudioFileImportOutcome {
 /// came from beyond the `AnalysisInputSource` enum on the input itself.
 final class ImportAudioFileUseCase {
   const ImportAudioFileUseCase({
-    required AnalysisAudioFilePicker picker,
-    WavDecoderAdapter decoder = const WavDecoderAdapter(),
-  }) : _picker = picker,
-       _decoder = decoder;
+    required this._picker,
+    this._decoder = const WavDecoderAdapter(),
+  });
 
   final AnalysisAudioFilePicker _picker;
   final WavDecoderAdapter _decoder;

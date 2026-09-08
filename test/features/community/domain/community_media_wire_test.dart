@@ -51,7 +51,7 @@ Map<String, Object?> _postJson({Object? media}) {
     'moderation_state': 'visible',
     'created_at': '2026-09-08T10:00:00Z',
     'resource_version': '2026-09-08T10:00:00Z',
-    if (media != null) 'media': media,
+    'media': ?media,
   };
 }
 

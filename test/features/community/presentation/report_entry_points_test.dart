@@ -23,13 +23,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/features/community/application/controllers/feed_controller.dart';
 import 'package:strumsight/features/community/data/local/feed_cache.dart';
-import 'package:strumsight/features/community/data/repositories/feed_repository_impl.dart';
 import 'package:strumsight/features/community/data/repositories/post_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_post.dart';
 import 'package:strumsight/features/community/domain/entities/moderation_state.dart';
@@ -163,7 +163,7 @@ Widget _app({
   final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
     ..httpClientAdapter = adapter;
   return ProviderScope(
-    overrides: <Override>[
+    overrides: [
       communityPostRepositoryProvider.overrideWithValue(
         HttpCommunityPostRepository(ApiClient(dio)),
       ),
@@ -183,7 +183,7 @@ Widget _app({
   );
 }
 
-List<Override> _feedOverrides() => <Override>[
+List<Override> _feedOverrides() => [
   communityFeedRepositoryProvider.overrideWithValue(_OnePageFeedRepository()),
   feedCacheProvider.overrideWithValue(
     FeedCache.open(
@@ -255,7 +255,7 @@ void main() {
     await tester.pumpWidget(
       _app(
         home: CommentsScreen(postId: ContentId(_postId)),
-        extraOverrides: const <Override>[],
+        extraOverrides: const [],
         adapter: adapter,
       ),
     );

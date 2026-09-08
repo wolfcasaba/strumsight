@@ -39,8 +39,7 @@ import '../domain/streak/streak_state.dart';
 
 /// Reads, grants and consumes the single-use recovery credit.
 final class StreakRecoveryGrantStore {
-  const StreakRecoveryGrantStore({required KeyValueStore store})
-    : _store = store;
+  const StreakRecoveryGrantStore({required this._store});
 
   /// This feature's own key. Deliberately NOT part of
   /// `GamificationStorageKeys`: that list is the enumeration of the four

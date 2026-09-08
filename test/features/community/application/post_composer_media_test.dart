@@ -86,7 +86,7 @@ class _RecordingAdapter implements HttpClientAdapter {
   /// ugyanazt kapja; több elem esetén sorban fogynak (a négyes korlát
   /// cellája így kap négy KÜLÖNBÖZŐ azonosítót egyetlen harness-en
   /// belül, harness-újraépítés nélkül).
-  _RecordingAdapter.sequence(this.mediaBodies, {this.mediaStatus = 201});
+  _RecordingAdapter.sequence(this.mediaBodies) : mediaStatus = 201;
 
   final List<Map<String, Object?>> mediaBodies;
   final int mediaStatus;

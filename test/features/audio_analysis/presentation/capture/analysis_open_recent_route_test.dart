@@ -94,9 +94,7 @@ Future<_Rig> _openAnalysisHome(
   final tunerEngine = FakeTunerEngine();
   final repository = _FakeAnalysisRepository(
     summaries: summaries,
-    documents: <String, AnalysisDocument>{
-      if (document != null) document.id: document,
-    },
+    documents: <String, AnalysisDocument>{?document?.id: ?document},
   );
   final container = ProviderContainer(
     overrides: [

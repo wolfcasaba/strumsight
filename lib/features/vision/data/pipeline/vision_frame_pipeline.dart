@@ -85,13 +85,12 @@ final class FrameQualityPipeline implements VisionFrameProcessor {
     required this.profile,
     required DateTime Function() now,
     FrameQualityAssessor? assessor,
-    VisionInsightClassifier classifier = const SetupOnlyInsightClassifier(),
+    this._classifier = const SetupOnlyInsightClassifier(),
     this.publishInterval = defaultPublishInterval,
     this.windowFrameLimit = defaultWindowFrameLimit,
   }) : assert(windowFrameLimit > 0, 'The window must hold at least one frame'),
        assert(publishInterval > Duration.zero, 'Publishing needs a cadence'),
        _assessor = assessor ?? FrameQualityAssessor(),
-       _classifier = classifier,
        _engine = FeedbackPolicyEngine(cueBudget: CueBudget(now: now)),
        _updates = StreamController<VisionPipelineUpdate>.broadcast();
 

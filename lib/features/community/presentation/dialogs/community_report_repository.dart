@@ -43,12 +43,10 @@ typedef CommunityHideTarget = Future<void> Function(String targetId);
 /// The wired [ReportRepository].
 final class CommunityReportRepository implements ReportRepository {
   const CommunityReportRepository({
-    required CommunityPostRepository postRepository,
-    required SocialGraphRepository socialGraph,
-    required CommunityHideTarget onHide,
-  }) : _postRepository = postRepository,
-       _socialGraph = socialGraph,
-       _onHide = onHide;
+    required this._postRepository,
+    required this._socialGraph,
+    required this._onHide,
+  });
 
   /// Build one from a widget's `ref`. The two repository providers are
   /// the same ones every other community surface reads, so a test
