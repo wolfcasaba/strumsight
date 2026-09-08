@@ -331,7 +331,8 @@ void main() {
     expect(
       third.value,
       isFalse,
-      reason: 'the third tap is refused, so the confirmed pair is the '
+      reason:
+          'the third tap is refused, so the confirmed pair is the '
           'one the user actually picked',
     );
     expect(find.byType(AnalysisComparePicker), findsOneWidget);

@@ -380,10 +380,7 @@ Future<void> _openAnalysisCompare(
   List<AnalysisSummary> summaries,
 ) async {
   final l10n = AppLocalizations.of(context);
-  final pair = await showAnalysisComparePicker(
-    context,
-    summaries: summaries,
-  );
+  final pair = await showAnalysisComparePicker(context, summaries: summaries);
   // The sheet is a route: the user can leave the Analyze home while it is
   // open, and everything below touches `context`.
   if (pair == null || !context.mounted) return;
