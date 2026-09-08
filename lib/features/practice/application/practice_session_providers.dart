@@ -41,7 +41,6 @@ import '../data/practice_session_result_history_mapper.dart';
 import '../domain/model/compiled_practice_target.dart';
 import '../domain/model/practice_definition.dart';
 import '../domain/model/practice_session_config.dart';
-import '../domain/repository/practice_history_repository.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_target_compiler.dart';
 import 'practice_observation_gateway.dart';

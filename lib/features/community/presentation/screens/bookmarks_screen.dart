@@ -34,8 +34,8 @@
 /// ``_l10n*`` constants that stood in for the catalogue are gone.
 ///
 /// **Rows say something a human can read (R20, audit M9).** The
-/// row used to render ``Post <uuid>`` over ``Saved at
-/// <ISO-8601>`` — the server's identifiers, verbatim. The bookmark
+/// row used to render `Post <uuid>` over `Saved at <ISO-8601>` —
+/// the server's identifiers, verbatim. The bookmark
 /// row the server returns
 /// ([CommunityBookmark]) carries no post title, author or excerpt,
 /// so the honest human copy is the localized "Saved post" label
