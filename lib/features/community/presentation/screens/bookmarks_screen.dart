@@ -42,7 +42,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
-import 'package:strumsight/core/i18n/ss_formatters.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../domain/value_objects/content_id.dart';
