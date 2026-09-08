@@ -66,6 +66,29 @@ FeatureFlags _shippedPreviewFlags() => FeatureFlags.forEnvironment(
   previewAll: true,
 );
 
+/// Pumps FIXED frames until [finder] matches nothing, at most [maxFrames].
+///
+/// MÉRT (run 564/565): a popped route is NOT gone when the pop is issued —
+/// it stays on stage for its whole reverse transition, and its overlay
+/// entry is removed a frame after that, while the route it uncovers is
+/// already found underneath. So "the arriving screen is here" needs no
+/// waiting, but "the leaving one is gone" is not measurable on a fixed pump
+/// budget. `pumpAndSettle` is out for the reason the cell below states
+/// (Riverpod 3 auto-retries a failing `FutureProvider`), so this is the
+/// same bounded shape `analysis_exit_chain_test` and the R18 entry-point
+/// cells already use.
+Future<void> _pumpUntilGone(
+  WidgetTester tester,
+  Finder finder, {
+  int maxFrames = 40,
+}) async {
+  await tester.pump();
+  for (var frame = 0; frame < maxFrames; frame++) {
+    if (finder.evaluate().isEmpty) return;
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
+
 /// Advances [session]'s fake clock in small, fixed steps until the active
 /// session's status satisfies [reached] — the same bounded-tick pattern
 /// `e2e_harness.dart`'s own private `_driveSessionUntil` and every
@@ -505,9 +528,17 @@ void main() {
           findsOneWidget,
         );
 
+        final errorFrame = find.byKey(const Key('analysis-home-route-error'));
         await tester.tap(find.byKey(const Key('route-frame-back')));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 400));
+        // The pushed frame has to be OFF STAGE before the next tap: while it
+        // is still transitioning out it sits above the Analyze page, and the
+        // exit tapped below would land on the leaving route instead.
+        await _pumpUntilGone(tester, errorFrame);
+        expect(
+          errorFrame,
+          findsNothing,
+          reason: 'the pushed error frame is popped by its own control',
+        );
         expect(
           find.byType(AnalyzeScreen),
           findsOneWidget,
@@ -519,8 +550,22 @@ void main() {
         // R30 (M4) — the Analyze page itself: the screen brings no
         // `Scaffold`, and before this round the pushed page carried no exit
         // either. The route's adapter is what this tap proves.
+        //
+        // MÉRT LELET (run 565): that exit is REAL, but it is not a
+        // DESCENDANT of `AnalyzeScreen` — the adapter WRAPS the screen, so
+        // the `BackButton` sits in the `AppBar` of the `Scaffold` ABOVE it.
+        // The original descendant finder could therefore never match, no
+        // matter how the page was reached. The closest `Scaffold` ancestor
+        // IS that frame (the shell's own `Scaffold` is further up), which
+        // is the finder `r18_entry_points_test`'s M4 cell already drives.
+        final analyzeFrame = find
+            .ancestor(
+              of: find.byType(AnalyzeScreen),
+              matching: find.byType(Scaffold),
+            )
+            .first;
         final analyzeBack = find.descendant(
-          of: find.byType(AnalyzeScreen),
+          of: analyzeFrame,
           matching: find.byType(BackButton),
         );
         expect(analyzeBack, findsOneWidget);
