@@ -174,8 +174,7 @@ final class CommunityPost {
     required ModerationState moderationState,
     required CommunityPostCounts counts,
     required CommunityViewerPostState viewerState,
-    List<CommunityMediaAttachment> media =
-        const <CommunityMediaAttachment>[],
+    List<CommunityMediaAttachment> media = const <CommunityMediaAttachment>[],
   }) {
     if (body != null) {
       if (body.length < kCommunityPostBodyMinLength) {

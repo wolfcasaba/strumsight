@@ -26,6 +26,7 @@
 ///   BEKAPCSOLVA készültek).
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -296,10 +297,7 @@ void main() {
         find.byKey(const Key('composer-media-$_mediaPublicId')),
         findsOneWidget,
       );
-      expect(
-        find.text(_en().communityComposerMediaSectionLabel),
-        findsWidgets,
-      );
+      expect(find.text(_en().communityComposerMediaSectionLabel), findsWidgets);
     });
 
     testWidgets('a dupla koppintás nem indít két feltöltést', (tester) async {
@@ -335,11 +333,7 @@ void main() {
       final picker = _FakePicker(result: _picked());
 
       await tester.pumpWidget(
-        _harness(
-          picker: picker,
-          adapter: _RecordingAdapter(),
-          store: store,
-        ),
+        _harness(picker: picker, adapter: _RecordingAdapter(), store: store),
       );
       await _settle(tester);
       await tester.tap(find.byKey(const Key('composer-attach-media')));
@@ -465,10 +459,7 @@ void main() {
       // kép nem ment fel.
       expect(state.status, PostComposerStatus.editing);
       expect(state.body, 'megírt szöveg');
-      expect(
-        find.byKey(const Key('composer-media-error')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('composer-media-error')), findsOneWidget);
       expect(
         find.text(_en().communityComposerMediaUploadFailed),
         findsOneWidget,
@@ -492,7 +483,10 @@ void main() {
       await _settle(tester);
       expect(_state(tester).mediaIds, hasLength(1));
 
-      await _controller(tester).removeMedia(_mediaPublicId);
+      // NEM `await`: a widget-teszt FakeAsync-zónájában a Dio-kérés csak a
+      // pumpolt időben halad, a közvetlen `await` sosem térne vissza (a run
+      // 561 tízperces időtúllépése). A csatolás útja is így, pumpolva fut.
+      unawaited(_controller(tester).removeMedia(_mediaPublicId));
       await _settle(tester);
 
       expect(_state(tester).mediaIds, isEmpty);
@@ -558,11 +552,7 @@ void main() {
       // ...de a kör HÁROM új widgete közül egy sem.
       expect(find.byKey(const Key('composer-media-error')), findsNothing);
       expect(find.byKey(const Key('composer-media-limit')), findsNothing);
-      expect(
-        find.text(_en().communityComposerMediaSectionLabel),
-        findsNothing,
-      );
+      expect(find.text(_en().communityComposerMediaSectionLabel), findsNothing);
     });
   });
 }
-

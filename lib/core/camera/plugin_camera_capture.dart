@@ -66,15 +66,22 @@ final class PluginCameraCapture implements CameraCapture, CameraPreviewSource {
 
   @override
   Widget? buildPreview() {
-    final controller = _controller;
-    if (_isClosed || controller is! CameraPreviewSource) return null;
-    return controller.buildPreview();
+    if (_isClosed) return null;
+    // A pattern, not an `is` check: `PlatformCameraController` and
+    // `CameraPreviewSource` are unrelated types, so a plain `is` test would
+    // not promote the field.
+    if (_controller case final CameraPreviewSource source) {
+      return source.buildPreview();
+    }
+    return null;
   }
 
   @override
   bool get previewMirror {
-    final controller = _controller;
-    return controller is CameraPreviewSource && controller.previewMirror;
+    if (_controller case final CameraPreviewSource source) {
+      return source.previewMirror;
+    }
+    return false;
   }
 
   @override

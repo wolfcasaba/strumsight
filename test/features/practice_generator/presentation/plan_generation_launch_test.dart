@@ -143,9 +143,7 @@ void main() {
 /// composition `start_plan_generation_test.dart` measures the success path
 /// with, so this file adds no generation logic of its own.
 StartPlanGeneration _succeeding() {
-  final orchestrator = GenerationOrchestrator(
-    activation: _NoopActivation(),
-  );
+  final orchestrator = GenerationOrchestrator(activation: _NoopActivation());
   addTearDown(orchestrator.dispose);
   return StartPlanGeneration(orchestrator: orchestrator, buildInput: _input);
 }
@@ -153,9 +151,7 @@ StartPlanGeneration _succeeding() {
 /// The assembly throws, which the use case turns into an `AppResult`
 /// failure — the shape a real generation failure reaches the launcher in.
 StartPlanGeneration _failing() {
-  final orchestrator = GenerationOrchestrator(
-    activation: _NoopActivation(),
-  );
+  final orchestrator = GenerationOrchestrator(activation: _NoopActivation());
   addTearDown(orchestrator.dispose);
   return StartPlanGeneration(
     orchestrator: orchestrator,

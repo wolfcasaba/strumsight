@@ -41,10 +41,8 @@ GuitarCalibration _guitar() => GuitarCalibration(
   createdAt: _savedAt,
 );
 
-VisionCalibrationRecord _record({CameraCalibrationProfile? profile}) => (
-  profile: profile ?? _profile(),
-  guitar: _guitar(),
-);
+VisionCalibrationRecord _record({CameraCalibrationProfile? profile}) =>
+    (profile: profile ?? _profile(), guitar: _guitar());
 
 VisionGeometryContext _context({
   VisionCameraPreference camera = VisionCameraPreference.back,

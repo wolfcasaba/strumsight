@@ -216,10 +216,7 @@ class _AttachedMedia extends StatelessWidget {
   Widget build(BuildContext context) {
     final descriptor = entry.descriptor;
     if (descriptor == null) {
-      return _RestoredAttachment(
-        publicId: entry.publicId,
-        onRemove: onRemove,
-      );
+      return _RestoredAttachment(publicId: entry.publicId, onRemove: onRemove);
     }
     return CommunityMediaTile(
       key: Key('composer-media-${entry.publicId}'),

@@ -120,10 +120,8 @@ Future<GoRouter> _openAnalysisHome(WidgetTester tester) async {
 }
 
 /// The app bar's implied back arrow on [screen]'s own frame.
-Finder _backArrowOf(Type screen) => find.descendant(
-  of: find.byType(screen),
-  matching: find.byType(BackButton),
-);
+Finder _backArrowOf(Type screen) =>
+    find.descendant(of: find.byType(screen), matching: find.byType(BackButton));
 
 /// Opens the recording step from the analysis home.
 Future<void> _tapRecord(WidgetTester tester) async {

@@ -119,8 +119,10 @@ class VisionSessionController extends Notifier<VisionSessionState> {
   /// immutable provider state would be a live platform handle in the audited
   /// summary-only state object.
   CameraPreviewSource? get previewSource {
-    final capture = _capture;
-    return capture is CameraPreviewSource ? capture : null;
+    // `CameraCapture` and `CameraPreviewSource` are unrelated types, so an
+    // `is` check cannot promote the field: bind the narrowed value instead.
+    if (_capture case final CameraPreviewSource source) return source;
+    return null;
   }
 
   /// Reads permission without presenting a system dialog and enters setup.

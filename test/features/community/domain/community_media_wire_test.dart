@@ -199,8 +199,8 @@ void main() {
         _postJson(
           media: <Map<String, Object?>>[
             _mediaJson(),
-            _mediaJson()..['public_id'] =
-                '66666666-6666-4666-8666-666666666666',
+            _mediaJson()
+              ..['public_id'] = '66666666-6666-4666-8666-666666666666',
           ],
         ),
       );
