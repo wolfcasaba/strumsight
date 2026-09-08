@@ -699,6 +699,14 @@
       "title": {}
     }
   },
+  "analysisHomeOpenFailed": "That analysis could not be opened from this device.",
+  "@analysisHomeOpenFailed": {
+    "description": "Shown when the saved analysis behind a recent-analysis card could not be read back (missing id, corrupt document, storage error). R32."
+  },
+  "analysisHomeOpeningAnalysis": "Opening the analysis…",
+  "@analysisHomeOpeningAnalysis": {
+    "description": "Progress snackbar shown while a saved analysis document is read back from the on-device repository after tapping a recent-analysis card. R32."
+  },
   "analysisHomeRecentEmpty": "No analyses yet — record or import one to get started.",
   "@analysisHomeRecentEmpty": {},
   "analysisHomeRecentSectionTitle": "Recent analyses",
@@ -4718,7 +4726,7 @@
   "todayHubStartPracticeCta": "Start practicing",
   "todayHubTitle": "Today",
   "todayHubViewProgressCta": "View progress",
-  "todayHubVisionCardMessage": "Use your camera for guided finger-placement feedback.",
+  "todayHubVisionCardMessage": "Use your camera to check your framing and lighting before you play.",
   "todayHubVisionCardTitle": "Vision practice",
   "todayHubVisionUnavailableReason": "Vision practice needs a supported device and isn't available in this build yet.",
   "todayPlanActionFailed": "That change could not be saved. The plan is unchanged.",

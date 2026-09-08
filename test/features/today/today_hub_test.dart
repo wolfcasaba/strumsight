@@ -271,7 +271,12 @@ void main() {
       await tester.pumpWidget(_host(visionEnabled: true));
       await tester.pump();
 
-      expect(find.textContaining('Use your camera for guided'), findsOneWidget);
+      // R32 — the card no longer promises finger-placement feedback: the
+      // session measures setup quality (framing, lighting, calibration).
+      expect(
+        find.textContaining('check your framing and lighting'),
+        findsOneWidget,
+      );
       expect(
         find.widgetWithText(TextButton, 'Vision practice'),
         findsOneWidget,

@@ -33,5 +33,13 @@
   "analysisSaveFailed": "Az elemzést nem sikerült elmenteni az eszközre.",
   "@analysisSaveFailed": {
     "description": "Shown on the processing screen when persisting a finished analysis to the on-device repository failed. R26."
+  },
+  "analysisHomeOpeningAnalysis": "Elemzés megnyitása…",
+  "@analysisHomeOpeningAnalysis": {
+    "description": "Progress snackbar shown while a saved analysis document is read back from the on-device repository after tapping a recent-analysis card. R32."
+  },
+  "analysisHomeOpenFailed": "Ezt az elemzést nem sikerült megnyitni erről az eszközről.",
+  "@analysisHomeOpenFailed": {
+    "description": "Shown when the saved analysis behind a recent-analysis card could not be read back (missing id, corrupt document, storage error). R32."
   }
 }

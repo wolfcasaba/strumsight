@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/foundation/app_result.dart';
 import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/application/analysis_providers.dart';
@@ -12,6 +13,7 @@ import '../../features/audio_analysis/application/import_audio_file_use_case.dar
 import '../../features/audio_analysis/domain/analysis_document.dart';
 import '../../features/audio_analysis/domain/analysis_input.dart';
 import '../../features/audio_analysis/domain/analysis_mode.dart';
+import '../../features/audio_analysis/domain/analysis_summary.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_import_messages.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
@@ -276,6 +278,53 @@ Future<void> _startAnalysisImport(BuildContext context, WidgetRef ref) async {
   // A cancelled picker says nothing — dismissing a chooser is not an error.
   if (message == null) return;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
+/// R32 (re-audit #2) — opens ONE saved analysis from the "recent" list.
+///
+/// The card used to `push` [AppRoutes.analysisTimeline] with the SUMMARY as
+/// `extra`, but that route's redirect accepts an [AnalysisDocument] and
+/// nothing else: every tap on a recent analysis was redirected to `/live`,
+/// so the list has never opened anything. A summary is an index row — it
+/// carries a title, a date and a hash, never the timeline — so the document
+/// has to be READ BACK by id (R26 made sure fresh runs are written there in
+/// the first place).
+///
+/// The read is spoken in both directions: a progress snackbar while the
+/// document is decoded, and a NAMED failure when the id is gone or the file
+/// is corrupt. A miss must not navigate: landing on `/live` would be the
+/// wrong page dressed up as a working link (the `_openLibrarySession`
+/// precedent above).
+Future<void> _openRecentAnalysis(
+  BuildContext context,
+  WidgetRef ref,
+  AnalysisSummary summary,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(
+    SnackBar(
+      key: const Key('analysis-home-open-progress'),
+      content: Text(l10n.analysisHomeOpeningAnalysis),
+    ),
+  );
+  final result = await ref
+      .read(analysisRepositoryProvider)
+      .getById(summary.documentId);
+  // The read is a file decode: the user can leave this route while it runs,
+  // and everything below touches `context`.
+  if (!context.mounted) return;
+  messenger.hideCurrentSnackBar();
+  switch (result) {
+    case Success<AnalysisDocument>(:final value):
+      // `push`, NEM `go` (R30): a napló a kezdőlap FÖLÉ kerül, tehát a
+      // saját vissza-nyila és a rendszer-vissza is ide vezet vissza.
+      context.push(AppRoutes.analysisTimeline, extra: value);
+    case Failure<AnalysisDocument>():
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.analysisHomeOpenFailed)),
+      );
+  }
 }
 
 /// R30 (re-audit #2 B2) — leaves one step of the Analysis V2 capture chain.
@@ -1199,8 +1248,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                   // konkrét okot mondja ki (`analysis_import_messages.dart`).
                   onImportFile: () =>
                       unawaited(_startAnalysisImport(context, ref)),
+                  // R32 (re-audit #2) — a kártya a MENTETT DOKUMENTUMOT
+                  // nyitja meg; az összefoglaló önmagában a `/live`-ra
+                  // dobta a felhasználót (`_openRecentAnalysis`).
                   onOpenAnalysis: (summary) =>
-                      context.push(AppRoutes.analysisTimeline, extra: summary),
+                      unawaited(_openRecentAnalysis(context, ref, summary)),
                 ),
               );
             },

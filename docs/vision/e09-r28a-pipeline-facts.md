@@ -136,3 +136,9 @@ no landmark model runs, so the session can only report setup quality and
 whether the guitar is calibrated. The wording needs to change (or the claim
 needs a model) — the Today hub is owned by another round, so this is a report,
 not an edit.
+
+**Resolved by R32 (re-audit #2):** both values now describe what the session
+measures — en "Use your camera to check your framing and lighting before you
+play.", hu "Ellenőrizd a kamerával a képkivágást és a fényt játék előtt." No
+golden renders the string (every Today-hub fixture pumps with the development
+flags, where `visionEnabled` is false), so the change moved no pixels.

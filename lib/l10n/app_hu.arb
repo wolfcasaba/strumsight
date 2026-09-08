@@ -692,6 +692,14 @@
       "title": {}
     }
   },
+  "analysisHomeOpenFailed": "Ezt az elemzést nem sikerült megnyitni erről az eszközről.",
+  "@analysisHomeOpenFailed": {
+    "description": "Shown when the saved analysis behind a recent-analysis card could not be read back (missing id, corrupt document, storage error). R32."
+  },
+  "analysisHomeOpeningAnalysis": "Elemzés megnyitása…",
+  "@analysisHomeOpeningAnalysis": {
+    "description": "Progress snackbar shown while a saved analysis document is read back from the on-device repository after tapping a recent-analysis card. R32."
+  },
   "analysisHomeRecentEmpty": "Még nincs elemzés — kezdéshez vegyél fel vagy importálj egyet.",
   "@analysisHomeRecentEmpty": {},
   "analysisHomeRecentSectionTitle": "Legutóbbi elemzések",
@@ -943,7 +951,7 @@
   },
   "analysisOverviewInsightKindLabelCaution": "Figyelem",
   "@analysisOverviewInsightKindLabelCaution": {},
-  "analysisOverviewInsightKindLabelDefault": "Insight",
+  "analysisOverviewInsightKindLabelDefault": "Meglátás",
   "@analysisOverviewInsightKindLabelDefault": {},
   "analysisOverviewInsightKindLabelObservation": "Erősség",
   "@analysisOverviewInsightKindLabelObservation": {},
@@ -3237,7 +3245,7 @@
   "practiceResultBreakdownTitle": "Pontszám-bontás",
   "practiceResultChord": "Akkord",
   "practiceResultChordPair": "Akkordpár",
-  "practiceResultCoachingTitle": "Coaching",
+  "practiceResultCoachingTitle": "Edzői visszajelzés",
   "practiceResultCompletion": "Teljesítés",
   "practiceResultConfidenceLowBody": "Csak {resolved}/{total} célt sikerült érzékelni — ez nem elég egy pontos pontszámhoz.",
   "@practiceResultConfidenceLowBody": {
@@ -4672,7 +4680,7 @@
   "todayHubStartPracticeCta": "Gyakorlás indítása",
   "todayHubTitle": "Ma",
   "todayHubViewProgressCta": "Fejlődés megtekintése",
-  "todayHubVisionCardMessage": "Használd a kamerát az ujjazat visszajelzéséhez.",
+  "todayHubVisionCardMessage": "Ellenőrizd a kamerával a képkivágást és a fényt játék előtt.",
   "todayHubVisionCardTitle": "Vizuális gyakorlás",
   "todayHubVisionUnavailableReason": "A vizuális gyakorláshoz támogatott eszköz kell, és ebben a buildben még nem érhető el.",
   "todayPlanActionFailed": "A módosítást nem sikerült menteni. A terv változatlan.",

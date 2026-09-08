@@ -3224,7 +3224,7 @@
   "todayHubNoPlanMessage": "No plan yet — head to Practice to get started.",
   "todayHubViewProgressCta": "View progress",
   "todayHubVisionCardTitle": "Vision practice",
-  "todayHubVisionCardMessage": "Use your camera for guided finger-placement feedback.",
+  "todayHubVisionCardMessage": "Use your camera to check your framing and lighting before you play.",
   "todayHubVisionUnavailableReason": "Vision practice needs a supported device and isn't available in this build yet.",
 
   "practiceAreaHubRecommendedTitle": "Recommended for you",
