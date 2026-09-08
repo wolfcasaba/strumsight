@@ -427,18 +427,46 @@ class _ScoringProfileReadout extends StatelessWidget {
   final String label;
   final String profileId;
 
+  /// The profile id is the row's only INFLEXIBLE child, and a `Row`
+  /// measures such a child with an unbounded main-axis constraint. At
+  /// `textScale 2.0` the id — a non-localised 17-character slug — alone
+  /// measured wider than the 372px content column, so the `RenderFlex`
+  /// overflowed by 43px, identically in both locales (the id never
+  /// translates). The cap therefore has to arrive from OUTSIDE the row,
+  /// which is what the [LayoutBuilder] provides: the id can never claim
+  /// more than the column it lives in, and ellipsises instead.
+  ///
+  /// Deliberately NOT `Flexible` on the id: that makes both children
+  /// flexible, so the row would split its width evenly and at
+  /// `textScale 1.0` the id would jump from the right edge to the
+  /// mid-point (and ellipsise there) — moving pixels in the pinned
+  /// `e13_r21_practice_setup_compact` golden. The [ConstrainedBox] is
+  /// inert at 1.0: the id fits far inside the column, so both children
+  /// keep the exact widths and offsets that golden recorded.
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-        Text(profileId, style: Theme.of(context).textTheme.bodySmall),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+              child: Text(
+                profileId,
+                style: Theme.of(context).textTheme.bodySmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

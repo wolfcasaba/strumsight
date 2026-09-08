@@ -82,6 +82,13 @@ class _FixtureRepo implements PracticeCatalogRepository {
       defs.where((d) => d.difficulty == difficulty).toList(growable: false);
 }
 
+/// The phone-portrait viewport the release accessibility audit measures
+/// (`test/accessibility/release_flow_text_scale_test.dart`), and the
+/// content column the Setup `ListView` leaves inside it — its padding is
+/// `EdgeInsets.fromLTRB(20, 12, 20, 28)`, so 412 - 2 * 20.
+const _phonePortrait = Size(412, 915);
+const _phoneContentWidth = 372.0;
+
 PracticeDefinition _strumPatternDef(String id, String title) {
   return PracticeDefinition(
     id: id,
@@ -469,6 +476,57 @@ void main() {
           reason: 'mode=$mode produced an exception at 200% text',
         );
       }
+    },
+  );
+
+  // Setup's own 200% cell, on the phone viewport the release audit measures
+  // (412x915) — the 800x600 widget-test default leaves the rows so much
+  // horizontal room that no width cap is ever exercised. The
+  // scoring-profile readout is the point: its `profileId` is a
+  // non-localised slug that used to be laid out as the `Row`'s only
+  // inflexible child (unbounded main-axis constraint), so at 200% it
+  // measured wider than the whole content column and overflowed by 43px in
+  // BOTH locales. That was carried as the `setup-scoring-profile-overflow`
+  // known exception in `test/accessibility/release_flow_text_scale_test.dart`
+  // + `docs/accessibility/known-exceptions.yaml`; both mirrors were removed
+  // when the readout was capped, and this cell is the regression pin that
+  // keeps them removable.
+  testWidgets(
+    'A1.5b 200% text scale: the Setup scoring-profile row fits its column',
+    (tester) async {
+      tester.view.physicalSize = _phonePortrait;
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await pumpSetup(tester);
+      final profileId = find.text(ScoringProfile.legacyLearnParity.id);
+      await tester.scrollUntilVisible(
+        profileId,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      // `scrollUntilVisible` can stop with the target still inside the
+      // ListView's cache extent — laid out, but never painted, and a
+      // `RenderFlex` reports its overflow from `paint`. `ensureVisible`
+      // puts it on screen, so the exception check below is real.
+      await tester.ensureVisible(profileId);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'the Setup form must not overflow at 200% text on 412x915',
+      );
+      expect(
+        tester.renderObject<RenderBox>(profileId).size.width,
+        lessThanOrEqualTo(_phoneContentWidth),
+        reason:
+            'the profile id must stay inside the content column and '
+            'ellipsise instead of pushing the Row past its constraints',
+      );
     },
   );
 
