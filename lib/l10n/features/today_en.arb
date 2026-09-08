@@ -17,5 +17,8 @@
   "@todayHubPlanUnreadableMessage": {},
 
   "todayHubPlanUnreadableRetry": "Try again",
-  "@todayHubPlanUnreadableRetry": {}
+  "@todayHubPlanUnreadableRetry": {},
+
+  "todayPlanActionNothingToChange": "There was nothing left to change in today's plan.",
+  "@todayPlanActionNothingToChange": {}
 }

@@ -1,0 +1,12 @@
+{
+  "@@locale": "hu",
+
+  "progressV2HistoryUnavailableTitle": "A gyakorlás-előzményed nem olvasható",
+  "@progressV2HistoryUnavailableTitle": {},
+
+  "progressV2HistoryUnavailableMessage": "A gyakorlásaid ezen az eszközön vannak, de nem sikerült beolvasni őket. Ez nem ugyanaz, mint hogy még soha nem gyakoroltál — semmi nem veszett el, csak az olvasás bukott meg.",
+  "@progressV2HistoryUnavailableMessage": {},
+
+  "progressV2HistoryUnavailableRetry": "Újra",
+  "@progressV2HistoryUnavailableRetry": {}
+}

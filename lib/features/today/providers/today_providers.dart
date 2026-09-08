@@ -1,7 +1,6 @@
-import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/i18n/locale_provider.dart';
+import '../../../core/i18n/effective_locale.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../practice_generator/public.dart';
 import '../data/active_plan_today_plan_repository.dart';
@@ -40,24 +39,18 @@ final todayPlanRepositoryProvider = Provider<TodayPlanRepository>((ref) {
   return ActivePlanTodayPlanRepository(
     controller: ref.watch(todayPlanControllerProvider),
     plan: plan,
-    l10n: lookupAppLocalizations(_localeFor(ref.watch(localeProvider))),
+    // M5 (re-audit 2026-09-08): `effectiveLocaleProvider`, NOT
+    // `localeProvider`. The stored preference is `null` for "follow the
+    // system" — its default — and this call site used to read that `null`
+    // as English, so the hub's hero label came back in English on a
+    // Hungarian phone whose owner never opened the language setting. The
+    // shared resolver falls back to English only when the build ships no
+    // translation for the preferred or platform language, which is what
+    // keeps `lookupAppLocalizations` from throwing inside a provider and
+    // taking the whole tab down.
+    l10n: lookupAppLocalizations(ref.watch(effectiveLocaleProvider)),
   );
 });
-
-/// The locale the hub's plan copy is rendered in.
-///
-/// `localeProvider` is `null` for "follow the system", and a cloud-synced
-/// settings row could carry a language this build does not ship; both fall
-/// back to English rather than letting `lookupAppLocalizations` throw inside
-/// a provider and take the whole tab down. Same fallback the Practice
-/// Generator's own composition root uses for `PlanSetupController.locale`.
-Locale _localeFor(Locale? preferred) {
-  if (preferred == null) return const Locale('en');
-  final isSupported = AppLocalizations.supportedLocales.any(
-    (locale) => locale.languageCode == preferred.languageCode,
-  );
-  return isSupported ? Locale(preferred.languageCode) : const Locale('en');
-}
 
 final todayPlanSnapshotProvider = Provider<TodayPlanSnapshot>(
   (ref) => ref.watch(todayPlanRepositoryProvider).load(),

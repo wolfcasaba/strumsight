@@ -13,11 +13,19 @@
 //      and the replacement survives a repository read-back.
 // A6 — swap with no usable alternative reports `noAlternative` and leaves
 //      the stored plan (exercise AND revision) untouched.
+//
+// Re-audit 2026-09-08 (MI-D) — `nothingToChange` used to be the ONE outcome
+// `runTodayPlanAction` said nothing about, so a Skip/Shorten/Pause press on
+// a day with nothing left to reschedule was indistinguishable from a dead
+// button:
+// A7 — the route-side wrapper speaks that outcome out loud.
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/practice_generator/presentation/today_plan_actions.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../../fixtures/practice_generator/plan/plan_fixtures.dart';
 import '../../../support/preference_store.dart';
@@ -206,6 +214,42 @@ void main() {
       );
       expect(stored.activeRevisionId, RevisionId('revision.1'));
     });
+  });
+
+  testWidgets('A7 — an outcome that changes nothing is SAID, not silent', (
+    tester,
+  ) async {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...preferenceOverrides(),
+          practiceGeneratorClockProvider.overrideWithValue(
+            () => DateTime(2026, 8, 17, 10),
+          ),
+          exerciseCandidateResolverProvider.overrideWithValue(resolveCandidate),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Consumer(
+              builder: (context, ref, _) => TextButton(
+                onPressed: () =>
+                    runTodayPlanAction(context, ref, TodayPlanAction.skip),
+                child: const Text('skip'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // No plan was ever activated, so the action has nothing to reschedule.
+    await tester.tap(find.text('skip'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.todayPlanActionNothingToChange), findsOneWidget);
   });
 
   test('the repository round-trips the fixture plan (guards the fixtures '

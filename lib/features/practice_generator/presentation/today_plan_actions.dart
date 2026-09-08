@@ -110,7 +110,16 @@ final todayPlanActionsProvider = Provider<TodayPlanActions>(
   (ref) => TodayPlanActions(ref),
 );
 
-/// Route-side wrapper: applies the action and says a failure out loud.
+/// Route-side wrapper: applies the action and says every outcome except a
+/// successful one out loud.
+///
+/// MI-D (re-audit 2026-09-08): [TodayPlanActionOutcome.nothingToChange] used
+/// to be silent, so pressing Skip / Shorten / Pause on a day with nothing
+/// left to reschedule looked exactly like a dead button. The learner pressed
+/// an enabled control on a real screen, so they are owed the same spoken
+/// answer [TodayPlanActionOutcome.noAlternative] already gets — the plan is
+/// genuinely unchanged, and saying so is the difference between an honest
+/// no-op and a broken one.
 Future<void> runTodayPlanAction(
   BuildContext context,
   WidgetRef ref,
@@ -121,7 +130,8 @@ Future<void> runTodayPlanAction(
   final l10n = AppLocalizations.of(context);
   final String? message = switch (outcome) {
     TodayPlanActionOutcome.applied => null,
-    TodayPlanActionOutcome.nothingToChange => null,
+    TodayPlanActionOutcome.nothingToChange =>
+      l10n.todayPlanActionNothingToChange,
     TodayPlanActionOutcome.noAlternative => l10n.todayPlanSwapNoAlternative,
     TodayPlanActionOutcome.failed => l10n.todayPlanActionFailed,
   };

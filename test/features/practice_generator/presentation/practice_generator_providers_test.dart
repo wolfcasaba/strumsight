@@ -1,6 +1,10 @@
+import 'dart:ui' show Locale;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/i18n/effective_locale.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 
@@ -342,6 +346,58 @@ void main() {
     final repository = container.read(practiceEvidenceRepositoryProvider);
 
     expect(repository, isA<LocalPracticeEvidenceRepository>());
+  });
+
+  // M5 (re-audit 2026-09-08) — the WIZARD's copy language.
+  //
+  // MEASURED before this round: `PlanSetupController.locale` came from
+  // `ref.read(localeProvider)?.languageCode ?? 'en'`, and `null` is the
+  // DEFAULT ("follow the system"), so a plan generated on a Hungarian phone
+  // whose owner never opened the language setting came out in English.
+  group('M5 the generated plan follows the phone', () {
+    ProviderContainer buildLocaleContainer({
+      Map<String, Object>? preferences,
+      required List<Locale> platformLocales,
+    }) {
+      final container = ProviderContainer(
+        overrides: [
+          keyValueStoreProvider.overrideWithValue(
+            InMemoryKeyValueStore(preferences),
+          ),
+          platformLocalesProvider.overrideWithValue(platformLocales),
+          exerciseCandidateResolverProvider.overrideWithValue(
+            (exerciseId) => buildCandidate(exerciseId: exerciseId),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('an unset preference resolves the phone language', () {
+      final container = buildLocaleContainer(
+        platformLocales: const [Locale('hu', 'HU')],
+      );
+
+      expect(container.read(planSetupControllerProvider).locale, 'hu');
+    });
+
+    test('an explicit preference still wins', () {
+      final container = buildLocaleContainer(
+        preferences: {StorageKeys.locale: 'en'},
+        platformLocales: const [Locale('hu', 'HU')],
+      );
+
+      expect(container.read(planSetupControllerProvider).locale, 'en');
+    });
+
+    test('a language this build does not ship falls back to English', () {
+      final container = buildLocaleContainer(
+        platformLocales: const [Locale('de', 'DE')],
+      );
+
+      expect(container.read(planSetupControllerProvider).locale, 'en');
+    });
   });
 
   test('D8: disposing the ProviderScope closes the GenerationOrchestrator\'s '

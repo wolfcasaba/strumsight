@@ -1,0 +1,12 @@
+{
+  "@@locale": "en",
+
+  "progressV2HistoryUnavailableTitle": "Your practice history could not be read",
+  "@progressV2HistoryUnavailableTitle": {},
+
+  "progressV2HistoryUnavailableMessage": "Your practice sessions are stored on this device but could not be read. That is not the same as never having practiced — nothing was lost, the read simply failed.",
+  "@progressV2HistoryUnavailableMessage": {},
+
+  "progressV2HistoryUnavailableRetry": "Try again",
+  "@progressV2HistoryUnavailableRetry": {}
+}

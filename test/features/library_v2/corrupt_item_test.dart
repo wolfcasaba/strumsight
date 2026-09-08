@@ -19,6 +19,8 @@ import 'package:strumsight/features/library_v2/screens/library_item_detail_scree
 import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/preference_store.dart';
+
 final class _FakeSource implements LibraryItemSource {
   const _FakeSource(this.type, this._load);
 
@@ -68,6 +70,9 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        // M6 (re-audit 2026-09-08): the analysis detail body restores its
+        // persisted note from `keyValueStoreProvider`, which has no default.
+        ...preferenceOverrides(),
         analysisRepositoryProvider.overrideWithValue(
           const _UnusedAnalysisRepository(),
         ),

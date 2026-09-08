@@ -20,7 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/foundation/app_result.dart';
-import '../../../../core/i18n/locale_provider.dart';
+import '../../../../core/i18n/effective_locale.dart';
 import '../../../../core/storage/storage_providers.dart';
 import '../../application/controller/active_plan_controller.dart';
 import '../../application/controller/today_plan_controller.dart';
@@ -214,13 +214,18 @@ final planSetupControllerProvider = Provider<PlanSetupController>((ref) {
     // `locale` constructor parameter is a plain `String` snapshot
     // (`PlanSetupController` lives in the forbidden `presentation/
     // controller/` zone for this round, so it cannot be changed to accept
-    // a locale-reading function the way `clock` does). Watching
-    // `localeProvider` here would rebuild — and so dispose — this whole
-    // provider on every runtime locale change, discarding an in-progress
-    // wizard draft the controller is holding in memory. `ref.read` takes
-    // the locale once, at first build, without subscribing to later
-    // changes.
-    locale: ref.read(localeProvider)?.languageCode ?? 'en',
+    // a locale-reading function the way `clock` does). Watching the locale
+    // here would rebuild — and so dispose — this whole provider on every
+    // runtime locale change, discarding an in-progress wizard draft the
+    // controller is holding in memory. `ref.read` takes the locale once,
+    // at first build, without subscribing to later changes.
+    //
+    // M5 (re-audit 2026-09-08): `effectiveLocaleProvider`, NOT
+    // `localeProvider`. The stored preference is `null` for "follow the
+    // system" — its default — and `?? 'en'` turned that into an ENGLISH
+    // generated plan on a Hungarian phone whose owner never opened the
+    // language setting.
+    locale: ref.read(effectiveLocaleProvider).languageCode,
   );
   ref.onDispose(controller.dispose);
   return controller;

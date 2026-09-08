@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design_system/public.dart';
 import '../../../core/foundation/app_result.dart';
+import '../../../core/logging/logger_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../audio_analysis/public.dart';
 import '../../share/public.dart';
+import '../data/key_value_library_note_repository.dart';
 import '../domain/library_item.dart';
 import '../providers/library_v2_providers.dart';
 import '../widgets/library_delete_section.dart';
@@ -155,21 +157,80 @@ class _AnalysisDetailBody extends ConsumerStatefulWidget {
 
 class _AnalysisDetailBodyState extends ConsumerState<_AnalysisDetailBody> {
   late final TextEditingController _notesController;
+
+  /// The text the store is known to hold — the guard that keeps a rebuild or
+  /// a cursor move from queueing a redundant write.
+  late String _persistedNote;
+
+  /// Writes are chained, never fired in parallel: each one is a
+  /// read-modify-write of the same document, so two in flight at once could
+  /// drop the earlier keystrokes.
+  Future<void> _pendingNoteWrite = Future<void>.value();
+
   AppResult<void>? _lastDeleteResult;
 
   @override
   void initState() {
     super.initState();
-    // Ephemeral in this round — no notes storage/use case exists on the tree
-    // yet (§0.0/B3 measured only delete owners); the field demonstrates the
-    // interaction and is not persisted across a screen re-entry.
-    _notesController = TextEditingController();
+    // M6 (re-audit 2026-09-08): the note is PERSISTED, keyed by item id.
+    // Until this round the controller was created empty here and dropped in
+    // `dispose`, so a note the learner typed about a session vanished on the
+    // way out — silently, with no save button to explain it. The field looks
+    // exactly the same; it now survives a screen re-entry AND an app
+    // restart.
+    //
+    // The store read is synchronous ([KeyValueStore] is loaded before the
+    // first frame), so the restored text is in the controller from its very
+    // first build — no async gap in which the learner's typing could be
+    // overwritten by an arriving value.
+    final stored = ref.read(libraryNoteRepositoryProvider).read(widget.item.id);
+    if (stored case Failure<String>(:final error)) {
+      // An unreadable notes document must not masquerade as "no note": the
+      // field starts empty either way, so the fact is recorded where it can
+      // still be seen.
+      ref
+          .read(appLoggerProvider)
+          .warning(
+            'library_note_read_failed',
+            fields: <String, Object?>{
+              'item': widget.item.id,
+              'code': error.code,
+            },
+          );
+    }
+    _persistedNote = stored.valueOrNull ?? '';
+    _notesController = TextEditingController(text: _persistedNote)
+      ..addListener(_persistNote);
   }
 
   @override
   void dispose() {
     _notesController.dispose();
     super.dispose();
+  }
+
+  /// Persists the field's current text.
+  ///
+  /// There is no save button — adding one would change what the screen
+  /// renders — so every edit is written straight through. The repository and
+  /// the logger are read BEFORE the async gap: the chained write can outlive
+  /// this state, and `ref` must not be touched once it has.
+  void _persistNote() {
+    final note = _notesController.text;
+    if (note == _persistedNote) return;
+    _persistedNote = note;
+    final repository = ref.read(libraryNoteRepositoryProvider);
+    final logger = ref.read(appLoggerProvider);
+    final itemId = widget.item.id;
+    _pendingNoteWrite = _pendingNoteWrite.then((_) async {
+      final result = await repository.write(itemId: itemId, note: note);
+      if (result case Failure<void>(:final error)) {
+        logger.warning(
+          'library_note_write_failed',
+          fields: <String, Object?>{'item': itemId, 'code': error.code},
+        );
+      }
+    });
   }
 
   Future<void> _handleExport(BuildContext context) async {

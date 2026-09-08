@@ -39,6 +39,11 @@ void main() {
       'lib/l10n/features/onboarding_hu.arb',
     ),
     (
+      'features/progress',
+      'lib/l10n/features/progress_en.arb',
+      'lib/l10n/features/progress_hu.arb',
+    ),
+    (
       'features/shell',
       'lib/l10n/features/shell_en.arb',
       'lib/l10n/features/shell_hu.arb',

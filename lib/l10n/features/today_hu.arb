@@ -17,5 +17,8 @@
   "@todayHubPlanUnreadableMessage": {},
 
   "todayHubPlanUnreadableRetry": "Újra",
-  "@todayHubPlanUnreadableRetry": {}
+  "@todayHubPlanUnreadableRetry": {},
+
+  "todayPlanActionNothingToChange": "A mai tervben nem maradt mit módosítani.",
+  "@todayPlanActionNothingToChange": {}
 }

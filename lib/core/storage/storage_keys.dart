@@ -39,6 +39,14 @@ abstract final class StorageKeys {
   static const String songs = 'ss.songs.songs';
   static const String setlists = 'ss.songs.setlists';
 
+  /// The learner's own free-text notes on a library item, keyed by item id
+  /// (M6, re-audit 2026-09-08).
+  ///
+  /// Deliberately its own key rather than a field on [librarySessions]: the
+  /// note is USER-AUTHORED content, while the item documents are projections
+  /// the sources rebuild — a rebuild must never be able to drop a note.
+  static const String libraryItemNotes = 'ss.library.item_notes';
+
   // --- progress ------------------------------------------------------------
   static const String practiceLog = 'ss.progress.practice_log';
   static const String dailyGoalMinutes = 'ss.progress.daily_goal_minutes';
@@ -96,6 +104,7 @@ abstract final class StorageKeys {
       'ss.tutor.conversation_documents';
   static const String tutorConversationIndex = 'ss.tutor.conversation_index';
   static const String tutorMemoryFacts = 'ss.tutor.memory_facts';
+
 
   /// Every local AI tutor document. Delete-all must visit this exact list and
   /// the quarantine of each key because [KeyValueStore] cannot enumerate keys.

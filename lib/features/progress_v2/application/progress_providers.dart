@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../practice/public.dart';
+import '../domain/progress_practice_history.dart';
 
 /// The Progress V2 feature's own Riverpod composition layer (ADR 0500 §5.1,
 /// mirrors `gamification_providers.dart` / ADR 0496 §1). The router stays a
@@ -15,16 +16,31 @@ import '../../practice/public.dart';
 /// `todayEpochDayProvider` (gamification_providers.dart).
 final progressNowProvider = Provider<DateTime>((_) => DateTime.now().toUtc());
 
-/// The loaded V2 practice history, falling back to empty while loading or on
-/// a failed load. `practiceHistoryV2ListProvider` (practice feature) already
-/// owns the load/failure handling; this applies the same `.value ?? []`
-/// fallback used elsewhere on the tree (Riverpod 3.3.2 — `.value` is
-/// nullable, never `.valueOrNull`).
+/// The loaded V2 practice history — empty while loading, and explicitly
+/// UNAVAILABLE when the read failed (M9, re-audit 2026-09-08).
+///
+/// `practiceHistoryV2ListProvider` surfaces a failed read as an `AsyncError`
+/// precisely so this layer can tell "the store could not be read" apart from
+/// "there are no sessions yet"; the previous `.value ?? []` collapsed the two
+/// and the dashboard showed a corrupt store as a brand new user. Loading
+/// still maps to an empty, AVAILABLE history: the store is on-device and
+/// settles within a frame or two (the same reasoning
+/// `todayPlanRepositoryProvider` records for its own loading state).
+///
+/// The DECLARED type stays `List<PracticeHistoryEntry>` while the value is
+/// always a [ProgressPracticeHistory]: the router hands this straight to the
+/// projection builders, and every existing `overrideWithValue(<plain list>)`
+/// in the suite keeps its exact previous meaning — "this IS the history".
+///
+/// Riverpod 3.3.2 — `.value` is nullable, never `.valueOrNull`.
 final progressPracticeHistoryProvider = Provider<List<PracticeHistoryEntry>>((
   ref,
 ) {
-  return ref.watch(practiceHistoryV2ListProvider).value ??
-      const <PracticeHistoryEntry>[];
+  final history = ref.watch(practiceHistoryV2ListProvider);
+  if (history.hasError) return ProgressPracticeHistory.unavailable();
+  return ProgressPracticeHistory.loaded(
+    history.value ?? const <PracticeHistoryEntry>[],
+  );
 });
 
 /// Progress V2 is 100% local (§5.7): the dashboard reads only the local

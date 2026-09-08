@@ -13,12 +13,18 @@
 //   T3 — a day with nothing to run says WHY, never "you have no plan",
 //   T4 — a completed day reports a full day so the hub can recap,
 //   T5 — a plan the store cannot read is `unreadable`, NEVER "no plan"
-//        (audit M6: an error must not be reclassified as a fresh start).
+//        (audit M6: an error must not be reclassified as a fresh start),
+//   T6 — with NO stored language preference the hub copy follows the PHONE
+//        (re-audit M5: `null` used to mean English, not "follow the
+//        system"),
+//   T7 — an explicit preference still wins over the phone.
 library;
 
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/i18n/effective_locale.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 import 'package:strumsight/features/today/data/active_plan_today_plan_repository.dart';
 import 'package:strumsight/features/today/domain/today_plan_snapshot.dart';
@@ -137,6 +143,10 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           ...preferenceOverrides(),
+          // The hub's copy now follows the PHONE when no preference is
+          // stored (T6), so this cell states the phone's language instead
+          // of depending on whatever the test host reports.
+          platformLocalesProvider.overrideWithValue(const [Locale('en')]),
           practiceGeneratorClockProvider.overrideWithValue(_onPlanDay),
           activePracticePlanProvider.overrideWith(_activePlan),
         ],
@@ -183,5 +193,46 @@ void main() {
       expect(snapshot.hasPlan, isFalse);
       expect(snapshot.availability, isNot(TodayPlanAvailability.unavailable));
     });
+
+    test('T6 an unset language preference follows the phone', () async {
+      final container = _hubOnHungarianPhone();
+
+      await container.read(activePracticePlanProvider.future);
+      final snapshot = container.read(todayPlanSnapshotProvider);
+
+      expect(
+        snapshot.recommendedTaskLabel,
+        'Elsődleges fókusz',
+        reason:
+            'MEASURED before the re-audit: a stored `null` (the DEFAULT, '
+            'meaning "follow the system") resolved to English, so this hero '
+            'read "Primary focus" inside an otherwise Hungarian app',
+      );
+    });
+
+    test('T7 an explicit preference still wins over the phone', () async {
+      final container = _hubOnHungarianPhone(
+        preferences: {StorageKeys.locale: 'en'},
+      );
+
+      await container.read(activePracticePlanProvider.future);
+      final snapshot = container.read(todayPlanSnapshotProvider);
+
+      expect(snapshot.recommendedTaskLabel, 'Primary focus');
+    });
   });
+}
+
+/// The hub, on a Hungarian phone, with the fixture plan active.
+ProviderContainer _hubOnHungarianPhone({Map<String, Object>? preferences}) {
+  final container = ProviderContainer(
+    overrides: [
+      ...preferenceOverrides(preferences),
+      platformLocalesProvider.overrideWithValue(const [Locale('hu')]),
+      practiceGeneratorClockProvider.overrideWithValue(_onPlanDay),
+      activePracticePlanProvider.overrideWith(_activePlan),
+    ],
+  );
+  addTearDown(container.dispose);
+  return container;
 }

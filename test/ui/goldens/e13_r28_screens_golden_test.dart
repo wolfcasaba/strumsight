@@ -23,6 +23,8 @@ import 'package:strumsight/features/library_v2/screens/library_item_detail_scree
 import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/preference_store.dart';
+
 const _compactPortrait = Size(412, 915);
 
 final class _GoldenSource implements LibraryItemSource {
@@ -120,6 +122,11 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        // M6 (re-audit 2026-09-08): the analysis detail body restores its
+        // persisted note from `keyValueStoreProvider`, which has no default.
+        // An EMPTY store — the rendered frame is byte-identical to the
+        // recorded golden, which is the point of the cell.
+        ...preferenceOverrides(),
         analysisRepositoryProvider.overrideWithValue(
           const _UnusedAnalysisRepository(),
         ),
