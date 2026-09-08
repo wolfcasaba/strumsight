@@ -1,4 +1,5 @@
-// Persisted per-item notes for the unified library.
+// Per-entity free-text notes over the app's only non-secret persistence
+// boundary ([KeyValueStore]).
 //
 // Re-audit 2026-09-08 M6: `library_item_detail_screen.dart` drew a Notes
 // field whose controller was created empty in `initState` and thrown away in
@@ -6,10 +7,11 @@
 // the note was gone with no warning. The UI-side twin of this repo's own
 // "silent no-op" trap.
 //
-// The store sits on the app's only non-secret persistence boundary
-// ([KeyValueStore]), the way `KeyValueSongResumeRepository` does for the
-// trainer's resume checkpoints: a feature-owned key, a versioned envelope,
-// and no direct plugin dependency.
+// The store is feature-agnostic on purpose. A surface binds it to its own
+// [StorageKeys] entry — `noteStoreProvider(StorageKeys.libraryItemNotes)` —
+// so no feature has to open storage of its own to keep a note; that is what
+// keeps the E13-R28 §5.4 rule ("the surface is an entry point, the actual
+// operation is a use case") machine-checkable for the library tree.
 //
 // A note is USER-AUTHORED content, so nothing here repairs a document by
 // guessing: an unreadable document surfaces as `Failure(storage.read)` (the
@@ -20,15 +22,18 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/foundation/app_failure.dart';
-import '../../../core/foundation/app_result.dart';
-import '../../../core/storage/key_value_store.dart';
-import '../../../core/storage/storage_keys.dart';
-import '../../../core/storage/storage_providers.dart';
+import '../foundation/app_failure.dart';
+import '../foundation/app_result.dart';
+import 'key_value_store.dart';
+import 'storage_providers.dart';
 
-/// The learner's free-text notes on library items, keyed by item id.
-final class KeyValueLibraryNoteRepository {
-  const KeyValueLibraryNoteRepository({required this.keyValueStore});
+/// The learner's free-text notes about one kind of entity, keyed by id and
+/// stored as one versioned document under [storageKey].
+final class KeyValueNoteStore {
+  const KeyValueNoteStore({
+    required this.keyValueStore,
+    required this.storageKey,
+  });
 
   /// Envelope version of the stored document.
   static const int schemaVersion = 1;
@@ -40,12 +45,16 @@ final class KeyValueLibraryNoteRepository {
 
   final KeyValueStore keyValueStore;
 
-  /// The stored note for [itemId] — `''` when the learner never wrote one.
+  /// The [StorageKeys] entry this store's document lives under. One key per
+  /// note-keeping surface, so two surfaces can never overwrite each other.
+  final String storageKey;
+
+  /// The stored note for [entityId] — `''` when the learner never wrote one.
   ///
   /// Synchronous on purpose: [KeyValueStore] reads are already loaded before
-  /// the first frame, so the detail screen can restore the note in
-  /// `initState` without an async gap that could clobber typing.
-  AppResult<String> read(String itemId) {
+  /// the first frame, so a screen can restore the note in `initState`
+  /// without an async gap that could clobber typing.
+  AppResult<String> readNote(String entityId) {
     final Map<String, String> stored;
     try {
       stored = _readAll();
@@ -58,12 +67,12 @@ final class KeyValueLibraryNoteRepository {
         ),
       );
     }
-    return Success<String>(stored[itemId] ?? '');
+    return Success<String>(stored[entityId] ?? '');
   }
 
-  /// Stores [note] for [itemId]; an empty note removes the entry.
-  Future<AppResult<void>> write({
-    required String itemId,
+  /// Stores [note] for [entityId]; an empty note removes the entry.
+  Future<AppResult<void>> updateNote({
+    required String entityId,
     required String note,
   }) async {
     final next = <String, String>{};
@@ -71,27 +80,24 @@ final class KeyValueLibraryNoteRepository {
       next.addAll(_readAll());
     } on FormatException {
       // A document this build cannot read must not block a NEW note. The
-      // unreadable bytes are replaced by the write below — the note the
-      // learner is typing right now is the one thing here that is certainly
-      // still wanted.
+      // unreadable bytes are replaced below — the note the learner is
+      // typing right now is the one thing here that is certainly still
+      // wanted.
     }
     final trimmed = note.length > maxNoteLength
         ? note.substring(0, maxNoteLength)
         : note;
     if (trimmed.isEmpty) {
-      next.remove(itemId);
+      next.remove(entityId);
     } else {
-      next[itemId] = trimmed;
+      next[entityId] = trimmed;
     }
     final payload = <String, Object?>{
       'schemaVersion': schemaVersion,
       'notes': next,
     };
     try {
-      await keyValueStore.writeString(
-        StorageKeys.libraryItemNotes,
-        jsonEncode(payload),
-      );
+      await keyValueStore.writeString(storageKey, jsonEncode(payload));
       return const Success<void>(null);
     } on StorageException catch (e, stackTrace) {
       return Failure<void>(
@@ -104,12 +110,12 @@ final class KeyValueLibraryNoteRepository {
     }
   }
 
-  /// Every stored note keyed by item id.
+  /// Every stored note keyed by entity id.
   ///
   /// Throws [FormatException] — and nothing else — when the document cannot
   /// be read, so every caller has exactly one failure shape to handle.
   Map<String, String> _readAll() {
-    final raw = keyValueStore.readString(StorageKeys.libraryItemNotes);
+    final raw = keyValueStore.readString(storageKey);
     if (raw == null || raw.isEmpty) return <String, String>{};
     final decoded = jsonDecode(raw);
     if (decoded is! Map<String, dynamic>) {
@@ -134,9 +140,11 @@ final class KeyValueLibraryNoteRepository {
   }
 }
 
-/// The note store the library detail screen reads and writes.
-final libraryNoteRepositoryProvider = Provider<KeyValueLibraryNoteRepository>(
-  (ref) => KeyValueLibraryNoteRepository(
+/// The note store for one [StorageKeys] document. A surface binds this
+/// family to its own key instead of opening a store of its own.
+final noteStoreProvider = Provider.family<KeyValueNoteStore, String>(
+  (ref, storageKey) => KeyValueNoteStore(
     keyValueStore: ref.watch(keyValueStoreProvider),
+    storageKey: storageKey,
   ),
 );

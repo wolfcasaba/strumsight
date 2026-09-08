@@ -8,8 +8,8 @@
 // the screen, and the note was gone — silently. The UI-side twin of this
 // repo's own "cloud write swallowed by try/catch" trap.
 //
-//   C1 — a note survives a NEW repository over the same store (the shape an
-//        app restart produces),
+//   C1 — a note survives a NEW store object over the same bytes (the shape
+//        an app restart produces),
 //   C2 — notes are keyed per item; one item's note never becomes another's,
 //   C3 — clearing the field removes the entry rather than storing '',
 //   C4 — an unreadable document is a FAILURE, not an innocent empty note,
@@ -23,13 +23,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/storage/key_value_note_store.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/audio_analysis/application/analysis_providers.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_repository.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_summary.dart';
-import 'package:strumsight/features/library_v2/data/key_value_library_note_repository.dart';
 import 'package:strumsight/features/library_v2/domain/library_item.dart';
 import 'package:strumsight/features/library_v2/screens/library_item_detail_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -58,7 +58,11 @@ final class _UnusedAnalysisRepository implements AnalysisRepository {
   }) => throw UnimplementedError();
 
   @override
-  Future<AppResult<void>> save(AnalysisDocument document) =>
+  Future<AppResult<void>> replace(String id, AnalysisSaveRequest request) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> save(AnalysisSaveRequest request) =>
       throw UnimplementedError();
 }
 
@@ -71,8 +75,10 @@ final _item = AnalysisLibraryItem(
   hasResult: true,
 );
 
-KeyValueLibraryNoteRepository _repositoryOn(InMemoryKeyValueStore store) =>
-    KeyValueLibraryNoteRepository(keyValueStore: store);
+KeyValueNoteStore _storeOn(InMemoryKeyValueStore store) => KeyValueNoteStore(
+  keyValueStore: store,
+  storageKey: StorageKeys.libraryItemNotes,
+);
 
 /// The detail screen on [store], sized so the whole body lays out (the notes
 /// field sits below the fold on a default 800×600 test surface).
@@ -105,41 +111,42 @@ Future<void> _pumpDetail(
 
 void main() {
   group('the note store', () {
-    test('C1 a note survives a new repository over the same store', () async {
+    test('C1 a note survives a new store over the same bytes', () async {
       final store = InMemoryKeyValueStore();
 
-      final write = await _repositoryOn(
-        store,
-      ).write(itemId: _item.id, note: 'Chord changes were late in bar 3.');
+      final write = await _storeOn(store).updateNote(
+        entityId: _item.id,
+        note: 'Chord changes were late in bar 3.',
+      );
       expect(write.isSuccess, isTrue);
 
-      // A FRESH repository reading the same bytes — the app restart shape.
+      // A FRESH store reading the same bytes — the app restart shape.
       expect(
-        _repositoryOn(store).read(_item.id).valueOrNull,
+        _storeOn(store).readNote(_item.id).valueOrNull,
         'Chord changes were late in bar 3.',
       );
     });
 
     test('C2 notes are keyed per item', () async {
       final store = InMemoryKeyValueStore();
-      final repository = _repositoryOn(store);
+      final notes = _storeOn(store);
 
-      await repository.write(itemId: 'item-a', note: 'about A');
-      await repository.write(itemId: 'item-b', note: 'about B');
+      await notes.updateNote(entityId: 'item-a', note: 'about A');
+      await notes.updateNote(entityId: 'item-b', note: 'about B');
 
-      expect(repository.read('item-a').valueOrNull, 'about A');
-      expect(repository.read('item-b').valueOrNull, 'about B');
-      expect(repository.read('item-c').valueOrNull, '');
+      expect(notes.readNote('item-a').valueOrNull, 'about A');
+      expect(notes.readNote('item-b').valueOrNull, 'about B');
+      expect(notes.readNote('item-c').valueOrNull, '');
     });
 
     test('C3 clearing the field removes the entry', () async {
       final store = InMemoryKeyValueStore();
-      final repository = _repositoryOn(store);
+      final notes = _storeOn(store);
 
-      await repository.write(itemId: _item.id, note: 'draft');
-      await repository.write(itemId: _item.id, note: '');
+      await notes.updateNote(entityId: _item.id, note: 'draft');
+      await notes.updateNote(entityId: _item.id, note: '');
 
-      expect(repository.read(_item.id).valueOrNull, '');
+      expect(notes.readNote(_item.id).valueOrNull, '');
       expect(
         store.readString(StorageKeys.libraryItemNotes),
         isNot(contains('draft')),
@@ -150,16 +157,16 @@ void main() {
       final store = InMemoryKeyValueStore({
         StorageKeys.libraryItemNotes: 'not-json-at-all{{{',
       });
-      final repository = _repositoryOn(store);
+      final notes = _storeOn(store);
 
-      final read = repository.read(_item.id);
+      final read = notes.readNote(_item.id);
 
       expect(read.isFailure, isTrue);
       expect(read.failureOrNull?.code, FailureCode.storageRead);
 
-      await repository.write(itemId: _item.id, note: 'written anyway');
+      await notes.updateNote(entityId: _item.id, note: 'written anyway');
 
-      expect(repository.read(_item.id).valueOrNull, 'written anyway');
+      expect(notes.readNote(_item.id).valueOrNull, 'written anyway');
     });
   });
 

@@ -9,7 +9,6 @@ import '../../../core/logging/logger_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../audio_analysis/public.dart';
 import '../../share/public.dart';
-import '../data/key_value_library_note_repository.dart';
 import '../domain/library_item.dart';
 import '../providers/library_v2_providers.dart';
 import '../widgets/library_delete_section.dart';
@@ -183,7 +182,8 @@ class _AnalysisDetailBodyState extends ConsumerState<_AnalysisDetailBody> {
     // first frame), so the restored text is in the controller from its very
     // first build — no async gap in which the learner's typing could be
     // overwritten by an arriving value.
-    final stored = ref.read(libraryNoteRepositoryProvider).read(widget.item.id);
+    final noteStore = ref.read(libraryItemNoteStoreProvider);
+    final stored = noteStore.readNote(widget.item.id);
     if (stored case Failure<String>(:final error)) {
       // An unreadable notes document must not masquerade as "no note": the
       // field starts empty either way, so the fact is recorded where it can
@@ -212,18 +212,18 @@ class _AnalysisDetailBodyState extends ConsumerState<_AnalysisDetailBody> {
   /// Persists the field's current text.
   ///
   /// There is no save button — adding one would change what the screen
-  /// renders — so every edit is written straight through. The repository and
-  /// the logger are read BEFORE the async gap: the chained write can outlive
-  /// this state, and `ref` must not be touched once it has.
+  /// renders — so every edit is persisted straight through. The note store
+  /// and the logger are read BEFORE the async gap: the chained write can
+  /// outlive this state, and `ref` must not be touched once it has.
   void _persistNote() {
     final note = _notesController.text;
     if (note == _persistedNote) return;
     _persistedNote = note;
-    final repository = ref.read(libraryNoteRepositoryProvider);
+    final noteStore = ref.read(libraryItemNoteStoreProvider);
     final logger = ref.read(appLoggerProvider);
     final itemId = widget.item.id;
     _pendingNoteWrite = _pendingNoteWrite.then((_) async {
-      final result = await repository.write(itemId: itemId, note: note);
+      final result = await noteStore.updateNote(entityId: itemId, note: note);
       if (result case Failure<void>(:final error)) {
         logger.warning(
           'library_note_write_failed',
