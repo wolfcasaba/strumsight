@@ -98,25 +98,33 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
   membership actions you take (join, leave, remove a member), and the same write-integrity
   idempotency key. Again: signed out, nothing on this route leaves the device.
 - **tutor_stream** — the AI tutor's cloud turn (javító sáv 3, 2026-09-07; cloud flag +
-  capability gate 2026-09-08). When you send a message to the tutor, the message text and a
-  redacted, on-device-assembled context snapshot go to the StrumSight backend's `/tutor/stream`
-  endpoint and from there to the configured model provider. **Five** gates, all re-checked on
-  every turn and all fail-closed: your explicit **model-use consent** on the Tutor privacy
-  screen (the request object is never even built without it), the build's own
-  `aiTutorCloudEnabled` rollout flag, an enabled account layer, a live signed-in session (the
-  same bearer token and 401 handling as `account_api`), and the server's own answer at
-  `/tutor/capability` — a backend still running its default, canned provider is never presented
-  to you as a cloud tutor. With any gate closed the tutor answers from the local, on-device
-  gateway and nothing leaves the phone.
-- **The cloud tutor is OFF in the build you install.** `aiTutorCloudEnabled` resolves to
-  `false` in every shipped build today (`docs/release/ga-scope.md` — postponed behind the open
-  `R-PRIV-01` blocker), so the tester APK answers every tutor turn on-device. If your build is
-  ever flipped on and the backend's operator has configured a real model provider, that
-  provider is a **third-party processor — Anthropic (Claude API)** — which receives exactly the
-  message and the redacted context snapshot above; its own retention is governed by that
-  provider's API data policy, which this repository does not measure. The full row, including
-  what the operator must verify before any such flip, is `tutor_stream` in
-  [`docs/privacy/data-inventory.yaml`](../privacy/data-inventory.yaml).
+  capability gate 2026-09-08; the provider named 2026-09-08, R29b). When you send a message to
+  the tutor, the message text and a redacted, on-device-assembled context snapshot go to the
+  StrumSight backend's `/tutor/stream` endpoint and from there to the configured model
+  provider. **Five** gates, all re-checked on every turn and all fail-closed: your explicit
+  **model-use consent** on the Tutor privacy screen (the request object is never even built
+  without it), the build's own `aiTutorCloudEnabled` rollout flag, an enabled account layer, a
+  live signed-in session (the same bearer token and 401 handling as `account_api`), and the
+  server's own answer at `/tutor/capability` — a backend still running its default, canned
+  provider is never presented to you as a cloud tutor. With any gate closed the tutor answers
+  from the local, on-device gateway and nothing leaves the phone.
+- **Who the third party is, when there is one.** The model provider this project has chosen is
+  **MiniMax (its M3 model, reached over an Anthropic-compatible Messages API)**. It becomes a
+  processor of your tutor messages only once the backend's operator has configured it — until
+  then the backend answers from a canned, offline provider and nothing leaves the StrumSight
+  server. What MiniMax receives is exactly the message and the redacted context snapshot above:
+  no e-mail, no account or device identifier, no audio. Its own retention and training policy,
+  and the region it processes in, are governed by MiniMax's API terms and the operator's
+  account — this repository does not measure either, which is why the operator has to check
+  both before switching the provider on. The full row, including that operator duty, is
+  `tutor_stream` in [`docs/privacy/data-inventory.yaml`](../privacy/data-inventory.yaml).
+- **Whether the cloud tutor is live in YOUR build depends on which build you got.** Production
+  builds cannot open it at all — `aiTutorCloudEnabled` stays `false` there
+  (`docs/release/ga-scope.md` — postponed behind the open `R-PRIV-01` blocker). The
+  **development tester artifact ships with the rollout flag ON** (2026-09-08, R29a: with it off
+  the Coach could not answer at all), so on that build the four remaining gates are what decide
+  every single turn — and the first of them is your own model-use consent, which is **off until
+  you grant it** on the Tutor privacy screen. Nothing reaches MiniMax before you do.
 
 ## The diagnostics report you can send us — two independent layers
 

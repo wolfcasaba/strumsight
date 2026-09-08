@@ -36,26 +36,58 @@ that completes one turn with consent granted and is then asked for a second turn
 revoked stops on the second turn without ever being rebuilt (proven by
 `test/privacy/consent_enforcement_test.dart`'s A6 tutor cell).
 
-**What's NOT yet true:** the tutor cloud transport (`HttpTutorStreamTransport`, `POST
-/tutor/stream`) has no production construction site anywhere in `lib/**` — `wired: false` in
-the inventory. The turn path today can only ever reach a local/fake `TutorModelGateway`.
+**What IS true now (R9/1–R9/2, R24, R29a):** the tutor cloud transport
+(`HttpTutorStreamTransport`, `POST /tutor/stream`) HAS a production construction site —
+`selectTutorModelGateway` (`lib/features/ai_tutor/presentation/providers/tutor_gateway_providers.dart:110`,
+plus the capability probe at `:81`) — so the inventory row says `wired: true`. The paragraph
+that used to stand here said the opposite (`wired: false`, "the turn path today can only ever
+reach a local/fake `TutorModelGateway`"), and so did the one below it, which described
+`_previewTurnRequest` hardcoding `consent: const TutorConsent(modelUseGranted: true)` as the
+E12-R17 MAJOR-3 gap. Both are now history, and the rest of this section is what replaced them.
 
-**Measured gap (E12-R17 javító kör #1, MAJOR-3):** the consent gate above reads
-`request.consent.modelUseGranted`, but the ONLY production `TutorTurnRequest` construction site
-— `_previewTurnRequest` (`lib/features/ai_tutor/presentation/providers/tutor_providers.dart:433,438`)
-— hardcodes `consent: const TutorConsent(modelUseGranted: true)` and never reads
-`tutorConsentControllerProvider` (`tutor_privacy_providers.dart:75`, the provider
-`tutor_privacy_screen.dart` writes a user's revocation to). A user's revocation via the Tutor
-privacy screen today changes a provider value that no production code path ever reads back into
-a turn request. The gate itself is sound — `reduceTutorTurn` DOES stop a request whose
-`consent.modelUseGranted` is `false` — but nothing in `lib/**` ever builds that `false` from the
-user's actual choice. **This is corrected wording** for a previous version of this paragraph,
-which claimed the gate above "is what will stop the REAL cloud call once a future round wires
-it" — that claim is false as written: wiring `HttpTutorStreamTransport` alone, without ALSO
-fixing `_previewTurnRequest`, would NOT be stopped by the gate, because the gate would still be
-fed a hardcoded `true`. `test/privacy/consent_enforcement_test.dart`'s MAJOR-3 guard group is a
-machine pin against exactly that: it fails the moment a construction site for
-`HttpTutorStreamTransport` appears in `lib/**` while the hardcode is still present.
+**The request path (MAJOR-3, closed by R9/1):** the only production `TutorTurnRequest` builder
+is `buildTutorTurnRequest` (`lib/features/ai_tutor/presentation/providers/tutor_providers.dart:101`),
+and it takes the consent value as an argument. Its one production call site — the
+`turnRequestFactory` of `tutorChatControllerProvider` (`tutor_providers.dart:641`) — supplies
+`ref.read(tutorConsentControllerProvider)`, a LIVE read on every send, not a value captured
+when the controller was built. Without `modelUseGranted` the builder returns a
+`ValidationFailure` carrying `tutor.consent.model_use_missing` and the request object is never
+constructed at all, so there is nothing a caller could accidentally send. The hardcoded `true`
+is gone from `lib/**`.
+
+**The gateway path (four more fail-closed conditions, R9/2 + R24):**
+`selectTutorModelGateway` (`tutor_gateway_providers.dart:95`) returns
+`LocalTutorModelGatewayStub` unless ALL of these hold, and only then builds the cloud gateway
+over `HttpTutorStreamTransport`:
+
+1. `consent.modelUseGranted` — the same live value, re-read at selection time, so consent is
+   enforced twice on independent layers;
+2. `FeatureFlags.aiTutorCloudEnabled` — the BUILD's rollout gate. Production cannot open it
+   (`docs/release/ga-scope.md` keeps the capability `postponed` behind the open `R-PRIV-01`
+   blocker); R29a opened it in the development tester artifact, where its kill switch is an
+   explicit `--dart-define=STRUMSIGHT_AI_TUTOR_CLOUD=false`. It is a rollout gate, never a
+   consent (ADR 0132 §1/§3);
+3. `accountEnabledProvider` — no account layer in this build, no cloud gateway;
+4. a non-null authenticated stream client (`tutorStreamClientProvider`, a thin alias over the
+   auth feature's `accountStreamClientProvider`) — signed out, there is no client to ride;
+5. the server's own `/tutor/capability` answer: a KNOWN capability that does not name a real
+   provider (the backend's canned `fake` adapter, or a tutor switched off) selects the local
+   stub, so a scripted reply is never presented as a cloud tutor's answer. UNKNOWN (not probed
+   yet, or the probe failed) leaves the other four in force rather than inventing an answer.
+
+The factory (`tutorModelGatewayFactoryProvider`, `tutor_gateway_providers.dart:118`) uses
+`ref.read` per attempt, not a boot-time snapshot, so a mid-session revocation or a sign-out
+takes effect on the NEXT turn without rebuilding the conversation.
+
+**The consent value survives a restart in both directions.** `TutorConsentController`
+(`tutor_privacy_providers.dart:76`) mixes in `PersistedPreference`: every grant AND every
+revocation is written through to `StorageKeys.tutorConsent` (`lib/core/storage/storage_keys.dart:116`),
+and `build()` (`:79`) decodes that key back at startup. An absent, empty or undecodable
+document resolves to `const TutorConsent()`, whose `modelUseGranted` is `false`
+(`lib/features/ai_tutor/domain/models/tutor_consent.dart:4`) — an unreadable store therefore
+means NO consent, never a remembered "yes". A write the platform refuses is logged with its
+key rather than swallowed (`lib/core/storage/persisted_preference.dart:31`), so a revocation
+that failed to persist is visible in the log instead of silently reappearing as a grant.
 
 ### 2. Diagnostics — `diagnosticsConsentProvider`
 

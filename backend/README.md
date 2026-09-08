@@ -151,25 +151,43 @@ same 1052 tests, with no test skipped, removed or weakened.
   `STRUMSIGHT_DIAG_TOKEN`; otherwise the process refuses to boot. Configure
   upload storage with `STRUMSIGHT_DIAG_DIR` and stage the optional APK with
   `STRUMSIGHT_APK_PATH`.
-- **AI Tutor proxy (ADR 0131 / 0142, wired R23):** off by default
+- **AI Tutor proxy (ADR 0131 / 0142, wired R23; MiniMax R29b):** off by default
   (`STRUMSIGHT_TUTOR_ENABLED=false` ⇒ `/tutor/*` is not mounted, the client
   gets a plain 404). When enabled, `STRUMSIGHT_TUTOR_PROVIDER` selects the
-  adapter the composition root builds — `fake` (the default and the fallback:
-  a canned reply, no socket), `anthropic` (Anthropic Messages API, streaming,
-  `app/tutor/provider_gateway.py::AnthropicProviderGateway`) or `openai`
-  (Chat Completions). `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` is the SEPARATE
-  JSON allowlist the registry validates the provider/model pair against; it
-  stays fail-closed at `{"fake": ["fake-model"]}`. A real provider also needs
-  a non-empty, non-development `STRUMSIGHT_TUTOR_API_KEY`. All three failure
+  adapter/profile the composition root builds:
+
+  | `STRUMSIGHT_TUTOR_PROVIDER` | model key | base-URL override | auth header |
+  |---|---|---|---|
+  | `fake` (default, no socket) | `fake-model` | — | — |
+  | `minimax` (**the product's provider** — MiniMax M3 over its Anthropic-compatible Messages API) | `MiniMax-M3` | `STRUMSIGHT_TUTOR_MINIMAX_BASE_URL` (`https://api.minimax.io/anthropic/v1`) | `Authorization: Bearer` |
+  | `anthropic` (Anthropic Messages API) | vendor model id | `STRUMSIGHT_TUTOR_ANTHROPIC_BASE_URL` | `x-api-key` |
+  | `openai` (Chat Completions) | vendor model id | `STRUMSIGHT_TUTOR_OPENAI_BASE_URL` | `Authorization: Bearer` |
+
+  MiniMax and Anthropic share ONE adapter
+  (`app/tutor/provider_gateway.py::AnthropicProviderGateway`) and differ only
+  by `AnthropicCompatibleProfile` — base URL plus which header carries the
+  key — so the streaming contract and the whole error classification are the
+  same code for both. The `Bearer` scheme for MiniMax is measured from this
+  repository's own MiniMax tooling (`tools/mm-round.sh`); the adapter sends
+  that one header only, never a second copy of the secret. `MiniMax-M3[1m]`
+  is Claude Code's context-window suffix, NOT an API model id — configuring
+  it fails the boot on the allowlist check.
+
+  `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` is the SEPARATE JSON allowlist the
+  registry validates the provider/model pair against (e.g.
+  `{"minimax": ["MiniMax-M3"]}`); it stays fail-closed at
+  `{"fake": ["fake-model"]}`. A real provider also needs a non-empty,
+  non-development `STRUMSIGHT_TUTOR_API_KEY`. All three failure
   modes — unknown provider, allowlist miss, unusable key — refuse to BOOT in
   every environment, not just prod, so a misconfigured tutor never serves a
   fake answer that looks real. `GET /tutor/capability` reports the live
   `provider` and `model` (never the key) so a flip is verifiable from outside
-  the container. The provider secret stays on the server; provider failures
+  the container — and the client reads the same answer, falling back to its
+  on-device stub when the server says `fake`. The provider secret stays on the server; provider failures
   are normalized to redacted `ProviderError`/`ProviderTimeoutError` and the
   prompt, the reply and the key are never logged. The client-facing answer is
   the same for every provider failure (`502`, or `504` on a timeout), while the
-  SERVER log carries a one-line classification — `configuration` (401/403/404),
+  SERVER log carries the profile name plus a one-line classification — `configuration` (401/403/404),
   `busy` (429/529/5xx), `invalid_request` (400/413/422), `timeout`, `transport`,
   `malformed_response`, `incomplete_response` — plus at most the HTTP status,
   never the provider body. Flip sequence, the classification table, cost/limit

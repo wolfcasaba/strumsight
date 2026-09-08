@@ -9,11 +9,20 @@ or the provider's response body.
 
 import json
 import logging
+from dataclasses import dataclass
 
 import httpx
 
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
 _ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
+#: MiniMax serves an ANTHROPIC-COMPATIBLE Messages API — the same request
+#: body, the same SSE frame types, the same `anthropic-version` header — at
+#: `https://api.minimax.io/anthropic`, with the Messages path `/v1/messages`
+#: under it. Measured from this repository's own MiniMax tooling
+#: (`tools/mm-round.sh`), which points Claude Code at that base URL. The
+#: constant therefore ends in `/v1`, so the adapter's `{base}/messages` join
+#: produces `https://api.minimax.io/anthropic/v1/messages`.
+_MINIMAX_BASE_URL = "https://api.minimax.io/anthropic/v1"
 #: The Anthropic Messages API is versioned by header, not by URL path.
 ANTHROPIC_API_VERSION = "2023-06-01"
 _BYTES_PER_TOKEN_ESTIMATE = 4
@@ -399,6 +408,56 @@ async def _read_anthropic_stream(
     return "".join(parts), output_tokens
 
 
+@dataclass(frozen=True)
+class AnthropicCompatibleProfile:
+    """The per-vendor wire details of ONE Anthropic-compatible endpoint.
+
+    Everything the Messages API contract leaves to the vendor lives here —
+    the base URL and how the key is presented — so a second provider is a
+    PROFILE, not a second adapter: the request body, the SSE folding and the
+    entire error classification below stay literally the same code, and a
+    bug fixed there is fixed for every provider at once.
+    """
+
+    name: str
+    base_url: str
+    auth_header: str
+    auth_prefix: str = ""
+
+    def auth_headers(self, api_key: str) -> dict[str, str]:
+        """Render the single authentication header this vendor expects."""
+        return {self.auth_header: f"{self.auth_prefix}{api_key}"}
+
+
+#: Anthropic's own Messages API: the key rides the `x-api-key` header.
+ANTHROPIC_PROFILE = AnthropicCompatibleProfile(
+    name="anthropic",
+    base_url=_ANTHROPIC_BASE_URL,
+    auth_header="x-api-key",
+)
+
+#: MiniMax M3 (the tutor's provider). MEASURED from this repository's own
+#: MiniMax tooling (`tools/mm-round.sh`), which drives the same endpoint by
+#: exporting `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic` plus
+#: `ANTHROPIC_AUTH_TOKEN` — i.e. the key is presented as
+#: `Authorization: Bearer <key>`, not as `x-api-key`. Whether MiniMax ALSO
+#: accepts `x-api-key` is not measured anywhere in this repository, so the
+#: adapter sends the one header that is: exactly one credential leaves the
+#: process per request, never a speculative second copy of the secret.
+MINIMAX_PROFILE = AnthropicCompatibleProfile(
+    name="minimax",
+    base_url=_MINIMAX_BASE_URL,
+    auth_header="Authorization",
+    auth_prefix="Bearer ",
+)
+
+#: Profile per provider name, for the composition root's lookup.
+ANTHROPIC_COMPATIBLE_PROFILES: dict[str, AnthropicCompatibleProfile] = {
+    ANTHROPIC_PROFILE.name: ANTHROPIC_PROFILE,
+    MINIMAX_PROFILE.name: MINIMAX_PROFILE,
+}
+
+
 class AnthropicProviderGateway(ProviderGateway):
     """Anthropic Messages API adapter with provider-neutral failure handling.
 
@@ -406,24 +465,47 @@ class AnthropicProviderGateway(ProviderGateway):
     whole reply: it is the shape that survives a long answer without tripping
     a request timeout, and the tutor's own SSE transport (`stream.py`) chunks
     the finished reply into `delta` frames from there (ADR 0142 D10).
+
+    It serves EVERY Anthropic-compatible endpoint, selected by `profile`:
+    Anthropic itself and MiniMax M3 differ only in the base URL and in how
+    the key is presented (`AnthropicCompatibleProfile`). `base_url` stays an
+    explicit override for a proxy in front of either vendor; left at `None`
+    the profile's own URL is used.
     """
 
     def __init__(
         self,
         max_output_bytes: int,
         client: httpx.AsyncClient | None = None,
-        base_url: str = _ANTHROPIC_BASE_URL,
+        base_url: str | None = None,
         api_version: str = ANTHROPIC_API_VERSION,
+        profile: AnthropicCompatibleProfile = ANTHROPIC_PROFILE,
     ) -> None:
         if max_output_bytes <= 0:
             raise ValueError("max_output_bytes must be positive")
 
         self._client = client or httpx.AsyncClient()
-        self._base_url = base_url.rstrip("/")
+        self._profile = profile
+        self._base_url = (base_url or profile.base_url).rstrip("/")
         self._api_version = api_version
         # Shared with the OpenAI adapter: the service truncates the reply to
         # `max_output_bytes` anyway, so asking for more would only burn tokens.
         self._max_tokens = max(1, max_output_bytes // _BYTES_PER_TOKEN_ESTIMATE)
+
+    @property
+    def profile(self) -> AnthropicCompatibleProfile:
+        """The vendor profile this adapter was composed with.
+
+        Read-only, and free of the key: it exists so a composition test can
+        assert WHICH provider a configuration actually built without reaching
+        into private attributes.
+        """
+        return self._profile
+
+    @property
+    def base_url(self) -> str:
+        """The resolved endpoint root (profile default or operator override)."""
+        return self._base_url
 
     async def complete(
         self,
@@ -453,7 +535,10 @@ class AnthropicProviderGateway(ProviderGateway):
                 "POST",
                 f"{self._base_url}/messages",
                 headers={
-                    "x-api-key": api_key,
+                    # The vendor-specific credential header comes from the
+                    # profile; everything below is the Messages API contract
+                    # and is identical for every compatible provider.
+                    **self._profile.auth_headers(api_key),
                     "anthropic-version": self._api_version,
                     "content-type": "application/json",
                     "accept": "text/event-stream",
@@ -476,8 +561,12 @@ class AnthropicProviderGateway(ProviderGateway):
             raise ProviderError("Provider request failed") from None
 
         # Metadata only — never the prompt, the reply or the key (AGENTS.md §5).
+        # The profile NAME is configuration, not a secret, and it is what an
+        # operator needs to tell two configured providers apart in one log.
         _logger.info(
-            "Tutor provider stream completed (output_tokens=%s)", output_tokens
+            "Tutor provider stream completed (provider=%s, output_tokens=%s)",
+            self._profile.name,
+            output_tokens,
         )
         return reply
 

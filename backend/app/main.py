@@ -114,7 +114,10 @@ def _guard_prod(settings: Settings) -> None:
 #: Provider names `_build_tutor_gateway` knows how to construct. The
 #: allowlist in `Settings.tutor_allowed_providers` is a SEPARATE, narrower
 #: gate — a name here is only "an adapter exists", never "it is permitted".
-_TUTOR_GATEWAY_PROVIDERS = frozenset({"fake", "openai", "anthropic"})
+#: `minimax` is the product's chosen provider (MiniMax M3 over its
+#: Anthropic-compatible Messages API); `anthropic` and `openai` remain
+#: available alternatives.
+_TUTOR_GATEWAY_PROVIDERS = frozenset({"fake", "openai", "anthropic", "minimax"})
 
 
 def _guard_tutor_provider(settings: Settings) -> None:
@@ -165,15 +168,28 @@ def _build_tutor_gateway(settings: Settings) -> "ProviderGateway":
     never opens a socket.
     """
     from .tutor.provider_gateway import (
+        ANTHROPIC_PROFILE,
+        MINIMAX_PROFILE,
         AnthropicProviderGateway,
         FakeProviderGateway,
         OpenAiProviderGateway,
     )
 
+    # MiniMax speaks the Anthropic Messages API, so it is the SAME adapter
+    # with a different profile (base URL + `Authorization: Bearer` instead of
+    # `x-api-key`) — not a second copy of the streaming and error-mapping
+    # code that would then have to be kept in step.
+    if settings.tutor_provider == "minimax":
+        return AnthropicProviderGateway(
+            max_output_bytes=settings.tutor_max_output_bytes,
+            base_url=settings.tutor_minimax_base_url,
+            profile=MINIMAX_PROFILE,
+        )
     if settings.tutor_provider == "anthropic":
         return AnthropicProviderGateway(
             max_output_bytes=settings.tutor_max_output_bytes,
             base_url=settings.tutor_anthropic_base_url,
+            profile=ANTHROPIC_PROFILE,
         )
     if settings.tutor_provider == "openai":
         return OpenAiProviderGateway(

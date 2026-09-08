@@ -211,8 +211,9 @@ A próba-fiók a mérés után törölve; a `POST /auth/login` vele `401`-et ad.
 - **`STRUMSIGHT_TUTOR_ENABLED=false`** — az AI tutor útvonalai
   (`/tutor/capability`, `/tutor/stream`, `/tutor/turn`) nincsenek felcsatolva,
   a kliens 404-et kap. A bekapcsolás pontos lépéssora a lenti **§7.2**; ez az
-  EGYETLEN felület, amelyhez harmadik fél (a modellszolgáltató) is hozzájut
-  adathoz, ezért külön kulcsot ÉS külön adatvédelmi döntést igényel.
+  EGYETLEN felület, amelyhez harmadik fél is hozzájut adathoz — a
+  modellszolgáltató, a termék döntése szerint a **MiniMax (M3)** —, ezért külön
+  kulcsot ÉS külön adatvédelmi döntést igényel.
 - **`STRUMSIGHT_DIAGNOSTICS_ENABLED=false`** és
   **`STRUMSIGHT_APK_DOWNLOAD_ENABLED=false`** — a Lab-felületek sötétek.
   A diagnosztika bekapcsolása nem-alapértelmezett `STRUMSIGHT_DIAG_TOKEN`-t is
@@ -293,6 +294,35 @@ felület tűnik el.
 
 ### 7.2 Az AI tutor provider bekapcsolása — pontos lépéssor
 
+**A tutor providere a MiniMax M3** (terméktulajdonosi döntés, R29b). A MiniMax
+egy **Anthropic-kompatibilis** Messages API-t szolgál ki
+(`https://api.minimax.io/anthropic`, alatta a `/v1/messages` út) — ugyanaz a
+kéréstest, ugyanazok az SSE-keretek, ugyanaz az `anthropic-version` fejléc —,
+ezért a backend NEM kapott második adaptert: az R23-as
+`AnthropicProviderGateway` fut, csak más **profillal**
+(`AnthropicCompatibleProfile`, `backend/app/tutor/provider_gateway.py`). A
+profil pontosan KÉT dolgot dönt el — a base URL-t és azt, melyik fejléc viszi
+a kulcsot; a táblázat többi oszlopa a hozzá tartozó konfiguráció:
+
+| profil | base URL (alapérték) | a kulcs fejléce | allowlist-bejegyzés | `/tutor/capability` `provider` / `model` |
+|---|---|---|---|---|
+| `minimax` | `https://api.minimax.io/anthropic/v1` | `Authorization: Bearer <kulcs>` | `{"minimax": ["MiniMax-M3"]}` | `minimax` / `MiniMax-M3` |
+| `anthropic` | `https://api.anthropic.com/v1` | `x-api-key: <kulcs>` | `{"anthropic": ["<modell>"]}` | `anthropic` / `<modell>` |
+| `openai` | `https://api.openai.com/v1` | `Authorization: Bearer <kulcs>` (Chat Completions) | `{"openai": ["<modell>"]}` | `openai` / `<modell>` |
+| `fake` | — (nincs socket) | — | `{"fake": ["fake-model"]}` | `fake` / `fake-model` |
+
+A `Bearer` séma a repó SAJÁT MiniMax-eszközeiből MÉRT tény
+(`tools/mm-round.sh`: `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic` +
+`ANTHROPIC_AUTH_TOKEN`), nem feltételezés. Hogy a MiniMax elfogadja-e emellett
+az `x-api-key`-t is, ebben a repóban nincs megmérve — az adapter ezért a
+mértet küldi, és **csak azt az egyet**: kérésenként pontosan egy példány
+hagyja el a folyamatot a titokból.
+
+**A modell-azonosító `MiniMax-M3`.** A `MiniMax-M3[1m]` a Claude Code
+kontextusablak-utótagja, NEM API-modellnév — ha az kerül a
+`STRUMSIGHT_TUTOR_MODEL`-be, az allowlist-ellenőrzés bootoláskor elhasal
+(ez a szándék: a hiba ne a diák első kérdésénél derüljön ki).
+
 **R23 előtt ez a kapcsoló félrevezető volt:** a `main.py` FELTÉTEL NÉLKÜL
 `FakeProviderGateway()`-t épített, tehát a tutor bekapcsolva is konzervdobozos
 választ adott, akárhogy állt a `STRUMSIGHT_TUTOR_PROVIDER`. R23 óta a
@@ -305,22 +335,28 @@ csendben:
 
 | Kulcs | Érték | Miért |
 |---|---|---|
-| `STRUMSIGHT_TUTOR_PROVIDER` | `anthropic` (vagy `openai`) | melyik ADAPTER épül; `fake` az alapértelmezés |
-| `STRUMSIGHT_TUTOR_MODEL` | `claude-sonnet-5` | a konkrét modell-azonosító |
-| `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` | `{"anthropic": ["claude-sonnet-5"]}` | a JSON allowlist — a registry ehhez validál |
-| `STRUMSIGHT_TUTOR_API_KEY` | a szolgáltató kulcsa | a szerveren marad, a kliens SOSEM látja |
+| `STRUMSIGHT_TUTOR_PROVIDER` | `minimax` | melyik ADAPTER/profil épül; `fake` az alapértelmezés |
+| `STRUMSIGHT_TUTOR_MODEL` | `MiniMax-M3` | a konkrét modell-azonosító |
+| `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` | `{"minimax": ["MiniMax-M3"]}` | a JSON allowlist — a registry ehhez validál |
+| `STRUMSIGHT_TUTOR_API_KEY` | a MiniMax API-kulcs | a szerveren marad, a kliens SOSEM látja |
 
 A provider és az allowlist szándékosan KÉT külön kulcs: az első azt mondja meg,
 melyik adapter létezik, a második azt, mi van engedélyezve. Az allowlist
 alapértéke `{"fake": ["fake-model"]}` marad — egy elgépelt provider- vagy
 modellnév tehát nem „majdnem működik", hanem meg sem indul.
 
+Az ötödik, OPCIONÁLIS kulcs a `STRUMSIGHT_TUTOR_MINIMAX_BASE_URL`: csak akkor
+kell, ha a MiniMax elé saját proxy/gateway kerül. Üresen hagyva a fenti
+alapérték érvényes, és a végpont, ahová a kérés ténylegesen megy,
+`https://api.minimax.io/anthropic/v1/messages` (az adapter a base URL-hez
+`/messages`-t fűz — ezért végződik a base URL `/v1`-re).
+
 **1. Kulcsok a `runtime.env`-be** (a fájl `0600`, nem verziókövetett):
 
 ```
-STRUMSIGHT_TUTOR_PROVIDER=anthropic
-STRUMSIGHT_TUTOR_MODEL=claude-sonnet-5
-STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS={"anthropic": ["claude-sonnet-5"]}
+STRUMSIGHT_TUTOR_PROVIDER=minimax
+STRUMSIGHT_TUTOR_MODEL=MiniMax-M3
+STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS={"minimax": ["MiniMax-M3"]}
 STRUMSIGHT_TUTOR_API_KEY=…            # a titokkezelőből, sosem kézzel ide
 STRUMSIGHT_TUTOR_ENABLED=true
 ```
@@ -328,7 +364,7 @@ STRUMSIGHT_TUTOR_ENABLED=true
 A négy kulcs egyetlen `up -d`-ben megy fel; ha mégis lépésenként haladsz,
 **a kulcs + a provider + az allowlist megy előbb, és a
 `STRUMSIGHT_TUTOR_ENABLED=true` legutoljára.** A veszélyes köztes állapot az
-`ENABLED=true` + `PROVIDER=anthropic` **kulcs nélkül**: ilyenkor a
+`ENABLED=true` + `PROVIDER=minimax` **kulcs nélkül**: ilyenkor a
 `_guard_tutor_provider` `RuntimeError`-t dob, a folyamat el sem indul, és mivel
 a `docker compose up -d` a régi konténert már leállította, nem „csak a tutor"
 esik ki, hanem a bejelentkezés is. (Az `ENABLED=true` önmagában, még `fake`
@@ -350,11 +386,16 @@ hiányzik — a hibaüzenetek a kulcs NEVÉT írják ki, az ÉRTÉKÉT soha.
 ```bash
 curl -s http://127.0.0.1:8010/tutor/capability
 # {"enabled":true,"version":"v1","streaming":false,
-#  "provider":"anthropic","model":"claude-sonnet-5"}
+#  "provider":"minimax","model":"MiniMax-M3"}
 #
 # flip ELŐTT: 404 (a router fel sem csatolódik)
 # flip UTÁN, de fake providerrel: "provider":"fake","model":"fake-model"
 ```
+
+Ez a válasz nem csak operátori kényelem: a kliens ugyanezt a végpontot kérdezi
+le (`tutorCloudCapabilityProvider`), és ha a szerver `fake`-et mond — vagy a
+tutor ki van kapcsolva —, a helyi, eszközön futó stubot választja, tehát egy
+konzervdobozos választ SOHA nem mutat felhő-tutor válaszaként.
 
 A válasz a kulcsot **nem** tartalmazza, és nem is tartalmazhatja: a
 `TutorCapabilityResponse` egy zárt allowlist-séma, a kulcs egyetlen mezőjének
@@ -410,22 +451,32 @@ A limiterek **folyamat-lokálisak** (ugyanaz a mérés, mint az auth-throttle-n�
 tényleges napi plafon ~worker-számszor nagyobb. Egyetlen workerre méretezz,
 vagy tedd a limitet közös tárba, mielőtt a számla ezt méri meg helyetted.
 A tényleges provider-oldali `output_tokens` minden turn után egy INFO sorba
-kerül (`Tutor provider stream completed (output_tokens=…)`) — szám, semmi más:
+kerül (`Tutor provider stream completed (provider=minimax, output_tokens=…)`)
+— a profil neve (konfiguráció, nem titok) és egy szám, semmi más:
 
 ```bash
 docker compose --env-file runtime.env logs api | grep 'Tutor provider stream'
 ```
 
 **6. Adatvédelem — mi hagyja el a szervert.** Ez a flip a StrumSight EGYETLEN
-olyan útvonala, ahol felhasználói szöveg harmadik félhez kerül. A
-`docs/privacy/data-inventory.yaml` `tutor_stream` sora írja le, mi megy fel a
-kliensről: a tanuló szabadszöveges üzenete + a prompt-építő által
-összeállított, redaktált kontextus-pillanatkép, `legal_basis: consent`, a
+olyan útvonala, ahol felhasználói szöveg harmadik félhez kerül, és a harmadik
+fél NEVE ezzel a flippel dől el: **MiniMax (M3, Anthropic-kompatibilis
+Messages API)**. A `docs/privacy/data-inventory.yaml` `tutor_stream` sora írja
+le, mi megy fel a kliensről: a tanuló szabadszöveges üzenete + a prompt-építő
+által összeállított, redaktált kontextus-pillanatkép, `legal_basis: consent`, a
 kliensoldali kapu a `TutorConsent.modelUseGranted`. A szerver ezt a két dolgot
 adja tovább a providernek — a kontextus a Messages API `system` mezőjében, az
 üzenet és az előzmény a `messages` tömbben —, semmi mást: nincs benne
 felhasználó-azonosító, e-mail, eszközazonosító vagy hangadat (a detektálás
 100%-ban on-device marad, §7).
+
+**Amit a flip ELŐTT az operátornak meg kell néznie**, mert ez a repó nem méri:
+a MiniMax saját megőrzési és tanítási politikája a felküldött szövegre, és az
+a régió, ahol a MiniMax-fiók feldolgoz. Mindkettő a fiók tulajdonságától függ,
+nem a kódtól — a `data-inventory.yaml` `tutor_stream` sora ezért mondja ki
+külön, mit garantál a KÓD (a kliens nem tart másolatot a nyitott beszélgetés
+memóriabeli állapotán túl; a backend a prompt tartalmát sehol nem naplózza) és
+mit kell az operátornak ELLENŐRIZNIE.
 
 A backend a prompt-tartalmat SEHOL nem naplózza (a napló csak a felhasználó
 azonosítóját és token-számokat lát), és a provider hibatestje sosem kerül sem
@@ -433,19 +484,39 @@ naplóba, sem a kliens felé — a `ProviderError`/`ProviderTimeoutError`
 provider-semleges, redaktált kivétel, amit a router `502`/`504`-re, a
 stream-transzport pedig `provider_error`/`provider_timeout` SSE-keretre képez.
 
-> **Nyitott tétel a flip előtt (R23 lelet, NEM ebben a körben javítva):** az
-> adat-leltár `tutor_stream` sorának `storage` mezője ma még csak
-> „backend (the configured STRUMSIGHT_API_URL host)"-ot mond. Amint a
-> `STRUMSIGHT_TUTOR_PROVIDER` nem `fake`, ez hiányos: a harmadik fél
-> (modellszolgáltató) mint adatfeldolgozó és a nála érvényes megőrzés
-> hiányzik a sorból. A `docs/privacy/**` szerkesztése ezen a körön kívül
-> esett — a flip ELŐTT a leltárt ki kell egészíteni, különben a beleegyezési
-> szöveg nem fedi a valóságot.
+> **Az R23 nyitott tétele LEZÁRVA (R24, majd R29b).** Az adat-leltár
+> `tutor_stream` sora korábban csak „backend (the configured
+> STRUMSIGHT_API_URL host)"-ot mondott, tehát a harmadik fél mint
+> adatfeldolgozó hiányzott belőle. Az R24 behúzta a harmadik-fél-hopot a
+> `storage`/`retention` mezőkbe, az R29b pedig a tényleges providert nevezi
+> meg benne (MiniMax M3) — ugyanígy a `docs/beta/tester-consent.md` prózája és
+> a `docs/store/data-safety.yaml` `tutor_turn_message` kategóriája. A flip
+> előtt tehát nincs leltár-adósság; ami marad, az a fenti operátori
+> ellenőrzés (MiniMax-oldali megőrzés + régió).
 
-**Visszakapcsolás:** `STRUMSIGHT_TUTOR_ENABLED=false`, `up -d` — a routerek
-eltűnnek, a kliens a `/tutor/capability` 404-jéből tudja, hogy nincs
-felhő-tutor, és a helyi stub-ra esik vissza. A providert visszaállítani
-`fake`-re önmagában is elég ahhoz, hogy egyetlen bájt se hagyja el a szervert.
+**Visszakapcsolás (két fokozat, mindkettő egy `up -d`):**
+
+1. `STRUMSIGHT_TUTOR_PROVIDER=fake` — a routerek maradnak, a
+   `/tutor/capability` őszintén `"provider":"fake"`-et mond, a kliens ettől a
+   helyi stubra vált, és **egyetlen bájt sem megy a MiniMaxhoz**. Ez a
+   visszavonás legkisebb lépése: a bejelentkezés és a beállítás-szinkron
+   érintetlen marad.
+2. `STRUMSIGHT_TUTOR_ENABLED=false` — a `/tutor/*` routerek le is csatolódnak,
+   a kliens 404-et kap, és ugyanúgy a helyi stubra esik vissza.
+
+Mindkét irány adatvesztés nélküli: a beszélgetés a készüléken él, a backend a
+turnökből semmit nem tárol.
+
+**Alternatív providerek.** A `minimax` a termék döntése, de az adapter
+profil-alapú, ezért az `anthropic` (Anthropic Messages API, `x-api-key`) és az
+`openai` (Chat Completions) változatlanul választható: a fenti lépéssor
+ugyanaz, csak a négy kulcs értéke más (a profil-táblázat a szakasz elején), és
+`anthropic`/`openai` esetén a base URL felülbírálása a
+`STRUMSIGHT_TUTOR_ANTHROPIC_BASE_URL` / `STRUMSIGHT_TUTOR_OPENAI_BASE_URL`
+kulcson megy. A providerváltás egyben ADATVÉDELMI változás: a
+`data-inventory.yaml` `tutor_stream` sora, a `tester-consent.md` és a
+`data-safety.yaml` a MiniMaxot NEVESÍTI, tehát más providerre váltva ezeket is
+át kell írni, mielőtt a flip élesbe megy.
 
 ### 7.3 Community média-feltöltés bekapcsolása — pontos lépéssor
 
