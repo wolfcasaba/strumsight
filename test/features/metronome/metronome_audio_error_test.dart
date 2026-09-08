@@ -47,6 +47,9 @@ void main() {
 
     await tester.tap(find.text('Start'));
     await tester.pump(const Duration(milliseconds: 16));
+    // The failing player's rejection lands one microtask after the tick;
+    // two frames make sure the notice's setState has been applied.
+    await tester.pump();
     await tester.pump();
 
     expect(find.byKey(audioOutputErrorKey), findsOneWidget);
