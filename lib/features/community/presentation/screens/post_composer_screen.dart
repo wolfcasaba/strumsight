@@ -29,16 +29,23 @@
 /// English build rendered a Hungarian composer — measured on the
 /// shipped development APK, where ``communityWritesEnabled`` is on.
 ///
-/// **Média placeholder (brief §3 / Kör 18, R21 audit MI5):** the
-/// composer carries a stub "Attach media" button that does NOT upload
-/// anything yet — the explicit Kör 12 boundary. Until R21 it rendered
-/// unconditionally, so every shipped build (where
-/// ``communityMediaEnabled`` is ``false`` — the flag has open
-/// R-SEC-01 / R-PRIV-01 blockers and is define-only in EVERY
-/// environment, ``feature_flags.dart``) offered an affordance that
-/// could never do its job. It is now behind that same flag: with the
-/// flag off the button is absent, with it on the honest "later"
-/// snackbar is kept.
+/// **Média csatolása (javító sáv R27).** A "Attach media" gomb R21 óta
+/// a ``communityMediaEnabled`` flag mögött áll; R12 és R27 között
+/// csak egy őszinte „később" snackbart mutatott, mert nem volt mit
+/// hívnia. R27 óta VAN: a gomb képet választ, azonnal feltölti
+/// (``POST /community/media``), és a keletkező azonosítót a
+/// piszkozatba teszi, tehát egy app-újraindítás után is megvan.
+///
+/// A gomb HELYE és megjelenése bájtra változatlan — a golden-képek
+/// (``e13_r33``) a flaggel BEKAPCSOLVA készültek, és csatolmány nélkül
+/// a képernyő pontosan ugyanaz marad: a csatolmány-lista, a hiba- és a
+/// korlát-üzenet KIZÁRÓLAG akkor jelenik meg, ha van mit mutatniuk.
+///
+/// A ``communityMediaEnabled`` a szállított buildekben továbbra is
+/// KIKAPCSOLT (``feature_flags.dart``; a nyitott R-SEC-01 /
+/// R-PRIV-01 tételek közül a threat model A6.2.5 CSAM-hash és
+/// moderátori SLA fele szervezeti döntés, nem kód) — a teljes út
+/// viszont kész és a flaggel bekapcsolva tesztelt.
 library;
 
 import 'package:flutter/material.dart';
@@ -50,9 +57,11 @@ import '../../../../app/config/app_config.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/post_composer_controller.dart';
+import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
+import '../widgets/community_media_tile.dart';
 import '../widgets/community_theme_scope.dart';
 
 /// The composer route. The entry-point that pushes this route
@@ -140,6 +149,7 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
             onSubmit: () =>
                 ref.read(postComposerControllerProvider.notifier).submit(),
             onAttachMediaPressed: _onAttachMediaPressed,
+            onRemoveMediaPressed: _onRemoveMediaPressed,
             mediaEnabled: mediaEnabled,
           ),
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -150,17 +160,120 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
   }
 
   void _onAttachMediaPressed() {
+    ref.read(postComposerControllerProvider.notifier).attachMedia();
+  }
+
+  void _onRemoveMediaPressed(String mediaPublicId) {
+    ref
+        .read(postComposerControllerProvider.notifier)
+        .removeMedia(mediaPublicId);
+  }
+}
+
+enum _PreviewFlag { chordTimeline, strumPattern, tempo, streakDays, bestScore }
+
+/// Egy megjelenítendő csatolmány: az azonosító mindig megvan, a leíró nem.
+typedef _AttachmentEntry = ({
+  String publicId,
+  CommunityMediaAttachment? descriptor,
+});
+
+/// A szerkesztőben MEGJELENÍTENDŐ csatolmányok, stabil sorrendben.
+///
+/// Két forrásból áll össze, és a sorrend nem esetleges:
+///
+/// 1. a [PostComposerState.mediaIds] — ezek mennek ki a poszttal,
+///    csatolási sorrendben. Egy VISSZATÖLTÖTT piszkozatnál csak az
+///    azonosító van meg (a szervernek nincs „leíró egy azonosítóhoz"
+///    végpontja), ilyenkor a `descriptor` `null`, és a csempe egy
+///    semleges „csatolva" arcot rajzol — kitalált `ready` állapot
+///    helyett;
+/// 2. utánuk azok a leírók, amelyek NEM kerültek a listába: az
+///    elutasított feltöltések. Ezeket meg KELL mutatni, különben a
+///    felhasználó annyit lát, hogy „nem történt semmi", és nem tudja
+///    meg, miért.
+List<_AttachmentEntry> _attachmentTiles(PostComposerState state) {
+  final entries = <_AttachmentEntry>[
+    for (final id in state.mediaIds)
+      (publicId: id, descriptor: state.mediaDescriptors[id]),
+  ];
+  final attached = state.mediaIds.toSet();
+  for (final descriptor in state.mediaDescriptors.values) {
+    if (attached.contains(descriptor.publicId)) continue;
+    entries.add((publicId: descriptor.publicId, descriptor: descriptor));
+  }
+  return entries;
+}
+
+/// Egy csatolmány sora a szerkesztőben.
+class _AttachedMedia extends StatelessWidget {
+  const _AttachedMedia({required this.entry, required this.onRemove});
+
+  final _AttachmentEntry entry;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final descriptor = entry.descriptor;
+    if (descriptor == null) {
+      return _RestoredAttachment(
+        publicId: entry.publicId,
+        onRemove: onRemove,
+      );
+    }
+    return CommunityMediaTile(
+      key: Key('composer-media-${entry.publicId}'),
+      media: descriptor,
+      onRemove: onRemove,
+    );
+  }
+}
+
+/// Egy visszatöltött piszkozat csatolmánya, leíró nélkül.
+///
+/// SZÁNDÉKOSAN semleges: nem állítja, hogy kész, és nem rajzol
+/// képet — a kliens ebben a pillanatban csak annyit tud, hogy a
+/// poszthoz tartozik egy azonosító.
+class _RestoredAttachment extends StatelessWidget {
+  const _RestoredAttachment({required this.publicId, required this.onRemove});
+
+  final String publicId;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.communityComposerMediaLater),
-        duration: const Duration(seconds: 2),
+    return ListTile(
+      key: Key('composer-media-restored-$publicId'),
+      leading: const Icon(Icons.attachment),
+      title: Text(l10n.communityComposerMediaSectionLabel),
+      trailing: IconButton(
+        tooltip: l10n.communityMediaRemove,
+        icon: const Icon(Icons.close),
+        onPressed: onRemove,
       ),
     );
   }
 }
 
-enum _PreviewFlag { chordTimeline, strumPattern, tempo, streakDays, bestScore }
+/// Egy soros üzenet a csatolás körül (hiba vagy korlát).
+class _MediaNotice extends StatelessWidget {
+  const _MediaNotice({super.key, required this.text, required this.isError});
+
+  final String text;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      text,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: isError ? theme.colorScheme.error : null,
+      ),
+    );
+  }
+}
 
 class _ComposerBody extends StatelessWidget {
   const _ComposerBody({
@@ -171,6 +284,7 @@ class _ComposerBody extends StatelessWidget {
     required this.onToggleField,
     required this.onSubmit,
     required this.onAttachMediaPressed,
+    required this.onRemoveMediaPressed,
     required this.mediaEnabled,
   });
 
@@ -181,11 +295,14 @@ class _ComposerBody extends StatelessWidget {
   final void Function(_PreviewFlag flag, bool value) onToggleField;
   final VoidCallback onSubmit;
   final VoidCallback onAttachMediaPressed;
+  final ValueChanged<String> onRemoveMediaPressed;
 
-  /// ``communityMediaEnabled`` (R21, audit MI5). The attach-media button
-  /// is a stub that cannot upload; rendering it while the flag is off
-  /// promises a capability the build does not have, so the whole
-  /// affordance is dropped instead of merely being disabled.
+  /// ``communityMediaEnabled`` (R21, audit MI5). Rendering the
+  /// attach-media affordance while the flag is off would promise a
+  /// capability the build does not have — the server would answer the
+  /// framework's bare 404, since the media router is not even mounted —
+  /// so the whole affordance is dropped instead of merely being
+  /// disabled.
   final bool mediaEnabled;
 
   @override
@@ -215,6 +332,13 @@ class _ComposerBody extends StatelessWidget {
         state.status == PostComposerStatus.submitting ||
         state.status == PostComposerStatus.success ||
         state.status == PostComposerStatus.failure;
+    // A média-blokk három feltétele, KISZÁMÍTVA — a `canSubmit` mintája.
+    // A widget-fában maradó, összetett kifejezés csak nehezebben
+    // olvasható, és a `_attachmentTiles` kétszeri hívását is hozná.
+    final atMediaLimit = state.mediaIds.length >= kCommunityMaxMediaPerPost;
+    final canAttachMedia =
+        !state.isSubmitting && !state.isAttachingMedia && !atMediaLimit;
+    final attachments = _attachmentTiles(state);
 
     return SafeArea(
       child: Column(
@@ -255,10 +379,47 @@ class _ComposerBody extends StatelessWidget {
                       variant: SsButtonVariant.secondary,
                       icon: Icons.attach_file,
                       label: l10n.communityComposerAttachMedia,
-                      onPressed: state.isSubmitting
-                          ? null
-                          : onAttachMediaPressed,
+                      // A korlát ELÉRÉSEKOR tiltott, nem rejtett: egy
+                      // eltűnő gomb azt sugallná, hogy a csatolás
+                      // elromlott, holott csak betelt a négy hely.
+                      onPressed: canAttachMedia ? onAttachMediaPressed : null,
                     ),
+                    // MINDEN további média-widget FELTÉTELES: csatolmány,
+                    // hiba és korlát nélkül a képernyő bájtra ugyanaz,
+                    // mint R21 óta (a golden-képek e13_r33 a flaggel
+                    // BEKAPCSOLVA készültek).
+                    if (state.mediaError != null) ...<Widget>[
+                      const SizedBox(height: 8),
+                      _MediaNotice(
+                        key: const Key('composer-media-error'),
+                        text: l10n.communityComposerMediaUploadFailed,
+                        isError: true,
+                      ),
+                    ],
+                    if (atMediaLimit) ...<Widget>[
+                      const SizedBox(height: 8),
+                      _MediaNotice(
+                        key: const Key('composer-media-limit'),
+                        text: l10n.communityComposerMediaLimitReached,
+                        isError: false,
+                      ),
+                    ],
+                    if (attachments.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 16),
+                      _SectionLabel(
+                        label: l10n.communityComposerMediaSectionLabel,
+                      ),
+                      const SizedBox(height: 8),
+                      for (final entry in attachments) ...<Widget>[
+                        _AttachedMedia(
+                          entry: entry,
+                          onRemove: state.isSubmitting
+                              ? null
+                              : () => onRemoveMediaPressed(entry.publicId),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ],
                   ],
                   const SizedBox(height: 24),
                   _SectionLabel(label: l10n.communityComposerAudienceLabel),

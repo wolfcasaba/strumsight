@@ -10,6 +10,7 @@
 library;
 
 import '../policies/community_audience.dart';
+import 'community_media.dart';
 import 'community_reaction.dart';
 import 'moderation_state.dart';
 import '../value_objects/content_id.dart';
@@ -173,6 +174,8 @@ final class CommunityPost {
     required ModerationState moderationState,
     required CommunityPostCounts counts,
     required CommunityViewerPostState viewerState,
+    List<CommunityMediaAttachment> media =
+        const <CommunityMediaAttachment>[],
   }) {
     if (body != null) {
       if (body.length < kCommunityPostBodyMinLength) {
@@ -209,6 +212,7 @@ final class CommunityPost {
       moderationState: moderationState,
       counts: counts,
       viewerState: viewerState,
+      media: List<CommunityMediaAttachment>.unmodifiable(media),
     );
   }
 
@@ -223,6 +227,7 @@ final class CommunityPost {
     required this.moderationState,
     required this.counts,
     required this.viewerState,
+    required this.media,
   });
 
   final ContentId id;
@@ -236,6 +241,14 @@ final class CommunityPost {
   final CommunityPostCounts counts;
   final CommunityViewerPostState viewerState;
 
+  /// A poszthoz csatolt, KÉSZ médiák, csatolási sorrendben (javító sáv
+  /// R27). Üres lista a csatolmány nélküli poszton, tehát a UI-nak sosem
+  /// kell a „nincs mező" és a „nincs csatolmány" között választania. A
+  /// szerver csak `ready` sorokat küld: egy közzététel után elutasított
+  /// vagy törölt csatolmány eltűnik a listából, nem törött csempeként
+  /// jelenik meg.
+  final List<CommunityMediaAttachment> media;
+
   CommunityPost copyWith({
     ContentId? id,
     PublicUserId? authorId,
@@ -247,6 +260,7 @@ final class CommunityPost {
     ModerationState? moderationState,
     CommunityPostCounts? counts,
     CommunityViewerPostState? viewerState,
+    List<CommunityMediaAttachment>? media,
   }) {
     return CommunityPost._(
       id: id ?? this.id,
@@ -259,6 +273,9 @@ final class CommunityPost {
       moderationState: moderationState ?? this.moderationState,
       counts: counts ?? this.counts,
       viewerState: viewerState ?? this.viewerState,
+      media: media == null
+          ? this.media
+          : List<CommunityMediaAttachment>.unmodifiable(media),
     );
   }
 
@@ -274,7 +291,8 @@ final class CommunityPost {
       other.editedAt == editedAt &&
       other.moderationState == moderationState &&
       other.counts == counts &&
-      other.viewerState == viewerState;
+      other.viewerState == viewerState &&
+      _sameMedia(other.media, media);
 
   @override
   int get hashCode => Object.hash(
@@ -288,7 +306,24 @@ final class CommunityPost {
     moderationState,
     counts,
     viewerState,
+    Object.hashAll(media),
   );
+}
+
+/// Listás elem-egyenlőség: a `List` `==`-e referencia-alapú, tehát két
+/// azonos tartalmú csatolmány-lista különbözőnek látszana, és a poszt
+/// `==`-e minden újradekódolás után hamisat adna — ami a feed
+/// diff-elésén annyit jelentene, hogy minden kártya újraépül.
+bool _sameMedia(
+  List<CommunityMediaAttachment> left,
+  List<CommunityMediaAttachment> right,
+) {
+  if (identical(left, right)) return true;
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }
 
 void _requireNonNegative(int value, String name) {

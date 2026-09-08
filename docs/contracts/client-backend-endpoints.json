@@ -2,7 +2,7 @@
   "schema_version": 1,
   "round": "E15-R12",
   "adr": "docs/adr/0497-community-router-mounting-and-client-contract-parity.md",
-  "_description": "Machine-checked client-to-backend endpoint contract (ADR 0497 D5). Every entry below has a MEASURED call site in lib/** -- this is not a wishlist, per the round brief SS0.0 R6. Re-measured in full by R16 (2026-09-07, branch claude/mit-audit-javitasok-v432t5 @ 3d2f0e3) with `grep -rnE \"_client\\.(getJson|postJson|putJson|patchJson|post|delete)(<[^(]*>)?\\(\" lib`: 65 ApiClient call sites plus the three raw-Dio ones (auth token posts share one helper; the two /tutor + one /diagnostics call sites use Dio directly), collapsing to 67 distinct method+path pairs. R14 reported ~24 of them missing; the measured figure was 26, and all 26 are added here. `source` is the line carrying the endpoint path literal, except where the path is assembled into a local variable shared by more than one verb (post/comment reactions, bookmarks) -- there it is the line of the issuing call. `backend/tests/test_client_contract_parity.py` asserts every `status: mounted` entry's path+method exists in `app.openapi()['paths']`, and asserts every `status: known_gap` entry is ABSENT (a canary: if a future round implements it, that assertion breaks and forces this file to be updated to `mounted`).",
+  "_description": "Machine-checked client-to-backend endpoint contract (ADR 0497 D5). Every entry below has a MEASURED call site in lib/** -- this is not a wishlist, per the round brief SS0.0 R6. Re-measured in full by R16 (2026-09-07, branch claude/mit-audit-javitasok-v432t5 @ 3d2f0e3) with `grep -rnE \"_client\\.(getJson|postJson|putJson|patchJson|post|delete)(<[^(]*>)?\\(\" lib`: 65 ApiClient call sites plus the three raw-Dio ones (auth token posts share one helper; the two /tutor + one /diagnostics call sites use Dio directly), collapsing to 67 distinct method+path pairs. R14 reported ~24 of them missing; the measured figure was 26, and all 26 are added here. `source` is the line carrying the endpoint path literal, except where the path is assembled into a local variable shared by more than one verb (post/comment reactions, bookmarks) -- there it is the line of the issuing call. `backend/tests/test_client_contract_parity.py` asserts every `status: mounted` entry's path+method exists in `app.openapi()['paths']`, and asserts every `status: known_gap` entry is ABSENT (a canary: if a future round implements it, that assertion breaks and forces this file to be updated to `mounted`). Javito sav R27 (2026-09-08): three MEASURED community-media call sites added -- POST /community/media (HttpCommunityPostRepository.uploadMedia, the tree's only multipart request), GET /community/media/{public_id} (communityMediaBytesProvider, the tree's only byte-body response) and DELETE /community/media/{public_id} (HttpCommunityPostRepository.deleteMedia). All three are `mounted`: test_client_contract_parity.py builds the app with community_media_enabled=true, and the router is registered under exactly that flag. 67 -> 70 entries.",
   "endpoints": [
     {
       "method": "POST",
@@ -407,6 +407,24 @@
       "method": "PUT",
       "path": "/community/notifications/preferences",
       "source": "lib/features/community/data/repositories/notification_repository_impl.dart:170",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/media",
+      "source": "lib/features/community/data/repositories/post_repository_impl.dart:520",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/media/{public_id}",
+      "source": "lib/features/community/presentation/widgets/community_media_tile.dart:56",
+      "status": "mounted"
+    },
+    {
+      "method": "DELETE",
+      "path": "/community/media/{public_id}",
+      "source": "lib/features/community/data/repositories/post_repository_impl.dart:539",
       "status": "mounted"
     }
   ]

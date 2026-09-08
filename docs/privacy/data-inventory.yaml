@@ -131,6 +131,13 @@ routes:
     wired: false
     gate: "none today — the uploader accepts an injected Dio; the brief's HTTP wiring (fetching the presigned-upload intent, choosing which Dio to inject) is a Kör 19+ task (ADR 0410 / ADR 0479)"
     consent_switch: "none yet — no production construction site exists; the intended gate is the same account-session mechanism the rest of Community rides on (communityApiClientProvider reuses accountApiClientProvider)"
+    # Javító sáv R27: ez a sor a Kör 18/19-es ALÁÍRT-URL-es feltöltőé, és
+    # továbbra is `wired: false` — nincs éles konstrukciós helye. A ténylegesen
+    # szállított út a DIREKT multipart feltöltés, amely az
+    # `account_api_community_post_repository` sorban él
+    # (`community_media_bytes`, `media_ids`). A két sor két külön transzportot
+    # ír le; összevonni azt jelentené, hogy egy nem létező objektum-tároló
+    # megőrzési szabálya keveredik a valóban használt kötetével.
     fields:
       - name: "community_media_bytes (image/video attachment bytes for a presigned PUT)"
         purpose: "community post/media attachment upload, once wired"
@@ -292,6 +299,23 @@ routes:
         purpose: "kétszeres beküldés és elveszett-frissítés elleni védelem"
         legal_basis: "legitimate interest — a művelet technikai helyessége"
         retention: "backend, az írási művelethez kötve"
+        storage: "backend"
+        leaves_device: true
+      # Javító sáv R27 — a szerkesztő „Média csatolása" útja. A bájtok NEM a
+      # poszttal együtt mennek ki: a csatolás pillanatában, önálló
+      # `POST /community/media` kéréssel. A `communityMediaEnabled` kliens-flag
+      # a szállított buildekben KIKAPCSOLT, tehát a gomb sem jelenik meg —
+      # a mező mégis itt van, mert a kód-út kész és a flag felkapcsolható.
+      - name: "community_media_bytes (a felhasználó által választott kép nyers bájtjai — POST /community/media multipart `file`)"
+        purpose: "kép csatolása egy közösségi poszthoz; a szerver a bájtokat magic-byte alapján ellenőrzi, vírusra vizsgálja, majd ÚJRAKÓDOLJA (az EXIF/GPS a tárolt fájlból hiányzik — threat model A6.2.4)"
+        legal_basis: "consent"
+        retention: "backend, a média sorához kötve a tulajdonos DELETE-jéig; a poszthoz nem kötött (laza) feltöltést a fiók kvótája korlátozza"
+        storage: "backend (STRUMSIGHT_MEDIA_ROOT, tartalom-címzett fájl a szerver saját kötetén)"
+        leaves_device: true
+      - name: "media_ids (a poszthoz csatolt médiák publikus azonosítói — POST /community/posts `media_ids`)"
+        purpose: "a már feltöltött média hozzákötése a poszthoz a közzétételkor"
+        legal_basis: "consent"
+        retention: "backend, a poszt rekordjához kötve"
         storage: "backend"
         leaves_device: true
 

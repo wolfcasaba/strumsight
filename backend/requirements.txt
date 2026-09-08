@@ -12,3 +12,10 @@ PyJWT>=2.8,<3
 bcrypt>=4.1,<5
 python-multipart>=0.0.9,<0.1
 httpx>=0.27,<0.29
+# Community media re-encode (E09 javito sav R27). Pillow is a HARD
+# dependency of `app/community/media/transcode.py`: every accepted image is
+# decoded and re-encoded from the pixel buffer, which is what strips EXIF /
+# GPS, polyglot tails and scriptable containers (threat model A6.2.4). There
+# is deliberately no "disabled image transcoder" fallback, so a missing
+# Pillow is a broken install, not a configuration state.
+Pillow>=11,<14

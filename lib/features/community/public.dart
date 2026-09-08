@@ -34,6 +34,10 @@ export 'domain/value_objects/public_user_id.dart';
 export 'domain/entities/community_challenge.dart';
 export 'domain/entities/community_club.dart';
 export 'domain/entities/community_comment.dart';
+// A csatolt média entitása (javító sáv R27). Azért van itt, mert a
+// `CommunityPost.media` mezőjének típusa — egy barrel-en át olvasó
+// hívó a poszt csatolmányait máskülönben csak `dynamic`-ként látná.
+export 'domain/entities/community_media.dart';
 export 'domain/entities/community_post.dart';
 export 'domain/entities/community_profile.dart';
 export 'domain/entities/community_reaction.dart';

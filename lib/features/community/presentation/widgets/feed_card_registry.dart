@@ -33,6 +33,7 @@ import '../../domain/entities/community_post.dart';
 import '../../domain/entities/moderation_state.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
+import 'community_media_tile.dart';
 import 'community_moderation_placeholder.dart';
 import 'community_theme_scope.dart';
 
@@ -82,6 +83,19 @@ class FeedCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 if (post.body != null && post.body!.isNotEmpty) ...<Widget>[
                   Text(post.body!, style: theme.textTheme.bodyMedium),
+                  const SizedBox(height: 8),
+                ],
+                // Csatolt média (javító sáv R27). FELTÉTELES, tehát egy
+                // csatolmány nélküli poszt kártyája bájtra ugyanaz, mint
+                // eddig — a meglévő golden-képek és kártya-tesztek
+                // fixture-jei mind ilyenek. A szerver csak `ready`
+                // sorokat küld, tehát egy közzététel után elutasított
+                // vagy törölt csatolmány egyszerűen eltűnik a listából.
+                for (final media in post.media) ...<Widget>[
+                  CommunityMediaTile(
+                    key: Key('feed-card-media-${media.publicId}'),
+                    media: media,
+                  ),
                   const SizedBox(height: 8),
                 ],
                 _artifactBody(context: context, post: post, artifact: artifact),

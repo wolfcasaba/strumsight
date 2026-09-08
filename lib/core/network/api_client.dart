@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -129,6 +130,118 @@ final class ApiClient {
     conflictCode: conflictCode,
   );
 
+  /// POST egy MULTIPART törzset, JSON-objektumot adó végpontra.
+  ///
+  /// A `POST /community/media` (javító sáv R27) az egyetlen felület a
+  /// fában, amely nem JSON-t küld: a bájtok egy `multipart/form-data`
+  /// részben utaznak. A primitív ITT él, és nem a feature adat-rétegében,
+  /// két mért okból:
+  ///
+  /// * a `FormData` felépítése így nem szivárog ki a repository-kba (a
+  ///   hívó bájtokat és egy fájlnevet ad, Dio-típust nem), és
+  /// * a kérés ugyanazon a `_requestJson`-on megy át, mint a másik öt
+  ///   primitív, tehát a JWT-t hozzáadó interceptor, a 401/403/409/422
+  ///   osztályozás és a rossz-válasz ág bájtra azonos. Egy külön,
+  ///   injektált `Dio`-t fielded feltöltő osztály mindhármat újra
+  ///   megírná — és az `api_client.dart` `_dio.` hívási helyeinek
+  ///   pinelt száma (`tool/check_data_inventory.dart`) is azért marad
+  ///   NÉGY, mert ez a metódus nem nyit új kimenő utat.
+  ///
+  /// A [filename] SZÁNDÉKOSAN nem a felhasználó fájlneve: a szerver
+  /// eldobja (a tárolt út a tartalom lenyomatából áll össze), a naplóba
+  /// viszont bekerülhetne, ezért a hívó egy semleges nevet ad.
+  ///
+  /// A rész `Content-Type`-ját SZÁNDÉKOSAN nem állítjuk be. A szerver a
+  /// fájl fajtáját kizárólag a magic-bytekből dönti el
+  /// (`backend/app/community/media/sniff.py`) — a hívó által írt fejléc
+  /// nem paramétere a döntésnek —, tehát egy itt kitalált érték
+  /// legfeljebb azt a látszatot keltené, hogy számít valamit.
+  Future<AppResult<T>> postMultipartJson<T>(
+    String path, {
+    required List<int> bytes,
+    required JsonObjectDecoder<T> decode,
+    String field = 'file',
+    String filename = 'upload.bin',
+    bool requiresAuthentication = true,
+    String unauthorizedCode = FailureCode.authSessionExpired,
+    String conflictCode = FailureCode.validationInvalidInput,
+  }) {
+    final form = FormData.fromMap(<String, Object?>{
+      field: MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    return _requestJson(
+      method: 'POST',
+      path: path,
+      data: form,
+      decode: decode,
+      requiresAuthentication: requiresAuthentication,
+      unauthorizedCode: unauthorizedCode,
+      conflictCode: conflictCode,
+    );
+  }
+
+  /// GET egy BÁJT-törzset adó végpontról (javító sáv R27).
+  ///
+  /// Egyetlen felület használja: a `GET /community/media/{public_id}`,
+  /// amely a csatolt kép újrakódolt bájtjait adja vissza. A kérés
+  /// hitelesített és közönség-ellenőrzött, tehát NEM cserélhető le egy
+  /// `Image.network`-re: annak nincs JWT-je, és a szerver 404-et adna.
+  ///
+  /// A [ResponseType.bytes] SZÁNDÉKOSAN a kérés saját beállítása, nem a
+  /// `DioFactory` globális alapértelmezése — minden más hívás JSON-t
+  /// vár, és egy globális átállítás mindet elrontaná. A Dio a
+  /// `bytes`/`stream` válaszfajtát meghagyja, akármi a generikus
+  /// argumentum; minden MÁS válaszfajtánál viszont JSON-ra váltana.
+  ///
+  /// A generikus argumentum LAPOS (`Uint8List`, nem `List<int>`), és ez
+  /// szándékos: a `tool/check_data_inventory.dart` kimenő-út mintája
+  /// (`\.(…|request)(Uri)?\s*(<[^>]*>)?\s*\(`) az ELSŐ `>`-nél megáll,
+  /// tehát egy beágyazott típus-argumentum LÁTHATATLANNÁ tenné ezt a
+  /// hívási helyet az adatvédelmi leltár számára — pontosan az a
+  /// vakfolt, amit a minta megjegyzése a `getJson<CommunityPage<…>>`
+  /// esetén már egyszer megfizetett.
+  Future<AppResult<Uint8List>> getBytes(
+    String path, {
+    bool requiresAuthentication = true,
+    String unauthorizedCode = FailureCode.authSessionExpired,
+  }) async {
+    try {
+      final response = await _dio.request<Uint8List>(
+        path,
+        options: Options(
+          method: 'GET',
+          responseType: ResponseType.bytes,
+          extra: {
+            NetworkRequestMetadata.requiresAuthentication:
+                requiresAuthentication,
+          },
+        ),
+      );
+      final body = response.data;
+      if (body == null) {
+        throw const FormatException('Expected a byte-array response.');
+      }
+      return Success(body);
+    } on DioException catch (error, stackTrace) {
+      return Failure(
+        mapNetworkFailure(
+          error,
+          unauthorizedCode: unauthorizedCode,
+          stackTrace: stackTrace,
+        ),
+      );
+    } catch (error, stackTrace) {
+      return Failure(
+        NetworkFailure(
+          code: FailureCode.networkBadResponse,
+          retryable: false,
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+  }
+
   /// Sends a request whose successful response body is intentionally ignored.
   Future<AppResult<void>> post(
     String path, {
@@ -198,7 +311,10 @@ final class ApiClient {
     required String unauthorizedCode,
     required String conflictCode,
     bool readsErrorDetail = false,
-    Map<String, Object?>? data,
+    // `Object?` és nem `Map<String, Object?>?`: a multipart primitív egy
+    // `FormData`-t ad át ugyanezen az úton. Az öt JSON-primitív továbbra
+    // is térképet küld, tehát a viselkedésük bájtra változatlan.
+    Object? data,
     Map<String, Object?>? queryParameters,
   }) async {
     // A `null` értékű kulcsok kihagyása szándékos: a szerver

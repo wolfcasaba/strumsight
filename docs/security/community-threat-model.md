@@ -248,27 +248,78 @@ piros).
 
 ### 6.2 Védelmi intézkedések
 
-- **A6.2.1 — MIME + magic-byte validáció.** A feltöltött fájl MIME
-  típusát a szerver a magic-bytek alapján ellenőrzi, és a
-  deklarált típust eldobja, ha nem egyezik.
-- **A6.2.2 — exif törlés.** A szerver a feltöltött képet szerver-
-  oldalon újra-kódolja, ami az exif-ot kiszedi.
-- **A6.2.3 — méretkorlát (8 MB / kép).** A feltöltés mérete
-  szerver-oldalon korlátozott; a CDN közvetlen hozzáférést nem
-  kap.
-- **A6.2.4 — átkódolás.** A szerver a feltöltött képet `image/webp`-
-  be konvertálja, ami kizárja a polyglot támadásokat.
-- **A6.2.5 — moderation pipeline.** A feltöltés után a kép
-  hash-elt a recognised CSAM-adatbázis ellen (PhotoDNA vagy
-  helyi hash-lista — a környezet függvénye), és a moderátor
-  5 percen belül átnézi.
+- **A6.2.1 — MIME + magic-byte validáció. ✅ MEGVALÓSÍTVA (javító sáv
+  R27, `backend/app/community/media/sniff.py`).** A verdiktet KIZÁRÓLAG a
+  bájtok adják: a fájlnév, a multipart `Content-Type` és a kliens által
+  deklarált típus egyike sem paramétere a döntésnek — a `sniff_media()`
+  szignatúrája `bytes`-ot vesz, és semmi mást. Nyolc engedélyezett
+  aláírás (jpeg/png/webp + mp3/wav/ogg/mp4/aac); minden más HIÁNY miatt
+  elutasítva (allowlist, nem blocklist), az SVG és a HTML pedig saját
+  elutasítási kódot kap, hogy az üzemeltetői napló megkülönböztesse a
+  „valaki markupot töltött fel" eseményt az „ismeretlen formátumtól".
+  Mérve: `backend/tests/community/test_media_sniff_store.py` (átnevezett
+  SVG, polyglot mindkét sorrendben, BOM/whitespace mögé bújtatott SVG,
+  ZIP/PDF/ELF/GIF/AVI, üres rész).
+- **A6.2.2 — exif törlés. ✅ MEGVALÓSÍTVA (R27).** Az A6.2.4
+  újrakódolásának következménye, nem külön lépés: a kimenet a
+  dekódolt pixel-pufferből épül, tehát nincs mit „kiszedni". Mérve:
+  `test_media_pipeline.py::test_gps_exif_does_not_survive` — a fixture
+  valódi GPS IFD-t hordoz, és a tárolt bájtokban nyoma sincs.
+- **A6.2.3 — méretkorlát. ✅ MEGVALÓSÍTVA (R27).** Két, egymástól
+  független korlát: fajtánkénti bájt-plafon
+  (`STRUMSIGHT_MEDIA_MAX_IMAGE_BYTES`, alapértéken 8 MiB;
+  `..._MAX_AUDIO_BYTES` 20 MiB) és fiókonkénti élő-sor kvóta
+  (`..._MAX_ITEMS_PER_PROFILE`), plusz egy IP-nkénti csúszóablak. A
+  plafon a TÉNYLEGESEN beolvasott bájtokra fut (a `Content-Length`
+  fejléc nem bizonyíték), a fajtánkénti pedig a sniff UTÁN. A CDN nem
+  kap közvetlen hozzáférést: a bájtokat a hitelesített
+  `GET /community/media/{public_id}` szolgálja ki.
+- **A6.2.4 — átkódolás. ✅ MEGVALÓSÍTVA (R27,
+  `media/transcode.py`).** A tárolt bájt MINDIG a szerver saját
+  enkóderének kimenete (Pillow; JPEG, illetve alfa-csatorna esetén
+  WebP — a `image/webp` kizárólagossága volt az egyetlen pontatlanság a
+  fenti eredeti szövegben, mert egy alfa nélküli fotót WebP-be kényszeríteni
+  csak méretet nyer, kockázatot nem). Ebből következik mind a három
+  hatás: EXIF/XMP/ICC eltűnik, a fájl végére fűzött polyglot-függelék
+  eltűnik, és a dekompressziós bomba a `Image.MAX_IMAGE_PIXELS` korláton
+  hasal el. A HANG átkódolója cserélhető port, amelynek alapértelmezése
+  ELUTASÍT (`audio_transcoder_unavailable`) — a repó nem szállít külső
+  kódolót, és egy át nem kódolt hangfájl tárolása pontosan az a rés,
+  amit ez a tétel bezár.
+- **A6.2.5 — scanner + moderation pipeline. ⚠️ RÉSZBEN MEGVALÓSÍTVA
+  (R27, `media/scanner.py`).** Ami KÉSZ: valódi vírusirtó-port két
+  adapterrel — `ClamdScanner` (`INSTREAM`, UNIX socket vagy TCP,
+  időkorláttal) és `DisabledScanner`, amely ELUTASÍT. Átengedő
+  („pass-through") adapter SZÁNDÉKOSAN nincs, és minden infrastruktúra-hiba
+  (elutasított kapcsolat, néma démon, időtúllépés, értelmezhetetlen válasz)
+  elutasítás — a vizsgálat az EREDETI bájtokon fut, nem az újrakódolt
+  kimeneten. Az alapértelmezés `disabled`, tehát egy clamd nélkül
+  felkapcsolt telepítés SEMMIT nem fogad el (runbook §7.3). Az
+  üzemeltető egy `review` állapotot is bekapcsolhat
+  (`STRUMSIGHT_MEDIA_REVIEW_REQUIRED=true`), amely a kész sort emberi
+  jóváhagyásig parkoltatja. Ami NYITVA MARAD: a CSAM-hash egyeztetés
+  (PhotoDNA vagy helyi hash-lista) és a moderátori 5 perces SLA — ezek
+  nem kódbeli hiányok, hanem szolgáltatói/szervezeti döntések, és a
+  `communityMediaEnabled` kliens-flag ezért marad kikapcsolva a
+  szállított buildekben.
 
 ### 6.3 Kapcsolódó feature-flag
 
 - `communityMediaEnabled` — KIZÁRÓLAG ez a flag engedi a média-
-  feltöltést. A flag nélkül a szöveg-only üzemmód aktív.
+  feltöltést. A flag nélkül a szöveg-only üzemmód aktív. A flagnek
+  KÉT fele van, és mindkettő külön áll: a szerveroldali
+  `STRUMSIGHT_COMMUNITY_MEDIA_ENABLED` REGISZTRÁCIÓS kapu (kikapcsolva
+  a három `/community/media` útvonal nincs a route-táblában, tehát nincs
+  futásidejű 403 sem, amit tapogatni lehetne), a kliensoldali
+  `FeatureFlags.communityMediaEnabled` pedig a szerkesztő „Média
+  csatolása" gombját kapuzza.
 - `communityWritesEnabled` — a media upload is egy write művelet,
   tehát mindkettő kell.
+- **A szállított buildekben a kliens-flag KIKAPCSOLVA marad** (javító
+  sáv R27 döntése). A teljes út kész és tesztelt (a Flutter-tesztek a
+  flaggel BEKAPCSOLVA futnak), de az A6.2.5 nyitott fele — CSAM-hash és
+  moderátori SLA — szervezeti döntés, nem kód, és egy felhasználói
+  tartalmat fogadó felületet nem kapcsolunk élesre, amíg ez nincs meg.
 
 ## 7. Challenge replay
 

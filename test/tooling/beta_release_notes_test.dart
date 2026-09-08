@@ -1113,10 +1113,19 @@ void main() {
     // 2026-09-07 (javító sáv 3, R9/2): the tutor cloud gateway is wired
     // behind the consent + account + session gate, so `tutor_stream`'s one
     // field leaves the device too: 24 → 25 pairs.
+    // 2026-09-08 (javító sáv R27): the composer's media path was wired, and
+    // the post repository gained two fields of its own — the image BYTES the
+    // user attaches (`POST /community/media`, the tree's only multipart
+    // request) and the `media_ids` the post is published with. Both are
+    // `leaves_device: true`: the `communityMediaEnabled` client flag is off
+    // in every shipped build, but a flag is a build-time choice, not a
+    // property of the data, and a disclosure that under-reports what the
+    // code CAN send is the failure this pin exists to prevent. 6 → 8 on the
+    // post route, 25 → 27 pairs total.
     test('the measured route/field counts are exactly account_api (6), '
         'diagnostics_upload (3), share_export (3), '
-        'account_api_community_post_repository (6), '
-        'account_api_community_club_repository (6), tutor_stream (1) — 25 '
+        'account_api_community_post_repository (8), '
+        'account_api_community_club_repository (6), tutor_stream (1) — 27 '
         'pairs total (round brief §0.0.A R2)', () {
       final expected = leavesDevicePairs(realInventory());
       expect(
@@ -1138,7 +1147,7 @@ void main() {
                   p.startsWith('account_api_community_post_repository\u0000'),
             )
             .length,
-        6,
+        8,
       );
       expect(
         expected
@@ -1153,7 +1162,7 @@ void main() {
         expected.where((p) => p.startsWith('tutor_stream\u0000')).length,
         1,
       );
-      expect(expected.length, 25);
+      expect(expected.length, 27);
     });
 
     test('a synthetic doc block missing one real row is caught (the '

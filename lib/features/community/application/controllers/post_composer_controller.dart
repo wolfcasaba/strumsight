@@ -38,7 +38,9 @@ import '../../../../core/logging/logger_provider.dart';
 import '../../../../core/storage/key_value_store.dart';
 import '../../../../core/storage/storage_providers.dart';
 import '../../../auth/public.dart';
+import '../../data/api/community_media_picker.dart';
 import '../../data/local/community_draft_store.dart';
+import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
@@ -53,8 +55,14 @@ import '../outbox/community_outbox.dart';
 // importálta (a komment- és reakció-controller, a szerkesztő), az a dobó
 // változatot kapta volna a valódi implementáció megírása UTÁN is — a
 // bekötés némán hatástalan marad. Az egy-definíció szabály az orvosság.
+//
+// A `HttpCommunityPostRepository` típusa is kell (javító sáv R27): a
+// média-feltöltés és -törlés a szerződésen KÍVÜLI metódus (a
+// `createClubPost` precedense), tehát a hívás előtt a konkrét
+// implementációra kell szűkíteni. A típus NEM kerül tovább-exportálásra
+// — a fájl kifelé továbbra is csak a providert kínálja.
 import '../../data/repositories/post_repository_impl.dart'
-    show communityPostRepositoryProvider;
+    show HttpCommunityPostRepository, communityPostRepositoryProvider;
 export '../../data/repositories/post_repository_impl.dart'
     show communityPostRepositoryProvider;
 
@@ -95,6 +103,10 @@ class PostComposerState {
     required this.lastSubmittedAt,
     required this.isSubmitting,
     this.clubId,
+    this.mediaIds = const <String>[],
+    this.mediaDescriptors = const <String, CommunityMediaAttachment>{},
+    this.isAttachingMedia = false,
+    this.mediaError,
   });
 
   /// Build the initial composer state for a fresh composer session.
@@ -151,6 +163,38 @@ class PostComposerState {
   /// invariant.
   final bool isSubmitting;
 
+  /// A poszthoz csatolandó, MÁR FELTÖLTÖTT médiák publikus azonosítói,
+  /// csatolási sorrendben (javító sáv R27).
+  ///
+  /// EZ a közzététel igazsága: ez megy ki a `media_ids` mezőben, és ez
+  /// az, ami a piszkozattal együtt túléli az újraindítást. Csak `ready`
+  /// állapotú feltöltés kerül bele — egy elutasított sort a szerver a
+  /// közzétételkor úgyis visszautasítana, és az egész posztot bukná.
+  final List<String> mediaIds;
+
+  /// A JELEN munkamenetben feltöltött médiák leírói, azonosító szerint.
+  ///
+  /// Külön él a [mediaIds]-tól, mert egy visszatöltött piszkozatból CSAK
+  /// az azonosító van meg: a szervernek nincs „leíró egy azonosítóhoz"
+  /// végpontja (a `GET /community/media/{id}` bájtokat ad). A hiányzó
+  /// leírót ezért nem TALÁLJUK KI — a szerkesztő egy semleges
+  /// „csatolva" csempét rajzol —, mert egy kitalált `ready` állapot
+  /// pontosan az a néma hazugság, amit ez a kör zár.
+  final Map<String, CommunityMediaAttachment> mediaDescriptors;
+
+  /// Igaz, amíg egy választás/feltöltés folyamatban van. A „Média
+  /// csatolása" gomb ilyenkor tiltott — egy dupla koppintás nem indít
+  /// két feltöltést.
+  final bool isAttachingMedia;
+
+  /// A LEGUTÓBBI csatolási hiba, a közzétételi hibától elkülönítve.
+  ///
+  /// Egy sikertelen feltöltés nem teszi a szerkesztőt `failure`
+  /// állapotba: a felhasználó szövege érintetlen, a poszt közzétehető
+  /// kép nélkül is, és a két hibát összemosva a felhasználó azt hinné,
+  /// hogy a posztja bukott el.
+  final AppFailure? mediaError;
+
   /// The PUBLIC id of the club this post is being written into, or
   /// `null` for an ordinary post (E17-R11).
   ///
@@ -172,6 +216,10 @@ class PostComposerState {
     DateTime? lastSubmittedAt,
     bool? isSubmitting,
     Object? clubId = _sentinel,
+    List<String>? mediaIds,
+    Map<String, CommunityMediaAttachment>? mediaDescriptors,
+    bool? isAttachingMedia,
+    Object? mediaError = _sentinel,
   }) {
     return PostComposerState(
       body: identical(body, _sentinel) ? this.body : body as String?,
@@ -188,6 +236,12 @@ class PostComposerState {
       lastSubmittedAt: lastSubmittedAt ?? this.lastSubmittedAt,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       clubId: identical(clubId, _sentinel) ? this.clubId : clubId as String?,
+      mediaIds: mediaIds ?? this.mediaIds,
+      mediaDescriptors: mediaDescriptors ?? this.mediaDescriptors,
+      isAttachingMedia: isAttachingMedia ?? this.isAttachingMedia,
+      mediaError: identical(mediaError, _sentinel)
+          ? this.mediaError
+          : mediaError as AppFailure?,
     );
   }
 }
@@ -235,6 +289,118 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
       audience: draft.audience,
       sharePreview: draft.sharePreview,
       idempotencyKey: draft.idempotencyKey,
+      // A leírók NEM jönnek vissza (l. `mediaDescriptors`) — csak az
+      // azonosítók, mert a poszt közzétételéhez pontosan azok kellenek.
+      mediaIds: draft.mediaIds,
+    );
+  }
+
+  /// Kép választása és azonnali feltöltése (javító sáv R27).
+  ///
+  /// A feltöltés a CSATOLÁS pillanatában történik, nem a közzétételkor:
+  /// a szerveren egy laza (poszthoz még nem kötött) sor keletkezik,
+  /// amelynek azonosítója a piszkozatba kerül, tehát egy app-újraindítás
+  /// után is megvan. A fordított sorrend — bájtokat vinni a kimenő
+  /// sorban — azt jelentené, hogy a kulcs-érték tár megabájtokat tárol,
+  /// és hogy egy offline közzététel a képet is újraküldi.
+  ///
+  /// A szerver ELUTASÍTÁSA (magic-byte, vírusirtó, átkódolás) nem
+  /// kivétel: 201-et ad egy `rejected` leíróval. Az ilyen leíró
+  /// megjelenik a szerkesztőben az okával együtt, de NEM kerül a
+  /// [PostComposerState.mediaIds] listába — a közzététel különben az
+  /// egész poszttal együtt bukna el.
+  Future<void> attachMedia() async {
+    final current = state.value;
+    if (current == null) return;
+    if (current.isSubmitting || current.isAttachingMedia) return;
+    if (current.mediaIds.length >= kCommunityMaxMediaPerPost) return;
+
+    state = AsyncData(
+      current.copyWith(isAttachingMedia: true, mediaError: null),
+    );
+    try {
+      final picked = await ref.read(communityMediaPickerProvider).pickImage();
+      if (picked == null) {
+        final afterPick = state.value;
+        if (afterPick == null) return;
+        state = AsyncData(afterPick.copyWith(isAttachingMedia: false));
+        return;
+      }
+      final repository = ref.read(communityPostRepositoryProvider);
+      if (repository is! HttpCommunityPostRepository) {
+        // Fiók nélküli mód vagy egy média-utat nem ismerő fake. NEM
+        // csinálunk úgy, mintha csatoltunk volna: a gomb hibát mutat.
+        throw const ConfigurationFailure();
+      }
+      final uploaded = await repository.uploadMedia(
+        bytes: picked.bytes,
+        // A felhasználó fájlneve SZÁNDÉKOSAN nem megy ki (l.
+        // `ApiClient.postMultipartJson`).
+        filename: 'community-upload',
+      );
+      final afterUpload = state.value;
+      if (afterUpload == null) return;
+      final descriptors = <String, CommunityMediaAttachment>{
+        ...afterUpload.mediaDescriptors,
+        uploaded.publicId: uploaded,
+      };
+      final next = afterUpload.copyWith(
+        isAttachingMedia: false,
+        mediaDescriptors: descriptors,
+        mediaIds: uploaded.isReady
+            ? <String>[...afterUpload.mediaIds, uploaded.publicId]
+            : afterUpload.mediaIds,
+      );
+      state = AsyncData(next);
+      await _persistDraft(next);
+    } on AppFailure catch (failure) {
+      _failAttach(failure);
+    } on Object catch (error, stackTrace) {
+      _failAttach(
+        UnknownFailure(
+          code: FailureCode.unknown,
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+  }
+
+  /// Egy csatolmány eldobása a szerkesztőből.
+  ///
+  /// A szerver oldali törlés BEST-EFFORT: ha nem sikerül, a sor egy laza
+  /// feltöltésként marad ott, amit a fiók kvótája és a takarítás kezel —
+  /// a felhasználó szempontjából viszont a csempe eltűnt, és a poszt nem
+  /// viszi magával. A fordított sorrend (csak sikeres törlés után
+  /// levenni) azt jelentené, hogy egy offline felhasználó nem tud
+  /// visszavonni egy csatolást.
+  Future<void> removeMedia(String mediaPublicId) async {
+    final current = state.value;
+    if (current == null) return;
+    if (current.isSubmitting) return;
+    final descriptors = <String, CommunityMediaAttachment>{
+      for (final entry in current.mediaDescriptors.entries)
+        if (entry.key != mediaPublicId) entry.key: entry.value,
+    };
+    final next = current.copyWith(
+      mediaIds: <String>[
+        for (final id in current.mediaIds)
+          if (id != mediaPublicId) id,
+      ],
+      mediaDescriptors: descriptors,
+      mediaError: null,
+    );
+    state = AsyncData(next);
+    await _persistDraft(next);
+
+    await _deleteMediaBestEffort(mediaPublicId);
+  }
+
+  void _failAttach(AppFailure failure) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData(
+      current.copyWith(isAttachingMedia: false, mediaError: failure),
     );
   }
 
@@ -386,6 +552,30 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
         clubId: current.clubId,
       ),
     );
+    // Az elvetett piszkozat csatolmányai laza sorok a szerveren: ha itt
+    // nem takarítjuk el őket, a felhasználó fiók-kvótáját fogyasztják
+    // úgy, hogy soha nem is látja őket. BEST-EFFORT — a szerkesztő
+    // állapota már üres, egy sikertelen törlés nem hozza vissza a
+    // csempéket.
+    for (final id in current.mediaIds) {
+      await _deleteMediaBestEffort(id);
+    }
+  }
+
+  Future<void> _deleteMediaBestEffort(String mediaPublicId) async {
+    final repository = ref.read(communityPostRepositoryProvider);
+    if (repository is! HttpCommunityPostRepository) return;
+    try {
+      await repository.deleteMedia(mediaPublicId: mediaPublicId);
+    } on Object catch (error, stackTrace) {
+      ref
+          .read(communityLoggerProvider)
+          .warning(
+            'community.composer.media_delete_failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+    }
   }
 
   // ---- internal helpers ------------------------------------------------
@@ -396,7 +586,13 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
   /// on its own — the composer never enqueues an empty post.
   CommunityDraft? _draftFromState(PostComposerState current) {
     final sourceArtifactJson = current.sourceArtifactJson;
-    if (current.body == null && _isEmptyArtifact(sourceArtifactJson)) {
+    // Egy CSATOLMÁNYT hordozó piszkozat nem üres (javító sáv R27): a
+    // bájtok már a szerveren vannak, és ha az azonosítójuk nem
+    // perzisztálódna, egy újraindítás után a felhasználó egy laza,
+    // számára láthatatlan feltöltést hagyna maga után.
+    if (current.body == null &&
+        current.mediaIds.isEmpty &&
+        _isEmptyArtifact(sourceArtifactJson)) {
       return null;
     }
     final existingKey = current.idempotencyKey;
@@ -410,6 +606,7 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
         sharePreview: current.sharePreview,
         lastEditedAt: now,
         clubId: current.clubId,
+        mediaIds: current.mediaIds,
       );
     }
     return CommunityDraft.fresh(
@@ -419,6 +616,7 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
       sharePreview: current.sharePreview,
       now: now,
       clubId: current.clubId,
+      mediaIds: current.mediaIds,
     );
   }
 
@@ -473,6 +671,15 @@ final communityDraftStoreProvider = Provider<CommunityDraftStore>((ref) {
     userId: user.id,
   );
 });
+
+/// A közösségi kép-választó platform-adaptere (javító sáv R27).
+///
+/// Sima [Provider], hogy a szerkesztő widget-tesztje egy fake-kel
+/// felülírhassa: egy platform-párbeszédet nyitó választó a
+/// `flutter_test` környezetében sosem térne vissza.
+final communityMediaPickerProvider = Provider<CommunityMediaPicker>(
+  (ref) => const PlatformCommunityMediaPicker(),
+);
 
 /// Provider for the Community outbox. Production wires
 /// [LocalCommunityOutbox]; tests override with a fake.

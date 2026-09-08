@@ -257,6 +257,34 @@ categories:
       - route: account_api_community_club_repository
         field: "club_membership_action (csatlakozás/kilépés/tag-eltávolítás cél-azonosítói az útvonalban — /join, /leave, /members/{id})"
 
+  # Javító sáv R27 (2026-09-08) — a szerkesztő „Média csatolása" útja. A
+  # `communityMediaEnabled` kliens-flag a szállított buildekben KI van
+  # kapcsolva, tehát ma egyetlen felhasználó sem tud képet feltölteni; a
+  # kategóriák mégis itt vannak, mert a Play adatbiztonsági nyilatkozata
+  # arról szól, mit KÉPES gyűjteni a kód, és egy flag build-idejű döntés,
+  # nem az adat tulajdonsága.
+  - id: community_media_image
+    label: "Community post: image you attach"
+    play_category: "Photos or videos"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "A picture you explicitly pick in the Community composer and attach to a post. Sent only after you tap \"Attach media\" and choose a file, while signed in. The server does not keep the file you sent: it re-encodes the image from the decoded pixels, so the camera's EXIF block — GPS coordinates included — is not part of what is stored or served back (threat model A6.2.4). Behind the communityMediaEnabled flag, which is false in every shipped build today."
+    references:
+      - route: account_api_community_post_repository
+        field: "community_media_bytes (a felhasználó által választott kép nyers bájtjai — POST /community/media multipart `file`)"
+
+  - id: community_media_attachment_ids
+    label: "Community post: attached media ids"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "The ids of the images a post is published with, so the server can bind the already-uploaded pictures to the post at publish time. No file content — the ids alone."
+    references:
+      - route: account_api_community_post_repository
+        field: "media_ids (a poszthoz csatolt médiák publikus azonosítói — POST /community/posts `media_ids`)"
+
   - id: community_write_integrity
     label: "Community write-integrity identifiers"
     play_category: "App info and performance"

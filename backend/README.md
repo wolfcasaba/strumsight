@@ -175,6 +175,38 @@ same 1052 tests, with no test skipped, removed or weakened.
   never the provider body. Flip sequence, the classification table, cost/limit
   knobs and the privacy statement:
   `docs/operations/backend-live-deploy.md` §7.2.
+- **Community media upload (javító sáv R27):** off by default.
+  `STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=false` ⇒ `POST/GET/DELETE
+  /community/media` are not in the route table at all (a registration
+  gate, like `clubs` / `leaderboards`), so an un-flipped deploy answers
+  the framework's bare 404 and the client's existing "not enabled on this
+  server" path applies unchanged. Flipping the flag is NOT enough to make
+  an upload succeed — two further switches are fail-closed on purpose:
+
+  | variable | default | effect |
+  |---|---|---|
+  | `STRUMSIGHT_MEDIA_ROOT` | `backend/media_data` | content-addressed store root (`<sha[0:2]>/<sha[2:4]>/<sha>`); the ONLY writable path the pipeline touches |
+  | `STRUMSIGHT_MEDIA_SCANNER` | `disabled` | `disabled` REJECTS every upload (`scanner_not_configured`); `clamd` selects the `INSTREAM` adapter. There is deliberately **no pass-through adapter** |
+  | `STRUMSIGHT_MEDIA_SCANNER_SOCKET` | *(empty)* | clamd UNIX socket path; wins over host/port when set |
+  | `STRUMSIGHT_MEDIA_SCANNER_HOST` / `_PORT` | `127.0.0.1` / `3310` | clamd TCP endpoint |
+  | `STRUMSIGHT_MEDIA_SCANNER_TIMEOUT_SECONDS` | `10.0` | every socket failure — refused, silent, timed out, unparseable — is a REJECT |
+  | `STRUMSIGHT_MEDIA_AUDIO_TRANSCODER` | `disabled` | `disabled` rejects every AUDIO upload (`audio_transcoder_unavailable`); `ffmpeg` selects the external re-encoder. Images are always re-encoded in-process by Pillow (a hard dependency) |
+  | `STRUMSIGHT_MEDIA_FFMPEG_PATH` | `ffmpeg` | binary the ffmpeg adapter runs (fixed argv, no shell) |
+  | `STRUMSIGHT_MEDIA_AUDIO_MAX_DURATION_SECONDS` | `180` | hard truncation, not a trusted container duration |
+  | `STRUMSIGHT_MEDIA_MAX_IMAGE_BYTES` | `8388608` | per-kind byte cap, enforced on the bytes actually read (`Content-Length` is not trusted) |
+  | `STRUMSIGHT_MEDIA_MAX_AUDIO_BYTES` | `20971520` | per-kind byte cap for audio |
+  | `STRUMSIGHT_MEDIA_MAX_ITEMS_PER_PROFILE` | `50` | per-account live-row quota (the second, independent budget next to the per-IP throttle) |
+  | `STRUMSIGHT_MEDIA_UPLOAD_RATE_LIMIT_MAX` / `_WINDOW` | `20` / `3600` | per-IP sliding window, keyed through `client_ip_for_throttle` |
+  | `STRUMSIGHT_MEDIA_IMAGE_MAX_DIMENSION` | `2048` | longest edge of the re-encoded image |
+  | `STRUMSIGHT_MEDIA_IMAGE_QUALITY` | `82` | JPEG/WebP quality factor |
+  | `STRUMSIGHT_MEDIA_REVIEW_REQUIRED` | `false` | `true` parks a scanned + transcoded row in `review` until an operator releases it |
+
+  What the surface does with the bytes: magic-byte sniff (the filename and
+  the multipart `Content-Type` never participate) → clamd scan of the
+  ORIGINAL bytes → re-encode, so the stored bytes are the encoder's output
+  and EXIF/GPS + polyglot tails do not survive → content-addressed write.
+  Flip sequence, the volume/clamd wiring and the fail-closed probe:
+  `docs/operations/backend-live-deploy.md` §7.3.
 - **Auth throttling (round 120):** per-IP sliding-window rate limits on
   `/auth/login` (10/min) and `/auth/register` (5/min) → `429` +
   `Retry-After`. The counters are process-local: multiple workers do not share

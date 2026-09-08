@@ -47,6 +47,8 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
 | account_api_community_post_repository | comment_body (a komment szabad szövege + `parent_public_id` — createComment/updateComment) |
 | account_api_community_post_repository | reaction_kind (a reakció típusa — PUT /community/posts/{id}/reaction `kind`) |
 | account_api_community_post_repository | idempotency_key / resource_version (írás-kísérlet azonosítója és optimista verzió) |
+| account_api_community_post_repository | community_media_bytes (a felhasználó által választott kép nyers bájtjai — POST /community/media multipart `file`) |
+| account_api_community_post_repository | media_ids (a poszthoz csatolt médiák publikus azonosítói — POST /community/posts `media_ids`) |
 | account_api_community_club_repository | club_name (a klub neve — createClub `name`) |
 | account_api_community_club_repository | club_description (a klub szabad szövegű leírása — createClub/updateClub `description`) |
 | account_api_community_club_repository | club_visibility (a klub láthatósága — `visibility` wire-érték) |
@@ -81,6 +83,15 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
   idempotency key / resource version that exists only to stop a double submit or a lost update.
   Nothing here is sent unless you are signed in and you explicitly compose, edit or react — with
   no signed-in account, the repository resolves to the disabled variant, which sends nothing.
+  Since the javító sáv R27 round the route also carries **an image you explicitly attach** in the
+  composer, plus the ids of the images a post is published with. Three things about that are worth
+  stating plainly. (1) It is never automatic: the bytes leave the device only after you tap
+  "Attach media" and pick a file. (2) The server does **not** store the file you sent — it
+  re-encodes the picture from the decoded pixels, so the EXIF block a phone camera writes,
+  **including GPS coordinates**, is not part of what is stored or ever served back. (3) The
+  affordance is behind the `communityMediaEnabled` flag, which is **off in every shipped build**
+  today, so unless you are running a build that explicitly turns it on, the button is not there at
+  all and nothing on this path can leave your device.
 - **account_api_community_club_repository** — Community clubs. Same transport and session gate as
   above, with its own fields: the **club name and free-text description** you write, the club's
   visibility setting, the public profile id of whoever you invite or hand ownership to, the

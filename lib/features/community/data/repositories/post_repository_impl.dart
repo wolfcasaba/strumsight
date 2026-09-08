@@ -81,6 +81,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../features/auth/public.dart';
 import '../../domain/entities/community_bookmark.dart';
 import '../../domain/entities/community_comment.dart';
+import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
 import '../../domain/entities/moderation_state.dart';
@@ -199,6 +200,7 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
     required String? body,
     required Object artifact,
     required String idempotencyKey,
+    List<String> mediaIds = const <String>[],
   }) async {
     final result = await _client.postJson<CommunityPost>(
       '/community/posts',
@@ -214,6 +216,10 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
         // mert a `parse_share_artifact` diszkriminátort vár. A szerkesztő
         // alapértelmezése épp az üres térkép (`composerSourceArtifactProvider`).
         'artifact': ?_artifactPayload(artifact),
+        // `media_ids` (javító sáv R27): az ÜRES listát sem küldjük ki, a
+        // kulcs hiánya és a `[]` a szerveren ugyanaz, egy fölösleges mező
+        // viszont minden szöveges poszt törzsét megnövelné.
+        'media_ids': ?_mediaIdsPayload(mediaIds),
         'idempotency_key': idempotencyKey,
       },
       decode: decodeCommunityPost,
@@ -244,6 +250,7 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
     required String? body,
     required Object artifact,
     required String idempotencyKey,
+    List<String> mediaIds = const <String>[],
   }) async {
     final result = await _client.postJson<CommunityPost>(
       '/community/posts',
@@ -252,6 +259,7 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
         'body': body,
         'club_public_id': clubId.value,
         'artifact': ?_artifactPayload(artifact),
+        'media_ids': ?_mediaIdsPayload(mediaIds),
         'idempotency_key': idempotencyKey,
       },
       decode: decodeCommunityPost,
@@ -489,6 +497,51 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
       Failure(:final error) => throw error,
     };
   }
+
+  /// Média feltöltése — `POST /community/media` (javító sáv R27).
+  ///
+  /// SZÁNDÉKOSAN a szerződésen KÍVÜL, a `createClubPost` precedense
+  /// szerint: a `CommunityPostRepository`-t tizenkét teszt-fake
+  /// valósítja meg, és egy új absztrakt metódus mindet eltörné.
+  ///
+  /// **Az ELUTASÍTÁS nem hiba-ág.** A szerver 201-et ad egy
+  /// `state: rejected` leíróval is (magic-byte, vírusirtó vagy
+  /// átkódolási elutasítás), mert a sor létezik, és az elutasítás
+  /// indoka a felhasználónak szóló információ. A metódus ezért az
+  /// elutasított leírót is VISSZAADJA — a hívó a
+  /// [CommunityMediaAttachment.state] és a `rejectionCode` alapján
+  /// dönt. Kivétel csak a valóban kivételes kimenetekre repül: 413
+  /// (túl nagy), 409 (kvóta), 429 (fojtás), 401/403, hálózat.
+  Future<CommunityMediaAttachment> uploadMedia({
+    required List<int> bytes,
+    String filename = 'upload.bin',
+  }) async {
+    final result = await _client.postMultipartJson<CommunityMediaAttachment>(
+      '/community/media',
+      bytes: bytes,
+      filename: filename,
+      decode: decodeCommunityMedia,
+      conflictCode: FailureCode.communityConflict,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  /// Feltöltött média eldobása — `DELETE /community/media/{id}`.
+  ///
+  /// A szerver idempotens: egy már törölt sor újratörlése is 200. A
+  /// nem létező és a NEM A TIÉD egyaránt 404 (leak-guard), tehát a
+  /// hívó a kettő között nem tud — és nem is szabad — különbséget
+  /// tenni; a szerkesztő ezért a 404-et is „eltávolítva"-ként kezeli.
+  Future<void> deleteMedia({required String mediaPublicId}) async {
+    final result = await _client.delete('/community/media/$mediaPublicId');
+    return switch (result) {
+      Success() => null,
+      Failure(:final error) => throw error,
+    };
+  }
 }
 
 /// Az optimista konkurencia-token wire-alakja.
@@ -512,6 +565,23 @@ String _resourceVersionWireValue(Object resourceVersion) {
     'resourceVersion',
     'resource version must be a DateTime or its ISO-8601 wire string',
   );
+}
+
+/// A csatolt médiák wire-alakja, vagy `null`, ha nincs mit küldeni.
+///
+/// A `CreatePostRequest.media_ids` nullable és `max_length`-korlátos. Az
+/// ÜRES listát azért nem küldjük ki, mert a szerveren pontosan ugyanaz,
+/// mint a hiányzó kulcs (`if media_ids:`), a kulcs viszont minden
+/// szöveges poszt törzsében ott ülne. Az üres sztringet KISZŰRJÜK, nem
+/// elnyeljük a listát: egy hibás azonosító a szerveren 400-at ad, ami a
+/// helyes válasz — a néma elhagyás azt jelentené, hogy a felhasználó
+/// csatolmány nélkül lát sikert.
+List<String>? _mediaIdsPayload(List<String> mediaIds) {
+  final cleaned = <String>[
+    for (final id in mediaIds)
+      if (id.isNotEmpty) id,
+  ];
+  return cleaned.isEmpty ? null : cleaned;
 }
 
 /// A poszt-artefaktum wire-alakja, vagy `null`, ha nincs mit küldeni.

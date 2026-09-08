@@ -362,6 +362,28 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
         "single-account bring-up chain (same reason as GET "
         "/community/clubs/{public_id}/members)"
     ),
+    # Javito sav 2026-09-08 R27 — the community media surface. All three
+    # are `mounted` in the contract (the parity test builds the app with
+    # every optional flag on), but none can join a bring-up chain:
+    ("POST", "/community/media"): (
+        "the only multipart request in the tree, and it WRITES durable user "
+        "content the chain has no delete-back step for (the POST "
+        "/community/posts rule); it is also the one endpoint whose success "
+        "depends on infrastructure OUTSIDE the app — with the fail-closed "
+        "default STRUMSIGHT_MEDIA_SCANNER=disabled every upload is answered "
+        "201 `rejected`, so a chain step here would be red on a healthy "
+        "target that simply has not stood up clamd"
+    ),
+    ("GET", "/community/media/{public_id}"): (
+        "requires a media public_id this single-account chain has no way to "
+        "create (see POST /community/media), and its success body is bytes "
+        "rather than JSON — the duck-typed request/response client this tool "
+        "shares with production_smoke.py has no byte-body support"
+    ),
+    ("DELETE", "/community/media/{public_id}"): (
+        "requires a media public_id this single-account chain has no way to "
+        "create (see POST /community/media)"
+    ),
     # Javito sav 2026-09-07 R16 — the 26 measured client call sites R14
     # reported as still missing from the contract. Re-measured against `lib/**`
     # that round; every one of them is present in the live OpenAPI schema, so

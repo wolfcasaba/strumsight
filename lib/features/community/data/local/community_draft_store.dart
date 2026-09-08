@@ -74,6 +74,7 @@ class CommunityDraft {
     required this.sharePreview,
     required this.lastEditedAt,
     this.clubId,
+    this.mediaIds = const <String>[],
   });
 
   /// Build the *first* draft for a new composer session. Generates a
@@ -89,6 +90,7 @@ class CommunityDraft {
     DateTime? now,
     int monotonicCounter = 0,
     String? clubId,
+    List<String> mediaIds = const <String>[],
   }) {
     final stamp = (now ?? DateTime.now()).microsecondsSinceEpoch;
     final key = 'e09-r12-draft-$stamp-$monotonicCounter';
@@ -100,6 +102,7 @@ class CommunityDraft {
       sharePreview: sharePreview,
       lastEditedAt: now ?? DateTime.now(),
       clubId: clubId,
+      mediaIds: mediaIds,
     );
   }
 
@@ -139,6 +142,19 @@ class CommunityDraft {
   /// destination the user has no way to notice.
   final String? clubId;
 
+  /// A már FELTÖLTÖTT médiák publikus azonosítói, csatolási sorrendben
+  /// (javító sáv R27).
+  ///
+  /// A bájtok NEM itt élnek: a feltöltés a csatolás pillanatában
+  /// megtörténik, és a szerveren egy laza (poszthoz még nem kötött) sor
+  /// keletkezik. A piszkozat csak az azonosítót őrzi — ez az, ami egy
+  /// app-újraindítást túlél, és ami nélkül a felhasználó a szerkesztő
+  /// visszatöltése után egy csatolmány nélküli posztot tenne közzé
+  /// abban a hitben, hogy a képe rajta van. A megabájtokat a
+  /// kulcs-érték tárba menteni ugyanezt a célt sokkal drágábban érné
+  /// el, és a szerveren úgyis van már egy másolat.
+  final List<String> mediaIds;
+
   CommunityDraft copyWith({
     String? body,
     CommunityAudience? audience,
@@ -146,6 +162,7 @@ class CommunityDraft {
     SharePreview? sharePreview,
     DateTime? lastEditedAt,
     String? clubId,
+    List<String>? mediaIds,
   }) {
     return CommunityDraft(
       idempotencyKey: idempotencyKey,
@@ -155,6 +172,7 @@ class CommunityDraft {
       sharePreview: sharePreview ?? this.sharePreview,
       lastEditedAt: lastEditedAt ?? this.lastEditedAt,
       clubId: clubId ?? this.clubId,
+      mediaIds: mediaIds ?? this.mediaIds,
     );
   }
 
@@ -162,7 +180,11 @@ class CommunityDraft {
   /// artifact. Empty drafts are not persisted — `clearDraft` is
   /// called by the composer on submit-success and on explicit
   /// "discard", so an empty draft means "no work in progress".
-  bool get isEmpty => (body == null || body!.isEmpty);
+  /// Egy CSAK csatolmányt hordozó piszkozat NEM üres (javító sáv R27):
+  /// a felhasználó feltöltött egy képet, és ha az újraindítás után
+  /// eltűnne, a szerveren maradna egy laza sor, amiről a felhasználó
+  /// nem tud, a szerkesztő pedig üres lenne.
+  bool get isEmpty => (body == null || body!.isEmpty) && mediaIds.isEmpty;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'schemaVersion': communityDraftSchemaVersion,
@@ -177,6 +199,11 @@ class CommunityDraft {
     // séma-verzió emelés, mert a hiányzó kulcs jelentése egyértelmű:
     // „nem klubba írjuk").
     if (clubId != null) 'clubId': clubId,
+    // Ugyanaz a szabály, mint a `clubId`-nál: az ÜRES lista nem kerül a
+    // dokumentumba, tehát a régi, kulcs nélküli bájtok séma-verzió
+    // emelés nélkül olvashatók maradnak — a hiányzó kulcs jelentése
+    // egyértelmű („nincs csatolmány").
+    if (mediaIds.isNotEmpty) 'mediaIds': mediaIds,
   };
 
   static CommunityDraft fromJson(Map<String, Object?> object) {
@@ -250,8 +277,37 @@ class CommunityDraft {
       sharePreview: _sharePreviewFromJson(previewRaw),
       lastEditedAt: lastEdited,
       clubId: clubIdRaw as String?,
+      mediaIds: _mediaIdsFromJson(object['mediaIds']),
     );
   }
+}
+
+/// A perzisztált csatolmány-azonosítók visszaolvasása.
+///
+/// A hiányzó kulcs ÜRES lista (a média előtti piszkozatok ilyenek). Egy
+/// ROSSZ alakú érték viszont nem olvasható úgy, hogy „akkor nincs
+/// csatolmány": az a felhasználó képét némán ejtené a közzétételkor,
+/// ezért az egész rekord elbukik, és a `JsonObjectStore` karanténba
+/// teszi a bájtokat — ugyanaz a döntés, mint a `clubId`-nál.
+List<String> _mediaIdsFromJson(Object? raw) {
+  if (raw == null) return const <String>[];
+  if (raw is! List) {
+    throw const JsonRecordException(
+      'mediaIds must be a list of non-empty strings',
+      field: 'mediaIds',
+    );
+  }
+  final ids = <String>[];
+  for (final item in raw) {
+    if (item is! String || item.isEmpty) {
+      throw const JsonRecordException(
+        'mediaIds must be a list of non-empty strings',
+        field: 'mediaIds',
+      );
+    }
+    ids.add(item);
+  }
+  return List<String>.unmodifiable(ids);
 }
 
 CommunityAudience _audienceFromWire(String wire) {

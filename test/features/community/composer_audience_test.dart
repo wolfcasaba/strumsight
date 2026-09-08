@@ -32,6 +32,7 @@ import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/model/auth_user.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/community/application/controllers/post_composer_controller.dart';
+import 'package:strumsight/features/community/data/api/community_media_picker.dart';
 import 'package:strumsight/features/community/data/repositories/profile_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_comment.dart';
 import 'package:strumsight/features/community/domain/entities/community_post.dart';
@@ -142,6 +143,17 @@ class _FakeCommunityPostRepository implements CommunityPostRepository {
   }) => throw UnsupportedError('not used in this test');
 }
 
+/// Választó, ami mindig megszakítást ad — a MI5 cellák nem töltenek fel.
+class _NullPicker implements CommunityMediaPicker {
+  int calls = 0;
+
+  @override
+  Future<PickedCommunityMedia?> pickImage() async {
+    calls++;
+    return null;
+  }
+}
+
 class _FakeAuthController extends AuthController {
   _FakeAuthController(this._user);
   final AuthUser _user;
@@ -191,6 +203,10 @@ Widget _harness({
         ),
       communityKeyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
       communityLoggerProvider.overrideWithValue(const NoopAppLogger()),
+      // R27 — a „Média csatolása" gomb valódi választót hív. A hamis
+      // választó `null`-t ad (a felhasználó megszakította), tehát a
+      // MI5-cellák a gomb LÉTÉT mérik, platform-csatorna nélkül.
+      communityMediaPickerProvider.overrideWithValue(_NullPicker()),
       communityPostRepositoryProvider.overrideWithValue(
         _FakeCommunityPostRepository(),
       ),
@@ -527,7 +543,7 @@ void main() {
       expect(find.text(_en().communityComposerAudienceLabel), findsOneWidget);
     });
 
-    testWidgets('a bekapcsolt zászló mellett a gomb ott van és őszinte', (
+    testWidgets('a bekapcsolt zászló mellett a gomb ott van és MŰKÖDIK', (
       tester,
     ) async {
       await tester.pumpWidget(_harness(mediaEnabled: true));
@@ -537,11 +553,15 @@ void main() {
       expect(button, findsOneWidget);
       expect(find.text(_en().communityComposerAttachMedia), findsOneWidget);
 
-      // A koppintás a „később" snackbart adja — a stub megmarad, csak már
-      // nem ígér semmit a zászló nélküli buildekben.
+      // R27 óta a koppintás VALÓDI kép-választást indít. A „később"
+      // snackbar eltűnt: a gomb nem ígér, hanem csinál. A hamis választó
+      // megszakítást ad, tehát a szerkesztő állapota változatlan marad.
       await tester.tap(button);
-      await tester.pump();
-      expect(find.text(_en().communityComposerMediaLater), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.text(_en().communityComposerMediaLater), findsNothing);
+      expect(_state(tester).mediaIds, isEmpty);
+      // A teljes csatolási folyamat saját sora:
+      // `test/features/community/application/post_composer_media_test.dart`.
     });
   });
 }

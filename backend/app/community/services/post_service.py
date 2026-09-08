@@ -80,6 +80,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..media.attach import attach_media_to_post
 from ..models.club import CommunityClub, CommunityClubMember
 from ..models.post import (
     MODERATION_STATE_VISIBLE,
@@ -398,6 +399,7 @@ def create_post(
     club_id: int | None = None,
     club_public_id: uuid.UUID | None = None,
     artifact: dict[str, Any] | None = None,
+    media_ids: list[uuid.UUID] | None = None,
     now: datetime,
     on_invalidate: Callable[[CachedInvalidationEvent], None] | None = None,
 ) -> CommunityPost:
@@ -427,6 +429,16 @@ def create_post(
     author may not post into it (unknown club, soft-deleted club, or
     the author is not a member). Both addressing forms go through the
     same gate — see :func:`_resolve_club_for_author`.
+
+    ``media_ids`` (javító sáv R27) names already-uploaded media to
+    attach. The list is re-validated server-side against the AUTHOR's
+    own rows (ownership + ``ready`` state + not already on another
+    post) by :func:`media.attach.attach_media_to_post`, which raises
+    :class:`media.attach.MediaAttachmentInvalid` — a ``ValueError``
+    subclass, so the router's existing 400 branch covers it. The
+    attachment runs AFTER the row exists (it needs the post's internal
+    id) and is skipped on the idempotent-retry path: a retry's media is
+    already bound to the winning row.
     """
     if len(body) > POST_BODY_MAX_LENGTH:
         # Defensive — the Pydantic layer should already have
@@ -532,6 +544,15 @@ def create_post(
             # the idempotency key specifically, not unrelated
             # constraints.
             raise
+
+    if media_ids:
+        attach_media_to_post(
+            db,
+            post_id=post.id,
+            owner_profile_id=author.id,
+            media_public_ids=media_ids,
+            now=now,
+        )
 
     if on_invalidate is not None:
         on_invalidate(

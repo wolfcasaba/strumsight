@@ -31,7 +31,9 @@ from typing import Any, Protocol
 from sqlalchemy import text as _sa_text
 from sqlalchemy.orm import Session
 
+from .media.attach import media_for_posts
 from .schemas.feed import FeedPostItem
+from .schemas.media import MediaOut, media_to_out
 
 
 class PostRowLike(Protocol):
@@ -164,6 +166,7 @@ def row_to_item(
     viewer: tuple[bool, str | None] = (False, None),
     *,
     club_id: int | None = None,
+    media: list[MediaOut] | None = None,
 ) -> FeedPostItem:
     """Egy feed-sor → wire-elem.
 
@@ -185,6 +188,7 @@ def row_to_item(
         bookmark_count=counts[2],
         viewer_bookmarked=viewer[0],
         viewer_reaction=viewer[1],
+        media=media or [],
         created_at=row.created_at,
         resource_version=row.updated_at,
         deleted_at=row.deleted_at,
@@ -206,12 +210,17 @@ def project_page(
     post_ids = [row.post_id for row in rows]
     counts = interaction_counts(db, post_ids)
     viewer = viewer_state(db, viewer_profile_id, post_ids)
+    # ONE query for the whole page's attachments (javító sáv R27) — the
+    # same batching discipline as the counters above, for the same
+    # reason: a per-row read here would be an N+1 on every feed page.
+    media = media_for_posts(db, post_ids)
     return [
         row_to_item(
             row,
             counts.get(row.post_id, (0, 0, 0)),
             viewer.get(row.post_id, (False, None)),
             club_id=club_id,
+            media=[media_to_out(m) for m in media.get(row.post_id, [])],
         )
         for row in rows
     ]

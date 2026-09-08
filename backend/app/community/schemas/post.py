@@ -44,9 +44,11 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from ..media.attach import MAX_MEDIA_PER_POST
 from ..models.post import POST_BODY_MAX_LENGTH
 from ..policies.access_policy import CommunityAudience
 from .artifacts import ShareArtifactEnvelope, parse_share_artifact
+from .media import MediaOut
 
 # ---------------------------------------------------------------------------
 # Body-validation regexes (brief §0.0 D5, D9).
@@ -137,6 +139,18 @@ class CreatePostRequest(BaseModel):
     # brief §0.0 D10). Unknown discriminators, unknown
     # ``schema_version``, and extra fields are rejected here.
     artifact: dict[str, Any] | None = None
+    # PUBLIC ids of already-uploaded media to attach (javító sáv R27).
+    # The ids name rows the caller uploaded through
+    # ``POST /community/media``; ownership, ``ready`` state and the
+    # "not already on another post" rule are re-checked SERVER-SIDE at
+    # publish time (``media/attach.py``) — the client's list is a
+    # request, never an assertion. The bound here is the same
+    # ``MAX_MEDIA_PER_POST`` the service enforces, duplicated at the
+    # schema layer so an oversized list is a 422 before any DB read.
+    media_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        max_length=MAX_MEDIA_PER_POST,
+    )
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
 
     @field_validator("body")
@@ -229,6 +243,10 @@ class PostOut(BaseModel):
     artifact_schema_version: int | None = None
     artifact_payload: dict[str, Any] | None = None
     moderation_state: Literal["visible", "removed"]
+    #: Attached media descriptors, in attachment order. Empty for a post
+    #: with no attachments, so the client never has to distinguish
+    #: "absent" from "none" (javító sáv R27).
+    media: list[MediaOut] = Field(default_factory=list)
     created_at: datetime
     resource_version: datetime
     deleted_at: datetime | None = None
@@ -236,6 +254,7 @@ class PostOut(BaseModel):
 
 __all__ = [
     "CreatePostRequest",
+    "MAX_MEDIA_PER_POST",
     "MENTION_MAX_COUNT",
     "PatchPostRequest",
     "PostOut",

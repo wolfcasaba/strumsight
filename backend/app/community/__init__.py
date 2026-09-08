@@ -122,10 +122,18 @@ def build_community_router(settings) -> APIRouter | None:
       exercised through this factory by the tilos-zóna suite, so this
       round leaves their existing all-or-nothing-with-
       ``community_enabled`` behaviour as measured.
-    * ``community_media_enabled`` — already self-gated inside
-      ``services/media_upload_service.py`` (checked at every call site);
-      no aggregated router exposes a dedicated media-upload HTTP surface
-      yet, so there is nothing to conditionally mount here.
+    * ``community_media_enabled`` — gates the whole ``media`` router
+      (``POST``/``GET``/``DELETE /community/media``), an all-or-nothing
+      surface like ``leaderboards`` and ``clubs``. Until the R27 javító
+      kör the flag had nothing to mount: the R18/R19 signed-URL services
+      self-gated internally and NO router exposed a media surface at all,
+      which is what the audit's §5.2 "Community média-feltöltés" item
+      measured. The direct-upload pipeline
+      (``community/media/**`` + ``routers/media.py``) is that surface,
+      and it stays behind this flag — an un-flipped deploy has no media
+      routes in the table, so the client's existing 404 path applies
+      unchanged. The R18/R19 ``services/media_upload_service.py`` keeps
+      its own internal gate and is still not mounted anywhere.
     * ``community_leaderboard_enabled`` — gates the whole ``leaderboards``
       router (an all-or-nothing competitive surface, not a read/write
       split).
@@ -160,6 +168,7 @@ def build_community_router(settings) -> APIRouter | None:
     from .routers.comments import router as comments_router
     from .routers.feed import router as feed_router
     from .routers.leaderboards import router as leaderboards_router
+    from .routers.media import router as media_router
     from .routers.moderation import router as moderation_router
     from .routers.notifications import router as notifications_router
     from .routers.posts import router as posts_router
@@ -192,6 +201,12 @@ def build_community_router(settings) -> APIRouter | None:
     aggregate.include_router(feed_router)
     if settings.community_leaderboard_enabled:
         aggregate.include_router(leaderboards_router)
+    # A `media` a `community_media_enabled` al-kapu alatt áll — egész
+    # felület, nem olvas/ír bontás (a `leaderboards` / `clubs` mintája).
+    # A kapu 2026-09-08-ig ÜRESEN állt: a feltöltésnek nem volt HTTP
+    # felülete, csak router nélküli service-e.
+    if settings.community_media_enabled:
+        aggregate.include_router(media_router)
     aggregate.include_router(moderation_router)
     # A `notifications` NEM áll a `community_writes_enabled` kapu alatt: az
     # olvasottra-jelölés és a beállítás-írás nem tagja az ADR 0395 §6

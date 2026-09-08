@@ -36,6 +36,8 @@ from sqlalchemy import text as _sa_text
 from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
+from ..media.attach import media_for_posts
+from ..schemas.media import MediaOut, media_to_out
 from ..schemas.post import CreatePostRequest, PatchPostRequest, PostOut
 from ..services.post_service import (
     ClubPostNotAllowed,
@@ -161,10 +163,22 @@ def _resolve_public_id_by_profile_id(db: Session, profile_id: int) -> uuid.UUID:
     return raw
 
 
+def _media_for(db: Session, post) -> list[MediaOut]:
+    """The post's READY attachments, in attachment order (R27).
+
+    Reads through the same batched helper the feed projection uses, so
+    the single-post and the page path can never disagree about which
+    attachments are visible.
+    """
+    grouped = media_for_posts(db, [int(post.id)])
+    return [media_to_out(row) for row in grouped.get(int(post.id), [])]
+
+
 def _row_to_out(
     post,
     author_public_id: uuid.UUID,
     club_public_id: uuid.UUID | None = None,
+    media: list[MediaOut] | None = None,
 ) -> PostOut:
     """Map a ``CommunityPost`` ORM row + author public_id to ``PostOut``.
 
@@ -188,6 +202,7 @@ def _row_to_out(
         artifact_schema_version=post.artifact_schema_version,
         artifact_payload=post.artifact_payload,
         moderation_state=post.moderation_state,  # type: ignore[arg-type]
+        media=media or [],
         created_at=post.created_at,
         resource_version=post.updated_at,
         deleted_at=post.deleted_at,
@@ -229,6 +244,7 @@ def post_post(
                     club_id=payload.club_id,
                     club_public_id=payload.club_public_id,
                     artifact=payload.artifact,
+                    media_ids=payload.media_ids,
                     now=datetime_now(),
                     on_invalidate=_on_invalidate(request),
                 )
@@ -253,7 +269,10 @@ def post_post(
         except HTTPException:
             raise
         return _row_to_out(
-            post, author_public_id, resolve_club_public_id(db, post.club_id)
+            post,
+            author_public_id,
+            resolve_club_public_id(db, post.club_id),
+            _media_for(db, post),
         )
     finally:
         try:
@@ -296,7 +315,10 @@ def get_post_endpoint(
             # meg a helyes azonosítót.
             author_public_id = _resolve_public_id_by_profile_id(db, post.profile_id)
             return _row_to_out(
-                post, author_public_id, resolve_club_public_id(db, post.club_id)
+                post,
+                author_public_id,
+                resolve_club_public_id(db, post.club_id),
+                _media_for(db, post),
             )
         except HTTPException:
             raise
@@ -371,7 +393,10 @@ def patch_post_endpoint(
         # okból, a válasz akkor is a valódi szerzőt mutatná).
         author_public_id = _resolve_public_id_by_profile_id(db, post.profile_id)
         return _row_to_out(
-            post, author_public_id, resolve_club_public_id(db, post.club_id)
+            post,
+            author_public_id,
+            resolve_club_public_id(db, post.club_id),
+            _media_for(db, post),
         )
     finally:
         try:

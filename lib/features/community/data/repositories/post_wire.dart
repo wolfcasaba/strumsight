@@ -14,6 +14,7 @@
 library;
 
 import '../../domain/entities/community_bookmark.dart';
+import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
 import '../../domain/entities/moderation_state.dart';
@@ -92,6 +93,12 @@ CommunityPost decodeCommunityPost(Map<String, Object?> json) {
       bookmarkedAt: null,
       myReaction: reactionKindFromWire(json['viewer_reaction'] as String?),
     ),
+    // A csatolt médiák (javító sáv R27). A szerver mindkét felületen —
+    // a `PostOut`-on és a `FeedPostItem`-en — ugyanazt a `media`
+    // tömböt küldi, ezért a KÖZÖS dekóder olvassa ki: ha a feed és a
+    // poszt-detail külön értelmezné, a csatolmány az egyik képernyőn
+    // megjelenne, a másikon nem.
+    media: decodeCommunityMediaList(json['media']),
   );
 }
 

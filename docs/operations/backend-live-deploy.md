@@ -234,7 +234,7 @@ STRUMSIGHT_COMMUNITY_ENABLED=true              # mester: a 15 router felcsatolá
 STRUMSIGHT_COMMUNITY_WRITES_ENABLED=true       # poszt/komment/social-graph írás
 STRUMSIGHT_COMMUNITY_CLUBS_ENABLED=true        # a clubs router (mind-vagy-semmi)
 STRUMSIGHT_COMMUNITY_LEADERBOARD_ENABLED=true  # a leaderboards router
-STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=false       # marad KI: nincs média-tárhely döntés
+STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=false       # a média-router; a lépéssor: §7.3
 ```
 
 `STRUMSIGHT_ENV=prod` mellett a community readiness Postgres-t követel
@@ -446,6 +446,124 @@ stream-transzport pedig `provider_error`/`provider_timeout` SSE-keretre képez.
 eltűnnek, a kliens a `/tutor/capability` 404-jéből tudja, hogy nincs
 felhő-tutor, és a helyi stub-ra esik vissza. A providert visszaállítani
 `fake`-re önmagában is elég ahhoz, hogy egyetlen bájt se hagyja el a szervert.
+
+### 7.3 Community média-feltöltés bekapcsolása — pontos lépéssor
+
+**A kapcsoló R27 előtt ÜRESEN állt.** A `STRUMSIGHT_COMMUNITY_MEDIA_ENABLED`
+a Kör 1 óta létezett, de nem csatolt fel semmit: a Kör 18/19 aláírt-URL-es
+szolgáltatás (`services/media_upload_service.py`) sosem kapott routert, és a
+hozzá képzelt objektum-tároló nem része ennek a deploynak. R27 óta a kapcsoló
+egy VALÓDI felületet kapuz — `POST/GET/DELETE /community/media` —, amely a
+bájtokat közvetlenül a backendbe tölti, ott újrakódolja és egy helyi köteten
+tárolja.
+
+**A két alapértelmezés SZÁNDÉKOSAN fail-closed.** A flag felkapcsolása
+önmagában NEM tesz elfogadhatóvá egyetlen feltöltést sem:
+
+| kapcsoló | alapértelmezés | mit csinál |
+|---|---|---|
+| `STRUMSIGHT_MEDIA_SCANNER` | `disabled` | a *disabled* adapter MINDEN feltöltést elutasít (`scanner_not_configured`). Nincs átengedő („pass-through") adapter: egy vírusirtó, ami ránézés nélkül mond tisztát, rosszabb a semminél, mert a sor, az üzemeltető és az audit onnantól azt olvassa, hogy a bájtokat átvizsgálták. |
+| `STRUMSIGHT_MEDIA_AUDIO_TRANSCODER` | `disabled` | minden HANG-feltöltés elutasítva (`audio_transcoder_unavailable`). A kép újrakódolása a folyamaton belül, Pillow-val történik (kemény függőség); a hanghoz külső kódoló kell, amit ez a repó nem szállít. |
+
+Kép-feltöltéshez tehát clamd KELL. Hang-feltöltéshez clamd ÉS egy `ffmpeg`.
+
+**1. Kötet és clamd** (a kötet a konténeren kívül él, hogy egy image-csere ne
+vigye el a felhasználók tartalmát):
+
+```bash
+# a) a médiakötet — csak a szolgáltatás felhasználója olvassa
+sudo install -d -o 10001 -g 10001 -m 0700 /srv/strumsight/media
+
+# b) clamd UNIX socketen (hálózati kitettség nélkül); a socketet
+#    ugyanabba a névtérbe kell bekötni, ahol az api fut
+sudo apt-get install -y clamav-daemon && sudo freshclam
+sudo systemctl enable --now clamav-daemon
+ls -l /var/run/clamav/clamd.ctl        # ennek léteznie kell
+```
+
+**2. Kulcsok a `runtime.env`-be:**
+
+```
+STRUMSIGHT_COMMUNITY_ENABLED=true
+STRUMSIGHT_COMMUNITY_WRITES_ENABLED=true
+STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=true        # a media router felcsatolása
+STRUMSIGHT_MEDIA_ROOT=/srv/strumsight/media    # a tartalom-címzett tároló gyökere
+STRUMSIGHT_MEDIA_SCANNER=clamd                 # a fail-closed alapértelmezés feloldása
+STRUMSIGHT_MEDIA_SCANNER_SOCKET=/var/run/clamav/clamd.ctl   # ha üres: host/port
+# STRUMSIGHT_MEDIA_SCANNER_HOST / _PORT        # csak ha nincs UNIX socket
+# STRUMSIGHT_MEDIA_SCANNER_TIMEOUT_SECONDS=10
+# STRUMSIGHT_MEDIA_MAX_IMAGE_BYTES=8388608     # 8 MiB
+# STRUMSIGHT_MEDIA_MAX_AUDIO_BYTES=20971520    # 20 MiB — csak transcoderrel él
+# STRUMSIGHT_MEDIA_MAX_ITEMS_PER_PROFILE=50    # fiókonkénti élő sor-kvóta
+# STRUMSIGHT_MEDIA_UPLOAD_RATE_LIMIT_MAX=20    # IP-nkénti csúszóablak…
+# STRUMSIGHT_MEDIA_UPLOAD_RATE_LIMIT_WINDOW=3600  # …másodpercben
+# STRUMSIGHT_MEDIA_IMAGE_MAX_DIMENSION=2048    # a hosszabb él az újrakódolás után
+# STRUMSIGHT_MEDIA_IMAGE_QUALITY=82
+# STRUMSIGHT_MEDIA_REVIEW_REQUIRED=false       # true: a kész sor `review`-ban parkol
+# STRUMSIGHT_MEDIA_AUDIO_TRANSCODER=ffmpeg     # csak ha van ffmpeg a konténerben
+# STRUMSIGHT_MEDIA_FFMPEG_PATH=ffmpeg
+# STRUMSIGHT_MEDIA_AUDIO_MAX_DURATION_SECONDS=180
+```
+
+A compose-fájlban a kötetet és a socketet is be kell kötni:
+
+```yaml
+    volumes:
+      - /srv/strumsight/media:/srv/strumsight/media
+      - /var/run/clamav/clamd.ctl:/var/run/clamav/clamd.ctl
+```
+
+**3. Migráció, majd újraindítás** — az `e09_r28_0021` revízió hozza létre a
+`community_media_uploads` táblát:
+
+```bash
+cd /home/ubuntu/strumsight-deploy
+docker compose --env-file runtime.env run --rm api alembic upgrade head
+docker compose --env-file runtime.env up -d
+curl -s http://127.0.0.1:8010/health/ready     # {"status":"ready"}
+```
+
+**4. Felcsatolás- és fail-closed-ellenőrzés.** A kapu REGISZTRÁCIÓS: flip
+előtt az útvonal nem is létezik, tehát a csupasz 404 és a hitelesítési 403
+különbsége mondja meg az állapotot.
+
+```bash
+# felcsatolt-e? token nélkül 403 = FEL van csatolva, 404 = NINCS
+curl -s -o /dev/null -w '%{http_code}
+' -X POST http://127.0.0.1:8010/community/media
+
+# a fail-closed alapértelmezés PRÓBÁJA (csináld meg, MIELŐTT a scanner=clamd
+# sort beteszed): a válasz 201, a törzsben state=rejected +
+# rejection_code=scanner_not_configured — ez a helyes, biztonságos állapot,
+# nem hiba
+curl -s -H "Authorization: Bearer $TOKEN" \
+     -F 'file=@/tmp/probe.jpg' http://127.0.0.1:8010/community/media
+
+# clamd bekapcsolása után ugyanez: state=ready, és a bájtok visszakérhetők
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+     http://127.0.0.1:8010/community/media/$PUBLIC_ID
+```
+
+**Amit a felület a bájtokkal tesz** (a három korábban nyitott threat-model
+tétel, `docs/security/community-threat-model.md` §6.2):
+
+1. **méret** — a kaput a ténylegesen beolvasott bájtok döntik el, nem a
+   `Content-Length` fejléc;
+2. **magic-byte** — a fájlnév és a multipart `Content-Type` SEMMIT nem
+   befolyásol; nyolc engedélyezett formátum van, minden más elutasítva, és az
+   SVG/HTML külön kódot kap;
+3. **vírusirtó** — clamd `INSTREAM` az EREDETI bájtokon (nem az újrakódolt
+   kimeneten: azt a támadó sosem küldte);
+4. **újrakódolás** — a tárolt bájt az `enkóder` kimenete, tehát EXIF/GPS,
+   ICC, XMP és a fájl végére fűzött „polyglot" függelék nem éli túl;
+5. **tárolás** — tartalom-címzett (`<sha256[0:2]>/<sha256[2:4]>/<sha256>`),
+   így egyetlen kérés-mező sem lesz útvonal-szegmenssé.
+
+**Visszakapcsolás.** `STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=false`, `up -d` — az
+útvonalak eltűnnek, a kliens visszaesik a szöveg-only szerkesztőre. A
+`STRUMSIGHT_MEDIA_ROOT` kötetet **ne töröld**: a migráció visszavonása (`alembic
+downgrade -1`) is csak a TÁBLÁT ejti, a felhasználók fájljait szándékosan
+érintetlenül hagyja, hogy egy újra-felhúzás a bájtokat a helyükön találja.
 
 ## 8. Egy MÉRT hibaosztály, amit ez a telepítés tárt fel
 

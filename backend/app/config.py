@@ -11,6 +11,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_DIAGNOSTICS_DIR = str(Path(__file__).resolve().parents[1] / "diagnostics_data")
+_DEFAULT_MEDIA_ROOT = str(Path(__file__).resolve().parents[1] / "media_data")
 BCRYPT_MAX_PASSWORD_BYTES = 72
 
 # Closed environment value set (ADR 0445 D1). The client's enum names
@@ -131,6 +132,59 @@ class Settings(BaseSettings):
     community_media_enabled: bool = False
     community_leaderboard_enabled: bool = False
     community_clubs_enabled: bool = False
+
+    # Community media upload pipeline (E09 javító sáv R27). Every value
+    # here is read ONLY when `community_media_enabled` is true — the
+    # router is not even registered otherwise (`build_community_router`),
+    # so a deploy that never flips that flag is unaffected by these
+    # defaults.
+    #
+    # SECURITY defaults are fail-closed on both processing hops:
+    #
+    #   * `media_scanner` defaults to "disabled", and the *disabled*
+    #     adapter REJECTS every upload — there is deliberately no
+    #     pass-through scanner. Accepting user bytes therefore requires
+    #     the operator to stand up clamd and set
+    #     STRUMSIGHT_MEDIA_SCANNER=clamd (runbook §7.3).
+    #   * `media_audio_transcoder` defaults to "disabled", which rejects
+    #     every AUDIO upload with `audio_transcoder_unavailable`. Images
+    #     are re-encoded in-process by Pillow, which is a hard
+    #     requirement (`requirements.txt`); audio needs an external
+    #     transcoder this repository does not ship.
+    #
+    # `media_root` is the ONLY writable path the pipeline touches. It is
+    # content-addressed (`<sha256[0:2]>/<sha256[2:4]>/<sha256>`), so the
+    # public_id -> row -> path resolution never concatenates
+    # caller-supplied text into a filesystem path.
+    media_root: str = _DEFAULT_MEDIA_ROOT
+    media_max_image_bytes: int = 8 * 1024 * 1024
+    media_max_audio_bytes: int = 20 * 1024 * 1024
+    #: Live (non-deleted) media rows a single profile may hold. The
+    #: per-account quota; the per-IP throttle below is the second,
+    #: independent bound.
+    media_max_items_per_profile: int = 50
+    media_upload_rate_limit_max: int = 20
+    media_upload_rate_limit_window: int = 3600
+    #: Longest edge (px) of the re-encoded image. Anything larger is
+    #: downscaled; the re-encode ALWAYS happens, even for a small image,
+    #: because dropping the original container is the point (A6.2.4).
+    media_image_max_dimension: int = 2048
+    media_image_quality: int = 82
+    #: "clamd" | "disabled". Never a pass-through value.
+    media_scanner: str = "disabled"
+    media_scanner_host: str = "127.0.0.1"
+    media_scanner_port: int = 3310
+    #: When non-empty this UNIX socket path wins over host/port.
+    media_scanner_socket: str = ""
+    media_scanner_timeout_seconds: float = 10.0
+    #: "disabled" (reject every audio upload) | "ffmpeg".
+    media_audio_transcoder: str = "disabled"
+    media_ffmpeg_path: str = "ffmpeg"
+    media_audio_max_duration_seconds: int = 180
+    #: When true the pipeline parks a scanned + transcoded upload in
+    #: `review` instead of `ready`, so a human has to release it. OFF by
+    #: default — the state exists for the operator who wants it.
+    media_review_required: bool = False
 
     @property
     def community_postgres_ready(self) -> bool:
