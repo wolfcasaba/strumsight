@@ -21,6 +21,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
+import '../../../../core/i18n/effective_locale.dart';
+import '../../../../core/logging/app_logger.dart';
+import '../../../../core/logging/logger_provider.dart';
 import '../../../../core/storage/key_value_store.dart';
 import '../../application/context/context_purpose.dart';
 import '../../application/context/tutor_context_assembler.dart';
@@ -33,11 +36,13 @@ import '../../application/prompts/prompt_template.dart';
 import '../../application/prompts/tutor_prompt_builder.dart';
 import '../../data/knowledge/knowledge_index.dart';
 import '../../data/knowledge/knowledge_retriever.dart';
+import '../../data/local/tutor_conversation_codec.dart';
 import '../../data/model_gateway/local_tutor_model_gateway_stub.dart';
 import '../../data/repositories/local_tutor_conversation_repository.dart';
 import '../../domain/models/tutor_action.dart';
 import '../../domain/models/tutor_consent.dart';
 import '../../domain/models/tutor_content_block.dart';
+import '../../domain/models/tutor_conversation.dart';
 import '../../domain/models/tutor_ids.dart';
 import '../../domain/models/tutor_message.dart';
 import '../../domain/models/tutor_response_mode.dart';
@@ -333,6 +338,8 @@ class DefaultTutorChatController extends ChangeNotifier
     required this.requestIdFactory,
     required this.turnRequestFactory,
     required this.onChanged,
+    this.localeTag = 'und',
+    this.logger = const NoopAppLogger(),
   });
 
   /// Called whenever the controller's visible state changes — wired
@@ -343,6 +350,20 @@ class DefaultTutorChatController extends ChangeNotifier
   final TutorConversationRepository repository;
   final TutorConversationId conversationId;
   final TutorRequestId Function() requestIdFactory;
+
+  /// BCP-47 language tag written onto a NEW persisted conversation
+  /// envelope (N1, R33). A restored conversation keeps the tag it was
+  /// stored with — the envelope records the language the conversation
+  /// was HELD in, and re-stamping it on every save would rewrite that
+  /// history. `und` (BCP-47 "undetermined") is the honest default for a
+  /// controller built without one.
+  final String localeTag;
+
+  /// Where a persistence failure is reported. Storage is best-effort:
+  /// a refused write must not take the chat down, and it must never be
+  /// silent either. Only METADATA is logged — an id, a failure code and
+  /// a message COUNT; never a line of the conversation.
+  final AppLogger logger;
 
   /// Consent-gated request producer. A [Failure] here means the turn is
   /// refused before anything is sent — see [buildTutorTurnRequest].
@@ -366,6 +387,17 @@ class DefaultTutorChatController extends ChangeNotifier
   /// re-emission of the same terminal state (e.g. [setOnline] replaying the
   /// orchestrator's state) cannot append the tutor's reply twice.
   bool _answerAppended = false;
+
+  /// N1 (R33) — the persisted envelope's `createdAt`, kept so repeated
+  /// saves of the SAME conversation do not keep moving its birth date.
+  /// Null until the first save or a successful restore.
+  DateTime? _conversationCreatedAt;
+
+  /// The locale a restored conversation was stored with, if any.
+  String? _restoredLocaleTag;
+
+  /// Guards [restore] against a second [attach].
+  bool _restoreStarted = false;
 
   @override
   List<TutorMessage> get messages => List<TutorMessage>.unmodifiable(_messages);
@@ -421,6 +453,11 @@ class DefaultTutorChatController extends ChangeNotifier
       final blocks = tutorAnswerBlocksFrom(next.responseText);
       if (blocks.isNotEmpty) _messages.add(_tutorMessage(blocks));
       _answerAppended = true;
+      // N1 — the turn is over, so the conversation is worth keeping.
+      // Fire-and-forget: the write must not block the frame that shows
+      // the answer, and a refusal is logged, not surfaced as a failed
+      // turn (the turn itself succeeded).
+      unawaited(persist());
     }
     final nextBanners = <TutorBannerKind>[];
     if (!isOnline) nextBanners.add(TutorBannerKind.offline);
@@ -445,6 +482,78 @@ class DefaultTutorChatController extends ChangeNotifier
   /// `ref.onAddListener` or directly.
   void attach() {
     _stateSubscription ??= orchestrator.states.listen(_consume);
+    unawaited(restore());
+  }
+
+  /// N1 (R33) — load the stored conversation for [conversationId].
+  ///
+  /// The repository was a constructor parameter this controller never
+  /// read: every turn was written to a screen and to nothing else, so
+  /// leaving the chat threw the conversation away. This is the read
+  /// half.
+  ///
+  /// A failed read leaves the chat EMPTY and logs metadata — a broken
+  /// or half-written local document must not make the tutor
+  /// unopenable. Idempotent, and it never overwrites messages a turn
+  /// already produced while the read was in flight.
+  Future<void> restore() async {
+    if (_restoreStarted) return;
+    _restoreStarted = true;
+    final result = await repository.get(conversationId);
+    final TutorConversation? conversation = switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => _onRestoreFailure(error),
+    };
+    if (conversation == null) return;
+    _conversationCreatedAt = conversation.createdAt;
+    _restoredLocaleTag = conversation.locale;
+    if (_messages.isNotEmpty) return;
+    _messages.addAll(conversation.messages);
+    _emit();
+  }
+
+  /// N1 (R33) — write the current messages to the local store.
+  ///
+  /// Only what [TutorConversation] already models is written: the id,
+  /// the two timestamps, the locale, the status and the messages. The
+  /// optional `title` stays null on purpose — deriving one from the
+  /// student's first line would copy message text into a summary field
+  /// the chat never asked for.
+  Future<void> persist() async {
+    final now = DateTime.now().toUtc();
+    final createdAt = _conversationCreatedAt ??= now;
+    final result = await repository.save(
+      TutorConversation(
+        schemaVersion: TutorConversationCodec.supportedSchemaVersion,
+        id: conversationId,
+        createdAt: createdAt,
+        updatedAt: now,
+        locale: _restoredLocaleTag ?? localeTag,
+        status: TutorConversationStatus.active,
+        messages: List<TutorMessage>.unmodifiable(_messages),
+      ),
+    );
+    if (result case Failure(:final error)) {
+      logger.warning(
+        'tutor.conversation.persist_failed',
+        fields: <String, Object?>{
+          'conversation_id': conversationId.value,
+          'failure_code': error.code,
+          'message_count': _messages.length,
+        },
+      );
+    }
+  }
+
+  TutorConversation? _onRestoreFailure(AppFailure failure) {
+    logger.warning(
+      'tutor.conversation.restore_failed',
+      fields: <String, Object?>{
+        'conversation_id': conversationId.value,
+        'failure_code': failure.code,
+      },
+    );
+    return null;
   }
 
   @override
@@ -643,6 +752,11 @@ final tutorChatControllerProvider = Provider<TutorChatController>((ref) {
       consent: ref.read(tutorConsentControllerProvider),
     ),
     onChanged: (_) {},
+    // `ref.read`, for the same reason the consent value is read late:
+    // a language change must not rebuild the controller and drop the
+    // conversation. The tag is only stamped on a NEW envelope anyway.
+    localeTag: ref.read(effectiveLocaleProvider).languageCode,
+    logger: ref.read(appLoggerProvider),
   );
   controller.attach();
   ref.onDispose(controller.dispose);

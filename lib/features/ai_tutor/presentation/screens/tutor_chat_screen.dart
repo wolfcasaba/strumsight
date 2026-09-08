@@ -40,6 +40,7 @@ import '../providers/tutor_providers.dart';
 import '../widgets/tutor_banners.dart';
 import '../widgets/tutor_composer.dart';
 import '../widgets/tutor_message_bubble.dart';
+import '../widgets/tutor_source_sheet.dart';
 
 /// The Chat's way back (2026-09-07 audit).
 ///
@@ -333,7 +334,19 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TutorMessageBubble(message: message);
+    return TutorMessageBubble(
+      message: message,
+      // M13 (R33) — the rendered source line is what opens the evidence
+      // sheet. `showTutorSourceSheet` had no `lib/**` caller before
+      // this: the citation was drawn and could not be inspected.
+      onSourceTap: (block) => showTutorSourceSheet(
+        context,
+        TutorSourceSheet.forSourceBlock(
+          title: block.title,
+          reference: block.reference,
+        ),
+      ),
+    );
   }
 }
 

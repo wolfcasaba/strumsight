@@ -34,16 +34,40 @@ class TutorSourceSheet extends StatelessWidget {
     this.evidenceId,
     this.metric,
     this.trendWindow,
+    this.sourceTitle,
   });
 
   factory TutorSourceSheet.forSource(TutorSourceRef source) =>
       TutorSourceSheet(kind: TutorEvidenceKind.knowledge, source: source);
+
+  /// The sheet a `TutorSourceBlock` inside a chat bubble opens (M13,
+  /// R33).
+  ///
+  /// A rendered source block carries only a display title and a
+  /// reference string — NOT the full [TutorSourceRef] the retrieval
+  /// layer produces. Fabricating a `TutorSourceRef` here would invent a
+  /// locale, a topic, a knowledge version and a chunk hash the message
+  /// never carried, so the block's two real fields get their own path
+  /// instead.
+  factory TutorSourceSheet.forSourceBlock({
+    required String title,
+    required String reference,
+  }) => TutorSourceSheet(
+    kind: TutorEvidenceKind.knowledge,
+    sourceTitle: title,
+    evidenceId: reference,
+  );
 
   final TutorEvidenceKind kind;
   final TutorSourceRef? source;
   final String? evidenceId;
   final String? metric;
   final String? trendWindow;
+
+  /// Display title of the source block that opened this sheet, when the
+  /// caller has no [TutorSourceRef]. Rendered with the SAME
+  /// `aiTutorSourceTitle` string the [source] section uses.
+  final String? sourceTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +119,13 @@ class TutorSourceSheet extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+              ),
+            ],
+            if (sourceTitle != null) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(
+                l10n.aiTutorSourceTitle(sanitizeTutorDisplayText(sourceTitle!)),
+                style: Theme.of(context).textTheme.titleMedium,
               ),
             ],
             if (evidenceId != null) ...<Widget>[

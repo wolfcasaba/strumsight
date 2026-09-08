@@ -84,6 +84,7 @@ import '../../domain/entities/community_comment.dart';
 import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
+import '../../domain/entities/community_report_receipt.dart';
 import '../../domain/entities/moderation_state.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_page.dart';
@@ -522,6 +523,48 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
       filename: filename,
       decode: decodeCommunityMedia,
       conflictCode: FailureCode.communityConflict,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  /// Tartalom-bejelentés — `POST /community/reports` (R33, M10).
+  ///
+  /// SZÁNDÉKOSAN a szerződésen KÍVÜL, a `createClubPost` / `uploadMedia`
+  /// precedense szerint: a `CommunityPostRepository`-t tizenhárom
+  /// teszt-fake valósítja meg — kettő közülük PIXELRE PINELT
+  /// golden-fájlban él (`e13_r33`, `e15_r13`), amiket ez a kör nem
+  /// szerkeszthet —, tehát egy új absztrakt metódus a szerződésen az
+  /// egész golden-sávot eltörné.
+  ///
+  /// A kimenő törzs a `backend/app/community/routers/reports.py` MÉRT
+  /// alakja: `{target_type, target_id, category, idempotency_key}`. Az
+  /// opcionális `extra_metadata` kulcsot NEM küldjük ki: a bejelentő
+  /// szabad szövegét a lap ma nem gyűjti be, egy üres objektum pedig
+  /// csak zajt vinne le az eszközről.
+  ///
+  /// A hibák a szokásos leképezésen mennek: 422 (ismeretlen kategória)
+  /// és 400 validációs hiba, 429 és 5xx `networkServer`, 404 „nincs ilyen
+  /// cél VAGY nincs bejelentői profilod" — a szerver szándékosan nem
+  /// különbözteti meg a kettőt, tehát a kliens sem tehet úgy, mintha
+  /// tudná, melyik történt.
+  Future<CommunityReportReceipt> submitReport({
+    required String targetType,
+    required String targetId,
+    required String category,
+    required String idempotencyKey,
+  }) async {
+    final result = await _client.postJson<CommunityReportReceipt>(
+      '/community/reports',
+      data: <String, Object?>{
+        'target_type': targetType,
+        'target_id': targetId,
+        'category': category,
+        'idempotency_key': idempotencyKey,
+      },
+      decode: decodeCommunityReportReceipt,
     );
     return switch (result) {
       Success(:final value) => value,

@@ -32,6 +32,7 @@ import 'package:flutter/material.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../widgets/community_theme_scope.dart';
 
@@ -374,15 +375,26 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
         _submitting = false;
         _submittedOutcome = outcome;
       });
+    } on AppFailure catch (failure) {
+      // R33: the wired repository throws the app-wide failure VALUE, which
+      // is a sealed class and NOT an `Exception` — so the old
+      // `on Exception` arm would have let every real submit failure fly
+      // past this handler and take the whole sheet down.
+      _onSubmitFailed(failure.code);
     } on Exception catch (_) {
-      // Repository-layer failure is mapped to a localized snack bar;
-      // the sheet stays in compose phase so the reporter can retry.
-      if (!mounted) return;
-      setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_mapFailureToLocalizedText(context))),
-      );
+      // Anything else (a decoder `FormatException`, a fake in a test).
+      _onSubmitFailed(null);
     }
+  }
+
+  /// Repository-layer failure → a localized snack bar; the sheet stays in
+  /// the compose phase so the reporter can retry with the same category.
+  void _onSubmitFailed(String? failureCode) {
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_mapFailureToLocalizedText(context, failureCode))),
+    );
   }
 
   Future<void> _onActionSelected(ReportSafetyAction action) async {
@@ -426,12 +438,23 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
     );
   }
 
-  String _mapFailureToLocalizedText(BuildContext context) {
+  /// The two failure classes the reporter can act on differently.
+  ///
+  /// Transport failures get the "no network" copy — retrying later is the
+  /// right move. Everything else gets the generic "could not submit"
+  /// copy. `reportSheetErrorRateLimited` deliberately stays UNUSED: the
+  /// shared Dio mapper folds 429 into the same `network.server` code as
+  /// every 5xx (`network_failure_mapper.dart`), so the client cannot tell
+  /// a throttle from an outage, and guessing "you hit the report limit"
+  /// would name a cause we did not measure.
+  String _mapFailureToLocalizedText(BuildContext context, String? code) {
     final l10n = AppLocalizations.of(context);
-    // The sheet's repository is responsible for translating
-    // AppFailure.code into the right key. The default fallback
-    // covers the rare "no AppFailure" case (a raw exception).
-    return l10n.reportSheetErrorInvalid;
+    return switch (code) {
+      FailureCode.networkUnavailable ||
+      FailureCode.networkTimeout ||
+      FailureCode.networkTls => l10n.reportSheetErrorNetwork,
+      _ => l10n.reportSheetErrorInvalid,
+    };
   }
 
   String _newIdempotencyKey() {

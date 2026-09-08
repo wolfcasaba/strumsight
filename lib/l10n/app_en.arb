@@ -1869,6 +1869,14 @@
   "@communityFollowersBlockAction": {},
   "communityFollowersMuteAction": "Mute",
   "@communityFollowersMuteAction": {},
+  "communityGateAppBarErrorTitle": "Community didn't load",
+  "@communityGateAppBarErrorTitle": {},
+  "communityGateAppBarLoggedOutTitle": "Sign in to Community",
+  "@communityGateAppBarLoggedOutTitle": {},
+  "communityGateAppBarTitle": "Community",
+  "@communityGateAppBarTitle": {},
+  "communityGateAppBarUnavailableTitle": "Community unavailable",
+  "@communityGateAppBarUnavailableTitle": {},
   "communityGateDisabledBody": "The Community feature is hidden by configuration. The rest of StrumSight — detection, practice, settings — works as usual.",
   "communityGateDisabledTitle": "Community is not available in this build",
   "@communityGateDisabledTitle": {},
@@ -3533,6 +3541,10 @@
     "description": "Profile hub button opening the Community gate. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
   },
   "profileHubCommunitySectionTitle": "Community",
+  "profileHubCommunityServerDisabledMessage": "Community is switched off on the server this build talks to.",
+  "@profileHubCommunityServerDisabledMessage": {
+    "description": "Profile hub Community subtitle when the gate resolved to CommunityGateStatus.unavailable. Lives in the community segment because lib/l10n/base is off-limits to feature rounds."
+  },
   "profileHubLocalOnlyMessage": "You're using StrumSight without an account — everything stays on this device.",
   "profileHubLocalOnlyTitle": "Local profile",
   "profileHubProgressSectionTitle": "Progress",

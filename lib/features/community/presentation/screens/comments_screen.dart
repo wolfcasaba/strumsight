@@ -29,6 +29,8 @@ import '../../application/controllers/comment_controller.dart';
 import '../../domain/entities/community_comment.dart';
 import '../../domain/entities/moderation_state.dart';
 import '../../domain/value_objects/content_id.dart';
+import '../dialogs/community_report_repository.dart';
+import '../dialogs/report_content_sheet.dart';
 import '../widgets/community_moderation_placeholder.dart';
 import '../widgets/community_theme_scope.dart';
 
@@ -95,6 +97,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
                         data.nextCursor.cursor != null,
                     onLoadMore: () =>
                         ref.read(commentControllerProvider.notifier).loadMore(),
+                    onReport: _openReportSheet,
                   ),
                 ),
               ),
@@ -115,6 +118,32 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       ),
     );
   }
+
+  /// M10 — the report sheet's entry point on a comment (R33).
+  ///
+  /// Long-press, for the same reason the feed card uses one: the
+  /// comment row is inside the pixel-pinned `e13_r33_comments_compact`
+  /// golden, and a visible overflow button would move it.
+  Future<void> _openReportSheet(CommunityComment comment) async {
+    final controller = ref.read(commentControllerProvider.notifier);
+    await showReportContentSheet(
+      context,
+      request: ReportContentRequest(
+        targetType: 'comment',
+        targetId: comment.id.value,
+        targetAuthorPublicId: comment.authorId.value,
+      ),
+      repository: CommunityReportRepository.fromRef(
+        ref,
+        // The comment controller's hide is synchronous state surgery;
+        // the sheet's contract is a `Future`, so it is adapted here
+        // rather than by widening the controller's signature.
+        onHide: (_) async {
+          controller.hideLocally(comment.id);
+        },
+      ),
+    );
+  }
 }
 
 /// The scrolling list of comments. The widget is a pure projection
@@ -126,12 +155,14 @@ class _CommentsList extends StatelessWidget {
     required this.isLoadingMore,
     required this.hasMore,
     required this.onLoadMore,
+    required this.onReport,
   });
 
   final List<CommentRow> rows;
   final bool isLoadingMore;
   final bool hasMore;
   final Future<void> Function() onLoadMore;
+  final ValueChanged<CommunityComment> onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +178,7 @@ class _CommentsList extends StatelessWidget {
           return _LoadMoreRow(isLoading: isLoadingMore, onPressed: onLoadMore);
         }
         final row = rows[index];
-        return _CommentTile(comment: row.comment);
+        return _CommentTile(comment: row.comment, onReport: onReport);
       },
     );
   }
@@ -159,9 +190,13 @@ class _CommentsList extends StatelessWidget {
 /// in the controller keeps the list from ever showing both at
 /// once).
 class _CommentTile extends StatelessWidget {
-  const _CommentTile({required this.comment});
+  const _CommentTile({required this.comment, required this.onReport});
 
   final CommunityComment comment;
+
+  /// M10 — long-press reports this comment. Pixel-neutral by design
+  /// (see `_CommentsScreenState._openReportSheet`).
+  final ValueChanged<CommunityComment> onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -173,18 +208,23 @@ class _CommentTile extends StatelessWidget {
         child: CommunityModerationPlaceholder(),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            comment.authorId.value,
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(comment.body, style: Theme.of(context).textTheme.bodyMedium),
-        ],
+    return GestureDetector(
+      key: Key('comment-report-${comment.id.value}'),
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => onReport(comment),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              comment.authorId.value,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(comment.body, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
       ),
     );
   }

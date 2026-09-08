@@ -7,6 +7,7 @@ import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/public.dart';
+import '../../community/public.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
 
@@ -33,6 +34,18 @@ class ProfileHubScreen extends ConsumerWidget {
         .flags
         .communityEnabled;
     final accountEnabled = ref.watch(accountEnabledProvider);
+    // MI-L (R33) — the MEASURED gate state, not just the build flag.
+    // `.value` is null while the probe is in flight and on a failed
+    // probe; both keep the pre-R33 copy, so nothing on this screen
+    // moves until the gate has actually said the server is off.
+    //
+    // Watched only when the feature is compiled in: a build that ships
+    // without Community has nothing to probe, and reading the gate
+    // controller there would start an account-API call for a section
+    // that already says "not in this build".
+    final gateStatus = communityEnabled
+        ? ref.watch(communityProfileControllerProvider).value?.status
+        : null;
     // Az AI Tanár belépési pontja. A `/tutor/*` útvonalak az `aiTutorEnabled`
     // kapu alatt regisztrálódnak (`app_router.dart`), ezért a gomb PONTOSAN
     // ugyanazzal a flaggel kapuzott — kikapcsolt kapunál nem mutat
@@ -100,9 +113,11 @@ class ProfileHubScreen extends ConsumerWidget {
             _SectionLabel(l10n.profileHubCommunitySectionTitle),
             const SizedBox(height: 8),
             Text(
-              communityEnabled
-                  ? l10n.profileHubCommunityEnabledMessage
-                  : l10n.profileHubCommunityDisabledReason,
+              _communityMessage(
+                l10n,
+                communityEnabled: communityEnabled,
+                gateStatus: gateStatus,
+              ),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             // A közösség BELÉPÉSI PONTJA (2026-09-05). A 13 community
@@ -132,6 +147,31 @@ class ProfileHubScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// What the hub says about Community (MI-L, R33).
+  ///
+  /// The build flag alone was the only input, so a build that ships the
+  /// feature against a server running with the Community module OFF told
+  /// the user "Connect with other players and share your progress" and
+  /// then handed them a gate screen that says the opposite. The gate
+  /// controller already measures that case as
+  /// [CommunityGateStatus.unavailable]; this reads it.
+  ///
+  /// Every other state — including "not resolved yet" and "the probe
+  /// failed" — keeps the original copy on purpose: an unfinished probe
+  /// is not evidence that the server is off, and the pixel-pinned
+  /// `e13_r17_profile_hub_compact` golden renders exactly that case.
+  String _communityMessage(
+    AppLocalizations l10n, {
+    required bool communityEnabled,
+    required CommunityGateStatus? gateStatus,
+  }) {
+    if (!communityEnabled) return l10n.profileHubCommunityDisabledReason;
+    if (gateStatus == CommunityGateStatus.unavailable) {
+      return l10n.profileHubCommunityServerDisabledMessage;
+    }
+    return l10n.profileHubCommunityEnabledMessage;
   }
 }
 

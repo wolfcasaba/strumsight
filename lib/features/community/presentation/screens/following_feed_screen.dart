@@ -42,7 +42,10 @@ import '../../../../app/config/app_config.dart';
 import '../../../../app/routing/app_route.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/feed_controller.dart';
+import '../../domain/entities/community_post.dart';
 import '../../domain/value_objects/cursor_page.dart';
+import '../dialogs/community_report_repository.dart';
+import '../dialogs/report_content_sheet.dart';
 import '../widgets/community_theme_scope.dart';
 import '../widgets/feed_card_registry.dart';
 
@@ -109,7 +112,32 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
               ref.read(feedControllerProvider.notifier).loadMore(),
           onRetry: () => ref.read(feedControllerProvider.notifier).retry(),
           onRefresh: () => ref.read(feedControllerProvider.notifier).refresh(),
+          onReport: _openReportSheet,
         ),
+      ),
+    );
+  }
+
+  /// M10 — the report sheet's entry point on the feed (R33).
+  ///
+  /// Reached by long-pressing a card: the sheet itself is the visible
+  /// affordance, and the gesture keeps the pixel-pinned feed golden
+  /// (`e13_r33_following_feed_compact`) byte-identical.
+  ///
+  /// "Hide from feed" is bound to THIS post, not to the id the sheet
+  /// echoes back, so a mismatch cannot silently hide the wrong row.
+  Future<void> _openReportSheet(CommunityPost post) async {
+    final controller = ref.read(feedControllerProvider.notifier);
+    await showReportContentSheet(
+      context,
+      request: ReportContentRequest(
+        targetType: 'post',
+        targetId: post.id.value,
+        targetAuthorPublicId: post.authorId.value,
+      ),
+      repository: CommunityReportRepository.fromRef(
+        ref,
+        onHide: (_) => controller.hideLocally(post.id),
       ),
     );
   }
@@ -126,12 +154,14 @@ class _Body extends StatelessWidget {
     required this.onLoadMore,
     required this.onRetry,
     required this.onRefresh,
+    required this.onReport,
   });
 
   final FeedState state;
   final VoidCallback onLoadMore;
   final VoidCallback onRetry;
   final Future<void> Function() onRefresh;
+  final ValueChanged<CommunityPost> onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -147,6 +177,7 @@ class _Body extends StatelessWidget {
             onLoadMore: onLoadMore,
             onRetry: onRetry,
             onRefresh: onRefresh,
+            onReport: onReport,
           );
         }
         return const _LoadingInitial();
@@ -158,6 +189,7 @@ class _Body extends StatelessWidget {
           onLoadMore: onLoadMore,
           onRetry: onRetry,
           onRefresh: onRefresh,
+          onReport: onReport,
         );
       case FeedStatus.offline:
         return _Content(
@@ -165,6 +197,7 @@ class _Body extends StatelessWidget {
           onLoadMore: onLoadMore,
           onRetry: onRetry,
           onRefresh: onRefresh,
+          onReport: onReport,
           leadingBanner: const _OfflineBanner(),
         );
       case FeedStatus.error:
@@ -175,6 +208,7 @@ class _Body extends StatelessWidget {
           onLoadMore: onLoadMore,
           onRetry: onRetry,
           onRefresh: onRefresh,
+          onReport: onReport,
           endState: const _EndOfFeed(),
         );
     }
@@ -316,6 +350,7 @@ class _Content extends StatefulWidget {
     required this.onLoadMore,
     required this.onRetry,
     required this.onRefresh,
+    required this.onReport,
     this.leadingBanner,
     this.endState,
   });
@@ -324,6 +359,7 @@ class _Content extends StatefulWidget {
   final VoidCallback onLoadMore;
   final VoidCallback onRetry;
   final Future<void> Function() onRefresh;
+  final ValueChanged<CommunityPost> onReport;
   final Widget? leadingBanner;
   final Widget? endState;
 
@@ -418,6 +454,8 @@ class _ContentState extends State<_Content> {
                               post.id.value,
                             ),
                           ),
+                          // M10 — long-press opens the report sheet.
+                          onReport: () => widget.onReport(post),
                         );
                       }
                       return _Footer(

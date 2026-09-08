@@ -66,9 +66,7 @@ class CommunityGateScreen extends ConsumerWidget {
 
     return CommunityThemeScope(
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(localizations.communityGateProfileMissingTitle),
-        ),
+        appBar: AppBar(title: Text(_appBarTitle(state, localizations))),
         body: state.when(
           loading: () => Center(
             child: Column(
@@ -105,6 +103,41 @@ class CommunityGateScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// The AppBar title, per gate state (MI-A, R33).
+  ///
+  /// Every state used to be titled "Create your Community profile" —
+  /// including the two that say the opposite in their body ("Community is
+  /// not available in this build", "…not enabled on this server yet") and
+  /// the logged-out one, which offers no profile creation at all. The
+  /// title is the first thing a screen reader announces, so it was the
+  /// screen's loudest untruth.
+  ///
+  /// These are DEDICATED short AppBar strings, not the body titles:
+  /// reusing the body title would print the same 40-character sentence
+  /// twice on one screen and clip it in the bar at large text scales.
+  /// `profileMissing` keeps [AppLocalizations.communityGateProfileMissingTitle]
+  /// — that state is the one pinned by `e13_r33_gate_compact`, and it is
+  /// the one state where the old title was true.
+  String _appBarTitle(
+    AsyncValue<CommunityProfileState> state,
+    AppLocalizations localizations,
+  ) {
+    if (state.hasError) return localizations.communityGateAppBarErrorTitle;
+    final value = state.value;
+    if (value == null) return localizations.communityGateAppBarTitle;
+    return switch (value.status) {
+      CommunityGateStatus.disabled ||
+      CommunityGateStatus.unavailable =>
+        localizations.communityGateAppBarUnavailableTitle,
+      CommunityGateStatus.loggedOut =>
+        localizations.communityGateAppBarLoggedOutTitle,
+      CommunityGateStatus.profileMissing =>
+        localizations.communityGateProfileMissingTitle,
+      CommunityGateStatus.ready => localizations.communityGateAppBarTitle,
+      CommunityGateStatus.error => localizations.communityGateAppBarErrorTitle,
+    };
   }
 }
 

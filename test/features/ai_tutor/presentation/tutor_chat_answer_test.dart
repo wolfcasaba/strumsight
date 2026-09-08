@@ -22,9 +22,11 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/ai_tutor/application/context/context_purpose.dart';
 import 'package:strumsight/features/ai_tutor/application/context/tutor_context_assembler.dart';
+import 'package:strumsight/features/ai_tutor/application/controller/tutor_command.dart';
 import 'package:strumsight/features/ai_tutor/application/controller/tutor_state.dart';
 import 'package:strumsight/features/ai_tutor/application/orchestration/tutor_orchestrator.dart';
 import 'package:strumsight/features/ai_tutor/application/prompts/prompt_template.dart';
@@ -39,7 +41,10 @@ import 'package:strumsight/features/ai_tutor/data/model_gateway/tutor_model_gate
 import 'package:strumsight/features/ai_tutor/data/model_gateway/tutor_model_request.dart';
 import 'package:strumsight/features/ai_tutor/data/repositories/local_tutor_conversation_repository.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_content_block.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/tutor_conversation.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/tutor_ids.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_message.dart';
+import 'package:strumsight/features/ai_tutor/domain/repositories/tutor_conversation_repository.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_gateway_providers.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_privacy_providers.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_providers.dart';
@@ -104,11 +109,7 @@ final class _Harness {
         ...preferenceOverrides(),
         tutorOrchestratorProvider.overrideWithValue(orchestrator),
         tutorModelGatewayFactoryProvider.overrideWithValue(_gateway),
-        tutorConversationRepositoryProvider.overrideWithValue(
-          LocalTutorConversationRepository(
-            keyValueStore: InMemoryKeyValueStore(),
-          ),
-        ),
+        tutorConversationRepositoryProvider.overrideWithValue(repository),
       ],
     );
     // The student granted model use — the request path is consent-gated by
@@ -127,6 +128,12 @@ final class _Harness {
   late final ProviderContainer container;
   late final TutorChatController controller;
   late final StreamSubscription<TutorChatState> _subscription;
+
+  /// N1 (R33) — the LOCAL conversation store the controller now actually
+  /// writes to. Exposed so a test can read back what a completed turn
+  /// persisted, instead of asserting on a screen field.
+  final LocalTutorConversationRepository repository =
+      LocalTutorConversationRepository(keyValueStore: InMemoryKeyValueStore());
 
   final List<FakeClock> clocks = <FakeClock>[];
 
@@ -490,6 +497,158 @@ void main() {
       expect(tutorAnswerBlocksFrom(jsonEncode(<String, Object?>{})), isEmpty);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // N1 (R33) — the conversation repository was a constructor parameter the
+  // controller never read. Every turn was written to a screen and to
+  // nothing else, so leaving the chat threw the conversation away.
+  // -------------------------------------------------------------------------
+  group('N1 — a completed turn is persisted, and restored on start', () {
+    test('the completed turn lands in the local conversation store', () async {
+      final harness = _Harness(
+        scripts: <List<FakeGatewayStep>>[
+          <FakeGatewayStep>[
+            FakeGatewayDelta(_answerOutput(), sequence: 1),
+            const FakeGatewayDone(sequence: 2),
+          ],
+        ],
+      );
+      addTearDown(harness.dispose);
+
+      harness.controller.setDraft(_question);
+      harness.controller.send();
+      await harness.drive();
+      await _settle();
+
+      final stored = await harness.repository.get(
+        TutorConversationId('preview'),
+      );
+      final conversation = stored.valueOrNull;
+      expect(
+        conversation,
+        isNotNull,
+        reason: 'before R33 the store was never written to at all',
+      );
+      expect(conversation!.messages, hasLength(2));
+      expect(conversation.messages.first.role, TutorMessageRole.user);
+      expect(conversation.messages.last.role, TutorMessageRole.tutor);
+      expect(conversation.status, TutorConversationStatus.active);
+      expect(
+        conversation.title,
+        isNull,
+        reason:
+            'a derived title would copy message text into a summary field '
+            'the chat never asked for',
+      );
+      expect(conversation.createdAt.isAfter(conversation.updatedAt), isFalse);
+    });
+
+    test('a stored conversation is loaded back on attach', () async {
+      final store = InMemoryKeyValueStore();
+      final seed = LocalTutorConversationRepository(keyValueStore: store);
+      final saved = await seed.save(
+        TutorConversation(
+          schemaVersion: 1,
+          id: TutorConversationId('preview'),
+          createdAt: DateTime.utc(2026, 9, 1),
+          updatedAt: DateTime.utc(2026, 9, 1),
+          locale: 'hu',
+          status: TutorConversationStatus.active,
+          messages: <TutorMessage>[
+            TutorMessage(
+              id: TutorMessageId('m-1'),
+              role: TutorMessageRole.user,
+              createdAt: DateTime.utc(2026, 9, 1),
+              sequence: 0,
+              deliveryState: TutorMessageDeliveryState.complete,
+              blocks: <TutorContentBlock>[TutorTextBlock(text: 'Older turn')],
+            ),
+          ],
+        ),
+      );
+      expect(saved, isA<Success<void>>());
+
+      final controller = DefaultTutorChatController(
+        orchestrator: _idleOrchestrator(),
+        repository: LocalTutorConversationRepository(keyValueStore: store),
+        conversationId: TutorConversationId('preview'),
+        requestIdFactory: () => TutorRequestId('r-1'),
+        turnRequestFactory: (text) => const Failure<TutorTurnRequest>(
+          ValidationFailure(code: 'test.not_used'),
+        ),
+        onChanged: (_) {},
+      );
+      addTearDown(controller.dispose);
+
+      await controller.restore();
+
+      expect(controller.messages, hasLength(1));
+      expect(controller.messages.single.id.value, 'm-1');
+    });
+
+    test('a failed load leaves the chat empty instead of throwing', () async {
+      final controller = DefaultTutorChatController(
+        orchestrator: _idleOrchestrator(),
+        repository: _BrokenConversationRepository(),
+        conversationId: TutorConversationId('preview'),
+        requestIdFactory: () => TutorRequestId('r-1'),
+        turnRequestFactory: (text) => const Failure<TutorTurnRequest>(
+          ValidationFailure(code: 'test.not_used'),
+        ),
+        onChanged: (_) {},
+      );
+      addTearDown(controller.dispose);
+
+      await controller.restore();
+      expect(controller.messages, isEmpty);
+
+      // A refused WRITE is equally non-fatal: the turn already happened.
+      await controller.persist();
+      expect(controller.messages, isEmpty);
+    });
+  });
+}
+
+/// An orchestrator that is never dispatched to — the two restore/persist
+/// cells drive the repository seam directly, not a turn.
+TutorOrchestrator _idleOrchestrator() => TutorOrchestrator(
+  contextAssembler: const TutorContextAssembler(),
+  knowledgeRetriever: KnowledgeRetriever(index: const KnowledgeIndex.empty()),
+  promptBuilder: TutorPromptBuilder(templateLoader: _TemplateLoader()),
+  gatewayForAttempt: (_) => LocalTutorModelGatewayStub(),
+);
+
+/// Every call fails — the corrupted-local-document case. A broken store
+/// must not make the tutor unopenable.
+final class _BrokenConversationRepository
+    implements TutorConversationRepository {
+  static const Failure<Never> _failure = Failure<Never>(
+    StorageFailure(code: FailureCode.storageRead),
+  );
+
+  @override
+  Future<AppResult<void>> save(TutorConversation conversation) async =>
+      const Failure<void>(StorageFailure(code: FailureCode.storageWrite));
+
+  @override
+  Future<AppResult<TutorConversation?>> get(TutorConversationId id) async =>
+      const Failure<TutorConversation?>(
+        StorageFailure(code: FailureCode.storageRead),
+      );
+
+  @override
+  Future<AppResult<TutorConversationPage>> list({
+    int offset = 0,
+    int limit = 20,
+  }) async => _failure;
+
+  @override
+  Future<AppResult<TutorConversationSummary?>> summary(
+    TutorConversationId id,
+  ) async => _failure;
+
+  @override
+  Future<AppResult<void>> delete(TutorConversationId id) async => _failure;
 }
 
 String _textOf(TutorMessage message) =>

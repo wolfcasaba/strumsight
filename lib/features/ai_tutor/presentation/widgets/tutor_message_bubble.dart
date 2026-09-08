@@ -23,9 +23,27 @@ import '../../domain/models/tutor_message.dart';
 /// explicit "no measured evidence" notice (ADR 0287 §8, E13-R29 §5.6) —
 /// the absence is stated, not silently omitted.
 class TutorMessageBubble extends StatelessWidget {
-  const TutorMessageBubble({super.key, required this.message});
+  const TutorMessageBubble({
+    super.key,
+    required this.message,
+    this.onSourceTap,
+  });
 
   final TutorMessage message;
+
+  /// Opens the source sheet for one rendered [TutorSourceBlock] (M13,
+  /// R33).
+  ///
+  /// `showTutorSourceSheet` shipped with the source sheet and then had
+  /// no `lib/**` caller: the bubble drew a source line that could not be
+  /// opened. The tap is added as a bare gesture on the EXISTING source
+  /// line — no chevron, no ripple, no extra padding — because the chat
+  /// screen is inside pixel-pinned goldens (`e13_r29_coach_chat_*`,
+  /// `e15_r13`) that cannot be re-recorded on this box.
+  ///
+  /// `null` (the default, and what the widget's own tests pass) leaves
+  /// the source line untappable, exactly as before.
+  final void Function(TutorSourceBlock block)? onSourceTap;
 
   bool get _hasEvidence => message.blocks.any(
     (block) =>
@@ -67,7 +85,11 @@ class TutorMessageBubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 for (final block in message.blocks)
-                  _BlockView(block: block, color: textColor),
+                  _BlockView(
+                    block: block,
+                    color: textColor,
+                    onSourceTap: onSourceTap,
+                  ),
                 if (_showsMissingEvidenceNotice)
                   _MissingEvidenceNotice(color: textColor),
               ],
@@ -111,10 +133,15 @@ class _MissingEvidenceNotice extends StatelessWidget {
 }
 
 class _BlockView extends StatelessWidget {
-  const _BlockView({required this.block, required this.color});
+  const _BlockView({
+    required this.block,
+    required this.color,
+    this.onSourceTap,
+  });
 
   final TutorContentBlock block;
   final Color color;
+  final void Function(TutorSourceBlock block)? onSourceTap;
 
   @override
   Widget build(BuildContext context) {
@@ -175,9 +202,16 @@ class _BlockView extends StatelessWidget {
       );
     }
     if (b is TutorSourceBlock) {
-      return Padding(
+      final line = Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Text('${b.title} (${b.reference})', style: bodySmall),
+      );
+      final onSourceTap = this.onSourceTap;
+      if (onSourceTap == null) return line;
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onSourceTap(b),
+        child: line,
       );
     }
     if (b is TutorActionBlock) {

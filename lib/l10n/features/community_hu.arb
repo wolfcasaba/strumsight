@@ -1,5 +1,17 @@
 {
   "@@locale": "hu",
+  "profileHubCommunityServerDisabledMessage": "A Közösség ki van kapcsolva azon a szerveren, amellyel ez a build beszél.",
+  "@profileHubCommunityServerDisabledMessage": {
+    "description": "A Profil-központ Közösség-alcíme, amikor a kapu CommunityGateStatus.unavailable állapotra jutott. Azért a community szegmensben él, mert a lib/l10n/base kör-szinten tiltott."
+  },
+  "communityGateAppBarTitle": "Közösség",
+  "@communityGateAppBarTitle": {},
+  "communityGateAppBarUnavailableTitle": "A Közösség nem érhető el",
+  "@communityGateAppBarUnavailableTitle": {},
+  "communityGateAppBarLoggedOutTitle": "Bejelentkezés a Közösségbe",
+  "@communityGateAppBarLoggedOutTitle": {},
+  "communityGateAppBarErrorTitle": "A Közösség nem töltődött be",
+  "@communityGateAppBarErrorTitle": {},
   "communityGateDisabledTitle": "A Közösség nem elérhető ebben a buildben",
   "@communityGateDisabledTitle": {},
   "communityGateDisabledBody": "A Közösség funkció konfigurációban ki van kapcsolva. A StrumSight többi része — felismerés, gyakorlás, beállítások — a szokásos módon működik.",
@@ -197,7 +209,7 @@
       }
     }
   },
-  "feedCardAchievementUnlocked": "Achievement unlocked",
+  "feedCardAchievementUnlocked": "Teljesítmény feloldva",
   "@feedCardAchievementUnlocked": {},
   "feedCardAchievementCatalogVersion": "{id} · {category} · v{version}",
   "@feedCardAchievementCatalogVersion": {

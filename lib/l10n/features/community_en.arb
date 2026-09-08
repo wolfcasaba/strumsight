@@ -1,5 +1,17 @@
 {
   "@@locale": "en",
+  "profileHubCommunityServerDisabledMessage": "Community is switched off on the server this build talks to.",
+  "@profileHubCommunityServerDisabledMessage": {
+    "description": "Profile hub Community subtitle when the gate resolved to CommunityGateStatus.unavailable. Lives in the community segment because lib/l10n/base is off-limits to feature rounds."
+  },
+  "communityGateAppBarTitle": "Community",
+  "@communityGateAppBarTitle": {},
+  "communityGateAppBarUnavailableTitle": "Community unavailable",
+  "@communityGateAppBarUnavailableTitle": {},
+  "communityGateAppBarLoggedOutTitle": "Sign in to Community",
+  "@communityGateAppBarLoggedOutTitle": {},
+  "communityGateAppBarErrorTitle": "Community didn't load",
+  "@communityGateAppBarErrorTitle": {},
   "communityGateDisabledTitle": "Community is not available in this build",
   "@communityGateDisabledTitle": {},
   "communityGateDisabledBody": "The Community feature is hidden by configuration. The rest of StrumSight — detection, practice, settings — works as usual.",

@@ -17,6 +17,7 @@ import '../../domain/entities/community_bookmark.dart';
 import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
+import '../../domain/entities/community_report_receipt.dart';
 import '../../domain/entities/moderation_state.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_page.dart';
@@ -233,5 +234,30 @@ CommunityPage<CommunityBookmark> decodeCommunityBookmarkPage(
           ),
     ],
     cursor: communityCursorFromWire(json['next_cursor']),
+  );
+}
+
+/// Egy `POST /community/reports` sanitizált válasza → [CommunityReportReceipt].
+///
+/// A szerver `build_sanitized_response`-a hat kulcsot ad vissza; a kliens
+/// KETTŐT olvas ki. A `target_type` / `target_id` / `category` visszhang,
+/// amit a hívó amúgy is ismer, a `created_at` pedig ma sehol nem
+/// jelenik meg — egy fel nem használt mező beolvasása csak azt sugallná,
+/// hogy valahol meg is jelenik.
+///
+/// A hiányzó `report_public_id` `FormatException`: nyugta nélkül nem
+/// mondhatjuk a bejelentőnek, hogy a bejelentés megérkezett.
+CommunityReportReceipt decodeCommunityReportReceipt(Map<String, Object?> json) {
+  final publicId = json['report_public_id'];
+  if (publicId is! String || publicId.isEmpty) {
+    throw const FormatException(
+      'community report wire: report_public_id must be a non-empty string',
+    );
+  }
+  return CommunityReportReceipt(
+    reportPublicId: publicId,
+    // A hiányzó zászló „friss sor"-t jelent: a duplikátum-jelzés a
+    // ritkább ág, és a bejelentő ugyanazt a köszönő nézetet látja.
+    deduplicated: json['deduplicated'] == true,
   );
 }

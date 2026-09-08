@@ -1841,6 +1841,14 @@
   "@communityFollowersBlockAction": {},
   "communityFollowersMuteAction": "Némítás",
   "@communityFollowersMuteAction": {},
+  "communityGateAppBarErrorTitle": "A Közösség nem töltődött be",
+  "@communityGateAppBarErrorTitle": {},
+  "communityGateAppBarLoggedOutTitle": "Bejelentkezés a Közösségbe",
+  "@communityGateAppBarLoggedOutTitle": {},
+  "communityGateAppBarTitle": "Közösség",
+  "@communityGateAppBarTitle": {},
+  "communityGateAppBarUnavailableTitle": "A Közösség nem érhető el",
+  "@communityGateAppBarUnavailableTitle": {},
   "communityGateDisabledBody": "A Közösség funkció konfigurációban ki van kapcsolva. A StrumSight többi része — felismerés, gyakorlás, beállítások — a szokásos módon működik.",
   "communityGateDisabledTitle": "A Közösség nem elérhető ebben a buildben",
   "@communityGateDisabledTitle": {},
@@ -2125,7 +2133,7 @@
       }
     }
   },
-  "feedCardAchievementUnlocked": "Achievement unlocked",
+  "feedCardAchievementUnlocked": "Teljesítmény feloldva",
   "@feedCardAchievementUnlocked": {},
   "feedCardAnalysisImprovementMetric": "{metric}: {direction} ({before} → {after})",
   "@feedCardAnalysisImprovementMetric": {
@@ -3494,6 +3502,10 @@
     "description": "Profile hub button opening the Community gate. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
   },
   "profileHubCommunitySectionTitle": "Közösség",
+  "profileHubCommunityServerDisabledMessage": "A Közösség ki van kapcsolva azon a szerveren, amellyel ez a build beszél.",
+  "@profileHubCommunityServerDisabledMessage": {
+    "description": "A Profil-központ Közösség-alcíme, amikor a kapu CommunityGateStatus.unavailable állapotra jutott. Azért a community szegmensben él, mert a lib/l10n/base kör-szinten tiltott."
+  },
   "profileHubLocalOnlyMessage": "Fiók nélkül használod a StrumSightot — minden ezen az eszközön marad.",
   "profileHubLocalOnlyTitle": "Helyi profil",
   "profileHubProgressSectionTitle": "Fejlődés",
