@@ -1,3 +1,6 @@
+# strumsight:allow-secret-file — every credential in this file is an invented
+# sentinel (`sk-ant-SENTINEL-KEY`); the suite talks to `httpx.MockTransport`
+# only and its PURPOSE is to prove the real key never reaches the log.
 """Contract tests for the Anthropic tutor provider adapter.
 
 Every call goes through `httpx.MockTransport` — the suite never reaches the

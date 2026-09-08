@@ -355,9 +355,17 @@ const Map<String, String> dioConsumingClassExclusions = {
 /// into `api_client.dart`) is exactly the blind spot the blanket exclusion
 /// would otherwise hide; [checkExclusionCallSiteDrift] re-measures both
 /// files on every run and fails if either count has moved.
+///
+/// Javító sáv 2026-09-08 (R19 CI-lelet): `api_client.dart` went 3 → 4 when
+/// `_requestJson` gained the `readsErrorDetail` branch — the SAME path and
+/// options issued as `_dio.request<String>` (Dio forces `responseType` to
+/// JSON for any other generic argument, so the opt-in `ResponseType.plain`
+/// only survives that way). Re-measured: the fourth call site rides the
+/// identical interceptor chain and never targets a route of its own, so no
+/// inventory entry is missing.
 const Map<String, int> dioConsumingClassExclusionCallSiteCounts = {
   'lib/core/network/dio_factory.dart': 0,
-  'lib/core/network/api_client.dart': 3,
+  'lib/core/network/api_client.dart': 4,
 };
 
 /// MINOR-2: loosened off the `ApiClient` return type — the previous pattern
