@@ -77,6 +77,18 @@ final class AppConfig {
   /// it gates the anonymous, opt-in diagnostics upload only.
   final String diagnosticsToken;
 
+  /// Whether diagnostics may actually be USED in this build.
+  ///
+  /// Availability alone is not enough: the Lab pipeline ships
+  /// `lab_build.json` with an EMPTY [diagnosticsToken] (the literal token was
+  /// a committed secret — audit H6; CI injects the real one from a repository
+  /// secret). An empty token means "diagnostics disabled" — a request with an
+  /// empty `X-Diag-Token` header would be an unauthenticated upload attempt,
+  /// which is worse than not uploading at all. Every diagnostics consumer
+  /// must gate on THIS, not on `flags.diagnosticsEnabled` alone.
+  bool get diagnosticsUsable =>
+      flags.diagnosticsEnabled && diagnosticsToken.trim().isNotEmpty;
+
   /// `debug` / `profile` / `release` (informational, e.g. diagnostics headers).
   final String buildMode;
 

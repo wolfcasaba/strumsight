@@ -20,6 +20,7 @@ import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -41,6 +42,7 @@ Future<FakeStrumEngine> _pumpLive(WidgetTester tester) async {
   final container = ProviderContainer(
     overrides: [
       ...preferenceOverrides(),
+      ...fakeAudioOverrides(),
       strumEngineProvider.overrideWithValue(engine),
     ],
   );

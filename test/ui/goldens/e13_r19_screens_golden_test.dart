@@ -22,6 +22,7 @@ import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -77,6 +78,7 @@ void main() {
         const TunerScreen(),
         overrides: [
           ...preferenceOverrides(),
+          ...fakeAudioOverrides(),
           tunerEngineProvider.overrideWithValue(engine),
         ],
         textScale: textScale,

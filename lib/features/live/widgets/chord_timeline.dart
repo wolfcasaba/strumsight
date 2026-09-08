@@ -28,6 +28,7 @@ class ChordTimeline extends StatelessWidget {
     required this.capo,
     this.listening = true,
     this.beat = 0,
+    this.idlePromptEnabled = true,
   });
 
   /// Rolling history, newest LAST. Empty → idle prompt.
@@ -46,6 +47,13 @@ class ChordTimeline extends StatelessWidget {
   /// hero pulse — 0 disables it. Each pulse is finite (keyed by this index), so
   /// it never repeats forever and `pumpAndSettle` still terminates.
   final int beat;
+
+  /// Whether the empty timeline may invite the player to strum. False when
+  /// the microphone is missing, unknown or failed: "Play a chord…" over a
+  /// mic that cannot hear anything is an invitation to a dead end, and the
+  /// permission/error banner is the honest state instead (the caller renders
+  /// that). The empty state then collapses to nothing.
+  final bool idlePromptEnabled;
 
   /// Size tiers from the hero outward (1.0 = nearest the hero, shrinking left).
   static const _tiers = <double>[1.0, 0.72, 0.55, 0.42];
@@ -108,6 +116,7 @@ class ChordTimeline extends StatelessWidget {
   // A single finite fade+scale on the icon (no `.repeat()`), so `pumpAndSettle`
   // still terminates. The `liveWaitingForChord` text is kept verbatim.
   Widget _emptyState(BuildContext context, AppLocalizations l10n) {
+    if (!idlePromptEnabled) return const SizedBox.shrink();
     final palette = context.palette;
     return Center(
       child: Column(

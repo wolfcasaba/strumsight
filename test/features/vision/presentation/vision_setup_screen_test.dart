@@ -326,6 +326,79 @@ void main() {
       expect(find.byType(SsButton), findsWidgets);
     });
   });
+
+  // Audit H17 — the skip action lived in the app bar inside a 120 px
+  // `ConstrainedBox`, so its label rendered as "Continue without came…"
+  // even across two lines. It is now a full-width bottom action whose
+  // label is laid out in full.
+  group('audit H17 — the skip label is fully readable', () {
+    Future<void> pumpAt(
+      WidgetTester tester,
+      ProviderContainer container, {
+      double textScale = 1.0,
+    }) async {
+      tester.view.physicalSize = const Size(412, 915);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(textScale)),
+              child: child!,
+            ),
+            home: const Scaffold(body: VisionSetupScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the action is not an app-bar slot and is not clipped', (
+      tester,
+    ) async {
+      final container = _setupContainer(visionEnabled: true);
+      addTearDown(container.dispose);
+      await pumpAt(tester, container);
+      final l10n = lookupAppLocalizations(const Locale('en'));
+
+      final skip = find.byKey(const Key('vision-setup-skip'));
+      expect(skip, findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: skip),
+        findsNothing,
+        reason: 'a toolbar slot cannot hold the full sentence',
+      );
+
+      final label = find.text(l10n.visionSetupSkipAction);
+      expect(label, findsOneWidget);
+      final labelWidget = tester.widget<Text>(label);
+      expect(labelWidget.overflow, isNot(TextOverflow.ellipsis));
+      expect(labelWidget.maxLines, isNull);
+      // The old app-bar action capped the label at 120 logical pixels.
+      expect(tester.getSize(label).width, greaterThan(120));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the action stays overflow-free at 200 percent text scale', (
+      tester,
+    ) async {
+      final container = _setupContainer(visionEnabled: true);
+      addTearDown(container.dispose);
+      await pumpAt(tester, container, textScale: 2.0);
+      final l10n = lookupAppLocalizations(const Locale('en'));
+
+      expect(find.text(l10n.visionSetupSkipAction), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
 
 void _noop() {}

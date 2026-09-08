@@ -19,7 +19,9 @@ final diagnosticsConsentProvider = Provider<bool>((_) => false);
 /// interceptor. Disabled builds never instantiate it.
 final diagnosticsApiClientProvider = Provider<ApiClient?>((ref) {
   final config = ref.watch(appConfigProvider);
-  if (!config.flags.diagnosticsEnabled) return null;
+  // An empty token is "diagnostics disabled" (audit H6) — never an empty
+  // X-Diag-Token on the wire.
+  if (!config.diagnosticsUsable) return null;
 
   final client = DioFactory(
     baseUrl: config.apiBaseUrl,

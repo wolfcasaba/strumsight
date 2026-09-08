@@ -3139,7 +3139,6 @@
   "@practicePlanStatusNoActiveLabel": {},
   "practicePlanStatusPlannedLabel": "Tervezett alkalom",
   "@practicePlanStatusPlannedLabel": {},
-
   "todayHubTitle": "Ma",
   "todayHubNewUserTitle": "Vágjunk bele",
   "todayHubNewUserMessage": "Az első gyakorlás csak pár percet vesz igénybe.",
@@ -3154,7 +3153,6 @@
   "todayHubVisionCardTitle": "Vizuális gyakorlás",
   "todayHubVisionCardMessage": "Használd a kamerát az ujjazat visszajelzéséhez.",
   "todayHubVisionUnavailableReason": "A vizuális gyakorláshoz támogatott eszköz kell, és ebben a buildben még nem érhető el.",
-
   "practiceAreaHubRecommendedTitle": "Neked ajánlott",
   "practiceAreaHubRecommendedMessage": "Indíts egy, a jelenlegi szintedhez válogatott gyakorlást.",
   "practiceAreaHubRecommendedCta": "Ajánlott gyakorlás indítása",
@@ -3165,7 +3163,6 @@
   "practiceAreaHubCategoryRhythm": "Ritmus",
   "practiceAreaHubCategoryScales": "Skálák",
   "practiceAreaHubCategoryTechnique": "Technika",
-
   "profileHubTitle": "Profil",
   "profileHubLocalOnlyTitle": "Helyi profil",
   "profileHubLocalOnlyMessage": "Fiók nélkül használod a StrumSightot — minden ezen az eszközön marad.",
@@ -3178,7 +3175,6 @@
   "profileHubCommunityDisabledReason": "A közösségi funkciók ebben a buildben még nem érhetők el.",
   "profileHubCommunityEnabledMessage": "Kapcsolódj más játékosokhoz, és oszd meg a fejlődésed.",
   "profileHubAchievementsSectionTitle": "Eredmények",
-
   "libraryV2Title": "Könyvtár",
   "libraryV2SearchLabel": "Keresés a könyvtárban",
   "libraryV2FilterAll": "Összes",
@@ -3229,5 +3225,57 @@
   "libraryV2SyncConflictMessage": "Ez a tétel két helyen is megváltozott. Válaszd ki, melyik verziót tartod meg — a másik elvész.",
   "libraryV2SyncConflictLocalLabel": "Ezen az eszközön",
   "libraryV2SyncConflictRemoteLabel": "A felhőben",
-  "libraryV2SyncConflictKeepThis": "Ezt tartom meg"
+  "libraryV2SyncConflictKeepThis": "Ezt tartom meg",
+  "audioOutputMetronomeFailed": "A metronóm kattanását nem sikerült lejátszani. Ellenőrizd a hangerőt, és próbáld újra.",
+  "@audioOutputMetronomeFailed": {
+    "description": "Inline notice shown on the metronome and lesson screens when the device refused to play the metronome click, so the metronome is running silently (audit H20/L12)."
+  },
+  "audioOutputChordFailed": "Az akkordot nem sikerült lejátszani. Ellenőrizd a hangerőt, és próbáld újra.",
+  "@audioOutputChordFailed": {
+    "description": "Inline notice shown on the chord/jam screens when the device refused to play a chord pad or reference tone, so a tap stayed silent (audit H20/L12)."
+  },
+  "songEditorSaveDisabledLoading": "A mentés akkor válik aktívvá, ha a dal betöltődött.",
+  "@songEditorSaveDisabledLoading": {
+    "description": "Helper text under the disabled Save action in the song editor while no draft is loaded yet."
+  },
+  "liveTempoNotMeasured": "A tempó nincs mérve",
+  "@liveTempoNotMeasured": {
+    "description": "Live status header: shown in place of a BPM number when no tempo has been measured yet, or when the signal-quality gate rejected the frame so any tempo reading would be an unsupported claim. Replaces the old, misleading \"0 BPM\"."
+  },
+  "practiceSessionIdleBody": "Még nem fut gyakorlás. Indíts egyet a Gyakorlás beállításainál.",
+  "@practiceSessionIdleBody": {
+    "description": "Body copy of the designed idle state on the practice session screen (audit H16)."
+  },
+  "practiceSessionCompletedBody": "Szép munka — kész az eredményed.",
+  "@practiceSessionCompletedBody": {
+    "description": "Body copy of the designed completed state on the practice session screen (audit H16)."
+  },
+  "practiceSessionCancelledBody": "A gyakorlást leállítottad. Bármikor újraindíthatod.",
+  "@practiceSessionCancelledBody": {
+    "description": "Body copy of the designed cancelled state on the practice session screen (audit H16)."
+  },
+  "practiceScoringProfileLegacyLearnParity": "Ritmus és pengetésirány",
+  "@practiceScoringProfileLegacyLearnParity": {
+    "description": "Human label of the legacyLearnParity scoring profile (audit H14)."
+  },
+  "practiceScoringProfileChordChangeDefault": "Akkordok és ritmus",
+  "@practiceScoringProfileChordChangeDefault": {
+    "description": "Human label of the chordChangeDefault scoring profile (audit H14)."
+  },
+  "practiceScoringProfileChordProgressionDefault": "Ritmus, irány és akkordok",
+  "@practiceScoringProfileChordProgressionDefault": {
+    "description": "Human label of the chordProgressionDefault scoring profile (audit H14)."
+  },
+  "practiceScoringProfileRhythmOnlyDefault": "Csak ritmus",
+  "@practiceScoringProfileRhythmOnlyDefault": {
+    "description": "Human label of the rhythmOnlyDefault scoring profile (audit H14)."
+  },
+  "practiceScoringProfileFreePracticeOpen": "Nincs pontozás",
+  "@practiceScoringProfileFreePracticeOpen": {
+    "description": "Human label of the freePracticeOpen scoring profile (audit H14)."
+  },
+  "practiceScoringProfileCustom": "Egyedi",
+  "@practiceScoringProfileCustom": {
+    "description": "Fallback label for a scoring profile outside the built-in set (audit H14)."
+  }
 }

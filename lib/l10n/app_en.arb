@@ -1274,6 +1274,14 @@
       }
     }
   },
+  "audioOutputChordFailed": "The chord could not be played. Check the volume and try again.",
+  "@audioOutputChordFailed": {
+    "description": "Inline notice shown on the chord/jam screens when the device refused to play a chord pad or reference tone, so a tap stayed silent (audit H20/L12)."
+  },
+  "audioOutputMetronomeFailed": "The metronome click could not be played. Check the volume and try again.",
+  "@audioOutputMetronomeFailed": {
+    "description": "Inline notice shown on the metronome and lesson screens when the device refused to play the metronome click, so the metronome is running silently (audit H20/L12)."
+  },
   "authContinueWithoutAccount": "Continue without an account",
   "authEmail": "Email",
   "authEmailInvalid": "Enter a valid email address",
@@ -1444,6 +1452,20 @@
   "chordLibraryTitle": "Chord library",
   "commonCancel": "Cancel",
   "commonClose": "Close",
+  "communityBookmarkSavedOn": "Saved on {date}",
+  "@communityBookmarkSavedOn": {
+    "description": "Subtitle of a bookmark row: the day the post was saved, formatted with the app's locale-aware date formatter (never an ISO timestamp).",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Aug 20, 2026"
+      }
+    }
+  },
+  "communityBookmarkUntitledPost": "Saved post",
+  "@communityBookmarkUntitledPost": {
+    "description": "Fallback label for a bookmark row whose post title/excerpt could not be loaded. Replaces the raw post id the row used to show (audit H15)."
+  },
   "communityChallengeAccept": "Accept",
   "@communityChallengeAccept": {},
   "communityChallengeActionBlockAuthor": "Block author",
@@ -1708,6 +1730,10 @@
   "@communityFollowersBlockAction": {},
   "communityFollowersMuteAction": "Mute",
   "@communityFollowersMuteAction": {},
+  "communityGateAppBarTitle": "Community",
+  "@communityGateAppBarTitle": {
+    "description": "App bar title of the Community gate screen — names the area, so the header no longer repeats the body's state title (audit H22)."
+  },
   "communityGateDisabledBody": "The Community feature is hidden by configuration. The rest of StrumSight — detection, practice, settings — works as usual.",
   "communityGateDisabledTitle": "Community is not available in this build",
   "@communityGateDisabledTitle": {},
@@ -2481,6 +2507,10 @@
   "@liveStarting": {
     "description": "Shown while the detection engine's first frame is still loading."
   },
+  "liveTempoNotMeasured": "Tempo not measured",
+  "@liveTempoNotMeasured": {
+    "description": "Live status header: shown in place of a BPM number when no tempo has been measured yet, or when the signal-quality gate rejected the frame so any tempo reading would be an unsupported claim. Replaces the old, misleading \"0 BPM\"."
+  },
   "liveTuner": "Tuner",
   "liveWaitingForChord": "Play a chord…",
   "@liveWaitingForChord": {
@@ -3128,7 +3158,39 @@
   "practiceRouteErrorBack": "Back to hub",
   "practiceRouteErrorBody": "We couldn't load this practice. Head back to the hub and pick another.",
   "practiceRouteErrorTitle": "Practice unavailable",
+  "practiceScoringProfileChordChangeDefault": "Chords and rhythm",
+  "@practiceScoringProfileChordChangeDefault": {
+    "description": "Human label of the chordChangeDefault scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileChordProgressionDefault": "Rhythm, direction and chords",
+  "@practiceScoringProfileChordProgressionDefault": {
+    "description": "Human label of the chordProgressionDefault scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileCustom": "Custom",
+  "@practiceScoringProfileCustom": {
+    "description": "Fallback label for a scoring profile outside the built-in set, so the raw profile id is never shown (audit H14)."
+  },
+  "practiceScoringProfileFreePracticeOpen": "No scoring",
+  "@practiceScoringProfileFreePracticeOpen": {
+    "description": "Human label of the freePracticeOpen scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileLegacyLearnParity": "Rhythm and strum direction",
+  "@practiceScoringProfileLegacyLearnParity": {
+    "description": "Human label of the legacyLearnParity scoring profile on the Practice setup screen — says what the session scores. Replaces the raw profile id (audit H14)."
+  },
+  "practiceScoringProfileRhythmOnlyDefault": "Rhythm only",
+  "@practiceScoringProfileRhythmOnlyDefault": {
+    "description": "Human label of the rhythmOnlyDefault scoring profile on the Practice setup screen (audit H14)."
+  },
   "practiceSessionAttempt": "Attempt",
+  "practiceSessionCancelledBody": "The session was stopped. You can start it again any time.",
+  "@practiceSessionCancelledBody": {
+    "description": "Body copy of the designed cancelled state on the practice session screen. Replaces the developer dump \"Session state: cancelled\" (audit H16)."
+  },
+  "practiceSessionCompletedBody": "Nice work — your result is ready.",
+  "@practiceSessionCompletedBody": {
+    "description": "Body copy of the designed completed state on the practice session screen. Replaces the developer dump \"Session state: completed\" (audit H16)."
+  },
   "practiceSessionConfirmExit": "Exiting now discards this session's progress. It will not be saved and this cannot be undone.",
   "practiceSessionCountIn": "Count-in beats remaining",
   "practiceSessionElapsed": "Elapsed",
@@ -3139,6 +3201,10 @@
   "practiceSessionErrorTitle": "Practice session error",
   "practiceSessionExit": "Exit",
   "practiceSessionFinish": "Finish",
+  "practiceSessionIdleBody": "No session is running yet. Start one from Practice setup.",
+  "@practiceSessionIdleBody": {
+    "description": "Body copy of the designed idle state on the practice session screen. Replaces the developer dump \"Session state: idle\" (audit H16)."
+  },
   "practiceSessionPause": "Pause",
   "practiceSessionPausedByInterruption": "Session paused automatically",
   "practiceSessionPausedByUser": "You paused this session",
@@ -3916,6 +3982,10 @@
   "songEditorRedo": "Redo",
   "songEditorSave": "Save",
   "songEditorSaveCopy": "Save a copy",
+  "songEditorSaveDisabledLoading": "Save turns on once the song is open.",
+  "@songEditorSaveDisabledLoading": {
+    "description": "Helper text under the disabled Save action in the song editor while no draft is loaded yet (audit H18)."
+  },
   "songEditorSaveFailed": "Saving failed: {code}. Your edits are still here.",
   "@songEditorSaveFailed": {
     "placeholders": {

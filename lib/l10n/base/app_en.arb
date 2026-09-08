@@ -3217,7 +3217,6 @@
   "@practicePlanStatusNoActiveLabel": {},
   "practicePlanStatusPlannedLabel": "Planned session",
   "@practicePlanStatusPlannedLabel": {},
-
   "todayHubTitle": "Today",
   "todayHubNewUserTitle": "Let's get started",
   "todayHubNewUserMessage": "Your first practice session takes just a few minutes.",
@@ -3232,7 +3231,6 @@
   "todayHubVisionCardTitle": "Vision practice",
   "todayHubVisionCardMessage": "Use your camera for guided finger-placement feedback.",
   "todayHubVisionUnavailableReason": "Vision practice needs a supported device and isn't available in this build yet.",
-
   "practiceAreaHubRecommendedTitle": "Recommended for you",
   "practiceAreaHubRecommendedMessage": "Jump into a practice session picked for where you are right now.",
   "practiceAreaHubRecommendedCta": "Start recommended practice",
@@ -3243,7 +3241,6 @@
   "practiceAreaHubCategoryRhythm": "Rhythm",
   "practiceAreaHubCategoryScales": "Scales",
   "practiceAreaHubCategoryTechnique": "Technique",
-
   "profileHubTitle": "Profile",
   "profileHubLocalOnlyTitle": "Local profile",
   "profileHubLocalOnlyMessage": "You're using StrumSight without an account — everything stays on this device.",
@@ -3256,7 +3253,6 @@
   "profileHubCommunityDisabledReason": "Community features aren't available in this build yet.",
   "profileHubCommunityEnabledMessage": "Connect with other players and share your progress.",
   "profileHubAchievementsSectionTitle": "Achievements",
-
   "libraryV2Title": "Library",
   "libraryV2SearchLabel": "Search your library",
   "libraryV2FilterAll": "All",
@@ -3307,5 +3303,57 @@
   "libraryV2SyncConflictMessage": "This item changed in two places. Choose which version to keep — the other is discarded.",
   "libraryV2SyncConflictLocalLabel": "On this device",
   "libraryV2SyncConflictRemoteLabel": "In the cloud",
-  "libraryV2SyncConflictKeepThis": "Keep this version"
+  "libraryV2SyncConflictKeepThis": "Keep this version",
+  "audioOutputMetronomeFailed": "The metronome click could not be played. Check the volume and try again.",
+  "@audioOutputMetronomeFailed": {
+    "description": "Inline notice shown on the metronome and lesson screens when the device refused to play the metronome click, so the metronome is running silently (audit H20/L12)."
+  },
+  "audioOutputChordFailed": "The chord could not be played. Check the volume and try again.",
+  "@audioOutputChordFailed": {
+    "description": "Inline notice shown on the chord/jam screens when the device refused to play a chord pad or reference tone, so a tap stayed silent (audit H20/L12)."
+  },
+  "songEditorSaveDisabledLoading": "Save turns on once the song is open.",
+  "@songEditorSaveDisabledLoading": {
+    "description": "Helper text under the disabled Save action in the song editor while no draft is loaded yet (audit H18)."
+  },
+  "liveTempoNotMeasured": "Tempo not measured",
+  "@liveTempoNotMeasured": {
+    "description": "Live status header: shown in place of a BPM number when no tempo has been measured yet, or when the signal-quality gate rejected the frame so any tempo reading would be an unsupported claim. Replaces the old, misleading \"0 BPM\"."
+  },
+  "practiceSessionIdleBody": "No session is running yet. Start one from Practice setup.",
+  "@practiceSessionIdleBody": {
+    "description": "Body copy of the designed idle state on the practice session screen. Replaces the developer dump \"Session state: idle\" (audit H16)."
+  },
+  "practiceSessionCompletedBody": "Nice work — your result is ready.",
+  "@practiceSessionCompletedBody": {
+    "description": "Body copy of the designed completed state on the practice session screen. Replaces the developer dump \"Session state: completed\" (audit H16)."
+  },
+  "practiceSessionCancelledBody": "The session was stopped. You can start it again any time.",
+  "@practiceSessionCancelledBody": {
+    "description": "Body copy of the designed cancelled state on the practice session screen. Replaces the developer dump \"Session state: cancelled\" (audit H16)."
+  },
+  "practiceScoringProfileLegacyLearnParity": "Rhythm and strum direction",
+  "@practiceScoringProfileLegacyLearnParity": {
+    "description": "Human label of the legacyLearnParity scoring profile on the Practice setup screen — says what the session scores. Replaces the raw profile id (audit H14)."
+  },
+  "practiceScoringProfileChordChangeDefault": "Chords and rhythm",
+  "@practiceScoringProfileChordChangeDefault": {
+    "description": "Human label of the chordChangeDefault scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileChordProgressionDefault": "Rhythm, direction and chords",
+  "@practiceScoringProfileChordProgressionDefault": {
+    "description": "Human label of the chordProgressionDefault scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileRhythmOnlyDefault": "Rhythm only",
+  "@practiceScoringProfileRhythmOnlyDefault": {
+    "description": "Human label of the rhythmOnlyDefault scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileFreePracticeOpen": "No scoring",
+  "@practiceScoringProfileFreePracticeOpen": {
+    "description": "Human label of the freePracticeOpen scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileCustom": "Custom",
+  "@practiceScoringProfileCustom": {
+    "description": "Fallback label for a scoring profile outside the built-in set, so the raw profile id is never shown (audit H14)."
+  }
 }

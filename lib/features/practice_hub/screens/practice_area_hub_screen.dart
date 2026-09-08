@@ -85,6 +85,9 @@ class PracticeAreaHubScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
+            // The quick tools PUSH: `go` replaces the whole stack, so a
+            // single BACK from the Metronome left the app instead of
+            // returning to this hub (emulator audit H5).
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -92,22 +95,22 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                 _QuickTool(
                   icon: Icons.graphic_eq,
                   label: l10n.navLive,
-                  onPressed: () => context.go(AppRoutes.practiceLive),
+                  onPressed: () => context.push(AppRoutes.practiceLive),
                 ),
                 _QuickTool(
                   icon: Icons.tune,
                   label: l10n.liveTuner,
-                  onPressed: () => context.go(AppRoutes.practiceTuner),
+                  onPressed: () => context.push(AppRoutes.practiceTuner),
                 ),
                 _QuickTool(
                   icon: Icons.av_timer,
                   label: l10n.metronomeTitle,
-                  onPressed: () => context.go(AppRoutes.practiceMetronome),
+                  onPressed: () => context.push(AppRoutes.practiceMetronome),
                 ),
                 _QuickTool(
                   icon: Icons.library_music_outlined,
                   label: l10n.chordLibraryTitle,
-                  onPressed: () => context.go(AppRoutes.practiceChords),
+                  onPressed: () => context.push(AppRoutes.practiceChords),
                 ),
               ],
             ),

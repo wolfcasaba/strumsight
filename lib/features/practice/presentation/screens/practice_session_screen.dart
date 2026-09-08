@@ -59,6 +59,7 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
   PracticeSessionHost? _host;
   PracticeSessionState _state = PracticeSessionState.initial;
   bool _exitInProgress = false;
+  bool _autoStarted = false;
   late final void Function(AppLifecycleState) _lifecycleListener;
   late final AppLifecycleEvents _lifecycle;
 
@@ -70,8 +71,11 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
     if (host != null) {
       _state = host.state;
       _states = host.states.listen((state) {
-        if (mounted) setState(() => _state = state);
+        if (!mounted) return;
+        setState(() => _state = state);
+        _maybeAutoStart(state);
       });
+      _maybeAutoStart(_state);
     }
     _lifecycleListener = (state) {
       final host = _host;
@@ -86,6 +90,26 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
     _states?.cancel();
     _lifecycle.removeListener(_lifecycleListener);
     super.dispose();
+  }
+
+  /// Audit L4 — one Start is enough.
+  ///
+  /// Arriving here from Setup ("Start practice") already IS the user's
+  /// start gesture, so the screen must not stop on an empty `ready` screen
+  /// asking for a second one: as soon as the target is compiled the
+  /// count-in begins on its own. Fires at most once per screen entry.
+  ///
+  /// The guard is `target == null`, not the status alone: `ready` is also
+  /// reachable with an invalidated target (a tempo change before the
+  /// attempt, `ChangeTempoBeforeAttempt`), and the reducer rejects
+  /// `StartPractice` there. In that state the explicit Start control in
+  /// [PracticeControls] stays the user's affordance.
+  void _maybeAutoStart(PracticeSessionState state) {
+    if (_autoStarted) return;
+    if (state.status != PracticeSessionStatus.ready) return;
+    if (state.target == null) return;
+    _autoStarted = true;
+    _host?.send(const StartPractice());
   }
 
   /// True only when the session is in a non-terminal phase AND the user

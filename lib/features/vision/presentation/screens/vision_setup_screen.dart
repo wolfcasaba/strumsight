@@ -62,27 +62,17 @@ class _VisionSetupScreenState extends ConsumerState<VisionSetupScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.visionSetupTitle, overflow: TextOverflow.ellipsis),
-        actions: [
-          if (state.step != VisionSetupStep.audioOnly)
-            ConstrainedBox(
-              // A9 — at a large text scale, an unconstrained action label
-              // pushes the whole toolbar past the viewport width instead of
-              // wrapping; the bound plus ellipsis below keeps this action
-              // legible instead of overflowing.
-              constraints: const BoxConstraints(maxWidth: 120),
-              child: TextButton(
-                key: const Key('vision-setup-skip'),
-                onPressed: () => unawaited(controller.skip()),
-                child: Text(
-                  l10n.visionSetupSkipAction,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-        ],
       ),
+      // Audit H17 — the skip used to be an app-bar action inside a
+      // 120 px `ConstrainedBox`, so its label was clipped to
+      // "Continue without came…" even across two lines. A toolbar
+      // slot cannot hold a full sentence; the action now lives in a
+      // full-width bottom bar where the label always fits, and the
+      // bar reserves its own layout space so it never covers the
+      // scrolling content.
+      bottomNavigationBar: state.step == VisionSetupStep.audioOnly
+          ? null
+          : _SkipActionBar(onSkip: () => unawaited(controller.skip())),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -110,6 +100,36 @@ class _VisionSetupScreenState extends ConsumerState<VisionSetupScreen> {
               VisionSetupStep.audioOnly => const _AudioOnlyStep(),
             },
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The camera setup's escape hatch: a full-width action under the wizard.
+/// It is part of the `Scaffold`'s bottom slot, so the body's `ListView` is
+/// laid out above it (no overlap) and the label is never truncated.
+class _SkipActionBar extends StatelessWidget {
+  const _SkipActionBar({required this.onSkip});
+
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(
+        SsSpacing.space4,
+        SsSpacing.space2,
+        SsSpacing.space4,
+        SsSpacing.space2,
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: TextButton(
+          key: const Key('vision-setup-skip'),
+          onPressed: onSkip,
+          child: Text(l10n.visionSetupSkipAction, textAlign: TextAlign.center),
         ),
       ),
     );

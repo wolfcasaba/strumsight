@@ -24,6 +24,7 @@ import 'package:strumsight/features/today/screens/today_hub_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/main.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -48,6 +49,7 @@ Future<FakeStrumEngine> _pumpLive(
   final container = ProviderContainer(
     overrides: [
       ...preferenceOverrides(),
+      ...fakeAudioOverrides(),
       strumEngineProvider.overrideWithValue(engine),
     ],
   );

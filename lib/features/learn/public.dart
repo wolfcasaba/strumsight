@@ -21,3 +21,10 @@ export 'widgets/lesson_highway.dart';
 export 'providers/backing_provider.dart';
 export 'audio/chord_audio.dart';
 export 'audio/metronome.dart';
+
+/// The typed audio-output failure those players publish, the injectable
+/// player seam behind them, and the inline notice that makes a mute output
+/// visible on the consuming screens (audit H20 / L12).
+export 'audio/audio_playback_error.dart';
+export 'audio/clip_player.dart';
+export 'widgets/audio_error_notice.dart';

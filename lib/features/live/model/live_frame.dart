@@ -79,8 +79,70 @@ class LiveFrame {
   /// [chordDecision] is `confirmed`/`null` (ADR 0516 D1/D5).
   final RecognitionRejectReason? chordRejectReason;
 
-  /// Confidence of the latest strum, or 0 if none.
+  /// Confidence of the latest strum, or 0 if none. Deliberately the RAW
+  /// [latestStrum] (other producers — the onboarding first-win engine, the
+  /// timeline fold — consume this as the engine's own number); the screens
+  /// read [displayStrum] when they need the freshness/signal gate too.
   double get confidence => latestStrum?.confidence ?? 0;
+
+  /// How long a strum indicator may stay on screen without a fresh detection
+  /// (seconds) — the same window `LivePipeline._buildFrame` uses to drop its
+  /// own `_latestStrum`, applied again here so an indicator expires even when
+  /// no further frame arrives to run the producer-side drop.
+  static const double strumHoldSec = 2.0;
+
+  /// True when this frame's chord verdict was rejected because the SIGNAL
+  /// itself is unusable — the six `signal*` reasons of ADR 0535 D1.
+  ///
+  /// While this holds, the screen may not present tempo or strum direction as
+  /// measured readings: the app has just stated it cannot tell what it is
+  /// hearing, and a confident arrow or BPM next to that statement is exactly
+  /// the "weak confidence rendered as a confident claim" AGENTS.md §5 forbids.
+  bool get hasUnusableSignal => switch (chordRejectReason) {
+    RecognitionRejectReason.signalTooQuiet ||
+    RecognitionRejectReason.signalTooLoud ||
+    RecognitionRejectReason.signalClipping ||
+    RecognitionRejectReason.signalTooNoisy ||
+    RecognitionRejectReason.signalSpeechLike ||
+    RecognitionRejectReason.signalUnstable => true,
+    RecognitionRejectReason.lowConfidence ||
+    RecognitionRejectReason.unstable ||
+    RecognitionRejectReason.noChord ||
+    RecognitionRejectReason.modelUnavailable ||
+    RecognitionRejectReason.timeout => false,
+    null => false,
+  };
+
+  /// True once [latestStrum] is older than [strumHoldSec] on the engine's own
+  /// clock. Both timestamps are −1 for producers that don't track a clock
+  /// (mocks), in which case nothing can be aged and this stays false.
+  bool get strumExpired =>
+      latestStrum != null &&
+      engineTimeSec >= 0 &&
+      latestStrumTime >= 0 &&
+      engineTimeSec - latestStrumTime > strumHoldSec;
+
+  /// The strum a screen may actually SHOW: [latestStrum] while it is still
+  /// fresh and the signal is usable, `null` otherwise. A stale arrow left up
+  /// during silence — or an arrow shown while the app says the signal is
+  /// unusable — is a claim the engine is not making.
+  Strum? get displayStrum =>
+      (strumExpired || hasUnusableSignal) ? null : latestStrum;
+
+  /// True when [bpm] is a real measurement. Zero BPM is the ABSENCE of a
+  /// tempo, not a tempo of zero, and an unusable signal cannot have measured
+  /// one either — the screen states that instead of printing "0 BPM".
+  bool get hasMeasuredTempo => bpm > 0 && !hasUnusableSignal;
+
+  /// The beat grid with expired strum marks removed. The bar's newest mark IS
+  /// [latestStrum], so once that has expired every remaining mark is at least
+  /// as old — they all go together.
+  List<BeatSlot> get displayBar => displayStrum != null
+      ? bar
+      : [
+          for (final slot in bar)
+            BeatSlot(label: slot.label, isDownbeat: slot.isDownbeat),
+        ];
 
   /// Copy with selected fields overridden (used to reflect the paused state).
   /// Note: nullable fields can only be kept, not cleared, which is all the UI

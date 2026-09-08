@@ -68,6 +68,7 @@ import 'package:strumsight/features/vision/presentation/screens/vision_result_sc
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/fake_auth.dart';
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/fake_settings.dart';
 import '../../support/preference_store.dart';
@@ -106,6 +107,7 @@ List<Override> _liveOverrides() {
   addTearDown(engine.dispose);
   return [
     ...preferenceOverrides(),
+    ...fakeAudioOverrides(),
     strumEngineProvider.overrideWithValue(engine),
   ];
 }
@@ -116,6 +118,7 @@ List<Override> _tunerOverrides() {
   addTearDown(engine.dispose);
   return [
     ...preferenceOverrides(),
+    ...fakeAudioOverrides(),
     tunerEngineProvider.overrideWithValue(engine),
   ];
 }

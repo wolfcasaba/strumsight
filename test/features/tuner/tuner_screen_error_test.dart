@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/core/platform/microphone_permission.dart';
 import 'package:strumsight/features/tuner/model/tuner_reading.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
 Widget _app(FakeTunerEngine engine) => ProviderScope(
   overrides: [
     ...preferenceOverrides(),
+    // Granted by default: these two cells are about the ENGINE failing, and
+    // the permission gate is fail-closed since the audit fix — without an
+    // explicit grant the screen would (correctly) show the permission banner
+    // instead of the mic-error one.
+    ...fakeAudioOverrides(),
     tunerEngineProvider.overrideWithValue(engine),
   ],
   child: const MaterialApp(
@@ -95,8 +101,14 @@ void main() {
       ProviderScope(
         overrides: [
           ...preferenceOverrides(),
+          // The permission is read through the gateway now (a CHECK, never a
+          // request) — the fake reports the denial the screen must state.
+          ...fakeAudioOverrides(
+            permissions: FakeMicrophonePermissionGateway(
+              state: MicrophonePermissionState.denied,
+            ),
+          ),
           tunerEngineProvider.overrideWithValue(engine),
-          micPermissionProvider.overrideWith((ref) async => false),
         ],
         child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -4,6 +4,9 @@ import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../application/practice_session_command.dart';
+import '../../application/practice_session_providers.dart';
+import '../../application/practice_setup_controller.dart';
 import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_insight.dart';
 import '../../domain/model/practice_metric_snapshot.dart';
@@ -11,6 +14,7 @@ import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_result.dart';
 import '../../domain/model/speed_builder_policy.dart';
 import '../../domain/model/tempo.dart';
+import '../practice_effect_listener.dart';
 import '../practice_route_args.dart';
 import '../providers/practice_result_providers.dart';
 import '../widgets/practice_mode_card.dart' show practiceModeLabel;
@@ -107,13 +111,17 @@ class _Header extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          entry.displayTitle.isEmpty
-              ? l10n.practiceResultTitle
-              : entry.displayTitle,
-          style: typography.titleLarge.copyWith(color: colors.textPrimary),
-        ),
-        const SizedBox(height: SsSpacing.space1),
+        // Audit H22: the app bar already carries "Practice result". Only
+        // the session's OWN title earns a second line here; an entry
+        // without one falls through to the finish-reason row instead of
+        // repeating the screen title verbatim.
+        if (entry.displayTitle.isNotEmpty) ...[
+          Text(
+            entry.displayTitle,
+            style: typography.titleLarge.copyWith(color: colors.textPrimary),
+          ),
+          const SizedBox(height: SsSpacing.space1),
+        ],
         Row(
           children: [
             Flexible(
@@ -335,32 +343,68 @@ class _RewardSection extends ConsumerWidget {
   }
 }
 
-/// The executable next step (A7): restarts the SAME definition through the
-/// Setup screen, correctly parameterized by [PracticeHistoryEntry.definitionId]
-/// — never a text-only suggestion.
-class _NextStepAction extends StatelessWidget {
+/// The executable next step (A7) — "Practice again".
+///
+/// Audit L3: this used to drop the user on the Setup screen, so "again"
+/// meant re-entering every setting by hand. It now restarts the SAME drill
+/// with the SAME settings whenever those settings are still known, and
+/// falls back to Setup only when they are not.
+class _NextStepAction extends ConsumerWidget {
   const _NextStepAction({required this.entry});
   final PracticeHistoryEntry entry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return SizedBox(
       width: double.infinity,
       child: FilledButton.icon(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => PracticeSetupScreen(
-              argsOverride: PracticeSetupArgs(
-                request: PracticeSetupRequest.hasId,
-                definitionId: entry.definitionId,
-              ),
-            ),
-          ),
-        ),
+        onPressed: () => _practiceAgain(context, ref),
         icon: const Icon(Icons.replay),
         label: Text(l10n.practiceResultNextStepCta),
         style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+      ),
+    );
+  }
+
+  /// Restarts the drill this result belongs to.
+  ///
+  /// The finished session's `(definition, config)` pair is still published
+  /// on [practiceActiveSessionInputsProvider], so re-dispatching it through
+  /// the production prepare sink reproduces the exact session the user just
+  /// played — and, because that sink now invalidates the controller family
+  /// element first (audit H2), the restart begins from a fresh state
+  /// instead of the terminal one this screen was reached from.
+  ///
+  /// The identity guard matters: a history entry opened days later (or
+  /// after a cold start) must NOT inherit some other drill's active inputs.
+  /// When the inputs are absent or belong to a different definition there
+  /// is nothing to reuse, and the user goes to Setup for THIS entry's
+  /// definition — the pre-fix behaviour, kept as the fallback.
+  void _practiceAgain(BuildContext context, WidgetRef ref) {
+    final inputs = ref.read(practiceActiveSessionInputsProvider);
+    if (inputs != null && inputs.definition.id == entry.definitionId) {
+      // Same lifetime contract as the Setup screen's Start CTA: the host
+      // is the only non-auto-dispose observer of the activation chain, so
+      // it is read before AND after the sink runs — otherwise the
+      // controller the sink just built is torn down before the session
+      // screen reads it (see `practice_setup_screen.dart`).
+      ref.read(practiceSessionHostProvider);
+      ref.read(practicePrepareSinkProvider)(
+        PreparePractice(definition: inputs.definition, config: inputs.config),
+      );
+      ref.read(practiceSessionHostProvider);
+      ref.read(practiceSessionNavigationSinkProvider)();
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PracticeSetupScreen(
+          argsOverride: PracticeSetupArgs(
+            request: PracticeSetupRequest.hasId,
+            definitionId: entry.definitionId,
+          ),
+        ),
       ),
     );
   }

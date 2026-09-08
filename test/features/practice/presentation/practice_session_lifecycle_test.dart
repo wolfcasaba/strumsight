@@ -358,12 +358,11 @@ void main() {
     ) async {
       final host = _FakeSessionHost();
       addTearDown(host.close);
-      // `idle` is the only status whose PracticeStateMessage renders
-      // the raw enum name. The screen must localise it.
+      // `idle` is the status the PracticeStateMessage renders on entry.
+      // The screen must show the localized status label, never the enum.
       host.emitState(_stateFor(PracticeSessionStatus.idle));
       await _pumpScreen(tester, host: host);
-      // The raw 'idle' must NOT appear unprefixed in any visible text.
-      // The localised form is "Session state: idle" which is fine.
+      // The raw 'idle' must NOT appear in any visible text.
       final visibleText = tester
           .widgetList<Text>(find.byType(Text))
           .map((w) => w.data ?? '')
@@ -372,10 +371,23 @@ void main() {
       expect(
         visibleText.contains('idle'),
         isFalse,
-        reason: 'raw enum name "idle" must not appear unprefixed',
+        reason: 'raw enum name "idle" must not appear',
       );
-      // The localised form is fine.
-      expect(visibleText.any((s) => s.contains('Session state')), isTrue);
+      // Audit H16: the developer dump ("Session state: <enum>") is gone —
+      // the screen renders the localized status label plus its body copy.
+      expect(
+        visibleText.any((s) => s.contains('Session state')),
+        isFalse,
+        reason: 'H16: no developer state dump on the session screen',
+      );
+      expect(
+        visibleText.contains(AppLocalizationsEn().practiceSessionStatusIdle),
+        isTrue,
+      );
+      expect(
+        visibleText.contains(AppLocalizationsEn().practiceSessionIdleBody),
+        isTrue,
+      );
     });
   });
 }

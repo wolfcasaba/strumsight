@@ -39,6 +39,7 @@ import '../../domain/model/practice_definition.dart';
 import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_config.dart';
 import '../../domain/model/practice_validation.dart';
+import '../../domain/model/scoring_profile.dart';
 import '../../domain/model/tempo.dart';
 import '../../application/practice_catalog_controller.dart';
 import '../practice_effect_listener.dart';
@@ -292,7 +293,10 @@ class _SetupFormState extends ConsumerState<_SetupForm> {
           const SizedBox(height: 12),
           _ScoringProfileReadout(
             label: l10n.practiceSetupScoringProfileLabel,
-            profileId: widget.definition.scoringProfile.id,
+            value: practiceScoringProfileLabel(
+              l10n,
+              widget.definition.scoringProfile,
+            ),
           ),
         ],
         const SizedBox(height: 24),
@@ -407,15 +411,49 @@ class _MeterReadout extends StatelessWidget {
   }
 }
 
+/// The localized, human-readable label of a [ScoringProfile] (audit H14).
+///
+/// [ScoringProfile.id] is a machine identifier ("legacyLearnParity") and
+/// must never be rendered. The label says WHAT the session scores, which
+/// is the only part of the profile that carries user value. The built-in
+/// set is closed; a profile outside it (a future or user-defined one)
+/// falls back to the localized "custom" label rather than leaking its id.
+String practiceScoringProfileLabel(
+  AppLocalizations l10n,
+  ScoringProfile profile,
+) {
+  final id = profile.id;
+  if (id == ScoringProfile.legacyLearnParity.id) {
+    return l10n.practiceScoringProfileLegacyLearnParity;
+  }
+  if (id == ScoringProfile.chordChangeDefault.id) {
+    return l10n.practiceScoringProfileChordChangeDefault;
+  }
+  if (id == ScoringProfile.chordProgressionDefault.id) {
+    return l10n.practiceScoringProfileChordProgressionDefault;
+  }
+  if (id == ScoringProfile.rhythmOnlyDefault.id) {
+    return l10n.practiceScoringProfileRhythmOnlyDefault;
+  }
+  if (id == ScoringProfile.freePracticeOpen.id) {
+    return l10n.practiceScoringProfileFreePracticeOpen;
+  }
+  return l10n.practiceScoringProfileCustom;
+}
+
 class _ScoringProfileReadout extends StatelessWidget {
-  const _ScoringProfileReadout({required this.label, required this.profileId});
+  const _ScoringProfileReadout({required this.label, required this.value});
 
   final String label;
-  final String profileId;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
+    // The value is a human phrase now, not a short machine id (H14), so
+    // it must be allowed to wrap: a non-flexible Text here overflowed the
+    // row at large text scales.
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Text(
@@ -423,7 +461,14 @@ class _ScoringProfileReadout extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
-        Text(profileId, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
       ],
     );
   }

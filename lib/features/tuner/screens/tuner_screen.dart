@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/design_system/public.dart';
 import '../../../core/music/guitar_strings.dart';
 import '../../../core/music/tuning.dart';
+import '../../../core/platform/app_lifecycle.dart';
+import '../../../core/platform/platform_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/mic_error_banner.dart';
@@ -44,6 +48,39 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
   /// here in the UI layer only (brief §0.0/R5.1).
   final TunerStability _stability = TunerStability();
   bool _unstable = false;
+
+  /// Captured in initState so dispose never has to touch `ref`.
+  late final AppLifecycleEvents _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = ref.read(appLifecycleEventsProvider);
+    _lifecycle.addListener(_onAppLifecycle);
+    // Opening the Tuner IS the user intent to listen, so this is the one
+    // place a system dialog may be shown — once per app run, and never as a
+    // side effect of a rebuild (L6).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.read(micPermissionProvider.notifier).requestOnce());
+    });
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.removeListener(_onAppLifecycle);
+    super.dispose();
+  }
+
+  /// Coming back into the foreground: re-read the microphone permission (L5).
+  /// The banner's "Open settings" leaves the app, so a grant made there lands
+  /// while the Tuner is backgrounded — without this re-read the screen went
+  /// on claiming there is no microphone until the app was restarted. The read
+  /// is a CHECK: it never shows a dialog.
+  void _onAppLifecycle(AppLifecycleState state) {
+    if (!mounted || state != AppLifecycleState.resumed) return;
+    unawaited(ref.read(micPermissionProvider.notifier).refresh());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +131,23 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
     final readingAsync = ref.watch(tunerReadingProvider);
     final reading = readingAsync.asData?.value ?? TunerReading.silent;
     final a4 = ref.watch(tuningReferenceProvider);
-    final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
+    // Fail-closed (L7): ONLY a confirmed grant counts. A read still in flight
+    // or one that errored is "not granted" — the previous `?? true` turned
+    // every unknown into consent and left the Tuner saying "Play a string…"
+    // over a microphone it had never been given.
+    final micGranted =
+        ref.watch(micPermissionProvider).value?.isGranted ?? false;
+    final micError = readingAsync.hasError;
+    // The idle prompt invites the player to sound a string; with no mic (or a
+    // dead one) that invitation leads nowhere, so the banner below is the
+    // whole message instead.
+    final canListen = micGranted && !micError;
+    final Widget idleHero = canListen
+        ? Text(
+            l10n.tunerListening,
+            style: TextStyle(color: palette.muted, fontSize: 16),
+          )
+        : const SizedBox.shrink();
     final tuning = ref.watch(tunerTuningProvider);
     final pinned = ref.watch(pinnedStringProvider);
     // Manual mode reads against the pinned target; auto stays chromatic.
@@ -182,15 +235,15 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
           // banner stays up through a Retry until the restarted engine
           // produces a reading (AsyncData clears hasError) or fails again.
           if (!micGranted) const MicPermissionBanner(),
-          if (micGranted && readingAsync.hasError)
+          // Shown REGARDLESS of the permission read: gating it on `micGranted`
+          // meant that whenever the permission was (wrongly) read as missing,
+          // the one message explaining why the tuner is dead disappeared too.
+          if (micError)
             MicErrorBanner(onRetry: () => ref.invalidate(tunerReadingProvider)),
         ],
       ),
       hero: state == TunerUiState.idle
-          ? Text(
-              l10n.tunerListening,
-              style: TextStyle(color: palette.muted, fontSize: 16),
-            )
+          ? idleHero
           : Column(
               mainAxisSize: MainAxisSize.min,
               children: [

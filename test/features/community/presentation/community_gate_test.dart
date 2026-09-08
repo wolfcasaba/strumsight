@@ -177,8 +177,41 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      // The title is in the AppBar + body; the CTA is unique.
+      // Audit H22 — the AppBar names the area, so the state title is
+      // rendered exactly once (in the body); the CTA is unique too.
+      expect(find.text('Create your Community profile'), findsOneWidget);
       expect(find.text('Create profile'), findsOneWidget);
+    });
+
+    // Audit H22 — the header used to repeat a body state title, so the
+    // logged-out gate read as two sign-in headlines stacked on each other.
+    testWidgets('the header names the area, not the state (no duplicate)', (
+      tester,
+    ) async {
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      final repo = _FakeCommunityProfileRepository(profile: null);
+      await tester.pumpWidget(
+        _scope(repo: repo, accountEnabled: true, user: null),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text(l10n.communityGateAppBarTitle),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.communityGateLoggedOutTitle), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text(l10n.communityGateLoggedOutTitle),
+        ),
+        findsNothing,
+      );
+      // The body still explains what signing in unlocks.
+      expect(find.text(l10n.communityGateLoggedOutBody), findsOneWidget);
     });
 
     testWidgets('shows the read-only summary in the ready state', (

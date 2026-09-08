@@ -81,7 +81,7 @@ final class GamificationMigrator {
     final state = gamificationRepository.readMigrationState();
     final checkpoint = switch (state.status) {
       GamificationReadStatus.missing => 0,
-      GamificationReadStatus.available => state.value!.processedCount,
+      GamificationReadStatus.available => _availableCheckpoint(state.value),
       GamificationReadStatus.corrupt => throw StateError(
         'Cannot resume a corrupt gamification migration checkpoint.',
       ),
@@ -90,5 +90,18 @@ final class GamificationMigrator {
       throw StateError('Migration checkpoint exceeds the supplied snapshot.');
     }
     return checkpoint;
+  }
+
+  /// The checkpoint of an `available` read. `GamificationRead.available` can
+  /// be constructed with a null payload, which is as unusable as a corrupt
+  /// read — it fails the same way instead of throwing an opaque null-check
+  /// error on `state.value!` (audit H21).
+  int _availableCheckpoint(GamificationMigrationState? state) {
+    if (state == null) {
+      throw StateError(
+        'Gamification migration checkpoint is available but empty.',
+      );
+    }
+    return state.processedCount;
   }
 }

@@ -27,20 +27,23 @@
 /// following feed, the pagination button is the only entry
 /// point to ``loadMore()`` (the Kör 14 invariant).
 ///
-/// **Localization note (l10n).** This round ships the screen
-/// with hardcoded English labels — the ARB file is not on
-/// this round's ``allowed_paths``. A follow-up round (Kör 18
-/// — community surface l10n) will lift the labels into
-/// ``lib/l10n/app_en.arb`` / ``app_hu.arb`` (the F1 lesson the
-/// Kör 14 brief called out). The label constants live at the
-/// top of the screen file so the future ARB migration is a
-/// one-pass search-and-replace.
+/// **Localization note (l10n).** The row label and the saved-on
+/// date go through ``AppLocalizations`` (audit H15); the
+/// remaining chrome labels below are still hardcoded English —
+/// the ARB file was not on that round's ``allowed_paths``. A
+/// follow-up round (Kör 18 — community surface l10n) will lift
+/// those remaining labels into ``lib/l10n/app_en.arb`` /
+/// ``app_hu.arb`` (the F1 lesson the Kör 14 brief called out).
+/// The label constants live at the top of the screen file so
+/// the future ARB migration is a one-pass search-and-replace.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/core/i18n/ss_formatters.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
@@ -77,12 +80,20 @@ class BookmarkRow {
     required this.postId,
     required this.createdAt,
     required this.isTombstone,
+    this.title,
   });
 
   /// The internal row id (the cursor key).
   final int id;
   final ContentId postId;
   final DateTime createdAt;
+
+  /// The saved post's title / content excerpt, when the controller could
+  /// read it. ``null`` when the joined post is not loadable (the tombstone
+  /// case, or a repository that only returns the bookmark row) — the card
+  /// then renders a localized fallback label. The raw [postId] is an
+  /// internal identifier and is NEVER shown to the user (AGENTS.md).
+  final String? title;
 
   /// ``true`` when the joined post is soft-deleted or
   /// moderation-removed. The screen renders the placeholder
@@ -96,10 +107,11 @@ class BookmarkRow {
           other.id == id &&
           other.postId == postId &&
           other.createdAt == createdAt &&
-          other.isTombstone == isTombstone);
+          other.isTombstone == isTombstone &&
+          other.title == title);
 
   @override
-  int get hashCode => Object.hash(id, postId, createdAt, isTombstone);
+  int get hashCode => Object.hash(id, postId, createdAt, isTombstone, title);
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +293,27 @@ class _BookmarksScreenState extends ConsumerState<BookmarksScreen> {
 // is the BookmarksScreen route.
 // ---------------------------------------------------------------------------
 
+/// The row's human label: the saved post's title / excerpt when the
+/// controller could read it, otherwise a localized fallback. The raw
+/// ``postId`` never reaches the screen (audit H15).
+String _bookmarkLabel(BuildContext context, BookmarkRow row) {
+  final title = row.title?.trim();
+  if (title == null || title.isEmpty) {
+    return AppLocalizations.of(context).communityBookmarkUntitledPost;
+  }
+  return title;
+}
+
+/// The saved-at line as a localized calendar date — never an ISO timestamp
+/// (audit H15). [SsFormatters.date] is the app's `intl` date formatter.
+String _savedOnLabel(BuildContext context, BookmarkRow row) =>
+    AppLocalizations.of(context).communityBookmarkSavedOn(
+      SsFormatters.date(
+        row.createdAt.toLocal(),
+        localeName: Localizations.localeOf(context).toString(),
+      ),
+    );
+
 class _BookmarkCard extends StatelessWidget {
   const _BookmarkCard({required this.row, required this.onRemove});
   final BookmarkRow row;
@@ -289,8 +322,8 @@ class _BookmarkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      title: Text('Post ${row.postId.value}'),
-      subtitle: Text('Saved at ${row.createdAt.toIso8601String()}'),
+      title: Text(_bookmarkLabel(context, row)),
+      subtitle: Text(_savedOnLabel(context, row)),
       trailing: IconButton(
         tooltip: _l10nBookmarkRemoveAction,
         icon: const Icon(Icons.bookmark_remove_outlined),
@@ -321,8 +354,13 @@ class _TombstoneCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Post ${row.postId.value}',
+                      _bookmarkLabel(context, row),
                       style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _savedOnLabel(context, row),
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 4),
                     Text(

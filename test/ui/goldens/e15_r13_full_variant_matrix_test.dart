@@ -1081,6 +1081,7 @@ List<Override> _liveOverrides() {
   addTearDown(engine.dispose);
   return [
     ...preferenceOverrides(),
+    ...fakeAudioOverrides(),
     strumEngineProvider.overrideWithValue(engine),
   ];
 }
@@ -1091,6 +1092,7 @@ List<Override> _tunerOverrides() {
   addTearDown(engine.dispose);
   return [
     ...preferenceOverrides(),
+    ...fakeAudioOverrides(),
     tunerEngineProvider.overrideWithValue(engine),
   ];
 }

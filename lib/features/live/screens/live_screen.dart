@@ -89,15 +89,32 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // expected-chord bias — clear it explicitly instead of trusting the nav
     // invariant that LearnScreen was disposed first (chunk 016 residual).
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(strumEngineProvider).setExpectedChord(null);
+      if (!mounted) return;
+      ref.read(strumEngineProvider).setExpectedChord(null);
+      // Opening Live IS the user intent to listen, so this is where the
+      // system dialog may be shown — once per app run, and never as a side
+      // effect of a rebuild (L6). Reading `micPermissionProvider` itself only
+      // ever checks.
+      unawaited(ref.read(micPermissionProvider.notifier).requestOnce());
     });
   }
 
   /// Backgrounded: release the screen wakelock and show the session as paused.
   /// The microphone itself is stopped by the AudioLifecycleGuard — resuming
   /// must NOT restart it behind the user's back (§9.4).
+  ///
+  /// Resumed: re-read the microphone permission (L5). The banner's "Open
+  /// settings" leaves the app, so a grant made there lands while we are
+  /// backgrounded — without this re-read the screen went on claiming there is
+  /// no microphone until the app was restarted. The read is a CHECK: it never
+  /// shows a dialog and never restarts the mic.
   void _onAppLifecycle(AppLifecycleState state) {
-    if (!isBackgroundLifecycleState(state) || !mounted || _paused) return;
+    if (!mounted) return;
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(micPermissionProvider.notifier).refresh());
+      return;
+    }
+    if (!isBackgroundLifecycleState(state) || _paused) return;
     unawaited(_wakelock.disable());
     setState(() {
       _frozen = ref.read(liveFrameProvider).asData?.value;
@@ -235,11 +252,16 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // Discrete beat index off the engine clock — a new value fires ONE finite
     // hero pulse (see ChordTimeline.beat). No free-running metronome, so widget
     // tests still settle. Guards keep it 0 (disabled) when there's no clock/BPM.
-    final beat = (frame.bpm > 0 && frame.engineTimeSec >= 0)
+    final beat = (frame.hasMeasuredTempo && frame.engineTimeSec >= 0)
         ? (frame.engineTimeSec * frame.bpm / 60).floor()
         : 0;
 
-    final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
+    // Fail-closed (L7): ONLY a confirmed grant counts. A read that is still
+    // in flight or came back as an error is "not granted" — the previous
+    // `?? true` turned every unknown into consent and rendered a screen that
+    // claimed to be listening on a microphone it had never been given.
+    final micPermission = ref.watch(micPermissionProvider);
+    final micGranted = micPermission.value?.isGranted ?? false;
     // The mic failed to start (busy / platform error) — surface it, never a
     // silent no-op. Not shown while paused (the engine is intentionally off).
     final micError = liveAsync.hasError && !_paused;
@@ -263,7 +285,11 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
     // ---- Derived Stage state (§0.0/R8 — LiveFrame carries no state enum;
     // every state below is derived from a measured input). ----
-    final isLoading = !_paused && liveAsync.isLoading;
+    // "Starting…" is only true while a mic we are ALLOWED to open is coming
+    // up. Without the permission nothing is starting, and showing both that
+    // and the permission banner told the user two contradictory things at
+    // once.
+    final isLoading = !_paused && liveAsync.isLoading && micGranted;
     // The heuristic weak-signal warning is the "no decision" fallback (ADR
     // 0520 D5): once the merged recognizer HAS a reject reason, the banner
     // below is the one place that states why, and this generic warning steps
@@ -291,10 +317,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         ? SsSessionTransportStatus.paused
         : SsSessionTransportStatus.active;
 
-    final latestStrum = frame.latestStrum;
+    // `displayStrum`, not `latestStrum`: an indicator EXPIRES without a fresh
+    // detection (L11) and is never shown next to a stated "the signal is
+    // unusable" — a stale ↑ under a "too quiet" banner is a confident claim
+    // the engine is not making (AGENTS.md §5).
+    final latestStrum = frame.displayStrum;
     final chordLabel = hasChord ? frame.current!.transposed(-capo).label : null;
-    final confColor = AppColors.confidence(frame.confidence, brightness);
-    final confTier = AppColors.confidenceTier(frame.confidence);
+    final shownConfidence = latestStrum?.confidence ?? 0;
+    final confColor = AppColors.confidence(shownConfidence, brightness);
+    final confTier = AppColors.confidenceTier(shownConfidence);
 
     return SsStageScaffold(
       // Live is free-play with no session artifact to save — no unsaved-data
@@ -332,7 +363,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               ),
             ),
           if (!micGranted) const MicPermissionBanner(),
-          if (micGranted && micError)
+          // Shown REGARDLESS of the permission read: gating it on `micGranted`
+          // meant that whenever the permission was (wrongly) read as missing,
+          // the one message explaining why the engine is dead disappeared too.
+          if (micError)
             MicErrorBanner(onRetry: () => ref.invalidate(liveFrameProvider)),
         ],
       ),
@@ -391,12 +425,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             capo: capo,
             listening: !_paused && frame.listening,
             beat: beat,
+            idlePromptEnabled: micGranted && !micError,
           ),
           if (frame.bar.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 10),
+              // `displayBar`: the grid keeps its "1 & 2 &" labels, but the
+              // strum marks expire with the arrow above (L11).
               child: BeatCounter(
-                bar: frame.bar,
+                bar: frame.displayBar,
                 activeIndex: _activeSlot(frame),
               ),
             ),
@@ -425,7 +462,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 
   int? _activeSlot(LiveFrame frame) {
-    final latest = frame.latestStrum;
+    final latest = frame.displayStrum;
     if (latest == null) return null;
     for (var i = frame.bar.length - 1; i >= 0; i--) {
       if (identical(frame.bar[i].strum, latest)) return i;

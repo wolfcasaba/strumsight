@@ -2,11 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/practice/application/practice_session_command.dart';
+import 'package:strumsight/features/practice/application/practice_session_providers.dart';
+import 'package:strumsight/features/practice/application/practice_setup_controller.dart';
+import 'package:strumsight/features/practice/domain/model/beat_position.dart';
+import 'package:strumsight/features/practice/domain/model/meter.dart';
+import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
+import 'package:strumsight/features/practice/domain/model/practice_event.dart';
 import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';
 import 'package:strumsight/features/practice/domain/model/practice_metric_snapshot.dart';
 import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
+import 'package:strumsight/features/practice/domain/model/practice_session_config.dart';
 import 'package:strumsight/features/practice/domain/model/practice_source.dart';
+import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
+import 'package:strumsight/features/practice/domain/model/tempo.dart';
+import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart';
+import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
@@ -208,16 +221,202 @@ void main() {
       );
     }
   });
+
+  // -------------------------------------------------------------------
+  // H22 — the screen title is not repeated in the body
+  // -------------------------------------------------------------------
+  group('H22 — no duplicated screen title', () {
+    testWidgets('an entry without its own title renders "Practice result" '
+        'exactly once (the app bar)', (tester) async {
+      final entry = _entry(PracticeMode.strumPattern, displayTitle: '');
+      await pumpResult(tester, PracticeResultScreen(entry: entry));
+      expect(
+        find.text(l10n().practiceResultTitle),
+        findsOneWidget,
+        reason:
+            'H22: the header used to echo the app-bar title as the first '
+            'body line whenever the entry had no title of its own.',
+      );
+    });
+
+    testWidgets('an entry WITH a title still shows it under the app bar', (
+      tester,
+    ) async {
+      final entry = _entry(PracticeMode.strumPattern);
+      await pumpResult(tester, PracticeResultScreen(entry: entry));
+      expect(find.text(entry.displayTitle), findsOneWidget);
+      expect(find.text(l10n().practiceResultTitle), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // L3 — "Practice again" restarts the same drill, same settings
+  // -------------------------------------------------------------------
+  group('L3 — Practice again restarts the drill', () {
+    testWidgets('with the finished session still active it re-dispatches the '
+        'IDENTICAL definition + config and opens the session', (tester) async {
+      final entry = _entry(PracticeMode.strumPattern);
+      final definition = _definitionFor(entry.definitionId);
+      final config = _configFor(entry.definitionId);
+      final commands = <PreparePractice>[];
+      var sessionNavigations = 0;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...preferenceOverrides(),
+            // The activation chain is exercised end-to-end by
+            // `practice_setup_navigation_test.dart`; here the host is
+            // stubbed out so the cell measures the restart hand-off only.
+            practiceSessionHostProvider.overrideWithValue(null),
+            practiceActiveSessionInputsProvider.overrideWith(
+              () => _FixedInputs((definition: definition, config: config)),
+            ),
+            practicePrepareSinkProvider.overrideWithValue(commands.add),
+            practiceSessionNavigationSinkProvider.overrideWithValue(
+              () => sessionNavigations++,
+            ),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: PracticeResultScreen(entry: entry),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final cta = find.text(l10n().practiceResultNextStepCta);
+      await tester.ensureVisible(cta);
+      await tester.pumpAndSettle();
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+
+      expect(commands, hasLength(1));
+      expect(commands.single.definition, definition);
+      expect(
+        commands.single.config,
+        config,
+        reason: 'L3: "again" means the SAME settings, not a fresh setup',
+      );
+      expect(sessionNavigations, 1);
+      expect(
+        find.byType(PracticeSetupScreen),
+        findsNothing,
+        reason: 'L3: the user must not be dropped back on Practice setup',
+      );
+    });
+
+    testWidgets('inputs belonging to ANOTHER definition are not reused', (
+      tester,
+    ) async {
+      final entry = _entry(PracticeMode.strumPattern);
+      const otherId = 'some-other-definition';
+      final commands = <PreparePractice>[];
+      var sessionNavigations = 0;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...preferenceOverrides(),
+            practiceSessionHostProvider.overrideWithValue(null),
+            practiceActiveSessionInputsProvider.overrideWith(
+              () => _FixedInputs((
+                definition: _definitionFor(otherId),
+                config: _configFor(otherId),
+              )),
+            ),
+            practicePrepareSinkProvider.overrideWithValue(commands.add),
+            practiceSessionNavigationSinkProvider.overrideWithValue(
+              () => sessionNavigations++,
+            ),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: PracticeResultScreen(entry: entry),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final cta = find.text(l10n().practiceResultNextStepCta);
+      await tester.ensureVisible(cta);
+      await tester.pumpAndSettle();
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+
+      // Nothing to restart from — the user goes to Setup for THIS entry's
+      // definition rather than silently replaying a different drill.
+      expect(commands, isEmpty);
+      expect(sessionNavigations, 0);
+      expect(find.byType(PracticeSetupScreen), findsOneWidget);
+    });
+  });
 }
 
-PracticeHistoryEntry _entry(PracticeMode mode) {
+/// A [PracticeActiveSessionInputsController] pinned to one value, so a
+/// widget test can describe "the session that just finished" without
+/// building the whole session runtime.
+class _FixedInputs extends PracticeActiveSessionInputsController {
+  _FixedInputs(this.inputs);
+
+  final PracticeSessionInputs inputs;
+
+  @override
+  PracticeSessionInputs? build() => inputs;
+}
+
+PracticeDefinition _definitionFor(String id) => PracticeDefinition(
+  id: id,
+  schemaVersion: 1,
+  titleKey: 'practiceCatalogTestSetupTitle',
+  descriptionKey: 'practiceCatalogTestSetupDescription',
+  mode: PracticeMode.strumPattern,
+  source: PracticeSource.builtin,
+  meter: const Meter(beatsPerBar: 4),
+  defaultTempo: const Tempo(100),
+  totalBeats: BeatPosition.quarters(16),
+  events: List<PracticeEvent>.unmodifiable([
+    for (var i = 0; i < 4; i++)
+      PracticeEvent(
+        id: '$id.e$i',
+        position: BeatPosition.quarters(i),
+        direction: StrumDirection.down,
+      ),
+  ]),
+  scoringProfile: ScoringProfile.legacyLearnParity,
+  skillTags: const ['test'],
+  displayTitle: 'Restart fixture',
+);
+
+PracticeSessionConfig _configFor(String id) => PracticeSessionConfig(
+  definitionId: id,
+  definitionSnapshotVersion: 1,
+  effectiveTempo: const Tempo(100),
+  countInBars: 1,
+  loopCount: 2,
+  metronomeEnabled: true,
+  accentEnabled: false,
+  backingEnabled: false,
+  scoringProfileId: ScoringProfile.legacyLearnParity.id,
+  inputLatency: Duration.zero,
+  visualLatency: Duration.zero,
+  expectedChordHintEnabled: true,
+  sessionTimeout: const Duration(minutes: 5),
+  reducedMotion: false,
+);
+
+PracticeHistoryEntry _entry(PracticeMode mode, {String? displayTitle}) {
   return PracticeHistoryEntry(
     id: 'result-${mode.code}',
     modeCode: mode.code,
     sourceCode: PracticeSource.builtin.code,
     createdAt: DateTime(2026, 8, 1, 12, 0),
     definitionId: 'd-${mode.code}',
-    displayTitle: 'fixture-${mode.code}',
+    displayTitle: displayTitle ?? 'fixture-${mode.code}',
     finishReasonCode: 'userFinished',
     activeDuration: const Duration(seconds: 30),
     pausedDuration: Duration.zero,

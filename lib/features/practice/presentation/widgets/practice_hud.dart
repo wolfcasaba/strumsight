@@ -67,12 +67,68 @@ class PracticeHud extends StatelessWidget {
   };
 }
 
+/// The designed, localized non-running state of the session screen — the
+/// idle entry state and the two terminal states (audit H16).
+///
+/// It replaces the developer dump this used to render ("Session state:
+/// completed", the raw enum name interpolated into an ARB string): a
+/// terminal session now gets a localized headline plus a body that says
+/// what happens next, and no machine identifier ever reaches the user.
 class PracticeStateMessage extends StatelessWidget {
   const PracticeStateMessage({required this.state, super.key});
   final PracticeSessionState state;
 
   @override
-  Widget build(BuildContext context) => Text(
-    AppLocalizations.of(context).practiceSessionStateMessage(state.status.name),
-  );
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    // Exhaustive over every status: a new one must decide its own copy
+    // here instead of silently falling into the neutral branch.
+    final (IconData icon, String body) = switch (state.status) {
+      PracticeSessionStatus.completed => (
+        Icons.check_circle_outline,
+        l10n.practiceSessionCompletedBody,
+      ),
+      PracticeSessionStatus.cancelled => (
+        Icons.cancel_outlined,
+        l10n.practiceSessionCancelledBody,
+      ),
+      PracticeSessionStatus.idle ||
+      PracticeSessionStatus.preparing ||
+      PracticeSessionStatus.permissionRequired ||
+      PracticeSessionStatus.ready ||
+      PracticeSessionStatus.countIn ||
+      PracticeSessionStatus.running ||
+      PracticeSessionStatus.paused ||
+      PracticeSessionStatus.finishing ||
+      PracticeSessionStatus.failed => (
+        Icons.play_circle_outline,
+        l10n.practiceSessionIdleBody,
+      ),
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    PracticeHud.statusLabel(l10n, state.status),
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(body, style: theme.textTheme.bodyMedium),
+          ],
+        ),
+      ),
+    );
+  }
 }

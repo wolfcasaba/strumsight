@@ -20,7 +20,12 @@ import '../tap_tempo.dart';
 /// signature is an "advanced" setting behind the app-bar action, presented
 /// through the R13 overlay system ([SsOverlayHost]).
 class MetronomeScreen extends StatefulWidget {
-  const MetronomeScreen({super.key});
+  const MetronomeScreen({super.key, this.metronome});
+
+  /// Injectable click player, mirroring `StrumReelScreen` — the tests use it
+  /// to prove a REFUSED click reaches the player as a visible message
+  /// (audit H20 / L12). Production passes nothing and gets the real one.
+  final Metronome? metronome;
 
   @override
   State<MetronomeScreen> createState() => _MetronomeScreenState();
@@ -31,7 +36,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   static const _minBpm = 40;
   static const _maxBpm = 240;
 
-  final Metronome _metronome = Metronome();
+  late final Metronome _metronome = widget.metronome ?? Metronome();
   final TapTempo _tapTempo = TapTempo(minBpm: _minBpm, maxBpm: _maxBpm);
 
   /// Phase-preserving clock: a mid-play tempo change keeps the beat position
@@ -65,7 +70,8 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   @override
   void dispose() {
     _ticker.dispose();
-    _metronome.dispose();
+    // Only ours to dispose — an injected metronome belongs to the caller.
+    if (widget.metronome == null) _metronome.dispose();
     super.dispose();
   }
 
@@ -85,6 +91,9 @@ class _MetronomeScreenState extends State<MetronomeScreen>
     setState(() {
       _playing = !_playing;
       if (_playing) {
+        // A fresh run gets a fresh verdict on the audio output: the notice
+        // below re-appears only if this run's clicks fail again.
+        _metronome.clearError();
         // Ticker elapsed restarts at zero on each start(), so count from 0.
         _lastBeat = -1;
         _currentBeat = 0;
@@ -217,7 +226,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
         color: AppColors.primary,
         mutedColor: palette.track,
       ),
-      timeline: _beatDots(),
+      timeline: _timeline(),
       bottomAction: _actions(l10n),
     );
   }
@@ -265,6 +274,17 @@ class _MetronomeScreenState extends State<MetronomeScreen>
           ),
         ],
       ),
+    ],
+  );
+
+  /// The beat dots plus the audio-output failure notice: a metronome that
+  /// cannot make a sound must SAY so instead of only looking busy — the
+  /// click used to fail into an empty `catch` (audit H20 / L12).
+  Widget _timeline() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      _beatDots(),
+      AudioOutputErrorNotice(sources: [_metronome.lastError]),
     ],
   );
 

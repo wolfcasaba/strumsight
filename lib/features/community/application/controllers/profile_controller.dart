@@ -190,10 +190,14 @@ class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
     required ProfileVisibility visibility,
     required CommunityAudience audienceDefault,
   }) async {
-    if (state.value?.isSubmitting ?? false) {
+    // The gate may still be loading (or have failed to resolve): there is
+    // then no state to submit from, so the write is refused as busy instead
+    // of throwing a null-check error on `state.value` (audit H21).
+    final current = state.value;
+    if (current == null || current.isSubmitting) {
       return const CommunityProfileSubmitResult.busy();
     }
-    state = AsyncData(state.value!.copyWith(isSubmitting: true, error: null));
+    state = AsyncData(current.copyWith(isSubmitting: true, error: null));
     final result = await _repo.createProfile(
       handle: handle,
       displayName: displayName,
@@ -213,10 +217,13 @@ class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
   Future<CommunityProfileSubmitResult> updateProfile({
     required String displayName,
   }) async {
-    if (state.value?.isSubmitting ?? false) {
+    // Same guard as `createProfile` — a loading/failed gate has no state to
+    // fold the submit flag into (audit H21).
+    final current = state.value;
+    if (current == null || current.isSubmitting) {
       return const CommunityProfileSubmitResult.busy();
     }
-    state = AsyncData(state.value!.copyWith(isSubmitting: true, error: null));
+    state = AsyncData(current.copyWith(isSubmitting: true, error: null));
     final result = await _repo.updateProfile(displayName: displayName);
     return switch (result) {
       Success(:final value) => _onWriteSuccess(value),
@@ -246,7 +253,15 @@ class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
   }
 
   CommunityProfileSubmitResult _onWriteFailure(AppFailure error) {
-    state = AsyncData(state.value!.copyWith(isSubmitting: false, error: error));
+    // Normally the caller has just written an AsyncData, but a concurrent
+    // `refresh()` can have replaced it with AsyncLoading while the write was
+    // in flight. In that case the cached state is gone and there is nothing
+    // to fold the error into — the returned result still carries it to the
+    // screen, which is what the screen branches on (audit H21).
+    final current = state.value;
+    if (current != null) {
+      state = AsyncData(current.copyWith(isSubmitting: false, error: error));
+    }
     if (error is ValidationFailure &&
         error.code == FailureCode.communityConflict) {
       // 409 on create — by the controller's pre-submit

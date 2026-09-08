@@ -120,6 +120,21 @@ final practiceResultNavigationSinkProvider =
       };
     });
 
+typedef PracticeSessionNavigationSink = void Function();
+
+/// Navigates to the live session route. The mirror image of
+/// [practiceResultNavigationSinkProvider]: production goes through the
+/// router, tests override it with a recording stub. Used by the result
+/// screen's "Practice again" action (audit L3), which restarts the drill
+/// through the prepare sink and then hands the user to the session screen.
+final practiceSessionNavigationSinkProvider =
+    Provider<PracticeSessionNavigationSink>((ref) {
+      return () {
+        final router = ref.read(routerProvider);
+        router.go(AppRoutes.practiceSession);
+      };
+    });
+
 /// Stores the recoverable failure shown by the active session screen.
 /// Auto-disposal gives every screen entry a fresh overlay state.
 final class PracticeErrorOverlayController extends Notifier<AppFailure?> {

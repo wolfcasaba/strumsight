@@ -1,10 +1,11 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/audio/codec/wav_encoder.dart';
+import 'audio_playback_error.dart';
+import 'clip_player.dart';
 
 /// Synthesises a soft chord "pad" in pure Dart and plays it as a jam-mode
 /// backing (RAG chunk 014). The chord tones are summed sines with a gentle
@@ -96,15 +97,32 @@ class ChordAudio {
 }
 
 /// Plays chord pads for jam-mode backing. Fire-and-forget (a no-op where the
-/// platform channel is absent, e.g. tests); caches synthesised pads per chord.
+/// platform channel is absent, e.g. tests) but NOT silent: a pad the device
+/// refuses to play lands in [lastError] so the chord screens can say so
+/// (audit H20 / L12). Caches synthesised pads per chord.
 class Backing {
+  Backing({ClipPlayer Function()? playerFactory})
+    : _player = (playerFactory ?? AudioPlayersClipPlayer.new)();
+
   /// Cache bound: beyond this the least-recently-used pad is evicted
   /// (round 101 — every distinct A4 × tone used to add a ~130 KB WAV
   /// forever).
   static const int maxCachedPads = 24;
 
-  final AudioPlayer _player = AudioPlayer();
+  final ClipPlayer _player;
   final Map<String, Uint8List> _cache = {};
+  final ValueNotifier<AudioPlaybackError?> _lastError = ValueNotifier(null);
+  bool _disposed = false;
+
+  /// The pad the device refused to play, or null while the output is
+  /// healthy. A tap that produces no sound must be explained, so the chord
+  /// screens render a localized message from this.
+  ValueListenable<AudioPlaybackError?> get lastError => _lastError;
+
+  /// Drop the surfaced error (the user dismissed it or tapped again).
+  void clearError() {
+    if (!_disposed) _lastError.value = null;
+  }
 
   /// Current number of cached pads (test surface for the bound).
   int get cacheSize => _cache.length;
@@ -131,22 +149,35 @@ class Backing {
     );
   }
 
+  void _report(Object error) {
+    if (_disposed || isAudioBackendAbsent(error)) return;
+    _lastError.value = AudioPlaybackError(
+      source: AudioOutputSource.chordPad,
+      detail: error.toString(),
+    );
+  }
+
   void _play(String cacheKey, Uint8List Function() build) {
     // LRU: re-insert on hit so the map's iteration order is recency.
     final wav = _cache.remove(cacheKey) ?? build();
     _cache[cacheKey] = wav;
     if (_cache.length > maxCachedPads) _cache.remove(_cache.keys.first);
     try {
-      _player.stop().ignore();
-      _player.play(BytesSource(wav)).ignore();
-    } catch (_) {
-      // Best-effort.
+      // Fire-and-forget, but no longer swallowed: a refused pad is reported
+      // through [lastError] instead of disappearing (audit H20 / L12).
+      _player.play(wav).onError<Object>((e, _) => _report(e)).ignore();
+    } catch (error) {
+      _report(error);
     }
   }
 
   Future<void> dispose() async {
+    _disposed = true;
     try {
       await _player.dispose();
-    } catch (_) {}
+    } catch (_) {
+      // Nothing left to surface — the player is going away.
+    }
+    _lastError.dispose();
   }
 }

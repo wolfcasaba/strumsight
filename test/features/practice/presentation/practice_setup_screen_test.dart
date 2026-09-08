@@ -21,6 +21,7 @@ import 'package:strumsight/features/practice/domain/repository/practice_catalog_
 import 'package:strumsight/features/practice/presentation/practice_route_args.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/l10n/app_localizations_en.dart';
 
 import '../../../support/preference_store.dart';
 
@@ -281,6 +282,62 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Scoring profile'), findsOneWidget);
+    });
+
+    testWidgets('the scoring profile row shows a localized label, never the '
+        'raw profile id (audit H14)', (tester) async {
+      final def = _definition(
+        id: 'fixture.strum.h14',
+        mode: PracticeMode.strumPattern,
+        meter: const Meter(beatsPerBar: 4),
+        bpm: 70,
+      );
+      await pumpSetup(tester, def: def);
+      await tester.scrollUntilVisible(
+        find.text('Scoring profile'),
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(
+        find.text(ScoringProfile.legacyLearnParity.id),
+        findsNothing,
+        reason: 'H14: "legacyLearnParity" is a machine id, not user copy',
+      );
+      expect(
+        find.text(
+          AppLocalizationsEn().practiceScoringProfileLegacyLearnParity,
+        ),
+        findsOneWidget,
+      );
+    });
+
+    test('every built-in profile maps to its own localized label, and an '
+        'unknown one falls back instead of leaking its id', () {
+      final l10n = AppLocalizationsEn();
+      final labels = <String>{
+        practiceScoringProfileLabel(l10n, ScoringProfile.legacyLearnParity),
+        practiceScoringProfileLabel(l10n, ScoringProfile.chordChangeDefault),
+        practiceScoringProfileLabel(
+          l10n,
+          ScoringProfile.chordProgressionDefault,
+        ),
+        practiceScoringProfileLabel(l10n, ScoringProfile.rhythmOnlyDefault),
+        practiceScoringProfileLabel(l10n, ScoringProfile.freePracticeOpen),
+      };
+      expect(labels, hasLength(5), reason: 'no two profiles share a label');
+      const unknown = ScoringProfile(
+        id: 'someFutureProfile',
+        matchWindow: Duration(milliseconds: 280),
+        perfectWindow: Duration(milliseconds: 50),
+        goodWindow: Duration(milliseconds: 120),
+        extraStrumPolicy: ExtraStrumPolicy.ignore,
+        weights: {PracticeScoreDimension.rhythm: 100},
+        completionThresholdPercent: 85,
+        overallThresholdPercent: 70,
+      );
+      final fallback = practiceScoringProfileLabel(l10n, unknown);
+      expect(fallback, l10n.practiceScoringProfileCustom);
+      expect(fallback.contains(unknown.id), isFalse);
     });
   });
 

@@ -78,10 +78,13 @@ final gamificationProfileProvider = Provider<GamificationProfile>((ref) {
   final repo = ref.watch(gamificationRepositoryProvider);
   final curve = ref.watch(levelCurveProvider);
   final read = repo.readProfileSnapshot();
-  final totalXp =
-      read.status == GamificationReadStatus.available && read.value != null
-      ? read.value!.totalXp
-      : 0;
+  // `GamificationRead.available` can carry a null payload, so the snapshot is
+  // read ONCE into a local and used through it — no `!` on a nullable field
+  // whose guard sits in a different expression (audit H21).
+  final snapshot = read.status == GamificationReadStatus.available
+      ? read.value
+      : null;
+  final totalXp = snapshot?.totalXp ?? 0;
   return GamificationProfile(
     schemaVersion: gamificationProfileSchemaVersion,
     totalXp: totalXp,
@@ -150,10 +153,10 @@ final streakEvaluationProvider = Provider<StreakEvaluation>((ref) {
 final gamificationInboxProvider = Provider<List<GamificationInboxItem>>((ref) {
   final repo = ref.watch(gamificationRepositoryProvider);
   final read = repo.readInbox();
-  if (read.status == GamificationReadStatus.available && read.value != null) {
-    return read.value!;
-  }
-  return const <GamificationInboxItem>[];
+  final items = read.status == GamificationReadStatus.available
+      ? read.value
+      : null;
+  return items ?? const <GamificationInboxItem>[];
 });
 
 /// Counted over [rewardInboxItemsProvider] (the ledger-joined projection),

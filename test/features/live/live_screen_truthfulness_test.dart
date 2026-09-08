@@ -25,6 +25,7 @@ import 'package:strumsight/features/live/widgets/uncertainty_reason_banner.dart'
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/main.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -34,6 +35,7 @@ Future<FakeStrumEngine> _pumpLive(WidgetTester tester) async {
   final container = ProviderContainer(
     overrides: [
       ...preferenceOverrides(),
+      ...fakeAudioOverrides(),
       strumEngineProvider.overrideWithValue(engine),
     ],
   );
@@ -155,6 +157,7 @@ void main() {
         ProviderScope(
           overrides: [
             ...preferenceOverrides(),
+            ...fakeAudioOverrides(),
             strumEngineProvider.overrideWithValue(engine),
           ],
           child: MaterialApp(

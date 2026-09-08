@@ -182,9 +182,9 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   expect(find.byType(PracticeSessionScreen), findsOneWidget);
   walked.add('PracticeSessionScreen');
 
-  await tester.tap(
-    find.widgetWithText(ElevatedButton, l10n.practiceSessionStart),
-  );
+  // Audit L4: one Start is enough — the Setup CTA above already started
+  // the session, and the screen auto-starts as soon as the target is
+  // compiled, so there is no second Start button to tap here.
   await tester.pump();
   await _driveSessionUntil(
     tester,

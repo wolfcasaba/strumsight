@@ -221,6 +221,99 @@ void main() {
       expect(messageText.style?.color, colors.danger);
     },
   );
+
+  // Audit H18 — the Save action used to sit in the toolbar while the
+  // emulator walkthrough measured it covering the chord chips, and the
+  // editor's last block was trapped behind the bottom navigation. Save now
+  // lives in the `Scaffold`'s bottom slot, which is LAID OUT (not overlaid),
+  // so the scroll viewport ends above it.
+  testWidgets(
+    'Save renders in a bottom action bar that never covers editor content',
+    (tester) async {
+      final repository = InMemorySongRepository();
+      final document = _document('editor-save-bar');
+      await repository.create(document);
+      final container = ProviderContainer(
+        overrides: [
+          songRepositoryProvider.overrideWithValue(repository),
+          songAssetRepositoryProvider.overrideWithValue(
+            _RecordingAssetRepository(),
+          ),
+          songFilePickerAdapterProvider.overrideWithValue(_BackingPicker()),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const SongEditorScreen(songId: 'editor-save-bar'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final save = find.byKey(const Key('song-editor-save'));
+      expect(save, findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: save),
+        findsNothing,
+        reason: 'the toolbar slot truncates and overlays the action',
+      );
+      expect(tester.widget<TextButton>(save).onPressed, isNotNull);
+      expect(
+        find.byKey(const Key('song-editor-save-disabled-reason')),
+        findsNothing,
+      );
+
+      // The editor's last block scrolls fully clear of the action bar.
+      final attach = find.byKey(const Key('song-editor-attach-backing'));
+      await tester.ensureVisible(attach);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(attach).bottom,
+        lessThanOrEqualTo(tester.getRect(save).top),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('a disabled Save states why it is disabled', (tester) async {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    final container = ProviderContainer(
+      overrides: [
+        songRepositoryProvider.overrideWithValue(_FailingGetRepository()),
+        songAssetRepositoryProvider.overrideWithValue(
+          _RecordingAssetRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: SsLightTheme.data(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const SongEditorScreen(songId: 'missing'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final save = find.byKey(const Key('song-editor-save'));
+    expect(tester.widget<TextButton>(save).onPressed, isNull);
+    final reason = find.byKey(const Key('song-editor-save-disabled-reason'));
+    expect(reason, findsOneWidget);
+    expect(
+      tester.widget<Text>(reason).data,
+      l10n.songEditorSaveDisabledLoading,
+    );
+  });
 }
 
 SongDocument _document(String id) {

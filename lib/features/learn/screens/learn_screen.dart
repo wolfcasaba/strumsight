@@ -26,6 +26,7 @@ import '../adapter/lesson_v2_scoring.dart';
 import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
+import '../widgets/audio_error_notice.dart';
 import '../widgets/hit_burst.dart';
 import '../widgets/lesson_highway.dart';
 import '../widgets/wrapped_prompt.dart';
@@ -692,6 +693,13 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                             color: colors.textPrimary,
                           ),
                         ),
+                      // A mute click or a mute jam pad used to fail into an
+                      // empty `catch` — the player heard nothing and was
+                      // told nothing (audit H20 / L12). Renders nothing
+                      // while both outputs are healthy.
+                      AudioOutputErrorNotice(
+                        sources: [_metronome.lastError, _backing.lastError],
+                      ),
                       // Dynamic difficulty (016b P4, r154): OFFER a switch —
                       // down after a fail streak, up when Easy is aced. Quiet
                       // inline row; the player stays in charge, and switching

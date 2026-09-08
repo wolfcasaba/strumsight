@@ -13,11 +13,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/core/platform/platform_providers.dart';
 import 'package:strumsight/core/widgets/mic_permission_banner.dart';
 import 'package:strumsight/features/practice/application/practice_session_command.dart';
 import 'package:strumsight/features/practice/application/practice_session_effect.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
+import 'package:strumsight/features/practice/domain/model/compiled_practice_target.dart';
 import 'package:strumsight/features/practice/domain/model/meter.dart';
 import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
 import 'package:strumsight/features/practice/domain/model/practice_event.dart';
@@ -148,6 +150,7 @@ PracticeSessionState _stateFor(
   PracticeSessionStatus status, {
   PracticeDefinition? definition,
   PracticeSessionConfig? config,
+  CompiledPracticeTarget? target,
   int attemptIndex = 0,
   int countInSpanBeats = 0,
   int emittedCountInClicks = 0,
@@ -156,10 +159,44 @@ PracticeSessionState _stateFor(
   status: status,
   definition: definition,
   config: config,
+  target: target,
   attemptIndex: attemptIndex,
   countInSpanBeats: countInSpanBeats,
   emittedCountInClicks: emittedCountInClicks,
   activeElapsed: activeElapsed,
+);
+
+/// A minimal compiled target — enough for the screen to treat the session
+/// as startable (the L4 auto-start guard reads `state.target`).
+CompiledPracticeTarget _fixtureTarget() => CompiledPracticeTarget(
+  definitionId: 'fixture.session',
+  definitionSnapshotVersion: 1,
+  tempo: const Tempo(100),
+  meter: const Meter(beatsPerBar: 4),
+  countInBars: 1,
+  countInDuration: const Duration(milliseconds: 2400),
+  events: List<CompiledTargetEvent>.generate(
+    4,
+    (i) => CompiledTargetEvent(
+      sourceEventId: 'e$i',
+      loopIndex: 0,
+      position: BeatPosition.quarters(i),
+      time: Duration(milliseconds: i * 600),
+      barIndex: 0,
+      chord: null,
+      direction: i.isEven ? StrumDirection.down : StrumDirection.up,
+      accent: false,
+      optional: false,
+    ),
+  ),
+  musicalDuration: const Duration(milliseconds: 2400),
+  ringOutDuration: Duration.zero,
+  totalDuration: const Duration(milliseconds: 2400),
+  barBoundaries: const [],
+  loopCount: 1,
+  loopRange: null,
+  expectedChordSegments: const [],
+  scoringApplicable: true,
 );
 
 Future<void> _pumpScreen(
@@ -383,11 +420,16 @@ void main() {
       addTearDown(host.close);
       host.emitState(_stateFor(PracticeSessionStatus.idle));
       await _pumpScreen(tester, host: host);
-      // The PracticeStateMessage widget renders the local "state: name"
-      // form so the screen never leaks a raw enum name.
+      // Audit H16: the cell used to pin the developer dump
+      // ("Session state: idle"). The designed state renders the localized
+      // status headline plus a body that says what to do next — never the
+      // raw enum name, never the machine phrasing.
+      expect(find.text(l10nEn().practiceSessionStatusIdle), findsOneWidget);
+      expect(find.text(l10nEn().practiceSessionIdleBody), findsOneWidget);
       expect(
-        find.textContaining(l10nEn().practiceSessionStateMessage('idle')),
-        findsOneWidget,
+        find.textContaining('Session state'),
+        findsNothing,
+        reason: 'H16: no developer state dump on the session screen',
       );
       // No exception, no command emitted.
       expect(host.sent, isEmpty);
@@ -400,9 +442,20 @@ void main() {
       addTearDown(host.close);
       host.emitState(_stateFor(PracticeSessionStatus.completed));
       await _pumpScreen(tester, host: host);
+      // Audit H16: a designed terminal state — localized headline + body,
+      // not "Session state: completed".
       expect(
-        find.textContaining(l10nEn().practiceSessionStateMessage('completed')),
+        find.text(l10nEn().practiceSessionStatusCompleted),
         findsOneWidget,
+      );
+      expect(
+        find.text(l10nEn().practiceSessionCompletedBody),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Session state'),
+        findsNothing,
+        reason: 'H16: no developer state dump on the session screen',
       );
       // Exit is available so the user can leave the screen.
       expect(find.text(l10nEn().practiceSessionExit), findsOneWidget);
@@ -416,8 +469,17 @@ void main() {
       host.emitState(_stateFor(PracticeSessionStatus.cancelled));
       await _pumpScreen(tester, host: host);
       expect(
-        find.textContaining(l10nEn().practiceSessionStateMessage('cancelled')),
+        find.text(l10nEn().practiceSessionStatusCancelled),
         findsOneWidget,
+      );
+      expect(
+        find.text(l10nEn().practiceSessionCancelledBody),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Session state'),
+        findsNothing,
+        reason: 'H16: no developer state dump on the session screen',
       );
       expect(find.text(l10nEn().practiceSessionExit), findsOneWidget);
     });
@@ -1029,6 +1091,57 @@ void main() {
       host.emitEffect(const NavigateToResult());
       await tester.pump(const Duration(milliseconds: 10));
       expect(nav.calls, 1);
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // L4 — one Start is enough (audit)
+  // -----------------------------------------------------------------
+  group('L4 — the session auto-starts once it is ready', () {
+    testWidgets('ready + compiled target → StartPractice without a tap', (
+      tester,
+    ) async {
+      final host = _FakeSessionHost();
+      addTearDown(host.close);
+      host.emitState(
+        _stateFor(PracticeSessionStatus.ready, target: _fixtureTarget()),
+      );
+      await _pumpScreen(tester, host: host);
+      // Entering the screen from Setup already WAS the start gesture; the
+      // user must not have to press Start a second time on an otherwise
+      // empty intermediate screen.
+      expect(host.sent, hasLength(1));
+      expect(host.sent.single, isA<StartPractice>());
+    });
+
+    testWidgets('the auto-start fires at most once per screen entry', (
+      tester,
+    ) async {
+      final host = _FakeSessionHost();
+      addTearDown(host.close);
+      host.emitState(
+        _stateFor(PracticeSessionStatus.ready, target: _fixtureTarget()),
+      );
+      await _pumpScreen(tester, host: host);
+      host.emitState(
+        _stateFor(PracticeSessionStatus.ready, target: _fixtureTarget()),
+      );
+      await tester.pump();
+      expect(host.sent.whereType<StartPractice>(), hasLength(1));
+    });
+
+    testWidgets('ready WITHOUT a target keeps the explicit Start control', (
+      tester,
+    ) async {
+      final host = _FakeSessionHost();
+      addTearDown(host.close);
+      // `ChangeTempoBeforeAttempt` leaves the session `ready` with the
+      // target invalidated, and the reducer rejects `StartPractice`
+      // there — the screen must not fire a command that will be refused.
+      host.emitState(_stateFor(PracticeSessionStatus.ready));
+      await _pumpScreen(tester, host: host);
+      expect(host.sent, isEmpty);
+      expect(find.text(l10nEn().practiceSessionStart), findsOneWidget);
     });
   });
 }

@@ -1257,6 +1257,14 @@
   "analyzeSaved": "Elmentve a Könyvtárba",
   "analyzeStop": "Leállítás",
   "analyzeStrumsSummary": "{down} le · {up} fel",
+  "audioOutputChordFailed": "Az akkordot nem sikerült lejátszani. Ellenőrizd a hangerőt, és próbáld újra.",
+  "@audioOutputChordFailed": {
+    "description": "Inline notice shown on the chord/jam screens when the device refused to play a chord pad or reference tone, so a tap stayed silent (audit H20/L12)."
+  },
+  "audioOutputMetronomeFailed": "A metronóm kattanását nem sikerült lejátszani. Ellenőrizd a hangerőt, és próbáld újra.",
+  "@audioOutputMetronomeFailed": {
+    "description": "Inline notice shown on the metronome and lesson screens when the device refused to play the metronome click, so the metronome is running silently (audit H20/L12)."
+  },
   "authContinueWithoutAccount": "Folytatás fiók nélkül",
   "authEmail": "Email",
   "authEmailInvalid": "Adj meg egy érvényes email címet",
@@ -1417,6 +1425,20 @@
   "chordLibraryTitle": "Akkordtár",
   "commonCancel": "Mégse",
   "commonClose": "Bezárás",
+  "communityBookmarkSavedOn": "Mentve: {date}",
+  "@communityBookmarkSavedOn": {
+    "description": "Subtitle of a bookmark row: the day the post was saved.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "2026. aug. 20."
+      }
+    }
+  },
+  "communityBookmarkUntitledPost": "Mentett bejegyzés",
+  "@communityBookmarkUntitledPost": {
+    "description": "Fallback label for a bookmark row whose post title/excerpt could not be loaded."
+  },
   "communityChallengeAccept": "Elfogad",
   "@communityChallengeAccept": {},
   "communityChallengeActionBlockAuthor": "Szerző tiltása",
@@ -1680,6 +1702,10 @@
   "@communityFollowersBlockAction": {},
   "communityFollowersMuteAction": "Némítás",
   "@communityFollowersMuteAction": {},
+  "communityGateAppBarTitle": "Közösség",
+  "@communityGateAppBarTitle": {
+    "description": "App bar title of the Community gate screen."
+  },
   "communityGateDisabledBody": "A Közösség funkció konfigurációban ki van kapcsolva. A StrumSight többi része — felismerés, gyakorlás, beállítások — a szokásos módon működik.",
   "communityGateDisabledTitle": "A Közösség nem elérhető ebben a buildben",
   "@communityGateDisabledTitle": {},
@@ -2442,6 +2468,10 @@
   "@liveStarting": {
     "description": "Shown while the detection engine's first frame is still loading."
   },
+  "liveTempoNotMeasured": "A tempó nincs mérve",
+  "@liveTempoNotMeasured": {
+    "description": "Live status header: shown in place of a BPM number when no tempo has been measured yet, or when the signal-quality gate rejected the frame so any tempo reading would be an unsupported claim. Replaces the old, misleading \"0 BPM\"."
+  },
   "liveTuner": "Hangoló",
   "liveWaitingForChord": "Pengess egy akkordot…",
   "@liveWaitingForChord": {
@@ -3089,7 +3119,39 @@
   "practiceRouteErrorBack": "Vissza a hubra",
   "practiceRouteErrorBody": "Ezt a gyakorlatot nem sikerült betölteni. Menj vissza a hubra, és válassz másikat.",
   "practiceRouteErrorTitle": "Gyakorlat nem elérhető",
+  "practiceScoringProfileChordChangeDefault": "Akkordok és ritmus",
+  "@practiceScoringProfileChordChangeDefault": {
+    "description": "Human label of the chordChangeDefault scoring profile (audit H14)."
+  },
+  "practiceScoringProfileChordProgressionDefault": "Ritmus, irány és akkordok",
+  "@practiceScoringProfileChordProgressionDefault": {
+    "description": "Human label of the chordProgressionDefault scoring profile (audit H14)."
+  },
+  "practiceScoringProfileCustom": "Egyedi",
+  "@practiceScoringProfileCustom": {
+    "description": "Fallback label for a scoring profile outside the built-in set (audit H14)."
+  },
+  "practiceScoringProfileFreePracticeOpen": "Nincs pontozás",
+  "@practiceScoringProfileFreePracticeOpen": {
+    "description": "Human label of the freePracticeOpen scoring profile (audit H14)."
+  },
+  "practiceScoringProfileLegacyLearnParity": "Ritmus és pengetésirány",
+  "@practiceScoringProfileLegacyLearnParity": {
+    "description": "Human label of the legacyLearnParity scoring profile (audit H14)."
+  },
+  "practiceScoringProfileRhythmOnlyDefault": "Csak ritmus",
+  "@practiceScoringProfileRhythmOnlyDefault": {
+    "description": "Human label of the rhythmOnlyDefault scoring profile (audit H14)."
+  },
   "practiceSessionAttempt": "Próbálkozás",
+  "practiceSessionCancelledBody": "A gyakorlást leállítottad. Bármikor újraindíthatod.",
+  "@practiceSessionCancelledBody": {
+    "description": "Body copy of the designed cancelled state on the practice session screen (audit H16)."
+  },
+  "practiceSessionCompletedBody": "Szép munka — kész az eredményed.",
+  "@practiceSessionCompletedBody": {
+    "description": "Body copy of the designed completed state on the practice session screen (audit H16)."
+  },
   "practiceSessionConfirmExit": "A kilépés eldobja a session eddigi eredményét. Nem lesz elmentve, és ez nem vonható vissza.",
   "practiceSessionCountIn": "Hátralévő beszámolási ütések",
   "practiceSessionElapsed": "Eltelt idő",
@@ -3100,6 +3162,10 @@
   "practiceSessionErrorTitle": "Gyakorlási hiba",
   "practiceSessionExit": "Kilépés",
   "practiceSessionFinish": "Befejezés",
+  "practiceSessionIdleBody": "Még nem fut gyakorlás. Indíts egyet a Gyakorlás beállításainál.",
+  "@practiceSessionIdleBody": {
+    "description": "Body copy of the designed idle state on the practice session screen (audit H16)."
+  },
   "practiceSessionPause": "Szünet",
   "practiceSessionPausedByInterruption": "A session automatikusan szünetel",
   "practiceSessionPausedByUser": "Te állítottad meg a sessiont",
@@ -3870,6 +3936,10 @@
   "songEditorRedo": "Újra",
   "songEditorSave": "Mentés",
   "songEditorSaveCopy": "Mentés másolatként",
+  "songEditorSaveDisabledLoading": "A mentés akkor válik aktívvá, ha a dal betöltődött.",
+  "@songEditorSaveDisabledLoading": {
+    "description": "Helper text under the disabled Save action in the song editor while no draft is loaded yet."
+  },
   "songEditorSaveFailed": "Mentés sikertelen: {code}. A szerkesztésed megmaradt.",
   "@songEditorSaveFailed": {
     "placeholders": {

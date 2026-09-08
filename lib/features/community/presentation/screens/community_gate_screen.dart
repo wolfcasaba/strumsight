@@ -47,9 +47,12 @@ class CommunityGateScreen extends ConsumerWidget {
 
     return CommunityThemeScope(
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(localizations.communityGateProfileMissingTitle),
-        ),
+        // Audit H22 — the header used to repeat one of the body's
+        // state titles ("Create your Community profile" / the
+        // logged-out "Sign in to use Community"), so the same
+        // sentence appeared twice on one screen. The app bar now
+        // names the AREA; the body owns the state message.
+        appBar: AppBar(title: Text(localizations.communityGateAppBarTitle)),
         body: state.when(
           loading: () => Center(
             child: Column(

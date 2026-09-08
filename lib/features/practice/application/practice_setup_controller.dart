@@ -43,6 +43,20 @@ typedef PracticePrepareSink = void Function(PreparePractice command);
 PracticePrepareSink _activateSessionSink(Ref ref) {
   return (command) {
     final inputs = (definition: command.definition, config: command.config);
+    // Audit H2 — every Start must begin on a FRESH controller.
+    //
+    // The controller family is keyed by `(definition, config)`, so a second
+    // Start with unchanged settings resolves to the SAME family element.
+    // That element is not collected between sessions either: the
+    // non-auto-dispose `practiceSessionHostProvider` watches the whole
+    // activation chain, keeping it alive for the rest of the app's life.
+    // The reducer rejects `PreparePractice` from `completed`/`cancelled`
+    // (`_reducePreparePractice`), so without this invalidation the second
+    // session opened on the previous session's terminal state.
+    //
+    // Invalidating first disposes the stale controller; the `read` below
+    // then builds a new one that starts from `PracticeSessionState.initial`.
+    ref.invalidate(practiceSessionControllerProvider(inputs));
     ref.read(practiceActiveSessionInputsProvider.notifier).activate(inputs);
     final controller = ref.read(practiceSessionControllerProvider(inputs));
     controller.dispatch(command);
