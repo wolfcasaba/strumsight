@@ -512,9 +512,7 @@ void main() {
   // R21 / audit MI5 — the stub "Attach media" CTA follows its own flag.
   // -------------------------------------------------------------------
   group('MI5 — a média-csatolás a communityMediaEnabled mögött áll', () {
-    testWidgets('a kikapcsolt zászló mellett NINCS média-gomb', (
-      tester,
-    ) async {
+    testWidgets('a kikapcsolt zászló mellett NINCS média-gomb', (tester) async {
       // Ez a SZÁLLÍTOTT állapot: a `communityMediaEnabled` define-only
       // minden környezetben (nyitott R-SEC-01 / R-PRIV-01), tehát a
       // felhasználó eddig egy olyan gombot látott, ami sosem tölthetett
