@@ -140,12 +140,22 @@ szintetikus zöld nem „kész".
 ## 5. Eredmények — a javító körök mért állapota
 
 Ág: `claude/mit-audit-javitasok-v432t5` (bázis: `main`, az audit commitja
-`f154139`). Huszonöt kör futott le rajta (az R9 három részletben: /1, /2, /3;
-az R18 commitja a commit-sorrendben az R19 UTÁN landolt). A körök tárgya a §4 tervhez képest a MÉRT
+`f154139`). Huszonkilenc kör futott le rajta (az R9 három részletben: /1, /2, /3;
+az R18 commitja a commit-sorrendben az R19 UTÁN landolt; az R26–R31 sáv
+párhuzamos ügynökökkel készült, ezért a kör-sorszám NEM a commit-sorrend — a
+landolás sorrendje R31 → R26 → R29a → R28a, és a táblázat is így sorolja őket).
+A körök tárgya a §4 tervhez képest a MÉRT
 hibákhoz igazodott: amit a §1.3 tábla sora állított, azt vagy bezártuk, vagy —
 ahol a mérés mást mondott, mint a terv — a valódi rést zártuk, és a maradékot
 itt, indokkal hagytuk nyitva (§5 „Nyitva maradt"). Dart-evidencia innen
 kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
+
+**Folyamatban, ebben a dokumentumban még NEM rögzítve:** az **R27** (community
+média-feltöltés) és az **R30** (a §5.6 B2/B3 navigációs zsákutcái) körök
+ügynökei ezzel a docs-körrel párhuzamosan futnak; az **R29b** (a tutor
+felhő-providere MiniMax M3-ra) az R27 után következik. **Az R26–R31 sávra ZÖLD
+CI-futás MÉG NINCS:** a `build-apk.yml` az `ac870ec` fejen FUT, az utolsó
+teljesen zöld és kiadott fej az `f59f9ef` (R17–R24, §5.3).
 
 | Kör | Commit | Mit zárt | Teszt |
 |---|---|---|---|
@@ -174,6 +184,11 @@ kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
 | **R23** | `b27a186` | **az AI tutor VALÓDI, konfigurációval kapcsolható provider-kapuja** (az újra-audit M2 BACKEND-fele). Új `AnthropicProviderGateway` a `backend/app/tutor/provider_gateway.py`-ban, httpx-en (nincs új függőség): `POST {base}/messages`, `x-api-key` + `anthropic-version`, `stream: true`, `split_anthropic_messages` a system-kontextus kiemelésére, SSE-összefűzés (`content_block_delta` / `message_delta` / `message_stop`), `message_stop` NÉLKÜL **fail-closed** (nem ad csonka választ késznek). Osztályozott hibaleképezés: `ProviderConfigurationError` (401/403/404), `ProviderBusyError` (429/529/5xx), `ProviderInvalidRequestError` (400/413/422), `ProviderTimeoutError`, plusz transport / malformed / incomplete — mind `ProviderError`, ezért a router 502/504-e és a stream `provider_error` / `provider_timeout` szerződése VÁLTOZATLAN; a napló CSAK az osztályozást + a HTTP-státuszt kapja (soha kulcsot, promptot, választ, provider-törzset). Konfiguráció: egyetlen új mező, a `Settings.tutor_anthropic_base_url` (a `tutor_provider`, `tutor_model`, `tutor_api_key`, `tutor_allowed_providers`, `tutor_timeout_seconds` a meglévők); `main.py::_guard_tutor_provider` **boot-időben fail-closed** (ismeretlen provider, allowlist-hiba, dev-alapértelmezett vagy üres kulcs → `RuntimeError`, a meglévő `_guard_prod` mintájára) — a runbook kimondja az árát is: egy rossz átbillentés az EGÉSZ backendet leviszi, a visszaállás env-visszaírás + `docker compose up -d`; `_build_tutor_gateway` + `app.state.tutor_gateway` + lifespan `aclose()`. A `/tutor/capability` a VALÓDI `provider` + `model` mezőket adja (a kliens csak a státuszkódot olvassa → kompatibilis; a `streaming: false` korábbi megfigyelés, ADR 0142). **Az alapértelmezés marad a `fake`** — a valódi válaszokhoz üzemeltetői flip kell (runbook §7.2), és a flip ELŐTT a `docs/privacy/data-inventory.yaml` `tutor_stream` sorát ki kell egészíteni a harmadik fél feldolgozójával + a megőrzéssel (a runbook BLOKKOLÓKÉNT jelöli). Docs: `backend/README.md`, `backend/deploy/staging.env.example`, runbook **§7.2** „Az AI tutor provider bekapcsolása" + §7.2/4 naplóosztályozás-tábla | `backend/tests/tutor/test_anthropic_provider_gateway.py` (54 cella, `httpx.MockTransport`, hálózat nélkül), `test_tutor_provider_composition.py` (11); helyben pytest **1051 passed + 1 xfailed**, ruff tiszta |
 | **R24** | `64b080a` | **az AI tutor felhő-kapujának KLIENS-fele** (az újra-audit M2 kliens-fele). A `selectTutorModelGateway` kötelező `cloudEnabled` és opcionális `capability` paramétert kapott, így **ÖT** fail-closed feltétel dönt: (1) hozzájárulás (`TutorConsent.modelUseGranted`), (2) a build `aiTutorCloudEnabled` zászlaja, (3) fiók-réteg, (4) hitelesített stream-kliens, (5) a szerver `/tutor/capability` válasza VALÓDI providert jelent — `fake` vagy `enabled:false` → helyi stub, mert egy konzerv-válasz felhő-válaszként bemutatva olyan hazugság, amit a tanuló nem tud leleplezni. A factory kísérletenként olvassa a zászlót is (`ref.read`), tehát a menet közben megérkező capability, a visszavont hozzájárulás és a kijelentkezés a KÖVETKEZŐ turnnál hat, a beszélgetés lebontása nélkül. Új `tutorCloudCapabilityProvider`: CSAK a zászló + a kliens megléte mellett szondáz (törzs nélküli, hitelesített GET — tanulói adat nincs benne), a `tutorTurnOrchestratorProvider` `ref.listen`-nel indítja a chat megnyitásakor, offline / 404 / értelmezhetetlen törzs esetén `null` = ISMERETLEN, ami a másik négy feltételt hagyja érvényben. Új értéktípus (`tutor_cloud_capability.dart`: `TutorCloudCapability`, `servesRealModel`, minden mező fail-closed értelmezéssel — a hiányzó `enabled`/`provider` a konzerv alapértelmezésre esik, nem valódi modellre) és `HttpTutorStreamTransport.capability()` (a `health()` státusz-szerződése VÁLTOZATLAN). **Zászló-döntés:** a development build `aiTutorCloudEnabled` értéke KI MARAD (`docs/release/ga-scope.md`: postponed; `capability-rollout.md`: KI; **ADR 0132** — a build-idejű kapcsoló nem helyettesíti a hozzájárulást; a `feature_flags_test` pineli, hogy dart-define sem kapcsolhatja be), tehát a szállított teszt-APK az üzemeltetői flipig NEM éri el a `/tutor/stream`-et, a hozzájárulást adó tanuló pedig a MÁR MEGLÉVŐ, őszinte `fallback` úton a helyi stubot kapja. **Privacy:** a `data-inventory.yaml` `tutor_stream` kapuja HÁROM → ÖT feltétel; a `tutor_turn_message` purpose-a a PONTOS drót-törzs (négy mező: `request_id`, `sequence`, `conversation_id`, `message` — a `message` maga a megrenderelt prompt, benne a redaktált pillanatkép 11 `TutorContextFieldKey` szekciója; nincs benne e-mail, fiók- vagy eszközazonosító és nincs hang); a megőrzés KÉT hopra bontva (amit a kód garantál vs. amit az üzemeltetőnek kell ellenőriznie); a tárolás NEVESÍTI a harmadik fél feldolgozóját — „Anthropic (Claude API)" — az üzemeltetői flip feltételével, a régió üzemeltető-függő. Ugyanez a `tester-consent.md` prózájában és a `data-safety.yaml` purpose-szövegében (a gépi keresztellenőrző blokk és a pinelt számlálók VÁLTOZATLANOK: 25). Golden: UI-fájl nem változott → a PNG-k bájtra azonosak. | `tutor_gateway_selection_test` (zászló-ki cella; `fake` / `enabled:false` capability → stub; valódi provider → felhő; ISMERETLEN capability → a másik négy feltétel dönt; értelmezhetetlen törzs → a konzerv alapértelmezés; a szállított dev build → stub és NINCS capability-kérés), `http_tutor_stream_transport_test` capability-csoport, `consent_enforcement_test` A3' |
 | **R25** | `11c2ecc` | **a backend-tesztsor a `backend-ci` 15 perces időkorlátja alá** — a §5.3 R17–R24 sorában mért kiesés zárása: a suite 1051 tesztre nőtt, és a „Backend test gate" az R23 fején **14 perc 56 másodpercnél** szakadt meg a job `timeout-minutes: 15` korlátján. Mérve (agent, py3.12, 4 mag): **928,21 s → 126,25 s (−86 %)**, **1051 → 1052 passed + 1 xfailed** — teszt vagy állítás NEM tűnt el, mind a három kar TESZT-OLDALI. **(1) bcrypt költségtényező:** az `app/security.py` explicit `PASSWORD_HASH_ROUNDS = 12` MODUL-konstanst kapott (a bcrypt saját alapértelmezése, bájtra azonos viselkedés) — szándékosan NEM env/`Settings` kapcsoló, mert egy üzemeltetői félrekapcsolás a SZÁLLÍTOTT hasítást gyengítené; kizárólag a pytest-folyamat köti át 4-re a `tests/conftest.py`-ban (mérve 0,271 s vs 0,001 s hasításonként), a szállított költséget pedig a `production_password_hashing` fixture + az ÚJ `test_production_cost_factor_hashes_and_verifies` pin rögzíti (12-es költség, `$2b$12$` prefix, round-trip) — eddig ezt SEMMI nem pinelte. A három `test_club_service` A7-cella (499 felhasználó/cella) ettől **139 s → 2,8 s**. **(2) tesztenkénti Alembic-visszajátszás:** az új `tests/migration_template.py::apply_head_schema()` a **22 revíziós** láncot folyamatonként EGYSZER játssza le egy sablon-SQLite-ba (0,85 s), a hívók onnan bájt-másolatot kapnak (0,7 ms) — a séma továbbra is a PRODUKCIÓS migrációs láncból jön, `alembic_version` sorral együtt, `Base.metadata.create_all` rövidítés NINCS (ADR 0060); 21 community-teszt + a `test_capacity_guards` állt át, a MAGÁRÓL a migrációról állító tesztek (`test_migrations`, `test_rollback_drill`, `test_readiness_and_recovery`, `test_community_mounting`, `test_auth_failure_logging`, a smoke-contract tesztek, `test_profile_schema`) változatlanul közvetlenül hívják az `alembic.command`-ot. **(3)** a `test_challenge_invite_service` probe-jának egyetlen elérhető ágán HALOTT 30 s-os barrier-várakozás 5 s-ra (a valódi race-teszt 30 s-a marad). Docs: `backend/README.md` új „Suite runtime — two test-only levers" alszakasza a mért indoklással. **Kimaradt, mérve:** a `test_security_release` 12 cellája 1,5–1,9 s/cella (valódi `pytest --collect-only` alfolyamatok) — a mai kereten belül elfér | `backend/tests/test_auth.py` új `test_production_cost_factor_hashes_and_verifies`; helyben pytest **1052 passed + 1 xfailed** 126,25 s alatt, `ruff check` + `ruff format` tiszta. A `backend-ci.yml` az R25 fején FUT — az eredménye ebben a dokumentumban még nincs rögzítve |
+| **R31** | `b874720` | **igazmondás és perzisztencia** (a második újra-audit M5, M9, M6 és MI-D tétele, §5.6). **M5:** új `lib/core/i18n/effective_locale.dart` — a `resolveEffectiveLocale` az explicit választást, majd a `PlatformDispatcher.instance` nyelv-listáját veszi SORRENDBEN, és `en`-re CSAK akkor esik, ha egyik platform-nyelvre sincs fordítás (nyelvkód-only összevetés); az új `platformLocalesProvider`/`effectiveLocaleProvider` binding nélkül is fut, és a `today_providers` + `practice_generator_providers` MINDKÉT hívóhelye a közös helperre állt — eddig a „kövesd a rendszert” ág (`localeProvider == null`) HARDKÓDOLT `en`-t adott, tehát egy magyar telefonon, ahol a felhasználó soha nem állított kézzel nyelvet, a Ma-fül hőse és a generált terv szövegei ANGOLUL jelentek meg. **M9:** a `practice_progress_providers` a `Failure`-t DOBJA (eddig üres listává lapította), új `ProgressPracticeHistory` értéktípus (lista + `isUnavailable`), és a Progress V2 műszerfal `_HistoryUnavailableState` hibakártyát ad újrapróbálással **KIZÁRÓLAG a hiba-ágon** — a „még nem gyakoroltál” üres állapot változatlan, ezért az `e13_r31` goldenek bájtra azonosak. **M6:** `KeyValueLibraryNoteRepository` a `KeyValueStore` felett (`ss.library.item_notes`, verziózott boríték, 2000 karakteres korlát, üres jegyzet töröl, sérült dokumentum cserélve); a részletképernyő `initState`-ben visszatölt és minden változásra láncoltan ír — **a renderelés változatlan**, ezért ez a tétel a §8 „csak x86 golden-boxon” listájáról LEKERÜLT. **MI-D:** `TodayPlanActionOutcome.nothingToChange` + saját kulcs — a Skip/Shorten/Pause többé nem néma. l10n: új `progress_{en,hu}.arb` szegmens (3 kulcs) + `today` +1; az aggregátumok az INDEXBŐL generálva, a párhuzamos körök még nem commitolt szegmensei nélkül. **Kimaradt, mérve:** az MI-F három le nem fordított hu-értéke a `base/` és a community ARB-ban (más kör tulajdona) — `analysisOverviewInsightKindLabelDefault` „Insight” → „Meglátás”, `practiceResultCoachingTitle` „Coaching” → „Edzői visszajelzés”, `feedCardAchievementUnlocked` „Achievement unlocked” → „Teljesítmény feloldva” | `effective_locale_test` A1–A6, `active_plan_today_plan_repository_test` T6/T7, `practice_generator_providers_test` (3 cella), `history_unavailable_test` B1–B5, `item_notes_test` C1–C5b, `today_plan_actions_test` A7, `arb_parity_test`; CI-bizonyíték ehhez a sávhoz még nincs |
+| **R26** | `ac870ec` | **audio-fájl import az elemzésbe — és a mért MELLÉK-LELET, hogy a friss elemzések eddig sehova nem íródtak.** Import: új `AnalysisAudioFilePicker` port + `file_selector` adapter (a pubspecben MÁR meglévő plugin — nincs második picker), `ImportAudioFileUseCase` (picker → a meglévő `WavDecoderAdapter` → `AudioFileImportOutcome`: Cancelled / Unsupported / Failed / Ready); a felkínált kiterjesztések SZÁNDÉKOSAN szélesebbek a dekódolhatónál, hogy a nem támogatott konténer NEVESÍTETT, lokalizált üzenetet kapjon a néma elutasítás helyett, a dobó platform-picker pedig `UnknownFailure` — soha nem elnyelve. **A mellék-lelet:** a `saveAnalysisUseCaseProvider`-nek mérve NULLA produkciós hívója volt, tehát egyetlen felvett vagy importált elemzés sem jutott el a V2-tárba (a Könyvtár és a „legutóbbi” lista csak a régi fixture-öket látta); új `analysisDocumentPersisterProvider` (mentés + `analysisRecentSummariesProvider` invalidálás) és `analysisPersistenceStatusProvider`, az `AnalysisController` a `complete` ÉS a `degraded` terminális átmeneten EGYSZER perzisztál, a dokumentum címe akkord-címkékből áll (`C · G`), a fájlnév SOSEM (export-allowlist); a `document_stages` `sourceName`-je az importált fájl OS-neve útvonal nélkül, a redakciós property-teszt változatlanul érvényes. Router (csak elemzés-callbackek): `_startAnalysisImport`, a processing route `push`-ra váltott (az R17 mintája — a capture maga is pusholt), az `onRestart` az EREDETHEZ tér vissza, a mentési hiba snackbar a státusz-providerből, és a duplikált route-szintű perzisztálás törölve. l10n: új `analysis_{en,hu}.arb` szegmens (6 kulcs). Ezzel a §5.2 MI4-tétele („Import file” CTA = snackbar) **ZÁRVA** | `import_audio_file_use_case_test` (elvetés, dobó picker, 6 nem dekódolható konténer, `.WAV`, sztereó downmix, 6 hibás WAV kódonként), `imported_audio_pipeline_test` (valódi WAV → teljes stage-lánc → dokumentum), `analysis_controller_test` +3 cella injektált persisterrel, `analysis_persistence_test` (index-megjelenés az invalidálás után, hiba-ág kódnaplózással), `analysis_import_route_test` (valódi router, fake picker: WAV → processing + pop vissza; MP3 → nevesített üzenet; elvetés → semmi), `document_stages_test`, `arb_parity_test`; CI-bizonyíték ehhez a sávhoz még nincs |
+| **R29a** | `67252eb` | **a Coach felhő-útja a `development` buildben NYITVA** — a második újra-audit B1 tételének FUNKCIONÁLIS fele, plusz M2, M3, M8 (§5.6). **Zászló-mátrix:** a `FeatureFlags.forShippedBuild` új `aiTutorCloudDefine:` paramétert kapott — `development`: BE (a `STRUMSIGHT_AI_TUTOR_CLOUD` define kill-switchként viselkedik, explicit `=false`-szal kapcsolható vissza), `lab`: CSAK define-nal, `production`: a define-t ELDOBJA; a `FeatureFlags.forEnvironment` bájtra VÁLTOZATLAN, a ga-scope osztályozás és a `production_default` sem mozdult (`tool/release/verify_ga_scope.py` exit 0), a `capability-rollout.md` KI → PREVIEW-ra váltott (új §5), a `kill-switches.md` és az `environment-matrix.md` frissült. **M2:** a `retry()` megőrzi az utolsó elküldött szöveget (`_lastSubmittedText`, közös `_submit()`, az újabb vázlat elsőbbséggel) — eddig a terminális `fallback` állapotban a Retry az ÜRES draft ágra futott, azaz néma no-op volt. **M3:** a `_BannerSlot` `onConsent`-je a `/tutor/privacy` képernyőre `push`-ol (ADR 0132: magát a hozzájárulást a bannerből NEM lehet megadni) — eddig a hozzájárulás-szalag gombja `null`, tehát PERMANENSEN tiltott volt, és ez volt az első, amit egy új felhasználó a Coach fülön látott. **M8:** a hozzájárulás, a diák-profil és a tanulási célok `PersistedPreference`-szel perzisztálnak (`ss.tutor.*` kulcsok, SZÁNDÉKOSAN a `tutorAiData` „összes AI-adat törlése” körén KÍVÜL; olvashatatlan vagy jövőbeli verzió fail-closed; a visszavonás is íródik). **Két további, ITT mért hiba javítva:** a validált `completed` turn válasza eddig CSAK a streaming-buborékban élt és a befejezéskor ELTŰNT — most `tutorAnswerBlocksFrom` + `_tutorMessage` idempotensen hozzáfűzi az üzenetlistához; és a `tutor_orchestrator` `_prompt`-ja a `SendTutorMessage`-nél törlődik — eddig MINDEN további kérdés az ELSŐ kérdés promptját vitte a modellhez (a repair-ág változatlanul ugyanazt küldi újra). **Nyitva (golden-blokkolt):** a Tanár-főoldal státusz-kártyája továbbra is „Running fully on this device”-t ír (`e13_r29` / `e15_r13`) — x86 golden-kör. **Doc-adósság:** a `docs/privacy/consent-enforcement.md` §1 két elavult bekezdése (az R27 után javítandó) | `feature_flags_test` (dev/lab/prod mátrix + „a kapu nem hozzájárulás”), `app_bootstrap_test`, `tutor_gateway_selection_test` (szállított dev + hozzájárulás + fiók + kliens + valódi capability → felhő ÉS capability-kérés; hozzájárulás nélkül / `fake` / explicit KI → stub, nulla kérés), `tutor_chat_screen_test` +2, új `tutor_chat_answer_test` (válasz-hozzáfűzés, második kérdés a kapuhoz, látható fallback, retry-ágak, 7 dekóder-cella), új `tutor_privacy_persistence_test` (restart round-trip minden tengelyen); CI-bizonyíték ehhez a sávhoz még nincs |
+| **R28a** | `2b3d1ab` | **a Vision-pipeline VEZETÉKEI** — a második újra-audit M1 tételének első fele (a felismerés maga az R28b). **Képkocka:** `CameraFrame.rowStride` (+`luminanceRowStride`), a plugin-adapter minden képkockával továbbadja a `bytesPerRow`-t, és a de-padding EGYETLEN helye az új `data/pipeline/yuv_luminance.dart` (a `_copyPlanes` szándékosan változatlan, a chroma-síkok saját stride-jai miatt) — eddig a padolt sorokból NYÍRT luma ment volna a pipeline-ba. Új `CameraPreviewSource` opcionális képesség: textúrát CSAK a plugin-adapter tud adni, teszt-dupla nem hamisíthat előnézetet; front lencsénél tükrözés. **Geometria + minőség:** `VisionSessionGeometry.resolve` (perzisztált kalibráció → tracking + manuális ROI, vagy `lost` + ok) és `FrameQualityPipeline` (formátum-őr, `copyBytes` a listener TÖRZSÉBEN — a `CameraFrame.invalidate()` a szinkron kézbesítés után azonnal tüzel —, timestamp-alapú 500 ms-os ablakok, `notObservable` evidencia → osztályozó → a VALÓDI `FeedbackPolicyEngine` + cue-budget; a kéz és a testtartás őszintén `notObservable`). **Osztályozó-varrat:** `VisionInsightClassifier` seam + fail-closed `SetupOnlyInsightClassifier` alapértelmezés (csak `setupNotObservable`) — ide köt be az R28b landmark-futtatója. **Perzisztencia:** `VisionSessionResultRecorder` (láncolt mentés, `vision.session.persist_failed` naplózva, NEM elnyelve) az eredmény-listener alapértelmezéseként — eddig `(_) {}` volt, tehát a kész munkamenet eredménye sehova nem íródott; a `visionFrameProcessorFactoryProvider` a kalibrációt a closure-ben olvassa, így a `recalibrate` a KÖVETKEZŐ starttól hat. **Előnézet:** `visionPreviewBuilderProvider` (autoDispose, csak `running`/`paused`/`calibrationLost` + valódi kamera mellett), a képernyő `Stack`-ben rendereli — `null` esetén a fa bájtra a régi, ezért **mind a hat vision-golden bájtra azonos**. **Mérve, NEM javítva (base ARB, golden-kitettség):** a `todayHubVisionCardMessage` „guided finger-placement feedback”-et ígér, miközben a munkamenet ma beállítás-minőséget és kalibrációt jelent. Tények: `docs/vision/e09-r28a-pipeline-facts.md` | `yuv_luminance_test` (stride ≠ width, a nyírás demonstrálva), `vision_session_geometry_test`, `vision_frame_pipeline_test`, `insight_classifier_test`, `vision_session_recorder_test`, `vision_session_controller_test` +7 cella, `vision_preview_test`; CI-bizonyíték ehhez a sávhoz még nincs |
+| **R27**, **R30** | (folyamatban) | **még nem landolt.** Az R27 a community média-feltöltést (§5.6 §7.1 javaslat, a `communityMediaEnabled` mögötti stub helyére), az R30 a §5.6 B2/B3 navigációs zsákutcáit (`/analysis/*` lánc `go` → `push`, a terv-generálás sikere `go` → `pushReplacement`, a katalógus két kártyája, a két AppBar nélküli router-vázlat, M4, M7, MI-E) zárja. Utánuk következik az **R29b**: a tutor felhő-providere **MiniMax M3**-ra (§5.2/B) | — |
 | formázó/analyze-javítások | `974d78e`, `8c29fe6`, `c472b93`, `9ee46a8`, `d3d10be`, `98d4b74`, `e460cc3` | a CI format- és analyze-kapujának leletei (lásd a HANDOFF „Csapdák" listáját) — a CI az egyetlen formázó-orákulum ebben a konténerben. | — |
 | formázó/analyze-javítások (sáv 3) | `61de4e3`, `22b904b` (+ a FeatureFlags-javítás a `4a0e1bf`-ben) | az R8/R11 CI-leletei: a stub-overview builder `=>`-törzse EGY sorba fér a nyíl utáni tördeléssel (a format-kapu az egyetlen fájlt jelölte, `61de4e3`); az `Override` típusargumentum a `misc.dart` import nélkül nem típus (két új teszt) és a felesleges `meta` import a `song_trainer_launch`-ban (`22b904b`); a `FeatureFlags(aiTutorEnabled:)` a három kötelező paraméter nélkül a `practice_plan_preview_route_test`-ben (run 34107003755, a `4a0e1bf`-en belül javítva). A CI itt is az egyetlen formázó- és analyze-orákulum. | — |
 
@@ -223,157 +238,187 @@ kizárólag a CI: a remote konténerben nincs Flutter/Dart SDK.
 
 ### 5.2 Nyitva maradt (mérve, indokkal)
 
-Az R8–R13 körök zárták a korábbi lista nagy részét (song-resume persistálás,
-ütemenkénti haladás-commit, `SongResultScreen` retry/next, hang-import, a
-Today-terv `onSwap`-ja, a Setlist V2 lista + session, a tutor felhő-gateway és
-a terv-előnézet előállítója, a klub-poszt `club_id` és a `profilePosts`
-végpont, a két képernyőn lévő belépési pont (R12) és a sebesség-slider
-pontozott munkamenetben (R13)). Az R16 zárta az itt korábban felsorolt két
-tételt is: a contract gépi lefedettségét (41 → 67 bejegyzés, mind `mounted`) és
-a community-routerek saját `_client_key` helpereit (`search.py`, `handles.py` →
-`client_ip_for_throttle`). Az R17–R20 az újra-audit (§5.5) mind a nyolc
-BLOCKER-ét, tíz MAJOR-jából pedig hetet TELJESEN zárt (M3–M8, M10), az M9-et
-részben (a címkék ARB-ban, a könyvjelző-sor szövege nyitva); az R21 a
-MINOR-listából ötöt zárt (MI5, MI6, MI8–MI10), és az M9 maradék literáljait is
-ARB-ba vitte — a mentett poszt SORÁNAK szövegén kívül. Az alábbi lista az
-onnan megmaradó tételekkel bővült. Ami MÉRHETŐEN nyitva maradt, indokkal:
+Az R8–R25 zárta a korábbi lista túlnyomó részét (a tételes felsorolás a §5
+sorokban áll). Az **R26–R31** sáv ehhez a második újra-audit (§5.6) leleteiből
+tett hozzá: a B1 FUNKCIONÁLIS fele (R29a), M2/M3/M8 (R29a), M5/M6/M9 (R31),
+az M1 első fele (R28a), és lezárult a korábban itt nyitva hagyott „Import file”
+CTA (MI4) tétele is (R26). Az alábbi lista a MA nyitott tételeket sorolja,
+aszerint csoportosítva, hogy **ki és hol** tudja bezárni őket.
 
-- **A Setlist V2 lista teljes SsCard/SsButton-migrációja** — az R10 a képernyő
-  térközeit `SsSpacing` tokenekre vitte (a golden-pinelt renderelés
-  pixel-semlegesen), a teljes design-rendszer-migráció golden-újrarögzítést
-  kíván az x86 boxon (ADR 0471 D6 őr) — tulajdonos-kör. (A belépési pont az
-  R12-vel megvan; ez már csak a lista vizuális migrációja.)
-- **Community média-feltöltés** — az R11 mért RÉS-JELENTÉST adott, nem kódot:
-  nincs média HTTP-router, a threat-model §6.2 A6.2.1 (magic-byte-ellenőrzés),
-  A6.2.4 (transcode) és A6.2.5 (valódi scanner) hiányzik, az `image_picker`
-  nincs a pubspecben. Az R-SEC-01 / R-PRIV-01 P1 blokkolók változatlanok, a
-  poszt-szerkesztő „Attach media" CTA-ja őszintén snackbart ad.
-- **A bejelentkezési hiba DÖNTÉSE** — a kódban programhiba nem mérhető (§5.4:
-  a 401 hitelesítési ítélet, a 409 létező fiók). Az R14 óta a döntés MÉRHETŐ:
-  az `auth.login_failed reason=unknown_email|bad_password …` INFO rekord
-  szétválasztja a két forgatókönyvet (olvasás: runbook §5.2) — a szerveren
-  össze kell gyűjteni. A korábban itt jelzett közös throttle-kulcs **zárva**
-  (R14, `client_ip_for_throttle` + `STRUMSIGHT_TRUSTED_PROXY_IPS`, runbook §5.1).
-- **Üzemeltetői művelet az élő deployon:** `STRUMSIGHT_COMMUNITY_ENABLED=false`
-  — a `live_backend_smoke.py` lánc emiatt a community-lépéseknél megáll, és az
-  R5/R11 community-funkciói az élő backenden nem gyakorolhatók. **Az app ezt az
-  R12 óta KEGYESEN viseli** („nincs engedélyezve ezen a szerveren", nem hamis
-  „Create profile"), de a funkciók bekapcsolása üzemeltetői döntés — a lépéssor
-  (átbillentés, readiness + mount-próba 404 → 403, az APK viselkedése
-  előtte/utána) az R14-ben leírva: runbook **§7.1**. Ugyanebbe az osztályba
-  tartozik az AI Tanár provider-átbillentése is (runbook **§7.2**): az R23 óta a
-  szerver a konfigurált, valódi gateway-t építi, de az alapértelmezés a `fake`,
-  ezért a Coach VALÓDI válaszai üzemeltetői flipig váratnak.
-- **`musicalPosition` a `PracticeSessionState`-en KÖZELÍTŐ újraidőzítés után** —
-  a getter egyetlen `BeatTimeConverter(tempo: target.tempo)`-val számol az
-  EGÉSZ idővonalon, az R13 újraidőzítése viszont szakaszonként affin (a pivot
-  előtt 1:1, utána `ratio`). A `lib/`-ben NINCS fogyasztója (mérve: csak a
-  definíció és a teszt hivatkozik rá), ezért a pontosítás nem sürgős — de
-  amint egy felület kiírja az ütem/ütés pozíciót, a getternek a rescaler
-  szakaszos leképezését kell használnia.
-- **A Vision munkamenet nem végez felismerést** (újra-audit M1) — a
-  `vision_session_controller.dart:41-44` doc-kommentje kimondja
-  („It deliberately does not perform inference"), a `reportQuality` és a
-  `reportRealtimeCue` `lib/`-ban hívó nélkül van, a
-  `visionSessionResultListenerProvider` `(_) {}` — a kész munkamenet eredménye
-  sehova nem íródik. Az R18 a BELÉPÉST nyitotta meg (B8), a TARTALOM nyitva: vagy
-  a felismerés kerül be, vagy a Ma-fül kártyája mondja ki, hogy előnézet.
-- **Az AI Tanár felhő-kapuja — az üzemeltetői flip és a provenance-jelvény**
-  (újra-audit M2). **A backend-fél az R23-mal, a KLIENS-fél az R24-gyel ZÁRVA.**
-  Backend: a `main.py::_build_tutor_gateway` a konfigurált adaptert állítja fel, a
-  valódi `AnthropicProviderGateway` létezik (osztályozott hibaleképezés, kulcs- és
-  törzs-szivárgás nélküli napló, boot-időben fail-closed `_guard_tutor_provider`),
-  és a `/tutor/capability` a valódi providert jelenti — a „bekapcsolva is
-  `FakeProviderGateway` épülne" állítás tehát MÁR NEM igaz. Kliens: a
-  `selectTutorModelGateway` ÖT fail-closed feltételt olvas kísérletenként
-  (hozzájárulás, a build `aiTutorCloudEnabled` zászlaja, fiók-réteg, hitelesített
-  stream-kliens, és a `/tutor/capability` valódi providert jelentő válasza — a
-  `fake` vagy a lekapcsolt tutor helyi stubot választ), tehát az
-  „`aiTutorCloudEnabled`-nek nulla fogyasztója van" lelet is zárva; a
-  zászló minden szállított buildben KI marad (ga-scope: postponed, ADR 0132 — a
-  build-idejű kapcsoló nem helyettesíti a hozzájárulást). Nyitva maradt KETTŐ:
-  **(a) üzemeltetői művelet** — az alapértelmezés `tutor_provider=fake` és
-  `tutor_enabled=False`, tehát a Coach VALÓDI válaszaihoz az élő deployon kell
-  átbillenteni (`STRUMSIGHT_TUTOR_PROVIDER=anthropic`,
-  `STRUMSIGHT_TUTOR_MODEL=claude-sonnet-5` vagy `claude-opus-5`, a hozzá tartozó
+**(A) Golden-újrarögzítő kör — kizárólag az x86 boxon (ADR 0471 D6)**
+
+- **A tutor provenance-jelvénye ÉS a Tanár-főoldal státusz-kártyája** — a
+  `tutorAiModeFor` (`tutor_providers.dart:217-223`) továbbra is `isOnline`-ból
+  következtet, ezért a chat AppBar idle turnnél is „Cloud"-ot mutat; a
+  `TutorHomeScreen` státusz-kártyája pedig „Running fully on this device"-t ír,
+  holott a fában NINCS eszközön futó modell (a kimondott korlát ARB-kulcsa,
+  `aiTutorHomeModelUnavailableMessage`, mérve NULLA `lib/`-fogyasztóval készen
+  áll). Az R29a a KAPUT nyitotta ki, a SZÖVEGEKHEZ nem nyúlt, mert mindkettő
+  pixelre pinelt az `e13_r29` és az `e15_r13` tutor-celláiban.
+- **A könyvjelző-SOR szövege** (az újra-audit M9 maradéka, MI-I) — a mentett
+  poszt sora továbbra is a szerver azonosítóit írja ki: `Post <id>` a nyers
+  ISO-8601 mentési idő fölött (`bookmarks_screen.dart:229-236`). Az emberi
+  szöveg (lokalizált címke + `DateFormat.yMMMd`) a pixel-pinelt E13-R33
+  könyvjelző-goldent mozdítaná. A CÍMKÉK már ARB-ban vannak (R20, R21) — CSAK ez
+  a sor maradt.
+- **A Setlist V2 lista `SsCard`/`SsButton`-migrációja** (MI7) — a
+  `setlist_list_screen_v2.dart`-ban 12 `Ss*` találat van, de MIND `SsSpacing`
+  token; komponens-migráció 0 (a fájl doc-kommentje maga mondja ki). Nincs benne
+  felhasználói literál, tehát ez nem l10n-, hanem golden-kör.
+- **A `todayHubVisionCardMessage` szövege** (R28a mért túlígérése) — a Ma-fül
+  kártyája „guided finger-placement feedback"-et / „ujjazat visszajelzést" ígér,
+  miközben az R28a után a munkamenet BEÁLLÍTÁS-minőséget és kalibrációt jelent
+  (a `SetupOnlyInsightClassifier` fail-closed). A kulcs a `base/` ARB-ban van;
+  **el kell dönteni, golden-kitett-e** — ha a Ma-hub goldenje ezt a mondatot
+  rendereli, a javítás ide, az (A) csoportba tartozik, ha nem, egy sima
+  l10n-javítás. Az alternatíva változatlan: vagy a szöveg mondja ki, hogy
+  előnézet, vagy a `visionEnabled` marad ki a preview-overlayből.
+- **NEM tartozik ide (mérve, az újra-audit §8 listájáról LEKERÜLT):** a Könyvtár
+  jegyzet-mezőjének felirata. Az R31 a **tárolás** ágát választotta
+  (`KeyValueLibraryNoteRepository`), nem a „hamarosan" feliratot, ezért a
+  renderelés változatlan maradt, és golden-újrarögzítésre nincs szükség.
+
+**(B) Üzemeltetői művelet az élő deployon (a repó ezt nem méri)**
+
+- **`STRUMSIGHT_COMMUNITY_ENABLED=false`** — a `live_backend_smoke.py` lánc emiatt
+  a community-lépéseknél megáll, és az R5/R11 community-funkciói az élő backenden
+  nem gyakorolhatók. Az app ezt az R12 óta KEGYESEN viseli („nincs engedélyezve
+  ezen a szerveren", nem hamis „Create profile"), és az R19 óta a HELYES okból
+  (`readsErrorDetail`). A lépéssor — átbillentés, readiness + mount-próba
+  404 → 403, az APK viselkedése előtte/utána: runbook **§7.1**. Két mért
+  szépséghiba marad mellette: a kapu AppBar-címe (MI-A) és a Profil-hub
+  „elérhető" ígérete (MI-L).
+- **Az AI Tanár providere — a felhasználó döntése szerint MiniMax M3, NEM
+  Anthropic.** Kötelező tények: végpont `api.minimax.io/anthropic`
+  (Anthropic-kompatibilis felület), hitelesítés **`Authorization: Bearer <kulcs>`**
+  (nem `x-api-key`), modell **`MiniMax-M3`**. A meglévő backend-adapter
+  (`AnthropicProviderGateway`, R23) `x-api-key` + `anthropic-version` fejlécet
+  küld, tehát az átállás **kódot igényel** — ez az **R29b** kör, ami az R27 után
+  következik; az üzemeltetői flip (`STRUMSIGHT_TUTOR_PROVIDER=…`,
+  `STRUMSIGHT_TUTOR_MODEL=MiniMax-M3`, a hozzá tartozó
   `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` JSON, az API-kulcs, végül
-  `STRUMSIGHT_TUTOR_ENABLED=true`) — a lépéssor runbook **§7.2**. Az
-  adatleltár-blokkoló ITT MÁR NEM áll: az R24 óta a
+  `STRUMSIGHT_TUTOR_ENABLED=true`) CSAK azután végezhető el — a lépéssor runbook
+  **§7.2**. A KLIENS-oldali akadály az R29a-val **elhárult**: az
+  `aiTutorCloudEnabled` a `development` buildben BE van (a `STRUMSIGHT_AI_TUTOR_CLOUD`
+  define kill-switchként visszakapcsolható, `production` a define-t eldobja),
+  tehát a második újra-audit „a flip önmagában nem elég" ítélete (§5.6) MÁR
+  NEM áll — a hiányzó lépés innentől kizárólag a szerver-oldali R29b + flip. A
   `docs/privacy/data-inventory.yaml` `tutor_stream` sora NEVESÍTI a harmadik fél
-  feldolgozóját („Anthropic (Claude API)", az üzemeltetői flip feltételével), és
-  a megőrzést két hopra bontja; ami az ÜZEMELTETŐN marad, az a provider saját
+  feldolgozóját, de **ma még „Anthropic (Claude API)"-t mond** — a
+  provider-váltással ezt (és a `tester-consent.md` prózáját) az R29b-nek
+  együtt kell javítania; ami az ÜZEMELTETŐN marad, az a provider saját
   megőrzési/tanítási politikájának és a feldolgozási RÉGIÓNAK az ellenőrzése és
-  rögzítése — ezt a repó nem méri;
-  **(b) a chat AppBar „Cloud" provenance-jelvénye** — a `tutorAiModeFor` a
-  szállított buildben online állapotban, idle turnnél is felhőt mutat, holott a
-  valódi választás (zászló KI) a helyi stub; a tényleges választás bekötése az
-  `e13_r29` és az `e15_r13` tutor-celláit mozdítaná, ezért **golden-újrarögzítő
-  kör** — ugyanabba az osztályba tartozik, mint a könyvjelző-SOR szövege (lentebb)
-  és a Setlist V2 lista `Ss*`-migrációja (MI7).
-  **Doc-adósság ugyanitt:** a `docs/privacy/consent-enforcement.md` §1 „What's NOT
-  yet true" blokkja még azt állítja, hogy a tutor felhő-transzportnak nincs
-  produkciós építési helye a `lib/**`-ban (`wired: false`) — ezt az R9/2 zárta, az
-  adatleltár azóta `wired: true`; a szakasz átírása egy jövőbeli docs-kör dolga.
-- **A könyvjelző-SOR szövege** (az újra-audit M9 maradéka) — az R20 a
-  poszt-szerkesztőt (M8) és a Könyvjelzők / Közösségi keresés minden CÍMKÉJÉT
-  ARB-ba vitte, de a mentett poszt sora továbbra is a
-  szerver azonosítóit írja ki: `Post <id>` a nyers ISO-8601 mentési idő fölött
-  (`bookmarks_screen.dart:235-236`). Az emberi szöveg (lokalizált „mentett
-  poszt" címke + `DateFormat.yMMMd`) a pixel-pinelt E13-R33 könyvjelző-goldent
-  mozdítaná, ami csak az x86 boxon rögzíthető újra (ADR 0471 D6 őr) — ez tehát
-  **golden-újrarögzítő kör**, nem l10n-kör. A korábban itt jelzett kisebb
-  hardkódolt literálok (`reaction_bar.dart`, `community_media_player.dart`,
-  `edit_profile_screen.dart`, `loop_controls.dart`, `reward_summary_sheet.dart`)
-  az **R21-gyel ZÁRVA** — a szegmens-ARB-ok +24 kulccsal, az aggregátumok
-  2408 → 2432 —, tehát ebből a tételből CSAK a mentett poszt sorának szövege
-  marad nyitva. A `communityWrites` a dev APK-ban BE van.
-- **MINOR-lista (újra-audit §3) — az R21 ötöt, az R22 hármat zárt, kettő
-  marad nyitva.**
-  **Zárva (R21):** a „Média csatolása" stub a `communityMediaEnabled` mögé kötve
-  (MI5 — a zászló megkapta az első fogyasztóját, a szállított buildekben a gomb
-  rejtve; az `e13_r33` composer-golden a zászlót bekapcsolva pineli, ezért
-  pixel-semleges); a community kapu `loggedOut` állapota `_LoggedOutView`-t kapott
-  a meglévő `communityGateLoggedOutCta` kulccsal és `context.push(AppRoutes.login)`-nal
-  (MI6 — `accountEnabled` nélkül CTA sem jelenik meg); és három ELAVULT
-  doc-komment javítva: a hub-ok „az `Ss*` widgetek az első képkockán
-  összeomlanak" állítása (MI8, a téma a `strumsight_app.dart:33-34`-ben be van
-  kötve), a `LaunchScreen` nulla `lib/`-hivatkozása (MI9) és a
-  `practiceSessionRecorderProvider` élő úton kívüli placeholder-ága (MI10 —
-  emiatt a §5.1 „a metaadat-kódok már valódiak voltak" sora pontatlan volt: a
-  placeholder-ág fizikailag ott van, csak nincs olvasója; a felhasználói hatás
-  rendben, a pontosítás most a doc-kommentben áll).
-  **Zárva (R22) — a három holt vezérlő:** a `StreakDetailScreen.onRecoveryPressed`
-  a gyakorlás-hubra visz (MI1 — a domain egyetlen helyreállítás-fogalma a
-  `StreakEvaluationRequest.recoveryEligible`, egy ALACSONYABB minősítési küszöb,
-  nem megvásárolható zseton vagy türelmi nap, és a `lib/`-ben semmi nem állítja
-  be; a CTA szövege — `streakV2RecoveryCta`, „Start a recovery practice" —
-  pontosan a hubra vitelt ígéri, ezért ez a teljes őszinte viselkedés, állapotot
-  nem mutál. **Ebből NYITVA marad:** a `recoveryEligible` MEGADÁSA, azaz egy
-  repository-művelet, ami a következő munkamenetre tényleg jóváírja a kedvezőbb
-  küszöböt — `docs/ui/legacy-backlog.md` §6.2); a
-  `RewardInboxScreen.onItemSelected` a MÁR MEGLÉVŐ `RewardSummarySheet`-et nyitja
-  (MI2 — alsó lap, nem új route; egyeseményes `CelebrationSummary` a koppintott,
-  már lokalizált tételből, az `onMarkSeen` változatlanul perzisztál;
-  legacy-backlog §6.3 ZÁRVA); és az Analysis V2 insight-kártyák CTA-ja aktív
-  (MI3 — az új `insight_action_route.dart` a perzisztált DURVA
-  `AnalysisRecommendedAction`-t képezi le regisztrált útvonalra:
-  repeatSection/continuePractice → `/practice`, slowDown → `/metronome`,
-  adjustInput → `/analysis/capture`; per-hotspot mélylink nem lehetne őszinte,
-  mert a `document_stages.dart` eldobja a szabály gazdag payloadját; kezelő
-  nélkül a kártya a régi letiltott + tooltipes állapotot tartja).
-  **Nyitva, mért indokkal:** az Analysis kezdőlap „Import file" CTA-ja (MI4 — a
-  snackbar MÁR őszinte, az import működővé tétele feature); a Setlist V2 lista
-  design-rendszer-migrációja (MI7 — **átsorolva:** a
-  `setlist_list_screen_v2.dart`-ban nincs felhasználói literál, a nyitott rész az
-  `Ss*`-migráció, azaz golden-újrarögzítő kör; azonos a fenti első ponttal).
-- **A backend-tesztsor futásideje a `backend-ci` időkorlátjához képest** —
-  **ZÁRVA (R25).** A §5.3 R17–R24 sora ezt még nyitott tételként jelölte: a
-  suite 1051 tesztre nőtt, a job `timeout-minutes: 15`, és a „Backend test
-  gate" az R23 fején 14 perc 56 másodpercnél szakadt meg. Az R25 három
-  TESZT-OLDALI karral 928,21 s → 126,25 s-ra vitte (−86 %, 1052 passed + 1
-  xfailed), állítás- és teszt-vesztés nélkül — részletek a §5 R25 sorában. Ami
-  mérve nyitva marad: a `test_security_release` 12 cellája (1,5–1,9 s/cella,
-  valódi `pytest --collect-only` alfolyamatok), ami a mai kereten belül elfér.
+  rögzítése.
+- **A bejelentkezési napló kiolvasása** — a kódban programhiba nem mérhető (§5.4:
+  a 401 hitelesítési ítélet, a 409 létező fiók), a döntés az R14 óta MÉRHETŐ a
+  szerveren: az `auth.login_failed reason=unknown_email|bad_password …` INFO
+  rekord szétválasztja a két forgatókönyvet (olvasás: runbook §5.2). A naplót
+  össze kell gyűjteni; a kliens-oldali ok (B7) az R17-tel zárva. A közös
+  throttle-kulcs szintén **zárva** (R14, `client_ip_for_throttle` +
+  `STRUMSIGHT_TRUSTED_PROXY_IPS`, runbook §5.1).
+
+**(C) A felhasználó saját gépén — az R28b előfeltételei**
+
+Az R28a a Vision-pipeline vezetékeit kötötte be, a FELISMERÉST nem: a
+`SetupOnlyInsightClassifier` fail-closed alapértelmezés, tehát a kéz és a
+testtartás őszintén `notObservable`. A scoping-memo mért döntése:
+**`tflite_flutter` + egy commitolt MediaPipe hand-landmark `.tflite`**,
+egy-fázisú futtatás a kalibrációs ROI-n (ADR 0185 §Döntés 1). Ebből a
+konténerből EGYIK lépés sem elvégezhető, mert a proxy a pub.dev-et és minden
+modell-CDN-t 403-mal tilt:
+
+1. az `assets/ml/hand_landmarker.tflite` + `…LICENSE` **letöltése és commitolása**
+   — kötelező is, mert a manifest `active` ága a MUNKAFÁBÓL számol checksumot
+   (`lib/core/ml/vision_model_manifest.dart`, `test/tooling/vision_model_integrity_test.dart`);
+   a `ml/make_manifest.py::_VISION_MODEL_SPECS` `hand_landmarker` bejegyzését
+   `status: "active"`-ra kell állítani a VALÓDI sha256-tal és `input_shape`-pel,
+   a `pose_landmarker` marad `deferred`;
+2. a `tflite_flutter` felvétele a `pubspec.yaml`-be és a `flutter pub get`
+   újra-feloldás — a feloldás ELŐTT ellenőrizni kell, hogy a `pubspec.lock`
+   `win32`-je EGY majoron (6.x) marad (CLAUDE.md invariáns; a
+   `flutter_secure_storage` pont ezért van v10-re pinelve);
+3. az aktivációs ADR (pontos asset-URL + upstream commit, SPDX Apache-2.0 +
+   NOTICE, mért sha256, az egy-fázisú ROI-döntés indoklása, az ADR 0184 M02
+   ≥15 FPS falszifikációs küszöb) és a `docs/eval/vision/hand_landmarker.md`
+   modellkártya, amire a manifest ma már mutat, de a fájl hiányzik.
+
+Mért go/no-go (ADR 0185 §Döntés 5): ha a `tflite_flutter` nem old fel verziót
+vagy nem építi az APK-t, **meg kell állni és újra kell nyitni az ADR-t** — a
+natív MediaPipe Tasks AAR a nevesített tartalék, saját körrel.
+
+**(D) Halott felületek — belépő nélküli, de kész funkciók (M10–M13)**
+
+| Lelet | Mért állapot | A választás |
+|---|---|---|
+| **M10** | `showReportContentSheet` (`report_content_sheet.dart:149`) — hívó CSAK a tesztből; a szerver-oldali `reports.py` router és a teljes UI kész | poszt- és komment-kártya „⋯ → Bejelentés" akció. Ma nem látszik (community KI a szerveren), de a §7.1 flip pillanatában Trust & Safety-rés |
+| **M11** | az elemzés-ÖSSZEHASONLÍTÁS teljes funkció halott, miközben az `analysisComparisonEnabled` a dev APK-ban BE van: a `CompareAnalysesUseCase` az EGYETLEN `AnalysisComparison`-előállító, és nulla `lib/`-hívója van; az `AppRoutes.analysisCompare`-re nulla navigáció | belépő a Könyvtárból (két elemzés kiválasztása), VAGY a zászló ki a preview-overlayből |
+| **M12** | a tervező Előnézet és Változás-áttekintés képernyője elérhetetlen: `PracticePlanPreviewArgs` és `PlanRevisionProposal` egyetlen `lib/` konstrukciós helye sincs a routeren kívül (az R10 a `PlanPreviewController` factory-t kötötte be, az `args` előállítóját nem) | az `extra` előállítója a tervező folyamatában |
+| **M13** | `showTutorSourceSheet` (`tutor_source_sheet.dart:162`) — hívó csak a teszt; a chat üzenetei RENDERELNEK forrás-blokkot (`tutor_message_bubble.dart:180`), a részletes lap mégsem nyitható | a forrás-blokk koppintása nyissa a lapot |
+
+**(E) Kisebb, mért maradékok**
+
+- **MI-F — három le nem fordított magyar érték** (en == hu, mérve; az R31-ből
+  szándékosan kimaradt, mert a `base/` és a community szegmens más kör
+  tulajdona): `analysisOverviewInsightKindLabelDefault` „Insight" →
+  **„Meglátás"**, `practiceResultCoachingTitle` „Coaching" → **„Edzői
+  visszajelzés"**, `feedCardAchievementUnlocked` „Achievement unlocked" →
+  **„Teljesítmény feloldva"** (ez utóbbit a jutalom-postaláda is használja,
+  `app_router.dart:168`).
+- **A `recoveryEligible` MEGADÁSA** (az R22 MI1-jének maradéka) — a
+  helyreállítás-CTA az R22 óta a gyakorlás-hubra visz, ami a teljes őszinte
+  viselkedés, de a domain egyetlen helyreállítás-fogalma, a
+  `StreakEvaluationRequest.recoveryEligible` ALACSONYABB minősítési küszöb, a
+  `lib/`-ben SEMMI nem állítja be. Ami hiányzik: egy repository-művelet, ami a
+  következő munkamenetre tényleg jóváírja a kedvezőbb küszöböt
+  (`docs/ui/legacy-backlog.md` §6.2).
+- **`musicalPosition` a `PracticeSessionState`-en** — a getter egyetlen
+  `BeatTimeConverter(tempo: target.tempo)`-val számol az EGÉSZ idővonalon, az R13
+  újraidőzítése viszont szakaszonként affin. `lib/` fogyasztója továbbra sincs
+  (mérve), ezért nem sürgős — de az első kiíró felület előtt a rescaler
+  szakaszos leképezését kell használnia.
+- **A második újra-audit MINOR-maradéka** (§5.6): MI-A (a community-kapu
+  AppBar-címe minden állapotban „Hozd létre a Közösség-profilod"), MI-B (a
+  `scales` kategória-csip MINDIG üres listát nyit — a 10 beépített definícióból
+  egyiknek sincs `scales` skill-tagje), MI-C (a készség-bizonyíték sor a
+  `libraryV2ItemsProvider` BETÖLTÉSE alatt is a „nincs ilyen munkamenet"
+  snackbart adja), MI-G (lokalizálatlan `semanticLabel`-ek 8 helyen), MI-H (a
+  három megosztó-kártya teljesen angol — magyar felhasználó angol képet oszt
+  meg), MI-K (`CatchUpSheet.show` holt kód), MI-L (a Profil-hub „elérhető"
+  ígérete a kikapcsolt szerverrel szemben), MI-M (a
+  `client-backend-endpoints.json` négy bejegyzésének elcsúszott sorszáma — az
+  útvonalak és a hívóhelyek megvannak). **MI-E** (a Setup `BackButton`-ja mindig
+  `go(practiceHub)`) az R30 scope-jában van.
+- **N1 (NOTE):** a chat-vezérlő megkapja a `TutorConversationRepository`-t, de
+  soha nem olvassa (`tutor_providers.dart:502-504`) — a beszélgetés se nem
+  mentődik, se nem töltődik vissza. Az R29a óta VAN mit menteni (a válasz
+  bekerül az üzenetlistába), tehát ez a tétel a stub-korszakhoz képest
+  felértékelődött.
+- **Doc-adósság:** a `docs/privacy/consent-enforcement.md` §1 „What's NOT yet
+  true" blokkja még azt állítja, hogy a tutor felhő-transzportnak nincs
+  produkciós építési helye a `lib/**`-ban (`wired: false`) — ezt az R9/2 zárta,
+  az adatleltár azóta `wired: true`; a bekezdés átírása az R27 utáni docs-kör
+  dolga (az R29a commit-üzenete is így jelöli).
+
+**(F) Folyamatban lévő körök**
+
+- **R27** — community média-feltöltés. A tétel mért állapota változatlanul rés-
+  jelentés: nincs média HTTP-router a `backend/app/community/routers/`-ben (17
+  fájl, egyik sem media), a threat-model §6.2 A6.2.1 (magic-byte-ellenőrzés),
+  A6.2.4 (transcode) és A6.2.5 (valódi scanner) hiányzik, a poszt-szerkesztő
+  „Média csatolása" CTA-ja az R21 óta a `communityMediaEnabled` mögött, őszinte
+  snackbarral. Az R-SEC-01 / R-PRIV-01 P1 blokkolók változatlanok.
+- **R30** — a §5.6 B2/B3 navigációs zsákutcái: a teljes `/analysis/*` lánc
+  `go` → `push`, a terv-generálás sikere `go` → `pushReplacement`, a katalógus
+  két kártyája `go` → `push`, a két AppBar nélküli router-vázlat kiútja, M4 (a
+  `/practice/analyze` Scaffold-adaptere), M7 (`returnToSongOverview`) és MI-E.
+- **R29b** — a tutor felhő-providere MiniMax M3-ra (l. a (B) csoportot); az R27
+  után következik.
+
+**A backend-tesztsor futásideje** a `backend-ci` időkorlátjához képest **ZÁRVA
+(R25)**: 928,21 s → 126,25 s (−86 %, 1052 passed + 1 xfailed), állítás- és
+teszt-vesztés nélkül — részletek a §5 R25 sorában. Ami mérve nyitva marad: a
+`test_security_release` 12 cellája (1,5–1,9 s/cella, valódi
+`pytest --collect-only` alfolyamatok), ami a mai kereten belül elfér.
 
 ### 5.3 CI-bizonyíték
 
@@ -514,6 +559,13 @@ Profil-hub belépői `push`-olnak (`login_success_navigation_test`, 3 cella).
 szétválasztásához a szerver-oldali `auth.login_failed reason=…` INFO rekordokat
 kell összegyűjteni (runbook §5.2) — a kliens-javítás azt nem váltja ki.
 
+**Ugyanennek az üzemeltetői teendő-listának a másik tétele, aktualizálva:** a
+Coach VALÓDI válaszai innentől nem az Anthropic-, hanem az üzemeltető
+**MiniMax M3**-flipjén múlnak (`api.minimax.io/anthropic`, `Bearer` hitelesítés,
+modell `MiniMax-M3`) — a kliens-oldali kapu az R29a óta a `development` buildben
+nyitva van, tehát a hiányzó lépés a szerver-oldali provider-adapter (R29b) és
+utána a runbook §7.2 szerinti átbillentés (§5.2/B).
+
 ### 5.5 Újra-audit a HEAD-en (2026-09-07)
 
 Az R16 utáni fejen (`2dd4fc9`, kód-azonos a `91f191b` docs-commit alatt) teljes,
@@ -579,7 +631,8 @@ küszöb, aminek a MEGADÁSA marad nyitva), MI2 (a postaláda-sor a már meglév
 `RewardSummarySheet`-et nyitja, új képernyő nélkül) és MI3 (az insight-kártya
 CTA-ja a perzisztált durva akcióhoz tartozó útvonalra navigál) —, így a maradék
 KETTŐ, indoka a §5.2-ben: MI4 feature (a snackbar már őszinte, a működő import a
-munka), MI7 pedig golden-újrarögzítő kör. **MI3 és MI7 ÁTSOROLVA volt:** egyik
+munka — **azóta az R26-tal ZÁRVA**), MI7 pedig golden-újrarögzítő kör (**ma is
+nyitva**, §5.2/A). **MI3 és MI7 ÁTSOROLVA volt:** egyik
 sem l10n-lelet — a mért fájlokban (`insight_card.dart`,
 `setlist_list_screen_v2.dart`) nincs hardkódolt felhasználói literál; az MI3 így,
 bekötésként (nem fordításként) zárult.
@@ -617,6 +670,146 @@ B6-osztály így nem bukhatott el.
 API-alakja a go_router 17.3-on (az R17 használja), és egy `StatefulShellBranch`
 route `context.push`-olása (Analyze/Learn) — utóbbira az `app_router`-ben van
 precedens. Mindkettőt a CI méri.
+
+**A végső mérce változatlan:** a valós-gitár APK-teszt a felhasználónál; a
+szintetikus zöld nem „kész".
+
+
+### 5.6 Újra-audit #2 a HEAD-en (2026-09-08)
+
+Az R25 utáni fejen (`c309e5f`) MÁSODIK, teljes, forrás-olvasásos újra-audit
+futott — tárgya ugyanaz a `build-apk.yml`-lel szállított **`development`** APK;
+minden lelet `fájl:sor` hivatkozással (Dart SDK a konténerben nincs, tehát
+futtatott Dart-mérés most sem volt). A jelentés a session scratchpadjában
+készült, ami **efemer** — a lényege ez a szakasz.
+
+**A zászló-kép változatlan** (`FeatureFlags.forShippedBuild(development)`,
+`feature_flags.dart:196-227`): `accountEnabled` + `previewAll` BE;
+`adaptiveShellEnabled`, `practiceEngineV2`, `practiceGenerator`, `songTrainerV2`,
+`migratedLearn`, `diagnostics`, `labModeAvailable` BE (`nonProd`);
+`aiTutorEnabled`, `visionEnabled`+10, `audioAnalysisV2Enabled`+9 (köztük
+`analysisComparisonEnabled`), `plannerAssistEnabled` BE;
+`communityEnabled/Writes/Clubs/Leaderboard` BE; `communityMediaEnabled` KI —
+és **`aiTutorCloudEnabled` KI MINDEN szállított buildben**
+(`feature_flags.dart:361-362, 391-392`). Az öt héj-célpont: Ma / Gyakorlás /
+Dalok / **Coach** / Profil (`home_shell.dart:140-167`).
+
+**A két mért tény, ami az egész értékelést uralta:**
+
+1. **A Coach célpont — az öt közül az egyik — semmilyen üzenetre nem tud
+   válaszolni, és az üzemeltetői flip sem javítja meg.** A §5.2 korábbi
+   állítása („a Coach VALÓDI válaszaihoz az élő deployon kell átbillenteni")
+   ezzel **CÁFOLVA** volt: a kliens ötödik fail-closed feltétele
+   (`aiTutorCloudEnabled`) minden szállított buildben hamis, tehát a kapu MINDIG
+   a `LocalTutorModelGatewayStub`-ot választotta, ami definíció szerint mindig
+   hibát ad. **Az R29a ezt a felét bezárta** (a `development` build a define-nal
+   BE-t kap, `production` a define-t eldobja).
+2. **Az R18 nyitotta belépési pontok mögött az R17 kijárat-javítása nincs
+   elvégezve.** Az Analyze/Learn/katalógus/Analysis V2 és a tervező folyamatai
+   ugyanabba a `context.go(<top-level route>)` osztályba futnak, amit az R17
+   négy helyen bezárt — csak most a felhasználó EL IS JUT oda. Ezt az **R30**
+   zárja (folyamatban).
+
+**BLOCKER — a felhasználó zsákutcába kerül, vagy a funkció nem működik:**
+
+| Lelet | Mit mért | Sors |
+|---|---|---|
+| **B1** | a Coach fül egyetlen üzenetre sem tud válaszolni, és a felület az ELLENKEZŐJÉT állítja: `tutor_providers.dart:466` → `selectTutorModelGateway` második feltétele (`!cloudEnabled` → stub) → `local_tutor_model_gateway_stub.dart:21-41` MINDIG `Failure('tutor.model_gateway.unavailable')` → `tutor_orchestrator.dart:360-370` `fallback` effekt, ami csak lezárja a feliratkozást, szöveget NEM termel; a Tanár-főoldal közben „Teljesen ezen az eszközön fut"-ot ír, a chat AppBar „Cloud"-ot | **funkcionális fele zárva (R29a)** — a `development` build `aiTutorCloudEnabled`-je BE (kill-switch define-nal), a kész válasz bekerül az üzenetlistába, a prompt turn-önként frissül; **nyitva:** a szerver-oldali provider-adapter **MiniMax M3**-ra (**R29b**, az R27 után) + az üzemeltetői flip (runbook §7.2), és golden-blokkoltan a két hazug szöveg (§5.2/A) |
+| **B2** | az Audio Analysis V2 felvételi folyamat ZSÁKUTCÁBAN végződik: a `/analysis/record` → `/analysis/processing` → `/analysis/overview` → `metric-detail`/`timeline` lánc végig `context.go` top-level route-ok között, az `analysis_overview_screen.dart:62` AppBarján nincs `leading`, nincs alsó sáv, `canPop == false`, a metric-detail üres-állapotának „Bezárás" gombja (`:56`) néma no-op | **R30 (folyamatban)** — a javítás `go` → `push` a láncon, **pixel-semlegesen** (AppBar-módosítás tilos); az R26 a `processing` route-ot már `push`-ra váltotta |
+| **B3** | a terv-generálás SIKERE és a katalógus két kártyája zsákutca: `plan_generation_launch.dart:36` `go(practiceGeneratorToday)` a `leading` nélküli `TodayPlanScreen`-re; `practice_hub_screen.dart:195,199` `_openPlanBuilder`/`_openTodayPlan` szintén `go`; a router `_RouteErrorScaffold` / `_RouteLoadingScaffold` (`app_router.dart:1450-1496`) **AppBar nélküli** `Scaffold` | **R30 (folyamatban)** — `go` → `pushReplacement` a varázsló sikerére, `go` → `push` a két kártyára, és a két router-vázlat kapjon kiutat |
+
+**MAJOR — hibás, félrevezető vagy némán elvesző viselkedés:**
+
+| Lelet | Mit mért | Sors |
+|---|---|---|
+| **M1** | a Vision munkamenet nem végez felismerést (`vision_session_controller.dart:41-44`), a `reportQuality`/`reportRealtimeCue` nulla `lib/`-hívóval, az eredmény-listener `(_) {}`, ezért `_finalizeOnce` mindig ÜRES összegzéssel zár — a Ma-fül kártyája viszont „finger-placement feedback"-et ígér | **részben zárva (R28a)** — a képkockák eljutnak a pipeline-ba (rowStride-helyes luma), a minőség-ablakok a VALÓDI `FeedbackPolicyEngine`-en át mennek, `reportQuality`/`reportRealtimeCue` hívva van, az eredmény perzisztál (`VisionSessionResultRecorder`); **nyitva:** maga a felismerés (**R28b**, a felhasználó gépén — §5.2/C) és a kártya szövege (§5.2/A) |
+| **M2** | a tutor hiba-szalag „Újrapróbálom" gombja NÉMA NO-OP: a terminális `fallback` állapotban a `retry()` a `send()` ágra fut, ami az azóta kiürített `draft`-tal azonnal visszatér | **zárva (R29a)** — `_lastSubmittedText` + közös `_submit()`, a retry újraküld |
+| **M3** | a tutor HOZZÁJÁRULÁS-szalag gombja PERMANENSEN TILTOTT: a `_BannerSlot` csak `onRetry`-t ad át, `onConsent`-et soha → `onPressed: null`; és mivel a hozzájárulás alapértéke „nem adott", ez az ELSŐ, amit egy új felhasználó a Coach fülön lát | **zárva (R29a)** — `onConsent` → `push('/tutor/privacy')` (ADR 0132: a bannerből maga a hozzájárulás nem adható meg) |
+| **M4** | az Analyze csempe olyan képernyőt nyit, amin NINCS látható vissza-vezérlő: az `AnalyzeScreen` nem épít `Scaffold`/`AppBar`-t, a pusholt oldal kerete pedig az `SsAdaptiveScaffold`, aminek nincs `appBar` paramétere (a `canPop` igaz, de a képernyőn nulla affordancia) | **R30 (folyamatban)** — a `/practice/analyze` route Scaffold-adaptert kap, a `/practice/live` mintájára |
+| **M5** | rendszer-nyelvet követő felhasználó ANGOL terv-szövegeket kap: `today_providers.dart:54-60` és `practice_generator_providers.dart:223` a `null` locale-t HARDKÓDOLT `en`-re oldja | **zárva (R31)** — `resolveEffectiveLocale` + `PlatformDispatcher` |
+| **M6** | a Könyvtár-tétel „Jegyzetek" mezője némán eldobja a beírt szöveget (`library_item_detail_screen.dart:163-166` efemer controller, mentés gomb nincs) — a repó „néma no-op" csapdájának UI-változata | **zárva (R31)** — `KeyValueLibraryNoteRepository` (`ss.library.item_notes`), a renderelés változatlan |
+| **M7** | „Következő szakasz" a dal-eredményen zsákutcába visz, ha nincs következő: `song_trainer_launch.dart:122-129` `returnToSongOverview` → `go`, a `SongOverviewScreen` AppBarja csupasz | **R30 (folyamatban)** — `go` → `pushReplacement` |
+| **M8** | a tutor HOZZÁJÁRULÁS, a diák-profil és a tanulási célok NEM perzisztensek (`tutor_privacy_providers.dart:12-13`, `:56-57`, `:88-97`) — az app újraindítása után magyarázat nélkül eltűnnek | **zárva (R29a)** — `PersistedPreference`, `ss.tutor.*`, a `tutorAiData` törlési körén kívül, fail-closed verzió-kezeléssel |
+| **M9** | a gyakorlás-előzmény OLVASÁSI HIBÁJA „még nem gyakoroltál"-ként jelenik meg: `practice_progress_providers.dart:13-21` a `Failure`-t üres listává lapítja, és innen táplálkozik a Progress V2 műszerfal, a Ma-fül statisztikája és a Könyvtár | **zárva (R31)** — a provider DOB, `ProgressPracticeHistory.isUnavailable`, `_HistoryUnavailableState` CSAK a hiba-ágon (goldenek bájtra azonosak) |
+| **M10** | a közösségi TARTALOM-BEJELENTÉS folyamatnak nincs éles belépője (`report_content_sheet.dart:149` — hívó csak a teszt), pedig a szerver-oldali `reports.py` és a teljes UI kész | **NYITVA** (§5.2/D) — a §7.1 flip pillanatában Trust & Safety-rés |
+| **M11** | az Elemzés-ÖSSZEHASONLÍTÁS teljes funkció halott, miközben az `analysisComparisonEnabled` BE van: a `CompareAnalysesUseCase`-nek nulla `lib/`-hívója, az `AppRoutes.analysisCompare`-re nulla navigáció | **NYITVA** (§5.2/D) |
+| **M12** | a tervező Előnézet és Változás-áttekintés képernyője elérhetetlen: a `PracticePlanPreviewArgs` / `PlanRevisionProposal` `extra` egyetlen `lib/` konstrukciós helye sincs a routeren kívül | **NYITVA** (§5.2/D) |
+| **M13** | a tutor forrás-hivatkozó lapja elérhetetlen (`tutor_source_sheet.dart:162` — hívó csak a teszt), holott a chat üzenetei renderelnek forrás-blokkot | **NYITVA** (§5.2/D) |
+
+**MINOR (MI-A … MI-M) — tizenhárom lelet.** Ebből **zárva (R31):** MI-D (a
+`TodayPlanActionOutcome.nothingToChange` néma volt — a Skip/Shorten/Pause
+megnyomása után semmi nem történt és semmi nem mondódott ki). **Az R30
+scope-jában:** MI-E (a Setup `BackButton`-ja MINDIG `go(practiceHub)`, ami a
+katalógusból pusholva eldobja a katalógus-oldalt). **NYITVA a többi tíz**
+(részletek és a hármas hu-fordítási tétel: §5.2/E) — MI-A (a community-kapu
+AppBar-címe minden állapotban „Hozd létre a Közösség-profilod", ami az élő
+`unavailable` állapotban a saját törzsének mond ellent), MI-B (a `scales`
+kategória-csip MINDIG üres: a 10 beépített definícióból egyiknek sincs `scales`
+skill-tagje — az 5 csipből 1 halott), MI-C (a betöltés és a „nincs ilyen
+munkamenet" ugyanazt a snackbart adja), MI-F (három le nem fordított magyar
+sztring), MI-G (nyolc lokalizálatlan `semanticLabel`), MI-H (a három
+megosztó-kártya teljesen angol), MI-I (a könyvjelző-sor nyers `Post <uuid>` +
+ISO-időbélyege — dokumentált, golden-blokkolt), MI-K (`CatchUpSheet.show` holt
+kód), MI-L (a Profil-hub „elérhető" community-ígérete a kikapcsolt szerverrel
+szemben), MI-M (a `client-backend-endpoints.json` négy elcsúszott sorszáma). Az
+**MI-J** („Import file" CTA = snackbar) az **R26-tal ZÁRVA**.
+
+**NOTE:** N1 — a chat-vezérlő megkapja a `TutorConversationRepository`-t, de
+soha nem olvassa (§5.2/E); N2 — a dev `ComponentCatalog` holt, de ártalmatlan;
+N3 — egy `StatefulShellBranch`-route `push`-olása működik és poppolható, de a
+pusholt oldal MÁSODIK héj-példány saját alsó sávval; N4 — a `musicalPosition`
+továbbra is fogyasztó nélkül (§5.2/E); N5 — az üres `catch (_) {}` blokkok mind
+audio-`dispose`/haptika körül vannak, a néma no-op csapda a backend-/tároló-
+írásokon NINCS jelen; N6 — a `/tutor/capability` szerződés-alak szerver ↔ kliens
+egyezik, fail-closed `servesRealModel`-lel; N7 — a tuner és a metronóm
+vissza-gombja helyesen `canPop`-őrzött.
+
+**Amit az újra-audit ELLENŐRZÖTT és RENDBEN TALÁLT:** az R17 kijutás-javításai
+(eredmény-képernyő `_needsExplicitExit`/`_exitCta`, login `_leaveScreen`,
+Profil-hub és tutor-home `push`, `practice_session_screen` `canPop ? pop : go`),
+az R18 belépési pontjai, az R19/R20 igazmondó állapotai (`readsErrorDetail` a
+siker-törzsön is, a 404-megkülönböztetés, a három route-építő `.when`-ágazása),
+az R21/R22 MINOR-söprése; **ARB-integritás** (`app_en.arb`/`app_hu.arb`
+**2432 / 2432** kulcs, a szegmensek uniója BÁJTRA az aggregátum kulcshalmaza,
+per-szegmens paritás hibátlan, placeholder-eltérés 0, és a `lib/**` **2136**
+`l10n.*` hivatkozásából 0 hiányzik); **szerződés-lefedettség** (mind a **67**
+bejegyzés útvonala megvan a megnevezett kliens-fájlban és a `backend/app/**`-ban);
+a beállítás-szinkron `_syncedSignature`-fegyelme; a kompozíciós gyökér és a
+perzisztencia (nincs in-memory repó az éles ágon); az erőforrás-kezelés
+(`isStageRoute`, a Live Finish elengedi a mikrofont + wakelockot); a három gyors
+eszköz; a community kapu éles `unavailable`/`error` szétválasztása. A 125
+`*Screen/Page/Route/Sheet/Dialog` osztályból éles hivatkozás NÉLKÜL:
+`CatchUpSheet`, `ReportContentSheet` (M10), `TutorSourceSheet` (M13),
+`LaunchScreen` (dokumentált), `CommunityInboxPage` (DTO), a dev
+`ComponentCatalog` — a megosztó-előnézetek és a `LearnScreen` elérhetők.
+
+**Az §5.5 tábla „zárva" celláit a mérés három helyen ÁRNYALTA:** a B3
+(Analyze/Analysis V2) esetén a BELÉPÉS zárva, a KIJÁRAT nyitva (→ B2); a B6
+(`go` a héjból top-level route-ra) osztálya négy helyen zárva, de ÉL (→ B2, B3,
+M7); az M2 (AI tanár) esetén a backend és a kliens KAPUJA zárva, a felhasználói
+eredmény viszont nem javult (→ B1). Mindhárom árnyalatot az R29a/R30 zárja.
+
+**Amit ebből a konténerből NEM lehet elvégezni** (az újra-audit §8):
+
+* **Csak az x86 golden-boxon (ADR 0471 D6):** a tutor státusz-kártya + a
+  provenance-jelvény goldenjei; MI-I (a könyvjelző-sor emberi szövege); MI7 (a
+  Setlist V2 `Ss*`-migrációja); minden ÚJ elérhető képernyő felvétele az
+  `e15_r13` variáns-mátrixba (ilyen lesz az R30 `/practice/analyze`
+  Scaffold-adaptere). **A lista egy tétellel RÖVIDÜLT:** az M6 könyvtár-jegyzet
+  felirata lekerült róla, mert az R31 a tárolás ágát választotta, és a
+  renderelés változatlan maradt.
+* **Csak a felhasználó saját gépén:** az R28b három előfeltétele — a commitolt
+  hand-landmark `.tflite` + LICENSE + `active` manifest-bejegyzés valódi
+  sha256-tal, a `tflite_flutter` felvétele és `pub get` a `win32` 6.x
+  ellenőrzésével, valamint az aktivációs ADR + modellkártya (részletek:
+  §5.2/C). A proxy innen a pub.dev-et és minden modell-CDN-t 403-mal tilt.
+* **Csak az ÜZEMELTETŐ tudja elvégezni:** `STRUMSIGHT_COMMUNITY_ENABLED=true`
+  (runbook §7.1); a tutor-provider átbillentése (runbook §7.2) — **a felhasználó
+  döntése szerint MiniMax M3-ra**, ami előbb a szerver-oldali R29b kört igényli;
+  és az `auth.login_failed reason=…` naplósorok kigyűjtése az élő szerverről
+  (§5.4). Az újra-audit „a tutor-flip ÖNMAGÁBAN nem elég, mert az
+  `aiTutorCloudEnabled` minden szállított buildben hamis" kikötése az R29a óta
+  **NEM áll**.
 
 **A végső mérce változatlan:** a valós-gitár APK-teszt a felhasználónál; a
 szintetikus zöld nem „kész".
