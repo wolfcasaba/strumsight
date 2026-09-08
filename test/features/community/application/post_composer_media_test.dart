@@ -45,8 +45,11 @@ import 'package:strumsight/features/auth/model/auth_user.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/community/application/controllers/post_composer_controller.dart';
 import 'package:strumsight/features/community/data/api/community_media_picker.dart';
+import 'package:strumsight/features/community/data/local/community_draft_store.dart';
 import 'package:strumsight/features/community/data/repositories/post_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_media.dart';
+import 'package:strumsight/features/community/domain/entities/share_artifact.dart';
+import 'package:strumsight/features/community/domain/policies/community_audience.dart';
 import 'package:strumsight/features/community/presentation/screens/post_composer_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
@@ -340,7 +343,14 @@ void main() {
       await _settle(tester);
       expect(_state(tester).mediaIds, <String>[_mediaPublicId]);
 
-      // „Újraindítás": friss widget-fa, UGYANAZ a tár.
+      // „Újraindítás": friss widget-fa, UGYANAZ a tár. A fát ELŐBB le
+      // kell szerelni: egy azonos alakú `ProviderScope` újrapumpálása
+      // csak a felülírásokat frissíti (`didUpdateWidget`), a KONTÉNERT
+      // nem dobja el — a szerkesztő állapota a leírókkal együtt
+      // életben maradna, és a teszt nem a piszkozatot mérné, hanem a
+      // saját memóriáját.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
       await tester.pumpWidget(
         _harness(
           picker: _FakePicker(),
@@ -351,12 +361,39 @@ void main() {
       await _settle(tester);
 
       expect(_state(tester).mediaIds, <String>[_mediaPublicId]);
+      // A leírók NEM perzisztálnak (nincs „leíró egy azonosítóhoz"
+      // végpont), tehát ez tényleg a tárból jött vissza.
+      expect(_state(tester).mediaDescriptors, isEmpty);
       // A leírót NEM találjuk ki: a visszatöltött csatolmány semleges
       // csempét kap, nem hamis „kész" arcot.
       expect(
         find.byKey(const Key('composer-media-restored-$_mediaPublicId')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('composer-media-$_mediaPublicId')),
+        findsNothing,
+      );
+    });
+
+    test('a mediaIds a piszkozat BÁJTJAIBAN is ott van', () {
+      // A fenti cella a tárból hidratál; ez a kódolást magát méri, hogy
+      // egy séma-változás ne csak a lassabb, widget-szintű cellán
+      // bukjon ki. A körút szándékosan valódi JSON: a tárba is bájtok
+      // kerülnek, nem élő objektumok.
+      final draft = CommunityDraft.fresh(
+        body: '',
+        audience: CommunityAudience.followers,
+        sourceArtifactJson: const <String, Object?>{},
+        sharePreview: SharePreview.conservative,
+        now: DateTime.utc(2026, 9, 8, 10),
+        mediaIds: const <String>[_mediaPublicId],
+      );
+
+      final decoded = jsonDecode(jsonEncode(draft.toJson()));
+      final restored = CommunityDraft.fromJson(decoded as Map<String, Object?>);
+
+      expect(restored.mediaIds, <String>[_mediaPublicId]);
     });
   });
 

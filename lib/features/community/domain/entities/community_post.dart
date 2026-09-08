@@ -155,6 +155,20 @@ base class UnfilledCommunityShareArtifact extends CommunityShareArtifact {
         sourceId: '',
         createdAt: DateTime.utc(1970, 1, 1),
       );
+
+  /// Két kitöltetlen artefaktum EGYENLŐ. Az osztálynak nincs saját
+  /// tartalma — a `schemaVersion == 0`, az üres `sourceId` és a
+  /// sentinel epoch mindig ugyanaz —, tehát a példány-azonosság itt
+  /// nem jelent semmit. Referencia-egyenlőséggel a [CommunityPost]
+  /// `==`-e minden újradekódolás után hamis lenne (a dekóder minden
+  /// hívásnál FRISS példányt ad), és a feed minden kártyája
+  /// újraépülne. A Kör 10 konkrét altípusai a saját, mezőnkénti
+  /// `==`-üket hozzák (`share_artifact.dart`).
+  @override
+  bool operator ==(Object other) => other is UnfilledCommunityShareArtifact;
+
+  @override
+  int get hashCode => Object.hash(schemaVersion, sourceId, createdAt);
 }
 
 /// A single Community post.

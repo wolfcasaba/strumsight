@@ -101,7 +101,7 @@ class CommunityMediaPlayer extends StatelessWidget {
           onTapPlay: onTapPlay,
         );
       case CommunityMediaProcessingState.rejected:
-        return const _RejectedCard();
+        return _RejectedCard(title: title);
       case CommunityMediaProcessingState.deleted:
         return const _DeletedCard();
       case CommunityMediaProcessingState.uploaded:
@@ -189,8 +189,18 @@ class _PendingCard extends StatelessWidget {
 }
 
 /// The placeholder card for the rejected state.
+///
+/// The optional [title] is the caller's localized *reason* (the
+/// attachment tile maps the server's machine rejection code to a
+/// sentence). Dropping it here would leave the user with the generic
+/// "this attachment was rejected" body and no way to learn why —
+/// and it would break the widget's documented contract, which says
+/// the title is rendered above the placeholder. Absent a title the
+/// card renders exactly as before (the Kör 19 call sites).
 class _RejectedCard extends StatelessWidget {
-  const _RejectedCard();
+  const _RejectedCard({required this.title});
+
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
@@ -200,9 +210,20 @@ class _RejectedCard extends StatelessWidget {
       child: SsSurface(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text(
-            AppLocalizations.of(context).communityMediaRejectedBody,
-            style: theme.textTheme.bodyMedium,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (title != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(title!, style: theme.textTheme.titleMedium),
+                ),
+              Text(
+                AppLocalizations.of(context).communityMediaRejectedBody,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
           ),
         ),
       ),
