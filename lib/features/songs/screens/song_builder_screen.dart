@@ -30,6 +30,9 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
   late List<StrumDirection?> _pattern;
   late int _bpm;
   late int _beatsPerBar;
+
+  /// Case-insensitive label filter for the add-chord picker (audit U5).
+  String _chordQuery = '';
   // Clamped to the slider's range so a tapped tempo is always representable.
   final TapTempo _tapTempo = TapTempo(minBpm: 50, maxBpm: 180);
 
@@ -75,6 +78,41 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
       _chords.isNotEmpty &&
       _pattern.any((d) => d != null);
 
+  /// Chord labels grouped by quality, filtered by a case-insensitive
+  /// [query]. Mirrors `ChordLibraryScreen._grouped`/`_classify` (same rules,
+  /// so the two pickers group identically); the shared classifier belongs in
+  /// `features/chords` once a round may touch that feature.
+  static Map<_ChordGroup, List<String>> _groupedChords(String query) {
+    final q = query.toLowerCase();
+    final out = {for (final g in _ChordGroup.values) g: <String>[]};
+    for (final label in ChordShapes.allLabels) {
+      if (q.isNotEmpty && !label.toLowerCase().contains(q)) continue;
+      out[_classify(label)]!.add(label);
+    }
+    out.removeWhere((_, labels) => labels.isEmpty);
+    return out;
+  }
+
+  /// Total over `ChordShapes.allLabels`: `sus` and `7` are read off the
+  /// suffix, a bare trailing `m` (never `maj`, never the `b` of a flat root)
+  /// is the minor triad, and everything else — including slash and `add`
+  /// shapes — is a major.
+  static _ChordGroup _classify(String label) {
+    if (label.contains('sus')) return _ChordGroup.suspended;
+    if (label.contains('7')) return _ChordGroup.seventh;
+    final quality = label.replaceAll(RegExp(r'^[A-G]#?'), '');
+    if (quality == 'm') return _ChordGroup.minor;
+    return _ChordGroup.major;
+  }
+
+  static String _groupLabel(AppLocalizations l10n, _ChordGroup group) =>
+      switch (group) {
+        _ChordGroup.major => l10n.chordGroupMajor,
+        _ChordGroup.minor => l10n.chordGroupMinor,
+        _ChordGroup.seventh => l10n.chordGroupSeventh,
+        _ChordGroup.suspended => l10n.chordGroupSuspended,
+      };
+
   Future<void> _suggest() async {
     final chords = await showProgressionPicker(context);
     if (chords != null && chords.isNotEmpty) {
@@ -109,6 +147,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final chordGroups = _groupedChords(_chordQuery);
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -164,17 +203,56 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
               style: Theme.of(context).textTheme.labelMedium,
             ),
             const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final label in ChordShapes.allLabels)
-                  ActionChip(
-                    label: Text(label),
-                    onPressed: () => setState(() => _chords.add(label)),
-                  ),
-              ],
+            // Audit U5 — the picker used to be one unstructured grid of every
+            // shape we have a diagram for. It is now filterable and grouped by
+            // quality, exactly like the Chord library's picker: `_classify`
+            // covers every label in `ChordShapes.allLabels`, so there is no
+            // "other" bucket to fall into. Chip labels (and therefore the
+            // finders the existing tests use) are unchanged.
+            TextField(
+              key: const Key('song-builder-chord-filter'),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: l10n.chordLibrarySearch,
+                isDense: true,
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (v) => setState(() => _chordQuery = v.trim()),
             ),
+            for (final entry in chordGroups.entries) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 6),
+                child: Text(
+                  _groupLabel(l10n, entry.key).toUpperCase(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final label in entry.value)
+                    ActionChip(
+                      label: Text(label),
+                      onPressed: () => setState(() => _chords.add(label)),
+                    ),
+                ],
+              ),
+            ],
+            // A filter that matches nothing must say so, not leave a blank gap.
+            if (chordGroups.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  l10n.chordLibraryNoResults(_chordQuery),
+                  style: TextStyle(color: Theme.of(context).hintColor),
+                ),
+              ),
             const SizedBox(height: 28),
 
             Row(
@@ -285,3 +363,7 @@ class _Label extends StatelessWidget {
     );
   }
 }
+
+/// Quality buckets for the add-chord picker (audit U5). `ChordShape` carries
+/// no quality field, so the bucket is derived from the label suffix.
+enum _ChordGroup { major, minor, seventh, suspended }

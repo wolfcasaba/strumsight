@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/song_setlist.dart';
 
@@ -30,14 +31,13 @@ final class SetlistItemAvailabilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // "Ready" uses the brand's success token, contrast-tuned for the current
+    // theme, instead of a raw Material green (audit U9).
+    final ready = AppColors.successOn(Theme.of(context).brightness);
     return switch (availability) {
       SetlistItemAvailability.ready => Semantics(
         label: l10n.setlistV2ItemReady,
-        child: const Icon(
-          Icons.check_circle_outline,
-          color: Colors.green,
-          size: 18,
-        ),
+        child: Icon(Icons.check_circle_outline, color: ready, size: 18),
       ),
       SetlistItemAvailability.missingAsset => Semantics(
         label: l10n.setlistV2ItemMissingAsset,

@@ -327,8 +327,11 @@ class _RewardSection extends ConsumerWidget {
                 ),
                 const SizedBox(height: SsSpacing.space1),
                 Text(
+                  // Audit U11: the session is over, so "no reward recorded
+                  // YET" promised something that is never coming. The copy
+                  // now states the settled fact.
                   reward == null
-                      ? l10n.practiceResultRewardNone
+                      ? l10n.practiceRewardNone
                       : l10n.practiceResultRewardXp(reward.totalXp),
                   style: typography.bodyMedium.copyWith(
                     color: colors.textSecondary,
@@ -503,6 +506,20 @@ class _ShareSummaryCard extends StatelessWidget {
   }
 }
 
+/// Whether [entry] carries anything worth sharing (audit U10).
+///
+/// The share card prints the session's counted coverage
+/// ([practiceResultShareSummaryFrom]). A session that resolved none of its
+/// targets — the `0/16` the audit measured — has no evidence behind that
+/// number, and a target-less mode (Free Practice) has none when it recorded
+/// no attempt either. Sharing an empty claim is exactly the overstatement
+/// the low-confidence rules exist to prevent, so the affordance is turned
+/// off there instead of producing a card with nothing in it.
+bool practiceResultHasShareableEvidence(PracticeHistoryEntry entry) {
+  if (entry.totalTargets > 0) return entry.resolvedTargets > 0;
+  return entry.attemptsCount > 0;
+}
+
 /// Toggleable share affordance (A8). Tapping "Share" reveals the minimal
 /// projection card in-place; there is no real share sink wired in this round
 /// (§0.0/B/R12 — the Community composer wiring is a named follow-up).
@@ -517,18 +534,36 @@ class _ShareSection extends StatefulWidget {
 class _ShareSectionState extends State<_ShareSection> {
   bool _expanded = false;
 
+  void _toggle() => setState(() => _expanded = !_expanded);
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final canShare = practiceResultHasShareableEvidence(widget.entry);
+    final button = OutlinedButton.icon(
+      onPressed: canShare ? _toggle : null,
+      icon: const Icon(Icons.ios_share),
+      label: Text(l10n.practiceResultShareCta),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        OutlinedButton.icon(
-          onPressed: () => setState(() => _expanded = !_expanded),
-          icon: const Icon(Icons.ios_share),
-          label: Text(l10n.practiceResultShareCta),
-        ),
-        if (_expanded) ...[
+        // Audit U10: a disabled control must still say why — the reason is
+        // both a tooltip and visible text, never a silently greyed button.
+        if (canShare)
+          button
+        else
+          Tooltip(message: l10n.practiceResultShareUnavailable, child: button),
+        if (!canShare) ...[
+          const SizedBox(height: SsSpacing.space1),
+          Text(
+            l10n.practiceResultShareUnavailable,
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+        ],
+        if (canShare && _expanded) ...[
           const SizedBox(height: 8),
           _ShareSummaryCard(
             summary: practiceResultShareSummaryFrom(widget.entry, l10n),

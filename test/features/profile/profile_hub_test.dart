@@ -28,6 +28,7 @@ Widget _host({
   bool accountEnabled = false,
   bool communityEnabled = false,
   AuthUser? signedInAs,
+  VoidCallback? onOpenCommunity,
 }) => ProviderScope(
   overrides: [
     ...preferenceOverrides(),
@@ -51,12 +52,22 @@ Widget _host({
         () => _FakeAuthController(signedInAs),
       ),
   ],
-  child: const MaterialApp(
+  child: MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    home: ProfileHubScreen(),
+    home: ProfileHubScreen(onOpenCommunity: onOpenCommunity),
   ),
 );
+
+const _settingsCtaKey = ValueKey('profile-hub-settings-cta');
+const _communityCtaKey = ValueKey('profile-hub-community-cta');
+
+/// Sizes the test surface to a small phone and restores it afterwards.
+void _useSurface(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -142,6 +153,169 @@ void main() {
         find.text("Community features aren't available in this build yet."),
         findsNothing,
       );
+    });
+  });
+
+  // Audit L10 — the Community entry's prominence must follow the sign-in
+  // state: logged out, "open Community" only reaches the sign-in wall
+  // (`CommunityGateStatus.loggedOut`), so it must not wear the screen's
+  // strongest (filled) weight while promising a feed.
+  group('audit L10 — Community prominence follows the sign-in state', () {
+    testWidgets('signed OUT: an OUTLINED action whose label states the gate — '
+        'no filled button anywhere on the screen', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          accountEnabled: true,
+          communityEnabled: true,
+          onOpenCommunity: () {},
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(_communityCtaKey), findsOneWidget);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Sign in to use Community'),
+        findsOneWidget,
+      );
+      expect(
+        find.byType(FilledButton),
+        findsNothing,
+        reason:
+            'the sign-in wall must never be reached through the screen\'s '
+            'strongest action',
+      );
+    });
+
+    testWidgets('signed IN: the same entry becomes the filled (primary) '
+        'action', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          accountEnabled: true,
+          communityEnabled: true,
+          signedInAs: const AuthUser(id: 1, email: 'player@example.com'),
+          onOpenCommunity: () {},
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.widgetWithText(FilledButton, 'Open Community'),
+        findsOneWidget,
+      );
+      expect(find.text('Sign in to use Community'), findsNothing);
+    });
+
+    testWidgets('signed in, but this build has NO Community route: no entry '
+        'at all rather than a button that opens nothing', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          accountEnabled: true,
+          communityEnabled: true,
+          signedInAs: const AuthUser(id: 1, email: 'player@example.com'),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(_communityCtaKey), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
+    });
+
+    testWidgets('community module off: no entry, signed in or out', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(accountEnabled: true, onOpenCommunity: () {}),
+      );
+      await tester.pump();
+
+      expect(find.byKey(_communityCtaKey), findsNothing);
+    });
+  });
+
+  // Audit U12/U1 — Settings used to be the LAST row, below Community; the
+  // first viewport therefore looked complete while hiding the row users
+  // reach for most.
+  group('audit U12 — Settings sits directly under the header', () {
+    testWidgets('Settings is the first body row: above the progress section, '
+        'above Community and above Library', (tester) async {
+      _useSurface(tester, const Size(360, 640));
+      await tester.pumpWidget(_host(communityEnabled: true));
+      await tester.pump();
+
+      final settings = tester.getRect(find.byKey(_settingsCtaKey));
+      expect(
+        settings.top,
+        lessThan(tester.getRect(find.text('Progress')).top),
+      );
+      expect(
+        settings.top,
+        lessThan(tester.getRect(find.text('Community')).top),
+      );
+      expect(
+        settings.top,
+        lessThan(
+          tester.getRect(find.widgetWithText(OutlinedButton, 'Library')).top,
+        ),
+      );
+    });
+
+    testWidgets('the e2e entry point is unchanged: Settings is still the one '
+        'OutlinedButton labelled "Settings"', (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pump();
+
+      expect(
+        find.widgetWithText(OutlinedButton, 'Settings'),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('audit U1 — the first viewport must not look complete', () {
+    testWidgets('640 dp phone: the section AFTER the header starts (and its '
+        'metrics fit) inside the first viewport', (tester) async {
+      _useSurface(tester, const Size(360, 640));
+      await tester.pumpWidget(_host());
+      await tester.pump();
+
+      expect(tester.getRect(find.text('Progress')).bottom, lessThan(640));
+      expect(tester.getRect(find.text('Sessions')).bottom, lessThan(640));
+    });
+
+    testWidgets('short surface: the list visibly continues past the fold — '
+        'the viewport CLIPS it, so it cannot read as a complete screen', (
+      tester,
+    ) async {
+      _useSurface(tester, const Size(360, 480));
+      await tester.pumpWidget(_host());
+      await tester.pump();
+
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      expect(
+        position.maxScrollExtent,
+        greaterThan(0),
+        reason: 'content below the fold is what the cue announces',
+      );
+      expect(
+        tester.getRect(find.widgetWithText(OutlinedButton, 'Library')).bottom,
+        greaterThan(480),
+        reason: 'the last row is cut by the bottom edge, not tidily inside it',
+      );
+    });
+  });
+
+  // Audit U13 — the bottom navigation already owns the AI Tutor/Coach
+  // destination (`AdaptiveHomeShell`), so a second entry here would be a
+  // duplicate. HEAD has none; this cell keeps it that way.
+  group('audit U13 — no duplicate AI Tutor entry on Profile', () {
+    testWidgets('no Coach/Tutor action on the Profile hub', (tester) async {
+      await tester.pumpWidget(_host(accountEnabled: true));
+      await tester.pump();
+
+      expect(find.textContaining('Tutor'), findsNothing);
+      expect(find.textContaining('Coach'), findsNothing);
     });
   });
 }

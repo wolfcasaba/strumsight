@@ -21,7 +21,18 @@ import '../../streak/public.dart';
 /// doc comment for why those widgets aren't safe under the app's current
 /// root theme.
 class ProfileHubScreen extends ConsumerWidget {
-  const ProfileHubScreen({super.key});
+  const ProfileHubScreen({super.key, this.onOpenCommunity});
+
+  /// Opens the Community area, when this build HAS one.
+  ///
+  /// Audit L10 — measured (`docs/ui/retirement-plan.md` §6, 2026-09-03): the
+  /// Community feature has **no route registered in `lib/app/routing/**` at
+  /// all**, so nothing on this screen can open it yet and a filled "Open
+  /// Community" button would promise a destination that does not exist. The
+  /// composition root injects this callback once the route is wired (the
+  /// round report carries the proposed router patch); the sign-in-aware
+  /// prominence rule in [_CommunityAction] is already in place for it.
+  final VoidCallback? onOpenCommunity;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,6 +51,19 @@ class ProfileHubScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
+            // Audit U12 — Settings used to be the LAST row of the list,
+            // below Community, so the most-reached-for destination on this
+            // screen was the one item a 640 dp phone never showed. It now
+            // sits directly under the header (this screen's identity block
+            // is its app bar; Today/Practice use the same bare-title app bar
+            // with no actions, so there is no app-bar-action pattern to
+            // follow here).
+            OutlinedButton(
+              key: const ValueKey('profile-hub-settings-cta'),
+              onPressed: () => context.go(AppRoutes.profileSettings),
+              child: Text(l10n.settingsTitle),
+            ),
+            const SizedBox(height: 24),
             _SectionLabel(l10n.profileHubProgressSectionTitle),
             const SizedBox(height: 12),
             Row(
@@ -84,19 +108,60 @@ class ProfileHubScreen extends ConsumerWidget {
                   : l10n.profileHubCommunityDisabledReason,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            // The action only exists where BOTH switches are on: Community
+            // is tied to an account, so with the account layer off there is
+            // no sign-in to offer (A3 — this screen never grows a login
+            // wall) and with the module flag off there is nothing to open.
+            if (communityEnabled && accountEnabled) ...[
+              const SizedBox(height: 12),
+              _CommunityAction(onOpen: onOpenCommunity),
+            ],
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: () => context.go(AppRoutes.profileLibrary),
               child: Text(l10n.navLibrary),
             ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () => context.go(AppRoutes.profileSettings),
-              child: Text(l10n.settingsTitle),
-            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Audit L10 — the Community entry's PROMINENCE follows the sign-in state.
+///
+/// Signed in, Community is genuinely one tap away, so the entry carries the
+/// filled (primary) weight. Signed out, the very same tap only reaches the
+/// sign-in wall (`CommunityGateStatus.loggedOut`), so the entry is demoted
+/// to an outlined button whose label STATES the gate instead of promising a
+/// feed. A still-loading auth state is treated as signed out (fail-closed,
+/// AGENTS.md): announcing the wall early is honest, promising a feed that
+/// then walls the user is not.
+class _CommunityAction extends ConsumerWidget {
+  const _CommunityAction({required this.onOpen});
+
+  /// See [ProfileHubScreen.onOpenCommunity] — `null` in every build whose
+  /// router has no Community route yet.
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final signedIn = ref.watch(authControllerProvider).value != null;
+    final open = onOpen;
+
+    if (!signedIn) {
+      return OutlinedButton(
+        key: const ValueKey('profile-hub-community-cta'),
+        onPressed: () => context.go(AppRoutes.login),
+        child: Text(l10n.communityGateLoggedOutTitle),
+      );
+    }
+    if (open == null) return const SizedBox.shrink();
+    return FilledButton(
+      key: const ValueKey('profile-hub-community-cta'),
+      onPressed: open,
+      child: Text(l10n.profileHubOpenCommunityCta),
     );
   }
 }

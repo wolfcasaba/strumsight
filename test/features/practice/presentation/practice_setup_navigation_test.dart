@@ -155,8 +155,9 @@ Future<ProviderContainer> _pumpSetup(WidgetTester tester) async {
   return container;
 }
 
-/// Scrolls the Start CTA into the viewport and taps it. The Start button
-/// sits at the bottom of a long form — the same pattern
+/// Taps the Start CTA. Audit U1 pinned it into a bottom action bar, so it
+/// is always on screen; the `scrollUntilVisible` below is kept because it
+/// is a no-op once the finder already resolves — the same pattern
 /// `practice_setup_screen_test.dart` uses.
 Future<void> _tapStart(WidgetTester tester) async {
   final start = find.widgetWithText(FilledButton, 'Start practice');

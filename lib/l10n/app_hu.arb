@@ -2492,6 +2492,14 @@
   "metronomeStart": "Indítás",
   "metronomeStop": "Leállítás",
   "metronomeTap": "Tap tempó",
+  "metronomeTempoDecrease": "1 BPM-mel lassabb",
+  "@metronomeTempoDecrease": {
+    "description": "Tooltip of the metronome's minus button (audit U7)."
+  },
+  "metronomeTempoIncrease": "1 BPM-mel gyorsabb",
+  "@metronomeTempoIncrease": {
+    "description": "Tooltip of the metronome's plus button (audit U7)."
+  },
   "metronomeTimeSignature": "Ütemmutató",
   "metronomeTitle": "Metronóm",
   "micErrorAction": "Újra",
@@ -3081,6 +3089,10 @@
     }
   },
   "practiceResultShareSummaryTitle": "Megosztási összegzés",
+  "practiceResultShareUnavailable": "Ebből a gyakorlásból nincs mit megosztani — nem érzékeltünk leütést",
+  "@practiceResultShareUnavailable": {
+    "description": "Reason shown next to the disabled Share button on the practice result screen when the session resolved no targets and recorded no attempt, so the share card would carry no evidence (audit U10)."
+  },
   "practiceResultShareWhen": "Dátum: {date}",
   "@practiceResultShareWhen": {
     "placeholders": {
@@ -3107,6 +3119,10 @@
   "practiceResultUnavailableAction": "Vissza a gyakorló hubra",
   "practiceResultUnavailableBody": "Futtass le egy gyakorlatot az eredmény megtekintéséhez.",
   "practiceResultUnavailableTitle": "Nincs megjeleníthető eredmény",
+  "practiceRewardNone": "Ehhez a gyakorláshoz nincs jutalom",
+  "@practiceRewardNone": {
+    "description": "Shown in the Reward card of the practice result screen when the ledger holds no reward for the finished session. Replaces practiceResultRewardNone, whose \"yet\" promised a reward that is never coming (audit U11)."
+  },
   "practiceRhythmOnlyBodyNoDirection": "Tempózz a 4/4-re. Az akkord- és irány-dimenzió itt nem pontozódik.",
   "practiceRhythmOnlyBodyWithDirection": "Tempózz a 4/4-re. Az akkord-dimenzió nem pontozódik; az irány csak tájékoztató jellegű.",
   "practiceRhythmOnlyDimensionAvailable": "Mérés alatt",
@@ -3161,7 +3177,15 @@
   "practiceSessionErrorPermission": "Mikrofonhozzáférés szükséges. Nyisd meg a Beállításokat az engedélyezéshez.",
   "practiceSessionErrorTitle": "Gyakorlási hiba",
   "practiceSessionExit": "Kilépés",
+  "practiceSessionExitHint": "Mentés nélkül lép ki — ez a gyakorlás elveszik",
+  "@practiceSessionExitHint": {
+    "description": "Semantics hint and tooltip on the Exit transport button of the practice session screen, shown only while an exit would really cancel a live session. States the consequence: Exit discards the session (audit L9)."
+  },
   "practiceSessionFinish": "Befejezés",
+  "practiceSessionFinishHint": "Lezárja a gyakorlást, és elmenti az eredményt",
+  "@practiceSessionFinishHint": {
+    "description": "Semantics hint and tooltip on the Finish transport button of the practice session screen. States the consequence: Finish keeps the result (audit L9)."
+  },
   "practiceSessionIdleBody": "Még nem fut gyakorlás. Indíts egyet a Gyakorlás beállításainál.",
   "@practiceSessionIdleBody": {
     "description": "Body copy of the designed idle state on the practice session screen (audit H16)."
@@ -3208,8 +3232,16 @@
   "practiceSetupChordHintLabel": "Akkord segítség mutatása",
   "practiceSetupCountInHelp": "0–4",
   "practiceSetupCountInLabel": "Beszámolás ütemek",
+  "practiceSetupCountInUnit": "ütem",
+  "@practiceSetupCountInUnit": {
+    "description": "Unit label of the count-in numeric field on the practice setup screen. The setting is named once by the row label; the field carries only the unit (audit U3)."
+  },
   "practiceSetupLoopHelp": "1–32",
   "practiceSetupLoopLabel": "Ismétlések száma",
+  "practiceSetupLoopUnit": "ismétlés",
+  "@practiceSetupLoopUnit": {
+    "description": "Unit label of the loop-count numeric field on the practice setup screen. The setting is named once by the row label; the field carries only the unit (audit U3)."
+  },
   "practiceSetupMeterLabel": "Ütemmutató",
   "practiceSetupMetronomeLabel": "Metronóm",
   "practiceSetupScoringProfileLabel": "Pontozási profil",
@@ -3260,6 +3292,8 @@
   "profileHubCommunitySectionTitle": "Közösség",
   "profileHubLocalOnlyMessage": "Fiók nélkül használod a StrumSightot — minden ezen az eszközön marad.",
   "profileHubLocalOnlyTitle": "Helyi profil",
+  "profileHubOpenCommunityCta": "Közösség megnyitása",
+  "@profileHubOpenCommunityCta": {},
   "profileHubProgressSectionTitle": "Fejlődés",
   "profileHubSignInCta": "Bejelentkezés",
   "profileHubSignOutCta": "Kijelentkezés",
@@ -4191,8 +4225,28 @@
   "songTrainerSpeedLabel": "Sebesség",
   "songTrainerSpeedResumesOnRestart": "Szünet: a sebesség a session újraindításakor tér vissza.",
   "songTrainerTitle": "Song Trainer",
+  "songTrainerTransportPause": "Szünet",
+  "@songTrainerTransportPause": {
+    "description": "Tooltip of the Song Trainer transport's pause button (audit U7)."
+  },
+  "songTrainerTransportPlay": "Lejátszás",
+  "@songTrainerTransportPlay": {
+    "description": "Tooltip of the Song Trainer transport's play button (audit U7)."
+  },
+  "songTrainerTransportRestart": "Vissza az elejére",
+  "@songTrainerTransportRestart": {
+    "description": "Tooltip of the Song Trainer transport's rewind button (audit U7)."
+  },
+  "songTrainerTransportResume": "Folytatás",
+  "@songTrainerTransportResume": {
+    "description": "Tooltip of the Song Trainer transport's play button while paused (audit U7)."
+  },
   "songVisionLoopQualityUnavailable": "Ehhez a loophoz nem volt elérhető megfelelő vizuális minőség. A hangalapú pontozás változatlan.",
   "songsEmpty": "Építsd meg a saját dalod — válassz akkordokat, tervezz ↓/↑ pengetésmintát, majd játszd le. Pontoz, mint egy lecke.",
+  "songsEmptyTitle": "Még nincs dalod",
+  "@songsEmptyTitle": {
+    "description": "One-line title of the empty songbook (audit U4)."
+  },
   "songsTitle": "Dalaim",
   "speedBuilderAttempt": "Próbálkozás: {current} / {maximum}",
   "@speedBuilderAttempt": {

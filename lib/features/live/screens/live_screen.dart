@@ -373,48 +373,61 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       // Before any chord is heard, a giant placeholder glyph is worse UX
       // than no hero at all — the timeline slot's own "Play a chord…" prompt
       // already carries that message (§5.2, kept as a separate state).
-      hero: hasChord
-          ? SsChordHero(
-              chordLabel: chordLabel,
-              textColor: palette.ink,
-              direction: latestStrum == null
-                  ? null
-                  : (latestStrum.isDown
-                        ? SsStrumDirection.down
-                        : SsStrumDirection.up),
-              glyphColor: confColor,
-              confidenceTier: confTier,
-              directionSemanticLabel: latestStrum == null
-                  ? null
-                  : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
-                        '${(latestStrum.confidence * 100).round()}%',
-            )
-          : SizedBox(
-              height: 64,
-              child: Center(
-                child: Icon(
-                  Icons.music_note_outlined,
-                  size: 32,
-                  color: palette.muted,
+      //
+      // U6 — the stage's middle region packs hero/feedback/timeline against
+      // the header, so the screen's middle third reads as empty while the
+      // content crowds top and bottom. Until `SsStageScaffold._CompactStage`
+      // centres that region itself (proposed patch in the round report), the
+      // screen distributes the spare height with token spacing of its own.
+      // Slot contract, keys and semantics are unchanged.
+      hero: Padding(
+        padding: const EdgeInsets.only(top: SsSpacing.space8),
+        child: hasChord
+            ? SsChordHero(
+                chordLabel: chordLabel,
+                textColor: palette.ink,
+                direction: latestStrum == null
+                    ? null
+                    : (latestStrum.isDown
+                          ? SsStrumDirection.down
+                          : SsStrumDirection.up),
+                glyphColor: confColor,
+                confidenceTier: confTier,
+                directionSemanticLabel: latestStrum == null
+                    ? null
+                    : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
+                          '${(latestStrum.confidence * 100).round()}%',
+              )
+            : SizedBox(
+                height: 64,
+                child: Center(
+                  child: Icon(
+                    Icons.music_note_outlined,
+                    size: 32,
+                    color: palette.muted,
+                  ),
                 ),
               ),
+      ),
+      feedback: Padding(
+        padding: const EdgeInsets.symmetric(vertical: SsSpacing.space4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SsLiveRegionAnnouncer(controller: _liveRegion),
+            SsSignalQualityIndicator(
+              level: frame.inputLevel,
+              listening: !_paused && frame.listening,
+              activeColor: AppColors.primary,
+              trackColor: palette.track,
+              warningColor: AppColors.danger,
+              levelSemanticLabel: l10n.liveInputLevel,
+              weakLabel: isWeakSignal ? l10n.liveWeakSignal : null,
             ),
-      feedback: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SsLiveRegionAnnouncer(controller: _liveRegion),
-          SsSignalQualityIndicator(
-            level: frame.inputLevel,
-            listening: !_paused && frame.listening,
-            activeColor: AppColors.primary,
-            trackColor: palette.track,
-            warningColor: AppColors.danger,
-            levelSemanticLabel: l10n.liveInputLevel,
-            weakLabel: isWeakSignal ? l10n.liveWeakSignal : null,
-          ),
-          if (frame.chordRejectReason != null)
-            UncertaintyReasonBanner(reason: frame.chordRejectReason!),
-        ],
+            if (frame.chordRejectReason != null)
+              UncertaintyReasonBanner(reason: frame.chordRejectReason!),
+          ],
+        ),
       ),
       timeline: Column(
         mainAxisSize: MainAxisSize.min,

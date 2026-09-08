@@ -2,6 +2,7 @@
 // brief §6.1 three-cell matrix) and A5 (legacy routes stay reachable).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:strumsight/app/config/app_config.dart';
@@ -13,14 +14,18 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
+import 'package:strumsight/features/practice/public.dart'
+    show practiceCatalogProvider;
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
 import 'package:strumsight/features/progress_v2/public.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/streak/screens/streak_screen.dart';
+import 'package:strumsight/features/today/screens/today_hub_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../fixtures/practice/session/practice_session_test_fixtures.dart';
 import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
@@ -131,6 +136,67 @@ class _DepthLevel extends StatelessWidget {
   }
 }
 
+const _todayCtaKey = ValueKey('today-hub-primary-cta');
+
+/// Pumps the Today hub on a minimal router whose Practice destinations are
+/// inert markers — the assertion is the LOCATION the CTA navigates to, so the
+/// real setup screen (and its providers) is deliberately not involved. Mirror
+/// of `test/features/practice_hub/practice_area_hub_cta_test.dart`'s helper.
+Future<GoRouter> _pumpTodayHub(
+  WidgetTester tester, {
+  List<Override> overrides = const [],
+  bool practiceEngineEnabled = true,
+}) async {
+  final router = GoRouter(
+    initialLocation: AppRoutes.today,
+    routes: [
+      GoRoute(
+        path: AppRoutes.today,
+        builder: (_, _) => TodayHubScreen(now: DateTime(2026, 8, 25)),
+      ),
+      GoRoute(
+        path: AppRoutes.practiceSetup,
+        builder: (_, _) => const SizedBox.shrink(),
+      ),
+      GoRoute(
+        path: AppRoutes.practiceHub,
+        builder: (_, _) => const SizedBox.shrink(),
+      ),
+    ],
+  );
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        ...preferenceOverrides(),
+        appConfigProvider.overrideWithValue(
+          AppConfig(
+            environment: AppEnvironment.development,
+            apiBaseUrl: AppConfig.devApiBaseUrl,
+            flags: FeatureFlags(
+              accountEnabled: false,
+              diagnosticsEnabled: false,
+              labModeAvailable: false,
+              practiceEngineV2Enabled: practiceEngineEnabled,
+            ),
+            diagnosticsToken: AppConfig.devDiagnosticsToken,
+            buildMode: 'test',
+            appVersion: 'test',
+          ),
+        ),
+        ...overrides,
+      ],
+      child: MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return router;
+}
+
 void main() {
   group(
     'A2 — the metronome quick tool is reachable within the 2-touch cap',
@@ -222,6 +288,83 @@ void main() {
       );
     },
   );
+
+  // Audit L1 — "Start your first practice" (the first CTA a new user ever
+  // sees) used to land on the Practice HUB, one more decision away from
+  // playing. The same URI matrix the Practice hub's own recommended CTA is
+  // measured with (`practice_area_hub_cta_test.dart`): the shipped catalog,
+  // an OVERRIDDEN catalog (so a hardcoded id literal fails), and the empty
+  // catalog — the only case that may still fall back to the hub.
+  group('audit L1 — the Today CTA starts the recommended practice', () {
+    testWidgets(
+      'the shipped catalog: the CTA lands on the practice SETUP route '
+      "carrying the recommendation's id, not on the hub",
+      (tester) async {
+        final router = await _pumpTodayHub(tester);
+
+        await tester.tap(find.byKey(_todayCtaKey));
+        await tester.pumpAndSettle();
+
+        expect(
+          router.state.uri.toString(),
+          '/practice/setup?id=builtin.quarterDownstrokes.v1',
+        );
+        expect(router.state.uri.path, isNot(AppRoutes.practiceHub));
+      },
+    );
+
+    testWidgets(
+      'an overridden catalog: the CTA carries the OVERRIDDEN first id, so a '
+      'hardcoded literal cannot satisfy this cell',
+      (tester) async {
+        final router = await _pumpTodayHub(
+          tester,
+          overrides: [
+            practiceCatalogProvider.overrideWithValue([
+              practiceSessionFixtureDefinition(id: 'test.first.v1'),
+            ]),
+          ],
+        );
+
+        await tester.tap(find.byKey(_todayCtaKey));
+        await tester.pumpAndSettle();
+
+        expect(router.state.uri.toString(), '/practice/setup?id=test.first.v1');
+      },
+    );
+
+    testWidgets(
+      'an EMPTY catalog: no recommendation exists, so the CTA falls back to '
+      'the hub instead of opening a setup screen with no definition id',
+      (tester) async {
+        final router = await _pumpTodayHub(
+          tester,
+          overrides: [practiceCatalogProvider.overrideWithValue(const [])],
+        );
+
+        await tester.tap(find.byKey(_todayCtaKey));
+        await tester.pumpAndSettle();
+
+        expect(router.state.uri.toString(), AppRoutes.practiceHub);
+      },
+    );
+
+    testWidgets(
+      'practiceEngineV2Enabled off: `/practice/setup` is not registered in '
+      'that build, so the CTA keeps the hub destination',
+      (tester) async {
+        final router = await _pumpTodayHub(
+          tester,
+          practiceEngineEnabled: false,
+        );
+
+        await tester.tap(find.byKey(_todayCtaKey));
+        await tester.pumpAndSettle();
+
+        expect(router.state.uri.toString(), AppRoutes.practiceHub);
+      },
+    );
+  });
 
   group('A5 — legacy routes stay reachable after the hub swap', () {
     testWidgets('legacy /live still redirects to its adaptive-shell target', (

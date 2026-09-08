@@ -274,7 +274,9 @@ Future<void> runFirstPracticeSession(
 
   // PracticeControls lives in the Stage scaffold's fixed `bottomAction`
   // slot, not inside a scrollable — always on screen, no scroll needed.
-  await tester.tap(find.widgetWithText(ElevatedButton, 'Start'));
+  // Audit L4: the Setup CTA above already started the session and the
+  // screen auto-starts once the target is compiled — there is no second
+  // Start button here.
   await tester.pump();
   await _driveSessionUntil(
     tester,

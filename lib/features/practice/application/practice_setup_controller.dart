@@ -99,24 +99,48 @@ final class PracticeSetupState {
   int get hashCode => Object.hash(definition, config);
 }
 
+/// The count-in the Setup screen starts from (audit L8).
+///
+/// The domain minimum is 0 bars — no count-in at all — which drops a
+/// beginner straight into the first beat with no time to place the hand.
+/// One bar is the smallest value that still gives a preparation window,
+/// and it stays well inside the domain range (0..4). The RANGE is
+/// unchanged: the user can still pick 0.
+const int practiceDefaultCountInBars = 1;
+
+/// The loop count the Setup screen starts from (audit L8).
+///
+/// The domain minimum is 1 — a single pass, over before a beginner has
+/// settled into the pattern. Four passes is the smallest count that lets
+/// the same drill be repeated enough to feel a change, and it stays well
+/// inside the domain range (1..32). The RANGE is unchanged.
+const int practiceDefaultLoopCount = 4;
+
+/// Whether the expected-chord hint starts on (audit L8). A beginner who
+/// cannot yet name the next chord has no way to turn a hint on they never
+/// knew existed, so it defaults ON and stays a single switch away from off.
+const bool practiceDefaultChordHintEnabled = true;
+
 /// Seeds a [`PracticeSessionConfig`] from a [PracticeDefinition] (ADR 0078
-/// §4). The defaults are the minimums for the numeric fields, except for
-/// the definition-derived ones; the meter is read-only and is not part of
-/// the config.
+/// §4). The numeric fields start from the beginner-friendly defaults above
+/// (audit L8) — NOT from the domain minimums, which validate the range but
+/// say nothing about what a first session should look like. The
+/// definition-derived fields are taken verbatim; the meter is read-only and
+/// is not part of the config.
 PracticeSessionConfig _seedConfigFromDefinition(PracticeDefinition definition) {
   return PracticeSessionConfig(
     definitionId: definition.id,
     definitionSnapshotVersion: definition.schemaVersion,
     effectiveTempo: definition.defaultTempo,
-    countInBars: PracticeSessionConfig.minimumCountInBars,
-    loopCount: PracticeSessionConfig.minimumLoopCount,
+    countInBars: practiceDefaultCountInBars,
+    loopCount: practiceDefaultLoopCount,
     metronomeEnabled: true,
     accentEnabled: false,
     backingEnabled: false,
     scoringProfileId: definition.scoringProfile.id,
     inputLatency: Duration.zero,
     visualLatency: Duration.zero,
-    expectedChordHintEnabled: false,
+    expectedChordHintEnabled: practiceDefaultChordHintEnabled,
     sessionTimeout: const Duration(minutes: 5),
     reducedMotion: false,
   );

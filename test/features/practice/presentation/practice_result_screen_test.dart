@@ -355,6 +355,130 @@ void main() {
       expect(find.byType(PracticeSetupScreen), findsOneWidget);
     });
   });
+
+  // -------------------------------------------------------------------
+  // Audit U2 / U10 / U11 — action hierarchy, empty share, reward copy
+  // -------------------------------------------------------------------
+  group('audit — result actions', () {
+    /// A viewport tall enough that every action below the fold is built —
+    /// the assertions are about hierarchy and enablement, not scrolling.
+    Future<void> pumpTall(WidgetTester tester, Widget child) async {
+      tester.view.physicalSize = const Size(500, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await pumpResult(tester, child);
+    }
+
+    testWidgets('U2 — exactly ONE primary (filled) button in the actions', (
+      tester,
+    ) async {
+      await pumpTall(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.strumPattern)),
+      );
+      // "Practice again" is the single filled action; every other action
+      // on the screen (Share, History, Speed Builder) is outlined.
+      final primaries = find.byWidgetPredicate(
+        (w) => w is FilledButton || w is ElevatedButton,
+        description: 'filled/elevated (primary) buttons',
+      );
+      expect(primaries, findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.text(l10n().practiceResultNextStepCta),
+          matching: primaries,
+        ),
+        findsOneWidget,
+        reason: 'the one primary must be "Practice again"',
+      );
+      expect(
+        find.byWidgetPredicate((w) => w is OutlinedButton),
+        findsWidgets,
+        reason: 'Share / History / Speed Builder stay secondary',
+      );
+    });
+
+    testWidgets('U10 — a result with nothing detected disables Share', (
+      tester,
+    ) async {
+      // 0 of 16 targets resolved: the share card would print "0/16" with
+      // no evidence behind it.
+      final entry = _entry(
+        PracticeMode.strumPattern,
+      ).copyWith(resolvedTargets: 0);
+      await pumpTall(tester, PracticeResultScreen(entry: entry));
+
+      final share = find.ancestor(
+        of: find.text(l10n().practiceResultShareCta),
+        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
+      );
+      expect(share, findsOneWidget);
+      expect(tester.widget<OutlinedButton>(share).onPressed, isNull);
+      // A disabled control still says why.
+      expect(
+        find.text(l10n().practiceResultShareUnavailable),
+        findsOneWidget,
+      );
+      // Tapping it cannot open the share projection either.
+      await tester.tap(share, warnIfMissed: false);
+      await tester.pump();
+      expect(find.text(l10n().practiceResultShareSummaryTitle), findsNothing);
+    });
+
+    testWidgets('U10 — a normal result keeps Share enabled', (tester) async {
+      await pumpTall(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.strumPattern)),
+      );
+      final share = find.ancestor(
+        of: find.text(l10n().practiceResultShareCta),
+        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
+      );
+      expect(tester.widget<OutlinedButton>(share).onPressed, isNotNull);
+      expect(find.text(l10n().practiceResultShareUnavailable), findsNothing);
+      await tester.tap(share);
+      await tester.pump();
+      expect(
+        find.text(l10n().practiceResultShareSummaryTitle),
+        findsOneWidget,
+      );
+    });
+
+    test('U10 — the predicate follows the model, not the mode', () {
+      final scored = _entry(PracticeMode.strumPattern);
+      expect(practiceResultHasShareableEvidence(scored), isTrue);
+      expect(
+        practiceResultHasShareableEvidence(scored.copyWith(resolvedTargets: 0)),
+        isFalse,
+      );
+      // Free Practice sets no targets — its evidence is the attempt count.
+      final free = _entry(PracticeMode.freePractice).copyWith(totalTargets: 0);
+      expect(
+        practiceResultHasShareableEvidence(free.copyWith(attemptsCount: 3)),
+        isTrue,
+      );
+      expect(
+        practiceResultHasShareableEvidence(free.copyWith(attemptsCount: 0)),
+        isFalse,
+      );
+    });
+
+    testWidgets('U11 — an empty reward is a settled fact, not a "yet"', (
+      tester,
+    ) async {
+      await pumpTall(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.strumPattern)),
+      );
+      expect(find.text(l10n().practiceRewardNone), findsOneWidget);
+      expect(
+        find.text(l10n().practiceResultRewardNone),
+        findsNothing,
+        reason: 'the old copy promised a reward that is never coming',
+      );
+      expect(l10n().practiceRewardNone.toLowerCase(), isNot(contains('yet')));
+    });
+  });
 }
 
 /// A [PracticeActiveSessionInputsController] pinned to one value, so a
@@ -446,6 +570,8 @@ extension on PracticeHistoryEntry {
     PracticeMetricSnapshot? finalMetricSnapshot,
     int? attemptsCount,
     Duration? activeDuration,
+    int? totalTargets,
+    int? resolvedTargets,
   }) {
     return PracticeHistoryEntry(
       id: id ?? this.id,
@@ -459,8 +585,8 @@ extension on PracticeHistoryEntry {
       pausedDuration: pausedDuration,
       attemptsCount: attemptsCount ?? this.attemptsCount,
       finalMetricSnapshot: finalMetricSnapshot ?? this.finalMetricSnapshot,
-      totalTargets: totalTargets,
-      resolvedTargets: resolvedTargets,
+      totalTargets: totalTargets ?? this.totalTargets,
+      resolvedTargets: resolvedTargets ?? this.resolvedTargets,
       scorePoints: scorePoints,
       maxCombo: maxCombo,
       meanAbsoluteOffset: meanAbsoluteOffset,

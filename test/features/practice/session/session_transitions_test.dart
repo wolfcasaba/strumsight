@@ -149,7 +149,8 @@ void main() {
         await _pumpScreen(tester, host: host);
 
         await tester.tap(
-          find.widgetWithText(ElevatedButton, l10nEn().practiceSessionExit),
+          // Audit L9: Exit is the transport row's `TextButton` now.
+          find.widgetWithText(TextButton, l10nEn().practiceSessionExit),
         );
         for (var i = 0; i < 4; i++) {
           await tester.pump(const Duration(milliseconds: 50));

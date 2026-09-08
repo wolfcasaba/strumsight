@@ -13,6 +13,7 @@ import 'package:strumsight/features/practice/domain/model/practice_definition.da
 import 'package:strumsight/features/practice/domain/model/practice_difficulty.dart';
 import 'package:strumsight/features/practice/domain/model/practice_event.dart';
 import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
+import 'package:strumsight/features/practice/domain/model/practice_session_config.dart';
 import 'package:strumsight/features/practice/domain/model/practice_source.dart';
 import 'package:strumsight/features/practice/domain/model/practice_validation.dart';
 import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
@@ -594,6 +595,136 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('TUNER SENTINEL'), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Audit L8 / U3 / U1 — beginner defaults, one label per setting, and a
+  // Start CTA that does not hide below the fold.
+  // -------------------------------------------------------------------
+  group('audit — setup defaults and layout', () {
+    PracticeDefinition strumDefinition() => _definition(
+      id: 'fixture.audit',
+      mode: PracticeMode.strumPattern,
+      meter: const Meter(beatsPerBar: 4),
+      bpm: 90,
+    );
+
+    Future<void> pumpSetup(
+      WidgetTester tester, {
+      required PracticeDefinition def,
+      Size surface = const Size(500, 1400),
+    }) async {
+      final container = _container(repository: _SingleDefRepository(def));
+      addTearDown(container.dispose);
+      tester.view.physicalSize = surface;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: PracticeSetupScreen(
+              argsOverride: PracticeSetupArgs(
+                request: PracticeSetupRequest.hasId,
+                definitionId: def.id,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    test('L8 — the seed is beginner-friendly, not the bare minimums', () {
+      final def = strumDefinition();
+      final container = _container(repository: _SingleDefRepository(def));
+      addTearDown(container.dispose);
+
+      final state = container.read(practiceSetupControllerProvider(def));
+      final config = state.config;
+      // A first session gets a preparation bar, enough repetitions to feel
+      // a change, and the chord hint already on.
+      expect(config.countInBars, practiceDefaultCountInBars);
+      expect(config.countInBars, greaterThanOrEqualTo(1));
+      expect(config.loopCount, practiceDefaultLoopCount);
+      expect(config.loopCount, greaterThanOrEqualTo(2));
+      expect(config.expectedChordHintEnabled, isTrue);
+      expect(
+        container.read(practiceSetupControllerProvider(def)).isValid,
+        isTrue,
+        reason: 'the new defaults must sit inside the domain range',
+      );
+    });
+
+    test('L8 — the ALLOWED RANGE is untouched: the minimums stay valid', () {
+      final def = strumDefinition();
+      final container = _container(repository: _SingleDefRepository(def));
+      addTearDown(container.dispose);
+      final controller = container.read(
+        practiceSetupControllerProvider(def).notifier,
+      );
+
+      controller.setCountInBars(PracticeSessionConfig.minimumCountInBars);
+      controller.setLoopCount(PracticeSessionConfig.minimumLoopCount);
+      controller.setChordHintEnabled(false);
+      final state = container.read(practiceSetupControllerProvider(def));
+      expect(state.isValid, isTrue);
+      expect(state.config.countInBars, 0);
+      expect(state.config.loopCount, 1);
+      expect(state.config.expectedChordHintEnabled, isFalse);
+    });
+
+    testWidgets('U3 — every setting is named exactly once', (tester) async {
+      final l10n = AppLocalizationsEn();
+      await pumpSetup(tester, def: strumDefinition());
+
+      // The row label names the setting; the numeric field next to it
+      // carries only the unit. Before the fix the field fell back to the
+      // row label and printed it a second time, side by side.
+      expect(find.text(l10n.practiceSetupCountInLabel), findsOneWidget);
+      expect(find.text(l10n.practiceSetupLoopLabel), findsOneWidget);
+      expect(find.text(l10n.practiceSetupBpmLabel), findsOneWidget);
+      expect(find.text(l10n.practiceSetupCountInUnit), findsOneWidget);
+      expect(find.text(l10n.practiceSetupLoopUnit), findsOneWidget);
+      expect(find.text(l10n.practiceSetupBpmUnit), findsOneWidget);
+    });
+
+    testWidgets('U1 — the Start CTA is on screen without scrolling', (
+      tester,
+    ) async {
+      final l10n = AppLocalizationsEn();
+      // A small, compact phone viewport — the form is far taller than this.
+      await pumpSetup(
+        tester,
+        def: strumDefinition(),
+        surface: const Size(360, 640),
+      );
+
+      final start = find.widgetWithText(FilledButton, l10n.practiceSetupStart);
+      expect(start, findsOneWidget);
+      // The CTA is NOT a child of the scrolling form any more: no amount
+      // of scrolling can hide it.
+      expect(
+        find.descendant(of: find.byType(ListView), matching: start),
+        findsNothing,
+      );
+      // …and it is drawn inside the viewport, at a tappable height.
+      final rect = tester.getRect(start);
+      expect(rect.bottom, lessThanOrEqualTo(640.0));
+      expect(rect.top, greaterThanOrEqualTo(0.0));
+      expect(rect.height, greaterThanOrEqualTo(48.0));
+      // The pointer really lands on the CTA where it is drawn — nothing
+      // (a system inset, the list content) covers it.
+      final RenderBox box = tester.renderObject(start);
+      final hit = tester.hitTestOnBinding(tester.getCenter(start));
+      expect(
+        hit.path.any((entry) => identical(entry.target, box)),
+        isTrue,
+        reason: 'the pinned Start CTA must be hit-testable where it is drawn',
+      );
     });
   });
 }

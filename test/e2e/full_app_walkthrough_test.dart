@@ -145,6 +145,13 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('today-hub-primary-cta')));
   await tester.pumpAndSettle();
 
+  // Audit L1 — the Today CTA now starts the RECOMMENDED practice directly, so
+  // it lands on Setup, not on the Practice hub. The hub stays a real stop on
+  // this walkthrough, reached the way the shell reaches it.
+  expect(find.byType(PracticeSetupScreen), findsOneWidget);
+  session.router.go(AppRoutes.practiceHub);
+  await tester.pumpAndSettle();
+
   // 3. Practice Area Hub (adaptive shell) — static content, no provider
   // feed (ADR 0276 A4): the only "real data" assertion available is its
   // own localized copy actually rendering.

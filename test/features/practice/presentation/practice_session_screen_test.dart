@@ -372,12 +372,13 @@ void main() {
       host.emitState(_stateFor(PracticeSessionStatus.finishing));
       await _pumpScreen(tester, host: host);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
-      // Exit button is rendered but disabled.
-      final exitButton = tester.widget<ElevatedButton>(
+      // Exit button is rendered but disabled. Audit L9: Exit is a
+      // `TextButton` now — the lowest weight in the transport row.
+      final exitButton = tester.widget<TextButton>(
         find
             .ancestor(
               of: find.text(l10nEn().practiceSessionExit),
-              matching: find.byType(ElevatedButton),
+              matching: find.byType(TextButton),
             )
             .first,
       );
@@ -846,9 +847,11 @@ void main() {
         act: () async {
           // First, tap the Exit button in the controls row. There may
           // also be "Exit" text widgets rendered later (the dialog);
-          // use the controls' button directly via ElevatedButton.
+          // use the controls' button directly — audit L9 made it the
+          // row's only `TextButton` labelled "Exit", while the dialog's
+          // confirm button stays an `ElevatedButton`.
           await tester.tap(
-            find.widgetWithText(ElevatedButton, l10nEn().practiceSessionExit),
+            find.widgetWithText(TextButton, l10nEn().practiceSessionExit),
           );
           // Pump the dialog route in. The transition is a fadeIn +
           // scale, so multiple bounded pumps are needed.
@@ -889,7 +892,7 @@ void main() {
         status: PracticeSessionStatus.running,
         act: () async {
           await tester.tap(
-            find.widgetWithText(ElevatedButton, l10nEn().practiceSessionExit),
+            find.widgetWithText(TextButton, l10nEn().practiceSessionExit),
           );
           for (var i = 0; i < 6; i++) {
             await tester.pump(const Duration(milliseconds: 50));
@@ -924,7 +927,7 @@ void main() {
         status: PracticeSessionStatus.paused,
         act: () async {
           await tester.tap(
-            find.widgetWithText(ElevatedButton, l10nEn().practiceSessionExit),
+            find.widgetWithText(TextButton, l10nEn().practiceSessionExit),
           );
           for (var i = 0; i < 6; i++) {
             await tester.pump(const Duration(milliseconds: 50));
@@ -959,7 +962,7 @@ void main() {
         status: PracticeSessionStatus.countIn,
         act: () async {
           await tester.tap(
-            find.widgetWithText(ElevatedButton, l10nEn().practiceSessionExit),
+            find.widgetWithText(TextButton, l10nEn().practiceSessionExit),
           );
           for (var i = 0; i < 6; i++) {
             await tester.pump(const Duration(milliseconds: 50));
@@ -1035,13 +1038,13 @@ void main() {
         await _pumpScreen(tester, host: host);
         // First tap: opens the dialog. While it is open, a second
         // tap must be a no-op. The screen's controls row is the only
-        // ElevatedButton with text "Exit" outside the dialog route, so
-        // we anchor the finder on the PracticeControls widget to
+        // TextButton with text "Exit" outside the dialog route (audit
+        // L9), so we anchor the finder on the PracticeControls widget to
         // disambiguate from the dialog's confirm button.
         final exitButton = find.descendant(
           of: find.byType(PracticeControls),
           matching: find.widgetWithText(
-            ElevatedButton,
+            TextButton,
             l10nEn().practiceSessionExit,
           ),
         );
@@ -1142,6 +1145,104 @@ void main() {
       await _pumpScreen(tester, host: host);
       expect(host.sent, isEmpty);
       expect(find.text(l10nEn().practiceSessionStart), findsOneWidget);
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // L9 (audit) — Finish and Exit no longer look interchangeable
+  // -----------------------------------------------------------------
+  group('L9 — Finish saves, Exit discards', () {
+    /// Every `hint` on a [Semantics] wrapper above the button labelled
+    /// [label]. The consequence sentence must live in the hint, never in
+    /// the label — the release-flow traversal pins the bare action word.
+    List<String> hintsFor(WidgetTester tester, String label) {
+      final wrappers = tester.widgetList<Semantics>(
+        find.ancestor(of: find.text(label), matching: find.byType(Semantics)),
+      );
+      return wrappers
+          .map((s) => s.properties.hint)
+          .whereType<String>()
+          .toList();
+    }
+
+    testWidgets('running: Finish is the filled primary and says it SAVES', (
+      tester,
+    ) async {
+      final host = _FakeSessionHost();
+      addTearDown(host.close);
+      host.emitState(_stateFor(PracticeSessionStatus.running));
+      await _pumpScreen(tester, host: host);
+
+      final finish = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, l10nEn().practiceSessionFinish),
+      );
+      final pause = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, l10nEn().practiceSessionPause),
+      );
+      // The primary carries an explicit filled background; the secondary
+      // transport control keeps the theme default.
+      expect(finish.style?.backgroundColor, isNotNull);
+      expect(
+        pause.style?.backgroundColor,
+        isNull,
+        reason: 'Finish must outrank Pause, not tie with it',
+      );
+      expect(
+        hintsFor(tester, l10nEn().practiceSessionFinish),
+        contains(l10nEn().practiceSessionFinishHint),
+      );
+      // The label itself is untouched — only the hint carries the
+      // consequence (release_flow_semantics_test pins the exact label).
+      expect(
+        find.text(l10nEn().practiceSessionFinish),
+        findsOneWidget,
+        reason: 'the action word stays the button label',
+      );
+    });
+
+    testWidgets('running: Exit is the low-emphasis action and says it '
+        'DISCARDS', (tester) async {
+      final host = _FakeSessionHost();
+      addTearDown(host.close);
+      host.emitState(_stateFor(PracticeSessionStatus.running));
+      await _pumpScreen(tester, host: host);
+
+      expect(
+        find.widgetWithText(TextButton, l10nEn().practiceSessionExit),
+        findsOneWidget,
+        reason: 'Exit is no longer an ElevatedButton like Finish',
+      );
+      expect(
+        find.widgetWithText(ElevatedButton, l10nEn().practiceSessionExit),
+        findsNothing,
+      );
+      expect(
+        hintsFor(tester, l10nEn().practiceSessionExit),
+        contains(l10nEn().practiceSessionExitHint),
+      );
+      // The same sentence is offered to sighted users as a tooltip.
+      expect(
+        tester
+            .widgetList<Tooltip>(find.byType(Tooltip))
+            .map((t) => t.message)
+            .toList(),
+        contains(l10nEn().practiceSessionExitHint),
+      );
+    });
+
+    testWidgets('completed: Exit does NOT claim a session is discarded', (
+      tester,
+    ) async {
+      final host = _FakeSessionHost();
+      addTearDown(host.close);
+      host.emitState(_stateFor(PracticeSessionStatus.completed));
+      await _pumpScreen(tester, host: host);
+      // The result is already recorded here — an exit loses nothing, so
+      // warning about a loss would be a false claim.
+      expect(
+        hintsFor(tester, l10nEn().practiceSessionExit),
+        isNot(contains(l10nEn().practiceSessionExitHint)),
+      );
     });
   });
 }

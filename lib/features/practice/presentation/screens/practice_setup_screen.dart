@@ -211,106 +211,172 @@ class _SetupFormState extends ConsumerState<_SetupForm> {
     final canStart = state.isValid;
     final firstFailure = failures.isEmpty ? null : failures.first;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+    // Audit U1: the form scrolls, the Start CTA does not. The button used
+    // to be the last child of the `ListView`, so on a compact screen it sat
+    // below the fold with nothing signalling it was there. It now lives in
+    // a pinned bar that RESERVES its own layout space (like the song
+    // editor's `_SaveActionBar`), so it is reachable without scrolling and
+    // never covers the last setting.
+    return Column(
+      // The bar must span the full width, like the CTA did as a `ListView`
+      // child — a loose cross-axis constraint would shrink it to the
+      // button's intrinsic width.
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionLabel(practiceDefinitionDisplayTitle(l10n, widget.definition)),
-        const SizedBox(height: 4),
-        Text(
-          practiceModeLabel(l10n, widget.definition.mode),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 12),
-        // SDD Ch13 UI-18 "readiness checklist" — the tuning entry belongs
-        // here first: before a session exists there is nothing to lose by
-        // leaving the screen, unlike the running-session surface (review
-        // E13-R21 MAJOR-1/MINOR-1). Weak-signal / degraded-capability have
-        // no meaning yet (no capture is active), so only the tuning
-        // affordance renders.
-        Align(
-          alignment: Alignment.centerLeft,
-          child: PracticeTuningEntry(
-            onOpenTuner: () => context.push(AppRoutes.practiceTuner),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+            children: [
+              _SectionLabel(
+                practiceDefinitionDisplayTitle(l10n, widget.definition),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                practiceModeLabel(l10n, widget.definition.mode),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              // SDD Ch13 UI-18 "readiness checklist" — the tuning entry
+              // belongs here first: before a session exists there is
+              // nothing to lose by leaving the screen, unlike the
+              // running-session surface (review E13-R21
+              // MAJOR-1/MINOR-1). Weak-signal / degraded-capability have
+              // no meaning yet (no capture is active), so only the
+              // tuning affordance renders.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PracticeTuningEntry(
+                  onOpenTuner: () => context.push(AppRoutes.practiceTuner),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SsValueSlider(
+                label: l10n.practiceSetupBpmLabel,
+                value: config.effectiveTempo.bpm,
+                min: Tempo.minimumBpm,
+                max: Tempo.maximumBpm,
+                unitLabel: l10n.practiceSetupBpmUnit,
+                onChanged: controller.setTempoBpm,
+              ),
+              Text(
+                l10n.practiceSetupBpmHelp,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              SsValueSlider(
+                label: l10n.practiceSetupCountInLabel,
+                value: config.countInBars.toDouble(),
+                min: PracticeSessionConfig.minimumCountInBars.toDouble(),
+                max: PracticeSessionConfig.maximumCountInBars.toDouble(),
+                // Audit U3: without a unit the numeric field falls
+                // back to the row label, printing "Count-in bars" twice
+                // side by side. The setting is named once (the row);
+                // the field carries only the unit.
+                unitLabel: l10n.practiceSetupCountInUnit,
+                onChanged: (v) => controller.setCountInBars(v.round()),
+              ),
+              Text(
+                l10n.practiceSetupCountInHelp,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              SsValueSlider(
+                label: l10n.practiceSetupLoopLabel,
+                value: config.loopCount.toDouble(),
+                min: PracticeSessionConfig.minimumLoopCount.toDouble(),
+                max: PracticeSessionConfig.maximumLoopCount.toDouble(),
+                // Audit U3 — see the count-in slider above.
+                unitLabel: l10n.practiceSetupLoopUnit,
+                onChanged: (v) => controller.setLoopCount(v.round()),
+              ),
+              Text(
+                l10n.practiceSetupLoopHelp,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              _MeterReadout(meter: widget.definition.meter),
+              const SizedBox(height: 16),
+              SsSwitchRow(
+                label: l10n.practiceSetupMetronomeLabel,
+                value: config.metronomeEnabled,
+                onChanged: controller.setMetronomeEnabled,
+              ),
+              SsSwitchRow(
+                label: l10n.practiceSetupAccentLabel,
+                value: config.accentEnabled,
+                onChanged: controller.setAccentEnabled,
+              ),
+              if (widget.definition.mode != PracticeMode.rhythmOnly)
+                SsSwitchRow(
+                  label: l10n.practiceSetupChordHintLabel,
+                  value: config.expectedChordHintEnabled,
+                  onChanged: controller.setChordHintEnabled,
+                ),
+              if (widget.definition.mode != PracticeMode.freePractice) ...[
+                const SizedBox(height: 12),
+                _ScoringProfileReadout(
+                  label: l10n.practiceSetupScoringProfileLabel,
+                  value: practiceScoringProfileLabel(
+                    l10n,
+                    widget.definition.scoringProfile,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: 20),
-        SsValueSlider(
-          label: l10n.practiceSetupBpmLabel,
-          value: config.effectiveTempo.bpm,
-          min: Tempo.minimumBpm,
-          max: Tempo.maximumBpm,
-          unitLabel: l10n.practiceSetupBpmUnit,
-          onChanged: controller.setTempoBpm,
+        _StartActionBar(
+          onStart: canStart ? _startAndOpenSession : null,
+          failure: firstFailure,
         ),
-        Text(
-          l10n.practiceSetupBpmHelp,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 16),
-        SsValueSlider(
-          label: l10n.practiceSetupCountInLabel,
-          value: config.countInBars.toDouble(),
-          min: PracticeSessionConfig.minimumCountInBars.toDouble(),
-          max: PracticeSessionConfig.maximumCountInBars.toDouble(),
-          onChanged: (v) => controller.setCountInBars(v.round()),
-        ),
-        Text(
-          l10n.practiceSetupCountInHelp,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 16),
-        SsValueSlider(
-          label: l10n.practiceSetupLoopLabel,
-          value: config.loopCount.toDouble(),
-          min: PracticeSessionConfig.minimumLoopCount.toDouble(),
-          max: PracticeSessionConfig.maximumLoopCount.toDouble(),
-          onChanged: (v) => controller.setLoopCount(v.round()),
-        ),
-        Text(
-          l10n.practiceSetupLoopHelp,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 16),
-        _MeterReadout(meter: widget.definition.meter),
-        const SizedBox(height: 16),
-        SsSwitchRow(
-          label: l10n.practiceSetupMetronomeLabel,
-          value: config.metronomeEnabled,
-          onChanged: controller.setMetronomeEnabled,
-        ),
-        SsSwitchRow(
-          label: l10n.practiceSetupAccentLabel,
-          value: config.accentEnabled,
-          onChanged: controller.setAccentEnabled,
-        ),
-        if (widget.definition.mode != PracticeMode.rhythmOnly)
-          SsSwitchRow(
-            label: l10n.practiceSetupChordHintLabel,
-            value: config.expectedChordHintEnabled,
-            onChanged: controller.setChordHintEnabled,
-          ),
-        if (widget.definition.mode != PracticeMode.freePractice) ...[
-          const SizedBox(height: 12),
-          _ScoringProfileReadout(
-            label: l10n.practiceSetupScoringProfileLabel,
-            value: practiceScoringProfileLabel(
-              l10n,
-              widget.definition.scoringProfile,
-            ),
-          ),
-        ],
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: canStart ? _startAndOpenSession : null,
-          icon: const Icon(Icons.play_arrow),
-          label: Text(l10n.practiceSetupStart),
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-        ),
-        if (firstFailure != null) ...[
-          const SizedBox(height: 12),
-          _ValidationMessage(failure: firstFailure),
-        ],
       ],
+    );
+  }
+}
+
+/// The pinned Start bar (audit U1).
+///
+/// Rendered below the scrolling form, in a slot that is laid out rather
+/// than overlaid, so the CTA is always on screen and never hides the last
+/// setting. The validation message travels with it: the reason Start is
+/// disabled must be visible at the same moment the disabled button is.
+class _StartActionBar extends StatelessWidget {
+  const _StartActionBar({required this.onStart, required this.failure});
+
+  /// `null` disables the CTA — the same predicate that gated it before.
+  final VoidCallback? onStart;
+
+  /// The first validation problem, or `null` when the config is valid.
+  final PracticeValidationFailure? failure;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final currentFailure = failure;
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (currentFailure != null) ...[
+              _ValidationMessage(failure: currentFailure),
+              const SizedBox(height: 12),
+            ],
+            FilledButton.icon(
+              onPressed: onStart,
+              icon: const Icon(Icons.play_arrow),
+              label: Text(l10n.practiceSetupStart),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

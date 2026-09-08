@@ -217,14 +217,27 @@ class _MetronomeScreenState extends State<MetronomeScreen>
           ),
         ],
       ),
-      hero: _bpmHero(l10n),
+      // U6 — the stage's middle region packs hero/feedback/timeline against
+      // the header, leaving the screen's middle third empty while the content
+      // crowds top and bottom. Until `SsStageScaffold._CompactStage` centres
+      // that region itself (proposed patch in the round report), the screen
+      // distributes the spare height with token spacing of its own: the group
+      // starts lower and its parts sit further apart. Slot contract, keys and
+      // semantics are unchanged.
+      hero: Padding(
+        padding: const EdgeInsets.only(top: SsSpacing.space10),
+        child: _bpmHero(l10n),
+      ),
       // The audio-clock-bound visual pulse (A4) — never a `Timer.periodic`.
-      feedback: BeatPulseDot(
-        playing: _playing,
-        clock: _beatClockAdapter,
-        beatDuration: beatDuration,
-        color: AppColors.primary,
-        mutedColor: palette.track,
+      feedback: Padding(
+        padding: const EdgeInsets.symmetric(vertical: SsSpacing.space6),
+        child: BeatPulseDot(
+          playing: _playing,
+          clock: _beatClockAdapter,
+          beatDuration: beatDuration,
+          color: AppColors.primary,
+          mutedColor: palette.track,
+        ),
       ),
       timeline: _timeline(),
       bottomAction: _actions(l10n),
@@ -256,6 +269,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton.filledTonal(
+            tooltip: l10n.metronomeTempoDecrease,
             onPressed: () => _setBpm(_bpm - 1),
             icon: const Icon(Icons.remove),
           ),
@@ -269,6 +283,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
             ),
           ),
           IconButton.filledTonal(
+            tooltip: l10n.metronomeTempoIncrease,
             onPressed: () => _setBpm(_bpm + 1),
             icon: const Icon(Icons.add),
           ),
@@ -338,7 +353,12 @@ class _BeatDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = downbeat ? AppColors.primary : AppColors.confidenceHigh;
+    // Brand tokens only: copper for the downbeat, warm amber for the other
+    // beats. The dots used to flash `AppColors.confidenceHigh` (a teal-green
+    // from the SEPARATE confidence ramp), which read as a foreign colour in
+    // the copper/amber stage and as a "high confidence" claim the metronome
+    // never makes (audit U9).
+    final base = downbeat ? AppColors.primary : AppColors.secondary;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 80),
       width: active ? 26 : 16,

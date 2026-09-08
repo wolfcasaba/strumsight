@@ -551,9 +551,9 @@ void main() {
         await tester.tap(setupStart);
         await tester.pumpAndSettle();
 
-        await tester.tap(
-          find.widgetWithText(ElevatedButton, l10n.practiceSessionStart),
-        );
+        // Audit L4: the Setup CTA above already started the session and the
+        // screen auto-starts once the target is compiled — there is no second
+        // Start button here.
         await tester.pump();
         await _driveSessionUntil(
           tester,

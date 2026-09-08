@@ -2531,6 +2531,14 @@
   "metronomeStart": "Start",
   "metronomeStop": "Stop",
   "metronomeTap": "Tap tempo",
+  "metronomeTempoDecrease": "Slower by 1 BPM",
+  "@metronomeTempoDecrease": {
+    "description": "Tooltip of the metronome's minus button (icon-only control, audit U7)."
+  },
+  "metronomeTempoIncrease": "Faster by 1 BPM",
+  "@metronomeTempoIncrease": {
+    "description": "Tooltip of the metronome's plus button (icon-only control, audit U7)."
+  },
   "metronomeTimeSignature": "Time signature",
   "metronomeTitle": "Metronome",
   "micErrorAction": "Retry",
@@ -3120,6 +3128,10 @@
     }
   },
   "practiceResultShareSummaryTitle": "Share summary",
+  "practiceResultShareUnavailable": "Nothing to share from this session — no strums were detected",
+  "@practiceResultShareUnavailable": {
+    "description": "Reason shown next to the disabled Share button on the practice result screen when the session resolved no targets and recorded no attempt, so the share card would carry no evidence (audit U10)."
+  },
   "practiceResultShareWhen": "Date: {date}",
   "@practiceResultShareWhen": {
     "placeholders": {
@@ -3146,6 +3158,10 @@
   "practiceResultUnavailableAction": "Back to practice hub",
   "practiceResultUnavailableBody": "Finish a practice session to see the breakdown.",
   "practiceResultUnavailableTitle": "No result to show",
+  "practiceRewardNone": "No reward for this session",
+  "@practiceRewardNone": {
+    "description": "Shown in the Reward card of the practice result screen when the ledger holds no reward for the finished session. Replaces practiceResultRewardNone, whose \"yet\" promised a reward that is never coming (audit U11)."
+  },
   "practiceRhythmOnlyBodyNoDirection": "Count-in then keep the rhythm. The chord and direction dimensions are not scored here.",
   "practiceRhythmOnlyBodyWithDirection": "Count-in then keep the rhythm. The chord dimension is not scored; direction is informational.",
   "practiceRhythmOnlyDimensionAvailable": "Being measured",
@@ -3200,7 +3216,15 @@
   "practiceSessionErrorPermission": "Microphone access is required. Open Settings to grant it.",
   "practiceSessionErrorTitle": "Practice session error",
   "practiceSessionExit": "Exit",
+  "practiceSessionExitHint": "Leaves without saving — this session is discarded",
+  "@practiceSessionExitHint": {
+    "description": "Semantics hint and tooltip on the Exit transport button of the practice session screen, shown only while an exit would really cancel a live session. States the consequence: Exit discards the session (audit L9)."
+  },
   "practiceSessionFinish": "Finish",
+  "practiceSessionFinishHint": "Ends the session and saves your result",
+  "@practiceSessionFinishHint": {
+    "description": "Semantics hint and tooltip on the Finish transport button of the practice session screen. States the consequence: Finish keeps the result (audit L9)."
+  },
   "practiceSessionIdleBody": "No session is running yet. Start one from Practice setup.",
   "@practiceSessionIdleBody": {
     "description": "Body copy of the designed idle state on the practice session screen. Replaces the developer dump \"Session state: idle\" (audit H16)."
@@ -3247,8 +3271,16 @@
   "practiceSetupChordHintLabel": "Show chord hint",
   "practiceSetupCountInHelp": "0 to 4",
   "practiceSetupCountInLabel": "Count-in bars",
+  "practiceSetupCountInUnit": "bars",
+  "@practiceSetupCountInUnit": {
+    "description": "Unit label of the count-in numeric field on the practice setup screen. The setting is named once by the row label (\"Count-in bars\"); the field carries only the unit (audit U3)."
+  },
   "practiceSetupLoopHelp": "1 to 32",
   "practiceSetupLoopLabel": "Loop count",
+  "practiceSetupLoopUnit": "loops",
+  "@practiceSetupLoopUnit": {
+    "description": "Unit label of the loop-count numeric field on the practice setup screen. The setting is named once by the row label (\"Loop count\"); the field carries only the unit (audit U3)."
+  },
   "practiceSetupMeterLabel": "Meter",
   "practiceSetupMetronomeLabel": "Metronome",
   "practiceSetupScoringProfileLabel": "Scoring profile",
@@ -3299,6 +3331,10 @@
   "profileHubCommunitySectionTitle": "Community",
   "profileHubLocalOnlyMessage": "You're using StrumSight without an account — everything stays on this device.",
   "profileHubLocalOnlyTitle": "Local profile",
+  "profileHubOpenCommunityCta": "Open Community",
+  "@profileHubOpenCommunityCta": {
+    "description": "Profile Hub — the filled (primary) action on the Community card. Rendered only for a signed-in user, for whom Community really is one tap away (audit L10); signed out the card renders the outlined communityGateLoggedOutTitle instead, so the sign-in wall is announced on the card."
+  },
   "profileHubProgressSectionTitle": "Progress",
   "profileHubSignInCta": "Sign in",
   "profileHubSignOutCta": "Sign out",
@@ -4237,8 +4273,28 @@
   "songTrainerSpeedLabel": "Speed",
   "songTrainerSpeedResumesOnRestart": "Paused: speed resumes when the session restarts.",
   "songTrainerTitle": "Song Trainer",
+  "songTrainerTransportPause": "Pause",
+  "@songTrainerTransportPause": {
+    "description": "Tooltip of the Song Trainer transport's pause button (icon-only control, audit U7)."
+  },
+  "songTrainerTransportPlay": "Play",
+  "@songTrainerTransportPlay": {
+    "description": "Tooltip of the Song Trainer transport's play button (icon-only control, audit U7)."
+  },
+  "songTrainerTransportRestart": "Back to start",
+  "@songTrainerTransportRestart": {
+    "description": "Tooltip of the Song Trainer transport's rewind button, which seeks back to position zero (audit U7)."
+  },
+  "songTrainerTransportResume": "Resume",
+  "@songTrainerTransportResume": {
+    "description": "Tooltip of the Song Trainer transport's play button while the session is paused — the same glyph performs a different action, so the tooltip names it (audit U7)."
+  },
   "songVisionLoopQualityUnavailable": "Visual quality was unavailable for this loop. Audio scoring is unchanged.",
   "songsEmpty": "Build your own song — pick chords, design a ↓/↑ strum pattern, then play it. It scores just like a lesson.",
+  "songsEmptyTitle": "No songs yet",
+  "@songsEmptyTitle": {
+    "description": "One-line title of the empty songbook. The explanatory sentence (songsEmpty) moved out of the title slot into body text, and the create action is now inline in the empty state (audit U4)."
+  },
   "songsTitle": "My songs",
   "speedBuilderAttempt": "Attempt: {current} of {maximum}",
   "@speedBuilderAttempt": {

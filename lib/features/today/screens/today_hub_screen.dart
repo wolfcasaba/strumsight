@@ -6,6 +6,8 @@ import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../practice/public.dart'
+    show PracticeDefinition, practiceCatalogProvider;
 import '../../progress/public.dart';
 import '../../streak/public.dart';
 import '../domain/today_plan_snapshot.dart';
@@ -17,7 +19,9 @@ import '../providers/today_providers.dart';
 ///
 /// Deliberately resource-free (A4, ADR 0276): this file imports no
 /// microphone, camera, or screen-wakelock API — the primary action only
-/// *navigates* to Practice; starting a session happens on a Stage screen.
+/// *navigates* into Practice; starting a session happens on a Stage screen.
+/// Reading [practiceCatalogProvider] (audit L1) is a const-list lookup, not
+/// a resource open — the same read `PracticeAreaHubScreen` does.
 ///
 /// Styled with plain Material widgets + [AppColors] (the same convention
 /// `ProgressScreen`/`SettingsScreen` use) rather than the `core/design_system`
@@ -42,6 +46,10 @@ class TodayHubScreen extends ConsumerWidget {
     final today = StreakLogic.epochDayOf(nowDate);
     final todaySeconds = ref.watch(dailyGoalActiveSecondsProvider(today));
     final flags = ref.watch(appConfigProvider).flags;
+    final primaryCtaLocation = _primaryCtaLocation(
+      practiceEngineEnabled: flags.practiceEngineV2Enabled,
+      catalog: ref.watch(practiceCatalogProvider),
+    );
 
     // A8 — "new user" is derived from REAL zero-state signals only (no
     // session yet, no streak, no plan); never an invented number.
@@ -88,7 +96,7 @@ class TodayHubScreen extends ConsumerWidget {
                     const SizedBox(height: 16),
                     FilledButton(
                       key: const ValueKey('today-hub-primary-cta'),
-                      onPressed: () => context.go(AppRoutes.practiceHub),
+                      onPressed: () => context.go(primaryCtaLocation),
                       child: Text(hero.ctaLabel),
                     ),
                   ],
@@ -133,6 +141,33 @@ class TodayHubScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Audit L1 — where the ONE primary CTA goes.
+  ///
+  /// The first CTA a new user ever sees ("Start your first practice") used
+  /// to land on the Practice HUB, one more decision away from playing. The
+  /// recommendation is resolved exactly the way `PracticeAreaHubScreen`
+  /// resolves it (ADR 0508 D3/D4): the catalog's first definition, carried
+  /// to the setup route as `?id=` — one tap from the session, since the
+  /// setup screen auto-starts once ready (audit L4).
+  ///
+  /// TWO cases keep the old hub destination, because neither can produce a
+  /// setup screen: an EMPTY catalog (no recommendation exists at all, ADR
+  /// 0508 D4 — never a setup route without a definition id) and a build with
+  /// `practiceEngineV2Enabled` off, where `/practice/setup` is not even
+  /// registered (E02-R12, `app_router.dart`).
+  String _primaryCtaLocation({
+    required bool practiceEngineEnabled,
+    required List<PracticeDefinition> catalog,
+  }) {
+    if (!practiceEngineEnabled || catalog.isEmpty) {
+      return AppRoutes.practiceHub;
+    }
+    return Uri(
+      path: AppRoutes.practiceSetup,
+      queryParameters: <String, String>{'id': catalog.first.id},
+    ).toString();
   }
 
   _HeroContent _heroContent(

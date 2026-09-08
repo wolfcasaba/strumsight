@@ -3277,5 +3277,59 @@
   "practiceScoringProfileCustom": "Egyedi",
   "@practiceScoringProfileCustom": {
     "description": "Fallback label for a scoring profile outside the built-in set (audit H14)."
+  },
+  "practiceSessionFinishHint": "Lezárja a gyakorlást, és elmenti az eredményt",
+  "@practiceSessionFinishHint": {
+    "description": "Semantics hint and tooltip on the Finish transport button of the practice session screen. States the consequence: Finish keeps the result (audit L9)."
+  },
+  "practiceSessionExitHint": "Mentés nélkül lép ki — ez a gyakorlás elveszik",
+  "@practiceSessionExitHint": {
+    "description": "Semantics hint and tooltip on the Exit transport button of the practice session screen, shown only while an exit would really cancel a live session. States the consequence: Exit discards the session (audit L9)."
+  },
+  "practiceSetupCountInUnit": "ütem",
+  "@practiceSetupCountInUnit": {
+    "description": "Unit label of the count-in numeric field on the practice setup screen. The setting is named once by the row label; the field carries only the unit (audit U3)."
+  },
+  "practiceSetupLoopUnit": "ismétlés",
+  "@practiceSetupLoopUnit": {
+    "description": "Unit label of the loop-count numeric field on the practice setup screen. The setting is named once by the row label; the field carries only the unit (audit U3)."
+  },
+  "practiceResultShareUnavailable": "Ebből a gyakorlásból nincs mit megosztani — nem érzékeltünk leütést",
+  "@practiceResultShareUnavailable": {
+    "description": "Reason shown next to the disabled Share button on the practice result screen when the session resolved no targets and recorded no attempt, so the share card would carry no evidence (audit U10)."
+  },
+  "practiceRewardNone": "Ehhez a gyakorláshoz nincs jutalom",
+  "@practiceRewardNone": {
+    "description": "Shown in the Reward card of the practice result screen when the ledger holds no reward for the finished session. Replaces practiceResultRewardNone, whose \"yet\" promised a reward that is never coming (audit U11)."
+  },
+  "profileHubOpenCommunityCta": "Közösség megnyitása",
+  "@profileHubOpenCommunityCta": {},
+  "songsEmptyTitle": "Még nincs dalod",
+  "@songsEmptyTitle": {
+    "description": "One-line title of the empty songbook (audit U4)."
+  },
+  "songTrainerTransportPlay": "Lejátszás",
+  "@songTrainerTransportPlay": {
+    "description": "Tooltip of the Song Trainer transport's play button (audit U7)."
+  },
+  "songTrainerTransportPause": "Szünet",
+  "@songTrainerTransportPause": {
+    "description": "Tooltip of the Song Trainer transport's pause button (audit U7)."
+  },
+  "songTrainerTransportResume": "Folytatás",
+  "@songTrainerTransportResume": {
+    "description": "Tooltip of the Song Trainer transport's play button while paused (audit U7)."
+  },
+  "songTrainerTransportRestart": "Vissza az elejére",
+  "@songTrainerTransportRestart": {
+    "description": "Tooltip of the Song Trainer transport's rewind button (audit U7)."
+  },
+  "metronomeTempoDecrease": "1 BPM-mel lassabb",
+  "@metronomeTempoDecrease": {
+    "description": "Tooltip of the metronome's minus button (audit U7)."
+  },
+  "metronomeTempoIncrease": "1 BPM-mel gyorsabb",
+  "@metronomeTempoIncrease": {
+    "description": "Tooltip of the metronome's plus button (audit U7)."
   }
 }

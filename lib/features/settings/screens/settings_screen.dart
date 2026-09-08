@@ -42,14 +42,17 @@ class SettingsScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
           children: [
+            // Audit U8 — this header used to be a hand-rolled 30 px
+            // Montserrat w800, roughly a third larger than every shell
+            // screen's title ("Today", "Profile", "Practice" — all plain
+            // `AppBar(title: Text(...))`, i.e. the theme's `titleLarge`).
+            // It now takes the SAME style, so moving between the shell
+            // screens and Settings no longer changes the header's weight.
             Text(
               l10n.settingsTitle,
-              style: TextStyle(
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w800,
-                fontSize: 30,
-                color: palette.ink,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(color: palette.ink),
             ),
             const SizedBox(height: 28),
 

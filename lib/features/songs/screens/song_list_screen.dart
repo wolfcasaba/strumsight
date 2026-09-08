@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../../share/public.dart';
@@ -97,10 +97,7 @@ class SongListScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: songs.isEmpty
-            ? EmptyState(
-                icon: Icons.library_music_outlined,
-                title: l10n.songsEmpty,
-              )
+            ? _SongsEmpty(onCreate: () => _openBuilder(context))
             : ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                 itemCount: songs.length,
@@ -154,6 +151,87 @@ class SongListScreen extends ConsumerWidget {
                 },
               ),
       ),
+    );
+  }
+}
+
+/// The empty songbook (audit U4). The whole explanation used to be rendered
+/// in `EmptyState`'s 18px semibold TITLE slot — four loud lines with no way
+/// out except the corner FAB. It is now a one-line title, the explanation in
+/// body type, and the SAME create action as the FAB, inline and reachable
+/// where the user is already looking.
+///
+/// Built here rather than through `core/widgets/empty_state.dart` because
+/// that shared component has no action slot; the layout (icon → title →
+/// body → action, centered, scrollable when the parent is short) is
+/// deliberately identical to it.
+class _SongsEmpty extends StatelessWidget {
+  const _SongsEmpty({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final content = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.library_music_outlined, size: 40, color: palette.muted),
+          const SizedBox(height: 16),
+          Text(
+            l10n.songsEmptyTitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 18,
+              height: 1.35,
+              color: palette.ink,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.songsEmpty,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              height: 1.45,
+              color: palette.muted,
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            key: const Key('songs-empty-create'),
+            onPressed: onCreate,
+            icon: const Icon(Icons.add),
+            label: Text(l10n.songNew),
+          ),
+        ],
+      ),
+    );
+
+    // "Center, but scroll if too tall" — the same idiom `EmptyState` uses, so
+    // the inline action can never be pushed off a short viewport.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final padded = Padding(
+          padding: const EdgeInsets.all(24),
+          child: content,
+        );
+        if (!constraints.hasBoundedHeight) {
+          return Center(child: padded);
+        }
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(child: padded),
+          ),
+        );
+      },
     );
   }
 }

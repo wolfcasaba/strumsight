@@ -3355,5 +3355,61 @@
   "practiceScoringProfileCustom": "Custom",
   "@practiceScoringProfileCustom": {
     "description": "Fallback label for a scoring profile outside the built-in set, so the raw profile id is never shown (audit H14)."
+  },
+  "practiceSessionFinishHint": "Ends the session and saves your result",
+  "@practiceSessionFinishHint": {
+    "description": "Semantics hint and tooltip on the Finish transport button of the practice session screen. States the consequence: Finish keeps the result (audit L9)."
+  },
+  "practiceSessionExitHint": "Leaves without saving — this session is discarded",
+  "@practiceSessionExitHint": {
+    "description": "Semantics hint and tooltip on the Exit transport button of the practice session screen, shown only while an exit would really cancel a live session. States the consequence: Exit discards the session (audit L9)."
+  },
+  "practiceSetupCountInUnit": "bars",
+  "@practiceSetupCountInUnit": {
+    "description": "Unit label of the count-in numeric field on the practice setup screen. The setting is named once by the row label (\"Count-in bars\"); the field carries only the unit (audit U3)."
+  },
+  "practiceSetupLoopUnit": "loops",
+  "@practiceSetupLoopUnit": {
+    "description": "Unit label of the loop-count numeric field on the practice setup screen. The setting is named once by the row label (\"Loop count\"); the field carries only the unit (audit U3)."
+  },
+  "practiceResultShareUnavailable": "Nothing to share from this session — no strums were detected",
+  "@practiceResultShareUnavailable": {
+    "description": "Reason shown next to the disabled Share button on the practice result screen when the session resolved no targets and recorded no attempt, so the share card would carry no evidence (audit U10)."
+  },
+  "practiceRewardNone": "No reward for this session",
+  "@practiceRewardNone": {
+    "description": "Shown in the Reward card of the practice result screen when the ledger holds no reward for the finished session. Replaces practiceResultRewardNone, whose \"yet\" promised a reward that is never coming (audit U11)."
+  },
+  "profileHubOpenCommunityCta": "Open Community",
+  "@profileHubOpenCommunityCta": {
+    "description": "Profile Hub — the filled (primary) action on the Community card. Rendered only for a signed-in user, for whom Community really is one tap away (audit L10); signed out the card renders the outlined communityGateLoggedOutTitle instead, so the sign-in wall is announced on the card."
+  },
+  "songsEmptyTitle": "No songs yet",
+  "@songsEmptyTitle": {
+    "description": "One-line title of the empty songbook. The explanatory sentence (songsEmpty) moved out of the title slot into body text, and the create action is now inline in the empty state (audit U4)."
+  },
+  "songTrainerTransportPlay": "Play",
+  "@songTrainerTransportPlay": {
+    "description": "Tooltip of the Song Trainer transport's play button (icon-only control, audit U7)."
+  },
+  "songTrainerTransportPause": "Pause",
+  "@songTrainerTransportPause": {
+    "description": "Tooltip of the Song Trainer transport's pause button (icon-only control, audit U7)."
+  },
+  "songTrainerTransportResume": "Resume",
+  "@songTrainerTransportResume": {
+    "description": "Tooltip of the Song Trainer transport's play button while the session is paused — the same glyph performs a different action, so the tooltip names it (audit U7)."
+  },
+  "songTrainerTransportRestart": "Back to start",
+  "@songTrainerTransportRestart": {
+    "description": "Tooltip of the Song Trainer transport's rewind button, which seeks back to position zero (audit U7)."
+  },
+  "metronomeTempoDecrease": "Slower by 1 BPM",
+  "@metronomeTempoDecrease": {
+    "description": "Tooltip of the metronome's minus button (icon-only control, audit U7)."
+  },
+  "metronomeTempoIncrease": "Faster by 1 BPM",
+  "@metronomeTempoIncrease": {
+    "description": "Tooltip of the metronome's plus button (icon-only control, audit U7)."
   }
 }
