@@ -174,3 +174,29 @@ ps -ef | grep -c '[c]laude remote-control'
 A kimenetet érdemes `docs/operations/oracle-box-probe-<dátum>.md`-be
 menteni, hogy a következő session mért tényből induljon (L09: a mérce
 artefaktum, nem prompt-szöveg).
+
+## 5. Laptop (VS Code) vagy az Oracle box? — a kettő nem egymás helyett van
+
+A user kérdése (2026-09-08): *„szóval nem jó app-fejlesztéshez, jobb lenne a
+laptopom VS Code-dal?"* A válasz: **más munkára valók.**
+
+| Munka | Laptop + VS Code + Claude Code/Codex | Oracle box (4 OCPU / 24 GB ARM) |
+|---|---|---|
+| interaktív fejlesztés, hot reload, valódi telefonon próbálás | ✅ ez a természetes helye | ❌ nincs kijelző, nincs USB-eszköz |
+| APK build, emulátor | ✅ x86/Apple Silicon hoston megy | ❌ ARM64 Linux hoston nem (Flutter #189724) |
+| gyors `flutter test` | ✅ (egy mai laptop többszörös sebességű) | ⚠ ~15 perc a teljes suite |
+| 24/7 automata kör-lánc (cron + tmux, éjjel is dolgozik) | ❌ csukott laptop = leáll | ✅ **ez az igazi értéke** |
+| több motor párhuzamos, izolált klónokban | ⚠ RAM-tól függ | ✅ 24 GB-on 1 slot, 48 GB-on 2 |
+| Remote Control a telefonról bárhonnan | ⚠ csak ha ébren van | ✅ mindig elérhető |
+| teljes suite + property gate + APK evidenciája | CI | CI (ADR 0053 — egyik gépen sem) |
+
+**Ajánlott felállás:** a laptop az *ember* gépe — ott futtatod a valódi
+gitáros APK-tesztet, a hot reload-os UI-munkát, és onnan írod a
+kör-briefeket VS Code-ban; a box a *gyár* — a cron-vezérelt kör-lánc, a
+motor-profilok, a Remote Control híd. Az összekötő elem a git + a CI: a
+laptop és a box ugyanazt a branch-et és ugyanazt a `round-gate.sh`
+artefaktumot használja, a bizonyíték mindkettőnél a CI-run link.
+
+Ha CSAK egy gép maradhatna: egy 16+ GB-os x86/Apple Silicon laptop az
+interaktív fejlesztésre jobb, de az éjjel-nappal futó automata lánc elveszne —
+azt a box adja, és az a StrumSight 600+ PR-jának a motorja volt.
