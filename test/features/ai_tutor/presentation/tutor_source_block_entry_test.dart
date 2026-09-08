@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/ai_tutor/application/controller/tutor_state.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_content_block.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_ids.dart';
@@ -116,6 +117,7 @@ Future<void> _pumpChat(WidgetTester tester) async {
         tutorChatControllerProvider.overrideWithValue(fake),
       ],
       child: MaterialApp(
+        theme: SsLightTheme.data(),
         locale: const Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
