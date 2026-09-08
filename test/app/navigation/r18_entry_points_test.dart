@@ -262,7 +262,7 @@ void main() {
       });
     }
 
-    testWidgets('the empty "scales" category shows the catalog\'s own empty '
+    testWidgets('the empty "scales" category shows the goal-level empty '
         'copy — an honest listing, not a failure', (tester) async {
       await _openHub(tester);
 
@@ -273,7 +273,11 @@ void main() {
 
       expect(find.byType(PracticeHubScreen), findsOneWidget);
       expect(find.byType(PracticeModeCard), findsNothing);
-      expect(find.text(l10n.practiceHubEmptyCatalogSubtitle), findsOneWidget);
+      // R34 (MI-B): the listing names the GOAL-level absence, not the
+      // whole-catalog "check back later" copy — nine exercises sit one chip
+      // away (`practice_category_empty_state_test.dart`).
+      expect(find.text(l10n.practiceCatalogCategoryEmpty), findsOneWidget);
+      expect(find.text(l10n.practiceHubEmptyCatalogSubtitle), findsNothing);
       expect(find.text(l10n.practiceRouteErrorTitle), findsNothing);
     });
   });
