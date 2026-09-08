@@ -115,21 +115,53 @@ void main() {
       await tester.pumpAndSettle();
 
       // The CTA's own copy is "Start a recovery practice" — the practice
-      // hub is where such a session starts. The domain's ONLY recovery
-      // concept is `StreakEvaluationRequest.recoveryEligible`, which no
-      // repository can grant, so nothing else may be claimed here.
+      // hub is where such a session starts.
       expect(router.state.uri.path, AppRoutes.practiceHub);
+    });
+
+    // R34 — the remainder of MI1 (`docs/ui/legacy-backlog.md` §6.2). Until
+    // this round the CTA was navigation ONLY: the domain's single recovery
+    // concept, `StreakEvaluationRequest.recoveryEligible` (a LOWER
+    // qualification threshold for one session), was never granted anywhere
+    // in `lib/`, so the button promised a recovery practice and credited
+    // nothing.
+    testWidgets('the recovery CTA PERSISTS a single-use recovery grant', (
+      tester,
+    ) async {
+      final store = InMemoryKeyValueStore();
+      final router = await _pumpRouterTo(
+        tester,
+        AppRoutes.streakDetail,
+        overrides: [preferenceStoreOverride(store)],
+      );
+
+      expect(
+        store.readInt(StreakRecoveryGrantStore.storageKey),
+        isNull,
+        reason: 'nothing is credited before the learner asks for it',
+      );
+
+      final screen = tester.widget<StreakDetailScreen>(
+        find.byType(StreakDetailScreen),
+      );
+      screen.onRecoveryPressed();
+      await tester.pumpAndSettle();
+
+      expect(router.state.uri.path, AppRoutes.practiceHub);
+      expect(
+        store.readInt(StreakRecoveryGrantStore.storageKey),
+        isNotNull,
+        reason:
+            'the grant is what makes the next short session qualify — a CTA '
+            'that only navigates leaves the promise unpaid',
+      );
     });
 
     test('the router no longer wires an empty recovery callback', () {
       final source = _readRouterSource();
-      expect(source.contains('onRecoveryPressed: () {'), isFalse);
-      expect(
-        source,
-        contains(
-          'onRecoveryPressed: () => context.push(AppRoutes.practiceHub)',
-        ),
-      );
+      expect(source.contains('onRecoveryPressed: () {}'), isFalse);
+      expect(source, contains('.grant(ref.read(todayEpochDayProvider))'));
+      expect(source, contains('context.push(AppRoutes.practiceHub)'));
     });
   });
 

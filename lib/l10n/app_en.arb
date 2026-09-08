@@ -623,6 +623,30 @@
   "@analysisCompareDirectionUnchanged": {},
   "analysisCompareEmpty": "No metric is comparable between these two sessions.",
   "@analysisCompareEmpty": {},
+  "analysisCompareLoadFailed": "Those analyses could not be opened from this device.",
+  "@analysisCompareLoadFailed": {
+    "description": "Shown when at least one of the two chosen analysis documents could not be read back; no navigation happens. R34 (audit M11)."
+  },
+  "analysisCompareLoading": "Loading both analyses…",
+  "@analysisCompareLoading": {
+    "description": "Progress snackbar shown while the two chosen analysis documents are read back from the on-device repository. R34 (audit M11)."
+  },
+  "analysisComparePickerCancel": "Cancel",
+  "@analysisComparePickerCancel": {
+    "description": "Dismisses the compare picker sheet without comparing anything. R34 (audit M11)."
+  },
+  "analysisComparePickerConfirm": "Compare",
+  "@analysisComparePickerConfirm": {
+    "description": "Confirm button of the compare picker sheet; enabled only when exactly two analyses are selected. R34 (audit M11)."
+  },
+  "analysisComparePickerHint": "Pick exactly two saved analyses. The older one is the “before” side.",
+  "@analysisComparePickerHint": {
+    "description": "Explains the selection rule inside the compare picker sheet. R34 (audit M11)."
+  },
+  "analysisComparePickerTitle": "Compare two analyses",
+  "@analysisComparePickerTitle": {
+    "description": "Title of the bottom sheet that lets the user pick exactly two saved analyses to compare. R34 (audit M11)."
+  },
   "analysisCompareReasonDescriptiveMetricNotComparable": "This metric is descriptive — a change here is not framed as better or worse.",
   "@analysisCompareReasonDescriptiveMetricNotComparable": {},
   "analysisCompareReasonDifferentMetricId": "The two sessions measured different metrics.",
@@ -679,6 +703,10 @@
   "@analysisExportSectionWarnings": {},
   "analysisExportTitle": "Export & share",
   "@analysisExportTitle": {},
+  "analysisHomeCompareCta": "Compare two analyses",
+  "@analysisHomeCompareCta": {
+    "description": "AppBar action on the Analyze home that opens the two-analysis picker. Only rendered when at least two saved analyses exist and the comparison flag is on. R34 (audit M11)."
+  },
   "analysisHomeImportCta": "Import a file",
   "@analysisHomeImportCta": {},
   "analysisHomeImportDescription": "Analyze an existing recording, up to {limitMb} MB.",
@@ -2987,6 +3015,10 @@
   "practiceAreaHubRecommendedTitle": "Recommended for you",
   "practiceCatalogAlternatingEighthsTitle": "Alternating eighths",
   "practiceCatalogCGAmFProgressionTitle": "C–G–Am–F progression",
+  "practiceCatalogCategoryEmpty": "No built-in exercises carry this goal yet.",
+  "@practiceCatalogCategoryEmpty": {
+    "description": "Shown on the catalog listing when a goal-category chip resolves to no built-in definition. Distinct from the whole-catalog empty copy: the catalog is NOT empty, only this goal has no content. R34 (audit MI-B)."
+  },
   "practiceCatalogCategoryHeading": "Category: {category}",
   "@practiceCatalogCategoryHeading": {
     "description": "Heading of the practice catalog list when it is filtered to one goal category.",
@@ -3525,6 +3557,10 @@
   "progressDailyGoal": "Daily goal",
   "progressDaysPracticed": "Days played",
   "progressEmpty": "Play in Live, analyse a riff, or pass a lesson — your progress shows up here.",
+  "progressEvidenceLoading": "Still loading your sessions — try that again in a moment.",
+  "@progressEvidenceLoading": {
+    "description": "Shown when a Progress V2 skill-evidence row is tapped while the unified library aggregation is still loading. Distinct from the no-such-session copy: nothing is missing yet. R34 (audit MI-C)."
+  },
   "progressEvidenceUnavailable": "This session is not in your library.",
   "@progressEvidenceUnavailable": {
     "description": "Shown when a skill-detail evidence row cannot be resolved to a library item, instead of silently opening the library list."

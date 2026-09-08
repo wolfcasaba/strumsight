@@ -21,6 +21,7 @@ final class AnalysisHomeScreen extends StatelessWidget {
     required this.onStartRecording,
     required this.onImportFile,
     this.onOpenAnalysis,
+    this.onCompareAnalyses,
     super.key,
   });
 
@@ -32,13 +33,36 @@ final class AnalysisHomeScreen extends StatelessWidget {
   final VoidCallback onImportFile;
   final void Function(AnalysisSummary summary)? onOpenAnalysis;
 
+  /// R34 (audit M11) — opens the two-analysis comparison flow.
+  ///
+  /// Optional and rendered as an AppBar action ONLY when the host supplies
+  /// it AND at least two analyses exist: the comparison feature is behind
+  /// its own flag (`analysisComparisonEnabled`), and a "Compare" control
+  /// over a single saved analysis would be a live-looking dead control.
+  /// Every golden fixture builds this screen without the callback, so the
+  /// pinned pixels do not move.
+  final VoidCallback? onCompareAnalyses;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
+    final compare = onCompareAnalyses;
+    final canCompare = compare != null && recentAnalyses.length >= 2;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.analysisHomeTitle)),
+      appBar: AppBar(
+        title: Text(l10n.analysisHomeTitle),
+        actions: <Widget>[
+          if (canCompare)
+            IconButton(
+              key: const Key('analysis-home-compare'),
+              icon: const Icon(Icons.compare_arrows),
+              tooltip: l10n.analysisHomeCompareCta,
+              onPressed: compare,
+            ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(SsSpacing.space4),

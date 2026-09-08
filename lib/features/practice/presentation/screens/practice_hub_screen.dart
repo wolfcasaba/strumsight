@@ -156,11 +156,27 @@ class PracticeHubScreen extends ConsumerWidget {
                   const SizedBox(height: SsSpacing.space3),
                   if (filtered.isEmpty)
                     Padding(
+                      key: const Key('practice-catalog-empty'),
                       padding: const EdgeInsets.symmetric(
                         vertical: SsSpacing.space3,
                       ),
                       child: Text(
-                        l10n.practiceHubEmptyCatalogSubtitle,
+                        // R34 (audit MI-B) — a goal chip that resolves to
+                        // nothing said "Check back later", the whole-catalog
+                        // empty copy. MÉRT: the `scales` category matches NO
+                        // built-in definition (`practice_category_test.dart`
+                        // pins that emptiness), so that chip ALWAYS landed
+                        // here and always told the learner the catalog was
+                        // empty — while nine other exercises sat one tap
+                        // away. The two absences are different facts and now
+                        // read differently. The chip itself stays: hiding it
+                        // would move the Practice Area Hub's pinned golden
+                        // (`e13_r17_practice_area_hub_compact*.png`), and
+                        // tagging a strumming exercise `scales` would invent
+                        // content the catalog does not have.
+                        categoryFilter == null
+                            ? l10n.practiceHubEmptyCatalogSubtitle
+                            : l10n.practiceCatalogCategoryEmpty,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),

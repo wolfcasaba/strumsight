@@ -9,11 +9,13 @@ import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/application/analysis_providers.dart';
 import '../../features/audio_analysis/application/capture_seed.dart';
+import '../../features/audio_analysis/application/compare_analyses_use_case.dart';
 import '../../features/audio_analysis/application/import_audio_file_use_case.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
 import '../../features/audio_analysis/domain/analysis_input.dart';
 import '../../features/audio_analysis/domain/analysis_mode.dart';
 import '../../features/audio_analysis/domain/analysis_summary.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_compare_picker.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_import_messages.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
@@ -206,27 +208,58 @@ bool _hasMasteryMilestoneForSkill(String? skillId) =>
 /// [LibraryItem]; a push without one silently lands on the library LIST,
 /// which is the wrong page dressed up as a working link. This resolves the
 /// item out of the already-aggregated library and passes it as `extra`. When
-/// it cannot be resolved — the aggregation has not finished, failed, or the
-/// session is genuinely not in the library — the miss is SPOKEN (a snackbar)
-/// instead of navigating somewhere the row did not name.
+/// it cannot be resolved the miss is SPOKEN (a snackbar) instead of
+/// navigating somewhere the row did not name.
+///
+/// R34 (audit MI-C) — the aggregation's THREE states are now three answers.
+/// The caller used to hand over `libraryItems.value`, which is `null` both
+/// while the unified library is still being read AND when the read failed;
+/// every one of those taps was answered with "this session is no longer
+/// available", i.e. the app claimed a session was GONE while it was still
+/// loading. A load in flight is not a miss, and telling the user to wait is
+/// the only honest thing to say about it.
 void _openLibrarySession(
   BuildContext context, {
   required AppLocalizations l10n,
-  required List<LibraryItem>? items,
+  required AsyncValue<List<LibraryItem>> items,
   required String route,
   required String sessionId,
 }) {
+  final messenger = ScaffoldMessenger.of(context);
+  final resolved = items.value;
+  if (resolved == null) {
+    // No data yet. `hasError` separates "the library could not be read"
+    // (a real unavailability) from "not finished yet" (a wait).
+    messenger.showSnackBar(
+      SnackBar(
+        key: Key(
+          items.hasError
+              ? 'progress-evidence-unavailable'
+              : 'progress-evidence-loading',
+        ),
+        content: Text(
+          items.hasError
+              ? l10n.progressEvidenceUnavailable
+              : l10n.progressEvidenceLoading,
+        ),
+      ),
+    );
+    return;
+  }
   LibraryItem? match;
-  for (final item in items ?? const <LibraryItem>[]) {
+  for (final item in resolved) {
     if (item.id == sessionId) {
       match = item;
       break;
     }
   }
   if (match == null) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(l10n.progressEvidenceUnavailable)));
+    messenger.showSnackBar(
+      SnackBar(
+        key: const Key('progress-evidence-unavailable'),
+        content: Text(l10n.progressEvidenceUnavailable),
+      ),
+    );
     return;
   }
   context.push(route.replaceFirst(':sessionId', sessionId), extra: match);
@@ -325,6 +358,68 @@ Future<void> _openRecentAnalysis(
         SnackBar(content: Text(l10n.analysisHomeOpenFailed)),
       );
   }
+}
+
+/// R34 (audit M11) — the analysis COMPARISON's only entry point.
+///
+/// Measured before this round: `CompareAnalysesUseCase` — the single
+/// producer of an `AnalysisComparison` — had ZERO `lib/` callers, and
+/// `AppRoutes.analysisCompare` had zero navigations, while
+/// `analysisComparisonEnabled` was ON in the shipped development build. The
+/// whole feature (use case, compatibility evaluator, screen, ARB copy) was
+/// finished and unreachable.
+///
+/// The flow mirrors [_openRecentAnalysis] exactly: pick, read the SAVED
+/// documents back by id (a summary carries no metrics at all), and push
+/// only on a complete pair. A failed read is NAMED and navigates nowhere —
+/// the compare route's own redirect would otherwise bounce the user to
+/// `/live` for a reason they could not see.
+Future<void> _openAnalysisCompare(
+  BuildContext context,
+  WidgetRef ref,
+  List<AnalysisSummary> summaries,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final pair = await showAnalysisComparePicker(
+    context,
+    summaries: summaries,
+  );
+  // The sheet is a route: the user can leave the Analyze home while it is
+  // open, and everything below touches `context`.
+  if (pair == null || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(
+    SnackBar(
+      key: const Key('analysis-compare-progress'),
+      content: Text(l10n.analysisCompareLoading),
+    ),
+  );
+  final repository = ref.read(analysisRepositoryProvider);
+  final before = await repository.getById(pair.before.documentId);
+  final after = await repository.getById(pair.after.documentId);
+  if (!context.mounted) return;
+  messenger.hideCurrentSnackBar();
+  final beforeDocument = switch (before) {
+    Success<AnalysisDocument>(:final value) => value,
+    Failure<AnalysisDocument>() => null,
+  };
+  final afterDocument = switch (after) {
+    Success<AnalysisDocument>(:final value) => value,
+    Failure<AnalysisDocument>() => null,
+  };
+  if (beforeDocument == null || afterDocument == null) {
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.analysisCompareLoadFailed)),
+    );
+    return;
+  }
+  final comparison = const CompareAnalysesUseCase()(
+    before: beforeDocument,
+    after: afterDocument,
+  );
+  // `push`, NEM `go` (R30): the comparison lands ON TOP of the Analyze
+  // home, so the ordinary pop is the way back.
+  context.push(AppRoutes.analysisCompare, extra: comparison);
 }
 
 /// R30 (re-audit #2 B2) — leaves one step of the Analysis V2 capture chain.
@@ -620,7 +715,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               onOpenEvidence: (route, sessionId) => _openLibrarySession(
                 context,
                 l10n: l10n,
-                items: libraryItems.value,
+                items: libraryItems,
                 route: route,
                 sessionId: sessionId,
               ),
@@ -1253,6 +1348,16 @@ final routerProvider = Provider<GoRouter>((ref) {
                   // dobta a felhasználót (`_openRecentAnalysis`).
                   onOpenAnalysis: (summary) =>
                       unawaited(_openRecentAnalysis(context, ref, summary)),
+                  // R34 (audit M11) — the comparison's entry point, gated
+                  // on its OWN flag. `null` when the flag is off, and the
+                  // screen then renders no action at all: a "Compare"
+                  // control in front of a route that is not registered
+                  // would be the dead-control class this bar closes.
+                  onCompareAnalyses: analysisComparisonEnabled
+                      ? () => unawaited(
+                          _openAnalysisCompare(context, ref, summaries),
+                        )
+                      : null,
                 ),
               );
             },
@@ -1538,10 +1643,29 @@ final routerProvider = Provider<GoRouter>((ref) {
               // claim. So the honest behaviour is the one the label
               // promises: take the user to the practice hub where such a
               // session starts. Same precedent as `QuestStartPracticeAction`
-              // above; no ledger, freeze count, or streak state is mutated
-              // here, because nothing in the domain grants a recovery
-              // without a real qualified day.
-              onRecoveryPressed: () => context.push(AppRoutes.practiceHub),
+              // above.
+              //
+              // R34 — the CTA now also CREDITS the recovery it promises.
+              // R22's "no state is mutated here" no longer holds, and that
+              // is the point: it held only because no repository could
+              // grant a recovery. Still nothing touches the ledger, the
+              // freeze count or the streak state — a recovery is a lower
+              // BAR for the next session, never a day the learner did not
+              // practise.
+              // `StreakRecoveryGrantStore.grant` persists a SINGLE-USE
+              // lower qualification threshold for the next session
+              // (`docs/ui/legacy-backlog.md` §6.2); the grant is only spent
+              // by a day that has a canonical activity, so tapping the CTA
+              // and then not practising cannot burn it. Navigation is
+              // unchanged — the hub is still where such a session starts.
+              onRecoveryPressed: () {
+                unawaited(
+                  ref
+                      .read(streakRecoveryGrantStoreProvider)
+                      .grant(ref.read(todayEpochDayProvider)),
+                );
+                context.push(AppRoutes.practiceHub);
+              },
             );
           },
         ),

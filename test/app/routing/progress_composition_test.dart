@@ -2,6 +2,8 @@
 // projection for `/profile/progress` (not a placeholder), the skill-detail
 // route resolves `:skillId` and redirects an unknown one, and three
 // measured builtin sessions clear the new-user state.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -447,6 +449,105 @@ void main() {
       expect(find.byType(LibraryItemDetailScreen), findsNothing);
       expect(find.byType(UnifiedLibraryScreen), findsNothing);
       expect(find.byType(SkillDetailScreen), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // R34 (audit MI-C) — "still loading" is not "no such session".
+  //
+  // MÉRT hiba: the route handed `libraryV2ItemsProvider`'s `.value` to the
+  // evidence opener, and that is `null` BOTH while the unified library is
+  // still being aggregated AND when the aggregation failed. Every tap in
+  // that window was answered with "this session is no longer available" —
+  // the app told the user a session was gone while it was still reading it.
+  // -------------------------------------------------------------------
+  group('R34/MI-C — a load in flight is not a miss', () {
+    late AppLocalizations l10n;
+
+    setUpAll(() async {
+      l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    });
+
+    testWidgets('tapping an evidence row while the library is STILL LOADING '
+        'says so, instead of claiming the session is gone', (tester) async {
+      // A source that never completes: the aggregation stays in
+      // `AsyncLoading` for the whole cell, which is exactly the window the
+      // defect lived in.
+      final pending = Completer<LibrarySourceLoad>();
+      addTearDown(() {
+        if (!pending.isCompleted) {
+          pending.complete(LibrarySourceLoad.success(const <LibraryItem>[]));
+        }
+      });
+      await _pumpRouterTo(
+        tester,
+        AppRoutes.profileProgressSkill.replaceFirst(
+          ':skillId',
+          'chordTransition',
+        ),
+        extraOverrides: [
+          progressPracticeHistoryProvider.overrideWithValue(
+            _threeQualifyingChordSessions(),
+          ),
+          libraryV2SourcesProvider.overrideWithValue(<LibraryItemSource>[
+            PracticeItemSource(() => pending.future),
+          ]),
+        ],
+      );
+
+      final detail = tester.widget<SkillDetailScreen>(
+        find.byType(SkillDetailScreen),
+      );
+      final sessionId = detail.projection.evidence.first.sessionId;
+      final row = find.byKey(ValueKey('event-list-row-$sessionId'));
+      await tester.scrollUntilVisible(row, 160, scrollable: _skillDetailList());
+      await tester.tap(row);
+      await tester.pump();
+
+      expect(find.text(l10n.progressEvidenceLoading), findsOneWidget);
+      expect(
+        find.text(l10n.progressEvidenceUnavailable),
+        findsNothing,
+        reason:
+            'the shipped build answered a load in flight with the '
+            '"no such session" copy — a claim it could not have measured',
+      );
+      expect(find.byType(LibraryItemDetailScreen), findsNothing);
+      expect(find.byType(SkillDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('a session the FINISHED aggregation does not contain still '
+        'gets the unavailable copy', (tester) async {
+      await _pumpRouterTo(
+        tester,
+        AppRoutes.profileProgressSkill.replaceFirst(
+          ':skillId',
+          'chordTransition',
+        ),
+        extraOverrides: [
+          progressPracticeHistoryProvider.overrideWithValue(
+            _threeQualifyingChordSessions(),
+          ),
+          libraryV2SourcesProvider.overrideWithValue(<LibraryItemSource>[
+            PracticeItemSource(
+              () async => LibrarySourceLoad.success(const <LibraryItem>[]),
+            ),
+          ]),
+        ],
+      );
+
+      final detail = tester.widget<SkillDetailScreen>(
+        find.byType(SkillDetailScreen),
+      );
+      final sessionId = detail.projection.evidence.first.sessionId;
+      final row = find.byKey(ValueKey('event-list-row-$sessionId'));
+      await tester.scrollUntilVisible(row, 160, scrollable: _skillDetailList());
+      await tester.tap(row);
+      await tester.pump();
+
+      expect(find.text(l10n.progressEvidenceUnavailable), findsOneWidget);
+      expect(find.text(l10n.progressEvidenceLoading), findsNothing);
+      expect(find.byType(LibraryItemDetailScreen), findsNothing);
     });
   });
 }

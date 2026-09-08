@@ -44,6 +44,11 @@ void main() {
       'lib/l10n/features/onboarding_hu.arb',
     ),
     (
+      'features/practice',
+      'lib/l10n/features/practice_en.arb',
+      'lib/l10n/features/practice_hu.arb',
+    ),
+    (
       'features/progress',
       'lib/l10n/features/progress_en.arb',
       'lib/l10n/features/progress_hu.arb',

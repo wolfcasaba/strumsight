@@ -8,5 +8,10 @@
   "@progressV2HistoryUnavailableMessage": {},
 
   "progressV2HistoryUnavailableRetry": "Újra",
-  "@progressV2HistoryUnavailableRetry": {}
+  "@progressV2HistoryUnavailableRetry": {},
+
+  "progressEvidenceLoading": "Még töltjük a munkameneteidet — próbáld újra egy pillanat múlva.",
+  "@progressEvidenceLoading": {
+    "description": "Shown when a Progress V2 skill-evidence row is tapped while the unified library aggregation is still loading. Distinct from the no-such-session copy: nothing is missing yet. R34 (audit MI-C)."
+  }
 }
