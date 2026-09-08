@@ -108,10 +108,9 @@ void main() {
     test('C1 a note survives a new repository over the same store', () async {
       final store = InMemoryKeyValueStore();
 
-      final write = await _repositoryOn(store).write(
-        itemId: _item.id,
-        note: 'Chord changes were late in bar 3.',
-      );
+      final write = await _repositoryOn(
+        store,
+      ).write(itemId: _item.id, note: 'Chord changes were late in bar 3.');
       expect(write.isSuccess, isTrue);
 
       // A FRESH repository reading the same bytes — the app restart shape.
