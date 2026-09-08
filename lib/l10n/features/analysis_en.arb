@@ -1,0 +1,37 @@
+{
+  "@@locale": "en",
+  "analysisImportUnsupportedFormat": "This audio format cannot be imported on this device. Convert the file to WAV and try again.",
+  "@analysisImportUnsupportedFormat": {
+    "description": "Shown when the chosen file is a container this build has no decoder for (any compressed format), or a WAV whose encoding is unsupported. R26 file-import flow."
+  },
+  "analysisImportFileTooLarge": "That file is larger than {megabytes} MB. Import a shorter section instead.",
+  "@analysisImportFileTooLarge": {
+    "description": "Shown when the chosen audio file exceeds the analysis input byte limit. R26 file-import flow.",
+    "placeholders": {
+      "megabytes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisImportClipTooShort": "That recording is too short to analyse.",
+  "@analysisImportClipTooShort": {
+    "description": "Shown when the imported audio is below the minimum analysable duration. R26 file-import flow."
+  },
+  "analysisImportClipTooLong": "That recording is longer than {minutes} minutes. Import a shorter section instead.",
+  "@analysisImportClipTooLong": {
+    "description": "Shown when the imported audio exceeds the maximum analysable duration. R26 file-import flow.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisImportUnreadable": "That file could not be read as audio — it may be damaged or incomplete.",
+  "@analysisImportUnreadable": {
+    "description": "Shown when a decodable container failed at the analysis input boundary for any other reason (truncated chunk, bad sizes, non-finite samples). R26 file-import flow."
+  },
+  "analysisSaveFailed": "The analysis could not be saved on this device.",
+  "@analysisSaveFailed": {
+    "description": "Shown on the processing screen when persisting a finished analysis to the on-device repository failed. R26."
+  }
+}

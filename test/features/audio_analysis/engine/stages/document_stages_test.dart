@@ -58,6 +58,38 @@ void main() {
       expect(document.hotspots, isEmpty);
     });
 
+    // R26 (audit MI4) — file import. The imported file NAME is the only
+    // provenance the document keeps about the source file; it lives in the
+    // one field designed for it (`AnalysisInputSummary.sourceName`), which
+    // the export allowlist omits, so a shared export still carries no
+    // filename. Everything else about the file (path, bytes, a second hash)
+    // stays out of the document entirely.
+    test('R26 — an imported run records the file name, a recorded run keeps '
+        'sourceName null', () async {
+      final importedAudio = _audio(
+        source: AnalysisInputSource.importedFile,
+        sourceDisplayName: const SourceDisplayName('my-take.wav'),
+      );
+      final imported = _success(
+        await DocumentAssemblyStage(
+          clock: () => DateTime.utc(2026, 8, 15),
+        ).run(_state(importedAudio), _context(DocumentStageIds.assembly)),
+      ).document!;
+
+      expect(imported.input.source, AnalysisInputSource.importedFile);
+      expect(imported.input.sourceName, 'my-take.wav');
+      expect(imported.input.originalAudioRetained, isFalse);
+      expect(imported.input.fingerprint, isNotEmpty);
+
+      final recorded = _success(
+        await DocumentAssemblyStage(
+          clock: () => DateTime.utc(2026, 8, 15),
+        ).run(_state(), _context(DocumentStageIds.assembly)),
+      ).document!;
+
+      expect(recorded.input.sourceName, isNull);
+    });
+
     test('A3/A4 — insight rules receive the assembled document and the final '
         'document keeps ranked insight and hotspot output', () async {
       final assembled = _success(
@@ -157,16 +189,22 @@ AnalysisWorkState _success(AppResult<AnalysisWorkState> result) =>
       Failure<AnalysisWorkState>(:final error) => throw StateError(error.code),
     };
 
-AnalysisWorkState _state() =>
+PcmAnalysisInput _audio({
+  AnalysisInputSource source = AnalysisInputSource.practiceSession,
+  SourceDisplayName? sourceDisplayName,
+}) {
+  return PcmAnalysisInput(
+    samples: List<double>.filled(5000, 0.1),
+    sampleRate: 1000,
+    channelCount: 1,
+    source: source,
+    sourceDisplayName: sourceDisplayName,
+  );
+}
+
+AnalysisWorkState _state([PcmAnalysisInput? audio]) =>
     AnalysisWorkState.seed(
-      input: ValidatedPcmAnalysisInput(
-        input: PcmAnalysisInput(
-          samples: List<double>.filled(5000, 0.1),
-          sampleRate: 1000,
-          channelCount: 1,
-          source: AnalysisInputSource.practiceSession,
-        ),
-      ),
+      input: ValidatedPcmAnalysisInput(input: audio ?? _audio()),
       mode: AnalysisMode.freePlay,
     ).copyWith(
       preprocessedAudio: PreprocessedAudio(

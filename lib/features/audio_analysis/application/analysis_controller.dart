@@ -9,6 +9,7 @@ import 'package:strumsight/features/audio_analysis/domain/analysis_event.dart';
 
 import 'analysis_providers.dart'
     show
+        analysisDocumentPersisterProvider,
         analysisPracticeCreditRecorderProvider,
         analyzeAudioUseCaseProvider,
         cancelAnalysisUseCaseProvider;
@@ -21,6 +22,25 @@ import 'cancel_analysis_use_case.dart';
 /// controller free of progress/streak feature imports.
 abstract interface class AnalysisPracticeCreditRecorder {
   void record(AnalysisDocument document);
+}
+
+/// Persistence of a finished run, owned by the composition root.
+///
+/// **R26 (audit MI4).** The finished document had NO production write path:
+/// `saveAnalysisUseCaseProvider` existed with zero callers in `lib/`
+/// (measured), so the V2 repository only ever received V1-migrated sessions
+/// and a fresh run — recorded OR imported — vanished the moment the user
+/// left the processing screen, while the home screen kept promising a
+/// "recent analyses" list.
+///
+/// It lives HERE rather than in a screen because a screen can only observe
+/// the run while it is mounted: the import flow starts the run and navigates
+/// on the next frame, so a route-level listener would miss a run that
+/// finished in between. The controller owns the terminal transition, so it
+/// is the only place that can promise "every finished run is offered to the
+/// repository, exactly once".
+abstract interface class AnalysisDocumentPersister {
+  void persist(AnalysisDocument document);
 }
 
 /// Coordinates one analysis run. It owns the authoritative active run ID;
@@ -41,10 +61,12 @@ final class AnalysisController extends Notifier<AnalysisState> {
     AnalyzeAudioUseCase? analyzeAudio,
     CancelAnalysisUseCase? cancelAnalysis,
     AnalysisPracticeCreditRecorder? practiceCredit,
+    AnalysisDocumentPersister? persistDocument,
     this.minEventsBetweenEmits = 5,
   }) : _analyzeAudioOverride = analyzeAudio,
        _cancelAnalysisOverride = cancelAnalysis,
-       _practiceCreditOverride = practiceCredit {
+       _practiceCreditOverride = practiceCredit,
+       _persistDocumentOverride = persistDocument {
     if (minEventsBetweenEmits <= 0) {
       throw ArgumentError.value(minEventsBetweenEmits, 'minEventsBetweenEmits');
     }
@@ -53,6 +75,7 @@ final class AnalysisController extends Notifier<AnalysisState> {
   final AnalyzeAudioUseCase? _analyzeAudioOverride;
   final CancelAnalysisUseCase? _cancelAnalysisOverride;
   final AnalysisPracticeCreditRecorder? _practiceCreditOverride;
+  final AnalysisDocumentPersister? _persistDocumentOverride;
 
   late final AnalyzeAudioUseCase analyzeAudio =
       _analyzeAudioOverride ?? ref.read(analyzeAudioUseCaseProvider);
@@ -61,8 +84,11 @@ final class AnalysisController extends Notifier<AnalysisState> {
   late final AnalysisPracticeCreditRecorder practiceCredit =
       _practiceCreditOverride ??
       ref.read(analysisPracticeCreditRecorderProvider);
+  late final AnalysisDocumentPersister persistDocument =
+      _persistDocumentOverride ?? ref.read(analysisDocumentPersisterProvider);
   final int minEventsBetweenEmits;
   final Set<String> _creditedRunIds = <String>{};
+  final Set<String> _persistedRunIds = <String>{};
   String? _activeRunId;
   AnalysisRunHandle? _activeRun;
   final Set<StreamSubscription<AnalysisProgressEvent>> _progressSubscriptions =
@@ -171,6 +197,7 @@ final class AnalysisController extends Notifier<AnalysisState> {
           return;
         }
         state = AnalysisCompleted(runId: runId, document: document);
+        _persistOnce(runId, document);
         _creditOnce(runId, document);
       case AnalysisCompletionStatus.degraded:
         final document = result.document;
@@ -179,6 +206,10 @@ final class AnalysisController extends Notifier<AnalysisState> {
           return;
         }
         state = AnalysisDegradedCompleted(runId: runId, document: document);
+        // A degradált futás IS valódi dokumentum (mért metrikákkal és a
+        // hiányzó képességek nevesítésével) — eldobni azt állítaná, hogy
+        // semmi nem készült el.
+        _persistOnce(runId, document);
       case AnalysisCompletionStatus.cancelled:
         state = AnalysisCancelled(runId: runId);
       case AnalysisCompletionStatus.failed:
@@ -187,6 +218,14 @@ final class AnalysisController extends Notifier<AnalysisState> {
           failure: result.failure ?? const UnknownFailure(),
         );
     }
+  }
+
+  /// Every finished run is offered to the repository exactly once. A
+  /// cancelled or failed run has no document and is never offered — an entry
+  /// with nothing in it would claim an analysis that never happened.
+  void _persistOnce(String runId, AnalysisDocument document) {
+    if (!_persistedRunIds.add(runId)) return;
+    persistDocument.persist(document);
   }
 
   void _creditOnce(String runId, AnalysisDocument document) {

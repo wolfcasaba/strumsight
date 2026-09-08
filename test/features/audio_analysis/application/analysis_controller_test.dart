@@ -45,6 +45,84 @@ void main() {
       expect(credit.calls, 0);
     });
 
+    // R26 (audit MI4) — a finished run is OFFERED to the repository exactly
+    // once. Before this round nothing in `lib/` called
+    // `saveAnalysisUseCaseProvider` (measured), so a fresh run — recorded or
+    // imported — was never written, and the home screen's "recent analyses"
+    // list could only ever show V1-migrated sessions.
+    test('R26 — a completed run is offered to the repository once', () async {
+      final run = _FakeRun('run-1');
+      final persister = _FakePersister();
+      final controller = _controller(run, persister: persister);
+      final document = _document();
+
+      final future = controller.analyze(_document(), audio: _audio());
+      run.complete(_result(runId: 'run-1', value: document));
+      await future;
+      await _flush();
+
+      expect(persister.documents, hasLength(1));
+      expect(persister.documents.single, same(document));
+    });
+
+    test('R26 — a degraded run is persisted too: it carries a real, measured '
+        'document', () async {
+      final run = _FakeRun('run-1');
+      final persister = _FakePersister();
+      final controller = _controller(run, persister: persister);
+
+      final future = controller.analyze(_document(), audio: _audio());
+      run.complete(
+        _result(
+          runId: 'run-1',
+          value: _document(),
+          completion: AnalysisCompletionStatus.degraded,
+        ),
+      );
+      await future;
+      await _flush();
+
+      expect(persister.documents, hasLength(1));
+    });
+
+    test('R26 — a run that produced no document is never persisted', () async {
+      final cancelled = _FakeRun('run-1');
+      final cancelledPersister = _FakePersister();
+      final cancelledController = _controller(
+        cancelled,
+        persister: cancelledPersister,
+      );
+      final cancelledFuture = cancelledController.analyze(
+        _document(),
+        audio: _audio(),
+      );
+      cancelled.complete(
+        const AnalysisRunResult(completion: AnalysisCompletionStatus.cancelled),
+      );
+      await cancelledFuture;
+
+      final failed = _FakeRun('run-2');
+      final failedPersister = _FakePersister();
+      final failedController = _controller(failed, persister: failedPersister);
+      final failedFuture = failedController.analyze(
+        _document(),
+        audio: _audio(),
+      );
+      failed.complete(
+        _result(
+          runId: 'run-2',
+          failure: const MlFailure(),
+          completion: AnalysisCompletionStatus.failed,
+        ),
+      );
+      await failedFuture;
+      await _flush();
+
+      // An empty entry would claim an analysis that never happened.
+      expect(cancelledPersister.documents, isEmpty);
+      expect(failedPersister.documents, isEmpty);
+    });
+
     test(
       'maps a fatal stage failure to analysis error without credit',
       () async {
@@ -239,11 +317,17 @@ void main() {
 AnalysisController _controller(
   _FakeRun run, {
   AnalysisPracticeCreditRecorder? credit,
-}) => _controllerWithRunner(_QueueRunner(<_FakeRun>[run]), credit: credit);
+  AnalysisDocumentPersister? persister,
+}) => _controllerWithRunner(
+  _QueueRunner(<_FakeRun>[run]),
+  credit: credit,
+  persister: persister,
+);
 
 AnalysisController _controllerWithRunner(
   AnalysisRunner runner, {
   AnalysisPracticeCreditRecorder? credit,
+  AnalysisDocumentPersister? persister,
 }) {
   final container = ProviderContainer();
   addTearDown(container.dispose);
@@ -251,6 +335,10 @@ AnalysisController _controllerWithRunner(
     analyzeAudio: AnalyzeAudioUseCase(runner),
     cancelAnalysis: CancelAnalysisUseCase(),
     practiceCredit: credit ?? _FakeCreditRecorder(),
+    // R26 — WITHOUT this the controller would resolve the production
+    // persister, whose repository provider throws until the bootstrap layer
+    // overrides it. The fake also lets the cells below COUNT the offers.
+    persistDocument: persister ?? _FakePersister(),
   );
   final provider = NotifierProvider<AnalysisController, AnalysisState>(
     () => controller,
@@ -310,6 +398,15 @@ final class _FakeCreditRecorder implements AnalysisPracticeCreditRecorder {
   @override
   void record(AnalysisDocument document) {
     calls++;
+  }
+}
+
+final class _FakePersister implements AnalysisDocumentPersister {
+  final documents = <AnalysisDocument>[];
+
+  @override
+  void persist(AnalysisDocument document) {
+    documents.add(document);
   }
 }
 

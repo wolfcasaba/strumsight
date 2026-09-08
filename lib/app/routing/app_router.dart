@@ -8,10 +8,12 @@ import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/application/analysis_providers.dart';
 import '../../features/audio_analysis/application/capture_seed.dart';
+import '../../features/audio_analysis/application/import_audio_file_use_case.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
 import '../../features/audio_analysis/domain/analysis_input.dart';
 import '../../features/audio_analysis/domain/analysis_mode.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_import_messages.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
 import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
@@ -226,6 +228,54 @@ void _openLibrarySession(
     return;
   }
   context.push(route.replaceFirst(':sessionId', sessionId), extra: match);
+}
+
+/// R26 (audit MI4) — the "Import file" CTA's real flow.
+///
+/// The CTA used to say, honestly, that no import flow existed. It does now:
+/// the picker hands back bytes, the WAV boundary decoder (`E06-R05`, already
+/// tested) turns them into validated PCM, and that PCM starts the IDENTICAL
+/// `AnalysisController.analyze` run a microphone capture starts — same
+/// isolate, same 20 stages, same processing screen. The pipeline never
+/// learns where the samples came from beyond the input's own enum.
+///
+/// A container this build cannot decode is still SPOKEN, not swallowed:
+/// `analysisImportMessage` names the actual reason (unsupported container,
+/// too large, too short, too long, unreadable), so the user knows what to
+/// fix instead of facing a button that appears to do nothing.
+Future<void> _startAnalysisImport(BuildContext context, WidgetRef ref) async {
+  final outcome = await ref.read(importAudioFileUseCaseProvider)();
+  // The picker is a full-screen platform surface: the user can leave this
+  // route while it is open. Everything after this point touches `ref` and
+  // `context`, both of which are invalid once that happens.
+  if (!context.mounted) return;
+  if (outcome case AudioFileImportReady(:final audio)) {
+    ref
+        .read(analysisCaptureOriginProvider.notifier)
+        .markStarted(AnalysisInputSource.importedFile);
+    unawaited(
+      ref
+          .read(analysisControllerProvider.notifier)
+          .analyze(
+            captureSeedDocument(
+              runId: 'import-${DateTime.now().microsecondsSinceEpoch}',
+              audio: audio,
+              createdAt: DateTime.now(),
+              mode: AnalysisMode.importedRecording,
+            ),
+            audio: ValidatedPcmAnalysisInput(input: audio),
+          ),
+    );
+    // `push`, NEM `go` (R17-minta): a kezdőlapot maga is `push` nyitotta az
+    // Elemzés fülről, és egy `go` az egész stacket lecserélné — a
+    // feldolgozó képernyőről nem lenne visszaút sehová.
+    context.push(AppRoutes.analysisProcessing);
+    return;
+  }
+  final message = analysisImportMessage(AppLocalizations.of(context), outcome);
+  // A cancelled picker says nothing — dismissing a chooser is not an error.
+  if (message == null) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
@@ -1067,7 +1117,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, _) => Consumer(
             builder: (context, ref, _) {
               final recent = ref.watch(analysisRecentSummariesProvider);
-              final l10n = AppLocalizations.of(context);
               // R18 (audit M6) — a `recent.value ?? const []` a provider
               // SZÁNDÉKOS hibaágát (`analysis_providers.dart`: a `Failure`
               // dob, hogy a hiba megkülönböztethető maradjon) pontosan azzá
@@ -1086,17 +1135,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                 data: (summaries) => AnalysisHomeScreen(
                   recentAnalyses: summaries,
                   onStartRecording: () => context.go(AppRoutes.analysisRecord),
-                  onImportFile: () {
-                    // A hang-importálásnak NINCS folyamata a fában (se
-                    // képernyő, se útvonal). Egy néma no-op itt halott
-                    // gombot adna; a felhasználó azt hinné, elromlott.
-                    // Ezért a hiányt kimondjuk.
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.analysisHomeImportUnavailable),
-                      ),
-                    );
-                  },
+                  // R26 (audit MI4) — a CTA VALÓDI importot nyit. A
+                  // korábbi őszinte hiány-üzenet helyére a folyamat lépett;
+                  // a „nem tudom dekódolni" eset megmaradt, de már a
+                  // konkrét okot mondja ki (`analysis_import_messages.dart`).
+                  onImportFile: () =>
+                      unawaited(_startAnalysisImport(context, ref)),
                   onOpenAnalysis: (summary) =>
                       context.go(AppRoutes.analysisTimeline, extra: summary),
                 ),
@@ -1124,6 +1168,9 @@ final routerProvider = Provider<GoRouter>((ref) {
                     channelCount: 1,
                     source: AnalysisInputSource.microphone,
                   );
+                  ref
+                      .read(analysisCaptureOriginProvider.notifier)
+                      .markStarted(AnalysisInputSource.microphone);
                   unawaited(
                     ref
                         .read(analysisControllerProvider.notifier)
@@ -1146,13 +1193,37 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.analysisProcessing,
           builder: (_, _) => Consumer(
             builder: (context, ref, _) {
+              // R26 — a MENTÉS a vezérlőben történik
+              // (`AnalysisController._persistOnce`), nem itt: ez az útvonal
+              // csak addig lát, amíg fel van építve, az import viszont
+              // elindítja a futást és a következő képkockán navigál. Ami
+              // ide tartozik, az a HIBA kimondása — egy elnyelt írási hiba
+              // azt a látszatot keltené, hogy az elemzés megmaradt, pedig a
+              // „legutóbbi elemzések" listába sosem kerülne be.
+              ref.listen(analysisPersistenceStatusProvider, (_, failure) {
+                if (failure == null) return;
+                final l10n = AppLocalizations.of(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(l10n.analysisSaveFailed)),
+                );
+              });
               final state = ref.watch(analysisControllerProvider);
+              final imported =
+                  ref.watch(analysisCaptureOriginProvider) ==
+                  AnalysisInputSource.importedFile;
               return AnalysisProcessingScreen(
                 state: state,
                 onCancel: () => unawaited(
                   ref.read(analysisControllerProvider.notifier).cancel(),
                 ),
-                onRestart: () => context.go(AppRoutes.analysisRecord),
+                // Egy importált futás után a felvevő képernyő HAZUDNA a
+                // bemenetről; a „kezdés elölről" oda visz vissza, ahonnan
+                // ez a futás indult.
+                onRestart: () => context.go(
+                  imported
+                      ? AppRoutes.analysisCapture
+                      : AppRoutes.analysisRecord,
+                ),
                 onViewResult: (document) =>
                     context.go(AppRoutes.analysisOverview, extra: document),
               );

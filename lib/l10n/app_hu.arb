@@ -702,6 +702,36 @@
   "@analysisHomeRecordDescription": {},
   "analysisHomeTitle": "Elemzés",
   "@analysisHomeTitle": {},
+  "analysisImportClipTooLong": "Ez a felvétel hosszabb {minutes} percnél. Importálj belőle egy rövidebb részt.",
+  "@analysisImportClipTooLong": {
+    "description": "Shown when the imported audio exceeds the maximum analysable duration. R26 file-import flow.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisImportClipTooShort": "Ez a felvétel túl rövid az elemzéshez.",
+  "@analysisImportClipTooShort": {
+    "description": "Shown when the imported audio is below the minimum analysable duration. R26 file-import flow."
+  },
+  "analysisImportFileTooLarge": "A fájl nagyobb {megabytes} MB-nál. Importálj belőle egy rövidebb részt.",
+  "@analysisImportFileTooLarge": {
+    "description": "Shown when the chosen audio file exceeds the analysis input byte limit. R26 file-import flow.",
+    "placeholders": {
+      "megabytes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisImportUnreadable": "A fájlt nem sikerült hangként beolvasni — sérült vagy hiányos lehet.",
+  "@analysisImportUnreadable": {
+    "description": "Shown when a decodable container failed at the analysis input boundary for any other reason (truncated chunk, bad sizes, non-finite samples). R26 file-import flow."
+  },
+  "analysisImportUnsupportedFormat": "Ez a hangformátum ezen az eszközön nem importálható. Alakítsd át WAV-ra, és próbáld újra.",
+  "@analysisImportUnsupportedFormat": {
+    "description": "Shown when the chosen file is a container this build has no decoder for (any compressed format), or a WAV whose encoding is unsupported. R26 file-import flow."
+  },
   "analysisInsightChordTransitionHotspot": "Egy akkordváltás célzott gyakorlást igényel ({hotspotId}).",
   "@analysisInsightChordTransitionHotspot": {
     "placeholders": {
@@ -1143,6 +1173,10 @@
   "@analysisRecordingStop": {},
   "analysisRecordingTitle": "Felvétel",
   "@analysisRecordingTitle": {},
+  "analysisSaveFailed": "Az elemzést nem sikerült elmenteni az eszközre.",
+  "@analysisSaveFailed": {
+    "description": "Shown on the processing screen when persisting a finished analysis to the on-device repository failed. R26."
+  },
   "analysisTechniqueAttackInstability": "Hangindítás tisztasága",
   "analysisTechniqueChordChangeGap": "Akkordváltás folyamatossága",
   "analysisTechniqueConfidenceCollapseDuration": "Akkordfelismerés bizonytalanságának időtartama",

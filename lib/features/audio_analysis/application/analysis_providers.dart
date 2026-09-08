@@ -21,9 +21,13 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/audio/lifecycle/audio_session_lease.dart';
+import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
+import '../../../core/logging/logger_provider.dart';
 import '../data/cache/analysis_cache.dart';
 import '../data/capture/analysis_recorder.dart';
+import '../data/input/analysis_audio_file_picker.dart';
+import '../domain/analysis_mode.dart';
 import '../domain/analysis_summary.dart';
 import '../data/local/file_analysis_repository.dart';
 import '../data/migration/analysis_migration_version_store.dart';
@@ -41,6 +45,7 @@ import 'analysis_isolate_runner.dart';
 import 'analysis_state.dart';
 import 'analyze_audio_use_case.dart';
 import 'cancel_analysis_use_case.dart';
+import 'import_audio_file_use_case.dart';
 import 'save_analysis_use_case.dart';
 import 'v2_analysis_runner.dart';
 
@@ -313,3 +318,154 @@ final analysisRecentSummariesProvider =
         Failure<List<AnalysisSummary>>(:final error) => throw error,
       };
     });
+
+// ---------------------------------------------------------------------------
+// Hang-import (R26, audit MI4) — a „Fájl importálása" belépő.
+//
+// A kezdőlap CTA-ja eddig egy ŐSZINTE hiány-üzenetet mutatott, mert a fához
+// nem tartozott import-folyamat. A hiányzó darab NEM a dekóder volt (a
+// `WavDecoderAdapter` és a `FileAnalysisInput` az E06-R05 óta megvan és
+// tesztelt), hanem a platform-szedő és a kettőt összekötő use case.
+// ---------------------------------------------------------------------------
+
+/// A hang-import platform-határa. A widget-teszt saját, a fájlrendszert nem
+/// érintő szedőt injektál ide.
+final analysisAudioFilePickerProvider = Provider<AnalysisAudioFilePicker>(
+  (_) => const PlatformAnalysisAudioFilePicker(),
+);
+
+/// Fájl → validált PCM az elemzés bemeneti határán. Elemzést NEM indít: a
+/// visszaadott mintákat a hívó ugyanabba a futásba adja, amit egy mikrofonos
+/// felvétel indít.
+final importAudioFileUseCaseProvider = Provider<ImportAudioFileUseCase>(
+  (ref) => ImportAudioFileUseCase(
+    picker: ref.watch(analysisAudioFilePickerProvider),
+  ),
+);
+
+/// Melyik bemenetből indult a LEGUTÓBB elindított futás.
+///
+/// A feldolgozó képernyő „Kezdés elölről" gombjának kell: egy importált
+/// futás után a felvevő képernyőre dobni a felhasználót azt állítaná, hogy
+/// az elemzés mikrofonból jött. A dokumentum ezt nem mondja meg — a futó
+/// állapot csak a `AnalysisState`-et hordozza, a seedet nem.
+final class AnalysisCaptureOrigin extends Notifier<AnalysisInputSource> {
+  @override
+  AnalysisInputSource build() => AnalysisInputSource.microphone;
+
+  void markStarted(AnalysisInputSource source) => state = source;
+}
+
+final analysisCaptureOriginProvider =
+    NotifierProvider<AnalysisCaptureOrigin, AnalysisInputSource>(
+      AnalysisCaptureOrigin.new,
+    );
+
+// ---------------------------------------------------------------------------
+// A befejezett futás MENTÉSE (R26, audit MI4).
+//
+// A `saveAnalysisUseCaseProvider`-nek egyetlen éles hívója sem volt a fában
+// (mért), tehát a V2 repository-ba KIZÁRÓLAG a V1-migráció írt: egy friss
+// futás — felvett vagy importált — eltűnt abban a pillanatban, amikor a
+// felhasználó elhagyta a feldolgozó képernyőt, miközben a kezdőlap
+// „legutóbbi elemzések" listát ígért.
+//
+// A mentés a VEZÉRLŐBEN dől el (`AnalysisController._persistOnce`), nem egy
+// képernyőn: egy képernyő csak addig lát, amíg fel van építve, az import
+// viszont elindítja a futást és a következő képkockán navigál — egy
+// útvonal-szintű figyelő lemaradna egy közben befejeződő futásról.
+// ---------------------------------------------------------------------------
+
+/// A LEGUTÓBBI mentési kísérlet hibája, vagy null, ha a legutóbb befejezett
+/// futás tárolásra került.
+///
+/// A hiba NEM marad néma: a feldolgozó útvonal ezt figyeli és kimondja. Egy
+/// elnyelt írási hiba a mért „a felhő-írást elnyeli a try/catch" csapda helyi
+/// változata lenne — a felhasználó úgy hagyná ott a képernyőt, hogy azt hiszi,
+/// az elemzés megmaradt.
+final class AnalysisPersistenceStatus extends Notifier<AppFailure?> {
+  @override
+  AppFailure? build() => null;
+
+  void markSaved() => state = null;
+
+  void markFailed(AppFailure failure) => state = failure;
+}
+
+final analysisPersistenceStatusProvider =
+    NotifierProvider<AnalysisPersistenceStatus, AppFailure?>(
+      AnalysisPersistenceStatus.new,
+    );
+
+/// A befejezett dokumentum írója.
+///
+/// A cím a V1 akkord-összefoglaló ([_autoTitle]), NEM az importált fájlnév:
+/// a fájlnév a dokumentum `input.sourceName` mezőjében marad, amit az
+/// export-engedélylista kihagy — az indexre viszont az engedélylista nem
+/// vonatkozik, tehát ott a névnek nincs helye.
+final analysisDocumentPersisterProvider = Provider<AnalysisDocumentPersister>(
+  (ref) => _RiverpodAnalysisDocumentPersister(ref),
+);
+
+final class _RiverpodAnalysisDocumentPersister
+    implements AnalysisDocumentPersister {
+  const _RiverpodAnalysisDocumentPersister(this._ref);
+
+  final Ref _ref;
+
+  @override
+  void persist(AnalysisDocument document) => unawaited(_save(document));
+
+  Future<void> _save(AnalysisDocument document) async {
+    final save = _ref.read(saveAnalysisUseCaseProvider);
+    final result = await save(
+      AnalysisSaveRequest(
+        document: document,
+        title: _autoTitle(document),
+        customTitle: false,
+      ),
+    );
+    final status = _ref.read(analysisPersistenceStatusProvider.notifier);
+    if (result case Failure<void>(:final error)) {
+      status.markFailed(error);
+      // Csak a KÓD kerül naplóba. Maga a kivétel hordozhat fájl-útvonalat (a
+      // `FileSystemException` a sajátját), a dokumentum pedig az importált
+      // fájl nevét — egyik sem való diagnosztikába.
+      final logger = _ref.read(appLoggerProvider);
+      logger.warning(
+        'analysis_persist_failed',
+        fields: <String, Object?>{'code': error.code},
+      );
+      return;
+    }
+    status.markSaved();
+    // A friss bejegyzés csak akkor JELENIK MEG a kezdőlapon, ha az
+    // index-olvasás újrafut: a lista `FutureProvider`-je a repository-t
+    // egyszer kérdezi meg, és a mentésről magától nem értesül.
+    _ref.invalidate(analysisRecentSummariesProvider);
+  }
+}
+
+/// The V1 auto-title, rebuilt from a V2 document: consecutive chord labels,
+/// de-duplicated and joined — "C · G · Am · F".
+///
+/// `AnalysisSummary.title` documents exactly this shape ("auto-title like
+/// `C · G`", with `customTitle` false), and mirroring
+/// `AnalyzeResult.chordSummary` keeps a migrated V1 session and a fresh V2
+/// run reading the same way inside one list.
+///
+/// It stays EMPTY when the run found no chord: a made-up name would claim
+/// content the analysis did not find, and the empty string is the documented
+/// value for "not titled yet" (the home screen falls back to the id). The
+/// imported FILE NAME is deliberately NOT a candidate — the index is not
+/// covered by the export allowlist that keeps `input.sourceName` out of a
+/// shared export.
+String _autoTitle(AnalysisDocument document) {
+  final labels = <String>[];
+  for (final segment in document.timeline.chordSegments) {
+    if (labels.isEmpty || labels.last != segment.label) {
+      labels.add(segment.label);
+    }
+  }
+  return labels.join(' · ');
+}

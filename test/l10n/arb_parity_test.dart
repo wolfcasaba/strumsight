@@ -19,6 +19,11 @@ void main() {
   const fragments = <(String label, String enPath, String huPath)>[
     ('base/app', 'lib/l10n/base/app_en.arb', 'lib/l10n/base/app_hu.arb'),
     (
+      'features/analysis',
+      'lib/l10n/features/analysis_en.arb',
+      'lib/l10n/features/analysis_hu.arb',
+    ),
+    (
       'features/community',
       'lib/l10n/features/community_en.arb',
       'lib/l10n/features/community_hu.arb',
