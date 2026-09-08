@@ -319,8 +319,13 @@ class LivePipeline {
   /// (`chordLatched && hasMatch`), so it can never diverge from it (§6 pt.2);
   /// among the remaining cases the jel-minőség reason takes priority over
   /// `noChord`/`lowConfidence` (D4: a bad mic reading is never blamed on the
-  /// player's fingers). Public + static so a test can drive it directly,
-  /// without a full pipeline (§6 pt.3/4).
+  /// player's fingers). ADR 0535 D2: the signal reason is derived by an
+  /// EXHAUSTIVE `switch` over [SignalQualityState] with NO `default` arm —
+  /// each non-`good` state maps to its OWN `signal*` reason, so a future
+  /// state cannot silently fall into a collector bucket; `good`/`unknown`
+  /// yield no signal reason (unchanged behaviour, no new threshold). Public
+  /// + static so a test can drive it directly, without a full pipeline
+  /// (§6 pt.3/4).
   @visibleForTesting
   static (RecognitionDecision, RecognitionRejectReason?)
   debugDeriveChordDecision({
@@ -331,12 +336,17 @@ class LivePipeline {
     if (chordLatched && hasMatch) {
       return (RecognitionDecision.confirmed, null);
     }
-    if (signalQualityState != SignalQualityState.good &&
-        signalQualityState != SignalQualityState.unknown) {
-      return (
-        RecognitionDecision.rejected,
-        RecognitionRejectReason.signalQuality,
-      );
+    final signalReason = switch (signalQualityState) {
+      SignalQualityState.tooQuiet => RecognitionRejectReason.signalTooQuiet,
+      SignalQualityState.tooLoud => RecognitionRejectReason.signalTooLoud,
+      SignalQualityState.clipping => RecognitionRejectReason.signalClipping,
+      SignalQualityState.tooNoisy => RecognitionRejectReason.signalTooNoisy,
+      SignalQualityState.speechLike => RecognitionRejectReason.signalSpeechLike,
+      SignalQualityState.unstable => RecognitionRejectReason.signalUnstable,
+      SignalQualityState.good || SignalQualityState.unknown => null,
+    };
+    if (signalReason != null) {
+      return (RecognitionDecision.rejected, signalReason);
     }
     if (!hasMatch) {
       return (RecognitionDecision.rejected, RecognitionRejectReason.noChord);

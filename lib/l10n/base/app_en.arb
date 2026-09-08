@@ -36,9 +36,29 @@
   "@liveRejectUnstable": {
     "description": "Uncertainty-reason banner text for RecognitionRejectReason.unstable (ADR 0520)."
   },
-  "liveRejectSignalQuality": "Signal too weak to tell — move closer to the mic",
-  "@liveRejectSignalQuality": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalQuality (ADR 0520)."
+  "liveRejectSignalClipping": "Distorting (clipping) — back away from the mic and ease up on the strum",
+  "@liveRejectSignalClipping": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalClipping (ADR 0535)."
+  },
+  "liveRejectSignalSpeechLike": "Hearing speech or other sound — let only the guitar play",
+  "@liveRejectSignalSpeechLike": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalSpeechLike (ADR 0535)."
+  },
+  "liveRejectSignalTooLoud": "Too loud — move back from the mic or play softer",
+  "@liveRejectSignalTooLoud": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooLoud (ADR 0535)."
+  },
+  "liveRejectSignalTooNoisy": "Too much background noise — find a quieter spot",
+  "@liveRejectSignalTooNoisy": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooNoisy (ADR 0535)."
+  },
+  "liveRejectSignalTooQuiet": "Too quiet — move closer to the mic or play louder",
+  "@liveRejectSignalTooQuiet": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooQuiet (ADR 0535)."
+  },
+  "liveRejectSignalUnstable": "Level keeps jumping — hold the phone steady and strum evenly",
+  "@liveRejectSignalUnstable": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalUnstable (ADR 0535)."
   },
   "liveRejectNoChord": "No chord detected yet",
   "@liveRejectNoChord": {

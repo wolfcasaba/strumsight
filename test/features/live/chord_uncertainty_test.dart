@@ -110,15 +110,15 @@ void main() {
       expect(reason, isNull);
     });
 
-    test('signalQuality: a bad mic reading rejects, never blamed as '
-        'lowConfidence', () {
+    test('signal quality: a bad mic reading rejects with its OWN typed '
+        'reason, never blamed as lowConfidence (ADR 0535 D1)', () {
       final (decision, reason) = LivePipeline.debugDeriveChordDecision(
         chordLatched: false,
         hasMatch: true,
         signalQualityState: SignalQualityState.tooLoud,
       );
       expect(decision, RecognitionDecision.rejected);
-      expect(reason, RecognitionRejectReason.signalQuality);
+      expect(reason, RecognitionRejectReason.signalTooLoud);
     });
 
     test('noChord: tonalness-gated / no match, signal quality good', () {

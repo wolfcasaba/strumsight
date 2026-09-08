@@ -36,9 +36,29 @@
   "@liveRejectUnstable": {
     "description": "Uncertainty-reason banner text for RecognitionRejectReason.unstable (ADR 0520)."
   },
-  "liveRejectSignalQuality": "Túl gyenge a jel — menj közelebb a mikrofonhoz",
-  "@liveRejectSignalQuality": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalQuality (ADR 0520)."
+  "liveRejectSignalClipping": "Torzít a jel (túlvezérlés) — távolodj el a mikrofontól és pengess lágyabban",
+  "@liveRejectSignalClipping": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalClipping (ADR 0535)."
+  },
+  "liveRejectSignalSpeechLike": "Beszédet vagy más hangot hallunk — csak a gitár szóljon",
+  "@liveRejectSignalSpeechLike": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalSpeechLike (ADR 0535)."
+  },
+  "liveRejectSignalTooLoud": "Túl hangos a jel — távolodj el a mikrofontól, vagy pengess halkabban",
+  "@liveRejectSignalTooLoud": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooLoud (ADR 0535)."
+  },
+  "liveRejectSignalTooNoisy": "Túl nagy a háttérzaj — keress csendesebb helyet",
+  "@liveRejectSignalTooNoisy": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooNoisy (ADR 0535)."
+  },
+  "liveRejectSignalTooQuiet": "Túl halk a jel — menj közelebb a mikrofonhoz, vagy pengess hangosabban",
+  "@liveRejectSignalTooQuiet": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooQuiet (ADR 0535)."
+  },
+  "liveRejectSignalUnstable": "Ugrál a hangerő — tartsd stabilan a telefont és pengess egyenletesen",
+  "@liveRejectSignalUnstable": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalUnstable (ADR 0535)."
   },
   "liveRejectNoChord": "Még nem érzékeltünk akkordot",
   "@liveRejectNoChord": {

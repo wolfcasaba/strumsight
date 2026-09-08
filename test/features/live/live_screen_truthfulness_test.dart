@@ -70,11 +70,14 @@ LiveFrame _frame({
 void main() {
   group('producer cell — LivePipeline reasons reach the real LiveScreen', () {
     final cases = <String, RecognitionRejectReason>{
-      'signalQuality (poor mic reading)': LivePipeline.debugDeriveChordDecision(
-        chordLatched: false,
-        hasMatch: false,
-        signalQualityState: SignalQualityState.tooQuiet,
-      ).$2!,
+      // ADR 0535 D1: the six signal states now carry SIX distinct reasons;
+      // this producer cell drives one of them end-to-end.
+      'signalTooQuiet (a poor, quiet mic reading)':
+          LivePipeline.debugDeriveChordDecision(
+            chordLatched: false,
+            hasMatch: false,
+            signalQualityState: SignalQualityState.tooQuiet,
+          ).$2!,
       'noChord (nothing recognized, good signal)':
           LivePipeline.debugDeriveChordDecision(
             chordLatched: false,
