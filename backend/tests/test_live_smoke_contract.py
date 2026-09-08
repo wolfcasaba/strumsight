@@ -99,7 +99,9 @@ class _CountingClient:
 def test_classify_contract_covers_the_real_contract_with_no_unclassified_entries():
     entries = smoke.load_contract(_REAL_CONTRACT_PATH)
     # 67 -> 70: javito sav R27 added the three /community/media entries.
-    assert len(entries) == 70
+    # 70 -> 71: javito sav R36 added POST /community/reports (R33's
+    # `HttpCommunityPostRepository.submitReport` call site).
+    assert len(entries) == 71
 
     classifications = smoke.classify_contract(entries)
     by_kind: dict[str, int] = {}
@@ -114,7 +116,10 @@ def test_classify_contract_covers_the_real_contract_with_no_unclassified_entries
     # but cannot join the bring-up chain (they write durable content, need
     # an id the chain cannot create, and one of them answers with bytes) —
     # each carries its documented reason in `_NOT_EXERCISED`.
-    assert by_kind == {"exercised": 10, "not_exercised": 57, "known_gap": 3}
+    # 57 -> 58: R36's POST /community/reports is `mounted` too, and out of
+    # the chain for the same family of reasons (durable moderation state
+    # against a target the single-account chain never creates).
+    assert by_kind == {"exercised": 10, "not_exercised": 58, "known_gap": 3}
 
 
 def test_classify_contract_fails_closed_on_an_uncovered_mounted_entry():

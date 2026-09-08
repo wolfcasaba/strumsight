@@ -172,9 +172,15 @@ Finder _scrollableOf(Type screen) {
 /// in `lib/` re-enters the shell inside that window; the harness did.
 ///
 /// `pumpAndSettle` is not an option here: the loading frame's
-/// `CircularProgressIndicator` never stops, and Riverpod 3 auto-retries a
-/// `FutureProvider` that threw ([analysisRecentSummariesProvider] does not
-/// opt out of the retry the way `activePracticePlanProvider` does).
+/// `CircularProgressIndicator` is an indeterminate animation that never
+/// stops, so a settle would time out instead of converging.
+///
+/// Riverpod's auto-retry is no longer a second reason: R35 gave
+/// [analysisRecentSummariesProvider] the same
+/// `retry: (retryCount, error) => null` opt-out
+/// `activePracticePlanProvider` already carried. The bounded pumps below
+/// stay exactly as they are — the indeterminate progress alone rules
+/// `pumpAndSettle` out.
 Future<void> _settleShellExit(WidgetTester tester) async {
   await tester.pump();
   for (var frame = 0; frame < 40; frame++) {

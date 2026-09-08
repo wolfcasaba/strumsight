@@ -515,6 +515,17 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
         "server-side enum that can drift; PUT /settings already proves the "
         "authenticated write path"
     ),
+    # Javito sav 2026-09-08 R36 — R33's content-report call site
+    # (`HttpCommunityPostRepository.submitReport`). `mounted`: the reports
+    # router is registered into the community aggregate unconditionally.
+    ("POST", "/community/reports"): (
+        "filing a report writes durable moderation state (a row a human "
+        "moderator has to triage) against a post or comment the "
+        "single-account bring-up chain never creates, and the chain has no "
+        "delete-back step to withdraw it (the POST /community/posts rule); "
+        "a target_id the chain could invent answers 404, which would make "
+        "the step red on a healthy deploy"
+    ),
 }
 
 
