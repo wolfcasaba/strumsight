@@ -243,10 +243,7 @@ void main() {
       await tester.pump();
 
       final settings = tester.getRect(find.byKey(_settingsCtaKey));
-      expect(
-        settings.top,
-        lessThan(tester.getRect(find.text('Progress')).top),
-      );
+      expect(settings.top, lessThan(tester.getRect(find.text('Progress')).top));
       expect(
         settings.top,
         lessThan(tester.getRect(find.text('Community')).top),
@@ -264,10 +261,7 @@ void main() {
       await tester.pumpWidget(_host());
       await tester.pump();
 
-      expect(
-        find.widgetWithText(OutlinedButton, 'Settings'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(OutlinedButton, 'Settings'), findsOneWidget);
     });
   });
 

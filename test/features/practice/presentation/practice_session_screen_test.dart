@@ -449,10 +449,7 @@ void main() {
         find.text(l10nEn().practiceSessionStatusCompleted),
         findsOneWidget,
       );
-      expect(
-        find.text(l10nEn().practiceSessionCompletedBody),
-        findsOneWidget,
-      );
+      expect(find.text(l10nEn().practiceSessionCompletedBody), findsOneWidget);
       expect(
         find.textContaining('Session state'),
         findsNothing,
@@ -473,10 +470,7 @@ void main() {
         find.text(l10nEn().practiceSessionStatusCancelled),
         findsOneWidget,
       );
-      expect(
-        find.text(l10nEn().practiceSessionCancelledBody),
-        findsOneWidget,
-      );
+      expect(find.text(l10nEn().practiceSessionCancelledBody), findsOneWidget);
       expect(
         find.textContaining('Session state'),
         findsNothing,

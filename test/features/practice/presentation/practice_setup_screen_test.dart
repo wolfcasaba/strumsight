@@ -305,9 +305,7 @@ void main() {
         reason: 'H14: "legacyLearnParity" is a machine id, not user copy',
       );
       expect(
-        find.text(
-          AppLocalizationsEn().practiceScoringProfileLegacyLearnParity,
-        ),
+        find.text(AppLocalizationsEn().practiceScoringProfileLegacyLearnParity),
         findsOneWidget,
       );
     });

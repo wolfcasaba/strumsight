@@ -58,86 +58,83 @@ void main() {
     for (final textScale in const <double>[1.0, 2.0]) {
       for (final withChord in const <bool>[false, true]) {
         final state = withChord ? 'chord on screen' : 'idle';
-        testWidgets(
-          'U6 — Live stage lays out without overflow: $viewportName, '
-          'textScale $textScale, $state',
-          (tester) async {
-            tester.view.physicalSize = size;
-            tester.view.devicePixelRatio = 1.0;
-            addTearDown(tester.view.reset);
+        testWidgets('U6 — Live stage lays out without overflow: $viewportName, '
+            'textScale $textScale, $state', (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
 
-            final engine = FakeStrumEngine();
-            addTearDown(engine.dispose);
+          final engine = FakeStrumEngine();
+          addTearDown(engine.dispose);
 
-            final captured = <FlutterErrorDetails>[];
-            final previousOnError = FlutterError.onError;
-            FlutterError.onError = captured.add;
+          final captured = <FlutterErrorDetails>[];
+          final previousOnError = FlutterError.onError;
+          FlutterError.onError = captured.add;
 
-            try {
-              await tester.pumpWidget(
-                ProviderScope(
-                  overrides: [
-                    ...preferenceOverrides(),
-                    ...fakeAudioOverrides(),
-                    strumEngineProvider.overrideWithValue(engine),
-                  ],
-                  child: MaterialApp(
-                    debugShowCheckedModeBanner: false,
-                    theme: SsLightTheme.data(),
-                    localizationsDelegates:
-                        AppLocalizations.localizationsDelegates,
-                    supportedLocales: AppLocalizations.supportedLocales,
-                    builder: (context, child) => MediaQuery(
-                      data: MediaQuery.of(
-                        context,
-                      ).copyWith(textScaler: TextScaler.linear(textScale)),
-                      child: child!,
-                    ),
-                    home: const LiveScreen(),
+          try {
+            await tester.pumpWidget(
+              ProviderScope(
+                overrides: [
+                  ...preferenceOverrides(),
+                  ...fakeAudioOverrides(),
+                  strumEngineProvider.overrideWithValue(engine),
+                ],
+                child: MaterialApp(
+                  debugShowCheckedModeBanner: false,
+                  theme: SsLightTheme.data(),
+                  localizationsDelegates:
+                      AppLocalizations.localizationsDelegates,
+                  supportedLocales: AppLocalizations.supportedLocales,
+                  builder: (context, child) => MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(textScaler: TextScaler.linear(textScale)),
+                    child: child!,
+                  ),
+                  home: const LiveScreen(),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+
+            if (withChord) {
+              engine.emit(
+                _frame(
+                  current: const Chord('Am'),
+                  latestStrum: const Strum(
+                    direction: StrumDirection.down,
+                    confidence: 0.92,
                   ),
                 ),
               );
               await tester.pumpAndSettle();
-
-              if (withChord) {
-                engine.emit(
-                  _frame(
-                    current: const Chord('Am'),
-                    latestStrum: const Strum(
-                      direction: StrumDirection.down,
-                      confidence: 0.92,
-                    ),
-                  ),
-                );
-                await tester.pumpAndSettle();
-              }
-              // Let the live-region announcer's timer drain before teardown.
-              await tester.pump(const Duration(milliseconds: 400));
-            } finally {
-              FlutterError.onError = previousOnError;
             }
+            // Let the live-region announcer's timer drain before teardown.
+            await tester.pump(const Duration(milliseconds: 400));
+          } finally {
+            FlutterError.onError = previousOnError;
+          }
 
-            final overflows = <String>[];
-            final otherErrors = <String>[];
-            for (final details in captured) {
-              final message = details.exception.toString();
-              if (_overflowPattern.hasMatch(message)) {
-                overflows.add(message);
-              } else {
-                otherErrors.add(message);
-              }
+          final overflows = <String>[];
+          final otherErrors = <String>[];
+          for (final details in captured) {
+            final message = details.exception.toString();
+            if (_overflowPattern.hasMatch(message)) {
+              overflows.add(message);
+            } else {
+              otherErrors.add(message);
             }
+          }
 
-            expect(
-              overflows,
-              isEmpty,
-              reason:
-                  'the Live stage must not overflow at $viewportName / '
-                  'textScale $textScale ($state)',
-            );
-            expect(otherErrors, isEmpty);
-          },
-        );
+          expect(
+            overflows,
+            isEmpty,
+            reason:
+                'the Live stage must not overflow at $viewportName / '
+                'textScale $textScale ($state)',
+          );
+          expect(otherErrors, isEmpty);
+        });
       }
     }
   }

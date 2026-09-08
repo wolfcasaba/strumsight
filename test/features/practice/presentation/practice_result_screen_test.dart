@@ -415,10 +415,7 @@ void main() {
       expect(share, findsOneWidget);
       expect(tester.widget<OutlinedButton>(share).onPressed, isNull);
       // A disabled control still says why.
-      expect(
-        find.text(l10n().practiceResultShareUnavailable),
-        findsOneWidget,
-      );
+      expect(find.text(l10n().practiceResultShareUnavailable), findsOneWidget);
       // Tapping it cannot open the share projection either.
       await tester.tap(share, warnIfMissed: false);
       await tester.pump();
@@ -438,10 +435,7 @@ void main() {
       expect(find.text(l10n().practiceResultShareUnavailable), findsNothing);
       await tester.tap(share);
       await tester.pump();
-      expect(
-        find.text(l10n().practiceResultShareSummaryTitle),
-        findsOneWidget,
-      );
+      expect(find.text(l10n().practiceResultShareSummaryTitle), findsOneWidget);
     });
 
     test('U10 — the predicate follows the model, not the mode', () {
