@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../dto/tutor_stream_dto.dart';
+import 'tutor_cloud_capability.dart';
 
 /// HTTP/SSE implementation of [TutorStreamTransport].
 ///
@@ -89,6 +90,40 @@ final class HttpTutorStreamTransport implements TutorStreamTransport {
     }
   }
 
+  /// What the server says it actually runs, parsed from the very same
+  /// `/tutor/capability` body [health] only reads a status code from.
+  ///
+  /// [health] stays a status-only reachability probe on purpose — that is
+  /// the contract [TutorStreamTransport] declares and the gateway's own
+  /// `health()` forwards. This method answers the different question the
+  /// gateway SELECTION needs: which adapter this deployment built. A body
+  /// that cannot be read as an object is a server failure, not a silent
+  /// "assume it is real" — the caller decides what an unknown capability
+  /// means (see `tutorCloudCapabilityProvider`).
+  Future<AppResult<TutorCloudCapability>> capability() async {
+    try {
+      final response = await _dio.get<Object?>('/tutor/capability');
+      if (!_isSuccessful(response.statusCode)) {
+        return const AppResult.failure(
+          NetworkFailure(code: FailureCode.networkServer),
+        );
+      }
+      final body = _decodeCapabilityBody(response.data);
+      if (body == null) {
+        return const AppResult.failure(
+          NetworkFailure(code: FailureCode.networkServer),
+        );
+      }
+      return AppResult.success(TutorCloudCapability.fromJson(body));
+    } on DioException catch (error, stackTrace) {
+      return AppResult.failure(_failureFor(error, stackTrace));
+    } on Object catch (error, stackTrace) {
+      return AppResult.failure(
+        NetworkFailure(cause: error, stackTrace: stackTrace),
+      );
+    }
+  }
+
   Stream<String> _payloads(Stream<Uint8List> bytes, CancelToken cancelToken) {
     return utf8.decoder
         .bind(bytes)
@@ -116,6 +151,18 @@ final class HttpTutorStreamTransport implements TutorStreamTransport {
     if (identical(_activeCancelToken, cancelToken)) {
       _activeCancelToken = null;
     }
+  }
+
+  /// The capability body as a map, whichever shape Dio handed back: a
+  /// decoded JSON object (the live backend answers `application/json`), or
+  /// a still-encoded string when the response carried no JSON content type.
+  /// A malformed string throws out of `jsonDecode` into the caller's
+  /// catch-all, where it becomes a controlled failure.
+  static Map<Object?, Object?>? _decodeCapabilityBody(Object? data) {
+    if (data is Map) return data;
+    if (data is! String || data.trim().isEmpty) return null;
+    final decoded = jsonDecode(data);
+    return decoded is Map ? decoded : null;
   }
 
   static bool _isSuccessful(int? statusCode) =>

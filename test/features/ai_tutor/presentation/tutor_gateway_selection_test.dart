@@ -13,6 +13,14 @@
 // auth session (fake token store + fake auth backend), never from a reader
 // the tutor owns, and an authenticated 401 signs the student out app-wide
 // exactly as it does for the account API client.
+//
+// R24: two more conditions. `FeatureFlags.aiTutorCloudEnabled` — which had
+// ZERO consumers before this round, so a consenting, signed-in student on
+// the shipped development build would have streamed to a cloud the build's
+// own flag says is not rolled out — and the server's OWN answer at
+// `/tutor/capability`: a deployment still running the backend's canned
+// `fake` adapter must never have its scripted reply presented as a cloud
+// tutor's answer.
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -37,6 +45,7 @@ import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_retriever.
 import 'package:strumsight/features/ai_tutor/data/model_gateway/fake_tutor_model_gateway.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/local_tutor_model_gateway_stub.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/remote_tutor_model_gateway.dart';
+import 'package:strumsight/features/ai_tutor/data/model_gateway/tutor_cloud_capability.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/tutor_model_gateway.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_consent.dart';
 import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_gateway_providers.dart';
@@ -49,9 +58,14 @@ import '../../../support/fake_auth.dart';
 /// A near-wire probe: it only ever sees a request the interceptor chain has
 /// already let through.
 final class _WireProbe implements HttpClientAdapter {
-  _WireProbe({this.status = 200});
+  _WireProbe({this.status = 200, this.body = '{}'});
 
   final int status;
+
+  /// The body every request gets back. The capability probe is the only GET
+  /// this suite issues, so a capability JSON here IS the server's answer to
+  /// "which adapter do you run?".
+  final String body;
   final List<RequestOptions> requests = <RequestOptions>[];
 
   @override
@@ -61,7 +75,7 @@ final class _WireProbe implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     requests.add(options);
-    return ResponseBody.fromString('{}', status);
+    return ResponseBody.fromString(body, status);
   }
 
   @override
@@ -88,19 +102,52 @@ AppConfig _config({required bool accountEnabled}) => AppConfig.resolve(
   appVersion: 'test',
 );
 
+/// The SHIPPED development build resolves `aiTutorCloudEnabled: false` —
+/// the cloud tutor is `postponed` in `docs/release/ga-scope.md` behind the
+/// open `R-PRIV-01` blocker, and `_withPreviewSurfacesEnabled` leaves it off
+/// even under `STRUMSIGHT_PREVIEW_ALL`. The ON half of the rule therefore
+/// has to be constructed explicitly: this is the post-flip flag set.
+AppConfig _cloudConfig({required bool accountEnabled}) => AppConfig.resolve(
+  environment: AppEnvironment.development,
+  apiBaseUrl: AppConfig.devApiBaseUrl,
+  flags: FeatureFlags(
+    accountEnabled: accountEnabled,
+    diagnosticsEnabled: true,
+    labModeAvailable: true,
+    aiTutorEnabled: true,
+    aiTutorCloudEnabled: true,
+  ),
+  diagnosticsToken: AppConfig.devDiagnosticsToken,
+  buildMode: 'debug',
+  appVersion: 'test',
+);
+
+/// The capability body a deployment answers with once its operator has
+/// flipped `STRUMSIGHT_TUTOR_PROVIDER` (`backend/app/tutor/schemas.py`).
+const String _realCapabilityBody =
+    '{"enabled":true,"version":"v1","streaming":false,'
+    '"provider":"anthropic","model":"claude-sonnet-5"}';
+
+/// The body the backend's DEFAULT, canned adapter answers with.
+const String _fakeCapabilityBody =
+    '{"enabled":true,"version":"v1","streaming":false,'
+    '"provider":"fake","model":"fake-model"}';
+
 /// A container whose auth session is RESTORED from [token] (null = signed
 /// out), so the stream client rides the same credential holder the account
 /// API client does.
 Future<ProviderContainer> _container({
   required bool accountEnabled,
   required _WireProbe probe,
+  bool cloudEnabled = false,
   String? token = 'jwt-token',
 }) async {
+  final config = cloudEnabled
+      ? _cloudConfig(accountEnabled: accountEnabled)
+      : _config(accountEnabled: accountEnabled);
   final container = ProviderContainer(
     overrides: [
-      appConfigProvider.overrideWithValue(
-        _config(accountEnabled: accountEnabled),
-      ),
+      appConfigProvider.overrideWithValue(config),
       accountDioFactoryProvider.overrideWithValue(_factory(probe)),
       tokenStoreProvider.overrideWithValue(FakeTokenStore(token)),
       authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
@@ -113,10 +160,12 @@ Future<ProviderContainer> _container({
 
 void main() {
   group('selectTutorModelGateway — the pure rule', () {
-    test('consent + account + client is the only cloud combination', () {
+    test('consent + cloud flag + account + client is the only cloud '
+        'combination', () {
       expect(
         selectTutorModelGateway(
           consent: const TutorConsent(modelUseGranted: true),
+          cloudEnabled: true,
           accountEnabled: true,
           streamClient: Dio(),
         ),
@@ -127,23 +176,118 @@ void main() {
     test('each missing precondition falls back to the local stub', () {
       final withoutConsent = selectTutorModelGateway(
         consent: const TutorConsent(),
+        cloudEnabled: true,
+        accountEnabled: true,
+        streamClient: Dio(),
+      );
+      final withoutCloudFlag = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: false,
         accountEnabled: true,
         streamClient: Dio(),
       );
       final withoutAccount = selectTutorModelGateway(
         consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
         accountEnabled: false,
         streamClient: Dio(),
       );
       final withoutClient = selectTutorModelGateway(
         consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
         accountEnabled: true,
         streamClient: null,
       );
 
       expect(withoutConsent, isA<LocalTutorModelGatewayStub>());
+      expect(
+        withoutCloudFlag,
+        isA<LocalTutorModelGatewayStub>(),
+        reason:
+            'aiTutorCloudEnabled is the build-level rollout gate — consent '
+            'cannot open a capability the build does not ship',
+      );
       expect(withoutAccount, isA<LocalTutorModelGatewayStub>());
       expect(withoutClient, isA<LocalTutorModelGatewayStub>());
+    });
+
+    test('a server that ANSWERS with the canned fake adapter, or with its '
+        'tutor switched off, falls back to the local stub', () {
+      final fakeAdapter = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
+        accountEnabled: true,
+        streamClient: Dio(),
+        capability: const TutorCloudCapability(
+          enabled: true,
+          provider: TutorCloudCapability.fakeProvider,
+          model: TutorCloudCapability.fakeModel,
+        ),
+      );
+      final tutorDisabled = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
+        accountEnabled: true,
+        streamClient: Dio(),
+        capability: const TutorCloudCapability(
+          enabled: false,
+          provider: 'anthropic',
+          model: 'claude-sonnet-5',
+        ),
+      );
+
+      expect(
+        fakeAdapter,
+        isA<LocalTutorModelGatewayStub>(),
+        reason:
+            'a scripted answer presented as a cloud tutor answer is a lie '
+            'the student cannot detect',
+      );
+      expect(tutorDisabled, isA<LocalTutorModelGatewayStub>());
+    });
+
+    test('a real provider keeps the cloud, and an UNKNOWN capability leaves '
+        'the other four conditions in force', () {
+      final realProvider = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
+        accountEnabled: true,
+        streamClient: Dio(),
+        capability: const TutorCloudCapability(
+          enabled: true,
+          provider: 'anthropic',
+          model: 'claude-sonnet-5',
+        ),
+      );
+      final unknown = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
+        accountEnabled: true,
+        streamClient: Dio(),
+      );
+
+      expect(realProvider, isA<RemoteTutorModelGateway>());
+      expect(unknown, isA<RemoteTutorModelGateway>());
+    });
+
+    test('an unparseable capability body reads as the canned default, not '
+        'as a real model', () {
+      const body = <Object?, Object?>{'version': 'v1'};
+      final capability = TutorCloudCapability.fromJson(body);
+
+      expect(capability.enabled, isFalse);
+      expect(capability.provider, TutorCloudCapability.fakeProvider);
+      expect(capability.servesRealModel, isFalse);
+      expect(
+        selectTutorModelGateway(
+          consent: const TutorConsent(modelUseGranted: true),
+          cloudEnabled: true,
+          accountEnabled: true,
+          streamClient: Dio(),
+          capability: capability,
+        ),
+        isA<LocalTutorModelGatewayStub>(),
+      );
     });
   });
 
@@ -229,16 +373,63 @@ void main() {
   });
 
   group('tutorModelGatewayFactoryProvider — decided per attempt', () {
-    test('granted consent on an account build selects the cloud', () async {
+    test('granted consent on a cloud-flagged account build whose server '
+        'runs a real provider selects the cloud', () async {
       final container = await _container(
         accountEnabled: true,
-        probe: _WireProbe(),
+        probe: _WireProbe(body: _realCapabilityBody),
+        cloudEnabled: true,
       );
+      await container.read(tutorCloudCapabilityProvider.future);
       container.read(tutorConsentControllerProvider.notifier).grantModelUse();
 
       final gateway = container.read(tutorModelGatewayFactoryProvider)(0);
 
       expect(gateway, isA<RemoteTutorModelGateway>());
+    });
+
+    test('the shipped development build selects the local stub even with '
+        'consent and a live client', () async {
+      final probe = _WireProbe(body: _realCapabilityBody);
+      final container = await _container(accountEnabled: true, probe: probe);
+      container.read(tutorConsentControllerProvider.notifier).grantModelUse();
+
+      expect(container.read(tutorStreamClientProvider), isNotNull);
+      expect(
+        container.read(tutorModelGatewayFactoryProvider)(0),
+        isA<LocalTutorModelGatewayStub>(),
+        reason:
+            'aiTutorCloudEnabled is false in the shipped development build '
+            '(docs/release/ga-scope.md: postponed, open R-PRIV-01) — before '
+            'R24 the flag had no consumer and this turn went to the cloud',
+      );
+      expect(
+        await container.read(tutorCloudCapabilityProvider.future),
+        isNull,
+        reason:
+            'a build whose cloud tutor is not rolled out does not even '
+            'probe the capability endpoint',
+      );
+      expect(probe.requests, isEmpty);
+    });
+
+    test('a server still running the canned fake adapter selects the local '
+        'stub, consent and flag notwithstanding', () async {
+      final container = await _container(
+        accountEnabled: true,
+        probe: _WireProbe(body: _fakeCapabilityBody),
+        cloudEnabled: true,
+      );
+      final capability = await container.read(
+        tutorCloudCapabilityProvider.future,
+      );
+      container.read(tutorConsentControllerProvider.notifier).grantModelUse();
+
+      expect(capability?.provider, TutorCloudCapability.fakeProvider);
+      expect(
+        container.read(tutorModelGatewayFactoryProvider)(0),
+        isA<LocalTutorModelGatewayStub>(),
+      );
     });
 
     test('the default (no consent granted) selects the local stub', () async {
@@ -256,7 +447,8 @@ void main() {
         'consent granted', () async {
       final container = await _container(
         accountEnabled: false,
-        probe: _WireProbe(),
+        probe: _WireProbe(body: _realCapabilityBody),
+        cloudEnabled: true,
       );
       container.read(tutorConsentControllerProvider.notifier).grantModelUse();
 
@@ -269,8 +461,10 @@ void main() {
         'factory', () async {
       final container = await _container(
         accountEnabled: true,
-        probe: _WireProbe(),
+        probe: _WireProbe(body: _realCapabilityBody),
+        cloudEnabled: true,
       );
+      await container.read(tutorCloudCapabilityProvider.future);
       final factory = container.read(tutorModelGatewayFactoryProvider);
       container.read(tutorConsentControllerProvider.notifier).grantModelUse();
       expect(factory(0), isA<RemoteTutorModelGateway>());

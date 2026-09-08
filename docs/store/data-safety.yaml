@@ -32,6 +32,10 @@
 # zöldre vált a fedezet-ellenőrzésben (nem "true", tehát nem követel kategóriát).
 # A `tutor_stream` 2026-09-07 (javító sáv 3, R9/2) óta `wired: true` /
 # `leaves_device: true` — a `tutor_turn_message` kategóriája a fájl végén.
+# R24 (2026-09-08): a kategória `shared: true` marad, de a megosztás címzettje
+# most NEVESÍTVE van — a harmadik fél feldolgozó (Anthropic, Claude API) csak
+# akkor kap adatot, ha az üzemeltető a `fake` providerről valódira váltott;
+# a kliensoldali `aiTutorCloudEnabled` kapu minden szállított buildben `false`.
 #
 # Restricted YAML subset — package:yaml NÉLKÜL olvasva
 # (test/tooling/store_package_test.dart saját olvasója), 2-space lista-elem
@@ -272,7 +276,7 @@ categories:
     collected: true
     shared: true
     optional: true
-    purpose: "The free-text message you send to the AI tutor plus the redacted, on-device-assembled context snapshot the prompt builder renders, sent to the StrumSight backend's /tutor/stream and relayed to the configured model provider. Only with explicit model-use consent (Tutor privacy screen), an enabled account layer and a live signed-in session — with any gate closed the tutor answers from the local on-device gateway (javító sáv 3, 2026-09-07, R9/2)."
+    purpose: "The free-text message you send to the AI tutor plus the redacted, on-device-assembled context snapshot the prompt builder renders, sent to the StrumSight backend's /tutor/stream and relayed to the configured model provider. When the operator has configured a real provider, that provider is a third-party processor: Anthropic (Claude API) — see the tutor_stream row of docs/privacy/data-inventory.yaml for what it receives and what the operator must verify about its retention; with the backend's default (fake) provider nothing leaves the StrumSight backend. Only with explicit model-use consent (Tutor privacy screen), the build's aiTutorCloudEnabled rollout flag (false in every shipped build today), an enabled account layer and a live signed-in session — with any gate closed the tutor answers from the local on-device gateway (javító sáv 3, 2026-09-07, R9/2; cloud flag + capability gate R24, 2026-09-08)."
     references:
       - route: tutor_stream
         field: "tutor_turn_message (student free-text message + the assembled, redacted context snapshot the prompt builder renders)"

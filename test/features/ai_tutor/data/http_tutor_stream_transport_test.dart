@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/http_tutor_stream_transport.dart';
+import 'package:strumsight/features/ai_tutor/data/model_gateway/tutor_cloud_capability.dart';
 
 final class _SseAdapter implements HttpClientAdapter {
   _SseAdapter({this.body = '', this.statusCode = 200, this.errorType});
@@ -122,6 +123,65 @@ void main() {
       final transport = _transport(_SseAdapter());
 
       expect(transport.cancelActiveStream, returnsNormally);
+    });
+  });
+
+  // R24 — the capability body, not just its status code. The gateway
+  // selection needs to know WHICH adapter the deployment runs, because a
+  // server still serving the backend's canned `fake` provider must not have
+  // its scripted reply presented as a cloud tutor's answer.
+  group('HttpTutorStreamTransport.capability', () {
+    test('parses the provider and model the server reports', () async {
+      final adapter = _SseAdapter(
+        body:
+            '{"enabled":true,"version":"v1","streaming":false,'
+            '"provider":"anthropic","model":"claude-sonnet-5"}',
+      );
+      final transport = _transport(adapter);
+
+      final result = await transport.capability();
+
+      expect(result, isA<Success<TutorCloudCapability>>());
+      final capability = result.valueOrNull!;
+      expect(capability.enabled, isTrue);
+      expect(capability.provider, 'anthropic');
+      expect(capability.model, 'claude-sonnet-5');
+      expect(capability.servesRealModel, isTrue);
+      expect(adapter.requests.single.method, 'GET');
+      expect(adapter.requests.single.path, '/tutor/capability');
+    });
+
+    test('the backend default answer serves no real model', () async {
+      final result = await _transport(
+        _SseAdapter(body: '{"enabled":true,"provider":"fake"}'),
+      ).capability();
+
+      expect(result.valueOrNull?.servesRealModel, isFalse);
+    });
+
+    test('a non-2xx capability response is a controlled failure', () async {
+      final result = await _transport(
+        _SseAdapter(statusCode: 503),
+      ).capability();
+
+      expect(result, isA<Failure<TutorCloudCapability>>());
+    });
+
+    test('a malformed body is a controlled failure, never a half-parsed '
+        'capability', () async {
+      final result = await _transport(
+        _SseAdapter(body: 'not json at all'),
+      ).capability();
+
+      expect(result, isA<Failure<TutorCloudCapability>>());
+    });
+
+    test('a transport error is a controlled failure', () async {
+      final result = await _transport(
+        _SseAdapter(errorType: DioExceptionType.connectionError),
+      ).capability();
+
+      expect(result, isA<Failure<TutorCloudCapability>>());
     });
   });
 }

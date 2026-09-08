@@ -483,12 +483,20 @@ void main() {
   // whether a turn exists at all; the selector decides which gateway runs
   // it. Both must refuse the cloud independently — either one alone would
   // leave a revoked student one refactor away from the network.
-  group('A3\' (R9/2) — gateway selection never returns the cloud gateway '
-      'without model-use consent AND an enabled account layer', () {
-    test('consent + account + a client is the ONLY combination that selects '
-        'the cloud gateway', () {
+  //
+  // R24 adds the build-level condition the 2026-09-07 re-audit found
+  // missing (MAJOR M2): `FeatureFlags.aiTutorCloudEnabled`. Consent is the
+  // student's decision; the flag is the ROLLOUT decision, and the shipped
+  // development build resolves it to false (`docs/release/ga-scope.md`:
+  // postponed behind the open `R-PRIV-01` blocker).
+  group('A3\' (R9/2, R24) — gateway selection never returns the cloud '
+      'gateway without model-use consent AND the build\'s cloud flag AND '
+      'an enabled account layer', () {
+    test('consent + cloud flag + account + a client is the ONLY combination '
+        'that selects the cloud gateway', () {
       final gateway = selectTutorModelGateway(
         consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
         accountEnabled: true,
         streamClient: Dio(),
       );
@@ -503,6 +511,7 @@ void main() {
           persistentStorageGranted: true,
           evaluationWithRedactionGranted: true,
         ),
+        cloudEnabled: true,
         accountEnabled: true,
         streamClient: Dio(),
       );
@@ -510,10 +519,29 @@ void main() {
       expect(gateway, isA<LocalTutorModelGatewayStub>());
     });
 
+    test('a build whose cloud tutor is not rolled out selects the local '
+        'stub even with consent granted', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: false,
+        accountEnabled: true,
+        streamClient: Dio(),
+      );
+
+      expect(
+        gateway,
+        isA<LocalTutorModelGatewayStub>(),
+        reason:
+            'consent authorizes a capability the build ships; it cannot '
+            'open one the rollout has not released',
+      );
+    });
+
     test('an account-disabled build selects the local stub even with '
         'consent granted', () {
       final gateway = selectTutorModelGateway(
         consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
         accountEnabled: false,
         streamClient: Dio(),
       );
@@ -525,6 +553,7 @@ void main() {
         'cloud gateway', () {
       final gateway = selectTutorModelGateway(
         consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
         accountEnabled: true,
         streamClient: null,
       );

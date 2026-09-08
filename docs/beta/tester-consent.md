@@ -86,14 +86,26 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
   visibility setting, the public profile id of whoever you invite or hand ownership to, the
   membership actions you take (join, leave, remove a member), and the same write-integrity
   idempotency key. Again: signed out, nothing on this route leaves the device.
-- **tutor_stream** — the AI tutor's cloud turn (javító sáv 3, 2026-09-07). When you send a
-  message to the tutor, the message text and a redacted, on-device-assembled context snapshot
-  go to the StrumSight backend's `/tutor/stream` endpoint and from there to the configured model
-  provider. Three gates, all re-checked on every turn and all fail-closed: your explicit
-  **model-use consent** on the Tutor privacy screen (the request object is never even built
-  without it), an enabled account layer, and a live signed-in session (the same bearer token
-  and 401 handling as `account_api`). With any gate closed the tutor answers from the local,
-  on-device gateway and nothing leaves the phone.
+- **tutor_stream** — the AI tutor's cloud turn (javító sáv 3, 2026-09-07; cloud flag +
+  capability gate 2026-09-08). When you send a message to the tutor, the message text and a
+  redacted, on-device-assembled context snapshot go to the StrumSight backend's `/tutor/stream`
+  endpoint and from there to the configured model provider. **Five** gates, all re-checked on
+  every turn and all fail-closed: your explicit **model-use consent** on the Tutor privacy
+  screen (the request object is never even built without it), the build's own
+  `aiTutorCloudEnabled` rollout flag, an enabled account layer, a live signed-in session (the
+  same bearer token and 401 handling as `account_api`), and the server's own answer at
+  `/tutor/capability` — a backend still running its default, canned provider is never presented
+  to you as a cloud tutor. With any gate closed the tutor answers from the local, on-device
+  gateway and nothing leaves the phone.
+- **The cloud tutor is OFF in the build you install.** `aiTutorCloudEnabled` resolves to
+  `false` in every shipped build today (`docs/release/ga-scope.md` — postponed behind the open
+  `R-PRIV-01` blocker), so the tester APK answers every tutor turn on-device. If your build is
+  ever flipped on and the backend's operator has configured a real model provider, that
+  provider is a **third-party processor — Anthropic (Claude API)** — which receives exactly the
+  message and the redacted context snapshot above; its own retention is governed by that
+  provider's API data policy, which this repository does not measure. The full row, including
+  what the operator must verify before any such flip, is `tutor_stream` in
+  [`docs/privacy/data-inventory.yaml`](../privacy/data-inventory.yaml).
 
 ## The diagnostics report you can send us — two independent layers
 
