@@ -140,6 +140,24 @@ Future<void> _pumpFrames(WidgetTester tester) async {
   }
 }
 
+/// Waits, bounded, until [finder] finds nothing.
+///
+/// A popped route is NOT gone when the pop is issued: it stays on stage for
+/// its whole reverse transition (and its overlay entry is removed a frame
+/// after that), while the route it uncovers is already found underneath. So
+/// "the arriving step is here" needs no waiting at all, but "the leaving
+/// step is gone" is not measurable on a fixed pump budget — and
+/// `pumpAndSettle` is out for the very reason [_pumpFrames] exists. Same
+/// shape as the `_pumpUntilGone` of the R18 entry-point cells
+/// (`test/app/navigation/r18_entry_points_test.dart`).
+Future<void> _pumpUntilGone(WidgetTester tester, Finder finder) async {
+  await tester.pump();
+  for (var frame = 0; frame < 40; frame++) {
+    if (finder.evaluate().isEmpty) return;
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
+
 /// Drives the chain up to the processing step the way the router does: the
 /// recording screen hands back a finished run, and the route starts the
 /// (pending) analysis and navigates.
@@ -226,7 +244,7 @@ void main() {
     // The restart control only renders in the cancelled/permission/error
     // bodies; the callback itself is the router code under test here.
     processing.onRestart!();
-    await _pumpFrames(tester);
+    await _pumpUntilGone(tester, find.byType(AnalysisProcessingScreen));
 
     expect(find.byType(AnalysisRecordingScreen), findsOneWidget);
     expect(find.byType(AnalysisProcessingScreen), findsNothing);
