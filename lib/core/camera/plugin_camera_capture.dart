@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart' as plugin;
+import 'package:flutter/widgets.dart';
 
 import '../foundation/app_failure.dart';
 import '../foundation/app_result.dart';
@@ -11,6 +12,7 @@ import 'camera_failure.dart';
 import 'camera_format.dart';
 import 'camera_frame.dart';
 import 'camera_frame_binding.dart';
+import 'camera_preview_source.dart';
 import 'camera_timestamp.dart';
 
 /// Minimal camera boundary used to test the capture adapter without a device.
@@ -31,7 +33,12 @@ CameraCapture createPlatformCameraCapture() =>
     PluginCameraCapture(controllerFactory: _PluginCameraController.create);
 
 /// Production adapter with latest-frame delivery and explicit buffer release.
-final class PluginCameraCapture implements CameraCapture {
+///
+/// It also implements [CameraPreviewSource], forwarding to its platform
+/// controller when that controller can render one. A controller that cannot
+/// (any test double) makes both members answer `null`/`false`, so nothing
+/// downstream has to guess whether a real texture exists.
+final class PluginCameraCapture implements CameraCapture, CameraPreviewSource {
   PluginCameraCapture({
     required PlatformCameraControllerFactory controllerFactory,
   }) : this._(controllerFactory);
@@ -56,6 +63,19 @@ final class PluginCameraCapture implements CameraCapture {
 
   @override
   Stream<CameraFrame> get frames => _frames.stream;
+
+  @override
+  Widget? buildPreview() {
+    final controller = _controller;
+    if (_isClosed || controller is! CameraPreviewSource) return null;
+    return controller.buildPreview();
+  }
+
+  @override
+  bool get previewMirror {
+    final controller = _controller;
+    return controller is CameraPreviewSource && controller.previewMirror;
+  }
 
   @override
   Future<AppResult<void>> start() async {
@@ -206,7 +226,8 @@ final class PluginCameraCapture implements CameraCapture {
   }
 }
 
-final class _PluginCameraController implements PlatformCameraController {
+final class _PluginCameraController
+    implements PlatformCameraController, CameraPreviewSource {
   _PluginCameraController(this._controller);
 
   final plugin.CameraController _controller;
@@ -252,6 +273,7 @@ final class _PluginCameraController implements PlatformCameraController {
     onFrame(
       PlatformCameraFrame(
         bytes: _copyPlanes(image),
+        rowStride: _lumaRowStride(image),
         timestamp: CameraTimestamp(timestampUs),
         width: image.width,
         height: image.height,
@@ -274,6 +296,36 @@ final class _PluginCameraController implements PlatformCameraController {
   @override
   Future<void> dispose() => _controller.dispose();
 
+  @override
+  Widget? buildPreview() => _controller.value.isInitialized
+      ? plugin.CameraPreview(_controller)
+      : null;
+
+  @override
+  bool get previewMirror =>
+      _controller.description.lensDirection ==
+      plugin.CameraLensDirection.front;
+
+  /// The luminance plane's padded row length, or `null` when it is unpadded.
+  ///
+  /// `Plane.bytesPerRow` exceeds `width` on many Android devices; the flat
+  /// buffer [_copyPlanes] produces is therefore NOT a `width x height` image.
+  /// Reporting the stride is what lets a reader de-pad instead of shearing
+  /// every row. 640x480 (`ResolutionPreset.medium`) usually has no padding,
+  /// which is exactly why an unreported stride passes on one device and
+  /// corrupts on another.
+  static int? _lumaRowStride(plugin.CameraImage image) {
+    if (image.planes.isEmpty) return null;
+    final stride = image.planes.first.bytesPerRow;
+    return stride > image.width ? stride : null;
+  }
+
+  /// Concatenates the planes verbatim, padding included.
+  ///
+  /// It must not de-pad here: the chroma planes have their own strides and
+  /// pixel strides, and dropping padding blindly would corrupt them. The
+  /// luminance stride travels beside the bytes as `rowStride`; the reader
+  /// that wants a luminance image de-pads with it.
   static Uint8List _copyPlanes(plugin.CameraImage image) {
     final length = image.planes.fold<int>(
       0,

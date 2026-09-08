@@ -3,17 +3,25 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/camera/camera_capture.dart';
+import '../../../core/camera/camera_frame.dart';
 import '../../../core/camera/camera_permission.dart';
+import '../../../core/camera/camera_preview_source.dart';
 import '../../../core/camera/camera_providers.dart';
 import '../../../core/camera/camera_session_coordinator.dart';
 import '../../../core/camera/camera_session_lease.dart';
 import '../../../core/foundation/app_result.dart';
+import '../../../core/logging/logger_provider.dart';
+import '../../../core/storage/storage_providers.dart';
+import '../data/persistence/vision_session_repository.dart';
+import '../data/pipeline/vision_frame_pipeline.dart';
 import '../domain/feedback/insight_code.dart';
 import '../domain/quality/vision_frame_quality.dart';
 import '../domain/quality/vision_quality_summary.dart';
 import '../domain/vision_session.dart';
 import '../domain/vision_session_result.dart';
 import 'calibration_loss_machine.dart';
+import 'vision_pipeline_providers.dart';
+import 'vision_session_recorder.dart';
 import 'vision_session_state.dart';
 
 typedef VisionSessionIdFactory = VisionSessionId Function();
@@ -28,9 +36,36 @@ final visionSessionIdFactoryProvider = Provider<VisionSessionIdFactory>((_) {
   return () => VisionSessionId.create('vision-session-${sequence++}');
 });
 
-/// Delivers the final aggregate to the composition root without persistence.
+/// Local-only history store for finished Vision sessions.
+final visionSessionRepositoryProvider = Provider<VisionSessionRepository>(
+  (ref) => VisionSessionRepository(store: ref.watch(keyValueStoreProvider)),
+);
+
+/// Model provenance recorded with every persisted session.
+///
+/// Both vision models are `deferred` in `assets/ml/model_manifest.json`, so
+/// the stored entry says `deferred` rather than naming a model that never
+/// ran. The round that activates a model replaces these values.
+final visionSessionModelVersionsProvider = Provider<Map<String, String>>(
+  (_) => const <String, String>{
+    'hand_landmarker': 'deferred',
+    'pose_landmarker': 'deferred',
+  },
+);
+
+/// Persists the final aggregate.
+///
+/// The recorder is resolved while the controller builds, so finalization can
+/// still write after the container that created it starts disposing.
 final visionSessionResultListenerProvider =
-    Provider<VisionSessionResultListener>((_) => (_) {});
+    Provider<VisionSessionResultListener>((ref) {
+      final recorder = VisionSessionResultRecorder(
+        repository: ref.watch(visionSessionRepositoryProvider),
+        modelVersions: ref.watch(visionSessionModelVersionsProvider),
+        logger: ref.watch(appLoggerProvider),
+      );
+      return recorder.call;
+    });
 
 final visionSessionControllerProvider =
     NotifierProvider.autoDispose<VisionSessionController, VisionSessionState>(
@@ -39,15 +74,19 @@ final visionSessionControllerProvider =
 
 /// Lifecycle-safe composition root for the camera and Vision feedback pipeline.
 ///
-/// It deliberately does not perform inference. The frame listener only owns
-/// the capture lifetime and counts deliveries locally; an inference adapter
-/// reports its immutable quality and R23-selected cue through the public
-/// methods below.
+/// It owns the capture lifetime and hands every delivered frame to a
+/// [VisionFrameProcessor] built in `data/pipeline/`. The processor does all
+/// pixel work and publishes summaries; the controller only copies those
+/// summaries into state through the same public [reportQuality] /
+/// [reportRealtimeCue] methods an external adapter would use, so no buffer,
+/// plane, or landmark ever reaches provider state.
 class VisionSessionController extends Notifier<VisionSessionState> {
   CameraSessionCoordinator? _coordinator;
   CameraCapture? _capture;
   CameraSessionLease? _lease;
-  StreamSubscription<Object?>? _frames;
+  StreamSubscription<CameraFrame>? _frames;
+  VisionFrameProcessor? _processor;
+  StreamSubscription<VisionPipelineUpdate>? _pipelineUpdates;
   VisionSession? _session;
   Future<void>? _startSettled;
   Future<VisionSessionResult?>? _finalization;
@@ -68,6 +107,20 @@ class VisionSessionController extends Notifier<VisionSessionState> {
     _resultListener = ref.read(visionSessionResultListenerProvider);
     ref.onDispose(_dispose);
     return VisionSessionState.idle();
+  }
+
+  /// The live preview surface of the running capture, or `null`.
+  ///
+  /// Only a capture adapter that really owns a platform texture implements
+  /// [CameraPreviewSource]; every test double is a plain `CameraCapture` and
+  /// answers `null` here, so nothing can fabricate a preview.
+  ///
+  /// It is deliberately a getter and not a state field: a `Widget` in
+  /// immutable provider state would be a live platform handle in the audited
+  /// summary-only state object.
+  CameraPreviewSource? get previewSource {
+    final capture = _capture;
+    return capture is CameraPreviewSource ? capture : null;
   }
 
   /// Reads permission without presenting a system dialog and enters setup.
@@ -186,6 +239,7 @@ class VisionSessionController extends Notifier<VisionSessionState> {
       return true;
     }
 
+    _installProcessor();
     _frames ??= capture.frames.listen(_onFrame, onError: _onFrameError);
     _setState(
       state.copyWith(
@@ -251,6 +305,9 @@ class VisionSessionController extends Notifier<VisionSessionState> {
         return;
       }
     }
+    // Drop the processor: the user is about to change the geometry, and the
+    // next start must build a pipeline from the bundle they just saved.
+    await _disposeProcessor();
     _calibrationState = CalibrationLossState.tracking;
     _setState(
       state.copyWith(
@@ -348,11 +405,56 @@ class VisionSessionController extends Notifier<VisionSessionState> {
     _setState(state.copyWith(status: status, clearIssue: true));
   }
 
-  void _onFrame(Object? _) {
-    // A frame is borrowed by the capture adapter. Do not inspect, copy, or put
-    // it in state here; a future pipeline owns inference off the UI thread.
+  /// Builds the processor for this session, if one is not already running.
+  void _installProcessor() {
+    if (_processor != null) return;
+    final processor = ref.read(visionFrameProcessorFactoryProvider)();
+    _processor = processor;
+    _pipelineUpdates = processor.updates.listen(_onPipelineUpdate);
+  }
+
+  Future<void> _disposeProcessor() async {
+    final updates = _pipelineUpdates;
+    _pipelineUpdates = null;
+    if (updates != null) await updates.cancel();
+    final processor = _processor;
+    _processor = null;
+    if (processor != null) await processor.dispose();
+  }
+
+  void _onFrame(CameraFrame frame) {
+    // The buffer is borrowed by the capture adapter and invalidated as soon
+    // as this callback returns. The processor copies what it needs inside
+    // this call; nothing here retains the frame or puts it in state.
     if (_disposed || state.status != VisionSessionStatus.running) return;
     _observedFrameCount += 1;
+    _processor?.onFrame(frame);
+  }
+
+  /// Copies one published pipeline summary into state.
+  ///
+  /// It re-uses the public report methods so the pipeline is gated by exactly
+  /// the same state machine an external adapter is. `reportQuality` does not
+  /// accept `calibrationLost`, so once the session has reported a lost
+  /// calibration only the cue keeps updating — calling it anyway would raise
+  /// a spurious `invalidTransition`.
+  void _onPipelineUpdate(VisionPipelineUpdate update) {
+    if (_disposed) return;
+    const reportable = <VisionSessionStatus>{
+      VisionSessionStatus.running,
+      VisionSessionStatus.paused,
+      VisionSessionStatus.calibrationLost,
+    };
+    if (!reportable.contains(state.status)) return;
+    if (state.status != VisionSessionStatus.calibrationLost) {
+      reportQuality(
+        summary: update.summary,
+        hand: update.hand,
+        pose: update.pose,
+        guitar: update.guitar,
+      );
+    }
+    reportRealtimeCue(update.realtimeCue, summary: update.sessionSummary);
   }
 
   void _onFrameError(Object error, StackTrace stackTrace) {
@@ -423,6 +525,7 @@ class VisionSessionController extends Notifier<VisionSessionState> {
   }
 
   Future<void> _closeCapture({required bool releaseLease}) async {
+    await _disposeProcessor();
     final subscription = _frames;
     _frames = null;
     if (subscription != null) await subscription.cancel();

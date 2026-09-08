@@ -19,6 +19,7 @@ final class PlatformCameraFrame {
     required bool mirror,
     required CameraCrop? crop,
     required void Function() release,
+    int? rowStride,
   }) => PlatformCameraFrame._(
     bytes: bytes,
     timestamp: timestamp,
@@ -29,6 +30,7 @@ final class PlatformCameraFrame {
     mirror: mirror,
     crop: crop,
     release: release,
+    rowStride: rowStride,
   );
 
   PlatformCameraFrame._({
@@ -41,6 +43,7 @@ final class PlatformCameraFrame {
     required this.mirror,
     required this.crop,
     required this._release,
+    this.rowStride,
   });
 
   final Uint8List bytes;
@@ -51,6 +54,9 @@ final class PlatformCameraFrame {
   final CameraOrientation orientation;
   final bool mirror;
   final CameraCrop? crop;
+
+  /// Bytes per row of the luminance plane, or `null` when it is unpadded.
+  final int? rowStride;
   final void Function() _release;
   bool _released = false;
 
@@ -77,5 +83,6 @@ abstract final class CameraFrameBinding {
         orientation: frame.orientation,
         mirror: frame.mirror,
         crop: frame.crop,
+        rowStride: frame.rowStride,
       );
 }

@@ -40,6 +40,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/camera/camera_coordinate_space.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/storage/json_document_store.dart';
+import '../../../core/storage/key_value_store.dart';
 import '../../../core/storage/storage_keys.dart';
 import '../../../core/storage/storage_providers.dart';
 import '../data/persistence/vision_calibration_codec.dart';
@@ -185,6 +186,31 @@ final class GuitarCalibrationState {
 /// surface three different messages: "Saved", "Still invalid (degenerate
 /// geometry)" and "Repository write failed".
 enum GuitarCalibrationSaveOutcome { none, saved, blocked, writeFailed }
+
+/// Builds the runtime context a persisted bundle is judged against.
+///
+/// The calibration editor and the running session (E09-R28a) both need it,
+/// and they MUST agree: a bundle saved at one zoom/orientation and evaluated
+/// at another is rejected as stale for no real reason. One function, so the
+/// two sites cannot drift apart.
+///
+/// `orientation` and `zoom` are still fixed defaults — there is no on-device
+/// orientation or zoom source in the app yet — but they are fixed in exactly
+/// one place now.
+GuitarCalibrationContext guitarCalibrationContextFrom({
+  required KeyValueStore store,
+  required DateTime Function() now,
+}) => GuitarCalibrationContext(
+  camera: VisionCameraPreference.fromStorage(
+    store.readString(StorageKeys.visionCamera),
+  ),
+  orientation: CameraRotation.degrees0,
+  zoom: 0.5,
+  setupProfile: VisionSetupProfile.fromStorage(
+    store.readString(StorageKeys.visionSetupProfile),
+  ),
+  now: now,
+);
 
 /// Backing document store for the calibration bundle. Lives in the
 /// application folder so the controller can read it without a circular

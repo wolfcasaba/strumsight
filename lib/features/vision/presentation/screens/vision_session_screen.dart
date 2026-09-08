@@ -9,6 +9,7 @@ import '../../../settings/public.dart';
 import '../../application/vision_session_controller.dart';
 import '../../application/vision_session_state.dart';
 import '../overlays/vision_preview_overlay.dart';
+import '../providers/vision_preview_providers.dart';
 import '../providers/vision_thermal_providers.dart';
 import 'vision_result_screen.dart';
 
@@ -50,6 +51,15 @@ class VisionSessionScreen extends ConsumerWidget {
     final labEnabled = labAvailable && ref.watch(labModeProvider);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
+    // `null` whenever the capture adapter owns no platform texture — which is
+    // every test double. The tree below is then exactly what it was before
+    // E09-R28a, so the pinned Vision goldens stay byte-identical.
+    final preview = ref.watch(visionPreviewBuilderProvider)?.call();
+    final overlay = VisionPreviewOverlay(
+      quality: state.overlayQuality,
+      realtimeCue: state.realtimeCue,
+      detailedOverlayEnabled: labEnabled && state.detailedOverlayEnabled,
+    );
     return Scaffold(
       appBar: AppBar(title: Text(l10n.visionSessionTitle)),
       body: SafeArea(
@@ -58,12 +68,18 @@ class VisionSessionScreen extends ConsumerWidget {
             Expanded(
               child: DecoratedBox(
                 decoration: BoxDecoration(color: colors.surfaceSunken),
-                child: VisionPreviewOverlay(
-                  quality: state.overlayQuality,
-                  realtimeCue: state.realtimeCue,
-                  detailedOverlayEnabled:
-                      labEnabled && state.detailedOverlayEnabled,
-                ),
+                child: preview == null
+                    ? overlay
+                    : Stack(
+                        key: const Key('vision-preview-stack'),
+                        fit: StackFit.expand,
+                        children: <Widget>[
+                          // The overlay draws on top; the live texture never
+                          // leaves this subtree and is never retained.
+                          preview,
+                          overlay,
+                        ],
+                      ),
               ),
             ),
             Padding(
