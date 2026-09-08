@@ -439,8 +439,9 @@ void main() {
     test('aiTutorCloudEnabled: development ON, lab define-only, production '
         'never — and production ignores the define outright', () {
       expect(
-        FeatureFlags.forShippedBuild(AppEnvironment.development)
-            .aiTutorCloudEnabled,
+        FeatureFlags.forShippedBuild(
+          AppEnvironment.development,
+        ).aiTutorCloudEnabled,
         isTrue,
         reason: 'the tester APK passes no define — this IS its resolution',
       );

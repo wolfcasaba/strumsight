@@ -101,10 +101,10 @@ void main() {
       await recorder.pending;
 
       final entries = VisionSessionRepository(store: store).list();
-      expect(
-        entries.map((entry) => entry.sessionId),
-        <String>['session-2', 'session-1'],
-      );
+      expect(entries.map((entry) => entry.sessionId), <String>[
+        'session-2',
+        'session-1',
+      ]);
     });
 
     test('a failed write is reported, never silently dropped', () async {

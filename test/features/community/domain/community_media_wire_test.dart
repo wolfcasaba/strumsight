@@ -206,13 +206,10 @@ void main() {
       );
 
       expect(post.media, hasLength(2));
-      expect(
-        post.media.map((m) => m.publicId).toList(),
-        <String>[
-          '55555555-5555-4555-8555-555555555555',
-          '66666666-6666-4666-8666-666666666666',
-        ],
-      );
+      expect(post.media.map((m) => m.publicId).toList(), <String>[
+        '55555555-5555-4555-8555-555555555555',
+        '66666666-6666-4666-8666-666666666666',
+      ]);
     });
 
     test('hiányzó kulcs ÜRES lista, nem hiba', () {

@@ -310,8 +310,7 @@ final class _PluginCameraController
 
   @override
   bool get previewMirror =>
-      _controller.description.lensDirection ==
-      plugin.CameraLensDirection.front;
+      _controller.description.lensDirection == plugin.CameraLensDirection.front;
 
   /// The luminance plane's padded row length, or `null` when it is unpadded.
   ///
