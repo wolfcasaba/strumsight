@@ -12,7 +12,7 @@
 | Tény | Forrás |
 |---|---|
 | Oracle Ampere A1, `linux_arm64`, Ubuntu; hostnév-prefix `free-tier-arm` | `docs/baseline/epic-01-start.md`, `docs/execution/remote-container-environment.md` §6 |
-| **4 mag, 23 GB RAM** (~11 GB szabad), 77 GB szabad lemez — mérve 2026-08-05 | ADR 0171 §„A box" |
+| **4 OCPU / 24 GB RAM / 4 Gbps** — a user az OCI konzolból megerősítette **2026-09-08-án** (a repó 2026-08-05-i mérése: 4 mag, 23 GB, ~11 GB szabad, 77 GB lemez) | user-közlés 2026-09-08; ADR 0171 §„A box" |
 | teljes `flutter test` **~15 perc** a boxon vs **4–5 perc** CI-ban (x86) | ADR 0053 |
 | `flutter analyze && flutter test` láncolva → **OOM** | L05, CLAUDE.md |
 | **Nincs lokális APK-build**: ARM64 Linux hoston a Flutter nem szállít `linux-arm64` host `gen_snapshot`-ot → az APK CSAK CI-ből jön | ADR 0052/0053; upstream: flutter/flutter #189724 |
@@ -49,11 +49,16 @@ Források: [InfoQ](https://www.infoq.com/news/2026/07/oracle-cloud-free-tier-lim
 [Oracle Always Free Resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm),
 [Oracle A1 árlap](https://www.oracle.com/cloud/compute/arm/).
 
-**Mit jelent nekünk:** a repó 2026-08-05-én 4 mag / 23 GB-ot mért, a lánc
-RAM-fedezete slotonként 6 GB (`PIPELINE_MIN_FREE_GB_PER_SLOT`, ADR 0171), az
-OOM-csapda már 23 GB-nál is él. **12 GB-on a jelenlegi gate (analyze + több
-teszt-útvonal + implementer-motor + orchestrátor) nem fér el** — a §4 első
-parancsa ezért a shape lekérdezése.
+**Mit jelent nekünk:** a box 2026-09-08-án — három héttel a 08-18-i
+határidő UTÁN — még mindig **4 OCPU / 24 GB**-on fut (user-megerősítés). Ez két
+dolgot jelenthet: (a) a fiók már **Pay-As-You-Go** (akkor a beszámolók szerint
+a 4/24 ingyen marad, de a számlát figyelni kell), vagy (b) Always Free fiók,
+amelyen az Oracle még nem hajtotta végre a leállítást — ez esetben a példány
+bármikor törlés-jelölt. **A §4/0 lépés ezért a fiók-típus ellenőrzése a
+konzolban, nem a shape-é** (a shape-et már tudjuk). A lánc RAM-fedezete
+slotonként 6 GB (`PIPELINE_MIN_FREE_GB_PER_SLOT`, ADR 0171), az OOM-csapda már
+24 GB-nál is él — **12 GB-on a jelenlegi gate nem férne el**, tehát a 4/24
+megtartása nem kényelem, hanem a pipeline működési feltétele.
 
 | Opció | OCPU / RAM | Havi ár (730 h) | Megjegyzés |
 |---|---|---|---|
@@ -109,9 +114,12 @@ marad. [Mérés](https://tiffena.me/blog/ai-infrastructure/benchmark-cpu-only-ll
 
 ## 3. Ajánlás — rangsorolva
 
-1. **Ma: shape + fiók-típus ellenőrzés** (§4/1). Ha Always Free és még 4/24:
-   váltás PAYG-ra (a keret alatt $0), különben a példány törlés-jelölt. Ha már
-   2/12: dönteni a §2.1 táblából — a ~27 % halt-idő és a 82 perces kör mellett
+1. **Ma: fiók-típus ellenőrzés** (§4/0) — a shape már ismert (4/24). Ha a
+   fiók Always Free: váltás PAYG-ra (a keret alatt $0; utána állíts $1-es
+   számlázási riasztást, hogy egy esetleges A1-túlszámlázás azonnal
+   látszódjon), különben a példány törlés-jelölt. Ha már PAYG: nincs teendő,
+   csak a havi számla figyelése. Ha valaha 2/12-re esne: dönteni a §2.1
+   táblából — a ~27 % halt-idő és a 82 perces kör mellett
    a $55/hó 4/24 a legolcsóbb tényleges gyorsítás (ADR 0171 §„A box" is ezt
    mondta: „a legolcsóbb lineáris gyorsítás a több RAM/mag").
 2. **Szerepmegosztás marad:** box = orchestrálás + könnyű gate (format,
@@ -144,7 +152,11 @@ marad. [Mérés](https://tiffena.me/blog/ai-infrastructure/benchmark-cpu-only-ll
 ## 4. Ellenőrző parancsok a boxon (mind read-only)
 
 ```bash
-# 1) OCI shape és fiók — a döntő adat
+# 0) Fiók-típus — az OCI konzolban: Billing & Cost Management → Upgrade and
+#    Manage Payment: „Always Free" vs „Pay As You Go" — ez dönti el az 1. teendőt.
+#    Plusz: Governance → Limits → Compute → „Ampere A1 Flex" OCPU/memória limit
+#    (Always Free fiókon 06-15 óta 2 OCPU / 12 GB-nak KELLENE lennie).
+# 1) OCI shape (a user 2026-09-08-án megerősítette: 4 OCPU / 24 GB / 4 Gbps)
 curl -s -H "Authorization: Bearer Oracle" http://169.254.169.254/opc/v2/instance/ \
   | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["shape"],d["shapeConfig"],d["region"])'
 nproc; free -h; swapon --show; df -h /
