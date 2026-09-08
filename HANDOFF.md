@@ -1,5 +1,43 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 AUDIT-JAVÍTÓ KÖRÖK — E17-R15 (H4, ADR 0535) + 2. és 3. hullám (H1–H23, L1/L3–L12, U1–U13) — branch `claude/laptop-apk-debug-prompt-kys4oa` (2026-09-08)
+
+A 2026-09-08-i emulátoros hibaaudit (24 hiba + 12 logikai + 15 UI javaslat, APK
+`1.0.0-1-3102673`, CI run 34244853752) javítása három hullámban, párhuzamos
+Opus-agentekkel, **remote konténerben — Flutter/Dart SDK NÉLKÜL**: egyetlen
+sor sem fordult le lokálisan, két csak-olvasó reviewer (R, R2) fésülte át a
+diffet, a bizonyíték a CI. Kör-brief: `docs/rounds/e17-r15-live-signal-quality-reasons.md`,
+agent-jelentések a session scratchpadjában (nem a repóban).
+
+- **E17-R15 / H4 (`5ad7050`, ADR [0535](docs/adr/0535-live-signal-quality-reject-reasons-split.md)):**
+  a `RecognitionRejectReason.signalQuality` gyűjtő helyett HAT tipizált ok
+  (`signalTooQuiet … signalUnstable`), kimerítő `switch` a motorban, hat saját
+  EN/HU tanács; gépi őr: túl hangos/clipping SOHA nem mond „közelebb"-et.
+- **2. hullám (`8babd9a`, 78 fájl):** engedély-lánc (H1, H7, H8, H11, H12, H13 —
+  `MicPermissionController`, check/request szétválasztva, fail-closed, resume-frissítés),
+  Live őszinteség (H9, H10, H19), gyakorlás-életciklus (H2, H14, H16, L3, L4),
+  navigáció/UI (H5, H15, H17, H18, H22, H23), audio-hiba kimondása (H20, L12),
+  `.value!` őrzés (H21), diag-token kivezetése (H6 — **a token visszavonása és a
+  `STRUMSIGHT_DIAG_TOKEN` repo-secret + `lab-apk.yml` injektálás a felhasználóé**).
+- **3. hullám (`5683437`, 39 fájl):** L1, L8, L9, U1–U13 (U2 nem reprodukálódott,
+  csak őr-teszt; U13-nak nem volt mit törölnie; U15 szándékos tulajdonnév, nem változott).
+- **NEM javítva (mérés kell, ADR 0053/AGENTS §9):** **H3 / L2** — a P agent
+  diagnózisa: a jel-minőség-kapu csak CÍMKÉZ, a latch (`_chordConfEma` ≥ 0.54)
+  nem húz be; három jelölt (EMA nem ér fel az ütések között · a `margin`-tag
+  ~0.5·winSim-re fojtja a konfidenciát KS-jelen · N.C.-padló nyer). Mérendő
+  laptopon: `chordConfidence`, `debugChordConfEma`, `debugTonalness`,
+  `signalQuality.state` chord-frame-enként (`test/tools/real_audio_probe_test.dart`).
+
+**Ismert piros a CI-ban, amit csak a box tud feloldani:** ~9 golden-teszt
+(`e13_r17/18/19/21/22/23/35`, ADR 0426) — `tools/golden-x86.sh record
+test/ui/goldens/e13_r{17,18,19,21,22,23,35}_*_test.dart`, majd a PNG-k commitja.
+Laptopos APK a goldenektől függetlenül: `lab-apk.yml` dispatch (kapuk nélkül,
+`lab_build.json` üres tokennel = diagnosztika kikapcsolva).
+
+**Következő kör:** a golden-újrafelvétel + CI zöldre vitele ezen a branch-en, aztán
+H3 mérési kör valós gitárral.
+
+
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 
 A Chapter 17 (Teljes bekötés) **első köre**: a `FirstWinStageScreen` eddig
