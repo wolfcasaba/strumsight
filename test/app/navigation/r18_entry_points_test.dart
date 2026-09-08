@@ -159,6 +159,43 @@ Finder _scrollableOf(Type screen) {
   return matches.first;
 }
 
+/// Bounded pumps that let a stack-replacing `go` FINISH arriving — that
+/// is, that wait for the shell page the `go` replaced to leave the tree.
+///
+/// MÉRT (CI run 562): the R30 error cell below tapped the arriving frame's
+/// exit 16 ms after the `go`, while the shell page underneath it was still
+/// mounted. go_router keys the shell's `StatefulNavigationShell` with a
+/// `GlobalKey` owned by the ONE `StatefulShellRoute` object, so an exit
+/// that goes back INTO the shell at that moment asks for that single key
+/// in two places at once, and finalizing the tree threw a duplicate-key
+/// assertion for `LabeledGlobalKey<StatefulNavigationShellState>`. Nothing
+/// in `lib/` re-enters the shell inside that window; the harness did.
+///
+/// `pumpAndSettle` is not an option here: the loading frame's
+/// `CircularProgressIndicator` never stops, and Riverpod 3 auto-retries a
+/// `FutureProvider` that threw ([analysisRecentSummariesProvider] does not
+/// opt out of the retry the way `activePracticePlanProvider` does).
+Future<void> _settleShellExit(WidgetTester tester) async {
+  await tester.pump();
+  for (var frame = 0; frame < 40; frame++) {
+    if (find.byType(TodayHubScreen).evaluate().isEmpty) return;
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
+
+/// The same bounded wait for a router-owned frame: pumps single frames
+/// until nothing carries [key] any more, and gives up after ~640 ms.
+///
+/// A measured condition rather than a hard-coded duration, so no cell has
+/// to know how long the page it just left takes to leave the tree.
+Future<void> _pumpUntilGone(WidgetTester tester, Key key) async {
+  await tester.pump();
+  for (var frame = 0; frame < 40; frame++) {
+    if (find.byKey(key).evaluate().isEmpty) return;
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
+
 Future<void> _tapOnHub(WidgetTester tester, Finder target) async {
   await tester.scrollUntilVisible(
     target,
@@ -574,18 +611,67 @@ void main() {
       );
     });
 
-    testWidgets('B3 — the analysis home\'s ERROR frame can be left', (
+    // R30 (re-audit #2 B3) — the LOADING frame is what a stack-replacing
+    // `go` lands on first, and its exit is the SAME `_RouteFrameBackButton`.
+    // No provider retries anywhere near this cell, so it pins the exit (and
+    // the single-shell invariant `_settleShellExit` documents) on its own.
+    testWidgets('B3 — the analysis home\'s LOADING frame can be left', (
       tester,
     ) async {
       final rig = await _pumpShell(
         tester,
         audioAnalysisV2Enabled: true,
         extraOverrides: [
-          analysisRecentSummariesProvider.overrideWith(_failingAnalyses),
+          analysisRecentSummariesProvider.overrideWith(_pendingAnalyses),
         ],
       );
       rig.router.go(AppRoutes.analysisCapture);
+      await _settleShellExit(tester);
+      expect(
+        find.byKey(const Key('analysis-home-route-loading')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('route-frame-back')));
+      await _pumpUntilGone(tester, const Key('analysis-home-route-loading'));
+
+      expect(
+        find.byType(TodayHubScreen),
+        findsOneWidget,
+        reason:
+            'reached with a stack-replacing `go` there is nothing to pop, '
+            'so the control falls back to the shell entry point',
+      );
+      expect(
+        find.byKey(const Key('analysis-home-route-loading')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('B3 — the analysis home\'s ERROR frame can be left', (
+      tester,
+    ) async {
+      // The read is GATED, so the arrival can finish BEFORE it fails: the
+      // frame may only be left once the shell page this `go` replaced is
+      // gone (`_settleShellExit` carries the measured reason). Failing the
+      // read from the start left no window in which to wait — Riverpod 3
+      // starts retrying this provider 200 ms later, and the retry repaints
+      // the frame while the shell is still on its way out.
+      final read = Completer<List<AnalysisSummary>>();
+      final rig = await _pumpShell(
+        tester,
+        audioAnalysisV2Enabled: true,
+        extraOverrides: [
+          analysisRecentSummariesProvider.overrideWith((_) => read.future),
+        ],
+      );
+      rig.router.go(AppRoutes.analysisCapture);
+      await _settleShellExit(tester);
+
+      read.completeError(StateError('the analysis index could not be read'));
       await tester.pump();
+      // Well inside Riverpod's first retry delay, so the frame under test
+      // is still the one the failed read produced.
       await tester.pump(const Duration(milliseconds: 16));
       expect(
         find.byKey(const Key('analysis-home-route-error')),
@@ -593,12 +679,15 @@ void main() {
       );
 
       await tester.tap(find.byKey(const Key('route-frame-back')));
-      await tester.pump();
       // Bounded pumps, never `pumpAndSettle`: Riverpod 3 auto-retries a
-      // `FutureProvider` that throws, and a settle would chase that retry.
-      await tester.pump(const Duration(milliseconds: 400));
+      // `FutureProvider` that threw, and a settle would chase that retry.
+      // The retry can repaint the frame it is leaving as the LOADING one,
+      // so both keys have to be gone before the frame counts as left.
+      await _pumpUntilGone(tester, const Key('analysis-home-route-error'));
+      await _pumpUntilGone(tester, const Key('analysis-home-route-loading'));
 
       expect(find.byType(TodayHubScreen), findsOneWidget);
+      expect(find.byKey(const Key('analysis-home-route-error')), findsNothing);
       // Tearing the tree down inside the cell disposes the autoDispose
       // provider (and its pending retry) before the binding checks for
       // leftover timers.
