@@ -80,6 +80,35 @@ cd backend
 Python 3.12 for backend changes, then applies `alembic upgrade head` to an
 isolated temporary SQLite database. It can also be started manually.
 
+### Suite runtime — two test-only levers (measured, round 25)
+
+The CI "Backend test gate" step was cancelled at 14 min 56 s of its 15 min
+limit. Profiling (`python -m pytest --durations=60`) found the run was
+CPU-bound on two things; both are now handled in TEST code only, and
+production behaviour is unchanged. Measured on a 4-core Xeon @ 2.80 GHz
+container, Python 3.12: **928 s (15 m 28 s) -> 126 s (2 m 06 s)** for the
+same 1052 tests, with no test skipped, removed or weakened.
+
+- **bcrypt cost factor.** `app/security.py::PASSWORD_HASH_ROUNDS` is `12`
+  (bcrypt's own default) and is a MODULE CONSTANT, never an environment /
+  `Settings` knob, so no deployment can weaken it. Only the pytest process
+  rebinds it, in `tests/conftest.py`, to `4` — measured 0.271 s vs 0.001 s
+  per hash, and the suite mints thousands of fixture hashes (the three
+  `test_club_service.py` A7 cells stage 499 users each: 139 s per test).
+  The shipped value keeps explicit coverage in
+  `tests/test_auth.py::test_production_cost_factor_hashes_and_verifies`,
+  which restores it through the `production_password_hashing` fixture.
+- **Per-test Alembic replays.** Roughly twenty test modules provisioned their
+  SQLite database with a function-scoped `alembic upgrade head` — 22
+  revisions, ~0.30 s per call.
+  `tests/migration_template.py::apply_head_schema()` replays the chain ONCE
+  per pytest process and byte-copies the resulting database file, so every
+  test still opens a schema the production migration chain produced,
+  `alembic_version` row included — never a `Base.metadata.create_all`
+  shortcut. Tests that assert something ABOUT migrating (upgrade/downgrade
+  behaviour, readiness on a stale head, the rollback drill, the
+  in-process-migration logging trap) still call `alembic.command` directly.
+
 ## API
 
 | Method | Path             | Auth   | Body / returns |

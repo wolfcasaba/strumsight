@@ -13,6 +13,19 @@ from .config import BCRYPT_MAX_PASSWORD_BYTES, get_settings
 
 settings = get_settings()
 
+#: bcrypt cost factor (log2 rounds) for NEW password hashes. 12 is bcrypt's
+#: own default and the value every deployment runs with — it is a module
+#: constant ON PURPOSE, never an environment / `Settings` knob, so no deploy
+#: can weaken the brute-force cost by setting a variable.
+#:
+#: The one process that rebinds it is pytest: `backend/tests/conftest.py`
+#: lowers it for the suite (MEASURED: 0.271 s per hash at 12 vs 0.001 s at 4
+#: on the CI-class box, and the suite mints thousands of fixture hashes) and
+#: `tests/test_auth.py::test_production_cost_factor_hashes_and_verifies`
+#: pins the production value back. Passing the value explicitly to
+#: `gensalt()` is behaviour-identical to the previous bare `gensalt()`.
+PASSWORD_HASH_ROUNDS = 12
+
 
 def _password_bytes(password: str) -> bytes:
     return password.encode("utf-8")
@@ -24,7 +37,9 @@ def hash_password(password: str) -> str:
         raise ValueError(
             f"password must not exceed {BCRYPT_MAX_PASSWORD_BYTES} UTF-8 bytes"
         )
-    return bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(
+        password_bytes, bcrypt.gensalt(rounds=PASSWORD_HASH_ROUNDS)
+    ).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:

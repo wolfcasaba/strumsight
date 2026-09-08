@@ -49,32 +49,19 @@ import json
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
-from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from alembic import command
 from app.community.feed import following_feed as feed_repo
 from app.community.routers.feed import router as feed_router
 from app.config import Settings
 from app.database import enable_sqlite_foreign_keys, get_db
 from app.security import create_access_token, hash_password
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
-_ALEMBIC_DIR = _BACKEND_ROOT / "alembic"
-
-
-def _alembic_config() -> Config:
-    cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    return cfg
-
+from tests.migration_template import apply_head_schema
 
 # ---------------------------------------------------------------------------
 # Cursor sign helper — same algorithm as the repository's
@@ -120,8 +107,7 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
     monkeypatch.setenv("STRUMSIGHT_SECRET_KEY", _TEST_SECRET)
 
-    cfg = _alembic_config()
-    command.upgrade(cfg, "head")
+    apply_head_schema(db_path)
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
     enable_sqlite_foreign_keys(engine)
     factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -943,8 +929,7 @@ def test_a7_real_violation_probe_drops_feed_index(tmp_path, monkeypatch) -> None
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
     monkeypatch.setenv("STRUMSIGHT_SECRET_KEY", _TEST_SECRET)
 
-    cfg = _alembic_config()
-    command.upgrade(cfg, "head")
+    apply_head_schema(db_path)
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
     enable_sqlite_foreign_keys(engine)
     factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)

@@ -45,14 +45,11 @@ import threading
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
-from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from alembic import command
 from app.community.models.post import CommunityPost
 from app.community.models.profile import CommunityProfile
 from app.community.models.reaction import (
@@ -64,17 +61,7 @@ from app.community.services import reaction_service
 from app.community.services.post_service import create_post
 from app.database import enable_sqlite_foreign_keys
 from app.security import hash_password
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
-_ALEMBIC_DIR = _BACKEND_ROOT / "alembic"
-
-
-def _alembic_config() -> Config:
-    cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    return cfg
-
+from tests.migration_template import apply_head_schema
 
 # ---------------------------------------------------------------------------
 # Fixtures — file-backed SQLite engine with the full alembic chain
@@ -89,8 +76,7 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
     db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
 
-    cfg = _alembic_config()
-    command.upgrade(cfg, "head")
+    apply_head_schema(db_path)
     engine = create_engine(
         db_url,
         connect_args={"check_same_thread": False},

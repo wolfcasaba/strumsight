@@ -44,16 +44,13 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
-from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from alembic import command
 from app.community.models.moderation import (
     ACTION_TYPE_APPEAL_RESOLVED,
     ACTION_TYPE_APPEAL_SUBMITTED,
@@ -98,21 +95,11 @@ from app.community.routers.moderation import router as moderation_router
 from app.config import Settings
 from app.database import enable_sqlite_foreign_keys, get_db
 from app.security import create_access_token, hash_password
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
-_ALEMBIC_DIR = _BACKEND_ROOT / "alembic"
-
+from tests.migration_template import apply_head_schema
 
 # ---------------------------------------------------------------------------
 # Test infrastructure — fresh alembic-upgraded SQLite DB per test.
 # ---------------------------------------------------------------------------
-
-
-def _alembic_config() -> Config:
-    cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    return cfg
 
 
 @pytest.fixture
@@ -121,8 +108,7 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
     db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
 
-    cfg = _alembic_config()
-    command.upgrade(cfg, "head")
+    apply_head_schema(db_path)
     engine = create_engine(
         db_url,
         connect_args={"check_same_thread": False},

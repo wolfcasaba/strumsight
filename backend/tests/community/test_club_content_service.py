@@ -33,14 +33,11 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
-from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from alembic import command as alembic_command
 from app.community.feed.club_feed import (
     ClubFeedPage,
     ClubNotVisible,
@@ -73,17 +70,7 @@ from app.community.services.club_content_service import (
     pin_post,
 )
 from app.database import enable_sqlite_foreign_keys
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
-_ALEMBIC_DIR = _BACKEND_ROOT / "alembic"
-
-
-def _alembic_config() -> Config:
-    cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    return cfg
-
+from tests.migration_template import apply_head_schema
 
 # ---------------------------------------------------------------------------
 # Fixtures — engine + session factory (the Kör 22 / Kör 23 / Kör 24
@@ -110,8 +97,7 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
     db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
 
-    cfg = _alembic_config()
-    alembic_command.upgrade(cfg, "head")
+    apply_head_schema(db_path)
     engine = create_engine(
         db_url,
         connect_args={"check_same_thread": False},
