@@ -39,6 +39,7 @@ import '../data/practice_history_recorder.dart';
 import '../data/practice_observation_gateway_provider.dart';
 import '../data/practice_session_result_history_mapper.dart';
 import '../domain/model/compiled_practice_target.dart';
+import '../domain/model/practice_correction.dart';
 import '../domain/model/practice_definition.dart';
 import '../domain/model/practice_session_config.dart';
 import '../domain/repository/practice_history_repository.dart';
@@ -277,4 +278,23 @@ final practiceSessionControllerProvider = Provider.autoDispose
       );
       ref.onDispose(controller.dispose);
       return controller;
+    });
+
+/// The concrete "next fix" for the ACTIVE session, or `null` when there is
+/// nothing to correct (E14-R38, ADR 0551 D6).
+///
+/// A stream over the controller's own state stream rather than a plain
+/// `Provider`: the correction is recomputed inside the scoring pass, which
+/// does not itself publish a state, so the emitted states are used purely as
+/// the "something moved" tick that makes the projection observable. Reading
+/// the value never mutates anything.
+///
+/// It stays `null` — and touches no controller — when no session is active,
+/// so a screen rendered without a live session simply shows no correction.
+final practiceLatestCorrectionProvider =
+    StreamProvider.autoDispose<PracticeCorrection?>((ref) {
+      final inputs = ref.watch(practiceActiveSessionInputsProvider);
+      if (inputs == null) return Stream<PracticeCorrection?>.value(null);
+      final controller = ref.watch(practiceSessionControllerProvider(inputs));
+      return controller.states.map((_) => controller.latestCorrection);
     });

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
@@ -66,9 +67,15 @@ class ChordTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // E14-R37 (ADR 0550 D5): every animated element on the Live stage asks
+    // the ONE resolver the design system owns (ADR 0274 §5.1). Reduced
+    // motion zeroes the MOTION, never the information: the hero, its
+    // history, the "next" ghost and the idle prompt all still render — they
+    // simply arrive without travel, scale or shimmer.
+    final reduceMotion = SsMotionScope.reduceMotionOf(context);
 
     if (events.isEmpty) {
-      return _emptyState(context, l10n);
+      return _emptyState(context, l10n, reduceMotion);
     }
 
     final hero = events.last;
@@ -79,7 +86,7 @@ class ChordTimeline extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         for (var i = 0; i < history.length; i++)
-          _historyCard(history[i], history.length - i),
+          _historyCard(history[i], history.length - i, reduceMotion),
       ],
     );
 
@@ -102,9 +109,15 @@ class ChordTimeline extends StatelessWidget {
               child: historyRow,
             ),
           ),
-        FittedBox(fit: BoxFit.scaleDown, child: _heroCard(context, hero, beat)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: _heroCard(context, hero, beat, reduceMotion),
+        ),
         if (next != null)
-          FittedBox(fit: BoxFit.scaleDown, child: _nextGhost(context, l10n)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: _nextGhost(context, l10n, reduceMotion),
+          ),
       ],
     );
 
@@ -115,22 +128,31 @@ class ChordTimeline extends StatelessWidget {
   //
   // A single finite fade+scale on the icon (no `.repeat()`), so `pumpAndSettle`
   // still terminates. The `liveWaitingForChord` text is kept verbatim.
-  Widget _emptyState(BuildContext context, AppLocalizations l10n) {
+  Widget _emptyState(
+    BuildContext context,
+    AppLocalizations l10n,
+    bool reduceMotion,
+  ) {
     if (!idlePromptEnabled) return const SizedBox.shrink();
     final palette = context.palette;
+    // The glyph itself is the information; only its arrival is motion.
+    Widget glyph = Icon(Icons.graphic_eq, size: 40, color: palette.muted);
+    if (!reduceMotion) {
+      glyph = glyph
+          .animate(key: const ValueKey('empty-pulse'))
+          .fadeIn(duration: 400.ms)
+          .scaleXY(
+            begin: 0.85,
+            end: 1.0,
+            duration: 400.ms,
+            curve: Curves.easeOut,
+          );
+    }
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.graphic_eq, size: 40, color: palette.muted)
-              .animate(key: const ValueKey('empty-pulse'))
-              .fadeIn(duration: 400.ms)
-              .scaleXY(
-                begin: 0.85,
-                end: 1.0,
-                duration: 400.ms,
-                curve: Curves.easeOut,
-              ),
+          glyph,
           const SizedBox(height: 14),
           Text(
             l10n.liveWaitingForChord,
@@ -155,19 +177,22 @@ class ChordTimeline extends StatelessWidget {
   // AnimatedScale/AnimatedOpacity animate to the new tier — the spec's "prior
   // cards slide left + scale down + fade, once per transition". (Rendered at
   // base size with `scale: 1.0`; the tier shrink is done here so it can tween.)
-  Widget _historyCard(ChordEvent event, int distance) {
+  Widget _historyCard(ChordEvent event, int distance, bool reduceMotion) {
     final scale = _scaleFor(distance);
     final opacity = (0.30 + 0.55 * scale).clamp(0.0, 1.0);
+    // Reduced motion keeps the TIER (a receded card still reads as older —
+    // that is information), and only drops the tween that travels to it.
+    final duration = reduceMotion ? Duration.zero : 340.ms;
 
     return RepaintBoundary(
       child: AnimatedOpacity(
         key: ValueKey(event.seq),
         opacity: opacity,
-        duration: 340.ms,
+        duration: duration,
         curve: Curves.easeOutCubic,
         child: AnimatedScale(
           scale: scale,
-          duration: 340.ms,
+          duration: duration,
           curve: Curves.easeOutCubic,
           child: ChordTimelineCard(event: event, isHero: false, capo: capo),
         ),
@@ -177,7 +202,12 @@ class ChordTimeline extends StatelessWidget {
 
   // --- Hero card: spring-in from the right + decoupled recognition flash -----
 
-  Widget _heroCard(BuildContext context, ChordEvent hero, int beat) {
+  Widget _heroCard(
+    BuildContext context,
+    ChordEvent hero,
+    int beat,
+    bool reduceMotion,
+  ) {
     // Directional strum flourish: down settles from just-above, up from
     // just-below — a small, calm nudge (not a bounce) that reads the ↓/↑ intent.
     final dirBegin = switch (hero.direction) {
@@ -200,14 +230,21 @@ class ChordTimeline extends StatelessWidget {
     // (If it were the outer wrapper, every beat would remount the whole subtree
     // and replay the entrance ~2×/sec — a glitch the beat==0 tests never
     // surface.) Finite scale each time, so `pumpAndSettle` still terminates.
-    card = card
-        .animate(key: ValueKey('beat-$beat'))
-        .scaleXY(
-          begin: 1.022,
-          end: 1.0,
-          duration: 180.ms,
-          curve: Curves.easeOutCubic,
-        );
+    //
+    // E14-R39 audit lelet B15 / E14-R37 (ADR 0550 D5): this pulse never asked
+    // `SsMotionScope`. Under reduced motion the SCALE is dropped — the beat is
+    // still readable from the beat grid and the status bar, so no functional
+    // feedback is lost by standing still (ADR 0274 §5.1).
+    if (!reduceMotion) {
+      card = card
+          .animate(key: ValueKey('beat-$beat'))
+          .scaleXY(
+            begin: 1.022,
+            end: 1.0,
+            duration: 180.ms,
+            curve: Curves.easeOutCubic,
+          );
+    }
 
     // MIDDLE: the recognition beat — one coherent gesture, not a pile-up. A
     // soft copper shimmer sweep + a single directional settle. (The old
@@ -215,18 +252,20 @@ class ChordTimeline extends StatelessWidget {
     // scale and made "landing" read as two separate pops.) Keyed by
     // seq+direction so it re-fires when a strum lands on the same held chord
     // (direction/confidence update in place) as well as on a new chord.
-    card = card
-        .animate(key: ValueKey('flash-${hero.seq}-${hero.direction}'))
-        .shimmer(
-          duration: 320.ms,
-          color: AppColors.primary.withValues(alpha: 0.28),
-        )
-        .slideY(
-          begin: dirBegin,
-          end: 0,
-          duration: 260.ms,
-          curve: Curves.easeOutCubic,
-        );
+    if (!reduceMotion) {
+      card = card
+          .animate(key: ValueKey('flash-${hero.seq}-${hero.direction}'))
+          .shimmer(
+            duration: 320.ms,
+            color: AppColors.primary.withValues(alpha: 0.28),
+          )
+          .slideY(
+            begin: dirBegin,
+            end: 0,
+            duration: 260.ms,
+            curve: Curves.easeOutCubic,
+          );
+    }
 
     // OUTERMOST: a smooth glide-in entrance (no overshoot); fire a light haptic
     // on each new hero. easeOutCubic decelerates cleanly instead of the old
@@ -234,22 +273,30 @@ class ChordTimeline extends StatelessWidget {
     // values so the chord arrives composed rather than springing. Keyed by seq
     // alone so it plays once per NEW chord and is untouched by beat/direction
     // changes (no re-entrance while a chord holds).
+    //
+    // The HAPTIC is not motion: a reduced-motion user still gets the physical
+    // "a new chord landed" cue. Only the visual travel is dropped, so the
+    // keyed `.animate` stays — with zero-length tweens — rather than being
+    // removed outright (which would silence the haptic too).
     card = card
         .animate(
           key: ValueKey('enter-${hero.seq}'),
           onPlay: (_) => _lightHaptic(),
         )
-        .fadeIn(duration: 300.ms, curve: Curves.easeOutCubic)
+        .fadeIn(
+          duration: reduceMotion ? Duration.zero : 300.ms,
+          curve: Curves.easeOutCubic,
+        )
         .slideX(
-          begin: 0.16,
+          begin: reduceMotion ? 0.0 : 0.16,
           end: 0,
-          duration: 340.ms,
+          duration: reduceMotion ? Duration.zero : 340.ms,
           curve: Curves.easeOutCubic,
         )
         .scaleXY(
-          begin: 0.95,
+          begin: reduceMotion ? 1.0 : 0.95,
           end: 1.0,
-          duration: 340.ms,
+          duration: reduceMotion ? Duration.zero : 340.ms,
           curve: Curves.easeOutCubic,
         );
 
@@ -258,7 +305,11 @@ class ChordTimeline extends StatelessWidget {
 
   // --- Next ghost: faint hint at the hero's right edge ----------------------
 
-  Widget _nextGhost(BuildContext context, AppLocalizations l10n) {
+  Widget _nextGhost(
+    BuildContext context,
+    AppLocalizations l10n,
+    bool reduceMotion,
+  ) {
     final palette = context.palette;
     final label = next!.transposed(-capo).label;
     // Fade the ghost in whenever the predicted chord changes (keyed by label),
@@ -299,7 +350,10 @@ class ChordTimeline extends StatelessWidget {
                 ),
               )
               .animate(key: ValueKey('ghost-$label'))
-              .fadeIn(duration: 280.ms, curve: Curves.easeOutCubic),
+              .fadeIn(
+                duration: reduceMotion ? Duration.zero : 280.ms,
+                curve: Curves.easeOutCubic,
+              ),
     );
   }
 

@@ -116,6 +116,17 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   /// Push the current lesson target chord to the detector when it changes
   /// (the chunk-016 expected-target prior). Jam mode and a finished/idle
   /// screen hint nothing.
+  ///
+  /// **What this actually does today (E14-R37, ADR 0550 D4 — stated so the
+  /// code does not imply more than it delivers):** the shared engine is
+  /// constructed in `RecognitionMode.free`
+  /// (`liveRecognitionModeProvider`), and `ExpectedChordHint.forMode`
+  /// returns `null` for that regime, so the label is dropped inside
+  /// `RealStrumEngine.setExpectedChord` and never reaches the decoder. The
+  /// lesson's verdict is therefore audio-only. The call is kept — not
+  /// deleted — because it is the wiring the guided regime needs the moment
+  /// the microphone-lease question is decided, and because clearing on
+  /// dispose stays correct in both regimes.
   String? _sentExpected;
   StrumEngine? _hintedEngine; // captured so dispose can clear without ref
   void _updateExpectedChord() {

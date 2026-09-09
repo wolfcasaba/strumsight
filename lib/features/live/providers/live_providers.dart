@@ -3,15 +3,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/audio/lifecycle/audio_session_lease.dart';
 import '../../../core/platform/microphone_permission.dart';
+import '../domain/recognition/recognition_mode.dart';
 import '../engine/real_strum_engine.dart';
 import '../engine/recognition_stabilizer.dart';
 import '../engine/strum_engine.dart';
 import '../model/live_frame.dart';
 
+/// The regime the app-wide detection engine is CONSTRUCTED in (E14-R30,
+/// ADR 0544 D1 — read by [strumEngineProvider], never by a screen).
+///
+/// [RecognitionMode.free] is the fail-closed default and the ONLY value this
+/// build ships: an expected-chord hint cannot even be BUILT for a free
+/// engine, so no caller — Live, Learn, Practice — can bias the chord verdict
+/// with a lesson target, whatever it passes to
+/// [StrumEngine.setExpectedChord] (ADR 0550 D4).
+///
+/// It is a provider rather than a literal so the regime is one declared,
+/// overridable value instead of an implicit constructor default: a future
+/// round that decides the microphone-lease question can raise it here, in
+/// one place, and every consumer of the shared engine moves with it.
+/// Raising it is a PRODUCT decision with a measurable consequence (ADR 0544
+/// D3 marks the tie-break's real-lesson value as UNKNOWN), so this round
+/// does not raise it.
+final liveRecognitionModeProvider = Provider<RecognitionMode>(
+  (ref) => RecognitionMode.free,
+);
+
 /// The active detection engine — the REAL microphone+DSP engine.
 /// (MockStrumEngine remains test infrastructure; tests override this.)
+///
+/// This is the app's single microphone client for chord/strum detection:
+/// Live, Learn and the Practice observation gateway all drive THIS instance,
+/// which is why the regime above is a property of the engine and not of the
+/// screen that happens to be on top.
 final strumEngineProvider = Provider<StrumEngine>((ref) {
-  final engine = RealStrumEngine(mic: createMicCapture(ref, AudioOwner.live));
+  final engine = RealStrumEngine(
+    mic: createMicCapture(ref, AudioOwner.live),
+    mode: ref.watch(liveRecognitionModeProvider),
+  );
   ref.onDispose(engine.dispose);
   return engine;
 });

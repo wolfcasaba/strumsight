@@ -17,14 +17,18 @@ import '../../../core/widgets/mic_error_banner.dart';
 import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/public.dart';
+import '../domain/recognition/recognition_decision.dart';
 import '../engine/strum_engine.dart';
 import '../model/live_frame.dart';
 import '../providers/chord_timeline_provider.dart';
 import '../providers/live_providers.dart';
+import '../providers/live_stage_mode.dart';
 import '../widgets/beat_counter.dart';
 import '../widgets/chord_timeline.dart';
+import '../widgets/guided_target_card.dart';
 import '../widgets/live_lab_panel.dart';
 import '../widgets/live_status_bar.dart';
+import '../widgets/recognition_state_chip.dart';
 import '../widgets/uncertainty_reason_banner.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
@@ -85,9 +89,16 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // listening while nothing is (E01-R09 §9.4).
     _lifecycle = ref.read(appLifecycleEventsProvider);
     _lifecycle.addListener(_onAppLifecycle);
-    // Defence in depth (r146): free-play must never inherit a lesson's
-    // expected-chord bias — clear it explicitly instead of trusting the nav
-    // invariant that LearnScreen was disposed first (chunk 016 residual).
+    // Free-play must never inherit a lesson's expected-chord bias. Since
+    // E14-R30 (ADR 0544) that is a MACHINE guarantee, not a convention: the
+    // shared engine is constructed in `RecognitionMode.free`
+    // (`liveRecognitionModeProvider`), and `ExpectedChordHint.forMode`
+    // returns `null` for that regime, so a label handed to
+    // `setExpectedChord` cannot reach the decoder at all. This explicit
+    // clear is kept as the belt to that braces (r146): it costs nothing, it
+    // is the ONLY `setExpectedChord` call this screen ever makes, and it
+    // always passes `null` — pinned by
+    // `test/features/live/screens/live_stage_mode_test.dart`.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(strumEngineProvider).setExpectedChord(null);
@@ -249,6 +260,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final timeline = ref.watch(chordTimelineProvider);
     // Capo: the detector hears concert pitch; show the fretted shape (−capo).
     final capo = ref.watch(capoProvider);
+    // The stage's PRODUCT mode (ADR 0550 D2) — derived from the on-screen
+    // target, so "guided" and "there is a target" can never disagree.
+    final stageMode = ref.watch(liveStageModeProvider);
+    final guidedTarget = ref.watch(liveGuidedTargetProvider);
     // Discrete beat index off the engine clock — a new value fires ONE finite
     // hero pulse (see ChordTimeline.beat). No free-running metronome, so widget
     // tests still settle. Guards keep it 0 (disabled) when there's no clock/BPM.
@@ -285,6 +300,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     if (!_paused &&
         frame.listening &&
         frame.current != null &&
+        _decisionClaimsChord(frame.chordDecision) &&
         frame.engineTimeSec >= 0) {
       final micros = (frame.engineTimeSec * 1e6).round();
       _liveRegion.report(
@@ -309,7 +325,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         frame.listening &&
         frame.chordRejectReason == null &&
         frame.inputLevel < SsSignalQualityIndicator.defaultWeakThreshold;
-    final hasChord = frame.current != null;
+    // ADR 0550 D1: a chord reaches the DETECTION hero only under a decision
+    // that actually claims one. `LivePipeline` already only fills `current`
+    // on a `confirmed` verdict (`showChord == chordLatched && hasMatch`), so
+    // on today's production path this changes nothing — it turns that
+    // producer-side coincidence into a screen-side machine guard that also
+    // holds for the stabilizer, the adapter and any future producer.
+    final claimsChord = _decisionClaimsChord(frame.chordDecision);
+    final hasChord = frame.current != null && claimsChord;
 
     // The transport only distinguishes disabled/finishing/paused/active — a
     // session autostarts on mount (no `countIn`, no separate "not yet
@@ -436,6 +459,42 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               levelSemanticLabel: l10n.liveInputLevel,
               weakLabel: isWeakSignal ? l10n.liveWeakSignal : null,
             ),
+            // The stage's mode and — in Guided only — the target. The target
+            // lives HERE, in the feedback slot, never in `hero`: the hero is
+            // the detection slot, and a target rendered there would read as a
+            // recognition result (ADR 0550 D3).
+            //
+            // A `Column` of centred rows rather than a `Wrap`: `Wrap` hands
+            // its children UNBOUNDED main-axis constraints, under which the
+            // chips' `Flexible` text would throw instead of shrinking — and
+            // the whole point of these rows is that they survive 360 px and
+            // textScale 2.0. `Align` passes bounded, loose constraints, so
+            // each pill keeps its intrinsic size until it has to shrink.
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(child: _StageModeChip(mode: stageMode)),
+                  if (guidedTarget != null) ...[
+                    const SizedBox(height: 6),
+                    Align(child: GuidedTargetCard(chordLabel: guidedTarget)),
+                  ],
+                  // The recognizer's own decision state, whenever a producer
+                  // supplies one. An absent decision is not a state, so the
+                  // chip is simply not rendered for it.
+                  if (frame.chordDecision != null) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      child: RecognitionStateChip(
+                        decision: frame.chordDecision!,
+                        chordLabel: frame.current?.transposed(-capo).label,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
             if (frame.chordRejectReason != null)
               UncertaintyReasonBanner(reason: frame.chordRejectReason!),
           ],
@@ -486,6 +545,25 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     );
   }
 
+  /// Whether [decision] lets the stage present a chord as RECOGNISED
+  /// (ADR 0550 D1). Exhaustive, no `default`: a seventh decision state is a
+  /// compile error here rather than a silent "yes".
+  ///
+  /// `null` — a producer that supplies no typed decision at all (mocks, the
+  /// onboarding first-win engine, the `LiveFrameAdapter` boundary) — keeps
+  /// the pre-E14-R37 behaviour: those producers gate the chord themselves and
+  /// this round does not invent a verdict for them.
+  static bool _decisionClaimsChord(RecognitionDecision? decision) =>
+      switch (decision) {
+        RecognitionDecision.confirmed => true,
+        RecognitionDecision.candidate ||
+        RecognitionDecision.provisional ||
+        RecognitionDecision.uncertain ||
+        RecognitionDecision.rejected ||
+        RecognitionDecision.expired => false,
+        null => true,
+      };
+
   int? _activeSlot(LiveFrame frame) {
     final latest = frame.displayStrum;
     if (latest == null) return null;
@@ -493,6 +571,58 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       if (identical(frame.bar[i].strum, latest)) return i;
     }
     return null;
+  }
+}
+
+/// Names the stage's product mode in words (ADR 0550 D2). Free play and
+/// Guided are told apart by TEXT plus an icon, never by colour alone — the
+/// E14-R39 audit measured the confidence tokens as a single grey under full
+/// colour loss, so a hue-only mode cue would be no cue at all.
+class _StageModeChip extends StatelessWidget {
+  const _StageModeChip({required this.mode});
+
+  final LiveStageMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final (label, icon) = switch (mode) {
+      LiveStageMode.freePlay => (l10n.liveModeFreePlay, Icons.graphic_eq),
+      LiveStageMode.guided => (l10n.liveModeGuided, Icons.flag_outlined),
+    };
+    return Semantics(
+      label: label,
+      excludeSemantics: true,
+      child: Container(
+        key: ValueKey('live-stage-mode-${mode.name}'),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: palette.border, width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: palette.muted),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                  color: palette.ink,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -13,6 +13,7 @@ import '../../../../core/widgets/mic_permission_banner.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../settings/public.dart';
 import '../../application/practice_session_command.dart';
+import '../../application/practice_session_providers.dart';
 import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_state.dart';
 import '../../domain/model/speed_builder_state.dart';
@@ -24,6 +25,7 @@ import '../views/rhythm_only_view.dart';
 import '../views/strum_pattern_view.dart';
 import '../widgets/adaptive_suggestion_banner.dart';
 import '../widgets/practice_controls.dart';
+import '../widgets/practice_correction_banner.dart';
 import '../widgets/practice_count_in_overlay.dart';
 import '../widgets/practice_error_panel.dart';
 import '../widgets/practice_hud.dart';
@@ -245,6 +247,15 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
           liveOverallPerMille: host.liveOverallPerMille,
         ),
       );
+      // The correction loop (E14-R38, ADR 0551 D6): after a missed target —
+      // or after the recognizer abstained on one — say the ONE concrete
+      // thing to change next. A projection of the scoring pass, so no
+      // reducer state was added for it; `null` (nothing to correct, or no
+      // active session) simply renders nothing.
+      final correction = ref.watch(practiceLatestCorrectionProvider).value;
+      if (correction != null) {
+        children.add(PracticeCorrectionBanner(correction: correction));
+      }
       // Weak signal: no live score yet while capture is active. Degraded
       // capability: a recoverable failure is currently surfaced. Both are
       // presentation-visible primitives — never a domain/service import

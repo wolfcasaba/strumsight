@@ -164,9 +164,21 @@ final class ChordChangeAnalyzer {
     );
   }
 
-  bool _hasUsableConfidence(ChordObservation observation) =>
-      observation.confidence.isFinite &&
-      observation.confidence >= minimumConfidence;
+  /// Whether an observation may be used as evidence of what was played.
+  ///
+  /// E14-R38 (ADR 0551 D3): the DECISION decides, the number only refines.
+  /// An `uncertain`/`rejected` reading is never usable, however confident a
+  /// number happens to sit next to it; a `measured` reading with no
+  /// confidence number (`null` — the live path, which measures none) IS
+  /// usable, because "not measured" is not "below threshold". Before this
+  /// round the live path fabricated `1.0` here, which made every reading —
+  /// including the ones the recognizer had rejected — look usable.
+  bool _hasUsableConfidence(ChordObservation observation) {
+    if (!observation.evidence.isEvidence) return false;
+    final confidence = observation.confidence;
+    if (confidence == null) return true;
+    return confidence.isFinite && confidence >= minimumConfidence;
+  }
 
   void _validateConfiguration() {
     if (stabilityThreshold <= Duration.zero) {
@@ -329,7 +341,19 @@ int _compareObservations(ChordObservation left, ChordObservation right) {
   final time = left.at.compareTo(right.at);
   if (time != 0) return time;
   if (left.label == right.label) {
-    return right.confidence.compareTo(left.confidence);
+    // Evidence-bearing readings sort first; among equals a measured
+    // confidence beats an unmeasured one, and a higher number beats a lower.
+    // A `null` confidence is "not measured", so it can never outrank a real
+    // number — and can never be compared with one arithmetically either.
+    final leftRank = left.evidence.isEvidence ? 1 : 0;
+    final rightRank = right.evidence.isEvidence ? 1 : 0;
+    if (leftRank != rightRank) return rightRank.compareTo(leftRank);
+    final leftConfidence = left.confidence;
+    final rightConfidence = right.confidence;
+    if (leftConfidence == null && rightConfidence == null) return 0;
+    if (leftConfidence == null) return 1;
+    if (rightConfidence == null) return -1;
+    return rightConfidence.compareTo(leftConfidence);
   }
   if (left.label == null) return -1;
   if (right.label == null) return 1;

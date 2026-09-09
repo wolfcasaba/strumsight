@@ -16,6 +16,7 @@ import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/music/chord.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/core/platform/microphone_permission.dart';
+import 'package:strumsight/features/live/domain/recognition/recognition_decision.dart';
 import 'package:strumsight/features/live/model/beat_slot.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/features/practice/application/practice_observation_gateway.dart';
@@ -150,6 +151,8 @@ LiveFrame _frame({
   double engineTimeSec = -1,
   double latestStrumTime = -1,
   bool listening = true,
+  RecognitionDecision? chordDecision,
+  RecognitionRejectReason? chordRejectReason,
 }) => LiveFrame(
   current: chord,
   next: null,
@@ -162,6 +165,8 @@ LiveFrame _frame({
   strumSeq: strumSeq,
   latestStrumTime: latestStrumTime,
   engineTimeSec: engineTimeSec,
+  chordDecision: chordDecision,
+  chordRejectReason: chordRejectReason,
 );
 
 Strum _strum(double confidence) =>
@@ -692,7 +697,10 @@ void main() {
         final chords = h.observations.whereType<ChordObservation>().toList();
         expect(chords, hasLength(1));
         expect(chords.single.label, 'C');
-        expect(chords.single.confidence, 1.0);
+        // E14-R38 (ADR 0551 D2): the fabricated `1.0` is gone. The live chord
+        // path measures no chord confidence, so the observation says so.
+        expect(chords.single.confidence, isNull);
+        expect(chords.single.evidence, ChordEvidence.measured);
       },
     );
 
@@ -794,7 +802,7 @@ void main() {
 
       final chords = observations.whereType<ChordObservation>().toList();
       expect(chords, hasLength(1));
-      expect(chords.single.confidence, 1.0);
+      expect(chords.single.confidence, isNull);
     });
   });
 
@@ -1059,4 +1067,118 @@ void main() {
       expect(h.logger.warnings.where((w) => w.contains('lag')).length, 1);
     });
   });
+
+  // ---- E14-R38 (ADR 0551): the typed verdict travels, the invented
+  // confidence does not. ----
+  group('the chord verdict reaches the observation', () {
+    const cases = <RecognitionDecision, ChordEvidence>{
+      RecognitionDecision.confirmed: ChordEvidence.measured,
+      RecognitionDecision.candidate: ChordEvidence.uncertain,
+      RecognitionDecision.provisional: ChordEvidence.uncertain,
+      RecognitionDecision.uncertain: ChordEvidence.uncertain,
+      RecognitionDecision.expired: ChordEvidence.uncertain,
+      RecognitionDecision.rejected: ChordEvidence.rejected,
+    };
+
+    for (final MapEntry(key: decision, value: evidence) in cases.entries) {
+      test('${decision.name} is recorded as ${evidence.name}', () async {
+        final h = await _spinUp();
+        addTearDown(h.gateway.dispose);
+        addTearDown(h.observationsSub.cancel);
+
+        h.engine.emit(_frame(chord: const Chord('C'), chordDecision: decision));
+        await _pump();
+
+        final chords = h.observations.whereType<ChordObservation>().toList();
+        expect(chords, hasLength(1));
+        expect(chords.single.evidence, evidence);
+        expect(
+          chords.single.confidence,
+          isNull,
+          reason: 'the live chord path measures no chord confidence; the old '
+              'hardcoded 1.0 was an invented number',
+        );
+      });
+    }
+
+    test('the reject reason travels as a stable code, so the practice UI can '
+        'state the concrete correction', () async {
+      final h = await _spinUp();
+      addTearDown(h.gateway.dispose);
+      addTearDown(h.observationsSub.cancel);
+
+      h.engine.emit(
+        _frame(
+          chord: null,
+          chordDecision: RecognitionDecision.rejected,
+          chordRejectReason: RecognitionRejectReason.signalTooQuiet,
+        ),
+      );
+      await _pump();
+
+      final chords = h.observations.whereType<ChordObservation>().toList();
+      expect(chords, hasLength(1));
+      expect(chords.single.evidence, ChordEvidence.rejected);
+      expect(
+        chords.single.rejectReasonCode,
+        RecognitionRejectReason.signalTooQuiet.name,
+      );
+    });
+
+    test('a producer with no typed decision keeps the legacy path '
+        'scoreable', () async {
+      final h = await _spinUp();
+      addTearDown(h.gateway.dispose);
+      addTearDown(h.observationsSub.cancel);
+
+      h.engine.emit(_frame(chord: const Chord('C')));
+      await _pump();
+
+      final chords = h.observations.whereType<ChordObservation>().toList();
+      expect(chords.single.evidence, ChordEvidence.measured);
+      expect(chords.single.rejectReasonCode, isNull);
+    });
+  });
+
+  // ---- E14-R37 (ADR 0550): the guided half of "Live never passes a hint,
+  // practice always does". The Live half lives in
+  // test/features/live/screens/live_stage_mode_test.dart. ----
+  group('the guided path always passes its target to the engine', () {
+    test('a target set before start reaches the engine on start, every later '
+        'target reaches it immediately, and stopping clears it', () async {
+      final engine = FakeStrumEngine();
+      addTearDown(engine.dispose);
+      final gateway = LivePracticeObservationGateway(
+        engine: engine,
+        permissions: FakeMicrophonePermissionGateway(),
+        timelineNow: () => Duration.zero,
+        logger: _RecordingAppLogger(),
+      );
+      addTearDown(gateway.dispose);
+
+      gateway.setExpectedChord('C');
+      expect(
+        engine.expectedChordCalls,
+        isEmpty,
+        reason: 'nothing is pushed while the gateway is not running',
+      );
+
+      final start = await gateway.start(
+        config: const PracticeObservationConfig(),
+      );
+      expect(start.isSuccess, isTrue);
+      expect(engine.expectedChordCalls, contains('C'));
+
+      gateway.setExpectedChord('G');
+      expect(engine.expectedChordCalls.last, 'G');
+
+      await gateway.stop();
+      expect(
+        engine.expectedChordCalls.last,
+        isNull,
+        reason: 'the target is cleared when the guided capture ends',
+      );
+    });
+  });
+
 }

@@ -50,6 +50,12 @@ abstract final class StorageKeys {
   /// round; the two sources will be unified in E02-R19.
   static const String practiceHistoryV2 = 'ss.practice.history_v2';
 
+  // --- today ---------------------------------------------------------------
+  /// The in-progress "10 useful minutes" chain (E14-R36, ADR 0546 D7).
+  /// Holds only the step, the start time and the active-seconds baseline —
+  /// never a plan the user did not start.
+  static const String tenMinuteFlow = 'ss.today.ten_minute_flow';
+
   // --- vision --------------------------------------------------------------
   static const String visionSetupProfile = 'ss.vision.setup_profile';
   static const String visionCamera = 'ss.vision.camera';

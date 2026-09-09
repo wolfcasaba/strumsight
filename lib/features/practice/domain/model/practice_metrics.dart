@@ -216,10 +216,20 @@ abstract final class PracticeMetricReasonCode {
   static const String insufficientSamples =
       'practice.metric.insufficient_samples';
 
+  /// The recognizer produced readings in the target window but stood behind
+  /// none of them (E14-R38, ADR 0551 D4).
+  ///
+  /// Deliberately distinct from [chordUnstable] (the player held nothing
+  /// steady) and from [insufficientSamples] (nothing was heard at all): this
+  /// one is a statement about the APP, not about the player, and it must
+  /// never be scored as a wrong chord.
+  static const String chordUncertain = 'practice.metric.chord_uncertain';
+
   static const Set<String> values = {
     noSignal,
     noApplicableTargets,
     chordUnstable,
+    chordUncertain,
     insufficientSamples,
   };
 }

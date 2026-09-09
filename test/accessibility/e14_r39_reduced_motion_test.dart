@@ -7,6 +7,7 @@
 // their public API and pins the rule where it now holds, and pins the part
 // that survives (content, not motion) where it does not yet.
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -208,32 +209,74 @@ void main() {
     });
   });
 
-  // MEASURED GAP (docs/accessibility/ch14-r39-audit.md): the Live hero's
-  // per-beat `flutter_animate` scale pulse in `chord_timeline.dart` has no
-  // reduced-motion branch — the widget is PKG-F's, so this round pins only
-  // what is true today: under reduced motion the chord INFORMATION is never
-  // lost and the tree still settles. The scale-suppression assertion ships
-  // together with the proposed patch (round brief §10), not before it.
+  // E14-R39 lelet B15, CLOSED by E14-R37 (ADR 0550 D5). The Live hero's
+  // per-beat `flutter_animate` scale pulse — and the shimmer/settle gesture
+  // above it — now ask `SsMotionScope` like every other animated element on
+  // the tree. The cells below are a falsification pair: the first proves the
+  // motion really is there without the override (so the second is not
+  // vacuously green), the second proves it is gone with it, and the third
+  // proves the INFORMATION survives either way (ADR 0274 §5.1).
   group('the Live chord timeline under reduced motion', () {
+    Future<int> pumpTimeline(
+      WidgetTester tester, {
+      required bool reduceMotion,
+    }) async {
+      await _pumpLive(
+        tester,
+        Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(disableAnimations: reduceMotion),
+            child: ChordTimeline(
+              events: [_event('G', 1), _event('C', 2)],
+              capo: 0,
+              beat: 3,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return tester.widgetList(find.byType(Animate)).length;
+    }
+
+    testWidgets(
+      'full motion: the hero really is wrapped in several finite animations '
+      '— the falsification cell for the one below',
+      (tester) async {
+        final animations = await pumpTimeline(tester, reduceMotion: false);
+        // beat pulse + recognition flash + entrance.
+        expect(animations, greaterThanOrEqualTo(3));
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'reduced motion: the beat pulse and the recognition flash are gone, '
+      'and only the entrance wrapper survives (it carries the haptic)',
+      (tester) async {
+        final reduced = await pumpTimeline(tester, reduceMotion: true);
+        final full = await pumpTimeline(tester, reduceMotion: false);
+        expect(
+          reduced,
+          lessThan(full),
+          reason: 'reduced motion must remove animated wrappers, not keep '
+              'them and merely shorten them',
+        );
+        expect(
+          reduced,
+          greaterThanOrEqualTo(1),
+          reason: 'the entrance wrapper stays: its onPlay fires the "a new '
+              'chord landed" haptic, which is feedback, not motion',
+        );
+      },
+    );
+
     testWidgets(
       'the recognised chord stays fully readable and the tree settles when '
       'animations are disabled',
       (tester) async {
-        await _pumpLive(
-          tester,
-          Builder(
-            builder: (context) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(disableAnimations: true),
-              child: ChordTimeline(
-                events: [_event('G', 1), _event('C', 2)],
-                capo: 0,
-                beat: 3,
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-
+        await pumpTimeline(tester, reduceMotion: true);
         expect(find.text('C'), findsWidgets);
         expect(tester.takeException(), isNull);
       },

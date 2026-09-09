@@ -12,10 +12,16 @@ import 'adapters/legacy_chord_label.dart';
 
 /// Adapts the public Live frame stream to Practice observations.
 ///
-/// The Live frame's confidence is a strum confidence. Chord observations use
-/// `1.0` because LiveFrame has no chord-confidence field; that value means
-/// "not measured" on this adapter path, so [PracticeObservationConfig.chordMinConfidence]
-/// does not filter them.
+/// The Live frame's confidence is a STRUM confidence and is used only by the
+/// strum observation. A chord observation carries no confidence number at
+/// all (`null` = not measured, ADR 0551 D2): the live chord path has none to
+/// report. Until E14-R38 this adapter wrote `confidence: 1.0` here — an
+/// invented number whose own comment admitted it was invented, and which
+/// made every reading look certain, including readings the recognizer had
+/// explicitly rejected. What it writes instead is the typed verdict the
+/// frame has carried since ADR 0516: [LiveFrame.chordDecision] becomes a
+/// [ChordEvidence], and [LiveFrame.chordRejectReason] travels with it as a
+/// stable code so the practice UI can state the concrete correction.
 ///
 /// Frame-delivery lag scope (E02-R08 R2): the lag is applied **only** to the
 /// strum observation. The chord observation receives the uncorrected
@@ -246,10 +252,35 @@ final class LivePracticeObservationGateway
       _lastChordEmittedAt = timelineNow;
       final at = _chordObservationAt(timelineNow);
       _observationsController.add(
-        ChordObservation(at: at, label: chordLabel, confidence: 1.0),
+        ChordObservation(
+          at: at,
+          label: chordLabel,
+          confidence: null,
+          evidence: _evidenceOf(frame.chordDecision),
+          rejectReasonCode: frame.chordRejectReason?.name,
+        ),
       );
     }
   }
+
+  /// Maps the frame's typed chord verdict onto the practice domain's
+  /// evidence rule (E14-R38, ADR 0551 D1). Exhaustive, no `default`.
+  ///
+  /// A producer that supplies NO decision (`null` — mocks, the
+  /// `LiveFrameAdapter` boundary, the onboarding first-win engine) is treated
+  /// as [ChordEvidence.measured]: those producers already only publish a
+  /// chord they mean, and downgrading them would silently stop scoring every
+  /// legacy path. The production `LivePipeline` always fills the decision in.
+  static ChordEvidence _evidenceOf(RecognitionDecision? decision) =>
+      switch (decision) {
+        RecognitionDecision.confirmed => ChordEvidence.measured,
+        RecognitionDecision.candidate ||
+        RecognitionDecision.provisional ||
+        RecognitionDecision.uncertain ||
+        RecognitionDecision.expired => ChordEvidence.uncertain,
+        RecognitionDecision.rejected => ChordEvidence.rejected,
+        null => ChordEvidence.measured,
+      };
 
   Duration _frameDeliveryLag(
     LiveFrame frame,

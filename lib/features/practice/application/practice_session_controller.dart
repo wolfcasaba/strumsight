@@ -8,6 +8,7 @@ import '../../../core/logging/app_logger.dart';
 import '../../../core/platform/microphone_permission.dart';
 import '../domain/model/compiled_practice_target.dart';
 import '../domain/model/practice_attempt_result.dart';
+import '../domain/model/practice_correction.dart';
 import '../domain/model/practice_definition.dart';
 import '../domain/model/practice_observation.dart';
 import '../domain/model/practice_session_config.dart';
@@ -16,6 +17,7 @@ import '../domain/model/practice_session_state.dart';
 import '../domain/model/scoring_profile.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_chord_scorer.dart';
+import '../domain/service/practice_correction_resolver.dart';
 import '../domain/service/practice_direction_scorer.dart';
 import '../domain/service/practice_event_matcher.dart';
 import '../domain/service/practice_score_aggregator.dart';
@@ -117,6 +119,7 @@ final class PracticeSessionController {
 
   PracticeSessionState _state = PracticeSessionState.initial;
   PracticeScoreAggregation? _liveScore;
+  PracticeCorrection? _latestCorrection;
   presult.PracticeSessionResult? _result;
   bool _recordInvoked = false;
   bool _disposed = false;
@@ -142,6 +145,15 @@ final class PracticeSessionController {
   PracticeSessionState get state => _state;
   Stream<PracticeSessionEffect> get effects => _effectsController.stream;
   PracticeScoreAggregation? get liveScore => _liveScore;
+
+  /// The concrete "next fix" derived from the LAST scoring pass (E14-R38,
+  /// ADR 0551 D6), or `null` when the latest resolved target was clean.
+  ///
+  /// This is a projection, not state: nothing in the reducer knows about it,
+  /// no command produces it, and it is recomputed from scratch on every
+  /// scoring pass. It is cleared with the rest of the attempt's observation
+  /// state so a new attempt never inherits the previous one's advice.
+  PracticeCorrection? get latestCorrection => _latestCorrection;
   presult.PracticeSessionResult? get result => _result;
 
   @visibleForTesting
@@ -393,6 +405,7 @@ final class PracticeSessionController {
 
   void _resetAttemptObservation() {
     _liveScore = null;
+    _latestCorrection = null;
   }
 
   void _onTick() {
@@ -463,6 +476,13 @@ final class PracticeSessionController {
       timing: timing,
       direction: direction,
       chord: chord,
+    );
+    // Derived from the very same pass, so the advice can never describe a
+    // scoring state that no longer exists.
+    _latestCorrection = resolvePracticeCorrection(
+      matches: matches,
+      chord: chord,
+      observations: _chordObservations,
     );
   }
 
