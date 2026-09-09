@@ -91,9 +91,7 @@ void main() {
       addTearDown(container.dispose);
       expect(container.read(liveRecognitionModeProvider), RecognitionMode.free);
       expect(
-        container
-            .read(liveRecognitionModeProvider)
-            .allowsExpectedChordPrior,
+        container.read(liveRecognitionModeProvider).allowsExpectedChordPrior,
         isFalse,
         reason: 'a free engine cannot even BUILD an expected-chord hint',
       );
@@ -127,7 +125,8 @@ void main() {
         expect(
           engine.expectedChordCalls.every((label) => label == null),
           isTrue,
-          reason: 'a non-null label from the free-play screen would be a '
+          reason:
+              'a non-null label from the free-play screen would be a '
               'lesson bias leaking into free play: '
               '${engine.expectedChordCalls}',
         );
@@ -168,7 +167,8 @@ void main() {
         expect(
           find.byType(SsChordHero),
           findsNothing,
-          reason: 'the hero is the DETECTION slot; a target rendered there '
+          reason:
+              'the hero is the DETECTION slot; a target rendered there '
               'would read as "we heard Am"',
         );
         await tester.pump(const Duration(milliseconds: 400));

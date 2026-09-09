@@ -158,20 +158,20 @@ void main() {
       Widget home,
       List<Override> extra,
     ) => tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              ...preferenceOverrides(),
-              ...fakeAudioOverrides(),
-              ...extra,
-            ],
-            child: MaterialApp(
-              theme: SsHighContrastTheme.data(),
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: home,
-            ),
-          ),
-        );
+      ProviderScope(
+        overrides: [
+          ...preferenceOverrides(),
+          ...fakeAudioOverrides(),
+          ...extra,
+        ],
+        child: MaterialApp(
+          theme: SsHighContrastTheme.data(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: home,
+        ),
+      ),
+    );
 
     testWidgets('Today hub', (tester) async {
       await pump(tester, TodayHubScreen(now: DateTime(2026, 8, 25, 18)), []);

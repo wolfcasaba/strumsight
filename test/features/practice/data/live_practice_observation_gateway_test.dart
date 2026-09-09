@@ -1095,7 +1095,8 @@ void main() {
         expect(
           chords.single.confidence,
           isNull,
-          reason: 'the live chord path measures no chord confidence; the old '
+          reason:
+              'the live chord path measures no chord confidence; the old '
               'hardcoded 1.0 was an invented number',
         );
       });

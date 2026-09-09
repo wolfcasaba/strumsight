@@ -46,6 +46,14 @@ export 'domain/recognition/recognition_frame.dart';
 /// product modes map onto this, and `PKG-F` needs it to build the right
 /// engine per mode.
 export 'domain/recognition/recognition_mode.dart';
+
+/// What one device's audio input needs to reach the nominal level (E14-R31,
+/// ADR 0552 D4). The CONSUMER side of the audio-setup wizard's seam: the
+/// wizard (`features/onboarding/audio_setup`) is the intended producer, the
+/// Live preprocessing stage the only consumer. Exported here because the
+/// producer lives in another feature and `engine/dsp/` is deliberately not
+/// on the barrel.
+export 'domain/recognition/device_audio_profile.dart';
 export 'domain/recognition/signal_quality_snapshot.dart';
 export 'domain/recognition/strum_prediction.dart';
 

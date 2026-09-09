@@ -149,8 +149,8 @@ class LiveLabController extends Notifier<LiveLabState> {
     RecognitionShadowSnapshot? shadow,
   ) {
     if (info == null || shadow == null) return info;
-    final chordRan = shadow.chordShadowEnabled &&
-        shadow.chordFallbackReason == null;
+    final chordRan =
+        shadow.chordShadowEnabled && shadow.chordFallbackReason == null;
     return info.withShadowBands(
       recognitionMode: shadow.mode,
       shadowStage: shadow.strumStage,

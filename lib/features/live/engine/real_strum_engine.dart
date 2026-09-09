@@ -7,9 +7,11 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../../../core/audio/mic_capture.dart';
 import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
+import '../domain/recognition/device_audio_profile.dart';
 import '../domain/recognition/recognition_mode.dart';
 import '../model/live_frame.dart';
 import 'dsp/live_pipeline.dart';
+import 'dsp/quality_aware_preprocessor.dart';
 import 'pcm_ring_buffer.dart';
 import 'recognition_shadow_observer.dart';
 import 'strum_engine.dart';
@@ -31,15 +33,35 @@ class RealStrumEngine implements StrumEngine {
   /// [RecognitionShadowObserverFactory]): the observer is created INSIDE the
   /// DSP isolate, because that is where the frames are produced. Null (the
   /// default) installs the no-op observer, i.e. no shadow work at all.
+  ///
+  /// [preprocessingEnabled] is the projection of the
+  /// `recognitionPreprocessingEnabled` feature flag (E14-R31, ADR 0552 D1):
+  /// `false` — the shipped, fail-closed value — builds the pipeline with
+  /// `LivePreprocessingConfig.disabled`, which hands every chunk through
+  /// untouched. The engine takes a BOOL rather than the config object so
+  /// the provider that reads the flag never has to import `engine/dsp/`.
+  ///
+  /// [deviceProfile] is the per-device correction the audio-setup wizard
+  /// (E14-R14) is meant to produce. It defaults to
+  /// [DeviceAudioProfile.identity] — 0 dB, no measured noise floor — and is
+  /// inert while [preprocessingEnabled] is `false`.
   RealStrumEngine({
     required MicCapture mic,
     this.mode = RecognitionMode.free,
+    this.preprocessingEnabled = false,
+    this.deviceProfile = const DeviceAudioProfile.identity(),
     RecognitionShadowObserverFactory? shadowObserverFactory,
   }) : _mic = mic,
        _shadowObserverFactory = shadowObserverFactory;
 
   /// The regime this engine was constructed in (ADR 0544 D1).
   final RecognitionMode mode;
+
+  /// Whether the quality-aware preprocessing stage may run (ADR 0552 D1).
+  final bool preprocessingEnabled;
+
+  /// The per-device audio correction handed to that stage (ADR 0552 D4).
+  final DeviceAudioProfile deviceProfile;
 
   StreamController<LiveFrame>? _controller;
   final MicCapture _mic;
@@ -139,6 +161,8 @@ class RealStrumEngine implements StrumEngine {
           sampleRate: actualRate,
           crnnWeights: await _liveCrnnWeights(),
           mode: mode,
+          preprocessingEnabled: preprocessingEnabled,
+          deviceProfile: deviceProfile,
           shadowObserverFactory: _shadowObserverFactory,
         ),
       );
@@ -198,12 +222,20 @@ class _DspInit {
     required this.sendPort,
     required this.sampleRate,
     required this.mode,
+    required this.preprocessingEnabled,
+    required this.deviceProfile,
     this.crnnWeights,
     this.shadowObserverFactory,
   });
 
   final SendPort sendPort;
   final int sampleRate;
+
+  /// The E14-R31 flag projection and the device profile (ADR 0552 D1/D4).
+  /// Both are plain immutable values (a bool and three scalars), so they
+  /// copy across the isolate boundary the same way [mode] does.
+  final bool preprocessingEnabled;
+  final DeviceAudioProfile deviceProfile;
 
   /// The regime the pipeline inside the isolate is CONSTRUCTED with
   /// (ADR 0544 D1) — an enum value, so it copies across the boundary.
@@ -261,6 +293,10 @@ void _dspEntry(_DspInit init) {
     sampleRate: init.sampleRate,
     crnnWeights: init.crnnWeights,
     mode: init.mode,
+    preprocessing: init.preprocessingEnabled
+        ? const LivePreprocessingConfig.standard()
+        : const LivePreprocessingConfig.disabled(),
+    deviceProfile: init.deviceProfile,
     shadowObserver: observerFactory == null
         ? const NoopRecognitionShadowObserver()
         : observerFactory(),

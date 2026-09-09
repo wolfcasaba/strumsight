@@ -103,32 +103,34 @@ void main() {
   });
 
   group('the capture site resolves the tag through the settings layer', () {
-    test('flag off + not enrolled → the uploaded session is untagged',
-        () async {
-      final uploader = _CapturingUploader();
-      final container = ProviderContainer(
-        overrides: [
-          appConfigProvider.overrideWithValue(
-            _config(taggingEnabled: false),
-          ),
-          diagnosticsConsentProvider.overrideWithValue(true),
-          diagnosticsUploaderProvider.overrideWithValue(uploader),
-        ],
-      );
-      addTearDown(container.dispose);
+    test(
+      'flag off + not enrolled → the uploaded session is untagged',
+      () async {
+        final uploader = _CapturingUploader();
+        final container = ProviderContainer(
+          overrides: [
+            appConfigProvider.overrideWithValue(
+              _config(taggingEnabled: false),
+            ),
+            diagnosticsConsentProvider.overrideWithValue(true),
+            diagnosticsUploaderProvider.overrideWithValue(uploader),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      await container
-          .read(diagnosticsUploadProvider.notifier)
-          .upload(_result, const [0.1], 44100, surface: 'live');
+        await container
+            .read(diagnosticsUploadProvider.notifier)
+            .upload(_result, const [0.1], 44100, surface: 'live');
 
-      expect(uploader.captured, isNotNull);
-      expect(uploader.captured!.fieldSessionTag, isNull);
-      expect(
-        uploader.captured!.toJson().containsKey('fieldPseudonymId'),
-        isFalse,
-        reason: 'a capture must never invent a study identifier',
-      );
-    });
+        expect(uploader.captured, isNotNull);
+        expect(uploader.captured!.fieldSessionTag, isNull);
+        expect(
+          uploader.captured!.toJson().containsKey('fieldPseudonymId'),
+          isFalse,
+          reason: 'a capture must never invent a study identifier',
+        );
+      },
+    );
 
     test('every closed gate on its own yields no tag', () {
       final pseudonym = TelemetryPseudonymId.restore(

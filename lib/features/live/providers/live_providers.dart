@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../core/audio/audio_providers.dart';
 import '../../../core/audio/lifecycle/audio_session_lease.dart';
 import '../../../core/platform/microphone_permission.dart';
@@ -40,6 +41,12 @@ final strumEngineProvider = Provider<StrumEngine>((ref) {
   final engine = RealStrumEngine(
     mic: createMicCapture(ref, AudioOwner.live),
     mode: ref.watch(liveRecognitionModeProvider),
+    // ADR 0552 D2: the quality-aware preprocessor is fail-closed — it runs
+    // only when the build's flag says so (off in every environment today).
+    preprocessingEnabled: ref
+        .watch(appConfigProvider)
+        .flags
+        .recognitionPreprocessingEnabled,
   );
   ref.onDispose(engine.dispose);
   return engine;

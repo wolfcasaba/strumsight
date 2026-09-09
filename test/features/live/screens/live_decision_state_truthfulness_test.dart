@@ -109,7 +109,8 @@ void main() {
       expect(
         texts,
         hasLength(RecognitionDecision.values.length),
-        reason: 'two decision states rendering the same words is the same '
+        reason:
+            'two decision states rendering the same words is the same '
             'failure ADR 0535 removed from the reject-reason axis',
       );
       for (final text in texts) {
@@ -199,7 +200,8 @@ void main() {
           expect(
             find.byType(SsChordHero),
             findsNothing,
-            reason: 'the hero is the "we heard this" slot; a chord under a '
+            reason:
+                'the hero is the "we heard this" slot; a chord under a '
                 '${decision.name} verdict is not a claim the engine makes',
           );
           await tester.pump(const Duration(milliseconds: 400));

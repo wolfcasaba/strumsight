@@ -1,10 +1,14 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../../core/music/chord.dart';
+import '../../domain/evaluation/confidence_calibration_profile.dart';
+import '../../domain/evaluation/selective_prediction.dart';
 import '../../domain/recognition/chord_latch_diagnostics.dart';
 import '../../domain/recognition/chord_prediction.dart';
+import '../../domain/recognition/device_audio_profile.dart';
 import '../../domain/recognition/recognition_decision.dart';
 import '../../domain/recognition/recognition_mode.dart';
 import '../../domain/recognition/signal_quality_snapshot.dart';
@@ -22,6 +26,8 @@ import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
 import 'nnls_chroma.dart';
+import 'quality_aware_preprocessor.dart';
+import 'recognition_calibration_wiring.dart';
 import '../../../../core/audio/dsp/sliding_framer.dart';
 import 'strum_analyzer.dart';
 import 'strum_direction_classifier.dart';
@@ -80,6 +86,10 @@ class LivePipeline {
     RecognitionMode mode = RecognitionMode.free,
     RecognitionShadowObserver shadowObserver =
         const NoopRecognitionShadowObserver(),
+    LivePreprocessingConfig preprocessing =
+        const LivePreprocessingConfig.disabled(),
+    DeviceAudioProfile deviceProfile = const DeviceAudioProfile.identity(),
+    RecognitionCalibration? calibration,
   }) {
     return LivePipeline._(
       sampleRate: sampleRate,
@@ -89,6 +99,9 @@ class LivePipeline {
       chordReleaseHoldFrames: chordReleaseHoldFrames,
       mode: mode,
       shadowObserver: shadowObserver,
+      preprocessing: preprocessing,
+      deviceProfile: deviceProfile,
+      calibration: calibration,
     );
   }
 
@@ -103,11 +116,18 @@ class LivePipeline {
     RecognitionMode mode = RecognitionMode.free,
     RecognitionShadowObserver shadowObserver =
         const NoopRecognitionShadowObserver(),
+    LivePreprocessingConfig preprocessing =
+        const LivePreprocessingConfig.disabled(),
+    DeviceAudioProfile deviceProfile = const DeviceAudioProfile.identity(),
+    RecognitionCalibration? calibration,
   }) {
     return LivePipeline._(
       sampleRate: sampleRate,
       mode: mode,
       shadowObserver: shadowObserver,
+      preprocessing: preprocessing,
+      deviceProfile: deviceProfile,
+      calibration: calibration,
       crnnActivation: ModelActivation<StrumDirectionClassifier>.activated(
         classifier,
         RecognitionRuntimeInfo(
@@ -127,11 +147,19 @@ class LivePipeline {
     required ModelActivation<StrumDirectionClassifier> crnnActivation,
     required this.mode,
     required RecognitionShadowObserver shadowObserver,
+    required LivePreprocessingConfig preprocessing,
+    required DeviceAudioProfile deviceProfile,
+    required RecognitionCalibration? calibration,
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
   }) : _crnnActivation = crnnActivation,
        _shadowObserver = shadowObserver,
+       _preprocessor = QualityAwarePreprocessor(
+         config: preprocessing,
+         deviceProfile: deviceProfile,
+       ),
+       _calibration = calibration ?? RecognitionCalibration.none(),
        _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
        _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
        _chordReleaseHoldFrames =
@@ -173,6 +201,19 @@ class LivePipeline {
   /// The output tap (ADR 0545 D6). Defaults to the null object, so the
   /// production path is bit-identical to the pre-seam pipeline.
   final RecognitionShadowObserver _shadowObserver;
+
+  /// Quality-aware input preprocessing (E14-R31, ADR 0552). Disabled in the
+  /// shipped build, where [QualityAwarePreprocessor.process] hands back the
+  /// caller's own chunk instance — the DSP path below is then bit-identical
+  /// to the pre-R31 pipeline, which
+  /// `test/features/live/preprocessing/live_preprocessing_test.dart` pins.
+  final QualityAwarePreprocessor _preprocessor;
+
+  /// The calibration artefacts + abstention policy this pipeline was built
+  /// with (E14-R31, ADR 0552 D7). [RecognitionCalibration.none] — the
+  /// shipped state — keeps both `calibratedConfidence` fields `null` and
+  /// the policy at `acceptAll`.
+  final RecognitionCalibration _calibration;
 
   /// The musical-presence gate (round 176): a Schmitt trigger on the
   /// EMA-smoothed chord-match confidence. A chord is surfaced to the UI once
@@ -226,8 +267,16 @@ class LivePipeline {
   void setExpectedChord(String? label) =>
       _chordDecoder.setExpected(ExpectedChordHint.forMode(mode, label));
 
+  /// The outcome every band reports in the SHIPPED tree: there is no
+  /// calibration artefact, so there is no calibrated confidence — and the
+  /// reason travels with the absence instead of being lost (ADR 0552 D7).
+  static const CalibrationOutcome _noCalibrationArtefact =
+      CalibrationOutcome.unavailable(CalibrationUnavailableReason.noArtefact);
+
   ChordMatch? _lastChord;
   StrumPrediction? _lastStrumPrediction;
+  CalibrationOutcome _lastStrumCalibration = _noCalibrationArtefact;
+  SelectiveOutcome _lastStrumSelectiveOutcome = const SelectiveOutcome.accept();
   int _chordFrameIndex = 0;
   double _lastChordFrameTimeSec = 0;
   bool _lastTonalGatePassed = false;
@@ -251,10 +300,18 @@ class LivePipeline {
   List<LiveFrame> addChunk(List<double> chunk) {
     final out = <LiveFrame>[];
     _samplesSeen += chunk.length;
+    // The quality analyzer always measures the RAW input: it is the sensor
+    // the preprocessing stage reads, so feeding it the already-corrected
+    // signal would close a loop and make the correction chase itself
+    // (ADR 0552 D5).
     _signalQuality.addChunk(chunk);
+    // E14-R31: identity (the SAME list instance) unless the round's flag is
+    // on AND the snapshot asks for a level correction — the sample count is
+    // never changed, so [_samplesSeen] above stays correct either way.
+    final input = _preprocessor.process(chunk, _signalQuality.snapshot);
 
     // Fast path: onsets + direction.
-    for (final frame in _onsetFramer.add(chunk)) {
+    for (final frame in _onsetFramer.add(input)) {
       final event = _strums.process(frame);
       // Onset-aligned chord updates (chunk 016, round 138): a fresh onset
       // relaxes the Viterbi switch penalty for the next couple of chord
@@ -285,7 +342,7 @@ class LivePipeline {
     // dictionary and smooths the path (RAG chunk 012). Gate on tonalness so a
     // diffuse frame (speech, noise) is fed as silence and resolves to no-chord
     // rather than faking one (RAG chunk 003).
-    for (final frame in _chordFramer.add(chunk)) {
+    for (final frame in _chordFramer.add(input)) {
       final chroma = _chroma.process(frame);
       final tonal =
           chroma != null &&
@@ -336,13 +393,27 @@ class LivePipeline {
     final pDown = event.pDown;
     final pUp = event.pUp;
     if (pDown == null || pUp == null) return true;
+    // E14-R31 (ADR 0552 D7): the ONE strum-band calibration call site. The
+    // raw score is the winning DIRECTION probability — `pNoStrum` belongs
+    // to the abstain head, not to "how sure are we it was a downstroke".
+    // With no artefact (the shipped state) the outcome is `unavailable` and
+    // the field stays `null`; a mapped value can only come from a HELD-OUT,
+    // model-matched artefact (the resolver's rule, ADR 0536 D2).
+    final outcome = _calibration.calibrateStrum(
+      rawConfidence: math.max(pDown, pUp),
+      info: _crnnActivation.info,
+    );
+    _lastStrumCalibration = outcome;
+    _lastStrumSelectiveOutcome = _calibration.select(
+      outcome.calibratedConfidence,
+    );
     final prediction = StrumPrediction(
       onsetTimeSec: event.timeSec,
       verdictTimeSec: event.timeSec,
       pDown: pDown,
       pUp: pUp,
       pNoStrum: event.pNoStrum ?? 0.0,
-      calibratedConfidence: null,
+      calibratedConfidence: outcome.calibratedConfidence,
       modelId: _crnnActivation.info.strumModelId,
     );
     // Kept for the shadow tap only (ADR 0545 D6) — the decision below is
@@ -508,11 +579,14 @@ class LivePipeline {
   /// The pipeline's typed chord verdict (ADR 0516 D1) — derived from the
   /// SAME latch/tonalness/signal-quality gates [_buildFrame] uses for
   /// [LiveFrame.current], never a second derivation (D3).
-  /// [ChordPrediction.calibratedConfidence] stays `null` (D2): no measured
-  /// chord calibration exists in this tree. `pNoChord`/`pUnknown` reflect
-  /// this decoder's actual (hard, deterministic) match/no-match state, not a
-  /// fabricated probability — the dictionary path never reports an "unknown
-  /// chord" state, so `pUnknown` is always 0.
+  /// [ChordPrediction.calibratedConfidence] is produced through PKG-B's
+  /// resolver (E14-R31, ADR 0552 D7) and stays `null` in the shipped tree,
+  /// where no chord artefact exists — the `null` is now a RESOLVER verdict
+  /// carrying a reason ([chordCalibration]), not a hard-coded literal.
+  /// `pNoChord`/`pUnknown` reflect this decoder's actual (hard,
+  /// deterministic) match/no-match state, not a fabricated probability —
+  /// the dictionary path never reports an "unknown chord" state, so
+  /// `pUnknown` is always 0.
   ChordPrediction? get chordPrediction {
     final match = _lastChord;
     final (decision, rejectReason) = debugDeriveChordDecision(
@@ -528,13 +602,70 @@ class LivePipeline {
       quality: quality,
       pNoChord: match == null ? 1.0 : 0.0,
       pUnknown: 0.0,
-      calibratedConfidence: null,
+      calibratedConfidence: chordCalibration.calibratedConfidence,
       stabilityFrames: 0,
       sourceEngine: RecognitionRuntimeInfo.chordEngineNnlsViterbi,
       decision: decision,
       rejectReason: rejectReason,
     );
   }
+
+  /// The chord band's calibration verdict for the CURRENT frame — the
+  /// mapped value, or the typed reason there is none (E14-R31, ADR 0552
+  /// D7). Side-effect-free: it reads the same three scalars
+  /// [chordPrediction] does, so the two can never disagree.
+  ///
+  /// A frame with no chord match goes through the SAME call (raw score 0,
+  /// label `N.C.`) rather than short-circuiting to a hand-picked reason:
+  /// `N.C.` carries no chord class, so an artefact would answer with its
+  /// default mapping at 0 — a defined value, not an invented one.
+  CalibrationOutcome get chordCalibration {
+    final match = _lastChord;
+    return _calibration.calibrateChord(
+      rawConfidence: match?.confidence ?? 0,
+      label: match?.chord.label ?? 'N.C.',
+      info: _crnnActivation.info,
+    );
+  }
+
+  /// The strum band's calibration verdict for the most recent
+  /// probability-bearing verdict (ADR 0552 D7). Stays at "no artefact"
+  /// while the heuristic ladder is in charge — that path has no
+  /// probability, so there is nothing to calibrate.
+  CalibrationOutcome get strumCalibration => _lastStrumCalibration;
+
+  /// The selective-prediction verdict for the most recent strum
+  /// (E14-R31, ADR 0552 D8) — READ-ONLY. The shipped policy is
+  /// `SelectivePredictionPolicy.acceptAll`, so this is
+  /// `SelectiveDecision.accept` in every shipped build. **Nothing on the
+  /// pipeline's decision path reads it**: [_isDirectionConfirmed] still
+  /// defers to [StrumPrediction.decision] exactly as before, so installing
+  /// a stricter policy changes what is REPORTED, never what is emitted.
+  SelectiveOutcome get strumSelectiveOutcome => _lastStrumSelectiveOutcome;
+
+  /// The selective-prediction verdict for the current chord frame — the
+  /// same read-only contract as [strumSelectiveOutcome].
+  SelectiveOutcome get chordSelectiveOutcome =>
+      _calibration.select(chordCalibration.calibratedConfidence);
+
+  /// The abstention policy this pipeline was constructed with (ADR 0552
+  /// D8). `SelectivePredictionPolicy.acceptAll` in every shipped build.
+  SelectivePredictionPolicy get selectivePredictionPolicy =>
+      _calibration.policy;
+
+  /// The input gain the quality-aware preprocessing stage is currently
+  /// applying, in dB (E14-R31, ADR 0552). Exactly `0` in every shipped
+  /// build, where the stage is disabled by flag.
+  double get preprocessingGainDb => _preprocessor.appliedGainDb;
+
+  /// What the preprocessing stage did to the most recent chunk —
+  /// `LivePreprocessingAdaptation.disabled` in every shipped build.
+  LivePreprocessingAdaptation get preprocessingAdaptation =>
+      _preprocessor.lastAdaptation;
+
+  /// How many samples the preprocessing stage's ±1.0 safety clamp touched.
+  /// A non-zero value is a fact someone must see, not a swallowed detail.
+  int get preprocessingClampedSampleCount => _preprocessor.clampedSampleCount;
 
   /// The most recent chroma tonalness (top-3 pitch-class energy) — the value
   /// the non-guitar gate tests. Exposed for the offline real-audio probe
@@ -612,8 +743,11 @@ class LivePipeline {
     _chordDecoder.reset();
     _tempo.reset();
     _signalQuality.reset();
+    _preprocessor.reset();
     _lastChord = null;
     _lastStrumPrediction = null;
+    _lastStrumCalibration = _noCalibrationArtefact;
+    _lastStrumSelectiveOutcome = const SelectiveOutcome.accept();
     _chordFrameIndex = 0;
     _lastChordFrameTimeSec = 0;
     _lastTonalGatePassed = false;

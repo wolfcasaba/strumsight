@@ -222,8 +222,7 @@ class _ShadowSection extends StatelessWidget {
     FallbackReason reason,
   ) => switch (reason) {
     FallbackReason.assetMissing => l10n.liveLabShadowChordFallbackAssetMissing,
-    FallbackReason.assetUnreadable =>
-      l10n.liveLabShadowChordFallbackUnreadable,
+    FallbackReason.assetUnreadable => l10n.liveLabShadowChordFallbackUnreadable,
     FallbackReason.parseFailed => l10n.liveLabShadowChordFallbackParse,
     FallbackReason.shapeMismatch => l10n.liveLabShadowChordFallbackShape,
     FallbackReason.disabledByFlag => l10n.liveLabShadowChordFallbackDisabled,

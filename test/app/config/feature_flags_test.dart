@@ -415,8 +415,7 @@ void ch14Main() {
       expect(
         strumShadowStage.hashCode,
         isNot(equals(strumGaStage.hashCode)),
-        reason:
-            'the stage must reach the hash, not just the "is it off" bit',
+        reason: 'the stage must reach the hash, not just the "is it off" bit',
       );
       expect(
         defaults.toString(),

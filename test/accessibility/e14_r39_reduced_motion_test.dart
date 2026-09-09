@@ -260,13 +260,15 @@ void main() {
         expect(
           reduced,
           lessThan(full),
-          reason: 'reduced motion must remove animated wrappers, not keep '
+          reason:
+              'reduced motion must remove animated wrappers, not keep '
               'them and merely shorten them',
         );
         expect(
           reduced,
           greaterThanOrEqualTo(1),
-          reason: 'the entrance wrapper stays: its onPlay fires the "a new '
+          reason:
+              'the entrance wrapper stays: its onPlay fires the "a new '
               'chord landed" haptic, which is feedback, not motion',
         );
       },

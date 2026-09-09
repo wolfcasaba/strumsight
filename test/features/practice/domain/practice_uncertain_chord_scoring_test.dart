@@ -241,7 +241,8 @@ void main() {
         expect(
           noisy.chordPerMille,
           cleanScore,
-          reason: 'the score moved because the MODEL got unsure, not because '
+          reason:
+              'the score moved because the MODEL got unsure, not because '
               'the player changed anything ($abstentions abstentions)',
         );
         expect(noisy.events.single.outcome, ChordOutcome.correct);

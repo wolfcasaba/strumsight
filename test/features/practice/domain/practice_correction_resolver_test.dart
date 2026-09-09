@@ -88,7 +88,8 @@ void main() {
       expect(
         correction.expectedChord,
         isNull,
-        reason: 'naming the expected chord here would blame the player for '
+        reason:
+            'naming the expected chord here would blame the player for '
             'the app being unable to hear',
       );
     });
@@ -225,7 +226,8 @@ void main() {
       expect(
         correction,
         isNull,
-        reason: 'a correction loop nags about the last thing, not about the '
+        reason:
+            'a correction loop nags about the last thing, not about the '
             'whole session history',
       );
     });
