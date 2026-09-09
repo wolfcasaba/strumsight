@@ -1,5 +1,40 @@
 # HANDOFF — StrumSight 🎸
 
+## 🎯 EPIC 14 BEFEJEZŐ HULLÁM — R20–R42 a kódoldalon (37/42 `done`, 5 `hold`) — branch `claude/laptop-apk-debug-prompt-kys4oa` (2026-09-09)
+
+A Chapter 14 nyitott 23 köre hat párhuzamos Opus-csomagban (PKG-A…F + A2)
+készült, **remote konténerben, Dart/Flutter SDK nélkül** — semmi nem fordult
+le lokálisan, a bizonyíték az egyetlen záró CI-futás. Terv és státusz körönként:
+`docs/rounds/epic-14-completion-plan.md`; ADR 0536–0552; briefek
+`docs/rounds/e14-r20…r42-*.md`; a §7 kapuk mért állapota
+`docs/release/ch14-production-gate.md` (**NOT PASSING** — a kapuk nem mértek zöldre,
+csak a mechanizmusok készültek el).
+
+**Kódként megvalósult (mechanizmus, mérés nélkül, ahol jelezve):**
+- R30 mód-izoláció (`RecognitionMode`, az expected-chord prior additív torzításból
+  tie-break, free módban strukturálisan nem alkalmazható — ADR 0544) · R28
+  onset-igazított akkordváltás + H3 latch-diagnosztika (ADR 0545) · R31
+  jelminőség-tudatos előfeldolgozó seam + `DeviceAudioProfile`, zászlóval zárva (ADR 0552).
+- R21/R32 modell-kötött kalibrációs artefaktum + szelektív predikció + open-set döntés
+  (identitás alapértékkel, in-sample knot-ok tiltva — ADR 0536, 0540) · R25 korpusz-manifest
+  + szintetikus generátor (ADR 0538) · R27 NNLS vs CRNN harness (döntés: NEEDS-MEASUREMENT — ADR 0539)
+  · R24/R33 kapu-fokozatok + rollout-clamp (ADR 0537, 0541).
+- R23 strum shadow-mód (kimenet-tap, nem modell-A-vs-B — ADR 0548) · R26 Chord CRNN
+  élő shadow-runner Lab-ból (ADR 0549) · zászlók `off` minden környezetben.
+- R36 tízperces gyakorlás-lánc (ADR 0546) · R37 Live Stage V2 döntésállapotok + mód-chip
+  (ADR 0550) · R38 akkord-evidencia: a bizonytalan akkord SOHA nem büntet (ADR 0551) ·
+  R39 audit (ADR 0547: világos téma outdoor-kontraszt 2,40:1 — lelet, nem javítva) ·
+  R41 opt-in béta-telemetria + privacy-kapu (ADR 0542) · R42 production gate + traceability (ADR 0543).
+
+**Hold (itt nem hozható):** R20 tanítás grouped holdouttal (§7.1 korpusz nem létezik),
+R22 distillation (nincs R20-modell), R29 root+quality modell-spike (GPU/adat), R35
+`adaptiveShellEnabled` GA-kapcsolás (emberi döntés), R40 field study (emberek).
+
+**Ismert CI-piros, amit csak a box old:** golden PNG-k — a korábbi 12 golden-fájl
+plusz `e13_r17` (today hub), `e13_r18` (live mód-chip), `e13_r35` (privacy center):
+`tools/golden-x86.sh record test/ui/goldens/e13_r{17,18,19,20,21,22,23,24,25,30,33,35}_*_test.dart`.
+
+
 ## 🔧 AUDIT-JAVÍTÓ KÖRÖK — E17-R15 (H4, ADR 0535) + 2. és 3. hullám (H1–H23, L1/L3–L12, U1–U13) — branch `claude/laptop-apk-debug-prompt-kys4oa` (2026-09-08)
 
 A 2026-09-08-i emulátoros hibaaudit (24 hiba + 12 logikai + 15 UI javaslat, APK
