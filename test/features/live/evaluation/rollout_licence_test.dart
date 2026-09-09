@@ -1,51 +1,84 @@
-// E14-R24/R33 (ADR 0537/0541): the rollout flag can never exceed the gate.
+// E14-R24/R33 (ADR 0537/0541): the rollout stage can never exceed the gate.
 //
 // What these cells prove:
-//   * a rollout stage is licensed only by ENABLED, PASSING gate rows;
+//   * a user-visible stage is licensed only by ENABLED, PASSING gate rows;
 //   * a DISABLED (informational) row licenses nothing — so today's Beta
-//     rows, shipped disabled, make `optInBeta` unreachable no matter what
-//     the flag says;
-//   * an unknown flag value resolves to `off`, never to the nearest stage;
-//   * the clamp can only ever REDUCE exposure, and names the metric paths
-//     that limited it;
-//   * the flag names this clamp reads match the registry PKG-D owns.
+//     rows, shipped disabled, make `beta` unreachable whatever the
+//     configuration says;
+//   * `shadow` is NOT gated by accuracy (it is never user-visible) — it is
+//     gated by PKG-D's shadow master switch instead;
+//   * an unknown stage name resolves to `off`, never to a near match;
+//   * the clamp only ever REDUCES exposure and names the limiting metrics;
+//   * this file's ladder mirrors PKG-D's `RecognitionRolloutStage` value for
+//     value, and the required-threshold mapping matches its own
+//     `requiresBetaThresholds`.
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/config/recognition_rollout_stage.dart';
 import 'package:strumsight/features/live/domain/evaluation/recognition_metrics.dart';
 import 'package:strumsight/features/live/domain/evaluation/recognition_release_gate.dart';
-import 'package:strumsight/features/live/domain/evaluation/recognition_rollout_stage.dart';
+import 'package:strumsight/features/live/domain/evaluation/rollout_licence.dart';
 
 void main() {
   const gate = RecognitionReleaseGate();
 
-  test('the flag names match the ones the feature-flag registry declares', () {
-    expect(
-      recognitionRolloutFlagNames[RecognitionGateBand.strum],
-      'strumModelRolloutStage',
-    );
-    expect(
-      recognitionRolloutFlagNames[RecognitionGateBand.chord],
-      'chordModelRolloutStage',
-    );
+  group('the mirror of PKG-D\'s ladder', () {
+    test('the flag names match the ones FeatureFlags declares', () {
+      expect(
+        recognitionRolloutFlagNames[RecognitionGateBand.strum],
+        'strumModelRolloutStage',
+      );
+      expect(
+        recognitionRolloutFlagNames[RecognitionGateBand.chord],
+        'chordModelRolloutStage',
+      );
+    });
+
+    test('every RecognitionRolloutStage value has a same-named licence '
+        'stage, in the same order', () {
+      expect(
+        LicensedRolloutStage.values.map((stage) => stage.name).toList(),
+        RecognitionRolloutStage.values.map((stage) => stage.name).toList(),
+      );
+    });
+
+    test('the required gate stage matches the ladder\'s own '
+        'requiresBetaThresholds', () {
+      for (final stage in RecognitionRolloutStage.values) {
+        final mirrored = LicensedRolloutStage.tryParseName(stage.name)!;
+        final required = requiredGateStageFor(mirrored);
+        if (!stage.isUserVisible) {
+          expect(required, isNull, reason: stage.name);
+          continue;
+        }
+        expect(
+          required,
+          stage.requiresBetaThresholds
+              ? RecognitionGateStage.beta
+              : RecognitionGateStage.alpha,
+          reason: stage.name,
+        );
+      }
+    });
   });
 
   group('licensing', () {
     final thresholds = gate.parseThresholds(_thresholdsJson());
 
-    test('passing Alpha rows license internalAlpha, and the DISABLED Beta '
-        'rows stop the ladder there even when the flag asks for more', () {
+    test('passing Alpha rows license alpha, and the DISABLED Beta rows stop '
+        'the ladder there even when the configuration asks for ga', () {
       final verdict = gate.evaluate(_passingMetrics(), thresholds);
       expect(verdict.passed, isTrue);
 
       final decision = clampRolloutStage(
         band: RecognitionGateBand.strum,
-        flagValue: 'percentageRollout',
+        stageName: 'ga',
         verdict: verdict,
       );
 
-      expect(decision.effective, RecognitionRolloutStage.internalAlpha);
-      expect(decision.requested, RecognitionRolloutStage.percentageRollout);
+      expect(decision.effective, LicensedRolloutStage.alpha);
+      expect(decision.requested, LicensedRolloutStage.ga);
       expect(decision.wasClamped, isTrue);
       expect(decision.reason, RolloutClampReason.gateRowDisabled);
       expect(
@@ -54,8 +87,8 @@ void main() {
       );
     });
 
-    test('a failing Alpha row drops the effective stage to off and names '
-        'the failing metric', () {
+    test('a failing Alpha row drops the effective stage to shadow (which '
+        'accuracy never licenses anyway) and names the failing metric', () {
       final verdict = gate.evaluate(
         _passingMetrics(onset50F1: 0.4),
         thresholds,
@@ -63,11 +96,15 @@ void main() {
 
       final decision = clampRolloutStage(
         band: RecognitionGateBand.strum,
-        flagValue: 'internalAlpha',
+        stageName: 'alpha',
         verdict: verdict,
       );
 
-      expect(decision.effective, RecognitionRolloutStage.off);
+      expect(decision.effective, LicensedRolloutStage.shadow);
+      expect(
+        decision.effective.rank,
+        lessThan(LicensedRolloutStage.alpha.rank),
+      );
       expect(decision.reason, RolloutClampReason.gateRowFailing);
       expect(decision.limitingMetricPaths, <String>[
         'overall.onsetTolerance50Ms.f1',
@@ -82,11 +119,29 @@ void main() {
 
       final decision = clampRolloutStage(
         band: RecognitionGateBand.strum,
-        flagValue: 'internalAlpha',
+        stageName: 'alpha',
         verdict: verdict,
       );
 
-      expect(decision.effective, RecognitionRolloutStage.off);
+      expect(decision.effective, LicensedRolloutStage.shadow);
+      expect(decision.wasClamped, isTrue);
+    });
+
+    test('shadow is licensed even by a red gate — it is never user-visible, '
+        'and PKG-D\'s master switch is what gates it', () {
+      final verdict = gate.evaluate(
+        _passingMetrics(onset50F1: 0.1, coverage: 0.1),
+        thresholds,
+      );
+
+      final decision = clampRolloutStage(
+        band: RecognitionGateBand.strum,
+        stageName: 'shadow',
+        verdict: verdict,
+      );
+
+      expect(decision.effective, LicensedRolloutStage.shadow);
+      expect(decision.wasClamped, isFalse);
     });
 
     test('the chord band is not held by a strum-band failure, but IS held '
@@ -103,18 +158,18 @@ void main() {
       expect(
         clampRolloutStage(
           band: RecognitionGateBand.chord,
-          flagValue: 'internalAlpha',
+          stageName: 'alpha',
           verdict: strumFailure,
         ).effective,
-        RecognitionRolloutStage.internalAlpha,
+        LicensedRolloutStage.alpha,
       );
       expect(
         clampRolloutStage(
           band: RecognitionGateBand.chord,
-          flagValue: 'internalAlpha',
+          stageName: 'alpha',
           verdict: sharedFailure,
         ).effective,
-        RecognitionRolloutStage.off,
+        LicensedRolloutStage.shadow,
       );
     });
 
@@ -124,27 +179,27 @@ void main() {
 
       final decision = clampRolloutStage(
         band: RecognitionGateBand.strum,
-        flagValue: 'off',
+        stageName: 'off',
         verdict: verdict,
       );
 
-      expect(decision.effective, RecognitionRolloutStage.off);
+      expect(decision.effective, LicensedRolloutStage.off);
       expect(decision.wasClamped, isFalse);
     });
 
-    test('an unknown flag value resolves to off, never to a near match', () {
+    test('an unknown stage name resolves to off, never to a near match', () {
       final verdict = gate.evaluate(_passingMetrics(), thresholds);
 
-      for (final value in <String?>[null, '', 'beta', 'INTERNALALPHA', '2']) {
+      for (final value in <String?>[null, '', 'ALPHA', 'internalAlpha', '2']) {
         final decision = clampRolloutStage(
           band: RecognitionGateBand.strum,
-          flagValue: value,
+          stageName: value,
           verdict: verdict,
         );
-        expect(decision.effective, RecognitionRolloutStage.off, reason: value);
+        expect(decision.effective, LicensedRolloutStage.off, reason: value);
         expect(
           decision.reason,
-          RolloutClampReason.unrecognisedFlagValue,
+          RolloutClampReason.unrecognisedStageName,
           reason: value,
         );
       }
@@ -168,11 +223,11 @@ void main() {
 
       final decision = clampRolloutStage(
         band: RecognitionGateBand.strum,
-        flagValue: 'optInBeta',
+        stageName: 'beta',
         verdict: verdict,
       );
 
-      expect(decision.effective, RecognitionRolloutStage.internalAlpha);
+      expect(decision.effective, LicensedRolloutStage.alpha);
       expect(decision.reason, RolloutClampReason.noGateRowForStage);
     });
   });
@@ -221,12 +276,9 @@ void main() {
       }
     });
 
-    test('with the shipped file, no metric set can reach optInBeta while '
-        'the Beta rows are disabled', () {
-      final verdict = gate.evaluate(
-        _passingMetrics(),
-        shippedThresholds(),
-      );
+    test('with the shipped file, no metric set can reach beta while the '
+        'Beta rows are disabled', () {
+      final verdict = gate.evaluate(_passingMetrics(), shippedThresholds());
 
       for (final band in <RecognitionGateBand>[
         RecognitionGateBand.strum,
@@ -234,12 +286,12 @@ void main() {
       ]) {
         final decision = clampRolloutStage(
           band: band,
-          flagValue: 'optInBeta',
+          stageName: 'beta',
           verdict: verdict,
         );
         expect(
           decision.effective,
-          RecognitionRolloutStage.internalAlpha,
+          LicensedRolloutStage.alpha,
           reason: band.name,
         );
       }

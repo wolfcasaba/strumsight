@@ -1,0 +1,146 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://strumsight.internal/schemas/confidence-calibration-artefact-1.json",
+  "title": "Confidence calibration artefact",
+  "description": "Model-bound confidence-calibration artefact for the strum and chord recognition bands (E14-R21/E14-R32, ADR 0536/0540). Fitted by ml/honest_eval.py::section_calib on a HELD-OUT fold and emitted by CI (ml-train.yml sections=calib / chord-train.yml); read in the app by lib/features/live/domain/evaluation/confidence_calibration_profile.dart, whose hand-written parser is the enforcing implementation (ADR 0354 D8 precedent: no schema-library dependency). NO artefact ships today — every prediction's calibratedConfidence stays null until a held-out fit exists (ADR 0536 D1). The in-sample knots in lib/features/live/engine/ml/live_crnn_classifier.dart::calibrate are deliberately NOT promoted into this format: they were fitted on the same fold their accuracy was reported on.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artefactVersion",
+    "band",
+    "model",
+    "provenance",
+    "mapping"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1",
+      "description": "Artefact schema contract version. Any other value is a typed CalibrationConfigException (unknownSchemaVersion), never a fall-back to a default mapping."
+    },
+    "artefactVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "This artefact's own version, e.g. strum-live3c-heldout-v1. Changes whenever the numbers change."
+    },
+    "band": {
+      "enum": ["strum", "chord"],
+      "description": "Which recognition band this artefact calibrates. An artefact served to the other band is refused (CalibrationUnavailableReason.bandMismatch)."
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelId", "modelSha256"],
+      "description": "The weights this calibration belongs to. Both fields are compared verbatim at every call: a matching id with a different sha256 is a mismatch, and the calibrated confidence is withheld (fail-closed, ADR 0536 D4).",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model identifier as used by assets/ml/model_manifest.json, e.g. strum_crnn_live_3c."
+        },
+        "modelSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the weight blob the calibration was fitted against."
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpusId",
+        "corpusSha256",
+        "foldId",
+        "sampling",
+        "observationCount",
+        "fittedAtCommit",
+        "producedBy"
+      ],
+      "description": "Where the numbers came from. Every field is required and non-empty: an artefact that cannot say which corpus and which fold produced it is not evidence.",
+      "properties": {
+        "corpusId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Corpus identifier, e.g. klangio-live70 or guitarset-majmin."
+        },
+        "corpusSha256": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Corpus content hash, matching the corpus manifest's corpusSha256. No raw audio is ever committed (ADR 0354 D1) — only this hash."
+        },
+        "foldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The fold inside that corpus the mapping was fitted on, e.g. logo-fold-3 or split3way-seed42-val."
+        },
+        "sampling": {
+          "enum": ["heldOut", "inSample"],
+          "description": "heldOut: the fitting fold is disjoint from the fold the accuracy was reported on. inSample: it is not — representable so the legacy state can be described honestly, but NEVER served (CalibrationUnavailableReason.inSampleArtefact)."
+        },
+        "observationCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Labelled observations the mapping was fitted on. 0 is a schema violation, not a measurement of nothing."
+        },
+        "fittedAtCommit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository commit the fitting script ran at."
+        },
+        "producedBy": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The workflow/command that emitted the artefact, e.g. 'ml-train.yml sections=calib'."
+        }
+      }
+    },
+    "mapping": { "$ref": "#/definitions/mapping" },
+    "perClassMappings": {
+      "type": "object",
+      "description": "Chord band only: per-class overrides of the default mapping, keyed '<root>:<quality>' (e.g. 'A:min'). A strum artefact carrying this key is rejected. Absent or empty means the default mapping applies to every class — the honest state until per-class support is measured.",
+      "additionalProperties": { "$ref": "#/definitions/mapping" },
+      "propertyNames": {
+        "pattern": "^[A-G](#|b)?:[A-Za-z0-9]+$"
+      }
+    }
+  },
+  "definitions": {
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "description": "A monotone confidence mapping. Both families are total on 0..1 and non-decreasing, so a higher raw score can never map to a lower calibrated confidence.",
+      "properties": {
+        "kind": {
+          "enum": ["identity", "piecewiseLinear"],
+          "description": "identity: calibrated == raw, a declarable measured state (never an implicit fallback for a missing artefact). piecewiseLinear: interpolate between knots, clamped at both ends (never extrapolated)."
+        },
+        "knots": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Required for piecewiseLinear, forbidden for identity. raw must be strictly increasing; calibrated must be non-decreasing.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["raw", "calibrated"],
+            "properties": {
+              "raw": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Raw model confidence (max softmax / winning similarity)."
+              },
+              "calibrated": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Empirical P(correct) measured on the held-out fold at this raw confidence."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

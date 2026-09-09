@@ -19,7 +19,7 @@
 /// disabled entry is INFORMATIONAL: it is still parsed, still evaluated and
 /// still rendered, but it never flips [RecognitionGateVerdict.passed] — and,
 /// crucially, it never LICENSES anything either
-/// (`recognition_rollout_stage.dart`: a stage whose rows are disabled cannot
+/// (`rollout_licence.dart`: a stage whose rows are disabled cannot
 /// be reached). That asymmetry is the point: the SDD Ch14 §7.3/§7.5 Beta
 /// targets can live in the file, visible and version-controlled, without
 /// either blocking today's Alpha work or pretending they are met. Omitted
@@ -371,7 +371,7 @@ final class RecognitionGateFinding {
 /// finding passed — one missing or below-threshold metric fails the whole
 /// gate. Disabled (informational) findings are reported in [findings] but
 /// never change [passed]; they also never license anything
-/// (`recognition_rollout_stage.dart`).
+/// (`rollout_licence.dart`).
 final class RecognitionGateVerdict {
   const RecognitionGateVerdict({
     required this.schemaVersion,

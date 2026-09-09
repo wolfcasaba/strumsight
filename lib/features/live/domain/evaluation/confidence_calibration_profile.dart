@@ -456,11 +456,9 @@ final class ConfidenceCalibrationProfile {
     },
   };
 
-  List<MapEntry<ChordClassKey, CalibrationMapping>> _sortedPerClassEntries() {
-    final entries = perClassMappings.entries.toList()
-      ..sort((a, b) => a.key.wireKey.compareTo(b.key.wireKey));
-    return entries;
-  }
+  List<MapEntry<ChordClassKey, CalibrationMapping>> _sortedPerClassEntries() =>
+      perClassMappings.entries.toList()
+        ..sort((a, b) => a.key.wireKey.compareTo(b.key.wireKey));
 
   /// Parses an artefact from its JSON text. Every failure is a typed
   /// [CalibrationConfigException] — there is no partially parsed profile and

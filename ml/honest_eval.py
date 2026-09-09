@@ -543,6 +543,108 @@ def _ece(conf, correct, n_bins=10):
     return float(e)
 
 
+# ---------------------------------------------------------------------------
+# E14-R21 (ADR 0536): calibration ARTEFACT emission
+# ---------------------------------------------------------------------------
+ARTEFACT_DIR = os.path.join(os.path.dirname(__file__), "artifacts")
+CALIBRATION_SCHEMA_VERSION = "1"
+
+
+def _sha256_file(path):
+    """SHA-256 of a file, or a hard failure. Never a placeholder hash: the
+    Dart loader binds the artefact to these exact bytes."""
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _git_commit():
+    """Current commit, or a hard failure — an artefact with no provenance is
+    refused by the Dart parser anyway."""
+    import subprocess
+
+    out = subprocess.check_output(["git", "rev-parse", "HEAD"],
+                                  cwd=os.path.dirname(os.path.dirname(
+                                      os.path.abspath(__file__))))
+    return "git:" + out.decode().strip()
+
+
+def emit_calibration_artefact(knots, *, model_id, model_path, corpus_id,
+                              corpus_path, fold_id, observation_count,
+                              artefact_version, produced_by,
+                              sampling="heldOut", band="strum"):
+    """Write one `<model_id>.calibration.json` artefact (E14-R21, ADR 0536).
+
+    Produced by CI, not by hand:
+
+        gh workflow run ml-train.yml -f sections="calib"
+
+    The workflow's artifact bundle carries `ml/artifacts/*.calibration.json`;
+    landing it in the app is a separate, reviewed step (copy to `assets/ml/`
+    AND add the `pubspec.yaml` asset line — assets are listed file by file).
+
+    Everything the Dart side needs to REFUSE a stale artefact is written
+    here: the model's own sha256, the corpus content hash, the fold id, and
+    whether the fit was held out. Any missing input raises instead of
+    writing a weaker artefact — `assets/ml/*.calibration.json` is evidence,
+    and evidence with a made-up field is worse than none (ADR 0271).
+
+    `knots` is the list of `(raw, calibrated)` pairs the fit produced; it
+    must be strictly increasing in `raw` and non-decreasing in `calibrated`,
+    exactly as `CalibrationMapping.piecewiseLinear` requires — the check
+    happens here so a bad fit fails in CI, not in the app.
+    """
+    if len(knots) < 2:
+        raise ValueError(
+            f"a piecewise-linear calibration needs >= 2 knots, got "
+            f"{len(knots)}: the fold is too small to calibrate on")
+    for i, (x, y) in enumerate(knots):
+        if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
+            raise ValueError(f"knot {i} = ({x}, {y}) is outside 0..1")
+        if i and x <= knots[i - 1][0]:
+            raise ValueError(f"knot raw values must strictly increase at {i}")
+        if i and y < knots[i - 1][1]:
+            raise ValueError(f"knot calibrated values must not decrease "
+                             f"at {i}")
+    if observation_count <= 0:
+        raise ValueError("observationCount must be > 0")
+
+    artefact = {
+        "schemaVersion": CALIBRATION_SCHEMA_VERSION,
+        "artefactVersion": artefact_version,
+        "band": band,
+        "model": {
+            "modelId": model_id,
+            "modelSha256": _sha256_file(model_path),
+        },
+        "provenance": {
+            "corpusId": corpus_id,
+            "corpusSha256": _sha256_file(corpus_path),
+            "foldId": fold_id,
+            "sampling": sampling,
+            "observationCount": int(observation_count),
+            "fittedAtCommit": _git_commit(),
+            "producedBy": produced_by,
+        },
+        "mapping": {
+            "kind": "piecewiseLinear",
+            "knots": [{"raw": round(float(x), 6),
+                       "calibrated": round(float(y), 6)} for x, y in knots],
+        },
+    }
+    os.makedirs(ARTEFACT_DIR, exist_ok=True)
+    path = os.path.join(ARTEFACT_DIR, f"{model_id}.calibration.json")
+    with open(path, "w") as fh:
+        json.dump(artefact, fh, indent=2)
+        fh.write("\n")
+    print(f"[calib] wrote {path}")
+    return path
+
+
 def section_calib(results):
     """Refit the live-model confidence calibration on VAL, report ECE on TEST.
 
@@ -595,6 +697,34 @@ def section_calib(results):
     }
     print(f"[calib] VAL-fitted knots: {fitted}")
     print(f"[calib] ECE test raw={ece_raw:.4f} calibrated={ece_cal:.4f}")
+
+    # E14-R21 (ADR 0536): emit the artefact the app can actually bind to.
+    # The mapping is the VAL fit; the ECE above is measured on TEST, so the
+    # fold that produced the knots is NOT the fold that scored them —
+    # `sampling: heldOut`. The shipped Dart knots stay where they are: they
+    # were fitted in-sample and this pipeline never promotes them.
+    model_path = os.path.join(os.path.dirname(__file__), "..", "assets", "ml",
+                              "strum_crnn_live_3c.bin")
+    corpus_path = os.path.join(os.path.dirname(__file__), "klangio_live70.npz")
+    try:
+        artefact_path = emit_calibration_artefact(
+            fitted,
+            model_id="strum_crnn_live_3c",
+            model_path=os.path.normpath(model_path),
+            corpus_id="klangio-live70",
+            corpus_path=corpus_path,
+            fold_id="split3way-seed42-val",
+            observation_count=int(len(r["val_conf"])),
+            artefact_version="strum-live3c-heldout-v1",
+            produced_by="ml-train.yml sections=calib",
+        )
+    except (OSError, ValueError) as exc:
+        # NOT swallowed: the section still records that no artefact exists
+        # and why, so a green run can never be read as "calibration shipped".
+        artefact_path = None
+        results["calibration"]["artefact_error"] = str(exc)
+        print(f"[calib] NO artefact written: {exc}")
+    results["calibration"]["artefact_path"] = artefact_path
     return results
 
 
