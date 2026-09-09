@@ -85,7 +85,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
   }
 
   SongPreviewController _previewFor(ChordAudition audition) =>
-      _preview ??= SongPreviewController(audition: audition);
+      _preview ??= SongPreviewController(audition);
 
   void _hear(ChordAudition audition, String label) {
     _preview?.stop();

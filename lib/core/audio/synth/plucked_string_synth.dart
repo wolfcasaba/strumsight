@@ -116,7 +116,7 @@ final class PluckedStringSynth {
     // Short fade-out so a cut-off tail never clicks.
     final release = math.min(n, (0.03 * sampleRate).round());
     for (var i = n - release; i < n; i++) {
-      mix[i] *= (n - i) / release;
+      mix[i] *= (n - 1 - i) / release;
     }
     var peak = 0.0;
     for (final v in mix) {

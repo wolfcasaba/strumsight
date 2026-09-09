@@ -80,8 +80,7 @@ List<PreviewStrum> previewSchedule({
 /// explicitly, at the end, or on [dispose] — cancels the pending timer and
 /// silences the audition, so nothing keeps ringing after the user leaves.
 final class SongPreviewController extends ChangeNotifier {
-  SongPreviewController({required ChordAudition audition})
-    : _audition = audition;
+  SongPreviewController(this._audition);
 
   final ChordAudition _audition;
 
