@@ -26,6 +26,9 @@ Skála: valószínűség és hatás `Low / Medium / High / Critical`.
 | R-020 | Egyetlen fejlesztő/Codex túl nagy programot nem tud követni | High | High | scope creep, handoff drift | one-round rule, traceability, completion report | Program | Open |
 | R-021 | API/schema verzióütközés régi klienssel | Medium | High | 4xx/deserialize spike | versioned contract, backward compatibility, rollout | Backend | Planned |
 | R-022 | Privacy/terms nem fedi cloud/community/AI adatfolyamot | Medium | Critical | release review blocker | data inventory, consent, retention, legal review | Product/Legal | Planned |
+| R-023 | A Ch14 felismerési kapuk MÉRTEN buknak, mégis rollout-nyomás keletkezik | High | Critical | „elég jó lesz" érv mérés nélkül; nonProd default kérése zászlóra | minden sáv `RecognitionRolloutStage.off` MINDEN környezetben, soronkénti kapu-tábla (`docs/release/ch14-production-gate.md`), fail-closed hiányzó metrika (ADR 0511) | Audio/ML + Release | Open |
+| R-024 | A béta telemetria opt-inje szertartássá válik: kapcsoló van, de a UI küldést sugall | Medium | High | „On" felirat transport nélkül; consent-szöveg változik a döntés újrakérdezése nélkül | három feltételes fail-closed kapu, verziózott consent-copy enum, „nothing is sent yet" sor gépi cellával, visszavonás TÖRLI a pszeudonimet (ADR 0542 D3/D8) | Privacy/Product | Open |
+| R-025 | A field study nyers audiót gyűjt a külön hozzájárulás megkerülésével | Low | Critical | tag nélküli felvételre panasz; „úgyis csak Lab" érv | három külön opt-in (study / nyers audio `LabConsentGranted` / aggregátum), fail-closed `FieldSessionTag.resolve`, zászló OFF minden környezetben (ADR 0542 D7, `docs/release/ch14-r40-field-study.md` §4) | Privacy/Research | Open |
 
 ## Review cadence
 

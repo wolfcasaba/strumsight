@@ -24,5 +24,21 @@
   "tunerPlayReference": "Referenciahang lejátszása",
   "tunerCentsSharp": "{cents} centtel magas",
   "tunerCentsFlat": "{cents} centtel mély",
-  "tunerHoldSteady": "Tartsd stabilan…"
+  "tunerHoldSteady": "Tartsd stabilan…",
+  "tunerTenMinuteStepLabel": "{step}. lépés / {total}",
+  "@tunerTenMinuteStepLabel": {
+    "description": "Position in the guided 10-minute chain, shown above the tuner's hand-off button.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tunerTenMinuteContinueCta": "Kész a hangolás",
+  "@tunerTenMinuteContinueCta": {
+    "description": "Tuner button that ends step 1 of the guided 10-minute chain and opens the practice exercise. Only the player ends this step; the app never infers that all six strings are in tune."
+  }
 }

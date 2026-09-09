@@ -3331,5 +3331,81 @@
   "metronomeTempoIncrease": "1 BPM-mel gyorsabb",
   "@metronomeTempoIncrease": {
     "description": "Tooltip of the metronome's plus button (audit U7)."
-  }
+  },
+  "todayHubTenMinuteStartCta": "Kezdj egy 10 perces gyakorlást",
+  "@todayHubTenMinuteStartCta": {
+    "description": "Today hub secondary action that starts the guided 10-minute practice chain (tune -> exercise -> recap)."
+  },
+  "todayHubTenMinuteTitle": "A te 10 perced",
+  "@todayHubTenMinuteTitle": {
+    "description": "Title of the Today hub hero card while the guided 10-minute chain is running."
+  },
+  "todayHubTenMinuteStepLabel": "{step}. lépés / {total}",
+  "@todayHubTenMinuteStepLabel": {
+    "description": "Position in the guided 10-minute chain, shown as visible text above the hero title.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "todayHubTenMinuteTuneMessage": "Először hangolj. Nagyjából 2 perc.",
+  "@todayHubTenMinuteTuneMessage": {
+    "description": "Hero message for the tuning step of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteTuneCta": "Hangolás",
+  "@todayHubTenMinuteTuneCta": {
+    "description": "Primary CTA label that opens the tuner as step 1 of the guided 10-minute chain."
+  },
+  "todayHubTenMinutePlayMessage": "Most jöhet a mai gyakorlat. Nagyjából 7 perc.",
+  "@todayHubTenMinutePlayMessage": {
+    "description": "Hero message for the practice step of the guided 10-minute chain."
+  },
+  "todayHubTenMinutePlayCta": "Gyakorlat indítása",
+  "@todayHubTenMinutePlayCta": {
+    "description": "Primary CTA label that opens the recommended practice as step 2 of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteReviewTitle": "Megvan a 10 perc",
+  "@todayHubTenMinuteReviewTitle": {
+    "description": "Hero title for the recap step of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteReviewMessage": "Íme, amit ma valóban játszottál.",
+  "@todayHubTenMinuteReviewMessage": {
+    "description": "Hero message for the recap step; the numbers below it are measured practice minutes, never a planned budget."
+  },
+  "todayHubTenMinuteReviewCta": "Befejezés",
+  "@todayHubTenMinuteReviewCta": {
+    "description": "Primary CTA label that closes the guided 10-minute chain from its recap step."
+  },
+  "todayHubTenMinuteLeaveCta": "Kilépés a gyakorlásból",
+  "@todayHubTenMinuteLeaveCta": {
+    "description": "Secondary action that abandons a running guided 10-minute chain."
+  },
+  "privacyCenterTelemetryTitle": "Segíts pontosabbá tenni a felismerést (béta)",
+  "@privacyCenterTelemetryTitle": {},
+  "privacyCenterTelemetrySubtitle": "Alapból ki van kapcsolva. Bármikor újra kikapcsolhatod.",
+  "@privacyCenterTelemetrySubtitle": {},
+  "privacyCenterTelemetryToggleLabel": "Névtelen felismerési statisztika küldése",
+  "@privacyCenterTelemetryToggleLabel": {},
+  "privacyCenterTelemetryToggleSubtitle": "Csak darabszámok és minőségi sávok — soha nem az, amit játszottál",
+  "@privacyCenterTelemetryToggleSubtitle": {},
+  "privacyCenterTelemetryScopeNote": "Ami benne lenne: hány felismerést fogadott el vagy utasított el az alkalmazás, milyen volt a bemenet minősége, mennyi ideig tartott egy döntés, és hogy javítottad-e.",
+  "@privacyCenterTelemetryScopeNote": {},
+  "privacyCenterTelemetryNeverNote": "Ami soha nincs benne: hang, beírt szöveg, a dalaid, sem rólad vagy a telefonodról szóló azonosító. A jelentés csak egy véletlen kódot visz, amit hetente lecserélünk.",
+  "@privacyCenterTelemetryNeverNote": {},
+  "privacyCenterTelemetryPendingTransportNote": "Most még semmi nem megy el. Ebben a változatban nincs küldési csatorna — a döntésedet megjegyezzük, amíg a béta jelentés el nem indul.",
+  "@privacyCenterTelemetryPendingTransportNote": {},
+  "privacyCenterTelemetryStatusOn": "Bekapcsolva — a döntésed rögzítve",
+  "@privacyCenterTelemetryStatusOn": {},
+  "privacyCenterTelemetryStatusNotAsked": "Még nincs döntés — semmit nem gyűjtünk",
+  "@privacyCenterTelemetryStatusNotAsked": {},
+  "privacyCenterTelemetryStatusOff": "Kikapcsolva — semmit nem gyűjtünk",
+  "@privacyCenterTelemetryStatusOff": {},
+  "privacyCenterTelemetryStatusUnavailable": "Ebben az alkalmazásváltozatban nem érhető el",
+  "@privacyCenterTelemetryStatusUnavailable": {},
+  "privacyCenterTelemetryRevokeNote": "A kikapcsolás a véletlen kódot is törli erről az eszközről.",
+  "@privacyCenterTelemetryRevokeNote": {}
 }

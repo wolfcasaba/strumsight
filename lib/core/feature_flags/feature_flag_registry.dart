@@ -18,9 +18,14 @@ import 'feature_flag_definition.dart';
 /// `grep -c 'final bool ' lib/app/config/feature_flags.dart`. This does not
 /// change how completeness is defined (ADR 0446 D4 derives it from parsing
 /// the live source, not from a fixed count), so this registry catalogs all
-/// 40 real fields — the count that keeps `dart run
+/// real fields — the set that keeps `dart run
 /// tool/check_feature_flags.dart` green on the shipped tree (R5). See the
-/// round's §10 handoff for the full note.
+/// round's §10 handoff for the full note. **Re-measured at E14-R41
+/// (2026-09-09): 44 `final bool` fields**, after the four Ch14 rollout
+/// booleans landed. The two `RecognitionRolloutStage` fields added by the
+/// same round are deliberately absent — the audit is defined over `final
+/// bool` declarations, so a bool-shaped entry for an enum field would make
+/// its completeness claim false in both directions (ADR 0542 D4).
 ///
 /// **`risk` heuristic (a judgement call, not a machine measurement):**
 /// `FeatureFlagRisk.high` is used only where `feature_flags.dart` itself
@@ -407,6 +412,60 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
         'hardcoded to `false` in every environment at '
         'feature_flags.dart:107; no dart-define or environment boundary '
         'can turn it on today — enabling it requires a source change.',
+  ),
+  FeatureFlagDefinition(
+    key: 'recognitionChordShadowModeEnabled',
+    owner: 'lib/features/live (chord CRNN shadow, not yet wired)',
+    risk: FeatureFlagRisk.low,
+    failClosedDefault: false,
+    adr: '0542',
+    killSwitchPath:
+        'hardcoded to `false` in every environment at '
+        'feature_flags.dart:131; no dart-define or environment boundary '
+        'can turn it on today — enabling it requires a source change. It '
+        'is also only half of the gate: the chord shadow path additionally '
+        'needs `chordModelRolloutStage.runsInference`, so this boolean '
+        'alone kills it (ADR 0542 D2).',
+  ),
+  FeatureFlagDefinition(
+    key: 'recognitionPreprocessingEnabled',
+    owner: 'lib/features/live (quality-aware preprocessing, not yet wired)',
+    risk: FeatureFlagRisk.low,
+    failClosedDefault: false,
+    adr: '0542',
+    killSwitchPath:
+        'hardcoded to `false` in every environment at '
+        'feature_flags.dart:132; this flag IS the one-switch rollback for '
+        'the recognition preprocessing path — flipping it off restores the '
+        'shipped preprocessing without a new model asset or app release.',
+  ),
+  FeatureFlagDefinition(
+    key: 'recognitionFieldSessionTaggingEnabled',
+    owner: 'lib/features/settings (Ch14 Kör 40 field study enrolment)',
+    risk: FeatureFlagRisk.high,
+    failClosedDefault: false,
+    adr: '0542',
+    killSwitchPath:
+        'hardcoded to `false` in every environment at '
+        'feature_flags.dart:133; a field-study build is a deliberate source '
+        'change reviewed with docs/release/ch14-r40-field-study.md. Even '
+        'on, a capture carries the tag only after the participant opts in '
+        '(FieldStudyEnrolment), so the flag alone collects nothing.',
+  ),
+  FeatureFlagDefinition(
+    key: 'betaTelemetryEnabled',
+    owner: 'lib/core/telemetry + lib/features/settings (Privacy Center)',
+    risk: FeatureFlagRisk.high,
+    failClosedDefault: false,
+    adr: '0542',
+    killSwitchPath:
+        'resolves to `nonProd` (`environment != AppEnvironment.production`) '
+        'at feature_flags.dart:139 — ON outside production, OFF in '
+        'production; there is deliberately no dart-define. Flipping that '
+        'line to `false` is the one-switch beta rollback. Availability is '
+        'not collection: `TelemetryUploadGate` also requires '
+        '`diagnosticsEnabled` AND an explicit, revocable user consent that '
+        'defaults to denied, so this flag on its own sends nothing.',
   ),
   FeatureFlagDefinition(
     key: 'newLiveStageEnabled',
