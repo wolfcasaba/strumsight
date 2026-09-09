@@ -636,6 +636,19 @@
   "songSuggest": "Suggest",
   "songSuggestTitle": "Suggest a progression",
   "songKeyLabel": "Key",
+  "songChordHear": "Hear {chord}",
+  "@songChordHear": {
+    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0535).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
+  "songPreviewPlay": "Preview",
+  "songPreviewStop": "Stop preview",
+  "songPreviewHint": "Hear the whole progression with your strum pattern before you pick up the guitar.",
   "commonCancel": "Cancel",
   "setlistsTitle": "Setlists",
   "setlistsEmpty": "Group your songs into a practice set and play them back-to-back.",
@@ -1347,6 +1360,7 @@
   },
   "songEditorReadOnlySource": "This song can't be saved in place. Save your changes as a new copy instead.",
   "songEditorSaveCopy": "Save a copy",
+  "songEditorHearChord": "Hear chord",
   "songOverviewTitle": "Song overview",
   "songOverviewSections": "Sections",
   "songOverviewTracks": "Tracks",

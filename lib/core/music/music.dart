@@ -8,6 +8,7 @@ library;
 
 export 'chord.dart';
 export 'chord_event.dart';
+export 'chord_voicing.dart';
 export 'guitar_strings.dart';
 export 'strum.dart';
 export 'tuning.dart';

@@ -190,3 +190,18 @@ the engine-clock de-jitter (`engineTimeSec − latestStrumTime`, guarded: missin
 clock or lag outside (0, 500 ms] → 0, logged); the user-calibrated input latency
 stays with the scorer/matcher — exactly the legacy `LearnScreen` (de-jitter) +
 `LessonScorer(inputLatencySec:)` division, so the frozen parity baseline holds.
+
+## Chord audition in the song editors (E18-R01, ADR 0535 — ✅ built)
+Tapping a chord in either song editor now plays the **fingering** the diagram
+shows, strummed: `ChordShapes.forLabel` frets → `ChordVoicing.frequencies`
+(open-string MIDI + fret, muted skipped) → `PluckedStringSynth.strumWav`
+(Karplus–Strong per string, fixed-seed LCG excitation so output is
+byte-deterministic, 18 ms per-string stagger — **down = low→high, up =
+high→low**, the same ↓/↑ meaning the detector uses). No diagram → the C3
+chord tones (`ChordAudio.frequencies`); unparseable label → silence, never a
+guessed major triad. Route-scoped `chordAuditionProvider` (autodispose,
+**watched** from `build`) so nothing rings after leaving the editor; no
+microphone lease involved. The legacy builder also has a **Preview**
+transport: `previewSchedule` (pure, eighth-note grid) + `SongPreviewController`
+(Timer chain, `currentBar` highlight, any structural edit stops it). The
+jam-mode `Backing` pad and the chord library's tap-to-hear are unchanged.

@@ -1,0 +1,186 @@
+# E18-R01 — A dalszerkesztő akkord-meghallgatása és menet-előnézet (komponálás füllel)
+
+- **Státusz:** IN REVIEW (implementálva 2026-09-09, remote Claude-session, kód olvasva: `main @ 1ae9e55`) — **kivétel az ADR 0055 szereposztás alól:** a user explicit utasítására („tervezd meg és fejlesszük át") a tervező session maga implementált; a review + CI-kapu változatlan (ADR 0052).
+- **Típus:** Chapter 18 (Komponálás és akkordok hangból), Kör 1
+- **Kör-azonosító:** `E18-R01`
+- **Branch:** `claude/song-editor-chord-audio-tbkokz`
+- **Brief szerzője:** Claude (Fable 5.1) · **Implementáció:** ugyanez a session (tesztek: Sonnet-ágens, review: Opus-ágens — user-döntés 2026-09-09, token-takarékosság)
+- **Előre kiosztott ADR:** [`0535`](../adr/0535-song-editor-chord-audition-and-progression-preview.md) — megírva.
+- **Fejezet-terv:** [`docs/plans/chapter-18-composer-and-chords-from-audio.md`](../plans/chapter-18-composer-and-chords-from-audio.md)
+
+> ⚠ **A remote konténerben nincs Flutter SDK** ([`docs/execution/remote-container-environment.md`](../execution/remote-container-environment.md)): a §7 gate itt NEM futtatható. A kör bizonyítéka a CI (`full-gate.yml` + `router-ci.yml`) a push-olt HEAD-en, a §10-ben linkelve. Lokális gate a user boxán a merge előtt KÖTELEZŐ.
+
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+  "lib/core/audio/synth/plucked_string_synth.dart",
+  "lib/core/music/chord_voicing.dart",
+  "lib/core/music/music.dart",
+  "lib/features/learn/audio/chord_audition.dart",
+  "lib/features/learn/providers/chord_audition_provider.dart",
+  "lib/features/learn/public.dart",
+  "lib/features/songs/application/song_preview_player.dart",
+  "lib/features/songs/screens/song_builder_screen.dart",
+  "lib/features/song_trainer/presentation/widgets/song_event_editor.dart",
+  "lib/features/song_trainer/presentation/screens/song_editor_screen.dart",
+  "lib/l10n/base/app_en.arb",
+  "lib/l10n/base/app_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "test/core/audio/plucked_string_synth_test.dart",
+  "test/core/music/chord_voicing_test.dart",
+  "test/features/learn/chord_audition_test.dart",
+  "test/features/songs/song_preview_player_test.dart",
+  "test/features/songs/song_builder_audition_test.dart",
+  "test/features/song_trainer/presentation/song_editor_audition_test.dart",
+  "docs/adr/0535-song-editor-chord-audition-and-progression-preview.md",
+  "docs/rounds/e18-r01-song-editor-chord-audition.md",
+  "docs/rag/chunks/014-play-along-learn.md",
+]
+native_gate = false
+gate_tests = [
+  "test/core/audio/plucked_string_synth_test.dart",
+  "test/core/music/chord_voicing_test.dart",
+  "test/features/learn/",
+  "test/features/songs/",
+  "test/features/song_trainer/presentation/",
+  "test/features/chords/",
+  "test/features/tuner/",
+  "test/core/architecture_dependency_test.dart",
+  "test/ui/goldens/e15_r13_full_variant_matrix_test.dart",
+  "test/core/screen_size_guard_test.dart",
+]
+```
+
+## 0. Kör-jelzés és STOP-protokoll
+
+Scope-ütközés esetén a kimenet a brief-REVÍZIÓ, nem a scope önkényes tágítása.
+
+## 1. Cél
+
+A dalszerkesztőben minden megnyomott akkord **hallható** — nem egy absztrakt
+hármashangzat, hanem a diagramon mutatott FOGÁS, lepengetve —, és a teljes
+menet a szerzett ↓/↑ mintával, tempóban **előre meghallgatható**, hogy a
+dal a gitár kézbevétele ELŐTT megkomponálható legyen.
+
+## 2. Jelenlegi állapot — mért tények (`main @ 1ae9e55`)
+
+- `song_builder_screen.dart:160-185`: a menet `InputChip`-jei csak
+  `onDeleted`-et kapnak; az „Add a chord" `ActionChip`-ek `setState(() =>
+  _chords.add(label))` — hang nélkül.
+- `song_event_editor.dart:56-71` (V2): szöveges akkordmező + `Add chord`;
+  hang nélkül. A `SongEditorScreen` `onAddChord`-ja
+  (`song_editor_screen.dart:352`) a controllerbe ír, mást nem.
+- `chord_audio.dart:49-63`: `ChordAudio.frequencies` C3 körüli akkordhangok
+  (3–4 hang); `padWav` szinusz-pad; `Backing` app-szintű `Provider` (nem
+  autodispose), jam-módra.
+- `chord_shape.dart:30-80`: 34 fogás húronkénti bund-számmal — a hangzó
+  hangmagasság (nyitott húr MIDI + bund) SEHOL nem származik belőle.
+- `reference_tone_provider.dart:55-62`: a route-hoz kötött, autodispose
+  lejátszó mintája (`watch` a `build`-ből; A5).
+- Keresztfeature-gráf: `learn → chords/public.dart` és `chords →
+  learn/public.dart` MÁR kölcsönös; `song_trainer` ma csak
+  `settings/public.dart`-ot importál.
+
+## 3. Scope
+
+**Benne:**
+- pengetett-húr szintézis (`core/audio/synth`), fogás → hangmagasság
+  (`core/music/chord_voicing.dart`);
+- `ChordAudition` kontraktus + `SynthChordAudition` + autodispose provider a
+  `learn` feature-ben, `public.dart`-on exportálva;
+- a legacy `SongBuilderScreen`: chip-tap = hallás, add-chip = hozzáad + hall,
+  `Preview` transport a menet-előnézethez, a szóló ütem chip-kiemelése;
+- a V2 `SongEventEditor`/`SongEditorScreen`: `onAddChord` hallat, „Hear chord"
+  gomb;
+- öt ARB-kulcs (en/hu) a FORRÁS szegmensben + generált aggregátum.
+
+**Kívül (ebben a körben TILOS):**
+- az akkordkönyvtár tap-to-hear átállítása (ADR 0535 D5);
+- `ChordAudio`/`Backing`/Learn jam-mód módosítása;
+- detektor-DSP, mikrofon-lease, `lib/core/audio/{capture,dsp,lifecycle,pitch}`;
+- hangból akkord-beolvasás (E18-R02…R04, ADR 0536).
+
+## 4. Engedélyezett fájlok
+
+Lásd az `ai-router` blokkot. **Tilos zóna:** `lib/core/audio/{capture,dsp,lifecycle,pitch}/`,
+`lib/features/chords/`, `lib/features/live/`, `tools/round-gate.sh`, `.github/workflows/`.
+
+## 5. Kötött architekturális döntések (ADR 0535)
+
+D1 fogás-hang pengetve, pad tartalék, ismeretlen címke = csend · D2 route-hoz
+kötött lejátszó, `watch` a `build`-ből, lusta `AudioPlayer`, mikrofon-lease
+nélkül · D3 tiszta `previewSchedule` + időzítő-lánc, szerkesztés = stop ·
+D4 mindkét szerkesztő ugyanazt a kontraktust fogyasztja · D5 könyvtár marad.
+
+### 5.1 Nyitott döntések — előre rögzített feloldással
+
+```yaml
+open_decisions:
+  - id: OD-01
+    question: Milyen kamarahangon szóljon a meghallgatás (a tuner A4-beállítása, vagy fix 440)?
+    blocking: false
+    resolution_policy: use_default
+    default: fix 440 Hz — a beállítás átvezetése follow-up (a settings-függés új keresztfeature-él lenne)
+  - id: OD-02
+    question: Loopoljon-e az előnézet a menet végén?
+    blocking: false
+    resolution_policy: use_default
+    default: nem — egyszer végigjátszik, az utolsó ütem kicseng, majd stop; a loop a Learn/Practice dolga
+```
+
+## 6. Acceptance criteria
+
+| # | Kritérium | Bizonyíték |
+|---|---|---|
+| A1 | `ChordVoicing.midiNotes([-1,3,2,0,1,0])` = `[48,52,55,60,64]`; nyitott E = `[40,45,50,55,59,64]`; néma húr kimarad, 24 feletti bund néma | `test/core/music/chord_voicing_test.dart` |
+| A2 | `strumOnsets` le-pengetésre szigorúan növekvő (0, 794, …), fel-pengetésre szigorúan csökkenő; le ≠ fel PCM ugyanarra a hangkészletre | `test/core/audio/plucked_string_synth_test.dart` |
+| A3 | A szintézis determinisztikus (két hívás bájtra azonos), a csúcs = `amp`·32767 ±2 %, a 220 Hz-es húr nullátmenet-becslése 220 ±4 %; érvényes RIFF/WAVE | ugyanott |
+| A4 | `resolve('C')` → `fingering`, 5 hang, legmélyebb 130,81 Hz; diagram nélküli, de értelmezhető címke → `chordTones`; szemét → `none` és **semmi nem szól** (a lejátszóhoz 0 hívás). **NEM elfogadható gyengítés:** ismeretlen címkére dúr-hármas találgatása. | `test/features/learn/chord_audition_test.dart` |
+| A5 | LRU-korlát: 24-nél több különböző (címke, irány) után `cacheSize == 24`; találat frissíti a recency-t | ugyanott |
+| A6 | `previewSchedule` mátrix: {4/4 default minta @90} × {3/4 hatréses @120} × {bpm 0} × {üres menet} × {túl hosszú minta} × {túl rövid minta} — a származtatott `timeSec` cellák: 0 / 0,6667 / 1,3333 / 2,0 / 2,6667 ill. 0 / 0,25 / … / 1,25 / 1,5; a hosszú minta farka NEM folyik a következő ütembe | `test/features/songs/song_preview_player_test.dart` |
+| A7 | `SongPreviewController`: start → azonnal pengeti az első akkordot, `currentBar == 0`; 2,7 s után `currentBar == 1` és a 2. akkord szólt; a menet végén `isPlaying == false`, `currentBar == null`, `stop` a lejátszón; `stop()` közben megszakít (több pengetés nincs); `dispose()` elhallgattat és nem notify-ol | ugyanott (widget-teszt, `tester.pump(Duration)`) |
+| A8 | Builder: add-chip `C` → chip + `strummed == ['C']`; chip-tap → újra szól, a menet nem változik; törlés → nincs hang; a `song-preview-toggle` üres menetnél tiltott; előnézet közben a szóló ütem chipje `selected`; a route elhagyása → a lejátszó `dispose` | `test/features/songs/song_builder_audition_test.dart` |
+| A9 | V2: `Add chord` → `strummed == ['Dm']` és PONTOSAN egy esemény a chord trackben; `Hear chord` → újra szól, esemény nem keletkezik | `test/features/song_trainer/presentation/song_editor_audition_test.dart` |
+| A10 | Az aggregált ARB-ok a generátorral bájtra egyeznek; az architektúra-teszt tiszta (új él csak `public.dart`-ra) | CI `check_l10n`, `test/core/architecture_dependency_test.dart` |
+
+### 6.1 Falszifikációs próba
+
+- A2: cseréld fel a `strumOnsets` irány-ágát → az A2 cellának PIROSNAK kell
+  lennie.
+- A4: engedd át az ismeretlen címkét dúr-hármasként → az A4 „0 hívás" cella
+  piros.
+- A8: cseréld a `watch`-ot `read`-re a builder `build`-jében → a „route
+  elhagyása → dispose" cella viselkedése változik (a tuner A5 mintája).
+
+## 7. Kötelező ellenőrzések
+
+```bash
+tools/round-gate.sh test/core/audio/plucked_string_synth_test.dart test/core/music/chord_voicing_test.dart test/features/learn/ test/features/songs/ test/features/song_trainer/presentation/ test/features/chords/ test/features/tuner/ test/core/architecture_dependency_test.dart test/ui/goldens/e15_r13_full_variant_matrix_test.dart test/core/screen_size_guard_test.dart
+```
+
+## 8. Implementációs sorrend
+
+1. core: szintézis + voicing (tiszta, tesztelve). 2. learn: kontraktus +
+provider + export. 3. songs: ütemező + controller. 4. a két szerkesztő
+bekötése. 5. ARB forrás + generált aggregátum. 6. tesztek (A1–A9).
+7. CI-dispatch a HEAD-en; lokális gate a user boxán.
+
+## 9. Kockázatok
+
+- **Platform-csatorna tesztben.** Az `AudioPlayer` csak az első pengetéskor
+  jön létre; a widget-tesztek a providert felülírják.
+- **Elavult előnézet.** Szerkesztés közben futó előnézet rossz dalt játszana —
+  ezért minden szerkezeti edit `stop()`.
+- **Golden-mátrix.** A builder új sort kap (Preview) — az `e15_r13` mátrix
+  strukturális (nincs `matchesGoldenFile`), de a textscale-cellák túlcsordulást
+  mérhetnek; a CI mondja meg.
+
+## 10. Implementation handoff
+
+_(a session tölti ki a CI-eredménnyel)_
+
+## 11. Review
+
+_(Opus review-ágens jelentése: `docs/reviews/e18-r01-review.md`)_

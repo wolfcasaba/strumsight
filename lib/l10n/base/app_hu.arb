@@ -591,6 +591,18 @@
   "songSuggest": "Javaslat",
   "songSuggestTitle": "Menet javaslása",
   "songKeyLabel": "Hangnem",
+  "songChordHear": "{chord} meghallgatása",
+  "@songChordHear": {
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
+  "songPreviewPlay": "Előnézet",
+  "songPreviewStop": "Előnézet leállítása",
+  "songPreviewHint": "Hallgasd meg az egész akkordmenetet a pengetési mintáddal, mielőtt kézbe vennéd a gitárt.",
   "commonCancel": "Mégse",
   "setlistsTitle": "Szettlisták",
   "setlistsEmpty": "Csoportosítsd a dalaidat egy gyakorló-szettbe, és játszd le őket egymás után.",
@@ -1302,6 +1314,7 @@
   },
   "songEditorReadOnlySource": "Ez a dal nem menthető a helyén. Mentsd a módosításokat új másolatként.",
   "songEditorSaveCopy": "Mentés másolatként",
+  "songEditorHearChord": "Akkord meghallgatása",
   "songOverviewTitle": "Dal áttekintése",
   "songOverviewSections": "Szakaszok",
   "songOverviewTracks": "Sávok",

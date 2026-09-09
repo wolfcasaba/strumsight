@@ -3821,6 +3821,15 @@
   "songCapabilityExportUnavailable": "Export nem elérhető",
   "songCapabilityTrainerAvailable": "Trainer elérhető",
   "songCapabilityTrainerUnavailable": "Trainer nem elérhető",
+  "songChordHear": "{chord} meghallgatása",
+  "@songChordHear": {
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
   "songDelete": "Törlés",
   "songDeleted": "Dal törölve",
   "songEditTitle": "Dal szerkesztése",
@@ -3836,6 +3845,7 @@
   "songEditorDetachBacking": "Alapzene leválasztása",
   "songEditorDiscard": "Módosítások elvetése",
   "songEditorEventMeasure": "Ütem",
+  "songEditorHearChord": "Akkord meghallgatása",
   "songEditorInvalid": "Mentés előtt javítsd a validációs hibákat.",
   "songEditorLoadFailed": "A dal nem nyitható meg.",
   "songEditorMeasures": "Ütemek",
@@ -3995,6 +4005,9 @@
   },
   "songOverviewTitle": "Dal áttekintése",
   "songOverviewTracks": "Sávok",
+  "songPreviewHint": "Hallgasd meg az egész akkordmenetet a pengetési mintáddal, mielőtt kézbe vennéd a gitárt.",
+  "songPreviewPlay": "Előnézet",
+  "songPreviewStop": "Előnézet leállítása",
   "songProgression": "Akkordmenet",
   "songProgressionHint": "Adj hozzá akkordokat lent — ütemenként egyet, lejátszási sorrendben.",
   "songSave": "Mentés",
