@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/learn/audio/chord_audition.dart';
+import 'package:strumsight/features/learn/providers/chord_audition_provider.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/data/importers/file_picker_adapter.dart';
 import 'package:strumsight/features/song_trainer/data/importers/song_importer.dart';
@@ -23,6 +26,23 @@ import 'package:strumsight/features/song_trainer/domain/repositories/song_reposi
 import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/core/design_system/public.dart';
+
+/// Adding a chord now HEARS it (E18-R01, ADR 0535); the real player is an
+/// `audioplayers` platform channel a widget test must never reach — the same
+/// injection every audio-using test makes.
+final class _SilentAudition implements ChordAudition {
+  @override
+  Future<void> strum(
+    String label, {
+    StrumDirection direction = StrumDirection.down,
+  }) async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<void> dispose() async {}
+}
 
 void main() {
   test('editor screen retains the route document identifier', () {
@@ -42,6 +62,7 @@ void main() {
           songRepositoryProvider.overrideWithValue(repository),
           songAssetRepositoryProvider.overrideWithValue(assetRepository),
           songFilePickerAdapterProvider.overrideWithValue(_BackingPicker()),
+          chordAuditionProvider.overrideWithValue(_SilentAudition()),
         ],
       );
       addTearDown(container.dispose);
@@ -128,6 +149,7 @@ void main() {
           songRepositoryProvider.overrideWithValue(repository),
           songAssetRepositoryProvider.overrideWithValue(assetRepository),
           songFilePickerAdapterProvider.overrideWithValue(_BackingPicker()),
+          chordAuditionProvider.overrideWithValue(_SilentAudition()),
         ],
       );
       addTearDown(container.dispose);
