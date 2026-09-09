@@ -14,6 +14,11 @@ export 'engine/recognition_stabilizer.dart';
 /// The strum-engine seam (real/mock) Learn drives during a lesson.
 export 'engine/strum_engine.dart';
 
+/// The single output tap a shadow/A-B consumer hooks into the live path
+/// (E14-R28 companion delivery for E14-R23, ADR 0545 D6) — interface plus its
+/// no-op null object, so a consumer never has to reach into `engine/dsp/`.
+export 'engine/recognition_shadow_observer.dart';
+
 /// The frame the Practice observation gateway adapts (E02-R08).
 export 'model/live_frame.dart';
 
@@ -30,10 +35,17 @@ export 'model/recognition_runtime_info.dart';
 /// chord- and direction-confidence, typed decision states (E14-R04, ADR
 /// 0505). `live_pipeline.dart` is not rewired to it yet; this is the
 /// contract + the `LiveFrame` compatibility adapter only.
+export 'domain/recognition/chord_latch_diagnostics.dart';
 export 'domain/recognition/chord_prediction.dart';
 export 'domain/recognition/live_frame_adapter.dart';
 export 'domain/recognition/recognition_decision.dart';
 export 'domain/recognition/recognition_frame.dart';
+
+/// The construction-time recognition regime and the only carrier an
+/// expected-chord hint can travel in (E14-R30, ADR 0544) — the Live screen's
+/// product modes map onto this, and `PKG-F` needs it to build the right
+/// engine per mode.
+export 'domain/recognition/recognition_mode.dart';
 export 'domain/recognition/signal_quality_snapshot.dart';
 export 'domain/recognition/strum_prediction.dart';
 

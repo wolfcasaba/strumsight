@@ -285,7 +285,10 @@ void main() {
   });
 
   group('shipped v1 threshold file (ADR 0511 D9 — pinned, not remeasured)', () {
-    test('carries exactly the Ch14 §7.2/§7.4 Alpha values this round maps', () {
+    test('carries exactly the Ch14 §7.2/§7.4 Alpha values this round maps '
+        '(E14-R24: the ALPHA rows are unchanged; the Beta rows E14-R24/R33 '
+        'added are stage "beta" and shipped disabled, and are pinned by '
+        'recognition_rollout_stage_test.dart)', () {
       final source = File(
         '${_findProjectRoot().path}/evaluation/recognition/'
         'recognition_release_gate.json',
@@ -308,17 +311,213 @@ void main() {
         'overall.onsetTolerance50Ms.f1': 0.82,
       };
 
+      final alpha = thresholds.entries
+          .where((e) => e.stage == RecognitionGateStage.alpha)
+          .toList();
       expect(
-        thresholds.entries.map((e) => e.metricPath).toList(),
+        alpha.map((e) => e.metricPath).toList(),
         expected.keys.toList()..sort(),
       );
-      for (final entry in thresholds.entries) {
+      for (final entry in alpha) {
         expect(
           entry.threshold,
           expected[entry.metricPath],
           reason: entry.metricPath,
         );
+        expect(entry.enabled, isTrue, reason: entry.metricPath);
       }
+    });
+
+    test('a disabled row is INFORMATIONAL: it is evaluated and reported, '
+        'but it never flips the verdict (E14-R24, ADR 0537 D3)', () {
+      final thresholds = gate.parseThresholds({
+        'schemaVersion': '1',
+        'thresholdsVersion': 'stages-v1',
+        'thresholds': <Object?>[
+          {
+            'metricPath': 'overall.coverage.value',
+            'threshold': 0.7,
+            'stage': 'alpha',
+          },
+          {
+            'metricPath': 'overall.coverage.value',
+            'threshold': 0.95,
+            'stage': 'beta',
+            'enabled': false,
+          },
+        ],
+      });
+
+      final verdict = gate.evaluate(
+        _metrics(coverage: _ratio(value: 0.8)),
+        thresholds,
+      );
+
+      expect(verdict.findings, hasLength(2));
+      expect(verdict.passed, isTrue);
+      expect(verdict.enabledFindings, hasLength(1));
+      expect(verdict.informationalFindings, hasLength(1));
+      expect(verdict.informationalFindings.single.passed, isFalse);
+      expect(
+        verdict.informationalFindings.single.stage,
+        RecognitionGateStage.beta,
+      );
+    });
+
+    test('two rows for the SAME metric at two stages sort deterministically '
+        '(List.sort is not stable — the tie-breakers are load-bearing)', () {
+      Map<String, Object?> source(List<Object?> rows) => <String, Object?>{
+        'schemaVersion': '1',
+        'thresholdsVersion': 'stages-v1',
+        'thresholds': rows,
+      };
+      const alphaRow = <String, Object?>{
+        'metricPath': 'overall.coverage.value',
+        'threshold': 0.7,
+        'stage': 'alpha',
+      };
+      const betaRow = <String, Object?>{
+        'metricPath': 'overall.coverage.value',
+        'threshold': 0.95,
+        'stage': 'beta',
+        'enabled': false,
+      };
+
+      final forward = gate.parseThresholds(source([alphaRow, betaRow]));
+      final reversed = gate.parseThresholds(source([betaRow, alphaRow]));
+
+      expect(
+        forward.entries.map((e) => e.stage).toList(),
+        <RecognitionGateStage>[
+          RecognitionGateStage.alpha,
+          RecognitionGateStage.beta,
+        ],
+      );
+      expect(
+        reversed.entries.map((e) => e.stage).toList(),
+        forward.entries.map((e) => e.stage).toList(),
+      );
+    });
+
+    test('a threshold entry declaring an unknown stage or band is a typed '
+        'error, never a default', () {
+      expect(
+        () => gate.parseThresholds(
+          _thresholdsJson([
+            {
+              'metricPath': 'overall.coverage.value',
+              'threshold': 0.7,
+              'stage': 'gamma',
+            },
+          ]),
+        ),
+        throwsA(isA<RecognitionGateConfigException>()),
+      );
+      expect(
+        () => gate.parseThresholds(
+          _thresholdsJson([
+            {
+              'metricPath': 'overall.coverage.value',
+              'threshold': 0.7,
+              'band': 'drums',
+            },
+          ]),
+        ),
+        throwsA(isA<RecognitionGateConfigException>()),
+      );
+    });
+
+    test('an omitted stage/band/enabled keeps the pre-E14-R24 meaning: '
+        'alpha, shared, enabled', () {
+      final thresholds = gate.parseThresholds(
+        _thresholdsJson([_entry('overall.coverage.value', 0.7)]),
+      );
+
+      final entry = thresholds.entries.single;
+      expect(entry.stage, RecognitionGateStage.alpha);
+      expect(entry.band, RecognitionGateBand.shared);
+      expect(entry.enabled, isTrue);
+    });
+
+    test('the newly nameable derived metric paths exist and read the same '
+        'per-label block the macro average is built from', () {
+      expect(
+        recognitionMetricExtractors.containsKey(
+          'directionF1.perLabel.down.f1',
+        ),
+        isTrue,
+      );
+      expect(
+        recognitionMetricExtractors.containsKey('directionF1.perLabel.up.f1'),
+        isTrue,
+      );
+      expect(
+        recognitionMetricExtractors.containsKey(
+          'chordMacroF1.weakestSupportedRecall',
+        ),
+        isTrue,
+      );
+
+      final metrics = _metrics(
+        directionF1: RecognitionMacroF1(
+          value: 0.8,
+          perLabel: <String, RecognitionPrecisionRecallF1>{
+            'down': _prf1(f1: 0.9),
+          },
+          definition: _def(),
+        ),
+      );
+
+      expect(
+        recognitionMetricExtractors['directionF1.perLabel.down.f1']!(
+          metrics,
+        ).value,
+        0.9,
+      );
+      // A label the report never saw is null — a fail-closed finding, not a
+      // silently skipped one.
+      expect(
+        recognitionMetricExtractors['directionF1.perLabel.up.f1']!(
+          metrics,
+        ).value,
+        isNull,
+      );
+    });
+
+    test('the weakest supported chord recall skips the reserved noChord/'
+        'unknown labels and the zero-support ones', () {
+      final metrics = _metrics(
+        chordMacroF1: RecognitionMacroF1(
+          value: 0.7,
+          perLabel: <String, RecognitionPrecisionRecallF1>{
+            'C': _labelPrf1(recall: 0.9, truePositives: 9, falseNegatives: 1),
+            'Am': _labelPrf1(recall: 0.6, truePositives: 6, falseNegatives: 4),
+            // Reserved: scored by their own metrics, never "the weakest
+            // supported chord".
+            'noChord': _labelPrf1(
+              recall: 0.1,
+              truePositives: 1,
+              falseNegatives: 9,
+            ),
+            'unknown': _labelPrf1(
+              recall: 0.0,
+              truePositives: 0,
+              falseNegatives: 3,
+            ),
+            // No support at all: excluded, not counted as a zero.
+            'Bm': _labelPrf1(recall: null, truePositives: 0, falseNegatives: 0),
+          },
+          definition: _def(),
+        ),
+      );
+
+      final sample =
+          recognitionMetricExtractors['chordMacroF1.weakestSupportedRecall']!(
+            metrics,
+          );
+
+      expect(sample.value, 0.6);
+      expect(sample.higherIsBetter, isTrue);
     });
 
     test('the shipped file evaluates FAIL against the current legacy-DSP '
@@ -395,6 +594,22 @@ RecognitionPrecisionRecallF1 _prf1({
   falsePositives: 1,
   falseNegatives: 1,
   definition: _def(higherIsBetter: higherIsBetter),
+);
+
+/// A per-label P/R/F1 entry with an explicit recall and support, for the
+/// derived weakest-supported-recall extractor.
+RecognitionPrecisionRecallF1 _labelPrf1({
+  required double? recall,
+  required int truePositives,
+  required int falseNegatives,
+}) => RecognitionPrecisionRecallF1(
+  precision: recall,
+  recall: recall,
+  f1: recall,
+  truePositives: truePositives,
+  falsePositives: 0,
+  falseNegatives: falseNegatives,
+  definition: _def(),
 );
 
 RecognitionMacroF1 _macro({double? value = 0.9, bool higherIsBetter = true}) =>

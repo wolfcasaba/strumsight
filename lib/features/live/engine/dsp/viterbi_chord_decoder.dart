@@ -2,8 +2,10 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../../../core/music/chord.dart';
+import '../../domain/recognition/recognition_mode.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart' show ChordMatch;
+import 'dsp_config.dart';
 
 /// Online (token-passing) Viterbi decoder over the chord-profile dictionary
 /// (RAG chunk 012) — the principled replacement for round-4's hand-tuned
@@ -39,23 +41,48 @@ class ViterbiChordDecoder {
   /// Index of the no-chord state (always 0 in [ChordDictionary]).
   static const int _noChord = 0;
 
-  /// Expected-target prior (chunk 016 rec #1 — round 137). In a lesson/song
-  /// the target chord is KNOWN, so its trellis score gains a small per-frame
-  /// bonus: ambiguous evidence (maj vs maj7, weak thirds) resolves toward the
-  /// target, while a genuinely different played chord still out-scores it —
-  /// the bonus is far below a real similarity gap, and it is NEVER applied to
-  /// the no-chord state (expecting a chord cannot conjure one from silence).
-  /// Confidence reporting stays on the RAW similarity (no self-deception).
-  static const double expectedPrior = 0.05;
+  /// Expected-target TIE-BREAK band (E14-R30, ADR 0544 D3 — the successor of
+  /// round 137's `expectedPrior`, same numeric value, different mechanism).
+  ///
+  /// Round 137 added `expectedPrior = 0.05` to the expected state's trellis
+  /// score EVERY frame. That is an additive bias: it accumulates, so a long
+  /// enough lesson could hold the target label against audio evidence that had
+  /// already overtaken it (the "prior overwrites the audio" hazard E14-R30
+  /// closes). The prior no longer enters the trellis at all. Instead, AFTER
+  /// the prior-free trellis has picked its winner, the expected state may take
+  /// over the REPORT only when the frame is genuinely a tie — within this band
+  /// on BOTH:
+  ///
+  ///   1. the accumulated path score (`best - delta[expected] <= band`), and
+  ///   2. this frame's raw dictionary similarity
+  ///      (`sim[best] - sim[expected] <= band`).
+  ///
+  /// Both conditions are needed: (1) alone would let a stale path advantage
+  /// decide, (2) alone would ignore the sequence. Because the trellis itself
+  /// never sees the hint, the tie-break has NO memory — it cannot compound
+  /// over frames, and clearing the hint returns a bit-identical decoder state
+  /// to one that never had it. The tie-break is also refused when the winner
+  /// is the no-chord state: expecting a chord can never conjure one from
+  /// silence.
+  ///
+  /// The 0.05 value is CARRIED OVER unchanged from `expectedPrior` — E14-R30
+  /// changes the mechanism, not the tuning (no measurement exists that would
+  /// justify a new number).
+  static const double expectedTieBreakBand = 0.05;
   int _expectedIdx = -1;
 
-  /// Set (or clear with null) the currently expected chord label. Unknown
-  /// labels (e.g. a slash chord outside the dictionary) clear the prior.
-  void setExpected(String? label) {
-    _expectedIdx = label == null
+  /// Set (or clear with null) the currently expected chord (E14-R30, ADR 0544
+  /// D2). The parameter is an [ExpectedChordHint], NOT a `String`: a hint can
+  /// only be obtained from [ExpectedChordHint.forMode], which returns `null`
+  /// in [RecognitionMode.free]. A free-mode engine therefore has no value to
+  /// pass here, which is what makes free-mode isolation structural rather than
+  /// a calling convention. Unknown labels (e.g. a slash chord outside the
+  /// dictionary) clear the hint.
+  void setExpected(ExpectedChordHint? hint) {
+    _expectedIdx = hint == null
         ? -1
         : dictionary.profiles.indexWhere(
-            (p) => !p.isNoChord && p.label == label,
+            (p) => !p.isNoChord && p.label == hint.label,
           );
   }
 
@@ -64,8 +91,11 @@ class ViterbiChordDecoder {
   /// chord frames the self-transition bonus is scaled by [_onsetBonusScale] —
   /// the decoder switches decisively ON the strum and stays stable between
   /// onsets. Online path only (the batch backtrace already sees the future).
-  static const int _onsetBoostFrames = 2; // ~186 ms at the 93 ms chord hop
-  static const double _onsetBonusScale = 0.25;
+  /// ~186 ms at the 93 ms chord hop. The values live in [DspConfig] since
+  /// E14-R28 so `RecognitionStabilizer` can derive its onset-alignment window
+  /// from the SAME numbers; nothing about them changed.
+  static const int _onsetBoostFrames = DspConfig.chordOnsetBoostFrames;
+  static const double _onsetBonusScale = DspConfig.chordOnsetBonusScale;
   int _boostLeft = 0;
 
   /// Tell the decoder a strum onset just happened (called by the pipeline
@@ -91,9 +121,11 @@ class ViterbiChordDecoder {
     final bonus = boosted ? selfBonus * _onsetBonusScale : selfBonus;
     if (boosted) _boostLeft--;
 
+    // The trellis is EXPECTED-HINT-FREE (ADR 0544 D3): the hint is applied
+    // only at read-out, below, so it can never accumulate into the path.
     if (!_seeded) {
       for (var s = 0; s < n; s++) {
-        _delta[s] = sim[s] + (s == _expectedIdx ? expectedPrior : 0.0);
+        _delta[s] = sim[s];
       }
       _seeded = true;
     } else {
@@ -103,10 +135,7 @@ class ViterbiChordDecoder {
       }
       for (var s = 0; s < n; s++) {
         final stay = _delta[s] + bonus;
-        _delta[s] =
-            sim[s] +
-            (s == _expectedIdx ? expectedPrior : 0.0) +
-            (stay > bestPrev ? stay : bestPrev);
+        _delta[s] = sim[s] + (stay > bestPrev ? stay : bestPrev);
       }
     }
 
@@ -120,11 +149,99 @@ class ViterbiChordDecoder {
         bestIdx = s;
       }
     }
+
+    // Guided-mode tie-break (ADR 0544 D3): the expected state may take over
+    // the REPORT only when it is tied with the winner on the accumulated path
+    // AND on this frame's raw similarity, and never against the no-chord
+    // state. Evaluated BEFORE renormalisation so the comparison is on the
+    // same scale for both terms; renormalisation subtracts the same constant
+    // from every state, so it cannot change the outcome either way.
+    var reportIdx = bestIdx;
+    var tieBreakApplied = false;
+    final expected = _expectedIdx;
+    if (expected >= 0 &&
+        expected != bestIdx &&
+        bestIdx != _noChord &&
+        best - _delta[expected] <= expectedTieBreakBand &&
+        sim[bestIdx] - sim[expected] <= expectedTieBreakBand) {
+      reportIdx = expected;
+      tieBreakApplied = true;
+    }
+
     for (var s = 0; s < n; s++) {
       _delta[s] -= best;
     }
 
-    return _matchFor(bestIdx, sim);
+    // The diagnostics computation IS [_matchFor]'s computation (same `second`
+    // scan, same formula), so the streaming path runs it once and builds the
+    // match from the recorded values — the reported confidence and the
+    // diagnostics table can then never disagree.
+    _recordDiagnostics(reportIdx, sim, tieBreakApplied);
+    return _lastWinnerIsNoChord
+        ? null
+        : ChordMatch(Chord(_lastWinnerLabel), _lastRawConfidence);
+  }
+
+  // ---------------------------------------------------------------------
+  // H3 / L2 diagnostics (E14-R28, ADR 0545 D5). Written by [process] only —
+  // the batch paths never touch them — and read by nothing on the decision
+  // path. They exist so the chord latch can be MEASURED without retuning it.
+  // ---------------------------------------------------------------------
+
+  String _lastWinnerLabel = 'N.C.';
+  bool _lastWinnerIsNoChord = true;
+  double _lastWinSim = 0;
+  double _lastSecondSim = 0;
+  double _lastMargin = 0;
+  double _lastRawConfidence = 0;
+  bool _lastTieBreakApplied = false;
+
+  /// Label of the state [process] last reported (`N.C.` for no-chord).
+  String get lastWinnerLabel => _lastWinnerLabel;
+
+  /// Whether [process] last landed in the no-chord state.
+  bool get lastWinnerIsNoChord => _lastWinnerIsNoChord;
+
+  /// Raw dictionary similarity of the last reported state (0 for no-chord).
+  double get lastWinSim => _lastWinSim;
+
+  /// Raw similarity of the best competing real chord on the last frame.
+  double get lastSecondSim => _lastSecondSim;
+
+  /// `(winSim - secondSim) / winSim` on the last frame, 0 when `winSim` is 0.
+  double get lastMargin => _lastMargin;
+
+  /// `winSim * (0.5 + 2 * margin)` clamped to `0..1` on the last frame — the
+  /// exact number the pipeline's EMA consumes.
+  double get lastRawConfidence => _lastRawConfidence;
+
+  /// Whether the guided tie-break changed the reported label on the last
+  /// frame. Always false without a hint, hence always false in free mode.
+  bool get lastExpectedTieBreakApplied => _lastTieBreakApplied;
+
+  /// The constant no-chord floor every real chord must beat.
+  double get noChordScore => dictionary.noChordScore;
+
+  void _recordDiagnostics(int idx, Float64List sim, bool tieBreakApplied) {
+    _lastTieBreakApplied = tieBreakApplied;
+    _lastWinnerIsNoChord = idx == _noChord;
+    _lastWinnerLabel = dictionary.profiles[idx].label;
+    if (idx == _noChord) {
+      _lastWinSim = 0;
+      _lastSecondSim = 0;
+      _lastMargin = 0;
+      _lastRawConfidence = 0;
+      return;
+    }
+    _lastWinSim = sim[idx];
+    var second = 0.0;
+    for (var s = 1; s < sim.length; s++) {
+      if (s != idx && sim[s] > second) second = sim[s];
+    }
+    _lastSecondSim = second;
+    _lastMargin = _lastWinSim <= 0 ? 0.0 : (_lastWinSim - second) / _lastWinSim;
+    final raw = _lastWinSim * (0.5 + 2 * _lastMargin);
+    _lastRawConfidence = raw.clamp(0.0, 1.0);
   }
 
   /// Full-sequence Viterbi with backtrace (batch — Analyze, chunk 012's last
@@ -278,5 +395,12 @@ class ViterbiChordDecoder {
     _seeded = false;
     _boostLeft = 0;
     _expectedIdx = -1;
+    _lastWinnerLabel = 'N.C.';
+    _lastWinnerIsNoChord = true;
+    _lastWinSim = 0;
+    _lastSecondSim = 0;
+    _lastMargin = 0;
+    _lastRawConfidence = 0;
+    _lastTieBreakApplied = false;
   }
 }

@@ -252,3 +252,99 @@ in the FIFTH — the lightest, most-omitted tone. Design that made it safe:
 ## Still open (NOT built in rounds 28/69–78)
 - Grow the vocabulary further (6, 9, add9, inversions/slash) once the base is
   validated on a real guitar. Power-5/sus2 stay OUT (round-26/28 stealing).
+
+## Expected-chord prior: additív bias → TIE-BREAK — AS BUILT (E14-R30, ADR 0544)
+
+Round 137 added an **additive** expected-target prior:
+`_delta[s] = sim[s] + (s == expected ? 0.05 : 0)`, applied EVERY frame inside
+the trellis. Additive means **accumulating**: a long enough lesson could hold
+the target label against audio evidence that had already overtaken it. The
+only thing keeping it out of Free Play was a screen-level
+`setExpectedChord(null)` convention.
+
+**As built now:**
+- `RecognitionMode { free, guided }` (`domain/recognition/recognition_mode.dart`)
+  is a CONSTRUCTION-time property of the engine (`LivePipeline({mode})`,
+  `RealStrumEngine({mode})`), default `free` (fail-closed).
+- The only carrier is `ExpectedChordHint`, whose constructor is private and
+  whose factory `ExpectedChordHint.forMode(mode, label)` returns **null** in
+  free mode. `ViterbiChordDecoder.setExpected` takes that type, not a `String`
+  — so in free mode there is no hint VALUE to apply, and the isolation is
+  structural rather than conventional.
+- **The hint never enters the trellis.** The recursion is bit-identical to a
+  hint-free decoder. At READ-OUT the expected state may take over the report
+  only if the frame is a genuine tie within
+  `expectedTieBreakBand = 0.05` on BOTH the accumulated path score
+  (`best - delta[expected]`) AND the frame's raw similarity
+  (`sim[best] - sim[expected]`), and **never** against the no-chord state.
+- The 0.05 value is CARRIED OVER from the deleted `expectedPrior` — the
+  mechanism changed, the tuning did not.
+
+**Honest consequence (measured by derivation, not by ear):** because the hint
+is outside the trellis, a SETTLED trellis puts every follower at least
+`selfBonus = 0.22` behind the leader (`gap = simLead − simFollower +
+selfBonus`), far outside the 0.05 band. So the tie-break can only fire at the
+start of a sequence and around a switch, where the paths really are on top of
+each other. The prior is therefore **much weaker** than round 137's. Verified
+tie case: with a uniform `{0,4,8}` bass+treble observation the three augmented
+roots score IDENTICALLY (0.8228 each; next competitor 0.6692), and the hint
+picks among exactly those three. Whether the weaker prior helps or hurts real
+lesson accuracy is **UNKNOWN — not measured**.
+
+## Onset-aligned chord TRANSITION above the stabilizer — AS BUILT (E14-R28, ADR 0545)
+
+The decoder has been onset-aware since round 138 (`noteOnset()` scales the
+self-bonus by `chordOnsetBonusScale = 0.25` for `chordOnsetBoostFrames = 2`
+chord frames — "the chord changes ON the strum"). The label-stability gate
+above it (`RecognitionStabilizer`, ADR 0518) did not share that premise: N
+agreeing frames confirmed a displacement whenever they arrived.
+
+Now a displacement ALSO has to land on an onset-aligned frame. The window is
+**derived, not tuned**:
+
+```
+onsetAlignmentWindowSec = chordOnsetBoostSeconds        // 2 × 4096 / 44100 ≈ 0.186 s
+                        + minAgreeFrames × frameEmitSeconds   // 0.066 s per emitted frame
+free   = 0.186 + 3 × 0.066 = 0.384 s
+guided = 0.186 + 5 × 0.066 = 0.516 s
+```
+
+The first term is the decoder's own onset-boost window; the second is the time
+the gate needs to accumulate its ADR 0518 agreement (without it the window
+would close before the displacement it exists to admit). `chordOnsetBoostFrames`
+and `chordOnsetBonusScale` moved from the decoder's private constants into
+`DspConfig` (values unchanged) so both layers read the SAME numbers.
+
+The gate reads a NEW `LiveFrame.onsetTimeSec` (fed by
+`StrumAnalyzer.lastOnsetSec`, stamped BEFORE direction classification), not
+`latestStrumTime` — the latter only advances for a strum whose direction was
+confirmed, so an onset the model abstained on would otherwise hold the chord
+hostage.
+
+Escape hatches, so the gate can never freeze a label: a frame with no sample
+clock (`engineTimeSec < 0` or `onsetTimeSec < 0`) falls back to plain ADR
+0518 agreement, and an onset older than `LiveFrame.strumHoldSec` (2 s) counts
+as expired evidence and re-opens the gate. `RecognitionStabilizer.onsetHeldFrames`
+counts what the gate actually cost, so transition latency is measurable.
+
+## Chord-latch diagnostics (H3 / L2) — MEASURABLE, NOT FIXED (E14-R28, ADR 0545 D5)
+
+The HANDOFF's H3 ("the chord latch does not engage on a Karplus–Strong
+signal") names `confidence = winSim * (0.5 + 2 * margin)`: on two near-tied
+templates `margin ≈ 0` → `conf ≈ 0.5 · winSim`, below `chordConfRise = 0.54`.
+That was a HYPOTHESIS — nothing exposed the per-frame values.
+
+`LivePipeline.chordLatchDiagnostics` (`ChordLatchDiagnostics`) now exposes,
+per chord frame: `tonalness`, `tonalGatePassed`, `winnerLabel`,
+`winnerIsNoChord`, `winSim`, `secondSim`, `margin`, `rawConfidence`,
+`noChordScore`, `winSimOverNoChordFloor`, `chordConfEma`, `chordConfRise`,
+`chordConfRelease`, `emaOverRise`, `belowReleaseFrames`, `chordLatched`,
+`expectedTieBreakApplied`, `mode` — built ON READ from scalars the frame path
+already keeps, so the real-time loop pays nothing.
+
+`test/features/live/chord_latch_diagnostics_report_test.dart` prints these as
+CSV for a deterministic Karplus–Strong chord (new
+`test/support/synth.dart::karplusStrongNote/Chord/StrumPattern`, own LCG, no
+`Random`) alongside the harmonic-sum reference, and **asserts no threshold at
+all**. `chordConfRise`, `chordNoChordScore` and the margin formula are
+UNCHANGED: the numbers come first, the retune only after them.

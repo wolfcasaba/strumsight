@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../../core/music/chord.dart';
+import '../../domain/recognition/chord_latch_diagnostics.dart';
 import '../../domain/recognition/chord_prediction.dart';
 import '../../domain/recognition/recognition_decision.dart';
+import '../../domain/recognition/recognition_mode.dart';
 import '../../domain/recognition/signal_quality_snapshot.dart';
 import '../../domain/recognition/strum_prediction.dart';
 import '../../model/live_frame.dart';
@@ -15,6 +17,7 @@ import '../ml/live_crnn_classifier.dart';
 import '../ml/model_activation.dart';
 import '../ml/strum_crnn.dart';
 import '../quality/live_signal_quality_analyzer.dart';
+import '../recognition_shadow_observer.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
@@ -74,6 +77,9 @@ class LivePipeline {
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
+    RecognitionMode mode = RecognitionMode.free,
+    RecognitionShadowObserver shadowObserver =
+        const NoopRecognitionShadowObserver(),
   }) {
     return LivePipeline._(
       sampleRate: sampleRate,
@@ -81,6 +87,8 @@ class LivePipeline {
       chordConfRise: chordConfRise,
       chordConfRelease: chordConfRelease,
       chordReleaseHoldFrames: chordReleaseHoldFrames,
+      mode: mode,
+      shadowObserver: shadowObserver,
     );
   }
 
@@ -92,9 +100,14 @@ class LivePipeline {
   factory LivePipeline.debugWithClassifier(
     StrumDirectionClassifier classifier, {
     required int sampleRate,
+    RecognitionMode mode = RecognitionMode.free,
+    RecognitionShadowObserver shadowObserver =
+        const NoopRecognitionShadowObserver(),
   }) {
     return LivePipeline._(
       sampleRate: sampleRate,
+      mode: mode,
+      shadowObserver: shadowObserver,
       crnnActivation: ModelActivation<StrumDirectionClassifier>.activated(
         classifier,
         RecognitionRuntimeInfo(
@@ -112,10 +125,13 @@ class LivePipeline {
   LivePipeline._({
     required this.sampleRate,
     required ModelActivation<StrumDirectionClassifier> crnnActivation,
+    required this.mode,
+    required RecognitionShadowObserver shadowObserver,
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
   }) : _crnnActivation = crnnActivation,
+       _shadowObserver = shadowObserver,
        _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
        _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
        _chordReleaseHoldFrames =
@@ -142,10 +158,21 @@ class LivePipeline {
          window: DspConfig.onsetWindow,
          hop: DspConfig.onsetHop,
        ),
-       _emitEverySamples = (sampleRate * 0.066).round();
+       _emitEverySamples = (sampleRate * DspConfig.frameEmitSeconds).round();
 
   final int sampleRate;
+
+  /// Which recognition regime this pipeline was CONSTRUCTED in (E14-R30,
+  /// ADR 0544 D1). In [RecognitionMode.free] the expected-chord hint cannot
+  /// exist, so [setExpectedChord] cannot reach the decoder with a value —
+  /// see [ExpectedChordHint.forMode].
+  final RecognitionMode mode;
+
   final ModelActivation<StrumDirectionClassifier> _crnnActivation;
+
+  /// The output tap (ADR 0545 D6). Defaults to the null object, so the
+  /// production path is bit-identical to the pre-seam pipeline.
+  final RecognitionShadowObserver _shadowObserver;
 
   /// The musical-presence gate (round 176): a Schmitt trigger on the
   /// EMA-smoothed chord-match confidence. A chord is surfaced to the UI once
@@ -186,13 +213,27 @@ class LivePipeline {
   int _samplesSeen = 0;
   int _lastEmitAt = 0;
 
-  /// Hint the currently expected chord (or clear with null) — the Viterbi
-  /// expected-target prior (chunk 016, round 137).
-  void setExpectedChord(String? label) => _chordDecoder.setExpected(label);
+  /// Hint the currently expected chord (or clear with null).
+  ///
+  /// E14-R30 (ADR 0544 D2): the label is funnelled through
+  /// [ExpectedChordHint.forMode], which yields `null` in
+  /// [RecognitionMode.free]. A free-mode pipeline therefore CLEARS the
+  /// decoder's hint no matter what a caller pushes in — the isolation is a
+  /// machine-checked contract, not the Live screen's `setExpectedChord(null)`
+  /// convention it replaces. In [RecognitionMode.guided] the hint reaches the
+  /// decoder, where it is a pure tie-breaker
+  /// ([ViterbiChordDecoder.expectedTieBreakBand]).
+  void setExpectedChord(String? label) =>
+      _chordDecoder.setExpected(ExpectedChordHint.forMode(mode, label));
 
   ChordMatch? _lastChord;
+  StrumPrediction? _lastStrumPrediction;
+  int _chordFrameIndex = 0;
+  double _lastChordFrameTimeSec = 0;
+  bool _lastTonalGatePassed = false;
   Strum? _latestStrum;
   double _latestStrumTime = -1;
+  double _lastOnsetTimeSec = -1;
   int _strumSeq = 0;
   final List<BeatSlot> _bar = _emptyBar();
   int _lastSlot = -1;
@@ -218,7 +259,14 @@ class LivePipeline {
       // Onset-aligned chord updates (chunk 016, round 138): a fresh onset
       // relaxes the Viterbi switch penalty for the next couple of chord
       // frames — the chord changes ON the strum, stays stable between.
-      if (_strums.onsetJustFired) _chordDecoder.noteOnset();
+      if (_strums.onsetJustFired) {
+        _chordDecoder.noteOnset();
+        // E14-R28 (ADR 0545 D2): recorded BEFORE classification, so an onset
+        // whose direction is later rejected still opens the chord-transition
+        // gate. `_latestStrumTime` cannot serve this role — it only advances
+        // for a CONFIRMED direction.
+        _lastOnsetTimeSec = _strums.lastOnsetSec;
+      }
       if (event == null) continue;
       _tempo.addOnset(event.timeSec);
       if (event.direction != null && _isDirectionConfirmed(event)) {
@@ -256,12 +304,24 @@ class LivePipeline {
       _applyChordConfEma(
         _chordConfEma + DspConfig.chordConfEmaAlpha * (conf - _chordConfEma),
       );
+      _recordChordLatchDiagnostics(tonal);
     }
 
     // Sample-clock emission (~15 Hz).
     if (_samplesSeen - _lastEmitAt >= _emitEverySamples) {
       _lastEmitAt = _samplesSeen;
-      out.add(_buildFrame());
+      final chord = chordPrediction;
+      final frame = _buildFrame(chord);
+      out.add(frame);
+      // ADR 0545 D6 — the single shadow tap: production has already decided
+      // everything this frame carries, and the observer's return type is
+      // `void`, so nothing it does can reach [out].
+      _shadowObserver.onRecognitionFrame(
+        mode: mode,
+        frame: frame,
+        chord: chord,
+        strum: _lastStrumPrediction,
+      );
     }
     return out;
   }
@@ -285,6 +345,12 @@ class LivePipeline {
       calibratedConfidence: null,
       modelId: _crnnActivation.info.strumModelId,
     );
+    // Kept for the shadow tap only (ADR 0545 D6) — the decision below is
+    // unchanged. Note it retains REJECTED verdicts too: a shadow consumer
+    // measuring abstention needs the frames production threw away, and the
+    // heuristic (probability-less) path leaves it `null`, because there is no
+    // prediction to report rather than a fabricated one.
+    _lastStrumPrediction = prediction;
     return prediction.decision == RecognitionDecision.confirmed;
   }
 
@@ -385,7 +451,7 @@ class LivePipeline {
     }
   }
 
-  LiveFrame _buildFrame() {
+  LiveFrame _buildFrame(ChordPrediction? chord) {
     final nowSec = _samplesSeen / sampleRate;
     // The hero arrow fades out: drop the strum after 2 s without a new one.
     if (_latestStrum != null && nowSec - _latestStrumTime > 2.0) {
@@ -397,9 +463,11 @@ class LivePipeline {
     // noise, not a guitar, so show nothing rather than a phantom chord.
     final showChord = _lastChord != null && _chordLatched;
     // ADR 0516 D5: additive only — [current] keeps deriving from the SAME
-    // `showChord` bit (bit-identical, §5.6), [chordPrediction] is a second,
-    // typed view of the SAME state, never a second decision.
-    final chord = chordPrediction;
+    // `showChord` bit (bit-identical, §5.6), [chord] is a second, typed view
+    // of the SAME state, never a second decision. It is passed IN (rather
+    // than read from [chordPrediction] here) only so the caller can hand the
+    // very same instance to the shadow tap instead of allocating a second
+    // one — the value is identical either way.
     return LiveFrame(
       current: showChord ? Chord(_lastChord!.chord.label) : null,
       next: null, // the real engine cannot know the future
@@ -411,6 +479,7 @@ class LivePipeline {
       listening: true,
       strumSeq: _strumSeq,
       latestStrumTime: _latestStrumTime,
+      onsetTimeSec: _lastOnsetTimeSec,
       engineTimeSec: nowSec,
       chordDecision: chord?.decision,
       chordRejectReason: chord?.rejectReason,
@@ -494,6 +563,49 @@ class LivePipeline {
   @visibleForTesting
   StrumDirectionClassifier get debugStrumClassifier => _strums.debugClassifier;
 
+  /// H3 / L2 (E14-R28, ADR 0545 D5) — every value the chord latch read on the
+  /// LAST processed chord frame, or `null` before the first one.
+  ///
+  /// Read-only and side-effect-free: every field is a value the per-frame
+  /// path had ALREADY computed, and nothing on the decision path reads the
+  /// record back. It exists so the "chord latch does not engage on a
+  /// Karplus–Strong chord" report can be MEASURED
+  /// (`chord_latch_diagnostics_report_test.dart`) before anyone proposes a
+  /// change to `chordConfRise`, `chordNoChordScore` or the margin formula.
+  /// The record is BUILT ON READ from scalars the frame path already keeps,
+  /// so the real-time loop allocates nothing for it (ADR 0545 D5).
+  ChordLatchDiagnostics? get chordLatchDiagnostics {
+    if (_chordFrameIndex == 0) return null;
+    return ChordLatchDiagnostics(
+      frameIndex: _chordFrameIndex - 1,
+      engineTimeSec: _lastChordFrameTimeSec,
+      mode: mode,
+      tonalness: _chroma.lastTonalness,
+      tonalGatePassed: _lastTonalGatePassed,
+      winnerLabel: _chordDecoder.lastWinnerLabel,
+      winnerIsNoChord: _chordDecoder.lastWinnerIsNoChord,
+      winSim: _chordDecoder.lastWinSim,
+      secondSim: _chordDecoder.lastSecondSim,
+      margin: _chordDecoder.lastMargin,
+      rawConfidence: _chordDecoder.lastRawConfidence,
+      noChordScore: _chordDecoder.noChordScore,
+      chordConfEma: _chordConfEma,
+      chordConfRise: _chordConfRise,
+      chordConfRelease: _chordConfRelease,
+      belowReleaseFrames: _belowReleaseFrames,
+      chordLatched: _chordLatched,
+      expectedTieBreakApplied: _chordDecoder.lastExpectedTieBreakApplied,
+    );
+  }
+
+  /// Per-chord-frame bookkeeping for [chordLatchDiagnostics]: three scalar
+  /// stores, no allocation, no branch on the decision path.
+  void _recordChordLatchDiagnostics(bool tonalGatePassed) {
+    _chordFrameIndex++;
+    _lastChordFrameTimeSec = _samplesSeen / sampleRate;
+    _lastTonalGatePassed = tonalGatePassed;
+  }
+
   void reset() {
     _chordFramer.reset();
     _onsetFramer.reset();
@@ -501,10 +613,16 @@ class LivePipeline {
     _tempo.reset();
     _signalQuality.reset();
     _lastChord = null;
+    _lastStrumPrediction = null;
+    _chordFrameIndex = 0;
+    _lastChordFrameTimeSec = 0;
+    _lastTonalGatePassed = false;
     _chordConfEma = 0;
     _chordLatched = false;
     _belowReleaseFrames = 0;
     _latestStrum = null;
+    _latestStrumTime = -1;
+    _lastOnsetTimeSec = -1;
     _strumSeq = 0;
     _clearBar();
     _lastSlot = -1;

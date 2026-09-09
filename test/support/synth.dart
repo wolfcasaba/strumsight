@@ -236,3 +236,115 @@ Float64List strumPattern({
   final total = offsets.last + parts.last.length + (0.2 * sampleRate).round();
   return mixNotes(parts, startOffsets: offsets, length: total);
 }
+
+/// A plucked string by **Karplus–Strong** physical modelling (E14-R28 / H3):
+/// a short broadband excitation fed through a tuned delay line with a one-pole
+/// lowpass in the feedback path. Unlike [harmonicNote] — a sum of ideal sine
+/// partials with a single exponential envelope — KS produces the *inharmonic
+/// attack, per-partial decay and slight detune* of a real string, which is why
+/// the H3 report uses it: the chord latch's failure to engage was reported on
+/// real guitar audio, and a sum of perfect sinusoids is exactly the input that
+/// cannot reproduce it.
+///
+/// Deterministic by construction: the excitation comes from a fixed 32-bit LCG
+/// seeded by [seed], never from `dart:math`'s `Random`, so two runs (and two
+/// machines) produce bit-identical samples.
+Float64List karplusStrongNote({
+  required double freq,
+  required double seconds,
+  int sampleRate = 44100,
+  double amp = 0.2,
+  double damping = 0.996,
+  int seed = 1,
+}) {
+  final n = (seconds * sampleRate).round();
+  final out = Float64List(n);
+  if (n == 0) return out;
+  final delay = math.max(2, (sampleRate / freq).round());
+  final buf = Float64List(delay);
+  // 32-bit LCG (Numerical Recipes constants) → white noise burst in -1..1.
+  var state = (seed * 2654435761) & 0xFFFFFFFF;
+  int next() {
+    state = (1664525 * state + 1013904223) & 0xFFFFFFFF;
+    return state;
+  }
+
+  for (var i = 0; i < delay; i++) {
+    buf[i] = (next() / 0xFFFFFFFF) * 2 - 1;
+  }
+  var idx = 0;
+  for (var i = 0; i < n; i++) {
+    out[i] = amp * buf[idx];
+    final nextIdx = (idx + 1) % delay;
+    buf[idx] = damping * 0.5 * (buf[idx] + buf[nextIdx]);
+    idx = nextIdx;
+  }
+  // Same 10 ms cosine release as [harmonicNote]: a hard cutoff is a broadband
+  // transient that reads as a (false) onset.
+  final ramp = math.min((0.010 * sampleRate).round(), n);
+  for (var i = 0; i < ramp; i++) {
+    out[n - 1 - i] *= 0.5 - 0.5 * math.cos(math.pi * i / ramp);
+  }
+  return out;
+}
+
+/// A strummed chord of [freqs] played as Karplus–Strong strings, each string
+/// starting [strumSpreadSeconds] after the previous one (a down-strum's
+/// low-to-high rake). Each string gets its OWN excitation seed, so the strings
+/// are uncorrelated the way six real strings are — while the whole signal
+/// stays reproducible.
+Float64List karplusStrongChord(
+  List<double> freqs, {
+  double seconds = 1.5,
+  int sampleRate = 44100,
+  double amp = 0.2,
+  double damping = 0.996,
+  double strumSpreadSeconds = 0.012,
+  int seed = 1,
+}) {
+  final step = (strumSpreadSeconds * sampleRate).round();
+  return mixNotes(
+    [
+      for (var i = 0; i < freqs.length; i++)
+        karplusStrongNote(
+          freq: freqs[i],
+          seconds: seconds,
+          sampleRate: sampleRate,
+          amp: amp,
+          damping: damping,
+          seed: seed + i,
+        ),
+    ],
+    startOffsets: [for (var i = 0; i < freqs.length; i++) i * step],
+  );
+}
+
+/// [count] Karplus–Strong strums of the same voicing, [gapSeconds] apart
+/// (onset to onset) — the "sustained chord, re-struck" input the chord latch
+/// is supposed to hold through.
+Float64List karplusStrongStrumPattern(
+  List<double> freqs, {
+  int count = 4,
+  double gapSeconds = 0.6,
+  int sampleRate = 44100,
+  double amp = 0.2,
+  double damping = 0.996,
+  int seed = 1,
+}) {
+  final step = (gapSeconds * sampleRate).round();
+  final parts = <Float64List>[
+    for (var i = 0; i < count; i++)
+      karplusStrongChord(
+        freqs,
+        seconds: gapSeconds * 1.4,
+        sampleRate: sampleRate,
+        amp: amp,
+        damping: damping,
+        seed: seed + i * 100,
+      ),
+  ];
+  return mixNotes(
+    parts,
+    startOffsets: [for (var i = 0; i < count; i++) i * step],
+  );
+}

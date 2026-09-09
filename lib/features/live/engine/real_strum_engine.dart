@@ -7,9 +7,11 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../../../core/audio/mic_capture.dart';
 import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
+import '../domain/recognition/recognition_mode.dart';
 import '../model/live_frame.dart';
 import 'dsp/live_pipeline.dart';
 import 'pcm_ring_buffer.dart';
+import 'recognition_shadow_observer.dart';
 import 'strum_engine.dart';
 
 /// The REAL engine: microphone → DSP isolate (LivePipeline) → LiveFrames.
@@ -19,10 +21,29 @@ import 'strum_engine.dart';
 class RealStrumEngine implements StrumEngine {
   /// [mic] carries the exclusive-session lease (E01-R09): the engine no longer
   /// owns a microphone, it owns a *lease* on the one microphone.
-  RealStrumEngine({required this._mic});
+  ///
+  /// [mode] is a CONSTRUCTION-time property (E14-R30, ADR 0544 D1), not a
+  /// setter: an engine built for free play can never be talked into applying
+  /// a lesson's expected-chord prior. It defaults to [RecognitionMode.free] —
+  /// fail-closed, the regime with no outside influence on the verdict.
+  ///
+  /// [shadowObserverFactory] must be a **top-level or static** function (see
+  /// [RecognitionShadowObserverFactory]): the observer is created INSIDE the
+  /// DSP isolate, because that is where the frames are produced. Null (the
+  /// default) installs the no-op observer, i.e. no shadow work at all.
+  RealStrumEngine({
+    required MicCapture mic,
+    this.mode = RecognitionMode.free,
+    RecognitionShadowObserverFactory? shadowObserverFactory,
+  }) : _mic = mic,
+       _shadowObserverFactory = shadowObserverFactory;
+
+  /// The regime this engine was constructed in (ADR 0544 D1).
+  final RecognitionMode mode;
 
   StreamController<LiveFrame>? _controller;
   final MicCapture _mic;
+  final RecognitionShadowObserverFactory? _shadowObserverFactory;
   Isolate? _isolate;
   SendPort? _toDsp;
   ReceivePort? _fromDsp;
@@ -35,10 +56,16 @@ class RealStrumEngine implements StrumEngine {
   // allocates and appends nothing.
   final PcmRingBuffer _capture = PcmRingBuffer();
 
+  /// E14-R30 (ADR 0544 D2): the label is normalised through
+  /// [ExpectedChordHint.forMode] BEFORE it is retained or sent across the
+  /// isolate boundary, so in [RecognitionMode.free] a hint never leaves this
+  /// method — the DSP isolate is not merely told to ignore it, it is never
+  /// told about it. The pipeline on the other side applies the same filter
+  /// again (defence in depth: neither side trusts the other's mode).
   @override
   void setExpectedChord(String? label) {
-    _expectedChord = label;
-    _toDsp?.send(_ExpectedChord(label));
+    _expectedChord = ExpectedChordHint.forMode(mode, label)?.label;
+    _toDsp?.send(_ExpectedChord(_expectedChord));
   }
 
   @override
@@ -111,6 +138,8 @@ class RealStrumEngine implements StrumEngine {
           sendPort: _fromDsp!.sendPort,
           sampleRate: actualRate,
           crnnWeights: await _liveCrnnWeights(),
+          mode: mode,
+          shadowObserverFactory: _shadowObserverFactory,
         ),
       );
       _fromDsp!.listen((message) {
@@ -168,11 +197,21 @@ class _DspInit {
   const _DspInit({
     required this.sendPort,
     required this.sampleRate,
+    required this.mode,
     this.crnnWeights,
+    this.shadowObserverFactory,
   });
 
   final SendPort sendPort;
   final int sampleRate;
+
+  /// The regime the pipeline inside the isolate is CONSTRUCTED with
+  /// (ADR 0544 D1) — an enum value, so it copies across the boundary.
+  final RecognitionMode mode;
+
+  /// A top-level/static function reference (sendable) that builds the shadow
+  /// observer inside the DSP isolate; null → the no-op observer.
+  final RecognitionShadowObserverFactory? shadowObserverFactory;
 
   /// The live strum model's weights bytes (r169): loaded on the MAIN isolate
   /// (rootBundle doesn't exist in the DSP isolate) and parsed inside. Null →
@@ -217,9 +256,14 @@ class _ExpectedChord {
 }
 
 void _dspEntry(_DspInit init) {
+  final observerFactory = init.shadowObserverFactory;
   final pipeline = LivePipeline(
     sampleRate: init.sampleRate,
     crnnWeights: init.crnnWeights,
+    mode: init.mode,
+    shadowObserver: observerFactory == null
+        ? const NoopRecognitionShadowObserver()
+        : observerFactory(),
   );
   final inbox = ReceivePort();
   init.sendPort.send(inbox.sendPort);

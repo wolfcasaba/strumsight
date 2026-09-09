@@ -20,6 +20,7 @@ class LiveFrame {
     required this.listening,
     this.strumSeq = 0,
     this.latestStrumTime = -1,
+    this.onsetTimeSec = -1,
     this.engineTimeSec = -1,
     this.chordDecision,
     this.chordRejectReason,
@@ -61,6 +62,17 @@ class LiveFrame {
   /// classification delay, so "when the frame arrived" runs 85–165 ms late
   /// with ±40 ms jitter (measured, r145).
   final double latestStrumTime;
+
+  /// The newest detected ONSET's attack instant on the same engine sample
+  /// clock (−1 while none, and for producers that don't detect onsets).
+  ///
+  /// Deliberately NOT the same as [latestStrumTime] (E14-R28, ADR 0545 D2):
+  /// that one only advances for a strum whose DIRECTION was confirmed, so an
+  /// onset the direction model abstained on leaves it untouched. A chord
+  /// change on such a strum is still a chord change on a strum, and the
+  /// onset-alignment gate in `RecognitionStabilizer` must see it — hence a
+  /// separate, classification-independent timestamp.
+  final double onsetTimeSec;
 
   /// This frame's EMIT instant on the same engine sample clock (−1 when the
   /// producer doesn't track it, e.g. mocks). Together with [latestStrumTime]
@@ -165,6 +177,7 @@ class LiveFrame {
       listening: listening ?? this.listening,
       strumSeq: strumSeq,
       latestStrumTime: latestStrumTime,
+      onsetTimeSec: onsetTimeSec,
       engineTimeSec: engineTimeSec,
       chordDecision: chordDecision,
       chordRejectReason: chordRejectReason,

@@ -12,11 +12,71 @@
 /// rounding or epsilon tolerance (D3). This file never opens a file or a
 /// socket — reading the threshold JSON off disk is the CLI's job
 /// (`tool/recognition_report.dart`).
+///
+/// **Stages (E14-R24/R33, ADR 0537/0541).** A threshold entry may declare
+/// which release [RecognitionGateStage] it belongs to and which
+/// [RecognitionGateBand] it constrains, and may be shipped DISABLED. A
+/// disabled entry is INFORMATIONAL: it is still parsed, still evaluated and
+/// still rendered, but it never flips [RecognitionGateVerdict.passed] — and,
+/// crucially, it never LICENSES anything either
+/// (`recognition_rollout_stage.dart`: a stage whose rows are disabled cannot
+/// be reached). That asymmetry is the point: the SDD Ch14 §7.3/§7.5 Beta
+/// targets can live in the file, visible and version-controlled, without
+/// either blocking today's Alpha work or pretending they are met. Omitted
+/// fields default to `stage: alpha`, `band: shared`, `enabled: true`, so
+/// every pre-existing threshold file keeps its exact meaning.
 library;
 
 import 'dart:convert';
 
 import 'recognition_metrics.dart';
+
+/// Which release stage a threshold entry belongs to. The Alpha rows are the
+/// SDD Ch14 §7.2/§7.4 minimums; the Beta rows are the §7.3/§7.5 targets.
+enum RecognitionGateStage {
+  alpha,
+  beta;
+
+  static RecognitionGateStage fromJson(Object? value, String path) =>
+      switch (value) {
+        'alpha' => RecognitionGateStage.alpha,
+        'beta' => RecognitionGateStage.beta,
+        _ => throw RecognitionGateConfigException(
+          RecognitionGateConfigErrorKind.malformedValue,
+          'unknown stage "$value" (expected "alpha" or "beta")',
+          path: path,
+        ),
+      };
+
+  String toJson() => name;
+}
+
+/// Which recognition band a threshold entry constrains. `shared` rows (onset,
+/// latency, coverage, accepted accuracy) constrain BOTH bands — a rollout of
+/// either model is held by them.
+enum RecognitionGateBand {
+  strum,
+  chord,
+  shared;
+
+  static RecognitionGateBand fromJson(Object? value, String path) =>
+      switch (value) {
+        'strum' => RecognitionGateBand.strum,
+        'chord' => RecognitionGateBand.chord,
+        'shared' => RecognitionGateBand.shared,
+        _ => throw RecognitionGateConfigException(
+          RecognitionGateConfigErrorKind.malformedValue,
+          'unknown band "$value" (expected "strum", "chord" or "shared")',
+          path: path,
+        ),
+      };
+
+  String toJson() => name;
+
+  /// Whether a rollout of [target] is constrained by a row of this band.
+  bool constrains(RecognitionGateBand target) =>
+      this == RecognitionGateBand.shared || this == target;
+}
 
 enum RecognitionGateConfigErrorKind {
   malformedValue,
@@ -121,7 +181,65 @@ recognitionMetricExtractors =
         higherIsBetter:
             metrics.chordUnknownFalseAccept.definition.higherIsBetter,
       ),
+      // Per-direction F1 (SDD Ch14 §7.3 Beta rows). These read the SAME
+      // per-label block the macro average is built from — no new
+      // measurement, no second definition of "down F1". A label the report
+      // never saw yields a `null` value, i.e. a fail-closed finding.
+      'directionF1.perLabel.down.f1': (metrics) =>
+          _perLabelSample(metrics.directionF1, 'down'),
+      'directionF1.perLabel.up.f1': (metrics) =>
+          _perLabelSample(metrics.directionF1, 'up'),
+      // Weakest SUPPORTED chord recall (SDD Ch14 §7.4/§7.5): the minimum
+      // per-label recall over the chord labels that actually occur in the
+      // ground truth, excluding the two reserved evaluation labels
+      // (`noChord`, `unknown`) — they are scored by their own metrics
+      // (`chordNoChordF1`, `chordUnknownFalseAccept`) and are not chord
+      // classes. Derived, never separately measured.
+      'chordMacroF1.weakestSupportedRecall': _weakestSupportedChordRecall,
     };
+
+/// Reads one label's F1 out of a macro-F1 block, keeping the direction from
+/// that label's own definition. A label absent from [macro] is `null` — the
+/// gate then fails closed on it, which is the correct reading of "the report
+/// never saw an up-strum".
+RecognitionMetricSample _perLabelSample(
+  RecognitionMacroF1 macro,
+  String label,
+) {
+  final entry = macro.perLabel[label];
+  return RecognitionMetricSample(
+    value: entry?.f1,
+    higherIsBetter:
+        entry?.definition.higherIsBetter ?? macro.definition.higherIsBetter,
+  );
+}
+
+/// The two labels `recognition_metrics.dart` reserves inside the chord label
+/// space: they are answers ABOUT chords, not chord classes, so they never
+/// enter the "weakest supported chord" statistic.
+const Set<String> reservedChordEvaluationLabels = <String>{
+  'noChord',
+  'unknown',
+};
+
+RecognitionMetricSample _weakestSupportedChordRecall(
+  RecognitionMetrics metrics,
+) {
+  double? weakest;
+  for (final entry in metrics.chordMacroF1.perLabel.entries) {
+    if (reservedChordEvaluationLabels.contains(entry.key)) continue;
+    final label = entry.value;
+    // Support = the label actually occurs in the ground truth.
+    if (label.truePositives + label.falseNegatives == 0) continue;
+    final recall = label.recall;
+    if (recall == null) continue;
+    if (weakest == null || recall < weakest) weakest = recall;
+  }
+  return RecognitionMetricSample(
+    value: weakest,
+    higherIsBetter: metrics.chordMacroF1.definition.higherIsBetter,
+  );
+}
 
 /// A single metric reading pulled off a [RecognitionMetrics] instance:
 /// [value] is `null` exactly when the underlying ratio/scalar had nothing to
@@ -151,16 +269,35 @@ final class RecognitionGateThresholdEntry {
     required this.metricPath,
     required this.threshold,
     this.label,
+    this.stage = RecognitionGateStage.alpha,
+    this.band = RecognitionGateBand.shared,
+    this.enabled = true,
   });
 
   final String metricPath;
   final double threshold;
   final String? label;
 
+  /// Defaults to [RecognitionGateStage.alpha] so a file written before
+  /// E14-R24 keeps its exact meaning.
+  final RecognitionGateStage stage;
+
+  /// Defaults to [RecognitionGateBand.shared] — a row that does not say
+  /// which band it belongs to constrains BOTH, which is the fail-closed
+  /// reading.
+  final RecognitionGateBand band;
+
+  /// `false` ships the row as INFORMATIONAL: evaluated and rendered, but it
+  /// neither fails the verdict nor licenses a rollout stage.
+  final bool enabled;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'metricPath': metricPath,
     'threshold': threshold,
     'label': label,
+    'stage': stage.toJson(),
+    'band': band.toJson(),
+    'enabled': enabled,
   };
 }
 
@@ -191,6 +328,9 @@ final class RecognitionGateFinding {
     required this.value,
     required this.passed,
     required this.reason,
+    required this.stage,
+    required this.band,
+    required this.enabled,
   });
 
   final String metricPath;
@@ -198,6 +338,13 @@ final class RecognitionGateFinding {
   final String thresholdsVersion;
   final double threshold;
   final bool higherIsBetter;
+  final RecognitionGateStage stage;
+  final RecognitionGateBand band;
+
+  /// Copied from the entry: `false` means this finding is informational —
+  /// it does not gate [RecognitionGateVerdict.passed] and cannot license a
+  /// rollout stage.
+  final bool enabled;
 
   /// `null` exactly when the metric was missing/unavailable (denominator or
   /// sample count zero) — in which case [passed] is always `false`.
@@ -214,11 +361,17 @@ final class RecognitionGateFinding {
     'value': value,
     'passed': passed,
     'reason': reason,
+    'stage': stage.toJson(),
+    'band': band.toJson(),
+    'enabled': enabled,
   };
 }
 
-/// The overall gate outcome: [passed] is `true` only when every finding
-/// passed — one missing or below-threshold metric fails the whole gate.
+/// The overall gate outcome: [passed] is `true` only when every ENABLED
+/// finding passed — one missing or below-threshold metric fails the whole
+/// gate. Disabled (informational) findings are reported in [findings] but
+/// never change [passed]; they also never license anything
+/// (`recognition_rollout_stage.dart`).
 final class RecognitionGateVerdict {
   const RecognitionGateVerdict({
     required this.schemaVersion,
@@ -232,6 +385,14 @@ final class RecognitionGateVerdict {
   final bool passed;
   final List<RecognitionGateFinding> findings;
 
+  /// The findings that actually gate the verdict.
+  Iterable<RecognitionGateFinding> get enabledFindings =>
+      findings.where((finding) => finding.enabled);
+
+  /// The findings that are shipped for visibility only.
+  Iterable<RecognitionGateFinding> get informationalFindings =>
+      findings.where((finding) => !finding.enabled);
+
   Map<String, Object?> toJson() => <String, Object?>{
     'schemaVersion': schemaVersion,
     'thresholdsVersion': thresholdsVersion,
@@ -242,8 +403,35 @@ final class RecognitionGateVerdict {
   };
 }
 
+/// Total order over threshold entries: `metricPath` first (the contract the
+/// findings' order has always had), then stage/band/enabled/threshold so a
+/// file carrying the SAME metric at two stages (an Alpha minimum and a Beta
+/// target) still sorts deterministically. `List.sort` is not stable, so the
+/// tie-breakers are load-bearing, not decoration.
+int _compareEntries(
+  RecognitionGateThresholdEntry a,
+  RecognitionGateThresholdEntry b,
+) {
+  final byPath = a.metricPath.compareTo(b.metricPath);
+  if (byPath != 0) return byPath;
+  final byStage = a.stage.index.compareTo(b.stage.index);
+  if (byStage != 0) return byStage;
+  final byBand = a.band.index.compareTo(b.band.index);
+  if (byBand != 0) return byBand;
+  final byEnabled = (a.enabled ? 0 : 1).compareTo(b.enabled ? 0 : 1);
+  if (byEnabled != 0) return byEnabled;
+  return a.threshold.compareTo(b.threshold);
+}
+
 const _rootKeys = <String>{'schemaVersion', 'thresholdsVersion', 'thresholds'};
-const _entryKeys = <String>{'metricPath', 'threshold', 'label'};
+const _entryKeys = <String>{
+  'metricPath',
+  'threshold',
+  'label',
+  'stage',
+  'band',
+  'enabled',
+};
 const _directionKeys = <String>{'higherIsBetter', 'direction', '>=', '<='};
 
 /// Parses [RecognitionGateThresholds] and evaluates them against a
@@ -290,7 +478,7 @@ final class RecognitionReleaseGate {
           _asMap(rawEntries[i], 'thresholds.thresholds[$i]'),
           'thresholds.thresholds[$i]',
         ),
-    ]..sort((a, b) => a.metricPath.compareTo(b.metricPath));
+    ]..sort(_compareEntries);
     return RecognitionGateThresholds(
       schemaVersion: schemaVersion,
       thresholdsVersion: thresholdsVersion,
@@ -319,10 +507,27 @@ final class RecognitionReleaseGate {
     final label = json['label'] == null
         ? null
         : _asString(json['label'], '$path.label');
+    final stage = json['stage'] == null
+        ? RecognitionGateStage.alpha
+        : RecognitionGateStage.fromJson(json['stage'], '$path.stage');
+    final band = json['band'] == null
+        ? RecognitionGateBand.shared
+        : RecognitionGateBand.fromJson(json['band'], '$path.band');
+    final rawEnabled = json['enabled'];
+    if (rawEnabled != null && rawEnabled is! bool) {
+      throw RecognitionGateConfigException(
+        RecognitionGateConfigErrorKind.malformedValue,
+        'expected a boolean',
+        path: '$path.enabled',
+      );
+    }
     return RecognitionGateThresholdEntry(
       metricPath: metricPath,
       threshold: threshold,
       label: label,
+      stage: stage,
+      band: band,
+      enabled: rawEnabled == null ? true : rawEnabled as bool,
     );
   }
 
@@ -340,7 +545,9 @@ final class RecognitionReleaseGate {
     return RecognitionGateVerdict(
       schemaVersion: thresholds.schemaVersion,
       thresholdsVersion: thresholds.thresholdsVersion,
-      passed: findings.every((finding) => finding.passed),
+      passed: findings
+          .where((finding) => finding.enabled)
+          .every((finding) => finding.passed),
       findings: findings,
     );
   }
@@ -377,6 +584,9 @@ final class RecognitionReleaseGate {
         higherIsBetter: sample.higherIsBetter,
         value: null,
         passed: false,
+        stage: entry.stage,
+        band: entry.band,
+        enabled: entry.enabled,
         reason:
             'metric "${entry.metricPath}" is missing (null: zero '
             'denominator or zero sample) — a missing metric fails closed',
@@ -394,6 +604,9 @@ final class RecognitionReleaseGate {
       higherIsBetter: sample.higherIsBetter,
       value: value,
       passed: passed,
+      stage: entry.stage,
+      band: entry.band,
+      enabled: entry.enabled,
       reason: passed
           ? '$value ${sample.higherIsBetter ? '>=' : '<='} '
                 '${entry.threshold} (thresholdsVersion '

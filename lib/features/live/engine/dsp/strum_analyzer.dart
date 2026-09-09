@@ -111,6 +111,16 @@ class StrumAnalyzer {
   /// round 138). Reset every [process] call.
   bool onsetJustFired = false;
 
+  /// Attack instant of the most recent CONFIRMED onset on the analyzer's own
+  /// sample clock (seconds; −1 before the first one). Stamped exactly like
+  /// [StrumEvent.timeSec], but recorded the moment the onset fires — BEFORE
+  /// classification — so it exists even for an onset whose direction is later
+  /// rejected or suppressed. E14-R28 (ADR 0545 D2) needs "an onset happened",
+  /// not "a strum with a confirmed direction happened": a chord change on a
+  /// strum the direction model abstained on is still a chord change on a
+  /// strum.
+  double lastOnsetSec = -1;
+
   double get _frameSec => hop / sampleRate;
 
   /// Push the next [window]-sample frame (advanced by [hop]); returns a
@@ -153,7 +163,9 @@ class StrumAnalyzer {
     final onsetSec = _onsets.processFrame(frame);
     onsetJustFired = onsetSec != null;
     if (onsetSec != null) {
-      _pendingOnsets.addLast((onsetSec * sampleRate / hop).round());
+      final onsetFrame = (onsetSec * sampleRate / hop).round();
+      _pendingOnsets.addLast(onsetFrame);
+      lastOnsetSec = (onsetFrame + _attackOffsetFrames) * _frameSec;
     }
 
     // Classify once enough post-onset evidence has accumulated (chunk 006).
