@@ -1,5 +1,8 @@
 # E18-R01 — Emulátoros tesztjelentés (A + B rész)
 
+**→ Ha csak egy dolgot olvasol el: a „FEJLESZTENDŐ — a következő kör teendői"
+szakasz a jelentés VÉGÉN van (F1–F13, fontossági sorrendben).**
+
 > **Terv:** [`docs/rounds/e18-r01-emulator-test-plan.md`](../rounds/e18-r01-emulator-test-plan.md)
 > **Ág:** `claude/song-editor-chord-audio-tbkokz` · **HEAD a méréskor:** `70c21acd`
 > **Dátum:** 2026-09-09 · **Gazdagép:** a felhasználó Windows-laptopja (NEM az Oracle VM)
@@ -533,3 +536,161 @@ pirosra, tehát a tesztek valóban fognak.
 
 **A kör NEM okozta a fenti négy leletet.** A jelentés a merge előtti
 teljes-app ellenőrzés eredménye, nem a kör minősítése.
+
+## §7b — Loopback-mérés: a felismerés MÉGIS mérhető lett
+
+A §7 akusztikus útja nem jött össze, ezért a terv §7 **3. opcióját** (belső
+loopback) állítottam be, és így a felismerés mérhetővé vált.
+
+### A mérőlánc
+
+| Elem | Beállítás |
+|---|---|
+| Hangforrás | **Wikimedia Commons, közkincs, valódi akusztikus gitár**: `A-major.ogg` … `G-major.ogg` („The chord of X major played on an acoustic guitar"). MP3-transzkód (64 kbps, 44,1 kHz sztereó), mert a gazdagépen nincs OGG-dekóder. |
+| Lejátszás | `System.Windows.Media.MediaPlayer`, akkordonként 6 ismételt pengetés |
+| Loopback | Windows felvevő alapeszköz = **Stereomix (Realtek)** — `AudioDeviceCmdlets` modullal állítva |
+| Szintek | felvétel 70 %, lejátszás 70 % |
+| Emulátor | `-allow-host-audio` |
+| Mérés | `uiautomator` akadálymentességi fa: a `"<X> chord diagram"` node adja a felismert akkordot |
+
+### L2 — akkordfelismerés (tiszta indulás akkordonként)
+
+Minden akkord előtt `am force-stop` + újranyitott Live, hogy a beragadt kártya
+(F5 lent) ne szennyezze a mérést.
+
+| Játszott | Elsőként felismert | Összes találat | Ítélet |
+|---|---|---|---|
+| C | **C** | C×5 | **HELYES** |
+| G | – | – | nem ismerte fel |
+| D | – | – | nem ismerte fel |
+| E | – | – | nem ismerte fel |
+| A | **A** | A×2 | **HELYES** |
+
+**Eredmény: 2/5 helyes, 3 felismerés nélkül, 0 TÉVES.**
+
+- **Pontosság (precision): 2/2 = 100 %** — amikor állít valamit, az helyes. Tiszta
+  indulásból egyetlen hamis akkordot sem mondott. Ez megfelel az `AGENTS.md` §5
+  „gyenge konfidencia sosem biztos állítás" elvárásának.
+- **Találati arány (recall): 2/5 = 40 %** — a terv §9/L2 mércéje „8-ból legalább
+  7 helyes", ezt **NEM éri el**.
+- A helyes találatoknál a fogásábra is jó volt (C = `x 3 2 0 1 0`).
+
+**A mérés korlátai — ezt a számot NEM szabad a valódi gitáros teljesítménynek
+tekinteni:** 64 kbps MP3-transzkód, digitális loopback több erősítési fokozaton
+át, emulátoros újramintavételezés. A `CLAUDE.md` szerint a végső mérce a
+felhasználó valódi, gitáros APK-tesztje. Ez a mérés arra jó, hogy a felismerés
+egyáltalán MŰKÖDIK, és hogy a hiánya nem hamis állításban, hanem hallgatásban
+jelentkezik.
+
+## FEJLESZTENDŐ — a következő kör teendői
+
+A felhasználó kérésére összegyűjtve, fontossági sorrendben. Egyik sincs
+javítva ebben a körben (ADR 0055).
+
+### P1 — Valódi hibák, a felhasználót közvetlenül érintik
+
+**F1. Az AI-tutor tudásanyag nem kerül be az APK-ba.**
+`pubspec.yaml` → `assets: - assets/tutor_knowledge/` — a Flutter könyvtár-
+deklarációja NEM rekurzív, ezért az `en/` és `hu/` alatti 10 dokumentum
+kimarad; csak a `manifest.json` kerül be. Valós eszközön minden indításkor
+`tutorKnowledge.indexLoad.assetReadFailure`.
+*Teendő:* vedd fel külön az `assets/tutor_knowledge/en/` és
+`assets/tutor_knowledge/hu/` sorokat. **Plusz egy őr**, ami a lefordított
+`AssetManifest`-et méri, ne a fájlrendszert — a mostani tesztek azért nem
+fogták meg, mert azok `tool/build_tutor_knowledge_manifest.dart`-tal a lemezről
+olvasnak. (Részletek: B1 szakasz.)
+
+**F2. A Live akkord-kártyája BERAGAD.**
+A legutóbb felismert akkord kint marad a **87 %-os konfidencia-sávval együtt**
+akkor is, amikor már más szól, vagy amikor a banner épp azt írja, hogy
+„No chord detected yet" / „Not quite clear". Mérve: G, D és E lejátszása alatt
+végig a korábbi `C` kártya látszott 87 %-kal.
+*Miért fontos:* ez az egyetlen pont, ahol a termék MAGABIZTOSAN ÁLLÍT valamit,
+ami nem igaz — szemben az `AGENTS.md` §5-tel. A felhasználó ezt „beragadt, csak
+C-t mutat"-ként észlelte.
+*Teendő:* a kártyának le kell járnia (elhalványulás / törlés), amint a
+konfidencia elavul; és amíg a banner „nincs felismerés"-t mond, ne legyen kint
+konfidencia-szám.
+
+**F3. Az irány- és konfidencia-kijelző beragadt értéken áll.**
+A `Down/Up 87%` érték a mérés egésze alatt **változatlanul 87 %** volt, és az
+irány sem követte a jelet. Gyanú: ugyanaz a beragadás, mint F2, vagy egy fix
+alapérték.
+*Teendő:* ellenőrizd, hogy a konfidencia valóban a mért jelből jön-e.
+
+**F4. A rendszer-back kilépteti az appot.**
+Practice hub → bármelyik Quick tool (Metronome, Chord library, Tuner, Live),
+majd rendszer-back → az app bezárul a hub helyett. 4/4 reprodukálva; a Profil
+alatti `Library`-re is igaz. Ezekről a képernyőkről az alsó tab-ra koppintás sem
+navigál vissza — gyök-szintű útvonalként viselkednek.
+*Teendő:* push-olt route-ként kezeld őket, vagy kezeld a back-et a shellben.
+
+**F5. A Library nem tölt be.**
+`Profile → Library` → „**Couldn't load your library. Try again.**" hibaállapot
+(fülek: All / Practice / Analysis / Song / Setlist megvannak). Kivétel nincs a
+konzolon.
+
+**F6. A cél-alapú gyakorlás-belépő nem működik.**
+`Practice hub → Browse by goal → Chords` → „**Practice unavailable — This
+practice isn't available.**" A „Start recommended practice" út viszont ÉL, tehát
+csak a cél-alapú útvonal hiányos.
+
+**F7. A mikrofon-hiba néma, üres képernyőre visz.**
+A V2 practice-session `audio.capture_failed` esetén szó nélkül a „Practice
+result — No result to show. Finish a practice session to see the breakdown."
+képernyőre navigál. A felhasználó azt hiszi, ő nem fejezte be a gyakorlást,
+holott a felvétel bukott el.
+*Teendő:* kimondott hiba + újrapróbálkozás, ahogy a Tuner is csinálja
+(„Couldn't start the microphone. It may be in use by another app. Tap Retry." —
+ez a minta JÓ, ezt kell átvenni).
+
+**F8. A V2 dalszerkesztő elérhetetlen.**
+`SongEditorScreen` a `songTrainerV2Enabled` flag mögött van, és a belépője a
+Learn lecke-listáról nyílna, ahová a jelenlegi négy-tabos shellből nem lehet
+eljutni. A reachability-mérő ezt nem fogja meg, mert a KÓDBELI `push` hívást
+méri, nem a tényleges navigálhatóságot.
+*Teendő:* vagy adj belépőt a shellből, vagy a reachability-mérő mérje a valódi
+navigálhatóságot is.
+
+### P2 — A felismerés (a felhasználó fő kérése)
+
+**F9. Találati arány: 2/5.** Loopback-méréssel C és A helyes, G, D és E
+**egyáltalán nem ismerte fel**. Téves állítás nem volt.
+*Teendő:* a hiány a RECALL oldalon van, nem a precízión — vagyis nem
+„félreismer", hanem „nem szólal meg". Érdemes a küszöböt/onset-detektálást
+megnézni éppen ezekre az akkordokra. **Fontos:** ezt a 2/5-öt valódi gitárral
+újra kell mérni, mielőtt bármit hangolsz — a mostani szám 64 kbps MP3
+loopbacken keletkezett, ami önmagában ronthat.
+
+**F10. A bemeneti szint kijelző nem használható.**
+Vagy 0 %-on, vagy 100 %-on ragad, a felvételi hangerőtől függetlenül
+(100/60/30/10 %-on is végig 100 %). Így a felhasználó nem tudja beállítani a
+távolságot/hangerőt — pedig a banner épp azt kéri tőle, hogy „menj közelebb".
+
+### P3 — Kisebb, mért
+
+**F11. Az előnézet a képernyő elhagyása után még egy ütést lejátszik.**
+Back után +396 ms-mal még egy pengetés, teljes csend +692 ms-nál. Valószínűleg
+a route-átmenet alatt fut tovább a timer.
+
+**F12. Windows-on nem futtatható a teszt-suite.**
+A teljes `flutter test` 203 pirosat ad ezen a gazdagépen (CI-n 0). Okok:
+POSIX fájlmód/symlink cellák, backslash-es útvonal-illesztés, linuxon generált
+pixel-goldenek. Ha a felhasználó gépén is futtatható suite a cél, ezeket
+platform-érzékennyé kell tenni (skip vagy normalizálás).
+*Külön:* a repó ékezetes útvonala (`gitár trainer`) összeomlasztja a
+`flutter analyze` analysis serverét (exit 255) — ezt legalább dokumentálni kell
+a fejlesztői setupban.
+
+### P4 — Terméktervezési döntés (NEM hiba)
+
+**F13. A „miért nem sikerült" bannerek mennyisége.**
+A felhasználó kérése szó szerint: *„ez a sok felirat hogy rossz a minőség nem
+kell, elég az equalizer jelzés"*. A jelenlegi viselkedés SZÁNDÉKOS: a terv
+§9/L5–L6 megköveteli a hat okot megnevező bannert, az `AGENTS.md` §5 pedig azt,
+hogy a hiba legyen kimondva.
+*Teendő, ha a döntés a visszavétel:* előbb az `AGENTS.md` §5-öt és a teszt-
+cellákat (L5, L6) kell átírni, különben a gépi mérce mond ellent a terméknek.
+**Megjegyzés:** az F2 (beragadt kártya) megoldása részben orvosolja a panaszt —
+ha a kártya eltűnik jel hiányában, kevesebb magyarázó szövegre van szükség,
+mert nem áll ott egy hamis állítás, amit magyarázni kell.
