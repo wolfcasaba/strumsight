@@ -314,5 +314,7 @@ plusz a CI-run linkje a brief §10-be.
 
 | — | **ÚJ (CI-lelet, 2. futás)** | 2 piros a log-plafon mögött → `song_flow_test` chip-tap cellái érik el a valódi `audioplayers`-t widget-tesztben; fake-injektálás a `_app()` helperbe (brief §0.0.1 R7), állítás nem változott |
 
+| — | **ÚJ (CI-lelet, bisect)** | A7 valódi hibát fogott: a preview vége egy ütemmel későn jelentett (dupla kicsengés-várakozás) — javítva; a hu `@songChordHear` metaadat-eltérés (a fa egyetlen ilyenje) — javítva (brief §0.0.1 R8) |
+
 A javítások független újra-ellenőrzése (ADR 0055) a user boxán vagy egy
 következő review-sessionben esedékes; a CI-run az egyetlen gépi bizonyíték.
