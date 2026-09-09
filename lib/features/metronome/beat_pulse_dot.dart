@@ -112,6 +112,19 @@ final class _BeatPulseDotState extends State<BeatPulseDot>
   @override
   Widget build(BuildContext context) {
     if (!widget.playing) return _dot(color: widget.mutedColor, scale: 1);
+    // E14-R39 — reduced motion. The pulse is FUNCTIONAL feedback (it says
+    // where the beat is), so it is de-animated, never removed: no scale, but
+    // the colour still steps with the beat, quantized to the first/second
+    // half so it reads as a discrete state change (ADR 0274 §5.1 — the same
+    // rule `SsBeatPulse` already implements, which this widget did not).
+    // The off-beat tone is a dimmed brand, distinct from [mutedColor] —
+    // otherwise the second half of every beat would be pixel-identical to
+    // "not playing".
+    if (SsMotionScope.reduceMotionOf(context)) {
+      final onBeat = _phase < 0.5;
+      final offBeat = Color.lerp(widget.mutedColor, widget.color, 0.45)!;
+      return _dot(color: onBeat ? widget.color : offBeat, scale: 1);
+    }
     final scale = 1 + (1 - _phase) * 0.3;
     return _dot(color: widget.color, scale: scale);
   }

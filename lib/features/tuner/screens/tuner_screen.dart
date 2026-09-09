@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../core/design_system/public.dart';
 import '../../../core/music/guitar_strings.dart';
 import '../../../core/music/tuning.dart';
@@ -15,7 +17,9 @@ import '../../../core/widgets/mic_error_banner.dart';
 import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../live/public.dart';
+import '../../practice/public.dart' show practiceCatalogProvider;
 import '../../settings/public.dart';
+import '../../today/public.dart';
 import '../model/in_tune_lock.dart';
 import '../model/tuner_reading.dart';
 import '../model/tuner_stability.dart';
@@ -80,6 +84,24 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
   void _onAppLifecycle(AppLifecycleState state) {
     if (!mounted || state != AppLifecycleState.resumed) return;
     unawaited(ref.read(micPermissionProvider.notifier).refresh());
+  }
+
+  /// Step 1 → step 2 of the "10 useful minutes" chain (E14-R36, ADR 0546).
+  ///
+  /// Commits the advance and goes straight to the exercise the Today hub
+  /// would have opened — the chain is ONE guided flow, so the player never
+  /// has to walk back to Today to find the next link. The destination is
+  /// resolved by the shared `tenMinuteStepLocation` rule, so the tuner can
+  /// never send the user somewhere the hub would not.
+  void _continueTenMinuteFlow(BuildContext context) {
+    final location = tenMinuteStepLocation(
+      TenMinuteStep.play,
+      practiceEngineEnabled:
+          ref.read(appConfigProvider).flags.practiceEngineV2Enabled,
+      catalog: ref.read(practiceCatalogProvider),
+    );
+    ref.read(tenMinuteFlowProvider.notifier).advance(from: TenMinuteStep.tune);
+    if (location != null) context.go(location);
   }
 
   @override
@@ -171,6 +193,13 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
       inTune: displayInTune,
       unstable: _unstable,
     );
+    // E14-R36 — the "10 useful minutes" chain's first link. Only the STEP is
+    // read here: the interruption rule (`resolveTenMinuteFlow`) belongs to
+    // the Today hub, which owns the clock and the measured active-time
+    // reading. A tuner opened on its own sees `null` and renders exactly
+    // what it always did.
+    final tenMinuteFlow = ref.watch(tenMinuteFlowProvider);
+    final inTuneStep = tenMinuteFlow?.step == TenMinuteStep.tune;
     String tuningName(Tuning t) => switch (t.id) {
       'dropD' => l10n.tunerTuningDropD,
       'halfStepDown' => l10n.tunerTuningHalfStepDown,
@@ -321,6 +350,30 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
       bottomAction: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // The chain hand-off: tuning is step 1, and the ONLY thing that
+          // ends it is the player saying so. Nothing here guesses that six
+          // strings are in tune — an in-tune lock on one string is not
+          // evidence about the other five (Ch14 §9).
+          if (inTuneStep && tenMinuteFlow != null) ...[
+            Text(
+              l10n.tunerTenMinuteStepLabel(
+                tenMinuteFlow.stepNumber,
+                tenMinuteFlow.stepCount,
+              ),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: palette.muted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            FilledButton(
+              key: const ValueKey('tuner-ten-minute-continue'),
+              onPressed: () => _continueTenMinuteFlow(context),
+              child: Text(l10n.tunerTenMinuteContinueCta),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (pinned != null)
             IconButton(
               tooltip: l10n.tunerPlayReference,
