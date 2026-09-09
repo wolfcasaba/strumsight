@@ -198,7 +198,8 @@ shows, strummed: `ChordShapes.forLabel` frets → `ChordVoicing.frequencies`
 (Karplus–Strong per string, fixed-seed LCG excitation so output is
 byte-deterministic, 18 ms per-string stagger — **down = low→high, up =
 high→low**, the same ↓/↑ meaning the detector uses). No diagram → the C3
-chord tones (`ChordAudio.frequencies`); unparseable label → silence, never a
+chord tones (`ChordAudio.frequencies`, gated by `ChordAudio.hasKnownQuality`); an
+unparseable label or an unknown quality suffix (`Cdim`) → silence, never a
 guessed major triad. Route-scoped `chordAuditionProvider` (autodispose,
 **watched** from `build`) so nothing rings after leaving the editor; no
 microphone lease involved. The legacy builder also has a **Preview**

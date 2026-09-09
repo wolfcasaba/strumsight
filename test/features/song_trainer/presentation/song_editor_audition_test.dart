@@ -126,8 +126,7 @@ final class _BackingPicker implements FilePickerAdapter {
 
 void main() {
   testWidgets(
-    'adding a chord strums it once; the hear-chord button strums again '
-    'without adding a second event',
+    'adding a chord strums it exactly once and adds exactly one event',
     (tester) async {
       final repository = InMemorySongRepository();
       final assetRepository = _RecordingAssetRepository();
@@ -161,13 +160,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fake.strummed, ['Dm']);
-
-      final hear = find.byKey(const Key('song-editor-hear-chord'));
-      await tester.ensureVisible(hear);
-      await tester.tap(hear);
-      await tester.pumpAndSettle();
-
-      expect(fake.strummed, ['Dm', 'Dm']);
 
       final controller = container.read(
         songEditorControllerProvider(SongId('editor-audition')),

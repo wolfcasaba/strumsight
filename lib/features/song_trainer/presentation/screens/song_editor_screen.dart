@@ -357,10 +357,12 @@ final class _EditorBody extends ConsumerWidget {
             onAddChord: (measureIndex, symbol) {
               controller.addChord(measureIndex: measureIndex, symbol: symbol);
               // Composing by ear: the chord just written is heard as its
-              // strummed fingering (ADR 0535 D1).
+              // strummed fingering (ADR 0535 D1, D4). A separate "hear
+              // again" control is deferred: it would move the E13-R24 pixel
+              // golden of this screen, which only the user's box can
+              // regenerate (brief §0.0).
               unawaited(audition.strum(symbol));
             },
-            onAuditionChord: (symbol) => unawaited(audition.strum(symbol)),
             onApplyPattern: (measureIndex, pattern) =>
                 controller.applyStrumPattern(
                   measureIndex: measureIndex,

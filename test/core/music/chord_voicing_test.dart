@@ -18,6 +18,11 @@ void main() {
       expect(ChordVoicing.midiNotes(const [0, 2, 2, 1, 0, 0]), expected);
     });
 
+    test('six open strings sound the standard tuning itself', () {
+      const expected = [40, 45, 50, 55, 59, 64];
+      expect(ChordVoicing.midiNotes(const [0, 0, 0, 0, 0, 0]), expected);
+    });
+
     test('an all-muted fingering sounds nothing', () {
       expect(ChordVoicing.midiNotes(const [-1, -1, -1, -1, -1, -1]), isEmpty);
     });

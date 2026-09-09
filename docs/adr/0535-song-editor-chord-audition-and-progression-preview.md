@@ -42,8 +42,11 @@ kell, amit a gitár fog adni.
    megszólaló húr, mély→magas, `AuditionSource.fingering`);
 2. nincs diagram → `ChordAudio.frequencies(label)` (akkordhangok C3 körül,
    `AuditionSource.chordTones`);
-3. nem értelmezhető címke → `AuditionSource.none`, **nem szól semmi** (nem
-   találgatunk).
+3. nem értelmezhető címke — ismeretlen alaphang VAGY ismeretlen
+   minőség-utótag (`Cdim`, `C5`) — → `AuditionSource.none`, **nem szól semmi**
+   (nem találgatunk; a `ChordAudio.frequencies` dúr-hármas helyettesítése a
+   jam-padé marad, az audition a `ChordAudio.hasKnownQuality` kapuján át
+   kérdezi).
 
 A szintézis Karplus–Strong pengetett húr (`lib/core/audio/synth/plucked_string_synth.dart`):
 zajlöket egy `sr/f` hosszú késleltető hurokban, kéttagú átlagoló szűrővel —
@@ -89,9 +92,12 @@ A „játszd el gitárral" út továbbra is a `LearnScreen` (chunk 014).
 ### D4 — Mindkét szerkesztő ugyanazt a kontraktust fogyasztja
 
 A legacy `SongBuilderScreen` (chip-tap = hallás; add-chip = hozzáad ÉS hall;
-`Preview` transport) és a V2 `SongEditorScreen` (`onAddChord` hallat; külön
-„Hear chord" gomb a mezőhöz) egyaránt a `learn/public.dart` felületén
-exportált `ChordAudition`-t használja. A `song_trainer` → `learn` él ÚJ, a
+`Preview` transport a menet fejlécsorában, ikon-gombként) és a V2
+`SongEditorScreen` (`onAddChord` hallat) egyaránt a `learn/public.dart`
+felületén exportált `ChordAudition`-t használja. A V2 külön „hallgasd meg
+újra" gombja szándékosan a következő, a user boxán futó körre marad: a
+képernyő pixel-goldenjét (`e13_r24_song_editor_*`) mozdítaná, amit a remote
+konténer nem tud újragenerálni (brief §0.0.1 R2). A `song_trainer` → `learn` él ÚJ, a
 meglévő szabály szerint kizárólag `public.dart`-ra mutat.
 
 ### D5 — Az akkordkönyvtár tap-to-hear NEM változik ebben a körben
@@ -107,9 +113,8 @@ kör (follow-up a fejezet-tervben), nem „mellékes" refaktor (AGENTS §4).
   `lib/features/learn/audio/chord_audition.dart`,
   `lib/features/learn/providers/chord_audition_provider.dart`,
   `lib/features/songs/application/song_preview_player.dart`.
-- Öt ARB-kulcs (`songChordHear`, `songPreviewPlay`, `songPreviewStop`,
-  `songPreviewHint`, `songEditorHearChord`) a FORRÁS szegmensben, az
-  aggregátum generálva (ADR 0307 §4).
+- Három ARB-kulcs (`songChordHear`, `songPreviewPlay`, `songPreviewStop`) a
+  FORRÁS szegmensben, az aggregátum generálva (ADR 0307 §4).
 - Memória: legfeljebb 24 gyorsítótárazott pengetés × ~140 KB (1,6 s @ 44,1 kHz)
   — a `Backing` korlátjának mintája.
 - Nem változik: detektor-DSP, `ChordAudio`/`Backing`, a Learn jam-mód, a

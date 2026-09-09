@@ -3,15 +3,24 @@ import 'package:strumsight/core/audio/synth/plucked_string_synth.dart';
 
 String _tag(List<int> b, int o) => String.fromCharCodes(b.sublist(o, o + 4));
 
-/// Zero crossings over [samples] → an estimated frequency, used to check
-/// `pluck` actually rings at (roughly) the requested pitch rather than just
-/// "some periodic-ish noise".
-double _estimatedHz(List<double> samples, double windowSeconds) {
-  var crossings = 0;
-  for (var i = 1; i < samples.length; i++) {
-    if ((samples[i - 1] >= 0) != (samples[i] >= 0)) crossings++;
+/// The period (in samples) with the strongest autocorrelation in
+/// [minLag]…[maxLag] — the honest pitch estimate for a Karplus–Strong string,
+/// whose upper partials outlive a zero-crossing count (measured: zero
+/// crossings reported ~1158 Hz for a 220 Hz pluck on the CI run).
+int _bestLag(List<double> samples, {required int minLag, required int maxLag}) {
+  var best = minLag;
+  var bestScore = double.negativeInfinity;
+  for (var lag = minLag; lag <= maxLag; lag++) {
+    var score = 0.0;
+    for (var i = lag; i < samples.length; i++) {
+      score += samples[i] * samples[i - lag];
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = lag;
+    }
   }
-  return crossings / 2 / windowSeconds;
+  return best;
 }
 
 void main() {
@@ -33,11 +42,12 @@ void main() {
       }
       expect(peak, lessThanOrEqualTo(0.5 + 1e-9));
 
-      // Karplus–Strong period = round(sr/f); the transient dies out well
-      // before 0.8 s of ringing, so measuring the tail is the honest check.
-      const windowSeconds = 0.8;
-      final windowStart = out.length - (windowSeconds * sampleRate).round();
-      final estimatedHz = _estimatedHz(out.sublist(windowStart), windowSeconds);
+      // Karplus–Strong period = round(sr/f) = 200 samples (220.5 Hz). The
+      // search window brackets one octave either side, so an octave error
+      // (a common pitch-estimator failure) would be caught, not masked.
+      final tail = out.sublist(out.length - 8820); // the last 0.2 s
+      final lag = _bestLag(tail, minLag: 100, maxLag: 400);
+      final estimatedHz = sampleRate / lag;
       expect(estimatedHz, closeTo(220, 220 * 0.04));
     });
 

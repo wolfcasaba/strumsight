@@ -11,7 +11,6 @@ final class SongEventEditor extends StatefulWidget {
     required this.onAddNote,
     required this.onSetTempo,
     required this.onSetMeter,
-    this.onAuditionChord,
     super.key,
   });
 
@@ -22,10 +21,6 @@ final class SongEventEditor extends StatefulWidget {
   final void Function(int measureIndex, int bpm) onSetTempo;
   final void Function(int measureIndex, int numerator, int denominator)
   onSetMeter;
-
-  /// "Hear this chord" for the symbol in the chord field (ADR 0535). Null
-  /// hides the affordance (no audition available on this host).
-  final void Function(String symbol)? onAuditionChord;
 
   @override
   State<SongEventEditor> createState() => _SongEventEditorState();
@@ -74,15 +69,6 @@ final class _SongEventEditorState extends State<SongEventEditor> {
                   : () => widget.onAddChord(selectedMeasure, _chord.trim()),
               child: Text(l10n.songEditorAddChord),
             ),
-            if (widget.onAuditionChord case final audition?)
-              IconButton(
-                key: const Key('song-editor-hear-chord'),
-                tooltip: l10n.songEditorHearChord,
-                icon: const Icon(Icons.volume_up_outlined),
-                onPressed: _chord.trim().isEmpty
-                    ? null
-                    : () => audition(_chord.trim()),
-              ),
             OutlinedButton(
               onPressed: () => widget.onApplyPattern(
                 selectedMeasure,

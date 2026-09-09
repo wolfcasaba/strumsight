@@ -164,6 +164,10 @@ void main() {
       expect(audition.strummed, ['C']);
       expect(controller.currentBar, 0);
       expect(controller.isPlaying, isTrue);
+
+      // The next stroke is already scheduled; a pending Timer at the end of
+      // a widget test fails its end-of-test invariants (review F2).
+      controller.stop();
     });
 
     testWidgets(

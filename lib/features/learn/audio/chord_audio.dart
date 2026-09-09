@@ -47,6 +47,20 @@ class ChordAudio {
     'add9': [0, 4, 7, 14],
   };
 
+  /// Whether [label] names a root AND a quality this table knows — the
+  /// audition's precondition for the chord-tone fallback (ADR 0535 D1, review
+  /// F8): `frequencies` itself substitutes a major triad for an unknown
+  /// suffix, which is right for the jam pad but a false answer to "what does
+  /// Cdim sound like".
+  static bool hasKnownQuality(String label) {
+    if (label.isEmpty) return false;
+    final rootLen = (label.length > 1 && (label[1] == '#' || label[1] == 'b'))
+        ? 2
+        : 1;
+    return _pitchClass.containsKey(label.substring(0, rootLen)) &&
+        _quality.containsKey(label.substring(rootLen));
+  }
+
   /// Chord-tone frequencies (Hz) for [label], voiced around octave 3, or null
   /// if the label can't be parsed.
   static List<double>? frequencies(String label) {

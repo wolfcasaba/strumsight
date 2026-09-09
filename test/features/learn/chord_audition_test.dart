@@ -68,6 +68,15 @@ void main() {
       expect(voicing.isPlayable, isTrue);
     });
 
+    test('a known root with an UNKNOWN quality is silence, not a major', () {
+      // ADR 0535 D1 / review F8: "Cdim" must not sound as C major.
+      for (final label in ['Cdim', 'C5', 'Cm6', 'Cwhatever']) {
+        final voicing = SynthChordAudition.resolve(label);
+        expect(voicing.source, AuditionSource.none, reason: label);
+        expect(voicing.isPlayable, isFalse, reason: label);
+      }
+    });
+
     test('an empty label resolves to nothing playable', () {
       final voicing = SynthChordAudition.resolve('');
       expect(voicing.source, AuditionSource.none);
@@ -124,6 +133,16 @@ void main() {
         greaterThan(SynthChordAudition.maxCachedStrokes),
       );
       expect(audition.cacheSize, SynthChordAudition.maxCachedStrokes);
+    });
+
+    test('a cache HIT refreshes recency — the LRU is not a FIFO', () async {
+      final playback = _RecordingWavPlayback();
+      final audition = SynthChordAudition(playback: playback);
+      await audition.strum('C');
+      await audition.strum('G');
+      await audition.strum('Am');
+      await audition.strum('C'); // hit — C becomes the newest again
+      expect(audition.debugCacheKeys, ['G:down', 'Am:down', 'C:down']);
     });
 
     test('stop forwards to the playback', () async {

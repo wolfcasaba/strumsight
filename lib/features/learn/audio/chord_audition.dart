@@ -116,6 +116,11 @@ final class SynthChordAudition implements ChordAudition {
   /// Current number of cached strokes (test surface for the bound).
   int get cacheSize => _cache.length;
 
+  /// Cached keys oldest → newest (test surface — proves a HIT refreshes
+  /// recency, the `Backing.debugCacheKeys` precedent).
+  @visibleForTesting
+  List<String> get debugCacheKeys => List.unmodifiable(_cache.keys);
+
   /// What [label] would sound as. Pure — the unit-tested contract:
   /// fingering first, chord tones as the fallback, nothing for junk.
   static AuditionVoicing resolve(String label, {int a4 = 440}) {
@@ -126,6 +131,9 @@ final class SynthChordAudition implements ChordAudition {
         return AuditionVoicing(freqs: freqs, source: AuditionSource.fingering);
       }
     }
+    // An unknown quality suffix ("Cdim", "C5") must NOT sound as a major
+    // triad — that would be a confidently wrong answer to the composer.
+    if (!ChordAudio.hasKnownQuality(label)) return const AuditionVoicing.none();
     final tones = ChordAudio.frequencies(label);
     if (tones == null || tones.isEmpty) return const AuditionVoicing.none();
     return AuditionVoicing(freqs: tones, source: AuditionSource.chordTones);

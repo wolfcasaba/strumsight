@@ -111,7 +111,7 @@ void main() {
   testWidgets('the preview toggle is disabled with no chords', (tester) async {
     await _pumpBuilder(tester);
 
-    final button = tester.widget<FilledButton>(
+    final button = tester.widget<IconButton>(
       find.byKey(const Key('song-preview-toggle')),
     );
     expect(button.onPressed, isNull);
@@ -131,8 +131,8 @@ void main() {
       await tester.tap(find.byKey(const Key('song-preview-toggle')));
       await tester.pump();
 
-      expect(fake.strummed, contains('C'));
-      expect(find.text('Stop preview'), findsOneWidget);
+      expect(fake.strummed, ['C', 'G', 'C']); // the preview's first stroke
+      expect(find.byTooltip('Stop preview'), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 2700));
       expect(fake.strummed, contains('G'));

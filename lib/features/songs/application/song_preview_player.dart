@@ -80,9 +80,11 @@ List<PreviewStrum> previewSchedule({
 /// explicitly, at the end, or on [dispose] — cancels the pending timer and
 /// silences the audition, so nothing keeps ringing after the user leaves.
 final class SongPreviewController extends ChangeNotifier {
-  SongPreviewController(this._audition);
+  SongPreviewController(this.audition);
 
-  final ChordAudition _audition;
+  /// The player this preview strums through (identity matters to the
+  /// owning screen — see `SongBuilderScreen._previewFor`).
+  final ChordAudition audition;
 
   Timer? _timer;
   bool _playing = false;
@@ -128,7 +130,7 @@ final class SongPreviewController extends ChangeNotifier {
       _currentBar = strum.bar;
       notifyListeners();
     }
-    unawaited(_audition.strum(strum.chord, direction: strum.direction));
+    unawaited(audition.strum(strum.chord, direction: strum.direction));
     final next = index + 1;
     final nextSec = next < schedule.length ? schedule[next].timeSec : totalSec;
     _timer = Timer(
@@ -149,7 +151,7 @@ final class SongPreviewController extends ChangeNotifier {
     if (!_playing && _currentBar == null) return;
     _playing = false;
     _currentBar = null;
-    unawaited(_audition.stop());
+    unawaited(audition.stop());
     if (!_disposed) notifyListeners();
   }
 
@@ -160,7 +162,7 @@ final class SongPreviewController extends ChangeNotifier {
     if (_playing) {
       _playing = false;
       _currentBar = null;
-      unawaited(_audition.stop());
+      unawaited(audition.stop());
     }
     _disposed = true;
     super.dispose();

@@ -84,8 +84,17 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
     setState(change);
   }
 
-  SongPreviewController _previewFor(ChordAudition audition) =>
-      _preview ??= SongPreviewController(audition);
+  /// The controller is bound to the WATCHED audition instance; if the
+  /// provider ever rebuilds (a new instance), the old controller would hold
+  /// a disposed player, so it is rebuilt too (review F9).
+  SongPreviewController _previewFor(ChordAudition audition) {
+    final current = _preview;
+    if (current != null && identical(current.audition, audition)) {
+      return current;
+    }
+    current?.dispose();
+    return _preview = SongPreviewController(audition);
+  }
 
   void _hear(ChordAudition audition, String label) {
     _preview?.stop();
@@ -185,6 +194,26 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
             Row(
               children: [
                 Expanded(child: _Label(l10n.songProgression)),
+                // Preview transport (ADR 0535 D3): icon-only so the header
+                // row keeps its height and never overflows at large text
+                // scales; the tooltip carries the play/stop label.
+                ListenableBuilder(
+                  listenable: preview,
+                  builder: (context, _) => IconButton.filledTonal(
+                    key: const Key('song-preview-toggle'),
+                    tooltip: preview.isPlaying
+                        ? l10n.songPreviewStop
+                        : l10n.songPreviewPlay,
+                    icon: Icon(
+                      preview.isPlaying
+                          ? Icons.stop_rounded
+                          : Icons.play_arrow_rounded,
+                    ),
+                    onPressed: canPreview
+                        ? () => _togglePreview(preview)
+                        : null,
+                  ),
+                ),
                 TextButton.icon(
                   onPressed: _suggest,
                   icon: const Icon(Icons.auto_awesome, size: 18),
@@ -217,38 +246,6 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
                   ],
                 ),
               ),
-            const SizedBox(height: 12),
-            ListenableBuilder(
-              listenable: preview,
-              builder: (context, _) => Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  FilledButton.tonalIcon(
-                    key: const Key('song-preview-toggle'),
-                    onPressed: canPreview
-                        ? () => _togglePreview(preview)
-                        : null,
-                    icon: Icon(
-                      preview.isPlaying
-                          ? Icons.stop_rounded
-                          : Icons.play_arrow_rounded,
-                    ),
-                    label: Text(
-                      preview.isPlaying
-                          ? l10n.songPreviewStop
-                          : l10n.songPreviewPlay,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      l10n.songPreviewHint,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
-            ),
             const SizedBox(height: 12),
             Text(
               l10n.songAddChord,
