@@ -26,8 +26,12 @@ Future<void> _pump(
   Widget home, {
   List<Override> overrides = const [],
 }) async {
+  // A fresh scope per pump: Riverpod forbids changing the NUMBER of
+  // overrides on a rebuilt ProviderScope, and the two screens need
+  // different override sets.
   await tester.pumpWidget(
     ProviderScope(
+      key: UniqueKey(),
       overrides: [...preferenceOverrides(), ...overrides],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,

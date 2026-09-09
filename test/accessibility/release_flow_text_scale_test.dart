@@ -236,28 +236,14 @@ final class KnownOverflow {
 /// Public: see [KnownOverflow]'s doc comment — the A6 guard cell in
 /// `release_flow_semantics_test.dart` imports this list.
 const knownOverflows = <KnownOverflow>[
-  // `_ScoringProfileReadout` (practice_setup_screen.dart:410-430) puts an
-  // un-`Expanded` `Text(profileId)` next to an `Expanded` label in a `Row`
-  // — at textScale 2.0 the fixed-width sibling no longer fits. Identical
-  // 43px on BOTH locales: the overflow is driven by `profileId` (a
-  // non-localised scoring-profile id), not by the label's translation
-  // length.
-  KnownOverflow(
-    id: 'setup-scoring-profile-overflow',
-    locale: 'en',
-    textScale: 2.0,
-    source: 'practice_setup_screen.dart:418',
-    overflowPx: 43,
-    measuredOn: '2026-09-01',
-  ),
-  KnownOverflow(
-    id: 'setup-scoring-profile-overflow',
-    locale: 'hu',
-    textScale: 2.0,
-    source: 'practice_setup_screen.dart:418',
-    overflowPx: 43,
-    measuredOn: '2026-09-01',
-  ),
+  // `setup-scoring-profile-overflow` was REMOVED (audit H14/U3): the
+  // scoring-profile row no longer renders a raw, fixed-width
+  // `Text(profileId)` next to an `Expanded` label — the value is a
+  // localized phrase inside a `Flexible`, so the `Row` cannot overflow at
+  // any text scale. The entry could only stay here as a STALE tolerance,
+  // which this file's own `_assertFlowCell` treats as a failure; its
+  // `docs/accessibility/known-exceptions.yaml` mirror was removed in the
+  // same change.
   // The combo-count `Row` (practice_feedback.dart:89-101) has neither Text
   // child `Expanded` — hu's longer `practiceFeedbackComboLabel` translation
   // overflows at textScale 2.0 where en's shorter "Combo" does not.

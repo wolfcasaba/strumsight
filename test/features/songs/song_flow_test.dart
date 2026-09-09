@@ -92,7 +92,10 @@ void main() {
     await tester.pump();
 
     // Open the builder.
-    await tester.tap(find.text('New song'));
+    // Audit U4: the EMPTY songbook now also renders an inline "New song"
+    // action next to the FAB, so a bare `find.text` matches two widgets.
+    // The FAB is the affordance this cell has always used.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New song'));
     await tester.pumpAndSettle();
 
     // Name it. `.first` — the builder now also carries the add-chord
@@ -123,7 +126,10 @@ void main() {
     // Round 116 — author a waltz, not just play the curriculum's.
     await tester.pumpWidget(_app(const SongListScreen()));
     await tester.pump();
-    await tester.tap(find.text('New song'));
+    // Audit U4: the EMPTY songbook now also renders an inline "New song"
+    // action next to the FAB, so a bare `find.text` matches two widgets.
+    // The FAB is the affordance this cell has always used.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New song'));
     await tester.pumpAndSettle();
     // `.first` — the name field; the add-chord filter (audit U5) is second.
     await tester.enterText(find.byType(TextField).first, 'Waltz Draft');
@@ -172,7 +178,10 @@ void main() {
   testWidgets('suggest-a-progression fills the chord list', (tester) async {
     await tester.pumpWidget(_app(const SongListScreen()));
     await tester.pump();
-    await tester.tap(find.text('New song'));
+    // Audit U4: the EMPTY songbook now also renders an inline "New song"
+    // action next to the FAB, so a bare `find.text` matches two widgets.
+    // The FAB is the affordance this cell has always used.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New song'));
     await tester.pumpAndSettle();
 
     // Open the suggestion sheet and pick the Pop progression (default key C).
@@ -213,7 +222,10 @@ void main() {
   testWidgets('a strum-pattern preset fills the editor', (tester) async {
     await tester.pumpWidget(_app(const SongListScreen()));
     await tester.pump();
-    await tester.tap(find.text('New song'));
+    // Audit U4: the EMPTY songbook now also renders an inline "New song"
+    // action next to the FAB, so a bare `find.text` matches two widgets.
+    // The FAB is the affordance this cell has always used.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New song'));
     await tester.pumpAndSettle();
 
     // The preset row + editor are below the fold — scroll them into view.

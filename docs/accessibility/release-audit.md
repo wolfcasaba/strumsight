@@ -60,6 +60,10 @@ the round's complete, documented output.
    next to an `Expanded` label in a `Row`; at `textScale 2.0` it overflows by
    43px on the right, identically in `en` and `hu` (the id itself never
    localises — the label growing is what starves it of space).
+   **RESOLVED (audit H14/U3):** the raw id is gone — the row now renders a
+   localized phrase inside a `Flexible`, so it cannot overflow. Its
+   `known-exceptions.yaml` entry and both `KnownOverflow` mirrors were
+   removed in the same change (a stale tolerance fails the gate).
 2. **`feedback-combo-row-overflow-hu`** — the combo-count `Row`
    (`practice_feedback.dart:89`) has neither `Text` child wrapped in
    `Expanded`/`Flexible`; the Hungarian `practiceFeedbackComboLabel`
