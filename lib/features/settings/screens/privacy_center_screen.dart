@@ -205,8 +205,6 @@ class _PrivacyCenterScreenState extends ConsumerState<PrivacyCenterScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  const _TelemetryConsentSection(),
-                  const SizedBox(height: 20),
                   _TaskRow(
                     key: const Key('privacyCenterExportTask'),
                     state: _exportState,
@@ -227,6 +225,10 @@ class _PrivacyCenterScreenState extends ConsumerState<PrivacyCenterScreen> {
                     failedLabel: l10n.privacyCenterExportFailed,
                     onRun: () => _confirmDeleteAll(l10n),
                   ),
+                  // Audit round: the data tasks stay first (and above the
+                  // fold); the opt-in telemetry card follows them.
+                  const SizedBox(height: 20),
+                  const _TelemetryConsentSection(),
                 ],
               ),
             ),
