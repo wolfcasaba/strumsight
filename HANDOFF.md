@@ -1,5 +1,68 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟡 E18-R01 IN REVIEW — a dalszerkesztő akkord-MEGHALLGATÁSA és menet-ELŐNÉZET (komponálás füllel) + a Chapter 18 terve (akkordok hangból, YouTube-határ) — branch `claude/song-editor-chord-audio-tbkokz` (2026-09-09)
+
+**User-kérés (2026-09-09):** „a hangok lenyomásakor az az akkord hang hallható,
+amit benyomott a felhasználó… lehet komponálni is így, mielőtt gitárral játszaná"
++ „lehessen internetről is dalokat behívni, mondjuk YouTube-ról, és ott beolvassa
+az akkordokat… Yousician is így működik, nézz utána".
+
+**Kivétel a szereposztás alól:** a user explicit utasítására („tervezd meg és
+fejlesszük át") a tervező REMOTE session maga implementálta az E18-R01-et; a
+tesztírás Sonnet-, a review Opus-ágensé (user-döntés: token-takarékosság, minőség
+nehézség szerint). A merge-kapu VÁLTOZATLAN (ADR 0052): CI zöld + review.
+
+### Mi készült (E18-R01, ADR [0535](docs/adr/0535-song-editor-chord-audition-and-progression-preview.md))
+
+| Réteg | Fájl | Mit ad |
+|---|---|---|
+| core (tiszta Dart) | `lib/core/audio/synth/plucked_string_synth.dart`, `lib/core/music/chord_voicing.dart` | Karplus–Strong pengetett húr (fix-seedes LCG, bájt-determinisztikus), húronkénti 18 ms-os lepengetés (**↓ mély→magas, ↑ magas→mély**), fogás → MIDI/Hz (nyitott húr + bund, néma kimarad) |
+| learn | `audio/chord_audition.dart`, `providers/chord_audition_provider.dart`, `public.dart`; `chord_audio.dart` (+`hasKnownQuality`) | `ChordAudition` kontraktus; `resolve()`: FOGÁS → akkordhangok (csak ismert utótag) → csend (`Cdim`/`C5` NEM szól dúrként); LRU 24 (`debugCacheKeys`); route-hoz kötött autodispose provider, a `build`-ből **watch**-olva |
+| songs | `application/song_preview_player.dart`, `screens/song_builder_screen.dart` | `previewSchedule` (tiszta nyolcad-rács) + `SongPreviewController` (Timer-lánc, `currentBar`); chip-tap = hallás, add-chip = hozzáad+hall, ▶/■ ikon-gomb a menet fejlécsorában, szóló ütem chipje kiemelve, minden szerkezeti edit stop |
+| song_trainer (V2) | `screens/song_editor_screen.dart` | `onAddChord` → hallás. A külön „hallgasd meg újra" gomb ELHALASZTVA: az `e13_r24_song_editor_*` pixel-goldent mozdítaná, amit csak a user boxa tud regenerálni (brief §0.0.1 R2) → E18-R02 |
+| l10n | `lib/l10n/base/app_{en,hu}.arb` + generált aggregátum | `songChordHear`, `songPreviewPlay`, `songPreviewStop` |
+| tesztek (6 fájl) | `test/core/audio/plucked_string_synth_test.dart`, `test/core/music/chord_voicing_test.dart`, `test/features/learn/chord_audition_test.dart`, `test/features/songs/song_preview_player_test.dart`, `test/features/songs/song_builder_audition_test.dart`, `test/features/song_trainer/presentation/song_editor_audition_test.dart` | A1–A9 cellák (brief §6) |
+
+**Review:** [`docs/reviews/e18-r01-review.md`](docs/reviews/e18-r01-review.md)
+(Opus-ágens, READ-ONLY): 1 BLOCKER (F1 — a nullátmenet-alapú pitch-becslés
+MÉRTEN 1158 Hz-et adott 220 helyett; a szintézis jó, a MÉRŐ volt rossz →
+autokorrelációs periódus-keresés), 2 MAJOR (F2 függő Timer, F3 scope), 6 MINOR
+— F1/F2/F6/F7/F8/F9 javítva ugyanabban a sessionben, F3 brief-revízióval
+(§0.0.1 R1), F4 (randomizált property-cella az új szintézisre) → E18-R02
+follow-up. A javítások FÜGGETLEN újra-ellenőrzése még hátravan.
+
+**CI (a remote konténerben nincs Flutter SDK, a CI az egyetlen gépi bizonyíték):**
+`full-gate.yml` [34364726569](https://github.com/wolfcasaba/strumsight/actions/runs/34364726569)
+a `a846e0c` HEAD-en — **EREDMÉNY: __CI_RESULT__**. Előzmény:
+[34338559280](https://github.com/wolfcasaba/strumsight/actions/runs/34338559280)
+(`6a4a2be`): 10265 zöld, **4 piros** — ebből 1 látható a log-farokban (F1), a
+többi a CI-log 5000 soros plafonja mögött; a valószínű okok (V2-golden,
+tap-tempo görgetés-geometria, függő Timer) a javító körben kezelve.
+Router CI a push-okon zöld; `tools/tests` lokálisan 968 passed (+1 deselect: a
+dokumentált környezeti cella, `remote-container-environment.md` §5).
+
+### A Chapter 18 terve — akkordok HANGBÓL, a YouTube-határral (Opus tervező-ágens)
+
+**Kutatás (mért, forrásokkal az ADR-ben):** a Yousician NEM YouTube-ból olvas
+akkordot — kiadói licenc + kész kották (support.yousician.com); a Chordify
+szerveroldalon, a Chord ai ESZKÖZÖN futó ML-lel ismer fel akkordot, és a Chord
+ai „listen"-módja a telefon mikrofonjával hallgatja a bárhonnan (YouTube, rádió)
+szóló zenét. A YouTube ToS TILTJA a hang letöltését harmadik féllel; az SDD Ch3
+§4.2 is kizárja. **Ezért a StrumSight útja:** (a) hallgatás-mód mikrofonnal, 100 %
+eszközön, a MEGLÉVŐ analyze-csővezetékkel; (b) a user SAJÁT helyi hangfájlja;
+(c) YouTube-link csak METAADAT. → [ADR 0536](docs/adr/0536-chords-from-audio-source-boundary.md)
+(javasolt), [fejezet-terv](docs/plans/chapter-18-composer-and-chords-from-audio.md),
+briefek: [E18-R02](docs/rounds/e18-r02-recording-to-song-draft.md) (felvételből
+dal-vázlat, ADR 0537), [E18-R03](docs/rounds/e18-r03-listen-mode-external-source.md)
+(hallgatás-mód külső forrásból), [E18-R04](docs/rounds/e18-r04-local-audio-file-decoding.md)
+(MP3/M4A dekódolás — kutató kör, ADR 0538). Queue: mind `hold` (E18-R01 is —
+a pipeline nem dispatch-eli).
+
+**Következő lépés (a user boxán):** `tools/round-gate.sh` a brief §7 útvonalain
+→ a review javításainak független újra-ellenőrzése → squash-merge → queue
+`done` → E18-R02 indítása (ott: V2 „hallgasd meg újra" gomb + golden-frissítés,
+property-cella a szintézisre).
+
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 
 A Chapter 17 (Teljes bekötés) **első köre**: a `FirstWinStageScreen` eddig
