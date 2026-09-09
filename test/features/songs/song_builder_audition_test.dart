@@ -81,7 +81,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.strummed, ['C']);
 
-    await tester.tap(find.widgetWithText(InputChip, 'C'));
+    // Tap the LABEL, not the chip's centre: on a two-letter chip the centre
+    // sits on the delete affordance, which would remove the chord instead.
+    final chip = find.widgetWithText(InputChip, 'C');
+    await tester.tap(find.descendant(of: chip, matching: find.text('C')));
     await tester.pumpAndSettle();
 
     expect(fake.strummed, ['C', 'C']);

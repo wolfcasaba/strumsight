@@ -201,6 +201,12 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
                   listenable: preview,
                   builder: (context, _) => IconButton.filledTonal(
                     key: const Key('song-preview-toggle'),
+                    // Same 40 px height as the neighbouring text button so
+                    // the header row keeps its measured height.
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(40, 40),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     tooltip: preview.isPlaying
                         ? l10n.songPreviewStop
                         : l10n.songPreviewPlay,
