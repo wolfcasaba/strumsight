@@ -305,7 +305,7 @@ plusz a CI-run linkje a brief §10-be.
 | F2 MAJOR | **FIXED** | explicit `controller.stop()` a törzs végén (`song_preview_player_test.dart`) |
 | F3 MAJOR | **RESOLVED — brief-revízió** (§0.0.1 R1): a tervdokumentumok a user explicit kérésének kimenetei; `allowed_paths` bővítve, queue-sor `hold` |
 | F4 MINOR | OPEN → follow-up (E18-R02 brief, §0.0.1 R6) |
-| F5 MINOR | **FIXED** a §10-ben (CI-run link) |
+| F5 MINOR | **FIXED** — §10: full-gate [34386737962](https://github.com/wolfcasaba/strumsight/actions/runs/34386737962) `success` a `476b01d` HEAD-en |
 | F6 MINOR | **FIXED** — hat-üres-húr cella felvéve, brief A1 pontosítva |
 | F7 MINOR | **FIXED** — `debugCacheKeys` + recency-cella |
 | F8 MINOR | **FIXED** — `ChordAudio.hasKnownQuality` kapu, `Cdim/C5/Cm6/Cwhatever → none` cella; ADR 0535 D1 pontosítva |

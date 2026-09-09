@@ -212,7 +212,13 @@ bekötése. 5. ARB forrás + generált aggregátum. 6. tesztek (A1–A9).
 
 ## 10. Implementation handoff
 
-_(a session tölti ki a CI-eredménnyel)_
+- **HEAD:** `476b01d` (a kód utoljára `9609c74`-ben mozdult; utána csak docs).
+- **CI (az egyetlen gépi bizonyíték, a remote konténerben nincs SDK):** `full-gate.yml` [34386737962](https://github.com/wolfcasaba/strumsight/actions/runs/34386737962) — `success`, 10 272 teszt / 0 piros / 21 skip, property gate zöld. Kontroll: `main @ 1ae9e55` [34373102220](https://github.com/wolfcasaba/strumsight/actions/runs/34373102220) `success`, 10 220 teszt.
+- **Lokális, ezen a boxon futtatható részek:** `tools/brief-lint.py --level base` exit 0; `tools/gateguard-scan.py` 0 ütközés; `tools/tests` 968 passed (1 deselect: a dokumentált környezeti cella).
+- **A §6.1 falszifikációs próbák** ezen a boxon nem futtathatók (nincs SDK) — a user boxán a merge előtt esedékesek a §7 gate-tel együtt (a §0.0.1 R8 két CI-lelete mutatja, hogy A7 és a program-completion őr valóban vág).
+- **Élt feloldások:** OD-01 (fix 440 Hz), OD-02 (nincs loop).
+- **Kívül maradt, follow-up (E18-R02):** V2 „hallgasd meg újra" gomb + golden-frissítés; randomizált property-cella a szintézisre (F4); a 9 eldobható diag-ág törlése a user boxáról.
+- **Ki implementált:** a tervező remote session (user-kivétel, §0); tesztek Sonnet-ágens; review Opus-ágens; a javítások és a bisect ugyanez a session.
 
 ## 11. Review
 

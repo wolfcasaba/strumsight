@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🟡 E18-R01 IN REVIEW — a dalszerkesztő akkord-MEGHALLGATÁSA és menet-ELŐNÉZET (komponálás füllel) + a Chapter 18 terve (akkordok hangból, YouTube-határ) — branch `claude/song-editor-chord-audio-tbkokz` (2026-09-09)
+## 🟢 E18-R01 CI-ZÖLD, MERGE-RE VÁR — a dalszerkesztő akkord-MEGHALLGATÁSA és menet-ELŐNÉZET (komponálás füllel) + a Chapter 18 terve (akkordok hangból, YouTube-határ) — branch `claude/song-editor-chord-audio-tbkokz` (2026-09-09)
 
 **User-kérés (2026-09-09):** „a hangok lenyomásakor az az akkord hang hallható,
 amit benyomott a felhasználó… lehet komponálni is így, mielőtt gitárral játszaná"
@@ -32,12 +32,30 @@ autokorrelációs periódus-keresés), 2 MAJOR (F2 függő Timer, F3 scope), 6 M
 follow-up. A javítások FÜGGETLEN újra-ellenőrzése még hátravan.
 
 **CI (a remote konténerben nincs Flutter SDK, a CI az egyetlen gépi bizonyíték):**
-`full-gate.yml` [34364726569](https://github.com/wolfcasaba/strumsight/actions/runs/34364726569)
-a `a846e0c` HEAD-en — **EREDMÉNY: __CI_RESULT__**. Előzmény:
-[34338559280](https://github.com/wolfcasaba/strumsight/actions/runs/34338559280)
-(`6a4a2be`): 10265 zöld, **4 piros** — ebből 1 látható a log-farokban (F1), a
-többi a CI-log 5000 soros plafonja mögött; a valószínű okok (V2-golden,
-tap-tempo görgetés-geometria, függő Timer) a javító körben kezelve.
+`full-gate.yml` [34386737962](https://github.com/wolfcasaba/strumsight/actions/runs/34386737962)
+a `476b01d` HEAD-en — **`success`: format · analyze · architecture · secret ·
+l10n · asset · teljes `flutter test` (10 272 teszt, 0 piros) · randomizált
+property gate · song schema + fixture provenance.** A `main` (`1ae9e55`)
+ugyanekkor újramérve: [34373102220](https://github.com/wolfcasaba/strumsight/actions/runs/34373102220)
+`success` (10 220 teszt) — a különbség pontosan a kör 52 új tesztje.
+
+**Az odáig vezető út (mért, ADR 0112-szerű önjavítás, 10 CI-futás):** a
+CI-log csak az utolsó 5000 sort adja vissza az MCP-n, a log-zip a proxyn
+blokkolt, a híd-session a user gépén lejárt bejelentkezés miatt elhalt
+(`OAuth session expired`), a `.github/workflows/*` írása gateguard-védett —
+ezért a maradék 2 pirosat **bisect-tel** lokalizáltam 9 eldobható
+`claude/e18-diag-*` / `claude/e18-r01-diag` ágon (párhuzamos dispatch-ek,
+darabszám-jel). Eredmény: (1) **valódi termékhiba** — a preview a menet végét
+kétszer várta ki (A7 fogta meg); (2) a queue új `E18` előtagjához hiányzott a
+sor a `docs/sdd/program-completion-report.md` §3 mátrixában
+(`program_completion_test`). Mellékleletek közben: `dart format` (3 fájl),
+`unnecessary_import`/`prefer_initializing_formals`, a nullátmenet-alapú
+pitch-mérő (1158 Hz!) → autokorreláció, a V2 pixel-golden miatt elhalasztott
+„hallgasd meg újra" gomb, a `song_flow`/`song_editor_screen` tesztek
+audition-fake injektálása, hu ARB-metaadat-paritás. **A 9 eldobható ág
+törlése a proxyn át nem ment (`remote end hung up`) — a user boxáról
+törlendők: `git push origin --delete claude/e18-r01-diag claude/e18-diag-{a1,a2,a3,b1,b2,b3,c1,d1}`;
+tartalmuk SOHA nem merge-elendő.**
 Router CI a push-okon zöld; `tools/tests` lokálisan 968 passed (+1 deselect: a
 dokumentált környezeti cella, `remote-container-environment.md` §5).
 
