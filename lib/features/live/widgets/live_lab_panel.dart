@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../diagnostics/public.dart';
+import '../data/shadow/recognition_shadow_recorder.dart';
+import '../model/recognition_runtime_info.dart';
 import '../providers/live_lab_provider.dart';
 
 /// Lab-mode Live panel (r199): a button that captures the last ~30 s of mic
@@ -107,8 +109,123 @@ class LiveLabPanel extends ConsumerWidget {
                 child: DiagnosticsPanel(result: result),
               ),
             ),
+          if (labState.shadow case final shadow?)
+            _ShadowSection(shadow: shadow),
         ],
       ),
     );
   }
+}
+
+/// The E14-R23 / E14-R26 shadow report (Lab only).
+///
+/// Every line is either a FRACTION or an explicit "nothing comparable":
+/// an empty sample has no agreement rate, and rendering `0%` or `100%` for
+/// it would be a fabricated number (ADR 0271). The closing line restates the
+/// invariant the whole round rests on — a shadow band can never change what
+/// Live shows.
+class _ShadowSection extends StatelessWidget {
+  const _ShadowSection({required this.shadow});
+
+  final RecognitionShadowSnapshot shadow;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final lines = <String>[];
+
+    if (!shadow.ranAnything) {
+      lines.add(l10n.liveLabShadowOff);
+    } else {
+      final strum = shadow.strum;
+      if (shadow.strumShadowEnabled) {
+        lines.add(
+          strum.comparedVerdicts == 0
+              ? l10n.liveLabShadowStrumNoData
+              : l10n.liveLabShadowStrumAgreement(
+                  strum.agreed,
+                  strum.comparedVerdicts,
+                ),
+        );
+        if (strum.candidateVerdicts > 0) {
+          lines.add(
+            l10n.liveLabShadowStrumAbstained(
+              strum.candidateAbstained + strum.bothAbstained,
+              strum.candidateVerdicts,
+            ),
+          );
+        }
+      }
+      if (shadow.chordShadowEnabled) {
+        final reason = shadow.chordFallbackReason;
+        if (reason != null) {
+          lines.add(_chordFallbackText(l10n, reason));
+        } else {
+          final chord = shadow.chord;
+          lines.add(
+            chord.comparedFrames == 0
+                ? l10n.liveLabShadowChordNoData
+                : l10n.liveLabShadowChordAgreement(
+                    chord.exactAgreed,
+                    chord.comparedFrames,
+                  ),
+          );
+        }
+      }
+      lines.add(
+        l10n.liveLabShadowWindow(
+          shadow.strumSamples.length + shadow.chordSamples.length,
+          shadow.droppedStrumSamples + shadow.droppedChordSamples,
+        ),
+      );
+    }
+    lines.add(l10n.liveLabShadowNeverShown);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            l10n.liveLabShadowTitle,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              color: palette.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          for (final line in lines)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                line,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: palette.muted,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Maps the closed [FallbackReason] set onto localized copy — the raw enum
+  /// name is never shown to a reader (AGENTS.md).
+  static String _chordFallbackText(
+    AppLocalizations l10n,
+    FallbackReason reason,
+  ) => switch (reason) {
+    FallbackReason.assetMissing => l10n.liveLabShadowChordFallbackAssetMissing,
+    FallbackReason.assetUnreadable =>
+      l10n.liveLabShadowChordFallbackUnreadable,
+    FallbackReason.parseFailed => l10n.liveLabShadowChordFallbackParse,
+    FallbackReason.shapeMismatch => l10n.liveLabShadowChordFallbackShape,
+    FallbackReason.disabledByFlag => l10n.liveLabShadowChordFallbackDisabled,
+  };
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/config/recognition_rollout_stage.dart';
 
 // Imported EXCLUSIVELY via the barrel (not the direct model file): if the
 // E14-R03 additive export in public.dart ever goes missing, this whole file
@@ -47,6 +48,97 @@ void main() {
       final decoded = RecognitionRuntimeInfo.fromJson(info.toJson());
       expect(decoded, info);
       expect(decoded.fallbackReason, FallbackReason.shapeMismatch);
+    });
+
+    // --- E14-R23 / E14-R26 additions (ADR 0548 D5, ADR 0549 D1) ------------
+    // RED before this round: the four chord fields, the recognition mode and
+    // the shadow stage did not exist on this type.
+
+    test('the new fields default to the fail-closed, model-free shape', () {
+      final info = _activatedInfo();
+      expect(info.recognitionMode, RecognitionMode.free);
+      expect(info.shadowStage, RecognitionRolloutStage.off);
+      expect(info.chordModelId, RecognitionRuntimeInfo.chordModelNone);
+      expect(info.chordModelVersion, 0);
+      expect(info.chordModelSha256, '');
+      expect(info.chordFallbackReason, isNull);
+    });
+
+    test('JSON round-trip is lossless with every shadow band populated', () {
+      final info = _activatedInfo().withShadowBands(
+        recognitionMode: RecognitionMode.guided,
+        shadowStage: RecognitionRolloutStage.shadow,
+        chordModelId: RecognitionRuntimeInfo.chordModelCrnn,
+        chordModelVersion: 1,
+        chordModelSha256: 'ab' * 32,
+        chordFallbackReason: FallbackReason.shapeMismatch,
+      );
+      final decoded = RecognitionRuntimeInfo.fromJson(info.toJson());
+      expect(decoded, info);
+      expect(decoded.recognitionMode, RecognitionMode.guided);
+      expect(decoded.shadowStage, RecognitionRolloutStage.shadow);
+      expect(decoded.chordFallbackReason, FallbackReason.shapeMismatch);
+    });
+
+    test('a legacy JSON without the new keys decodes fail-CLOSED', () {
+      final legacy = <String, dynamic>{
+        'strumModelId': 'strum_crnn_live_3c.bin',
+        'strumModelVersion': 1,
+        'strumModelSha256': 'cd' * 31,
+        'chordEngineId': RecognitionRuntimeInfo.chordEngineNnlsViterbi,
+        'sampleRate': 44100,
+        'frontendVersion': RecognitionRuntimeInfo.frontendCrnnV1,
+        'fallbackReason': null,
+      };
+      final decoded = RecognitionRuntimeInfo.fromJson(legacy);
+      expect(decoded.recognitionMode, RecognitionMode.free);
+      expect(decoded.shadowStage, RecognitionRolloutStage.off);
+      expect(decoded.chordModelId, RecognitionRuntimeInfo.chordModelNone);
+      expect(decoded.chordFallbackReason, isNull);
+    });
+
+    test('an unknown mode/stage on the wire reads back as the safe one', () {
+      final json = _activatedInfo().toJson()
+        ..['recognitionMode'] = 'omniscient'
+        ..['shadowStage'] = 'ga-plus';
+      final decoded = RecognitionRuntimeInfo.fromJson(json);
+      expect(
+        decoded.recognitionMode,
+        RecognitionMode.free,
+        reason: 'an unreadable regime must never widen to guided',
+      );
+      expect(
+        decoded.shadowStage,
+        RecognitionRolloutStage.off,
+        reason: 'an unreadable stage must never widen to a running one',
+      );
+    });
+
+    test('the two bands report SEPARATE fallbacks', () {
+      final info = RecognitionRuntimeInfo.fallback(
+        FallbackReason.assetMissing,
+        sampleRate: 44100,
+      ).withShadowBands(chordFallbackReason: FallbackReason.parseFailed);
+      expect(info.fallbackReason, FallbackReason.assetMissing);
+      expect(info.chordFallbackReason, FallbackReason.parseFailed);
+      expect(
+        RecognitionRuntimeInfo.fromJson(info.toJson()),
+        info,
+        reason: 'one band failing must never be reported as the other',
+      );
+    });
+
+    test('withShadowBands never relabels which model DECIDED', () {
+      final base = _activatedInfo();
+      final withShadow = base.withShadowBands(
+        shadowStage: RecognitionRolloutStage.shadow,
+        chordModelId: RecognitionRuntimeInfo.chordModelCrnn,
+      );
+      expect(withShadow.strumModelId, base.strumModelId);
+      expect(withShadow.strumModelSha256, base.strumModelSha256);
+      expect(withShadow.chordEngineId, base.chordEngineId);
+      expect(withShadow.fallbackReason, base.fallbackReason);
+      expect(withShadow, isNot(base));
     });
 
     test('fallbackReason serializes to its enum name, not an index', () {

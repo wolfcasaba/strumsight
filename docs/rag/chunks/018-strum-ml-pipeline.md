@@ -459,3 +459,75 @@ precision job is now BACKED by the learned reject (false onsets that slip
 through SuperFlux draw no confident wrong arrow). **Acceptance remains the
 real-guitar APK test** — synthetic/eval green is never "done" (HORIZON). r175 is
 the last dev round before that gate.
+
+---
+
+## AS-BUILT — E14-R26: the shipped chord CRNN as a live shadow candidate (ADR 0549)
+
+Written 2026-09-09. Until this round `assets/ml/chord_crnn.bin` had exactly
+one loader in the app (`analyze_providers.dart`, the batch Analyze path) and
+never ran on the live path at all — SDD Ch14 §4.5's claim, still true on the
+tree before this change.
+
+**Integrity, fail-closed.** `ChordShadowActivation.activate(bytes,
+expectedSha256:)` hashes the bytes IN HAND and refuses to build a runner when
+the digest does not match. `assets/ml/model_manifest.json` is not a bundled
+asset (`pubspec.yaml` ships only the `.bin` files), so the expected digest is
+a Dart constant, `ChordCrnnShadowRunner.shippedChordModelSha256` =
+`8f7596d45784fecd472be3bda141599e77a690edc8d526b85a9929532709fc74`. A test
+compares THREE values — the constant, the manifest's declared `sha256`, and
+the sha256 of the bytes on disk — so swapping the model without updating the
+constant turns CI red instead of shipping an unverified blob. Failure codes
+are the existing closed `FallbackReason` set: `assetMissing` (no/empty
+bytes), `parseFailed` (bad magic/version, truncation, OR a hash mismatch),
+`shapeMismatch` (bins/classes do not match the build's front-end). No silent
+no-op anywhere; the Lab renders the reason as localized copy.
+
+**Two adapters over one model.**
+
+- `runClip(pcm, sr)` — whole-buffer, one pass. `ChordCrnn.infer` is
+  sequence-length agnostic (recurrent GRU, local conv, fixed BN stats), so no
+  100-frame stitching is needed. This is the DETERMINISTIC path and the one
+  the Lab comparison uses. Frame `i` is stamped at `i * 2048/22050 ≈ 92.9 ms`,
+  the CQT grid.
+- `addPcm` / `poll()` — the streaming trailing-window adapter: one PCM ring of
+  exactly `windowFrames(100) × hop(2048)` samples at the CQT rate, allocated
+  once, re-analysed every `emitEveryFrames(8)` hops (≈ 0.74 s); the window's
+  LAST frame posterior is the current verdict, stamped on the engine clock.
+
+  **Honest limit:** `CqtExtractor` centre-pads whatever buffer it gets, so the
+  newest frame of a trailing window sees padding where a continuous CQT would
+  see future audio, and the GRU restarts from a zero state each window. The
+  streaming verdict is therefore NOT bit-identical to `runClip` on the same
+  audio, and the size of the difference on real guitar is **NOT MEASURED**.
+  `windowFrames = 100` is the model's training contract, not a tunable;
+  `emitEveryFrames = 8` is a reporting cadence and touches no recognition
+  threshold.
+
+**Comparison taxonomy — 26 closed classes.** `ShadowChordClass` = root
+(0..11) × majmin quality, plus `N.C.` and `unknown`, which is what lets the
+confusion matrix be a fixed `Int32List(26*26)` instead of a map that grows
+with whatever labels the two engines emit. The majmin reduction mirrors
+`ml/chords/labels.py`; it is duplicated in `features/live` (rather than
+imported from `features/analyze`, which already depends on live) and a parity
+cell pins it against `MlChordDecoder.majminReduce`.
+
+Two deliberate, documented choices around "no chord":
+
+- an UNREADABLE label becomes `unknown`, never `N.C.` — merging them would
+  silently inflate the N.C. agreement rate;
+- a frame where production published no chord IS recorded as `N.C.`. That
+  conflates silence with "the latch is not confident yet", because those look
+  the same to the user, and separating them would need a chord-confidence
+  field the emitted `LiveFrame` does not carry.
+
+**Gate.** `recognitionChordShadowModeEnabled && chordModelRolloutStage
+.runsInference`, independent of the strum band so one band can be killed
+without the other. Both `off` in every shipped environment.
+
+**Not measured:** NNLS ↔ CRNN ↔ ground-truth agreement on a real corpus
+(that is R27's question and cannot be answered without one), device latency
+and memory, and the streaming/continuous CQT gap. `real_strum_engine.dart`
+was NOT changed: the chord weights are loaded on the main isolate by the Lab
+path and carried over by `compute()`; the isolate-side live wiring needs a
+protocol patch recorded in the E14-R26 round report.
