@@ -217,8 +217,12 @@ FieldSessionTag? resolveFieldSessionTag(
   required FieldStudyTask task,
 }) {
   final flags = ref.read(appConfigProvider).flags;
+  // Fail-closed AND cheap: with the flag off (every shipped environment)
+  // nothing else is read, so a capture site never has to wire the preference
+  // store just to be told "there is no tag".
+  if (!flags.recognitionFieldSessionTaggingEnabled) return null;
   return FieldSessionTag.resolve(
-    fieldSessionTaggingEnabled: flags.recognitionFieldSessionTaggingEnabled,
+    fieldSessionTaggingEnabled: true,
     enrolled: ref.read(fieldStudyEnrolmentProvider),
     cohort: FieldStudyCohort.ch14InternalAlpha,
     task: task,

@@ -110,7 +110,8 @@ void main() {
       expect(
         activation.isActivated,
         isFalse,
-        reason: 'bytes that are not the reviewed bytes have no measured '
+        reason:
+            'bytes that are not the reviewed bytes have no measured '
             'behaviour and must not be used',
       );
       expect(activation.reason, FallbackReason.parseFailed);
