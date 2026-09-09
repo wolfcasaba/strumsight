@@ -6,20 +6,16 @@ void main() {
     test('the C-shape open chord sounds C3-E3-G3-C4-E4', () {
       // [-1, 3, 2, 0, 1, 0] low-E -> high-E; low-E and the -1 mute the 6th
       // string, so 5 strings sound.
-      expect(
-        ChordVoicing.midiNotes(const [-1, 3, 2, 0, 1, 0]),
-        [48, 52, 55, 60, 64],
-      );
+      const expected = [48, 52, 55, 60, 64];
+      expect(ChordVoicing.midiNotes(const [-1, 3, 2, 0, 1, 0]), expected);
     });
 
     test('the E-shape open chord sounds every string (E-B-E-G#-B-E)', () {
       // [0, 2, 2, 1, 0, 0]: open low-E, A-string fret 2 (B), D-string fret 2
       // (E), G-string fret 1 (G#), open B, open high-E — the familiar open
       // E-major voicing, NOT the six open-string pitches.
-      expect(
-        ChordVoicing.midiNotes(const [0, 2, 2, 1, 0, 0]),
-        [40, 47, 52, 56, 59, 64],
-      );
+      const expected = [40, 47, 52, 56, 59, 64];
+      expect(ChordVoicing.midiNotes(const [0, 2, 2, 1, 0, 0]), expected);
     });
 
     test('an all-muted fingering sounds nothing', () {
@@ -39,10 +35,8 @@ void main() {
     });
 
     test('a non-standard a4 scales every frequency', () {
-      final freqs = ChordVoicing.frequencies(
-        const [0, -1, -1, -1, -1, -1],
-        a4: 432,
-      );
+      const frets = [0, -1, -1, -1, -1, -1];
+      final freqs = ChordVoicing.frequencies(frets, a4: 432);
       expect(freqs, hasLength(1));
       expect(freqs.single, closeTo(80.91, 0.05));
     });
