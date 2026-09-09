@@ -120,9 +120,10 @@ final class SongPreviewController extends ChangeNotifier {
   void _step(List<PreviewStrum> schedule, int index, double totalSec) {
     if (_disposed || !_playing) return;
     if (index >= schedule.length) {
-      // Let the last bar ring out before reporting the end.
-      final lastSec = schedule.last.timeSec;
-      _timer = Timer(_delay(totalSec - lastSec), stop);
+      // The timer that brought us here already waited from the last stroke
+      // to `totalSec` (see `nextSec` below), so the last bar has rung out:
+      // report the end now, never wait it out a second time.
+      stop();
       return;
     }
     final strum = schedule[index];
