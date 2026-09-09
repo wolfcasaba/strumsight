@@ -593,6 +593,7 @@
   "songKeyLabel": "Hangnem",
   "songChordHear": "{chord} meghallgatása",
   "@songChordHear": {
+    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0535).",
     "placeholders": {
       "chord": {
         "type": "String",
