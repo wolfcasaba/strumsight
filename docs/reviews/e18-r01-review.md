@@ -312,5 +312,7 @@ plusz a CI-run linkje a brief §10-be.
 | F9 MINOR | **FIXED** — `_previewFor` identity-ellenőrzés, újrakötés |
 | — | **ÚJ (CI-lelet)** | a V2 „Hear chord" gomb elhalasztva: az `e13_r24_song_editor_*` pixel-golden a hajtás felett tartalmazza a gombsort, a remote konténer goldent nem tud regenerálni (§0.0.1 R2); az `onAddChord` → hallás út marad |
 
+| — | **ÚJ (CI-lelet, 2. futás)** | 2 piros a log-plafon mögött → `song_flow_test` chip-tap cellái érik el a valódi `audioplayers`-t widget-tesztben; fake-injektálás a `_app()` helperbe (brief §0.0.1 R7), állítás nem változott |
+
 A javítások független újra-ellenőrzése (ADR 0055) a user boxán vagy egy
 következő review-sessionben esedékes; a CI-run az egyetlen gépi bizonyíték.

@@ -22,6 +22,7 @@
 - **R3 — A1 pontosítva (review F6):** a „nyitott E" cella a hat üres húr (`[0,0,0,0,0,0]` → `[40,45,50,55,59,64]`) ÉS az E-dúr fogás (`[0,2,2,1,0,0]` → `[40,47,52,56,59,64]`) — mindkettő mérve.
 - **R4 — A4 szigorítva (review F8):** ismert alaphang + ISMERETLEN minőség-utótag (`Cdim`, `C5`, `Cm6`) → `none`, csend — a `ChordAudio.hasKnownQuality` additív statikus a `chord_audio.dart`-ban (allowed_paths bővítve ezzel az egy fájllal; a jam-pad viselkedése változatlan).
 - **R5 — A5 kiegészítve (review F7):** a HIT frissíti a recency-t (`debugCacheKeys`), a FIFO-degradáció mérve piros.
+- **R7 — CI-lelet, 2. futás (`a846e0c`, [34364726569](https://github.com/wolfcasaba/strumsight/actions/runs/34364726569)): 10270 zöld, 2 piros.** A CI-log 5000 soros plafonja mögött; a mért állapot alapján a `test/features/songs/song_flow_test.dart` két cellája, amelyek a builder akkord-chipjeit NYOMJÁK: a chip-tap mostantól a `chordAuditionProvider` szállított gyárát, azaz a VALÓDI `audioplayers` lejátszót éri el — egy widget-tesztben plugin nélkül. A repó egyetlen valódi-lejátszós precedense (`recorder_hardening_test.dart:50`) sima `test()`, nem `testWidgets()`, ezért ott a függő időzítő/plugin-hiba nem bukik. A javítás: a `song_flow_test` `_app()` helperje ugyanazt a fake-injektálást kapja, amit a chord-library, a tuner és a reel tesztje használ (`chordAuditionProvider.overrideWithValue`); a cellák állításai NEM változnak (nem gyengítés, ugyanaz a mérce, csend a hangszórón). A fájl felvéve az `allowed_paths`-ra.
 - **R6 — F4 (randomizált property-cella az új szintézisre) follow-up:** a `test/property/` nincs a kör listáján; az E18-R02 briefje veszi fel (`docs/plans/chapter-18-…md` follow-up tábla).
 
 > ⚠ **A remote konténerben nincs Flutter SDK** ([`docs/execution/remote-container-environment.md`](../execution/remote-container-environment.md)): a §7 gate itt NEM futtatható. A kör bizonyítéka a CI (`full-gate.yml` + `router-ci.yml`) a push-olt HEAD-en, a §10-ben linkelve. Lokális gate a user boxán a merge előtt KÖTELEZŐ.
@@ -51,6 +52,7 @@ allowed_paths = [
   "test/features/songs/song_preview_player_test.dart",
   "test/features/songs/song_builder_audition_test.dart",
   "test/features/song_trainer/presentation/song_editor_audition_test.dart",
+  "test/features/songs/song_flow_test.dart",
   "docs/adr/0535-song-editor-chord-audition-and-progression-preview.md",
   "docs/rounds/e18-r01-song-editor-chord-audition.md",
   "docs/rag/chunks/014-play-along-learn.md",

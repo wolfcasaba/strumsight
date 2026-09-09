@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/chords/chord_shape.dart';
 import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/learn/audio/chord_audition.dart';
+import 'package:strumsight/features/learn/providers/chord_audition_provider.dart';
 import 'package:strumsight/features/share/widgets/strum_card.dart';
 import 'package:strumsight/features/songs/model/song.dart';
 import 'package:strumsight/features/songs/providers/songs_provider.dart';
@@ -23,10 +25,28 @@ class _SeededSongs extends SongsController {
   }
 }
 
+/// Tapping a chord chip in the builder now HEARS it (E18-R01, ADR 0535);
+/// the real player is an `audioplayers` platform channel, which a widget
+/// test must never reach — the same injection every audio-using test makes.
+final class _SilentAudition implements ChordAudition {
+  @override
+  Future<void> strum(
+    String label, {
+    StrumDirection direction = StrumDirection.down,
+  }) async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<void> dispose() async {}
+}
+
 Widget _app(Widget home, {List<Song>? seed}) => ProviderScope(
   overrides: [
     ...preferenceOverrides(),
     if (seed != null) songsProvider.overrideWith(() => _SeededSongs(seed)),
+    chordAuditionProvider.overrideWithValue(_SilentAudition()),
   ],
   child: MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
