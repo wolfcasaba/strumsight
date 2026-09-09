@@ -449,6 +449,7 @@ class ChordShadowAggregate {
     required List<int> confusion,
   }) : _confusion = List<int>.unmodifiable(confusion);
 
+  // ignore: prefer_const_constructors_in_immutables
   ChordShadowAggregate.empty()
     : observedFrames = 0,
       comparedFrames = 0,

@@ -45,7 +45,7 @@ class GuidedTargetCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.my_location, size: 16, color: AppColors.primary),
+            const Icon(Icons.my_location, size: 16, color: AppColors.primary),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
