@@ -40,6 +40,14 @@ allowed_paths = [
   "test/features/analyze/listen_mode_test.dart",
   "test/features/songs/song_source_url_test.dart",
   "test/property/listen_clip_bound_property_test.dart",
+  "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/app/navigation/legacy_route_redirect_test.dart",
+  "test/app/offline_network_guard_test.dart",
+  "test/features/analyze/mic_error_parity_test.dart",
+  "test/ui/goldens/e15_r13_full_variant_matrix_test.dart",
+  "test/core/screen_size_guard_test.dart",
+  "test/features/songs/song_builder_audition_test.dart",
+  "test/features/songs/song_tap_tempo_test.dart",
   "docs/rounds/e18-r03-listen-mode-external-source.md",
 ]
 native_gate = false
@@ -50,6 +58,10 @@ gate_tests = [
   "test/app/offline_network_guard_test.dart",
   "test/property/listen_clip_bound_property_test.dart",
   "test/l10n/arb_parity_test.dart",
+  "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/app/navigation/legacy_route_redirect_test.dart",
+  "test/ui/goldens/e15_r13_full_variant_matrix_test.dart",
+  "test/core/screen_size_guard_test.dart",
 ]
 ```
 
@@ -133,7 +145,18 @@ Csak az `ai-router` blokk listája módosítható. Bármi más → MEGÁLLÁS é
 | `lib/features/songs/model/song.dart` | opcionális `sourceUrl` + a sanitizáló |
 | `lib/features/songs/screens/song_builder_screen.dart` | a link megjelenítése/szerkesztése a vázlaton |
 | `lib/l10n/base/app_{en,hu}.arb` + `lib/l10n/app_{en,hu}.arb` | az ÚJ kulcsok forrása, majd a GENERÁLT aggregátum |
-| `test/...` (3 fájl) | a kör saját mércéi |
+| `test/...` | a kör saját mércéi (3 új fájl) + a pin-őrök (lásd alább) |
+
+**A pin-őrök jogosultsága (S11):** a listán szereplő, a briefen KÍVÜL élő
+pin-tesztek (`test/app/navigation/**`, `test/app/offline_network_guard_test.dart`,
+`test/ui/goldens/e15_r13_full_variant_matrix_test.dart`,
+`test/core/screen_size_guard_test.dart`,
+`test/features/analyze/mic_error_parity_test.dart`,
+`test/features/songs/song_builder_audition_test.dart`,
+`test/features/songs/song_tap_tempo_test.dart`) azért vannak az `allowed_paths`-ban
+ÉS a `gate_tests`-ben, mert a forrásválasztó és a link-mező a két képernyő
+RENDERELT tartalmát mozdítja. A jogosultság PONTOSAN ennyi: a megváltozott render
+leképezése a pinnelő cellában. **Cella törlése, `skip`-je vagy gyengítése TILOS.**
 
 **Tilos zóna:** `lib/core/**`, `lib/features/audio_analysis/**`,
 `lib/features/analyze/engine/clip_analyzer.dart`, `docs/adr/**`, `pubspec.yaml`.
@@ -262,17 +285,17 @@ open_decisions:
 
 | Felajánlott mintaszám | Másodperc | Elvárt viselkedés | Mit mér |
 |---|---|---|---|
-| `3968999` | `89,99997732…` | fut tovább, `isRecording == true` | szigorúan a korlát ALATT |
-| `3969000` | `90,0` | a felvétel LEÁLL, a puffer hossza **pontosan** `3969000` | pontosan a korláton — ez az egyetlen cella, ami a `>=` és a `>` közt különbséget tesz |
-| `3969001` | `90,00002267…` | a felvétel LEÁLL, a puffer hossza **`3969000`**, nem `3969001` | szigorúan a korlát FÖLÖTT (a túlcsordult minta nem kerül a pufferbe) |
+| `3968999` | `89,99997732…` | fut tovább, `isRecording == true` | szigorúan a küszöb **alatt** |
+| `3969000` | `90,0` | a felvétel LEÁLL, a puffer hossza **pontosan** `3969000` | pontosan **rajta** — ez az egyetlen cella, ami a `>=` és a `>` közt különbséget tesz |
+| `3969001` | `90,00002267…` | a felvétel LEÁLL, a puffer hossza **`3969000`**, nem `3969001` | szigorúan a küszöb **fölött** (a túlcsordult minta nem kerül a pufferbe) |
 
 ### 6.2 Küszöb-mátrix — a link hossza (cap = 2048 karakter)
 
 | URL hossza | Elvárt `sourceUrl` | Mit mér |
 |---|---|---|
-| `2047` | az URL | a korlát ALATT |
-| `2048` | az URL | pontosan a korláton (`<=`) |
-| `2049` | `null` | a korlát FÖLÖTT |
+| `2047` | az URL | szigorúan a küszöb **alatt** |
+| `2048` | az URL | pontosan **rajta** (`<=`) |
+| `2049` | `null` | szigorúan a küszöb **fölött** |
 
 Séma-cellák: `https://…` → elfogadva · `http://…` → elfogadva ·
 `javascript:alert(1)` → `null` · `file:///etc/passwd` → `null` ·
@@ -282,7 +305,7 @@ Séma-cellák: `https://…` → elfogadva · `http://…` → elfogadva ·
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| A korlát-ellenőrzés `>` és nem `>=` | 6.1 „pontosan a korláton" sora |
+| A korlát-ellenőrzés `>` és nem `>=` | 6.1 „pontosan rajta" sora |
 | A korlát elérésekor a felvétel FUT tovább, csak nem gyűjt | A2 (`isRecording` cella) |
 | A túlcsorduló chunk EGÉSZBEN bekerül | 6.1 harmadik sora (puffer-hossz) |
 | A korlát a gitár-módra is életbe lép | A3 regresszió |
@@ -300,13 +323,13 @@ hossza SOHA nem nagyobb a korlátnál, a korlát elérése után `isRecording ==
 ### 6.5 Falszifikációs próba (KÖTELEZŐ, a §10-ben dokumentálva)
 
 Cseréld a korlát-ellenőrzést `>=`-ról `>`-ra, futtasd a gate-et → a 6.1
-„pontosan a korláton" cella **PIROS** → állítsd vissza. Másodikként: vedd ki a
+„pontosan rajta" cella **PIROS** → állítsd vissza. Másodikként: vedd ki a
 séma-fehérlistát → a 6.2 `javascript:` cellája **PIROS** → állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/analyze/ test/features/songs/ test/core/audio/ test/app/offline_network_guard_test.dart test/property/listen_clip_bound_property_test.dart test/l10n/arb_parity_test.dart
+tools/round-gate.sh test/features/analyze/ test/features/songs/ test/core/audio/ test/app/offline_network_guard_test.dart test/property/listen_clip_bound_property_test.dart test/l10n/arb_parity_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/ui/goldens/e15_r13_full_variant_matrix_test.dart test/core/screen_size_guard_test.dart
 ```
 
 A gate a `format` → `analyze` → `test <minden útvonal külön>` → `architecture`

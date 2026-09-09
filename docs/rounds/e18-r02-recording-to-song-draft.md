@@ -37,6 +37,14 @@ allowed_paths = [
   "test/features/songs/song_draft_from_analysis_test.dart",
   "test/features/analyze/analyze_to_song_draft_test.dart",
   "test/property/song_draft_quantisation_property_test.dart",
+  "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/app/navigation/legacy_route_redirect_test.dart",
+  "test/app/offline_network_guard_test.dart",
+  "test/features/analyze/mic_error_parity_test.dart",
+  "test/ui/goldens/e15_r13_full_variant_matrix_test.dart",
+  "test/core/screen_size_guard_test.dart",
+  "test/features/songs/song_builder_audition_test.dart",
+  "test/features/songs/song_tap_tempo_test.dart",
   "docs/adr/0537-recording-to-song-draft-quantisation.md",
   "docs/rounds/e18-r02-recording-to-song-draft.md",
 ]
@@ -46,6 +54,11 @@ gate_tests = [
   "test/features/analyze/",
   "test/property/song_draft_quantisation_property_test.dart",
   "test/l10n/arb_parity_test.dart",
+  "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/app/navigation/legacy_route_redirect_test.dart",
+  "test/app/offline_network_guard_test.dart",
+  "test/ui/goldens/e15_r13_full_variant_matrix_test.dart",
+  "test/core/screen_size_guard_test.dart",
 ]
 ```
 
@@ -133,8 +146,20 @@ Csak az `ai-router` blokk listája módosítható. Bármi más → MEGÁLLÁS é
 | `lib/features/analyze/screens/analyze_screen.dart` | a belépési pont az eredmény-sávban |
 | `lib/l10n/base/app_{en,hu}.arb` | az ÚJ kulcsok forrás-szegmense |
 | `lib/l10n/app_{en,hu}.arb` | a `tool/gen_l10n_segments.dart` által GENERÁLT aggregátum — kézzel ne írd, regeneráld |
-| `test/...` (3 fájl) | a kör saját mércéi |
+| `test/...` | a kör saját mércéi (3 új fájl) + a pin-őrök (lásd alább) |
 | `docs/adr/0537-...` | a §5 döntéseinek rögzítése |
+
+**A pin-őrök jogosultsága (S11):** a fenti listán szereplő, a briefen KÍVÜL élő
+pin-tesztek (`test/app/navigation/**`, `test/app/offline_network_guard_test.dart`,
+`test/ui/goldens/e15_r13_full_variant_matrix_test.dart`,
+`test/core/screen_size_guard_test.dart`,
+`test/features/analyze/mic_error_parity_test.dart`,
+`test/features/songs/song_builder_audition_test.dart`,
+`test/features/songs/song_tap_tempo_test.dart`) azért kerültek az `allowed_paths`-ba
+ÉS a `gate_tests`-be, mert a két érintett képernyő RENDERELT tartalma mozdul (új
+művelet a sávban, vázlat-prefill). A jogosultság PONTOSAN ennyi: a megváltozott
+render leképezése a pinnelő cellában. **Cella törlése, `skip`-je vagy gyengítése
+TILOS** — ha egy cella ezen túl válik pirossá, az a kör BLOKKOLÓ lelete.
 
 **Tilos zóna:** `lib/features/analyze/engine/**`, `lib/features/audio_analysis/**`,
 `lib/core/audio/**`, `lib/features/song_trainer/**`, `lib/app/routing/**`.
@@ -257,15 +282,15 @@ open_decisions:
 
 | Átfedés az ütemben | Származtatott `coverage` | Elvárt `uncertain` | Mit mér |
 |---|---|---|---|
-| `0.9 s` | `0.45` | **true** | szigorúan a küszöb ALATT |
-| `1.0 s` | `0.5` | **false** | pontosan a küszöbÖN — ez az egyetlen cella, ami a `<` és `<=` közt különbséget tesz |
-| `1.1 s` | `0.55` | **false** | szigorúan a küszöb FÖLÖTT |
+| `0.9 s` | `0.45` | **true** | szigorúan a küszöb **alatt** |
+| `1.0 s` | `0.5` | **false** | pontosan **rajta** — ez az egyetlen cella, ami a `<` és a `<=` közt különbséget tesz |
+| `1.1 s` | `0.55` | **false** | szigorúan a küszöb **fölött** |
 
 ### 6.2 Mérce-mátrix — melyik hibás implementációt fogja PIROSRA
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| `uncertain = coverage <= 0.5` | a 6.1 „pontosan a küszöbön" sora |
+| `uncertain = coverage <= 0.5` | a 6.1 „pontosan rajta" sora |
 | Az ütemhossz `60/bpm` (beat) lesz `beatsPerBar * 60/bpm` helyett | A2 property-cella, a `beatsPerBar = 3` oszlop |
 | A győztes címke az ütem KEZDETÉN szóló akkord (nem a legnagyobb átfedésű) | A2/A4 unit-cella: két akkord egy ütemben, 0,4 s + 1,6 s bontásban |
 | Az átfedés nélküli ütem üres címkét kap | A3 + A5 (a `fromJson` `JsonRecordException`-t dob) |
@@ -289,7 +314,7 @@ tényleg méri, nem csak leírja.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/songs/ test/features/analyze/ test/property/song_draft_quantisation_property_test.dart test/l10n/arb_parity_test.dart
+tools/round-gate.sh test/features/songs/ test/features/analyze/ test/property/song_draft_quantisation_property_test.dart test/l10n/arb_parity_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/offline_network_guard_test.dart test/ui/goldens/e15_r13_full_variant_matrix_test.dart test/core/screen_size_guard_test.dart
 ```
 
 A gate a `format` → `analyze` → `test <minden útvonal külön>` → `architecture`

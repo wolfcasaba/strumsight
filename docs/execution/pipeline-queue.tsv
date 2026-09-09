@@ -810,3 +810,6 @@ E17-R11	docs/rounds/e17-r11-community-notification-and-social-graph.md	sonnet-im
 E17-R12	docs/rounds/e17-r12-community-routes-and-shell-entry.md	sonnet-impl	0531	hold
 E17-R13	docs/rounds/e17-r13-community-backend-enablement.md	sonnet-impl	0532	hold
 E17-R14	docs/rounds/e17-r14-full-wiring-closure.md	sonnet-impl	0533	hold
+E18-R02	docs/rounds/e18-r02-recording-to-song-draft.md	sonnet-impl	0537	hold
+E18-R03	docs/rounds/e18-r03-listen-mode-external-source.md	sonnet-impl	0536	hold
+E18-R04	docs/rounds/e18-r04-local-audio-file-decoding.md	sonnet-impl	0538	hold
