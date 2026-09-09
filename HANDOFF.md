@@ -28,9 +28,36 @@ agent-jelentések a session scratchpadjában (nem a repóban).
   laptopon: `chordConfidence`, `debugChordConfEma`, `debugTonalness`,
   `signalQuality.state` chord-frame-enként (`test/tools/real_audio_probe_test.dart`).
 
-**Ismert piros a CI-ban, amit csak a box tud feloldani:** ~9 golden-teszt
-(`e13_r17/18/19/21/22/23/35`, ADR 0426) — `tools/golden-x86.sh record
-test/ui/goldens/e13_r{17,18,19,21,22,23,35}_*_test.dart`, majd a PNG-k commitja.
+**Ismert piros a CI-ban, amit csak a box tud feloldani:** a `a36d5f8` CI-futás
+(run 34297344123) **32 piros cellája golden-PNG eltérés** — a fenti hullámok
+minden érintett képernyőt átrajzoltak. A korábbi 7 fájlos lista (`e13_r17/18/19/
+21/22/23/35`) **hiányos volt**: a megváltozott képernyők/widgetek → golden-fájl
+leképezés (mért, importokból) TIZENKÉT fájlt ad:
+
+| golden fájl | átrajzolt cella(k) | mi változott |
+|---|---|---|
+| `e13_r17` | today hub, practice area hub, profile hub | mind a három képernyő |
+| `e13_r18` | live stage | `live_screen` + `chord_timeline`/`live_status_bar`/`uncertainty_reason_banner`/`MicPermissionBanner` |
+| `e13_r19` | tuner, metronome | `tuner_screen`, `metronome_screen` |
+| `e13_r20` | chord library | `AudioOutputErrorNotice` beszúrása |
+| `e13_r21` | practice setup, session running, session paused | `practice_setup_screen`, `practice_session_screen`, `practice_controls`, `practice_hud` |
+| `e13_r22` | practice result | `practice_result_screen` |
+| `e13_r23` | song library, setlist list v2 | `song_capability_badges`, `setlist_item_availability_badge` (U9 success-token) |
+| `e13_r24` | song editor | `song_editor_screen` |
+| `e13_r25` | song trainer stage | `transport_controls` |
+| `e13_r30` | vision setup | `vision_setup_screen` |
+| `e13_r33` | community gate, bookmarks | `community_gate_screen` (H22 app-bar), `bookmarks_screen` |
+| `e13_r35` | settings | `settings_screen` |
+
+Újrafelvétel (a `record` mód a fenti tizenkét fájlra, majd a PNG-k commitja):
+`tools/golden-x86.sh record test/ui/goldens/e13_r{17,18,19,20,21,22,23,24,25,30,33,35}_*_test.dart`.
+**Forrás-szkennelő (pure-Dart) őr NEM piros:** a `test/tooling/**`, `test/l10n/**`,
+`test/app/**`, `test/accessibility/**` fixture- és forrás-őrök teljes szimulációja
+zöld a `a36d5f8` fán (ARB-szegmens unió + sorrend, en/hu paritás, magyar
+plural-nyelvtan, route-literál, design-system barrel, cross-feature import,
+képernyő-leltár (96), `Colors.green` (U9), `shared_preferences`, `Dio(`,
+diagnosztika-tárolás, örökölt azonosítók, known-exceptions ↔ teszt-tolerancia
+tükör) — golden-újrafelvétel után nem marad rejtett őr-piros.
 Laptopos APK a goldenektől függetlenül: `lab-apk.yml` dispatch (kapuk nélkül,
 `lab_build.json` üres tokennel = diagnosztika kikapcsolva).
 
