@@ -1,10 +1,15 @@
-// Audit H21 — `state.value!` on an AsyncValue throws in the loading and
-// error states. The profile controller dereferenced it on every submit.
-// `refresh()` sets a BARE `AsyncLoading` (no previous value carried over) and
-// `AsyncValue.guard` a bare `AsyncError`, so a submit that lands while the
-// gate is being re-resolved — or after that failed — used to crash instead
-// of being refused. These tests pin the safe behaviour: the write is
-// reported as busy, and nothing throws.
+// Audit H21 / F1 — a submit that lands while the gate is being re-resolved
+// (or after that re-resolution failed) must be REFUSED, not sent to the
+// repository.
+//
+// The measured shape (this is what F1 corrected): Riverpod does NOT hand the
+// controller a bare `AsyncLoading`/`AsyncError`. `state = const
+// AsyncLoading()` and `AsyncValue.guard` both carry the previously emitted
+// data forward (`copyWithPrevious`), so `state.value` is still non-null
+// mid-refresh. The old `state.value == null` guard therefore never fired and
+// the write went straight through to the repository. These cells drive the
+// REAL `refresh()` (never a hand-built AsyncValue), assert the loading /
+// error SHAPE the app actually produces, and pin the refusal.
 
 import 'dart:async';
 
@@ -133,10 +138,19 @@ void main() {
     await pumpEventQueue();
     final controller = _controllerOf(container);
 
-    // A refresh that never resolves: the state is a bare AsyncLoading, so
-    // `state.value` is null — the exact shape the old `!` blew up on.
+    // A refresh that never resolves. The state is `AsyncLoading` — and it
+    // still CARRIES the previous data, which is exactly why a `state.value
+    // == null` guard was no guard at all.
     unawaited(controller.refresh());
-    expect(container.read(communityProfileControllerProvider).value, isNull);
+    final loading = container.read(communityProfileControllerProvider);
+    expect(loading.isLoading, isTrue);
+    expect(
+      loading.value,
+      isNotNull,
+      reason:
+          'Riverpod copies the previous data into the AsyncLoading; the '
+          'guard must read the SHAPE, not the value.',
+    );
 
     final result = await controller.createProfile(
       handle: CommunityHandle('wolfcasaba'),
@@ -169,7 +183,8 @@ void main() {
     final controller = _controllerOf(container);
 
     await controller.refresh();
-    expect(container.read(communityProfileControllerProvider).value, isNull);
+    final failed = container.read(communityProfileControllerProvider);
+    expect(failed.hasError, isTrue);
 
     final result = await controller.createProfile(
       handle: CommunityHandle('wolfcasaba'),

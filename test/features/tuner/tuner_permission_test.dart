@@ -7,6 +7,10 @@
 //   H12   — reading the permission never shows the system dialog; a denial no
 //           dialog can repair is never re-asked.
 //   H11   — a mic failure is stated even while the permission reads missing.
+//   F1    — an UNRESOLVED read is a THIRD state: while the check is in
+//           flight the screen shows neither the banner nor the prompt.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +25,26 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
+
+/// A gateway whose `currentState()` stays unanswered until the test says
+/// so — the "we do not know yet" first frame every mount goes through.
+final class _PendingPermissionGateway implements MicrophonePermissionGateway {
+  final Completer<MicrophonePermissionState> _pending =
+      Completer<MicrophonePermissionState>();
+
+  int requestCalls = 0;
+
+  @override
+  Future<MicrophonePermissionState> currentState() => _pending.future;
+
+  @override
+  Future<MicrophonePermissionState> request() async {
+    requestCalls++;
+    return MicrophonePermissionState.denied;
+  }
+
+  void resolve(MicrophonePermissionState state) => _pending.complete(state);
+}
 
 Future<void> _pumpTuner(
   WidgetTester tester, {
@@ -67,6 +91,57 @@ void main() {
     expect(find.text(l10n.tunerListening), findsNothing);
     expect(find.byType(MicPermissionBanner), findsOneWidget);
   });
+
+  // F1 — `micPermissionProvider` is an AsyncNotifier, so its FIRST frame is
+  // `AsyncLoading`. Rendering the settings banner from that frame made every
+  // Tuner mount flash "the microphone is off" (and, in a test that pumps
+  // once, say it forever) — a claim about the device made before the device
+  // had answered. Unknown is still fail-closed for ACTIONS: no invitation.
+  testWidgets(
+    'while the check is in flight neither the banner nor the prompt is '
+    'shown — and once the answer is "denied", the banner appears',
+    (tester) async {
+      final engine = FakeTunerEngine();
+      addTearDown(engine.dispose);
+      final gateway = _PendingPermissionGateway();
+
+      await _pumpTuner(tester, engine: engine, gateway: gateway);
+
+      expect(
+        find.byType(MicPermissionBanner),
+        findsNothing,
+        reason: 'an unanswered read is not a measured denial',
+      );
+      expect(find.text(l10n.tunerListening), findsNothing);
+
+      gateway.resolve(MicrophonePermissionState.permanentlyDenied);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MicPermissionBanner), findsOneWidget);
+      expect(find.text(l10n.tunerListening), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'while the check is in flight neither the banner nor the prompt is '
+    'shown — and once the answer is "granted", the prompt appears',
+    (tester) async {
+      final engine = FakeTunerEngine();
+      addTearDown(engine.dispose);
+      final gateway = _PendingPermissionGateway();
+
+      await _pumpTuner(tester, engine: engine, gateway: gateway);
+
+      expect(find.byType(MicPermissionBanner), findsNothing);
+      expect(find.text(l10n.tunerListening), findsNothing);
+
+      gateway.resolve(MicrophonePermissionState.granted);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MicPermissionBanner), findsNothing);
+      expect(find.text(l10n.tunerListening), findsOneWidget);
+    },
+  );
 
   testWidgets('a granted permission keeps the invitation', (tester) async {
     final engine = FakeTunerEngine();

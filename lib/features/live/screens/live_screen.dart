@@ -260,8 +260,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // in flight or came back as an error is "not granted" — the previous
     // `?? true` turned every unknown into consent and rendered a screen that
     // claimed to be listening on a microphone it had never been given.
+    //
+    // But "not granted" is TWO states, not one (audit F1). The permission is
+    // an `AsyncNotifier` whose first frame is `AsyncLoading`, so treating the
+    // in-flight read like a measured denial flashed the settings banner on
+    // every Live mount — and in a test that pumps a single frame it never
+    // went away. While the answer is unknown the screen says nothing at all:
+    // no banner, no "Starting…", no "play a chord" invitation — only the
+    // level meter, which honestly reads `listening: false`. Actions stay
+    // fail-closed (the transport below is disabled until the grant lands).
     final micPermission = ref.watch(micPermissionProvider);
     final micGranted = micPermission.value?.isGranted ?? false;
+    final micUnknown = !micPermission.hasValue && !micPermission.hasError;
     // The mic failed to start (busy / platform error) — surface it, never a
     // silent no-op. Not shown while paused (the engine is intentionally off).
     final micError = liveAsync.hasError && !_paused;
@@ -362,7 +372,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                 ),
               ),
             ),
-          if (!micGranted) const MicPermissionBanner(),
+          // Only a RESOLVED "not granted" earns the banner — see `micUnknown`
+          // above.
+          if (!micGranted && !micUnknown) const MicPermissionBanner(),
           // Shown REGARDLESS of the permission read: gating it on `micGranted`
           // meant that whenever the permission was (wrongly) read as missing,
           // the one message explaining why the engine is dead disappeared too.

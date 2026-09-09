@@ -531,8 +531,19 @@ void main() {
           ),
         );
         await tester.pump();
+        // Audit U1 pinned the Start CTA into its own bottom bar, which took
+        // that height off the `ListView` viewport: the meter row now falls
+        // outside the viewport AND outside its cache extent, so the lazy
+        // sliver never builds it and `find.text` sees nothing. Same
+        // scroll-into-view pattern as the scoring-profile cells above.
+        final readout = find.text('${m.beatsPerBar}/${m.beatUnit}');
+        await tester.scrollUntilVisible(
+          readout,
+          120,
+          scrollable: find.byType(Scrollable).first,
+        );
         expect(
-          find.text('${m.beatsPerBar}/${m.beatUnit}'),
+          readout,
           findsOneWidget,
           reason: 'meter ${m.beatsPerBar}/${m.beatUnit}',
         );

@@ -135,8 +135,16 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
     // or one that errored is "not granted" — the previous `?? true` turned
     // every unknown into consent and left the Tuner saying "Play a string…"
     // over a microphone it had never been given.
-    final micGranted =
-        ref.watch(micPermissionProvider).value?.isGranted ?? false;
+    //
+    // But "not granted" is TWO states, not one (audit F1). The permission is
+    // an `AsyncNotifier` whose first frame is `AsyncLoading`, so treating the
+    // in-flight read like a measured denial flashed the settings banner on
+    // every Tuner mount — and in a test that pumps a single frame it never
+    // went away. While the answer is unknown the screen says nothing at all:
+    // no banner, no "Play a string…" invitation. Actions stay fail-closed.
+    final micPermission = ref.watch(micPermissionProvider);
+    final micGranted = micPermission.value?.isGranted ?? false;
+    final micUnknown = !micPermission.hasValue && !micPermission.hasError;
     final micError = readingAsync.hasError;
     // The idle prompt invites the player to sound a string; with no mic (or a
     // dead one) that invitation leads nowhere, so the banner below is the
@@ -234,7 +242,9 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
           // a start failure (busy / platform error) gets Retry. The error
           // banner stays up through a Retry until the restarted engine
           // produces a reading (AsyncData clears hasError) or fails again.
-          if (!micGranted) const MicPermissionBanner(),
+          // Only a RESOLVED "not granted" earns the banner — see `micUnknown`
+          // above.
+          if (!micGranted && !micUnknown) const MicPermissionBanner(),
           // Shown REGARDLESS of the permission read: gating it on `micGranted`
           // meant that whenever the permission was (wrongly) read as missing,
           // the one message explaining why the tuner is dead disappeared too.

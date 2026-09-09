@@ -180,6 +180,24 @@ class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
     state = await AsyncValue.guard(build);
   }
 
+  /// The settled state a submit may fold its ``isSubmitting`` flag into,
+  /// or ``null`` when the gate is busy and the write must be refused.
+  ///
+  /// The SHAPE of the [AsyncValue] is what says "busy", not its value: a
+  /// Riverpod `AsyncLoading` / `AsyncError` carries the previously emitted
+  /// data forward (``copyWithPrevious``), so ``state.value`` stays non-null
+  /// while the gate is being re-resolved. The old ``state.value == null``
+  /// guard therefore let a submit through mid-refresh — straight into the
+  /// repository — and then folded its result into a state the in-flight
+  /// ``build()`` was about to overwrite (audit F1, was H21).
+  CommunityProfileState? get _submittableState {
+    final gate = state;
+    if (gate.isLoading || gate.hasError) return null;
+    final current = gate.value;
+    if (current == null || current.isSubmitting) return null;
+    return current;
+  }
+
   /// Create the caller's community profile. The submit-gate on the
   /// edit-profile screen prevents a second concurrent call from
   /// landing here, but ``isSubmitting`` is the belt-and-braces for
@@ -193,8 +211,8 @@ class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
     // The gate may still be loading (or have failed to resolve): there is
     // then no state to submit from, so the write is refused as busy instead
     // of throwing a null-check error on `state.value` (audit H21).
-    final current = state.value;
-    if (current == null || current.isSubmitting) {
+    final current = _submittableState;
+    if (current == null) {
       return const CommunityProfileSubmitResult.busy();
     }
     state = AsyncData(current.copyWith(isSubmitting: true, error: null));
@@ -219,8 +237,8 @@ class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
   }) async {
     // Same guard as `createProfile` — a loading/failed gate has no state to
     // fold the submit flag into (audit H21).
-    final current = state.value;
-    if (current == null || current.isSubmitting) {
+    final current = _submittableState;
+    if (current == null) {
       return const CommunityProfileSubmitResult.busy();
     }
     state = AsyncData(current.copyWith(isSubmitting: true, error: null));

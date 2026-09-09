@@ -7,6 +7,8 @@
 //         next resume, without restarting the app, and without a dialog.
 //   H7  — an unresolved/errored read is NOT consent (fail-closed).
 //   H13 — "Starting…" never coexists with the permission banner.
+//   F1  — an UNRESOLVED read is a third state: no banner, no "Starting…",
+//         no invitation (the banner is a claim, and we do not know yet).
 //   H8  — the "play a chord" invitation is not offered without a microphone.
 //   H11 — an engine/mic failure is stated regardless of the permission read.
 import 'dart:async';
@@ -190,9 +192,17 @@ void main() {
   });
 
   group('H7/H13/H8 — an unknown permission is not consent', () {
+    // F1 — "not granted" is TWO states. Fail-closed means the screen offers
+    // no invitation and no "Starting…" while the read is in flight, but a
+    // read that has not answered yet is NOT a measured denial either: the
+    // banner ("open the settings, the microphone is off") is a claim about
+    // the device, and the screen must not make it before it knows. The old
+    // cell pinned the flash: `micPermissionProvider` is an AsyncNotifier
+    // whose first frame is loading, so EVERY Live mount rendered the banner
+    // for a frame — and in a test that pumps once, forever.
     testWidgets(
-      'while the read is still in flight the screen states the missing '
-      'permission and offers neither "Starting…" nor "play a chord"',
+      'while the check is in flight neither the banner nor the prompt is '
+      'shown — and once the answer is "denied", the banner appears',
       (tester) async {
         final engine = FakeStrumEngine();
         addTearDown(engine.dispose);
@@ -202,9 +212,34 @@ void main() {
 
         expect(
           find.byType(MicPermissionBanner),
-          findsOneWidget,
-          reason: 'unknown is fail-closed: not granted',
+          findsNothing,
+          reason: 'an unanswered read is not a measured denial',
         );
+        expect(find.text(l10n.liveStarting), findsNothing);
+        expect(find.text(l10n.liveWaitingForChord), findsNothing);
+
+        // The read finally answers "denied" — now the screen states it.
+        gateway.resolve(MicrophonePermissionState.permanentlyDenied);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(MicPermissionBanner), findsOneWidget);
+        expect(find.text(l10n.liveStarting), findsNothing);
+        expect(find.text(l10n.liveWaitingForChord), findsNothing);
+        await tester.pump(const Duration(milliseconds: 400));
+      },
+    );
+
+    testWidgets(
+      'while the check is in flight neither the banner nor the prompt is '
+      'shown — and once the answer is "granted", the prompt appears',
+      (tester) async {
+        final engine = FakeStrumEngine();
+        addTearDown(engine.dispose);
+        final gateway = _PendingPermissionGateway();
+
+        await _pumpLive(tester, engine: engine, gateway: gateway);
+
+        expect(find.byType(MicPermissionBanner), findsNothing);
         expect(find.text(l10n.liveStarting), findsNothing);
         expect(find.text(l10n.liveWaitingForChord), findsNothing);
 
