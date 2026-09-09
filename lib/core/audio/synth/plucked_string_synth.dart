@@ -77,8 +77,7 @@ final class PluckedStringSynth {
   }) {
     final step = (staggerMs / 1000 * sampleRate).round();
     return [
-      for (var i = 0; i < count; i++)
-        (downstroke ? i : count - 1 - i) * step,
+      for (var i = 0; i < count; i++) (downstroke ? i : count - 1 - i) * step,
     ];
   }
 

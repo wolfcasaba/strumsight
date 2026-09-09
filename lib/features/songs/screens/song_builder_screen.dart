@@ -7,8 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chords/public.dart';
 import '../../../core/music/strum.dart';
-import '../../learn/public.dart'
-    show ChordAudition, chordAuditionProvider;
+import '../../learn/public.dart' show ChordAudition, chordAuditionProvider;
 import '../application/song_preview_player.dart';
 import '../model/song.dart';
 import '../providers/songs_provider.dart';
