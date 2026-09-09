@@ -190,9 +190,58 @@ ami hiányzik, az a hangzás JELLEGE:
 - **E11** — az `Eighths` preset fel-pengetésénél megfordul-e a söprés iránya (magas→mély).
 - **E15** — a mentett dal Learn-futásában a jam-pad LÁGY SZINUSZ marad-e (nem a pengetett hang).
 
-## §7 — Mikrofon-bekötés
+## §7 — Mikrofon-bekötés: NEM SIKERÜLT, a §9–§12 emiatt BLOCKED
 
-*(mérés alatt)*
+A gazdagép hangja nem jut át az emulátorba. A lánc elemenként megmérve:
+
+| Láncszem | Állapot | Bizonyíték |
+|---|---|---|
+| Windows mikrofon-engedély | jó | `HKLM`/`HKCU` `…\CapabilityAccessManager\ConsentStore\microphone` = `Allow` |
+| Windows felvevő eszköz | jó | `Get-PnpDevice -Class AudioEndpoint`: „Microphone Array (Realtek(R) Audio)" — Status `OK`. (Van „Stereomix" is, a §7 3. opciójához.) |
+| Emulátor indítási kapcsoló | jó | az emulátor `-allow-host-audio`-val indítva (a súgó: „Allows sending of audio from audio input devices. **Otherwise, zeroes out audio.**") |
+| Android mikrofon-megnyitás | jó | `dumpsys audio`: `rec update riid:1487 uid:10196 session:1561 src:MIC not silenced pack:com.wolfcasaba.strumsight`; `dumpsys media.audio_flinger`: nyitott `AUDIO_DEVICE_IN_BUILTIN_MIC` RECORD szál; a Flutter-naplóban `audio.session.acquired {owner=live}` és **nincs** `audio.capture_failed` |
+| **Jel a vendég oldalon** | **0%** | a Live „Input level" akadálymentességi node-ja **156 mintavételben három külön futásban végig `0%`**; a banner végig „Signal too weak to tell — move closer to the mic" |
+
+**Következtetés.** Az app és az Android-réteg helyesen működik: a mikrofont
+megnyitja, a felvétel nem hibázik. A jel a **gazdagép → emulátor** határon
+vész el. Az egyetlen nem ellenőrzött láncszem az emulátor saját
+`⋯` (Extended controls) → **Microphone** → „Virtual microphone uses host audio
+input" kapcsolója. Ez gazdagép-oldali Qt-UI beállítás: `adb`-vel, az emulátor
+konzoljával és a regisztrációs adatbázisban sem olvasható ki
+(`HKCU:\Software\Android Open Source Project\Emulator` nem tárolja), ezért sem
+ellenőrizni, sem beállítani nem tudtam a sessionből.
+
+**Emiatt a §9 (Live-felismerés), §10 (Tuner), §11 (Learn-pontozás) és §12
+(Analyze) cellái NEM MÉRHETŐK — BLOCKED.** Nem tippelek helyettük.
+
+### Amit a §7 hiánya ELLENÉRE sikerült megmérni
+
+| Cella | Eredmény | Mért |
+|---|---|---|
+| §9/L10 (mikrofon-kizárólagosság a Tunerrel) | **PASS** | Amíg a Live tartotta a hangsessiont, a Tuner megnyitásakor: `[warning] audio.session.busy {requested=tuner, holder=live}`, a képernyőn KIMONDOTT hiba: **„Couldn't start the microphone. It may be in use by another app. Tap Retry."** + `Retry` gomb. Tehát nincs néma holt stream — pontosan a terv által kért viselkedés. |
+| §9/L1 (képernyő megnyitása) | **részleges PASS** | A Live megnyílik, „LISTENING", „Play a chord…", input-szint kijelző jelen van, `0 BPM · A=440`. A szint mozgása jel hiányában nem mérhető. |
+| §9/L5 (csend → nincs hamis akkord) | **PASS** | Néma bemenetnél 156 mintavételen át **egyetlen akkordcímke sem** jelent meg; végig az őszinte „Signal too weak to tell — move closer to the mic" banner. SOHA nem állított magabiztos hamis akkordot. |
+
+## §4 — Megfigyelések (nem bukás-kritérium)
+
+**A felhasználó visszajelzése a Live képernyő szövegeiről (2026-09-10).**
+Szó szerint: *„ez a sok felirat hogy rossz a minőség nem kell, elég az
+equalizer jelzés"* — vagyis a „miért nem sikerült" magyarázó bannerek helyett
+elegendőnek tartaná a szint-kijelzőt (equalizer) önmagában.
+
+Ezt VÁLTOZTATÁS NÉLKÜL rögzítem, mert **szembemegy a kör írott mércéjével**:
+
+- a terv §9/L6 kifejezetten MEGKÖVETELI, hogy tompított pengetésnél a banner
+  „az egyik hat okot mondja" (`Not quite clear` / `Still settling` /
+  `Signal too weak` …);
+- a §9/L5 megköveteli, hogy csendben a „Weak signal — move closer" jelenjen meg;
+- az `AGENTS.md` §5 elve, hogy „gyenge konfidencia sosem biztos állítás", és a
+  hiba legyen KIMONDVA.
+
+Tehát a jelenlegi viselkedés szándékos, nem hiba. A szövegek visszavétele
+TERMÉKTERVEZÉSI döntés (és az L5/L6 cellák plusz az AGENTS §5 újraírását
+igényelné), nem javítás — ezért a következő kör / a terméktulajdonos dolga.
+Nem nyúltam hozzá.
 
 ## §14 — Hordozó képernyők: részleges leletek
 
@@ -200,6 +249,14 @@ ami hiányzik, az a hangzás JELLEGE:
 |---|---|---|---|
 | H1 | Today hub | **PASS** | Új felhasználónak „Let's get started" + „Start your first practice" CTA, „0 Day streak", „0 of 10 min today", „View progress". |
 | H2 | Practice area hub → Setup → Session → Result | **FAIL** | Két különböző út, két különböző eredmény — részletek lent (B3). |
+| H3 | Chord library | **részleges PASS** | Megnyílik, 0 kivétel. A tap-to-hear PAD hangzása (pad vs. pengetett) fül-cella — nem mérhető. A bal kezes tükrözés nem mérve. |
+| H4 | Metronome | **részleges PASS** | Megnyílik (100 BPM, Tap tempo, Start, Advanced settings), 0 kivétel. Start/Stop működik: 62 s futás alatt folyt a hang, az audio-HAL csak a leállítás után ~3 s-mal ment standby-ba (`entering standby, frames: 13165888`). A kattanások EGYENLETESSÉGE nem mérhető a logcat-ből (folyamatos stream, nincs per-kattanás esemény) — fül-cella. |
+| H5 | Unified Library | **FAIL** | A képernyő megnyílik (fülek: All / Practice / Analysis / Song / Setlist), de a tartalom helyén hibaállapot: **„Couldn't load your library. Try again."** 0 kivétel a konzolon. Mentett Analyze-felvétel nincs (a §12 BLOCKED), de a saját dalnak látszania kellene. Nem javítottam. |
+| H6 | Progress / Profile / Streak / Gamification | **részleges PASS** | A Profile hub megnyílik: Haladás, „2 Napi sorozat / 0 Sessions", Achievements, „Local profile — You're using StrumSight without an account", „Community features aren't available in this build yet", Library, Settings. 0 kivétel. A napi lecke tükröződése nem mérhető (§11 BLOCKED). |
+| H7 | Settings, nyelvváltás en↔hu | **PASS** | A Settings megnyílik: Appearance (Light/Dark/System), Language (System default/English/Magyar), **Confidence threshold 45 %**, Privacy & data, Offline AI models. A „Magyar" koppintásra a felület AZONNAL magyar lett, a tabokkal együtt („Ma", „Gyakorló hub", „4/1. lap"), 0 kivétel. A terv által külön kért kör-specifikus l10n **helyes**: a ▶ gomb `content-desc`-je **„Előnézet"**, lejátszás közben **„Előnézet leállítása"** (= `songPreviewPlay` / `songPreviewStop`). |
+| H8 | Song Trainer V2 import (MusicXML) | **BLOCKED** | A V2 belépő nem érhető el — lásd a §3 szakaszt. |
+| H9 | Rejtett hálózati kérés | **PASS** | Kijelentkezett állapotban („Local profile") négy tab bejárása alatt `adb logcat`-ben **0** apphoz köthető `http`/`socket`/`okhttp`/`dio` sor. (AGENTS §5) |
+| H10 | Elforgatás (landscape) | **PASS** | `user_rotation 1` → a rendszer `mDisplayRotation=ROTATION_90`, 2220×1080; az app nincs tájolás-zárolva (nincs `screenOrientation` a manifestben, nincs `setPreferredOrientations`). Az alsó tab-sáv **bal oldali navigációs sínné** alakul, a tartalom újratördel. **0** apphoz köthető `RenderFlex`/`overflowed` a Today-en és a dal-builderben sem. (A logcat 2 találata a rendszertől jött: `SystemServiceRegistry` ethernet és a Google-billentyűzet — nem az apptól.) |
 
 ### B3 — §14/H2: a V2 practice-session mikrofon-hibája néma üres képernyőre visz
 
@@ -365,4 +422,114 @@ ered; a mintázatok:
 célja a hű mérés; a 203 piros ezen a gazdagépen NEM minősíti a kört —
 a kör mércéje a CI, ami zöld.
 
-<!-- A §3, §8–§13, §16 szakaszok a mérés előrehaladtával kerülnek ide. -->
+## §3 — A V2 szerkesztő: BLOCKED (a belépő nem érhető el)
+
+A `SongEditorScreen` a reachability-mérés szerint **elérhető, de flag mögött**:
+
+```
+SongEditorScreen   reachable=True  flagGated=True   song_editor_screen.dart
+SongLibraryScreen  reachable=True  flagGated=True   song_library_screen.dart
+LessonListScreen   reachable=True  flagGated=False  lesson_list_screen.dart
+```
+
+A kód szerint az egyetlen belépő a Learn lecke-lista
+(`lesson_list_screen.dart:69` → `context.push(AppRoutes.songTrainerLibrary)`),
+`flags.songTrainerV2Enabled` mögött. A flag a `FeatureFlags.forEnvironment`
+szerint `nonProd`-on BE van kapcsolva, tehát egy debug buildben elvileg látszania
+kellene.
+
+**A lecke-listához (`/learn`, a shellben `/practice/learn`) nem jutottam el** a
+négy alsó tabról (Ma / Gyakorló hub / Dalkönyvtár / Profil). A Practice hub
+tartalma: Quick tools (Live, Tuner, Metronome, Chord library) + Browse by goal
+(Warm-up, Chords, Rhythm, Scales, Technique) + „Start recommended practice" —
+egyik sem visz a lecke-listára. Deep-linkkel sem nyitható: a
+`AndroidManifest.xml`-ben nincs `intent-filter` a MAIN/LAUNCHER-en kívül (S10).
+
+Emiatt a **V1–V6 cellák NEM MÉRHETŐK**. Ez önmagában is lelet: ha a V2
+szerkesztő csak egy olyan képernyőről érhető el, ami a jelenlegi shellből nem
+navigálható, akkor a funkció gyakorlatilag elérhetetlen a felhasználónak — a
+reachability-mérő ezt nem fogja meg, mert az a KÓDBELI `push` hívást méri, nem
+a tényleges navigálhatóságot a futó shellben.
+
+## §8 — Onboarding: részlegesen mérve
+
+| # | Cella | Eredmény | Mért |
+|---|---|---|---|
+| O1 | Welcome → … → Allow → First-Win valós konfidencia | **BLOCKED** | Az onboarding LEFUTOTT (a telepítés aláírás-ütközés miatt friss lett, S8): „See what you play — StrumSight names your chord in real time as you play — fully offline, right on your phone.", `Skip` + `Next` + 3 pötty. A First-Win állomás konfidenciája mikrofon nélkül nem mérhető (§7). |
+| O2 | tiszta Em/G → küszöb átlépése | **BLOCKED** | mikrofon (§7) |
+| O3 | „Not now" kilépés az állomásról | **BLOCKED** | mikrofon (§7) |
+| O4 | Deny ág → `micPermissionBody` + „Open settings" | **részleges** | A rendszer-dialógus HELYESEN megjelenik („Allow StrumSight to record audio?" — While using the app / Only this time / Don't allow). A Deny ág utáni kimondott hiba-szöveg nem mérve. |
+| O5 | hol landol az onboarding vége | **részleges** | `Skip`-pel a **Today** hubon landolt (`/today`), nem a `/live`-on. A TELJESEN végigvitt onboarding végpontja nem mérve. |
+
+## §9–§12 — BLOCKED (mikrofon)
+
+A §7-ben leírt ok miatt a következők NEM MÉRHETŐK, és nem is tippelek rájuk:
+
+- **§9 Live** — L2 (8 akkord felismerése), L3 (↓/↑ irány 10 pengetésen), L4
+  (nincs fantom onset kicsengésre), L6 (a hat ok banner), L7 (Pause/Resume),
+  L8 (capo), L9 (küszöb), L11 (háttérbe küldés → mikrofon elengedése),
+  L12 (5 perces memória-figyelés).
+  *Kivétel — mérve:* **L1 részleges PASS**, **L5 PASS**, **L10 PASS** (lásd §7).
+- **§10 Tuner** — T1–T5 mind BLOCKED. A képernyő megnyílik.
+- **§11 Learn** — P1–P7 mind BLOCKED (a pontozás játékot igényel).
+- **§12 Analyze** — A1–A5 mind BLOCKED (a felvétel hangot igényel).
+
+**Ez a jelentés legfontosabb hiánya: a FELISMERÉS PONTOSSÁGA — a termék
+„moat"-ja — ebben a sessionben ELLENŐRIZETLEN maradt.** A `CLAUDE.md` szerint
+amúgy is a felhasználó valódi, gitáros APK-tesztje a végső mérce; ez a kör azt
+nem helyettesíti, és most az emulátoros elő-ellenőrzést sem tudta elvégezni.
+
+**A felhasználó kifejezett elvárása (2026-09-10), szó szerint:** *„szeretném ha
+érzékeny lenne és pontosan mutatná az akkordokat akkor ami szól"* — vagyis a
+felismerés érzékenysége és pontossága a legfontosabb szempont. Ez pontosan a
+terv §9/L2 mércéje (8-ból legalább 7 helyes, ≤1 s-on belül). Mivel egyetlen
+felismerési cella sem futott le, erről a jelentés SEMMIT nem állít.
+
+## §13 — Kalibráció: nem mérve
+
+A K1–K3 cellák (audio mód, rendszertelen koppintás elutasítása, vizuális mód)
+ebben a sessionben nem kerültek sorra. A `/calibrate` útvonal létezik; a
+Settings képernyőn a bejárt részen nem találtam a „Timing calibration"
+belépőt, és a session a §7 elakadása után lezárult.
+
+## §16 — Összegzés
+
+### Ami MÉRVE lett
+
+| Szakasz | Eredmény |
+|---|---|
+| §0 előkészítés | Flutter 3.44.2 telepítve; 3 gazdagép-akadály felderítve és megkerülve (ékezetes út, CRLF, hiányzó SDK) |
+| §1 kapu | **16 PASS / 3 FAIL** — mindhárom bukás gazdagép-műtermék |
+| §1 falszifikáció | **P1 / P2 / P3 mind PASS** — mindegyik mutáció pontosan a kijelölt cellát vitte pirosra, mind visszaállítva |
+| §2 legacy szerkesztő | **10 PASS / 1 FAIL (E12) / 4 hallgatási cella nem mérve** |
+| §3 V2 szerkesztő | **BLOCKED** (a belépő nem navigálható) |
+| §7 mikrofon | **NEM SIKERÜLT** — a gazdagép hangja nem jut az emulátorba |
+| §8 onboarding | részlegesen mérve; O1–O3 BLOCKED |
+| §9–§12 | **BLOCKED**, három cella kivételével (L1 részleges, L5, L10 PASS) |
+| §13 kalibráció | nem mérve |
+| §14 hordozó képernyők | **4 PASS (H7, H9, H10, H1) / 2 FAIL (H2, H5) / 3 részleges (H3, H4, H6) / 1 BLOCKED (H8)** |
+| §15 automata | **7 PASS / 1 FAIL** (a FAIL a teljes suite 203 Windows-pirosa) |
+
+### A négy termék-lelet (egyik sem javítva, ADR 0055)
+
+| # | Lelet | Súly |
+|---|---|---|
+| **B1** | Az AI-tutor tudásanyag 10 dokumentuma NEM kerül be az APK-ba (nem rekurzív `pubspec.yaml` asset-deklaráció) → valós eszközön minden indításkor `assetReadFailure`. Egyetlen host-teszt sem fogja meg. | **valódi termékhiba, a kör hatókörén kívül** |
+| **B4** | Mind a négy Practice hub „Quick tool"-ról (Metronome, Chord library, Tuner, Live) — és a Profile alatti Library-ről is — a rendszer-back KILÉPTETI az appot a hub helyett. 4/4 reprodukálva. | valódi navigációs hiba |
+| **B3** | A V2 practice-session `audio.capture_failed` hibája néma, üres „No result to show" képernyőre visz, kimondott hiba nélkül. (A kiváltó ok itt környezeti.) | hibaút-lelet |
+| **E12** | Az előnézet a route elhagyása után még egy ütést lejátszik (+396 ms), teljes csend +692 ms-nál. | kis mértékű, mért |
+
+Ezeken kívül: **H5** (Library „Couldn't load your library"), **H2** (a
+cél-alapú belépő „Practice unavailable"), és a **§3** elérhetetlen V2 belépő.
+
+### A kör (E18-R01) saját mércéje
+
+A kör által épített viselkedés — akkord-meghallgatás és menet-előnézet — a
+mérhető részén **HELYESEN MŰKÖDIK**, és a legkockázatosabb pontja (a
+brief §6.1 A7 cellája, a menetvég kétszeri kivárása) **tisztán, számszerűen**
+igazolódott: 10,636 s a 10,667 s elvárthoz, a hibás változat ~11,30 s-ja
+helyett. A három falszifikációs próba mindegyike a kijelölt cellát vitte
+pirosra, tehát a tesztek valóban fognak.
+
+**A kör NEM okozta a fenti négy leletet.** A jelentés a merge előtti
+teljes-app ellenőrzés eredménye, nem a kör minősítése.
