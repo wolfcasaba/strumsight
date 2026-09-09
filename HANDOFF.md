@@ -55,7 +55,7 @@ pitch-mérő (1158 Hz!) → autokorreláció, a V2 pixel-golden miatt elhalaszto
 audition-fake injektálása, hu ARB-metaadat-paritás. **A 9 eldobható ág
 törlése a proxyn át nem ment (`remote end hung up`) — a user boxáról
 törlendők: `git push origin --delete claude/e18-r01-diag claude/e18-diag-{a1,a2,a3,b1,b2,b3,c1,d1}`;
-tartalmuk SOHA nem merge-elendő.**
+tartalmuk SOHA nem merge-elendő.** A HORIZON git-note (`round=E18-R01 verdict=pass tests=10272 …`) LOKÁLISAN a `d0d0684`-en áll; a `refs/notes/*` push a proxyn szintén blokkolt — a user boxáról: `git fetch origin && git push origin 'refs/notes/*'` (vagy a note újra-felvétele a squash-SHA-ra).
 Router CI a push-okon zöld; `tools/tests` lokálisan 968 passed (+1 deselect: a
 dokumentált környezeti cella, `remote-container-environment.md` §5).
 
