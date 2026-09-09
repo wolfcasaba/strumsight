@@ -26,6 +26,7 @@ occupy — the prohibition is structural (ADR 0484 D1), and the redactor in
 | `tutorTurnCompleted` | tutor | An AI tutor turn reached a terminal state. |
 | `settingsChanged` | settings | A user-visible setting changed. |
 | `diagnosticsUploadAttempted` | diagnostics | An opt-in Lab-mode diagnostics upload was attempted. |
+| `recognitionQualityReported` | detection | An opt-in beta recognition-quality AGGREGATE for one window: band, model, quality bucket, bucketed accepted/rejected counts, verdict-latency bucket, user-correction flag (E14-R41, ADR 0542). Never a per-verdict trace and never audio. |
 
 ## `TelemetryEventCategory`
 

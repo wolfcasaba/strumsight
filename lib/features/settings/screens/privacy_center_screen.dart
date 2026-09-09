@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design_system/public.dart';
 import '../../../core/storage/storage_providers.dart';
+import '../../../core/telemetry/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../vision/public.dart';
 import '../providers/lab_mode_provider.dart';
+import '../providers/telemetry_consent_provider.dart';
 import '../theme/settings_theme_scope.dart';
 import 'vision_privacy_screen.dart';
 
@@ -203,6 +205,8 @@ class _PrivacyCenterScreenState extends ConsumerState<PrivacyCenterScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
+                  const _TelemetryConsentSection(),
+                  const SizedBox(height: 20),
                   _TaskRow(
                     key: const Key('privacyCenterExportTask'),
                     state: _exportState,
@@ -270,6 +274,97 @@ class _TaskRow extends StatelessWidget {
           : SsButtonVariant.secondary,
       destructiveSemanticHint: destructive ? idleLabel : null,
       onPressed: state == PrivacyTaskState.running ? null : onRun,
+    );
+  }
+}
+
+/// The opt-in beta telemetry consent card (SDD Ch14 Kör 41, ADR 0542).
+///
+/// Three honesty rules shape this widget, and each of them is a cell in
+/// `test/features/settings/telemetry_consent_center_test.dart`:
+///
+/// 1. When the build does not offer beta telemetry (the flag is off, or the
+///    diagnostics path is off — every production build), NO switch is
+///    rendered. A switch the user can flip that changes nothing is a lie
+///    with a nicer shape than a wrong label.
+/// 2. The "on" status never claims data is being sent. This round ships no
+///    transport, so the copy says the choice is recorded, and a separate
+///    line says nothing is sent yet.
+/// 3. The scope and the exclusion list are both shown, always — not behind
+///    a "learn more" the consenting tap can skip.
+class _TelemetryConsentSection extends ConsumerWidget {
+  const _TelemetryConsentSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final gate = ref.watch(telemetryUploadGateProvider);
+    final consent = ref.watch(telemetryConsentProvider);
+    final reason = gate.blockReason;
+    final buildOffers =
+        reason != TelemetryUploadBlockReason.buildDisabled &&
+        reason != TelemetryUploadBlockReason.diagnosticsDisabled;
+
+    final unavailable = l10n.privacyCenterTelemetryStatusUnavailable;
+    final status = switch (reason) {
+      TelemetryUploadBlockReason.buildDisabled => unavailable,
+      TelemetryUploadBlockReason.diagnosticsDisabled => unavailable,
+      TelemetryUploadBlockReason.consentMissing =>
+        l10n.privacyCenterTelemetryStatusNotAsked,
+      TelemetryUploadBlockReason.consentRefused =>
+        l10n.privacyCenterTelemetryStatusOff,
+      null => l10n.privacyCenterTelemetryStatusOn,
+    };
+
+    final secondary = TextStyle(fontSize: 12, color: colors.textSecondary);
+
+    return SsSection(
+      title: l10n.privacyCenterTelemetryTitle,
+      child: SsCard(
+        key: const Key('privacyCenterTelemetryCard'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(l10n.privacyCenterTelemetrySubtitle, style: secondary),
+            const SizedBox(height: 8),
+            if (buildOffers)
+              SsSwitchRow(
+                key: const Key('privacyCenterTelemetrySwitch'),
+                label: l10n.privacyCenterTelemetryToggleLabel,
+                subtitle: l10n.privacyCenterTelemetryToggleSubtitle,
+                value: consent.state == TelemetryConsentState.granted,
+                onChanged: (value) {
+                  final notifier = ref.read(telemetryConsentProvider.notifier);
+                  // Fire-and-forget is deliberate and safe here: the state
+                  // flips synchronously, and a failed WRITE is reported by
+                  // PersistedPreference.persist's logger rather than
+                  // swallowed.
+                  if (value) {
+                    notifier.grant();
+                  } else {
+                    notifier.revoke();
+                  }
+                },
+              ),
+            const SizedBox(height: 8),
+            Text(status, key: const Key('privacyCenterTelemetryStatus')),
+            const SizedBox(height: 8),
+            Text(l10n.privacyCenterTelemetryScopeNote, style: secondary),
+            const SizedBox(height: 4),
+            Text(l10n.privacyCenterTelemetryNeverNote, style: secondary),
+            const SizedBox(height: 4),
+            Text(l10n.privacyCenterTelemetryRevokeNote, style: secondary),
+            const SizedBox(height: 4),
+            Text(
+              l10n.privacyCenterTelemetryPendingTransportNote,
+              key: const Key('privacyCenterTelemetryPendingTransport'),
+              style: secondary,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

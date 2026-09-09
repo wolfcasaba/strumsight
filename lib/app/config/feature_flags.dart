@@ -1,4 +1,5 @@
 import 'app_environment.dart';
+import 'recognition_rollout_stage.dart';
 import '../../features/audio_analysis/domain/rollout/analysis_rollout_stage.dart';
 
 /// Compile-time feature availability (E01-R03, SDD Ch2 Kör 3 §3.2).
@@ -43,6 +44,12 @@ final class FeatureFlags {
     this.analysisTutorIntegrationEnabled = false,
     this.recognitionRecoveryEnabled = false,
     this.recognitionShadowModeEnabled = false,
+    this.recognitionChordShadowModeEnabled = false,
+    this.recognitionPreprocessingEnabled = false,
+    this.recognitionFieldSessionTaggingEnabled = false,
+    this.betaTelemetryEnabled = false,
+    this.strumModelRolloutStage = RecognitionRolloutStage.off,
+    this.chordModelRolloutStage = RecognitionRolloutStage.off,
     this.newLiveStageEnabled = false,
     this.communityEnabled = false,
     this.communityWritesEnabled = false,
@@ -112,7 +119,26 @@ final class FeatureFlags {
       analysisPracticeIntegrationEnabled: false,
       analysisTutorIntegrationEnabled: false,
       recognitionRecoveryEnabled: false,
+      // E14-R23/R24/R33/R41 (ADR 0542). Every recognition-recovery gate
+      // resolves to OFF in EVERY environment, including non-production:
+      // none of the SDD Ch14 §7 thresholds is green on the measured
+      // baseline (`evaluation/recognition/baseline_manifest.json`: onset
+      // F1@50 ms 0,674 vs. 0,82; chord accuracy 0,671 vs. 0,80; direction,
+      // latency and calibration blocks `not-measured`). A `nonProd`
+      // default here would make a dev build claim a rollout level no
+      // measurement supports.
       recognitionShadowModeEnabled: false,
+      recognitionChordShadowModeEnabled: false,
+      recognitionPreprocessingEnabled: false,
+      recognitionFieldSessionTaggingEnabled: false,
+      // E14-R41: the opt-in beta telemetry SURFACE (the Privacy Center
+      // consent row) follows the same `nonProd` boundary as
+      // `diagnosticsEnabled`, because it is gated on that flag anyway.
+      // Availability is not collection: nothing is recorded until the
+      // user grants consent, which defaults to denied.
+      betaTelemetryEnabled: nonProd,
+      strumModelRolloutStage: RecognitionRolloutStage.off,
+      chordModelRolloutStage: RecognitionRolloutStage.off,
       newLiveStageEnabled: false,
       // Epic 9 Community (E09-R01, ADR 0395). The compile-time kill switch is
       // read directly here so app_config.dart stays untouched — without a
@@ -258,9 +284,91 @@ final class FeatureFlags {
   /// It remains OFF in every environment until evaluation evidence is accepted.
   final bool recognitionRecoveryEnabled;
 
-  /// Whether recognition recovery may run in shadow mode without UI changes.
-  /// It remains OFF in every environment until evaluation evidence is accepted.
+  /// Master switch for STRUM shadow recognition (SDD Ch14 Kör 23).
+  ///
+  /// **Semantics (ADR 0542 D2), so the flag can never be read two ways:**
+  /// a shadow strum inference may run for a frame only when BOTH
+  /// - [strumModelRolloutStage] `.runsInference` is true, AND
+  /// - this switch is true.
+  ///
+  /// The AND is asymmetric on purpose — either half alone turns the path
+  /// OFF, neither alone turns it ON — so an incident responder can kill
+  /// shadow work with one boolean without having to reason about the
+  /// rollout ladder. While the pair is off, the shadow path must cost
+  /// ZERO extra inference calls, not "a cheap call whose result is
+  /// dropped".
+  ///
+  /// **Consumed-by contract:** the shadow observer seam in
+  /// `lib/features/live/**` (PKG-A's `RecognitionShadowObserver`) reads
+  /// this pair and nothing else; the shadow output may reach the Lab panel
+  /// and the diagnostics report only — never a `LiveFrame`, never a score,
+  /// never a pixel (`RecognitionRolloutStage.shadow.isUserVisible` is
+  /// `false`, and that is the machine-checked invariant).
+  ///
+  /// **Measured at this round:** still zero consumers in `lib/**` — the
+  /// consumer lands in wave 2 (PKG-E). This round defines and tests the
+  /// flag surface only.
   final bool recognitionShadowModeEnabled;
+
+  /// Master switch for CHORD shadow recognition — the shipped
+  /// `assets/ml/chord_crnn.bin` running alongside the live NNLS-chroma path
+  /// (SDD Ch14 §4.5, Kör 26).
+  ///
+  /// Separate from [recognitionShadowModeEnabled] because the two bands
+  /// have separate release gates (§7.2 vs. §7.4), separate corpora and
+  /// separate failure modes: one band's shadow run must be killable without
+  /// touching the other. Same asymmetric AND with
+  /// [chordModelRolloutStage].
+  final bool recognitionChordShadowModeEnabled;
+
+  /// Whether the recognition-side quality-aware preprocessing and device
+  /// adaptation path (SDD Ch14 Kör 31) may run.
+  ///
+  /// This is the ONE-SWITCH ROLLBACK for that path: flipping it off
+  /// restores the shipped preprocessing without a new model asset and
+  /// without an app release, so a preprocessing regression found in the
+  /// field is a flag flip, not a store round-trip. Distinct from
+  /// [analysisPreprocessingExperimentalEnabled], which governs the batch
+  /// Audio Analysis V2 pipeline.
+  final bool recognitionPreprocessingEnabled;
+
+  /// Whether a Lab/diagnostics capture may carry the internal Alpha
+  /// FIELD-SESSION tag (SDD Ch14 Kör 40).
+  ///
+  /// The tag is a study cohort marker, never an identity: it may carry the
+  /// closed cohort value and the rotating pseudonymous id, and nothing
+  /// else (`lib/core/telemetry/field_session_tag.dart`). It is OFF in every
+  /// environment — a field study is a deliberate build, so enabling it is a
+  /// source change reviewed together with the study protocol
+  /// (`docs/release/ch14-r40-field-study.md`).
+  final bool recognitionFieldSessionTaggingEnabled;
+
+  /// Whether the OPT-IN beta telemetry surface exists in this build
+  /// (SDD Ch14 Kör 41).
+  ///
+  /// Availability, not collection. Three independent conditions must all
+  /// hold before a single aggregate event may leave the device
+  /// (`TelemetryUploadGate`): this flag, [diagnosticsEnabled], and the
+  /// user's explicit, revocable consent — which defaults to
+  /// `TelemetryConsentState.notAsked`, i.e. denied. Flipping this flag off
+  /// is the one-switch beta rollback.
+  final bool betaTelemetryEnabled;
+
+  /// The rollout ladder step of the STRUM recognition band (Kör 24).
+  /// Defaults to [RecognitionRolloutStage.off] in every environment.
+  ///
+  /// Deliberately NOT catalogued in `featureFlagRegistry`: that registry
+  /// and its machine audit (`tool/check_feature_flags.dart`) are defined
+  /// over `final bool` fields, and inventing a bool-shaped entry for an
+  /// enum field would make the audit's completeness claim false in both
+  /// directions (ADR 0542 D4). The stage's own reviewed record is
+  /// `docs/release/ch14-recognition-rollout.md`.
+  final RecognitionRolloutStage strumModelRolloutStage;
+
+  /// The rollout ladder step of the CHORD recognition band (Kör 33).
+  /// Defaults to [RecognitionRolloutStage.off] in every environment; see
+  /// [strumModelRolloutStage] for why it is not in the registry.
+  final RecognitionRolloutStage chordModelRolloutStage;
 
   /// Whether the new Live recognition stage may be reachable.
   /// It remains OFF in every environment until evaluation evidence is accepted.
@@ -356,6 +464,15 @@ final class FeatureFlags {
           analysisTutorIntegrationEnabled &&
       other.recognitionRecoveryEnabled == recognitionRecoveryEnabled &&
       other.recognitionShadowModeEnabled == recognitionShadowModeEnabled &&
+      other.recognitionChordShadowModeEnabled ==
+          recognitionChordShadowModeEnabled &&
+      other.recognitionPreprocessingEnabled ==
+          recognitionPreprocessingEnabled &&
+      other.recognitionFieldSessionTaggingEnabled ==
+          recognitionFieldSessionTaggingEnabled &&
+      other.betaTelemetryEnabled == betaTelemetryEnabled &&
+      other.strumModelRolloutStage == strumModelRolloutStage &&
+      other.chordModelRolloutStage == chordModelRolloutStage &&
       other.newLiveStageEnabled == newLiveStageEnabled &&
       other.communityEnabled == communityEnabled &&
       other.communityWritesEnabled == communityWritesEnabled &&
@@ -402,6 +519,16 @@ final class FeatureFlags {
       analysisTutorIntegrationEnabled,
       recognitionRecoveryEnabled,
       recognitionShadowModeEnabled,
+      recognitionChordShadowModeEnabled,
+      recognitionPreprocessingEnabled,
+      recognitionFieldSessionTaggingEnabled,
+      betaTelemetryEnabled,
+      // The two rollout stages are enums, not bools; "is it still at its
+      // OFF default" is the bit that decides whether the legacy hash still
+      // applies, and the stages themselves are hashed below so two
+      // different non-off stages never collapse into one hash.
+      strumModelRolloutStage != RecognitionRolloutStage.off,
+      chordModelRolloutStage != RecognitionRolloutStage.off,
       newLiveStageEnabled,
       communityEnabled,
       communityWritesEnabled,
@@ -413,7 +540,12 @@ final class FeatureFlags {
     if (!additionalBits.contains(true)) {
       return legacyHash;
     }
-    return Object.hashAll(<Object?>[legacyHash, ...additionalBits]);
+    return Object.hashAll(<Object?>[
+      legacyHash,
+      ...additionalBits,
+      strumModelRolloutStage,
+      chordModelRolloutStage,
+    ]);
   }
 
   @override
@@ -455,6 +587,14 @@ final class FeatureFlags {
       'analysisTutorIntegrationEnabled: $analysisTutorIntegrationEnabled, '
       'recognitionRecoveryEnabled: $recognitionRecoveryEnabled, '
       'recognitionShadowModeEnabled: $recognitionShadowModeEnabled, '
+      'recognitionChordShadowModeEnabled: '
+      '$recognitionChordShadowModeEnabled, '
+      'recognitionPreprocessingEnabled: $recognitionPreprocessingEnabled, '
+      'recognitionFieldSessionTaggingEnabled: '
+      '$recognitionFieldSessionTaggingEnabled, '
+      'betaTelemetryEnabled: $betaTelemetryEnabled, '
+      'strumModelRolloutStage: ${strumModelRolloutStage.name}, '
+      'chordModelRolloutStage: ${chordModelRolloutStage.name}, '
       'newLiveStageEnabled: $newLiveStageEnabled, '
       'communityEnabled: $communityEnabled, '
       'communityWritesEnabled: $communityWritesEnabled, '

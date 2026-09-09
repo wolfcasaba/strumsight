@@ -1,8 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/config/recognition_rollout_stage.dart';
+import 'package:strumsight/core/feature_flags/public.dart';
 
 void main() {
+  ch14Main();
+
   group('Practice Generator feature flags', () {
     test('constructor defaults are off at the rollout boundary', () {
       const flags = FeatureFlags(
@@ -225,4 +231,261 @@ void _expectCommunityFlagsOff(FeatureFlags flags) {
     reason: 'communityLeaderboardEnabled',
   );
   expect(flags.communityClubsEnabled, isFalse, reason: 'communityClubsEnabled');
+}
+
+// ---------------------------------------------------------------------------
+// E14-R23/R24/R33/R40/R41 (ADR 0542) — the recognition rollout flag surface.
+// ---------------------------------------------------------------------------
+
+void _expectCh14FlagsOff(FeatureFlags flags) {
+  expect(
+    flags.recognitionChordShadowModeEnabled,
+    isFalse,
+    reason: 'recognitionChordShadowModeEnabled',
+  );
+  expect(
+    flags.recognitionPreprocessingEnabled,
+    isFalse,
+    reason: 'recognitionPreprocessingEnabled',
+  );
+  expect(
+    flags.recognitionFieldSessionTaggingEnabled,
+    isFalse,
+    reason: 'recognitionFieldSessionTaggingEnabled',
+  );
+  expect(
+    flags.strumModelRolloutStage,
+    RecognitionRolloutStage.off,
+    reason: 'strumModelRolloutStage',
+  );
+  expect(
+    flags.chordModelRolloutStage,
+    RecognitionRolloutStage.off,
+    reason: 'chordModelRolloutStage',
+  );
+}
+
+void ch14Main() {
+  group('RecognitionRolloutStage — the ladder is closed and ordered', () {
+    test('only `off` runs nothing', () {
+      final running = RecognitionRolloutStage.values
+          .where((stage) => stage.runsInference)
+          .toSet();
+      expect(running, isNot(contains(RecognitionRolloutStage.off)));
+      expect(running, hasLength(RecognitionRolloutStage.values.length - 1));
+    });
+
+    test('shadow RUNS but is never user-visible — the one invariant the '
+        'whole shadow mode rests on', () {
+      expect(RecognitionRolloutStage.shadow.runsInference, isTrue);
+      expect(RecognitionRolloutStage.shadow.isUserVisible, isFalse);
+    });
+
+    test('exactly alpha, beta and ga are user-visible', () {
+      final visible = RecognitionRolloutStage.values
+          .where((stage) => stage.isUserVisible)
+          .toList();
+      expect(visible, <RecognitionRolloutStage>[
+        RecognitionRolloutStage.alpha,
+        RecognitionRolloutStage.beta,
+        RecognitionRolloutStage.ga,
+      ]);
+    });
+
+    test('beta and ga require the Beta thresholds, everything below does '
+        'not', () {
+      final betaBar = RecognitionRolloutStage.values
+          .where((stage) => stage.requiresBetaThresholds)
+          .toList();
+      expect(betaBar, <RecognitionRolloutStage>[
+        RecognitionRolloutStage.beta,
+        RecognitionRolloutStage.ga,
+      ]);
+    });
+
+    test('tryParse is fail-closed: an unknown or misspelled stage is null, '
+        'never a more permissive neighbour', () {
+      expect(RecognitionRolloutStage.tryParse(null), isNull);
+      expect(RecognitionRolloutStage.tryParse(''), isNull);
+      expect(RecognitionRolloutStage.tryParse('GA'), isNull);
+      expect(RecognitionRolloutStage.tryParse('generalAvailability'), isNull);
+      expect(
+        RecognitionRolloutStage.tryParse('shadow'),
+        RecognitionRolloutStage.shadow,
+      );
+    });
+  });
+
+  group('Ch14 recognition rollout flags', () {
+    test('the constructor defaults every Ch14 gate to off/none', () {
+      const flags = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+
+      _expectCh14FlagsOff(flags);
+      expect(flags.recognitionShadowModeEnabled, isFalse);
+      expect(flags.betaTelemetryEnabled, isFalse);
+    });
+
+    test('production resolves every Ch14 gate to off, beta telemetry '
+        'included', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+
+      _expectCh14FlagsOff(flags);
+      expect(flags.recognitionShadowModeEnabled, isFalse);
+      expect(flags.betaTelemetryEnabled, isFalse);
+    });
+
+    test('NON-production also resolves every recognition gate to off — no '
+        'Ch14 §7 threshold is green on the measured baseline, so a dev '
+        'build must not claim a rollout level either', () {
+      for (final environment in <AppEnvironment>[
+        AppEnvironment.development,
+        AppEnvironment.lab,
+      ]) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+
+        _expectCh14FlagsOff(flags);
+        expect(
+          flags.recognitionShadowModeEnabled,
+          isFalse,
+          reason: '${environment.name}: recognitionShadowModeEnabled',
+        );
+      }
+    });
+
+    test('betaTelemetryEnabled follows the diagnostics boundary: available '
+        'outside production, absent inside it', () {
+      final development = FeatureFlags.forEnvironment(
+        AppEnvironment.development,
+        accountEnabled: false,
+      );
+      final production = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+
+      expect(development.betaTelemetryEnabled, isTrue);
+      expect(development.diagnosticsEnabled, isTrue);
+      expect(production.betaTelemetryEnabled, isFalse);
+      expect(production.diagnosticsEnabled, isFalse);
+    });
+
+    test('the new flags participate in value semantics and toString — a '
+        'flag the equality forgets is a flag a config diff cannot show', () {
+      const defaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      const chordShadow = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        recognitionChordShadowModeEnabled: true,
+      );
+      const strumShadowStage = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        strumModelRolloutStage: RecognitionRolloutStage.shadow,
+      );
+      const strumGaStage = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        strumModelRolloutStage: RecognitionRolloutStage.ga,
+      );
+
+      expect(chordShadow, isNot(equals(defaults)));
+      expect(strumShadowStage, isNot(equals(defaults)));
+      expect(
+        strumShadowStage,
+        isNot(equals(strumGaStage)),
+        reason: 'two different non-off stages are two different configs',
+      );
+      expect(
+        strumShadowStage.hashCode,
+        isNot(equals(strumGaStage.hashCode)),
+        reason:
+            'the stage must reach the hash, not just the "is it off" bit',
+      );
+      expect(
+        defaults.toString(),
+        contains('strumModelRolloutStage: off'),
+      );
+      expect(
+        defaults.toString(),
+        contains('chordModelRolloutStage: off'),
+      );
+      expect(defaults.toString(), contains('betaTelemetryEnabled: false'));
+    });
+  });
+
+  group('featureFlagRegistry — the Ch14 additions are catalogued, and the '
+      'enum fields deliberately are NOT (ADR 0542 D4)', () {
+    Set<String> keysOf() => featureFlagRegistry.map((d) => d.key).toSet();
+
+    test('every new BOOL flag has a catalog entry with an owner and a '
+        'kill-switch path', () {
+      for (final key in <String>[
+        'recognitionChordShadowModeEnabled',
+        'recognitionPreprocessingEnabled',
+        'recognitionFieldSessionTaggingEnabled',
+        'betaTelemetryEnabled',
+      ]) {
+        final entry = featureFlagRegistry.singleWhere((d) => d.key == key);
+        expect(entry.owner.trim(), isNotEmpty, reason: key);
+        expect(entry.killSwitchPath.trim(), isNotEmpty, reason: key);
+        expect(entry.failClosedDefault, isFalse, reason: key);
+      }
+    });
+
+    test('the two rollout-stage ENUM fields have no catalog entry — the '
+        'registry audit parses `final bool` declarations, so an entry for '
+        'a non-bool field would report unknownCatalogEntry forever', () {
+      expect(keysOf(), isNot(contains('strumModelRolloutStage')));
+      expect(keysOf(), isNot(contains('chordModelRolloutStage')));
+    });
+
+    test('the registry stays in sync with the SOURCE in both directions — '
+        'the same parse tool/check_feature_flags.dart performs, repeated '
+        'here so a missing entry is red in the unit suite too', () {
+      final source = File(
+        'lib/app/config/feature_flags.dart',
+      ).readAsStringSync();
+      final fieldNames = RegExp(
+        r'^\s*final bool\??\s+(\w+)\s*(?:;|=)',
+        multiLine: true,
+      ).allMatches(source).map((match) => match.group(1)!).toSet();
+
+      expect(fieldNames.difference(keysOf()), isEmpty);
+      expect(keysOf().difference(fieldNames), isEmpty);
+      expect(
+        fieldNames,
+        contains('betaTelemetryEnabled'),
+        reason: 'the parse must actually see the new fields',
+      );
+    });
+
+    test('the beta-telemetry entry names all three gates in its prose, not '
+        'just the flag — an operator reading only this entry must not '
+        'conclude the flag alone sends data', () {
+      final entry = featureFlagRegistry.singleWhere(
+        (d) => d.key == 'betaTelemetryEnabled',
+      );
+
+      expect(entry.killSwitchPath, contains('diagnosticsEnabled'));
+      expect(entry.killSwitchPath, contains('consent'));
+      expect(entry.risk, FeatureFlagRisk.high);
+    });
+  });
 }

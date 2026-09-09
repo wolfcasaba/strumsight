@@ -76,6 +76,16 @@ chord-detection app leaves out.
   registered app route yet, and the device checklist/CI review evidence remains
   open. The exact supported subset and each named blocker are in
   [`docs/sdd/epic-03-completion-report.md`](docs/sdd/epic-03-completion-report.md).
+- **Recognition recovery (Chapter 14) is not release-enabled.** Both recognition
+  bands sit at `RecognitionRolloutStage.off` in **every** environment, and the
+  measured baseline does not support anything else: onset F1@50 ms is **0,674**
+  against a 0,82 gate and chord accuracy **0,671** against 0,80, while the
+  direction, N.C., latency and calibration blocks are not measured at all
+  (`evaluation/recognition/baseline_manifest.json`). The row-by-row verdict,
+  the owning workflow for each number and the open human decisions are in
+  [`docs/release/ch14-production-gate.md`](docs/release/ch14-production-gate.md);
+  the rollout ladder and its one-switch rollbacks in
+  [`docs/release/ch14-recognition-rollout.md`](docs/release/ch14-recognition-rollout.md).
 - **iOS build** requires a Mac (no Linux toolchain).
 
 ## Architecture
@@ -158,6 +168,16 @@ on a physical device — synthetic green is never "done".
   `test/app/offline_network_guard_test.dart` at the single `DioFactory` seam
   (`test/tooling/dio_factory_guard_test.dart` guarantees no other Dio source exists).
 - Tokens live in `flutter_secure_storage`; logs are redacted (no token/password/raw audio).
+- **Beta telemetry is opt-in, off by default, and revocable.** Nothing is
+  collected until the user turns it on in the Privacy Center, and turning it
+  off also erases the rotating pseudonymous id. An aggregate may only leave the
+  device when the build flag, the diagnostics path AND the consent all allow it
+  (`TelemetryUploadGate`) — and this build ships **no transport at all**, which
+  the Privacy Center says in plain words rather than implying that data is
+  flowing. The event schema carries counts, quality bands and latency buckets
+  only: never audio, never free text, never a device or account identifier
+  (`lib/core/telemetry/`, [ADR 0542](docs/adr/0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md);
+  randomized redaction property: `test/property/telemetry_redaction_property_test.dart`).
 - Vision is optional and currently disabled in every environment. Camera frames stay on-device;
   raw frames and pixel buffers may not enter Vision persistence or provider state. Any future
   rollout follows [`docs/runbooks/vision-rollout.md`](docs/runbooks/vision-rollout.md) and requires
