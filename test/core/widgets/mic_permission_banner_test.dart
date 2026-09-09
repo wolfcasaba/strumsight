@@ -62,20 +62,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'no overflow at textScale 2.0 in the 258 px column that used to '
-    'overflow by 167 px',
-    (tester) async {
-      await _pumpBanner(
-        tester,
-        viewport: const Size(320, 690),
-        width: 258,
-        textScale: 2.0,
-      );
+  testWidgets('no overflow at textScale 2.0 in the 258 px column that used to '
+      'overflow by 167 px', (tester) async {
+    await _pumpBanner(
+      tester,
+      viewport: const Size(320, 690),
+      width: 258,
+      textScale: 2.0,
+    );
 
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('renders the message and the settings action', (tester) async {
     final l10n = lookupAppLocalizations(const Locale('en'));
