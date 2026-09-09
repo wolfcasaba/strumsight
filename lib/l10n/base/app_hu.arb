@@ -3407,5 +3407,171 @@
   "privacyCenterTelemetryStatusUnavailable": "Ebben az alkalmazásváltozatban nem érhető el",
   "@privacyCenterTelemetryStatusUnavailable": {},
   "privacyCenterTelemetryRevokeNote": "A kikapcsolás a véletlen kódot is törli erről az eszközről.",
-  "@privacyCenterTelemetryRevokeNote": {}
+  "@privacyCenterTelemetryRevokeNote": {},
+  "liveLabShadowTitle": "Árnyék-összehasonlítás",
+  "@liveLabShadowTitle": {
+    "description": "Live Lab panel — heading of the E14-R23/R26 shadow-mode card. Lab-only; a candidate recognition model is compared against the shipped one."
+  },
+  "liveLabShadowOff": "Mindkét árnyék-sáv ki van kapcsolva ebben a buildben — semmi nem futott.",
+  "@liveLabShadowOff": {
+    "description": "Live Lab shadow card — shown when both shadow gates are closed. Says nothing ran, rather than showing an empty report that could be mistaken for a zero result."
+  },
+  "liveLabShadowNeverShown": "Az árnyék-eredmények soha nem változtatják meg, amit a Live mutat.",
+  "@liveLabShadowNeverShown": {
+    "description": "Live Lab shadow card — the invariant footnote: a shadow band's output can never reach the Live screen, a score, or any user-visible verdict."
+  },
+  "liveLabShadowStrumAgreement": "Pengetés: {compared} döntésből {agreed} egyezik a szállított úttal",
+  "@liveLabShadowStrumAgreement": {
+    "description": "Live Lab shadow card — strum-band agreement line. Deliberately a fraction and not a percentage, so a tiny sample cannot read as a confident rate.",
+    "placeholders": {
+      "agreed": {
+        "type": "int"
+      },
+      "compared": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowStrumNoData": "Pengetés: ebben a felvételben nincs összehasonlítható döntés.",
+  "@liveLabShadowStrumNoData": {
+    "description": "Live Lab shadow card — shown when the strum band produced no comparable verdict. An empty sample has no agreement rate, so none is displayed."
+  },
+  "liveLabShadowStrumAbstained": "Pengetés: {verdicts} döntésből {abstained} nem adott választ",
+  "@liveLabShadowStrumAbstained": {
+    "description": "Live Lab shadow card — how often the candidate strum model abstained (no-strum class, or a margin inside the uncertainty band).",
+    "placeholders": {
+      "abstained": {
+        "type": "int"
+      },
+      "verdicts": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowChordAgreement": "Akkordmodell: {compared} keretből {agreed} egyezik a szállított akkordúttal",
+  "@liveLabShadowChordAgreement": {
+    "description": "Live Lab shadow card — chord-band agreement line between the shadow chord model and the shipped chord path.",
+    "placeholders": {
+      "agreed": {
+        "type": "int"
+      },
+      "compared": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowChordNoData": "Akkordmodell: ebben a felvételben nincs összehasonlítható keret.",
+  "@liveLabShadowChordNoData": {
+    "description": "Live Lab shadow card — shown when the chord band produced no comparable frame."
+  },
+  "liveLabShadowChordFallbackAssetMissing": "Akkordmodell: a modellfájl nincs benne ebben a buildben.",
+  "@liveLabShadowChordFallbackAssetMissing": {
+    "description": "Live Lab shadow card — the chord shadow model could not start because its weights asset is absent. Named explicitly instead of silently showing no chord row."
+  },
+  "liveLabShadowChordFallbackUnreadable": "Akkordmodell: a modellfájlt nem sikerült beolvasni.",
+  "@liveLabShadowChordFallbackUnreadable": {
+    "description": "Live Lab shadow card — the chord shadow model's weights file exists but could not be read."
+  },
+  "liveLabShadowChordFallbackParse": "Akkordmodell: a modellfájl megbukott az integritás-ellenőrzésen.",
+  "@liveLabShadowChordFallbackParse": {
+    "description": "Live Lab shadow card — the chord weights did not match the expected checksum or could not be parsed. Fail-closed: the model is not used."
+  },
+  "liveLabShadowChordFallbackShape": "Akkordmodell: a modell nem illeszkedik a build bemeneti formátumához.",
+  "@liveLabShadowChordFallbackShape": {
+    "description": "Live Lab shadow card — the chord model parsed but its input/output shape does not match the build's feature front-end."
+  },
+  "liveLabShadowChordFallbackDisabled": "Akkordmodell: kikapcsolva.",
+  "@liveLabShadowChordFallbackDisabled": {
+    "description": "Live Lab shadow card — the chord shadow band was explicitly disabled rather than failing."
+  },
+  "liveLabShadowWindow": "Ablak: a legutóbbi {kept} összehasonlítás ({dropped} korábbi elhagyva)",
+  "@liveLabShadowWindow": {
+    "description": "Live Lab shadow card — states that the sample list is a bounded ring, so the reader knows the report is a window and not a session total.",
+    "placeholders": {
+      "kept": {
+        "type": "int"
+      },
+      "dropped": {
+        "type": "int"
+      }
+    }
+  },
+  "liveDecisionCandidate": "Akkord keresése…",
+  "@liveDecisionCandidate": {
+    "description": "Live stage decision chip for RecognitionDecision.candidate (E14-R37, ADR 0550): a verdict is forming but has cleared no threshold, so no chord is claimed."
+  },
+  "liveDecisionProvisional": "Akkord kirajzolódik…",
+  "@liveDecisionProvisional": {
+    "description": "Live stage decision chip for RecognitionDecision.provisional when no chord label is known yet. Hedged on purpose: the reading is leaning somewhere but is not confirmed."
+  },
+  "liveDecisionProvisionalNamed": "Valószínűleg {chord}…",
+  "@liveDecisionProvisionalNamed": {
+    "description": "Live stage decision chip for RecognitionDecision.provisional when a chord label is known. The chord is named ONLY inside this hedged sentence — never as a confirmed verdict (ADR 0550 D1).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "C"
+      }
+    }
+  },
+  "liveDecisionConfirmed": "Akkord megerősítve",
+  "@liveDecisionConfirmed": {
+    "description": "Live stage decision chip for RecognitionDecision.confirmed — the only state in which the hero may present a chord."
+  },
+  "liveDecisionUncertain": "Még bizonytalan",
+  "@liveDecisionUncertain": {
+    "description": "Live stage decision chip for RecognitionDecision.uncertain: below the confirmation threshold, so nothing is shown as a recognised chord."
+  },
+  "liveDecisionRejected": "Nincs akkordolvasat",
+  "@liveDecisionRejected": {
+    "description": "Live stage decision chip for RecognitionDecision.rejected. The paired uncertainty banner states WHY; this chip only states that there is no reading."
+  },
+  "liveDecisionExpired": "A legutóbbi akkord elhalványult",
+  "@liveDecisionExpired": {
+    "description": "Live stage decision chip for RecognitionDecision.expired: a chord was confirmed earlier and has since aged out."
+  },
+  "liveModeFreePlay": "Szabad játék",
+  "@liveModeFreePlay": {
+    "description": "Live stage mode chip: nothing is being asked of the player, the stage mirrors what it hears (E14-R37, ADR 0550 D2)."
+  },
+  "liveModeGuided": "Vezetett",
+  "@liveModeGuided": {
+    "description": "Live stage mode chip: a lesson/song target is on screen (E14-R37, ADR 0550 D2)."
+  },
+  "liveGuidedTarget": "Cél",
+  "@liveGuidedTarget": {
+    "description": "Label of the Guided-mode target card on the Live stage. Names the ROLE of the chord next to it — what the app is asking for, not what it heard."
+  },
+  "liveGuidedTargetSemantics": "Cél akkord: {chord}",
+  "@liveGuidedTargetSemantics": {
+    "description": "Screen-reader label of the Guided-mode target card: the role is spoken before the value, so a target is never mistaken for a detection.",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
+  "practiceCorrectionTitle": "Következő javítás",
+  "@practiceCorrectionTitle": {
+    "description": "Heading of the practice session's correction banner (E14-R38, ADR 0551 D6) — the one concrete thing to change on the next target."
+  },
+  "practiceCorrectionPlayChord": "A következő célnál {chord} akkordot játssz.",
+  "@practiceCorrectionPlayChord": {
+    "description": "Correction shown after a missed target, or a chord the recognizer confidently heard as a different one.",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "C"
+      }
+    }
+  },
+  "practiceCorrectionHitTarget": "Ez a cél kimaradt — a következőre figyelj.",
+  "@practiceCorrectionHitTarget": {
+    "description": "Correction shown when a missed target carries no chord (a rhythm / strum-pattern exercise), so no chord can honestly be named."
+  },
+  "practiceCorrectionUnclear": "Az app nem tudta kivenni, mit hallott — játszd el újra ezt a részt.",
+  "@practiceCorrectionUnclear": {
+    "description": "Correction shown when the recognizer abstained and gave no typed reason. Blames the app, never the player (ADR 0551 D6); when a reason IS available the localized liveReject* sentence is shown instead."
+  }
 }

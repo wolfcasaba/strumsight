@@ -2450,12 +2450,156 @@
       }
     }
   },
+  "liveDecisionCandidate": "Picking up a chord…",
+  "@liveDecisionCandidate": {
+    "description": "Live stage decision chip for RecognitionDecision.candidate (E14-R37, ADR 0550): a verdict is forming but has cleared no threshold, so no chord is claimed."
+  },
+  "liveDecisionConfirmed": "Chord confirmed",
+  "@liveDecisionConfirmed": {
+    "description": "Live stage decision chip for RecognitionDecision.confirmed — the only state in which the hero may present a chord."
+  },
+  "liveDecisionExpired": "Last chord faded",
+  "@liveDecisionExpired": {
+    "description": "Live stage decision chip for RecognitionDecision.expired: a chord was confirmed earlier and has since aged out."
+  },
+  "liveDecisionProvisional": "Settling on a chord…",
+  "@liveDecisionProvisional": {
+    "description": "Live stage decision chip for RecognitionDecision.provisional when no chord label is known yet. Hedged on purpose: the reading is leaning somewhere but is not confirmed."
+  },
+  "liveDecisionProvisionalNamed": "Settling on {chord}…",
+  "@liveDecisionProvisionalNamed": {
+    "description": "Live stage decision chip for RecognitionDecision.provisional when a chord label is known. The chord is named ONLY inside this hedged sentence — never as a confirmed verdict (ADR 0550 D1).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "C"
+      }
+    }
+  },
+  "liveDecisionRejected": "No chord reading",
+  "@liveDecisionRejected": {
+    "description": "Live stage decision chip for RecognitionDecision.rejected. The paired uncertainty banner states WHY; this chip only states that there is no reading."
+  },
+  "liveDecisionUncertain": "Not sure yet",
+  "@liveDecisionUncertain": {
+    "description": "Live stage decision chip for RecognitionDecision.uncertain: below the confirmation threshold, so nothing is shown as a recognised chord."
+  },
   "liveFinish": "Finish",
   "@liveFinish": {
     "description": "Ends the current Live session and leaves the screen (ADR 0276 decision 4)."
   },
+  "liveGuidedTarget": "Target",
+  "@liveGuidedTarget": {
+    "description": "Label of the Guided-mode target card on the Live stage. Names the ROLE of the chord next to it — what the app is asking for, not what it heard."
+  },
+  "liveGuidedTargetSemantics": "Target chord {chord}",
+  "@liveGuidedTargetSemantics": {
+    "description": "Screen-reader label of the Guided-mode target card: the role is spoken before the value, so a target is never mistaken for a detection.",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
   "liveInputLevel": "Input level",
+  "liveLabShadowChordAgreement": "Chord model: {agreed} of {compared} frames match the shipped chord path",
+  "@liveLabShadowChordAgreement": {
+    "description": "Live Lab shadow card — chord-band agreement line between the shadow chord model and the shipped chord path.",
+    "placeholders": {
+      "agreed": {
+        "type": "int"
+      },
+      "compared": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowChordFallbackAssetMissing": "Chord model: the model file is not in this build.",
+  "@liveLabShadowChordFallbackAssetMissing": {
+    "description": "Live Lab shadow card — the chord shadow model could not start because its weights asset is absent. Named explicitly instead of silently showing no chord row."
+  },
+  "liveLabShadowChordFallbackDisabled": "Chord model: switched off.",
+  "@liveLabShadowChordFallbackDisabled": {
+    "description": "Live Lab shadow card — the chord shadow band was explicitly disabled rather than failing."
+  },
+  "liveLabShadowChordFallbackParse": "Chord model: the model file failed its integrity check.",
+  "@liveLabShadowChordFallbackParse": {
+    "description": "Live Lab shadow card — the chord weights did not match the expected checksum or could not be parsed. Fail-closed: the model is not used."
+  },
+  "liveLabShadowChordFallbackShape": "Chord model: the model does not match this build's input format.",
+  "@liveLabShadowChordFallbackShape": {
+    "description": "Live Lab shadow card — the chord model parsed but its input/output shape does not match the build's feature front-end."
+  },
+  "liveLabShadowChordFallbackUnreadable": "Chord model: the model file could not be read.",
+  "@liveLabShadowChordFallbackUnreadable": {
+    "description": "Live Lab shadow card — the chord shadow model's weights file exists but could not be read."
+  },
+  "liveLabShadowChordNoData": "Chord model: nothing comparable in this capture.",
+  "@liveLabShadowChordNoData": {
+    "description": "Live Lab shadow card — shown when the chord band produced no comparable frame."
+  },
+  "liveLabShadowNeverShown": "Shadow results never change what Live shows.",
+  "@liveLabShadowNeverShown": {
+    "description": "Live Lab shadow card — the invariant footnote: a shadow band's output can never reach the Live screen, a score, or any user-visible verdict."
+  },
+  "liveLabShadowOff": "Both shadow bands are off in this build — nothing was run.",
+  "@liveLabShadowOff": {
+    "description": "Live Lab shadow card — shown when both shadow gates are closed. Says nothing ran, rather than showing an empty report that could be mistaken for a zero result."
+  },
+  "liveLabShadowStrumAbstained": "Strum: {abstained} of {verdicts} verdicts declined to answer",
+  "@liveLabShadowStrumAbstained": {
+    "description": "Live Lab shadow card — how often the candidate strum model abstained (no-strum class, or a margin inside the uncertainty band).",
+    "placeholders": {
+      "abstained": {
+        "type": "int"
+      },
+      "verdicts": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowStrumAgreement": "Strum: {agreed} of {compared} verdicts match the shipped path",
+  "@liveLabShadowStrumAgreement": {
+    "description": "Live Lab shadow card — strum-band agreement line. Deliberately a fraction and not a percentage, so a tiny sample cannot read as a confident rate.",
+    "placeholders": {
+      "agreed": {
+        "type": "int"
+      },
+      "compared": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowStrumNoData": "Strum: nothing comparable in this capture.",
+  "@liveLabShadowStrumNoData": {
+    "description": "Live Lab shadow card — shown when the strum band produced no comparable verdict. An empty sample has no agreement rate, so none is displayed."
+  },
+  "liveLabShadowTitle": "Shadow comparison",
+  "@liveLabShadowTitle": {
+    "description": "Live Lab panel — heading of the E14-R23/R26 shadow-mode card. Lab-only; a candidate recognition model is compared against the shipped one."
+  },
+  "liveLabShadowWindow": "Window: the most recent {kept} comparisons ({dropped} older ones dropped)",
+  "@liveLabShadowWindow": {
+    "description": "Live Lab shadow card — states that the sample list is a bounded ring, so the reader knows the report is a window and not a session total.",
+    "placeholders": {
+      "kept": {
+        "type": "int"
+      },
+      "dropped": {
+        "type": "int"
+      }
+    }
+  },
   "liveListening": "Listening",
+  "liveModeFreePlay": "Free play",
+  "@liveModeFreePlay": {
+    "description": "Live stage mode chip: nothing is being asked of the player, the stage mirrors what it hears (E14-R37, ADR 0550 D2)."
+  },
+  "liveModeGuided": "Guided",
+  "@liveModeGuided": {
+    "description": "Live stage mode chip: a lesson/song target is on screen (E14-R37, ADR 0550 D2)."
+  },
   "liveNext": "Next",
   "livePause": "Pause",
   "liveRejectLowConfidence": "Not quite clear — play it again",
@@ -2816,6 +2960,28 @@
   "practiceChordLaneOutcomeNotApplicable": "Not scored",
   "practiceChordLaneOutcomeWrong": "Wrong",
   "practiceChordLaneUpcomingBar": "Upcoming bar",
+  "practiceCorrectionHitTarget": "That target went by — aim for the next one.",
+  "@practiceCorrectionHitTarget": {
+    "description": "Correction shown when a missed target carries no chord (a rhythm / strum-pattern exercise), so no chord can honestly be named."
+  },
+  "practiceCorrectionPlayChord": "Play {chord} on the next target.",
+  "@practiceCorrectionPlayChord": {
+    "description": "Correction shown after a missed target, or a chord the recognizer confidently heard as a different one.",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "C"
+      }
+    }
+  },
+  "practiceCorrectionTitle": "Next fix",
+  "@practiceCorrectionTitle": {
+    "description": "Heading of the practice session's correction banner (E14-R38, ADR 0551 D6) — the one concrete thing to change on the next target."
+  },
+  "practiceCorrectionUnclear": "The app could not tell what it heard — play that part again.",
+  "@practiceCorrectionUnclear": {
+    "description": "Correction shown when the recognizer abstained and gave no typed reason. Blames the app, never the player (ADR 0551 D6); when a reason IS available the localized liveReject* sentence is shown instead."
+  },
   "practiceErrorConfigCountInBarsOutOfRange": "Count-in bars must be between 0 and 4.",
   "practiceErrorConfigLoopCountOutOfRange": "Loop count must be between 1 and 32.",
   "practiceErrorDefinitionNotFound": "This practice isn't available.",
