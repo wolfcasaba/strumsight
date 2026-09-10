@@ -25,8 +25,12 @@ szakaszában. Két további `lib/**` javítás lett belőle: a Live üres-prompt
 túlcsordulása a hős-helyen, és az E12-R20 óta nyilvántartott
 `setup-scoring-profile-overflow` (43 px @2.0) **végleges javítása** (a registry
 zsugorodott; az azonosító a sor 60 %-ára korlátozva tördelődik, a goldenek
-változatlanok). **Törlendő a user boxáról:** `git push origin --delete
-claude/e18-fixes-diag claude/e18-diag-a claude/e18-diag-b claude/e18-diag-c`.
+változatlanok). **Teendő a user boxáról:** (1) a négy eldobható szelet-ág törlése:
+`git push origin --delete claude/e18-fixes-diag claude/e18-diag-a claude/e18-diag-b claude/e18-diag-c`;
+(2) a HORIZON git-note felvitele — a remote konténerből a `refs/notes/*` push-t a
+proxy elutasítja („the remote end hung up unexpectedly", 4× visszalépéses
+újrapróbával is), a branch-push megy:
+`git notes add -m "round=E18-R01-fixes verdict=pass tests=10317 lesson=ci-log-tail-5000-slice-branches-and-golden-pixel-identity" 22a06e25 && git push origin 'refs/notes/*'`.
 
 **Az ág az E18-R01 ágról (`bc81bc5f`) indul** — a jelentés és az F11 kódja
 csak ott él; squash-merge UTÁN az E18-R01 merge-e mellé ez külön PR.
