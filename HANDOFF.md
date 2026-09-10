@@ -25,7 +25,11 @@ szakaszában. Két további `lib/**` javítás lett belőle: a Live üres-prompt
 túlcsordulása a hős-helyen, és az E12-R20 óta nyilvántartott
 `setup-scoring-profile-overflow` (43 px @2.0) **végleges javítása** (a registry
 zsugorodott; az azonosító a sor 60 %-ára korlátozva tördelődik, a goldenek
-változatlanok). **Teendő a user boxáról:** (1) a négy eldobható szelet-ág törlése:
+változatlanok). **Ellenőrző prompt a laptopos AI-sessionnek (emulátor):**
+[`docs/reviews/e18-r01-emulator-verify-prompt.md`](docs/reviews/e18-r01-emulator-verify-prompt.md)
+— a jelentés kötelező szerkezetével (`docs/reviews/e18-r01-emulator-verify-report.md`).
+
+**Teendő a user boxáról:** (1) a négy eldobható szelet-ág törlése:
 `git push origin --delete claude/e18-fixes-diag claude/e18-diag-a claude/e18-diag-b claude/e18-diag-c`;
 (2) a HORIZON git-note felvitele — a remote konténerből a `refs/notes/*` push-t a
 proxy elutasítja („the remote end hung up unexpectedly", 4× visszalépéses
