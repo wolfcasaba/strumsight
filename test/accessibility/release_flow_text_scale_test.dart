@@ -237,8 +237,9 @@ final class KnownOverflow {
 /// `release_flow_semantics_test.dart` imports this list.
 const knownOverflows = <KnownOverflow>[
   // `setup-scoring-profile-overflow` (practice_setup_screen.dart:418, 43px,
-  // en+hu) was FIXED in E18-R01 — `_ScoringProfileReadout`'s id is a loose
-  // `Flexible` now — and its entry removed here and in the YAML mirror.
+  // en+hu) was FIXED in E18-R01 — `_ScoringProfileReadout`'s id is capped at
+  // 60 % of the row and wraps — and its entry removed here and in the YAML
+  // mirror.
   //
   // The combo-count `Row` (practice_feedback.dart:89-101) has neither Text
   // child `Expanded` — hu's longer `practiceFeedbackComboLabel` translation

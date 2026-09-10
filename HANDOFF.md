@@ -24,7 +24,8 @@ eldobható szelet-ágak tették láthatóvá — részletek a jelentés „CI-k�
 szakaszában. Két további `lib/**` javítás lett belőle: a Live üres-prompt 2,5 px-es
 túlcsordulása a hős-helyen, és az E12-R20 óta nyilvántartott
 `setup-scoring-profile-overflow` (43 px @2.0) **végleges javítása** (a registry
-zsugorodott). **Törlendő a user boxáról:** `git push origin --delete
+zsugorodott; az azonosító a sor 60 %-ára korlátozva tördelődik, a goldenek
+változatlanok). **Törlendő a user boxáról:** `git push origin --delete
 claude/e18-fixes-diag claude/e18-diag-a claude/e18-diag-b claude/e18-diag-c`.
 
 **Az ág az E18-R01 ágról (`bc81bc5f`) indul** — a jelentés és az F11 kódja

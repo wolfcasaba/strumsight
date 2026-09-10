@@ -421,25 +421,34 @@ class _ScoringProfileReadout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-        // A loose Flexible so a grown label (textScale 2.0) never starves
-        // the id of width — it wraps instead of overflowing (E18-R01; the
-        // E12-R20 audit's `setup-scoring-profile-overflow` finding).
-        Flexible(
-          child: Text(
-            profileId,
-            textAlign: TextAlign.end,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The id keeps its natural width — so the un-scaled layout (and its
+        // pixel goldens) is unchanged — but may take at most 60 % of the
+        // row: at textScale 2.0 it wraps instead of overflowing (E18-R01;
+        // the E12-R20 audit's `setup-scoring-profile-overflow` finding).
+        final idMaxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth * 0.6
+            : double.infinity;
+        return Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: idMaxWidth),
+              child: Text(
+                profileId,
+                textAlign: TextAlign.end,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

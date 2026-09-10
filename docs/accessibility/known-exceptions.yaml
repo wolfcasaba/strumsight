@@ -33,7 +33,8 @@ schema_version: 1
 exceptions:
   # `setup-scoring-profile-overflow` (practice_setup_screen.dart:418, 43px at
   # textScale 2.0, en+hu, measured 2026-09-01) — FIXED in E18-R01
-  # (`_ScoringProfileReadout`'s id is a loose `Flexible`), entry removed
+  # (`_ScoringProfileReadout`'s id is capped at 60 % of the row and wraps),
+  # entry removed
   # together with its `knownOverflows` mirror (shrink-only registry).
   - id: feedback-combo-row-overflow-hu
     owner: "Next Practice design-migration round (SDD, unscheduled)"
