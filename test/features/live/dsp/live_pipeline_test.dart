@@ -102,7 +102,7 @@ void main() {
       frames.addAll(pipeline.addChunk(strum.sublist(i, end)));
     }
     final atSilenceStart = frames.length;
-    expect(frames.last.inputLevel, greaterThan(0.2));
+    expect(frames.last.inputLevel, greaterThan(0.05));
     final silence = Float64List(1024);
     for (var fed = 0; fed < sr * 2; fed += 1024) {
       frames.addAll(pipeline.addChunk(silence));

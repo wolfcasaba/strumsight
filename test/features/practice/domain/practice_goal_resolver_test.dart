@@ -64,6 +64,16 @@ void main() {
     expect(entries.single.definitionId, 'easy');
   });
 
+  test('rhythm: a rhythm-only practice outranks a "rhythm"-tagged strum '
+      'pattern, whatever the catalogue order', () {
+    final entries = resolvePracticeGoals([
+      _def('tagged', mode: PracticeMode.strumPattern, skillTags: ['rhythm']),
+      _def('pure', mode: PracticeMode.rhythmOnly),
+    ]);
+    final rhythm = entries.singleWhere((e) => e.goal == PracticeGoal.rhythm);
+    expect(rhythm.definitionId, 'pure');
+  });
+
   test('scales and technique resolve by skill tag when content exists', () {
     final entries = resolvePracticeGoals([
       _def('s', mode: PracticeMode.freePractice, skillTags: ['scales']),

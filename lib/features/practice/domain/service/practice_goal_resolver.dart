@@ -24,13 +24,17 @@ final class PracticeGoalEntry {
 /// definition is simply absent from the result — the hub then shows no chip
 /// for it rather than a dead end.
 ///
-/// Within a goal the easiest definition wins (beginner before intermediate
-/// before advanced), catalogue order breaking ties — the same "first entry is
-/// the recommendation" convention the hub's CTA relies on (ADR 0508 D3).
+/// Within a goal a MODE match outranks a skill-tag match (a rhythm-only
+/// practice before a strum pattern merely tagged "rhythm"); within a rank the
+/// easiest definition wins (beginner before intermediate before advanced),
+/// catalogue order breaking ties — the same "first entry is the
+/// recommendation" convention the hub's CTA relies on (ADR 0508 D3).
 List<PracticeGoalEntry> resolvePracticeGoals(List<PracticeDefinition> catalog) {
   final entries = <PracticeGoalEntry>[];
   for (final goal in PracticeGoal.values) {
-    final match = _easiest(catalog.where((d) => _serves(d, goal)));
+    final match =
+        _easiest(catalog.where((d) => _servesByMode(d, goal))) ??
+        _easiest(catalog.where((d) => _servesByTag(d, goal)));
     if (match != null) {
       entries.add(PracticeGoalEntry(goal: goal, definitionId: match.id));
     }
@@ -38,7 +42,7 @@ List<PracticeGoalEntry> resolvePracticeGoals(List<PracticeDefinition> catalog) {
   return List.unmodifiable(entries);
 }
 
-bool _serves(PracticeDefinition definition, PracticeGoal goal) {
+bool _servesByMode(PracticeDefinition definition, PracticeGoal goal) {
   switch (goal) {
     case PracticeGoal.warmup:
       return definition.mode == PracticeMode.strumPattern &&
@@ -47,12 +51,24 @@ bool _serves(PracticeDefinition definition, PracticeGoal goal) {
       return definition.mode == PracticeMode.chordChanges ||
           definition.mode == PracticeMode.chordProgression;
     case PracticeGoal.rhythm:
-      return definition.mode == PracticeMode.rhythmOnly ||
-          definition.skillTags.contains(_rhythmTag);
+      return definition.mode == PracticeMode.rhythmOnly;
+    case PracticeGoal.scales:
+    case PracticeGoal.technique:
+      return false;
+  }
+}
+
+bool _servesByTag(PracticeDefinition definition, PracticeGoal goal) {
+  switch (goal) {
+    case PracticeGoal.rhythm:
+      return definition.skillTags.contains(_rhythmTag);
     case PracticeGoal.scales:
       return definition.skillTags.contains(_scalesTag);
     case PracticeGoal.technique:
       return definition.skillTags.contains(_techniqueTag);
+    case PracticeGoal.warmup:
+    case PracticeGoal.chords:
+      return false;
   }
 }
 

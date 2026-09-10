@@ -249,14 +249,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final brightness = Theme.of(context).brightness;
 
     // ---- Accessible announcement, throttled independently of the visual
-    // frame rate (ADR 0280 §2, §0.0/R8). ----
+    // frame rate (ADR 0280 §2, §0.0/R8). Announces the STABILIZED label the
+    // hero shows (ADR 0539 D1) — a screen reader must never hear a one-frame
+    // blip the sighted user no longer sees. ----
+    final announcedChord = timeline.isNotEmpty
+        ? timeline.last.chord
+        : frame.current;
     if (!_paused &&
         frame.listening &&
         frame.current != null &&
+        announcedChord != null &&
         frame.engineTimeSec >= 0) {
       final micros = (frame.engineTimeSec * 1e6).round();
       _liveRegion.report(
-        frame.current!.transposed(-capo).label,
+        announcedChord.transposed(-capo).label,
         at: Duration(microseconds: micros),
       );
     }

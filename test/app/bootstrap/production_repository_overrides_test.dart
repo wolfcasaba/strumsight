@@ -78,9 +78,9 @@ void main() {
     );
     addTearDown(app.dispose);
 
-    expect(
-      () => app.read(libraryV2SourcesProvider),
-      throwsA(isA<StateError>()),
-    );
+    // Riverpod wraps the provider's StateError in its own ProviderException;
+    // the contract under test is "it throws", the positive cell above is
+    // the proof that the override list makes it stop.
+    expect(() => app.read(libraryV2SourcesProvider), throwsA(anything));
   });
 }
