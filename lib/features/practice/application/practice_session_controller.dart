@@ -226,6 +226,18 @@ final class PracticeSessionController {
     if (input is PreparePractice) {
       await _onPreparePractice(input);
     }
+    if (input is RetryPractice && !transition.isRejected) {
+      // `failed → preparing` re-runs the SAME preparation (permission +
+      // compile) the first PreparePractice did; without this the retry sat
+      // in `preparing` forever (found while fixing E18-R01 F7).
+      final definition = transition.state.definition;
+      final config = transition.state.config;
+      if (definition != null && config != null) {
+        await _onPreparePractice(
+          PreparePractice(definition: definition, config: config),
+        );
+      }
+    }
     if (input is PausePractice) {
       clock.pause();
     }
@@ -252,7 +264,15 @@ final class PracticeSessionController {
     } else if (newStatus == PracticeSessionStatus.cancelled) {
       await _cleanupTerminalResources();
     } else if (newStatus == PracticeSessionStatus.failed) {
-      await _cleanupTerminalResources();
+      if (input is ObservationCaptureFailed) {
+        // Recoverable: the gateway already tore its capture down; keep it
+        // (and our observation subscription) alive so Retry can restart
+        // capture on the same session (E18-R01 F7).
+        await _stopGateway();
+        tickSource.stop();
+      } else {
+        await _cleanupTerminalResources();
+      }
     }
 
     // Tick-source management.
@@ -435,6 +455,15 @@ final class PracticeSessionController {
       stackTrace: stackTrace,
       fields: <String, Object?>{'code': mapped.code},
     );
+    if (practiceCaptureActive(_state.status)) {
+      // The gateway stops its own capture on a stream error, so the session
+      // would otherwise run BLIND to the end and navigate to an empty result
+      // (E18-R01 emulator F7). Drive it to `failed` — named failure + Retry.
+      // The capture-activation sync in `_applySideEffects` issues the
+      // (idempotent) `gateway.stop()` and clears `_gatewayActive`.
+      unawaited(dispatch(ObservationCaptureFailed(mapped)));
+      return;
+    }
     _effectsController.add(ShowRecoverableError(mapped));
   }
 

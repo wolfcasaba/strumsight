@@ -110,7 +110,13 @@ class PracticeSetupScreen extends ConsumerWidget {
   }
 
   void _backToHub(BuildContext context) {
-    context.go(AppRoutes.practiceHub);
+    // Pushed from the hub (E18-R01 F4) → pop back to it; a deep link with
+    // nothing underneath still lands on the hub.
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.practiceHub);
+    }
   }
 }
 

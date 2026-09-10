@@ -90,6 +90,41 @@ void main() {
     expect(history, findsNWidgets(2));
   });
 
+  testWidgets(
+    'hasCurrent: false demotes the newest card to history and shows the idle '
+    'prompt in the hero slot (E18-R01 emulator F2)',
+    (tester) async {
+      final events = [
+        _event('Am', StrumDirection.down, 0),
+        _event('C', StrumDirection.down, 1),
+      ];
+      await _pump(
+        tester,
+        ChordTimeline(events: events, capo: 0, hasCurrent: false),
+      );
+      await tester.pumpAndSettle();
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(ChordTimeline)),
+      );
+      // The prompt is back — and there is no hero card at all.
+      expect(find.text(l10n.liveWaitingForChord), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((w) => w is ChordTimelineCard && w.isHero),
+        findsNothing,
+      );
+      // The history is kept, honestly, as history (both cards receded).
+      expect(
+        find.byWidgetPredicate((w) => w is ChordTimelineCard && !w.isHero),
+        findsNWidgets(2),
+      );
+      expect(find.text('C'), findsOneWidget);
+      expect(find.text('Am'), findsOneWidget);
+      // No confidence figure anywhere (history cards carry none).
+      expect(find.textContaining('%'), findsNothing);
+    },
+  );
+
   testWidgets('a beat-index change fires a finite pulse and settles cleanly', (
     tester,
   ) async {

@@ -42,6 +42,8 @@ export 'data/practice_session_result_history_mapper.dart'
 export 'data/vision/practice_vision_adapter.dart';
 export 'domain/service/practice_progress_aggregator.dart'
     show AggregatedPracticeEntry, PracticeProgressAggregator;
+export 'domain/service/practice_goal_resolver.dart'
+    show PracticeGoal, PracticeGoalEntry, resolvePracticeGoals;
 export 'domain/service/practice_session_eligibility.dart'
     show PracticeSessionEligibility, PracticeSessionEligibilityInput;
 export 'domain/model/practice_metrics.dart'

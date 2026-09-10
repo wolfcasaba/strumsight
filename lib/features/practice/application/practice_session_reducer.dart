@@ -200,6 +200,8 @@ PracticeSessionTransition reducePracticeSession(
       state,
       failure,
     ),
+    ObservationCaptureFailed(:final failure) =>
+      _reduceObservationCaptureFailed(state, failure),
     PermissionDenied() => _reducePermissionDenied(state),
     ClockAdvanced(:final snapshot) => _reduceClockAdvanced(state, snapshot),
   };
@@ -618,6 +620,26 @@ PracticeSessionTransition _reducePreparationFailed(
       PracticeSessionStatus.preparing,
       PracticeSessionStatus.failed,
     ],
+  );
+}
+
+PracticeSessionTransition _reduceObservationCaptureFailed(
+  PracticeSessionState state,
+  AppFailure failure,
+) {
+  // The §11.2 table already permits `countIn | running | finishing → failed`;
+  // anything else (paused: capture is off anyway; terminals) is rejected.
+  if (!_canTransition(state.status, PracticeSessionStatus.failed)) {
+    return _rejected(state, state.status, 'ObservationCaptureFailed');
+  }
+  return PracticeSessionTransition(
+    state: state.copyWith(
+      status: PracticeSessionStatus.failed,
+      recoverableFailure: failure,
+      finishReason: PracticeFinishReason.failed,
+    ),
+    effects: [ShowRecoverableError(failure)],
+    statusPath: [state.status, PracticeSessionStatus.failed],
   );
 }
 

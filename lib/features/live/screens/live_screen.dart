@@ -292,7 +292,17 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         : SsSessionTransportStatus.active;
 
     final latestStrum = frame.latestStrum;
-    final chordLabel = hasChord ? frame.current!.transposed(-capo).label : null;
+    // The hero shows the STABILIZED label (the timeline's newest card — only
+    // a label that survived the RecognitionStabilizer's agreement window
+    // ever becomes a card), not the raw per-frame decision: a one-or-two
+    // frame blip on a strum attack made the big chord jump to a wrong chord
+    // and back (user report 2026-09-09, ADR 0539). The raw frame still owns
+    // presence (`hasChord`), so the hero disappears the moment the chord
+    // gate releases; the raw label is only the cold-start fallback.
+    final stableChord = timeline.isNotEmpty ? timeline.last.chord : null;
+    final chordLabel = hasChord
+        ? (stableChord ?? frame.current!).transposed(-capo).label
+        : null;
     final confColor = AppColors.confidence(frame.confidence, brightness);
     final confTier = AppColors.confidenceTier(frame.confidence);
 
@@ -391,6 +401,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             capo: capo,
             listening: !_paused && frame.listening,
             beat: beat,
+            // The card must expire with the chord gate (E18-R01 F2): no
+            // hero — and no confidence figure — while the frame says
+            // nothing is sounding, in step with the Stage hero above.
+            hasCurrent: hasChord,
           ),
           if (frame.bar.isNotEmpty)
             Padding(

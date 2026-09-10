@@ -584,6 +584,10 @@ jelentkezik.
 
 ## FEJLESZTENDŐ — a következő kör teendői
 
+> **Státusz 2026-09-09 (javító kör):** az F1–F8, F10, F11 javítva, az F9/F12/F13
+> rendelkezése és a felismerés-stabilitás (ADR 0539) a
+> [`e18-r01-emulator-fixes.md`](e18-r01-emulator-fixes.md) jelentésben.
+
 A felhasználó kérésére összegyűjtve, fontossági sorrendben. Egyik sincs
 javítva ebben a körben (ADR 0055).
 

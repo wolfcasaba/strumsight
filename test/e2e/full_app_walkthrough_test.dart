@@ -251,14 +251,19 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   await tester.pumpAndSettle();
 
   // 5. Library. MÉRT LELET (recorded in
-  // docs/release/full-app-verification.md, §5.2 — not fixed here):
-  // `libraryV2SourcesProvider` (`library_v2_providers.dart`) unconditionally
-  // reads `analysisRepositoryProvider`/`songRepositoryProvider`/
+  // docs/release/full-app-verification.md, §5.2): `libraryV2SourcesProvider`
+  // (`library_v2_providers.dart`) unconditionally reads
+  // `analysisRepositoryProvider`/`songRepositoryProvider`/
   // `setlistRepositoryProvider`, three providers whose base declarations
   // (`analysis_providers.dart`) deliberately `throw StateError` until the
-  // PRODUCTION bootstrap (`main.dart`) wires them from the boot variants —
+  // PRODUCTION bootstrap (`main.dart`) wires them from the boot variants.
+  // Until E18-R01 F5 the production bootstrap wired only the song store —
+  // the SAME error state shipped to every device; `main.dart` now wires all
+  // three (`production_repository_overrides.dart`, guarded by
+  // `test/app/bootstrap/production_repository_overrides_test.dart`).
   // `bootE2eApp` builds its `ProviderContainer` directly (E12-R11, ADR
-  // 0472), never runs that bootstrap, and does not override these three.
+  // 0472), never runs that bootstrap, and does not override these three,
+  // so THIS harness still measures the error branch.
   // `LibraryV2Controller.build()` therefore fails for EVERY item source,
   // and `UnifiedLibraryScreen` renders its own real, localized, EXPLICIT
   // `libraryV2LoadFailed` error state (§5.1's "or an explicit state" branch

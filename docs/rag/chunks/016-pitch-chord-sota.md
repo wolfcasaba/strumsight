@@ -110,6 +110,19 @@ confirms, ~12 ms after the attack — well inside one chord frame) →
 faster post-onset than steady-state; the boost expires; an onset on the same
 sustained chord changes nothing.
 
+**AS BUILT 2026-09-09 (ADR 0539) — the latch risk below is now the leading
+hypothesis for a MEASURED symptom** (user: a repeated C shows C → another
+chord → C, on every chord): the ×0.25 window sits exactly on the attack
+transient, and a 186 ms wrong label spans 2–3 of the ~15 Hz frames the
+`RecognitionStabilizer` counts, so it CONFIRMED. Shipped without touching
+this decoder: (1) the Stage hero reads the STABILIZED label (timeline's
+newest card), not raw `frame.current`; (2) the stabilizer ignores
+displacement frames within 0.2 s of `latestStrumTime` (attack guard);
+(3) the timeline card expires with the chord gate / strum expiry. The
+decoder-side candidate — shift the boost to chord frames 2–3 after the onset
+(switch on the sustain, not the attack) — needs the real-guitar A/B in
+`docs/research/chord-recognition-stability-and-engines-2026-09.md` §4.
+
 **r142 audit fixes/notes:** (1) `process(..., gated: true)` on sub-tonalness
 frames — a gated frame neither consumes the 2-frame onset boost nor lowers the
 incumbent's guard (before: a silent chord-frame right after a strum could

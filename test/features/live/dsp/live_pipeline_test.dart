@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -79,6 +80,50 @@ void main() {
     expect(frames, isNotEmpty);
     expect(frames.last.current, isNull);
     expect(frames.last.inputLevel, lessThan(0.05));
+  });
+
+  test(
+    'end-to-end: a moderate strum reads MID-scale on the level meter — '
+    'never pinned at 1.0 (E18-R01 emulator F10)',
+    () {
+      // The synthetic strum's onset frames sit around −12…−20 dBFS RMS;
+      // the old `rms * 8` curve clamped all of that to exactly 1.0.
+      final frames = run(strumSignal(lowFirst: true, seconds: 0.6));
+      final peak = frames.map((f) => f.inputLevel).reduce(math.max);
+      expect(peak, greaterThan(0.2));
+      expect(peak, lessThan(0.95));
+    },
+  );
+
+  test('end-to-end: the level meter RELEASES after the strum instead of '
+      'snapping to 0 on the next quiet frame (E18-R01 F10)', () {
+    final pipeline = LivePipeline(sampleRate: sr);
+    final frames = <LiveFrame>[];
+    final strum = strumSignal(lowFirst: true, seconds: 0.4);
+    for (var i = 0; i < strum.length; i += 1024) {
+      final end = (i + 1024 < strum.length) ? i + 1024 : strum.length;
+      frames.addAll(pipeline.addChunk(strum.sublist(i, end)));
+    }
+    final atSilenceStart = frames.length;
+    expect(frames.last.inputLevel, greaterThan(0.2));
+    final silence = Float64List(1024);
+    for (var fed = 0; fed < sr * 2; fed += 1024) {
+      frames.addAll(pipeline.addChunk(silence));
+    }
+    final tail = frames.sublist(atSilenceStart).map((f) => f.inputLevel);
+    // Once the signal is gone the reading is non-increasing…
+    var prev = frames[atSilenceStart - 1].inputLevel;
+    var intermediates = 0;
+    for (final level in tail) {
+      expect(level, lessThanOrEqualTo(prev + 1e-9));
+      if (level > 0 && level < prev) intermediates++;
+      prev = level;
+    }
+    // …passing through several intermediate values (a release, not a
+    // cliff)…
+    expect(intermediates, greaterThanOrEqualTo(3));
+    // …and ending at zero.
+    expect(frames.last.inputLevel, 0);
   });
 
   test('hero strum fades after 2 s without a new onset', () {

@@ -58,7 +58,15 @@ flutter:
 
   assets:
     # Curated, reviewed tutor knowledge documents and their manifest.
+    # A directory entry is NOT recursive: the manifest lives at the root, the
+    # documents one level down in `en/` and `hu/` — each level is declared
+    # (E18-R01 emulator finding F1: only `manifest.json` shipped, every device
+    # start fell back with `tutorKnowledge.indexLoad.assetReadFailure`).
+    # `test/features/ai_tutor/data/bundled_knowledge_assets_test.dart` reads
+    # the COMPILED bundle and guards this.
     - assets/tutor_knowledge/
+    - assets/tutor_knowledge/en/
+    - assets/tutor_knowledge/hu/
     # Versioned, trusted system templates for AI Tutor prompt composition.
     - assets/tutor_prompts/
     # Trained strum-direction CRNN weights (pure-Dart inference, round 163).

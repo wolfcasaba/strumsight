@@ -16,6 +16,7 @@ import '../../support/preference_store.dart';
 /// tests.
 final class _RecordingAudition implements ChordAudition {
   final List<String> strummed = [];
+  var stops = 0;
   var disposed = false;
 
   @override
@@ -27,7 +28,7 @@ final class _RecordingAudition implements ChordAudition {
   }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stops++;
 
   @override
   Future<void> dispose() async => disposed = true;
@@ -186,4 +187,56 @@ void main() {
 
     expect(fake.disposed, isTrue);
   });
+
+  testWidgets(
+    'leaving the builder while the preview plays silences it AT the pop, not '
+    'after the exit transition (E18-R01 F11)',
+    (tester) async {
+      final fake = _RecordingAudition();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [...preferenceOverrides(), _auditionOverride(fake)],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SongBuilderScreen(),
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ActionChip, 'C'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('song-preview-toggle')));
+      await tester.pump();
+      expect(fake.strummed, ['C', 'C']); // add + the preview's first stroke
+
+      // Default 90 bpm, downs on beats: the next stroke is due at 667 ms.
+      await tester.pump(const Duration(milliseconds: 500));
+      final stopsBeforeBack = fake.stops;
+      final strummedBeforeBack = List<String>.of(fake.strummed);
+
+      await tester.tap(find.byType(BackButton));
+      // Still inside the ~300 ms exit transition: the route is alive, its
+      // State not yet disposed — this is where the stray stroke came from.
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(fake.stops, greaterThan(stopsBeforeBack));
+      expect(fake.strummed, strummedBeforeBack);
+
+      await tester.pumpAndSettle();
+      expect(fake.strummed, strummedBeforeBack);
+      expect(fake.disposed, isTrue);
+    },
+  );
 }

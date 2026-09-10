@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 
 import 'app/bootstrap/app_bootstrap.dart';
 import 'app/bootstrap/bootstrap_result.dart';
+import 'app/bootstrap/production_repository_overrides.dart';
 import 'app/config/app_config.dart';
 import 'app/strumsight_app.dart';
 import 'core/logging/logger_provider.dart';
@@ -82,6 +83,12 @@ Future<void> _runAppWithSongTrainerRepositories({
     final SongAssetRepository assetRepository = await bootstrapContainer.read(
       songAssetRepositoryBootProvider.future,
     );
+    // Analysis + setlist stores: read by the unified Library on every device
+    // start — they were never wired, so Profile → Library always failed
+    // (E18-R01 emulator finding F5).
+    final repositoryOverrides = await buildProductionRepositoryOverrides(
+      bootstrapContainer,
+    );
     final tutorOverrides = await buildTutorProductionOverrides(
       keyValueStore: keyValueStore,
     );
@@ -92,6 +99,7 @@ Future<void> _runAppWithSongTrainerRepositories({
           keyValueStoreProvider.overrideWithValue(keyValueStore),
           songRepositoryProvider.overrideWithValue(repository),
           songAssetRepositoryProvider.overrideWithValue(assetRepository),
+          ...repositoryOverrides,
           diagnosticsConsentProvider.overrideWith(
             (ref) => ref.watch(labModeProvider),
           ),

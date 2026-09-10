@@ -4,7 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../features/practice/public.dart' show practiceCatalogProvider;
+import '../../../features/practice/public.dart'
+    show PracticeGoal, practiceCatalogProvider, resolvePracticeGoals;
 import '../../../l10n/app_localizations.dart';
 
 /// The Practice Area Hub (UI-06, SDD Ch13 §UI-06) — every practice tool's
@@ -19,6 +20,13 @@ import '../../../l10n/app_localizations.dart';
 /// [practiceCatalogProvider] (ADR 0508 D3) is a const-list lookup, not a
 /// resource open.
 ///
+/// Every navigation here is a `context.push`, never `context.go`: the tool
+/// routes are registered as siblings of this hub inside the Practice branch,
+/// so `go` REPLACED the branch stack with a single page and the Android
+/// system back then closed the app instead of returning here (E18-R01
+/// emulator finding F4, 4/4 reproduced). A push stacks the tool above the
+/// hub, so back — and the in-screen back arrow — pop to it.
+///
 /// Styled with plain Material widgets + [AppColors] (matching
 /// `ProgressScreen`/the legacy `PracticeHubScreen`), not the
 /// `core/design_system` component library — see `today_hub_screen.dart`'s
@@ -31,6 +39,14 @@ class PracticeAreaHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final catalog = ref.watch(practiceCatalogProvider);
+    // E18-R01 F6: each goal chip opens the practice the catalogue resolves
+    // for it; a goal the catalogue cannot serve says so IN PLACE instead of
+    // landing on "Practice unavailable". (All five chips stay rendered — the
+    // e13_r17 pixel golden of this hub is regenerated only on the box.)
+    final goals = {
+      for (final entry in resolvePracticeGoals(catalog))
+        entry.goal: entry.definitionId,
+    };
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceHubTitle)),
@@ -68,7 +84,7 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                               'id': catalog.first.id,
                             },
                           );
-                          context.go(uri.toString());
+                          context.push(uri.toString());
                         },
                         child: Text(l10n.practiceAreaHubRecommendedCta),
                       ),
@@ -92,22 +108,22 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                 _QuickTool(
                   icon: Icons.graphic_eq,
                   label: l10n.navLive,
-                  onPressed: () => context.go(AppRoutes.practiceLive),
+                  onPressed: () => context.push(AppRoutes.practiceLive),
                 ),
                 _QuickTool(
                   icon: Icons.tune,
                   label: l10n.liveTuner,
-                  onPressed: () => context.go(AppRoutes.practiceTuner),
+                  onPressed: () => context.push(AppRoutes.practiceTuner),
                 ),
                 _QuickTool(
                   icon: Icons.av_timer,
                   label: l10n.metronomeTitle,
-                  onPressed: () => context.go(AppRoutes.practiceMetronome),
+                  onPressed: () => context.push(AppRoutes.practiceMetronome),
                 ),
                 _QuickTool(
                   icon: Icons.library_music_outlined,
                   label: l10n.chordLibraryTitle,
-                  onPressed: () => context.go(AppRoutes.practiceChords),
+                  onPressed: () => context.push(AppRoutes.practiceChords),
                 ),
               ],
             ),
@@ -124,16 +140,11 @@ class PracticeAreaHubScreen extends ConsumerWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final label in [
-                  l10n.practiceAreaHubCategoryWarmup,
-                  l10n.practiceAreaHubCategoryChords,
-                  l10n.practiceAreaHubCategoryRhythm,
-                  l10n.practiceAreaHubCategoryScales,
-                  l10n.practiceAreaHubCategoryTechnique,
-                ])
+                for (final goal in PracticeGoal.values)
                   ActionChip(
-                    label: Text(label),
-                    onPressed: () => context.go(AppRoutes.practiceSetup),
+                    key: ValueKey('practice-hub-goal-${goal.name}'),
+                    label: Text(_goalLabel(l10n, goal)),
+                    onPressed: () => _openGoal(context, l10n, goals[goal]),
                   ),
               ],
             ),
@@ -143,6 +154,33 @@ class PracticeAreaHubScreen extends ConsumerWidget {
     );
   }
 }
+
+void _openGoal(
+  BuildContext context,
+  AppLocalizations l10n,
+  String? definitionId,
+) {
+  if (definitionId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.practiceAreaHubGoalUnavailable)),
+    );
+    return;
+  }
+  context.push(
+    Uri(
+      path: AppRoutes.practiceSetup,
+      queryParameters: <String, String>{'id': definitionId},
+    ).toString(),
+  );
+}
+
+String _goalLabel(AppLocalizations l10n, PracticeGoal goal) => switch (goal) {
+  PracticeGoal.warmup => l10n.practiceAreaHubCategoryWarmup,
+  PracticeGoal.chords => l10n.practiceAreaHubCategoryChords,
+  PracticeGoal.rhythm => l10n.practiceAreaHubCategoryRhythm,
+  PracticeGoal.scales => l10n.practiceAreaHubCategoryScales,
+  PracticeGoal.technique => l10n.practiceAreaHubCategoryTechnique,
+};
 
 /// A single-tap quick tool: icon + label, text-button weight so it never
 /// competes with the hub's one primary "start recommended" action (§5.2).

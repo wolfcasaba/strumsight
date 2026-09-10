@@ -32,6 +32,15 @@ mic chunk sizes vary (chunk 001), frames are pulled at fixed hops.
 chroma normalize, no onset, chord decays to null after ~1.5 s of silence.
 Tune on-device (phone mics differ); expose in Settings later if needed.
 
+**Input-level meter (display only, `input_level_meter.dart`, E18-R01 F10):**
+`LiveFrame.inputLevel` = onset-frame RMS on a **dBFS scale**, linear from
+**−45 dBFS → 0** to **−6 dBFS → 1**, instant attack + **0.7×/frame release**
+(~15 Hz emit → ≈0.5 s from full scale to 5 %). The weak-signal warning
+threshold (0.12) therefore sits at ≈ −40 dBFS, the analyzer's `quietRmsDbfs`.
+Replaced `rms * 8` (full scale at −18 dBFS, zero below −32: a 14 dB window
+that pinned the meter at 0 % or 100 % at every emulator mic gain). Decides
+nothing — the silence gate above still reads the raw RMS.
+
 **Latency budget (target <80 ms felt):** mic chunk ~23–46 ms + onset confirm
 ~12 ms + frame emit ≤66 ms (15 Hz) → arrow lags the strum by roughly one
 eighth at 120 BPM in the worst case; acceptable for a mirror, NOT for a game.

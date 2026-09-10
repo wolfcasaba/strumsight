@@ -125,6 +125,18 @@ final class PreparationFailed extends PracticeSessionSignal {
   final AppFailure failure;
 }
 
+/// The observation capture died MID-SESSION (the gateway's stream errored —
+/// busy microphone, capture failure — and the gateway tore its capture
+/// down). Drives `countIn | running | finishing → failed` so the session
+/// stops scoring nothing, names the failure and offers Retry, instead of
+/// running blind to the end and landing on an empty result (E18-R01
+/// emulator finding F7).
+final class ObservationCaptureFailed extends PracticeSessionSignal {
+  const ObservationCaptureFailed(this.failure);
+
+  final AppFailure failure;
+}
+
 /// User refused (or system denied) the microphone permission. Drives
 /// `preparing → permissionRequired`.
 final class PermissionDenied extends PracticeSessionSignal {

@@ -3235,6 +3235,7 @@
   "practiceAreaHubCategoryRhythm": "Rhythm",
   "practiceAreaHubCategoryScales": "Scales",
   "practiceAreaHubCategoryTechnique": "Technique",
+  "practiceAreaHubGoalUnavailable": "No practice for this goal yet.",
 
   "profileHubTitle": "Profile",
   "profileHubLocalOnlyTitle": "Local profile",

@@ -18,6 +18,7 @@ import '../quality/live_signal_quality_analyzer.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
+import 'input_level_meter.dart';
 import 'nnls_chroma.dart';
 import '../../../../core/audio/dsp/sliding_framer.dart';
 import 'strum_analyzer.dart';
@@ -171,6 +172,10 @@ class LivePipeline {
     ),
   );
   final StrumAnalyzer _strums;
+
+  /// Display-only level meter (dBFS + release ballistics, E18-R01 F10);
+  /// reads the same `lastRms` the onset detector measures, decides nothing.
+  final InputLevelMeter _levelMeter = InputLevelMeter();
 
   /// The Live-side signal-quality analyzer (E14-R05, ADR 0507) — fed the raw
   /// chunk alongside the DSP pipeline, exposed read-only via [signalQuality].
@@ -381,7 +386,7 @@ class LivePipeline {
     if (_latestStrum != null && nowSec - _latestStrumTime > 2.0) {
       _latestStrum = null;
     }
-    final level = (_strums.lastRms * 8).clamp(0.0, 1.0).toDouble();
+    final level = _levelMeter.update(_strums.lastRms);
     // Only surface the chord once the smoothed match confidence clears the
     // musical-presence gate: below it we're almost certainly hearing speech /
     // noise, not a guitar, so show nothing rather than a phantom chord.

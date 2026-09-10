@@ -421,28 +421,107 @@ void main() {
   //    surfaces a ShowRecoverableError effect and does not crash the
   //    session.
   // -------------------------------------------------------------------------
-  test('stream failure: observation stream error → ShowRecoverableError, '
-      'session stays running', () async {
-    final h = makeHarness();
-    await driveToRunning(h);
+  test(
+    'stream failure: observation stream error → ShowRecoverableError AND '
+    'the session is `failed` (capture is dead, it must not run blind)',
+    () async {
+      final h = makeHarness();
+      await driveToRunning(h);
 
-    final effects = <PracticeSessionEffect>[];
-    final sub = h.controller.effects.listen(effects.add);
-    h.gateway.emitError(
-      AudioFailure(code: FailureCode.practiceObservationStreamFailed),
-    );
-    await settle();
-    await sub.cancel();
+      final effects = <PracticeSessionEffect>[];
+      final sub = h.controller.effects.listen(effects.add);
+      h.gateway.emitError(
+        AudioFailure(code: FailureCode.practiceObservationStreamFailed),
+      );
+      await settle();
+      await sub.cancel();
 
-    final errors = effects.whereType<ShowRecoverableError>().toList();
-    expect(errors, hasLength(1));
-    expect(
-      errors.first.failure.code,
-      FailureCode.practiceObservationStreamFailed,
-    );
-    expect(h.controller.state.status, PracticeSessionStatus.running);
-    await h.controller.dispose();
-  });
+      final errors = effects.whereType<ShowRecoverableError>().toList();
+      expect(errors, hasLength(1));
+      expect(
+        errors.first.failure.code,
+        FailureCode.practiceObservationStreamFailed,
+      );
+      expect(h.controller.state.status, PracticeSessionStatus.failed);
+      expect(
+        h.controller.state.recoverableFailure?.code,
+        FailureCode.practiceObservationStreamFailed,
+      );
+      await h.controller.dispose();
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // 7b. E18-R01 emulator finding F7 — `audio.capture_failed` mid-session
+  //     used to leave the session RUNNING with no capture; the clock then
+  //     ran the timeline to its end and NavigateToResult sent the user to an
+  //     empty "No result to show" screen. Now: `failed` + the named failure,
+  //     the tick source stops, no result navigation — and Retry restarts
+  //     capture on the same session.
+  // -------------------------------------------------------------------------
+  test(
+    'capture failure mid-session → failed with the failure, ticks stop, and '
+    'the timeline end NEVER navigates to a result (E18-R01 F7)',
+    () async {
+      final h = makeHarness();
+      await driveToRunning(h);
+      expect(h.tick.isRunning, isTrue);
+
+      h.gateway.emitError(
+        const AudioFailure(code: FailureCode.audioCaptureFailed),
+      );
+      await settle();
+
+      expect(h.controller.state.status, PracticeSessionStatus.failed);
+      expect(
+        h.controller.state.recoverableFailure?.code,
+        FailureCode.audioCaptureFailed,
+      );
+      expect(h.tick.isRunning, isFalse);
+      expect(h.controller.gatewayIsActive, isFalse);
+      // Recoverable: the gateway is stopped, NOT disposed (Retry needs it).
+      expect(h.controller.gatewayDisposeCalls, 0);
+
+      // Even if a stale tick arrived after the failure with the timeline
+      // long over, nothing navigates and nothing is recorded.
+      h.clock.advance(const Duration(minutes: 5));
+      h.tick.emitTick();
+      await settle();
+      expect(h.controller.state.status, PracticeSessionStatus.failed);
+      expect(h.controller.navigateToResultEffects, 0);
+      expect(h.recorder.recordCalls, 0);
+      await h.controller.dispose();
+    },
+  );
+
+  test(
+    'Retry after a capture failure re-prepares and restarts capture on the '
+    'same session (E18-R01 F7)',
+    () async {
+      final h = makeHarness();
+      await driveToRunning(h);
+      h.gateway.emitError(
+        const AudioFailure(code: FailureCode.audioCaptureFailed),
+      );
+      await settle();
+      expect(h.controller.state.status, PracticeSessionStatus.failed);
+      expect(h.gateway.startCalls, 1);
+
+      await h.controller.dispatch(const RetryPractice());
+      await settle();
+      // failed → preparing → (permission + compile) → ready.
+      expect(h.controller.state.status, PracticeSessionStatus.ready);
+      expect(h.controller.state.recoverableFailure, isNull);
+      expect(h.controller.compileAttempts, 2);
+
+      await h.controller.dispatch(const StartPractice());
+      await settle();
+      expect(h.controller.state.status, PracticeSessionStatus.countIn);
+      expect(h.gateway.startCalls, 2);
+      expect(h.controller.gatewayIsActive, isTrue);
+      await h.controller.dispose();
+    },
+  );
 
   // -------------------------------------------------------------------------
   // 8. No signal — many strums, none match. direction/rhythm both

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/practice_session_command.dart';
+import '../practice_effect_listener.dart' show practiceFailureMessage;
 
 class PracticeErrorPanel extends StatelessWidget {
   const PracticeErrorPanel({
@@ -27,7 +28,9 @@ class PracticeErrorPanel extends StatelessWidget {
               l10n.practiceSessionErrorTitle,
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            Text(l10n.practiceSessionErrorBody),
+            // Name the failure (mic vs. permission vs. generic) — the Tuner's
+            // "Couldn't start the microphone… Tap Retry" pattern (E18-R01 F7).
+            Text(practiceFailureMessage(l10n, failure)),
             const SizedBox(height: 8),
             ElevatedButton(
               onPressed: onRetry,

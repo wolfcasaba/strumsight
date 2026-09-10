@@ -28,10 +28,19 @@ class ChordTimeline extends StatelessWidget {
     required this.capo,
     this.listening = true,
     this.beat = 0,
+    this.hasCurrent = true,
   });
 
   /// Rolling history, newest LAST. Empty → idle prompt.
   final List<ChordEvent> events;
+
+  /// Whether the engine is hearing a chord RIGHT NOW (`frame.current !=
+  /// null`). When false the newest card is no longer the hero: it recedes
+  /// into the history strip and the hero slot shows the idle prompt again —
+  /// the history buffer only ever grows, so without this the last chord
+  /// stayed up as a confident claim while the banner said "no chord"
+  /// (E18-R01 emulator F2).
+  final bool hasCurrent;
 
   /// The chord the engine predicts next, if known (concert pitch).
   final Chord? next;
@@ -63,8 +72,8 @@ class ChordTimeline extends StatelessWidget {
       return _emptyState(context, l10n);
     }
 
-    final hero = events.last;
-    final history = events.sublist(0, events.length - 1);
+    final hero = hasCurrent ? events.last : null;
+    final history = hasCurrent ? events.sublist(0, events.length - 1) : events;
 
     final historyRow = Row(
       mainAxisSize: MainAxisSize.min,
@@ -94,7 +103,12 @@ class ChordTimeline extends StatelessWidget {
               child: historyRow,
             ),
           ),
-        FittedBox(fit: BoxFit.scaleDown, child: _heroCard(context, hero, beat)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: hero == null
+              ? _idlePrompt(context, l10n)
+              : _heroCard(context, hero, beat),
+        ),
         if (next != null)
           FittedBox(fit: BoxFit.scaleDown, child: _nextGhost(context, l10n)),
       ],
@@ -108,8 +122,15 @@ class ChordTimeline extends StatelessWidget {
   // A single finite fade+scale on the icon (no `.repeat()`), so `pumpAndSettle`
   // still terminates. The `liveWaitingForChord` text is kept verbatim.
   Widget _emptyState(BuildContext context, AppLocalizations l10n) {
+    return Center(child: _idlePrompt(context, l10n));
+  }
+
+  /// The idle prompt itself — also the hero slot's content while a history
+  /// exists but nothing sounds now (see [hasCurrent]).
+  Widget _idlePrompt(BuildContext context, AppLocalizations l10n) {
     final palette = context.palette;
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

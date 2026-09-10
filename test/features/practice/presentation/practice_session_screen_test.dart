@@ -374,6 +374,39 @@ void main() {
     });
   });
 
+  group('E18-R01 F7 — a capture failure is NAMED, with Retry', () {
+    testWidgets(
+      'failed with audio.capture_failed renders the mic message (the '
+      'Tuner\'s pattern), not the generic body, and Retry sends RetryPractice',
+      (tester) async {
+        final def = _fixtureDefinition();
+        final cfg = _fixtureConfig();
+        final host = _FakeSessionHost();
+        addTearDown(host.close);
+        host.emitState(
+          _stateFor(
+            PracticeSessionStatus.failed,
+            definition: def,
+            config: cfg,
+          ).copyWith(
+            recoverableFailure: const AudioFailure(
+              code: FailureCode.audioCaptureFailed,
+            ),
+          ),
+        );
+        await _pumpScreen(tester, host: host);
+
+        expect(find.text(l10nEn().practiceSessionErrorAudio), findsOneWidget);
+        expect(find.text(l10nEn().practiceSessionErrorBody), findsNothing);
+        expect(find.textContaining('capture_failed'), findsNothing);
+
+        await tester.tap(find.text(l10nEn().practiceSessionRetry));
+        await tester.pump();
+        expect(host.sent.whereType<RetryPractice>(), hasLength(1));
+      },
+    );
+  });
+
   // -----------------------------------------------------------------
   // A1b — remaining statuses + null host
   // -----------------------------------------------------------------

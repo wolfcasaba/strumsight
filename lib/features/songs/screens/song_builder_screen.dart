@@ -170,194 +170,206 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
     final audition = ref.watch(chordAuditionProvider);
     final preview = _previewFor(audition);
     final canPreview = _chords.isNotEmpty && _pattern.any((d) => d != null);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.existing == null ? l10n.songNewTitle : l10n.songEditTitle,
+    final presets = StrumPatternPreset.forMeter(_beatsPerBar);
+    // The preview must fall silent the moment the user LEAVES, not when the
+    // route is finally disposed after its exit transition: the timer chain
+    // kept firing through the transition (E18-R01 emulator finding F11 — one
+    // more stroke ~400 ms after back). `dispose` still covers every other
+    // teardown path.
+    return PopScope<Object?>(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _preview?.stop();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            widget.existing == null ? l10n.songNewTitle : l10n.songEditTitle,
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-          children: [
-            TextField(
-              controller: _name,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                labelText: l10n.songName,
-                border: const OutlineInputBorder(),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+            children: [
+              TextField(
+                controller: _name,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: l10n.songName,
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (_) => setState(() {}),
               ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 26),
+              const SizedBox(height: 26),
 
-            Row(
-              children: [
-                Expanded(child: _Label(l10n.songProgression)),
-                // Preview transport (ADR 0535 D3): icon-only so the header
-                // row keeps its height and never overflows at large text
-                // scales; the tooltip carries the play/stop label.
+              Row(
+                children: [
+                  Expanded(child: _Label(l10n.songProgression)),
+                  // Preview transport (ADR 0535 D3): icon-only so the header
+                  // row keeps its height and never overflows at large text
+                  // scales; the tooltip carries the play/stop label.
+                  ListenableBuilder(
+                    listenable: preview,
+                    builder: (context, _) => IconButton.filledTonal(
+                      key: const Key('song-preview-toggle'),
+                      // Same 40 px height as the neighbouring text button so
+                      // the header row keeps its measured height.
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(40, 40),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      tooltip: preview.isPlaying
+                          ? l10n.songPreviewStop
+                          : l10n.songPreviewPlay,
+                      icon: Icon(
+                        preview.isPlaying
+                            ? Icons.stop_rounded
+                            : Icons.play_arrow_rounded,
+                      ),
+                      onPressed: canPreview
+                          ? () => _togglePreview(preview)
+                          : null,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _suggest,
+                    icon: const Icon(Icons.auto_awesome, size: 18),
+                    label: Text(l10n.songSuggest),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_chords.isEmpty)
+                Text(
+                  l10n.songProgressionHint,
+                  style: TextStyle(color: Theme.of(context).hintColor),
+                )
+              else
                 ListenableBuilder(
                   listenable: preview,
-                  builder: (context, _) => IconButton.filledTonal(
-                    key: const Key('song-preview-toggle'),
-                    // Same 40 px height as the neighbouring text button so
-                    // the header row keeps its measured height.
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(40, 40),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    tooltip: preview.isPlaying
-                        ? l10n.songPreviewStop
-                        : l10n.songPreviewPlay,
-                    icon: Icon(
-                      preview.isPlaying
-                          ? Icons.stop_rounded
-                          : Icons.play_arrow_rounded,
-                    ),
-                    onPressed: canPreview
-                        ? () => _togglePreview(preview)
-                        : null,
+                  builder: (context, _) => Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (var i = 0; i < _chords.length; i++)
+                        InputChip(
+                          label: Text(_chords[i]),
+                          tooltip: l10n.songChordHear(_chords[i]),
+                          // The bar that is sounding during a preview.
+                          selected: preview.currentBar == i,
+                          onPressed: () => _hear(audition, _chords[i]),
+                          onDeleted: () => _edit(() => _chords.removeAt(i)),
+                        ),
+                    ],
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: _suggest,
-                  icon: const Icon(Icons.auto_awesome, size: 18),
-                  label: Text(l10n.songSuggest),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (_chords.isEmpty)
+              const SizedBox(height: 12),
               Text(
-                l10n.songProgressionHint,
-                style: TextStyle(color: Theme.of(context).hintColor),
-              )
-            else
-              ListenableBuilder(
-                listenable: preview,
-                builder: (context, _) => Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (var i = 0; i < _chords.length; i++)
-                      InputChip(
-                        label: Text(_chords[i]),
-                        tooltip: l10n.songChordHear(_chords[i]),
-                        // The bar that is sounding during a preview.
-                        selected: preview.currentBar == i,
-                        onPressed: () => _hear(audition, _chords[i]),
-                        onDeleted: () => _edit(() => _chords.removeAt(i)),
-                      ),
-                  ],
-                ),
+                l10n.songAddChord,
+                style: Theme.of(context).textTheme.labelMedium,
               ),
-            const SizedBox(height: 12),
-            Text(
-              l10n.songAddChord,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final label in ChordShapes.allLabels)
-                  ActionChip(
-                    label: Text(label),
-                    tooltip: l10n.songChordHear(label),
-                    onPressed: () => _addChord(audition, label),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 28),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final label in ChordShapes.allLabels)
+                    ActionChip(
+                      label: Text(label),
+                      tooltip: l10n.songChordHear(label),
+                      onPressed: () => _addChord(audition, label),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 28),
 
-            Row(
-              children: [
-                Expanded(child: _Label(l10n.songStrumPattern)),
-                // Time-signature notation is universal — deliberately not
-                // localized (like chord labels).
-                SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 4, label: Text('4/4')),
-                    ButtonSegment(value: 3, label: Text('3/4')),
-                  ],
-                  selected: {_beatsPerBar},
-                  onSelectionChanged: (s) => _setMeter(s.first),
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
+              Row(
+                children: [
+                  Expanded(child: _Label(l10n.songStrumPattern)),
+                  // Time-signature notation is universal — deliberately not
+                  // localized (like chord labels).
+                  SegmentedButton<int>(
+                    segments: const [
+                      ButtonSegment(value: 4, label: Text('4/4')),
+                      ButtonSegment(value: 3, label: Text('3/4')),
+                    ],
+                    selected: {_beatsPerBar},
+                    onSelectionChanged: (s) => _setMeter(s.first),
+                    showSelectedIcon: false,
+                    style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              l10n.songStrumPatternHint,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              children: [
-                for (final preset in StrumPatternPreset.forMeter(_beatsPerBar))
-                  ActionChip(
-                    label: Text(preset.name),
-                    onPressed: () =>
-                        _edit(() => _pattern = [...preset.pattern]),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            StrumPatternEditor(
-              pattern: _pattern,
-              onChanged: (p) => _edit(() => _pattern = p),
-            ),
-            const SizedBox(height: 28),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.songStrumPatternHint,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final preset in presets)
+                    ActionChip(
+                      label: Text(preset.name),
+                      onPressed: () =>
+                          _edit(() => _pattern = [...preset.pattern]),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              StrumPatternEditor(
+                pattern: _pattern,
+                onChanged: (p) => _edit(() => _pattern = p),
+              ),
+              const SizedBox(height: 28),
 
-            _Label(l10n.songTempo),
-            Row(
-              children: [
-                // Tap the tempo of the track you're writing along to
-                // (round 103, same tool as the metronome's).
-                IconButton.filledTonal(
-                  tooltip: l10n.metronomeTap,
-                  icon: const Icon(Icons.touch_app_outlined),
-                  onPressed: () {
-                    final bpm = _tapTempo.tap(DateTime.now());
-                    if (bpm != null) _edit(() => _bpm = bpm);
-                  },
-                ),
-                Expanded(
-                  child: Slider(
-                    value: _bpm.toDouble(),
-                    min: 50,
-                    max: 180,
-                    divisions: 130,
-                    label: '$_bpm',
-                    onChanged: (v) => _edit(() => _bpm = v.round()),
+              _Label(l10n.songTempo),
+              Row(
+                children: [
+                  // Tap the tempo of the track you're writing along to
+                  // (round 103, same tool as the metronome's).
+                  IconButton.filledTonal(
+                    tooltip: l10n.metronomeTap,
+                    icon: const Icon(Icons.touch_app_outlined),
+                    onPressed: () {
+                      final bpm = _tapTempo.tap(DateTime.now());
+                      if (bpm != null) _edit(() => _bpm = bpm);
+                    },
                   ),
-                ),
-                SizedBox(
-                  width: 64,
-                  child: Text(
-                    l10n.songBpm(_bpm),
-                    textAlign: TextAlign.end,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  Expanded(
+                    child: Slider(
+                      value: _bpm.toDouble(),
+                      min: 50,
+                      max: 180,
+                      divisions: 130,
+                      label: '$_bpm',
+                      onChanged: (v) => _edit(() => _bpm = v.round()),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  SizedBox(
+                    width: 64,
+                    child: Text(
+                      l10n.songBpm(_bpm),
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _valid ? _save : null,
-        backgroundColor: _valid
-            ? AppColors.primary
-            : Theme.of(context).disabledColor,
-        icon: const Icon(Icons.check),
-        label: Text(l10n.songSave),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _valid ? _save : null,
+          backgroundColor: _valid
+              ? AppColors.primary
+              : Theme.of(context).disabledColor,
+          icon: const Icon(Icons.check),
+          label: Text(l10n.songSave),
+        ),
       ),
     );
   }

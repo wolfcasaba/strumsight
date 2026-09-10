@@ -48,6 +48,18 @@ class ChordEvent {
     );
   }
 
+  /// The card once its stroke has expired: the engine drops `latestStrum`
+  /// 2 s after the last onset, and a card must not keep announcing a
+  /// direction + confidence the frame no longer carries (E18-R01 F2/F3).
+  /// `copyWith` cannot clear a nullable field, hence the explicit method.
+  ChordEvent withoutStrum() => ChordEvent(
+    chord: chord,
+    direction: null,
+    confidence: 0,
+    seq: seq,
+    timeSec: timeSec,
+  );
+
   @override
   bool operator ==(Object other) =>
       other is ChordEvent &&

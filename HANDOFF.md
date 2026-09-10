@@ -1,5 +1,37 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟡 E18-R01 EMULÁTOR-LELETEK JAVÍTVA, CI-RA VÁR — F1–F8, F10, F11 + felismerés-stabilitás (ADR 0539) — branch `claude/optimistic-bohr-vpaxh4` (2026-09-10)
+
+**User-kérés:** „itt vannak a hibák" (F1–F13, az emulátor-jelentés végén) +
+„ne ugráljon egy leütött akkordnál más hangokra… mindegyik akkordnál; kutass,
+hogy kell jól megcsinálni, nézz utána jobb motoroknak".
+
+**Végrehajtási jelentés (tétel-tábla, mércék, nem-futtatott ellenőrzések):**
+[`docs/reviews/e18-r01-emulator-fixes.md`](docs/reviews/e18-r01-emulator-fixes.md).
+Kutatás: [`docs/research/chord-recognition-stability-and-engines-2026-09.md`](docs/research/chord-recognition-stability-and-engines-2026-09.md).
+ADR: [0539](docs/adr/0539-live-recognition-stability-stabilized-hero-and-onset-guard.md).
+
+| Lelet | Állapot |
+|---|---|
+| F1 tutor-asset nem kerül be · F2/F3 beragadt kártya · F4 back kilép · F5 Library nem tölt · F6 cél-chipek · F7 néma mikrofon-hiba · F8 V2 szerkesztő belépő · F10 szintmérő · F11 előnézet pop után | **javítva**, mind gépi cellával (17 teszt-fájl új/bővített) |
+| F9 találati arány 2/5 | nem hangolva — a jelentés saját szabálya: valós gitárral ÚJRA kell mérni előbb (protokoll a kutatási jegyzet §4) |
+| F12 Windows-suite | dokumentálva (setup-jegyzet), platform-érzékenyítés külön kör |
+| F13 bannerek | termékdöntés, nem változott; az F2 részben orvosolja |
+| Felismerés „elugrál" | stabilizált hős + 0.2 s onset-őr + kártya-lejárat (ADR 0539 D1–D3); a dekóder attack-ablak eltolása (D4) → **E18-R05** valós gitáros A/B-vel |
+
+**Az ág az E18-R01 ágról (`bc81bc5f`) indul** — a jelentés és az F11 kódja
+csak ott él; squash-merge UTÁN az E18-R01 merge-e mellé ez külön PR.
+**Remote konténer: nincs Flutter SDK** → a gépi bizonyíték a branchre
+dispatchelt `build-apk.yml` (a `pubspec.yaml` érintett, ADR 0171). A futás
+linkje alább, amint megvan. Goldenek: szándékosan egyik sem mozdul (a hub 5
+chipje megmaradt — az `e13_r17` golden csak a boxon regenerálható).
+
+**Következő lépés (a user boxán):** valós gitáros mérés a Live-on (elugrálás
+megszűnt-e; F9 újramérés WAV-loopbackkel) → E18-R05 brief: a dekóder onset-
+boost ablakának eltolása az attack-ról a sustain-re, A/B a kutatási jegyzet §4
+protokolljával; a `LiveCrnnClassifier.calibrate` 0.87-es plafonjának
+újrakalibrálása valós adaton.
+
 ## 🟢 E18-R01 CI-ZÖLD, MERGE-RE VÁR — a dalszerkesztő akkord-MEGHALLGATÁSA és menet-ELŐNÉZET (komponálás füllel) + a Chapter 18 terve (akkordok hangból, YouTube-határ) — branch `claude/song-editor-chord-audio-tbkokz` (2026-09-09)
 
 **User-kérés (2026-09-09):** „a hangok lenyomásakor az az akkord hang hallható,

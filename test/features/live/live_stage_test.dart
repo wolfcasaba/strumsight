@@ -19,6 +19,8 @@ import 'package:strumsight/features/live/domain/recognition/recognition_decision
 import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
+import 'package:strumsight/core/design_system/components/music/ss_chord_hero.dart';
+import 'package:strumsight/features/live/widgets/chord_timeline_card.dart';
 import 'package:strumsight/features/live/widgets/uncertainty_reason_banner.dart';
 import 'package:strumsight/features/today/screens/today_hub_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -163,6 +165,115 @@ void main() {
         expect(find.text(l10n.liveWaitingForChord), findsWidgets);
         expect(find.text(l10n.liveWeakSignal), findsNothing);
         expect(find.byType(UncertaintyReasonBanner), findsNothing);
+        await tester.pump(const Duration(milliseconds: 400));
+      },
+    );
+  });
+
+  group('A2b — the card expires with the chord gate (E18-R01 F2/F3)', () {
+    testWidgets(
+      'a chord that WAS heard leaves the hero slot — and takes its confidence '
+      'figure with it — once the frame reports no chord',
+      (tester) async {
+        final engine = await _pumpLive(tester);
+        final l10n = lookupAppLocalizations(const Locale('en'));
+        engine.emit(
+          _frame(
+            current: const Chord('C'),
+            latestStrum: const Strum(
+              direction: StrumDirection.down,
+              confidence: 0.9,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.textContaining('90%'), findsWidgets);
+        expect(find.byType(SsChordHero), findsOneWidget);
+
+        // The gate released: nothing sounds, and the banner says so.
+        engine.emit(
+          _frame(
+            current: null,
+            engineTimeSec: 4.0,
+            chordRejectReason: RecognitionRejectReason.noChord,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(UncertaintyReasonBanner), findsOneWidget);
+        expect(find.byType(SsChordHero), findsNothing);
+        expect(
+          find.byWidgetPredicate((w) => w is ChordTimelineCard && w.isHero),
+          findsNothing,
+        );
+        expect(find.textContaining('90%'), findsNothing);
+        expect(find.text(l10n.liveWaitingForChord), findsWidgets);
+        await tester.pump(const Duration(milliseconds: 400));
+      },
+    );
+
+    testWidgets(
+      'a held chord whose stroke expired (2 s, no new onset) drops the arrow '
+      'and the percentage from the timeline card',
+      (tester) async {
+        final engine = await _pumpLive(tester);
+        engine.emit(
+          _frame(
+            current: const Chord('C'),
+            latestStrum: const Strum(
+              direction: StrumDirection.down,
+              confidence: 0.87,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.textContaining('87%'), findsWidgets);
+
+        // Same chord, the engine has dropped `latestStrum`.
+        engine.emit(_frame(current: const Chord('C'), engineTimeSec: 3.5));
+        await tester.pumpAndSettle();
+
+        expect(find.text('C'), findsWidgets);
+        expect(find.textContaining('87%'), findsNothing);
+        await tester.pump(const Duration(milliseconds: 400));
+      },
+    );
+  });
+
+  group('A2c — the Stage hero shows the STABILIZED label (ADR 0539 D1)', () {
+    testWidgets(
+      'a one-or-two frame foreign label on a strum does not move the hero; '
+      'the confirmed chord stays up',
+      (tester) async {
+        final engine = await _pumpLive(tester);
+        for (var i = 0; i < 4; i++) {
+          engine.emit(
+            _frame(
+              current: const Chord('C'),
+              engineTimeSec: 0.5 + i * 0.066,
+              latestStrum: const Strum(
+                direction: StrumDirection.down,
+                confidence: 0.9,
+              ),
+            ),
+          );
+          await tester.pump();
+        }
+        await tester.pumpAndSettle();
+        expect(find.byType(SsChordHero), findsOneWidget);
+        expect(find.text('C'), findsWidgets);
+
+        // The next strum's attack window decides "G" for two frames.
+        for (final t in [1.02, 1.09]) {
+          engine.emit(_frame(current: const Chord('G'), engineTimeSec: t));
+          await tester.pump();
+          expect(find.text('G'), findsNothing, reason: 'blip at $t');
+          expect(find.text('C'), findsWidgets);
+        }
+        engine.emit(_frame(current: const Chord('C'), engineTimeSec: 1.16));
+        await tester.pumpAndSettle();
+        expect(find.text('G'), findsNothing);
+        expect(find.text('C'), findsWidgets);
         await tester.pump(const Duration(milliseconds: 400));
       },
     );
