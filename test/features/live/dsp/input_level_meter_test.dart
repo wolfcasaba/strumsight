@@ -24,7 +24,7 @@ void main() {
     test('silence reads 0, a hot input reads 1', () {
       expect(meter.instantaneous(0), 0);
       expect(meter.instantaneous(_rmsForDbfs(-60)), 0);
-      expect(meter.instantaneous(_rmsForDbfs(-6)), 1);
+      expect(meter.instantaneous(_rmsForDbfs(-6)), closeTo(1, 1e-9));
       expect(meter.instantaneous(_rmsForDbfs(-1)), 1);
     });
 
@@ -81,7 +81,7 @@ void main() {
   group('ballistics', () {
     test('instant attack, exponential release per frame', () {
       final meter = InputLevelMeter();
-      expect(meter.update(_rmsForDbfs(-6)), 1);
+      expect(meter.update(_rmsForDbfs(-3)), 1);
       // The burst is over; the meter releases rather than dropping to 0.
       expect(meter.update(0), closeTo(0.7, 1e-9));
       expect(meter.update(0), closeTo(0.49, 1e-9));

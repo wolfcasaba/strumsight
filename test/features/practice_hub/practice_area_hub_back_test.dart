@@ -7,6 +7,7 @@
 // a user does — tap the hub's own button, then the system back (the
 // `flutter/navigation` popRoute the OS sends) — and assert the hub is back.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -99,10 +100,17 @@ Future<GoRouter> _pumpShell(WidgetTester tester) async {
   return router;
 }
 
-/// What the OS sends on Android back: the `popRoute` platform message the
-/// binding routes to the Router's back-button dispatcher.
+/// What the OS sends on Android back: the `popRoute` method call on the
+/// `flutter/navigation` channel, which the binding routes to the Router's
+/// back-button dispatcher — the real system-back path, not `Navigator.pop`.
 Future<void> _systemBack(WidgetTester tester) async {
-  await tester.binding.handlePopRoute();
+  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    SystemChannels.navigation.name,
+    SystemChannels.navigation.codec.encodeMethodCall(
+      const MethodCall('popRoute'),
+    ),
+    (_) {},
+  );
   await tester.pumpAndSettle();
 }
 
