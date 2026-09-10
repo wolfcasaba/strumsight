@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🟡 E18-R01 EMULÁTOR-LELETEK JAVÍTVA, CI-RA VÁR — F1–F8, F10, F11 + felismerés-stabilitás (ADR 0539) — branch `claude/optimistic-bohr-vpaxh4` (2026-09-10)
+## 🟢 E18-R01 EMULÁTOR-LELETEK JAVÍTVA, CI-ZÖLD, MERGE-RE VÁR — F1–F8, F10, F11 + felismerés-stabilitás (ADR 0539) — branch `claude/optimistic-bohr-vpaxh4` @ `3521c210` (2026-09-10)
 
 **User-kérés:** „itt vannak a hibák" (F1–F13, az emulátor-jelentés végén) +
 „ne ugráljon egy leütött akkordnál más hangokra… mindegyik akkordnál; kutass,
@@ -31,8 +31,17 @@ claude/e18-fixes-diag claude/e18-diag-a claude/e18-diag-b claude/e18-diag-c`.
 **Az ág az E18-R01 ágról (`bc81bc5f`) indul** — a jelentés és az F11 kódja
 csak ott él; squash-merge UTÁN az E18-R01 merge-e mellé ez külön PR.
 **Remote konténer: nincs Flutter SDK** → a gépi bizonyíték a branchre
-dispatchelt `build-apk.yml` (a `pubspec.yaml` érintett, ADR 0171). A futás
-linkje alább, amint megvan. Goldenek: szándékosan egyik sem mozdul (a hub 5
+dispatchelt `build-apk.yml` (a `pubspec.yaml` érintett, ADR 0171).
+**Gépi bizonyíték a `3521c210` SHA-n:**
+[build-apk 34431041159](https://github.com/wolfcasaba/strumsight/actions/runs/34431041159)
+— ZÖLD: format + analyze + **10317 teszt zöld, 0 piros, 21 skip** + property-kapu
+randomizált seeddel (123 zöld) + architektúra/asset/l10n/secret kapuk + a
+Coverage job + `strumsight-1.0.0-1-3521c21-development.apk` (73,8 MB, artefakt
+10134964374); [full-gate 34431039782](https://github.com/wolfcasaba/strumsight/actions/runs/34431039782)
+— a `full-gate` job ZÖLD (ugyanez a suite), a párhuzamos Coverage jobja
+1 rejtett (a log-tail mögötti), a másik három futásban NEM reprodukálódó
+piros cellával zárt → egyszeri újrafuttatás elindítva (az eredménye a
+következő check-in-nél kerül ide). Goldenek: szándékosan egyik sem mozdul (a hub 5
 chipje megmaradt — az `e13_r17` golden csak a boxon regenerálható).
 
 **Következő lépés (a user boxán):** valós gitáros mérés a Live-on (elugrálás
