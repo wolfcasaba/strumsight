@@ -103,12 +103,28 @@ class ChordTimeline extends StatelessWidget {
               child: historyRow,
             ),
           ),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: hero == null
-              ? _idlePrompt(context, l10n)
-              : _heroCard(context, hero, beat),
-        ),
+        if (hero == null)
+          // The idle prompt is TEXT, unlike the hero card: it must be able to
+          // wrap and to yield width. A loose Flexible bounds it (weighted 3:1
+          // against the receding history), the ConstrainedBox gives the text
+          // a wrap width, and the FittedBox scales the wrapped block down on
+          // a strip narrower than that (E18-R01 F2/F3: a 288 px strip
+          // overflowed by 2.5 px with the prompt unbounded).
+          Flexible(
+            flex: 3,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 200),
+                child: _idlePrompt(context, l10n),
+              ),
+            ),
+          )
+        else
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: _heroCard(context, hero, beat),
+          ),
         if (next != null)
           FittedBox(fit: BoxFit.scaleDown, child: _nextGhost(context, l10n)),
       ],
