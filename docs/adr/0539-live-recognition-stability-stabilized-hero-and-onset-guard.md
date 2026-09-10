@@ -57,7 +57,10 @@ eltűnik; a nyers címke csak a hidegindítás tartaléka (üres időszalag).
 Következmény: egy valódi akkordváltásnál a hős a megerősítésig (≈ D2 őr +
 3 keret) az előző megerősített akkordot mutatja — ez a „tartsd az utolsó
 értéket” viselkedés, nem hamis állítás (a kapu nyitva, a címke a legutóbb
-megerősített).
+megerősített). **Az akadálymentes bejelentés (ADR 0280 §2) is a stabilizált
+címkét mondja** — a képernyőolvasó nem hallhat olyan egy-keretes blipet,
+amit a látó felhasználó már nem lát; az E13-R18 A5 throttle-cellái ezért
+megerősített (3 keretes) váltásokat küldenek.
 
 ### D2 — Onset-tranziens őr a stabilizátorban
 
