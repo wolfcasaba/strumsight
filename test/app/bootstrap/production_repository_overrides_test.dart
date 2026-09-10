@@ -28,65 +28,59 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
-  test(
-    'the production override list makes the unified Library\'s sources '
-    'readable — no "must be overridden" StateError',
-    () async {
-      final bootstrap = ProviderContainer(
-        overrides: [
-          analysisRepositoryProductionRootResolverProvider.overrideWithValue(
-            () async => Directory('${root.path}/analysis'),
-          ),
-          songTrainerProductionRootResolverProvider.overrideWithValue(
-            () async => Directory('${root.path}/songs'),
-          ),
-        ],
-      );
-      addTearDown(bootstrap.dispose);
+  test('the production override list makes the unified Library\'s sources '
+      'readable — no "must be overridden" StateError', () async {
+    final bootstrap = ProviderContainer(
+      overrides: [
+        analysisRepositoryProductionRootResolverProvider.overrideWithValue(
+          () async => Directory('${root.path}/analysis'),
+        ),
+        songTrainerProductionRootResolverProvider.overrideWithValue(
+          () async => Directory('${root.path}/songs'),
+        ),
+      ],
+    );
+    addTearDown(bootstrap.dispose);
 
-      final overrides = await buildProductionRepositoryOverrides(bootstrap);
-      expect(overrides, hasLength(2));
+    final overrides = await buildProductionRepositoryOverrides(bootstrap);
+    expect(overrides, hasLength(2));
 
-      final app = ProviderContainer(
-        overrides: [
-          ...preferenceOverrides(),
-          songRepositoryProvider.overrideWithValue(
-            InMemorySongRepository(clock: DateTime.now),
-          ),
-          ...overrides,
-        ],
-      );
-      addTearDown(app.dispose);
+    final app = ProviderContainer(
+      overrides: [
+        ...preferenceOverrides(),
+        songRepositoryProvider.overrideWithValue(
+          InMemorySongRepository(clock: DateTime.now),
+        ),
+        ...overrides,
+      ],
+    );
+    addTearDown(app.dispose);
 
-      // The exact read that threw on the device.
-      final sources = app.read(libraryV2SourcesProvider);
-      expect(sources, hasLength(4));
+    // The exact read that threw on the device.
+    final sources = app.read(libraryV2SourcesProvider);
+    expect(sources, hasLength(4));
 
-      // …and the controller that swallowed it into an AsyncError.
-      final items = await app.read(libraryV2ItemsProvider.future);
-      expect(items, isEmpty);
-      expect(app.read(libraryV2ItemsProvider).hasError, isFalse);
-    },
-  );
+    // …and the controller that swallowed it into an AsyncError.
+    final items = await app.read(libraryV2ItemsProvider.future);
+    expect(items, isEmpty);
+    expect(app.read(libraryV2ItemsProvider).hasError, isFalse);
+  });
 
-  test(
-    'WITHOUT the production overrides the same read fails — the guard is '
-    'not vacuous',
-    () {
-      final app = ProviderContainer(
-        overrides: [
-          ...preferenceOverrides(),
-          songRepositoryProvider.overrideWithValue(
-            InMemorySongRepository(clock: DateTime.now),
-          ),
-        ],
-      );
-      addTearDown(app.dispose);
+  test('WITHOUT the production overrides the same read fails — the guard is '
+      'not vacuous', () {
+    final app = ProviderContainer(
+      overrides: [
+        ...preferenceOverrides(),
+        songRepositoryProvider.overrideWithValue(
+          InMemorySongRepository(clock: DateTime.now),
+        ),
+      ],
+    );
+    addTearDown(app.dispose);
 
-      expect(
-        () => app.read(libraryV2SourcesProvider),
-        throwsA(isA<StateError>()),
-      );
-    },
-  );
+    expect(
+      () => app.read(libraryV2SourcesProvider),
+      throwsA(isA<StateError>()),
+    );
+  });
 }

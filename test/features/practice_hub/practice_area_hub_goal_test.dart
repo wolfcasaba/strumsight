@@ -123,21 +123,18 @@ void main() {
     },
   );
 
-  testWidgets(
-    'a catalogue with nothing goal-shaped: every chip explains, none '
-    'navigates',
-    (tester) async {
-      final router = await _pumpHub(
-        tester,
-        overrides: [
-          practiceCatalogProvider.overrideWithValue(const [_freePlayOnly]),
-        ],
-      );
+  testWidgets('a catalogue with nothing goal-shaped: every chip explains, none '
+      'navigates', (tester) async {
+    final router = await _pumpHub(
+      tester,
+      overrides: [
+        practiceCatalogProvider.overrideWithValue(const [_freePlayOnly]),
+      ],
+    );
 
-      await tester.tap(find.byKey(const ValueKey('practice-hub-goal-chords')));
-      await tester.pump();
-      expect(find.text(l10n.practiceAreaHubGoalUnavailable), findsOneWidget);
-      expect(router.state.uri.path, AppRoutes.practiceHub);
-    },
-  );
+    await tester.tap(find.byKey(const ValueKey('practice-hub-goal-chords')));
+    await tester.pump();
+    expect(find.text(l10n.practiceAreaHubGoalUnavailable), findsOneWidget);
+    expect(router.state.uri.path, AppRoutes.practiceHub);
+  });
 }

@@ -28,32 +28,28 @@ void main() {
       expect(meter.instantaneous(_rmsForDbfs(-1)), 1);
     });
 
-    test(
-      'the ordinary recording range (−40…−12 dBFS) is spread across the '
-      'meter, not pinned at either end — the measured F10 failure',
-      () {
-        // The old `rms * 8` curve: −18 dBFS and above → 1.0; −32 and below → 0.
-        expect(meter.instantaneous(_rmsForDbfs(-12)), closeTo(0.846, 0.01));
-        expect(meter.instantaneous(_rmsForDbfs(-18)), closeTo(0.692, 0.01));
-        expect(meter.instantaneous(_rmsForDbfs(-25)), closeTo(0.513, 0.01));
-        expect(meter.instantaneous(_rmsForDbfs(-32)), closeTo(0.333, 0.01));
-        expect(meter.instantaneous(_rmsForDbfs(-40)), closeTo(0.128, 0.01));
-      },
-    );
+    test('the ordinary recording range (−40…−12 dBFS) is spread across the '
+        'meter, not pinned at either end — the measured F10 failure', () {
+      // The old `rms * 8` curve: −18 dBFS and above → 1.0; −32 and below → 0.
+      expect(meter.instantaneous(_rmsForDbfs(-12)), closeTo(0.846, 0.01));
+      expect(meter.instantaneous(_rmsForDbfs(-18)), closeTo(0.692, 0.01));
+      expect(meter.instantaneous(_rmsForDbfs(-25)), closeTo(0.513, 0.01));
+      expect(meter.instantaneous(_rmsForDbfs(-32)), closeTo(0.333, 0.01));
+      expect(meter.instantaneous(_rmsForDbfs(-40)), closeTo(0.128, 0.01));
+    });
 
-    test(
-      'the weak-signal threshold lands on the analyzer\'s −40 dBFS "quiet" '
-      'line (±1 dB)',
-      () {
-        final atThreshold = meter.instantaneous(_rmsForDbfs(-40));
-        final weak = SsSignalQualityIndicator.defaultWeakThreshold;
-        expect(atThreshold, closeTo(weak, 0.02));
-        expect(meter.instantaneous(_rmsForDbfs(-41)), lessThan(weak));
-        expect(meter.instantaneous(_rmsForDbfs(-39)), greaterThan(weak));
-      },
-    );
+    test('the weak-signal threshold lands on the analyzer\'s −40 dBFS "quiet" '
+        'line (±1 dB)', () {
+      final atThreshold = meter.instantaneous(_rmsForDbfs(-40));
+      final weak = SsSignalQualityIndicator.defaultWeakThreshold;
+      expect(atThreshold, closeTo(weak, 0.02));
+      expect(meter.instantaneous(_rmsForDbfs(-41)), lessThan(weak));
+      expect(meter.instantaneous(_rmsForDbfs(-39)), greaterThan(weak));
+    });
 
     test('property: monotonic, bounded, linear in dB between the knees', () {
+      const floor = InputLevelMeter.defaultFloorDbfs;
+      const ceiling = InputLevelMeter.defaultCeilingDbfs;
       for (var i = 0; i < 500; i++) {
         final a = -70 + rng.nextDouble() * 70; // −70 … 0 dBFS
         final b = -70 + rng.nextDouble() * 70;
@@ -63,16 +59,9 @@ void main() {
         if (a < b) {
           expect(la, lessThanOrEqualTo(lb), reason: 'seed=$seed a=$a b=$b');
         }
-        if (a > InputLevelMeter.defaultFloorDbfs &&
-            a < InputLevelMeter.defaultCeilingDbfs) {
-          final span =
-              InputLevelMeter.defaultCeilingDbfs -
-              InputLevelMeter.defaultFloorDbfs;
-          expect(
-            la,
-            closeTo((a - InputLevelMeter.defaultFloorDbfs) / span, 1e-9),
-            reason: 'seed=$seed a=$a',
-          );
+        if (a > floor && a < ceiling) {
+          final expected = (a - floor) / (ceiling - floor);
+          expect(la, closeTo(expected, 1e-9), reason: 'seed=$seed a=$a');
         }
       }
     });

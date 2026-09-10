@@ -27,9 +27,7 @@ final class PracticeGoalEntry {
 /// Within a goal the easiest definition wins (beginner before intermediate
 /// before advanced), catalogue order breaking ties — the same "first entry is
 /// the recommendation" convention the hub's CTA relies on (ADR 0508 D3).
-List<PracticeGoalEntry> resolvePracticeGoals(
-  List<PracticeDefinition> catalog,
-) {
+List<PracticeGoalEntry> resolvePracticeGoals(List<PracticeDefinition> catalog) {
   final entries = <PracticeGoalEntry>[];
   for (final goal in PracticeGoal.values) {
     final match = _easiest(catalog.where((d) => _serves(d, goal)));

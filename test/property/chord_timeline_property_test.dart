@@ -273,46 +273,43 @@ void main() {
     expect(b.single.direction, isNull);
   });
 
-  test(
-    'strum expiry (same chord, latestStrum gone) clears the card in place — '
-    'never a stale "↓ 87 %" (E18-R01 emulator F2/F3)',
-    () {
-      var b = <ChordEvent>[];
-      b = reduceChordTimeline(
-        b,
-        _frame(
-          'C',
-          strum: const Strum(direction: StrumDirection.down, confidence: 0.87),
-          latestStrumTime: 1.0,
-        ),
-      );
-      expect(b.single.direction, StrumDirection.down);
-      expect(b.single.confidence, 0.87);
+  test('strum expiry (same chord, latestStrum gone) clears the card in place — '
+      'never a stale "↓ 87 %" (E18-R01 emulator F2/F3)', () {
+    var b = <ChordEvent>[];
+    b = reduceChordTimeline(
+      b,
+      _frame(
+        'C',
+        strum: const Strum(direction: StrumDirection.down, confidence: 0.87),
+        latestStrumTime: 1.0,
+      ),
+    );
+    expect(b.single.direction, StrumDirection.down);
+    expect(b.single.confidence, 0.87);
 
-      // The engine drops `latestStrum` 2 s after the onset; the chord holds.
-      b = reduceChordTimeline(b, _frame('C', engineTimeSec: 3.5));
-      expect(b.single.direction, isNull);
-      expect(b.single.confidence, 0);
-      expect(b.single.seq, 0, reason: 'identity preserved — no new card');
-      expect(b.single.timeSec, 1.0);
+    // The engine drops `latestStrum` 2 s after the onset; the chord holds.
+    b = reduceChordTimeline(b, _frame('C', engineTimeSec: 3.5));
+    expect(b.single.direction, isNull);
+    expect(b.single.confidence, 0);
+    expect(b.single.seq, 0, reason: 'identity preserved — no new card');
+    expect(b.single.timeSec, 1.0);
 
-      // Idempotent: a second strum-less frame is the same list instance.
-      final again = reduceChordTimeline(b, _frame('C', engineTimeSec: 3.6));
-      expect(identical(again, b), isTrue);
+    // Idempotent: a second strum-less frame is the same list instance.
+    final again = reduceChordTimeline(b, _frame('C', engineTimeSec: 3.6));
+    expect(identical(again, b), isTrue);
 
-      // A fresh stroke on the held chord re-arms the card in place.
-      b = reduceChordTimeline(
-        b,
-        _frame(
-          'C',
-          strum: const Strum(direction: StrumDirection.up, confidence: 0.6),
-        ),
-      );
-      expect(b.single.direction, StrumDirection.up);
-      expect(b.single.confidence, 0.6);
-      expect(b.single.seq, 0);
-    },
-  );
+    // A fresh stroke on the held chord re-arms the card in place.
+    b = reduceChordTimeline(
+      b,
+      _frame(
+        'C',
+        strum: const Strum(direction: StrumDirection.up, confidence: 0.6),
+      ),
+    );
+    expect(b.single.direction, StrumDirection.up);
+    expect(b.single.confidence, 0.6);
+    expect(b.single.seq, 0);
+  });
 
   test('idle (null current) leaves the buffer identical instance', () {
     final b = <ChordEvent>[];

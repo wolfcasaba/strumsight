@@ -16,6 +16,15 @@ import 'package:strumsight/features/ai_tutor/data/knowledge/asset_knowledge_repo
 /// COMPILED asset bundle the way the device does: `flutter test` builds the
 /// declared assets into the bundle behind `rootBundle`, so an undeclared
 /// document fails here exactly as it fails on the phone.
+const _manifestPath = 'assets/tutor_knowledge/manifest.json';
+
+/// The on-disk manifest's document entries (what the tooling tests read).
+List<Map<String, Object?>> _diskManifestDocuments() {
+  final raw = File(_manifestPath).readAsStringSync();
+  final manifest = jsonDecode(raw) as Map<String, Object?>;
+  return (manifest['documents']! as List<Object?>).cast<Map<String, Object?>>();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -23,13 +32,7 @@ void main() {
     'every document the on-disk manifest lists is readable from the COMPILED '
     'asset bundle',
     () async {
-      final manifest =
-          jsonDecode(
-                File('assets/tutor_knowledge/manifest.json').readAsStringSync(),
-              )
-              as Map<String, Object?>;
-      final documents = (manifest['documents']! as List<Object?>)
-          .cast<Map<String, Object?>>();
+      final documents = _diskManifestDocuments();
       expect(documents, isNotEmpty);
 
       for (final document in documents) {
@@ -46,30 +49,20 @@ void main() {
     },
   );
 
-  test(
-    'the production repository loads the full index from the bundle — no '
-    'fallback code',
-    () async {
-      final result = await AssetKnowledgeRepository.fromRootBundle()
-          .loadIndex();
+  test('the production repository loads the full index from the bundle — no '
+      'fallback code', () async {
+    final repository = AssetKnowledgeRepository.fromRootBundle();
+    final result = await repository.loadIndex();
 
-      expect(result.errorCode, isNull);
-      expect(result.isFallback, isFalse);
-      final manifest =
-          jsonDecode(
-                File('assets/tutor_knowledge/manifest.json').readAsStringSync(),
-              )
-              as Map<String, Object?>;
-      final documentIds = {
-        for (final entry in result.index.entries) entry.document.id,
-      };
-      final manifestIds = {
-        for (final document
-            in (manifest['documents']! as List<Object?>)
-                .cast<Map<String, Object?>>())
-          document['id']! as String,
-      };
-      expect(documentIds, manifestIds);
-    },
-  );
+    expect(result.errorCode, isNull);
+    expect(result.isFallback, isFalse);
+    final documentIds = {
+      for (final entry in result.index.entries) entry.document.id,
+    };
+    final manifestIds = {
+      for (final document in _diskManifestDocuments())
+        document['id']! as String,
+    };
+    expect(documentIds, manifestIds);
+  });
 }

@@ -38,10 +38,7 @@ Future<GoRouter> _pumpSongs(
   final router = GoRouter(
     initialLocation: AppRoutes.songs,
     routes: [
-      GoRoute(
-        path: AppRoutes.songs,
-        builder: (_, _) => const SongListScreen(),
-      ),
+      GoRoute(path: AppRoutes.songs, builder: (_, _) => const SongListScreen()),
       GoRoute(
         path: AppRoutes.songTrainerLibrary,
         builder: (_, _) => const Scaffold(body: Text('trainer library')),

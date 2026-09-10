@@ -82,18 +82,15 @@ void main() {
     expect(frames.last.inputLevel, lessThan(0.05));
   });
 
-  test(
-    'end-to-end: a moderate strum reads MID-scale on the level meter — '
-    'never pinned at 1.0 (E18-R01 emulator F10)',
-    () {
-      // The synthetic strum's onset frames sit around −12…−20 dBFS RMS;
-      // the old `rms * 8` curve clamped all of that to exactly 1.0.
-      final frames = run(strumSignal(lowFirst: true, seconds: 0.6));
-      final peak = frames.map((f) => f.inputLevel).reduce(math.max);
-      expect(peak, greaterThan(0.2));
-      expect(peak, lessThan(0.95));
-    },
-  );
+  test('end-to-end: a moderate strum reads MID-scale on the level meter — '
+      'never pinned at 1.0 (E18-R01 emulator F10)', () {
+    // The synthetic strum's onset frames sit around −12…−20 dBFS RMS;
+    // the old `rms * 8` curve clamped all of that to exactly 1.0.
+    final frames = run(strumSignal(lowFirst: true, seconds: 0.6));
+    final peak = frames.map((f) => f.inputLevel).reduce(math.max);
+    expect(peak, greaterThan(0.2));
+    expect(peak, lessThan(0.95));
+  });
 
   test('end-to-end: the level meter RELEASES after the strum instead of '
       'snapping to 0 on the next quiet frame (E18-R01 F10)', () {

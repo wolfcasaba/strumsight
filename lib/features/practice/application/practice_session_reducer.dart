@@ -200,8 +200,10 @@ PracticeSessionTransition reducePracticeSession(
       state,
       failure,
     ),
-    ObservationCaptureFailed(:final failure) =>
-      _reduceObservationCaptureFailed(state, failure),
+    ObservationCaptureFailed(:final failure) => _reduceObservationCaptureFailed(
+      state,
+      failure,
+    ),
     PermissionDenied() => _reducePermissionDenied(state),
     ClockAdvanced(:final snapshot) => _reduceClockAdvanced(state, snapshot),
   };
