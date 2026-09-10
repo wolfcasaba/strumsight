@@ -44,15 +44,17 @@ Coverage job + `strumsight-1.0.0-1-3521c21-development.apk` (73,8 MB, artefakt
 10134964374); [full-gate 34431039782](https://github.com/wolfcasaba/strumsight/actions/runs/34431039782)
 — a `full-gate` job ZÖLD (ugyanez a suite), a párhuzamos Coverage jobja
 1 rejtett (a log-tail mögötti), a másik három futásban NEM reprodukálódó
-piros cellával zárt → egyszeri újrafuttatás elindítva (az eredménye a
-következő check-in-nél kerül ide). Goldenek: szándékosan egyik sem mozdul (a hub 5
+piros cellával zárt → az egyszeri újrafuttatás (attempt 2, 03:46Z) **ZÖLD**,
+a teljes workflow zöld; a cella nemdeterminisztikus `--coverage`-futású volt. Goldenek: szándékosan egyik sem mozdul (a hub 5
 chipje megmaradt — az `e13_r17` golden csak a boxon regenerálható).
 
 **Következő lépés (a user boxán):** valós gitáros mérés a Live-on (elugrálás
-megszűnt-e; F9 újramérés WAV-loopbackkel) → E18-R05 brief: a dekóder onset-
-boost ablakának eltolása az attack-ról a sustain-re, A/B a kutatási jegyzet §4
-protokolljával; a `LiveCrnnClassifier.calibrate` 0.87-es plafonjának
-újrakalibrálása valós adaton.
+megszűnt-e; F9 újramérés WAV-loopbackkel) — ez az **E18-R05** `hold`-jának
+feloldó feltétele. A brief ELŐRE MEGÍRVA, lint + gateguard zöld:
+[`docs/rounds/e18-r05-decoder-attack-window-real-guitar-ab.md`](docs/rounds/e18-r05-decoder-attack-window-real-guitar-ab.md)
+(a dekóder onset-boost ablakának eltolása az attack-ról a sustain-re, fixture +
+property + valós gitáros A/B, ADR 0540 előzetes). A `LiveCrnnClassifier.calibrate`
+0.87-es plafonjának újrakalibrálása valós adaton KÜLÖN kör (a brief §3 kizárja).
 
 ## 🟢 E18-R01 CI-ZÖLD, MERGE-RE VÁR — a dalszerkesztő akkord-MEGHALLGATÁSA és menet-ELŐNÉZET (komponálás füllel) + a Chapter 18 terve (akkordok hangból, YouTube-határ) — branch `claude/song-editor-chord-audio-tbkokz` (2026-09-09)
 

@@ -73,6 +73,7 @@ a szabályt viszi tovább — *az előnézet nem véglegesítés*.
 | `E18-R02` | **Felvételből dal-vázlat**: `AnalyzeResult` → ütemekre kvantált `Song`-vázlat, ütemenkénti lefedettséggel, a szerkesztőben megerősítésre | `0537` | R01 |
 | `E18-R03` | **Hallgatás-mód külső forrásból**: a mikrofon hallja a szóló dalt (YouTube a telefonon, másik eszköz, rádió), korlátos klip, eszközön futó elemzés → R02 vázlat-útja; a link CSAK metaadat | [`0536`](../adr/0536-chords-from-audio-source-boundary.md) | R02 |
 | `E18-R04` | **Helyi hangfájl dekódolása** (MP3/M4A/OGG) — kutató- és döntéskör a `FileAnalysisInput` dekóder-seamjéhez, spike-kal, production bekötés NÉLKÜL | `0538` | — (a döntése az R03 után köthető be) |
+| `E18-R05` | **A dekóder onset-ablakának eltolása az attack-ról a sustain-re** — az E18-R01 felismerés-stabilitás javításának (ADR 0539 D4) dekóder-oldali folytatása: fixture + randomizált property + valós gitáros A/B; `hold`, amíg a felhasználó valós gitáros alapmérése nincs meg ([brief](../rounds/e18-r05-decoder-attack-window-real-guitar-ab.md)) | `0540` | — (a Live DSP-jét érinti, a fejezet szállító köreitől független) |
 
 Az `E18-R01` ebben a sessionben szállított; a többi kör a
 `docs/execution/pipeline-queue.tsv`-ben `hold`, a fenti függésekkel.
