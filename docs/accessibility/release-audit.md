@@ -61,7 +61,7 @@ the round's complete, documented output.
    43px on the right, identically in `en` and `hu` (the id itself never
    localises — the label growing is what starves it of space).
    **FIXED in E18-R01 (2026-09-10)** — the id `Text` is capped at 60 % of
-   the row (`LayoutBuilder` + `ConstrainedBox`, `textAlign: end`), so it
+   the row (`LayoutBuilder` + `ConstrainedBox`), so it
    keeps its natural width when it fits (pixel goldens unchanged) and wraps
    instead of overflowing when it does not; the registry entry
    and its `knownOverflows` mirror were removed (shrink-only registry, A6

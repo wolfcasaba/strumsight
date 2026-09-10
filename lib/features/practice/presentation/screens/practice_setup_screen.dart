@@ -438,11 +438,15 @@ class _ScoringProfileReadout extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
+            // No `textAlign: end`: with the paragraph laid out at its own
+            // intrinsic width the end-alignment lands on a sub-pixel offset
+            // (bodySmall's letter spacing) and shifts every glyph — the
+            // e13_r21 compact golden moved by 240 px. Start-aligned lines are
+            // pixel-identical to the pre-fix render.
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: idMaxWidth),
               child: Text(
                 profileId,
-                textAlign: TextAlign.end,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
