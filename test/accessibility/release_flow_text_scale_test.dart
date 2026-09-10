@@ -229,35 +229,17 @@ final class KnownOverflow {
 /// Measured 2026-09-01 on this box (phone viewport 412x915, the core flow
 /// driven end to end — brief §6.1's "Egyetlen állapot sincs..." matrix does
 /// not name this class, but the §0.0.A/R10 STOP-protokoll does: every
-/// overflow this audit finds is a LELET, `lib/**` stays untouched). Both
-/// entries are also recorded in `docs/accessibility/known-exceptions.yaml`
+/// overflow this audit finds is a LELET, `lib/**` stays untouched). Every
+/// entry is also recorded in `docs/accessibility/known-exceptions.yaml`
 /// with owner + lejárat; this list can only SHRINK (a cell that stops
 /// overflowing must have its entry removed here — see `_assertFlowCell`).
 /// Public: see [KnownOverflow]'s doc comment — the A6 guard cell in
 /// `release_flow_semantics_test.dart` imports this list.
 const knownOverflows = <KnownOverflow>[
-  // `_ScoringProfileReadout` (practice_setup_screen.dart:410-430) puts an
-  // un-`Expanded` `Text(profileId)` next to an `Expanded` label in a `Row`
-  // — at textScale 2.0 the fixed-width sibling no longer fits. Identical
-  // 43px on BOTH locales: the overflow is driven by `profileId` (a
-  // non-localised scoring-profile id), not by the label's translation
-  // length.
-  KnownOverflow(
-    id: 'setup-scoring-profile-overflow',
-    locale: 'en',
-    textScale: 2.0,
-    source: 'practice_setup_screen.dart:418',
-    overflowPx: 43,
-    measuredOn: '2026-09-01',
-  ),
-  KnownOverflow(
-    id: 'setup-scoring-profile-overflow',
-    locale: 'hu',
-    textScale: 2.0,
-    source: 'practice_setup_screen.dart:418',
-    overflowPx: 43,
-    measuredOn: '2026-09-01',
-  ),
+  // `setup-scoring-profile-overflow` (practice_setup_screen.dart:418, 43px,
+  // en+hu) was FIXED in E18-R01 — `_ScoringProfileReadout`'s id is a loose
+  // `Flexible` now — and its entry removed here and in the YAML mirror.
+  //
   // The combo-count `Row` (practice_feedback.dart:89-101) has neither Text
   // child `Expanded` — hu's longer `practiceFeedbackComboLabel` translation
   // overflows at textScale 2.0 where en's shorter "Combo" does not.

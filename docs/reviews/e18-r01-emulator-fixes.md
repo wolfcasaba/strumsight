@@ -65,6 +65,24 @@ kétirányú, súlyok nélkül); a nyereség a döntési rétegben van; az Analy
 oldalra a BTC-osztály és a 2508.07973 adatkészlet (irány + akkord) a kutatási
 irány.
 
+## CI-kör — a távoli konténerből nem futtatható suite gépi bizonyítéka
+
+A remote konténerben nincs Flutter SDK, ezért a teljes suite CSAK a
+dispatchelt `full-gate.yml`-en fut. A GitHub log-API az utolsó 5000 sort adja
+(≈4500 teszt), a 10 300-as suite első fele láthatatlan — a rejtett piros
+cellákat **eldobható szelet-ágakkal** tettem láthatóvá (`claude/e18-fixes-diag`,
+`claude/e18-diag-a/b/c`: a suite egy-egy része, a többi tesztfájl törölve;
+**soha nem mergelendők, a user boxáról törlendők**: `git push origin --delete
+claude/e18-fixes-diag claude/e18-diag-a claude/e18-diag-b claude/e18-diag-c`).
+
+| CI-kör | Piros | Ok | Javítás |
+|---|---|---|---|
+| 1 | format gate, 10 fájl | nincs helyi `dart format` | kézzel a tall-stílus szabályai szerint |
+| 2 | 9 cella | cél-feloldó tag-előny a mód helyett; a bejelentés nyers címkét követett; Riverpod `ProviderException`; szint-padló | mód > tag; stabilizált bejelentés (ADR 0539 D1); `throwsA(anything)`; padló 0.05 |
+| 3 | 3 rejtett cella | a log-tail mögött | szelet-ágak (fent) |
+| 3/a | `live_stage_test` A2b: `RenderFlex overflowed by 2.5 px` (`chord_timeline.dart:94`) | az üres-prompt a hős-helyen NEM-flex `FittedBox`-ként ült, a szövege 288 px-es sávon 290,5 px | a prompt laza `Flexible` (3:1 a történettel), 200 px-es tördelési szélesség, `scaleDown` |
+| 3/b | `release_flow_text_scale_test` en+hu @2.0: `practice_setup_screen.dart:424` 43 px | az E12-R20 ismert kivétel SORSZÁMRA volt tűzve (`:418`); az F4 `_backToHub`-javítása 6 sort tolt → a tolerancia elavult → a cella (helyesen) piros | **a hibát javítottam, nem a tűt mozgattam**: `_ScoringProfileReadout` azonosítója laza `Flexible` (`textAlign: end`); a bejegyzés kikerült a `knownOverflows` tükörből és a `known-exceptions.yaml`-ból (zsugorodó registry, A6 őr); `release-audit.md` + `known-issues.md` frissítve |
+
 ## Nem futtatott ellenőrzések és okuk
 
 - `tools/round-gate.sh` / `flutter analyze` / `flutter test` **lokálisan nem

@@ -31,29 +31,10 @@
 # `release_flow_semantics_test.dart`, the two files the guard checks).
 schema_version: 1
 exceptions:
-  - id: setup-scoring-profile-overflow
-    owner: "Next Practice design-migration round (SDD, unscheduled — see docs/ui/legacy-backlog.md pattern)"
-    expiry: unscheduled
-    review_by: "2026-12-01"
-    severity: P2
-    file: lib/features/practice/presentation/screens/practice_setup_screen.dart:418
-    widget: _ScoringProfileReadout
-    measured_on: "2026-09-01"
-    measured_overflow_px: 43
-    locales: [en, hu]
-    text_scale: 2.0
-    viewport: "412x915 (phone portrait)"
-    description: >
-      `_ScoringProfileReadout` renders `Row(children: [Expanded(Text(label)),
-      Text(profileId)])` — the second `Text` (a non-localised scoring-profile
-      id, e.g. a slug) is NOT wrapped in `Expanded`/`Flexible`, so at
-      `textScale 2.0` it no longer fits next to the grown label and the
-      `RenderFlex` overflows by 43px on the right, identically in both
-      locales (the id itself never translates — driven by the fixed-width
-      sibling, not by label length).
-    source_test: test/accessibility/release_flow_text_scale_test.dart (knownOverflows)
-    status: open
-
+  # `setup-scoring-profile-overflow` (practice_setup_screen.dart:418, 43px at
+  # textScale 2.0, en+hu, measured 2026-09-01) — FIXED in E18-R01
+  # (`_ScoringProfileReadout`'s id is a loose `Flexible`), entry removed
+  # together with its `knownOverflows` mirror (shrink-only registry).
   - id: feedback-combo-row-overflow-hu
     owner: "Next Practice design-migration round (SDD, unscheduled)"
     expiry: unscheduled

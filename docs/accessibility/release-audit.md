@@ -38,8 +38,8 @@ unmodified (A5, verified by the §7 gate).
 
 | # | Criterion | Result |
 | --- | --- | --- |
-| A1 | Core flow, `textScale 2.0`, `en`, no overflow | **PASS with 1 recorded exception** — `setup-scoring-profile-overflow` (43px, `practice_setup_screen.dart:418`), tolerated by a dated `_KnownOverflow` entry |
-| A2 | Same, `hu` | **PASS with 2 recorded exceptions** — the same `setup-scoring-profile-overflow` (43px, locale-independent) PLUS `feedback-combo-row-overflow-hu` (65px, `practice_feedback.dart:89`, Hungarian-only) |
+| A1 | Core flow, `textScale 2.0`, `en`, no overflow | **PASS with 1 recorded exception** at audit time — `setup-scoring-profile-overflow` (43px, `practice_setup_screen.dart:418`), tolerated by a dated `_KnownOverflow` entry. **Fixed in E18-R01** (2026-09-10): the id is a loose `Flexible`; the entry was removed from both mirrors, so the cell now passes with NO exception |
+| A2 | Same, `hu` | **PASS with 2 recorded exceptions** at audit time — the same `setup-scoring-profile-overflow` (43px, locale-independent; **fixed in E18-R01**, see A1) PLUS `feedback-combo-row-overflow-hu` (65px, `practice_feedback.dart:89`, Hungarian-only, still open) |
 | A3 | Every interactive element reachable via the REAL simulated accessibility traversal, sensible focus order | **PASS with 1 recorded exception class** — `switch-row-split-semantics-node` (3 occurrences per locale on Practice Setup); the primary CTA path (Quick start → Start practice → Start → Pause/Finish/Exit, in that reading order) is fully reachable and correctly labeled in both locales |
 | A4 | No state communicated by colour alone | **PASS** — the session readiness row (`PracticeReadinessRow`) exposes its weak-signal/degraded-capability state as one of 4 fully-localised text labels, verified present in the traversal for both locales |
 | A5 | `arb_parity_test.dart` / `hardcoded_string_guard_test.dart` unchanged and green | **PASS** — §7 gate |
@@ -60,6 +60,13 @@ the round's complete, documented output.
    next to an `Expanded` label in a `Row`; at `textScale 2.0` it overflows by
    43px on the right, identically in `en` and `hu` (the id itself never
    localises — the label growing is what starves it of space).
+   **FIXED in E18-R01 (2026-09-10)** — the id `Text` is a loose `Flexible`
+   (`textAlign: end`), so it wraps instead of overflowing; the registry entry
+   and its `knownOverflows` mirror were removed (shrink-only registry, A6
+   guard re-verified in CI). Trigger: the E18-R01 fix to `_backToHub` moved
+   the `Row` to line 424, which made the line-pinned tolerance stale — a
+   stale tolerance is a red cell by design, so the defect was fixed rather
+   than the pin moved.
 2. **`feedback-combo-row-overflow-hu`** — the combo-count `Row`
    (`practice_feedback.dart:89`) has neither `Text` child wrapped in
    `Expanded`/`Flexible`; the Hungarian `practiceFeedbackComboLabel`

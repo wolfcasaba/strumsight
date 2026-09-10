@@ -429,7 +429,16 @@ class _ScoringProfileReadout extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
-        Text(profileId, style: Theme.of(context).textTheme.bodySmall),
+        // A loose Flexible so a grown label (textScale 2.0) never starves
+        // the id of width — it wraps instead of overflowing (E18-R01; the
+        // E12-R20 audit's `setup-scoring-profile-overflow` finding).
+        Flexible(
+          child: Text(
+            profileId,
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
       ],
     );
   }

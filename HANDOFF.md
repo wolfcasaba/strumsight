@@ -19,6 +19,14 @@ ADR: [0539](docs/adr/0539-live-recognition-stability-stabilized-hero-and-onset-g
 | F13 bannerek | termékdöntés, nem változott; az F2 részben orvosolja |
 | Felismerés „elugrál" | stabilizált hős + 0.2 s onset-őr + kártya-lejárat (ADR 0539 D1–D3); a dekóder attack-ablak eltolása (D4) → **E18-R05** valós gitáros A/B-vel |
 
+**CI-körök (3 + szelet-diagnózis):** a log-tail mögé rejtett 3 piros cellát
+eldobható szelet-ágak tették láthatóvá — részletek a jelentés „CI-kör"
+szakaszában. Két további `lib/**` javítás lett belőle: a Live üres-prompt 2,5 px-es
+túlcsordulása a hős-helyen, és az E12-R20 óta nyilvántartott
+`setup-scoring-profile-overflow` (43 px @2.0) **végleges javítása** (a registry
+zsugorodott). **Törlendő a user boxáról:** `git push origin --delete
+claude/e18-fixes-diag claude/e18-diag-a claude/e18-diag-b claude/e18-diag-c`.
+
 **Az ág az E18-R01 ágról (`bc81bc5f`) indul** — a jelentés és az F11 kódja
 csak ott él; squash-merge UTÁN az E18-R01 merge-e mellé ez külön PR.
 **Remote konténer: nincs Flutter SDK** → a gépi bizonyíték a branchre
