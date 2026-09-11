@@ -65,6 +65,7 @@ final class SsStrumPendulum extends StatefulWidget {
     required this.beatDuration,
     required this.struck,
     this.height = 200,
+    this.muted = false,
     this.semanticLabel,
   });
 
@@ -87,6 +88,10 @@ final class SsStrumPendulum extends StatefulWidget {
 
   final double height;
 
+  /// Whether the exercise is played on DAMPED strings (the right-hand-only
+  /// rungs). A damped string does not ring, so it must not be drawn ringing.
+  final bool muted;
+
   /// When null the widget is decorative-only and excluded from semantics: the
   /// caller announces the stroke through its own live region.
   final String? semanticLabel;
@@ -99,6 +104,57 @@ final class SsStrumPendulum extends StatefulWidget {
   /// is clipped to 70% of a half-cycle in [frameAt], so two strokes can never be
   /// lit at once at any tempo.
   static const Duration strikeGlow = Duration(milliseconds: 160);
+
+  /// How long the strike takes to cross all six strings.
+  ///
+  /// A strum is NOT one instant: the pick meets the strings one at a time, which
+  /// is why a chord strummed slowly sounds like an arpeggio. The sweep therefore
+  /// starts AT the beat and runs forward — never centred on it — and that
+  /// direction is measured, not assumed: in
+  /// `test/features/live/strum_timestamp_latency_test.dart` the engine's
+  /// reported onset sits 0.0-3.4 ms from the FIRST string of a six-string spread,
+  /// so the beat is the sweep's beginning.
+  ///
+  /// The duration itself is a PRESENTATION constant. A synthesis reference puts
+  /// a medium strum near 22 ms per string (~110 ms across six), which is the
+  /// right order of magnitude but is an engineering figure rather than something
+  /// measured on players — so this is deliberately shorter than that, chosen to
+  /// stay clear of the next stroke rather than to assert a physical value. Like
+  /// the glow, it is clipped in [stringGlowAt] so two strokes never overlap.
+  static const Duration strikeSweep = Duration(milliseconds: 90);
+
+  /// Strings, thickest first — the order a DOWNstroke meets them.
+  static const int stringCount = 6;
+
+  /// How lit string [stringIndex] (0 = thickest, at the top) is, [sinceCrossing]
+  /// after a stroke travelling [direction], given the time to the next crossing.
+  ///
+  /// Each string lights when the pick REACHES it and decays from there, so a
+  /// still frame of a downstroke shows the low strings already ringing while the
+  /// high ones are not yet touched. Direction is then legible from a single
+  /// frame — a third channel after shape and motion, and one that survives
+  /// greyscale.
+  static double stringGlowAt({
+    required int stringIndex,
+    required Duration sinceCrossing,
+    required SsStrumDirection direction,
+    required Duration halfCycle,
+  }) {
+    if (stringIndex < 0 || stringIndex >= stringCount) return 0;
+    final budget = halfCycle.inMicroseconds * 0.7;
+    if (budget <= 0) return 0;
+    final sweep = math.min(strikeSweep.inMicroseconds.toDouble(), budget * 0.6);
+    final glow = math.min(strikeGlow.inMicroseconds.toDouble(), budget - sweep);
+    if (glow <= 0) return 0;
+    // A downstroke meets the thickest string first; an upstroke the thinnest.
+    final order = direction == SsStrumDirection.down
+        ? stringIndex
+        : stringCount - 1 - stringIndex;
+    final reachedAt = sweep * (order / (stringCount - 1));
+    final since = sinceCrossing.inMicroseconds - reachedAt;
+    if (since < 0) return 0;
+    return (1 - since / glow).clamp(0.0, 1.0);
+  }
 
   /// Key of the pick, stable across reduced and full motion, so tests can find
   /// and inspect it.
@@ -158,6 +214,8 @@ final class SsStrumPendulum extends StatefulWidget {
       travel: travel,
       strikeGlow: glow,
       isStruck: struck[crossing],
+      sinceCrossing: Duration(microseconds: sinceCrossing.round()),
+      halfCycle: Duration(microseconds: halfCycle.round()),
     );
   }
 
@@ -174,6 +232,8 @@ final class SsStrumPendulumFrame {
     required this.travel,
     required this.strikeGlow,
     required this.isStruck,
+    required this.sinceCrossing,
+    required this.halfCycle,
   });
 
   /// Which crossing of the pattern is in progress, 0-based.
@@ -194,6 +254,13 @@ final class SsStrumPendulumFrame {
   /// Whether this crossing strikes the strings at all.
   final bool isStruck;
 
+  /// How long ago the pick crossed the strings — what the per-string sweep is
+  /// derived from.
+  final Duration sinceCrossing;
+
+  /// The time from one crossing to the next at the current tempo.
+  final Duration halfCycle;
+
   @override
   bool operator ==(Object other) =>
       other is SsStrumPendulumFrame &&
@@ -201,11 +268,20 @@ final class SsStrumPendulumFrame {
       other.direction == direction &&
       other.travel == travel &&
       other.strikeGlow == strikeGlow &&
-      other.isStruck == isStruck;
+      other.isStruck == isStruck &&
+      other.sinceCrossing == sinceCrossing &&
+      other.halfCycle == halfCycle;
 
   @override
-  int get hashCode =>
-      Object.hash(crossingIndex, direction, travel, strikeGlow, isStruck);
+  int get hashCode => Object.hash(
+    crossingIndex,
+    direction,
+    travel,
+    strikeGlow,
+    isStruck,
+    sinceCrossing,
+    halfCycle,
+  );
 }
 
 final class _SsStrumPendulumState extends State<SsStrumPendulum>
@@ -250,6 +326,7 @@ final class _SsStrumPendulumState extends State<SsStrumPendulum>
       painter: _SsStrumPendulumPainter(
         frame: _frame,
         reduceMotion: reduceMotion,
+        muted: widget.muted,
         strings: colors.textSecondary,
         downColor: colors.brand,
         upColor: colors.brandStrong,
@@ -271,6 +348,7 @@ class _SsStrumPendulumPainter extends CustomPainter {
   _SsStrumPendulumPainter({
     required this.frame,
     required this.reduceMotion,
+    required this.muted,
     required this.strings,
     required this.downColor,
     required this.upColor,
@@ -279,6 +357,11 @@ class _SsStrumPendulumPainter extends CustomPainter {
 
   final SsStrumPendulumFrame? frame;
   final bool reduceMotion;
+
+  /// A damped exercise: the strings are held silent, so they must not be drawn
+  /// ringing. The two right-hand rungs look different from the chord rung
+  /// because they ARE different exercises.
+  final bool muted;
   final Color strings;
   final Color downColor;
   final Color upColor;
@@ -300,36 +383,45 @@ class _SsStrumPendulumPainter extends CustomPainter {
         _stringGap * (_stringWidths.length - 1);
     final current = frame;
 
-    if (current != null && current.strikeGlow > 0) {
-      final tint = current.direction == SsStrumDirection.down
-          ? downColor
-          : upColor;
-      final rect = Rect.fromCenter(
-        center: Offset(size.width / 2, midY),
-        width: size.width,
-        height: bandHeight + 26,
-      );
-      canvas.drawRect(
-        rect,
-        Paint()
-          ..shader = LinearGradient(
-            colors: [
-              glowBase.withValues(alpha: 0),
-              tint.withValues(alpha: 0.45 * current.strikeGlow),
-              glowBase.withValues(alpha: 0),
-            ],
-          ).createShader(rect),
-      );
-    }
+    // Each string lights as the pick REACHES it, so a downstroke shows the low
+    // strings ringing while the high ones are still untouched. Direction is then
+    // readable from a single frozen frame, with no colour and no motion.
+    final tint = current == null
+        ? strings
+        : current.direction == SsStrumDirection.down
+        ? downColor
+        : upColor;
 
     var y = midY - bandHeight / 2;
-    for (final width in _stringWidths) {
+    for (var i = 0; i < _stringWidths.length; i++) {
+      final width = _stringWidths[i];
       y += width / 2;
+      final glow = current == null || !current.isStruck
+          ? 0.0
+          : SsStrumPendulum.stringGlowAt(
+              stringIndex: i,
+              sinceCrossing: current.sinceCrossing,
+              direction: current.direction,
+              halfCycle: current.halfCycle,
+            );
+      if (glow > 0) {
+        // A struck string is louder AND thicker for a moment — a damped one only
+        // flickers, because a damped string does not ring.
+        final bloom = muted ? 1.0 : 2.2;
+        canvas.drawLine(
+          Offset(0, y),
+          Offset(size.width, y),
+          Paint()
+            ..color = tint.withValues(alpha: (muted ? 0.45 : 0.9) * glow)
+            ..strokeWidth = width + bloom * glow
+            ..strokeCap = StrokeCap.round,
+        );
+      }
       canvas.drawLine(
         Offset(0, y),
         Offset(size.width, y),
         Paint()
-          ..color = strings.withValues(alpha: 0.7)
+          ..color = strings.withValues(alpha: muted ? 0.4 : 0.7)
           ..strokeWidth = width
           ..strokeCap = StrokeCap.round,
       );
@@ -412,6 +504,7 @@ class _SsStrumPendulumPainter extends CustomPainter {
   bool shouldRepaint(_SsStrumPendulumPainter old) =>
       old.frame != frame ||
       old.reduceMotion != reduceMotion ||
+      old.muted != muted ||
       old.strings != strings ||
       old.downColor != downColor ||
       old.upColor != upColor ||

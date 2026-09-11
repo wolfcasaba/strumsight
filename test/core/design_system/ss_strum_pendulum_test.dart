@@ -164,6 +164,86 @@ void main() {
     });
   });
 
+  group('the strike SWEEPS across the strings', () {
+    const halfCycle = Duration(milliseconds: 250);
+
+    double glow(int string, int sinceMs, SsStrumDirection direction) =>
+        SsStrumPendulum.stringGlowAt(
+          stringIndex: string,
+          sinceCrossing: Duration(milliseconds: sinceMs),
+          direction: direction,
+          halfCycle: halfCycle,
+        );
+
+    test('a downstroke reaches the THICKEST string first', () {
+      // At the instant of the crossing only the top string is lit; the pick has
+      // not arrived at the others yet. That is what makes direction readable
+      // from a single frozen frame.
+      expect(glow(0, 0, SsStrumDirection.down), 1.0);
+      expect(glow(5, 0, SsStrumDirection.down), 0.0);
+    });
+
+    test('an upstroke reaches the THINNEST string first', () {
+      expect(glow(5, 0, SsStrumDirection.up), 1.0);
+      expect(glow(0, 0, SsStrumDirection.up), 0.0);
+    });
+
+    test('the sweep starts AT the beat and runs forward', () {
+      // Measured, not assumed: the engine places a strum 0.0-3.4 ms from the
+      // FIRST string of a six-string spread, so the beat is the sweep's
+      // beginning rather than its centre.
+      expect(glow(0, 0, SsStrumDirection.down), 1.0);
+      for (var string = 1; string < SsStrumPendulum.stringCount; string++) {
+        expect(
+          glow(string, 0, SsStrumDirection.down),
+          0.0,
+          reason: 'string $string cannot be lit before the pick reaches it',
+        );
+      }
+    });
+
+    test('every string is reached, in order', () {
+      var previousArrival = -1;
+      for (var string = 0; string < SsStrumPendulum.stringCount; string++) {
+        var arrival = -1;
+        for (var ms = 0; ms <= 120; ms++) {
+          if (glow(string, ms, SsStrumDirection.down) > 0) {
+            arrival = ms;
+            break;
+          }
+        }
+        expect(arrival, isNonNegative, reason: 'string $string never lit');
+        expect(arrival, greaterThanOrEqualTo(previousArrival));
+        previousArrival = arrival;
+      }
+    });
+
+    test('the whole sweep stays clear of the next stroke, at any tempo', () {
+      for (final bpm in [60, 120, 240, 400]) {
+        final cycle = Duration(microseconds: (60000000 / bpm / 2).round());
+        final justBefore = Duration(microseconds: cycle.inMicroseconds - 1000);
+        for (var string = 0; string < SsStrumPendulum.stringCount; string++) {
+          expect(
+            SsStrumPendulum.stringGlowAt(
+              stringIndex: string,
+              sinceCrossing: justBefore,
+              direction: SsStrumDirection.down,
+              halfCycle: cycle,
+            ),
+            0,
+            reason:
+                'at $bpm bpm string $string is still lit at the next stroke',
+          );
+        }
+      }
+    });
+
+    test('an out-of-range string index is 0, not a crash', () {
+      expect(glow(-1, 0, SsStrumDirection.down), 0);
+      expect(glow(6, 0, SsStrumDirection.down), 0);
+    });
+  });
+
   group('clock discipline (ADR 0274)', () {
     test('no tempo means no live frame — not a guessed one', () {
       expect(

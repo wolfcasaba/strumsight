@@ -288,6 +288,7 @@ final class _RhythmPracticeScreenState
                 beatDuration: _beatDuration,
                 struck: crossings,
                 height: 180,
+                muted: _assignment.grid.slots.every((slot) => slot.muted),
               ),
               const SizedBox(height: SsSpacing.space4),
               if (askedChord != null)
