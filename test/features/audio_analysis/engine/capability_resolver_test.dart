@@ -205,7 +205,15 @@ void main() {
       final assignments = <String>[];
       for (final file in files) {
         final content = file.readAsStringSync();
-        if (content.contains('CapabilityStatus.')) assignments.add(file.path);
+        if (content.contains('CapabilityStatus.')) {
+          // `listSync` joins with the HOST separator, so on Windows this
+          // yielded `...engine/confidence\\capability_resolver.dart` — mixed,
+          // because the directory above is spelled with `/`. The claim being
+          // made is about WHICH file assigns statuses, not how the host spells
+          // a separator, so normalise before comparing (same convention as
+          // `test/tooling/legacy_identifier_guard_test.dart`).
+          assignments.add(file.path.replaceAll(Platform.pathSeparator, '/'));
+        }
       }
 
       expect(assignments, <String>[
