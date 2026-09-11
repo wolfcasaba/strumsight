@@ -75,6 +75,7 @@ class LivePipeline {
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
+    double whiteningMeanCoefficient = 0.0,
   }) {
     return LivePipeline._(
       sampleRate: sampleRate,
@@ -82,6 +83,7 @@ class LivePipeline {
       chordConfRise: chordConfRise,
       chordConfRelease: chordConfRelease,
       chordReleaseHoldFrames: chordReleaseHoldFrames,
+      whiteningMeanCoefficient: whiteningMeanCoefficient,
     );
   }
 
@@ -116,6 +118,7 @@ class LivePipeline {
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
+    double whiteningMeanCoefficient = 0.0,
   }) : _crnnActivation = crnnActivation,
        _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
        _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
@@ -124,6 +127,9 @@ class LivePipeline {
        _chroma = NnlsChroma(
          sampleRate: sampleRate,
          window: DspConfig.nnlsWindow,
+         // Injectable so the offline probe can sweep it, the same way the
+         // onset detector's thresholds are (r166). Production passes nothing.
+         whiteningMeanCoefficient: whiteningMeanCoefficient,
        ),
        _strums = StrumAnalyzer(
          sampleRate: sampleRate,

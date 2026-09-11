@@ -89,6 +89,76 @@ there is no chord ground truth for these files. But it points at the already
 identified, still unshipped whitening follow-up: the reference's mean subtraction
 plus half-wave rectification, whose purpose is suppressing phantom partials.
 
+## 5. The whitening follow-up, measured and NOT shipped
+
+The `sus4`/`aug` hypothesis above was the standing reason to try the reference's
+whitening arithmetic: subtract the local mean and half-wave rectify
+(`Chordino.cpp:333-345`) instead of only dividing by the local level. It was
+implemented, swept, and **left switched off**. The measurement is the deliverable.
+
+The implementation is a dial, not a switch — `whiteningMeanCoefficient`, 0 = today,
+1 = the reference — because the first A/B showed the answer was not binary.
+
+### What it buys
+
+| | named frames (10 files) | mean sus4+aug share |
+|---|---|---|
+| k = 0 (shipped) | 1134 | 43.6 % |
+| k = 0.5 | 1472 | 37.7 % |
+| k = 0.75 | **1530** | **35.8 %** |
+| k = 1.0 | 1445 | 36.0 % |
+
+And the headline case: the F minor file that named **nothing at all** across
+12.7 s went to **112 confirmed frames, 90 % of them in the labelled key**,
+naming the tonic `Fm7` among them. On modelled chords with exact ground truth it
+stayed 7/7 at every value.
+
+### What it costs, and why that ends it
+
+At k ≥ 0.15 the shipped quiet-third fixture flips: an open E whose major third
+sits at 0.08 of the peak reads as **`Em`**. That fixture is not decoration — it
+guards the E18-R01 result that took the seven reference recordings from 4/7 to
+7/7, and **major-for-minor is the worst error this app can make**, because E/Em
+and A/Am are chords the beginner course teaches. A learner playing E correctly
+would be told they played Em.
+
+The cliff was located precisely rather than assumed:
+
+```
+third level          0.08   0.12   0.20
+k <= 0.10             E      E      E
+k = 0.15 .. 0.25     Em      E      E
+k = 0.75 .. 1.0      Em     Em      E
+```
+
+A two-dimensional sweep over the exponent found exactly one combination that
+keeps the quiet third while subtracting any mean at all — **w = 1.0, k = 0.25**,
+the reference's own exponent — and the whole DSP suite passes there. But on real
+audio it is worse than both alternatives: B minor in-key falls from 82 % to 69 %,
+and one file that named 71 frames goes silent.
+
+| setting | B minor in key | F minor in key | quiet third |
+|---|---|---|---|
+| w 0.7, k 0 (shipped) | **82 %** | 0 % (silent) | **E** |
+| w 0.7, k 1.0 | 76 % | **90 %** | `Em` |
+| w 1.0, k 0.25 | 69 % | 55 % | **E** |
+
+**No setting dominates.** Each buys one thing by selling another, and the thing
+sold at the only settings that help hard material is the one error class this app
+cannot afford. So the dial ships at 0, the code and the sweep stay in the tree,
+and this is written down as a measured negative result rather than a forgotten
+idea.
+
+### What would change the answer
+
+Not another sweep of these two numbers. The costs all trace to half-wave
+rectification discarding weak-but-real energy, so the candidates are the
+differences NOT yet tried: the reference's **Hamming-weighted kernel** in place
+of our flat box (a weighted mean treats a distant neighbour as less relevant,
+which is exactly what a hard box gets wrong at a peak's edge), and a rectifier
+with a soft floor rather than a hard zero. Both are separate rounds, and both
+need this same three-criteria harness.
+
 ## What this does not establish
 
 No file here has per-chord ground truth, so nothing above is a chord-accuracy

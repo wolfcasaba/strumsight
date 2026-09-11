@@ -136,7 +136,18 @@ void main() {
       }
       final (pcm, sampleRate) = decoded;
 
-      final pipeline = LivePipeline(sampleRate: sampleRate);
+      // `WHITENING_MEAN_K=<0..1>` re-runs the same probe with a different
+      // amount of local mean subtracted, so two settings can be compared line
+      // for line rather than from memory. Unset uses the shipped value.
+      final override = double.tryParse(
+        Platform.environment['WHITENING_MEAN_K'] ?? '',
+      );
+      final pipeline = override == null
+          ? LivePipeline(sampleRate: sampleRate)
+          : LivePipeline(
+              sampleRate: sampleRate,
+              whiteningMeanCoefficient: override,
+            );
       final chordCounts = <String, int>{};
       // The typed verdicts exist so a silence can be EXPLAINED rather than
       // guessed at: "I could not hear you" and "that is not a chord I know" are

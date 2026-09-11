@@ -30,6 +30,7 @@ class NnlsChroma {
     this.spectralWhitening = true,
     this.whiteningExponent = 0.7,
     this.whiteningHalfSemitones = 3.0,
+    this.whiteningMeanCoefficient = 0.0,
     this.referenceRegisterWindows = true,
   }) : _fft = FFT(window),
        _hann = Float64List(window),
@@ -154,6 +155,30 @@ class NnlsChroma {
   /// onto the same neighbourhood: at [binsPerSemitone] 3 the effective
   /// half-window is `round(whiteningHalfSemitones * 3)` bins.
   final double whiteningHalfSemitones;
+
+  /// How much of the local mean whitening SUBTRACTS before dividing, from 0
+  /// (today's behaviour: divide only) to 1 (the reference's arithmetic).
+  ///
+  /// The reference (`Chordino.cpp:333-345`) computes `d = spec - runningmean`
+  /// and then `d > 0 ? d / runningstd^w : 0`. Subtracting makes the whitener a
+  /// true local-CONTRAST operator — a bin must exceed its neighbourhood to
+  /// survive — and the half-wave rectification zeroes everything at or below the
+  /// local mean, which suppresses noise floors and the skirts of strong peaks far
+  /// harder than dividing by an RMS does.
+  ///
+  /// MEASURED, and the reason this is a dial rather than a switch. At the full
+  /// reference value the engine hears a great deal MORE on real recordings — a
+  /// file that named nothing at all across 12.7 s went to 112 confirmed frames,
+  /// 90% of them in the labelled key — but it also lost a QUIET MAJOR THIRD, so
+  /// an open E whose third sits at 0.08 read as `Em`. Confusing major with minor
+  /// is the worst error this app can make: those are the chords the beginner
+  /// course teaches, and a learner playing E correctly would be told they played
+  /// Em. The coefficient exists so that trade can be measured instead of taken.
+  ///
+  /// The kernel stays a flat box regardless: the reference's Hamming weighting is
+  /// a SEPARATE difference, and changing two things at once makes a measurement
+  /// unreadable.
+  final double whiteningMeanCoefficient;
 
   /// [whiteningHalfSemitones] on the log-frequency bin grid — derived once in
   /// the constructor, never per bin: [_whiten] reads it inside a per-bin loop.
@@ -393,6 +418,10 @@ class NnlsChroma {
   /// ^[whiteningExponent]. The RMS floor (relative to [maxS]) keeps true
   /// silence from being amplified into structure.
   void _whiten(double maxS) {
+    if (whiteningMeanCoefficient > 0) {
+      _whitenByLocalContrast(maxS);
+      return;
+    }
     final prefix = Float64List(_nBins + 1);
     for (var j = 0; j < _nBins; j++) {
       prefix[j + 1] = prefix[j] + _s[j] * _s[j];
@@ -404,6 +433,51 @@ class NnlsChroma {
       var rms = math.sqrt((prefix[hi + 1] - prefix[lo]) / (hi - lo + 1));
       if (rms < floor) rms = floor;
       _s[j] = _s[j] / math.pow(rms, whiteningExponent);
+    }
+  }
+
+  /// The reference arithmetic: subtract the running mean, divide by the running
+  /// standard deviation raised to [whiteningExponent], and half-wave rectify.
+  ///
+  /// Two box passes, both by prefix sum: the first gives each bin's local mean,
+  /// the second the local mean of the squared deviations — each bin's deviation
+  /// measured from ITS OWN local mean, as the reference does it.
+  ///
+  /// The standard-deviation FLOOR is ours, not the reference's: without it a
+  /// silent neighbourhood divides by ~0 and turns numerical dust into structure.
+  /// The reference has no such guard because it never runs on a live microphone
+  /// that can be handed pure silence.
+  void _whitenByLocalContrast(double maxS) {
+    final prefix = Float64List(_nBins + 1);
+    for (var j = 0; j < _nBins; j++) {
+      prefix[j + 1] = prefix[j] + _s[j];
+    }
+    final mean = Float64List(_nBins);
+    final deviation = Float64List(_nBins);
+    for (var j = 0; j < _nBins; j++) {
+      final lo = math.max(0, j - whiteningHalfWindow);
+      final hi = math.min(_nBins - 1, j + whiteningHalfWindow);
+      mean[j] = (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1);
+      final d = _s[j] - whiteningMeanCoefficient * mean[j];
+      deviation[j] = d * d;
+    }
+    final devPrefix = Float64List(_nBins + 1);
+    for (var j = 0; j < _nBins; j++) {
+      devPrefix[j + 1] = devPrefix[j] + deviation[j];
+    }
+    final floor = 1e-4 * maxS;
+    for (var j = 0; j < _nBins; j++) {
+      final lo = math.max(0, j - whiteningHalfWindow);
+      final hi = math.min(_nBins - 1, j + whiteningHalfWindow);
+      final d = _s[j] - whiteningMeanCoefficient * mean[j];
+      if (d <= 0) {
+        // Half-wave rectification: at or below the local mean is nothing.
+        _s[j] = 0;
+        continue;
+      }
+      var std = math.sqrt((devPrefix[hi + 1] - devPrefix[lo]) / (hi - lo + 1));
+      if (std < floor) std = floor;
+      _s[j] = d / math.pow(std, whiteningExponent);
     }
   }
 
