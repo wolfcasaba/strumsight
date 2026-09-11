@@ -53,7 +53,13 @@ void _addPluck(
       sample +=
           math.sin(2 * math.pi * freqHz * harmonic * t) / (harmonic * harmonic);
     }
-    pcm[index] += amplitude * envelope * sample;
+    // Fade the last 30 ms out. A synthesis that simply STOPS ends on a step, and
+    // a step is a real broadband transient the detector is right to hear — six
+    // of them 22 ms apart produced phantom strums in this file's first run.
+    // Diagnosed in `onset_double_trigger_diagnosis_test.dart`.
+    final remaining = (length - i) / _sampleRate;
+    final fade = remaining < 0.03 ? remaining / 0.03 : 1.0;
+    pcm[index] += amplitude * envelope * fade * sample;
   }
 }
 
@@ -178,14 +184,13 @@ void main() {
     }
   });
 
-  test('EXTRA DETECTIONS on this stimulus are reported, not hidden', () {
-    // MEASURED and unexplained: this synthetic signal yields about twice as many
-    // reported strums as there are strums, the surplus landing ~550 ms after each
-    // one. It is NOT claimed to be an engine defect — six decaying harmonic
-    // stacks 22 ms apart is a stimulus no guitar makes, and the surplus may be
-    // the synthesis. It is recorded because the timing score has to survive it:
-    // `gradeRhythm` already counts an unmatched confirmed stroke as an EXTRA,
-    // which never subtracts (design §2 rule 6).
+  test('NO surplus detections — one strum reported per strum', () {
+    // This file's first run measured about twice as many reported strums as
+    // there were strums and recorded it as unexplained. It is now explained, and
+    // the engine is NOT at fault: the synthesis ended on a step, and six steps
+    // 22 ms apart are a real transient. With the truncation faded (see
+    // `_addPluck`) the surplus is zero. Kept as a cell so the stimulus cannot
+    // silently regress into testing its own artifacts again.
     final matchOfDetected = matchWithinTolerance(
       expected: [for (final onset in onsets) (onset * 1e6).round()],
       detected: [
@@ -198,9 +203,10 @@ void main() {
     print('MEASURED surplus detections: $unmatched');
     expect(
       unmatched,
-      greaterThanOrEqualTo(0),
+      0,
       reason:
-          'recorded as a measurement; no threshold is claimed on synthetic audio',
+          'a surplus means either the stimulus has grown an artifact again, or '
+          'the engine has started hearing strums that were not played',
     );
   });
 
