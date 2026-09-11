@@ -1,5 +1,11 @@
 # E18-R01 javító kör — emulátoros ELLENŐRZŐ jelentés (2026-09-10)
 
+> **HELYESBÍTÉS (2026-09-11) — olvasd el a §8-at a §3 és a V-F10 sor előtt.**
+> Egy utólagos kutatókör kimérte a mérőlánc saját zajpadlóját, és ennek
+> alapján **a V-F10 ítélete PASS-ra javítva**, a **§3 felismerés-stabilitás
+> számai pedig ÉRVÉNYTELENEK** — helyettük a §8 tiszta, emulátor nélküli
+> mérése az érvényes. A §8 a jelentés végén van.
+
 > Szerep: ELLENŐRZŐ (ADR 0055). A `lib/**` és `test/**` alatt semmi nem
 > módosult, golden nem lett regenerálva, konstans nem lett hangolva.
 > A prompt: [`e18-r01-emulator-verify-prompt.md`](e18-r01-emulator-verify-prompt.md).
@@ -116,7 +122,7 @@ tesztfájl az E18-R01 mérésben is piros volt ugyanezzel a mintával.
 | V-F6 | **PASS** | Chords → Setup **„G ↔ D chord changes"**; Warm-up → **„Quarter downstrokes"**; Rhythm → **„Rhythm only — quarters"**; Scales és Technique → **SnackBar „No practice for this goal yet."**, navigáció nélkül (a hubon maradtunk). „Practice unavailable" **0-szor**. | `V-F6-scales-snackbar.png`; a Technique SnackBar-ja szintén elkapva (azonos szöveg) |
 | V-F7 | **PARTIAL** | A hibapanel és a Retry-út MŰKÖDIK: a session „StrumSight needs the microphone to hear your guitar. Audio never leaves the device." üzenetet mutat, **„Open settings"** és **„Prepare again"** gombbal — **nem** üres eredmény-képernyő. A „Prepare again" valóban újra-előkészít (visszajön az engedélykérés), nem ragad `preparing`-ben. Engedély megadása után a session ismét indítható. **Amit nem tudtam mérni:** a *futás közbeni* mikrofon-elvétel (lásd §4 lelet). | `V-F7-mic-denied.png`; logcat: `practice_observation_capture_started` a start után |
 | V-F8 | **PASS** | A Songs tab AppBar-jában megjelent a **„Song Trainer"** ikon ([816,77]–[948,209]); megnyitja a V2 „Song library"-t (Create song / Source / Sort / „No songs yet. Import a file to start your library." / Import); rendszer-back → vissza a „My songs"-ra, app előtérben. | a11y node-lista mindkét képernyőn |
-| V-F10 | **PARTIAL** | A fokozatosság MEGVAN: lejátszás 70 % → **4/5** sáv, 30 % → **3/5** sáv, pengetés-csúcs → **5/5**. A 0 %/100 % ugrás megszűnt. **De:** csendben a méter **3/5-nél megáll** — és ugyanígy 3/5-öt mutat némított kimenettel (digitális csend a Stereomixbe) ÉS valódi mikrofonnal csendes szobában. A „−45 dBFS alatt 0 / csendben lecseng" fél nem reprodukálódott. | `V-F10-level-70-30-silence.png`, `V-F10-floor-muted-vs-quietmic.png` |
+| V-F10 | **PASS** (a §8.2 helyesbítés után; az eredeti mérésben PARTIAL) | A fokozatosság MEGVAN: lejátszás 70 % → **4/5** sáv, 30 % → **3/5** sáv, pengetés-csúcs → **5/5**. A 0 %/100 % ugrás megszűnt. **De:** csendben a méter **3/5-nél megáll** — és ugyanígy 3/5-öt mutat némított kimenettel (digitális csend a Stereomixbe) ÉS valódi mikrofonnal csendes szobában. A „−45 dBFS alatt 0 / csendben lecseng" fél az eredeti mérésben nem reprodukálódott — **a §8.2 kimutatta, hogy ez a Stereo Mix −24,1 dBFS-es sávon belüli zajpadlója volt, nem a méter hibája**; tiszta bemeneten a szint 0. | `V-F10-level-70-30-silence.png`, `V-F10-floor-muted-vs-quietmic.png`, `V-F10-clean-path-zero.png` |
 | V-F11 | **PASS** | Előnézet `C G Am F`-en, 0,66 s-onkénti ütések. `KEYCODE_BACK` **19:24:47.573**; az utolsó pengetés **19:24:47.255** (a back ELŐTT), és utána **egyetlen új `requestAudioFocus` sem** — pedig az ütemterv szerint ~47,92-kor jött volna a következő. Az E18-R01-ben itt +396 ms-mal még egy ütés szólt. | logcat onset-időbélyegek (lent, §4-mentes) |
 | V-CI-A | **PASS** | 320 dp széles ablakban (`wm size 720x1280`, `wm density 360`) a Live „Play a chord…" prompt a hős-helyen elfér, a „Signal too weak…" banner két sorba tördel, a BPM ellipszissel rövidül. **0** `RenderFlex`/`overflowed` a konzolon, nincs sárga-fekete csík. | `V-CI-A-live-320dp.png`; `grep -ciE "RenderFlex\|overflowed"` → `0` |
 | V-CI-B | **PASS** | `font_scale 2.0`: a „Scoring profile" két sorba tördel, az azonosító `chordChangeDefa / ult`-ként tördelődik; a sor magassága 55 px → **203 px**. **0** overflow. Normál méretnél a sor egysoros (55 px), az id jobbra. | `V-CI-B-setup-scale2.png`; a11y bounds `[55,1813][1025,1868]` (1.0) vs `[55,1665][1025,1868]` (2.0) |
@@ -326,9 +332,10 @@ mércéje a felhasználó valós gitáros tesztje.
 
 ## 7. Összegzés a remote sessionnek
 
-- **PASS: 11/13**, FAIL: **0**, PARTIAL: **2** (V-F7, V-F10), BLOCKED: **0**
+- **PASS: 12/13**, FAIL: **0**, PARTIAL: **1** (V-F7), BLOCKED: **0**
+  *(a §8.2 helyesbítés után; az eredeti mérésben 11/13 és 2 PARTIAL volt)*
   (a 13 cellából egyik sem maradt teljesen mérés nélkül; a részleges okok a §6-ban)
-- **P1 leletek: nincs.** **P2: V-F10, V-STAB.** P3: V-F7 (mérési korlát), V-GATE.
+- **P1 leletek: nincs.** **P2: V-STAB** (a V-F10 a §8.2 szerint kiesett). P3: V-F7 (mérési korlát), V-GATE.
 - **A felismerés-stabilitás egy mondatban:** a hős C-n és A-n 8/8 stabil és
   helyes, D-n néma, G-n stabilan `Bm`, **E-n viszont továbbra is oda-vissza
   ugrál** (`Bsus4` ↔ `E`) — a felhasználó eredeti panasza E-n reprodukálódott.
@@ -363,3 +370,114 @@ $ git push origin 'refs/notes/*'
 
 (A `22a06e25` = „docs(E18-R01): CI-green evidence on 3521c210 — build-apk
 fully green (10317 tests), full-gate job green".)
+
+## 8. HELYESBÍTÉS és kutatókör (2026-09-11)
+
+A felhasználó kérésére a leletek okát külön kutatókör vizsgálta. Kettő közülük
+**a saját mérőláncom hibája volt, nem a terméké** — ezeket itt helyesbítem.
+
+### 8.1 A mérőlánc zajpadlója — MÉRT
+
+Gazdagép-oldali felvétel (`sounddevice`, 3 s, 44,1 kHz), sávon belül
+szűrve 70–5000 Hz-re (ez a sáv, amiben az akkordfelismerés dolgozik):
+
+| Bemenet | teljes sáv | 70–5000 Hz |
+|---|---|---|
+| **Stereo Mix (Realtek), üresjárat** | −19,6 … −22,2 dBFS | **−24,1 dBFS** |
+| Microphone Array, csendes szoba | −89,0 dBFS | **−98,4 dBFS** |
+
+A Stereo Mix zaja ~18 Hz-en tetőzik (szubszonikus), és az emulátor
+LEÁLLÍTVA is ott van (−22,2 dBFS), tehát a Realtek eszközé, nem az emulátoré.
+
+### 8.2 V-F10 — az ítélet PASS-ra javítva
+
+A §2 táblában V-F10 PARTIAL-t kapott azzal, hogy „csendben 3/5 sávnál megáll".
+A méter 5 sávos, a 3. sáv `level ≥ 0,6`-nál gyullad, ami a −45…−6 dBFS
+skálán **−21,6 dBFS** — pontosan a mért Stereo Mix zajpadló. **A méter tehát
+őszinte volt: valóban ennyi jel érkezett.**
+
+Amiért a „valódi mikrofonra váltás" sem változtatott semmit: az emulátor a
+már megnyitott capture-eszközt nem cseréli menet közben, tehát végig a
+Stereo Mixet hallgatta.
+
+Tiszta bemeneten (valódi mikrofon alapértelmezettként, hidegindított
+emulátor, csendes szoba) a Live szint-jelző **minden sávja szürke, a szint 0**,
+a banner „Signal too weak to tell" — pontosan a specifikáció szerint
+(„−45 dBFS alatt 0"). **V-F10 = PASS.** Bizonyíték:
+`assets/e18-r01-verify/V-F10-clean-path-zero.png`.
+
+### 8.3 A §3 felismerés-stabilitás számai ÉRVÉNYTELENEK
+
+A teszt-WAV-ok ~−20 dBFS-en értek a Stereo Mixbe, a sávon belüli zaj
+−24,1 dBFS volt → **a jel/zaj viszony ≈ 4 dB**. Ennyivel a „G → Bm",
+„E ugrál Bsus4 és E között", „D néma" eredmények nem a dekóderről szólnak.
+
+A tiszta akusztikus út (hangszóró → valódi mikrofon) a gazdagépen **82,8 dB**
+sávon belüli jel/zajt ad — csakhogy **az emulátor ezen a boxon nem tudja
+fogadni**: `-allow-host-audio` mellett, hidegindítva (`-no-snapshot-load`), a
+Microphone Array-jel mint Windows-alapértelmezéssel, 100 %-os lejátszás és
+felvétel mellett is **nulla szintű bemenetet** kap („Signal too weak",
+0 sáv). Az emulátor ezen a gépen csak a Stereo Mixet fogja meg. Ezért a
+dekóder AZON AZ ÚTON nem mérhető.
+
+### 8.4 A felismerés tiszta mérése — emulátor nélkül
+
+Új megfigyelő eszköz: `test/tooling/live_chord_wav_probe_test.dart` — a
+letöltött, címkézett, közkincs akusztikus gitár WAV-okat közvetlenül a VALÓDI
+`LivePipeline`-on hajtja át, és kiírja a mutatott címkét, a döntés-hisztogramot
+és az elutasítás okait. Nem kapu (felismerési minőségre sosem bukik), és
+`LIVE_WAV_DIR` nélkül kihagyja magát, így a CI-t nem érinti.
+
+Mérés −6 dBFS csúcsra normalizált felvételeken — a jelminőség-ablak közepén
+(`quietRmsDbfs −40`, `loudPeakDbfs −2`):
+
+| Várt | Mutatott | Nyers dekóder-címke | Ítélet |
+|---|---|---|---|
+| C | `C`×37 | `C` | **helyes** |
+| G | – (57 kereten át semmi) | **`Dsus4`** | téves |
+| D | – (61 kereten át semmi) | **`D`** | **helyesen dekódolva, de 56 kereten át `lowConfidence` → sosem erősödik meg** |
+| E | `Bsus4`×27 | `Bsus4` | téves |
+| A | `A`×41 | `A` | **helyes** |
+| F | `F`×33 | `F` | **helyes** |
+| B | `B`×51 | `B` | **helyes** |
+
+**Összesen 4/7.** Két dolog következik ebből:
+
+1. **Az ADR 0539 stabilizálása MŰKÖDIK.** Tiszta bemeneten az E **nem ugrál**:
+   egyetlen, stabil címkét ad (`Bsus4`×27) — a §3-ban látott oda-vissza váltás
+   a ~4 dB jel/zaj műterméke volt. A hős tehát nem ugrik; a címke téves.
+2. **A pontossági hiba viszont valódi**, zaj nélkül is reprodukálható.
+
+### 8.5 A tévesztések mintázata és egy NEGATÍV kísérlet
+
+`G → Dsus4` és `E → Bsus4`: mindkettő **a kvinten épülő** akkord (G kvintje D,
+E kvintje B). Vagyis a dekóder ezekben az esetekben **a kvintet veszi
+gyöknek**.
+
+Kipróbáltam a kézenfekvő fogantyút — a `sus4` Occam-fék emelését
+`0.04 → 0.08` (`chord_dictionary.dart`), mert a 181. kör kommentje szerint
+pont ez a fék véd a sus4-lopás ellen. **Nem javít:** a G nyers címkéje
+`Dsus4`-ről `Dm`-re váltott (továbbra is D-gyökerű, továbbra is téves), az E
+maradt `Bsus4`, az összesítés maradt 4/7. **A konstanst visszaállítottam** —
+a hiba nem a sus4-fékben van, hanem a gyök/basszus-becslésben, és ez pontosan
+az a dekóder-oldali kérdés, amit az ADR 0539 D4 valós gitáros A/B-hez köt
+(E18-R05). DSP-konstans ebben a körben **nem mozdult**.
+
+### 8.6 Amit a kutatókör MEGJAVÍTOTT
+
+| Lelet | Javítás |
+|---|---|
+| **V-GATE** — `knowledge_manifest_test.dart` 3 piros Windowson | `tool/build_tutor_knowledge_manifest.dart`: a `_contentFiles` maga építette a kizárandó útvonalakat (az egyiket bedrótozott `/`-rel), a jelölteket viszont a `listSync` adta — Windowson a nyers `!=` sosem talált, így a `manifest.json` saját magát is tartalmi dokumentumként dolgozta fel, és `missingLicense`-szel halt el. Új `_pathKey()` normalizál (Windowson elválasztójel + kis/nagybetű, POSIX-on azonosság). **Windowson 3 piros → 8/8 zöld; a teljes `test/features/ai_tutor/data` 119/119 zöld** (korábban `+116 −3`). |
+| **§6 „a nyers címke nem figyelhető meg"** | A szonda kiírja a nyers `frame.current`-et és a `chordRejectReason`-t, tehát az E18-R05 „nyers ugrik-e, a hős nem" alapmérése mostantól elvégezhető — emulátor nélkül. |
+
+### 8.7 Amit a kutatókör NEM javított, és miért
+
+- **G/E tévesztés, D elnyomása:** gyök-becslési és konfidencia-kapu kérdés,
+  mindkettő DSP-döntési paraméter (`AGENTS.md` §9). Van már hozzá fixture (7
+  címkézett felvétel), de egyetlen forrásból — ez önmagában vékony, és a
+  hangolása túlillesztés lenne. A valós gitáros A/B (E18-R05) marad a mérce.
+- **A `uiautomator` nem tudja dumpolni a Live-ot:** a 15 Hz-es keret-stream
+  folyamatos újrarajzolása miatt; egy élő audio-képernyőnél ez természetes, a
+  fojtása terméket rontana. Mérési korlát marad.
+- **V-F7 futás közbeni mikrofon-elvétel:** platformkorlát (a `pm revoke` megöli
+  a folyamatot), nem termékhiba.

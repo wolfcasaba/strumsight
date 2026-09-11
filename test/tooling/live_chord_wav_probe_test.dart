@@ -36,89 +36,94 @@ const _labels = <String>['C', 'G', 'D', 'E', 'A', 'F', 'B'];
 void main() {
   final dir = Platform.environment['LIVE_WAV_DIR'];
 
-  test('Live pipeline chord probe over labelled real-guitar WAVs', () {
-    final root = Directory(dir!);
-    expect(root.existsSync(), isTrue, reason: 'LIVE_WAV_DIR must exist');
+  test(
+    'Live pipeline chord probe over labelled real-guitar WAVs',
+    () {
+      final root = Directory(dir!);
+      expect(root.existsSync(), isTrue, reason: 'LIVE_WAV_DIR must exist');
 
-    final rows = <String>[];
-    var scored = 0;
-    var correct = 0;
-    for (final label in _labels) {
-      final wav = File(
-        '${root.path}${Platform.pathSeparator}$label-major.wav',
-      );
-      if (!wav.existsSync()) {
-        rows.add('$label | MISSING ${wav.path}');
-        continue;
-      }
-      final decoded = WavDecoder.decode(
-        Uint8List.fromList(wav.readAsBytesSync()),
-      );
-      if (decoded == null) {
-        rows.add('$label | NOT A SUPPORTED WAV');
-        continue;
-      }
-      final (pcm, sampleRate) = decoded;
+      final rows = <String>[];
+      var scored = 0;
+      var correct = 0;
+      for (final label in _labels) {
+        final wav = File(
+          '${root.path}${Platform.pathSeparator}$label-major.wav',
+        );
+        if (!wav.existsSync()) {
+          rows.add('$label | MISSING ${wav.path}');
+          continue;
+        }
+        final decoded = WavDecoder.decode(
+          Uint8List.fromList(wav.readAsBytesSync()),
+        );
+        if (decoded == null) {
+          rows.add('$label | NOT A SUPPORTED WAV');
+          continue;
+        }
+        final (pcm, sampleRate) = decoded;
 
-      final pipeline = LivePipeline(sampleRate: sampleRate);
-      final frames = <LiveFrame>[];
-      const chunk = 1024;
-      for (var i = 0; i < pcm.length; i += chunk) {
-        final end = i + chunk < pcm.length ? i + chunk : pcm.length;
-        frames.addAll(pipeline.addChunk(pcm.sublist(i, end)));
-      }
+        final pipeline = LivePipeline(sampleRate: sampleRate);
+        final frames = <LiveFrame>[];
+        const chunk = 1024;
+        for (var i = 0; i < pcm.length; i += chunk) {
+          final end = i + chunk < pcm.length ? i + chunk : pcm.length;
+          frames.addAll(pipeline.addChunk(pcm.sublist(i, end)));
+        }
 
-      final histogram = <String, int>{};
-      String? first;
-      final decisions = <String, int>{};
-      final rejects = <String, int>{};
-      for (final frame in frames) {
-        final decision = frame.chordDecision?.name ?? 'none';
-        decisions[decision] = (decisions[decision] ?? 0) + 1;
-        final reject = frame.chordRejectReason?.name;
-        if (reject != null) rejects[reject] = (rejects[reject] ?? 0) + 1;
-        final emitted = frame.current?.label;
-        if (emitted == null) continue;
-        histogram[emitted] = (histogram[emitted] ?? 0) + 1;
-        first ??= emitted;
-      }
-      final entries = histogram.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      final top = entries.isEmpty ? null : entries.first.key;
-      final hist = entries.isEmpty
-          ? '(no chord in ${frames.length} frames)'
-          : entries.map((e) => '${e.key}x${e.value}').join(' ');
-      scored++;
-      if (top == label) correct++;
-      final verdict = top == null
-          ? 'NO-DETECT'
-          : (top == label ? 'CORRECT' : 'WRONG(top=$top)');
-      final dec = (decisions.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value)))
-          .map((e) => '${e.key}x${e.value}')
-          .join(' ');
-      final rej = rejects.isEmpty
-          ? '-'
-          : (rejects.entries.toList()
+        final histogram = <String, int>{};
+        String? first;
+        final decisions = <String, int>{};
+        final rejects = <String, int>{};
+        for (final frame in frames) {
+          final decision = frame.chordDecision?.name ?? 'none';
+          decisions[decision] = (decisions[decision] ?? 0) + 1;
+          final reject = frame.chordRejectReason?.name;
+          if (reject != null) rejects[reject] = (rejects[reject] ?? 0) + 1;
+          final emitted = frame.current?.label;
+          if (emitted == null) continue;
+          histogram[emitted] = (histogram[emitted] ?? 0) + 1;
+          first ??= emitted;
+        }
+        final entries = histogram.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+        final top = entries.isEmpty ? null : entries.first.key;
+        final hist = entries.isEmpty
+            ? '(no chord in ${frames.length} frames)'
+            : entries.map((e) => '${e.key}x${e.value}').join(' ');
+        scored++;
+        if (top == label) correct++;
+        final verdict = top == null
+            ? 'NO-DETECT'
+            : (top == label ? 'CORRECT' : 'WRONG(top=$top)');
+        final dec =
+            (decisions.entries.toList()
                   ..sort((a, b) => b.value.compareTo(a.value)))
                 .map((e) => '${e.key}x${e.value}')
                 .join(' ');
-      rows.add(
-        '$label | len=${(pcm.length / sampleRate).toStringAsFixed(2)}s | '
-        'shown: $hist | first=${first ?? '-'} | $verdict\n'
-        '      decisions: $dec\n'
-        '      rejects  : $rej\n'
-        '      raw last : ${pipeline.chordPrediction?.label ?? '-'}',
-      );
-    }
+        final rej = rejects.isEmpty
+            ? '-'
+            : (rejects.entries.toList()
+                    ..sort((a, b) => b.value.compareTo(a.value)))
+                  .map((e) => '${e.key}x${e.value}')
+                  .join(' ');
+        rows.add(
+          '$label | len=${(pcm.length / sampleRate).toStringAsFixed(2)}s | '
+          'shown: $hist | first=${first ?? '-'} | $verdict\n'
+          '      decisions: $dec\n'
+          '      rejects  : $rej\n'
+          '      raw last : ${pipeline.chordPrediction?.label ?? '-'}',
+        );
+      }
 
-    // ignore: avoid_print
-    print('--- Live pipeline chord probe ---');
-    for (final row in rows) {
       // ignore: avoid_print
-      print(row);
-    }
-    // ignore: avoid_print
-    print('SUMMARY: $correct/$scored top-label matches');
-  }, skip: dir == null ? 'set LIVE_WAV_DIR to run the probe' : null);
+      print('--- Live pipeline chord probe ---');
+      for (final row in rows) {
+        // ignore: avoid_print
+        print(row);
+      }
+      // ignore: avoid_print
+      print('SUMMARY: $correct/$scored top-label matches');
+    },
+    skip: dir == null ? 'set LIVE_WAV_DIR to run the probe' : null,
+  );
 }
