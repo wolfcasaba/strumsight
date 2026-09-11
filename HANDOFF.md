@@ -1,5 +1,80 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R10…R12 — A MOTOR HALLÁSÁNAK KALIBRÁLÁSA: két párhuzamos kör, egy nemleges, egy szállított — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „mehet mindent tökéletesre kell be kalibrálni nem lehet kihagyni
+semmit esetleg nézz utána ilyen tanulmányoknak hogy kell" + „folytasd két opus 5
+agentel a két külön kört te irányits".
+
+**Hogyan futott.** Két Opus 5 agent, két IZOLÁLT git worktree (`C:\src\ss-hamm`,
+`C:\src\ss-soft`), külön ágon — mert mindkét kör ugyanazt a függvényt
+(`_whitenByLocalContrast`) írta volna át. Mindkettőnek ELŐRE ki volt mondva a
+győzelmi feltétel, hogy utólag ne lehessen elmozdítani, és mindkettő meg is
+kapta a kampány eddigi csapdáját: a replika-stimulus, ami SEMMIT nem mér.
+
+### A kulcsfordulat: az R11 megdöntötte a saját leírásunk premisszáját
+
+A §5 azt írta, hogy a költség a félhullámú egyenirányításból jön. Az R11 egy
+mérőponton közvetlenül kiolvasta a halk terc binjének súlyát, és **a terc binje
+sosem nullázódik** — a saját lokális átlaga FÖLÖTT van. A padló nem gyenge: **nem
+alkalmazható**. Amit a tercet megöli, az a **kivonás** (8.57 % → 2.30 %, ahogy `k`
+nő). Nemleges eredmény, 0-n hagyva, a kód és a mérőpad a fában.
+
+**Ez célozta újra az R10-et**: a Hamming-kernel nem „gyengébb", hanem azt
+változtatja meg, hogy **mi a lokális átlag**.
+
+### Amit ÉN tettem hozzá, és amit elrontottam
+
+**Elrontottam:** a `NnlsChroma` default-jának átírása semmit nem tesz, mert a
+`LivePipeline` explicit továbbadja. Az első „eredményem" **kétszer a szállított
+viselkedést mérte** — csak a számjegyre azonos kimenet miatt tűnt fel. Ugyanez a
+hibaosztály ült a `real_audio_hearing_probe_test.dart`-ban `override ?? 0.0`-ként,
+miközben a kommentje a szállított értéket ígérte: amíg az 0 volt, láthatatlan, a
+tárcsa elmozdulásával viszont **minden jövőbeli kör mást mért volna**. Innen a
+nevesített `default*` konstansok.
+
+**Hozzátettem:** a döntő mérést, amit egyik kör sem használt, és ez az én hibám
+volt, nem az övék — `test/tooling/live_chord_wav_probe_test.dart`, **hét címkézett
+valódi gitárfelvétel**, az egyetlen valódi akkord-ground-truth. 7/7 ↔ 7/7,
+278 → 296 megerősített keret, egyetlen címke sem romlik. Ezen látszott, hogy a
+valódi gitáron a **kernel** hozza a hasznot, a `k` alig — tehát a `k`-t a nehéz
+anyagon kell igazolni, és ott `k = 0` **két fájlt veszít csendbe**.
+
+### Szállítva (ADR 0542): `hamming / w 0.70 / k 0.20`
+
+- a halk-terc szakadék 0.08 → 0.04–0.02: a legrosszabb hibaosztály **kétszer
+  robusztusabb**, és a moll akkordok mollok maradnak
+- F-moll loop: néma → **93 % hangnemben**; B-moll 82 % → 86 %
+- ár: a keret-büdzsé **0.023 %-a** (gazdagép JIT; az eszközön futó AOT NEM mérve)
+
+**Két állítás billent, egyiket sem lazítottam fel.** Az egyik tautológia volt
+(most nevesített konstansból állítja a Hammingot, a doboz uniformitása külön
+cellában marad). A másik az ADR 0540 ±2-es gyök-erózió **kontrollja**, ami azért
+vesztette el a kontrasztját, mert a Hamming a jelenséget MEGSZÜNTETI — megmérve:
+doboz ±2-nél 2/8, doboz ±1.5 alatt 0/8 (tehát a ±2 pontszerű volt, nem trend),
+Hamming 0/8 mindenhol. A kontroll a DOBOZ kernelre kötve maradt, és új cella
+rögzíti a megszűnést; az ADR 0540 megkapta az utólagos mérést.
+
+### Amit NEM javít — és ez volt a kampány eredeti célja
+
+A **`sus4`/`aug` túlreprezentáltság marad** (43.6 % → 43.1 %, zaj). A `k ≤ 0.15`-nél
+látszó ~9 pontos javulás **műtermék**: a `sus4`-ben gazdag fájl ott elnémul és
+kiesik az átlagból. Nyitva marad, és a mechanizmus egy eddig nem próbált jelöltet
+nevez meg: **relatív kivonás** (a bin saját magnitúdójának egy része, nem a
+szomszédság átlaga) — önálló kör.
+
+### Mellékesen lezárva: az L269 utolsó szála (L654)
+
+A Kuhn-matcher két megmaradt kézi példánya a `core/music/onset_matching.dart`-ba
+olvadt. Az egyik doc-commentje azt állította, hogy a duplikáció **„per ADR 0359
+D6"** helyes — az ADR viszont kereszt-FEATURE függést tilt, a `core/music/` pedig
+egyik feature sem. Méréssel eldöntve: a `check_architecture.dart` **új
+allowlist-bejegyzés nélkül** zöld, tehát a D6 teljesítve van, nem felülírva. A
+paritást a „riport bájtra azonos" cella adta.
+
+**Commitok:** `6321d952` (matcher), `1ab2d4a0` (lágy padló, nemleges),
+`7f6c5305` (§5 javítása), `a1bf33ae` (Hamming, szállítva).
+
 ## 🟢 E18-R09 — A RITMUS-PILLÉR UI-JA: pengető-inga, nyílsor akkorddal, ÉS EMULÁTOROS ELLENŐRZÉS — branch `claude/e18-r06-verify-followup` (2026-09-11)
 
 **User-kérés:** „az ui készítéshez végezz kutatást, nézd meg a versenytársak hogy
