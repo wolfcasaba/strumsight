@@ -2,7 +2,13 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:fftea/fftea.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+// `package:meta`, not `package:flutter/foundation` — which only re-exports this
+// annotation anyway. With it, the whole chord chain (this file, `dsp_config`,
+// `chord_dictionary`, `chord_matcher`, `viterbi_chord_decoder`) is Flutter-free,
+// as SDD Ch2 §10.1 asks of DSP. The practical payoff: it can be compiled AOT by
+// `dart compile exe` and benchmarked the way it actually ships, instead of only
+// under the test runner's JIT.
+import 'package:meta/meta.dart' show visibleForTesting;
 
 /// Chordino-class chroma (RAG chunk 011): STFT → log-frequency spectrum →
 /// **NNLS approximate note transcription** against a harmonic dictionary →

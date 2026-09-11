@@ -115,10 +115,36 @@ B-mollt 74 %-ra rontja.
 
 ## A változás MÉRT költsége
 
-- **Futásidő:** 147 bin × 19 tap, közvetlen konvolúció. Gazdagép JIT-en
-  21.09 µs/keret a 8.89 helyett (divide-only), illetve 16.67 a 4.89 helyett
-  (átlag-kivonós) — ~2.4×, de a keret-büdzsé (egy `nnlsHop` = 92 880 µs)
-  **0.023 %-a**. **NEM mérve:** az eszközön futó AOT/ARM absztolút érték.
+- **Futásidő:** 147 bin × 19 tap, közvetlen konvolúció. Izolált
+  mikrobenchmarkon (gazdagép JIT) 21.09 µs/keret a 8.89 helyett (divide-only),
+  illetve 16.67 a 4.89 helyett (átlag-kivonós) — ~2.4×, de a keret-büdzsé (egy
+  `nnlsHop` = 92 880 µs) **0.023 %-a**.
+
+  **Utólag AOT-on is megmérve (E18-R13).** A `nnls_chroma.dart` Flutter-mentes
+  lett (`package:meta` a `package:flutter/foundation` helyett — az csak
+  újraexportálja ezt az annotációt), amivel a teljes akkord-lánc
+  `dart compile exe`-vel AOT-ra fordítható és a szállított módon mérhető. A
+  `tool/bench/whitening_bench.dart` a **publikus `process()`-t** méri, egy teljes
+  analízis-keretet — nem teszt-szeamen keresztül a whiteninget, mert egy benchmark
+  nem teszt, és az analizátornak igaza van, amikor a `tool/` `@visibleForTesting`
+  tagot érint:
+
+  ```
+  keret-büdzsé 92 880 µs (egy nnlsHop), 3000 iteráció, AOT, két futás
+  box     k=0.20            1174.32 / 1208.54 µs    1.26 % / 1.30 %
+  hamming k=0.20 (szállított) 1215.04 / 1216.57 µs  1.31 % / 1.31 %
+  ```
+
+  Két dolgot mond. **Egy teljes króma-keret ~1.2 ms AOT-on, a büdzsé ~1.3 %-a** —
+  tehát a valós munka két nagyságrenddel nagyobb, mint a kernel különbsége. És a
+  **kernel választása ezen a felbontáson nem különíthető el**: a szállított és a
+  box közti eltérés (8–40 µs) ugyanabba a sávba esik, mint a box saját
+  futás-közti szórása (34 µs). Ez összhangban van az izolált 12 µs-mal: a kernel
+  költsége a keret saját munkájának zajszintje alatt van.
+
+  **Ami továbbra sem mérve:** az **ARM** absztolút érték. A JIT→AOT ugrás be van
+  zárva (a kettő gyakorlatilag megegyezik), tehát a nyitott kérdés egy
+  architektúra-váltás, nem egy fordítási mód.
 - **Két állítás billent, egyik sem képesség-regresszió.** A „szállított kernel a
   lapos doboz" tautológia volt; most a Hamminget állítja, a NEVESÍTETT
   konstansból, és a doboz uniformitása külön cellában marad mérve. Az ADR 0540
