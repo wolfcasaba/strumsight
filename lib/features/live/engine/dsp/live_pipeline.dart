@@ -76,6 +76,8 @@ class LivePipeline {
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
     double whiteningMeanCoefficient = 0.0,
+    double whiteningSpectralFloor = 0.0,
+    double? whiteningExponent,
   }) {
     return LivePipeline._(
       sampleRate: sampleRate,
@@ -84,6 +86,8 @@ class LivePipeline {
       chordConfRelease: chordConfRelease,
       chordReleaseHoldFrames: chordReleaseHoldFrames,
       whiteningMeanCoefficient: whiteningMeanCoefficient,
+      whiteningSpectralFloor: whiteningSpectralFloor,
+      whiteningExponent: whiteningExponent,
     );
   }
 
@@ -119,6 +123,8 @@ class LivePipeline {
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
     double whiteningMeanCoefficient = 0.0,
+    double whiteningSpectralFloor = 0.0,
+    double? whiteningExponent,
   }) : _crnnActivation = crnnActivation,
        _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
        _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
@@ -130,6 +136,9 @@ class LivePipeline {
          // Injectable so the offline probe can sweep it, the same way the
          // onset detector's thresholds are (r166). Production passes nothing.
          whiteningMeanCoefficient: whiteningMeanCoefficient,
+         whiteningSpectralFloor: whiteningSpectralFloor,
+         whiteningExponent:
+             whiteningExponent ?? NnlsChroma.defaultWhiteningExponent,
        ),
        _strums = StrumAnalyzer(
          sampleRate: sampleRate,
@@ -473,6 +482,20 @@ class LivePipeline {
   /// harness (`test/tools/real_audio_probe_test.dart`).
   @visibleForTesting
   double get debugTonalness => _chroma.lastTonalness;
+
+  /// The share of log-frequency bins the last whitened frame's spectral floor
+  /// RESCUED from the hard zero, and the share it still zeroed (E18-R11).
+  /// Both 0 on the shipped divide-only path. Exposed so the floor sweep can
+  /// tell "the floor is a no-op here" apart from "the floor rewrites the
+  /// spectrum and the decoder is unmoved" — the two look identical from the
+  /// decoded labels alone.
+  @visibleForTesting
+  double get debugWhiteningRescuedFraction =>
+      _chroma.lastWhiteningRescuedFraction;
+
+  @visibleForTesting
+  double get debugWhiteningZeroedFraction =>
+      _chroma.lastWhiteningZeroedFraction;
 
   /// The EMA-smoothed chord-match confidence the musical-presence gate tests.
   @visibleForTesting

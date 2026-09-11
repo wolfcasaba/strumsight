@@ -28,9 +28,10 @@ class NnlsChroma {
     this.tuningEstimation = true,
     this.tuningSmoothing = 0.2,
     this.spectralWhitening = true,
-    this.whiteningExponent = 0.7,
+    this.whiteningExponent = defaultWhiteningExponent,
     this.whiteningHalfSemitones = 3.0,
     this.whiteningMeanCoefficient = 0.0,
+    this.whiteningSpectralFloor = 0.0,
     this.referenceRegisterWindows = true,
   }) : _fft = FFT(window),
        _hann = Float64List(window),
@@ -100,6 +101,11 @@ class NnlsChroma {
   /// outvoted by their own harmonics' register.
   final bool spectralWhitening;
   final double whiteningExponent;
+
+  /// The shipped [whiteningExponent], named so a caller that only wants to
+  /// OVERRIDE it sometimes (the offline sweeps) has one source of truth to fall
+  /// back on instead of re-typing the literal and letting the two drift.
+  static const double defaultWhiteningExponent = 0.7;
 
   /// Half-width of the normalisation neighbourhood, in SEMITONES.
   ///
@@ -180,6 +186,54 @@ class NnlsChroma {
   /// unreadable.
   final double whiteningMeanCoefficient;
 
+  /// The SPECTRAL FLOOR of the rectifier, as a fraction of the bin's own
+  /// magnitude: 0 = today's hard zero, β > 0 keeps `β · s[j]` where the hard
+  /// zero kept nothing.
+  ///
+  /// Why a floor at all. With [whiteningMeanCoefficient] > 0 the whitener
+  /// subtracts a local estimate and then half-wave rectifies — and
+  /// "subtract an estimate, clamp the negatives to zero" is the textbook
+  /// spectral-subtraction rule, whose textbook failure mode is exactly what the
+  /// E18-R10 sweep measured. Berouti, Schwartz & Makhoul (ICASSP 1979,
+  /// *Enhancement of speech corrupted by acoustic noise*) identified the hard
+  /// zero as the cause of "musical noise" and fixed it with a SPECTRAL FLOOR:
+  /// hold the output at a small β instead of dropping it to nothing, with
+  /// 0 < β ≪ 1. Forty-odd years of suppressors carry the same idea in the
+  /// gain domain as a minimum gain `G_min` ("maximum reduction per bin",
+  /// typically −26 dB … −6 dB, i.e. β ≈ 0.05 … 0.5).
+  ///
+  /// The floor here is proportional to the BIN'S OWN magnitude, which is the
+  /// gain-domain form `out = max(d, β · s[j])`, not Berouti's flat
+  /// `β · estimate`. That choice is deliberate and it is the whole point: a
+  /// flat floor gives every sub-mean bin in a neighbourhood the SAME value, so a
+  /// quiet-but-real major third and an empty bin come out identical — fine when
+  /// the consumer is an ear being masked, useless when the consumer is an NNLS
+  /// fit that has to tell the two apart. Scaling by `s[j]` preserves the
+  /// ordering among weak bins, is scale-free (β is a pure ratio, no dependence
+  /// on the frame's peak), is continuous in `s[j]` (a max of two continuous
+  /// functions), is monotone, and can never go negative — which matters because
+  /// the NNLS stage below assumes a non-negative spectrum: a negative `_s[j]`
+  /// would make `Dᵀs` negative and the multiplicative update would flip the
+  /// activation's sign on every iteration.
+  ///
+  /// At β = 0 the arithmetic is bit-for-bit today's: `max(d, 0)` is the hard
+  /// zero. MEASURED: see `docs/research/soft-floor-rectifier-2026-09.md`.
+  final double whiteningSpectralFloor;
+
+  /// Diagnostic (E18-R11): the fraction of log-frequency bins that the last
+  /// frame's [whiteningSpectralFloor] RESCUED — bins the hard zero would have
+  /// discarded and the floor kept. 0 on the shipped path.
+  ///
+  /// It exists so a marginal measurement can be told apart from a no-op: "the
+  /// floor barely does anything" and "the floor changes a third of the spectrum
+  /// and the decoder does not care" are different findings with different
+  /// follow-ups, and without this counter they look the same from outside.
+  double lastWhiteningRescuedFraction = 0;
+
+  /// Diagnostic (E18-R11): the fraction of bins the last frame's rectifier left
+  /// at exactly zero, AFTER any floor. 0 on the shipped path.
+  double lastWhiteningZeroedFraction = 0;
+
   /// [whiteningHalfSemitones] on the log-frequency bin grid — derived once in
   /// the constructor, never per bin: [_whiten] reads it inside a per-bin loop.
   int get whiteningHalfWindow => _whiteningHalfWindow;
@@ -214,6 +268,29 @@ class NnlsChroma {
   double debugBassWeightForMidi(int midi) {
     final n = midi - minMidi;
     return (n < 0 || n >= nNotes) ? 0 : _bassWeight[n];
+  }
+
+  /// The WHITENED log-frequency bin nearest [hz], as a fraction of the frame's
+  /// largest whitened bin — 0 when the rectifier zeroed it (E18-R11 seam).
+  ///
+  /// Test seam for one specific question the decoded label cannot answer: when a
+  /// quiet third still reads as a minor chord, is its bin GONE or merely
+  /// under-weighted? The spectral floor changes which of those is true without
+  /// changing the label, so the two have to be distinguishable from outside.
+  @visibleForTesting
+  double debugWhitenedRelativeAt(double hz) {
+    var best = 0;
+    var bestDistance = double.infinity;
+    var peak = 0.0;
+    for (var j = 0; j < _nBins; j++) {
+      final distance = (_binFreq[j] - hz).abs();
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = j;
+      }
+      if (_s[j] > peak) peak = _s[j];
+    }
+    return peak <= 0 ? 0 : _s[best] / peak;
   }
 
   final int nNotes;
@@ -422,6 +499,8 @@ class NnlsChroma {
       _whitenByLocalContrast(maxS);
       return;
     }
+    lastWhiteningRescuedFraction = 0;
+    lastWhiteningZeroedFraction = 0;
     final prefix = Float64List(_nBins + 1);
     for (var j = 0; j < _nBins; j++) {
       prefix[j + 1] = prefix[j] + _s[j] * _s[j];
@@ -437,7 +516,12 @@ class NnlsChroma {
   }
 
   /// The reference arithmetic: subtract the running mean, divide by the running
-  /// standard deviation raised to [whiteningExponent], and half-wave rectify.
+  /// standard deviation raised to [whiteningExponent], and half-wave rectify —
+  /// the rectifier's floor being [whiteningSpectralFloor] (0 = a hard zero).
+  ///
+  /// Reached only when [whiteningMeanCoefficient] > 0: with nothing subtracted
+  /// there is nothing to rectify, so [whiteningSpectralFloor] is inert on the
+  /// shipped divide-only path by construction, not by a guard.
   ///
   /// Two box passes, both by prefix sum: the first gives each bin's local mean,
   /// the second the local mean of the squared deviations — each bin's deviation
@@ -466,19 +550,31 @@ class NnlsChroma {
       devPrefix[j + 1] = devPrefix[j] + deviation[j];
     }
     final floor = 1e-4 * maxS;
+    var rescued = 0;
+    var zeroed = 0;
     for (var j = 0; j < _nBins; j++) {
       final lo = math.max(0, j - whiteningHalfWindow);
       final hi = math.min(_nBins - 1, j + whiteningHalfWindow);
       final d = _s[j] - whiteningMeanCoefficient * mean[j];
-      if (d <= 0) {
-        // Half-wave rectification: at or below the local mean is nothing.
+      // Half-wave rectification with a SPECTRAL FLOOR (Berouti et al. 1979, in
+      // the gain domain): at or below the local estimate keep β of the bin's own
+      // magnitude rather than nothing. `max` of two continuous, non-negative
+      // functions — so continuous at the threshold and never negative, which the
+      // NNLS stage requires. At β = 0 this is exactly the hard zero.
+      final rectified = whiteningSpectralFloor * _s[j];
+      final effective = d > rectified ? d : rectified;
+      if (d <= 0 && effective > 0) rescued++;
+      if (effective <= 0) {
+        zeroed++;
         _s[j] = 0;
         continue;
       }
       var std = math.sqrt((devPrefix[hi + 1] - devPrefix[lo]) / (hi - lo + 1));
       if (std < floor) std = floor;
-      _s[j] = d / math.pow(std, whiteningExponent);
+      _s[j] = effective / math.pow(std, whiteningExponent);
     }
+    lastWhiteningRescuedFraction = rescued / _nBins;
+    lastWhiteningZeroedFraction = zeroed / _nBins;
   }
 
   /// Sample the STFT magnitude at each log-freq bin centre × [tuningFactor]

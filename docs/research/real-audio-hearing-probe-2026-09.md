@@ -159,6 +159,15 @@ which is exactly what a hard box gets wrong at a peak's edge), and a rectifier
 with a soft floor rather than a hard zero. Both are separate rounds, and both
 need this same three-criteria harness.
 
+**UPDATE (E18-R11).** The soft-floor candidate was built, swept over a 2-D grid and
+**rejected** — see `docs/research/soft-floor-rectifier-2026-09.md`. It also
+corrects the attribution above: the quiet third's bin is *never* zeroed (it sits
+above its local mean, so the rectifier never clamps it), so half-wave
+rectification is not the mechanism behind that cost. The **subtraction** is — it
+takes a larger relative share from a weak peak than from a loud one. That makes
+the Hamming-kernel candidate the better-aimed of the two, because a weighted mean
+changes *what the local mean is*.
+
 ## What this does not establish
 
 No file here has per-chord ground truth, so nothing above is a chord-accuracy

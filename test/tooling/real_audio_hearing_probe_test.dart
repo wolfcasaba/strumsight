@@ -31,65 +31,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/codec/wav_decoder.dart';
 import 'package:strumsight/features/live/engine/dsp/live_pipeline.dart';
 
-/// Chords that belong to a natural minor key, by tonic pitch class.
-///
-/// i, III, iv, v, VI, VII — plus the V that harmonic minor borrows, because
-/// popular music uses it constantly.
-const _pitchNames = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
+import '../support/whitening_sweep.dart';
 
-Set<String> _minorKeyChords(int tonicPc) {
-  String name(int pc) => _pitchNames[pc % 12];
-  // Triads AND their diatonic sevenths. The first version of this set listed
-  // triads only, which scored a decoder that correctly named `Gmaj7` and
-  // `Dmaj7` in B minor as if it had wandered out of the key — the measurement
-  // was wrong, not the engine.
-  return {
-    '${name(tonicPc)}m', '${name(tonicPc)}m7', // i
-    '${name(tonicPc + 2)}dim', // ii°
-    name(tonicPc + 3), '${name(tonicPc + 3)}maj7', // III
-    '${name(tonicPc + 5)}m', '${name(tonicPc + 5)}m7', // iv
-    '${name(tonicPc + 7)}m', '${name(tonicPc + 7)}m7', // v
-    name(tonicPc + 7),
-    '${name(tonicPc + 7)}7', // V, borrowed from harmonic minor
-    name(tonicPc + 8), '${name(tonicPc + 8)}maj7', // VI
-    name(tonicPc + 10), '${name(tonicPc + 10)}7', // VII
-  };
-}
-
-int? _tonicFromName(String fileName) {
-  final lower = fileName.toLowerCase();
-  const roots = {
-    'a-minor': 9,
-    'a#-minor': 10,
-    'b-minor': 11,
-    'c-minor': 0,
-    'c#-minor': 1,
-    'd-minor': 2,
-    'd#-minor': 3,
-    'e-minor': 4,
-    'f-minor': 5,
-    'f#-minor': 6,
-    'g-minor': 7,
-    'g#-minor': 8,
-  };
-  for (final entry in roots.entries) {
-    if (lower.contains(entry.key)) return entry.value;
-  }
-  return null;
-}
+// The in-key sets, the key-name parsing and the pitch names live in
+// `test/support/whitening_sweep.dart`: the whitening sweeps report the same two
+// key percentages, and two copies of "which chords are in B minor" that drifted
+// apart would make the two measurements incomparable. This probe and the sweeps
+// grade identically or not at all.
 
 String _histogram(Map<String, int> counts) {
   if (counts.isEmpty) return '(none)';
@@ -138,16 +86,24 @@ void main() {
 
       // `WHITENING_MEAN_K=<0..1>` re-runs the same probe with a different
       // amount of local mean subtracted, so two settings can be compared line
-      // for line rather than from memory. Unset uses the shipped value.
+      // for line rather than from memory. `WHITENING_FLOOR` and `WHITENING_W`
+      // do the same for the E18-R11 rectifier floor and the exponent. Unset
+      // uses the shipped values.
       final override = double.tryParse(
         Platform.environment['WHITENING_MEAN_K'] ?? '',
       );
-      final pipeline = override == null
-          ? LivePipeline(sampleRate: sampleRate)
-          : LivePipeline(
-              sampleRate: sampleRate,
-              whiteningMeanCoefficient: override,
-            );
+      final floorOverride = double.tryParse(
+        Platform.environment['WHITENING_FLOOR'] ?? '',
+      );
+      final exponentOverride = double.tryParse(
+        Platform.environment['WHITENING_W'] ?? '',
+      );
+      final pipeline = LivePipeline(
+        sampleRate: sampleRate,
+        whiteningMeanCoefficient: override ?? 0.0,
+        whiteningSpectralFloor: floorOverride ?? 0.0,
+        whiteningExponent: exponentOverride,
+      );
       final chordCounts = <String, int>{};
       // The typed verdicts exist so a silence can be EXPLAINED rather than
       // guessed at: "I could not hear you" and "that is not a chord I know" are
@@ -187,7 +143,7 @@ void main() {
           ? null
           : sortedBpm[sortedBpm.length ~/ 2];
       final labelledBpm = _labelledBpm(name);
-      final tonic = _tonicFromName(name);
+      final tonic = tonicFromName(name);
 
       final top =
           (chordCounts.entries.toList()
@@ -230,13 +186,13 @@ void main() {
       }
 
       if (tonic != null) {
-        final inKey = _minorKeyChords(tonic);
+        final inKey = minorKeyChords(tonic);
         final named = chordCounts.entries.fold<int>(0, (a, e) => a + e.value);
         final inKeyFrames = chordCounts.entries
             .where((e) => inKey.contains(e.key))
             .fold<int>(0, (a, e) => a + e.value);
         buffer.writeln(
-          '  KEY ${_pitchNames[tonic]} minor: '
+          '  KEY ${pitchNames[tonic]} minor: '
           '${named == 0 ? 0 : (inKeyFrames * 100 / named).round()}% of named '
           'frames are IN KEY (${inKey.join(", ")})',
         );
