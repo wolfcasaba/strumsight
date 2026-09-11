@@ -32,6 +32,8 @@ import '../../practice_generator/public.dart'
         SkillEstimate,
         SkillEstimateReducer,
         SkillEvidence;
+import '../domain/chord_evidence.dart';
+import '../domain/chord_grading.dart';
 import '../domain/course.dart';
 import '../domain/rhythm_evidence.dart';
 import '../domain/rhythm_grading.dart';
@@ -46,32 +48,48 @@ final class CurriculumProgress {
   final PracticeEvidenceRepository evidenceRepository;
   final SkillEstimateReducer reducer;
 
-  /// Persists what [attempt] says about [mission]'s skills, and returns the
-  /// records actually written — empty when the attempt may claim nothing.
+  /// Persists what one run says about [mission]'s skills, and returns the records
+  /// actually written — empty when nothing may be claimed.
   ///
   /// Returning the records rather than void is what lets a caller tell "saved
   /// nothing because there was not enough evidence" apart from "saved", without
-  /// re-deriving the refusal rules that [rhythmAttemptEvidence] owns.
+  /// re-deriving the refusal rules that [rhythmAttemptEvidence] and
+  /// [chordAttemptEvidence] own.
   ///
   /// Writing the same attempt twice is harmless: the outcome id is derived from
   /// the mission and [at], so a repeat save replaces the identical record
   /// instead of counting the attempt twice. That matters because a Flutter
   /// widget can rebuild for reasons that have nothing to do with the learner.
-  List<SkillEvidence> recordRhythmAttempt({
+  List<SkillEvidence> recordAttempt({
     required CurriculumMission mission,
-    required RhythmAttempt attempt,
+    required RhythmAttempt rhythm,
+    ChordAttempt? chord,
     required DateTime at,
   }) {
-    final evidence = rhythmAttemptEvidence(
-      mission: mission,
-      attempt: attempt,
-      measuredAt: at,
-      // The attempt was graded the instant it ended, so it was measured and
-      // captured at the same time. They are separate fields because an adapter
-      // importing older measurements needs them apart; here they coincide, and
-      // saying so is more honest than back-dating one of them.
-      capturedAt: at,
-    );
+    final evidence = [
+      ...rhythmAttemptEvidence(
+        mission: mission,
+        attempt: rhythm,
+        measuredAt: at,
+        capturedAt: at,
+      ),
+      // ONE run, TWO measurements. They are separate records with separate metric
+      // codes and separate dedup keys, because direction accuracy and chord
+      // accuracy say different things about the player — and a rung's skills are
+      // credited only from the measurement they are actually made of
+      // (`skill_metrics.dart`).
+      if (chord != null)
+        ...chordAttemptEvidence(
+          mission: mission,
+          attempt: chord,
+          measuredAt: at,
+          // The attempt was graded the instant it ended, so it was measured and
+          // captured at the same time. They are separate fields because an
+          // adapter importing older measurements needs them apart; here they
+          // coincide, and saying so is more honest than back-dating one of them.
+          capturedAt: at,
+        ),
+    ];
     for (final record in evidence) {
       // No `sourcePlanId`: this evidence belongs to no generated practice plan,
       // and claiming one would hand `deleteForPlan` a record it does not own.

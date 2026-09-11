@@ -56,6 +56,8 @@ import '../../domain/rhythm_countin.dart';
 import '../../domain/rhythm_grading.dart';
 import '../../domain/rhythm_grid.dart';
 import '../../domain/rhythm_mode.dart';
+import '../../domain/chord_grading.dart';
+import '../../domain/mission_chords.dart';
 import '../curriculum_names.dart';
 import '../providers/curriculum_progress_providers.dart';
 import '../widgets/rhythm_lane.dart';
@@ -148,6 +150,12 @@ final class _RhythmPracticeScreenState
   /// is what a finished attempt's evidence is attributed to.
   late final CurriculumMission _mission;
 
+  /// What the decoder said about the held chord during the attempt, in order.
+  ///
+  /// Kept separately from `_strokes` because it is a different measurement on a
+  /// different unit: strokes are instants, a chord is held across a bar.
+  final List<DetectedChord> _chordDetections = <DetectedChord>[];
+
   /// Whether the attempt that just finished was recorded as evidence, or null
   /// before any attempt has finished.
   ///
@@ -161,18 +169,30 @@ final class _RhythmPracticeScreenState
   void initState() {
     super.initState();
     final course = beginnerCourse();
-    // The no-argument route is a direct entry point, not a teaching decision:
-    // it opens the richest rung (the one with a chord) so the whole surface is
-    // reachable. The real flow always passes the learner's own mission.
+    // The no-argument route is a direct entry point, not a teaching decision: it
+    // opens the RICHEST rung so the whole surface is reachable in one place. Most
+    // chord rungs now carry an exercise too, so "the first one with a chord" no
+    // longer identifies the richest — the one with the most notated strokes does,
+    // and that is the pattern rung (24 strokes against a held chord's 16). Derived
+    // rather than named, so adding a rung cannot leave this pointing at a thinner
+    // one. The real flow always passes the learner's own mission.
+    final playable = [
+      for (final candidate in course.missionsInOrder)
+        if (candidate.rhythm != null) candidate,
+    ];
     final mission =
         widget.mission ??
-        course.missionsInOrder.firstWhere(
-          (candidate) => candidate.rhythm?.mode.scoresChord ?? false,
-          orElse: () => course.missionsInOrder.firstWhere(
-            (candidate) => candidate.rhythm != null,
-            orElse: () => course.missionsInOrder.first,
-          ),
-        );
+        (playable.isEmpty
+            ? course.missionsInOrder.first
+            : playable.reduce((best, candidate) {
+                final bestRichness =
+                    (best.rhythm!.mode.scoresChord ? 1000 : 0) +
+                    best.rhythm!.notatedStrokes;
+                final richness =
+                    (candidate.rhythm!.mode.scoresChord ? 1000 : 0) +
+                    candidate.rhythm!.notatedStrokes;
+                return richness > bestRichness ? candidate : best;
+              }));
     _mission = mission;
     _assignment =
         mission.rhythm ??
@@ -186,11 +206,12 @@ final class _RhythmPracticeScreenState
           bpm: beginnerQuarterBpm,
           bars: beginnerBarsPerAttempt,
         );
-    // A damped rung has no chord to name, so the lane says so instead of
-    // showing a shape the learner is not meant to fret.
-    _chords = _assignment.mode.scoresChord
-        ? const ['Em', 'Am']
-        : const <String>[];
+    // Which chords this rung asks for, derived from what it TRAINS — not a
+    // hardcoded Em/Am pair, which was right only for the pattern rung and would
+    // have asked an E-minor rung's learner to play A minor every other bar.
+    // A damped rung gets an empty cycle, so the lane says so instead of showing a
+    // shape the learner is not meant to fret.
+    _chords = missionChordCycle(mission);
     _countIn = RhythmCountIn.forGrid(_assignment.grid);
     // The pendulum follows the EXERCISE timeline, which is negative during the
     // count-in; `frameAt` wraps a negative position into the loop, so the
@@ -251,8 +272,24 @@ final class _RhythmPracticeScreenState
     if (_calibrator != null) return;
     final counted = ref
         .read(curriculumEstimatesProvider.notifier)
-        .recordRhythmAttempt(mission: _mission, attempt: _gradeAttempt());
+        .recordAttempt(
+          mission: _mission,
+          rhythm: _gradeAttempt(),
+          chord: _gradeChordAttempt(),
+        );
     setState(() => _attemptCounted = counted);
+  }
+
+  /// The chord side of the same run, or null when this rung asks for no chord.
+  ChordAttempt? _gradeChordAttempt() {
+    if (_chords.isEmpty) return null;
+    return gradeChords(
+      cycle: _chords,
+      bars: _attemptBars,
+      bpm: _assignment.bpm,
+      beatsPerBar: _assignment.grid.beatsPerBar,
+      detections: _chordDetections,
+    );
   }
 
   void _toggle() {
@@ -266,6 +303,7 @@ final class _RhythmPracticeScreenState
       _startEngineSec = _engineNowSec;
       _position = Duration.zero;
       _strokes.clear();
+      _chordDetections.clear();
       _finished = false;
       _attemptCounted = null;
       _playing = true;
@@ -285,6 +323,7 @@ final class _RhythmPracticeScreenState
       _startEngineSec = _engineNowSec;
       _position = Duration.zero;
       _strokes.clear();
+      _chordDetections.clear();
       _finished = false;
       _attemptCounted = null;
       _playing = _engineNowSec != null;
@@ -329,6 +368,9 @@ final class _RhythmPracticeScreenState
 
     final start = _startEngineSec;
     if (!_playing || start == null) return;
+
+    _absorbChord(live, start);
+
     if (live.strumSeq <= _lastStrumSeq) return;
     _lastStrumSeq = live.strumSeq;
     final strum = live.latestStrum;
@@ -364,6 +406,39 @@ final class _RhythmPracticeScreenState
         // The pipeline publishes a strum only once its DIRECTION is confirmed,
         // so a stroke reaching here is confirmed evidence by construction.
         isConfirmed: true,
+      ),
+    );
+  }
+
+  /// Records what the decoder says about the held chord, on the exercise timeline.
+  ///
+  /// Sampled every frame rather than at each stroke, because a chord is HELD: the
+  /// decoder needs several frames of a ringing shape before it confirms one, so
+  /// asking "what was confirmed at the instant of this stroke" would measure the
+  /// decoder's latency instead of the learner's fingers.
+  ///
+  /// Placed at the frame's own engine time, and said plainly: unlike a stroke —
+  /// which is placed at the measured true onset `latestStrumTime` — there is no
+  /// measured decision-time to correct back to. A confirmation therefore carries
+  /// the decoder's own lag. Bar-level grading is what makes that acceptable: a bar
+  /// is 3.4 s at this tempo, and `gradeChords` credits a bar on ANY confirmation
+  /// inside it, so a late confirmation still credits the right bar. What it cannot
+  /// tell is whether a change landed ON the bar line, which is why nothing here
+  /// claims that.
+  void _absorbChord(LiveFrame live, double start) {
+    if (_calibrator != null || _chords.isEmpty) return;
+    final decision = live.chordDecision;
+    if (decision == null) return;
+    final atUs =
+        ((live.engineTimeSec - start) * 1e6).round() -
+        _countIn.durationAt(_beatDuration).inMicroseconds;
+    // Before bar 1 is the count-in: the learner is being counted in, not scored.
+    if (atUs < 0) return;
+    _chordDetections.add(
+      DetectedChord(
+        atUs: atUs,
+        label: live.current?.label,
+        isConfirmed: decision == RecognitionDecision.confirmed,
       ),
     );
   }
@@ -684,6 +759,7 @@ final class _RhythmPracticeScreenState
             ).textTheme.labelMedium?.copyWith(color: colors.textSecondary),
           ),
           ..._timingLines(context, l10n, colors, attempt),
+          ..._chordLines(context, l10n, colors),
           // Only once an attempt has actually finished, and only when it was
           // recorded. Silence otherwise: the "too little heard" line above
           // already says why nothing was written, and repeating it as "not
@@ -698,6 +774,45 @@ final class _RhythmPracticeScreenState
         ],
       ),
     );
+  }
+
+  /// What the chord side of the run says, or an honest statement that it says
+  /// nothing yet.
+  ///
+  /// Reported SEPARATELY from the direction lines, never blended into one
+  /// "accuracy": a learner whose shape is clean but whose hand stalls, and one
+  /// whose hand is even but whose fingers are wrong, need opposite advice, and a
+  /// single number would hide which of the two they are.
+  List<Widget> _chordLines(
+    BuildContext context,
+    AppLocalizations l10n,
+    SsColorScheme colors,
+  ) {
+    final attempt = _gradeChordAttempt();
+    if (attempt == null) return const [];
+    final label = Theme.of(
+      context,
+    ).textTheme.labelMedium?.copyWith(color: colors.textSecondary);
+    final accuracy = attempt.accuracy;
+    if (!attempt.isReportable || accuracy == null) {
+      // Rule 4's sibling: what is not measured says so, and it costs the learner
+      // nothing. Not a score of zero, which would read as "your chord was wrong".
+      return [Text(l10n.curriculumChordTooLittle, style: label)];
+    }
+    final heardInstead = attempt.heardInstead;
+    return [
+      Text(
+        l10n.curriculumChordAccuracy((accuracy * 100).round()),
+        style: label,
+      ),
+      // Naming the shape the recogniser actually heard is the actionable half;
+      // "wrong chord" on its own tells the learner nothing to change.
+      if (heardInstead.isNotEmpty)
+        Text(
+          l10n.curriculumChordHeardInstead(heardInstead.first),
+          style: label,
+        ),
+    ];
   }
 
   /// Whether this device has a measured pendulum↔strum offset.

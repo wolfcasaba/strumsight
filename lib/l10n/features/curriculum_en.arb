@@ -191,6 +191,23 @@
       }
     }
   },
+  "curriculumChordAccuracy": "Chord held in {percent}% of the bars",
+  "@curriculumChordAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumChordTooLittle": "I could not hear the chord well enough yet",
+  "curriculumChordHeardInstead": "I heard this instead: {chord}",
+  "@curriculumChordHeardInstead": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
   "curriculumCapabilityMicrophone": "a microphone",
   "curriculumCapabilityCamera": "a camera",
   "curriculumCapabilityDirection": "up/down stroke scoring",

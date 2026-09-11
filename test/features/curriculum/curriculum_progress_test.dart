@@ -90,9 +90,9 @@ void main() {
     DateTime? asOf,
   }) {
     for (var i = 0; i < count; i++) {
-      subject.recordRhythmAttempt(
+      subject.recordAttempt(
         mission: rungOne,
-        attempt: _attempt(rungOne, heard: heard, flipDirection: flipDirection),
+        rhythm: _attempt(rungOne, heard: heard, flipDirection: flipDirection),
         // A day apart, because the reducer buckets evidence by `measuredAt`:
         // identical instants would land in one bucket and read as a conflict
         // rather than as a series. Real attempts are never simultaneous.
@@ -197,9 +197,9 @@ void main() {
         'unknown and the rung stays shut', () {
       final subject = progress();
       for (var i = 0; i < 6; i++) {
-        final written = subject.recordRhythmAttempt(
+        final written = subject.recordAttempt(
           mission: rungOne,
-          attempt: _attempt(rungOne, heard: 1),
+          rhythm: _attempt(rungOne, heard: 1),
           at: _start.add(Duration(days: i)),
         );
         expect(written, isEmpty);
@@ -285,11 +285,7 @@ void main() {
       final subject = progress();
       final attempt = _attempt(rungOne);
       for (var i = 0; i < 3; i++) {
-        subject.recordRhythmAttempt(
-          mission: rungOne,
-          attempt: attempt,
-          at: _start,
-        );
+        subject.recordAttempt(mission: rungOne, rhythm: attempt, at: _start);
       }
       final estimate = subject.estimatesFor(
         course,
@@ -303,6 +299,213 @@ void main() {
             'learner; a rebuild must not earn them a rung',
       );
       expect(estimate.state, SkillEstimateState.initial);
+    });
+  });
+
+  group('MEASURE: can the whole ladder actually be climbed?', () {
+    /// One clean run of [mission]: every notated stroke the right way, and the
+    /// asked chord confirmed in every bar.
+    ({RhythmAttempt rhythm, ChordAttempt? chord}) cleanRun(
+      CurriculumMission mission,
+    ) {
+      final assignment = mission.rhythm!;
+      final cycle = missionChordCycle(mission);
+      final barUs = (60000000 / assignment.bpm * assignment.grid.beatsPerBar)
+          .round();
+      return (
+        rhythm: gradeRhythm(
+          assignment.grid,
+          bpm: assignment.bpm,
+          bars: assignment.bars,
+          strokes: [
+            for (var bar = 0; bar < assignment.bars; bar++)
+              for (final slot in assignment.grid.slots)
+                if (slot.isStruck)
+                  DetectedStroke(
+                    atUs: assignment.grid.onsetUs(
+                      bar: bar,
+                      slotIndex: slot.index,
+                      bpm: assignment.bpm,
+                    ),
+                    direction: slot.direction,
+                    isConfirmed: true,
+                  ),
+          ],
+        ),
+        chord: cycle.isEmpty
+            ? null
+            : gradeChords(
+                cycle: cycle,
+                bars: assignment.bars,
+                bpm: assignment.bpm,
+                beatsPerBar: assignment.grid.beatsPerBar,
+                detections: [
+                  for (var bar = 0; bar < assignment.bars; bar++)
+                    DetectedChord(
+                      atUs: bar * barUs + 1000,
+                      label: cycle[bar % cycle.length],
+                      isConfirmed: true,
+                    ),
+                ],
+              ),
+      );
+    }
+
+    test('a learner who plays every rung cleanly reaches the top', () {
+      // THE measurement this pillar exists for. Until the chord rungs had an
+      // exercise, `mission.dDuUdU` and everything above it could not be earned at
+      // all, however well anyone played — the ladder was a map of a path that
+      // stopped after two steps. This walks it.
+      final subject = progress();
+      final capabilities = curriculumDeviceCapabilities(
+        microphoneListening: true,
+      );
+      var day = 0;
+      var attempts = 0;
+      final opened = <String>[];
+      final stuck = <String>[];
+
+      for (final mission in course.missionsInOrder) {
+        final estimates = subject.estimatesFor(
+          course,
+          asOf: _start.add(Duration(days: day)),
+        );
+        final availability = missionAvailability(
+          mission,
+          estimates: estimates,
+          deviceCapabilities: capabilities,
+        );
+        if (availability != MissionAvailability.available) {
+          stuck.add('${mission.missionId} ($availability)');
+          continue;
+        }
+        opened.add(mission.missionId);
+        if (mission.rhythm == null) continue;
+        // Two clean attempts is what the measured gate needs.
+        for (var i = 0; i < 2; i++) {
+          day++;
+          attempts++;
+          final run = cleanRun(mission);
+          subject.recordAttempt(
+            mission: mission,
+            rhythm: run.rhythm,
+            chord: run.chord,
+            at: _start.add(Duration(days: day)),
+          );
+        }
+      }
+
+      // ignore: avoid_print
+      print(
+        'LADDER WALK: ${opened.length}/${course.missionsInOrder.length} rungs '
+        'opened in $attempts attempts over $day days',
+      );
+      for (final rung in stuck) {
+        // ignore: avoid_print
+        print('  STUCK: $rung');
+      }
+
+      expect(
+        stuck,
+        isEmpty,
+        reason:
+            'a rung nobody can reach however well they play is a promise the '
+            'course cannot keep',
+      );
+      expect(opened, hasLength(course.missionsInOrder.length));
+    });
+
+    test('a chord rung opens the next one, on the CHORD measurement', () {
+      final subject = progress();
+      final eMinor = _mission(course, 'mission.eMinor');
+      final aMinor = _mission(course, 'mission.aMinor');
+
+      // The prerequisite first: eMinor is gated on the right-hand rung.
+      for (var i = 0; i < 2; i++) {
+        final run = cleanRun(rungOne);
+        subject.recordAttempt(
+          mission: rungOne,
+          rhythm: run.rhythm,
+          chord: run.chord,
+          at: _start.add(Duration(days: i)),
+        );
+      }
+      for (var i = 0; i < 2; i++) {
+        final run = cleanRun(eMinor);
+        subject.recordAttempt(
+          mission: eMinor,
+          rhythm: run.rhythm,
+          chord: run.chord,
+          at: _start.add(Duration(days: 2 + i)),
+        );
+      }
+      final estimates = subject.estimatesFor(
+        course,
+        asOf: _start.add(const Duration(days: 4)),
+      );
+      final chordEstimate = estimates['chord.eMinor']!;
+      // ignore: avoid_print
+      print(
+        'chord.eMinor after 2 clean attempts: ${chordEstimate.state.name}, '
+        'level ${chordEstimate.level?.toStringAsFixed(3)}',
+      );
+      expect(aMinor.unlock.isSatisfiedBy(estimates), isTrue);
+
+      // And the direction measurement of the SAME runs did not leak into it: the
+      // chord skill's evidence must carry the chord metric, not the rhythm one.
+      final records = subject.evidenceRepository.allForSkill('chord.eMinor');
+      expect(records, isNotEmpty);
+      for (final record in records) {
+        expect(record.performance!.metricCode, chordShapeAccuracyMetric);
+      }
+    });
+
+    test('holding ONE chord through a change rung does not pass it', () {
+      // The change rung's whole point. A learner who finds Em and never moves has
+      // half the bars right, which is 0.5 — under the course's 0.6 gate.
+      final subject = progress();
+      final emToAm = _mission(course, 'mission.emToAm');
+      final assignment = emToAm.rhythm!;
+      final barUs = (60000000 / assignment.bpm * assignment.grid.beatsPerBar)
+          .round();
+      for (var i = 0; i < 6; i++) {
+        subject.recordAttempt(
+          mission: emToAm,
+          rhythm: cleanRun(emToAm).rhythm,
+          chord: gradeChords(
+            cycle: missionChordCycle(emToAm),
+            bars: assignment.bars,
+            bpm: assignment.bpm,
+            beatsPerBar: assignment.grid.beatsPerBar,
+            detections: [
+              for (var bar = 0; bar < assignment.bars; bar++)
+                DetectedChord(
+                  atUs: bar * barUs + 1000,
+                  label: 'Em',
+                  isConfirmed: true,
+                ),
+            ],
+          ),
+          at: _start.add(Duration(days: i)),
+        );
+      }
+      final estimates = subject.estimatesFor(
+        course,
+        asOf: _start.add(const Duration(days: 6)),
+      );
+      final estimate = estimates['chord.emToAm']!;
+      // ignore: avoid_print
+      print(
+        'Em held through an Em/Am change rung, 6 attempts: '
+        '${estimate.state.name}, level ${estimate.level?.toStringAsFixed(3)}',
+      );
+      expect(
+        _mission(course, 'mission.dDuUdU').unlock.isSatisfiedBy(estimates),
+        isFalse,
+        reason:
+            'crediting a change nobody made would teach the learner that not '
+            'changing is changing',
+      );
     });
   });
 

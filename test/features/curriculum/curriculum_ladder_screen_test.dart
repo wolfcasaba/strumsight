@@ -86,9 +86,9 @@ Override _playedInto({
   final grid = mission.rhythm!.grid;
   final bpm = mission.rhythm!.bpm;
   for (var i = 0; i < attempts; i++) {
-    progress.recordRhythmAttempt(
+    progress.recordAttempt(
       mission: mission,
-      attempt: gradeRhythm(
+      rhythm: gradeRhythm(
         grid,
         bpm: bpm,
         bars: mission.rhythm!.bars,

@@ -1806,6 +1806,22 @@
   "curriculumCapabilityOther": "valami, ami ezen a készüléken nincs",
   "curriculumCapabilityPitch": "hangmagasság-pontozás",
   "curriculumCapabilityTempo": "tempó-felismerés",
+  "curriculumChordAccuracy": "Az akkord a taktusok {percent}%-ában szólt",
+  "@curriculumChordAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumChordHeardInstead": "Helyette ezt hallottam: {chord}",
+  "@curriculumChordHeardInstead": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
   "curriculumChordOther": "{chord} szól",
   "@curriculumChordOther": {
     "placeholders": {
@@ -1816,6 +1832,7 @@
   },
   "curriculumChordRinging": "szól, tisztán",
   "curriculumChordStays": "ugyanaz marad",
+  "curriculumChordTooLittle": "Az akkordot még nem hallottam elég jól",
   "curriculumChordUnclear": "nem tisztázott",
   "curriculumCountInLabel": "Felkészülés",
   "curriculumCountInNumber": "{number}",

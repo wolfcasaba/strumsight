@@ -13,6 +13,16 @@
 /// otherwise. A future chord-scored attempt gets its own metric code and its own
 /// translator rather than borrowing this one's number.
 ///
+/// ## Only the skills this measurement is ABOUT
+///
+/// A rung's exercise produces both a direction measurement and (when it scores a
+/// chord) a chord measurement, from the same run. So this writes records only for
+/// the trained skills [curriculumSkillMetric] classifies as
+/// [CurriculumSkillMetric.strumDirection]; the chord skills of the same rung are
+/// `chord_evidence.dart`'s to write. Without that split, `mission.eMinor` would
+/// have its chord skill credited from a direction accuracy — a number in the right
+/// field measuring the wrong thing, which nothing downstream could detect.
+///
 /// ## The four refusals
 ///
 /// Each returns NO evidence, which is a different thing from evidence of a low
@@ -67,6 +77,7 @@ import '../../practice_generator/public.dart'
         SkillEvidence;
 import 'course.dart';
 import 'rhythm_grading.dart';
+import 'skill_metrics.dart';
 
 /// What the rhythm attempt actually measures, named so it can never be mistaken
 /// for a chord, tone or timing measurement later.
@@ -100,13 +111,9 @@ OutcomeId rhythmAttemptOutcomeId({
 /// Evidence for every skill [mission] trains, or empty when this attempt may
 /// claim nothing.
 ///
-/// One record per trained skill, each carrying the same direction measurement.
-/// That is sound only because a rhythm mission's success criterion IS its
-/// direction accuracy: the attempt measures the mission's own definition of
-/// done, so every skill the mission declares it trains is measured by it. A
-/// mission that wanted two different measurements would need two criteria, and
-/// the course's own invariants already refuse a measured mission that names no
-/// skill.
+/// One record per trained DIRECTION skill. Chord skills of the same rung get
+/// nothing here: they are measured by `gradeChords` on the same run and written by
+/// `chordAttemptEvidence`.
 List<SkillEvidence> rhythmAttemptEvidence({
   required CurriculumMission mission,
   required RhythmAttempt attempt,
@@ -123,7 +130,15 @@ List<SkillEvidence> rhythmAttemptEvidence({
   // Sorted so the records come out in one order whatever order the set iterates
   // in — the reducer is order-independent, but a test that compares lists should
   // not have to be.
-  final skillIds = mission.trainedSkillIds.toList(growable: false)..sort();
+  final skillIds =
+      mission.trainedSkillIds
+          .where(
+            (skillId) =>
+                curriculumSkillMetric(skillId) ==
+                CurriculumSkillMetric.strumDirection,
+          )
+          .toList(growable: false)
+        ..sort();
   return [
     for (final skillId in skillIds)
       SkillEvidence(

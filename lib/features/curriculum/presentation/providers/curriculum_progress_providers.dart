@@ -12,6 +12,7 @@ import '../../../practice_generator/public.dart'
     show SkillEstimate, practiceEvidenceRepositoryProvider;
 import '../../application/curriculum_progress.dart';
 import '../../data/beginner_course.dart';
+import '../../domain/chord_grading.dart';
 import '../../domain/course.dart';
 import '../../domain/rhythm_grading.dart';
 
@@ -53,20 +54,23 @@ class CurriculumEstimates extends Notifier<Map<String, SkillEstimate>> {
         asOf: ref.read(curriculumClockProvider)(),
       );
 
-  /// Records [attempt] and republishes the estimates.
+  /// Records one run — its direction measurement and, when the rung scores a
+  /// chord, its chord measurement — and republishes the estimates.
   ///
   /// Returns whether anything was written. False is not a failure — it is the
   /// app declining to judge on too little evidence — and the caller needs to
   /// know which happened so it can say so rather than imply progress.
-  bool recordRhythmAttempt({
+  bool recordAttempt({
     required CurriculumMission mission,
-    required RhythmAttempt attempt,
+    required RhythmAttempt rhythm,
+    ChordAttempt? chord,
   }) {
     final written = ref
         .read(curriculumProgressProvider)
-        .recordRhythmAttempt(
+        .recordAttempt(
           mission: mission,
-          attempt: attempt,
+          rhythm: rhythm,
+          chord: chord,
           at: ref.read(curriculumClockProvider)(),
         );
     // Re-read even when nothing was written: a recompute is cheap, and a

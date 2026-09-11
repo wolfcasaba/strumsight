@@ -1834,6 +1834,22 @@
   "curriculumCapabilityOther": "something this device does not have",
   "curriculumCapabilityPitch": "pitch scoring",
   "curriculumCapabilityTempo": "tempo detection",
+  "curriculumChordAccuracy": "Chord held in {percent}% of the bars",
+  "@curriculumChordAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumChordHeardInstead": "I heard this instead: {chord}",
+  "@curriculumChordHeardInstead": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
   "curriculumChordOther": "{chord} is sounding",
   "@curriculumChordOther": {
     "placeholders": {
@@ -1844,6 +1860,7 @@
   },
   "curriculumChordRinging": "ringing clearly",
   "curriculumChordStays": "stays the same",
+  "curriculumChordTooLittle": "I could not hear the chord well enough yet",
   "curriculumChordUnclear": "not confirmed",
   "curriculumCountInLabel": "Get ready",
   "curriculumCountInNumber": "{number}",

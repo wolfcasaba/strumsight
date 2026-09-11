@@ -60,8 +60,15 @@ RhythmAttempt _attempt({
 CurriculumMission _rhythmMission() => beginnerCourse().missionsInOrder
     .firstWhere((m) => m.missionId == 'mission.downQuarters');
 
-/// A shipped rung that measures a chord and carries no rhythm assignment.
-CurriculumMission _chordMission() => beginnerCourse().missionsInOrder
+/// A shipped rung that carries no rhythm assignment at all. The song rung: a song
+/// played through is not a grid exercise and this app does not measure it yet.
+CurriculumMission _unplayableMission() => beginnerCourse().missionsInOrder
+    .firstWhere((m) => m.missionId == 'mission.twoChordSong');
+
+/// A shipped CHORD rung. It does carry an exercise now, so a rhythm attempt over
+/// it is real — but its trained skill is a chord, which this translator must not
+/// credit from a direction measurement.
+CurriculumMission _chordSkillMission() => beginnerCourse().missionsInOrder
     .firstWhere((m) => m.missionId == 'mission.eMinor');
 
 final DateTime _at = DateTime.utc(2026, 9, 12, 10);
@@ -147,7 +154,7 @@ void main() {
 
     test('a mission with no rhythm assignment writes nothing, however good the '
         'attempt', () {
-      final mission = _chordMission();
+      final mission = _unplayableMission();
       expect(mission.rhythm, isNull);
       expect(
         _evidence(mission, _attempt(played: 4)),
@@ -155,6 +162,22 @@ void main() {
         reason:
             'nothing here was graded by gradeRhythm, so crediting a chord skill '
             'with a direction measurement would be a claim with no evidence',
+      );
+    });
+  });
+
+  group('a CHORD skill is never credited from a direction measurement', () {
+    test('a chord rung writes no direction evidence, however well it was '
+        'strummed', () {
+      final mission = _chordSkillMission();
+      expect(mission.rhythm, isNotNull, reason: 'the rung is playable now');
+      expect(
+        _evidence(mission, _attempt(played: 4)),
+        isEmpty,
+        reason:
+            'direction accuracy says nothing about whether the fingers were on '
+            'the right frets; a number in the right field measuring the wrong '
+            'thing is worse than none, because nothing downstream can tell',
       );
     });
   });

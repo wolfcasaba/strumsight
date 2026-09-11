@@ -108,7 +108,12 @@ void main() {
       // Withholding real music until the whole chord set is learned is a
       // documented attrition risk. The song must come right after the first
       // change, and well before the last chord.
-      final song = _rungOf(course, BeginnerSkills.twoChordSong);
+      // By mission id, not by trained skill: the song rung trains no skill, because
+      // nothing here measures a song performance and a skill with no measurement
+      // would be a claim with nothing behind it.
+      final song = course.missionsInOrder.toList().indexWhere(
+        (mission) => mission.missionId == 'mission.twoChordSong',
+      );
       final firstChange = _rungOf(course, BeginnerSkills.changeEmToAm);
       final lastChord = _rungOf(course, BeginnerSkills.chordCMajor);
       expect(song, greaterThan(firstChange));
@@ -163,16 +168,41 @@ void main() {
       expect(setup.trainedSkillIds, isEmpty);
     });
 
-    test('every other mission is measured and names what it measures', () {
-      for (final mission in course.missionsInOrder.skip(1)) {
-        expect(
-          mission.isOutcomeMeasured,
-          isTrue,
-          reason: '${mission.missionId} should be measured',
-        );
-        expect(mission.trainedSkillIds, isNotEmpty);
-        expect(mission.successCriteria.minimumAccuracy, isNotNull);
+    test('a measured mission names what it measures; an unmeasured one claims '
+        'nothing', () {
+      // TWO honest shapes, and nothing in between. A measured rung carries a
+      // skill and a threshold; an unmeasured one carries neither. The shape that
+      // would be dishonest is a threshold with nothing able to produce it, which
+      // is what `mission.twoChordSong` used to be.
+      final unmeasured = <String>[];
+      for (final mission in course.missionsInOrder) {
+        if (mission.isOutcomeMeasured) {
+          expect(
+            mission.trainedSkillIds,
+            isNotEmpty,
+            reason: '${mission.missionId} measures progress in WHAT?',
+          );
+          expect(
+            mission.successCriteria.minimumAccuracy,
+            isNotNull,
+            reason: '${mission.missionId} is measured against no threshold',
+          );
+        } else {
+          expect(
+            mission.trainedSkillIds,
+            isEmpty,
+            reason:
+                '${mission.missionId} names a skill it does not measure, which '
+                'is a claim with nothing behind it',
+          );
+          expect(mission.successCriteria.minimumAccuracy, isNull);
+          unmeasured.add(mission.missionId);
+        }
       }
+      // Pinned, so a rung quietly losing its measurement has to be a deliberate
+      // act: the setup rung (nothing to measure) and the song rung (no
+      // song-performance measurement exists in this app).
+      expect(unmeasured, ['mission.tuneAndSit', 'mission.twoChordSong']);
     });
 
     test('every mission works offline', () {

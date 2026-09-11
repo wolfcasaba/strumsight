@@ -1,5 +1,77 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R15 — AZ AKKORD-PILLÉR: a létra végigjárható, 14/14 rung — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd" (teljes delegálás).
+
+Az R14 végén két rungot lehetett kiérdemelni. Minden akkord-rungnak **nem volt
+gyakorlata** — ott álltak a létrán, és bármilyen jól játszott bárki, soha nem
+nyíltak meg, tehát a `mission.dDuUdU` és minden fölötte lévő rung elérhetetlen
+volt. Ez a kör ezt zárja le.
+
+### Először a mérés, aztán a döntés
+
+Nem tettem pontozottá egyetlen akkord-rungot sem, amíg nem ellenőriztem, **mit hall
+a motor** — volt egy mért defektünk (G → Bm, D soha nem konfirmál). Újrafuttattam:
+
+```
+Em -> Em (34/43)  Am -> Am (36/43)  D -> D (34/43)  G -> G (30/43)  C -> C (34/43)
+MEASURED: 7 of 7 named correctly   |   down/up ugyanazt adja
+```
+
+A defekt megszűnt. A hét természetes dúr valódi gitáron is 7/7. **Kimondva: az Em és
+Am valódi-gitár megerősítése hiányzik** (nincs címkézett felvétel a gépen), tehát a
+két első akkordra a bizonyíték modellezett audio.
+
+### A kör fő mérése
+
+```
+LADDER WALK: 14/14 rungs opened in 24 attempts over 24 days
+chord.eMinor after 2 clean attempts: emerging, level 0.750
+Em held through an Em/Am change rung, 6 attempts: stable, level 0.500
+```
+
+**A létra végigjárható** — ez volt hamis a kör előtt. Egy akkord-rung ugyanazzal a
+két tiszta körrel nyit, mint egy ritmus-rung. És aki Em-et tart végig egy Em/Am
+váltás-rungon, 0.500-on marad: a kapu 0.6, tehát **a váltást meg nem tevő tanuló nem
+megy át**. Ez attól működik, hogy a taktus-ablak NINCS toleranciával kiszélesítve.
+
+### A központi döntés: egy készség csak abból kap kreditet, AMIBŐL VAN
+
+Egy futás két mérést termel — irányt és akkordot. A kézenfekvő bekötés mindkettőt
+beírja a rung minden készségéhez, és akkor a `mission.eMinor` akkord-készsége egy
+**irány-pontosságból** kapna kreditet, ami semmit nem mond az ujjak helyéről. Egy jó
+mezőben lévő, rossz dolgot mérő szám **rosszabb a semminél**, mert utána semmi nem
+tudja megállapítani. A `skill_metrics.dart` osztályoz, a két fordító csak a maga
+készségeit írja, saját metrikakóddal és saját dedup-kulccsal.
+
+### Egy guard valódi inkoherenciát talált a szállított kurzusban
+
+A `mission.twoChordSong` `accuracyThreshold`-ot deklarált 0.6-os céllal, miközben
+ebben az appban **nincs dal-előadás mérés**: a rung azt mondta, „erre pontozni
+fogok", majd semmit nem pontozott. Az új `skill_metrics_test.dart` találta meg. A
+kurzus saját 7. szabálya szerint javítottam — teljesítés-rung lett: nem tanít
+készséget, nem állít mérést, mikrofont sem kér. A helyét megtartja, mert a célja soha
+nem a pontszám volt. A `songPerformance.twoChord` azonosító megszűnt: amit semmi nem
+tanít és semmi nem mér, az állítás semmi mögött.
+
+**Gate:** zöld — `curriculum` (271 cella), `practice_generator`, `live`,
+`practice_hub`, `app/routing` + architecture / secrets / l10n. Új: `chord_grading`
+(15), `chord_evidence` (8), `skill_metrics` (9), `mission_chords` (7), +3 mérő cella
+a progress-tesztben; 3 l10n-kulcs × 2 nyelv.
+
+**Dokumentáció:** [ADR 0544](docs/adr/0544-the-chord-pillar-and-the-metric-a-skill-is-made-of.md).
+
+### Ami nyitva marad
+
+- **Em/Am valódi gitáron** — a két első akkordra csak modellezett audio van. Ehhez
+  címkézett felvétel kell, amit nem commitolunk; a próba környezeti változóval
+  indul.
+- **A váltás IDŐZÍTÉSE** — hogy a váltás a taktusvonalra esett-e, nincs mérve, és
+  semmi nem állítja. Önálló kör, saját metrikakóddal.
+- Készülék-ellenőrzés (ARM per-frame költség), `sus4`/`aug` túljelentés: továbbra is
+  környezet-, illetve adathiány miatt blokkolt.
+
 ## 🟢 E18-R14 — A LÉTRA MOST OLVASHATÓ: nevek a perzisztencia-kódok helyén — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „folytasd" (teljes delegálás).

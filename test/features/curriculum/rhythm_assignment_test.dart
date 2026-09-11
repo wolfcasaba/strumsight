@@ -278,15 +278,43 @@ void main() {
   group('the shipped course', () {
     final course = beginnerCourse();
 
-    test('exactly the three right-hand rungs carry an exercise', () {
+    test('every rung the app can measure carries an exercise, and the ones it '
+        'cannot do not', () {
       final withRhythm = [
         for (final mission in course.missionsInOrder)
           if (mission.rhythm != null) mission.missionId,
       ];
+      // The three right-hand rungs plus every chord and change rung. An exercise
+      // is what makes a rung PLAYABLE, and therefore measurable: without one the
+      // rung sat on the ladder and could never be earned, which left every rung
+      // gated behind it permanently out of reach.
       expect(withRhythm, [
         'mission.downQuarters',
+        'mission.eMinor',
+        'mission.aMinor',
+        'mission.emToAm',
         'mission.downUpEighths',
         'mission.dDuUdU',
+        'mission.dMajor',
+        'mission.amToD',
+        'mission.gMajor',
+        'mission.dToG',
+        'mission.cMajor',
+        'mission.gToC',
+      ]);
+
+      // The two that deliberately carry none, each for its own stated reason.
+      final withoutRhythm = [
+        for (final mission in course.missionsInOrder)
+          if (mission.rhythm == null) mission.missionId,
+      ];
+      expect(withoutRhythm, [
+        // Measured by nothing and says so.
+        'mission.tuneAndSit',
+        // A song played through is not a grid exercise, and this app does not
+        // measure it yet — so it stays unplayable here rather than being
+        // scored as something else.
+        'mission.twoChordSong',
       ]);
     });
 

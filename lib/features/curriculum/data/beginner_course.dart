@@ -83,7 +83,10 @@ abstract final class BeginnerSkills {
   static const changeAmToD = 'chord.amToD';
   static const changeDToG = 'chord.dToG';
   static const changeGToC = 'chord.gToC';
-  static const twoChordSong = 'songPerformance.twoChord';
+  // No `twoChordSong` skill: the song rung is a completion rung, because this app
+  // has no song-performance measurement. A skill id nothing trains and nothing
+  // measures is a claim with nothing behind it; it returns when the measurement
+  // does.
 }
 
 const _micDirection = <ExerciseCapability>{
@@ -92,11 +95,11 @@ const _micDirection = <ExerciseCapability>{
   ExerciseCapability.supportsOffline,
 };
 
-const _micChord = <ExerciseCapability>{
-  ExerciseCapability.requiresMicrophone,
-  ExerciseCapability.supportsChordScoring,
-  ExerciseCapability.supportsOffline,
-};
+// There is deliberately no chord-ONLY capability set any more. Every chord rung
+// runs over a strum grid, because the app can only hear a chord that is being
+// played and something has to say when to play it — so every one of them genuinely
+// needs direction scoring as well, and claiming less would be claiming the
+// exercise does not strum.
 
 const _micChordDirection = <ExerciseCapability>{
   ExerciseCapability.requiresMicrophone,
@@ -151,6 +154,27 @@ RhythmAssignment _dDuUdUExercise() => RhythmAssignment(
     struck: const [true, false, true, true, false, true, true, true],
   ),
   bpm: beginnerEighthBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+/// Down-strokes on every beat over a held shape — the chord rungs' exercise.
+///
+/// Why a grid at all for a rung whose skill is the SHAPE: the app can only hear a
+/// chord that is being played, so something has to say when to play it. The
+/// simplest thing that does is the exercise the learner already passed at rung 2,
+/// which means a chord rung adds exactly one new thing to get wrong (the course's
+/// own ordering principle). It also makes the rung playable and therefore
+/// measurable — without an exercise these rungs existed on the ladder and could
+/// never be earned, which left every rung above them permanently out of reach.
+///
+/// `withChord` and NOT muted: a damped string has no chord to name.
+RhythmAssignment _heldChordExercise() => RhythmAssignment(
+  mode: RhythmMode.withChord,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.quarter,
+    struck: const [true, true, true, true],
+  ),
+  bpm: beginnerQuarterBpm,
   bars: beginnerBarsPerAttempt,
 );
 
@@ -253,7 +277,8 @@ Course beginnerCourse() => Course(
               description:
                   'play E minor, one strum at a time, every string '
                   'ringing',
-              capabilities: _micChord,
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
           ],
         ),
@@ -270,7 +295,8 @@ Course beginnerCourse() => Course(
               trains: const {BeginnerSkills.chordAMinor},
               unlock: _after(const {BeginnerSkills.chordEMinor}),
               description: 'play A minor cleanly',
-              capabilities: _micChord,
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
             _scored(
               id: 'mission.emToAm',
@@ -281,6 +307,7 @@ Course beginnerCourse() => Course(
                   'change between E minor and A minor WITHOUT stopping '
                   'the strumming hand',
               capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
           ],
         ),
@@ -291,14 +318,35 @@ Course beginnerCourse() => Course(
           id: 'level.firstSong',
           goal: PracticeGoalType.songPerformance,
           missions: [
-            _scored(
-              id: 'mission.twoChordSong',
-              goal: PracticeGoalType.songPerformance,
-              trains: const {BeginnerSkills.twoChordSong},
+            // A COMPLETION rung, and deliberately not a scored one.
+            //
+            // It used to declare `accuracyThreshold` with a 0.6 target, which was
+            // a claim nothing could honour: this app has no song-performance
+            // measurement, so the rung said "I will score you on this" and then
+            // scored nothing. `skill_metrics_test.dart` is what found it — a
+            // measured rung whose own exercise cannot produce the measurement its
+            // skill is made of.
+            //
+            // The course's own rule 7 prescribes the fix rather than the
+            // alternative of inventing a score: a rung with nothing to measure is
+            // HONEST about that. So it trains no skill, claims no measurement, and
+            // needs no microphone — nothing is being listened to. It keeps its
+            // place in the ladder because its purpose was never the score: real
+            // music as soon as two chords exist is a documented attrition remedy,
+            // and it works whether or not a machine grades it.
+            CurriculumMission(
+              missionId: 'mission.twoChordSong',
+              goalType: PracticeGoalType.songPerformance,
+              trainedSkillIds: const {},
               unlock: _after(const {BeginnerSkills.changeEmToAm}),
-              description: 'play a two-chord song all the way through',
-              capabilities: _micChordDirection,
-              minimumAccuracy: 0.6,
+              successCriteria: SuccessCriteria(
+                kind: SuccessCriterionKind.completion,
+                description: 'play a two-chord song all the way through',
+                requiredCapabilities: const [
+                  ExerciseCapability.supportsOffline,
+                ],
+              ),
+              isOutcomeMeasured: false,
             ),
           ],
         ),
@@ -357,7 +405,8 @@ Course beginnerCourse() => Course(
               trains: const {BeginnerSkills.chordDMajor},
               unlock: _after(const {BeginnerSkills.changeEmToAm}),
               description: 'play D major with the top three strings clean',
-              capabilities: _micChord,
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
             _scored(
               id: 'mission.amToD',
@@ -366,6 +415,7 @@ Course beginnerCourse() => Course(
               unlock: _after(const {BeginnerSkills.chordDMajor}),
               description: 'change A minor to D without stopping the strum',
               capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
           ],
         ),
@@ -379,7 +429,8 @@ Course beginnerCourse() => Course(
               trains: const {BeginnerSkills.chordGMajor},
               unlock: _after(const {BeginnerSkills.chordDMajor}),
               description: 'play G major, reaching without squeezing',
-              capabilities: _micChord,
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
             _scored(
               id: 'mission.dToG',
@@ -388,6 +439,7 @@ Course beginnerCourse() => Course(
               unlock: _after(const {BeginnerSkills.chordGMajor}),
               description: 'change D to G without stopping the strum',
               capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
           ],
         ),
@@ -401,7 +453,8 @@ Course beginnerCourse() => Course(
               trains: const {BeginnerSkills.chordCMajor},
               unlock: _after(const {BeginnerSkills.chordGMajor}),
               description: 'play C major across three frets',
-              capabilities: _micChord,
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
             _scored(
               id: 'mission.gToC',
@@ -410,6 +463,7 @@ Course beginnerCourse() => Course(
               unlock: _after(const {BeginnerSkills.chordCMajor}),
               description: 'change G to C without stopping the strum',
               capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
             ),
           ],
         ),

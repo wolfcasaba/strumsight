@@ -191,6 +191,23 @@
       }
     }
   },
+  "curriculumChordAccuracy": "Az akkord a taktusok {percent}%-ában szólt",
+  "@curriculumChordAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumChordTooLittle": "Az akkordot még nem hallottam elég jól",
+  "curriculumChordHeardInstead": "Helyette ezt hallottam: {chord}",
+  "@curriculumChordHeardInstead": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
   "curriculumCapabilityMicrophone": "mikrofon",
   "curriculumCapabilityCamera": "kamera",
   "curriculumCapabilityDirection": "le/fel ütés pontozása",
