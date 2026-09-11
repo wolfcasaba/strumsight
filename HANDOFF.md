@@ -1,5 +1,110 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R08 — JÁTÉKOS OKTATÁSI PROGRAM (Yousician-szerű) + A LE/FEL RITMUS-PILLÉR, amit a Yousician nem tud — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „nézd meg a yosician appot, szeretnék hasonló játékos oktatási
+programot" + „csak fel le ütés is legyen a ritmusérzékeltetéshez, a yosicianon
+ilyen nincs" + „csináld meg úgy, hogy a tanulmányokat és minden tényezőt
+figyelembe véve a legjobb megoldásokat választva a legjobb élményt és tudást
+érjük el — ehhez nem kell az én döntésem".
+
+**Terv:**
+[`docs/superpowers/specs/2026-09-11-gamified-curriculum-design.md`](docs/superpowers/specs/2026-09-11-gamified-curriculum-design.md)
+(§1–3 leszállítva, §4–5 review-ra vár).
+**Kutatás:**
+[`docs/research/strumming-direction-pedagogy-2026-09.md`](docs/research/strumming-direction-pedagogy-2026-09.md).
+
+Új feature: `lib/features/curriculum/` — GOAL SEQUENCER a meglévő tervező felett.
+Nem épít gyakorlat-tartalmat: missziót ad át a `practice_generator`-nak, és az
+választ gyakorlatot a tanuló bizonyítékaiból. **107 cella**, analyze /
+architecture / l10n tiszta, allowlist változatlanul 12.
+
+### Amit a kutatás és a mérés ELDÖNTÖTT (nem a véleményem)
+
+**A tananyag-sorrendet a kutatás KÉTSZER írta át.** Egy független kereszt-
+ellenőrzés három állításomat cáfolta: (1) az Em-első NEM konszenzus (a
+JustinGuitar D-A-E-vel indul, a Musicademy G/Em7/Cadd9-cel) — most választásként
+van kimondva, az okaival, nem tényként; (2) a „ne állj meg a pengető kézzel" nem
+késői mérföldkő, három forrás az ELSŐ váltástól alkalmazza → a 4. fokra került;
+(3) a játszható dal nem a 10. fokon, hanem az 5-en — a visszatartása dokumentált
+lemorzsolódási kockázat.
+
+**Mit NEM pontozunk, mérés alapján.** A C/G késleltetését oldó egyszerűsített
+fogások egyike sem pontozható tisztességesen: a **G6 nincs a felismerő
+szótárában** (a kétujjas fogás `G`-ként olvas), a **Cmaj7 pedig 32 keretből
+24-ben a jelenlét-kapu alatt ült**, a sima C 3-ával szemben. Ezért a tananyag
+csak sima hármashangzatot pontoz; egyszerűsített fogás mutatható tippként, de
+célként soha — aki jól játszik, annak nem kaphat nulla elismerést.
+
+### A le/fel ritmus-pillér — és az ellenpélda, ami megváltoztatta a modellt
+
+A rács **nem engedi** az irányt szerzőileg megadni: `RhythmGrid.pendulum`
+booleanokat kap, a szerző azt mondja meg, MEGSZÓLAL-e egy slot, a rács azt, hogy
+MERRE. A nyolcad-rácson az ütésen le, az „és"-en fel; a kéz nem áll meg, ezért a
+minta lyuka nem kieső ütés, hanem **ghost** (a kéz megy, csak nem ér a húrhoz) —
+és a ghost slot sosincs pontozva.
+
+**A rendes, tiszta megoldás HIBÁS LETT VOLNA.** Ha az inga-szabályt kemény
+invariánsként kódolom, az app **hibásnak mondta volna a saját, helyesen tanított
+`waltz-time` leckéjét**: a 3/4 waltz basszust le az EGYEN, akkordokat FEL a
+kettőn-hármon játszik („oom-pah-pah", „down-up-up"), és ez dokumentáltan így
+tanított. Átvizsgáltam mind a 18 szállított minta-ritmust: ez az egyetlen
+kivétel, és jogos. Ezért két konstruktor van (`pendulum` / `authored`) és egy
+`followsPendulum` jelzés — a kezdő fokok megkövetelhetik a származtatottat a
+többi zene betiltása nélkül. A reggae és a funk ellenpélda-jelöltként ellenőrizve
+**nem** kivétel: ők az ütéseket ghostolják, nem megfordítják.
+
+### A pontozás három döntése, mindegyik egy tisztességi elágazás
+
+1. **A párosítás csak IDŐT használ, soha nem irányt.** Ha a párosító
+   előnyben részesíthetné az irányban egyező párokat, a fel-le sorrendben
+   eljátszott le-fel minta két helyes ütéssé címkéződne át. Az hízelgés, nem
+   tanítás. (Ugyanaz a sorrend, mint a motor saját mért `directionF1`-jében.)
+2. **A megerősített bizonyíték párosul ELŐBB.** §2 1–2. szabály: a nem
+   megerősített észlelés semmit nem érdemel és semmilyen negatív állítást nem
+   támaszt alá, tehát nem szoríthat ki egy megerősítettet — egy fizikai ütés
+   mindkettőként felszínre kerülhet, és a puszta „legközelebbi" elvetné a
+   kiérdemelt elismerést.
+3. **A kihagyott slot nem von le semmit — de egy kísérlet nem nézhet ki
+   hibátlannak.** A §3 nyitott kérdése lezárva, és a lezárás felszínre hozott egy
+   rést az eredeti szövegben: ha a kihagyás nem érinti az arányt, akkor 16-ból 2
+   tiszta ütés **hibátlannak olvas**. Ezért két szám van — `directionAccuracy`
+   („amit HALLOTTAM, abból mennyi volt jó", nulla bizonyítéknál `null`, nem
+   `0.0`) és `coverage` („mennyit hallottam egyáltalán"). A `coverage` alatt a
+   kísérlet **semmit nem állít**: ez nem bukás (§2 6. szabály), hanem az app nem
+   ítél túl kevés bizonyítékon, és ezt a szintmérő jelzi, nem felirat (§2 4.).
+
+**Kimondva, mi mért és mi nem:** az 50 ms-os onset-ablak a **MÉRT**
+(`onsetTolerance50Ms` a release-kapuban, `toleranceUs: 50000` a valós-audio
+hámban) — azért ez, hogy az appnak EGY „időben van" fogalma legyen. A
+`minimumRhythmCoverage = 0.5` ezzel szemben **policy**, a többségi szabály, és a
+doc-komment ezt ki is mondja, pont azért, mert a mellette álló konstans nem az.
+
+### L269: nem negyedik másolat, hanem a közös otthon
+
+A ritmus-pontozáshoz időablakos one-to-one párosítás kell. `docs/LESSONS.md`
+**L269** mérte, hogy a mohó „legközelebbi szabad pár" ALULSZÁMOLJA a találatokat,
+és szó szerint azt írja elő, hogy „minden ilyen metric UGYANAZT a
+maximum-cardinality segédet használja — a közös matcher a szerződés része".
+Ez elcsúszott: **három másolat** él a fában. Itt a tét nem metrikai finomság:
+az alulszámolás azt mondaná a tanulónak, hogy kihagyott egy ütést, amit
+eljátszott. Ezért a segéd a `core/music/onset_matching.dart`-ba került (keretrendszer-
+független), és a legjobban tesztelt használó átállt rá — a viselkedés-azonosságot
+nem én állítom: a `recognition_metrics_test.dart` 37 cellája (köztük L269 saját
+ellenpéldája és 36 kézzel ellenőrzött literál metrika) végig zöld.
+
+**NYITOTT, kimondva:** a másik két másolat
+(`audio_analysis/.../evaluation_runner.dart`, `recognition_annotation.dart`)
+bent maradt. Mindkettő mért értékelési úton van; a behúzásuk önálló,
+átnézhető szelet, nem egy tananyag-kör mellékhatása.
+
+**Mércék:** `tools/round-gate.sh` zöld minden szeletre (format, analyze,
+`test/core/music`, `test/features/curriculum` 107, `test/features/live/evaluation`,
+architecture, secrets, l10n).
+
+**Szándékosan elhalasztva:** UI, l10n és route-ok. Együtt nyílnak, hogy a
+képernyő- és a `check_l10n_parity` kapu egyszerre, készen érjen.
+
 ## 🟢 E18-R07 — A REFERENCIA-MOTOR PONTOS BEÁLLÍTÁSAI: mélység-súlyozott basszus-króma (ADR 0541) + a piros kapu javítva — branch `claude/e18-r06-verify-followup` (2026-09-11)
 
 **User-kérés:** „nézz utána a gitár motor pontos beállításának, javítsd a piros

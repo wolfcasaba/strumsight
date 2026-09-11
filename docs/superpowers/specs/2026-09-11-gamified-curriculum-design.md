@@ -1,6 +1,6 @@
 # Gamified guitar curriculum — design
 
-**Date:** 2026-09-11 · **Status:** approved sections 1–2, sections 3–5 awaiting
+**Date:** 2026-09-11 · **Status:** sections 1–3 implemented, sections 4–5 awaiting
 review · **Requested by:** the user ("szeretnék hasonló játékos oktatási
 programot" — a Yousician-like playful teaching programme, plus "csak fel le ütés
 is legyen a ritmusérzékeltetéshez, a Yousicianon ilyen nincs")
@@ -150,44 +150,120 @@ gate but a **"practice without scoring"** mode: they can play, measurement is
 off, and they know it. A silent microphone then never traps anyone, and no false
 claim is made.
 
-## 3. The rhythm pillar — down/up (NEEDS REVIEW)
+## 3. The rhythm pillar — down/up (IMPLEMENTED)
 
 This is the part Yousician does not have, and the repo's own research note
 already calls it the moat: *"No competitor detects strum DIRECTION (↓/↑) — that
-stays our moat"* (`docs/rag/chunks/012`). All four modes the user chose form a
-pedagogical order of their own, from easiest to measure and easiest to play,
-toward the real thing:
+stays our moat"* (`docs/rag/chunks/012`). It also carries this app's most
+asymmetric risk. A chord recogniser that errs says "I did not hear C"; a
+direction grader that errs tells someone who played correctly that they strummed
+the wrong way — and a beginner will believe it.
 
-1. **Muted strings, no chord.** The left hand damps; only the right hand works.
-   Strongest isolation and easiest recognition — there is no chord to get right,
-   so a direction error cannot be confused with a fingering error.
-2. **Silent grid + metronome.** The arrow row (`↓ ↑ ↓ ↑`) scrolls, the
-   metronome ticks, the learner plays. The recogniser marks which strokes
-   landed. Works with or without a chord.
-3. **With a chord.** The target state: hold a shape and play the pattern.
-   Harder, and the first mode where chord and direction are scored together.
-4. **Listen and repeat.** The app plays a pattern, the learner plays it back.
-   Trains the ear, not only reading.
+Shipped as `domain/rhythm_grid.dart`, `domain/rhythm_grading.dart` and
+`domain/rhythm_mode.dart`. Research: `docs/research/strumming-direction-pedagogy-2026-09.md`.
 
-**Notation.** `↓` downstroke, `↑` upstroke, `x` muted/dampened stroke, `>`
-accent — the existing `Strum` model already carries `accent` and `muted`, so the
-notation is not new vocabulary.
+### 3.1 Direction is DERIVED, not authored — and where that stops
 
-**What counts as "on time".** A stroke is credited to a grid slot when its onset
-falls inside a tolerance window around the slot. The window must be a named,
-documented constant with a measured basis, NOT a guess — the existing
-recognition evaluation already uses a 50 ms onset tolerance
-(`matchOnsetsUs(..., toleranceUs: 50000)` in
-`tool/benchmarks/real_audio_dsp_baseline.dart`), and the release gate names
-`onsetTolerance50Ms`. Reusing that constant keeps the curriculum's notion of
-"in time" identical to the one the engine is already measured against, instead
-of inventing a second, unmeasured one.
+Sources agree on two things. Within continuous eighth-note strumming the on-beat
+strokes are downstrokes and the "ands" are upstrokes. And the hand never stops:
+a gap in a pattern is not a pattern with fewer strokes, it is the same pendulum
+with a stroke **ghosted** — the hand travels, it just misses the strings. So
+`RhythmGrid.pendulum` takes a list of BOOLEANS, never directions: an author says
+WHETHER a slot sounds, the grid says WHICH WAY. An upstroke cannot land on a beat
+by accident. A ghost keeps its direction (hand travel is physical) and is never
+graded (nothing was asked for there, so nothing can be missed). At quarter
+resolution every stroke is a downstroke, which is what the app's existing
+`first-strums` lesson already does.
 
-**Open question for implementation:** whether a MISSED slot (no stroke detected)
-should count as neutral or as nothing-at-all. Rule 1 says a mistake never
-penalises; a silent slot is not evidence of a wrong stroke, it is absence of
-evidence. So a missed slot contributes nothing and the mission simply needs more
-repetitions. That follows from rule 1 rather than adding a new rule.
+**REVISED BY RESEARCH.** The tidy choice — the pendulum as a hard invariant —
+would have been wrong. The taught 3/4 waltz accompaniment puts a bass note DOWN
+on ONE and light chords UP on two and three ("oom-pah-pah", strummed
+"down-up-up"), and this app ALREADY SHIPS it as the `waltz-time` lesson. An audit
+of all 18 shipped lesson patterns found it is the only departure from the
+pendulum, and the sources say it is right to be one. A hard invariant would have
+made the app call correctly-taught folk guitar wrong.
+
+So there are two constructors — `pendulum` (derived) and `authored` (given) — and
+`followsPendulum` reports which kind a grid is. The beginner rungs require the
+derived kind; the rest of music is not outlawed. Reggae and funk were checked as
+candidate counterexamples and are NOT ones: they ghost the on-beats rather than
+reversing them, so `reggae-skank` is a pendulum pattern.
+
+### 3.2 The four modes
+
+A pedagogical order, each step adding exactly one thing to get wrong. What is
+modelled is what is measurably different, not presentation:
+
+| step | mode | scores a chord | notation shown | app plays first |
+|---|---|---|---|---|
+| 1 | muted strokes | no — a damped string has no chord to name | yes | no |
+| 2 | silent grid + metronome | no | yes | no |
+| 3 | with a chord | YES | yes | no |
+| 4 | listen and repeat | no | NO | yes |
+
+Mode 4 hides the arrow row on purpose: otherwise the whole pillar could be passed
+by reading alone. Codes are stable strings, and an unknown code resolves to
+`null` rather than a default — silently falling back would hand the learner a
+different exercise than the one recorded.
+
+### 3.3 What counts as "on time", and what counts as evidence
+
+The window is the **measured** one: `onsetToleranceMsPrimary` (50 ms), which the
+release gate reports as `onsetTolerance50Ms` and the real-audio harness uses as
+`toleranceUs: 50000`. Reusing it keeps the curriculum's notion of "in time"
+identical to the one the engine is measured against instead of inventing a
+second, unmeasured one.
+
+Matching is the shared maximum-cardinality helper now in
+`core/music/onset_matching.dart`. `docs/LESSONS.md` L269 measured that greedy
+nearest-free-pair matching under-counts matches and asks in as many words for ONE
+shared helper. Here an under-count is not a metric nuance: it would tell a learner
+they missed a stroke they actually played.
+
+Three grading decisions, each a fork where the easy answer taught something false:
+
+1. **Pairing uses TIME only, never direction.** Letting the matcher prefer
+   pairings that agree on direction would re-pair an up-then-down attempt against
+   a down-then-up pattern into two correct strokes. That flatters instead of
+   teaching. Pair by time, then judge direction — the same order the engine's own
+   measured `directionF1` uses.
+2. **Confirmed evidence is matched FIRST.** §2 rules 1-2: an unconfirmed
+   detection earns nothing and supports no negative claim, so it must never
+   displace a confirmed one. One physical stroke can surface as both, and
+   nearest-first alone could pick the unconfirmed twin and discard earned credit.
+3. **A missed slot subtracts nothing, but an attempt cannot look perfect.** The
+   open question below is now CLOSED, and closing it exposed something the
+   original wording missed.
+
+**The open question, resolved.** §3 originally asked whether a missed slot counts
+as neutral or as nothing-at-all, and answered "nothing, the mission just needs
+more repetitions". That is right as far as it goes — silence is absence of
+evidence, not evidence of a wrong stroke — but taken alone it has a hole: if
+missed slots leave the ratio untouched, two clean strokes out of sixteen read as a
+flawless attempt, and a learner could pass by barely playing. So an attempt
+reports TWO numbers, neither of which can stand in for the other:
+
+- `directionAccuracy` — of the strokes that could be HEARD, the share travelling
+  the right way. `null`, never `0.0`, when nothing was heard.
+- `coverage` — the share of notated strokes that produced confirmed evidence.
+
+Below `minimumRhythmCoverage` the attempt claims **nothing at all**. That is not
+a failure (§2 rule 6); it is the app declining to judge on too little evidence,
+shown by the level meter rather than prose (§2 rule 4).
+
+**Named honestly:** the 50 ms tolerance is measured; `minimumRhythmCoverage = 0.5`
+is a POLICY choice — the majority rule, that a verdict about someone's strumming
+should rest on more than half the strokes asked for. The code comment says so
+explicitly, precisely because the constant next to it is not a policy choice.
+
+### 3.4 Not claimed
+
+Nothing in this section measures whether the engine can reliably HEAR direction on
+real audio. That is a separate, open question (ADR 0539 D4 / E18-R05), and no
+minor chord or upstroke-heavy pattern has been verified on real recordings — all
+seven reference recordings are major chords. Sixteenth-note subdivision is
+deliberately absent: the same alternation extends to it, but shipping an unused
+third subdivision would be untested surface.
 
 ## 4. How a mission becomes a real exercise (NEEDS REVIEW)
 
