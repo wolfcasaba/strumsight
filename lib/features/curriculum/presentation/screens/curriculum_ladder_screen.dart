@@ -21,13 +21,40 @@
 ///   and it names the missing capability, because "a microphone is needed for
 ///   this" is actionable where "unavailable" is not.
 ///
-/// **It does not show progress, because the app does not yet measure it.** Skill
-/// estimates are not persisted anywhere: `missionAvailability` is handed an empty
-/// map, so every gated rung reads as not-yet-reached and will keep doing so until
-/// a round wires attempt outcomes into `SkillEstimate`. That is why this screen
-/// is written as a MAP of the path with its requirements shown, rather than as a
-/// progress tracker with a bar that could never fill. Nothing here says or
-/// implies that an attempt advances anything.
+/// ## Progress, now that it is measured
+///
+/// Graded attempts are persisted as `SkillEvidence` and reduced to a
+/// `SkillEstimate` on read (`curriculum_progress.dart`), so the estimate map is
+/// real and a rung genuinely opens. What a rung shows about the learner is
+/// therefore also real, and deliberately modest: the estimate's STATE in words
+/// plus how many attempts it rests on. There is no percentage and no bar,
+/// because the underlying level is a confidence-damped figure whose absolute
+/// value would invite a precision it does not have — 0.625 after one perfect
+/// attempt is the policy's caution, not a claim that the learner is 62.5% good.
+/// The count is the honest part: it says what the verdict rests on.
+///
+/// A skill with no evidence shows NOTHING rather than a zero. Absence of
+/// evidence is not a low score (§2 rule 1), and "0%" would read as one.
+///
+/// ## Why the estimate's STATE is not shown as a word, measured
+///
+/// The obvious line here would have been the state in plain language — "Steady",
+/// "Solid". It is wrong, and `curriculum_progress_test.dart` is what showed it:
+/// six attempts in which every stroke was confirmed travelling the WRONG way
+/// reduce to `SkillEstimateState.stable` at level **0.000**. `stable` means the
+/// evidence is consistent, not that the playing is good — so "Steady" would have
+/// been praise for a learner who strummed everything backwards. The state
+/// describes how much the app KNOWS; only `level` describes how well the learner
+/// played, and the rung's own verdict above already carries that. So this line
+/// reports the attempt COUNT, and the only state words kept are the two that are
+/// genuinely about the evidence: it has aged, or the attempts disagreed.
+///
+/// **What is still not reachable, said plainly:** only rungs carrying a rhythm
+/// assignment can be played here, so only those produce evidence.
+/// `mission.dDuUdU` is gated on `chord.emToAm`, trained by a chord mission this
+/// screen cannot open — so that rung cannot be earned yet however well the
+/// learner plays. The chain that does work end to end is `mission.downQuarters`
+/// then `mission.downUpEighths`.
 library;
 
 import 'package:flutter/material.dart';
@@ -36,11 +63,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../live/public.dart';
-import '../../../practice_generator/public.dart' show ExerciseCapability;
-import '../../data/beginner_course.dart';
+import '../../../practice_generator/public.dart'
+    show ExerciseCapability, SkillEstimate, SkillEstimateState;
 import '../../domain/course.dart';
 import '../../domain/device_capabilities.dart';
 import '../../domain/mission_availability.dart';
+import '../providers/curriculum_progress_providers.dart';
 import 'rhythm_practice_screen.dart';
 
 final class CurriculumLadderScreen extends ConsumerWidget {
@@ -50,11 +78,12 @@ final class CurriculumLadderScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
-    final course = beginnerCourse();
+    final course = ref.watch(curriculumCourseProvider);
     final live = ref.watch(liveFrameProvider).asData?.value;
     final capabilities = curriculumDeviceCapabilities(
       microphoneListening: live?.listening ?? false,
     );
+    final estimates = ref.watch(curriculumEstimatesProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.curriculumLadderTitle)),
@@ -80,20 +109,42 @@ final class CurriculumLadderScreen extends ConsumerWidget {
                   _MissionRow(
                     mission: mission,
                     // The domain decides; this screen only renders the verdict.
-                    // An empty estimate map is the true state of a learner whose
-                    // skills have never been measured.
                     availability: missionAvailability(
                       mission,
-                      estimates: const {},
+                      estimates: estimates,
                       deviceCapabilities: capabilities,
                     ),
                     missing: missingCapabilitiesFor(mission, capabilities),
+                    earned: _earnedFor(mission, estimates),
                   ),
               ],
           ],
         ),
       ),
     );
+  }
+
+  /// The estimate worth showing on [mission]'s row, or null when nothing about it
+  /// has been measured.
+  ///
+  /// A mission trains one skill in the shipped course, but the type allows
+  /// several. When there are several the LEAST confident one is shown: a rung is
+  /// only as earned as its weakest part, and showing the strongest would let one
+  /// solid skill hide a shaky one the same rung is responsible for.
+  SkillEstimate? _earnedFor(
+    CurriculumMission mission,
+    Map<String, SkillEstimate> estimates,
+  ) {
+    SkillEstimate? weakest;
+    for (final skillId in mission.trainedSkillIds) {
+      final estimate = estimates[skillId];
+      // `unknown` carries no level and means "never measured", not a low one.
+      if (estimate == null || estimate.isUnknown) continue;
+      if (weakest == null || estimate.uncertainty > weakest.uncertainty) {
+        weakest = estimate;
+      }
+    }
+    return weakest;
   }
 }
 
@@ -102,11 +153,15 @@ final class _MissionRow extends StatelessWidget {
     required this.mission,
     required this.availability,
     required this.missing,
+    required this.earned,
   });
 
   final CurriculumMission mission;
   final MissionAvailability availability;
   final Set<ExerciseCapability> missing;
+
+  /// What has been MEASURED about this rung's skill, or null when nothing has.
+  final SkillEstimate? earned;
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +205,20 @@ final class _MissionRow extends StatelessWidget {
       _ => null,
     };
 
+    // How much evidence stands behind this rung — a COUNT, never a quality
+    // word. See the library doc for why the state's name cannot be used here.
+    final earnedEstimate = earned;
+    final evidence = earnedEstimate == null
+        ? null
+        : l10n.curriculumLadderEvidence(earnedEstimate.evidenceIds.length);
+    // The two things the count alone cannot say, both about the EVIDENCE and
+    // neither about the player: it has aged, or the attempts disagreed.
+    final evidenceNote = switch (earnedEstimate?.state) {
+      SkillEstimateState.stale => l10n.curriculumSkillStale,
+      SkillEstimateState.conflicted => l10n.curriculumSkillConflicted,
+      _ => null,
+    };
+
     // Only a rhythm rung can be opened from here: it is the only kind this
     // screen has somewhere to send the learner. An available rung without one is
     // shown, and says so, rather than offering a tap that goes nowhere.
@@ -167,6 +236,16 @@ final class _MissionRow extends StatelessWidget {
             if (detail != null)
               Text(
                 detail,
+                style: text.labelSmall?.copyWith(color: colors.textSecondary),
+              ),
+            if (evidence != null)
+              Text(
+                evidence,
+                style: text.labelSmall?.copyWith(color: colors.textSecondary),
+              ),
+            if (evidenceNote != null)
+              Text(
+                evidenceNote,
                 style: text.labelSmall?.copyWith(color: colors.textSecondary),
               ),
           ],

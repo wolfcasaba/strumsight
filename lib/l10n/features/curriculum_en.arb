@@ -141,6 +141,17 @@
     }
   },
   "curriculumLadderNoRhythm": "Not a strumming exercise yet",
+  "curriculumAttemptCounted": "Counted towards your path",
+  "curriculumLadderEvidence": "Measured over {count, plural, =1{1 attempt} other{{count} attempts}}",
+  "@curriculumLadderEvidence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumSkillStale": "Worth playing again",
+  "curriculumSkillConflicted": "Mixed results so far",
   "curriculumCapabilityMicrophone": "a microphone",
   "curriculumCapabilityCamera": "a camera",
   "curriculumCapabilityDirection": "up/down stroke scoring",

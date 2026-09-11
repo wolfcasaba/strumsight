@@ -182,10 +182,18 @@ class E07R25VisionEvidenceScopeTest(unittest.TestCase):
         text = SKILL_EVIDENCE.read_text(encoding="utf-8")
         match = _ENUM_VALUES_RE.search(text)
         self.assertIsNotNone(match, "EvidenceSource enum body not found")
+        # Strip line comments before splitting: the value list is parsed by
+        # splitting on commas, so a `///` doc comment sitting between two values
+        # lands inside the following chunk and made this parse raise
+        # `AttributeError` rather than fail with a message (E18-R13, hit while
+        # adding `curriculum`). The assertion below is unchanged.
+        # `.` excludes newlines without DOTALL, so this strips one comment
+        # per line and nothing more.
+        body = re.sub("//.*", "", match.group(1))
         values = tuple(
-            re.match(r"\s*(\w+)", line).group(1)
-            for line in match.group(1).split(",")
-            if line.strip()
+            re.match(r"\s*(\w+)", chunk).group(1)
+            for chunk in body.split(",")
+            if chunk.strip()
         )
         missing = [v for v in ORIGINAL_EVIDENCE_SOURCE_VALUES if v not in values]
         self.assertEqual(

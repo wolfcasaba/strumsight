@@ -1803,6 +1803,7 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Make this public?",
   "@communityPublicConfirmTitle": {},
+  "curriculumAttemptCounted": "Counted towards your path",
   "curriculumAttemptDone": "Attempt finished",
   "curriculumBarOf": "Bar {bar} of {total}",
   "@curriculumBarOf": {
@@ -1874,6 +1875,14 @@
   },
   "curriculumHoldChord": "hold",
   "curriculumLadderCannotMeasure": "This device cannot measure this one",
+  "curriculumLadderEvidence": "Measured over {count, plural, =1{1 attempt} other{{count} attempts}}",
+  "@curriculumLadderEvidence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "curriculumLadderMissing": "Missing: {capabilities}",
   "@curriculumLadderMissing": {
     "placeholders": {
@@ -1924,6 +1933,8 @@
   "curriculumOutcomeWrongDirection": "other direction",
   "curriculumPrepareChange": "the change starts here — keep the strumming hand moving",
   "curriculumRhythmTitle": "Strumming",
+  "curriculumSkillConflicted": "Mixed results so far",
+  "curriculumSkillStale": "Worth playing again",
   "curriculumStrokeDown": "down",
   "curriculumStrokeGhost": "ghost stroke, the hand passes without touching the strings",
   "curriculumStrokeSemantic": "Beat {count}, {direction} stroke",

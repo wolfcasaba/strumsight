@@ -1,5 +1,97 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R13 — A LÉTRA MOST HALAD: a kör-eredmény készség-evidenciává lett — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd" (teljes delegálás: „ehez nem kell az én döntésem te
+dönthetsz minderől amit jőnak gondolsz").
+
+**Amit megtaláltam.** A lánc minden darabja MÁR létezett — a perzisztens
+`LocalPracticeEvidenceRepository` (ADR 0482), a `SkillEstimateReducer`, az
+`EvidenceWeightPolicy`, a kapu (`UnlockRule.isSatisfiedBy`). EGY darab hiányzott:
+a fordító a lefokozott `RhythmAttempt` és a `SkillEvidence` között. Ezért kapott
+a létra üres becslés-térképet, és ezért maradt minden kapuzott rung örökre „még
+nem elért".
+
+### A mérés, amiért ez a kör megérte
+
+A „hány jó kör nyit rungot" SEHOL nem volt leírva — három policy kölcsönhatásából
+adódik. Kimérve (`test/features/curriculum/curriculum_progress_test.dart`, a
+szállított kurzussal, gradeRhythm-mel, reducerrel és policyval):
+
+| Tiszta körök | Állapot | Szint | A következő rung |
+|---|---|---|---|
+| 1 | `initial` | 0.625 | még nem |
+| 2 | `emerging` | 0.750 | **NYITVA** |
+| 3 | `strong` | 0.875 | nyitva |
+
+**Két tiszta kör nyit rungot** — és pedagógiailag védhető: egy jó futás lehet
+szerencse. Lepinezve, hogy elmozdítása szándékos tett legyen.
+
+Továbbá kimérve: a rekordonkénti 0.25-es plafon MINDIG kötelez a fedettségi padló
+fölött, tehát a `confidence` ma semmit nem hangol (50 % és 100 % fedettség azonos
+0.7500 szintet ad) — leírva, hogy senki ne hitte, hogy ez a mező dolgozik. És a
+fakulás: +60 napon még nyitva (0.690), +90 napon zár (0.595), `stale` soha —
+mert nincs önlejárat, csak a mért 30 napos recency-felezés.
+
+### A mérés egy hibát mutatott a SAJÁT aznapi munkámban (→ L656)
+
+Megírtam a létra sorát az állapot nevével sima nyelven (`stable` → „Steady").
+Aztán a mérő cella kiírta: **hat kör, amelyben minden stroke megerősítve a ROSSZ
+irányba haladt, `stable` 0.000 szinten.** A képernyőn „Steady · 6 attempts" állt
+volna — dicséret annak, aki mindent visszafelé pengetett. A `SkillEstimateState`
+a MEGBÍZHATÓSÁGOT írja le, nem a teljesítményt; azt csak a `level`.
+
+Négy l10n-kulcsot **töröltem**, nem átszövegeztem. A létra a kör-SZÁMOT mutatja, és
+csak azt a két állapotot szövegezi, ami valóban az evidenciáról szól (`stale`,
+`conflicted`). Nincs százalék és nincs sáv. Őrteszt a létra-tesztben.
+
+### Egy valódi defektet is javított
+
+A gyakorló képernyő mérlege a `!_playing` őr miatt **eltűnt abban a pillanatban,
+amikor véglegessé vált** (a befejezés `_playing = false`-ra állít) — a tanuló
+elvesztette azt az egy leolvasást, amiért odament. Most `_playing || _finished`.
+
+### Amit NEM ér el, kimondva
+
+- Csak ritmus-hozzárendelést hordozó rung játszható, tehát csak az termel
+  evidenciát. A `mission.dDuUdU` a `chord.emToAm`-ra kapuzott, amit egy
+  akkord-küldetés tanít, amit ez a képernyő nem tud megnyitni → az a rung
+  **egyelőre nem kiérdemelhető**. A végig működő lánc: `mission.downQuarters` →
+  `mission.downUpEighths`.
+- A rungok és készségek a képernyőn még perzisztencia-azonosítóval jelennek meg
+  (`mission.downQuarters`). Belső token, nem mondat — ugyanaz a hibaosztály, amit
+  az R12 a képességeknél javított. **A következő kör dolga.**
+
+### Mellékhatás, amit ki kell mondani
+
+Az `EvidenceSource.curriculum` hozzáadása eltörte a
+`tools/tests/test_e07_r25_vision_evidence_scope.py` parse-olását: vesszők szerint
+darabolja az enum értéklistát, és egy `///` doc comment két érték között
+`AttributeError`-t dobott üzenet helyett. A guard kommenttűrő lett (az állítás
+változatlan), a magyarázat pedig az enum doc-jába került, a fájl saját
+`vision`-konvencióját követve.
+
+### Csapda, amibe beléptem és ki kell mondani
+
+A `lib/l10n/app_en.arb` **generált aggregátum**; az igazi forrás a
+`lib/l10n/features/<feature>_{en,hu}.arb`. Én az aggregátumba írtam a kulcsokat,
+és **minden zöld volt** — mert az analyze a már legenerált
+`app_localizations.dart`-ot olvassa. Aztán a gate „aggregátum elavult" hibájára
+lefuttatott `gen_l10n_segments.dart --write` az aggregátumot a szegmensekből írta
+újra, és **csendben letörölte mind a négy fordítást**, miközben a gate továbbra is
+zöld maradt (a parity en↔hu konzisztens volt, a generált dart pedig régi). Csak a
+`git status` mutatta meg: nulla módosítás a `lib/l10n` alatt, pedig szerkesztettem.
+A kulcsok most a szegmens-fájlokban vannak, a generált dart-ot nulláról újragenerálva
+ellenőrizve (2366 → 2370 üzenet).
+
+**Gate:** zöld — `curriculum`, `practice_generator`, `ai_tutor`, `progress_v2`,
+`audio_analysis`, `app/routing`, `practice_hub` + architecture / secrets / l10n.
+A python guard 7/7. Új cellák: 12 (`rhythm_evidence_test`), 9
+(`curriculum_progress_test`), +3 (létra → 13), +3 (gyakorló → 21).
+
+**Dokumentáció:** [ADR 0543](docs/adr/0543-curriculum-attempts-become-skill-evidence.md),
+`docs/LESSONS.md` **L656**.
+
 ## 🟢 E18-R10…R12 — A MOTOR HALLÁSÁNAK KALIBRÁLÁSA: két párhuzamos kör, egy nemleges, egy szállított — branch `claude/e18-r06-verify-followup` (2026-09-11)
 
 **User-kérés:** „mehet mindent tökéletesre kell be kalibrálni nem lehet kihagyni

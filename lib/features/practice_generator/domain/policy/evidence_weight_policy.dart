@@ -85,6 +85,15 @@ final class EvidenceWeightPolicy {
     EvidenceSource.analyzeV2 => 0.9,
     EvidenceSource.selfReport => 0.5,
     EvidenceSource.vision => 0.75,
+    // The SAME figure as `learn`, deliberately, and not a new intermediate
+    // number. A curriculum attempt is a guided exercise whose task the app
+    // itself set, exactly like a Learn lesson, and there is no measurement
+    // establishing that it is MORE reliable than one — so inventing 0.85 to
+    // sit between `learn` and `analyzeV2` would be precision with nothing
+    // behind it. It is a separate arm rather than a shared one so a later
+    // round can re-rate curriculum evidence on its own measurements without
+    // moving Learn's.
+    EvidenceSource.curriculum => 0.8,
   };
 
   /// Calculates and caps one evidence record's influence at caller-supplied

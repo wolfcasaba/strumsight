@@ -141,6 +141,17 @@
     }
   },
   "curriculumLadderNoRhythm": "Ez még nem pengetés-gyakorlat",
+  "curriculumAttemptCounted": "Beleszámít az utadba",
+  "curriculumLadderEvidence": "{count, plural, =1{1 kísérlet} other{{count} kísérlet}} alapján mérve",
+  "@curriculumLadderEvidence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumSkillStale": "Érdemes újra eljátszani",
+  "curriculumSkillConflicted": "Eddig vegyes eredmények",
   "curriculumCapabilityMicrophone": "mikrofon",
   "curriculumCapabilityCamera": "kamera",
   "curriculumCapabilityDirection": "le/fel ütés pontozása",

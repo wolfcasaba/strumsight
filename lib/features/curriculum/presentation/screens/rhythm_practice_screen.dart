@@ -56,6 +56,7 @@ import '../../domain/rhythm_countin.dart';
 import '../../domain/rhythm_grading.dart';
 import '../../domain/rhythm_grid.dart';
 import '../../domain/rhythm_mode.dart';
+import '../providers/curriculum_progress_providers.dart';
 import '../widgets/rhythm_lane.dart';
 
 /// Reads the screen's own playback position for the design system's clock port.
@@ -142,6 +143,19 @@ final class _RhythmPracticeScreenState
   /// of 4" readout over an endless loop would be a lie.
   bool _finished = false;
 
+  /// The rung being practised. Held rather than recomputed per build, because it
+  /// is what a finished attempt's evidence is attributed to.
+  late final CurriculumMission _mission;
+
+  /// Whether the attempt that just finished was recorded as evidence, or null
+  /// before any attempt has finished.
+  ///
+  /// Three-valued on purpose. "Not recorded" is not a failure — it is the app
+  /// declining to judge on too little evidence — and it must be distinguishable
+  /// from "nothing has happened yet", or the screen would claim a refusal it
+  /// never made.
+  bool? _attemptCounted;
+
   @override
   void initState() {
     super.initState();
@@ -158,6 +172,7 @@ final class _RhythmPracticeScreenState
             orElse: () => course.missionsInOrder.first,
           ),
         );
+    _mission = mission;
     _assignment =
         mission.rhythm ??
         RhythmAssignment(
@@ -200,6 +215,7 @@ final class _RhythmPracticeScreenState
     // Interpolate forward from the last engine anchor: the anchor is the truth,
     // the ticker only fills the ~66 ms gaps so the motion is smooth. Derived
     // from the anchor every frame, never accumulated (ADR 0274).
+    var justFinished = false;
     setState(() {
       _position =
           Duration(microseconds: ((engineNow - start) * 1e6).round()) +
@@ -216,8 +232,26 @@ final class _RhythmPracticeScreenState
           exercise.inMicroseconds >= attemptMicros) {
         _playing = false;
         _finished = true;
+        justFinished = true;
       }
     });
+    // AFTER the state change, never inside `build`: recording is a write, and a
+    // write driven by a rebuild would count one attempt again every time the
+    // widget happened to rebuild.
+    if (justFinished) _recordFinishedAttempt();
+  }
+
+  /// Records the finished attempt, exactly once, unless it was a calibration run.
+  ///
+  /// A calibration run uses the same ticker and the same grid, but the learner
+  /// was following a reference rather than being measured — crediting it as an
+  /// attempt would put the calibration's own strokes into the learner's score.
+  void _recordFinishedAttempt() {
+    if (_calibrator != null) return;
+    final counted = ref
+        .read(curriculumEstimatesProvider.notifier)
+        .recordRhythmAttempt(mission: _mission, attempt: _gradeAttempt());
+    setState(() => _attemptCounted = counted);
   }
 
   void _toggle() {
@@ -232,6 +266,7 @@ final class _RhythmPracticeScreenState
       _position = Duration.zero;
       _strokes.clear();
       _finished = false;
+      _attemptCounted = null;
       _playing = true;
     });
   }
@@ -250,6 +285,7 @@ final class _RhythmPracticeScreenState
       _position = Duration.zero;
       _strokes.clear();
       _finished = false;
+      _attemptCounted = null;
       _playing = _engineNowSec != null;
     });
   }
@@ -583,19 +619,17 @@ final class _RhythmPracticeScreenState
   /// sixteen would read as a flawless attempt. Below the coverage floor the
   /// screen says it could not hear enough — which costs the learner nothing
   /// (design §2 rule 6).
-  Widget _attemptSummary(
-    BuildContext context,
-    AppLocalizations l10n,
-    SsColorScheme colors,
-  ) {
-    final start = _startEngineSec;
-    if (start == null || !_playing) return const SizedBox.shrink();
+  /// The attempt as it stands, graded.
+  ///
+  /// One definition, used by the on-screen summary AND by the evidence record,
+  /// so what the learner is shown and what is written down can never disagree.
+  RhythmAttempt _gradeAttempt() {
     // `_attemptBars`, not the chord cycle's length. The attempt is as long as
     // the assignment says, and grading only the first cycle would push every
     // stroke after it into `extraConfirmedStrokes` and compute coverage over too
     // few slots — a bug that only became visible once the attempt had an end.
-    final calibrationMs = ref.watch(strumLatencyProvider);
-    final attempt = gradeRhythm(
+    final calibrationMs = ref.read(strumLatencyProvider);
+    return gradeRhythm(
       _assignment.grid,
       bpm: _assignment.bpm,
       bars: _attemptBars,
@@ -604,6 +638,22 @@ final class _RhythmPracticeScreenState
       // then no timing is claimed at all.
       timingCalibrationUs: _isCalibrated ? calibrationMs * 1000 : null,
     );
+  }
+
+  Widget _attemptSummary(
+    BuildContext context,
+    AppLocalizations l10n,
+    SsColorScheme colors,
+  ) {
+    final start = _startEngineSec;
+    // `_finished` as well as `_playing`: the summary used to vanish at the exact
+    // moment it became final, throwing away the one reading the learner came for.
+    if (start == null || !(_playing || _finished)) {
+      return const SizedBox.shrink();
+    }
+    // Watched, not read, so a calibration saved mid-screen re-grades the view.
+    ref.watch(strumLatencyProvider);
+    final attempt = _gradeAttempt();
     final accuracy = attempt.directionAccuracy;
     final text = !attempt.isReportable || accuracy == null
         ? l10n.curriculumTooLittleHeard
@@ -628,6 +678,17 @@ final class _RhythmPracticeScreenState
             ).textTheme.labelMedium?.copyWith(color: colors.textSecondary),
           ),
           ..._timingLines(context, l10n, colors, attempt),
+          // Only once an attempt has actually finished, and only when it was
+          // recorded. Silence otherwise: the "too little heard" line above
+          // already says why nothing was written, and repeating it as "not
+          // counted" would read as a penalty for a quiet room.
+          if (_finished && _attemptCounted == true)
+            Text(
+              l10n.curriculumAttemptCounted,
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(color: colors.success),
+            ),
         ],
       ),
     );

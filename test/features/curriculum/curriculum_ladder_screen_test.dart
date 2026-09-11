@@ -11,13 +11,21 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/curriculum/domain/device_capabilities.dart';
 import 'package:strumsight/features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
 import 'package:strumsight/features/curriculum/presentation/screens/rhythm_practice_screen.dart';
+import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/curriculum/application/curriculum_progress.dart';
+import 'package:strumsight/features/curriculum/data/beginner_course.dart';
+import 'package:strumsight/features/curriculum/domain/rhythm_grading.dart';
+import 'package:strumsight/features/curriculum/presentation/providers/curriculum_progress_providers.dart';
 import 'package:strumsight/features/live/public.dart';
+import 'package:strumsight/features/practice_generator/public.dart'
+    show InMemoryPracticeEvidenceRepository;
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/features/practice_generator/public.dart'
     show CapabilitySupport, ExerciseCapability;
@@ -38,20 +46,78 @@ LiveFrame _frame({bool listening = true}) => LiveFrame(
   strumSeq: 0,
 );
 
-Widget _host(Stream<LiveFrame> frames, {Locale locale = const Locale('en')}) =>
-    ProviderScope(
-      overrides: [
-        liveFrameProvider.overrideWith((ref) => frames),
-        keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
-      ],
-      child: MaterialApp(
-        locale: locale,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        theme: SsDarkTheme.data(),
-        home: const CurriculumLadderScreen(),
+Widget _host(
+  Stream<LiveFrame> frames, {
+  Locale locale = const Locale('en'),
+  List<Override> overrides = const [],
+}) => ProviderScope(
+  overrides: [
+    liveFrameProvider.overrideWith((ref) => frames),
+    keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+    ...overrides,
+  ],
+  child: MaterialApp(
+    locale: locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    theme: SsDarkTheme.data(),
+    home: const CurriculumLadderScreen(),
+  ),
+);
+
+/// A progress service whose store has already been played into, so the ladder
+/// can be rendered for a learner with real measured evidence.
+///
+/// The attempts are placed a day apart on a FIXED clock: the reducer buckets
+/// evidence by `measuredAt`, and identical instants would read as one
+/// disagreeing bucket instead of a series.
+Override _playedInto({
+  required String missionId,
+  required int attempts,
+  bool flipDirection = false,
+}) {
+  final course = beginnerCourse();
+  final mission = course.missionsInOrder.firstWhere(
+    (candidate) => candidate.missionId == missionId,
+  );
+  final progress = CurriculumProgress(
+    evidenceRepository: InMemoryPracticeEvidenceRepository(),
+  );
+  final grid = mission.rhythm!.grid;
+  final bpm = mission.rhythm!.bpm;
+  for (var i = 0; i < attempts; i++) {
+    progress.recordRhythmAttempt(
+      mission: mission,
+      attempt: gradeRhythm(
+        grid,
+        bpm: bpm,
+        bars: mission.rhythm!.bars,
+        strokes: [
+          for (var bar = 0; bar < mission.rhythm!.bars; bar++)
+            for (final slot in grid.slots)
+              if (slot.isStruck)
+                DetectedStroke(
+                  atUs: grid.onsetUs(bar: bar, slotIndex: slot.index, bpm: bpm),
+                  direction: flipDirection
+                      ? (slot.direction == StrumDirection.down
+                            ? StrumDirection.up
+                            : StrumDirection.down)
+                      : slot.direction,
+                  isConfirmed: true,
+                ),
+        ],
       ),
+      at: _fixedNow.subtract(Duration(days: attempts - i)),
     );
+  }
+  return curriculumProgressProvider.overrideWithValue(progress);
+}
+
+final DateTime _fixedNow = DateTime.utc(2026, 9, 12, 10);
+
+final Override _fixedClock = curriculumClockProvider.overrideWithValue(
+  () => _fixedNow,
+);
 
 void main() {
   group('the capability map is conservative by construction', () {
@@ -203,6 +269,99 @@ void main() {
           'offering a rung and then starting a different one would be the '
           'ladder lying about what it just offered',
     );
+  });
+
+  group('what the ladder says about measured progress', () {
+    testWidgets(
+      'a learner who has played nothing sees no attempt count — not a '
+      'zero',
+      (tester) async {
+        await tester.pumpWidget(_host(Stream<LiveFrame>.value(_frame())));
+        await tester.pump();
+        expect(
+          find.textContaining('Measured over'),
+          findsNothing,
+          reason:
+              'absence of evidence is not a low score, and "0 attempts" would '
+              'read as one',
+        );
+      },
+    );
+
+    testWidgets('two clean attempts open the next rung and the count says what '
+        'the verdict rests on', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          Stream<LiveFrame>.value(_frame()),
+          overrides: [
+            _fixedClock,
+            _playedInto(missionId: 'mission.downQuarters', attempts: 2),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Measured over 2 attempts'), findsOneWidget);
+
+      // `mission.downUpEighths` is gated on exactly the skill just measured, so
+      // its own row must now read as open. Asserted on THAT row rather than on a
+      // count of "Open" labels: a count would pass just as happily if some other
+      // rung had opened instead, which is the opposite of what this measures.
+      // It is also below the fold, and a row the ListView never built is a row
+      // this test would never see.
+      await tester.scrollUntilVisible(
+        find.text('mission.downUpEighths'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('mission.downUpEighths'),
+            matching: find.byType(ListTile),
+          ),
+          matching: find.text('Open'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a learner who strummed everything the WRONG way is never '
+        'praised', (tester) async {
+      // The regression guard for what `curriculum_progress_test.dart` measured:
+      // six confirmed wrong-direction attempts reduce to SkillEstimateState
+      // `stable` at level 0.000, so any wording derived from the state would
+      // have put a word like "Steady" or "Solid" on screen.
+      await tester.pumpWidget(
+        _host(
+          Stream<LiveFrame>.value(_frame()),
+          overrides: [
+            _fixedClock,
+            _playedInto(
+              missionId: 'mission.downQuarters',
+              attempts: 6,
+              flipDirection: true,
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Measured over 6 attempts'), findsOneWidget);
+      for (final praise in ['Steady', 'Solid', 'Strong', 'Stable']) {
+        expect(
+          find.textContaining(praise),
+          findsNothing,
+          reason:
+              '$praise describes how consistent the EVIDENCE is, not how well '
+              'the learner played — on screen it would be praise for playing '
+              'every stroke backwards',
+        );
+      }
+      // And it must not have opened anything: the level is 0.0.
+      expect(find.text('Not yet reached'), findsWidgets);
+    });
   });
 
   testWidgets('Hungarian renders Hungarian', (tester) async {

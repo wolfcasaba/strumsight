@@ -26687,3 +26687,68 @@ proxyra dönt.
 nevesíti a próbát a kötelező valós-audio mérésként, és az
 [ADR 0542](adr/0542-hamming-whitening-kernel-and-reference-mean-subtraction.md)
 „Miért `k = 0.20`" szakasza a ground-truth táblát hordozza, nem a proxy-számokat.
+
+## L656 — Egy ÁLLAPOT-enum neve nem teljesítmény-szó: a `stable` a MEGBÍZHATÓSÁGOT írja le, és hat visszafelé pengetett kör után „Steady"-t tett volna a képernyőre (E18-R13, 2026-09-12)
+
+**Mi történt.** A tananyag-létra bekötésénél azt a sort írtam, ami kézenfekvő volt:
+a `SkillEstimate.state` sima nyelven, hat l10n-kulccsal — `initial` → „First sign",
+`emerging` → „Taking shape", `stable` → „Steady", `strong` → „Solid". A kód
+lefordult, az analyze zöld volt, a sor szépen nézett ki.
+
+Aztán lefutott a mérő cella, amit ugyanabban a körben írtam más okból (*hány tiszta
+kör nyit rungot*), és kiírta ezt:
+
+```
+6 wrong-direction attempts: state stable, level 0.000
+```
+
+**Hat kör, amelyben MINDEN stroke megerősítve a ROSSZ irányba haladt, `stable`.** Az
+én szövegezésemmel a képernyőn az állt volna: **„Steady · 6 attempts"** — dicséret
+egy tanulónak, aki mindent visszafelé pengetett.
+
+**A gyökér.** A `SkillEstimateState` két, egymástól független dolgot kever össze
+ANNAK, AKI CSAK A NEVÉT OLVASSA:
+
+- `initial` / `emerging` / `stable` / `strong` azt írja le, **mennyi és milyen
+  konzisztens az evidencia** — a `_stateFor` kizárólag `evidenceCount`-ból,
+  `uncertainty`-ból és `conflicted`-ből származtatja őket. A `level` csak egyetlen
+  helyen szól bele (`uncertainty <= 0.25 && level >= 0.8` → `strong`), tehát
+  `stable` bármilyen szinten elérhető, 0.000-on is.
+- a teljesítményt **kizárólag** a `level` hordozza.
+
+A nevek angol köznyelvi jelentése („stable", „strong") teljesítmény-szónak OLVASÓDIK,
+és ez a csapda: nem a típus hibás — a doksija helyesen írja, hogy „the amount and
+quality of evidence" —, hanem az, hogy egy UI-réteg a nevet szó szerint átemelte.
+
+**Miért nem kapta el semmi más.** Az analyze nem tud róla. A type-rendszer nem tud
+róla: a `switch` kimerítő volt, minden ág megvolt, fordult. A becslés-reducer saját
+tesztjei sem: ott `stable` 0.000-on HELYES eredmény. A hiba csak a **fordítás**
+pillanatában keletkezett — állapotból teljesítmény-szóba —, és csak az a mérés
+mutatta meg, ami a 0.000-hoz tartozó állapotot kiírta. Egy feltételezés („a
+`stable` jó jelentésű") sosem bukott volna meg, ha nem íratjuk ki a számot.
+
+**A javítás, nem a tünetre.** A hat kulcs közül négyet TÖRÖLTEM, nem átszövegeztem.
+A létra most a **kör-számot** jelenti (`Measured over 2 attempts`), és csak azt a
+két állapotot szövegezi, ami valóban az EVIDENCIÁRÓL szól, nem a játékosról:
+`stale` („érdemes újra eljátszani" — megöregedett) és `conflicted` („vegyes
+eredmények" — a körök nem egyeztek). A minőségi verdikt ott marad, ahol mérve van:
+a rung `available` / `lockedPendingSkill` állapotában és a gyakorló képernyő
+irány-pontosságában.
+
+Ugyanez zárta ki a százalékot és a sávot is: a `level` bizalom-csillapított szám
+(0.625 EGY tökéletes kör után), tehát az absztrakt értéke olyan precizitásra hívna,
+amivel nem rendelkezik.
+
+**Az általános szabály.** *Ha egy enum-értéknek olyan köznyelvi neve van, ami
+minősítésnek olvasódik, a felületre kerülés előtt ki kell íratni a hozzá tartozó
+SZÉLSŐ számot.* A kérdés nem „mit jelent ez az érték", hanem „milyen legrosszabb
+adat mellett állhat elő ez az érték" — és a fordítást erre kell megírni.
+
+**Őrteszt:** `test/features/curriculum/curriculum_ladder_screen_test.dart` →
+„a learner who strummed everything the WRONG way is never praised": hat
+megerősített rossz irányú kört tölt a tárba, és megtiltja a `Steady` / `Solid` /
+`Strong` / `Stable` szavakat a képernyőn. A mérés, ami kiderítette, a
+`test/features/curriculum/curriculum_progress_test.dart` „a rung never opens on the
+wrong evidence" cellája — az kiírja az állapotot és a szintet együtt, ami az egész
+lecke: **a kettő soha nem olvasható egymás nélkül.** Lásd még
+[ADR 0543](adr/0543-curriculum-attempts-become-skill-evidence.md) D7.

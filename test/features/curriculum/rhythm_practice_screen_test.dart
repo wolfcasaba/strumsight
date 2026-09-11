@@ -16,7 +16,13 @@ import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/curriculum/presentation/screens/rhythm_practice_screen.dart';
 import 'package:strumsight/features/settings/public.dart';
 import 'package:strumsight/features/curriculum/presentation/widgets/rhythm_lane.dart';
+import 'package:strumsight/features/curriculum/application/curriculum_progress.dart';
+import 'package:strumsight/features/curriculum/data/beginner_course.dart';
+import 'package:strumsight/features/curriculum/domain/course.dart';
+import 'package:strumsight/features/curriculum/presentation/providers/curriculum_progress_providers.dart';
 import 'package:strumsight/features/live/public.dart';
+import 'package:strumsight/features/practice_generator/public.dart'
+    show EvidenceSource, InMemoryPracticeEvidenceRepository;
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../core/storage/in_memory_key_value_store.dart';
@@ -422,6 +428,165 @@ void main() {
       );
       await tester.pump();
       expect(find.text('I could not hear enough of that yet'), findsOneWidget);
+    });
+  });
+
+  group('what happens when the attempt ENDS', () {
+    /// The first rhythm rung, explicitly: 70 bpm quarters, four bars, damped.
+    /// Chosen over the screen's own default because every slot is a DOWN stroke
+    /// at a round beat, so the strokes below can be placed by arithmetic.
+    CurriculumMission rungOne() => beginnerCourse().missionsInOrder.firstWhere(
+      (mission) => mission.missionId == 'mission.downQuarters',
+    );
+
+    Widget host(
+      Stream<LiveFrame> frames, {
+      required CurriculumProgress progress,
+      CurriculumMission? mission,
+    }) => ProviderScope(
+      overrides: [
+        liveFrameProvider.overrideWith((ref) => frames),
+        keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+        curriculumProgressProvider.overrideWithValue(progress),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: SsDarkTheme.data(),
+        home: RhythmPracticeScreen(mission: mission ?? rungOne()),
+      ),
+    );
+
+    testWidgets('the summary survives the moment it becomes final', (
+      tester,
+    ) async {
+      // It used to vanish exactly then: the guard was `!_playing`, and finishing
+      // sets `_playing = false`. The learner lost the one reading they came for.
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(
+        host(
+          controller.stream,
+          progress: CurriculumProgress(
+            evidenceRepository: InMemoryPracticeEvidenceRepository(),
+          ),
+        ),
+      );
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 1.0));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+
+      // Past the count-in bar AND the whole four-bar attempt, with nothing heard.
+      controller.add(_frame(engineTimeSec: 40.0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+
+      expect(find.text('Attempt finished'), findsOneWidget);
+      expect(
+        find.text('I could not hear enough of that yet'),
+        findsOneWidget,
+        reason:
+            'an attempt that ended with nothing heard must still SAY so; a blank '
+            'screen is the app declining to answer a question it was asked',
+      );
+      expect(
+        find.text('Counted towards your path'),
+        findsNothing,
+        reason: 'nothing was written, so nothing may claim it was',
+      );
+    });
+
+    testWidgets('a played-through attempt is recorded, once, and says so', (
+      tester,
+    ) async {
+      final repository = InMemoryPracticeEvidenceRepository();
+      final progress = CurriculumProgress(evidenceRepository: repository);
+      final mission = rungOne();
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(
+        host(controller.stream, progress: progress, mission: mission),
+      );
+      await tester.pump();
+
+      const startSec = 1.0;
+      controller.add(_frame(engineTimeSec: startSec));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+
+      // 70 bpm quarters: one beat is 60/70 s, the count-in is one bar of four.
+      final beatSec = 60 / mission.rhythm!.bpm;
+      final countInSec = beatSec * mission.rhythm!.grid.beatsPerBar;
+      final slots =
+          mission.rhythm!.grid.slots.where((slot) => slot.isStruck).length *
+          mission.rhythm!.bars;
+      for (var k = 0; k < slots; k++) {
+        final atSec = startSec + countInSec + k * beatSec;
+        controller.add(
+          _frame(
+            engineTimeSec: atSec,
+            latestStrumTime: atSec,
+            strumSeq: k + 1,
+            latestStrum: const Strum(
+              direction: StrumDirection.down,
+              confidence: 0.9,
+            ),
+          ),
+        );
+        await tester.pump();
+      }
+      // Then past the end of the attempt, and a tick to notice.
+      controller.add(_frame(engineTimeSec: startSec + countInSec + 60));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+
+      expect(find.text('Counted towards your path'), findsOneWidget);
+      final stored = repository.allForSkill(mission.trainedSkillIds.single);
+      expect(
+        stored,
+        hasLength(1),
+        reason: 'one attempt, one record — not one per rebuild',
+      );
+      expect(stored.single.performance!.value, 1.0);
+      expect(stored.single.source, EvidenceSource.curriculum);
+
+      // And a rebuild must not write a second one.
+      await tester.pump(const Duration(milliseconds: 32));
+      expect(
+        repository.allForSkill(mission.trainedSkillIds.single),
+        hasLength(1),
+      );
+    });
+
+    testWidgets('a CALIBRATION run is never recorded as an attempt', (
+      tester,
+    ) async {
+      // Same ticker, same grid, but the learner was following a reference rather
+      // than being measured. Crediting it would put the calibration's own strokes
+      // into their score.
+      final repository = InMemoryPracticeEvidenceRepository();
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(
+        host(
+          controller.stream,
+          progress: CurriculumProgress(evidenceRepository: repository),
+        ),
+      );
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 1.0));
+      await tester.pump();
+      await tester.tap(find.text('Calibrate'));
+      await tester.pump();
+
+      controller.add(_frame(engineTimeSec: 40.0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+
+      expect(repository.allForSkill(rungOne().trainedSkillIds.single), isEmpty);
     });
   });
 

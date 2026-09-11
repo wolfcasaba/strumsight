@@ -1775,6 +1775,7 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Nyilvánossá teszed?",
   "@communityPublicConfirmTitle": {},
+  "curriculumAttemptCounted": "Beleszámít az utadba",
   "curriculumAttemptDone": "Kör vége",
   "curriculumBarOf": "{total} ütem közül a {bar}.",
   "@curriculumBarOf": {
@@ -1846,6 +1847,14 @@
   },
   "curriculumHoldChord": "fogd",
   "curriculumLadderCannotMeasure": "Ezt ez a készülék nem tudja megmérni",
+  "curriculumLadderEvidence": "{count, plural, =1{1 kísérlet} other{{count} kísérlet}} alapján mérve",
+  "@curriculumLadderEvidence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "curriculumLadderMissing": "Hiányzik: {capabilities}",
   "@curriculumLadderMissing": {
     "placeholders": {
@@ -1896,6 +1905,8 @@
   "curriculumOutcomeWrongDirection": "másik irány",
   "curriculumPrepareChange": "itt indul a váltás — a pengető kéz ne álljon meg",
   "curriculumRhythmTitle": "Pengetés",
+  "curriculumSkillConflicted": "Eddig vegyes eredmények",
+  "curriculumSkillStale": "Érdemes újra eljátszani",
   "curriculumStrokeDown": "lefelé",
   "curriculumStrokeGhost": "ghost ütés, a kéz átmegy, de nem ér a húrhoz",
   "curriculumStrokeSemantic": "{count} ütés, {direction}",
