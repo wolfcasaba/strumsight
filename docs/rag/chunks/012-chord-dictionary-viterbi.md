@@ -121,7 +121,10 @@ Mirror of `DspConfig` + `ChordDictionary`/`ViterbiChordDecoder` defaults. These
 were tuned against synth signals + a 9-seed randomized property gate; **expect a
 real-guitar retune** (that is the final acceptance).
 
-- **Register split (`NnlsChroma`)**: `trebleMinMidi = 40` (E2) — the treble
+- **Register split (`NnlsChroma`)** — **SUPERSEDED in E18-R07, see the
+  "Register windows" section below.** The bass fold is now DEPTH-WEIGHTED, as
+  the reference does it; the hard cut described here is the fallback path
+  (`referenceRegisterWindows: false`). `trebleMinMidi = 40` (E2) — the treble
   chroma folds the **whole** note range, i.e. the full harmony; `bassMaxMidi =
   52` (E3) — the bass chroma folds only the low sub-register for the root.
   *Learned the hard way:* a HIGH treble floor (first tried C3) drops a guitar
@@ -275,6 +278,24 @@ i.e. the chord with its root removed, which is precisely what a lost root looks
 like. ±3.0 (9 bins) sits two bins above that cliff and inside the real-audio
 plateau.
 
+**±3 is also exactly what the reference uses** — read off the source in E18-R07,
+and worth recording because it is independent of our measurement:
+
+```c
+// NNLSBase.cpp:368
+// make hamming window of length 1/2 octave
+int hamwinlength = nBPS * 6 + 1;   // = 19 bins = 6 semitones TOTAL, i.e. ±3
+```
+
+Our constant had been `whiteningHalfWindow = 18 // ±half octave at 3
+bins/semitone` — 18 bins as the HALF window. The reference's "half octave" is
+the TOTAL window; reading it as a half-window and doubling it is the whole bug.
+
+**The lower bound was lifted afterwards** by depth-weighted register windows
+(E18-R07, section below): low dom7s survive ±1.5 once the root is named by
+REGISTER rather than by loudness. The span still stays at ±3 — the reference's
+own value, and narrower than that would be overfitting on this evidence.
+
 The round-70 envelope gates (thin mic, body resonance) hold across the ENTIRE
 sweep, so the span was never the knob that fixed the thin mic — the exponent
 was — and the span is free to be chosen on the two criteria above.
@@ -329,6 +350,51 @@ inversion-aware bass scorer was measured offline during this round (open G:
 `Bm` 0.7921 → `G` 0.8291, the other six winners unchanged) but is NOT shipped,
 because the span fix made it unnecessary and bundling it would have been scope
 creep.
+
+## Register windows — the reference WEIGHTS, it does not cut (E18-R07)
+
+Read off the reference source this round (`Chordino.cpp:412-413`,
+`chromamethods.h`): the semitone spectrum is MULTIPLIED by smooth
+raised-cosine register windows before folding to 12 bins. Semitone index 0 is
+MIDI 21 (A0). `basswindow` is a hump over MIDI 21–57 (A0–A3) peaking near
+MIDI 39 (E♭2, ~78 Hz) and reaching zero at A3; `treblewindow` spans the whole
+range peaking near MIDI 62 (D4).
+
+On guitar notes the bass window reads **E2 0.995, G2 0.944, B2 0.625, C3 0.542,
+D3 0.375, E3 0.222, G3 0.056** — i.e. **E2 counts ~4.5× what E3 counts**. Our
+fold used a hard `midi <= bassMaxMidi` cut that weighted all of them equally,
+so the bass chroma could say "these pitch classes are low" but never "C is
+lower than E". Two measured consequences, both fixed by adopting the weighting:
+
+| | hard cut | depth-weighted |
+|---|---|---|
+| seven labelled recordings (offline scorer) | 7/7 correct, latch 6/7 | **7/7, latch 7/7** |
+| same through the full `LivePipeline` | 7/7 | **7/7** |
+| `Caug` close voicing C3-E3-G#3 | `Eaug` (bass C 0.68 / E 0.73) | **`Caug`** (bass **C 0.87 / E 0.47**) |
+| low dom7 E2–B2 at a ±2 semitone whitening span | **6/8** (`A#`→`Ddim`, `B`→`D#dim`) | **8/8** |
+| the same at ±1.5 | 8/8 | 8/8 |
+
+The augmented case is the clean demonstration: `{C,E,G#}` is equally Caug, Eaug
+and G#aug, so only the bass can name the root, and a 0.05 chroma difference was
+doing it. The dom7 row is the important one — it is the LOWER bound that
+constrained the whitening span in ADR 0540, and depth weighting lifts it,
+because the root is now named by REGISTER rather than by loudness.
+
+The span nevertheless stays at ±3 (ADR 0541 D4): that is the reference's own
+value, and going below it on this round's evidence would be overfitting.
+
+NOT adopted, deliberately: the reference's **treble** window peaks at D4 and
+tapers at both ends, ours stays flat over E2–E6. Separate measurement, separate
+round.
+
+**Licence boundary:** the reference is **GPL-2+** and StrumSight is a private
+app. Its code and tabulated constants are NOT copied — the published method (a
+raised cosine over a stated semitone span) is reimplemented, and the reference
+table was used only to CHECK the shape (the Hann form reproduces
+`treblewindow` to 5e-07 and `basswindow` to 2e-02). Full comparison, including
+three further divergences we have NOT taken (mean subtraction + half-wave
+rectification in the whitening, the Hamming kernel, the analysis range):
+`docs/research/chordino-reference-parameters-2026-09.md`.
 
 ## Batch Viterbi — AS BUILT (round 71). The chunk-012 pipeline is COMPLETE.
 

@@ -1,5 +1,95 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R07 — A REFERENCIA-MOTOR PONTOS BEÁLLÍTÁSAI: mélység-súlyozott basszus-króma (ADR 0541) + a piros kapu javítva — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „nézz utána a gitár motor pontos beállításának, javítsd a piros
+kaput".
+
+**Kutatási jegyzet (a kért deliverable):**
+[`docs/research/chordino-reference-parameters-2026-09.md`](docs/research/chordino-reference-parameters-2026-09.md)
+— a `c4dm/nnls-chroma` TÉNYLEGES forráskódja a miénkkel szembeállítva, nem a
+cikk-leírás alapján.
+
+### A két fő lelet
+
+**1. A whitening ablakszélessége — a referencia igazolja a tegnapi javítást.**
+
+```c
+// NNLSBase.cpp:368  — "make hamming window of length 1/2 octave"
+int hamwinlength = nBPS * 6 + 1;   // 19 bin = 6 félhang TELJES, azaz ±3
+```
+
+A mi konstansunk `whiteningHalfWindow = 18 // ±half octave at 3 bins/semitone`
+volt — **18 bin mint FÉL-ablak**. A referencia „fél oktáv"-ja a *teljes* ablak;
+fél-ablakként olvasni és megduplázni volt a hiba. Az ADR 0540 méréssel,
+függetlenül jutott ±3-ra: **ugyanaz a szám két irányból**.
+
+**2. A regiszter-szétválasztás — a referencia NEM vág, hanem SÚLYOZ.**
+
+A félhang-spektrumot sima emelt-koszinusz ablakokkal szorozza a 12 binre hajtás
+előtt. Guitár-hangokra a `basswindow`: **E2 0.995, B2 0.625, C3 0.542,
+D3 0.375, E3 0.222, G3 0.056** — vagyis **E2 ~4.5×-ét számít E3-nak**. A miénk
+`midi <= bassMaxMidi` kemény vágással mindet egyenlően súlyozta, tehát a
+basszus-króma azt soha nem tudta kimondani, hogy „a C mélyebben van, mint az E".
+
+| mérés | kemény vágás | mélység-súlyozás |
+|---|---|---|
+| hét valós felvétel (offline) | 7/7, latch 6/7 | **7/7, latch 7/7** |
+| ugyanaz a teljes `LivePipeline`-on | 7/7 | **7/7** |
+| `Caug` zárt fekvés C3-E3-G#3 | `Eaug` (bass C 0.68 / E 0.73) | **`Caug`** (bass **C 0.87 / E 0.47**) |
+| mély dom7 E2–B2, whitening **±2** | **6/8** (`A#→Ddim`, `B→D#dim`) | **8/8** |
+| ugyanaz ±1.5-nél | 8/8 | 8/8 |
+
+Ez **az ADR 0540 két nyitott follow-upját zárja le**: a bővített hármas gyöke
+most geometriából jön (nem 0.05-ös különbségből), és a whitening alsó korlátja
+megszűnt. A szélesség ennek ellenére **marad ±3** (ADR 0541 D4) — az a
+referencia saját értéke, ennél szűkebbre menni e kör adatain túlillesztés lenne.
+
+**⚠ LICENC-HATÁR.** A referencia **GPL-2+**, a StrumSight privát app. A kódját
+és betáblázott konstansait **nem másoltam és nem is szabad**: a publikált
+módszert implementáltam, a táblához csak *ellenőrzésként* hasonlítottam (Hann:
+`treblewindow` 5e-07-ig, `basswindow` 2e-02-ig). Ld. a jegyzet bevezetőjét.
+
+### A piros kapu javítva
+
+`test/features/audio_analysis/engine/capability_resolver_test.dart` — a
+`Directory.listSync` a GAZDAGÉP szeparátorával fűz, a fölötte lévő könyvtár
+`/`-jelekkel van írva, így Windowson **vegyes** útvonal jött vissza
+(`…/confidence\capability_resolver.dart`) és a cella a szeparátoron bukott el,
+miközben az állítása igaz volt. Normalizálás `Platform.pathSeparator`-ral (ez a
+`legacy_identifier_guard_test.dart` bevett mintája); POSIX-on no-op, tehát a
+CI-viselkedés változatlan. Igazoltam, hogy a tegnapi változás **kistash-olva is
+ugyanúgy bukott** — F12-osztály, nem regresszió. `test/features/audio_analysis`
+683/683.
+
+**Kapu:** MINDEN ZÖLD (format, analyze, 12 teszt-útvonal, architecture,
+secrets, l10n) — ez az első kör, ahol ezen a gazdagépen egy piros cella sem
+maradt a kijelölt körben. `dsp_property_test.dart` zöld 42/7/123/2026/31337
+seeden.
+
+### Amit a jegyzet azonosított, de NEM szállítottam
+
+- **A whitening aritmetikája** (a legígéretesebb következő lépés): a referencia
+  **kivonja a futó átlagot és félhullámban egyenirányít**
+  (`(x − mean) > 0 ? (x − mean)/std^w : 0`), mi átlag-kivonás nélkül RMS-sel
+  osztunk. Ez lokális kontraszt-operátorrá teszi a whiteninget, és épp a
+  fantom-energiát célozza (az E felvétel F#4-je B2 3. harmonikusa, saját
+  alaphang nélkül). Ez a whitening átírása, nem konstans-hangolás.
+- Hamming- helyett lapos kernel; a treble-ablak csúcsosítása D4 körül; a
+  referencia tágabb sávja (A0–G#7 vs a mi E2–E6-unk); `m_whitening` 1.0 vs 0.7
+  újramérése az átlag-kivonás UTÁN.
+
+### Nyitott, változatlanul
+
+- **A 82 felvételes / 11 767 eseményes korpusz nincs megmérve** — a
+  `ml/data/klangio` a repón kívül él; a `baseline_manifest.json` 0.6707-e
+  MINDKÉT mai változásra igazolatlan. Release-állítás előtt
+  `tool/benchmarks/real_audio_dsp_baseline.dart` újrafuttatás kell.
+- **Moll akkord valós audión nincs mérve** (mind a hét felvétel dúr); az ADR
+  0540-ben rögzített szintetikus Am-veszteséget (0.12–0.16 sáv → `Esus4`) a
+  mélység-súlyozás nem célozta és utána nem mértem újra.
+- **Valódi gitáros A/B** (ADR 0539 D4 / E18-R05) továbbra is nyitott.
+
 ## 🟢 E18-R06 — F9 FELISMERÉS MEGJAVÍTVA A GYÖKÉRNÉL: a whitening-szomszédság ±6 → ±3 félhang (ADR 0540) — branch `claude/e18-r06-verify-followup` (2026-09-11)
 
 **User-kérés:** „az eredmények alapján végezz kutatásokat és javítsd a

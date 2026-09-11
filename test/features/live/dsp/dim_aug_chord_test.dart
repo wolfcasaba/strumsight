@@ -53,12 +53,28 @@ void main() {
   // flip — it landed on Caug, and a change to the whitening neighbourhood
   // landed it on Eaug without anything about augmented chords changing.
   //
-  // These cases voice each rotation with its root ALONE in the bass window,
-  // which is what makes the root knowable at all. They pass across the whole
-  // `whiteningHalfSemitones` range (±1 … ±6), so they pin the mechanism rather
-  // than the constant. The depth-blind bass chroma is a real limitation and is
-  // tracked as a follow-up, not papered over here.
+  // The bass chroma now weights by DEPTH (the reference implementation's
+  // raised-cosine register windows, ADR 0541), so "lower" is expressible and
+  // the close voicing is decided by geometry rather than by which of two
+  // equal-amplitude notes the analysis left ahead: C3 carries 0.542 of the
+  // bass window against E3's 0.222. MEASURED on that same C3-E3-G#3 signal —
+  // bass C 0.87 vs E 0.47, where the depth-blind fold gave C 0.68 vs E 0.73
+  // and returned `Eaug`.
+  //
+  // Both forms are kept: the close voicing because that is what a player
+  // actually plays, and the three isolated-root rotations because they pin the
+  // mechanism (the root comes from the bass) independently of how loud the
+  // upper voices are.
   group('an augmented triad takes its root from the bass note', () {
+    test('a C augmented triad in close voicing is recognised as Caug', () {
+      // C3 E3 G#3 — root, major third, augmented fifth, all at one level and
+      // root + third both inside the bass register.
+      expect(
+        decode(chordSignal(const [130.81, 164.81, 207.65], seconds: 1.5)),
+        'Caug',
+      );
+    });
+
     test('C in the bass reads as Caug', () {
       // C3 G#3 E4 — only C3 is inside the bass window.
       expect(

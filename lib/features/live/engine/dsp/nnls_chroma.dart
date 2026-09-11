@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:fftea/fftea.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 /// Chordino-class chroma (RAG chunk 011): STFT → log-frequency spectrum →
 /// **NNLS approximate note transcription** against a harmonic dictionary →
@@ -29,6 +30,7 @@ class NnlsChroma {
     this.spectralWhitening = true,
     this.whiteningExponent = 0.7,
     this.whiteningHalfSemitones = 3.0,
+    this.referenceRegisterWindows = true,
   }) : _fft = FFT(window),
        _hann = Float64List(window),
        _windowed = Float64List(window),
@@ -38,6 +40,26 @@ class NnlsChroma {
     }
     _nBins = nNotes * binsPerSemitone;
     _whiteningHalfWindow = (whiteningHalfSemitones * binsPerSemitone).round();
+    _bassWeight = Float64List(nNotes);
+    _trebleWeight = Float64List(nNotes);
+    for (var n = 0; n < nNotes; n++) {
+      final midi = minMidi + n;
+      if (referenceRegisterWindows) {
+        // Hann windows indexed in semitones from A0 (MIDI 21), exactly as
+        // the reference tables are: `0.5 - 0.5*cos(2*pi*(i + 0.5)/len)`
+        // reproduces `basswindow`/`treblewindow` to all six printed digits.
+        final i = midi - 21;
+        _bassWeight[n] = (i < 0 || i > 36)
+            ? 0.0
+            : 0.5 - 0.5 * math.cos(2 * math.pi * (i + 0.5) / 37);
+        _trebleWeight[n] = (i < 0 || i > 83)
+            ? 0.0
+            : 0.5 - 0.5 * math.cos(2 * math.pi * (i + 0.5) / 84);
+      } else {
+        _bassWeight[n] = midi <= bassMaxMidi ? 1.0 : 0.0;
+        _trebleWeight[n] = midi >= trebleMinMidi ? 1.0 : 0.0;
+      }
+    }
     _binFreq = Float64List(_nBins);
     for (var j = 0; j < _nBins; j++) {
       final midi = minMidi + j / binsPerSemitone;
@@ -148,6 +170,26 @@ class NnlsChroma {
   /// harmony — hence treble spans everything and bass is the isolating cut.
   final int bassMaxMidi;
   final int trebleMinMidi;
+
+  /// EXPERIMENT (E18-R07): fold the registers with the reference
+  /// implementation's smooth raised-cosine weights instead of the hard
+  /// [bassMaxMidi] / [trebleMinMidi] cuts. See `chromamethods.h` in
+  /// c4dm/nnls-chroma: `basswindow` is a Hann of length 37 semitones from
+  /// A0 (MIDI 21), `treblewindow` a Hann of length 84 from the same base.
+  final bool referenceRegisterWindows;
+
+  late final Float64List _bassWeight;
+  late final Float64List _trebleWeight;
+
+  /// The bass-register weight applied to [midi] when folding to 12 bins, or 0
+  /// for a note outside the analysed range. Test seam: the depth ORDERING is
+  /// the property that names a root, so a test must be able to read it without
+  /// inferring it from a decoded label.
+  @visibleForTesting
+  double debugBassWeightForMidi(int midi) {
+    final n = midi - minMidi;
+    return (n < 0 || n >= nNotes) ? 0 : _bassWeight[n];
+  }
 
   final int nNotes;
   late final int _nBins;
@@ -325,8 +367,8 @@ class NnlsChroma {
       final pc = midi % 12;
       final a = _activation[n];
       chroma[pc] += a;
-      if (midi <= bassMaxMidi) lastBassChroma[pc] += a;
-      if (midi >= trebleMinMidi) lastTrebleChroma[pc] += a;
+      lastBassChroma[pc] += a * _bassWeight[n];
+      lastTrebleChroma[pc] += a * _trebleWeight[n];
     }
     _l2Normalise(lastBassChroma);
     _l2Normalise(lastTrebleChroma);
