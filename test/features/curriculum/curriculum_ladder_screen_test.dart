@@ -214,11 +214,58 @@ void main() {
     }
   });
 
-  testWidgets('a locked rung names what it needs', (tester) async {
+  testWidgets('a locked rung names what it needs, in words', (tester) async {
     await tester.pumpWidget(_host(Stream<LiveFrame>.value(_frame())));
     await tester.pump();
-    // "Locked" on its own tells the learner nothing they can act on.
-    expect(find.textContaining('Needs first:'), findsWidgets);
+    // "Locked" on its own tells the learner nothing they can act on — and
+    // "Needs first: rhythm.downQuarters" tells them nothing either.
+    expect(
+      find.textContaining('Needs first: steady down-strokes'),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('nothing on the ladder is a persistence code', (tester) async {
+    await tester.pumpWidget(_host(Stream<LiveFrame>.value(_frame())));
+    await tester.pump();
+
+    // The ids are deliberately stable and deliberately never translated, which is
+    // exactly what makes them wrong on screen. Scanning every rendered string is
+    // cheaper than one cell per id and it cannot be outgrown by a new rung.
+    final scroll = find.byType(Scrollable).first;
+    for (var sweep = 0; sweep < 12; sweep++) {
+      for (final widget in tester.widgetList<Text>(find.byType(Text))) {
+        final shown = widget.data;
+        if (shown == null) continue;
+        for (final prefix in const [
+          'mission.',
+          'level.',
+          'stage.',
+          'chord.',
+          'rhythm.',
+          'strumPattern.',
+          'songPerformance.',
+        ]) {
+          expect(
+            shown.contains(prefix),
+            isFalse,
+            reason: 'a persistence code reached the screen: "$shown"',
+          );
+        }
+      }
+      await tester.drag(scroll, const Offset(0, -300));
+      await tester.pump();
+    }
+  });
+
+  testWidgets('each rung is numbered once, in ladder order', (tester) async {
+    await tester.pumpWidget(_host(Stream<LiveFrame>.value(_frame())));
+    await tester.pump();
+    // The order IS the teaching sequence, so the number is information. Step 1
+    // must be the first rung of the first stage, and no number may repeat.
+    expect(find.text('Step 1'), findsOneWidget);
+    expect(find.text('Step 2'), findsOneWidget);
+    expect(find.text('First sounds'), findsOneWidget);
   });
 
   testWidgets('with no audio, unmeasurable rungs blame the DEVICE and say what '
@@ -310,7 +357,7 @@ void main() {
       // It is also below the fold, and a row the ListView never built is a row
       // this test would never see.
       await tester.scrollUntilVisible(
-        find.text('mission.downUpEighths'),
+        find.text('Down-up eighths'),
         200,
         scrollable: find.byType(Scrollable).first,
       );
@@ -318,7 +365,7 @@ void main() {
       expect(
         find.descendant(
           of: find.ancestor(
-            of: find.text('mission.downUpEighths'),
+            of: find.text('Down-up eighths'),
             matching: find.byType(ListTile),
           ),
           matching: find.text('Open'),
@@ -348,18 +395,32 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Measured over 6 attempts'), findsOneWidget);
-      for (final praise in ['Steady', 'Solid', 'Strong', 'Stable']) {
-        expect(
-          find.textContaining(praise),
-          findsNothing,
-          reason:
-              '$praise describes how consistent the EVIDENCE is, not how well '
-              'the learner played — on screen it would be praise for playing '
-              'every stroke backwards',
-        );
-      }
-      // And it must not have opened anything: the level is 0.0.
+      // Asserted as the EXACT set of strings the row is allowed to say, rather
+      // than as a list of forbidden words. A word list was the first version and
+      // it was wrong twice over: "Steady down-strokes" is now the legitimate NAME
+      // of this very exercise, so banning "Steady" banned the row's own title;
+      // and a banned-word list would have missed any new wording a later round
+      // invented. An exact set catches an extra line however it is phrased.
+      final row = find.ancestor(
+        of: find.text('Steady down-strokes'),
+        matching: find.byType(ListTile),
+      );
+      final shown = tester
+          .widgetList<Text>(
+            find.descendant(of: row, matching: find.byType(Text)),
+          )
+          .map((text) => text.data)
+          .whereType<String>()
+          .toSet();
+      expect(
+        shown,
+        {'Steady down-strokes', 'Step 2', 'Open', 'Measured over 6 attempts'},
+        reason:
+            'six confirmed wrong-direction attempts reduce to state `stable` at '
+            'level 0.000, so ANY extra line derived from the state would be '
+            'praise for playing every stroke backwards',
+      );
+      // And nothing it measured opened a gated rung: the level is 0.0.
       expect(find.text('Not yet reached'), findsWidgets);
     });
   });

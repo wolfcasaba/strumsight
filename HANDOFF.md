@@ -1,5 +1,68 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R14 — A LÉTRA MOST OLVASHATÓ: nevek a perzisztencia-kódok helyén — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd" (teljes delegálás).
+
+Az R13 kimondta, hogy a rungok és készségek még `mission.downQuarters` /
+`rhythm.downQuarters` formában jelennek meg. Ez a kör ezt zárja le.
+
+**Három szivárgás volt a létrán:** a szakasz-fejléc (`level.downQuarters`), a sor
+címe (`mission.downQuarters`), és az „Előbb kell:" lista (`rhythm.downQuarters`).
+Plusz a gyakorló képernyő címe generikus „Pengetés" volt, tehát a 6. lépés
+megnyitva megkülönböztethetetlen a 2.-tól — a tanuló nem tudta ellenőrizni, hogy a
+koppintás azt adta-e, amit kínált.
+
+**Miért nem a `SuccessCriteria.description`-t rendereltem.** Egy sor lett volna, és
+rossz forrás: azok a stringek a `beginner_course.dart`-ban **csak angolul**
+léteznek, tehát egy magyar tanuló elé angol szöveget tettek volna — és az l10n
+parity gate ezt SOHA nem vette volna észre, mert az arb-fájlokból nem hiányzott
+volna semmi. Amit a tanuló olvas, az az arb-fájlokba tartozik.
+
+**Szakasz-fejléc a szint-fejléc helyett.** Egy szint itt többnyire EGY küldetést
+tartalmaz, tehát a fejléce megismételte az alatta lévő sort. A szakasz az a
+felosztás, ami valóban több rungot csoportosít. Helyette minden rung **számot**
+kapott (1-14, a kurzus saját sorrendjében): ez valódi információ, nem dekoráció —
+a sorrend MAGA a tanítási szekvencia, amit a `Course.validate()` kényszerít ki.
+
+**Az őrteszt a lényeg.** A `curriculum_names.dart` fallbackje semleges generikus
+(„Ez a lépés"), sosem az azonosító — mert a token rosszabb, mint egy ködös felirat:
+a tanuló nem tudja megkülönböztetni egy elírástól. Hogy elérhetetlen maradjon, azt
+nem remény biztosítja: a `curriculum_names_test.dart` **mindkét nyelven** bejárja a
+szállított kurzust, és elbukik, ha bármelyik küldetés, szakasz vagy hivatkozott
+készség a fallbackbe esik. Egy rung névadás nélküli hozzáadása piros teszt, nem
+kiszivárgott token. Plusz a létra-tesztben egy cella MINDEN kirenderelt stringet
+végigpásztáz hét azonosító-prefixre, görgetés közben.
+
+### Egy tesztdizájn-csapda, amibe beléptem
+
+Az R13 őrtesztje tiltólistával dolgozott: a „Steady" / „Solid" / „Strong" /
+„Stable" szavak nem jelenhettek meg a képernyőn. Ez a kör megbuktatta — mert
+„**Steady** down-strokes" most a gyakorlat LEGITIM NEVE. A tiltólista kétszeresen
+is rossz volt: a sor saját címét tiltotta, és egy későbbi kör új szövegezését
+amúgy sem fogta volna el. Most a sor **pontos megengedett string-halmazát**
+állítom (név, lépésszám, állapot, kör-szám), ami bármilyen megfogalmazású extra
+sort elkap.
+
+*Általános forma: egy egész képernyőre kiterjedő szó-tiltólista akkor törik el,
+amikor a termék legitimen használja azt a szót. A megengedett halmazt kell
+állítani, nem a tiltottat.*
+
+**Gate:** zöld — `curriculum` (231 cella), `practice_hub`, `app/routing` +
+architecture / secrets / l10n. Új: 11 cella (`curriculum_names_test`), +2 a
+létra-tesztben; 32 l10n-kulcs × 2 nyelv, a **szegmens**-fájlokba (lásd az R13
+csapdáját).
+
+### Ami nyitva marad
+
+- A `mission.dDuUdU` továbbra sem kiérdemelhető: egy akkord-készségre kapuzott,
+  amit ez a képernyő nem tud megnyitni. A végig működő lánc
+  `mission.downQuarters` → `mission.downUpEighths`. **Ez a következő kör tárgya:**
+  akkord-pontozott küldetés értékelése, saját metrikakóddal (nem az
+  irány-pontosságot kölcsönözve).
+- Készülék-ellenőrzés (valódi gitár, ARM per-frame költség) és a `sus4`/`aug`
+  túljelentés továbbra is környezet-, illetve adathiány miatt blokkolt.
+
 ## 🟢 E18-R13 — A LÉTRA MOST HALAD: a kör-eredmény készség-evidenciává lett — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „folytasd" (teljes delegálás: „ehez nem kell az én döntésem te

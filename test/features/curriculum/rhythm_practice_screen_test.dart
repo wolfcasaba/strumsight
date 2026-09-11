@@ -593,6 +593,8 @@ void main() {
   testWidgets('Hungarian renders Hungarian', (tester) async {
     await tester.pumpWidget(_host(_frame(), locale: const Locale('hu')));
     await tester.pump();
-    expect(find.text('Pengetés'), findsOneWidget);
+    // The title is the RUNG's Hungarian name now, not a generic "Pengetés": the
+    // no-argument route opens the pattern rung.
+    expect(find.text('A D-DU-UDU ritmus'), findsOneWidget);
   });
 }

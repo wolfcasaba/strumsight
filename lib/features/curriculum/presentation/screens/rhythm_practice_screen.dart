@@ -56,6 +56,7 @@ import '../../domain/rhythm_countin.dart';
 import '../../domain/rhythm_grading.dart';
 import '../../domain/rhythm_grid.dart';
 import '../../domain/rhythm_mode.dart';
+import '../curriculum_names.dart';
 import '../providers/curriculum_progress_providers.dart';
 import '../widgets/rhythm_lane.dart';
 
@@ -455,7 +456,12 @@ final class _RhythmPracticeScreenState
     final fretting = _frettingFor(live, askedChord);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.curriculumRhythmTitle)),
+      appBar: AppBar(
+        // The RUNG's name, not a generic "Strumming". Opening step 6 from the
+        // ladder and landing on a screen indistinguishable from step 2 leaves the
+        // learner unable to tell whether the tap did what it offered.
+        title: Text(curriculumMissionName(l10n, _mission.missionId)),
+      ),
       // The transport sits OUTSIDE the scroll view on purpose: a practice
       // screen's play control must be reachable without scrolling, and a widget
       // test caught it sitting below the fold at phone height.

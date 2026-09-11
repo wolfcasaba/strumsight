@@ -68,6 +68,7 @@ import '../../../practice_generator/public.dart'
 import '../../domain/course.dart';
 import '../../domain/device_capabilities.dart';
 import '../../domain/mission_availability.dart';
+import '../curriculum_names.dart';
 import '../providers/curriculum_progress_providers.dart';
 import 'rhythm_practice_screen.dart';
 
@@ -84,6 +85,12 @@ final class CurriculumLadderScreen extends ConsumerWidget {
       microphoneListening: live?.listening ?? false,
     );
     final estimates = ref.watch(curriculumEstimatesProvider);
+    // Numbered once, from the course's own order, so no row has to work out its
+    // own position and two rows can never claim the same number.
+    final rungNumbers = <String, int>{
+      for (final (index, mission) in course.missionsInOrder.indexed)
+        mission.missionId: index + 1,
+    };
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.curriculumLadderTitle)),
@@ -91,23 +98,31 @@ final class CurriculumLadderScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(SsSpacing.space4),
           children: [
-            for (final stage in course.stages)
-              for (final level in stage.levels) ...[
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: SsSpacing.space3,
-                    bottom: SsSpacing.space2,
-                  ),
-                  child: Text(
-                    level.levelId,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: colors.textSecondary,
-                    ),
+            // STAGE headers, not level headers. A level here usually holds one
+            // mission, so its header repeated the row underneath it; the stage is
+            // the division that actually groups several rungs together.
+            for (final stage in course.stages) ...[
+              Padding(
+                padding: const EdgeInsets.only(
+                  top: SsSpacing.space3,
+                  bottom: SsSpacing.space2,
+                ),
+                child: Text(
+                  curriculumStageName(l10n, stage.stageId),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colors.textSecondary,
                   ),
                 ),
+              ),
+              for (final level in stage.levels)
                 for (final mission in level.missions)
                   _MissionRow(
                     mission: mission,
+                    // One-based, in ladder order. The number is real information,
+                    // not decoration: the order IS the teaching sequence (the
+                    // course's own `validate()` refuses a gate that needs a skill
+                    // trained later), so it tells the learner where they are.
+                    rung: rungNumbers[mission.missionId]!,
                     // The domain decides; this screen only renders the verdict.
                     availability: missionAvailability(
                       mission,
@@ -117,7 +132,7 @@ final class CurriculumLadderScreen extends ConsumerWidget {
                     missing: missingCapabilitiesFor(mission, capabilities),
                     earned: _earnedFor(mission, estimates),
                   ),
-              ],
+            ],
           ],
         ),
       ),
@@ -151,12 +166,16 @@ final class CurriculumLadderScreen extends ConsumerWidget {
 final class _MissionRow extends StatelessWidget {
   const _MissionRow({
     required this.mission,
+    required this.rung,
     required this.availability,
     required this.missing,
     required this.earned,
   });
 
   final CurriculumMission mission;
+
+  /// This rung's one-based position in the ladder.
+  final int rung;
   final MissionAvailability availability;
   final Set<ExerciseCapability> missing;
 
@@ -192,7 +211,14 @@ final class _MissionRow extends StatelessWidget {
       MissionAvailability.lockedPendingSkill
           when mission.unlock.prerequisiteSkillIds.isNotEmpty =>
         l10n.curriculumLadderNeeds(
-          (mission.unlock.prerequisiteSkillIds.toList()..sort()).join(', '),
+          // Named, then sorted BY NAME: sorting the ids first would order the
+          // list by a code the learner cannot see, which looks arbitrary on
+          // screen. Still deterministic, which is what the sort is for.
+          (mission.unlock.prerequisiteSkillIds
+                  .map((skillId) => curriculumSkillName(l10n, skillId))
+                  .toList()
+                ..sort())
+              .join(', '),
         ),
       MissionAvailability.unavailableCapability when missing.isNotEmpty =>
         l10n.curriculumLadderMissing(
@@ -228,10 +254,17 @@ final class _MissionRow extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: SsSpacing.space2),
       child: ListTile(
-        title: Text(mission.missionId, style: text.bodyMedium),
+        title: Text(
+          curriculumMissionName(l10n, mission.missionId),
+          style: text.bodyMedium,
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              l10n.curriculumLadderRung(rung),
+              style: text.labelSmall?.copyWith(color: colors.textSecondary),
+            ),
             Text(status, style: text.labelMedium?.copyWith(color: tone)),
             if (detail != null)
               Text(
