@@ -71,12 +71,55 @@ class ChordShapes {
     'G#m': [4, 6, 6, 4, 4, 4],
   };
 
+  /// The shape for [label], resolving an ENHARMONIC spelling of the root when
+  /// the catalogue stores the chord under the other name.
+  ///
+  /// Two parts of the app spell one pitch class differently, and they have to
+  /// meet somewhere. The live recogniser's dictionary is sharps-only
+  /// (`chord_dictionary.dart`), so the only name it can produce for this chord
+  /// is `A#`; the catalogue stores it as `Bb`, which is what a guitarist calls
+  /// it. Before this fallback a recognised Bb found no diagram and no
+  /// tap-to-hear audio, even though the shape was right there — and an imported
+  /// song written with `A#` hit the same hole, since the song validator accepts
+  /// both spellings.
+  ///
+  /// The catalogue's mixed spelling is deliberate and stays: `Bb` alongside
+  /// `C#m`, `F#m`, `G#m` is conventional naming, the names real charts use. Only
+  /// the ROOT is respelled here and the quality suffix is untouched, so a
+  /// quality the catalogue lacks stays absent rather than resolving to some
+  /// other chord. The returned [ChordShape] keeps the label the CALLER asked
+  /// for, so nothing downstream silently renames a detected chord — choosing a
+  /// display spelling is the UI's decision, as `ChordLabelNormalizer` documents.
   static ChordShape? forLabel(String label) {
-    final f = _map[label];
-    return f == null ? null : ChordShape(label, f);
+    final frets = _map[label] ?? _map[_respelled(label) ?? ''];
+    return frets == null ? null : ChordShape(label, frets);
   }
 
-  static bool has(String label) => _map.containsKey(label);
+  static bool has(String label) =>
+      _map.containsKey(label) || _map.containsKey(_respelled(label) ?? '');
+
+  /// Enharmonic root spellings, each way round.
+  static const _enharmonicRoots = <String, String>{
+    'C#': 'Db',
+    'Db': 'C#',
+    'D#': 'Eb',
+    'Eb': 'D#',
+    'F#': 'Gb',
+    'Gb': 'F#',
+    'G#': 'Ab',
+    'Ab': 'G#',
+    'A#': 'Bb',
+    'Bb': 'A#',
+  };
+
+  /// [label] with its root written the other way, or null when the root carries
+  /// no accidental (nothing to respell) or the label is not a chord name.
+  static String? _respelled(String label) {
+    if (label.length < 2) return null;
+    final root = label.substring(0, 2);
+    final other = _enharmonicRoots[root];
+    return other == null ? null : '$other${label.substring(2)}';
+  }
 
   /// All chord labels we have a diagram for, in insertion order.
   static List<String> get allLabels => _map.keys.toList();
