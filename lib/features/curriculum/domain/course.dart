@@ -11,7 +11,12 @@
 library;
 
 import '../../practice_generator/public.dart'
-    show PracticeGoalType, SuccessCriteria, SuccessCriterionKind;
+    show
+        ExerciseCapability,
+        PracticeGoalType,
+        SuccessCriteria,
+        SuccessCriterionKind;
+import 'rhythm_assignment.dart';
 import 'unlock_rule.dart';
 
 /// A way a course can be malformed.
@@ -63,6 +68,7 @@ final class CurriculumMission {
     required this.unlock,
     required this.successCriteria,
     required this.isOutcomeMeasured,
+    this.rhythm,
   }) : missionId = _requireText(missionId, 'missionId'),
        trainedSkillIds = Set<String>.unmodifiable(trainedSkillIds) {
     final selfGated = unlock.prerequisiteSkillIds.intersection(
@@ -111,6 +117,33 @@ final class CurriculumMission {
       case SuccessCriterionKind.tempoSustained:
         break;
     }
+    final rhythm = this.rhythm;
+    if (rhythm != null) {
+      final required = successCriteria.requiredCapabilities;
+      if (!required.contains(ExerciseCapability.supportsDirectionScoring)) {
+        throw ArgumentError.value(
+          successCriteria,
+          'successCriteria',
+          'a rhythm mission measures which way the hand travelled, so it must '
+              'require direction scoring',
+        );
+      }
+      final claimsChord = required.contains(
+        ExerciseCapability.supportsChordScoring,
+      );
+      if (claimsChord != rhythm.mode.scoresChord) {
+        throw ArgumentError.value(
+          successCriteria,
+          'successCriteria',
+          'the ${rhythm.mode.code} mode '
+              '${rhythm.mode.scoresChord ? 'does' : 'does NOT'} score a chord, '
+              'so the criterion must '
+              '${rhythm.mode.scoresChord ? 'require' : 'not require'} '
+              'supportsChordScoring — a rung that claims a chord score it '
+              'cannot produce would credit a learner for nothing',
+        );
+      }
+    }
   }
 
   final String missionId;
@@ -126,6 +159,11 @@ final class CurriculumMission {
   final UnlockRule unlock;
 
   final SuccessCriteria successCriteria;
+
+  /// The rhythm exercise this rung drills, or null when it is not a rhythm
+  /// rung. A mission that carries one must require direction scoring, and must
+  /// claim a chord score exactly when its mode actually produces one.
+  final RhythmAssignment? rhythm;
 
   /// Whether finishing this mission says something MEASURED about the learner.
   ///

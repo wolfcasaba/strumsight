@@ -64,6 +64,9 @@ library;
 
 import '../../practice_generator/public.dart';
 import '../domain/course.dart';
+import '../domain/rhythm_assignment.dart';
+import '../domain/rhythm_grid.dart';
+import '../domain/rhythm_mode.dart';
 import '../domain/unlock_rule.dart';
 
 /// Skill ids this course trains, named once so nothing can typo them apart.
@@ -102,6 +105,55 @@ const _micChordDirection = <ExerciseCapability>{
   ExerciseCapability.supportsOffline,
 };
 
+/// The tempos the app ALREADY teaches these things at, not new numbers: the
+/// shipped `first-strums` and `first-win` lessons run at 70 bpm and
+/// `eighth-drive` — the first lesson with eighth-note strumming — at 80
+/// (`lib/features/learn/model/lesson.dart`). Inventing a different beginner
+/// tempo here would have the app teaching two answers to the same question.
+const double beginnerQuarterBpm = 70;
+const double beginnerEighthBpm = 80;
+
+/// Four bars per attempt: enough repetitions that one stray stroke does not
+/// decide the outcome, short enough that a beginner can hold the shape.
+const int beginnerBarsPerAttempt = 4;
+
+/// Damped down-strokes on every beat — the right hand alone.
+RhythmAssignment _downQuartersExercise() => RhythmAssignment(
+  mode: RhythmMode.mutedStrokes,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.quarter,
+    struck: const [true, true, true, true],
+    muted: true,
+  ),
+  bpm: beginnerQuarterBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+/// Damped continuous eighths: the pendulum itself, nothing skipped.
+RhythmAssignment _downUpEighthsExercise() => RhythmAssignment(
+  mode: RhythmMode.mutedStrokes,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.eighth,
+    struck: const [true, true, true, true, true, true, true, true],
+    muted: true,
+  ),
+  bpm: beginnerEighthBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+/// `D DU UDU` — the pattern the app already ships as `down-up-groove`, over a
+/// chord. The two silent slots are GHOSTS, not missing strokes: the hand keeps
+/// travelling through them.
+RhythmAssignment _dDuUdUExercise() => RhythmAssignment(
+  mode: RhythmMode.withChord,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.eighth,
+    struck: const [true, false, true, true, false, true, true, true],
+  ),
+  bpm: beginnerEighthBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
 UnlockRule _after(Set<String> skills) => UnlockRule.skillConfidence(
   prerequisiteSkillIds: skills,
   minimumState: SkillEstimateState.emerging,
@@ -116,6 +168,7 @@ CurriculumMission _scored({
   required String description,
   required Set<ExerciseCapability> capabilities,
   double minimumAccuracy = 0.7,
+  RhythmAssignment? rhythm,
 }) => CurriculumMission(
   missionId: id,
   goalType: goal,
@@ -128,6 +181,7 @@ CurriculumMission _scored({
     minimumAccuracy: minimumAccuracy,
   ),
   isOutcomeMeasured: true,
+  rhythm: rhythm,
 );
 
 CurriculumLevel _level({
@@ -180,6 +234,7 @@ Course beginnerCourse() => Course(
               description:
                   'damp the strings and play steady down-strokes on every beat',
               capabilities: _micDirection,
+              rhythm: _downQuartersExercise(),
             ),
           ],
         ),
@@ -265,6 +320,7 @@ Course beginnerCourse() => Course(
               unlock: _after(const {BeginnerSkills.rhythmDownQuarters}),
               description: 'damped down-up eighths, even and relaxed',
               capabilities: _micDirection,
+              rhythm: _downUpEighthsExercise(),
             ),
           ],
         ),
@@ -285,6 +341,7 @@ Course beginnerCourse() => Course(
               }),
               description: 'down, down-up, up-down-up over E minor and A minor',
               capabilities: _micChordDirection,
+              rhythm: _dDuUdUExercise(),
             ),
           ],
         ),
