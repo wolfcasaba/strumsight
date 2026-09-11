@@ -28,7 +28,7 @@ class NnlsChroma {
     this.tuningSmoothing = 0.2,
     this.spectralWhitening = true,
     this.whiteningExponent = 0.7,
-    this.whiteningHalfWindow = 18, // ±half octave at 3 bins/semitone
+    this.whiteningHalfSemitones = 6.0,
   }) : _fft = FFT(window),
        _hann = Float64List(window),
        _windowed = Float64List(window),
@@ -37,6 +37,7 @@ class NnlsChroma {
       _hann[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (window - 1));
     }
     _nBins = nNotes * binsPerSemitone;
+    _whiteningHalfWindow = (whiteningHalfSemitones * binsPerSemitone).round();
     _binFreq = Float64List(_nBins);
     for (var j = 0; j < _nBins; j++) {
       final midi = minMidi + j / binsPerSemitone;
@@ -69,14 +70,33 @@ class NnlsChroma {
   final double tuningSmoothing;
 
   /// Spectral whitening (chunk 012, Chordino stage): divide each log-freq bin
-  /// by the RMS of its ±[whiteningHalfWindow]-bin neighbourhood raised to
+  /// by the RMS of its ±[whiteningHalfSemitones] neighbourhood raised to
   /// [whiteningExponent], flattening the spectral envelope BEFORE NNLS.
   /// Measured round-70 failure it fixes: a phone mic's low-shelf roll-off
   /// (fundamentals ×0.15 below 300 Hz) read a C major as Em — the notes were
   /// outvoted by their own harmonics' register.
   final bool spectralWhitening;
   final double whiteningExponent;
-  final int whiteningHalfWindow;
+
+  /// Half-width of the normalisation neighbourhood, in SEMITONES.
+  ///
+  /// Expressed in semitones on purpose: the bin count it converts to depends on
+  /// [binsPerSemitone], and while this was stored as a raw BIN COUNT the two
+  /// could silently desync — a change to [binsPerSemitone] moved the musical
+  /// span without anyone editing the constant. That is not hypothetical; it
+  /// produced a wrong diagnosis once (see the E18-R06 section of
+  /// `docs/rag/chunks/012-chord-dictionary-viterbi.md`). The musical quantity
+  /// is what matters, so the musical quantity is what is stored.
+  ///
+  /// The span is quantised to the bin grid, so several nearby values collapse
+  /// onto the same neighbourhood: at [binsPerSemitone] 3 the effective
+  /// half-window is `round(whiteningHalfSemitones * 3)` bins.
+  final double whiteningHalfSemitones;
+
+  /// [whiteningHalfSemitones] on the log-frequency bin grid — derived once in
+  /// the constructor, never per bin: [_whiten] reads it inside a per-bin loop.
+  int get whiteningHalfWindow => _whiteningHalfWindow;
+  late final int _whiteningHalfWindow;
 
   /// Register split for the bass+treble chroma (RAG chunk 012). The **treble**
   /// chroma folds the whole harmony (activations at/above [trebleMinMidi],
