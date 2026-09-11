@@ -7,7 +7,6 @@
 // the sourced rationale disagreeing with it.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/chords/chord_shape.dart';
-import 'package:strumsight/features/curriculum/data/beginner_course.dart';
 import 'package:strumsight/features/curriculum/public.dart';
 import 'package:strumsight/features/live/engine/dsp/chord_dictionary.dart';
 import 'package:strumsight/features/practice_generator/public.dart';

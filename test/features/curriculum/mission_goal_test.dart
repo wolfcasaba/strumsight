@@ -12,7 +12,6 @@
 // different seed on every attempt — quietly destroying the guarantee that the
 // same content always plans the same way.
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/curriculum/data/beginner_course.dart';
 import 'package:strumsight/features/curriculum/public.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 
