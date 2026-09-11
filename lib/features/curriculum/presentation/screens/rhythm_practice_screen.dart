@@ -70,17 +70,30 @@ final class _RhythmPracticeScreenState
 
   Duration? _position;
   bool _playing = false;
+
+  /// The ticker's own elapsed time, the only time base this screen reads.
+  ///
+  /// Deliberately NOT `SchedulerBinding.currentFrameTimeStamp`: that is valid
+  /// only inside a frame, so reading it from a tap handler asserts.
+  Duration _tickerElapsed = Duration.zero;
   Duration _startedAt = Duration.zero;
   Duration _elapsedAtPause = Duration.zero;
 
   @override
   void initState() {
     super.initState();
+    final course = beginnerCourse();
+    // The no-argument route is a direct entry point, not a teaching decision:
+    // it opens the richest rung (the one with a chord) so the whole surface is
+    // reachable. The real flow always passes the learner's own mission.
     final mission =
         widget.mission ??
-        beginnerCourse().missionsInOrder.firstWhere(
-          (candidate) => candidate.rhythm != null,
-          orElse: () => beginnerCourse().missionsInOrder.first,
+        course.missionsInOrder.firstWhere(
+          (candidate) => candidate.rhythm?.mode.scoresChord ?? false,
+          orElse: () => course.missionsInOrder.firstWhere(
+            (candidate) => candidate.rhythm != null,
+            orElse: () => course.missionsInOrder.first,
+          ),
         );
     _assignment =
         mission.rhythm ??
@@ -110,12 +123,12 @@ final class _RhythmPracticeScreenState
   }
 
   void _onTick(Duration elapsed) {
+    _tickerElapsed = elapsed;
     if (!_playing) return;
-    final next = _elapsedAtPause + (elapsed - _startedAt);
-    setState(() => _position = next);
+    setState(() => _position = _elapsedAtPause + (elapsed - _startedAt));
   }
 
-  void _toggle(Duration now) {
+  void _toggle() {
     setState(() {
       if (_playing) {
         _elapsedAtPause = _position ?? Duration.zero;
@@ -124,7 +137,7 @@ final class _RhythmPracticeScreenState
         // than restarting it, and a null read would park the pendulum.
         return;
       }
-      _startedAt = now;
+      _startedAt = _tickerElapsed;
       _playing = true;
     });
   }
@@ -165,6 +178,24 @@ final class _RhythmPracticeScreenState
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.curriculumRhythmTitle)),
+      // The transport sits OUTSIDE the scroll view on purpose: a practice
+      // screen's play control must be reachable without scrolling, and a widget
+      // test caught it sitting below the fold at phone height.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(SsSpacing.space3),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FilledButton.icon(
+                onPressed: _toggle,
+                icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+                label: Text('${_assignment.bpm.round()} BPM'),
+              ),
+            ],
+          ),
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(SsSpacing.space4),
@@ -219,26 +250,6 @@ final class _RhythmPracticeScreenState
                 activeColor: colors.success,
                 trackColor: colors.surfaceSunken,
                 warningColor: colors.warning,
-              ),
-              const SizedBox(height: SsSpacing.space4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FilledButton.icon(
-                    onPressed: () => _toggle(
-                      Duration(
-                        microseconds:
-                            (SchedulerBinding
-                                    .instance
-                                    .currentFrameTimeStamp
-                                    .inMicroseconds)
-                                .toInt(),
-                      ),
-                    ),
-                    icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
-                    label: Text('${_assignment.bpm.round()} BPM'),
-                  ),
-                ],
               ),
             ],
           ),
