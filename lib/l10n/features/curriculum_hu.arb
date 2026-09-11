@@ -1,0 +1,79 @@
+{
+  "@@locale": "hu",
+  "curriculumRhythmTitle": "Pengetés",
+  "curriculumHoldChord": "fogd",
+  "curriculumNoChord": "Nincs akkord — tompítsd a húrokat, csak a jobb kéz",
+  "curriculumNextChord": "következik: {chord}",
+  "@curriculumNextChord": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumChordStays": "ugyanaz marad",
+  "curriculumChordRinging": "szól, tisztán",
+  "curriculumChordUnclear": "nem tisztázott",
+  "curriculumChordOther": "{chord} szól",
+  "@curriculumChordOther": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumStrokeDown": "lefelé",
+  "curriculumStrokeUp": "felfelé",
+  "curriculumStrokeGhost": "ghost ütés, a kéz átmegy, de nem ér a húrhoz",
+  "curriculumStrokeSemantic": "{count} ütés, {direction}",
+  "@curriculumStrokeSemantic": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumPrepareChange": "itt indul a váltás — a pengető kéz ne álljon meg",
+  "curriculumHeard": "{expected} ütésből {heard} hallatszott",
+  "@curriculumHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTooLittleHeard": "Ebből még nem hallottam eleget",
+  "curriculumDirectionAccuracy": "Amit hallottam, annak {percent}%-a jó irányba ment",
+  "@curriculumDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumOutcomeCredited": "beszámítva",
+  "curriculumOutcomeWrongDirection": "másik irány",
+  "curriculumOutcomeUnclear": "nem tisztázott",
+  "curriculumOutcomeNoEvidence": "nem hallatszott",
+  "curriculumModeMutedStrokes": "Tompított ütések",
+  "curriculumModeSilentGrid": "Olvasd és játszd",
+  "curriculumModeWithChord": "Akkorddal",
+  "curriculumModeListenAndRepeat": "Hallgasd és ismételd",
+  "curriculumModeStep": "{total} lépésből a {step}.",
+  "@curriculumModeStep": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
+}

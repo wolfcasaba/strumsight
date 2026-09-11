@@ -1803,6 +1803,82 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Make this public?",
   "@communityPublicConfirmTitle": {},
+  "curriculumChordOther": "{chord} is sounding",
+  "@curriculumChordOther": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumChordRinging": "ringing clearly",
+  "curriculumChordStays": "stays the same",
+  "curriculumChordUnclear": "not confirmed",
+  "curriculumDirectionAccuracy": "{percent}% of the strokes I heard went the right way",
+  "@curriculumDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumHeard": "heard {heard} of {expected} strokes",
+  "@curriculumHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumHoldChord": "hold",
+  "curriculumModeListenAndRepeat": "Listen and repeat",
+  "curriculumModeMutedStrokes": "Muted strokes",
+  "curriculumModeSilentGrid": "Read and play",
+  "curriculumModeStep": "Step {step} of {total}",
+  "@curriculumModeStep": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumModeWithChord": "With a chord",
+  "curriculumNextChord": "next: {chord}",
+  "@curriculumNextChord": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumNoChord": "No chord — damp the strings, right hand only",
+  "curriculumOutcomeCredited": "counted",
+  "curriculumOutcomeNoEvidence": "nothing heard",
+  "curriculumOutcomeUnclear": "not confirmed",
+  "curriculumOutcomeWrongDirection": "other direction",
+  "curriculumPrepareChange": "the change starts here — keep the strumming hand moving",
+  "curriculumRhythmTitle": "Strumming",
+  "curriculumStrokeDown": "down",
+  "curriculumStrokeGhost": "ghost stroke, the hand passes without touching the strings",
+  "curriculumStrokeSemantic": "Beat {count}, {direction} stroke",
+  "@curriculumStrokeSemantic": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumStrokeUp": "up",
+  "curriculumTooLittleHeard": "I could not hear enough of that yet",
   "ddSuggestEasy": "Tough one — try Easy mode?",
   "ddSuggestFull": "You're nailing it — try the full lesson?",
   "ddSwitch": "Switch",

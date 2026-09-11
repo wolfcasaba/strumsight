@@ -17,6 +17,9 @@ abstract final class AppRoutes {
   static const String songs = '/songs';
   static const String setlists = '/setlists';
   static const String chords = '/chords';
+  // The curriculum's down/up rhythm pillar (the Yousician differentiator):
+  // the strumming-hand motion plus the notation row.
+  static const String curriculumRhythm = '/curriculum/rhythm';
   static const String login = '/login';
   static const String librarySession = '/library/session';
   static const String practiceHub = '/practice';

@@ -1,0 +1,79 @@
+{
+  "@@locale": "en",
+  "curriculumRhythmTitle": "Strumming",
+  "curriculumHoldChord": "hold",
+  "curriculumNoChord": "No chord — damp the strings, right hand only",
+  "curriculumNextChord": "next: {chord}",
+  "@curriculumNextChord": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumChordStays": "stays the same",
+  "curriculumChordRinging": "ringing clearly",
+  "curriculumChordUnclear": "not confirmed",
+  "curriculumChordOther": "{chord} is sounding",
+  "@curriculumChordOther": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumStrokeDown": "down",
+  "curriculumStrokeUp": "up",
+  "curriculumStrokeGhost": "ghost stroke, the hand passes without touching the strings",
+  "curriculumStrokeSemantic": "Beat {count}, {direction} stroke",
+  "@curriculumStrokeSemantic": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumPrepareChange": "the change starts here — keep the strumming hand moving",
+  "curriculumHeard": "heard {heard} of {expected} strokes",
+  "@curriculumHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTooLittleHeard": "I could not hear enough of that yet",
+  "curriculumDirectionAccuracy": "{percent}% of the strokes I heard went the right way",
+  "@curriculumDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumOutcomeCredited": "counted",
+  "curriculumOutcomeWrongDirection": "other direction",
+  "curriculumOutcomeUnclear": "not confirmed",
+  "curriculumOutcomeNoEvidence": "nothing heard",
+  "curriculumModeMutedStrokes": "Muted strokes",
+  "curriculumModeSilentGrid": "Read and play",
+  "curriculumModeWithChord": "With a chord",
+  "curriculumModeListenAndRepeat": "Listen and repeat",
+  "curriculumModeStep": "Step {step} of {total}",
+  "@curriculumModeStep": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
+}

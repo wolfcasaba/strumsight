@@ -220,6 +220,22 @@ final class RhythmGrid {
         slot.direction == pendulumDirection(slot.index, subdivision),
   );
 
+  /// The hand's crossings of the strings, two per beat, each saying whether it
+  /// STRIKES.
+  ///
+  /// An eighth grid already has one slot per crossing. A quarter grid does not:
+  /// it notates four downstrokes, but the hand still comes back up between them,
+  /// so the returns appear here as ghost crossings. That is the difference
+  /// between what is ASKED (the slots, and all that is ever scored) and what the
+  /// hand DOES — which is what an animation has to draw, because a hand that
+  /// teleported back to the top would be teaching a motion nobody can make.
+  List<bool> get handCrossings => switch (subdivision) {
+    RhythmSubdivision.eighth => [for (final slot in slots) slot.isStruck],
+    RhythmSubdivision.quarter => [
+      for (final slot in slots) ...[slot.isStruck, false],
+    ],
+  };
+
   /// Microseconds from the start of the exercise to the slot at [slotIndex] of
   /// [bar], at [bpm].
   ///
