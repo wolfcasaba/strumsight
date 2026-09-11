@@ -1,5 +1,101 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R09 — A RITMUS-PILLÉR UI-JA: pengető-inga, nyílsor akkorddal, ÉS EMULÁTOROS ELLENŐRZÉS — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „az ui készítéshez végezz kutatást, nézd meg a versenytársak hogy
+ábrázolják a hangokat… nézz utána animációknak is, pl. a yosiciannal van egy
+ilyen golyóval mutatja ami pattog, nekünk a le-fel iránnyal kellene
+érzékeltetni a ritmust valósághűen" + „a mostani UI-k elég amatőrök, ezt
+mindenképp fejleszteni kell" + „a nyilaknál szeretném, ha mutatná a lefogott
+akkordot is" + „zöldüljön ki, amíg jó a lefogás" + „ha kész minden, teszteld le
+mindent emulátorban".
+
+**Kutatás:**
+[`docs/research/visual-rhythm-cues-2026-09.md`](docs/research/visual-rhythm-cues-2026-09.md).
+**Interaktív prototípus (a döntéshez, futó animációkkal):** Artifact —
+„Pengető-inga".
+
+### A kutatás KÉTSZER írta felül a kézenfekvő tervet
+
+**1. A szebb görbe az, amelyik veszített.** Az inga fizikailag szinuszos, tehát a
+szinusz lett volna a magától értetődő választás. A pattogó-golyó szinkronizációs
+vizsgálat az ellenkezőjét mérte: a **gravitáció-szerű, egyenletesen változó
+sebesség** elérte az AUDIO-metronóm pontosságát — amit vizuális metronómok
+általában nem tudnak —, és a szinuszos kontrollt szignifikánsan legyőzte
+(p = 0.028). Ezért `SsStrumPendulum.travelAt` állandó gyorsulás, és egy teszt a
+MÁSODIK DERIVÁLTAT mintavételezi: ha valaki később „kisimítaná", elhasal egy
+cella, nem pedig csendben visszaáll a rosszabb profilra.
+
+**2. Az ember előre üt, nem reagál** (negatív aszinkrónia). Ezért a felvillanás
+önmagában használhatatlan jelzés: a pengető fél slot-időn át **láthatóan
+gyorsulva közeledik** a húrsávhoz, és a glow csak ráadás.
+
+**NEM állítom:** a mért vizsgálatban a golyó EGY eseményt adott körönként, kemény
+visszapattanással; a pengetésnél KETTŐ van, és a fordulók a húrokon kívül esnek.
+Hogy a profil előnye erre is átvihető-e, **nyitott**.
+
+**3. A színkódolás működik — és csapda.** A Figurenotes-nak valódi bizonyítéka
+van, de minden támogató forrás ugyanarra figyelmeztet: mankó lesz belőle, és a
+tanuló végül AZ APPOT tudja olvasni, nem a hangszert; a megoldás a szín
+**eltávolíthatóságának** betervezése. Ezért: a jelölés a STANDARD (↓/↑, a
+klasszikus ⊓/V logikájával), az irányt ALAK hordozza (a pengető csúcsa vezet,
+csökkentett mozgásban is), a szín pedig csak az app bizonyítékát jelöli —
+aminek nincs kottai megfelelője, tehát levehető veszteség nélkül. Vörös
+egyáltalán nincs: az a pár olvad össze a leggyakoribb színvakságban.
+
+### Amit leszállítottunk
+
+| réteg | mi |
+|---|---|
+| design system | `SsStrumPendulum` — a TELJES látvány (a glow is) az óraállás tiszta függvénye (`frameAt`), ezért 17 cella widget-fa nélkül fut; `SsBeatClock`-ról hajtva, ADR 0274 |
+| feature widget | `RhythmLane` — akkord-sáv a nyilak FÖLÖTT, ghost nyilak, felkészülési ablak aláhúzással |
+| képernyő | `RhythmPracticeScreen` — élő mikrofonról a lefogás-állapot, szintmérő, transport |
+| l10n | `curriculum_{en,hu}.arb`, +25 üzenet, parity 2339 |
+| route | `/curriculum/rhythm`, belépő a Practice hub gyorseszközei közt |
+
+**A zöld lefogás szabálya:** az akkord-sáv és a **fogásdiagram pontjai** csak
+akkor zöldek, ha a felismerő MEGERŐSÍTETTE a KÉRT akkordot. `uncertain`,
+`rejected`, null döntés, vagy megerősített döntés címke nélkül → semleges. Más
+akkord → amber. Váltás közben szándékosan nem zöld: amíg az ujjak mozognak,
+semmi nincs megerősítve.
+
+**Amit a képernyő KIMONDOTTAN nem állít:** az ütések IDŐZÍTÉSE még nincs
+pontozva. Ahhoz a detektált onset és a rács ugyanazon az órán kell üljön, és a
+motor időalapja és a képernyő lejátszási órája közti eltolás **nincs megmérve**.
+Igazolatlan órán pontozni annyi lenne, mint azt mondani a tanulónak, hogy késett,
+amikor nem — pont az a hamis tanítás, ami ellen az egész pillér épült. A
+`gradeRhythm` megírva és tesztelve; a bekötése erre a mérésre vár.
+
+### Emulátoros ellenőrzés (Pixel 3a / API 34) — NÉGY hibát talált
+
+A gépi cellák mind zöldek voltak, mégis:
+
+1. **A képernyőnek nem volt belépési pontja** — regisztrált route, amit semmi nem
+   nyit meg. → Practice hub „Strumming" gyorseszköz.
+2. **A pengető nyugalomban eltűnt** — óra nélkül a painter kirajzolta a húrokat
+   és visszatért, így a hero-terület 180 px üres sötét volt. Töröttnek látszik,
+   nem „készenlétnek". → nyugalomban a húrsávon parkol.
+3. **A „not confirmed" olvashatatlan volt** — a szó a sáv SZEGÉLY-színét kapta, a
+   `border` pedig hajszálvonal-tónus, nem szövegszín. Ez túlmutat az esztétikán:
+   a szó pont azért van ott, hogy az állapot ne színfüggő legyen.
+4. **A play gomb a hajtás alatt volt** — egy gyakorlóképernyő lejátszás-gombjához
+   nem szabad görgetni. → fix alsó sávba került. (Ezt a widget-teszt „rákoppintottam
+   a playre, nem történt semmi" alakban fogta meg.)
+
+**SZABÁLY-ÜTKÖZÉS, kimondva:** az `AGENTS.md` „APK-build MINDIG CI-vel" szakasza
+azt írja, lokálisan `flutter build apk`-t **ne futtass és ne is próbálj**, az
+indoka pedig az, hogy „a fejlesztői boxon nincs Android SDK". Ezen a gépen ez az
+indok **már nem igaz**: az SDK ott van, az emulátor fut, a debug build 89 s alatt
+lefordult. A user kifejezett kérésére futott le (ő a szabály szerzője). A
+szabály SZÖVEGÉT frissíteni kell, mert egy hamis premisszájú kötelező szabály a
+következő session-t félrevezeti.
+
+**Mércék:** `tools/round-gate.sh` zöld minden szeletre (curriculum 149 cella,
+`test/core/design_system`, `test/app/navigation`, `test/features/practice_hub`,
+architecture, secrets, l10n). Az architektúra-kapu talált egy valódi
+határsértést is (a képernyő közvetlenül nyúlt a `chords/chord_shape.dart`-hoz) —
+barrel-re javítva, nem allowlistre téve.
+
 ## 🟢 E18-R08 — JÁTÉKOS OKTATÁSI PROGRAM (Yousician-szerű) + A LE/FEL RITMUS-PILLÉR, amit a Yousician nem tud — branch `claude/e18-r06-verify-followup` (2026-09-11)
 
 **User-kérés:** „nézd meg a yosician appot, szeretnék hasonló játékos oktatási
