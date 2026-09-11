@@ -151,13 +151,76 @@ idea.
 
 ### What would change the answer
 
-Not another sweep of these two numbers. The costs all trace to half-wave
-rectification discarding weak-but-real energy, so the candidates are the
-differences NOT yet tried: the reference's **Hamming-weighted kernel** in place
-of our flat box (a weighted mean treats a distant neighbour as less relevant,
-which is exactly what a hard box gets wrong at a peak's edge), and a rectifier
-with a soft floor rather than a hard zero. Both are separate rounds, and both
-need this same three-criteria harness.
+Not another sweep of these two numbers. Two differences had not been tried: the
+reference's **Hamming-weighted kernel** in place of our flat box (a weighted
+mean treats a distant neighbour as less relevant, which is exactly what a hard
+box gets wrong at a peak's edge), and **a rectifier with a soft floor** rather
+than a hard zero. Both became separate rounds on this same three-criteria
+harness.
+
+> **This section originally named a CAUSE, and the cause was wrong.** It said
+> "the costs all trace to half-wave rectification discarding weak-but-real
+> energy". E18-R11 measured that claim directly and falsified it — see §6. The
+> two candidates were right; the reason given for them was not.
+
+## 6. The soft floor: a measured negative, and a correction to §5
+
+E18-R11 built the soft-floor candidate — a gain-domain spectral floor
+`max(d, β·s[j])`, the remedy Berouti, Schwartz & Makhoul (ICASSP 1979) published
+for exactly the artefact a hard zero after spectral subtraction produces — and
+swept β against k over both exponents. Full detail in
+`docs/research/soft-floor-rectifier-2026-09.md`. It ships at 0 (inert), and the
+β = 0 column reproduces §5's numbers digit for digit, which is what makes the
+rest of the grid readable.
+
+**No cell satisfies the win condition.** But the round's real finding is the
+mechanism, read straight out of the whitened spectrum through a debug seam —
+the quiet major third's weight as a share of the frame's largest whitened bin:
+
+| k | β = 0 | β = 0.02 … 0.20 | β = 0.90 | decode |
+|---|---|---|---|---|
+| 0.00 | 8.57 % | 8.57 % | 8.57 % | **E** |
+| 0.25 | 7.09 % | 7.09 % | 7.83 % | `Em` → **E** at β 0.90 |
+| 0.50 | 5.54 % | 5.54 % | 7.92 % | `Em` → **E** at β 0.90 |
+| 0.75 | 3.94 % | 3.94 % | 7.99 % | `Em` → **E** at β 0.90 |
+| 1.00 | 2.30 % | 2.30 % | 8.03 % | `Em` → **E** at β 0.90 |
+
+Three things follow, and the first one is the correction:
+
+1. **The third's bin is never zeroed.** It sits ABOVE its own local mean, so the
+   half-wave rectifier never touches it — at any k, including the full reference
+   value. §5's attribution was wrong: rectification is not where the cost comes
+   from.
+2. **Across the whole published β range the third's weight does not move by one
+   digit.** The floor is not too weak here, it is *inapplicable*. It rescues
+   29–73 % of all bins from zero and the decoder does not care, because those
+   bins carried no evidence.
+3. **The subtraction is what kills the third:** 8.57 → 7.09 → 5.54 → 3.94 →
+   2.30 % as k rises. `k · mean` is a fixed absolute amount within a
+   neighbourhood, so it taxes a weak peak far harder than a loud one — mean
+   subtraction is a contrast operator, and a quiet third is precisely the
+   low-contrast feature it suppresses. The decision boundary sits between
+   7.09 % (`Em`) and 7.83 % (`E`).
+
+The third does return at β ≥ 0.90, an order of magnitude above the literature —
+but that is not the floor working. At β ≈ 1 `max(d, β·s)` returns `β·s` for
+almost every bin including loud ones, so the contrast operator collapses back
+into a plain divide-by-σ: the subtraction has been switched off globally, and
+real audio is then *below* shipped anyway (1132 against 1134 named frames, the
+F minor file silent again).
+
+**What this re-aims.** The Hamming kernel is now the better-aimed candidate, not
+because it is gentler but because it changes *what the local mean is* — which
+the measurement above identifies as the actual operator at fault. And the
+mechanism names a third candidate nobody had: a **relative** subtraction, taking
+a share of the bin's OWN magnitude rather than of its neighbourhood's mean,
+which is what would stop a weak peak being taxed disproportionately. Its own
+round.
+
+**Unmeasured, and said plainly:** Berouti's literal flat floor and the smooth
+rectifiers (soft-max, softplus) were ranked and then not implemented, on the
+argument that no floor shape can move a bin that is never clamped. That argument
+follows from the table above, but it is an argument, not a measurement.
 
 **UPDATE (E18-R11).** The soft-floor candidate was built, swept over a 2-D grid and
 **rejected** — see `docs/research/soft-floor-rectifier-2026-09.md`. It also
