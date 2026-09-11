@@ -236,3 +236,30 @@ Float64List strumPattern({
   final total = offsets.last + parts.last.length + (0.2 * sampleRate).round();
   return mixNotes(parts, startOffsets: offsets, length: total);
 }
+
+/// A guitar voicing given as `(frequency Hz, relative level)` per SOUNDING
+/// string — the level is what separates this from [chordSignal], which gives
+/// every note the same amplitude.
+///
+/// Real guitar chords are not level-flat: the fifth is usually doubled across
+/// two or three strings while the third is fretted exactly once, so the tone
+/// that DECIDES the chord's quality is routinely the quietest thing in the
+/// signal. Measured on the E18-R01 reference recordings: in an open E the
+/// major third G#3 sat at 0.12 of the peak while the fifth B2 sat at 0.97.
+/// Tests that need that asymmetry build it here.
+Float64List voicedChord(
+  List<(double, double)> strings, {
+  double seconds = 2.0,
+  int sampleRate = 44100,
+  double amp = 0.2,
+  double decayPerSecond = 1.5,
+}) => mixNotes([
+  for (final (freq, level) in strings)
+    harmonicNote(
+      freq: freq,
+      seconds: seconds,
+      sampleRate: sampleRate,
+      amp: amp * level,
+      decayPerSecond: decayPerSecond,
+    ),
+]);

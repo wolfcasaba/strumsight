@@ -1,5 +1,79 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R06 — F9 FELISMERÉS MEGJAVÍTVA A GYÖKÉRNÉL: a whitening-szomszédság ±6 → ±3 félhang (ADR 0540) — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „az eredmények alapján végezz kutatásokat és javítsd a
+problémákat" → „folytasd a fejlesztéseket, cél pontos jó felismerés".
+
+**A lelet:** E18-R01 **F9** („találati arány 2/5; G, D és E egyáltalán nem
+ismerte fel"). Hét címkézett valós gitárfelvételen, a teljes `LivePipeline`-on:
+kiindulás **4/7 helyes**, a D helyesen dekódolt de **soha nem konfirmált**
+(56 keret `lowConfidence`), a G `Bm`/`Dsus4`, az E `Bsus4`.
+
+**A gyökér — egy konstans, mérve:** a spektrális whitening minden bint a
+±szomszédsága RMS-ével oszt, tehát a **szélesség** dönti el, mihez képest
+hangos valami. Fél oktávnyi ablaknál egy halk hang halk marad a hangos
+szomszédai mellett. Gitárnál ez dönti el az akkordot: **a kvint két-három húron
+duplázódik, a terc pontosan egyszer van lefogva** — a kvalitást meghatározó
+hang rendszeresen a jel leghalkabb eleme (mérve: az open E terce G#3=0.12 a
+kvint B2=0.97 mellett). A `Bsus4`/`Dsus4` ezért nem véletlen: profil a valódi
+akkord hangos gyökére + kvintjére, a saját terc láthatatlan — ugyanaz a
+hibaosztály, amiért a 26. kör kihagyta a power-5-öt a szótárból.
+
+| | ±6 (r70 óta) | **±3 (most)** |
+|---|---|---|
+| valós 7 felvétel: helyes | 4/7 | **7/7** |
+| ugyanott: `confirmed` | 4/7 | **7/7** |
+
+**A szélesség KÉT oldalról kötött** — ugyanaz a mechanizmus két regiszterben:
+túl széles, és a halk terc nem lesz bizonyíték; túl szűk, és a csúcs-kiegyenlítés
+**a gyök szint-dominanciáját** is erodálja, amin a basszus-chroma a gyököt
+megnevezi. 7 binnél (±2.4 és alatta) a `dsp_property_test.dart` mély
+dominánsszeptimjei a saját tercükre épülő szűkített hármasra esnek
+(`B7` → `D#dim`) 5 seedből 4-en. ±3.0 = 9 bin: két binnel a szakadék fölött,
+a valós-audió platón belül.
+
+**Két saját tévedés korrigálva a körben:** (1) a `binsPerSemitone: 5` javításnak
+látszott (5/7 → 7/7), de a kontroll (bins 5, szélesség ±6-on TARTVA) **5/7** — a
+felbontás semmit nem ad; a látszat abból jött, hogy a konstans **bin-számban**
+volt tárolva (18 bin öt bin/félhangnál már ±3.6 félhang), ezért most félhangban
+tárolódik. (2) A ±2.0-t előbb optimumnak mértem, de a több seedes property
+kizárja.
+
+**Mércék:** `tools/round-gate.sh` zöld (format, analyze, `test/features/live`
+473, `test/property`, analyze/audio_analysis/practice/learn/songs/accessibility/
+bootstrap/ai_tutor-data). `dsp_property_test.dart` zöld 42/7/123/2026/31337
+seeden. A valós szonda: `test/tooling/live_chord_wav_probe_test.dart`
+(`LIVE_WAV_DIR` nélkül kihagyja magát, CI-t nem érint).
+
+**Amit NEM bizonyít — nyitott:**
+- **A 82 felvételes / 11 767 eseményes korpusz nincs megmérve.** Az
+  `evaluation/recognition/baseline_manifest.json` 0.6707-es akkord-pontossága a
+  repón KÍVÜL élő `ml/data/klangio`-n készült — ezen a boxon nem futtatható, így
+  az új szélességre **IGAZOLATLAN**. Release-állítás előtt újra kell futtatni a
+  `tool/benchmarks/real_audio_dsp_baseline.dart`-ot.
+- **Moll akkord valós audión nincs mérve** (mind a hét felvétel dúr), és a
+  szintetikus open Am-nél van egy **mért romlás**: a 0.12–0.16 sáv `Esus4`-re
+  esik. Open Em és Dm mindkét ablaknál, minden szinten helyes, tehát nem
+  rendszerszintű — de nyitott hiány. Részletek: ADR 0540 „A változás MÉRT
+  költsége".
+- **Valódi gitáros A/B továbbra is nyitott** (ADR 0539 D4 / E18-R05). Ez a kör
+  felvételeket mért, nem a felhasználó hangszerét.
+
+**Follow-up, mérve de NEM leszállítva:** mélység-súlyozott basszus-chroma. A
+basszus-chroma a `bassMaxMidi` alatti mindent súlyozás nélkül hajt össze, tehát
+azt soha nem mondja, hogy „a C mélyebben van, mint az E" — ezért (a) a bővített
+hármas gyöke mérési véletlenen áll (a régi `Caug` fixture-t **C 0.72 vs E 0.69**
+döntötte el; a fixture most mindhárom elfordítást a gyökével egyedül a basszusban
+ellenőrzi, ±1…±6 sávon), (b) ez a ±3 alsó korlátjának valódi oka, (c) ez adná a
+fordítások / slash-akkordok (`G/B`) elvi útját. Fordítás-tudatos basszust
+offline megmértem (G: `Bm` 0.7921 → `G` 0.8291, a többi hat győztese
+változatlan), de a szélesség-javítás után nem szükséges, ezért nem került be.
+
+**Korábban, ugyanezen az ágon:** `tool/build_tutor_knowledge_manifest.dart`
+Windows-útvonal hibája javítva (a manifest önmagát dolgozta fel tartalmi
+dokumentumként) — `test/features/ai_tutor/data` 119/119, volt `+116 -3`.
+
 ## 🟢 E18-R01 EMULÁTOR-LELETEK JAVÍTVA, CI-ZÖLD, MERGE-RE VÁR — F1–F8, F10, F11 + felismerés-stabilitás (ADR 0539) — branch `claude/optimistic-bohr-vpaxh4` @ `3521c210` (2026-09-10)
 
 **User-kérés:** „itt vannak a hibák" (F1–F13, az emulátor-jelentés végén) +

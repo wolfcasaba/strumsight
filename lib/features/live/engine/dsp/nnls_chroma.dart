@@ -28,7 +28,7 @@ class NnlsChroma {
     this.tuningSmoothing = 0.2,
     this.spectralWhitening = true,
     this.whiteningExponent = 0.7,
-    this.whiteningHalfSemitones = 6.0,
+    this.whiteningHalfSemitones = 3.0,
   }) : _fft = FFT(window),
        _hann = Float64List(window),
        _windowed = Float64List(window),
@@ -79,6 +79,46 @@ class NnlsChroma {
   final double whiteningExponent;
 
   /// Half-width of the normalisation neighbourhood, in SEMITONES.
+  ///
+  /// ±3 semitones (a minor third). The span matters as much as the whitening
+  /// itself, because it sets what "loud" is measured against: at a WIDE span a
+  /// bin is normalised against most of an octave, so a quiet tone stays quiet
+  /// relative to its loud neighbours, while at a NARROW span each local peak is
+  /// normalised by its own neighbourhood and the peaks are pulled toward a
+  /// common level.
+  ///
+  /// For guitar that distinction decides the chord, because a guitar voicing is
+  /// not level-flat: the fifth is doubled across two or three strings while the
+  /// third is fretted exactly once, so the tone that determines the QUALITY is
+  /// routinely the quietest thing in the signal. MEASURED on the E18-R01
+  /// reference recordings: in the open E the third G#3 sat at 0.12 of the peak
+  /// against the fifth B2 at 0.97, and the decoder returned `Bsus4` — a profile
+  /// built wholly on the loud root and fifth, with the chord's own third
+  /// invisible. The open G read `Bm` / `Dsus4` the same way.
+  ///
+  /// The span is bounded from BOTH sides, and the two bounds are the same
+  /// mechanism seen in two registers (ADR 0540):
+  /// - too WIDE and a quiet third never becomes evidence — the seven labelled
+  ///   recordings score 5/7 correct at ±6 and ±5, 6/7 at ±4, and 7/7 from ±3.5
+  ///   down;
+  /// - too NARROW and the peak levelling also erodes the ROOT's natural
+  ///   dominance, which is the only thing naming the root in the bass chroma —
+  ///   at 7 bins (±2.4 and below) `test/property/dsp_property_test.dart` loses
+  ///   low-voiced dominant 7ths to a diminished triad on their own third
+  ///   (`B7` → `D#dim`, i.e. B7 with its root gone) on 4 of the 5 documented
+  ///   seeds.
+  ///
+  /// ±3.0 is 9 bins at [binsPerSemitone] 3: two bins above that property cliff
+  /// (8 bins also passes everything) and inside the real-audio plateau.
+  /// Verified at this value — the seven recordings 7/7 correct with all seven
+  /// `confirmed` through the full `LivePipeline` (was 4/7 correct, with D never
+  /// confirming), and `dsp_property_test.dart` green on seeds 42, 7, 123, 2026
+  /// and 31337.
+  ///
+  /// The round-70 envelope guards this whitening exists for (phone-mic low
+  /// shelf, body resonance) hold across the ENTIRE sweep — the span was never
+  /// the knob that fixed the thin mic, [whiteningExponent] was — so the span is
+  /// free to be chosen on the criteria above.
   ///
   /// Expressed in semitones on purpose: the bin count it converts to depends on
   /// [binsPerSemitone], and while this was stored as a raw BIN COUNT the two
