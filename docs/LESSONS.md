@@ -26601,3 +26601,44 @@ walk bővítése valódi tapokkal megy, teszt-oldali híd nélkül.
 set and the documented exclusion table exactly partition the measured-reachable
 screen set` (a kör `gate_tests`-én, brief §0.0.2), falszifikálva: a
 `walked.add('FirstWinStageScreen')` kivételére MÉRTEN piros.
+
+## L654 — Egy „a MINTÁT másoljuk, a FÜGGÉST nem" kódkomment ADR-hivatkozással ELAVUL, amint a közös segédnek lesz `core` otthona: az ADR hatókörét kell újraolvasni, nem a kommentet követni (E18-R12, 2026-09-11)
+
+**Mit mértünk.** Az L269 előírja, hogy **minden** időablakos one-to-one metric
+UGYANAZT a maximum-cardinality segédet használja — „a közös matcher a szerződés
+része". A `core/music/onset_matching.dart` megépülése után mégis két kézzel
+másolt `_maxBipartiteMatching` maradt a fában, és az egyik doc-commentje azt
+állította, hogy ez így HELYES:
+
+> „same shape as `EvaluationRunner.matchEvents` … the pattern is copied, not
+> imported, **per ADR 0359 D6**"
+
+Az ADR 0359 D6 tényleges szövege viszont nem a másolást írja elő, hanem egy
+**kereszt-feature függést tilt**: „A `live` annotációs kód nem importálja az
+`audio_analysis` evaluation kódját… a kereszt-feature import csak `public.dart`
+barrelt célozhat (`tool/check_architecture.dart:774`)". A `core/music/` **egyik
+feature sem**. Vagyis a `core`-ba emelt közös segéd az az EGYETLEN elrendezés,
+ami a D6-ot és az L269-et egyszerre teljesíti — a komment nem az ADR-t idézte
+félre, hanem egy olyan világból maradt ott, amelyben még nem volt hova emelni.
+
+**A mérés, ami eldöntötte.** A `tool/check_architecture.dart` a `features →
+core/music` importra **új allowlist-bejegyzés nélkül** zöld maradt (12
+allowlistelt deviáció, változatlan) — ez a konkrét bizonyíték arra, hogy itt
+nincs kereszt-feature függés, tehát a D6 nem felülírva, hanem TELJESÍTVE van. A
+paritást a `recognition_annotation_test.dart` „a fixture report **bájtra
+azonos** két futás között" cellája adta: a riport a refaktor után bájtra
+ugyanaz.
+
+**Hogyan alkalmazd.** Ha egy kódkomment egy ADR-re hivatkozva tilt meg valamit,
+az ADR **hatókörét** olvasd újra, ne a kommentet kövesd: egy tilalom, ami két
+konkrét modul közti függésről szól, nem tilalom minden megosztásra. És ha a
+duplikációt mégis fel kell oldani, a komment törlése helyett ÍRD LE a feloldást
+(miért nem ütközik a két szabály) — különben a következő kör ugyanezt a vitát
+futja le újra. Lásd `lib/features/live/domain/evaluation/recognition_annotation.dart`
+`_matchEvents` doc-commentjét.
+
+**Őrteszt:** `test/core/music/onset_matching_test.dart::isEligible: a window AND
+a kind` (5 cella) — az `isEligible` predikátum az a hiányzó darab, ami miatt a
+`type`-szűrős annotációs út addig nem tudott a közös segédre állni; falszifikálva:
+a predikátum figyelmen kívül hagyására az „an ineligible pair is not matched even
+at gap zero" cella MÉRTEN piros.

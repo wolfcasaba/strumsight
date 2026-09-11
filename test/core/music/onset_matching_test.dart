@@ -141,6 +141,83 @@ void main() {
     });
   });
 
+  group('isEligible: a window AND a kind', () {
+    test('an ineligible pair is not matched even at gap zero', () {
+      // The annotation comparison pairs an onset with an onset and a beat with
+      // a beat. Two events at the SAME millisecond must stay unmatched when
+      // their kinds differ, or the agreement number counts a disagreement as
+      // agreement.
+      final matchOfDetected = matchWithinTolerance(
+        expected: const [100],
+        detected: const [100],
+        tolerance: 50,
+        isEligible: (i, j) => false,
+      );
+      expect(matchOfDetected, [-1]);
+    });
+
+    test('it only ever removes candidates — a rejected near pair frees a far '
+        'one that is eligible', () {
+      // Expected 100 would prefer detected[0] at 100 (gap 0), but that pair is
+      // ineligible; detected[1] at 140 is eligible and inside the window, so
+      // the match is made there rather than lost.
+      final matchOfDetected = matchWithinTolerance(
+        expected: const [100],
+        detected: const [100, 140],
+        tolerance: 50,
+        isEligible: (i, j) => j == 1,
+      );
+      expect(matchOfDetected, [-1, 0]);
+    });
+
+    test('it cannot widen the window', () {
+      // Eligible, but 60 ms away with a 50 ms tolerance: still no match. The
+      // predicate is an extra requirement, never an alternative one.
+      expect(
+        matchWithinTolerance(
+          expected: const [100],
+          detected: const [160],
+          tolerance: 50,
+          isEligible: (i, j) => true,
+        ),
+        [-1],
+      );
+    });
+
+    test('omitting it matches exactly as before', () {
+      const expected = [50, 90];
+      const detected = [0, 55];
+      expect(
+        matchWithinTolerance(
+          expected: expected,
+          detected: detected,
+          tolerance: 50,
+          isEligible: (i, j) => true,
+        ),
+        matchWithinTolerance(
+          expected: expected,
+          detected: detected,
+          tolerance: 50,
+        ),
+      );
+    });
+
+    test('kinds are matched within their own kind, maximally in each', () {
+      // Two onsets and two beats interleaved. With the kind filter the matcher
+      // must still find the maximum matching WITHIN each kind — this is the
+      // L269 counterexample wearing a type tag.
+      const expectedKind = ['onset', 'onset'];
+      const detectedKind = ['onset', 'onset'];
+      final matchOfDetected = matchWithinTolerance(
+        expected: const [50, 90],
+        detected: const [0, 55],
+        tolerance: 50,
+        isEligible: (i, j) => expectedKind[i] == detectedKind[j],
+      );
+      expect(_matchCount(matchOfDetected), 2);
+    });
+  });
+
   group('the raw Kuhn helper', () {
     test('an augmenting path reassigns an already-matched right node', () {
       // Left 0 admits only right 0; left 1 prefers right 0 but also admits

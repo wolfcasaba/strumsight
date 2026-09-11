@@ -13,6 +13,7 @@ library;
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:strumsight/core/music/onset_matching.dart';
 import 'package:strumsight/core/music/strum.dart';
 
 /// Event kinds a recognition annotation can record.
@@ -275,12 +276,22 @@ final class AnnotationAgreementCalculator {
   }
 
   /// Deterministic maximum-cardinality one-to-one matching of [left] against
-  /// [right], via Kuhn's augmenting-path algorithm (same shape as
-  /// `EvaluationRunner.matchEvents` in the Audio Analysis evaluation
-  /// harness — the pattern is copied, not imported, per ADR 0359 D6). An
-  /// event may only pair with a same-`type` counterpart inside
+  /// [right]. An event may only pair with a same-`type` counterpart inside
   /// [toleranceMs]; candidate edges are tried closest-gap-first (index as
   /// tie-breaker) so the result is reproducible across runs.
+  ///
+  /// ## Why this now imports the matcher it used to copy
+  ///
+  /// This was a hand-copied Kuhn's algorithm, and its comment said the pattern
+  /// was copied rather than imported **per ADR 0359 D6**. D6 is still in force
+  /// and still says what it said: `live` annotation code must not depend on
+  /// `audio_analysis` evaluation code, because a cross-FEATURE import may only
+  /// target a `public.dart` barrel. But D6 forbids a dependency between two
+  /// features — and `core/music/onset_matching.dart` is neither of them. A
+  /// shared helper in `core` is the one arrangement that satisfies D6 and
+  /// `docs/LESSONS.md` L269 at the same time, and L269 is explicit that ONE
+  /// maximum-cardinality helper behind every time-windowed one-to-one metric
+  /// is part of the contract. The copy predates that home existing.
   List<MatchedAnnotationEventPair> _matchEvents(
     List<AnnotationEvent> left,
     List<AnnotationEvent> right,
@@ -289,26 +300,12 @@ final class AnnotationAgreementCalculator {
     final sortedRight = [...right]
       ..sort((x, y) => x.timeMs.compareTo(y.timeMs));
 
-    final candidatesByLeft = List<List<int>>.generate(sortedLeft.length, (i) {
-      final leftEvent = sortedLeft[i];
-      final withGap =
-          <MapEntry<int, int>>[
-            for (var j = 0; j < sortedRight.length; j++)
-              if (sortedRight[j].type == leftEvent.type &&
-                  (sortedRight[j].timeMs - leftEvent.timeMs).abs() <=
-                      toleranceMs)
-                MapEntry(j, (sortedRight[j].timeMs - leftEvent.timeMs).abs()),
-          ]..sort((x, y) {
-            final byGap = x.value.compareTo(y.value);
-            return byGap != 0 ? byGap : x.key.compareTo(y.key);
-          });
-      return [for (final entry in withGap) entry.key];
-    });
-
-    final matchOfRight = _maxBipartiteMatching(
-      leftCount: sortedLeft.length,
-      candidatesByLeft: candidatesByLeft,
-      rightCount: sortedRight.length,
+    final matchOfRight = matchWithinTolerance(
+      expected: [for (final e in sortedLeft) e.timeMs],
+      detected: [for (final e in sortedRight) e.timeMs],
+      tolerance: toleranceMs,
+      // An onset never validates a beat, however close the two land.
+      isEligible: (i, j) => sortedRight[j].type == sortedLeft[i].type,
     );
 
     final matched = <MatchedAnnotationEventPair>[];
@@ -333,28 +330,10 @@ final class AnnotationAgreementCalculator {
     final sortedRight = [...right]
       ..sort((x, y) => x.startMs.compareTo(y.startMs));
 
-    final candidatesByLeft = List<List<int>>.generate(sortedLeft.length, (i) {
-      final leftSegment = sortedLeft[i];
-      final withGap =
-          <MapEntry<int, int>>[
-            for (var j = 0; j < sortedRight.length; j++)
-              if ((sortedRight[j].startMs - leftSegment.startMs).abs() <=
-                  toleranceMs)
-                MapEntry(
-                  j,
-                  (sortedRight[j].startMs - leftSegment.startMs).abs(),
-                ),
-          ]..sort((x, y) {
-            final byGap = x.value.compareTo(y.value);
-            return byGap != 0 ? byGap : x.key.compareTo(y.key);
-          });
-      return [for (final entry in withGap) entry.key];
-    });
-
-    final matchOfRight = _maxBipartiteMatching(
-      leftCount: sortedLeft.length,
-      candidatesByLeft: candidatesByLeft,
-      rightCount: sortedRight.length,
+    final matchOfRight = matchWithinTolerance(
+      expected: [for (final s in sortedLeft) s.startMs],
+      detected: [for (final s in sortedRight) s.startMs],
+      tolerance: toleranceMs,
     );
 
     final matched = <MatchedAnnotationChordPair>[];
@@ -366,36 +345,5 @@ final class AnnotationAgreementCalculator {
     }
     matched.sort((x, y) => x.a.startMs.compareTo(y.a.startMs));
     return matched;
-  }
-
-  /// Kuhn's algorithm: finds a maximum-cardinality one-to-one matching
-  /// between `leftCount` left nodes and `rightCount` right nodes, given each
-  /// left node's admissible right-node candidates (ordered — ties are broken
-  /// by that order). Returns `matchOfRight`, where `matchOfRight[j]` is the
-  /// matched left index, or `-1` if unmatched.
-  List<int> _maxBipartiteMatching({
-    required int leftCount,
-    required List<List<int>> candidatesByLeft,
-    required int rightCount,
-  }) {
-    final matchOfRight = List<int>.filled(rightCount, -1);
-
-    bool tryAugment(int leftIndex, List<bool> visited) {
-      for (final rightIndex in candidatesByLeft[leftIndex]) {
-        if (visited[rightIndex]) continue;
-        visited[rightIndex] = true;
-        if (matchOfRight[rightIndex] == -1 ||
-            tryAugment(matchOfRight[rightIndex], visited)) {
-          matchOfRight[rightIndex] = leftIndex;
-          return true;
-        }
-      }
-      return false;
-    }
-
-    for (var i = 0; i < leftCount; i++) {
-      tryAugment(i, List<bool>.filled(rightCount, false));
-    }
-    return matchOfRight;
   }
 }

@@ -74,12 +74,21 @@ List<int> maxCardinalityMatching({
 /// that need time order must sort before calling; sorting here would silently
 /// renumber their own events.
 ///
+/// [isEligible], when given, is an ADDITIONAL requirement on a pair that is
+/// already inside the window — it can only ever remove candidates, never widen
+/// the tolerance. It exists because some callers pair within a window AND
+/// within a kind: an annotation comparison may only pair an onset with an
+/// onset, never with a beat. Expressing that here keeps those callers on this
+/// one code path rather than hand-rolling a second candidate builder, which is
+/// exactly what L269 asks us not to do.
+///
 /// Returns `matchOfDetected`: `matchOfDetected[j]` is the index in [expected]
 /// matched to `detected[j]`, or `-1` when nothing matched it.
 List<int> matchWithinTolerance({
   required List<int> expected,
   required List<int> detected,
   required int tolerance,
+  bool Function(int expectedIndex, int detectedIndex)? isEligible,
 }) {
   if (tolerance < 0) {
     throw ArgumentError.value(
@@ -95,7 +104,8 @@ List<int> matchWithinTolerance({
     final gaps =
         <({int index, int gap})>[
           for (var j = 0; j < detected.length; j++)
-            if ((detected[j] - expected[i]).abs() <= tolerance)
+            if ((detected[j] - expected[i]).abs() <= tolerance &&
+                (isEligible == null || isEligible(i, j)))
               (index: j, gap: (detected[j] - expected[i]).abs()),
         ]..sort((a, b) {
           final byGap = a.gap.compareTo(b.gap);
