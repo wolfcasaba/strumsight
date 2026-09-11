@@ -1,0 +1,408 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+
+import '../../foundations/ss_colors.dart';
+import '../../motion/ss_beat_pulse.dart' show SsBeatClock;
+import '../../motion/ss_motion_scope.dart';
+import 'ss_strum_glyph.dart' show SsStrumDirection;
+
+/// The strumming hand's travel, rendered as a pick crossing a band of strings.
+///
+/// This is the down/up rhythm pillar's headline visual. A bouncing ball — the
+/// shape every competitor uses — can say WHEN but never WHICH WAY: the same arc
+/// serves a downstroke and an upstroke. Turning the axis ninety degrees fixes
+/// that: the marker crosses a horizontal string band, and its direction of
+/// travel IS the information being taught.
+///
+/// ## Why the motion looks the way it does
+///
+/// The pick leaves the strings at full speed, slows to a turnaround clear of
+/// them, and accelerates back — one crossing per half beat, the hand never
+/// stopping. Two measured findings shape it:
+///
+///   - **Uniformly varying velocity** (constant acceleration, a projectile
+///     profile) is what [travelAt] implements. A bouncing-ball synchronization
+///     study measured this profile as matching AUDITORY metronome accuracy, and
+///     as significantly better than a sinusoidal control (p = 0.028). The
+///     prettier sine curve is the one that lost.
+///   - **People anticipate; they do not react.** Tapping in those studies ran
+///     consistently ahead of the visual event (negative mean asynchrony). A
+///     flash at the moment of the stroke is therefore useless on its own — what
+///     a learner times against is the approach. So the pick spends a visible
+///     half-cycle accelerating toward the band before every strike.
+///
+/// NOT measured, and not claimed: in that study the ball produced ONE event per
+/// cycle at a hard reversal, while a strumming hand produces TWO with its
+/// turnarounds clear of the strings. Whether the profile's advantage carries
+/// over to this shape is open.
+///
+/// ## Why colour is not load-bearing
+///
+/// Colour-coded notation measurably helps beginners and measurably becomes a
+/// crutch when it is the only channel — the research consensus is that it must
+/// be removable. Here direction is carried by the pick's SHAPE (the tip leads
+/// the travel) in both full and reduced motion; the two brand tints are
+/// redundant reinforcement. Remove all colour and the visual still teaches.
+/// Red/green is avoided outright: those two are the classic pair that merges
+/// under the most common colour-vision deficiency.
+///
+/// Research: `docs/research/visual-rhythm-cues-2026-09.md`.
+///
+/// ## Clock discipline
+///
+/// Driven by [clock], never by a timer of its own, and every frame derives the
+/// phase from the clock's CURRENT position rather than accumulating — so a
+/// pause, a seek or a tempo change is exact on the next frame instead of
+/// drifting (ADR 0274, the same rule as `SsBeatPulse`). The entire visual is a
+/// pure function of the clock position: see [frameAt], which tests call
+/// directly without a widget tree.
+final class SsStrumPendulum extends StatefulWidget {
+  const SsStrumPendulum({
+    super.key,
+    required this.clock,
+    required this.beatDuration,
+    required this.struck,
+    this.height = 200,
+    this.semanticLabel,
+  });
+
+  /// The timeline this follows. Never a locally-owned `Timer`.
+  final SsBeatClock clock;
+
+  /// The musical period of one beat, derived from BPM by the caller. A
+  /// non-positive value is treated as "no live timeline" — a real runtime
+  /// possibility when tempo is missing, not merely a programmer error.
+  final Duration beatDuration;
+
+  /// Which crossings strike the strings, indexed by crossing — TWO per beat,
+  /// because the hand crosses going down and again coming back up.
+  ///
+  /// A `false` entry is a ghost stroke: the hand still travels through it, it
+  /// simply misses the strings. That is why a down-quarters exercise is
+  /// `[true, false, true, false, …]` rather than four entries — the return is
+  /// real movement, it is just not asked for.
+  final List<bool> struck;
+
+  final double height;
+
+  /// When null the widget is decorative-only and excluded from semantics: the
+  /// caller announces the stroke through its own live region.
+  final String? semanticLabel;
+
+  /// How long a strike stays lit.
+  ///
+  /// A presentation constant, not a measured one — said plainly, because the
+  /// onset tolerance this pillar grades against IS measured and the two must
+  /// not be confused. Its value is bounded rather than chosen by taste: the glow
+  /// is clipped to 70% of a half-cycle in [frameAt], so two strokes can never be
+  /// lit at once at any tempo.
+  static const Duration strikeGlow = Duration(milliseconds: 160);
+
+  /// Key of the pick, stable across reduced and full motion, so tests can find
+  /// and inspect it.
+  static const Key pickKey = ValueKey('ss_strum_pendulum_pick');
+
+  /// The hand crosses the strings twice per beat: once going down, once coming
+  /// back up. This is physical, not a notation choice, which is why it is a
+  /// constant and not a parameter.
+  static const int crossingsPerBeat = 2;
+
+  /// Signed travel away from the strings at [u], the progress (0..1) through one
+  /// half-cycle: `0` at the strings, `1` at the turnaround, back to `0`.
+  ///
+  /// Constant acceleration throughout — maximum speed exactly at the strings,
+  /// zero at the turnaround. Exposed for direct testing of the profile.
+  static double travelAt(double u) => 1 - math.pow(2 * u - 1, 2).toDouble();
+
+  /// The complete visual state at [position], or null when there is no live
+  /// timeline (no tempo, or nothing to play).
+  ///
+  /// Pure and side-effect free: this is the whole animation, and it is a
+  /// function of the clock alone.
+  static SsStrumPendulumFrame? frameAt({
+    required Duration position,
+    required Duration beatDuration,
+    required List<bool> struck,
+  }) {
+    final beatMicros = beatDuration.inMicroseconds;
+    if (beatMicros <= 0 || struck.isEmpty) return null;
+
+    final halfCycle = beatMicros / crossingsPerBeat;
+    final loop = halfCycle * struck.length;
+    var elapsed = position.inMicroseconds % loop;
+    if (elapsed < 0) elapsed += loop;
+
+    final raw = elapsed / halfCycle;
+    final crossing = math.min(raw.floor(), struck.length - 1);
+    final u = raw - crossing;
+
+    final isDown = crossing.isEven;
+    final travel = (isDown ? 1.0 : -1.0) * travelAt(u);
+
+    // Clipped to a fraction of the half-cycle so a fast tempo can never leave
+    // two strokes lit at the same time.
+    final glowWindow = math.min(
+      strikeGlow.inMicroseconds.toDouble(),
+      halfCycle * 0.7,
+    );
+    final sinceCrossing = u * halfCycle;
+    final glow = struck[crossing] && glowWindow > 0
+        ? (1 - sinceCrossing / glowWindow).clamp(0.0, 1.0)
+        : 0.0;
+
+    return SsStrumPendulumFrame(
+      crossingIndex: crossing,
+      direction: isDown ? SsStrumDirection.down : SsStrumDirection.up,
+      travel: travel,
+      strikeGlow: glow,
+      isStruck: struck[crossing],
+    );
+  }
+
+  @override
+  State<SsStrumPendulum> createState() => _SsStrumPendulumState();
+}
+
+/// The pendulum's visual state at one instant.
+@immutable
+final class SsStrumPendulumFrame {
+  const SsStrumPendulumFrame({
+    required this.crossingIndex,
+    required this.direction,
+    required this.travel,
+    required this.strikeGlow,
+    required this.isStruck,
+  });
+
+  /// Which crossing of the pattern is in progress, 0-based.
+  final int crossingIndex;
+
+  /// Which way the hand was travelling when it last crossed the strings.
+  final SsStrumDirection direction;
+
+  /// Distance from the strings, signed: positive is below them (after a
+  /// downstroke), negative above. `0` is exactly at the strings, `±1` at a
+  /// turnaround.
+  final double travel;
+
+  /// How lit the last strike is, 1 at the moment of contact decaying to 0.
+  /// Always 0 for a ghost crossing — there was nothing to hear.
+  final double strikeGlow;
+
+  /// Whether this crossing strikes the strings at all.
+  final bool isStruck;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SsStrumPendulumFrame &&
+      other.crossingIndex == crossingIndex &&
+      other.direction == direction &&
+      other.travel == travel &&
+      other.strikeGlow == strikeGlow &&
+      other.isStruck == isStruck;
+
+  @override
+  int get hashCode =>
+      Object.hash(crossingIndex, direction, travel, strikeGlow, isStruck);
+}
+
+final class _SsStrumPendulumState extends State<SsStrumPendulum>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  SsStrumPendulumFrame? _frame;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker(_onTick)..start();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  void _onTick(Duration _) {
+    final position = widget.clock.position;
+    final frame = position == null
+        ? null
+        : SsStrumPendulum.frameAt(
+            position: position,
+            beatDuration: widget.beatDuration,
+            struck: widget.struck,
+          );
+    // The ticker is never stopped, so a later resume is picked up on the very
+    // next frame even if the caller never rebuilds — `clock` is polled
+    // pull-style, exactly as `SsBeatPulse` does it.
+    if (frame != _frame) setState(() => _frame = frame);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final reduceMotion = SsMotionScope.reduceMotionOf(context);
+    final painted = CustomPaint(
+      key: SsStrumPendulum.pickKey,
+      size: Size.infinite,
+      painter: _SsStrumPendulumPainter(
+        frame: _frame,
+        reduceMotion: reduceMotion,
+        strings: colors.textSecondary,
+        downColor: colors.brand,
+        upColor: colors.brandStrong,
+        glowBase: colors.brand,
+      ),
+    );
+    final sized = SizedBox(
+      height: widget.height,
+      width: double.infinity,
+      child: painted,
+    );
+    final label = widget.semanticLabel;
+    if (label == null) return ExcludeSemantics(child: sized);
+    return Semantics(label: label, excludeSemantics: true, child: sized);
+  }
+}
+
+class _SsStrumPendulumPainter extends CustomPainter {
+  _SsStrumPendulumPainter({
+    required this.frame,
+    required this.reduceMotion,
+    required this.strings,
+    required this.downColor,
+    required this.upColor,
+    required this.glowBase,
+  });
+
+  final SsStrumPendulumFrame? frame;
+  final bool reduceMotion;
+  final Color strings;
+  final Color downColor;
+  final Color upColor;
+  final Color glowBase;
+
+  /// The six string thicknesses, thickest FIRST.
+  ///
+  /// Thickest at the top is what a player sees looking down at their own
+  /// guitar, and it is the reason "down" means low-to-high: the hand travels
+  /// from the thick strings toward the thin ones, toward the floor.
+  static const List<double> _stringWidths = [3.0, 2.5, 2.0, 1.6, 1.3, 1.0];
+  static const double _stringGap = 5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final midY = size.height / 2;
+    final bandHeight =
+        _stringWidths.reduce((a, b) => a + b) +
+        _stringGap * (_stringWidths.length - 1);
+    final current = frame;
+
+    if (current != null && current.strikeGlow > 0) {
+      final tint = current.direction == SsStrumDirection.down
+          ? downColor
+          : upColor;
+      final rect = Rect.fromCenter(
+        center: Offset(size.width / 2, midY),
+        width: size.width,
+        height: bandHeight + 26,
+      );
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = LinearGradient(
+            colors: [
+              glowBase.withValues(alpha: 0),
+              tint.withValues(alpha: 0.45 * current.strikeGlow),
+              glowBase.withValues(alpha: 0),
+            ],
+          ).createShader(rect),
+      );
+    }
+
+    var y = midY - bandHeight / 2;
+    for (final width in _stringWidths) {
+      y += width / 2;
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        Paint()
+          ..color = strings.withValues(alpha: 0.55)
+          ..strokeWidth = width
+          ..strokeCap = StrokeCap.round,
+      );
+      y += width / 2 + _stringGap;
+    }
+
+    if (current == null) return;
+
+    // Reduced motion removes the TRAVEL, never the information: the pick parks
+    // on the strings and its tip still points the way the hand is going, so
+    // direction stays shape-encoded (ADR 0274 §5.1).
+    final amplitude = (size.height / 2 - bandHeight / 2 - 18).clamp(0.0, 90.0);
+    final offset = reduceMotion ? 0.0 : current.travel * amplitude;
+    final isDown = current.direction == SsStrumDirection.down;
+    _drawPick(
+      canvas,
+      center: Offset(size.width / 2, midY + offset),
+      pointsDown: isDown,
+      color: isDown ? downColor : upColor,
+    );
+  }
+
+  /// A guitar pick: rounded shoulders, a point that LEADS the travel.
+  void _drawPick(
+    Canvas canvas, {
+    required Offset center,
+    required bool pointsDown,
+    required Color color,
+  }) {
+    const halfWidth = 11.0;
+    const halfHeight = 14.0;
+    final sign = pointsDown ? 1.0 : -1.0;
+    final tip = Offset(center.dx, center.dy + sign * halfHeight);
+    final backLeft = Offset(
+      center.dx - halfWidth,
+      center.dy - sign * halfHeight * 0.55,
+    );
+    final backRight = Offset(
+      center.dx + halfWidth,
+      center.dy - sign * halfHeight * 0.55,
+    );
+
+    final path = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..quadraticBezierTo(
+        center.dx - halfWidth * 1.05,
+        center.dy + sign * halfHeight * 0.35,
+        backLeft.dx,
+        backLeft.dy,
+      )
+      ..quadraticBezierTo(
+        center.dx,
+        center.dy - sign * halfHeight * 1.15,
+        backRight.dx,
+        backRight.dy,
+      )
+      ..quadraticBezierTo(
+        center.dx + halfWidth * 1.05,
+        center.dy + sign * halfHeight * 0.35,
+        tip.dx,
+        tip.dy,
+      )
+      ..close();
+
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_SsStrumPendulumPainter old) =>
+      old.frame != frame ||
+      old.reduceMotion != reduceMotion ||
+      old.strings != strings ||
+      old.downColor != downColor ||
+      old.upColor != upColor ||
+      old.glowBase != glowBase;
+}
