@@ -18,7 +18,15 @@ library;
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:strumsight/core/music/onset_matching.dart';
 import 'package:strumsight/core/music/strum.dart';
+
+/// The measured onset tolerance moved to `core/music` so the whole app shares
+/// ONE notion of "in time" (L269). Re-exported because this file is where every
+/// existing consumer reads it from; moving the declaration must not move the
+/// import site.
+export 'package:strumsight/core/music/onset_matching.dart'
+    show onsetToleranceMsPrimary;
 
 /// The three kinds of timed events a recognition case can carry.
 enum RecognitionEventKind { onset, strum, chord }
@@ -457,7 +465,6 @@ final class RecognitionEvaluationReport {
       const JsonEncoder.withIndent('  ').convert(toJson());
 }
 
-const int onsetToleranceMsPrimary = 50;
 const List<int> onsetTolerancesMs = [25, onsetToleranceMsPrimary, 100];
 const int chordToleranceMs = 250;
 
@@ -896,10 +903,15 @@ final class _MatchedEventPair {
 
 /// Deterministic maximum-cardinality one-to-one matching of [expected]
 /// against [detected] within [toleranceMs] (inclusive), via Kuhn's
-/// augmenting-path algorithm — copied from `EvaluationRunner.matchEvents`
-/// (ADR 0509 D5/D8): candidate edges are tried closest-gap-first (index as
-/// tie-breaker), and a detected event is reassigned to a different expected
-/// event whenever that grows the total number of matches.
+/// augmenting-path algorithm (ADR 0509 D5/D8): candidate edges are tried
+/// closest-gap-first (index as tie-breaker), and a detected event is
+/// reassigned to a different expected event whenever that grows the total
+/// number of matches.
+///
+/// The algorithm itself now lives in `core/music/onset_matching.dart`, which
+/// `docs/LESSONS.md` L269 asks for in as many words: "the shared matcher is
+/// part of the contract". This function keeps the typed event wrapper — the
+/// sort, and mapping indices back to event pairs — and nothing else.
 List<_MatchedEventPair> _matchEvents(
   List<RecognitionExpectedEvent> expected,
   List<RecognitionDetectedEvent> detected,
@@ -910,30 +922,10 @@ List<_MatchedEventPair> _matchEvents(
   final sortedDetected = [...detected]
     ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
 
-  final candidatesByExpected = List<List<int>>.generate(sortedExpected.length, (
-    i,
-  ) {
-    final expectedEvent = sortedExpected[i];
-    final withGap =
-        <MapEntry<int, int>>[
-          for (var j = 0; j < sortedDetected.length; j++)
-            if ((sortedDetected[j].timeMs - expectedEvent.timeMs).abs() <=
-                toleranceMs)
-              MapEntry(
-                j,
-                (sortedDetected[j].timeMs - expectedEvent.timeMs).abs(),
-              ),
-        ]..sort((a, b) {
-          final byGap = a.value.compareTo(b.value);
-          return byGap != 0 ? byGap : a.key.compareTo(b.key);
-        });
-    return [for (final entry in withGap) entry.key];
-  });
-
-  final matchOfDetected = _maxBipartiteMatching(
-    leftCount: sortedExpected.length,
-    candidatesByLeft: candidatesByExpected,
-    rightCount: sortedDetected.length,
+  final matchOfDetected = matchWithinTolerance(
+    expected: [for (final event in sortedExpected) event.timeMs],
+    detected: [for (final event in sortedDetected) event.timeMs],
+    tolerance: toleranceMs,
   );
 
   final matched = <_MatchedEventPair>[];
@@ -945,37 +937,6 @@ List<_MatchedEventPair> _matchEvents(
   }
   matched.sort((a, b) => a.expected.timeMs.compareTo(b.expected.timeMs));
   return matched;
-}
-
-/// Kuhn's algorithm: finds a maximum-cardinality one-to-one matching
-/// between `leftCount` left nodes and `rightCount` right nodes, given each
-/// left node's admissible right-node candidates (ordered — ties are broken
-/// by that order). Returns `matchOfRight`, where `matchOfRight[j]` is the
-/// matched left index, or `-1` if unmatched.
-List<int> _maxBipartiteMatching({
-  required int leftCount,
-  required List<List<int>> candidatesByLeft,
-  required int rightCount,
-}) {
-  final matchOfRight = List<int>.filled(rightCount, -1);
-
-  bool tryAugment(int leftIndex, List<bool> visited) {
-    for (final rightIndex in candidatesByLeft[leftIndex]) {
-      if (visited[rightIndex]) continue;
-      visited[rightIndex] = true;
-      if (matchOfRight[rightIndex] == -1 ||
-          tryAugment(matchOfRight[rightIndex], visited)) {
-        matchOfRight[rightIndex] = leftIndex;
-        return true;
-      }
-    }
-    return false;
-  }
-
-  for (var i = 0; i < leftCount; i++) {
-    tryAugment(i, List<bool>.filled(rightCount, false));
-  }
-  return matchOfRight;
 }
 
 RecognitionPrecisionRecallF1 _eventPrf1(
