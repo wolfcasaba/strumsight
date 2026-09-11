@@ -1826,6 +1826,13 @@
     }
   },
   "curriculumCalibrateUneven": "Too uneven to trust — try that again",
+  "curriculumCapabilityCamera": "a camera",
+  "curriculumCapabilityChord": "chord scoring",
+  "curriculumCapabilityDirection": "up/down stroke scoring",
+  "curriculumCapabilityMicrophone": "a microphone",
+  "curriculumCapabilityOther": "something this device does not have",
+  "curriculumCapabilityPitch": "pitch scoring",
+  "curriculumCapabilityTempo": "tempo detection",
   "curriculumChordOther": "{chord} is sounding",
   "@curriculumChordOther": {
     "placeholders": {
@@ -1866,6 +1873,27 @@
     }
   },
   "curriculumHoldChord": "hold",
+  "curriculumLadderCannotMeasure": "This device cannot measure this one",
+  "curriculumLadderMissing": "Missing: {capabilities}",
+  "@curriculumLadderMissing": {
+    "placeholders": {
+      "capabilities": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNeeds": "Needs first: {skills}",
+  "@curriculumLadderNeeds": {
+    "placeholders": {
+      "skills": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNoRhythm": "Not a strumming exercise yet",
+  "curriculumLadderNotYet": "Not yet reached",
+  "curriculumLadderOpen": "Open",
+  "curriculumLadderTitle": "Your path",
   "curriculumModeListenAndRepeat": "Listen and repeat",
   "curriculumModeMutedStrokes": "Muted strokes",
   "curriculumModeSilentGrid": "Read and play",

@@ -1798,6 +1798,13 @@
     }
   },
   "curriculumCalibrateUneven": "Túl egyenetlen ahhoz, hogy megbízható legyen — próbáld újra",
+  "curriculumCapabilityCamera": "kamera",
+  "curriculumCapabilityChord": "akkord-pontozás",
+  "curriculumCapabilityDirection": "le/fel ütés pontozása",
+  "curriculumCapabilityMicrophone": "mikrofon",
+  "curriculumCapabilityOther": "valami, ami ezen a készüléken nincs",
+  "curriculumCapabilityPitch": "hangmagasság-pontozás",
+  "curriculumCapabilityTempo": "tempó-felismerés",
   "curriculumChordOther": "{chord} szól",
   "@curriculumChordOther": {
     "placeholders": {
@@ -1838,6 +1845,27 @@
     }
   },
   "curriculumHoldChord": "fogd",
+  "curriculumLadderCannotMeasure": "Ezt ez a készülék nem tudja megmérni",
+  "curriculumLadderMissing": "Hiányzik: {capabilities}",
+  "@curriculumLadderMissing": {
+    "placeholders": {
+      "capabilities": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNeeds": "Előbb kell: {skills}",
+  "@curriculumLadderNeeds": {
+    "placeholders": {
+      "skills": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNoRhythm": "Ez még nem pengetés-gyakorlat",
+  "curriculumLadderNotYet": "Még nem érted el",
+  "curriculumLadderOpen": "Nyitva",
+  "curriculumLadderTitle": "A te utad",
   "curriculumModeListenAndRepeat": "Hallgasd és ismételd",
   "curriculumModeMutedStrokes": "Tompított ütések",
   "curriculumModeSilentGrid": "Olvasd és játszd",

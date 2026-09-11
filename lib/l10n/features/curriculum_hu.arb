@@ -119,5 +119,33 @@
       }
     }
   },
-  "curriculumCalibrateUneven": "Túl egyenetlen ahhoz, hogy megbízható legyen — próbáld újra"
+  "curriculumCalibrateUneven": "Túl egyenetlen ahhoz, hogy megbízható legyen — próbáld újra",
+  "curriculumLadderTitle": "A te utad",
+  "curriculumLadderOpen": "Nyitva",
+  "curriculumLadderNotYet": "Még nem érted el",
+  "curriculumLadderNeeds": "Előbb kell: {skills}",
+  "@curriculumLadderNeeds": {
+    "placeholders": {
+      "skills": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderCannotMeasure": "Ezt ez a készülék nem tudja megmérni",
+  "curriculumLadderMissing": "Hiányzik: {capabilities}",
+  "@curriculumLadderMissing": {
+    "placeholders": {
+      "capabilities": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNoRhythm": "Ez még nem pengetés-gyakorlat",
+  "curriculumCapabilityMicrophone": "mikrofon",
+  "curriculumCapabilityCamera": "kamera",
+  "curriculumCapabilityDirection": "le/fel ütés pontozása",
+  "curriculumCapabilityChord": "akkord-pontozás",
+  "curriculumCapabilityPitch": "hangmagasság-pontozás",
+  "curriculumCapabilityTempo": "tempó-felismerés",
+  "curriculumCapabilityOther": "valami, ami ezen a készüléken nincs"
 }

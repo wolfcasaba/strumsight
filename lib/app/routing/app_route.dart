@@ -20,6 +20,10 @@ abstract final class AppRoutes {
   // The curriculum's down/up rhythm pillar (the Yousician differentiator):
   // the strumming-hand motion plus the notation row.
   static const String curriculumRhythm = '/curriculum/rhythm';
+
+  /// The course made visible: every rung, its availability, and what a locked
+  /// one needs. Without it the ladder existed only in tests.
+  static const String curriculumLadder = '/curriculum';
   static const String login = '/login';
   static const String librarySession = '/library/session';
   static const String practiceHub = '/practice';

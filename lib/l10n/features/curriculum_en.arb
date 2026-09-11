@@ -119,5 +119,33 @@
       }
     }
   },
-  "curriculumCalibrateUneven": "Too uneven to trust — try that again"
+  "curriculumCalibrateUneven": "Too uneven to trust — try that again",
+  "curriculumLadderTitle": "Your path",
+  "curriculumLadderOpen": "Open",
+  "curriculumLadderNotYet": "Not yet reached",
+  "curriculumLadderNeeds": "Needs first: {skills}",
+  "@curriculumLadderNeeds": {
+    "placeholders": {
+      "skills": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderCannotMeasure": "This device cannot measure this one",
+  "curriculumLadderMissing": "Missing: {capabilities}",
+  "@curriculumLadderMissing": {
+    "placeholders": {
+      "capabilities": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNoRhythm": "Not a strumming exercise yet",
+  "curriculumCapabilityMicrophone": "a microphone",
+  "curriculumCapabilityCamera": "a camera",
+  "curriculumCapabilityDirection": "up/down stroke scoring",
+  "curriculumCapabilityChord": "chord scoring",
+  "curriculumCapabilityPitch": "pitch scoring",
+  "curriculumCapabilityTempo": "tempo detection",
+  "curriculumCapabilityOther": "something this device does not have"
 }

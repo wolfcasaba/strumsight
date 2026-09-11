@@ -132,6 +132,15 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                   label: l10n.curriculumRhythmTitle,
                   onPressed: () => context.push(AppRoutes.curriculumRhythm),
                 ),
+                // The course itself, not just one rung of it. Same rule as the
+                // line above: a registered route with no entry point is a screen
+                // nobody can reach, and until this existed the ladder, its gating
+                // and its ordering were visible only in tests.
+                _QuickTool(
+                  icon: Icons.stairs,
+                  label: l10n.curriculumLadderTitle,
+                  onPressed: () => context.push(AppRoutes.curriculumLadder),
+                ),
               ],
             ),
             const SizedBox(height: 24),

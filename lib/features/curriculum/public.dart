@@ -4,6 +4,7 @@ library;
 export 'application/mission_goal.dart';
 export 'data/beginner_course.dart';
 export 'domain/course.dart';
+export 'domain/device_capabilities.dart';
 export 'domain/mission_availability.dart';
 export 'domain/rhythm_assignment.dart';
 export 'domain/rhythm_grading.dart';

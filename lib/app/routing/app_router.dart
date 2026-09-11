@@ -15,6 +15,7 @@ import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart
 import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
+import '../../features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
 import '../../features/curriculum/presentation/screens/rhythm_practice_screen.dart';
 import '../../features/gamification/public.dart';
 import '../../l10n/app_localizations.dart';
@@ -293,6 +294,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.curriculumRhythm,
         builder: (_, _) => const RhythmPracticeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.curriculumLadder,
+        builder: (_, _) => const CurriculumLadderScreen(),
       ),
       GoRoute(
         path: AppRoutes.metronome,
