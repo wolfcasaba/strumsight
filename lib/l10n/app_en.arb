@@ -1803,6 +1803,18 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Make this public?",
   "@communityPublicConfirmTitle": {},
+  "curriculumAttemptDone": "Attempt finished",
+  "curriculumBarOf": "Bar {bar} of {total}",
+  "@curriculumBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "curriculumChordOther": "{chord} is sounding",
   "@curriculumChordOther": {
     "placeholders": {
@@ -1814,6 +1826,15 @@
   "curriculumChordRinging": "ringing clearly",
   "curriculumChordStays": "stays the same",
   "curriculumChordUnclear": "not confirmed",
+  "curriculumCountInLabel": "Get ready",
+  "curriculumCountInNumber": "{number}",
+  "@curriculumCountInNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
   "curriculumDirectionAccuracy": "{percent}% of the strokes I heard went the right way",
   "@curriculumDirectionAccuracy": {
     "placeholders": {

@@ -50,6 +50,7 @@ import '../../../live/public.dart';
 import '../../data/beginner_course.dart';
 import '../../domain/course.dart';
 import '../../domain/rhythm_assignment.dart';
+import '../../domain/rhythm_countin.dart';
 import '../../domain/rhythm_grading.dart';
 import '../../domain/rhythm_grid.dart';
 import '../../domain/rhythm_mode.dart';
@@ -65,6 +66,11 @@ final class _PlaybackClock implements SsBeatClock {
   @override
   Duration? get position => _read();
 }
+
+/// The spoken count-in number, so a test can find it without colliding with the
+/// lane's own count row.
+@visibleForTesting
+const Key countInNumberKey = ValueKey('rhythm.countIn.number');
 
 final class RhythmPracticeScreen extends ConsumerStatefulWidget {
   const RhythmPracticeScreen({super.key, this.mission});
@@ -111,6 +117,15 @@ final class _RhythmPracticeScreenState
   final List<DetectedStroke> _strokes = [];
   int _lastStrumSeq = 0;
 
+  /// One bar of the exercise's OWN metre, counted before bar 1.
+  late final RhythmCountIn _countIn;
+
+  /// True once the attempt has run its full length and stopped itself.
+  ///
+  /// An attempt that loops forever cannot be graded AS an attempt, and a "bar 2
+  /// of 4" readout over an endless loop would be a lie.
+  bool _finished = false;
+
   @override
   void initState() {
     super.initState();
@@ -144,7 +159,13 @@ final class _RhythmPracticeScreenState
     _chords = _assignment.mode.scoresChord
         ? const ['Em', 'Am']
         : const <String>[];
-    _clock = _PlaybackClock(() => _position);
+    _countIn = RhythmCountIn.forGrid(_assignment.grid);
+    // The pendulum follows the EXERCISE timeline, which is negative during the
+    // count-in; `frameAt` wraps a negative position into the loop, so the
+    // count-in is fed its own ghost-only crossing list instead (see `_crossings`).
+    _clock = _PlaybackClock(
+      () => _countInNumber != null ? _position : _exercisePosition,
+    );
     _ticker = createTicker(_onTick)..start();
   }
 
@@ -167,6 +188,19 @@ final class _RhythmPracticeScreenState
       _position =
           Duration(microseconds: ((engineNow - start) * 1e6).round()) +
           (elapsed - _engineAnchorTick);
+      // The attempt has a length, so it ends. Grading a run that never stops
+      // would keep moving the denominator under the learner's own score.
+      final exercise = _exercisePosition;
+      final attemptMicros =
+          _beatDuration.inMicroseconds *
+          _assignment.grid.beatsPerBar *
+          _attemptBars;
+      if (exercise != null &&
+          attemptMicros > 0 &&
+          exercise.inMicroseconds >= attemptMicros) {
+        _playing = false;
+        _finished = true;
+      }
     });
   }
 
@@ -181,6 +215,7 @@ final class _RhythmPracticeScreenState
       _startEngineSec = _engineNowSec;
       _position = Duration.zero;
       _strokes.clear();
+      _finished = false;
       _playing = true;
     });
   }
@@ -201,9 +236,22 @@ final class _RhythmPracticeScreenState
     _lastStrumSeq = live.strumSeq;
     final strum = live.latestStrum;
     if (strum == null || live.latestStrumTime < 0) return;
+    // On the EXERCISE timeline, not the button's: bar 1 beat 1 is zero, so the
+    // count-in does not shift every expected onset by a bar.
+    final atUs =
+        ((live.latestStrumTime - start) * 1e6).round() -
+        _countIn.durationAt(_beatDuration).inMicroseconds;
+    // A stroke played while counting in is not a mistake — but one just BEFORE
+    // bar 1 is bar 1 played early, and must still be graded.
+    if (!RhythmCountIn.countsTowardAttempt(
+      atUs: atUs,
+      toleranceUs: rhythmToleranceUs,
+    )) {
+      return;
+    }
     _strokes.add(
       DetectedStroke(
-        atUs: ((live.latestStrumTime - start) * 1e6).round(),
+        atUs: atUs,
         direction: strum.direction,
         // The pipeline publishes a strum only once its DIRECTION is confirmed,
         // so a stroke reaching here is confirmed evidence by construction.
@@ -215,6 +263,10 @@ final class _RhythmPracticeScreenState
   /// Crossings per loop: two per beat, across however many bars the exercise
   /// repeats, with the chord cycle laid over them.
   List<bool> get _crossings {
+    // While counting in, the hand swings through a bar of pure ghosts. That is
+    // our own model applied honestly: the hand never stops, so the learner's arm
+    // is already moving when bar 1 arrives instead of starting from rest.
+    if (_countInNumber != null) return _countIn.ghostCrossings;
     final perBar = _assignment.grid.handCrossings;
     final bars = _chords.isEmpty ? 1 : _chords.length;
     return [for (var bar = 0; bar < bars; bar++) ...perBar];
@@ -222,6 +274,34 @@ final class _RhythmPracticeScreenState
 
   Duration get _beatDuration =>
       Duration(microseconds: (60000000 / _assignment.bpm).round());
+
+  /// Where the exercise itself stands: negative for the whole count-in, zero
+  /// exactly at bar 1 beat 1.
+  Duration? get _exercisePosition => _position == null
+      ? null
+      : _countIn.exercisePosition(
+          position: _position!,
+          beatDuration: _beatDuration,
+        );
+
+  /// The number being counted, or null once the exercise has begun.
+  int? get _countInNumber => _position == null
+      ? null
+      : _countIn.numberAt(position: _position!, beatDuration: _beatDuration);
+
+  /// How many bars the whole attempt lasts.
+  int get _attemptBars => _assignment.bars;
+
+  /// One-based bar within the attempt, or null before bar 1.
+  int? get _barNumber {
+    final exercise = _exercisePosition;
+    if (exercise == null || exercise.isNegative) return null;
+    final barMicros =
+        _beatDuration.inMicroseconds * _assignment.grid.beatsPerBar;
+    if (barMicros <= 0) return null;
+    final bar = exercise.inMicroseconds ~/ barMicros + 1;
+    return bar > _attemptBars ? null : bar;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -232,10 +312,16 @@ final class _RhythmPracticeScreenState
     _absorb(live);
 
     final crossings = _crossings;
-    final pendulum = _position == null
+    final countInNumber = _countInNumber;
+    // Same timeline the clock reports, so the painted frame and the scored grid
+    // can never disagree about where the hand is.
+    final pendulumPosition = countInNumber != null
+        ? _position
+        : _exercisePosition;
+    final pendulum = pendulumPosition == null
         ? null
         : SsStrumPendulum.frameAt(
-            position: _position!,
+            position: pendulumPosition,
             beatDuration: _beatDuration,
             struck: crossings,
           );
@@ -244,7 +330,11 @@ final class _RhythmPracticeScreenState
         ? 0
         : (pendulum.crossingIndex ~/ perBar) %
               (_chords.isEmpty ? 1 : _chords.length);
-    final askedChord = _chords.isEmpty ? null : _chords[barIndex];
+    // Nothing is asked during the count-in: it is for listening, so naming a
+    // chord there would score a bar that has not started.
+    final askedChord = (_chords.isEmpty || countInNumber != null)
+        ? null
+        : _chords[barIndex];
     final fretting = _frettingFor(live, askedChord);
 
     return Scaffold(
@@ -283,6 +373,8 @@ final class _RhythmPracticeScreenState
                 ).textTheme.labelMedium?.copyWith(color: colors.textSecondary),
               ),
               const SizedBox(height: SsSpacing.space3),
+              _loopPosition(context, l10n, colors, countInNumber),
+              const SizedBox(height: SsSpacing.space3),
               SsStrumPendulum(
                 clock: _clock,
                 beatDuration: _beatDuration,
@@ -307,7 +399,7 @@ final class _RhythmPracticeScreenState
                     fretting: bar == barIndex
                         ? fretting
                         : FrettingState.unconfirmed,
-                    activeSlotIndex: bar == barIndex
+                    activeSlotIndex: (bar == barIndex && countInNumber == null)
                         ? _activeSlot(pendulum)
                         : null,
                     heardChord: live?.current?.label,
@@ -327,6 +419,56 @@ final class _RhythmPracticeScreenState
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Where the learner is: counting in, in bar N of the attempt, or finished.
+  ///
+  /// This closed the last gap that made the exercise unusable rather than merely
+  /// unpolished. Without it the loop had no landmarks at all: no count-in, so
+  /// bar 1 was always a guess; no bar number, so a four-bar attempt was
+  /// indistinguishable from an endless loop; and no end, so there was never a
+  /// moment the summary was ABOUT something.
+  Widget _loopPosition(
+    BuildContext context,
+    AppLocalizations l10n,
+    SsColorScheme colors,
+    int? countInNumber,
+  ) {
+    final text = Theme.of(context).textTheme;
+    if (countInNumber != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.curriculumCountInLabel,
+            style: text.labelMedium?.copyWith(color: colors.textSecondary),
+          ),
+          Text(
+            // Keyed: the lane below also prints "1" as part of its "1 & 2 &"
+            // count row, so a test looking for the spoken number by text alone
+            // matches three widgets and proves nothing.
+            key: countInNumberKey,
+            l10n.curriculumCountInNumber(countInNumber),
+            // Big, because it is read at a glance while the hand is already
+            // moving — not something to study.
+            style: text.displaySmall?.copyWith(
+              color: colors.brand,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      );
+    }
+    final bar = _barNumber;
+    return Text(
+      bar == null
+          ? (_finished ? l10n.curriculumAttemptDone : '')
+          : l10n.curriculumBarOf(bar, _attemptBars),
+      style: text.labelLarge?.copyWith(
+        color: _finished ? colors.textSecondary : colors.textPrimary,
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
   }

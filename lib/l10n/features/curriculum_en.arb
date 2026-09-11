@@ -75,5 +75,26 @@
         "type": "int"
       }
     }
-  }
+  },
+  "curriculumCountInLabel": "Get ready",
+  "curriculumCountInNumber": "{number}",
+  "@curriculumCountInNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumBarOf": "Bar {bar} of {total}",
+  "@curriculumBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumAttemptDone": "Attempt finished"
 }

@@ -1775,6 +1775,18 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Nyilvánossá teszed?",
   "@communityPublicConfirmTitle": {},
+  "curriculumAttemptDone": "Kör vége",
+  "curriculumBarOf": "{total} ütem közül a {bar}.",
+  "@curriculumBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "curriculumChordOther": "{chord} szól",
   "@curriculumChordOther": {
     "placeholders": {
@@ -1786,6 +1798,15 @@
   "curriculumChordRinging": "szól, tisztán",
   "curriculumChordStays": "ugyanaz marad",
   "curriculumChordUnclear": "nem tisztázott",
+  "curriculumCountInLabel": "Felkészülés",
+  "curriculumCountInNumber": "{number}",
+  "@curriculumCountInNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
   "curriculumDirectionAccuracy": "Amit hallottam, annak {percent}%-a jó irányba ment",
   "@curriculumDirectionAccuracy": {
     "placeholders": {

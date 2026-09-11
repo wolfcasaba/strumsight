@@ -235,6 +235,61 @@ void main() {
       expect(find.textContaining('heard'), findsOneWidget);
     });
 
+    testWidgets('a stroke played DURING the count-in is not scored', (
+      tester,
+    ) async {
+      // The count-in is for listening, and a learner who strums along while
+      // counting has done nothing wrong — so it must not land in the attempt as
+      // a stroke, and must not be held against them as a wrong one either.
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_streamHost(controller.stream));
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 5.0));
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+      // start + 1.0 s: well inside the 3.0 s count-in at 80 bpm.
+      controller.add(
+        _frame(
+          engineTimeSec: 6.1,
+          latestStrumTime: 6.0,
+          strumSeq: 1,
+          latestStrum: const Strum(
+            direction: StrumDirection.down,
+            confidence: 0.9,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.textContaining('heard 0 of'), findsOneWidget);
+    });
+
+    testWidgets('the count-in shows a number, and no slot is active yet', (
+      tester,
+    ) async {
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_streamHost(controller.stream));
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 5.0));
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      // "Get ready" plus the first number: the learner must know the exercise
+      // has not begun, or they will try to play the count-in.
+      expect(find.text('Get ready'), findsOneWidget);
+      expect(find.byKey(countInNumberKey), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(countInNumberKey)).data,
+        '1',
+        reason: 'the count is spoken one-based',
+      );
+    });
+
     testWidgets('starting again clears what the last run heard', (
       tester,
     ) async {
@@ -247,10 +302,13 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.play_arrow));
       await tester.pump();
+      // PAST THE COUNT-IN. At 80 bpm a 4/4 bar is 3.0 s, and one bar is counted
+      // in before bar 1, so a stroke at start + 3.0 s is bar 1 beat 1. This used
+      // to sit at start + 0.0 s, which is now mid-count-in and correctly unheard.
       controller.add(
         _frame(
-          engineTimeSec: 5.1,
-          latestStrumTime: 5.0,
+          engineTimeSec: 8.1,
+          latestStrumTime: 8.0,
           strumSeq: 1,
           latestStrum: const Strum(
             direction: StrumDirection.down,
