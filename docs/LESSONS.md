@@ -26642,3 +26642,48 @@ a kind` (5 cella) — az `isEligible` predikátum az a hiányzó darab, ami miat
 `type`-szűrős annotációs út addig nem tudott a közös segédre állni; falszifikálva:
 a predikátum figyelmen kívül hagyására az „an ineligible pair is not matched even
 at gap zero" cella MÉRTEN piros.
+
+## L655 — Címke NÉLKÜLI anyagon a „több megnevezett keret" nem bizonyít jobb hallást: egy DSP-kör szállítási döntését a ground-truth próba fordította meg, amit egyik mérő agent sem futtatott (E18-R12, 2026-09-11)
+
+**Mit mértünk.** Az E18-R10 (Hamming-kernel) és az E18-R11 (lágy padló) körök
+ugyanazt a három kritériumot kapták, és mindkettő **kizárólag a tíz címkézetlen
+stock loopon** pontozta a valós-hang ágat: megnevezett keretek száma és a
+`sus4`/`aug` arány. Ezekből az R10 candidate-je „nem nyert" (a teljes
+DSP-suite két cellája billent), az R11 pedig nemleges lett.
+
+A döntést egy olyan mérés fordította meg, ami **már bent volt a repóban**:
+`test/tooling/live_chord_wav_probe_test.dart` — **hét címkézett valódi
+gitárfelvétel**, a projekt egyetlen valódi akkord-ground-truth-ja a repón
+belül elérhető adaton:
+
+```
+box,     k=0 (addig szállított)   7/7   278 megerősített keret
+hamming, k=0                      7/7   294
+hamming, k=0.20  (ez lett szállítva) 7/7   296
+```
+
+Ez mutatta meg, hogy (a) egyetlen címke sem romlik, tehát a kernel nem
+agresszívebb, csak jobb, és (b) a valódi gitáron a **kernel** hozza a hasznot, a
+`k` alig — tehát a `k`-t a nehéz anyagon kell igazolni, és ott `k = 0` **két
+fájlt veszít el csendbe**. Egyik következtetés sem jön ki a címkézetlen
+loopokból.
+
+**Miért nem futtatták.** Nem az ő hibájuk volt: a brief nem mutatott rá, és az
+`AGENTS.md` §9 is csak annyit írt, hogy „valós audio mérés" kötelező — azt nem,
+hogy MELYIK. A §9 ezért most nevén nevezi a próbát.
+
+**Hogyan alkalmazd.** Címke nélküli anyagon a „több megnevezett keret" ugyanúgy
+jelenthet **pontosabb hallást**, mint **kevesebb óvatosságot** — a kettő ugyanúgy
+néz ki kívülről, és ezen az appon a rossz irány konkrétan azt jelenti, hogy a
+helyesen játszó tanulónak hamis címkét mutatunk. Szállítási döntést tehát csak
+ground-truth-on lehet hozni; a címkézetlen anyag **viselkedési jelzés**, amivel
+hipotézist lehet szűkíteni, de nem lehet dönteni. Ha egy körnek nincs
+ground-truth-ja a kérdéséhez, az a helyes kimenet, hogy **ezt kimondja** — ahogy
+a `sus4`/`aug` hipotézis maradt nyitva —, nem az, hogy a rendelkezésre álló
+proxyra dönt.
+
+**Őrteszt:** nincs és nem is lehet (a felvételek nincsenek commitolva, a próba
+önmagát skippeli a változó nélkül). A mérce ezért **eljárási**: `AGENTS.md` §9
+nevesíti a próbát a kötelező valós-audio mérésként, és az
+[ADR 0542](adr/0542-hamming-whitening-kernel-and-reference-mean-subtraction.md)
+„Miért `k = 0.20`" szakasza a ground-truth táblát hordozza, nem a proxy-számokat.
