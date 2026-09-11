@@ -1787,6 +1787,17 @@
       }
     }
   },
+  "curriculumCalibrateAction": "Kalibrálás",
+  "curriculumCalibrateInstruction": "Pengess LE minden ütésre",
+  "curriculumCalibrateSaved": "Kalibrálva: {ms} ms",
+  "@curriculumCalibrateSaved": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateUneven": "Túl egyenetlen ahhoz, hogy megbízható legyen — próbáld újra",
   "curriculumChordOther": "{chord} szól",
   "@curriculumChordOther": {
     "placeholders": {
@@ -1871,6 +1882,18 @@
     }
   },
   "curriculumStrokeUp": "felfelé",
+  "curriculumTimingEarly": "Egyenletesen a beat előtt vagy",
+  "curriculumTimingLate": "Egyenletesen a beat mögött vagy",
+  "curriculumTimingOff": "Időzítés: átlagosan {ms} ms eltérés",
+  "@curriculumTimingOff": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTimingScattered": "Szórt — nem egyenletesen korán vagy későn",
+  "curriculumTimingUncalibrated": "Az időzítés ezen a készüléken még nincs pontozva",
   "curriculumTooLittleHeard": "Ebből még nem hallottam eleget",
   "ddSuggestEasy": "Nehéz? Próbáld Easy módban!",
   "ddSuggestFull": "Ez megy! Próbáld a teljes leckét!",

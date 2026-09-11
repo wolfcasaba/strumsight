@@ -445,4 +445,141 @@ void main() {
       );
     });
   });
+  _timingGroup();
+}
+
+void _timingGroup() {
+  // Down-quarters at 120 bpm: notated onsets at 0, 500, 1000, 1500 ms.
+  RhythmGrid grid() => RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.quarter,
+    struck: const [true, true, true, true],
+  );
+
+  List<DetectedStroke> strokesAt(List<int> msList) => [
+    for (final ms in msList)
+      DetectedStroke(
+        atUs: ms * 1000,
+        direction: StrumDirection.down,
+        isConfirmed: true,
+      ),
+  ];
+
+  group('timing is reported ONLY when the device is calibrated', () {
+    test('uncalibrated: every slot error is null and no timing is claimed', () {
+      final attempt = gradeRhythm(
+        grid(),
+        bpm: 120,
+        bars: 1,
+        strokes: strokesAt([10, 510, 1010, 1510]),
+      );
+      expect(attempt.credited, 4, reason: 'direction still graded');
+      expect(attempt.timingErrorsUs, isEmpty);
+      expect(attempt.meanAbsTimingErrorUs, isNull);
+      expect(attempt.timingBiasUs, isNull);
+      expect(attempt.hasTimingReport, isFalse);
+      // An uncalibrated error figure would be the device's skew as much as the
+      // learner's playing — a claim with no evidence behind it.
+      expect(attempt.slots.every((slot) => slot.errorUs == null), isTrue);
+    });
+
+    test('calibrated: the signed error of each heard slot is reported', () {
+      final attempt = gradeRhythm(
+        grid(),
+        bpm: 120,
+        bars: 1,
+        strokes: strokesAt([10, 510, 1010, 1510]),
+        timingCalibrationUs: 0,
+      );
+      expect(attempt.timingErrorsUs, [10000, 10000, 10000, 10000]);
+      expect(attempt.meanAbsTimingErrorUs, 10000);
+      expect(attempt.timingBiasUs, 10000, reason: 'consistently 10 ms late');
+      expect(attempt.hasTimingReport, isTrue);
+    });
+
+    test('a calibration of zero is NOT the same as no calibration', () {
+      // The distinction the API has to keep: 0 means "measured, and it is zero",
+      // null means "never measured". Collapsing them would let an uncalibrated
+      // device publish a timing score.
+      final uncalibrated = gradeRhythm(
+        grid(),
+        bpm: 120,
+        bars: 1,
+        strokes: strokesAt([0, 500, 1000, 1500]),
+      );
+      final calibratedAtZero = gradeRhythm(
+        grid(),
+        bpm: 120,
+        bars: 1,
+        strokes: strokesAt([0, 500, 1000, 1500]),
+        timingCalibrationUs: 0,
+      );
+      expect(uncalibrated.hasTimingReport, isFalse);
+      expect(calibratedAtZero.hasTimingReport, isTrue);
+      expect(calibratedAtZero.meanAbsTimingErrorUs, 0);
+    });
+  });
+
+  test('the calibration rescues an attempt a skew would have thrown away', () {
+    // THE cell this feature exists for. A device whose display↔microphone skew
+    // is 80 ms puts every stroke outside the 50 ms window, so NOTHING pairs:
+    // coverage collapses and the screen tells a learner who played the pattern
+    // correctly that it could not hear enough of it.
+    final late80 = strokesAt([80, 580, 1080, 1580]);
+
+    final uncorrected = gradeRhythm(grid(), bpm: 120, bars: 1, strokes: late80);
+    expect(uncorrected.heard, 0);
+    expect(uncorrected.coverage, 0);
+    expect(
+      uncorrected.isReportable,
+      isFalse,
+      reason: 'correct playing, declared unhearable — the bug being fixed',
+    );
+
+    final corrected = gradeRhythm(
+      grid(),
+      bpm: 120,
+      bars: 1,
+      strokes: late80,
+      timingCalibrationUs: 80000,
+    );
+    expect(corrected.credited, 4);
+    expect(corrected.coverage, 1.0);
+    expect(corrected.meanAbsTimingErrorUs, 0);
+    expect(
+      corrected.timingBiasUs,
+      0,
+      reason: 'what the learner FELT as together now reads as together',
+    );
+  });
+
+  test('bias and spread are separated, because they mean different things', () {
+    // Scattered by ±30 ms with no systematic lag: mean absolute error 30 ms,
+    // bias ~0. A learner here is UNSTEADY. A single number would be
+    // indistinguishable from someone steadily 30 ms late, whose fix is the
+    // opposite kind of practice.
+    final attempt = gradeRhythm(
+      grid(),
+      bpm: 120,
+      bars: 1,
+      strokes: strokesAt([30, 470, 1030, 1470]),
+      timingCalibrationUs: 0,
+    );
+    expect(attempt.meanAbsTimingErrorUs, 30000);
+    expect(attempt.timingBiasUs, 0);
+  });
+
+  test('a thin attempt claims no timing even when calibrated', () {
+    // Coverage floor outranks the calibration: one clean stroke of four is not
+    // grounds for a verdict about someone's timing.
+    final attempt = gradeRhythm(
+      grid(),
+      bpm: 120,
+      bars: 1,
+      strokes: strokesAt([0]),
+      timingCalibrationUs: 0,
+    );
+    expect(attempt.timingErrorsUs, hasLength(1));
+    expect(attempt.isReportable, isFalse);
+    expect(attempt.hasTimingReport, isFalse);
+  });
 }

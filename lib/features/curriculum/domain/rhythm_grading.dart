@@ -116,6 +116,7 @@ final class RhythmSlotResult {
     required this.expected,
     required this.outcome,
     this.detected,
+    this.errorUs,
   });
 
   final int bar;
@@ -131,6 +132,15 @@ final class RhythmSlotResult {
   /// because naming a direction there would be a claim without evidence.
   final StrumDirection? detected;
 
+  /// Signed timing error in microseconds: positive = played LATE. Null unless a
+  /// confirmed stroke was matched here AND the device is calibrated.
+  ///
+  /// Without a calibration this stays null rather than holding a raw engine
+  /// figure: an uncalibrated number would be the device's display↔microphone
+  /// skew as much as the learner's playing, and presenting it as theirs would be
+  /// a claim with no evidence behind it.
+  final int? errorUs;
+
   @override
   bool operator ==(Object other) =>
       other is RhythmSlotResult &&
@@ -138,10 +148,12 @@ final class RhythmSlotResult {
       other.slotIndex == slotIndex &&
       other.expected == expected &&
       other.outcome == outcome &&
-      other.detected == detected;
+      other.detected == detected &&
+      other.errorUs == errorUs;
 
   @override
-  int get hashCode => Object.hash(bar, slotIndex, expected, outcome, detected);
+  int get hashCode =>
+      Object.hash(bar, slotIndex, expected, outcome, detected, errorUs);
 }
 
 /// The graded result of one run through a grid.
@@ -193,7 +205,63 @@ final class RhythmAttempt {
   /// False is not a failure — it is the app declining to judge on too little
   /// evidence. See [minimumRhythmCoverage].
   bool get isReportable => coverage >= minimumRhythmCoverage;
+
+  /// Signed timing errors of the heard slots, in microseconds, in time order.
+  /// Positive = late. Empty when uncalibrated or when nothing was heard.
+  List<int> get timingErrorsUs => [
+    for (final slot in slots)
+      if (slot.errorUs != null) slot.errorUs!,
+  ];
+
+  /// How far off the heard strokes were on average, ignoring direction of error.
+  /// Null when there is nothing to average — uncalibrated, or nothing heard.
+  double? get meanAbsTimingErrorUs {
+    final errors = timingErrorsUs;
+    if (errors.isEmpty) return null;
+    return errors.fold<int>(0, (a, e) => a + e.abs()) / errors.length;
+  }
+
+  /// The learner's systematic BIAS: positive = consistently late.
+  ///
+  /// Reported separately from [meanAbsTimingErrorUs] because the two say
+  /// different things to a learner and call for different practice. Being
+  /// steadily 40 ms late is a lag — one thing to fix, and the pattern is
+  /// otherwise even. Being scattered ±40 ms with no bias is unsteadiness, which
+  /// is a different problem entirely. A single "accuracy" number would hide
+  /// which one they have.
+  double? get timingBiasUs {
+    final errors = timingErrorsUs;
+    if (errors.isEmpty) return null;
+    return errors.fold<int>(0, (a, e) => a + e) / errors.length;
+  }
+
+  /// Whether a timing claim is allowed at all: the device must be calibrated
+  /// AND the attempt must clear the coverage floor.
+  bool get hasTimingReport => timingErrorsUs.isNotEmpty && isReportable;
+
+  /// Whether the error is mostly a steady LAG/RUSH or mostly scatter.
+  ///
+  /// The threshold is half the mean absolute error: when the bias accounts for
+  /// at least half of it, the strokes are mostly on one side of the beat and the
+  /// learner has a lag to correct. Below that they are on both sides and the
+  /// problem is steadiness. Null when no timing may be claimed.
+  ///
+  /// This exists because the advice differs: "you are playing behind the beat"
+  /// is actionable in a way that "your timing is 30 ms out" is not.
+  RhythmTimingShape? get timingShape {
+    if (!hasTimingReport) return null;
+    final bias = timingBiasUs!;
+    final spread = meanAbsTimingErrorUs!;
+    if (spread == 0) return RhythmTimingShape.scattered;
+    if (bias.abs() * 2 < spread) return RhythmTimingShape.scattered;
+    return bias > 0
+        ? RhythmTimingShape.systematicLate
+        : RhythmTimingShape.systematicEarly;
+  }
 }
+
+/// Whether a timing error is a steady lag, a steady rush, or scatter.
+enum RhythmTimingShape { systematicLate, systematicEarly, scattered }
 
 /// Grades [strokes] against [bars] repetitions of [grid] at [bpm].
 ///
@@ -201,6 +269,19 @@ final class RhythmAttempt {
 /// [DetectedStroke.atUs]. [toleranceUs] defaults to the measured window and is
 /// a parameter only so a test can show the boundary; shipping code should leave
 /// it alone.
+///
+/// [timingCalibrationUs] is this device's measured pendulum↔strum offset, and it
+/// does TWO things — both of them necessary:
+///
+/// 1. It is subtracted from every stroke BEFORE matching. This is not a
+///    cosmetic correction to a displayed number: an uncorrected skew larger than
+///    [toleranceUs] pairs with nothing at all, so coverage collapses and the
+///    screen reports "I could not hear enough" to a learner who in fact played
+///    the pattern. Direction accuracy and coverage therefore depend on it too.
+/// 2. Its presence is what PERMITS a timing claim. When it is null every
+///    [RhythmSlotResult.errorUs] stays null and the attempt reports no timing,
+///    because an uncalibrated error figure is the device's skew mixed with the
+///    learner's playing and cannot honestly be attributed to them (§2 rule 1).
 RhythmAttempt gradeRhythm(
   RhythmGrid grid, {
   required double bpm,
@@ -208,6 +289,7 @@ RhythmAttempt gradeRhythm(
   required List<DetectedStroke> strokes,
   int startUs = 0,
   int toleranceUs = rhythmToleranceUs,
+  int? timingCalibrationUs,
 }) {
   if (bars <= 0) {
     throw ArgumentError.value(
@@ -230,9 +312,21 @@ RhythmAttempt gradeRhythm(
     }
   }
 
-  final confirmed = [...strokes.where((stroke) => stroke.isConfirmed)]
+  // The calibration shifts the learner's strokes onto the grid's own timeline.
+  // Zero when uncalibrated, so the arithmetic is identical to before and only
+  // the REPORTING differs.
+  final shiftUs = timingCalibrationUs ?? 0;
+  final corrected = [
+    for (final stroke in strokes)
+      DetectedStroke(
+        atUs: stroke.atUs - shiftUs,
+        direction: stroke.direction,
+        isConfirmed: stroke.isConfirmed,
+      ),
+  ];
+  final confirmed = [...corrected.where((stroke) => stroke.isConfirmed)]
     ..sort((a, b) => a.atUs.compareTo(b.atUs));
-  final unconfirmed = [...strokes.where((stroke) => !stroke.isConfirmed)]
+  final unconfirmed = [...corrected.where((stroke) => !stroke.isConfirmed)]
     ..sort((a, b) => a.atUs.compareTo(b.atUs));
   final expectedTimes = [for (final slot in expected) slot.atUs];
 
@@ -272,7 +366,12 @@ RhythmAttempt gradeRhythm(
   return RhythmAttempt(
     slots: List<RhythmSlotResult>.unmodifiable([
       for (var i = 0; i < expected.length; i++)
-        _resultFor(expected[i], strokeOfSlot[i], isUnclear[i]),
+        _resultFor(
+          expected[i],
+          strokeOfSlot[i],
+          isUnclear[i],
+          reportTiming: timingCalibrationUs != null,
+        ),
     ]),
     extraConfirmedStrokes: confirmed.length - matchedConfirmed,
   );
@@ -281,8 +380,9 @@ RhythmAttempt gradeRhythm(
 RhythmSlotResult _resultFor(
   ({int bar, RhythmSlot slot, int atUs}) expected,
   DetectedStroke? matched,
-  bool isUnclear,
-) {
+  bool isUnclear, {
+  required bool reportTiming,
+}) {
   final RhythmSlotOutcome outcome;
   if (matched == null) {
     outcome = isUnclear
@@ -299,5 +399,8 @@ RhythmSlotResult _resultFor(
     expected: expected.slot.direction,
     outcome: outcome,
     detected: matched?.direction,
+    errorUs: (reportTiming && matched != null)
+        ? matched.atUs - expected.atUs
+        : null,
   );
 }

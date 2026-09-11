@@ -96,5 +96,28 @@
       }
     }
   },
-  "curriculumAttemptDone": "Attempt finished"
+  "curriculumAttemptDone": "Attempt finished",
+  "curriculumTimingOff": "Timing: {ms} ms off on average",
+  "@curriculumTimingOff": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTimingLate": "You are steadily behind the beat",
+  "curriculumTimingEarly": "You are steadily ahead of the beat",
+  "curriculumTimingScattered": "Evenly spread — not consistently early or late",
+  "curriculumTimingUncalibrated": "Timing is not scored on this device yet",
+  "curriculumCalibrateAction": "Calibrate",
+  "curriculumCalibrateInstruction": "Strum DOWN on every beat, with the pick",
+  "curriculumCalibrateSaved": "Calibrated: {ms} ms",
+  "@curriculumCalibrateSaved": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateUneven": "Too uneven to trust — try that again"
 }

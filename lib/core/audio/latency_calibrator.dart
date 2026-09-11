@@ -1,5 +1,14 @@
 /// Rock-Band-style tap-test maths (RAG chunk 016b P3) — pure & testable.
 ///
+/// **Lives in `core`, not in a feature.** It began under `features/learn`, where
+/// it had one caller. The curriculum's rhythm exercise needs the same maths for
+/// its own pendulum↔strum calibration, and a cross-feature import would have to
+/// target `learn/public.dart` — which would declare a shared utility to be part
+/// of Learn's public contract, which it is not. The same reasoning as
+/// `core/music/onset_matching.dart` (`docs/LESSONS.md` L269/L654): a pure helper
+/// two features need has its home in `core`, and then nothing imports across
+/// features at all.
+///
 /// The user taps along an audible click with period [beatPeriodSec]. Each
 /// tap's signed offset from its nearest beat is collected; the device's
 /// input+audio latency is the **median** of the valid offsets (robust to a

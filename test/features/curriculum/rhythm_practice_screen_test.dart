@@ -11,10 +11,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/music/chord.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/core/storage/storage_providers.dart';
+
 import 'package:strumsight/features/curriculum/presentation/screens/rhythm_practice_screen.dart';
+import 'package:strumsight/features/settings/public.dart';
 import 'package:strumsight/features/curriculum/presentation/widgets/rhythm_lane.dart';
 import 'package:strumsight/features/live/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+
+import '../../core/storage/in_memory_key_value_store.dart';
 
 LiveFrame _frame({
   String? chordLabel,
@@ -44,6 +49,10 @@ Widget _host(LiveFrame frame, {Locale locale = const Locale('en')}) =>
     ProviderScope(
       overrides: [
         liveFrameProvider.overrideWith((ref) => Stream<LiveFrame>.value(frame)),
+        // The screen reads the persisted pendulum↔strum calibration, so the
+        // store has to exist. Empty = uncalibrated, which is the state most of
+        // these cells are about.
+        keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
       ],
       child: MaterialApp(
         locale: locale,
@@ -56,15 +65,31 @@ Widget _host(LiveFrame frame, {Locale locale = const Locale('en')}) =>
 
 /// A host driven by a controller, so a test can deliver frames over time the
 /// way the engine does.
-Widget _streamHost(Stream<LiveFrame> frames) => ProviderScope(
-  overrides: [liveFrameProvider.overrideWith((ref) => frames)],
-  child: MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    theme: SsDarkTheme.data(),
-    home: const RhythmPracticeScreen(),
-  ),
-);
+Widget _streamHost(Stream<LiveFrame> frames, {int calibrationMs = 0}) =>
+    ProviderScope(
+      overrides: [
+        liveFrameProvider.overrideWith((ref) => frames),
+        keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+        if (calibrationMs != 0)
+          strumLatencyProvider.overrideWith(
+            () => _FixedStrumLatency(calibrationMs),
+          ),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: SsDarkTheme.data(),
+        home: const RhythmPracticeScreen(),
+      ),
+    );
+
+/// A calibrated device, without running the calibration flow.
+class _FixedStrumLatency extends StrumLatencyNotifier {
+  _FixedStrumLatency(this.ms);
+  final int ms;
+  @override
+  int build() => ms;
+}
 
 FrettingState _fretting(WidgetTester tester) =>
     tester.widgetList<RhythmLane>(find.byType(RhythmLane)).first.fretting;
@@ -233,6 +258,48 @@ void main() {
       // not be credited — the point being that it is judged on its own
       // timestamp rather than on the frame's.
       expect(find.textContaining('heard'), findsOneWidget);
+    });
+
+    testWidgets('an UNCALIBRATED device says so instead of scoring timing', (
+      tester,
+    ) async {
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_streamHost(controller.stream));
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 5.0));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+      controller.add(
+        _frame(
+          engineTimeSec: 8.1,
+          latestStrumTime: 8.0,
+          strumSeq: 1,
+          latestStrum: const Strum(
+            direction: StrumDirection.down,
+            confidence: 0.9,
+          ),
+        ),
+      );
+      await tester.pump();
+      // Rule: what is not measured says so. No millisecond figure may appear
+      // for a device whose display↔microphone offset has never been measured.
+      expect(
+        find.text('Timing is not scored on this device yet'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('ms off on average'), findsNothing);
+    });
+
+    testWidgets('a CALIBRATED device offers the calibration action', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_streamHost(const Stream<LiveFrame>.empty()));
+      await tester.pump();
+      // The way back: a learner whose calibration is wrong must be able to redo
+      // it from the screen the score appears on.
+      expect(find.text('Calibrate'), findsOneWidget);
     });
 
     testWidgets('a stroke played DURING the count-in is not scored', (

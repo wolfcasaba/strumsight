@@ -1815,6 +1815,17 @@
       }
     }
   },
+  "curriculumCalibrateAction": "Calibrate",
+  "curriculumCalibrateInstruction": "Strum DOWN on every beat, with the pick",
+  "curriculumCalibrateSaved": "Calibrated: {ms} ms",
+  "@curriculumCalibrateSaved": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateUneven": "Too uneven to trust — try that again",
   "curriculumChordOther": "{chord} is sounding",
   "@curriculumChordOther": {
     "placeholders": {
@@ -1899,6 +1910,18 @@
     }
   },
   "curriculumStrokeUp": "up",
+  "curriculumTimingEarly": "You are steadily ahead of the beat",
+  "curriculumTimingLate": "You are steadily behind the beat",
+  "curriculumTimingOff": "Timing: {ms} ms off on average",
+  "@curriculumTimingOff": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTimingScattered": "Evenly spread — not consistently early or late",
+  "curriculumTimingUncalibrated": "Timing is not scored on this device yet",
   "curriculumTooLittleHeard": "I could not hear enough of that yet",
   "ddSuggestEasy": "Tough one — try Easy mode?",
   "ddSuggestFull": "You're nailing it — try the full lesson?",

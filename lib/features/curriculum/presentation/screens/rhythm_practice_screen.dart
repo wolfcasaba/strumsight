@@ -43,10 +43,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/audio/latency_calibrator.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../chords/public.dart';
 import '../../../live/public.dart';
+import '../../../settings/public.dart';
 import '../../data/beginner_course.dart';
 import '../../domain/course.dart';
 import '../../domain/rhythm_assignment.dart';
@@ -119,6 +121,20 @@ final class _RhythmPracticeScreenState
 
   /// One bar of the exercise's OWN metre, counted before bar 1.
   late final RhythmCountIn _countIn;
+
+  /// Non-null while a CALIBRATION run is in progress rather than an attempt.
+  ///
+  /// Calibration happens here, at the exercise's own tempo, and not in the
+  /// global settings tap-test — for two measured reasons. The tap-test's pair is
+  /// screen-tap against click or flash, so it carries touch latency and measures
+  /// neither of this screen's channels (pendulum out, microphone in). And
+  /// anticipation GROWS with slower tempi, so a number taken at one tempo is
+  /// only approximate at another; taken here it is taken at the tempo the
+  /// learner is about to be scored at.
+  LatencyCalibrator? _calibrator;
+
+  /// What the last calibration run concluded, shown until the next run.
+  String? _calibrationNote;
 
   /// True once the attempt has run its full length and stopped itself.
   ///
@@ -220,6 +236,50 @@ final class _RhythmPracticeScreenState
     });
   }
 
+  /// Reference strokes collected before a calibration is allowed to conclude.
+  static const int _calibrationTaps = 8;
+
+  void _startCalibration() {
+    setState(() {
+      _calibrationNote = null;
+      _calibrator = LatencyCalibrator(
+        // The exercise's OWN beat, because anticipation is tempo-dependent.
+        beatPeriodSec: _beatDuration.inMicroseconds / 1e6,
+      );
+      _startEngineSec = _engineNowSec;
+      _position = Duration.zero;
+      _strokes.clear();
+      _finished = false;
+      _playing = _engineNowSec != null;
+    });
+  }
+
+  /// Saves the measured offset, or refuses to.
+  ///
+  /// An unstable run is NOT saved. A median over inconsistent taps would be a
+  /// number with no evidence behind it, and every timing score afterwards would
+  /// inherit it silently — worse than staying uncalibrated, which at least says
+  /// so out loud.
+  void _finishCalibration() {
+    final calibrator = _calibrator;
+    if (calibrator == null) return;
+    final l10n = AppLocalizations.of(context);
+    final offset = calibrator.offsetSec;
+    final stable = calibrator.isStable && offset != null;
+    if (stable) {
+      final ms = (offset * 1000).round();
+      ref.read(strumLatencyProvider.notifier).set(ms);
+      _calibrationNote = l10n.curriculumCalibrateSaved(ms);
+    } else {
+      _calibrationNote = l10n.curriculumCalibrateUneven;
+    }
+    setState(() {
+      _calibrator = null;
+      _playing = false;
+      _position = null;
+    });
+  }
+
   /// Folds a freshly arrived frame into the clock anchor and the stroke list.
   ///
   /// A stroke is placed at `latestStrumTime` — the MEASURED true onset — never
@@ -236,6 +296,17 @@ final class _RhythmPracticeScreenState
     _lastStrumSeq = live.strumSeq;
     final strum = live.latestStrum;
     if (strum == null || live.latestStrumTime < 0) return;
+    final calibrator = _calibrator;
+    if (calibrator != null) {
+      // Calibration measures the offset between the beat the learner SEES and
+      // the strum the engine REPORTS, on the exercise's own timeline.
+      final atSec =
+          (live.latestStrumTime - start) -
+          _countIn.durationAt(_beatDuration).inMicroseconds / 1e6;
+      if (atSec >= 0) calibrator.registerTap(atSec);
+      if (calibrator.sampleCount >= _calibrationTaps) _finishCalibration();
+      return;
+    }
     // On the EXERCISE timeline, not the button's: bar 1 beat 1 is zero, so the
     // count-in does not shift every expected onset by a bar.
     final atUs =
@@ -267,6 +338,7 @@ final class _RhythmPracticeScreenState
     // our own model applied honestly: the hand never stops, so the learner's arm
     // is already moving when bar 1 arrives instead of starting from rest.
     if (_countInNumber != null) return _countIn.ghostCrossings;
+    if (_calibrator != null) return _calibrationCrossings;
     final perBar = _assignment.grid.handCrossings;
     final bars = _chords.isEmpty ? 1 : _chords.length;
     return [for (var bar = 0; bar < bars; bar++) ...perBar];
@@ -288,6 +360,15 @@ final class _RhythmPracticeScreenState
   int? get _countInNumber => _position == null
       ? null
       : _countIn.numberAt(position: _position!, beatDuration: _beatDuration);
+
+  /// While calibrating, the hand strikes on EVERY beat: the learner is asked for
+  /// one reference stroke per beat, so every beat yields a sample.
+  List<bool> get _calibrationCrossings => [
+    for (var beat = 0; beat < _assignment.grid.beatsPerBar * 2; beat++) ...[
+      true,
+      false,
+    ],
+  ];
 
   /// How many bars the whole attempt lasts.
   int get _attemptBars => _assignment.bars;
@@ -347,11 +428,17 @@ final class _RhythmPracticeScreenState
           padding: const EdgeInsets.all(SsSpacing.space3),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            spacing: SsSpacing.space3,
             children: [
               FilledButton.icon(
                 onPressed: _toggle,
                 icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
                 label: Text('${_assignment.bpm.round()} BPM'),
+              ),
+              TextButton.icon(
+                onPressed: _calibrator == null ? _startCalibration : null,
+                icon: const Icon(Icons.tune),
+                label: Text(l10n.curriculumCalibrateAction),
               ),
             ],
           ),
@@ -374,6 +461,20 @@ final class _RhythmPracticeScreenState
               ),
               const SizedBox(height: SsSpacing.space3),
               _loopPosition(context, l10n, colors, countInNumber),
+              if (_calibrator != null)
+                Text(
+                  l10n.curriculumCalibrateInstruction,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: colors.brand),
+                ),
+              if (_calibrationNote != null)
+                Text(
+                  _calibrationNote!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+                ),
               const SizedBox(height: SsSpacing.space3),
               SsStrumPendulum(
                 clock: _clock,
@@ -488,11 +589,19 @@ final class _RhythmPracticeScreenState
   ) {
     final start = _startEngineSec;
     if (start == null || !_playing) return const SizedBox.shrink();
+    // `_attemptBars`, not the chord cycle's length. The attempt is as long as
+    // the assignment says, and grading only the first cycle would push every
+    // stroke after it into `extraConfirmedStrokes` and compute coverage over too
+    // few slots — a bug that only became visible once the attempt had an end.
+    final calibrationMs = ref.watch(strumLatencyProvider);
     final attempt = gradeRhythm(
       _assignment.grid,
       bpm: _assignment.bpm,
-      bars: _chords.isEmpty ? 1 : _chords.length,
+      bars: _attemptBars,
       strokes: _strokes,
+      // 0 means "measured, and it is zero"; absent means never measured, and
+      // then no timing is claimed at all.
+      timingCalibrationUs: _isCalibrated ? calibrationMs * 1000 : null,
     );
     final accuracy = attempt.directionAccuracy;
     final text = !attempt.isReportable || accuracy == null
@@ -517,9 +626,46 @@ final class _RhythmPracticeScreenState
               context,
             ).textTheme.labelMedium?.copyWith(color: colors.textSecondary),
           ),
+          ..._timingLines(context, l10n, colors, attempt),
         ],
       ),
     );
+  }
+
+  /// Whether this device has a measured pendulum↔strum offset.
+  ///
+  /// The preference stores 0 for "uncalibrated", which is indistinguishable from
+  /// a genuine zero — so a separate marker would be better. It is not worth a
+  /// migration here: a real device measuring exactly 0 ms is vanishingly
+  /// unlikely, and the cost of the collision is one extra calibration run, not a
+  /// false score.
+  bool get _isCalibrated => ref.read(strumLatencyProvider) != 0;
+
+  /// The timing report, or an honest statement that there isn't one.
+  List<Widget> _timingLines(
+    BuildContext context,
+    AppLocalizations l10n,
+    SsColorScheme colors,
+    RhythmAttempt attempt,
+  ) {
+    final label = Theme.of(
+      context,
+    ).textTheme.labelMedium?.copyWith(color: colors.textSecondary);
+    if (!attempt.hasTimingReport) {
+      // Rule: what is not measured says so. An uncalibrated device gets no
+      // timing number rather than a plausible-looking one.
+      if (_isCalibrated) return const [];
+      return [Text(l10n.curriculumTimingUncalibrated, style: label)];
+    }
+    final offMs = (attempt.meanAbsTimingErrorUs! / 1000).round();
+    return [
+      Text(l10n.curriculumTimingOff(offMs), style: label),
+      Text(switch (attempt.timingShape!) {
+        RhythmTimingShape.systematicLate => l10n.curriculumTimingLate,
+        RhythmTimingShape.systematicEarly => l10n.curriculumTimingEarly,
+        RhythmTimingShape.scattered => l10n.curriculumTimingScattered,
+      }, style: label),
+    ];
   }
 
   /// The notated slot currently sounding, or null on a ghost crossing.

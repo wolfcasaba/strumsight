@@ -96,5 +96,28 @@
       }
     }
   },
-  "curriculumAttemptDone": "Kör vége"
+  "curriculumAttemptDone": "Kör vége",
+  "curriculumTimingOff": "Időzítés: átlagosan {ms} ms eltérés",
+  "@curriculumTimingOff": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTimingLate": "Egyenletesen a beat mögött vagy",
+  "curriculumTimingEarly": "Egyenletesen a beat előtt vagy",
+  "curriculumTimingScattered": "Szórt — nem egyenletesen korán vagy későn",
+  "curriculumTimingUncalibrated": "Az időzítés ezen a készüléken még nincs pontozva",
+  "curriculumCalibrateAction": "Kalibrálás",
+  "curriculumCalibrateInstruction": "Pengess LE minden ütésre",
+  "curriculumCalibrateSaved": "Kalibrálva: {ms} ms",
+  "@curriculumCalibrateSaved": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateUneven": "Túl egyenetlen ahhoz, hogy megbízható legyen — próbáld újra"
 }
