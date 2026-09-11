@@ -111,19 +111,40 @@ List<File> _contentFiles(Directory contentRoot, File outputFile) {
   if (!contentRoot.existsSync()) {
     throw KnowledgeManifestException(KnowledgeManifestErrorCode.corruptContent);
   }
-  final outputPath = outputFile.absolute.path;
-  final manifestPath = File('${contentRoot.path}/manifest.json').absolute.path;
+  final outputPath = _pathKey(outputFile.absolute.path);
+  final manifestPath = _pathKey(
+    File(
+      '${contentRoot.path}${Platform.pathSeparator}manifest.json',
+    ).absolute.path,
+  );
   final files = <File>[
     for (final entity in contentRoot.listSync(recursive: true))
       if (entity is File &&
           entity.path.endsWith('.json') &&
-          entity.absolute.path != outputPath &&
-          entity.absolute.path != manifestPath)
+          _pathKey(entity.absolute.path) != outputPath &&
+          _pathKey(entity.absolute.path) != manifestPath)
         entity,
   ];
   files.sort((left, right) => left.path.compareTo(right.path));
   return files;
 }
+
+/// Comparison key for "is this the same file on disk?".
+///
+/// The two exclusion paths are BUILT here, while the candidates come from
+/// [Directory.listSync] — on Windows the two disagree about the separator
+/// (a built `assets/tutor_knowledge/manifest.json` vs. a listed
+/// `assets\tutor_knowledge\manifest.json`), so a raw `!=` never matched and
+/// the manifest was fed back in as a content document. It carries no
+/// `license` field, so the build died with `missingLicense` pointing at the
+/// manifest itself — measured on the user's Windows box, E18-R01 verification
+/// report §1 (three red cells in `knowledge_manifest_test.dart`).
+///
+/// Windows paths are also case-insensitive, so the key folds case there.
+/// POSIX paths are returned untouched: the separator is already `/` and the
+/// filesystem is case-sensitive.
+String _pathKey(String path) =>
+    Platform.isWindows ? path.replaceAll('\\', '/').toLowerCase() : path;
 
 List<int> _readContent(File sourceFile) {
   try {
