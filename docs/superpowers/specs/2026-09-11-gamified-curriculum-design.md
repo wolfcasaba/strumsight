@@ -40,39 +40,85 @@ HOW.
 
 ### 1.1 The first stage's order, and its basis
 
-| rung | goal | measured by |
+REVISED TWICE, by research and then by measurement. The table below is what
+ships (`lib/features/curriculum/data/beginner_course.dart`); what it replaced,
+and why, is recorded after it.
+
+| rung | content | measured |
 |---|---|---|
-| 1 | tuning + posture | nothing (and it says so) |
-| 2 | right hand: muted strings, **down only**, quarter notes | strum direction + timing |
-| 3 | first shape: **Em**, one strum per chord | chord, and whether it rings clean |
-| 4 | second shape: **Am** (shares Em's shape) | chord |
-| 5 | **Em↔Am change**, slow, one strum | chord change |
-| 6 | right hand: **down-up** eighths on muted strings | strum direction |
-| 7 | **D**, then Em→D and Am→D | chord change |
-| 8 | change **without stopping the strum** | direction + continuity |
-| 9 | **C**, **G** (harder shapes) | chord |
-| 10 | first pattern: `↓ ↓↑ ↑↓↑` | direction + pattern |
+| 1 | tuning + playing position | nothing, and it says so |
+| 2 | right hand alone: muted strings, DOWN only, quarter notes | direction + timing |
+| 3 | first shape: **Em**, one strum per chord, no pattern yet | chord |
+| 4 | **Am**, then the **Em↔Am change** — and "keep the strumming hand moving" | chord + direction |
+| 5 | **a playable two-chord song** | chord + direction |
+| 6 | right hand: DOWN-UP eighths, still muted | direction |
+| 7 | first pattern `↓ ↓↑ ↑↓↑` over Em/Am | chord + direction |
+| 8 | **D**, then Am→D | chord + direction |
+| 9 | **G**, then D→G | chord + direction |
+| 10 | **C**, then G→C | chord + direction |
 
-**Sources and what they settle.** Em first: two fingers and all six strings
-ring. First batch Am, C, D, Em, G. Early practice is two chords, slow switching,
-**one strum per chord with no strumming pattern yet**. The difficulty is the
-TRANSITION, not the shape. The key skill is moving between shapes **without
-stopping the strum** — which is rung 8, and which StrumSight can actually
-measure, unlike a chord-only recogniser.
+**Sources, and where they disagree.** Em first: two fingers, all six strings
+ring, and Em→Am is among the easiest CHANGES — which matters more than the
+shape, because every source agrees the change is the hard part. That choice is
+CONTESTED and the contest is recorded rather than smoothed over: JustinGuitar,
+the largest structured beginner course, starts D-A-E and defers minors to its
+module 3, and Musicademy rejects the bedrock-chord opening entirely in favour of
+G/Em7/Cadd9. Em-first is supported by the National Guitar Academy and Guitar
+Noise, it is the easiest physical start, and — decisively — it agrees with the
+three lessons this app ALREADY ships (`Lessons.all` opens on Em/G), so the app
+teaches one order instead of two.
 
+- [JustinGuitar — beginner 1, first steps](https://www.justinguitar.com/modules/beginner-1-first-steps)
+- [JustinGuitar — A & D chords, play your first song](https://www.justinguitar.com/modules/a-d-chords-play-your-first-song)
 - [Musicademy — how to teach beginners guitar](https://www.musicademy.com/blog/how-to-teach-beginners-guitar-a-new-approach/)
-- [School of Rock — guitar chords for beginners](https://www.schoolofrock.com/resources/guitar/guitar-chords-for-beginners)
-- [National Guitar Academy — chord learning program drills](https://nationalguitaracademy.com/wp-content/uploads/2016/01/NGA-Chord-Learning-Program-Practice-Drills.pdf)
-- [Acoustic Life — transitioning Am, Dm, Em](https://acousticlife.tv/guitar-for-beginners/minor-chords-a-d-and-e/)
+- [National Guitar Academy — easy guitar chords](https://nationalguitaracademy.com/chords/easy-guitar-chords/)
+- [Guitar Noise — beginner chords](https://www.guitarnoise.com/help/beginner-chords/)
+- [Tomas Michaud — strumming through chord changes](https://tomasmichaud.com/strumming-guitar/)
+- [Fundamental Changes — changing chords while strumming](https://www.fundamental-changes.com/changing-chords-while-strumming/)
+- [Tom Hess — teaching beginner guitar students](https://tomhess.net/TeachBeginnerGuitarStudents.aspx)
 
-C and G come late on purpose (the sources group them with the harder shapes) and
-the barre F is not in this stage at all.
+**What the first draft got wrong, corrected here.** An independent cross-check
+contradicted three things the first version of this section asserted:
 
-**An honest fork, not silently resolved.** Some schools isolate the right hand
-first (muted rhythm), others start with a chord shape and a single strum. Both
-are established. This ladder runs them in PARALLEL from the start (rungs 2 and
-3), because they train different hands and the app can measure both. That is a
-choice, not a consensus.
+1. It called Em-first "the conventional first chord". It is not a consensus; see
+   above. The claim is now stated as a choice with its reasons.
+2. It put "change without stopping the strumming hand" at rung 8, as its own late
+   milestone. Three independent teaching sources treat it as a rule applied from
+   the VERY FIRST change, so it moved to rung 4.
+3. It withheld a playable song until rung 10. That is a documented attrition
+   risk — JustinGuitar has a two-chord song in module 1, and Tom Hess's
+   teacher-training material argues explicitly against strict "master one skill
+   before the next" sequencing. The song moved to rung 5, and the strumming
+   pattern moved forward to rung 7 instead of sitting behind the whole chord set.
+
+Uniformly supported by every source checked, and unchanged: isolating the right
+hand on muted strings, and no barre chord or F anywhere in this stage.
+
+### 1.2 No simplified stepping-stone chord — decided by measurement
+
+Sources that dislike delaying C and G reach for simplified voicings rather than
+delay: Cmaj7 for C, the two-finger G6 (320000) for G. Measured through the real
+`LivePipeline`, neither can be SCORED honestly:
+
+- **G6 is not in the recogniser's vocabulary at all.** `chord_dictionary.dart`
+  carries maj, min, 7, maj7, m7, sus4, dim and aug — no 6 — so the two-finger
+  shape reads as `G`. The app would be scoring a label it cannot distinguish from
+  a different chord.
+- **Cmaj7 does not reliably confirm.** On a clean three-second voicing it sat
+  below the presence gate for 24 of 32 frames, against 3 for plain C. That is the
+  maj7 Occam handicap doing its intended job — maj7 must be clearly present or
+  phantom overtone energy would rename every triad — with plain C right next door
+  taking the margin (RAG chunk 012).
+
+So the course SCORES major and minor triads only. A simplified shape may be shown
+as an unscored hint, never set as a mission target: a learner must never play
+something correctly and be credited with nothing. Two tests pin this — every
+scored chord must be in the recogniser's vocabulary, and must be a plain triad.
+
+Also measured, and the reason the minor opening is defensible at all: Em, Am, D,
+A, E, G and C all decode correctly AND confirm through the real pipeline on
+realistic voicings (~22 of 32 frames each). Real-audio minors remain unverified —
+all seven reference recordings are major — so that gap still stands (see §7).
 
 ## 2. Unlock and completion — the honesty rules (APPROVED)
 
