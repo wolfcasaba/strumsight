@@ -1,5 +1,75 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔴 E18-R16 — NEMLEGES KÖR: a váltás-időzítés pontszáma MÉRTEN lehetetlen — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd" (teljes delegálás).
+
+Az R15 végén a következő lépésnek a váltás IDŐZÍTÉSE látszott: „a váltásod N ms-mal
+késett". Pedagógiailag indokolt (ez a rung tanítása), a kód egyszerű. **Egy dolgot
+nem tudtunk: mennyi ebből a motor sajátja** — egy akkord-döntésnek, ellentétben egy
+pengetéssel, nincs mért valódi onsetje, amihez vissza lehetne korrigálni.
+
+### A mérés
+
+`test/features/live/chord_change_latency_test.dart` — a váltás pillanata
+konstrukcióból ismert:
+
+```
+Em->Am 508 ms   Am->D 1344 ms   D->G 159 ms   G->C 438 ms
+median 508 ms, mean 612 ms, legnagyobb eltérés 731 ms
+```
+
+70 bpm-en egy ütés 857 ms. A motor saját késése **~0,7 ütés átlagban, ~0,85 ütésnyi
+szórással** — tiszta modellezett audión, pillanatnyi, tökéletesen lefogott
+váltásokkal.
+
+### A döntés: a funkció nem épül meg
+
+Egy SZISZTEMATIKUS késés kivonható (ezt teszi a pengetés-kalibráció a készülék
+latenciájával). Egy 731 ms-ot szóró **nem**: amit a tanulónak mutatnánk, az
+túlnyomórészt dekóder-zaj lenne az ő nevén. Az app nem pontozza a váltás
+időzítését, és ezt kimondja — a `chord_grading.dart` doksija most a mérést és a
+következtetést hordozza, nem egy „későbbre hagyva" jegyzetet.
+
+### Amit a mérés IGAZOLT, és amit hozott
+
+A taktus-szintű osztályozás eddig **érv** volt; most mérés: a legrosszabb eset a
+3,43 s-os taktus **39 %-a**, és az előző alakzat a váltás után 90–368 ms-mal szűnik
+meg megerősített lenni. A taktus kényelmes egység; a pengetés-szintű osztályozás a
+dekódert mérte volna.
+
+Ebből egy új, **mért korlát** lett: `minimumChordBarUs` = 2,0 s (≈1,5× a
+legrosszabb eset), amit a `RhythmAssignment` konstruktora kényszerít ki. Egy
+jövőbeli gyorsabb akkord-rung hangosan bukik el a létrehozásnál, ahelyett hogy
+csendben az előző akkordot pontozná — ami az „idejében váltottál, mégis rosszat
+játszottál" hibát adná. A szállított tempók (3,43 s / 3,0 s) kényelmesen felette
+vannak, tehát ma semmit nem szorít.
+
+### Egy duplikátumot is megszüntetett
+
+Ugyanaz a Karplus-Strong modell már KÉT teszten belül létezett külön példányban
+(modellezett akkord-felismerés, kalibrációs körforgás). Harmadikat nem csináltam:
+`test/support/modelled_guitar.dart` a közös definíció, és a modellezett
+akkord-teszt most ezt használja. A tábla **digitre ugyanaz** (34/43, 36/43, 30/43…),
+ami egyben azt is megmutatta, hogy a régi „confirmed" számolás nem mért mást — a
+`current` csak megerősítés után publikálódik. A saját doc-állításomat ennek
+megfelelően javítottam.
+
+**Gate:** zöld — `curriculum` (281 cella a két live-teszttel), `live` +
+architecture / secrets / l10n.
+
+**Dokumentáció:** [ADR 0545](docs/adr/0545-no-change-timing-score-the-engine-lag-is-not-subtractable.md),
+`docs/LESSONS.md` **L657**.
+
+### Ami nyitva marad
+
+- **Em/Am valódi gitáron** — a két első akkordra csak modellezett audio van.
+- A váltás-időzítés **újranyitható**, ha a dekóder konfirmálási késése
+  szisztematikussá válik (pl. a stabilizátor ablakának megváltoztatásával) — de
+  akkor is a mérés dönt, nem az érv.
+- Készülék-ellenőrzés (ARM per-frame költség), `sus4`/`aug` túljelentés: továbbra is
+  környezet-, illetve adathiány miatt blokkolt.
+
 ## 🟢 E18-R15 — AZ AKKORD-PILLÉR: a létra végigjárható, 14/14 rung — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „folytasd" (teljes delegálás).

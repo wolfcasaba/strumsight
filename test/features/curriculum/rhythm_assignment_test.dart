@@ -33,6 +33,36 @@ void main() {
       );
     });
 
+    test('a chord cannot be asked for in a bar shorter than the engine needs to '
+        'follow a change', () {
+      // MEASURED, not chosen: the engine's worst-case follow latency over the four
+      // changes this course teaches is 1344 ms
+      // (`test/features/live/chord_change_latency_test.dart`). A bar shorter than
+      // that can be over before the change has been followed into it, and the bar
+      // would then be graded as the PREVIOUS chord — a learner who changed on time
+      // told they played the wrong shape.
+      expect(
+        () => RhythmAssignment(
+          mode: RhythmMode.withChord,
+          grid: _ringingEighths(),
+          // 4/4 at 130 bpm is a 1.85 s bar, under the 2.0 s floor.
+          bpm: 130,
+          bars: 4,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      // And the shipped tempos are comfortably above it.
+      expect(
+        RhythmAssignment(
+          mode: RhythmMode.withChord,
+          grid: _ringingEighths(),
+          bpm: 80,
+          bars: 4,
+        ).bpm,
+        80,
+      );
+    });
+
     test('the muted-strokes mode needs an actually damped grid', () {
       expect(
         () => RhythmAssignment(

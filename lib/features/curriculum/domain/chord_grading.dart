@@ -21,10 +21,31 @@
 /// bars cannot be credited without the learner having changed between them, so
 /// bar-level chord accuracy is a measurement of the change happening.
 ///
-/// Said plainly: it does NOT measure that the change landed ON the beat. The
-/// continuity lesson of that rung — keep the strumming hand moving — is shown and
-/// graded as direction on the same run, and "the change arrived within N ms of
-/// the bar line" is a further measurement nothing here claims.
+/// ## Why there is no "your change was N ms late", and it is not a gap
+///
+/// That score was the obvious next step, and it was MEASURED to be impossible
+/// rather than merely deferred. `test/features/live/chord_change_latency_test.dart`
+/// feeds the engine changes at instants known by construction and reports how long
+/// it takes to follow one:
+///
+/// ```
+/// Em->Am 508 ms   Am->D 1344 ms   D->G 159 ms   G->C 438 ms
+/// median 508 ms, mean 612 ms, worst deviation 731 ms
+/// ```
+///
+/// At the course's 70 bpm a beat is 857 ms. So the engine's own lag averages
+/// ~0.7 of a beat and SCATTERS by ~0.85 of a beat — on clean modelled audio with
+/// instantaneous, perfectly fingered changes. A systematic lag could be subtracted
+/// the way the strum path's calibration subtracts device latency; a lag that varies
+/// by 731 ms cannot, so any "N ms late" shown to a learner would be mostly decoder
+/// noise wearing their name. The app therefore does not score change timing, and
+/// says so rather than showing a plausible-looking number.
+///
+/// The same measurement VINDICATES the bar as the unit: the worst case is 39% of a
+/// 3.43 s bar, and the previous shape stops being confirmed 90-368 ms after a
+/// change, so bar-level crediting is comfortable where stroke-level crediting would
+/// have been measuring the decoder. [minimumChordBarUs] is the floor that keeps it
+/// that way.
 ///
 /// ## The honesty rules, same as the rhythm pillar's
 ///
@@ -54,6 +75,23 @@ import 'rhythm_grading.dart' show minimumRhythmCoverage;
 /// rather than a low score. Like its sibling it is a POLICY choice, not a measured
 /// constant.
 const double minimumChordCoverage = minimumRhythmCoverage;
+
+/// The shortest bar a chord may be asked for in, in microseconds.
+///
+/// MEASURED, not chosen. `test/features/live/chord_change_latency_test.dart` feeds
+/// the engine chord changes at instants known by construction and reports how long
+/// it takes to FOLLOW one: median 508 ms over the four changes the course teaches,
+/// worst case **1344 ms** (Am to D), on clean modelled audio with instantaneous,
+/// perfectly fingered changes. A bar shorter than that latency could pass entirely
+/// before the engine had followed the change into it, so the bar would read as
+/// `noEvidence` or — worse — as the PREVIOUS chord, and a learner who changed on
+/// time would be told they played the wrong shape.
+///
+/// 2.0 s is roughly 1.5x the measured worst case. The shipped rungs sit well above
+/// it (3.43 s at 70 bpm, 3.0 s at 80), so this constrains nothing today; it exists
+/// so a future rung at a faster tempo or a shorter metre fails loudly at
+/// construction instead of quietly scoring the wrong bar.
+const int minimumChordBarUs = 2000000;
 
 /// What the recogniser said while one bar was being asked for.
 ///

@@ -26752,3 +26752,59 @@ megerősített rossz irányú kört tölt a tárba, és megtiltja a `Steady` / `
 wrong evidence" cellája — az kiírja az állapotot és a szintet együtt, ami az egész
 lecke: **a kettő soha nem olvasható egymás nélkül.** Lásd még
 [ADR 0543](adr/0543-curriculum-attempts-become-skill-evidence.md) D7.
+
+
+## L657 — Egy pontszám, ami az APP saját latenciáját a tanuló késésével keveri, csak a saját felét MEGMÉRVE dönthető el: a mérés azt mondta, a funkció lehetetlen, nem azt, hogy pontatlan (E18-R16, 2026-09-12)
+
+**Mi történt.** Az akkord-pillér után a következő lépésnek a váltás IDŐZÍTÉSE
+látszott: „a váltásod N ms-mal késett". A rung tanítása épp ez („változz meg, a
+pengető kéz ne álljon meg"), tehát a funkció pedagógiailag indokolt volt, a
+felhasználói érték világos, és a kód oldala egyszerű: a taktusvonal és az első
+megerősítés közti idő.
+
+Egy dolgot nem tudtunk: **mennyi ebből a motor sajátja.** Egy akkord-döntésnek —
+ellentétben egy pengetéssel — nincs mért valódi onsetje, amihez vissza lehetne
+korrigálni. A pengetés-útnak épp ezért van kalibrációja.
+
+Ezért megmértem a motor felét, olyan audión, ahol a váltás pillanata konstrukcióból
+ismert (`test/features/live/chord_change_latency_test.dart`):
+
+```
+Em->Am 508 ms   Am->D 1344 ms   D->G 159 ms   G->C 438 ms
+median 508 ms, mean 612 ms, legnagyobb eltérés 731 ms
+```
+
+70 bpm-en egy ütés **857 ms**. A motor saját késése tehát átlagosan ~0,7 ütés, és
+**~0,85 ütésnyit szór** — tiszta modellezett audión, pillanatnyi, tökéletesen
+lefogott váltásokkal. Egy valódi kezdő keze ennél lassabban és egyenetlenebbül
+érkezik meg.
+
+**A következtetés nem „pontatlan", hanem „lehetetlen".** Egy SZISZTEMATIKUS késés
+kivonható — pontosan ezt teszi a pengetés-kalibráció a készülék latenciájával. Egy
+731 ms-ot szóró késés **nem**: amit a tanulónak mutatnánk, az túlnyomórészt
+dekóder-zaj lenne az ő nevén. Az app ezért nem pontozza a váltás időzítését, és ezt
+kimondja, nem pedig egy hihetőnek látszó számot mutat.
+
+**És a mérés igazolta azt is, amit már szállítottunk.** A taktus-szintű osztályozás
+korábban ÉRV volt („egy akkord tartott, a dekódernek több képkocka kell"). Most
+mérés: a legrosszabb eset a 3,43 s-os taktus **39 %-a**, és az előző alakzat a
+váltás után 90–368 ms-mal szűnik meg megerősített lenni. Tehát a taktus kényelmes
+egység, miközben a pengetés-szintű osztályozás a dekódert mérte volna. Ebből egy új,
+mért KORLÁT is lett (`minimumChordBarUs` = 2,0 s ≈ 1,5× a legrosszabb eset), amit a
+`RhythmAssignment` konstruktora kényszerít ki: egy jövőbeli gyorsabb rung
+**hangosan** bukik el a létrehozásnál, ahelyett hogy csendben az előző akkordot
+pontozná — ami a „idejében váltottál, mégis rosszat játszottál" hibát adná.
+
+**Az általános szabály.** *Ha egy tervezett pontszám a mi saját késésünket a tanuló
+teljesítményével összegezné, a kör első fele a MI felünk megmérése — és a
+megengedhető kimenetek közt ott van az, hogy a funkció nem épül meg.* A kérdés nem
+„mennyire pontos lesz", hanem „szisztematikus-e annyira, hogy kivonható legyen".
+Egy mediánt közölni egy 731 ms-ot szóró mennyiségről pontosságot állítana ott, ahol
+nincs.
+
+**Őrteszt:** a mérés maga (`chord_change_latency_test.dart`) padlót állít — ha a
+motor a kurzus váltásainak többségét egyáltalán nem követi, az nem pontatlanság,
+hanem lehetetlenség —, a korlátot pedig
+`test/features/curriculum/rhythm_assignment_test.dart` → „a chord cannot be asked
+for in a bar shorter than the engine needs to follow a change" tartja. Lásd még
+[ADR 0545](adr/0545-no-change-timing-score-the-engine-lag-is-not-subtractable.md).

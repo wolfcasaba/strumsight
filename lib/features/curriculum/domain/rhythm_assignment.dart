@@ -14,6 +14,7 @@ library;
 
 import 'package:meta/meta.dart';
 
+import 'chord_grading.dart';
 import 'rhythm_grid.dart';
 import 'rhythm_mode.dart';
 
@@ -55,6 +56,22 @@ final class RhythmAssignment {
         'the muted-strokes mode isolates the right hand, so every slot must be '
             'damped — a half-damped grid teaches neither thing',
       );
+    }
+    if (mode.scoresChord) {
+      // The engine needs TIME to follow a chord change — measured at a 1344 ms
+      // worst case. A bar shorter than that can be over before the change has been
+      // followed into it, and the bar would then be graded as the previous chord:
+      // a learner who changed on time told they played the wrong shape.
+      final barUs = (60000000 / bpm * grid.beatsPerBar).round();
+      if (barUs < minimumChordBarUs) {
+        throw ArgumentError.value(
+          bpm,
+          'bpm',
+          'a chord-scoring bar lasts ${barUs}us, under the measured '
+              '${minimumChordBarUs}us the engine needs to follow a chord change '
+              '(test/features/live/chord_change_latency_test.dart)',
+        );
+      }
     }
     if (mode.scoresChord && anyMuted) {
       throw ArgumentError.value(
