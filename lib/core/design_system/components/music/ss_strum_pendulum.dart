@@ -329,14 +329,25 @@ class _SsStrumPendulumPainter extends CustomPainter {
         Offset(0, y),
         Offset(size.width, y),
         Paint()
-          ..color = strings.withValues(alpha: 0.55)
+          ..color = strings.withValues(alpha: 0.7)
           ..strokeWidth = width
           ..strokeCap = StrokeCap.round,
       );
       y += width / 2 + _stringGap;
     }
 
-    if (current == null) return;
+    if (current == null) {
+      // At rest the pick PARKS on the strings rather than vanishing. An empty
+      // band reads as a broken screen — seen on the emulator, where the hero
+      // area was 180 px of nothing until the clock started.
+      _drawPick(
+        canvas,
+        center: Offset(size.width / 2, midY),
+        pointsDown: true,
+        color: strings,
+      );
+      return;
+    }
 
     // Reduced motion removes the TRAVEL, never the information: the pick parks
     // on the strings and its tip still points the way the hand is going, so

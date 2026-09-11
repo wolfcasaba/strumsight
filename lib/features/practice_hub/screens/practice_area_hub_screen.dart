@@ -125,6 +125,13 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                   label: l10n.chordLibraryTitle,
                   onPressed: () => context.push(AppRoutes.practiceChords),
                 ),
+                // The curriculum's down/up rhythm pillar. A registered route
+                // with no entry point is a screen nobody can reach.
+                _QuickTool(
+                  icon: Icons.swap_vert,
+                  label: l10n.curriculumRhythmTitle,
+                  onPressed: () => context.push(AppRoutes.curriculumRhythm),
+                ),
               ],
             ),
             const SizedBox(height: 24),

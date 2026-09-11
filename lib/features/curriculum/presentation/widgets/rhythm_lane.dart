@@ -161,9 +161,14 @@ final class RhythmLane extends StatelessWidget {
             child: Text(
               _frettingWord(l10n),
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: accent),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                // NOT the border colour: `border` is a hairline tone and was
+                // unreadable as text on the emulator. The word needs a text
+                // colour, which is also the point of having the word at all.
+                color: fretting == FrettingState.unconfirmed
+                    ? colors.textSecondary
+                    : accent,
+              ),
             ),
           ),
         ],
@@ -266,6 +271,7 @@ final class RhythmLane extends StatelessWidget {
     return index % perBeat == 0 ? '${beat + 1}' : '&';
   }
 
+  /// The BORDER colour of the chord bar.
   Color _frettingColor(SsColorScheme colors) => switch (fretting) {
     // Green is the confirmed-evidence colour, shared with the grading: it may
     // only appear when the recogniser actually confirmed the asked chord.
