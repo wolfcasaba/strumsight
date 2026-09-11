@@ -376,4 +376,156 @@ void main() {
       expect(_frame(125), isNot(_frame(130)));
     });
   });
+
+  _soundingGroup();
+}
+
+void _soundingGroup() {
+  const halfCycle = Duration(milliseconds: 250);
+
+  group('unplayed strings are crossed, not sounded', () {
+    // Am is ×02210 and D is ××0232 in standard notation: the × strings are not
+    // played, and the instruction that goes with the notation is to strum from
+    // the lowest non-× string.
+    const am = [false, true, true, true, true, true];
+    const d = [false, false, true, true, true, true];
+
+    test('a muted string never lights, at any point in the sweep', () {
+      for (var ms = 0; ms <= 200; ms += 10) {
+        expect(
+          SsStrumPendulum.stringGlowAt(
+            stringIndex: 0,
+            sinceCrossing: Duration(milliseconds: ms),
+            direction: SsStrumDirection.down,
+            halfCycle: halfCycle,
+            sounding: am,
+          ),
+          0,
+          reason: 'the bass E of an Am must never ring, at +${ms}ms',
+        );
+      }
+    });
+
+    test('a DOWNstroke begins at the lowest SOUNDING string', () {
+      // The cell this feature exists for. Without `sounding` the sweep started
+      // at string 0 for every chord, animating the exact motion that makes an Am
+      // muddy — shown to the learner as the thing to copy.
+      final atCrossing = SsStrumPendulum.stringGlowAt(
+        stringIndex: 1, // the A string: an Am's lowest sounding one
+        sinceCrossing: Duration.zero,
+        direction: SsStrumDirection.down,
+        halfCycle: halfCycle,
+        sounding: am,
+      );
+      expect(atCrossing, 1.0, reason: 'it is reached AT the crossing');
+    });
+
+    test('on a D the stroke begins at the D string, two in', () {
+      expect(
+        SsStrumPendulum.stringGlowAt(
+          stringIndex: 2,
+          sinceCrossing: Duration.zero,
+          direction: SsStrumDirection.down,
+          halfCycle: halfCycle,
+          sounding: d,
+        ),
+        1.0,
+      );
+      // And the strings above it stay dark for the whole stroke.
+      for (final index in [0, 1]) {
+        expect(
+          SsStrumPendulum.stringGlowAt(
+            stringIndex: index,
+            sinceCrossing: const Duration(milliseconds: 20),
+            direction: SsStrumDirection.down,
+            halfCycle: halfCycle,
+            sounding: d,
+          ),
+          0,
+        );
+      }
+    });
+
+    test('an UPstroke begins at the thinnest sounding string', () {
+      expect(
+        SsStrumPendulum.stringGlowAt(
+          stringIndex: 5,
+          sinceCrossing: Duration.zero,
+          direction: SsStrumDirection.up,
+          halfCycle: halfCycle,
+          sounding: d,
+        ),
+        1.0,
+      );
+    });
+
+    test('the sounding strings are still swept IN ORDER, not together', () {
+      // The sweep is what makes a strum legible as a strum rather than a stab,
+      // so narrowing it to four strings must not collapse it to one instant.
+      final reached = <int, int>{};
+      for (final index in [2, 3, 4, 5]) {
+        for (var ms = 0; ms <= 120; ms++) {
+          final glow = SsStrumPendulum.stringGlowAt(
+            stringIndex: index,
+            sinceCrossing: Duration(milliseconds: ms),
+            direction: SsStrumDirection.down,
+            halfCycle: halfCycle,
+            sounding: d,
+          );
+          if (glow > 0) {
+            reached[index] = ms;
+            break;
+          }
+        }
+      }
+      expect(reached.keys, hasLength(4));
+      expect(
+        reached[2]! <= reached[3]! &&
+            reached[3]! <= reached[4]! &&
+            reached[4]! <= reached[5]!,
+        isTrue,
+        reason: 'thickest sounding first on a downstroke: $reached',
+      );
+      expect(
+        reached[5]! > reached[2]!,
+        isTrue,
+        reason: 'the sweep still takes time across the four strings',
+      );
+    });
+
+    test('omitting it is the same as all six sounding', () {
+      for (var i = 0; i < SsStrumPendulum.stringCount; i++) {
+        expect(
+          SsStrumPendulum.stringGlowAt(
+            stringIndex: i,
+            sinceCrossing: const Duration(milliseconds: 30),
+            direction: SsStrumDirection.down,
+            halfCycle: halfCycle,
+            sounding: const [true, true, true, true, true, true],
+          ),
+          SsStrumPendulum.stringGlowAt(
+            stringIndex: i,
+            sinceCrossing: const Duration(milliseconds: 30),
+            direction: SsStrumDirection.down,
+            halfCycle: halfCycle,
+          ),
+        );
+      }
+    });
+
+    test('a single sounding string lights at the crossing', () {
+      // Degenerate but reachable: the sweep has nowhere to travel, and dividing
+      // by (count - 1) would be a division by zero.
+      expect(
+        SsStrumPendulum.stringGlowAt(
+          stringIndex: 3,
+          sinceCrossing: Duration.zero,
+          direction: SsStrumDirection.down,
+          halfCycle: halfCycle,
+          sounding: const [false, false, false, true, false, false],
+        ),
+        1.0,
+      );
+    });
+  });
 }

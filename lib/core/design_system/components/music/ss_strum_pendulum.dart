@@ -66,6 +66,7 @@ final class SsStrumPendulum extends StatefulWidget {
     required this.struck,
     this.height = 200,
     this.muted = false,
+    this.sounding,
     this.semanticLabel,
   });
 
@@ -91,6 +92,25 @@ final class SsStrumPendulum extends StatefulWidget {
   /// Whether the exercise is played on DAMPED strings (the right-hand-only
   /// rungs). A damped string does not ring, so it must not be drawn ringing.
   final bool muted;
+
+  /// Which of the six strings the current chord actually sounds, thickest first.
+  /// Null means all six — a damped rung has no chord to exclude anything.
+  ///
+  /// ## Why this is not decoration
+  ///
+  /// Standard chord notation marks an unplayed string `×` above the nut, and the
+  /// instruction that goes with it is to **strum from the lowest non-`×`
+  /// string**. Without this list the sweep lit all six strings for every chord,
+  /// so an Am (`×02210`) or a D (`××0232`) was animated as though the pick
+  /// sounded the bass E — the exact motion that makes those chords muddy, shown
+  /// to the learner as the thing to copy. That is not a missing polish, it is the
+  /// app demonstrating a fault.
+  ///
+  /// The hand still TRAVELS across an unplayed string: our own model is that the
+  /// hand never stops, and a ghost stroke is one the hand passes through. So the
+  /// arc is unchanged and only the SOUND is withheld — the string is drawn dim
+  /// and never glows.
+  final List<bool>? sounding;
 
   /// When null the widget is decorative-only and excluded from semantics: the
   /// caller announces the stroke through its own live region.
@@ -139,18 +159,37 @@ final class SsStrumPendulum extends StatefulWidget {
     required Duration sinceCrossing,
     required SsStrumDirection direction,
     required Duration halfCycle,
+    List<bool>? sounding,
   }) {
     if (stringIndex < 0 || stringIndex >= stringCount) return 0;
+    // An unplayed string is crossed, not sounded. It never lights, whatever the
+    // timing says.
+    if (sounding != null &&
+        stringIndex < sounding.length &&
+        !sounding[stringIndex]) {
+      return 0;
+    }
     final budget = halfCycle.inMicroseconds * 0.7;
     if (budget <= 0) return 0;
     final sweep = math.min(strikeSweep.inMicroseconds.toDouble(), budget * 0.6);
     final glow = math.min(strikeGlow.inMicroseconds.toDouble(), budget - sweep);
     if (glow <= 0) return 0;
-    // A downstroke meets the thickest string first; an upstroke the thinnest.
+    // The sweep is spread across the strings that SOUND, in the order the pick
+    // meets them — a downstroke from the thickest sounding string, an upstroke
+    // from the thinnest. On a D (××0232) the stroke therefore begins at the D
+    // string, which is what "strum from the lowest non-× string" means.
+    final played = <int>[
+      for (var i = 0; i < stringCount; i++)
+        if (sounding == null || i >= sounding.length || sounding[i]) i,
+    ];
     final order = direction == SsStrumDirection.down
-        ? stringIndex
-        : stringCount - 1 - stringIndex;
-    final reachedAt = sweep * (order / (stringCount - 1));
+        ? played.indexOf(stringIndex)
+        : played.length - 1 - played.indexOf(stringIndex);
+    if (order < 0) return 0;
+    // One sounding string has nowhere to sweep to, so it lights at the crossing.
+    final reachedAt = played.length <= 1
+        ? 0.0
+        : sweep * (order / (played.length - 1));
     final since = sinceCrossing.inMicroseconds - reachedAt;
     if (since < 0) return 0;
     return (1 - since / glow).clamp(0.0, 1.0);
@@ -327,6 +366,7 @@ final class _SsStrumPendulumState extends State<SsStrumPendulum>
         frame: _frame,
         reduceMotion: reduceMotion,
         muted: widget.muted,
+        sounding: widget.sounding,
         strings: colors.textSecondary,
         downColor: colors.brand,
         upColor: colors.brandStrong,
@@ -349,6 +389,7 @@ class _SsStrumPendulumPainter extends CustomPainter {
     required this.frame,
     required this.reduceMotion,
     required this.muted,
+    required this.sounding,
     required this.strings,
     required this.downColor,
     required this.upColor,
@@ -357,6 +398,10 @@ class _SsStrumPendulumPainter extends CustomPainter {
 
   final SsStrumPendulumFrame? frame;
   final bool reduceMotion;
+
+  /// Which strings the chord sounds; null means all six. See
+  /// [SsStrumPendulum.sounding].
+  final List<bool>? sounding;
 
   /// A damped exercise: the strings are held silent, so they must not be drawn
   /// ringing. The two right-hand rungs look different from the chord rung
@@ -396,6 +441,7 @@ class _SsStrumPendulumPainter extends CustomPainter {
     for (var i = 0; i < _stringWidths.length; i++) {
       final width = _stringWidths[i];
       y += width / 2;
+      final plays = sounding == null || i >= sounding!.length || sounding![i];
       final glow = current == null || !current.isStruck
           ? 0.0
           : SsStrumPendulum.stringGlowAt(
@@ -403,6 +449,7 @@ class _SsStrumPendulumPainter extends CustomPainter {
               sinceCrossing: current.sinceCrossing,
               direction: current.direction,
               halfCycle: current.halfCycle,
+              sounding: sounding,
             );
       if (glow > 0) {
         // A struck string is louder AND thicker for a moment — a damped one only
@@ -421,7 +468,12 @@ class _SsStrumPendulumPainter extends CustomPainter {
         Offset(0, y),
         Offset(size.width, y),
         Paint()
-          ..color = strings.withValues(alpha: muted ? 0.4 : 0.7)
+          // An unplayed string is drawn FAINTER but still drawn: it is physically
+          // there and the hand crosses it. Removing it would say the guitar has
+          // four strings for a D, which is a different falsehood.
+          ..color = strings.withValues(
+            alpha: plays ? (muted ? 0.4 : 0.7) : 0.22,
+          )
           ..strokeWidth = width
           ..strokeCap = StrokeCap.round,
       );
@@ -505,8 +557,21 @@ class _SsStrumPendulumPainter extends CustomPainter {
       old.frame != frame ||
       old.reduceMotion != reduceMotion ||
       old.muted != muted ||
+      !_sameSounding(old.sounding, sounding) ||
       old.strings != strings ||
       old.downColor != downColor ||
       old.upColor != upColor ||
       old.glowBase != glowBase;
+
+  /// Lists compare by identity in Dart, so a fresh list with the same contents
+  /// would repaint every frame. The band is six entries; comparing them is
+  /// cheaper than the repaint it avoids.
+  static bool _sameSounding(List<bool>? a, List<bool>? b) {
+    if (a == null || b == null) return (a == null) == (b == null);
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 }

@@ -482,6 +482,7 @@ final class _RhythmPracticeScreenState
                 struck: crossings,
                 height: 180,
                 muted: _assignment.grid.slots.every((slot) => slot.muted),
+                sounding: _soundingFor(askedChord),
               ),
               const SizedBox(height: SsSpacing.space4),
               if (askedChord != null)
@@ -666,6 +667,21 @@ final class _RhythmPracticeScreenState
         RhythmTimingShape.scattered => l10n.curriculumTimingScattered,
       }, style: label),
     ];
+  }
+
+  /// Which strings [chord] actually sounds, from the app's OWN fingering.
+  ///
+  /// Null when there is no chord to ask about — a damped rung, or the count-in —
+  /// and then the band shows all six, because nothing is being excluded.
+  ///
+  /// `-1` in a shipped fingering is the `×` of standard notation: the string is
+  /// not played. Feeding it to the pendulum is what stops an Am being animated as
+  /// though the pick sounded the bass E.
+  List<bool>? _soundingFor(String? chord) {
+    if (chord == null) return null;
+    final shape = ChordShapes.forLabel(chord);
+    if (shape == null) return null;
+    return [for (final fret in shape.frets) fret >= 0];
   }
 
   /// The notated slot currently sounding, or null on a ghost crossing.
