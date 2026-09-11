@@ -30,6 +30,7 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/codec/wav_decoder.dart';
 import 'package:strumsight/features/live/engine/dsp/live_pipeline.dart';
+import 'package:strumsight/features/live/engine/dsp/nnls_chroma.dart';
 
 import '../support/whitening_sweep.dart';
 
@@ -100,8 +101,13 @@ void main() {
       );
       final pipeline = LivePipeline(
         sampleRate: sampleRate,
-        whiteningMeanCoefficient: override ?? 0.0,
-        whiteningSpectralFloor: floorOverride ?? 0.0,
+        // `?? NnlsChroma.default...` and NOT `?? 0.0`: the fallback has to BE the
+        // shipped value, or the probe measures a setting nothing ships while its
+        // own comment claims otherwise. It did exactly that until E18-R12.
+        whiteningMeanCoefficient:
+            override ?? NnlsChroma.defaultWhiteningMeanCoefficient,
+        whiteningSpectralFloor:
+            floorOverride ?? NnlsChroma.defaultWhiteningSpectralFloor,
         whiteningExponent: exponentOverride,
       );
       final chordCounts = <String, int>{};

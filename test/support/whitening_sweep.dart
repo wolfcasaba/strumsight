@@ -27,20 +27,31 @@ const int sweepSampleRate = 44100;
 /// The seven chords the beginner course teaches, with exact ground truth.
 const modelledChords = ['Em', 'Am', 'D', 'G', 'C', 'E', 'A'];
 
-/// One whitening setting: the three dials a sweep varies together.
+/// One whitening setting: the dials a sweep varies together.
+///
+/// All of them live here, in one place, on purpose. E18-R10 and E18-R11 ran as
+/// separate rounds against the same three criteria, and the only way their
+/// tables stay comparable is if both are produced from the SAME stimuli and the
+/// same runner — a second private copy of the open-E voicing is a second chance
+/// for two published numbers to stop meaning the same thing.
 class WhiteningSetting {
   const WhiteningSetting({
     this.meanCoefficient = 0.0,
     this.spectralFloor = 0.0,
     this.exponent = NnlsChroma.defaultWhiteningExponent,
+    this.hammingKernel = NnlsChroma.defaultWhiteningHammingKernel,
   });
 
   final double meanCoefficient;
   final double spectralFloor;
   final double exponent;
 
+  /// The normalisation kernel: Hamming-weighted, or the flat box.
+  final bool hammingKernel;
+
   @override
   String toString() =>
+      '${hammingKernel ? "hamming" : "box"} '
       'k=${meanCoefficient.toStringAsFixed(2)} '
       'beta=${spectralFloor.toStringAsFixed(2)} '
       'w=${exponent.toStringAsFixed(1)}';
@@ -139,6 +150,7 @@ String? quietThird(WhiteningSetting setting, {double third = 0.08}) {
     whiteningMeanCoefficient: setting.meanCoefficient,
     whiteningSpectralFloor: setting.spectralFloor,
     whiteningExponent: setting.exponent,
+    whiteningHammingKernel: setting.hammingKernel,
   );
   final decoder = ViterbiChordDecoder(
     selfBonus: DspConfig.chordSelfTransitionBonus,
@@ -174,6 +186,7 @@ double quietThirdBinWeight(WhiteningSetting setting, {double third = 0.08}) {
     whiteningMeanCoefficient: setting.meanCoefficient,
     whiteningSpectralFloor: setting.spectralFloor,
     whiteningExponent: setting.exponent,
+    whiteningHammingKernel: setting.hammingKernel,
   );
   var sum = 0.0;
   var counted = 0;
@@ -218,6 +231,7 @@ SweepRun runPipeline(
     whiteningMeanCoefficient: setting.meanCoefficient,
     whiteningSpectralFloor: setting.spectralFloor,
     whiteningExponent: setting.exponent,
+    whiteningHammingKernel: setting.hammingKernel,
   );
   final chords = <String, int>{};
   var confirmed = 0;

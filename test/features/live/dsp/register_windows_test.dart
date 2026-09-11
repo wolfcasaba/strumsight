@@ -64,11 +64,14 @@ String? _decode(
   Float64List signal, {
   required bool depthWeighted,
   double halfSemitones = 3.0,
+  bool? hammingKernel,
 }) {
   final chroma = NnlsChroma(
     sampleRate: 44100,
     whiteningHalfSemitones: halfSemitones,
     referenceRegisterWindows: depthWeighted,
+    whiteningHammingKernel:
+        hammingKernel ?? NnlsChroma.defaultWhiteningHammingKernel,
   );
   final decoder = ViterbiChordDecoder(
     selfBonus: DspConfig.chordSelfTransitionBonus,
@@ -139,24 +142,93 @@ void main() {
     // named by REGISTER instead, that bound lifts: low dominant 7ths survive a
     // span well below the shipped ±3, where the depth-blind fold loses them to
     // a diminished triad on their own third (the chord minus its root).
+    //
+    // The CONTROL below is pinned to the flat box kernel, and that is the whole
+    // point of this comment. It used to run on the shipped kernel and assert
+    // `blindLosses > 0` — "the hard cut must still show the erosion this
+    // lifts". E18-R12 shipped the Hamming kernel and the assertion went red,
+    // with `blindLosses == 0`: not because depth weighting stopped working, but
+    // because the Hamming kernel independently removes the erosion the control
+    // was there to exhibit. MEASURED over roots 40-47 at several spans:
+    //
+    //   box      ±2   blind 2/8 lost, depth-weighted 0/8
+    //   box      ±1.5 … ±0.5   blind 0/8   (so ±2 is a specific break, not a trend)
+    //   hamming  ±2 … ±0.5     blind 0/8, depth-weighted 0/8
+    //
+    // Rewriting the control to pass on the new kernel would have deleted a real
+    // guard to make a change green. Pinning it to `hammingKernel: false` keeps
+    // its teeth on the configuration where the phenomenon exists — the box is
+    // still shipped code, every sweep compares against it — while the cell below
+    // records what the new kernel does to it.
     var blindLosses = 0;
     for (var rootMidi = 40; rootMidi < 48; rootMidi++) {
       final root = _pitchClasses[rootMidi % 12];
       final signal = _lowDom7(rootMidi);
-      if (_decode(signal, depthWeighted: false, halfSemitones: 2.0) !=
+      if (_decode(
+            signal,
+            depthWeighted: false,
+            halfSemitones: 2.0,
+            hammingKernel: false,
+          ) !=
           '${root}7') {
         blindLosses++;
       }
       expect(
-        _decode(signal, depthWeighted: true, halfSemitones: 2.0),
+        _decode(
+          signal,
+          depthWeighted: true,
+          halfSemitones: 2.0,
+          hammingKernel: false,
+        ),
         '${root}7',
         reason: 'depth-weighted $root 7 at a ±2 semitone whitening span',
+      );
+      // And on the SHIPPED kernel, which is what actually has to hold.
+      expect(
+        _decode(signal, depthWeighted: true, halfSemitones: 2.0),
+        '${root}7',
+        reason: 'depth-weighted $root 7 at ±2, shipped kernel',
       );
     }
     expect(
       blindLosses,
       greaterThan(0),
-      reason: 'the hard cut must still show the erosion this lifts',
+      reason:
+          'with the BOX kernel the hard cut must still show the erosion this '
+          'lifts — if this goes quiet the control has lost its meaning and the '
+          'measurement above needs redoing, not the assertion relaxing',
+    );
+  });
+
+  test('the Hamming kernel removes the narrow-span root erosion as well', () {
+    // The finding that made the control above need pinning, stated as its own
+    // cell rather than left implicit in a comment. ADR 0540 bounded the
+    // whitening span from below on the strength of that erosion; with the
+    // shipped kernel the depth-BLIND fold no longer loses a single low dominant
+    // 7th at ±2, so that particular argument for the bound no longer applies.
+    //
+    // This does NOT say the depth weighting is redundant: it still carries the
+    // root in the both-low voicing cell above, and that control still shows
+    // contrast on the shipped kernel.
+    var blindLosses = 0;
+    for (var rootMidi = 40; rootMidi < 48; rootMidi++) {
+      final root = _pitchClasses[rootMidi % 12];
+      if (_decode(
+            _lowDom7(rootMidi),
+            depthWeighted: false,
+            halfSemitones: 2.0,
+            hammingKernel: true,
+          ) !=
+          '${root}7') {
+        blindLosses++;
+      }
+    }
+    expect(
+      blindLosses,
+      0,
+      reason:
+          'MEASURED in E18-R12: the Hamming kernel alone holds all eight low '
+          'dominant 7ths at ±2 where the box kernel lost two',
     );
   });
 

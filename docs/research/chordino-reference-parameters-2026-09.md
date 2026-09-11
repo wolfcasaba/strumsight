@@ -138,7 +138,11 @@ Négy érdemi különbség:
    Ez a zajpadlót és az erős csúcsok „szoknyáját" sokkal keményebben elnyomja,
    mint az RMS-sel osztás.
 3. **Kernel**: a referencia normált **Hamming** (a 3 félhangra lévő szomszéd
-   kevesebbet számít), a miénk lapos box (prefix-szumma).
+   kevesebbet számít), a miénk lapos box (prefix-szumma). **MÉRVE (E18-R10):**
+   `docs/research/hamming-whitening-kernel-2026-09.md` — a Hamming-kernel a halk
+   tercet a teljes átlag-kivonásnál is megtartja (a box k ≥ 0.15-nél elveszti),
+   és önmagában (k = 0) felezi a szükséges terc-szintet 0.08-ról 0.04-re. A
+   `sus4`/`aug` arányt nem javítja. Az alapérték továbbra is a box.
 4. **Exponens**: a referencia alapértéke `m_whitening = 1.0`; a miénk 0.7. A
    referenciában **van egy kikommentelt preset éppen 0.7-tel**
    (`NNLSBase.cpp:308`), tehát a 0.7 ismert referencia-variáns, nem a mi

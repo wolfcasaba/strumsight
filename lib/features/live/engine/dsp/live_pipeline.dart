@@ -75,8 +75,10 @@ class LivePipeline {
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
-    double whiteningMeanCoefficient = 0.0,
-    double whiteningSpectralFloor = 0.0,
+    double whiteningMeanCoefficient =
+        NnlsChroma.defaultWhiteningMeanCoefficient,
+    double whiteningSpectralFloor = NnlsChroma.defaultWhiteningSpectralFloor,
+    bool whiteningHammingKernel = NnlsChroma.defaultWhiteningHammingKernel,
     double? whiteningExponent,
   }) {
     return LivePipeline._(
@@ -87,6 +89,7 @@ class LivePipeline {
       chordReleaseHoldFrames: chordReleaseHoldFrames,
       whiteningMeanCoefficient: whiteningMeanCoefficient,
       whiteningSpectralFloor: whiteningSpectralFloor,
+      whiteningHammingKernel: whiteningHammingKernel,
       whiteningExponent: whiteningExponent,
     );
   }
@@ -122,8 +125,10 @@ class LivePipeline {
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
-    double whiteningMeanCoefficient = 0.0,
-    double whiteningSpectralFloor = 0.0,
+    double whiteningMeanCoefficient =
+        NnlsChroma.defaultWhiteningMeanCoefficient,
+    double whiteningSpectralFloor = NnlsChroma.defaultWhiteningSpectralFloor,
+    bool whiteningHammingKernel = NnlsChroma.defaultWhiteningHammingKernel,
     double? whiteningExponent,
   }) : _crnnActivation = crnnActivation,
        _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
@@ -137,6 +142,11 @@ class LivePipeline {
          // onset detector's thresholds are (r166). Production passes nothing.
          whiteningMeanCoefficient: whiteningMeanCoefficient,
          whiteningSpectralFloor: whiteningSpectralFloor,
+         whiteningHammingKernel: whiteningHammingKernel,
+
+         // Null keeps [NnlsChroma]'s own shipped default — the sweep needs the
+         // exponent on the same axis as the kernel, because E18-R09 measured
+         // the two interacting (only w=1.0 preserved the quiet third at k>0).
          whiteningExponent:
              whiteningExponent ?? NnlsChroma.defaultWhiteningExponent,
        ),

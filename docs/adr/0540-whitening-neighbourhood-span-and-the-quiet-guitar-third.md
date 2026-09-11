@@ -215,3 +215,39 @@ szint-dominanciája elfogy, a basszus-chromának nincs mivel megnevezze a gyök�
 **Follow-up (nem ez a kör):** mélység-súlyozott basszus-chroma. Ez egyszerre
 adna szilárd alapot a bővített hármas gyökének, feloldaná a szélesség alsó
 korlátját, és elvi utat nyitna a fordításokhoz / slash-akkordokhoz (`G/B`).
+
+## Utólagos MÉRÉS — a ±3 alsó korlátjának egyik indoka megszűnt (E18-R12, 2026-09-11)
+
+A „Miért ±3" szakasz az alsó korlátot részben a **gyök-erózióra** alapozta: ha a
+szomszédság szűkül, a csúcsszintek kiegyenlítődnek, és a basszus-chromának nincs
+mivel megnevezze a gyököt. Az E18-R12 a whitening **kernelt** lapos dobozról
+normált **Hamming-súlyozásra** váltotta (ADR 0542), és ezt az eróziót megmérte
+újra, 40–47 MIDI gyökökön, nyolc mély domináns szeptimen:
+
+```
+kernel    span   mélység-vak veszteség   mélység-súlyozott
+box       ±2      2/8                     0/8
+box       ±1.5 … ±0.5   0/8               0/8
+hamming   ±2 … ±0.5     0/8               0/8
+```
+
+Két dolog derült ki, és egyik sem az, amit ez az ADR feltételezett:
+
+1. **A Hamming-kernellel az erózió egyáltalán nem jelentkezik** — egyetlen
+   szeptim sem veszik el ±2-nél, sőt ±0.5-ig sem. Tehát az alsó korlátnak EZ az
+   indoka a szállított kernellel már nem áll.
+2. **Az erózió a dobozzal sem monoton a spanban**: ±2-nél 2/8, de ±1.5 és lejjebb
+   0/8. Vagyis a ±2 egy konkrét törésponti eset volt, nem egy trend kezdete —
+   amit ez az ADR „alsó korlátként" írt le, az egy pontszerű jelenség.
+
+**Amit ez NEM jelent.** A ±3 döntése nem dől meg: a szélesség FELSŐ korlátja
+(a halk terc elnyomása) érintetlen, és azt ez a kör nem mérte újra a span
+tengelyén. A mélység-súlyozás (ADR 0541) sem válik feleslegessé — a „gyök és terc
+is mély" cellájában továbbra is az nevezi meg a gyököt, és ott a kontroll a
+szállított kernellel is kontrasztos. Csak az az EGY érv esett ki, hogy a szűk span
+eróziója alulról kötné a szélességet.
+
+**Őrteszt:** `test/features/live/dsp/register_windows_test.dart` — a régi
+kontroll (`blindLosses > 0`) mostantól a DOBOZ kernelre van kötve, ahol a
+jelenség valóban létezik, és egy új cella rögzíti, hogy a Hamming-kernel
+megszünteti. A kontrollt nem lazítottuk fel azért, hogy zöld legyen.

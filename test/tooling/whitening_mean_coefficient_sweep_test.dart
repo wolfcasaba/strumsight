@@ -26,6 +26,13 @@ import '../support/whitening_sweep.dart';
 
 const _coefficients = [0.0, 0.25, 0.5, 0.75, 1.0];
 
+/// Both kernels, because E18-R12 measured that the kernel and the coefficient
+/// are NOT independent: with the flat box the quiet third is lost from k = 0.15
+/// upward, while with the shipped Hamming kernel it survives every k in this
+/// grid. A sweep of k alone would have read as "mean subtraction always costs a
+/// third", which is only true of the kernel that no longer ships.
+const _kernels = [false, true];
+
 void main() {
   test('SWEEP the mean coefficient across all three criteria', () {
     final modelledPcm = {
@@ -34,34 +41,44 @@ void main() {
     final realFiles = realAudioFiles();
 
     final lines = <String>[];
-    for (final coefficient in _coefficients) {
-      final setting = WhiteningSetting(meanCoefficient: coefficient);
-      final quietTop = quietThird(setting);
-      var correct = 0;
-      for (final chord in modelledChords) {
-        final run = runPipeline(modelledPcm[chord]!, sweepSampleRate, setting);
-        if (topChord(run.chords) == chord) correct++;
-      }
+    for (final hamming in _kernels) {
+      for (final coefficient in _coefficients) {
+        final setting = WhiteningSetting(
+          meanCoefficient: coefficient,
+          hammingKernel: hamming,
+        );
+        final quietTop = quietThird(setting);
+        var correct = 0;
+        for (final chord in modelledChords) {
+          final run = runPipeline(
+            modelledPcm[chord]!,
+            sweepSampleRate,
+            setting,
+          );
+          if (topChord(run.chords) == chord) correct++;
+        }
 
-      var named = 0;
-      var colour = 0.0;
-      var counted = 0;
-      for (final file in realFiles) {
-        final decoded = decodeWav(file);
-        if (decoded == null) continue;
-        final result = runPipeline(decoded.pcm, decoded.sampleRate, setting);
-        named += result.confirmed;
-        colour += colourShare(result.chords);
-        counted++;
-      }
+        var named = 0;
+        var colour = 0.0;
+        var counted = 0;
+        for (final file in realFiles) {
+          final decoded = decodeWav(file);
+          if (decoded == null) continue;
+          final result = runPipeline(decoded.pcm, decoded.sampleRate, setting);
+          named += result.confirmed;
+          colour += colourShare(result.chords);
+          counted++;
+        }
 
-      lines.add(
-        'k=${coefficient.toStringAsFixed(2)}  '
-        'quiet-third=${quietTop ?? "-"}  '
-        'modelled=$correct/${modelledChords.length}  '
-        'real: named=$named  '
-        'sus4+aug=${counted == 0 ? "-" : (colour / counted * 100).toStringAsFixed(1)}%',
-      );
+        lines.add(
+          '${hamming ? "hamming" : "box    "}  '
+          'k=${coefficient.toStringAsFixed(2)}  '
+          'quiet-third=${quietTop ?? "-"}  '
+          'modelled=$correct/${modelledChords.length}  '
+          'real: named=$named  '
+          'sus4+aug=${counted == 0 ? "-" : (colour / counted * 100).toStringAsFixed(1)}%',
+        );
+      }
     }
 
     // ignore: avoid_print

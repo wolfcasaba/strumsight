@@ -30,8 +30,9 @@ class NnlsChroma {
     this.spectralWhitening = true,
     this.whiteningExponent = defaultWhiteningExponent,
     this.whiteningHalfSemitones = 3.0,
-    this.whiteningMeanCoefficient = 0.0,
-    this.whiteningSpectralFloor = 0.0,
+    this.whiteningMeanCoefficient = defaultWhiteningMeanCoefficient,
+    this.whiteningSpectralFloor = defaultWhiteningSpectralFloor,
+    this.whiteningHammingKernel = defaultWhiteningHammingKernel,
     this.referenceRegisterWindows = true,
   }) : _fft = FFT(window),
        _hann = Float64List(window),
@@ -42,6 +43,20 @@ class NnlsChroma {
     }
     _nBins = nNotes * binsPerSemitone;
     _whiteningHalfWindow = (whiteningHalfSemitones * binsPerSemitone).round();
+    // The Hamming kernel over the WHOLE neighbourhood (2H+1 taps), from the
+    // textbook definition `0.54 - 0.46*cos(2*pi*i/(N-1))` — derived here, never
+    // copied from a table. The running prefix of the weights is what makes the
+    // edge re-normalisation O(1): the in-bounds weight sum for any bin is one
+    // subtraction of two prefix entries.
+    final taps = 2 * _whiteningHalfWindow + 1;
+    _hammingKernel = Float64List(taps);
+    _hammingKernelPrefix = Float64List(taps + 1);
+    for (var i = 0; i < taps; i++) {
+      _hammingKernel[i] = taps == 1
+          ? 1.0
+          : 0.54 - 0.46 * math.cos(2 * math.pi * i / (taps - 1));
+      _hammingKernelPrefix[i + 1] = _hammingKernelPrefix[i] + _hammingKernel[i];
+    }
     _bassWeight = Float64List(nNotes);
     _trebleWeight = Float64List(nNotes);
     for (var n = 0; n < nNotes; n++) {
@@ -70,6 +85,10 @@ class NnlsChroma {
     _buildDictionary();
     _activation = Float64List(nNotes);
     _s = Float64List(_nBins);
+    _whitenPrefix = Float64List(_nBins + 1);
+    _whitenMean = Float64List(_nBins);
+    _whitenWork = Float64List(_nBins);
+    _whitenVariance = Float64List(_nBins);
     _dtS = Float64List(nNotes);
     _dtDx = Float64List(nNotes);
   }
@@ -102,10 +121,28 @@ class NnlsChroma {
   final bool spectralWhitening;
   final double whiteningExponent;
 
-  /// The shipped [whiteningExponent], named so a caller that only wants to
-  /// OVERRIDE it sometimes (the offline sweeps) has one source of truth to fall
-  /// back on instead of re-typing the literal and letting the two drift.
+  /// The shipped whitening exponent, named so a caller that only wants to
+  /// OVERRIDE it sometimes (the sweep harness) has one place to fall back to
+  /// rather than a second copy of the literal that could silently desync.
   static const double defaultWhiteningExponent = 0.7;
+
+  /// The SHIPPED normalisation kernel for whitening: Hamming-weighted.
+  ///
+  /// Named rather than inlined so there is exactly one place that says what ships
+  /// — the constructor default and any test that asserts "the shipped kernel is
+  /// X" read the SAME constant, instead of a literal in each that can disagree
+  /// silently. MEASURED in `docs/research/hamming-whitening-kernel-2026-09.md`.
+  static const bool defaultWhiteningHammingKernel = true;
+
+  /// The SHIPPED amount of local mean the whitener subtracts, and the SHIPPED
+  /// rectifier floor. Named for the same reason as the kernel above: a probe or
+  /// sweep that wants "the shipped value unless overridden" must be able to say
+  /// so, instead of writing `?? 0.0` and silently pinning the dial to a value
+  /// that used to be the default. That exact bug was found in
+  /// `real_audio_hearing_probe_test.dart`, whose comment promised the shipped
+  /// value while its code pinned zero.
+  static const double defaultWhiteningMeanCoefficient = 0.20;
+  static const double defaultWhiteningSpectralFloor = 0.0;
 
   /// Half-width of the normalisation neighbourhood, in SEMITONES.
   ///
@@ -181,9 +218,8 @@ class NnlsChroma {
   /// course teaches, and a learner playing E correctly would be told they played
   /// Em. The coefficient exists so that trade can be measured instead of taken.
   ///
-  /// The kernel stays a flat box regardless: the reference's Hamming weighting is
-  /// a SEPARATE difference, and changing two things at once makes a measurement
-  /// unreadable.
+  /// The kernel is chosen separately by [whiteningHammingKernel], because
+  /// changing two things at once makes a measurement unreadable.
   final double whiteningMeanCoefficient;
 
   /// The SPECTRAL FLOOR of the rectifier, as a fraction of the bin's own
@@ -233,6 +269,31 @@ class NnlsChroma {
   /// Diagnostic (E18-R11): the fraction of bins the last frame's rectifier left
   /// at exactly zero, AFTER any floor. 0 on the shipped path.
   double lastWhiteningZeroedFraction = 0;
+
+  /// Weight the normalisation neighbourhood with a **Hamming window** instead of
+  /// the flat box, for BOTH whitening paths (the plain running-RMS divide and
+  /// the mean-subtracting local-contrast form).
+  ///
+  /// The reference (`Chordino.cpp`, via its `SpecialConvolution` helper) takes
+  /// its running mean and running standard deviation through a normalised
+  /// Hamming-weighted kernel, not a box. The hypothesis that made this worth a
+  /// round (E18-R10, from the E18-R09 write-up): a box treats the bin 3
+  /// semitones away exactly like the bin next door, so at the EDGE of a loud
+  /// peak the local mean is dragged up by energy that is musically elsewhere —
+  /// and that is precisely where a quiet chord third lives. A weighted mean
+  /// discounts the distant neighbour, so the mean near a peak's skirt is lower
+  /// and a quiet third should survive a subtraction that a box would kill.
+  ///
+  /// Default false: the shipped behaviour is the flat box, and this flag exists
+  /// so the claim could be MEASURED rather than assumed. See
+  /// `docs/research/hamming-whitening-kernel-2026-09.md` for what the
+  /// measurement said.
+  final bool whiteningHammingKernel;
+
+  /// The Hamming weights over the `2*whiteningHalfWindow + 1` tap neighbourhood,
+  /// and their running prefix (for the O(1) in-bounds weight sum at the edges).
+  late final Float64List _hammingKernel;
+  late final Float64List _hammingKernelPrefix;
 
   /// [whiteningHalfSemitones] on the log-frequency bin grid — derived once in
   /// the constructor, never per bin: [_whiten] reads it inside a per-bin loop.
@@ -308,6 +369,15 @@ class NnlsChroma {
 
   late final Float64List _activation;
   late final Float64List _s;
+
+  // Whitening scratch, allocated once: [_whiten] runs on every frame of the
+  // live audio path, and a per-frame `Float64List` there is pure garbage.
+  late final Float64List _whitenPrefix;
+  late final Float64List _whitenMean;
+  late final Float64List _whitenWork;
+
+  /// The local mean of the squared deviations, i.e. the local VARIANCE.
+  late final Float64List _whitenVariance;
   late final Float64List _dtS;
   late final Float64List _dtDx;
 
@@ -494,18 +564,38 @@ class NnlsChroma {
   /// Whiten [_s] in place: each bin ÷ RMS(±[whiteningHalfWindow] neighbours)
   /// ^[whiteningExponent]. The RMS floor (relative to [maxS]) keeps true
   /// silence from being amplified into structure.
+  ///
+  /// Two kernels, selected by [whiteningHammingKernel]: a flat box (the shipped
+  /// default, computed by prefix sum in O(1) per bin) or a normalised Hamming
+  /// weighting (direct convolution — a weighted kernel has no prefix-sum
+  /// shortcut).
   void _whiten(double maxS) {
     if (whiteningMeanCoefficient > 0) {
       _whitenByLocalContrast(maxS);
       return;
     }
+    // No rectifier on this path, so there is nothing for the spectral floor to
+    // hold up and the diagnostics read zero rather than going stale.
     lastWhiteningRescuedFraction = 0;
     lastWhiteningZeroedFraction = 0;
-    final prefix = Float64List(_nBins + 1);
+    final floor = 1e-4 * maxS;
+    if (whiteningHammingKernel) {
+      // The squared spectrum is copied aside first because the whitened result
+      // is written back over [_s] while later bins still need their original values.
+      for (var j = 0; j < _nBins; j++) {
+        _whitenWork[j] = _s[j] * _s[j];
+      }
+      for (var j = 0; j < _nBins; j++) {
+        var rms = math.sqrt(_weightedLocalMean(_whitenWork, j));
+        if (rms < floor) rms = floor;
+        _s[j] = _s[j] / math.pow(rms, whiteningExponent);
+      }
+      return;
+    }
+    final prefix = _whitenPrefix;
     for (var j = 0; j < _nBins; j++) {
       prefix[j + 1] = prefix[j] + _s[j] * _s[j];
     }
-    final floor = 1e-4 * maxS;
     for (var j = 0; j < _nBins; j++) {
       final lo = math.max(0, j - whiteningHalfWindow);
       final hi = math.min(_nBins - 1, j + whiteningHalfWindow);
@@ -515,46 +605,67 @@ class NnlsChroma {
     }
   }
 
+  /// The Hamming-weighted mean of [src] over bin [j]'s neighbourhood,
+  /// re-normalised by the weight that actually falls INSIDE the array.
+  ///
+  /// WHY re-normalise instead of zero-padding. Zero padding would let the taps
+  /// hanging off the end of the axis count as measured silence, so the first and
+  /// last [whiteningHalfWindow] bins would report a local level pulled toward
+  /// zero and come out of whitening several times too loud — a fabricated peak
+  /// at each end of the log-frequency axis, which is exactly where the lowest
+  /// guitar fundamental (E2, bin 0) sits. Dividing by the in-bounds weight sum
+  /// instead says "there is less evidence here", which is the truth, and leaves
+  /// an all-flat spectrum whitened flat everywhere including its edges. It is
+  /// also the reference's convention for the same operator.
+  ///
+  /// O(taps) per bin by direct convolution; the in-bounds weight sum is O(1)
+  /// from [_hammingKernelPrefix].
+  double _weightedLocalMean(Float64List src, int j) {
+    final half = whiteningHalfWindow;
+    final lo = math.max(0, j - half);
+    final hi = math.min(_nBins - 1, j + half);
+    var sum = 0.0;
+    for (var b = lo; b <= hi; b++) {
+      sum += _hammingKernel[b - j + half] * src[b];
+    }
+    final weight =
+        _hammingKernelPrefix[hi - j + half + 1] -
+        _hammingKernelPrefix[lo - j + half];
+    return weight > 0 ? sum / weight : 0.0;
+  }
+
   /// The reference arithmetic: subtract the running mean, divide by the running
-  /// standard deviation raised to [whiteningExponent], and half-wave rectify —
-  /// the rectifier's floor being [whiteningSpectralFloor] (0 = a hard zero).
+  /// standard deviation raised to [whiteningExponent], and rectify.
   ///
-  /// Reached only when [whiteningMeanCoefficient] > 0: with nothing subtracted
-  /// there is nothing to rectify, so [whiteningSpectralFloor] is inert on the
-  /// shipped divide-only path by construction, not by a guard.
-  ///
-  /// Two box passes, both by prefix sum: the first gives each bin's local mean,
+  /// Two passes over the neighbourhood, both through whichever kernel
+  /// [whiteningHammingKernel] selects: the first gives each bin's local mean,
   /// the second the local mean of the squared deviations — each bin's deviation
   /// measured from ITS OWN local mean, as the reference does it.
+  ///
+  /// The rectification happens in exactly ONE place, for both kernels. That is
+  /// deliberate: [whiteningSpectralFloor] and its two diagnostics have to apply
+  /// identically whichever kernel is in use, and a per-kernel copy of the
+  /// rectifier would be a per-kernel chance for them to drift apart.
   ///
   /// The standard-deviation FLOOR is ours, not the reference's: without it a
   /// silent neighbourhood divides by ~0 and turns numerical dust into structure.
   /// The reference has no such guard because it never runs on a live microphone
   /// that can be handed pure silence.
   void _whitenByLocalContrast(double maxS) {
-    final prefix = Float64List(_nBins + 1);
+    final mean = _whitenMean;
+    final deviation = _whitenWork;
+    _localMeanInto(_s, mean);
     for (var j = 0; j < _nBins; j++) {
-      prefix[j + 1] = prefix[j] + _s[j];
-    }
-    final mean = Float64List(_nBins);
-    final deviation = Float64List(_nBins);
-    for (var j = 0; j < _nBins; j++) {
-      final lo = math.max(0, j - whiteningHalfWindow);
-      final hi = math.min(_nBins - 1, j + whiteningHalfWindow);
-      mean[j] = (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1);
       final d = _s[j] - whiteningMeanCoefficient * mean[j];
       deviation[j] = d * d;
     }
-    final devPrefix = Float64List(_nBins + 1);
-    for (var j = 0; j < _nBins; j++) {
-      devPrefix[j + 1] = devPrefix[j] + deviation[j];
-    }
+    final variance = _whitenVariance;
+    _localMeanInto(deviation, variance);
+
     final floor = 1e-4 * maxS;
     var rescued = 0;
     var zeroed = 0;
     for (var j = 0; j < _nBins; j++) {
-      final lo = math.max(0, j - whiteningHalfWindow);
-      final hi = math.min(_nBins - 1, j + whiteningHalfWindow);
       final d = _s[j] - whiteningMeanCoefficient * mean[j];
       // Half-wave rectification with a SPECTRAL FLOOR (Berouti et al. 1979, in
       // the gain domain): at or below the local estimate keep β of the bin's own
@@ -569,12 +680,82 @@ class NnlsChroma {
         _s[j] = 0;
         continue;
       }
-      var std = math.sqrt((devPrefix[hi + 1] - devPrefix[lo]) / (hi - lo + 1));
+      var std = math.sqrt(variance[j]);
       if (std < floor) std = floor;
       _s[j] = effective / math.pow(std, whiteningExponent);
     }
     lastWhiteningRescuedFraction = rescued / _nBins;
     lastWhiteningZeroedFraction = zeroed / _nBins;
+  }
+
+  /// The local mean of [src] over each bin's neighbourhood, into [out].
+  ///
+  /// The flat box goes by prefix sum (O(1) per bin); the Hamming kernel by
+  /// direct convolution, because a weighted kernel has no prefix-sum shortcut.
+  /// Both divide by what actually falls inside the axis — see
+  /// [_weightedLocalMean] for why that is re-normalisation and not zero-padding.
+  void _localMeanInto(Float64List src, Float64List out) {
+    if (whiteningHammingKernel) {
+      for (var j = 0; j < _nBins; j++) {
+        out[j] = _weightedLocalMean(src, j);
+      }
+      return;
+    }
+    final prefix = _whitenPrefix;
+    for (var j = 0; j < _nBins; j++) {
+      prefix[j + 1] = prefix[j] + src[j];
+    }
+    for (var j = 0; j < _nBins; j++) {
+      final lo = math.max(0, j - whiteningHalfWindow);
+      final hi = math.min(_nBins - 1, j + whiteningHalfWindow);
+      out[j] = (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1);
+    }
+  }
+
+  /// Test/benchmark seam: load [spectrum] into the log-frequency buffer, run ONE
+  /// whitening pass over it with this instance's settings, and return a copy of
+  /// the result.
+  ///
+  /// Exists for two reasons that both need the whitener ISOLATED from the rest
+  /// of [process]. First, the kernels have different complexity — the box is
+  /// O(1) per bin by prefix sum, the Hamming O(taps) by direct convolution — and
+  /// this runs on the live on-device audio path, so the difference has to be
+  /// measured rather than assumed. Second, the kernel's own properties (a flat
+  /// spectrum whitens flat, including at the edges) are only checkable here;
+  /// through a decoded chord label they are invisible.
+  @visibleForTesting
+  Float64List debugWhitenSpectrum(Float64List spectrum) {
+    assert(spectrum.length == _nBins);
+    var maxS = 0.0;
+    for (var j = 0; j < _nBins; j++) {
+      _s[j] = spectrum[j];
+      if (spectrum[j] > maxS) maxS = spectrum[j];
+    }
+    _whiten(maxS);
+    return Float64List.fromList(_s);
+  }
+
+  /// The number of log-frequency bins — the length [debugWhitenSpectrum] wants.
+  @visibleForTesting
+  int get debugBinCount => _nBins;
+
+  /// Test seam for the kernel: the normalised weight bin `j` gives to the
+  /// neighbour [offset] bins away, or 0 outside the neighbourhood. A property
+  /// test needs to read the weights to assert they are a Hamming and that the
+  /// in-bounds normalisation sums to 1 — it must not re-derive them.
+  @visibleForTesting
+  double debugWhiteningWeight(int j, int offset) {
+    final half = whiteningHalfWindow;
+    if (offset.abs() > half) return 0;
+    final neighbour = j + offset;
+    if (neighbour < 0 || neighbour >= _nBins) return 0;
+    final lo = math.max(0, j - half);
+    final hi = math.min(_nBins - 1, j + half);
+    if (!whiteningHammingKernel) return 1.0 / (hi - lo + 1);
+    final weight =
+        _hammingKernelPrefix[hi - j + half + 1] -
+        _hammingKernelPrefix[lo - j + half];
+    return _hammingKernel[offset + half] / weight;
   }
 
   /// Sample the STFT magnitude at each log-freq bin centre × [tuningFactor]

@@ -231,6 +231,62 @@ takes a larger relative share from a weak peak than from a loud one. That makes
 the Hamming-kernel candidate the better-aimed of the two, because a weighted mean
 changes *what the local mean is*.
 
+## 7. The Hamming kernel: SHIPPED, and the measurement that decided it
+
+§6 re-aimed the campaign at the kernel, because the cost traced to the
+subtraction operator rather than the rectifier. That round is
+`docs/research/hamming-whitening-kernel-2026-09.md` and the decision is
+[ADR 0542](../adr/0542-hamming-whitening-kernel-and-reference-mean-subtraction.md).
+The kernel SHIPS, Hamming-weighted, together with `k = 0.20` of the reference
+mean subtraction — the thing §5 left switched off.
+
+**What changed the verdict was a measurement neither round had.** Both rounds
+scored themselves on the ten stock loops, which carry no chord ground truth, so
+"more named frames" could equally have meant "less cautious". This repo already
+had the answer: `test/tooling/live_chord_wav_probe_test.dart`, seven labelled
+real-guitar recordings of the natural majors. Nobody pointed the rounds at it.
+
+| setting | real guitar | confirmed frames |
+|---|---|---|
+| box, k = 0 (was shipped) | **7/7** | 278 |
+| hamming, k = 0 | **7/7** | 294 |
+| **hamming, k = 0.20 (ships)** | **7/7** | **296** |
+| hamming, k = 0.50 | **7/7** | 297 |
+
+No label degrades, and every file holds or gains frames — the weakest, C, gains
+most (20 → 27). So on real guitar the KERNEL carries the benefit and `k` adds
+almost nothing; `k` had to earn its place on the hard material instead, and it
+does, per file:
+
+| | box k=0 | hamming k=0 | **hamming k=0.20** | hamming k=0.50 |
+|---|---|---|---|---|
+| B minor in key | 82 % | 84 % | **86 %** | 74 % |
+| F minor in key | silent | **silent** | **93 %** | 88 % |
+| `electric-guitar-phrase` | 71 frames | **silent** | names again | names again |
+
+`k = 0` loses TWO files to silence — a regression, not a neutral trade. `k = 0.20`
+recovers both and is best on B minor.
+
+**And the quiet third, the thing that blocked §5, is now twice as robust**: the
+cliff moves from a third at 0.08 to between 0.04 and 0.02, and minor chords with
+a quiet third stay minor. That is the worst error class this app has, and it got
+better rather than being traded away.
+
+**Still not fixed, and still the campaign's open question:** the `sus4`/`aug`
+over-reporting of §4. 43.6 % → 43.1 % is noise. The ~9-point improvement visible
+at `k ≤ 0.15` is an ARTEFACT — the `sus4`-heavy `electric-guitar-phrase` goes
+silent there and drops out of the mean.
+
+**A defect this work surfaced in this very probe.** It passed
+`whiteningMeanCoefficient: override ?? 0.0` while its comment promised the
+shipped value. Invisible while the shipped value was 0; from the moment the dial
+moved it would have made every future round measure something nothing ships. The
+fallbacks are now named constants on `NnlsChroma`. The same error class caught me
+mid-round: flipping `NnlsChroma`'s own default changes nothing, because
+`LivePipeline` forwards the parameter explicitly — my first "result" measured
+shipped behaviour twice and printed identical numbers, which is the only reason I
+noticed.
+
 ## What this does not establish
 
 No file here has per-chord ground truth, so nothing above is a chord-accuracy

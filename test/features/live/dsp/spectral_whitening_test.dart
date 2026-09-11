@@ -29,12 +29,23 @@ Float64List thinMicChord(
     ),
 ]);
 
-/// Decode [signal]; [halfSemitones] overrides the shipped whitening span so
-/// a test can state what the OLD span did, not only what the new one does.
-String? decode(Float64List signal, {double? halfSemitones}) {
-  final nc = halfSemitones == null
-      ? NnlsChroma(sampleRate: 44100)
-      : NnlsChroma(sampleRate: 44100, whiteningHalfSemitones: halfSemitones);
+/// Decode [signal]; [halfSemitones] overrides the shipped whitening span so a
+/// test can state what the OLD span did, not only what the new one does, and
+/// [hamming]/[meanCoefficient] override the whitening KERNEL and arithmetic so a
+/// test can state what each one costs or buys.
+String? decode(
+  Float64List signal, {
+  double? halfSemitones,
+  bool hamming = false,
+  double meanCoefficient = 0.0,
+}) {
+  final nc = NnlsChroma(
+    sampleRate: 44100,
+    whiteningHalfSemitones:
+        halfSemitones ?? NnlsChroma(sampleRate: 44100).whiteningHalfSemitones,
+    whiteningHammingKernel: hamming,
+    whiteningMeanCoefficient: meanCoefficient,
+  );
   final decoder = ViterbiChordDecoder(
     selfBonus: DspConfig.chordSelfTransitionBonus,
     dictionary: ChordDictionary(),
@@ -216,6 +227,224 @@ void main() {
         ),
         'A7',
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // THE KERNEL (E18-R10). Our whitening normalises against a FLAT BOX: the bin
+  // three semitones away counts exactly as much as the bin next door. The
+  // reference weights that neighbourhood with a HAMMING window. The difference
+  // bites at the EDGE OF A LOUD PEAK, which is precisely where a quiet chord
+  // third lives: a box drags the local mean up with energy that is musically
+  // elsewhere, while a weighted mean discounts it.
+  //
+  // `docs/research/hamming-whitening-kernel-2026-09.md` carries the sweep. The
+  // default is still the box, so these tests state the kernel explicitly.
+  group('the whitening kernel', () {
+    List<(double, double)> openE(double third) => [
+      (82.41, 0.60), // E2
+      (123.47, 0.97), // B2  the fifth, doubled and loud
+      (164.81, 1.00), // E3
+      (207.65, third), // G#3 the major third, fretted once
+      (246.94, 0.49), // B3
+      (329.63, 0.53), // E4
+    ];
+    List<(double, double)> openEm(double third) => [
+      (82.41, 0.60),
+      (123.47, 0.97),
+      (164.81, 1.00),
+      (196.00, third), // G3 the minor third
+      (246.94, 0.49),
+      (329.63, 0.53),
+    ];
+
+    test('the SHIPPED kernel is the Hamming one', () {
+      // E18-R12 flipped this. The cell it replaces asserted the opposite — "the
+      // SHIPPED kernel is the flat box" — which was true when written and is a
+      // TAUTOLOGY either way: it restates the default rather than measuring
+      // anything, so it cannot tell us the flip was right. What justifies the
+      // flip is `docs/research/hamming-whitening-kernel-2026-09.md` plus the
+      // real-guitar ground truth in `live_chord_wav_probe_test.dart` (7/7 at
+      // both kernels, 278 -> 296 confirmed frames), NOT this assertion.
+      //
+      // It is kept, and reads the NAMED constant rather than a literal, so that
+      // what ships is stated in exactly one place and a future accidental flip
+      // of the default shows up here as a failure instead of silently shipping.
+      final shipped = NnlsChroma(sampleRate: 44100);
+      expect(shipped.whiteningHammingKernel, isTrue);
+      expect(
+        shipped.whiteningHammingKernel,
+        NnlsChroma.defaultWhiteningHammingKernel,
+      );
+    });
+
+    test('the flat box is still available, and its weights are still uniform', () {
+      // The box arithmetic did not stop existing when it stopped being the
+      // default: every sweep compares against it, so it stays guarded. Deleting
+      // this cell with the flip would have left the comparison baseline itself
+      // unmeasured.
+      final box = NnlsChroma(sampleRate: 44100, whiteningHammingKernel: false);
+      final taps = 2 * box.whiteningHalfWindow + 1;
+      // Mid-axis bin: the whole neighbourhood is in bounds, so every neighbour
+      // carries the same 1/taps - that IS the flat box.
+      for (
+        var offset = -box.whiteningHalfWindow;
+        offset <= box.whiteningHalfWindow;
+        offset++
+      ) {
+        expect(box.debugWhiteningWeight(60, offset), closeTo(1 / taps, 1e-12));
+      }
+    });
+
+    test('the Hamming weights are a Hamming: symmetric, peaked, 12.5:1', () {
+      final nc = NnlsChroma(sampleRate: 44100, whiteningHammingKernel: true);
+      final half = nc.whiteningHalfWindow;
+      final centre = nc.debugWhiteningWeight(60, 0);
+      final edge = nc.debugWhiteningWeight(60, half);
+      // `0.54 - 0.46*cos(2*pi*i/(N-1))` peaks at 1.00 and ends at 0.08, so the
+      // furthest neighbour counts 12.5x less than the bin itself. Derived from
+      // the textbook formula, not copied from a reference table.
+      expect(centre / edge, closeTo(1.00 / 0.08, 1e-9));
+      for (var offset = 1; offset <= half; offset++) {
+        expect(
+          nc.debugWhiteningWeight(60, offset),
+          closeTo(nc.debugWhiteningWeight(60, -offset), 1e-12),
+          reason: 'the kernel must be symmetric at +/-$offset',
+        );
+        expect(
+          nc.debugWhiteningWeight(60, offset),
+          lessThan(nc.debugWhiteningWeight(60, offset - 1)),
+          reason: 'weight must fall off monotonically outward',
+        );
+      }
+      expect(nc.debugWhiteningWeight(60, half + 1), 0);
+    });
+
+    test('the weights sum to 1 everywhere INCLUDING the edges - that is the '
+        'in-bounds re-normalisation, not zero padding', () {
+      for (final hamming in const [false, true]) {
+        final nc = NnlsChroma(
+          sampleRate: 44100,
+          whiteningHammingKernel: hamming,
+        );
+        final half = nc.whiteningHalfWindow;
+        // Bin 0 has half its neighbourhood off the end of the axis. Zero
+        // padding would make these weights sum to ~0.5, the local level would
+        // read half what it is, and the lowest guitar fundamental would come out
+        // of whitening inflated. Re-normalising says "less evidence here".
+        for (final j in [0, 1, half, 60, nc.debugBinCount - 1]) {
+          var sum = 0.0;
+          for (var offset = -half; offset <= half; offset++) {
+            sum += nc.debugWhiteningWeight(j, offset);
+          }
+          expect(
+            sum,
+            closeTo(1.0, 1e-12),
+            reason: 'kernel=$hamming bin=$j weights must re-normalise to 1',
+          );
+        }
+      }
+    });
+
+    test('a FLAT spectrum whitens flat, edges included (no fabricated edge '
+        'peak)', () {
+      for (final hamming in const [false, true]) {
+        for (final meanK in const [0.0, 1.0]) {
+          final nc = NnlsChroma(
+            sampleRate: 44100,
+            whiteningHammingKernel: hamming,
+            whiteningMeanCoefficient: meanK,
+          );
+          final flat = Float64List(nc.debugBinCount)
+            ..fillRange(0, nc.debugBinCount, 0.5);
+          final out = nc.debugWhitenSpectrum(flat);
+          for (var j = 0; j < out.length; j++) {
+            expect(
+              out[j],
+              closeTo(out[out.length ~/ 2], 1e-9),
+              reason:
+                  'kernel=$hamming k=$meanK bin $j must match the middle: a '
+                  'constant spectrum has no structure anywhere, edges included',
+            );
+          }
+        }
+      }
+    });
+
+    test('the kernel flag is off by default, so the shipped decode is '
+        'unchanged (parity)', () {
+      // Every fixture above runs through `decode` with hamming: false, which is
+      // the shipped path; this states the default explicitly so a future change
+      // of default cannot slip through as a silent behaviour change.
+      expect(decode(thinMicChord(cMajorFreqs)), 'C');
+      expect(decode(thinMicChord(cMajorFreqs), hamming: false), 'C');
+    });
+
+    // --- what the kernel actually buys, measured -------------------------
+    test('the Hamming kernel lowers the quiet-third floor on its own (k=0): '
+        'a third at 0.04 reads E where the box reads Em', () {
+      expect(decode(voicedChord(openE(0.04))), isNot('E'));
+      expect(decode(voicedChord(openE(0.04)), hamming: true), 'E');
+      // And the shipped 0.08 case is unaffected - this only extends downward.
+      expect(decode(voicedChord(openE(0.08)), hamming: true), 'E');
+    });
+
+    test('with the Hamming kernel the quiet third survives the FULL reference '
+        'mean subtraction, which the box does not', () {
+      // The E18-R09 blocker: at k >= 0.15 the box reads this open E as `Em`,
+      // and major-for-minor is the worst error this app can make. The weighted
+      // kernel keeps it `E` all the way to the reference's own k = 1.
+      for (final k in const [0.15, 0.25, 0.5, 0.75, 1.0]) {
+        expect(
+          decode(voicedChord(openE(0.08)), hamming: true, meanCoefficient: k),
+          'E',
+          reason: 'hamming kernel, k=$k',
+        );
+      }
+      expect(
+        decode(voicedChord(openE(0.08)), meanCoefficient: 0.25),
+        'Em',
+        reason: 'the box must still show the failure this kernel addresses',
+      );
+    });
+
+    test('and it does not manufacture a major third: minors stay minor at '
+        'every coefficient', () {
+      // The inverse risk of lifting quiet tones. If the Hamming kernel kept the
+      // open E major by biasing everything toward major thirds, THIS is where it
+      // would show, and it does not.
+      for (final k in const [0.0, 0.25, 0.75, 1.0]) {
+        for (final third in const [0.40, 0.12, 0.08, 0.04]) {
+          expect(
+            decode(
+              voicedChord(openEm(third)),
+              hamming: true,
+              meanCoefficient: k,
+            ),
+            'Em',
+            reason: 'open Em, hamming kernel, k=$k, third=$third',
+          );
+        }
+      }
+    });
+
+    test('a GENUINE sus4 is still a sus4 under the Hamming kernel', () {
+      for (final k in const [0.0, 0.25, 1.0]) {
+        expect(
+          decode(
+            voicedChord(const [
+              (146.83, 1.00), // D3
+              (220.00, 0.90), // A3  fifth
+              (293.66, 0.80), // D4
+              (392.00, 0.85), // G4  the fourth, clearly present
+            ]),
+            hamming: true,
+            meanCoefficient: k,
+          ),
+          'Dsus4',
+          reason: 'hamming kernel, k=$k',
+        );
+      }
     });
   });
 }
