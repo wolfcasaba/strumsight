@@ -11,13 +11,32 @@
 /// and 2), amber when it confirms a different one, and neutral otherwise —
 /// neutral being "I cannot tell", never "you failed".
 ///
-/// It deliberately does **not** score stroke TIMING yet. Timing credit needs the
-/// detected onset and the grid to sit on the same clock, and the offset between
-/// the engine's time base and this screen's playback clock has not been
-/// measured. Grading against an unverified clock would tell a learner they were
-/// late when they were not — exactly the false teaching the whole pillar is
-/// built to avoid. The grader (`gradeRhythm`) is written and tested; wiring it
-/// up waits for that measurement.
+/// ## The clock, and why timing can be scored
+///
+/// MEASURED (`test/features/live/strum_timestamp_latency_test.dart`), by driving
+/// the real `LivePipeline` with synthetic strums at known times:
+///
+///   - `latestStrumTime` is the stroke's TRUE onset on the engine's sample
+///     clock — placement error 0.0-3.4 ms across four strums.
+///   - the frame CARRYING it arrives 84-142 ms later, independently reproducing
+///     the 85-165 ms the `LiveFrame` doc comment cites from r145.
+///
+/// Those two differ by a factor of about 42, which is the whole design
+/// constraint: timestamping a stroke when its frame arrives would import the
+/// second number as false lateness, and 142 ms against a 50 ms window means
+/// every stroke would read as late. So a stroke is placed at `latestStrumTime`,
+/// and the exercise grid runs on the SAME engine clock rather than on a clock of
+/// its own — an offset that does not exist cannot be miscalibrated.
+///
+/// The ticker remains, but only to interpolate BETWEEN engine anchors so the
+/// pendulum moves at frame rate instead of the engine's ~66 ms cadence. The
+/// visual interpolates; the grading never does.
+///
+/// Still NOT corrected here, and named: the learner hears the count through the
+/// speaker and is heard through the microphone, so their perception carries this
+/// device's output+input latency. `LatencyCalibrator` already measures that (tap
+/// test, median, MAD-gated); applying it is the next step, and until then the
+/// score is of what the microphone heard, not of what the learner felt.
 library;
 
 import 'package:flutter/material.dart';
@@ -31,6 +50,7 @@ import '../../../live/public.dart';
 import '../../data/beginner_course.dart';
 import '../../domain/course.dart';
 import '../../domain/rhythm_assignment.dart';
+import '../../domain/rhythm_grading.dart';
 import '../../domain/rhythm_grid.dart';
 import '../../domain/rhythm_mode.dart';
 import '../widgets/rhythm_lane.dart';
@@ -71,13 +91,25 @@ final class _RhythmPracticeScreenState
   Duration? _position;
   bool _playing = false;
 
-  /// The ticker's own elapsed time, the only time base this screen reads.
+  /// The ticker's own elapsed time. Used ONLY to interpolate between engine
+  /// anchors so the pendulum runs at frame rate — never as the timeline itself.
   ///
   /// Deliberately NOT `SchedulerBinding.currentFrameTimeStamp`: that is valid
   /// only inside a frame, so reading it from a tap handler asserts.
   Duration _tickerElapsed = Duration.zero;
-  Duration _startedAt = Duration.zero;
-  Duration _elapsedAtPause = Duration.zero;
+
+  /// The engine clock reading at the exercise's start. Null until the engine has
+  /// produced a frame — which is also when playback can begin, because without
+  /// the engine there is no shared clock and so nothing that could be scored.
+  double? _startEngineSec;
+
+  /// The newest engine clock reading, and the ticker time it arrived at.
+  double? _engineNowSec;
+  Duration _engineAnchorTick = Duration.zero;
+
+  /// Strokes heard this run, placed on the engine clock.
+  final List<DetectedStroke> _strokes = [];
+  int _lastStrumSeq = 0;
 
   @override
   void initState() {
@@ -125,21 +157,59 @@ final class _RhythmPracticeScreenState
   void _onTick(Duration elapsed) {
     _tickerElapsed = elapsed;
     if (!_playing) return;
-    setState(() => _position = _elapsedAtPause + (elapsed - _startedAt));
+    final start = _startEngineSec;
+    final engineNow = _engineNowSec;
+    if (start == null || engineNow == null) return;
+    // Interpolate forward from the last engine anchor: the anchor is the truth,
+    // the ticker only fills the ~66 ms gaps so the motion is smooth. Derived
+    // from the anchor every frame, never accumulated (ADR 0274).
+    setState(() {
+      _position =
+          Duration(microseconds: ((engineNow - start) * 1e6).round()) +
+          (elapsed - _engineAnchorTick);
+    });
   }
 
   void _toggle() {
     setState(() {
       if (_playing) {
-        _elapsedAtPause = _position ?? Duration.zero;
         _playing = false;
-        // The position is kept, not cleared: resuming continues the bar rather
-        // than restarting it, and a null read would park the pendulum.
         return;
       }
-      _startedAt = _tickerElapsed;
+      // Starting anchors the exercise to the engine clock's current reading, so
+      // the grid and every detected stroke share one scale from the first bar.
+      _startEngineSec = _engineNowSec;
+      _position = Duration.zero;
+      _strokes.clear();
       _playing = true;
     });
+  }
+
+  /// Folds a freshly arrived frame into the clock anchor and the stroke list.
+  ///
+  /// A stroke is placed at `latestStrumTime` — the MEASURED true onset — never
+  /// at the moment this frame arrived, which the same measurement puts 84-142 ms
+  /// later.
+  void _absorb(LiveFrame? live) {
+    if (live == null || live.engineTimeSec < 0) return;
+    _engineNowSec = live.engineTimeSec;
+    _engineAnchorTick = _tickerElapsed;
+
+    final start = _startEngineSec;
+    if (!_playing || start == null) return;
+    if (live.strumSeq <= _lastStrumSeq) return;
+    _lastStrumSeq = live.strumSeq;
+    final strum = live.latestStrum;
+    if (strum == null || live.latestStrumTime < 0) return;
+    _strokes.add(
+      DetectedStroke(
+        atUs: ((live.latestStrumTime - start) * 1e6).round(),
+        direction: strum.direction,
+        // The pipeline publishes a strum only once its DIRECTION is confirmed,
+        // so a stroke reaching here is confirmed evidence by construction.
+        isConfirmed: true,
+      ),
+    );
   }
 
   /// Crossings per loop: two per beat, across however many bars the exercise
@@ -159,6 +229,7 @@ final class _RhythmPracticeScreenState
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final frame = ref.watch(liveFrameProvider);
     final live = frame.asData?.value;
+    _absorb(live);
 
     final crossings = _crossings;
     final pendulum = _position == null
@@ -241,6 +312,7 @@ final class _RhythmPracticeScreenState
                     heardChord: live?.current?.label,
                   ),
                 ),
+              _attemptSummary(context, l10n, colors),
               const SizedBox(height: SsSpacing.space2),
               // Rule 4: the "I cannot hear you" signal is the level METER, not a
               // banner of prose.
@@ -254,6 +326,55 @@ final class _RhythmPracticeScreenState
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// What this run can honestly claim so far.
+  ///
+  /// Two numbers, never one: `directionAccuracy` answers "of the strokes I
+  /// heard, how many went the right way", and `coverage` answers "how much of
+  /// the pattern did I hear at all". Without the second, two clean strokes out of
+  /// sixteen would read as a flawless attempt. Below the coverage floor the
+  /// screen says it could not hear enough — which costs the learner nothing
+  /// (design §2 rule 6).
+  Widget _attemptSummary(
+    BuildContext context,
+    AppLocalizations l10n,
+    SsColorScheme colors,
+  ) {
+    final start = _startEngineSec;
+    if (start == null || !_playing) return const SizedBox.shrink();
+    final attempt = gradeRhythm(
+      _assignment.grid,
+      bpm: _assignment.bpm,
+      bars: _chords.isEmpty ? 1 : _chords.length,
+      strokes: _strokes,
+    );
+    final accuracy = attempt.directionAccuracy;
+    final text = !attempt.isReportable || accuracy == null
+        ? l10n.curriculumTooLittleHeard
+        : l10n.curriculumDirectionAccuracy((accuracy * 100).round());
+    return Padding(
+      padding: const EdgeInsets.only(top: SsSpacing.space2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: attempt.isReportable
+                  ? colors.textPrimary
+                  : colors.textSecondary,
+            ),
+          ),
+          Text(
+            l10n.curriculumHeard(attempt.heard, attempt.notatedStrokes),
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: colors.textSecondary),
+          ),
+        ],
       ),
     );
   }
