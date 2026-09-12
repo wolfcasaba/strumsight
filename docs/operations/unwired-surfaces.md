@@ -21,6 +21,14 @@ done
 grep -rn "^final [a-zA-Z0-9_]*Provider = " lib/ --include=*.dart
 ```
 
+
+> **E18-R22 figyelmeztetés a fenti grepekhez.** Egyik sem vág **kommentet**, tehát egy
+> csak kommentben említett képernyő vagy provider „hivatkozottnak" tűnhet. Ez nem
+> elméleti: a `tool/check_screen_reachability.dart` pontosan ettől jelentett egy
+> szándékosan nem route-olt képernyőt elérhetőnek (`docs/LESSONS.md` L661). A szkennelő
+> eszköz már levágja a sorvégi kommenteket; a fenti kézi grepek **nem**, szóval minden
+> találatot ellenőrizni kell a forráson, mielőtt „bekötve"-ként olvassuk.
+
 ## 1. Parkolt rollout-felületek — NEM elfelejtett munka
 
 Ezeket nem szabad „bekötni": a kapuk szándékosak, és az indok a

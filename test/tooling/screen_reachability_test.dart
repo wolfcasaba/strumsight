@@ -82,15 +82,102 @@ List<String> _retireRowsMissingSuccessorOrReason(List<_PlanRow> retireRows) {
 void main() {
   final repository = Directory.current;
 
-  group('A1 — every one of the 96 real screens gets a verdict with a source '
+  group('A0 — a class name in a COMMENT is not a reference to it', () {
+    // MEASURED DEFECT, E18-R22. The scan had no comment handling, so
+    // `app_router.dart`'s comment explaining that `CommunityChallengesScreen` is
+    // deliberately NOT routed (the hosted backend serves no challenge list) was
+    // matched as that screen's route site. The screen was reported **reachable**,
+    // citing the comment line as its source.
+    //
+    // It was not one stray line. Stripping comments changed the measurement across
+    // the tree: Reachable 86 -> 85, Flag-gated 36 -> 37, and fifteen cited route
+    // lines in `app_router.dart` turned out to be prose. The most consequential was
+    // `ProgressDashboardScreen`, whose only REAL registration sits inside
+    // `adaptiveShellEnabled` — it had been reported un-gated, i.e. available in every
+    // build. Test-reference counts were inflated too (`OnboardingScreen` 27 -> 20,
+    // `LearnScreen` 33 -> 27), so "how well covered is this screen" read high.
+    //
+    // These cells pin the stripper's behaviour directly, because it now decides every
+    // verdict the guards below rest on.
+
+    test('it cuts at // but never inside a string', () {
+      expect(
+        ScreenReachability.stripLineComment(
+          '  const x = 1; // LiveScreen here',
+        ),
+        '  const x = 1; ',
+      );
+      // A route path or URL containing `//` must survive: truncating it would drop
+      // real code and silently make routed screens look unreachable — the same
+      // defect with the sign flipped.
+      expect(
+        ScreenReachability.stripLineComment("  path: 'https://x/y', // note"),
+        "  path: 'https://x/y', ",
+      );
+      expect(
+        ScreenReachability.stripLineComment(
+          '  builder: (_, _) => const LiveScreen(),',
+        ),
+        '  builder: (_, _) => const LiveScreen(),',
+      );
+      // An escaped quote must not be read as closing the string.
+      expect(
+        ScreenReachability.stripLineComment(
+          r"  final s = 'it\'s // not a comment';",
+        ),
+        r"  final s = 'it\'s // not a comment';",
+      );
+      // A doc comment is a comment.
+      expect(
+        ScreenReachability.stripLineComment('/// [LiveScreen] does x'),
+        '',
+      );
+    });
+
+    test('the challenge screen is measured UNREACHABLE, as the router says', () {
+      // The specific regression, asserted on the real tree rather than a fixture:
+      // the router's own comment states why this screen has no route, and the
+      // measurement must agree with the code instead of with the prose.
+      final measured = ScreenReachability(repository).render();
+      final challenges = measured.verdicts.firstWhere(
+        (v) => v.screenPath.endsWith('community_challenges_screen.dart'),
+      );
+      expect(
+        challenges.isReachable,
+        isFalse,
+        reason:
+            'the hosted backend serves no challenge list, so a reachable verdict '
+            'here would mean the app offers a button that always fails',
+      );
+      expect(challenges.declarativeReferences, isEmpty);
+    });
+
+    test('the stated limit is real: no scanned source has a block comment', () {
+      // `stripLineComment` cannot remove `/* ... */`, which needs state a
+      // single-line scan does not carry, and this tool avoids a full Dart parser on
+      // purpose. So the limit is MEASURED rather than hoped: if a routing source
+      // ever grows a block comment, this fails and says so, instead of the gap
+      // quietly reopening.
+      expect(
+        ScreenReachability(repository).blockCommentSources(),
+        isEmpty,
+        reason:
+            'a block comment in a routing source can still hide a class name from '
+            'the stripper — either reword it as // lines or teach the scan to '
+            'track block state',
+      );
+    });
+  });
+
+  group('A1 — every one of the 98 real screens gets a verdict with a source '
       'reference', () {
-    test('measures all 96, each with a non-empty source location, '
+    test('measures all 98, each with a non-empty source location, '
         'deterministically', () {
       final checker = ScreenReachability(repository);
       final first = checker.render();
       final second = checker.render();
 
-      expect(first.verdicts, hasLength(96));
+      expect(first.verdicts, hasLength(98));
       expect(first.toJsonString(), second.toJsonString());
       for (final verdict in first.verdicts) {
         expect(verdict.primaryReference.path, isNotEmpty);
@@ -240,7 +327,7 @@ final routes = [
     });
 
     test('the plan has exactly one row per measured screen', () {
-      expect(planRows.map((r) => r.screenPath).toSet(), hasLength(96));
+      expect(planRows.map((r) => r.screenPath).toSet(), hasLength(98));
       expect(
         planByPath.keys.toSet(),
         measured.verdicts.map((v) => v.screenPath).toSet(),

@@ -27005,3 +27005,69 @@ példányával. A kért felvételek listája ezzel kiegészült:
 
 Lásd még [[L269]] (egy közös segéd, soha két példány) — a szabály azért kerülhetett
 egyetlen helyre, mert a modell is egyetlen helyen van.
+
+
+## L661 — A mérés KOMMENTBEN szereplő osztálynevet route-helyként számolt: egy szándékosan nem route-olt képernyő „elérhető" volt, és ugyanabban a körben három lejárt pin derült ki (E18-R22, 2026-09-12)
+
+**Hogyan bukkant elő.** Nem kerestem. A fül-rung köre után lefuttattam néhány
+szomszédos tooling-tesztet, és a `screen_reachability_test.dart` két cellája bukott.
+Először megnéztem, **az én változásaim előtt is bukik-e** — stashelve igen —, tehát
+korábbi, és nem az enyém. Eddig ez csak egy lejárt szám lett volna. De amikor a plan
+hiányzó sorait akartam megírni, a mérés ezt mondta:
+
+```
+lib/features/community/presentation/screens/community_challenges_screen.dart
+  declarative = lib/app/routing/app_router.dart:522
+```
+
+Ez **ellentmondott a saját dokumentumomnak**: a `docs/operations/unwired-surfaces.md`
+azt írja, a kihívás-képernyő *szándékosan* nincs route-olva, mert a futó backend nem
+szolgál ki kihívás-listát. Megnéztem az 522. sort:
+
+```dart
+// `CommunityChallengesScreen` would be a screen that always fails, and a
+```
+
+**Komment.** A szkenner a kommentben szereplő osztálynevet route-helyként számolta.
+
+**És nem egyetlen sor volt.** A kommentek levágása után a mérés az egész fán
+megváltozott: **Reachable 86 → 85, Flag-gated 36 → 37**, és az `app_router.dart`-ban
+**tizenöt** hivatkozott „route-sor" bizonyult prózának — mind a tizenötöt egyenként
+ellenőriztem, hogy valódi kódot ne vágjak le. A legsúlyosabb következmény nem a
+kihívás-képernyő volt:
+
+- **`ProgressDashboardScreen`** egyetlen VALÓDI regisztrációja az `adaptiveShellEnabled`
+  mögött van. Korábban **kapu nélkülinek** volt mérve — vagyis olyannak, ami minden
+  buildben elérhető.
+- **A teszt-hivatkozások száma széles körben fel volt fújva** (`OnboardingScreen`
+  27 → 20, `LearnScreen` 33 → 27, `TunerScreen` 34 → 32), tehát a „mennyire le van
+  fedve ez a képernyő" magasabbnak olvasódott, mint amilyen.
+
+**A javítás.** `ScreenReachability.stripLineComment`, **idézőjel-tudatosan** — egy
+`//`-t tartalmazó route-útvonal vagy URL levágása ugyanaz a hiba lenne fordított
+előjellel: valódi kódot dobna el, és route-olt képernyőket mutatna elérhetetlennek.
+A `/* ... */` blokk-kommentet **nem** kezeli (ahhoz állapot kell, amit ez az
+egysoros szkennelés nem visz, és az eszköz szándékosan nem tartalmaz Dart-parsert) —
+ezért a korlát **mérve** van: a `blockCommentSources()` jelenti, ha egy szkennelt
+forrás mégis tartalmaz ilyet, és az őr **elbukik**, ahelyett hogy a rés csendben
+visszanyílna.
+
+**A mélyebb tanulság, és ez a harmadik ugyanerről ebben a munkamenetben.** Az
+[[L660]] arról szólt, hogy a mérőeszközöm felülszámolt onseteket, és a szám egy
+szállított mérés kimenetében ült olvasatlanul. Ez ugyanaz a családból: *a mérés
+forrásszövegként olvasta a kódot, és a próza is forrásszöveg.* A tanulság nem „vágd le
+a kommenteket", hanem: **egy szöveg-illesztésen alapuló mérés azt méri, amit a fájlban
+TALÁL, nem amit a fordító LÁT** — és a kettő különbségét ki kell mondani, különben a
+mérés a dokumentációt méri.
+
+Ugyanez érinti a saját felmérésemet is: a `docs/operations/unwired-surfaces.md`
+módszertani grep-je szintén nem vág kommentet, tehát egy csak kommentben említett
+képernyő „hivatkozottnak" tűnhet. A fájl most ezt kimondja.
+
+**És a kísérő tanulság a pinekről.** Ugyanebben a körben **három** kipinezett szám
+bizonyult lejártnak, mind 96-on, miközben a valóság 98: a
+`screen_reachability_test.dart` A1 és A3 cellái, és a `test/ui/ui_inventory_test.dart`.
+A `theme_adoption_test` negyedikként már korábban kiderült. Mindegyik ugyanabból az
+okból maradt észrevétlen: **a körök, amik a két curriculum-képernyőt hozzáadták, a
+saját teszt-útjaikon futtatták a kaput.** *Egy kipinezett szám csak addig véd, amíg
+valami lefuttatja* — és a kör teszt-útjainak megválasztása ezért nem kényelmi kérdés.

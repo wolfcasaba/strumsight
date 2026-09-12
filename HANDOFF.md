@@ -1,5 +1,63 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R22 — A MÉRÉS KOMMENTET OLVASOTT: egy szándékosan nem route-olt képernyő „elérhető" volt — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**Hogyan jött.** A fül-rung köre után lefuttattam pár szomszédos tooling-tesztet, és a
+`screen_reachability_test.dart` bukott. Előbb megnéztem, **az én változásaim előtt is
+bukik-e** — stashelve igen —, tehát korábbi. Eddig ez csak egy lejárt pin lett volna.
+
+De amikor a plan hiányzó sorait írtam volna meg, a mérés azt állította, hogy a
+`CommunityChallengesScreen` route-olva van az `app_router.dart:522`-n. Ez
+**ellentmondott a saját felmérésemnek**. Az 522. sor:
+
+```dart
+// `CommunityChallengesScreen` would be a screen that always fails, and a
+```
+
+**Egy komment.** A szkenner a kommentben szereplő osztálynevet route-helyként számolta,
+és a képernyőt — amit szándékosan NEM route-oltam, mert a futó backend nem szolgál ki
+kihívás-listát — **elérhetőnek** jelentette.
+
+**Nem egyetlen sor volt.** A kommentek levágása után: **Reachable 86 → 85, Flag-gated
+36 → 37**, és az `app_router.dart`-ban **tizenöt** hivatkozott „route-sor" próza volt
+— mind a tizenötöt egyenként ellenőriztem, hogy valódi kódot ne vágjak le. A legsúlyosabb
+nem a kihívás-képernyő:
+
+- **`ProgressDashboardScreen`** egyetlen valódi regisztrációja az `adaptiveShellEnabled`
+  mögött van; **kapu nélkülinek** volt mérve, azaz minden buildben elérhetőnek.
+- **A teszt-hivatkozások széles körben felfújva** (`OnboardingScreen` 27 → 20,
+  `LearnScreen` 33 → 27, `TunerScreen` 34 → 32) — a „mennyire lefedett" túl volt mondva.
+
+**Javítás:** `ScreenReachability.stripLineComment`, **idézőjel-tudatosan** — egy `//`-t
+tartalmazó útvonal levágása ugyanaz a hiba lenne fordítva. A blokk-kommentet nem kezeli,
+és ez a korlát **mérve** van: `blockCommentSources()` jelenti, ha egy szkennelt forrás
+tartalmaz ilyet, és az őr elbukik, ahelyett hogy a rés csendben visszanyílna.
+
+**A plan hamis állításai javítva.** A `docs/ui/retirement-plan.md` §6 tizenhárom
+community sora azt írta, hogy a funkciónak „*has no route registered in
+`lib/app/routing/**` at all*" — miközben az **E18-R19-ben route-oltam őket**. Tizenöt sor
+hozzáigazítva a méréshez (9 route-olt, 6 nem), mindegyikhez a valódi indokkal, plusz a
+két hiányzó curriculum sor.
+
+**Három lejárt pin, mind 96-on, a valóság 98:** a `screen_reachability_test.dart` A1 és
+A3 cellái, és a `test/ui/ui_inventory_test.dart`. A `theme_adoption_test` negyedikként
+korábban derült ki. Mind ugyanazért maradt észrevétlen: a körök, amik a két
+curriculum-képernyőt hozzáadták, a saját teszt-útjaikon futtatták a kaput. *Egy
+kipinezett szám csak addig véd, amíg valami lefuttatja.*
+
+**Új őr:** `A0` csoport — a vágó viselkedése közvetlenül pinelve (string-belseje, escape,
+doc-komment), a kihívás-képernyő elérhetetlensége a valódi fán állítva, és a
+blokk-komment korlát mérve. → `docs/LESSONS.md` **L661**.
+
+**Gate:** zöld — `test/tooling/screen_reachability_test.dart`, `test/ui/ui_inventory_test.dart`.
+
+### Amit NEM én rontottam el, és nem is javítottam
+
+A `test/ui/goldens/e13_r16_screens_golden_test.dart` **8 cellája az érintetlen alapon is
+bukik** (stashelve ellenőrizve) — képi összehasonlítás, ezen a boxon betű-renderelés.
+Ugyanabba a családba tartozik, mint a `test/tooling/` régóta ismert CRLF/LF stdout
+bukásai itt.
+
 ## 🟢 E18-R21 — A FÜL: a negyedik ritmus-mód játszható, és a mérőeszközöm felülszámolt — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „folytasd a v2 még nem kapcsolod be" — tehát az elemzés V2 marad

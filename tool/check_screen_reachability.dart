@@ -224,6 +224,66 @@ final class ScreenReachability {
   /// checks) without needing a full Dart parser.
   static final RegExp _flagIf = RegExp(r'if\s*\(([^()]*Enabled[^()]*)\)');
 
+  /// [line] with any trailing `//` comment removed, so a class name MENTIONED in
+  /// prose is not counted as a reference to it.
+  ///
+  /// MEASURED DEFECT this exists to fix (E18-R22): `app_router.dart` carries a
+  /// comment explaining that `CommunityChallengesScreen` is deliberately NOT routed,
+  /// because the hosted backend serves no challenge list. The scan matched the class
+  /// name inside that comment and reported the screen **reachable**, citing the
+  /// comment line as its route site. So a screen that cannot be opened at all was
+  /// measured as reachable, the headline "Reachable: n" was inflated, and writing the
+  /// number into `docs/ui/retirement-plan.md` would have written down a falsehood.
+  ///
+  /// Quote-aware rather than a plain `indexOf('//')`: a route path or URL string
+  /// containing `//` must not be truncated. Escapes are honoured so a quote inside a
+  /// string cannot end it early.
+  ///
+  /// What this deliberately does NOT do is handle `/* ... */`. A block comment
+  /// spanning lines needs state this single-line scan does not carry, and the tool
+  /// avoids a full Dart parser on purpose (see [_flagIf]). Instead the limit is
+  /// ENFORCED: [blockCommentSources] reports any scanned source that contains one, and
+  /// the guard test fails rather than letting the gap go unmeasured.
+  static String stripLineComment(String line) {
+    var quote = 0; // 0 = none, otherwise the code unit of the open quote
+    for (var i = 0; i < line.length; i++) {
+      final unit = line.codeUnitAt(i);
+      if (quote != 0) {
+        if (unit == 0x5C) {
+          i++; // backslash escape: skip whatever it escapes
+        } else if (unit == quote) {
+          quote = 0;
+        }
+        continue;
+      }
+      if (unit == 0x27 || unit == 0x22) {
+        quote = unit;
+        continue;
+      }
+      if (unit == 0x2F &&
+          i + 1 < line.length &&
+          line.codeUnitAt(i + 1) == 0x2F) {
+        return line.substring(0, i);
+      }
+    }
+    return line;
+  }
+
+  /// Scanned sources that contain a `/* ... */` comment, which
+  /// [stripLineComment] cannot remove. Empty in this tree; reported so the known
+  /// limit above is a measured claim rather than a hope.
+  List<String> blockCommentSources() {
+    final offenders = <String>[];
+    for (final path in routingSources) {
+      if (_readLines(
+        path,
+      ).any((line) => stripLineComment(line).contains('/*'))) {
+        offenders.add(path);
+      }
+    }
+    return offenders;
+  }
+
   ScreenReachabilityResult render() {
     final screenPaths = UiInventory(repository).render().screenPaths;
 
@@ -261,7 +321,8 @@ final class ScreenReachability {
       final lines = routingLines[routingPath]!;
       final scopes = flagScopes[routingPath]!;
       for (var i = 0; i < lines.length; i++) {
-        final line = lines[i];
+        // Comments stripped FIRST: a class name in prose is a mention, not a route.
+        final line = stripLineComment(lines[i]);
         if (!line.contains('Screen')) continue;
         final matchedNames = <String>{
           for (final m in _referenceToken.allMatches(line)) m.group(1)!,
@@ -288,7 +349,7 @@ final class ScreenReachability {
       if (routingSources.contains(libPath)) continue;
       final lines = _readLines(libPath);
       for (var i = 0; i < lines.length; i++) {
-        final line = lines[i];
+        final line = stripLineComment(lines[i]);
         if (!line.contains('Screen')) continue;
         final matchedNames = <String>{
           for (final m in _constructToken.allMatches(line)) m.group(1)!,
@@ -312,7 +373,7 @@ final class ScreenReachability {
     for (final testPath in testFiles) {
       final lines = _readLines(testPath);
       for (var i = 0; i < lines.length; i++) {
-        final line = lines[i];
+        final line = stripLineComment(lines[i]);
         if (!line.contains('Screen')) continue;
         final matchedNames = <String>{
           for (final m in _referenceToken.allMatches(line)) m.group(1)!,

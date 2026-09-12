@@ -23,7 +23,12 @@ void main() {
     // center (`lib/features/settings/screens/privacy_center_screen.dart`) and
     // the offline AI model manager, on a brand-new feature root
     // (`lib/features/offline_ai/screens/model_manager_screen.dart`): 94 -> 96.
-    expect(first.screenPaths, hasLength(96));
+    // E18-R14/R16 — the curriculum ladder and the rhythm practice screen
+    // (`lib/features/curriculum/presentation/screens/`): 96 -> 98. Updated in
+    // E18-R22, late: those rounds ran the gate over their own test paths, so this
+    // pin and two others went stale together (the same way `theme_adoption_test`
+    // did). A pinned count only guards while something runs it.
+    expect(first.screenPaths, hasLength(98));
     expect(
       first.screenPaths,
       contains('lib/features/settings/screens/privacy_center_screen.dart'),
