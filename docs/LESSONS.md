@@ -27427,3 +27427,82 @@ fölött, a szállított 0,3876-ról. *A „több hang" javítja a modellt azon,
 Lásd még [[L664]] (prior-illesztés küszöbön), [[L665]] (hamis blokkoló), [[L666]]
 (ablak-igazítás), ADR 0552 (a kétszintű döntés).
 Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+## L668 — Egy osztás monoton trendet mutatott, 14 fold megbuktatta; és amikor a normális CI meg az előjel-teszt ellentmond, a CI a hibás (E18-R30, 2026-09-12)
+
+### 1. A trend, ami nem volt
+
+Az előző körben egyetlen, játékos- és darab-diszjunkt osztáson megmértem, hogy a
+frekvenciasávok **számát** csökkentve a lineáris padló **monoton** javul:
+
+```
+  128 log-mel  0,6601   →   32 sáv  0,6882   →   16 sáv  0,7143   →   8 sáv  0,7160
+```
+
+Szép, rendezett, és volt rá **jó magyarázatom** is: 128 mel × 15 frame = 1920 jellemző
+~1055 tanító söprésre, az irány pedig széles spektrális egyensúly jel, tehát a finom
+mel-felbontás zaj. A történet kerek volt.
+
+**14 foldon nem replikált, és nem is rendezett:**
+
+```
+  128: 0,6715   32: 0,7090   16: 0,6731   8: 0,6931      (sd 0,08–0,11 mindegyiken)
+```
+
+A 16 sáv **rosszabb**, mint a 32, és minden érték benne van minden másik szórásában. Az
+egyetlen osztáson látott monotonitás **műtermék** volt — négy szám, ami véletlenül sorba
+állt.
+
+**Amit majdnem megvett.** Ez a „megállapítás" `ml/features.py` + `crnn_frontend.dart`
+cserét jelentett volna az r134-es paritás-fegyelem alatt: fixtúrák, paritás-tesztek,
+exportált súlyok, újratanítás. **Egy egész kör, nulla nyereségért.**
+
+**A szabály.** Egy **trend** k pont fölött nem erősebb bizonyíték, mint egy pont — ugyanaz
+az egy minta, csak többször leolvasva. *A monotonitás nem replikáció.* Ha egy rendezett
+sorozatból döntés lesz, a sorozatot **független osztásokon** kell újra előállítani, nem
+megmagyarázni. És a jó magyarázat **rontja** a helyzetet, nem javítja: attól lesz hihető,
+ami nem igaz.
+
+### 2. Amikor két teszt ellentmond, nézd meg, melyik feltevését sérti az adat
+
+A maradék jelölt (16 geometriai amplitúdó-sáv a 128 log-mel helyett) **párosítva**, 13
+foldon:
+
+```
+  átlagos különbség   +0,0636   sd 0,0981   SE 0,0272
+  95% CI (normális)   [+0,0103, +0,1170]   ← nullát KIZÁR
+  előjel-teszt        p = 0,2668           ← NEM utasít el
+  geometriai nyer     9/13 fold,  a legnagyobb egyetlen fold +0,3096
+```
+
+Könnyű lett volna a CI-t idézni és „szignifikánsat" írni. De a két teszt **nem
+ugyanazt** kérdezi: a CI azt, hogy az **átlag** elválik-e nullától *normalitás
+feltevése mellett*, az előjel-teszt azt, hogy a **többség** elválik-e, feltevés nélkül. Itt
+4 fold negatív és egy fold **+0,31** — vagyis az átlagot a farok viszi, és pont a
+normalitás az, amit az adat sért.
+
+**A szabály.** Ellentmondó tesztek esetén nem az „erősebb" nyer, hanem az, amelyiknek a
+**feltevései állnak**. Egy párosított különbségnél ezért mindig ki kell írni a
+**foldonkénti előjeleket és a legnagyobb egyedi hozzájárulást** — ezek mondják meg, hogy a
+CI eloszlásról beszél-e vagy egy kiugró pontról. A `probe_direction_representation.py`
+ezért **mindkettőt** kinyomtatja, szándékosan.
+
+### 3. És a pozitív lelet: a rés ADAT, nem modell és nem jellemző
+
+Ugyanez a kör lezárt két utat — mérve, nem érveléssel:
+
+- **Modell:** a CRNN **0,0155**-tel van a *saját bemenetének* lineáris plafonja alatt
+  (0,6446 vs 0,6601, hibahatáron belül). Nincs hova több epoch, paraméter vagy
+  regularizáció. A zsugorítás összeomlaszt (ADR 0551 D5).
+- **Jellemzők:** a gradient boosting **minden** reprezentáción *rosszabb*, mint a
+  logisztikus regresszió (pl. 0,6822 vs 0,7270). Erősebb olvasó **kevesebbet** nyer ki,
+  tehát nincs kiaknázatlan nemlineáris szerkezet: a ~0,73 **plafon**, nem padló.
+
+A kapu 0,80. Tehát a maradék rés **adat** — és ez nem feltételezés, hanem az egyetlen emelő,
+ami eddig mérhetően **átvitt** (ADR 0552 D2). Kilenc gitáros van összesen. *Egy negatív
+kör, ami két utat lezár és egy harmadikra mutat, többet ér, mint egy pozitív, ami egy
+műtermékre épít.*
+
+Lásd még [[L664]] (prior-illesztés), [[L665]] (hamis blokkoló), [[L666]] (ablak-igazítás),
+[[L667]] (hiányzó alapvonal), ADR 0553.
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).

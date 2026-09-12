@@ -626,3 +626,140 @@ A kétszintű döntés (ADR 0551 D4) **megérte** és megépül: ideiglenes vál
 asset újratanításával; a jelenlegi kísérletek szándékosan **2 osztályosak**, mert a
 no-strum fej külön képesség saját kalibrált kapuval, és összekeverve nem lehetne megmondani,
 melyik változás mozdította melyik számot.
+
+---
+
+# A maradék rés szétszedve: ADAT, nem modell és nem jellemző (E18-R30)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/probe_direction_representation.py
+```
+
+A „0,088-as rés" két különböző dolgot kevert össze: a 0,7326-os padló **16 geometriai
+amplitúdó-sávon** volt mérve, a CRNN 0,6446-ja **128 log-melen**. Külön mérve:
+
+## 1. A modell-oldal: nincs rés
+
+238 ms-on, ugyanazon az osztáson, **a CRNN saját bemenetén**:
+
+| | le | fel | macro | 95% CI |
+|---|---|---|---|---|
+| lineáris padló, **szállított 128 log-mel** | 0,8692 | 0,4510 | **0,6601** | [0,6088, 0,7108] |
+| 32 sávra poolozva | 0,8717 | 0,5046 | 0,6882 | [0,6386, 0,7357] |
+| 16 sávra poolozva | 0,9035 | 0,5251 | 0,7143 | [0,6617, 0,7624] |
+| 8 sávra poolozva | 0,9062 | 0,5257 | 0,7160 | [0,6656, 0,7666] |
+| **betanított CRNN** | 0,8284 | 0,4609 | **0,6446** | — |
+
+**0,0155 a rés** — a hibahatáron jóval belül. A CRNN **eléri a saját bemenetének lineáris
+plafonját.** Több epoch, paraméter vagy regularizáció nincs hova dolgozzon; a zsugorítás
+pedig összeomlaszt (ADR 0551 D5). **A modell-oldal lezárva.**
+
+## 2. A „szélesebb sáv jobb" NEM replikált — és ez majdnem egy kört vett meg
+
+A fenti táblázat monoton (128 → 8: 0,6601 → 0,7160), és jó magyarázata is volt. **18 jelölt
+fold** (minden játékos sorra kiemelve × a darab-osztás három rotációja, mindig mindkét
+tengelyen diszjunktul; 14 használható):
+
+```
+  szállított 128 log-mel     0,6715 ± 0,0828   [0,5552, 0,7845]
+  32 sávra poolozva          0,7090 ± 0,0802
+  16 sávra poolozva          0,6731 ± 0,0897
+   8 sávra poolozva          0,6931 ± 0,1063
+  16 geometriai amplitúdó    0,7270 ± 0,0821   [0,5993, 0,8648]   (13 fold)
+```
+
+**Nem monoton** (16 sáv rosszabb, mint 32), és minden érték benne van minden másik
+szórásában. Az egy osztáson látott rendezettség **műtermék** volt — és ha nem
+keresztvalidálom, `ml/features.py` + `crnn_frontend.dart` cserét javasoltam volna az r134-es
+paritás-fegyelem alatt, **nulla nyereségért.**
+
+## 3. A reprezentáció PLAFON, nem padló
+
+Gradient boosting ugyanazokon a foldokon, ugyanazokon a jellemzőkön:
+
+```
+  szállított 128 log-mel, boosted     0,6492 ± 0,1277   (lineáris: 0,6715)
+  16 sávra poolozva, boosted          0,6490 ± 0,1142   (lineáris: 0,6731)
+  16 geometriai amplitúdó, boosted    0,6822 ± 0,1193   (lineáris: 0,7270)
+```
+
+**Minden reprezentáción rosszabb.** Egy erősebb olvasó **kevesebbet** nyer ki — túlilleszkedik.
+Nincs kiaknázatlan nemlineáris szerkezet: a **~0,73 plafon.**
+
+## 4. A geometriai reprezentáció előnye NEM bizonyított
+
+Párosítva (ugyanazok a foldok, ugyanazok a söprések), 13 fold:
+
+```
+  fold              log-mel   geometriai    diff
+  00 × Funk1         0,6754     0,6115     −0,0639
+  00 × Funk2         0,6144     0,5993     −0,0151
+  00 × Funk3         0,6298     0,6387     +0,0089
+  01 × Funk1         0,7806     0,7727     −0,0079
+  01 × Funk2         0,7845     0,8512     +0,0667
+  01 × Funk3         0,7843     0,7388     −0,0455
+  02 × Funk3         0,5904     0,7491     +0,1587
+  03 × Funk3         0,5843     0,6887     +0,1044
+  04 × Funk1         0,7383     0,8194     +0,0811
+  04 × Funk2         0,5855     0,6758     +0,0903
+  04 × Funk3         0,6828     0,7324     +0,0495
+  05 × Funk2         0,6189     0,7088     +0,0899
+  05 × Funk3         0,5552     0,8648     +0,3096
+
+  átlag +0,0636   sd 0,0981   SE 0,0272
+  95% CI (normális)  [+0,0103, +0,1170]   ← nullát KIZÁR
+  előjel-teszt       p = 0,2668           ← NEM utasít el
+```
+
+A két teszt **ellentmond**, és ez az eredmény. A CI-t a **farok viszi**: egy fold +0,3096,
+miközben **4 fold negatív**. Vagyis a **normalitás-feltevés** a hibás, nem az
+eloszlásfüggetlen teszt. Ez nem elég a szállított jellemző-kinyerő és a Dart-párja
+átírásához.
+
+## Ami ebből következik
+
+| | macro-F1 |
+|---|---|
+| többségi alapvonal | 0,4468 |
+| szállított 3 osztályos CRNN (ma, végponttól) | 0,3876 |
+| **betanított CRNN, Klangio+GuitarSet, 238 ms** | **0,6446** |
+| a reprezentáció **plafonja** a foldokon | ~0,73 |
+| Ch14 §7.2 **Alpha kapu** | **0,80** |
+
+**A maradék rés ADAT.** Nem finomítás: a modell a plafonján van, a jellemzők plafonja 0,73,
+és erősebb modell rosszabb. A korpusz-diverzitás viszont az **egyetlen** emelő, ami eddig
+mérhetően **átvitt** (ADR 0552 D2). Ma **kilenc gitáros** van összesen (Klangio 3 +
+GuitarSet 6).
+
+Ezért a következő **mérési** lépés gyűjtés, nem modellezés: (1) a user saját telefonos
+felvétele — pontos címkék, célhardver, nincs licenc-kérdés, és egyszerre lezárja az L660
+nyitott tételét; (2) további iránycímkés vagy hexafonikus korpuszok.
+
+## 5. És az egy-osztásos mérés ÉHEZTETI a tanítást: a 0,6446 alsó korlát
+
+Megvizsgáltam, hogy a GuitarSet **keresztezett** kombinációi (1471 söprés a 3056-ból)
+hozzáadhatók-e a tanításhoz. **Nem:**
+
+```
+  keresztezett söprés összesen        1471
+    amelyik JÁTÉKOST oszt a teszttel   886
+    amelyik DARABOT  oszt a teszttel   585
+    amelyik EGYIKET SEM                  0
+```
+
+Tehát a „használható, ha a teszt-fold diszjunkt" megfogalmazás igaz, de **üres** — nincs
+ilyen söprés. Viszont kiderült valami fontosabb: az egy-osztásos terv egyszerre **három
+játékost és nyolc darabot** tart vissza, a 18-fold CV pedig csak **egy játékost és egy
+darabcsoportot**:
+
+```
+  18-fold CV tanító-méret:  min 1296   median 1635   max 2100
+  az egy osztás:                                     1055
+```
+
+Vagyis a **0,6446** azt írja le, amit a konfiguráció **1055 söprésből** tud — nem a
+képességét. A tartalék-teljesítményt ezért **foldok fölött** kell jelenteni, nem egy
+osztáson; a szállítható modell a teljes készleten tanul, a becslés a CV-ből jön.
+
+A következő **építési** lépés változatlanul az ADR 0552 kétszintű bekötése (+0,1429 mérve,
+architektúra-költség nélkül).

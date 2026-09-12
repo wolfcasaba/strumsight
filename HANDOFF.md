@@ -14216,6 +14216,26 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   egymást**: plusz hang egyedül a saját doménben +0,2133, idegen felvételen
   **nulla**. Az Alpha kapu (0,80) **továbbra sem teljesül**. Bekötő kör kell
   (AGENTS.md §9, a 3 osztályos asset újratanításával) — ADR 0552.
+  **A MARADÉK RÉS SZÉTSZEDVE (E18-R30, ADR 0553): ADAT, nem modell és nem
+  jellemző.** (a) A CRNN **0,0155**-tel van a *saját bemenetének* lineáris
+  plafonja alatt (0,6446 vs 0,6601, 95% CI [0,6088, 0,7108]) — a modell-oldal
+  **lezárva**, kapacitás/regularizáció javaslatot csak bizonyítékkal. (b) A
+  „szélesebb frekvenciasáv jobb" megállapítás **NEM replikált**: egy osztáson
+  monoton (128→8 sáv: 0,6601→0,7160), 14 foldon nem is rendezett (128: 0,6715,
+  32: 0,7090, 16: 0,6731, 8: 0,6931, mind egymás szórásán belül) — emiatt a
+  szállított `ml/features.py`-hoz és a Dart-párjához (`crnn_frontend.dart`)
+  **NEM nyúlunk**. (c) A reprezentáció **plafon, nem padló**: gradient boosting
+  minden reprezentáción *rosszabb* a logisztikusnál (0,6822 vs 0,7270 a
+  geometriai sávokon). (d) A geometriai reprezentáció párosított +0,0636-a
+  **nem bizonyított**: a normális CI nullát kizár, de az előjel-teszt p=0,2668,
+  4/13 fold negatív, és egy fold +0,3096 visz. **Az öt szám, amit együtt kell
+  idézni:** többségi alapvonal 0,4468 · szállított ma 0,3876 · betanított
+  0,6446 · a reprezentáció plafonja ~0,73 · Alpha kapu 0,80. Következő
+  **mérési** lépés gyűjtés (user saját telefonos felvétele — egyszerre lezárja
+  az L660-at; további iránycímkés/hexafonikus korpuszok; a GuitarSet 1471
+  keresztezett söprése tanításra használható, ha a teszt-fold mindkét tengelyen
+  diszjunkt), nem modellezés. Ma **kilenc gitáros** van összesen.
+  Tanulság: `docs/LESSONS.md` **L668**.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

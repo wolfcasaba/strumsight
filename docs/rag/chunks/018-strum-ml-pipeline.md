@@ -645,3 +645,83 @@ wrong answer costs the learner, ADR 0549 D2). It needs the 3-class asset retrain
 chosen configuration; these experiments are deliberately 2-class, because the no-strum head
 is a separate capability with its own calibrated gate and mixing them would make it
 impossible to say which change moved which number.
+
+### The remaining gap is DATA, not the model and not the features (E18-R30, ADR 0553)
+
+The "0.088 gap" conflated two inputs: the 0.7326 floor was measured on 16 geometric
+magnitude bands, the CRNN's 0.6446 on 128 log-mels. Measured separately, at 238 ms, on the
+player- and tune-disjoint split:
+
+```
+  linear floor on the CRNN's OWN input (128 log-mel)   macro 0.6601  95% CI [0.6088, 0.7108]
+  trained CRNN (Klangio + GuitarSet, 238 ms)           macro 0.6446
+```
+
+**The model side is closed.** 0.0155 is well inside the interval: the CRNN already sits at
+the linear ceiling of its own input, so more epochs, more parameters and more regularisation
+have nowhere to work — and shrinking it collapses it (ADR 0551 D5). Treat any further
+capacity/architecture proposal for direction as requiring evidence that headroom exists.
+
+**"Coarser bands are better" did not replicate, and cross-validation is what caught it.** On
+one split the linear floor improved monotonically (128 -> 8 bands: 0.6601 -> 0.7160), with a
+good story attached (1920 features for ~1055 training sweeps; direction is a broad spectral
+cue). Over 14 usable folds — every player held out, crossed with three rotations of the tune
+split, always disjoint in both — it is not even ordered:
+
+```
+  128 log-mel  0.6715 +/- 0.0828     32 bands  0.7090 +/- 0.0802
+   16 bands    0.6731 +/- 0.0897      8 bands  0.6931 +/- 0.1063
+  16 geometric magnitude bands  0.7270 +/- 0.0821  (13 folds)
+```
+
+16 scores below 32, and every value sits inside every other's spread. A monotone trend over
+k points is not k pieces of evidence — it is one sample read k times. Acting on it would have
+bought a change to `ml/features.py` plus its Dart twin `crnn_frontend.dart` under the r134
+parity discipline, for nothing.
+
+**The representation is a CEILING.** Gradient boosting scores WORSE than logistic regression
+on every representation (0.6492 vs 0.6715 on log-mel; 0.6822 vs 0.7270 on geometric bands).
+A stronger reader extracting less means overfitting, i.e. no unexploited non-linear
+structure. ~0.73 is the ceiling, not a floor.
+
+**Geometric vs log-mel is unproven, and the two tests disagreeing IS the result.** Paired
+over 13 folds: mean +0.0636 (sd 0.0981, SE 0.0272), normal 95% CI [+0.0103, +0.1170] which
+excludes zero, sign test p = 0.27 with 4 of 13 folds negative and one fold contributing
++0.3096. The CI is carried by the tail, so normality is the assumption that fails — not the
+distribution-free test. When a paired comparison is reported, print the per-fold signs and
+the largest single contribution; `probe_direction_representation.py` prints both on purpose.
+
+**Where that leaves direction:**
+
+```
+  majority baseline                                   macro 0.4468
+  shipped 3-class CRNN today (end to end)             macro 0.3876
+  trained CRNN, Klangio + GuitarSet, 238 ms           macro 0.6446
+  ceiling of this representation over folds           macro ~0.73
+  Chapter 14 7.2 Alpha gate                           macro 0.80
+```
+
+Quote all five together: with the model at its ceiling and the features exhausted, "we are
+still tuning it" is not an available answer. The gate needs DATA — and corpus diversity is
+the one lever that demonstrably transferred (ADR 0552 D2). There are nine guitarists in
+total (Klangio 3 + GuitarSet 6). Next measurement step is collection, not modelling: the
+user's own phone recording (exact labels, target hardware, no licence question, and it also
+closes L660's open item), plus further direction-labelled or hexaphonic corpora.
+
+**And the single split starves training, so 0.6446 is a LOWER bound.** GuitarSet's crossed
+player/tune cells — 1471 of 3056 sweeps — cannot be added to training: 886 share a player
+with the test set, 585 share a tune, and **zero** share neither. What the check did reveal is
+that the single split withholds three players AND eight tunes at once, while a CV fold
+withholds one player and one tune group:
+
+```
+  18-fold CV training size:  min 1296   median 1635   max 2100
+  the single split:                                   1055
+```
+
+So ADR 0552's 0.6446 describes what the configuration manages from 1055 sweeps, not its
+capability. Report held-out direction performance over FOLDS from now on, not over one
+split; a shipping model trains on everything and takes its estimate from the CV.
+
+The next BUILD step is unchanged: wiring ADR 0552's two-tier decision (+0.1429 measured, no
+architecture cost).
