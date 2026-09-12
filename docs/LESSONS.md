@@ -28284,3 +28284,73 @@ megoldást egy **másik rétegben**. Most viszont a szabályom működött — a
 mert helyes, hanem mert senki nem kéri tőle a bizonyítékot.*
 
 Lásd még [[L674]], [[L676]], [[L677]], [[L679]], ADR 0474, ADR 0559, ADR 0563, ADR 0564.
+
+## L681 — Szintetikus bemeneten mértem egy adat-függő költséget; és ugyanabban a körben KÉTSZER adtam téves mechanizmust egy mért különbségre (E18-R42, 2026-09-12)
+
+### 1. A benchmark bemenete nem részlet, hanem a mért munka
+
+Az ADR 0564 benchmarkja **szintetikus** ablakot használt, egy determinisztikus
+`((r*31+c*17)%97)` mintát, azzal az indoklással, hogy „egy konstans bemenet elfuthat egy
+branch-es kernelben egy nem reprezentatív úton". Ez igaz, de **nem elég**: a trunk költsége
+**post-ReLU nulla-arányon** múlik, ami az **adat** tulajdonsága. Egy szintetikus ablak tehát
+**más munkát** mér, és azt jelenti be ennek.
+
+Mennyire más:
+
+```
+                                  szintetikus   valódi (paritás-fixtúra)
+  dense forward median              ~28 ms       ~32,5 ms
+  sparse forward median             ~18,4 ms     ~13–16 ms
+  gyorsulás                          1,5×         2,0–2,4×
+```
+
+Ha a szintetikus számot hiszem el, a ritkásítás nyereségét **harmadával alábecsülöm**, a
+szállított út költségét pedig **15%-kal**. A benchmark most a **paritás-fixtúra valódi,
+normalizált ablakát** olvassa, és hiányzó fixtúránál **hangosan** jelzi, hogy szintetikusra
+esett vissza — nem csendben.
+
+**A szabály.** Ha egy mért költség a **bemenet statisztikájától** függ (ritkaság, hossz,
+elágazás-arány, cache-lokalitás), akkor a benchmark bemenete **valódi adat**, vagy a szám nem
+a rendszerről szól. És ezt a függést **ki kell írni** a benchmarkba, mert a következő olvasó
+különben beteszi a saját kényelmes bemenetét. *Egy szintetikus bemenet nem egyszerűsítés,
+hanem egy másik kísérlet.*
+
+### 2. Kétszer adtam mechanizmust, amit a saját számaim cáfoltak
+
+Az [[L679]] szabálya egy körrel korábban született: **egy mechanizmus-állítás önálló állítás,
+vagy mérem, vagy sejtésnek jelölöm.** Ebben a körben **kétszer** sértettem meg.
+
+**Először:** megmagyaráztam, miért gyorsabb a dense a szintetikus ablakon — „a szintetikus
+kevesebb GRU-munkát végez". A mérés, amit ugyanabban a szkriptben írattam ki: a szintetikus
+**1,90 M** GRU-MAC-ot végez, a valódi **1,15 M**-et. **Többet, nem kevesebbet.** A magyarázó
+mondatot a szám **előtt** írtam meg, és a kiírás cáfolta.
+
+**Másodszor:** amikor a két sparse bináris 13 ms-ot és 16 ms-ot adott, az első gondolatom
+„gépterhelés" volt. Interleaved futtatás: **reprodukálható, ~20%**, azonos conv-kóddal, csak a
+**timed loopon kívüli** print-ekben különböző binárisokkal. Tehát **kód-elhelyezés**, nem
+terhelés.
+
+A különbség az L679-hez: ott a magyarázatot **nem mértem**. Itt **megmértem, és a mérés mellé
+írtam a cáfolt magyarázatot** — a szkript kiírta mindkettőt, egymásnak ellentmondva. Ez rosszabb
+szokás, mert a hibás mondat **mérés mellett** áll, tehát hitelesebbnek látszik.
+
+**A megszorítás, amit felveszek.** Amikor egy mérést magyarázok, a magyarázatot **a szám
+kiolvasása után** írom meg, és ha a szám nem támasztja alá, akkor a dokumentumba **„ezt nem
+tudom megmagyarázni"** kerül. A dense szintetikus↔valódi különbség ezért most **kimondottan
+megmagyarázatlan** az ADR 0565-ben. *Egy megmagyarázatlan mérés becsületes; egy megmagyarázott,
+de cáfolt mérés hazugság, ami méréssé öltözött.*
+
+### 3. A módszertani lelet, ami ezután minden perf-mérésre érvényes
+
+Ezen a hoston az AOT **kód-elhelyezés önmagában ~20%-ot** mozdít a latencián. Ebből:
+
+1. **Abszolút latencia nem idézhető 20%-nál pontosabban** ezen a hoston.
+2. Egy A/B csak akkor érvényes, ha a **két összevetendő binárist interleaved** futtatom — amit
+   megtettem, és a sorozatokon belül az arány stabil (1,93–2,04, illetve 2,37–2,48), a sorozatok
+   **között** viszont nem.
+3. Ha két sorozat eltér, a **konzervatív** vég a szállítható állítás. Itt: **2,00×**, nem 2,43×,
+   mert egy szállítási döntés nem épülhet a legszerencsésebb binárisra.
+
+*Egy mikrobenchmark, amiben nem interleaved az A és a B, a fordító szerencséjét méri.*
+
+Lásd még [[L674]], [[L679]], [[L680]], ADR 0474, ADR 0564, ADR 0565.

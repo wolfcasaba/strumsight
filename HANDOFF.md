@@ -14598,11 +14598,52 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   újrahasználati faktorral szorozva: konv-pozíciók, időlépések); egy **inkrementum** mérésekor
   ugyanazzal a műszerrel **az alapot is** meg kell mérni; és az AOT-feltevésem is mérés nélküli
   mechanizmus-állítás volt ([[L679]] mintája egy körrel a rögzítése után).
+  **E18-R42 — A CONV TRUNK KIHAGYJA A NULLA BEMENETEKET: a forward FELE idő alatt fut,
+  bit-azonos kimenettel (ADR 0565).** A conv2/conv3 **post-ReLU** aktivációkat olvas; 200 VALÓS
+  GuitarSet-ablakon a bemenetük **46,1%** és **71,5%** nulla = a trunk 11,34 M MAC-jából
+  **6,78 M (59,8%)** kihagyható. **A kihagyás a kimeneti ciklusokon KÍVÜL kell:** a naiv
+  legbelső `if (v == 0) continue` egy tesztet egy multiply-addra költ, de a csomagolt kernel
+  `[tap][o][c]`, tehát **egy bemeneti pozíció csatorna-vektorát minden kimeneti csatorna
+  újraolvassa** — a bemenetet **egyszer**, CSR-szerűen ritkásítva `inC` teszt/pozíció árán
+  `outC` multiply-add spórolódik nullánként (conv3-nál **egy teszt 48 műveletre**).
+  **Egzakt, nem közelítés:** a kihagyott tagok `0.0 × véges`, a megmaradók eredeti sorrendjükben
+  — **mind az öt paritás-fixtúra zöld** (crnn_strum_net, crnn_live_parity, crnn_live_3c_parity,
+  chord_crnn_parity, live_crnn_3class).
+  **Mért nyereség, interleaved A/B ugyanazon a valódi ablakon:** dense **32 250–33 030 us** →
+  sparse **15 575–16 768 us** → **2,00× (1,93–2,04, n=5)**. Terhelés (valódi ablak, host AOT):
+  200 bpm tizenhatod gyors tier **42,7% → 22,2%** egy magból, letisztult tier **8,5% → 4,4%**;
+  80 bpm nyolcad gyors tier **8,5% → 4,4%**.
+  **MÉRT MÓDSZERTANI KORLÁT: ezen a hoston az AOT kód-elhelyezés önmagában ~20%-ot mozdít.**
+  Két bináris **azonos conv-kóddal**, csak a timed loopon **kívüli** print-ekben különbözve,
+  interleaved: **13 036–13 580 us vs 15 575–16 033 us**, reprodukálhatóan. Tehát (a) abszolút
+  latencia nem idézhető 20%-nál pontosabban; (b) egy A/B csak **interleaved** binárisokkal
+  érvényes; (c) ha két sorozat eltér (itt 2,43× és 2,00×), a **konzervatív** vég a szállítható
+  állítás — egy szállítási döntés nem épülhet a legszerencsésebb binárisra.
+  **EZ KORRIGÁLJA AZ ADR 0564 SZÁMAIT**, mert az **szintetikus** ablakon mért, a trunk költsége
+  viszont **adat-függő**: dense forward **~28 ms szintetikuson vs ~32,5 ms valódin**, gyors tier
+  **37,6% vs 42,7%**. A benchmark mostantól a **paritás-fixtúra valódi, normalizált ablakát**
+  olvassa, és hiányzó fixtúránál **hangosan** jelzi a szintetikus visszaesést. Ami az ADR
+  0564-ből **áll**: a „~1 ms per window" állítás téves volt, paraméter-számból latenciát becsülni
+  tilos, és a letisztult tier nem a szűk keresztmetszet.
+  A benchmark „16,5 M MAC"-ja mostantól **DENSE-EKVIVALENS**, kiírt figyelmeztetéssel, hogy
+  **nem szabad** a latenciával elosztva átbocsátóképességnek hívni (a végrehajtott ~6,2 M ezen
+  az ablakon).
+  **NEM állítjuk:** semmilyen on-device számot (a 2,00× x86 host AOT; a telefon cache-e és
+  branch-prediktora más, és a CSR-gather nem-folytonos kernel-olvasása ott máshogy viselkedhet).
+  A ritkaság **ezen a korpuszon és modellen** mért. És a dense szintetikus↔valódi különbséget a
+  MAC-számok **NEM magyarázzák** — megmérve a szintetikus ablak a GRU-ban **többet** dolgozik
+  (1,90 M vs 1,15 M), tehát a dense-nek ott lassabbnak kellene lennie: ez **kimondottan
+  megmagyarázatlan**.
+  Tanulság: **L681** — (a) ha egy mért költség a **bemenet statisztikájától** függ, a benchmark
+  bemenete **valódi adat**, különben egy **másik kísérletet** futtatok; (b) ebben a körben
+  **kétszer** adtam mechanizmust, amit a saját számaim cáfoltak (a GRU-munka iránya, és a
+  „gépterhelés" a kód-elhelyezés helyett) — a magyarázatot **a szám kiolvasása után** kell
+  megírni, és ha nem támasztja alá, akkor **„ezt nem tudom megmagyarázni"** kerül a dokumentumba.
   **KÖVETKEZŐ:** (1) **on-device mérés** (CI/profile) a **gyors** tierre — ez a valódi nyitott
-  teljesítmény-kérdés, nem a letisztulté; a benchmark futtatható és a `--json` a meglévő
-  `tool/compare_benchmarks.py`-ba illik; (2) ha kifizetődik, a `settledTier` felkapcsolása és a
-  pontozó út a letisztult irányra állítása az ADR 0556 D3 szabályával; (3) az ADR 0555 D4
-  **költség-arányból** vezetett no-strum küszöb; (4) a **címkézett felvétel** — továbbra is az
+  teljesítmény-kérdés; a benchmark futtatható, `--json` a `tool/compare_benchmarks.py`-ba illik,
+  és `--window-from=` más fixtúrára is állítható (ritkaság-érzékenységi sorozat ingyen);
+  (2) ha kifizetődik, a `settledTier` felkapcsolása az ADR 0556 D3 szabályával; (3) az ADR 0555
+  D4 **költség-arányból** vezetett no-strum küszöb; (4) a **címkézett felvétel** — továbbra is az
   egyetlen ismert forrása az inga-sértő ütéseknek.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang

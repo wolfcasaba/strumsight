@@ -170,8 +170,44 @@ class CrnnStrumNet {
     final inC = k.dims[2];
     final kPacked = k.packedConv ??= _packConv(k, inC, outC);
     final out = _Tensor3(x.h, x.w, outC);
-    final xData = x.data;
     final outData = out.data;
+
+    // The input is sparsified ONCE, CSR-style, and the convolution then reads only
+    // the non-zero channels. Exact, not approximate: the skipped terms are
+    // `0.0 * finite`, and the surviving terms keep their original order, so the sum
+    // is unchanged.
+    //
+    // MEASURED why (ADR 0565): conv2 and conv3 read POST-ReLU activations, and on
+    // 200 real GuitarSet windows those inputs are 46.1 % and 71.5 % zero, which is
+    // 6.78 M of the trunk's 11.34 M multiply-adds.
+    //
+    // The gather is amortised by the loop shape rather than paid per multiply. The
+    // packed kernel is [tap][o][c], so one input position's channel vector is reused
+    // by every output channel: sparsifying costs `inC` tests per INPUT position
+    // (h*w of them, one pass) and saves `outC` multiply-adds per zero found. A naive
+    // `if (value == 0) continue` in the innermost loop would instead spend one test
+    // per single multiply-add and save nothing — which is why the sparse structure is
+    // built outside the output loops, not inside them.
+    final positions = x.h * x.w;
+    final starts = Int32List(positions + 1);
+    final indices = Int32List(positions * inC);
+    final values = Float64List(positions * inC);
+    final xData = x.data;
+    var n = 0;
+    for (var p = 0; p < positions; p++) {
+      starts[p] = n;
+      final base = p * inC;
+      for (var c = 0; c < inC; c++) {
+        final v = xData[base + c];
+        if (v != 0) {
+          indices[n] = c;
+          values[n] = v;
+          n++;
+        }
+      }
+    }
+    starts[positions] = n;
+
     for (var i = 0; i < x.h; i++) {
       for (var j = 0; j < x.w; j++) {
         final outBase = (i * x.w + j) * outC;
@@ -184,13 +220,16 @@ class CrnnStrumNet {
           for (var dj = -1; dj <= 1; dj++) {
             final jj = j + dj;
             if (jj < 0 || jj >= x.w) continue;
+            final p = ii * x.w + jj;
+            final from = starts[p];
+            final to = starts[p + 1];
+            if (from == to) continue; // the whole channel vector is zero
             final tap = ((di + 1) * 3 + (dj + 1)) * inC * outC;
-            final xBase = (ii * x.w + jj) * x.c;
             for (var o = 0; o < outC; o++) {
               final kBase = tap + o * inC;
               var acc = 0.0;
-              for (var c = 0; c < inC; c++) {
-                acc += xData[xBase + c] * kPacked[kBase + c];
+              for (var s = from; s < to; s++) {
+                acc += values[s] * kPacked[kBase + indices[s]];
               }
               outData[outBase + o] += acc;
             }

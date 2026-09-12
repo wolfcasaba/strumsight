@@ -1380,3 +1380,66 @@ is an x86 desktop figure, and scalar Dart on a phone is typically slower. What t
 delivers is that the question is now measurable and the record schema stops a host number from
 reading as a device one. If it ever does pinch, the win is in the trunk, not the tier: 11.3 M
 of the 16.5 M MACs are the three convolutions.
+
+### The conv trunk skips zero inputs and halves the forward, bit-exactly (E18-R42, ADR 0565)
+
+ADR 0564 found the bottleneck: 11.34 M of the 16.5 M MACs are the three convolutions, and the
+already-shipping FAST tier is the expensive one. conv2 and conv3 read POST-ReLU activations, so
+zeros can be skipped EXACTLY -- the trick the shipped GRU already uses.
+
+Measured on 200 REAL GuitarSet windows (sparsity is a property of the data):
+
+```
+  layer   zero inputs   MACs      skippable
+  conv1      0.00 %     0.28 M     0.00 M
+  conv2     46.08 %     4.42 M     2.04 M
+  conv3     71.48 %     6.64 M     4.75 M
+  trunk                11.34 M     6.78 M  (59.8 %)
+```
+
+**The skip has to live outside the output loops.** A naive `if (value == 0) continue` in the
+innermost loop spends one test per single multiply-add. But the packed kernel is `[tap][o][c]`,
+so one input position's channel vector is reused by EVERY output channel: sparsifying the input
+once, CSR-style, costs `inC` tests per input position (one pass) and saves `outC` multiply-adds
+per zero found -- one test for 48 operations in conv3. Exact, not approximate: the skipped terms
+are `0.0 * finite` and the survivors keep their original order. All five parity fixtures stay
+green (crnn_strum_net, crnn_live_parity, crnn_live_3c_parity, chord_crnn_parity,
+live_crnn_3class).
+
+**Measured gain, interleaved A/B on the same real window:**
+
+```
+  dense 32 250-33 030 us  ->  sparse 15 575-16 768 us  ->  2.00x (1.93-2.04), n=5
+```
+
+```
+  load (real window, host AOT)            dense        sparse
+  200 bpm sixteenths, fast tier         42.7 %/core   22.2 %/core
+  200 bpm sixteenths, settled tier       8.5 %/core    4.4 %/core
+  80 bpm eighths, fast tier              8.5 %/core    4.4 %/core
+```
+
+**A measured methodological limit: on this host AOT CODE LAYOUT alone moves latency ~20 %.** Two
+binaries with IDENTICAL conv code, differing only in print statements OUTSIDE the timed loop,
+interleaved: 13 036-13 580 us versus 15 575-16 033 us, reproducibly. So absolute latency cannot
+be quoted to better than 20 % here, an A/B is valid only when the two binaries under comparison
+are run interleaved, and when two such series disagree (2.43x and 2.00x here) the CONSERVATIVE
+end is what ships -- a shipping decision must not rest on the luckiest binary.
+
+**This CORRECTS ADR 0564's numbers**, which were measured on a SYNTHETIC window while the trunk's
+cost is data-dependent: dense forward ~28 ms synthetic versus ~32.5 ms real, fast tier 37.6 %
+versus 42.7 % of a core. The benchmark now reads the parity fixture's real normalised window and
+says so loudly when it falls back. What stands from ADR 0564: the "~1 ms per window" header claim
+was wrong, estimating latency from a parameter count is forbidden, and the settled tier is not
+the bottleneck.
+
+The benchmark's "16.5 M MACs" is now labelled DENSE-EQUIVALENT, with a printed warning not to
+divide it by the latency and call the result a throughput -- the MACs actually executed are
+fewer and data-dependent (~6.2 M on this window).
+
+Not claimed: any on-device figure. The 2.00x is x86 host AOT; a phone's cache hierarchy and
+branch predictor differ, and the CSR gather's non-contiguous kernel reads may behave differently
+there. The sparsity is also this corpus on this model -- a retrained model has different ReLU
+statistics. And the dense synthetic-versus-real difference (28 vs 32.5 ms) is NOT explained by
+MAC counts: measured, the synthetic window does MORE GRU work (1.90 M versus 1.15 M), so dense
+should be slower on it, not faster. That is left explicitly unexplained (L681).

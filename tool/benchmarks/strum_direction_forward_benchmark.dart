@@ -113,16 +113,54 @@ void main([List<String> arguments = const []]) {
   }
 
   final net = CrnnStrumNet.parse(ByteData.sublistView(file.readAsBytesSync()));
-  // A window that is not constant: a flat input can let a branchy kernel take an
-  // unrepresentative path, and the measurement is meant to stand in for real audio.
-  final window = <List<double>>[
-    for (var r = 0; r < _rows; r++)
-      <double>[
-        for (var c = 0; c < _mels; c++)
-          // Deterministic, spread over the range a normalised log-mel occupies.
-          ((r * 31 + c * 17) % 97) / 97.0 * 6.0 - 3.0,
-      ],
-  ];
+
+  // The window must come from REAL audio, and this is not a nicety. The conv trunk's
+  // cost depends on how many of its POST-ReLU inputs are zero (46 % and 71 % on real
+  // GuitarSet windows, ADR 0565), and a synthetic window has no reason to produce the
+  // same sparsity — so timing one would measure a different workload and report it as
+  // this one. The parity fixture already holds normalised real windows, so it is the
+  // input, and a missing fixture degrades loudly rather than silently.
+  final windowSource = _argValue(
+    arguments,
+    'window-from',
+    'test/fixtures/crnn_live_3c_parity.json',
+  );
+  final List<List<double>> window;
+  final String windowOrigin;
+  final fixture = File(windowSource);
+  if (fixture.existsSync()) {
+    final decoded =
+        jsonDecode(fixture.readAsStringSync()) as Map<String, Object?>;
+    final windows = (decoded['windows'] ?? decoded['cases']) as List;
+    final first = windows.first;
+    final rows =
+        (first is Map<String, Object?> ? first['window'] : first) as List;
+    window = <List<double>>[
+      for (final row in rows)
+        <double>[for (final v in row as List) (v as num).toDouble()],
+    ];
+    windowOrigin = '$windowSource (real, normalised)';
+  } else {
+    // Deterministic stand-in, clearly labelled. Its sparsity is NOT representative.
+    window = <List<double>>[
+      for (var r = 0; r < _rows; r++)
+        <double>[
+          for (var c = 0; c < _mels; c++)
+            ((r * 31 + c * 17) % 97) / 97.0 * 6.0 - 3.0,
+        ],
+    ];
+    windowOrigin =
+        'SYNTHETIC — fixture $windowSource missing, sparsity '
+        'unrepresentative';
+  }
+  if (window.length != _rows || window.first.length != _mels) {
+    stderr.writeln(
+      'window is ${window.length}x${window.first.length}, expected '
+      '${_rows}x$_mels',
+    );
+    exitCode = 2;
+    return;
+  }
 
   // Warm up: the first calls pay lazy initialisation and, under JIT, profiling
   // and optimisation. Timing them would measure the warm-up, not the steady state.
@@ -197,6 +235,7 @@ void main([List<String> arguments = const []]) {
   stdout.writeln('asset            $assetPath');
   stdout.writeln('iterations       $iterations (after 20 warm-up calls)');
   stdout.writeln('window           $_rows x $_mels');
+  stdout.writeln('window source    $windowOrigin');
   stdout.writeln('build            $sha on ci_host');
   stdout.writeln('');
   stdout.writeln(
@@ -205,13 +244,23 @@ void main([List<String> arguments = const []]) {
   );
   stdout.writeln('');
   stdout.writeln(
-    'work per forward  ${(_macsPerForward / 1e6).toStringAsFixed(1)} M MACs '
-    'for 363 891 parameters (45x) -> '
-    '${(_macsPerForward / median / 1000).toStringAsFixed(2)} GMAC/s',
+    'dense-equivalent  ${(_macsPerForward / 1e6).toStringAsFixed(1)} M MACs '
+    'for 363 891 parameters (45x)',
   );
   stdout.writeln(
     '                  a latency estimated from the PARAMETER count alone is '
     'wrong by that 45x.',
+  );
+  stdout.writeln(
+    '                  the trunk SKIPS zero inputs (ADR 0565), so the MACs '
+    'actually executed are',
+  );
+  stdout.writeln(
+    '                  fewer and DATA-dependent — about 6.2 M on this window. '
+    'Do not divide',
+  );
+  stdout.writeln(
+    '                  the dense count by the latency and call it a throughput.',
   );
   stdout.writeln('');
   stdout.writeln('load per second of audio (linear in strokes/s):');
