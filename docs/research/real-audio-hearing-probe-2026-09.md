@@ -343,3 +343,34 @@ heavy-metal
   14.1s | frames 202 | strums 51 (3.6/s) | peak 0.80
   chords: G#sus4:24
 ```
+
+
+## NYITOTT: a nyolcad-pengetés onset-SZÁMA valódi hangon (E18-R21, 2026-09-12)
+
+A fenti próbák akkord-**azonosságot** mérnek valódi felvételeken. Egy másik kérdés
+most derült ki mérhetetlennek modellezett hanggal, és külön felvételt kér.
+
+A `test/features/live/modelled_strum_overlap_test.dart` szerint a modellezett gitár
+**nem használható onset-SZÁM mérésére, ha a csengés átlapol**: 12 pengetésre 22
+onsetet jelent a motor, mert a modell független, zajjal gerjesztett hangokat ad
+össze, és azok interferenciája új tranzienseket termel. A `synth.dart` additív
+harmonikus modellje ugyanazon az aránynál pontosan 12-t ad, és a nyers
+`SuperFluxOnsetDetector` onsetre egyezik a teljes `LivePipeline`-nal mind a hat
+cellában — tehát a stimulus a felelős, nem a sűrűség és nem a réteg.
+
+**Amit ez NEM igazol:** hogy a motor egy valódi gitár nyolcad-pengetését helyesen
+számolja. Az immunis stimulus azért immunis, mert *sima*, nem mert *valósághű*. Egy
+valódi gitár egyik modellt sem követi: az újra megpengetett húr **újra gerjed**, nem
+pedig egy második példányként összeadódik.
+
+Ez közvetlenül érinti a `mission.dDuUdU` rungot (`D DU UDU` nyolcadokban, 80 bpm),
+ami **ma is szállított és pontozott**. Ha a motor valódi hangon is felülszámol, a
+tanuló olyan ütésekért kapna jelzést, amiket nem játszott.
+
+**Amit rögzíteni kell** (44,1 kHz mono, címkézve, soha nem commitolva — csak a mérés):
+
+1. `Em` és `Am` váltás — a kurzus első két akkordja (már korábban kért).
+2. **`D DU UDU` nyolcadokban 80 bpm-en, metronómmal, egy tartott akkordon** — 4 ütem.
+   Ebből az onset-szám és a helyezés közvetlenül mérhető a címkézett rácshoz.
+3. Ugyanez **tompított** (bal kéz damp) — a fül-rung ezt kéri, és ez választja el a
+   tranziens-kérdést az akkord-csengés kérdésétől.

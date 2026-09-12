@@ -26939,3 +26939,69 @@ csak csendesebben. Őrteszt:
 
 Lásd még [`docs/operations/unwired-surfaces.md`](operations/unwired-surfaces.md) — a
 teljes felmérés megismételhető parancsokkal.
+
+
+## L660 — A mérőeszköz is mérés alatt áll: a modellezett gitár átlapoló csengéssel 12 pengetésre 22 onsetet termel, és ez egy szállított mérés kimenetében ott volt olvasatlanul (E18-R21, 2026-09-12)
+
+**Mi történt.** A hallás-utáni-ismétlés idővonalát mértem (demó → csendes ütem →
+beszámolás → pontozott ütemek), egy kontrollal: ugyanaz az előadás, egyszer hangzó,
+egyszer néma pre-rollal. A keresett válasz tiszta volt. De a kiírás mellékesen ezt
+mutatta:
+
+```
+notated strokes : 24
+pre-roll OFF    : reported 43, scored 43
+```
+
+**43 onset 24 notált ütésre — a kontroll felvételen.** Nem arról, amit mértem.
+
+**Nem mentem el mellette**, mert a `D DU UDU` nyolcad-minta **ma is szállított,
+pontozott rung** (`mission.dDuUdU`), és egy felülszámoló detektor olyan ütésekkel
+kreditálna vagy rontana, amiket a tanuló nem játszott. Három gyanúsítottat néven
+nevezve, rácsban mérve:
+
+```
+ring/gap 0.8 KS-chord: struck 12 | LivePipeline 12 | rawSuperFlux 12
+ring/gap 0.8 harmonic: struck 12 | LivePipeline 12 | rawSuperFlux 12
+ring/gap 2.0 KS-chord: struck 12 | LivePipeline 22 | rawSuperFlux 22
+ring/gap 2.0 harmonic: struck 12 | LivePipeline 12 | rawSuperFlux 12
+ring/gap 2.4 KS-chord: struck 12 | LivePipeline 22 | rawSuperFlux 22
+ring/gap 2.4 harmonic: struck 12 | LivePipeline 12 | rawSuperFlux 12
+```
+
+- **Nem a sűrűség**: ring ≤ gap esetén mindkét modell pontos.
+- **Nem a réteg**: a nyers detektor onsetre egyezik a teljes `LivePipeline`-nal
+  mind a hat cellában.
+- **A stimulus.** A `modelled_guitar.dart` húronként és pengetésenként egy
+  **független, zajjal gerjesztett** Karplus-Strong hangot ad össze. Átlapolásnál két
+  függetlenül seedelt zajos hang szól ugyanazon a magasságon, és az interferenciájuk
+  véletlen konstruktív kitöréseket termel — amik pontosan úgy néznek ki, mint
+  attackok. Az additív harmonikus modell determinisztikus és fázisban van, ezért
+  simán összeadódik.
+
+**A tanulság két részes, és a második a fontosabb.**
+
+*Egy:* aki **onsetet SZÁMOL**, annak a `ringSeconds` nem lehet nagyobb a következő
+pengetésig tartó résnél, különben a modell saját interferenciáját számolja. Az
+átlapolás továbbra is helyes, ha azt mérjük, **mennyi idő alatt követi** a dekóder a
+váltást (`strumSequence` szándékosan így teszi) — ott a kérdés az akkord-címke, nem
+az onset-szám. Ez a szabály most az `addStrummedChord` doksijában áll, vagyis ott,
+ahol a következő hívó *kénytelen* látni.
+
+*Kettő:* **ez a szám egy szállított mérés kimenetében ült olvasatlanul.** A
+`metronome_click_pollution_test.dart` `23/16`-ot ír ki ugyanebből az okból, és mivel
+a pengetés-számot csak **kiírja, soha nem állítja**, soha nem bukott el, és én magam
+sem néztem rá jelként, amikor az ADR 0546-ot írtam. Egy nem állított szám egy
+mérésben nem bizonyíték — *díszlet*, és a díszlet bármit mutathat. Ahol egy mérés
+számot ír ki, ott vagy állítás van mögötte, vagy ki kell mondani, hogy nem az
+állítása (most ki van mondva, és a stimulus szándékosan érintetlen, hogy az ADR
+számai reprodukálhatók maradjanak).
+
+**Amit ez NEM igazol, és ezért nyitott.** Hogy a motor egy **valódi** gitár
+nyolcad-pengetését helyesen számolja. Az immunis stimulus azért immunis, mert *sima*,
+nem mert *valósághű*; egy valódi húr újra gerjed, nem adódik össze önmaga második
+példányával. A kért felvételek listája ezzel kiegészült:
+[`docs/research/real-audio-hearing-probe-2026-09.md`](research/real-audio-hearing-probe-2026-09.md).
+
+Lásd még [[L269]] (egy közös segéd, soha két példány) — a szabály azért kerülhetett
+egyetlen helyre, mert a modell is egyetlen helyen van.

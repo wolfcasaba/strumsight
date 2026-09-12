@@ -62,6 +62,16 @@ double _peak(List<double> pcm) =>
     pcm.fold<double>(0, (best, s) => math.max(best, s.abs()));
 
 /// Four bars of down-quarters over a held chord, as the course's chord rungs ask.
+///
+/// The ring deliberately OVERLAPS the next beat, which is right for the question this
+/// file asks (does a click change the chord the decoder names?) and wrong for
+/// counting onsets. So the `n/16` strum counts this file prints are INFLATED by the
+/// stimulus itself — measured at 23 for 16 struck — and they are not the claim here;
+/// they are printed for context. The claim rests on chord identity, on confirmed-frame
+/// counts, and on the clicks-only takes, which contain no guitar and so cannot
+/// overlap. See `modelled_strum_overlap_test.dart` and the rule on
+/// `addStrummedChord`. The stimulus is left as it was on purpose: ADR 0546 quotes
+/// these numbers, and changing it would make them irreproducible.
 List<double> _performance(String chord) {
   final beatSec = 60 / _bpm;
   final total = _bars * _beatsPerBar * beatSec + 1.0;

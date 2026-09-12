@@ -79,6 +79,37 @@ List<double> pluckedString({
 /// `-1` frets are NOT played, exactly as the diagram says — so an Am really does
 /// leave the low E silent, which is part of what makes it an Am rather than a
 /// muddier chord. Returns false when there is no shipped fingering.
+///
+/// ## MEASURED LIMIT: keep [ringSeconds] at or below the gap to the next strum
+///
+/// This model sums an INDEPENDENT, noise-excited voice per string per strum. Two
+/// overlapping strums therefore put two independently seeded noisy voices at the
+/// same pitch into the signal at once, and they interfere — the sum gains random
+/// constructive bursts that an onset detector cannot tell from attacks.
+///
+/// Measured (`test/features/live/modelled_strum_overlap_test.dart`), 12 strums of
+/// `Em` 375 ms apart:
+///
+/// ```
+/// ring/gap 0.8 : 12 reported of 12 struck
+/// ring/gap 2.0 : 22 reported of 12 struck
+/// ring/gap 2.4 : 22 reported of 12 struck
+/// ```
+///
+/// The additive-harmonic model in `synth.dart` reports exactly 12 at every one of
+/// those ratios, and the raw `SuperFluxOnsetDetector` agrees with the full
+/// `LivePipeline` to the onset in all six cells — so this is the stimulus, not the
+/// spacing and not the layer.
+///
+/// So: a measurement that COUNTS onsets must not overlap, or it is counting this
+/// file's own interference. Overlap is still the right choice when measuring how
+/// long the decoder takes to FOLLOW a change ([strumSequence] does it on purpose),
+/// because there the quantity of interest is the chord label, not the onset count.
+///
+/// A real guitar does neither thing: re-striking a string re-excites it rather than
+/// adding a second copy of it. Whether the engine counts a real guitar's eighth-note
+/// strumming correctly is therefore still OPEN — the immune stimulus is immune
+/// because it is smooth, not because it is realistic.
 bool addStrummedChord(
   List<double> pcm,
   String label, {
