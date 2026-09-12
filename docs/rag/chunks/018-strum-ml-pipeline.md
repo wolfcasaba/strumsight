@@ -422,6 +422,15 @@ UNTOUCHED. Parity fixture `test/fixtures/crnn_live_3c_parity.json` (32 eval-fold
 windows, 11 down / 11 up / 10 no-strum) locks the Dart 3-col softmax to Keras
 `<=1e-3`.
 
+
+> **E18-R25 frissítés (ADR 0549).** A fenti illesztett küszöb a modell **saját** eval
+> foldján tart 95%-ot; független pengetés-anyagon (GuitarSet, 72 fájl) **59,6%**-ot. A
+> szállított érték ezért **0,85**, az illesztett pedig `fittedNoStrumThreshold` néven
+> marad meg a provenienciájáért. A tanulság nem a szám: **egy korpuszra illesztett kapu
+> korpuszon kívül nem érvényes**, és minden új modellnél újra kell mérni — lehetőleg nem
+> csak a saját foldján. Mérés:
+> [`docs/eval/guitarset-strum-baseline.md`](../../eval/guitarset-strum-baseline.md).
+
 **The suppression gate (measured on the held-out eval fold, n_pos=2013,
 n_neg=1707):** the threshold on P(no-strum) that keeps **95.0 %** of TRUE strums
 is **`no_strum_threshold = 0.43877`**; at that operating point it **rejects

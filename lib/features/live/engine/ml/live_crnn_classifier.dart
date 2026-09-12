@@ -140,6 +140,9 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
     }
   }
 
+  /// The gate as FITTED for this model, kept for provenance — the shipped gate is
+  /// [noStrumThreshold], which is deliberately higher (ADR 0549).
+  ///
   /// r175 — the learned no-strum reject gate. P(no-strum) above this SUPPRESSES
   /// the arrow. Fit on the shipped 3-class live model's HELD-OUT eval fold as
   /// the P(no-strum) quantile that keeps ≥95 % of TRUE strums (chunk 018 r175 —
@@ -153,7 +156,40 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
   /// players vs ~3 % for the r170 confidence gate — the noise the r170 finding
   /// proved confidence cannot touch. Only consulted for a 3-class model; a
   /// 2-class asset never suppresses (r139 fallback preserved).
-  static const noStrumThreshold = 0.4387717843055725;
+  static const fittedNoStrumThreshold = 0.4387717843055725;
+
+  /// What SHIPS, and deliberately not [fittedNoStrumThreshold].
+  ///
+  /// MEASURED on GuitarSet (`docs/eval/guitarset-strum-baseline.md`, ADR 0549): the
+  /// fitted value was the P(no-strum) quantile keeping 95% of true strums **on this
+  /// model's own eval fold**, and on 72 files of real Rock/Funk strumming it keeps
+  /// **59.6%**. The gate generalises badly, and the cost is not only missed arrows: a
+  /// suppressed strum is a stroke the rhythm grader never sees, so a learner who played
+  /// it is marked down for the engine's silence.
+  ///
+  /// The sweep over the same corpus, one row per candidate gate:
+  ///
+  /// ```
+  ///   gate    onset P   onset F1   true-strum recall   direction macro-F1
+  ///   0.439     0.913     0.5828               0.596              0.4192
+  ///   0.650     0.906     0.6013               0.620              0.4235
+  ///   0.850     0.899     0.6223               0.649              0.4311
+  ///   none      0.701     0.7847               0.955              0.4506
+  /// ```
+  ///
+  /// 0.85 is better than the fitted value on EVERY column — detection, retention and
+  /// direction — for 1.4 points of precision. Lifting the gate entirely is better still
+  /// on recall and direction, and is NOT taken: at 0.701 precision roughly three in ten
+  /// reported strums match no annotated event, and a phantom stroke credits a slot the
+  /// learner never played. That is a lie with the opposite sign to the one being fixed,
+  /// and the rhythm pillar cannot afford either.
+  ///
+  /// [fittedNoStrumThreshold] is kept rather than overwritten because it is a real
+  /// measurement with its own provenance (`ml/live_3c_threshold.json`, written by
+  /// `ml/train_live_3c.py`). Replacing the number in place would have deleted the
+  /// evidence for the number, and left the JSON disagreeing with the code with nothing
+  /// saying which was right.
+  static const noStrumThreshold = 0.85;
 
   @override
   void observe(Float64List frame, StrumFrameFeatures features) =>

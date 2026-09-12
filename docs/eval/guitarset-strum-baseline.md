@@ -173,3 +173,29 @@ Semmit nem kellett tanítani, és az irány **0,4192 → 0,4506**-ra nőtt. Az
 le 85,51 / fel 79,02) **így is messze felettünk** vannak. Tehát a kompozíció javít, de
 nem zárja a rést — a cikk megközelítése továbbra is jobb, és továbbra is **adat nélkül**
 vagyunk hozzá.
+
+
+---
+
+# A döntés és az ELLENŐRZÉSE: a kapu 0,85-re állítva (E18-R25, ADR 0549)
+
+`noStrumThreshold` **0,4387717843055725 → 0,85**. Az illesztett érték
+`fittedNoStrumThreshold` néven megmarad a provenienciájával; az eltérés szándékos és
+őrteszttel pinelve (`live_crnn_3class_test.dart`).
+
+**Ellenőrizve a független alapvonal-próbával, nem feltételezve:**
+
+| | söprés jósolta | szállított úton mérve | előtte |
+|---|---|---|---|
+| onset precision | 0,899 | **0,900** | 0,913 |
+| onset F1 | 0,6223 | **0,6224** | 0,5828 |
+| pengetés-recall | 0,649 | **0,649** | 0,596 |
+| irány macro-F1 | 0,4311 | **0,4313** | 0,4192 |
+
+Két egymástól független szerelvény kerekítésen belül egyezik. És a **heurisztika-ág
+változatlan** (0,786 / 0,954 / 0,2953) — vagyis a változás pontosan azt érintette, amit
+érintenie kellett, és semmi mást.
+
+**Amit ez nem ad meg.** Az irány 0,4313 továbbra is messze a Chapter 14 §7.2 Alpha kapu
+alatt (0,80), és messze az arXiv 2508.07973 mikrofonos számai alatt. Ez a döntés
+**javít, nem megoldás**.

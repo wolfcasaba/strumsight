@@ -16,6 +16,39 @@ void main() {
       expect(thr, lessThan(1.0));
     });
 
+    test('the shipped gate is DELIBERATELY not the fitted one (ADR 0549)', () {
+      // The fitted value was the quantile keeping 95% of true strums on this model's
+      // OWN eval fold. On GuitarSet it keeps 59.6%
+      // (`docs/eval/guitarset-strum-baseline.md`), and the swept 0.85 is better on
+      // every column — detection, retention and direction — for 1.4 points of
+      // precision.
+      //
+      // Both numbers are pinned here so the divergence cannot be "tidied up" by
+      // someone syncing the constant back to `ml/live_3c_threshold.json`. That JSON
+      // still records the FIT, which is still true; it is simply not the ship
+      // decision.
+      expect(
+        LiveCrnnStrumClassifier.fittedNoStrumThreshold,
+        0.4387717843055725,
+      );
+      expect(thr, 0.85);
+      expect(
+        thr,
+        greaterThan(LiveCrnnStrumClassifier.fittedNoStrumThreshold),
+        reason:
+            'the shipped gate must stay ABOVE the fit: a lower one suppresses more '
+            'real strums, and a suppressed strum is a stroke the rhythm grader '
+            'never sees, so the learner is marked down for the engine going quiet',
+      );
+      // And not so high that suppression stops existing: the reject head is what
+      // keeps phantom strokes out of a slot nobody played.
+      expect(
+        thr,
+        lessThan(1.0),
+        reason: 'a gate at or above 1.0 would never suppress anything',
+      );
+    });
+
     test('P(no-strum) above the threshold suppresses the arrow', () {
       final pNo = (thr + 1.0) / 2; // strictly between thr and 1
       final rest = (1 - pNo) / 2;
