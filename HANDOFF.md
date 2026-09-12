@@ -1,5 +1,86 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R18 — A NAPI HUROK: a kurzus a mai terv — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd koss be mindent ami le van fejlestve".
+
+### A feltárás kétféle dolgot talált, és ez a kör fontos fele
+
+**1. Szándékos rollout-kapuk — NEM elfelejtett munka, és nem kapcsoltam fel.**
+15 képernyőt semmi nem konstruál: a teljes közösségi felület (ranglista, klubok,
+követők, értesítések, biztonság), az elemzés-felvétel három képernyője, az AI-tutor
+terv-előnézete, a setlist-session. Ezek a `FeatureFlags` alatt élnek, ami a saját
+doksija szerint *„availability switches, not user preferences"*, és az indokok is ott
+vannak — a fiók például azért van kikapcsolva, mert *„there is no hosted backend; a
+Sign-in button that always fails is worse than none."* A közösségi felületnek
+ráadásul **egyáltalán nincs route-ja**: „bekötni" azt jelentené, hogy egy nem létező
+backendre épít routingot. Ez rollout-döntés, nem bekötés — a tiéd, nem az enyém.
+
+**2. Egy valódi, várakozó illesztés — ezt kötöttem be.** A `TodayPlanRepository`
+doksija szó szerint azt írta, hogy a produkció `UnavailableTodayPlanRepository`-t
+olvas *„until a future round wires the real plan source"*. Közben a tananyag pontosan
+tudta, hol áll a tanuló. A Today hub tehát egy a létra közepén járó tanulót azzal
+fogadott, hogy **„még nincs terved"**, és az elsődleges gombja egy generikus hubra
+vitte.
+
+### Amit most tesz
+
+- A **mai terv a szállított kurzus**: a hub megnevezi a következő rungot („Következik:
+  E-moll"), és az elsődleges gomb **azt** folytatja — a létrára visz, ahol ugyanaz a
+  rung `ez következik` jelölést kap.
+- **Egy definíció** arra, melyik rung a következő (`curriculumNextStep`), két
+  fogyasztóval. Két implementáció előbb-utóbb más rungot nevezne meg, és a tanuló azt
+  látná, hogy a hub egyet ígér, a létra másra mutat (L269).
+- A **sorozat** mozdul, ha a tanuló valóban játszott (`heard > 0`) — nem akkor, ha a
+  pontszám elég jó volt. A sorozat szokást mér; csak írott evidenciára kreditálni
+  elvonná attól, aki egy halkan hallható szobában játszott, befejezett körre
+  kreditálni viszont annak adna, aki semmit nem játszott.
+
+### Két finom dolog, amit a munka kikényszerített
+
+**Az „új felhasználó" jel megszűnt jel lenni.** A hub feltétele tartalmazta, hogy
+`!snapshot.hasPlan` — de a szállított kurzus MINDENKINEK ad tervet az első indítástól,
+tehát a nulla-állapot üdvözlése elérhetetlenné vált volna, és a hub azt mondta volna
+egy soha nem játszott embernek, hogy „folytasd". Újraalapozva a tanuló saját
+történetére, plusz arra, mutat-e a terv korábbi aktivitást.
+
+**A készülék-képességet szándékosan NEM kérdezem meg a tervhez.** A
+`curriculumDeviceCapabilities` azt mondja meg, mi mérhető, amíg audio érkezik — a
+Today hubon nem érkezik. `false` mellett a hub **örökké hangolást ajánlana**, `true`
+mellett képességet állítanánk bizonyíték nélkül. A terv azt válaszolja meg, amit
+őszintén tud: meddig ér a tanuló evidenciája.
+
+### Két publikus API hiányosságot is javított
+
+- `streak/public.dart` most exportálja a `StreakData`-t: a `streakProvider` értéktípusa
+  volt, amit egy fogyasztó következtetésből olvasni tudott, de megnevezni nem.
+- `curriculum/public.dart` exportálja a `curriculumMissionName`-et, mert most egy a
+  feature-ön kívüli felület jelenít meg rungot, és nem nyomtathatja ki a
+  perzisztencia-azonosítót.
+
+**Gate:** zöld — `curriculum`, `today`, `streak`, `progress`, `app/routing` +
+architecture / secrets / l10n. Új: 6 cella (`next_step_test`), 8 cella
+(`curriculum_today_plan_repository_test`), +3 a hub-tesztben; 3 l10n-kulcs × 2 nyelv.
+
+**Dokumentáció:** [ADR 0547](docs/adr/0547-the-daily-loop-the-course-is-today-s-plan.md).
+
+### Ami nyitva marad — és ami a TE döntésed
+
+**A te döntésed (rollout):** a közösségi felület, az elemzés-felvétel, az AI-tutor
+terv-előnézet és a setlist-session felkapcsolása. Mindegyik lefejlesztett, és
+mindegyik kapuzott. A közösségihez backend is kell, ami nincs.
+
+**A te közreműködésed kell:** Em/Am valódi gitáron — a kurzus első két akkordjára csak
+modellezett audio a bizonyíték. Néhány címkézett felvétel (44,1 kHz mono) feloldja; a
+felvételek NEM kerülnek a repóba, csak a mérés.
+
+**Enyém, mérés vagy adat híján blokkolt:** a váltás időzítése (ADR 0545 szerint a
+motor késése nem kivonható), ARM per-frame költség, `sus4`/`aug` túljelentés.
+
+**Enyém, szabadon folytathatom:** a `listenAndRepeat` mód (a négy deklarált közül a
+másik nem használt) — most már van rá mért válasz: az app nem játszhat hangot, amíg
+pontoz, tehát a demonstráció és a visszajátszás időben el kell váljon.
+
 ## 🟢 E18-R17 — A PULZUS: hallható beszámolás, haptikus pontozás — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „ok mivel folytassuk" → a metronóm-bekötés + klikk-szennyezés mérése.

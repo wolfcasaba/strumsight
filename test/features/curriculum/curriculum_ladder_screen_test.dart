@@ -264,8 +264,12 @@ void main() {
     // The order IS the teaching sequence, so the number is information. Step 1
     // must be the first rung of the first stage, and no number may repeat.
     expect(find.text('Step 1'), findsOneWidget);
-    expect(find.text('Step 2'), findsOneWidget);
     expect(find.text('First sounds'), findsOneWidget);
+    // Step 2 carries the next-up marker for a learner with no evidence: the
+    // right-hand rung is the first thing the course asks for, and the same shared
+    // function tells the Today hub's primary button to come here.
+    expect(find.text('Step 2 · next up'), findsOneWidget);
+    expect(find.text('Step 3'), findsOneWidget);
   });
 
   testWidgets('with no audio, unmeasurable rungs blame the DEVICE and say what '
@@ -414,7 +418,15 @@ void main() {
           .toSet();
       expect(
         shown,
-        {'Steady down-strokes', 'Step 2', 'Open', 'Measured over 6 attempts'},
+        {
+          'Steady down-strokes',
+          // Still the next step: six wrong-direction attempts measured the learner
+          // at level 0.000, so nothing later opened and the course still asks for
+          // this rung.
+          'Step 2 · next up',
+          'Open',
+          'Measured over 6 attempts',
+        },
         reason:
             'six confirmed wrong-direction attempts reduce to state `stable` at '
             'level 0.000, so ANY extra line derived from the state would be '

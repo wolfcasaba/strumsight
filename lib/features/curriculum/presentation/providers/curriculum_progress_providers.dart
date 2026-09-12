@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../practice_generator/public.dart'
     show SkillEstimate, practiceEvidenceRepositoryProvider;
+import '../../../streak/public.dart' show streakProvider;
 import '../../application/curriculum_progress.dart';
 import '../../data/beginner_course.dart';
 import '../../domain/chord_grading.dart';
@@ -77,7 +78,30 @@ class CurriculumEstimates extends Notifier<Map<String, SkillEstimate>> {
     // conditional refresh is the kind of shortcut that later hides a real write
     // behind a stale map.
     state = _read();
+    _creditStreak(rhythm);
     return written.isNotEmpty;
+  }
+
+  /// Credits the practice streak when the learner actually PLAYED.
+  ///
+  /// The trigger is `heard > 0` — at least one confirmed stroke — and deliberately
+  /// NOT "evidence was written". The two differ for an attempt below the coverage
+  /// floor, and the difference matters in both directions:
+  ///
+  ///   - Crediting only on written evidence would withhold a streak from someone
+  ///     who played in a room the microphone could not hear well enough. That is
+  ///     punishing the signal's shortfall as the player's — the rule the whole
+  ///     design is built against.
+  ///   - Crediting on a finished attempt regardless would hand a streak to someone
+  ///     who opened the screen, let it run and played nothing. A confirmed stroke is
+  ///     proof that somebody played.
+  ///
+  /// A streak measures HABIT, not performance, so the bar is "did you practise", not
+  /// "did you practise well enough to score". `recordPracticeToday` is idempotent
+  /// within a calendar day, so repeated attempts cost nothing.
+  void _creditStreak(RhythmAttempt rhythm) {
+    if (rhythm.heard <= 0) return;
+    ref.read(streakProvider.notifier).recordPracticeToday().ignore();
   }
 
   /// Recomputes from the store — for a surface returning from elsewhere.

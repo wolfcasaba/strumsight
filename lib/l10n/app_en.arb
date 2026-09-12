@@ -1917,6 +1917,7 @@
       }
     }
   },
+  "curriculumLadderNextStep": "next up",
   "curriculumLadderNoRhythm": "Not a strumming exercise yet",
   "curriculumLadderNotYet": "Not yet reached",
   "curriculumLadderOpen": "Open",
@@ -4595,6 +4596,14 @@
   "todayHubDayCompletedTitle": "Nice work today",
   "todayHubNewUserMessage": "Your first practice session takes just a few minutes.",
   "todayHubNewUserTitle": "Let's get started",
+  "todayHubNextStep": "Next: {step}",
+  "@todayHubNextStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
   "todayHubNoPlanMessage": "No plan yet — head to Practice to get started.",
   "todayHubPracticeMoreCta": "Practice more",
   "todayHubStartFirstPracticeCta": "Start your first practice",

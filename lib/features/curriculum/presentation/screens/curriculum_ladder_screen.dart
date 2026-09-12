@@ -68,6 +68,7 @@ import '../../../practice_generator/public.dart'
 import '../../domain/course.dart';
 import '../../domain/device_capabilities.dart';
 import '../../domain/mission_availability.dart';
+import '../../domain/next_step.dart';
 import '../curriculum_names.dart';
 import '../providers/curriculum_progress_providers.dart';
 import 'rhythm_practice_screen.dart';
@@ -85,6 +86,10 @@ final class CurriculumLadderScreen extends ConsumerWidget {
       microphoneListening: live?.listening ?? false,
     );
     final estimates = ref.watch(curriculumEstimatesProvider);
+    // The SAME answer the Today hub's primary button promises, from the same
+    // function — otherwise "continue" would drop the learner onto a list of
+    // fourteen rows with nothing marking the one they were just sent to.
+    final nextStep = curriculumNextStep(course, estimates: estimates);
     // Numbered once, from the course's own order, so no row has to work out its
     // own position and two rows can never claim the same number.
     final rungNumbers = <String, int>{
@@ -131,6 +136,7 @@ final class CurriculumLadderScreen extends ConsumerWidget {
                     ),
                     missing: missingCapabilitiesFor(mission, capabilities),
                     earned: _earnedFor(mission, estimates),
+                    isNextStep: mission.missionId == nextStep?.missionId,
                   ),
             ],
           ],
@@ -170,6 +176,7 @@ final class _MissionRow extends StatelessWidget {
     required this.availability,
     required this.missing,
     required this.earned,
+    required this.isNextStep,
   });
 
   final CurriculumMission mission;
@@ -181,6 +188,9 @@ final class _MissionRow extends StatelessWidget {
 
   /// What has been MEASURED about this rung's skill, or null when nothing has.
   final SkillEstimate? earned;
+
+  /// Whether this is the rung the course says to practise next.
+  final bool isNextStep;
 
   @override
   Widget build(BuildContext context) {
@@ -262,8 +272,13 @@ final class _MissionRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              l10n.curriculumLadderRung(rung),
-              style: text.labelSmall?.copyWith(color: colors.textSecondary),
+              isNextStep
+                  ? '${l10n.curriculumLadderRung(rung)} · '
+                        '${l10n.curriculumLadderNextStep}'
+                  : l10n.curriculumLadderRung(rung),
+              style: text.labelSmall?.copyWith(
+                color: isNextStep ? colors.brand : colors.textSecondary,
+              ),
             ),
             Text(status, style: text.labelMedium?.copyWith(color: tone)),
             if (detail != null)

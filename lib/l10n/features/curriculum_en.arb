@@ -209,6 +209,15 @@
     }
   },
   "curriculumClickStopsWhileListening": "The click stops while I listen, so it is not mistaken for your strumming",
+  "todayHubNextStep": "Next: {step}",
+  "@todayHubNextStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNextStep": "next up",
   "curriculumCapabilityMicrophone": "a microphone",
   "curriculumCapabilityCamera": "a camera",
   "curriculumCapabilityDirection": "up/down stroke scoring",

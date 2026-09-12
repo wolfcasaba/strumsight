@@ -6,6 +6,7 @@ import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../curriculum/public.dart' show curriculumMissionName;
 import '../../progress/public.dart';
 import '../../streak/public.dart';
 import '../domain/today_plan_snapshot.dart';
@@ -43,12 +44,33 @@ class TodayHubScreen extends ConsumerWidget {
     final todaySeconds = ref.watch(dailyGoalActiveSecondsProvider(today));
     final flags = ref.watch(appConfigProvider).flags;
 
-    // A8 — "new user" is derived from REAL zero-state signals only (no
-    // session yet, no streak, no plan); never an invented number.
+    // A8 — "new user" is derived from REAL zero-state signals only, never an
+    // invented number.
+    //
+    // `!snapshot.hasPlan` was one of those signals and is no longer a signal at
+    // all: the plan now comes from the SHIPPED course, so everyone has one from
+    // their first launch. Keeping it in the conjunction would have made the
+    // zero-state greeting unreachable — the hub would have told someone who has
+    // never played to "continue".
+    //
+    // What still says "new": the learner's own history, plus whether the PLAN shows
+    // prior activity. Work already counted today is history; so is a plan that
+    // arrived from a sync, which can only exist once something was set up. A plan
+    // that is merely present is not.
+    final planShowsHistory =
+        snapshot.completedTaskCount > 0 ||
+        snapshot.availability == TodayPlanAvailability.offlineCached ||
+        snapshot.availability == TodayPlanAvailability.syncPending;
     final isNewUser =
-        stats.totalSessions == 0 && streak.current == 0 && !snapshot.hasPlan;
+        stats.totalSessions == 0 && streak.current == 0 && !planShowsHistory;
 
     final hero = _heroContent(l10n, snapshot: snapshot, isNewUser: isNewUser);
+    // The primary button continues THAT rung when the plan names one. A button
+    // labelled "continue" that goes somewhere else is the hub lying about what it
+    // just offered.
+    final primaryDestination = snapshot.recommendedMissionId == null
+        ? AppRoutes.practiceHub
+        : AppRoutes.curriculumLadder;
     final todayMinutes = todaySeconds ~/ 60;
 
     return Scaffold(
@@ -88,7 +110,7 @@ class TodayHubScreen extends ConsumerWidget {
                     const SizedBox(height: 16),
                     FilledButton(
                       key: const ValueKey('today-hub-primary-cta'),
-                      onPressed: () => context.go(AppRoutes.practiceHub),
+                      onPressed: () => context.go(primaryDestination),
                       child: Text(hero.ctaLabel),
                     ),
                   ],
@@ -154,6 +176,17 @@ class TodayHubScreen extends ConsumerWidget {
         title: l10n.todayHubDayCompletedTitle,
         message: l10n.todayHubDayCompletedMessage,
         ctaLabel: l10n.todayHubPracticeMoreCta,
+      );
+    }
+    final missionId = snapshot.recommendedMissionId;
+    if (missionId != null) {
+      // The rung's NAME, resolved here because this is where the localisations
+      // are: the projection deliberately carries the id, so a plan source can
+      // never put untranslated prose in front of a learner.
+      return _HeroContent(
+        title: l10n.todayHubTitle,
+        message: l10n.todayHubNextStep(curriculumMissionName(l10n, missionId)),
+        ctaLabel: l10n.todayHubContinueCta,
       );
     }
     if (snapshot.hasPlan) {

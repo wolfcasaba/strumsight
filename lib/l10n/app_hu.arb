@@ -1889,6 +1889,7 @@
       }
     }
   },
+  "curriculumLadderNextStep": "ez következik",
   "curriculumLadderNoRhythm": "Ez még nem pengetés-gyakorlat",
   "curriculumLadderNotYet": "Még nem érted el",
   "curriculumLadderOpen": "Nyitva",
@@ -4549,6 +4550,14 @@
   "todayHubDayCompletedTitle": "Szép munka ma",
   "todayHubNewUserMessage": "Az első gyakorlás csak pár percet vesz igénybe.",
   "todayHubNewUserTitle": "Vágjunk bele",
+  "todayHubNextStep": "Következik: {step}",
+  "@todayHubNextStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
   "todayHubNoPlanMessage": "Még nincs terved — indulj a Gyakorlásba, hogy elkezdd.",
   "todayHubPracticeMoreCta": "Gyakorolj még",
   "todayHubStartFirstPracticeCta": "Első gyakorlás indítása",

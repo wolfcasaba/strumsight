@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/features/streak/public.dart';
 import 'package:strumsight/features/today/domain/today_plan_repository.dart';
 import 'package:strumsight/features/today/domain/today_plan_snapshot.dart';
 import 'package:strumsight/features/today/providers/today_providers.dart';
@@ -16,9 +17,13 @@ import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/preference_store.dart';
 
-/// A fake plan source for tests (brief §5.5 — the real Chapter 8 source has
-/// no presentation-layer provider yet; production reads the honest
-/// [UnavailableTodayPlanRepository] default).
+/// A fake plan source for tests.
+///
+/// Production no longer reads [UnavailableTodayPlanRepository]: since E18-R18 it
+/// reads the shipped COURSE (`CurriculumTodayPlanRepository`), which always offers a
+/// rung. The fake stays because the offline-cached and sync-pending states belong to
+/// a synced plan source and the curriculum one never produces them — it has nothing
+/// to sync.
 class _FakeTodayPlanRepository implements TodayPlanRepository {
   const _FakeTodayPlanRepository(this._snapshot);
   final TodayPlanSnapshot _snapshot;
@@ -27,14 +32,30 @@ class _FakeTodayPlanRepository implements TodayPlanRepository {
   TodayPlanSnapshot load() => _snapshot;
 }
 
+/// A learner who already has a streak — i.e. not a new user.
+///
+/// Needed because the new-user greeting outranks every other hero, and since the
+/// plan comes from the shipped course "has a plan" is no longer a signal about the
+/// learner. What still is: their own history.
+class _FixedStreak extends StreakController {
+  _FixedStreak(this.days);
+  final int days;
+  @override
+  StreakData build() =>
+      StreakData(current: days, longest: days, totalDays: days);
+}
+
 Widget _host({
   TodayPlanSnapshot? plan,
   bool visionEnabled = false,
   bool visionSetupEnabled = false,
   DateTime? now,
+  int streakDays = 0,
 }) => ProviderScope(
   overrides: [
     ...preferenceOverrides(),
+    if (streakDays > 0)
+      streakProvider.overrideWith(() => _FixedStreak(streakDays)),
     if (plan != null)
       todayPlanRepositoryProvider.overrideWithValue(
         _FakeTodayPlanRepository(plan),
@@ -64,6 +85,77 @@ Widget _host({
 );
 
 void main() {
+  group('a plan that names a curriculum rung', () {
+    testWidgets('a BRAND-NEW learner still gets the welcome, not "continue"', (
+      tester,
+    ) async {
+      // The course gives everyone a plan from their first launch, so the hub must
+      // not greet someone who has never played with "continue". The zero-state
+      // greeting is a deliberate guarantee; what changed is that it now rests on
+      // the learner's own history rather than on the absence of a plan.
+      await tester.pumpWidget(
+        _host(
+          plan: const TodayPlanSnapshot(
+            availability: TodayPlanAvailability.ready,
+            recommendedMissionId: 'mission.eMinor',
+            totalTaskCount: 1,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Next:'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('today-hub-primary-cta')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('renders the rung NAME, never its persistence id', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          streakDays: 3,
+          plan: const TodayPlanSnapshot(
+            availability: TodayPlanAvailability.ready,
+            recommendedMissionId: 'mission.eMinor',
+            totalTaskCount: 1,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Next: E minor'), findsOneWidget);
+      expect(
+        find.textContaining('mission.'),
+        findsNothing,
+        reason:
+            'the projection carries an id precisely so the surface can localise '
+            'it; printing the id would defeat the point',
+      );
+    });
+
+    testWidgets('a rung already practised today reads as done, not as a nag', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          plan: const TodayPlanSnapshot(
+            availability: TodayPlanAvailability.ready,
+            recommendedMissionId: 'mission.eMinor',
+            totalTaskCount: 1,
+            completedTaskCount: 1,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The completed-day hero wins over the recommendation, and over the
+      // new-user greeting: work counted today IS history.
+      expect(find.text('Nice work today'), findsOneWidget);
+    });
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 

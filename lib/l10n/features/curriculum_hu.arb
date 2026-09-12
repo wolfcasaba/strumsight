@@ -209,6 +209,15 @@
     }
   },
   "curriculumClickStopsWhileListening": "A klikk elhallgat, amíg hallgatlak — hogy ne a te pengetésednek vegyem",
+  "todayHubNextStep": "Következik: {step}",
+  "@todayHubNextStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNextStep": "ez következik",
   "curriculumCapabilityMicrophone": "mikrofon",
   "curriculumCapabilityCamera": "kamera",
   "curriculumCapabilityDirection": "le/fel ütés pontozása",
