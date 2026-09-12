@@ -51,9 +51,15 @@ void main() {
         // metadata gate MUST short-circuit before the real recorder runs.
         expect(recorder, isA<NoopPracticeSessionRecorder>());
 
-        // A real record() call (the production path the controller takes
-        // on every finish) returns Success without writing anything that
-        // would be discarded by the reader.
+        // A record() call on THIS provider returns Success without writing
+        // anything the reader would discard.
+        //
+        // Corrected in E18-R20: this comment used to call it "the production path
+        // the controller takes on every finish", and that was false — nothing reads
+        // this provider, and the controller family builds its own recorder inline
+        // with real metadata. The live path's guard is
+        // `test/features/practice/practice_recorder_live_path_test.dart`; this cell
+        // keeps the gate itself honest.
         final result = await recorder.record(_result('session-x'));
         expect(result, isA<Success<void>>());
 

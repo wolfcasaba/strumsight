@@ -26872,3 +26872,70 @@ regisztrál koppintást, tehát egy klikk a saját metronómjára kalibrálná a
 él (`metronome_pulse.dart`), nem a widget tick-callbackjében, mert a legnagyobb súlyú
 eset — a csend kalibráció alatt — az, amit egy widget-teszt a legnehezebben ér el.
 Lásd még [ADR 0546](adr/0546-the-pulse-channel-is-decided-by-what-is-being-measured.md).
+
+
+## L659 — Egy őrteszt, ami ROSSZ ALANYT nevez meg, rosszabb a védelem hiányánál: a „produkciós út, amit a vezérlő minden befejezésnél bejár" kommentet semmi nem olvasta (E18-R20, 2026-09-12)
+
+**Mi történt.** A „kössünk be mindent" felmérés során kiírtam minden providert, amit a
+saját fájlján kívül semmi nem olvas. A listán ott volt a
+`practiceSessionRecorderProvider` — a gyakorlás-munkamenetek **rögzítője**, a legélőbb
+feature-ben (19 importáló).
+
+A provider szándékosan `NoopPracticeSessionRecorder`-t ad, amíg a metaadat-kódok
+placeholderek, és ez **jól** van dokumentálva: a valódi rögzítő olyan rekordot írna,
+amit az olvasó eldob (`JsonRecordException` ismeretlen enum-kódra) — write-then-drop.
+Van rá B2 biztonsági teszt is, ezzel a kommenttel:
+
+> „A real record() call (**the production path the controller takes on every finish**)
+> returns Success without writing anything that would be discarded by the reader."
+
+Első olvasásra ez azt jelenti, hogy a gyakorlás **nem rögzül** — súlyos, csendes
+adatvesztés. Megmértem, mit kap valójában a vezérlő:
+
+```
+practice_session_providers.dart:245
+  final recorder = PracticeHistoryRecorder(
+    repository: repository,
+    mapperFactory: () => PracticeSessionResultHistoryMapper(
+      modeCode: inputs.definition.mode.code,      // VALÓDI
+      sourceCode: inputs.definition.source.code,  // VALÓDI
+      definitionId: inputs.definition.id,         // VALÓDI
+```
+
+A `practiceSessionControllerProvider` családja **inline** építi a valódi rögzítőt a
+tényleges metaadatokkal. A gyakorlás **rögzül**; a provider túlélt kód.
+
+**A valódi hiba tehát nem adatvesztés, hanem az őr alanya.** A B2 cella egy olyan ágat
+védett, amibe a produkció soha nem lép be, és **magáról azt állította**, hogy az élest
+védi. Ez rosszabb, mint a védelem hiánya: aki utána ránéz, abban a hitben hagyja, hogy
+az éles út le van fedve. És ha az inline rögzítő egyszer placeholder metaadatot kapna,
+ez a cella **zöld maradna**.
+
+**A javítás nem a provider törlése.** A prediktátuma (`isPlaceholderPracticeMetadata`)
+az a hely, ahol a csapda le van írva, és az éles út őrét is ennek a fogalmaiban lehet
+megfogalmazni. Amit javítani kellett, az az **állítás**, plusz a hiányzó fedés:
+
+- a provider doksija és a cella kommentje most kimondja, hogy **ez nem a produkciós
+  út**;
+- az éles utat `practice_recorder_live_path_test.dart` védi, **két független
+  mechanizmusra** állítva: a **típusok** (`PracticeMode` / `PracticeSource` kódjai
+  valódi értékek, tehát a placeholder azokon keresztül **elérhetetlen**, nem csak
+  „nem használt"), és a **katalógus** (egy szállított definíció sem viseli a
+  placeholder id-t — ez az egyetlen szabad szöveges mező).
+
+**Az általános szabály.** *Egy őrteszt annyit véd, amennyit az alanya, és az alany a
+kommentben szerepel — nem a kódban.* Amikor egy cella azt írja magáról, hogy „a
+produkciós utat" védi, azt meg kell MÉRNI: ki olvassa a providert, és mit kap a
+konstruktor. A „semmi nem olvassa" lista erre a legjobb szűrő — egy őrzött provider,
+amit senki nem olvas, vagy halott kód, vagy egy rossz alanyra állított őr.
+
+**Mellékhatás, ami önmagában is hiba volt.** Ugyanez a felmérés mutatta meg, hogy az
+E18-R19-ben bekötött közösségi felület lánca **nem volt végig állítva**: három
+provider, egy null rövidzárral a közepén, és `accountEnabled: false` mellett a
+`DisabledSocialGraphRepository` minden hívásra `ConfigurationFailure`-t ad — a
+képernyők renderelnek, görgetnek, és soha nem töltenek be semmit. Az L652 hibaosztály,
+csak csendesebben. Őrteszt:
+`test/features/community/community_production_chain_test.dart`, mindkét irányra.
+
+Lásd még [`docs/operations/unwired-surfaces.md`](operations/unwired-surfaces.md) — a
+teljes felmérés megismételhető parancsokkal.

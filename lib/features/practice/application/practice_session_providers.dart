@@ -73,6 +73,21 @@ final practiceTickSourceProvider = Provider<PracticeTickSource>(
 /// resolves to a [NoopPracticeSessionRecorder] whenever the wired codes are
 /// still the placeholders, so a production record() returns `Success` without
 /// writing anything that would be discarded by the reader.
+/// **NOT the path the controller takes.** MEASURED (E18-R20): nothing reads this
+/// provider. `practiceSessionControllerProvider`'s family builds its own
+/// `PracticeHistoryRecorder` inline, from `inputs.definition`, with the real mode,
+/// source and id — so the live recorder never sees the placeholder metadata this
+/// provider's gate is about, and the gate below has never fired in production.
+///
+/// It is kept rather than deleted because its predicate
+/// ([isPlaceholderPracticeMetadata]) is where the write-then-drop trap is written
+/// down, and the live path's own guard is stated in terms of it
+/// (`test/features/practice/practice_recorder_live_path_test.dart`: the typed `mode`
+/// and `source` fields make the placeholder unreachable, and no shipped definition
+/// carries the placeholder id). What was corrected is the CLAIM: the B2 cell over in
+/// `practice_history_recorder_test.dart` described this provider as "the production
+/// path the controller takes on every finish", which would have let everyone after it
+/// believe the live path was covered when it was not.
 final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>((
   ref,
 ) {

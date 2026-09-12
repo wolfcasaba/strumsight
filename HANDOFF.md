@@ -1,5 +1,64 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R20 — A BEKÖTÉSEK FELMÉRVE, és két őr rossz alanyt nevezett meg — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd a bekötéseket".
+
+Szisztematikusan végigmértem, mi van lefejlesztve és bekötetlenül — nem tippeltem.
+A teljes felmérés megismételhető parancsokkal:
+[`docs/operations/unwired-surfaces.md`](docs/operations/unwired-surfaces.md).
+
+### Az eredmény: a maradék bekötetlen dolog MIND parkolt, megnevezett előfeltétellel
+
+- **Az elemzés-felvétel (3 képernyő)** erősebben parkolt, mint hittem: az
+  `audioAnalysisV2Enabled`-hez **nincs dart-define**, a `forEnvironment` fixen
+  `false`-ra állítja, és a `/analyze` shell-fül eközben a működő **V1** képernyőre
+  megy. Tehát ez egy párhuzamos V2 implementáció, nem hiányzó út.
+- **Öt képernyő nem úticél, hanem komponens** — konstruktorból mérve (`recorder`,
+  `state`, `draft`, `setlist`, `performanceRunner`). Route-ot adni nekik azt
+  jelentené, hogy kitalálom az adatot, amit kérnek.
+- **A kihívás-képernyő** szerveroldali hiányon vár (három útvonal).
+
+Jó hír, amit a felmérés kiderített: a capture-folyamhoz **az agy megvan** — teljes
+`AnalysisController` állapotgép, szállított `createMicCapture`, `file_selector`
+dependency, és a bootstrap valóban felülírja az `analysisRepositoryProvider`-t. Ha a
+rollout-döntés megvan, az egy **kompozíciós** kör.
+
+### De a felmérés két VALÓDI hibát talált, és ezek a kör szállítmánya
+
+**1. Egy őr, ami rossz alanyt nevezett meg (→ L659).** A
+`practiceSessionRecorderProvider` `Noop` rögzítőt ad, és a B2 cella ezt **„a
+produkciós útnak, amit a vezérlő minden befejezésnél bejár"** nevezte. Első olvasásra
+ez azt jelenti, hogy a gyakorlás nem rögzül. **Megmérve: a vezérlő családja INLINE
+építi a valódi rögzítőt** az `inputs.definition` tényleges mode/source/id
+értékeivel — a gyakorlás rögzül, a provider túlélt kód.
+
+A valódi hiba tehát az őr alanya: egy halott ágat védett, és magáról azt állította,
+hogy az élest. Ez rosszabb a védelem hiányánál — és ha az inline rögzítő egyszer
+placeholder metaadatot kapna, ez a cella **zöld maradna**. Javítva: az állítás
+kijavítva mindkét helyen, és az éles utat új teszt védi, **két független
+mechanizmusra** állítva (a típusok teszik a placeholdert elérhetetlenné; a katalógus
+egyetlen definíciója sem viseli a placeholder id-t).
+
+**2. A közösségi lánc nem volt végig állítva.** Amit az R19-ben bekötöttem, három
+provideren át dől el, **null rövidzárral** a közepén: `accountEnabled: false` mellett
+a `DisabledSocialGraphRepository` minden hívásra `ConfigurationFailure`-t ad, tehát a
+képernyők renderelnek, görgetnek, és **soha nem töltenek be semmit**. Pontosan az L652
+hibaosztály, csak csendesebben. Új őrteszt mindkét irányra — és közben megmérve, hogy
+`accountEnabled: true` mellett valóban a **HTTP** repository épül fel.
+
+**Gate:** zöld — `test/features/practice`, `test/features/community`, `test/app` +
+architecture / secrets / l10n. Új: 4 cella (live-path őr), 4 cella (közösségi lánc).
+
+**Dokumentáció:** `docs/LESSONS.md` **L659**,
+[`docs/operations/unwired-surfaces.md`](docs/operations/unwired-surfaces.md).
+
+### Ami rád vár
+
+1. **A szerver három kihívás-útvonala** → a kihívás-képernyő egysoros route.
+2. **Rollout-döntés az elemzés V2-ről** → utána a capture-folyam kompozíciós kör.
+3. **Em/Am valódi gitáron** — változatlanul nyitott.
+
 ## 🟢 E18-R19 — A HOSZTOLT BACKEND BEÁLLÍTVA + a közösségi felület ROUTE-olva — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „van hostolt backen domain is casaba.app néven fut nézz utána" →
