@@ -19,6 +19,11 @@ const _sr = 44100;
 /// verdict behind the r139 seam is controlled, same pattern as
 /// `strum_classifier_seam_test.dart`'s `_RecordingClassifier`.
 class _FixedClassifier implements StrumDirectionClassifier {
+  /// No settled tier: this double answers once, like the
+  /// heuristic (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => null;
+
   _FixedClassifier(this.verdict);
   final StrumClassification verdict;
 

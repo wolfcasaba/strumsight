@@ -46,6 +46,11 @@ List<LiveFrame> _run(
 /// `_FixedClassifier`, used here to guarantee a HIGH, deterministic strum
 /// confidence for the §6 pt.6 "chord ≠ strum source" cell.
 class _FixedClassifier implements StrumDirectionClassifier {
+  /// No settled tier: this double answers once, like the
+  /// heuristic (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => null;
+
   _FixedClassifier(this.verdict);
   final StrumClassification verdict;
 

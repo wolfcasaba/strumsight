@@ -13,6 +13,11 @@ import '../../../support/synth.dart';
 /// Live arrow, Learn scoring and the streak all see nothing. The seam is still
 /// consulted on every onset — suppression is a decision, not a bypass.
 class _SuppressingClassifier implements StrumDirectionClassifier {
+  /// No settled tier: this double answers once, like the
+  /// heuristic (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => null;
+
   int classifyCalls = 0;
 
   @override
@@ -33,6 +38,11 @@ class _SuppressingClassifier implements StrumDirectionClassifier {
 }
 
 class _DownClassifier implements StrumDirectionClassifier {
+  /// No settled tier: this double answers once, like the
+  /// heuristic (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => null;
+
   @override
   void observe(Float64List frame, StrumFrameFeatures features) {}
 

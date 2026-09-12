@@ -13,6 +13,7 @@ import 'superflux_onset_detector.dart';
 /// confident the direction call is.
 class StrumEvent {
   const StrumEvent({
+    required this.onsetFrame,
     required this.timeSec,
     required this.direction,
     required this.confidence,
@@ -20,6 +21,16 @@ class StrumEvent {
     this.pUp,
     this.pNoStrum,
   });
+
+  /// The analyzer's own frame index for this strum's detected onset — its
+  /// IDENTITY, and what a later [StrumRevision] matches on.
+  ///
+  /// An integer on purpose. Matching on [timeSec] would need an epsilon, and at
+  /// 200 bpm sixteenths consecutive strokes are ~13 frames (75 ms) apart while a
+  /// settled verdict takes ~41 frames, so up to three strokes are in flight at
+  /// once. An epsilon wide enough to absorb float rounding could reach the
+  /// NEIGHBOURING stroke, which is exactly the hazard ADR 0556 names.
+  final int onsetFrame;
 
   final double timeSec;
   final StrumDirection? direction;
@@ -33,6 +44,48 @@ class StrumEvent {
   final double? pUp;
 
   /// See [pDown]; carried from [StrumClassification.pNoStrum].
+  final double? pNoStrum;
+}
+
+/// A SETTLED direction verdict for a strum [StrumAnalyzer.process] already
+/// reported (ADR 0556 D3).
+///
+/// It revises DIRECTION and nothing else. It cannot create a strum, cannot
+/// retract one, and says nothing about whether a stroke happened — those were
+/// decided at the fast deadline and are not reopened. A consumer must match it to
+/// the strum whose [StrumEvent.onsetFrame] equals [onsetFrame], never to "the
+/// latest strum": by the time a revision lands, later strokes may already have
+/// arrived.
+///
+/// Per ADR 0556 D1 the revision must NOT redraw an arrow the learner has seen.
+/// Its purpose is the direction used for SCORING and for the post-bar review —
+/// where there is no latency requirement and where a wrong answer actually costs
+/// the learner marks.
+class StrumRevision {
+  const StrumRevision({
+    required this.onsetFrame,
+    required this.timeSec,
+    required this.direction,
+    required this.confidence,
+    this.pDown,
+    this.pUp,
+    this.pNoStrum,
+  });
+
+  /// Identity of the strum being revised — matches [StrumEvent.onsetFrame].
+  final int onsetFrame;
+
+  /// Same reported attack instant the original [StrumEvent] carried, recomputed
+  /// from [onsetFrame] rather than stored, so the two can never disagree.
+  final double timeSec;
+
+  /// The settled direction (`null` = the model is still ambiguous, which is a
+  /// verdict, not a failure).
+  final StrumDirection? direction;
+
+  final double confidence;
+  final double? pDown;
+  final double? pUp;
   final double? pNoStrum;
 }
 
@@ -55,6 +108,7 @@ class StrumAnalyzer {
     this.window = DspConfig.onsetWindow,
     this.hop = DspConfig.onsetHop,
     StrumDirectionClassifier? classifier,
+    this.settledTier = false,
   }) : _fft = FFT(window),
        _hann = Float64List(window),
        _windowed = Float64List(window),
@@ -72,6 +126,22 @@ class StrumAnalyzer {
   final int sampleRate;
   final int window;
   final int hop;
+
+  /// Whether to produce [settledRevision] at all (ADR 0556 D3). **Off by
+  /// default, deliberately.**
+  ///
+  /// Enabling it makes the classifier run a SECOND time per strum — with the live
+  /// CRNN behind the seam that is a second model forward, doubling the direction
+  /// model's per-strum cost, and at 200 bpm sixteenths there are ~13 strums a
+  /// second. Until a consumer actually reads [settledRevision], that cost would
+  /// buy a learner's phone nothing, so the tier stays dark.
+  ///
+  /// It is switched on by the round that wires the settled direction into SCORING
+  /// (ADR 0558 D1: the tie-break fusion rule, measured to never lose at any
+  /// learner compliance) — the same round that can justify the cost with the
+  /// +0.0723 macro-F1 it buys. The flag is not a feature toggle for users; it is
+  /// the seam that keeps an unconsumed computation from shipping.
+  final bool settledTier;
 
   // Tunables (RAG chunks 005–006; update the chunk when retuned).
   static const _lowBandMaxHz = 200.0;
@@ -101,6 +171,13 @@ class StrumAnalyzer {
   // slot): at 200 BPM 16ths the next onset (~75 ms) can land while the
   // previous one is still inside its ~70 ms classify window.
   final ListQueue<int> _pendingOnsets = ListQueue();
+
+  // Strums that have ALREADY been reported and are waiting for their settled
+  // verdict. Separate from [_pendingOnsets] because the two tiers drain at
+  // different delays, and because an onset the fast tier SUPPRESSED must never
+  // enter this queue — a suppressed onset that came back later would be the
+  // analyzer inventing a stroke (ADR 0556, hazard 3).
+  final ListQueue<int> _pendingSettled = ListQueue();
   int _frameIndex = -1;
 
   /// RMS of the most recent frame (level meter).
@@ -111,6 +188,15 @@ class StrumAnalyzer {
   /// round 138). Reset every [process] call.
   bool onsetJustFired = false;
 
+  /// The settled verdict that came due on THIS frame, or `null`. Reset every
+  /// [process] call, the same idiom as [onsetJustFired] and [lastRms].
+  ///
+  /// A separate field rather than a second return value because one frame can
+  /// legitimately carry both: a settled verdict for an earlier strum and a fast
+  /// verdict for a later one. Returning a record would make every existing caller
+  /// unpack something it does not use.
+  StrumRevision? settledRevision;
+
   double get _frameSec => hop / sampleRate;
 
   /// Push the next [window]-sample frame (advanced by [hop]); returns a
@@ -118,6 +204,7 @@ class StrumAnalyzer {
   StrumEvent? process(Float64List frame) {
     assert(frame.length == window);
     _frameIndex++;
+    settledRevision = null;
 
     var sumSq = 0.0;
     for (var i = 0; i < window; i++) {
@@ -156,6 +243,39 @@ class StrumAnalyzer {
       _pendingOnsets.addLast((onsetSec * sampleRate / hop).round());
     }
 
+    // The SETTLED tier (ADR 0556 D3), drained BEFORE the fast tier because that
+    // branch returns: in one frame a settled verdict for an EARLIER strum and a
+    // fast verdict for a LATER one can both come due, and the early return would
+    // otherwise swallow the settled one. At most one settled verdict per frame,
+    // mirroring the fast tier — the queue is FIFO, so a dense burst delays a
+    // verdict by a frame but can never skip one.
+    final settleAfter = settledTier ? _classifier.settleAfterFrames : null;
+    if (settleAfter != null &&
+        _pendingSettled.isNotEmpty &&
+        _frameIndex - _pendingSettled.first >= settleAfter) {
+      final onsetFrame = _pendingSettled.removeFirst();
+      final settled = _classifier.classifyAt(
+        onsetFrame: onsetFrame,
+        currentFrame: _frameIndex,
+      );
+      // A settled SUPPRESSION is deliberately ignored. Existence was decided at
+      // the fast deadline and an event has already reached every consumer;
+      // retracting it would delete a stroke the learner saw, which is the visible
+      // self-correction ADR 0556 D1 forbids. The settled tier revises DIRECTION,
+      // never existence — so the fast verdict simply stands.
+      if (!settled.suppressed) {
+        settledRevision = StrumRevision(
+          onsetFrame: onsetFrame,
+          timeSec: (onsetFrame + _attackOffsetFrames) * _frameSec,
+          direction: settled.direction,
+          confidence: settled.confidence,
+          pDown: settled.pDown,
+          pUp: settled.pUp,
+          pNoStrum: settled.pNoStrum,
+        );
+      }
+    }
+
     // Classify once enough post-onset evidence has accumulated (chunk 006).
     if (_pendingOnsets.isNotEmpty &&
         _frameIndex - _pendingOnsets.first >= _classifyAfterFrames) {
@@ -171,7 +291,11 @@ class StrumAnalyzer {
       // unchanged (a null direction still yields a StrumEvent — ambiguous
       // strum, not no-strum).
       if (c.suppressed) return null;
+      // Only a strum that was actually REPORTED waits for a settled verdict, so
+      // the suppressed onset above can never come back (ADR 0556, hazard 3).
+      if (settleAfter != null) _pendingSettled.addLast(onsetFrame);
       return StrumEvent(
+        onsetFrame: onsetFrame,
         timeSec: (onsetFrame + _attackOffsetFrames) * _frameSec,
         direction: c.direction,
         confidence: c.confidence,

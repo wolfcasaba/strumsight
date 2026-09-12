@@ -1052,3 +1052,61 @@ sits where the geometry says it should.
 
 12/12 tests green. **Shipped behaviour is unchanged: the unit is NOT wired** -- `LivePipeline`
 does not call it, so this is a clean new surface.
+
+### The settled tier is built, and deliberately DARK (E18-R36, ADR 0559)
+
+`StrumAnalyzer` now has a second, delayed classification (ADR 0556 D3). The instant is
+DERIVED, not written down: `LiveCrnnFrontend.framesUntilComplete` computes it from the
+model geometry (row count, preFrames, modelHop, FFT size) and comes out at 41 analyzer
+frames = 238 ms for the shipped framing -- the same 238 ms the settled tier is measured
+at. The `+ 1` frame absorbs the centre rounding in `_buildWindow`, because arriving EARLY
+would restore exactly the zero-padding the tier exists to remove.
+
+Proven rather than assumed (`test/features/live/dsp/strum_settled_tier_test.dart`): at the
+settled instant the streamed window equals the whole-signal reference to 1e-9, and at the
+fast instant the window's last row is the log-mel of SILENCE -- one constant across all
+128 mels. So the truncation is real and the tier removes it.
+
+`StrumRevision` revises DIRECTION and nothing else. It cannot create a strum, cannot
+retract one, and says nothing about whether a stroke happened. Its identity is an INTEGER
+frame index, not a timestamp: at 200 bpm sixteenths strokes are ~13 frames apart while
+settling takes 41, so up to three are in flight, and an epsilon wide enough for float
+rounding could reach the neighbouring stroke.
+
+The three ADR 0556 hazards, each with a test: a revision never creates a strum (one onset →
+exactly one event plus one revision; the heuristic path emits zero revisions); it never
+overwrites a NEWER stroke (3+ in flight, every revision names its own onsetFrame, strictly
+increasing); a SUPPRESSED onset never comes back (no event, no revision, and the seam is
+consulted once but never twice). Plus the mirror case: a SETTLED suppression does not
+retract an already-reported strum -- the event reached every consumer, deleting it would
+remove a stroke the learner SAW, which is the visible self-correction ADR 0556 D1 forbids.
+
+Queue order matters and is tested, not hoped for: the SETTLED queue is drained BEFORE the
+fast one, because the fast branch returns and one frame can carry a settled verdict for an
+earlier stroke together with a fast verdict for a later one. A stroke's fast verdict is due
+12 frames after its onset and its settled verdict 41 frames after, so the collision needs a
+gap of 29 frames, not 41; the test sweeps 28/29/30 and REQUIRES the collision to occur at
+least once, reporting that the ordering was never exercised otherwise.
+
+**The tier is OFF by default (`settledTier: false`), and that is the point.** With the live
+CRNN behind the seam `settleAfterFrames` is 41, so enabling it means a SECOND model forward
+per strum, and nothing reads `settledRevision` yet -- the cost would buy a learner's phone
+nothing. On this JIT test harness one forward is ~29 ms; that is NOT an on-device figure and
+the two are not comparable (release AOT is substantially faster), so no on-device number is
+claimed. What is claimed: the doubling is not free, its magnitude is unknown, and at 200 bpm
+sixteenths there are ~13 strums a second. The flag is not a user feature toggle -- it is the
+seam that keeps an unconsumed computation from shipping, and it is flipped by the round that
+both consumes the revision (ADR 0558 D1) and measures the cost in a profile build. A test
+guards it: without opting in, the second forward is not merely ignored, it is never issued.
+
+`settleAfterFrames` is a REQUIRED seam member with no default, so eight test doubles had to
+say they have no settled tier. Deliberate: a default would silently opt future classifiers
+into the safe value and hide the decision. For two of them it was not a formality -- the
+recorders in `guitarset_direction_boundary_test.dart` and
+`guitarset_threshold_sweep_test.dart` delegate to the REAL classifier and append every call
+to `calls`, so delegating would have added one extra verdict per strum, at a different
+truncation, to the very pass every threshold in those measurements is rescored from.
+
+`StrumEvent` gained an additive `onsetFrame`. Its only construction site is the analyzer;
+the same-named domain event in `features/audio_analysis` is a DIFFERENT class and is
+untouched.

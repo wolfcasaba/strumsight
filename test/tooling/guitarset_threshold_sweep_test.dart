@@ -93,6 +93,14 @@ const List<_Gate> _gates = [
 /// Never suppressing is not a proposed behaviour — it is how one pass can stand in for
 /// every pass: the recorded `pNoStrum` lets each gate be applied afterwards.
 final class _RecordingClassifier implements StrumDirectionClassifier {
+  /// No settled tier, and that is load-bearing here rather than boilerplate:
+  /// delegating it would make the analyzer issue a SECOND classify call per
+  /// strum, which this recorder would append to [calls] — silently adding one
+  /// verdict per strum, at a different truncation, to the pass every boundary
+  /// in this measurement is rescored from (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => null;
+
   _RecordingClassifier(this._inner);
 
   final LiveCrnnStrumClassifier _inner;

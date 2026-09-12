@@ -27831,3 +27831,61 @@ magabiztosság pont akkor nő, amikor a bizonyíték fogy. Minden „sértő" po
 kevésbé mérhető — és a kettőt nem szabad összekeverni.*
 
 Lásd még [[L662]], [[L670]], [[L671]], [[L672]], ADR 0557, ADR 0558.
+
+## L674 — Zöld tesztek azt bizonyítják, hogy a dolog MŰKÖDIK, nem azt, hogy FUTNIA kell; egy fogyasztó nélküli számítást egy kapu-futásra voltam a szállítástól (E18-R36, 2026-09-12)
+
+### 1. Kilenc zöld teszt után még mindig hibás volt, amit csinálni készültem
+
+A letisztult tier megépült: derivált időzítés, három csapda-teszt, a streamelt ablak
+paritása a referenciával, a gyors ablak nullázásának bizonyítéka. **9/9 zöld**, kapu zöld.
+Ebben az állapotban lett volna commit.
+
+Aztán feltettem a kérdést, amit a tesztek nem tesznek fel: **ki olvassa ezt?** Senki. A
+`settledRevision`-nak **nincs fogyasztója** — az azt használó szabály (ADR 0558 D1) a
+következő kör. Viszont az élő CRNN a sín mögött `settleAfterFrames = 41`-et ad, tehát a tier
+**ütésenként egy második modell-forwardot** indított volna a produkcióban, 200 bpm
+tizenhatodon ~13 ütés/másodperc mellett, **nulla haszonért**.
+
+Megmértem, amit meg tudtam: ezen a **JIT-es teszt-harnesszen** egy forward **~29 ms**. Ez
+**nem** az eszközön mért szám és nem is átvihető (a release AOT lényegesen gyorsabb) — de
+pont elég ahhoz, hogy kiderüljön: a duplázás **nem ingyenes**, és a mértéke **ismeretlen**.
+Egy ismeretlen nagyságú költség nulla haszonért nem „apró szépséghiba".
+
+**A szabály, amit megtartok.** Egy új kimenet befejezése nem a teszt, hanem **a fogyasztója**.
+Amíg nincs olvasója, a default az, hogy **nem fut** — nem az, hogy fut és figyelmen kívül
+marad. A tesztek a „működik?" kérdésre felelnek; a „futnia kell?" kérdést **nekem** kell
+feltennem, és a zöld szín pont elnyomja a késztetést rá.
+
+Gyakorlati sarokpont: **amikor egy kör terméke egy mező, amit senki nem olvas, a körnek egy
+kapcsolóval kell zárulnia, ami kikapcsolva van** — és egy teszttel, ami őrzi. Itt a teszt nem
+csak azt ellenőrzi, hogy nincs revízió, hanem hogy **a második forward ki sem megy**: a
+„figyelmen kívül hagyjuk" és a „nem számoljuk ki" két különböző rendszer, és csak a második
+ingyenes.
+
+### 2. A kapcsoló nem feature-flag, és ezt ki kell írni
+
+Kísértés volt „feature toggle"-nek nevezni. Nem az: felhasználó sosem látja, és nem
+viselkedés-variáns. **A sín, ami megakadályozza, hogy egy fogyasztó nélküli számítás
+szállítódjon** — és a felkapcsolása nem termék-döntés, hanem két feltétel: (a) legyen olvasó,
+(b) legyen **profile-buildben mért** költség. Ha „flag"-nek hívom, hat hónap múlva valaki
+felkapcsolja, mert „a flagek fel szoktak kerülni".
+
+*Egy kapcsoló neve és doksija dönti el, hogy kapu lesz-e vagy törmelék.*
+
+### 3. És egy kötelező interfész-tag nyolc helyen „bosszúság", ami kétszer valódi hiba volt
+
+A `settleAfterFrames`-t default nélkül tettem a sínbe, így **nyolc teszt-dublőrt** kellett
+hozzáírni. Default-tal egy sort sem. De a default **csendben** beválasztotta volna a jövő
+osztályozóit a „nincs letisztult tier" értékbe — ami a biztonságos érték, és épp ezért
+**elrejti a döntést**.
+
+Kettőnél ez nem formalitás volt: két tooling-rekorder a **valódi** osztályozóhoz delegál és
+minden hívást egy `calls` listába fűz. Ha ezek delegálták volna a `settleAfterFrames`-t, a
+mért futás **ütésenként egy extra verdiktet** kapott volna, **más levágáson** — pont azt a
+felvételt rontva el, amiből minden küszöb-határ újrapontozódik. A „bosszúság" kényszerített
+rá, hogy mindkettőt elolvassam; egy default mellett **észre sem vettem volna**.
+
+*Egy kötelező tag ott fizetődik ki, ahol egy default csendben helyes választ adna a rossz
+okból.*
+
+Lásd még [[L662]], [[L672]], [[L673]], ADR 0556, ADR 0558, ADR 0559.

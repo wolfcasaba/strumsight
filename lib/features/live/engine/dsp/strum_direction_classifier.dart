@@ -79,6 +79,22 @@ abstract class StrumDirectionClassifier {
     required int onsetFrame,
     required int currentFrame,
   });
+
+  /// How many analyzer frames after the onset frame a SETTLED verdict becomes
+  /// available, or `null` when this classifier has no settled tier.
+  ///
+  /// `null` means "one verdict is all I have", and it keeps the analyzer's
+  /// behaviour byte-identical to before the settled tier existed (ADR 0556 D3).
+  /// A classifier returns a number only when waiting longer genuinely buys it
+  /// more evidence — for the CRNN, the instant its whole training window has
+  /// arrived, so the verdict is computed over audio that was still zero-padded
+  /// at the 70 ms deadline (ADR 0552/0554).
+  ///
+  /// MEASURED payoff (`docs/eval/guitarset-strum-baseline.md`): direction
+  /// macro-F1 0.5262 at the fast deadline against 0.6061 settled, on held-out
+  /// unseen players. The settled verdict is for SCORING and the post-bar review,
+  /// never for re-drawing an arrow the learner has already seen (ADR 0556 D1).
+  int? get settleAfterFrames;
 }
 
 /// The chunk-006 heuristic: sub-band rise order × centroid slope fusion over
@@ -181,6 +197,13 @@ class HeuristicStrumClassifier implements StrumDirectionClassifier {
 
     return StrumClassification(direction: direction, confidence: confidence);
   }
+
+  /// No settled tier. This classifier reads a fixed ~70 ms band of sub-band and
+  /// centroid features; more audio past it does not add evidence, it adds the
+  /// NEXT strum's ring-in. Returning null keeps the heuristic path exactly as it
+  /// was before the settled tier existed.
+  @override
+  int? get settleAfterFrames => null;
 
   /// First index where the series crosses 50% of its max (null if flat).
   static int? _firstRise(List<double> series) {

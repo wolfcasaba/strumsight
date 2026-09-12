@@ -14385,11 +14385,46 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **SZÁLLÍTOTT VISELKEDÉS NEM VÁLTOZOTT — az egység NINCS BEKÖTVE** (a `LivePipeline` nem
   hívja). Tanulság: **L673** (egy szabállyal mértem, másikat készültem szállítani; a
   produkciós kód megírása fogta el, nem a mérés).
-  **KÖVETKEZŐ, ebben a sorrendben:** (1) a **letisztult tier** (ADR 0556 D3 + a három
-  csapda-teszt: a revízió nem kreál ütést, nem ír át **újabb** ütést, elnyomott onset nem
-  éled újra) — **a D1 ezen áll, mert a `c* = 0,000` a 238 ms-os tieren mért**; (2) a
-  `TempoTracker` rácsa + bar-horgony átadása a csatornának; (3) a D1 fúzió bekötése a
-  **pontozó** úton; (4) a nyíl fúziója **funkció-kapu** mögé.
+  **E18-R36 — A LETISZTULT TIER MEGÉPÜLT, ÉS SÖTÉT (ADR 0559).** A `StrumAnalyzer` kapott
+  egy második, késleltetett osztályozást. A pillanat **DERIVÁLT**:
+  `LiveCrnnFrontend.framesUntilComplete` a modell geometriájából **41 frame = 238 ms** —
+  ugyanaz a 238 ms, amin a tier mérve van; a `+1` a középpont-kerekítés tartaléka, mert
+  **korán** érkezni épp a nullázást hozná vissza. **Bizonyítva, nem feltéve:** a letisztult
+  pillanatban a streamelt ablak **azonos** a teljes jelből számolt referenciával (1e-9), a
+  gyors pillanatban az utolsó sor **a csend log-mele** (egy konstans mind a 128 melen).
+  **`StrumRevision` IRÁNYT revideál, létezést soha**, és az identitása **egész frame-index**,
+  nem időbélyeg (200 bpm tizenhatodon ~13 frame a rés, 41 a letisztulás → **három ütés
+  levegőben**; egy elég bő epszilon **átérne a szomszédra**).
+  **A három csapda mérve:** a revízió nem kreál ütést (1 onset → pontosan 1 esemény + 1
+  revízió; a heurisztikus út **nulla** revízió) · nem ír át **újabb** ütést (3+ levegőben,
+  minden revízió a **saját** `onsetFrame`-jét nevezi, szigorúan növő) · elnyomott onset nem
+  éled újra (nincs esemény, nincs revízió, a sín egyszer hívva). **Plusz a fordított eset:**
+  egy **letisztult elnyomás nem vonja vissza** a már bejelentett ütést — az minden
+  fogyasztóhoz megérkezett, törlése egy **látott** ütést tüntetne el (ADR 0556 D1).
+  **A várólista-sorrend tesztelve, nem remélve:** a **letisztultat** kell előbb leszívni, mert
+  a gyors ág visszatér; az ütközéshez **29** frame-es rés kell (nem 41: a gyors 12-kor, a
+  letisztult 41-kor jár), és a teszt **söpri** a 28/29/30-at és **megköveteli** az ütközést.
+  **A TIER SÖTÉT: `settledTier = false` a default** — az élő CRNN-nel ütésenként egy **második
+  modell-forward**, és a `settledRevision`-t **ma senki nem olvassa**. Ezen a **JIT-es
+  teszt-harnesszen** egy forward **~29 ms**; **ez NEM on-device szám** és nem átvihető (a
+  release AOT lényegesen gyorsabb), ezért on-device értéket **nem állítok**. Amit állítok: a
+  duplázás **nem ingyenes**, a mértéke **ismeretlen**, 200 bpm-en ~13 ütés/s. A flag **nem
+  felhasználói kapcsoló**, hanem a sín, ami egy fogyasztó nélküli számítást távol tart; azt a
+  kör kapcsolja fel, amelyik (a) **fogyasztja** (ADR 0558 D1) és (b) **profile-buildben
+  megméri**. Teszt őrzi: opt-in nélkül a második forward **ki sem megy**.
+  **Nyolc teszt-dublőr** kimondja, hogy nincs letisztult tierje (a `settleAfterFrames`
+  kötelező sín-tag, default nélkül — egy default **csendben** beválasztana). Kettőnél ez
+  **valódi hiba** lett volna: a két tooling-rekorder a **valódi** osztályozóhoz delegál és
+  minden hívást a `calls`-ba fűz → delegálás esetén a mért futás ütésenként **egy extra
+  verdiktet** kapott volna, **más levágáson**. A `StrumEvent` kapott egy additív `onsetFrame`
+  mezőt (egyetlen építési helye az analyzer; a `features/audio_analysis` azonos nevű
+  domain-eseménye **más osztály**). **10/10 zöld, kapu zöld, szállított viselkedés
+  változatlan.** Tanulság: **L674** (a zöld teszt azt bizonyítja, hogy MŰKÖDIK, nem azt, hogy
+  FUTNIA kell).
+  **KÖVETKEZŐ, ebben a sorrendben:** (1) a `TempoTracker` rácsa + a bar-horgony átadása a
+  `StrumMetricChannel`-nek; (2) a **D1 fúzió** bekötése a **pontozó** úton + a `settledTier`
+  felkapcsolása **profile-build költségméréssel**; (3) a nyíl fúziója **funkció-kapu** mögé
+  (megtérülés 0,475, nyolc sértő ütésen).
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

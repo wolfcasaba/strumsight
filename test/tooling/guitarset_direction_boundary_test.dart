@@ -158,6 +158,14 @@ typedef _Heard = ({double atSec, double pUp, double pNoStrum});
 /// at any boundary. The pipeline's own margin gate is bypassed by reporting a direction
 /// with no probabilities (see `guitarset_threshold_sweep_test.dart` for why).
 final class _Recorder implements StrumDirectionClassifier {
+  /// No settled tier, and that is load-bearing here rather than boilerplate:
+  /// delegating it would make the analyzer issue a SECOND classify call per
+  /// strum, which this recorder would append to [calls] — silently adding one
+  /// verdict per strum, at a different truncation, to the pass every boundary
+  /// in this measurement is rescored from (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => null;
+
   _Recorder(this._inner);
   final LiveCrnnStrumClassifier _inner;
   final List<StrumClassification> calls = [];

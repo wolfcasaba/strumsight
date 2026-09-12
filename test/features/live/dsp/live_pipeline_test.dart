@@ -16,6 +16,11 @@ const sr = 44100;
 /// controlled, above-threshold probability pair, which no shipped model
 /// asset can guarantee deterministically.
 class _FixedVerdictClassifier implements StrumDirectionClassifier {
+  /// No settled tier: this double answers once, like the
+  /// heuristic (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => null;
+
   _FixedVerdictClassifier(this.verdict);
   final StrumClassification verdict;
 

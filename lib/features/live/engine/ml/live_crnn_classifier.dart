@@ -60,6 +60,34 @@ class LiveCrnnFrontend {
     return _buildWindow(onsetSec, availableEnd);
   }
 
+  /// Analyzer frames after an onset frame at which this window has FULLY
+  /// arrived — the SETTLED tier's instant (ADR 0556 D3).
+  ///
+  /// DERIVED from the model geometry, never written down, so it cannot drift from
+  /// [CrnnFrontend]'s constants or from the extractor's FFT size. For the shipped
+  /// framing (44.1 kHz, hop 256, window 1024) it comes out at 41 frames = 238 ms
+  /// past the onset frame — the same 238 ms the settled tier is measured at.
+  ///
+  /// The `+ 1` is the centre rounding: [_buildWindow] rounds the onset to the
+  /// nearest MODEL frame, which can push the segment's end up to half a model hop
+  /// (5 ms, ~0.9 analyzer frames) later than the exact arithmetic below. Paying
+  /// one analyzer frame (5.8 ms) is the cheap side of that trade — arriving early
+  /// would zero-pad the tail, which is precisely the truncation the settled tier
+  /// exists to avoid.
+  int get framesUntilComplete {
+    const modelRate = CrnnFrontend.modelSampleRate;
+    const modelHop = CrnnFrontend.modelHop;
+    final rows = CrnnFrontend.preFrames + CrnnFrontend.postFrames;
+    final segLen = (rows - 1) * modelHop + _logMel.nFft;
+    // Segment samples lying AFTER the onset's centre frame.
+    final afterCentre = segLen - CrnnFrontend.preFrames * modelHop;
+    // [windowAt] puts the attack at (onsetFrame + 2.5) hops, and the audio
+    // available at currentFrame ends at currentFrame * hop + window.
+    final needed =
+        (2.5 * hop + afterCentre * sampleRate / modelRate - window) / hop;
+    return needed.ceil() + 1;
+  }
+
   /// The same window computed from a WHOLE signal (no ring) — the test
   /// reference and the parity anchor for the streamed path.
   static List<List<double>> referenceWindow(
@@ -201,6 +229,12 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
     required int currentFrame,
   }) =>
       classifyProbs(_net.forward(_frontend.windowAt(onsetFrame, currentFrame)));
+
+  /// The instant this model's whole window has arrived, so the verdict runs on
+  /// audio the 70 ms deadline could only zero-pad. Derived, not tuned — see
+  /// [LiveCrnnFrontend.framesUntilComplete].
+  @override
+  int? get settleAfterFrames => _frontend.framesUntilComplete;
 
   /// The r175 decision rule for a raw softmax [probs]. A 3-class vector
   /// `[P(down), P(up), P(no-strum)]` SUPPRESSES the arrow when P(no-strum)
