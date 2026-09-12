@@ -163,9 +163,17 @@ class StrumAnalyzer {
   ///
   /// MEASURED (`ml/probe_settled_tier_value.py`, held-out GuitarSet, unseen player AND
   /// tune, 530 strokes) **on `ml/weights_live_3c_settled.npz`** — the asset ADR 0555 D3
-  /// left unwired, NOT the one that ships. Naming it matters, because ADR 0569 measured
-  /// that asset to regress on Klangio (the deployment corpus) and withdrew its swap, and
-  /// ADR 0570 then re-ran this table on the SHIPPED asset and got a different answer.
+  /// left unwired, NOT the one that ships. Naming it matters, because ADR 0570 re-ran this
+  /// table on the SHIPPED asset and got a different answer — the margin is flat there, so
+  /// routing on it is legitimate only for the asset it was measured on.
+  ///
+  /// ADR 0569 also read that asset as regressing on Klangio and withdrew its swap; **that
+  /// reading is itself withdrawn (ADR 0573/0575).** It compared a new-player model against
+  /// the shipped asset's SAME-PLAYER Klangio score: `split_by_recording` is
+  /// recording-disjoint, not player-disjoint, and the shipped asset trained on 22 of
+  /// guitarist 4's 27 recordings. On a matched split the settled recipe wins on BOTH corpora
+  /// (+0.1051 Klangio, +0.3448 GuitarSet — ADR 0575 D2). What still blocks the swap is not a
+  /// regression: it is the absence of a cell that can decide the two assets (ADR 0573 D6).
   ///
   /// On the settled asset the margin really does predict whether the fast call is right,
   /// which is what makes routing on it legitimate:
@@ -227,8 +235,16 @@ class StrumAnalyzer {
   /// out-of-distribution input looks like: this asset trained on the 70 ms truncation only
   /// (`train_live_3c.py` loads `live70`). On the asset that DID train at both truncations
   /// the settled tier is positive on both corpora (+0.0655 GuitarSet, +0.1299 Klangio), so
-  /// the two-tier decision needs such an asset — and the one that exists regresses on
-  /// Klangio overall (ADR 0569). Do NOT light this with the shipped asset.
+  /// the two-tier decision needs such an asset.
+  ///
+  /// **Do NOT light this with the shipped asset** — but note the reason changed. It is not
+  /// that the alternative asset regresses on Klangio: ADR 0573/0575 withdrew that reading
+  /// (it measured a new-player model against a same-player score, and on a matched split the
+  /// settled recipe wins on both corpora). The reason is the line above, which stands because
+  /// it is a WITHIN-asset comparison: feeding THIS asset an untruncated window is an
+  /// out-of-distribution input. ADR 0574 localised that damage to frames 7..14 of 15 — the
+  /// truncation's whole footprint, not the 4 dead tail frames, which account for only
+  /// 40-56 % of it.
   ///
   /// Also corrected there: the upstroke is not a data problem but a TRANSFER one. The
   /// shipped asset's up-F1 is 0.7579 on Klangio against 0.2007 on GuitarSet — ADR 0550's

@@ -1834,7 +1834,8 @@ stroke — the close must wait until onset + 238 ms, which showed up here as the
 row at a take's end), and the CPU, derived from ADR 0565: a second forward per stroke doubles
 the fast tier, ~44 % of a core at 200 bpm sixteenths, ~8.8 % at 80 bpm eighths.
 
-Not claimed: any on-device number; the Klangio side (no local corpus, ADR 0569) so the settled
+Not claimed: any on-device number; the Klangio side (no local corpus, ADR 0569 — **WRONG, see
+ADR 0576: the corpus was in `ml/data/klangio/` all along**) so the settled
 tier's effect on the DEPLOYMENT corpus is unmeasured; why the untruncated window helps down so
 much and up not at all (an obvious guess exists, left unwritten per L681); and down-F1 0.9032
 is NOT comparable to arXiv 2508.07973's mic 0.8551 — different corpus, different protocol. The
@@ -2109,6 +2110,15 @@ protocol would destroy that fold - so they stay stated, not measured.
 +0.1051, GuitarSet +0.3448 - **and the second truncation costs nothing at 70 ms** (+0.0004)
 while buying the 238 ms tier outright (0.4231 -> 0.6112).
 
+> **PARTLY RETRACTED, E18-R45 (ADR 0578).** Repeated over `STD_SEEDS = [42, 1, 2]`: the net
+> on KLANGIO flips sign (+0.1051 / +0.0923 / **-0.0403**, mean +0.0524 +/- 0.0805), so on the
+> deployment corpus it is NOT ESTABLISHED which recipe is better - neither "wins" nor
+> "regresses". The GuitarSet half HOLDS: +0.3448 / +0.4581 / +0.3266, mean **+0.3765 +/-
+> 0.0713**. Also retracted: the "adding GuitarSet lifts Klangio" step (+0.0810 / +0.0642 /
+> **-0.0413**) and the regularisation TRADE below. What replicates instead is ADR 0554 D1's
+> VARIANCE argument: the both-truncation arm has the smallest seed spread on both corpora
+> (Klangio sd 0.0153 against R0's 0.0757; GuitarSet 0.0308 against 0.0705).
+
 **This reverses ADR 0569's conclusion and rules out two of its mechanisms.** "The settled asset
 regresses on the deployment corpus" was produced against the shipped asset's same-player number
 (ADR 0573); on a matched split there is no regression. And "the GuitarSet data's dominant
@@ -2164,3 +2174,132 @@ situ; R0 is not "the shipped asset minus the leakage" (Klangio has three guitari
 one out removes a third of the player diversity, and R0 is worse on the clean GuitarSet cell
 too); `full` cells for 70 ms-trained arms are CROSS-TIER, not comparisons; and the GuitarSet cell
 favours R3/R4, so 0.5596 / 0.5071 must not be read against the shipped asset's 0.3340.
+
+### The Klangio corpus was on the machine for nine and a half hours before three ADRs said it was not (E18-R45, ADR 0576)
+
+ADR 0569's Context said the in-situ measurement was "not available in this environment: the
+Klangio corpus is NOT ON THE MACHINE". ADR 0571 and ADR 0572 repeated it, and the HANDOFF
+carried "the Klangio in-situ sweep, IF the corpus lands on the machine" for three rounds.
+
+It was in `ml/data/klangio/` the whole time: **82** `recording_<id>_phone.wav` (44.1 kHz mono
+16-bit, ~60 s) plus **82** `.strums` annotations, gitignored (`git ls-files | grep -c '\.wav$'`
+-> 0, so the no-third-party-audio rule was never at risk). This is the DEPLOYMENT condition -
+phone mic, in `ml/klangio.py`'s own words "our deployment condition".
+
+```
+  12:38-12:42   the 82 wav + 82 .strums land in ml/data/klangio/
+  12:53         ml/klangio_live70.npz       is BUILT from them
+  15:53         ml/klangio_neg_live70.npz   is BUILT from them
+  22:12         ADR 0569 commit (7d72025c): "the Klangio corpus is NOT ON THE MACHINE"
+  22:44         ADR 0572 commit (6d1eefc1): the same claim repeated
+```
+
+`honest_eval.build_live` writes the cache only after READING the corpus, so those middle rows
+are not coincidence - and this is measured, not inferred: rebuilding recording 1001's windows
+from the local audio reproduces the cache **bit for bit** (49/49 rows, max |cached - rebuilt| =
+0.000e+00). Three ADRs measured on a derivative of the thing they said was unavailable.
+
+A third refutation sat in the repo since r164: `test/tools/klangio_real_ab_test.dart` has
+`const dataDir = 'ml/data/klangio';` and "auto-skips when ml/data/klangio is absent", and
+`onset_recall_probe_test.dart` imports the same constant. The repo contained a READY-MADE
+availability probe; running either test would have answered the question.
+
+Corrected in place at all 10 sites across 5 files. The NUMBERS those ADRs produced stand -
+they called themselves oracle-window numbers and they were. What fell is the stated REASON for
+not measuring in situ, and the deferral it licensed (LESSONS L690: a false number gets
+re-measured by the next round, a false "we can't measure that" gets INHERITED, because it
+behaves as an excuse rather than a claim, and each round that accepts it builds a caveat and a
+deferral item on top).
+
+### The deployment corpus, in situ, for the first time (E18-R45, ADR 0577)
+
+`test/tooling/klangio_threshold_sweep_test.dart`, driving the real `LivePipeline` over all 82
+takes through `test/support/live_sweep_harness.dart` - the same instrument
+`guitarset_threshold_sweep_test.dart` uses, extracted this round and verified by reproducing
+ADR 0571 D2's table to every digit (0.3872 -> 0.5551, +0.1679, down 0.9032, up 0.2069,
+missing 1).
+
+```
+  shipped asset, 82 recordings, 11767 annotated strums, 13142 SuperFlux onsets,
+  18 strums excluded as frame-coalesced
+  gate      margin   onsetP  onsetR  onsetF1   dirMacro   down    up      kept
+  0.850 *   on       0.7264  0.7021  0.7141    0.9166     0.9398  0.8934  11374
+  0.439     on       0.7357  0.6994  0.7171    0.9177     0.9406  0.8947  11186
+  none      on       0.6380  0.7078  0.6711    0.9144     0.9380  0.8908  13055
+```
+
+**This is not a generalisation claim.** `split: all`, and the shipped asset trained on ~80 % of
+these recordings (ADR 0573 D1), so 0.9166 is a SAME-PLAYER, largely-in-training number. What it
+does give is what the app does on deployment-condition audio along the path it actually runs.
+
+**The settled tier in situ on the deployment corpus: -0.3355** (0.9166 -> 0.5811; up 0.8934 ->
+0.3429; `settledMissing` = 0, since 60-second takes leave room for every window). ADR 0572 D1
+measured -0.2455 for this on ORACLE windows - same sign, larger magnitude. So ADR 0571 D4's rule
+is vindicated (the oracle instrument is corroborated for a delta's SIGN, not its LEVEL: it was
+0.09 off here, in the right direction), and "do NOT light the settled tier with the shipped
+asset" now rests on an in-situ deployment-corpus number instead of an oracle one.
+
+**Onset retention 0.7021 re-measures a KNOWN figure rather than revealing a regression.** The
+89.6 % in `superflux_onset_detector.dart` is the RAW detector at a +-0.12 s match window on the
+2013-strum eval fold; this is the FULL pipeline's published strums at +-50 ms
+(`onsetToleranceMsPrimary`) over all 11767 - a later stage at 2.4x the strictness. And
+`onset_recall_probe_test.dart`'s first line has asked since r164 "WHY does the live analyzer
+match only 73 % of labeled strums on real takes". 0.7021 reproduces that. One cause is ruled
+out: lifting the gate entirely moves recall 0.7021 -> 0.7078 (+0.006), so the missing ~30 % is
+lost BEFORE the gate, not at it.
+
+**And the gate earns its keep on the deployment corpus, measured end-to-end for the first
+time:** none -> 0.850 buys **+0.0884** onset precision for **-0.0057** recall.
+
+Two in-situ corpora now stand side by side from one instrument: Klangio 0.9166 (phone, ~80 %
+trained on) against GuitarSet 0.3872 (studio, never seen), with up-F1 0.8934 against 0.2007 -
+the same contrast ADR 0572 D5 drew on oracle windows, now in situ on both sides. The difference
+is corpus AND training exposure together and cannot be separated on these two cells
+(ADR 0573 D6).
+
+### Three seeds retract the Klangio half of ADR 0575 (E18-R45, ADR 0578)
+
+ADR 0575 D5's own noise-floor measurement prescribed repeating the ladder over
+`honest_eval.STD_SEEDS = [42, 1, 2]`. Repeated - and it retracts half of that round's headline.
+
+```
+  Klangio@70 (DEPLOYMENT)      s42     s1      s2      mean +/- sd
+  R0  shipped recipe          0.4354  0.4192  0.5577  0.4708 +/- 0.0757
+  R4  settled recipe          0.5405  0.5115  0.5174  0.5231 +/- 0.0153
+  NET R0 -> R4               +0.1051 +0.0923 -0.0403  +0.0524 +/- 0.0805   SIGN FLIPS
+
+  GuitarSet@70                 s42     s1      s2      mean +/- sd
+  NET R0 -> R4               +0.3448 +0.4581 +0.3266  +0.3765 +/- 0.0713   ALL POSITIVE
+```
+
+**Holds:** the GuitarSet net (+0.3765 +/- 0.0713, mean 5x the sd); the GuitarSet-data step on
+GuitarSet (+0.2823 +/- 0.0264); regularisation as a CONSISTENT COST on Klangio (-0.0592 +/-
+0.0348, all three negative); the second truncation as positive on Klangio on all three seeds
+(+0.0467 +/- 0.0508, though one value is +0.0004).
+
+**Retracted:** the Klangio net - so on the deployment corpus it is NOT ESTABLISHED which recipe
+is better, neither "wins" nor "regresses". Also the "adding GuitarSet lifts Klangio" step
+(+0.0810 / +0.0642 / **-0.0413**) and ADR 0575 D4's regularisation TRADE, which was read from
+one seed's two cells: on GuitarSet that step flips sign (+0.0997 / -0.0485 / +0.0458), so
+regularisation is a cost on the deployment corpus and noise on GuitarSet, not a Pareto trade.
+
+**What replicates instead is ADR 0554 D1's VARIANCE argument** - the half that never depended
+on a level. The both-truncation arm has the SMALLEST seed spread on both corpora: Klangio sd
+0.0153 against R0's 0.0757, GuitarSet 0.0308 against 0.0705. ADR 0554 measured that on 2-class
+ungated models; it transfers to the shipped 3-class gated family. A recipe whose output moves
+less between seeds is worth something on its own, which is precisely why ADR 0575's noise floor
+was such a problem.
+
+**The methodological error, stated:** ADR 0575 D5 put the +0.1051 net on the "reliable" side
+because it exceeded the measured 0.048 floor. That was the wrong test. *A one-seed noise floor
+bounds the STEPS, not the NET - the net is the sum of four steps, and if the steps are
+individually seed-sensitive their sum's spread can be larger, not smaller.* No amount of
+staring at the floor number would have caught it; only the seeds did.
+
+So the deployment-corpus recipe question is OPEN, and more seeds on the same instrument are not
+how to close it. The instrument that can is ADR 0577's in-situ sweep, which measures the app's
+actual path end to end; comparing a candidate there needs its weights exported to a `.bin` and
+the sweep run with `STRUM_3C_ASSET`. Not claimed: n=3, so the +/- sd is indicative and not a
+confidence interval; oracle windows throughout this ladder; and the GuitarSet advantage is not a
+shipping claim, since GuitarSet is not the deployment condition and that cell favours the arms
+that trained there.

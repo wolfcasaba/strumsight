@@ -78,8 +78,10 @@ MARGIN_BANDS = ((0.0, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.5), (0.5, 1.0))
 
 # name -> (corpora, truncations, reg, monitor, epochs, batch, one-line what-changed)
 ARMS = {
+    # Descriptions name the RECIPE only. The split is a property of --data, printed once at
+    # the top, so an arm label stays true in both modes.
     "R0": (("klangio",), ("70",), {}, "val_accuracy", 40, 32,
-           "the SHIPPED recipe, on the settled split"),
+           "the SHIPPED recipe (no reg, val_accuracy/40/bs32)"),
     "R1": (("klangio",), ("70",), {}, "val_loss", 60, 64,
            "+ the fit schedule (val_loss / 60 ep / bs64)"),
     "R2": (("klangio",), ("70",), H.AUG_REG, "val_loss", 60, 64,
@@ -91,8 +93,16 @@ ARMS = {
     # Added only if the ladder points at one step; kept here so the file records the design.
     "R5": (("klangio", "guitarset"), ("70", "full"), {}, "val_loss", 60, 64,
            "the settled recipe WITHOUT regularisation"),
+    # The `allklangio` ladder's endpoint: every settled factor EXCEPT the GuitarSet data, so
+    # it can be scored against the shipped asset on GuitarSet as a genuine third corpus.
+    "R2T": (("klangio",), ("70", "full"), H.AUG_REG, "val_loss", 60, 64,
+            "+ the second truncation, Klangio only (settled recipe minus GuitarSet)"),
 }
 LADDER = ("R0", "R1", "R2", "R3", "R4")
+# The matched-data ladder: Klangio-only arms, so GuitarSet stays a third corpus for all of
+# them AND for the shipped asset. R3/R4 cannot appear here - they would train on the corpus
+# that is supposed to be unseen.
+MATCHED = ("R0", "R1", "R2", "R2T")
 
 
 # ---------------------------------------------------------------------------------------
@@ -106,7 +116,25 @@ TRUNCATIONS = {
 }
 
 
-def load_cells():
+def load_cells(mode="heldout"):
+    """`mode` picks WHAT the held-out cells are, and that choice is the whole design.
+
+    "heldout" (ADR 0575's ladder): Klangio guitarist '4' and GuitarSet players 03-05 x
+        Funk3/Rock3 are held out. Lets the recipe factors be compared to each other under one
+        split, but NOT to the shipped asset - every Klangio cell favours the shipped asset
+        (same-player, ADR 0573 D1) and every GuitarSet cell favours an arm that trained on
+        GuitarSet (ADR 0573 D6).
+
+    "allklangio" (ADR 0576): nothing is held out of Klangio, and GuitarSet is not trained on
+        at all, so ALL 3056 of its sweeps become a THIRD corpus - unseen by the arms AND
+        unseen by the shipped asset, which trained on Klangio only. That is the one cell
+        where the shipped ARTEFACT can be compared to a candidate fairly, and it also removes
+        the confound ADR 0573 D4 had to declare: the arms now train on all three Klangio
+        guitarists, exactly as the shipped asset did, so a difference on GuitarSet is the
+        RECIPE and not the missing third of the player diversity. The price is that the
+        Klangio cell stops being a held-out number for the arms - it is reported and labelled,
+        never read as one.
+    """
     cells = {}
     for trunc, (deadline, k_pos, k_neg, g_pos, g_neg) in TRUNCATIONS.items():
         px, py, prec = H.build_live(deadline_s=deadline, cache=k_pos)
@@ -115,7 +143,12 @@ def load_cells():
         y = np.concatenate([py, np.full(len(nx), NO_STRUM, dtype=py.dtype)])
         rec = np.concatenate([prec, nrec])
         held = np.array([K.guitarist_of(r) for r in rec]) == KLANGIO_TEST_GUITARIST
-        cells[("klangio", trunc)] = (X, y, np.array([f"k{r}" for r in rec]), ~held, held)
+        if mode == "allklangio":
+            # Everything trains; the cell is reported only to show it is NOT held out.
+            k_train, k_test = np.ones(len(y), bool), held
+        else:
+            k_train, k_test = ~held, held
+        cells[("klangio", trunc)] = (X, y, np.array([f"k{r}" for r in rec]), k_train, k_test)
 
         px, py, pplayer, ptune = G.build(deadline_s=deadline, cache=g_pos)
         nx, nplayer, ntune = G.build_negatives(deadline, g_neg)
@@ -124,6 +157,11 @@ def load_cells():
         player = np.concatenate([pplayer, nplayer])
         tune = np.concatenate([ptune, ntune])
         train, test = G.split_masks(player, tune)
+        if mode == "allklangio":
+            # Never trained on, so ALL of it is the third corpus - including the 1471
+            # positives in the crossed player x tune combinations that `split_masks` leaves
+            # unused, which no arm and no shipped asset has ever seen.
+            train, test = np.zeros(len(y), bool), np.ones(len(y), bool)
         groups = np.array([f"g{p}_{t}" for p, t in zip(player, tune)])
         cells[("guitarset", trunc)] = (X, y, groups, train, test)
         for corpus in ("klangio", "guitarset"):
@@ -131,6 +169,16 @@ def load_cells():
             print(f"  {corpus:<9} {trunc:>4}: train {int(tr.sum()):5d} / "
                   f"held-out {int(te.sum()):5d}  "
                   f"({int((yy[te] < NO_STRUM).sum())} true strums)", flush=True)
+        if mode == "allklangio":
+            # The fairness of the GuitarSet cell IS this mask, so assert it rather than
+            # trusting the print above: one GuitarSet row in training and the cell stops
+            # being a third corpus, silently, and the comparison it exists to make becomes
+            # the very thing ADR 0573 D6 rejected.
+            _, _, _, g_tr, g_te = cells[("guitarset", trunc)]
+            _, _, _, k_tr, _ = cells[("klangio", trunc)]
+            assert not g_tr.any(), f"{trunc}: GuitarSet must not be trained on in this mode"
+            assert g_te.all(), f"{trunc}: all of GuitarSet must be in the held-out cell"
+            assert k_tr.all(), f"{trunc}: all of Klangio must be trained on in this mode"
     return cells
 
 
@@ -275,11 +323,19 @@ def run_arm(name, cells, seed):
     return out
 
 
-def run_shipped(cells):
+def run_shipped(cells, mode="heldout"):
     print("\n=== SHIPPED asset (assets/ml/strum_crnn_live_3c.bin) ===", flush=True)
-    print("    bias: it trained on most of guitarist 4's recordings, so the Klangio cell "
-          "FAVOURS it;", flush=True)
-    print("          it never saw GuitarSet, so that cell is pure OOD for it.", flush=True)
+    if mode == "allklangio":
+        print("    bias: NONE on the GuitarSet cell - neither it nor any arm here has seen "
+              "that corpus,", flush=True)
+        print("          and both trained on all three Klangio guitarists. This is the fair "
+              "cell.", flush=True)
+        print("          The Klangio cell is training data for the arms: ignore it.",
+              flush=True)
+    else:
+        print("    bias: it trained on most of guitarist 4's recordings, so the Klangio cell "
+              "FAVOURS it;", flush=True)
+        print("          it never saw GuitarSet, so that cell is pure OOD for it.", flush=True)
     model, mean, std = load_keras(SHIPPED_BIN)
     out = {}
     for gate, label in ((SHIPPED_CALIBRATED_GATE, "own, blind"),
@@ -295,23 +351,42 @@ def main():
     if not os.environ.get("GUITARSET_DIR"):
         sys.exit("set GUITARSET_DIR")
     seed = 42
-    arms = list(LADDER)
+    mode = "heldout"
+    arms = None
     for arg in sys.argv[1:]:
         if arg.startswith("--seed="):
             seed = int(arg.split("=", 1)[1])
         elif arg.startswith("--arms="):
             arms = [a.strip() for a in arg.split("=", 1)[1].split(",") if a.strip()]
-    print(f"E18-R44 recipe ladder, seed {seed}, arms {arms}")
+        elif arg.startswith("--data="):
+            mode = arg.split("=", 1)[1].strip()
+    if mode not in ("heldout", "allklangio"):
+        sys.exit(f"--data must be heldout or allklangio, not {mode!r}")
+    if arms is None:
+        arms = list(LADDER if mode == "heldout" else MATCHED)
+    if mode == "allklangio":
+        bad = [a for a in arms if "guitarset" in ARMS[a][0]]
+        if bad:
+            sys.exit(f"--data=allklangio needs Klangio-only arms; {bad} train on GuitarSet, "
+                     "which is the corpus that has to stay unseen")
+    print(f"E18-R44 recipe ladder, seed {seed}, data={mode}, arms {arms}")
     print("")
-    print("cells (the SETTLED split: Klangio guitarist '4' out, "
-          "GuitarSet players 03-05 x Funk3/Rock3 out)")
-    cells = load_cells()
+    if mode == "heldout":
+        print("cells (the SETTLED split: Klangio guitarist '4' out, "
+              "GuitarSet players 03-05 x Funk3/Rock3 out)")
+    else:
+        print("cells (MATCHED DATA: nothing held out of Klangio - so its cell is NOT a "
+              "held-out number -\n       and ALL of GuitarSet is a THIRD corpus, unseen by "
+              "the arms AND by the shipped asset)")
+    cells = load_cells(mode)
 
-    report = {"seed": seed, "arms": {}, "shipped": run_shipped(cells)}
+    report = {"seed": seed, "data_mode": mode, "arms": {},
+              "shipped": run_shipped(cells, mode)}
+    suffix = "" if mode == "heldout" else f"_{mode}"
     for name in arms:
         report["arms"][name] = run_arm(name, cells, seed)
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            f"recipe_ladder_seed{seed}.json")
+                            f"recipe_ladder{suffix}_seed{seed}.json")
         with open(path, "w") as handle:
             json.dump(report, handle, indent=2)
         print(f"    -> {path}", flush=True)
@@ -324,10 +399,12 @@ def main():
     print("  arm  what changed                                  "
           "Klangio@70  GSet@70   Klangio@full  GSet@full")
     ship = report["shipped"]["own, blind"]
+    note = ("   <- GSet cells are the FAIR ones here" if mode == "allklangio"
+            else "   <- Klangio cell FAVOURS it")
     print(f"  {'SHIP':<4} {'the shipped asset (own gate 0.439)':<45} "
           f"{ship['klangio|70']['macro_f1']:.4f}      {ship['guitarset|70']['macro_f1']:.4f}"
           f"    {ship['klangio|full']['macro_f1']:.4f}        "
-          f"{ship['guitarset|full']['macro_f1']:.4f}   <- Klangio cell FAVOURS it")
+          f"{ship['guitarset|full']['macro_f1']:.4f}{note}")
     prod = report["shipped"]["production"]
     print(f"  {'':<4} {'the same asset at the PRODUCTION gate 0.85':<45} "
           f"{prod['klangio|70']['macro_f1']:.4f}      {prod['guitarset|70']['macro_f1']:.4f}"
@@ -343,17 +420,26 @@ def main():
     print("")
     print("  a 'full' cell for an arm that trained at 70 ms only is CROSS-TIER "
           "(experiment_deadline_augmentation.py: that cell collapses) -- not a comparison.")
+    if mode == "allklangio":
+        print("  the Klangio cells above are TRAINING DATA for every arm -- not held-out "
+              "numbers. Do not read them.")
 
     print("")
-    print("=== step by step, on the DEPLOYMENT corpus (Klangio @70) ===")
+    read_cell = "klangio|70" if mode == "heldout" else "guitarset|70"
+    label = ("the DEPLOYMENT corpus (Klangio @70)" if mode == "heldout"
+             else "the THIRD corpus (GuitarSet @70) -- unseen by the arms AND by SHIP")
+    print(f"=== step by step, on {label} ===")
+    if mode == "allklangio":
+        print(f"  SHIP  {ship[read_cell]['macro_f1']:.4f}   the shipped asset, same data, "
+              f"same corpus unseen -- the bar, fairly")
     prev = None
     for name in arms:
-        value = report["arms"][name]["cells"]["klangio|70"]["macro_f1"]
+        value = report["arms"][name]["cells"][read_cell]["macro_f1"]
         delta = "" if prev is None else f"   {value - prev:+.4f}"
-        print(f"  {name}  {value:.4f}{delta}   {report['arms'][name]['what_changed']}")
+        print(f"  {name:<4}  {value:.4f}{delta}   {report['arms'][name]['what_changed']}")
         prev = value
     print("")
-    print("wrote", f"recipe_ladder_seed{seed}.json")
+    print("wrote", f"recipe_ladder{suffix}_seed{seed}.json")
 
 
 if __name__ == "__main__":

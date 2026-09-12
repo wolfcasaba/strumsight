@@ -44,6 +44,13 @@ sides of the line in any class.
 
     GUITARSET_DIR=/path/to/guitarset python ml/train_live_3c_settled.py [--seed=42]
 
+E18-R44 (ADR 0575 D7) additionally records PER-TIER class-blind thresholds, because the
+`tier` array this script builds — with a comment explaining why the gate should be calibrated
+per tier — was never consumed, and every recorded gate was pooled over both truncations. The
+shipped selection is unchanged; the per-tier numbers are recorded for the wiring round. Note
+that the `live_3c_settled_threshold.json` currently on the tree PREDATES this and therefore
+carries no `per_tier_class_blind` block — it appears on the next training run.
+
 Writes `weights_live_3c_settled.npz`, `live_3c_settled_threshold.json` and
 `assets/ml/strum_crnn_live_3c_settled.bin`. **The shipped
 `assets/ml/strum_crnn_live_3c.bin` is NOT touched** - swapping it over is the wiring round's
@@ -212,6 +219,33 @@ def main(seed=SEED):
     p_neg = model.predict(Xn[val_neg], verbose=0)
     y_pos = y[val_pos]
     gates = {"class_blind": H._gate(p_pos[:, NO_STRUM], p_neg[:, NO_STRUM])}
+
+    # ---- PER-TIER thresholds (ADR 0575 D7) ------------------------------------------
+    # The `tier` array this function receives was built, justified in the comment inside
+    # `build_dataset`, and then never consumed: every gate here is pooled over BOTH
+    # truncations, which is exactly what that comment argued against. Per-tier thresholds
+    # cost nothing (the gate is a Dart-side scalar, not part of the asset), so they are now
+    # computed and recorded.
+    #
+    # The DIRECTION of the error is known, not guessed: ADR 0575's R4 arm is this recipe with
+    # per-tier calibration, and its thresholds STRADDLE the pooled one — 0.1962 at 70 ms,
+    # 0.0462 untruncated, against the pooled 0.1245. So the pooled gate UNDER-retains at
+    # 70 ms, which is the tier the arrow lives in, and over-retains at 238 ms.
+    #
+    # They are deliberately NOT made the shipped selection. ADR 0575 D5 swept the settled
+    # asset from its pooled 0.1245 to NO gate at all and the entire headroom is <= 0.03
+    # macro, with the sweep's optimum at no gate — which reopens ADR 0549's phantom trade
+    # rather than handing over a free win. This is a correctness fix that puts a number in
+    # front of the next wiring round, not a lever being pulled.
+    per_tier = {}
+    tier_pos, tier_neg = tier[val_pos], tier[val_neg]
+    for label in sorted(set(tier.tolist())):
+        rows_p, rows_n = tier_pos == label, tier_neg == label
+        per_tier[label] = H._gate(p_pos[rows_p, NO_STRUM], p_neg[rows_n, NO_STRUM])
+        print(f"[gate tier {label:>7}] threshold={per_tier[label][0]:.6f} keeps "
+              f"{per_tier[label][1]:.3f} of true strums, rejects {per_tier[label][2]:.3f} "
+              f"of false onsets (n={int(rows_p.sum())}/{int(rows_n.sum())})")
+
     per_class = {}
     for cls, name in ((DOWN, "down"), (UP, "up")):
         rows = y_pos == cls
@@ -282,6 +316,20 @@ def main(seed=SEED):
                               "true_strum_retention": ret,
                               "false_onset_rejection": rej}
                       for label, (thr, ret, rej) in gates.items()},
+            "per_tier_class_blind": {label: {"no_strum_threshold": thr,
+                                             "true_strum_retention": ret,
+                                             "false_onset_rejection": rej}
+                                     for label, (thr, ret, rej) in per_tier.items()},
+            "per_tier_note": "ADR 0575 D7. The gates above are pooled over BOTH truncations, "
+                             "which the comment in build_dataset argued against and then "
+                             "nobody acted on: P(no-strum) has no reason to be distributed "
+                             "alike with 70 ms of audio versus 238 ms, and the gate is a "
+                             "Dart-side scalar so per-tier costs nothing. Recorded, NOT "
+                             "shipped: ADR 0575 D5 swept the settled asset from its pooled "
+                             "0.1245 to no gate at all and the whole headroom is <=0.03 "
+                             "macro, optimum at no gate — which reopens ADR 0549's phantom "
+                             "trade rather than being a free win. The next wiring round "
+                             "chooses with these numbers in front of it.",
             "no_strum_threshold": gates["class_conditional"][0],
             "shipped_gate_rule": "class_conditional",
             "gate_rule_note": "ADR 0549's class-blind rule is textbook Chow (1970), whose "

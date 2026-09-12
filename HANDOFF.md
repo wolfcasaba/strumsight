@@ -14761,7 +14761,9 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **E18-R43c — A SETTLED ASSET A TELEPÍTÉSI KORPUSZON VISSZAESIK; AZ ADR 0567 D3 CSERE-
   JAVASLATA VISSZAVONVA (ADR 0569).** Az ADR 0567 D4 nyitva hagyta a Klangio-oldalt, kimondott
   okkal: a szállított asset Klangion **egyedül** tanult, a settled Klangio **+ GuitarSeten**,
-  tehát a +0,186 lehet **csere**. A korpusz nincs a gépen (in situ nem mérhető), de a kérdés
+  tehát a +0,186 lehet **csere**. ~~A korpusz nincs a gépen (in situ nem mérhető)~~ —
+  **HAMIS, ADR 0576: a korpusz a gépen VOLT, 9,5 órával korábban, és a mérésben használt
+  gyorsítótár éppen annak beolvasásából épült** —, de a kérdés
   igen: az új **`ml/read_ssml.py`** mindkét `.bin`-t **egy** Keras-gráfba tölti — egy műszer,
   két asset, ugyanazok az ablakok (az L682 §1 szabálya).
   **Minden Klangio-fold torzít, és a torzítás IRÁNYA a műszer.** A szállított a **felvételek**
@@ -14880,7 +14882,8 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   KLANGION −0,2455 (ADR 0572).** Az ADR 0571 GuitarSeten in situ **+0,1679**-et mért a
   „minden ütést letisztítani" szabályra. De az ADR 0569 már megmutatta, hogy a két korpusz
   **előjelben** is eltérhet, és hogy a **Klangio** a telepítési feltétel — tehát az L684 §3
-  saját szabályom a **saját** eredményemre is áll. A Klangio-audió nincs a gépen, de a két
+  saját szabályom a **saját** eredményemre is áll. ~~A Klangio-audió nincs a gépen~~ (**ADR
+  0576: a gépen volt**), de a két
   levágás gyorsítótára igen (`klangio_live70.npz` / `klangio_live_full.npz`, **sor-azonosak
   és ellenőrizve**), és az ADR 0571 D4 épp erre a **delta**-kérdésre korroborálta az
   orákulum-műszert.
@@ -14990,17 +14993,90 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   diszjunktság **mértékegységét**, és **mindkét irányban ellenőrizve** (a játékos-diszjunkt
   splitterre elsül). **Gate:** zöld. **Semmi nem kerül felkapcsolásra**, a `settledTier` marad
   **false**, asset nem cserélve, szállított konstans nem mozdítva.
-  **KÖVETKEZŐ:** (1) **a létra megismétlése `honest_eval.STD_SEEDS = [42, 1, 2]`-vel** — az
-  ADR 0575 D5 zajpadlója szerint a lépés-delták fele egy seeden nem feloldható, és a nettó
-  állítás ettől lesz szórásos; (2) **egy HARMADIK korpusz, amit egyik modell sem látott** — az
-  ADR 0573 D6 szerint ez az **egyetlen** szerkezeti feloldás a „szállított vs jelölt" kérdésre,
-  tehát a **címkézett felvétel** és a **Guitar-TECHS** ingesztálás ettől a körtől nem
-  „jó lenne", hanem a szállítási döntés **előfeltétele**; (3) a `pool_tier` elfogyasztása
-  (tierenkénti `class_blind` kapu) helyességi javításként; (4) az **R5** kar (settled recept
-  regularizáció **nélkül**) — már definiálva a létrában, mérve nincs; (5) a Klangio **in-situ**
-  söprése, ha a korpusz bekerül a gépre;
-  (3) ha a Klangio korpusz bekerül a gépre, a Klangio **in-situ** söprés a
-  `guitarset_threshold_sweep_test.dart` mintájára; (2) **on-device mérés** (CI/profile) a **gyors**
+  **E18-R45 — A KLANGIO KORPUSZ A GÉPEN VOLT, AMIKOR HÁROM ADR AZT ÍRTA, HOGY NINCS; A
+  TELEPÍTÉSI KORPUSZ ELŐSZÖR IN SITU; ÉS HÁROM SEED VISSZAVONJA AZ ELŐZŐ KÖR FŐÁLLÍTÁSÁNAK
+  FELÉT (ADR 0576, 0577, 0578).**
+  **(1) A KORPUSZ A GÉPEN VOLT (ADR 0576).** `ml/data/klangio/` — **82** telefon-wav
+  (44,1 kHz mono, ~60 s) + **82** `.strums`, gitignore-olva (`git ls-files | grep -c '\.wav$'`
+  → **0**, a harmadik-fél audió szabály sértetlen). Ez a **telepítési feltétel**. Az időrend:
+  **12:38–12:42** a korpusz a gépre kerül → **12:53** a `klangio_live70.npz` **ebből épül** →
+  **22:12** az ADR 0569 commit: *„a Klangio korpusz NINCS A GÉPEN"* → **22:44** az ADR 0572
+  ugyanezt megismétli. **Kilenc és fél óra.** És nem következtetés: az 1001-es felvétel ablakai
+  a helyi audióból újraépítve **bitre** egyeznek a gyorsítótárral (**49/49 sor, max |Δ| = 0**).
+  Három ADR azon a derivátumon mért, amiről azt írta, hogy a forrása nem elérhető. **Harmadik
+  cáfolat r164 óta a repóban:** a `test/tools/klangio_real_ab_test.dart`-ban
+  `const dataDir = 'ml/data/klangio'`, és „auto-skips when ml/data/klangio is absent" — a repó
+  **kész elérhetőség-próbát** tartalmazott. Javítva **10 helyen, 5 fájlban**; a számok állnak
+  (orákulum-ablakosak voltak és annak is nevezték magukat), az **elnapolás** dőlt meg.
+  **Tanulság L690:** *egy hamis szám messzebb nem jut, mert a következő kör újramérné; egy
+  hamis „ezt nem tudjuk megmérni" viszont **kifogásként** viselkedik, tehát a következő kör nem
+  ellenőrzi, hanem **örökli** — és épít rá korlátot meg elnapolási tételt, amitől minden körrel
+  drágább kimondani, hogy az alapja egy `ls` volt.*
+  **(2) EGY MŰSZER, KÉT KORPUSZ (ADR 0577).** Kiszerveztem a söprés gépezetét a
+  `test/support/live_sweep_harness.dart`-ba (streamelt pass, letisztult ablak, margó-kapu,
+  onset-egyeztető, kapu-ladder, F1-konvenció), és **ellenőriztem, hogy nem mozdult szám**: a
+  GuitarSet-söprés az ADR 0571 D2 táblájának **minden jegyét** reprodukálja (0,3872 → 0,5551,
+  +0,1679, le 0,9032, fel 0,2069, missing 1). Másolni helyette azt jelentette volna, hogy két
+  korpusz csendben két műszert mér (L269, L682).
+  **(3) A TELEPÍTÉSI KORPUSZ IN SITU, ELŐSZÖR.** 82 felvétel, **11767** annotált pengetés,
+  13142 SuperFlux onset, 18 egybeolvadás miatt kizárva. Szállított asset, 0,850-es kapu,
+  margin on: onset **P 0,7264 / R 0,7021 / F1 0,7141**, **irány-macro 0,9166** (le 0,9398, fel
+  0,8934). **NEM generalizációs állítás:** `split: all`, és a szállított asset ezek ~80%-án
+  tanult (ADR 0573 D1) — **same-player** szám. **A letisztult tier itt −0,3355** (0,9166 →
+  0,5811; fel 0,8934 → **0,3429**; `settledMissing` = 0). Az ADR 0572 D1 orákulumon −0,2455-öt
+  mért: **ugyanaz az előjel, nagyobb magnitúdó** — tehát az **ADR 0571 D4 korlátja igazolva**
+  (az orákulum a delta ELŐJELÉRE korroborált, a SZINTJÉRE nem: itt 0,09-cel tévedett, helyes
+  irányban), és a „ne kapcsold fel a szállított assettel" mostantól **in-situ, telepítési
+  korpuszú** számon áll. **Az onsetR 0,70 nem regresszió:** a 89,6% a **nyers detektor** ±0,12 s
+  ablakkal, ez a **teljes pipeline** ±50 ms-mal (2,4× szigorúbb, későbbi fázis), és az
+  `onset_recall_probe_test.dart` első sora r164 óta pont a **73%**-ot kérdezi. A kapu **nincs
+  benne**: teljes felengedése 0,7021 → 0,7078 (**+0,006**). **A kapu viszont megkeresi az árát**,
+  végponttól végpontig először: **+0,0884 precizitás −0,0057 megtartásért.**
+  **(4) HÁROM SEED, ÉS VISSZAVONJA AZ ELŐZŐ KÖRT (ADR 0578).** Az ADR 0575 D5 **saját**
+  előírása szerint (`STD_SEEDS = [42, 1, 2]`). **Nettó R0 → R4, Klangio: +0,1051 / +0,0923 /
+  −0,0403** — átlag +0,0524 ± **0,0805**, **előjelet vált**. Tehát a telepítési korpuszon **nem
+  megállapított**, melyik recept jobb: se nem „nyer", se nem „visszaesik". **Áll:** a GuitarSet
+  nettó **+0,3765 ± 0,0713** (mindhárom pozitív), a GuitarSet-adat lépése GuitarSeten
+  **+0,2823 ± 0,0264**, a regularizáció Klangión **következetes költség** (−0,0592 ± 0,0348,
+  mindhárom negatív), és a 2. levágás Klangión mindhárom seeden pozitív (+0,0467 ± 0,0508).
+  **Visszavonva:** a D2 Klangio-fele, a D3 Klangio-lépése („a GuitarSet a Klangiót is emeli" —
+  s2-n **−0,0413**), és a D4 Pareto-csere (a regularizáció GuitarSeten **előjelet vált**:
+  +0,0997 / −0,0485 / +0,0458 — tehát zaj, nem nyereség). **Ami viszont REPLIKÁL: az ADR 0554 D1
+  szórás-érve** — a mindkét levágáson tanított kar **mindkét korpuszon a legkisebb
+  seed-szórású** (Klangio sd **0,0153** az R0 0,0757-e ellen; GuitarSet 0,0308 a 0,0705 ellen).
+  Ez az ADR 0554 érvének az a fele, ami a szállító (3-osztályú, kapuzott) családra **átvisz**.
+  **A módszertani hiba kimondva:** az ADR 0575 D5 a +0,1051-es nettót azért tette a
+  „megbízható" oldalra, mert nagyobb volt a 0,048-as padlónál. *Rossz teszt: egy egy-seedes
+  zajpadló a LÉPÉSEKRE ad korlátot, nem a NETTÓRA — a nettó négy lépés összege, és ha a lépések
+  külön-külön seed-érzékenyek, az összegük szórása nagyobb lehet, nem kisebb.*
+  **(5) ELFOGYASZTVA a `pool_tier` (ADR 0575 D7 folytatása).** A
+  `train_live_3c_settled.py` mostantól **tierenkénti** `class_blind` kaput is kiszámol és
+  rögzít (`per_tier_class_blind`). A szállított választás **nem** változik: a headroom ≤0,03, és
+  a söprés optimuma a kapu nélküli eset, ami az ADR 0549 fantom-cseréjét nyitja újra. Az irány
+  viszont **ismert**: az R4 tierenkénti kapui **közrefogják** a poolozottat (0,1962 @70 /
+  0,0462 @full vs pooled 0,1245), tehát a poolozott kapu a **70 ms-os** tieren
+  **alul-megtart** — ott, ahol a nyíl él.
+  **(6) DART DOC-JAVÍTÁSOK.** A `strum_analyzer.dart` két helyen az ADR 0569 visszaesés-olvasatát
+  hordozta; javítva (az utasítás — *ne kapcsold fel a szállított assettel* — **áll**, de az oka
+  megváltozott: soron belüli OOD, nem egy asset-rangsor). A `live_crnn_classifier.dart` gate-doc
+  mostantól kiírja, hogy a „HELD-OUT eval fold" **felvétel**-diszjunkt és **nem**
+  játékos-diszjunkt, tehát a 0,807-es iránypontosság **same-player** szám, és az új-játékos szám
+  az r172 LOGO (0,6061 ± 0,0548, legrosszabb fold 0,5289).
+  **Gate:** zöld. **Semmi nem kerül felkapcsolásra**, `settledTier` **false**, asset nem
+  cserélve, szállított konstans nem mozdítva.
+  **KÖVETKEZŐ:** (1) **a telepítési korpusz in-situ ASSET-összevetése** — a settled asset
+  `STRUM_3C_ASSET=…`-tel ugyanazon a söprésen, és `KLANGIO_SPLIT=guitarist4`-en; ez az
+  ADR 0578 D6 szerint a helyes következő lépés, **nem** újabb seed-kör; (2) a **matched-data
+  létra lefuttatása** (`--data=allklangio`, már megírva és assertelve): minden kar CSAK
+  Klangión tanul mind a három gitároson, tehát **az EGÉSZ GuitarSet (3056 pengetés) harmadik
+  korpusz a karoknak ÉS a szállított assetnek is** — ez az egyetlen sejt, ahol a szállított
+  **artefaktum** tisztességesen összevethető egy jelölttel (a bar mérve: SHIP **0,2997** a
+  produkciós kapun); (3) az **R5** kar (settled recept regularizáció **nélkül**) — az ADR 0578
+  szerint a regularizáció Klangión következetes költség, tehát ez most **mérendő**, nem
+  opcionális; (4) a **címkézett felvétel**;
+  (3) ~~ha a Klangio korpusz bekerül a gépre~~ — **a gépen van (ADR 0576)** —, a Klangio
+  **in-situ** söprés megírva: `test/tooling/klangio_threshold_sweep_test.dart`;
+  (2) **on-device mérés** (CI/profile) a **gyors**
   tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a
   `settledTier` felkapcsolása az ADR 0556 D3 szabályával; (4) a **címkézett felvétel** —
   továbbra is az egyetlen ismert forrása az inga-sértő ütéseknek, **és** az egyetlen módja a

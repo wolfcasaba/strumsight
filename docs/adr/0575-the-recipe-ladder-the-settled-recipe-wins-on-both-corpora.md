@@ -1,7 +1,11 @@
 # ADR 0575 — A recept-létra: a két recept HAT dologban tér el, és egy illesztett splitten a settled recept MINDKÉT korpuszon győz (+0,105 Klangio, +0,345 GuitarSet)
 
-- **Státusz:** elfogadva (mérés; az ADR 0569 **következtetését** megfordítja, a mechanizmus-listáját
-  **kizárja**; semmi nem kerül felkapcsolásra)
+- **Státusz:** elfogadva **részben**. Az **ADR 0578** három seeden megismételte, és a
+  **D2 KLANGIO-felét, a D3 Klangio-lépését és a D4-et VISSZAVONTA** (a nettó Klangion
+  előjelet vált: +0,1051 / +0,0923 / **−0,0403**). **Áll:** a D2 GuitarSet-fele
+  (+0,3765 ± 0,0713 három seeden), a D1 létra-terv, a D5 zajpadló, a D6 (ADR 0554-gyel nincs
+  ellentmondás), a D7 (`pool_tier` lelet) és a D8. A címben szereplő „MINDKÉT korpuszon
+  győz" tehát **csak a GuitarSetre** érvényes. Semmi nem kerül felkapcsolásra.
 - **Dátum:** 2026-09-12
 - **Kör:** E18-R44
 - **Kapcsolódó:** ADR 0573 (miért ez a létra a helyes műszer, és miért nem bíró a szállított
@@ -73,6 +77,13 @@ levágásra kalibrált kapuján):
 legyőzi** — Klangion +0,1051, GuitarSeten +0,3448 —, **és a második levágás a 70 ms-os tieren
 nem kerül semmibe** (+0,0004), miközben a 238 ms-os tiert **megvásárolja** (0,4231 → 0,6112).
 
+> **RÉSZBEN VISSZAVONVA (ADR 0578).** Három seeden a nettó **Klangion előjelet vált**
+> (+0,1051 / +0,0923 / **−0,0403**, átlag +0,0524 ± 0,0805), tehát a telepítési korpuszon
+> **nem megállapított**, melyik recept jobb — se nem „nyer", se nem „visszaesik". A
+> **GuitarSet-fele áll**: +0,3448 / +0,4581 / +0,3266, átlag **+0,3765 ± 0,0713**. A második
+> levágás Klangión mindhárom seeden pozitív (+0,0004 / +0,0388 / +0,1010), tehát az is áll,
+> de a legszűkebben.
+
 ### D3 — Ez megfordítja az ADR 0569 következtetését, és kizárja a mechanizmus-listáját
 
 Az ADR 0569 fő állítása — *„a settled asset a telepítési korpuszon visszaesik"* — a **szállított
@@ -83,12 +94,20 @@ visszaesés**: a settled recept nyer.
 
 - **„a GuitarSet-adat domináns hatása"** — a GuitarSet hozzáadása a **Klangiót** is emeli,
   **+0,0810**-nel (R2 → R3). A kereszt-korpusz adat nem elvesz a telepítési korpusztól, hanem ad.
+  > **VISSZAVONVA (ADR 0578 D3).** Három seeden ez a lépés is előjelet vált Klangión:
+  > +0,0810 / +0,0642 / **−0,0413**. A GuitarSet-adat hatása a telepítési korpuszra **nem
+  > megállapított**. (A GuitarSeten mért +0,2823 ± 0,0264 viszont áll.)
 - **„a guitarist-diszjunkt split nehezebb célja"** — igaz, de nem a settled recept ellen szól:
   minden kar ezen a splitten van, tehát a nehézség **kiesik** a létra deltáiból.
 
 A mikrofon-karakter és a kapacitás **nincs mérve**, és nem is állítunk róluk semmit (L681).
 
 ### D4 — A REGULARIZÁCIÓ nem ingyen van, és a cserét ki kell írni
+
+> **VISSZAVONVA (ADR 0578 D4).** Nincs csere. Három seeden a regularizáció Klangión
+> **következetesen költség** (−0,0217 / −0,0905 / −0,0656), GuitarSeten pedig **előjelet vált**
+> (+0,0997 / −0,0485 / +0,0458) — tehát zaj, nem nyereség. Az alábbi Pareto-csere egyetlen
+> seed két cellájából olvasva született, és nincs ott.
 
 Az R1 → R2 lépés a Klangión **−0,0217**, a GuitarSeten **+0,0998**. Vagyis a regularizáció a
 kereszt-korpusz transzferért fizet in-domain pontossággal — **pont az a csere, amit az
@@ -122,6 +141,14 @@ megmondja, mit NEM olvashatok ki egy seedből:
   és a második levágás 70 ms-os hatása (+0,0004). A D4 GuitarSet-oldala (+0,0998) a határon van.
 
 A következő kör dolga ezeket a `honest_eval.STD_SEEDS = [42, 1, 2]`-vel megismételni.
+
+> **MEGTÖRTÉNT, és a fenti osztályozás HIÁNYOS volt (ADR 0578 D7).** A „NEM feloldható" lista
+> két tétele valóban megfordult — de megfordult a **„Megbízható" lista első két tétele is**: a
+> GuitarSet-lépés Klangión (−0,0413 az s2-n) és a **nettó** Klangión (−0,0403 az s2-n). A hiba
+> a következtetésben volt, nem a padló számában: *egy egy-seedes zajpadló a LÉPÉSEKRE ad
+> korlátot, nem a NETTÓRA — a nettó négy lépés összege, és ha a lépések külön-külön
+> seed-érzékenyek, az összegük szórása nagyobb lehet, nem kisebb.* A 0,1051 azért került a
+> „megbízható" oldalra, mert 0,048-nál nagyobb; ez rossz teszt volt.
 
 ### D6 — Az ADR 0554 D1-gyel NINCS ellentmondás, mert más modell-családon mérte
 

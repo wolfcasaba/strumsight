@@ -18,7 +18,9 @@ volt — a szállított asset Klangion **egyedül** tanult, a settled Klangio **
 tehát a GuitarSeten mért **+0,186** lehet **csere**, nem nyereség.
 
 Az in-situ változat ebben a környezetben nem elérhető: a Klangio korpusz **nincs a gépen**, a
-Dart pipeline pedig audiót fogyaszt, nem gyorsítótárazott ablakot. A **mögötte lévő kérdés**
+Dart pipeline pedig audiót fogyaszt, nem gyorsítótárazott ablakot.
+
+> **JAVÍTVA (ADR 0576): a korpusz a gépen VAN** — `ml/data/klangio/`, 82 telefon-wav + 82 `.strums`, gitignore-olva, és 9,5 órával az állítás előtt került oda; a `klangio_live70.npz` éppen annak beolvasásából épült. Az itteni számok orákulum-ablakosak és azok is maradnak, de az in-situ mérés NEM volt elérhetetlen. A **mögötte lévő kérdés**
 viszont megválaszolható, mert az `ml/read_ssml.py` (ebben a körben) mindkét `.bin`-t be tudja
 tölteni **ugyanabba** a Keras-gráfba — egy műszer, két asset, ugyanazok az ablakok. Ez épp
 az, amit az L682 §1 megkövetel.
@@ -172,8 +174,9 @@ két-tier bekötése előtt az ADR 0563 mérését a **szállított** assetn meg
 
 - **Nincs in-situ Klangio szám.** Ezek **orákulum**-ablakok, a Python úton az annotált
   onsetre építve — a „melyik modell jobb ezen az audión" kérdésre válaszolnak, nem arra,
-  hogy „mit tenne az app". A korpusz nincs a gépen; ha bekerül, a mérés a
-  `guitarset_threshold_sweep_test.dart` mintájára megírható.
+  hogy „mit tenne az app". ~~A korpusz nincs a gépen; ha bekerül~~ — **a korpusz a gépen
+  van (ADR 0576)**, tehát a mérés a `guitarset_threshold_sweep_test.dart` mintájára
+  **megírható, most**.
 - **A szállított assetnek NINCS gitáros-diszjunkt Klangio száma**, mert a tanításakor ilyen
   split nem létezett. Ezért a „0,795 vs 0,507" **nem** érvényes modell-összevetés; az
   érvényes összevetések a D2 három **azonos foldos** sora.

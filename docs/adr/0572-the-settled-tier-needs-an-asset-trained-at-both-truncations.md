@@ -120,7 +120,11 @@ korpuszon is megvan.*
 
 ## Amit NEM állítunk
 
-- **A Klangio-számok ORÁKULUM-ablakosak**, nem in situ (a korpusz nincs a gépen). Az ADR
+- **A Klangio-számok ORÁKULUM-ablakosak**, nem in situ (~~a korpusz nincs a gépen~~ — **a
+  korpusz a gépen VAN, ADR 0576**: `ml/data/klangio/`, 82 telefon-wav + 82 `.strums`,
+  gitignore-olva, és a `klangio_live70.npz`, amin ez a kör mért, éppen annak beolvasásából
+  épült. A számok orákulum-ablakosak és azok is maradnak; az in-situ mérés viszont **nem**
+  volt elérhetetlen, tehát a Kontextus első bekezdésének indoklása megdőlt). Az ADR
   0571 D4 szerint ez **delta-kérdésekre** korroborált, szintekre nem — és itt delta a
   kérdés. Egy szállítási döntés előtt a Klangio in-situ söprése is kell.
 - **Nem magyarázzuk meg**, miért fordul az előjel a két korpusz között egy eloszláson kívüli

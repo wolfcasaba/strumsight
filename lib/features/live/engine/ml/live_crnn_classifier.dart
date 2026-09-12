@@ -184,6 +184,18 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
   /// players vs ~3 % for the r170 confidence gate — the noise the r170 finding
   /// proved confidence cannot touch. Only consulted for a 3-class model; a
   /// 2-class asset never suppresses (r139 fallback preserved).
+  ///
+  /// **What "HELD-OUT eval fold" means here, precisely (ADR 0573 D1).** It is held
+  /// out by RECORDING — the unit `klangio.split_by_recording` cuts on — and NOT by
+  /// player: all three guitarists sit on both sides of that line, and this model
+  /// trained on 22 of guitarist 4's 27 recordings. Guarded by
+  /// `ml/test_pipeline.py::test_split_by_recording_is_NOT_player_disjoint`. So every
+  /// eval-fold figure above, the 0.807 direction accuracy included, is a SAME-PLAYER
+  /// / new-recording number. The new-player figure for this recipe is r172's LOGO CV
+  /// in `ml/model_card.json`: live-70 ms direction accuracy 0.6061 ± 0.0548, worst
+  /// fold 0.5289 — roughly 19 points lower. Quote the LOGO number when asking what
+  /// this model does for a stranger; quote the eval fold only as what the gate was
+  /// fitted on.
   static const fittedNoStrumThreshold = 0.4387717843055725;
 
   /// What SHIPS, and deliberately not [fittedNoStrumThreshold].

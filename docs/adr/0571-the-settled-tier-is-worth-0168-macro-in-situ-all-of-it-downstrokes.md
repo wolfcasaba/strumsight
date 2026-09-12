@@ -125,7 +125,8 @@ a szállított assetn **nem** a helyes szabály.
 ## Amit NEM állítunk
 
 - **Nincs on-device szám.** 12 GuitarSet-fájl, host futás.
-- **Nincs Klangio-oldal IN SITU** (a korpusz nincs a gépen — ADR 0569). A +0,1679 a
+- **Nincs Klangio-oldal IN SITU** (~~a korpusz nincs a gépen — ADR 0569~~ — **a korpusz a
+  gépen van, ADR 0576; az elnapolás alaptalan volt**). A +0,1679 a
   GuitarSetre vonatkozik. ~~a telepítési korpuszon a letisztult tier hatása nincs
   megmérve~~ — **az ADR 0572 orákulum-ablakon megmérte, és ott −0,2455**, tehát a fenti
   szám nem általánosítható a telepítési feltételre.

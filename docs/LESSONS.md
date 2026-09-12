@@ -28906,3 +28906,92 @@ kontroll (k=0 az ellenkező alapvonalat adja) és a felbontás-korlát kimondás
 mérés része, mint a szám.*
 
 Lásd még [[L681]], [[L686]], ADR 0554, ADR 0570, ADR 0572, ADR 0574.
+
+## L690 — Egy hamis „ez nem elérhető" állítás messzebb terjed, mint egy hamis szám, mert a számot a következő kör újramérné, a kifogást viszont megörökli (E18-R45, 2026-09-13)
+
+### 1. Az állítás, és mi épült rá
+
+Az ADR 0569 Kontextusában ezt írtam:
+
+> „Az in-situ változat ebben a környezetben nem elérhető: a Klangio korpusz **nincs a
+> gépen**, a Dart pipeline pedig audiót fogyaszt, nem gyorsítótárazott ablakot."
+
+Erre épült **három kör**:
+
+- az ADR 0569 egész Klangio-oldala **orákulum**-ablakon;
+- az ADR 0571 D4 korlátja (*„az orákulum-műszer delta-kérdésekre korroborált, szintekre
+  nem"*) — ami **igaz és hasznos**, de azért kellett, mert a szinteket nem mértem;
+- az ADR 0572 kikötése (*„a Klangio-számok orákulum-ablakosak, nem in situ (a korpusz nincs
+  a gépen)"*) és a HANDOFF visszatérő tétele: *„a Klangio in-situ söprése, **ha a korpusz
+  bekerül a gépre**"*.
+
+A korpusz a gépen volt. `ml/data/klangio/`, **82** telefon-wav + **82** `.strums`,
+gitignore-olva. És nem „azóta került oda":
+
+```
+  12:38–12:42   a 82 wav + 82 .strums a gépre kerül
+  12:53         ml/klangio_live70.npz       EBBŐL épül
+  15:53         ml/klangio_neg_live70.npz   EBBŐL épül
+  22:12         ADR 0569 commit: „a Klangio korpusz NINCS A GÉPEN"
+  22:44         ADR 0572 ugyanezt megismétli
+```
+
+Kilenc és fél óra.
+
+### 2. A bizonyíték nem hiányzott — RAJTA mértem
+
+A `honest_eval.build_live` a gyorsítótárat csak akkor **írja meg**, ha előtte **beolvasta**
+a korpuszt:
+
+```python
+    if os.path.exists(path):            # cache hit -> korai visszatérés
+        ...
+    for rid in recording_ids(DATA):     # különben: a KORPUSZT olvassa
+        pcm = _read_wav(f"{DATA}/recording_{rid}_phone.wav")
+```
+
+Tehát a `klangio_live70.npz` **létezése** maga cáfolta az állítást, és én **azon a fájlon
+mértem**, miközben kimondtam, hogy a forrása nem elérhető. Nem egy hiányzó bizonyítékot
+néztem el, hanem azt, amit a kezemben tartottam.
+
+*Ha gyorsítótárat használsz, kérdezd meg, mi építette. A derivátum létezése állítás a
+forrásról.*
+
+És volt egy harmadik cáfolat is, r164 óta a repóban: **két teszt, ami erre a könyvtárra
+mutat, és aminek az első dolga megnézni, ott van-e.**
+
+```
+  test/tools/klangio_real_ab_test.dart      const dataDir = 'ml/data/klangio';
+                                            „Auto-skips when ml/data/klangio is absent"
+  test/tools/onset_recall_probe_test.dart   ugyanazt a dataDir-t importálja
+```
+
+A repó tehát **kész elérhetőség-próbát** tartalmazott. Nem nehezen hozzáférhető tényt
+néztem el, hanem olyat, amire egy egysoros ellenőrzés várt — és a kifogás pont attól tudott
+három körön át megállni, hogy az ellenőrzést soha nem írtam le.
+
+### 3. Miért bírta ki három körön át — és ez az igazi tanulság
+
+Egy hamis **számot** a következő kör újramér. Megvan a műszer, megvan a fogás, és a
+fegyelem éppen arra való: ez az arc öt-hat saját állítást vont vissza így, a saját
+méréseivel.
+
+Egy hamis **„ezt nem tudjuk megmérni"** állítást viszont senki nem mér újra — mert nem
+mérésként viselkedik, hanem **kifogásként**. A következő kör nem ellenőrzi, hanem
+**örökli**, és épít rá: korlátot ír hozzá („orákulumon csak deltát"), elnapolási tételt tesz
+a HANDOFF-ba („ha bekerül a gépre"), és ezzel a kifogás **infrastruktúrát** kap. Minden
+további kör után drágább kimondani, hogy az alapja egy `ls` volt.
+
+**A szabály: egy „X nem elérhető ebben a környezetben" állítás MÉRÉS, és a legolcsóbb mérés
+az egész repóban. Írd ki a parancsot, ami ellenőrizte.** Ha egy ADR azt mondja, valami nem
+elérhető, ott kell lennie a mellette álló sornak, ami ezt megállapította — `ls`, `find`,
+`test -d` —, különben az állítás nem mérés, hanem emlék. Egy emlék pedig elavul, és
+csendben avul el: a környezet megváltozik, az állítás nem.
+
+### 4. Amit NEM állítok
+
+Az orákulum-mérések **nem hibásak**: azt mérték, amit mondtak, és az ADR 0571 D4
+delta-korroborációja áll. Ami megdőlt, az az **ok**, amiért nem mértem in situ — és három
+kör elnapolása.
+
+Lásd még [[L682]], [[L683]], [[L687]], ADR 0569, ADR 0571, ADR 0572, ADR 0576.
