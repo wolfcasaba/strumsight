@@ -14254,6 +14254,43 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   negatívok bányászása az új geometrián, a no-strum kapu újrakalibrálása (ADR
   0549 receptje), `.bin` export, paritás-fixtúra (AGENTS.md §9). A
   `crnn_frontend` **nem változik** (1 s-os gyűrű, a `windowAt` magától nulláz).
+  **MEGÉPÜLT (E18-R32): a kétszintű 3 osztályos asset + két döntés.** Az új súlyok
+  `assets/ml/strum_crnn_live_3c_settled.bin`-ben, a fixtúra
+  `test/fixtures/crnn_live_3c_settled_parity.json`-ban; a **szállított
+  `strum_crnn_live_3c.bin` ÉRINTETLEN**, és az új bináris **szándékosan NEM szerepel**
+  a `pubspec.yaml`-ben és a `model_manifest.json`-ban — tehát a repóban van, az
+  APK-ban nincs (a bekötés külön kör, §9).
+  **(a) ADR 0555 — a kapu osztály-feltételes:** az ADR 0549 osztály-vak szabálya a
+  felütéseket **1,3–2,8-szor** gyakrabban nyomta el (P(no-strum) mediánjuk **5×**),
+  az osztályonkénti küszöb **7×** eltér (le 0,0412 / fel 0,2929); a szállított küszöb
+  a maximum (0,2929), ami mind a négy tartalék cellában jobb 1,4 pont hamis-onset
+  elutasításért, és a felütés-elnyomást 0,225→0,127 (@70) illetve 0,098→0,078 (@238)
+  csökkenti. **Ez nevezett előzmény:** Chow (1970) szimmetrikus költségei,
+  Mondrian/címke-feltételes konformális predikció (Vovk 2003; Barber 2021 a véges
+  partícióra), és Fumera–Roli–Giacinto (2000) Pareto-dominancia-tétele. Az irodalom
+  előírta ellenőrzés (Jones 2020, Cresswell 2025) **elvégezve**: a megtartott
+  felütés-pontosság mozdulatlan (−0,005…+0,003), a recall +0,020…+0,063 — nincs
+  visszaütés. **NYITVA (ADR 0555 D4):** a megtartási kvantilis rossz keret, ha a
+  hamis csend és a hamis pozitív költsége különbözik → **költség-arányból** vezetett
+  küszöb kell (külön kör).
+  **(b) ADR 0556 — a nyíl soha nem fordul át:** a gyors hívás irányt **csak elég
+  margónál** mond, egyébként **irány-semleges ütés-jel**; a letisztult hívás adja az
+  irányt a **pontozáshoz**. Indok: az élő feliratozás mért javítás-költsége (Du, CHI
+  2023) + cry-wolf (Hoff & Bashir 2015); a naiv alternatíva pedig olyan ellen mérné a
+  tanulót, amit nem látott. **Őszinte státusz:** a guidance-hipotézis irodalma
+  másodperces skálán mért, tehát **nem dönti el** — saját tanulókon, **megtartásra**
+  kell megmérni.
+  **(c) A no-strum képesség mért ára** 0,03–0,07 macro (a valódi ütések 7,8–13,7%-a
+  elnyomva, hibának számolva).
+  **(d) Az őszinte szám:** a megtartott felütés-pontosság a GuitarSeten **0,40**, a
+  recall **0,31** (a lefelé ütés 0,857 / 0,865).
+  **KÖVETKEZŐ ADAT-LÉPÉS: Guitar-TECHS** (Zenodo 14963133, arXiv 2501.03720,
+  **CC-BY-4.0**, 5h12m, **három új profi gitáros**, explicit alternáló
+  akkord-pengetés, húronkénti MIDI Fishman Triple Play pickupból → az irány ugyanúgy
+  levezethető, mint a GuitarSetnél; **9 → 12 játékos**). Kizárva: `KLANGIO-GST-MM-T`
+  (ugyanazok a játékosok), IDMT-SMT-Guitar (**CC BY-NC-ND**), EGDB / EG-IPT (egy-egy
+  játékos), GAPS (licenc-ellentmondás), GIHME (üres repó), Zenodo 6470236 (36 játékos,
+  de a **pengetés nem megerősített**). Tanulság: **L670**.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

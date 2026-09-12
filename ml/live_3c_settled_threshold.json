@@ -1,0 +1,102 @@
+{
+  "note": "E18-R32 two-tier 3-class live model (ADR 0552/0554): Klangio + GuitarSet, trained on BOTH the 70 ms and the untruncated window so one asset serves both tiers. Threshold = P(no-strum) quantile keeping >=95% of TRUE strums on the held-out VAL GROUPS (ADR 0549's rule). NOT yet wired: assets/ml/strum_crnn_live_3c.bin is unchanged.",
+  "seed": 42,
+  "retention_target": 0.95,
+  "gates": {
+    "class_blind": {
+      "no_strum_threshold": 0.12452833354473114,
+      "true_strum_retention": 0.9499762920815552,
+      "false_onset_rejection": 0.9735964424680378
+    },
+    "class_conditional": {
+      "no_strum_threshold": 0.2929004430770874,
+      "true_strum_retention": 0.9706021811284969,
+      "false_onset_rejection": 0.9599777654252363
+    }
+  },
+  "no_strum_threshold": 0.2929004430770874,
+  "shipped_gate_rule": "class_conditional",
+  "gate_rule_note": "ADR 0549's class-blind rule is textbook Chow (1970), whose threshold carries no class index because it assumes symmetric costs. Measured here that fails: upstrokes carry up to 5x the median P(no-strum), so the class-blind budget silences them 1.3-2.8x more often. The shipped threshold is the max of the per-class 95% quantiles - Mondrian / label-conditional conformal prediction (Vovk et al. 2003), exact in finite samples because the classes are a finite partition (Barber et al. 2021). Fumera, Roli & Giacinto (2000) showed per-class reject thresholds Pareto-dominate single-threshold Chow.",
+  "held_out": {
+    "class_blind | 70 ms | Klangio (new player)": {
+      "down_f1": 0.47069431920649235,
+      "up_f1": 0.5136707388016288,
+      "macro_f1": 0.49218252900406056,
+      "suppressed_fraction": 0.1819403386186509,
+      "n": 3721,
+      "up_retained_precision": 0.43433349729463844,
+      "up_retained_recall": 0.6284697508896797,
+      "up_suppressed_fraction": 0.2092526690391459
+    },
+    "class_blind | 70 ms | GuitarSet (new player AND tune)": {
+      "down_f1": 0.7634961439588689,
+      "up_f1": 0.26,
+      "macro_f1": 0.5117480719794345,
+      "suppressed_fraction": 0.15471698113207547,
+      "n": 530,
+      "up_retained_precision": 0.2653061224489796,
+      "up_retained_recall": 0.2549019607843137,
+      "up_suppressed_fraction": 0.22549019607843138
+    },
+    "class_blind | 238 ms | Klangio (new player)": {
+      "down_f1": 0.6779324055666004,
+      "up_f1": 0.5754170922710249,
+      "macro_f1": 0.6266747489188127,
+      "suppressed_fraction": 0.12926632625638268,
+      "n": 3721,
+      "up_retained_precision": 0.5515665796344648,
+      "up_retained_recall": 0.6014234875444839,
+      "up_suppressed_fraction": 0.15373665480427046
+    },
+    "class_blind | 238 ms | GuitarSet (new player AND tune)": {
+      "down_f1": 0.8591385331781141,
+      "up_f1": 0.3409090909090909,
+      "macro_f1": 0.6000238120436024,
+      "suppressed_fraction": 0.04716981132075472,
+      "n": 530,
+      "up_retained_precision": 0.40540540540540543,
+      "up_retained_recall": 0.29411764705882354,
+      "up_suppressed_fraction": 0.09803921568627451
+    },
+    "class_conditional | 70 ms | Klangio (new player)": {
+      "down_f1": 0.4752534287418008,
+      "up_f1": 0.5356847616423257,
+      "macro_f1": 0.5054690951920633,
+      "suppressed_fraction": 0.12335393711367912,
+      "n": 3721,
+      "up_retained_precision": 0.4370503597122302,
+      "up_retained_recall": 0.691814946619217,
+      "up_suppressed_fraction": 0.13665480427046264
+    },
+    "class_conditional | 70 ms | GuitarSet (new player AND tune)": {
+      "down_f1": 0.7742749054224464,
+      "up_f1": 0.27802690582959644,
+      "macro_f1": 0.5261509056260214,
+      "suppressed_fraction": 0.0830188679245283,
+      "n": 530,
+      "up_retained_precision": 0.256198347107438,
+      "up_retained_recall": 0.30392156862745096,
+      "up_suppressed_fraction": 0.12745098039215685
+    },
+    "class_conditional | 238 ms | Klangio (new player)": {
+      "down_f1": 0.6827943717600592,
+      "up_f1": 0.5898950131233596,
+      "macro_f1": 0.6363446924417093,
+      "suppressed_fraction": 0.09217952163396936,
+      "n": 3721,
+      "up_retained_precision": 0.5471698113207547,
+      "up_retained_recall": 0.6398576512455516,
+      "up_suppressed_fraction": 0.10960854092526691
+    },
+    "class_conditional | 238 ms | GuitarSet (new player AND tune)": {
+      "down_f1": 0.8604651162790697,
+      "up_f1": 0.3516483516483517,
+      "macro_f1": 0.6060567339637107,
+      "suppressed_fraction": 0.033962264150943396,
+      "n": 530,
+      "up_retained_precision": 0.4,
+      "up_retained_recall": 0.3137254901960784,
+      "up_suppressed_fraction": 0.0784313725490196
+    }
+  }
+}

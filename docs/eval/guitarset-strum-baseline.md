@@ -845,3 +845,117 @@ korrigálni, és nem lehet konzervatív becslésnek nevezni. A repónak **volt**
 alapvonal alatt van, tehát a Dart-sín korai bekötése a **ritmus-pontozást rontaná el** — épp
 azon az úton, ahol a hamis válasz levonás vagy hamis kredit (ADR 0549 D2). Egy sín, aminek a
 mögötte lévő modellje rosszabb, **nem semleges infrastruktúra, hanem regresszió**.
+
+---
+
+# A kétszintű 3 osztályos asset, és a kapu, ami a felütéseket hallgattatta el (E18-R32)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/train_live_3c_settled.py
+```
+
+Két korpusz (Klangio + GuitarSet), **mindkét levágáson** tanítva (ADR 0554 D1), 3 osztály,
+saját kapu-kalibrációval. A szállított `strum_crnn_live_3c.bin` **nem változik** — az új
+súlyok `strum_crnn_live_3c_settled.bin`-ben, a fixtúra
+`crnn_live_3c_settled_parity.json`-ban.
+
+## A kapu: az osztály-vak szabály a felütéseket vágta
+
+```
+  szint    korpusz     elnyomva: LE     FEL     arány    P(no-strum) medián LE / FEL
+   70 ms   Klangio        0,165      0,209     1,27×      0,0051 / 0,0098
+   70 ms   GuitarSet      0,138      0,225     1,63×      0,0046 / 0,0241
+  238 ms   Klangio        0,114      0,154     1,35×      0,0014 / 0,0038
+  238 ms   GuitarSet      0,035      0,098    2,80×      0,0003 / 0,0019
+
+  osztályonkénti illesztett küszöb:   le 0,041166     fel 0,292900     (7×)
+```
+
+A `reggae-skank` lecke szinte csak felütés — egy azt gyakorló tanuló az ütéseinek
+**tizedét** a motor csendje miatt veszítené el, levonásként. Ez az ADR 0549 D2 hazugsága,
+osztály szerint elfordítva.
+
+```
+  kapu               küszöb      megtart  elutasít
+  class_blind        0,124528     0,950    0,974     (ADR 0549 szabálya)
+  class_conditional  0,292900     0,971    0,960     (szállított, ADR 0555)
+```
+
+| kapu | szint | korpusz | macro | fel-F1 | fel-pont. | fel-recall | elnyomva-fel |
+|---|---|---|---|---|---|---|---|
+| class_blind | 70 ms | Klangio | 0,4922 | 0,5137 | 0,4343 | 0,6285 | 0,209 |
+| **class_conditional** | 70 ms | Klangio | **0,5055** | 0,5357 | 0,4371 | **0,6918** | **0,137** |
+| class_blind | 70 ms | GuitarSet | 0,5117 | 0,2600 | 0,2653 | 0,2549 | 0,225 |
+| **class_conditional** | 70 ms | GuitarSet | **0,5262** | 0,2780 | 0,2562 | **0,3039** | **0,127** |
+| class_blind | 238 ms | Klangio | 0,6267 | 0,5754 | 0,5516 | 0,6014 | 0,154 |
+| **class_conditional** | 238 ms | Klangio | **0,6363** | 0,5899 | 0,5472 | **0,6399** | **0,110** |
+| class_blind | 238 ms | GuitarSet | 0,6000 | 0,3409 | 0,4054 | 0,2941 | 0,098 |
+| **class_conditional** | 238 ms | GuitarSet | **0,6061** | 0,3516 | 0,4000 | **0,3137** | **0,078** |
+
+**Mind a négy cellában jobb**, 1,4 pont hamis-onset elutasításért.
+
+### Ez nem új ötlet, és ez a fontos
+
+- Az osztály-vak szabály **tankönyvi Chow (1970)**; a `t = (C_r − C_c)/(C_e − C_c)`
+  formulában **nincs osztály-index**, mert szimmetrikus költségeket tesz fel. A mért eltérés
+  ennek **dokumentált** bukása.
+- A javítás neve **Mondrian / címke-feltételes konformális predikció** (Vovk és mások 2003;
+  Vovk–Gammerman–Shafer 2005) → **egzakt véges mintás osztályonkénti garancia**.
+- Barber és mások (2021): folytonos feltételre lehetetlen, **véges partícióra elérhető** — a
+  három osztály véges partíció.
+- **Fumera–Roli–Giacinto (2000)** már bizonyította, hogy az osztályonkénti küszöbök
+  **Pareto-dominálják** az egy-küszöbűt.
+
+### A kötelező ellenőrzés, amit az irodalom írt elő
+
+Jones és mások (NeurIPS 2020) és Cresswell és mások (ICLR 2025): a **megtartás**
+kiegyenlítése nem egyenlíti ki a **megtartott halmaz** hibaarányát, és ronthat is. Megmérve:
+a felütés megtartott **pontossága** −0,005…+0,003 (mozdulatlan), a **recall** +0,020…+0,063.
+A visszaütés **nem történik meg**, de kicsiben látható — a nyereség a recallon van.
+
+### Ami NYITVA marad
+
+A megtartási kvantilis **eleve rossz keret**, ha a hamis csend és a hamis pozitív költsége
+különbözik; akkor a küszöböt **költség-arányból** kell levezetni (Tortorella; Pietraszek
+2005; Charoenphakdee és mások 2021). Az ADR 0549 D2 **megnevezte** mindkét költséget
+prózában, aztán kvantilist választott. Külön kör (ADR 0555 D4), és a riportot érdemes
+**precision/recall reject curve**-re váltani (Fischer & Wollstadt 2023).
+
+## A 3 osztályos ár, és ami nem javult
+
+```
+  2 osztályos arm C (kapu nélkül):  GuitarSet 0,5934 @70 / 0,6659 @238 · Klangio 0,5828 / 0,6675
+  3 osztályos + kapu (szállítható):  GuitarSet 0,5262 / 0,6061        · Klangio 0,5055 / 0,6363
+```
+
+A no-strum képesség mért ára tehát **0,03–0,07 macro** — az elnyomás 7,8–13,7%-a a valódi
+ütéseknek, és ezeket hibának számolom, mert egy elnyomott ütés olyan ütés, amit a pontozó
+**sosem lát**.
+
+**És az őszinte szám:** a GuitarSeten a megtartott felütések **pontossága 0,40**, a
+**recallja 0,31** — vagyis az ismeretlen játékosok felütéseinek kb. **harmadát** találja meg,
+és amikor „fel"-t mond, 40%-ban igaza van. A lefelé ütés ezzel szemben 0,857 / 0,865. Ez az
+ADR 0553 adat-diagnózisát erősíti: **a rés adat, nem modell és nem jellemző.**
+
+## Az adat-irány, amit a kutatás talált
+
+**Guitar-TECHS** ([Zenodo 14963133](https://zenodo.org/records/14963133),
+[arXiv:2501.03720](https://arxiv.org/abs/2501.03720)) — **CC-BY-4.0**, 5h12m, **három profi
+gitáros**, akik nem azonosak a meglévőkkel, **explicit alternáló akkord-pengetés** („a
+legalsó fekvéstől indulva"), és **húronkénti MIDI** Fishman Triple Play pickupból, amiből az
+irány **ugyanúgy levezethető, mint a GuitarSetnél**. Ez **9 → 12 játékos.** Az irányt nem a
+szerzők címkézték: mi vezetnénk le, ugyanazzal a módszerrel.
+
+Amit a keresés **kizárt**:
+
+| készlet | ok |
+|---|---|
+| `KLANGIO-GST-MM-T` | az ISMIR-2022 előd-készlet, **ugyanazok a játékosok** |
+| arXiv 2508.07973 | **maga a GST-MM-2025 papír**, nem külön korpusz |
+| IDMT-SMT-Guitar | **CC BY-NC-ND** — a no-derivatives kizárja a tanítást |
+| EGDB | **egy** gitáros; a kiadott audio mono DI, a hexafonikus csatornák megléte nem megerősített |
+| EG-IPT | **egy** gitáros, csak izolált egyes hangok |
+| GAPS | licenc-ellentmondás (Zenodo CC-BY vs. a projekt saját, nem továbbadható licence), klasszikus szólórepertoár |
+| François Leduc | hozzáférés kérésre, egy gitáros |
+| GIHME | a repó **üres placeholder** |
+| Zenodo 6470236 (36 gitáros, EMG+mocap) | CC-BY és a legnagyobb játékos-készlet, de **a pengetés nem megerősített**, nincs hexafonikus csatorna |

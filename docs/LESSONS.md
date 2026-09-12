@@ -27555,3 +27555,72 @@ tért el a szállítandótól.
 Lásd még [[L664]]–[[L668]], ADR 0552, ADR 0554.
 Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
 eszköz: `ml/experiment_deadline_augmentation.py`.
+
+## L670 — A „jó ötletem" egy 2000-es tétel volt; és az irodalom egy KÖTELEZŐ ellenőrzést írt elő, amit nem végeztem el (E18-R32, 2026-09-12)
+
+### 1. Mérés után, kutatás előtt döntöttem volna
+
+Megmértem, hogy a no-strum kapu a felütéseket **1,3–2,8-szor** gyakrabban nyomja el, mint a
+lefelé ütéseket, mert a felütések P(no-strum) mediánja **ötszörös**. Kitaláltam a javítást —
+osztályonkénti kvantilis, a maximumot szállítva —, megmértem, hogy mind a négy cellában
+jobb, és **kész lettem volna rögzíteni saját ötletként.**
+
+Ez a javítás **nem új**:
+
+- az osztály-vak szabály **tankönyvi Chow (1970)**, és a formulájában
+  `t = (C_r − C_c)/(C_e − C_c)` **nincs osztály-index**, mert szimmetrikus költségeket tesz
+  fel — a mért eltérés tehát ennek a feltevésnek a **dokumentált** bukása, nem egy általam
+  felfedezett anomália;
+- a javítás neve **Mondrian / címke-feltételes konformális predikció** (Vovk és mások 2003;
+  Vovk–Gammerman–Shafer 2005), és **egzakt véges mintás osztályonkénti garanciát** ad —
+  nem csak empirikus javulást;
+- Barber és mások (2021) szerint ez folytonos feltételre **lehetetlen**, véges partícióra
+  **egzaktul elérhető** — a három osztályom véges partíció, tehát nincs elvi kifogás;
+- és **Fumera–Roli–Giacinto (2000)** már **bizonyította**, hogy az osztályonkénti
+  elutasítási küszöbök **Pareto-dominálják** az egy-küszöbű Chow-t.
+
+**Amit ebből megtartok.** Egy empirikusan igazolt javítás **akkor is** megérdemli a
+szakirodalmi keresést, ha a mérés már meggyőzött. Nem azért, hogy hivatkozást tegyek alá,
+hanem mert **a név garanciát és bukási módot hoz magával**: a nevetlen verzióm „jobb
+számokat" adott volna, a nevezett verzió **formális osztályonkénti garanciát**, plusz a
+tudást, hogy *mikor nem működik*. A mérés megmondja, hogy jobb; a szakirodalom megmondja,
+hogy **miért és meddig**.
+
+### 2. És épp azt az ellenőrzést nem végeztem el, amit a bukási mód előír
+
+Jones, Sanyal és mások (NeurIPS 2020) és Cresswell és mások (ICLR 2025) ugyanazt mondja: a
+**megtartás** kiegyenlítése osztályok között **nem** egyenlíti ki a **megtartott halmaz**
+hibaarányát, és a hátrányos osztályt akár **rontani** is tudja — a költség egyszerűen
+átkerül egy másik tengelyre (halmaz-méret, pontosság, hamis-elfogadás).
+
+Én a **megtartási arányokat** és a **macro-F1-et** mértem. Az utóbbi tartalmazza a
+pontosságot, de nem *bontja* osztályra a megtartott halmazon — vagyis a figyelmeztetett
+csere pont láthatatlan volt a műszereimen.
+
+Utólag megmérve: a felütés megtartott **pontossága** −0,005…+0,003 (mozdulatlan), a
+**recall** +0,020…+0,063. A visszaütés **nem történt meg** — de **kicsiben látható**, és a
+magnitúdók szerencséje, nem az én tervezésem érdeme.
+
+**A szabály.** Amikor egy ismert bukási módú javítást vezetek be, a mérőeszköznek **azt a
+tengelyt kell mutatnia, amelyre a bukás átterheli a költséget** — nem csak azt, amit
+javítani akartam. A `train_live_3c_settled.py` ezért **mindkét** kapun, osztályonkénti
+megtartott pontossággal ÉS recall-lal riportál. *Egy javítás, ami csak a saját célmetrikáját
+nézi, nem tudja megmondani, mit rontott el.*
+
+### 3. A pedagógiai kutatás attól volt hasznos, hogy kimondta, mit NEM tud
+
+A kétszintű nyíl tervéhez azt kérdeztem, jobb-e az azonnali-de-javítható visszajelzés a
+késleltetett-de-helyesnél. A guidance-hipotézis irodalma (Salmoni, Schmidt & Walter 1984;
+Winstein & Schmidt 1990) erős és jól replikált — **de másodperces skálán mért gyakoriságot**,
+nem 70 vs 240 ms-ot. A kutatás ezt **kimondta**, és nem vetítette rá.
+
+Ami helyette használható volt, az egy **analógia mért költséggel**: az élő feliratozás
+(Du és mások, CHI 2023), ahol a gyors, bizonytalan kimenet **látható javítása** mérhetően
+zavaró **még akkor is, ha a végeredmény helyes**. Ebből lett a döntés, hogy a nyíl **soha
+nem fordul át** — és a hozzá tartozó őszinte címke: ez **indoklással bíró választás, nem
+eredmény** (ADR 0556 D5).
+
+*Egy „az irodalom nem válaszol erre" többet ér, mint egy magabiztos rávetítés — mert
+megmondja, hogy a döntést nekünk kell megmérnünk.*
+
+Lásd még [[L664]]–[[L669]], ADR 0549, ADR 0555, ADR 0556.

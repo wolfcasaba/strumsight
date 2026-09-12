@@ -773,3 +773,95 @@ direction is not predictable; `STD_SEEDS` existed for this.
 
 `crnn_frontend` needs NO change: its ring is 1 s and `windowAt(onsetFrame, currentFrame)`
 zero-fills whatever has not arrived, so the settled call is the same call made later.
+
+### The two-tier asset, and the gate that was silencing upstrokes (E18-R32, ADR 0555/0556)
+
+`ml/train_live_3c_settled.py` trains the 3-class live model on BOTH corpora at BOTH
+truncations (ADR 0554) and exports `assets/ml/strum_crnn_live_3c_settled.bin` plus
+`test/fixtures/crnn_live_3c_settled_parity.json`. **The shipped `strum_crnn_live_3c.bin` is
+untouched**, and the new binary is deliberately NOT declared in `pubspec.yaml` or
+`model_manifest.json`, so it is in the repo but not in the APK - wiring it is a separate
+round under AGENTS.md 9.
+
+**The gate is now class-conditional.** ADR 0549's rule is the P(no-strum) quantile retaining
+95 % of true strums, class-blind. Measured, that silences upstrokes 1.3-2.8x more often,
+because they carry up to 5x the median P(no-strum):
+
+```
+  per-class fitted threshold:   down 0.041166     up 0.292900     (7x apart)
+
+  gate               threshold   retains  rejects
+  class_blind        0.124528     0.950    0.974     (ADR 0549's rule)
+  class_conditional  0.292900     0.971    0.960     (shipped, = max of per-class quantiles)
+```
+
+Held out, the class-conditional gate is better in ALL four cells - GuitarSet macro
+0.5117 -> 0.5262 @70 ms and 0.6000 -> 0.6061 @238 ms, Klangio 0.4922 -> 0.5055 and
+0.6267 -> 0.6363 - for 1.4 points of false-onset rejection. Upstroke suppression drops from
+0.225 to 0.127 (GuitarSet @70) and 0.098 to 0.078 (@238). The product reason: `reggae-skank`
+is nearly all upstrokes, so a class-blind gate makes the engine's silence the learner's
+deduction - ADR 0549 D2's lie, turned by class.
+
+**This is named prior art, not our idea.** The class-blind rule is textbook Chow (1970),
+whose threshold `t = (C_r - C_c)/(C_e - C_c)` carries no class index because it assumes
+symmetric costs; the fix is Mondrian / label-conditional conformal prediction (Vovk et al.
+2003; Vovk, Gammerman and Shafer 2005) with an exact finite-sample per-class guarantee,
+available because the classes are a FINITE partition (Barber et al. 2021 prove continuous
+conditioning is impossible, finite achievable); and Fumera, Roli and Giacinto (2000) already
+proved per-class reject thresholds Pareto-dominate single-threshold Chow.
+
+**Required check, per that failure mode:** Jones et al. (NeurIPS 2020) and Cresswell et al.
+(ICLR 2025) show equalising RETENTION does not equalise error rate on what is RETAINED and
+can worsen the disadvantaged class. Measured: upstroke retained PRECISION moves
+-0.005..+0.003 (flat) while RECALL moves +0.020..+0.063 - no backfire, but visible in
+miniature. The trainer therefore reports per-class retained precision AND recall under both
+gates; a measurement watching only retention cannot see this trade.
+
+**Still open (ADR 0555 D4):** a retention quantile is the wrong frame when false-silence and
+false-positive costs differ - the classical answer is a cost-ratio-derived threshold
+(Tortorella; Pietraszek 2005; Charoenphakdee et al. 2021), and ADR 0549 D2 named both costs
+in prose before choosing a quantile anyway. Separate round, plus precision/recall reject
+curves (Fischer and Wollstadt 2023) for imbalanced reporting.
+
+**Price of the no-strum capability:** 2-class arm C without a gate scores GuitarSet 0.5934
+@70 / 0.6659 @238 and Klangio 0.5828 / 0.6675; the shippable 3-class path with the gate
+scores 0.5262 / 0.6061 and 0.5055 / 0.6363 - so 0.03-0.07 macro, with 7.8-13.7 % of true
+strums suppressed and counted as errors.
+
+**The number to quote:** on GuitarSet the retained upstroke precision is 0.40 and recall
+0.31 - roughly a third of unseen players' upstrokes are found at all - against 0.857 / 0.865
+for downstrokes. That is ADR 0553's data diagnosis, unchanged.
+
+### Presentation rule: the arrow never flips (ADR 0556)
+
+The two tiers must not surface as a visibly self-correcting arrow. The closest studied
+analogue is live captioning (Du et al., CHI 2023), where visible revision of a fast,
+uncertain output is a MEASURED cost even when the final output is right; trust research adds
+the cry-wolf effect (Hoff and Bashir 2015). But the naive alternative - arrow shows the
+provisional call, scoring uses the settled one, disagreement invisible - grades the learner
+against something they never saw, a third lie on top of ADR 0549 D2's two.
+
+So: the fast call shows a direction ONLY when its margin is adequate; otherwise a
+direction-NEUTRAL stroke mark ("a stroke happened, I am not saying which way"). The settled
+call supplies direction for SCORING and the post-bar review. No flip, and no direction claim
+the grader will contradict. The seam already exists - `StrumPrediction.decision`'s margin
+gate (ADR 0512), and a null direction already emits a StrumEvent.
+
+Honest status (ADR 0556 D5): the guidance-hypothesis literature (Salmoni, Schmidt and Walter
+1984; Winstein and Schmidt 1990) is strong but manipulated frequency at SECOND-scale, not
+70 ms vs 240 ms, so it does not settle this. The decision is a justified choice under
+uncertainty and must be measured on our own learners for RETENTION, not in-session accuracy.
+
+### Next data step: Guitar-TECHS
+
+[Zenodo 14963133](https://zenodo.org/records/14963133) /
+[arXiv:2501.03720](https://arxiv.org/abs/2501.03720) - CC-BY-4.0, 5h12m, THREE professional
+guitarists distinct from ours, explicit alternate chord strumming, and per-string MIDI from a
+Fishman Triple Play pickup, so direction is derivable exactly as for GuitarSet. Takes the
+pool from 9 players to 12.
+
+Ruled out by the same search: `KLANGIO-GST-MM-T` (same players, earlier snapshot);
+arXiv 2508.07973 (it IS the GST-MM-2025 paper, not another corpus); IDMT-SMT-Guitar
+(CC BY-NC-ND, no derivatives); EGDB and EG-IPT (one player each); GAPS (licence conflict,
+classical solo); the Francois Leduc set (restricted, one player); GIHME (empty placeholder);
+Zenodo 6470236 (36 players, CC-BY, but strumming NOT confirmed and no hexaphonic channels).
