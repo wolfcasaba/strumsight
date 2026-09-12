@@ -14840,10 +14840,47 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   meg a tábla **artefaktumát** is (a split és az n a *mérésről* szól, az asset arról, hogy
   **miről**); (3) egy **sötét** konstans nem mis-shippel, de az **indoklását** a következő
   kör örökli — *a sötétség a viselkedést védi, nem a gondolatmenetet.*
+  **E18-R43e — A LETISZTULT TIER IN SITU +0,168 MACRO, ÉS A NYERESÉG TELJES EGÉSZE A LEFELÉ
+  ÜTÉS (ADR 0571).** Az ADR 0570 orákulum-ablakon +0,1919-et jelzett, és kimondta, hogy **nem**
+  in-situ szám. Most az is megvan: a söprés recordere rögzíti az **onset-frame**et, és a pass
+  után minden megtartott onsetre megépül a **csonkítatlan** ablak a
+  `LiveCrnnFrontend.referenceWindow`-val — a repó **saját**, a streamelt `windowAt`-hoz már
+  pinelt referenciájával. Két részlet teszi helyessé: (1) **szelet, nem a felvétel** (a ring
+  **egy másodperc**, tehát egy 30 s-os take-ből csak az utolsó másodperc címezhető — a szelet
+  az onset előtt 0,1 s, utána 0,6 s); (2) a `referenceWindow` **maga** adja az r144
+  attack-offsetet, tehát az onset **FRAME** kezdete kell neki — a közzétett időből
+  visszaszámolva **kétszer** alkalmazódna. A létezést továbbra is a **gyors** hívás dönti
+  (ADR 0559 D2), tehát a mérés azt izolálja, amit a **második forward** vásárol.
+  **Mérve (12 held-out fájl, 1772 onset, szállított asset, 0,850-es kapu, margin on):**
+  irány-macro **0,3872 → 0,5551 (+0,1679)**, **LE 0,5736 → 0,9032 (+0,3296)**, **FEL 0,2007 →
+  0,2069 (+0,0062)**. Kapu szerint: 0,439 **+0,1917**, 0,650 +0,1788, 0,850 +0,1679, nincs
+  +0,1168. Az 1772-ből **1** onsetnek nem volt megépíthető a letisztult ablaka (take vége) —
+  kizárva és **kiírva**.
+  **A NYERESÉG TELJES EGÉSZE A LEFELÉ ÜTÉS.** A második forward a lefelé ütést ezen a
+  korpuszon gyakorlatilag megoldja, a felütéshez **semmit** nem ad — ami az **ADR 0553**
+  adat-diagnózisát **megerősíti**, nem váltja: aminek több hang kellett, az a lefelé ütés
+  volt; a felütéshez **adat** kell. Terméki következmény: egy `reggae-skank`-szerű,
+  felütés-domináns lecke ebből **semmit** nem kap.
+  **A KÉT MŰSZER A DELTÁN EGYEZIK, A SZINTEN NEM:** orákulum 0,3340/0,5259 (+0,1919), in situ
+  0,3872/0,5551 (+0,1679) — a szintek ~0,05-tel eltérnek (más ablak-építő, más onset-időpontok,
+  más kapu-alkalmazás), a delta **0,024-en belül** egyezik. Ez az arc **első** olyan esete,
+  ahol egy orákulum-szám in-situ ellenőrzést kapott, és használható korlátot ad: az
+  orákulum-műszer **delta-kérdésekre** korroborált, **szint-kérdésekre** nem — szűrni
+  orákulumon szabad (gyors, nem kell korpusz-audió), szállítási állítás **szintjét** in situ
+  kell mérni.
+  **NEM kapcsoltunk fel semmit:** a pontozó irány-forrásának változtatása szállított
+  viselkedés, tehát a §9 négy lábát kívánja; ez a kör a **valódi-audió** lábat adja. Hátravan:
+  **fixtúra + property** a „letisztult irány minden ütésre" útra; az **él-eset** (a kísérlet
+  **utolsó** ütése — a lezárást az utolsó onset + 238 ms-ig ki kell várni; a mérésben ez a
+  „missing 1" a take végén); és a **CPU** (ADR 0565-ből levezetve: minden ütésre egy második
+  forward = a gyors tier **kétszerese**, ~44% egy magból 200 bpm tizenhatodon, ~8,8% 80 bpm
+  nyolcadon). Az irány-macro 0,5551 továbbra is a Chapter 14 §7.2 Alpha kapu (**0,80**)
+  **alatt**, és a rés most már majdnem teljesen a **felütés**.
   **KÖVETKEZŐ:** (1) **egy asset, ami MINDKÉT korpuszon legyőzi a szállítottat** — a
   következő tanító kör célja, az ADR 0569 elfogadási kritériumával (a `read_ssml.py` ezt
-  mérhetővé teszi), és ADR 0570 szerint olyan, **amin a margó jelez**; (2) a letisztult tier
-  **in-situ** mérése a söprésben (második, csonkítatlan ablakos osztályozás rögzítése);
+  mérhetővé teszi), és ADR 0570 szerint olyan, **amin a margó jelez**; (2) a „letisztult irány
+  minden ütésre" **bekötése** a §9 hiányzó lábaival (fixtúra + property + az utolsó-ütés
+  él-eset) — az ADR 0571 a valódi-audió lábat már megadta;
   (3) ha a Klangio korpusz bekerül a gépre, a Klangio **in-situ** söprés a
   `guitarset_threshold_sweep_test.dart` mintájára; (2) **on-device mérés** (CI/profile) a **gyors**
   tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a

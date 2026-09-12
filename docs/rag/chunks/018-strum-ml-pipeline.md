@@ -1769,3 +1769,63 @@ Not claimed: why the shipped asset is BETTER on the untruncated window it never 
 (`train_live_3c.py` loads `live70` only) — an obvious guess exists and is left unwritten
 (L681); n=530 on one split, and the 0.2-0.4 band is n=22, so FLATNESS is the claim, not the
 row order; and up-F1 stays 0.2581 even settled, so ADR 0553's data diagnosis stands.
+
+### The settled tier is worth +0.168 macro IN SITU on the shipped asset, and all of it is downstrokes (E18-R43, ADR 0571)
+
+ADR 0570 predicted +0.1919 from ORACLE windows and said plainly it was not an in-situ number:
+the sweep recorded one classification per onset, at 70 ms. This round records the second one.
+
+**How, without a second implementation.** The sweep's recorder now keeps the ONSET FRAME for
+every call, and after the streaming pass each retained onset's untruncated window is built with
+`LiveCrnnFrontend.referenceWindow` — the function the repo already pins against the streamed
+`windowAt`. Two details make it correct rather than nearly so: (1) a SLICE, not the recording,
+because the frontend's ring is one second long, so a 30-second take would leave only its last
+second addressable and every earlier onset would read zeros — the slice runs from 0.1 s before
+the onset frame to 0.6 s after; (2) `referenceWindow` adds the r144 attack offset itself, so
+what it wants is the onset FRAME's start time, and re-deriving it from the published time would
+double-apply the correction. Existence stays the FAST call's decision (ADR 0559 D2), so the
+measurement isolates what the second forward buys.
+
+```
+  shipped asset, 0.850 gate, margin on, 12 held-out files, 1772 onsets
+  direction F1          fast      settled     change
+  macro                0.3872     0.5551     +0.1679
+  DOWN                 0.5736     0.9032     +0.3296
+  UP                   0.2007     0.2069     +0.0062
+
+  gate      fast      settled    delta
+  0.439    0.3753     0.5670    +0.1917
+  0.650    0.3811     0.5599    +0.1788
+  0.850 *  0.3872     0.5551    +0.1679
+  none     0.4213     0.5380    +0.1168
+```
+
+One onset of 1772 had no buildable settled window (end of take) — excluded and REPORTED.
+
+**The whole gain is the downstroke.** 0.5736 -> 0.9032 on down, 0.2007 -> 0.2069 on up. The
+second forward essentially solves the downstroke on this corpus and adds nothing to the
+upstroke, which CONFIRMS ADR 0553's diagnosis rather than replacing it: what needed more audio
+was the downstroke; the upstroke needs DATA. Product consequence: a `reggae-skank`-style
+upstroke-dominant lesson gains nothing here; a downstroke-dominant beginner lesson gains
+almost everything.
+
+**The two instruments agree on the DELTA and not on the LEVEL** — oracle 0.3340/0.5259
+(+0.1919), in situ 0.3872/0.5551 (+0.1679). Levels differ by ~0.05 (different window builder,
+different onset instants, different gate application); the delta agrees within 0.024. This is
+the arc's first oracle-window figure checked against in situ, and it yields a usable rule: the
+oracle instrument is corroborated for DELTA questions and not for LEVEL ones. Screen on oracle
+windows (fast, no corpus audio needed); measure a shipping claim's level in situ.
+
+Nothing is lit. Changing the grader's direction source is shipped behaviour and wants §9's four
+legs; this round delivers the real-audio one. Still missing: fixture + property for the
+"settled direction on every stroke" path, the edge case ADR 0570 D4 named (the attempt's LAST
+stroke — the close must wait until onset + 238 ms, which showed up here as the one "missing"
+row at a take's end), and the CPU, derived from ADR 0565: a second forward per stroke doubles
+the fast tier, ~44 % of a core at 200 bpm sixteenths, ~8.8 % at 80 bpm eighths.
+
+Not claimed: any on-device number; the Klangio side (no local corpus, ADR 0569) so the settled
+tier's effect on the DEPLOYMENT corpus is unmeasured; why the untruncated window helps down so
+much and up not at all (an obvious guess exists, left unwritten per L681); and down-F1 0.9032
+is NOT comparable to arXiv 2508.07973's mic 0.8551 — different corpus, different protocol. The
+0.5551 macro is still below Chapter 14 §7.2's Alpha gate of 0.80, and the remaining gap is now
+almost entirely the upstroke.

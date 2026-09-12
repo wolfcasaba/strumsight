@@ -62,6 +62,7 @@ import 'package:strumsight/features/live/engine/dsp/live_pipeline.dart';
 import 'package:strumsight/features/live/engine/dsp/strum_direction_classifier.dart';
 import 'package:strumsight/features/live/domain/recognition/recognition_decision.dart';
 import 'package:strumsight/features/live/domain/recognition/strum_prediction.dart';
+import 'package:strumsight/features/live/engine/ml/crnn_strum_net.dart';
 import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
 
 const double _linkMs = 45;
@@ -151,6 +152,12 @@ final class _RecordingClassifier implements StrumDirectionClassifier {
   final LiveCrnnStrumClassifier _inner;
   final List<StrumClassification> calls = [];
 
+  /// The analyzer frame each call in [calls] was made for, same order. Needed because
+  /// the SETTLED window is addressed by onset frame, not by published time: the
+  /// published time carries the r144 attack correction and the window does too, so
+  /// re-deriving one from the other would double-apply it.
+  final List<int> onsetFrames = [];
+
   @override
   void observe(Float64List frame, StrumFrameFeatures features) =>
       _inner.observe(frame, features);
@@ -165,6 +172,7 @@ final class _RecordingClassifier implements StrumDirectionClassifier {
       currentFrame: currentFrame,
     );
     calls.add(result);
+    onsetFrames.add(onsetFrame);
     // BOTH gates are lifted here, and the second by OMISSION rather than a flag:
     // `live_pipeline._isDirectionConfirmed` returns true unconditionally for an
     // event carrying no probabilities, so reporting a direction WITHOUT pDown/pUp
@@ -268,7 +276,18 @@ bool _same(List<int> a, List<int> b) {
 int coalesced = 0;
 
 /// One onset the pipeline produced, with the model's raw verdict attached.
-typedef _Heard = ({double atSec, double? pDown, double? pUp, double? pNoStrum});
+/// One onset as the pipeline saw it: the FAST (70 ms) probabilities the streaming path
+/// produced, plus the SETTLED (untruncated) ones for the same onset frame, computed by
+/// [_settledProbs]. `s*` is null when the settled window could not be built.
+typedef _Heard = ({
+  double atSec,
+  double? pDown,
+  double? pUp,
+  double? pNoStrum,
+  double? sDown,
+  double? sUp,
+  double? sNoStrum,
+});
 
 /// Would the pipeline's margin gate confirm this onset?
 ///
@@ -290,9 +309,50 @@ bool _marginConfirms(_Heard h) {
       RecognitionDecision.confirmed;
 }
 
+/// The SETTLED probabilities for one onset frame, from the untruncated window.
+///
+/// Uses `LiveCrnnFrontend.referenceWindow`, which the repo already pins against the
+/// streamed `windowAt` — so this is the documented parity anchor, not a second
+/// implementation. Two details make it correct rather than approximately right:
+///
+/// 1. **A SLICE, not the recording.** The frontend's ring is one second long
+///    (`Float64List(sampleRate)`), so appending a 30-second take would leave only its
+///    last second addressable and every earlier onset would read zeros. The slice runs
+///    from 0.1 s before the onset frame to 0.6 s after — comfortably past the window's
+///    own span, comfortably inside the ring.
+/// 2. **Frame-start semantics.** `referenceWindow` adds the r144 attack offset itself,
+///    so what it wants is the onset FRAME's start time, here expressed relative to the
+///    slice.
+///
+/// Null when the slice cannot cover the window (an onset at the very end of the take).
+({double pDown, double pUp, double pNoStrum})? _settledProbs(
+  List<double> pcm,
+  CrnnStrumNet net,
+  int onsetFrame, {
+  int hop = 256,
+}) {
+  final frameStart = onsetFrame * hop;
+  final lo = math.max(0, frameStart - (_sampleRate * 0.1).round());
+  final hi = math.min(pcm.length, frameStart + (_sampleRate * 0.6).round());
+  if (hi - frameStart < (_sampleRate * 0.35).round()) return null;
+  final slice = Float64List.fromList(pcm.sublist(lo, hi));
+  final window = LiveCrnnFrontend.referenceWindow(
+    slice,
+    _sampleRate,
+    (frameStart - lo) / _sampleRate,
+  );
+  final call = LiveCrnnStrumClassifier.classifyProbs(net.forward(window));
+  final pDown = call.pDown;
+  final pUp = call.pUp;
+  final pNoStrum = call.pNoStrum;
+  if (pDown == null || pUp == null || pNoStrum == null) return null;
+  return (pDown: pDown, pUp: pUp, pNoStrum: pNoStrum);
+}
+
 List<_Heard> _heardWithProbs(
   List<double> pcm,
-  LiveCrnnStrumClassifier crnn, {
+  LiveCrnnStrumClassifier crnn,
+  CrnnStrumNet net, {
   int chunk = 1024,
 }) {
   final recorder = _RecordingClassifier(crnn);
@@ -357,12 +417,18 @@ List<_Heard> _heardWithProbs(
   return [
     for (var i = 0; i < times.length; i++)
       if (times[i] != null)
-        (
-          atSec: times[i]!,
-          pDown: recorder.calls[i].pDown,
-          pUp: recorder.calls[i].pUp,
-          pNoStrum: recorder.calls[i].pNoStrum,
-        ),
+        () {
+          final settled = _settledProbs(pcm, net, recorder.onsetFrames[i]);
+          return (
+            atSec: times[i]!,
+            pDown: recorder.calls[i].pDown,
+            pUp: recorder.calls[i].pUp,
+            pNoStrum: recorder.calls[i].pNoStrum,
+            sDown: settled?.pDown,
+            sUp: settled?.pUp,
+            sNoStrum: settled?.pNoStrum,
+          );
+        }(),
   ];
 }
 
@@ -466,6 +532,32 @@ final class _GateScore {
     StrumDirection.up: 0,
   };
 
+  /// The same direction tallies, but with the SETTLED (untruncated) call deciding the
+  /// direction while the FAST call still decides EXISTENCE — the arrangement ADR 0559 D2
+  /// fixes (the gate is the live deadline's decision and the settled tier never revises
+  /// it). ADR 0570 measured +0.1919 macro for this on ORACLE windows; these are the
+  /// in-situ counterpart.
+  final Map<StrumDirection, int> stp = {
+    StrumDirection.down: 0,
+    StrumDirection.up: 0,
+  };
+  final Map<StrumDirection, int> sfp = {
+    StrumDirection.down: 0,
+    StrumDirection.up: 0,
+  };
+  final Map<StrumDirection, int> sfn = {
+    StrumDirection.down: 0,
+    StrumDirection.up: 0,
+  };
+
+  /// Strums whose settled window could not be built (end of take) — excluded from the
+  /// settled columns and REPORTED, because a silent exclusion is a quieter error.
+  int settledMissing = 0;
+
+  double sDirF1(StrumDirection d) => _f1(stp[d]!, sfp[d]!, sfn[d]!);
+  double get sDirMacroF1 =>
+      (sDirF1(StrumDirection.down) + sDirF1(StrumDirection.up)) / 2;
+
   double get onsetF1 => _f1(onsetTp, onsetFp, onsetFn);
   double get precision => onsetTp == 0 ? 0 : onsetTp / (onsetTp + onsetFp);
   double get strumRecall => strumTotal == 0 ? 0 : strumFound / strumTotal;
@@ -520,6 +612,11 @@ void main() {
       var totalOnsets = 0;
       var withProbs = 0;
 
+      // One parse for the whole run: the offline settled pass needs the net directly,
+      // and re-parsing a 1.4 MB blob per file would be the measurement's own bottleneck.
+      final settledNet = CrnnStrumNet.parse(
+        ByteData.sublistView(File(_liveCrnn3c).readAsBytesSync()),
+      );
       final wavs =
           audioDir
               .listSync()
@@ -551,7 +648,7 @@ void main() {
           sampleRate: _sampleRate,
         );
         expect(crnn, isNotNull, reason: 'the weights must parse');
-        final heard = _heardWithProbs(decoded.$1, crnn!);
+        final heard = _heardWithProbs(decoded.$1, crnn!, settledNet);
         totalOnsets += heard.length;
         withProbs += heard.where((h) => h.pNoStrum != null).length;
 
@@ -613,6 +710,23 @@ void main() {
               score.fn[truth] = score.fn[truth]! + 1;
               score.fp[called] = score.fp[called]! + 1;
             }
+            // The settled direction on the SAME retained stroke. Existence is still the
+            // fast tier's call, so this isolates what the second forward buys.
+            final sDown = h.sDown;
+            final sUp = h.sUp;
+            if (sDown == null || sUp == null) {
+              score.settledMissing++;
+            } else {
+              final sCalled = sUp > sDown
+                  ? StrumDirection.up
+                  : StrumDirection.down;
+              if (sCalled == truth) {
+                score.stp[truth] = score.stp[truth]! + 1;
+              } else {
+                score.sfn[truth] = score.sfn[truth]! + 1;
+                score.sfp[sCalled] = score.sfp[sCalled]! + 1;
+              }
+            }
           }
         }
         files++;
@@ -657,6 +771,34 @@ void main() {
         );
       }
       out.writeln('  (* = what production does today)');
+      out.writeln();
+      out.writeln(
+        '  IN-SITU SETTLED TIER (ADR 0570): the same retained strokes, direction decided',
+      );
+      out.writeln(
+        '  by the UNTRUNCATED window while the FAST call still decides existence.',
+      );
+      out.writeln();
+      out.writeln(
+        '  suppress  margin   dirMacro(fast)  dirMacro(settled)   delta   '
+        'down     up      missing',
+      );
+      for (final gate in _gates) {
+        final s = scores[gate]!;
+        final label = gate.suppress > 1
+            ? 'none'
+            : gate.suppress.toStringAsFixed(3);
+        out.writeln(
+          '  ${label.padRight(9)} '
+          '${(gate.margin ? 'on' : 'off').padRight(6)} '
+          '${s.dirMacroF1.toStringAsFixed(4).padLeft(14)}  '
+          '${s.sDirMacroF1.toStringAsFixed(4).padLeft(17)}  '
+          '${(s.sDirMacroF1 - s.dirMacroF1).toStringAsFixed(4).padLeft(7)}  '
+          '${s.sDirF1(StrumDirection.down).toStringAsFixed(4)}  '
+          '${s.sDirF1(StrumDirection.up).toStringAsFixed(4)}  '
+          '${s.settledMissing.toString().padLeft(7)}',
+        );
+      }
       out.writeln();
       out.writeln(
         '  WHERE THE PHANTOMS FALL (ADR 0566): a false positive within '

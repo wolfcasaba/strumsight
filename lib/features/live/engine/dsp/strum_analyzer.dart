@@ -215,6 +215,13 @@ class StrumAnalyzer {
   /// ones (+0.091), so this constant captures **+0.0044** of it. The rule for the shipped
   /// asset would be "settle EVERY stroke", not "settle the short-margin ones".
   ///
+  /// And that +0.192 is no longer an oracle-window extrapolation: ADR 0571 recorded the
+  /// settled call IN SITU in the same sweep, and the shipped path gains **+0.1679** macro
+  /// with the settled direction on every stroke — with the whole of it on DOWNSTROKES
+  /// (0.5736 -> 0.9032) and essentially none on upstrokes (0.2007 -> 0.2069). So ADR
+  /// 0553's data diagnosis stands: what needed more audio was the downstroke; the upstroke
+  /// needs DATA.
+  ///
   /// None of that is live: [settledTier] is false, so this constant is dark either way.
   /// It is written down because the justification above is asset-specific and the comment
   /// did not say so — and because ADR 0556 D1/D3's objection to settling everything (the
