@@ -14567,12 +14567,43 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **A TIER MARAD SÖTÉT:** a `settledTier = false` nem változik, a felkapcsolás továbbra is
   **profile-build költségszámot** kíván (a ~29 ms JIT-forward nem on-device szám). Ami
   változott: az ár mérve **+20%** a korábbi +100% helyett, a haszon mérve **+0,0551 macro**.
-  **KÖVETKEZŐ:** (1) **profile-build költségmérés** a CI-ban -> ha kifizetődik, a `settledTier`
-  felkapcsolása és a pontozó út a letisztult irányra állítása az ADR 0556 D3 szabályával
-  (elég margó -> a nyíl iránya megy a pontozóba is; rövid margó -> irány-semleges nyíl +
-  letisztult irány a pontozónak); (2) az ADR 0555 D4 **költség-arányból** vezetett no-strum
-  küszöb; (3) a **címkézett felvétel** — továbbra is az egyetlen ismert forrása az inga-sértő
-  ütéseknek.
+  **E18-R41 — AZ IRÁNY-MODELL 45×-ÉT KÖLTI ANNAK, AMIT A FEJLÉCE ÁLLÍTOTT (ADR 0564,
+  `tool/benchmarks/strum_direction_forward_benchmark.dart`).** Az ADR 0563 az absztrakt
+  költséget prózában hagyta („~29 ms JIT, nem on-device") — felső korlát adatpontnak
+  maszkírozva, pont amit az ADR 0474 négy `kind`-ja megakadályozni hivatott. Megmérve, a repó
+  saját benchmark-sémájában: **JIT median 25,8 ms · AOT median 27–29 ms (p95 33 ms)** —
+  vagyis **az AOT NEM gyorsabb**, a JIT-szám sosem volt pesszimista korlát.
+  És feloldva egy ellentmondás: a `crnn_strum_net.dart` fejléce **„~350k params / ~1 ms per
+  window"**-t állított. A paraméter-szám helyes (363 891), a latencia **45×-esen téves**, mert
+  **paraméterből** becsülték, nem munkából: `conv1 0,28 M + conv2 4,42 M + conv3 6,64 M +
+  GRU 15 lépés 5,16 M = **16,5 M MAC**`. Egy konv-kernel **minden pozíción**, a GRU mátrixai
+  **mind a 15 időlépésen** — a paraméter és a munka nem ugyanaz a szám. 16,5 M MAC / 28 ms ≈
+  **0,6 GMAC/s**, ami **szokásos** skalár Dart, tehát **nem a kód lassú**.
+  **A terhelés lineáris az ütés-sűrűségben:** 200 bpm tizenhatod (13,3 ütés/s) → gyors tier
+  **376 ms/s = 37,6% egy magból**, letisztult **74 ms/s = 7,4%**; 80 bpm nyolcad (2,7 ütés/s) →
+  **75 ms/s = 7,5%**, illetve **15 ms/s = 1,5%**.
+  **EZÉRT A LETISZTULT TIER NEM A SZŰK KERESZTMETSZET, HANEM A MÁR SZÁLLÍTÓ GYORS TIER.** A
+  kör kérdése („megengedhetjük-e a második forwardot") **a rossz kérdés volt**: az inkrementum
+  kicsi, az alap nagy — és az alap száma csak azért került elő, mert egy inkrementum mérése
+  rákényszerített az alap mérésére ugyanazzal a műszerrel.
+  Négy `measured` rekord `ci_host`-on; **egyik sem állít telefon-`deviceId`-t** (az ADR 0474 D2
+  zárt eszköz-szótára szerint egy kitalált eszköz **parse-hiba**). Az on-device szám **nincs
+  megmérve**, és ezért **nincs rekordja** — a séma értéket kíván, tehát egy „PENDING cél"
+  dokumentum-sor, nem rekord. A `crnn_strum_net.dart` fejléce mostantól a mért számot, a
+  MAC-táblát **és azt is** hordozza, hogy a korábbi állítás 45×-esen téves volt és miért.
+  **NEM állítjuk:** hogy a szállított gyors út elfér-e a telefon élő büdzséjében. A 37,6%
+  **x86 asztali** szám. Ha szorít, a nyereség a **trunkban** van: a 16,5 M MAC-ból **11,3 M a
+  három konvolúció** — külön kör.
+  Tanulság: **L680** — latenciát **soha ne becsülj paraméter-számból** (a munka az
+  újrahasználati faktorral szorozva: konv-pozíciók, időlépések); egy **inkrementum** mérésekor
+  ugyanazzal a műszerrel **az alapot is** meg kell mérni; és az AOT-feltevésem is mérés nélküli
+  mechanizmus-állítás volt ([[L679]] mintája egy körrel a rögzítése után).
+  **KÖVETKEZŐ:** (1) **on-device mérés** (CI/profile) a **gyors** tierre — ez a valódi nyitott
+  teljesítmény-kérdés, nem a letisztulté; a benchmark futtatható és a `--json` a meglévő
+  `tool/compare_benchmarks.py`-ba illik; (2) ha kifizetődik, a `settledTier` felkapcsolása és a
+  pontozó út a letisztult irányra állítása az ADR 0556 D3 szabályával; (3) az ADR 0555 D4
+  **költség-arányból** vezetett no-strum küszöb; (4) a **címkézett felvétel** — továbbra is az
+  egyetlen ismert forrása az inga-sértő ütéseknek.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

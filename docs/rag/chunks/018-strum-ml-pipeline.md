@@ -1320,3 +1320,63 @@ The tier stays DARK: `settledTier = false` is unchanged, and flipping it still n
 profile-build cost number -- the ~29 ms JIT forward is not an on-device figure. What changed is
 that the price is now measured as +20 % of the direction model's forwards rather than +100 %,
 and the benefit is measured at +0.0551 macro-F1.
+
+### The direction model costs 45x what its own header claimed: 28 ms per stroke, not ~1 ms (E18-R41, ADR 0564)
+
+ADR 0563 left the settled tier's ABSOLUTE cost in prose ("~29 ms on a JIT harness, not an
+on-device figure") -- an upper bound masquerading as a data point, which is the confusion
+ADR 0474's four `kind`s exist to prevent. `tool/benchmarks/strum_direction_forward_benchmark.dart`
+puts it in the record instead, and resolves a contradiction: `crnn_strum_net.dart`'s header
+claimed "~350k params / ~1 ms per window".
+
+```
+  forward latency   JIT (flutter test)  median 25.8 ms
+                    AOT (dart compile)  median 27-29 ms, p95 33 ms
+```
+
+**AOT is NOT faster**, so the JIT figure was never the pessimistic bound it had been treated
+as. The parameter count was right (363 891); the latency was wrong by 45x, and wrong because
+it was derived from parameters instead of work:
+
+```
+  conv1  15x128x16 outputs x 9        =  0.28 M MAC   (then maxpool W/2)
+  conv2  15x64x32  outputs x 9x16     =  4.42 M
+  conv3  15x32x48  outputs x 9x32     =  6.64 M
+  GRU    15 steps x (768 + 128) x 384 =  5.16 M
+                                        --------
+                                        16.5 M MAC   = 45x the parameters
+```
+
+A conv kernel applies at every spatial position and the GRU matrices at every one of the 15
+timesteps, so parameters and work are different numbers. 16.5 M MAC / 28 ms is about
+0.6 GMAC/s, an ordinary scalar-Dart rate -- the implementation is fine, the work is 45x what
+the header implied.
+
+**Load is linear in stroke density**, so one figure misleads:
+
+```
+  200 bpm sixteenths (stress) 13.3 strokes/s   fast tier 376 ms/s = 37.6 % of one core
+                                               settled   74 ms/s  =  7.4 %
+  80 bpm eighths (beginner)    2.7 strokes/s   fast tier  75 ms/s =  7.5 %
+                                               settled    15 ms/s =  1.5 %
+```
+
+**The settled tier is not the bottleneck; the already-shipping FAST tier is.** The question
+this round opened with -- can we afford a second forward -- was the wrong question: the
+increment is small and the base is large. That base number only surfaced because measuring an
+increment forced measuring the baseline with the same instrument (L680).
+
+Four `measured` records are emitted on `ci_host`, and **none claims a phone `deviceId`** --
+ADR 0474 D2's closed device dictionary makes an invented device a parse failure, which is the
+wanted behaviour. The on-device figure is NOT measured and therefore has no record at all: the
+schema requires a value, so a PENDING target is a document line, not a record.
+
+The header in `crnn_strum_net.dart` now carries the measured numbers, the MAC table, and an
+explicit statement that the earlier claim was wrong by 45x and why -- a correction that hid
+what had been there would not protect the next reader from making the same estimate.
+
+Not claimed: whether the shipped fast path fits the live budget on a phone. 37.6 % of one core
+is an x86 desktop figure, and scalar Dart on a phone is typically slower. What this round
+delivers is that the question is now measurable and the record schema stops a host number from
+reading as a device one. If it ever does pinch, the win is in the trunk, not the tier: 11.3 M
+of the 16.5 M MACs are the three convolutions.

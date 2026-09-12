@@ -3,8 +3,38 @@ import 'dart:typed_data';
 
 /// Pure-Dart forward pass of the trained strum-direction CRNN
 /// (ml-track P1.3, revised 2026-07-13: hand-written inference instead of
-/// tflite_flutter — the net is ~350k params / ~1 ms per window, host-testable
-/// on any platform, and keeps the ONE-win32-major rule untouched).
+/// tflite_flutter — host-testable on any platform, and keeps the
+/// ONE-win32-major rule untouched).
+///
+/// ## Cost — MEASURED, correcting this header's own earlier claim
+///
+/// This comment used to say "~350k params / ~1 ms per window". The parameter
+/// count is right (363 891); **the latency was wrong by 45x**, and wrong because
+/// it was derived from the parameter count instead of from the work
+/// (`tool/benchmarks/strum_direction_forward_benchmark.dart`, ADR 0564):
+///
+/// ```
+///   conv1  15x128x16 outputs x 9        =  0.28 M MAC   (then maxpool W/2)
+///   conv2  15x64x32  outputs x 9x16     =  4.42 M
+///   conv3  15x32x48  outputs x 9x32     =  6.64 M
+///   GRU    15 steps x (768 + 128) x 384 =  5.16 M
+///                                         --------
+///                                         16.5 M MAC  = 45x the parameters
+/// ```
+///
+/// A conv kernel is applied at every spatial position and the GRU matrices at
+/// every one of the 15 timesteps, so parameters and work are not the same number.
+/// Measured on `ci_host` (x86 desktop), AOT via `dart compile exe`, 400 calls
+/// after warm-up: **median 27-29 ms across runs** (28.2 ms in the recorded run),
+/// p95 33 ms — about 0.6 GMAC/s, which is an ordinary rate for scalar Dart, so the
+/// implementation is not the problem; the work is simply 45x what the header
+/// implied. JIT under `flutter test` measures 25.8 ms, i.e. **AOT is not faster
+/// here** — so the JIT figure was never the pessimistic bound it was treated as.
+///
+/// The load is linear in strokes per second: at 80 bpm eighths (2.7 strokes/s)
+/// that is 7.2 % of one core, at the 200 bpm sixteenths stress case (13.3
+/// strokes/s) 35.9 %. **The on-device figure is NOT measured** — an x86 desktop
+/// bounds a phone, it does not stand in for one.
 ///
 /// Architecture (must mirror `ml/train.py::build_model` exactly):
 ///   log-mel window (frames, mels) → standardise (per-mel mean/std) →

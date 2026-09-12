@@ -28214,3 +28214,73 @@ kész, amíg azt is meg nem mértem** — vagy amíg ki nem írtam, hogy nem mé
 eredmény, és úgy viselkedik, mint egy találgatás.*
 
 Lásd még [[L670]], [[L672]] (ott a korrekció), [[L677]], ADR 0562, ADR 0563.
+
+## L680 — Egy paraméter-számból becsült latencia 45×-esen téves volt, és hónapokig a szállított forrás fejlécében állt (E18-R41, 2026-09-12)
+
+### 1. A hiba, és hogy miért pont ennyi
+
+A `crnn_strum_net.dart` fejléce ezt állította: *„a net ~350k params / **~1 ms per window**"*.
+A paraméter-szám helyes (363 891). A latencia **45×-esen** téves: mérve **27–29 ms**.
+
+A becslés módja a hiba: **a paraméter-szám nem a munka**. Egy konvolúciós kernel **minden
+térbeli pozíción** alkalmazódik, a GRU mátrixai **mind a 15 időlépésen**:
+
+```
+  conv1  0,28 M MAC · conv2  4,42 M · conv3  6,64 M · GRU  5,16 M   =  16,5 M MAC
+  363 891 paraméter ellen                                           =  45×
+```
+
+A 16,5 M MAC / 28 ms ≈ **0,6 GMAC/s**, ami **szokásos** skalár Dart-sebesség — tehát nem a kód
+lassú. A becslés implicit feltevése az volt, hogy **minden paramétert egyszer használunk**.
+
+**A szabály.** Latenciát **soha ne becsüljek paraméter-számból**. A munka a paraméter-szám
+**újrahasználati faktorral** szorozva: konvolúciónál a kimeneti pozíciók száma, rekurrensnél
+az időlépések száma, attention-nél a szekvencia-hossz négyzete. Ha a faktort nem írom le, a
+becslésem nem becslés, hanem **alsó korlát**, aminek felső korlátként hisznek.
+
+### 2. És a becslés AOT-feltevésem is téves volt
+
+Az ADR 0559-ben a ~29 ms-os JIT-számot úgy kezeltem, mint **pesszimista korlátot**, azzal,
+hogy „a release AOT lényegesen gyorsabb". Megmérve: **az AOT nem gyorsabb** (27–29 ms vs
+JIT 25,8 ms). Ez is egy **mechanizmus-állítás mérés nélkül** — pontosan az [[L679]] mintája,
+egy körrel a rögzítése után.
+
+A miért utólag érthető: a forward `Float64List`-eken futó szoros skalár ciklusokból áll, amit
+a JIT a 200+ hívás alatt már optimalizált — nincs mit az AOT-nak hozzátennie. De ezt **meg
+kellett volna mérnem**, nem feltennem.
+
+### 3. Amit a kör valójában talált: a rossz kérdéssel indultam
+
+A kör kérdése az volt, hogy „megengedhetjük-e a **második** forwardot". A mérés válasza:
+
+```
+  200 bpm tizenhatod:  gyors tier (MA SZÁLLÍT)  37,6 % egy magból
+                       letisztult tier (+20%)    7,4 %
+```
+
+Az **inkrementum kicsi, az alap nagy**. Az a kérdés, amit hetek óta kerülgettem („kifizetődik-e
+a tier"), **kevesebbet dönt el**, mint az, amit soha nem tettem fel: **mennyibe kerül az, ami
+már fut.** És azért nem tettem fel, mert a fejléc ~1 ms-ot állított, és **elhittem egy
+szállított forrásban álló számnak mérés nélkül**.
+
+**A szabály.** Amikor egy **inkrementum** költségét mérem, ugyanazzal a műszerrel meg kell
+mérnem az **alapot** is. Az inkrementum önmagában értelmezhetetlen, és az alap számáról
+kiderülhet, hogy az a valódi lelet.
+
+### 4. A repó eszköze készen állt, és nem használtam
+
+Az ADR 0474 egy **formális benchmark-rekord-sémát** ad, pont ezzel a négy `kind`-dal:
+`measured` / `upperBound` / `derivedContract` / `target` — és a célja szó szerint az, hogy egy
+felső korlát ne olvasódjon mért baseline-ként. Az ADR 0559-ben a „~29 ms JIT, nem on-device"
+megfogalmazás **prózában** tette ugyanezt a distinkciót, a sémán **kívül** — tehát nem
+összevethetően, nem regresszió-figyelve, és a következő olvasó számára nem kötelezően.
+
+Ez ugyanaz a család, mint [[L676]] és [[L677]] (negyedszer, ötödször): a repó már tartalmazta a
+megoldást egy **másik rétegben**. Most viszont a szabályom működött — a fogalomra („benchmark",
+„performance budget") kerestem `lib/` és `tool/` egészében, és **megtaláltam**, mielőtt sajátot
+írtam volna.
+
+*Egy szám, ami egy forrásfájl fejlécében áll mérés nélkül, hónapokig lesz igaz — nem azért,
+mert helyes, hanem mert senki nem kéri tőle a bizonyítékot.*
+
+Lásd még [[L674]], [[L676]], [[L677]], [[L679]], ADR 0474, ADR 0559, ADR 0563, ADR 0564.
