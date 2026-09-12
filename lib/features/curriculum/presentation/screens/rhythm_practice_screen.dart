@@ -41,12 +41,14 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/audio/latency_calibrator.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../chords/public.dart';
+import '../../../learn/public.dart' show Metronome, metronomeMutedProvider;
 import '../../../live/public.dart';
 import '../../../settings/public.dart';
 import '../../data/beginner_course.dart';
@@ -57,6 +59,7 @@ import '../../domain/rhythm_grading.dart';
 import '../../domain/rhythm_grid.dart';
 import '../../domain/rhythm_mode.dart';
 import '../../domain/chord_grading.dart';
+import '../../domain/metronome_pulse.dart';
 import '../../domain/mission_chords.dart';
 import '../curriculum_names.dart';
 import '../providers/curriculum_progress_providers.dart';
@@ -150,6 +153,17 @@ final class _RhythmPracticeScreenState
   /// is what a finished attempt's evidence is attributed to.
   late final CurriculumMission _mission;
 
+  /// The shipped click. WHEN it may sound is `metronome_pulse.dart`'s decision,
+  /// which carries the measurement: an audible click during the scored bars is
+  /// counted as a stroke on the very beat it marks (15 false strums from 16 clicks,
+  /// `test/features/live/metronome_click_pollution_test.dart`).
+  final Metronome _metronome = Metronome();
+
+  /// The last beat index a pulse was emitted for, counted from the moment play was
+  /// pressed so the count-in and the attempt share one monotonic sequence. -1 means
+  /// nothing has pulsed yet.
+  int _lastPulsedBeat = -1;
+
   /// What the decoder said about the held chord during the attempt, in order.
   ///
   /// Kept separately from `_strokes` because it is a different measurement on a
@@ -225,6 +239,7 @@ final class _RhythmPracticeScreenState
   @override
   void dispose() {
     _ticker.dispose();
+    _metronome.dispose();
     super.dispose();
   }
 
@@ -257,10 +272,57 @@ final class _RhythmPracticeScreenState
         justFinished = true;
       }
     });
+    _pulseIfNewBeat();
     // AFTER the state change, never inside `build`: recording is a write, and a
     // write driven by a rebuild would count one attempt again every time the
     // widget happened to rebuild.
     if (justFinished) _recordFinishedAttempt();
+  }
+
+  /// Emits the beat, once per beat, in whichever channel is safe right now.
+  ///
+  /// WHICH channel is a decision with a measurement behind it, and it lives in
+  /// `metronome_pulse.dart` rather than here: the case that matters most — silence
+  /// during a calibration run — is the hardest one to reach from a widget test, and
+  /// it is the one that stops the device calibrating against its own metronome.
+  void _pulseIfNewBeat() {
+    final position = _position;
+    if (!_playing || position == null) {
+      _lastPulsedBeat = -1;
+      return;
+    }
+    final beatUs = _beatDuration.inMicroseconds;
+    if (beatUs <= 0) return;
+    final beat = position.inMicroseconds ~/ beatUs;
+    if (beat == _lastPulsedBeat) return;
+    _lastPulsedBeat = beat;
+
+    switch (curriculumPulseFor(
+      phase: _pulsePhase,
+      isDownbeat: beat % _assignment.grid.beatsPerBar == 0,
+      muted: ref.read(metronomeMutedProvider),
+    )) {
+      case CurriculumPulse.none:
+        return;
+      case CurriculumPulse.click:
+        _metronome.tick().ignore();
+      case CurriculumPulse.accentClick:
+        _metronome.tick(accent: true).ignore();
+      case CurriculumPulse.haptic:
+        HapticFeedback.lightImpact();
+      case CurriculumPulse.accentHaptic:
+        HapticFeedback.mediumImpact();
+    }
+  }
+
+  /// What is being measured at this instant, which is what decides the channel.
+  ///
+  /// Calibration outranks the count-in deliberately: a calibration run also counts
+  /// itself in, and a click there would be registered as a tap.
+  CurriculumPulsePhase get _pulsePhase {
+    if (_calibrator != null) return CurriculumPulsePhase.calibration;
+    if (_countInNumber != null) return CurriculumPulsePhase.countIn;
+    return CurriculumPulsePhase.scoredAttempt;
   }
 
   /// Records the finished attempt, exactly once, unless it was a calibration run.
@@ -306,6 +368,7 @@ final class _RhythmPracticeScreenState
       _chordDetections.clear();
       _finished = false;
       _attemptCounted = null;
+      _lastPulsedBeat = -1;
       _playing = true;
     });
   }
@@ -326,6 +389,7 @@ final class _RhythmPracticeScreenState
       _chordDetections.clear();
       _finished = false;
       _attemptCounted = null;
+      _lastPulsedBeat = -1;
       _playing = _engineNowSec != null;
     });
   }
@@ -536,6 +600,17 @@ final class _RhythmPracticeScreenState
         // ladder and landing on a screen indistinguishable from step 2 leaves the
         // learner unable to tell whether the tap did what it offered.
         title: Text(curriculumMissionName(l10n, _mission.missionId)),
+        actions: [
+          IconButton(
+            icon: Icon(
+              ref.watch(metronomeMutedProvider)
+                  ? Icons.volume_off
+                  : Icons.volume_up,
+            ),
+            tooltip: l10n.learnMetronome,
+            onPressed: () => ref.read(metronomeMutedProvider.notifier).toggle(),
+          ),
+        ],
       ),
       // The transport sits OUTSIDE the scroll view on purpose: a practice
       // screen's play control must be reachable without scrolling, and a widget
@@ -681,14 +756,30 @@ final class _RhythmPracticeScreenState
       );
     }
     final bar = _barNumber;
-    return Text(
-      bar == null
-          ? (_finished ? l10n.curriculumAttemptDone : '')
-          : l10n.curriculumBarOf(bar, _attemptBars),
-      style: text.labelLarge?.copyWith(
-        color: _finished ? colors.textSecondary : colors.textPrimary,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          bar == null
+              ? (_finished ? l10n.curriculumAttemptDone : '')
+              : l10n.curriculumBarOf(bar, _attemptBars),
+          style: text.labelLarge?.copyWith(
+            color: _finished ? colors.textSecondary : colors.textPrimary,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        // Said once, in the first scored bar, where the learner notices the click
+        // stopping and would otherwise conclude the metronome broke. Shown only
+        // when there WAS a click to stop: a muted metronome has nothing to explain.
+        if (bar == 1 &&
+            !_finished &&
+            _pulsePhase == CurriculumPulsePhase.scoredAttempt &&
+            !ref.watch(metronomeMutedProvider))
+          Text(
+            l10n.curriculumClickStopsWhileListening,
+            style: text.labelSmall?.copyWith(color: colors.textSecondary),
+          ),
+      ],
     );
   }
 

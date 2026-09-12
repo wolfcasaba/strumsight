@@ -167,6 +167,29 @@ List<double> strumSequence(
   return pcm;
 }
 
+/// Onsets the ENGINE reports for [pcm], in seconds on its own clock.
+///
+/// Read from `strumSeq` increments and `latestStrumTime` — the MEASURED true onset
+/// the pipeline publishes, not the moment a frame happened to arrive.
+List<double> strumOnsets(List<double> pcm, {int chunk = 1024}) {
+  final pipeline = LivePipeline(sampleRate: modelledSampleRate);
+  final out = <double>[];
+  var lastSeq = 0;
+  for (var i = 0; i < pcm.length; i += chunk) {
+    final end = math.min(i + chunk, pcm.length);
+    for (final frame in pipeline.addChunk(pcm.sublist(i, end))) {
+      if (frame.strumSeq > lastSeq) {
+        lastSeq = frame.strumSeq;
+        out.add(frame.latestStrumTime);
+      }
+    }
+  }
+  return out;
+}
+
+/// How many strums the engine reports for [pcm].
+int strumCount(List<double> pcm) => strumOnsets(pcm).length;
+
 /// One published frame of the real pipeline, with the time it was published.
 typedef ChordFrame = ({double atSec, String? label, bool isConfirmed});
 

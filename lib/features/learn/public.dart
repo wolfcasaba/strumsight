@@ -26,3 +26,7 @@ export 'audio/chord_audio.dart';
 export 'audio/chord_audition.dart';
 export 'providers/chord_audition_provider.dart';
 export 'audio/metronome.dart';
+// The mute preference travels with the metronome: a cross-feature consumer
+// that can play the click must also be able to honour the learner's choice
+// about hearing it (E18-R17).
+export 'providers/metronome_pref_provider.dart';

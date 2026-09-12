@@ -208,6 +208,7 @@
       }
     }
   },
+  "curriculumClickStopsWhileListening": "A klikk elhallgat, amíg hallgatlak — hogy ne a te pengetésednek vegyem",
   "curriculumCapabilityMicrophone": "mikrofon",
   "curriculumCapabilityCamera": "kamera",
   "curriculumCapabilityDirection": "le/fel ütés pontozása",

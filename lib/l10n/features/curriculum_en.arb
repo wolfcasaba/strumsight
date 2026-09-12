@@ -208,6 +208,7 @@
       }
     }
   },
+  "curriculumClickStopsWhileListening": "The click stops while I listen, so it is not mistaken for your strumming",
   "curriculumCapabilityMicrophone": "a microphone",
   "curriculumCapabilityCamera": "a camera",
   "curriculumCapabilityDirection": "up/down stroke scoring",

@@ -1834,6 +1834,7 @@
   "curriculumChordStays": "ugyanaz marad",
   "curriculumChordTooLittle": "Az akkordot még nem hallottam elég jól",
   "curriculumChordUnclear": "nem tisztázott",
+  "curriculumClickStopsWhileListening": "A klikk elhallgat, amíg hallgatlak — hogy ne a te pengetésednek vegyem",
   "curriculumCountInLabel": "Felkészülés",
   "curriculumCountInNumber": "{number}",
   "@curriculumCountInNumber": {

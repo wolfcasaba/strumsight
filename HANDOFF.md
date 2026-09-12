@@ -1,5 +1,79 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R17 — A PULZUS: hallható beszámolás, haptikus pontozás — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „ok mivel folytassuk" → a metronóm-bekötés + klikk-szennyezés mérése.
+
+A ritmus-képernyő **néma** volt, pedig három mód `needsMetronome: true`-t deklarál,
+az app szállít metronómot, és a `pubspec.yaml` sora szó szerint „metronome click".
+Deklarált igény, semmi mögötte.
+
+### A mérés két kockázatot nézett, és a MÁSIKAT igazolta
+
+Megjósoltam egy konkrét hibamódot: a klikk 1000 Hz, az ≈ B5, és a **B az E-moll és a
+G akkord hangja is** — a kurzus első és negyedik akkordja. Az érv jó volt. **A mérés
+megdöntötte:** az akkord azonossága egyetlen klikk-szinten sem változott, a
+megerősített képkockák ~200-ból legfeljebb 1-gyel mozdultak, és a csak-klikkek
+egyáltalán nem neveznek akkordot, teljes skálán sem.
+
+Ugyanaz a futás viszont kiírta a döntő számot, amit nem erre a kérdésre gyűjtöttem:
+
+```
+csak klikkek, gain 0.10 / 0.30 / 1.00: mindháromnál 15 jelentett pengetés
+```
+
+**16 klikkből 15 pengetés, gitár nélkül** — és a klikk pontosan az ütésre esik,
+pontosan oda, ahol a rács pengetést vár. Egy tanuló, aki **semmit nem játszik**,
+teli, tökéletesen időzített körrel lenne kreditálva. És ez a hiba **hízelgő**, tehát
+soha nem generált volna bugreportot. → **L658**
+
+### A döntés, amit a szám hozott
+
+| Fázis | Csatorna |
+|---|---|
+| beszámolás | hallható klikk, 1. ütésen akcentus — itt semmi nincs pontozva |
+| pontozott kör | **haptikus** pulzus, néma — érezhető, a mikrofon nem hallja |
+| kalibráció | **semmi** |
+
+A kalibráció felülírja a beszámolást, és ez nem apróság: a kalibrátor a
+`latestStrumTime`-ból regisztrál koppintást, a fenti mérés szerint pedig a klikk épp
+ilyet termel — egy hallható pulzus **a saját metronómjára kalibrálná a készüléket**.
+
+A döntés **tiszta funkció** (`metronome_pulse.dart`), nem a widget tick-callbackje,
+mert a legnagyobb súlyú eset — a csend kalibráció alatt — az, amit egy widget-teszt a
+legnehezebben ér el. A `metronome_pulse_test.dart` kimerítően állítja a táblát.
+
+Egy kapcsoló mindkét csatornára (a meglévő `metronomeMutedProvider`). És az első
+pontozott taktusban a tanuló megtudja, miért hallgatott el a klikk — enélkül azt
+hiszi, elromlott.
+
+### Mellékhatás
+
+Fájlt nem kellett mozgatni: a szabály `crossFeatureImportsMustUsePublicApi`, tehát a
+tananyag a `learn/public.dart`-on át importál. A némítás-preferencia exportja
+odakerült, mert aki le tudja játszani a klikket, annak a tanuló választását is
+tisztelnie kell.
+
+**Gate:** zöld — `curriculum` (283 cella), `live`, `learn` + architecture / secrets /
+l10n. Új: 8 cella (`metronome_pulse_test`), 3 mérő cella
+(`metronome_click_pollution_test`), 1 l10n-kulcs × 2 nyelv.
+
+**Dokumentáció:** [ADR 0546](docs/adr/0546-the-pulse-channel-is-decided-by-what-is-being-measured.md),
+`docs/LESSONS.md` **L658**.
+
+### Ami nyitva marad
+
+- **A napi hurok** (`today` / `streak` / `gamification`): a tananyagot a routeren
+  kívül semmi nem ismeri, tehát a „ma" képernyő nem mutat a következő rungra, és egy
+  teljesített kör nem mozdít sorozatot. Ez a legnagyobb nyitott termék-hiány.
+- **`listenAndRepeat` mód** — most már van rá mért válasz: az app nem játszhat hangot,
+  amíg pontoz, tehát a demonstráció és a visszajátszás időben el kell váljon (ami a
+  mód deklarált alakja, `demonstratesFirst: true`).
+- **Em/Am valódi gitáron** — csak modellezett audio; ezt felvétellel te tudod
+  feloldani.
+- Készülék-ellenőrzés (ARM per-frame költség), `sus4`/`aug` túljelentés: környezet-,
+  illetve adathiány.
+
 ## 🔴 E18-R16 — NEMLEGES KÖR: a váltás-időzítés pontszáma MÉRTEN lehetetlen — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „folytasd" (teljes delegálás).

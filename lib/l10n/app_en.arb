@@ -1862,6 +1862,7 @@
   "curriculumChordStays": "stays the same",
   "curriculumChordTooLittle": "I could not hear the chord well enough yet",
   "curriculumChordUnclear": "not confirmed",
+  "curriculumClickStopsWhileListening": "The click stops while I listen, so it is not mistaken for your strumming",
   "curriculumCountInLabel": "Get ready",
   "curriculumCountInNumber": "{number}",
   "@curriculumCountInNumber": {

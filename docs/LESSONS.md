@@ -26808,3 +26808,67 @@ hanem lehetetlenség —, a korlátot pedig
 `test/features/curriculum/rhythm_assignment_test.dart` → „a chord cannot be asked
 for in a bar shorter than the engine needs to follow a change" tartja. Lásd még
 [ADR 0545](adr/0545-no-change-timing-score-the-engine-lag-is-not-subtractable.md).
+
+
+## L658 — A kockázat-hipotézis nem helyettesíti a végigmérést: a megjósolt hibamódot (kromapollúció) a mérés MEGDÖNTÖTTE, és egy másikat talált (minden klikk hamis pengetés) (E18-R17, 2026-09-12)
+
+**Mi történt.** A tananyag ritmus-képernyője néma volt, pedig három mód
+`needsMetronome: true`-t deklarál és az app szállít metronómot. A bekötés előtt
+feltettem a helyes kérdést — „mit tesz a klikk a felismeréssel?" —, és **meg is
+jósoltam egy konkrét, megnevezhető hibamódot**:
+
+> A klikk 1000 Hz-es szinusz, 1000 Hz ≈ B5, és a B az E-moll (E-G-B) ÉS a G (G-B-D)
+> akkord hangja — a kurzus első és negyedik akkordja. Tehát a klikk a kroma-binekre
+> esik, amiket a dekóder mérlegel.
+
+Az érv jó volt: specifikus, ellenőrizhető, és a zenei tartalom alapján helyes. Ha
+csak erre mértem volna rá egy célzott próbát, „megerősítést vagy cáfolatot" kaptam
+volna — és **mindkét kimenet félrevezetett volna.**
+
+**Amit a mérés mondott.** A kroma **érintetlen**: az akkord azonossága egyetlen
+klikk-szinten sem változott, a megerősített képkockák száma legfeljebb 1-gyel mozdult
+~200-ból, és a csak-klikkek **egyáltalán nem neveznek akkordot**, teljes skálán sem.
+A hipotézisem megdőlt.
+
+Ugyanaz a futás viszont kiírta azt is, amit nem erre a kérdésre gyűjtöttem:
+
+```
+csak klikkek, gain 0.10: 15 jelentett pengetés
+csak klikkek, gain 0.30: 15 jelentett pengetés
+csak klikkek, gain 1.00: 15 jelentett pengetés
+```
+
+**16 klikkből 15 pengetés, gitár nélkül, minden szinten** — és a klikk pontosan az
+ütésre esik, pontosan oda, ahol a rács pengetést vár. Egy tanuló, aki semmit nem
+játszik, teli, tökéletesen időzített körrel lenne kreditálva. Ez nem pontatlanság,
+hanem a pontozás teljes meghamisítása, és sokkal súlyosabb, mint amit jósoltam.
+
+**Miért maradt volna észrevétlen.** A hamis onset NEM rontja el az akkordot, tehát a
+képernyő minden jele jó maradt volna: az akkord zölden konfirmál, a szint-méter szól,
+a kör „teli" lesz. A hiba csak a PONTSZÁMBAN létezik, és épp abba az irányba hajlít,
+amit senki nem jelent be: a tanuló jobb eredményt kap, mint amit játszott. Egy
+hízelgő hiba nem generál bugreportot.
+
+**Ami megmentette.** Hogy a próbát nem a hipotézisre szabtam, hanem a lánc KIMENETEIRE:
+pengetésszám, akkord-azonosság, megerősített képkockák — szintenként, és egy
+kontrollal, amiben **egyáltalán nincs gitár**. Az a kontroll adta a döntő számot, és
+nem azért szerepelt benne, mert gyanakodtam rá, hanem mert „a klikk önmagában mit
+tesz" a legegyszerűbb elkülönítés.
+
+**Az általános szabály.** *Egy hipotézis azt mondja meg, hogy MÉRJ — nem azt, hogy MIT
+mérj. A próbának a lánc összes megfigyelhető kimenetét ki kell írnia, plusz egy olyan
+kontrollt, amiből a vizsgált jel kimarad.* Egy hipotézisre szabott próba a
+hipotézissel együtt áll vagy bukik, és ha megbukik, magával viszi azt a hibát is,
+amit észrevehetett volna.
+
+**Amit a szám eldöntött, nem az érv.** Hallható klikk csak a **beszámolásban** (ott
+semmi nincs pontozva), a pontozott körben **haptikus** pulzus (érezhető, a mikrofon
+nem hallja), kalibráció alatt **semmi** — mert a kalibrátor a `latestStrumTime`-ból
+regisztrál koppintást, tehát egy klikk a saját metronómjára kalibrálná a készüléket.
+
+**Őrteszt:** `test/features/curriculum/metronome_pulse_test.dart` kimerítően
+állítja a csatorna-táblát (fázis × akcentus × némítás), és a mérés maga
+`test/features/live/metronome_click_pollution_test.dart`. A döntés tiszta funkcióban
+él (`metronome_pulse.dart`), nem a widget tick-callbackjében, mert a legnagyobb súlyú
+eset — a csend kalibráció alatt — az, amit egy widget-teszt a legnehezebben ér el.
+Lásd még [ADR 0546](adr/0546-the-pulse-channel-is-decided-by-what-is-being-measured.md).
