@@ -14758,10 +14758,58 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   (2) ha egy kör bármit letesz a `test/fixtures/` alá, **nevezze meg** a kapuban a
   `fixture_manifest_test.dart`-ot; (3) egy új assetet előbb a **portja paritásán** kell
   átvinni, és csak utána mérni vele.
-  **KÖVETKEZŐ:** (1) **az asset bekötése** az ADR 0567 D3 javaslatával (settled asset +
-  kapu vissza 0,439-re) — a §9 négy lába közül a fixtúra/property/paritás/valódi-audió
-  mostantól **mind megvan**; ami hátravan: a **Klangio-oldal in situ** ellenőrzése és maga
-  a csere; (2) **on-device mérés** (CI/profile) a **gyors**
+  **E18-R43c — A SETTLED ASSET A TELEPÍTÉSI KORPUSZON VISSZAESIK; AZ ADR 0567 D3 CSERE-
+  JAVASLATA VISSZAVONVA (ADR 0569).** Az ADR 0567 D4 nyitva hagyta a Klangio-oldalt, kimondott
+  okkal: a szállított asset Klangion **egyedül** tanult, a settled Klangio **+ GuitarSeten**,
+  tehát a +0,186 lehet **csere**. A korpusz nincs a gépen (in situ nem mérhető), de a kérdés
+  igen: az új **`ml/read_ssml.py`** mindkét `.bin`-t **egy** Keras-gráfba tölti — egy műszer,
+  két asset, ugyanazok az ablakok (az L682 §1 szabálya).
+  **Minden Klangio-fold torzít, és a torzítás IRÁNYA a műszer.** A szállított a **felvételek**
+  random 20%-át tartotta ki (`split_by_recording`, seed 42), a settled a **4-es gitárost**
+  teljesen:
+  fold **A** gitáros 4 (n=3721): **0,9490 → 0,5072 (−0,4418)**, torzít a szállított felé;
+  fold **B** a szállított eval-foldja (n=2013): **0,7950 → 0,7428 (−0,0521)**, torzít a
+  **settled** felé; fold **C** egyik sem látta (n=824): **0,8013 → 0,5359 (−0,2653)**.
+  **A B-t fordítva kell olvasni:** ott a **settled** az előnyben lévő (ott tanult), és
+  **mégis veszít** — ehhez nem kell torzításmentes sejt, csak a torzítás ismert iránya. A
+  valódi rés tehát **legalább 0,052**, és a kitettség elvételével **nő**. A C-n a settled
+  **mindkét** osztályon rosszabb (le 0,497 vs 0,810, fel 0,575 vs 0,792) **és** kevesebb
+  valódi pengetést tart meg (0,824 vs 0,964); hamis onseteken közel egyenlők.
+  **A C NEM torzításmentes sejt, és ennek elnevezése a kör saját csapdája volt:** egyik modell
+  sem memorizálta azokat az ablakokat, de a két split **fajtájában** más — a szállított látta
+  a 4-es gitáros **többi** felvételét, a settled egyet sem. *„Egyik sem tanult ezeken az
+  ablakokon" nem azonos azzal, hogy „egyformán ismeretlen".*
+  **A DÖNTÉST A KORPUSZOK HOZTÁK, NEM A DELTÁK.** A Klangio `recording_*_phone.wav` — a
+  `ml/klangio.py` saját szavaival **„our deployment condition"** —, a GuitarSet mikrofon-tömb
+  stúdióban, és az app **a telefon mikrofonját** hallja. A nyereség tehát azon a korpuszon
+  van, ami **nem** a telepítés, a veszteség azon, ami **igen**: **az assetet nem cseréljük**,
+  az ADR 0567 D3 **visszavonva** (a mérés alatta áll, a következtetés dőlt meg).
+  **A SZERKEZETI HIÁNYOSSÁG ÉS AZ ÚJ ELFOGADÁSI KRITÉRIUM:** az ADR 0554 helyesen mutatta,
+  hogy a GuitarSet hozzáadása mindkét korpuszt emelte — a **saját belső** alapvonalához
+  (GuitarSet 0,4468, Klangio 0,3836, ugyanaz a szerelvény). Ez **abláció**. Jelölt assetet a
+  **szállítotthoz** egy műszerrel, minden korpuszon **soha** nem mértünk — és ez nem
+  *kimaradt*, hanem **lehetetlen** volt: a szállított súlyok csak `.bin`-ként léteznek, és
+  nem volt olvasó. Ez a rosszabb eset, mert egy lehetetlen mérés **nem kerül fel** a listára.
+  Innentől: **egy jelölt asset akkor szállítható, ha a szállítottat MINDEN korpuszon legyőzi
+  vagy hozza, egy műszerrel mérve**, soronként kiírt torzítás-iránnyal.
+  **AMIT EZ AZ ARC TÖBBI MÉRÉSÉRŐL MOND:** a `weights_live_3c_settled.npz`-t tölti be a
+  `probe_direction_fusion`, `probe_settled_tier_value`, `probe_gate_window_jitter` és
+  `probe_gate_cost_frame` — tehát az **ADR 0563** (+0,0551 macro margó 0,30 felett), az
+  **ADR 0566 D2** reject curve-jei és az **ADR 0557–0562** akusztikus AUC-jai a **settled**
+  modellt jellemzik, nem a szállítottat. Egyik sem érvénytelen — mindegyik igaz a maga
+  modelljéről —, de a szállított útra vonatkozó előrejelzésük **nem igazolt**, és az ADR 0563
+  mérését a két-tier bekötése előtt a **szállított** assetn meg kell ismételni. A metrikus
+  csatorna 0,9797-e modell-független (ütem-fázis), azt nem érinti.
+  Tanulság: **L684** — (1) ablációs alapvonalhoz mért javulás **nem** elfogadási kritérium,
+  és ha egy összevetés **lehetetlen**, az eszköz-hiányosság, nem ok másra; (2) ha két modell
+  splitje **fajtájában** más, nincs közös tiszta halmaz — építs olyan foldot, ami a cáfolni
+  kívánt állítás **felé** torzít; (3) egy kereszt-korpusz delta mellé ki kell írni, **melyik
+  korpusz a telepítési feltétel**.
+  **KÖVETKEZŐ:** (1) **egy asset, ami MINDKÉT korpuszon legyőzi a szállítottat** — ez a
+  következő tanító kör célja, az új elfogadási kritériummal (a `read_ssml.py` ezt mérhetővé
+  teszi); (2) az **ADR 0563** két-tier mérésének megismétlése a **szállított** assetn;
+  (3) ha a Klangio korpusz bekerül a gépre, a Klangio **in-situ** söprés a
+  `guitarset_threshold_sweep_test.dart` mintájára; (2) **on-device mérés** (CI/profile) a **gyors**
   tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a
   `settledTier` felkapcsolása az ADR 0556 D3 szabályával; (4) a **címkézett felvétel** —
   továbbra is az egyetlen ismert forrása az inga-sértő ütéseknek, **és** az egyetlen módja a

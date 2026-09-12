@@ -1650,3 +1650,66 @@ distribution on arbitrary input, and a "measured, not wired" guard pinning both 
 `noStrumThreshold` is still 0.85 AND that the two asset files differ — without the second
 check the test would still pass if someone copied the settled weights over the shipped path,
 which is exactly the change it exists to notice.
+
+### The settled asset regresses on the DEPLOYMENT corpus, so the swap is withdrawn (E18-R43, ADR 0569)
+
+ADR 0567 D4 left the Klangio side open, for a stated reason: the shipped asset trained on
+Klangio ALONE and the settled one on Klangio + GuitarSet, so +0.186 on GuitarSet could be a
+trade. The in-situ version is unavailable here (no Klangio corpus on this machine, and the
+Dart path consumes audio), but the question behind it is answerable, because `ml/read_ssml.py`
+can now load BOTH `.bin` assets into one Keras graph -- one instrument, two assets, the same
+cached windows.
+
+**Every Klangio fold is biased, and the bias DIRECTION is the instrument.** The shipped asset
+held out a random 20 % of RECORDINGS (`split_by_recording`, seed 42); the settled asset held
+out guitarist "4" entirely.
+
+```
+  fold                   n     shipped@0.85   settled@0.439   delta    bias
+  A guitarist 4        3721       0.9490         0.5072      -0.4418   for shipped
+  B shipped eval fold  2013       0.7950         0.7428      -0.0521   for SETTLED
+  C neither saw these   824       0.8013         0.5359      -0.2653   still for shipped
+```
+
+Read fold B the other way round: there the SETTLED asset trained on those recordings and is
+the ADVANTAGED one, and it still loses. That settles it without needing an unbiased cell —
+the true held-out gap is at least 0.052, and removing the exposure widens it rather than
+closing it. On fold C the settled asset is worse on BOTH classes (down 0.497 vs 0.810, up
+0.575 vs 0.792) and also retains fewer real strums (0.824 vs 0.964); on false onsets the two
+are near-equal (0.952 vs 0.961 suppressed).
+
+**Fold C is NOT an unbiased cell, and calling it one was this round's own trap.** Neither
+model memorised those windows, but the two splits differ in KIND: the shipped asset saw
+guitarist 4's OTHER recordings, the settled asset saw none of that guitarist. "Neither trained
+on these windows" is not "equally unseen".
+
+**The decision came from the corpora, not the deltas.** Klangio is `recording_*_phone.wav` —
+`ml/klangio.py`'s own words, "our deployment condition". GuitarSet is a mic array in a studio.
+An Android app hears the phone mic. So the gain is on the corpus that is not deployment and
+the loss is on the one that is: **ADR 0567 D3's swap proposal is WITHDRAWN** and the asset is
+not wired. The measurement under it stands; the conclusion fell.
+
+**The structural gap, and the new acceptance criterion.** ADR 0554 correctly showed that
+adding GuitarSet lifted both corpora — against its OWN internal baselines (GuitarSet 0.4468,
+Klangio 0.3836, same harness, same splits). That is an ablation claim. Nobody ever compared a
+candidate asset to the SHIPPED asset with one instrument on every corpus, and it was not
+merely skipped: the shipped weights exist only as a `.bin`, its training artefacts are gone,
+and there was no reader. The comparison was IMPOSSIBLE, which is worse than skipped because
+nothing puts it on a list. From now on: a candidate asset ships only if it beats or matches
+the shipped asset on EVERY corpus, measured with one instrument, with each row's bias
+direction stated. Improvement over an ablation baseline is not an acceptance criterion.
+
+**What this says about the rest of the arc.** `ml/weights_live_3c_settled.npz` is what
+`probe_direction_fusion.py`, `probe_settled_tier_value.py`, `probe_gate_window_jitter.py` and
+`probe_gate_cost_frame.py` all load, so ADR 0563's two-tier value (+0.0551 macro above margin
+0.30), ADR 0566 D2's reject curves (UP precision 0.206 -> 0.043 ungated, macro peaking at
+0.439) and ADR 0557-0562's ACOUSTIC AUCs characterise the SETTLED model, not the shipped one.
+None of them is invalidated — each is true of its own model — but their predictions for the
+shipped path are unverified, and ADR 0563's measurement has to be repeated on the shipped
+asset before the two-tier decision is wired. The metric channel's own 0.9797 AUC is
+model-independent (beat phase) and untouched.
+
+Not claimed: any in-situ Klangio figure; a guitarist-disjoint Klangio number for the shipped
+asset (no such split existed when it was trained, so "0.795 vs 0.507" is NOT a valid model
+comparison — the valid ones are the three same-fold rows); and no mechanism for the
+regression, which is left explicitly unexplained.

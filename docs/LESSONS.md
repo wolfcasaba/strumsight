@@ -28562,3 +28562,71 @@ pótolni, és a kimondani, hogy visszafelé történt.
 rossz.*
 
 Lásd még [[L671]], [[L682]], ADR 0473, ADR 0555, ADR 0567, ADR 0568.
+
+## L684 — Egy ablációs alapvonalhoz mért javulás nem elfogadási kritérium; és „egyik sem tanult ezeken az ablakokon" nem azonos azzal, hogy „egyformán ismeretlen" (E18-R43, 2026-09-12)
+
+### 1. Tizenegy körön át egy assetet a saját alapvonalához mértünk, a szállítotthoz soha
+
+Az ADR 0554 azt állította — helyesen —, hogy a GuitarSet hozzáadása **mindkét** tartalék
+korpuszt emelte: GuitarSet 0,4468 → ..., Klangio 0,3836 → ... Ez **adat-abláció**: ugyanaz a
+szerelvény, ugyanazok a splitek, egy kar hozzáadva. Igaz állítás.
+
+Amit **soha senki nem mért**: a jelölt assetet **a szállított assethez**, egy műszerrel,
+minden korpuszon. Amikor végre megmértem:
+
+```
+  Klangio, irány-macro-F1, azonos foldon      szállított   settled    delta
+  A  gitáros 4 (a settled tiszta held-outja)    0,9490     0,5072   −0,4418
+  B  a szállított eval-foldja (a settled ELŐNYBEN)  0,7950 0,7428   −0,0521
+  C  egyik sem tanult ezeken az ablakokon       0,8013     0,5359   −0,2653
+```
+
+A settled asset a **telepítési** korpuszon (Klangio = `recording_*_phone.wav`, a
+`klangio.py` saját szavaival „our deployment condition") **rosszabb** — miközben GuitarSeten
+in situ **+0,186**. Csere, nem nyereség, és a rossz irányba.
+
+**És miért nem derült ki hamarabb:** a szállított asset súlyai **csak `.bin`-ként** léteznek
+(a tanítási artefaktumai nincsenek meg), és **nem volt olvasó**. Az összevetés tehát nem
+*kimaradt*, hanem **lehetetlen** volt. Ez a rosszabb eset, mert semmi nem jelzi: egy kimaradt
+mérés hiányzik a listáról, egy lehetetlen mérés **nem kerül fel** a listára.
+
+**A szabály.** Ha egy összevetés lehetetlen, az **eszköz-hiányosság**, amit be kell zárni —
+nem ok arra, hogy valami mást vessünk össze helyette. Az `ml/read_ssml.py` harminc sor;
+tizenegy kör állítása függött attól, hogy senki meg nem írta. És az elfogadási kritérium
+innentől: **egy jelölt asset akkor szállítható, ha a szállítottat MINDEN korpuszon legyőzi
+vagy hozza, egy műszerrel mérve** — ablációs alapvonalhoz mért javulás nem elég.
+
+### 2. „Egyik sem tanult ezeken az ablakokon" ≠ „egyformán ismeretlen"
+
+A próbát három folddal terveztem, és a harmadikat **torzításmentesnek** neveztem: a gitáros-4
+és a szállított eval-foldjának metszete, ahol egyik modell sem tanult ezeken a mintákon.
+Leírtam a kódba, hogy ez „BOTH clean", és ez **hibás**.
+
+A két split **fajtájában** különbözik: a szállított a **felvételek** 20%-át tartotta ki, a
+settled a **4-es gitárost** teljesen. A metszeten tehát egyik sem memorizálta a mintát, de a
+szállított **látta a 4-es gitáros többi felvételét**, a settled **egyet sem**. A C fold így
+is a szállított felé torzít — nem memorizáláson, hanem **ugyanaz-a-gitáros transzferen**
+keresztül. Nincs torzításmentes sejt, és ezt a tervezés **nem tudta megadni**.
+
+Ami megmaradt, egyszerűbb és erősebb: **a B foldon a settled az előnyben lévő** (ott
+tanult), és **mégis veszít** — ehhez nem kell torzításmentes sejt, csak a torzítás **ismert
+iránya**. A mérés értéke nem a semleges foldból jött, hanem abból, hogy tudtam, **melyik
+irányba** hazudik mindegyik.
+
+**A szabály.** Ha két modell splitje **fajtájában** különbözik, akkor nincs közös tiszta
+halmaz, és nem is kell keresni: építs olyan foldot, ami **az általad cáfolni kívánt állítás
+felé** torzít, és ha az állítás ott is elbukik, megvan a következtetés. *Egy ismert irányú
+torzítás műszer; egy „semlegesnek" hitt fold vakfolt.*
+
+### 3. Egy korpusz nem szám, hanem állítás a felhasználóról
+
+A döntést nem a két delta nagysága hozta meg (+0,186 vs −0,052), hanem az, hogy **melyik
+korpusz hasonlít a telepítésre**. A Klangio telefon-mikrofonos felvételek; a GuitarSet
+mikrofon-tömb stúdióban. Az app **a telefon mikrofonját** hallja.
+
+Ha csak a számokat nézem, a +0,186 „nagyobb", és a csere jónak látszik. A reláció azonban nem
+a deltákon van, hanem a korpuszokon. **A szabály:** egy kereszt-korpusz delta mellé ki kell
+írni, **melyik korpusz a telepítési feltétel** — különben a nagyobb szám győz, és az a szám
+egy másik felhasználóról szól.
+
+Lásd még [[L682]], ADR 0554, ADR 0567, ADR 0569.

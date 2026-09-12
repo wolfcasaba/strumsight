@@ -1,6 +1,8 @@
 # ADR 0567 — A bekötetlen settled asset a SZÁLLÍTÓ úton +0,186 irány-macro-F1-et ér ismeretlen játékoson és dallamon
 
-- **Státusz:** elfogadva (**csak mérés**; az asset ebben a körben **nem** kerül bekötésre)
+- **Státusz:** elfogadva **mint mérés**; a **D3 csere-javaslata VISSZAVONVA** az
+  ADR 0569-ben (a settled asset a Klangion — a telepítési korpuszon — visszaesik). A D1/D2
+  in-situ mérése és a D5/D6 műszere érvényes marad.
 - **Dátum:** 2026-09-12
 - **Kör:** E18-R43
 - **Kapcsolódó:** ADR 0554 (egy asset szolgálja mindkét szintet), ADR 0555 D3 (szándékosan
@@ -67,7 +69,15 @@ Ez **ugyanaz a szám**, amit az ADR 0566 D1 a keret-korrekció magjául használ
 asset-csere nem *megkerüli* a kapu-kérdést, hanem **elveszi a tárgyát**: egy 0,92-es
 megtartás mellett a szakadék nem működő költség többé.
 
-### D3 — Az ár precizitásban van, és egy kapu-szigorítás visszavesz belőle
+### D3 — Az ár precizitásban van, és egy kapu-szigorítás visszavesz belőle — **VISSZAVONVA (ADR 0569)**
+
+> **Ez a szakasz a kör végén megdőlt.** Az ADR 0569 ugyanebben a körben megmérte a
+> Klangio-oldalt is — azt a lábat, amit ez az ADR a D4-ben nyitva hagyott —, és a settled
+> asset ott **rosszabb**: a szállított asset saját eval-foldján, ahol a settled az
+> **előnyben** lévő (ott tanult), a macro **0,7950 → 0,7428**. A Klangio felvételei
+> telefon-mikrofonosak, azaz a **telepítési feltétel**; a GuitarSet mikrofon-tömb stúdióban.
+> Az alábbi „szállítható javaslat" tehát **nem szállítható**, és a csere nem történik meg.
+> A mérés, ami alatta van, áll — a **következtetés** dőlt meg.
 
 A settled modell ugyanazon a kapun **több fantomot** enged át (a held-out szeleten
 74 → 206), mert összességében ritkábban mond „nem-pengetést". De a **teljes görbéje**
@@ -118,7 +128,8 @@ tábla szerepel.
 
 ## Következmények
 
-- A bekötő körnek megvan a **valódi-audió** száma, a szállító úton, tiszta szeleten.
+- A bekötő körnek megvan a **valódi-audió** száma, a szállító úton, tiszta szeleten — de
+  az ADR 0569 szerint **nem indul** ezzel az assettel.
 - Az ADR 0566 D5 2. pontja (miért nem mozdul most kapu-konstans) **ezzel indokolt**: a kapu
   újrakalibrálása a ma szállított assetn kétszer elvégzett és egyszer sem érvényes munka.
 - A Chapter 14 §7.2 Alpha kapu (irány-macro **0,80**) innen **0,5728/0,5771** — még nincs
