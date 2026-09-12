@@ -1071,3 +1071,90 @@ függetlensége szerkezetileg valószínű (az akusztikus ablak onset-relatív, 
 látja), de a közös poszterior tartalék teljesítménye **külön mérés**, ami a cache
 újraépítését kívánja onset-idővel. Amíg az nem fut, a fúzió **indoklással bíró terv, nem
 eredmény**.
+
+---
+
+# A fúzió megmérve: a nyereség nagy, a kockázat az inga-sértő ütéseken van (E18-R34)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/probe_direction_fusion.py
+```
+
+Az ADR 0557 két csatornát mért külön és **nem állított** összevont számot. Itt van — és az
+is, ami a termék-kérdést eldönti.
+
+Tartalék GuitarSet (ismeretlen játékos **ÉS** dal): **530 sor**, a metrikus csatorna
+**99,2%-on elérhető**, inga-követő **519**, inga-sértő **11**.
+
+Az illeszkedés bizonyítva, nem feltéve: a `guitarset.build` determinisztikus, így az onset-
+időket annotációból visszajátszom, és a próba **leáll**, ha a sor-szám vagy a teljes
+`(játékos, dal)` sorozat nem egyezik a cache-sel. Egy jövőbeli ciklus-változás így
+**hangosan** bukik, nem csendben párosít egy ütést egy másik ütés fázisával.
+
+## A három szabály
+
+A `lam` a **előírt rácsnak adott bizalom**: egyetlen söpört skalár, nem korpuszból
+illesztett tábla (ADR 0557 D3). `lam = 0,5` **azonos** a csak-akusztikus szabállyal, tehát
+az alapvonal **ugyanazon görbe egy pontja**, nem külön kódút.
+
+| tier | szabály | macro | le-F1 | fel-F1 | pont. összes | követő | **SÉRTŐ** |
+|---|---|---|---|---|---|---|---|
+| 70 ms | C csak akusztikus | 0,5262 | 0,7743 | 0,2780 | 0,6377 | 0,6435 | **0,3636** |
+| 70 ms | A teljes fúzió `lam=0,99` | **0,9168** | 0,9518 | 0,8817 | 0,9000 | 0,9152 | **0,1818** |
+| 70 ms | B csak döntetlen `m<0,30` | 0,6497 | 0,8409 | 0,4585 | 0,7321 | 0,7418 | **0,2727** |
+| 238 ms | C csak akusztikus | 0,6061 | 0,8605 | 0,3516 | 0,7585 | 0,7649 | **0,4545** |
+| 238 ms | A teljes fúzió `lam=0,99` | **0,9226** | 0,9709 | 0,8743 | 0,9377 | 0,9538 | **0,1818** |
+| 238 ms | B csak döntetlen `m<0,30` | 0,6784 | 0,8876 | 0,4693 | 0,8019 | 0,8092 | **0,4545** |
+
+Az „elnyomott" ütés elnyomott marad mindkét szabályban: a metrikus csatorna azt mondja meg,
+**melyik irányú** egy ütés, nem azt, hogy **volt-e**. Ha feléleszthetne egy elnyomott
+onsetet, az a **létezést** döntené el a megoldókulcsból.
+
+## A fejléc fel van fújva — és a megtérülési pont a valódi becslés
+
+A tartalék ütések **98%-a engedelmeskedik az ingának**, tehát egy rácsra bízó szabály
+nagyrészt azt a feladatot kapja, hogy **a rácsot jósolja meg a rácsból**. Egy tanuló
+kevésbé engedelmeskedik, és a várható pontossága egyenes az engedelmességben (`c`):
+
+```
+  pont(c) = c · pont(követő) + (1 − c) · pont(sértő)
+```
+
+| tier | szabály | megtérülés `c*` | `c=0,95` | `0,80` | `0,60` | `0,40` |
+|---|---|---|---|---|---|---|
+| 70 ms | A teljes fúzió `lam=0,99` | **0,401** | 0,8786 | 0,7685 | 0,6219 | 0,4752 |
+| 70 ms | B csak döntetlen `m<0,30` | 0,481 | 0,7184 | 0,6480 | 0,5542 | 0,4604 |
+| 238 ms | A teljes fúzió `lam=0,99` | 0,591 | 0,9152 | 0,7994 | 0,6450 | 0,4906 |
+| 238 ms | **B csak döntetlen `m<0,30`** | **0,000** | 0,7915 | 0,7383 | 0,6674 | 0,5964 |
+
+`c*` az a pont, ahol a szabály **már nem veri** a csak-akusztikust.
+
+**A döntés, amit ez kiválaszt:**
+
+- **238 ms (pontozás):** a döntetlen-törő szabály `c* = 0,000` — **semmilyen engedelmességi
+  szinten nem veszít**, közben +0,0723 macro. Pareto-javítás, **szállítható most**.
+- **70 ms (nyíl):** a teljes fúzió a nyíl pontosságát 0,6377 → 0,9000-re viszi, és
+  **0,401 engedelmesség felett** jobb — amit egy küszködő kezdő is meghalad. **De 11 ütésen
+  áll**, ezért **funkció-kapu mögé** kerül, nem szállítható vakon.
+
+## És a „konzervatívnak" tervezett szabályom a gyors tieren rosszabb volt
+
+A B szabály a *tervezési* intuícióm volt a biztonságosra: ne írja felül a magabiztos
+akusztikus hívást. 238 ms-on igazam volt (`c* = 0,000`). **70 ms-on fordítva**: 0,481 vs a
+teljes fúzió 0,401 — ott, ahol a legtöbb a tét, az óvatos szabály **hamarabb** veszít.
+
+A mechanizmus utólag átlátszó: ha az akusztikus hívás magabiztos **és téved** — 70 ms-on
+gyakran az —, akkor épp a „ne írd felül a magabiztosat" védelem **tartja meg a hibát**. A
+margó 70 ms-on nem mér megbízhatóságot. (L672 §2.)
+
+## Amit NEM állítunk
+
+- A 0,9168 / 0,9226 **nem** generalizációs becslés tanulóra. A megtérülési görbe az, és az
+  **11 ütésen** áll: minden „sértő" pontosság 1/11 többszöröse, a mért romlás
+  (0,3636 → 0,1818) **két ütés**. Ezek **korlátok, nem munkapontok**.
+- A lineáris engedelmesség-modell feltételezi, hogy a **tanuló** sértései úgy néznek ki,
+  mint a GuitarSet sértései. Egy kezdő sértése valószínűleg **másfajta** (egész minta
+  elcsúszása, nem egy-egy kósza ütés) — tehát még a modell is ismeretlen pontosságú.
+- A `lam` **nem kalibrált valószínűség**, hanem söpört bizalom-skalár.
+- Az ADR 0557 D4 etikai korlátja és a D1 mért választása **egybeesik, de ez egybeesés, nem
+  levezetés** — a D4 mérés előtt született, és eltérés esetén is kötne.

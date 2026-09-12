@@ -27702,3 +27702,83 @@ pontosság, hanem csalás — a jó kérdés nem az, hogy javítja-e a számot, 
 helyette.*
 
 Lásd még [[L667]], [[L668]], [[L670]], ADR 0551, ADR 0553, ADR 0557.
+
+## L672 — A tartalék szám nem generalizációs becslés, ha a tartalék halmaz majdnem konstans abban, amit az új jellemző kihasznál (E18-R34, 2026-09-12)
+
+### 1. A fejléc-szám hazudott, és nem szivárgás miatt
+
+A metrikus csatorna fúziója a nyíl pontosságát **0,6377 → 0,9000**-re vitte **tartalék**
+halmazon: ismeretlen játékos, ismeretlen dal, szivárgás-kontrollok lefuttatva (L671 §2).
+Minden szabály szerint ez tiszta szám. **Mégis félrevezető.**
+
+Mert a tartalék ütések **98%-a engedelmeskedik az ingának**, vagyis a rácsra bízó szabály
+nagyrészt azt a feladatot kapja, hogy **a rácsot jósolja meg a rácsból**. A tartalék halmaz
+*disjunkt* volt, de **nem volt reprezentatív abban az egy változóban, amit az új jellemző
+kihasznál** — és ez a két dolog nem ugyanaz.
+
+**A módszer, amit ebből megtartok.** Ha egy új jellemző egy olyan változót használ, amiben a
+tartalék halmaz majdnem konstans, akkor a tartalék pontszám **nem** generalizációs becslés.
+Ilyenkor **újra kell paraméterezni a pontosságot annak a változónak a függvényében**, és
+megtérülési pontot kell közölni, nem fejlécet:
+
+```
+  pont(c) = c · pont(követő) + (1 − c) · pont(sértő)
+```
+
+Ez egyenes, tehát minden szabály **egy ponton** metszi az alapvonalat — és az a metszés a
+szállíthatóság kritériuma. Mérve: a teljes fúzió 70 ms-on `c* = 0,401`, 238 ms-on `c* =
+0,591`; a döntetlen-törő szabály 238 ms-on `c* = 0,000`, vagyis **semmilyen engedelmességi
+szinten nem veszít**.
+
+*Egy diszjunkt tartalék halmaz a szivárgás ellen védi a számot, nem a reprezentativitás
+ellen. A kérdés nem „láttam-e ezt az adatot", hanem „olyan-e, mint amin futni fog".*
+
+### 2. A „konzervatívnak" tervezett szabályom ott volt rosszabb, ahol a legtöbb múlt rajta
+
+Két szabályt terveztem: teljes Bayes-fúzió, és egy óvatos változat, ami a metrikus
+csatornát **csak döntetlenre** engedi (alacsony akusztikus margó). Meg voltam róla
+győződve, hogy a második a biztonságos, mert **nem írja felül a magabiztos akusztikus
+hívást** — pont azt a védelmet adja, amit az ADR 0557 D4-ben etikai korlátként kimondtam.
+
+Mérve: **238 ms-on** igazam volt, és jobban, mint hittem (`c* = 0,000`, soha nem veszít).
+**70 ms-on viszont fordítva**: a „konzervatív" szabály megtérülése **0,481**, a teljes
+fúzióé **0,401** — vagyis a gyors tieren, ahol az akusztikus csatorna a leggyengébb és a
+legtöbb a tét, **az óvatos szabály hamarabb kezd veszíteni.**
+
+A mechanizmus utólag átlátszó: ha az akusztikus hívás magabiztos **és téved** — és 70 ms-on
+gyakran az —, akkor épp a „ne írd felül a magabiztosat" védelem tartja meg a hibát. A
+margó 70 ms-on **nem mér megbízhatóságot**, tehát a rá épített óvatosság nem óvatosság,
+hanem zaj.
+
+**A szabály.** Egy biztonsági szabály, ami egy **megbízhatóságnak hitt** jelre (itt: margó)
+épül, csak ott biztonságos, ahol az a jel **kalibrált**. Ezt külön kell megmérni, tierenként
+— nem átvinni abból a rendszerből, ahol működött. *A „konzervatív" nem a szabály
+tulajdonsága, hanem a szabály és a rendszer párjának a tulajdonsága.*
+
+### 3. Az etikai korlát és a mérés egyetértett — és ezt egybeesésként kell kimondani
+
+Az ADR 0557 D4-et **mérés előtt** mondtam ki: a metrikus csatorna a tartózkodás lécét
+mozdíthatja, a hívást soha nem fordítja át. A mérés ezt a pontozó úton **kiválasztotta**
+(`c* = 0,000`). Kényelmes lett volna úgy írni le, mintha a mérés **igazolta volna** a
+döntést.
+
+Nem igazolta — **egybeesett vele.** A D4 azért kötött, mert a megoldókulcs ellen mérni
+hamis tanítás, **nem azért**, mert jobb számot ad. Ha a mérés nem egyezett volna, a D4
+**akkor is kötne**, és akkor azt kellett volna kiírnom, hogy a szabály **macrót fizet**
+becsületességért. *Egy etikai korlát, amit utólag optimalizációs eredményként adok el,
+legközelebb el fog tűnni, amikor a számok nem egyeznek vele.*
+
+### 4. És ami valójában blokkol: a harm-mérés 11 ütésen áll
+
+A sértő részhalmaz **11 ütés**. Minden „sértő" pontosság **1/11 többszöröse**, a mért
+romlás (0,3636 → 0,1818) **két ütés**. A megtérülési pontok ezt öröklik.
+
+Ez nem a mérés hibája, hanem **ugyanaz a lelet még egyszer** (ADR 0557 D5): a korpusz nem
+tartalmazza azt a hibaosztályt, amiért az app létezik. Ezért a döntés **korlátozva** van,
+nem elhagyva: a Pareto-biztos szabály (238 ms) szállítható most, az erősebb (70 ms, nyíl)
+**funkció-kapu mögé** kerül, amíg tanulói adat nem mérhető.
+
+*Ha a kockázat-oldali minta n = 11, akkor nem munkapontot mértem, hanem korlátot — és a
+kettőt nem szabad ugyanazzal a magabiztossággal idézni.*
+
+Lásd még [[L670]], [[L671]], ADR 0557, ADR 0558.

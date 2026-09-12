@@ -14324,6 +14324,40 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **A BEKÖTŐ KÖR TERVE EZÉRT MEGVÁLTOZOTT:** az ADR 0556 margó-küszöbe helyett a **fúziós
   döntési szabályt** kell megmérni — különben olyan kaput betonoznánk be, amit a metrikus
   csatorna feleslegessé tesz.
+  **E18-R34 — A FÚZIÓS SZABÁLY MEGMÉRVE (ADR 0558, `ml/probe_direction_fusion.py`).**
+  Tartalék GuitarSet (ismeretlen játékos ÉS dal): 530 sor, a metrikus csatorna **99,2%-on
+  elérhető**, inga-követő 519, **inga-sértő 11**. Az illeszkedés **bizonyítva**: az
+  onset-időket annotációból visszajátszom, és a próba **leáll**, ha a sor-szám vagy a teljes
+  `(játékos, dal)` sorozat nem egyezik a cache-sel.
+  | tier | szabály | macro | pont. követő | **SÉRTŐ** |
+  |---|---|---|---|---|
+  | 70 ms | csak akusztikus | 0,5262 | 0,6435 | **0,3636** |
+  | 70 ms | teljes fúzió `lam=0,99` | **0,9168** | 0,9152 | **0,1818** |
+  | 238 ms | csak akusztikus | 0,6061 | 0,7649 | **0,4545** |
+  | 238 ms | teljes fúzió `lam=0,99` | **0,9226** | 0,9538 | **0,1818** |
+  | 238 ms | **csak döntetlen `m<0,30`** | 0,6784 | 0,8092 | **0,4545** |
+  **A fejléc fel van fújva, és a korpusz teszi:** a tartalék ütések **98%-a engedelmeskedik
+  az ingának**, tehát a rácsra bízó szabály nagyrészt a rácsot jósolja a rácsból. A valódi
+  becslés a **megtérülési pont** (`pont(c) = c·követő + (1−c)·sértő`):
+  **70 ms teljes fúzió `c* = 0,401`** · 70 ms döntetlen-törő 0,481 · 238 ms teljes fúzió
+  0,591 · **238 ms döntetlen-törő `c* = 0,000`**.
+  **EZ VÁLASZTJA KI A SZABÁLYT — és tierenként MÁS.** **(D1) Pontozás (238 ms): a
+  döntetlen-törő szabály, `c* = 0,000` — semmilyen engedelmességi szinten nem veszít,
+  +0,0723 macro. Pareto, SZÁLLÍTHATÓ MOST**, és egybeesik az ADR 0557 D4 etikai korlátjával
+  — **de ez egybeesés, nem levezetés**: a D4 mérés előtt született és eltérés esetén is
+  kötne. **(D2) Nyíl (70 ms): a teljes fúzió 0,6377 → 0,9000 pontosság, megtérülés 0,401**
+  (egy küszködő kezdő is meghaladja) — **de 11 ütésen áll, ezért FUNKCIÓ-KAPU mögé kerül.**
+  **(D3) És a „konzervatívnak" tervezett szabályom a gyors tieren ROSSZABB volt** (0,481 vs
+  0,401): ha az akusztikus hívás magabiztos ÉS téved — 70 ms-on gyakran az —, akkor épp a
+  „ne írd felül a magabiztosat" védelem **tartja meg a hibát**. A margó 70 ms-on nem mér
+  megbízhatóságot.
+  **NEM állítjuk:** a 0,9168 / 0,9226 **nem** generalizációs becslés tanulóra; a megtérülési
+  görbe az, és **11 ütésen** áll (minden „sértő" pontosság 1/11 többszöröse, a mért romlás
+  **két ütés**) → **korlátok, nem munkapontok**. A lineáris modell feltételezi, hogy a tanuló
+  sértései olyanok, mint a GuitarSet sértései — egy kezdőé valószínűleg **másfajta**.
+  **KÖVETKEZŐ:** a `TempoTracker` rácsát **tizenhatodra** finomítani (ma nyolcad) + a fázist
+  folytonosan megtartani, majd a D1 szabályát bekötni (§9: fixtúra + property + paritás +
+  valós-audio mérés). Tanulság: **L672**.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

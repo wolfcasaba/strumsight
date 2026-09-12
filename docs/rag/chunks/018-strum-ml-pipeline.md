@@ -933,3 +933,68 @@ pendulum, and the only known source is our own labelled recording.
 **Not claimed:** the fusion gain is UNMEASURED. Two AUCs do not combine into one number;
 the joint posterior's held-out performance is a separate round needing the cache rebuilt
 with onset times. Until it runs, the fusion is a justified plan, not a result.
+
+### The fusion rule, measured -- and it differs by tier (E18-R34, ADR 0558)
+
+`ml/probe_direction_fusion.py` supplies the combined number ADR 0557 deliberately did not
+claim. Held-out GuitarSet (unseen player AND tune): 530 rows, metric channel available on
+99.2 %, pendulum-obeying 519, **pendulum-violating 11**.
+
+Alignment is PROVEN, not assumed: `guitarset.build` is deterministic, so onset times are
+replayed from the annotation, and the probe EXITS unless both the row count and the full
+(player, tune) sequence match the cache -- a future change to either loop fails loudly
+instead of silently pairing a stroke with another stroke's phase.
+
+`lam` is the confidence given to the prescribed grid: one swept scalar, not a corpus-fitted
+table (ADR 0557 D3). `lam = 0.5` IS the acoustic-only rule, so the baseline is a point on
+the same curve rather than a separate code path.
+
+```
+  tier     rule                        macro   downF1  upF1    accAll  accObey  accVIOL
+  70 ms    C  acoustic only            0.5262  0.7743  0.2780  0.6377  0.6435   0.3636
+  70 ms    A  full fusion  lam=0.99    0.9168  0.9518  0.8817  0.9000  0.9152   0.1818
+  70 ms    B  ties only    m<0.30      0.6497  0.8409  0.4585  0.7321  0.7418   0.2727
+ 238 ms    C  acoustic only            0.6061  0.8605  0.3516  0.7585  0.7649   0.4545
+ 238 ms    A  full fusion  lam=0.99    0.9226  0.9709  0.8743  0.9377  0.9538   0.1818
+ 238 ms    B  ties only    m<0.30      0.6784  0.8876  0.4693  0.8019  0.8092   0.4545
+```
+
+A suppressed stroke stays suppressed under every rule: the metric channel says WHICH
+direction a stroke had, never WHETHER one happened. Letting it resurrect a suppressed onset
+would decide EXISTENCE from the answer key.
+
+**The headline is inflated, and the corpus does it.** 98 % of held-out strokes obey the
+pendulum, so a rule that trusts the grid is largely asked to predict the grid from the grid.
+A learner complies less, and their expected accuracy is a straight line in compliance c:
+`acc(c) = c*accObey + (1-c)*accViol`. Each rule crosses the acoustic-only baseline once, and
+THAT crossing is the shippability test:
+
+```
+  tier     rule                      break-even c*   acc at c = 0.95 / 0.80 / 0.60 / 0.40
+  70 ms    A  full fusion lam=0.99      0.401        0.8786  0.7685  0.6219  0.4752
+  70 ms    B  ties only   m<0.30        0.481        0.7184  0.6480  0.5542  0.4604
+ 238 ms    A  full fusion lam=0.99      0.591        0.9152  0.7994  0.6450  0.4906
+ 238 ms    B  ties only   m<0.30        0.000        0.7915  0.7383  0.6674  0.5964
+```
+
+**What this selects.** At 238 ms (SCORING) the tie-break rule has `c* = 0.000` -- it never
+loses at any compliance, while gaining +0.0723 macro. Pareto, shippable now, and it
+coincides with ADR 0557 D4's ethical constraint ("the metric channel may move the abstention
+bar but never flips the call") -- **coincidence, not derivation**: D4 was declared BEFORE the
+measurement and would bind either way. At 70 ms (the ARROW) full fusion lifts accuracy
+0.6377 -> 0.9000 and beats acoustic-only above 0.401 compliance, which even a struggling
+beginner exceeds -- but it rests on ELEVEN strokes, so it goes behind a feature gate.
+
+**And the rule designed to be "conservative" was WORSE on the fast tier.** Rule B was the
+design intuition for safety (never override a confident acoustic call). At 238 ms that was
+right (`c* = 0.000`); at 70 ms it inverts -- 0.481 against full fusion's 0.401. The
+mechanism is transparent afterwards: when the acoustic call is confident AND wrong, which at
+70 ms it often is, the "do not override the confident one" guard is exactly what PRESERVES
+the error. The margin does not measure reliability at 70 ms (LESSONS L672 section 2).
+
+**Not claimed:** 0.9168 / 0.9226 are NOT generalisation estimates for a learner -- the
+break-even curve is, and it rests on 11 strokes (every accViol a multiple of 1/11; the
+measured harm 0.3636 -> 0.1818 is TWO strokes). Bounds, not operating points. The linear
+compliance model also assumes a learner's violations look like GuitarSet's; a beginner's
+probably differ in kind (whole-pattern drift, not a stray stroke). `lam` is a swept
+confidence scalar, not a calibrated probability.
