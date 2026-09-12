@@ -218,9 +218,21 @@ class StrumAnalyzer {
   /// And that +0.192 is no longer an oracle-window extrapolation: ADR 0571 recorded the
   /// settled call IN SITU in the same sweep, and the shipped path gains **+0.1679** macro
   /// with the settled direction on every stroke — with the whole of it on DOWNSTROKES
-  /// (0.5736 -> 0.9032) and essentially none on upstrokes (0.2007 -> 0.2069). So ADR
-  /// 0553's data diagnosis stands: what needed more audio was the downstroke; the upstroke
-  /// needs DATA.
+  /// (0.5736 -> 0.9032) and essentially none on upstrokes (0.2007 -> 0.2069).
+  ///
+  /// **But that is a GuitarSet result, and ADR 0572 measured the other corpus.** On
+  /// Klangio — phone mic, the deployment condition — the same shipped asset with the same
+  /// rule loses **0.2455** macro (0.7950 -> 0.5495), because its up-F1 collapses from
+  /// 0.7579 to 0.3118. Opposite signs on the two corpora, which is what an
+  /// out-of-distribution input looks like: this asset trained on the 70 ms truncation only
+  /// (`train_live_3c.py` loads `live70`). On the asset that DID train at both truncations
+  /// the settled tier is positive on both corpora (+0.0655 GuitarSet, +0.1299 Klangio), so
+  /// the two-tier decision needs such an asset — and the one that exists regresses on
+  /// Klangio overall (ADR 0569). Do NOT light this with the shipped asset.
+  ///
+  /// Also corrected there: the upstroke is not a data problem but a TRANSFER one. The
+  /// shipped asset's up-F1 is 0.7579 on Klangio against 0.2007 on GuitarSet — ADR 0550's
+  /// diagnosis, not ADR 0553's.
   ///
   /// None of that is live: [settledTier] is false, so this constant is dark either way.
   /// It is written down because the justification above is asset-specific and the comment

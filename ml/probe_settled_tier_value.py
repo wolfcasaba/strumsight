@@ -45,6 +45,58 @@ THRESHOLD_JSON = "live_3c_settled_threshold.json"
 SHIPPED_GATE = 0.85
 
 
+def pick_corpus(argv):
+    """(truth, mask, label, cache70, cache_full) for the requested corpus.
+
+    `--corpus=klangio` exists because ADR 0569 showed GuitarSet and Klangio can disagree in
+    SIGN about a change, and Klangio is the deployment condition (phone mic). The Klangio
+    corpus audio is not on this machine, so this is an ORACLE-window measurement — which
+    ADR 0571 D4 corroborated for exactly this kind of question: the settled tier's DELTA
+    agreed within 0.024 between the oracle and in-situ instruments, while the LEVELS
+    differed by ~0.05.
+
+    `--fold=` picks which Klangio rows: `eval` (default) is `split_by_recording`'s held-out
+    fold, which is the SHIPPED asset's own clean fold; `guitarist4` is the settled asset's.
+    A within-model fast-vs-settled delta is far more robust to contamination than a
+    between-model comparison -- the exposure moves both columns -- but the clean fold is
+    still the one to report.
+    """
+    which = next((a.split("=", 1)[1] for a in argv if a.startswith("--corpus=")),
+                 "guitarset")
+    if which == "guitarset":
+        # Only the GuitarSet path replays the annotation, so only it needs the corpus.
+        if not os.environ.get("GUITARSET_DIR"):
+            sys.exit("set GUITARSET_DIR (or pass --corpus=klangio, which reads caches)")
+        _times, y, player, tune = aligned_onsets()
+        _train, test = G.split_masks(player, tune)
+        return (y, test, "GuitarSet (unseen player AND tune)",
+                "guitarset_live70.npz", "guitarset_live_full.npz")
+    if which != "klangio":
+        sys.exit("--corpus must be guitarset or klangio")
+
+    import klangio as K
+
+    here = os.path.dirname(__file__)
+    fast = np.load(os.path.join(here, "klangio_live70.npz"))
+    full = np.load(os.path.join(here, "klangio_live_full.npz"))
+    # The zip below is an assumption -- same row, same stroke, two truncations -- and it is
+    # CHECKED, because a silent misalignment would compare one stroke's fast call with
+    # another's settled one and still print a plausible table.
+    if not ((fast["y"] == full["y"]).all() and (fast["rec"] == full["rec"]).all()):
+        sys.exit("the two Klangio truncation caches are NOT row-aligned")
+    fold = next((a.split("=", 1)[1] for a in argv if a.startswith("--fold=")), "eval")
+    if fold == "eval":
+        _train, mask = K.split_by_recording(fast["rec"])
+        label = "Klangio (split_by_recording eval fold -- the SHIPPED asset's own)"
+    elif fold == "guitarist4":
+        mask = np.array([K.guitarist_of(r) for r in fast["rec"]]) == "4"
+        label = "Klangio (guitarist 4 -- the SETTLED asset's held-out)"
+    else:
+        sys.exit("--fold must be eval or guitarist4")
+    return (fast["y"], mask, label,
+            "klangio_live70.npz", "klangio_live_full.npz")
+
+
 def pick_model(argv):
     """(model, mean, std, gate, label) -- which asset is under test, and at which gate.
 
@@ -83,20 +135,16 @@ def score(called, truth):
 
 
 def main():
-    if not os.environ.get("GUITARSET_DIR"):
-        sys.exit("set GUITARSET_DIR")
-
-    _times, y, player, tune = aligned_onsets()
-    _train_mask, test_mask = G.split_masks(player, tune)
+    y, test_mask, corpus_label, cache_fast, cache_full = pick_corpus(sys.argv[1:])
     model, mean, std, threshold, asset_label = pick_model(sys.argv[1:])
     print(f"ASSET UNDER TEST: {asset_label}")
+    print(f"CORPUS:           {corpus_label}")
     print("  (a table that does not say which asset it measured looks comparable with one")
     print("   it is not -- ADR 0569, LESSONS L682 §1)")
 
     truth = y[test_mask]
     tiers = {}
-    for tier, cache in (("fast", "guitarset_live70.npz"),
-                        ("settled", "guitarset_live_full.npz")):
+    for tier, cache in (("fast", cache_fast), ("settled", cache_full)):
         data = np.load(os.path.join(os.path.dirname(__file__), cache))
         X = ((data["X"] - mean) / std)[test_mask]
         tiers[tier] = model.predict(X, batch_size=256, verbose=0)
@@ -111,7 +159,7 @@ def main():
     def called_from(probs):
         return np.where(suppressed, -1, probs[:, :2].argmax(axis=1))
 
-    print("held-out GuitarSet: unseen player AND unseen tune, %d strokes" % len(truth))
+    print("%d strokes, %.0f%% up" % (len(truth), 100 * float((truth == UP).mean())))
     print("no-strum gate %.6f; a suppressed stroke is" % threshold)
     print("counted as an error either way, so the tiers are compared on equal terms.\n")
 

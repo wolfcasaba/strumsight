@@ -1,7 +1,9 @@
 # ADR 0571 — A letisztult tier IN SITU +0,168 macrót ér a szállított assetn, és a nyereség teljes egésze a LEFELÉ ütés
 
-- **Státusz:** elfogadva (mérés; a §9 **valódi-audió** lába a „mindent letisztítani"
-  szabályhoz; semmi nem kerül felkapcsolásra)
+- **Státusz:** elfogadva **mint GuitarSet-mérés**; az ebből olvasható **ajánlás**
+  („mindent letisztítani" a szállított assettel) az **ADR 0572-ben megdőlt**: Klangion — a
+  telepítési korpuszon — ugyanez **−0,2455**. A D3 felütés-állítása szintén ott **javítva**.
+  Semmi nem kerül felkapcsolásra.
 - **Dátum:** 2026-09-12
 - **Kör:** E18-R43
 - **Kapcsolódó:** ADR 0570 (az orákulum-ablakos előrejelzés, amit ez ellenőriz), ADR 0559 D2
@@ -71,7 +73,13 @@ Az 1772 onsetből **1**-nek nem volt megépíthető a letisztult ablaka (a take 
 gyakorlatilag megoldja ezen a korpuszon, és a felütéshez **nem ad semmit**.
 
 Ez az ADR 0553 adat-diagnózisát **megerősíti, nem váltja**: a felütés hiánya nem
-ablak-hossz-kérdés. Aminek több hang kell, az a lefelé ütés volt; a felütéshez **adat** kell.
+ablak-hossz-kérdés.
+
+> **JAVÍTVA (ADR 0572 D5).** Az eredeti mondat itt így folytatódott: „a felütéshez **adat**
+> kell". Ez GuitarSet-alapú volt, és általánosként **téves**. Ugyanez a szállított asset a
+> **Klangion** a felütést **0,7579**-cel hozza (gyors tier), GuitarSeten 0,2007-tel. A modell
+> tehát **tud** felütést a saját korpuszán; amit nem tud, az **átvinni** — ez az **ADR 0550**
+> diagnózisa (kereszt-korpusz transzfer), nem az ADR 0553-é.
 
 Terméki következmény: egy `reggae-skank`-szerű, felütés-domináns lecke ebből **semmit** nem
 kap. Egy lefelé-domináns kezdő lecke viszont majdnem mindent.
@@ -117,8 +125,10 @@ a szállított assetn **nem** a helyes szabály.
 ## Amit NEM állítunk
 
 - **Nincs on-device szám.** 12 GuitarSet-fájl, host futás.
-- **Nincs Klangio-oldal** (a korpusz nincs a gépen — ADR 0569). A +0,1679 a GuitarSetre
-  vonatkozik; a telepítési korpuszon a letisztult tier hatása **nincs megmérve**.
+- **Nincs Klangio-oldal IN SITU** (a korpusz nincs a gépen — ADR 0569). A +0,1679 a
+  GuitarSetre vonatkozik. ~~a telepítési korpuszon a letisztult tier hatása nincs
+  megmérve~~ — **az ADR 0572 orákulum-ablakon megmérte, és ott −0,2455**, tehát a fenti
+  szám nem általánosítható a telepítési feltételre.
 - **Nem magyarázzuk meg**, miért javít a csonkítatlan ablak ennyit a LE és semennyit a FEL
   osztályon. Kézenfekvő sejtés van rá, de sejtés (L681).
 - **A down-F1 0,9032 nem hasonlítható** az arXiv 2508.07973 mikrofonos 0,8551-éhez: más

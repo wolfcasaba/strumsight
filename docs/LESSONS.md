@@ -28688,3 +28688,67 @@ indoklással, és a szállított assetn **+0,0044**-et épít oda, ahol **+0,191
 *A sötétség a viselkedést védi, nem a gondolatmenetet.*
 
 Lásd még [[L672]], [[L682]], [[L684]], ADR 0556, ADR 0563, ADR 0569, ADR 0570.
+
+## L686 — Egy eloszláson kívüli bemenet nem „rosszabb", hanem KISZÁMÍTHATATLAN; és egy osztály gyengesége csak akkor az osztályról szól, ha két korpuszon megvan (E18-R43, 2026-09-12)
+
+### 1. Ugyanaz a szabály, ugyanaz az asset, két korpusz, ELLENTÉTES előjel
+
+A „minden ütést letisztítani" szabályt az ADR 0571 GuitarSeten **in situ** mérte:
+**+0,1679** macro. Meggyőző szám, saját műszerrel, a szállító úton. Aztán a telepítési
+korpuszon:
+
+```
+  szállított asset, csak gyors → csak letisztult      macro
+  GuitarSet (in situ)                              +0,1679
+  Klangio   (orákulum, a telepítési feltétel)      −0,2455
+```
+
+A felütés Klangion **0,7579 → 0,3118**-ra omlik. Ugyanaz az asset, ugyanaz a szabály.
+
+A magyarázat, ami **nem** mechanizmus, hanem a bizonyíték általánosítása: a szállított asset
+a **csonkítatlan** ablakot sosem látta (`train_live_3c.py` csak `live70`-et tölt). Egy
+eloszláson kívüli bemeneten a modell nem *rosszabb* — **kiszámíthatatlan**, és a
+kiszámíthatatlanság úgy néz ki, ahogy itt: két korpusz, két előjel. Amelyik korpuszon
+először mérek, azt fogom elhinni.
+
+És a kontroll, ami ezt eldöntötte: ugyanaz a mérés azon az assetn, ami **mindkét** levágáson
+tanult (ADR 0554) — ott a letisztult tier **mindkét** korpuszon pozitív (+0,0655 GuitarSet,
++0,1299 Klangio). Tehát nem az **ötlet** rossz, hanem a **bemenet** volt eloszláson kívül.
+
+**A szabály.** Ha egy döntés a modellt olyan bemeneten használja, amin **nem tanult** (más
+levágás, más mintavételezés, más ablakhossz), akkor egy korpusz mérése **nem elég** — és nem
+azért, mert kevés, hanem mert az előjel sem garantált. A kontroll egy olyan modell, ami **az
+adott bemeneten tanult**: ha ott a hatás konzisztens, a különbség az eloszlás-eltérés, nem az
+ötlet.
+
+### 2. Egy korpuszon mért osztály-gyengeség nem az osztályról szól
+
+Egy körrel korábban ezt írtam: „aminek több hang kell, az a lefelé ütés volt; **a felütéshez
+adat kell**". GuitarSeten a szállított asset felütés-F1-je **0,2007** — a szám stimmel, a
+következtetés nem:
+
+```
+  szállított asset, gyors tier, fel-F1     GuitarSet 0,2007     Klangio 0,7579
+```
+
+Ugyanaz a modell a **saját** korpuszán a felütést **0,76**-tal hozza. Tehát **tud** felütést;
+amit nem tud, az **átvinni** — ez az [[ADR 0550]] diagnózisa (kereszt-korpusz transzfer),
+nem az adat-hiány. Az „adat kell" következtetés egy **transzfer**-hibát adat-hibának
+nevezett, és ezzel egy rossz kört írt volna elő (több felütés-adat gyűjtése helyett a
+transzfer javítása kell).
+
+**A szabály.** Egy osztály gyengesége akkor **az osztály** tulajdonsága, ha **legalább két**
+korpuszon megvan. Egy korpuszon mért osztály-gyengeség alapértelmezésben **transzfer**, amíg
+nem bizonyított az ellenkezője. *A „hiányzik az adat" a legdrágább diagnózis, amit egyetlen
+korpuszból fel lehet írni: egy adatgyűjtő kört rendel olyan hibára, ami nem is ott van.*
+
+### 3. A fegyelem, ami ezt elkapta, a saját előző köröm szabálya volt
+
+Az [[L684]] §3-ban írtam fel: *egy kereszt-korpusz delta mellé ki kell írni, melyik korpusz a
+telepítési feltétel.* Egy körrel később pont ezt kellett alkalmaznom a saját
+GuitarSet-eredményemre — és az eredmény egy visszavont ajánlás lett. A szabályok akkor
+érnek valamit, ha a következő kör a **saját** munkájára alkalmazza őket, nem csak a
+korábbiakra.
+
+Lásd még [[L681]], [[L682]], [[L684]], ADR 0550, ADR 0553, ADR 0554, ADR 0569, ADR 0571,
+ADR 0572.

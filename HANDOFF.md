@@ -14876,11 +14876,49 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   forward = a gyors tier **kétszerese**, ~44% egy magból 200 bpm tizenhatodon, ~8,8% 80 bpm
   nyolcadon). Az irány-macro 0,5551 továbbra is a Chapter 14 §7.2 Alpha kapu (**0,80**)
   **alatt**, és a rés most már majdnem teljesen a **felütés**.
-  **KÖVETKEZŐ:** (1) **egy asset, ami MINDKÉT korpuszon legyőzi a szállítottat** — a
-  következő tanító kör célja, az ADR 0569 elfogadási kritériumával (a `read_ssml.py` ezt
-  mérhetővé teszi), és ADR 0570 szerint olyan, **amin a margó jelez**; (2) a „letisztult irány
-  minden ütésre" **bekötése** a §9 hiányzó lábaival (fixtúra + property + az utolsó-ütés
-  él-eset) — az ADR 0571 a valódi-audió lábat már megadta;
+  **E18-R43f — A LETISZTULT TIER MINDKÉT LEVÁGÁSON TANÍTOTT ASSETET KÍVÁN; A SZÁLLÍTOTTON
+  KLANGION −0,2455 (ADR 0572).** Az ADR 0571 GuitarSeten in situ **+0,1679**-et mért a
+  „minden ütést letisztítani" szabályra. De az ADR 0569 már megmutatta, hogy a két korpusz
+  **előjelben** is eltérhet, és hogy a **Klangio** a telepítési feltétel — tehát az L684 §3
+  saját szabályom a **saját** eredményemre is áll. A Klangio-audió nincs a gépen, de a két
+  levágás gyorsítótára igen (`klangio_live70.npz` / `klangio_live_full.npz`, **sor-azonosak
+  és ellenőrizve**), és az ADR 0571 D4 épp erre a **delta**-kérdésre korroborálta az
+  orákulum-műszert.
+  **Mérve:** szállított asset (csak `live70`-en tanult), csak gyors → csak letisztult:
+  GuitarSet in situ **+0,1679**, **Klangio −0,2455** (0,7950 → 0,5495), a **felütés
+  0,7579 → 0,3118**-ra omlik. **Ellentétes előjel.**
+  **A KONTROLL, AMI ELDÖNTI, MIT JELENT:** ugyanaz a mérés azon az assetn, ami **mindkét**
+  levágáson tanult (ADR 0554), mindkettő a **saját tiszta** foldján: GuitarSet
+  0,5262 → 0,5917 (**+0,0655**), Klangio 0,5055 → 0,6354 (**+0,1299**) — **mindkettő
+  pozitív**. (Műszer-ellenőrzés: ez a két Klangio-szám az ADR 0555 saját tábláján 0,5055 és
+  0,6363, az utóbbi 0,001-en belül.)
+  Tehát **az ötlet jó, a BEMENET volt eloszláson kívül.** Egy eloszláson kívüli bemenet nem
+  „rosszabb", hanem **kiszámíthatatlan** — és a kiszámíthatatlanság pont így néz ki: két
+  korpusz, két előjel, és amelyiken először mérek, azt hiszem el. Ez a bizonyíték
+  általánosítása, **nem mechanizmus**: hogy a telefon-mikrofon későbbi hangja miért fordítja
+  meg az előjelet, **nem tudjuk**.
+  **EZ AZ EGÉSZ ARCOT EGY HIÁNYZÓ ARTEFAKTUMRA FŰZI:** az ADR 0563 margó-routingja a settled
+  assetn érvényes, a szállítotton nem (ott a margó **lapos**, ADR 0570); a „mindent
+  letisztítani" a settled assetn **mindkét** korpuszon érvényes, a szállítotton a telepítésin
+  **−0,2455**; és a settled asset maga nem szállítható, mert a Klangion összességében
+  visszaesik (ADR 0569). Mindhárom **ugyanarra** vár: **egy asset, ami (a) mindkét levágáson
+  tanul, (b) a szállítottat a Klangion is legyőzi vagy hozza, (c) és amin a margó jelez.**
+  Egy tanító kör **három** ADR-t nyit fel — ez specifikáció, nem kívánságlista.
+  **ÉS JAVÍT EGY EGY KÖRREL KORÁBBI ÁLLÍTÁST:** az ADR 0571 D3 azt írta, hogy „a felütéshez
+  **adat** kell". GuitarSet-alapú volt és általánosként **téves**: ugyanez a szállított asset
+  a **Klangion** a felütést **0,7579**-cel hozza (vs 0,2007 GuitarSeten). A modell **tud**
+  felütést a saját korpuszán; amit nem tud, az **átvinni** — az **ADR 0550** diagnózisa, nem
+  az ADR 0553-é.
+  Tanulság: **L686** — (1) ha egy döntés a modellt olyan bemeneten használja, amin **nem
+  tanult**, egy korpusz **nem elég**, mert az **előjel** sem garantált; a kontroll egy olyan
+  modell, ami **azon a bemeneten** tanult; (2) egy osztály gyengesége akkor **az osztályé**,
+  ha **két** korpuszon megvan — egyébként alapértelmezésben **transzfer**, és a „hiányzik az
+  adat" a legdrágább diagnózis, amit egyetlen korpuszból fel lehet írni; (3) a szabályok
+  akkor érnek valamit, ha a következő kör a **saját** munkájára alkalmazza őket.
+  **KÖVETKEZŐ:** (1) **egy asset, ami mindkét levágáson tanul, a szállítottat MINDKÉT
+  korpuszon legyőzi vagy hozza, és amin a margó jelez** — ez a következő tanító kör
+  specifikációja (ADR 0569 + 0570 + 0572), és a `read_ssml.py` + a korpusz-kapcsolós próba
+  ezt mérhetővé teszi; (2) a Klangio **in-situ** söprése, ha a korpusz bekerül a gépre;
   (3) ha a Klangio korpusz bekerül a gépre, a Klangio **in-situ** söprés a
   `guitarset_threshold_sweep_test.dart` mintájára; (2) **on-device mérés** (CI/profile) a **gyors**
   tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a

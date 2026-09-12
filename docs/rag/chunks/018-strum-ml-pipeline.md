@@ -1829,3 +1829,59 @@ much and up not at all (an obvious guess exists, left unwritten per L681); and d
 is NOT comparable to arXiv 2508.07973's mic 0.8551 — different corpus, different protocol. The
 0.5551 macro is still below Chapter 14 §7.2's Alpha gate of 0.80, and the remaining gap is now
 almost entirely the upstroke.
+
+### The settled tier needs an asset trained at BOTH truncations: on the shipped one Klangio loses 0.2455 (E18-R43, ADR 0572)
+
+ADR 0571 measured "settle every stroke" IN SITU on GuitarSet at +0.1679 macro. ADR 0569 had
+already shown the two corpora can disagree in SIGN, and that Klangio (phone mic) is the
+deployment condition — so L684 §3's rule applies to my own result: do not act on a
+cross-corpus delta without measuring the deployment corpus. The Klangio audio is not local,
+but both truncation caches are (`klangio_live70.npz`, `klangio_live_full.npz`, row-aligned and
+checked), and ADR 0571 D4 corroborated the oracle instrument for exactly this DELTA question.
+
+```
+  shipped asset (trained on live70 ONLY)      fast      settled    delta
+  GuitarSet, in situ                         0.3872    0.5551    +0.1679
+  Klangio, oracle (its own clean eval fold)  0.7950    0.5495    -0.2455
+     up-F1 on Klangio                        0.7579    0.3118
+```
+
+**Opposite signs.** And the control that decides what that means: the same measurement on the
+asset that DID train at both truncations (ADR 0554), each on its own clean fold:
+
+```
+  settled asset          fast      settled    delta
+  GuitarSet             0.5262    0.5917    +0.0655
+  Klangio (guitarist 4) 0.5055    0.6354    +0.1299
+```
+
+(Instrument check: those two Klangio numbers are 0.5055 and 0.6363 in ADR 0555's own table —
+the second within 0.001.)
+
+So the IDEA is sound and the INPUT was out of distribution. An out-of-distribution input does
+not make a model worse, it makes it UNPREDICTABLE, and unpredictable looks exactly like this:
+two corpora, two signs, and whichever you measure first is what you believe. That is evidence
+generalisation, not a mechanism — why the phone mic's later audio flips the sign is NOT
+explained.
+
+**This fuses the whole arc onto one missing artefact.** ADR 0563's margin routing is valid on
+the settled asset and not the shipped one (the margin is flat there, ADR 0570);
+"settle everything" is valid on the settled asset on BOTH corpora and loses 0.2455 on the
+shipped one; and the settled asset itself cannot ship because it regresses on Klangio overall
+(ADR 0569). All three wait for ONE thing: an asset that (a) trains at both truncations,
+(b) beats or matches the shipped asset on Klangio too, (c) and whose margin predicts its
+errors. One training round unblocks three ADRs — that is a specification, not a wish list.
+
+**And it corrects something from one round earlier.** ADR 0571 D3 said "the upstroke needs
+DATA". That was GuitarSet-only and wrong as a general claim: the same shipped asset scores
+up-F1 **0.7579** on Klangio against 0.2007 on GuitarSet. The model CAN do upstrokes on its own
+corpus; what it cannot do is transfer — ADR 0550's diagnosis, not ADR 0553's. A class weakness
+measured on one corpus is TRANSFER by default until a second corpus says otherwise, because
+"we need more data" is the most expensive diagnosis a single corpus can license: it orders a
+collection round for a fault that is somewhere else.
+
+The probe now takes `--corpus=klangio [--fold=eval|guitarist4]` with no corpus audio, and
+prints which asset and which corpus it measured. Not claimed: the Klangio figures are ORACLE
+windows (delta-corroborated, not level-corroborated); the two rows of the control are on
+DIFFERENT folds by design, each on its own clean one, so they are not to be read against each
+other — that comparison is ADR 0569's.
