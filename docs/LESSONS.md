@@ -27071,3 +27071,48 @@ A `theme_adoption_test` negyedikként már korábban kiderült. Mindegyik ugyana
 okból maradt észrevétlen: **a körök, amik a két curriculum-képernyőt hozzáadták, a
 saját teszt-útjaikon futtatták a kaput.** *Egy kipinezett szám csak addig véd, amíg
 valami lefuttatja* — és a kör teszt-útjainak megválasztása ezért nem kényelmi kérdés.
+
+
+## L662 — A produkciós OSZTÁLY alapértelmezett konstruktora nem a produkciós KONFIGURÁCIÓ: a `LivePipeline(sampleRate:)` csendben a heurisztikára esik vissza (E18-R23, 2026-09-12)
+
+**Mi történt.** Megírtam a GuitarSet-próbát, lefuttattam, és megkaptam az első valódi
+irány-számot: macro-F1 **0,2953**, `up` FP 1863 = `down` FN 1863 — vagyis a motor 86%-ban
+„fel"-et mond olyan anyagon, ami 73%-ban „le". Majdnem inverzió.
+
+**Nem jelentettem le.** Két dolgot kellett előbb kizárni: fordítva van-e a *címkém*
+(nem — a `data_source` 0 hangmagasságai MIDI 40-től indulnak, tehát tényleg az alsó E),
+és azonos-e a *konvenció* (igen — `gap = highRise - lowRise`). Eközben a
+`strum_direction_classifier.dart` doc-kommentjében megláttam a szót: **CRNN**.
+
+```
+lib/features/live/engine/dsp/strum_direction_classifier.dart:88  HeuristicStrumClassifier
+lib/features/live/engine/ml/live_crnn_classifier.dart:121        LiveCrnnStrumClassifier
+```
+
+Két osztályozó van. A próbám `LivePipeline(sampleRate: sampleRate)`-t hívott —
+**súlyok nélkül**. A gyár ilyenkor nem hibázik: `_activateLiveCrnn(null, …)`
+**visszaesik a heurisztikára**, és feljegyzi, miért (ADR 0355). A produkció ellenben
+(`real_strum_engine.dart:113`) `crnnWeights: await _liveCrnnWeights()`-t ad át, és a
+`assets/ml/strum_crnn_live_3c.bin` szállított assetet tölti be.
+
+**Tehát a heurisztikát mértem, és majdnem „a mi pontosságunkként" publikáltam.**
+A két szám nem közel van egymáshoz: irány macro-F1 **0,2953 vs 0,4195**, valódi
+pengetésekre vett recall **0,954 vs 0,595**. Ellentétes irányban is tévedtem volna.
+
+**A szabály.** *Egy produkciós osztály alapértelmezett konstruktora nem a produkciós
+konfiguráció.* Egy opcionális, null-elfogadó függőség — `Uint8List? crnnWeights` — olyan
+szeam, ami **hangtalanul** más rendszert ad, és a visszaesés jól dokumentált jósága
+pont azt teszi észrevehetetlenné. A mérésnek ezért nem a *típust* kell megtalálnia
+(`LivePipeline`), hanem a **bemeneteket, amiket a produkció ad neki** — és ha az egyik
+egy asset, akkor a mérés olvassa be azt az assetet.
+
+Ezért a próba most **mindkét ágat** futtatja azonos pontozó kóddal és egymás mellé írja
+őket, plusz **hibával elhasal**, ha a súly-asset nem létezik — a csendes visszaesés
+helyett. Egy mérés, ami vissza tud esni, előbb-utóbb vissza is esik.
+
+Ez a **harmadik** eset ebben a munkamenetben ugyanerről a családról: [[L660]] (a
+stimulus-modell felülszámolt), [[L661]] (a szkenner kommentet olvasott), és most a
+konfiguráció. Mindhárom ugyanazt mondja: *a mérés annyit ér, amennyire ismerjük a
+mérőeszközt — és az eszköz a kódunk része.* Lásd még [[L652]] és [[L659]].
+
+Az eredmények: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
