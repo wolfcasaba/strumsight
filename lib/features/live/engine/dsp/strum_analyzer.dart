@@ -158,6 +158,38 @@ class StrumAnalyzer {
   // baseline window into the attack).
   static const double _attackOffsetFrames = 2.5;
 
+  /// A fast verdict at or above this direction margin (`|pDown - pUp|`) is taken as
+  /// final: no settled verdict is requested, so no second model forward is spent.
+  ///
+  /// MEASURED (`ml/probe_settled_tier_value.py`, held-out GuitarSet, unseen player AND
+  /// tune, 530 strokes). The margin really does predict whether the fast call is right,
+  /// which is what makes routing on it legitimate:
+  ///
+  /// ```
+  ///   fast margin   n     fast accuracy
+  ///    0.0-0.2      70       0.4000
+  ///    0.2-0.4      72       0.4167
+  ///    0.4-0.6      66       0.5455
+  ///    0.6-0.8     102       0.5588
+  ///    0.8-1.0     220       0.8500
+  /// ```
+  ///
+  /// And the hybrid curve, against fast-only macro-F1 0.5262:
+  ///
+  /// ```
+  ///   margin t   macro    settled verdicts requested
+  ///     0.10     0.5389        6.4 %
+  ///     0.30     0.5813       19.8 %     <- this constant
+  ///     0.70     0.6044       49.1 %
+  ///     1.01     0.5917      100.0 %     (= settled-only)
+  /// ```
+  ///
+  /// 0.30 buys 84 % of the settled-only gain for a fifth of its cost. The higher rows
+  /// are NOT chosen: above ~0.3 the curve is within a handful of strokes of itself on
+  /// this sample (the t = 0.70 row even exceeds settled-only, which a 530-stroke
+  /// up-F1 cannot support), and each step costs both CPU and direction-neutral arrows.
+  static const double _settleBelowMargin = 0.30;
+
   final FFT _fft;
   final Float64List _hann;
   final Float64List _windowed;
@@ -198,6 +230,18 @@ class StrumAnalyzer {
   StrumRevision? settledRevision;
 
   double get _frameSec => hop / sampleRate;
+
+  /// Whether this fast verdict is uncertain enough to be worth a settled one.
+  ///
+  /// A null direction is always worth settling: the fast call named nothing, so there
+  /// is no arrow claim for a later verdict to contradict, and the grader would
+  /// otherwise have nothing at all (ADR 0556 D3's direction-neutral case).
+  static bool _needsSettling(StrumClassification c) {
+    if (c.direction == null) return true;
+    final down = c.pDown, up = c.pUp;
+    if (down == null || up == null) return false;
+    return (down - up).abs() < _settleBelowMargin;
+  }
 
   /// Push the next [window]-sample frame (advanced by [hop]); returns a
   /// confirmed+classified strum when one completes its evidence window.
@@ -292,8 +336,14 @@ class StrumAnalyzer {
       // strum, not no-strum).
       if (c.suppressed) return null;
       // Only a strum that was actually REPORTED waits for a settled verdict, so
-      // the suppressed onset above can never come back (ADR 0556, hazard 3).
-      if (settleAfter != null) _pendingSettled.addLast(onsetFrame);
+      // the suppressed onset above can never come back (ADR 0556, hazard 3) — and
+      // only one whose fast margin was SHORT, because that is the only subset the
+      // settled verdict measurably improves. A classification with no
+      // probabilities (the heuristic) has no margin to judge, and also no settled
+      // tier, so it never reaches here.
+      if (settleAfter != null && _needsSettling(c)) {
+        _pendingSettled.addLast(onsetFrame);
+      }
       return StrumEvent(
         onsetFrame: onsetFrame,
         timeSec: (onsetFrame + _attackOffsetFrames) * _frameSec,

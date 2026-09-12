@@ -27755,6 +27755,21 @@ hanem zaj.
 — nem átvinni abból a rendszerből, ahol működött. *A „konzervatív" nem a szabály
 tulajdonsága, hanem a szabály és a rendszer párjának a tulajdonsága.*
 
+> **⚠ KORREKCIÓ (E18-R40, ADR 0563 D4): a fenti MECHANIZMUS-magyarázatom téves volt.**
+> Azt állítottam, hogy „a margó 70 ms-on nem mér megbízhatóságot". Megmérve
+> (`ml/probe_settled_tier_value.py`) a margó **monoton** jelzi a helyességet: a gyors
+> pontosság 0,4000 a 0,0–0,2 sávban és **0,8500** a 0,8–1,0 sávban.
+>
+> A valódi ok, amiért a teljes fúzió megverte a döntetlen-törőt: `lam = 0,99`-nél a teljes
+> fúzió **gyakorlatilag a rácsra cserélte az akusztikus hívást mindenhol**, és egy **96%-ban
+> inga-követő** korpusz ezt jutalmazza. A döntetlen-törő csak a rövid margójú ütéseken
+> támaszkodott a rácsra, tehát **kevesebbet nyert ebből** — az összehasonlítás a margó
+> megbízhatóságáról **semmit nem mondott**. Ez **erősíti az ADR 0562-t**: a „jobb" sor azért
+> volt jobb, mert **többet csalt**.
+>
+> A szabály **fele áll**: egy jelre épített óvatosságot külön meg kell mérni. A **magyarázat**
+> nem állt, és azt is külön kellett volna megmérni — lásd [[L679]].
+
 ### 3. Az etikai korlát és a mérés egyetértett — és ezt egybeesésként kell kimondani
 
 Az ADR 0557 D4-et **mérés előtt** mondtam ki: a metrikus csatorna a tartózkodás lécét
@@ -28148,3 +28163,54 @@ megsemmisülését elfogja — és itt ez fogta el.
 csináltam, az volt-e, amit hittem.*
 
 Lásd még [[L674]], ADR 0562.
+
+
+## L679 — Adtam egy mechanizmus-magyarázatot egy mért különbségre, és a magyarázatot nem mértem meg; két körig téves okot hittem (E18-R40, 2026-09-12)
+
+### 1. A hiba
+
+Az E18-R34-ben mértem, hogy a „konzervatív" döntetlen-törő szabály a gyors tieren rosszabb a
+teljes fúziónál (megtérülés 0,481 vs 0,401). A **számot** helyesen mértem. Aztán odaírtam egy
+**mechanizmust**:
+
+> „ha az akusztikus hívás magabiztos ÉS téved — 70 ms-on gyakran az —, akkor épp a »ne írd
+> felül a magabiztosat« védelem tartja meg a hibát. A margó 70 ms-on **nem mér
+> megbízhatóságot**."
+
+Ez **magabiztosan hangzott**, illeszkedett a számhoz, és **nem mértem meg**. Most megmértem:
+a margó monoton jelzi a helyességet — **0,4000** a 0,0–0,2 sávban, **0,8500** a 0,8–1,0-ban.
+A magyarázatom fordítva volt.
+
+A valódi ok: a teljes fúzió `lam = 0,99`-nél **a rácsra cserélte az akusztikus hívást
+mindenhol**, és egy 96%-ban inga-követő korpusz ezt jutalmazza. A döntetlen-törő csak a rövid
+margójú részhalmazon használta a rácsot, tehát **kevesebbet nyert a megoldókulcsból**. Az
+összehasonlítás tehát **nem a margóról szólt**, hanem arról, melyik szabály támaszkodik
+jobban a válaszkulcsra — ami utólag az ADR 0562 érvét **erősíti**: a „jobb" sor azért volt
+jobb, mert **többet csalt**.
+
+### 2. Miért volt ez ennyire könnyű
+
+A mérés és a magyarázat **ugyanabban a bekezdésben** volt. A szám hitelessége átszivárgott a
+mellette álló mondatra — **pontosan ugyanaz a mechanizmus, mint az [[L677]] „egybeesik"-je.**
+Ott egy **korlátról** állítottam valótlant mérés mellé, itt egy **okról**. Kétszer ugyanaz a
+hiba két körön belül, tehát nem figyelmetlenség, hanem **szokás**: ha van egy erős számom,
+engedem magamnak, hogy a körülötte lévő prózát ne ellenőrizzem.
+
+### 3. A szabály
+
+Egy **mechanizmus-állítás önálló állítás**, és vagy mérem, vagy **sejtésnek jelölöm**. Nem
+elég, hogy illeszkedik a számhoz — a rossz magyarázat is illeszkedik, ez a baj vele. Három
+forma, ami megengedett:
+
+1. *„Mérve: a margó 0,40-ról 0,85-re nő."* — állítás, méréssel.
+2. *„Sejtés: a margó talán nem kalibrált; **nem mértem**."* — megjelölt sejtés.
+3. *„Nem tudom, mi a mechanizmus."* — a leginkább használható, ha igaz.
+
+Amit nem: egy mérés mellé odatett magyarázat mérés-jelölés nélkül. Gyakorlati sarokpont:
+**ha a magyarázatomban szerepel egy mérhető állítás („X nem mér Y-t"), akkor az a kör ki nem
+kész, amíg azt is meg nem mértem** — vagy amíg ki nem írtam, hogy nem mértem.
+
+*Egy szám mellé írt hihető ok a legrosszabb fajta dokumentáció: úgy olvasódik, mint egy
+eredmény, és úgy viselkedik, mint egy találgatás.*
+
+Lásd még [[L670]], [[L672]] (ott a korrekció), [[L677]], ADR 0562, ADR 0563.

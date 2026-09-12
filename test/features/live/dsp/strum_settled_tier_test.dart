@@ -55,6 +55,17 @@ StrumClassification _down({bool suppressed = false}) => StrumClassification(
   pNoStrum: suppressed ? 0.99 : 0.01,
 );
 
+/// A fast verdict whose margin is SHORT (|0.55 - 0.45| = 0.10 < 0.30), so the
+/// analyzer routes it to the settled tier. Everything that expects a revision must
+/// use this: a confident fast verdict deliberately gets no second forward.
+StrumClassification _downUncertain() => const StrumClassification(
+  direction: StrumDirection.down,
+  confidence: 0.4,
+  pDown: 0.55,
+  pUp: 0.45,
+  pNoStrum: 0.01,
+);
+
 StrumClassification _up() => const StrumClassification(
   direction: StrumDirection.up,
   confidence: 0.9,
@@ -196,7 +207,9 @@ void main() {
       // profile build (ADR 0558 D1).
       final classifier = _TwoTierClassifier(
         settleAfterFrames: 41,
-        fast: (_) => _down(),
+        // Short margin on purpose: with the flag on this WOULD settle, so a green
+        // assertion below proves the FLAG stopped it, not the routing.
+        fast: (_) => _downUncertain(),
         settled: (_) => _up(),
       );
       final analyzer = StrumAnalyzer(sampleRate: 44100, classifier: classifier);
@@ -227,11 +240,83 @@ void main() {
     });
   });
 
+  group('routing: only a SHORT-margin fast verdict asks for a settled one', () {
+    // The measured reason (ml/probe_settled_tier_value.py): fast accuracy is 0.85 at
+    // margin 0.8-1.0 and 0.40 at 0.0-0.2, and the hybrid captures 84 % of the
+    // settled-only gain while requesting a settled verdict on 19.8 % of strokes. A
+    // confident fast call spending a second model forward buys nothing.
+    test('a CONFIDENT fast verdict gets no second forward', () {
+      final classifier = _TwoTierClassifier(
+        settleAfterFrames: 41,
+        fast: (_) => _down(), // |0.8 - 0.2| = 0.6, well above 0.30
+        settled: (_) => _up(),
+      );
+      final result = _run(
+        strumSignal(lowFirst: true, seconds: 1.2),
+        classifier,
+      );
+      expect(result.events, hasLength(1));
+      expect(
+        result.revisions,
+        isEmpty,
+        reason: 'a confident fast call is taken as final',
+      );
+      expect(
+        classifier.calls,
+        hasLength(1),
+        reason: 'the second forward must not be issued at all',
+      );
+    });
+
+    test('an AMBIGUOUS fast verdict (null direction) always settles', () {
+      // The fast call named nothing, so there is no arrow claim for the settled
+      // verdict to contradict, and the grader would otherwise have nothing at all.
+      final classifier = _TwoTierClassifier(
+        settleAfterFrames: 41,
+        fast: (_) => const StrumClassification(
+          direction: null,
+          confidence: 0.3,
+          pDown: 0.5,
+          pUp: 0.5,
+          pNoStrum: 0.01,
+        ),
+        settled: (_) => _up(),
+      );
+      final result = _run(
+        strumSignal(lowFirst: true, seconds: 1.2),
+        classifier,
+      );
+      expect(result.events, hasLength(1));
+      expect(result.events.single.direction, isNull);
+      expect(result.revisions, hasLength(1));
+      expect(result.revisions.single.direction, StrumDirection.up);
+    });
+
+    test('a classifier with no probabilities never settles', () {
+      // The heuristic has no margin to judge. It also has no settled tier, so this is
+      // belt and braces — but a future 2-class asset could have one.
+      final classifier = _TwoTierClassifier(
+        settleAfterFrames: 41,
+        fast: (_) => const StrumClassification(
+          direction: StrumDirection.down,
+          confidence: 0.8,
+        ),
+        settled: (_) => _up(),
+      );
+      final result = _run(
+        strumSignal(lowFirst: true, seconds: 1.2),
+        classifier,
+      );
+      expect(result.events, hasLength(1));
+      expect(result.revisions, isEmpty);
+    });
+  });
+
   group('hazard 1 — a revision must NOT create a strum', () {
     test('one onset yields one event and one revision, never two events', () {
       final classifier = _TwoTierClassifier(
         settleAfterFrames: 41,
-        fast: (_) => _down(),
+        fast: (_) => _downUncertain(),
         settled: (_) => _up(),
       );
       final result = _run(
@@ -280,7 +365,7 @@ void main() {
       // otherwise pass while exercising nothing.
       final classifier = _TwoTierClassifier(
         settleAfterFrames: 41,
-        fast: (_) => _down(),
+        fast: (_) => _downUncertain(),
         settled: (_) => _up(),
       );
       final result = _run(
@@ -353,7 +438,7 @@ void main() {
       // event stands and simply gets no revision.
       final classifier = _TwoTierClassifier(
         settleAfterFrames: 41,
-        fast: (_) => _down(),
+        fast: (_) => _downUncertain(),
         settled: (_) => _down(suppressed: true),
       );
       final result = _run(
@@ -391,7 +476,7 @@ void main() {
       ]) {
         final classifier = _TwoTierClassifier(
           settleAfterFrames: settleAfter,
-          fast: (_) => _down(),
+          fast: (_) => _downUncertain(),
           settled: (_) => _up(),
         );
         final result = _run(

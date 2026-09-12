@@ -1268,3 +1268,55 @@ Not claimed: the settled tier WITHOUT fusion may still help scoring on its own -
 acoustic verdict scores macro-F1 0.6061 against the fast 0.5262, with no grid involved. That
 is independent of the fusion and could be a separate round, but its cost (a second model
 forward per strum) still needs a profile-build measurement.
+
+### The settled tier earns its CPU only on SHORT-MARGIN strokes (E18-R40, ADR 0563)
+
+ADR 0562 closed the fusion; the two-TIER decision survives it untouched because it is purely
+acoustic -- same model, same window, just more audio arrived. `ml/probe_settled_tier_value.py`
+measures whether lighting it is worth the second forward, held out on GuitarSet (unseen player
+AND tune, 530 strokes):
+
+```
+  tier                      macro   downF1  upF1    neutral arrows / 2nd forwards
+  fast only (ships today)  0.5262  0.7743  0.2780        0 %
+  settled only             0.5917  0.8481  0.3353      100 %     (not shippable: every
+                                                                  arrow would wait 238 ms)
+  ADR 0556 D3 hybrid -- fast above the margin, settled below it
+    t = 0.10             0.5389                          6.4 %    +0.0127
+    t = 0.30             0.5813                         19.8 %    +0.0551   <- chosen
+    t = 0.50             0.5811                         32.5 %    +0.0550
+    t = 0.70             0.6044                         49.1 %    +0.0783
+    t = 1.01             0.5917                        100.0 %    +0.0655   (= settled only)
+```
+
+t = 0 is fast-only and t > 1 is settled-only: the baseline and the ceiling are points on the
+same curve, not separate code paths. Chosen t = 0.30 buys **84 % of the settled-only gain for
+a fifth of its cost**; higher rows are within a handful of strokes of each other on this
+sample (t = 0.70 even exceeds settled-only, which a 530-stroke up-F1 cannot support) and each
+step costs both CPU and direction-neutral arrows.
+
+Where the gain sits: at t = 0.30 the short-margin strokes (n=105) go 0.3619 -> 0.6762 accuracy
+while the adequate-margin ones (n=425) move 0.7059 -> 0.7459; at t = 0.90 the adequate-margin
+subset moves +0.0000. **And the margin really does predict correctness**, which is what makes
+routing on it legitimate: fast accuracy is 0.4000 in the 0.0-0.2 margin band and 0.8500 in
+0.8-1.0.
+
+**This changes ADR 0559's cost calculus: not double, +20 %.** `StrumAnalyzer` now queues a
+stroke for settling only when the fast verdict's margin is below 0.30, OR when the fast call
+named no direction at all (no arrow claim exists for a later verdict to contradict, and the
+grader would otherwise have nothing). Three tests pin it: a confident fast verdict issues no
+second forward at all; a null-direction verdict always settles; a classifier with no
+probabilities never does.
+
+**And it CORRECTS LESSONS L672 section 2**, which claimed "the margin does not measure
+reliability at 70 ms". It does (0.40 -> 0.85, monotone). The real reason full fusion beat the
+tie-break rule in E18-R34: at lam = 0.99 full fusion effectively replaced the acoustic call
+with the GRID everywhere, and a 96 %-pendulum-compliant corpus rewards that, while the
+tie-break rule leaned on the grid only on short-margin strokes and so harvested less of it.
+The comparison said nothing about the margin. That STRENGTHENS ADR 0562: the "better" fusion
+row was better because it cheated more (L679).
+
+The tier stays DARK: `settledTier = false` is unchanged, and flipping it still needs a
+profile-build cost number -- the ~29 ms JIT forward is not an on-device figure. What changed is
+that the price is now measured as +20 % of the direction model's forwards rather than +100 %,
+and the benefit is measured at +0.0551 macro-F1.

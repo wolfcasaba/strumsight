@@ -14534,6 +14534,45 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **negyedik** eset, hogy a repó már tartalmazta a kontraktust ([[L676]] mintázata) — az új
   szabály, hogy a megtalált fájl **fej-kommentárját végig kell olvasni**, mert a döntései ott
   vannak kimondva.
+  **E18-R40 — A LETISZTULT TIER CSAK A RÖVID MARGÓJÚ ÜTÉSEKEN ÉRI MEG (ADR 0563,
+  `ml/probe_settled_tier_value.py`).** A fúzió halálát a **kétszintű döntés** érintetlenül
+  átélte, mert **tisztán akusztikus** (nincs rács, nincs megoldókulcs). Tartalék GuitarSet,
+  530 ütés: **csak gyors 0,5262** (ma szállít) · **csak letisztult 0,5917** (nem szállítható:
+  minden nyíl 238 ms-ot várna) · **ADR 0556 D3 hibrid**: `t=0,10` 0,5389 / 6,4% ·
+  **`t=0,30` 0,5813 / 19,8% -> +0,0551 (VÁLASZTVA)** · `t=0,50` 0,5811 / 32,5% · `t=0,70`
+  0,6044 / 49,1% · `t=1,01` 0,5917 / 100%. A `t=0` a csak-gyors, a `t>1` a csak-letisztult:
+  **az alapvonal és a plafon ugyanazon görbe pontjai**. A 0,30 a nyereség **84%-át** adja a
+  költség **ötödéért**; feljebb a görbe ezen a mintán pár ütésen belül van önmagától (a
+  `t=0,70` még a csak-letisztultat is meghaladja, amit 530 ütés fel-F1-je nem támaszt alá).
+  **A nyereség helye:** `t=0,30`-nál a rövid margójú ütések (n=105) **0,3619 -> 0,6762**, az
+  elég margójúak (n=425) 0,7059 -> 0,7459; `t=0,90`-nél az elég margójú részhalmaz **+0,0000**.
+  **És a margó TÉNYLEG mér megbízhatóságot** (ez legitimálja a rá való útválasztást): gyors
+  pontosság **0,4000** a 0,0-0,2 sávban, **0,8500** a 0,8-1,0-ban.
+  **EZ MEGVÁLTOZTATJA AZ ADR 0559 KÖLTSÉG-KALKULUSÁT: nem duplázás, hanem +20%.** Az analyzer
+  mostantól **csak akkor** állít sorba, ha a gyors margó `< 0,30`, **vagy** ha a gyors hívás
+  **nem nevezett irányt** (akkor nincs nyíl-állítás, amit megcáfolhatnánk, és a pontozónak
+  különben semmije nem lenne). Három teszt pinneli: magabiztos gyors verdikt -> a második
+  forward **ki sem megy**; null irányú -> mindig settle-el; valószínűség nélküli osztályozó ->
+  soha. **13/13 zöld.**
+  **ÉS KORRIGÁLJA AZ L672 §2-t:** azt állítottam, hogy „a margó 70 ms-on nem mér
+  megbízhatóságot". **Téves** — monoton 0,40 -> 0,85. A valódi ok, amiért a teljes fúzió akkor
+  megverte a döntetlen-törőt: `lam=0,99`-nél **a rácsra cserélte az akusztikus hívást
+  mindenhol**, és egy **96%-ban inga-követő** korpusz ezt jutalmazza; a döntetlen-törő csak a
+  rövid margón támaszkodott rá, tehát kevesebbet nyert belőle. Az összehasonlítás a margóról
+  **semmit nem mondott**. Ez **erősíti az ADR 0562-t**: a „jobb" sor azért volt jobb, mert
+  **többet csalt**. Tanulság: **L679** — egy **mechanizmus-állítás önálló állítás**: vagy
+  mérem, vagy **sejtésnek jelölöm**; egy szám mellé írt hihető ok úgy olvasódik, mint eredmény,
+  és úgy viselkedik, mint találgatás. (Ugyanaz a szokás, mint az L677 „egybeesik"-je — kétszer
+  két körön belül.)
+  **A TIER MARAD SÖTÉT:** a `settledTier = false` nem változik, a felkapcsolás továbbra is
+  **profile-build költségszámot** kíván (a ~29 ms JIT-forward nem on-device szám). Ami
+  változott: az ár mérve **+20%** a korábbi +100% helyett, a haszon mérve **+0,0551 macro**.
+  **KÖVETKEZŐ:** (1) **profile-build költségmérés** a CI-ban -> ha kifizetődik, a `settledTier`
+  felkapcsolása és a pontozó út a letisztult irányra állítása az ADR 0556 D3 szabályával
+  (elég margó -> a nyíl iránya megy a pontozóba is; rövid margó -> irány-semleges nyíl +
+  letisztult irány a pontozónak); (2) az ADR 0555 D4 **költség-arányból** vezetett no-strum
+  küszöb; (3) a **címkézett felvétel** — továbbra is az egyetlen ismert forrása az inga-sértő
+  ütéseknek.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a
