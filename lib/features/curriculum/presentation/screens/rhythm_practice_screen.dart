@@ -55,6 +55,7 @@ import '../../data/beginner_course.dart';
 import '../../domain/course.dart';
 import '../../domain/rhythm_assignment.dart';
 import '../../domain/rhythm_countin.dart';
+import '../../domain/rhythm_demonstration.dart';
 import '../../domain/rhythm_grading.dart';
 import '../../domain/rhythm_grid.dart';
 import '../../domain/rhythm_mode.dart';
@@ -80,6 +81,11 @@ final class _PlaybackClock implements SsBeatClock {
 /// lane's own count row.
 @visibleForTesting
 const Key countInNumberKey = ValueKey('rhythm.countIn.number');
+
+/// The demonstration's own readout, so a test can tell "Listen — 1 of 2" from the
+/// "Now you" that follows it without matching the label above as well.
+@visibleForTesting
+const Key demonstrationLabelKey = ValueKey('rhythm.demonstration.label');
 
 final class RhythmPracticeScreen extends ConsumerStatefulWidget {
   const RhythmPracticeScreen({super.key, this.mission});
@@ -128,6 +134,15 @@ final class _RhythmPracticeScreenState
 
   /// One bar of the exercise's OWN metre, counted before bar 1.
   late final RhythmCountIn _countIn;
+
+  /// What the app plays BEFORE the count-in, or null for the three modes that do
+  /// not demonstrate (`rhythm_demonstration.dart`).
+  late final RhythmDemonstration? _demonstration;
+
+  /// How many demonstration strokes have been sounded this run, so each sounds
+  /// exactly once. Counted rather than timed: a dropped frame must not replay a
+  /// stroke, and must not skip the rest of the pattern either.
+  int _demoStrokesSounded = 0;
 
   /// Non-null while a CALIBRATION run is in progress rather than an attempt.
   ///
@@ -227,11 +242,14 @@ final class _RhythmPracticeScreenState
     // shape the learner is not meant to fret.
     _chords = missionChordCycle(mission);
     _countIn = RhythmCountIn.forGrid(_assignment.grid);
+    _demonstration = RhythmDemonstration.forAssignment(_assignment);
     // The pendulum follows the EXERCISE timeline, which is negative during the
     // count-in; `frameAt` wraps a negative position into the loop, so the
     // count-in is fed its own ghost-only crossing list instead (see `_crossings`).
     _clock = _PlaybackClock(
-      () => _countInNumber != null ? _position : _exercisePosition,
+      () => _demoPosition != null || _countInNumber != null
+          ? _countInClock
+          : _exercisePosition,
     );
     _ticker = createTicker(_onTick)..start();
   }
@@ -272,11 +290,41 @@ final class _RhythmPracticeScreenState
         justFinished = true;
       }
     });
+    _soundDemonstration();
     _pulseIfNewBeat();
     // AFTER the state change, never inside `build`: recording is a write, and a
     // write driven by a rebuild would count one attempt again every time the
     // widget happened to rebuild.
     if (justFinished) _recordFinishedAttempt();
+  }
+
+  /// Plays the demonstration's strokes, each exactly once, while it is running.
+  ///
+  /// Audible and unaccented except on beat 1 of a demonstrated bar — the accent is
+  /// metre, never direction, because a pitch that meant "up" would teach a cue the
+  /// guitar does not make (`rhythm_demonstration.dart`).
+  ///
+  /// Safe to sound at full volume despite the measured 15-false-strums-from-16-clicks
+  /// result, because nothing here is scored: every demonstration stroke sits at least
+  /// a full bar plus a count-in before bar 1, and `RhythmCountIn.countsTowardAttempt`
+  /// drops it. That separation is measured end to end in
+  /// `test/features/live/demonstration_preroll_test.dart`, not assumed.
+  void _soundDemonstration() {
+    final demonstration = _demonstration;
+    final position = _demoPosition;
+    if (demonstration == null || position == null) return;
+    if (ref.read(metronomeMutedProvider)) {
+      // Muted silences the demonstration too, and that is not a half-measure: with
+      // no sound there is nothing to repeat, so the screen says the mode cannot run
+      // rather than scoring a pattern it never played.
+      return;
+    }
+    final strokes = demonstration.strokes;
+    while (_demoStrokesSounded < strokes.length &&
+        strokes[_demoStrokesSounded].atUs <= position.inMicroseconds) {
+      _metronome.tick(accent: strokes[_demoStrokesSounded].accent).ignore();
+      _demoStrokesSounded++;
+    }
   }
 
   /// Emits the beat, once per beat, in whichever channel is safe right now.
@@ -321,6 +369,7 @@ final class _RhythmPracticeScreenState
   /// itself in, and a click there would be registered as a tap.
   CurriculumPulsePhase get _pulsePhase {
     if (_calibrator != null) return CurriculumPulsePhase.calibration;
+    if (_demoPosition != null) return CurriculumPulsePhase.demonstration;
     if (_countInNumber != null) return CurriculumPulsePhase.countIn;
     return CurriculumPulsePhase.scoredAttempt;
   }
@@ -369,6 +418,7 @@ final class _RhythmPracticeScreenState
       _finished = false;
       _attemptCounted = null;
       _lastPulsedBeat = -1;
+      _demoStrokesSounded = 0;
       _playing = true;
     });
   }
@@ -390,6 +440,10 @@ final class _RhythmPracticeScreenState
       _finished = false;
       _attemptCounted = null;
       _lastPulsedBeat = -1;
+      // A calibration run never demonstrates: the reference being calibrated
+      // against is the pendulum, and a demonstration would give the learner
+      // something else to follow.
+      _demoStrokesSounded = _demonstration?.strokes.length ?? 0;
       _playing = _engineNowSec != null;
     });
   }
@@ -445,7 +499,7 @@ final class _RhythmPracticeScreenState
       // the strum the engine REPORTS, on the exercise's own timeline.
       final atSec =
           (live.latestStrumTime - start) -
-          _countIn.durationAt(_beatDuration).inMicroseconds / 1e6;
+          (_demoUs + _countIn.durationAt(_beatDuration).inMicroseconds) / 1e6;
       if (atSec >= 0) calibrator.registerTap(atSec);
       if (calibrator.sampleCount >= _calibrationTaps) _finishCalibration();
       return;
@@ -454,6 +508,7 @@ final class _RhythmPracticeScreenState
     // count-in does not shift every expected onset by a bar.
     final atUs =
         ((live.latestStrumTime - start) * 1e6).round() -
+        _demoUs -
         _countIn.durationAt(_beatDuration).inMicroseconds;
     // A stroke played while counting in is not a mistake — but one just BEFORE
     // bar 1 is bar 1 played early, and must still be graded.
@@ -510,32 +565,70 @@ final class _RhythmPracticeScreenState
   /// Crossings per loop: two per beat, across however many bars the exercise
   /// repeats, with the chord cycle laid over them.
   List<bool> get _crossings {
-    // While counting in, the hand swings through a bar of pure ghosts. That is
-    // our own model applied honestly: the hand never stops, so the learner's arm
-    // is already moving when bar 1 arrives instead of starting from rest.
-    if (_countInNumber != null) return _countIn.ghostCrossings;
+    // While counting in — and through a demonstration, for the same reason over a
+    // longer stretch — the hand swings through pure ghosts. That is our own model
+    // applied honestly: the hand never stops, so the learner's arm is already
+    // moving when bar 1 arrives instead of starting from rest.
+    if (_demoPosition != null || _countInNumber != null) {
+      return _countIn.ghostCrossings;
+    }
     if (_calibrator != null) return _calibrationCrossings;
     final perBar = _assignment.grid.handCrossings;
     final bars = _chords.isEmpty ? 1 : _chords.length;
-    return [for (var bar = 0; bar < bars; bar++) ...perBar];
+    final crossings = [for (var bar = 0; bar < bars; bar++) ...perBar];
+    // A mode with NO arrow row gets all ghosts here as well, and this is the
+    // difference between hiding the notation and hiding the hand. The swing itself
+    // is not notation: at a given subdivision it is identical for every pattern, and
+    // the learner has to make it either way. WHICH crossings strike IS the pattern —
+    // so marking them on the pendulum would hand straight back what
+    // `showsArrowRow: false` took away, and the ear rung could be passed by watching.
+    if (!_assignment.mode.showsArrowRow) {
+      return List<bool>.filled(crossings.length, false);
+    }
+    return crossings;
   }
 
   Duration get _beatDuration =>
       Duration(microseconds: (60000000 / _assignment.bpm).round());
 
-  /// Where the exercise itself stands: negative for the whole count-in, zero
+  /// Microseconds of pre-roll the demonstration adds before the count-in.
+  ///
+  /// Zero for the three non-demonstrating modes, which is what keeps this change
+  /// invisible to them: their bar 1 is still the count-in's end.
+  int get _demoUs => _demonstration?.totalUs ?? 0;
+
+  /// [_position] with the demonstration subtracted — the clock the count-in and
+  /// the exercise both run on. One definition, because two would be two places
+  /// for bar 1 to be.
+  Duration? get _countInClock =>
+      _position == null ? null : _position! - Duration(microseconds: _demoUs);
+
+  /// Where the DEMONSTRATION stands, or null once it is over (and always null for
+  /// a mode that does not demonstrate).
+  Duration? get _demoPosition {
+    final position = _position;
+    final demonstration = _demonstration;
+    if (position == null || demonstration == null) return null;
+    if (position.inMicroseconds >= demonstration.totalUs) return null;
+    return position;
+  }
+
+  /// Where the exercise itself stands: negative for the whole pre-roll, zero
   /// exactly at bar 1 beat 1.
-  Duration? get _exercisePosition => _position == null
+  Duration? get _exercisePosition => _countInClock == null
       ? null
       : _countIn.exercisePosition(
-          position: _position!,
+          position: _countInClock!,
           beatDuration: _beatDuration,
         );
 
-  /// The number being counted, or null once the exercise has begun.
-  int? get _countInNumber => _position == null
-      ? null
-      : _countIn.numberAt(position: _position!, beatDuration: _beatDuration);
+  /// The number being counted, or null while demonstrating and once the exercise
+  /// has begun.
+  int? get _countInNumber {
+    final clock = _countInClock;
+    if (clock == null || clock.isNegative) return null;
+    return _countIn.numberAt(position: clock, beatDuration: _beatDuration);
+  }
 
   /// While calibrating, the hand strikes on EVERY beat: the learner is asked for
   /// one reference stroke per beat, so every beat yields a sample.
@@ -545,6 +638,15 @@ final class _RhythmPracticeScreenState
       false,
     ],
   ];
+
+  /// Whether the scored attempt has begun — the WHOLE pre-roll behind us, the
+  /// demonstration included.
+  ///
+  /// Named once because three places ask it, and before the demonstration existed
+  /// they each asked it as "the count-in is over". That phrasing is now wrong by one
+  /// phase, and a screen that thought the attempt had started during a demonstration
+  /// would ask for a chord nobody was meant to be playing yet.
+  bool get _attemptRunning => _demoPosition == null && _countInNumber == null;
 
   /// How many bars the whole attempt lasts.
   int get _attemptBars => _assignment.bars;
@@ -589,7 +691,7 @@ final class _RhythmPracticeScreenState
               (_chords.isEmpty ? 1 : _chords.length);
     // Nothing is asked during the count-in: it is for listening, so naming a
     // chord there would score a bar that has not started.
-    final askedChord = (_chords.isEmpty || countInNumber != null)
+    final askedChord = (_chords.isEmpty || !_attemptRunning)
         ? null
         : _chords[barIndex];
     final fretting = _frettingFor(live, askedChord);
@@ -680,25 +782,29 @@ final class _RhythmPracticeScreenState
               if (askedChord != null)
                 _nowPlaying(context, l10n, colors, askedChord, fretting),
               const SizedBox(height: SsSpacing.space4),
-              for (
-                var bar = 0;
-                bar < (_chords.isEmpty ? 1 : _chords.length);
-                bar++
-              )
-                Padding(
-                  padding: const EdgeInsets.only(bottom: SsSpacing.space3),
-                  child: RhythmLane(
-                    grid: _assignment.grid,
-                    chord: _chords.isEmpty ? null : _chords[bar],
-                    fretting: bar == barIndex
-                        ? fretting
-                        : FrettingState.unconfirmed,
-                    activeSlotIndex: (bar == barIndex && countInNumber == null)
-                        ? _activeSlot(pendulum)
-                        : null,
-                    heardChord: live?.current?.label,
+              // The notation. Withheld entirely for a mode that declares no arrow
+              // row: it is the whole content of the pattern, and the ear rung exists
+              // so the pillar cannot be passed by reading.
+              if (_assignment.mode.showsArrowRow)
+                for (
+                  var bar = 0;
+                  bar < (_chords.isEmpty ? 1 : _chords.length);
+                  bar++
+                )
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: SsSpacing.space3),
+                    child: RhythmLane(
+                      grid: _assignment.grid,
+                      chord: _chords.isEmpty ? null : _chords[bar],
+                      fretting: bar == barIndex
+                          ? fretting
+                          : FrettingState.unconfirmed,
+                      activeSlotIndex: (bar == barIndex && _attemptRunning)
+                          ? _activeSlot(pendulum)
+                          : null,
+                      heardChord: live?.current?.label,
+                    ),
                   ),
-                ),
               _attemptSummary(context, l10n, colors),
               const SizedBox(height: SsSpacing.space2),
               // Rule 4: the "I cannot hear you" signal is the level METER, not a
@@ -731,6 +837,35 @@ final class _RhythmPracticeScreenState
     int? countInNumber,
   ) {
     final text = Theme.of(context).textTheme;
+    final demonstration = _demonstration;
+    final demoPosition = _demoPosition;
+    if (demonstration != null && demoPosition != null) {
+      // Two states, and the silence needs its own words. A screen that showed
+      // nothing through the gap bar would read as stalled at exactly the moment the
+      // learner has to decide to start playing.
+      final demoBar = demonstration.barNumberAt(demoPosition.inMicroseconds);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            demoBar == null
+                ? l10n.curriculumNowYouLabel
+                : l10n.curriculumListenLabel,
+            style: text.labelMedium?.copyWith(color: colors.textSecondary),
+          ),
+          Text(
+            key: demonstrationLabelKey,
+            demoBar == null
+                ? l10n.curriculumNowYouLabel
+                : l10n.curriculumListenBarOf(demoBar, demonstration.bars),
+            style: text.titleMedium?.copyWith(
+              color: demoBar == null ? colors.brand : colors.textPrimary,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      );
+    }
     if (countInNumber != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,

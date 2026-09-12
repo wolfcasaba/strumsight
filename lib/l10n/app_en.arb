@@ -1931,8 +1931,21 @@
     }
   },
   "curriculumLadderTitle": "Your path",
+  "curriculumListenBarOf": "Listen — {bar} of {total}",
+  "@curriculumListenBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumListenLabel": "Listen",
   "curriculumMissionAMinor": "A minor",
   "curriculumMissionAmToD": "Am to D",
+  "curriculumMissionByEar": "The same pattern, by ear",
   "curriculumMissionCMajor": "C major",
   "curriculumMissionDDuUdU": "The D-DU-UDU pattern",
   "curriculumMissionDMajor": "D major",
@@ -1969,12 +1982,14 @@
     }
   },
   "curriculumNoChord": "No chord — damp the strings, right hand only",
+  "curriculumNowYouLabel": "Now you",
   "curriculumOutcomeCredited": "counted",
   "curriculumOutcomeNoEvidence": "nothing heard",
   "curriculumOutcomeUnclear": "not confirmed",
   "curriculumOutcomeWrongDirection": "other direction",
   "curriculumPrepareChange": "the change starts here — keep the strumming hand moving",
   "curriculumRhythmTitle": "Strumming",
+  "curriculumSkillByEar": "playing a heard pattern back",
   "curriculumSkillChangeAmToD": "the Am to D change",
   "curriculumSkillChangeDToG": "the D to G change",
   "curriculumSkillChangeEmToAm": "the Em to Am change",

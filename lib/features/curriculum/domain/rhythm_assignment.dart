@@ -24,6 +24,9 @@ final class RhythmAssignment {
   /// Throws when the assignment could not mean what it says:
   ///
   /// - a muted-stroke mode whose grid is not actually damped;
+  /// - a mode with **no arrow row** on a grid whose struck directions are authored
+  ///   rather than derived — the notation is hidden, so nothing could tell the
+  ///   learner which way to travel;
   /// - a chord-scoring mode on a damped grid — **a muted string has no chord to
   ///   name**, so scoring one would be scoring a label the engine cannot
   ///   produce (the same reason `G6` and `Cmaj7` are not scored targets);
@@ -72,6 +75,21 @@ final class RhythmAssignment {
               '(test/features/live/chord_change_latency_test.dart)',
         );
       }
+    }
+    if (!mode.showsArrowRow && !grid.followsPendulum) {
+      // A mode that hides the notation can only ask for directions the learner can
+      // DERIVE. The demonstration carries timing (`rhythm_demonstration.dart`), and
+      // the pendulum rule carries direction; an authored departure from it — the
+      // taught waltz is a real one — is carried by neither, because the arrow row is
+      // exactly what was taken away. Scoring it would fault a learner for
+      // information the app never gave them, so the combination is refused here
+      // rather than left to an author to remember.
+      throw ArgumentError.value(
+        grid,
+        'grid',
+        'a mode with no arrow row cannot ask for authored directions: nothing '
+            'shows them and the demonstration cannot sound them',
+      );
     }
     if (mode.scoresChord && anyMuted) {
       throw ArgumentError.value(

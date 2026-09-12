@@ -77,6 +77,19 @@
     }
   },
   "curriculumCountInLabel": "Get ready",
+  "curriculumListenLabel": "Listen",
+  "curriculumListenBarOf": "Listen — {bar} of {total}",
+  "@curriculumListenBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumNowYouLabel": "Now you",
   "curriculumCountInNumber": "{number}",
   "@curriculumCountInNumber": {
     "placeholders": {
@@ -160,6 +173,7 @@
   "curriculumMissionTwoChordSong": "A two-chord song",
   "curriculumMissionDownUpEighths": "Down-up eighths",
   "curriculumMissionDDuUdU": "The D-DU-UDU pattern",
+  "curriculumMissionByEar": "The same pattern, by ear",
   "curriculumMissionDMajor": "D major",
   "curriculumMissionAmToD": "Am to D",
   "curriculumMissionGMajor": "G major",
@@ -171,6 +185,7 @@
   "curriculumSkillDownQuarters": "steady down-strokes",
   "curriculumSkillDownUpEighths": "down-up eighths",
   "curriculumSkillStrumPattern": "the D-DU-UDU pattern",
+  "curriculumSkillByEar": "playing a heard pattern back",
   "curriculumSkillChordEMinor": "E minor",
   "curriculumSkillChordAMinor": "A minor",
   "curriculumSkillChordDMajor": "D major",

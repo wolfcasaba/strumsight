@@ -1,5 +1,132 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R21 — A FÜL: a negyedik ritmus-mód játszható, és a mérőeszközöm felülszámolt — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd a v2 még nem kapcsolod be" — tehát az elemzés V2 marad
+lekapcsolva, és a `listenAndRepeat` mód volt a maradék olyan tétel, ami rajtam állt.
+
+Két commit, mert két külön tárgy.
+
+### 1. `3e2b46eb` — a mérés, és egy mérőeszköz-hiba, amit a saját kimenete kényszerített ki
+
+**A keresett válasz.** A `listenAndRepeat` idővonala ~20 klikket küld a pipeline-on át a
+pontozott ütemek ELŐTT. A megnevezett kockázat nem az átszivárgás volt (az ütemekkel
+messze van), hanem hogy a pre-roll **átállítja az adaptív onset-küszöböt**, és a tanuló
+ütéseit a saját demonstrációja által felemelt küszöbhöz mérjük. Ez minden olyan
+tesztnek láthatatlan, ami az 1. ütemnél indul, a tanulónak meg úgy hangzik: „játszottam
+és nem számolta". Kontrollal mérve — ugyanaz az előadás ugyanazokon az absztolút
+időpontokon, egyszer hangzó, egyszer néma pre-rollal:
+
+```
+notated strokes : 24
+pre-roll ON  : reported 39, dropped before bar 1: 15, scored 24
+pre-roll OFF : reported 24, scored 24
+```
+
+A pre-roll **15 ütésként hallatszik**, **mind kívül esik**, és a kísérlet **azonosan**
+hallatszik — minden ütés 5 ms-on belül. Új mechanizmus nem kellett.
+
+**A másik, ami többet ér (→ L660).** Az első futás **43 onsetet jelentett 24 notált
+ütésre — MINDKÉT felvételen**, tehát nem arról, amit mértem. Nem mentem el mellette: a
+`D DU UDU` nyolcad-minta a `mission.dDuUdU`, ami **ma is szállított, pontozott rung**.
+Három gyanúsított néven nevezve, rácsban mérve:
+
+```
+ring/gap 0.8 KS-chord: struck 12 | LivePipeline 12 | rawSuperFlux 12
+ring/gap 2.0 KS-chord: struck 12 | LivePipeline 22 | rawSuperFlux 22
+ring/gap 2.0 harmonic: struck 12 | LivePipeline 12 | rawSuperFlux 12
+```
+
+**Nem a sűrűség** (ring ≤ gap mellett mindkét modell pontos), **nem a réteg** (a nyers
+detektor onsetre egyezik a teljes pipeline-nal mind a hat cellában) — a **stimulus**. A
+`modelled_guitar.dart` húronként és pengetésenként egy **független, zajjal gerjesztett**
+Karplus-Strong hangot ad össze, és két függetlenül seedelt zajos hang interferenciája
+tranzienseket gyárt. A szabály most az `addStrummedChord` doksijában áll.
+
+És a csípős rész: **ez a szám egy szállított mérés kimenetében ült olvasatlanul.** A
+`metronome_click_pollution_test` `23/16`-ot ír ki ugyanebből az okból, és mivel a
+pengetés-számot csak **kiírja, soha nem állítja**, soha nem bukott el — én sem néztem rá
+jelként, amikor az ADR 0546-ot írtam. *Egy szám, amit egy mérés kiír de nem állít, nem
+bizonyíték, hanem díszlet.*
+
+**NYITOTT, és ez most konkrét kérés:** hogy a motor egy **valódi** gitár
+nyolcad-pengetését jól számolja-e. Az immunis stimulus azért immunis, mert *sima*, nem
+mert *valósághű*.
+
+### 1b. A user adta felvétel — a projekt eddigi leghosszabb valódi take-je
+
+A `gitár minta/` Moonlight Sonata MP3 (**gitáron játszott** átirat), 140,2 s, 44,1 kHz
+monóra dekódolva. **A felvétel nem került a repóba**, csak a mérés:
+
+```
+140.2s | frames 2012 | strums 791 (5.6/s) | peak 0.91
+chords: Am:252 E7:238 Esus4:184 Dm:173
+decisions: confirmed:1961 rejected:46 uncertain:5
+```
+
+A négy címke pontosan **i – V7 – V(sus4) – iv** egy moll hangnemben, **97,5%
+megerősített** 140 másodpercen, sűrű, folyamatosan átfedő gitárhangon. Az eddigi
+leghosszabb take 22,6 s volt. **Amit NEM dönt el:** a pengetés-irányt (ez arpeggio, nem
+akkordütés) és a `sus4` felüljelentést (arpeggióban az átmenő kvart **tényleg**
+megszólal). Az onset-ráta 5,6/s a készlet legmagasabbja, ami *irányba mutat*, de címke
+nélkül nem mérés.
+
+### 2. A fül-rung (→ ADR 0548)
+
+A pedagógiai ellenvetést kellett előbb eldönteni: a mód elveszi a nyílsort, az app
+egyetlen hangja a klikk, és **egy klikk nem tudja közölni, hogy LE vagy FEL** — miközben
+pont ezt pontozzuk. Kutatva: a fülre tanulás forrásai pontosan ezt a munkamegosztást
+írják le („keresd meg az ismétlődő ritmikai ötletet, kopogd ki, mondd ki semleges
+szótagokkal" — kifejezetten anélkül, hogy melyik ütés melyik). **Amit a fül ad, az a
+MIKOR. Az irányt a pendulum adja.**
+
+Ebből:
+
+- **A klikk nem kódol irányt.** Egy „fel"-et jelentő hangmagasság olyan jelzést
+  tanítana, ami a gitáron nem létezik. Az akcentus az 1-es ütés — az metrum, és igaz.
+- **A mód csak pendulum-rácson őszinte**, és a `RhythmAssignment` konstruktora
+  **visszautasítja** a `!showsArrowRow && !followsPendulum` kombinációt. Általánosan
+  fogalmazva, nem a módra szabva — az authored rácsok maguk nem tiltottak, az a tanított
+  valcert nevezné hibásnak.
+- **Idővonal:** 2 demó ütem → **1 CSENDES ütem** → beszámolás → pontozott ütemek. A
+  csendes ütem nem díszítés: egyetlen klikk-színnel egy negyed-minta demonstrációja és a
+  beszámolás **szó szerint azonos** lenne.
+- **`needsMetronome` igazra javítva.** Hamisként volt deklarálva, a pontozás megírása
+  előtt. Pulzus nélkül a tanuló **tempó-elcsúszását és a mintáját együtt** mérnénk, és a
+  bukás értelmezhetetlen lenne (ADR 0545 logikája). Ingyenes, mert a pontozott ütemek
+  pulzusa **haptikus**: a pulzust hordozza, a mintát nem.
+- **A `showsArrowRow` most tényleg be van kötve** — deklarált volt, és a képernyő **nem
+  olvasta**. A **sáv** a notáció → nem renderelődik; a **pendulum** a kéz mozgása →
+  renderelődik, de **minden átmenet szellem**. A lengés nem notáció (adott felosztásnál
+  minden mintára azonos); hogy MELYIK átmenet üt, az maga a minta.
+- **A rung:** `mission.byEar`, ugyanaz a `D DU UDU`, **tompítva**, saját skillel
+  (`rhythm.byEar`). Semmi új a játékban, csak a kapaszkodó elvéve.
+
+**Egy saját hiba, amit a saját L659-em fogott meg:** a „pendulum marks NO struck
+crossing" cella először **zölden rossz alanyt mért** — a play után még a demonstrációban
+vagyunk, ahol a lengés eleve szellem, tehát a cella a `showsArrowRow` ág nélkül is
+átmenne. Javítva: a **pontozott szakaszban** mér, és két nem-üresség állítással.
+
+**Gate:** zöld — `test/features/curriculum`, `test/features/live`,
+`test/features/today` + architecture / secrets / l10n.
+
+### Ami rád vár
+
+1. **Címkézett pengetés-felvétel** (44,1 kHz mono, soha nem commitolva): `D DU UDU`
+   nyolcadokban 80 bpm-en tartott akkordon, 4 ütem; ugyanez **tompítva**; plusz a
+   korábban kért `Em`/`Am` váltás. Ez dönti el a felülszámolás kérdését.
+2. **A szerver három kihívás-útvonala** → a kihívás-képernyő egysoros route.
+3. **Rollout-döntés az elemzés V2-ről** — a kérésed szerint egyelőre LEKAPCSOLVA.
+
+### Amit találtam és NEM ebben a körben javítottam
+
+A `test/tooling/screen_reachability_test.dart` **két cellája már a változásaim előtt is
+bukik** (stashelt alapon ellenőrizve): A1 96 képernyőt pinel, a valóság több, és A3
+plan↔mérés kereszt-ellenőrzése ezért szintén elhasal. Ugyanaz a lejárt-pin osztály, mint
+a korábban javított `theme_adoption_test` 96→98 — és ugyanabból az okból maradt észre
+nem véve: azok a körök a saját teszt-útjaikon futtatták a kaput. Külön kör, mert külön
+tárgy, és a plan-sorok megírása tartalmi döntés.
+
 ## 🟢 E18-R20 — A BEKÖTÉSEK FELMÉRVE, és két őr rossz alanyt nevezett meg — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „folytasd a bekötéseket".

@@ -77,6 +77,19 @@
     }
   },
   "curriculumCountInLabel": "Felkészülés",
+  "curriculumListenLabel": "Hallgasd",
+  "curriculumListenBarOf": "Hallgasd — {total} közül a {bar}.",
+  "@curriculumListenBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumNowYouLabel": "Most te",
   "curriculumCountInNumber": "{number}",
   "@curriculumCountInNumber": {
     "placeholders": {
@@ -160,6 +173,7 @@
   "curriculumMissionTwoChordSong": "Kétakkordos dal",
   "curriculumMissionDownUpEighths": "Le-fel nyolcadok",
   "curriculumMissionDDuUdU": "A D-DU-UDU ritmus",
+  "curriculumMissionByEar": "Ugyanaz a ritmus, fülből",
   "curriculumMissionDMajor": "D-dúr",
   "curriculumMissionAmToD": "Am → D",
   "curriculumMissionGMajor": "G-dúr",
@@ -171,6 +185,7 @@
   "curriculumSkillDownQuarters": "egyenletes lefelé pengetés",
   "curriculumSkillDownUpEighths": "le-fel nyolcadok",
   "curriculumSkillStrumPattern": "a D-DU-UDU ritmus",
+  "curriculumSkillByEar": "hallott ritmus visszajátszása",
   "curriculumSkillChordEMinor": "E-moll",
   "curriculumSkillChordAMinor": "A-moll",
   "curriculumSkillChordDMajor": "D-dúr",

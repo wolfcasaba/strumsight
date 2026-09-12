@@ -374,3 +374,44 @@ tanuló olyan ütésekért kapna jelzést, amiket nem játszott.
    Ebből az onset-szám és a helyezés közvetlenül mérhető a címkézett rácshoz.
 3. Ugyanez **tompított** (bal kéz damp) — a fül-rung ezt kéri, és ez választja el a
    tranziens-kérdést az akkord-csengés kérdésétől.
+
+
+## A leghosszabb valódi take eddig: gitárra írt Moonlight Sonata, 140 s (E18-R21, 2026-09-12)
+
+A felvételt a user adta (`gitár minta/`, Free-scores.com MP3, **gitáron játszott** átirat
+— nem zongora). 44,1 kHz monóra dekódolva `soundfile`-lal, csúcsra normalizálva 0,9-re.
+**A felvétel nem kerül a repóba**, csak ez a mérés.
+
+```
+moonlight-guitar.wav
+  140.2s | frames 2012 | strums 791 (5.6/s) | peak level 0.91
+  chords: Am:252 E7:238 Esus4:184 Dm:173
+  decisions: confirmed:1961 rejected:46 uncertain:5
+  rejects: noChord:46 lowConfidence:5
+```
+
+**1. A leghosszabb valódi take, és a legsűrűbb átfedés.** Az eddigi leghosszabb
+22,6 s volt. Az első tétel végig folyamatos, egymásba csengő arpeggio, tehát ez az a
+feltétel, amit modellezett hanggal nem lehetett eldönteni (lásd a fenti NYITOTT
+szakaszt).
+
+**2. A harmónia-olvasat koherens.** A négy jelentett címke — `Am`, `E7`, `Esus4`, `Dm` —
+pontosan **i, V7, V(sus4) és iv** egyetlen moll hangnemben. Ez a KIMENETRŐL szóló
+tény, nem a felvételről: hogy az átirat valóban A-mollban van-e, nincs ellenőrizve
+(a C#-moll → A-moll transzpozíció a szokásos gitáros választás, de ez következtetés).
+2012 képkockából **1961 megerősített (97,5%)**, 46 `noChord`, 5 `lowConfidence`.
+
+**3. Az onset-ráta 5,6/s — a készlet legmagasabbja** (a többi felvétel 1,2–3,9/s). Ez
+ugyanabba az irányba mutat, mint a modellen mért felülszámolás, **de nem mérés**: ehhez
+a felvételhez nincs onset-címke, és nem ismert sem az átirat tempója, sem hogy a
+feldolgozás hány hangot tesz a tételbe. A címkézett pengetés-felvétel kérése tehát
+változatlanul áll.
+
+**4. Amit ez a felvétel NEM tud eldönteni**, és ezért külön kimondva:
+
+- **Pengetés-IRÁNY.** Ez pengetett arpeggio, nem akkordütés. A ritmus-pillér metrikája
+  (`rhythm.directionAccuracy`) itt egyszerűen nem értelmezhető.
+- **A `sus4` felüljelentés.** Az `Esus4` 184-szer szerepel az `E7` 238 mellett, és egy
+  arpeggióban az átmenő kvart **tényleg megszólal** — tehát ez a take nem választja szét
+  a „túl sok sus4-et jelent" és a „a sus4 valóban ott van" eseteket. A per-akkord
+  ground truth hiánya marad a blokkoló.

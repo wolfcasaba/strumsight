@@ -74,6 +74,7 @@ abstract final class BeginnerSkills {
   static const rhythmDownQuarters = 'rhythm.downQuarters';
   static const rhythmDownUpEighths = 'rhythm.downUpEighths';
   static const strumPattern = 'strumPattern.dDuUdU';
+  static const rhythmByEar = 'rhythm.byEar';
   static const chordEMinor = 'chord.eMinor';
   static const chordAMinor = 'chord.aMinor';
   static const chordDMajor = 'chord.dMajor';
@@ -152,6 +153,32 @@ RhythmAssignment _dDuUdUExercise() => RhythmAssignment(
   grid: RhythmGrid.pendulum(
     subdivision: RhythmSubdivision.eighth,
     struck: const [true, false, true, true, false, true, true, true],
+  ),
+  bpm: beginnerEighthBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+/// The SAME pattern as `_dDuUdUExercise`, with the notation withdrawn — the rhythm
+/// pillar's last rung.
+///
+/// Nothing about the playing is new here, which is the point: the only thing removed
+/// is the crutch. `listenAndRepeat` hides the arrow row and plays the pattern instead
+/// (`rhythm_demonstration.dart`), so what the learner must now supply themselves is
+/// WHEN the strokes fall; the pendulum rule still supplies which way the hand travels,
+/// which is why a click can demonstrate this honestly at all.
+///
+/// **Damped, and back to muted strings on purpose.** The course's ordering principle
+/// is one new thing to get wrong per rung, and the new thing here is the ear. Damping
+/// removes the chord as a confound, and it also matches the demonstration
+/// acoustically: a damped stroke is percussive, which is what a click is. A ringing
+/// chord would ask the learner to reproduce a click with a sound that does not
+/// resemble it.
+RhythmAssignment _byEarExercise() => RhythmAssignment(
+  mode: RhythmMode.listenAndRepeat,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.eighth,
+    struck: const [true, false, true, true, false, true, true, true],
+    muted: true,
   ),
   bpm: beginnerEighthBpm,
   bars: beginnerBarsPerAttempt,
@@ -394,7 +421,30 @@ Course beginnerCourse() => Course(
           ],
         ),
 
-        // 8-10 — the remaining open chords, hardest last.
+        // 8 — the ear. The rhythm pillar's capstone: the pattern from rung 7 with
+        // the arrow row taken away, so a learner cannot pass the whole pillar by
+        // reading alone. Its own skill rather than more evidence for
+        // `strumPattern`, because reproducing a heard pattern is a different
+        // ability from playing a notated one — the METRIC is the same (direction
+        // accuracy), the task is not.
+        _level(
+          id: 'level.byEar',
+          goal: PracticeGoalType.rhythm,
+          missions: [
+            _scored(
+              id: 'mission.byEar',
+              goal: PracticeGoalType.rhythm,
+              trains: const {BeginnerSkills.rhythmByEar},
+              unlock: _after(const {BeginnerSkills.strumPattern}),
+              description:
+                  'hear the pattern, then play it back without the arrows',
+              capabilities: _micDirection,
+              rhythm: _byEarExercise(),
+            ),
+          ],
+        ),
+
+        // 9-11 — the remaining open chords, hardest last.
         _level(
           id: 'level.dMajor',
           goal: PracticeGoalType.chordChanges,

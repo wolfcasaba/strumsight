@@ -46,7 +46,16 @@ enum RhythmMode {
     code: 'rhythm.listenAndRepeat',
     scoresChord: false,
     showsArrowRow: false,
-    needsMetronome: false,
+    // TRUE, and this was authored as false before the grading existed. The attempt
+    // is scored by placing strokes on a grid at a fixed tempo within a 50 ms
+    // window, so withholding the pulse would not make the exercise purer — it would
+    // measure the learner's tempo drift and their pattern TOGETHER, and a failure
+    // would be uninterpretable (the same reason ADR 0545 refused a change-timing
+    // score outright). The pulse during the scored bars is HAPTIC
+    // (`metronome_pulse.dart`), which is what makes this cost nothing here: a felt
+    // beat carries the pulse and not the pattern, so it cannot leak the thing the
+    // ear is supposed to supply.
+    needsMetronome: true,
     demonstratesFirst: true,
   );
 

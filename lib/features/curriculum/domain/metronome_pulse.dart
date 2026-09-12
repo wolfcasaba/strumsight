@@ -56,6 +56,11 @@ enum CurriculumPulsePhase {
   /// drops every stroke before bar 1.
   countIn,
 
+  /// The app is playing the pattern for the learner to hear
+  /// (`rhythm_demonstration.dart`). Nothing is scored, and the pattern itself is the
+  /// sound.
+  demonstration,
+
   /// The scored attempt. Anything the microphone hears can be credited to a slot.
   scoredAttempt,
 
@@ -82,6 +87,13 @@ CurriculumPulse curriculumPulseFor({
       // establish the beat BEFORE anything has to be played on it. Safe because
       // nothing here is scored.
       return isDownbeat ? CurriculumPulse.accentClick : CurriculumPulse.click;
+    case CurriculumPulsePhase.demonstration:
+      // NOTHING from the metronome. Not for safety — nothing is scored here — but
+      // because the demonstration's own strokes are already clicks, and a beat click
+      // in the SAME timbre on top of them would make the pattern unreadable: the
+      // learner could not tell which click was a stroke and which was the pulse.
+      // Metre is carried instead by accenting beat 1 of each demonstrated bar.
+      return CurriculumPulse.none;
     case CurriculumPulsePhase.scoredAttempt:
       // Felt, not heard. An audible click here would be counted as a stroke on the
       // very beat it marks — 15 false strums from 16 clicks, measured.

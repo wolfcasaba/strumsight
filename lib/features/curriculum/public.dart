@@ -14,6 +14,7 @@ export 'domain/next_step.dart';
 export 'domain/mission_chords.dart';
 export 'domain/rhythm_assignment.dart';
 export 'domain/rhythm_countin.dart';
+export 'domain/rhythm_demonstration.dart';
 export 'domain/rhythm_evidence.dart';
 export 'domain/rhythm_grading.dart';
 export 'domain/rhythm_grid.dart';

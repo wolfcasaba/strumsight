@@ -1903,8 +1903,21 @@
     }
   },
   "curriculumLadderTitle": "A te utad",
+  "curriculumListenBarOf": "Hallgasd — {total} közül a {bar}.",
+  "@curriculumListenBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumListenLabel": "Hallgasd",
   "curriculumMissionAMinor": "A-moll",
   "curriculumMissionAmToD": "Am → D",
+  "curriculumMissionByEar": "Ugyanaz a ritmus, fülből",
   "curriculumMissionCMajor": "C-dúr",
   "curriculumMissionDDuUdU": "A D-DU-UDU ritmus",
   "curriculumMissionDMajor": "D-dúr",
@@ -1941,12 +1954,14 @@
     }
   },
   "curriculumNoChord": "Nincs akkord — tompítsd a húrokat, csak a jobb kéz",
+  "curriculumNowYouLabel": "Most te",
   "curriculumOutcomeCredited": "beszámítva",
   "curriculumOutcomeNoEvidence": "nem hallatszott",
   "curriculumOutcomeUnclear": "nem tisztázott",
   "curriculumOutcomeWrongDirection": "másik irány",
   "curriculumPrepareChange": "itt indul a váltás — a pengető kéz ne álljon meg",
   "curriculumRhythmTitle": "Pengetés",
+  "curriculumSkillByEar": "hallott ritmus visszajátszása",
   "curriculumSkillChangeAmToD": "az Am → D váltás",
   "curriculumSkillChangeDToG": "a D → G váltás",
   "curriculumSkillChangeEmToAm": "az Em → Am váltás",

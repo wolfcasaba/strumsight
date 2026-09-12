@@ -89,6 +89,25 @@ Widget _streamHost(Stream<LiveFrame> frames, {int calibrationMs = 0}) =>
       ),
     );
 
+/// The same, opening a NAMED rung — the ear rung is not the default entry point.
+Widget _missionHost(Stream<LiveFrame> frames, String missionId) =>
+    ProviderScope(
+      overrides: [
+        liveFrameProvider.overrideWith((ref) => frames),
+        keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: SsDarkTheme.data(),
+        home: RhythmPracticeScreen(
+          mission: beginnerCourse().missionsInOrder.firstWhere(
+            (mission) => mission.missionId == missionId,
+          ),
+        ),
+      ),
+    );
+
 /// A calibrated device, without running the calibration flow.
 class _FixedStrumLatency extends StrumLatencyNotifier {
   _FixedStrumLatency(this.ms);
@@ -587,6 +606,176 @@ void main() {
       await tester.pump(const Duration(milliseconds: 32));
 
       expect(repository.allForSkill(rungOne().trainedSkillIds.single), isEmpty);
+    });
+  });
+
+  group('the ear rung: the notation is withheld and the app plays first', () {
+    // `mission.byEar` is `listenAndRepeat`: showsArrowRow false, demonstratesFirst
+    // true. These cells are about the things that could silently undo it.
+
+    testWidgets('NO lane is rendered — the pattern IS the notation', (
+      tester,
+    ) async {
+      // Rendering the lane would let the whole rhythm pillar be passed by reading,
+      // which is the one thing this rung exists to prevent.
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_missionHost(controller.stream, 'mission.byEar'));
+      await tester.pump();
+      expect(find.byType(RhythmLane), findsNothing);
+      // The hand is still drawn: the swing is identical for every eighth-note
+      // pattern, so it is not notation, and the learner has to make it either way.
+      expect(find.byType(SsStrumPendulum), findsOneWidget);
+    });
+
+    testWidgets('the pendulum marks NO struck crossing', (tester) async {
+      // The subtler half. Hiding the lane is not enough if the pendulum still
+      // marks which crossings strike — that is the pattern by another route.
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_missionHost(controller.stream, 'mission.byEar'));
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 5.0));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+      // Into the SCORED bars, not merely after pressing play. Right after play the
+      // pre-roll is ghost-only anyway (the count-in has always been), so asserting
+      // there would pass without the `showsArrowRow` branch existing at all — a
+      // guard naming the wrong subject (`docs/LESSONS.md` L659). At 80 bpm the
+      // pre-roll is 9.0 s and the count-in ends at 12.0 s, so start + 12.5 s is
+      // inside bar 1 of the attempt.
+      controller.add(_frame(engineTimeSec: 17.5));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(
+        find.byKey(demonstrationLabelKey),
+        findsNothing,
+        reason: 'this cell must be asserting the ATTEMPT, not the pre-roll',
+      );
+      expect(find.byKey(countInNumberKey), findsNothing);
+
+      final pendulum = tester.widget<SsStrumPendulum>(
+        find.byType(SsStrumPendulum),
+      );
+      expect(
+        pendulum.struck,
+        isNotEmpty,
+        reason: 'an empty crossing list would make the assertion below vacuous',
+      );
+      // And the grid really does have strokes to hide — otherwise "nothing is
+      // marked" would be true of an exercise with nothing in it.
+      final mission = beginnerCourse().missionsInOrder.firstWhere(
+        (mission) => mission.missionId == 'mission.byEar',
+      );
+      expect(mission.rhythm!.grid.handCrossings.any((s) => s), isTrue);
+      expect(
+        pendulum.struck.any((strikes) => strikes),
+        isFalse,
+        reason:
+            'a marked crossing tells the learner where the strokes are, which is '
+            'exactly what the ear is supposed to supply here',
+      );
+    });
+
+    testWidgets('it opens by LISTENING, not by counting in', (tester) async {
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_missionHost(controller.stream, 'mission.byEar'));
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 5.0));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(find.byKey(demonstrationLabelKey), findsOneWidget);
+      expect(
+        find.byKey(countInNumberKey),
+        findsNothing,
+        reason: 'the count-in comes after the demonstration, not instead of it',
+      );
+    });
+
+    testWidgets('a stroke played during the DEMONSTRATION is not scored', (
+      tester,
+    ) async {
+      // The measured risk, at the screen level: the demonstration sounds clicks,
+      // and `demonstration_preroll_test` showed the engine reports 15 strokes from
+      // them. They must not reach the attempt — and nor must a learner strumming
+      // along while listening, which is not a mistake either.
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_missionHost(controller.stream, 'mission.byEar'));
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 5.0));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+
+      // start + 1.0 s: inside demonstration bar 1. At 80 bpm a bar is 3.0 s, so
+      // the whole pre-roll is 9.0 s (2 demo + 1 gap + 1 count-in).
+      controller.add(
+        _frame(
+          engineTimeSec: 6.1,
+          latestStrumTime: 6.0,
+          strumSeq: 1,
+          latestStrum: const Strum(
+            direction: StrumDirection.down,
+            confidence: 0.9,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.textContaining('heard 0 of'), findsOneWidget);
+    });
+
+    testWidgets('the silent bar says "now you" rather than going blank', (
+      tester,
+    ) async {
+      // A screen showing nothing through the gap would read as stalled at exactly
+      // the moment the learner has to decide to start playing.
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_missionHost(controller.stream, 'mission.byEar'));
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 5.0));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+      // start + 7.0 s: past the two demonstration bars (6.0 s), inside the gap.
+      controller.add(_frame(engineTimeSec: 12.0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(find.byKey(demonstrationLabelKey), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(demonstrationLabelKey)).data,
+        'Now you',
+      );
+    });
+
+    testWidgets('the count-in still happens, AFTER the demonstration', (
+      tester,
+    ) async {
+      // The count-in is not dropped: without it the learner has to invent bar 1,
+      // and the first bar of every attempt would be a guess.
+      final controller = StreamController<LiveFrame>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(_missionHost(controller.stream, 'mission.byEar'));
+      await tester.pump();
+      controller.add(_frame(engineTimeSec: 5.0));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+      // start + 9.5 s: half a second into the count-in bar.
+      controller.add(_frame(engineTimeSec: 14.5));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(find.byKey(demonstrationLabelKey), findsNothing);
+      expect(find.byKey(countInNumberKey), findsOneWidget);
     });
   });
 

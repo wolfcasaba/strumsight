@@ -102,19 +102,47 @@ void main() {
   });
 
   group('the table is total', () {
-    test('every phase answers, and only the count-in answers audibly', () {
+    test('every silence is a decision, and only the count-in is audible', () {
+      // The two silent phases are silent for DIFFERENT reasons, and both are
+      // reasoned rather than left over:
+      //
+      //   calibration  — a click would be registered as a tap, so the device would
+      //                  calibrate against its own metronome;
+      //   demonstration — the pattern itself is already clicks, and a beat click in
+      //                  the same timbre on top would make it unreadable.
+      //
+      // Listing them here means adding a phase without deciding its channel is a red
+      // test rather than an accidental silence.
+      const silentByDesign = <CurriculumPulsePhase>{
+        CurriculumPulsePhase.calibration,
+        CurriculumPulsePhase.demonstration,
+      };
       final audible = <CurriculumPulsePhase>[];
+      final silent = <CurriculumPulsePhase>{};
       for (final phase in CurriculumPulsePhase.values) {
         for (final downbeat in [false, true]) {
           final pulse = _pulse(phase, downbeat: downbeat);
-          // No phase is left without an answer by accident: the only `none` is the
-          // calibration one, which is a decision.
-          if (phase != CurriculumPulsePhase.calibration) {
-            expect(pulse, isNot(CurriculumPulse.none), reason: '$phase');
+          if (pulse == CurriculumPulse.none) {
+            silent.add(phase);
+          } else {
+            expect(
+              silentByDesign,
+              isNot(contains(phase)),
+              reason:
+                  '$phase is listed as silent by design but pulsed — one of the '
+                  'two is wrong, and the comment above says which it should be',
+            );
           }
           if (pulse.isAudible && !audible.contains(phase)) audible.add(phase);
         }
       }
+      expect(
+        silent,
+        silentByDesign,
+        reason:
+            'a phase fell silent without a stated reason, or a stated reason no '
+            'longer holds',
+      );
       expect(audible, [CurriculumPulsePhase.countIn]);
     });
 

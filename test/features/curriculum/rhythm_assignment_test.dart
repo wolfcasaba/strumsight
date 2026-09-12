@@ -325,6 +325,7 @@ void main() {
         'mission.emToAm',
         'mission.downUpEighths',
         'mission.dDuUdU',
+        'mission.byEar',
         'mission.dMajor',
         'mission.amToD',
         'mission.gMajor',
