@@ -27169,3 +27169,45 @@ Mindegyik esetben az fogta meg, amit előre leírtam állításként — nem az,
 átnéztem.
 
 Az eredmények: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+
+## L664 — Lapos hangoló görbe + emelkedő tartalék görbe = a PRIORT illesztem, nem a jelet (E18-R26, 2026-09-12)
+
+**A helyzet.** Az ADR 0549 után az irány-hibák egyetlen torzításból jöttek: 919 valódi
+lefelé ütést nevezett a modell felfelének. A döntés sima argmax (`pUp > pDown`), vagyis a
+határ fixen 0,5, és semmi nem illesztette. Kézenfekvő „ingyenes" javítás lett volna
+eltolni — pont úgy, ahogy az elnyomó kapu eltolása valódit hozott egy körrel korábban.
+
+**Amit előre megtettem.** Nem a teljes korpuszon söpörtem. **Játékos szerint osztottam**
+(hangolás 00/01/02, kiértékelés 03/04/05), mert az ADR 0549 épp azt írta le, mi történik,
+ha egy korpuszra illesztett döntést korpuszon kívül használunk.
+
+**És az osztás megfogta.** A tartalék halmazon a macro-F1 0,3876 → 0,4343-ra nőtt, ami
+nyereségnek látszik. Három jel mondja, hogy nem az:
+
+1. **A hangoló görbe lapos**: +0,0066 a TELJES söprésen (0,4697 → 0,4763), és a „legjobb"
+   érték hajszállal veri a szomszédjait. *Ha nincs csúcs, nincs mit hangolni — csak zajra
+   illesztek.*
+2. **A tartalék görbe a priort követi**: a test fél 90% lefelé a tune 72%-ával szemben, és
+   minél inkább lefelé tolom a határt, annál jobb pont azon a felén, ahol több a lefelé.
+3. **A kisebbségi osztály F1-je meg sem mozdul**: felütés 0,1905 → 0,1848, miközben a
+   lefelé 0,5848 → 0,6837. A nyereség **100%-ban** abból jön, hogy több dolgot nevez a
+   többségi osztálynak.
+
+**A szabály, amit ebből megtartok.** Egy döntési határ eltolása akkor és csak akkor
+javítás, ha **a kisebbségi osztály metrikája is javul**. Ha csak a többségi osztályé
+emelkedik, akkor a „nyereség" a teszthalmaz osztály-arányának ajándéka, és egy más
+arányú anyagon (nálunk: a `reggae-skank` lecke, ami szinte csak felütés) **rontás** lesz
+belőle.
+
+És a diagnosztikai minta, ami ezt azonnal elárulja: **lapos hangoló görbe emelkedő
+tartalék görbe mellett.** Ha az igazi jel lenne benne, a hangoló görbének is csúcsa
+volna ugyanott.
+
+**A valódi diagnózis.** Minden határnál a felütés F1 ≈ 0,19 a tartalék játékosokon: a
+modell erre az anyagra **nem tudja azonosítani a felütéseket**. Ez képesség-hiány, nem
+küszöb-hiba — és ez a felismerés az, ami a következő lépést *nem* egy újabb skalár
+hangolásává teszi.
+
+Lásd még [[L662]], [[L663]] (a mérőeszköz), és ADR 0549 (a korpuszra illesztett kapu).
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).

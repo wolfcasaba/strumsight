@@ -199,3 +199,87 @@ változatlan** (0,786 / 0,954 / 0,2953) — vagyis a változás pontosan azt ér
 **Amit ez nem ad meg.** Az irány 0,4313 továbbra is messze a Chapter 14 §7.2 Alpha kapu
 alatt (0,80), és messze az arXiv 2508.07973 mikrofonos számai alatt. Ez a döntés
 **javít, nem megoldás**.
+
+
+---
+
+# NEGATÍV eredmény: a le/fel döntési határ elmozgatása nem javít, csak a priort illeszti (E18-R26)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset flutter test \
+  test/tooling/guitarset_direction_boundary_test.dart
+```
+
+## A kérdés
+
+A szállított úton (ADR 0549 után) az irány-hibák **egyetlen** torzításból jönnek:
+
+```
+down: TP 696  FP 135  FN 919   →  valódi le: 1615,  jelentett le:  831
+up  : TP 219  FP 919  FN 135   →  valódi fel:  354, jelentett fel: 1138
+```
+
+A ground truth **82% lefelé**, a modell **58%-ban felfelé** mond: **919 valódi lefelé
+ütést nevez felfelének.** A döntés pedig sima argmax — `final up = pUp > pDown`, vagyis
+a határ fixen **0,5** egy kétosztályos, normalizált valószínűségen. Semmi nem illesztette;
+ez az, amit az argmax jelent.
+
+Kézenfekvő lenne eltolni. **De ugyanaz a csapda, amit az ADR 0549 épp leírt:** ha azért
+tolom, mert ez a korpusz 82% lefelé, akkor korpusz-priorra illesztek — és a
+felütés-domináns mintákon (a saját `reggae-skank` leckénk szinte csak felütés) rontanék.
+
+Ezért **játékos szerinti osztás**: hangolás 00/01/02-n, kiértékelés 03/04/05-ön, se
+előadó-, se felvétel-átfedés.
+
+## A mérés
+
+```
+  tune játékosok 00/01/02: 72% le (907 eset)
+  test játékosok 03/04/05: 90% le (1084 eset)
+
+  P(up)>   tuneLe    tuneFel  tuneMacro | testLe    testFel  testMacro
+  0,30     0,4980    0,3942     0,4461  |  0,5522   0,1870     0,3696
+  0,40     0,5323    0,3965     0,4644  |  0,5692   0,1888     0,3790
+  0,50*    0,5498    0,3896     0,4697  |  0,5848   0,1905     0,3876
+  0,60     0,5661    0,3802     0,4731  |  0,6011   0,1877     0,3944
+  0,70     0,5717    0,3683     0,4700  |  0,6230   0,1890     0,4060
+  0,80     0,5877    0,3559     0,4718  |  0,6482   0,1838     0,4160
+  0,90     0,6143    0,3383     0,4763  |  0,6837   0,1848     0,4343
+  (* = a mai argmax)
+
+  TUNE-on választva: P(up) > 0,90  (tune macro 0,4763)
+  tartalék TESTen: macro 0,4343  vs  0,3876 a mai 0,50-nél  (n=1084)
+```
+
+## Amit ez mond, és miért NEM javítás
+
+A tartalék halmazon a macro-F1 0,3876 → **0,4343** nő. Ez elsőre nyereségnek látszik. Nem
+az, és három jel mondja meg:
+
+**1. A hangoló görbe LAPOS.** 0,4697 (0,50) → 0,4763 (0,90): a teljes söprésen **+0,0066**.
+A „legjobb" 0,90 hajszállal veri a 0,60-at (0,4731) és a 0,80-at (0,4718). Ez zaj-szint,
+nem jel. *Egy lapos hangoló görbe azt jelenti, hogy nincs mit hangolni.*
+
+**2. A tartalék görbe a PRIORT követi.** A test halmaz **90% lefelé** a tune 72%-ával
+szemben. Minél inkább „lefelé" felé tolom a határt, annál jobb azon a felén, ahol több a
+lefelé. Ez a definíció szerint prior-illesztés.
+
+**3. A felütés F1 MEGSEM MOZDUL.** Tartalékon 0,1905 → 0,1848 a teljes söprésen, miközben
+a lefelé F1 0,5848 → 0,6837-re nő. Tehát a nyereség **teljes egészében** abból jön, hogy
+több dolgot nevez lefelének egy túlnyomóan lefelé korpuszon. Semmit nem tanult a
+felütésekről.
+
+**A diagnózis tehát nem a határ, hanem a modell.** Minden határnál a felütés F1 ≈ 0,19 a
+tartalék játékosokon. A modell erre az anyagra **gyakorlatilag nem tudja azonosítani a
+felütéseket**. Ez képesség-hiány, nem küszöb-hiba, és nem lehet egy skalárral elintézni.
+
+**Mellék-fenntartás, ami önmagában is fontos:** a két fél **priorja nagyon eltér** (72% vs
+90%), tehát a GuitarSet két fele nem felcserélhető. Ez a mérést nem rontja el — sőt, ez
+az, ami a prior-illesztést *láthatóvá* tette —, de azt jelenti, hogy ezen a korpuszon
+minden „átlagos" irány-szám erősen függ attól, kit válogatunk bele.
+
+## Ami ebből következik
+
+A küszöb-típusú (ingyenes) javítások **kimerültek**: az elnyomó kapu hozott valódit
+(ADR 0549), a döntési határ nem hoz. Innen vagy **jobb modell** kell — amihez
+iránycímkés tanítóadat, és az a blokkoló —, vagy **más jelforrás**.
