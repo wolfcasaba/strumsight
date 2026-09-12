@@ -27506,3 +27506,52 @@ műtermékre épít.*
 Lásd még [[L664]] (prior-illesztés), [[L665]] (hamis blokkoló), [[L666]] (ablak-igazítás),
 [[L667]] (hiányzó alapvonal), ADR 0553.
 Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+## L669 — A repónak VOLT multi-seed konvenciója, és nem használtam; egy mag mindkét irányban tévedett (E18-R31, 2026-09-12)
+
+**A helyzet.** Az E18-R29 (ADR 0552) a kétszintű irány-döntést **egy magon** (`seed 42`)
+mérte, és abból hozott döntést meg nyereség-számot. A `honest_eval.py` 37. sora viszont
+pont erre létezik:
+
+```python
+STD_SEEDS = [42, 1, 2]  # standard-config multi-seed sweep
+```
+
+Három maggal ugyanazok a cellák:
+
+```
+  A @70 ms,  GuitarSet:   0,5017 (egy mag)  →  0,4690 ± 0,0603    optimista volt
+  B @238 ms, GuitarSet:   0,6446 (egy mag)  →  0,6954 ± 0,0362    pesszimista volt
+```
+
+**A hiba alakja nem „egy mag optimista".** Egyik cella felé, másik lefelé tévedett — vagyis
+nem lehet fejben korrigálni, és nem lehet „konzervatív becslésnek" nevezni. *Egy mag nem
+mérés, hanem minta — és a minta iránya nem kiszámítható.*
+
+**És ez már a negyedik alakja ugyanannak a hibának ebben az epicben:** egy osztás
+([[L666]] ablak-igazítás), egy osztás monoton trendje ([[L668]]), egy osztás tanító-mérete
+(ADR 0553 D3a), és most **egy mag**. A minta kimondható: **ahol a repónak van konvenciója a
+többszöri mérésre, ott azért van, mert valaki már belefutott.** A `STD_SEEDS` nem stílus,
+hanem egy korábbi kör tanulsága kódba írva — és átlépni rajta ugyanaz, mint az L665-ben a
+róla elnevezett modult ki sem nyitni.
+
+**Amit a három mag megvett.** Nem a kis különbségek: az **összeomlások** stabilitása. A
+238 ms-ra tanított fej a 70 ms-os bemeneten három magon át **0,08**-at mond felütésnek a
+valódi 0,38 mellett, és a 70 ms-ra tanított fej 238 ms-on **0,4269 ± 0,0063** — a szórás
+parányi, tehát a „többségi alapvonal alatt" **tulajdonság**, nem ingadozás. Egy magon
+mindkettő elmagyarázható lett volna rossz inicializálásként, és akkor a kétszintű terv
+maradt volna „ugyanaz a modell, két időben hívva" — ami mérve **a nyíl helyén omlik össze**.
+
+**A második tanulság: a nyereséget a SAJÁT súlykészletén kell mérni.** Az ADR 0552 a
+„+0,1429"-et úgy kapta, hogy A @ 70 ms-t hasonlította B @ 238 ms-hoz — **egyszerre
+változtatva a szintet és a tanítást**. Ugyanazon a súlykészleten (amit valóban szállítanánk)
+a szint-nyereség **+0,0725 / +0,0847**, nem +0,1429.
+
+*Egy A/B összehasonlításban pontosan egy dolog változhat — és ha a terméket egy harmadik
+konfiguráció szállítja, akkor a nyereséget azon kell mérni, nem a két karon.* Ez ugyanaz a
+család, mint [[L662]] (a konfiguráció tért el a produkciótól), csak itt a **mért különbség**
+tért el a szállítandótól.
+
+Lásd még [[L664]]–[[L668]], ADR 0552, ADR 0554.
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
+eszköz: `ml/experiment_deadline_augmentation.py`.

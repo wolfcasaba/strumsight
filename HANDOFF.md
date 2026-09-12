@@ -14236,6 +14236,24 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   keresztezett söprése tanításra használható, ha a teszt-fold mindkét tengelyen
   diszjunkt), nem modellezés. Ma **kilenc gitáros** van összesen.
   Tanulság: `docs/LESSONS.md` **L668**.
+  **AZ ARCHITEKTÚRA ELDÖNTVE (E18-R31, ADR 0554): EGY asset szolgálja mindkét
+  szintet.** A `STD_SEEDS = [42, 1, 2]` magokkal mérve a „mindkét levágáson
+  tanítva" fej **nyeri** a 70 ms-os szintet a saját specialistáját is megverve
+  (GuitarSet 0,5934 ±0,0127 vs 0,4690 ±0,0603; Klangio 0,5828 vs 0,4879), és
+  **döntetlen** a 238 ms-oson (0,6659 vs 0,6954 a ±0,036 szóráson belül) — tehát
+  egy `.bin`, egy paritás-fixtúra, egy `tryLoad`, és a két szint két **hívási
+  idő**. **A két szint NEM lehet „a mai modell kétszer hívva":** a 238 ms-os fej
+  70 ms-on a Klangión 0,08-at mond felütésnek a valódi 0,38 mellett (a **nyíl**
+  helye), a mai fej pedig 238 ms-on 0,4269 **±0,0063** — a többségi alapvonal
+  alatt, parányi szórással. **Ezért ASSET ELŐBB, SÍN UTÁNA** (a mai assettel a
+  sín a ritmus-pontozást rontaná). **Az ADR 0552 „+0,1429"-e két változást
+  kevert** (szint ÉS tanítás); ugyanazon a súlykészleten a szint-nyereség
+  **+0,0725 / +0,0847**, és az egy-magos számai **mindkét irányban** tévedtek
+  (A@70 0,5017→0,4690; B@238 0,6446→0,6954). Tanulság: **L669**.
+  **Következő kör:** a C konfigurációval 3 osztályos tanítás — GuitarSet
+  negatívok bányászása az új geometrián, a no-strum kapu újrakalibrálása (ADR
+  0549 receptje), `.bin` export, paritás-fixtúra (AGENTS.md §9). A
+  `crnn_frontend` **nem változik** (1 s-os gyűrű, a `windowAt` magától nulláz).
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

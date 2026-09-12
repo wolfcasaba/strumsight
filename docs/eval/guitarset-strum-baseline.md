@@ -763,3 +763,85 @@ osztáson; a szállítható modell a teljes készleten tanul, a becslés a CV-b�
 
 A következő **építési** lépés változatlanul az ADR 0552 kétszintű bekötése (+0,1429 mérve,
 architektúra-költség nélkül).
+
+---
+
+# Egy asset vagy kettő? — és az előző kör nyereség-száma két változást kevert (E18-R31)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/experiment_deadline_augmentation.py
+```
+
+Az ADR 0552 „nulla architektúra-költség" megfogalmazása a **bemenetre** igaz (a 15 frame már
+238 ms-ot elér, a tensor `(15, 128)` marad), a **súlyokra nem**: a két szint két különböző
+levágáson tanított modell volt. Naivan tehát két asset, két `tryLoad`, két paritás-fixtúra,
+és hívás-helyenkénti modellválasztás a Dart-oldalon. Harmadik lehetőség: **egy** modell,
+ami **mindkét** levágáson tanul.
+
+Három kar, mindegyik **mindkét** határidőn pontozva, mindkét tartalék korpuszon, a repó saját
+`honest_eval.STD_SEEDS = [42, 1, 2]` magjaival:
+
+| kar | GuitarSet @70 ms | GuitarSet @238 ms | Klangio @70 ms | Klangio @238 ms |
+|---|---|---|---|---|
+| *alapvonal* | *0,4468* | *0,4468* | *0,3836* | *0,3836* |
+| A tanítva @70 ms | 0,4690 ±0,0603 | **0,4269 ±0,0063** ↓ | 0,4879 ±0,0854 | 0,5205 ±0,0248 |
+| B tanítva @238 ms | 0,5865 ±0,0358 | **0,6954 ±0,0362** | **0,4795 ±0,0924** | 0,6593 ±0,0193 |
+| **C tanítva MINDKETTŐN** | **0,5934 ±0,0127** | 0,6659 ±0,0172 | **0,5828 ±0,0385** | **0,6675 ±0,0195** |
+
+„Fel"-nek mond / valóság a két kritikus cellában: **B @70 ms Klangión 0,08 / 0,38** (fel-F1
+0,1912), **A @238 ms GuitarSeten 0,53 / 0,19**.
+
+## 1. Mindkét kereszt-cella összeomlik, és három magon stabilan
+
+- **A letisztult fej a nyílnál** (B @ 70 ms): a Klangión **0,08**-at mond felütésnek a valódi
+  0,38 mellett — gyakorlatilag megszűnik felütést jelezni, **pont a nyíl helyén**.
+- **A mai fej a pontozásnál** (A @ 238 ms): GuitarSeten **0,4269 ± 0,0063**, a **többségi
+  alapvonal alatt**, és a szórás **parányi** — tehát tulajdonság, nem ingadozás. A mai modell
+  a plusz hangtól **rosszabb** lesz, mert sosem tanulta meg használni.
+
+Egy magon mindkettő elmagyarázható lett volna rossz inicializálásként.
+
+## 2. C nyeri a 70 ms-os szintet — a saját specialistáját is megverve
+
+GuitarSet 0,5934 vs A 0,4690; Klangio 0,5828 vs A 0,4879. És **C szórása a legkisebb**
+(±0,0127 / ±0,0385 az A ±0,0603 / ±0,0854-éhez képest). A határidő-augmentáció tehát
+**regularizál**, nem kompromisszum.
+
+A 238 ms-os szinten B és C **döntetlen**: GuitarSet 0,6954 vs 0,6659 a ±0,036-os szóráson
+belül, Klangión C a jobb. C @238 GuitarSeten a kalibráció is pontos: „fel"-nek mond
+**0,19** a valódi 0,19 mellett.
+
+→ **Egy asset megy mindkét szintre** (ADR 0554 D1): egy `.bin`, egy paritás-fixtúra, egy
+`tryLoad`, és a két szint két **hívási idő**, nem két modell.
+
+## 3. A „+0,1429" két változást kevert össze
+
+Az ADR 0552 a nyereséget A @ 70 ms (0,5017) → B @ 238 ms (0,6446) úton számolta — vagyis
+**egyszerre** mozdította a szintet és a tanítást. Ugyanazon a súlykészleten, azon, amit
+szállítanánk:
+
+```
+  GuitarSet:  C @70 ms 0,5934  →  C @238 ms 0,6659   =  +0,0725
+  Klangio:    C @70 ms 0,5828  →  C @238 ms 0,6675   =  +0,0847
+```
+
+**+0,07–0,08, nem +0,14.** A szórás ±0,017–0,020, tehát a nyereség valódi — de a korábbi
+szám nem az volt, aminek látszott.
+
+## 4. És az egy-magos számok MINDKÉT irányban tévedtek
+
+```
+  A @70 ms,  GuitarSet:  0,5017 (egy mag)  →  0,4690 ± 0,0603    optimista volt
+  B @238 ms, GuitarSet:  0,6446 (egy mag)  →  0,6954 ± 0,0362    pesszimista volt
+```
+
+Nem „egy mag optimista" tehát, hanem **az irány sem kiszámítható** — nem lehet fejben
+korrigálni, és nem lehet konzervatív becslésnek nevezni. A repónak **volt** erre konvenciója
+(`honest_eval.STD_SEEDS`), és az előző kör nem használta.
+
+## Ami ebből a sorrendre következik
+
+**Asset előbb, sín utána** (ADR 0554 D3). A mai assettel a „letisztult" hívás a többségi
+alapvonal alatt van, tehát a Dart-sín korai bekötése a **ritmus-pontozást rontaná el** — épp
+azon az úton, ahol a hamis válasz levonás vagy hamis kredit (ADR 0549 D2). Egy sín, aminek a
+mögötte lévő modellje rosszabb, **nem semleges infrastruktúra, hanem regresszió**.

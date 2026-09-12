@@ -725,3 +725,51 @@ split; a shipping model trains on everything and takes its estimate from the CV.
 
 The next BUILD step is unchanged: wiring ADR 0552's two-tier decision (+0.1429 measured, no
 architecture cost).
+
+### One asset serves both direction tiers (E18-R31, ADR 0554)
+
+ADR 0552's "no architecture cost" holds for the INPUT (the shipped 15-frame window already
+reaches 238 ms past the onset; the tensor stays (15, 128)) but not for the WEIGHTS: the two
+tiers were models trained on different truncations, which reads as two assets, two
+`tryLoad`s, two parity fixtures and per-call-site model selection in Dart.
+
+Measured over the repo's `honest_eval.STD_SEEDS = [42, 1, 2]`, three arms x two deadlines x
+two held-out corpora (`ml/experiment_deadline_augmentation.py`), macro-F1 mean +/- sd:
+
+```
+  GuitarSet (baseline 0.4468)        @70 ms              @238 ms
+    A trained @70 ms          0.4690 +/- 0.0603   0.4269 +/- 0.0063   <- BELOW baseline
+    B trained @238 ms         0.5865 +/- 0.0358   0.6954 +/- 0.0362
+    C trained @BOTH           0.5934 +/- 0.0127   0.6659 +/- 0.0172
+
+  Klangio (baseline 0.3836)
+    A trained @70 ms          0.4879 +/- 0.0854   0.5205 +/- 0.0248
+    B trained @238 ms         0.4795 +/- 0.0924   0.6593 +/- 0.0193
+    C trained @BOTH           0.5828 +/- 0.0385   0.6675 +/- 0.0195
+```
+
+**Ship ONE asset, trained on both truncations (arm C).** It WINS the 70 ms tier on both
+corpora — beating the dedicated 70 ms specialist — with the smallest seed spread
+(+/- 0.0127 vs A's +/- 0.0603), and ties the specialist at 238 ms. Deadline augmentation
+regularises rather than compromising. The two tiers become two CALL TIMES, not two models.
+
+**The tiers cannot be "today's model called twice."** Both cross cells collapse, stably
+across seeds: B at 70 ms calls up 0.08 of the time against a true 0.38 on Klangio (up-F1
+0.1912) — that is the ARROW's position; and A at 238 ms scores 0.4269 +/- 0.0063 on
+GuitarSet, below the 0.4468 majority baseline with a tiny spread, so the current head gets
+WORSE with more audio because it never learned to use it.
+
+**Order: ASSET FIRST, WIRING SECOND.** With today's asset a "settled" call sits below the
+majority baseline, so wiring the seam early would regress rhythm SCORING — the path where a
+wrong answer is a deduction or a phantom credit (ADR 0549 D2). A seam whose model is worse is
+not neutral infrastructure.
+
+**ADR 0552's "+0.1429" conflated two changes** (tier AND training: A@70 -> B@238). On the
+weights that would actually ship, the tier gain is +0.0725 (GuitarSet) and +0.0847 (Klangio),
+against a seed spread of +/- 0.017-0.020 — real, but not what it looked like. And its
+single-seed figures erred in BOTH directions: A@70 GuitarSet 0.5017 -> 0.4690 +/- 0.0603
+(optimistic), B@238 0.6446 -> 0.6954 +/- 0.0362 (pessimistic). One seed is a sample whose
+direction is not predictable; `STD_SEEDS` existed for this.
+
+`crnn_frontend` needs NO change: its ring is 1 s and `windowAt(onsetFrame, currentFrame)`
+zero-fills whatever has not arrived, so the settled call is the same call made later.
