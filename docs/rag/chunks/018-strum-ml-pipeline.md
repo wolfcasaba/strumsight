@@ -1699,6 +1699,17 @@ nothing puts it on a list. From now on: a candidate asset ships only if it beats
 the shipped asset on EVERY corpus, measured with one instrument, with each row's bias
 direction stated. Improvement over an ablation baseline is not an acceptance criterion.
 
+> **WITHDRAWN, E18-R44 (ADR 0573 D6, LESSONS L688).** The last sentence stands. The criterion
+> before it is structurally unsatisfiable, and the reason is measurable: `split_by_recording`
+> is RECORDING-disjoint, not player-disjoint, so the shipped asset has no new-player Klangio
+> number and its split cannot produce one (it trained on 22 of guitarist 4's 27 recordings).
+> Every Klangio cell therefore favours the shipped asset and every GuitarSet cell favours a
+> candidate that trained there - no cell can decide the comparison, so the criterion blocks
+> every candidate forever regardless of merit. What replaces it: recipe-vs-recipe under ONE
+> split (`ml/experiment_recipe_ladder.py`, ADR 0575), with the shipped asset as a row carrying
+> its exposure rather than as the judge; and for an actual shipping decision, a THIRD corpus
+> neither model has seen.
+
 **What this says about the rest of the arc.** `ml/weights_live_3c_settled.npz` is what
 `probe_direction_fusion.py`, `probe_settled_tier_value.py`, `probe_gate_window_jitter.py` and
 `probe_gate_cost_frame.py` all load, so ADR 0563's two-tier value (+0.0551 macro above margin
@@ -1885,3 +1896,271 @@ prints which asset and which corpus it measured. Not claimed: the Klangio figure
 windows (delta-corroborated, not level-corroborated); the two rows of the control are on
 DIFFERENT folds by design, each on its own clean one, so they are not to be read against each
 other — that comparison is ADR 0569's.
+
+### The shipped asset has no new-player Klangio number, so ADR 0569's bound and its acceptance criterion were both unavailable (E18-R44, ADR 0573)
+
+ADR 0569 D4 wrote an acceptance criterion with eleven rounds of lesson in it: a candidate
+asset ships when it beats or matches the SHIPPED asset on every corpus, one instrument, the
+fold bias stated per row. D1 reasoned carefully about the DIRECTION of the fold bias. What it
+did not do - and what the repo's own provenance record already contained - was the bias's
+MAGNITUDE and its KIND.
+
+**The split, counted.** `klangio.split_by_recording` holds out 20 % of RECORDINGS, seed 42:
+
+```
+  guitarist   TRAIN recordings   EVAL recordings   TRAIN strums   EVAL strums
+  1                21                  6               3426           643
+  2                23                  5               3431           546
+  4                22                  5               2897           824
+```
+
+All three guitarists sit on BOTH sides. So the shipped asset's "clean held-out eval fold" is
+recording-disjoint and NOT player-disjoint: 0.7950 is a same-player, new-recording number. And
+on fold A (all 3721 of guitarist 4's strums) 78 % of the rows are literally in its training
+set, which is why it scores 0.9490 there. **The shipped asset has no new-player Klangio figure
+and its split cannot produce one.** That is the split's structure, not a measurement.
+
+**The repo had already measured the magnitude, on the same fold.** `ml/model_card.json`, r172,
+leave-one-guitarist-out, live-70 ms - and the guitarist-4 fold's `n_test` is 3721, bit-for-bit
+fold A:
+
+```
+  held-out guitarist   test_acc (2-class direction accuracy)
+  1                      0.6508
+  2                      0.6387
+  4                      0.5289   <- the WORST of the three
+  mean                   0.6061 +/- 0.0548      same-player live-70 ms: ~0.799
+```
+
+This chunk's own r172 section says it in words: *"the worst unseen guitarist is near coin-flip
+on up/down"*, and *"the ~15-point same-player->new-player drop is the real deployment gap"*. So
+the settled split holds out precisely the guitarist the repo measured as hardest, and that
+measurement sat in the model card for eleven rounds unread.
+
+**Measured this round:** `ml/experiment_recipe_ladder.py` arm R0 is the shipped RECIPE
+(Klangio, 70 ms, no regularisation, val_accuracy/40/bs32) transplanted onto the settled split -
+one instrument, one scorer, the same 3721 strums:
+
+```
+  direction macro-F1, COMMON gates 0.439 / 0.650 / 0.850
+  shipped ASSET  (trained on 22/27 of guitarist 4)   0.9481 / 0.9484 / 0.9490
+  R0  shipped RECIPE (guitarist 4 held out)          0.4039 / 0.4132 / 0.4220
+```
+
+Gate-matched, the gap is 0.527 - not a gate artefact.
+
+**But 0.527 is an upper bound, and the control says so.** R0 is not "the shipped asset minus
+the leakage": Klangio has only THREE guitarists, so holding one out removes a third of the
+player diversity - the split is not an independent factor on this corpus. And on the one cell
+that is equally unseen for both models, GuitarSet, R0 is worse too (0.1386 vs 0.3340 at 0.850).
+So R0 is also a weaker run, and the memorisation component cannot be separated from that. What
+pins the level instead is r172's LOGO fold: a different script, a different era, a 2-class
+model, the same 3721 strums, also near coin-flip. The level belongs to the fold and the
+exposure, not to this run.
+
+**Two retractions follow.** ADR 0569 D2's bound ("the real held-out difference is at least
+0.052") treated the shipped asset's fold-B 0.7950 as its honest held-out level; it is a
+same-player level the repo had priced ~15 points above the new-player one, so the bound does
+not hold. And ADR 0569 D4's criterion is structurally unsatisfiable:
+
+```
+  cell                              SHIP           candidate        decidable?
+  Klangio, ANY fold                 same-player    new-player       NO - favours SHIP
+  GuitarSet, Klangio-only candidate never saw it   never saw it     YES
+  GuitarSet, both-corpora candidate never saw it   TRAINED on it    NO - favours candidate
+```
+
+No cell can decide a both-corpora candidate against the shipped asset: every Klangio cell
+favours the shipped asset because its split yields no new-player number, every GuitarSet cell
+favours the candidate because the candidate trained there. A criterion like that blocks every
+candidate forever, regardless of merit. D4's *intent* stands (an improvement over an ablation
+baseline is not an acceptance criterion, L684) - the criterion written in its place was simply
+unmeasurable.
+
+What replaces it: (1) recipe-vs-recipe under ONE split, with the shipped asset as a row in the
+table carrying its exposure rather than as the judge - available today; (2) a THIRD corpus
+neither model has seen, which is the only structural resolution for SHIP-vs-candidate. On the
+HANDOFF that has been a nice-to-have (the user's labelled recording, the Guitar-TECHS
+ingestion); from this round it is a precondition of the shipping decision.
+
+Not claimed: that the shipped asset is bad - its Klangio numbers are same-player numbers, which
+is a statement about the measurement, and rounds 0549-0555 measured it on GuitarSet in situ
+besides. That the 0.527 decomposes. That r172's 0.5289 and R0's 0.4220 are the same quantity -
+they are different metrics (2-class accuracy vs 3-class gated macro-F1) and are not compared;
+r172 corroborates the LEVEL's order of magnitude and the fold's rank, not the value. One seed.
+
+### The settled window's OOD footprint is the DECAY RAMP, not the four dead frames (E18-R44, ADR 0574)
+
+ADR 0572 D3 established that handing the shipped asset an untruncated window is an
+out-of-distribution input, that an OOD input is unpredictable rather than worse (two corpora,
+opposite signs), and declined to explain the mechanism (L681). There is a smaller question that
+IS measurable and had not been asked: **which frames of the tensor carry the damage.** That is
+input geometry, not model behaviour.
+
+**The geometry, from the caches, all 11767 rows.** The window is 15 frames (PRE 3 + POST 12) at
+hop 256. In `live70` the audio is cut at onset + 70 ms, so the tail is the log-mel of silence:
+
+```
+  klangio live70    row std per frame (mean over mels)
+    f0..f9   1.51 .. 2.08      real signal
+    f10      1.736             the cut falls INSIDE this frame
+    f11..f14 0.00153           a CONSTANT (mean -13.81) across all 11767 windows
+  klangio live_full
+    f0..f14  1.655 .. 2.069    every frame carries signal
+```
+
+So 4 of 15 frames - 26.7 % of the tensor - go from dead constant to live signal. That was the
+hypothesis: the damage is there. **It is not.** The difference PROFILE is a ramp, because the
+1024-sample analysis window straddles the cut for several frames:
+
+```
+  |d| per frame  f0 0.12  f1 0.24  f2 0.40  f3 0.59  f4 0.84  f5 1.19  f6 1.73
+                 f7 2.62  f8 4.20  f9 7.38  f10 14.04  f11..f14 ~15.0
+```
+
+Frame 9's mean is already -6.06 in `live70` against +1.32 untruncated - inside the 70 ms
+deadline and already half-silenced.
+
+**Measured** (`ml/probe_settled_window_frames.py`; RESTORE puts the live70 values back from
+frame k on, INJECT takes frames k.. from the untruncated window; swept to k=0, where each edit
+reproduces the opposite baseline exactly - a built-in control that passes in all four blocks):
+
+```
+  shipped asset, gate 0.85        fold A (n=3721)          fold B (n=2013)
+  70 ms                           0.9490                   0.7950
+  untruncated                     0.5712  (-0.3777)        0.5578  (-0.2372)
+  RESTORE f11..14                 0.7826  repairs 56 %     0.6554  repairs 41 %
+  RESTORE f 9..14                 0.8900          84 %     0.7521          82 %
+  RESTORE f 7..14                 0.9339          96 %     0.7828          95 %
+  INJECT  f11..14                 0.7964  repro'd 40 %     0.7372  repro'd 24 %
+  INJECT  f 7..14                 0.5860          96 %     0.6035          81 %
+```
+
+The dead region accounts for only 40-56 % of the collapse on either fold. What accounts for
+~95 % is frames **7..14** - the truncation's whole footprint, ramp included. **The damage is
+localised to 8 of 15 frames, not 4, and is carried mostly by the frames that FADE rather than
+the ones that go flat.** The landmark was not the cause (L689).
+
+**The settled asset is the mirror image in the same frames** - the control that makes the
+shipped number interpretable rather than merely bad: fold A 0.5055 -> 0.6363 untruncated
+(+0.1309), and restoring f7..14 takes it back to 0.6399. The same input region carries the loss
+for the asset trained at one truncation and the gain for the asset trained at both. ADR 0572 D3,
+now local.
+
+**The probe's own limit, stated.** Every edit builds an input neither training distribution
+contains, so single-frame edits are not clean counterfactuals. The sharpest artefact: for the
+SETTLED asset, restoring ONLY frame 14 to the constant is catastrophic (fold A macro 0.3325,
+down-F1 0.1368) while restoring f13..14 is fine (0.6351) - a one-frame cliff at the end of a
+live signal. Not interpreted; it bounds the resolution. Read the 8-frame conclusion, which holds
+on both folds and in both directions, not the per-frame wiggles.
+
+Not claimed: why the model responds to that region as it does - which frames carry the damage is
+geometry, why is behaviour, and that stays unmeasured (L681). Nor the obvious alternative ("give
+it a 70 ms-shaped window taken later, so it stays in distribution"):
+`ml/probe_gate_window_jitter.py` already measured the shipped asset as steeply asymmetric in
+window centring (+15 ms -> 0.802, +30 ms -> 0.454 at gate 0.439), so moving the window is not a
+free substitute for lengthening it. Oracle windows, one corpus (Klangio), no in-situ number. The
+LEVELS in these tables are same-player for the shipped asset (ADR 0573) - the RATIOS are
+within-row and unaffected.
+
+### The recipe ladder: the two recipes differ in SIX ways, and on a matched split the settled recipe wins on BOTH corpora (E18-R44, ADR 0575)
+
+ADR 0569 listed the candidate mechanisms for the settled asset's Klangio regression as "the
+guitarist-disjoint split being harder, the GuitarSet data's dominant effect, the two corpora's
+mic character, or capacity". Reading `train_live_3c.py` against `train_live_3c_settled.py`, that
+list is incomplete - they differ in six ways, and the arc only ever named two:
+
+```
+  1. CORPORA         Klangio only              vs  Klangio + GuitarSet
+  2. TRUNCATIONS     70 ms only                vs  70 ms AND untruncated
+  3. REGULARISATION  none (dropout=0, l2=0)    vs  AUG_REG (dropout .25 / rec .15 / l2 1e-4)
+  4. FIT SCHEDULE    val_accuracy, 40 ep, bs32 vs  val_loss, 60 ep, bs64
+  5. SPLIT           random 20 % of recordings vs  guitarist 4 + GuitarSet player x tune
+  6. VAL PROTOCOL    eval fold IS the early-stop AND gate-calibration fold  vs  group-wise
+                                                   20 % out of TRAIN only
+```
+
+(3) in particular trades in-domain accuracy for generalisation in either direction and was
+never on the list.
+
+**The ladder** (`ml/experiment_recipe_ladder.py`): five arms, each ONE factor from the previous,
+all under the settled split, one instrument, one scorer, one gate rule. Held fixed so they are
+not hidden factors: the split, the val protocol, norm stats and class weights from the fit fold
+only, the class-blind gate rule (ADR 0549's, what ships), the scorer (a suppressed strum is no
+call, not a wrong call), and the eval cells. (5) and (6) cannot be varied here - holding the
+settled split is what makes a clean Klangio held-out fold exist, and reproducing the shipped
+protocol would destroy that fold - so they stay stated, not measured.
+
+```
+  arm  what changed                      Klangio@70   delta      GuitarSet@70   delta
+  R0   the SHIPPED recipe                  0.4354                  0.1623
+  R1   + the fit schedule                  0.4808   +0.0454        0.1506   -0.0117
+  R2   + regularisation                    0.4591   -0.0217        0.2504   +0.0998
+  R3   + GuitarSet                         0.5401   +0.0810        0.5596   +0.3092
+  R4   + the 2nd truncation = SETTLED      0.5405   +0.0004        0.5071   -0.0525
+                                   net:            +0.1051                 +0.3448
+
+  the untruncated tier, which only R4 can legitimately serve (own per-tier gate):
+  Klangio @full    R3 0.4231 [CROSS-TIER]   R4 0.6112
+  GuitarSet @full  R3 0.5674 [CROSS-TIER]   R4 0.5745
+```
+
+**On a matched split the settled recipe beats the shipped recipe on BOTH corpora** - Klangio
++0.1051, GuitarSet +0.3448 - **and the second truncation costs nothing at 70 ms** (+0.0004)
+while buying the 238 ms tier outright (0.4231 -> 0.6112).
+
+**This reverses ADR 0569's conclusion and rules out two of its mechanisms.** "The settled asset
+regresses on the deployment corpus" was produced against the shipped asset's same-player number
+(ADR 0573); on a matched split there is no regression. And "the GuitarSet data's dominant
+effect" is measured FALSE - adding GuitarSet lifts Klangio by +0.0810. "The harder
+guitarist-disjoint split" is true but cancels out, since every arm sits on that split. Mic
+character and capacity stay unmeasured (L681).
+
+**Regularisation is not free, and the trade is now signed:** R1 -> R2 is -0.0217 on Klangio and
++0.0998 on GuitarSet - it pays for cross-corpus transfer with in-domain accuracy, which is
+exactly ADR 0550's diagnosis of the direction defect.
+
+**The noise floor, measured - and it limits what one seed can say.** R4 is the same recipe,
+split and seed (42) that produced the settled ASSET, yet R4 gives Klangio@70 0.5405 where the
+asset's own class-blind report gives 0.4923. The gate does not explain it: sweeping the settled
+asset from its pooled 0.1245 all the way to NO gate buys only +0.030 (0.4923 -> 0.5219 at 70 ms,
+0.6268 -> 0.6568 at full). So most of the 0.048 is run-to-run spread between two scripts at one
+seed (different row order -> different batches under `shuffle=True`). Therefore:
+
+- **robust** (beyond the spread): adding GuitarSet (+0.0810), the net R0 -> R4 (+0.1051 /
+  +0.3448), and buying the untruncated tier (0.4231 -> 0.6112);
+- **not resolvable at one seed**: the fit schedule (+0.0454), regularisation on Klangio
+  (-0.0217), and the second truncation at 70 ms (+0.0004). Next round repeats these over
+  `honest_eval.STD_SEEDS = [42, 1, 2]`.
+
+**No contradiction with ADR 0554, because it measured a different model family.** ADR 0554 D1
+claimed the both-truncation arm BEATS its own 70 ms specialist at 70 ms (GuitarSet 0.5934 vs
+0.4690; Klangio 0.5828 vs 0.4879). My R3 -> R4 is a tie on Klangio and a small loss on
+GuitarSet. But `experiment_deadline_augmentation.py`'s arms are `n_classes=2` - no reject head,
+no gate, plain `argmax`, and its "0.59/0.19" column is `called_up`/`truth_up`, not suppression.
+Different quantity; comparing them would be the L682 error exactly. What this round adds is that
+ADR 0554's central design decision has now been measured on the SHIPPING model family (3 classes,
+reject head, gate), where the 70 ms tier is a TIE rather than a win. The decision stands - the
+238 ms tier comes free - but the argument is weaker: deadline augmentation here does not
+*regularise*, it *costs nothing*.
+
+**A code finding in passing:** `train_live_3c_settled.py` builds the `pool_tier` array, writes a
+comment justifying it (*"the no-strum GATE is a Dart-side scalar ... so it can be calibrated per
+tier for free - and P(no-strum) has no reason to be distributed alike when the model has 70 ms of
+audio versus 238 ms. One asset does not imply one threshold."*), receives it at line 157 and
+never references it again: the class-blind gate is computed over both truncations' val rows
+pooled. Same family as ADR 0568's fixture nobody reads and L685's dark constant - a variable
+computed, justified, and never consumed. Cost bounded small by the sweep above (<= 0.03, and the
+monotone curve's "optimum" is no gate at all, which reopens ADR 0549's phantom trade rather than
+handing over a free win), so: a correctness fix, not a lever.
+
+**What this decides and what it does not.** It decides the RECIPE question. It does NOT decide
+the SHIPPING question - per ADR 0573 D6 no cell can decide the shipped asset against a
+both-corpora candidate, so whether `strum_crnn_live_3c_settled.bin` should replace the shipped
+asset still needs a THIRD corpus neither has seen. `settledTier` stays false; nothing is lit.
+
+Not claimed: one seed (half the step deltas sit under the measured floor); oracle windows, not in
+situ; R0 is not "the shipped asset minus the leakage" (Klangio has three guitarists, so holding
+one out removes a third of the player diversity, and R0 is worse on the clean GuitarSet cell
+too); `full` cells for 70 ms-trained arms are CROSS-TIER, not comparisons; and the GuitarSet cell
+favours R3/R4, so 0.5596 / 0.5071 must not be read against the shipped asset's 0.3340.

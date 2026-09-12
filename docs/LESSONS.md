@@ -28752,3 +28752,157 @@ korábbiakra.
 
 Lásd még [[L681]], [[L682]], [[L684]], ADR 0550, ADR 0553, ADR 0554, ADR 0569, ADR 0571,
 ADR 0572.
+
+## L687 — A „tiszta held-out"-nak MÉRTÉKEGYSÉGE van: a felvétel-diszjunkt nem játékos-diszjunkt, és egy same-player szám bíróként órákat visz el (E18-R44, 2026-09-12)
+
+### 1. Két kör épült egy számra, ami nem az volt, aminek hittem
+
+Az ADR 0569 D1-ben végiggondoltam a fold-torzítás **irányát**, táblázatban, három foldra,
+és a C foldról még egy tévedést is javítottam benne („nincs torzításmentes sejt, és a C NEM
+az"). Jó munka volt — és a **fajtát** mégis elvétette. A szállított asset splitje
+`split_by_recording`: a **felvételek** 20%-át tartja ki.
+
+```
+  gitáros   TRAIN felvétel   EVAL felvétel
+  1              21                6
+  2              23                5
+  4              22                5     <- a 4-es gitáros 27 felvételéből 22 a tanításban
+```
+
+Tehát a „tiszta held-out eval fold" **felvétel**-diszjunkt, de **nem játékos**-diszjunkt.
+A 0,7950 egy **same-player, új-felvétel** szám. És a fold A-ban, ahol a 4-es gitáros összes
+pengetését mértem, a sorok **78%-a literálisan a tanítókészletben** volt — ott a 0,9490
+nagyrészt memorizálás.
+
+Két kör (ADR 0569, ADR 0572) ezekre a számokra mint **bíróra** épült.
+
+### 2. A nagyságot a repó MÁR megmérte, és nem néztem meg
+
+`ml/model_card.json`, r172, leave-one-guitarist-out, **live-70 ms**, a 4-es fold `n_test`
+értéke **3721** — bitre ugyanaz a fold:
+
+```
+  kihagyott gitáros   test_acc      same-player (live70, új felvétel): ~0,799
+  1                   0,6508
+  2                   0,6387
+  4                   0,5289   <- a LEGROSSZABB a három közül
+```
+
+A `docs/rag/chunks/018` saját szavaival: *„a legrosszabb ismeretlen gitáros közel
+pénzfeldobás"*, és *„a ~15 pontos same-player→new-player esés a valódi telepítési rés"*.
+
+A settled split tehát **pont a legnehezebb gitárost** tartja ki — és ezt a tényt a model card
+tizenegy kör óta tartalmazta. A torzítás **irányáról** gondolkodtam, amikor a **nagysága** már
+meg volt mérve és le volt írva.
+
+### 3. A szabály
+
+**Egy kereszt-asset összevetés előtt nem azt kell megkérdezni, hogy „melyik modell látta ezt a
+foldot", hanem azt, hogy „MIBEN diszjunkt a régebbi asset splitje".** Felvétel? Take? Játékos?
+Darab? Korpusz? A „held-out" szó mértékegység nélkül nem jelent semmit, és egy
+felvétel-diszjunkt szám ugyanúgy same-player, mint egy in-sample.
+
+És utána: **a repó saját provenance-artefaktumát (model card, RAG chunk) fel kell lapozni,
+mielőtt a torzítás nagyságát becsüljük.** Az [[L682]] §1 azt írta fel, hogy *provenance
+mechanizmus előtt*. Ez a folytatása: **provenance a TORZÍTÁS-BECSLÉS előtt is** — és a
+provenance nem csak az, amit az artefaktum magáról állít, hanem az is, amit a repó korábban
+megmért róla.
+
+Lásd még [[L682]], [[L684]], [[L688]], ADR 0550, ADR 0569, ADR 0572, ADR 0573.
+
+## L688 — Egy elfogadási kritériumot a SEJTEK dönthetőségére kell ellenőrizni, különben nem kritérium, hanem örök blokk (E18-R44, 2026-09-12)
+
+### 1. A kritérium jó szándékkal született, és egyetlen jelölt sem teljesítheti
+
+Az ADR 0569 D4 ezt írta fel, és igaza volt abban, amit cáfolt (ablációs alapvonalhoz mért
+javulás nem elfogadás — [[L684]]):
+
+> „Egy jelölt asset akkor szállítható, ha **a szállítottat minden korpuszon legyőzi vagy
+> hozza**."
+
+Sorold fel viszont az **összes elérhető sejtet** egy mindkét korpuszon tanító jelölt és a
+szállított asset között:
+
+```
+  sejt                             SHIP           jelölt           tiszta?
+  Klangio, BÁRMELY fold            same-player    új-játékos       NEM — SHIP-nek kedvez
+  GuitarSet, Klangio-only jelölt   nem látta      nem látta        IGEN
+  GuitarSet, mindkét korpuszos     nem látta      TANULTA          NEM — a jelöltnek kedvez
+```
+
+Egyetlen sor sem dönthető. Minden Klangio-sejt a szállítottnak kedvez (mert a splitje nem ad
+új-játékos számot), minden GuitarSet-sejt a jelöltnek (mert a jelölt tanult rajta). A
+kritérium tehát nem szigorú — **mérhetetlen**, és emiatt **minden** jelöltet örökre blokkol,
+függetlenül attól, jó-e.
+
+### 2. Amit egy kritérium megírásakor el kell végezni
+
+**Írd fel a sejt-táblát, mielőtt a kritériumot felírod.** Minden sorra: mit látott az egyik
+modell, mit a másik, és melyik felé torzít. Ha nincs egyetlen dönthető sor sem, a kritérium
+nem szigorú, hanem **üres** — és egy üres kritérium a legdrágább fajta, mert szigorúságnak
+látszik, és a következő köröket olyan artefaktum keresésére küldi, amit nem tud elfogadni.
+
+### 3. Ami a helyére lép
+
+Két dolog, és mindkettő szerkezeti, nem szorgalmi:
+
+1. **Recept-vs-recept EGY splitten** — a szállított asset nem bíró, hanem egy sor a táblában,
+   a kitettségével kiírva. Ez **ma** elérhető (`ml/experiment_recipe_ladder.py`).
+2. **Egy HARMADIK korpusz, amit egyik sem látott.** Ez az egyetlen szerkezeti feloldás a
+   SHIP-vs-jelölt kérdésre. A HANDOFF listáján ez eddig „jó lenne" tételként állt (a
+   felhasználó címkézett felvétele, a Guitar-TECHS ingesztálás); ettől a körtől a szállítási
+   döntés **előfeltétele**.
+
+Lásd még [[L684]], [[L687]], ADR 0569, ADR 0573, ADR 0575.
+
+## L689 — A bemenet legSZEMBETŰNŐBB különbsége nem ott van, ahol a kár: mérd a különbség-profilt, ne a tájékozódási pontot (E18-R44, 2026-09-12)
+
+### 1. A hipotézis kézenfekvő volt, és a rá épített próba megdöntötte
+
+Megmértem, hogy a 70 ms-os ablakban a 15 frame-ből az utolsó **4 halott konstans** (sor-szórás
+**0,0015**, átlag −13,81, mind a 11767 ablakon), a csonkítatlanban pedig mindegyik hordoz
+jelet. Kézenfekvő következtetés: a két-tier OOD-kára ebben a 4 frame-ben van — ott változik a
+bemenet *látványosan*.
+
+Aztán megmértem (`ml/probe_settled_window_frames.py`):
+
+```
+  szállított asset, fold A (n=3721)            javít / reprodukál a kárból
+  RESTORE f11..14 (a halott régió)    0,7826      56 %
+  RESTORE f 7..14                    0,9339      96 %
+  INJECT  f11..14                    0,7964      40 %
+  INJECT  f 7..14                    0,5860      96 %
+```
+
+A halott régió a kár **40–56%-a**. Amit ~95%-ban magyaráz, az a **f7..f14** — mert az 1024
+mintás analízis-ablak **több frame-en át átlóg** a vágáson, és a különbség-profil **rampa**:
+
+```
+  |Δ| frame-enként:  f7 2,62   f8 4,20   f9 7,38   f10 14,04   f11..14 ~15,0
+```
+
+A f9 átlaga a `live70`-ben már −6,06 a csonkítatlan +1,32-vel szemben — **a 70 ms-os
+határidőn belül van, és már félig elhallgattatott.** A kárt tehát túlnyomórészt azok a
+frame-ek hordozzák, amik csak **elhalványulnak**, nem azok, amik **kilapulnak**.
+
+### 2. A szabály
+
+**Egy eloszlás-eltérés lokalizálásához a különbség PROFILJÁT kell megmérni, nem azt a pontot,
+ahol a különbség a legfeltűnőbb.** A konstans régió volt a tájékozódási pont: bináris,
+szemmel látható, könnyen elmondható. A rampa volt a válasz: folytonos, és csak akkor látszik,
+ha frame-enként kiíratod a `|Δ|`-t.
+
+A határidő egy **időpont**, a lábnyoma a tenzorban viszont **sáv** — mert minden időbeli vágást
+az analízis-ablak elmos. Aki a vágási időpontot keresi a tenzorban, rossz felbontáson keres.
+
+### 3. És a próba saját korlátja is mérés volt
+
+Minden ilyen szerkesztés olyan bemenetet épít, amit **egyik** tanító eloszlás sem tartalmaz.
+A settled assetn **csak a f14**-et visszatenni konstansra katasztrofális (macro 0,3325, le-F1
+**0,1368**), a f13..14 visszatétele viszont rendben (0,6351). Ezt **nem értelmezem** — azt
+határolja be, milyen felbontásig olvasható a próba: a 8-frame-es következtetés áll (két
+foldon, két irányban), a frame-enkénti ingadozás nem. *Egy ablációs próbánál a beépített
+kontroll (k=0 az ellenkező alapvonalat adja) és a felbontás-korlát kimondása ugyanannyira a
+mérés része, mint a szám.*
+
+Lásd még [[L681]], [[L686]], ADR 0554, ADR 0570, ADR 0572, ADR 0574.

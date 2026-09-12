@@ -1,7 +1,10 @@
 # ADR 0569 — A settled asset a TELEPÍTÉSI korpuszon visszaesik: az ADR 0567 D3 csere-javaslata visszavonva
 
-- **Státusz:** elfogadva (mérés + egy javaslat **visszavonása**; szállított viselkedés nem
-  változik)
+- **Státusz:** elfogadva **mint mérés**; a **D2 korlátja** és a **D4 elfogadási
+  kritériuma** az **ADR 0573-ban visszavonva** (a szállított asset Klangio-számai
+  *same-player* számok: a splitje felvétel-diszjunkt, nem játékos-diszjunkt, és a 4-es gitáros
+  27 felvételéből 22-t tanult). A D1 fold-táblája, a D2 **számai** és a D5 felsorolása áll.
+  Szállított viselkedés nem változik.
 - **Dátum:** 2026-09-12
 - **Kör:** E18-R43
 - **Kapcsolódó:** ADR 0567 (amelynek D3-át ez **visszavonja**), ADR 0554 (egy asset mindkét
@@ -64,6 +67,15 @@ tanult), és **mégis veszít**. Ebből következik, hogy a valódi held-out kü
 0,052** — a 0,2653 (C) és a 0,4418 (A) pedig azt mutatja, hogy a kitettség elvételével a rés
 **nő**, nem csökken.
 
+> **VISSZAVONVA (ADR 0573 D5).** Ez az érvelés a szállított asset fold-B-beli **0,7950**-ét a
+> becsületes held-out szintjének vette. Nem az: a `split_by_recording` **felvétel**-diszjunkt,
+> de **nem játékos**-diszjunkt — mind a három gitáros mindkét oldalon van —, tehát a 0,7950
+> **same-player, új-felvétel** szám. A repó saját r172 LOGO mérése (`ml/model_card.json`,
+> ugyanez a live-70 ms konfiguráció) a same-player→új-játékos esést **~15 pontra** árazta, és a
+> 4-es gitárost mérte a három közül a **legrosszabbnak** (`test_acc` 0,5289, `n_test`=3721 —
+> bitre a fold A). A „legalább 0,052" korlát tehát **nem áll**. A számok a táblában
+> reprodukálhatók és érvényesek; amit nem bírnak el, az a belőlük olvasott **rangsor**.
+
 Lebontva, közös kapun, hogy a modell és a kapu szétválhasson:
 
 ```
@@ -111,6 +123,23 @@ olvasó**. Most van: `ml/read_ssml.py`.)
 **Elfogadási kritérium innentől:** egy jelölt asset akkor szállítható, ha **a szállítottat
 minden korpuszon legyőzi vagy hozza**, egy műszerrel mérve, és a fold-torzítás iránya
 minden sorra kimondva. Ablációs alapvonalhoz mért javulás **nem** elfogadási kritérium.
+
+> **VISSZAVONVA (ADR 0573 D6, LESSONS L688).** A második mondat **áll**. Az első viszont
+> **szerkezetileg teljesíthetetlen**, mert egyetlen dönthető sejt sincs:
+>
+> ```
+>   sejt                                 SHIP          jelölt         dönthető?
+>   Klangio, BÁRMELY fold                same-player   új-játékos     NEM — SHIP-nek kedvez
+>   GuitarSet, Klangio-only jelölt       nem látta     nem látta      IGEN
+>   GuitarSet, mindkét korpuszos jelölt  nem látta     TANULTA        NEM — a jelöltnek kedvez
+> ```
+>
+> Minden Klangio-sejt a szállítottnak kedvez (mert a splitje nem ad új-játékos számot), minden
+> GuitarSet-sejt a jelöltnek. Egy ilyen kritérium **minden** jelöltet örökre blokkol,
+> függetlenül attól, jó-e. A helyére: **(1)** recept-vs-recept **egy** splitten, ahol a
+> szállított asset nem bíró, hanem egy sor a táblában a kitettségével (ADR 0575 létrája); és
+> **(2)** egy **harmadik korpusz**, amit egyik modell sem látott — ez az egyetlen szerkezeti
+> feloldás a SHIP-vs-jelölt kérdésre.
 
 ### D5 — Amit ez a kör az ARC többi méréséről mond
 

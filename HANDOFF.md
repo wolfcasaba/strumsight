@@ -14915,10 +14915,90 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   ha **két** korpuszon megvan — egyébként alapértelmezésben **transzfer**, és a „hiányzik az
   adat" a legdrágább diagnózis, amit egyetlen korpuszból fel lehet írni; (3) a szabályok
   akkor érnek valamit, ha a következő kör a **saját** munkájára alkalmazza őket.
-  **KÖVETKEZŐ:** (1) **egy asset, ami mindkét levágáson tanul, a szállítottat MINDKÉT
-  korpuszon legyőzi vagy hozza, és amin a margó jelez** — ez a következő tanító kör
-  specifikációja (ADR 0569 + 0570 + 0572), és a `read_ssml.py` + a korpusz-kapcsolós próba
-  ezt mérhetővé teszi; (2) a Klangio **in-situ** söprése, ha a korpusz bekerül a gépre;
+  **E18-R44 — A SZÁLLÍTOTT ASSETNEK NINCS ÚJ-JÁTÉKOS KLANGIO SZÁMA; A RECEPT HAT DOLOGBAN
+  TÉR EL; ÉS ILLESZTETT SPLITTEN A SETTLED RECEPT MINDKÉT KORPUSZON GYŐZ (ADR 0573, 0574,
+  0575).** Ez a kör az **előző kettő következtetését fordítja meg**, és a saját lokalizációs
+  hipotézisemet is megdönti.
+  **(1) A SPLIT, MEGSZÁMOLVA (ADR 0573).** A `klangio.split_by_recording` a **felvételek**
+  20%-át tartja ki: gitáros 1 → 21 TRAIN / 6 EVAL felvétel, gitáros 2 → 23/5, gitáros 4 →
+  **22/5**. **Mind a három gitáros MINDKÉT oldalon van.** Tehát a szállított asset „tiszta
+  held-out eval foldja" **felvétel**-diszjunkt, **nem játékos**-diszjunkt — a **0,7950**
+  same-player szám —, a fold A 3721 pengetésének pedig **78%-a literálisan a tanítókészletében**
+  van, ezért áll ott 0,9490-en. **A szállított assetnek egyetlen új-játékos Klangio száma sincs,
+  és a splitje nem is tud ilyet előállítani.**
+  **(2) ÉS A NAGYSÁGOT A REPÓ MÁR MEGMÉRTE.** `ml/model_card.json`, r172, leave-one-guitarist-out,
+  **live-70 ms**, a 4-es fold `n_test`=**3721** — bitre a fold A: `test_acc` **0,5289**, míg a
+  gitáros 1 → 0,6508 és a gitáros 2 → 0,6387. **A 4-es a három közül a LEGROSSZABB**, és a
+  settled split pont őt tartja ki. A chunk saját szavaival: *„a legrosszabb ismeretlen gitáros
+  közel pénzfeldobás"*. **Tizenegy kör óta a model cardban állt, és nem néztem meg.**
+  **Mérve (ADR 0573 D3):** a szállított **RECEPT** a 4-es gitáros nélkül, ugyanazon a 3721
+  pengetésen, közös kapukon **0,4039 / 0,4132 / 0,4220** a szállított **ASSET** 0,9481 / 0,9484 /
+  **0,9490**-je ellen — kapu-illesztve **0,527** a rés. **DE felső korlát, és ezt a saját
+  kontrollom mondja:** a Klangiónak **három** gitárosa van, egyet kihagyni a játékos-diverzitás
+  harmadát veszi el, és a **GuitarSet-sejten — az egyetlenen, ami mindkettőnek egyformán
+  ismeretlen** — az R0 is gyengébb (0,1386 vs 0,3340). A szintet az r172 LOGO foldja pineli,
+  nem az R0.
+  **(3) AZ ELFOGADÁSI KRITÉRIUM SZERKEZETILEG TELJESÍTHETETLEN VOLT (ADR 0573 D6, L688).**
+  Minden Klangio-sejt a szállítottnak kedvez (mert a splitje nem ad új-játékos számot), minden
+  GuitarSet-sejt a jelöltnek (mert ott tanult) — **nincs dönthető sejt**, tehát a „legyőzni a
+  szállítottat minden korpuszon" **minden** jelöltet örökre blokkol, érdemtől függetlenül. Az
+  ADR 0569 D2 **korlátja** („legalább 0,052") és D4 **kritériuma** **visszavonva**, helyben
+  annotálva; a D4 második mondata (*ablációs alapvonal nem kritérium*) **áll**.
+  **(4) A RECEPT HAT DOLOGBAN TÉR EL, NEM KETTŐBEN (ADR 0575).** korpusz / levágás /
+  **regularizáció** (nincs vs dropout .25+rec .15+l2 1e-4) / **fit-menetrend** (val_accuracy 40
+  bs32 vs val_loss 60 bs64) / **split** / **val-protokoll** (a szállítottnál az eval fold
+  EGYBEN a korai-leállás ÉS a kapu-kalibrálás foldja). Az arc mindig csak az első kettőt nevezte
+  meg.
+  **A LÉTRA (`ml/experiment_recipe_ladder.py`), öt kar, egy faktor/lépés, EGY splitten:**
+  Klangio@70 **R0 0,4354 → R1 0,4808 (+0,0454, menetrend) → R2 0,4591 (−0,0217, regularizáció)
+  → R3 0,5401 (+0,0810, GuitarSet) → R4 0,5405 (+0,0004, 2. levágás)**; GuitarSet@70
+  **0,1623 → 0,1506 → 0,2504 → 0,5596 → 0,5071**. Nettó **+0,1051** / **+0,3448**. És a
+  csonkítatlan tier, amit csak az R4 szolgálhat: Klangio@full **0,4231 [kereszt-tier] → 0,6112**.
+  **Tehát illesztett splitten a settled recept MINDKÉT korpuszon győz, és a második levágás a
+  70 ms-os tieren nem kerül semmibe, miközben a 238 ms-osat megvásárolja.** Ez az ADR 0569
+  következtetését **megfordítja**, és a mechanizmus-listájából a *„GuitarSet-dominancia"*-t
+  **kizárja** (a GuitarSet a Klangiót is emeli).
+  **(5) A ZAJPADLÓ, MÉRVE (ADR 0575 D5).** Az R4 ugyanaz a recept/split/seed, mint a settled
+  **asset**, mégis 0,5405 vs 0,4923. Végigmértem, hogy a kapu magyarázza-e: **nem** — a settled
+  asseten 0,1245-ről a **kapu nélküliig** is csak +0,030 (0,4923 → 0,5219). Tehát ~0,048
+  **futás-közi szórás két script között egy seeden**. Ezért: **megbízható** a GuitarSet-lépés
+  (+0,0810), a nettó (+0,1051/+0,3448) és a full tier megvásárlása; **egy seeden NEM feloldható**
+  a menetrend (+0,0454), a regularizáció (−0,0217) és a 2. levágás 70 ms-os hatása (+0,0004).
+  **(6) AZ ADR 0554-GYEL NINCS ELLENTMONDÁS**, mert az `experiment_deadline_augmentation.py`
+  **`n_classes=2`** — nincs reject fej, **nincs kapu**, sima `argmax`, és a „0,59/0,19" oszlopa
+  `called_up`/`truth_up`, nem elnyomás. Más mennyiség; összevetni őket pont az **L682**-hiba
+  lenne. Amit a kör hozzáad: az ADR 0554 központi döntését most a **szállító** modell-családon
+  (3 osztály, kapu) is megmértük, és ott a 70 ms-os tier **döntetlen**, nem győzelem — a döntés
+  áll, az érv gyengébb.
+  **(7) AZ OOD-LÁBNYOM A RAMPA, NEM A NÉGY HALOTT FRAME (ADR 0574) — a saját hipotézisem
+  megdöntve.** A `live70`-ben a 15 frame-ből az utolsó **4 halott konstans** (sor-szórás
+  **0,0015**, átlag −13,81, mind a 11767 ablakon). Kézenfekvő volt, hogy ott a kár. **Nem ott
+  van:** a `RESTORE f11..14` a kárnak csak **40–56%**-át javítja, a `RESTORE f7..14` viszont
+  **95–96%**-át — mert az 1024 mintás analízis-ablak **átlóg** a vágáson, és a különbség-profil
+  **rampa** (|Δ| f7 2,62 / f8 4,20 / f9 7,38 / f10 14,04). **8 frame a 15-ből, nem 4.** És a
+  settled asset **ugyanazokban** a frame-ekben a tükörképe (0,5055 → 0,6363, a f7..14 visszatétele
+  0,6399-re hozza vissza): ugyanaz a bemeneti régió hordozza a veszteséget az egy levágáson
+  tanult assetnek és a nyereséget a kettőn tanultnak. A próba **k=0 kontrollja** mind a négy
+  blokkban pontosan egyezik; a **felbontás-korlátja** kimondva (a settled asseten csak a f14
+  visszatétele katasztrofális — 0,3325 / le-F1 0,1368 —, ez műtermék, nem értelmezzük).
+  **(8) EGY KÓDLELET:** a `train_live_3c_settled.py` felépíti a `pool_tier` tömböt, **odaírja az
+  indoklást** (*„a kapu tierenként ingyen kalibrálható … egy asset nem jelent egy küszöböt"*),
+  a 157. sorban átveszi, és **soha nem hivatkozik rá** — a `class_blind` kapu a két levágás val
+  sorain **összevontan** számolódik. Az ADR 0568 „fixtúra, amit senki nem olvas" családja.
+  Költsége a söprés szerint **korlátos** (≤0,03), tehát **helyességi** javítás, nem kar.
+  **Új guard:** `ml/test_pipeline.py::test_split_by_recording_is_NOT_player_disjoint` — pineli a
+  diszjunktság **mértékegységét**, és **mindkét irányban ellenőrizve** (a játékos-diszjunkt
+  splitterre elsül). **Gate:** zöld. **Semmi nem kerül felkapcsolásra**, a `settledTier` marad
+  **false**, asset nem cserélve, szállított konstans nem mozdítva.
+  **KÖVETKEZŐ:** (1) **a létra megismétlése `honest_eval.STD_SEEDS = [42, 1, 2]`-vel** — az
+  ADR 0575 D5 zajpadlója szerint a lépés-delták fele egy seeden nem feloldható, és a nettó
+  állítás ettől lesz szórásos; (2) **egy HARMADIK korpusz, amit egyik modell sem látott** — az
+  ADR 0573 D6 szerint ez az **egyetlen** szerkezeti feloldás a „szállított vs jelölt" kérdésre,
+  tehát a **címkézett felvétel** és a **Guitar-TECHS** ingesztálás ettől a körtől nem
+  „jó lenne", hanem a szállítási döntés **előfeltétele**; (3) a `pool_tier` elfogyasztása
+  (tierenkénti `class_blind` kapu) helyességi javításként; (4) az **R5** kar (settled recept
+  regularizáció **nélkül**) — már definiálva a létrában, mérve nincs; (5) a Klangio **in-situ**
+  söprése, ha a korpusz bekerül a gépre;
   (3) ha a Klangio korpusz bekerül a gépre, a Klangio **in-situ** söprés a
   `guitarset_threshold_sweep_test.dart` mintájára; (2) **on-device mérés** (CI/profile) a **gyors**
   tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a
