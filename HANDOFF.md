@@ -14291,6 +14291,39 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   (ugyanazok a játékosok), IDMT-SMT-Guitar (**CC BY-NC-ND**), EGDB / EG-IPT (egy-egy
   játékos), GAPS (licenc-ellentmondás), GIHME (üres repó), Zenodo 6470236 (36 játékos,
   de a **pengetés nem megerősített**). Tanulság: **L670**.
+  **E18-R33 — A METRIKUS CSATORNA (ADR 0557, `ml/probe_direction_metric.py`).** Négy kör
+  mérte az irány-jelet a HANGBAN és falba ért; egyik sem kérdezte meg, van-e **másik
+  csatorna**. Van: az ütemen belüli **hely**. Annotáció-olvasás, **nincs audio, nincs
+  modell**, a jellemzőnek **nincs illesztett paramétere**
+  (`-|távolság a legközelebbi tizenhatod-offbeattől|`):
+  **metrikus AUC 0,9797** vs **akusztikus 0,7484** (70 ms), játékos- ÉS dal-diszjunkt
+  felosztáson. Kontrollok: címke-szivárgás kizárva (seprés-szórás 21,8/23,5 ms, különbség
+  1,7 ms, a tizenhatod 134 ms); fázis-keverés felvételen belül 0,98 → **0,56**; nem
+  sáv-műtermék (a paraméter nélküli folytonos jellemző megismétli); játékosonként
+  0,90 / 1,00 / 0,99. **Időzítési szórás:** ±30 ms → 0,96, ±50 ms → **0,84**, ±80 ms → 0,63
+  — vagyis egy pontatlan tanulón is jobb, mint az akusztikus egy profin.
+  **Az ADR 0551 kötő korlátja megszűnik:** a fázis az onset pillanatában kész, nem 70/238 ms
+  múlva. **A sín már megvan a produkcióban:** `TempoTracker.bpm` + `_placeInBar` ma
+  kiszámolja a fázist és eldobja.
+  **A KÖTŐ SZABÁLY (D4):** a metrikus csatorna **egyedül soha** nem dönti el, mit mondunk a
+  tanulóra — mert az előírt mintából a legerősebb, tehát a **saját megoldókulcs ellen**
+  mérne (a megtiltott hamis tanítás, magabiztosan). Ezért: **nyíl = fúzió**, **pontozás =
+  csak akusztikus + tartózkodás**, a metrikus a tartózkodás lécét mozdíthatja, a hívást
+  **soha nem fordítja át**, és a két csatorna **egyet nem értése** maga a pedagógiai kimenet
+  (ütem UTÁN, ADR 0556 D4).
+  **A kellemetlen fele (D5):** az ütések **96%-a engedelmeskedik az ingának**; a tanító
+  felosztásban **41 sértés 1037-ből (3,95%), ebből 39 rácson kívüli felütés**. Vagyis a
+  korpusz alig tartalmazza azt a hibaosztályt, amiért az app létezik, és **a Guitar-TECHS
+  (9 → 12 játékos) ezt NEM javítja meg** — profik nem követik el. A szükséges adat
+  **tanulók inga-sértő ütése** → a **címkézett felvétel** ezzel „jó lenne"-ből **az egyetlen
+  ismert forrása a döntő tanító adatnak** lett (különösen a `D DU UDU` és a lefojtott take).
+  **NEM állítjuk:** a **fúzió nyereségét nem mértük** (két AUC nem ad összevont számot) →
+  külön kör, a cache újraépítésével onset-idővel. A 0,9797 **profikra** szól, kezdőkön
+  nincs mérés. Tanulság: **L671** (a keretet négy körön át nem teszteltem; egy „kontrollom"
+  affin transzformáció volt, tehát vakon ment át).
+  **A BEKÖTŐ KÖR TERVE EZÉRT MEGVÁLTOZOTT:** az ADR 0556 margó-küszöbe helyett a **fúziós
+  döntési szabályt** kell megmérni — különben olyan kaput betonoznánk be, amit a metrikus
+  csatorna feleslegessé tesz.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

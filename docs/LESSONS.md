@@ -27624,3 +27624,81 @@ eredmény** (ADR 0556 D5).
 megmondja, hogy a döntést nekünk kell megmérnünk.*
 
 Lásd még [[L664]]–[[L669]], ADR 0549, ADR 0555, ADR 0556.
+
+## L671 — Négy körön át a kereten BELÜL optimalizáltam, és a keretet nem teszteltem; a döntő mérés másodpercekbe került és az első körben is elérhető volt (E18-R33, 2026-09-12)
+
+### 1. A hiba nem egy rossz szám volt, hanem egy nem feltett kérdés
+
+Négy kör mérte az irány-jelet: ablak-felbontás, határidő-söprés, reprezentáció, modell-
+kapacitás, adat-összetétel. Mindegyik korrekt volt, mindegyiket kontrolláltam, és a
+végén eljutottam egy valódi következtetésig — „a modell és a jellemzők kimerültek, a rés
+adat" (ADR 0553).
+
+**Mind a négy mérés ugyanazt a csatornát mérte**: a hangot, egyetlen izolált ütésben. Egyik
+sem kérdezte meg, hogy **van-e másik csatorna**. A pengető kéz inga, a lüktetéshez kötve —
+ezt a gitár-pedagógia így tanítja, és **az app maga kirajzolja** (`ss_strum_pendulum.dart`).
+Az ütemen belüli hely tartalék AUC-ja **0,9797**, nulla illesztett paraméterrel, ismeretlen
+játékosokon és ismeretlen dalokon — szemben az akusztikus csatorna **0,7484**-ével.
+
+És a mérés **annotáció-olvasás** volt. A GuitarSet a hexafonikus `note_midi` mellé
+`beat_position` rácsot is ad, **ugyanabban a fájlban**, amit négy körön át minden egyes
+körben beolvastam. Sosem listáztam ki a névtereit.
+
+**A szabály, amit ebből megtartok.** Amikor egy mérés-sorozat plafonra fut, a következő kör
+**ne** a plafon alatti paramétereket finomítsa. Írjam ki, **mit tart fixen a keret** — itt:
+„egy ütés, csak a hangja" —, és kérdezzem meg, hogy **a termékben tényleg fix-e**. Nem volt:
+a `TempoTracker` és a `_placeInBar` a fázist **ma kiszámolja a produkcióban**, és
+irány-jelként **eldobja**. *Egy kimerült keretben a legjobb következő mérés nem a keret
+belsejében van.*
+
+Gyakorlati sarokpont: **mielőtt egy korpuszt negyedszer olvasok, listázzam ki, mit tartalmaz.**
+
+### 2. A túl jó szám kontrollt érdemel, nem örömöt — és az egyik „kontrollom" vakon ment át
+
+0,98-at látni nem eredmény, hanem **riasztás**. Mielőtt bármit rögzítettem, négy dolgot
+kellett kizárni: szivárog-e a címke az ütés saját idején keresztül (a seprés szórása
+21,8/23,5 ms, a különbség 1,7 ms, a tizenhatod 134 ms → kizárva); felvétel-szintű prior-e
+(fázis-keverés felvételen belül: 0,98 → 0,56); sáv-illesztési műtermék-e (a paraméter
+nélküli folytonos jellemző megismétli); egy játékos viszi-e (0,90 / 1,00 / 0,99).
+
+**De az egyik „kontrollom" semmit nem kontrollált.** „A legközelebbi *nyolcadtól* mért
+távolság" pontosan ugyanazt az AUC-t adta (0,9797), és ezt egy pillanatra **független
+megerősítésnek** olvastam. Nem az: a két pontszám **affin transzformációja** egymásnak
+(`d8 = 0,25 − d16`), az AUC pedig monoton transzformációra invariáns. **Matematikailag
+lehetetlen volt, hogy más számot adjon.**
+
+**A szabály.** Egy kontrollról azt kell megmutatni, hogy **tudott volna megbukni**. Ha a
+kontroll pontszáma a fő pontszám monoton függvénye, akkor nem kontroll, hanem ugyanaz a
+mérés kétszer kiírva. *Egy kontroll, ami nem tud nemet mondani, nem mond igent sem.*
+
+### 3. A lelet legértékesebb fele a kellemetlen fele volt, és csak egy további kérdéstől jött
+
+A fejlécnél megállhattam volna. A feltett kérdés ez volt: **ha a hely ennyire megmondja az
+irányt, akkor mennyi ütés SÉRTI meg az ingát?** Mert pont azok az ütések azok, ahol a
+metrikus csatorna **téved**, és ahol az akusztikusnak egyedül kell döntenie — vagyis a
+tanuló hibái.
+
+Válasz: az ütések **96%-a engedelmeskedik**; a tanító felosztásban **41 sértés 1037-ből,
+ebből 39 rácson kívüli felütés**. Az akusztikus csatorna tehát **szinte soha nem látta** azt
+a hibaosztályt, amiért az app létezik — és ez átírja az ADR 0553 adat-diagnózisát:
+**a Guitar-TECHS (9 → 12 játékos) ezt nem javítja meg, mert profik nem követik el ezt a
+hibát.**
+
+*Egy erős lelet után a legtöbbet hozó kérdés nem „mennyire jó", hanem „mi következik
+belőle arra, amit eddig hittem".*
+
+### 4. És amit a siker majdnem elrejtett: a csatorna önmagában hazugságot szállít
+
+A metrikus csatorna az **előírt mintából** a legerősebb. Ha prior-ként eldöntheti az
+irányt, akkor az app a **saját megoldókulcsa ellen** mér: visszaigazolja a leckét, amit a
+tanuló nem játszott. Ez pontosan a megtiltott hamis tanítás, **és annál is rosszabb, mint
+a hiányzó jel** — mert magabiztosan szól.
+
+Ezért a döntés nem „fuzionálj", hanem **„két mérés, soha egybeolvasztva"**: a nyíl fúziót
+kap, a **pontozás csak az akusztikus csatornát**, a metrikus pedig a tartózkodás lécét
+mozdíthatja, de a hívást **soha nem fordítja át** — és a két csatorna **egyet nem értése**
+maga a pedagógiai kimenet (ADR 0557 D4). *Egy erős prior a megoldókulcs felé nem
+pontosság, hanem csalás — a jó kérdés nem az, hogy javítja-e a számot, hanem hogy mit mér
+helyette.*
+
+Lásd még [[L667]], [[L668]], [[L670]], ADR 0551, ADR 0553, ADR 0557.

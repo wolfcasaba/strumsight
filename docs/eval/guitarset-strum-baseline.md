@@ -959,3 +959,115 @@ Amit a keresés **kizárt**:
 | François Leduc | hozzáférés kérésre, egy gitáros |
 | GIHME | a repó **üres placeholder** |
 | Zenodo 6470236 (36 gitáros, EMG+mocap) | CC-BY és a legnagyobb játékos-készlet, de **a pengetés nem megerősített**, nincs hexafonikus csatorna |
+
+---
+
+# A metrikus csatorna: az irányt az ütemen belüli HELY erősebben jelzi, mint a hang (E18-R33)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/probe_direction_metric.py
+```
+
+Annotáció-olvasás — **nincs audio, nincs modell**, és a fejléc-jellemzőnek **nincs illesztett
+paramétere**:
+
+```
+  pontszám = -| a legközelebbi tizenhatod-offbeattől mért távolság |
+```
+
+```
+  csatorna                                          tartalék AUC
+  METRIKUS   (hely az ütemben, 0 paraméter, 0 ms)      0,9797    n=526
+  AKUSZTIKUS (CRNN, 70 ms-os élő határidő)             0,7484    (probe_direction_budget)
+```
+
+Felosztás: **játékos- ÉS dal-diszjunkt** (`guitarset.split_masks` szabálya) — 1037 tanító /
+526 teszt seprés, felütés-arány 0,385 / 0,192. Az AUC-t azért használom, mert
+osztályarány-invariáns: egy konstans jósló mindkét oldalon 0,5.
+
+## A mechanizmus, olvashatóan — `P(fel | fázis)`, 8 sáv, tanító oldal
+
+```
+  fázis 0,000-0,125  n=216  P(fel)=0,0316    <- a nyolcadon: LE
+  fázis 0,125-0,250  n= 63  P(fel)=0,8884
+  fázis 0,250-0,375  n=115  P(fel)=0,9600    <- a tizenhatod-offbeaten: FEL
+  fázis 0,375-0,500  n=124  P(fel)=0,0536
+  fázis 0,500-0,625  n=176  P(fel)=0,0385    <- a nyolcadon: LE
+  fázis 0,625-0,750  n= 82  P(fel)=0,9009
+  fázis 0,750-0,875  n=128  P(fel)=0,9565    <- a tizenhatod-offbeaten: FEL
+  fázis 0,875-1,000  n=133  P(fel)=0,0715
+```
+
+Ez a tankönyvi tizenhatod-pengetés: a kéz folyamatosan ingázik, a lefelé ütés a nyolcadokon
+landol, a felfelé a tizenhatod-offbeateken.
+
+## A kontrollok
+
+| kontroll | eredmény |
+|---|---|
+| **Címke-szivárgás az ütés saját idején** — a lefelé seprés első hangja a basszus, a felfelé seprésé a magas E, `at` mindkettőnél az ELSŐ hang | seprés-szórás **21,8 ms (le) / 23,5 ms (fel)**, a különbség **1,7 ms**, a tizenhatod **134 ms** → ~6× annyi, amit át kellene lépni. **Kizárva** |
+| **Fázis keverése felvételen belül** (tempó, stílus, osztályarány megtartva) | 0,9797 → **0,5604**. A maradék 0,06 a kontroll plafonja: a keverés megtartja a fázis-eloszlást, így egy felvétel-szintű korreláció túléli |
+| **Sáv-illesztési műtermék?** | a paraméter nélküli folytonos jellemző **megismétli** (0,9783 vs 0,9797) — a tábla csak újra felfedezte ugyanazt a fogalmat |
+| **Egy játékos viszi?** | 03 → **0,9044** · 04 → **1,0000** · 05 → **0,9923** |
+| Rock↔Funk átvitel | 0,9888 / 0,9560 — **de ez a STÍLUST méri, nem a felosztást**: mindkettő tizenhatod-alapú |
+
+**Amit egy „kontrollom" nem kontrollált:** „a legközelebbi *nyolcadtól* mért távolság"
+ugyanazt az AUC-t adta, mert a két pontszám **affin transzformációja** egymásnak
+(`d8 = 0,25 − d16`), az AUC pedig monoton transzformációra invariáns — **matematikailag
+nem tudott volna más számot adni**. Nem független megerősítés. (L671 §2.)
+
+## A felosztás-feltevés, és miért nem korpuszból jön
+
+```
+  sávok/ütem    tartalék AUC
+     2 (nyolcad)   0,5426     <- majdnem vakvéletlen
+     4             0,6555     <- a határok AZ onsetekre esnek, elmázolja az osztályokat
+     8             0,9783
+    16             0,9807
+```
+
+A 2 sávos sor a lényeg: egy **nyolcadokat** előíró leckében a GuitarSeten illesztett tábla
+**fordítva** szólna. Az app viszont **tudja** az előírt mintát (`strum_patterns.dart`,
+`D DU UDU`), tehát a leképezés **nem illesztett paraméter, hanem a lecke jelölése**
+(ADR 0557 D3).
+
+## A termék száma: időzítési szórás
+
+A rács elcsúsztatása ugyanaz a relatív eltérés, mint amikor a **tanuló** csúszik el egy
+pontos rácshoz képest:
+
+```
+  ±0 ms 0,9797 · ±10 ms 0,9781 · ±20 ms 0,9804 · ±30 ms 0,9599 · ±50 ms 0,8427 · ±80 ms 0,6285
+```
+
+**±50 ms szórású tanulón is 0,8427** — vagyis a metrikus csatorna egy pontatlan tanulón
+**jobb, mint az akusztikus csatorna egy profin** (0,7484). Őszintén: a GuitarSet játékosai
+alapsávra játszó profik, **kezdőkön ez nincs megmérve** — ez a legközelebbi, amit ez a
+korpusz mondani tud.
+
+## És a kellemetlen fele: a korpusz nem tartalmazza azt a hibaosztályt, amiért az app létezik
+
+```
+  tolerancia          sértő ütés              ebből felütés a rácson KÍVÜL
+  ±0,0625 ütem (31 ms@120)   203 / 3018  6,7%        188
+  ±0,0938 ütem (47 ms@120)   125 / 3018  4,1%        104
+  ±0,1250 ütem (62 ms@120)   101 / 3018  3,3%         69
+
+  TANÍTÓ felosztás:  41 / 1037  (3,95%)  — ebből 39 rácson kívüli felütés
+```
+
+Az ütések **96%-a engedelmeskedik az ingának.** Az akusztikus csatorna tehát szinte soha
+nem látott olyan felütést, ami egy lefelé ütés metrikus helyén szól — és pont ezek azok,
+ahol a metrikus csatorna **téved**, tehát ahol az akusztikusnak **egyedül kell döntenie**.
+
+A 0,31-es felütés-recall (ADR 0555) így nem csak „kevés játékos" (ADR 0553): a korpusz
+felütései **metrikusan sztereotípak**. **A Guitar-TECHS (9 → 12 játékos) ezt nem javítja
+meg** — profik nem követik el ezt a hibát. A szükséges adat **tanulók inga-sértő ütése**.
+
+## Amit NEM állítunk
+
+A **fúzió nyereségét nem mértük meg**: két AUC nem ad összevont számot. A csatornák
+függetlensége szerkezetileg valószínű (az akusztikus ablak onset-relatív, a rácsot nem
+látja), de a közös poszterior tartalék teljesítménye **külön mérés**, ami a cache
+újraépítését kívánja onset-idővel. Amíg az nem fut, a fúzió **indoklással bíró terv, nem
+eredmény**.

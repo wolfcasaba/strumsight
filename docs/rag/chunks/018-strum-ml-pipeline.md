@@ -865,3 +865,71 @@ arXiv 2508.07973 (it IS the GST-MM-2025 paper, not another corpus); IDMT-SMT-Gui
 (CC BY-NC-ND, no derivatives); EGDB and EG-IPT (one player each); GAPS (licence conflict,
 classical solo); the Francois Leduc set (restricted, one player); GIHME (empty placeholder);
 Zenodo 6470236 (36 players, CC-BY, but strumming NOT confirmed and no hexaphonic channels).
+
+### The metric channel: position in the beat predicts direction better than the audio does (E18-R33, ADR 0557)
+
+`ml/probe_direction_metric.py` reads GuitarSet's `beat_position` grid next to the
+hexaphonic note annotation - no audio, no model - and the headline feature has NO
+fitted parameter: `score = -|distance from the nearest sixteenth offbeat|`.
+
+```
+  channel                                        held-out AUC
+  METRIC    (position in the beat, 0 params, 0 ms)   0.9797   n=526
+  ACOUSTIC  (CRNN at the 70 ms live deadline)        0.7484   (probe_direction_budget)
+```
+
+Player- AND tune-disjoint split. `P(up | phase)` is legible: ~0.03-0.07 on the eighths
+(phase .0 and .5), ~0.89-0.96 on the sixteenth offbeats (.25 and .75) - textbook
+sixteenth-note strumming, the hand a continuous pendulum.
+
+**Controls.** Label leak through the sweep's own time is ruled out: sweep spread is
+21.8 ms (down) / 23.5 ms (up), differing by 1.7 ms, against a 134 ms sixteenth (~6x).
+Shuffling phase WITHIN each test take (tempo, style and class balance preserved) drops
+0.9797 -> 0.5604 - the residual 0.06 is the control's own ceiling, since shuffling keeps
+each take's phase distribution. Not a binning artefact: the parameter-free continuous
+feature reproduces the 8-bin table (0.9783 vs 0.9797). Per unseen player 0.9044 / 1.0000
+/ 0.9923. Rock<->Funk transfer (0.9888 / 0.9560) measures STYLE, not subdivision - both
+GuitarSet styles are sixteenth-based. **One "control" controlled nothing:** distance from
+the nearest EIGHTH scored identically because it is an affine transform of the same score
+(`d8 = 0.25 - d16`) and AUC is monotone-invariant (LESSONS L671 section 2).
+
+**The subdivision is pattern-specific, so the map comes from the LESSON, not a corpus.**
+A 2-bin (eighth-note) table scores 0.5426, near chance - in a lesson prescribing eighths
+the GuitarSet-fitted table would read BACKWARDS. The app knows its prescribed pattern
+(`strum_patterns.dart`, `D DU UDU`), so the map is notation, not a fitted parameter.
+
+**Timing scatter, the product number** (displacing the grid is the same relative
+displacement as the learner playing off a perfect grid): +-0 ms 0.9797, +-20 ms 0.9804,
++-30 ms 0.9599, +-50 ms 0.8427, +-80 ms 0.6285. So the metric channel on a SLOPPY learner
+still beats the acoustic channel on a professional. GuitarSet's players are professionals
+on a backing track; beginners are NOT measured.
+
+**The binding rule (ADR 0557 D4): the metric channel NEVER decides alone what the learner
+is told they played.** It is strongest from the PRESCRIBED pattern, so letting it settle
+direction would grade the learner against the answer key and confirm a pattern they did
+not play - the forbidden false teaching, worse than a missing signal because it is
+confident. Therefore: the ARROW fuses both channels (low stakes, latency-critical);
+SCORING uses the acoustic channel only, with abstention; the metric channel may raise or
+lower the abstention bar but never flips the call; and channel DISAGREEMENT under a
+confident acoustic call is itself the pedagogical output ("your strumming hand left the
+pendulum here"), reported after the bar per ADR 0556 D4.
+
+**ADR 0551's binding constraint is dissolved, not managed.** The metric channel has NO
+deadline - phase is known at the onset instant, not 70 or 238 ms later.
+
+**The rail already exists in production:** `TempoTracker.bpm` + `_placeInBar` compute the
+phase today and throw it away as a direction cue. Wiring means refining that grid from
+eighths to sixteenths and keeping the phase continuous.
+
+**And the unwelcome half (ADR 0557 D5): the corpus barely contains the error class the app
+exists to detect.** 96 % of strokes obey the pendulum; the TRAIN split holds 41 violations
+in 1037 sweeps (3.95 %), of which 39 are upstrokes played off the grid. Those are exactly
+the strokes where the metric channel is WRONG and the acoustic channel must decide alone.
+So upstroke recall 0.31 is not only "too few players" (ADR 0553) - the corpus's upstrokes
+are METRICALLY STEREOTYPED, and **Guitar-TECHS (9 -> 12 players) cannot fix it, because
+professionals do not make this mistake.** The data needed is LEARNERS breaking the
+pendulum, and the only known source is our own labelled recording.
+
+**Not claimed:** the fusion gain is UNMEASURED. Two AUCs do not combine into one number;
+the joint posterior's held-out performance is a separate round needing the cache rebuilt
+with onset times. Until it runs, the fusion is a justified plan, not a result.
