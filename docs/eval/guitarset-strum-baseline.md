@@ -423,3 +423,113 @@ AUC 0,7507. Még így is **messze** a szállított 0,1905 fel-F1 felett.
    egy skaláron.**
 6. **Új megkötés a pontozásra:** az irány-fejet **szigorúan onset utáni ablakon** kell
    értékelni, különben a szám részben váltakozás-tipp.
+
+---
+
+# JAVÍTÁS: a fenti 0,7723 ABLAK-IGAZÍTÁSI hibából jött — és a valódi korlát a 70 ms (E18-R28)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/probe_direction_budget.py
+GUITARSET_DIR=/path/to/guitarset python ml/experiment_cross_corpus.py
+```
+
+## Mit rontottam el
+
+A fenti szakasz azt állította, hogy egy lineáris olvasó **a modell saját bemenetéből**
+macro **0,7723**-at ér el. **Nem a modell bemenetéből.** A
+`probe_direction_headroom.centred_starts` minden ablakot a frame-re **centrál**:
+
+```
+start = onset − PRE_FRAMES·HOP − N_FFT//2          →  onset − 94 ms
+```
+
+a szállított modellt tápláló `experiment_deadline.window_truncated` viszont a frame-nél
+**kezdi**, és a határidő utáni farkat kinullázza:
+
+```
+start = (center − PRE_FRAMES)·HOP                 →  onset − 30 ms
+seg[onset + 70 ms :] = 0
+```
+
+**64 ms extra felvezetés, és a 70 ms utáni hang.** És a hiba pont ott fájt a legjobban,
+ahol a legkevésbé kellett volna: **ugyanez a szakasz** mérte ki, hogy a szigorúan onset
+**előtti** hang AUC **0,7128**-cal jelzi az irányt a comping váltakozásából, és mondta ki,
+hogy ez **tipp, nem mérés**, amit nálunk nem szabad beszámítani. A főszámom tehát azzal a
+jellel pontozott, amit a saját szomszédos döntésem megtiltott.
+
+Ugyanazok a címkék, ugyanaz az osztás, a **modell valódi** igazításán:
+
+| | le | fel | macro | AUC |
+|---|---|---|---|---|
+| szállított log-mel 128, 70 ms levágás — **a CRNN bemenete** | 0,7857 | 0,3913 | **0,5885** | 0,6523 |
+| 16 geometriai sáv, 70 ms levágás | 0,8817 | 0,3457 | 0,6137 | 0,7484 |
+| betanított CRNN (Klangio+GuitarSet), 70 ms | 0,5835 | 0,4199 | **0,5017** | — |
+| *~~próba-igazítás, levágás nélkül~~* | *~~0,9152~~* | *~~0,6294~~* | *~~0,7723~~* | *~~0,8928~~* |
+
+A rés tehát **0,087**, nem 0,39. *A CRNN nem a domináns defekt* — a „nem nyeri ki, ami a
+bemenetében van" állítás ennyiben túlzó volt.
+
+## A valódi korlát: a 70 ms-os élő határidő
+
+Ugyanaz a reprezentáció, ugyanaz a geometria, csak az onset után megtartott hang hossza
+mozog. Két frame-szám, hogy a frame-**darabszám** ne legyen összekeverhető a hang
+**hosszával**:
+
+```
+  frame  megtartott hang        le      fel    macro     AUC
+    15    40 ms              0,8746  0,3584  0,6165  0,7479
+    15    70 ms (SZÁLLÍTOTT) 0,8817  0,3457  0,6137  0,7484
+    15   100 ms              0,8894  0,3506  0,6200  0,7501
+    15   150 ms              0,8911  0,3356  0,6133  0,7826
+    15   250 ms              0,9186  0,5466  0,7326  0,8369
+    15   minden (238 ms)     0,9186  0,5466  0,7326  0,8369
+    28    70 ms              0,8817  0,3457  0,6137  0,7485
+    28   250 ms              0,9142  0,5217  0,7179  0,8279
+    28   minden (368 ms)     0,9129  0,5185  0,7157  0,8228
+```
+
+**150 és 250 ms között ugrás: +0,12 macro, és a fel-F1 megduplázódik (0,3356 → 0,5466).**
+Több **frame** nem hoz semmit (28 frame rosszabb, mint 15); több **hang** hoz.
+
+Vagyis **az irány nem attack-tranziens jellemző, hanem a lecsengés jellemzője**: melyik
+húrok zengenek tovább, és a pengető útja hogyan formálja őket. Ez utólag megmagyarázza
+azt is, amit a korábbi szakasz mért, de nem értett: a nagy időfelbontás **azért** rosszabb
+(nincs sorrend-jel, amit felbontani kéne), és a 128 ms-os ablak **azért** nem volt baj.
+
+A termékre nézve ebből az következik, hogy a 70 ms-ot **nem kell mindenhol** fizetni: az
+élő **nyílnak** kell azonnal megjelennie, a **ritmus-pontozásnak** nincs latencia-igénye.
+A javítás alakja ezért **kétszintű irány-döntés** — ideiglenes válasz 70 ms-nál a nyílhoz,
+letisztult ~250 ms-nál a pontozáshoz (ADR 0551 D4).
+
+## Ami VÁLTOZATLANUL áll: a korpusz-diverzitás valódi emelő
+
+Az igazítási hiba ezt **nem érinti** — az `ml/experiment_cross_corpus.py` végig a
+szállított `window_truncated` geometriát használja. A szállított architektúra, három kar,
+mindegyik mindkét tartalék korpuszon:
+
+| kar | GuitarSet macro | Klangio macro | „fel"-nek mond / valóság |
+|---|---|---|---|
+| A csak Klangio | 0,3552 | 0,4080 | 0,76/0,19 · 0,73/0,38 |
+| **B Klangio + GuitarSet** | **0,5017** | **0,5979** | 0,64/0,19 · 0,58/0,38 |
+| C csak GuitarSet | 0,5068 | 0,3832 | 0,06/0,19 · **0,00**/0,38 |
+
+**B mindkét korpuszon javít**, az *eredeti* doménben is (0,4080 → 0,5979). Hat új játékos
+a három mellé valódi nyereség, és ezzel a GuitarSet levezetett címkéi már nem csak
+lineáris illesztéssel, hanem a szállított architektúrával is **taníthatónak** bizonyultak.
+
+**C egy csapda, amit a kontroll-kar kapott el.** A macro-ja (0,5068) *megveri* B-t — de a
+Klangión **0,00**-t mond felütésnek: összeomlott a „mindig lefelé" válaszra, és a macro-ja
+csak azért magas, mert a GuitarSet-teszt 81% lefelé. **Macro-F1 egyedül a rosszabb modellt
+hozta volna ki győztesnek.** Ezért: minden irány-eredmény mellé **ki kell írni a jósolt
+osztály-arányt a valódi mellé**. Ugyanaz a prior-illesztés, mint az L664-ben, új helyen —
+és ezúttal egy olyan helyen, ahol a győztes kiválasztását rontotta volna el.
+
+## Két hipotézis, ami megbukott
+
+- **Kapacitás.** „364 ezer paraméter 106 effektív csoportra (82 Klangio-felvétel + 24
+  GuitarSet-take), tehát túlilleszkedés." Mérve: a 10 ezer paraméteres és a 4 ezer
+  paraméteres változat **összeomlott** — mindent „fel"-nek mond, le-F1 **0,0000**. A
+  zsugorítás nem javít, hanem megszünteti.
+- **Hangerő-invariancia.** „Egy erős lefelé ütés hangosabb, tehát globális normalizálás
+  mellett a modell a hangerőre ülhet." Mérve: az ablakonkénti energia-normalizálás a
+  CRNN-nek **rontott** (0,5017 → 0,4065) és a lineáris olvasónak is (0,5885 → 0,5763).

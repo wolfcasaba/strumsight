@@ -1,5 +1,23 @@
 """E18-R27 - how much down/up information is in the input the LIVE model ALREADY gets?
 
+## CORRECTED BY E18-R28 (ADR 0551) - this file's headline number is NOT the model's input
+
+`centred_starts` below CENTRES each analysis window on its frame
+(`onset - PRE_FRAMES*HOP - N_FFT//2`, i.e. onset-94 ms) and applies NO live-deadline
+truncation. The shipped path (`experiment_deadline.window_truncated`) STARTS each window
+at its frame (onset-30 ms) and zeroes everything past onset+70 ms. So this file hands the
+classifier 64 ms of extra lead-in plus the audio past the deadline -- and section 3 below
+measures that lead-in ALONE predicts direction at AUC 0.7128 by alternation, which the
+same round's ADR said must not be counted.
+
+    this file's headline, probe alignment, no truncation   macro 0.7723
+    the same labels at the MODEL's alignment + 70 ms cut   macro 0.5885
+
+Use `ml/probe_direction_budget.py` for numbers about the shipped input. This file is kept
+as the record of how the error was found, and because sections 2 and 3 -- the controls and
+the pre/post separation -- are unaffected by the alignment and are what caught it.
+
+
 The shipped 3-class live CRNN scores direction macro-F1 0.3876 (up-F1 0.1905) on
 GuitarSet (`docs/eval/guitarset-strum-baseline.md`). ADR 0549 raised the no-strum gate
 and that helped; the round after it proved moving the decision boundary does NOT help -
@@ -54,12 +72,6 @@ import sys
 import wave
 
 import numpy as np
-
-try:
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import f1_score, roc_auc_score
-except ImportError:  # pragma: no cover - dev tool
-    sys.exit("needs scikit-learn: pip install scikit-learn")
 
 # --- ground truth, mirroring guitarset_direction_boundary_test.dart ------------------
 LINK_MS = 45.0
@@ -237,6 +249,13 @@ def extract(root):
 
 # --------------------------------------------------------------------------- scoring
 def score(X, y, train, test, shuffle_seed=None):
+    # Imported here, not at module scope: `ml/guitarset.py` imports this module only for
+    # the LABEL derivation, and a training-corpus loader must not need scikit-learn.
+    try:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.metrics import f1_score, roc_auc_score
+    except ImportError:  # pragma: no cover - dev tool
+        sys.exit("needs scikit-learn: pip install scikit-learn")
     y_train = y[train]
     if shuffle_seed is not None:
         y_train = np.random.default_rng(shuffle_seed).permutation(y_train)
@@ -295,6 +314,8 @@ def main():
         print(f"  note count {count}: {(y[test][mask] == 0).sum():4d} down / "
               f"{(y[test][mask] == 1).sum():4d} up, "
               f"accuracy {(predicted[mask] == y[test][mask]).mean():.4f}")
+    from sklearn.metrics import f1_score  # lazy, see score()
+
     balanced = [c for c in set(n_strings[test])
                 if (y[test][n_strings[test] == c] == 0).sum() >= 20
                 and (y[test][n_strings[test] == c] == 1).sum() >= 20]

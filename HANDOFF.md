@@ -14173,16 +14173,33 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   [arXiv 2508.07973](https://arxiv.org/html/2508.07973) saját **publikus**
   (Apache-2.0) adatkészlete — 82 felvétel, **11767 címkézett ütés**, 38%
   felütés, **telefon-mikrofonos** felvétel. A valódi ok **átvitel**: egy sima
-  logisztikus regresszió a modell **saját bemenetéből** macro **0,7723** /
-  fel-F1 **0,6294** / AUC **0,8928**-at ér el játékos- ÉS darab-diszjunkt
-  GuitarSet-osztáson (`ml/probe_direction_headroom.py`) — vagyis az információ
-  ott van, a CRNN nem nyeri ki. A korpusz-deficit nevesítve:
+  logisztikus regresszió a modell saját bemenetéből macro **0,5885**-ot ér el
+  játékos- ÉS darab-diszjunkt GuitarSet-osztáson
+  (`ml/probe_direction_budget.py`), a betanított CRNN pedig **0,5017**-et — a rés
+  tehát **0,087**, nem a korábban közölt 0,39. *(Az E18-R27 `0,7723`-as száma
+  **ablak-igazítási hibából** jött: a próba ablakai 64 ms-mal korábban
+  kezdődtek és nem volt 70 ms-os levágás, így a tiltott onset-előtti
+  váltakozás-tippel is pontozott — **javítva, ADR 0551 D1**.)* **A kötő korlát
+  mérve a 70 ms-os élő határidő:** 70 ms-on a padló 0,6137, levágás nélkül
+  (238 ms) **0,7326**, és a fel-F1 0,3457 → **0,5466** — az irány a
+  **lecsengésben** van, nem az attackban (ADR 0551 D3). A javítás alakja ezért
+  **kétszintű döntés**: ideiglenes válasz 70 ms-nál a nyílhoz, letisztult
+  ~250 ms-nál a pontozáshoz, aminek nincs latencia-igénye (ADR 0551 D4). A
+  korpusz-deficit nevesítve:
   `guitarist_of(rid) = str(rid)[0]`, a blokkok `1xxx/2xxx/4xxx` → **három
   gitáros**, egy teremben, egy gitáron, egy mikrofonnal; a
   leave-one-guitarist-out szám ezt nem tudja megmutatni. **Előfeltétel a
   javításhoz:** tanítás a Klangio + GuitarSet korpuszon EGYÜTT, és a becsületes
-  szám a **korpuszközi** kiértékelés (egyiken tanulva a másikon mérni) — külön
-  kör, a GuitarSet levezetett címkéi tanításra már minősítve (ADR 0550 D2).
+  szám a **korpuszközi** kiértékelés (egyiken tanulva a másikon mérni).
+  **Megmérve (E18-R28, `ml/experiment_cross_corpus.py`):** a GuitarSet
+  hozzáadása **mindkét** korpuszon javít — GuitarSet macro 0,3552 → **0,5017**,
+  és az *eredeti* Klangio-doménben 0,4080 → **0,5979**. A „csak GuitarSet"
+  kontroll-kar viszont összeomlott a „mindig lefelé" válaszra (a Klangión
+  **0,00**-t mond felütésnek), és a macro-ja mégis megverte a győztest —
+  **macro-F1 egyedül a rosszabb modellt hozta volna ki**, ezért minden
+  irány-eredmény mellé ki kell írni a jósolt osztály-arányt a valódi mellé
+  (ADR 0551 D2). A kapacitás-csökkentés és az ablakonkénti normalizálás mérve
+  **nem** emelő (ADR 0551 D5).
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

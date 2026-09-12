@@ -508,3 +508,64 @@ AUC 0.8928 while a shuffled-label control over 7 seeds sits at 0.41–0.59.
    geometry. On a microphone, direction reads off spectral balance rather than the sweep's
    string ordering — even though the sweep's median span is 22.2 ms and 40.7 % of sweeps
    fall inside two 10 ms frames.
+
+### CORRECTION and the real constraint (E18-R28, ADR 0551)
+
+The figure above — "macro 0.7723, up-F1 0.6294 on the model's OWN input" — is **wrong**,
+and the error is instructive. `probe_direction_headroom.centred_starts` CENTRES each
+analysis window on its frame (`onset - PRE_FRAMES*HOP - N_FFT//2`, i.e. onset−94 ms) and
+applies no truncation; the shipped `experiment_deadline.window_truncated` STARTS each
+window at its frame (onset−30 ms) and zeroes everything past onset+70 ms. The probe was
+handed 64 ms of extra lead-in plus the post-deadline audio — and lead-in ALONE predicts
+direction at AUC 0.7128 by alternation, the very cue the same round ruled inadmissible.
+Parameters matched; window POSITION did not. **Measure on the array production eats**
+(`guitarset_live70.npz`), not on a re-derivation with the same parameters.
+
+At the model's real alignment and 70 ms cut, same labels, player- AND tune-disjoint:
+
+```
+  shipped log-mel 128, 70 ms cut  <- the CRNN's input   down 0.7857  up 0.3913  macro 0.5885
+  16 geometric bands, 70 ms cut                         down 0.8817  up 0.3457  macro 0.6137
+  trained CRNN (Klangio+GuitarSet), 70 ms cut           down 0.5835  up 0.4199  macro 0.5017
+```
+
+So the CRNN sits 0.087 below the linear floor of its own input, not 0.39. It is not the
+dominant defect.
+
+**The binding constraint is the 70 ms live deadline** (`ml/probe_direction_budget.py`):
+
+```
+  audio kept after onset    40 ms   70 ms  100 ms  150 ms  250 ms
+  macro                    0.6165  0.6137  0.6200  0.6133  0.7326
+  up-F1                    0.3584  0.3457  0.3506  0.3356  0.5466
+```
+
+Between 150 ms and 250 ms macro gains 0.12 and up-F1 nearly doubles; adding FRAMES without
+audio buys nothing (28 frames scores below 15). **Direction on a microphone is a DECAY
+feature, not an attack transient** — which strings keep ringing and how the pick's travel
+shapes them. That also explains, after the fact, why higher time resolution measured worse
+and why the 128 ms analysis window was never the problem.
+
+Product consequence (ADR 0551 D4): the 70 ms budget exists for the live ARROW. Rhythm
+SCORING has no latency requirement and is where a wrong answer actually costs the learner
+(ADR 0549 D2). The fix is a two-tier decision — provisional at 70 ms for the arrow,
+settled at ~250 ms for scoring — on the existing `StrumDirectionClassifier` /
+`StrumAnalyzer` seam.
+
+**Corpus diversity stands** and is unaffected by the alignment error
+(`ml/experiment_cross_corpus.py` uses `window_truncated` throughout). Shipped
+architecture, three arms, each scored on both held-out corpora:
+
+```
+  arm                     GuitarSet macro   Klangio macro   called-up / truth
+  A Klangio only               0.3552          0.4080        0.76/0.19 · 0.73/0.38
+  B Klangio + GuitarSet        0.5017          0.5979        0.64/0.19 · 0.58/0.38
+  C GuitarSet only             0.5068          0.3832        0.06/0.19 · 0.00/0.38
+```
+
+B improves BOTH corpora, including the original domain. C's macro BEATS B while calling
+nothing up on Klangio — it collapsed onto the majority class of an 81 %-down test set, so
+**macro-F1 alone would have selected the worse model**. Always print the predicted class
+rate beside the true one. Two hypotheses died here as well: shrinking the model (10k and
+4k parameters) collapses it to one class, and per-window energy normalisation hurts both
+the CRNN (0.5017 → 0.4065) and the linear reader (0.5885 → 0.5763).

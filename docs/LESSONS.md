@@ -27283,3 +27283,66 @@ Lásd még [[L662]], [[L663]], [[L664]] (a mérőeszköz-hibák sorozata), ADR 0
 korpuszra illesztett kapu), ADR 0550 (a diagnózis áthelyezése).
 Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
 eszköz: `ml/probe_direction_headroom.py`.
+
+## L666 — A mérőeszköz a PRODUKCIÓ ablakát nézze, ne csak a paramétereit — és a saját szabályom fogta meg, egy körrel később (E18-R28, 2026-09-12)
+
+**A hiba.** Az E18-R27-ben azt állítottam, hogy egy lineáris olvasó **a modell saját
+bemenetéből** macro **0,7723**-at ér el, szemben a CRNN 0,3876-jával, és ebből azt
+következtettem, hogy „az információ ott van, a modell nem nyeri ki". Ezt ADR-be,
+mérés-dokumentumba, RAG chunkba és a HANDOFF blokkoló-listájába is beírtam.
+
+Ellenőriztem, hogy a **paraméterek** egyezzenek: N_FFT 2048, HOP 160, 15 frame, 16 kHz.
+Egyeztek. **Az ablak POZÍCIÓJÁT nem ellenőriztem:**
+
+```
+az én próbám:   start = onset − PRE·HOP − N_FFT//2   →  onset − 94 ms,  nincs levágás
+a produkció:    start = (center − PRE)·HOP           →  onset − 30 ms,  seg[onset+70ms:]=0
+```
+
+**64 ms extra felvezetés, és a 70 ms utáni hang.** A valódi padló 0,5885, nem 0,7723 — a
+CRNN 0,5017-je tehát **0,087**-tel van alatta, nem 0,39-cel.
+
+**Miért ez a legrosszabb fajta igazítási hiba.** Nem egy véletlen 64 ms. Az **ugyanaz a
+kör** mérte ki a D3-ban, hogy a szigorúan onset **előtti** hang AUC **0,7128**-cal jelzi
+az irányt a comping váltakozásából, és mondta ki, hogy ez **tipp, nem mérés**, amit a mi
+nem-váltakozó mintáinkon nem szabad beszámítani. A főszámom **pont azzal a jellel
+pontozott, amit a szomszédos döntésem megtiltott.** Két számot írtam le ugyanabban a
+dokumentumban, amelyek egymást cáfolták, és nem vettem észre.
+
+**A szabály.** „Ugyanaz a geometria" nem paraméter-egyezés. A mérőeszköznek a produkció
+**ablakát** kell kivágnia — ugyanaz a **kezdő minta**, ugyanaz a **levágás** —, és ezt
+nem szemre kell egyeztetni, hanem **a produkció saját függvényével** (itt:
+`window_truncated`) kell előállítani, vagy egy fixtúrán egyeztetni vele. Ez ugyanaz a
+család, mint az [[L662]] (a konfiguráció tért el) és az [[L663]] (az életciklus tért el);
+itt az **ablak pozíciója** tért el. Mindhárom ugyanazt az alakot veszi fel: *a mérés
+egy szomszédos rendszert mér, és a szám hihető.*
+
+**Ami megfogta.** Nem újraolvasás, hanem az, hogy **a következő kör a produkció valódi
+tömbjén mért** — azon a `guitarset_live70.npz`-n, amin a CRNN tanul. A szám ott rögtön
+0,5885 lett, és a 0,7723-at nem lehetett hova tenni. *Ha mérni akarod, amit a modell lát,
+vedd el tőle azt a tömböt, amit megeszik.*
+
+És az, hogy a D3-as szabály **ki volt írva**. Ha nem lett volna kimondva, hogy az
+onset-előtti hang tipp, a 0,7723-nak nem lett volna mihez ütköznie, és a kör azzal zárult
+volna, hogy „a CRNN rossz" — a 70 ms-os határidőt, ami a valódi korlát, **meg sem
+kerestem volna**. *Egy szabály, amit a mérésed ellen is alkalmazsz, többet ér, mint egy
+szabály, amit csak a termékre.*
+
+**A lelet, amit a javítás hozott.** A helyes igazításon kiderült, hogy 150 és 250 ms
+között **+0,12 macro** ugrás van, és a fel-F1 megduplázódik (0,3356 → 0,5466). Az irány a
+mikrofonon tehát **a lecsengés** jellemzője, nem attack-tranziens — és ezért a kötő korlát
+a **70 ms-os élő határidő**, nem a korpusz és nem a modell (ADR 0551). A hibás szám
+javítása **egy jobb kérdést** adott, nem csak egy kisebb számot.
+
+**Mellékág, ami önmagában is szabály.** A korpusz-kísérlet kontroll-karja („csak
+GuitarSet") macro-F1-ben **megverte a győztest** (0,5068 vs 0,5017), miközben a Klangión
+**0,00**-t mondott felütésnek: összeomlott a többségi osztályra egy 81%-ban lefelé
+teszten. Macro-F1 egyedül **a rosszabb modellt hozta volna ki győztesnek.** Ezért minden
+irány-eredmény mellé ki kell írni a **jósolt osztály-arányt a valódi mellé** — ugyanaz a
+prior-csapda, mint az [[L664]], de ott csak egy küszöböt rontott volna el, itt a
+**modellválasztást**.
+
+Lásd még ADR 0550 (a felülírt főszám), ADR 0551 (a javítás és a határidő-lelet).
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
+eszközök: `ml/probe_direction_budget.py`, `ml/experiment_cross_corpus.py`,
+`ml/guitarset.py`.
