@@ -14421,10 +14421,41 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   domain-eseménye **más osztály**). **10/10 zöld, kapu zöld, szállított viselkedés
   változatlan.** Tanulság: **L674** (a zöld teszt azt bizonyítja, hogy MŰKÖDIK, nem azt, hogy
   FUTNIA kell).
-  **KÖVETKEZŐ, ebben a sorrendben:** (1) a `TempoTracker` rácsa + a bar-horgony átadása a
-  `StrumMetricChannel`-nek; (2) a **D1 fúzió** bekötése a **pontozó** úton + a `settledTier`
-  felkapcsolása **profile-build költségméréssel**; (3) a nyíl fúziója **funkció-kapu** mögé
-  (megtérülés 0,475, nyolc sértő ütésen).
+  **E18-R37 — A RÁCS MEGÁLLÍTOTTA A BEKÖTÉST (ADR 0560,
+  `ml/probe_metric_grid_sensitivity.py`).** A kimondott következő lépés („`TempoTracker` rács
+  + bar-horgony átadása") **hibás volt, és TÖRÖLVE**. Az ADR 0557 minden száma a GuitarSet
+  **annotált** rácsán áll (helyes tempó **és** fázis-origó); az app ezt szabad játékban nem
+  tudja: a `TempoTracker` **oktávot hajtogat** és fázist nem ad, a `_barStartSec` pedig egy
+  **önkényes ütés** saját idejéhez horgonyoz. A csatorna állítása az, hogy **a pozíció dönt**,
+  tehát egy fél réssel hibás origó nem elmossa, hanem **megfordítja** a választ.
+  Tartalék (526 ütés, 12 felvétel, felütés-arány 0,1920 → **„mindig lefelé" = 0,8080**, L667):
+  annotált **0,9848** · önhorgonyzott helyes tempóval seedenként **0,7300 / 0,9430 / 0,8555 /
+  0,7833 / 0,9468** (⇒ **3/5 ROSSZABB a konstansnál**) · ütemenként újrahorgonyozva
+  (`_placeInBar`) **0,8612** (csak +0,053) · tempó ×2 **0,6597** · ÷2 **0,7985** ·
+  mindkettő téves **0,6179 / 0,7662** — **minden rossz-oktáv sor rosszabb a konstansnál**.
+  **Az átlag elrejti a szerkezetet:** a horgony-ütés **81,2% lefelé / 18,8% felfelé**, és egy
+  **felfelé** horgony egy réssel csúsztat ⇒ szigorú alternáción **minden hívás átfordul**. A
+  0,73–0,95 szórás tehát **majdnem tökéletes és majdnem invertált felvételek keveréke** — nem
+  „kicsit pontatlanabb mindenkinek", hanem **„helyes az egyik tanulónak, fordított a
+  másiknak"**.
+  **EZ DÖNT:** a csatorna **csak olyan rácson** admisszibilis, amit **az app birtokol** — a
+  metronóm/lecke saját időrácsa, aminek a fázisa **definíció szerint ismert**. Az a
+  `features/curriculum` / `features/learn` rétegben él és **ma nem jut el a DSP-ig**, tehát a
+  bekötés **réteg-átívelő**. **Szabad játékban a csatorna NEM ELÉRHETŐ**, és ez már így van
+  megépítve (`MetricCall.unavailable` `bpm <= 0`-ra) — tiszta képesség-határ.
+  **ÚJ KOCKÁZAT:** a repó már megmérte, hogy **16 metronóm-klikkből 15 jelentett ütés** lesz
+  (`metronome_click_pollution_test.dart`, 0,1 erősítésig). A klikk **pontosan az ütemre** esik
+  ⇒ a metrikus csatorna **magabiztos lefelé ütésként** bélyegezné, és a fúzió a fantomot **még
+  magabiztosabbá** tenné. A pontozás alatti **haptikus** pulzus (`CurriculumPulse.haptic`)
+  innentől **a csatorna ELŐFELTÉTELE**, nem kényelem.
+  **NEM állítjuk:** nem azt mértük, hogy **egy** beat-tracker nem tudna elég jó rácsot adni —
+  azt, hogy **a jelenlegi** nem. Ismert fázisú, oktávot eldöntő beat-tracker külön mérés.
+  Tanulság: **L675** (a bemenetet, amin egy mért jellemző áll, külön kell megmérni).
+  **KÖVETKEZŐ, ebben a sorrendben:** (1) a **curriculum rácsának** (ismert fázisú metronóm-
+  időrács) eljuttatása a DSP pipeline-ig — réteg-átívelő; (2) a **D1 fúzió** bekötése a
+  **pontozó** úton + a `settledTier` felkapcsolása **profile-build költségméréssel**; (3) a
+  nyíl fúziója **funkció-kapu** mögé (megtérülés 0,475, nyolc sértő ütésen). A Learn/practice
+  út lesz az első, ahol a csatorna él; a **szabad Live marad csak-akusztikus**.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

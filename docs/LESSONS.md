@@ -27889,3 +27889,73 @@ rá, hogy mindkettőt elolvassam; egy default mellett **észre sem vettem volna*
 okból.*
 
 Lásd még [[L662]], [[L672]], [[L673]], ADR 0556, ADR 0558, ADR 0559.
+
+## L675 — A bemenetet, amin egy mért jellemző áll, külön kell megmérni; a sajátjában biztos csatorna egy gyártott rácson rosszabb lett, mint egy konstans (E18-R37, 2026-09-12)
+
+### 1. Két körön át a jellemzőt mértem, a bemenetét nem
+
+A metrikus csatorna tartalék pontossága **0,9848**, nulla illesztett paraméterrel, ismeretlen
+játékosokon és dalokon, öt kontrollal (L671). Erre építettem egy fúziós szabályt (ADR 0558),
+egy Dart-egységet paritás-fixtúrával (E18-R35), és kimondtam a következő lépést: „a
+`TempoTracker` rácsa + a bar-horgony átadása a csatornának".
+
+**Mind a 0,9848 a GuitarSet ANNOTÁLT ütem-rácsán állt** — helyes tempó **és** helyes
+fázis-origó. Azt nem kérdeztem meg, hogy az app **ilyen rácsot tud-e adni**. Nem tud: a
+`TempoTracker` medián-IOI-t ad, **oktávot hajtogatva** és fázis nélkül, a `_barStartSec`
+pedig egy **önkényes ütés saját idejéhez** horgonyoz.
+
+Megmérve, ugyanazon a tartalék halmazon, a **„mindig lefelé" 0,8080** ellen:
+
+```
+  annotált rács                       0,9848
+  önhorgonyzott, helyes tempó         0,8612   (seedenként 0,73 – 0,95)
+  rossz tempó-oktáv                   0,6597 / 0,7985
+  mindkettő téves (szabad játék)       0,6179 / 0,7662
+```
+
+A gyártott rácson a csatorna **rosszabb, mint egy konstans**, és közben **magabiztos**. Egy
+kör korábban ezt kötöttem volna be.
+
+**A szabály, amit megtartok.** Ha egy jellemző egy **származtatott bemenetet** használ (rács,
+szegmentálás, igazítás, referencia-idő), akkor a mérés **két** dolgot állít: hogy a jellemző
+működik, ÉS hogy a bemenet elég jó. A kettőt **külön** kell megmérni, és a második a
+kockázatos. *Egy korpusz annotációja nem a termék bemenete — a jellemzőt a korpusz adja, a
+bemenetet az app, és csak az egyiket mértem.*
+
+Gyakorlati sarokpont: **minden mért jellemzőnél le kell írni, mi adja a bemenetét a
+produkcióban**, és ha a válasz „valami becsült", akkor a becslés hibája a jellemző mérésének
+a része, nem utólagos részlet.
+
+### 2. Az átlag elrejtette, hogy a tanulók fele FORDÍTVA kapná
+
+A 0,8612 úgy néz ki, mint egy mérsékelt romlás. Nem az. A horgony-ütés **81,2%-ban lefelé,
+18,8%-ban felfelé** lenne, és egy **felfelé** horgony egy réssel csúsztatja a rácsot, ami
+szigorú alternáción **minden hívást átfordít**. A seedenkénti 0,73–0,95 szórás ezt mutatja: a
+sorok **majdnem tökéletes és majdnem invertált felvételek keveréke**.
+
+Vagyis nem „kicsit pontatlanabb mindenkinek", hanem „**helyes a tanulók egy részének,
+fordított a másiknak**". Egy átlagolt pontosság ezt a szerkezetet **nem tudja megmutatni** —
+ugyanaz a hiba-osztály, mint amikor a megtartási arányt mértem a megtartott pontosság helyett
+(L670), csak most a felvételek, nem az osztályok tengelyén.
+
+*Ha egy hiba egy diszkrét választástól függ (melyik ütés a horgony), akkor a metrika
+eloszlását kell megmutatni, nem az átlagát — az átlag egy bimodális jelet közepesnek mutat.*
+
+### 3. Amit a negatív eredmény megvédett, és amit ki kell mondani
+
+Ez a kör **nem épített semmit**, és ez a haszna: a három állapotos `MetricCall` (nincs rács /
+szünet van előírva / előírt irány) pont ezt az esetet modellezte, és most **mért indoka** van
+annak, hogy a szabad Live a „nincs rács" állapotban maradjon. A csatorna csak ott
+admisszibilis, ahol az app **birtokolja** a rácsot — a metronóm/lecke időrácsán, aminek a
+fázisa definíció szerint ismert.
+
+És egy kockázatot is talált, amit nem kerestem: a repó már megmérte, hogy **16 metronóm-
+klikkből 15 jelentett ütés** lesz. A klikk **pontosan az ütemre** esik, tehát a metrikus
+csatorna **magabiztos lefelé ütésként** bélyegezné, és a fúzió a fantom ütést **még
+magabiztosabbá** tenné. A meglévő mérséklés (pontozás alatt **haptikus** pulzus) innentől nem
+kényelem, hanem **a csatorna előfeltétele**.
+
+*Egy „ne kösd be" eredmény ugyanannyit ér, mint egy bekötés — de csak akkor, ha kiírom, mi
+lett volna a kár.*
+
+Lásd még [[L667]], [[L670]], [[L673]], ADR 0557, ADR 0558, ADR 0560.

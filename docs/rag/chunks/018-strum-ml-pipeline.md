@@ -1110,3 +1110,61 @@ truncation, to the very pass every threshold in those measurements is rescored f
 `StrumEvent` gained an additive `onsetFrame`. Its only construction site is the analyzer;
 the same-named domain event in `features/audio_analysis` is a DIFFERENT class and is
 untouched.
+
+### The metric channel needs a grid the APP OWNS -- on the pipeline's self-anchored bar it is WORSE than always-down (E18-R37, ADR 0560)
+
+Every number in ADR 0557 stands on GuitarSet's ANNOTATED beat grid: the right tempo AND the
+right phase ORIGIN. The app cannot supply that in free play. `TempoTracker.bpm` is a
+median-IOI estimate, EMA-smoothed and folded into 60-200 by repeated doubling/halving, so
+its OCTAVE is explicitly ambiguous and it carries no phase at all; `_barStartSec` is
+anchored to `event.timeSec` of whichever strum overflowed the previous bar -- an ARBITRARY
+stroke, re-picked about once a bar.
+
+The channel's claim is that POSITION decides direction, so an origin error of half a slot
+does not blur the answer, it INVERTS it.
+
+Held out (unseen player AND tune): 526 strokes, 12 takes, up rate 0.1920, so **ALWAYS-DOWN
+scores 0.8080** and that is the number to beat (LESSONS L667).
+
+```
+  grid                                        accuracy   vs annotated
+  annotated (ADR 0557)                          0.9848       --
+  self-anchored, right tempo (seeds 0-4)   0.7300 / 0.9430 / 0.8555 / 0.7833 / 0.9468
+  re-anchored every bar (_placeInBar)           0.8612      -0.1236
+  tempo x2 (half-time read)                     0.6597      -0.3251
+  tempo /2 (double-time read)                   0.7985      -0.1863
+  re-anchored + tempo x2                        0.6179      -0.3669
+  re-anchored + tempo /2                        0.7662      -0.2186
+```
+
+Against always-down: the re-anchored arm gains only +0.053, three of five single-anchor
+seeds are WORSE than the constant, and every wrong-octave arm is worse. **On a manufactured
+grid the channel is worse than a constant -- and confident while being so.**
+
+The average hides the shape. The anchor stroke would be DOWN 81.2 % of the time and UP
+18.8 %, and an UP anchor shifts the grid by one slot, which FLIPS every call on a strict
+alternation. The 0.73-0.95 spread across seeds is that: a mixture of near-perfect and
+near-inverted takes, not a uniformly degraded signal. So it is not "slightly less accurate
+for everyone", it is "right for some learners and INVERTED for others" -- a structure an
+averaged accuracy cannot show (L675 section 2).
+
+**Decided: passing `TempoTracker.bpm` + `_barStartSec` to the channel is CANCELLED** as the
+next step (ADR 0560 D1). The only legitimate origin is the metronome / lesson timeline the
+app generates itself, whose phase is known by construction -- and that lives in
+`features/curriculum` / `features/learn` and does NOT reach the DSP pipeline today, so
+wiring it is cross-layer work. In free play the channel stays UNAVAILABLE, which is already
+how it is built (`MetricCall.unavailable` for `bpm <= 0`): a clean capability boundary, not
+silent degradation.
+
+**New risk this round found:** the repo already measured that **15 of 16 metronome clicks
+become reported strums** (`metronome_click_pollution_test.dart`), at every level down to a
+gain of 0.1. A click lands exactly ON the beat -- exactly where the grid expects a
+downstroke -- so the metric channel would rubber-stamp clicks as CONFIDENT downstrokes and
+fusion would make the phantom stroke MORE confident. The existing mitigation (a HAPTIC pulse
+while scoring, `CurriculumPulse.haptic`) is therefore not a convenience but a PRECONDITION
+of the channel.
+
+Not claimed: this did not measure whether a real beat-tracker could supply a good enough
+grid -- only that the CURRENT TempoTracker and `_placeInBar` cannot. The 0.8080 baseline is
+this corpus's class balance and differs on upstroke-dominant material. The click interaction
+was not measured with the metric channel; the 15/16 figure is the repo's earlier measurement.

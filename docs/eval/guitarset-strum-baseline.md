@@ -1230,3 +1230,69 @@ mondja.**
 
 **12/12 teszt zöld.** Szállított viselkedés **nem változott**: az egység **nincs bekötve**
 (a `LivePipeline` nem hívja), tehát ez tiszta új felület.
+
+---
+
+# A metrikus csatorna csak olyan rácson működik, amit az APP birtokol (E18-R37)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/probe_metric_grid_sensitivity.py
+```
+
+Az ADR 0557 minden száma a GuitarSet **annotált** ütem-rácsán áll: helyes tempó **és** helyes
+fázis-origó. Az app ezt szabad játékban nem tudja. Amit tud:
+
+- **`TempoTracker.bpm`** — medián-IOI, EMA-simítva, **ismételt duplázással/felezéssel
+  60–200-ra hajtogatva**, tehát az **oktávja kifejezetten kétértelmű**, fázist nem ad;
+- **`_barStartSec`** — ahhoz az **önkényes ütéshez** horgonyozva, ami túllépte az előző
+  ütemet, kb. ütemenként újraválasztva.
+
+A csatorna állítása az, hogy **a pozíció dönti el az irányt**. Egy fél réssel elhibázott
+origó ezért nem elmossa a választ, hanem **megfordítja**.
+
+526 ütés, 12 felvétel, felütés-arány 0,1920 → a **„MINDIG LEFELÉ" alapvonal 0,8080** (L667).
+
+| rács | pontosság | vs annotált | vs „mindig lefelé" |
+|---|---|---|---|
+| **annotált** (ADR 0557) | **0,9848** | — | +0,177 |
+| önhorgonyzott, helyes tempó (seed 0–4) | 0,7300 / 0,9430 / 0,8555 / 0,7833 / 0,9468 | −0,038…−0,255 | **3 / 5 ROSSZABB** |
+| ütemenként újrahorgonyozva (`_placeInBar`) | 0,8612 | −0,1236 | +0,053 |
+| tempó ×2 (felezett olvasat) | 0,6597 | −0,3251 | **ROSSZABB** |
+| tempó ÷2 (duplázott olvasat) | 0,7985 | −0,1863 | **ROSSZABB** |
+| újrahorgonyozva + tempó ×2 | 0,6179 | −0,3669 | **ROSSZABB** |
+| újrahorgonyozva + tempó ÷2 | 0,7662 | −0,2186 | **ROSSZABB** |
+
+**Gyártott rácson a csatorna rosszabb, mint egy konstans — és közben magabiztos.**
+
+## Az átlag elrejti a szerkezetet
+
+A horgony-ütés **81,2%-ban lefelé, 18,8%-ban felfelé** lenne, és egy **felfelé** horgony egy
+réssel csúsztatja a rácsot → szigorú alternáción **minden hívás átfordul**. A seedenkénti
+0,73–0,95 szórás ezt mutatja: ezek **majdnem tökéletes és majdnem invertált felvételek
+keverékei**, nem egyenletesen romlott jel.
+
+Vagyis nem „kicsit pontatlanabb mindenkinek", hanem **„helyes a tanulók egy részének,
+fordított a másiknak"** — amit egy átlagolt pontosság nem tud megmutatni. (L675 §2.)
+
+## Amit ez eldönt
+
+- **A `TempoTracker` + `_barStartSec` átadása TÖRÖLVE** mint következő lépés (ADR 0560 D1).
+- A csatorna csak a **metronóm / lecke saját időrácsán** admisszibilis, aminek a fázisa
+  **definíció szerint ismert** — az a `features/curriculum` / `features/learn` rétegben él és
+  **ma nem jut el a DSP-ig**, tehát a bekötés **réteg-átívelő** munka.
+- **Szabad játékban a csatorna NEM ELÉRHETŐ**, és ez már így van megépítve
+  (`MetricCall.unavailable` `bpm <= 0`-ra) — tiszta képesség-határ, nem néma romlás.
+- **Új kockázat:** a repó már megmérte, hogy **16 metronóm-klikkből 15 jelentett ütés** lesz
+  (`metronome_click_pollution_test.dart`). A klikk **pontosan az ütemre** esik, tehát a
+  metrikus csatorna **magabiztos lefelé ütésként** bélyegezné, és a fúzió a fantom ütést
+  **még magabiztosabbá** tenné. A pontozás alatti **haptikus** pulzus innentől nem kényelem,
+  hanem **a csatorna előfeltétele**.
+
+## Amit NEM állítunk
+
+- **Nem** azt mértük, hogy egy beat-tracker nem tudna elég jó rácsot adni — azt, hogy **a
+  jelenlegi** `TempoTracker` és `_placeInBar` nem. Ismert fázisú, oktávot eldöntő
+  beat-tracker külön kérdés és külön mérés.
+- A 0,8080 **ennek a korpusznak** az osztályaránya; felütés-domináns anyagon más.
+- A klikk-kölcsönhatást a metrikus csatornával **nem mértük** — a 15/16 a repó korábbi
+  mérése.
