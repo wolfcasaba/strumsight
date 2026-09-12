@@ -162,7 +162,12 @@ class StrumAnalyzer {
   /// final: no settled verdict is requested, so no second model forward is spent.
   ///
   /// MEASURED (`ml/probe_settled_tier_value.py`, held-out GuitarSet, unseen player AND
-  /// tune, 530 strokes). The margin really does predict whether the fast call is right,
+  /// tune, 530 strokes) **on `ml/weights_live_3c_settled.npz`** — the asset ADR 0555 D3
+  /// left unwired, NOT the one that ships. Naming it matters, because ADR 0569 measured
+  /// that asset to regress on Klangio (the deployment corpus) and withdrew its swap, and
+  /// ADR 0570 then re-ran this table on the SHIPPED asset and got a different answer.
+  ///
+  /// On the settled asset the margin really does predict whether the fast call is right,
   /// which is what makes routing on it legitimate:
   ///
   /// ```
@@ -188,6 +193,33 @@ class StrumAnalyzer {
   /// are NOT chosen: above ~0.3 the curve is within a handful of strokes of itself on
   /// this sample (the t = 0.70 row even exceeds settled-only, which a 530-stroke
   /// up-F1 cannot support), and each step costs both CPU and direction-neutral arrows.
+  ///
+  /// ## On the SHIPPED asset this routing rule does not hold (ADR 0570)
+  ///
+  /// The same probe, same split, same 530 strokes, `--asset=assets/ml/strum_crnn_live_3c.bin`
+  /// at its own 0.85 gate:
+  ///
+  /// ```
+  ///   fast margin   n     fast accuracy      <- flat and NON-MONOTONE
+  ///    0.0-0.2      32       0.2188
+  ///    0.2-0.4      22       0.4545
+  ///    0.4-0.6      35       0.2286
+  ///    0.6-0.8      60       0.3000
+  ///    0.8-1.0     381       0.3202
+  /// ```
+  ///
+  /// So for the asset that actually ships the margin carries no information about
+  /// correctness, and routing on it is unjustified. The settled tier is still worth a
+  /// great deal there — fast-only macro 0.3340, settled-only 0.5259, **+0.192** — but the
+  /// gain sits on the ADEQUATE-margin strokes (+0.323 at t = 0.30) rather than the short
+  /// ones (+0.091), so this constant captures **+0.0044** of it. The rule for the shipped
+  /// asset would be "settle EVERY stroke", not "settle the short-margin ones".
+  ///
+  /// None of that is live: [settledTier] is false, so this constant is dark either way.
+  /// It is written down because the justification above is asset-specific and the comment
+  /// did not say so — and because ADR 0556 D1/D3's objection to settling everything (the
+  /// arrow would wait or go direction-neutral) does not bind today: ADR 0566 D3 found that
+  /// no shipped surface renders a DETECTED direction at all.
   static const double _settleBelowMargin = 0.30;
 
   final FFT _fft;

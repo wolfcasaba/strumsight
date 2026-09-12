@@ -14805,9 +14805,45 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   splitje **fajtájában** más, nincs közös tiszta halmaz — építs olyan foldot, ami a cáfolni
   kívánt állítás **felé** torzít; (3) egy kereszt-korpusz delta mellé ki kell írni, **melyik
   korpusz a telepítési feltétel**.
-  **KÖVETKEZŐ:** (1) **egy asset, ami MINDKÉT korpuszon legyőzi a szállítottat** — ez a
-  következő tanító kör célja, az új elfogadási kritériummal (a `read_ssml.py` ezt mérhetővé
-  teszi); (2) az **ADR 0563** két-tier mérésének megismétlése a **szállított** assetn;
+  **E18-R43d — A KÉT-TIER ROUTING JELE ASSET-SPECIFIKUS (ADR 0570).** Az ADR 0569 által
+  megnevezett következő lépés elvégezve: a `probe_settled_tier_value.py` mostantól
+  `--asset=PATH [--gate=X]`-szel bármely SSML blobot mér (a `read_ssml.py`-on keresztül) és
+  **kiírja, melyiket** — argumentum nélkül **egzaktan** reprodukálja az ADR 0563-at (fast
+  0,5262, hibrid@0,30 0,5813, +0,0551), ami a paraméterezés regressziós ellenőrzése.
+  **A szállított assetn a margó NEM jelez** (ugyanaz a szelet, ugyanaz az 530 ütés, 0,85-es
+  kapu): margó-sávonként **0,2188 / 0,4545 / 0,2286 / 0,3000 / 0,3202** — **lapos és nem
+  monoton**, szemben a settled asset monoton **0,4000 → 0,8500**-ával. Az L672 §2 kritériuma
+  tehát az egyik assetn teljesül, a másikon nem: *a routing-jel érvényessége a MODELL
+  tulajdonsága, nem az ötleté.*
+  **A letisztult tier a szállított assetn IS sokat ér, csak máshol:** csak gyors **0,3340**,
+  csak letisztult **0,5259** (**+0,1919**) — de a nyereség a **megfelelő** margójú ütéseken
+  van (+0,3230, n=486), nem a rövideken (+0,0909, n=44), ezért a `_settleBelowMargin = 0.30`
+  ebből **+0,0044**-et fog. A szállított assethez tartozó szabály tehát **„MINDEN ütést
+  letisztítani"**, nem „a rövid margójúakat".
+  **ÉS AZ UX-ELLENVETÉS MA NEM KÖTELEZ:** az ADR 0556 D1 a revízió-költségre, a D3 az
+  irány-semleges nyilak árára hivatkozva vetette el a „mindent letisztítani" utat — de az
+  ADR 0566 D3 szerint **egyetlen szállított felület sem rajzol ÉSZLELT irányt**, tehát a
+  100% semleges nyíl ára **nulla**, mert nincs nyíl. A pontozó a kísérlet **végén** értékel,
+  ahol a 238 ms irreleváns. **Egy él-eset kimondva:** a kísérlet **utolsó** ütése — a
+  lezárást a bekötő körnek az utolsó onset + 238 ms-ig ki kell várnia, különben az az ütés
+  bizonyíték nélkül marad. A **költség** levezetett (ADR 0565), nem újonnan mért: minden
+  ütésre egy második forward = a gyors tier **kétszerese**, ~44% egy magból 200 bpm
+  tizenhatodon, ~8,8% 80 bpm nyolcadon.
+  **NEM kapcsoltunk fel semmit:** hiányzik az **in-situ** letisztult szám (a söprés egy
+  onsetre **egy** osztályozást rögzít, a 70 ms-osat — a letisztult pillanathoz egy második,
+  csonkítatlan ablakos hívás rögzítése kell), és a pontozó irány-forrásának változtatása a
+  §9 négy lábát kívánja. Amit a kör **ad**: a `_settleBelowMargin` doc-kommentje mostantól
+  **megnevezi az assetet**, amin a tábla készült, és hordozza a szállított asset
+  ellen-tábláját is.
+  Tanulság: **L685** — (1) egy routing-jel **nem öröklődik** modellcserén át, a „jelez-e?"
+  kritériumot assetenként kell kimérni; (2) ha egy komment **mért táblát** hordoz, nevezze
+  meg a tábla **artefaktumát** is (a split és az n a *mérésről* szól, az asset arról, hogy
+  **miről**); (3) egy **sötét** konstans nem mis-shippel, de az **indoklását** a következő
+  kör örökli — *a sötétség a viselkedést védi, nem a gondolatmenetet.*
+  **KÖVETKEZŐ:** (1) **egy asset, ami MINDKÉT korpuszon legyőzi a szállítottat** — a
+  következő tanító kör célja, az ADR 0569 elfogadási kritériumával (a `read_ssml.py` ezt
+  mérhetővé teszi), és ADR 0570 szerint olyan, **amin a margó jelez**; (2) a letisztult tier
+  **in-situ** mérése a söprésben (második, csonkítatlan ablakos osztályozás rögzítése);
   (3) ha a Klangio korpusz bekerül a gépre, a Klangio **in-situ** söprés a
   `guitarset_threshold_sweep_test.dart` mintájára; (2) **on-device mérés** (CI/profile) a **gyors**
   tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a

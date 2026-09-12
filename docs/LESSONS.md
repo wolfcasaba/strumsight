@@ -28630,3 +28630,61 @@ a deltákon van, hanem a korpuszokon. **A szabály:** egy kereszt-korpusz delta 
 egy másik felhasználóról szól.
 
 Lásd még [[L682]], ADR 0554, ADR 0567, ADR 0569.
+
+## L685 — Egy routing-jel érvényessége a MODELL tulajdonsága, nem az ötlet; és egy sötét konstans is állít valamit (E18-R43, 2026-09-12)
+
+### 1. Ugyanaz a jel az egyik assetn jelez, a másikon nem
+
+A `_settleBelowMargin = 0.30` azért legitim, mert az irány-margó **tényleg** jelzi, hogy a
+gyors hívás téved — ezt az [[L672]] §2 kritériumként rögzítette, és a próba **kiírja**. A
+tábla, amire az ADR 0563 épült:
+
+```
+  fast margó    settled asset    szállított asset
+   0,0–0,2         0,4000            0,2188
+   0,2–0,4         0,4167            0,4545
+   0,4–0,6         0,5455            0,2286
+   0,6–0,8         0,5588            0,3000
+   0,8–1,0         0,8500            0,3202
+```
+
+Bal oldal **monoton**, jobb oldal **lapos és nem monoton** — ugyanaz a jel, ugyanaz a szelet,
+ugyanaz az 530 ütés, **más modell**. A kritérium tehát nem egyszer eldönthető kérdés: a
+routing-jel érvényessége **asset-enként** mérendő.
+
+És a következmény nem kozmetikai: a szállított assetn a letisztult tier **+0,1919**-et ér
+(macro 0,3340 → 0,5259), de a margó-alapú routing ebből **+0,0044**-et fog, mert a nyereség a
+**megfelelő** margójú ütéseken van (+0,3230), nem a rövideken (+0,0909). A szabály a jó
+ötletből a rossz részhalmazt választja ki — nem azért, mert a szabály hibás, hanem mert egy
+**másik** modellre illesztették.
+
+**A szabály.** Egy jel, amire routolunk (margó, konfidencia, entrópia, bármi), **nem**
+öröklődik modellcserén át. A kritériumot — „jelez-e?" — minden assetre újra ki kell mérni, és
+az eredményt **az asset nevével együtt** kell leírni.
+
+### 2. A doc-komment mindent megnevezett, csak azt nem, ami számított
+
+A `_settleBelowMargin` kommentje gondosan rögzítette a próbát (`probe_settled_tier_value.py`),
+a szeletet (held-out GuitarSet, ismeretlen játékos ÉS darab), a mintaszámot (530 ütés), a
+hibrid-görbét, sőt azt is, miért nem a magasabb sorokat választottuk. **Az assetet nem.**
+
+És pont az volt a különbség. A tábla a `weights_live_3c_settled.npz`-n készült — azon az
+assetn, amit az ADR 0555 D3 szándékosan **bekötetlenül** hagyott, és amiről az ADR 0569
+kimutatta, hogy a telepítési korpuszon **visszaesik**. Egy komment, ami ennyi
+proveniencia-részletet felsorol, **általánosnak látszik**: a következő olvasó (én, négy
+körrel később) nem kérdezi meg, hogy melyik súlyokról van szó.
+
+**A szabály.** Ha egy komment **mért táblát** hordoz, akkor a tábla **artefaktumát** is
+nevezze meg — súlyok, asset-fájl, revízió. A split és az n nem elég: azok a *mérésről*
+szólnak, az asset arról, hogy **miről**.
+
+### 3. Egy sötét konstans nem mis-shippel, de az indoklása igen
+
+A `settledTier` **false**, tehát a `_settleBelowMargin` ma nem fut: semmilyen viselkedés nem
+hibás. Mégis javítani kellett, mert amit szállít, az az **érvelés** — és azt a következő kör
+örökli. Ha a felkapcsoló kör elolvassa a régi kommentet, a margó-routingot készen kapja
+indoklással, és a szállított assetn **+0,0044**-et épít oda, ahol **+0,1919** lett volna.
+
+*A sötétség a viselkedést védi, nem a gondolatmenetet.*
+
+Lásd még [[L672]], [[L682]], [[L684]], ADR 0556, ADR 0563, ADR 0569, ADR 0570.

@@ -1713,3 +1713,59 @@ Not claimed: any in-situ Klangio figure; a guitarist-disjoint Klangio number for
 asset (no such split existed when it was trained, so "0.795 vs 0.507" is NOT a valid model
 comparison — the valid ones are the three same-fold rows); and no mechanism for the
 regression, which is left explicitly unexplained.
+
+### The two-tier routing SIGNAL is asset-specific: on the shipped asset the margin is flat (E18-R43, ADR 0570)
+
+ADR 0569 withdrew the settled asset's swap and named the follow-up: repeat ADR 0563's
+two-tier measurement on the SHIPPED asset. `ml/probe_settled_tier_value.py` now takes
+`--asset=PATH [--gate=X]` (through ADR 0569's `read_ssml.py`) and PRINTS which asset it
+measured. With no argument it reproduces ADR 0563 exactly — fast 0.5262, hybrid@0.30 0.5813,
++0.0551 — which is the regression check on the parameterisation.
+
+On the shipped asset at its own 0.85 gate, same split, same 530 strokes:
+
+```
+  fast margin    n     fast accuracy      settled asset (ADR 0563)
+   0.0-0.2       32       0.2188               0.4000
+   0.2-0.4       22       0.4545               0.4167
+   0.4-0.6       35       0.2286               0.5455
+   0.6-0.8       60       0.3000               0.5588
+   0.8-1.0      381       0.3202               0.8500
+```
+
+Monotone 0.40 -> 0.85 on the settled asset; FLAT and NON-MONOTONE on the shipped one. L672
+§2's criterion — the margin is a legitimate routing signal only if it predicts the error —
+holds for one asset and fails for the other. A routing signal's validity is a property of the
+MODEL, not of the idea.
+
+The consequence is not cosmetic. The settled tier is worth a lot on the shipped asset too —
+fast-only macro 0.3340, settled-only 0.5259, **+0.1919** — but the gain sits on the
+ADEQUATE-margin strokes (+0.3230 at t = 0.30, n=486) rather than the short ones (+0.0909,
+n=44), so `_settleBelowMargin = 0.30` captures **+0.0044** of it. The shipped asset's rule
+would be "settle EVERY stroke".
+
+**And the UX objection that ruled that out does not bind today.** ADR 0556 D1 rejected
+settle-everything on revision cost (Du, CHI 2023) and D3 on the price of direction-neutral
+arrows — but ADR 0566 D3 measured that NO shipped surface renders a detected direction
+(`RhythmLane` draws the notated grid; `practice_highway` and `practice_feedback` draw the
+EXPECTED direction; only the share card shows a detected one; ADR 0556's live arrow is dark).
+So neutralising 100 % of arrows costs nothing, because there is no arrow. And the grader runs
+at the END of the attempt, where a 238 ms direction delay is irrelevant — with one edge case
+stated rather than hidden: the attempt's LAST stroke, whose settled verdict could arrive after
+the attempt closes, so the wiring round must hold the close until onset + 238 ms.
+
+The cost is real and DERIVED, not newly measured: a second forward for every stroke, which per
+ADR 0565's sparse figures doubles the fast tier's load — ~44 % of a core at 200 bpm sixteenths,
+~8.8 % at 80 bpm eighths.
+
+Nothing is lit. Two things are missing: an IN-SITU settled number (the sweep records one
+classification per onset, at 70 ms; the settled instant needs a second recorded call), and §9's
+four legs for changing the grader's direction source. What the round does ship is the
+`_settleBelowMargin` doc comment NAMING the asset its table was measured on, plus the shipped
+asset's counter-table, so the next reader cannot inherit an asset-specific justification as a
+general one.
+
+Not claimed: why the shipped asset is BETTER on the untruncated window it never trained on
+(`train_live_3c.py` loads `live70` only) — an obvious guess exists and is left unwritten
+(L681); n=530 on one split, and the 0.2-0.4 band is n=22, so FLATNESS is the claim, not the
+row order; and up-F1 stays 0.2581 even settled, so ADR 0553's data diagnosis stands.

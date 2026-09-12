@@ -41,6 +41,34 @@ from train_live_3c_settled import DOWN, NO_STRUM, UP, f1
 
 THRESHOLD_JSON = "live_3c_settled_threshold.json"
 
+#: `LiveCrnnStrumClassifier.noStrumThreshold` -- what the SHIPPED asset gates at.
+SHIPPED_GATE = 0.85
+
+
+def pick_model(argv):
+    """(model, mean, std, gate, label) -- which asset is under test, and at which gate.
+
+    Default reproduces ADR 0563 exactly: the settled weights and their class-conditional
+    gate. `--asset=PATH [--gate=X]` measures an SSML `.bin` instead, which is what ADR 0569
+    made possible and necessary: the two-tier decision was only ever measured on the
+    SETTLED asset, and that asset is not shippable (it regresses on Klangio, the deployment
+    corpus). A decision about the shipped path has to be measured on the shipped asset.
+    """
+    asset = next((a.split("=", 1)[1] for a in argv if a.startswith("--asset=")), None)
+    gate_arg = next((a.split("=", 1)[1] for a in argv if a.startswith("--gate=")), None)
+    if asset is None:
+        model, mean, std = load_model()
+        with open(os.path.join(os.path.dirname(__file__), THRESHOLD_JSON)) as handle:
+            gate = json.load(handle)["no_strum_threshold"]
+        return model, mean, std, gate, "weights_live_3c_settled.npz (ADR 0563 default)"
+    from read_ssml import load_keras
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = asset if os.path.isabs(asset) else os.path.join(root, asset)
+    model, mean, std = load_keras(path)
+    gate = float(gate_arg) if gate_arg else SHIPPED_GATE
+    return model, mean, std, gate, f"{asset} @ gate {gate}"
+
 
 def direction_probs(probs):
     """P(up) renormalised over the down/up mass, as the shipped Dart path does."""
@@ -60,9 +88,10 @@ def main():
 
     _times, y, player, tune = aligned_onsets()
     _train_mask, test_mask = G.split_masks(player, tune)
-    with open(os.path.join(os.path.dirname(__file__), THRESHOLD_JSON)) as handle:
-        threshold = json.load(handle)["no_strum_threshold"]
-    model, mean, std = load_model()
+    model, mean, std, threshold, asset_label = pick_model(sys.argv[1:])
+    print(f"ASSET UNDER TEST: {asset_label}")
+    print("  (a table that does not say which asset it measured looks comparable with one")
+    print("   it is not -- ADR 0569, LESSONS L682 §1)")
 
     truth = y[test_mask]
     tiers = {}
@@ -83,8 +112,7 @@ def main():
         return np.where(suppressed, -1, probs[:, :2].argmax(axis=1))
 
     print("held-out GuitarSet: unseen player AND unseen tune, %d strokes" % len(truth))
-    print("no-strum gate %.6f (class-conditional, ADR 0555); a suppressed stroke is"
-          % threshold)
+    print("no-strum gate %.6f; a suppressed stroke is" % threshold)
     print("counted as an error either way, so the tiers are compared on equal terms.\n")
 
     fast_macro = score(called_from(fast), truth)
