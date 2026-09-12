@@ -14451,11 +14451,49 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **NEM állítjuk:** nem azt mértük, hogy **egy** beat-tracker nem tudna elég jó rácsot adni —
   azt, hogy **a jelenlegi** nem. Ismert fázisú, oktávot eldöntő beat-tracker külön mérés.
   Tanulság: **L675** (a bemenetet, amin egy mért jellemző áll, külön kell megmérni).
-  **KÖVETKEZŐ, ebben a sorrendben:** (1) a **curriculum rácsának** (ismert fázisú metronóm-
-  időrács) eljuttatása a DSP pipeline-ig — réteg-átívelő; (2) a **D1 fúzió** bekötése a
-  **pontozó** úton + a `settledTier` felkapcsolása **profile-build költségméréssel**; (3) a
-  nyíl fúziója **funkció-kapu** mögé (megtérülés 0,475, nyolc sértő ütésen). A Learn/practice
-  út lesz az első, ahol a csatorna él; a **szabad Live marad csak-akusztikus**.
+  **E18-R38 — A RÁCS FORRÁSA A `RhythmGrid`, ÉS AZ ELOLVASÁSA KÉT HIBÁT TALÁLT (ADR 0561).**
+  A keresett app-birtokolt rács a `lib/features/curriculum/domain/rhythm_grid.dart`, ami
+  **már tartalmazta az egészet, jobban**: `pendulumDirection` (ugyanazokra a pedagógiai
+  forrásokra hivatkozva, mint az ADR 0557), `beatsPerBar`/`subdivision`, `RhythmGrid.authored`
+  + `followsPendulum` (a tanított 3/4 oom-pah mint **dokumentált ellenpélda**),
+  `StrokeSound.ghost`, `handCrossings`, és **`onsetUs({bar, slotIndex, bpm})` — ismert fázisú
+  absztrakt időrács a gyakorlat kezdetétől**, pontosan amit az ADR 0560 megkíván.
+  **A `RhythmGrid` az inga EGYETLEN hatósága:** a `StrumMetricChannel` készen kapott irányú
+  `MetricSlot`-okat vesz át, tehát nincs második implementáció, ami elsodródhat. A DSP réteg
+  **nem importálja** a curriculumot; a leképezés a `StrumMetricChannel.crossings` gyár.
+  **HIBA 1 — egy ghost-kereszteződés HORDOZ irányt.** Az első verzió a `null` rést „nincs
+  véleménye"-ként kezelte; ez **pedagógiailag téves**, és a repó saját doksija mondja ki: a
+  kéz **inga és nem áll meg**, tehát a csendben hagyott kereszteződésen **valódi kéz-utazás**
+  van, valódi iránnyal. Ezért a `MetricSlot` **kettőt** hordoz: `direction` (mindig ismert) +
+  `expected`; a `expectedHere == false` nem kétely, hanem **minta-sértés** (ütem utáni lelet).
+  **HIBA 2 — egy NEGYED rácsot KERESZTEZŐDÉS-felbontáson kell olvasni, különben minden
+  off-beat ütés ÁTFORDUL.** A negyed rács négy lefelé ütést jelöl, de a kéz **felfelé** jön
+  vissza (`handCrossings`, és a doksi kimondja: „amit KÉRNEK" vs „amit a kéz TESZ"). Rés-
+  felbontáson egy ütemek közti ütés a legközelebbi negyedre esik és **„lefelé"** lesz,
+  miközben a kéz felfelé tart — **magabiztos inverzió** pont azokon az off-beat ütéseken,
+  amiket a tanuló akkor ad hozzá, amikor kezdi kitölteni a mintát. A `crossings` gyár a negyed
+  rácsot **nyolc kereszteződésre** tágítja; teszt pinneli a `handCrossings`-egyezést **és**
+  azt, hogy a **nem tágított** olvasat ugyanazon az ütésen „lefelé"-t ad.
+  **Az AUTHORED rács iránya érvényben marad** (`followsPendulum == false` az oom-pah-nál, a
+  csatorna nem javítja ki) — különben hamisat tanítanánk egy mintáról, amit valódi tanárok
+  tanítanak. Teszt pinneli.
+  **A MÉRÉS NEM VÁLTOZIK:** a GuitarSet implikált mintája szigorú tizenhatod-alternáció
+  **ghost nélkül**, tehát a `slot_call` válasza sosem függött a ghost-szemantikától → a 0,9797
+  és a fúziós táblák állnak. A **paritás-fixtúra újragenerálva** (180 eset): `expectedHere`,
+  a kitágított negyed rács és a 3/4 authored oom-pah is benne. **16/16 zöld, szállított
+  viselkedés változatlan, a csatorna továbbra sincs bekötve.**
+  Tanulság: **L676** — és ez a **harmadik** eset ugyanebből a családból ([[L669]] `STD_SEEDS`,
+  [[L671]] `beat_position`), tehát **mintázat**: a keresésem a **technikai** szomszédságra megy
+  (ugyanaz a réteg/könyvtár), nem a **fogalmira**. Szabály: egy domain-fogalom kódolása előtt a
+  **fogalom nevére** keresni `lib/` egészében + `docs/research/` + `docs/superpowers/specs/`.
+  **KÖVETKEZŐ, ebben a sorrendben:** (1) a `RhythmGrid.onsetUs` bar-horgonyának + a
+  `crossings` mintájának eljuttatása a DSP pipeline-ig (réteg-átívelő, a konfigurációs helyen);
+  (2) a **D1 fúzió** bekötése a **pontozó** úton + a `settledTier` felkapcsolása
+  **profile-build költségméréssel**; (3) a nyíl fúziója **funkció-kapu** mögé (megtérülés
+  0,475, nyolc sértő ütésen). A Learn/practice út lesz az első, ahol a csatorna él; a **szabad
+  Live marad csak-akusztikus**. **Előfeltétel (ADR 0560 D4):** pontozás alatt a pulzus
+  **haptikus**, mert a klikk pontosan az ütemre esik és a csatorna magabiztos lefelé ütésként
+  bélyegezné.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

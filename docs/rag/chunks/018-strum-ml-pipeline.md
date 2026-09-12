@@ -1168,3 +1168,50 @@ Not claimed: this did not measure whether a real beat-tracker could supply a goo
 grid -- only that the CURRENT TempoTracker and `_placeInBar` cannot. The 0.8080 baseline is
 this corpus's class balance and differs on upstroke-dominant material. The click interaction
 was not measured with the metric channel; the 15/16 figure is the repo's earlier measurement.
+
+### The grid source is RhythmGrid, and reading it found TWO defects (E18-R38, ADR 0561)
+
+Hunting for the app-owned grid ADR 0560 demands led to
+`lib/features/curriculum/domain/rhythm_grid.dart`, which already held everything the metric
+channel needed, and better: `pendulumDirection` (the same pedagogy sources ADR 0557 rests
+on), `beatsPerBar` and `subdivision`, `RhythmGrid.authored` plus `followsPendulum` for
+patterns that legitimately leave the pendulum (the taught 3/4 oom-pah), `StrokeSound.ghost`,
+`handCrossings`, and **`onsetUs({bar, slotIndex, bpm})` -- a known-phase absolute timeline
+from the exercise start**, which is exactly the grid ADR 0560 requires.
+
+**RhythmGrid is the single authority for the pendulum.** `StrumMetricChannel` takes
+`MetricSlot`s that already carry their direction, so there is no second implementation to
+drift from the first. `features/live/engine/dsp` does not import curriculum (no file in that
+directory imports another feature); the mapping is `StrumMetricChannel.crossings`, called
+from the configuration site with the grid.
+
+**Defect 1 -- a GHOST crossing carries a direction.** The first version treated a `null`
+pattern slot as "no opinion". That is pedagogically wrong, and the repo's own doc says so: the
+strumming hand is a pendulum and does not stop, so a crossing left silent is real hand travel
+with a real direction -- it simply has nothing to hear. If a learner strikes there anyway, the
+pendulum still predicts their direction. So `MetricSlot` carries BOTH `direction` (always
+known) and `expected` (does the pattern ask for a sound here), and
+`MetricCall.expectedHere == false` is not doubt about the direction -- it is a pattern
+violation, a post-bar finding (ADR 0556 D4).
+
+**Defect 2 -- a QUARTER grid must be read at CROSSING resolution or every off-beat stroke
+inverts.** A quarter bar notates four downstrokes; the hand still comes back UP between them,
+which is why `handCrossings` exists, and the class states the distinction as "what is ASKED
+(the slots) versus what the hand DOES". This channel is about what the hand does. Read at slot
+resolution, a stroke between beats lands on the nearest quarter and reads DOWN while the hand
+travelled UP -- a confident inversion on exactly the off-beat strokes a learner adds when they
+start filling a pattern in. `StrumMetricChannel.crossings` expands a quarter grid to eight
+crossings with the returns as ghosts; tests pin both halves, including that the UNEXPANDED
+reading gives DOWN on the same stroke, so the defect is written down in numbers.
+
+**An AUTHORED grid keeps its authored directions.** The taught oom-pah has
+`followsPendulum == false` and the channel does not "correct" it -- a model that called it
+wrong would teach something false about a pattern real teachers teach. Pinned by test.
+
+**The measurement is unaffected:** GuitarSet's implied pattern is a strict sixteenth
+alternation with NO ghost crossings, so `slot_call`'s answer never depended on the rest
+semantics. 0.9797 and the fusion tables stand. The parity fixture was regenerated (180 cases)
+and now carries `expectedHere`, the expanded quarter grid and the 3/4 authored oom-pah.
+
+16/16 tests green. The channel is still NOT wired, and per ADR 0560 it never will be in free
+play.

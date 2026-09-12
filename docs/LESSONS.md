@@ -27959,3 +27959,67 @@ kényelem, hanem **a csatorna előfeltétele**.
 lett volna a kár.*
 
 Lásd még [[L667]], [[L670]], [[L673]], ADR 0557, ADR 0558, ADR 0560.
+
+## L676 — Harmadszor fordult elő ugyanaz: a repó már tartalmazta, amit kitaláltam, és jobban; ez már nem eset, hanem MINTA (E18-R38, 2026-09-12)
+
+### 1. A konkrét eset
+
+Megépítettem a `StrumMetricChannel`-t: minta-alapú irány-jóslat, `List<StrumDirection?>`
+résekkel, ahol a `null` rés „nincs véleménye". Paritás-fixtúra, property-tesztek, ADR. Aztán
+a rács forrását keresve elolvastam a `lib/features/curriculum/domain/rhythm_grid.dart`-ot, és
+a repó **már tartalmazta az egészet, jobban**:
+
+- `RhythmGrid.pendulumDirection` — az inga-deriváció, **ugyanazokra a pedagógiai forrásokra**
+  hivatkozva, amikre az ADR 0557-et építettem;
+- `StrokeSound.ghost` — és a **kimondott** indoklás, hogy egy csendben hagyott rés **hordoz
+  irányt**, mert a kéz inga és nem áll meg;
+- `RhythmGrid.authored` + `followsPendulum` — a tanított 3/4 oom-pah mint **dokumentált
+  ellenpélda**, amit nem szabad kitörvényesíteni;
+- `handCrossings` — a **kimondott** különbség „amit kérnek" és „amit a kéz tesz" között;
+- `onsetUs({bar, slotIndex, bpm})` — **ismert fázisú időrács**, pontosan az, amit az ADR 0560
+  egy körrel korábban megkívánt és nem talált.
+
+És az elolvasása **két valódi hibát** talált a saját osztályomban: a „ghost = nincs véleménye"
+**pedagógiailag téves**, és egy **negyed** rácsot rés-felbontáson olvasva minden off-beat
+ütés **átfordul** (a kéz felfelé tart, a négy-rés rács lefelét mond).
+
+### 2. Ez a harmadik ugyanebből a családból, és ezt ki kell mondani
+
+- **L669** — a repóban ott volt a `STD_SEEDS`, és nem használtam: egy-seedes számokat
+  rögzítettem ADR-be.
+- **L671** — a GuitarSet `beat_position` rácsa ott volt **ugyanabban a fájlban**, amit négy
+  körön át beolvastam, és sosem listáztam ki a névtereit.
+- **L676** (ez) — a `RhythmGrid` ott volt, a **pendulum-derivációval és a pedagógiai
+  forrásokkal együtt**, miközben ugyanazt újraépítettem mellé.
+
+Három eset után ez **nem véletlen, hanem mintázat**: amikor egy új fogalmat építek, a
+keresésem a **technikai** szomszédságra irányul (ugyanaz a réteg, ugyanaz a könyvtár, ugyanaz
+a modalitás), nem a **fogalmi** szomszédságra. A `RhythmGrid` a `curriculum` rétegben van, én
+a `live/engine/dsp`-ben dolgoztam — más könyvtár, más réteg, **ugyanaz a fogalom**.
+
+**A szabály, amit ebből csinálok.** Mielőtt egy **domain-fogalmat** kódolok (inga, irány,
+rács, ütem, minta, tolerancia), a fogalom **nevére** kell keresnem a teljes repóban — nem a
+réteg könyvtárában. Konkrétan: a fogalom magyar és angol nevére, `lib/` **egészében**, plusz
+a `docs/research/` és `docs/superpowers/specs/` alatt. Ha egy `docs/research/*.md` már
+létezik a témáról, akkor **biztosan** van kód is, ami rá hivatkozik.
+
+*A technikai szomszédság azt mondja meg, hol fog a kódom élni; a fogalmi szomszédság azt,
+hogy létezik-e már. Eddig csak az elsőt kérdeztem.*
+
+### 3. Ami ebből jó: nem az volt a kár, amit hittem
+
+Ösztönösen „elvesztegetett munkának" olvastam. Nem az: a `StrumMetricChannel` **kell**, mert
+a DSP réteg nem importálhatja a curriculumot, és a mérés oldalán a Python próbának is kell egy
+párja. Amit elvesztettem, az **két kör**, amiben a kontraktus **téves** volt — és a
+tévedéseket nem a tesztek fogták el (16 teszt zöld volt a hibás szemantikával), hanem **a
+meglévő fájl elolvasása**.
+
+Ezért a javítás nem „használd a `RhythmGrid`-et helyette", hanem: **a `RhythmGrid` az inga
+egyetlen hatósága**, a csatorna pedig **készen kapott irányú** réseket vesz át, hogy ne legyen
+két implementáció, ami elsodródhat. A duplikáció megszüntetése a javítás, nem az osztály
+eldobása.
+
+*Egy zöld tesztsor a saját feltevéseimet is validálja — ha a feltevés téves, a tesztek
+pontosan a téves viselkedést védik meg.*
+
+Lásd még [[L669]], [[L671]], [[L673]], ADR 0557, ADR 0560, ADR 0561.

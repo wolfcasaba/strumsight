@@ -2,8 +2,31 @@ import 'package:meta/meta.dart';
 
 import '../../../../core/music/strum.dart';
 
-/// The metric channel's verdict for one onset — three DISTINCT states, because
-/// collapsing them is what turns this class into a lie (see
+/// One crossing of the strings in the prescribed pattern: which way the hand is
+/// travelling, and whether the pattern asks for a sound there.
+///
+/// Both halves are needed, and conflating them was a real defect in the first
+/// version of this file. A slot the pattern leaves silent is NOT a slot without
+/// a direction: the strumming hand is a pendulum and does not stop, so it still
+/// travels through that crossing — it simply misses the strings. That is
+/// `RhythmGrid`'s `StrokeSound.ghost`, documented from the same pedagogy
+/// research this channel rests on (`docs/research/
+/// strumming-direction-pedagogy-2026-09.md`). So if a learner DOES strike there,
+/// the pendulum still predicts which way they were moving.
+@immutable
+class MetricSlot {
+  const MetricSlot({required this.direction, required this.expected});
+
+  /// Which way the hand travels at this crossing. Always known on a grid.
+  final StrumDirection direction;
+
+  /// Whether the pattern asks for a STRUCK stroke here. `false` is a ghost
+  /// crossing: real hand travel, nothing to hear, nothing the pattern asked for.
+  final bool expected;
+}
+
+/// The metric channel's verdict for one onset — and the states are kept apart
+/// because collapsing them is what makes this class dangerous (see
 /// [StrumMetricChannel]).
 @immutable
 class MetricCall {
@@ -11,39 +34,47 @@ class MetricCall {
     required this.direction,
     required this.slot,
     required this.offsetSlots,
+    required this.expectedHere,
   });
 
   /// No tempo grid exists, so the channel has nothing to say about any onset.
-  /// This is the state of free play without a metronome — a normal mode, not a
-  /// failure.
+  /// This is free play without a metronome — a normal mode, not a failure, and
+  /// MEASURED to be the only honest answer there: on a grid manufactured from
+  /// `TempoTracker` plus a self-anchored bar the channel scores below a constant
+  /// "always down" (ADR 0560).
   static const unavailable = MetricCall._(
     direction: null,
     slot: -1,
     offsetSlots: double.nan,
+    expectedHere: false,
   );
 
-  /// The prescribed direction at the nearest slot, or `null` when that slot is a
-  /// REST — the pattern says nothing should have been played there, so the
-  /// channel has NO OPINION about a stroke that happened anyway. (A stroke on a
-  /// rest is itself a pattern violation, which is a finding for the post-bar
-  /// review, not a direction claim.)
+  /// The direction the hand was travelling at the nearest crossing, or `null`
+  /// only when [available] is false. Non-null whenever a grid exists, INCLUDING
+  /// on a ghost crossing — see [MetricSlot].
   final StrumDirection? direction;
 
-  /// Index of the nearest slot in the pattern, or `-1` when [available] is false.
+  /// Index of the nearest crossing, or `-1` when [available] is false.
   final int slot;
 
-  /// How far the onset sat from that slot's centre, in SLOTS, within
+  /// How far the onset sat from that crossing's centre, in SLOTS, within
   /// `[-0.5, 0.5]` — negative = early, positive = late. `NaN` when unavailable.
   /// Not a confidence: it is the raw geometric offset, and any mapping from it
   /// to a probability would be a fitted parameter this class deliberately has
   /// none of.
   final double offsetSlots;
 
-  /// Whether a grid existed at all. `available && direction == null` means "on
-  /// the grid, but the pattern prescribes a rest here".
+  /// Whether the pattern asked for a struck stroke at that crossing. `false`
+  /// with [available] true means the learner played where the pattern ghosts —
+  /// itself a pattern violation, and a finding for the post-bar review rather
+  /// than a reason to doubt [direction].
+  final bool expectedHere;
+
+  /// Whether a grid existed at all.
   bool get available => slot >= 0;
 
-  /// True only when the channel actually names a direction.
+  /// Whether the channel names a direction. Equal to [available] on a grid, and
+  /// kept as its own name so call sites read as intent rather than arithmetic.
   bool get hasOpinion => available && direction != null;
 }
 
@@ -57,13 +88,22 @@ class MetricCall {
 /// 238 ms later, which is why ADR 0551's binding latency constraint dissolves
 /// rather than needing to be managed.
 ///
-/// The rule is the nearest slot of the supplied pattern, wrapping. It is
+/// The rule is the nearest crossing of the supplied pattern, wrapping. It is
 /// deliberately NOT "an upstroke sits on a sixteenth offbeat": that is one
 /// corpus's pattern. A lesson's pattern is whatever its own notation says, and
-/// the app knows it — so the map is notation, not a parameter fitted to a
-/// corpus (ADR 0557 D3). Measured, a 2-bin eighth-note map scores 0.5426 on
-/// GuitarSet's sixteenth-note material, i.e. near chance: using the wrong
-/// pattern's map is not a small error, it is no signal at all.
+/// the app knows it — so the map is notation, not a parameter fitted to a corpus
+/// (ADR 0557 D3). Measured, a 2-bin eighth-note map scores 0.5426 on GuitarSet's
+/// sixteenth-note material, i.e. near chance: using the wrong pattern's map is
+/// not a small error, it is no signal at all.
+///
+/// ## The pendulum is NOT derived here
+///
+/// `RhythmGrid.pendulumDirection` is the single authority for which way the hand
+/// travels at a slot, and it carries the pedagogy sources with it. This class
+/// takes [MetricSlot]s already carrying their direction precisely so there is no
+/// second implementation of that rule to drift from the first. Callers build the
+/// slots with [StrumMetricChannel.crossings], which is also where a quarter-note
+/// grid is expanded — see that constructor for why it must be.
 ///
 /// ## What this class must NEVER be used for
 ///
@@ -85,39 +125,108 @@ class MetricCall {
 ///    pendulum here" — and belongs in the post-bar review (ADR 0556 D4).
 /// 3. This class never decides whether a stroke HAPPENED. It says which
 ///    direction a stroke had, never whether there was one.
+///
+/// And one hazard that is NOT this class's to fix but must be respected by its
+/// callers: a metronome click lands exactly ON the beat, which is exactly where
+/// the grid expects a downstroke, and the onset detector hears clicks (MEASURED:
+/// 15 reported strums from 16 clicks, `metronome_click_pollution_test.dart`). So
+/// this channel would rubber-stamp a click as a confident downstroke. While
+/// scoring, the pulse must be HAPTIC — that is a precondition of using this
+/// channel, not a convenience (ADR 0560 D4).
 @immutable
 class StrumMetricChannel {
   const StrumMetricChannel({required this.pattern, required this.beatsPerBar})
     : assert(beatsPerBar > 0, 'a bar needs at least one beat');
 
-  /// One bar of prescribed slots at ANY subdivision — 8 for the eighth-note
-  /// presets the app ships today, 16 for sixteenth-note material. `null` is a
-  /// rest. This is the lesson's notation, passed in rather than fitted.
-  final List<StrumDirection?> pattern;
+  /// One bar of crossings at ANY resolution — 8 for the eighth-note patterns the
+  /// app ships today, 16 for sixteenth-note material. This is the lesson's
+  /// notation, passed in rather than fitted.
+  final List<MetricSlot> pattern;
 
-  /// Beats per bar (4 in 4/4, 3 in 3/4). Only used to turn [bpm] into a bar
+  /// Beats per bar (4 in 4/4, 3 in 3/4). Only used to turn `bpm` into a bar
   /// length, so the caller's metre and the pattern's length stay independent.
   final int beatsPerBar;
 
-  /// Slots per beat — 2 for an eighth-note pattern in 4/4, 4 for sixteenths.
+  /// Crossings per beat — 2 for an eighth-note pattern, 4 for sixteenths.
   double get slotsPerBeat => pattern.length / beatsPerBar;
+
+  /// Build a channel from a notated bar, expanding a QUARTER-note grid to the
+  /// crossings the hand actually makes.
+  ///
+  /// [directions] and [struck] are one entry per NOTATED slot, in bar order —
+  /// exactly `RhythmGrid.slots`' `direction` and `isStruck`. [slotsPerBeatNotated]
+  /// is that grid's own resolution.
+  ///
+  /// **Why a quarter grid must be expanded, and why getting this wrong would
+  /// invert half the answers.** A quarter-note bar notates four downstrokes. The
+  /// hand still comes back UP between them — `RhythmGrid.handCrossings` exists
+  /// for exactly that, and the class documents the distinction as "what is ASKED
+  /// (the slots) versus what the hand DOES". This channel is about what the hand
+  /// DOES. Read at slot resolution, a stroke halfway between two beats would land
+  /// on the nearest quarter slot and be called DOWN, while the hand was travelling
+  /// UP — a confident inversion on precisely the off-beat strokes a learner adds
+  /// when they start filling in the pattern.
+  ///
+  /// A grid already at eighth resolution or finer is taken as given: its notation
+  /// already names every crossing.
+  factory StrumMetricChannel.crossings({
+    required List<StrumDirection> directions,
+    required List<bool> struck,
+    required int slotsPerBeatNotated,
+    int beatsPerBar = 4,
+  }) {
+    assert(
+      directions.length == struck.length,
+      'one struck flag per notated slot',
+    );
+    if (slotsPerBeatNotated >= 2) {
+      return StrumMetricChannel(
+        beatsPerBar: beatsPerBar,
+        pattern: [
+          for (var i = 0; i < directions.length; i++)
+            MetricSlot(direction: directions[i], expected: struck[i]),
+        ],
+      );
+    }
+    // One notated slot per beat: insert the return travel as a ghost crossing,
+    // travelling opposite to the notated stroke.
+    return StrumMetricChannel(
+      beatsPerBar: beatsPerBar,
+      pattern: [
+        for (var i = 0; i < directions.length; i++) ...[
+          MetricSlot(direction: directions[i], expected: struck[i]),
+          MetricSlot(direction: _opposite(directions[i]), expected: false),
+        ],
+      ],
+    );
+  }
+
+  static StrumDirection _opposite(StrumDirection direction) =>
+      direction == StrumDirection.down
+      ? StrumDirection.up
+      : StrumDirection.down;
 
   /// The prescribed call for an onset at [onsetTimeSec], given the bar that
   /// started at [barStartSec] and a tempo of [bpm].
   ///
-  /// A non-positive [bpm] (the [TempoTracker] before it has seen three onsets,
-  /// or after a long gap) yields [MetricCall.unavailable] — the channel reports
-  /// that it has no grid rather than inventing one, because a guessed grid would
-  /// produce a confident direction from nothing.
+  /// [barStartSec] must come from a grid the APP OWNS — the metronome or lesson
+  /// timeline, whose phase is known by construction (`RhythmGrid.onsetUs`). It
+  /// must NOT be estimated from the learner's own strokes: measured, a grid
+  /// anchored to an arbitrary stroke scores below a constant "always down",
+  /// because an origin off by one crossing INVERTS every call on an alternating
+  /// pattern (ADR 0560).
+  ///
+  /// A non-positive [bpm] yields [MetricCall.unavailable] — the channel reports
+  /// that it has no grid rather than inventing one.
   MetricCall callAt({
     required double onsetTimeSec,
     required double barStartSec,
     required double bpm,
   }) {
     // An empty pattern prescribes nothing, which is genuinely the same state as
-    // having no grid: the channel has nothing to say. Checked here rather than
-    // asserted in the constructor so the constructor can stay `const` — a
-    // const-evaluated `pattern.length` is not available to an initializer assert.
+    // having no grid. Checked here rather than asserted in the constructor so the
+    // constructor can stay `const` — a const-evaluated `pattern.length` is not
+    // available to an initializer assert.
     if (pattern.isEmpty) return MetricCall.unavailable;
     if (!bpm.isFinite || bpm <= 0) return MetricCall.unavailable;
     if (!onsetTimeSec.isFinite || !barStartSec.isFinite) {
@@ -127,12 +236,11 @@ class StrumMetricChannel {
     if (barSec <= 0) return MetricCall.unavailable;
 
     // Wrap FIRST, into [0, 1). Two reasons, both load-bearing: an onset can sit
-    // before the bar start (the pipeline re-anchors bars, so a stroke can arrive
-    // early), and the nearest-slot arithmetic below only matches the Python
-    // reference for non-negative inputs — Dart's `round()` breaks ties away from
-    // zero while the reference uses `floor(x + 0.5)`, and those differ in sign
-    // only for negatives. Wrapping removes the disagreement instead of relying
-    // on it never arising.
+    // before the bar start (a stroke can arrive early), and the nearest-crossing
+    // arithmetic below only matches the Python reference for non-negative inputs
+    // — Dart's `round()` breaks ties away from zero while the reference uses
+    // `floor(x + 0.5)`, and those differ in sign only for negatives. Wrapping
+    // removes the disagreement instead of relying on it never arising.
     var phaseInBar = ((onsetTimeSec - barStartSec) / barSec) % 1.0;
     if (phaseInBar < 0) phaseInBar += 1.0;
 
@@ -140,9 +248,10 @@ class StrumMetricChannel {
     final scaled = phaseInBar * slots;
     final index = scaled.round() % slots;
     return MetricCall._(
-      direction: pattern[index],
+      direction: pattern[index].direction,
       slot: index,
       offsetSlots: scaled - scaled.roundToDouble(),
+      expectedHere: pattern[index].expected,
     );
   }
 }
