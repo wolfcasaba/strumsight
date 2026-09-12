@@ -14199,7 +14199,23 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **macro-F1 egyedül a rosszabb modellt hozta volna ki**, ezért minden
   irány-eredmény mellé ki kell írni a jósolt osztály-arányt a valódi mellé
   (ADR 0551 D2). A kapacitás-csökkentés és az ablakonkénti normalizálás mérve
-  **nem** emelő (ADR 0551 D5).
+  **nem** emelő (ADR 0551 D5). **A MÉRCE, ami eddig hiányzott (E18-R29, ADR
+  0552):** a többségi alapvonal („mindig lefelé") a GuitarSet teszten macro
+  **0,4468**, a Klangión **0,3836** — a szállított irány-kimenet (0,3876) tehát
+  **a GuitarSet alapvonala ALATT van**, és ez négy mérési körön át nem derült ki,
+  mert az alapvonal nem volt leírva. Továbbá **az AUC ezen a korpuszon
+  olvashatatlan**: egy orákulum, ami csak a felvételt azonosítja és annak
+  osztály-arányát mondja, **AUC 0,7386**-ot ér el nulla ütés-információval, tehát
+  0,74 alatti AUC semmit nem bizonyít — **macro-F1-et kell olvasni**. Ugyanez
+  buktatta meg az onset előtti jel „váltakozás" magyarázatát: az egymást követő
+  ütések 61,4%-ban EGYIRÁNYÚAK, a mechanizmus felvétel-felismerés (a D3 döntése
+  áll, az érve javítva). **A kétszintű döntés megérte, mérve:** a B kar
+  (Klangio+GuitarSet) 70 → 238 ms-on GuitarSet **0,5017 → 0,6446** és Klangio
+  0,5979 → **0,6321**, nulla architektúra-költséggel (a szállított 15 frame már
+  238 ms-ot elér, a tensor-alak `(15,128)` marad). A két emelő **nem helyettesíti
+  egymást**: plusz hang egyedül a saját doménben +0,2133, idegen felvételen
+  **nulla**. Az Alpha kapu (0,80) **továbbra sem teljesül**. Bekötő kör kell
+  (AGENTS.md §9, a 3 osztályos asset újratanításával) — ADR 0552.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

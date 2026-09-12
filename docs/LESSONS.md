@@ -27346,3 +27346,84 @@ Lásd még ADR 0550 (a felülírt főszám), ADR 0551 (a javítás és a határi
 Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
 eszközök: `ml/probe_direction_budget.py`, `ml/experiment_cross_corpus.py`,
 `ml/guitarset.py`.
+
+## L667 — Három kör beszélt „javulásról" alapvonal nélkül; és egy orákulum, ami nulla információval AUC 0,7386-ot ér (E18-R29, 2026-09-12)
+
+### 1. A kérdés, amit nem tettem fel: mihez képest?
+
+Az ADR 0549 (kapu), az utána jövő kör (döntési határ), az ADR 0550 és az ADR 0551 mind
+irány-macro-F1-et hasonlított **egy korábbi irány-macro-F1-hez**. Egyik sem írta le azt az
+egy sort, amihez képest a szám egyáltalán jelent valamit:
+
+```
+  többségi alapvonal („mindig lefelé")
+    GuitarSet teszt (n=530):   macro 0,4468
+    Klangio  teszt (n=3721):   macro 0,3836
+  SZÁLLÍTOTT 3 osztályos CRNN, GuitarSeten:  macro 0,3876
+```
+
+**A szállított irány-kimenet a többségi alapvonal ALATT van.** Négy kör mért rá, és ez
+egyikben sem derült ki — nem azért, mert a számok rosszak voltak, hanem mert **nem volt
+hova tenni őket**. Egy 0,43-ról 0,50-re javulás úgy hangzik, mint előrelépés; azt, hogy
+mindkettő a találgatás szintje körül van, csak az alapvonal mondja meg.
+
+A kínos rész: **a repó tudja ezt a fegyelmet.** A GOV-06 akkord-mérése így van leírva:
+„67,069% a 18,832%-os többségi-osztály baseline fölött". Az irány-mérések ugyanabban a
+repóban, ugyanabban a stílusban íródtak — alapvonal nélkül.
+
+**A szabály.** Egy osztályozási szám **alapvonal nélkül nem eredmény, hanem szám.** Az
+alapvonal a triviális stratégia a *konkrét teszthalmazon* (többségi osztály, vagy a
+legerősebb nem-informatív prediktor), és **a mérőeszközbe kell égetni**, nem a prózába —
+ezért a `probe_direction_budget.py` most minden futásnál előbb az alapvonalat írja ki, és
+csak utána a sorokat.
+
+### 2. Az orákulum, ami nulla információval jól rangsorol
+
+Építettem egy prediktort, ami **semmit nem tud az ütésről** — csak azt, **melyik
+felvételből** jött, és a take-ek felütés-aránya szerint rangsorol. **AUC 0,7386.**
+
+Ebből az következik, hogy ezen a korpuszon **minden 0,74 alatti AUC semmilyen
+irány-diszkriminációt nem bizonyít** — és több AUC, amit a saját ADR-jeimben idéztem, ott
+van vagy alatta (a szállított log-mel 0,6523, a 16 sávos 0,7484 épphogy fölötte).
+
+**A szabály.** Az AUC **a teszthalmaz szerkezetére** érzékeny: ha a halmaz felvételekből
+áll, és a felvételek osztály-aránya különbözik, akkor a **felvétel felismerése** már
+rangsorol. Egy rangsoroló metrikához tehát **ugyanúgy kell nem-informatív alapvonal**, mint
+egy döntési metrikához — és ha az alapvonal magas, **nem az a metrika**, amit olvasni kell.
+Itt a macro-F1 az (az orákulum ott csak 0,4468, mert felütést egyáltalán nem tud termelni).
+
+### 3. És ez buktatta meg a saját mechanizmus-magyarázatomat
+
+Az ADR 0550 D3-ban megmértem, hogy a szigorúan onset **előtti** hang AUC 0,7128-cal jelzi
+az irányt, és a mechanizmust **„váltakozás-tippnek"** nevezte el. A mérés igaz. **A név
+téves volt, és nem mértem meg, mielőtt leírtam.** Az egymást követő ütések a GuitarSeten
+**61,4%-ban ugyanolyan irányúak** (Klangión 45,4%) — nincs erős váltakozás, amit tippelni
+lehetne.
+
+A valódi mechanizmus **rosszabb**: 128 ms terem, gitár és akkord **azonosítja a take-et**,
+és a take osztály-aránya elvégzi a többit — pontosan az, amit a 2. pont orákuluma mér. A
+0,7128 tehát **nem is jellemző-alapú tipp, hanem felvétel-felismerés.**
+
+A *döntés* (ne számítsuk be az onset előtti kontextust) **változatlan, és erősebb lett**.
+De a mellé írt *érvem* pontatlan volt: azt mondtam, a `D DU UDU` „nem váltakozik", ezért ott
+a tipp hazudna — a `D DU UDU` valójában **60%-ban** váltakozik, vagyis **többet**, mint a
+korpusz. A helyes érv nem a váltakozási arány, hanem hogy a kontextus-prior **a korpusz
+repertoárjára** jellemző, és bármi másra átvive téved.
+
+**A szabály.** Egy megfigyelt korrelációhoz adott **mechanizmus-magyarázat is állítás**, és
+ugyanúgy mérni kell, mint a korrelációt. Ha nem mérem, akkor egy helyes mérés mellé egy
+téves *miért*-et írok — és a következő döntés már a miértre épül. (Ez az [[L665]] 1. pontja
+megint: ott egy blokkolót állítottam utánanézés nélkül, itt egy mechanizmust.)
+
+### 4. Amit a kör pozitívan hozott
+
+A mérce bevezetése után a grid (3 tanítókészlet × 2 határidő) azt mutatta, hogy **a két
+emelő nem helyettesíti egymást**: plusz hang egyedül a saját doménben +0,2133, idegen
+felvételen **nulla**; második korpusz egyedül +0,1465, de a hang-költségvetést asztalon
+hagyja; együtt GuitarSet **0,6446** / Klangio **0,6321** — a 0,4468 / 0,3836 alapvonalak
+fölött, a szállított 0,3876-ról. *A „több hang" javítja a modellt azon, amit már ismer; a
+„több korpusz" teszi átvihetővé.*
+
+Lásd még [[L664]] (prior-illesztés küszöbön), [[L665]] (hamis blokkoló), [[L666]]
+(ablak-igazítás), ADR 0552 (a kétszintű döntés).
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).

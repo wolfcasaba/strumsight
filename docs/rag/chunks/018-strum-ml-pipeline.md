@@ -569,3 +569,79 @@ nothing up on Klangio — it collapsed onto the majority class of an 81 %-down t
 rate beside the true one. Two hypotheses died here as well: shrinking the model (10k and
 4k parameters) collapses it to one class, and per-window energy normalisation hurts both
 the CRNN (0.5017 → 0.4065) and the linear reader (0.5885 → 0.5763).
+
+### The baseline that was missing, and the measured two-tier payoff (E18-R29, ADR 0552)
+
+**Quote this first, always.** Every direction figure above was compared to an earlier
+direction figure, never to the trivial strategy on the same test set:
+
+```
+  majority baseline ("always down")
+    GuitarSet test (n=530,  81% down):  down 0.8935  up 0.0000  macro 0.4468
+    Klangio  test (n=3721, 62% down):  down 0.7673  up 0.0000  macro 0.3836
+
+  SHIPPED 3-class CRNN, end to end, on GuitarSet:                  macro 0.3876
+```
+
+The shipped direction output is **below** a system that ignores the audio. Four rounds
+measured it without that line, so "0.43 -> 0.50" read as progress when both sit around
+guessing. `probe_direction_budget.py` now prints the baseline before any result row.
+
+**AUC is the wrong metric on this corpus.** A predictor that knows nothing about the stroke
+— only which take it came from, ranking by that take's up-rate — reaches **AUC 0.7386**,
+because recognising the recording is enough to order the corpus. Any AUC below ~0.74 here
+is no evidence of direction discrimination, and several figures in ADR 0551 sit at or under
+it. Read macro-F1 (the oracle scores only 0.4468 there, being unable to emit upstrokes).
+
+That same oracle **refuted my own mechanism label**: ADR 0550 D3 measured pre-onset audio
+predicting direction at AUC 0.7128 and called it "alternation". Consecutive strokes share a
+direction 61.4 % of the time in GuitarSet (45.4 % in Klangio) — there is no strong
+alternation to guess. The mechanism is take identification plus that take's class prior.
+The decision to exclude pre-onset context is unchanged and better founded; the argument
+beside it was wrong, including the claim that `D DU UDU` "does not alternate" (it flips
+60 %, i.e. MORE than the corpus). The real argument is that a context prior belongs to the
+corpus's repertoire and misleads on any other.
+
+**The grid.** Three training pools x two deadlines, every cell on both held-out corpora.
+Only the truncation differs: the shipped 15-frame window already reaches 238 ms past the
+onset, so both blocks use the same (15, 128) tensor and the same network — the deadline
+lever costs nothing architecturally.
+
+```
+  GuitarSet (new player AND tune, n=530)            baseline 0.4468
+    A Klangio only          70 ms   macro 0.3552   calledUp 0.76/0.19
+    A Klangio only         238 ms   macro 0.3415   calledUp 0.82/0.19
+    B Klangio + GuitarSet   70 ms   macro 0.5017   calledUp 0.64/0.19
+    B Klangio + GuitarSet  238 ms   macro 0.6446   calledUp 0.29/0.19   <- chosen
+    C GuitarSet only        70 ms   macro 0.5068   calledUp 0.06/0.19
+    C GuitarSet only       238 ms   macro 0.6514   calledUp 0.20/0.19
+
+  Klangio (new player, same rig, n=3721)            baseline 0.3836
+    A Klangio only          70 ms   macro 0.4080     B  70 ms  macro 0.5979
+    A Klangio only         238 ms   macro 0.6213     B 238 ms  macro 0.6321   <- chosen
+    C GuitarSet only        70 ms   macro 0.3832     C 238 ms  macro 0.5525
+```
+
+**The two levers do not substitute for each other.** Extra audio alone lifts the ORIGINAL
+domain hard (Klangio 0.4080 -> 0.6213, +0.2133) and transfers NOTHING (GuitarSet 0.3552 ->
+0.3415, both below baseline). The second corpus alone transfers (+0.1465 on GuitarSet) but
+leaves the audio budget unspent. Together: 0.6446 / 0.6321. More audio improves the model
+on what it already knows; more corpora make it transferable.
+
+C is not the winner despite scoring highest on GuitarSet (0.6514 vs 0.6446): it is 0.08
+worse on Klangio and collapses entirely at 70 ms (calledUp 0.00). Klangio is not dead
+weight. And at 70 ms macro-F1 alone would again have picked C — print the predicted class
+rate beside the true one.
+
+**Alpha gate (Ch14 §7.2, macro-F1 >= 0.80) is NOT met**: 0.6446. The linear floor at 238 ms
+is 0.7326, so the CRNN sits 0.088 under it — the same distance as at 70 ms (0.5017 vs
+0.5885), meaning it converts the extra audio at unchanged efficiency. Real capability, not
+an artefact, and the remaining gap is unchanged.
+
+**Next:** a wiring round under AGENTS.md §9 — a second, delayed classification on the
+existing `StrumDirectionClassifier` / `StrumAnalyzer` seam, the arrow taking the provisional
+call and rhythm SCORING the settled one (scoring has no latency requirement and is where a
+wrong answer costs the learner, ADR 0549 D2). It needs the 3-class asset retrained with the
+chosen configuration; these experiments are deliberately 2-class, because the no-strum head
+is a separate capability with its own calibrated gate and mixing them would make it
+impossible to say which change moved which number.

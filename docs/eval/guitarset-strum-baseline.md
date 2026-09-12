@@ -533,3 +533,96 @@ osztály-arányt a valódi mellé**. Ugyanaz a prior-illesztés, mint az L664-be
 - **Hangerő-invariancia.** „Egy erős lefelé ütés hangosabb, tehát globális normalizálás
   mellett a modell a hangerőre ülhet." Mérve: az ablakonkénti energia-normalizálás a
   CRNN-nek **rontott** (0,5017 → 0,4065) és a lineáris olvasónak is (0,5885 → 0,5763).
+
+---
+
+# A mérce, ami eddig hiányzott — és a kétszintű döntés mért nyeresége (E18-R29)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/experiment_cross_corpus.py
+GUITARSET_DIR=/path/to/guitarset python ml/probe_direction_budget.py
+```
+
+## Előbb a mérce: a szállított irány-kimenet a TÖBBSÉGI ALAPVONAL ALATT van
+
+```
+  többségi alapvonal („mindig lefelé")
+    GuitarSet teszt (n=530,  81% lefelé):  le 0,8935  fel 0,0000  macro 0,4468
+    Klangio  teszt (n=3721, 62% lefelé):  le 0,7673  fel 0,0000  macro 0,3836
+
+  SZÁLLÍTOTT 3 osztályos CRNN, végponttól végpontig, GuitarSeten:  macro 0,3876
+```
+
+Három kör beszélt „javulásról" anélkül, hogy ez a sor le lett volna írva. A repó máshol
+használja ezt a fegyelmet — a GOV-06 az akkord-pontosságot „67,069% a 18,832%-os többségi
+alapvonal fölött" formában rögzítette —, az irány-mérésekből kimaradt.
+
+**És egy metrika-csapda.** Egy orákulum, ami semmit nem tud az ütésről, csak azt, **melyik
+felvételből** jött, és a take-ek felütés-aránya szerint rangsorol: **AUC 0,7386.**
+
+> Ezen a korpuszon a **0,74 alatti AUC semmilyen irány-diszkriminációt nem bizonyít.**
+> A **macro-F1** az olvasandó metrika.
+
+Ez visszamenőleg érvénytelenít néhány AUC-ot a fenti szakaszokból (a szállított log-mel
+0,6523-a és a 16 sávos 0,7484-e a nulla-információs szint körül vagy alatta van); a
+macro-F1 számok érvényesek.
+
+**Mellékhatásként megbukott a saját magyarázatom.** Az onset előtti jelet (AUC 0,7128)
+„váltakozás-tippnek" nevezte a fenti szakasz. De az egymást követő ütések a GuitarSeten
+**61,4%-ban ugyanolyan irányúak** (Klangión 45,4%) — **nincs erős váltakozás.** A valódi
+mechanizmus rosszabb: **128 ms terem, gitár és akkord azonosítja a take-et**, és a take
+osztály-aránya elvégzi a többit. A döntés (ne számítsuk be az onset előtti kontextust)
+**változatlan, és jobban megalapozott.** A `D DU UDU`-ra hivatkozó érv viszont pontatlan
+volt: az 60%-ban váltakozik, vagyis **többet**, mint a korpusz; a valódi érv az, hogy a
+kontextus-prior **a korpusz repertoárjára** jellemző.
+
+## A grid: három tanítókészlet × két határidő
+
+A két határidő-blokk között **csak a levágás** változik. A szállított 15 frame **már
+238 ms-ot elér** az onset után (a 70 ms-os levágás 168 ms-ot dob el belőle), tehát a
+tensor-alak mindkét blokkban `(15, 128)`, a háló, a mag és a csoport szerinti korai
+leállítás ugyanaz. **Nulla architektúra-költség.**
+
+| kar | határidő | GuitarSet le/fel/**macro** | „fel" mond/valóság | Klangio le/fel/**macro** | „fel" mond/valóság |
+|---|---|---|---|---|---|
+| *alapvonal* | — | 0,8935 / 0,0000 / *0,4468* | — | 0,7673 / 0,0000 / *0,3836* | — |
+| A csak Klangio | 70 ms | 0,3856 / 0,3248 / **0,3552** | 0,76 / 0,19 | 0,3426 / 0,4734 / **0,4080** | 0,73 / 0,38 |
+| A csak Klangio | 238 ms | 0,3352 / 0,3477 / **0,3415** | 0,82 / 0,19 | 0,6442 / 0,5984 / **0,6213** | 0,56 / 0,38 |
+| B Klangio+GuitarSet | 70 ms | 0,5835 / 0,4199 / **0,5017** | 0,64 / 0,19 | 0,6169 / 0,5788 / **0,5979** | 0,58 / 0,38 |
+| **B Klangio+GuitarSet** | **238 ms** | 0,8284 / 0,4609 / **0,6446** | 0,29 / 0,19 | 0,6488 / 0,6154 / **0,6321** | 0,58 / 0,38 |
+| C csak GuitarSet | 70 ms | 0,8772 / 0,1364 / **0,5068** | **0,06** / 0,19 | 0,7649 / 0,0014 / **0,3832** | **0,00** / 0,38 |
+| C csak GuitarSet | 238 ms | 0,8625 / 0,4402 / **0,6514** | 0,20 / 0,19 | 0,7496 / 0,3554 / **0,5525** | 0,18 / 0,38 |
+
+### A két emelő nem helyettesíti egymást
+
+- **Plusz hang egyedül** (A kar): a *saját* doménben nagyot hoz — Klangio 0,4080 →
+  **0,6213** (+0,2133) —, de **átvinni nem tud**: GuitarSet 0,3552 → 0,3415, vagyis
+  **semmi**, és mindkettő az alapvonal **alatt**.
+- **Második korpusz egyedül** (B @ 70 ms): átvisz (+0,1465 a GuitarSeten), de a
+  hang-költségvetést asztalon hagyja.
+- **Együtt** (B @ 238 ms): **0,6446 / 0,6321**, mindkettő jóval az alapvonala fölött.
+
+*A „több hang" javítja a modellt azon, amit már ismer; a „több korpusz" teszi átvihetővé.*
+
+### A kontroll-kar megint dolgozott
+
+`C @ 238 ms` a GuitarSeten **0,6514**, hajszálnyival B felett — de a Klangión **0,5525** B
+0,6321-ével szemben, és 70 ms-nál **teljesen összeomlik** („fel"-nek mond 0,00). A Klangio
+tehát **nem holt súly**, és a választás B. Megint: **macro-F1 egyedül C-t hozta volna ki
+győztesnek** 70 ms-nál.
+
+### Az Alpha kapu nincs meg, és nem kerekítjük fel
+
+Ch14 §7.2: **0,80**. A választott konfiguráció **0,6446**. A lineáris padló 238 ms-on
+0,7326, tehát a CRNN **0,088**-cal van alatta — **ugyanannyival, mint 70 ms-nál** (0,5017
+vs 0,5885). Vagyis a plusz hangot **ugyanolyan hatékonysággal** váltja pontosságra: a
+nyereség valódi képesség, nem műtermék, de a maradék rés is ugyanott van.
+
+## Ami ebből következik
+
+A kétszintű döntés (ADR 0551 D4) **megérte** és megépül: ideiglenes válasz 70 ms-nál az
+élő nyílhoz, letisztult ~250 ms-nál a **ritmus-pontozáshoz**, aminek nincs latencia-igénye
+— és ahol a hamis válasz fáj (ADR 0549 D2). Bekötő kör, AGENTS.md §9 alatt, a 3 osztályos
+asset újratanításával; a jelenlegi kísérletek szándékosan **2 osztályosak**, mert a
+no-strum fej külön képesség saját kalibrált kapuval, és összekeverve nem lehetne megmondani,
+melyik változás mozdította melyik számot.

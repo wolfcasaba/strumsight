@@ -1,4 +1,19 @@
-"""E18-R28 - does adding a SECOND corpus fix the direction head's transfer failure?
+"""E18-R28/R29 - two levers on the direction head: a SECOND corpus, and the DEADLINE.
+
+Run as a grid: three training pools x two live deadlines, every cell scored on both
+held-out corpora. The second axis was added once ADR 0551 D3 measured that the cue needs
+150-250 ms of post-onset audio while the shipped path zeroes everything past 70 ms.
+
+The deadline axis costs nothing architecturally, which is the point: the shipped 15-frame
+window ALREADY reaches 238 ms past the onset, so both blocks use the same (15, 128) tensor
+and the same network, and only the truncation moves. A "settled" direction head therefore
+needs no new frontend and no Dart parity work - just a second invocation once the audio
+has arrived.
+
+What the grid decides: whether the two-tier decision of ADR 0551 D4 (provisional at 70 ms
+for the live arrow, settled at ~250 ms for rhythm scoring) is worth wiring. The 0.7326 in
+ADR 0551 is a LINEAR floor; if the CRNN cannot convert the extra audio into accuracy, the
+plumbing buys nothing and must not be built.
 
 ADR 0550 measured the defect: the live model scores direction macro-F1 0.3876 (up-F1
 0.1905) on GuitarSet while a plain logistic regression on the model's OWN input geometry
@@ -26,6 +41,14 @@ Three arms, each evaluated on BOTH held-out corpora:
     C  GuitarSet only          - the control that keeps B honest: if C alone matched B,
                                  then B would be "GuitarSet works" rather than "two
                                  corpora work", and Klangio would be dead weight
+
+Arm C earned its place immediately: at the 70 ms deadline its macro-F1 (0.5068) BEAT the
+candidate's (0.5017) while it called nothing up on Klangio - it had collapsed onto the
+majority class of an 81 %-down test set. Macro-F1 alone would have selected the worse
+model. That is why every row prints `calledUp/truth`, the predicted up-rate beside the true
+one: a collapsed model is invisible in macro-F1 and obvious in that column (LESSONS L666,
+and the same prior trap as L664 one level up - there it would have mis-set a threshold,
+here it would have chosen which model ships).
 
 Held-out sets, fixed before any arm runs:
 
@@ -68,6 +91,15 @@ BATCH = 64
 PATIENCE = 8
 VAL_GROUP_FRAC = 0.2
 KLANGIO_TEST_GUITARIST = "4"
+
+# The second axis, added after ADR 0551 D3 measured that the cue needs 150-250 ms of
+# post-onset audio while the live path zeroes everything past 70 ms. No architecture
+# changes between these two: the shipped 15-frame window already REACHES 238 ms after the
+# onset, so the tensor stays (15, 128) and only the truncation moves. `ARRIVED` is any
+# deadline past that reach, i.e. the window with nothing thrown away.
+DEADLINES = {"70 ms (shipped)": 0.070, "238 ms (full window)": 10.0}
+CACHES = {0.070: ("klangio_live70.npz", "guitarset_live70.npz"),
+          10.0: ("klangio_live_full.npz", "guitarset_live_full.npz")}
 # r173 regularisation, a-priori and NOT tuned here (honest_eval.AUG_REG): the documented
 # train-0.99 / val-0.84 overfit on ~364k params is exactly what a small corpus produces,
 # and this experiment makes the corpus bigger, so leaving it off would confound the two.
@@ -131,63 +163,73 @@ def train_arm(name, X, y, groups, tests):
     return out
 
 
-def main():
+def build_grid(deadline):
+    """Both corpora at one deadline, with the three arms and the two held-out sets."""
     import guitarset as G
 
-    if not os.environ.get("GUITARSET_DIR"):
-        sys.exit("set GUITARSET_DIR")
-
-    kx, ky, krec = H.build_live()
+    k_cache, g_cache = CACHES[deadline]
+    kx, ky, krec = H.build_live(deadline_s=deadline, cache=k_cache)
     k_guitarist = np.array([K.guitarist_of(r) for r in krec])
-    k_train = k_guitarist != KLANGIO_TEST_GUITARIST
+    k_train, k_test = k_guitarist != KLANGIO_TEST_GUITARIST, None
     k_test = ~k_train
 
-    gx, gy, g_player, g_tune = G.build()
-    g_train_mask, g_test_mask = G.split_masks(g_player, g_tune)
+    gx, gy, g_player, g_tune = G.build(deadline_s=deadline, cache=g_cache)
+    g_train, g_test = G.split_masks(g_player, g_tune)
     g_take = np.array([f"{p}_{t}" for p, t in zip(g_player, g_tune)])
-
-    print(f"Klangio  : train {k_train.sum():5d} windows "
-          f"(guitarists {sorted(set(k_guitarist[k_train].tolist()))}), "
-          f"test {k_test.sum():5d} (guitarist {KLANGIO_TEST_GUITARIST}), "
-          f"{100 * (ky[k_test] == 0).mean():.0f}% down in test")
-    print(f"GuitarSet: train {g_train_mask.sum():5d} windows, "
-          f"test {g_test_mask.sum():5d}, "
-          f"{100 * (gy[g_test_mask] == 0).mean():.0f}% down in test; "
-          f"{(~(g_train_mask | g_test_mask)).sum()} crossed windows DISCARDED")
+    k_groups = np.array([f"k{r}" for r in krec[k_train]])
+    g_groups = np.array([f"g{t}" for t in g_take[g_train]])
 
     tests = {
-        "GuitarSet (new player AND new tune)": (gx[g_test_mask], gy[g_test_mask]),
+        "GuitarSet (new player AND tune)": (gx[g_test], gy[g_test]),
         "Klangio (new player, same rig)": (kx[k_test], ky[k_test]),
     }
     arms = {
-        "A Klangio only": (kx[k_train], ky[k_train],
-                           np.array([f"k{r}" for r in krec[k_train]])),
+        "A Klangio only": (kx[k_train], ky[k_train], k_groups),
         "B Klangio + GuitarSet": (
-            np.concatenate([kx[k_train], gx[g_train_mask]]),
-            np.concatenate([ky[k_train], gy[g_train_mask]]),
-            np.concatenate([np.array([f"k{r}" for r in krec[k_train]]),
-                            np.array([f"g{t}" for t in g_take[g_train_mask]])]),
+            np.concatenate([kx[k_train], gx[g_train]]),
+            np.concatenate([ky[k_train], gy[g_train]]),
+            np.concatenate([k_groups, g_groups]),
         ),
-        "C GuitarSet only": (gx[g_train_mask], gy[g_train_mask],
-                             np.array([f"g{t}" for t in g_take[g_train_mask]])),
+        "C GuitarSet only": (gx[g_train], gy[g_train], g_groups),
     }
+    return arms, tests, (k_train.sum(), k_test.sum(), g_train.sum(), g_test.sum(),
+                         (~(g_train | g_test)).sum())
 
-    results = {name: train_arm(name, *data, tests) for name, data in arms.items()}
 
-    print("\n" + "=" * 78)
-    print("DIRECTION F1 (2-class, live 70 ms geometry, held-out by player and tune)")
-    for test_name in tests:
+def main():
+    if not os.environ.get("GUITARSET_DIR"):
+        sys.exit("set GUITARSET_DIR")
+
+    results = {}
+    tests_seen = None
+    for label, deadline in DEADLINES.items():
+        arms, tests, sizes = build_grid(deadline)
+        tests_seen = tests
+        print(f"\n##### deadline {label}: Klangio train {sizes[0]} / test {sizes[1]}, "
+              f"GuitarSet train {sizes[2]} / test {sizes[3]} "
+              f"({sizes[4]} crossed windows DISCARDED)", flush=True)
+        for name, data in arms.items():
+            results[(label, name)] = train_arm(f"{name} @ {label}", *data, tests)
+
+    print("\n" + "=" * 94)
+    print("DIRECTION F1 (2-class, shipped 15x128 geometry, held out by player and tune)")
+    print("Only the TRUNCATION differs between the two deadline blocks - same tensor "
+          "shape, same network.")
+    for test_name in tests_seen:
         print(f"\n  {test_name}")
-        print("    arm                      down      up    macro   called up / truth")
-        for name, per_test in results.items():
+        print("    arm                     deadline               down      up    macro"
+              "   calledUp/truth")
+        for (label, name), per_test in results.items():
             row = per_test[test_name]
-            print(f"    {name:<22} {row['down']:.4f}  {row['up']:.4f}  "
-                  f"{row['macro']:.4f}   {row['called_up']:.2f} / {row['truth_up']:.2f}"
-                  f"   (n={row['n']})")
-    print("\n  shipped 3-class CRNN on GuitarSet, same clean labels: "
+            print(f"    {name:<22}  {label:<20} {row['down']:.4f}  {row['up']:.4f}  "
+                  f"{row['macro']:.4f}   {row['called_up']:.2f}/{row['truth_up']:.2f}"
+                  f"  (n={row['n']})")
+    print("\n  shipped 3-class CRNN on GuitarSet (end to end): "
           "down 0.5848  up 0.1905  macro 0.3876")
-    print("  linear floor on the same input (ADR 0550):   "
-          "down 0.9152  up 0.6294  macro 0.7723")
+    print("  linear floor, shipped input @  70 ms (ADR 0551): "
+          "down 0.7857  up 0.3913  macro 0.5885")
+    print("  linear floor, 16 bands    @ 238 ms (ADR 0551): "
+          "down 0.9186  up 0.5466  macro 0.7326")
 
 
 if __name__ == "__main__":
