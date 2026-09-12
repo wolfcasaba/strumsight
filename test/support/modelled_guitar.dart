@@ -202,6 +202,20 @@ List<double> strumSequence(
 ///
 /// Read from `strumSeq` increments and `latestStrumTime` — the MEASURED true onset
 /// the pipeline publishes, not the moment a frame happened to arrive.
+///
+/// ## KNOWN BLIND SPOT: strums closer together than one emitted frame
+///
+/// `LiveFrame` is emitted on a sample clock at about 15 Hz and carries only the
+/// LATEST strum, while `strumSeq` counts every one. Two strums inside one ~66 ms
+/// emission window therefore advance the sequence by two and surface ONE time — the
+/// earlier is unrecoverable from the frame stream. This loop takes one time per
+/// increment-bearing frame, so it silently returns the shorter list.
+///
+/// Harmless for every current caller (their strums are hundreds of ms apart), and
+/// stated because it is not obvious: it cost real time to find in
+/// `test/tooling/guitarset_threshold_sweep_test.dart`, where onsets are dense
+/// (`docs/LESSONS.md` L663). A caller that needs EVERY onset at close spacing must
+/// watch the size of each `strumSeq` jump, not merely that one happened.
 List<double> strumOnsets(List<double> pcm, {int chunk = 1024}) {
   final pipeline = LivePipeline(sampleRate: modelledSampleRate);
   final out = <double>[];

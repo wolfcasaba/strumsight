@@ -84,3 +84,92 @@ Ez egy **kompozíciós** kísérlet, nem modell-fejlesztés, és ez a legkölts�
 következő mérés. Csak utána érdemes a cikk közös onset+irány+akkord CRNN-jéről
 beszélni — és arra **nincs adatunk**: az ő készletük nincs publikálva, a GuitarSet
 iránycímkéje pedig levezetett, amit tanításhoz előbb zaj-szempontból minősíteni kell.
+
+
+---
+
+# A küszöb-söprés: az ötvözés NYER, és nem a cikkel (E18-R24)
+
+Újrafuttatás:
+
+```bash
+GUITARSET_DIR=/path/to/guitarset flutter test \
+  test/tooling/guitarset_threshold_sweep_test.dart
+```
+
+## Korrekció a fenti alapvonalhoz: NEM egy kapu van, hanem kettő
+
+A fenti szakasz a megtartás-veszteséget az elnyomó kapura írta. **Pontatlan volt.** A
+szállított CRNN-úton két kapu áll egymás mögött:
+
+1. `LiveCrnnStrumClassifier.noStrumThreshold` (0,43877) — a tanult „nem-pengetés"
+   elutasítás, az osztályozón belül;
+2. egy **margó-kapu** a `live_pipeline.dart`-ban: a `_strumSeq` csak akkor lép, ha
+   `_isDirectionConfirmed(event)`, ami a `StrumPrediction.decision`-re hárít — és egy
+   **valószínűség nélküli** eseményre (a heurisztika) **feltétel nélkül igazat** ad.
+
+Ezért a heurisztika-ág **egyik kapuval sem** találkozik, a CRNN-ág **mindkettővel**. A
+második kaput egy összefűzés-hossz állítás bukása találta meg (173 osztályozás → 172
+kibocsátott pengetés), nem kódolvasás.
+
+## Az eredmény
+
+72 fájl, **10286 SuperFlux onset** (12 kizárva képkocka-egybeolvadás miatt).
+
+| suppress | margó | megtartva | onset P | onset F1 | pengetés-recall | irány *le* | irány *fel* | **irány macro** |
+|---|---|---|---|---|---|---|---|---|
+| **0,439\*** | on | 3789 | 0,913 | 0,5828 | 0,596 | 0,5615 | 0,2769 | **0,4192** |
+| 0,439 | off | 3824 | 0,913 | 0,5864 | 0,602 | 0,5628 | 0,2762 | 0,4195 |
+| 0,650 | on | 4015 | 0,906 | 0,6013 | 0,620 | 0,5635 | 0,2835 | 0,4235 |
+| 0,650 | off | 4052 | 0,906 | 0,6051 | 0,627 | 0,5648 | 0,2825 | 0,4237 |
+| **0,850** | on | 4279 | 0,899 | 0,6223 | 0,649 | 0,5689 | 0,2934 | **0,4311** |
+| 0,850 | off | 4318 | 0,899 | 0,6259 | 0,656 | 0,5700 | 0,2924 | 0,4312 |
+| **none** | on | 10106 | 0,701 | 0,7792 | 0,941 | 0,5809 | 0,3196 | **0,4502** |
+| **none** | off | 10286 | 0,701 | 0,7847 | **0,955** | 0,5809 | 0,3204 | **0,4506** |
+
+`*` = amit a produkció ma tesz. A söprés a szállított kapun **pontosan reprodukálja** a
+fenti, független alapvonalat (0,5828 / 0,596 / 0,4192 vs 0,5828 / 0,595 / 0,4195) — ez
+hitelesíti a szerelvényt, nem az eredményt.
+
+### 1. A margó-kapu nem a lényeg
+
+`on` → `off` mindenhol **±0,0003** az irány macro-F1-en. Nem ez a mozgató, és nem
+érdemes hozzányúlni.
+
+### 2. Az elnyomó kapu a mozgató, és **minden** oszlopon rosszul áll erre az anyagra
+
+0,439 → `none`: onset F1 **0,5828 → 0,7847**, pengetés-recall **0,596 → 0,955**, és az
+irány macro-F1 **0,4192 → 0,4506**. A **pontosság** az egyetlen, ami fizet: 0,913 →
+0,701.
+
+Ez megoldja a fenti szakasz „két külön igazság" dilemmáját: nem két detektorról volt
+szó. Az onsetek **mindig ugyanazok** (SuperFlux); a CRNN iránya pedig **jobb lesz**, ha
+minden onsetre alkalmazzuk, nem csak arra az 59,6%-ra, amit ő maga megtart.
+
+| | pengetés-recall | irány macro-F1 |
+|---|---|---|
+| szállított (CRNN + elnyomás) | 0,596 | 0,4192 |
+| heurisztika (elnyomás nélkül) | 0,954 | 0,2953 |
+| **CRNN irány, elnyomás nélkül** | **0,955** | **0,4506** |
+
+A javasolt összetétel tehát **mindkét mai ágat dominálja** recallon és irányon is.
+
+### 3. De a javaslat nem „vegyük ki a kaput"
+
+A pontosság 0,701 azt jelenti, hogy a jelentett pengetések ~30%-a nem párosul annotált
+eseménnyel. Tanulónak mutatott nyílnál ez **nem ingyenes**: a tananyag ritmus-pontozásában
+egy hamis pengetés olyan slotot kreditál, amit a tanuló nem játszott — és a hiányzó
+pengetés meg levonás. Mindkettő hazugság, csak ellentétes előjellel.
+
+Ezért a mért, **biztonságos** lépés a **0,850**: minden oszlopon jobb a mainál
+(onset F1 0,6223 vs 0,5828, recall 0,649 vs 0,596, irány 0,4311 vs 0,4192), és
+**1,4 pont pontosságot** fizet érte. Ez a küszöb-érték egy szám a `ml/live_3c_threshold.json`-ban
+— a döntés rollout-döntés, nem kód-kérdés.
+
+### 4. Amit ez a cikkről mond
+
+Semmit nem kellett tanítani, és az irány **0,4192 → 0,4506**-ra nőtt. Az
+[arXiv 2508.07973](https://arxiv.org/html/2508.07973) mikrofonos számai (any 92,75 /
+le 85,51 / fel 79,02) **így is messze felettünk** vannak. Tehát a kompozíció javít, de
+nem zárja a rést — a cikk megközelítése továbbra is jobb, és továbbra is **adat nélkül**
+vagyunk hozzá.

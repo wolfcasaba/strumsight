@@ -176,16 +176,30 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
   /// unit-testable without an asset.
   static StrumClassification classifyProbs(List<double> probs) {
     if (probs.length >= 3) {
-      if (probs[2] > noStrumThreshold) {
-        return const StrumClassification(
-          direction: null,
-          confidence: 0,
-          suppressed: true,
-        );
-      }
       final sum = probs[0] + probs[1];
       final pDown = sum > 0 ? probs[0] / sum : 0.5;
       final pUp = sum > 0 ? probs[1] / sum : 0.5;
+      if (probs[2] > noStrumThreshold) {
+        return StrumClassification(
+          direction: null,
+          confidence: 0,
+          suppressed: true,
+          // The probabilities are exported on the SUPPRESSED branch too, and this
+          // changes nothing production does: `strum_analyzer.dart` returns before
+          // building a `StrumEvent` when `suppressed` is set, so no consumer can
+          // read them. What it buys is that [noStrumThreshold] becomes MEASURABLE
+          // — a sweep can ask what a different gate would have kept without
+          // re-running the model per threshold. That matters because the shipped
+          // value was fitted for 95% true-strum retention on this model's own
+          // held-out fold, and on GuitarSet it retains 59.5%
+          // (`docs/eval/guitarset-strum-baseline.md`). A gate whose retention is
+          // corpus-dependent has to be re-measurable, not re-derived by hand.
+          // Additive export in the sense of ADR 0512 D1.
+          pDown: pDown,
+          pUp: pUp,
+          pNoStrum: probs[2],
+        );
+      }
       final up = pUp > pDown;
       return StrumClassification(
         direction: up ? StrumDirection.up : StrumDirection.down,

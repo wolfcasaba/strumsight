@@ -27116,3 +27116,56 @@ konfiguráció. Mindhárom ugyanazt mondja: *a mérés annyit ér, amennyire ism
 mérőeszközt — és az eszköz a kódunk része.* Lásd még [[L652]] és [[L659]].
 
 Az eredmények: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+
+## L663 — Két hibát a PRÓBÁMBAN a beépített állításaim fogtak meg, nem én: a hoisztolt állapotos osztályozó és a képkocka-egybeolvadás (E18-R24, 2026-09-12)
+
+**A kontextus.** A küszöb-söprést egyetlen átfutásra terveztem: a valószínűségeket egy
+becsomagoló osztályozó rögzíti, minden kaput utólag alkalmazok. Két dolog romlott el,
+és egyik sem abból derült ki, hogy okos voltam.
+
+### 1. A `strumSeq`-alapú megfigyelés CSENDBEN nyel el pengetéseket
+
+Beépítettem egy állítást arra, hogy az osztályozások száma egyezzen a kibocsátott
+pengetésekével. **173 → 172.** Két hipotézist megbuktattam mérve: néma farokkal nem
+javult (tehát nem vég-effektus), és a margó-kapu kiiktatásával sem (tehát nem a kapu).
+
+A valódi ok a **saját ciklusomban** volt: a `LiveFrame` ~15 Hz-en jön ki, és csak a
+**legutolsó** pengetést hordozza, míg a `strumSeq` mindet számolja. Két pengetés egyetlen
+~66 ms-os ablakban tehát kettőt léptet a számlálón és **egy** időpontot ad — a korábbit
+a képkocka-folyamból nem lehet visszanyerni.
+
+Ez nem a próba sajátja: a `test/support/modelled_guitar.dart` `strumOnsets`-e **ugyanezt a
+ciklust** használja, tehát ugyanez a vakfolt. Ott ártalmatlan, mert a pengetések több
+száz ms-ra vannak — de ugyanaz az alak, és most ki van mondva.
+
+A kezelés nem elfedés: egy *k*-s ugrásnál az időpont az utolsóhoz tartozik, az előző
+*k−1* pedig **kizárásra kerül és jelentve van** (10286-ból 12). *Egy kizárás, amit senki
+nem lát, csak egy csendesebb hiba.*
+
+### 2. A hoisztolt osztályozó idegen audióból olvasott
+
+A `LiveCrnnStrumClassifier`-t a fájl-ciklus **elé** építettem, egyszer. Csak az a gond,
+hogy **állapotot tart** (`LiveCrnnFrontend`: audio-puffer + képkocka-index), miközben
+minden fájl friss pipeline-t indít, aminek a képkocka-számlálója **nulláról** kezd. A
+modell tehát az **előző fájl** audiójából olvasott ablakokat.
+
+Amiből kiderült, az nem egy állítás volt, hanem az, hogy **a számok lehetetlent
+mondtak**: a szállított kapunál 10286 onsetből **15** maradt meg, miközben a független
+futás 3784-et tartott. És az árulkodó jel: az **onset-oszlopok stimmeltek** (0,701 /
+0,7847 / 0,955 ≈ a heurisztika-ág), mert azok nem a modelltől jönnek. *Egy részlegesen
+helyes eredmény pontosabban mutat a hibára, mint egy teljesen hibás.*
+
+**A szabály.** Egy osztályozó, ami `observe(frame)`-et vesz, **állapotos** — és
+állapotos komponenst fájl-ciklus elé emelni ugyanaz a hiba, mint ugyanazt a
+`LivePipeline`-t újrahasználni. A produkció fájlonként (munkamenetenként) **egy**
+aktivációt épít; egy mérés, ami ettől eltér, **más rendszert mér**. Ez ugyanaz a
+család, mint [[L662]]: ott a konfiguráció tért el a produkciótól, itt az
+**életciklus**.
+
+Három mérőeszköz-hiba három körben ([[L660]], [[L661]], [[L662]]) után ez a negyedik, és
+a minta már kimondható: **a mérés annyit ér, amennyit a mérőeszközéről ÁLLÍTUNK.**
+Mindegyik esetben az fogta meg, amit előre leírtam állításként — nem az, amit utólag
+átnéztem.
+
+Az eredmények: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
