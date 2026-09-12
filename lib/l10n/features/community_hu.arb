@@ -781,5 +781,6 @@
   "communityChallengeResultVerifiedIcon": "Ellenőrizve",
   "@communityChallengeResultVerifiedIcon": {},
 
-  "communityChallengeMyResultAction": "Saját eredmény megtekintése"
+  "communityChallengeMyResultAction": "Saját eredmény megtekintése",
+  "communityOpenCta": "Közösség megnyitása"
 }

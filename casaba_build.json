@@ -1,0 +1,9 @@
+{
+  "STRUMSIGHT_ENV": "prod",
+  "STRUMSIGHT_API_URL": "https://casaba.app/strumsight",
+  "STRUMSIGHT_ACCOUNT": "true",
+  "STRUMSIGHT_COMMUNITY": "true",
+  "STRUMSIGHT_COMMUNITY_WRITES": "true",
+  "STRUMSIGHT_COMMUNITY_CLUBS": "true",
+  "STRUMSIGHT_COMMUNITY_LEADERBOARD": "true"
+}

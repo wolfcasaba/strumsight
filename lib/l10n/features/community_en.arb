@@ -782,5 +782,6 @@
   "@communityChallengeResultVerifiedIcon": {},
 
   "communityChallengeMyResultAction": "View my result",
-  "@communityChallengeMyResultAction": {}
+  "@communityChallengeMyResultAction": {},
+  "communityOpenCta": "Open Community"
 }

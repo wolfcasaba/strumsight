@@ -175,12 +175,16 @@ void main() {
 
     expect(
       screenCount,
-      96,
+      98,
       reason:
           'the MaterialApp theme now carries the design-system '
           'extensions for the whole tree (D1), so every production '
           'screen — migrated or not — resolves tokens from the same '
-          'ThemeData, not just the previously-wrapped subset',
+          'ThemeData, not just the previously-wrapped subset. '
+          '96 -> 98 in E18: the two curriculum screens '
+          '(`curriculum_ladder_screen.dart`, `rhythm_practice_screen.dart`), '
+          'both of which import `core/design_system/public.dart` and read '
+          '`SsColorScheme` from the theme. See docs/ui/migration-status.md.',
     );
   });
 

@@ -130,6 +130,37 @@ abstract final class AppRoutes {
       '/profile/progress/skills/:skillId';
   static const String profileRewards = '/profile/rewards';
 
+  // --- Community (E18-R19) ----------------------------------------------------
+  //
+  // Gated on `communityEnabled`, and routed for the first time here. The screens
+  // and their tests already existed; what was missing was any way to reach them,
+  // which is why a whole social surface sat unreachable behind a flag that was
+  // already wired to a dart-define.
+  //
+  // [community] is the GATE, not the feed: `CommunityGateScreen` is where consent
+  // and the signed-in requirement are handled, so it is the only entry point the
+  // rest of the app links to.
+  static const String community = '/community';
+  static const String communityFeed = '/community/feed';
+  static const String communityNotifications = '/community/notifications';
+  static const String communityBookmarks = '/community/bookmarks';
+  static const String communitySafety = '/community/safety';
+  static const String communityChallenges = '/community/challenges';
+  static const String communityClubs = '/community/clubs';
+
+  /// `:postId` is a `ContentId` — the post whose comments are shown.
+  static const String communityComments = '/community/posts/:postId/comments';
+
+  /// `:challengeId` is a `ContentId`.
+  static const String communityLeaderboard =
+      '/community/challenges/:challengeId/leaderboard';
+
+  /// `:profileId` is a `ContentId`; the trailing segment picks the direction.
+  static const String communityFollowers =
+      '/community/profiles/:profileId/followers';
+  static const String communityFollowing =
+      '/community/profiles/:profileId/following';
+
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[
     live,

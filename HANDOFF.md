@@ -1,5 +1,101 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟢 E18-R19 — A HOSZTOLT BACKEND BEÁLLÍTVA + a közösségi felület ROUTE-olva — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „van hostolt backen domain is casaba.app néven fut nézz utána" →
+„szoval állitsd be rendesen és kapcsold fel a 15 képernyot is".
+
+**A premisszám téves volt, és jó, hogy szóltál.** A `FeatureFlags` doksija azt írta,
+hogy „there is no hosted backend", és ezt átvettem. A repóban ott van egy **teljes
+FastAPI backend** (`backend/`: 58 útvonal, Alembic migrációk, Dockerfile, deploy
+runbookok) — a komment azt jelentette, hogy nem volt KITELEPÍTVE.
+
+### Amit megmértem, nem feltételeztem
+
+```
+$ curl -sI https://casaba.app/health
+HTTP/1.1 401   Server: kong/3.9.1   Via: 1.1 Caddy
+Www-Authenticate: Basic realm="service"   X-Kong-Response-Latency: 0
+```
+
+A `casaba.app` **minden** útvonala 401 Basic-kihívással, 0 upstream-latenciával —
+semmi nem ér el backendet. A StrumSight API a **`/strumsight`** prefix alatt van:
+
+```
+/strumsight/health        -> {"status":"ok","version":"0.1.0"}
+/strumsight/health/ready  -> {"status":"ready"}
+/strumsight/auth/me       -> {"detail":"Not authenticated"}  (403, a FastAPI SAJÁT válasza)
+/strumsight/community/ping-> {"module":"community"}
+/strumsight/openapi.json  -> 58 útvonal, "StrumSight Account API 0.1.0"
+```
+
+Az `/auth/me` a bizonyíték, hogy a kérés **az app backendjéhez** ér el, nem a
+gatewayhez. A `community/ping` pedig, hogy a közösség **szerveroldalon be van
+kapcsolva**.
+
+### A csapda, amit ez majdnem okozott
+
+Ez az első `STRUMSIGHT_API_URL`, ami **útvonalat** hordoz. Az RFC 3986 feloldás
+szerint egy absztolút path **lecseréli** a base path-ot — az `/auth/me` így
+`https://casaba.app/auth/me` lenne, amire a gateway 401-et ad. Az app
+„bejelentkezés sikertelen"-t mutatott volna egy **működő** backend ellen, és a hiba
+hitelesítési problémának látszott volna. Megmérve (`api_base_url_prefix_test.dart`):
+a kliens **megőrzi** a prefixet. Az őrteszt azért marad, hogy egy jövőbeli
+kliens-frissítés ITT bukjon el.
+
+### Beállítva
+
+[`casaba_build.json`](casaba_build.json) + a mérések
+[`docs/operations/casaba-backend.md`](docs/operations/casaba-backend.md)-ben.
+`STRUMSIGHT_ENV=prod` (a validáció átengedi: https, nem loopback, nem „staging"
+host), fiók + közösség + klubok + ranglista be. **Titok nincs benne** — a fájl
+commitolva van.
+
+### A „15 képernyő": 10 route-olva, 5 nem úticél
+
+**Tíz közösségi képernyő route-ot kapott** (`/community` a KAPU, nem a feed — a
+consent és a bejelentkezés-feltétel ott lakik), plusz **belépési pont** a profil
+hubon. A hub eddig kiírta, hogy „a közösség engedélyezett", és **nem adott hozzá
+utat**.
+
+**Öt képernyő viszont nem úticél, hanem komponens** — és ez mérés, nem vélemény:
+`AnalysisHomeScreen(recentAnalyses, onStartRecording, onImportFile)`,
+`AnalysisRecordingScreen(recorder, …)`, `AnalysisProcessingScreen(state, …)`,
+`PracticePlanPreviewScreen(draft, validationContext)`,
+`SetlistSessionScreen(setlist, mode, availability, performanceRunner)`. Route-ot adni
+nekik azt jelentené, hogy **kitalálom a recordert, a draftot és a setlistet**, amit
+kérnek. Ami hiányzik, az nem az útvonal, hanem a folyam, ami összeállítja őket — az
+külön kör mindegyiknek.
+
+**A `CommunityChallengesScreen` szándékosan nincs route-olva**: a futó példány a
+`/community/leaderboards/{id}`-t és a `/challenges/{id}/results`-t kiszolgálja, de
+**nincs kihívás-lista és -részletek** (mérve). Route-ot adni neki olyan gombot adna,
+ami mindig elhasal. A konstans megvan, hogy egysoros legyen, amint a szerver megkapja
+azt a három útvonalat.
+
+### Egy régi, saját hibát is kijavított
+
+A `test/app/theme_adoption_test.dart` A6 cellája kiszögezett képernyő-számot állít
+(96). A curriculum két képernyőt adott, tehát 98 — és ez **több köröm óta piros volt**,
+mert a curriculum-körök a saját teszt-útvonalaikon futtatták a kaput, és a `test/app`
+nem volt köztük. A pin elvégezte a dolgát, amint lefutott; a hiba az útvonal-választás
+volt, nem az őr. Szám frissítve, és a `docs/ui/migration-status.md` kimondja, miért.
+
+**Gate:** zöld — `test/app`, `test/core/network`, `test/features/community` +
+architecture / secrets / l10n.
+
+### Ami rád vár
+
+- **A szerver három útvonala:** `GET /community/challenges`,
+  `GET /community/challenges/{id}`, `GET /community/challenges/{id}/me`. Ezek után a
+  kihívás-képernyő egysoros route.
+- **Media:** a futó példány egyetlen upload-útvonalat sem expose-ol, ezért a
+  `STRUMSIGHT_COMMUNITY_MEDIA` kikapcsolva maradt.
+- **Ha a gateway Basic-auth kerül a `/strumsight` elé is:** a javítás a gatewayen van,
+  nem az appban — a kliens bearer JWT-t küld, és Basic credentialt a binárisba tenni
+  titkot commitolna.
+- **Em/Am valódi gitáron** — változatlanul nyitott.
+
 ## 🟢 E18-R18 — A NAPI HUROK: a kurzus a mai terv — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **User-kérés:** „folytasd koss be mindent ami le van fejlestve".

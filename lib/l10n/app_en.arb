@@ -1795,6 +1795,7 @@
   "@communityNotificationsRetry": {},
   "communityNotificationsTitle": "Notifications",
   "@communityNotificationsTitle": {},
+  "communityOpenCta": "Open Community",
   "communityPublicConfirmBody": "Everyone will be able to see this, not just people who follow you. You can change the setting again later, but anything already public may already have been seen or shared.",
   "@communityPublicConfirmBody": {},
   "communityPublicConfirmCancel": "Cancel",

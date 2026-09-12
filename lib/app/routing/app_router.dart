@@ -15,6 +15,17 @@ import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart
 import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
+import '../../features/community/domain/value_objects/content_id.dart';
+import '../../features/community/domain/value_objects/public_user_id.dart';
+import '../../features/community/presentation/screens/bookmarks_screen.dart';
+import '../../features/community/presentation/screens/clubs/club_list_screen.dart';
+import '../../features/community/presentation/screens/comments_screen.dart';
+import '../../features/community/presentation/screens/community_gate_screen.dart';
+import '../../features/community/presentation/screens/community_notifications_screen.dart';
+import '../../features/community/presentation/screens/followers_screen.dart';
+import '../../features/community/presentation/screens/following_feed_screen.dart';
+import '../../features/community/presentation/screens/leaderboard_screen.dart';
+import '../../features/community/presentation/screens/safety_relationships_screen.dart';
 import '../../features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
 import '../../features/curriculum/presentation/screens/rhythm_practice_screen.dart';
 import '../../features/gamification/public.dart';
@@ -221,6 +232,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .analysisComparisonEnabled;
+  final communityEnabled = ref.read(appConfigProvider).flags.communityEnabled;
+  final communityClubsEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .communityClubsEnabled;
+  final communityLeaderboardEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .communityLeaderboardEnabled;
   final adaptiveShellEnabled = ref
       .read(appConfigProvider)
       .flags
@@ -424,6 +444,97 @@ final routerProvider = Provider<GoRouter>((ref) {
       // — `practice_generator_providers.dart`, out of scope for this round).
       // Gated independently of `practiceEnabled` (Practice Engine V2): the
       // Generator is a distinct rollout (ADR 0491 D2).
+      // E18-R19 — the community surface, routed. Every screen below already
+      // existed with tests; none of them was constructed anywhere, so the whole
+      // social feature was unreachable however the flag was set. The backend is
+      // live (`docs/operations/casaba-backend.md`): /community/ping answers
+      // {"module":"community"} on the hosted instance.
+      //
+      // `AppRoutes.community` is deliberately the GATE and not the feed —
+      // `CommunityGateScreen` owns the consent and signed-in requirements, so
+      // every link from the rest of the app points there.
+      if (communityEnabled) ...[
+        GoRoute(
+          path: AppRoutes.community,
+          builder: (_, _) => const CommunityGateScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityFeed,
+          builder: (_, _) => const FollowingFeedScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityNotifications,
+          builder: (_, _) => const CommunityNotificationsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityBookmarks,
+          builder: (_, _) => const BookmarksScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communitySafety,
+          builder: (_, _) => const SafetyRelationshipsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityComments,
+          builder: (_, state) {
+            final raw = state.pathParameters['postId'];
+            // A malformed id is sent back to the gate rather than thrown at the
+            // learner: `ContentId` rejects empty and over-long values, and a
+            // crash on a bad deep link would be the app blaming the user for a
+            // URL it built.
+            if (raw == null || raw.isEmpty) return const CommunityGateScreen();
+            return CommentsScreen(postId: ContentId(raw));
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.communityFollowers,
+          builder: (_, state) {
+            final raw = state.pathParameters['profileId'];
+            if (raw == null || raw.isEmpty) return const CommunityGateScreen();
+            return FollowersScreen(
+              profileId: PublicUserId(raw),
+              mode: FollowersMode.followers,
+            );
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.communityFollowing,
+          builder: (_, state) {
+            final raw = state.pathParameters['profileId'];
+            if (raw == null || raw.isEmpty) return const CommunityGateScreen();
+            return FollowersScreen(
+              profileId: PublicUserId(raw),
+              mode: FollowersMode.following,
+            );
+          },
+        ),
+        // Clubs are their own rollout decision (ADR 0395's per-surface flags),
+        // and the hosted instance serves /community/clubs.
+        if (communityClubsEnabled)
+          GoRoute(
+            path: AppRoutes.communityClubs,
+            builder: (_, _) => const ClubListScreen(),
+          ),
+        // The leaderboard is routed; the CHALLENGE LIST is not, and that is a
+        // measurement rather than an omission. The hosted instance serves
+        // /community/leaderboards/{id} and /community/challenges/{id}/results,
+        // but it serves NO challenge list or detail — so
+        // `CommunityChallengesScreen` would be a screen that always fails, and a
+        // route to it would be a button that cannot work
+        // (`docs/operations/casaba-backend.md`). It gets its route when the
+        // server gets those three paths.
+        if (communityLeaderboardEnabled)
+          GoRoute(
+            path: AppRoutes.communityLeaderboard,
+            builder: (_, state) {
+              final raw = state.pathParameters['challengeId'];
+              if (raw == null || raw.isEmpty) {
+                return const CommunityGateScreen();
+              }
+              return LeaderboardScreen(challengeId: ContentId(raw));
+            },
+          ),
+      ],
       if (practiceGeneratorEnabled) ...[
         GoRoute(
           path: AppRoutes.practiceGeneratorSetup,

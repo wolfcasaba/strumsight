@@ -85,6 +85,18 @@ class ProfileHubScreen extends ConsumerWidget {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 24),
+            // The way IN. The hub already said "Community is enabled" and then
+            // offered no route to it — the screens existed, their tests existed,
+            // and nothing anywhere constructed them (E18-R19). It points at the
+            // GATE, never straight at the feed: `CommunityGateScreen` owns the
+            // consent and signed-in requirements.
+            if (communityEnabled) ...[
+              OutlinedButton(
+                onPressed: () => context.push(AppRoutes.community),
+                child: Text(l10n.communityOpenCta),
+              ),
+              const SizedBox(height: 12),
+            ],
             OutlinedButton(
               onPressed: () => context.push(AppRoutes.profileLibrary),
               child: Text(l10n.navLibrary),
