@@ -14639,12 +14639,84 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **kétszer** adtam mechanizmust, amit a saját számaim cáfoltak (a GRU-munka iránya, és a
   „gépterhelés" a kód-elhelyezés helyett) — a magyarázatot **a szám kiolvasása után** kell
   megírni, és ha nem támasztja alá, akkor **„ezt nem tudom megmagyarázni"** kerül a dokumentumba.
-  **KÖVETKEZŐ:** (1) **on-device mérés** (CI/profile) a **gyors** tierre — ez a valódi nyitott
-  teljesítmény-kérdés; a benchmark futtatható, `--json` a `tool/compare_benchmarks.py`-ba illik,
-  és `--window-from=` más fixtúrára is állítható (ritkaság-érzékenységi sorozat ingyen);
-  (2) ha kifizetődik, a `settledTier` felkapcsolása az ADR 0556 D3 szabályával; (3) az ADR 0555
-  D4 **költség-arányból** vezetett no-strum küszöb; (4) a **címkézett felvétel** — továbbra is az
-  egyetlen ismert forrása az inga-sértő ütéseknek.
+  **E18-R43 — A KAPU KÖLTSÉG-KERETE KORLÁTOS OPTIMALIZÁLÁS, NEM ARÁNY (ADR 0566); ÉS A
+  BEKÖTETLEN ASSET A SZÁLLÍTÓ ÚTON +0,186 IRÁNY-MACRO-F1 (ADR 0567).**
+  Az ADR 0555 D4-et a **feltett formájában lezárva**: a javasolt `C_FS/C_FP` arány **egyik
+  költséget sem tudja kifejezni**. (a) **Az elnyomott ütés nem levonás, hanem SZAKADÉK** — a
+  `rhythm_grading.dart` 3. döntése szerint „egy kihagyott slot nem von le semmit", de a
+  `minimumRhythmCoverage` (0,5) alatt a `rhythmAttemptEvidence` **nulla bizonyítékot** ad,
+  tehát **nincs haladás**. Egzakt binomiálissal a mért megtartásból: a **hibátlanul
+  eljátszott** 8-slotos kísérletek **2,4–10,7%-a** (korpusz-függő, mindkét vég **alsó
+  korlát**, mert az elnyomás sorozatos). Nincs második kapu: a `rhythm_practice_screen.dart`
+  minden ütést `isConfirmed: true`-val épít, tehát a `coverage` **pontosan** a megtartás — és
+  a `RhythmSlotOutcome.unclear` a produkcióban **elérhetetlen**. (b) **A fantom nem feltétel
+  nélkül kreditál**: a `gradeRhythm` **maximum-kardinalitással** illeszt, tehát a kár
+  **nyitott slotot** kíván (mérve **4,7%** 8 slotnál 80 bpm-en), különben
+  `extraConfirmedStrokes`, amit **egyetlen widget sem jelenít meg**. A **kiszorítás** (fantom
+  elveszi a slotot egy valódi ütéstől) mérve **1,1–1,5%** — amit a bányászott negatívok
+  **soha** nem mondhattak volna meg, mert a `ml/negatives.py` 120 ms-on belül mindent kizár.
+  **Ezért a keret Neyman–Pearson** (Tong, Feng & Zhao 2016): *minimalizáld a hamis
+  állításokat úgy, hogy P(nincs bizonyíték) ≤ δ*. **Nem a kalibráció** zárja ki az inverziót
+  (ECE **0,0249**), hanem a **lépcső** és a **feltételesség**.
+  **A D4 által kért reject curve-ök** (held-out, kevert folyam): kapu nélkül a **FEL
+  precizitás 0,206 → 0,043** omlik, mert a beengedett fantomok **93,8%-át** hívja a modell
+  „fel"-nek. Ez **korrigálja** a saját költség-modellemet: az csak a **slot-verdiktet**
+  számolja (ott a matcher védi), a precizitás **mindent** — két fogyasztó, két célfüggvény.
+  **ÉS A FOGYASZTÓKAT A KÓDBÓL OLVASTAM KI, AMI FORDÍT.** A szállított 0,85 indoklása két
+  hazugságra épült, és mindkettő ellenőrizhető volt: a „levonás" **nem létezik** (a);
+  a „fantom kreditál" **feltételes** (b); és a **nyíl**, ami a fantomot megmutatná,
+  **nincs**: a `RhythmLane` a **notált** rácsot rajzolja és észlelt ütést nem is kap, a
+  `practice_highway`/`practice_feedback` szintén a **várt** irányt
+  (`CompiledTargetEvent`, `expectedDirection`); az egyetlen **észlelt** irányt mutató felület
+  a **megosztó kártya**, az ADR 0556 élő nyila pedig **sötét**. Vagyis a kapu *de facto*
+  **aggregált precizitás-küszöb**, nem slot-verdikt-küszöb.
+  **AZ ADR 0567 MÉRÉSE** (`STRUM_SPLIT=heldout`, players 03–05 × 4 nem tanított dallam,
+  1772 onset, a szállított 0,850-es kapu, `margin on`): a `strum_crnn_live_3c_settled.bin`
+  **onsetP 0,908 → 0,836 (−0,072)**, de **onsetF1 0,6518 → 0,7810**, **pengetés-recall
+  0,758 → 0,919**, **le-F1 0,5736 → 0,7978**, **fel-F1 0,2007 → 0,3478**, **macro
+  0,3872 → 0,5728 (+0,186)**. A **precizitás az EGYETLEN** romló oszlop, és a szakadék
+  **0,0238 → 0,0002**-re esik. **A szállítható javaslat a csere ÉS a kapu visszaállítása az
+  illesztett 0,439-re**: precizitás −0,044 (nem −0,072), recall +0,117, macro **+0,190** —
+  a szigorítás itt **nem** kerül irányba, a legjobb macro épp ott van.
+  **KÉT PROVENANCIA-CSAPDA, MINDKETTŐ EBBEN A KÖRBEN (L682 §1).** (1) Elosztottam a
+  Python-megtartást (0,944) a söprés megtartásával (0,633), „30 pontos résnek" neveztem, és
+  **órákig a mechanizmusát kerestem** — miközben minden `ml/probe_*.py` a
+  `weights_live_3c_settled.npz`-t tölti, a söprés pedig a **szállított** assetet futtatja:
+  **két modell, a hányados semmiről**. Apples-to-apples: a Python orákulum-megtartás
+  0,944/0,963/0,976 vs a produkciós **0,941/0,954/0,971** ugyanazokon a söpréseken — az
+  `audio → ablak` lánc **rendben van**. (2) Aztán mind a **72** fájlon mértem, miközben a
+  settled modell **GuitarSeten tanult** (ADR 0554) — a kontaminált tábla **+0,284**-et
+  mutatott a held-out **+0,186** helyett, **felével** felnagyítva. A söprés mostantól kiírja
+  az **assetet** (`STRUM_3C_ASSET`) **és a szeletet** (`STRUM_SPLIT`).
+  **KÉT MECHANIZMUS, AMIT A SAJÁT MÉRÉSEM CÁFOLT** (harmadik kör egymás után): (1) az
+  ablak-központozás — megírtam a `probe_gate_window_jitter.py`-t, ami szándékosan tol
+  (−15 ms: 0,936 · 0 ms: 0,938 · +15 ms: 0,802 · +30 ms: 0,454), aztán megmértem a detektor
+  **előjeles késését**: **p50 = −8,3 ms (korán!)**, p90 = +1,5 ms, csak **1,4%** +30 ms-on
+  túl, és a `windowAt` ugyanazt a +2,5 hop korrekciót alkalmazza — **kizárva**; (2) a
+  tompított/perkusszív ütések (a `ml/negatives.py` docstringjéből) — **részben**: a
+  legcsendesebb hangosság-decilis elnyomása **0,147**, a leghangosabbé **0,020** (**7×**,
+  önmagában terméki lelet: *a kezdő csendesen játszik*), de az össz-elnyomás ott 5,6%.
+  **ESZKÖZ-HIBA JAVÍTVA (ADR 0566 D6):** a söprés kapu-listájában az ADR 0549 óta **kétszer**
+  szerepelt a 0,85 (egyszer literálként, egyszer `noStrumThreshold`-ként), a Dart rekordok
+  **érték-egyenlők**, tehát a tálkák map-je **egy** tálkára ejtette a kettőt: a szállított sor
+  `kept`-je **8558**-at írt 4279 helyett. **És semmi nem látszott hibásnak**, mert minden
+  *arány* olyan osztás, amiben a kettes kiesik. Őr bekerült (különböző kulcsok), és a tábla
+  most **pontosan** reprodukálja a független alapvonalat (3789/4015/4279/10106).
+  **NEM mozdult szállított konstans**, és az asset **nincs bekötve** (AGENTS.md §9 négyet kér,
+  ez a kör a **valódi-audió** lábat adja; az asset nincs a `pubspec.yaml`-ban, tehát nem is
+  kerül az APK-ba).
+  Tanulság: **L682** — (1) két mérés összevetése előtt nevezd meg **mindkettő
+  artefaktumát** (súlyok, ablak-építő, **szelet**, revízió); (2) egy különbség magyarázatának
+  **első** lépése **provenancia**, nem mechanizmus; (3) egy konfigurációkat felsoroló eszköz
+  **állítsa**, hogy a konfigurációi különbözőek; (4) mielőtt A hibát B-vel váltod, **grepeld
+  meg a widgetet**, ami megjeleníti — *egy költség, aminek nincs fogyasztója, nem költség.*
+  **KÖVETKEZŐ:** (1) **az asset bekötése** az ADR 0567 D3 javaslatával (settled asset +
+  kapu vissza 0,439-re) — az AGENTS.md §9 hiányzó lábai: fixtúra/property munka és a
+  **Klangio-oldal in situ** ellenőrzése; (2) **on-device mérés** (CI/profile) a **gyors**
+  tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a
+  `settledTier` felkapcsolása az ADR 0556 D3 szabályával; (4) a **címkézett felvétel** —
+  továbbra is az egyetlen ismert forrása az inga-sértő ütéseknek, **és** az egyetlen módja a
+  7×-es hangosság-gradiens terméki súlyának megmérésére (a „damped" take pont ez).
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

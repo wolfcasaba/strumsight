@@ -1443,3 +1443,152 @@ there. The sparsity is also this corpus on this model -- a retrained model has d
 statistics. And the dense synthetic-versus-real difference (28 vs 32.5 ms) is NOT explained by
 MAC counts: measured, the synthetic window does MORE GRU work (1.90 M versus 1.15 M), so dense
 should be slower on it, not faster. That is left explicitly unexplained (L681).
+
+### The gate's cost frame is constrained, not a ratio — and the cost that keeps it tight has almost no consumer (E18-R43, ADR 0566)
+
+ADR 0555 D4 left the frame open and named the textbook fix: state `C_FS / C_FP` and invert
+Chow, plus report precision/recall reject curves (Fischer & Wollstadt 2023). Measured, the
+proposed frame cannot express EITHER cost.
+
+**A suppressed stroke is not a deduction, it is a CLIFF.** `rhythm_grading.dart` decision 3
+says "a missed slot subtracts nothing" — `directionAccuracy` untouched, only `coverage`
+moves. But below `minimumRhythmCoverage` (0.5), `rhythmAttemptEvidence` returns NO evidence
+at all, so the attempt yields no progress. Exact binomial over the measured retention, for a
+learner who played EVERY slot:
+
+```
+  gate    p(heard)   4 slots   8 slots   16 slots
+  0.439     0.596      0.184     0.180     0.150
+  0.850     0.649      0.127     0.107     0.068   <- the shipped gate
+  none      0.941      0.001     0.000     0.000
+```
+
+10.7 % of PERFECTLY PLAYED 8-slot attempts yield nothing on the shipped gate. The figure is
+corpus-dependent and must be quoted as a range: on the 12-file HELD-OUT split the same asset
+retains 0.758, giving 0.024. So 2.4-10.7 %, and BOTH ends are lower bounds because
+independence is optimistic when suppression is bursty. No second gate needs
+folding in: `rhythm_practice_screen.dart` builds every stroke with `isConfirmed: true`, so
+coverage IS retention and `RhythmSlotOutcome.unclear` is unreachable in production.
+
+**A phantom does not credit unconditionally.** `gradeRhythm` matches with MAXIMUM
+CARDINALITY, so a phantom beside a stroke the learner did play becomes an
+`extraConfirmedStrokes` count — "reported, never subtracted". Damage needs an OPEN slot, and
+open slots are what suppression creates. Measured, 8 slots at 80 bpm: 4.7 % of phantoms land
+in an open slot's ±50 ms window. Displacement — a phantom TAKING a slot from the learner's
+real stroke — measured end-to-end at 1.1–1.5 % of phantoms; the mined-negative corpus could
+never have answered it, because `ml/negatives.py` excludes every candidate within 120 ms of
+an annotated onset, so double triggers are absent there BY CONSTRUCTION.
+
+So the frame is Neyman–Pearson, not Chow: minimise false claims subject to
+P(no evidence) ≤ δ (Tong, Feng & Zhao 2016 — the NP oracle's threshold is α-dependent, not
+1/2). Calibration is NOT the obstacle (ECE 0.0249, bins track); the step and the
+conditionality are.
+
+**The pedagogy agrees, from a verified source.** Buekers, Magill & Hall (1992, QJEP 44(1)):
+in anticipation timing, CORRECT KR is redundant with the learner's own sensory feedback —
+yet ERRONEOUS KR still influenced learning, through retention tests at 10 min, 1 week and
+1 month. A false claim's harm does not fade and is not offset by a true one. (A search
+summary's "1:1 and 4:1 ratio" claim could NOT be verified behind the paywall and is not
+used. And our task is less redundant than theirs — a beginner often cannot hear their own
+stroke direction — so `C_FS` is not zero either.)
+
+**The reject curves D4 asked for, and what they show** (held-out GuitarSet, mixed stream):
+
+```
+  gate    reject%   DOWN prec/rec     UP prec/rec      macro-F1
+  0.439     62.3     0.793/0.724      0.221/0.324       0.5100
+  0.850     58.9     0.765/0.729      0.206/0.363       0.5044
+  none       0.0     0.731/0.729      0.043/0.422       0.4038
+```
+
+Ungated, UP PRECISION COLLAPSES 0.206 → 0.043, because 93.8 % of the phantoms a loose gate
+admits are called UP (50.7 % at 0.850). The loose end poisons exactly the differentiator.
+This also CORRECTS the cost model above: that model counts slot-verdict claims only, where
+the matcher protects; precision counts every phantom. Two consumers, two objectives.
+
+**And the consumers were read from the CODE, which reverses the argument.** The shipped
+0.85's justification claimed "a suppressed strum is a deduction" (it is not — it is the
+cliff) and "a phantom credits a slot the learner never played" (only in an OPEN slot, 4.7 %;
+otherwise `extraConfirmedStrokes`, which NO widget displays). The arrow that would show a
+phantom: `RhythmLane` draws the NOTATED grid and is never handed a detected stroke;
+`practice_highway` and `practice_feedback` also render the EXPECTED direction
+(`CompiledTargetEvent`, `expectedDirection`). The only surface showing a DETECTED direction
+is the share card's arrow row, and ADR 0556's live arrow is designed but DARK. So the cost
+keeping the gate tight largely protects a surface that does not exist yet, while the cost it
+pays — 2.4-10.7 % "I cannot judge that" — lands on the grader that ships. The gate is de facto an
+aggregate PRECISION threshold, not a slot-verdict threshold.
+
+**Two tooling defects fixed.** (1) The gate sweep's list held `0.85` as a literal AND as
+`noStrumThreshold` after ADR 0549 moved it; Dart records are value-equal, so the tallies map
+collapsed two entries onto one and the shipped row's COUNTS printed doubled (kept 8558 vs
+4279) since then — while every RATIO stayed correct, so nothing looked wrong. Guarded with
+an `expect` on distinct keys. (2) The asset under test is now overridable
+(`STRUM_3C_ASSET`) and printed, because the tree holds two 3-class models (ADR 0567).
+
+**Measured, and a product finding on its own: quiet players lose more.** Suppression by
+loudness decile, held-out strums: quietest 0.147, loudest 0.020 — a 7× gradient. It does not
+explain total suppression (5.6 % there), but a beginner plays quietly and unevenly, so the
+learner who most needs credit is the one most often told "I could not hear enough".
+
+Not claimed: any user data; the phantom rate of a beginner's own room (swept 0.5–4×, and no
+multiplier makes the two objectives agree because one is linear in it and the other is not);
+displacement at tight gates rests on n=5–9. No shipped constant moved: the frame changed
+this round, and the retention the calibration refers to belongs to a model the next round
+replaces (ADR 0567).
+
+### The unwired settled asset is worth +0.186 direction macro-F1 in the SHIPPED path (E18-R43, ADR 0567)
+
+ADR 0555 D3 left `strum_crnn_live_3c_settled.bin` deliberately unwired and said the
+switch-over belongs to a later round under AGENTS.md §9. That round needed a number nobody
+had: what the asset does IN THE PRODUCTION PATH, on detected onsets, not in Python on
+oracle-centred windows.
+
+Measured through the shipped Dart pipeline, `STRUM_SPLIT=heldout` (players 03-05 x the 4
+untrained tunes, 1772 SuperFlux onsets), at the shipped 0.850 gate with `margin on` --
+exactly what production does:
+
+```
+  asset                       kept  onsetP  onsetF1  strumRecall  downF1  upF1    macro
+  strum_crnn_live_3c           804   0.908   0.6518      0.758     0.5736  0.2007  0.3872
+  strum_crnn_live_3c_settled  1258   0.836   0.7810      0.919     0.7978  0.3478  0.5728
+  delta                             -0.072  +0.1292     +0.161    +0.2242 +0.1471 +0.1856
+```
+
+**Onset precision is the ONLY column that worsens.** UP F1 -- the bottleneck since ADR 0553
+-- goes 0.2007 -> 0.3478. And the coverage cliff of ADR 0566 D1 nearly vanishes: exact
+binomial over these retentions gives P(a perfectly played 8-slot attempt yields NO evidence)
+0.0238 -> 0.0002. The asset swap does not sidestep the gate question, it removes its
+SUBJECT.
+
+**The shippable proposal is the swap PLUS tightening the gate back to the fitted 0.439**, not
+the swap alone:
+
+```
+  asset / gate                       onsetP  strumRecall  macro
+  shipped @ 0.850 (today)             0.908     0.758     0.3872
+  shipped @ 0.439 (its best prec.)    0.925     0.722     0.3753
+  settled @ 0.850                     0.836     0.919     0.5728
+  settled @ 0.439                     0.864     0.875     0.5771
+```
+
+Tightening costs nothing in direction here -- the best macro is at 0.439 -- so precision goes
+0.908 -> 0.864 (-0.044, not -0.072) for +0.117 retention and +0.190 macro. NOTE that ADR
+0566's "strums gained per phantom admitted" exchange rate does NOT apply to a model swap: it
+measures movement along ONE model's gate curve, and a model swap moves direction F1, which no
+gate can.
+
+**Two provenance traps caught on the way, both in this round** (L682 §1). First: every
+`ml/probe_*.py` loads `weights_live_3c_settled.npz` while the sweep loads the SHIPPED
+`strum_crnn_live_3c.bin`, so a Python retention divided by a sweep retention is two
+experiments -- I had named that quotient a "30-point gap" and hunted its mechanism for hours.
+Second: the settled model TRAINED on GuitarSet (ADR 0554), so measuring on all 72 files is
+contaminated -- the contaminated table showed +0.284 macro versus the held-out +0.186,
+inflating the gain by half. The sweep now prints both the asset and the split.
+
+NOT wired this round: AGENTS.md §9 wants fixture + property + parity + real-audio, and this
+round delivers the real-audio leg only. The asset is absent from `pubspec.yaml` (assets are
+declared file by file), so it does not reach the APK today.
+
+Not claimed: any on-device or user figure; the Klangio side in situ; a variance estimate (one
+split, 530 clean sweeps, no cross-validation). UP F1 0.3478 means ADR 0553's data diagnosis
+stands -- the asset loses less, it does not supply the missing upstroke data.

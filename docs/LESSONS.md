@@ -28354,3 +28354,133 @@ Ezen a hoston az AOT **kód-elhelyezés önmagában ~20%-ot** mozdít a latenci�
 *Egy mikrobenchmark, amiben nem interleaved az A és a B, a fordító szerencséjét méri.*
 
 Lásd még [[L674]], [[L679]], [[L680]], ADR 0474, ADR 0564, ADR 0565.
+
+## L682 — Két szám két MODELLRŐL nem „rés"; és harmadszor írtam le mechanizmust, amit a saját mérésem cáfolt (E18-R43, 2026-09-12)
+
+### 1. Majdnem leírtam egy 30 pontos „rést", ami két különböző modell volt
+
+Megmértem, hogy a no-strum kapu a valódi pengetések **0,944**-ét tartja meg
+Python-ablakokon az annotált onseten, és a végponti söprés szerint **0,633**-ot a
+szállító úton. Elneveztem 30 pontos résnek, és elkezdtem a **mechanizmusát** keresni:
+ablak-központozás, populáció, újraminta-vétel, fixtúra-határ. Mindegyiket megmértem,
+mindegyik kiesett.
+
+Amit **nem** kérdeztem meg: **melyik modellen készült a két szám.** Az ADR 0555 D3 —
+amit ugyanebben a körben olvastam — kimondja, hogy a `strum_crnn_live_3c_settled.bin`
+**szándékosan bekötetlen**, és a `ml/weights_live_3c_settled.npz` (amit **minden**
+`ml/probe_*.py` betölt) **ennek** a súlyai. A söprés viszont a szállított
+`strum_crnn_live_3c.bin`-t futtatja. **A két szám két modellről szólt**, és a
+hányadosuk semmiről.
+
+Az apples-to-apples mérés (a söprés a settled assettel, `STRUM_3C_ASSET`):
+
+```
+  ugyanaz a modell, ugyanaz a korpusz      megtartás .439 / .650 / .850
+  Python, annotált onset, orákulum-ablak     0,944 / 0,963 / 0,976
+  a szállító Dart út, detektált onseten      0,941 / 0,954 / 0,971
+```
+
+**0,3–0,5 ponton belül egyeznek.** Az `audio → ablak` lánc tehát rendben van, a „rés"
+**teljes egészében a modell** volt: a szállított asset in situ 0,633/0,659/0,690-et tart
+meg, a bekötetlen 0,941/0,954/0,971-et **ugyanazon az úton**.
+
+**És ugyanez a hiba másodszor, tíz perccel később.** Ráállítottam a söprést a settled
+assetre — és mind a **72** fájlon mértem. A settled modell viszont **GuitarSeten is
+tanult** (ADR 0554: players 00–02 × 8 dallam), tehát a 72 fájlos szám **kontaminált**: a
+modell memóriáját jelenti be képességként. A kontaminált tábla **+0,284** irány-macro-F1-et
+mutatott, a held-out szelet **+0,186**-ot — a kontamináció a nyereséget **felével**
+felnagyította. Ugyanaz a hiba-családba tartozó kérdés maradt ki: *melyik szeleten?*
+
+**A szabály.** Mielőtt két mérést elosztasz vagy egymás mellé teszel, nevezd meg, **melyik
+artefaktumon** készült mindkettő: **modell-súlyok, ablak-építő, korpusz-szelet,
+kód-revízió**. Ha bármelyik eltér, nem egy rést mértél, hanem **két kísérletet**. És a
+mérőeszköz **írja ki**, mit mért — a söprés fejléce most kiírja az **assetet** és a
+**szeletet** is (`STRUM_3C_ASSET`, `STRUM_SPLIT`), pont azért, hogy egy tábla ne
+*látszódjon* összevethetőnek eggyel, amivel nem az.
+
+**Amiért mégis érdemes volt utánamenni:** az érvénytelen hányados hajtott rá az
+apples-to-apples mérésre, és **az** mutatta meg, hogy a bekötetlen asset a szállító úton,
+tiszta held-out szeleten **+0,186 irány-macro-F1-et** és **+0,161 pengetés-recallt** ér
+(ADR 0567) — ami a lefedési szakadékot 2,4%-ról 0,02%-ra viszi. A tanulság tehát nem „ne
+nyomozz", hanem **„ne publikáld a hányadost"**: a nyomozás jó volt, a szám nem.
+
+### 2. Harmadszor: mechanizmust írtam a szám mellé, és a saját mérésem cáfolta
+
+Az [[L679]] rögzítette, hogy a mechanizmus önálló állítás; az [[L681]] §2-ben
+**kétszer** sértettem meg, és megfogadtam, hogy a magyarázatot a szám **kiolvasása után**
+írom. Ebben a körben **kétszer** adtam mechanizmust, és mindkettőt mérés cáfolta:
+
+1. **„Az ablak központja elmozdul, mert a produkció a detektált onsetre épít."** Megírtam
+   a `probe_gate_window_jitter.py`-t, ami a középpontot szándékosan tolja: a görbe erősen
+   aszimmetrikus (−15 ms: 0,936; 0 ms: 0,938; +15 ms: 0,802; +30 ms: 0,454 a 0,439-es
+   kapun). Aztán **megmértem a detektor előjeles késését** is a szállító úton:
+   **p50 = −8,3 ms** (korán!), p90 = +1,5 ms, és csak **1,4%** van +30 ms-on túl. És a
+   kód: a `windowAt` **ugyanazt** a +2,5 hop attack-korrekciót alkalmazza, mint a jelentett
+   idő — tehát a produkciós ablak a táblám **0 ms** sora, ami **pontosan** az orákulum-szám.
+   A hipotézis megdőlt, és a próba, amit a teszteléséhez írtam, ölte meg.
+2. **„A tompított/perkusszív ütések, mert a negatív-bányász pitch-alapú annotációt
+   használ."** Ez a `ml/negatives.py` saját docstringjéből jött, tehát jól dokumentált
+   jelölt — és mérve **részben igaz, de nem elég**: a legcsendesebb decilis elnyomása
+   **0,147**, a leghangosabbé **0,020** (7×-es gradiens), de az össz-elnyomás ott **5,6%**,
+   nem 30%.
+
+A minta, ami három kör alatt kirajzolódott: **amint meglátok egy számot, mechanizmust
+nyúlok hozzá — és a mechanizmus arról szól, amit a rendszerről épp tudok.** A jitter a
+friss ismeretem volt (az L681-ben az AOT kód-elhelyezés), a tompítás a frissen olvasott
+docstring. Egyik sem azért került elő, mert a szám odavezetett.
+
+**A megszorítás, amit hozzáveszek az L681-hez.** Egy két mérés **közötti** különbség
+magyarázatának **első** lépése nem mechanizmus, hanem **provenancia**: ugyanaz a modell?
+ugyanaz az építő? ugyanaz a szelet? Csak ha mindhárom igen, akkor van különbség, amit
+magyarázni kell. Ebben a körben a provenancia-kérdés **megszüntette** a magyarázandót.
+*Egy mechanizmus, amit egy fantom-rés magyarázatára találtam, két órát ért — és a két óra
+az apples-to-apples mérést szülte, nem a mechanizmust.*
+
+### 3. Egy mérőeszköz, ami csendben duplán számolt
+
+A `guitarset_threshold_sweep_test.dart` kapu-listája nyolc `(suppress, margin)` rekord, és
+a tálkák map-je **rekord-érték szerint** kulcsol. Amikor az ADR 0549 a szállított
+`noStrumThreshold`-ot **0,85-re** állította, a listában **már volt** egy `0.85` literál — a
+két érték-egyenlő rekord **egy** tálkára esett, a ciklus kétszer futott rá. A szállított
+sor `kept`-je **8558**-at írt 4279 helyett, a fantom-szám 862-t 431 helyett.
+
+**És semmi nem látszott hibásnak**, mert minden *arány* osztás, amiben a kettes kiesik: a
+precizitás, az F1, a recall mind helyes maradt. Csak a darabszámok duplázódtak — és a
+táblát azért nézi az ember, hogy arányokat olvasson.
+
+**A szabály.** Egy eszköz, ami **konfigurációkat sorol fel**, állítsa is, hogy a
+konfigurációi **különbözőek**. Egy kétszer szereplő sor nem hibát ad, hanem egy másik
+kísérletet, és ha az eszköz arányokat is ír, a hiba **láthatatlan**. A guard bekerült; a
+tábla most pontosan reprodukálja a független alapvonalat (3789 / 4015 / 4279 / 10106).
+
+### 4. Négy kör alatt nem kérdeztem meg, KI fogyasztja a számot
+
+A szállított 0,85 indoklása (a `live_crnn_classifier.dart` fejlécében) két költséget tett
+egymás mellé: „az elnyomott pengetés levonás" és „a fantom olyan slotot kreditál, amit a
+tanuló nem játszott". A kapu ezen a két hazugságon áll, és **egyiket sem ellenőriztem a
+kódban**, pedig mindkettő ellenőrizhető:
+
+- „**levonás**" — a `rhythm_grading.dart` 3. döntése szerint **nem**: „egy kihagyott slot
+  nem von le semmit". Amit valóban tesz: a lefedés esik, és a `minimumRhythmCoverage`
+  (0,5) alatt a `rhythmAttemptEvidence` **nulla bizonyítékot** ad — nem levonás, hanem
+  **szakadék** (a szállított kapun a hibátlanul eljátszott 8-slotos kísérletek
+  **2,4–10,7%-a**, korpusztól függően — és mindkét vég alsó korlát).
+- „**kreditál**" — csak **nyitott** slotban (mérve: a fantomok **4,7%-a** 8 slotnál
+  80 bpm-en), különben `extraConfirmedStrokes`, amit **egyetlen widget sem jelenít meg**.
+- a **nyíl**, ami a fantomot megmutatná: végigolvastam a widgeteket. A `RhythmLane` a
+  **notált** rácsot rajzolja és észlelt ütést nem is kap; a `practice_highway` és a
+  `practice_feedback` is a **várt** irányt (`CompiledTargetEvent`, `expectedDirection`). Az
+  egyetlen hely, ami **észlelt** irányt mutat, a **megosztó kártya** nyíl-sora; az ADR 0556
+  élő nyila **tervezett, de sötét**.
+
+Vagyis a költség, ami a kaput szorosan tartja, nagyrészt egy felületet védett, ami **ma
+nincs**. (A laza vég mégsem ingyenes, de **más** okból, mint amit a fejléc írt: kapu nélkül
+a **FEL precizitás 0,206 → 0,043** omlik, mert a beengedett fantomok **93,8%-át** hívja a
+modell „fel"-nek. Ez aggregált precizitás, nem slot-verdikt — megint egy **másik fogyasztó**.)
+
+**A szabály.** Mielőtt A hibát B hibával váltod, keresd meg a kódot, ami **megjeleníti**
+mindkettőt. Nem az ADR-t, ami leírja, és nem a kommentet, ami indokolja: a widgetet és a
+pontozót. Négy kör költség-érvelést építettem egy olyan nyílra, amit sosem grepeltem.
+*Egy költség, aminek nincs fogyasztója, nem költség — csak egy mondat.*
+
+Lásd még [[L662]], [[L671]], [[L675]], [[L679]], [[L681]], ADR 0549, ADR 0555, ADR 0566.

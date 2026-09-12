@@ -66,7 +66,46 @@ import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
 
 const double _linkMs = 45;
 const List<String> _styles = ['Rock', 'Funk'];
-const String _liveCrnn3c = 'assets/ml/strum_crnn_live_3c.bin';
+
+/// The 3-class asset under test, overridable with `STRUM_3C_ASSET`.
+///
+/// It has to be overridable, and the reason is a mistake worth naming. ADR 0555 D3 left
+/// a SECOND 3-class asset in the tree deliberately unwired
+/// (`strum_crnn_live_3c_settled.bin`), while `ml/weights_live_3c_settled.npz` — what
+/// every `ml/probe_*.py` loads — is that asset's weights, NOT the shipped one's. So a
+/// Python retention number and this sweep's retention number are measured on DIFFERENT
+/// MODELS unless this path is pointed at the settled asset. Dividing one by the other
+/// and calling the quotient a property of the production path is two experiments wearing
+/// one number's clothes (E18-R43; LESSONS L682).
+///
+/// The default stays the shipped asset, so an unconfigured run measures production.
+/// Restrict the corpus to the HELD-OUT split with `STRUM_SPLIT=heldout`.
+///
+/// Mandatory whenever the asset under test trained on GuitarSet. The settled asset did
+/// (ADR 0554), and all 72 files include players 00-02 and the 8 training tunes, so an
+/// unsplit number is CONTAMINATED — it would report the model's memory as its skill. The
+/// shipped asset did not train here, so for it the unsplit run is honest; comparing the
+/// two therefore has to happen on the SAME split, which is the whole reason this knob
+/// exists (ADR 0567, LESSONS L682 §1).
+const _testPlayers = {'03', '04', '05'};
+const _testTunes = {
+  'Funk3-112-C#',
+  'Funk3-98-A',
+  'Rock3-117-Bb',
+  'Rock3-148-C',
+};
+
+/// True when [name] (a `*_comp_mic.wav` basename) is in the requested split.
+bool _inSplit(String name) {
+  if ((Platform.environment['STRUM_SPLIT'] ?? '') != 'heldout') return true;
+  final player = name.substring(0, 2);
+  final tune = name.substring(3).replaceAll('_comp_mic.wav', '');
+  return _testPlayers.contains(player) && _testTunes.contains(tune);
+}
+
+String get _liveCrnn3c =>
+    Platform.environment['STRUM_3C_ASSET'] ??
+    'assets/ml/strum_crnn_live_3c.bin';
 const int _sampleRate = 44100;
 
 /// The gates to compare. The first is what ships; 1.01 never suppresses, which is the
@@ -82,8 +121,14 @@ const List<_Gate> _gates = [
   (suppress: LiveCrnnStrumClassifier.noStrumThreshold, margin: false),
   (suppress: 0.65, margin: true),
   (suppress: 0.65, margin: false),
-  (suppress: 0.85, margin: true),
-  (suppress: 0.85, margin: false),
+  // The value ADR 0549 replaced, kept for provenance — NOT a literal 0.85, which is
+  // what [LiveCrnnStrumClassifier.noStrumThreshold] already is. When the shipped
+  // constant moved here it collided with the literal, and because these records are
+  // value-equal the scores map collapsed two entries onto ONE tally: the shipped row's
+  // `kept`/`phantoms` printed DOUBLE from then until E18-R43. Ratios survived it,
+  // counts did not. The duplicate guard below is what makes that impossible now.
+  (suppress: LiveCrnnStrumClassifier.fittedNoStrumThreshold, margin: true),
+  (suppress: LiveCrnnStrumClassifier.fittedNoStrumThreshold, margin: false),
   (suppress: 1.01, margin: true),
   (suppress: 1.01, margin: false),
 ];
@@ -362,6 +407,52 @@ final class _GateScore {
   int onsetFn = 0;
   int strumFound = 0;
   int strumTotal = 0;
+
+  /// False positives split by distance to the NEAREST annotated event, because the
+  /// rhythm grader treats the three distances completely differently (ADR 0566).
+  ///
+  /// A phantom inside [onsetToleranceMsPrimary] of an annotated event is a DOUBLE
+  /// TRIGGER: `gradeRhythm` matches with maximum cardinality, so it competes with the
+  /// learner's real stroke for that slot and can WIN it, putting its own direction on a
+  /// stroke the learner played correctly. A phantom farther out can only land in a slot
+  /// the learner MISSED, or in none at all — where it becomes `extraConfirmedStrokes`,
+  /// which subtracts nothing.
+  ///
+  /// Counted rather than assumed because the mined-negative corpus cannot answer it:
+  /// `ml/negatives.py` excludes every candidate within its 120 ms margin of an annotated
+  /// onset, so the double-trigger population is absent there BY CONSTRUCTION.
+  int fpWithinTolerance = 0;
+  int fpWithinMargin = 0;
+  int fpBeyondMargin = 0;
+
+  /// Signed `detected - annotated` milliseconds for every matched onset. Positive
+  /// means the pipeline reported the stroke LATE.
+  ///
+  /// This decides between the two surviving explanations for the 30-point gap
+  /// between the gate's retention on Python-built windows at annotated onsets
+  /// (0.944 at gate 0.439) and its retention in situ (0.633): either the detector
+  /// lands late often enough that the concave retention-vs-offset curve
+  /// (`ml/probe_gate_window_jitter.py`) accounts for it, or the production feature
+  /// chain differs from the Python one in a way the parity fixtures do not cover.
+  /// The +-50 ms match tolerance admits a detection 45 ms late as "found" while its
+  /// classification window is far past the attack, so the mean says little and the
+  /// TAIL is the quantity that matters.
+  final List<double> lagsMs = [];
+
+  /// P(no-strum) as PRODUCTION computed it, for onsets matched to a CLEAN sweep.
+  ///
+  /// The direct counterpart of the Python number over the same sweeps: 0.0063 median,
+  /// 0.944 retention at gate 0.439 (`ml/probe_gate_window_jitter.py`, offset 0). In situ
+  /// the same gate keeps 0.633 of the sweeps the detector finds. Three candidate causes
+  /// were eliminated (population, window centring, resampler kind), so this column is
+  /// what localises the rest: if the median here is ~0.006 the gap is about WHICH onsets
+  /// get matched, and if it is far higher the production window itself differs from the
+  /// one the gate was calibrated on.
+  ///
+  /// Read the `none` row: with no gate every onset is present, so this is the honest
+  /// production distribution over real strums, and 1 - share(>g) IS the retention a
+  /// candidate gate `g` would deliver on production windows.
+  final List<double> matchedStrumPNoStrum = [];
   final Map<StrumDirection, int> tp = {
     StrumDirection.down: 0,
     StrumDirection.up: 0,
@@ -415,6 +506,16 @@ void main() {
       );
 
       final scores = {for (final gate in _gates) gate: _GateScore()};
+      // Two value-equal gates would share one tally and print doubled counts. This
+      // already happened once (see [_gates]); a table that silently double-counts is
+      // worse than a missing row, because nothing in it looks wrong.
+      expect(
+        scores.length,
+        _gates.length,
+        reason:
+            'the gate list has value-equal duplicates, so their tallies merge and '
+            'every COUNT for that row is multiplied by how many times it appears',
+      );
       var files = 0;
       var totalOnsets = 0;
       var withProbs = 0;
@@ -427,6 +528,7 @@ void main() {
               .where(
                 (f) => _styles.any((s) => f.uri.pathSegments.last.contains(s)),
               )
+              .where((f) => _inSplit(f.uri.pathSegments.last))
               .toList()
             ..sort((a, b) => a.path.compareTo(b.path));
       expect(wavs, isNotEmpty);
@@ -469,11 +571,34 @@ void main() {
           score.onsetTp += pairs.length;
           score.onsetFp += keptHeard.length - pairs.length;
           score.onsetFn += expectedTimes.length - pairs.length;
+          // Where did the phantoms fall? See [_GateScore.fpWithinTolerance].
+          final matchedDetections = {for (final pair in pairs) pair.detected};
+          for (var d = 0; d < keptHeard.length; d++) {
+            if (matchedDetections.contains(d)) continue;
+            var nearestMs = double.infinity;
+            for (final e in expectedTimes) {
+              final gap = (keptHeard[d].atSec - e).abs() * 1000;
+              if (gap < nearestMs) nearestMs = gap;
+            }
+            if (nearestMs <= onsetToleranceMsPrimary) {
+              score.fpWithinTolerance++;
+            } else if (nearestMs <= 120) {
+              score.fpWithinMargin++;
+            } else {
+              score.fpBeyondMargin++;
+            }
+          }
           score.strumTotal += sweeps.where((s) => s.isClean).length;
           for (final pair in pairs) {
+            score.lagsMs.add(
+              (keptHeard[pair.detected].atSec - expectedTimes[pair.expected]) *
+                  1000,
+            );
             final sweep = sweeps[pair.expected];
             if (!sweep.isClean) continue;
             score.strumFound++;
+            final pns = keptHeard[pair.detected].pNoStrum;
+            if (pns != null) score.matchedStrumPNoStrum.add(pns);
             final truth = sweep.direction!;
             final h = keptHeard[pair.detected];
             final pDown = h.pDown;
@@ -499,6 +624,12 @@ void main() {
         'GuitarSet comping ${_styles.join('+')} — $files files, '
         '$totalOnsets SuperFlux onsets ($withProbs carrying probabilities, '
         '$coalesced excluded as frame-coalesced)',
+      );
+      // Provenance, not decoration: every retention number below belongs to THIS asset,
+      // and the tree holds two 3-class assets that differ (see [_liveCrnn3c]).
+      out.writeln('  asset: $_liveCrnn3c');
+      out.writeln(
+        '  split: ${Platform.environment['STRUM_SPLIT'] ?? 'all 72 files'}',
       );
       out.writeln();
       out.writeln(
@@ -526,6 +657,111 @@ void main() {
         );
       }
       out.writeln('  (* = what production does today)');
+      out.writeln();
+      out.writeln(
+        '  WHERE THE PHANTOMS FALL (ADR 0566): a false positive within '
+        '${onsetToleranceMsPrimary}ms of an annotated',
+      );
+      out.writeln(
+        '  event is a DOUBLE TRIGGER and can take a slot away from the stroke the '
+        'learner really',
+      );
+      out.writeln(
+        '  played; one beyond it can only fill a slot they MISSED, or none at all.',
+      );
+      out.writeln();
+      out.writeln(
+        '  suppress  margin   phantoms   <=${onsetToleranceMsPrimary}ms   '
+        '<=120ms   >120ms   displacing share',
+      );
+      for (final gate in _gates) {
+        final s = scores[gate]!;
+        final label = gate.suppress > 1
+            ? 'none'
+            : gate.suppress.toStringAsFixed(3);
+        final share = s.onsetFp == 0 ? 0.0 : s.fpWithinTolerance / s.onsetFp;
+        out.writeln(
+          '  ${label.padRight(9)} '
+          '${(gate.margin ? 'on' : 'off').padRight(6)} '
+          '${s.onsetFp.toString().padLeft(9)}  '
+          '${s.fpWithinTolerance.toString().padLeft(7)}  '
+          '${s.fpWithinMargin.toString().padLeft(7)}  '
+          '${s.fpBeyondMargin.toString().padLeft(7)}  '
+          '${share.toStringAsFixed(4).padLeft(16)}',
+        );
+      }
+      out.writeln();
+      out.writeln(
+        '  SIGNED DETECTOR LAG (detected - annotated, ms): positive = reported LATE.',
+      );
+      out.writeln(
+        '  The classification window is built at this instant, and retention collapses',
+      );
+      out.writeln(
+        '  for late windows while early ones cost nothing, so the LATE TAIL is what',
+      );
+      out.writeln('  decides whether centring explains the in-situ retention.');
+      out.writeln();
+      out.writeln(
+        '  suppress  margin       n      p10     p50     p90   share>+20ms  '
+        'share>+30ms',
+      );
+      for (final gate in _gates) {
+        final s = scores[gate]!;
+        if (s.lagsMs.isEmpty) continue;
+        final sorted = [...s.lagsMs]..sort();
+        double q(double f) => sorted[((sorted.length - 1) * f).round()];
+        final late20 = s.lagsMs.where((v) => v > 20).length / s.lagsMs.length;
+        final late30 = s.lagsMs.where((v) => v > 30).length / s.lagsMs.length;
+        final label = gate.suppress > 1
+            ? 'none'
+            : gate.suppress.toStringAsFixed(3);
+        out.writeln(
+          '  ${label.padRight(9)} '
+          '${(gate.margin ? 'on' : 'off').padRight(6)} '
+          '${sorted.length.toString().padLeft(6)}  '
+          '${q(0.10).toStringAsFixed(1).padLeft(7)} '
+          '${q(0.50).toStringAsFixed(1).padLeft(7)} '
+          '${q(0.90).toStringAsFixed(1).padLeft(7)}  '
+          '${late20.toStringAsFixed(4).padLeft(11)}  '
+          '${late30.toStringAsFixed(4).padLeft(11)}',
+        );
+      }
+      out.writeln();
+      out.writeln(
+        '  PRODUCTION P(no-strum) ON REAL STRUMS (onsets matched to a clean sweep).',
+      );
+      out.writeln(
+        '  Python over the SAME sweeps, windowed at the annotated onset: median 0.0063,',
+      );
+      out.writeln(
+        '  retention 0.944 / 0.963 / 0.976 at gates 0.439 / 0.650 / 0.850.',
+      );
+      out.writeln('  Read the `none` row: every onset is present there.');
+      out.writeln();
+      out.writeln(
+        '  suppress  margin       n      p50      p90   retention at .439  .650  .850',
+      );
+      for (final gate in _gates) {
+        final s = scores[gate]!;
+        if (s.matchedStrumPNoStrum.isEmpty) continue;
+        final sorted = [...s.matchedStrumPNoStrum]..sort();
+        double q(double f) => sorted[((sorted.length - 1) * f).round()];
+        String keep(double g) =>
+            (sorted.where((v) => v <= g).length / sorted.length)
+                .toStringAsFixed(3);
+        final label = gate.suppress > 1
+            ? 'none'
+            : gate.suppress.toStringAsFixed(3);
+        out.writeln(
+          '  ${label.padRight(9)} '
+          '${(gate.margin ? 'on' : 'off').padRight(6)} '
+          '${sorted.length.toString().padLeft(6)}  '
+          '${q(0.50).toStringAsFixed(4).padLeft(7)}  '
+          '${q(0.90).toStringAsFixed(4).padLeft(7)}  '
+          '${keep(0.439).padLeft(13)} ${keep(0.650)} ${keep(0.850)}',
+        );
+      }
       // ignore: avoid_print — the table IS this file's deliverable.
       print(out);
 
