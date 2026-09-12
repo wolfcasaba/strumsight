@@ -42,6 +42,11 @@ from probe_direction_headroom import clean_sweeps
 # wrong.
 OFFBEAT_PHASE = 0.25
 
+# Half-width of the "this onset is on a sixteenth offbeat" band, in beats, for the
+# threshold rule ADR 0557's headline used. 0.09375 = 1.5/16 of a beat = 47 ms at
+# 120 bpm. The PRODUCTION rule ([slot_call]) needs no tolerance at all.
+TOLERANCE_BEATS = 0.09375
+
 
 def beats_of(jams):
     """The annotated beat grid: (time, position-in-bar, measure)."""
@@ -64,6 +69,33 @@ def pendulum_score(phase: float) -> float:
     upstroke. A score, not a probability -- it is ranked by AUC, never thresholded
     here."""
     return -abs((phase % (2 * OFFBEAT_PHASE)) - OFFBEAT_PHASE)
+
+
+# GuitarSet's IMPLIED lesson, and the only pattern this corpus can stand in for:
+# sixteenth down-up alternation, four slots per beat. In the app the pattern spans a
+# whole BAR and comes from `strum_patterns.dart`; `slot_call` is written to take any
+# pattern so the corpus measurement and the shipped rule are the same function.
+DOWN_SLOT, UP_SLOT = 0, 1
+GUITARSET_PATTERN = (DOWN_SLOT, UP_SLOT, DOWN_SLOT, UP_SLOT)
+
+
+def slot_call(phase: float, pattern=GUITARSET_PATTERN):
+    """THE PRODUCTION RULE: the prescribed pattern's direction at the NEAREST slot.
+
+    This is what the Dart side implements, and it is deliberately not
+    [pendulum_score]'s threshold. `pendulum_score` encodes one corpus's sixteenth
+    offbeats; a lesson's pattern can be eighths, sixteenths, or anything the notation
+    allows, and the app KNOWS which (ADR 0557 D3). Nearest-slot generalises over that
+    while staying parameter-free.
+
+    Measured agreement with the rule ADR 0557's headline used: the two disagree on 5 of
+    526 held-out rows (0.95 %), and nearest-slot is slightly BETTER -- accuracy 0.9848
+    vs 0.9791, violations 8 vs 11. The consequence is NOT that the finding got stronger:
+    the violating subset, which is the only place the fusion can do harm, shrank from 11
+    strokes to 8, so the harm estimate got THINNER (ADR 0558 D4).
+    """
+    n = len(pattern)
+    return pattern[int(round(phase * n)) % n]
 
 
 def collect(base_dir=None):
@@ -252,6 +284,25 @@ def main():
             shuffled[i]["phase"] = phase
     print("      held-out AUC %.4f"
           % auc([pendulum_score(r["phase"]) for r in shuffled], y_test))
+
+    print("\n--- 4b  the PRODUCTION rule vs the rule measured above ---")
+    print("    slot_call is what Dart implements: the prescribed pattern's direction")
+    print("    at the NEAREST slot. pendulum_score encodes one corpus's offbeats; a")
+    print("    lesson's pattern is whatever its notation says, and the app knows it.")
+    measured = np.array([1 if abs((r["phase"] % 0.5) - 0.25) <= TOLERANCE_BEATS else 0
+                         for r in test])
+    produced = np.array([slot_call(r["phase"]) for r in test])
+    truth = np.array(y_test)
+    print("      rules disagree on %d of %d rows (%.2f%%)"
+          % (int((measured != produced).sum()), len(test),
+             100.0 * (measured != produced).mean()))
+    print("      measured rule    accuracy %.4f   violations %d"
+          % (float((measured == truth).mean()), int((measured != truth).sum())))
+    print("      PRODUCTION rule  accuracy %.4f   violations %d"
+          % (float((produced == truth).mean()), int((produced != truth).sum())))
+    print("    Nearest-slot is slightly better -- and that SHRINKS the violating")
+    print("    subset, which is the only place fusion can do harm, so the harm")
+    print("    estimate gets THINNER, not stronger (ADR 0558 D4).")
 
     print("\n--- 5  per unseen player ---")
     for player in G.TEST_PLAYERS:

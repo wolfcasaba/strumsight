@@ -27782,3 +27782,52 @@ nem elhagyva: a Pareto-biztos szabály (238 ms) szállítható most, az erősebb
 kettőt nem szabad ugyanazzal a magabiztossággal idézni.*
 
 Lásd még [[L670]], [[L671]], ADR 0557, ADR 0558.
+
+## L673 — Egy szabállyal mértem és egy másikat készültem szállítani; a produkciós kód megírása fogta el, nem a mérés (E18-R35, 2026-09-12)
+
+### 1. A mérés szabálya nem az volt, amit szállítani akartam
+
+Az ADR 0557 és 0558 minden száma ezzel a szabállyal készült: „felütés, ha a
+tizenhatod-offbeattől mért távolság ≤ 0,09375 ütem". Két körön át ezt mértem, kontrolláltam,
+rögzítettem, idéztem.
+
+Amikor leültem megírni a Dart-egységet, a **kódnak fel kellett tennie a kérdést, amit a
+próba nem tett fel: mi pontosan a szabály?** És a válasz nem az lehetett, ami a próbában
+volt — mert az offbeat-szabály **egy korpusz mintáját** kódolja, a leckék mintája viszont
+nyolcad, tizenhatod, vagy bármi, amit a jelölés megenged. A produkciós szabály így a
+**legközelebbi előírt rés** lett.
+
+Ez **L662 ismétlése** (egy konfiguráció, ami eltér a produkciótól, más rendszert mér) —
+csak most nem a geometrián, hanem a **döntési szabályon**. És nem kozmetikai: a két szabály
+a tartalék soroknak csak **0,95%-án** tér el, mégis
+
+- a sértő részhalmaz **11 → 8 ütésre** csökkent, tehát a kockázat-becslés **vékonyabb** lett,
+- a nyíl fúziójának megtérülése **0,401 → 0,475** romlott — lényegesen közelebb a 0,5-höz,
+- a szállítható D1 szabály viszont **változatlanul** `c* = 0,000`.
+
+**A szabály, amit megtartok.** A produkciós implementáció megírása **a mérés ellenőrzése**, és
+csak akkor ér valamit, ha **a számok véglegesként idézése ELŐTT** történik. Egy próba
+megírhat egy szabályt, ami a korpuszra illik; a produkciós kód nem tud ilyet, mert neki
+minden leckére működnie kell. *Ha a produkciós kód kérdése nehezebb, mint a próba kérdése
+volt, akkor nem a kódot kell a próbához igazítani.*
+
+Gyakorlati sarokpont: **egy mért szabályt előbb kell paritás-fixtúrába kötni, mint
+ADR-címsorba.** A fixtúra (`test/fixtures/strum_metric_channel_parity.json`,
+`ml/make_metric_channel_fixture.py`) most ugyanazt az aritmetikát generálja, amivel a próba
+mér, tehát a kettő **nem tud szétcsúszni** — ezt kellett volna először megépíteni.
+
+### 2. Hogy a jobb szabály vékonyabb kockázat-becslést ad, az nem paradoxon, hanem figyelmeztetés
+
+A szállított szabály **pontosabb** (0,9848 vs 0,9791). Épp ezért **kevesebb sértést** talál —
+és a sértések az **egyetlen** hely, ahol a fúzió kárt tud tenni. Vagyis a jellemző javítása
+automatikusan **elvette a kockázat-mérés mintáját**.
+
+Ez általános csapda: ha a kockázatot a modell **saját hibáinak** részhalmazán méred, akkor
+minden javítás **csökkenti a mintaszámot**, amin a kockázatot becsülni tudod — és a
+magabiztosság pont akkor nő, amikor a bizonyíték fogy. Minden „sértő" pontosság most
+**1/8 többszöröse**, a mért romlás **két ütés**.
+
+*Ha a kockázat-oldali n a javítással együtt fogy, akkor a kockázat nem lett kisebb, csak
+kevésbé mérhető — és a kettőt nem szabad összekeverni.*
+
+Lásd még [[L662]], [[L670]], [[L671]], [[L672]], ADR 0557, ADR 0558.

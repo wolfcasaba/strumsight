@@ -1158,3 +1158,75 @@ margó 70 ms-on nem mér megbízhatóságot. (L672 §2.)
 - A `lam` **nem kalibrált valószínűség**, hanem söpört bizalom-skalár.
 - Az ADR 0557 D4 etikai korlátja és a D1 mért választása **egybeesik, de ez egybeesés, nem
   levezetés** — a D4 mérés előtt született, és eltérés esetén is kötne.
+
+---
+
+# A szállított szabály, és a Dart-egység, ami nem tud elcsúszni tőle (E18-R35)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/make_metric_channel_fixture.py
+flutter test test/features/live/dsp/strum_metric_channel_test.dart
+```
+
+Az ADR 0557/0558 minden száma a **mérési** szabállyal készült („fel, ha a
+tizenhatod-offbeattől mért távolság ≤ 0,09375 ütem"). A **szállított** szabály a lecke
+előírt mintájának **legközelebbi rése** — mert az offbeat-szabály **egy korpusz** mintáját
+kódolja, egy lecke mintája viszont bármi lehet, amit a jelölése megenged (ADR 0557 D3).
+Egy olyan szabállyal mérni, amit nem szállítunk, **más rendszert mér** (L662).
+
+```
+  szabály                           pontosság   sértő ütés
+  mérési     (|d16| ≤ 0,09375)         0,9791        11
+  SZÁLLÍTOTT (legközelebbi rés)        0,9848         8
+```
+
+A szabályok a tartalék soroknak **0,95%-án** (5 / 526) térnek el. A szállított **jobb** — és
+épp ezért a sértő részhalmaz **11 → 8**, vagyis az egyetlen hely, ahol a fúzió kárt tehet,
+**kevesebb mintát** ad. A kockázat-becslés **vékonyabb** lett, nem erősebb. (L673 §2.)
+
+Újramérve a szállított szabállyal:
+
+| tier | szabály | macro | követő | **SÉRTŐ** | megtérülés `c*` |
+|---|---|---|---|---|---|
+| 70 ms | csak akusztikus | 0,5262 | 0,6398 | **0,5000** | — |
+| 70 ms | teljes fúzió `lam=0,99` | 0,9278 | 0,9157 | **0,2500** | **0,475** (volt 0,401) |
+| 70 ms | csak döntetlen `m<0,30` | 0,6564 | 0,7395 | **0,3750** | 0,557 (volt 0,481) |
+| 238 ms | csak akusztikus | 0,6061 | 0,7605 | **0,6250** | — |
+| 238 ms | teljes fúzió `lam=0,99` | 0,9268 | 0,9502 | **0,2500** | 0,664 (volt 0,591) |
+| 238 ms | **csak döntetlen `m<0,30`** | 0,6784 | 0,8046 | **0,6250** | **0,000** (változatlan) |
+
+**A szállítható D1 változatlanul áll** (`c* = 0,000`); a nyíl D2-je **romlott**
+(0,401 → 0,475), ami **erősíti** a funkció-kapus döntést.
+
+## A Dart-egység: `StrumMetricChannel`
+
+`lib/features/live/engine/dsp/strum_metric_channel.dart` — **paraméter nélküli**, Flutter-
+független, a mintát **kívülről kapja** (nem a korpuszból illeszti). Három **elkülönített**
+állapot, mert ezek összeolvasztása az, ami az osztályt hazugsággá tenné:
+
+| állapot | jelentés |
+|---|---|
+| `available == false` | **nincs rács** (metronóm/tempó nélküli szabad játék) — normál mód, nem hiba |
+| `available && direction == null` | **a rácson van, de a minta ott szünetet ír elő** → nincs véleménye (a szünetre leütött ütés maga is minta-sértés: ütem utáni lelet) |
+| `hasOpinion` | az előírt irány |
+
+Az osztály dokumentációja **kimondja, mire nem használható**: az itt visszaadott irány a
+**megoldókulcs**. Tanulói ütésként jelenteni, vagy magabiztos akusztikus hívást vele
+átfordítani = a megtiltott hamis tanítás (ADR 0557 D4).
+
+## §9 négy követelménye, tételesen
+
+| követelmény | mi teljesíti |
+|---|---|
+| **fixtúra** | `test/fixtures/strum_metric_channel_parity.json` — **180 eset**: 120 valós tartalék GuitarSet onset-fázis + szintetikus élek (rés-határ, 1,0-es körbefordulás, **negatív** fázis, szünet-rés, 3/4-es minta) |
+| **paritás** | a fixtúrát **ugyanaz az aritmetika** generálja, amivel a próba mér (`ml/make_metric_channel_fixture.py` ↔ `probe_direction_metric.slot_call`), tehát a szállított és a mért szabály **nem tud szétcsúszni** |
+| **property** | randomizált: rés-középpont → pontos rés · `offsetSlots ∈ [−0,5; 0,5]` · ütem-eltolás invariáns · egy-rés eltolás **átfordítja a nyilat** (maga az inga) · **fél résnél kisebb elcsúszás megtartja a rést** |
+| **valós-audio mérés** | `probe_direction_metric.py` 4b (72 valós GuitarSet felvétel, tartalék pontosság **0,9848**) + `probe_direction_fusion.py` (a **tanított modell** fut a valós audión) |
+
+A fél-rés property a mért időzítés-szórás **geometriai** párja: 120 bpm-en egy tizenhatod
+125 ms, tehát a csatorna **±62,5 ms** tanulói hibát tolerál, mire a szomszédos rést olvassa —
+és a mért AUC ±50 ms-on 0,8427, ±80 ms-on 0,6285. **A könyök ott van, ahol a geometria
+mondja.**
+
+**12/12 teszt zöld.** Szállított viselkedés **nem változott**: az egység **nincs bekötve**
+(a `LivePipeline` nem hívja), tehát ez tiszta új felület.

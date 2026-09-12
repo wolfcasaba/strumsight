@@ -14355,9 +14355,41 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   görbe az, és **11 ütésen** áll (minden „sértő" pontosság 1/11 többszöröse, a mért romlás
   **két ütés**) → **korlátok, nem munkapontok**. A lineáris modell feltételezi, hogy a tanuló
   sértései olyanok, mint a GuitarSet sértései — egy kezdőé valószínűleg **másfajta**.
-  **KÖVETKEZŐ:** a `TempoTracker` rácsát **tizenhatodra** finomítani (ma nyolcad) + a fázist
-  folytonosan megtartani, majd a D1 szabályát bekötni (§9: fixtúra + property + paritás +
-  valós-audio mérés). Tanulság: **L672**.
+  Tanulság: **L672**.
+  **E18-R35 — A SZÁLLÍTOTT SZABÁLY + A DART-EGYSÉG (ADR 0558 korrekció,
+  `lib/features/live/engine/dsp/strum_metric_channel.dart`).** Az ADR 0557/0558 számai a
+  **mérési** szabállyal készültek (offbeat-távolság ≤ 0,09375); a **szállított** szabály a
+  lecke mintájának **legközelebbi rése** — mert az offbeat-szabály **egy korpusz** mintáját
+  kódolja. A szabályok a tartalék soroknak **0,95%-án** térnek el, a szállított **jobb**
+  (0,9848 vs 0,9791) — **és ezért a sértő részhalmaz 11 → 8**, vagyis a kockázat-becslés
+  **vékonyabb** lett (minden „sértő" pontosság 1/8 többszöröse, a mért romlás **két ütés**).
+  Újramérve: **a D1 VÁLTOZATLAN** (238 ms döntetlen-törő, `c* = 0,000`, +0,0723 macro) → a
+  szállítható szabály túlélte; **a D2 ROMLOTT** (nyíl teljes fúzió `c*` 0,401 → 0,475), ami
+  **erősíti** a funkció-kaput; a D3 áll (0,557 vs 0,475).
+  **Az egység:** paraméter nélküli, Flutter-független, a mintát **kívülről** kapja. Három
+  **elkülönített** állapot: `available == false` = **nincs rács** (metronóm nélküli szabad
+  játék, normál mód) · `available && direction == null` = **a rácson van, de szünet van
+  előírva** → nincs véleménye (a szünetre leütött ütés maga is minta-sértés, ütem utáni
+  lelet) · `hasOpinion` = az előírt irány. A doksija **kimondja, mire nem használható**: az
+  irány a **megoldókulcs**, tanulói ütésként jelenteni vagy magabiztos akusztikus hívást vele
+  átfordítani = hamis tanítás (ADR 0557 D4).
+  **§9 tételesen:** fixtúra `test/fixtures/strum_metric_channel_parity.json` (**180 eset**:
+  120 valós tartalék onset-fázis + szintetikus élek: rés-határ, 1,0 körbefordulás,
+  **negatív** fázis, szünet-rés, 3/4) · **paritás**: a fixtúrát **ugyanaz az aritmetika**
+  generálja, amivel a próba mér (`ml/make_metric_channel_fixture.py` ↔ `slot_call`), tehát
+  nem tud szétcsúszni · **property**: rés-középpont, `offsetSlots ∈ [−0,5; 0,5]`,
+  ütem-invariancia, egy-rés eltolás **átfordítja a nyilat**, **fél résnél kisebb elcsúszás
+  megtartja a rést** (120 bpm-en ±62,5 ms — a mért könyök ±50/±80 ms-on pont ide esik) ·
+  **valós-audio**: `probe_direction_metric.py` 4b (72 felvétel, 0,9848) +
+  `probe_direction_fusion.py` (a tanított modell a valós audión). **12/12 zöld.**
+  **SZÁLLÍTOTT VISELKEDÉS NEM VÁLTOZOTT — az egység NINCS BEKÖTVE** (a `LivePipeline` nem
+  hívja). Tanulság: **L673** (egy szabállyal mértem, másikat készültem szállítani; a
+  produkciós kód megírása fogta el, nem a mérés).
+  **KÖVETKEZŐ, ebben a sorrendben:** (1) a **letisztult tier** (ADR 0556 D3 + a három
+  csapda-teszt: a revízió nem kreál ütést, nem ír át **újabb** ütést, elnyomott onset nem
+  éled újra) — **a D1 ezen áll, mert a `c* = 0,000` a 238 ms-os tieren mért**; (2) a
+  `TempoTracker` rácsa + bar-horgony átadása a csatornának; (3) a D1 fúzió bekötése a
+  **pontozó** úton; (4) a nyíl fúziója **funkció-kapu** mögé.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a

@@ -52,11 +52,6 @@ from train_live_3c_settled import DOWN, NO_STRUM, UP, f1
 WEIGHTS = "weights_live_3c_settled.npz"
 THRESHOLD_JSON = "live_3c_settled_threshold.json"
 
-# A stroke counts as pendulum-OBEYING when the prescribed grid's call matches the truth.
-# The tolerance is the half-width of the "this is a sixteenth offbeat" band, in beats;
-# 0.09375 = 1.5/16 of a beat = 47 ms at 120 bpm, the middle row of ADR 0557 D5.
-TOLERANCE = 0.09375
-
 
 def aligned_onsets(cache: str = G.CACHE):
     """The onset time of every row in `guitarset.build`'s cache, in the same order.
@@ -97,12 +92,19 @@ def phase_of(base_dir: str):
 
 
 def metric_call(times, players, tunes, grids):
-    """The prescribed grid's direction call per row: UP, DOWN, or -1 when the metric
+    """The prescribed pattern's direction call per row: UP, DOWN, or -1 when the metric
     channel is UNAVAILABLE (no beat grid, or the onset sits outside it). Unavailable is a
     real state, not a missing value to impute -- in free play without a metronome the app
-    is in exactly this state for every stroke."""
+    is in exactly this state for every stroke.
+
+    The rule is `probe_direction_metric.slot_call`, the PRODUCTION rule the Dart side
+    implements: the nearest slot of the prescribed pattern. It is deliberately NOT the
+    offbeat-distance threshold ADR 0557's headline used, because a lesson's pattern is
+    whatever its notation says (ADR 0557 D3) -- and measuring one rule while shipping
+    another measures a different system (LESSONS L662).
+    """
     calls = np.full(len(times), -1, dtype=np.int64)
-    offsets = np.full(len(times), np.nan)
+    phases = np.full(len(times), np.nan)
     for i, (at, player, tune) in enumerate(zip(times, players, tunes)):
         grid = grids.get((player, tune))
         if grid is None:
@@ -114,10 +116,9 @@ def metric_call(times, players, tunes, grids):
         if period <= 0:
             continue
         phase = (at - grid[k]) / period
-        distance = abs((phase % 0.5) - 0.25)
-        offsets[i] = distance
-        calls[i] = UP if distance <= TOLERANCE else DOWN
-    return calls, offsets
+        phases[i] = phase
+        calls[i] = UP if M.slot_call(phase) == M.UP_SLOT else DOWN
+    return calls, phases
 
 
 def load_model():

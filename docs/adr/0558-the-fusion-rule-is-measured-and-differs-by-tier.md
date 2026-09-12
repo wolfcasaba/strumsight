@@ -1,6 +1,11 @@
 # ADR 0558 — A fúziós szabály megmérve: a nyereség nagy, a kockázat az inga-sértő ütéseken van, és a biztonságos szabály TIERENKÉNT MÁS
 
 - **Státusz:** elfogadva (mérés; a bekötés ezzel **megkapta a szabályát** a pontozó úton)
+- **⚠ KORREKCIÓ (E18-R35):** az alábbi táblák a *mérési* szabállyal (offbeat-távolság,
+  tolerancia 0,09375) készültek; a **szállított** szabály a legközelebbi előírt rés
+  (`slot_call`). A szabály-csere a számokat **megmozgatta** — lásd a „Korrekció" szakaszt a
+  dokumentum alján. **A D1 (szállítható szabály) változatlanul áll**, a D2 megtérülése
+  **0,401 → 0,475** romlott, és a sértő részhalmaz **11 → 8 ütésre** csökkent.
 - **Dátum:** 2026-09-12
 - **Kör:** E18-R34
 - **Kapcsolódó:** ADR 0557 (a két csatorna), ADR 0555 (a kapu), ADR 0556 (a nyíl),
@@ -118,3 +123,54 @@ a D1 szabálya szállítható most, a D2-é **a tanulói adat után**.
   pontosságú**.
 - A `lam` nem kalibrált valószínűség, hanem söpört bizalom-skalár. Kalibrálni a lecke
   jelöléséből és a mért időzítési szórásból lehetne — külön kör.
+
+---
+
+## Korrekció (E18-R35): a szállított szabály a legközelebbi előírt rés, és ez megmozdította a számokat
+
+A fenti mérés a **mérési** szabállyal készült: „fel, ha a tizenhatod-offbeattől mért
+távolság ≤ 0,09375 ütem". A **szállított** szabály ennél általánosabb és paraméter nélküli:
+**a lecke előírt mintájának legközelebbi rése** (`probe_direction_metric.slot_call`, Dart
+oldalon `StrumMetricChannel`). Azért az, mert az offbeat-szabály **egy korpusz** mintáját
+kódolja, egy lecke mintája viszont bármi lehet, amit a jelölése megenged (ADR 0557 D3).
+
+A cserét **a mérés előtt** kellett volna elvégezni: egy olyan szabállyal mérni, amit nem
+szállítunk, **más rendszert mér** (L662). A két szabály a tartalék soroknak csak **0,95%-án**
+(5 / 526) tér el, de a hatás nem kozmetikai:
+
+```
+  szabály                           pontosság   sértő ütés
+  mérési    (|d16| ≤ 0,09375)          0,9791        11
+  SZÁLLÍTOTT (legközelebbi rés)        0,9848         8
+```
+
+A szállított szabály **jobb** — és épp ezért a **sértő részhalmaz 11-ről 8-ra csökken**,
+vagyis az egyetlen hely, ahol a fúzió kárt tud tenni, **még kevesebb mintát** ad. A
+kockázat-becslés tehát **vékonyabb** lett, nem erősebb.
+
+Újramérve a szállított szabállyal (ugyanaz a modell, ugyanaz a tartalék felosztás):
+
+```
+  tier     szabály                     macro   követő   SÉRTŐ   megtérülés c*
+  70 ms    C  csak akusztikus          0,5262  0,6398  0,5000      —
+  70 ms    A  teljes fúzió lam=0,99    0,9278  0,9157  0,2500    0,475   (volt 0,401)
+  70 ms    B  csak döntetlen m<0,30    0,6564  0,7395  0,3750    0,557   (volt 0,481)
+ 238 ms    C  csak akusztikus          0,6061  0,7605  0,6250      —
+ 238 ms    A  teljes fúzió lam=0,99    0,9268  0,9502  0,2500    0,664   (volt 0,591)
+ 238 ms    B  csak döntetlen m<0,30    0,6784  0,8046  0,6250    0,000   (változatlan)
+```
+
+**Mi áll és mi nem:**
+
+- **A D1 — a szállítható szabály — változatlanul áll.** 238 ms-on a döntetlen-törő szabály
+  `c* = 0,000`: **semmilyen engedelmességi szinten nem veszít**, és ugyanaz a +0,0723 macro.
+  Ez az, ami bekötésre kerül, és a szabály-csere nem érintette.
+- **A D2 romlott.** A nyíl teljes fúziójának megtérülése **0,401 → 0,475**, vagyis
+  lényegesen közelebb a 0,5-höz: egy 48% alatti engedelmességű tanulót a **csak akusztikus**
+  út jobban szolgálna. Ez **erősíti** a funkció-kapus döntést, nem enyhíti.
+- **A D3 áll.** A „konzervatív" szabály a gyors tieren továbbra is rosszabb (0,557 vs 0,475).
+- **A D4 áll, rosszabb alapon.** Minden „sértő" pontosság most **1/8 többszöröse**
+  (0,5000 / 0,3750 / 0,2500), a mért romlás **két ütés**. Korlát, nem munkapont.
+
+Az eredeti táblákat **nem írtam át**, mert valódi mérések a saját provenienciájukkal; a
+szállított szabály számai ezek. Tanulság: **L673**.
