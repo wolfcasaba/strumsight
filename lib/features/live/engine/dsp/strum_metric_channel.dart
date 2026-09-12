@@ -113,18 +113,39 @@ class MetricCall {
 /// it. That is worse than a missing signal, because it is confident, and it is
 /// exactly the false teaching the project forbids (ADR 0557 D4).
 ///
-/// So the binding rule, which the wiring must preserve:
+/// **ADR 0562: this class must NOT reach the scoring path at all — not even as a
+/// tie-break.** `gradeRhythm` compares a stroke's direction against the GRID's
+/// expected direction to produce `RhythmSlotOutcome.wrongDirection`, which its own
+/// code calls "the thing only this app can tell a learner". Fold this channel's
+/// prescription into `DetectedStroke.direction` and the grader compares the grid
+/// to itself: `wrongDirection` collapses and the app tells every learner their
+/// strumming hand is perfect. Measured, not feared — on pendulum-violating
+/// strokes the fused rule takes accuracy 0.5000 to 0.2500, and those strokes ARE
+/// the `wrongDirection` cases, so fusion HALVES detection of the one finding the
+/// rhythm pillar exists for.
+///
+/// The same argument kills the arrow use (ADR 0558 D2 is superseded too): a fused
+/// arrow beside an acoustic-only grader would contradict itself on exactly the
+/// violating strokes — the learner sees the arrow the pattern asked for, then
+/// reads after the bar that they strummed the other way.
+///
+/// So the rules are:
 ///
 /// 1. **Scoring** takes direction from the ACOUSTIC channel only, with
-///    abstention. This channel may move the abstention bar; it may never flip
-///    the call. Measured at the settled tier, that tie-break rule never loses at
-///    ANY learner compliance (`c* = 0.000`) while gaining +0.0723 macro-F1
-///    (ADR 0558 D1).
-/// 2. **Disagreement** between the two channels, under a confident acoustic
-///    call, is itself the pedagogical output — "your strumming hand left the
-///    pendulum here" — and belongs in the post-bar review (ADR 0556 D4).
+///    abstention (`RhythmSlotOutcome.unclear`). This channel contributes nothing,
+///    in either direction — an earlier version of this comment said it could move
+///    the abstention bar, and ADR 0558 D1 then let it flip low-margin calls while
+///    claiming the two rules coincided. They did not (ADR 0562 D2).
+/// 2. **Disagreement** as the pedagogical output needs nothing from here: the
+///    grid plus `wrongDirection` already is it.
 /// 3. This class never decides whether a stroke HAPPENED. It says which
 ///    direction a stroke had, never whether there was one.
+///
+/// What it is FOR, then: a measurement instrument (the Dart twin of
+/// `ml/probe_direction_metric.py`, pinned by a parity fixture), and the candidate
+/// basis for choosing which recorded sessions are worth collecting — the ones
+/// where the two channels disagree are where the scarce pendulum-violating
+/// strokes live (ADR 0562 D5).
 ///
 /// And one hazard that is NOT this class's to fix but must be respected by its
 /// callers: a metronome click lands exactly ON the beat, which is exactly where

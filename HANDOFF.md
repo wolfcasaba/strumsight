@@ -14486,14 +14486,54 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   [[L671]] `beat_position`), tehát **mintázat**: a keresésem a **technikai** szomszédságra megy
   (ugyanaz a réteg/könyvtár), nem a **fogalmira**. Szabály: egy domain-fogalom kódolása előtt a
   **fogalom nevére** keresni `lib/` egészében + `docs/research/` + `docs/superpowers/specs/`.
-  **KÖVETKEZŐ, ebben a sorrendben:** (1) a `RhythmGrid.onsetUs` bar-horgonyának + a
-  `crossings` mintájának eljuttatása a DSP pipeline-ig (réteg-átívelő, a konfigurációs helyen);
-  (2) a **D1 fúzió** bekötése a **pontozó** úton + a `settledTier` felkapcsolása
-  **profile-build költségméréssel**; (3) a nyíl fúziója **funkció-kapu** mögé (megtérülés
-  0,475, nyolc sértő ütésen). A Learn/practice út lesz az első, ahol a csatorna él; a **szabad
-  Live marad csak-akusztikus**. **Előfeltétel (ADR 0560 D4):** pontozás alatt a pulzus
-  **haptikus**, mert a klikk pontosan az ütemre esik és a csatorna magabiztos lefelé ütésként
-  bélyegezné.
+  **Előfeltétel (ADR 0560 D4):** pontozás alatt a pulzus **haptikus**, mert a klikk pontosan
+  az ütemre esik és a csatorna magabiztos lefelé ütésként bélyegezné.
+  **E18-R39 — A FÚZIÓ A PONTOZÓ ÚTON MEGENGEDHETETLEN (ADR 0562, FELÜLÍRJA az ADR 0558
+  D1-et ÉS D2-t).** A bekötési helyet keresve a `gradeRhythm`-ot találtam meg
+  (`lib/features/curriculum/domain/rhythm_grading.dart`), ami **már a fogyasztó** és **már
+  tartalmazza a teljes kontraktust**: `DetectedStroke {atUs, direction, isConfirmed}` ·
+  `startUs` + `grid.onsetUs(...)` = **ismert fázisú rács** · `RhythmSlotOutcome.unclear` =
+  tartózkodás · `extraConfirmedStrokes` = ghost-résre ütött ütés · és a fájl fejében **1.
+  szabály: „a párosítás IDŐT használ, SOHA nem irányt"** — ugyanaz a megoldókulcs-védelem,
+  amit az ADR 0557 D4-ben magam vezettem le.
+  **A DÖNTŐ MEGFIGYELÉS:** a `gradeRhythm` a felismert irányt a **rács** `expected`
+  irányához hasonlítja, ebből lesz a `wrongDirection` — amiről a kód azt írja: **„this is the
+  thing only this app can tell a learner"**. Ha a metrikus előírást beolvasztom a
+  `DetectedStroke.direction`-be, a grader **a rácsot a ráccsal** hasonlítja: a
+  `wrongDirection` **nullára megy**, és az app **minden tanulónak azt mondja, hogy a pengető
+  keze hibátlan**. És ez **már megmért szám**: az inga-sértő ütéseken a fúzió **0,5000 →
+  0,2500** (letisztult tier) — azok a sértő ütések **pontosan a `wrongDirection` esetek**,
+  tehát a fúzió **felére csökkenti** a ritmus-pillér egyetlen differenciátorának észlelését.
+  A táblámban ott volt, „a sértő részhalmazon jelentkező kár"-ként — és nem kötöttem össze a
+  termék kimenetével.
+  **ÖNELLENTMONDÁS, amit ki kell írni:** az ADR 0557 D4 azt mondta, a metrikus csatorna „a
+  hívást **soha nem fordítja át**"; az ADR 0558 D1 döntetlen-törő szabálya `t` alatt **a
+  metrikus hívást** hagyja dönteni, vagyis **átfordít** — és az ADR 0558 D1 szövegébe azt
+  írtam, hogy **„egybeesik"** a D4-gyel. **Nem esik egybe: megsérti.** A `c* = 0,000` mérés
+  valódi, de **irány-macro-F1-en** készült, ami **nem tudja megkérdezni**, hogy a grader képes-e
+  még észlelni egy minta-sértést.
+  **A NYÍL FÚZIÓJA IS ELESIK (ADR 0558 D2 felülírva):** fúziós nyíl + csak-akusztikus grader
+  **szerkezetileg ellentmond egymásnak pontosan a sértő ütéseken** (a tanuló a minta kért
+  nyilát látja, majd az ütem után azt olvassa, hogy a másik irányba ütött) — az ADR 0556 D2
+  tilalma visszafelé.
+  **AMI MEGMARAD a `StrumMetricChannel`-nek (ADR 0562 D5), őszintén nem tanulónak szóló:**
+  (a) **mérőeszköz** — a Python próba Dart-párja, paritás-fixtúrával, és magyarázat arra, hogy
+  a korpusz-alapú irány-számok miért optimisták (a pozíció 0,98-cal jelzi az irányt, innen a
+  take-ID orákulum is); (b) **adat-kiválasztás** — azok a menetek, ahol a két csatorna sokat
+  nem egyezik, épp a hiányzó inga-sértő ütések jelöltjei. **A repóban marad, bekötés nélkül**,
+  a tilalom a class-doksijában.
+  **KÖVETKEZMÉNY: nincs mit bekötni**, tehát a `settledTier` **SÖTÉT marad** — az egyetlen
+  indoka a D1 fúzió volt. Az ADR 0558 **D3** (a „konzervatív" szabályom rosszabb volt a gyors
+  tieren) és **D4** (a 11→8 ütéses korlát) **mérésként érvényben**.
+  **NEM állítjuk:** a `settledTier` **fúzió nélkül**, önmagában még javíthatja a pontozást (a
+  letisztult akusztikus verdikt 0,6061 vs a gyors 0,5262, **rács nélkül**) — ez **független** a
+  fúziótól, lehet külön kör, de a költsége (ütésenként egy második forward) akkor is
+  **profile-build mérést** kíván.
+  Tanulság: **L677** — „egybeesik" a legdrágább szó, amit mérés mellé írhatok; és egy
+  termék-metrikának **meg kell tudnia kérdezni, amiért a termék létezik**. Plusz: ez a
+  **negyedik** eset, hogy a repó már tartalmazta a kontraktust ([[L676]] mintázata) — az új
+  szabály, hogy a megtalált fájl **fej-kommentárját végig kell olvasni**, mert a döntései ott
+  vannak kimondva.
   **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
   **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
   egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a
