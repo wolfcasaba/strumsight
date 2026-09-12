@@ -124,7 +124,16 @@ final class FixtureManifestReport {
 /// as a fixture with no manifest entry.
 FixtureManifestReport checkFixtureManifest({required Directory projectRoot}) {
   final issues = <FixtureManifestIssue>[];
-  final root = projectRoot.absolute.path;
+  // Forward slashes, and no trailing separator. [_walkFixtureFiles] normalises each
+  // entity's absolute path to forward slashes and then tests `startsWith(root + '/')`,
+  // so a root carrying Windows separators matched NOTHING and the walk yielded nothing:
+  // on Windows this checker could not flag an unregistered fixture at all, which made
+  // the "real manifest is clean" assertion vacuous here while staying real on CI. The
+  // self-test that DID fail is the one asserting the checker can fail (LESSONS L671) —
+  // it earned its keep in E18-R43.
+  final root = projectRoot.absolute.path
+      .replaceAll('\\', '/')
+      .replaceAll(RegExp(r'/+$'), '');
   final manifestFile = File('$root/$_manifestRelativePath');
 
   if (!manifestFile.existsSync()) {

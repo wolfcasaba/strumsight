@@ -1592,3 +1592,61 @@ declared file by file), so it does not reach the APK today.
 Not claimed: any on-device or user figure; the Klangio side in situ; a variance estimate (one
 split, 530 clean sweeps, no cross-validation). UP F1 0.3478 means ADR 0553's data diagnosis
 stands -- the asset loses less, it does not supply the missing upstroke data.
+
+### The settled asset's parity golden was never read, was in the wrong space, and the guard that should have caught it could not fail on Windows (E18-R43, ADR 0568)
+
+Preparing the wiring round meant checking which AGENTS.md §9 legs already existed under the
+settled asset. ADR 0555 D3 says "the parity fixture is in
+`test/fixtures/crnn_live_3c_settled_parity.json`". It is: 1.26 MB, committed, and read by
+NOTHING. Three faults, each invisible because of the other two:
+
+1. **No consumer** for eleven rounds.
+2. **Not in the fixture manifest** — 54 data files on disk, 52 registered. The other
+   unregistered one is `strum_metric_channel_parity.json`, committed in E18-R35.
+3. **The wrong window space.** `CrnnStrumNet.forward` standardises internally with the
+   mean/std it parses from the asset, so it wants RAW log-mel. Measured spaces: the shipped
+   golden is mean -4.906 / std 6.884 (raw, correct); the settled one was +0.126 / 0.960
+   (already normalised). `ml/train_live_3c_settled.py` wrote `Xn[i]` where `X[i]` belonged,
+   so a Dart consumer would have standardised twice. The fixture was internally CONSISTENT
+   (Keras on its normalised rows reproduces `expected` to max|delta| = 0.000000) — it just
+   did not match the Dart entry point. An internally perfect fixture can still be
+   unconsumable, and only a consumer shows it.
+
+Fixed by de-normalising the rows in place with the asset's own mean/std, `expected`
+untouched: the normalise -> de-normalise -> normalise round trip is exact to **2.4e-07** on
+the window and **1.8e-07** on the softmax, four orders inside the 1e-3 tolerance (std is
+5.01-7.56 everywhere, so no amplification). Values ship at full float32 precision rather
+than rounded to 5 decimals, which satisfies the r143 rule (both sides consume literally
+identical input) more strictly than rounding would. The generator is fixed too.
+
+**The guard could not fail here.** `tool/check_fixture_manifest.dart` compared a
+forward-slash-normalised absolute path against an UN-normalised prefix, so on Windows
+`startsWith` never matched, the walk yielded nothing, and the "file on disk with no manifest
+entry" direction could not report at all — making the "real manifest is clean" assertion
+vacuous locally while staying real on Linux CI. What found it was the repo's own self-test,
+the one asserting that the guard CAN fail (L671): that case was red, and it was the only
+signal. After the fix both directions are verified — a dropped file is flagged, a clean tree
+reports `OK (54 fixture(s))`.
+
+**CI consequence, inferred not measured:** CI runs `flutter test --coverage` with no path, so
+`fixture_manifest_test.dart` runs there, and on Linux the real-tree case fails on the two
+unregistered goldens. That implies the full gate has been red on this test since E18-R32. The
+local round gate never caught it because `tools/round-gate.sh` runs NAMED test paths and
+eleven rounds named something else. Rule: a round that drops anything into `test/fixtures/`
+names `fixture_manifest_test.dart` in its own gate run.
+
+**And this validates ADR 0567 after the fact.** That ADR measured the settled asset through
+the shipped Dart pipeline and reported +0.186 direction macro-F1 — a number about the trained
+model only if the Dart port reproduces it. The new parity test's worst deviation over 32
+cases is **1.78e-07**, so it does and the figure stands. The ORDER was wrong: parity is the
+instrument's calibration and +0.186 is the reading, and the reading was published first
+(L683 §4).
+
+The new `test/features/live/ml/crnn_live_3c_settled_parity_test.dart` closes the §9 parity and
+property legs in five cases: a schema guard (a renamed `cases` key would otherwise run every
+assertion over zero rows), parity <=1e-3 with the worst deviation PRINTED, the mined no-strum
+cases landing on the reject class, a seeded 40-trial property that the softmax is a
+distribution on arbitrary input, and a "measured, not wired" guard pinning both that
+`noStrumThreshold` is still 0.85 AND that the two asset files differ — without the second
+check the test would still pass if someone copied the settled weights over the shipped path,
+which is exactly the change it exists to notice.

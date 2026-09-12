@@ -14710,9 +14710,58 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   **első** lépése **provenancia**, nem mechanizmus; (3) egy konfigurációkat felsoroló eszköz
   **állítsa**, hogy a konfigurációi különbözőek; (4) mielőtt A hibát B-vel váltod, **grepeld
   meg a widgetet**, ami megjeleníti — *egy költség, aminek nincs fogyasztója, nem költség.*
+  **E18-R43b — A PARITÁS-ARANYAT SENKI NEM OLVASTA, ROSSZ TÉRBEN VOLT, ÉS AZ ŐR WINDOWSON
+  NEM TUDOTT BUKNI (ADR 0568).** Az ADR 0555 D3 úgy hivatkozik a settled paritás-fixtúrára,
+  mintha fedés lenne. Megvan — 1,26 MB, commitolva, és **semmi nem olvasta**. Három hiba,
+  mindegyik a másik kettő miatt láthatatlan: (1) **nincs fogyasztó** tizenegy körön át;
+  (2) **nincs a manifesztben** — a fán 54 adatfájl, nyilvántartva 52 (a másik hiányzó a
+  `strum_metric_channel_parity.json`, amit **én** hagytam ott az R35-ben); (3) **rossz
+  tér** — a `CrnnStrumNet.forward` **maga standardizál**, tehát nyers log-melt vár, a
+  fixtúra viszont **normalizált** sorokat tárolt (mért tér: szállított arany mean −4,906 /
+  std 6,884 = nyers; settled +0,126 / 0,960 = normalizált). A
+  `train_live_3c_settled.py` `Xn[i]`-t írt `X[i]` helyett. A fixtúra **önmagában
+  konzisztens** volt (Keras a normalizált sorokra max|Δ| = **0,000000**) — csak a Dart
+  belépési pontjával nem: *egy belsőleg hibátlan fixtúra is lehet fogyaszthatatlan, és ezt
+  csak a fogyasztó mutatja meg.*
+  Javítva: a sorok **helyben visszaskálázva** nyers térbe az asset saját mean/std-jével, az
+  `expected` változatlanul — a kör hibája mérve **2,4e-07** az ablakon, **1,8e-07** a
+  softmaxon (a `std` 5,01–7,56, nincs felerősítés), és **teljes float32** pontossággal,
+  nem 5 tizedesre kerekítve, ami az r143 szabályát **szigorúbban** teljesíti. A
+  **generátor is javítva**.
+  **AZ ŐR NEM TUDOTT BUKNI:** a `tool/check_fixture_manifest.dart` a forward-slashra
+  normalizált absolute path-ot **nem normalizált** prefixhez hasonlította, tehát Windowson
+  a `startsWith` **soha** nem egyezett, a bejárás **semmit** nem adott vissza, és a
+  „lemezen van, manifesztben nincs" irány nem tudott jelezni — a „valódi manifeszt tiszta"
+  állítás itt **üres** volt (Linuxon/CI-n valódi). **Nem kódolvasás hozta elő, hanem a repó
+  ÖNTESZTJE**, az az eset, ami azt állítja, hogy *az őr tud bukni* — az [[L671]]
+  kifizetődése. Javítás után **mindkét irány ellenőrizve** (bedobott fájl → jelez; tiszta
+  fa → `OK (54 fixture(s))`).
+  **CI-KÖVETKEZMÉNY (következtetés, nem mérés):** a CI `flutter test --coverage`-t hív
+  **útvonal nélkül**, tehát a `fixture_manifest_test.dart` is fut, és Linuxon a valódi fa
+  esete a két nem regisztrált aranyra **elbukik** → a teljes kapu ezen a teszten
+  **az E18-R32 óta piros**. Ezt az orchestrátornak érdemes visszaigazolnia (gh-t nem hívok).
+  A kör-kapu azért nem fogta, mert a `round-gate.sh` **megnevezett** utakat futtat, és
+  tizenegy kör egyike sem nevezte meg ezt.
+  **ÉS EZ UTÓLAG HITELESÍTI AZ ADR 0567-et:** a +0,186 csak akkor a tanított modellről szól,
+  ha a Dart port reprodukálja — a most megírt paritás-teszt legnagyobb eltérése 32 esetre
+  **1,78e-07**, tehát **áll**. A **sorrend** viszont fordítva helyes: a paritás a műszer
+  **kalibrációja**, a +0,186 a **leolvasás**, és a leolvasás ment ki előbb (L683 §4).
+  **Az új `crnn_live_3c_settled_parity_test.dart` öt esete** zárja a §9 paritás- és
+  property-lábát: séma-őr (egy átnevezett `cases` kulcs különben **nulla** soron futtatna
+  mindent), paritás ≤1e-3 a legrosszabb eltérés **kiírásával**, a no-strum esetek az
+  elutasító osztályra (≥0,6), **property** (40 magolt véletlen ablakon a softmax eloszlás:
+  véges, [0,1], összeg 1e-9-en belül), és **„mért, de nincs bekötve" őr**, ami a 0,85-ös
+  `noStrumThreshold`-ot **és** a két asset bájt-különbségét is pineli — a második nélkül a
+  teszt akkor is átmenne, ha valaki a settled súlyokat a szállított útra másolja.
+  Tanulság: **L683** — (1) egy fixtúra és az **első olvasója** ugyanabban a körben szállít,
+  különben nem teszt, hanem fájl, és egy ADR-sor, ami fájlra mutat, **nem fedés**;
+  (2) ha egy kör bármit letesz a `test/fixtures/` alá, **nevezze meg** a kapuban a
+  `fixture_manifest_test.dart`-ot; (3) egy új assetet előbb a **portja paritásán** kell
+  átvinni, és csak utána mérni vele.
   **KÖVETKEZŐ:** (1) **az asset bekötése** az ADR 0567 D3 javaslatával (settled asset +
-  kapu vissza 0,439-re) — az AGENTS.md §9 hiányzó lábai: fixtúra/property munka és a
-  **Klangio-oldal in situ** ellenőrzése; (2) **on-device mérés** (CI/profile) a **gyors**
+  kapu vissza 0,439-re) — a §9 négy lába közül a fixtúra/property/paritás/valódi-audió
+  mostantól **mind megvan**; ami hátravan: a **Klangio-oldal in situ** ellenőrzése és maga
+  a csere; (2) **on-device mérés** (CI/profile) a **gyors**
   tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a
   `settledTier` felkapcsolása az ADR 0556 D3 szabályával; (4) a **címkézett felvétel** —
   továbbra is az egyetlen ismert forrása az inga-sértő ütéseknek, **és** az egyetlen módja a

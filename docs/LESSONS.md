@@ -28484,3 +28484,81 @@ pontozót. Négy kör költség-érvelést építettem egy olyan nyílra, amit s
 *Egy költség, aminek nincs fogyasztója, nem költség — csak egy mondat.*
 
 Lásd még [[L662]], [[L671]], [[L675]], [[L679]], [[L681]], ADR 0549, ADR 0555, ADR 0566.
+
+## L683 — Egy fixtúra, amit senki nem olvas, nem bizonyíték; és a modellt a portja ellenőrzése ELŐTT mértem meg (E18-R43, 2026-09-12)
+
+### 1. Három hiba, amelyik mindegyike a másik kettő miatt volt láthatatlan
+
+A settled asset paritás-aranya (`test/fixtures/crnn_live_3c_settled_parity.json`, 1,26 MB)
+az E18-R32-ben készült, és az ADR 0555 D3 úgy hivatkozik rá, mintha fedést jelentene: „a
+paritás-fixtúra `...settled_parity.json`-ban van". Megvan. És:
+
+1. **semmi nem olvasta** — nulla fogyasztó tizenegy körön át;
+2. **nem volt a manifesztben** — a fán 54 adatfájl, a nyilvántartásban 52;
+3. **a rossz térben volt** — normalizált ablakokat tárolt, miközben a
+   `CrnnStrumNet.forward` **maga standardizál**, tehát nyers log-melt vár.
+
+A három **egymást** takarta el. (3) csak akkor derül ki, ha valaki megírja (1)-et. (2) csak
+akkor, ha az őr tud jelezni — és nem tudott (lásd §2). És (1) hiánya nem tűnt fel, mert a
+fixtúra **létezése** úgy olvasódott, mint fedés: egy ADR-sor, ami egy fájlra mutat, úgy néz
+ki, mint egy teljesített §9 láb.
+
+Mérve, a két arany tere: a szállítotté mean **−4,906** / std **6,884** (nyers), a settledé
+**+0,126** / **0,960** (normalizált). A fixtúra önmagában konzisztens volt — a
+Keras-referencia a normalizált sorokra **max|Δ| = 0,000000** —, csak a Dart belépési
+pontjával nem. Vagyis **egy belsőleg hibátlan fixtúra is lehet fogyaszthatatlan**, és ezt
+csak a fogyasztó mutatja meg.
+
+**A szabály.** Egy fixtúra és az **első olvasója** ugyanabban a körben szállít, különben
+nem teszt, hanem fájl. És egy ADR nem írhatja le úgy, hogy „a fixtúra megvan", mintha az
+a lábat teljesítené — a láb az **olvasó**, nem az arany.
+
+### 2. A repó öntesztje találta meg, nem én
+
+A `tool/check_fixture_manifest.dart` bejárója a normalizált absolute path-ot egy **nem
+normalizált** prefixhez hasonlította, tehát Windowson a `startsWith` soha nem egyezett és a
+bejárás **semmit** nem adott vissza: a „lemezen van, manifesztben nincs" irány itt egyáltalán
+nem tudott jelezni, és a „valódi manifeszt tiszta" állítás **üres** volt.
+
+Nem kódolvasás hozta elő. A `fixture_manifest_test.dart`-ban van egy eset, ami azt állítja,
+hogy **az őr tud bukni** — temp-projekt, bedobott fájl, üres manifeszt, „ezt jeleznie kell".
+**Ez** volt piros, és ez volt az egyetlen jelzés. Ez az [[L671]] („egy kontroll, ami nem tud
+elbukni, nem mond semmit") **kifizetődése**: egy korábbi kör megírta az őr őrét, és ma az
+fogta meg a platform-specifikus csendet. Javítás után **mindkét irányt** ellenőriztem
+(bedobott fájl → jelez; tiszta fa → `OK (54 fixture(s))`), mert a javításra ugyanaz a
+szabály áll, mint az eredetire.
+
+### 3. A két nem regisztrált arany egyikét ÉN hagytam ott
+
+A `strum_metric_channel_parity.json` az E18-R35-ben lett commitolva — nyolc körrel ezelőtt,
+általam —, és nem került a manifesztbe. A kör-kapu nem fogta, mert a `tools/round-gate.sh`
+**megnevezett** teszt-utakat futtat, és nyolc körön át egyszer sem neveztem meg a
+`fixture_manifest_test.dart`-ot. A CI-é a teljes suite, tehát ott (Linuxon, ahol a bejárás
+működik) ez **piros** volt.
+
+**A szabály.** Ha egy kör bármit letesz a `test/fixtures/` alá, akkor **ugyanabban a körben**
+nevezze meg a kapuban a `fixture_manifest_test.dart`-ot. A „megnevezett teszt-utak" kapu
+gyors, de azt és csak azt ellenőrzi, amit megnevezek — tehát a megnevezés **a kör része**,
+nem a kapu dolga.
+
+### 4. A modellt a portja ellenőrzése ELŐTT mértem meg
+
+Az ADR 0567 a settled assetet a szállított Dart pipeline-on mérte, és **+0,186**
+irány-macro-F1-et jelentett. Utána írtam meg a paritás-tesztet. Ha az elbukott volna
+érdemben, az a szám **egy ismeretlen modellről** szólt volna — nem arról, amit a Keras
+tanított, hanem arról, amit a Dart parse-ol belőle. Szerencsém volt: a mért legnagyobb
+eltérés **1,78e-07**, vagyis a két oldal ugyanazt számolja, és a szám áll.
+
+De a sorrend fordítva helyes, és ez nem stílus-kérdés: a paritás a **mérőeszköz
+kalibrációja**, a +0,186 a **leolvasás**. Leolvasást kalibráció előtt publikálni ugyanaz a
+családba tartozó hiba, mint amit az [[L682]] §1 ír le — csak ott **melyik** artefaktumot
+mértem volt a kérdés, itt meg azt, hogy **reprodukálja-e** az artefaktum azt, aminek hiszem.
+
+**A szabály.** Egy új assetet először a **portja** paritásán kell átvinni, és csak utána
+mérni vele; ha a sorrend mégis felborult, akkor a paritást **ugyanabban a körben** kell
+pótolni, és a kimondani, hogy visszafelé történt.
+
+*Egy ADR-sor, ami egy fájlra mutat, nem fedés. A fedés az, ha valami elbukik, amikor a fájl
+rossz.*
+
+Lásd még [[L671]], [[L682]], ADR 0473, ADR 0555, ADR 0567, ADR 0568.

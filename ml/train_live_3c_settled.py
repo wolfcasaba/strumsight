@@ -312,8 +312,13 @@ def main(seed=SEED):
         "note": "E18-R32. Rows are (15, 128) normalised windows and the 3-column softmax "
                 "from strum_crnn_live_3c_settled.bin. Dart must match within 1e-3.",
         "no_strum_threshold": threshold,
+        # RAW windows, never `Xn`: the Dart `CrnnStrumNet.forward` standardises
+        # internally with the mean/std it parses out of the asset, so a normalised row
+        # gets standardised TWICE and the parity can never hold. E18-R32 shipped `Xn`
+        # here and nothing noticed for eleven rounds, because the round that wrote the
+        # fixture wrote no test to read it (ADR 0568, LESSONS L683).
         "cases": [
-            {"window": Xn[i].astype(np.float32).tolist(),
+            {"window": X[i].astype(np.float32).tolist(),
              "expected": model.predict(Xn[i:i + 1], verbose=0)[0].astype(float).tolist(),
              "label": int(y[i])}
             for i in pick
