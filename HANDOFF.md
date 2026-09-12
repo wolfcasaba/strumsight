@@ -14163,6 +14163,37 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **A pengetés-IRÁNY a Ch14 §7.2 Alpha kapu alatt van (macro-F1 0,80) — a
+  diagnózis ÁTHELYEZVE, és egy korábban rögzített blokkoló VISSZAVONVA
+  (E18-R27, mérve, ADR 0550).** A szállított út irány-macro-F1-je **0,4313**,
+  fel-F1 **0,1905** független valódi pengetésen (GuitarSet Rock/Funk comping,
+  tartalék játékosok). ~~„Iránycímkés tanítóadat kell, és az a blokkoló"~~ —
+  **TÉVES, visszavonva:** a szállított modell a **Klangio GST-MM-2025**
+  készleten tanult (`ml/klangio.py`, `ml/honest_eval.py:34`), ami az
+  [arXiv 2508.07973](https://arxiv.org/html/2508.07973) saját **publikus**
+  (Apache-2.0) adatkészlete — 82 felvétel, **11767 címkézett ütés**, 38%
+  felütés, **telefon-mikrofonos** felvétel. A valódi ok **átvitel**: egy sima
+  logisztikus regresszió a modell **saját bemenetéből** macro **0,7723** /
+  fel-F1 **0,6294** / AUC **0,8928**-at ér el játékos- ÉS darab-diszjunkt
+  GuitarSet-osztáson (`ml/probe_direction_headroom.py`) — vagyis az információ
+  ott van, a CRNN nem nyeri ki. A korpusz-deficit nevesítve:
+  `guitarist_of(rid) = str(rid)[0]`, a blokkok `1xxx/2xxx/4xxx` → **három
+  gitáros**, egy teremben, egy gitáron, egy mikrofonnal; a
+  leave-one-guitarist-out szám ezt nem tudja megmutatni. **Előfeltétel a
+  javításhoz:** tanítás a Klangio + GuitarSet korpuszon EGYÜTT, és a becsületes
+  szám a **korpuszközi** kiértékelés (egyiken tanulva a másikon mérni) — külön
+  kör, a GuitarSet levezetett címkéi tanításra már minősítve (ADR 0550 D2).
+  **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
+  **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
+  egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a
+  mi mintáink **nem** (`D DU UDU`-ban két le egymás után, `reggae-skank` szinte
+  csak felütés), tehát ez a tipp nálunk hazugság lenne; (2) a bemenet
+  időfelbontásához **nem** nyúlunk — mérve, egyenlő jellemzőszámmal a nagy
+  felbontás rosszabb (0,6435 vs 0,7723). A külső korpuszok **nincsenek
+  verziókövetve** (`ml/data/` gitignorált, harmadik fél audiója soha nem kerül
+  a repóba), a mérés ezért elkötelezett riport, nem CI-kapu. Mérés:
+  [`docs/eval/guitarset-strum-baseline.md`](docs/eval/guitarset-strum-baseline.md),
+  tanulság `docs/LESSONS.md` **L665**.
 - **E06-R28 cache — 6 lezárandó előfeltétel a jövőbeli BEKÖTŐ körnek, nincs
   kijelölt kör (mérve, `docs/reviews/e06-r28-…-security.md` §6).** A cache-nek
   ma nulla production hívója van (`audioAnalysisV2Enabled` false), úgyhogy

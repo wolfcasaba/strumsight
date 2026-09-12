@@ -283,3 +283,143 @@ minden „átlagos" irány-szám erősen függ attól, kit válogatunk bele.
 A küszöb-típusú (ingyenes) javítások **kimerültek**: az elnyomó kapu hozott valódit
 (ADR 0549), a döntési határ nem hoz. Innen vagy **jobb modell** kell — amihez
 iránycímkés tanítóadat, és az a blokkoló —, vagy **más jelforrás**.
+
+---
+
+# A defekt NEM az adat és NEM a felbontás: a modell nem nyeri ki azt, amit már megkap (E18-R27)
+
+```bash
+GUITARSET_DIR=/path/to/guitarset python ml/probe_direction_headroom.py
+```
+
+## Először is: a fenti szakasz záró állítása TÉVES, és itt visszavonom
+
+A fenti „Ami ebből következik" azt mondta, hogy jobb modellhez *„iránycímkés tanítóadat
+kell, és az a blokkoló"*. **Ez nem igaz, és a repó maga mondja meg, miért.**
+
+A szállított 3 osztályos élő modell a **Klangio GST-MM-2025** készleten tanult
+(`ml/klangio.py`, `ml/honest_eval.py:34`): ez **az arXiv 2508.07973 saját, publikus
+adatkészlete**, Apache-2.0, 82 felvétel, `recording_<id>.strums` fájlokban
+`time_s \t D|U \t akkord` címkékkel, és **telefon-mikrofonos** felvétellel — vagyis
+pontosan a mi telepítési körülményünk. Iránycímkés, valódi tanítóadatunk tehát **van és
+mindig is volt**; a modell ezen tanult.
+
+Ez a javítás nem kozmetikai: a blokkolót rossz helyre tette, és emiatt a következő lépés
+is rossz helyre mutatott.
+
+## A kérdés, amit ez a kör feltett
+
+Az ADR 0549 az elnyomó kaput állította (hozott valódit), az utána jövő kör a döntési
+határt (nem hozott, csak a priort illesztette — L664). **Mindkettő egy skalárt hangolt.**
+A most feltett kérdés más:
+
+> Benne van-e az irány-információ abban, amit a modell **már most megkap** — és csak nem
+> nyeri ki?
+
+A mérőeszköz szándékosan a lehető legtompább: **sima logisztikus regresszió** 240
+jellemzőn, amiket **a modell saját transzformációs geometriájával** veszek
+(`ml/features.py`: N_FFT 2048 @ 16 kHz = **128 ms ablak**, HOP 160 = 10 ms, 15 frame).
+Egy lineáris modell sokkal gyengébb egy CRNN-nél, tehát amit elér, az **alsó korlát** a
+kinyerhetőre, nem felső.
+
+Ground truth ugyanaz, mint a szállított út mérésénél: a hexafonikus pickup húronkénti
+hangkezdetei, ugyanazzal a csoportosítással és `isClean` szűrővel, mint a
+`guitarset_direction_boundary_test.dart` — így a számok **összevethetők**, nem csak
+hasonlóak.
+
+## 1. Az irány benne van — és a nagy időfelbontás ROSSZABB
+
+Egyetlen változó mozog: a transzformáció felbontása. **Mindkét ág 240 jellemző**, ugyanaz
+az osztályozó, ugyanazok a címkék.
+
+| osztás | ág | le | fel | **macro** | AUC | train/test |
+|---|---|---|---|---|---|---|
+| **A** játékos-diszjunkt (darabok közösek) | `lo` = a modell geometriája | 0,9386 | 0,6355 | **0,7871** | 0,9225 | 1629/1409 |
+| | `hi` = 5,8 ms ablak, 3,7 ms hop | 0,8631 | 0,4404 | 0,6518 | 0,7997 | |
+| **B** darab-diszjunkt (játékosok közösek) | `lo` | 0,8902 | 0,7655 | **0,8279** | 0,9248 | 1928/1110 |
+| | `hi` | 0,8219 | 0,6423 | 0,7321 | 0,8273 | |
+| **C** MINDKETTŐ diszjunkt | `lo` | 0,9152 | 0,6294 | **0,7723** | 0,8928 | 1048/529 |
+| | `hi` | 0,8335 | 0,4534 | 0,6435 | 0,7900 | |
+| | **szállított CRNN** | **0,5848** | **0,1905** | **0,3876** | — | |
+
+Két dolgot mond:
+
+**(a) A hipotézisem megbukott.** Azzal indultam, hogy a 128 ms-os elemző ablak a baj:
+a tiszta söprések medián hossza **22,2 ms**, a húrok közti késés **~8 ms**, és 40,7%-uk
+**két 10 ms-os frame alatt** lezajlik — tehát „a söprés sorrendje elmosódik". A
+kontrollált kísérlet ezt **megbuktatta**: a nagy felbontás *minden* osztáson rosszabb
+(C-n 0,6435 vs 0,7723). Az irány tehát **nem elsősorban a söprés sorrendjéből** olvasható
+ki a mikrofonon, hanem a **spektrális egyensúlyból** — amit a hosszabb ablak mér
+stabilabban. (A söprés-statisztikák maradnak: igazak, csak nem azt jelentik, amit
+hittem.)
+
+**(b) A szállított modell nem nyeri ki azt, amit megkap.** Egy lineáris olvasó a modell
+*saját* bemenetéből, **ismeretlen játékoson ÉS ismeretlen darabon**, macro **0,7723**-at
+és fel-F1 **0,6294**-et ér el, szemben a szállított **0,3876 / 0,1905**-tel. A fel-F1
+**háromszorosa**.
+
+## 2. A kontrollok, mind a C osztáson
+
+Négy egymást követő kör a mérőeszközön bukott el (L660–L664), úgyhogy minden szám
+kontrollal jön:
+
+```
+  véletlenített címkék, 7 mag:  AUC 0,4096..0,5905  (átlag 0,4865)   [valódi: 0,8928]
+
+  húrszám 3:  180 le /  60 fel   találat 0,8333
+  húrszám 4:  189 le /  36 fel   találat 0,8800
+  húrszám 5:   50 le /   5 fel   találat 0,9273
+  húrszám 6:    8 le /   1 fel   találat 0,7778
+  húrszám, ahol MINDKÉT osztályból >=20 van [3, 4]:
+              le 0,9105  fel 0,6298  macro 0,7702  (n=465)
+  húrszám MINT EGYETLEN jellemző:  AUC 0,4058
+```
+
+- **A 0,5776-os egymagú kontroll félrevezetett volna.** Egy mag nem kontroll: hét maggal
+  a null-sáv 0,41–0,59, tehát az első húzás a sáv felső szélén volt, nem szivárgás.
+- **Nem húrszámot mér.** A húrszám önmagában **AUC 0,4058** (rosszabb a véletlennél), és
+  a 3–4 húros, mindkét osztályból jól képviselt részhalmazon a macro **változatlan**
+  (0,7702 vs 0,7723). A comping felütései gyakran kevesebb húrt érnek — ezt külön ki
+  kellett zárni, mert különben az „irány" csak a húrszám proxyja lett volna.
+- **A darab-osztás nem luxus.** A GuitarSet **minden játékosa ugyanazt a 12 Rock/Funk
+  darabot** játssza, tehát a játékos-diszjunkt osztás a harmóniamenetet **közösen
+  hagyja**, és az osztályozó megjegyezhetné, hogy „ebben a darabban, ezen a ponton, ez
+  egy le". Ezért van A, B és C — és a találat **mindhármon megáll**.
+
+## 3. Mérés vagy tippelés? — és ez új megkötést szül
+
+Egy 128 ms-os, az onset környékére centrált ablak **minden** frame-jében ott van az
+attack, tehát frame-index szerinti ablációval **nem lehet** szétválasztani a „ezt az
+ütést mérem" és a „az előzőből tippelek" eseteket. Ezért két ág van úgy kivágva, hogy az
+egyik csak onset **előtti**, a másik csak onset **utáni** minta legyen:
+
+| ág | le | fel | macro | AUC |
+|---|---|---|---|---|
+| `pre` — szigorúan az onset ELŐTT | 0,6984 | 0,4274 | 0,5629 | **0,7128** |
+| `post` — szigorúan az onseten/utána | 0,8744 | 0,4545 | **0,6645** | 0,7507 |
+| `both` | 0,8544 | 0,4872 | 0,6708 | 0,7703 |
+
+**Az onset előtti hang egyedül AUC 0,7128-cal jelzi az irányt.** Ez nem mérés, hanem
+**váltakozás-tipp**: a comping le-fel-le-fel, tehát aki tudja, mi volt az előző ütés,
+az ingyen tippel. A mi mintáink viszont **nem váltakoznak** — a `D DU UDU`-ban két le
+van egymás után, a `reggae-skank` szinte csak felütés —, tehát ez a tipp **nálunk
+hazugság lenne**.
+
+Ezért a szigorúan onset utáni szám az **őszinte**: macro **0,6645**, fel-F1 0,4545,
+AUC 0,7507. Még így is **messze** a szállított 0,1905 fel-F1 felett.
+
+## Amit ez a kör megállapít
+
+1. **Nem az adat a blokkoló.** Valódi, iránycímkés, telefon-mikrofonos tanítóadatunk van
+   (Klangio), és a modell azon tanult.
+2. **Nem a bemenet felbontása a baj.** Mérve: a nagy felbontás rosszabb.
+3. **Nem is a küszöb vagy a döntési határ.** Azok kimerültek (ADR 0549, L664).
+4. **A GuitarSet levezetett iránycímkéi taníthatók.** Az ezeken illesztett modell
+   ismeretlen játékosra **és** ismeretlen darabra általánosít (AUC 0,8928), miközben a
+   véletlenített kontroll 0,41–0,59. Ez volt az a nyitott kérdés, hogy „a levezetett
+   címke zaját tanítás előtt minősíteni kell" — **minősítve van.**
+5. **A defekt átvitel (generalizáció):** a modell egy korpuszon tanult, és egy másikon
+   nem viszi át — pontosan az ADR 0549 betegsége, de már **az egész modell szintjén, nem
+   egy skaláron.**
+6. **Új megkötés a pontozásra:** az irány-fejet **szigorúan onset utáni ablakon** kell
+   értékelni, különben a szám részben váltakozás-tipp.

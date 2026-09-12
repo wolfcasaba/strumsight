@@ -468,3 +468,43 @@ precision job is now BACKED by the learned reject (false onsets that slip
 through SuperFlux draw no confident wrong arrow). **Acceptance remains the
 real-guitar APK test** — synthetic/eval green is never "done" (HORIZON). r175 is
 the last dev round before that gate.
+
+## What limits direction accuracy (E18-R27, ADR 0550)
+
+The live 3-class model's direction score on INDEPENDENT real strumming is far below its
+own fold: macro-F1 **0.3876**, up-F1 **0.1905** on GuitarSet's Rock/Funk comping (the
+shipped path, held-out players). Three rounds of scalar tuning are exhausted — the
+no-strum gate moved it (ADR 0549), the down/up boundary did not (prior-matching, L664),
+the margin gate never did (±0.0003).
+
+**The defect is cross-corpus transfer, not missing data.** `ml/probe_direction_headroom.py`
+fits a plain logistic regression on 240 band-pooled features taken with the model's OWN
+geometry (N_FFT 2048 @ 16 kHz, HOP 160, 15 frames) and reaches macro **0.7723**, up-F1
+**0.6294**, AUC **0.8928** on a player- AND tune-disjoint GuitarSet split. A linear model
+is a FLOOR on what is extractable, so the cue is present in the input the CRNN already
+receives and the CRNN is not extracting it.
+
+**The corpus deficit, named.** Klangio GST-MM-2025 is real, labelled, phone-mic data
+(82 recordings, 11767 strums, 38 % up — a BETTER class balance than GuitarSet's 27 %),
+but `guitarist_of(rid) = str(rid)[0]` and the blocks are `1xxx / 2xxx / 4xxx`:
+**three guitarists.** Leave-one-guitarist-out cannot expose player-invariance failure
+when all three share one room, guitar and microphone. GuitarSet's 3038 clean derived
+sweeps add six more players, and those derived labels are now qualified as trainable
+(ADR 0550 D2): a model fitted on them generalises to unseen players AND unseen tunes at
+AUC 0.8928 while a shuffled-label control over 7 seeds sits at 0.41–0.59.
+
+**Two measurement rules this established:**
+
+1. **Score the direction head on a STRICTLY POST-ONSET window.** Audio strictly BEFORE
+   the onset predicts direction at AUC **0.7128**, because comping alternates
+   down-up-down-up — a model with pre-onset context scores by predicting alternation.
+   The app's own patterns do not alternate (`D DU UDU` has two downs in a row,
+   `reggae-skank` is nearly all upstrokes), so that cue is a lie here. A 128 ms window
+   centred on the onset contains the attack in EVERY frame, so a frame-index ablation
+   cannot separate the two — the arms must be cut by sample range. Honest post-onset
+   figure: macro 0.6645, up-F1 0.4545.
+2. **Do NOT raise the input's time resolution.** Measured, with feature count held equal:
+   5.8 ms window / 3.7 ms hop scores macro 0.6435 vs 0.7723 for the model's own 128 ms
+   geometry. On a microphone, direction reads off spectral balance rather than the sweep's
+   string ordering — even though the sweep's median span is 22.2 ms and 40.7 % of sweeps
+   fall inside two 10 ms frames.

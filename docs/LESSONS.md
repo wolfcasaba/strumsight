@@ -27211,3 +27211,75 @@ hangolásává teszi.
 
 Lásd még [[L662]], [[L663]] (a mérőeszköz), és ADR 0549 (a korpuszra illesztett kapu).
 Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+## L665 — Két hibám: egy BLOKKOLÓT rögzítettem utánanézés nélkül, és a hipotézisemet a saját kísérletem buktatta meg (E18-R27, 2026-09-12)
+
+### 1. A blokkoló, ami nem létezett — és három körön át szerepelt
+
+Az ADR 0549 és az utána jövő kör is azzal zárult, hogy a következő lépés
+*„iránycímkés tanítóadat, és az a blokkoló"*. Ezt **bele is írtam a mérés-dokumentumba**,
+és a körök között tovább vittem.
+
+**Nem volt igaz.** A `ml/klangio.py` **első sora** azt mondja, hogy az arXiv 2508.07973
+saját adatkészlete **publikus** (Apache-2.0), 82 felvétel, `D|U` címkékkel és
+**telefon-mikrofonos** felvétellel — és a szállított modell **ezen tanult**
+(`ml/honest_eval.py:34`). 11767 címkézett ütés, 38% felütés.
+
+Nem egy rejtett fájl volt. Egy **adapter modul, a repóban, a témára elnevezve**, aminek
+a docstringje pont ezt a kérdést válaszolja meg. Elég volt volna egyszer megnyitni.
+
+**A szabály, amit ebből megtartok.** Egy **blokkoló kijelentése állítás a repóról** —
+ugyanaz a műfaj, mint egy mérési szám, és ugyanúgy bizonyíték kell hozzá. „Nincs X" a
+legdrágább fajta állítás, mert **lezár egy irányt**, és senki nem fut neki még egyszer.
+Mielőtt blokkolót írok le, meg kell néznem a helyet, ahol az X lenne, ha lenne — itt
+`ml/` és a `ml/README.md`.
+
+És ennek a hibának **iránya** volt: a hamis blokkoló három kört tolt a
+*skalár-hangolás* felé (kapu, döntési határ, margó), mert a „modellt javítani nem
+lehet, nincs adat" következménye az, hogy csak a küszöbök maradnak. Az ADR 0549 így is
+hozott valódit, de a sorrend rossz volt.
+
+### 2. A hipotézisem megbukott — és ez a kör legjobb része
+
+Azzal indultam, hogy a bemenet **időfelbontása** a baj: `ml/features.py` N_FFT 2048
+@ 16 kHz = **128 ms elemző ablak**, miközben a tiszta söprések medián hossza **22,2 ms**
+és a húrok közti késés **~8 ms**. Mértem is: a söprések **40,7%-a két 10 ms-os frame
+alatt** lezajlik. A történet kerek volt: „a hat húr belépési sorrendje egyetlen ablakba
+esik és elmosódik".
+
+**A kontrollált kísérlet ezt megbuktatta.** Ugyanaz az osztályozó, ugyanazok a címkék,
+ugyanaz az osztás, és — ez a döntő — **ugyanannyi jellemző mindkét ágon (240)**, hogy a
+kapacitás ne lehessen a magyarázat. Csak a felbontás mozgott:
+
+```
+  lo = a modell saját geometriája (128 ms)   macro 0,7723   AUC 0,8928
+  hi = 5,8 ms ablak, 3,7 ms hop              macro 0,6435   AUC 0,7900
+```
+
+A nagy felbontás **rosszabb**, mindhárom osztáson. Az irány a mikrofonon nem elsősorban
+a söprés **sorrendje**, hanem a **spektrális egyensúly** — amit a hosszabb ablak
+stabilabban mér.
+
+**Amit ebből megtartok.** A kísérletet *úgy* terveztem, hogy **meg tudjon buktatni**: az
+egyenlő jellemzőszám nélkül a „hi rosszabb" eredményt elmagyarázhattam volna
+kapacitás-különbséggel, és a hipotézisem **életben maradt volna egy hibás érvvel**. Az
+egyetlen mozgó változó nem tisztaság-kérdés — az a *különbség* a „megtudtam valamit" és a
+„megerősítettem magamat" között.
+
+És a hipotézis bukása hozta a valódi leletet: mivel a modell saját bemenete volt a
+*jobb* ág, kiderült, hogy egy **sima logisztikus regresszió** abból a bemenetből fel-F1
+**0,6294**-et hoz, ahol a szállított CRNN **0,1905**-öt. Vagyis az információ ott van, a
+modell nem nyeri ki — és innen a diagnózis **átviteli hiba** (ADR 0550), nem adat-,
+felbontás- vagy küszöb-hiba. *A hipotézisem megmentése elrejtette volna a leletet.*
+
+### 3. És a kontroll, ami egy maggal hazudott volna
+
+A véletlenített címkés kontroll **első futása** AUC 0,5776-ot adott, ami 0,5 felett van
+és szivárgásnak látszott. Hét maggal a null-sáv **0,4096–0,5905**: az első húzás a sáv
+felső szélén volt. **Egy mag nem kontroll**, csak egy minta a null-eloszlásból — és ha
+elhittem volna, egy nem létező szivárgást kerestem volna a következő órában.
+
+Lásd még [[L662]], [[L663]], [[L664]] (a mérőeszköz-hibák sorozata), ADR 0549 (a
+korpuszra illesztett kapu), ADR 0550 (a diagnózis áthelyezése).
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
+eszköz: `ml/probe_direction_headroom.py`.
