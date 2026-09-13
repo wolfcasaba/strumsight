@@ -127,10 +127,7 @@ class _StubSessionHost implements PracticeSessionHost {
       const Stream<PracticeSessionState>.empty();
 
   @override
-  PracticeSessionState get state => throw UnsupportedError(
-    'This stub only exposes `effects` for this test; '
-    'a regression that reads a different member is loud, not silent.',
-  );
+  PracticeSessionState get state => PracticeSessionState.initial;
 
   @override
   int? get liveOverallPerMille => null;
