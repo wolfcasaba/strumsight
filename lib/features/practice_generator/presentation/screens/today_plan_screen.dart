@@ -227,10 +227,15 @@ class _ScrollableIfShort extends StatelessWidget {
 /// plan's day status (rest / unavailable / completed / planned / no-active)
 /// — inventing a mapping would misrepresent the state (§5.2).
 class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.label, required this.icon});
+  const _StatusBadge({
+    required this.label,
+    required this.icon,
+    required this.l10n,
+  });
 
   final String label;
   final IconData icon;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -247,7 +252,7 @@ class _StatusBadge extends StatelessWidget {
             icon,
             size: 16,
             color: colors.textPrimary,
-            semanticLabel: 'status',
+            semanticLabel: l10n.practicePlanStatusBadgeSemantic,
           ),
           const SizedBox(width: SsSpacing.space1),
           Flexible(
@@ -279,6 +284,7 @@ class _EmptyState extends StatelessWidget {
         _StatusBadge(
           label: l10n.practicePlanStatusNoActiveLabel,
           icon: Icons.info_outline,
+          l10n: l10n,
         ),
         const SizedBox(height: SsSpacing.space3),
         Text(
@@ -320,7 +326,11 @@ class _MessageState extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (statusLabel != null) ...[
-          _StatusBadge(label: statusLabel!, icon: Icons.info_outline),
+          _StatusBadge(
+            label: statusLabel!,
+            icon: Icons.info_outline,
+            l10n: AppLocalizations.of(context),
+          ),
           const SizedBox(height: SsSpacing.space3),
         ],
         Text(
@@ -367,6 +377,7 @@ class _PlannedDay extends StatelessWidget {
         _StatusBadge(
           label: l10n.practicePlanStatusPlannedLabel,
           icon: Icons.event_note,
+          l10n: l10n,
         ),
         const SizedBox(height: SsSpacing.space3),
         Text(

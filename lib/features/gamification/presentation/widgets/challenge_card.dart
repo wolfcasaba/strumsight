@@ -59,7 +59,11 @@ class ChallengeCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _ChallengeHeader(title: title, completed: completed),
+                _ChallengeHeader(
+                  title: title,
+                  completed: completed,
+                  l10n: l10n,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   l10n.challengeDailyBody,
@@ -75,7 +79,7 @@ class ChallengeCard extends StatelessWidget {
                       Icon(
                         Icons.check_circle_outline,
                         key: const Key('challenge-completed-icon'),
-                        semanticLabel: 'completed',
+                        semanticLabel: l10n.questCompletedBadge,
                         size: 18,
                         color: Theme.of(context).colorScheme.primary,
                       ),
@@ -136,10 +140,15 @@ class ChallengeCard extends StatelessWidget {
 }
 
 class _ChallengeHeader extends StatelessWidget {
-  const _ChallengeHeader({required this.title, required this.completed});
+  const _ChallengeHeader({
+    required this.title,
+    required this.completed,
+    required this.l10n,
+  });
 
   final String title;
   final bool completed;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +167,7 @@ class _ChallengeHeader extends StatelessWidget {
           Icon(
             Icons.check_circle_outline,
             key: const Key('challenge-completed-badge'),
-            semanticLabel: 'completed',
+            semanticLabel: l10n.questCompletedBadge,
             size: 20,
             color: theme.colorScheme.primary,
           ),

@@ -221,7 +221,7 @@ class _ScopeCard extends StatelessWidget {
                 Icons.lock_outline,
                 size: 20,
                 color: colors.textSecondary,
-                semanticLabel: 'kept',
+                semanticLabel: l10n.practicePrivacyScopePreserved,
               ),
               const SizedBox(width: SsSpacing.space2),
               Expanded(

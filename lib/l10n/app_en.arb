@@ -3257,6 +3257,10 @@
   "@practicePlanCatchUpSheetTravelBody": {},
   "practicePlanCatchUpSheetTravelTitle": "Travel doesn't count as a miss",
   "@practicePlanCatchUpSheetTravelTitle": {},
+  "practicePlanStatusBadgeSemantic": "Status",
+  "@practicePlanStatusBadgeSemantic": {
+    "description": "Semantic label (a11y) for the status icon rendered next to a day-status label on the today plan screen."
+  },
   "practicePlanStatusCompletedLabel": "Completed day",
   "@practicePlanStatusCompletedLabel": {},
   "practicePlanStatusNoActiveLabel": "No active plan",
@@ -3755,6 +3759,10 @@
       }
     }
   },
+  "questArchivedBadge": "Archived",
+  "@questArchivedBadge": {
+    "description": "Semantic label (a11y) for the archived-state icon badge on a quest card."
+  },
   "questCompletedBadge": "Completed",
   "questCompletedBody": "The reward is already in your ledger.",
   "questCompletedSemantics": "Quest {title} is complete. The reward is already credited.",
@@ -4207,7 +4215,59 @@
       }
     }
   },
+  "shareCardBpmLabel": "BPM",
+  "@shareCardBpmLabel": {},
   "shareCardButton": "Share card",
+  "shareCardChordsLabel": "CHORDS",
+  "@shareCardChordsLabel": {},
+  "shareCardDownLabel": "DOWN ↓",
+  "@shareCardDownLabel": {},
+  "shareCardLengthLabel": "LENGTH",
+  "@shareCardLengthLabel": {},
+  "shareCardLessonBestComboLabel": "BEST COMBO",
+  "@shareCardLessonBestComboLabel": {},
+  "shareCardLessonCompleteLabel": "LESSON COMPLETE",
+  "@shareCardLessonCompleteLabel": {},
+  "shareCardLessonHitsLabel": "HITS",
+  "@shareCardLessonHitsLabel": {},
+  "shareCardLessonMoatLine": "Graded on my strum direction",
+  "@shareCardLessonMoatLine": {},
+  "shareCardMoatLine": "The only app that sees your down/up strokes",
+  "@shareCardMoatLine": {},
+  "shareCardMyRiffFallback": "My riff",
+  "@shareCardMyRiffFallback": {},
+  "shareCardNoStrumsPlaceholder": "No strums detected",
+  "@shareCardNoStrumsPlaceholder": {},
+  "shareCardStrumPatternLabel": "YOUR STRUM PATTERN",
+  "@shareCardStrumPatternLabel": {},
+  "shareCardStrumSubtitle": "Chord & strum-direction detector",
+  "@shareCardStrumSubtitle": {},
+  "shareCardTitleLabel": "TITLE",
+  "@shareCardTitleLabel": {},
+  "shareCardUpLabel": "UP ↑",
+  "@shareCardUpLabel": {},
+  "shareCardWrappedAccuracyLabel": "↓↑ ACCURACY",
+  "@shareCardWrappedAccuracyLabel": {},
+  "shareCardWrappedDaysLabel": "DAYS",
+  "@shareCardWrappedDaysLabel": {},
+  "shareCardWrappedMinutesLabel": "MINUTES PLAYED",
+  "@shareCardWrappedMinutesLabel": {},
+  "shareCardWrappedMoatLine": "The app that grades your strumming hand",
+  "@shareCardWrappedMoatLine": {},
+  "shareCardWrappedSessionsLabel": "SESSIONS",
+  "@shareCardWrappedSessionsLabel": {},
+  "shareCardWrappedStreakLine": "{count}-day streak",
+  "@shareCardWrappedStreakLine": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareCardWrappedStrumsLabel": "STRUMS",
+  "@shareCardWrappedStrumsLabel": {},
+  "shareCardWrappedWeekLabel": "MY STRUM WEEK",
+  "@shareCardWrappedWeekLabel": {},
   "shareRedactionChords": "Chord progression",
   "shareRedactionDuration": "Session length",
   "shareRedactionIncludeTitle": "Include the session title",

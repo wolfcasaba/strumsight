@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import '../../../../core/music/strum.dart';
 import 'beat_position.dart';
+import 'beat_time_converter.dart';
 import 'meter.dart';
 import 'practice_value_equality.dart';
 import 'tempo.dart';
@@ -49,6 +50,50 @@ final class CompiledPracticeTarget {
   final PracticeLoopRange? loopRange;
   final List<ExpectedChordSegment> expectedChordSegments;
   final bool scoringApplicable;
+
+  /// Piecewise inverse of [musicalDuration]: maps elapsed musical time
+  /// (excluding count-in, ring-out and any future loop gap) to a
+  /// [BeatPosition] inside the current loop iteration.
+  ///
+  /// Returns `null` when the elapsed time falls in a region whose musical
+  /// position is not defined by this target — that is, before the musical
+  /// origin, at or past [musicalDuration] (ring-out included), or for a
+  /// target that has no musical content at all (`musicalDuration == 0` or
+  /// `loopCount == 0`). The contract is symmetric with the compile-time
+  /// invariant that a position inside `[0, musicalDuration)` is well
+  /// defined: outside that interval the caller has to decide what to render.
+  ///
+  /// Within `[0, musicalDuration)` the function reduces to a single segment
+  /// per loop iteration (`passDuration = musicalDuration / loopCount`), so
+  /// the same offset inside any two iterations yields the same
+  /// [BeatPosition] — by construction, since the compiler emits the loop
+  /// pass verbatim `loopCount` times without gap.
+  BeatPosition? musicalPosition(Duration elapsedSinceMusicalOrigin) {
+    if (musicalDuration <= Duration.zero || loopCount <= 0) return null;
+    if (elapsedSinceMusicalOrigin < Duration.zero) return null;
+    if (elapsedSinceMusicalOrigin >= musicalDuration) return null;
+    final passDuration = _passDuration();
+    if (passDuration <= Duration.zero) return null;
+    var loopIndex =
+        elapsedSinceMusicalOrigin.inMicroseconds ~/ passDuration.inMicroseconds;
+    if (loopIndex >= loopCount) loopIndex = loopCount - 1;
+    final inLoopTime =
+        elapsedSinceMusicalOrigin -
+        Duration(microseconds: loopIndex * passDuration.inMicroseconds);
+    return BeatTimeConverter(tempo: tempo, meter: meter).positionAt(inLoopTime);
+  }
+
+  /// One pass's musical duration — `musicalDuration / loopCount`.
+  ///
+  /// Exposed for tests so the piecewise decomposition can be pinned without
+  /// driving the public [musicalPosition] getter around the edges.
+  Duration passDuration() => _passDuration();
+
+  Duration _passDuration() {
+    if (loopCount <= 0) return Duration.zero;
+    final micros = musicalDuration.inMicroseconds ~/ loopCount;
+    return Duration(microseconds: micros);
+  }
 
   @override
   bool operator ==(Object other) =>

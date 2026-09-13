@@ -310,7 +310,7 @@ final class _ActionsAndFormsShowcase extends StatelessWidget {
             ),
             SsIconButton(
               iconName: 'close',
-              semanticLabel: 'Close',
+              semanticLabel: l10n.commonClose,
               tooltip: 'Close',
               onPressed: () {},
             ),

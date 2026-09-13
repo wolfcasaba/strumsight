@@ -45,6 +45,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: SsLightTheme.data(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Center(
             child: LessonScoreCard(
@@ -59,11 +61,15 @@ void main() {
         ),
       ),
     );
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text('Funk Chop'), findsOneWidget);
     expect(find.text('80%'), findsOneWidget);
     expect(find.text('12/15'), findsOneWidget);
     expect(find.text('9'), findsOneWidget);
     expect(find.byIcon(Icons.star), findsNWidgets(2)); // 2 filled stars
+    // MI-H — the chip labels and moat line resolve through l10n.
+    expect(find.text(l10n.shareCardLessonHitsLabel), findsOneWidget);
+    expect(find.text(l10n.shareCardLessonBestComboLabel), findsOneWidget);
   });
 
   testWidgets('score % colour follows the confidence ramp, not always green', (
@@ -75,14 +81,18 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: SsLightTheme.data(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: LessonScoreCard(
-            lessonName: 'L',
-            accuracy: 0.0,
-            stars: 0,
-            maxCombo: 0,
-            hits: 0,
-            total: 16,
+          body: Center(
+            child: LessonScoreCard(
+              lessonName: 'L',
+              accuracy: 0.0,
+              stars: 0,
+              maxCombo: 0,
+              hits: 0,
+              total: 16,
+            ),
           ),
         ),
       ),
@@ -96,14 +106,18 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: SsLightTheme.data(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: LessonScoreCard(
-            lessonName: 'L',
-            accuracy: 0.9,
-            stars: 3,
-            maxCombo: 9,
-            hits: 14,
-            total: 16,
+          body: Center(
+            child: LessonScoreCard(
+              lessonName: 'L',
+              accuracy: 0.9,
+              stars: 3,
+              maxCombo: 9,
+              hits: 14,
+              total: 16,
+            ),
           ),
         ),
       ),
@@ -172,5 +186,38 @@ void main() {
         expect(find.text(l10n.shareCardButton), findsOneWidget);
       },
     );
+  }
+
+  // MI-H — en and hu both render through `AppLocalizations.of(context)` and
+  // the rendered card labels must differ between locales (regression guard
+  // for the parity rule in `test/l10n/arb_parity_test.dart`).
+  for (final locale in [const Locale('en'), const Locale('hu')]) {
+    testWidgets('MI-H: LessonScoreCard labels resolve through l10n '
+        '(${locale.languageCode})', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SsLightTheme.data(),
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: LessonScoreCard(
+                lessonName: 'Funk Chop',
+                accuracy: 0.8,
+                stars: 2,
+                maxCombo: 9,
+                hits: 12,
+                total: 15,
+              ),
+            ),
+          ),
+        ),
+      );
+      final l10n = await AppLocalizations.delegate.load(locale);
+      expect(find.text(l10n.shareCardLessonCompleteLabel), findsOneWidget);
+      expect(find.text(l10n.shareCardLessonHitsLabel), findsOneWidget);
+      expect(find.text(l10n.shareCardLessonBestComboLabel), findsOneWidget);
+    });
   }
 }

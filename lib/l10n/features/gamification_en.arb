@@ -263,6 +263,10 @@
     }
   },
   "questExpiredBadge": "Expired",
+  "questArchivedBadge": "Archived",
+  "@questArchivedBadge": {
+    "description": "Semantic label (a11y) for the archived-state icon badge on a quest card."
+  },
   "questUnavailableBadge": "Content not installed",
   "questUnavailableBody": "This quest points to content that is not installed on this device yet.",
   "questExpiryToday": "Available until midnight",

@@ -3133,6 +3133,10 @@
   "@practicePlanStatusNoActiveLabel": {},
   "practicePlanStatusPlannedLabel": "Tervezett alkalom",
   "@practicePlanStatusPlannedLabel": {},
+  "practicePlanStatusBadgeSemantic": "Állapot",
+  "@practicePlanStatusBadgeSemantic": {
+    "description": "Semantic label (a11y) for the status icon rendered next to a day-status label on the today plan screen."
+  },
 
   "todayHubTitle": "Ma",
   "todayHubNewUserTitle": "Vágjunk bele",

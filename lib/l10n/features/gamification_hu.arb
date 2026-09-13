@@ -263,6 +263,10 @@
     }
   },
   "questExpiredBadge": "Lejárt",
+  "questArchivedBadge": "Archiválva",
+  "@questArchivedBadge": {
+    "description": "Semantic label (a11y) for the archived-state icon badge on a quest card."
+  },
   "questUnavailableBadge": "A tartalom nincs telepítve",
   "questUnavailableBody": "Ehhez a küldetéshez tartozó tartalom még nincs telepítve ezen az eszközön.",
   "questExpiryToday": "Éjfélig elérhető",

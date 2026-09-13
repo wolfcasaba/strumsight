@@ -2,7 +2,6 @@ import 'package:meta/meta.dart';
 
 import '../../../../core/foundation/app_failure.dart';
 import 'beat_position.dart';
-import 'beat_time_converter.dart';
 import 'compiled_practice_target.dart';
 import 'practice_definition.dart';
 import 'practice_session_config.dart';
@@ -139,17 +138,18 @@ final class PracticeSessionState {
   }.contains(status);
 
   /// `BeatPosition` of the playhead relative to the musical origin
-  /// (excluding count-in), or `null` while in count-in or before a target
-  /// is available.
+  /// (excluding count-in), or `null` while in count-in, past the musical
+  /// end, or before a target is available.
+  ///
+  /// Delegates the piecewise inverse to
+  /// [CompiledPracticeTarget.musicalPosition] — the session state only knows
+  /// how to subtract count-in (a session concept); the loop/ring-out
+  /// contract lives with the compiled target.
   BeatPosition? get musicalPosition {
     final target = this.target;
     if (target == null) return null;
     if (timelinePosition < target.countInDuration) return null;
-    final converter = BeatTimeConverter(
-      tempo: target.tempo,
-      meter: target.meter,
-    );
-    return converter.positionAt(timelinePosition - target.countInDuration);
+    return target.musicalPosition(timelinePosition - target.countInDuration);
   }
 
   PracticeSessionState copyWith({
