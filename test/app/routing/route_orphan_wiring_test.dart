@@ -47,11 +47,18 @@ import 'package:strumsight/features/gamification/presentation/screens/gamificati
 import 'package:strumsight/features/gamification/presentation/screens/reward_inbox_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/practice/public.dart';
+import 'package:strumsight/features/progress/model/practice_entry.dart';
+import 'package:strumsight/features/progress/model/practice_stats.dart';
+import 'package:strumsight/features/progress/providers/daily_goal_provider.dart';
+import 'package:strumsight/features/progress/providers/practice_stats_provider.dart';
 import 'package:strumsight/features/progress_v2/public.dart';
+import 'package:strumsight/features/streak/model/streak_data.dart';
+import 'package:strumsight/features/streak/providers/streak_provider.dart';
 import 'package:strumsight/features/streak/screens/streak_screen.dart';
+import 'package:strumsight/features/today/domain/today_plan_snapshot.dart';
+import 'package:strumsight/features/today/providers/today_providers.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
-
-import '../../support/preference_store.dart';
+import '../../support/preference_store.dart' show preferenceOverrides, storedCollection, storedDocument;
 
 FeatureFlags get _adaptiveFlags => const FeatureFlags(
   accountEnabled: false,
@@ -74,6 +81,25 @@ Future<GoRouter> _pumpRouter(
   final container = ProviderContainer(
     overrides: [
       ...overrides,
+      // The KV store has no default — `keyValueStoreProvider` throws unless
+      // injected (storage_providers.dart). The Today Hub's
+      // `dailyGoalActiveSecondsProvider` → `aggregatedPracticeFeedProvider` →
+      // `practiceLogProvider` chain reaches it via
+      // `practiceLogRepositoryProvider`. Cells that need a SEEDED store pass
+      // their own `preferenceOverrides({...})` entry above; cells that only
+      // need an empty one (the two routing cells that previously failed with
+      // a provider exception) append `preferenceOverrides({})` themselves.
+      // Today Hub support providers — the hub watches six providers
+      // synchronously; without these overrides its `build()` throws and the
+      // two failed cells land in `onException` (R22 audit §5.2 MI2).
+      todayPlanSnapshotProvider.overrideWithValue(
+        const TodayPlanSnapshot(availability: TodayPlanAvailability.unavailable),
+      ),
+      streakProvider.overrideWith(_EmptyStreakController.new),
+      aggregatedPracticeStatsProvider.overrideWithValue(
+        PracticeStats(const <PracticeEntry>[]),
+      ),
+      dailyGoalProvider.overrideWith(_FixedDailyGoalController.new),
       onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
       appConfigProvider.overrideWithValue(
         AppConfig(
@@ -114,6 +140,26 @@ Future<GoRouter> _pumpRouter(
 Future<void> _settle(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 16));
+}
+
+/// Stub [StreakController] that returns a zero-streak snapshot — the hub
+/// reads `streak.current` only, and the routing cells do not exercise
+/// `recordPracticeToday`, so the persisted repo wiring is irrelevant here.
+/// Extends the real controller type so the `NotifierProvider<StreakController,
+/// StreakData>` override accepts it.
+class _EmptyStreakController extends StreakController {
+  @override
+  StreakData build() => const StreakData();
+}
+
+/// Stub [DailyGoalController] that returns a fixed 30-minute goal — the hub
+/// renders `goalMinutes` as a number; the routing cells never call
+/// `setGoal`, so the persisted-preference wiring is irrelevant here.
+/// Extends the real controller type so the `NotifierProvider<DailyGoalController,
+/// int>` override accepts it.
+class _FixedDailyGoalController extends DailyGoalController {
+  @override
+  int build() => 30;
 }
 
 void main() {
@@ -220,6 +266,7 @@ void main() {
           tester,
           initialLocation: AppRoutes.profileProgress,
           overrides: [
+            ...preferenceOverrides({}),
             progressPracticeHistoryProvider.overrideWithValue(
               _qualifiedChordSessions(),
             ),
@@ -272,6 +319,7 @@ void main() {
           tester,
           initialLocation: AppRoutes.communityClubs,
           overrides: [
+            ...preferenceOverrides({}),
             communityClubRepositoryProvider.overrideWithValue(
               _SeedingClubsRepository([
                 _club(
