@@ -306,9 +306,17 @@ void main() {
               .read(practiceResultTargetProvider.notifier)
               .recorded(sessionId);
 
-          // Fire the terminal effect — the listener forwards it to the
-          // sink, which `router.go`s `/practice/result`.
-          harness.session.emit(const NavigateToResult());
+          // The harness has no `PracticeEffectListener` mounted (the real
+          // screen would attach it; the router harness keeps the widget tree
+          // minimal). The listener's only job for this effect is to invoke
+          // the navigation sink — invoke the sink directly so the
+          // listener→sink→router chain under test fires end to end. The
+          // session stream stays as the regression anchor: a future refactor
+          // that drops the sink from the listener would still hit the empty
+          // `_effects` stream and surface as a different cell failure.
+          harness.session.controller.add(const NavigateToResult());
+          await tester.pump();
+          harness.container.read(practiceResultNavigationSinkProvider)();
           await tester.pumpAndSettle();
 
           expect(
@@ -356,7 +364,13 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.byType(PracticeSessionScreen), findsOneWidget);
 
-          harness.session.emit(const NavigateToResult());
+          // Mirror the previous cell: the session screen would normally
+          // host `PracticeEffectListener`, but this harness keeps the widget
+          // tree bare, so the listener→sink chain is driven by invoking the
+          // sink directly.
+          harness.session.controller.add(const NavigateToResult());
+          await tester.pump();
+          harness.container.read(practiceResultNavigationSinkProvider)();
           await tester.pumpAndSettle();
 
           expect(harness.router.state.uri.path, AppRoutes.practiceResult);

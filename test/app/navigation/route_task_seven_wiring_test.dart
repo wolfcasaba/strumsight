@@ -31,6 +31,7 @@
 // the practice generator. Both are on by default outside production; the
 // shipped `forShippedBuild` factory turns them on explicitly.
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,6 +44,8 @@ import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/logging/logger_provider.dart';
 import 'package:strumsight/features/practice_generator/application/usecase/revise_practice_plan.dart';
@@ -65,6 +68,7 @@ import 'package:strumsight/features/song_trainer/domain/models/song_section.dart
 import 'package:strumsight/features/song_trainer/domain/models/song_source.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_track.dart';
 import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_overview_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/song_trainer_launch.dart';
@@ -204,6 +208,43 @@ SongTrainerResult _bareResult() => SongTrainerResult(
   sectionResults: const <SongSectionTrainerResult>[],
 );
 
+/// No-op stand-in for [SongAssetRepository]. The route-reach contract under
+/// test in the editor cell only needs the bootstrap layer to be able to
+/// resolve the provider — the editor screen reads it on `initState`, but
+/// none of the navigation tests exercise an asset write. Returning success
+/// (or "not found") keeps the contract honest without dragging in a real
+/// fake asset store.
+final class _NoopAssetRepository implements SongAssetRepository {
+  const _NoopAssetRepository();
+
+  @override
+  Future<AppResult<SongAssetStoreReceipt>> put(
+    SongAssetWriteRequest request,
+  ) async => const AppResult<SongAssetStoreReceipt>.failure(
+    UnknownFailure(code: FailureCode.unknown),
+  );
+
+  @override
+  Future<AppResult<Uint8List?>> get(String sha256) async =>
+      const AppResult<Uint8List?>.success(null);
+
+  @override
+  Future<AppResult<SongAssetSummary?>> summary(String sha256) async =>
+      const AppResult<SongAssetSummary?>.success(null);
+
+  @override
+  Future<AppResult<void>> incrementReference(SongAssetHolder holder) async =>
+      const AppResult<void>.success(null);
+
+  @override
+  Future<AppResult<void>> decrementReference(SongAssetHolder holder) async =>
+      const AppResult<void>.success(null);
+
+  @override
+  Future<AppResult<void>> permanentlyDelete(String sha256) async =>
+      const AppResult<void>.success(null);
+}
+
 void main() {
   // ---------------------------------------------------------------------
   // practiceGeneratorChangeReview — the M12 change-review seam.
@@ -280,6 +321,18 @@ void main() {
                             ],
                             reason: PlanRevisionReason.learnerReschedule,
                             confirmation: PlanChangeConfirmation.pending,
+                            // The router-only contract under test is "a real
+                            // `PlanRevisionProposal` lands on
+                            // `/practice/generator/change-review`" — the
+                            // synthetic `previous` that `launchChangeReview`
+                            // builds when this is null constructs a
+                            // `PlanChangeSet` whose `fromRevisionId` equals
+                            // its `toRevisionId`, and the constructor
+                            // refuses that with `ArgumentError`. Passing a
+                            // real predecessor with a distinct `RevisionId`
+                            // routes through the use case's path that
+                            // produces a valid `PlanChangeSet`.
+                            previous: revision(number: 1),
                           ),
                         );
                       },
@@ -383,6 +436,16 @@ void main() {
           tester,
           overrides: [
             songRepositoryProvider.overrideWithValue(repository),
+            // The editor screen's controller reads the asset repository
+            // on `initState` (it never touches it in the route-reach
+            // contract under test, but the production provider throws
+            // unless the bootstrap layer overrides it). A noop asset
+            // repo is enough to prove the WIRE — the route's redirect and
+            // path-parameter behaviour — without dragging in a fake
+            // asset store the test does not otherwise need.
+            songAssetRepositoryProvider.overrideWithValue(
+              const _NoopAssetRepository(),
+            ),
             ...preferenceOverrides(<String, Object>{}),
           ],
         );
@@ -445,6 +508,17 @@ void main() {
         expect(find.byType(SongOverviewScreen), findsOneWidget);
         expect(find.byKey(const Key('song-overview-start')), findsOneWidget);
 
+        // The Start button sits at the bottom of a `ListView` body. In
+        // the default 800×600 test viewport it falls just below the
+        // hit-test area and `tap()` reports "would not hit test on the
+        // specified widget". Resize the surface to a phone-class height
+        // so the button lands inside the viewport — this matches what a
+        // real device shows, and keeps the route-reach contract under
+        // test honest without coupling the test to a specific scroll
+        // position.
+        await tester.binding.setSurfaceSize(const Size(800, 1200));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await _settle(tester);
         await tester.tap(find.byKey(const Key('song-overview-start')));
         await _settle(tester);
 
