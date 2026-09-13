@@ -15064,9 +15064,76 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   az r172 LOGO (0,6061 ± 0,0548, legrosszabb fold 0,5289).
   **Gate:** zöld. **Semmi nem kerül felkapcsolásra**, `settledTier` **false**, asset nem
   cserélve, szállított konstans nem mozdítva.
-  **KÖVETKEZŐ:** (1) **a telepítési korpusz in-situ ASSET-összevetése** — a settled asset
-  `STRUM_3C_ASSET=…`-tel ugyanazon a söprésen, és `KLANGIO_SPLIT=guitarist4`-en; ez az
-  ADR 0578 D6 szerint a helyes következő lépés, **nem** újabb seed-kör; (2) a **matched-data
+  **E18-R46 — A LETISZTULT TIER IN SITU A TELEPÍTÉSI KORPUSZON +0,1236-OT ÉR, HA AZ ASSET
+  MINDKÉT LEVÁGÁSON TANULT (ADR 0579).** Ez a két-tier ügy **hiányzó valódi-audió lába** a
+  telepítési korpuszon. Mindkét asset ugyanazon a foldon (4-es gitáros, 27 felvétel, **3721**
+  annotált pengetés, 4430 onset, 9 egybeolvadás kizárva), ugyanazzal a műszerrel, ugyanazokon a
+  kapukon — a söprés mostantól `KLANGIO_EXTRA_GATES`-szel a jelölt **saját** kapuját is felveszi,
+  a kanonikus sorok megtartásával.
+  **Belső ellenőrzés, ami a többit olvashatóvá teszi:** a `nincs kapu / margin off` sor **bitre
+  ugyanaz** a két assetre (onsetP **0,6582**, onsetR **0,7837**, 4430 megtartva) — az onset-út
+  tehát **asset-független**, és minden különbség utána keletkezik.
+  **A HIÁNYZÓ LÁB (settled asset, saját 0,2929-es kapu, saját tiszta foldja):** gyors **0,5389**
+  → letisztult **0,6625**, **+0,1236** — és **mindkét irány javul** (le 0,4873 → 0,6847, fel
+  0,5905 → 0,6402), `settledMissing` = **0**.
+  **Ugyanaz a fold, ugyanaz a műszer, a SZÁLLÍTOTT asseten: −0,3628** (0,9373 → 0,5745; fel
+  0,9224 → **0,3432**). Ellentétes előjel, és a különbség az, hogy az asset tanult-e a
+  csonkítatlan ablakon — az ADR 0572 D3 állítása in situ, az ADR 0574 lokalizációjával (f7..14).
+  **AZ ORÁKULUM-MŰSZER MOST HÁROM PONTON JELLEMEZVE:** settled/Klangio (in-distribution)
+  orákulum +0,1299 vs in situ **+0,1236** (|Δ| **0,0063**); szállított/GuitarSet +0,1919 vs
+  +0,1679 (0,0240); szállított/Klangio csonkítatlan (**OOD**) −0,2455 vs −0,3355 (0,0900).
+  Tehát az ADR 0571 D4 korlátja **áll és pontosodik**: *a delta 0,006–0,024-re pontos, ha a
+  bemenet az asset számára eloszláson BELÜL van; ha kívül, csak az ELŐJEL marad.* A **szintek**
+  szisztematikusan elválnak (a settled gyors 0,5055 → in situ 0,5389; letisztult 0,6354 →
+  0,6625) — in situ **magasabb**, és az okát **nem mértük**.
+  **NEM asset-rangsor:** a szállított 0,9373 vs settled 0,5250 ezen a foldon a **szennyezett**
+  pár (a szállított 22/27-ét tanulta), és az in-situ műszer a Python orákulum 0,9490 / 0,5055-ét
+  **reprodukálja** (0,9373 / 0,5250) — ez a **műszert** hitelesíti, nem a rangsort.
+  **ÉS EGY ÁR, AMIT A CSERE FIZETNE:** a settled asset iránya **javul** a szorosabb kapun
+  (0,5250 → 0,5550 a 0,124-en), de az onset-megtartása **összeomlik** (0,7157 → **0,6095**;
+  3534 → 2737 megtartva a szállított 3950 → 3783-a ellen). Az ADR 0566 szerint egy elnyomott
+  pengetés olyan ütés, amit a pontozó **soha nem lát** — a tanuló a motor hallgatásáért kap
+  levonást. A jobb irány tehát **fedezettel van megvásárolva**, és ez in situ megerősíti az
+  ADR 0569 D2 orákulum-megfigyelését (settled 0,824 vs szállított 0,964 megtartás).
+  **Két kisebb javítás:** a létra JSON-ja mostantól **MERGE**-öl, nem klobberol (egy
+  `--arms=R5` futás korábban szétverte volna a három seed ötkaros provenance-rekordját), és a
+  `crnn_live_3c_settled_parity_test.dart` „measured, not wired" guardjának `reason`-je egy
+  **visszavont** állítást hordozott („a settled asset a fitted 0,439-et akarná" — az ADR 0567 D3
+  javaslata, amit az ADR 0569 D3 visszavont, és a 0,439 a **szállított** asset saját értéke). Most
+  kiírja, hogy a kapu **asset-specifikus**, és hogy a settled asset 0,2929-re / 0,1245-re
+  kalibrál. **Gate:** zöld. **Semmi nem kerül felkapcsolásra.**
+  **AZ R5 KAR (regularizáció elvétele) ELUTASÍTVA, ÉS KÉT EGYEZŐ SEED NEM REPLIKÁCIÓ
+  (ADR 0580, L691).** Irányított kísérlet volt, nem tapogatózás: az ADR 0578 D2 egyetlen stabil
+  negatívja az volt, hogy a regularizáció Klangión mindhárom seeden **költség**
+  (−0,0592 ± 0,0348). Elvéve, három seeden: **Klangio@70 +0,0533 / +0,0440 / −0,0244** —
+  **előjelet vált**, tehát nem megállapított. **GuitarSet@70 +0,0246 / −0,0630 / −0,0696** —
+  szintén. De a **csonkítatlan** tieren a legszorosabb delta az egész sorozatban:
+  **−0,0190 ± 0,0051** Klangión, mindhárom seeden — azaz az elvétele pont azt a tiert rombolja
+  következetesen, amit a két-tier döntés **meg akar vásárolni** (ADR 0579). **És a regularizáció
+  szűkíti a szórást:** Klangio@70 seed-sd **R4 0,0153** vs **R5 0,0509** (3,3×), tehát az R5
+  látszólag magasabb átlaga (0,5474 vs 0,5231) háromszor bizonytalanabb mérésből jön. **Az R5
+  elutasítva**, az **R4 marad a jelölt recept.** Az ADR 0578 D2 regularizáció-megállapítása
+  **hatókörben szűkítve**: a Klangio-only / 70 ms-only kontextusra áll, a mindkét levágáson
+  tanító receptre **nem vihető át** (L685 családja).
+  **A MÓDSZERTANI LELET, HÁROM ESETTEL:** `ADR 0575 nettó +0,1051/+0,0923/−0,0403`;
+  `ADR 0578 R2→R3 +0,0810/+0,0642/−0,0413`; `ADR 0580 R4→R5 +0,0533/+0,0440/−0,0244`. Háromszor
+  ugyanaz: **s42 és s1 egyetért, s2 megfordítja** — és mindháromszor a két egyező érték közel
+  volt egymáshoz, ami pont úgy néz ki, mint két korrelált zajminta, de **konzisztenciának
+  érződik**. A Klangio@70 seed-szórása az R0-n **0,0757**, nagyobb mindhárom vizsgált hatásnál.
+  **SZABÁLY innentől: ezen a létrán egyetlen recept-állítás sem megy ADR-be két seedből;
+  mindhárom `STD_SEEDS` kötelező, és ha egy delta előjele nem egyezik mind a háromon, az
+  eredmény „NEM MEGÁLLAPÍTOTT", nem „kisebb".** Előjel-egyezés és nem t-próba, mert n=3-nál a
+  szórás-becslés maga is zajos. Ez a műszert nem utasítja el: a **GuitarSet** oldalon ugyanez a
+  létra háromszor egyező, szoros deltákat ad (+0,2823 ± 0,0264 / nettó +0,3765 ± 0,0713) — a
+  szabály azt mondja meg, **mekkora hatást tud ez a műszer kimutatni** (Klangio@70-en ~0,08
+  fölött).
+  **KÖVETKEZŐ:** (1) a **matched-data létra R0 karja** három seeden (`--data=allklangio`, már
+  megírva és assertelve): minden kar CSAK Klangión tanul **mind a három** gitároson, ugyanannyi
+  adaton és ugyanolyan fajta splittel, mint a szállított asset — tehát **az EGÉSZ GuitarSet
+  (3056 pengetés) harmadik korpusz a karoknak ÉS a szállított assetnek is**, és ez az egyetlen
+  sejt, ahol a szállított **artefaktum** tisztességesen összevethető. A közvetlen kérdés: a
+  szállított asset GuitarSet-száma (**0,2997** a produkciós kapun, mérve) a **RECEPT**
+  tulajdonsága vagy egy szerencsés futás? Ez kvantifikálja az ADR 0573 D4 kimondott konfoundját; (2) a **matched-data
   létra lefuttatása** (`--data=allklangio`, már megírva és assertelve): minden kar CSAK
   Klangión tanul mind a három gitároson, tehát **az EGÉSZ GuitarSet (3056 pengetés) harmadik
   korpusz a karoknak ÉS a szállított assetnek is** — ez az egyetlen sejt, ahol a szállított

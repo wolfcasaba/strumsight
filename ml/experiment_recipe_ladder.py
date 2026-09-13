@@ -380,13 +380,26 @@ def main():
               "the arms AND by the shipped asset)")
     cells = load_cells(mode)
 
-    report = {"seed": seed, "data_mode": mode, "arms": {},
-              "shipped": run_shipped(cells, mode)}
     suffix = "" if mode == "heldout" else f"_{mode}"
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        f"recipe_ladder{suffix}_seed{seed}.json")
+    # MERGE, never clobber. Running `--arms=R5` alone used to overwrite the file holding the
+    # five-arm ladder, which would have destroyed the provenance record three seeds of
+    # training produced. The filename carries the seed and the data mode, so merging can only
+    # ever combine arms measured under identical conditions.
+    report = {"seed": seed, "data_mode": mode, "arms": {}}
+    if os.path.exists(path):
+        with open(path) as handle:
+            prior = json.load(handle)
+        if prior.get("seed") == seed and prior.get("data_mode", "heldout") == mode:
+            report["arms"] = prior.get("arms", {})
+            print(f"  merging into {len(report['arms'])} existing arm(s) in {path}")
+        else:
+            sys.exit(f"{path} holds seed={prior.get('seed')} "
+                     f"data_mode={prior.get('data_mode')}, refusing to merge")
+    report["shipped"] = run_shipped(cells, mode)
     for name in arms:
         report["arms"][name] = run_arm(name, cells, seed)
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            f"recipe_ladder{suffix}_seed{seed}.json")
         with open(path, "w") as handle:
             json.dump(report, handle, indent=2)
         print(f"    -> {path}", flush=True)
@@ -398,6 +411,9 @@ def main():
     print("")
     print("  arm  what changed                                  "
           "Klangio@70  GSet@70   Klangio@full  GSet@full")
+    # Every arm the FILE holds, in a canonical order, not only the ones this run measured —
+    # so an accumulating file prints a complete table instead of a one-row fragment.
+    order = [a for a in ARMS if a in report["arms"]]
     ship = report["shipped"]["own, blind"]
     note = ("   <- GSet cells are the FAIR ones here" if mode == "allklangio"
             else "   <- Klangio cell FAVOURS it")
@@ -410,7 +426,7 @@ def main():
           f"{prod['klangio|70']['macro_f1']:.4f}      {prod['guitarset|70']['macro_f1']:.4f}"
           f"    {prod['klangio|full']['macro_f1']:.4f}        "
           f"{prod['guitarset|full']['macro_f1']:.4f}")
-    for name in arms:
+    for name in order:
         arm = report["arms"][name]
         c = arm["cells"]
         print(f"  {name:<4} {arm['what_changed']:<45} "
@@ -433,7 +449,7 @@ def main():
         print(f"  SHIP  {ship[read_cell]['macro_f1']:.4f}   the shipped asset, same data, "
               f"same corpus unseen -- the bar, fairly")
     prev = None
-    for name in arms:
+    for name in order:
         value = report["arms"][name]["cells"][read_cell]["macro_f1"]
         delta = "" if prev is None else f"   {value - prev:+.4f}"
         print(f"  {name:<4}  {value:.4f}{delta}   {report['arms'][name]['what_changed']}")

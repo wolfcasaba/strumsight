@@ -137,8 +137,14 @@ void main() {
       LiveCrnnStrumClassifier.noStrumThreshold,
       0.85,
       reason:
-          'ADR 0549s gate; the settled asset would want the fitted 0.439 '
-          '(ADR 0567 D3), so a change here means the wiring round happened',
+          'ADR 0549s gate, calibrated for the SHIPPED asset; a change here means '
+          'the wiring round happened. Whoever does it: this constant is '
+          'ASSET-SPECIFIC and has to move WITH the asset. The settled asset '
+          'calibrates to 0.2929 (class_conditional, what its JSON ships) or '
+          '0.1245 (class_blind) — NOT to 0.439, which is the shipped asset own '
+          'fitted value. ADR 0567 D3 did propose 0.439 and ADR 0569 D3 withdrew '
+          'that proposal. ADR 0575 D7 additionally records PER-TIER gates, since '
+          'P(no-strum) is not distributed alike at 70 ms and untruncated.',
     );
     final shippedBytes = File(shippedAsset).readAsBytesSync();
     final settledBytes = File(settledAsset).readAsBytesSync();

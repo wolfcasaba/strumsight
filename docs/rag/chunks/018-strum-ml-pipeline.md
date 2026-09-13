@@ -2303,3 +2303,142 @@ the sweep run with `STRUM_3C_ASSET`. Not claimed: n=3, so the +/- sd is indicati
 confidence interval; oracle windows throughout this ladder; and the GuitarSet advantage is not a
 shipping claim, since GuitarSet is not the deployment condition and that cell favours the arms
 that trained there.
+
+### The settled tier helps IN SITU on the deployment corpus - +0.1236, with an asset that trained at both truncations (E18-R46, ADR 0579)
+
+ADR 0571 measured the settled tier's in-situ value on GuitarSet (+0.1679); ADR 0572 could only
+measure the deployment corpus on ORACLE windows (+0.1299 settled asset, -0.2455 shipped). Since
+ADR 0577 the deployment corpus runs in situ, so both assets went through the SAME fold, the SAME
+instrument and the SAME gate ladder: guitarist 4's 27 recordings, 3721 annotated strums, 4430
+SuperFlux onsets, 9 strums excluded as frame-coalesced. That fold is player-disjoint for the
+SETTLED asset and NOT for the shipped one (it trained on 22 of those 27 recordings, ADR 0573 D1).
+
+**An internal check first, because it is what makes the rest readable.** The `none / margin off`
+row is identical for both assets - onsetP 0.6582, onsetR 0.7837, 4430 kept - so the onset path is
+asset-independent (SuperFlux, not the CRNN) and every difference below arises after it. Had that
+row differed, the two tables could not be read against each other at all.
+
+**The missing leg.** Settled asset at its own 0.2929 gate, on its own clean fold:
+
+```
+  tier              dirMacro    down     up
+  fast only          0.5389    0.4873   0.5905
+  settled only       0.6625    0.6847   0.6402    (+0.1236)
+```
+
+BOTH directions improve - down by +0.1974, up by +0.0497 - and `settledMissing` = 0, since
+60-second takes leave room for every window. This is what ADR 0571 D5 and ADR 0572 named as the
+two-tier decision's missing REAL-AUDIO leg, previously assertable only on oracle windows.
+
+**The same fold and instrument on the SHIPPED asset: -0.3628** (0.9373 -> 0.5745; up 0.9224 ->
+0.3432). Same corpus, same fold, same rig, opposite sign, and the difference is whether the asset
+trained on the untruncated window - ADR 0572 D3's claim, now in situ on the deployment corpus,
+with ADR 0574 having localised WHERE (frames 7..14, the truncation's whole footprint).
+
+**The oracle instrument is now characterised at three points:**
+
+```
+  case                                              oracle    in situ   |diff|
+  settled asset, Klangio g4 (in-distribution)       +0.1299   +0.1236   0.0063
+  shipped asset, GuitarSet held-out (ADR 0571)      +0.1919   +0.1679   0.0240
+  shipped asset, Klangio, untruncated (OOD)         -0.2455   -0.3355   0.0900
+```
+
+ADR 0571 D4's rule - the oracle is corroborated for DELTAS, not LEVELS - holds and sharpens: **a
+delta is accurate to 0.006-0.024 when the input is IN distribution for that asset, and only
+sign-accurate when it is not.** Which is consistent with what "out of distribution" means: the
+magnitude there is not predictable. Levels sit closer than feared but part systematically - the
+settled asset's fast level is 0.5055 on oracle windows against **0.5389** in situ (+0.033), its
+settled level 0.6354 against **0.6625** (+0.027). In situ is HIGHER; the obvious reading is that
+the detector finds the easier onsets so the matched subset is favourable, but that is unmeasured
+and not claimed (L681).
+
+**Not an asset ranking.** Shipped 0.9373 against settled 0.5250 on this fold is the contaminated
+pair, and the in-situ instrument REPRODUCES the Python oracle's 0.9490 / 0.5055 closely
+(0.9373 / 0.5250) - which validates the instrument, not the ordering. ADR 0573 D6 stands.
+
+**And a price a swap would pay, measured.** The settled asset's direction macro IMPROVES as the
+gate tightens (0.5250 at 0.850 -> 0.5550 at 0.124) while its onset retention COLLAPSES
+(0.7157 -> 0.6095; 3534 -> 2737 kept against the shipped asset's 3950 -> 3783):
+
+```
+  gate      shipped onsetR   settled onsetR     kept, shipped / settled
+  0.850         0.7718           0.7157             3950 / 3534
+  0.293         0.7665           0.6533             3835 / 3009
+  0.124         0.7632           0.6095             3783 / 2737
+```
+
+Per ADR 0566 a suppressed strum is a stroke the rhythm grader never sees - the learner is marked
+down for the engine's silence. So the settled asset's better direction at a tighter gate is
+BOUGHT WITH COVERAGE, and a shipping decision has to weigh that trade rather than the macro
+alone. This also confirms ADR 0569 D2's oracle observation (settled retains 0.824 against the
+shipped 0.964) in situ.
+
+Not claimed: any on-device number; one fold, one corpus, one guitarist - and r172's LOGO measured
+guitarist 4 as the HARDEST of the three (ADR 0573 D2), so this fold is pessimistic for the
+settled asset; not an asset ranking (above); the settled tier's CPU is not measured here, since
+the sweep builds the second window offline rather than on the live deadline; and the level
+discrepancy's cause is unmeasured.
+
+### Removing regularisation is REJECTED, and two agreeing seeds is not a replication (E18-R46, ADR 0580)
+
+ADR 0578 D2 found exactly one stable negative: regularisation (dropout .25 / rec .15 / l2 1e-4)
+cost on the deployment corpus on all three seeds (R1 -> R2: -0.0217 / -0.0905 / -0.0656, mean
+**-0.0592 +/- 0.0348**). That gave a DIRECTED hypothesis rather than a guess - if it costs, take
+it out of the settled recipe. R5 is R4 with `reg={}`, three seeds.
+
+```
+  R4 -> R5 (remove regularisation)   s42       s1        s2      mean +/- sd        verdict
+  Klangio@70                       +0.0533   +0.0440   -0.0244  +0.0243 +/- 0.0424  SIGN FLIPS
+  GuitarSet@70                     +0.0246   -0.0630   -0.0696  -0.0360 +/- 0.0526  SIGN FLIPS
+  Klangio@full                     -0.0186   -0.0141   -0.0243  -0.0190 +/- 0.0051  ALL NEGATIVE
+  GuitarSet@full                   -0.0007   -0.0547   -0.0759  -0.0438 +/- 0.0388  ALL <= 0
+```
+
+Two seeds confirmed the hypothesis; the third reversed it. At the UNTRUNCATED tier, though, the
+delta is the tightest in the whole experiment series - **-0.0190 +/- 0.0051** on Klangio, all
+three seeds - so removing regularisation consistently DAMAGES precisely the tier the two-tier
+decision exists to buy (ADR 0579).
+
+**And regularisation does what regularisation does: it narrows the spread.**
+
+```
+  seed sd, Klangio@70     R0        R4 (reg)    R5 (no reg)
+                        0.0757      0.0153        0.0509
+  levels (mean)         0.4708      0.5231        0.5474
+```
+
+R4's spread is 3.3x tighter on the same cell, so R5's apparently higher mean comes from a three
+times noisier measurement - exactly the trade ADR 0554 D1's variance argument describes and
+ADR 0578 D5 replicated on the 3-class gated family. **R5 is rejected** on four counts: the 70 ms
+gain is not established, the untruncated tier loses consistently, GuitarSet loses at both tiers,
+and the seed spread triples. R4 - the settled recipe WITH regularisation - stands as the candidate.
+
+ADR 0578 D2's regularisation finding is narrowed in SCOPE rather than retracted: it holds for the
+context it was measured in (R1 -> R2, the Klangio-only 70 ms-only recipe, on the 70 ms cell). In
+the both-truncation recipe the same factor behaves differently - unresolved at 70 ms, beneficial
+untruncated. A factor's effect does not transfer between recipe contexts, the same error family
+L685 recorded for the routing signal.
+
+**The methodological finding, with three instances (LESSONS L691):**
+
+```
+  claim                                        s42       s1        s2       outcome
+  ADR 0575 net R0->R4, Klangio               +0.1051   +0.0923   -0.0403  retracted
+  ADR 0578 R2->R3 (GuitarSet data), Klangio  +0.0810   +0.0642   -0.0413  retracted
+  ADR 0580 R4->R5 (drop reg), Klangio        +0.0533   +0.0440   -0.0244  rejected
+```
+
+The same shape three times: s42 and s1 agree, s2 reverses - and each time the two agreeing values
+sat close together (+0.105/+0.092; +0.081/+0.064; +0.053/+0.044), which is what two correlated
+noise draws look like but FEELS like consistency. The Klangio@70 seed sd on R0 is 0.0757, larger
+than any of the three effects, so two agreeing signs arise by luck roughly a quarter of the time
+even at zero true effect.
+
+**The rule from here: no recipe claim on this ladder goes into an ADR from two seeds. All three
+`STD_SEEDS` are mandatory, and a delta whose sign does not agree on all three is NOT ESTABLISHED -
+not "smaller".** Sign agreement rather than a t-test, because at n=3 the sd estimate is itself
+noisy and a confidence interval would be false precision. This does not reject the instrument: on
+the GuitarSet side the same ladder gives three-way agreement with tight spreads (the GuitarSet
+data step +0.2823 +/- 0.0264, the net +0.3765 +/- 0.0713). It says what the instrument can
+RESOLVE - on Klangio@70, roughly effects above the 0.08 spread.

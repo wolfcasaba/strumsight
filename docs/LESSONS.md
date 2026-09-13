@@ -28995,3 +28995,55 @@ delta-korroborációja áll. Ami megdőlt, az az **ok**, amiért nem mértem in 
 kör elnapolása.
 
 Lásd még [[L682]], [[L683]], [[L687]], ADR 0569, ADR 0571, ADR 0572, ADR 0576.
+
+## L691 — Két egyező seed nem replikáció: háromszor egymás után a harmadik fordította meg az előjelet, és a szabály nem t-próba, hanem előjel-egyezés (E18-R46, 2026-09-13)
+
+### 1. Ugyanaz az alak, háromszor
+
+```
+  állítás                                      s42       s1        s2       kimenet
+  ADR 0575 nettó R0→R4, Klangio              +0,1051   +0,0923   −0,0403  visszavonva
+  ADR 0578 R2→R3 (GuitarSet-adat) Klangión   +0,0810   +0,0642   −0,0413  visszavonva
+  ADR 0580 R4→R5 (reg elvétele) Klangión     +0,0533   +0,0440   −0,0244  elutasítva
+```
+
+Mindhárom esetben **s42 és s1 egyetértett, és s2 megfordította.** És mindhárom esetben
+ugyanazt gondoltam közben: *„két független seed ugyanazt az előjelet adta, ez nem lehet zaj."*
+
+Lehet. A Klangio@70 cella seed-szórása az R0 karon **0,0757** — ami **nagyobb**, mint a
+három vizsgált hatás bármelyike. Ha a zaj ekkora, két egyező előjel ~25% eséllyel adódik
+puszta szerencséből még akkor is, ha a valódi hatás nulla.
+
+### 2. Miért épp ez a csapda ragadós
+
+Egy seed után **tudom**, hogy egy seed nem elég — ezt az ADR 0575 D5 ki is írta. Két seed után
+viszont az agy „megerősítést" lát, nem „két mintát": megjelenik egy **minta**, és a minta
+meggyőzőbb, mint a szám. A kettő ráadásul *rendre* közel volt egymáshoz (+0,105/+0,092;
++0,081/+0,064; +0,053/+0,044) — ami **pont az**, amit két korrelált zajminta is produkál, de
+úgy *érződik*, mint konzisztencia.
+
+### 3. A szabály, és miért előjel és nem t-próba
+
+**Ezen a létrán egyetlen recept-állítás sem mehet ADR-be két seedből. Mindhárom `STD_SEEDS`
+kötelező, és ha egy delta előjele nem egyezik mind a háromon, az eredmény „NEM
+MEGÁLLAPÍTOTT" — nem „kisebb", nem „gyengébb".**
+
+Miért előjel-egyezés, és nem konfidencia-intervallum? Mert n=3 mellett a **szórás-becslés maga
+is zajos**, tehát egy t-próba pontossága látszat. Az előjel-egyezés durvább, de **őszintébb**
+kritérium: nem tesz úgy, mintha három pontból elosztást ismernénk.
+
+És van egy korábbi hibám, ami ugyanide tartozik: az ADR 0575 D5 megmért egy **zajpadlót**
+(~0,048 két script között, egy seeden), és azt a **nettóra** alkalmazta. *Egy egy-seedes
+zajpadló a LÉPÉSEKRE ad korlátot, nem az összegükre* — ha a lépések külön-külön
+seed-érzékenyek, a nettó szórása nagyobb lehet, nem kisebb. A padló szám önmagában nem tudta
+volna ezt megmondani; csak a seedek.
+
+### 4. Amit NEM jelent
+
+Nem azt, hogy az s2 „rossz seed", és nem azt, hogy a létra használhatatlan. A **GuitarSet**
+oldalon ugyanez a létra háromszor egyező, szoros deltákat ad (a GuitarSet-adat lépése
+**+0,2823 ± 0,0264**, a nettó **+0,3765 ± 0,0713**) — ott a hatás nagyobb, mint a zaj. A
+szabály nem a műszert utasítja el, hanem azt mondja meg, **mekkora hatást tud ez a műszer
+kimutatni**: a Klangio@70 cellán nagyjából a 0,08-as szóráson felül.
+
+Lásd még [[L681]], [[L685]], [[L687]], ADR 0554, ADR 0575, ADR 0578, ADR 0580.

@@ -55,7 +55,38 @@ import '../support/live_sweep_harness.dart';
 /// 44.1 kHz mono 16-bit, verified per file rather than assumed.
 const int _sampleRate = kSweepSampleRate;
 
-const List<Gate> _gates = kSweepGates;
+/// The canonical ladder, plus any gate named by `KLANGIO_EXTRA_GATES` (comma-separated).
+///
+/// Needed because [kSweepGates] is built from the SHIPPED asset's constants, so a candidate
+/// asset measured on it is measured at thresholds that are not its own — and "each model at
+/// its own class-blind gate" is the rule the Python ladder holds to. The settled asset's own
+/// gates are 0.2929 (class_conditional, what its JSON ships) and 0.1245 (class_blind); the
+/// canonical rows stay so the two assets still share a COMMON-gate comparison, which is what
+/// separates the model from the gate.
+///
+///     KLANGIO_EXTRA_GATES=0.2929,0.1245 flutter test ...
+///
+/// Built once — a top-level `final` is lazy in Dart — rather than per read: the ladder is the
+/// measurement's identity and must not be able to differ between the tally map and the table.
+final List<Gate> _gates = _buildGates();
+
+List<Gate> _buildGates() {
+  final extra = Platform.environment['KLANGIO_EXTRA_GATES'];
+  if (extra == null || extra.trim().isEmpty) return kSweepGates;
+  final parsed = <Gate>[];
+  for (final raw in extra.split(',')) {
+    final value = double.parse(raw.trim());
+    for (final margin in const [true, false]) {
+      final gate = (suppress: value, margin: margin);
+      // A value-equal duplicate would merge two tallies and print doubled counts — the
+      // collision kSweepGates documents. Dropping it here keeps the guard below honest.
+      if (!kSweepGates.contains(gate) && !parsed.contains(gate)) {
+        parsed.add(gate);
+      }
+    }
+  }
+  return [...kSweepGates, ...parsed];
+}
 
 /// The asset under test. Defaults to what ships; `STRUM_3C_ASSET` points at a candidate.
 ///
