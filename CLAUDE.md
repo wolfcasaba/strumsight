@@ -22,6 +22,19 @@ though it reuses their Flutter infrastructure, plugin set, dev-agents and learni
 
 ---
 
+## A tulajdonossal való kommunikáció (user-preferencia, 2026-09-14)
+
+- **A tulajdonos NEM fejlesztő.** Minden javaslatnál, döntési pontnál és
+  jelentésnél laikus nyelven mondd el, MI ez, MIÉRT hasznos neki / a
+  gitárosnak, és MEKKORA munka. Szakszót csak egy tagmondatnyi magyarázattal
+  használj; fájlnevet indoklás nélkül ne dobálj.
+- **Munkamód:** Claude átnézi az appot → LISTÁBAN ad fejlesztési pontokat
+  indoklással → a tulajdonos VÁLASZT → csak utána jön az implementálás
+  (SDD-kör). Ne dönts helyette termékkérdésben.
+- **Memória:** ez a szakasz a tartós forrás (a távoli konténer memóriája nem
+  garantáltan marad meg); a saját boxon a Viking is kapja meg
+  (`session-learning` skill).
+
 ## Tech Stack
 
 Flutter (Dart SDK `^3.12.2`) · Material 3 · Riverpod 3 (`flutter_riverpod`, hand-written providers, NO codegen)
