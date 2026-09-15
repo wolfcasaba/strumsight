@@ -52,6 +52,73 @@ export 'domain/repositories/notification_repository.dart';
 export 'domain/repositories/post_repository.dart';
 export 'domain/repositories/social_graph_repository.dart';
 
+// Production wiring surface (feed / post / composer seams). The
+// bootstrap (`lib/app/bootstrap/community_production_overrides.dart`)
+// binds the throwing seam providers to the HTTP implementations; the
+// `community is reachable only through public.dart` guard means the
+// providers and factories it needs must cross this barrel. `show`
+// keeps the exported names to exactly that set.
+export 'application/controllers/feed_controller.dart'
+    show communityFeedRepositoryProvider, feedCacheProvider;
+export 'application/controllers/post_composer_controller.dart'
+    show
+        communityKeyValueStoreProvider,
+        communityLoggerProvider,
+        communityPostRepositoryProvider;
+export 'data/local/feed_cache.dart' show FeedCache;
+export 'data/repositories/feed_repository_impl.dart'
+    show
+        DisabledCommunityFeedRepository,
+        HttpCommunityFeedRepository,
+        communityFeedApiClientProvider,
+        createCommunityFeedRepository;
+export 'data/repositories/post_repository_impl.dart'
+    show
+        DisabledCommunityPostRepository,
+        HttpCommunityPostRepository,
+        communityPostApiClientProvider,
+        createCommunityPostRepository;
+// Production wiring surface (notification / challenge / club / social-
+// graph seams). The bootstrap (`lib/app/bootstrap/
+// community_social_production_overrides.dart`) binds the throwing seam
+// providers to the HTTP implementations through this barrel — same
+// rule as the feed block above. `challenge_repository_impl.dart`
+// declares a same-named `communityChallengeRepositoryProvider`; only
+// the controller's seam (the one the challenges screen reads) is
+// exported, the impl module contributes its client provider + factory.
+export 'application/controllers/challenge_controller.dart'
+    show communityChallengeRepositoryProvider;
+export 'application/controllers/challenge_result_controller.dart'
+    show communityChallengeResultRepositoryProvider;
+export 'application/controllers/notification_controller.dart'
+    show communityNotificationRepositoryProvider;
+export 'data/repositories/challenge_repository_impl.dart'
+    show
+        DisabledCommunityChallengeRepository,
+        HttpCommunityChallengeRepository,
+        communityChallengeApiClientProvider,
+        createCommunityChallengeRepository;
+export 'data/repositories/club_repository_impl.dart'
+    show
+        DisabledCommunityClubRepository,
+        HttpCommunityClubRepository,
+        communityClubApiClientProvider,
+        createCommunityClubRepository;
+export 'data/repositories/notification_repository_impl.dart'
+    show
+        DisabledCommunityNotificationRepository,
+        HttpCommunityNotificationRepository,
+        communityNotificationApiClientProvider,
+        createCommunityNotificationRepository;
+export 'data/repositories/social_graph_repository_impl.dart'
+    show
+        DisabledSocialGraphRepository,
+        HttpCommunitySocialGraphRepository,
+        HttpSocialGraphRepository,
+        communitySocialApiClientProvider,
+        createCommunitySocialGraphRepository,
+        socialGraphRepositoryProvider;
+
 // Presentation surface (E18-R19 routed the community screens; E18-R23
 // routes them through this barrel so `app_router.dart` never imports a
 // community internal — the `community is reachable only through

@@ -42,6 +42,8 @@ import '../../application/controllers/feed_controller.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../widgets/community_theme_scope.dart';
 import '../widgets/feed_card_registry.dart';
+import 'community_search_screen.dart';
+import 'post_composer_screen.dart';
 
 /// The following-feed route.
 class FollowingFeedScreen extends ConsumerStatefulWidget {
@@ -74,6 +76,15 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
         appBar: AppBar(
           title: Text(localizations.followingFeedTitle),
           actions: <Widget>[
+            // Entry point to the profile search (E09-R09 screen). An
+            // imperative push — the reachability tool measures the
+            // `Navigator.push` edge, and the search screen owns no
+            // route of its own.
+            IconButton(
+              tooltip: localizations.followingFeedSearch,
+              icon: const Icon(Icons.search),
+              onPressed: () => _openSearch(context),
+            ),
             IconButton(
               tooltip: localizations.followingFeedRefresh,
               icon: const Icon(Icons.refresh),
@@ -90,6 +101,15 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
           onRetry: () => ref.read(feedControllerProvider.notifier).retry(),
           onRefresh: () => ref.read(feedControllerProvider.notifier).refresh(),
         ),
+        // Entry point to the post composer (E09-R12 screen). Same
+        // imperative push as the search action above; the composer
+        // reads its draft / outbox seams from the ProviderScope, so
+        // nothing is passed through the constructor.
+        floatingActionButton: FloatingActionButton(
+          tooltip: localizations.followingFeedCompose,
+          onPressed: () => _openComposer(context),
+          child: const Icon(Icons.edit),
+        ),
       ),
     );
   }
@@ -98,6 +118,22 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
       status != FeedStatus.loading &&
       status != FeedStatus.refreshing &&
       status != FeedStatus.paging;
+
+  Future<void> _openSearch(BuildContext context) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const CommunitySearchScreen(),
+      ),
+    );
+  }
+
+  Future<void> _openComposer(BuildContext context) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const PostComposerScreen(),
+      ),
+    );
+  }
 }
 
 class _Body extends StatelessWidget {

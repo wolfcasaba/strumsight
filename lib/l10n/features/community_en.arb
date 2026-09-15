@@ -168,6 +168,12 @@
   "followingFeedPracticeNotAvailable": "Starting practice is available in future builds.",
   "@followingFeedPracticeNotAvailable": {},
 
+  "followingFeedCompose": "New post",
+  "@followingFeedCompose": {},
+
+  "followingFeedSearch": "Search people",
+  "@followingFeedSearch": {},
+
   "feedCardPracticeSummaryTitle": "Practice summary",
   "@feedCardPracticeSummaryTitle": {},
 
@@ -318,6 +324,9 @@
 
   "communityNotificationsMarkAllRead": "Mark all as read",
   "@communityNotificationsMarkAllRead": {},
+
+  "communityNotificationsOpenChallenges": "Challenges",
+  "@communityNotificationsOpenChallenges": {},
 
   "communityNotificationsEmpty": "No notifications yet.",
   "@communityNotificationsEmpty": {},
