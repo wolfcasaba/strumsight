@@ -96,10 +96,7 @@ void main() {
       final resolve = container.read(exerciseCandidateResolverProvider);
 
       expect(snapshot.candidates, isEmpty);
-      expect(
-        () => resolve('builtin.quarterDownstrokes.v1'),
-        throwsStateError,
-      );
+      expect(() => resolve('builtin.quarterDownstrokes.v1'), throwsStateError);
     });
   });
 

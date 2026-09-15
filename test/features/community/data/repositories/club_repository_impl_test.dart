@@ -410,10 +410,7 @@ void main() {
 
       final options = adapter.captured.single;
       expect(options.method, 'DELETE');
-      expect(
-        options.uri.path,
-        '/community/clubs/$_clubId/members/$_memberId',
-      );
+      expect(options.uri.path, '/community/clubs/$_clubId/members/$_memberId');
       expect(options.uri.queryParameters['idempotency_key'], 'kr');
     });
 

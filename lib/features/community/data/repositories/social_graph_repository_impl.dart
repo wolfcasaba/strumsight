@@ -66,9 +66,7 @@ const int kCommunityFollowListPageSize = 50;
 /// Pick the implementation for the given client: the cursor-forwarding
 /// HTTP decorator when the account layer is on, the disabled stand-in
 /// otherwise (the ``createCommunityPostRepository`` precedent).
-SocialGraphRepository createCommunitySocialGraphRepository(
-  ApiClient? client,
-) {
+SocialGraphRepository createCommunitySocialGraphRepository(ApiClient? client) {
   if (client == null) return const DisabledSocialGraphRepository();
   return HttpCommunitySocialGraphRepository(
     client,

@@ -154,8 +154,7 @@ class CommunityPostDto {
     }
     final moderation = deletedAt != null
         ? ModerationState.removed
-        : (moderationStateFromWire(moderationState) ??
-              ModerationState.removed);
+        : (moderationStateFromWire(moderationState) ?? ModerationState.removed);
     return CommunityPost(
       id: ContentId(publicId),
       authorId: PublicUserId(authorPublicId),

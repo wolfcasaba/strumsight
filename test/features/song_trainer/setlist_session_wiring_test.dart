@@ -329,38 +329,35 @@ void main() {
       composer = SetlistSessionComposer(songs: v2, clock: () => _fixedNow);
     });
 
-    test(
-      'resolves V2, legacy-only and unknown ids honestly and projects the '
-      'legacy setlist with persistV2\'s ids without persisting',
-      () async {
-        final composition = await composer.compose(
-          legacySetlist: const LegacySetlistRecord(
-            id: 'My Gig 1',
-            name: _setlistName,
-            songIds: _songIds,
-          ),
-          legacySongs: [_legacyOnly.toJson()],
-          presentStage: (_) async => Duration.zero,
-        );
+    test('resolves V2, legacy-only and unknown ids honestly and projects the '
+        'legacy setlist with persistV2\'s ids without persisting', () async {
+      final composition = await composer.compose(
+        legacySetlist: const LegacySetlistRecord(
+          id: 'My Gig 1',
+          name: _setlistName,
+          songIds: _songIds,
+        ),
+        legacySongs: [_legacyOnly.toJson()],
+        presentStage: (_) async => Duration.zero,
+      );
 
-        final setlist = composition.setlist;
-        expect(setlist.id, SongIdValidator.safeFilename('My Gig 1'));
-        expect(setlist.name, _setlistName);
-        expect(setlist.items.map((item) => item.id), [
-          '${setlist.id}-0',
-          '${setlist.id}-1',
-          '${setlist.id}-2',
-        ]);
-        expect(setlist.items.map(composition.availability), [
-          SetlistItemAvailability.ready,
-          SetlistItemAvailability.ready,
-          SetlistItemAvailability.missingSong,
-        ]);
-        // Nothing was written to the V2 store.
-        final listed = await v2.list(const SongQuery());
-        expect(listed.valueOrNull, hasLength(1));
-      },
-    );
+      final setlist = composition.setlist;
+      expect(setlist.id, SongIdValidator.safeFilename('My Gig 1'));
+      expect(setlist.name, _setlistName);
+      expect(setlist.items.map((item) => item.id), [
+        '${setlist.id}-0',
+        '${setlist.id}-1',
+        '${setlist.id}-2',
+      ]);
+      expect(setlist.items.map(composition.availability), [
+        SetlistItemAvailability.ready,
+        SetlistItemAvailability.ready,
+        SetlistItemAvailability.missingSong,
+      ]);
+      // Nothing was written to the V2 store.
+      final listed = await v2.list(const SongQuery());
+      expect(listed.valueOrNull, hasLength(1));
+    });
 
     test(
       'a blank legacy name falls back to the id instead of throwing',
@@ -379,41 +376,38 @@ void main() {
       },
     );
 
-    test(
-      'performance runner presents playback-only inputs and reports the '
-      'presenter\'s duration; practice runner compiles scored inputs from '
-      'the same document',
-      () async {
-        final presented = <SetlistItemStage>[];
-        final composition = await composer.compose(
-          legacySetlist: const LegacySetlistRecord(
-            id: 's',
-            name: 'My Gig',
-            songIds: ['a', 'b'],
-          ),
-          legacySongs: [_legacyOnly.toJson()],
-          presentStage: (stage) async {
-            presented.add(stage);
-            return const Duration(seconds: 42);
-          },
-        );
-        final items = composition.setlist.items;
+    test('performance runner presents playback-only inputs and reports the '
+        'presenter\'s duration; practice runner compiles scored inputs from '
+        'the same document', () async {
+      final presented = <SetlistItemStage>[];
+      final composition = await composer.compose(
+        legacySetlist: const LegacySetlistRecord(
+          id: 's',
+          name: 'My Gig',
+          songIds: ['a', 'b'],
+        ),
+        legacySongs: [_legacyOnly.toJson()],
+        presentStage: (stage) async {
+          presented.add(stage);
+          return const Duration(seconds: 42);
+        },
+      );
+      final items = composition.setlist.items;
 
-        final performance = await composition.performanceRunner(items[0]);
-        expect(performance.status, SetlistItemResultStatus.completed);
-        expect(performance.itemId, items[0].id);
-        expect(performance.activeDuration, const Duration(seconds: 42));
-        expect(presented.single.inputs.compilation.isPlaybackOnly, isTrue);
-        expect(presented.single.document.id, SongId(_legacyOnly.id));
+      final performance = await composition.performanceRunner(items[0]);
+      expect(performance.status, SetlistItemResultStatus.completed);
+      expect(performance.itemId, items[0].id);
+      expect(performance.activeDuration, const Duration(seconds: 42));
+      expect(presented.single.inputs.compilation.isPlaybackOnly, isTrue);
+      expect(presented.single.document.id, SongId(_legacyOnly.id));
 
-        presented.clear();
-        final practice = await composition.createPracticeRunner()(items[1]);
-        expect(practice.status, SetlistItemResultStatus.completed);
-        expect(practice.itemId, items[1].id);
-        expect(presented.single.inputs.compilation.isPlaybackOnly, isFalse);
-        expect(presented.single.document.id, SongId(_v2Only.id));
-      },
-    );
+      presented.clear();
+      final practice = await composition.createPracticeRunner()(items[1]);
+      expect(practice.status, SetlistItemResultStatus.completed);
+      expect(practice.itemId, items[1].id);
+      expect(presented.single.inputs.compilation.isPlaybackOnly, isFalse);
+      expect(presented.single.document.id, SongId(_v2Only.id));
+    });
 
     test('a runner asked for an unresolved item skips it as missingSong '
         'without presenting a Stage', () async {

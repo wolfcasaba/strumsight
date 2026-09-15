@@ -223,115 +223,109 @@ void main() {
     expect(closed, isTrue);
   });
 
-  group(
-    'B2 guard: a production-shape container (keyValueStoreProvider '
-    'overridden ONLY) — which provider builds is a MEASURED fact, not an '
-    'assumption (round brief §10.1, ADR 0482 / D9). E17-R05 closed both '
-    'seams, so every cell now builds; the seam-level proof lives in '
-    'seam_implementation_test.dart',
-    () {
-      ProviderContainer buildProductionShapeContainer() {
-        final container = ProviderContainer(
-          overrides: [
-            keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
-          ],
-        );
-        addTearDown(container.dispose);
-        return container;
-      }
-
-      test('1/6 PlanSetup: planSetupControllerProvider builds', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(planSetupControllerProvider),
-          returnsNormally,
-        );
-      });
-
-      test('2/6 PlanPreview: planPreviewControllerFactoryProvider builds on '
-          'the production ExerciseCandidateResolver seam (E17-R05)', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(planPreviewControllerFactoryProvider),
-          returnsNormally,
-        );
-        expect(
-          () => container.read(planValidationContextForPlanProvider),
-          returnsNormally,
-        );
-      });
-
-      test('3/6 PlanPrivacy: deletePracticePlanningDataProvider and '
-          'exportPracticePlanningDataProvider both build', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(deletePracticePlanningDataProvider),
-          returnsNormally,
-        );
-        expect(
-          () => container.read(exportPracticePlanningDataProvider),
-          returnsNormally,
-        );
-      });
-
-      test('4/6 PlanChangeReview: revisePracticePlanProvider and the Today '
-          'proposal use case both build; no active plan → no proposal '
-          '(explicit null, never a fabricated change set)', () async {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(revisePracticePlanProvider),
-          returnsNormally,
-        );
-        expect(
-          () => container.read(proposeTodayPlanChangeProvider),
-          returnsNormally,
-        );
-        final proposal = await container.read(
-          todayPlanChangeProposalProvider.future,
-        );
-        expect(proposal, isNull);
-      });
-
-      test('5/6 TodayPlan: todayPlanControllerProvider builds', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(todayPlanControllerProvider),
-          returnsNormally,
-        );
-      });
-
-      test('6/6 WeeklyPlan: practiceGeneratorTodayProvider builds and '
-          'activePracticePlanProvider reads "no active plan" through the '
-          'real plan repository + production resolver', () async {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(practiceGeneratorTodayProvider),
-          returnsNormally,
-        );
-        final activePlan = await container.read(
-          activePracticePlanProvider.future,
-        );
-        expect(activePlan, isNull);
-      });
-
-      test(
-        'GEN: generationOrchestratorProvider and startPlanGenerationProvider '
-        'both build — the resolver AND the input-builder seam are closed '
-        '(E17-R05 / A1)',
-        () {
-          final container = buildProductionShapeContainer();
-          expect(
-            () => container.read(generationOrchestratorProvider),
-            returnsNormally,
-          );
-          expect(
-            () => container.read(startPlanGenerationProvider),
-            returnsNormally,
-          );
-        },
+  group('B2 guard: a production-shape container (keyValueStoreProvider '
+      'overridden ONLY) — which provider builds is a MEASURED fact, not an '
+      'assumption (round brief §10.1, ADR 0482 / D9). E17-R05 closed both '
+      'seams, so every cell now builds; the seam-level proof lives in '
+      'seam_implementation_test.dart', () {
+    ProviderContainer buildProductionShapeContainer() {
+      final container = ProviderContainer(
+        overrides: [
+          keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+        ],
       );
-    },
-  );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('1/6 PlanSetup: planSetupControllerProvider builds', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(planSetupControllerProvider),
+        returnsNormally,
+      );
+    });
+
+    test('2/6 PlanPreview: planPreviewControllerFactoryProvider builds on '
+        'the production ExerciseCandidateResolver seam (E17-R05)', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(planPreviewControllerFactoryProvider),
+        returnsNormally,
+      );
+      expect(
+        () => container.read(planValidationContextForPlanProvider),
+        returnsNormally,
+      );
+    });
+
+    test('3/6 PlanPrivacy: deletePracticePlanningDataProvider and '
+        'exportPracticePlanningDataProvider both build', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(deletePracticePlanningDataProvider),
+        returnsNormally,
+      );
+      expect(
+        () => container.read(exportPracticePlanningDataProvider),
+        returnsNormally,
+      );
+    });
+
+    test('4/6 PlanChangeReview: revisePracticePlanProvider and the Today '
+        'proposal use case both build; no active plan → no proposal '
+        '(explicit null, never a fabricated change set)', () async {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(revisePracticePlanProvider),
+        returnsNormally,
+      );
+      expect(
+        () => container.read(proposeTodayPlanChangeProvider),
+        returnsNormally,
+      );
+      final proposal = await container.read(
+        todayPlanChangeProposalProvider.future,
+      );
+      expect(proposal, isNull);
+    });
+
+    test('5/6 TodayPlan: todayPlanControllerProvider builds', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(todayPlanControllerProvider),
+        returnsNormally,
+      );
+    });
+
+    test('6/6 WeeklyPlan: practiceGeneratorTodayProvider builds and '
+        'activePracticePlanProvider reads "no active plan" through the '
+        'real plan repository + production resolver', () async {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(practiceGeneratorTodayProvider),
+        returnsNormally,
+      );
+      final activePlan = await container.read(
+        activePracticePlanProvider.future,
+      );
+      expect(activePlan, isNull);
+    });
+
+    test('GEN: generationOrchestratorProvider and startPlanGenerationProvider '
+        'both build — the resolver AND the input-builder seam are closed '
+        '(E17-R05 / A1)', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(generationOrchestratorProvider),
+        returnsNormally,
+      );
+      expect(
+        () => container.read(startPlanGenerationProvider),
+        returnsNormally,
+      );
+    });
+  });
 
   test('production default: the evidence repository is the PERSISTENT '
       'implementation, never the never-forgets in-memory test fake '

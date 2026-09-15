@@ -408,10 +408,7 @@ class _ChatBubble extends StatelessWidget {
   factory _ChatBubble.fromMessage(
     TutorMessage message, {
     ValueChanged<TutorPracticePlanBlock>? onPracticePlanTap,
-  }) => _ChatBubble._(
-    message,
-    onPracticePlanTap: onPracticePlanTap,
-  );
+  }) => _ChatBubble._(message, onPracticePlanTap: onPracticePlanTap);
 
   factory _ChatBubble.fromStreamingText(
     String text, {

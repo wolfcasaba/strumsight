@@ -44,9 +44,7 @@ void main() {
     });
 
     testWidgets('Plan preview without an active plan is an explicit '
-        '"create a plan first" state, never an empty preview', (
-      tester,
-    ) async {
+        '"create a plan first" state, never an empty preview', (tester) async {
       final container = _container();
       await _pumpToday(tester, container);
 
@@ -181,9 +179,7 @@ void main() {
 /// The fixture plan's only day is 2026-08-17 — "today" for every cell.
 final DateTime _today = DateTime(2026, 8, 17, 9);
 
-ProviderContainer _container({
-  List<Override> overrides = const <Override>[],
-}) {
+ProviderContainer _container({List<Override> overrides = const <Override>[]}) {
   final container = ProviderContainer(
     overrides: [
       keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),

@@ -899,8 +899,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, ref, _) => AnalysisHomeScreen(
               recentAnalyses:
                   ref.watch(recentAnalysesProvider).value ?? const [],
-              onStartRecording: () =>
-                  context.push(AppRoutes.analysisRecording),
+              onStartRecording: () => context.push(AppRoutes.analysisRecording),
               // File import has no picker/decoder use case wired in this
               // feature yet (only the WAV decoder gateway exists), so the
               // tap says so instead of pretending.

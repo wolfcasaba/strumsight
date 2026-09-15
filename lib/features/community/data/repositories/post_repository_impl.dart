@@ -325,7 +325,7 @@ class HttpCommunityPostRepository implements CommunityPostRepository {
       artifact,
       'artifact',
       'artifact must be a JSON map, a ShareArtifact or an '
-          'UnfilledCommunityShareArtifact',
+      'UnfilledCommunityShareArtifact',
     );
   }
 
