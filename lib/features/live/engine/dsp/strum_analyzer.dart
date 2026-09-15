@@ -111,6 +111,12 @@ class StrumAnalyzer {
   /// round 138). Reset every [process] call.
   bool onsetJustFired = false;
 
+  /// Estimated ATTACK instant of the most recent confirmed onset (the same
+  /// r144-corrected time a later [StrumEvent] reports), available the frame
+  /// the onset fires — ~70 ms before the direction verdict. The pipeline
+  /// publishes it as the onset-first "strings ring now" signal.
+  double? lastOnsetTimeSec;
+
   double get _frameSec => hop / sampleRate;
 
   /// Push the next [window]-sample frame (advanced by [hop]); returns a
@@ -153,7 +159,9 @@ class StrumAnalyzer {
     final onsetSec = _onsets.processFrame(frame);
     onsetJustFired = onsetSec != null;
     if (onsetSec != null) {
-      _pendingOnsets.addLast((onsetSec * sampleRate / hop).round());
+      final onsetFrame = (onsetSec * sampleRate / hop).round();
+      _pendingOnsets.addLast(onsetFrame);
+      lastOnsetTimeSec = (onsetFrame + _attackOffsetFrames) * _frameSec;
     }
 
     // Classify once enough post-onset evidence has accumulated (chunk 006).

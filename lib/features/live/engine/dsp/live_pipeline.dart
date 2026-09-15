@@ -194,6 +194,13 @@ class LivePipeline {
   Strum? _latestStrum;
   double _latestStrumTime = -1;
   int _strumSeq = 0;
+
+  /// Onset-first feedback: bumped the frame an onset is CONFIRMED (before,
+  /// and independently of, the direction verdict ~70 ms later), with the
+  /// estimated attack instant. A suppressed (no-strum) onset still counts
+  /// here — the strings visibly react to the hit, only the arrow waits.
+  int _onsetSeq = 0;
+  double _latestOnsetTime = -1;
   final List<BeatSlot> _bar = _emptyBar();
   int _lastSlot = -1;
   double _barStartSec = -1;
@@ -213,12 +220,18 @@ class LivePipeline {
     _signalQuality.addChunk(chunk);
 
     // Fast path: onsets + direction.
+    var emitNow = false;
     for (final frame in _onsetFramer.add(chunk)) {
       final event = _strums.process(frame);
       // Onset-aligned chord updates (chunk 016, round 138): a fresh onset
       // relaxes the Viterbi switch penalty for the next couple of chord
       // frames — the chord changes ON the strum, stays stable between.
-      if (_strums.onsetJustFired) _chordDecoder.noteOnset();
+      if (_strums.onsetJustFired) {
+        _chordDecoder.noteOnset();
+        _onsetSeq++;
+        _latestOnsetTime = _strums.lastOnsetTimeSec ?? _latestOnsetTime;
+        emitNow = true;
+      }
       if (event == null) continue;
       _tempo.addOnset(event.timeSec);
       if (event.direction != null && _isDirectionConfirmed(event)) {
@@ -229,6 +242,7 @@ class LivePipeline {
         _latestStrumTime = event.timeSec;
         _strumSeq++; // a discrete new strum (for the play-along scorer)
         _placeInBar(event);
+        emitNow = true;
       }
     }
 
@@ -258,8 +272,10 @@ class LivePipeline {
       );
     }
 
-    // Sample-clock emission (~15 Hz).
-    if (_samplesSeen - _lastEmitAt >= _emitEverySamples) {
+    // Sample-clock emission (~15 Hz) — plus an IMMEDIATE frame on the chunk
+    // that confirmed an onset or a strum, so the UI never waits out the
+    // 0–66 ms cadence for the feedback that matters most (onset-first).
+    if (emitNow || _samplesSeen - _lastEmitAt >= _emitEverySamples) {
       _lastEmitAt = _samplesSeen;
       out.add(_buildFrame());
     }
@@ -401,6 +417,8 @@ class LivePipeline {
       listening: true,
       strumSeq: _strumSeq,
       latestStrumTime: _latestStrumTime,
+      onsetSeq: _onsetSeq,
+      latestOnsetTime: _latestOnsetTime,
       engineTimeSec: nowSec,
       chordDecision: chord?.decision,
       chordRejectReason: chord?.rejectReason,
@@ -496,6 +514,8 @@ class LivePipeline {
     _belowReleaseFrames = 0;
     _latestStrum = null;
     _strumSeq = 0;
+    _onsetSeq = 0;
+    _latestOnsetTime = -1;
     _clearBar();
     _lastSlot = -1;
     _barStartSec = -1;

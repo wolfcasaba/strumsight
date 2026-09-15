@@ -20,6 +20,8 @@ class LiveFrame {
     required this.listening,
     this.strumSeq = 0,
     this.latestStrumTime = -1,
+    this.onsetSeq = 0,
+    this.latestOnsetTime = -1,
     this.engineTimeSec = -1,
     this.chordDecision,
     this.chordRejectReason,
@@ -62,6 +64,18 @@ class LiveFrame {
   /// with ±40 ms jitter (measured, r145).
   final double latestStrumTime;
 
+  /// Onset-first feedback (round strum-strings): bumped the moment an onset
+  /// is CONFIRMED, ~70 ms BEFORE the direction verdict bumps [strumSeq]. The
+  /// strings visual rings on this; the arrow/pick direction follows on
+  /// [strumSeq]. A suppressed no-strum onset still bumps it (the hit was
+  /// heard) without ever bumping [strumSeq].
+  final int onsetSeq;
+
+  /// The latest confirmed onset's estimated attack instant on the engine
+  /// sample clock (−1 while none) — same clock and correction as
+  /// [latestStrumTime].
+  final double latestOnsetTime;
+
   /// This frame's EMIT instant on the same engine sample clock (−1 when the
   /// producer doesn't track it, e.g. mocks). Together with [latestStrumTime]
   /// a consumer can subtract the classify-delay + emit-cadence lag — the
@@ -103,6 +117,8 @@ class LiveFrame {
       listening: listening ?? this.listening,
       strumSeq: strumSeq,
       latestStrumTime: latestStrumTime,
+      onsetSeq: onsetSeq,
+      latestOnsetTime: latestOnsetTime,
       engineTimeSec: engineTimeSec,
       chordDecision: chordDecision,
       chordRejectReason: chordRejectReason,
