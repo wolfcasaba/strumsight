@@ -83,6 +83,66 @@ void main() {
     expect(f.latestStrum!.accent, isTrue); // beat 1 is accented
   });
 
+  group('onsetSeq leads strumSeq by the classification delay', () {
+    // One bar = 2.5 s at 96 BPM, so the eighth-note slots start at 0, 312.5,
+    // 625, … ms; the pattern's strums are slots 0, 2, 3, 5, 6 and 7.
+    const delay = MockStrumEngine.directionDelay;
+
+    test('the very first hit is HEARD before it is classified', () {
+      final onset = engine.frameAt(Duration.zero);
+      expect(onset.onsetSeq, 1, reason: 'the strike is confirmed at once');
+      expect(onset.strumSeq, 0, reason: 'the direction is not known yet');
+
+      final justBefore = engine.frameAt(
+        delay - const Duration(microseconds: 1),
+      );
+      expect(justBefore.onsetSeq, 1);
+      expect(justBefore.strumSeq, 0);
+
+      final verdict = engine.frameAt(delay);
+      expect(verdict.onsetSeq, 1);
+      expect(verdict.strumSeq, 1, reason: 'the verdict lands one delay later');
+    });
+
+    test('every later strum repeats the same two-stage bump', () {
+      // Slot 2 of bar 0 strikes at 625 ms.
+      const strike = Duration(milliseconds: 625);
+      expect(engine.frameAt(strike).onsetSeq, 2);
+      expect(engine.frameAt(strike).strumSeq, 1);
+      expect(engine.frameAt(strike + delay).strumSeq, 2);
+    });
+
+    test('both counters are monotonic and onsetSeq never trails strumSeq', () {
+      var lastOnset = 0;
+      var lastStrum = 0;
+      for (var ms = 0; ms < 12000; ms += 5) {
+        final f = engine.frameAt(Duration(milliseconds: ms));
+        expect(f.onsetSeq, greaterThanOrEqualTo(lastOnset));
+        expect(f.strumSeq, greaterThanOrEqualTo(lastStrum));
+        expect(f.onsetSeq, greaterThanOrEqualTo(f.strumSeq));
+        // At most one strum can be awaiting its verdict: the pattern's
+        // tightest gap (312.5 ms) is far wider than the 70 ms delay.
+        expect(f.onsetSeq - f.strumSeq, lessThanOrEqualTo(1));
+        lastOnset = f.onsetSeq;
+        lastStrum = f.strumSeq;
+      }
+    });
+
+    test('a full bar contributes exactly its six pattern strums', () {
+      expect(engine.frameAt(const Duration(milliseconds: 2499)).onsetSeq, 6);
+      // The next bar's downbeat, counted the instant it lands.
+      expect(engine.frameAt(const Duration(milliseconds: 2500)).onsetSeq, 7);
+    });
+
+    test('at the default tick the first emitted frame is onset-only', () {
+      final e = MockStrumEngine(bpm: 96);
+      final first = e.frameAt(e.tickInterval);
+      expect(e.tickInterval, lessThan(MockStrumEngine.directionDelay));
+      expect(first.onsetSeq, 1);
+      expect(first.strumSeq, 0);
+    });
+  });
+
   test('frames stream emits a well-formed frame after start()', () async {
     final e = MockStrumEngine(tickInterval: const Duration(milliseconds: 10));
     await e.start();

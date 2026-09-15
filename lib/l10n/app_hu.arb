@@ -2422,6 +2422,10 @@
   "@liveStarting": {
     "description": "Shown while the detection engine's first frame is still loading."
   },
+  "liveStringsSemantics": "Húrok",
+  "@liveStringsSemantics": {
+    "description": "Semantic label for the Live hero's six-string band, which rings on every confirmed onset and takes the strum direction's colour once the verdict lands."
+  },
   "liveTuner": "Hangoló",
   "liveWaitingForChord": "Pengess egy akkordot…",
   "@liveWaitingForChord": {

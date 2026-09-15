@@ -40,6 +40,19 @@ class MockStrumEngine implements StrumEngine {
   ];
   static const _labels = ['1', '&', '2', '&', '3', '&', '4', '&'];
 
+  /// How long after an onset the mock "decides" the direction. The real
+  /// pipeline confirms an ONSET ~70 ms before it has a direction verdict
+  /// (r145), which is exactly the gap the Live strings band animates:
+  /// [LiveFrame.onsetSeq] rings the strings, [LiveFrame.strumSeq] colours
+  /// them. Reproducing the delay here is what makes demo/mock mode show the
+  /// same two-stage behaviour as a live microphone.
+  static const directionDelay = Duration(milliseconds: 70);
+
+  /// Non-null entries of [_patternDirs] — how many strums one bar contains.
+  static final int _strumsPerBar = _patternDirs
+      .whereType<StrumDirection>()
+      .length;
+
   StreamController<LiveFrame>? _controller;
   Timer? _timer;
   int _tick = 0;
@@ -145,6 +158,30 @@ class MockStrumEngine implements StrumEngine {
       inputLevel: level,
       tuningHz: 440,
       listening: true,
+      // Two-stage feedback: the hit is counted the instant it lands, the
+      // verdict one [directionDelay] later. At the default 60 ms tick the two
+      // therefore bump on DIFFERENT emitted frames, so the Live strings band
+      // rings neutral first and only then picks up the direction colour.
+      onsetSeq: _strumsStartedBy(elapsedMicros),
+      strumSeq: _strumsStartedBy(elapsedMicros - directionDelay.inMicroseconds),
     );
+  }
+
+  /// How many pattern strums have been STRUCK at or before [micros] since the
+  /// session start — a monotonic onset counter. Evaluating the same function
+  /// one [directionDelay] earlier yields the verdict counter, which is why
+  /// `onsetSeq` always runs exactly one classification delay ahead of
+  /// `strumSeq` without either ever going backwards.
+  int _strumsStartedBy(int micros) {
+    final barMicros = _barMicros;
+    if (micros < 0 || barMicros == 0) return 0;
+    final slots = _patternDirs.length;
+    var count = (micros ~/ barMicros) * _strumsPerBar;
+    final rest = micros % barMicros;
+    for (var i = 0; i < slots; i++) {
+      if (_patternDirs[i] == null) continue;
+      if (i * barMicros ~/ slots <= rest) count++;
+    }
+    return count;
   }
 }

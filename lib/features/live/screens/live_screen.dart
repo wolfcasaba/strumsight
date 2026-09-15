@@ -345,25 +345,53 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       // The wrapper renders the bare hero until a strum lands and stops its
       // own ticker afterwards, so an idle Live still settles in tests.
       hero: hasChord
-          ? StrumBurstOverlay(
-              strumSeq: frame.strumSeq,
-              isDown: latestStrum?.isDown,
-              strength: latestStrum?.confidence ?? 0.0,
-              child: SsChordHero(
-                chordLabel: chordLabel,
-                textColor: palette.ink,
-                direction: latestStrum == null
-                    ? null
-                    : (latestStrum.isDown
-                          ? SsStrumDirection.down
-                          : SsStrumDirection.up),
-                glyphColor: confColor,
-                confidenceTier: confTier,
-                directionSemanticLabel: latestStrum == null
-                    ? null
-                    : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
-                          '${(latestStrum.confidence * 100).round()}%',
-              ),
+          ? Column(
+              // NOT `stretch`: `SsChordHero` is a shrink-wrapping Row and
+              // `StrumBurstOverlay.trailingGlyphCenter` derives the spark
+              // origin from the laid-out width, so forcing the hero to full
+              // width would move the sparks to the screen edge. The strings
+              // band below asks for the full width on its own instead.
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StrumBurstOverlay(
+                  strumSeq: frame.strumSeq,
+                  isDown: latestStrum?.isDown,
+                  strength: latestStrum?.confidence ?? 0.0,
+                  child: SsChordHero(
+                    chordLabel: chordLabel,
+                    textColor: palette.ink,
+                    direction: latestStrum == null
+                        ? null
+                        : (latestStrum.isDown
+                              ? SsStrumDirection.down
+                              : SsStrumDirection.up),
+                    glyphColor: confColor,
+                    confidenceTier: confTier,
+                    directionSemanticLabel: latestStrum == null
+                        ? null
+                        : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
+                              '${(latestStrum.confidence * 100).round()}%',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Onset-first feedback: the band rings the moment an onset is
+                // CONFIRMED (`onsetSeq`, ~70 ms ahead of the verdict) and only
+                // then takes the direction colour from `strumSeq`. Same colour
+                // pair as the burst overlay — copper down, confidence green up
+                // — so one strum reads as one event across both widgets. It
+                // reads the frame the screen already rebuilt on; no extra watch.
+                SsStrumStrings(
+                  onsetSeq: frame.onsetSeq,
+                  strumSeq: frame.strumSeq,
+                  isDown: latestStrum?.isDown,
+                  strength: latestStrum?.confidence ?? 0.0,
+                  height: 72,
+                  downColor: AppColors.primary,
+                  upColor: AppColors.confidenceHigh,
+                  stringColor: palette.muted,
+                  semanticLabel: l10n.liveStringsSemantics,
+                ),
+              ],
             )
           : SizedBox(
               height: 64,

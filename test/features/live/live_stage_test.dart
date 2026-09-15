@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/core/music/chord.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/live/domain/recognition/recognition_decision.dart';
@@ -75,6 +76,8 @@ LiveFrame _frame({
   double bpm = 96,
   double engineTimeSec = 1.0,
   RecognitionRejectReason? chordRejectReason,
+  int onsetSeq = 0,
+  int strumSeq = 0,
 }) => LiveFrame(
   current: current,
   next: null,
@@ -86,6 +89,8 @@ LiveFrame _frame({
   listening: listening,
   engineTimeSec: engineTimeSec,
   chordRejectReason: chordRejectReason,
+  onsetSeq: onsetSeq,
+  strumSeq: strumSeq,
 );
 
 void main() {
@@ -305,5 +310,63 @@ void main() {
       expect(find.byType(LiveScreen), findsNothing);
       expect(find.byType(TodayHubScreen), findsOneWidget);
     });
+  });
+
+  group('the hero strings band is fed onset-first (round strum-strings)', () {
+    testWidgets(
+      'an onset-only frame (onsetSeq 1, strumSeq 0) rings the band, the '
+      'verdict frame (strumSeq 1) lands on it, and everything settles',
+      (tester) async {
+        final engine = await _pumpLive(tester);
+        final l10n = lookupAppLocalizations(const Locale('en'));
+
+        // Stage 1 — the engine has CONFIRMED a hit but does not yet know
+        // which way the hand went (no latestStrum, strumSeq still 0). The
+        // band must already be mounted and ringing on this frame alone.
+        engine.emit(_frame(current: const Chord('C'), onsetSeq: 1));
+        await tester.pump(); // deliver the stream event
+        await tester.pump(); // first ticker frame
+
+        expect(find.byType(SsStrumStrings), findsOneWidget);
+        expect(find.bySemanticsLabel(l10n.liveStringsSemantics), findsWidgets);
+
+        // Stage 2 — the direction verdict arrives ~70 ms later, inside the
+        // band's grace window, so it resolves the stroke already ringing.
+        engine.emit(
+          _frame(
+            current: const Chord('C'),
+            latestStrum: const Strum(
+              direction: StrumDirection.down,
+              confidence: 0.88,
+            ),
+            onsetSeq: 1,
+            strumSeq: 1,
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 70));
+
+        // The band's clock is a LOCAL ticker that stops itself once the last
+        // stroke has rung out — if it did not, this call would never return.
+        await tester.pumpAndSettle();
+
+        expect(find.byType(SsStrumStrings), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        // Flush flutter_animate's zero-delay play timers (see the other cells).
+        await tester.pump(const Duration(milliseconds: 400));
+      },
+    );
+
+    testWidgets(
+      'no chord yet → no band, so the idle hero stays a placeholder',
+      (tester) async {
+        final engine = await _pumpLive(tester);
+        engine.emit(_frame(current: null, onsetSeq: 1));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(SsStrumStrings), findsNothing);
+        await tester.pump(const Duration(milliseconds: 400));
+      },
+    );
   });
 }
