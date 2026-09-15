@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🟡 E18-R24 — „MINDEN BEKAPCSOLVA": a 328 kör alatt megépült, de kikapcsolt / bekötetlen részek élesítése — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
+## 🟢 E18-R24 — „MINDEN BEKAPCSOLVA": a 328 kör alatt megépült, de kikapcsolt / bekötetlen részek élesítése — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
 
 **User-kérés (felülíró):** „De én szeretném ha a teljes app működne." — vagyis
 ne csak zöld legyen az ág, hanem minden, ami az elmúlt körökben elkészült,
@@ -45,7 +45,9 @@ alapból BE" őrök maradnak.
 | 1063 | `73474f4` | ❌ teszt: 11402 ✅ / 22 ❌ | a 5000-soros log-vég csak 4-et mutatott → import-lezárásos teszt-szeletek (`diag-slice-A3`, `-B1…B4`) nevezték meg a többit |
 | — | `301229b`, `16409fc` | javítások | ismétlődő jelölt a heti tervezőnek (dedup), Processing Stage végtelen csíkja (`pump` a `pumpAndSettle` helyett, 2 teszt), felvétel-képernyő görgethető fekvő 2.0×-nél (4 mátrix-cella), feed-repository beágyazott generikusa láthatatlan volt az egress-leltárnak (typedef) |
 | record-goldens #1 | `b2fb484` → `063f8ca` | ✅ 9 PNG felvéve x86-on | **új workflow, tulajdonosi engedéllyel** (`.github/workflows/record-goldens.yml`, a main-en is, mert a GitHub csak onnan indít kézzel) |
-| full-gate + build-apk + lab-apk | `063f8ca` | **folyamatban** — az eredményt a következő session írja ide | |
+| full-gate 1077 | `063f8ca` | ✅ **ZÖLD** (formázás, analyze, architektúra, titok, l10n, asset, teszt, property) | [34940932559](https://github.com/wolfcasaba/strumsight/actions/runs/34940932559) |
+| build-apk #593 | `063f8ca` | ✅ **ZÖLD** — artefaktum `strumsight-1.0.0-1-063f8ca-development.apk` (38.9 MB) | [34940934608](https://github.com/wolfcasaba/strumsight/actions/runs/34940934608) |
+| lab-apk #11 | `063f8ca` | ✅ **ZÖLD** — artefaktum `strumsight-lab-apk` (39.6 MB; casaba.app backend, fiók + közösség BE, tag `e18-r23-everything-on`) | [34940962471](https://github.com/wolfcasaba/strumsight/actions/runs/34940962471) |
 
 **Tanulság (L-jelölt):** a szeletelésnél a `test/fixtures`, `test/support`,
 `test/core` és a tesztek által `File(...)`-lel olvasott fájlok is kellenek —
