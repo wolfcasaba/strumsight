@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔁 FOLYAMATBAN — 4. kör: egy haladás-modell; 5. kör: a Dalkönyvtár fül a Song Trainer V2 (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+## ✅ KÉSZ — 4. kör: egy haladás-modell; 5. kör: a Dalkönyvtár fül a Song Trainer V2 (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
 **4. kör — egy haladás-modell** (az 1. kör 6. lelete és az E16-R05 L4):
 | Elem | Mit ad | Fájl |
@@ -16,8 +16,21 @@
 | `/songs/own` (ÚJ route) | a legacy „Dalaim" builder-lista, a V2 könyvtár app-bar ikonjáról (`song-library-own-songs`) egy tapra; a nem-adaptív shellben is regisztrálva | `app_route.dart`, `app_router.dart`, `song_library_screen.dart` |
 | Teszt | flag BE → könyvtár + ikon → builder; flag KI → legacy lista | `test/app/navigation/songs_tab_v2_test.dart` (ÚJ) |
 
-**Golden:** `e13_r23_song_library` (új app-bar ikon) újrafelvétele a
-`record-goldens.yml`-lel a CI-mérés után.
+**CI-bizonyíték (a kör mérce-artefaktuma):**
+- Első teljes kapu (7b1cff1): 5 piros — `songs_tab_v2_test` (a router
+  harness nem adta a `songRepositoryProvider`-t; javítva 5e0f2e1), a két
+  `e13_r23_song_library` golden (szándékos: új app-bar ikon; x86
+  újrafelvétel `record-goldens.yml` run 34977570898 → 1eed124), és a
+  `full_app_walkthrough` + `placeholder_wiring` e2e páros: a bejárás a
+  §5.2 **L4** leletet kódolta („a Profile sessions csempe V2-vak"), amit
+  épp a 4. kör oldott fel — a teszt most a V1 + 1 V2 session egyesített
+  rollupot méri (f7bcb90); `docs/release/full-app-verification.md` L4 (4.
+  kör) és L5 (2. kör: `ref.invalidate` a `NavigateToResult`-nál) feloldva.
+- A 5000 soros log-farkon túli hibákat a `record-goldens.yml` PNG-mentes
+  könyvtárakra célzott, rövid logú futásaival lokalizáltuk (run 34980424437,
+  34980433500 zöld; 34981137366 piros → e2e); nem commitolt semmit.
+- Zöld teljes kapu f7bcb90-en: `full-gate.yml` run 34981957665;
+  `build-apk.yml` run 34982557486 (APK artefaktum).
 
 **6. kör előkészítése — Chapter 14 felismerési sáv:** a sáv (R20: strum
 modell tanítás csoportosított holdouton) **nem indítható** adat nélkül — a
