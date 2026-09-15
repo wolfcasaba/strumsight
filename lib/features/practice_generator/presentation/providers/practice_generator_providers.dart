@@ -302,12 +302,15 @@ final revisePracticePlanProvider = Provider<RevisePracticePlan>(
 
 /// Learner-initiated rewrites of the active plan (shorten / skip / pause)
 /// — revision ids come from the shared id generator, candidates from the
-/// block's own already-resolved prescription.
+/// catalog resolver keyed by the block's persisted exercise id (a
+/// prescription carries the id and provenance, never the candidate).
 final activePlanControllerProvider = Provider<ActivePlanController>((ref) {
   final generateId = ref.watch(practiceGeneratorIdGeneratorProvider);
+  final resolveCandidate = ref.watch(exerciseCandidateResolverProvider);
   return ActivePlanController(
     generateRevisionId: () => RevisionId.generate(generateId),
-    resolveCandidate: ProposeTodayPlanChange.candidateOfBlock,
+    resolveCandidate: (block) =>
+        resolveCandidate(block.prescription.exerciseId),
   );
 });
 

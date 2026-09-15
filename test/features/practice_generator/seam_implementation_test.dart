@@ -184,7 +184,7 @@ void main() {
     expect(active!.id, plan.id);
     final exerciseIds = active.days
         .expand((day) => day.blocks)
-        .map((block) => block.prescription.candidate.exerciseId)
+        .map((block) => block.prescription.exerciseId)
         .toList();
     expect(exerciseIds, isNotEmpty);
     for (final exerciseId in exerciseIds) {

@@ -76,10 +76,7 @@ SocialGraphRepository createCommunitySocialGraphRepository(ApiClient? client) {
 
 /// Cursor-forwarding decorator over [HttpSocialGraphRepository].
 class HttpCommunitySocialGraphRepository implements SocialGraphRepository {
-  HttpCommunitySocialGraphRepository(
-    this._client, {
-    required SocialGraphRepository delegate,
-  }) : _delegate = delegate;
+  HttpCommunitySocialGraphRepository(this._client, {required this._delegate});
 
   final ApiClient _client;
   final SocialGraphRepository _delegate;

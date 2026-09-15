@@ -11,12 +11,9 @@
 /// behaviour.
 library;
 
-import '../../domain/id/planner_ids.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
-import '../../domain/model/exercise_candidate.dart';
 import '../../domain/model/plan_change_set.dart';
 import '../../domain/model/plan_revision.dart';
-import '../../domain/model/practice_block.dart';
 import '../../domain/model/practice_day.dart';
 import '../../domain/model/weekly_availability.dart';
 import '../controller/active_plan_controller.dart';
@@ -127,10 +124,4 @@ final class ProposeTodayPlanChange {
       ),
     ).revision;
   }
-
-  /// Resolves a persisted block's candidate without a second catalog
-  /// lookup: a block loaded through the composition root's resolver
-  /// already carries its full [ExerciseCandidate].
-  static ExerciseCandidate candidateOfBlock(PracticeBlock block) =>
-      block.prescription.candidate;
 }

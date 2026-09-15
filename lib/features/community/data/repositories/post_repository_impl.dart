@@ -212,7 +212,7 @@ class HttpCommunityPostRepository implements CommunityPostRepository {
       path,
       data: <String, Object?>{
         'audience': audience.wireValue,
-        if (body != null) 'body': body,
+        'body': ?body,
         'resource_version': _resourceVersionWire(resourceVersion),
       },
       decode: CommunityPostDto.fromJson,

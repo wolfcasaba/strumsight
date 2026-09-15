@@ -196,7 +196,7 @@ Map<String, Object?> communityPostCreatePayload({
     // string so the backend's 422 — not a client-side guess — is the
     // verdict on an artifact-only post.
     'body': body ?? '',
-    if (artifact != null) 'artifact': artifact,
+    'artifact': ?artifact,
     'idempotency_key': idempotencyKey,
   };
 }

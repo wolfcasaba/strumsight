@@ -102,6 +102,7 @@ final recentAnalysesProvider =
 final analysisCaptureFlowProvider = Provider<AnalysisCaptureFlow>(
   (ref) => AnalysisCaptureFlow(
     controller: ref.watch(analysisControllerProvider.notifier),
+    readState: () => ref.read(analysisControllerProvider),
     saveAnalysis: ref.watch(saveAnalysisUseCaseProvider),
     repository: ref.watch(analysisRepositoryProvider),
     logger: ref.watch(appLoggerProvider),
@@ -114,22 +115,21 @@ final analysisCaptureFlowProvider = Provider<AnalysisCaptureFlow>(
 /// starts the V2 analysis, and persists a completed document.
 final class AnalysisCaptureFlow {
   AnalysisCaptureFlow({
-    required AnalysisController controller,
-    required SaveAnalysisUseCase saveAnalysis,
-    required AnalysisRepository repository,
-    required AppLogger logger,
-    required String appVersion,
-    required void Function() onSaved,
-    AnalysisInputValidator validator = const AnalysisInputValidator(),
-  }) : _controller = controller,
-       _saveAnalysis = saveAnalysis,
-       _repository = repository,
-       _logger = logger,
-       _appVersion = appVersion,
-       _onSaved = onSaved,
-       _validator = validator;
+    required this._controller,
+    required this._readState,
+    required this._saveAnalysis,
+    required this._repository,
+    required this._logger,
+    required this._appVersion,
+    required this._onSaved,
+    this._validator = const AnalysisInputValidator(),
+  });
 
   final AnalysisController _controller;
+
+  /// The controller's current state, read through its provider — the
+  /// notifier's own `state` is protected outside the notifier.
+  final AnalysisState Function() _readState;
   final SaveAnalysisUseCase _saveAnalysis;
   final AnalysisRepository _repository;
   final AppLogger _logger;
@@ -190,7 +190,7 @@ final class AnalysisCaptureFlow {
   }
 
   Future<void> _persistResult() async {
-    final document = switch (_controller.state) {
+    final document = switch (_readState()) {
       AnalysisCompleted(:final document) => document,
       AnalysisDegradedCompleted(:final document) => document,
       _ => null,

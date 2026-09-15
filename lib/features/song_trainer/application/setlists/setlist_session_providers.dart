@@ -97,14 +97,11 @@ final class SetlistSessionComposition {
 /// a pure, in-memory view, recomputed from the latest legacy edit each time.
 final class SetlistSessionComposer {
   const SetlistSessionComposer({
-    required SongRepository songs,
-    required ClockSupplier clock,
-    LegacySongReader reader = const LegacySongReader(),
-    LegacySongAdapter adapter = const LegacySongAdapter(),
-  }) : _songs = songs,
-       _clock = clock,
-       _reader = reader,
-       _adapter = adapter;
+    required this._songs,
+    required this._clock,
+    this._reader = const LegacySongReader(),
+    this._adapter = const LegacySongAdapter(),
+  });
 
   final SongRepository _songs;
   final ClockSupplier _clock;
