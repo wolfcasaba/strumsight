@@ -274,9 +274,9 @@ void main() {
         expect(find.byType(SetlistSessionScreen), findsOneWidget);
         expect(find.text(title), findsOneWidget);
         expect(
-          tester.widget<SetlistSessionScreen>(
-            find.byType(SetlistSessionScreen),
-          ).mode,
+          tester
+              .widget<SetlistSessionScreen>(find.byType(SetlistSessionScreen))
+              .mode,
           mode,
         );
 

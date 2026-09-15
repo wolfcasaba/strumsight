@@ -69,9 +69,7 @@ final analysisRecorderProvider = Provider.autoDispose<AnalysisRecorder>((ref) {
 /// `autoDispose` notifier with no listener in that gap would be torn down —
 /// and its run cancelled — by Riverpod's disposal pass.
 final analysisControllerProvider =
-    NotifierProvider<AnalysisController, AnalysisState>(
-      AnalysisController.new,
-    );
+    NotifierProvider<AnalysisController, AnalysisState>(AnalysisController.new);
 
 /// Most-recent-first summaries for the Analyze home (index read only, never a
 /// document decode — `AnalysisRepository.list` contract).

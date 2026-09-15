@@ -243,9 +243,8 @@ class HttpCommunityPostRepository implements CommunityPostRepository {
     required ContentId postId,
     required Object? kind,
     required String idempotencyKey,
-  }) async => throw communityEndpointUnavailable(
-    'PUT /community/posts/{id}/reaction',
-  );
+  }) async =>
+      throw communityEndpointUnavailable('PUT /community/posts/{id}/reaction');
 
   @override
   Future<void> setBookmark({
@@ -272,9 +271,8 @@ class HttpCommunityPostRepository implements CommunityPostRepository {
     required ContentId postId,
     required Object cursor,
     required int limit,
-  }) async => throw communityEndpointUnavailable(
-    'GET /community/posts/{id}/comments',
-  );
+  }) async =>
+      throw communityEndpointUnavailable('GET /community/posts/{id}/comments');
 
   @override
   Future<CommunityComment> createComment({
@@ -282,26 +280,23 @@ class HttpCommunityPostRepository implements CommunityPostRepository {
     required ContentId? parentCommentId,
     required String body,
     required String idempotencyKey,
-  }) async => throw communityEndpointUnavailable(
-    'POST /community/posts/{id}/comments',
-  );
+  }) async =>
+      throw communityEndpointUnavailable('POST /community/posts/{id}/comments');
 
   @override
   Future<CommunityComment> updateComment({
     required ContentId commentId,
     required String body,
     required String idempotencyKey,
-  }) async => throw communityEndpointUnavailable(
-    'PATCH /community/comments/{id}',
-  );
+  }) async =>
+      throw communityEndpointUnavailable('PATCH /community/comments/{id}');
 
   @override
   Future<void> deleteComment({
     required ContentId commentId,
     required String idempotencyKey,
-  }) async => throw communityEndpointUnavailable(
-    'DELETE /community/comments/{id}',
-  );
+  }) async =>
+      throw communityEndpointUnavailable('DELETE /community/comments/{id}');
 
   /// Normalise the ``Object``-typed artifact of the domain contract.
   ///
@@ -325,7 +320,7 @@ class HttpCommunityPostRepository implements CommunityPostRepository {
       artifact,
       'artifact',
       'artifact must be a JSON map, a ShareArtifact or an '
-      'UnfilledCommunityShareArtifact',
+          'UnfilledCommunityShareArtifact',
     );
   }
 

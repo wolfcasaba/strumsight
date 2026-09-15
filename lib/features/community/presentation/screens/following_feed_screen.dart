@@ -121,17 +121,13 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
 
   Future<void> _openSearch(BuildContext context) {
     return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const CommunitySearchScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const CommunitySearchScreen()),
     );
   }
 
   Future<void> _openComposer(BuildContext context) {
     return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const PostComposerScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const PostComposerScreen()),
     );
   }
 }

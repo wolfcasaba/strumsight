@@ -168,10 +168,12 @@ void main() {
       expect(data['body'], 'with artifact');
       expect(data['idempotency_key'], 'artifact-1');
       // The backend `extra="forbid"` whitelist — nothing else crosses.
-      expect(
-        data.keys.toSet(),
-        <String>{'audience', 'body', 'artifact', 'idempotency_key'},
-      );
+      expect(data.keys.toSet(), <String>{
+        'audience',
+        'body',
+        'artifact',
+        'idempotency_key',
+      });
       final envelope = data['artifact'] as Map<String, Object?>;
       final inner = envelope['artifact'] as Map<String, Object?>;
       expect(inner['type'], 'practiceSummary');
@@ -417,10 +419,11 @@ void main() {
       expect(data['resource_version'], '2026-08-23T12:00:00Z');
       // The backend `extra="forbid"` whitelist — the idempotency key
       // rides the URL, never the body; `artifact` is never sent.
-      expect(
-        data.keys.toSet(),
-        <String>{'audience', 'body', 'resource_version'},
-      );
+      expect(data.keys.toSet(), <String>{
+        'audience',
+        'body',
+        'resource_version',
+      });
 
       expect(post.id, ContentId(_postA));
       expect(post.audience, CommunityAudience.public);
@@ -621,10 +624,7 @@ void main() {
 
       final options = adapter.captured.single;
       expect(options.method, 'POST');
-      expect(
-        options.path,
-        '/community/bookmarks/$_postA?idempotency_key=bm-1',
-      );
+      expect(options.path, '/community/bookmarks/$_postA?idempotency_key=bm-1');
       expect(options.uri.queryParameters['idempotency_key'], 'bm-1');
     });
 
@@ -642,10 +642,7 @@ void main() {
 
       final options = adapter.captured.single;
       expect(options.method, 'DELETE');
-      expect(
-        options.path,
-        '/community/bookmarks/$_postA?idempotency_key=bm-2',
-      );
+      expect(options.path, '/community/bookmarks/$_postA?idempotency_key=bm-2');
     });
 
     test('404 (post gone) throws '

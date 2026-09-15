@@ -62,13 +62,10 @@ HttpCommunitySocialGraphRepository _buildRepo(_ScriptedAdapter adapter) {
   );
 }
 
-_ScriptedAdapter _ok(String body) => _ScriptedAdapter(
-  onFetch: (_) => _CannedResponse(body: body, status: 200),
-);
+_ScriptedAdapter _ok(String body) =>
+    _ScriptedAdapter(onFetch: (_) => _CannedResponse(body: body, status: 200));
 
-final PublicUserId _peer = PublicUserId(
-  '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fb0',
-);
+final PublicUserId _peer = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fb0');
 
 void main() {
   group('follow lists forward the query string', () {

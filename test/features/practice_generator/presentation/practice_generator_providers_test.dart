@@ -276,10 +276,7 @@ void main() {
         'proposal use case both build; no active plan → no proposal '
         '(explicit null, never a fabricated change set)', () async {
       final container = buildProductionShapeContainer();
-      expect(
-        () => container.read(revisePracticePlanProvider),
-        returnsNormally,
-      );
+      expect(() => container.read(revisePracticePlanProvider), returnsNormally);
       expect(
         () => container.read(proposeTodayPlanChangeProvider),
         returnsNormally,

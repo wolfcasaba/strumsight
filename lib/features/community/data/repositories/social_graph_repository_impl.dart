@@ -89,20 +89,16 @@ class HttpCommunitySocialGraphRepository implements SocialGraphRepository {
   Future<CommunityPage<CommunityProfile>> followingPage({
     required PublicUserId userId,
     required Object cursor,
-  }) => _fetchFollowList(
-    '/community/profiles/${userId.value}/following',
-    cursor,
-  );
+  }) =>
+      _fetchFollowList('/community/profiles/${userId.value}/following', cursor);
 
   /// ``GET /community/profiles/{id}/followers?limit=50&cursor=…``
   @override
   Future<CommunityPage<CommunityProfile>> followersPage({
     required PublicUserId userId,
     required Object cursor,
-  }) => _fetchFollowList(
-    '/community/profiles/${userId.value}/followers',
-    cursor,
-  );
+  }) =>
+      _fetchFollowList('/community/profiles/${userId.value}/followers', cursor);
 
   @override
   Future<ContentId> follow({

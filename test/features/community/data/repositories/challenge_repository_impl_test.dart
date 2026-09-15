@@ -62,9 +62,8 @@ HttpCommunityChallengeRepository _buildRepo(_ScriptedAdapter adapter) {
   return HttpCommunityChallengeRepository(ApiClient(dio));
 }
 
-_ScriptedAdapter _ok(String body) => _ScriptedAdapter(
-  onFetch: (_) => _CannedResponse(body: body, status: 200),
-);
+_ScriptedAdapter _ok(String body) =>
+    _ScriptedAdapter(onFetch: (_) => _CannedResponse(body: body, status: 200));
 
 const String _challengeId = '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fd0';
 const String _authorId = '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fd1';

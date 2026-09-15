@@ -288,10 +288,8 @@ Future<void> _confirmSheet(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-PracticePlanPreviewScreen _previewWidget(WidgetTester tester) =>
-    tester.widget<PracticePlanPreviewScreen>(
-      find.byType(PracticePlanPreviewScreen),
-    );
+PracticePlanPreviewScreen _previewWidget(WidgetTester tester) => tester
+    .widget<PracticePlanPreviewScreen>(find.byType(PracticePlanPreviewScreen));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

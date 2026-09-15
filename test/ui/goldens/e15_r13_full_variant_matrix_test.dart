@@ -1293,9 +1293,8 @@ List<Override> _clubDetailOverrides() => [
   ...preferenceOverrides(),
   communityClubRepositoryProvider.overrideWithValue(_FakeClubsRepository()),
   clubFeedProvider.overrideWith(
-    (ref, clubId) async => const CommunityPagePlaceholder<CommunityPost>(
-      items: <CommunityPost>[],
-    ),
+    (ref, clubId) async =>
+        const CommunityPagePlaceholder<CommunityPost>(items: <CommunityPost>[]),
   ),
   clubPinnedProvider.overrideWith(
     (ref, clubId) async => const <CommunityPost>[],

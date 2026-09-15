@@ -87,9 +87,7 @@ final class PracticeEngineCatalogReader implements PracticeCatalogReader {
 
   /// Catalog CONTENT revision: changes when any definition's authored
   /// content (schema version) changes while membership stays the same.
-  static String contentRevisionOfCatalog(
-    List<PracticeDefinition> definitions,
-  ) {
+  static String contentRevisionOfCatalog(List<PracticeDefinition> definitions) {
     final entries = <String>[
       for (final definition in definitions)
         '${definition.id}@${contentRevisionOf(definition)}',

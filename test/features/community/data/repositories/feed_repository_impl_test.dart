@@ -510,10 +510,7 @@ void main() {
         'payload', () {
       expect(communityArtifactFromWire(null), isNull);
       expect(communityArtifactFromWire(<String, Object?>{}), isNull);
-      expect(
-        communityArtifactFromWire(<String, Object?>{'type': 'x'}),
-        isNull,
-      );
+      expect(communityArtifactFromWire(<String, Object?>{'type': 'x'}), isNull);
     });
   });
 }

@@ -126,18 +126,16 @@ class HttpCommunityFeedRepository implements CommunityFeedRepository {
     required PublicUserId userId,
     required Object cursor,
     required int limit,
-  }) async => throw communityEndpointUnavailable(
-    'GET /community/profiles/{id}/posts',
-  );
+  }) async =>
+      throw communityEndpointUnavailable('GET /community/profiles/{id}/posts');
 
   @override
   Future<CommunityPage<CommunityPost>> clubPinned({
     required ContentId clubId,
     required Object cursor,
     required int limit,
-  }) async => throw communityEndpointUnavailable(
-    'GET /community/clubs/{id}/pinned',
-  );
+  }) async =>
+      throw communityEndpointUnavailable('GET /community/clubs/{id}/pinned');
 
   /// Decode the ``FeedPage`` envelope (``{"items": […],
   /// "next_cursor": …}``) into the domain page.

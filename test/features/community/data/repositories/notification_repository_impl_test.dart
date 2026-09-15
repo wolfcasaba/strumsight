@@ -60,9 +60,8 @@ HttpCommunityNotificationRepository _buildRepo(_ScriptedAdapter adapter) {
   return HttpCommunityNotificationRepository(ApiClient(dio));
 }
 
-_ScriptedAdapter _ok(String body) => _ScriptedAdapter(
-  onFetch: (_) => _CannedResponse(body: body, status: 200),
-);
+_ScriptedAdapter _ok(String body) =>
+    _ScriptedAdapter(onFetch: (_) => _CannedResponse(body: body, status: 200));
 
 const String _inboxBody =
     '{"items":['

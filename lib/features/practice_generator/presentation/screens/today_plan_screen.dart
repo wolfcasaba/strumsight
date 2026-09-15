@@ -593,17 +593,18 @@ class _PlanChangeReviewRoute extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return switch (ref.watch(todayPlanChangeProposalProvider)) {
-      AsyncData(:final value) => value == null
-          ? _MessageScaffold(
-              key: const Key('today-plan-change-review-empty'),
-              title: l10n.planChangeReviewTitle,
-              message: l10n.practiceGeneratorNoChangesToReview,
-            )
-          : PlanChangeReviewScreen(
-              proposal: value.proposal,
-              onAccepted: () => _accept(context, ref, value),
-              onRejected: () => Navigator.of(context).pop(),
-            ),
+      AsyncData(:final value) =>
+        value == null
+            ? _MessageScaffold(
+                key: const Key('today-plan-change-review-empty'),
+                title: l10n.planChangeReviewTitle,
+                message: l10n.practiceGeneratorNoChangesToReview,
+              )
+            : PlanChangeReviewScreen(
+                proposal: value.proposal,
+                onAccepted: () => _accept(context, ref, value),
+                onRejected: () => Navigator.of(context).pop(),
+              ),
       AsyncError() => _MessageScaffold(
         key: const Key('today-plan-route-error'),
         title: l10n.planChangeReviewTitle,
