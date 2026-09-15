@@ -117,16 +117,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // once the screen is gone. Safe after unmount (touches no provider state).
     _engine?.setDiagnosticsCapture(false);
     // Log the finished Live session for the Progress dashboard (only if the user
-    // actually played). Uses the captured notifier — safe after unmount.
-    if (_sessionStart != null && _strokeCount > 0) {
-      _log?.record(
-        PracticeEntry(
-          day: StreakLogic.epochDayOf(DateTime.now()),
-          source: PracticeSource.live,
-          seconds: DateTime.now().difference(_sessionStart!).inSeconds,
-          strokes: _strokeCount,
-        ),
+    // actually played). Uses the captured notifier — safe after unmount. The
+    // write is deferred one microtask: Riverpod forbids modifying a provider
+    // inside a widget life-cycle (dispose included), and this dispose runs
+    // inside the unmount frame when the route is left (measured in CI).
+    final log = _log;
+    final sessionStart = _sessionStart;
+    if (log != null && sessionStart != null && _strokeCount > 0) {
+      final entry = PracticeEntry(
+        day: StreakLogic.epochDayOf(DateTime.now()),
+        source: PracticeSource.live,
+        seconds: DateTime.now().difference(sessionStart).inSeconds,
+        strokes: _strokeCount,
       );
+      scheduleMicrotask(() => unawaited(log.record(entry)));
     }
     super.dispose();
   }
