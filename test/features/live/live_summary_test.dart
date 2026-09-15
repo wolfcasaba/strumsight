@@ -11,6 +11,7 @@ import 'package:strumsight/core/music/chord.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
+import 'package:strumsight/features/live/providers/chord_timeline_provider.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/live/widgets/live_summary_dialog.dart';
@@ -26,7 +27,9 @@ const _dialogKey = ValueKey('live-summary-dialog');
 const _doneKey = ValueKey('live-summary-done');
 const _courseKey = ValueKey('live-summary-course');
 
-Future<FakeStrumEngine> _pumpLive(WidgetTester tester) async {
+typedef _LiveHarness = ({FakeStrumEngine engine, ProviderContainer container});
+
+Future<_LiveHarness> _pumpLive(WidgetTester tester) async {
   final engine = FakeStrumEngine();
   addTearDown(engine.dispose);
   final container = ProviderContainer(
@@ -50,7 +53,7 @@ Future<FakeStrumEngine> _pumpLive(WidgetTester tester) async {
   await tester.pumpAndSettle();
   container.read(routerProvider).go(AppRoutes.practiceLive);
   await tester.pumpAndSettle();
-  return engine;
+  return (engine: engine, container: container);
 }
 
 /// One strummed frame; [seq] must differ between strums for the Live
@@ -94,15 +97,25 @@ Future<void> _finish(WidgetTester tester) async {
 void main() {
   testWidgets('a played session shows the recap with real counts, and Done '
       'leaves to the entry route', (tester) async {
-    final engine = await _pumpLive(tester);
+    final live = await _pumpLive(tester);
     final l10n = lookupAppLocalizations(const Locale('en'));
-    await _play(engine, tester, 3);
+    await _play(live.engine, tester, 3);
+    // The recap's chord count is whatever the stabilised timeline confirmed
+    // for these frames — read it from the same provider the screen reads,
+    // rather than assuming how many of the C/G frames were confirmed.
+    final confirmedChords = <String>{
+      for (final event in live.container.read(chordTimelineProvider))
+        event.chord.label,
+    }.length;
 
     await _finish(tester);
 
     expect(find.byKey(_dialogKey), findsOneWidget);
     expect(find.text(l10n.liveSummaryStrums(3)), findsOneWidget);
-    expect(find.text(l10n.liveSummaryChords(2)), findsOneWidget);
+    expect(
+      find.text(l10n.liveSummaryChords(confirmedChords)),
+      findsOneWidget,
+    );
     // Under the short-session threshold: the tip asks for a longer session
     // and the course shortcut is not offered.
     expect(find.text(l10n.liveSummaryTipShort), findsOneWidget);
@@ -119,9 +132,9 @@ void main() {
 
   testWidgets('a longer session offers the guided course as the next step, '
       'and taking it opens the lesson list', (tester) async {
-    final engine = await _pumpLive(tester);
+    final live = await _pumpLive(tester);
     final l10n = lookupAppLocalizations(const Locale('en'));
-    await _play(engine, tester, LiveSummaryDialog.shortSessionStrums);
+    await _play(live.engine, tester, LiveSummaryDialog.shortSessionStrums);
 
     await _finish(tester);
 
@@ -139,8 +152,10 @@ void main() {
   });
 
   testWidgets('a session with no strum leaves without a recap', (tester) async {
-    final engine = await _pumpLive(tester);
-    engine.emit(LiveFrame.empty.copyWith(listening: true, inputLevel: 0.3));
+    final live = await _pumpLive(tester);
+    live.engine.emit(
+      LiveFrame.empty.copyWith(listening: true, inputLevel: 0.3),
+    );
     await tester.pump();
 
     await _finish(tester);
