@@ -339,25 +339,17 @@ def get_club(
     return club
 
 
-def list_clubs(
-    db: Session,
+def _visible_clubs_stmt(
     *,
     viewer_profile_id: int,
-    visibility: str | None = None,
-    limit: int = 25,
-) -> list[CommunityClub]:
-    """List clubs visible to the viewer.
+    visibility: str | None,
+    before: tuple[datetime, int] | None,
+):
+    """The visibility-gated ``SELECT`` behind :func:`list_clubs` /
+    :func:`list_clubs_page`, ordered ``(created_at DESC, id DESC)``.
 
-    The visibility rules:
-
-    * ``private`` clubs are visible only to members — they are
-      filtered out of the list unless the viewer is a member.
-    * ``discoverable`` clubs are visible to anyone with a profile.
-    * ``public`` clubs are visible to anyone (the public surface).
-
-    The block-side gate is applied at the row level: any club whose
-    owner is in a block relationship with the viewer is dropped
-    (the §6 / A6 invariant — the same Kör 8 helper is called).
+    ``before`` is the optional ``(created_at, id)`` of the last row of
+    the previous page — only rows strictly before it are matched.
     """
     member_club_ids_subq = (
         select(CommunityClubMember.club_id)
@@ -374,7 +366,6 @@ def list_clubs(
             | (CommunityClub.id.in_(select(member_club_ids_subq.c.club_id))),
         )
         .order_by(CommunityClub.created_at.desc(), CommunityClub.id.desc())
-        .limit(limit)
     )
     if visibility is not None and visibility in (
         CLUB_VISIBILITY_PRIVATE,
@@ -382,63 +373,168 @@ def list_clubs(
         CLUB_VISIBILITY_PUBLIC,
     ):
         stmt = stmt.where(CommunityClub.visibility == visibility)
-    rows = db.execute(stmt).scalars().all()
+    if before is not None:
+        before_created_at, before_id = before
+        stmt = stmt.where(
+            (CommunityClub.created_at < before_created_at)
+            | (
+                (CommunityClub.created_at == before_created_at)
+                & (CommunityClub.id < before_id)
+            )
+        )
+    return stmt
 
-    # Apply the block-side gate on the OWNER — a club whose owner
-    # is blocked by the viewer is hidden (the A6 invariant — the
-    # same helper the Kör 8 / Kör 21 readers use).
+
+def _drop_clubs_of_blocked_owners(
+    db: Session, rows: list[CommunityClub], *, viewer_profile_id: int
+) -> list[CommunityClub]:
+    """The block-side gate on the OWNER — a club whose owner is in a
+    block relationship with the viewer is hidden (the A6 invariant —
+    the same helper the Kör 8 / Kör 21 readers use)."""
     if not rows:
         return []
-    owner_internal_ids = [club.owner_profile_id for club in rows]
     blocked_internal = {
         pid
-        for pid in owner_internal_ids
+        for pid in {club.owner_profile_id for club in rows}
         if is_blocked_pair(
             db,
             profile_id_a=viewer_profile_id,
             profile_id_b=pid,
         )
     }
-    if blocked_internal:
-        rows = [club for club in rows if club.owner_profile_id not in blocked_internal]
-    return rows
+    if not blocked_internal:
+        return list(rows)
+    return [club for club in rows if club.owner_profile_id not in blocked_internal]
 
 
-def list_club_members(
+def list_clubs(
     db: Session,
     *,
-    club_public_id: uuid.UUID,
     viewer_profile_id: int,
-    limit: int = 100,
-) -> list[ClubMembershipView]:
-    """List the active members of a club.
+    visibility: str | None = None,
+    limit: int = 25,
+    before: tuple[datetime, int] | None = None,
+) -> list[CommunityClub]:
+    """List clubs visible to the viewer.
 
-    Block-side gate (A6, D8): members in a block relationship with
-    the viewer are dropped via the Kör 8
-    ``filter_public_ids_against_viewer_blocks`` helper. The viewer
-    MUST be a member of the club (private clubs) or any signed-in
-    profile (discoverable / public clubs) to call this — the
-    membership check lives in ``get_club``.
+    The visibility rules:
+
+    * ``private`` clubs are visible only to members — they are
+      filtered out of the list unless the viewer is a member.
+    * ``discoverable`` clubs are visible to anyone with a profile.
+    * ``public`` clubs are visible to anyone (the public surface).
+
+    The block-side gate is applied at the row level: any club whose
+    owner is in a block relationship with the viewer is dropped
+    (the §6 / A6 invariant — the same Kör 8 helper is called).
+
+    ``before`` is the optional ``(created_at, id)`` cursor of the
+    last row of the previous page — only rows strictly before it in
+    the ``(created_at DESC, id DESC)`` order are returned. ``None``
+    (the default, every pre-existing caller) starts from the top.
+    Callers that page SHOULD use :func:`list_clubs_page`, which
+    decides "is there another page" on the raw slice — this function
+    applies the block filter after the ``LIMIT``.
     """
-    club = get_club(
-        db,
-        club_public_id=club_public_id,
-        viewer_profile_id=viewer_profile_id,
-    )
-    members = (
-        db.query(CommunityClubMember)
-        .filter(CommunityClubMember.club_id == club.id)
-        .order_by(
-            CommunityClubMember.joined_at.asc(),
-            CommunityClubMember.id.asc(),
+    stmt = _visible_clubs_stmt(
+        viewer_profile_id=viewer_profile_id, visibility=visibility, before=before
+    ).limit(limit)
+    rows = list(db.execute(stmt).scalars().all())
+    return _drop_clubs_of_blocked_owners(db, rows, viewer_profile_id=viewer_profile_id)
+
+
+@dataclass(frozen=True)
+class ClubListPage:
+    """One page of :func:`list_clubs_page`. ``next_before`` is the
+    ``(created_at, id)`` of the last RAW row when a further page
+    exists (``None`` at the end) — the router encodes it as the
+    opaque wire cursor."""
+
+    items: list[CommunityClub]
+    next_before: tuple[datetime, int] | None
+
+
+def list_clubs_page(
+    db: Session,
+    *,
+    viewer_profile_id: int,
+    limit: int,
+    visibility: str | None = None,
+    before: tuple[datetime, int] | None = None,
+) -> ClubListPage:
+    """Cursor page of the clubs visible to the viewer.
+
+    ``limit + 1`` raw rows are fetched; ``next_before`` is taken from
+    the last row of the raw ``limit`` slice BEFORE the owner-block
+    filter runs, so a blocked owner on the page boundary can never
+    end the walk early or stall it (the filter only ever shrinks the
+    page it is applied to).
+    """
+    stmt = _visible_clubs_stmt(
+        viewer_profile_id=viewer_profile_id, visibility=visibility, before=before
+    ).limit(limit + 1)
+    raw = list(db.execute(stmt).scalars().all())
+    has_more = len(raw) > limit
+    page = raw[:limit]
+    next_before = None
+    if has_more and page:
+        last = page[-1]
+        next_before = (_as_utc(last.created_at), last.id)
+    items = _drop_clubs_of_blocked_owners(db, page, viewer_profile_id=viewer_profile_id)
+    return ClubListPage(items=items, next_before=next_before)
+
+
+def _club_members_query(
+    db: Session,
+    *,
+    club_id: int,
+    after: tuple[datetime, uuid.UUID] | None,
+):
+    """The roster query, ordered ``(joined_at ASC, id ASC)``.
+
+    ``after`` is the optional ``(joined_at, member public_id)`` of the
+    last row of the previous page — only rows strictly after it are
+    matched. The public_id is resolved to the internal row id here so
+    the internal id never rides the wire cursor; an unknown public_id
+    (a member removed between pages) falls back to the timestamp
+    alone, which at worst repeats a same-instant row rather than
+    skipping one.
+    """
+    query = db.query(CommunityClubMember).filter(CommunityClubMember.club_id == club_id)
+    if after is not None:
+        after_joined_at, after_public_id = after
+        after_row = (
+            db.query(CommunityClubMember.id)
+            .filter(CommunityClubMember.public_id == after_public_id)
+            .one_or_none()
         )
-        .limit(limit)
-        .all()
+        if after_row is None:
+            query = query.filter(CommunityClubMember.joined_at > after_joined_at)
+        else:
+            query = query.filter(
+                (CommunityClubMember.joined_at > after_joined_at)
+                | (
+                    (CommunityClubMember.joined_at == after_joined_at)
+                    & (CommunityClubMember.id > int(after_row[0]))
+                )
+            )
+    return query.order_by(
+        CommunityClubMember.joined_at.asc(),
+        CommunityClubMember.id.asc(),
     )
+
+
+def _members_to_views(
+    db: Session,
+    members: list[CommunityClubMember],
+    *,
+    club: CommunityClub,
+    viewer_profile_id: int,
+) -> list[ClubMembershipView]:
+    """Block-side gate (A6, D8) + the internal→public identity map."""
     if not members:
         return []
     profile_ids = [m.profile_id for m in members]
-    # Resolve internal-ids → public-ids for the helper.
     profile_rows = (
         db.query(CommunityProfile.id, CommunityProfile.public_id)
         .filter(CommunityProfile.id.in_(profile_ids))
@@ -471,6 +567,77 @@ def list_club_members(
             )
         )
     return views
+
+
+def list_club_members(
+    db: Session,
+    *,
+    club_public_id: uuid.UUID,
+    viewer_profile_id: int,
+    limit: int = 100,
+    after: tuple[datetime, uuid.UUID] | None = None,
+) -> list[ClubMembershipView]:
+    """List the active members of a club.
+
+    Block-side gate (A6, D8): members in a block relationship with
+    the viewer are dropped via the Kör 8
+    ``filter_public_ids_against_viewer_blocks`` helper. The viewer
+    MUST be a member of the club (private clubs) or any signed-in
+    profile (discoverable / public clubs) to call this — the
+    membership check lives in ``get_club``.
+
+    ``after`` is the optional ``(joined_at, member public_id)`` cursor
+    of the last row of the previous page. ``None`` (the default,
+    every pre-existing caller) starts from the first member. Callers
+    that page SHOULD use :func:`list_club_members_page`.
+    """
+    club = get_club(
+        db,
+        club_public_id=club_public_id,
+        viewer_profile_id=viewer_profile_id,
+    )
+    members = _club_members_query(db, club_id=club.id, after=after).limit(limit).all()
+    return _members_to_views(
+        db, members, club=club, viewer_profile_id=viewer_profile_id
+    )
+
+
+@dataclass(frozen=True)
+class ClubMemberListPage:
+    """One page of :func:`list_club_members_page`. ``next_after`` is
+    the ``(joined_at, member public_id)`` of the last RAW row when a
+    further page exists (``None`` at the end)."""
+
+    items: list[ClubMembershipView]
+    next_after: tuple[datetime, uuid.UUID] | None
+
+
+def list_club_members_page(
+    db: Session,
+    *,
+    club_public_id: uuid.UUID,
+    viewer_profile_id: int,
+    limit: int,
+    after: tuple[datetime, uuid.UUID] | None = None,
+) -> ClubMemberListPage:
+    """Cursor page of the roster — the same visibility + block rules
+    as :func:`list_club_members`, with ``next_after`` decided on the
+    raw ``limit + 1`` slice BEFORE the block filter (a blocked member
+    on the page boundary can never truncate the walk)."""
+    club = get_club(
+        db,
+        club_public_id=club_public_id,
+        viewer_profile_id=viewer_profile_id,
+    )
+    raw = _club_members_query(db, club_id=club.id, after=after).limit(limit + 1).all()
+    has_more = len(raw) > limit
+    page = raw[:limit]
+    next_after = None
+    if has_more and page:
+        last = page[-1]
+        next_after = (_as_utc(last.joined_at), last.public_id)
+    items = _members_to_views(db, page, club=club, viewer_profile_id=viewer_profile_id)
+    return ClubMemberListPage(items=items, next_after=next_after)
 
 
 def get_member_role(
@@ -946,6 +1113,46 @@ def decline_join_request(
     return invite
 
 
+def list_pending_join_requests(
+    db: Session,
+    *,
+    actor_profile_id: int,
+    club_public_id: uuid.UUID,
+    limit: int = 100,
+) -> list[CommunityClubInvite]:
+    """The club's pending join requests (the private-club D6 flow —
+    invite rows whose inviter == invitee), oldest first.
+
+    Moderator+ only: the same ``ACCEPT_JOIN_REQUEST`` matrix cell
+    that gates accepting them gates seeing them. A non-member
+    actor gets :class:`ClubPermissionDenied`; a club that does not
+    exist raises :class:`ClubNotFound`.
+    """
+    club = _resolve_club_by_public_id(db, club_public_id)
+    if club is None or club.deleted_at is not None:
+        raise ClubNotFound("club not found")
+    actor_role = get_member_role(
+        db,
+        club_public_id=club_public_id,
+        profile_public_id=_public_id_for_internal(db, actor_profile_id),
+    )
+    if actor_role is None:
+        raise ClubPermissionDenied("actor is not a member")
+    assert_may(actor_role=actor_role, action=ClubAction.ACCEPT_JOIN_REQUEST)
+    return (
+        db.query(CommunityClubInvite)
+        .filter(
+            CommunityClubInvite.club_id == club.id,
+            CommunityClubInvite.status == "pending",
+            CommunityClubInvite.inviter_profile_id
+            == CommunityClubInvite.invitee_profile_id,
+        )
+        .order_by(CommunityClubInvite.created_at.asc(), CommunityClubInvite.id.asc())
+        .limit(limit)
+        .all()
+    )
+
+
 def leave_club(
     db: Session,
     *,
@@ -1395,6 +1602,8 @@ __all__ = [
     "ClubIdempotencyCollision",
     "ClubInviteLimitExceeded",
     "ClubInviteNotFound",
+    "ClubListPage",
+    "ClubMemberListPage",
     "ClubMemberNotFound",
     "ClubMembershipLimitExceeded",
     "ClubMembershipView",
@@ -1413,7 +1622,10 @@ __all__ = [
     "invite",
     "leave_club",
     "list_club_members",
+    "list_club_members_page",
     "list_clubs",
+    "list_clubs_page",
+    "list_pending_join_requests",
     "promote_to_moderator",
     "remove_member",
     "request_join",

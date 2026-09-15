@@ -126,8 +126,14 @@ def build_community_router(settings) -> APIRouter | None:
     * ``community_leaderboard_enabled`` — gates the whole ``leaderboards``
       router (an all-or-nothing competitive surface, not a read/write
       split).
-    * ``community_clubs_enabled`` — no clubs router exists among the 13
-      yet; nothing to gate here either.
+    * ``community_clubs_enabled`` — gates the whole ``clubs`` router
+      (``routers/clubs.py``, the HTTP surface over the Kör 24
+      ``club_service``). Inside that gate the router's write-method
+      routes (create / join / leave / member management / invites)
+      additionally follow ``community_writes_enabled`` through the
+      same ``_reads_only`` downgrade as ``posts``: with writes off the
+      club list / detail / roster reads stay mounted, every mutation
+      is absent from the route table.
 
     Router order is NOT alphabetical — it is the ADR 0497 D3 contract:
     ``search`` (a literal ``/community/profiles/search`` route) MUST be
@@ -150,6 +156,7 @@ def build_community_router(settings) -> APIRouter | None:
     # the docstring above (ADR 0497 D6).
     from .routers.bookmarks import router as bookmarks_router
     from .routers.challenges import router as challenges_router
+    from .routers.clubs import router as clubs_router
     from .routers.feed import router as feed_router
     from .routers.leaderboards import router as leaderboards_router
     from .routers.moderation import router as moderation_router
@@ -165,6 +172,10 @@ def build_community_router(settings) -> APIRouter | None:
 
     aggregate.include_router(bookmarks_router)
     aggregate.include_router(challenges_router)
+    if settings.community_clubs_enabled:
+        aggregate.include_router(
+            clubs_router if writes_on else _reads_only(clubs_router)
+        )
     aggregate.include_router(feed_router)
     if settings.community_leaderboard_enabled:
         aggregate.include_router(leaderboards_router)

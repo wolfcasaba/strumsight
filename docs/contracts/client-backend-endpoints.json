@@ -158,22 +158,19 @@
       "method": "GET",
       "path": "/community/challenges",
       "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:134",
-      "status": "known_gap",
-      "note": "backend/app/community/routers/challenges.py has no GET routes at all (grep-confirmed, 2026-09-03) -- only invite lifecycle (POST/DELETE) and result submission (POST) exist. listChallenges/fetchDefinition/fetchMyParticipation were written client-side (E09-R21/22) ahead of a server-side listing surface that was never built. backend/app/community/routers/** is this round's tilos zona; tracked here for a future round."
+      "status": "mounted"
     },
     {
       "method": "GET",
       "path": "/community/challenges/{challenge_public_id}",
       "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:149",
-      "status": "known_gap",
-      "note": "See the /community/challenges known_gap note -- same missing listing/detail surface."
+      "status": "mounted"
     },
     {
       "method": "GET",
       "path": "/community/challenges/{challenge_public_id}/me",
       "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:163",
-      "status": "known_gap",
-      "note": "See the /community/challenges known_gap note -- same missing listing/detail surface."
+      "status": "mounted"
     },
     {
       "method": "POST",
