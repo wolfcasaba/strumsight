@@ -13,6 +13,8 @@ import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
+import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
+import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
 import 'package:strumsight/features/songs/screens/song_list_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
@@ -49,6 +51,7 @@ Future<void> _pumpSongs(
       strumEngineProvider.overrideWithValue(liveEngine),
       tunerEngineProvider.overrideWithValue(tunerEngine),
       onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
+      songRepositoryProvider.overrideWithValue(InMemorySongRepository()),
       appConfigProvider.overrideWithValue(
         AppConfig(
           environment: AppEnvironment.development,
