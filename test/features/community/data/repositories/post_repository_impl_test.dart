@@ -9,11 +9,16 @@
 ///   ``idempotency_key`` and the snake_case ``{"artifact": {…}}``
 ///   envelope), decoding the 201 ``PostOut``;
 /// * ``fetchPost`` → ``GET /community/posts/{id}``, 404 → ``null``;
+/// * ``updatePost`` → ``PATCH /community/posts/{id}?idempotency_key=…``
+///   with the ``PatchPostRequest`` body (``audience`` / ``body`` /
+///   ``resource_version`` — the ``extra="forbid"`` whitelist; a null
+///   body omits the key), decoding the 200 ``PostOut``; 404 / 409 /
+///   5xx mapping;
 /// * ``deletePost`` → ``DELETE /community/posts/{id}?idempotency_key=…``;
 /// * ``setBookmark`` → ``POST`` / ``DELETE /community/bookmarks/{id}``;
 /// * the error taxonomy (409 → ``community.conflict``, 422, 5xx, 401);
-/// * every method with no backend route (reactions, comments, PATCH)
-///   throws the typed ``ConfigurationFailure`` without a request.
+/// * every method with no backend route (reactions, comments) throws
+///   the typed ``ConfigurationFailure`` without a request.
 library;
 
 import 'dart:convert';
@@ -385,6 +390,192 @@ void main() {
     });
   });
 
+  group('updatePost()', () {
+    test('PATCHes /community/posts/{id}?idempotency_key=… with the '
+        'PatchPostRequest body and decodes the 200 PostOut', () async {
+      final adapter = _adapterWith(
+        _postOutJson(audience: 'public', body: 'edited'),
+      );
+      final repo = _buildRepo(adapter);
+
+      final post = await repo.updatePost(
+        postId: ContentId(_postA),
+        body: 'edited',
+        audience: CommunityAudience.public,
+        resourceVersion: '2026-08-23T12:00:00Z',
+        idempotencyKey: 'u-1',
+      );
+
+      expect(adapter.captured, hasLength(1));
+      final options = adapter.captured.single;
+      expect(options.method, 'PATCH');
+      expect(options.path, '/community/posts/$_postA?idempotency_key=u-1');
+      expect(options.uri.queryParameters['idempotency_key'], 'u-1');
+      final data = options.data as Map<String, Object?>;
+      expect(data['audience'], 'public');
+      expect(data['body'], 'edited');
+      expect(data['resource_version'], '2026-08-23T12:00:00Z');
+      // The backend `extra="forbid"` whitelist — the idempotency key
+      // rides the URL, never the body; `artifact` is never sent.
+      expect(
+        data.keys.toSet(),
+        <String>{'audience', 'body', 'resource_version'},
+      );
+
+      expect(post.id, ContentId(_postA));
+      expect(post.audience, CommunityAudience.public);
+      expect(post.body, 'edited');
+      expect(post.moderationState, ModerationState.visible);
+    });
+
+    test('a null body omits the body key (absent field = leave '
+        'alone)', () async {
+      final adapter = _adapterWith(_postOutJson(audience: 'private'));
+      final repo = _buildRepo(adapter);
+
+      await repo.updatePost(
+        postId: ContentId(_postA),
+        body: null,
+        audience: CommunityAudience.private,
+        resourceVersion: '2026-08-23T12:00:00Z',
+        idempotencyKey: 'u-2',
+      );
+
+      final data = adapter.captured.single.data as Map<String, Object?>;
+      expect(data.containsKey('body'), isFalse);
+      expect(data['audience'], 'private');
+      expect(data.keys.toSet(), <String>{'audience', 'resource_version'});
+    });
+
+    test('a DateTime resourceVersion is sent as UTC ISO-8601', () async {
+      final adapter = _adapterWith(_postOutJson());
+      final repo = _buildRepo(adapter);
+
+      await repo.updatePost(
+        postId: ContentId(_postA),
+        body: 'x',
+        audience: CommunityAudience.followers,
+        resourceVersion: DateTime.utc(2026, 8, 23, 12),
+        idempotencyKey: 'u-3',
+      );
+
+      final data = adapter.captured.single.data as Map<String, Object?>;
+      expect(data['resource_version'], '2026-08-23T12:00:00.000Z');
+    });
+
+    test('an unsupported resourceVersion type is an ArgumentError '
+        'before any request', () async {
+      final adapter = _adapterWith(_postOutJson());
+      final repo = _buildRepo(adapter);
+
+      await expectLater(
+        repo.updatePost(
+          postId: ContentId(_postA),
+          body: 'x',
+          audience: CommunityAudience.public,
+          resourceVersion: 42,
+          idempotencyKey: 'u-4',
+        ),
+        throwsArgumentError,
+      );
+      expect(adapter.captured, isEmpty);
+    });
+
+    test('409 (stale resource_version) surfaces as '
+        'ValidationFailure(community.conflict)', () async {
+      final adapter = _adapterWith(
+        '{"detail":{"error":"stale_resource_version",'
+        '"current_resource_version":"2026-08-24T12:00:00Z"}}',
+        status: 409,
+      );
+      final repo = _buildRepo(adapter);
+
+      await expectLater(
+        repo.updatePost(
+          postId: ContentId(_postA),
+          body: 'x',
+          audience: CommunityAudience.public,
+          resourceVersion: '2026-08-23T12:00:00Z',
+          idempotencyKey: 'u-5',
+        ),
+        throwsA(
+          isA<ValidationFailure>().having(
+            (f) => f.code,
+            'code',
+            FailureCode.communityConflict,
+          ),
+        ),
+      );
+    });
+
+    test('404 (missing or not owned) throws '
+        'NetworkFailure(network.bad_response)', () async {
+      final adapter = _adapterWith('{"detail":"post not found"}', status: 404);
+      final repo = _buildRepo(adapter);
+
+      await expectLater(
+        repo.updatePost(
+          postId: ContentId(_postA),
+          body: 'x',
+          audience: CommunityAudience.public,
+          resourceVersion: '2026-08-23T12:00:00Z',
+          idempotencyKey: 'u-6',
+        ),
+        throwsA(
+          isA<NetworkFailure>().having(
+            (f) => f.code,
+            'code',
+            FailureCode.networkBadResponse,
+          ),
+        ),
+      );
+    });
+
+    test('5xx surfaces as a retryable '
+        'NetworkFailure(network.server)', () async {
+      final adapter = _adapterWith('{"detail":"boom"}', status: 503);
+      final repo = _buildRepo(adapter);
+
+      await expectLater(
+        repo.updatePost(
+          postId: ContentId(_postA),
+          body: 'x',
+          audience: CommunityAudience.public,
+          resourceVersion: '2026-08-23T12:00:00Z',
+          idempotencyKey: 'u-7',
+        ),
+        throwsA(
+          isA<NetworkFailure>()
+              .having((f) => f.code, 'code', FailureCode.networkServer)
+              .having((f) => f.retryable, 'retryable', isTrue),
+        ),
+      );
+    });
+
+    test('a malformed PostOut surfaces as '
+        'NetworkFailure(network.bad_response)', () async {
+      final adapter = _adapterWith('{"body":"x"}');
+      final repo = _buildRepo(adapter);
+
+      await expectLater(
+        repo.updatePost(
+          postId: ContentId(_postA),
+          body: 'x',
+          audience: CommunityAudience.public,
+          resourceVersion: '2026-08-23T12:00:00Z',
+          idempotencyKey: 'u-8',
+        ),
+        throwsA(
+          isA<NetworkFailure>().having(
+            (f) => f.code,
+            'code',
+            FailureCode.networkBadResponse,
+          ),
+        ),
+      );
+    });
+  });
+
   group('deletePost()', () {
     test('DELETEs /community/posts/{id} with ?idempotency_key=…', () async {
       final adapter = _adapterWith('{"status":"deleted"}');
@@ -499,19 +690,6 @@ void main() {
           postId: ContentId(_postA),
           kind: ReactionKind.support,
           idempotencyKey: 'r-1',
-        ),
-        _unavailable(),
-      );
-    });
-
-    test('updatePost() — ApiClient has no PATCH transport', () async {
-      await expectLater(
-        repo.updatePost(
-          postId: ContentId(_postA),
-          body: 'edited',
-          audience: CommunityAudience.public,
-          resourceVersion: '2026-08-23T12:00:00Z',
-          idempotencyKey: 'u-1',
         ),
         _unavailable(),
       );

@@ -9,31 +9,36 @@
 /// |-----------------|------------------------------------------------|
 /// | ``createPost``  | ``POST /community/posts`` → 201 ``PostOut``     |
 /// | ``fetchPost``   | ``GET /community/posts/{id}`` (404 → ``null``)  |
-/// | ``updatePost``  | ``PATCH /community/posts/{id}`` — see below     |
+/// | ``updatePost``  | ``PATCH /community/posts/{id}`` → ``PostOut``   |
 /// | ``deletePost``  | ``DELETE /community/posts/{id}``                |
 /// | ``setBookmark`` | ``POST`` / ``DELETE /community/bookmarks/{id}`` |
 /// | ``setReaction`` | no route                                        |
 /// | ``comments`` / ``createComment`` / ``updateComment`` /
 ///   ``deleteComment`` | no route                                    |
 ///
-/// **``updatePost``** cannot be sent: the backend route is ``PATCH``
-/// and the shared ``ApiClient`` (``core/network/api_client.dart``)
-/// exposes GET / POST / PUT / DELETE only. Adding a ``patchJson`` is
-/// a ``core/network`` change (outside this round's file list), so the
-/// method throws the typed [communityEndpointUnavailable] failure —
-/// named after the transport gap, not the route — until that lands.
+/// **``updatePost``** rides ``ApiClient.patchJson`` with the
+/// ``PatchPostRequest`` body (``extra="forbid"``): ``audience``,
+/// ``body`` and the required ``resource_version`` token. The router
+/// applies "absent field = leave alone" (``exclude_unset``), so a
+/// ``null`` domain body OMITS the ``body`` key rather than sending
+/// ``""`` (the backend's ``min_length=1`` would 422 that). The
+/// ``artifact`` key is never sent — the domain contract has no slot
+/// for it, and an absent key leaves the stored artifact intact. A
+/// stale ``resource_version`` answers 409 → ``communityConflict``.
 ///
-/// **Missing routes** (reactions, comments) throw the same typed
-/// ``ConfigurationFailure``: the controllers catch ``AppFailure`` and
-/// surface a failure state; nothing crashes, nothing pretends.
+/// **Missing routes** (reactions, comments) throw the typed
+/// ``ConfigurationFailure`` [communityEndpointUnavailable]: the
+/// controllers catch ``AppFailure`` and surface a failure state;
+/// nothing crashes, nothing pretends.
 ///
 /// **Idempotency keys:** ``POST /community/posts`` reads
 /// ``idempotency_key`` from the JSON body (``CreatePostRequest``).
-/// The bookmark and delete routes take no body / no key today — the
-/// key still travels as ``?idempotency_key=…`` (the ADR 0401 §1 DELETE
-/// convention the social-graph impl uses) so the wire carries the
-/// mutation identity the moment the backend starts reading it; the
-/// router ignores unknown query parameters.
+/// The bookmark, delete and PATCH routes take no key today
+/// (``PatchPostRequest`` is ``extra="forbid"``, so it must NOT ride
+/// the body) — the key still travels as ``?idempotency_key=…`` (the
+/// ADR 0401 §1 DELETE convention the social-graph impl uses) so the
+/// wire carries the mutation identity the moment the backend starts
+/// reading it; the router ignores unknown query parameters.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -195,9 +200,29 @@ class HttpCommunityPostRepository implements CommunityPostRepository {
     required CommunityAudience audience,
     required Object resourceVersion,
     required String idempotencyKey,
-  }) async => throw communityEndpointUnavailable(
-    'PATCH /community/posts/{id} (ApiClient has no PATCH transport)',
-  );
+  }) async {
+    // ``PATCH /community/posts/{id}`` answers 404 both for a missing
+    // row and for a post the viewer does not own (the §0.0 D7
+    // uniform-404 rule) — the interface has no null channel for an
+    // update, so the ``networkBadResponse`` failure propagates.
+    final path =
+        '/community/posts/${postId.value}'
+        '?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}';
+    final result = await _client.patchJson<CommunityPostDto>(
+      path,
+      data: <String, Object?>{
+        'audience': audience.wireValue,
+        if (body != null) 'body': body,
+        'resource_version': _resourceVersionWire(resourceVersion),
+      },
+      decode: CommunityPostDto.fromJson,
+      conflictCode: FailureCode.communityConflict,
+    );
+    return switch (result) {
+      Success(:final value) => value.toDomain(),
+      Failure(:final error) => throw error,
+    };
+  }
 
   @override
   Future<void> deletePost({
@@ -301,6 +326,27 @@ class HttpCommunityPostRepository implements CommunityPostRepository {
       'artifact',
       'artifact must be a JSON map, a ShareArtifact or an '
           'UnfilledCommunityShareArtifact',
+    );
+  }
+
+  /// Normalise the ``Object``-typed ``resourceVersion`` of the domain
+  /// contract into the ``resource_version`` wire token — the
+  /// ``updated_at`` ISO-8601 timestamp a prior read echoed
+  /// (``CommunityPostDto.resourceVersion`` holds it as a [DateTime];
+  /// a caller may also forward the raw wire string).
+  ///
+  /// * a [String] is sent as-is (the server parses it as a datetime);
+  /// * a [DateTime] is serialised as UTC ISO-8601;
+  /// * anything else is a programming error at the call site.
+  static String _resourceVersionWire(Object resourceVersion) {
+    if (resourceVersion is String) return resourceVersion;
+    if (resourceVersion is DateTime) {
+      return resourceVersion.toUtc().toIso8601String();
+    }
+    throw ArgumentError.value(
+      resourceVersion,
+      'resourceVersion',
+      'resourceVersion must be the wire String or a DateTime',
     );
   }
 

@@ -5,8 +5,9 @@
 /// Pins every route + body key set (the request models are
 /// ``extra='forbid'``, so a stray key is a 422 on the device), the
 /// ``ClubOut`` → ``CommunityClub`` decode, the DELETE idempotency key
-/// on the URL (ADR 0401 §1), and the ``updateClub`` typed refusal
-/// (``PATCH`` has no transport in the shared ``ApiClient``).
+/// on the URL (ADR 0401 §1), and the ``updateClub`` PATCH wire shape
+/// (``UpdateClubRequest`` body, 200 → ``CommunityClub``, 403 / 404 /
+/// 409 / 5xx mapping).
 library;
 
 import 'dart:typed_data';
@@ -205,11 +206,70 @@ void main() {
       );
     });
 
-    test('updateClub is a typed refusal — PATCH has no transport', () async {
-      final adapter = _ok('{}');
+    test('updateClub PATCHes /community/clubs/{id} with exactly the '
+        'UpdateClubRequest keys and decodes the 200 ClubOut', () async {
+      final adapter = _ok(_clubOut());
       final repo = _buildRepo(adapter);
 
-      await expectLater(
+      final club = await repo.updateClub(
+        clubId: ContentId(_clubId),
+        description: 'Slow blues, every Tuesday.',
+        visibility: ClubVisibility.discoverable,
+        tags: const <String>['blues'],
+        resourceVersion: '2026-09-10T09:00:00Z',
+        idempotencyKey: 'k-update',
+      );
+
+      expect(adapter.captured, hasLength(1));
+      final options = adapter.captured.single;
+      expect(options.method, 'PATCH');
+      expect(options.path, '/community/clubs/$_clubId');
+      final body = options.data as Map<String, Object?>;
+      expect(body.keys.toSet(), <String>{
+        'description',
+        'visibility',
+        'tags',
+        'resource_version',
+        'idempotency_key',
+      });
+      expect(body['description'], 'Slow blues, every Tuesday.');
+      expect(body['visibility'], 'discoverable');
+      expect(body['tags'], <String>['blues']);
+      expect(body['resource_version'], '2026-09-10T09:00:00Z');
+      expect(body['idempotency_key'], 'k-update');
+      expect(club.id, ContentId(_clubId));
+      expect(club.visibility, ClubVisibility.discoverable);
+      expect(club.myRole, ClubRole.owner);
+    });
+
+    test('updateClub sends a DateTime resourceVersion as UTC '
+        'ISO-8601', () async {
+      final adapter = _ok(_clubOut());
+      final repo = _buildRepo(adapter);
+
+      await repo.updateClub(
+        clubId: ContentId(_clubId),
+        description: 'd',
+        visibility: ClubVisibility.public,
+        tags: const <String>[],
+        resourceVersion: DateTime.utc(2026, 9, 10, 9),
+        idempotencyKey: 'k',
+      );
+
+      final body = adapter.captured.single.data as Map<String, Object?>;
+      expect(body['resource_version'], '2026-09-10T09:00:00.000Z');
+    });
+
+    test('updateClub maps a 409 (stale resource_version) to '
+        'communityConflict', () {
+      final adapter = _ok(
+        '{"detail":{"error":"stale_resource_version",'
+        '"resource_version":"2026-09-11T09:00:00Z"}}',
+        status: 409,
+      );
+      final repo = _buildRepo(adapter);
+
+      expect(
         repo.updateClub(
           clubId: ContentId(_clubId),
           description: 'd',
@@ -218,10 +278,84 @@ void main() {
           resourceVersion: '2026-09-10T09:00:00Z',
           idempotencyKey: 'k',
         ),
-        throwsA(isA<ConfigurationFailure>()),
+        throwsA(
+          isA<ValidationFailure>().having(
+            (f) => f.code,
+            'code',
+            FailureCode.communityConflict,
+          ),
+        ),
       );
-      // Nothing reached the wire: no half-sent PUT masquerading as PATCH.
-      expect(adapter.captured, isEmpty);
+    });
+
+    test('updateClub maps a 403 (non-owner) to '
+        'AuthenticationFailure(auth.forbidden)', () {
+      final adapter = _ok('{"detail":"owner only"}', status: 403);
+      final repo = _buildRepo(adapter);
+
+      expect(
+        repo.updateClub(
+          clubId: ContentId(_clubId),
+          description: 'd',
+          visibility: ClubVisibility.public,
+          tags: const <String>[],
+          resourceVersion: '2026-09-10T09:00:00Z',
+          idempotencyKey: 'k',
+        ),
+        throwsA(
+          isA<AuthenticationFailure>().having(
+            (f) => f.code,
+            'code',
+            FailureCode.authForbidden,
+          ),
+        ),
+      );
+    });
+
+    test('updateClub maps a 404 (not visible) to '
+        'NetworkFailure(network.bad_response)', () {
+      final adapter = _ok('{"detail":"club not found"}', status: 404);
+      final repo = _buildRepo(adapter);
+
+      expect(
+        repo.updateClub(
+          clubId: ContentId(_clubId),
+          description: 'd',
+          visibility: ClubVisibility.public,
+          tags: const <String>[],
+          resourceVersion: '2026-09-10T09:00:00Z',
+          idempotencyKey: 'k',
+        ),
+        throwsA(
+          isA<NetworkFailure>().having(
+            (f) => f.code,
+            'code',
+            FailureCode.networkBadResponse,
+          ),
+        ),
+      );
+    });
+
+    test('updateClub maps a 5xx to a retryable '
+        'NetworkFailure(network.server)', () {
+      final adapter = _ok('{"detail":"boom"}', status: 500);
+      final repo = _buildRepo(adapter);
+
+      expect(
+        repo.updateClub(
+          clubId: ContentId(_clubId),
+          description: 'd',
+          visibility: ClubVisibility.public,
+          tags: const <String>[],
+          resourceVersion: '2026-09-10T09:00:00Z',
+          idempotencyKey: 'k',
+        ),
+        throwsA(
+          isA<NetworkFailure>()
+              .having((f) => f.code, 'code', FailureCode.networkServer)
+              .having((f) => f.retryable, 'retryable', isTrue),
+        ),
+      );
     });
 
     test('requestJoin POSTs …/join with the idempotency key', () async {

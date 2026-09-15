@@ -65,6 +65,33 @@ final class ApiClient {
     conflictCode: conflictCode,
   );
 
+  /// Sends a JSON ``PATCH`` and decodes the JSON object response.
+  ///
+  /// Mirror of [postJson] — same bearer handling (the
+  /// ``requiresAuthentication`` extra the auth interceptor reads),
+  /// same [mapNetworkFailure] taxonomy, same object-only response
+  /// validation, and never a retry. Added for the two backend PATCH
+  /// routes (``PATCH /community/posts/{id}`` and
+  /// ``PATCH /community/clubs/{id}``) whose request bodies carry the
+  /// optimistic-concurrency ``resource_version`` token; a stale token
+  /// answers 409, which [conflictCode] names for the caller.
+  Future<AppResult<T>> patchJson<T>(
+    String path, {
+    required Map<String, Object?> data,
+    required JsonObjectDecoder<T> decode,
+    bool requiresAuthentication = true,
+    String unauthorizedCode = FailureCode.authSessionExpired,
+    String conflictCode = FailureCode.validationInvalidInput,
+  }) => _requestJson(
+    method: 'PATCH',
+    path: path,
+    data: data,
+    decode: decode,
+    requiresAuthentication: requiresAuthentication,
+    unauthorizedCode: unauthorizedCode,
+    conflictCode: conflictCode,
+  );
+
   /// Sends a request whose successful response body is intentionally ignored.
   Future<AppResult<void>> post(
     String path, {

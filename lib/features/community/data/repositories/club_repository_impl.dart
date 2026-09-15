@@ -19,20 +19,20 @@
 /// | ``listClubs``         | ``GET …?limit=&cursor=``                       |
 /// | ``fetchClub``         | ``GET …/{id}``                                 |
 /// | ``createClub``        | ``POST …``                                     |
-/// | ``updateClub``        | ``PATCH …/{id}`` — NOT sendable, see below     |
+/// | ``updateClub``        | ``PATCH …/{id}`` → 200 ``ClubOut``             |
 /// | ``requestJoin``       | ``POST …/{id}/join``                           |
 /// | ``invite``            | ``POST …/{id}/invites``                        |
 /// | ``leave``             | ``POST …/{id}/leave``                          |
 /// | ``removeMember``      | ``DELETE …/{id}/members/{profile_id}``         |
 /// | ``transferOwnership`` | ``POST …/{id}/transfer-ownership``             |
 ///
-/// **``updateClub`` cannot be sent:** the backend route is ``PATCH``
-/// and the shared ``ApiClient`` exposes GET / POST / PUT / DELETE only
-/// (``api_client.dart`` is outside this round's files). The method
-/// throws the typed [communityEndpointUnavailable] failure — the same
-/// decision ``post_repository_impl.dart`` took for
-/// ``PATCH /community/posts/{id}`` — so the caller sees a
-/// ``ConfigurationFailure`` naming the route, never a silent no-op.
+/// **``updateClub``** rides ``ApiClient.patchJson`` with the
+/// ``UpdateClubRequest`` body (``extra='forbid'``: ``description``,
+/// ``visibility``, ``tags``, ``resource_version``, ``idempotency_key``
+/// — exactly these five keys). ``resource_version`` is the
+/// ``updated_at`` token a prior read echoed; a stale one answers 409
+/// → ``communityConflict``, a non-owner 403 → ``authForbidden``, and
+/// a club the caller cannot see 404 → ``networkBadResponse``.
 ///
 /// ``ClubOut`` → [CommunityClub] field map: ``public_id`` → ``id``,
 /// ``owner_public_id`` → ``ownerId``, ``member_count`` →
@@ -210,8 +210,12 @@ class HttpCommunityClubRepository implements CommunityClubRepository {
     };
   }
 
-  /// See the library comment — the route is ``PATCH`` and the shared
-  /// transport has no PATCH; the typed failure names the route.
+  /// ``PATCH /community/clubs/{id}`` — ``UpdateClubRequest`` (``extra=
+  /// 'forbid'``: only these five keys may travel). Owner-only: a 403
+  /// surfaces as ``AuthenticationFailure(authForbidden)`` through the
+  /// shared mapper; a stale ``resource_version`` (409
+  /// ``stale_resource_version``) maps to ``FailureCode.communityConflict``
+  /// like the create path's idempotency collision.
   @override
   Future<CommunityClub> updateClub({
     required ContentId clubId,
@@ -220,9 +224,24 @@ class HttpCommunityClubRepository implements CommunityClubRepository {
     required List<String> tags,
     required Object resourceVersion,
     required String idempotencyKey,
-  }) async => throw communityEndpointUnavailable(
-    'PATCH /community/clubs/{id} (ApiClient has no PATCH transport)',
-  );
+  }) async {
+    final result = await _client.patchJson<dynamic>(
+      '/community/clubs/${clubId.value}',
+      data: <String, Object?>{
+        'description': description,
+        'visibility': clubVisibilityToWire(visibility),
+        'tags': tags,
+        'resource_version': _resourceVersionWire(resourceVersion),
+        'idempotency_key': idempotencyKey,
+      },
+      decode: decodeClub,
+      conflictCode: FailureCode.communityConflict,
+    );
+    return switch (result) {
+      Success(:final value) => value as CommunityClub,
+      Failure(:final error) => throw error,
+    };
+  }
 
   /// ``POST /community/clubs/{id}/join`` — ``ClubActionRequest``.
   /// The server turns this into a membership row (public /
@@ -318,6 +337,24 @@ class HttpCommunityClubRepository implements CommunityClubRepository {
   }
 
   // ---- internal ----------------------------------------------------------
+
+  /// Normalise the ``Object``-typed ``resourceVersion`` of the domain
+  /// contract into the ``resource_version`` wire token (the
+  /// ``updated_at`` ISO-8601 timestamp ``ClubOut`` echoes). A
+  /// [String] travels as-is, a [DateTime] as UTC ISO-8601; anything
+  /// else is a programming error at the call site (the
+  /// ``communityCursorQueryValue`` precedent).
+  static String _resourceVersionWire(Object resourceVersion) {
+    if (resourceVersion is String) return resourceVersion;
+    if (resourceVersion is DateTime) {
+      return resourceVersion.toUtc().toIso8601String();
+    }
+    throw ArgumentError.value(
+      resourceVersion,
+      'resourceVersion',
+      'resourceVersion must be the wire String or a DateTime',
+    );
+  }
 
   /// Decode the ``ClubPage`` envelope. Cursor mapping mirrors
   /// ``decodeChallengeListPage``: no ``next_cursor`` + no rows halts
