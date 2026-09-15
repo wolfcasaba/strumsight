@@ -7,9 +7,14 @@
 /// with kézzel written Riverpod 3 providers (CLAUDE.md: no codegen).
 ///
 /// This file wires **route-less** composition only: it opens no route, sets
-/// no feature flag, and creates no screen (ADR 0482 / D7 — the 6 screens
-/// stay `unreachable` after this round). Wiring a screen into navigation is
-/// `E15-R07 / F1`'s job.
+/// no feature flag, and creates no screen (ADR 0482 / D7). Wiring a screen
+/// into navigation is the router's (`PlanSetup`, `TodayPlan`) and
+/// `TodayPlanScreen`'s (the four plan sub-screens, E17-R06) job.
+///
+/// E17-R05 closed the two production seams this root used to leave open:
+/// [exerciseCandidateResolverProvider] reads the shipped Practice Engine
+/// catalog, and [generationPlanInputBuilderProvider] assembles the draft
+/// from that catalog plus the persistent practice-evidence history.
 library;
 
 import 'dart:async';
@@ -18,21 +23,29 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
+import 'package:strumsight/features/practice/public.dart'
+    show practiceCatalogProvider;
 
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/i18n/locale_provider.dart';
 import '../../../../core/storage/storage_providers.dart';
+import '../../application/controller/active_plan_controller.dart';
 import '../../application/controller/today_plan_controller.dart';
 import '../../application/service/generation_orchestrator.dart';
+import '../../application/service/generation_plan_input_assembler.dart';
 import '../../application/usecase/delete_practice_planning_data.dart';
 import '../../application/usecase/export_practice_planning_data.dart';
+import '../../application/usecase/propose_today_plan_change.dart';
 import '../../application/usecase/revise_practice_plan.dart';
 import '../../application/usecase/start_plan_generation.dart';
+import '../../data/adapter/practice_engine_catalog_reader.dart';
 import '../../data/local/generation_draft_repository.dart';
 import '../../data/local/local_practice_evidence_repository.dart';
 import '../../data/local/local_practice_plan_repository.dart';
+import '../../domain/id/planner_ids.dart' show RevisionId;
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_block.dart' show ExerciseCandidateResolver;
+import '../../domain/model/practice_catalog_snapshot.dart';
 import '../../domain/model/weekly_availability.dart' show LocalDate;
 import '../../domain/repository/practice_evidence_repository.dart';
 import '../../domain/service/plan_validator.dart' show PlanValidationContext;
@@ -75,21 +88,43 @@ final generationDraftRepositoryProvider = Provider<GenerationDraftRepository>(
   ),
 );
 
-/// Overridable production seam. Resolving a persisted prescription's
-/// `exerciseId` back into a full `ExerciseCandidate` needs the live
-/// exercise catalog; wiring that catalog is a later round's composition
-/// (round brief §0.0.B/R4 note). Production boot injects the concrete
-/// resolver; tests override it with a fixture (the same pattern as
-/// `ai_tutor/presentation/providers/tutor_providers.dart`'s
-/// `tutorOrchestratorProvider`).
+/// The live exercise catalog as the planner's revisioned snapshot
+/// (E17-R05, ADR 0524 / §5.1). Reads the Practice feature's ONE shipped
+/// catalog through its public barrel (`practiceCatalogProvider`) — never a
+/// generator-specific second list — so overriding the Practice catalog
+/// repository (an empty catalog in a test, say) flows straight into every
+/// consumer below.
+final practiceCatalogSnapshotProvider = Provider<PracticeCatalogSnapshot>(
+  (ref) => PracticeEngineCatalogReader(
+    definitions: ref.watch(practiceCatalogProvider),
+  ).read(),
+);
+
+/// Production seam, now closed (E17-R05 / A1): a persisted prescription's
+/// `exerciseId` resolves back into the full `ExerciseCandidate` the live
+/// catalog snapshot carries for it. An id the shipped catalog no longer
+/// contains is a controlled failure of the read that asked for it
+/// (`LocalPracticePlanRepository.readActivePlan` surfaces it as a
+/// `Failure`, never as a silently substituted exercise). Tests may still
+/// override this provider with a fixture resolver.
 final exerciseCandidateResolverProvider = Provider<ExerciseCandidateResolver>((
   ref,
 ) {
-  throw UnimplementedError(
-    'exerciseCandidateResolverProvider must be overridden — production '
-    'wires it from the exercise catalog at boot; tests inject a fixture '
-    'resolver.',
-  );
+  final snapshot = ref.watch(practiceCatalogSnapshotProvider);
+  final byExerciseId = {
+    for (final candidate in snapshot.candidates)
+      candidate.exerciseId: candidate,
+  };
+  return (exerciseId) {
+    final candidate = byExerciseId[exerciseId];
+    if (candidate == null) {
+      throw StateError(
+        'No exercise "$exerciseId" in the shipped practice catalog '
+        '(${snapshot.catalogRevision})',
+      );
+    }
+    return candidate;
+  };
 });
 
 final localPracticePlanRepositoryProvider =
@@ -140,20 +175,28 @@ final generationOrchestratorProvider =
       return orchestrator;
     });
 
-/// Overridable production seam, mirroring [exerciseCandidateResolverProvider]:
-/// turning a Setup-wizard draft into a `GenerationPlanInput` needs the
-/// candidate catalog + evidence-ranking pipeline (ADR 0482 §Kontextus), which
-/// is out of this round's scope (round brief STOP-protocol: "az ÚJ
-/// start_plan_generation.dart use case KIZÁRÓLAG a meglévő
-/// GenerationOrchestrator-t hívja, nem ír új generálási logikát").
-final generationPlanInputBuilderProvider = Provider<GenerationPlanInputBuilder>(
-  (ref) {
-    throw UnimplementedError(
-      'generationPlanInputBuilderProvider must be overridden — production '
-      'wires it once the candidate catalog + evidence pipeline lands; '
-      'tests inject a fixture builder.',
+/// The deterministic catalog + evidence + scheduling pipeline behind
+/// [generationPlanInputBuilderProvider] (E17-R05, ADR 0524 / §5.2). Its
+/// evidence source is the PERSISTENT [practiceEvidenceRepositoryProvider]
+/// — the learner's real practice history — never a constant.
+final generationPlanInputAssemblerProvider =
+    Provider<GenerationPlanInputAssembler>(
+      (ref) => GenerationPlanInputAssembler(
+        catalogReader: PracticeEngineCatalogReader(
+          definitions: ref.watch(practiceCatalogProvider),
+        ),
+        evidenceRepository: ref.watch(practiceEvidenceRepositoryProvider),
+        clock: ref.watch(practiceGeneratorClockProvider),
+        generateId: ref.watch(practiceGeneratorIdGeneratorProvider),
+      ),
     );
-  },
+
+/// Production seam, now closed (E17-R05 / A1, A3): a Setup-wizard draft
+/// becomes a `GenerationPlanInput` through
+/// [generationPlanInputAssemblerProvider]. Tests may still override this
+/// provider with a fixture builder.
+final generationPlanInputBuilderProvider = Provider<GenerationPlanInputBuilder>(
+  (ref) => ref.watch(generationPlanInputAssemblerProvider).assemble,
 );
 
 /// `autoDispose` because it watches [generationOrchestratorProvider] (M5):
@@ -218,6 +261,16 @@ final planPreviewControllerFactoryProvider =
           );
     });
 
+/// The [PlanValidationContext] an already-compiled plan is previewed
+/// against from Today (E17-R06): the live catalog snapshot plus the
+/// availability reconstructed from the plan's own persisted day budgets.
+final planValidationContextForPlanProvider =
+    Provider<PlanValidationContext Function(AdaptivePracticePlan plan)>(
+      (ref) => ref
+          .watch(generationPlanInputAssemblerProvider)
+          .validationContextForPlan,
+    );
+
 // ---------------------------------------------------------------------------
 // Screen 3/6 — PlanPrivacyScreen
 // ---------------------------------------------------------------------------
@@ -246,6 +299,53 @@ final exportPracticePlanningDataProvider = Provider<ExportPracticePlanningData>(
 final revisePracticePlanProvider = Provider<RevisePracticePlan>(
   (ref) => RevisePracticePlan(clock: ref.watch(practiceGeneratorClockProvider)),
 );
+
+/// Learner-initiated rewrites of the active plan (shorten / skip / pause)
+/// — revision ids come from the shared id generator, candidates from the
+/// block's own already-resolved prescription.
+final activePlanControllerProvider = Provider<ActivePlanController>((ref) {
+  final generateId = ref.watch(practiceGeneratorIdGeneratorProvider);
+  return ActivePlanController(
+    generateRevisionId: () => RevisionId.generate(generateId),
+    resolveCandidate: ProposeTodayPlanChange.candidateOfBlock,
+  );
+});
+
+final proposeTodayPlanChangeProvider = Provider<ProposeTodayPlanChange>(
+  (ref) => ProposeTodayPlanChange(
+    activePlanController: ref.watch(activePlanControllerProvider),
+    revisePracticePlan: ref.watch(revisePracticePlanProvider),
+  ),
+);
+
+/// The proposal `PlanChangeReviewScreen` shows when opened from Today
+/// (E17-R06 / §5.2): today's first pending block of the ACTIVE plan,
+/// shortened to its catalog minimum. `null` when there is no active plan
+/// or nothing is scheduled today. `autoDispose` so a review re-reads the
+/// plan every time it opens; a read failure of the active plan surfaces as
+/// this provider's own `AsyncError` (M4 discipline, never reclassified).
+final todayPlanChangeProposalProvider =
+    FutureProvider.autoDispose<TodayPlanChangeProposal?>((ref) async {
+      // Every dependency is read synchronously, before the first `await`
+      // — the same discipline as [activePracticePlanProvider].
+      final repository = ref.watch(localPracticePlanRepositoryProvider);
+      final propose = ref.watch(proposeTodayPlanChangeProvider);
+      final today = ref.watch(practiceGeneratorTodayProvider);
+      final planFuture = ref.watch(activePracticePlanProvider.future);
+
+      final plan = await planFuture;
+      if (plan == null) return null;
+      final archive = await repository.readArchive(plan.id);
+      final revisionCount = switch (archive) {
+        Success<ArchivedPracticeLog>(:final value) => value.revisions.length,
+        Failure<ArchivedPracticeLog>() => 0,
+      };
+      return propose(
+        plan: plan,
+        today: today(),
+        currentRevisionNumber: revisionCount < 1 ? 1 : revisionCount,
+      );
+    }, retry: (retryCount, error) => null);
 
 // ---------------------------------------------------------------------------
 // Screen 5/6 — TodayPlanScreen

@@ -22,6 +22,8 @@ export 'application/usecase/resume_practice_plan.dart';
 export 'application/usecase/delete_practice_planning_data.dart';
 export 'application/usecase/export_practice_planning_data.dart';
 export 'application/usecase/start_plan_generation.dart';
+export 'application/usecase/propose_today_plan_change.dart';
+export 'application/service/generation_plan_input_assembler.dart';
 
 export 'data/adapter/legacy_lesson_candidate_adapter.dart';
 export 'data/adapter/legacy_lesson_catalog_adapter.dart';
@@ -32,6 +34,7 @@ export 'data/adapter/analysis_evidence_adapter.dart';
 export 'data/adapter/vision_evidence_adapter.dart';
 export 'data/adapter/tutor_plan_proposal_adapter.dart';
 export 'data/adapter/practice_engine_catalog_adapter.dart';
+export 'data/adapter/practice_engine_catalog_reader.dart';
 export 'data/adapter/song_goal_reader_adapter.dart';
 export 'data/ai/planner_assist_schema.dart';
 export 'data/ai/remote_planner_assist_gateway.dart';

@@ -1,32 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 
 import '../../../core/storage/in_memory_key_value_store.dart';
 import '../../../fixtures/practice_generator/validation/validation_fixtures.dart';
-
-/// Riverpod 3 wraps a provider-creation error in a [ProviderException]
-/// (possibly nested, when the failure comes from a chain of `ref.watch`
-/// calls) whenever it crosses a `container.read`/`ref.watch` boundary.
-/// The B2 guard cells below care about the ROOT cause
-/// (`UnimplementedError`, the deliberate open-seam signal — round brief
-/// §10.9 / ADR 0482 / D9), not how many wrapping layers Riverpod added.
-Object _rootCause(Object error) {
-  var current = error;
-  while (current is ProviderException) {
-    current = current.exception;
-  }
-  return current;
-}
-
-final Matcher _throwsUnimplementedSeam = throwsA(
-  predicate<Object>(
-    (error) => _rootCause(error) is UnimplementedError,
-    'unwraps (through any ProviderException wrapping) to an UnimplementedError',
-  ),
-);
 
 /// E15-R14 §6/A3: every MANDATORY constructor dependency of the 6 plan
 /// screens (round brief §0.0.B/R4) resolves from ONE `ProviderScope`, with
@@ -247,8 +225,10 @@ void main() {
 
   group(
     'B2 guard: a production-shape container (keyValueStoreProvider '
-    'overridden ONLY) — which provider builds and which throws is a '
-    'MEASURED fact, not an assumption (round brief §10.1, ADR 0482 / D9)',
+    'overridden ONLY) — which provider builds is a MEASURED fact, not an '
+    'assumption (round brief §10.1, ADR 0482 / D9). E17-R05 closed both '
+    'seams, so every cell now builds; the seam-level proof lives in '
+    'seam_implementation_test.dart',
     () {
       ProviderContainer buildProductionShapeContainer() {
         final container = ProviderContainer(
@@ -268,34 +248,48 @@ void main() {
         );
       });
 
-      test('2/6 PlanPreview: planPreviewControllerFactoryProvider throws — '
-          'no production ExerciseCandidateResolver seam yet', () {
+      test('2/6 PlanPreview: planPreviewControllerFactoryProvider builds on '
+          'the production ExerciseCandidateResolver seam (E17-R05)', () {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(planPreviewControllerFactoryProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
+        );
+        expect(
+          () => container.read(planValidationContextForPlanProvider),
+          returnsNormally,
         );
       });
 
       test('3/6 PlanPrivacy: deletePracticePlanningDataProvider and '
-          'exportPracticePlanningDataProvider both throw', () {
+          'exportPracticePlanningDataProvider both build', () {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(deletePracticePlanningDataProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
         );
         expect(
           () => container.read(exportPracticePlanningDataProvider),
-          _throwsUnimplementedSeam,
+          returnsNormally,
         );
       });
 
-      test('4/6 PlanChangeReview: revisePracticePlanProvider builds', () {
+      test('4/6 PlanChangeReview: revisePracticePlanProvider and the Today '
+          'proposal use case both build; no active plan → no proposal '
+          '(explicit null, never a fabricated change set)', () async {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(revisePracticePlanProvider),
           returnsNormally,
         );
+        expect(
+          () => container.read(proposeTodayPlanChangeProvider),
+          returnsNormally,
+        );
+        final proposal = await container.read(
+          todayPlanChangeProposalProvider.future,
+        );
+        expect(proposal, isNull);
       });
 
       test('5/6 TodayPlan: todayPlanControllerProvider builds', () {
@@ -306,32 +300,33 @@ void main() {
         );
       });
 
-      test('6/6 WeeklyPlan: practiceGeneratorTodayProvider builds, but '
-          'activePracticePlanProvider throws — it needs the plan '
-          'repository, which needs the resolver seam', () async {
+      test('6/6 WeeklyPlan: practiceGeneratorTodayProvider builds and '
+          'activePracticePlanProvider reads "no active plan" through the '
+          'real plan repository + production resolver', () async {
         final container = buildProductionShapeContainer();
         expect(
           () => container.read(practiceGeneratorTodayProvider),
           returnsNormally,
         );
-        await expectLater(
-          container.read(activePracticePlanProvider.future),
-          _throwsUnimplementedSeam,
+        final activePlan = await container.read(
+          activePracticePlanProvider.future,
         );
+        expect(activePlan, isNull);
       });
 
       test(
         'GEN: generationOrchestratorProvider and startPlanGenerationProvider '
-        'both throw — the resolver AND the input-builder seam are both open',
+        'both build — the resolver AND the input-builder seam are closed '
+        '(E17-R05 / A1)',
         () {
           final container = buildProductionShapeContainer();
           expect(
             () => container.read(generationOrchestratorProvider),
-            _throwsUnimplementedSeam,
+            returnsNormally,
           );
           expect(
             () => container.read(startPlanGenerationProvider),
-            _throwsUnimplementedSeam,
+            returnsNormally,
           );
         },
       );

@@ -1,0 +1,11 @@
+{
+  "@@locale": "en",
+  "practiceGeneratorMoreActions": "More plan actions",
+  "practiceGeneratorOpenWeeklyPlan": "Weekly plan",
+  "practiceGeneratorOpenPlanPreview": "Plan preview",
+  "practiceGeneratorOpenChangeReview": "Review plan changes",
+  "practiceGeneratorOpenPrivacy": "Plan data and privacy",
+  "practiceGeneratorPlanLoadFailed": "The active plan could not be read. Try again later.",
+  "practiceGeneratorNoActivePlanForAction": "Create and activate a plan first.",
+  "practiceGeneratorNoChangesToReview": "Nothing is scheduled for today, so there is no change to review."
+}

@@ -19,3 +19,5 @@ export '../application/usecase/resume_practice_plan.dart';
 export '../application/usecase/delete_practice_planning_data.dart';
 export '../application/usecase/export_practice_planning_data.dart';
 export '../application/usecase/start_plan_generation.dart';
+export '../application/usecase/propose_today_plan_change.dart';
+export '../application/service/generation_plan_input_assembler.dart';
