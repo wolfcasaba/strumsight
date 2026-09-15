@@ -85,9 +85,11 @@ void main() {
     );
     final down = make(1);
     final up = make(-1);
-    // Invisible before the start and once its (short) life is over.
+    // Invisible before the start and once its (short) life is over. (A hair
+    // past the end, not exactly on it: 1.0 + 0.22 rounds BELOW 1.22 in
+    // binary floating point, so the exact boundary is not a clean cell.)
     expect(down.sweepAt(0.9), isNull);
-    expect(down.sweepAt(1.0 + HitBurstSweep.lifeSec), isNull);
+    expect(down.sweepAt(1.0 + HitBurstSweep.lifeSec + 1e-6), isNull);
     // A down-stroke starts ABOVE the centre and ends BELOW it (screen y grows
     // downward); an up-stroke mirrors it exactly.
     final d0 = down.sweepAt(1.0)!;

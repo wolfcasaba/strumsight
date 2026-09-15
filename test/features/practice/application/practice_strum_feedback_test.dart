@@ -9,6 +9,7 @@ import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/core/platform/microphone_permission.dart';
+import 'package:strumsight/features/practice/application/practice_observation_gateway.dart';
 import 'package:strumsight/features/practice/application/practice_session_command.dart';
 import 'package:strumsight/features/practice/application/practice_session_controller.dart';
 import 'package:strumsight/features/practice/application/practice_strum_feedback.dart';
@@ -128,6 +129,7 @@ void main() {
       permissions: FakeMicrophonePermissionGateway(
         state: MicrophonePermissionState.granted,
       ),
+      observationConfig: const PracticeObservationConfig(),
       sessionIdFactory: () => 'session-strum-${++n}',
       compileTarget: _compile,
       observationGateway: gateway,
