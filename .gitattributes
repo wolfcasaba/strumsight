@@ -1,0 +1,12 @@
+# Line endings: the repo is LF (CI runs on Linux and several tests compare
+# fixtures byte-for-byte). A Windows checkout with core.autocrlf=true turned
+# every text file into CRLF and made those tests red on the dev box only.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.wav binary
+*.bin binary
+*.npz binary
+*.ttf binary
+*.otf binary
+*.jar binary
