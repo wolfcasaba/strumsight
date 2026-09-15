@@ -51,3 +51,17 @@ export 'domain/repositories/feed_repository.dart';
 export 'domain/repositories/notification_repository.dart';
 export 'domain/repositories/post_repository.dart';
 export 'domain/repositories/social_graph_repository.dart';
+
+// Presentation surface (E18-R19 routed the community screens; E18-R23
+// routes them through this barrel so `app_router.dart` never imports a
+// community internal — the `community is reachable only through
+// public.dart (E09-R05)` guard in `architecture_dependency_test.dart`).
+export 'presentation/screens/bookmarks_screen.dart';
+export 'presentation/screens/clubs/club_list_screen.dart';
+export 'presentation/screens/comments_screen.dart';
+export 'presentation/screens/community_gate_screen.dart';
+export 'presentation/screens/community_notifications_screen.dart';
+export 'presentation/screens/followers_screen.dart';
+export 'presentation/screens/following_feed_screen.dart';
+export 'presentation/screens/leaderboard_screen.dart';
+export 'presentation/screens/safety_relationships_screen.dart';
