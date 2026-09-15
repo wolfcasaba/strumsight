@@ -11,6 +11,7 @@ void main() {
     bool? isDown = true,
     double confidence = 0.9,
     bool reducedMotion = false,
+    int onsetSeq = 0,
   }) {
     return MediaQuery(
       data: MediaQueryData(disableAnimations: reducedMotion),
@@ -19,6 +20,7 @@ void main() {
         child: Center(
           child: StrumBurstOverlay(
             strumSeq: seq,
+            onsetSeq: onsetSeq,
             isDown: isDown,
             strength: confidence,
             child: const SizedBox(width: 200, height: 80, child: Text('G')),
@@ -96,5 +98,38 @@ void main() {
     expect(overlay, findsOneWidget);
     await tester.pumpAndSettle();
     expect(overlay, findsNothing);
+  });
+  testWidgets('a rising onsetSeq fires the impact ring before any direction', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(seq: 0, onsetSeq: 0, isDown: null));
+    await tester.pumpWidget(host(seq: 0, onsetSeq: 1, isDown: null));
+    expect(overlay, findsOneWidget, reason: 'the hit shows at once');
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(overlay, findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(overlay, findsNothing, reason: 'the ring stops its own ticker');
+  });
+
+  testWidgets('onset then direction: the ring is joined by the burst', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(seq: 0, onsetSeq: 0, isDown: null));
+    await tester.pumpWidget(host(seq: 0, onsetSeq: 1, isDown: null));
+    await tester.pump(const Duration(milliseconds: 70));
+    await tester.pumpWidget(host(seq: 1, onsetSeq: 1, isDown: true));
+    expect(overlay, findsOneWidget);
+    // Outlives the 0.28 s ring: the 0.45 s burst keeps it alive.
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(overlay, findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(overlay, findsNothing);
+  });
+
+  testWidgets('reduced motion draws no impact ring either', (tester) async {
+    await tester.pumpWidget(host(seq: 0, onsetSeq: 0, reducedMotion: true));
+    await tester.pumpWidget(host(seq: 0, onsetSeq: 1, reducedMotion: true));
+    expect(overlay, findsNothing);
+    await tester.pumpAndSettle();
   });
 }

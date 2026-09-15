@@ -103,6 +103,47 @@ class SweepMark {
   final double progress;
 }
 
+/// The onset-first IMPACT: a ring that snaps outward from the burst centre
+/// the instant the engine confirms a hit (`LiveFrame.onsetSeq`), ~70 ms before
+/// the direction verdict fires the directional [HitBurst]. Direction-free by
+/// design — it says "you hit the strings NOW", nothing more — so it is drawn
+/// in a neutral tint, never in the ↓/↑ colours. Pure geometry, same clock.
+class ImpactRing {
+  const ImpactRing({
+    required this.startSec,
+    required this.strength,
+    this.lifeSec = 0.28,
+  });
+
+  final double startSec;
+
+  /// 0..1 — sizes the ring's reach.
+  final double strength;
+  final double lifeSec;
+
+  bool isDone(double nowSec) => nowSec - startSec >= lifeSec;
+
+  /// The ring at [nowSec], or null when not visible.
+  RingMark? ringAt(double nowSec) {
+    final dt = nowSec - startSec;
+    if (dt < 0 || dt >= lifeSec) return null;
+    final t = dt / lifeSec;
+    final ease = 1 - (1 - t) * (1 - t) * (1 - t); // ease-out cubic
+    final radius = 6.0 + (18.0 + 14.0 * strength) * ease;
+    final alpha = (1 - t) * (1 - t) * (0.55 + 0.45 * strength);
+    final stroke = 3.5 * (1 - t) + 1.0;
+    return RingMark(radius, alpha.clamp(0.0, 1.0), stroke);
+  }
+}
+
+/// The impact ring's [radius], [alpha] and [strokeWidth] at one instant.
+class RingMark {
+  const RingMark(this.radius, this.alpha, this.strokeWidth);
+  final double radius;
+  final double alpha;
+  final double strokeWidth;
+}
+
 /// One spark: [offset] from the burst centre, current [radius] and [alpha].
 class BurstParticle {
   const BurstParticle(this.offset, this.radius, this.alpha);

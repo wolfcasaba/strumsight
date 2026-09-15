@@ -123,4 +123,20 @@ void main() {
       isTrue,
     );
   });
+  test('the impact ring expands, fades and ends on its own clock', () {
+    const ring = ImpactRing(startSec: 1.0, strength: 1.0);
+    expect(ring.ringAt(0.9), isNull);
+    final early = ring.ringAt(1.0)!;
+    final mid = ring.ringAt(1.14)!;
+    final late = ring.ringAt(1.27)!;
+    expect(mid.radius, greaterThan(early.radius));
+    expect(late.radius, greaterThan(mid.radius));
+    expect(mid.alpha, lessThan(early.alpha));
+    expect(late.alpha, lessThan(mid.alpha));
+    expect(ring.isDone(1.28), isTrue);
+    expect(ring.ringAt(1.28), isNull);
+    // Strength scales the reach.
+    const weak = ImpactRing(startSec: 1.0, strength: 0.35);
+    expect(weak.ringAt(1.27)!.radius, lessThan(late.radius));
+  });
 }

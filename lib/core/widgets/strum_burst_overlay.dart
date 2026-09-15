@@ -16,6 +16,11 @@ import 'hit_burst.dart';
 ///   reads the direction: a pick-sweep mark travels through the glyph the
 ///   way the hand moved (top→bottom for ↓, bottom→top for ↑, with a fading
 ///   trail — [HitBurstSweep]) and the sparks fan the same way.
+/// * Onset-first (round strum-strings): when [onsetSeq] advances — the engine
+///   confirmed a HIT, ~70 ms before it knows the direction — a neutral
+///   [ImpactRing] snaps outward at once, so the feedback lands with the
+///   strike, not with the verdict. The directional burst still follows on
+///   [strumSeq]. Surfaces without an onset signal leave [onsetSeq] at 0.
 /// * The clock is a local [Ticker] that runs ONLY while a burst is alive
 ///   (≤ 0.45 s) and stops itself — so `pumpAndSettle` terminates and an idle
 ///   Live screen schedules no frames. This is event-driven decay, not a
@@ -30,8 +35,18 @@ final class StrumBurstOverlay extends StatefulWidget {
     required this.strumSeq,
     required this.isDown,
     required this.strength,
+    this.onsetSeq = 0,
+    this.impactColor,
     this.centerOf = trailingGlyphCenter,
   });
+
+  /// Monotonic per-onset counter from the live frame (bumps before
+  /// [strumSeq]); a rise fires the neutral impact ring. 0 = no onset signal.
+  final int onsetSeq;
+
+  /// Tint of the impact ring; defaults to the theme's on-surface colour —
+  /// deliberately NOT a direction colour.
+  final Color? impactColor;
 
   /// The strum surface the sparks overlay (drawn above it, never blocking
   /// taps).
@@ -67,6 +82,7 @@ final class _StrumBurstOverlayState extends State<StrumBurstOverlay>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   final List<HitBurst> _bursts = [];
+  final List<ImpactRing> _rings = [];
   double _nowSec = 0;
 
   @override
@@ -79,9 +95,18 @@ final class _StrumBurstOverlayState extends State<StrumBurstOverlay>
   void didUpdateWidget(StrumBurstOverlay old) {
     super.didUpdateWidget(old);
     final isDown = widget.isDown;
+    if (widget.onsetSeq > old.onsetSeq) _fireImpact();
     if (widget.strumSeq > old.strumSeq && isDown != null) {
       _fire(isDown);
     }
+  }
+
+  void _fireImpact() {
+    if (SsMotionScope.reduceMotionOf(context)) return;
+    _rings.add(
+      ImpactRing(startSec: _nowSec, strength: widget.strength.clamp(0.35, 1.0)),
+    );
+    if (!_ticker.isActive) _ticker.start();
   }
 
   void _fire(bool isDown) {
@@ -106,7 +131,8 @@ final class _StrumBurstOverlayState extends State<StrumBurstOverlay>
     setState(() {
       _nowSec = elapsed.inMicroseconds / 1e6;
       _bursts.removeWhere((b) => b.isDone(_nowSec));
-      if (_bursts.isEmpty) {
+      _rings.removeWhere((r) => r.isDone(_nowSec));
+      if (_bursts.isEmpty && _rings.isEmpty) {
         _ticker.stop();
         _nowSec = 0;
       }
@@ -121,7 +147,9 @@ final class _StrumBurstOverlayState extends State<StrumBurstOverlay>
 
   @override
   Widget build(BuildContext context) {
-    if (_bursts.isEmpty) return widget.child;
+    if (_bursts.isEmpty && _rings.isEmpty) return widget.child;
+    final impact =
+        widget.impactColor ?? Theme.of(context).colorScheme.onSurface;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -133,6 +161,8 @@ final class _StrumBurstOverlayState extends State<StrumBurstOverlay>
               child: CustomPaint(
                 painter: _HeroBurstPainter(
                   bursts: List.unmodifiable(_bursts),
+                  rings: List.unmodifiable(_rings),
+                  impactColor: impact,
                   nowSec: _nowSec,
                   centerOf: widget.centerOf,
                 ),
@@ -153,9 +183,15 @@ final class _HeroBurstPainter extends CustomPainter {
     required this.bursts,
     required this.nowSec,
     required this.centerOf,
+    this.rings = const [],
+    this.impactColor = const Color(0xFFFFFFFF),
   });
 
   final List<HitBurst> bursts;
+  final List<ImpactRing> rings;
+  final Color impactColor;
+
+  final Paint _ring = Paint()..style = PaintingStyle.stroke;
   final double nowSec;
   final Offset Function(Size size) centerOf;
 
@@ -174,6 +210,15 @@ final class _HeroBurstPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = centerOf(size);
+    // The impact ring first (lowest layer): a direction-free "hit" mark.
+    for (final r in rings) {
+      final mark = r.ringAt(nowSec);
+      if (mark == null) continue;
+      _ring
+        ..color = impactColor.withValues(alpha: mark.alpha)
+        ..strokeWidth = mark.strokeWidth;
+      canvas.drawCircle(center, mark.radius, _ring);
+    }
     for (final b in bursts) {
       // The pick sweep first (under the sparks): the mark plus a fading
       // trail, all travelling in the stroke's direction through the glyph.
@@ -200,5 +245,8 @@ final class _HeroBurstPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_HeroBurstPainter old) =>
-      old.nowSec != nowSec || old.bursts != bursts;
+      old.nowSec != nowSec ||
+      old.bursts != bursts ||
+      old.rings != rings ||
+      old.impactColor != impactColor;
 }
