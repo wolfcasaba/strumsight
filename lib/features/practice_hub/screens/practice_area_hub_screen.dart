@@ -77,10 +77,8 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                       const SizedBox(height: 16),
                       FilledButton(
                         key: const ValueKey('practice-hub-recommended-cta'),
-                        onPressed: () => _openSetup(
-                          context,
-                          definitionId: catalog.first.id,
-                        ),
+                        onPressed: () =>
+                            _openSetup(context, definitionId: catalog.first.id),
                         child: Text(l10n.practiceAreaHubRecommendedCta),
                       ),
                     ],
@@ -143,8 +141,7 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                     key: const ValueKey('practice-hub-song-trainer'),
                     icon: Icons.queue_music,
                     label: l10n.songTrainerTitle,
-                    onPressed: () =>
-                        context.push(AppRoutes.songTrainerLibrary),
+                    onPressed: () => context.push(AppRoutes.songTrainerLibrary),
                   ),
               ],
             ),
@@ -195,10 +192,7 @@ class PracticeAreaHubScreen extends ConsumerWidget {
 
   /// The one way into a scored practice: Setup, parameterized by the
   /// definition id (the same URI shape as the legacy Hub's `_openSetup`).
-  static void _openSetup(
-    BuildContext context, {
-    required String definitionId,
-  }) {
+  static void _openSetup(BuildContext context, {required String definitionId}) {
     final uri = Uri(
       path: AppRoutes.practiceSetup,
       queryParameters: <String, String>{'id': definitionId},
@@ -214,8 +208,7 @@ class PracticeAreaHubScreen extends ConsumerWidget {
     PracticeAreaHubCategory.chords => l10n.practiceAreaHubCategoryChords,
     PracticeAreaHubCategory.rhythm => l10n.practiceAreaHubCategoryRhythm,
     PracticeAreaHubCategory.scales => l10n.practiceAreaHubCategoryScales,
-    PracticeAreaHubCategory.technique =>
-      l10n.practiceAreaHubCategoryTechnique,
+    PracticeAreaHubCategory.technique => l10n.practiceAreaHubCategoryTechnique,
   };
 
   static String _difficultyLabel(

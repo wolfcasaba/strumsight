@@ -107,8 +107,7 @@ Future<({GoRouter router, List<String> visited})> _pumpHub(
         appConfigProvider.overrideWithValue(
           _config(songTrainerV2Enabled: songTrainerV2Enabled),
         ),
-        if (catalog != null)
-          practiceCatalogProvider.overrideWithValue(catalog),
+        if (catalog != null) practiceCatalogProvider.overrideWithValue(catalog),
       ],
       child: MaterialApp.router(
         routerConfig: router,

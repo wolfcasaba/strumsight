@@ -179,9 +179,9 @@ void main() {
         tester.element(find.byType(FirstWinStageScreen)),
       );
       expect(
-        tester.widget<Text>(
-          find.byKey(const ValueKey('onboard-first-win-title')),
-        ).data,
+        tester
+            .widget<Text>(find.byKey(const ValueKey('onboard-first-win-title')))
+            .data,
         l10n.onboardFirstWinListening,
       );
       expect(

@@ -36,6 +36,11 @@ Future<FakeStrumEngine> _pumpLive(WidgetTester tester) async {
     ],
   );
   addTearDown(container.dispose);
+  // Registered AFTER container.dispose so it runs BEFORE it (LIFO): the Live
+  // screen lives in a StatefulShellRoute branch and stays mounted after
+  // Finish switches to /today, so its dispose (which records the session
+  // into practiceLogProvider) must run while the container is still alive.
+  addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
@@ -120,15 +125,16 @@ void main() {
     expect(find.text(l10n.liveSummaryTipCourse), findsOneWidget);
 
     await tester.tap(find.byKey(_courseKey));
-    await tester.pumpAndSettle();
+    // The lesson list carries its own continuous motion, so settle by
+    // fixed pumps instead of pumpAndSettle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byKey(_dialogKey), findsNothing);
     expect(find.byType(LessonListScreen), findsOneWidget);
   });
 
-  testWidgets('a session with no strum leaves without a recap', (
-    tester,
-  ) async {
+  testWidgets('a session with no strum leaves without a recap', (tester) async {
     final engine = await _pumpLive(tester);
     engine.emit(LiveFrame.empty.copyWith(listening: true, inputLevel: 0.3));
     await tester.pumpAndSettle();

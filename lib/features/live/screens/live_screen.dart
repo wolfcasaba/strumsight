@@ -218,8 +218,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       context.pop();
       return;
     }
-    final entryLocation =
-        ref.read(appConfigProvider).flags.adaptiveShellEnabled
+    final entryLocation = ref.read(appConfigProvider).flags.adaptiveShellEnabled
         ? AppRoutes.today
         : AppRoutes.live;
     if (entryLocation != AppRoutes.live) {

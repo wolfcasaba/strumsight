@@ -47,10 +47,7 @@ class LiveSummaryDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Stat(
-            icon: Icons.graphic_eq,
-            label: l10n.liveSummaryStrums(strums),
-          ),
+          _Stat(icon: Icons.graphic_eq, label: l10n.liveSummaryStrums(strums)),
           const SizedBox(height: 8),
           _Stat(
             icon: Icons.music_note_outlined,
