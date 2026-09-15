@@ -77,6 +77,12 @@ Future<({GoRouter router, List<String> visited})> _pumpHub(
   List<PracticeDefinition>? catalog,
   bool songTrainerV2Enabled = false,
 }) async {
+  // Tall enough that every catalog tile is fully inside the viewport: a
+  // partially visible card's centre lands outside the 800x600 default
+  // surface and the tap silently misses (measured in CI).
+  tester.view.physicalSize = const Size(800, 4000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
   final visited = <String>[];
   Widget probe(GoRouterState state) {
     visited.add(state.uri.toString());
@@ -211,7 +217,6 @@ void main() {
         final tile = find.byKey(
           ValueKey('practice-hub-definition-${definition.id}'),
         );
-        await tester.scrollUntilVisible(tile, 200);
         await tester.tap(tile);
         await tester.pumpAndSettle();
 
@@ -273,7 +278,6 @@ void main() {
 
       final hub = await _pumpHub(tester, songTrainerV2Enabled: true);
       final tool = find.byKey(const ValueKey('practice-hub-song-trainer'));
-      await tester.scrollUntilVisible(tool, 200);
       await tester.tap(tool);
       await tester.pumpAndSettle();
       expect(hub.visited.last, AppRoutes.songTrainerLibrary);
