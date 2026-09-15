@@ -17,17 +17,27 @@ funkció nélkül (mind kompozíció):
 | 6 | Profil fül címkéje `tutorProfileTitle` („Tutor profil"); „Bizonyossági küszöb" csúszka a Beállítások első képernyőjén | `profileHubTitle`; a csúszka összecsukott „Haladó beállítások" `ExpansionTile` alá | `lib/app/home_shell.dart`, `settings_screen.dart` |
 | — | 15 új ARB-kulcs a `base/` FORRÁS szegmensben, aggregátum generálva (ADR 0307 §4, a generátor Python-tükrével — bájtra azonos a Dart-kimenettel a módosítás előtti fán mérve) | | `lib/l10n/base/app_{en,hu}.arb`, `lib/l10n/app_{en,hu}.arb` |
 
-**Ami ebben a sessionben NEM futott (remote konténer, nincs Flutter SDK —
-`docs/execution/remote-container-environment.md`):** `dart format`, `flutter
-analyze`, `flutter test`. A bizonyíték a CI-futás lesz (`build-apk.yml` a fenti
-ágon), utána a pirosak javítása.
+**CI-bizonyíték (remote konténer, nincs Flutter SDK —
+`docs/execution/remote-container-environment.md`):** a `full-gate.yml`
+[run 34947243304](https://github.com/wolfcasaba/strumsight/actions/runs/34947243304)
+a `300f9cd`-n: **format, analyze, architektúra, secret-scan, l10n-paritás, asset
+kapu ZÖLD**; a test-kapu `10227 passed, 9 failed` — 2 a Live-összegző teszt
+`pumpAndSettle`-je (javítva fix pumpokra a következő commitban), **7 a
+szándékosan változott pixel-golden** (alább). A formázó kimenetét egy
+ideiglenes, azóta törölt próbateszt írta a CI-naplóba, onnan lett bájtra
+visszavezetve.
 
-**Előre ismert piros:** a pixel-goldenek 5 képernyőn (e13_r17 practice_area_hub /
-today_hub / profile_hub, e13_r22 practice_result, e13_r35 settings — 10 PNG)
-SZÁNDÉKOSAN változnak. Újrafelvételük a `tools/golden-x86.sh record` a
-felhasználó boxán (ADR 0426), VAGY egy `golden-record.yml` workflow — ez
-utóbbit a `protect_factory_files` hook helyesen blokkolta (`.github/workflows/*`
-a mérce része, ADR 0112/0138); emberi engedély nélkül nem került be.
+**Nyitott piros — emberi lépés:** 7 golden PNG újrafelvétele a kapu
+architektúráján (ADR 0426): `e13_r17_today_hub_compact`,
+`e13_r17_practice_area_hub_compact{,_scale2}`,
+`e13_r17_profile_hub_compact{,_scale2}`, `e13_r22_practice_result_compact`,
+`e13_r35_settings_compact`. Parancs a felhasználó boxán, ezen az ágon:
+`tools/golden-x86.sh record test/ui/goldens/e13_r17_screens_golden_test.dart
+test/ui/goldens/e13_r22_screens_golden_test.dart
+test/ui/goldens/e13_r35_screens_golden_test.dart`. Egy CI-oldali
+`golden-record.yml` workflow-t a `protect_factory_files` hook helyesen
+blokkolt (`.github/workflows/*` a mérce része, ADR 0112/0138) — emberi
+engedély (`.claude/gate-edit-authorized`) nélkül nem került be.
 
 **Nyitva marad (külön kör):** valódi XP-főkönyv bekötés; a „Dalkönyvtár" fül
 V2-re váltása; egy haladás-modell (progress V1/V2/gamification); a Ch14 R20–R42

@@ -83,9 +83,12 @@ Future<void> _play(
 Future<void> _finish(WidgetTester tester) async {
   await tester.tap(find.byKey(_finishKey));
   await tester.pump();
-  // Past the 300 ms deferred "finishing" beat.
+  // Past the 300 ms deferred "finishing" beat, then the dialog's own
+  // transition. Fixed pumps, not pumpAndSettle: the Live stage behind the
+  // dialog keeps scheduling frames (its idle pulse), so "settled" never
+  // arrives while the recap is open (measured in CI).
   await tester.pump(const Duration(milliseconds: 350));
-  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 void main() {
@@ -106,7 +109,8 @@ void main() {
     expect(find.byKey(_courseKey), findsNothing);
 
     await tester.tap(find.byKey(_doneKey));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byKey(_dialogKey), findsNothing);
     expect(find.byType(LiveScreen), findsNothing);
@@ -137,7 +141,7 @@ void main() {
   testWidgets('a session with no strum leaves without a recap', (tester) async {
     final engine = await _pumpLive(tester);
     engine.emit(LiveFrame.empty.copyWith(listening: true, inputLevel: 0.3));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     await _finish(tester);
 
