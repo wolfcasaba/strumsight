@@ -1,5 +1,25 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔁 FOLYAMATBAN — 4. kör: egy haladás-modell; 5. kör: a Dalkönyvtár fül a Song Trainer V2 (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+**4. kör — egy haladás-modell** (az 1. kör 6. lelete és az E16-R05 L4):
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `practiceStatsProvider` | a session/másodperc/pengetés rollup a V1+V2 összesített feedből (`PracticeStats.fromAggregated`), így a V2 gyakorlás a Ma-hubon, Profilon, streak- és haladás-képernyőn is számít | `lib/features/progress/providers/practice_stats_provider.dart` (ÚJ), `progress/public.dart`; fogyasztók: `today_hub_screen`, `profile_hub_screen`, `streak_screen`, `progress_screen` |
+| `StreakCreditingPracticeSessionRecorder` | sikeres history-mentés után a KANONIKUS `PracticeSessionEligibility` predikátummal (≥20 s aktív VAGY ≥4 megoldott cél) jóváírja a streaket (idempotens naponta); cancelled/failed/interrupted soha. A V1 naplót SZÁNDÉKOSAN nem tükrözi: az összesített feed már uniózza a V2 history-t, egy V1 tükörbejegyzés duplázná a napi célt | `lib/features/practice/application/practice_streak_recorder.dart` (ÚJ); bekötés `practice_session_providers.dart` (history → streak → reward) |
+| Tesztek | rollup V1 2 + V2 2 = 4 session; streak: eligible → 1, kétszer → 1, rövid → 0, cancelled → 0, bukó mentés → Failure és 0; tiszta predikátum-cellák | `test/features/progress/practice_stats_provider_test.dart`, `test/features/practice/practice_streak_recorder_test.dart` (ÚJ) |
+
+**5. kör — a Dalkönyvtár fül a Song Trainer V2:**
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `/songs` az adaptív shellben | `songTrainerV2Enabled` esetén a `SongLibraryScreen` (8 képernyős tréner belépője), különben változatlanul a legacy `SongListScreen` | `app_router.dart` (branch) |
+| `/songs/own` (ÚJ route) | a legacy „Dalaim" builder-lista, a V2 könyvtár app-bar ikonjáról (`song-library-own-songs`) egy tapra; a nem-adaptív shellben is regisztrálva | `app_route.dart`, `app_router.dart`, `song_library_screen.dart` |
+| Teszt | flag BE → könyvtár + ikon → builder; flag KI → legacy lista | `test/app/navigation/songs_tab_v2_test.dart` (ÚJ) |
+
+**Golden:** `e13_r23_song_library` (új app-bar ikon) újrafelvétele a
+`record-goldens.yml`-lel a CI-mérés után.
+
+
 ## ✅ KÉSZ — 3. kör: valódi XP-főkönyv a Practice V2 session mögött (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
 Az 1. kör 3. lelete („+XP kártya, ami soha nem ad"): a

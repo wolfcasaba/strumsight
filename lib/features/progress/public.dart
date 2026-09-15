@@ -10,3 +10,4 @@ export 'providers/practice_log_provider.dart';
 
 /// Daily-goal setting and active-time rollup for feature integrations.
 export 'providers/daily_goal_provider.dart';
+export 'providers/practice_stats_provider.dart';
