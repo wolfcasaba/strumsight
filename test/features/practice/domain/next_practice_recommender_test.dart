@@ -4,6 +4,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
 import 'package:strumsight/features/practice/domain/model/meter.dart';
+import 'package:strumsight/features/practice/domain/model/next_practice_recommendation.dart';
 import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
 import 'package:strumsight/features/practice/domain/model/practice_difficulty.dart';
 import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';

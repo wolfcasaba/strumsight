@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/model/next_practice_recommendation.dart';
 import '../domain/service/next_practice_recommender.dart';
 import 'practice_catalog_controller.dart';
 import 'practice_progress_providers.dart';
