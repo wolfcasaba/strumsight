@@ -87,8 +87,7 @@ class _ControllerSessionHost implements PracticeSessionHost {
   Stream<PracticeSessionEffect> get effects => _controller.effects;
 
   @override
-  Stream<PracticeStrumFeedback> get strumFeedback =>
-      _controller.strumFeedback;
+  Stream<PracticeStrumFeedback> get strumFeedback => _controller.strumFeedback;
 
   @override
   int? get liveOverallPerMille => _controller.liveScore?.overallPerMille;
