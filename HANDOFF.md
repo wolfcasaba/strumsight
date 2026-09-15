@@ -1,5 +1,49 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟡 MOTION-ADAG — `bc8003d` (Chapter 18 R01/R03/R04 szelet): 10 240 zöld, **6 golden PNG újrafelvételre vár** (2026-09-15)
+
+Commit `bc8003d` (branch `claude/ui-design-viral-elements-u9z9ht`): három
+témafüggetlen design-system komponens + bekötés — `SsStaggeredEntrance`
+(lépcsőzetes belépés), `SsScoreRingReveal` (gyűrű-felfutás számlálóval),
+`SsLockRing` (bezáruló lock-gyűrű); Today Hub (szekciók belépése + napi cél
+gyűrű a hero-ban), Tuner (lock-gyűrű a hang neve körül), Practice result
+(gyűrű minden pontozott dimenzió sorában). `SsMotion.stagger` (60 ms) és
+`SsMotion.ringFill` tokenek; a rögzített alap-időtartamok változatlanok.
+
+**CI a `bc8003d`-n:** [full-gate 34941593327](https://github.com/wolfcasaba/strumsight/actions/runs/34941593327)
++ [build-apk 34941595591](https://github.com/wolfcasaba/strumsight/actions/runs/34941595591):
+format + analyze zöld, **10 240 teszt zöld, 6 piros** — mind a hat a három
+érintett képernyő nulla-toleranciás pixel-goldenje:
+`e13_r17_today_hub_compact{,_scale2}.png`, `e13_r19_tuner_compact{,_scale2}.png`,
+`e13_r22_practice_result_compact{,_scale2}.png`. Ez a várt következmény (a
+képernyők szándékosan változtak), nem regresszió.
+
+**Teendő (emberi box, ADR 0426 — a felvétel a KAPU architektúráján, x86-on):**
+
+```bash
+git fetch origin claude/ui-design-viral-elements-u9z9ht
+git checkout claude/ui-design-viral-elements-u9z9ht
+tools/golden-x86.sh record test/ui/goldens/e13_r17_screens_golden_test.dart \
+  test/ui/goldens/e13_r19_screens_golden_test.dart \
+  test/ui/goldens/e13_r22_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r17_screens_golden_test.dart \
+  test/ui/goldens/e13_r19_screens_golden_test.dart \
+  test/ui/goldens/e13_r22_screens_golden_test.dart
+git add test/ui/goldens/goldens/e13_r17_today_hub_compact*.png \
+  test/ui/goldens/goldens/e13_r19_tuner_compact*.png \
+  test/ui/goldens/goldens/e13_r22_practice_result_compact*.png
+git commit -m "test(goldens): re-record Today Hub, Tuner, Practice result after the Ch18 motion batch"
+git push origin claude/ui-design-viral-elements-u9z9ht
+```
+
+Ezután a full-gate + build-apk újraindítható a branchen (a remote session
+nem tudja a PNG-ket felvenni: nincs Docker és Flutter a konténerben; a
+`docs/execution/gate-runs/2026-09-15-strum-spark-gate.md` szerint a
+hoszt-allowlist sem ért el a `Default` környezethez).
+
+Tesztek: `test/core/design_system/motion/ss_staggered_entrance_test.dart`,
+`ss_score_ring_reveal_test.dart`, `ss_lock_ring_test.dart` — a CI-ban zöld.
+
 ## ✅ STRUM-SPARK — a le/fel ütés-animáció a Live, Practice és Song Trainer képernyőn — branch `claude/ui-design-viral-elements-u9z9ht`, HEAD `9121160` (2026-09-15)
 
 A felhasználó kérése a dizájn-session után: „a le/fel ütés animáció már volt
