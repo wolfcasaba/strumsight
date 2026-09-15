@@ -51,6 +51,10 @@ Widget _host(
   InMemoryKeyValueStore? store,
   DateTime Function()? clock,
 }) => ProviderScope(
+  // A fresh container per pump: pumpWidget UPDATES a root ProviderScope in
+  // place, which would keep the previous tree's notifier state alive and
+  // turn the "brand-new tree over the same store" cells into a lie.
+  key: UniqueKey(),
   overrides: [
     liveFrameProvider.overrideWith((ref) => frames),
     // The screen reads the persisted calibration, the metronome mute, the

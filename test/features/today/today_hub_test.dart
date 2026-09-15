@@ -307,6 +307,12 @@ void main() {
     testWidgets('vision disabled: reason text, no action button', (
       tester,
     ) async {
+      // The Today hub grew two cards above this one (2026-09-15); on the
+      // default 800×600 surface it now sits below the fold, so give the
+      // ListView room instead of scrolling past real content.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_host(visionEnabled: false));
       await tester.pump();
 
@@ -318,6 +324,12 @@ void main() {
     });
 
     testWidgets('vision enabled: actionable, no reason text', (tester) async {
+      // The Today hub grew two cards above this one (2026-09-15); on the
+      // default 800×600 surface it now sits below the fold, so give the
+      // ListView room instead of scrolling past real content.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_host(visionEnabled: true));
       await tester.pump();
 
@@ -373,6 +385,12 @@ void main() {
   group('the privacy promise card (2026-09-15)', () {
     testWidgets('renders the title and all four promises, with no button and '
         'no second primary action', (tester) async {
+      // The Today hub grew two cards above this one (2026-09-15); on the
+      // default 800×600 surface it now sits below the fold, so give the
+      // ListView room instead of scrolling past real content.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_host());
       await tester.pump();
 
