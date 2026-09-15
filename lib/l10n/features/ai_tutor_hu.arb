@@ -1,0 +1,8 @@
+{
+  "@@locale": "hu",
+  "tutorPlanPreviewEntry": "Gyakorlási terv előnézete",
+  "tutorPlanOpenPreview": "A gyakorlási terv előnézetének megnyitása",
+  "tutorPlanSaved": "A gyakorlási terv a tanár memóriájába mentve.",
+  "tutorPlanSaveFailed": "A gyakorlási tervet nem sikerült menteni.",
+  "tutorPlanStartUnavailable": "Ehhez a tervhez még nincs indítható gyakorlat."
+}
