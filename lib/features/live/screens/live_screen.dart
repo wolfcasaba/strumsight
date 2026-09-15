@@ -355,6 +355,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               children: [
                 StrumBurstOverlay(
                   strumSeq: frame.strumSeq,
+                  onsetSeq: frame.onsetSeq,
                   isDown: latestStrum?.isDown,
                   strength: latestStrum?.confidence ?? 0.0,
                   child: SsChordHero(
