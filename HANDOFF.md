@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🟡 E18-R23 — AZ E18 ÁG CI-ZÖLDÍTÉSE + A 60 MÁSODPERCES PENGETÉS-KIHÍVÁS — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
+## 🟢 E18-R23 — AZ E18 ÁG CI-ZÖLDÍTÉSE (csak a 4 golden felvétele van hátra) + A 60 MÁSODPERCES PENGETÉS-KIHÍVÁS — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
 
 **User-kérés:** „autonóm módon menj az agent csapatoddal… úgy készítsd el az
 appot, hogy mindenkinek tetsszen, végezz kutatást, tervezz, fejlessz gyorsan;
@@ -27,7 +27,8 @@ körben leszállítva (pengetés-kihívás, adatvédelmi ígéret).
 | `c590a6d` | **Őr 2 + 5 javítva:** a §3.2 kizárási tábla 10 új sora (9 community + `rhythm_practice`, indokkal, gazdával, `nincs — …` körrel) és 11 új `_ScreenFixture` az e15_r13 mátrixban (a `curriculum_ladder` is hiányzott). Döntés: a community walkthrough-fedés a backend `community_enabled` bekapcsolása után értelmes. |
 | `55746a1` | **12 mért nagybetűs (2.0×) túlcsordulás javítva a lib-ben** (nem cella-kizárással): community gate (görgethető), értesítés-beállítások (≥1.5× egymás alá), safety-lista (akció a sor alá), ritmus-gyakorlás (transport `Wrap`). Mind a négy képernyő kapott 2.0×/hu regressziós cellát. |
 | `6e17a96` | **ÚJ funkció: 60 másodperces pengetés-kihívás** (`lib/features/strum_challenge/`, `/practice/strum-challenge` stage-route, Today hub kártya, napi legjobb `ss.strum_challenge.best`, 20 teszt-cella, l10n szegmens). |
-| (folyamatban) | Today hub „Alapból privát" kártya (nincs fiók / offline / nincs reklám / a hang nem hagyja el a telefont). |
+| `c3ed31e` | **Today hub „Alapból privát" kártya** (nincs fiók / offline / nincs reklám / a hang nem hagyja el a telefont), 5 l10n kulcs. |
+| `f539b03`…`86c015f` | Formázás- és teszt-javítások a CI mérése nyomán. |
 
 ### CI-állás (full-gate, a saját tail-korlát-kerülő diagnosztikával mérve)
 
@@ -35,7 +36,13 @@ körben leszállítva (pengetés-kihívás, adatvédelmi ígéret).
 - 3. futás (`648ec1c`, őrök után): 10982 ✅ / **13** ❌ → 1 golden + 12 valódi
   túlcsordulás (a szelet-ág `claude/diag-guards-slice` listázta ki őket).
 - 4. futás (`55746a1`, túlcsordulások után): 10996 ✅ / **3** ❌ → CSAK goldenek.
-- 5. futás (`6e17a96`, kihívás): folyamatban — ld. lentebb a jelen állást.
+- 5–7. futás (`6e17a96` → `c7ef12e`): formázási körök (a tall-style formázó
+  alakjait egy szelet-ág, `claude/diag-format-probe`, nevezte meg), majd
+  11028 ✅ / 9 ❌ — a 4 nem-golden hibát a `claude/diag-slice-2` szelet
+  listázta (Today hub kártyák a 600 px-es teszt-felület alatt; a
+  ProviderScope helyben frissül `pumpWidget`-nél → `key: UniqueKey()`).
+- **8. futás (`86c015f`): 11033 ✅ / 4 ❌ — KIZÁRÓLAG a 4 golden**
+  ([34924543554](https://github.com/wolfcasaba/strumsight/actions/runs/34924543554)).
 
 **Goldenek, amiket x86-on ÚJRA KELL VENNI (a diff szándékos, mért):**
 `e13_r17` practice area hub compact (E18 feature-drift), `e13_r17` today hub
@@ -47,7 +54,7 @@ marker) engedély nélkül nem engedi. **A kész workflow-vázlat a session
 scratchpadjában készült; a tulajdonos döntése: (a) engedélyezi a workflow
 hozzáadását, vagy (b) a saját boxán `tools/golden-x86.sh record …` (docker).**
 
-**Takarítás a user boxáról:** `git push origin --delete claude/diag-guards-slice`
+**Takarítás a user boxáról:** `git push origin --delete claude/diag-guards-slice claude/diag-format-probe claude/diag-slice-2`
 (a proxy a távoli törlést elutasította, mint az E18-R01 négy szelet-ágánál).
 
 ### KÖVETKEZŐ
