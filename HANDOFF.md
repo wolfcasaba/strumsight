@@ -1,5 +1,64 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟡 E18-R24 — „MINDEN BEKAPCSOLVA": a 328 kör alatt megépült, de kikapcsolt / bekötetlen részek élesítése — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
+
+**User-kérés (felülíró):** „De én szeretném ha a teljes app működne." — vagyis
+ne csak zöld legyen az ág, hanem minden, ami az elmúlt körökben elkészült,
+legyen bekapcsolva ÉS elérhető a felületről. A tulajdonos nem fejlesztő:
+laikus összefoglaló lent, a „mit kell neki tennie" pontban.
+
+### Mi volt a helyzet (mért, `tool/check_screen_reachability.dart` szabályaival)
+
+99 képernyőből **13 sehonnan nem volt elérhető** (megépült, tesztelt, de egy
+gomb sem vezetett oda), **8 funkció-kapcsoló ki volt kapcsolva** minden
+környezetben (AI Tutor, Hangelemzés V2 és hat alkapcsolója), a közösségi
+képernyők pedig **hibapanelt mutattak**, mert az adatréteg csak „placeholder"
+volt (a szerverhez soha nem beszéltek), és a szerveren sem létezett klub-,
+kihívás-lista- és értesítés-útvonal.
+
+### Ami elkészült (commitok `84e277e` után, mind pusholva)
+
+| Commit | Mit ad |
+|---|---|
+| `ad50623`, `5359026` | **8 kapcsoló BE minden nem-éles buildben** (dev/lab): `aiTutorEnabled`, `audioAnalysisV2Enabled` + beatGrid/pitch/techniqueProxies/comparison/practiceIntegration/tutorIntegration. Éles (production) érték byte-ra változatlan (`verify_ga_scope.py`). Docs: capability-rollout, ga-scope, kill-switches. |
+| `25b5184` | **Setlist-munkamenet** elérhető a setlist részleteiből („Run as session", gyakorlás/előadás mód). |
+| `f3719b6` | **Tutor gyakorlásterv-előnézet** elérhető a Tutor-chatből (AppBar-gomb + terv-blokk érintése); „Start" a meglévő Practice útvonalat használja. |
+| `643c9ce` | **Hangelemzés V2 felvétel-folyam** végig működik: home → felvétel → feldolgozás → áttekintés; a Practice hub új gyorseszköze nyitja. |
+| `a39ac88`, `64f8ca9` | **Gyakorlás-generátor:** a két „seam" valódi (katalógus-olvasó, terv-bemenet összeállító), a heti terv / előnézet / módosítás-áttekintés / adatvédelem képernyők a Today Plan menüből nyílnak; a Today Plan útvonal az aktív tervet kapja. |
+| `566fc82`, `a773457`, `a7e31c6`, `ece71a2` | **Közösség valódi adatréteggel:** HTTP feed/poszt/értesítés/klub/social-graph repositoryk (Dio, PATCH is), production overrides az app-indításnál; klub-részlet, kihívások, keresés, poszt-szerkesztő elérhető a feedből/értesítésekből. 5 új sor az adat-leltárban (egress). |
+| `3514284`, `de4a5ba` | **Szerver (FastAPI):** teljes klub-router (16 útvonal), kihívás-olvasó GET-ek (lista/részlet/saját részvétel), értesítés-router (5 útvonal). Szerződés-fájl 39 bejegyzés, mind `mounted`; a `live_backend_smoke.py` lánc már a kihívás- és értesítés-olvasásokat hívja (13 exercised / 26 not_exercised / 0 known_gap). Backend-suite: 916+ zöld helyben. |
+| `24f8901` | **Őrök a méréshez igazítva:** 99/99 elérhető, 0 elérhetetlen, 30 kapu mögött; §3.2 tábla 88 sor; e15_r13 mátrix 99 fixture; retirement-plan sorok. |
+| `451ca21` | Formázás-átnézés (13 alak-javítás, mért precedensekkel) + **`lab_build.json`**: a Lab APK a `https://casaba.app/strumsight` szerverre épül, fiók + közösség (írás, ranglista, klubok) BE, build tag `e18-r23-everything-on`. |
+
+**Szándékosan NEM kapcsolt be:** *vision* (a ML-modellek deferred asset-ek →
+biztos betöltési hiba lenne), a felismerés-helyreállító trió és a kísérleti
+kapcsolók (nulla fogyasztójuk van a kódban). A közösség **nem** `nonProd`,
+hanem `lab_build.json` define-okkal megy — így a „külső erőforrás sosem
+alapból BE" őrök maradnak.
+
+### CI-állás
+
+- Első teljes kapu a „minden bekapcsolva" fejre (`451ca21`): **kitöltendő a
+  futás után** (várható: formázási/analyze/teszt körök, mert a fenti commitok
+  Dart SDK nélkül, vakon készültek; a 4 golden továbbra is piros marad, amíg
+  fel nem veszik).
+- `lab-apk.yml` a `lab_build.json` push-ra indult — az APK a run
+  artefaktumában.
+
+### Mit kell a TULAJDONOSNAK tennie (laikusan)
+
+1. **Szerver-kapcsolók** a casaba.app szolgáltatáson (környezeti változók):
+   `STRUMSIGHT_COMMUNITY_ENABLED=true`, `STRUMSIGHT_COMMUNITY_WRITES_ENABLED=true`,
+   `STRUMSIGHT_COMMUNITY_CLUBS_ENABLED=true`, `STRUMSIGHT_COMMUNITY_LEADERBOARD_ENABLED=true`
+   — e nélkül az app közösségi része „nincs ilyen útvonal" hibát kap. Utána a
+   frissen deployolt szerver ellenőrzése: `python3 tool/release/live_backend_smoke.py --base-url https://casaba.app/strumsight`.
+2. **Goldenek felvétele** (4 kép, lásd E18-R23 lent) — a távoli konténerből nem
+   megy.
+3. **Lab APK kipróbálása** valódi gitárral: Tutor-chat → terv-előnézet; Practice
+   hub → Hangelemzés; Today Plan menü; Songs → setlist → „Run as session";
+   Community fül (bejelentkezve).
+4. A három diag-ág törlése a saját boxról (E18-R23 parancs).
+
 ## 🟢 E18-R23 — AZ E18 ÁG CI-ZÖLDÍTÉSE (csak a 4 golden felvétele van hátra) + A 60 MÁSODPERCES PENGETÉS-KIHÍVÁS — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
 
 **User-kérés:** „autonóm módon menj az agent csapatoddal… úgy készítsd el az
