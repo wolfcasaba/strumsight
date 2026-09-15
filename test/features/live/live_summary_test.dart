@@ -112,10 +112,7 @@ void main() {
 
     expect(find.byKey(_dialogKey), findsOneWidget);
     expect(find.text(l10n.liveSummaryStrums(3)), findsOneWidget);
-    expect(
-      find.text(l10n.liveSummaryChords(confirmedChords)),
-      findsOneWidget,
-    );
+    expect(find.text(l10n.liveSummaryChords(confirmedChords)), findsOneWidget);
     // Under the short-session threshold: the tip asks for a longer session
     // and the course shortcut is not offered.
     expect(find.text(l10n.liveSummaryTipShort), findsOneWidget);
