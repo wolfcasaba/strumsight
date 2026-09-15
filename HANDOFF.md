@@ -36,14 +36,22 @@ kapcsolók (nulla fogyasztójuk van a kódban). A közösség **nem** `nonProd`,
 hanem `lab_build.json` define-okkal megy — így a „külső erőforrás sosem
 alapból BE" őrök maradnak.
 
-### CI-állás
+### CI-állás (a „minden bekapcsolva" fej zöldítése, 2026-09-15)
 
-- Első teljes kapu a „minden bekapcsolva" fejre (`451ca21`): **kitöltendő a
-  futás után** (várható: formázási/analyze/teszt körök, mert a fenti commitok
-  Dart SDK nélkül, vakon készültek; a 4 golden továbbra is piros marad, amíg
-  fel nem veszik).
-- `lab-apk.yml` a `lab_build.json` push-ra indult — az APK a run
-  artefaktumában.
+| Futás | Fej | Eredmény | Mit tanított |
+|---|---|---|---|
+| 1060 | `451ca21` | ❌ formázás (17 fájl) | a formázó pontos diffjét egy eldobható ág Coverage-jobja írta ki (`diag-format-dump`: `dart format --output=show` + sor-diff a teszt `print`-jével) → 29 hunk szó szerint alkalmazva |
+| 1062 | `c6a7535` | ❌ analyze (22 találat, 2 valódi hiba) | `ExercisePrescription`-nek nincs `candidate` mezője → a katalógus-feloldó adja; a felvétel-folyam a vezérlő állapotát provideren át olvassa; lintek |
+| 1063 | `73474f4` | ❌ teszt: 11402 ✅ / 22 ❌ | a 5000-soros log-vég csak 4-et mutatott → import-lezárásos teszt-szeletek (`diag-slice-A3`, `-B1…B4`) nevezték meg a többit |
+| — | `301229b`, `16409fc` | javítások | ismétlődő jelölt a heti tervezőnek (dedup), Processing Stage végtelen csíkja (`pump` a `pumpAndSettle` helyett, 2 teszt), felvétel-képernyő görgethető fekvő 2.0×-nél (4 mátrix-cella), feed-repository beágyazott generikusa láthatatlan volt az egress-leltárnak (typedef) |
+| record-goldens #1 | `b2fb484` → `063f8ca` | ✅ 9 PNG felvéve x86-on | **új workflow, tulajdonosi engedéllyel** (`.github/workflows/record-goldens.yml`, a main-en is, mert a GitHub csak onnan indít kézzel) |
+| full-gate + build-apk + lab-apk | `063f8ca` | **folyamatban** — az eredményt a következő session írja ide | |
+
+**Tanulság (L-jelölt):** a szeletelésnél a `test/fixtures`, `test/support`,
+`test/core` és a tesztek által `File(...)`-lel olvasott fájlok is kellenek —
+különben a szelet 100+ hamis „loading failed"-et mutat. A
+scratchpad-beli `slice.py` az import-lezárást számolja; a `File('test/…')`
+string-hivatkozásokat is követi.
 
 ### Mit kell a TULAJDONOSNAK tennie (laikusan)
 
@@ -52,12 +60,14 @@ alapból BE" őrök maradnak.
    `STRUMSIGHT_COMMUNITY_CLUBS_ENABLED=true`, `STRUMSIGHT_COMMUNITY_LEADERBOARD_ENABLED=true`
    — e nélkül az app közösségi része „nincs ilyen útvonal" hibát kap. Utána a
    frissen deployolt szerver ellenőrzése: `python3 tool/release/live_backend_smoke.py --base-url https://casaba.app/strumsight`.
-2. **Goldenek felvétele** (4 kép, lásd E18-R23 lent) — a távoli konténerből nem
-   megy.
+2. ~~Goldenek felvétele~~ — MEGTÖRTÉNT a `record-goldens.yml`-lel (9 kép,
+   `063f8ca`); a jövőben bármely szándékos golden-eltérés így vehető fel:
+   Actions → „Record goldens (x86 CI)" → ág + tesztfájl(ok) + indok.
 3. **Lab APK kipróbálása** valódi gitárral: Tutor-chat → terv-előnézet; Practice
    hub → Hangelemzés; Today Plan menü; Songs → setlist → „Run as session";
    Community fül (bejelentkezve).
-4. A három diag-ág törlése a saját boxról (E18-R23 parancs).
+4. Az eldobható diag-ágak törlése a saját boxról (a proxy innen nem engedi):
+   `git push origin --delete claude/diag-guards-slice claude/diag-format-probe claude/diag-slice-2 claude/diag-format-dump claude/diag-slice-A claude/diag-slice-A2 claude/diag-slice-A3 claude/diag-slice-B claude/diag-slice-B1 claude/diag-slice-B2 claude/diag-slice-B3 claude/diag-slice-B4`
 
 ## 🟢 E18-R23 — AZ E18 ÁG CI-ZÖLDÍTÉSE (csak a 4 golden felvétele van hátra) + A 60 MÁSODPERCES PENGETÉS-KIHÍVÁS — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
 
