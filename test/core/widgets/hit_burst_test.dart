@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/learn/widgets/hit_burst.dart';
+import 'package:strumsight/core/widgets/hit_burst.dart';
 
 void main() {
   HitBurst burst({double start = 1.0, double strength = 1.0}) =>
@@ -59,6 +59,21 @@ void main() {
         .map((p) => p.offset.distance)
         .fold(0.0, (a, d) => d > a ? d : a);
     expect(reach(1.0), greaterThan(reach(0.4)));
+  });
+
+  test('directionSign flips the cone: up by default, down for +1', () {
+    double meanDy(double sign) {
+      final ps = HitBurst(
+        startSec: 1.0,
+        color: Colors.orange,
+        strength: 1.0,
+        directionSign: sign,
+      ).particlesAt(1.1);
+      return ps.map((p) => p.offset.dy).fold(0.0, (a, b) => a + b) / ps.length;
+    }
+
+    expect(meanDy(-1), lessThan(0)); // sparks rise (screen y grows downward)
+    expect(meanDy(1), greaterThan(0)); // sparks fall with a down-stroke
   });
 
   test('painter repaints only when the clock, bursts or centre change', () {

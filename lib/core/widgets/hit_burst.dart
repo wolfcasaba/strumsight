@@ -6,6 +6,10 @@ import 'package:flutter/material.dart';
 /// beat (chunk 016b P0 "juice"). The geometry is PURE and deterministic (no
 /// Random) so it's unit-testable and identical every run; [HitBurstPainter]
 /// just draws whatever [particlesAt] returns for the current clock.
+///
+/// Shared by the Learn highway (strike-line hits) and the Live hero (every
+/// detected strum) — it depends on nothing but `dart:ui` geometry, so it
+/// lives in `core/widgets` rather than either feature.
 class HitBurst {
   HitBurst({
     required this.startSec,
@@ -13,7 +17,8 @@ class HitBurst {
     required this.strength,
     this.lifeSec = 0.45,
     this.count = 14,
-  });
+    this.directionSign = -1,
+  }) : assert(directionSign == -1 || directionSign == 1);
 
   /// Elapsed-clock time (lesson seconds) at which the burst was fired.
   final double startSec;
@@ -24,6 +29,11 @@ class HitBurst {
 
   final double lifeSec;
   final int count;
+
+  /// Which way the spark cone opens: `-1` (default) fans UPWARD — the
+  /// strike-line burst; `+1` fans DOWNWARD — so a Live down-stroke ↓ throws
+  /// its sparks the way the hand moved, and an up-stroke ↑ the other way.
+  final double directionSign;
 
   bool isDone(double nowSec) => nowSec - startSec >= lifeSec;
 
@@ -39,8 +49,9 @@ class HitBurst {
     final reach = 26.0 + 40.0 * strength;
     final out = <BurstParticle>[];
     for (var i = 0; i < count; i++) {
-      // Upward-biased cone, deterministic per index (a little variety via sin).
-      const base = -math.pi / 2; // straight up
+      // Direction-biased cone (up by default), deterministic per index (a
+      // little variety via sin).
+      final base = directionSign * math.pi / 2; // straight up or down
       const spread = math.pi * 0.95;
       final frac = count == 1 ? 0.5 : i / (count - 1);
       final angle = base + (frac - 0.5) * spread + math.sin(i * 2.399) * 0.14;

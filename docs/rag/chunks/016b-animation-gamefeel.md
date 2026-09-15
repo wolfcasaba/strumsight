@@ -101,3 +101,18 @@ audio is usually the largest on Android. Approach:
 - **P5** Vanishing-point perspective + radial-shader glow (screenshot/reel-worthy). *medium.*
 - **P6** Signed timing + wrong-direction feedback vocabulary. *low–medium.*
 - **P7** Reel viral polish (branded end-card, downbeat punch-in, 1-tap share) once P0/P5 land. *low.*
+
+## AS BUILT (2026-09-15) — the strike-line spark reaches the Live hero
+`HitBurst` moved from `features/learn/widgets/` to **`core/widgets/hit_burst.dart`**
+(shared, dependency-free geometry) and gained `directionSign` (−1 = the
+default upward cone, +1 = downward). New `features/live/widgets/strum_burst_hero.dart`
+wraps the Stage `SsChordHero`: every NEW `LiveFrame.strumSeq` throws a spark
+over the ↓/↑ glyph — copper fanning down for ↓, confidence-green fanning up
+for ↑, strength = stroke confidence (clamped ≥ 0.35). A local `Ticker` runs
+only while a burst is alive (≤ 0.45 s) and stops itself, so an idle Live
+schedules no frames and `pumpAndSettle` terminates; reduced motion
+(`SsMotionScope`) draws no spark (the glyph shape already carries direction).
+This is event-driven decay, not rhythm — ADR 0274's audio-clock rule is not
+in play. Next on this thread (Chapter 18 plan): verdict pop + combo counter
+on Live once a beat-relative timing verdict exists there (today Live has no
+scorer, only the metronome grid).
