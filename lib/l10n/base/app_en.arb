@@ -3224,6 +3224,11 @@
   "todayHubVisionCardTitle": "Vision practice",
   "todayHubVisionCardMessage": "Use your camera for guided finger-placement feedback.",
   "todayHubVisionUnavailableReason": "Vision practice needs a supported device and isn't available in this build yet.",
+  "todayHubPrivacyTitle": "Private by design",
+  "todayHubPrivacyNoAccount": "No account needed",
+  "todayHubPrivacyOffline": "Works fully offline",
+  "todayHubPrivacyNoAds": "No ads, no subscription",
+  "todayHubPrivacyAudioLocal": "Your audio never leaves the phone",
 
   "practiceAreaHubRecommendedTitle": "Recommended for you",
   "practiceAreaHubRecommendedMessage": "Jump into a practice session picked for where you are right now.",

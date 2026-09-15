@@ -3146,6 +3146,11 @@
   "todayHubVisionCardTitle": "Vizuális gyakorlás",
   "todayHubVisionCardMessage": "Használd a kamerát az ujjazat visszajelzéséhez.",
   "todayHubVisionUnavailableReason": "A vizuális gyakorláshoz támogatott eszköz kell, és ebben a buildben még nem érhető el.",
+  "todayHubPrivacyTitle": "Alapból privát",
+  "todayHubPrivacyNoAccount": "Nem kell fiók",
+  "todayHubPrivacyOffline": "Teljesen offline működik",
+  "todayHubPrivacyNoAds": "Nincs reklám, nincs előfizetés",
+  "todayHubPrivacyAudioLocal": "A hangod nem hagyja el a telefont",
 
   "practiceAreaHubRecommendedTitle": "Neked ajánlott",
   "practiceAreaHubRecommendedMessage": "Indíts egy, a jelenlegi szintedhez válogatott gyakorlást.",

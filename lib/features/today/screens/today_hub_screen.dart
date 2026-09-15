@@ -149,6 +149,8 @@ class TodayHubScreen extends ConsumerWidget {
             const SizedBox(height: 20),
             const _StrumChallengeCard(),
             const SizedBox(height: 20),
+            const _PrivacyPromiseCard(),
+            const SizedBox(height: 20),
             _VisionCard(
               l10n: l10n,
               visionEnabled: flags.visionEnabled,
@@ -324,6 +326,71 @@ class _StrumChallengeCard extends ConsumerWidget {
               onPressed: () => context.go(AppRoutes.strumChallenge),
               child: Text(l10n.strumChallengeStart),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The privacy promise (2026-09-15): four plain facts a guitarist can check
+/// against the app — no account, offline, no ads/subscription, audio stays
+/// on the phone. Deliberately quiet (secondary text, no button): it informs,
+/// it does not sell. Every line is a `Row` with a `Flexible` text so the
+/// card wraps instead of overflowing at large text scales.
+class _PrivacyPromiseCard extends StatelessWidget {
+  const _PrivacyPromiseCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final lines = [
+      l10n.todayHubPrivacyNoAccount,
+      l10n.todayHubPrivacyOffline,
+      l10n.todayHubPrivacyNoAds,
+      l10n.todayHubPrivacyAudioLocal,
+    ];
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.lock_outline, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.todayHubPrivacyTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final line in lines)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.check,
+                      size: 16,
+                      color: Theme.of(context).hintColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        line,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

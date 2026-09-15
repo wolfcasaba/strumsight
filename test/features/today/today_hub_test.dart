@@ -370,6 +370,23 @@ void main() {
     });
   });
 
+  group('the privacy promise card (2026-09-15)', () {
+    testWidgets('renders the title and all four promises, with no button and '
+        'no second primary action', (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pump();
+
+      expect(find.text('Private by design'), findsOneWidget);
+      expect(find.text('No account needed'), findsOneWidget);
+      expect(find.text('Works fully offline'), findsOneWidget);
+      expect(find.text('No ads, no subscription'), findsOneWidget);
+      expect(find.text('Your audio never leaves the phone'), findsOneWidget);
+      // A1 — the card informs, it does not sell: the hero keeps the screen's
+      // only filled button and the card adds no CTA of its own.
+      expect(find.byType(FilledButton), findsOneWidget);
+    });
+  });
+
   group('A8 — no invented statistic when there is no real data', () {
     testWidgets('new user: streak and progress both read real zero, '
         'never a placeholder number', (tester) async {
