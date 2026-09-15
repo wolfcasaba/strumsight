@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔁 FOLYAMATBAN — 2. kör: „Következő lépés ajánlás" (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+## ✅ KÉSZ — 2. kör: „Következő lépés ajánlás" (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
 Az 1. kör auditjának 5. leletére („nincs mi legyen most a hurok végén": az
 ajánlás mindig a katalógus első eleme, az eredmény csak „Gyakorolj újra").
@@ -16,11 +16,23 @@ Egyetlen tiszta szabályrendszer, két fogyasztóval:
 | Szövegek | 4 ok-mondat + `practiceResultNextRecommendedCta` a `base/` forrásban, en+hu | `lib/l10n/base/app_{en,hu}.arb` |
 | Tesztek | 10 tiszta cella (küszöb-határ inkluzív, `latest` dedup, katalógusból hiányzó definíció), hub 2 cella (gyenge előzmény → ugyanaz, név+ok+id; nincs előzmény → első), eredmény 2 cella (haladás → „Következő: Second pattern" + Setup a másik id-vel; gyenge → egy gomb, ugyanaz az id) | `test/features/practice/domain/next_practice_recommender_test.dart`, `test/features/practice_hub/practice_area_hub_categories_test.dart`, `test/features/practice/presentation/practice_result_next_step_test.dart` |
 
-**Golden:** a hub és az eredményképernyő goldenje ismét változik (név+ok sor,
-két gomb) — újrafelvétel a `record-goldens.yml`-lel a CI-mérés után.
+**Zöld kapu:** `full-gate.yml`
+[run 34961974108](https://github.com/wolfcasaba/strumsight/actions/runs/34961974108)
+a `2f4f803`-on — a `full-gate` job MINDEN lépése `success` (format, analyze,
+architektúra, secret-scan, l10n-paritás, asset, teljes tesztsuite, randomizált
+property gate, song-schema és song-fixture kapu). A goldenek a tulajdonos által
+engedélyezett `record-goldens.yml`-lel (a `main`-ről, run 34958608357 és
+34961673742) a kapu x86 architektúráján lettek felvéve: 1. kör 7 PNG, 2. kör 3
+PNG — a PNG-diff review-ja emberi lépés. Két lappangó hiba is előkerült a CI
+mérésével és javítva lett: a Live `dispose`-beli provider-írás (1. kör), és az
+eredményképernyő `Next` sorának build-fázisú history-inicializálása a 200 %-os
+akadálymentességi cellában (2. kör, post-frame betöltésre cserélve).
+
+**APK:** `build-apk.yml` a `2f4f803`-on dispatchelve (development env: adaptív
+shell, Practice V2, Song Trainer V2 BE) — ez a valós gitáros teszt artefaktuma.
 
 
-## 🔁 FOLYAMATBAN — tanulói hurok-javítás (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+## ✅ KÉSZ — 1. kör: tanulói hurok-javítás (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
 A felhasználó kérése: az SDD-tervek átnézése után „a tanulónak tényleg élmény
 legyen" — az audit szerint a KÓD minősége nem a gond, hanem a szállított
