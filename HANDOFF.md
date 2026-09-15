@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🟡 SZÉRIA-LÁNG + SHARE-REVEAL — `f99cc9e` + goldenek `e97d270` (Chapter 18 R06/R07 szelet), CI fut (2026-09-15)
+## ✅ SZÉRIA-LÁNG + SHARE-REVEAL — `f99cc9e` → javítások `bb8f251` + `a8a287b`, goldenek `9d2eb4b` (Chapter 18 R06/R07 szelet), kapu zöld (2026-09-15)
 
 A felhasználó „mehetsz tovább, CI csak a fejlesztés után" döntése nyomán a
 következő szelet: **`SsFlame`** (festett széria-láng S 16 / M 40 / L 72;
@@ -33,8 +33,45 @@ x86-on újravette és bot-commitként visszatette (`e97d270`):
 változtak — bizonyíték, hogy a reveal végállapota pixelre azonos a régi
 kártyával.
 
-**CI az `e97d270`-en:** full-gate + build-apk dispatch 08:52 UTC — eredmény
-a következő HANDOFF-frissítésben.
+**CI-történet a szeleten (négy fej, mind CI-ből diagnosztizálva):**
+
+1. `e97d270` — PIROS: format (egy `wrapped_card.dart` sor 80 karakterbe
+   fér, a formázó összevonja) + 4 cella: a `SsShareReveal` reduced-motion
+   ága build KÖZBEN (és post-frame másodszor is) küldte a completion-t; a
+   `ss_flame` semantics-cella a `SemanticsHandle`-t tearDown-ban zárta (a
+   teszt végi ellenőrzés előbb fut); a streak-detail M láng (40 dp) a 24 dp
+   ikon helyett megnövelte a kártyát, és egy MEGLÉVŐ teszt recovery-gombja
+   kicsúszott a 600 px-es teszt-viewportból.
+2. `bb8f251` — javítás: státusz-listener csak az animált ágon (a reduced ág
+   először ugrik, egyszer, post-frame jelez); inline `dispose()`; a láng a
+   24 dp ikon-lábnyomon áll (`SizedOverflowBox`, fölfelé a paddingba nő) —
+   egyetlen képernyő magassága sem változik.
+3. `9d2eb4b` — streak-detail goldenek újra x86-on
+   ([record-goldens 34952311405](https://github.com/wolfcasaba/strumsight/actions/runs/34952311405));
+   a teljes suite ZÖLD, a composite az l10n-frissességi kapun piros: az
+   `app_<locale>.arb` GENERÁLT aggregátum (ADR 0307 §4), az új kulcs csak
+   oda került.
+4. `a8a287b` — `streakMilestone` a `lib/l10n/base/` szegmensekben; az
+   aggregátum bájtra azonos maradt. **Zöld:**
+   [full-gate 34955802156](https://github.com/wolfcasaba/strumsight/actions/runs/34955802156)
+   + [build-apk 34955804305](https://github.com/wolfcasaba/strumsight/actions/runs/34955804305)
+   (a 2. kísérletben: az 1.-ben a párhuzamos Coverage job egyetlen, a
+   napló-plafon fölötti, azonosítatlan cellán esett el, miközben ugyanaz a
+   suite ugyanezen a commiton két másik jobban zöld volt — egyszeri
+   újrafuttatás, ADR 0053 szerint a kapu így teljesült).
+
+**LESSON (ebből a szeletből):**
+- ARB-kulcs a `lib/l10n/base/` vagy `lib/l10n/features/` SZEGMENSBE megy;
+  az `app_<locale>.arb` generált (ADR 0307 §4). Dart nélkül a
+  `tool/gen_l10n_segments.dart` Python-replikája — egy friss commit ellen
+  bájtra validálva — újratermeli az aggregátumot (scratchpad-script, nem
+  repó-eszköz).
+- A GitHub log-eszköz 5000 sornál vágja a naplót: egy KORAI egyedi piros
+  cella csak a `failed_only` nézetben vagy az artefaktumban látszik; a
+  `--reporter` marad `expanded` (a ❌-sorok kellenek a diagnózishoz).
+- Egy meglévő tesztet a viewport-magasság köt: ha egy komponens megnő,
+  a képernyő alja kicsúszhat a 800×600-as tesztablakból — a lábnyom
+  megtartása (`SizedOverflowBox`) olcsóbb, mint a teszt átírása.
 
 ## ✅ MOTION-ADAG — `bc8003d` → goldenek `288ee57` (Chapter 18 R01/R03/R04 szelet), kapu zöld (2026-09-15)
 
