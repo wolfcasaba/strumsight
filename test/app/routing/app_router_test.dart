@@ -434,7 +434,11 @@ void main() {
       expect(find.byType(AnalysisRecordingScreen), findsOneWidget);
 
       harness.router.go(AppRoutes.analysisProcessing);
-      await tester.pumpAndSettle();
+      // The controller is idle here, so the Processing Stage shows its
+      // indeterminate "starting" bar — an endless animation that
+      // `pumpAndSettle` would wait on forever.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
       expect(tester.takeException(), isNull);
       expect(harness.router.state.uri.path, AppRoutes.analysisProcessing);
       expect(find.byType(AnalysisProcessingScreen), findsOneWidget);

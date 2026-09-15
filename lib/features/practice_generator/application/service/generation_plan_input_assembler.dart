@@ -338,15 +338,22 @@ final class GenerationPlanInputAssembler {
   /// One [ScheduleCandidate] per successful selection; a candidate whose
   /// executable duration is not positive cannot become a block
   /// (`PracticeBlock.estimatedElapsed` must be positive) and is left out.
+  /// One [ScheduleCandidate] per DISTINCT selected exercise, in priority
+  /// order. Two ranked skills may resolve to the same catalog exercise
+  /// (its `skillTargets` cover both); `WeeklyScheduleRequest` rejects a
+  /// repeated identity, so the first — highest-priority — selection wins
+  /// and the exercise's own skill targets carry the rest.
   static Iterable<ScheduleCandidate> _scheduleCandidates(
     Iterable<CandidateDecision> selections,
   ) sync* {
     var index = 0;
+    final seen = <String>{};
     for (final selection in selections) {
       final selected = selection.selected;
       if (selected == null) continue;
       final candidate = selected.candidate;
       if (candidate.supportedDurations.minimum <= Duration.zero) continue;
+      if (!seen.add(candidate.sortKey)) continue;
       yield ScheduleCandidate(
         identity: candidate.sortKey,
         focus: index++ == 0
