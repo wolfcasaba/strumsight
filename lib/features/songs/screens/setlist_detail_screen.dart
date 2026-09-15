@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
+import '../../song_trainer/public.dart';
 import '../model/setlist.dart';
 import '../model/song.dart';
 import '../providers/setlists_provider.dart';
@@ -24,6 +26,143 @@ class SetlistDetailScreen extends ConsumerWidget {
         builder: (_) => LearnScreen(lesson: set.combine(songs)),
       ),
     );
+  }
+
+  /// E17-R03 (ADR 0522 §5.2) — the mode chooser in front of the ONE session
+  /// launcher. Both tiles resolve to a [SetlistSessionMode] and fall through
+  /// to [_startSession]; there is no second entry path per mode.
+  Future<void> _chooseSessionMode(
+    BuildContext context,
+    WidgetRef ref,
+    Setlist set,
+    List<Song> library,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final mode = await showModalBottomSheet<SetlistSessionMode>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                l10n.setlistSessionChooseMode,
+                style: typography.titleMedium.copyWith(
+                  color: colors.textPrimary,
+                ),
+              ),
+            ),
+            ListTile(
+              key: const Key('setlist-session-mode-practice'),
+              leading: Icon(Icons.mic, color: colors.brand),
+              title: Text(l10n.setlistSessionPracticeTitle),
+              subtitle: Text(l10n.setlistSessionPracticeDescription),
+              onTap: () =>
+                  Navigator.of(context).pop(SetlistSessionMode.practice),
+            ),
+            ListTile(
+              key: const Key('setlist-session-mode-performance'),
+              leading: Icon(Icons.play_circle_outline, color: colors.brand),
+              title: Text(l10n.setlistSessionPerformanceTitle),
+              subtitle: Text(l10n.setlistSessionPerformanceDescription),
+              onTap: () =>
+                  Navigator.of(context).pop(SetlistSessionMode.performance),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mode == null || !context.mounted) return;
+    await _startSession(context, ref, set, library, mode);
+  }
+
+  /// E17-R03 (ADR 0522 §5.1) — the single Song Trainer session launcher;
+  /// [mode] is a parameter, never a second code path.
+  ///
+  /// The legacy [Setlist] is projected into a V2 setlist IN MEMORY on every
+  /// entry by [SetlistSessionComposer.compose] (same mapping as the
+  /// migration adapter, nothing persisted — the legacy `setlistsProvider`
+  /// stays the single source of truth this screen edits). Availability and
+  /// both runners come from the real song repositories through the same
+  /// composer. Finishing pops back to THIS screen (A4) and reports the run
+  /// in a snack bar.
+  Future<void> _startSession(
+    BuildContext context,
+    WidgetRef ref,
+    Setlist set,
+    List<Song> library,
+    SetlistSessionMode mode,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final composition = await ref
+        .read(setlistSessionComposerProvider)
+        .compose(
+          legacySetlist: LegacySetlistRecord(
+            id: set.id,
+            name: set.name,
+            songIds: set.songIds,
+          ),
+          legacySongs: [for (final song in library) song.toJson()],
+          presentStage: (stage) => _presentStage(navigator, stage),
+        );
+    if (!context.mounted) return;
+    await navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => SetlistSessionScreen(
+          setlist: composition.setlist,
+          mode: mode,
+          availability: composition.availability,
+          performanceRunner: composition.performanceRunner,
+          createPracticeRunner: composition.createPracticeRunner,
+          onCompleted: (result) {
+            navigator.pop();
+            final completed = result.itemResults
+                .where(
+                  (item) => item.status == SetlistItemResultStatus.completed,
+                )
+                .length;
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  l10n.setlistSessionResult(
+                    completed,
+                    result.itemResults.length,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Shows one item's Stage — the same `SongTrainerScreen(songId, inputs)`
+  /// composition the `/song-trainer/session` route renders — pushed so the
+  /// session list stays underneath, and resolves with the time on screen
+  /// once the guitarist leaves it.
+  static Future<Duration> _presentStage(
+    NavigatorState navigator,
+    SetlistItemStage stage,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    await navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => SongTrainerScreen(
+          songId: stage.document.id.value,
+          inputs: stage.inputs,
+        ),
+      ),
+    );
+    stopwatch.stop();
+    return stopwatch.elapsed;
   }
 
   Future<void> _addSong(
@@ -75,6 +214,12 @@ class SetlistDetailScreen extends ConsumerWidget {
     final library = ref.watch(songsProvider);
     final songs = set.resolve(library);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
+    // Same flag gate as the Song Trainer routes and the Songs-tab entry
+    // (`song_list_screen.dart`): the V2 session is a V2 surface.
+    final sessionEnabled = ref
+        .watch(appConfigProvider)
+        .flags
+        .songTrainerV2Enabled;
 
     return Scaffold(
       appBar: AppBar(
@@ -113,15 +258,30 @@ class SetlistDetailScreen extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: SizedBox(
-                width: double.infinity,
-                child: SsButton(
-                  onPressed: songs.isEmpty
-                      ? null
-                      : () => _playAll(context, set, songs),
-                  icon: Icons.play_arrow,
-                  label: l10n.setlistPlayAll,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SsButton(
+                    onPressed: songs.isEmpty
+                        ? null
+                        : () => _playAll(context, set, songs),
+                    icon: Icons.play_arrow,
+                    label: l10n.setlistPlayAll,
+                  ),
+                  if (sessionEnabled) ...[
+                    const SizedBox(height: SsSpacing.space2),
+                    SsButton(
+                      key: const Key('setlist-session-entry'),
+                      onPressed: songs.isEmpty
+                          ? null
+                          : () =>
+                                _chooseSessionMode(context, ref, set, library),
+                      variant: SsButtonVariant.secondary,
+                      icon: Icons.queue_play_next,
+                      label: l10n.setlistSessionEntry,
+                    ),
+                  ],
+                ],
               ),
             ),
             Expanded(
