@@ -25,12 +25,12 @@ class RewardingPracticeSessionRecorder implements PracticeSessionRecorder {
     required String definitionId,
     required DateTime Function() now,
     required AppLogger logger,
-  }) : _inner = inner,
-       _adapter = adapter,
-       _ingestor = ingestor,
-       _definitionId = definitionId,
-       _now = now,
-       _logger = logger;
+  }) : _inner = inner, // ignore: prefer_initializing_formals
+       _adapter = adapter, // ignore: prefer_initializing_formals
+       _ingestor = ingestor, // ignore: prefer_initializing_formals
+       _definitionId = definitionId, // ignore: prefer_initializing_formals
+       _now = now, // ignore: prefer_initializing_formals
+       _logger = logger; // ignore: prefer_initializing_formals
 
   final PracticeSessionRecorder _inner;
   final GamificationPracticeAdapter _adapter;
