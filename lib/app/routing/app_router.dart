@@ -23,6 +23,7 @@ import '../../features/community/public.dart'
         CommunityGateScreen,
         CommunityNotificationsScreen,
         ContentId,
+        FollowersMode,
         FollowersScreen,
         FollowingFeedScreen,
         LeaderboardScreen,
