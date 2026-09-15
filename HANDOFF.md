@@ -19,13 +19,16 @@ funkció nélkül (mind kompozíció):
 
 **CI-bizonyíték (remote konténer, nincs Flutter SDK —
 `docs/execution/remote-container-environment.md`):** a `full-gate.yml`
-[run 34947243304](https://github.com/wolfcasaba/strumsight/actions/runs/34947243304)
-a `300f9cd`-n: **format, analyze, architektúra, secret-scan, l10n-paritás, asset
-kapu ZÖLD**; a test-kapu `10227 passed, 9 failed` — 2 a Live-összegző teszt
-`pumpAndSettle`-je (javítva fix pumpokra a következő commitban), **7 a
-szándékosan változott pixel-golden** (alább). A formázó kimenetét egy
-ideiglenes, azóta törölt próbateszt írta a CI-naplóba, onnan lett bájtra
-visszavezetve.
+[run 34955651162](https://github.com/wolfcasaba/strumsight/actions/runs/34955651162)
+a `415621e`-n: **format, analyze, architektúra, secret-scan, l10n-paritás, asset
+kapu ZÖLD**; a test-kapu `10227 passed, 7 failed` — a 7 piros pontosan a
+szándékosan változott pixel-golden (alább), más piros nincs. A formázó
+kimenetét és a bukó tesztek naplóját egy ideiglenes, azóta törölt próbateszt
+írta a CI-naplóba (a napló-API az utolsó 5000 sorra csonkol), onnan lett
+visszavezetve. Közben egy LAPPANGÓ hiba is előkerült és javítva lett: a Live
+képernyő `dispose`-a a `practiceLogProvider`-be írt (Riverpod tiltja a
+provider-írást widget-életciklusban) — a session-napló írása mikrotaszkra
+halasztva (`live_screen.dart`).
 
 **Nyitott piros — emberi lépés:** 7 golden PNG újrafelvétele a kapu
 architektúráján (ADR 0426): `e13_r17_today_hub_compact`,
