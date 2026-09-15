@@ -2940,6 +2940,10 @@
   "practiceInsightNoSignal": "We couldn't detect any strums — make sure the microphone is close to your guitar.",
   "practiceInsightPositiveReinforcement": "Strong run — every available dimension cleared the bar.",
   "practiceInsightTempoTooHigh": "The tempo pushed your rhythm accuracy below the threshold.",
+  "practiceNextReasonAdvance": "You cleared the last one. The next step up:",
+  "practiceNextReasonFirstSession": "Your first session: start with the easiest pattern.",
+  "practiceNextReasonRepeat": "Almost there. One more round of the same, so it locks in.",
+  "practiceNextReasonRevisit": "You've played everything once. This is where you were weakest last time.",
   "practicePatternPreviewEmpty": "No events in this bar",
   "practicePatternPreviewLabel": "Pattern preview",
   "practicePlanCatchUpSheetBody": "Skipping a day is part of playing. Your plan adapts — it never adds extra work.",
@@ -3066,6 +3070,14 @@
   "practiceResultFinishUserFinished": "You finished the session",
   "practiceResultHistoryCta": "History",
   "practiceResultInsufficientData": "Not enough data",
+  "practiceResultNextRecommendedCta": "Next: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "practiceResultNextStepCta": "Practice again",
   "practiceResultNotScored": "Not scored",
   "practiceResultOverall": "Overall",

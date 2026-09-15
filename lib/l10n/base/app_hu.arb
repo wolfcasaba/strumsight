@@ -3248,5 +3248,17 @@
   "liveSummaryTipShort": "Rövid volt. Legközelebb játssz kicsit tovább — a felismerés pár pengetés után áll be.",
   "liveSummaryTipCourse": "Jöhet egy cél? A vezetett tanfolyam megadja a következő megtanulandó akkordot.",
   "liveSummaryOpenCourse": "Tanfolyam megnyitása",
-  "liveSummaryDone": "Kész"
+  "liveSummaryDone": "Kész",
+  "practiceNextReasonFirstSession": "Az első gyakorlásod: a legkönnyebb mintával kezdünk.",
+  "practiceNextReasonRepeat": "Majdnem megvan. Még egy kör ugyanebből, hogy rögzüljön.",
+  "practiceNextReasonAdvance": "Az előzőt megcsináltad. A következő lépcső:",
+  "practiceNextReasonRevisit": "Mindent kipróbáltál már egyszer. Ebben voltál legutóbb a leggyengébb.",
+  "practiceResultNextRecommendedCta": "Következő: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  }
 }

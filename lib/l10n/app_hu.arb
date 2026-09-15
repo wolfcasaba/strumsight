@@ -2901,6 +2901,10 @@
   "practiceInsightNoSignal": "Nem érzékeltünk pengetést — a mikrofon legyen közel a gitárhoz.",
   "practiceInsightPositiveReinforcement": "Erős futam — minden elérhető dimenzió átlépte a küszöböt.",
   "practiceInsightTempoTooHigh": "A tempó a ritmus-pontosságot a küszöb alá nyomta.",
+  "practiceNextReasonAdvance": "Az előzőt megcsináltad. A következő lépcső:",
+  "practiceNextReasonFirstSession": "Az első gyakorlásod: a legkönnyebb mintával kezdünk.",
+  "practiceNextReasonRepeat": "Majdnem megvan. Még egy kör ugyanebből, hogy rögzüljön.",
+  "practiceNextReasonRevisit": "Mindent kipróbáltál már egyszer. Ebben voltál legutóbb a leggyengébb.",
   "practicePatternPreviewEmpty": "Nincs esemény ebben az ütemben",
   "practicePatternPreviewLabel": "Minta előnézet",
   "practicePlanCatchUpSheetBody": "Egy kimaradt nap a tanulás része. A terved alkalmazkodik — sosem büntet.",
@@ -3027,6 +3031,14 @@
   "practiceResultFinishUserFinished": "Te zártad a gyakorlatot",
   "practiceResultHistoryCta": "Előzmények",
   "practiceResultInsufficientData": "Nincs elég adat",
+  "practiceResultNextRecommendedCta": "Következő: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "practiceResultNextStepCta": "Gyakorolj újra",
   "practiceResultNotScored": "Nincs pontozva",
   "practiceResultOverall": "Összesített",

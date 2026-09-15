@@ -17,6 +17,8 @@ import 'package:strumsight/features/practice/public.dart'
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/preference_store.dart';
+
 /// A minimal, self-contained definition — mirrors the shape
 /// `practice_catalog_controller_test.dart` uses for its own override cell,
 /// but with a distinct id so a bedrótozott `'builtin.quarterDownstrokes.v1'`
@@ -58,7 +60,7 @@ Future<GoRouter> _pumpHub(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: overrides,
+      overrides: [...preferenceOverrides(), ...overrides],
       child: MaterialApp.router(
         routerConfig: router,
         theme: AppTheme.dark(),

@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/model/practice_definition.dart';
 import '../../domain/model/practice_mode.dart';
+import '../../domain/model/next_practice_recommendation.dart';
 
 /// The localized human label for a [PracticeMode] (SDD §22.3). The enum's
 /// `code` is the persisted identifier; the user-facing label is here.
@@ -30,6 +31,21 @@ String practiceModeLabel(AppLocalizations l10n, PracticeMode mode) {
     case PracticeMode.freePractice:
       return l10n.practiceHubModeFreePractice;
   }
+}
+
+/// The learner-facing sentence for a [NextPracticeReason] — shared by the
+/// hub's recommended card and the result screen's Next action so the two
+/// places never disagree about WHY something is next.
+String practiceNextReasonLabel(
+  AppLocalizations l10n,
+  NextPracticeReason reason,
+) {
+  return switch (reason) {
+    NextPracticeReason.firstSession => l10n.practiceNextReasonFirstSession,
+    NextPracticeReason.repeatToConsolidate => l10n.practiceNextReasonRepeat,
+    NextPracticeReason.advance => l10n.practiceNextReasonAdvance,
+    NextPracticeReason.revisitWeakest => l10n.practiceNextReasonRevisit,
+  };
 }
 
 /// The display title of a [PracticeDefinition] for the Hub list.

@@ -21,11 +21,16 @@ import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
 import 'package:strumsight/features/practice/domain/model/practice_source.dart';
 import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
 import 'package:strumsight/features/practice/domain/model/tempo.dart';
+import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';
+import 'package:strumsight/features/practice/domain/model/practice_metric_snapshot.dart';
 import 'package:strumsight/features/practice/public.dart'
-    show practiceCatalogProvider;
+    show practiceCatalogProvider, practiceHistoryV2ListProvider;
 import 'package:strumsight/features/practice_hub/practice_area_hub_categories.dart';
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/l10n/app_localizations_en.dart';
+
+import '../../support/preference_store.dart';
 
 PracticeDefinition _definition({
   required String id,
@@ -75,6 +80,7 @@ AppConfig _config({bool songTrainerV2Enabled = false}) => AppConfig(
 Future<({GoRouter router, List<String> visited})> _pumpHub(
   WidgetTester tester, {
   List<PracticeDefinition>? catalog,
+  List<PracticeHistoryEntry> history = const [],
   bool songTrainerV2Enabled = false,
 }) async {
   // Tall enough that every catalog tile is fully inside the viewport: a
@@ -104,10 +110,12 @@ Future<({GoRouter router, List<String> visited})> _pumpHub(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        ...preferenceOverrides(),
         appConfigProvider.overrideWithValue(
           _config(songTrainerV2Enabled: songTrainerV2Enabled),
         ),
         if (catalog != null) practiceCatalogProvider.overrideWithValue(catalog),
+        practiceHistoryV2ListProvider.overrideWith((ref) async => history),
       ],
       child: MaterialApp.router(
         routerConfig: router,
@@ -258,6 +266,57 @@ void main() {
     });
   });
 
+  group("the recommended card follows the learner's history", () {
+    testWidgets('a weak last session recommends the SAME definition again, '
+        'named, with the consolidation reason, and the CTA carries its id', (
+      tester,
+    ) async {
+      final l10n = AppLocalizationsEn();
+      final hub = await _pumpHub(
+        tester,
+        history: [_weakSession('builtin.gToDChanges.v1')],
+      );
+
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('practice-hub-recommended-name')),
+            )
+            .data,
+        l10n.practiceCatalogGToDChangesTitle,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('practice-hub-recommended-reason')),
+            )
+            .data,
+        l10n.practiceNextReasonRepeat,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('practice-hub-recommended-cta')),
+      );
+      await tester.pumpAndSettle();
+      expect(hub.visited.last, contains('id=builtin.gToDChanges.v1'));
+    });
+
+    testWidgets('no history: the easiest entry, as the first session', (
+      tester,
+    ) async {
+      final l10n = AppLocalizationsEn();
+      await _pumpHub(tester);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('practice-hub-recommended-reason')),
+            )
+            .data,
+        l10n.practiceNextReasonFirstSession,
+      );
+    });
+  });
+
   group('the curriculum and the Song Trainer are reachable from the hub', () {
     testWidgets('the course card opens the lesson list route', (tester) async {
       final hub = await _pumpHub(tester);
@@ -283,3 +342,31 @@ void main() {
     });
   });
 }
+
+PracticeHistoryEntry _weakSession(String definitionId) => PracticeHistoryEntry(
+  id: 'weak-$definitionId',
+  modeCode: PracticeMode.chordChanges.code,
+  sourceCode: PracticeSource.builtin.code,
+  createdAt: DateTime.utc(2026, 9, 1, 12),
+  definitionId: definitionId,
+  displayTitle: '',
+  finishReasonCode: 'completedAllTargets',
+  activeDuration: const Duration(seconds: 30),
+  pausedDuration: Duration.zero,
+  attemptsCount: 1,
+  finalMetricSnapshot: const PracticeMetricSnapshot(
+    completion: PracticeMetricDimensionAvailable(0.3),
+    rhythm: PracticeMetricDimensionAvailable(0.3),
+    direction: PracticeMetricDimensionAvailable(0.3),
+    chord: PracticeMetricDimensionAvailable(0.3),
+    overall: PracticeMetricDimensionAvailable(0.3),
+  ),
+  totalTargets: 10,
+  resolvedTargets: 3,
+  scorePoints: 0,
+  maxCombo: 0,
+  meanAbsoluteOffset: Duration.zero,
+  timingBias: Duration.zero,
+  coachingSummary: const [],
+  skillTags: const [],
+);

@@ -8,9 +8,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../features/practice/public.dart'
     show
         PracticeDifficulty,
+        nextPracticeRecommendationProvider,
         practiceCatalogProvider,
         practiceDefinitionDisplayTitle,
-        practiceModeLabel;
+        practiceModeLabel,
+        practiceNextReasonLabel;
 import '../../../l10n/app_localizations.dart';
 import '../practice_area_hub_categories.dart';
 
@@ -47,6 +49,9 @@ class PracticeAreaHubScreen extends ConsumerWidget {
     final catalog = ref.watch(practiceCatalogProvider);
     final flags = ref.watch(appConfigProvider).flags;
     final groups = practiceAreaHubGroups(catalog);
+    // ADR 0508 D4 — `null` only for an empty catalog, so the recommended
+    // card and the catalog stay consistent by construction.
+    final recommendation = ref.watch(nextPracticeRecommendationProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceHubTitle)),
@@ -57,7 +62,7 @@ class PracticeAreaHubScreen extends ConsumerWidget {
             // ADR 0508 D4 — an empty catalog means no recommended card at
             // all (no title, no message, no button), not a CTA that
             // navigates without a definition id.
-            if (catalog.isNotEmpty)
+            if (recommendation != null)
               Card(
                 margin: EdgeInsets.zero,
                 child: Padding(
@@ -70,15 +75,30 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
+                      // The recommended definition by name, and the one
+                      // honest sentence saying WHY it is next — derived from
+                      // the learner's own history, never a generic promise.
                       Text(
-                        l10n.practiceAreaHubRecommendedMessage,
+                        practiceDefinitionDisplayTitle(
+                          l10n,
+                          recommendation.definition,
+                        ),
+                        key: const ValueKey('practice-hub-recommended-name'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        practiceNextReasonLabel(l10n, recommendation.reason),
+                        key: const ValueKey('practice-hub-recommended-reason'),
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
                       FilledButton(
                         key: const ValueKey('practice-hub-recommended-cta'),
-                        onPressed: () =>
-                            _openSetup(context, definitionId: catalog.first.id),
+                        onPressed: () => _openSetup(
+                          context,
+                          definitionId: recommendation.definition.id,
+                        ),
                         child: Text(l10n.practiceAreaHubRecommendedCta),
                       ),
                     ],

@@ -1,5 +1,25 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔁 FOLYAMATBAN — 2. kör: „Következő lépés ajánlás" (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+Az 1. kör auditjának 5. leletére („nincs mi legyen most a hurok végén": az
+ajánlás mindig a katalógus első eleme, az eredmény csak „Gyakorolj újra").
+Egyetlen tiszta szabályrendszer, két fogyasztóval:
+
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `recommendNextPractice(catalog, history, latest?)` | determinisztikus, I/O-mentes: nincs előzmény → legkönnyebb (`firstSession`); az utolsó session lefedettsége < 70 % → ugyanaz újra (`repeatToConsolidate`); különben az első még nem játszott, könnyebbtől (`advance`); ha minden játszva → a leggyengébb legutóbbi (`revisitWeakest`) | `lib/features/practice/domain/service/next_practice_recommender.dart`, model: `domain/model/next_practice_recommendation.dart` |
+| `nextPracticeRecommendationProvider` | katalógus + `practiceHistoryV2ListProvider` (töltés/hiba alatt üres előzmény = legkönnyebb, sosem `null`, csak üres katalógusnál) | `application/practice_recommendation_providers.dart`, `public.dart` export |
+| Gyakorló hub „Neked ajánlott" | a definíció NEVE + az OK egy mondatban + CTA az ajánlott id-vel (nem `catalog.first`) | `practice_area_hub_screen.dart` |
+| Eredményképernyő „Következő" | elsődleges gomb: „Következő: {cím}" + ok; „Gyakorolj újra" másodlagos; ha az ajánlás ugyanaz a definíció, egyetlen elsődleges „Gyakorolj újra" az okkal. A most befejezett session `latest`-ként számít, mielőtt a lista újratölt | `practice_result_screen.dart` (`_NextStepAction`) |
+| L5 (E16-R05) zárva | session-vég után `practiceHistoryV2ListProvider` invalidálva, így a hub és a dashboard restart nélkül látja | `practice_effect_listener.dart` |
+| Szövegek | 4 ok-mondat + `practiceResultNextRecommendedCta` a `base/` forrásban, en+hu | `lib/l10n/base/app_{en,hu}.arb` |
+| Tesztek | 10 tiszta cella (küszöb-határ inkluzív, `latest` dedup, katalógusból hiányzó definíció), hub 2 cella (gyenge előzmény → ugyanaz, név+ok+id; nincs előzmény → első), eredmény 2 cella (haladás → „Következő: Second pattern" + Setup a másik id-vel; gyenge → egy gomb, ugyanaz az id) | `test/features/practice/domain/next_practice_recommender_test.dart`, `test/features/practice_hub/practice_area_hub_categories_test.dart`, `test/features/practice/presentation/practice_result_next_step_test.dart` |
+
+**Golden:** a hub és az eredményképernyő goldenje ismét változik (név+ok sor,
+két gomb) — újrafelvétel a `record-goldens.yml`-lel a CI-mérés után.
+
+
 ## 🔁 FOLYAMATBAN — tanulói hurok-javítás (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
 A felhasználó kérése: az SDD-tervek átnézése után „a tanulónak tényleg élmény

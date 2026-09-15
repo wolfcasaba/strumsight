@@ -5,6 +5,10 @@ import 'package:intl/intl.dart' show DateFormat;
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../gamification/public.dart' show RewardLedgerEntry;
+import '../../application/practice_catalog_controller.dart'
+    show practiceCatalogProvider;
+import '../../application/practice_progress_providers.dart'
+    show practiceHistoryV2ListProvider;
 import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_insight.dart';
 import '../../domain/model/practice_metric_snapshot.dart';
@@ -12,9 +16,15 @@ import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_result.dart';
 import '../../domain/model/speed_builder_policy.dart';
 import '../../domain/model/tempo.dart';
+import '../../domain/service/next_practice_recommender.dart'
+    show recommendNextPractice;
 import '../practice_route_args.dart';
 import '../providers/practice_result_providers.dart';
-import '../widgets/practice_mode_card.dart' show practiceModeLabel;
+import '../widgets/practice_mode_card.dart'
+    show
+        practiceDefinitionDisplayTitle,
+        practiceModeLabel,
+        practiceNextReasonLabel;
 import '../widgets/score_breakdown.dart';
 import '../widgets/timing_bias_chart.dart';
 import 'practice_history_screen.dart';
@@ -341,33 +351,91 @@ class _RewardSection extends StatelessWidget {
   }
 }
 
-/// The executable next step (A7): restarts the SAME definition through the
-/// Setup screen, correctly parameterized by [PracticeHistoryEntry.definitionId]
-/// — never a text-only suggestion.
-class _NextStepAction extends StatelessWidget {
+/// The executable next step (A7): the ONE recommended next practice
+/// ([recommendNextPractice] over the catalog, the persisted history and the
+/// session just finished — which may not be in the reloaded list yet),
+/// named and explained, as a Setup launch correctly parameterized by its
+/// definition id — never a text-only suggestion. "Practice again" stays as
+/// the secondary action when the recommendation is a different definition.
+class _NextStepAction extends ConsumerWidget {
   const _NextStepAction({required this.entry});
   final PracticeHistoryEntry entry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => PracticeSetupScreen(
-              argsOverride: PracticeSetupArgs(
-                request: PracticeSetupRequest.hasId,
-                definitionId: entry.definitionId,
-              ),
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final catalog = ref.watch(practiceCatalogProvider);
+    final history = ref.watch(practiceHistoryV2ListProvider).value ?? const [];
+    final recommendation = recommendNextPractice(
+      catalog: catalog,
+      history: history,
+      latest: entry,
+    );
+    final nextIsSame =
+        recommendation == null ||
+        recommendation.definition.id == entry.definitionId;
+
+    void openSetup(String definitionId) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PracticeSetupScreen(
+            argsOverride: PracticeSetupArgs(
+              request: PracticeSetupRequest.hasId,
+              definitionId: definitionId,
             ),
           ),
         ),
-        icon: const Icon(Icons.replay),
-        label: Text(l10n.practiceResultNextStepCta),
-        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-      ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (recommendation != null) ...[
+          Text(
+            practiceNextReasonLabel(l10n, recommendation.reason),
+            key: const ValueKey('practice-result-next-reason'),
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+        ],
+        if (recommendation != null && !nextIsSame) ...[
+          FilledButton.icon(
+            key: const ValueKey('practice-result-next-recommended'),
+            onPressed: () => openSetup(recommendation.definition.id),
+            icon: const Icon(Icons.arrow_forward),
+            label: Text(
+              l10n.practiceResultNextRecommendedCta(
+                practiceDefinitionDisplayTitle(l10n, recommendation.definition),
+              ),
+            ),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          OutlinedButton.icon(
+            key: const ValueKey('practice-result-practice-again'),
+            onPressed: () => openSetup(entry.definitionId),
+            icon: const Icon(Icons.replay),
+            label: Text(l10n.practiceResultNextStepCta),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+          ),
+        ] else
+          FilledButton.icon(
+            key: const ValueKey('practice-result-practice-again'),
+            onPressed: () => openSetup(entry.definitionId),
+            icon: const Icon(Icons.replay),
+            label: Text(l10n.practiceResultNextStepCta),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+          ),
+      ],
     );
   }
 }
