@@ -134,22 +134,39 @@ void main() {
       );
     });
 
-    test('the challenge screen is measured UNREACHABLE, as the router says', () {
-      // The specific regression, asserted on the real tree rather than a fixture:
-      // the router's own comment states why this screen has no route, and the
-      // measurement must agree with the code instead of with the prose.
+    test('the challenge screen has NO declarative reference, as the router '
+        'says — it is reachable only through the inbox push (E17-R11)', () {
+      // The specific regression, asserted on the real tree rather than a
+      // fixture: the router's own comment states why this screen has no
+      // route, and the measurement must agree with the code instead of with
+      // the prose — so the declarative channel stays EMPTY. Until E17-R11 that
+      // made the screen unreachable outright; since then the notifications
+      // inbox pushes it (`community_notifications_screen.dart`,
+      // `_openChallenges`), which is real code, not a comment. The verdict
+      // therefore flips to reachable through the imperative channel ALONE: a
+      // declarative reference reappearing here would mean the comment is
+      // being read as a route again.
       final measured = ScreenReachability(repository).render();
       final challenges = measured.verdicts.firstWhere(
         (v) => v.screenPath.endsWith('community_challenges_screen.dart'),
       );
       expect(
-        challenges.isReachable,
-        isFalse,
+        challenges.declarativeReferences,
+        isEmpty,
         reason:
-            'the hosted backend serves no challenge list, so a reachable verdict '
-            'here would mean the app offers a button that always fails',
+            'the router deliberately mounts no route for the challenge list '
+            '(its comment says why); a declarative hit here means the scan '
+            'matched that comment again',
       );
-      expect(challenges.declarativeReferences, isEmpty);
+      expect(challenges.isImperativelyReachable, isTrue);
+      expect(challenges.isReachable, isTrue);
+      expect(challenges.isFlagGated, isFalse);
+      expect(
+        challenges.imperativeReferences.map((r) => r.path),
+        everyElement(endsWith('community_notifications_screen.dart')),
+        reason:
+            'the only in-app entry is the inbox (AppBar action + invite row)',
+      );
     });
 
     test('the stated limit is real: no scanned source has a block comment', () {

@@ -154,6 +154,34 @@ import 'package:strumsight/features/curriculum/presentation/screens/rhythm_pract
 // `AppRoutes.strumChallenge`, opened from the Today hub's card. Same engine
 // stream + preference store the curriculum screens inject.
 import 'package:strumsight/features/strum_challenge/presentation/screens/strum_challenge_screen.dart';
+// The E17 lane (2026-09-15) made thirteen more screens reachable: the
+// tutor's plan preview (E17-R04), the Analysis V2 capture wizard (E17-R02),
+// the setlist session (E17-R03), the four remaining Practice Generator
+// screens (E17-R05/R06) and four Community screens (E17-R07…R11). Their
+// fixtures mirror the widget tests named per block below.
+import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
+import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/practice_plan_block.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/practice_plan_draft.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/skill_node.dart';
+import 'package:strumsight/features/ai_tutor/domain/services/practice_plan_validator.dart';
+import 'package:strumsight/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart';
+import 'package:strumsight/features/audio_analysis/application/analysis_state.dart';
+import 'package:strumsight/features/audio_analysis/data/capture/analysis_recorder.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
+import 'package:strumsight/features/auth/model/auth_user.dart';
+import 'package:strumsight/features/community/application/controllers/challenge_controller.dart'
+    as challenge_controller;
+import 'package:strumsight/features/community/presentation/screens/clubs/club_detail_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_challenges_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_search_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/post_composer_screen.dart';
+import 'package:strumsight/features/song_trainer/domain/models/setlist_result.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/setlist_session_screen.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/gamification/public.dart';
@@ -1251,6 +1279,173 @@ List<Override> _safetyRelationshipsOverrides() => [
   ),
 ];
 
+// ── community, the E17-R07…R11 push targets ────────────────────────────────
+//    (test/features/community/presentation/clubs/club_list_row_tap_test.dart,
+//    community_notifications_challenges_tap_test.dart and
+//    following_feed_entry_points_test.dart measure the taps that reach these
+//    four; the render arguments are the ones
+//    test/ui/goldens/e13_r33_screens_golden_test.dart and
+//    e13_r34_screens_golden_test.dart pump.)
+
+Widget _clubDetailScreen() =>
+    ClubDetailScreen(clubId: ContentId('golden-club-1'));
+List<Override> _clubDetailOverrides() => [
+  ...preferenceOverrides(),
+  communityClubRepositoryProvider.overrideWithValue(_FakeClubsRepository()),
+  clubFeedProvider.overrideWith(
+    (ref, clubId) async => const CommunityPagePlaceholder<CommunityPost>(
+      items: <CommunityPost>[],
+    ),
+  ),
+  clubPinnedProvider.overrideWith(
+    (ref, clubId) async => const <CommunityPost>[],
+  ),
+  clubChallengesProvider.overrideWith(
+    (ref, clubId) async => <CommunityChallengeSummaryPlaceholder>[
+      CommunityChallengeSummaryPlaceholder(
+        challengePublicId: 'golden-club-challenge-1',
+        metric: 'score',
+        difficulty: 2,
+        startsAt: DateTime.utc(2026, 8, 20),
+        endsAt: DateTime.utc(2026, 8, 27),
+      ),
+    ],
+  ),
+];
+
+// `CommunityChallengesScreen` reads the `challenge_controller.dart` provider
+// — the mirror image of the leaderboard note above, measured from its import
+// list; overriding the `challenge_repository_impl.dart` one would be a
+// silent no-op.
+final class _FakeChallengeListRepository
+    implements CommunityChallengeRepository {
+  @override
+  Future<CommunityPage<CommunityChallengeDefinition>> listChallenges({
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<CommunityChallengeDefinition>(
+    items: <CommunityChallengeDefinition>[
+      CommunityChallengeDefinition(
+        id: ContentId('golden-challenge-1'),
+        version: 1,
+        type: ChallengeType.personalBest,
+        metric: 'score',
+        difficulty: 2,
+        startsAt: DateTime.utc(2026, 8, 20),
+        endsAt: DateTime.utc(2026, 8, 27),
+        authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5c01'),
+        clubId: null,
+      ),
+      CommunityChallengeDefinition(
+        id: ContentId('golden-challenge-2'),
+        version: 1,
+        type: ChallengeType.friends,
+        metric: 'accuracy',
+        difficulty: 1,
+        startsAt: DateTime.utc(2026, 8, 22),
+        endsAt: DateTime.utc(2026, 8, 29),
+        authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5c02'),
+        clubId: null,
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+  @override
+  Future<CommunityChallengeDefinition> fetchDefinition({
+    required ContentId challengeId,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityChallengeParticipantState?> fetchMyParticipation({
+    required ContentId challengeId,
+  }) async => null;
+  @override
+  Future<void> invite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+  @override
+  Future<void> acceptInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) async {}
+  @override
+  Future<void> declineInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) async {}
+  @override
+  Future<void> cancelInvite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+  @override
+  Future<void> submitResult({
+    required ContentId challengeId,
+    required int metricValue,
+    required String sourceEventId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPage<Object>> leaderboard({
+    required ContentId challengeId,
+    required Object cursor,
+    required int limit,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+Widget _communityChallengesScreen() => const CommunityChallengesScreen();
+List<Override> _communityChallengesOverrides() => [
+  ...preferenceOverrides(),
+  challenge_controller.communityChallengeRepositoryProvider.overrideWithValue(
+    _FakeChallengeListRepository(),
+  ),
+];
+
+// No injected recent-search store: the screen renders its empty recent list
+// and only hits the profile repository after a debounced keystroke.
+Widget _communitySearchScreen() => const CommunitySearchScreen();
+List<Override> _communitySearchOverrides() => [
+  ...preferenceOverrides(),
+  communityProfileRepositoryProvider.overrideWithValue(
+    _FakeCommunityProfileRepository(profile: _communityProfileFixture()),
+  ),
+];
+
+// The composer's controller awaits the auth provider before it reads the
+// draft store, so the cell signs a fixed user in; the post repository is
+// never asked to create anything during a pump.
+class _MatrixAuthController extends AuthController {
+  @override
+  Future<AuthUser?> build() async =>
+      const AuthUser(id: 1, email: 'golden@strumsight.app');
+}
+
+Map<String, Object?> _composerArtifactFixture() => PracticeSummaryArtifact(
+  schemaVersion: shareArtifactSchemaVersion,
+  sourceId: 'sess-golden-composer',
+  createdAt: DateTime.utc(2026, 8, 23, 12),
+  activeSeconds: 300,
+  pausedSeconds: 10,
+  attemptCount: 2,
+  finishReasonCode: 'userFinished',
+  bestScore: 0.7,
+  coachingCodes: const <String>[],
+).toJson();
+
+Widget _postComposerScreen() => const PostComposerScreen();
+List<Override> _postComposerOverrides() => [
+  ...preferenceOverrides(),
+  communityKeyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+  communityLoggerProvider.overrideWithValue(const NoopAppLogger()),
+  communityPostRepositoryProvider.overrideWithValue(
+    _ScriptedCommentRepository(),
+  ),
+  composerSourceArtifactProvider.overrideWithValue(_composerArtifactFixture()),
+  authControllerProvider.overrideWith(() => _MatrixAuthController()),
+];
+
 // ── curriculum (test/features/curriculum/curriculum_ladder_screen_test.dart,
 //    test/features/curriculum/rhythm_practice_screen_test.dart) ─────────────
 // Both screens read the engine's `liveFrameProvider` stream plus the
@@ -1288,6 +1483,109 @@ Widget _rhythmPracticeScreen() => const RhythmPracticeScreen();
 // metronome mute, today's best) as the rhythm screen, and starts the same
 // unconditional Ticker in `initState` — the bounded three-frame pump covers it.
 Widget _strumChallengeScreen() => const StrumChallengeScreen();
+
+// ── ai_tutor, the practice-plan preview (E17-R04) ──────────────────────────
+//    (test/features/ai_tutor/practice_plan_preview_wiring_test.dart opens it
+//    from the chat; the draft/context shape is the one
+//    test/ui/goldens/e13_r29_screens_golden_test.dart pumps.)
+// A plain StatefulWidget — the draft and the validation context arrive
+// through the constructor, no provider is read at render time.
+
+PracticePlanValidationContext _practicePlanValidationContext() =>
+    PracticePlanValidationContext(
+      songIds: const <String>{},
+      practiceTargetIds: const <String>{},
+      userAvoidList: const <String>{},
+      activeTuning: const <String>[],
+      capabilities: const <PracticePlanCapability>{},
+      availableSkillIds: const <SkillId>{},
+    );
+
+PracticePlanDraft _practicePlanDraft() => PracticePlanDraft(
+  id: 'matrix-plan',
+  title: 'Rhythm focus',
+  targetDuration: const Duration(minutes: 10),
+  blocks: <PracticePlanBlock>[
+    PracticePlanBlock.basic(
+      id: 'warmup',
+      type: PracticePlanBlockType.warmup,
+      duration: const Duration(minutes: 2),
+    ),
+    PracticePlanBlock.basic(
+      id: 'rhythm',
+      type: PracticePlanBlockType.rhythm,
+      duration: const Duration(minutes: 8),
+      tempoBpm: 92,
+    ),
+  ],
+  goalIds: const <String>[],
+  rationale: 'You have been rushing chord changes in the last two sessions.',
+  source: PracticePlanSource.aiSuggestion,
+);
+
+Widget _practicePlanPreviewScreen() => PracticePlanPreviewScreen(
+  draft: _practicePlanDraft(),
+  validationContext: _practicePlanValidationContext(),
+);
+List<Override> _practicePlanPreviewOverrides() => [...preferenceOverrides()];
+
+// ── audio_analysis, the V2 capture wizard (E17-R02) ────────────────────────
+//    (test/features/audio_analysis/capture_wiring_test.dart drives the
+//    routed flow over the real router; the per-screen arguments are the ones
+//    test/ui/goldens/e13_r26_screens_golden_test.dart pumps.)
+// All three are fed through their constructors — no provider is read at
+// render time. The recording screen disposes its recorder on unmount, so
+// every cell builds a fresh one over the fake microphone and its own
+// coordinator; nothing starts capturing until the user taps.
+
+List<AnalysisSummary> _analysisRecentSummaries() => <AnalysisSummary>[
+  AnalysisSummary(
+    documentId: 'matrix-1',
+    title: 'C · G · Am · F',
+    customTitle: false,
+    createdAt: DateTime.utc(2026, 8, 20, 9, 30),
+    completionStatus: 'complete',
+    documentHash: 'a' * 64,
+    sizeBytes: 4096,
+  ),
+  AnalysisSummary(
+    documentId: 'matrix-2',
+    title: 'Free play',
+    customTitle: true,
+    createdAt: DateTime.utc(2026, 8, 18, 18, 5),
+    completionStatus: 'degraded',
+    documentHash: 'b' * 64,
+    sizeBytes: 2048,
+  ),
+];
+
+Widget _analysisHomeScreen() => AnalysisHomeScreen(
+  recentAnalyses: _analysisRecentSummaries(),
+  onStartRecording: () {},
+  onImportFile: () {},
+);
+
+Widget _analysisRecordingScreen() => AnalysisRecordingScreen(
+  recorder: AnalysisRecorder(
+    mic: fakeMicCapture(
+      owner: AudioOwner.analyzeRecorder,
+      coordinator: AudioSessionCoordinator(),
+    ),
+  ),
+  onFinished: (_, _) {},
+  onCancel: () {},
+);
+
+Widget _analysisProcessingScreen() => AnalysisProcessingScreen(
+  state: const AnalysisAnalyzing(
+    runId: 'matrix-run',
+    phase: AnalysisProgressPhase.computingMetrics,
+    completedUnits: 3,
+    totalUnits: 5,
+  ),
+  onCancel: () {},
+);
+List<Override> _analysisCaptureOverrides() => [...preferenceOverrides()];
 
 // ── gamification (test/ui/goldens/e13_r32_screens_golden_test.dart) ────────
 
@@ -3072,6 +3370,89 @@ Widget _todayPlanScreen() {
 
 List<Override> _todayPlanOverrides() => [...preferenceOverrides()];
 
+// The four screens Today Plan pushes since E17-R06
+// (test/features/practice_generator/screen_wiring_test.dart measures the
+// menu taps; the render arguments mirror presentation/
+// plan_preview_screen_test.dart, accessibility/planner_accessibility_test.dart
+// and the wiring test's own confirmation proposal).
+
+final class _MatrixPlanActivation implements GenerationPlanActivation {
+  @override
+  Future<void> activate(AdaptivePracticePlan plan) async {}
+}
+
+Widget _planPreviewScreen() {
+  final controller = PlanPreviewController(
+    initialPlan: buildPlan(),
+    validationContext: buildContext(),
+    activation: _MatrixPlanActivation(),
+  );
+  addTearDown(controller.dispose);
+  return PlanPreviewScreen(controller: controller);
+}
+
+/// The fixture plan's only day is 2026-08-17 — "today" for the review.
+final DateTime _planFixtureToday = DateTime(2026, 8, 17, 9);
+
+/// A proposal that REQUIRES confirmation (two changes ≥ the
+/// `RevisePracticePlan.confirmationThreshold`), so the review screen shows
+/// its accept / reject controls — built through the real use case.
+PlanRevisionProposal _planChangeProposal() {
+  final plan = buildPlan();
+  PlanChange change(String key, int before, int after) => PlanChange(
+    type: PlanChangeType.updated,
+    target: 'day:day.1:block:day.1.block.1',
+    before: <String, Object?>{key: before},
+    after: <String, Object?>{key: after},
+    reason: PlanChangeReason.learnerReschedule,
+    evidenceRefs: const <String>[],
+    confidence: 1,
+    requiresUserConfirmation: false,
+    reversible: true,
+  );
+  final request = RevisePracticePlanRequest(
+    previous: PlanRevision(
+      id: plan.activeRevisionId,
+      planId: plan.id,
+      number: 1,
+      createdAt: plan.createdAt,
+      reason: PlanRevisionReason.initialGeneration,
+      snapshot: plan,
+    ),
+    nextRevisionId: RevisionId('revision.2'),
+    candidateSnapshot: plan.copyWith(
+      activeRevisionId: RevisionId('revision.2'),
+    ),
+    changes: <PlanChange>[
+      change('activeDurationMicros', 300000000, 240000000),
+      change('restDurationMicros', 60000000, 30000000),
+    ],
+    reason: PlanRevisionReason.learnerReschedule,
+    confirmation: PlanChangeConfirmation.pending,
+  );
+  return RevisePracticePlan(clock: () => _planFixtureToday)(request);
+}
+
+Widget _planChangeReviewScreen() => PlanChangeReviewScreen(
+  proposal: _planChangeProposal(),
+  onAccepted: () {},
+  onRejected: () {},
+);
+
+// The real delete + export use cases from the composition root — the same
+// providers Today Plan hands the screen (E17-R06). Both are constructed over
+// the injected key-value store and only touch it on tap, never at render.
+Widget _planPrivacyScreen() => Consumer(
+  builder: (_, ref, _) => PlanPrivacyScreen(
+    deleteUseCase: ref.watch(deletePracticePlanningDataProvider),
+    exportUseCase: ref.watch(exportPracticePlanningDataProvider),
+  ),
+);
+
+Widget _weeklyPlanScreen() =>
+    WeeklyPlanScreen(plan: buildPlan(), today: LocalDate(2026, 8, 17));
+List<Override> _practiceGeneratorPushOverrides() => [...preferenceOverrides()];
+
 // ── progress (test/features/progress/progress_screen_test.dart) ───────────
 
 class _SeededPracticeLog extends PracticeLogController {
@@ -3145,7 +3526,7 @@ final _strumReelResult = AnalyzeResult(
 Widget _strumReelScreen() => StrumReelScreen(result: _strumReelResult);
 List<Override> _strumReelOverrides() => [...preferenceOverrides()];
 
-// ── songs (test/features/songs/*_test.dart) ─────────────────────────────────
+// ── songs (test/features/songs/*_test.dart) ────────────────────────────────
 
 class _SeededSongs extends SongsController {
   _SeededSongs(this._seed);
@@ -3186,6 +3567,35 @@ List<Override> _setlistDetailOverrides() => [
   songsProvider.overrideWith(() => _SeededSongs([_setlistFixtureSong])),
   setlistsProvider.overrideWith(() => _SeededSetlists([_setlistFixtureSet])),
 ];
+
+// The setlist session the detail launches since E17-R03
+// (test/features/song_trainer/setlist_session_wiring_test.dart measures the
+// launcher over the real controller; the render arguments are the ones
+// test/ui/goldens/e13_r25_screens_golden_test.dart pumps — performance mode
+// needs no scoring-runner factory and reads no provider).
+SongSetlist _setlistSessionFixture() => SongSetlist(
+  id: 'golden-setlist',
+  name: 'Golden Setlist',
+  createdAt: DateTime.utc(2026, 8, 26),
+  updatedAt: DateTime.utc(2026, 8, 26),
+  items: <SongSetlistItem>[
+    SongSetlistItem(id: 'first', songId: SongId('song-a')),
+    SongSetlistItem(
+      id: 'second',
+      songId: SongId('song-b'),
+      overrides: const SetlistItemOverrides(tuningOverrideCode: 'dropD'),
+    ),
+  ],
+);
+
+Widget _setlistSessionScreen() => SetlistSessionScreen(
+  setlist: _setlistSessionFixture(),
+  mode: SetlistSessionMode.performance,
+  availability: (_) => SetlistItemAvailability.ready,
+  performanceRunner: (item) async =>
+      SetlistItemResult.completed(itemId: item.id),
+);
+List<Override> _setlistSessionOverrides() => [...preferenceOverrides()];
 
 Widget _setlistListScreen() => const SetlistListScreen();
 List<Override> _setlistListOverrides() => [
@@ -3412,6 +3822,86 @@ final _screens = <String, _ScreenFixture>{
         'lib/features/strum_challenge/presentation/screens/strum_challenge_screen.dart',
     build: _strumChallengeScreen,
     overridesBuilder: _curriculumOverrides,
+  ),
+  // The E17 lane (2026-09-15): thirteen more reachable screens, keyed by
+  // their snake_case basename like every entry above.
+  'practice_plan_preview': _ScreenFixture(
+    screenPath:
+        'lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart',
+    build: _practicePlanPreviewScreen,
+    overridesBuilder: _practicePlanPreviewOverrides,
+  ),
+  'analysis_home': _ScreenFixture(
+    screenPath:
+        'lib/features/audio_analysis/presentation/capture/analysis_home_screen.dart',
+    build: _analysisHomeScreen,
+    overridesBuilder: _analysisCaptureOverrides,
+  ),
+  'analysis_recording': _ScreenFixture(
+    screenPath:
+        'lib/features/audio_analysis/presentation/capture/analysis_recording_screen.dart',
+    build: _analysisRecordingScreen,
+    overridesBuilder: _analysisCaptureOverrides,
+  ),
+  'analysis_processing': _ScreenFixture(
+    screenPath:
+        'lib/features/audio_analysis/presentation/capture/analysis_processing_screen.dart',
+    build: _analysisProcessingScreen,
+    overridesBuilder: _analysisCaptureOverrides,
+  ),
+  'club_detail': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/clubs/club_detail_screen.dart',
+    build: _clubDetailScreen,
+    overridesBuilder: _clubDetailOverrides,
+  ),
+  'community_challenges': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/community_challenges_screen.dart',
+    build: _communityChallengesScreen,
+    overridesBuilder: _communityChallengesOverrides,
+  ),
+  'community_search': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/community_search_screen.dart',
+    build: _communitySearchScreen,
+    overridesBuilder: _communitySearchOverrides,
+  ),
+  'post_composer': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/post_composer_screen.dart',
+    build: _postComposerScreen,
+    overridesBuilder: _postComposerOverrides,
+  ),
+  'plan_change_review': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart',
+    build: _planChangeReviewScreen,
+    overridesBuilder: _practiceGeneratorPushOverrides,
+  ),
+  'plan_preview': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/plan_preview_screen.dart',
+    build: _planPreviewScreen,
+    overridesBuilder: _practiceGeneratorPushOverrides,
+  ),
+  'plan_privacy': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart',
+    build: _planPrivacyScreen,
+    overridesBuilder: _practiceGeneratorPushOverrides,
+  ),
+  'weekly_plan': _ScreenFixture(
+    screenPath:
+        'lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart',
+    build: _weeklyPlanScreen,
+    overridesBuilder: _practiceGeneratorPushOverrides,
+  ),
+  'setlist_session': _ScreenFixture(
+    screenPath:
+        'lib/features/song_trainer/presentation/screens/setlist_session_screen.dart',
+    build: _setlistSessionScreen,
+    overridesBuilder: _setlistSessionOverrides,
   ),
   'achievements': _ScreenFixture(
     screenPath:
