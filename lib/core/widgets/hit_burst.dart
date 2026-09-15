@@ -67,6 +67,42 @@ class HitBurst {
   }
 }
 
+/// The pick "sweep" that accompanies a burst: a short mark that travels
+/// THROUGH the burst centre the way the hand moved — top→bottom for a
+/// down-stroke (`directionSign == 1`), bottom→top for an up-stroke — so the
+/// motion itself reads the direction, not only the settled glyph shape.
+/// Pure geometry on the same clock as [HitBurst.particlesAt]; the caller
+/// draws it (and a fading trail by sampling slightly earlier instants).
+extension HitBurstSweep on HitBurst {
+  /// How long the sweep is visible after [HitBurst.startSec] — shorter than
+  /// the spark life, so the pick has "passed" while the sparks still fall.
+  static const double lifeSec = 0.22;
+
+  /// Half the distance the mark travels (from `-reach` to `+reach` along the
+  /// stroke direction, relative to the burst centre).
+  static const double reach = 34.0;
+
+  /// The mark at [nowSec], or null when the sweep is not visible.
+  SweepMark? sweepAt(double nowSec) {
+    final dt = nowSec - startSec;
+    if (dt < 0 || dt >= lifeSec) return null;
+    final t = dt / lifeSec;
+    final ease = 1 - (1 - t) * (1 - t) * (1 - t); // ease-out cubic: fast start
+    final dy = directionSign * (-reach + 2 * reach * ease);
+    final alpha = (1 - t) * (0.55 + 0.45 * strength);
+    return SweepMark(dy, alpha.clamp(0.0, 1.0), t);
+  }
+}
+
+/// The sweep mark's vertical [dy] from the burst centre (signed: positive is
+/// downward on screen), its [alpha] and its [progress] (0 start → 1 end).
+class SweepMark {
+  const SweepMark(this.dy, this.alpha, this.progress);
+  final double dy;
+  final double alpha;
+  final double progress;
+}
+
 /// One spark: [offset] from the burst centre, current [radius] and [alpha].
 class BurstParticle {
   const BurstParticle(this.offset, this.radius, this.alpha);

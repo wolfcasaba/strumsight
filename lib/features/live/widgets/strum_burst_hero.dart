@@ -11,8 +11,10 @@ import '../../../core/widgets/hit_burst.dart';
 ///
 /// * A burst fires when [strumSeq] advances (never on a rebuild with the
 ///   same seq, never on first mount), in the stroke's colour (copper = down,
-///   confidence green = up), fanning the way the hand moved, sized by the
-///   stroke's [confidence].
+///   confidence green = up), sized by the stroke's [confidence]. The MOTION
+///   reads the direction: a pick-sweep mark travels through the glyph the
+///   way the hand moved (top→bottom for ↓, bottom→top for ↑, with a fading
+///   trail — [HitBurstSweep]) and the sparks fan the same way.
 /// * The clock is a local [Ticker] that runs ONLY while a burst is alive
 ///   (≤ 0.45 s) and stops itself — so `pumpAndSettle` terminates and an idle
 ///   Live screen schedules no frames. This is event-driven decay, not a
@@ -153,10 +155,36 @@ final class _HeroBurstPainter extends CustomPainter {
 
   final Paint _paint = Paint()..style = PaintingStyle.fill;
 
+  final Paint _sweep = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+
+  /// Trail samples behind the sweep mark: earlier instants, fainter.
+  static const List<double> _trailLagSec = [0.0, 0.03, 0.06, 0.09];
+
+  /// Half-length of the horizontal pick mark.
+  static const double _sweepHalfLength = 22;
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = centerOf(size);
     for (final b in bursts) {
+      // The pick sweep first (under the sparks): the mark plus a fading
+      // trail, all travelling in the stroke's direction through the glyph.
+      for (var k = _trailLagSec.length - 1; k >= 0; k--) {
+        final mark = b.sweepAt(nowSec - _trailLagSec[k]);
+        if (mark == null) continue;
+        final fade = 1 - k / _trailLagSec.length;
+        _sweep
+          ..color = b.color.withValues(alpha: mark.alpha * fade)
+          ..strokeWidth = 4 + 2 * fade;
+        final y = center.dy + mark.dy;
+        canvas.drawLine(
+          Offset(center.dx - _sweepHalfLength, y),
+          Offset(center.dx + _sweepHalfLength, y),
+          _sweep,
+        );
+      }
       for (final p in b.particlesAt(nowSec)) {
         _paint.color = b.color.withValues(alpha: p.alpha.clamp(0.0, 1.0));
         canvas.drawCircle(center + p.offset, p.radius, _paint);

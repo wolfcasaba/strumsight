@@ -76,6 +76,35 @@ void main() {
     expect(meanDy(1), greaterThan(0)); // sparks fall with a down-stroke
   });
 
+  test('the pick sweep travels through the centre in the stroke direction', () {
+    HitBurst make(double sign) => HitBurst(
+      startSec: 1.0,
+      color: Colors.orange,
+      strength: 1.0,
+      directionSign: sign,
+    );
+    final down = make(1);
+    final up = make(-1);
+    // Invisible before the start and once its (short) life is over.
+    expect(down.sweepAt(0.9), isNull);
+    expect(down.sweepAt(1.0 + HitBurstSweep.lifeSec), isNull);
+    // A down-stroke starts ABOVE the centre and ends BELOW it (screen y grows
+    // downward); an up-stroke mirrors it exactly.
+    final d0 = down.sweepAt(1.0)!;
+    final d1 = down.sweepAt(1.0 + HitBurstSweep.lifeSec * 0.95)!;
+    expect(d0.dy, lessThan(0));
+    expect(d1.dy, greaterThan(0));
+    expect(d1.dy, greaterThan(d0.dy)); // monotone travel
+    final u0 = up.sweepAt(1.0)!;
+    final u1 = up.sweepAt(1.0 + HitBurstSweep.lifeSec * 0.95)!;
+    expect(u0.dy, -d0.dy);
+    expect(u1.dy, -d1.dy);
+    // It fades as it travels, and progress runs 0 → 1.
+    expect(d1.alpha, lessThan(d0.alpha));
+    expect(d0.progress, 0);
+    expect(d1.progress, closeTo(0.95, 1e-9));
+  });
+
   test('painter repaints only when the clock, bursts or centre change', () {
     final list = [burst()];
     final a = HitBurstPainter(bursts: list, nowSec: 1.1, center: Offset.zero);
