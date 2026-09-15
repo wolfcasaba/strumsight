@@ -144,7 +144,6 @@ void main() {
 
   testWidgets('is excluded from semantics unless labelled', (tester) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     await tester.pumpWidget(host(lit: true));
     expect(find.bySemanticsLabel(RegExp('.+')), findsNothing);
 
@@ -159,6 +158,7 @@ void main() {
       ),
     );
     expect(find.bySemanticsLabel('Practice streak'), findsOneWidget);
+    semantics.dispose();
   });
 
   test('painter repaints only when a drawn input changes', () {

@@ -48,10 +48,7 @@ final class _SsShareRevealState extends State<SsShareReveal>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: widget.duration)
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) widget.onCompleted?.call();
-      });
+    _controller = AnimationController(vsync: this, duration: widget.duration);
   }
 
   @override
@@ -61,14 +58,19 @@ final class _SsShareRevealState extends State<SsShareReveal>
     _started = true;
     if (SsMotionScope.reduceMotionOf(context) ||
         widget.duration == Duration.zero) {
+      // Jump to the end BEFORE any status listener exists: the jump itself
+      // reports `completed` synchronously, which would reach the host in
+      // the middle of this build. The host is told once this frame is out.
       _controller.value = 1;
-      // Jumping to the end fires no `completed` transition; tell the host
-      // once this frame is out so it never setState()s mid-build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) widget.onCompleted?.call();
       });
     } else {
-      _controller.forward();
+      _controller
+        ..addStatusListener((status) {
+          if (status == AnimationStatus.completed) widget.onCompleted?.call();
+        })
+        ..forward();
     }
   }
 

@@ -130,9 +130,7 @@ class WrappedCard extends StatelessWidget {
                 end: 0.8,
                 child: Row(
                   children: [
-                    Expanded(
-                      child: _chip('${recap.daysPracticed}/7', 'DAYS'),
-                    ),
+                    Expanded(child: _chip('${recap.daysPracticed}/7', 'DAYS')),
                     const SizedBox(width: 10),
                     Expanded(child: _chip('${recap.strokes}', 'STRUMS')),
                     const SizedBox(width: 10),

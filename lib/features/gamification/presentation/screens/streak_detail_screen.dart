@@ -70,15 +70,21 @@ class StreakDetailScreen extends StatelessWidget {
                           // Ch18 spec §11.2: the current-rhythm card carries
                           // the flame; the caller-fed reduceMotion is
                           // honoured through SsMotionScope like the status
-                          // card's own transition.
-                          leading: SsMotionScope(
-                            appOverride: reduceMotion ? true : null,
-                            child: SsFlame(
-                              lit: state.current > 0,
-                              color: colorScheme.primary,
-                              dimColor: colorScheme.onSurfaceVariant,
-                              size: SsFlameSize.medium,
-                              igniteOnMount: true,
+                          // card's own transition. The M flame stands on
+                          // the icon's 24 dp footprint and grows up into
+                          // the card padding, so the card keeps its height.
+                          leading: SizedOverflowBox(
+                            size: const Size(24, 24),
+                            alignment: Alignment.bottomLeft,
+                            child: SsMotionScope(
+                              appOverride: reduceMotion ? true : null,
+                              child: SsFlame(
+                                lit: state.current > 0,
+                                color: colorScheme.primary,
+                                dimColor: colorScheme.onSurfaceVariant,
+                                size: SsFlameSize.medium,
+                                igniteOnMount: true,
+                              ),
                             ),
                           ),
                           value: state.current,
