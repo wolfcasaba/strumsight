@@ -1,0 +1,63 @@
+name: Record goldens (x86 CI)
+
+# Felvevő, NEM mérce. A golden PNG-ket ugyanazon a futtatókörnyezeten
+# (ubuntu-latest, x86_64, Flutter 3.44.2) rögzíti, amelyen a merge-kapu
+# összehasonlítja őket (ADR 0426), majd a felvett PNG-ket VISSZACOMMITOLJA
+# ugyanarra az ágra. Egyetlen mérce-lépést sem módosít és nem kerül meg:
+# a full-gate / build-apk komparátora változatlanul nulla-toleranciás.
+#
+# MIKOR: csak akkor, ha a golden-eltérést ELŐBB diffként megnézted és
+# szándékosnak ítélted (a vak újrafelvétel = assertion viselkedéshez
+# hajlítása). A commit-üzenetbe kötelező beírni, MELYIK képernyők és MIÉRT.
+#
+# Hozzáadva a tulajdonos kifejezett engedélyével (2026-09-15, chat:
+# „2. Engedélyezem neked, vedd fel").
+
+on:
+  workflow_dispatch:
+    inputs:
+      paths:
+        description: 'Golden teszt-fájl(ok) szóközzel elválasztva'
+        required: true
+        default: 'test/ui/goldens/e13_r17_screens_golden_test.dart'
+      reason:
+        description: 'Miért szándékos az eltérés (a commit-üzenetbe kerül)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: record-goldens-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Record goldens
+        run: flutter test --update-goldens ${{ github.event.inputs.paths }}
+      - name: Commit the recorded PNGs back to the branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          changed=$(git status --porcelain -- ':(glob)test/**/*.png' | wc -l)
+          if [ "$changed" = "0" ]; then
+            echo 'No golden changed — nothing to commit.'
+            exit 0
+          fi
+          git add -- ':(glob)test/**/*.png'
+          git commit -m "chore(goldens): x86 CI recording — ${{ github.event.inputs.paths }}" \
+                     -m "Reason: ${{ github.event.inputs.reason }}" \
+                     -m "Recorded by record-goldens.yml run ${{ github.run_id }} on ${{ github.sha }}."
+          git push origin HEAD:${{ github.ref_name }}
