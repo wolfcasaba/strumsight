@@ -1,5 +1,26 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔁 FOLYAMATBAN — 3. kör: valódi XP-főkönyv a Practice V2 session mögött (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+Az 1. kör 3. lelete („+XP kártya, ami soha nem ad"): a
+`GamificationPracticeAdapter` sehol nem volt példányosítva, a result-képernyő
+főkönyv-seamje egy no-op volt. Most a MEGLÉVŐ lánc kap produkciós kompozíciót:
+
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| Reward-pipeline providerek | `LocalActivityOutboxRepository` (kapacitás 64, 3 próba) a MEGOSZTOTT `gamificationRewardLedgerRepositoryProvider` fölött, `ActivityEventIngestor`, `DefaultRewardEligibilityPolicy(standard)`, `DefaultRewardPolicy(standard)` — egy főkönyv, egy outbox, egy policy-pár, a `public.dart`-on exportálva | `lib/features/gamification/providers/gamification_reward_pipeline_providers.dart` (ÚJ) |
+| `practiceGamificationAdapterProvider` | az adapter `newOnly` módban (a V2 sessionnek nincs legacy statisztika-sinkje: a V1 napló/streak a Learn és Song Trainer `PracticeSessionRecording`-ja, amit a V2 session sosem hívott — nincs mit duplán írni); a policy-history a főkönyvből (`practiceRewardHistorySnapshotFromLedger`) | `lib/features/practice/application/practice_reward_providers.dart` (ÚJ) |
+| `RewardingPracticeSessionRecorder` | a history-mentés UTÁN (és csak sikeres mentés után) jel → adapter → outbox → `drain()`, így a result-képernyő már valódi bejegyzést olvas; jutalmazási hiba SOHA nem bukja a sessiont (log + a mentés eredménye megy vissza) | `lib/features/practice/application/practice_reward_recorder.dart` (ÚJ); bekötés: `practice_session_providers.dart` (`practiceSessionControllerProvider`) |
+| Jel-leképezés (tiszta) | finishReason → outcome (completed/userFinished/timedOut → completed; cancelled/interrupted → cancelled; failed → failed); quality = a legjobb próbálkozás overall-ja, ha mért; trust `scored` / `deviceObserved` | ugyanott, `practiceGamificationSignalFor` |
+| Result-képernyő seam | `rewardLedgerRepositoryProvider` → a valódi `gamificationRewardLedgerRepositoryProvider` (a `_NoopRewardLedgerRepository` törölve) | `practice_result_providers.dart` |
+| Tesztek | valós in-memory lánc: scored 2,5 perces session → 1 bejegyzés, XP > 0, a seam visszaolvassa; kétszeri rögzítés → 1; két session egy napon → history 2; 30 mp → semmi; cancelled → semmi; bukó mentés → Failure és semmi; jel-leképezés cellák | `test/features/practice/practice_reward_recorder_test.dart` (ÚJ) |
+
+**Őszinte kapuk maradnak:** a standard eligibility 1 perc alatt nem ad XP-t,
+mért minőség nélkül nem ad minőség-XP-t. **Nyitva (következő):** a V2 session
+ma sem írja a V1 naplót / streaket (a Ma-hub és a Profil a V1-et olvassa) — ez
+a haladás-modell egyesítésének köre.
+
+
 ## ✅ KÉSZ — 2. kör: „Következő lépés ajánlás" (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
 Az 1. kör auditjának 5. leletére („nincs mi legyen most a hurok végén": az
