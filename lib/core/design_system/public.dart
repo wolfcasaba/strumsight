@@ -65,6 +65,7 @@ export 'components/music/ss_lock_ring.dart';
 export 'components/music/ss_session_transport.dart';
 export 'components/music/ss_signal_quality_indicator.dart';
 export 'components/music/ss_strum_glyph.dart';
+export 'components/music/ss_strum_strings.dart';
 export 'components/music/ss_strum_strings_model.dart';
 export 'components/music/ss_tempo_display.dart';
 export 'components/music/ss_tuner_gauge.dart';
