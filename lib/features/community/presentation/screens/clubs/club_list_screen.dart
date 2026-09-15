@@ -60,6 +60,7 @@ import '../../../domain/repositories/club_repository.dart';
 import '../../../domain/repositories/community_page.dart';
 import '../../../domain/value_objects/cursor_page.dart';
 import '../../widgets/community_theme_scope.dart';
+import 'club_detail_screen.dart' show ClubDetailScreen;
 
 /// Map a wire visibility to its localized label (E13-R34, A10).
 String communityClubVisibilityLabel(
@@ -81,16 +82,18 @@ String communityClubVisibilityLabel(
 /// the cursor-stability invariants.
 const int _kClubListPageSize = 25;
 
-/// Repository provider stub — the Kör 24 wire-backed
-/// implementation is a future round (``data/repositories/
-/// club_repository_impl.dart`` is NOT on this round's
-/// ``allowed_paths``). The provider is the override seam:
-/// widget tests inject a recording fake via ``ProviderScope``,
-/// production code will inject the http impl once it lands.
+/// Repository provider seam. Production binds it to the
+/// ``HttpCommunityClubRepository`` (``data/repositories/
+/// club_repository_impl.dart``) in ``lib/app/bootstrap/
+/// community_social_production_overrides.dart``; widget tests inject
+/// a recording fake via ``ProviderScope``. The default deliberately
+/// throws ``StateError`` — Riverpod folds it into the list
+/// provider's error state, so a missing override is a visible
+/// failure, not a silently empty club list.
 final communityClubRepositoryProvider = Provider<CommunityClubRepository>(
-  (ref) => throw UnimplementedError(
-    'communityClubRepositoryProvider: Kör 24 wire impl not in scope; '
-    'override via ProviderScope in tests.',
+  (ref) => throw StateError(
+    'communityClubRepositoryProvider must be overridden in production '
+    'wiring; the test overrides it with a recording fake.',
   ),
 );
 
@@ -270,6 +273,12 @@ bool _isPrivateNonMember(CommunityClub club) =>
     club.myRole == null && club.visibility == ClubVisibility.private;
 
 /// A single accessible club-row (A7).
+///
+/// Tapping the row pushes the [ClubDetailScreen] for the club — the
+/// list is the only in-app entry to the detail surface (the router
+/// mounts ``/community/clubs`` on this list; the detail screen has
+/// no route of its own). The detail screen re-runs the A3 gate on
+/// its own fetch, so the row hands over the id only.
 class _ClubRow extends StatelessWidget {
   const _ClubRow({required this.club, required this.localizations});
 
@@ -294,38 +303,49 @@ class _ClubRow extends StatelessWidget {
     return Semantics(
       container: true,
       label: '${club.name}. $memberCountLabel.',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor,
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    club.name,
-                    style: nameStyle,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    memberCountLabel,
-                    style: TextStyle(fontSize: textScaler.scale(14)),
-                  ),
-                ],
+      child: InkWell(
+        onTap: () => _openDetail(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
               ),
             ),
-          ],
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      club.name,
+                      style: nameStyle,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      memberCountLabel,
+                      style: TextStyle(fontSize: textScaler.scale(14)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _openDetail(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ClubDetailScreen(clubId: club.id),
       ),
     );
   }

@@ -47,6 +47,20 @@ final communityChallengeApiClientProvider = Provider<ApiClient?>(
   (ref) => ref.watch(accountApiClientProvider),
 );
 
+/// Pick the implementation for the given client: the HTTP one when
+/// the account layer is on, the disabled stand-in otherwise (the
+/// ``createCommunityPostRepository`` precedent). The production
+/// bootstrap binds the two controller seams
+/// (``communityChallengeRepositoryProvider`` in
+/// ``challenge_controller.dart`` and
+/// ``communityChallengeResultRepositoryProvider``) through this.
+CommunityChallengeRepository createCommunityChallengeRepository(
+  ApiClient? client,
+) {
+  if (client == null) return const DisabledCommunityChallengeRepository();
+  return HttpCommunityChallengeRepository(client);
+}
+
 /// Disabled-mode fallback: returns ``ConfigurationFailure`` for
 /// every call. Mirrors the pattern of
 /// ``DisabledSocialGraphRepository`` /
@@ -127,11 +141,20 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     required Object cursor,
     required int limit,
   }) async {
-    final params = <String, Object?>{'limit': limit};
+    // ``ApiClient.getJson`` takes no query map — the ``params`` map
+    // the Kör 21 version built here was never sent, so every
+    // "load more" re-fetched page one at the server's default
+    // limit. The cursor / limit are inlined into the path (the
+    // ``leaderboard`` pattern below; backend
+    // ``GET /community/challenges?cursor=&limit=``).
     final cursorValue = cursorQueryValue(cursor);
-    if (cursorValue != null) params['cursor'] = cursorValue;
+    final querySegments = <String>[
+      'limit=${Uri.encodeQueryComponent('$limit')}',
+      if (cursorValue != null)
+        'cursor=${Uri.encodeQueryComponent(cursorValue)}',
+    ];
     final result = await _client.getJson<dynamic>(
-      '/community/challenges',
+      '/community/challenges?${querySegments.join('&')}',
       decode: decodeChallengeListPage,
     );
     return switch (result) {

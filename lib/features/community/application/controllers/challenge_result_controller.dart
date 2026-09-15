@@ -108,10 +108,9 @@ const Object _sentinel = Object();
 /// Kör 22 surface).
 final communityChallengeResultRepositoryProvider =
     Provider<CommunityChallengeRepository>(
-      (ref) => throw UnimplementedError(
-        'communityChallengeResultRepositoryProvider must be overridden via '
-        'the production wiring (challenge_repository_impl.dart) or via a '
-        'recording fake in tests.',
+      (ref) => throw StateError(
+        'communityChallengeResultRepositoryProvider must be overridden in '
+        'production wiring; the test overrides it with a recording fake.',
       ),
     );
 

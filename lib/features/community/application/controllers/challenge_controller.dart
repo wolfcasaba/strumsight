@@ -122,17 +122,21 @@ class ChallengeListState {
 
 const Object _sentinel = Object();
 
-/// Provider for the [CommunityChallengeRepository]. The
-/// production wiring lands in this file (the Kör 21
-/// ``challenge_repository_impl.dart``). The widget test in
-/// ``community_challenges_test.dart`` overrides this provider
-/// with a recording fake.
+/// Provider for the [CommunityChallengeRepository] — the seam the
+/// [ChallengeController] and ``community_challenges_screen.dart``
+/// read. NOTE: ``challenge_repository_impl.dart`` declares a
+/// same-named provider that resolves the HTTP impl on its own; the
+/// leaderboard screen reads THAT one, this one is the controller's.
+/// Production binds this seam in
+/// ``lib/app/bootstrap/community_social_production_overrides.dart``;
+/// the widget test in ``community_challenges_test.dart`` overrides it
+/// with a recording fake. The default deliberately throws
+/// ``StateError`` — a missing override is a visible failure.
 final communityChallengeRepositoryProvider =
     Provider<CommunityChallengeRepository>(
-      (ref) => throw UnimplementedError(
-        'communityChallengeRepositoryProvider must be overridden via the '
-        'production wiring (challenge_repository_impl.dart) or via a '
-        'recording fake in tests.',
+      (ref) => throw StateError(
+        'communityChallengeRepositoryProvider must be overridden in '
+        'production wiring; the test overrides it with a recording fake.',
       ),
     );
 

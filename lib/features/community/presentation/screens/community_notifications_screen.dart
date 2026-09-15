@@ -9,18 +9,19 @@
 ///
 /// **Inbox tap action (A1, A4, §3).** Tapping a row marks it read
 /// via the controller's ``markRead`` — the single mutation path;
-/// the screen does NOT call the repository directly, and it does
-/// NOT navigate anywhere (measured §0.0.B/B8 — the corrected claim:
-/// an earlier draft of this comment said the tap "deep-links the
-/// user to the entity", which was never true of the code below).
-/// [CommunityNotificationItem] carries no route / URL / deep-link
-/// field — only ``relatedContentId`` — and the community screens
-/// are not registered in ``lib/app/routing/**`` (out of this
-/// round's scope, §0.0.B/B8). The row's visible AND ``Semantics``
-/// surface is built exclusively from ``titleKey`` / ``bodyKey`` /
-/// ``kind`` / ``isRead`` — never from ``relatedContentId`` — so a
-/// private club or challenge a non-member is not entitled to see
-/// cannot leak through a notification row (A3 / A4).
+/// the screen does NOT call the repository directly. The ONE
+/// navigation the screen performs (production wiring round
+/// 2026-09-15): a ``challengeInvite`` row — and the AppBar's
+/// challenges action — pushes the challenge LIST
+/// (``CommunityChallengesScreen``), which the router does not mount
+/// and which fetches its own data. No id from the tapped row
+/// crosses over: [CommunityNotificationItem] carries no route / URL
+/// / deep-link field — only ``relatedContentId`` — and the row's
+/// visible AND ``Semantics`` surface is built exclusively from
+/// ``titleKey`` / ``bodyKey`` / ``kind`` / ``isRead`` — never from
+/// ``relatedContentId`` — so a private club or challenge a
+/// non-member is not entitled to see cannot leak through a
+/// notification row (A3 / A4).
 ///
 /// **Per-category push toggle (A6, §3).** The screen renders a
 /// per-kind switch panel (the 10 wire kinds of
@@ -37,6 +38,8 @@
 /// push gateway is a separate concern owned by a future round.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -48,6 +51,18 @@ import '../../application/controllers/notification_controller.dart';
 import '../../domain/entities/notification_item.dart';
 import '../../domain/value_objects/content_id.dart';
 import '../widgets/community_theme_scope.dart';
+import 'community_challenges_screen.dart' show CommunityChallengesScreen;
+
+/// Push the challenge list (the only in-app entry to
+/// [CommunityChallengesScreen] — the router mounts no route for it,
+/// see ``app_router.dart``). Shared by the AppBar action and the
+/// challenge-invite row tap; the list screen fetches its own data,
+/// nothing from the tapped row (A4) crosses over.
+void _openChallenges(BuildContext context) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => const CommunityChallengesScreen()),
+  );
+}
 
 /// Public screen — ``ConsumerWidget`` so the test surface is
 /// the ``ProviderScope`` override of the
@@ -81,6 +96,15 @@ class CommunityNotificationsScreen extends ConsumerWidget {
                 icon: const Icon(Icons.done_all),
                 onPressed: isMutating ? null : () => notifier.markAllRead(),
               ),
+            // The challenge list is reachable from here and from a
+            // challenge-invite row — not from the router (the list
+            // had no backend until this round). Always shown: it
+            // does not depend on the inbox state.
+            IconButton(
+              tooltip: localizations.communityNotificationsOpenChallenges,
+              icon: const Icon(Icons.emoji_events_outlined),
+              onPressed: () => _openChallenges(context),
+            ),
           ],
         ),
         body: asyncState.when(
@@ -230,10 +254,32 @@ class _NotificationRow extends ConsumerWidget {
               onPressed: () => notifier.clearError(),
             )
           : null,
-      onTap: item.isRead || isMutating
-          ? null
-          : () => notifier.markRead(item.id),
+      onTap: _tapAction(context, notifier, isMutating: isMutating),
     );
+  }
+
+  /// The row's tap action. A challenge-invite row is always
+  /// tappable: it marks the row read (when unread and no mutation
+  /// is in flight — the existing single mutation path) and pushes
+  /// the challenge LIST, where the invite is accepted / declined.
+  /// The list is fetched by its own controller; the row's
+  /// ``relatedContentId`` is never read (A4). Every other kind keeps
+  /// the mark-read-only tap, disabled once read.
+  VoidCallback? _tapAction(
+    BuildContext context,
+    NotificationController notifier, {
+    required bool isMutating,
+  }) {
+    if (item.kind == CommunityNotificationKind.challengeInvite) {
+      return () {
+        if (!item.isRead && !isMutating) {
+          unawaited(notifier.markRead(item.id));
+        }
+        _openChallenges(context);
+      };
+    }
+    if (item.isRead || isMutating) return null;
+    return () => notifier.markRead(item.id);
   }
 
   Widget? _buildSubtitle(

@@ -173,14 +173,18 @@ class NotificationInboxState {
 const Object _sentinel = Object();
 
 /// Provider for the [CommunityNotificationRepository]. The
-/// production wiring lands in a future round (the brief
-/// §0.0 D2 scope-shrink — the HTTP data-layer is NOT in this
-/// round's ``allowed_paths``); the widget test in
-/// ``community_notifications_test.dart`` overrides this
-/// provider with a recording fake.
+/// production wiring binds it in
+/// ``lib/app/bootstrap/community_social_production_overrides.dart``
+/// (the ``HttpCommunityNotificationRepository`` over the shared
+/// account client); the widget test in
+/// ``community_notifications_test.dart`` overrides this provider
+/// with a recording fake. The default deliberately throws
+/// ``StateError`` — Riverpod folds it into the controller's error
+/// state, so a missing override is a visible failure, not a
+/// silently empty inbox.
 final communityNotificationRepositoryProvider =
     Provider<CommunityNotificationRepository>((ref) {
-      throw UnimplementedError(
+      throw StateError(
         'communityNotificationRepositoryProvider must be overridden in '
         'production wiring; the test overrides it with a recording fake.',
       );
