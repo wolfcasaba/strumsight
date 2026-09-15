@@ -124,3 +124,65 @@ at 64 it detects nothing at all. Ctor-injectable like delta/lambda; production
 passes nothing. Pinned by `test/features/live/dsp/superflux_ring_out_phantom_test.dart`
 (the 31 measured grid points, plus a recall counter-weight so a
 detect-nothing "fix" cannot pass). Real-device feel remains the final gate.
+
+## D9 — on the HONEST metric the (delta, lambda, minRiseBands) grid is FLAT (2026-09-15)
+
+**NEGATIVE RESULT: nothing moved.** `delta 12.0 / lambda 1.0 / minRiseBands 16`
+stand unchanged after a full 36-cell sweep
+(delta 8/10/12/14 × lambda 0.7/1.0/1.3 × minRiseBands 12/16/20) over **all 82**
+Klangio takes — 11 767 labels, ~5 005 s of audio, 472 s wall clock on 8
+isolates (`test/tools/superflux_honest_sweep_test.dart`, data-gated).
+
+**⚠ The r166 and HEAL E14-R19 percentages above are NOT comparable with these.**
+They score "is there ANY detection within ±120 ms of this label": one detection
+can satisfy several labels, and the tolerance is 2.4× the release tolerance.
+This sweep scores ONE-TO-ONE and PER RECORDING — the shipped
+`computeRecognitionMetrics` (ADR 0509: Kuhn maximum-cardinality matching) and,
+side by side, the greedy `matchOnsetsUs` that produced
+`evaluation/recognition/baseline_manifest.json`. Under that metric the shipped
+detector is **P 0.530 / R 0.592 / F1 0.560 @±50 ms**, not "90 % recall".
+
+| delta, lambda, minRiseBands | P@50 | R@50 | F1@50 | F1@50 greedy | eval fold F1@50 |
+|---|---|---|---|---|---|
+| **12, 1.0, 16 (shipped)** | 0.530 | 0.592 | **0.5596** | 0.5534 | 0.4766 |
+| 10, 1.0, 20 (grid best) | 0.534 | 0.614 | 0.5711 | 0.5653 | 0.4849 |
+| 12, 0.7, 20 | 0.538 | 0.607 | 0.5706 | 0.5647 | 0.4837 |
+| 8, 0.7, 12 (grid worst) | 0.455 | 0.644 | 0.5331 | 0.5279 | 0.4526 |
+
+The best cell beats the shipped one by **+0.0116**; the bar is +0.02, so it does
+not ship. The **entire grid spans 0.038 F1@50** — these three knobs are not
+where the remaining onset error lives.
+
+**Structure, consistent but too small to buy anything.** `minRiseBands` is
+monotone 12 → 16 → 20 at **every one of the 12 (delta, lambda) pairs**
+(+0.006…+0.026 F1@50 over the full 12 → 20 step, largest where delta is lowest).
+delta 8 collapses precision (0.455 at the worst cell); delta 14 and lambda 1.3
+always lose recall faster than they gain precision.
+
+**Why raising the gate can RAISE recall here** (the opposite sign from the ±120 ms
+sweep, where 16 → 20 cost 0.6 pts): the detection sets are **not nested**. The
+min-IOI (60 ms) + release hysteresis mean a spurious early candidate BLOCKS the
+true attack behind it, so rejecting the spurious one lets the correctly-timed
+one fire. Measured at delta 12 / lambda 1.0: gate 16 → 20 drops 257 detections
+yet gains 17 true positives (TP 6970 → 6987, FP 6174 → 5900).
+
+**Where the error actually is — two measurements worth more than the grid:**
+
+1. **The raw detector scores BELOW `ClipAnalyzer`.** Shipped cell 0.5534 greedy
+   vs the manifest's **0.6739** on the same corpus under the same matcher. The
+   difference is the `StrumAnalyzer` gating stacked on top of this detector: it
+   is worth ~0.12 F1, roughly **3× the whole grid's span**. Onset precision is
+   won downstream, not in the threshold.
+2. **Most of the ±50 ms loss is TIMING, not misses.** Shipped-cell recall by
+   tolerance: **0.284 @25 ms → 0.592 @50 ms → 0.879 @100 ms**. The attacks are
+   found; they land 50–100 ms off. A threshold knob cannot move a latency
+   offset — which is exactly why the grid is flat. The next real gain is in
+   peak localisation / the 2-frame confirmation delay, not in
+   delta/lambda/minRiseBands.
+
+Reproduce:
+`flutter test --dart-define=SUPERFLUX_SWEEP_STRIDE=1 --dart-define=SUPERFLUX_SWEEP_WORKERS=8 test/tools/superflux_honest_sweep_test.dart`
+(defaults are exactly these; `SUPERFLUX_SWEEP_STRIDE=k` subsamples every k-th id
+and the report states it). Full 36-row table at both folds and all three
+tolerances: `docs/eval/superflux-honest-sweep-2026-09-15.md`. Runtime is
+machine-dependent (ADR 0474/0248) — never a merge gate.

@@ -3,8 +3,38 @@ import 'dart:typed_data';
 
 /// Pure-Dart forward pass of the trained strum-direction CRNN
 /// (ml-track P1.3, revised 2026-07-13: hand-written inference instead of
-/// tflite_flutter — the net is ~350k params / ~1 ms per window, host-testable
-/// on any platform, and keeps the ONE-win32-major rule untouched).
+/// tflite_flutter — host-testable on any platform, and keeps the
+/// ONE-win32-major rule untouched).
+///
+/// ## Cost — MEASURED, correcting this header's own earlier claim
+///
+/// This comment used to say "~350k params / ~1 ms per window". The parameter
+/// count is right (363 891); **the latency was wrong by 45x**, and wrong because
+/// it was derived from the parameter count instead of from the work
+/// (`tool/benchmarks/strum_direction_forward_benchmark.dart`, ADR 0564):
+///
+/// ```
+///   conv1  15x128x16 outputs x 9        =  0.28 M MAC   (then maxpool W/2)
+///   conv2  15x64x32  outputs x 9x16     =  4.42 M
+///   conv3  15x32x48  outputs x 9x32     =  6.64 M
+///   GRU    15 steps x (768 + 128) x 384 =  5.16 M
+///                                         --------
+///                                         16.5 M MAC  = 45x the parameters
+/// ```
+///
+/// A conv kernel is applied at every spatial position and the GRU matrices at
+/// every one of the 15 timesteps, so parameters and work are not the same number.
+/// Measured on `ci_host` (x86 desktop), AOT via `dart compile exe`, 400 calls
+/// after warm-up: **median 27-29 ms across runs** (28.2 ms in the recorded run),
+/// p95 33 ms — about 0.6 GMAC/s, which is an ordinary rate for scalar Dart, so the
+/// implementation is not the problem; the work is simply 45x what the header
+/// implied. JIT under `flutter test` measures 25.8 ms, i.e. **AOT is not faster
+/// here** — so the JIT figure was never the pessimistic bound it was treated as.
+///
+/// The load is linear in strokes per second: at 80 bpm eighths (2.7 strokes/s)
+/// that is 7.2 % of one core, at the 200 bpm sixteenths stress case (13.3
+/// strokes/s) 35.9 %. **The on-device figure is NOT measured** — an x86 desktop
+/// bounds a phone, it does not stand in for one.
 ///
 /// Architecture (must mirror `ml/train.py::build_model` exactly):
 ///   log-mel window (frames, mels) → standardise (per-mel mean/std) →
@@ -140,8 +170,44 @@ class CrnnStrumNet {
     final inC = k.dims[2];
     final kPacked = k.packedConv ??= _packConv(k, inC, outC);
     final out = _Tensor3(x.h, x.w, outC);
-    final xData = x.data;
     final outData = out.data;
+
+    // The input is sparsified ONCE, CSR-style, and the convolution then reads only
+    // the non-zero channels. Exact, not approximate: the skipped terms are
+    // `0.0 * finite`, and the surviving terms keep their original order, so the sum
+    // is unchanged.
+    //
+    // MEASURED why (ADR 0565): conv2 and conv3 read POST-ReLU activations, and on
+    // 200 real GuitarSet windows those inputs are 46.1 % and 71.5 % zero, which is
+    // 6.78 M of the trunk's 11.34 M multiply-adds.
+    //
+    // The gather is amortised by the loop shape rather than paid per multiply. The
+    // packed kernel is [tap][o][c], so one input position's channel vector is reused
+    // by every output channel: sparsifying costs `inC` tests per INPUT position
+    // (h*w of them, one pass) and saves `outC` multiply-adds per zero found. A naive
+    // `if (value == 0) continue` in the innermost loop would instead spend one test
+    // per single multiply-add and save nothing — which is why the sparse structure is
+    // built outside the output loops, not inside them.
+    final positions = x.h * x.w;
+    final starts = Int32List(positions + 1);
+    final indices = Int32List(positions * inC);
+    final values = Float64List(positions * inC);
+    final xData = x.data;
+    var n = 0;
+    for (var p = 0; p < positions; p++) {
+      starts[p] = n;
+      final base = p * inC;
+      for (var c = 0; c < inC; c++) {
+        final v = xData[base + c];
+        if (v != 0) {
+          indices[n] = c;
+          values[n] = v;
+          n++;
+        }
+      }
+    }
+    starts[positions] = n;
+
     for (var i = 0; i < x.h; i++) {
       for (var j = 0; j < x.w; j++) {
         final outBase = (i * x.w + j) * outC;
@@ -154,13 +220,16 @@ class CrnnStrumNet {
           for (var dj = -1; dj <= 1; dj++) {
             final jj = j + dj;
             if (jj < 0 || jj >= x.w) continue;
+            final p = ii * x.w + jj;
+            final from = starts[p];
+            final to = starts[p + 1];
+            if (from == to) continue; // the whole channel vector is zero
             final tap = ((di + 1) * 3 + (dj + 1)) * inC * outC;
-            final xBase = (ii * x.w + jj) * x.c;
             for (var o = 0; o < outC; o++) {
               final kBase = tap + o * inC;
               var acc = 0.0;
-              for (var c = 0; c < inC; c++) {
-                acc += xData[xBase + c] * kPacked[kBase + c];
+              for (var s = from; s < to; s++) {
+                acc += values[s] * kPacked[kBase + indices[s]];
               }
               outData[outBase + o] += acc;
             }
