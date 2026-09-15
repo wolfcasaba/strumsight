@@ -7,7 +7,10 @@
 // (the direction verdict). Screenshots are taken at the first hits.
 //
 // Run (device/emulator attached, WAV pushed to the device first):
-//   adb push <8 s guitar excerpt>.wav /sdcard/Download/strumsight_probe.wav
+//   adb push <8 s guitar excerpt>.wav /data/local/tmp/strumsight_probe.wav
+//   adb shell chmod 644 /data/local/tmp/strumsight_probe.wav
+//   (an app cannot read /sdcard/Download on API 30+, and a reinstall wipes the
+//   app's own external dir; /data/local/tmp survives and is world-readable)
 //   flutter drive --driver=test_driver/integration_test.dart \
 //     --target=integration_test/live_strum_feedback_headless_test.dart \
 //     -d emulator-5554
@@ -34,7 +37,7 @@ import '../test/support/preference_store.dart';
 
 const _wavPath = String.fromEnvironment(
   'STRUMSIGHT_PROBE_WAV',
-  defaultValue: '/sdcard/Download/strumsight_probe.wav',
+  defaultValue: '/data/local/tmp/strumsight_probe.wav',
 );
 
 /// Streams a decoded WAV into the engine in real time, 1024 samples a tick —
@@ -108,10 +111,17 @@ void main() {
     double? firstOnsetLag; // engine-clock lag of the frame that reported it
     final directions = <String>[];
     final total = pcm.length / sr;
-    final deadline = DateTime.now().add(
-      Duration(milliseconds: (total * 1000).round() + 1500),
+    // Feed until the clip is exhausted (an emulator under load delivers the
+    // real-time timer late), then one more second for the last verdicts; a
+    // hard cap of 4x the clip keeps a stalled capture from hanging the run.
+    final hardDeadline = DateTime.now().add(
+      Duration(milliseconds: (total * 4000).round() + 2000),
     );
-    while (DateTime.now().isBefore(deadline)) {
+    DateTime? settleUntil;
+    while (DateTime.now().isBefore(settleUntil ?? hardDeadline)) {
+      if (settleUntil == null && capture.exhausted) {
+        settleUntil = DateTime.now().add(const Duration(seconds: 1));
+      }
       await tester.pump(const Duration(milliseconds: 50));
       final LiveFrame? f = container.read(liveFrameProvider).value;
       if (f == null) continue;
