@@ -1,0 +1,96 @@
+name: Record goldens (x86)
+# Records golden PNGs on the MERGE-GATE architecture (ubuntu x86_64, the
+# same Flutter pin as full-gate/build-apk) — ADR 0426: goldens recorded on
+# any other ISA are red on the gate at zero tolerance. This is the remote
+# counterpart of `tools/golden-x86.sh record` for sessions with no Docker.
+#
+# NOT a gate: it never blocks a merge and never runs on its own. It is
+# dispatched by hand with the golden test files to re-record; it commits the
+# changed PNGs back to the SAME branch (never main) and also uploads them as
+# an artifact. Added 2026-09-15 with the owner's explicit approval.
+on:
+  workflow_dispatch:
+    inputs:
+      test_paths:
+        description: 'Space-separated golden test files to re-record'
+        required: true
+        default: 'test/ui/goldens'
+      commit:
+        description: 'Commit the re-recorded PNGs back to this branch'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: record-goldens-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Refuse to record on the default branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "::error::Goldens are re-recorded on a round branch, never on main."
+            exit 1
+          fi
+      - name: Re-record goldens on x86
+        shell: bash
+        env:
+          TEST_PATHS: ${{ inputs.test_paths }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          flutter test --update-goldens $TEST_PATHS
+      - name: Collect changed PNGs
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/goldens
+          changed="$(git status --porcelain -- 'test/**/*.png' | awk '{print $2}')"
+          if [[ -z "$changed" ]]; then
+            echo "No golden changed — the on-disk PNGs already match x86."
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$changed" | while read -r f; do
+            mkdir -p "dist/goldens/$(dirname "$f")"
+            cp -- "$f" "dist/goldens/$f"
+          done
+          echo "$changed"
+          echo "count=$(echo "$changed" | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+      - name: Upload re-recorded PNGs
+        if: steps.changed.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldens-x86-${{ github.run_id }}
+          path: dist/goldens
+          if-no-files-found: error
+      - name: Commit and push to the branch
+        if: steps.changed.outputs.count != '0' && inputs.commit == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "strumsight-record-goldens[bot]"
+          git config user.email "record-goldens@users.noreply.github.com"
+          git add -- $(git status --porcelain -- 'test/**/*.png' | awk '{print $2}')
+          git commit -m "test(goldens): re-record on x86 (record-goldens run ${{ github.run_id }})" \
+            -m "Re-recorded with flutter test --update-goldens on ubuntu x86_64 (ADR 0426)." \
+            -m "Inputs: ${{ inputs.test_paths }}"
+          git push origin "HEAD:${{ github.ref_name }}"
