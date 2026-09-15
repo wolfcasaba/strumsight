@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 
 import 'app/bootstrap/app_bootstrap.dart';
 import 'app/bootstrap/bootstrap_result.dart';
+import 'app/bootstrap/community_production_overrides.dart';
+import 'app/bootstrap/community_social_production_overrides.dart';
 import 'app/bootstrap/production_repository_overrides.dart';
 import 'app/config/app_config.dart';
 import 'app/strumsight_app.dart';
@@ -92,6 +94,20 @@ Future<void> _runAppWithSongTrainerRepositories({
     final tutorOverrides = await buildTutorProductionOverrides(
       keyValueStore: keyValueStore,
     );
+    // Community data seams (E17-R07…R11): feed/post/draft store on one
+    // side, notifications/challenges/clubs/social graph on the other —
+    // without these every routed community screen rendered an error panel.
+    final communityLogger = createDefaultAppLogger();
+    final communityOverrides = <Override>[
+      ...buildCommunityProductionOverrides(
+        keyValueStore: keyValueStore,
+        logger: communityLogger,
+      ),
+      ...buildCommunitySocialProductionOverrides(
+        keyValueStore: keyValueStore,
+        logger: communityLogger,
+      ),
+    ];
     runApp(
       ProviderScope(
         overrides: [
@@ -107,6 +123,7 @@ Future<void> _runAppWithSongTrainerRepositories({
             () => OnboardingController(onboardingSeen),
           ),
           ...tutorOverrides,
+          ...communityOverrides,
         ],
         child: const StrumSightApp(),
       ),

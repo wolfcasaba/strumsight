@@ -208,9 +208,54 @@ routes:
     rides: "account_api"
     fields: []
 
+  - id: account_api_community_feed_repository
+    source: "HttpCommunityFeedRepository"
+    file: "lib/features/community/data/repositories/feed_repository_impl.dart:93"
+    wired: true
+    gate: "rides account_api via communityFeedApiClientProvider, which re-exports accountApiClientProvider verbatim (feed_repository_impl.dart:51-53)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_community_post_repository
+    source: "HttpCommunityPostRepository"
+    file: "lib/features/community/data/repositories/post_repository_impl.dart:145"
+    wired: true
+    gate: "rides account_api via communityPostApiClientProvider, which re-exports accountApiClientProvider verbatim (post_repository_impl.dart:57-59)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_community_notification_repository
+    source: "HttpCommunityNotificationRepository"
+    file: "lib/features/community/data/repositories/notification_repository_impl.dart:111"
+    wired: true
+    gate: "rides account_api via communityNotificationApiClientProvider, which re-exports accountApiClientProvider verbatim (notification_repository_impl.dart:60-62)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_community_club_repository
+    source: "HttpCommunityClubRepository"
+    file: "lib/features/community/data/repositories/club_repository_impl.dart:142"
+    wired: true
+    gate: "rides account_api via communityClubApiClientProvider, which re-exports accountApiClientProvider verbatim (club_repository_impl.dart:61-63)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_community_social_graph_pages_repository
+    source: "HttpCommunitySocialGraphRepository"
+    file: "lib/features/community/data/repositories/social_graph_repository_impl.dart:80"
+    wired: true
+    gate: "rides account_api via communitySocialApiClientProvider (re-exported from relationship_repository_impl.dart:43-44); a paging decorator over HttpSocialGraphRepository"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
   - id: account_api_community_challenge_repository
     source: "HttpCommunityChallengeRepository"
-    file: "lib/features/community/data/repositories/challenge_repository_impl.dart:120"
+    file: "lib/features/community/data/repositories/challenge_repository_impl.dart:134"
     wired: true
     gate: "rides account_api via communityChallengeApiClientProvider, which re-exports accountApiClientProvider verbatim (challenge_repository_impl.dart:46-47)"
     consent_switch: "rides account_api — see that route's consent_switch"

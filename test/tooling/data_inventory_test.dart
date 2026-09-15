@@ -236,6 +236,11 @@ void main() {
           'HttpCommunityProfileRepository',
           'HttpSocialGraphRepository',
           'HttpCommunityChallengeRepository',
+          'HttpCommunityFeedRepository',
+          'HttpCommunityPostRepository',
+          'HttpCommunityNotificationRepository',
+          'HttpCommunityClubRepository',
+          'HttpCommunitySocialGraphRepository',
           'DiagnosticsUploader',
         ]),
       );
