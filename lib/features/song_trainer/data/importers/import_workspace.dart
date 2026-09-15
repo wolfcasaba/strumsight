@@ -72,7 +72,10 @@ final class ImportWorkspace {
   }
 
   Future<File> _resolveFile(String relativePath) async {
-    final components = relativePath.split(Platform.pathSeparator);
+    // Split on BOTH separators: Windows accepts '/' as well as '\', so a
+    // '../x' traversal must be caught there too (it slipped through when only
+    // Platform.pathSeparator was split — a Windows-only escape).
+    final components = relativePath.split(_anySeparator);
     if (relativePath.isEmpty ||
         File(relativePath).isAbsolute ||
         components.any((part) => part.isEmpty || part == '.' || part == '..')) {
@@ -100,6 +103,8 @@ final class ImportWorkspace {
     }
     return File('${current.path}${Platform.pathSeparator}${components.last}');
   }
+
+  static final RegExp _anySeparator = RegExp(r'[\\/]');
 
   static bool _isSafeOperationId(String value) =>
       RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(value);

@@ -45,7 +45,18 @@ void main() {
           workspace.createFile('../escaped.json'),
           throwsA(isA<ImportWorkspaceException>()),
         );
-        await Link('${workspace.path}/escape').create(outside.path);
+        // The symlink half needs a filesystem that lets the test create a
+        // link: on Windows without Developer Mode `Link.create` is denied
+        // (ERROR_PRIVILEGE_NOT_HELD). That is a box limitation, not a
+        // workspace verdict — the traversal half above still ran.
+        try {
+          await Link('${workspace.path}/escape').create(outside.path);
+        } on FileSystemException catch (e) {
+          if (!Platform.isWindows) rethrow;
+          // ignore: avoid_print
+          print('symlink escape cell skipped: ${e.osError?.message}');
+          return;
+        }
         await expectLater(
           workspace.createFile('escape/escaped.json'),
           throwsA(isA<ImportWorkspaceException>()),
