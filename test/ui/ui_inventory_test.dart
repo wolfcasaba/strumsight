@@ -28,7 +28,9 @@ void main() {
     // E18-R22, late: those rounds ran the gate over their own test paths, so this
     // pin and two others went stale together (the same way `theme_adoption_test`
     // did). A pinned count only guards while something runs it.
-    expect(first.screenPaths, hasLength(98));
+    // 2026-09-15 — the 60-second strum challenge
+    // (`lib/features/strum_challenge/presentation/screens/`): 98 -> 99.
+    expect(first.screenPaths, hasLength(99));
     expect(
       first.screenPaths,
       contains('lib/features/settings/screens/privacy_center_screen.dart'),

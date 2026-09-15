@@ -45,6 +45,9 @@ final String _songTrainerSessionPrefix = AppRoutes.songTrainerSession
 /// D13's earlier reasoning — see D14/3).
 bool isStageRoute(String location) {
   if (location == AppRoutes.practiceLive) return true;
+  // The 60-second strum challenge: a top-level, microphone-owning route with
+  // the same mount/dispose reasoning as `/practice/live` (2026-09-15).
+  if (location == AppRoutes.strumChallenge) return true;
   if (location == AppRoutes.practiceSession) return true;
   if (location == AppRoutes.visionSession) return true;
   if (!location.startsWith(_songTrainerSessionPrefix)) return false;

@@ -4543,6 +4543,77 @@
       }
     }
   },
+  "strumChallengeBestToday": "Mai legjobb: {score}",
+  "@strumChallengeBestToday": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeCardBody": "Le-le-fel-fel-le-fel egy percen át. Döntsd meg a mai legjobbat.",
+  "strumChallengeCountIn": "Készülj — {n}",
+  "@strumChallengeCountIn": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeDirectionAccuracy": "Irány-pontosság {percent}%",
+  "@strumChallengeDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeDone": "Kész",
+  "strumChallengeHeard": "{notated} pengetésből {heard}-at hallottam",
+  "@strumChallengeHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "notated": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeNewBest": "Új mai rekord!",
+  "strumChallengeNoAttemptYet": "Ma még nem próbáltad",
+  "strumChallengeResult": "{score} pont · {patterns} teljes minta",
+  "@strumChallengeResult": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      },
+      "patterns": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeScore": "Pont: {score}",
+  "@strumChallengeScore": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeSecondsLeft": "{seconds} mp van hátra",
+  "@strumChallengeSecondsLeft": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeStart": "Indítás",
+  "strumChallengeStop": "Leállítás",
+  "strumChallengeTitle": "60 másodperces pengetés-kihívás",
+  "strumChallengeTooLittleHeard": "Nem hallottam eleget. Menj közelebb a mikrofonhoz vagy pengess kicsit hangosabban, és próbáld újra.",
+  "strumChallengeTryAgain": "Újra",
   "strumDown": "Le",
   "strumRest": "Szünet",
   "strumUp": "Fel",

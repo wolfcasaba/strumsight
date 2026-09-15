@@ -1,0 +1,74 @@
+{
+  "@@locale": "en",
+  "strumChallengeTitle": "60-second strum challenge",
+  "strumChallengeCardBody": "Down-down-up-up-down-up for one minute. Beat today's best.",
+  "strumChallengeBestToday": "Today's best: {score}",
+  "@strumChallengeBestToday": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeNoAttemptYet": "No attempt yet today",
+  "strumChallengeStart": "Start",
+  "strumChallengeStop": "Stop",
+  "strumChallengeCountIn": "Get ready — {n}",
+  "@strumChallengeCountIn": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeSecondsLeft": "{seconds} s left",
+  "@strumChallengeSecondsLeft": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeScore": "Score {score}",
+  "@strumChallengeScore": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeResult": "Score {score} · {patterns} full patterns",
+  "@strumChallengeResult": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      },
+      "patterns": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeDirectionAccuracy": "Direction accuracy {percent}%",
+  "@strumChallengeDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeHeard": "I heard {heard} of {notated} strums",
+  "@strumChallengeHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "notated": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeNewBest": "New best today!",
+  "strumChallengeTooLittleHeard": "I couldn't hear enough. Move closer to the mic or play a little louder, then try again.",
+  "strumChallengeTryAgain": "Try again",
+  "strumChallengeDone": "Done"
+}

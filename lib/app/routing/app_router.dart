@@ -62,6 +62,7 @@ import '../../features/today/screens/today_hub_screen.dart';
 import '../../features/songs/screens/setlist_list_screen.dart';
 import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
+import '../../features/strum_challenge/presentation/screens/strum_challenge_screen.dart';
 import '../../features/song_trainer/public.dart';
 import '../../features/song_trainer/application/song_trainer_providers.dart';
 import '../../features/song_trainer/application/trainer/song_trainer_result.dart';
@@ -618,6 +619,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.practiceLive,
           builder: (_, _) => const Scaffold(body: LiveScreen()),
         ),
+      // The 60-second strum challenge (2026-09-15) — a top-level route for
+      // the same reason `/practice/live` is one: the screen reads the
+      // microphone stream, so it must dispose on navigation away, which a
+      // kept-alive shell branch would not let it do. Not flag-gated: it is
+      // reachable unconditionally (from the Today hub's card), and it is a
+      // Stage route (`isStageRoute`), so no primary navigation renders on
+      // top of it.
+      GoRoute(
+        path: AppRoutes.strumChallenge,
+        builder: (_, _) => const StrumChallengeScreen(),
+      ),
       // E13-R08 (ADR 0275) — the five-area adaptive shell, reachable only
       // when `adaptiveShellEnabled` is on. Every destination and target
       // sub-route renders an EXISTING screen as a legacy adapter (D6/D11);

@@ -9,6 +9,7 @@ import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/features/streak/public.dart';
+import 'package:strumsight/features/strum_challenge/public.dart';
 import 'package:strumsight/features/today/domain/today_plan_repository.dart';
 import 'package:strumsight/features/today/domain/today_plan_snapshot.dart';
 import 'package:strumsight/features/today/providers/today_providers.dart';
@@ -45,17 +46,30 @@ class _FixedStreak extends StreakController {
       StreakData(current: days, longest: days, totalDays: days);
 }
 
+/// A learner who already scored the 60-second strum challenge today.
+class _FixedStrumChallengeBest extends StrumChallengeBestController {
+  _FixedStrumChallengeBest(this.best);
+  final StrumChallengeBest best;
+  @override
+  StrumChallengeBest? build() => best;
+}
+
 Widget _host({
   TodayPlanSnapshot? plan,
   bool visionEnabled = false,
   bool visionSetupEnabled = false,
   DateTime? now,
   int streakDays = 0,
+  StrumChallengeBest? strumChallengeBest,
 }) => ProviderScope(
   overrides: [
     ...preferenceOverrides(),
     if (streakDays > 0)
       streakProvider.overrideWith(() => _FixedStreak(streakDays)),
+    if (strumChallengeBest != null)
+      strumChallengeBestProvider.overrideWith(
+        () => _FixedStrumChallengeBest(strumChallengeBest),
+      ),
     if (plan != null)
       todayPlanRepositoryProvider.overrideWithValue(
         _FakeTodayPlanRepository(plan),
@@ -312,6 +326,47 @@ void main() {
         find.widgetWithText(TextButton, 'Vision practice'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('the 60-second strum challenge card (2026-09-15)', () {
+    testWidgets('renders the card, an honest "no attempt yet", and a Start '
+        'CTA that navigates to the challenge without being a second primary '
+        'action', (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pump();
+
+      expect(find.text('60-second strum challenge'), findsOneWidget);
+      expect(find.text('No attempt yet today'), findsOneWidget);
+      final cta = find.byKey(const ValueKey('today-hub-strum-challenge-cta'));
+      expect(cta, findsOneWidget);
+      expect(
+        find.descendant(of: cta, matching: find.text('Start')),
+        findsOneWidget,
+      );
+      // A1 — the hero keeps the screen's only filled button; the challenge
+      // CTA is outlined. A4 — the card only navigates: the route it opens
+      // (`AppRoutes.strumChallenge`) is a Stage route that acquires the
+      // microphone itself.
+      expect(find.byType(FilledButton), findsOneWidget);
+      expect(tester.widget(cta), isA<OutlinedButton>());
+    });
+
+    testWidgets("shows today's best when one exists", (tester) async {
+      await tester.pumpWidget(
+        _host(
+          strumChallengeBest: const StrumChallengeBest(
+            dateKey: '2026-08-25',
+            bestScore: 57,
+            bestPatterns: 8,
+            attempts: 2,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text("Today's best: 57"), findsOneWidget);
+      expect(find.text('No attempt yet today'), findsNothing);
     });
   });
 

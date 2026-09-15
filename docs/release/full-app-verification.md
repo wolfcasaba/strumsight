@@ -178,7 +178,7 @@ el, a javítást a felelős feature körök öröklik.**
 ## 3. A mért elérhető halmaz partíciója (A4/A5)
 
 `dart run tool/check_screen_reachability.dart --format table` →
-**Measured screens: 98. Reachable: 85. Unreachable: 13. Flag-gated: 28.**
+**Measured screens: 99. Reachable: 86. Unreachable: 13. Flag-gated: 28.**
 
 > **Újravágva 2026-09-15** (a kör eredeti, 2026-09-04-i mérése: 96 / 73 / 23 /
 > 27, bejárt 9 + kimaradó 64). Azóta három kör bővítette a mért elérhető
@@ -211,7 +211,7 @@ megfigyelt) képernyő-osztályok:
 | 10 | `ProfileHubScreen` | `lib/features/profile_hub/screens/profile_hub_screen.dart` |
 | 11 | `SettingsScreen` | `lib/features/settings/screens/settings_screen.dart` |
 
-### 3.2 Kimaradó halmaz (74) — gazdával és körrel
+### 3.2 Kimaradó halmaz (75) — gazdával és körrel
 
 | Screen | Indok | Gazda | Kör |
 | --- | --- | --- | --- |
@@ -284,13 +284,14 @@ megfigyelt) képernyő-osztályok:
 | `lib/features/songs/screens/song_builder_screen.dart` | Az adaptív shell „Songs” tabján (4. navigációs cél) elérhető — a kör mag-útja (§1) csak Today/Practice/Library/Progress/Profile állomásokat nevez meg, a Songs tabot nem. | Songs feature | nincs — a Songs tab a mag-úton kívül esik, saját UI-tesztjei fedik |
 | `lib/features/songs/screens/song_list_screen.dart` | Az adaptív shell „Songs” tabján (4. navigációs cél) elérhető — a kör mag-útja (§1) csak Today/Practice/Library/Progress/Profile állomásokat nevez meg, a Songs tabot nem. | Songs feature | nincs — a Songs tab a mag-úton kívül esik, saját UI-tesztjei fedik |
 | `lib/features/streak/screens/streak_screen.dart` | A Profile Hub nem linkel közvetlenül a `/profile/rewards` útvonalra (csak achievements/library/settings gombja van) — csak a legacy `/streak` deep linken vagy közvetlen URL-en érhető el. Az utód-felület a Gamification Hub `StreakDetailScreen`-je. | Streak/Gamification feature | E08-R30 |
+| `lib/features/strum_challenge/presentation/screens/strum_challenge_screen.dart` | A 2026-09-15-i E18-lane kör kötötte be a routerbe (`app_router.dart`, `/practice/strum-challenge`, feltétel nélküli top-level Stage-útvonal, a `/practice/live` mintájára) a Today hub 60 másodperces pengetés-kihívás kártyájának „Indítás” gombja mögé. A bejárt `TodayHubScreen` (§3.1, 3. állomás) mutatja a kártyát, de a kihívás megnyitásához mikrofon-alapú munkamenet (`liveFrameProvider` engine-óra) kell — az offline bejárás ezt nem adja, a mag-út a hub jelenlétét méri, nem a kihívás megnyitását. A saját bekötését a `test/features/strum_challenge/strum_challenge_screen_test.dart` (count-in → pontozás, jól időzített le/fel pengetések = credited pont, kevés bizonyíték → „nem hallottam eleget”, napi rekord megőrzése és új napi nullázás, streak-jóváírás) és a `test/features/today/today_hub_test.dart` (kártya + CTA) méri. | Strum challenge feature (E18 lane) | nincs — a kártya→kihívás tap bejárás-fedése a valós-gitáros alapvonal (E18-R05) után |
 | `lib/features/tuner/screens/tuner_screen.dart` | A Practice Area Hub Quick Tools egy érintéssel elérhető gombjai (`practice_area_hub_screen.dart`) — a kör mag-útja (§1) nem nevezi meg őket, saját adat-bekötésüket a `hub_navigation_test.dart` A2 cellája már méri. | Practice feature (quick tools) | E13-R17 |
 | `lib/features/vision/presentation/screens/guitar_calibration_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
 | `lib/features/vision/presentation/screens/vision_result_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
 | `lib/features/vision/presentation/screens/vision_session_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
 | `lib/features/vision/presentation/screens/vision_setup_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
 
-**Összegzés:** 11 (bejárt) + 74 (kimaradó) = 85 (mért elérhető) — a két
+**Összegzés:** 11 (bejárt) + 75 (kimaradó) = 86 (mért elérhető) — a két
 halmaz diszjunkt (egyik screen sem szerepel mindkettőben) és uniójuk
 pontosan lefedi a mért elérhető halmazt. Egyik kimaradó sor sem üres
 `Indok`/`Gazda`/`Kör` cellával; minden `Kör` érték `E\d+-R\d+` alakú vagy

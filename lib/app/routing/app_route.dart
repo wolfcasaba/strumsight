@@ -103,6 +103,13 @@ abstract final class AppRoutes {
   // Adaptive shell target sub-routes (E13-R08) — each renders the same
   // existing screen the corresponding legacy route rendered; see D6.
   static const String practiceLive = '/practice/live';
+
+  /// The 60-second strum challenge (E18 lane, 2026-09-15). A top-level route
+  /// OUTSIDE the shell branches, exactly like [practiceLive]: it owns the
+  /// microphone stream through `liveFrameProvider`, so it must unmount — and
+  /// release it — on navigation away, which a kept-alive shell branch would
+  /// not do. A Stage route (`isStageRoute`): no primary navigation on top.
+  static const String strumChallenge = '/practice/strum-challenge';
   static const String practiceAnalyze = '/practice/analyze';
   static const String practiceLearn = '/practice/learn';
   static const String practiceTuner = '/practice/tuner';

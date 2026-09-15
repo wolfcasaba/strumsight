@@ -26,3 +26,7 @@ export 'domain/unlock_rule.dart';
 // persistence id (E18-R14).
 export 'presentation/curriculum_names.dart';
 export 'presentation/providers/curriculum_progress_providers.dart';
+// The notation row and its fretting state. Exported because the 60-second
+// strum challenge (`features/strum_challenge`) draws the SAME arrow row over
+// the same grid — a second lane would be a second notation to drift.
+export 'presentation/widgets/rhythm_lane.dart';

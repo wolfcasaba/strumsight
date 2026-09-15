@@ -1,5 +1,12 @@
 # Screen migration status
 
+**2026-09-15 update — the total is now 99, not 98.** The 60-second strum
+challenge (`lib/features/strum_challenge/presentation/screens/strum_challenge_screen.dart`,
+E18 lane) added one production screen. It imports `core/design_system/public.dart`
+and reads `SsColorScheme` from the theme, so the A6 pinned count in
+`test/app/theme_adoption_test.dart` moved 98 → 99 in the same change, together
+with the three sibling pins (`ui_inventory_test`, `screen_reachability_test` ×2).
+
 **E18 update (2026-09-12) — the total is now 98, not 96.** The curriculum pillar
 added two production screens: `curriculum_ladder_screen.dart` (the course made
 visible, E18-R12) and `rhythm_practice_screen.dart` (the strumming exercise). Both

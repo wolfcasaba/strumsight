@@ -169,15 +169,16 @@ void main() {
     });
   });
 
-  group('A1 — every one of the 98 real screens gets a verdict with a source '
+  group('A1 — every one of the 99 real screens gets a verdict with a source '
       'reference', () {
-    test('measures all 98, each with a non-empty source location, '
+    test('measures all 99, each with a non-empty source location, '
         'deterministically', () {
       final checker = ScreenReachability(repository);
       final first = checker.render();
       final second = checker.render();
 
-      expect(first.verdicts, hasLength(98));
+      // 98 -> 99 on 2026-09-15: the 60-second strum challenge screen.
+      expect(first.verdicts, hasLength(99));
       expect(first.toJsonString(), second.toJsonString());
       for (final verdict in first.verdicts) {
         expect(verdict.primaryReference.path, isNotEmpty);
@@ -327,7 +328,8 @@ final routes = [
     });
 
     test('the plan has exactly one row per measured screen', () {
-      expect(planRows.map((r) => r.screenPath).toSet(), hasLength(98));
+      // 98 -> 99 on 2026-09-15: the 60-second strum challenge screen.
+      expect(planRows.map((r) => r.screenPath).toSet(), hasLength(99));
       expect(
         planByPath.keys.toSet(),
         measured.verdicts.map((v) => v.screenPath).toSet(),

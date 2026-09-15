@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../curriculum/public.dart' show curriculumMissionName;
 import '../../progress/public.dart';
 import '../../streak/public.dart';
+import '../../strum_challenge/public.dart' show strumChallengeBestProvider;
 import '../domain/today_plan_snapshot.dart';
 import '../providers/today_providers.dart';
 
@@ -146,6 +147,8 @@ class TodayHubScreen extends ConsumerWidget {
               child: Text(l10n.todayHubViewProgressCta),
             ),
             const SizedBox(height: 20),
+            const _StrumChallengeCard(),
+            const SizedBox(height: 20),
             _VisionCard(
               l10n: l10n,
               visionEnabled: flags.visionEnabled,
@@ -268,6 +271,61 @@ class _Metric extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The daily 60-second strum challenge (2026-09-15): the pattern, today's best
+/// (or that there is none yet) and a Start that only NAVIGATES (A4) — the
+/// microphone is acquired on the Stage route it opens, never here. Outlined,
+/// not filled: the hero above keeps the screen's single primary action (A1).
+class _StrumChallengeCard extends ConsumerWidget {
+  const _StrumChallengeCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final best = ref.watch(strumChallengeBestProvider);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.strumChallengeTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.strumChallengeCardBody,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              best == null
+                  ? l10n.strumChallengeNoAttemptYet
+                  : l10n.strumChallengeBestToday(best.bestScore),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const ValueKey('today-hub-strum-challenge-cta'),
+              onPressed: () => context.go(AppRoutes.strumChallenge),
+              child: Text(l10n.strumChallengeStart),
+            ),
+          ],
+        ),
       ),
     );
   }

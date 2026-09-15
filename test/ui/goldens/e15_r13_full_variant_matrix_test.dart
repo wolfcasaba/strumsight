@@ -150,6 +150,10 @@ import 'package:strumsight/features/community/presentation/screens/safety_relati
 // pushes the rhythm screen; the rhythm screen is routed on its own too.
 import 'package:strumsight/features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
 import 'package:strumsight/features/curriculum/presentation/screens/rhythm_practice_screen.dart';
+// The 60-second strum challenge (2026-09-15): routed top-level at
+// `AppRoutes.strumChallenge`, opened from the Today hub's card. Same engine
+// stream + preference store the curriculum screens inject.
+import 'package:strumsight/features/strum_challenge/presentation/screens/strum_challenge_screen.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/gamification/public.dart';
@@ -1277,6 +1281,13 @@ List<Override> _curriculumOverrides() => [
 
 Widget _curriculumLadderScreen() => const CurriculumLadderScreen();
 Widget _rhythmPracticeScreen() => const RhythmPracticeScreen();
+
+// ── strum_challenge ────────────────────────────────────────────────────────
+//    (test/features/strum_challenge/strum_challenge_screen_test.dart)
+// Reads the same `liveFrameProvider` stream and preference store (calibration,
+// metronome mute, today's best) as the rhythm screen, and starts the same
+// unconditional Ticker in `initState` — the bounded three-frame pump covers it.
+Widget _strumChallengeScreen() => const StrumChallengeScreen();
 
 // ── gamification (test/ui/goldens/e13_r32_screens_golden_test.dart) ────────
 
@@ -3394,6 +3405,12 @@ final _screens = <String, _ScreenFixture>{
     screenPath:
         'lib/features/curriculum/presentation/screens/rhythm_practice_screen.dart',
     build: _rhythmPracticeScreen,
+    overridesBuilder: _curriculumOverrides,
+  ),
+  'strum_challenge': _ScreenFixture(
+    screenPath:
+        'lib/features/strum_challenge/presentation/screens/strum_challenge_screen.dart',
+    build: _strumChallengeScreen,
     overridesBuilder: _curriculumOverrides,
   ),
   'achievements': _ScreenFixture(
