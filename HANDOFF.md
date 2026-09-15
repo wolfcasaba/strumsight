@@ -143,6 +143,40 @@ NEM futott** (a doboz OOM-ol tőle, ADR 0053: a CI a mérce).
   Lab-only és alapból no-op, de bekapcsolt Lab-capture mellett ez az utolsó
   dobozolt ugrás egy latencia-mérésben.
 
+### Kapu + emulátor-bizonyíték, zárás (2026-09-16, HEAD `a6608218`)
+
+A docs-szekció utáni commitok: `109429ed` (fejnélküli emulátor-teszt a klip
+végéig etet, WAV `/data/local/tmp`-ből), `181a173e` (song-import: a `/`-es
+`../` menekülést Windowson sem engedi át — a kapu találta, CI-n láthatatlan),
+`a6608218` (`.gitattributes`: `* text=auto eol=lf`, mert a Windows-checkout
+CRLF-je a bájtra hasonlító fixture-teszteket pirosra festette).
+
+**A kapu ezen a boxon csak ASCII-útvonalú worktree-ről fut** (`C:\src\ss-gate`,
+`FLUTTER_BIN=/c/src/flutter/bin/flutter`): a `gitár trainer` útvonal „á"-ja
+megöli a `flutter analyze` LSP-üzenetét ÉS az `aapt` manifest-olvasást
+(memória: `strumsight-emulator-headless-recipe`).
+
+| Lépés | Eredmény |
+|---|---|
+| format, analyze | zöld |
+| test/features/live (478), core/widgets, core/design_system, features/practice, features/song_trainer, features/learn, test/property | zöld (a learn és a property csak LF-checkouttal, ill. nem párhuzamos futással) |
+| test/tooling `beta_profile_test` (2) + `beta_release_notes_test` (28) | **PIROS, ÖRÖKÖLT, csak Windows** — a bázis-commiton (`fb777baa`) ugyanígy piros: CLI-alfolyamat `
+` stdout, 1-es kilépési kód, symlink-jog (1314). CI Linuxon zöld. Nem a kör kódja. |
+
+**Emulátor (Pixel 3a, API 34, fejnélküli, mikrofon nélkül):**
+`integration_test/live_strum_feedback_headless_test.dart` a VALÓDI engine-t
+(izolát, DSP, CRNN, varrat) fájlból eteti a capture-factory seamen át. Mért:
+8 s telefonmikrofonos gitárklip → 13 onset, 9 irány-verdict, 29 szikra-keret,
+**az első ütés 38 ms-mal a becsült támadás után jelent meg a Live képernyőn**;
+képernyőképek `build/screenshots/live-hit-{1,2,3}.png`. A szabad Live-ban a
+cue nem él (nincs elvárt akkord), az irányok a CRNN-éi.
+
+**Mi jön:** (1) a tulajdonos valódi gitáros APK-tesztje — a Learn/Practice
+módban a cue élesedik, ott várható a legnagyobb különbség; (2) saját címkézett
+felvételek (E18 következtetése: ez az egyetlen döntő tanítóadat); (3) a Song
+Trainer nem hív `setExpectedChord`-ot → ott a cue még nem él; (4) a két
+tooling-teszt Windows-portja külön kör.
+
 ## ✅ SZÉRIA-LÁNG + SHARE-REVEAL — `f99cc9e` → javítások `bb8f251` + `a8a287b`, goldenek `9d2eb4b` (Chapter 18 R06/R07 szelet), kapu zöld (2026-09-15)
 
 A felhasználó „mehetsz tovább, CI csak a fejlesztés után" döntése nyomán a
