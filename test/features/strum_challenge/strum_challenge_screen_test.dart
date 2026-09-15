@@ -131,29 +131,35 @@ Future<void> _finishRun(
 }
 
 void main() {
-  testWidgets('it renders the motion, the notation, the level meter and the '
-      'empty daily best', (tester) async {
-    await tester.pumpWidget(_host(Stream<LiveFrame>.value(_frame())));
-    await tester.pump();
-    expect(find.byType(SsStrumPendulum), findsOneWidget);
-    expect(find.byType(RhythmLane), findsOneWidget);
-    expect(find.byType(SsSignalQualityIndicator), findsOneWidget);
-    expect(find.text('60-second strum challenge'), findsOneWidget);
-    expect(find.text('No attempt yet today'), findsOneWidget);
-    expect(find.text('Start'), findsOneWidget);
-    expect(find.text('Done'), findsOneWidget);
-  });
+  testWidgets(
+    'it renders the motion, the notation, the level meter and the '
+    'empty daily best',
+    (tester) async {
+      await tester.pumpWidget(_host(Stream<LiveFrame>.value(_frame())));
+      await tester.pump();
+      expect(find.byType(SsStrumPendulum), findsOneWidget);
+      expect(find.byType(RhythmLane), findsOneWidget);
+      expect(find.byType(SsSignalQualityIndicator), findsOneWidget);
+      expect(find.text('60-second strum challenge'), findsOneWidget);
+      expect(find.text('No attempt yet today'), findsOneWidget);
+      expect(find.text('Start'), findsOneWidget);
+      expect(find.text('Done'), findsOneWidget);
+    },
+  );
 
-  testWidgets('the pattern is the shipped D DU UDU at 80 bpm, and the minute '
-      'is 20 whole bars', (tester) async {
-    await tester.pumpWidget(_host(Stream<LiveFrame>.value(_frame())));
-    await tester.pump();
-    final lane = tester.widget<RhythmLane>(find.byType(RhythmLane));
-    expect(lane.grid.struckSlots.length, 6, reason: 'D DU UDU');
-    expect(lane.chord, isNull, reason: 'no chord is asked for');
-    expect(strumChallengeBars(), 20);
-    expect(strumChallengeBpm, 80);
-  });
+  testWidgets(
+    'the pattern is the shipped D DU UDU at 80 bpm, and the minute '
+    'is 20 whole bars',
+    (tester) async {
+      await tester.pumpWidget(_host(Stream<LiveFrame>.value(_frame())));
+      await tester.pump();
+      final lane = tester.widget<RhythmLane>(find.byType(RhythmLane));
+      expect(lane.grid.struckSlots.length, 6, reason: 'D DU UDU');
+      expect(lane.chord, isNull, reason: 'no chord is asked for');
+      expect(strumChallengeBars(), 20);
+      expect(strumChallengeBpm, 80);
+    },
+  );
 
   group('the run: count-in, then scoring', () {
     testWidgets(
@@ -232,117 +238,129 @@ void main() {
       expect(find.textContaining("I couldn't hear enough"), findsOneWidget);
     });
 
-    testWidgets('too few strokes: "could not hear enough", no score, and '
-        'nothing recorded as a best', (tester) async {
-      final store = InMemoryKeyValueStore();
-      final controller = StreamController<LiveFrame>();
-      addTearDown(controller.close);
-      await tester.pumpWidget(_host(controller.stream, store: store));
-      await tester.pump();
-      await _startRun(tester, controller);
+    testWidgets(
+      'too few strokes: "could not hear enough", no score, and '
+      'nothing recorded as a best',
+      (tester) async {
+        final store = InMemoryKeyValueStore();
+        final controller = StreamController<LiveFrame>();
+        addTearDown(controller.close);
+        await tester.pumpWidget(_host(controller.stream, store: store));
+        await tester.pump();
+        await _startRun(tester, controller);
 
-      // Two clean bars of twenty: 12 strokes, coverage 0.1 — too thin to
-      // claim anything, and NOT a low score.
-      await _playBars(tester, controller, 2);
-      await _finishRun(tester, controller);
+        // Two clean bars of twenty: 12 strokes, coverage 0.1 — too thin to
+        // claim anything, and NOT a low score.
+        await _playBars(tester, controller, 2);
+        await _finishRun(tester, controller);
 
-      expect(
-        find.text(
-          "I couldn't hear enough. Move closer to the mic or play a little "
-          'louder, then try again.',
-        ),
-        findsOneWidget,
-      );
-      expect(find.textContaining('Score'), findsNothing);
-      expect(find.textContaining('full patterns'), findsNothing);
-      expect(find.text('New best today!'), findsNothing);
-      expect(find.text('No attempt yet today'), findsOneWidget);
-      expect(
-        store.values.containsKey(StorageKeys.strumChallengeBest),
-        isFalse,
-        reason: 'a run below the coverage floor claims nothing, so it writes '
-            'nothing',
-      );
-    });
+        expect(
+          find.text(
+            "I couldn't hear enough. Move closer to the mic or play a little "
+            'louder, then try again.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Score'), findsNothing);
+        expect(find.textContaining('full patterns'), findsNothing);
+        expect(find.text('New best today!'), findsNothing);
+        expect(find.text('No attempt yet today'), findsOneWidget);
+        expect(
+          store.values.containsKey(StorageKeys.strumChallengeBest),
+          isFalse,
+          reason: 'a run below the coverage floor claims nothing, so it writes '
+              'nothing',
+        );
+      },
+    );
   });
 
   group('the daily best', () {
-    testWidgets('persists across a second pump of the same store, and resets '
-        'on a new day', (tester) async {
-      final store = InMemoryKeyValueStore();
-      final day = DateTime(2026, 9, 15, 10);
-      final first = StreamController<LiveFrame>();
-      addTearDown(first.close);
-      await tester.pumpWidget(
-        _host(first.stream, store: store, clock: () => day),
-      );
-      await tester.pump();
-      await _startRun(tester, first);
-      await _playBars(tester, first, 12);
-      await _finishRun(tester, first);
-      expect(find.text("Today's best: 72"), findsOneWidget);
-      expect(store.values.containsKey(StorageKeys.strumChallengeBest), isTrue);
+    testWidgets(
+      'persists across a second pump of the same store, and resets '
+      'on a new day',
+      (tester) async {
+        final store = InMemoryKeyValueStore();
+        final day = DateTime(2026, 9, 15, 10);
+        final first = StreamController<LiveFrame>();
+        addTearDown(first.close);
+        await tester.pumpWidget(
+          _host(first.stream, store: store, clock: () => day),
+        );
+        await tester.pump();
+        await _startRun(tester, first);
+        await _playBars(tester, first, 12);
+        await _finishRun(tester, first);
+        expect(find.text("Today's best: 72"), findsOneWidget);
+        expect(
+          store.values.containsKey(StorageKeys.strumChallengeBest),
+          isTrue,
+        );
 
-      // A brand-new tree over the SAME store, later the same day.
-      final second = StreamController<LiveFrame>();
-      addTearDown(second.close);
-      await tester.pumpWidget(
-        _host(
-          second.stream,
-          store: store,
-          clock: () => day.add(const Duration(hours: 5)),
-        ),
-      );
-      await tester.pump();
-      expect(find.text("Today's best: 72"), findsOneWidget);
-      expect(find.text('No attempt yet today'), findsNothing);
+        // A brand-new tree over the SAME store, later the same day.
+        final second = StreamController<LiveFrame>();
+        addTearDown(second.close);
+        await tester.pumpWidget(
+          _host(
+            second.stream,
+            store: store,
+            clock: () => day.add(const Duration(hours: 5)),
+          ),
+        );
+        await tester.pump();
+        expect(find.text("Today's best: 72"), findsOneWidget);
+        expect(find.text('No attempt yet today'), findsNothing);
 
-      // The next morning: a new day, a fresh best to set.
-      final third = StreamController<LiveFrame>();
-      addTearDown(third.close);
-      await tester.pumpWidget(
-        _host(
-          third.stream,
-          store: store,
-          clock: () => day.add(const Duration(days: 1)),
-        ),
-      );
-      await tester.pump();
-      expect(find.text('No attempt yet today'), findsOneWidget);
-      expect(find.text("Today's best: 72"), findsNothing);
-    });
+        // The next morning: a new day, a fresh best to set.
+        final third = StreamController<LiveFrame>();
+        addTearDown(third.close);
+        await tester.pumpWidget(
+          _host(
+            third.stream,
+            store: store,
+            clock: () => day.add(const Duration(days: 1)),
+          ),
+        );
+        await tester.pump();
+        expect(find.text('No attempt yet today'), findsOneWidget);
+        expect(find.text("Today's best: 72"), findsNothing);
+      },
+    );
 
-    testWidgets('a lower second run keeps the best and says nothing about a '
-        'record', (tester) async {
-      final store = InMemoryKeyValueStore();
-      final day = DateTime(2026, 9, 15, 10);
-      final controller = StreamController<LiveFrame>();
-      addTearDown(controller.close);
-      await tester.pumpWidget(
-        _host(controller.stream, store: store, clock: () => day),
-      );
-      await tester.pump();
-      await _startRun(tester, controller);
-      await _playBars(tester, controller, 12);
-      await _finishRun(tester, controller);
-      expect(find.text("Today's best: 72"), findsOneWidget);
+    testWidgets(
+      'a lower second run keeps the best and says nothing about a '
+      'record',
+      (tester) async {
+        final store = InMemoryKeyValueStore();
+        final day = DateTime(2026, 9, 15, 10);
+        final controller = StreamController<LiveFrame>();
+        addTearDown(controller.close);
+        await tester.pumpWidget(
+          _host(controller.stream, store: store, clock: () => day),
+        );
+        await tester.pump();
+        await _startRun(tester, controller);
+        await _playBars(tester, controller, 12);
+        await _finishRun(tester, controller);
+        expect(find.text("Today's best: 72"), findsOneWidget);
 
-      // Try again — the second run is anchored to the engine clock's NEW
-      // reading, so the same arithmetic works from a fresh start.
-      final second = StreamController<LiveFrame>();
-      addTearDown(second.close);
-      await tester.pumpWidget(
-        _host(second.stream, store: store, clock: () => day),
-      );
-      await tester.pump();
-      await _startRun(tester, second);
-      await _playBars(tester, second, 11);
-      await _finishRun(tester, second);
+        // Try again — the second run is anchored to the engine clock's NEW
+        // reading, so the same arithmetic works from a fresh start.
+        final second = StreamController<LiveFrame>();
+        addTearDown(second.close);
+        await tester.pumpWidget(
+          _host(second.stream, store: store, clock: () => day),
+        );
+        await tester.pump();
+        await _startRun(tester, second);
+        await _playBars(tester, second, 11);
+        await _finishRun(tester, second);
 
-      expect(find.text('Score 66 · 11 full patterns'), findsOneWidget);
-      expect(find.text('New best today!'), findsNothing);
-      expect(find.text("Today's best: 72"), findsOneWidget);
-    });
+        expect(find.text('Score 66 · 11 full patterns'), findsOneWidget);
+        expect(find.text('New best today!'), findsNothing);
+        expect(find.text("Today's best: 72"), findsOneWidget);
+      },
+    );
   });
 
   group('the streak', () {
@@ -407,40 +425,43 @@ void main() {
       expect(store.values.containsKey(StorageKeys.strumChallengeBest), isFalse);
     });
 
-    testWidgets('the transport wraps instead of overflowing at 2.0 text scale '
-        'on a compact phone (hu)', (tester) async {
-      tester.view.physicalSize = const Size(412, 915);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+    testWidgets(
+      'the transport wraps instead of overflowing at 2.0 text scale '
+      'on a compact phone (hu)',
+      (tester) async {
+        tester.view.physicalSize = const Size(412, 915);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            liveFrameProvider.overrideWith(
-              (ref) => Stream<LiveFrame>.value(_frame()),
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              liveFrameProvider.overrideWith(
+                (ref) => Stream<LiveFrame>.value(_frame()),
+              ),
+              keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+            ],
+            child: MaterialApp(
+              locale: const Locale('hu'),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: SsDarkTheme.data(),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2.0)),
+                child: child!,
+              ),
+              home: const StrumChallengeScreen(),
             ),
-            keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
-          ],
-          child: MaterialApp(
-            locale: const Locale('hu'),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            theme: SsDarkTheme.data(),
-            builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: const TextScaler.linear(2.0)),
-              child: child!,
-            ),
-            home: const StrumChallengeScreen(),
           ),
-        ),
-      );
-      await tester.pump();
+        );
+        await tester.pump();
 
-      expect(tester.takeException(), isNull);
-      expect(find.text('Indítás'), findsOneWidget);
-      expect(find.text('Kész'), findsOneWidget);
-    });
+        expect(tester.takeException(), isNull);
+        expect(find.text('Indítás'), findsOneWidget);
+        expect(find.text('Kész'), findsOneWidget);
+      },
+    );
   });
 }

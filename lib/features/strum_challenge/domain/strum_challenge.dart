@@ -35,10 +35,7 @@ const int strumChallengeSeconds = 60;
 
 /// Whole bars that fit [strumChallengeSeconds] at [bpm] — rounded UP, so the
 /// run is never shorter than the promised minute. 20 bars at 80 BPM in 4/4.
-int strumChallengeBars({
-  double bpm = strumChallengeBpm,
-  int beatsPerBar = 4,
-}) {
+int strumChallengeBars({double bpm = strumChallengeBpm, int beatsPerBar = 4}) {
   final barSeconds = beatsPerBar * 60 / bpm;
   return (strumChallengeSeconds / barSeconds).ceil();
 }
