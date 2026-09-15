@@ -1,48 +1,77 @@
 # HANDOFF — StrumSight 🎸
 
-## 🟡 MOTION-ADAG — `bc8003d` (Chapter 18 R01/R03/R04 szelet): 10 240 zöld, **6 golden PNG újrafelvételre vár** (2026-09-15)
+## 🟡 SZÉRIA-LÁNG + SHARE-REVEAL — `f99cc9e` + goldenek `e97d270` (Chapter 18 R06/R07 szelet), CI fut (2026-09-15)
 
-Commit `bc8003d` (branch `claude/ui-design-viral-elements-u9z9ht`): három
-témafüggetlen design-system komponens + bekötés — `SsStaggeredEntrance`
+A felhasználó „mehetsz tovább, CI csak a fejlesztés után" döntése nyomán a
+következő szelet: **`SsFlame`** (festett széria-láng S 16 / M 40 / L 72;
+`lit`/dim ugyanaz a forma; egyszer gyullad — talptól nő 0,6 → 1,18 → 1 + rövid
+glow, 700 ms — amikor a széria életre kel, a `ignition` számláló nő (napi
+jóváírás) vagy belépéskor; nyugalomban nem ütemez frame-et; reduced motion
+vált) és **`SsShareReveal` + `SsRevealSlot`** (egy 0→1 progress a kártya
+fölött, minden blokk saját ablakot kap, a ↓/↑ nyilak 1,6×-ről landolnak; az
+ablak végén VAGY reveal nélkül a slot érintetlenül adja vissza a gyerekét →
+a `RepaintBoundary`-export és a kártya-tesztek a sima kártyát látják).
+Bekötés: StreakBadge (Live fejléc, S, jóváíráskor gyullad), StreakScreen
+hero (L + 7/30/100 napos milestone-pill — új ARB `streakMilestone` en+hu —
++ hatcsoportos `SsStaggeredEntrance`), gamification hub streak-tile (S),
+StreakStatusCard (M a két „ég" okra), StreakDetail current-kártya (M, a
+caller-fed `reduceMotion` `SsMotionScope`-on át), SharePreview + Wrapped
+preview (felépülés; a KÉP-megosztás a végállapotra kapuzva, a szöveges nem
+vár; 0,98 press-scale a boundary-n kívül). A milestone-JELENET
+(`SsCelebrationScene` + ADR 0389 koordinátor) R03-mal együtt nyílik.
+
+Tesztek: `test/core/design_system/motion/ss_flame_test.dart`,
+`ss_share_reveal_test.dart`, `test/features/streak/streak_milestone_test.dart`,
+`test/features/share/share_reveal_test.dart`. Doksi: chunk 016b AS BUILT (3.
+lépés), plan §1 „Státusz" blokk.
+
+**Goldenek:** a `record-goldens.yml` futás
+[34947870239](https://github.com/wolfcasaba/strumsight/actions/runs/34947870239)
+x86-on újravette és bot-commitként visszatette (`e97d270`):
+`e13_r18_live_stage_compact{,_scale2}`, `e13_r32_hub_compact`,
+`e13_r32_streak_detail_compact{,_scale2}`. A `share_preview` goldenek NEM
+változtak — bizonyíték, hogy a reveal végállapota pixelre azonos a régi
+kártyával.
+
+**CI az `e97d270`-en:** full-gate + build-apk dispatch 08:52 UTC — eredmény
+a következő HANDOFF-frissítésben.
+
+## ✅ MOTION-ADAG — `bc8003d` → goldenek `288ee57` (Chapter 18 R01/R03/R04 szelet), kapu zöld (2026-09-15)
+
+Három témafüggetlen design-system komponens + bekötés — `SsStaggeredEntrance`
 (lépcsőzetes belépés), `SsScoreRingReveal` (gyűrű-felfutás számlálóval),
 `SsLockRing` (bezáruló lock-gyűrű); Today Hub (szekciók belépése + napi cél
 gyűrű a hero-ban), Tuner (lock-gyűrű a hang neve körül), Practice result
 (gyűrű minden pontozott dimenzió sorában). `SsMotion.stagger` (60 ms) és
 `SsMotion.ringFill` tokenek; a rögzített alap-időtartamok változatlanok.
 
-**CI a `bc8003d`-n:** [full-gate 34941593327](https://github.com/wolfcasaba/strumsight/actions/runs/34941593327)
-+ [build-apk 34941595591](https://github.com/wolfcasaba/strumsight/actions/runs/34941595591):
-format + analyze zöld, **10 240 teszt zöld, 6 piros** — mind a hat a három
-érintett képernyő nulla-toleranciás pixel-goldenje:
-`e13_r17_today_hub_compact{,_scale2}.png`, `e13_r19_tuner_compact{,_scale2}.png`,
-`e13_r22_practice_result_compact{,_scale2}.png`. Ez a várt következmény (a
-képernyők szándékosan változtak), nem regresszió.
+**Zöld kapu a `288ee57`-en:** [full-gate 34946210462](https://github.com/wolfcasaba/strumsight/actions/runs/34946210462)
++ [build-apk 34946212622](https://github.com/wolfcasaba/strumsight/actions/runs/34946212622),
+mindkettő `success`. Az előző futás (`bc8003d`) 10 240 zöld / 6 piros volt —
+mind a hat a három szándékosan változott képernyő nulla-toleranciás
+pixel-goldenje (`e13_r17_today_hub`, `e13_r19_tuner`,
+`e13_r22_practice_result`, compact + scale2).
 
-**Teendő (emberi box, ADR 0426 — a felvétel a KAPU architektúráján, x86-on):**
+**Új eszköz — `record-goldens.yml` (`0a4e0c8`, a tulajdonos kifejezett
+jóváhagyásával, H-GATEGUARD marker):** az ADR 0426 távoli megfelelője a
+`tools/golden-x86.sh record`-nak — a remote konténerben nincs Docker/Flutter,
+ezért egy kézzel dispatchelt workflow futtatja a `flutter test
+--update-goldens`-t ubuntu x86_64-en a kapu Flutter-pinjével, a változott
+PNG-ket artefaktumként feltölti ÉS bot-commitként visszateszi a dispatchelő
+branchre (main-en megtagadja). Nem kapu, magától sosem fut. Használat:
 
-```bash
-git fetch origin claude/ui-design-viral-elements-u9z9ht
-git checkout claude/ui-design-viral-elements-u9z9ht
-tools/golden-x86.sh record test/ui/goldens/e13_r17_screens_golden_test.dart \
-  test/ui/goldens/e13_r19_screens_golden_test.dart \
-  test/ui/goldens/e13_r22_screens_golden_test.dart
-tools/golden-x86.sh check  test/ui/goldens/e13_r17_screens_golden_test.dart \
-  test/ui/goldens/e13_r19_screens_golden_test.dart \
-  test/ui/goldens/e13_r22_screens_golden_test.dart
-git add test/ui/goldens/goldens/e13_r17_today_hub_compact*.png \
-  test/ui/goldens/goldens/e13_r19_tuner_compact*.png \
-  test/ui/goldens/goldens/e13_r22_practice_result_compact*.png
-git commit -m "test(goldens): re-record Today Hub, Tuner, Practice result after the Ch18 motion batch"
-git push origin claude/ui-design-viral-elements-u9z9ht
+```
+Actions → Record goldens (x86) → Run workflow → branch + test_paths
+   (pl. "test/ui/goldens/e13_r17_screens_golden_test.dart …")
+→ bot-commit "test(goldens): re-record on x86 (record-goldens run <id>)"
+→ utána full-gate + build-apk dispatch az új fejre
 ```
 
-Ezután a full-gate + build-apk újraindítható a branchen (a remote session
-nem tudja a PNG-ket felvenni: nincs Docker és Flutter a konténerben; a
-`docs/execution/gate-runs/2026-09-15-strum-spark-gate.md` szerint a
-hoszt-allowlist sem ért el a `Default` környezethez).
-
-Tesztek: `test/core/design_system/motion/ss_staggered_entrance_test.dart`,
-`ss_score_ring_reveal_test.dart`, `ss_lock_ring_test.dart` — a CI-ban zöld.
+Első éles futás: [34945400267](https://github.com/wolfcasaba/strumsight/actions/runs/34945400267)
+→ `288ee57`. **Figyelem:** egy másik session ugyanaznap FÜGGETLENÜL
+hozzáadott egy `record-goldens.yml`-t a `claude/guitar-app-development-points-d0asfy`
+branchen (run 34940207516) — merge-kor a két fájlt egyeztetni kell (egy
+maradjon).
 
 ## ✅ STRUM-SPARK — a le/fel ütés-animáció a Live, Practice és Song Trainer képernyőn — branch `claude/ui-design-viral-elements-u9z9ht`, HEAD `9121160` (2026-09-15)
 
