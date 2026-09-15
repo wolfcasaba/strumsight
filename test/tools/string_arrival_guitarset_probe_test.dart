@@ -126,6 +126,8 @@ void main() {
       final rise = double.tryParse(env['STRING_ARRIVAL_RISE'] ?? '') ?? 0.5;
       final minHz = double.tryParse(env['STRING_ARRIVAL_MINHZ'] ?? '') ?? 150;
       final maxHz = double.tryParse(env['STRING_ARRIVAL_MAXHZ'] ?? '') ?? 4000;
+      final postSec =
+          double.tryParse(env['STRING_ARRIVAL_POST_SEC'] ?? '') ?? 0.100;
       final tiers = <String, List<int>>{}; // [total, correct]
 
       var wavs =
@@ -168,6 +170,7 @@ void main() {
           riseFraction: rise,
           minPartialHz: minHz,
           maxPartialHz: maxHz,
+          postSec: postSec,
         );
 
         for (final s in _sweeps(jams)) {
@@ -237,7 +240,7 @@ void main() {
       final absErr = [for (final e in arrivalErrors) e.abs()];
       final out = StringBuffer()
         ..writeln(
-          'GuitarSet ${_styles.join('+')} comping, ${wavs.length} files, window=$window hop=$hop rise=$rise minHz=$minHz maxHz=$maxHz, ${sw.elapsed.inSeconds}s',
+          'GuitarSet ${_styles.join('+')} comping, ${wavs.length} files, window=$window hop=$hop rise=$rise minHz=$minHz maxHz=$maxHz post=${postSec}s, ${sw.elapsed.inSeconds}s',
         )
         ..writeln(
           'clean sweeps $sweeps  coverage ${pct(covered, sweeps)}  acc|cov ${pct(correct, covered)}  acc/all ${pct(correct, sweeps)}',

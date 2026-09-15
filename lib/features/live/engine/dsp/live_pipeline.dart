@@ -20,6 +20,9 @@ import 'chord_matcher.dart';
 import 'dsp_config.dart';
 import 'nnls_chroma.dart';
 import '../../../../core/audio/dsp/sliding_framer.dart';
+import '../../../chords/chord_shape.dart';
+import 'direction/shape_informed_strum_classifier.dart';
+import 'direction/string_arrival_cue.dart';
 import 'strum_analyzer.dart';
 import 'strum_direction_classifier.dart';
 import 'tempo_tracker.dart';
@@ -124,15 +127,19 @@ class LivePipeline {
          sampleRate: sampleRate,
          window: DspConfig.nnlsWindow,
        ),
-       _strums = StrumAnalyzer(
-         sampleRate: sampleRate,
+       _shape = ShapeInformedStrumClassifier(
          // The live 70 ms model behind the r139 seam (r169): the engine
          // hands the weights-asset BYTES across the isolate boundary
          // (rootBundle is main-isolate-only, same pattern as the r165
          // Analyze wiring); null/unparseable keeps the heuristic — the
          // model is an upgrade, never a dependency. Typed observably via
          // [_crnnActivation] (ADR 0355), computed ONCE by the factory above.
-         classifier: crnnActivation.model,
+         // Wrapped by the shape-informed fusion (round strum-strings): a
+         // transparent pass-through until a voicing is set.
+         inner: crnnActivation.model ?? HeuristicStrumClassifier(),
+         sampleRate: sampleRate,
+         window: DspConfig.onsetWindow,
+         hop: DspConfig.onsetHop,
        ),
        _chordFramer = SlidingFramer(
          window: DspConfig.nnlsWindow,
@@ -142,7 +149,9 @@ class LivePipeline {
          window: DspConfig.onsetWindow,
          hop: DspConfig.onsetHop,
        ),
-       _emitEverySamples = (sampleRate * 0.066).round();
+       _emitEverySamples = (sampleRate * 0.066).round() {
+    _strums = StrumAnalyzer(sampleRate: sampleRate, classifier: _shape);
+  }
 
   final int sampleRate;
   final ModelActivation<StrumDirectionClassifier> _crnnActivation;
@@ -170,7 +179,16 @@ class LivePipeline {
       noChordScore: DspConfig.chordNoChordScore,
     ),
   );
-  final StrumAnalyzer _strums;
+  late final StrumAnalyzer _strums;
+
+  /// Shape-informed ↓/↑ fusion around the activated classifier (round
+  /// strum-strings). Armed ONLY while the expected chord is set AND the
+  /// decoder currently shows that same chord — a learner playing something
+  /// else must not be judged against a voicing they are not holding
+  /// (MEASURED: a wrong voicing drags the cue to chance).
+  final ShapeInformedStrumClassifier _shape;
+  String? _expectedChord;
+  List<double?>? _expectedVoicing;
 
   /// The Live-side signal-quality analyzer (E14-R05, ADR 0507) — fed the raw
   /// chunk alongside the DSP pipeline, exposed read-only via [signalQuality].
@@ -188,7 +206,25 @@ class LivePipeline {
 
   /// Hint the currently expected chord (or clear with null) — the Viterbi
   /// expected-target prior (chunk 016, round 137).
-  void setExpectedChord(String? label) => _chordDecoder.setExpected(label);
+  void setExpectedChord(String? label) {
+    _chordDecoder.setExpected(label);
+    _expectedChord = label;
+    final frets = label == null ? null : ChordShapes.forLabel(label)?.frets;
+    _expectedVoicing = frets == null ? null : StringArrivalCue.voicingHz(frets);
+    _armShapeCue();
+  }
+
+  /// The cue speaks only while the shown chord IS the expected chord.
+  void _armShapeCue() {
+    final armed =
+        _expectedVoicing != null &&
+        _chordLatched &&
+        _lastChord?.chord.label == _expectedChord;
+    _shape.setVoicing(armed ? _expectedVoicing : null);
+  }
+
+  /// Wiring proof surface: the shape-informed fusion wrapper.
+  ShapeInformedStrumClassifier get debugShapeClassifier => _shape;
 
   ChordMatch? _lastChord;
   Strum? _latestStrum;
@@ -220,6 +256,7 @@ class LivePipeline {
     _signalQuality.addChunk(chunk);
 
     // Fast path: onsets + direction.
+    _armShapeCue();
     var emitNow = false;
     for (final frame in _onsetFramer.add(chunk)) {
       final event = _strums.process(frame);
@@ -500,7 +537,7 @@ class LivePipeline {
 
   /// The strum classifier actually behind the seam (r169 wiring proof).
   @visibleForTesting
-  StrumDirectionClassifier get debugStrumClassifier => _strums.debugClassifier;
+  StrumDirectionClassifier get debugStrumClassifier => _shape.inner;
 
   void reset() {
     _chordFramer.reset();
