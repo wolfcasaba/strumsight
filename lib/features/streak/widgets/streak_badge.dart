@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
@@ -10,6 +11,9 @@ import '../providers/streak_provider.dart';
 
 /// A compact "🔥 N" pill showing the current practice streak; tap → the streak
 /// screen. Lives in the Live header — a persistent, glanceable habit cue.
+/// The flame is an [SsFlame] (Ch18 spec §11): it ignites once when the
+/// count grows — the moment today's practice is credited — and is static
+/// otherwise.
 class StreakBadge extends ConsumerWidget {
   const StreakBadge({super.key});
 
@@ -30,7 +34,13 @@ class StreakBadge extends ConsumerWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.local_fire_department, size: 16, color: color),
+              SsFlame(
+                lit: active,
+                color: AppColors.primary,
+                dimColor: context.palette.muted,
+                size: SsFlameSize.small,
+                ignition: streak.current,
+              ),
               const SizedBox(width: 3),
               Text(
                 '${streak.current}',

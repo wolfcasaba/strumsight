@@ -157,6 +157,15 @@ class GamificationHubScreen extends StatelessWidget {
                     _CountSummaryTile(
                       key: const Key('gamification-hub-streak-tile'),
                       icon: Icons.local_fire_department_outlined,
+                      // Ch18 spec §11: the streak tile carries the flame
+                      // glyph — lit while the streak is alive, static here
+                      // (the ignite plays where the credit lands).
+                      leading: SsFlame(
+                        lit: streakCurrentDays > 0,
+                        color: theme.colorScheme.primary,
+                        dimColor: theme.colorScheme.onSurfaceVariant,
+                        size: SsFlameSize.small,
+                      ),
                       title: l10n.gamificationHubStreakTitle,
                       summary: l10n.gamificationHubStreakSummary(
                         streakCurrentDays,
@@ -401,9 +410,13 @@ class _CountSummaryTile extends StatelessWidget {
     required this.summary,
     required this.semantics,
     required this.onTap,
+    this.leading,
   });
 
   final IconData icon;
+
+  /// Replaces the [icon] glyph when given (the streak tile's flame).
+  final Widget? leading;
   final String title;
   final String summary;
   final String semantics;
@@ -424,7 +437,7 @@ class _CountSummaryTile extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               child: Row(
                 children: [
-                  Icon(icon, color: theme.colorScheme.primary),
+                  leading ?? Icon(icon, color: theme.colorScheme.primary),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

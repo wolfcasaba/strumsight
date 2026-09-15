@@ -34,6 +34,11 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
   final GlobalKey _cardKey = GlobalKey();
   bool _busy = false;
 
+  // Ch18 spec §12: the card builds up in front of the user (SsShareReveal);
+  // the image share waits for the final frame so the captured PNG is
+  // never a half-built card. Text share needs no pixels and never waits.
+  bool _revealed = false;
+
   // A7 (§5.5, ADR 0292): the card is minimal by default — the title only
   // leaves the device once the user explicitly turns this on. Never
   // pre-checked from `widget.title` being non-null.
@@ -97,14 +102,29 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
                       ),
                       child: AspectRatio(
                         aspectRatio: StrumCard.width / StrumCard.height,
-                        child: FittedBox(
-                          child: RepaintBoundary(
-                            key: _cardKey,
-                            child: StrumCard(
-                              result: widget.result,
-                              capo: widget.capo,
-                              title: widget.title,
-                              showTitle: _includeTitle,
+                        // The press-down scale (spec §12.2) sits OUTSIDE the
+                        // RepaintBoundary: the capture is the card's own
+                        // layer at native size, unaffected by it.
+                        child: AnimatedScale(
+                          scale: _busy ? 0.98 : 1,
+                          duration: SsMotionScope.durationOf(
+                            context,
+                            SsMotion.instant,
+                          ),
+                          child: FittedBox(
+                            child: SsShareReveal(
+                              onCompleted: () {
+                                if (mounted) setState(() => _revealed = true);
+                              },
+                              child: RepaintBoundary(
+                                key: _cardKey,
+                                child: StrumCard(
+                                  result: widget.result,
+                                  capo: widget.capo,
+                                  title: widget.title,
+                                  showTitle: _includeTitle,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -129,7 +149,9 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
                             label: l10n.shareCardButton,
                             icon: Icons.ios_share,
                             loading: _busy,
-                            onPressed: _busy ? null : () => _shareImage(btnCtx),
+                            onPressed: _busy || !_revealed
+                                ? null
+                                : () => _shareImage(btnCtx),
                           ),
                         ),
                         const SizedBox(height: 8),

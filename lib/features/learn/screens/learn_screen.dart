@@ -26,7 +26,7 @@ import '../adapter/lesson_v2_scoring.dart';
 import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
-import '../widgets/hit_burst.dart';
+import '../../../core/widgets/hit_burst.dart';
 import '../widgets/lesson_highway.dart';
 import '../widgets/wrapped_prompt.dart';
 import 'lesson_score_preview_screen.dart';

@@ -198,18 +198,26 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
                   scale: _lock.isLocked ? 1.08 : 1.0,
                   duration: const Duration(milliseconds: 160),
                   curve: Curves.easeOutBack,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      displayNote,
-                      style: TextStyle(
-                        fontFamily: 'Montserrat',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 96,
-                        height: 1,
-                        color: _lock.isLocked
-                            ? AppColors.successOn(brightness)
-                            : palette.ink,
+                  // Ch18 spec §4: the lock is a SHAPE change too — a ring
+                  // closes around the note when the string locks in, opens
+                  // again when it drifts — never colour alone (A3).
+                  child: SsLockRing(
+                    locked: _lock.isLocked,
+                    color: AppColors.successOn(brightness),
+                    trackColor: palette.track,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        displayNote,
+                        style: TextStyle(
+                          fontFamily: 'Montserrat',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 96,
+                          height: 1,
+                          color: _lock.isLocked
+                              ? AppColors.successOn(brightness)
+                              : palette.ink,
+                        ),
                       ),
                     ),
                   ),

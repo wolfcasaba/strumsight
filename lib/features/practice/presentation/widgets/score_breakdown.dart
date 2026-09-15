@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/model/practice_metric_snapshot.dart';
 
@@ -83,6 +84,22 @@ class ScoreBreakdown extends StatelessWidget {
               child: Text(label),
             ),
           ),
+          // Ch18 spec §7: a scored dimension's ring fills up on arrival (the
+          // "reveal"); the text stays the single spoken/measured value, so
+          // the ring is decorative — no label, excluded from semantics.
+          if (dimension is PracticeMetricDimensionAvailable)
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: ExcludeSemantics(
+                child: SsScoreRingReveal(
+                  state: SsScoreRingState.measured,
+                  ratio: dimension.value,
+                  size: 22,
+                  labelBuilder: (_) => '',
+                  semanticLabel: '',
+                ),
+              ),
+            ),
           Text(text),
         ],
       ),
