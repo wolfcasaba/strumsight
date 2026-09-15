@@ -141,8 +141,13 @@ a saját forrásából helyesen számított érték (§5.1, nem P1/P2/P3
 placeholder-literál), csak épp egy másik, V2-vak tárolót tükröz.
 
 - **Gazda:** Profile Hub / Progress feature (V1↔V2 napló-szétválás).
-- **Kör:** nincs — a két napló összehangolása vagy a mérce forrásának
-  cseréje a felelős feature kör dolga; a lelet itt van rögzítve.
+- **Kör:** **learner-loop 4. kör (2026-09-15) — feloldva.** Minden hub
+  (`TodayHubScreen`, `ProfileHubScreen`, streak- és haladás-képernyő) a
+  `practiceStatsProvider`-t olvassa, amely a V1 + V2 összesített feedből
+  (`aggregatedPracticeFeedProvider`) épül; a bejárás e2e tesztje
+  (`test/e2e/full_app_walkthrough_test.dart`, 7. megálló) azóta azt méri,
+  hogy a „sessions" csempe a V1 darabszám + a bejárás egy V2 sessionjét
+  mutatja.
 
 ### L5 — a `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül
 
@@ -163,9 +168,13 @@ Library/Progress/Profile állomásokat bejárná — enélkül a Progress-mérce
 konténerben, még a helyes forráskód mellett sem.
 
 - **Gazda:** Practice feature / Progress V2 (V2 history cache invalidáció).
-- **Kör:** nincs — a cache-invalidáció (vagy a provider `.family`/
-  `autoDispose` alakra cserélése) a felelős feature kör dolga; a lelet
-  itt van rögzítve.
+- **Kör:** **learner-loop 2. kör (2026-09-15) — feloldva.** A
+  `PracticeEffectListener` a `NavigateToResult` effektnél
+  `ref.invalidate(practiceHistoryV2ListProvider)`-t hív
+  (`lib/features/practice/presentation/practice_effect_listener.dart`),
+  így a result-képernyő „Következő" ajánlása és a hubok ugyanabban a
+  konténerben látják a frissen mentett sessiont. A bejárás
+  `restartE2eApp` lépése megmaradt: egy valós újraindítást is mér.
 
 **Egyik lelet sem placeholder-literál (P1/P2/P3) — mindegyik a bejárás
 (A2/A3) által mért, valós, explicit állapot vagy valós (de más forrásból
@@ -278,6 +287,6 @@ kimondott `nincs — <indok>`.
 | 1 | L1 — Practice Area Hub recommended CTA nem ad át `id`-t | Practice Area Hub | **`E16-R06` — feloldva** (ADR 0508 D3/D4, l. a szakasz Kör sorát) |
 | 2 | L2 — Onboarding mindig `/live`-ra fejez be | Onboarding feature | **`E16-R06` — feloldva** (ADR 0508 D1/D2, l. a szakasz Kör sorát) |
 | 3 | L3 — Library V2 forrásai bootstrap-függők, a harness nem köti be | Library V2 / E12-R11 harness | nincs — a harness-nek vagy a Library kompozíciós rétegének kell ezt bekötnie egy jövőbeli körben; a lelet itt van rögzítve |
-| 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | nincs — a két napló összehangolása vagy a mérce forrásának cseréje a felelős feature kör dolga; a lelet itt van rögzítve |
-| 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | nincs — a cache-invalidáció (vagy a provider `.family`/`autoDispose` alakra cserélése) a felelős feature kör dolga; a lelet itt van rögzítve |
+| 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | **learner-loop 4. kör — feloldva** (`practiceStatsProvider`, V1 + V2 összesített feed; l. a szakasz Kör sorát) |
+| 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | **learner-loop 2. kör — feloldva** (`ref.invalidate` a `NavigateToResult` effektnél; l. a szakasz Kör sorát) |
 | 6 | A3 — a core utak a termék SAJÁT navigációjával (a két teszt-oldali híd nélkül) mérhetően NEM voltak végigjárhatók (l. L1, L2, §2 bevezető) | Practice Area Hub / Onboarding feature | **`E16-R06` — feloldva, A3 mérve TELJESÜL** (l. §2 bevezető) |
