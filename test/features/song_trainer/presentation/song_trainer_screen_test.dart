@@ -40,6 +40,7 @@ import 'package:strumsight/features/song_trainer/domain/models/trainer_range.dar
 import 'package:strumsight/features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/core/widgets/strum_strings_band.dart';
 
 import '../../../support/fake_audio.dart';
 import '../../../support/fake_practice_observation_gateway.dart';
@@ -119,6 +120,93 @@ void main() {
     expect(find.byKey(const Key('song-trainer-loop-index')), findsOneWidget);
     expect(find.byKey(const Key('song-trainer-speed')), findsOneWidget);
     expect(find.byKey(const Key('song-trainer-strum-lane')), findsOneWidget);
+  });
+
+  // Round U4: the per-stroke juice the Live hero and the Practice highway
+  // already show reaches the coach surface too — a strings band hung directly
+  // under the strum lane, strummed by the same counter/direction/strength the
+  // lane's spark overlay uses. The band is always mounted (six still strings)
+  // and only its own local ticker runs, so an idle running Stage still
+  // settles.
+  testWidgets('running status hangs a strings band directly under the strum '
+      'lane', (tester) async {
+    final harness = _Harness.scored();
+    addTearDown(harness.dispose);
+
+    final state = const SongTrainerState.initial().copyWith(
+      status: SongTrainerStatus.running,
+      backingRateSupported: true,
+      loopIndex: 2,
+      maxLoops: 5,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          ..._preferenceOverridesForScreen(),
+          songTrainerControllerProvider(
+            SongTrainerControllerInputs(
+              compilation: _scoredCompilation(),
+              backingAsset: _asset,
+            ),
+          ).overrideWith((ref) => harness.controller),
+        ],
+        child: MaterialApp(
+          theme: SsLightTheme.data(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SongTrainerScreen(state: state),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final lane = find.byKey(const Key('song-trainer-strum-lane'));
+    final band = find.byType(StrumStringsBand);
+    expect(lane, findsOneWidget);
+    expect(band, findsOneWidget);
+    expect(tester.getSize(band).height, StrumStringsBand.height);
+    // Under the lane, not somewhere else down the column: the band's top edge
+    // is the lane's bottom edge.
+    expect(
+      tester.getTopLeft(band).dy,
+      moreOrLessEquals(tester.getBottomLeft(lane).dy, epsilon: 0.5),
+    );
+  });
+
+  // The paused body shows the lane as a static score reader — there is no
+  // per-stroke feedback while the transport is stopped, so there is nothing
+  // for a band to ring and none is built.
+  testWidgets('paused status shows no strings band', (tester) async {
+    final harness = _Harness.scored();
+    addTearDown(harness.dispose);
+    final state = const SongTrainerState.initial().copyWith(
+      status: SongTrainerStatus.paused,
+      backingRateSupported: false,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          ..._preferenceOverridesForScreen(),
+          songTrainerControllerProvider(
+            SongTrainerControllerInputs(
+              compilation: _scoredCompilation(),
+              backingAsset: _asset,
+            ),
+          ).overrideWith((ref) => harness.controller),
+        ],
+        child: MaterialApp(
+          theme: SsLightTheme.data(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SongTrainerScreen(state: state),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(StrumStringsBand), findsNothing);
   });
 
   testWidgets(

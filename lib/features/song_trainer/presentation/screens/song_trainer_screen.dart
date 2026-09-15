@@ -28,6 +28,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/public.dart';
 import '../../../../core/widgets/strum_burst_overlay.dart';
+import '../../../../core/widgets/strum_strings_band.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../practice/public.dart' show PracticeStrumFeedback;
 import '../../../settings/public.dart';
@@ -266,8 +267,9 @@ final class _RunningBody extends StatelessWidget {
   final List<SongLoopFeedbackMessage> feedback;
   final Duration? loopRangeEnd;
 
-  /// Per-strum spark trigger for the strum lane (chunk 016b P0): the latest
-  /// observed stroke and the counter whose rise fires the burst.
+  /// Per-strum feedback for the strum lane (chunk 016b P0): the latest
+  /// observed stroke and the counter whose rise fires the burst and strums
+  /// the strings band below the lane.
   final PracticeStrumFeedback? strum;
   final int strumSeq;
 
@@ -338,6 +340,15 @@ final class _RunningBody extends StatelessWidget {
             viewportStart: playhead,
             viewportEnd: viewportEnd,
           ),
+        ),
+        // …and rings on in the strings directly under that lane: the same
+        // counter, direction and strength, so the spark and the band are one
+        // event. Idle it is six still strings and schedules no frames, so a
+        // running Stage with no strokes costs nothing extra.
+        StrumStringsBand(
+          strumSeq: strumSeq,
+          isDown: strum?.isDown,
+          strength: strum?.strength ?? 0,
         ),
         TablatureLane(
           events: noteEvents.cast(),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/strum_burst_overlay.dart';
+import '../../../../core/widgets/strum_strings_band.dart';
 import '../../domain/model/compiled_practice_target.dart';
 import '../../domain/model/practice_metrics.dart';
 import '../../domain/model/practice_verdict.dart';
@@ -9,7 +10,8 @@ import '../widgets/practice_highway.dart';
 import '../widgets/practice_pattern_preview.dart';
 
 /// Mode-view for the Strum Pattern practice. Composes the highway, the
-/// one-bar pattern preview, and the verdict feedback widget. The verdict
+/// strings band that rings under it, the one-bar pattern preview, and the
+/// verdict feedback widget. The verdict
 /// and metrics are passed as explicit constructor params (R10) — the
 /// host wires them in, but the widget renders correctly in isolation.
 class StrumPatternView extends StatelessWidget {
@@ -41,9 +43,10 @@ class StrumPatternView extends StatelessWidget {
   final PracticeMetrics? metrics;
   final bool leftHanded;
 
-  /// Per-strum spark trigger (chunk 016b P0): a rise fires a burst at the
-  /// strike line in the observed stroke's direction, sized by
-  /// [strumStrength]. `strumIsDown == null` never bursts.
+  /// Per-strum feedback trigger (chunk 016b P0): a rise fires a burst at the
+  /// strike line AND strums the band below it, in the observed stroke's
+  /// direction and sized by [strumStrength]. `strumIsDown == null` — a stroke
+  /// whose direction is unknown — never bursts and never rings the band.
   final int strumSeq;
   final bool? strumIsDown;
   final double strumStrength;
@@ -77,6 +80,15 @@ class StrumPatternView extends StatelessWidget {
               leftHanded: leftHanded,
             ),
           ),
+        ),
+        // The stroke that just sparked at the strike line rings on through
+        // the strings right below it: same counter, same direction, same
+        // strength, so the spark and the band are one event, not two.
+        const SizedBox(height: 8),
+        StrumStringsBand(
+          strumSeq: strumSeq,
+          isDown: strumIsDown,
+          strength: strumStrength,
         ),
         const SizedBox(height: 12),
         PracticePatternPreview(target: target, barIndex: 0),
