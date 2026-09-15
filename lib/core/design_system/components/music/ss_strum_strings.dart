@@ -290,6 +290,17 @@ final class _SsStrumStringsPainter extends CustomPainter {
 
   final Paint _pickPaint = Paint()..style = PaintingStyle.fill;
 
+  /// The vibration ENVELOPE: two faint ghost lines at ± the current
+  /// amplitude. A 9–14 Hz sine sampled at 60 fps reads as a slow wobble; the
+  /// envelope is what the eye recognises as a string ringing.
+  final Paint _ghostPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+
+  /// Ghost picks behind the sweep — the motion trail of the hand.
+  static const List<double> _pickTrailLagSec = [0.012, 0.024, 0.036];
+  static const List<double> _pickTrailAlpha = [0.45, 0.28, 0.14];
+
   /// Reused across strings: one allocation per frame instead of six.
   final Path _path = Path();
 
@@ -329,11 +340,37 @@ final class _SsStrumStringsPainter extends CustomPainter {
         SsStrumStringsModel.maxAmplitude,
       );
 
+      // Colour holds longer than the motion (sqrt of the decay): the string
+      // still LOOKS struck while its swing has become sub-pixel.
       _stringPaint
         ..strokeWidth = _maxStringWidth * SsStrumStringsModel.gaugeScale(string)
-        ..color = _colorFor(tint, excitation);
+        ..color = _colorFor(tint, math.sqrt(excitation));
 
       final swing = displacement * spacing;
+      if (excitation > 0.03) {
+        final envelope =
+            excitation *
+            SsStrumStringsModel.maxAmplitude *
+            SsStrumStringsModel.gaugeScale(string) *
+            spacing;
+        _ghostPaint
+          ..strokeWidth = _stringPaint.strokeWidth * 0.7
+          ..color = (tint ?? stringColor).withValues(
+            alpha: (0.10 + 0.30 * excitation).clamp(0.0, 0.4),
+          );
+        for (final sign in const [-1.0, 1.0]) {
+          _path.reset();
+          _path.moveTo(0, baseY);
+          for (var i = 1; i <= _segments; i++) {
+            final u = i / _segments;
+            _path.lineTo(
+              u * size.width,
+              baseY + sign * envelope * math.sin(math.pi * u),
+            );
+          }
+          canvas.drawPath(_path, _ghostPaint);
+        }
+      }
       if (swing == 0) {
         canvas.drawLine(
           Offset(0, baseY),
@@ -367,10 +404,29 @@ final class _SsStrumStringsPainter extends CustomPainter {
       return;
     }
     for (final stroke in strokes) {
-      final position = SsStrumStringsModel.pickPositionAt(stroke, nowSec);
       final isDown = stroke.isDown;
-      if (position == null || isDown == null) continue;
-      _drawPick(canvas, centerX, topY + position * spacing, spacing, isDown);
+      if (isDown == null) continue;
+      // Trail first (older = fainter), then the pick with its glow on top.
+      for (var k = _pickTrailLagSec.length - 1; k >= 0; k--) {
+        final p = SsStrumStringsModel.pickPositionAt(
+          stroke,
+          nowSec - _pickTrailLagSec[k],
+        );
+        if (p == null) continue;
+        _drawPick(
+          canvas,
+          centerX,
+          topY + p * spacing,
+          spacing,
+          isDown,
+          alpha: _pickTrailAlpha[k],
+        );
+      }
+      final position = SsStrumStringsModel.pickPositionAt(stroke, nowSec);
+      if (position == null) continue;
+      final y = topY + position * spacing;
+      _drawPick(canvas, centerX, y, spacing, isDown, alpha: 0.22, scale: 1.9);
+      _drawPick(canvas, centerX, y, spacing, isDown);
     }
   }
 
@@ -381,11 +437,16 @@ final class _SsStrumStringsPainter extends CustomPainter {
     double centerX,
     double y,
     double spacing,
-    bool isDown,
-  ) {
-    final width = spacing * 0.62;
-    final height = spacing * 1.2;
-    _pickPaint.color = isDown ? downColor : upColor;
+    bool isDown, {
+    double alpha = 1.0,
+    double scale = 1.0,
+  }) {
+    final width = spacing * 0.62 * scale;
+    final height = spacing * 1.2 * scale;
+    final base = isDown ? downColor : upColor;
+    _pickPaint.color = alpha >= 1.0
+        ? base
+        : base.withValues(alpha: base.a * alpha);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(
