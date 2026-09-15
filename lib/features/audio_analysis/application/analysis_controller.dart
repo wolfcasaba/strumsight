@@ -5,9 +5,11 @@ import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_event.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_input.dart';
 
 import 'analyze_audio_use_case.dart';
 import 'analysis_isolate_runner.dart';
+import 'analysis_providers.dart';
 import 'analysis_state.dart';
 import 'cancel_analysis_use_case.dart';
 
@@ -19,21 +21,40 @@ abstract interface class AnalysisPracticeCreditRecorder {
 
 /// Coordinates one analysis run. It owns the authoritative active run ID;
 /// runner- and pipeline-local counters are never used for stale-event checks.
+///
+/// The three collaborators are injectable for tests; when a caller omits one
+/// (the composition root's `analysisControllerProvider`, E17-R02) it is
+/// resolved lazily from the feature's own providers — the same
+/// "injected-or-`ref`" shape the legacy `AnalyzeController` uses for its
+/// recorder, so a test-built controller never touches a provider it did not
+/// ask for.
 final class AnalysisController extends Notifier<AnalysisState> {
   AnalysisController({
-    required this.analyzeAudio,
-    required this.cancelAnalysis,
-    required this.practiceCredit,
+    AnalyzeAudioUseCase? analyzeAudio,
+    CancelAnalysisUseCase? cancelAnalysis,
+    AnalysisPracticeCreditRecorder? practiceCredit,
     this.minEventsBetweenEmits = 5,
-  }) {
+  }) : _injectedAnalyzeAudio = analyzeAudio,
+       _injectedCancelAnalysis = cancelAnalysis,
+       _injectedPracticeCredit = practiceCredit {
     if (minEventsBetweenEmits <= 0) {
       throw ArgumentError.value(minEventsBetweenEmits, 'minEventsBetweenEmits');
     }
   }
 
-  final AnalyzeAudioUseCase analyzeAudio;
-  final CancelAnalysisUseCase cancelAnalysis;
-  final AnalysisPracticeCreditRecorder practiceCredit;
+  final AnalyzeAudioUseCase? _injectedAnalyzeAudio;
+  final CancelAnalysisUseCase? _injectedCancelAnalysis;
+  final AnalysisPracticeCreditRecorder? _injectedPracticeCredit;
+
+  /// Lazy so `ref` is only touched after `build` — and only when nothing was
+  /// injected.
+  late final AnalyzeAudioUseCase analyzeAudio =
+      _injectedAnalyzeAudio ?? ref.read(analyzeAudioUseCaseProvider);
+  late final CancelAnalysisUseCase cancelAnalysis =
+      _injectedCancelAnalysis ?? ref.read(cancelAnalysisUseCaseProvider);
+  late final AnalysisPracticeCreditRecorder practiceCredit =
+      _injectedPracticeCredit ??
+      ref.read(analysisPracticeCreditRecorderProvider);
   final int minEventsBetweenEmits;
   final Set<String> _creditedRunIds = <String>{};
   String? _activeRunId;
@@ -67,13 +88,20 @@ final class AnalysisController extends Notifier<AnalysisState> {
   void inputError(AppFailure failure) => state = AnalysisInputError(failure);
 
   /// Starts an explicit user-requested analysis. There is no automatic retry.
-  Future<void> analyze(AnalysisDocument input) async {
+  ///
+  /// [audio] is the validated PCM the chain analyses (E17-R02); the capture
+  /// flow always supplies it. Without it the use case falls back to its
+  /// empty placeholder input (ADR 0254), which only earlier callers rely on.
+  Future<void> analyze(
+    AnalysisDocument input, {
+    ValidatedPcmAnalysisInput? audio,
+  }) async {
     final previousRun = _activeRun;
     if (previousRun != null) {
       unawaited(cancelAnalysis(previousRun));
     }
     validating();
-    final run = analyzeAudio(input);
+    final run = analyzeAudio(input, audio: audio);
     final runId = run.runId;
     _activeRun = run;
     _activeRunId = runId;

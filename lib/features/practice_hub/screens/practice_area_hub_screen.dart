@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../features/practice/public.dart'
@@ -141,6 +142,17 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                   label: l10n.curriculumLadderTitle,
                   onPressed: () => context.push(AppRoutes.curriculumLadder),
                 ),
+                // E17-R02 (ADR 0521) — the ONLY entry point of the Analysis
+                // V2 capture flow, shown while `audioAnalysisV2Enabled` is
+                // on (the routes it leads to exist only under that gate), so
+                // a production build with the flag off sees no new button.
+                if (ref.watch(appConfigProvider).flags.audioAnalysisV2Enabled)
+                  _QuickTool(
+                    key: const ValueKey('practice-hub-analysis-v2'),
+                    icon: Icons.analytics_outlined,
+                    label: l10n.analysisHomeEntryCta,
+                    onPressed: () => context.push(AppRoutes.analysisHome),
+                  ),
               ],
             ),
             const SizedBox(height: 24),
@@ -205,6 +217,7 @@ class _QuickTool extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    super.key,
   });
 
   final IconData icon;

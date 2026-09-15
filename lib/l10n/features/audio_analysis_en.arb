@@ -1,0 +1,6 @@
+{
+  "@@locale": "en",
+  "analysisHomeEntryCta": "Analyze a recording (V2)",
+  "analysisHomeImportUnavailable": "File import is not available in this build yet — record with the microphone instead.",
+  "analysisHomeOpenFailed": "Couldn't open that analysis."
+}

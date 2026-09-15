@@ -62,6 +62,15 @@ abstract final class AppRoutes {
   static const String analysisMetricDetail = '/analysis/metric-detail';
   static const String analysisTimeline = '/analysis/timeline';
 
+  // Audio Analysis V2 capture flow (E17-R02, ADR 0521) — home → recording →
+  // processing, under the SAME `audioAnalysisV2Enabled` gate as the three
+  // result screens above (no fourth flag, §5.1). Top-level routes outside
+  // the shell branches, like [strumChallenge]: the Recording Stage owns the
+  // microphone lease and must unmount — and release it — on navigation away.
+  static const String analysisHome = '/analysis';
+  static const String analysisRecording = '/analysis/recording';
+  static const String analysisProcessing = '/analysis/processing';
+
   // Session comparison and trend (E06-R25, ADR 0246) — flag-gated behind
   // its own `analysisComparisonEnabled` flag, independent of
   // `audioAnalysisV2Enabled`.

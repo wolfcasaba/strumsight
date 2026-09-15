@@ -12,9 +12,17 @@ import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/analyze/public.dart';
+import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
+import 'package:strumsight/features/audio_analysis/application/analysis_providers.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_repository.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_summary.dart';
 import 'package:strumsight/features/audio_analysis/domain/comparison/analysis_comparison.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_metric_catalog.dart';
 import 'package:strumsight/features/audio_analysis/presentation/analysis_compare_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/auth/screens/login_screen.dart';
@@ -90,6 +98,7 @@ Future<_RouterHarness> _pumpRouter(
   bool songTrainerEnabled = false,
   bool analysisComparisonEnabled = false,
   bool practiceGeneratorEnabled = false,
+  bool audioAnalysisV2Enabled = false,
 }) async {
   final engine = FakeStrumEngine();
   final songRepository = InMemorySongRepository();
@@ -106,6 +115,11 @@ Future<_RouterHarness> _pumpRouter(
       songAssetRepositoryProvider.overrideWithValue(
         const _RouterAssetRepository(),
       ),
+      // E17-R02 — the V2 analysis home reads the repository index; the
+      // base provider throws until the bootstrap overrides it.
+      analysisRepositoryProvider.overrideWithValue(
+        const _EmptyAnalysisRepository(),
+      ),
       appConfigProvider.overrideWithValue(
         AppConfig(
           environment: AppEnvironment.development,
@@ -117,6 +131,7 @@ Future<_RouterHarness> _pumpRouter(
             songTrainerV2Enabled: songTrainerEnabled,
             analysisComparisonEnabled: analysisComparisonEnabled,
             practiceGeneratorEnabled: practiceGeneratorEnabled,
+            audioAnalysisV2Enabled: audioAnalysisV2Enabled,
           ),
           diagnosticsToken: AppConfig.devDiagnosticsToken,
           buildMode: 'test',
@@ -358,6 +373,76 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(harness.router.state.uri.path, AppRoutes.live);
       expect(find.byType(TodayPlanScreen), findsNothing);
+    },
+  );
+
+  // E17-R02 (ADR 0521) — A3: the three capture routes exist ONLY behind
+  // `audioAnalysisV2Enabled` (the same gate as the overview/timeline/detail
+  // routes; no fourth flag), and the legacy `/analyze` path renders the
+  // untouched `AnalyzeScreen` on BOTH flag settings.
+  testWidgets(
+    'audioAnalysisV2Enabled OFF: the capture routes do not exist and the '
+    'legacy Analyze route still renders (A3 OFF)',
+    (tester) async {
+      final harness = await _pumpRouter(
+        tester,
+        seen: true,
+        audioAnalysisV2Enabled: false,
+      );
+
+      for (final path in <String>[
+        AppRoutes.analysisHome,
+        AppRoutes.analysisRecording,
+        AppRoutes.analysisProcessing,
+      ]) {
+        harness.router.go(path);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(harness.router.state.uri.path, AppRoutes.live);
+      }
+      expect(find.byType(AnalysisHomeScreen), findsNothing);
+      expect(find.byType(AnalysisRecordingScreen), findsNothing);
+      expect(find.byType(AnalysisProcessingScreen), findsNothing);
+
+      harness.router.go(AppRoutes.analyze);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AnalyzeScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'audioAnalysisV2Enabled ON: the three capture routes build from the '
+    'composition root and the legacy Analyze route is unchanged (A3 ON)',
+    (tester) async {
+      final harness = await _pumpRouter(
+        tester,
+        seen: true,
+        audioAnalysisV2Enabled: true,
+      );
+
+      harness.router.go(AppRoutes.analysisHome);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.analysisHome);
+      expect(find.byType(AnalysisHomeScreen), findsOneWidget);
+
+      harness.router.go(AppRoutes.analysisRecording);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.analysisRecording);
+      expect(find.byType(AnalysisRecordingScreen), findsOneWidget);
+
+      harness.router.go(AppRoutes.analysisProcessing);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.analysisProcessing);
+      expect(find.byType(AnalysisProcessingScreen), findsOneWidget);
+
+      harness.router.go(AppRoutes.analyze);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AnalyzeScreen), findsOneWidget);
     },
   );
 
@@ -603,6 +688,37 @@ SongDocument _editorDocument(String id) {
     tempoMap: TempoMap.constant(Tempo(120)),
     meterMap: MeterMap.constant(Meter(4, 4)),
   );
+}
+
+/// An always-empty analysis index for the router cells: the V2 home renders
+/// its empty state, and nothing here ever needs a document.
+final class _EmptyAnalysisRepository implements AnalysisRepository {
+  const _EmptyAnalysisRepository();
+
+  @override
+  Future<AppResult<List<AnalysisSummary>>> list() async =>
+      const AppResult<List<AnalysisSummary>>.success(<AnalysisSummary>[]);
+
+  @override
+  Future<AppResult<AnalysisDocument>> getById(String id) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> save(AnalysisSaveRequest request) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> replace(String id, AnalysisSaveRequest request) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> rename({
+    required String id,
+    required String newTitle,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AppResult<void>> delete(String id) => throw UnimplementedError();
 }
 
 final class _RouterAssetRepository implements SongAssetRepository {

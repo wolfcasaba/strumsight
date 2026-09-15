@@ -6,12 +6,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
+import '../../features/audio_analysis/application/analysis_capture_providers.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
 import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
 import '../../features/audio_analysis/presentation/analysis_compare_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_metric_detail_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_overview_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
 import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
@@ -877,6 +881,87 @@ final routerProvider = Provider<GoRouter>((ref) {
               state.extra is AnalysisDocument ? null : AppRoutes.live,
           builder: (_, state) => AnalysisTimelineScreen(
             document: state.extra! as AnalysisDocument,
+          ),
+        ),
+        // E17-R02 (ADR 0521) — the V2 capture flow: home → recording →
+        // processing → overview, under the SAME gate as the three result
+        // routes above. The screens are pure presentation; the recorder,
+        // the controller state and every callback are injected here from
+        // `analysis_capture_providers.dart`, so no `ref.watch` enters the
+        // widgets (§5.2) and the legacy Analyze path stays untouched (§5.3).
+        GoRoute(
+          path: AppRoutes.analysisHome,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => AnalysisHomeScreen(
+              recentAnalyses:
+                  ref.watch(recentAnalysesProvider).value ?? const [],
+              onStartRecording: () =>
+                  context.push(AppRoutes.analysisRecording),
+              // File import has no picker/decoder use case wired in this
+              // feature yet (only the WAV decoder gateway exists), so the
+              // tap says so instead of pretending.
+              onImportFile: () => ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    AppLocalizations.of(context).analysisHomeImportUnavailable,
+                  ),
+                ),
+              ),
+              onOpenAnalysis: (summary) async {
+                final document = await ref
+                    .read(analysisCaptureFlowProvider)
+                    .loadAnalysis(summary.documentId);
+                if (!context.mounted) return;
+                if (document == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppLocalizations.of(context).analysisHomeOpenFailed,
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                await context.push(AppRoutes.analysisOverview, extra: document);
+              },
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisRecording,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => AnalysisRecordingScreen(
+              recorder: ref.watch(analysisRecorderProvider),
+              onFinished: (run, samples) {
+                // The flow copies the samples synchronously and moves the
+                // controller to `validating`/`analyzing` before its first
+                // await, so the Processing Stage never mounts on a stale
+                // state and the replaced Recording Stage may dispose its
+                // recorder at once.
+                unawaited(
+                  ref
+                      .read(analysisCaptureFlowProvider)
+                      .analyzeRecording(run, samples),
+                );
+                context.pushReplacement(AppRoutes.analysisProcessing);
+              },
+              onCancel: () => context.pop(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisProcessing,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => AnalysisProcessingScreen(
+              state: ref.watch(analysisControllerProvider),
+              onCancel: () => unawaited(
+                ref.read(analysisControllerProvider.notifier).cancel(),
+              ),
+              onRestart: () =>
+                  context.pushReplacement(AppRoutes.analysisRecording),
+              onViewResult: (document) =>
+                  context.push(AppRoutes.analysisOverview, extra: document),
+            ),
           ),
         ),
       ],
