@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../model/weekly_recap.dart';
 
 /// The shareable 9:16 "Strum Wrapped" weekly recap card (chunk 017 rec #5).
 /// Same self-contained dark brand language as the other cards — card copy is
 /// English-global like every exported card (hashtags/symbols travel).
+/// Its blocks are [SsRevealSlot]s (Ch18 spec §12): the minutes figure lands
+/// under an [SsShareReveal]; without one the slots are inert.
 class WrappedCard extends StatelessWidget {
   const WrappedCard({super.key, required this.recap, required this.weekLabel});
 
@@ -36,118 +39,153 @@ class WrappedCard extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
           child: Column(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.brandGradient,
-                      borderRadius: BorderRadius.circular(7),
+              SsRevealSlot(
+                start: 0,
+                end: 0.25,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.brandGradient,
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: const Icon(
+                        Icons.graphic_eq,
+                        size: 16,
+                        color: Colors.white,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.graphic_eq,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-                  const Text(
-                    'StrumSight',
-                    style: TextStyle(
-                      fontFamily: 'Montserrat',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17,
-                      color: _ink,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              const Text(
-                'MY STRUM WEEK',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                  letterSpacing: 2,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                weekLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: _ink.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                '${recap.minutes}',
-                style: const TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w900,
-                  fontSize: 84,
-                  height: 1,
-                  color: AppColors.primary,
-                ),
-              ),
-              Text(
-                'MINUTES PLAYED',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1.5,
-                  color: _ink.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Expanded(child: _chip('${recap.daysPracticed}/7', 'DAYS')),
-                  const SizedBox(width: 10),
-                  Expanded(child: _chip('${recap.strokes}', 'STRUMS')),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: acc == null
-                        ? _chip('${recap.sessions}', 'SESSIONS')
-                        : _chip('${(acc * 100).round()}%', '↓↑ ACCURACY'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              if (recap.streak > 0)
-                Text(
-                  '🔥 ${recap.streak}-day streak',
-                  style: const TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    color: AppColors.secondary,
-                  ),
-                ),
-              const Spacer(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    '↓↑',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 7),
-                  Flexible(
-                    child: Text(
-                      'The app that grades your strumming hand',
+                    const SizedBox(width: 9),
+                    const Text(
+                      'StrumSight',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontFamily: 'Montserrat',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                        color: _ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              SsRevealSlot(
+                start: 0.1,
+                end: 0.4,
+                child: Column(
+                  children: [
+                    const Text(
+                      'MY STRUM WEEK',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        letterSpacing: 2,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      weekLabel,
+                      style: TextStyle(
+                        fontSize: 12,
                         color: _ink.withValues(alpha: 0.7),
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              SsRevealSlot(
+                start: 0.25,
+                end: 0.6,
+                landing: true,
+                child: Text(
+                  '${recap.minutes}',
+                  style: const TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontWeight: FontWeight.w900,
+                    fontSize: 84,
+                    height: 1,
+                    color: AppColors.primary,
                   ),
-                ],
+                ),
+              ),
+              SsRevealSlot(
+                start: 0.35,
+                end: 0.65,
+                child: Text(
+                  'MINUTES PLAYED',
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 1.5,
+                    color: _ink.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              SsRevealSlot(
+                start: 0.45,
+                end: 0.8,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _chip('${recap.daysPracticed}/7', 'DAYS'),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: _chip('${recap.strokes}', 'STRUMS')),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: acc == null
+                          ? _chip('${recap.sessions}', 'SESSIONS')
+                          : _chip('${(acc * 100).round()}%', '↓↑ ACCURACY'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (recap.streak > 0)
+                SsRevealSlot(
+                  start: 0.6,
+                  end: 0.9,
+                  child: Text(
+                    '🔥 ${recap.streak}-day streak',
+                    style: const TextStyle(
+                      fontFamily: 'Montserrat',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: AppColors.secondary,
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              SsRevealSlot(
+                start: 0.75,
+                end: 1,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      '↓↑',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: Text(
+                        'The app that grades your strumming hand',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: _ink.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

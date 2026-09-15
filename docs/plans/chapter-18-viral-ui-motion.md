@@ -48,6 +48,26 @@
 Flag-OFF felületek (Coach, Vision, Community) csak spec-szinten (spec
 §14–16); körük a saját sávjuk rollout-döntése után nyílik.
 
+### Státusz (2026-09-15, szelet-alapú előrehaladás a formális körök előtt)
+
+A felhasználó „mehetsz tovább, CI csak a fejlesztés után" döntése alapján a
+sáv komponensei szeletekben épülnek a `claude/ui-design-viral-elements-u9z9ht`
+branchen; a formális kör-brief + ADR-foglalás (R00 palettával együtt) még
+nyitott emberi döntés. Beépült:
+
+- **R01** (`SsMotion.stagger`, `SsStaggeredEntrance`, `SsScoreRingReveal`,
+  Today Hub) — `bc8003d`, goldenek x86-on újrafelvéve (`288ee57`).
+- **R04 részben** (`SsLockRing` a Tuneren; `SsBeatDisc` nincs).
+- **R03 részben** (score-ring reveal a Practice result sorain; a
+  `SsCelebrationScene` + koordinátor nincs).
+- **R06** (`SsFlame` S/M/L + ignite; StreakBadge, StreakScreen hero +
+  milestone-pill + belépés, gamification hub tile, StreakStatusCard,
+  StreakDetail) — a milestone-JELENET R03-mal együtt nyílik.
+- **R07** (`SsShareReveal` + `SsRevealSlot`; Strum Card és Wrapped
+  felépülés, image-share kapuzva a végállapotra, 0,98 press-scale).
+- Strike-line spark (Live/Practice/Song Trainer, `9121160`) — az R02
+  `SsHitJuice` általánosítás előfutára (`core/widgets/strum_burst_overlay.dart`).
+
 ## 2. Kör-brief kötelező cellái (minden E18-körben)
 
 A-MOTION-1…8 a spec §17 szerint, PLUSZ:

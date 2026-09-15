@@ -40,6 +40,7 @@ class StreakDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     return GamificationThemeScope(
       child: Scaffold(
         appBar: AppBar(title: Text(l10n.streakV2Title)),
@@ -66,6 +67,20 @@ class StreakDetailScreen extends StatelessWidget {
                         width: cardWidth,
                         child: _StreakMetricCard(
                           icon: Icons.local_fire_department_outlined,
+                          // Ch18 spec §11.2: the current-rhythm card carries
+                          // the flame; the caller-fed reduceMotion is
+                          // honoured through SsMotionScope like the status
+                          // card's own transition.
+                          leading: SsMotionScope(
+                            appOverride: reduceMotion ? true : null,
+                            child: SsFlame(
+                              lit: state.current > 0,
+                              color: colorScheme.primary,
+                              dimColor: colorScheme.onSurfaceVariant,
+                              size: SsFlameSize.medium,
+                              igniteOnMount: true,
+                            ),
+                          ),
                           value: state.current,
                           label: l10n.streakV2CurrentLabel,
                           semantics: l10n.streakV2CurrentSemantics(
@@ -144,9 +159,13 @@ class _StreakMetricCard extends StatelessWidget {
     required this.value,
     required this.label,
     required this.semantics,
+    this.leading,
   });
 
   final IconData icon;
+
+  /// Replaces the [icon] glyph when given.
+  final Widget? leading;
   final int value;
   final String label;
   final String semantics;
@@ -162,7 +181,7 @@ class _StreakMetricCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon),
+              leading ?? Icon(icon),
               const SizedBox(height: 12),
               Text(
                 value.toString(),

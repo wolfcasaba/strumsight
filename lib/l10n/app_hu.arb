@@ -4205,6 +4205,15 @@
   "streakDoneToday": "Ma gyakoroltál ✓ — holnap találkozunk!",
   "streakFreezes": "Fagyasztások",
   "streakLongest": "Leghosszabb",
+  "streakMilestone": "{days} napos mérföldkő 🎉",
+  "@streakMilestone": {
+    "description": "Pill under the streak hero on a 7/30/100-day streak.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "streakSkillAccuracy": "↓↑ pontosság",
   "streakSkillGrowing": "A pengető kezed egyre jobb — építs rá tovább.",
   "streakSkillStrums": "Lejátszott pengetés",

@@ -132,3 +132,28 @@ finally show the live verdict in `PracticeFeedback` (the old R10 null gap).
 stream through; the trainer's running body bursts at the strum lane's
 "now" edge. Nothing here touches DSP or the reducer: the stream is emitted
 from the controller's observation intake right after the scoring pass.
+
+## AS BUILT (2026-09-15, 3rd step) — streak flame + share reveal (Ch18 R06/R07 slice)
+`SsFlame` (**`core/design_system/components/music/ss_flame.dart`**) is the
+painted streak glyph — S 16 / M 40 / L 72 — lit (colour + light core) or
+dim (same shape, grey). It "ignites" ONCE (grow 0.6 → 1.18 → 1 about the
+foot, plus a sine glow, `celebration` = 700 ms) when `lit` flips true, when
+the caller's `ignition` counter rises (the streak length → the daily-credit
+moment) or on mount (`igniteOnMount`, hero reveal). No idle flicker (§9.7 —
+no endless decoration): at rest it schedules no frames. Reduced motion
+snaps. `SsFlame.milestoneFor(days)` → 7/30/100. Wired: `StreakBadge` (Live
+header, ignites on credit), `StreakScreen` hero (L, ignite on entry,
+milestone pill, one `SsStaggeredEntrance` of six groups = 500 ms), the
+gamification streak tile (S), `StreakStatusCard` (M, for the two "lit"
+reasons only) and the streak-detail current card (M; the caller-fed
+`reduceMotion` reaches it through `SsMotionScope(appOverride:)`).
+`SsShareReveal` + `SsRevealSlot` (**`motion/ss_share_reveal.dart`**): one
+0 → 1 progress over `celebration`, inherited down the card; each slot maps
+it onto its own [start, end] window (fade + 10 px rise, or `landing` from
+1.6× for the ↓/↑ arrows — `SsRevealSlot.windowFor` spreads the arrows
+evenly over 0.40–0.85). At/after `end`, or with no reveal above, a slot
+returns its child UNTOUCHED — so the `RepaintBoundary` capture and the
+card tests see the plain card. `SharePreviewScreen` / `WrappedPreviewScreen`
+gate the IMAGE share on `onCompleted` (text share never waits) and press
+the card to 0.98 (`instant`) outside the boundary. The milestone SCENE
+(`SsCelebrationScene` via the ADR 0389 coordinator) stays R03's.
