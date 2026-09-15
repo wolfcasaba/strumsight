@@ -117,6 +117,40 @@ import 'package:strumsight/features/community/domain/value_objects/public_user_i
 import 'package:strumsight/features/community/presentation/screens/clubs/club_list_screen.dart';
 import 'package:strumsight/features/community/presentation/screens/clubs/club_member_management_screen.dart';
 import 'package:strumsight/features/community/presentation/screens/edit_profile_screen.dart';
+// E18-R19 routed the community surface (`app_router.dart`, `if
+// (communityEnabled)`), so nine more community screens are measured
+// reachable — fixtures adapted from `e13_r33_screens_golden_test.dart` and
+// the `test/features/community/presentation/**` widget tests named per block.
+import 'package:strumsight/features/community/application/controllers/feed_controller.dart';
+import 'package:strumsight/features/community/application/controllers/notification_controller.dart';
+import 'package:strumsight/features/community/application/controllers/post_composer_controller.dart';
+import 'package:strumsight/features/community/data/local/feed_cache.dart';
+import 'package:strumsight/features/community/data/repositories/challenge_repository_impl.dart';
+import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
+import 'package:strumsight/features/community/domain/entities/community_challenge.dart';
+import 'package:strumsight/features/community/domain/entities/community_comment.dart';
+import 'package:strumsight/features/community/domain/entities/community_post.dart';
+import 'package:strumsight/features/community/domain/entities/moderation_state.dart';
+import 'package:strumsight/features/community/domain/entities/notification_item.dart';
+import 'package:strumsight/features/community/domain/entities/share_artifact.dart';
+import 'package:strumsight/features/community/domain/repositories/challenge_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/feed_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/notification_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/post_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/social_graph_repository.dart';
+import 'package:strumsight/features/community/presentation/screens/bookmarks_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/comments_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_gate_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_notifications_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/followers_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/following_feed_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/leaderboard_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/safety_relationships_screen.dart';
+// The E18 curriculum: the ladder is routed (`AppRoutes.curriculumLadder`) and
+// pushes the rhythm screen; the rhythm screen is routed on its own too.
+import 'package:strumsight/features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
+import 'package:strumsight/features/curriculum/presentation/screens/rhythm_practice_screen.dart';
+import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/gamification/public.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
@@ -765,6 +799,484 @@ List<Override> _editProfileOverrides() => [
     _FakeCommunityProfileRepository(profile: null),
   ),
 ];
+
+// ── community, the E18-R19 routed surface ──────────────────────────────────
+// (test/ui/goldens/e13_r33_screens_golden_test.dart — bookmarks, followers,
+// following_feed, comments, gate fixtures; test/features/community/
+// presentation/clubs/club_list_screen_test.dart, community_notifications_
+// test.dart, leaderboard_screen_test.dart, screens/safety_relationships_
+// screen_test.dart — the overrides each screen's own widget test injects.)
+
+CommunityProfile _communityProfileFixture() => CommunityProfile(
+  userId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f60'),
+  handle: CommunityHandle('wolfcasaba'),
+  displayName: 'Wolf Casaba',
+  visibility: ProfileVisibility.followers,
+  avatarUrl: null,
+  bio: null,
+  skillInterests: const <String>[],
+  badges: const <String>[],
+  relationship: CommunityRelationshipToViewer.notRelated,
+  createdAt: DateTime.utc(2026, 8, 1),
+);
+
+Widget _bookmarksScreen() => const BookmarksScreen();
+List<Override> _bookmarksOverrides() => [
+  ...preferenceOverrides(),
+  bookmarksProvider.overrideWith(
+    (ref) => Stream.value(
+      BookmarksState(
+        rows: <BookmarkRow>[
+          BookmarkRow(
+            id: 1,
+            postId: ContentId('post-golden-1'),
+            createdAt: DateTime.utc(2026, 8, 20),
+            isTombstone: false,
+          ),
+          BookmarkRow(
+            id: 2,
+            postId: ContentId('post-golden-2'),
+            createdAt: DateTime.utc(2026, 8, 18),
+            isTombstone: true,
+          ),
+        ],
+        nextCursor: const CursorPage.haltedAfterRequest(),
+        isLoadingMore: false,
+        isRemoving: false,
+      ),
+    ),
+  ),
+];
+
+Widget _clubListScreen() => const ClubListScreen();
+List<Override> _clubListOverrides() => [
+  ...preferenceOverrides(),
+  communityClubRepositoryProvider.overrideWithValue(_FakeClubsRepository()),
+];
+
+final class _ScriptedCommentRepository implements CommunityPostRepository {
+  @override
+  Future<CommunityPage<CommunityComment>> comments({
+    required ContentId postId,
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<CommunityComment>(
+    items: <CommunityComment>[
+      CommunityComment(
+        id: ContentId('comment-golden-1'),
+        authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a30'),
+        postId: ContentId('post-golden-1'),
+        parentCommentId: null,
+        body: 'Szuper, gratulálok!',
+        createdAt: DateTime.utc(2026, 8, 23, 10),
+        moderationState: ModerationState.visible,
+      ),
+      CommunityComment(
+        id: ContentId('comment-golden-2'),
+        authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a31'),
+        postId: ContentId('post-golden-1'),
+        parentCommentId: null,
+        body: 'Ez a komment el lett távolítva moderálás miatt.',
+        createdAt: DateTime.utc(2026, 8, 23, 11),
+        moderationState: ModerationState.removed,
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<CommunityPost> createPost({
+    required CommunityAudience audience,
+    required String? body,
+    required Object artifact,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPost?> fetchPost({required ContentId postId}) =>
+      throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPost> updatePost({
+    required ContentId postId,
+    required String? body,
+    required CommunityAudience audience,
+    required Object resourceVersion,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> deletePost({
+    required ContentId postId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> setReaction({
+    required ContentId postId,
+    required Object? kind,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> setBookmark({
+    required ContentId postId,
+    required bool bookmarked,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityComment> createComment({
+    required ContentId postId,
+    required ContentId? parentCommentId,
+    required String body,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityComment> updateComment({
+    required ContentId commentId,
+    required String body,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> deleteComment({
+    required ContentId commentId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+Widget _commentsScreen() => CommentsScreen(postId: ContentId('post-golden-1'));
+List<Override> _commentsOverrides() => [
+  ...preferenceOverrides(),
+  communityPostRepositoryProvider.overrideWithValue(
+    _ScriptedCommentRepository(),
+  ),
+];
+
+// The gate reads the same account + profile providers the edit-profile
+// screen does (`_authOverrides` in e13_r33): signed in, no profile yet.
+Widget _communityGateScreen() => const CommunityGateScreen();
+List<Override> _communityGateOverrides() => _editProfileOverrides();
+
+final class _FakeNotificationRepository
+    implements CommunityNotificationRepository {
+  @override
+  Future<CommunityPage<CommunityNotificationItem>> inboxPage({
+    required Object cursor,
+    required int limit,
+  }) async => const CommunityPage<CommunityNotificationItem>(
+    items: <CommunityNotificationItem>[],
+    cursor: CursorPage.haltedAfterRequest(),
+  );
+  @override
+  Future<void> markRead({
+    required ContentId notificationId,
+    required String idempotencyKey,
+  }) async {}
+  @override
+  Future<void> markAllReadUpTo({
+    required ContentId upToId,
+    required String idempotencyKey,
+  }) async {}
+  @override
+  Future<Object> preferences() async => const <String, String>{};
+  @override
+  Future<void> updatePreference({
+    required String category,
+    required String level,
+    required String idempotencyKey,
+  }) async {}
+}
+
+Widget _communityNotificationsScreen() => const CommunityNotificationsScreen();
+List<Override> _communityNotificationsOverrides() => [
+  ...preferenceOverrides(),
+  communityNotificationRepositoryProvider.overrideWithValue(
+    _FakeNotificationRepository(),
+  ),
+];
+
+final class _FakeSocialGraphRepository implements SocialGraphRepository {
+  Future<CommunityPage<CommunityProfile>> _profilesPage() async {
+    return CommunityPage<CommunityProfile>(
+      items: <CommunityProfile>[
+        _communityProfileFixture(),
+        CommunityProfile(
+          userId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a20'),
+          handle: CommunityHandle('szitakoto'),
+          displayName: 'Szita Kóto',
+          visibility: ProfileVisibility.followers,
+          avatarUrl: null,
+          bio: null,
+          skillInterests: const <String>[],
+          badges: const <String>[],
+          relationship: CommunityRelationshipToViewer.notRelated,
+          createdAt: DateTime.utc(2026, 7, 15),
+        ),
+      ],
+      cursor: const CursorPage.haltedAfterRequest(),
+    );
+  }
+
+  @override
+  Future<CommunityPage<CommunityProfile>> followersPage({
+    required PublicUserId userId,
+    required Object cursor,
+  }) => _profilesPage();
+  @override
+  Future<CommunityPage<CommunityProfile>> followingPage({
+    required PublicUserId userId,
+    required Object cursor,
+  }) => _profilesPage();
+  @override
+  Future<CommunityPage<CommunityProfile>> blockedProfilesPage({
+    required Object cursor,
+  }) => _profilesPage();
+  @override
+  Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
+    required Object cursor,
+  }) => _profilesPage();
+  @override
+  Future<ContentId> follow({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> unfollow({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> removeFollower({
+    required PublicUserId follower,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> acceptFollowRequest({
+    required ContentId requestId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> declineFollowRequest({
+    required ContentId requestId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> block({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> unblock({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> mute({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> unmute({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+Widget _followersScreen() => FollowersScreen(
+  profileId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f60'),
+  mode: FollowersMode.followers,
+);
+List<Override> _followersOverrides() => [
+  ...preferenceOverrides(),
+  socialGraphRepositoryProvider.overrideWithValue(_FakeSocialGraphRepository()),
+];
+
+final class _FakeFeedRepository implements CommunityFeedRepository {
+  @override
+  Future<CommunityPage<CommunityPost>> followingFeed({
+    required Object cursor,
+    required int limit,
+  }) async {
+    final artifact = PracticeSummaryArtifact(
+      schemaVersion: shareArtifactSchemaVersion,
+      sourceId: 'sess-golden-1',
+      createdAt: DateTime.utc(2026, 8, 23, 12),
+      activeSeconds: 620,
+      pausedSeconds: 40,
+      attemptCount: 3,
+      finishReasonCode: 'userFinished',
+      bestScore: 0.82,
+      coachingCodes: const <String>['strongDownBeats'],
+    );
+    return CommunityPage<CommunityPost>(
+      items: <CommunityPost>[
+        CommunityPost(
+          id: ContentId('post-golden-1'),
+          authorId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a10'),
+          audience: CommunityAudience.followers,
+          body: 'Ma sikerült végre a barré akkordos váltás!',
+          artifact: artifact,
+          createdAt: DateTime.utc(2026, 8, 23, 9),
+          moderationState: ModerationState.visible,
+          counts: CommunityPostCounts(
+            reactionCount: 4,
+            commentCount: 2,
+            bookmarkCount: 1,
+          ),
+          viewerState: const CommunityViewerPostState.empty(),
+        ),
+      ],
+      cursor: const CursorPage.haltedAfterRequest(),
+    );
+  }
+
+  @override
+  Future<CommunityPage<CommunityPost>> profilePosts({
+    required PublicUserId userId,
+    required Object cursor,
+    required int limit,
+  }) => throw UnsupportedError('golden fixture');
+
+  @override
+  Future<CommunityPage<CommunityPost>> clubPinned({
+    required ContentId clubId,
+    required Object cursor,
+    required int limit,
+  }) => throw UnsupportedError('golden fixture');
+}
+
+Widget _followingFeedScreen() => const FollowingFeedScreen();
+List<Override> _followingFeedOverrides() => [
+  ...preferenceOverrides(),
+  communityFeedRepositoryProvider.overrideWithValue(_FakeFeedRepository()),
+  feedCacheProvider.overrideWithValue(
+    FeedCache.open(
+      store: InMemoryKeyValueStore(),
+      logger: const NoopAppLogger(),
+      userId: 1,
+    ),
+  ),
+];
+
+// `LeaderboardScreen` reads the `challenge_repository_impl.dart` provider
+// (NOT the same-named one in `challenge_controller.dart`) — measured from its
+// import list; overriding the other would be a silent no-op.
+final class _FakeLeaderboardRepository implements CommunityChallengeRepository {
+  @override
+  Future<CommunityPage<CommunityChallengeDefinition>> listChallenges({
+    required Object cursor,
+    required int limit,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityChallengeDefinition> fetchDefinition({
+    required ContentId challengeId,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityChallengeParticipantState?> fetchMyParticipation({
+    required ContentId challengeId,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> invite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> acceptInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> declineInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> cancelInvite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<void> submitResult({
+    required ContentId challengeId,
+    required int metricValue,
+    required String sourceEventId,
+    required String idempotencyKey,
+  }) => throw UnsupportedError('golden fixture');
+  @override
+  Future<CommunityPage<Object>> leaderboard({
+    required ContentId challengeId,
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<LeaderboardEntry>(
+    items: <LeaderboardEntry>[
+      LeaderboardEntry(
+        publicId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f60'),
+        rank: 1,
+        displayName: 'Wolf Casaba',
+        handle: '@wolfcasaba',
+        metricValue: 500,
+        submittedAt: DateTime.utc(2026, 8, 24),
+        verifiedBadge: true,
+      ),
+      LeaderboardEntry(
+        publicId: PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a20'),
+        rank: 2,
+        displayName: 'Szita Kóto',
+        handle: '@szitakoto',
+        metricValue: 420,
+        submittedAt: DateTime.utc(2026, 8, 24),
+        verifiedBadge: true,
+      ),
+    ],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+}
+
+Widget _leaderboardScreen() =>
+    LeaderboardScreen(challengeId: ContentId('golden-challenge-1'));
+List<Override> _leaderboardOverrides() => [
+  ...preferenceOverrides(),
+  communityChallengeRepositoryProvider.overrideWithValue(
+    _FakeLeaderboardRepository(),
+  ),
+];
+
+Widget _safetyRelationshipsScreen() => const SafetyRelationshipsScreen();
+List<Override> _safetyRelationshipsOverrides() => [
+  ...preferenceOverrides(),
+  socialGraphRepositoryProvider.overrideWithValue(_FakeSocialGraphRepository()),
+  communityProfileRepositoryProvider.overrideWithValue(
+    _FakeCommunityProfileRepository(profile: _communityProfileFixture()),
+  ),
+];
+
+// ── curriculum (test/features/curriculum/curriculum_ladder_screen_test.dart,
+//    test/features/curriculum/rhythm_practice_screen_test.dart) ─────────────
+// Both screens read the engine's `liveFrameProvider` stream plus the
+// preference store (calibration, metronome mute); the tests inject exactly
+// these two. The rhythm screen starts an unconditional Ticker in `initState`
+// (same class as StrumReelScreen) — the bounded three-frame pump covers it.
+
+LiveFrame _curriculumFrame() => LiveFrame(
+  current: null,
+  next: null,
+  latestStrum: null,
+  bar: const [],
+  bpm: 0,
+  inputLevel: 0.4,
+  tuningHz: 440,
+  listening: true,
+  engineTimeSec: 1.0,
+  latestStrumTime: -1,
+  strumSeq: 0,
+);
+
+List<Override> _curriculumOverrides() => [
+  ...preferenceOverrides(),
+  liveFrameProvider.overrideWith(
+    (ref) => Stream<LiveFrame>.value(_curriculumFrame()),
+  ),
+];
+
+Widget _curriculumLadderScreen() => const CurriculumLadderScreen();
+Widget _rhythmPracticeScreen() => const RhythmPracticeScreen();
 
 // ── gamification (test/ui/goldens/e13_r32_screens_golden_test.dart) ────────
 
@@ -2817,6 +3329,72 @@ final _screens = <String, _ScreenFixture>{
         'lib/features/community/presentation/screens/edit_profile_screen.dart',
     build: _editProfileScreen,
     overridesBuilder: _editProfileOverrides,
+  ),
+  'bookmarks': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/bookmarks_screen.dart',
+    build: _bookmarksScreen,
+    overridesBuilder: _bookmarksOverrides,
+  ),
+  'club_list': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/clubs/club_list_screen.dart',
+    build: _clubListScreen,
+    overridesBuilder: _clubListOverrides,
+  ),
+  'comments': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/comments_screen.dart',
+    build: _commentsScreen,
+    overridesBuilder: _commentsOverrides,
+  ),
+  'community_gate': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/community_gate_screen.dart',
+    build: _communityGateScreen,
+    overridesBuilder: _communityGateOverrides,
+  ),
+  'community_notifications': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/community_notifications_screen.dart',
+    build: _communityNotificationsScreen,
+    overridesBuilder: _communityNotificationsOverrides,
+  ),
+  'followers': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/followers_screen.dart',
+    build: _followersScreen,
+    overridesBuilder: _followersOverrides,
+  ),
+  'following_feed': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/following_feed_screen.dart',
+    build: _followingFeedScreen,
+    overridesBuilder: _followingFeedOverrides,
+  ),
+  'leaderboard': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/leaderboard_screen.dart',
+    build: _leaderboardScreen,
+    overridesBuilder: _leaderboardOverrides,
+  ),
+  'safety_relationships': _ScreenFixture(
+    screenPath:
+        'lib/features/community/presentation/screens/safety_relationships_screen.dart',
+    build: _safetyRelationshipsScreen,
+    overridesBuilder: _safetyRelationshipsOverrides,
+  ),
+  'curriculum_ladder': _ScreenFixture(
+    screenPath:
+        'lib/features/curriculum/presentation/screens/curriculum_ladder_screen.dart',
+    build: _curriculumLadderScreen,
+    overridesBuilder: _curriculumOverrides,
+  ),
+  'rhythm_practice': _ScreenFixture(
+    screenPath:
+        'lib/features/curriculum/presentation/screens/rhythm_practice_screen.dart',
+    build: _rhythmPracticeScreen,
+    overridesBuilder: _curriculumOverrides,
   ),
   'achievements': _ScreenFixture(
     screenPath:

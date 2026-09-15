@@ -8,8 +8,9 @@ Ez a dokumentum a kör MÉRT eredményét rögzíti: (1) a placeholder-mérő
 (`test/e2e/full_app_walkthrough_test.dart`) által talált, **NEM javított**
 leletek (§5.2 — a `lib/**` ennek a körnek tiltott zónája; L1/L2 azóta
 `E16-R06`-ban feloldva, l. §2), és (3) a mért
-elérhető képernyő-halmaz (73) diszjunkt, teljes partíciója a bejárt (9) és a
-kimaradó (64) képernyők között, gazdával és körrel.
+elérhető képernyő-halmaz (85) diszjunkt, teljes partíciója a bejárt (11) és a
+kimaradó (74) képernyők között, gazdával és körrel (§3 — a partíció
+2026-09-15-én újravágva, l. ott).
 
 ## 1. Placeholder-mérő — mért eredmény
 
@@ -177,9 +178,21 @@ el, a javítást a felelős feature körök öröklik.**
 ## 3. A mért elérhető halmaz partíciója (A4/A5)
 
 `dart run tool/check_screen_reachability.dart --format table` →
-**Measured screens: 96. Reachable: 73. Unreachable: 23. Flag-gated: 27.**
+**Measured screens: 98. Reachable: 85. Unreachable: 13. Flag-gated: 28.**
 
-### 3.1 Bejárt halmaz (9) — a `full_app_walkthrough_test.dart` FUTÁSÁBÓL
+> **Újravágva 2026-09-15** (a kör eredeti, 2026-09-04-i mérése: 96 / 73 / 23 /
+> 27, bejárt 9 + kimaradó 64). Azóta három kör bővítette a mért elérhető
+> halmazt anélkül, hogy ez a partíció követte volna: `E17-R01` a first-win
+> állomást (`FirstWinStageScreen`) tette a bejárás részévé, az E18 curriculum-
+> körök a létrát (`CurriculumLadderScreen`, bejárt) és a ritmus-gyakorlást
+> (`RhythmPracticeScreen`, kimaradó) kötötték be, `E18-R19` pedig a Community-
+> felület kilenc képernyőjét routolta a `CommunityGateScreen` kapu mögé
+> (kimaradó). A számok a `tool/check_screen_reachability.dart` szabályaival
+> (osztálynév-említés a routing-forrásokban, illetve `Osztály(` konstrukció a
+> `lib/**`-ban) újraszámolva; a `placeholder_wiring_test.dart` A4/A5 cellája
+> a bejárást FUTTATVA ellenőrzi ugyanezt.
+
+### 3.1 Bejárt halmaz (11) — a `full_app_walkthrough_test.dart` FUTÁSÁBÓL
 
 A `runCoreWalkthrough` által ténylegesen felépített (és `find.byType`-pal
 megfigyelt) képernyő-osztályok:
@@ -187,16 +200,18 @@ megfigyelt) képernyő-osztályok:
 | # | Screen (mért osztály) | Forrás-útvonal |
 |---|---|---|
 | 1 | `OnboardingScreen` | `lib/features/onboarding/screens/onboarding_screen.dart` |
-| 2 | `TodayHubScreen` | `lib/features/today/screens/today_hub_screen.dart` |
-| 3 | `PracticeAreaHubScreen` | `lib/features/practice_hub/screens/practice_area_hub_screen.dart` |
-| 4 | `PracticeSetupScreen` | `lib/features/practice/presentation/screens/practice_setup_screen.dart` |
-| 5 | `PracticeSessionScreen` | `lib/features/practice/presentation/screens/practice_session_screen.dart` |
-| 6 | `UnifiedLibraryScreen` | `lib/features/library_v2/screens/unified_library_screen.dart` |
-| 7 | `ProgressDashboardScreen` | `lib/features/progress_v2/screens/progress_dashboard_screen.dart` |
-| 8 | `ProfileHubScreen` | `lib/features/profile_hub/screens/profile_hub_screen.dart` |
-| 9 | `SettingsScreen` | `lib/features/settings/screens/settings_screen.dart` |
+| 2 | `FirstWinStageScreen` | `lib/features/onboarding/screens/first_win_stage_screen.dart` |
+| 3 | `TodayHubScreen` | `lib/features/today/screens/today_hub_screen.dart` |
+| 4 | `CurriculumLadderScreen` | `lib/features/curriculum/presentation/screens/curriculum_ladder_screen.dart` |
+| 5 | `PracticeAreaHubScreen` | `lib/features/practice_hub/screens/practice_area_hub_screen.dart` |
+| 6 | `PracticeSetupScreen` | `lib/features/practice/presentation/screens/practice_setup_screen.dart` |
+| 7 | `PracticeSessionScreen` | `lib/features/practice/presentation/screens/practice_session_screen.dart` |
+| 8 | `UnifiedLibraryScreen` | `lib/features/library_v2/screens/unified_library_screen.dart` |
+| 9 | `ProgressDashboardScreen` | `lib/features/progress_v2/screens/progress_dashboard_screen.dart` |
+| 10 | `ProfileHubScreen` | `lib/features/profile_hub/screens/profile_hub_screen.dart` |
+| 11 | `SettingsScreen` | `lib/features/settings/screens/settings_screen.dart` |
 
-### 3.2 Kimaradó halmaz (64) — gazdával és körrel
+### 3.2 Kimaradó halmaz (74) — gazdával és körrel
 
 | Screen | Indok | Gazda | Kör |
 | --- | --- | --- | --- |
@@ -213,8 +228,18 @@ megfigyelt) képernyő-osztályok:
 | `lib/features/audio_analysis/presentation/analysis_timeline_screen.dart` | Az Audio Analysis V2 capability-csoport (9 flag) KI besorolású — shadow rollout, Epic 6 release-blokkolók nyitva. | Audio Analysis V2 (Epic 6) | nincs — Epic 6 release-blokkolók feloldása (docs/sdd/epic-06-completion-report.md) |
 | `lib/features/auth/screens/login_screen.dart` | `accountEnabled=false` ebben az összeállításban (a kör a szállított `FeatureFlags.forEnvironment(development, accountEnabled: false)` értéket használja) — a Profile Hub emiatt csak a helyi-only szöveget mutatja, Sign-in CTA nélkül; a bejárás a bejelentkezés NÉLKÜLI utat méri. | Auth feature | nincs — accountEnabled=false ebben az összeállításban, nincs hosztolt backend-döntés |
 | `lib/features/chords/screens/chord_library_screen.dart` | A Practice Area Hub Quick Tools egy érintéssel elérhető gombjai (`practice_area_hub_screen.dart`) — a kör mag-útja (§1) nem nevezi meg őket, saját adat-bekötésüket a `hub_navigation_test.dart` A2 cellája már méri. | Practice feature (quick tools) | E13-R17 |
+| `lib/features/community/presentation/screens/bookmarks_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community/bookmarks`, az `if (communityEnabled)` blokkban) a `CommunityGateScreen` kapu mögé. A bejárás mag-útja (§3.1) offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatja, ezért a könyvjelző-lista valós érintéssel nem érhető el az offline bejárásban — a saját adat-bekötését (a `bookmarksProvider` állapot-vetítése, tombstone-sorral) a `test/ui/goldens/e13_r33_screens_golden_test.dart` bookmarks-cellája és ennek a körnek a variáns-mátrixa (`e15_r13_full_variant_matrix_test.dart`) méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
+| `lib/features/community/presentation/screens/clubs/club_list_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community/clubs`, az `if (communityEnabled)` blokkon belül külön `if (communityClubsEnabled)` alatt) a `CommunityGateScreen` kapu mögé. A bejárás mag-útja (§3.1) offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatja, ezért a klublista valós érintéssel nem érhető el az offline bejárásban — a saját adat-bekötését (üres/lista/hiba ág, listClubs kurzor+limit) a `test/features/community/presentation/clubs/club_list_screen_test.dart` méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
 | `lib/features/community/presentation/screens/clubs/club_member_management_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/comments_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community/comments/:postId`, az `if (communityEnabled)` blokkban) a `CommunityGateScreen` kapu mögé. A bejárás mag-útja (§3.1) offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatja, és poszt sincs, amihez komment-lap nyílhatna, ezért valós érintéssel nem érhető el az offline bejárásban — a saját adat-bekötését (optimista temp-ID csere, hiba-visszagörgetés, Send-gomb állapot) a `test/features/community/presentation/comments_screen_test.dart` méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
+| `lib/features/community/presentation/screens/community_gate_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community`, az `if (communityEnabled)` blokk ELSŐ útvonala) mint a Community-felület KAPUJÁT — minden, a felületre mutató link ide vezet. A bejárás mag-útja (§3.1) nem nevez meg Community-állomást, és offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatná, mögé érintéssel nem lehet jutni, ezért a mag-út nem nyitja meg — a kapu saját állapot-bekötését (letiltott / profil-hiányzó / kész ág, implicit profil-létrehozás tilalma) a `test/features/community/presentation/community_gate_test.dart` és a `test/features/community/community_gate_test.dart` méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
+| `lib/features/community/presentation/screens/community_notifications_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community/notifications`, az `if (communityEnabled)` blokkban) a `CommunityGateScreen` kapu mögé. A bejárás mag-útja (§3.1) offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatja, ezért az értesítés-inbox valós érintéssel nem érhető el az offline bejárásban — a saját adat-bekötését (kategóriánkénti push-preferencia, markRead, üres inbox) a `test/features/community/presentation/community_notifications_test.dart` és a mélylink-kezelést a `test/features/community/notification_deeplink_test.dart` méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
 | `lib/features/community/presentation/screens/edit_profile_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/followers_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community/followers/:profileId` és `/community/following/:profileId`, az `if (communityEnabled)` blokkban) a `CommunityGateScreen` kapu mögé. A bejárás mag-útja (§3.1) offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatja, és profil sincs, aminek a követőit meg lehetne nyitni, ezért valós érintéssel nem érhető el az offline bejárásban — a saját adat-bekötését (követő/követett lista, block/mute műveletek) a `test/features/community/block_mute_test.dart` és a `test/ui/goldens/e13_r33_screens_golden_test.dart` followers-cellája méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
+| `lib/features/community/presentation/screens/following_feed_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community/feed`, az `if (communityEnabled)` blokkban) a `CommunityGateScreen` kapu mögé. A bejárás mag-útja (§3.1) offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatja, ezért a követett-feed valós érintéssel nem érhető el az offline bejárásban — a saját adat-bekötését (hálózati hiba → hiba-állapot, felhasználónkénti cache, nincs auto-lapozás, duplikátum-szűrés, ismeretlen artifact → fallback kártya, feed vége, pull-to-refresh) a `test/features/community/presentation/following_feed_test.dart` méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
+| `lib/features/community/presentation/screens/leaderboard_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community/leaderboards/:challengeId`, az `if (communityEnabled)` blokkon belül külön `if (communityLeaderboardEnabled)` alatt) a `CommunityGateScreen` kapu mögé. A bejárás mag-útja (§3.1) offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatja, és kihívás-lista sincs routolva, amiből ranglista nyílna, ezért valós érintéssel nem érhető el az offline bejárásban — a saját adat-bekötését (üres/lista/hiba ág, verified-jelvény, 2× szövegméret, kurzor+limit) a `test/features/community/presentation/leaderboard_screen_test.dart` méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
+| `lib/features/community/presentation/screens/safety_relationships_screen.dart` | Az E18-R19 kör kötötte be a routerbe (`app_router.dart`, `/community/safety`, az `if (communityEnabled)` blokkban) a `CommunityGateScreen` kapu mögé. A bejárás mag-útja (§3.1) offline, hosztolt-backend munkamenet nélkül fut: a kapu ilyenkor a kizárt (bejelentkezés nélküli) állapotát mutatja, ezért a blokkolt/némított lista valós érintéssel nem érhető el az offline bejárásban — a saját adat-bekötését (Blocked/Muted fül, Unblock/Unmute optimista eltávolítás, üres állapot) a `test/features/community/presentation/screens/safety_relationships_screen_test.dart` méri. | Community feature (Epic 9) | nincs — a Community walkthrough-fedés a hosztolt backend community_enabled bekapcsolása (E17-R13) után értelmes |
+| `lib/features/curriculum/presentation/screens/rhythm_practice_screen.dart` | A bejárt `CurriculumLadderScreen` (§3.1, 4. állomás) nyitja `Navigator.push`-sal (`curriculum_ladder_screen.dart`), és a `/curriculum/rhythm` útvonalon is regisztrált. A létra be van járva, de a rung→gyakorlás érintéshez ritmus-feladattal rendelkező, NYITOTT rung és mikrofon-alapú munkamenet (`liveFrameProvider` engine-óra) kell — az offline bejárás ezt nem adja, a mag-út a létra-állomás jelenlétét és szövegét méri, nem a gyakorlás megnyitását. A saját bekötését a `test/features/curriculum/rhythm_practice_screen_test.dart` (csak megerősített akkord zöldül, engine-óra, count-in, kalibrálatlan eszköz, rögzített kísérlet, ear-rung) és a `test/features/curriculum/curriculum_ladder_screen_test.dart` („an open rung opens THAT mission") méri. | Curriculum feature (E18) | nincs — a rung→gyakorlás tap bejárás-fedése a valós-gitáros alapvonal (E18-R05) után |
 | `lib/features/gamification/presentation/screens/achievement_detail_screen.dart` | Elérhető a Profile Hub „achievements” gombjából (két érintésen belül), de a kör mag-útja (§1) a névvel megnevezett Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be — a gamification-alrendszer saját köre (E08-R30) tesztjei már mérik az adat-bekötést. | Gamification feature (Epic 8) | E08-R30 |
 | `lib/features/gamification/presentation/screens/achievements_screen.dart` | Elérhető a Profile Hub „achievements” gombjából (két érintésen belül), de a kör mag-útja (§1) a névvel megnevezett Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be — a gamification-alrendszer saját köre (E08-R30) tesztjei már mérik az adat-bekötést. | Gamification feature (Epic 8) | E08-R30 |
 | `lib/features/gamification/presentation/screens/gamification_hub_screen.dart` | Elérhető a Profile Hub „achievements” gombjából (két érintésen belül), de a kör mag-útja (§1) a névvel megnevezett Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be — a gamification-alrendszer saját köre (E08-R30) tesztjei már mérik az adat-bekötést. | Gamification feature (Epic 8) | E08-R30 |
@@ -265,7 +290,7 @@ megfigyelt) képernyő-osztályok:
 | `lib/features/vision/presentation/screens/vision_session_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
 | `lib/features/vision/presentation/screens/vision_setup_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
 
-**Összegzés:** 9 (bejárt) + 64 (kimaradó) = 73 (mért elérhető) — a két
+**Összegzés:** 11 (bejárt) + 74 (kimaradó) = 85 (mért elérhető) — a két
 halmaz diszjunkt (egyik screen sem szerepel mindkettőben) és uniójuk
 pontosan lefedi a mért elérhető halmazt. Egyik kimaradó sor sem üres
 `Indok`/`Gazda`/`Kör` cellával; minden `Kör` érték `E\d+-R\d+` alakú vagy
