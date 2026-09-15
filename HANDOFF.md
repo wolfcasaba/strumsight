@@ -1,5 +1,65 @@
 # HANDOFF — StrumSight 🎸
 
+## 🟡 E18-R23 — AZ E18 ÁG CI-ZÖLDÍTÉSE + A 60 MÁSODPERCES PENGETÉS-KIHÍVÁS — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
+
+**User-kérés:** „autonóm módon menj az agent csapatoddal… úgy készítsd el az
+appot, hogy mindenkinek tetsszen, végezz kutatást, tervezz, fejlessz gyorsan;
+a CI-t csak nagyobb résznél használd; te vagy a főnök." A tulajdonos NEM
+fejlesztő — minden javaslat laikus indoklással (CLAUDE.md, új szakasz).
+
+**Kiindulás (mért):** a `main` (`1ae9e55`, E17-R01) mögött 122 commitnyi, be nem
+olvasztott E18-munka állt a `claude/e18-r06-verify-followup` ágon (R01–R22:
+emulátor-javítások, tanterv-létra, ritmus-pillér, napi hurok, közösségi
+route-ok, hosztolt backend). Ez az ág PIROS volt a CI-ban (`build-apk`
+34743093520: 5 bukó teszt; a `MINIMAX_START_HERE.md` §5b négy nyitott őrt
+nevezett meg). **Döntés:** erre az ágra épülünk tovább, nem a `main`-re; a
+munkaág az E18 fejéről (`f66a512`) indul.
+
+**Piaci kutatás:** [`docs/research/guitar-app-appeal-2026-09.md`](docs/research/guitar-app-appeal-2026-09.md)
+— 12 szeretett minta, 6 kerülendő panasz, 5 ajánlás; ebből kettő ebben a
+körben leszállítva (pengetés-kihívás, adatvédelmi ígéret).
+
+### Ami elkészült (commitok az ágon, mind pusholva)
+
+| Commit | Mit ad |
+|---|---|
+| `976db82`, `13f18fa` | **Őr 3 javítva:** a router a 9 közösségi képernyőt a `community/public.dart` barrelen át éri el (explicit `show` lista, +`FollowersMode`); a barrel exportálja a routolt képernyőket. |
+| `c590a6d` | **Őr 2 + 5 javítva:** a §3.2 kizárási tábla 10 új sora (9 community + `rhythm_practice`, indokkal, gazdával, `nincs — …` körrel) és 11 új `_ScreenFixture` az e15_r13 mátrixban (a `curriculum_ladder` is hiányzott). Döntés: a community walkthrough-fedés a backend `community_enabled` bekapcsolása után értelmes. |
+| `55746a1` | **12 mért nagybetűs (2.0×) túlcsordulás javítva a lib-ben** (nem cella-kizárással): community gate (görgethető), értesítés-beállítások (≥1.5× egymás alá), safety-lista (akció a sor alá), ritmus-gyakorlás (transport `Wrap`). Mind a négy képernyő kapott 2.0×/hu regressziós cellát. |
+| `6e17a96` | **ÚJ funkció: 60 másodperces pengetés-kihívás** (`lib/features/strum_challenge/`, `/practice/strum-challenge` stage-route, Today hub kártya, napi legjobb `ss.strum_challenge.best`, 20 teszt-cella, l10n szegmens). |
+| (folyamatban) | Today hub „Alapból privát" kártya (nincs fiók / offline / nincs reklám / a hang nem hagyja el a telefont). |
+
+### CI-állás (full-gate, a saját tail-korlát-kerülő diagnosztikával mérve)
+
+- 2. futás (`13f18fa`): 10816 ✅ / **3** ❌ → placeholder A4, e15 A1, e13_r17 golden.
+- 3. futás (`648ec1c`, őrök után): 10982 ✅ / **13** ❌ → 1 golden + 12 valódi
+  túlcsordulás (a szelet-ág `claude/diag-guards-slice` listázta ki őket).
+- 4. futás (`55746a1`, túlcsordulások után): 10996 ✅ / **3** ❌ → CSAK goldenek.
+- 5. futás (`6e17a96`, kihívás): folyamatban — ld. lentebb a jelen állást.
+
+**Goldenek, amiket x86-on ÚJRA KELL VENNI (a diff szándékos, mért):**
+`e13_r17` practice area hub compact (E18 feature-drift), `e13_r17` today hub
+compact + `_scale2` (új kártyák), `e13_r34` notifications és safety
+`_compact_scale2` (a ≥1.5× egymás-alá-rendezés). A távoli konténerből NEM
+vehetők fel: az artefaktum-letöltés, a log-zip és a blob-host is proxy-403;
+a `record-goldens.yml` felvevő-workflow hozzáadását a mérce-őr (H-GATEGUARD
+marker) engedély nélkül nem engedi. **A kész workflow-vázlat a session
+scratchpadjában készült; a tulajdonos döntése: (a) engedélyezi a workflow
+hozzáadását, vagy (b) a saját boxán `tools/golden-x86.sh record …` (docker).**
+
+**Takarítás a user boxáról:** `git push origin --delete claude/diag-guards-slice`
+(a proxy a távoli törlést elutasította, mint az E18-R01 négy szelet-ágánál).
+
+### KÖVETKEZŐ
+
+1. Goldenek felvétele (fent) → full-gate ZÖLD → `build-apk.yml` → APK-evidencia.
+2. Az ág squash-merge-e a `main`-re (E18 sáv R01–R23 egyben; PR a tulajdonos
+   jóváhagyásával, mert 130+ commit).
+3. Kutatás 1. és 5. ajánlása: 90 mp-es first-win forgatókönyv; adaptív rövid
+   ülés + heti edzői kártya.
+4. `MINIMAX_START_HERE.md` §5b elavult (az őrök zöldek) — frissítendő.
+
+
 ## 🟢 E18-R22 — A MÉRÉS KOMMENTET OLVASOTT: egy szándékosan nem route-olt képernyő „elérhető" volt — branch `claude/e18-r06-verify-followup` (2026-09-12)
 
 **Hogyan jött.** A fül-rung köre után lefuttattam pár szomszédos tooling-tesztet, és a
