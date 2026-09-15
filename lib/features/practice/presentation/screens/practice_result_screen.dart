@@ -357,17 +357,49 @@ class _RewardSection extends StatelessWidget {
 /// named and explained, as a Setup launch correctly parameterized by its
 /// definition id — never a text-only suggestion. "Practice again" stays as
 /// the secondary action when the recommendation is a different definition.
-class _NextStepAction extends ConsumerWidget {
+class _NextStepAction extends ConsumerStatefulWidget {
   const _NextStepAction({required this.entry});
   final PracticeHistoryEntry entry;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_NextStepAction> createState() => _NextStepActionState();
+}
+
+class _NextStepActionState extends ConsumerState<_NextStepAction> {
+  /// The persisted history, loaded AFTER the first frame. Watching the
+  /// history future provider from build made its (re)initialisation land
+  /// inside the build phase when the enclosing scope's overrides changed
+  /// (measured: the A1.5 200 % audit cell), which Riverpod rejects. Until
+  /// it arrives the action row is not rendered — a one-frame gap, never a
+  /// recommendation that flips after the fact.
+  List<PracticeHistoryEntry>? _history;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(practiceHistoryV2ListProvider.future)
+          .then<List<PracticeHistoryEntry>>(
+            (list) => list,
+            onError: (_) => const <PracticeHistoryEntry>[],
+          )
+          .then((list) {
+            if (mounted) setState(() => _history = list);
+          });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final history = _history;
+    if (history == null) return const SizedBox.shrink();
+    final entry = widget.entry;
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
     final catalog = ref.watch(practiceCatalogProvider);
-    final history = ref.watch(practiceHistoryV2ListProvider).value ?? const [];
     final recommendation = recommendNextPractice(
       catalog: catalog,
       history: history,
