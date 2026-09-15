@@ -22,8 +22,15 @@ abstract interface class OnboardingFirstWinEngine {
 /// per-attempt confidence stream (`LiveFrame.confidence`,
 /// `lib/features/live/model/live_frame.dart:83`). Errors on the underlying
 /// frame stream (denied permission, busy mic, motor failure) pass through
-/// unchanged — `Stream.map` forwards error events — so the Stage's
-/// `AsyncValue` sees them too (D5).
+/// unchanged — `Stream.where`/`Stream.map` forward error events — so the
+/// Stage's `AsyncValue` sees them too (D5).
+///
+/// Only frames that carry a strum (`LiveFrame.latestStrum != null`) count as
+/// an ATTEMPT. The engine emits a frame on every hop, and a silent frame's
+/// confidence is `0.0` — without this filter the very first silent frame
+/// after the mic opens would flip the Stage to "we couldn't hear that
+/// clearly" before the learner has strummed once. Silence is "still
+/// listening", not a failed attempt.
 ///
 /// [start]/[stop] delegate straight to the wrapped [StrumEngine] without
 /// disposing it: the engine instance is shared with the Live feature
@@ -38,8 +45,9 @@ class LiveFirstWinEngine implements OnboardingFirstWinEngine {
   bool _started = false;
 
   @override
-  Stream<double> get confidence =>
-      _engine.frames.map((LiveFrame frame) => frame.confidence);
+  Stream<double> get confidence => _engine.frames
+      .where((LiveFrame frame) => frame.latestStrum != null)
+      .map((LiveFrame frame) => frame.confidence);
 
   @override
   void start() {

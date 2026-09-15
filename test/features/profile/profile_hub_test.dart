@@ -118,14 +118,18 @@ void main() {
   });
 
   group('Community section reflects the real rollout flag (§5.6 spirit)', () {
-    testWidgets('community disabled: names the reason', (tester) async {
+    testWidgets('community disabled: the section is not rendered at all — '
+        'a heading over "not available" promises what cannot be opened', (
+      tester,
+    ) async {
       await tester.pumpWidget(_host(communityEnabled: false));
       await tester.pump();
 
       expect(
         find.text("Community features aren't available in this build yet."),
-        findsOneWidget,
+        findsNothing,
       );
+      expect(find.text('Community'), findsNothing);
     });
 
     testWidgets('community enabled: shows the enabled message instead', (

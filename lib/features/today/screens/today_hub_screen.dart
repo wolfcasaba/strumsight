@@ -123,12 +123,19 @@ class TodayHubScreen extends ConsumerWidget {
               onPressed: () => context.go(AppRoutes.profileProgress),
               child: Text(l10n.todayHubViewProgressCta),
             ),
-            const SizedBox(height: 20),
-            _VisionCard(
-              l10n: l10n,
-              visionEnabled: flags.visionEnabled,
-              visionSetupEnabled: flags.visionSetupEnabled,
-            ),
+            // A card whose only content is "not available in this build" is
+            // an advertisement for a feature the learner cannot use — it is
+            // not rendered at all while the Vision capability is off. The
+            // disabled-reason copy stays on the card for the flag-on-but-
+            // setup-off case (A7).
+            if (flags.visionEnabled) ...[
+              const SizedBox(height: 20),
+              _VisionCard(
+                l10n: l10n,
+                visionEnabled: flags.visionEnabled,
+                visionSetupEnabled: flags.visionSetupEnabled,
+              ),
+            ],
           ],
         ),
       ),

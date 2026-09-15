@@ -3209,5 +3209,44 @@
   "libraryV2SyncConflictMessage": "Ez a tétel két helyen is megváltozott. Válaszd ki, melyik verziót tartod meg — a másik elvész.",
   "libraryV2SyncConflictLocalLabel": "Ezen az eszközön",
   "libraryV2SyncConflictRemoteLabel": "A felhőben",
-  "libraryV2SyncConflictKeepThis": "Ezt tartom meg"
+  "libraryV2SyncConflictKeepThis": "Ezt tartom meg",
+  "practiceAreaHubCourseTitle": "Vezetett tanfolyam",
+  "practiceAreaHubCourseMessage": "Rövid leckék az első akkordtól a teljes dalokig — mindegyik megmondja, mit old fel. Ha most kezded, itt indulj.",
+  "practiceAreaHubDifficultyBeginner": "Kezdő",
+  "practiceAreaHubDifficultyIntermediate": "Középhaladó",
+  "practiceAreaHubDifficultyAdvanced": "Haladó",
+  "settingsAdvanced": "Haladó beállítások",
+  "settingsAdvancedHint": "Felismerés-finomhangolás. Az alapértékek a legtöbb gitárhoz jók — csak akkor nyúlj hozzá, ha a felismerés rendre elvéti.",
+  "liveSummaryTitle": "Szép munka!",
+  "liveSummaryStrums": "{count} pengetés",
+  "@liveSummaryStrums": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryChords": "{count} különböző akkord",
+  "@liveSummaryChords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryDuration": "{minutes} perc {seconds} mp",
+  "@liveSummaryDuration": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryTipShort": "Rövid volt. Legközelebb játssz kicsit tovább — a felismerés pár pengetés után áll be.",
+  "liveSummaryTipCourse": "Jöhet egy cél? A vezetett tanfolyam megadja a következő megtanulandó akkordot.",
+  "liveSummaryOpenCourse": "Tanfolyam megnyitása",
+  "liveSummaryDone": "Kész"
 }

@@ -75,15 +75,18 @@ class ProfileHubScreen extends ConsumerWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
-            const SizedBox(height: 24),
-            _SectionLabel(l10n.profileHubCommunitySectionTitle),
-            const SizedBox(height: 8),
-            Text(
-              communityEnabled
-                  ? l10n.profileHubCommunityEnabledMessage
-                  : l10n.profileHubCommunityDisabledReason,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            // A section whose only content is "not available in this build"
+            // promises something the learner cannot open — it is not
+            // rendered while the Community capability is off.
+            if (communityEnabled) ...[
+              const SizedBox(height: 24),
+              _SectionLabel(l10n.profileHubCommunitySectionTitle),
+              const SizedBox(height: 8),
+              Text(
+                l10n.profileHubCommunityEnabledMessage,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: () => context.go(AppRoutes.profileLibrary),

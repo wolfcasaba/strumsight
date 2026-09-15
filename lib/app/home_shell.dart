@@ -158,7 +158,7 @@ class AdaptiveHomeShell extends StatelessWidget {
         SsAdaptiveDestination(
           icon: const Icon(Icons.person_outline),
           selectedIcon: const Icon(Icons.person),
-          label: l10n.tutorProfileTitle,
+          label: l10n.profileHubTitle,
         ),
       ],
     );

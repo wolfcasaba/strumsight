@@ -1,5 +1,39 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔁 FOLYAMATBAN — tanulói hurok-javítás (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+A felhasználó kérése: az SDD-tervek átnézése után „a tanulónak tényleg élmény
+legyen" — az audit szerint a KÓD minősége nem a gond, hanem a szállított
+kompozíció zsákutcái és ígéretei. Ez az ág a mért zsákutcákat zárja, ÚJ
+funkció nélkül (mind kompozíció):
+
+| # | Mért lelet | Javítás | Fájl |
+|---|---|---|---|
+| 1 | A First-Win Stage a mikrofon első CSENDES frame-jére (`LiveFrame.confidence == 0`) azonnal „nem hallottuk tisztán"-t mutatott, a játék ELŐTT | csak `latestStrum != null` frame számít próbálkozásnak; A11 csend-cellák | `lib/features/onboarding/first_win_engine.dart`, `test/features/onboarding/first_win_production_engine_test.dart` |
+| 2 | A Gyakorló hub 5 „Böngészés cél szerint" chipje `?id=` nélkül nyitotta a Setupot → „Gyakorlat nem elérhető" hibaképernyő | a katalógus célcsoportokra bontva (a definíció módja/skillTags-e szerint), minden csempe `?id=`-vel; üres csoport nem renderelődik; + „Vezetett tanfolyam" kártya (`/practice/learn`) és Song Trainer gyors-eszköz (flag mögött) | `lib/features/practice_hub/practice_area_hub_categories.dart` (ÚJ), `.../practice_area_hub_screen.dart`, `test/features/practice_hub/practice_area_hub_categories_test.dart` (ÚJ) |
+| 3 | A gyakorlás-eredmény „+XP" kártyája MINDIG „még nincs rögzített jutalom" volt (`_NoopRewardLedgerRepository`, a `GamificationPracticeAdapter` sehol nincs példányosítva) | a kártya csak valódi főkönyvi bejegyzésnél renderelődik; a VALÓDI bekötés külön kör (E08-R29 integritás-hold után) | `lib/features/practice/presentation/screens/practice_result_screen.dart`, `test/features/practice/reward_idempotency_test.dart` |
+| 4 | Flag-KI kártyák a fő felületeken („Vizuális gyakorlás" a Ma-hubon, „Közösség" a Profilon), tartalmuk csak „nem elérhető" | a kártya/szekció flag-KI állapotban nem renderelődik | `today_hub_screen.dart`, `profile_hub_screen.dart` + tesztjeik |
+| 5 | Élő „Befejezés" → Ma, összegzés nélkül | pengetéses session után `LiveSummaryDialog` (pengetés, akkordszám, idő, egy következő lépés; ≥8 pengetésnél „Tanfolyam megnyitása"); 0 pengetésnél változatlan azonnali kilépés | `lib/features/live/widgets/live_summary_dialog.dart` (ÚJ), `live_screen.dart`, `test/features/live/live_summary_test.dart` (ÚJ) |
+| 6 | Profil fül címkéje `tutorProfileTitle` („Tutor profil"); „Bizonyossági küszöb" csúszka a Beállítások első képernyőjén | `profileHubTitle`; a csúszka összecsukott „Haladó beállítások" `ExpansionTile` alá | `lib/app/home_shell.dart`, `settings_screen.dart` |
+| — | 15 új ARB-kulcs a `base/` FORRÁS szegmensben, aggregátum generálva (ADR 0307 §4, a generátor Python-tükrével — bájtra azonos a Dart-kimenettel a módosítás előtti fán mérve) | | `lib/l10n/base/app_{en,hu}.arb`, `lib/l10n/app_{en,hu}.arb` |
+
+**Ami ebben a sessionben NEM futott (remote konténer, nincs Flutter SDK —
+`docs/execution/remote-container-environment.md`):** `dart format`, `flutter
+analyze`, `flutter test`. A bizonyíték a CI-futás lesz (`build-apk.yml` a fenti
+ágon), utána a pirosak javítása.
+
+**Előre ismert piros:** a pixel-goldenek 5 képernyőn (e13_r17 practice_area_hub /
+today_hub / profile_hub, e13_r22 practice_result, e13_r35 settings — 10 PNG)
+SZÁNDÉKOSAN változnak. Újrafelvételük a `tools/golden-x86.sh record` a
+felhasználó boxán (ADR 0426), VAGY egy `golden-record.yml` workflow — ez
+utóbbit a `protect_factory_files` hook helyesen blokkolta (`.github/workflows/*`
+a mérce része, ADR 0112/0138); emberi engedély nélkül nem került be.
+
+**Nyitva marad (külön kör):** valódi XP-főkönyv bekötés; a „Dalkönyvtár" fül
+V2-re váltása; egy haladás-modell (progress V1/V2/gamification); a Ch14 R20–R42
+felismerési sáv; valós gitáros APK-teszt jegyzőkönyve.
+
+
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 
 A Chapter 17 (Teljes bekötés) **első köre**: a `FirstWinStageScreen` eddig

@@ -119,14 +119,16 @@ void main() {
     },
   );
 
-  testWidgets('no ledger entry for this session renders "no reward" — never an '
-      'estimated number', (tester) async {
+  testWidgets('no ledger entry for this session renders NO reward card — '
+      'neither an estimated number nor an empty promise', (tester) async {
     final entry = _entry('session-2');
     final ledger = _FakeRewardLedgerRepository();
 
     await pumpResult(tester, entry, ledger);
 
-    expect(find.text(l10n().practiceResultRewardNone), findsOneWidget);
+    expect(find.text(l10n().practiceResultRewardNone), findsNothing);
+    expect(find.text(l10n().practiceResultRewardTitle), findsNothing);
+    expect(find.textContaining(' XP'), findsNothing);
     expect(ledger.appendCallCount, 0);
   });
 

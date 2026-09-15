@@ -4,6 +4,7 @@ import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../gamification/public.dart' show RewardLedgerEntry;
 import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_insight.dart';
 import '../../domain/model/practice_metric_snapshot.dart';
@@ -59,6 +60,7 @@ class PracticeResultScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final mode = _modeFor(entry.modeCode);
+    final reward = ref.watch(practiceRewardForSessionProvider(entry.id));
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceResultTitle)),
       body: SafeArea(
@@ -74,8 +76,15 @@ class PracticeResultScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _InsightSection(entry: entry),
             const SizedBox(height: 16),
-            _RewardSection(sessionId: entry.id),
-            const SizedBox(height: 16),
+            // The reward card renders only when the ledger actually holds an
+            // entry for this session. A permanent "no reward recorded yet"
+            // card advertised an XP system the shipped composition never
+            // writes to (`rewardLedgerRepositoryProvider` defaults to a
+            // no-op ledger) — a promise without delivery, not information.
+            if (reward != null) ...[
+              _RewardSection(reward: reward),
+              const SizedBox(height: 16),
+            ],
             _NextStepAction(entry: entry),
             const SizedBox(height: 12),
             _ShareSection(entry: entry),
@@ -289,19 +298,18 @@ class _LowConfidenceSummary extends StatelessWidget {
   }
 }
 
-/// Reads the finished session's reward straight from the ledger (A5, ADR
-/// 0283 §Döntés 4). Never computes a number itself — an absent ledger entry
-/// renders as "no reward", not an estimate.
-class _RewardSection extends ConsumerWidget {
-  const _RewardSection({required this.sessionId});
-  final String sessionId;
+/// Shows the finished session's reward exactly as the ledger recorded it
+/// (A5, ADR 0283 §Döntés 4). Never computes a number itself — the parent
+/// reads the ledger and renders this card only when an entry exists.
+class _RewardSection extends StatelessWidget {
+  const _RewardSection({required this.reward});
+  final RewardLedgerEntry reward;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
-    final reward = ref.watch(practiceRewardForSessionProvider(sessionId));
     return SsCard(
       child: Row(
         children: [
@@ -319,9 +327,7 @@ class _RewardSection extends ConsumerWidget {
                 ),
                 const SizedBox(height: SsSpacing.space1),
                 Text(
-                  reward == null
-                      ? l10n.practiceResultRewardNone
-                      : l10n.practiceResultRewardXp(reward.totalXp),
+                  l10n.practiceResultRewardXp(reward.totalXp),
                   style: typography.bodyMedium.copyWith(
                     color: colors.textSecondary,
                   ),
