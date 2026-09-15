@@ -157,14 +157,18 @@ class _StatusView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(24),
+      // Same shrink-wrapped scroll idiom as ``_CtaView`` (A2): the cluster
+      // stays centred while it fits and scrolls once it does not.
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Text(body, textAlign: TextAlign.center),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text(body, textAlign: TextAlign.center),
+            ],
+          ),
         ),
       ),
     );
@@ -188,16 +192,24 @@ class _CtaView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(24),
+      // A2 (measured, E15-R13 matrix): at 2.0 text scale in landscape
+      // (915×412) the title + body + CTA no longer fit the bounded body,
+      // and a Column that cannot scroll overflowed by 8 px (en) / 48 px
+      // (hu). The scroll view is shrink-wrapped inside the Center, so the
+      // cluster stays vertically centred whenever it DOES fit (the
+      // compact-portrait rendering is unchanged) and scrolls otherwise.
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Text(body, textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            SsButton(onPressed: onCta, label: ctaLabel),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text(body, textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              SsButton(onPressed: onCta, label: ctaLabel),
+            ],
+          ),
         ),
       ),
     );

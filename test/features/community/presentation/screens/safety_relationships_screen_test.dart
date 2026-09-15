@@ -150,21 +150,30 @@ CommunityProfile _makeProfile(String suffix) {
 Widget _harness({
   required SocialGraphRepository repo,
   required CommunityProfileRepository profileRepo,
+  Locale? locale,
+  double textScale = 1.0,
 }) {
   return ProviderScope(
     overrides: [
       socialGraphRepositoryProvider.overrideWithValue(repo),
       communityProfileRepositoryProvider.overrideWithValue(profileRepo),
     ],
-    child: const MaterialApp(
-      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+    child: MaterialApp(
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
-      home: SafetyRelationshipsScreen(),
+      locale: locale,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
+      home: const SafetyRelationshipsScreen(),
     ),
   );
 }
@@ -281,6 +290,51 @@ void main() {
     expect(unmuteCallCount, 1, reason: 'unmute should fire on tap');
     expect(find.text('placeholder'), findsNothing);
   });
+
+  testWidgets(
+    'A2 — at 2.0 text scale the Unblock action sits under the row instead '
+    'of as a too-wide trailing widget (hu, compact phone)',
+    (tester) async {
+      // The measured E15-R13 cell: compact portrait 412×915, hu, 2.0 —
+      // "Letiltás feloldása" wrapped inside the trailing button, took the
+      // whole tile width, and tripped ListTile's "Trailing widget consumes
+      // the entire tile width" assertion.
+      tester.view.physicalSize = const Size(412, 915);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final adapter = _ScriptedAdapter(
+        onFetch: (_) => const _CannedResponse(
+          body:
+              '{"public_ids":["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a01",'
+              '"01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a02"],'
+              '"next_cursor":null}',
+          status: 200,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _harness(
+          repo: _buildRepo(adapter),
+          profileRepo: _FakeCommunityProfileRepository(_makeProfile('a00')),
+          locale: const Locale('hu'),
+          textScale: 2.0,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Both rows still carry a reachable action, now below the title.
+      expect(find.text('Letiltás feloldása'), findsNWidgets(2));
+      final tiles = tester.widgetList<ListTile>(find.byType(ListTile));
+      expect(tiles, hasLength(2));
+      expect(
+        tiles.every((tile) => tile.trailing == null),
+        isTrue,
+        reason: "a wide action must never be the tile's trailing widget",
+      );
+    },
+  );
 
   testWidgets(
     'Empty list renders the empty-state copy (no spinner, no error)',

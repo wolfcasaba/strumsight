@@ -720,9 +720,18 @@ final class _RhythmPracticeScreenState
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(SsSpacing.space3),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          // A Wrap, not a Row (A2, measured in the E15-R13 matrix): at 2.0
+          // text scale on a compact phone (412 wide) the two labelled
+          // buttons side by side overflowed by 118 px (en) / 146 px (hu —
+          // "Kalibrálás" is one glyph longer). A Wrap lays them out exactly
+          // as the Row did while they fit, and drops the second onto its
+          // own line when they do not; the bar grows and the scrolling body
+          // above yields the room.
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
             spacing: SsSpacing.space3,
+            runSpacing: SsSpacing.space2,
             children: [
               FilledButton.icon(
                 onPressed: _toggle,

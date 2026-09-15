@@ -280,6 +280,8 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
     }
 
     final halted = state.cursor.isInitial || state.cursor.cursor == null;
+    final stacked =
+        MediaQuery.textScalerOf(context).scale(1) >= _stackedRowTextScale;
     return ListView.separated(
       itemCount: state.items.length + (halted ? 0 : 1),
       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -295,35 +297,70 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
           );
         }
         final profile = state.items[index];
-        return ListTile(
+        final action = SsButton(
+          variant: SsButtonVariant.secondary,
+          onPressed: () async {
+            try {
+              if (widget.tab == SafetyTab.blocked) {
+                await notifier.unblock(profile.userId);
+              } else {
+                await notifier.unmute(profile.userId);
+              }
+            } on AppFailure catch (failure) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(_formatFailure(context, failure))),
+              );
+            }
+          },
+          label: widget.tab == SafetyTab.blocked
+              ? localizations.safetyUnblock
+              : localizations.safetyUnmute,
+        );
+        final tile = ListTile(
           title: Text(
             profile.displayName.isEmpty
                 ? profile.userId.value
                 : profile.displayName,
           ),
           subtitle: Text(profile.handle.value),
-          trailing: SsButton(
-            variant: SsButtonVariant.secondary,
-            onPressed: () async {
-              try {
-                if (widget.tab == SafetyTab.blocked) {
-                  await notifier.unblock(profile.userId);
-                } else {
-                  await notifier.unmute(profile.userId);
-                }
-              } on AppFailure catch (failure) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(_formatFailure(context, failure))),
-                );
-              }
-            },
-            label: widget.tab == SafetyTab.blocked
-                ? localizations.safetyUnblock
-                : localizations.safetyUnmute,
-          ),
+          trailing: stacked ? null : action,
+        );
+        if (!stacked) return tile;
+        // Large text: the action goes UNDER the row instead of beside it
+        // (see ``_stackedRowTextScale``). The tile keeps its title /
+        // subtitle typography; the button gets the tile's own horizontal
+        // inset so it lines up with the text above it.
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            tile,
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: 16,
+                end: 16,
+                bottom: 12,
+              ),
+              child: Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: action,
+              ),
+            ),
+          ],
         );
       },
     );
   }
 }
+
+/// The text scale at (and above) which a Blocked / Muted row moves its
+/// Unblock / Unmute button below the title instead of using it as the
+/// tile's ``trailing``.
+///
+/// A2 (measured, E15-R13 matrix, compact portrait 412×915, hu, 2.0):
+/// "Letiltás feloldása" at 2.0 wraps inside the button, and a wrapped
+/// label takes the full width it was offered — the whole tile width — which
+/// trips ``ListTile``'s "Trailing widget consumes the entire tile width"
+/// assertion. Below the threshold the trailing layout is kept unchanged.
+const double _stackedRowTextScale = 1.5;

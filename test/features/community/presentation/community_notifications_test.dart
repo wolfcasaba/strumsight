@@ -113,7 +113,12 @@ class _RecordingNotificationRepository
   }
 }
 
-Widget _wrap(Widget child, _RecordingNotificationRepository fake) {
+Widget _wrap(
+  Widget child,
+  _RecordingNotificationRepository fake, {
+  Locale locale = const Locale('en'),
+  double textScale = 1.0,
+}) {
   return ProviderScope(
     overrides: [
       communityNotificationRepositoryProvider.overrideWithValue(fake),
@@ -125,7 +130,14 @@ Widget _wrap(Widget child, _RecordingNotificationRepository fake) {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const <Locale>[Locale('en')],
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: child,
     ),
   );
@@ -210,6 +222,39 @@ void main() {
 
         expect(fake.markReadCalls, hasLength(1));
         expect(fake.markReadCalls.single.notificationId.value, 'n-direct');
+      },
+    );
+  });
+
+  group('A2 — large text scale', () {
+    testWidgets(
+      'the preference rows stack instead of overflowing at 2.0 text scale '
+      'on a compact phone (hu)',
+      (tester) async {
+        // The measured E15-R13 cell: compact portrait 412×915, hu, 2.0 —
+        // the one-line label + dropdown row overflowed by ~231 px on
+        // each of the 10 category rows (2310 px in total).
+        tester.view.physicalSize = const Size(412, 915);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final fake = _RecordingNotificationRepository();
+        await tester.pumpWidget(
+          _wrap(
+            const CommunityNotificationsScreen(),
+            fake,
+            locale: const Locale('hu'),
+            textScale: 2.0,
+          ),
+        );
+        for (var i = 0; i < 3; i += 1) {
+          await tester.pump();
+        }
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Értesítési kategóriák'), findsOneWidget);
+        expect(find.text('Követési kérések'), findsOneWidget);
       },
     );
   });

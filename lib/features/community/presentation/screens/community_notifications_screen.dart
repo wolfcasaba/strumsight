@@ -342,6 +342,18 @@ class _PreferencePanel extends ConsumerWidget {
   }
 }
 
+/// The text scale at (and above) which a preference row stacks its label
+/// above the dropdown instead of sharing one line with it.
+///
+/// A2 (measured, E15-R13 matrix, compact portrait 412×915, hu, 2.0): a
+/// non-expanded ``DropdownButton`` is as wide as its widest item, and a
+/// ``Row`` hands a non-flex child unbounded width — so at 2.0 the Hungarian
+/// level label ("Alkalmazáson belül") alone was wider than the phone and
+/// every one of the 10 rows overflowed by ~231 px (2310 px in total). The
+/// threshold is the lower bound of the required 1.5 / 2.0 pair; below it the
+/// one-line row is kept unchanged.
+const double _stackedPreferenceRowTextScale = 1.5;
+
 class _PreferenceRow extends StatelessWidget {
   const _PreferenceRow({
     required this.kind,
@@ -357,38 +369,47 @@ class _PreferenceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stacked =
+        MediaQuery.textScalerOf(context).scale(1) >=
+        _stackedPreferenceRowTextScale;
+    final dropdown = DropdownButton<NotificationPreferenceLevel>(
+      // Full-width when stacked, so a long level label wraps INSIDE the
+      // button instead of pushing the button past the screen edge.
+      isExpanded: stacked,
+      value: level,
+      onChanged: enabled
+          ? (next) {
+              if (next != null) onChanged(next);
+            }
+          : null,
+      items: <DropdownMenuItem<NotificationPreferenceLevel>>[
+        DropdownMenuItem(
+          value: NotificationPreferenceLevel.inApp,
+          child: Text(_levelLabel(context, NotificationPreferenceLevel.inApp)),
+        ),
+        DropdownMenuItem(
+          value: NotificationPreferenceLevel.push,
+          child: Text(_levelLabel(context, NotificationPreferenceLevel.push)),
+        ),
+        DropdownMenuItem(
+          value: NotificationPreferenceLevel.disabled,
+          child: Text(
+            _levelLabel(context, NotificationPreferenceLevel.disabled),
+          ),
+        ),
+      ],
+    );
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[Text(_labelFor(context, kind)), dropdown],
+      );
+    }
     return Row(
       children: <Widget>[
         Expanded(child: Text(_labelFor(context, kind))),
         const SizedBox(width: 8),
-        DropdownButton<NotificationPreferenceLevel>(
-          value: level,
-          onChanged: enabled
-              ? (next) {
-                  if (next != null) onChanged(next);
-                }
-              : null,
-          items: <DropdownMenuItem<NotificationPreferenceLevel>>[
-            DropdownMenuItem(
-              value: NotificationPreferenceLevel.inApp,
-              child: Text(
-                _levelLabel(context, NotificationPreferenceLevel.inApp),
-              ),
-            ),
-            DropdownMenuItem(
-              value: NotificationPreferenceLevel.push,
-              child: Text(
-                _levelLabel(context, NotificationPreferenceLevel.push),
-              ),
-            ),
-            DropdownMenuItem(
-              value: NotificationPreferenceLevel.disabled,
-              child: Text(
-                _levelLabel(context, NotificationPreferenceLevel.disabled),
-              ),
-            ),
-          ],
-        ),
+        dropdown,
       ],
     );
   }

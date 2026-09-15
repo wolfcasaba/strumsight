@@ -51,23 +51,32 @@ LiveFrame _frame({
   strumSeq: strumSeq,
 );
 
-Widget _host(LiveFrame frame, {Locale locale = const Locale('en')}) =>
-    ProviderScope(
-      overrides: [
-        liveFrameProvider.overrideWith((ref) => Stream<LiveFrame>.value(frame)),
-        // The screen reads the persisted pendulum↔strum calibration, so the
-        // store has to exist. Empty = uncalibrated, which is the state most of
-        // these cells are about.
-        keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
-      ],
-      child: MaterialApp(
-        locale: locale,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        theme: SsDarkTheme.data(),
-        home: const RhythmPracticeScreen(),
-      ),
-    );
+Widget _host(
+  LiveFrame frame, {
+  Locale locale = const Locale('en'),
+  double textScale = 1.0,
+}) => ProviderScope(
+  overrides: [
+    liveFrameProvider.overrideWith((ref) => Stream<LiveFrame>.value(frame)),
+    // The screen reads the persisted pendulum↔strum calibration, so the
+    // store has to exist. Empty = uncalibrated, which is the state most of
+    // these cells are about.
+    keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+  ],
+  child: MaterialApp(
+    locale: locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    theme: SsDarkTheme.data(),
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(
+        context,
+      ).copyWith(textScaler: TextScaler.linear(textScale)),
+      child: child!,
+    ),
+    home: const RhythmPracticeScreen(),
+  ),
+);
 
 /// A host driven by a controller, so a test can deliver frames over time the
 /// way the engine does.
@@ -230,6 +239,28 @@ void main() {
       await tester.pump();
       expect(find.text('80 BPM'), findsOneWidget);
     });
+
+    testWidgets(
+      'the transport wraps instead of overflowing at 2.0 text scale on a '
+      'compact phone (hu)',
+      (tester) async {
+        // The measured E15-R13 cell: compact portrait 412×915, 2.0 — the
+        // play + calibrate buttons side by side overflowed the bottom bar
+        // by 118 px (en) / 146 px (hu). Both must still be reachable.
+        tester.view.physicalSize = const Size(412, 915);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        await tester.pumpWidget(
+          _host(_frame(), locale: const Locale('hu'), textScale: 2.0),
+        );
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+        expect(find.text('Kalibrálás'), findsOneWidget);
+      },
+    );
   });
 
   group('the clock is the ENGINE clock, measured', () {
