@@ -672,6 +672,7 @@
   "@analysisExportSectionWarnings": {},
   "analysisExportTitle": "Exportálás és megosztás",
   "@analysisExportTitle": {},
+  "analysisHomeEntryCta": "Felvétel elemzése (V2)",
   "analysisHomeImportCta": "Fájl importálása",
   "@analysisHomeImportCta": {},
   "analysisHomeImportDescription": "Meglévő felvétel elemzése, legfeljebb {limitMb} MB.",
@@ -682,12 +683,14 @@
       }
     }
   },
+  "analysisHomeImportUnavailable": "A fájlimport ebben a buildben még nem érhető el — vedd fel mikrofonnal helyette.",
   "analysisHomeOpenAnalysisSemantics": "Elemzés megnyitása: {title}",
   "@analysisHomeOpenAnalysisSemantics": {
     "placeholders": {
       "title": {}
     }
   },
+  "analysisHomeOpenFailed": "Nem sikerült megnyitni ezt az elemzést.",
   "analysisHomeRecentEmpty": "Még nincs elemzés — kezdéshez vegyél fel vagy importálj egyet.",
   "@analysisHomeRecentEmpty": {},
   "analysisHomeRecentSectionTitle": "Legutóbbi elemzések",
@@ -1757,6 +1760,8 @@
   "@communityNotificationsEmpty": {},
   "communityNotificationsMarkAllRead": "Összes olvasottnak jelölése",
   "@communityNotificationsMarkAllRead": {},
+  "communityNotificationsOpenChallenges": "Kihívások",
+  "@communityNotificationsOpenChallenges": {},
   "communityNotificationsPreferencesTitle": "Értesítési kategóriák",
   "@communityNotificationsPreferencesTitle": {},
   "communityNotificationsQuietHours": "Csendes időszak",
@@ -2184,6 +2189,8 @@
       }
     }
   },
+  "followingFeedCompose": "Új poszt",
+  "@followingFeedCompose": {},
   "followingFeedEmptyState": "Még nincs poszt a feedben.",
   "@followingFeedEmptyState": {},
   "followingFeedEmptyStateCta": "Gyakorlás indítása",
@@ -2206,6 +2213,8 @@
   "@followingFeedRefresh": {},
   "followingFeedRetry": "Újrapróbálkozás",
   "@followingFeedRetry": {},
+  "followingFeedSearch": "Emberek keresése",
+  "@followingFeedSearch": {},
   "followingFeedTitle": "Követési feed",
   "@followingFeedTitle": {},
   "gamificationHubAchievementsTitle": "Eredmények",
@@ -3042,6 +3051,14 @@
   "practiceFreePracticeTempoStabilityTitle": "Tempó-stabilitás",
   "practiceFreePracticeUpCount": "Fel pengetések",
   "practiceFreePracticeUpRatio": "Fel arány",
+  "practiceGeneratorMoreActions": "További tervműveletek",
+  "practiceGeneratorNoActivePlanForAction": "Előbb készíts és aktiválj egy tervet.",
+  "practiceGeneratorNoChangesToReview": "Mára nincs beütemezve semmi, így nincs áttekintendő módosítás.",
+  "practiceGeneratorOpenChangeReview": "Tervmódosítások áttekintése",
+  "practiceGeneratorOpenPlanPreview": "Terv előnézete",
+  "practiceGeneratorOpenPrivacy": "Tervadatok és adatvédelem",
+  "practiceGeneratorOpenWeeklyPlan": "Heti terv",
+  "practiceGeneratorPlanLoadFailed": "Az aktív terv nem olvasható. Próbáld újra később.",
   "practiceHighwayLabel": "Gyakorló sáv",
   "practiceHighwayRestMarker": "Szünet",
   "practiceHistoryEmptyAction": "Vissza",
@@ -3908,7 +3925,9 @@
       }
     }
   },
+  "setlistSessionChooseMode": "Hogyan futtassuk ezt a szettet?",
   "setlistSessionCompleted": "Teljesítve",
+  "setlistSessionEntry": "Futtatás sessionként",
   "setlistSessionFailed": "Nem fejezhető be",
   "setlistSessionPerformanceDescription": "Játszd le a dalokat sorrendben mikrofonos pontozás nélkül.",
   "setlistSessionPerformanceSemantics": "Csak lejátszásos dalcsomag-előadás. A mikrofonos pontozás ki van kapcsolva.",
@@ -4821,6 +4840,11 @@
   "tutorDataMemoryTitle": "Megjegyzett tények",
   "tutorDataScreenSemantics": "Tutor adatok képernyő",
   "tutorDataTitle": "Tutor adatok",
+  "tutorPlanOpenPreview": "A gyakorlási terv előnézetének megnyitása",
+  "tutorPlanPreviewEntry": "Gyakorlási terv előnézete",
+  "tutorPlanSaveFailed": "A gyakorlási tervet nem sikerült menteni.",
+  "tutorPlanSaved": "A gyakorlási terv a tanár memóriájába mentve.",
+  "tutorPlanStartUnavailable": "Ehhez a tervhez még nincs indítható gyakorlat.",
   "tutorPrivacyIntro": "Ez a három kapcsoló szabályozza, hogy a tutor mit tehet az adataiddal. Egymástól függetlenül kapcsolhatod őket.",
   "tutorPrivacyScopeBody": "A törlés pontosan ezeket a kulcsokat (és a karanténjaikat) érinti.",
   "tutorPrivacyScopePreserved": "A beleegyezésed, a profilod és a bejelentkezésed megmarad.",

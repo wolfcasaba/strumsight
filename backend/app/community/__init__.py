@@ -6,7 +6,7 @@ E09-R02, ADR 0396; wired live E15-R12, ADR 0497. This module owns:
   (BigInteger internal PK + ``Uuid`` public_id, see ADR 0396 §1),
 * the Pydantic response contract that whitelists only ``public_id`` and never
   leaks the internal ``id`` (A2),
-* a ``build_community_router`` factory that aggregates 11 of the 13 router
+* a ``build_community_router`` factory that aggregates 12 of the 14 router
   modules behind ``settings.community_enabled`` (registration-level gate,
   ADR 0497 D1 — the module simply does not exist in the route table when
   off, no runtime 403) plus the sub-flags (D2), in the deterministic order
@@ -58,7 +58,7 @@ __all__ = [
 ]
 
 # ADR 0497 D2/D1: the write-method branch (POST/PUT/PATCH/DELETE) of the
-# posts + social-graph (follow-request) routers is a REGISTRATION-level
+# posts + social-graph (follow-request) + notifications routers is a REGISTRATION-level
 # gate on ``community_writes_enabled`` — same fail-closed strength as the
 # top-level module flag (D1: "route-ok nem regisztrálódnak", not a runtime
 # 403). GET/HEAD/OPTIONS on those same routers stay registered either way
@@ -84,7 +84,7 @@ def _reads_only(router: APIRouter) -> APIRouter:
 
 
 def build_community_router(settings) -> APIRouter | None:
-    """Aggregate 11 of the 13 Community router modules into one
+    """Aggregate 12 of the 14 Community router modules into one
     ``APIRouter``, or return ``None`` when the module is disabled.
 
     Registration-level gating (ADR 0497 D1): a disabled module — or a
@@ -112,7 +112,9 @@ def build_community_router(settings) -> APIRouter | None:
     Sub-flags (D2, independent of the master flag and of each other):
 
     * ``community_writes_enabled`` — gates the write-method routes of
-      ``posts`` and ``social_graph`` (see ``_reads_only`` above). Not
+      ``posts``, ``social_graph`` and ``notifications`` (see ``_reads_only``
+      above; with writes off the inbox list + preferences GETs stay
+      mounted, mark-read / read-all / preference PUT are absent). Not
       applied to ``bookmarks``/``challenges``/``moderation``/``reports``/
       ``safety``: none of those are named by ADR 0395 §6's write-domain
       list ("poszt, komment, reakció, follow-request"), and none are
@@ -160,6 +162,7 @@ def build_community_router(settings) -> APIRouter | None:
     from .routers.feed import router as feed_router
     from .routers.leaderboards import router as leaderboards_router
     from .routers.moderation import router as moderation_router
+    from .routers.notifications import router as notifications_router
     from .routers.posts import router as posts_router
     from .routers.profile import router as profile_router
     from .routers.reports import router as reports_router
@@ -180,6 +183,9 @@ def build_community_router(settings) -> APIRouter | None:
     if settings.community_leaderboard_enabled:
         aggregate.include_router(leaderboards_router)
     aggregate.include_router(moderation_router)
+    aggregate.include_router(
+        notifications_router if writes_on else _reads_only(notifications_router)
+    )
     aggregate.include_router(posts_router if writes_on else _reads_only(posts_router))
     aggregate.include_router(reports_router)
     aggregate.include_router(safety_router)

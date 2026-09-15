@@ -679,6 +679,7 @@
   "@analysisExportSectionWarnings": {},
   "analysisExportTitle": "Export & share",
   "@analysisExportTitle": {},
+  "analysisHomeEntryCta": "Analyze a recording (V2)",
   "analysisHomeImportCta": "Import a file",
   "@analysisHomeImportCta": {},
   "analysisHomeImportDescription": "Analyze an existing recording, up to {limitMb} MB.",
@@ -689,12 +690,14 @@
       }
     }
   },
+  "analysisHomeImportUnavailable": "File import is not available in this build yet — record with the microphone instead.",
   "analysisHomeOpenAnalysisSemantics": "Open analysis: {title}",
   "@analysisHomeOpenAnalysisSemantics": {
     "placeholders": {
       "title": {}
     }
   },
+  "analysisHomeOpenFailed": "Couldn't open that analysis.",
   "analysisHomeRecentEmpty": "No analyses yet — record or import one to get started.",
   "@analysisHomeRecentEmpty": {},
   "analysisHomeRecentSectionTitle": "Recent analyses",
@@ -1785,6 +1788,8 @@
   "@communityNotificationsEmpty": {},
   "communityNotificationsMarkAllRead": "Mark all as read",
   "@communityNotificationsMarkAllRead": {},
+  "communityNotificationsOpenChallenges": "Challenges",
+  "@communityNotificationsOpenChallenges": {},
   "communityNotificationsPreferencesTitle": "Notification categories",
   "@communityNotificationsPreferencesTitle": {},
   "communityNotificationsQuietHours": "Quiet hours",
@@ -2212,6 +2217,8 @@
       }
     }
   },
+  "followingFeedCompose": "New post",
+  "@followingFeedCompose": {},
   "followingFeedEmptyState": "No posts in the feed yet.",
   "@followingFeedEmptyState": {},
   "followingFeedEmptyStateCta": "Start practice",
@@ -2234,6 +2241,8 @@
   "@followingFeedRefresh": {},
   "followingFeedRetry": "Retry",
   "@followingFeedRetry": {},
+  "followingFeedSearch": "Search people",
+  "@followingFeedSearch": {},
   "followingFeedTitle": "Following feed",
   "@followingFeedTitle": {},
   "gamificationHubAchievementsTitle": "Achievements",
@@ -3081,6 +3090,14 @@
   "practiceFreePracticeTempoStabilityTitle": "Tempo stability",
   "practiceFreePracticeUpCount": "Up strums",
   "practiceFreePracticeUpRatio": "Up ratio",
+  "practiceGeneratorMoreActions": "More plan actions",
+  "practiceGeneratorNoActivePlanForAction": "Create and activate a plan first.",
+  "practiceGeneratorNoChangesToReview": "Nothing is scheduled for today, so there is no change to review.",
+  "practiceGeneratorOpenChangeReview": "Review plan changes",
+  "practiceGeneratorOpenPlanPreview": "Plan preview",
+  "practiceGeneratorOpenPrivacy": "Plan data and privacy",
+  "practiceGeneratorOpenWeeklyPlan": "Weekly plan",
+  "practiceGeneratorPlanLoadFailed": "The active plan could not be read. Try again later.",
   "practiceHighwayLabel": "Practice highway",
   "practiceHighwayRestMarker": "Rest",
   "practiceHistoryEmptyAction": "Back",
@@ -3947,7 +3964,9 @@
       }
     }
   },
+  "setlistSessionChooseMode": "How do you want to run this set?",
   "setlistSessionCompleted": "Completed",
+  "setlistSessionEntry": "Run as session",
   "setlistSessionFailed": "Could not finish",
   "setlistSessionPerformanceDescription": "Play each song in order without microphone scoring.",
   "setlistSessionPerformanceSemantics": "Playback-only setlist performance. Microphone scoring is off.",
@@ -4888,6 +4907,11 @@
   "tutorDataMemoryTitle": "Remembered facts",
   "tutorDataScreenSemantics": "Tutor data screen",
   "tutorDataTitle": "Tutor data",
+  "tutorPlanOpenPreview": "Open the practice plan preview",
+  "tutorPlanPreviewEntry": "Preview a practice plan",
+  "tutorPlanSaveFailed": "The practice plan could not be saved.",
+  "tutorPlanSaved": "Practice plan saved to your tutor memory.",
+  "tutorPlanStartUnavailable": "No practice exercise is available for this plan yet.",
   "tutorPrivacyIntro": "These three switches control what the tutor may do with your data. Toggle them independently.",
   "tutorPrivacyScopeBody": "Delete-all touches exactly these keys (and their corruption quarantines).",
   "tutorPrivacyScopePreserved": "Your consent choices, profile and account sign-in are kept.",
