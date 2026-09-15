@@ -89,6 +89,11 @@ final class DisabledCommunityFeedRepository implements CommunityFeedRepository {
   }) async => throw _disabled.error;
 }
 
+/// The feed page type, named so the request-verb call below carries a flat
+/// generic — the egress inventory walker (`tool/check_data_inventory.dart`)
+/// matches `getJson<…>(` without nested angle brackets.
+typedef _FeedPage = CommunityPage<CommunityPost>;
+
 /// Live HTTP-backed feed repository.
 class HttpCommunityFeedRepository implements CommunityFeedRepository {
   HttpCommunityFeedRepository(this._client);
@@ -111,7 +116,7 @@ class HttpCommunityFeedRepository implements CommunityFeedRepository {
       params.add('cursor=${Uri.encodeQueryComponent(cursorValue)}');
     }
     final path = '/community/feed?${params.join('&')}';
-    final result = await _client.getJson<CommunityPage<CommunityPost>>(
+    final result = await _client.getJson<_FeedPage>(
       path,
       decode: decodeFeedPage,
     );

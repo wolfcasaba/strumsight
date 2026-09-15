@@ -157,7 +157,12 @@ Future<_Harness> _startRecording(WidgetTester tester) async {
 
 Future<void> _stopRecording(WidgetTester tester, _Harness harness) async {
   await tester.tap(find.byKey(const Key('analysis-recording-stop')));
-  await tester.pumpAndSettle();
+  // The scripted runner completes only when a cell tells it to, so the
+  // Processing Stage sits on its indeterminate "starting" bar here — an
+  // endless animation `pumpAndSettle` would wait on forever. One second is
+  // enough for the page replacement to finish.
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
   expect(harness.router.state.uri.path, AppRoutes.analysisProcessing);
   expect(find.byType(AnalysisProcessingScreen), findsOneWidget);
   // `pushReplacement`, not `push`: the Recording Stage is gone, so its

@@ -154,19 +154,24 @@ class _AnalysisRecordingScreenState extends State<AnalysisRecordingScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: switch (_stage) {
-            _RecordingStage.idle || _RecordingStage.starting => _ReadyBody(
-              maximumDuration: widget.maximumDuration,
-              retentionPolicy: widget.retentionPolicy,
-              starting: _stage == _RecordingStage.starting,
-              onStart: _start,
+            _RecordingStage.idle ||
+            _RecordingStage.starting => _BottomPinnedScrollable(
+              child: _ReadyBody(
+                maximumDuration: widget.maximumDuration,
+                retentionPolicy: widget.retentionPolicy,
+                starting: _stage == _RecordingStage.starting,
+                onStart: _start,
+              ),
             ),
-            _RecordingStage.recording => _RecordingBody(
-              run: _run,
-              level: _lastLevel,
-              retentionPolicy: widget.retentionPolicy,
-              silenceThresholdDbfs: widget.silenceThresholdDbfs,
-              onStop: _stop,
-              onCancel: _cancel,
+            _RecordingStage.recording => _BottomPinnedScrollable(
+              child: _RecordingBody(
+                run: _run,
+                level: _lastLevel,
+                retentionPolicy: widget.retentionPolicy,
+                silenceThresholdDbfs: widget.silenceThresholdDbfs,
+                onStop: _stop,
+                onCancel: _cancel,
+              ),
             ),
             _RecordingStage.permissionDenied => _PermissionDeniedBody(
               onRetry: _start,
@@ -178,6 +183,28 @@ class _AnalysisRecordingScreenState extends State<AnalysisRecordingScreen> {
               onCancel: _cancel,
             ),
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Keeps a `Spacer`-pinned column layout intact when it fits, and lets it
+/// scroll instead of overflowing when it does not (landscape at 2.0× text,
+/// measured by the e15_r13 variant matrix): the column is at least as tall
+/// as the viewport, so the spacer still pushes the buttons to the bottom.
+final class _BottomPinnedScrollable extends StatelessWidget {
+  const _BottomPinnedScrollable({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(child: child),
         ),
       ),
     );
