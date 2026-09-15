@@ -71,9 +71,11 @@ void main() {
     final navigationBar = tester.widget<NavigationBar>(
       find.byType(NavigationBar),
     );
-    // Profile is the adaptive shell's last destination; Coach is absent
-    // (aiTutorEnabled defaults off), so index 3, not the legacy shell's 4.
-    expect(navigationBar.selectedIndex, 3);
+    // Profile is the adaptive shell's last destination. Since the owner
+    // decision of 2026-09-15 `aiTutorEnabled` is `nonProd`, so the Coach
+    // destination exists in the development flags this test boots with
+    // and Profile sits at index 4 (Today/Practice/Songs/Coach/Profile).
+    expect(navigationBar.selectedIndex, 4);
     expect(
       rig.live.stopCalls,
       greaterThan(stopsBefore),

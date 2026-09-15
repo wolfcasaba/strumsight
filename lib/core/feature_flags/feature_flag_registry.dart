@@ -121,9 +121,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0132',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:82; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'gated by `environment != AppEnvironment.production` at '
+        'feature_flags.dart:105 (`nonProd`, owner decision 2026-09-15); '
+        'a production release build already resolves this to false — '
+        'no dart-define can turn it on in production.',
   ),
   FeatureFlagDefinition(
     key: 'aiTutorCloudEnabled',
@@ -293,9 +294,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0220',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:97; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'gated by `environment != AppEnvironment.production` at '
+        'feature_flags.dart:129 (`nonProd`, owner decision 2026-09-15); '
+        'a production release build already resolves this to false — '
+        'no dart-define can turn it on in production.',
   ),
   FeatureFlagDefinition(
     key: 'analysisBeatGridEnabled',
@@ -304,9 +306,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0220',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:98; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'gated by `environment != AppEnvironment.production` at '
+        'feature_flags.dart:130 (`nonProd`, owner decision 2026-09-15); '
+        'a production release build already resolves this to false — '
+        'no dart-define can turn it on in production.',
   ),
   FeatureFlagDefinition(
     key: 'analysisPitchEnabled',
@@ -315,9 +318,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0220',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:99; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'gated by `environment != AppEnvironment.production` at '
+        'feature_flags.dart:131 (`nonProd`, owner decision 2026-09-15); '
+        'a production release build already resolves this to false — '
+        'no dart-define can turn it on in production.',
   ),
   FeatureFlagDefinition(
     key: 'analysisPreprocessingExperimentalEnabled',
@@ -346,9 +350,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0236',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:102; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'gated by `environment != AppEnvironment.production` at '
+        'feature_flags.dart:134 (`nonProd`, owner decision 2026-09-15); '
+        'a production release build already resolves this to false — '
+        'no dart-define can turn it on in production.',
   ),
   FeatureFlagDefinition(
     key: 'analysisComparisonEnabled',
@@ -357,9 +362,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     failClosedDefault: false,
     adr: '0246',
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:103; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'gated by `environment != AppEnvironment.production` at '
+        'feature_flags.dart:135 (`nonProd`, owner decision 2026-09-15); '
+        'a production release build already resolves this to false — '
+        'no dart-define can turn it on in production.',
   ),
   FeatureFlagDefinition(
     key: 'analysisPracticeIntegrationEnabled',
@@ -367,9 +373,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     risk: FeatureFlagRisk.medium,
     failClosedDefault: false,
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:104; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'gated by `environment != AppEnvironment.production` at '
+        'feature_flags.dart:136 (`nonProd`, owner decision 2026-09-15); '
+        'a production release build already resolves this to false — '
+        'no dart-define can turn it on in production.',
   ),
   FeatureFlagDefinition(
     key: 'analysisTutorIntegrationEnabled',
@@ -377,9 +384,10 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     risk: FeatureFlagRisk.medium,
     failClosedDefault: false,
     killSwitchPath:
-        'hardcoded to `false` in every environment at '
-        'feature_flags.dart:105; no dart-define or environment boundary '
-        'can turn it on today — enabling it requires a source change.',
+        'gated by `environment != AppEnvironment.production` at '
+        'feature_flags.dart:137 (`nonProd`, owner decision 2026-09-15); '
+        'a production release build already resolves this to false — '
+        'no dart-define can turn it on in production.',
   ),
 
   // ---------------------------------------------------------------------

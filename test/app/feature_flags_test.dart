@@ -28,13 +28,29 @@ List<bool> _visionFlags(FeatureFlags flags) => <bool>[
   flags.visionLabCaptureEnabled,
 ];
 
-List<bool> _audioAnalysisFlags(FeatureFlags flags) => <bool>[
+/// The seven Audio Analysis V2 flags the owner decision of 2026-09-15 moved
+/// to `nonProd` (true in development/lab, false in production).
+List<bool> _audioAnalysisNonProdFlags(FeatureFlags flags) => <bool>[
   flags.audioAnalysisV2Enabled,
   flags.analysisBeatGridEnabled,
   flags.analysisPitchEnabled,
+  flags.analysisTechniqueProxiesEnabled,
+  flags.analysisComparisonEnabled,
+  flags.analysisPracticeIntegrationEnabled,
+  flags.analysisTutorIntegrationEnabled,
+];
+
+/// The two experimental Audio Analysis flags that stay OFF everywhere.
+List<bool> _audioAnalysisExperimentalFlags(FeatureFlags flags) => <bool>[
   flags.analysisPreprocessingExperimentalEnabled,
   flags.analysisExperimentalFusionEnabled,
-  flags.analysisComparisonEnabled,
+];
+
+/// All nine Audio Analysis V2 flags — used for the production checks, where
+/// every one of them must still be off.
+List<bool> _audioAnalysisFlags(FeatureFlags flags) => <bool>[
+  ..._audioAnalysisNonProdFlags(flags),
+  ..._audioAnalysisExperimentalFlags(flags),
 ];
 
 FeatureFlags _withAiTutorFlags({
@@ -221,14 +237,21 @@ void main() {
       expect(flags.songTrainerV2Enabled, isFalse);
     });
 
-    test('keeps unrelated rollout flags disabled in every environment', () {
+    test('keeps unrelated rollout flags at their own boundary in every '
+        'environment', () {
       for (final environment in AppEnvironment.values) {
         final flags = FeatureFlags.forEnvironment(
           environment,
           accountEnabled: false,
         );
 
-        expect(flags.aiTutorEnabled, isFalse);
+        // Owner decision 2026-09-15: the local tutor shares the nonProd
+        // boundary; cloud tutor and vision stay off everywhere.
+        expect(
+          flags.aiTutorEnabled,
+          environment != AppEnvironment.production,
+          reason: '$environment',
+        );
         expect(flags.aiTutorCloudEnabled, isFalse);
         expect(flags.visionEnabled, isFalse);
       }
@@ -304,15 +327,36 @@ void main() {
       _expectAiTutorFlagsOff(flags);
     });
 
-    test('forEnvironment leaves both flags off in every environment', () {
+    // Owner decision 2026-09-15: the LOCAL tutor is `nonProd` (on in
+    // development/lab, off in production); the cloud tutor needs the
+    // backend proxy and stays off in every environment.
+    test('forEnvironment turns aiTutorEnabled on outside production only and '
+        'keeps aiTutorCloudEnabled off in every environment', () {
       for (final environment in AppEnvironment.values) {
         final flags = FeatureFlags.forEnvironment(
           environment,
           accountEnabled: false,
         );
 
-        _expectAiTutorFlagsOff(flags);
+        expect(
+          _aiTutorEnabled(flags),
+          environment != AppEnvironment.production,
+          reason: environment == AppEnvironment.production
+              ? 'production must keep the local AI Tutor OFF'
+              : '$environment must enable the local AI Tutor (nonProd)',
+        );
+        expect(
+          _aiTutorCloudEnabled(flags),
+          isFalse,
+          reason: '$environment: cloud tutor never defaults on',
+        );
       }
+
+      final production = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+      _expectAiTutorFlagsOff(production);
     });
 
     test('new flags participate in value semantics but not network use', () {
@@ -408,27 +452,71 @@ void main() {
   });
 
   group('Audio Analysis V2 rollout boundary', () {
-    test('all audio analysis flags remain off in every environment', () {
+    // Owner decision 2026-09-15: the seven non-experimental flags are
+    // `nonProd` (on in development/lab, off in production); the two
+    // experimental flags stay off everywhere; the constructor default for
+    // all nine stays off.
+    test('constructor defaults keep all nine audio analysis flags off', () {
       const constructorDefaults = FeatureFlags(
         accountEnabled: false,
         diagnosticsEnabled: false,
         labModeAvailable: false,
       );
       expect(_audioAnalysisFlags(constructorDefaults), everyElement(isFalse));
+    });
 
+    test('forEnvironment turns the seven non-experimental flags on outside '
+        'production and keeps them off in production', () {
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+        final expected = environment != AppEnvironment.production;
+        expect(
+          _audioAnalysisNonProdFlags(flags),
+          everyElement(expected),
+          reason: expected
+              ? '$environment must enable the Audio Analysis V2 lane (nonProd)'
+              : 'production must keep Audio Analysis V2 OFF',
+        );
+        expect(flags.toString(), contains('audioAnalysisV2Enabled: $expected'));
+        expect(
+          flags.toString(),
+          contains('analysisBeatGridEnabled: $expected'),
+        );
+        expect(flags.toString(), contains('analysisPitchEnabled: $expected'));
+        expect(
+          flags.toString(),
+          contains('analysisTechniqueProxiesEnabled: $expected'),
+        );
+        expect(
+          flags.toString(),
+          contains('analysisComparisonEnabled: $expected'),
+        );
+        expect(
+          flags.toString(),
+          contains('analysisPracticeIntegrationEnabled: $expected'),
+        );
+        expect(
+          flags.toString(),
+          contains('analysisTutorIntegrationEnabled: $expected'),
+        );
+      }
+    });
+
+    test('the two experimental analysis flags stay off in every '
+        'environment', () {
       for (final environment in AppEnvironment.values) {
         final flags = FeatureFlags.forEnvironment(
           environment,
           accountEnabled: false,
         );
         expect(
-          _audioAnalysisFlags(flags),
+          _audioAnalysisExperimentalFlags(flags),
           everyElement(isFalse),
-          reason: '$environment must not implicitly enable Audio Analysis V2.',
+          reason: '$environment must not enable experimental analysis paths.',
         );
-        expect(flags.toString(), contains('audioAnalysisV2Enabled: false'));
-        expect(flags.toString(), contains('analysisBeatGridEnabled: false'));
-        expect(flags.toString(), contains('analysisPitchEnabled: false'));
         expect(
           flags.toString(),
           contains('analysisPreprocessingExperimentalEnabled: false'),
@@ -437,12 +525,11 @@ void main() {
           flags.toString(),
           contains('analysisExperimentalFusionEnabled: false'),
         );
-        expect(flags.toString(), contains('analysisComparisonEnabled: false'));
       }
     });
 
-    test('analysisComparisonEnabled defaults to false and remains off for '
-        'every environment', () {
+    test('analysisComparisonEnabled defaults to false and follows the '
+        'nonProd boundary in forEnvironment', () {
       const constructorDefaults = FeatureFlags(
         accountEnabled: false,
         diagnosticsEnabled: false,
@@ -457,8 +544,10 @@ void main() {
         );
         expect(
           flags.analysisComparisonEnabled,
-          isFalse,
-          reason: '$environment must not implicitly enable comparison.',
+          environment != AppEnvironment.production,
+          reason: environment == AppEnvironment.production
+              ? 'production must not enable comparison.'
+              : '$environment must enable comparison (nonProd).',
         );
       }
     });
@@ -495,16 +584,19 @@ void main() {
   });
 
   group('E16-R03 capability rollout — zero flip (ADR 0492)', () {
-    // Pins the round's ZERO FLIP outcome as a flag-boolean regression guard:
-    // every capability this round evaluated that was `false` before the
-    // round stays `false` in every environment (a documented, accepted
-    // "zero flip" outcome, brief §0.0.1 R3). The decision table's own
+    // E16-R03 itself was a ZERO FLIP round (brief §0.0.1 R3). The owner
+    // decision of 2026-09-15 later moved the local AI Tutor and the seven
+    // non-experimental Audio Analysis V2 flags to `nonProd` (measured in
+    // the two cells after this one). This cell is therefore re-scoped to
+    // the capabilities that REMAIN off in every environment: Planner
+    // Assist, Vision, the two experimental analysis flags, the recognition
+    // recovery trio, and the cloud tutor. The decision table's own
     // structure (A1 coverage/classification, A6 resolving round) is
     // measured separately below, against `docs/release/capability-
     // rollout.md` as data, not against these flag booleans.
-    test('the four previously-false capability groups this round evaluated '
-        'stay off in every environment: AI Tutor, Planner Assist, Vision, '
-        'Audio Analysis V2, Recognition recovery', () {
+    test('the capabilities still classified KI stay off in every '
+        'environment: Planner Assist, Vision, experimental analysis, '
+        'Recognition recovery, cloud Tutor', () {
       for (final environment in AppEnvironment.values) {
         final flags = FeatureFlags.forEnvironment(
           environment,
@@ -512,11 +604,11 @@ void main() {
         );
 
         expect(
-          flags.aiTutorEnabled,
+          flags.aiTutorCloudEnabled,
           isFalse,
           reason:
-              '$environment: aiTutorEnabled stays KI — epic-04-completion-'
-              'report.md names the ON decision a separate Termék/User call',
+              '$environment: aiTutorCloudEnabled stays KI — needs the '
+              'backend proxy (R-PRIV-01 open)',
         );
         expect(
           flags.plannerAssistEnabled,
@@ -530,14 +622,15 @@ void main() {
           everyElement(isFalse),
           reason:
               '$environment: Vision stays KI pending HORIZON device '
-              'acceptance (docs/sdd/epic-05-completion-report.md)',
+              'acceptance (docs/sdd/epic-05-completion-report.md) — its '
+              'ML models are deferred assets',
         );
         expect(
-          _audioAnalysisFlags(flags),
+          _audioAnalysisExperimentalFlags(flags),
           everyElement(isFalse),
           reason:
-              '$environment: Audio Analysis V2 stays KI — Epic 6 '
-              'release blockers remain open (ADR 0220)',
+              '$environment: the experimental preprocessing / fusion '
+              'analysis flags stay KI',
         );
         expect(
           flags.recognitionRecoveryEnabled,
@@ -550,6 +643,35 @@ void main() {
         expect(flags.recognitionShadowModeEnabled, isFalse);
         expect(flags.newLiveStageEnabled, isFalse);
       }
+    });
+
+    // Owner decision 2026-09-15 — the flipped capabilities: on in
+    // development and lab, off in production. Pinned per environment so a
+    // silent revert (or an accidental production flip) fails loudly.
+    test('the owner-flipped capabilities (local AI Tutor, Audio Analysis V2 '
+        'lane) are on in development and lab and off in production', () {
+      for (final environment in [
+        AppEnvironment.development,
+        AppEnvironment.lab,
+      ]) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+        expect(flags.aiTutorEnabled, isTrue, reason: '$environment');
+        expect(
+          _audioAnalysisNonProdFlags(flags),
+          everyElement(isTrue),
+          reason: '$environment',
+        );
+      }
+
+      final production = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+      expect(production.aiTutorEnabled, isFalse);
+      expect(_audioAnalysisNonProdFlags(production), everyElement(isFalse));
     });
 
     // A3 — the two named external-resource branches must never become the
@@ -636,7 +758,8 @@ void main() {
       expect(production.adaptiveShellEnabled, isFalse);
     });
 
-    // A4 — this round moved no production default at all.
+    // A4 — neither E16-R03 nor the 2026-09-15 owner decision moved a
+    // production default: every field evaluated stays off in production.
     test('production defaults are byte-identical to every non-production '
         'default check above, i.e. every field this round evaluated stays '
         'off in production too (A4)', () {
