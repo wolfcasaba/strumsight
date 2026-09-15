@@ -557,6 +557,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, _) => Consumer(
             builder: (context, ref, _) => TodayPlanScreen(
               controller: ref.watch(todayPlanControllerProvider),
+              // The active plan is the screen's body (E17-R06): without it
+              // the route always rendered "no active plan".
+              plan: ref.watch(activePracticePlanProvider).value,
+              isTodayRouteEnabled: true,
             ),
           ),
         ),
