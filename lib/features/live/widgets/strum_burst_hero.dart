@@ -87,8 +87,9 @@ final class _StrumBurstHeroState extends State<StrumBurstHero>
         directionSign: isDown ? 1 : -1,
       ),
     );
+    // No setState: this runs from didUpdateWidget, and the framework rebuilds
+    // right after it anyway; the ticker's first tick repaints from there on.
     if (!_ticker.isActive) _ticker.start();
-    setState(() {});
   }
 
   void _onTick(Duration elapsed) {

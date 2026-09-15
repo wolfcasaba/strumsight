@@ -348,7 +348,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           ? StrumBurstHero(
               strumSeq: frame.strumSeq,
               isDown: latestStrum?.isDown,
-              confidence: latestStrum?.confidence ?? 0,
+              confidence: latestStrum?.confidence ?? 0.0,
               child: SsChordHero(
                 chordLabel: chordLabel,
                 textColor: palette.ink,
