@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔁 FOLYAMATBAN — 3. kör: valódi XP-főkönyv a Practice V2 session mögött (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+## ✅ KÉSZ — 3. kör: valódi XP-főkönyv a Practice V2 session mögött (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
 Az 1. kör 3. lelete („+XP kártya, ami soha nem ad"): a
 `GamificationPracticeAdapter` sehol nem volt példányosítva, a result-képernyő
@@ -14,6 +14,14 @@ főkönyv-seamje egy no-op volt. Most a MEGLÉVŐ lánc kap produkciós kompozí
 | Jel-leképezés (tiszta) | finishReason → outcome (completed/userFinished/timedOut → completed; cancelled/interrupted → cancelled; failed → failed); quality = a legjobb próbálkozás overall-ja, ha mért; trust `scored` / `deviceObserved` | ugyanott, `practiceGamificationSignalFor` |
 | Result-képernyő seam | `rewardLedgerRepositoryProvider` → a valódi `gamificationRewardLedgerRepositoryProvider` (a `_NoopRewardLedgerRepository` törölve) | `practice_result_providers.dart` |
 | Tesztek | valós in-memory lánc: scored 2,5 perces session → 1 bejegyzés, XP > 0, a seam visszaolvassa; kétszeri rögzítés → 1; két session egy napon → history 2; 30 mp → semmi; cancelled → semmi; bukó mentés → Failure és semmi; jel-leképezés cellák | `test/features/practice/practice_reward_recorder_test.dart` (ÚJ) |
+
+**Zöld kapu:** `build-apk.yml`
+[run 34968350914](https://github.com/wolfcasaba/strumsight/actions/runs/34968350914)
+az `a2b08a6`-on — a `flutter-gates` composite MINDEN lépése `success` (format,
+analyze, architektúra, secret-scan, l10n-paritás, asset, teljes tesztsuite,
+randomizált property gate), a song-schema és song-fixture kapu is; a release
+APK ugyanebből a futásból (development env). Az előző, 2. körös APK: run
+34964160809.
 
 **Őszinte kapuk maradnak:** a standard eligibility 1 perc alatt nem ad XP-t,
 mért minőség nélkül nem ad minőség-XP-t. **Nyitva (következő):** a V2 session
