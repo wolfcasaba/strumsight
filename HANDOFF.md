@@ -1,5 +1,50 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ STRUM-SPARK — a le/fel ütés-animáció a Live, Practice és Song Trainer képernyőn — branch `claude/ui-design-viral-elements-u9z9ht`, HEAD `9121160` (2026-09-15)
+
+A felhasználó kérése a dizájn-session után: „a le/fel ütés animáció már volt
+fejlesztve, folytasd azzal" → „amikor ütöd a gitárt, abban az irányban mutassa
+az ütést" → „vidd át a többi képernyőre is (Practice, Song Trainer)". A Learn
+highway meglévő strike-line juice-a (`HitBurst`, chunk 016b P0) lett a közös
+alap; DSP/ML/reducer érintetlen.
+
+**Zöld kapu a HEAD-en:** [full-gate 34938571528](https://github.com/wolfcasaba/strumsight/actions/runs/34938571528)
++ [build-apk 34938573519](https://github.com/wolfcasaba/strumsight/actions/runs/34938573519),
+mindkettő `success` (teljes suite + property gate + APK). Az előző futás
+(`1474512`) 10 230 zöld / 2 piros volt — mindkét piros az új tesztekben
+(hiányzó `observationConfig`; a söprés élettartam-vége lebegőpontos határon),
+`9121160` javította.
+
+| Commit | Mit hoz |
+|---|---|
+| `04490c8` | `HitBurst` → `core/widgets/` (+ `directionSign`); `StrumBurstHero` a Live hero glyph fölé: minden új `LiveFrame.strumSeq` szikrát dob, réz ↓ lefelé, zöld ↑ felfelé, erősség = konfidencia; saját `Ticker` csak amíg él a szikra; reduced motion → nincs szikra |
+| `e576a8e` | explicit `0.0` fallback, redundáns `setState` ki |
+| `b4341ca` | `HitBurstSweep`: pengető-söprés csík, ami az ütés irányában fut végig a glyph-en (fentről le ↓, lentről fel ↑, 0,22 s, fakuló nyom) |
+| `1474512` | `StrumBurstOverlay` (általánosított, `core/widgets/strum_burst_overlay.dart`, `centerOf` + `strength`); **motor**: `PracticeSessionController.strumFeedback` → `PracticeStrumFeedback` (hallott irány + konfidencia + a talált cél ÉLŐ verdictje, kósza ütésnél null), a `PracticeSessionHost` határon és a practice public barrelen át; **Practice**: `StrumPatternView`/`ChordProgressionView` a strike-vonalon szikrázik (balkezes tükrözés), Learn-létra (PERFECT 1.0 · GOOD 0.72 · EARLY/LATE 0.45 · miss/kósza 0.35), és a `PracticeFeedback` végre az élő verdictet mutatja (R10 null-hiány zárva); **Song Trainer**: `SongTrainerController.practiceStrumFeedback` passthrough, a futó nézet a strum-sáv „most" élénél szikrázik |
+| `5762102` | dart format (egysoros passthrough) |
+| `70dfdf6` | a testvér-session gate-jelentése (lent) |
+| `9121160` | a két teszt-cella javítása |
+
+**Tesztek:** `test/core/widgets/hit_burst_test.dart` (irány + söprés cellák),
+`test/core/widgets/strum_burst_overlay_test.dart` (6 cella),
+`test/features/practice/application/practice_strum_feedback_test.dart`
+(talált verdict PERFECT, sorrend, inaktív capture, erősség-létra),
+`test/features/practice/presentation/practice_strum_burst_test.dart`
+(nézet-cellák); a három `PracticeSessionHost` fake frissítve.
+
+**Lokális gate ebben a konténerben NEM futott** — mért ok: a proxy 403-at ad a
+`storage.googleapis.com` / `pub.dev` / `pub.dartlang.org` hosztokra; a
+felhasználó engedélyezése után indított FRISS testvér-session ugyanabban a
+környezetben (`Default`, `env_011CUaPRnRYLByjSGKz4YDzE`) is 403-at kapott →
+jelentés: [`docs/execution/gate-runs/2026-09-15-strum-spark-gate.md`](docs/execution/gate-runs/2026-09-15-strum-spark-gate.md).
+A CI a mérce (ADR 0053). Nyitott: a környezet hoszt-allowlistjének
+ellenőrzése a claude.ai-on (melyik környezeten lett beállítva).
+
+**Következő lépés a szálon (Chapter 18 terv, `docs/plans/chapter-18-viral-ui-motion.md`):**
+verdict-pop + kombó-számláló a Live-on (ehhez ott ütem-relatív időzítési
+verdict kell; ma a Live-nak nincs scorere), majd E18-R00 paletta-döntés.
+Nem érintett: `docs/execution/pipeline-queue.tsv`.
+
 ## 🎨 DIZÁJN-SESSION — Chapter 18 „Viral UI & Motion" terv + Midnight Stage paletta (2026-09-15, branch `claude/ui-design-viral-elements-u9z9ht`)
 
 A felhasználó kérése: „nézd át az UI dizájnokat, keress viral elemeket a
