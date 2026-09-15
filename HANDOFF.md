@@ -1,5 +1,32 @@
 # HANDOFF — StrumSight 🎸
 
+## 🎨 DIZÁJN-SESSION — Chapter 18 „Viral UI & Motion" terv + Midnight Stage paletta (2026-09-15, branch `claude/ui-design-viral-elements-u9z9ht`)
+
+A felhasználó kérése: „nézd át az UI dizájnokat, keress viral elemeket a
+versenytársakkal szemben, fejleszd az UI-t minden funkcióhoz animációval,
+látványos elemekkel" + „a színeket is lehetne változtatni, nagyon
+Claude-dizájnos". **Csak dokumentum és makett készült — production kód NEM
+változott** (remote konténer, nincs Flutter SDK; ADR 0055: Claude tervez).
+
+| Kimenet | Hely |
+|---|---|
+| Versenytárs- és viral-audit (Yousician, Simply, Duolingo, Chordify, Rocksmith+, GuitarTuna vs. StrumSight; V1–V7 elem; kemény korlátok) | [`docs/ui/viral-ui-audit.md`](docs/ui/viral-ui-audit.md) |
+| Funkciónkénti motion-dizájn spec (16 terület, 9 új `Ss*` komponens, új `stagger` alias, A-MOTION-1…8 elfogadási cellák) + **§0.5 palettajavaslat** (A „Midnight Stage" ajánlott, B „Tube Amp") | [`docs/ui/viral-motion-design-spec.md`](docs/ui/viral-motion-design-spec.md) |
+| Chapter 18 körterv (E18-R00 paletta … E18-R12 zárás; engedélyezett-fájl magok; kockázatok) | [`docs/plans/chapter-18-viral-ui-motion.md`](docs/plans/chapter-18-viral-ui-motion.md) |
+| Vizuális makett-canvas (Live, Today, Result, Tuner, Széria, Strum Card + palettalap + alternatíva; CSS-előnézet mozgással) | https://claude.ai/artifact/W74U95xMr3LGF9csazq22C |
+
+**Mért tények, amikre a terv épül:** `SsMotion`/`SsMotionScope`/`SsBeatPulse`
+kész, de a feature-fában 3 `flutter_animate`-import és 1 `AnimationController`
+→ a képernyők statikusak; `HitBurst` csak a Learn highway-en; a
+`CelebrationCoordinator` (ADR 0389) létezik, jelenet nincs; a `StrumCard`
+statikus PNG. A ↓/↑ irány-pontozás EGYETLEN versenytársnál sincs.
+
+**Következő lépés (emberi döntés kell):** 1) paletta A vagy B (spec §0.5);
+2) ha igen, E18-R00 brief (`docs/rounds/e18-r00-…`) + ADR-foglalás
+(`tools/round-slots.py reserve-adr --round E18-R00`) + a queue-sor felvétele
+— ez a session a pipeline-queue.tsv-hez NEM nyúlt. A Chapter 17 `hold`
+sorai és a Chapter 18 fájlszinten nem ütköznek (plan §0).
+
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 
 A Chapter 17 (Teljes bekötés) **első köre**: a `FirstWinStageScreen` eddig
