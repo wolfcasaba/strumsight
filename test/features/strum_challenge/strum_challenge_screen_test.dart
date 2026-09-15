@@ -268,7 +268,8 @@ void main() {
         expect(
           store.values.containsKey(StorageKeys.strumChallengeBest),
           isFalse,
-          reason: 'a run below the coverage floor claims nothing, so it writes '
+          reason:
+              'a run below the coverage floor claims nothing, so it writes '
               'nothing',
         );
       },
