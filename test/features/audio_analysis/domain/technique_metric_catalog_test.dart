@@ -47,22 +47,23 @@ void main() {
     });
 
     test(
-      'the new flag defaults to false in every environment (flag-guard)',
+      'the flag is on outside production only and off in it (flag-guard, '
+      'owner decision 2026-09-15)',
       () {
         for (final environment in AppEnvironment.values) {
           final flags = FeatureFlags.forEnvironment(
             environment,
             accountEnabled: false,
           );
+          final expected = environment != AppEnvironment.production;
           expect(
             flags.analysisTechniqueProxiesEnabled,
-            isFalse,
-            reason:
-                '$environment must not implicitly enable technique proxies.',
+            expected,
+            reason: '$environment: technique proxies follow the nonProd gate.',
           );
           expect(
             flags.toString(),
-            contains('analysisTechniqueProxiesEnabled: false'),
+            contains('analysisTechniqueProxiesEnabled: $expected'),
           );
         }
         const defaults = FeatureFlags(

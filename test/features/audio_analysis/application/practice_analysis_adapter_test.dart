@@ -137,14 +137,16 @@ void main() {
     expect(progressFactory.calls, 0);
   });
 
-  test('integration flags remain OFF in every environment', () {
+  test('integration flags are ON outside production and OFF in it '
+      '(owner decision 2026-09-15)', () {
     for (final environment in AppEnvironment.values) {
       final flags = FeatureFlags.forEnvironment(
         environment,
         accountEnabled: false,
       );
-      expect(flags.analysisPracticeIntegrationEnabled, isFalse);
-      expect(flags.analysisTutorIntegrationEnabled, isFalse);
+      final expected = environment != AppEnvironment.production;
+      expect(flags.analysisPracticeIntegrationEnabled, expected);
+      expect(flags.analysisTutorIntegrationEnabled, expected);
     }
   });
 }

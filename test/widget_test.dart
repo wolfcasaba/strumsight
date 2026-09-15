@@ -27,8 +27,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Bottom-nav destinations (default locale = en). Coach is absent —
-    // aiTutorEnabled defaults to false, so only 4 of the 5 areas show.
+    // Bottom-nav destinations (default locale = en). Coach is present too
+    // since aiTutorEnabled is on outside production (2026-09-15); these
+    // four are asserted, the fifth is not required here.
     expect(find.text('Today'), findsWidgets);
     expect(find.text('Practice hub'), findsWidgets);
     expect(find.text('Song library'), findsWidgets);
