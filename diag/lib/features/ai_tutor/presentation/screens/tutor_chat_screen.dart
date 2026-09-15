@@ -1,0 +1,500 @@
+/// Tutor Chat screen (E04-R18 §3 + §6, design-system migration E15-R09).
+///
+/// A virtualized message list + composer + banners. The screen is a
+/// pure `ConsumerWidget`; all state lives in [TutorChatController].
+///
+/// Streaming-batching: the screen renders a single `Semantics` node
+/// with label "Generating response" while the controller is in the
+/// streaming state — the screen reader announces the bubble once per
+/// turn, not once per token. Scroll-anchoring: a new bubble that
+/// exceeds the viewport pushes the list to the bottom.
+///
+/// Raw-HTML / unknown-block safety: the bubble renders unknown blocks
+/// verbatim inside a monospaced panel (see `tutor_message_bubble.dart`).
+/// The screen never passes raw text through a HTML parser.
+///
+/// Unlike [TutorHomeScreen], this screen's own pinned widget test
+/// (`tutor_chat_screen_test.dart`) IS on the E15-R09 `allowed_paths` list
+/// and its bare `MaterialApp` is wired with `theme: SsLightTheme.data()`
+/// (§0.0.A/R3) — so the AI-mode indicator below safely uses the
+/// theme-extension `SsProvenanceBadge` instead of a plain-[Theme] rebuild.
+///
+/// The streaming pill next to it is [SsSkeleton] (a small `SsRadius.pill`
+/// circle), not a raw [CircularProgressIndicator] — javító kör #1,
+/// §0.0.B/R13: §5.2 names a raw spinner as an unacceptable weakening, and
+/// [SsSkeleton] is this design system's one loading primitive.
+///
+/// Practice-plan preview entry (E17-R04, ADR 0523): the AppBar's
+/// "Preview a practice plan" action and a tap on a plan block inside a
+/// tutor message both push [PracticePlanPreviewScreen] with the LOCAL
+/// deterministic draft (`tutorPracticePlanProposalProvider`, §5.2 — no cloud
+/// call; the local path has no plan store, so a message's `planId` cannot
+/// be resolved and the template IS the draft). The preview's "Start plan"
+/// compiles the draft and hands the resolved catalog entry to the EXISTING
+/// `/practice/setup?id=` route through `context.go` (§5.1) — this screen
+/// owns no session launcher. "Save plan" persists the plan as a
+/// user-inspectable fact through `tutorMemoryRepositoryProvider`, the
+/// same local-first memory the Data screen lists.
+library;
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../app/routing/app_route.dart';
+import '../../../../core/design_system/public.dart';
+import '../../../../core/foundation/app_result.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../application/controller/tutor_state.dart';
+import '../../application/planning/practice_plan_compiler.dart';
+import '../../application/planning/practice_plan_launch.dart';
+import '../../domain/models/practice_plan_draft.dart';
+import '../../domain/models/tutor_content_block.dart';
+import '../../domain/models/tutor_ids.dart';
+import '../../domain/models/tutor_memory_fact.dart';
+import '../../domain/models/tutor_message.dart';
+import '../providers/tutor_practice_plan_providers.dart';
+import '../providers/tutor_privacy_providers.dart';
+import '../providers/tutor_providers.dart';
+import '../widgets/tutor_banners.dart';
+import '../widgets/tutor_composer.dart';
+import '../widgets/tutor_message_bubble.dart';
+import 'practice_plan_preview_screen.dart';
+
+class TutorChatScreen extends ConsumerStatefulWidget {
+  const TutorChatScreen({super.key});
+
+  @override
+  ConsumerState<TutorChatScreen> createState() => _TutorChatScreenState();
+}
+
+class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
+  final ScrollController _scrollController = ScrollController();
+  late final TutorChatController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ref.read(tutorChatControllerProvider);
+    // The controller is a `ChangeNotifier`-like seam — when it
+    // notifies (test fakes call `notifyListeners()` after `addMessage`,
+    // and the production controller does the same from `_emit()`),
+    // we rebuild so the freshly appended message renders without
+    // waiting for the `StreamProvider` microtask round-trip.
+    if (_controller is Listenable) {
+      (_controller as Listenable).addListener(_onControllerChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_controller is Listenable) {
+      (_controller as Listenable).removeListener(_onControllerChanged);
+    }
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (!mounted) return;
+    setState(() {});
+    // Scroll-anchoring: when a new bubble arrives or the streaming
+    // text grows, push the list to the bottom on the next frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+  }
+
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.maxScrollExtent <= position.pixels) return;
+    position.jumpTo(position.maxScrollExtent);
+  }
+
+  // ---------------------------------------------------------------------
+  // Practice-plan preview (E17-R04, ADR 0523)
+  // ---------------------------------------------------------------------
+
+  /// Pushes the preview for the local deterministic template. The provider
+  /// is READ here, on the tap, never watched in `build` — the pinned chat
+  /// tests build containers without the Practice/profile graph, and the
+  /// preview is a modal step over the chat, not a routed destination.
+  void _openPlanPreview(Duration targetDuration) {
+    final proposal = ref.read(
+      tutorPracticePlanProposalProvider(targetDuration),
+    );
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PracticePlanPreviewScreen(
+            draft: proposal.draft,
+            validationContext: proposal.validationContext,
+            onSave: (draft) => unawaited(_savePlan(draft)),
+            onStart: (draft) => _startPlan(draft, proposal),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A plan block inside a tutor message is the plan proposal surface the
+  /// local path renders; accepting it opens the same preview.
+  void _openPlanFromBlock(TutorPracticePlanBlock block) =>
+      _openPlanPreview(tutorPracticePlanDefaultDuration);
+
+  /// Persists the (possibly edited) plan as one user-inspectable memory fact
+  /// through the existing local-first repository — the Data screen lists,
+  /// edits and deletes it like any other fact. Feedback is a SnackBar in
+  /// both outcomes; a failed write is never swallowed silently.
+  Future<void> _savePlan(PracticePlanDraft draft) async {
+    final l10n = AppLocalizations.of(context);
+    final repository = ref.read(tutorMemoryRepositoryProvider);
+    final now = DateTime.now().toUtc();
+    final result = await repository.saveCandidate(
+      TutorMemoryCandidate(
+        id: 'plan-${draft.id}-${now.microsecondsSinceEpoch}',
+        content: _planMemoryContent(draft),
+        conversationId: TutorConversationId('preview'),
+        messageId: TutorMessageId(draft.id),
+        createdAt: now,
+      ),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.isSuccess ? l10n.tutorPlanSaved : l10n.tutorPlanSaveFailed,
+        ),
+      ),
+    );
+  }
+
+  String _planMemoryContent(PracticePlanDraft draft) {
+    final blocks = draft.blocks
+        .map((block) => '${block.type} ${block.duration.inMinutes} min')
+        .join(', ');
+    return '${draft.title} (${draft.targetDuration.inMinutes} min): $blocks';
+  }
+
+  /// Compiles the plan with [PracticePlanCompiler] and opens the EXISTING
+  /// Practice Setup route for the first launchable block (§5.1). No block
+  /// launchable (Practice Engine V2 off, or the plan holds only reflection
+  /// / rest blocks) is reported, not routed — `/practice/setup` without a
+  /// resolvable id renders only its "definition not found" state.
+  void _startPlan(PracticePlanDraft draft, TutorPracticePlanProposal proposal) {
+    final l10n = AppLocalizations.of(context);
+    final compiled = const PracticePlanCompiler().compile(
+      draft: draft,
+      context: proposal.compilationContext,
+    );
+    final target = switch (compiled) {
+      Success<CompiledPracticePlan>(:final value) =>
+        resolvePracticePlanLaunchTarget(
+          plan: value,
+          catalog: proposal.launchableCatalog,
+        ),
+      Failure<CompiledPracticePlan>() => null,
+    };
+    if (target == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.tutorPlanStartUnavailable)),
+      );
+      return;
+    }
+    final uri = Uri(
+      path: AppRoutes.practiceSetup,
+      queryParameters: <String, String>{'id': target.definitionId},
+    );
+    // The confirmation sheet pops itself right after `onConfirm` returns
+    // (`SsToolConfirmationSheet._handleConfirm`). Leaving the preview and
+    // switching routes is deferred one frame so the two pops never race:
+    // by then the sheet is no longer a present route, so the pop below
+    // targets the preview page this screen pushed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      context.go(uri.toString());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final controller = _controller;
+    final chatState = ref.watch(tutorChatStateProvider).value;
+
+    final status = chatState?.status ?? controller.status;
+    final responseText = chatState?.responseText ?? controller.responseText;
+    final banners = chatState?.banners ?? controller.banners;
+    final isOnline = chatState?.isOnline ?? controller.isOnline;
+    final aiMode = tutorAiModeFor(status: status, isOnline: isOnline);
+    final visibleMessages = chatState?.messages ?? controller.messages;
+    final messages = <_ChatBubble>[
+      for (final message in visibleMessages)
+        _ChatBubble.fromMessage(
+          message,
+          onPracticePlanTap: _openPlanFromBlock,
+        ),
+      if (status == TutorTurnStatus.streaming)
+        _ChatBubble.fromStreamingText(
+          responseText,
+          keyId: TutorMessageId('streaming'),
+        ),
+    ];
+
+    return Semantics(
+      container: true,
+      label: l10n.aiTutorChatScreenSemantics,
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          title: Text(l10n.aiTutorChatTitle),
+          actions: <Widget>[
+            // E17-R04 — the practice-plan preview entry. The local path
+            // emits no plan-save proposal today, so this is the one entry
+            // that makes the preview reachable for real (A1/A2).
+            IconButton(
+              key: const ValueKey('tutor-plan-preview'),
+              tooltip: l10n.tutorPlanPreviewEntry,
+              icon: const Icon(Icons.playlist_add_check),
+              onPressed: () =>
+                  _openPlanPreview(tutorPracticePlanDefaultDuration),
+            ),
+            // Always visible regardless of turn status (ADR 0278 §1,
+            // E13-R29 §5.2) — this is the screen-level anchor; the
+            // streaming indicator below repeats it at message level.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: SsSpacing.space2),
+              child: _AiModeIndicator(mode: aiMode),
+            ),
+            if (status.isActive)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: SsSpacing.space2,
+                ),
+                child: TextButton.icon(
+                  onPressed: controller.cancel,
+                  icon: const Icon(Icons.stop_circle_outlined),
+                  label: Text(l10n.aiTutorChatCancel),
+                ),
+              ),
+          ],
+        ),
+        body: SafeArea(
+          child: Column(
+            children: <Widget>[
+              for (final kind in banners)
+                _BannerSlot(kind: kind, controller: controller),
+              Expanded(
+                child: messages.isEmpty
+                    ? _EmptyState(scrollController: _scrollController)
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: SsSpacing.space4,
+                          vertical: SsSpacing.space3,
+                        ),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) => Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: SsSpacing.space2,
+                          ),
+                          child: messages[index],
+                        ),
+                      ),
+              ),
+              if (status == TutorTurnStatus.streaming)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: SsSpacing.space4,
+                    vertical: SsSpacing.space1,
+                  ),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Semantics(
+                      label: l10n.aiTutorChatStreamingSemantics,
+                      liveRegion: true,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          const SsSkeleton(
+                            width: 12,
+                            height: 12,
+                            radius: SsRadius.pill,
+                          ),
+                          const SizedBox(width: SsSpacing.space2),
+                          _AiModeIndicator(mode: aiMode),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              const TutorComposer(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BannerSlot extends StatelessWidget {
+  const _BannerSlot({required this.kind, required this.controller});
+
+  final TutorBannerKind kind;
+  final TutorChatController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return TutorBanner(kind: kind, onRetry: controller.retry);
+  }
+}
+
+/// The "no messages yet" prompt. NOT [SsEmptyState]: that component
+/// requires a caller-supplied `onAction` (ADR 0277 §5 — an empty state must
+/// name a next step), but this screen's real next step is typing in the
+/// always-visible [TutorComposer] below, not a button this widget could
+/// wire up itself (§0.0.A/R6 exception class — same as the E15-R04/R06/
+/// R07/R08 precedent). Still fully token-styled via [SsColorScheme]/
+/// [SsTypography]/[SsSpacing], never a bare [Theme] read.
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.scrollController});
+
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return SingleChildScrollView(
+      controller: scrollController,
+      padding: const EdgeInsets.all(SsSpacing.space6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const SizedBox(height: SsSpacing.space12),
+          Icon(Icons.chat_bubble_outline, size: 48, color: colors.brand),
+          const SizedBox(height: SsSpacing.space3),
+          Text(
+            l10n.aiTutorChatEmptyTitle,
+            textAlign: TextAlign.center,
+            style: typography.titleMedium.copyWith(color: colors.textPrimary),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          Text(
+            l10n.aiTutorChatEmptyBody,
+            textAlign: TextAlign.center,
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble._(this.message, {this.onPracticePlanTap});
+
+  final TutorMessage message;
+  final ValueChanged<TutorPracticePlanBlock>? onPracticePlanTap;
+
+  factory _ChatBubble.fromMessage(
+    TutorMessage message, {
+    ValueChanged<TutorPracticePlanBlock>? onPracticePlanTap,
+  }) => _ChatBubble._(message, onPracticePlanTap: onPracticePlanTap);
+
+  factory _ChatBubble.fromStreamingText(
+    String text, {
+    required TutorMessageId keyId,
+  }) {
+    final createdAt = DateTime.now().toUtc();
+    return _ChatBubble._(
+      TutorMessage(
+        id: keyId,
+        role: TutorMessageRole.tutor,
+        createdAt: createdAt,
+        sequence: 0,
+        deliveryState: TutorMessageDeliveryState.streaming,
+        blocks: <TutorContentBlock>[
+          if (text.isEmpty)
+            TutorTextBlock(text: ' ')
+          else
+            TutorTextBlock(text: text),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TutorMessageBubble(
+      message: message,
+      onPracticePlanTap: onPracticePlanTap,
+    );
+  }
+}
+
+/// The AI-mode indicator (ADR 0278 §1, E13-R29 §5.2) — an [SsProvenanceBadge]
+/// (safe here: see the file doc comment on why this screen, unlike
+/// [TutorHomeScreen], can use theme-extension `Ss*` components). Fallback
+/// reuses the local badge (the fallback path answers FROM the local model)
+/// plus an explicit trailing notice — meaning is carried by icon+text
+/// together, never colour alone (same rule [SsProvenanceBadge] itself
+/// documents).
+class _AiModeIndicator extends StatelessWidget {
+  const _AiModeIndicator({required this.mode});
+
+  final TutorAiMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final provenance = switch (mode) {
+      TutorAiMode.cloud => SsProvenanceKind.cloud,
+      TutorAiMode.local || TutorAiMode.fallback => SsProvenanceKind.local,
+    };
+    if (mode != TutorAiMode.fallback) {
+      return SsProvenanceBadge(l10n: l10n, kind: provenance);
+    }
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    // §0.0.B/R14 (measured via the committed textScaler 2.0 cells): this
+    // widget renders inside `AppBar.actions`, which lays each action out at
+    // its OWN natural width before the title claims the remainder — an
+    // ambient constraint neither [SsProvenanceBadge]'s own internal
+    // `Flexible` nor a `Flexible` wrapped around the trailing text here can
+    // see through, since both are non-flexible siblings free to claim
+    // whatever width they naturally need first (measured: `RenderFlex
+    // overflowed by 1187 pixels`, en, textScaler 2.0, before either bound
+    // existed). Bounding EACH piece's own width directly — not via the
+    // Row's flex negotiation — clips both deterministically regardless of
+    // locale or the ambient constraint.
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 130),
+          child: SsProvenanceBadge(l10n: l10n, kind: provenance),
+        ),
+        const SizedBox(width: SsSpacing.space1),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 90),
+          child: Text(
+            l10n.aiTutorAiModeFallbackMessage,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: colors.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
