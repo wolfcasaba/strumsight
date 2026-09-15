@@ -19,6 +19,18 @@
 **Golden:** `e13_r23_song_library` (új app-bar ikon) újrafelvétele a
 `record-goldens.yml`-lel a CI-mérés után.
 
+**6. kör előkészítése — Chapter 14 felismerési sáv:** a sáv (R20: strum
+modell tanítás csoportosított holdouton) **nem indítható** adat nélkül — a
+repóban nincs verziózott valós corpus (`ml/corpus`: 4 fájl, mind szkript), és
+0 dokumentált valós gitáros menet van. Ezért két bemenet készült:
+- `docs/manual-testing/learner-loop-device-run.md` — az ÚJ APK
+  tesztjegyzőkönyve (1–7. szakasz: az 1–5. kör mérése; 8. szakasz: a
+  felismerés számai, amelyek az R20 célértékét és hibaosztályát adják).
+- `docs/rounds/e14-r20-strum-model-grouped-holdout-training.md` — az R20
+  brief §0.0 STOP-feltételekkel (jegyzőkönyv, ≥3 játékos × 2 gitár × 2
+  helyiség csoportosított corpus, rögzített holdout-séma); a queue-ba
+  szándékosan nem került, amíg az adat nincs meg.
+
 
 ## ✅ KÉSZ — 3. kör: valódi XP-főkönyv a Practice V2 session mögött (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
