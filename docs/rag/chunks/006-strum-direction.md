@@ -67,3 +67,21 @@ down-strum (fewer strings, softer attack, treble-led is noisier). This is why
 confidence is a first-class UI signal (shape+colour), not decoration.
 
 **v2 upgrade path:** small CRNN/TFLite on user-recorded labeled clips.
+
+**⚠ ROUND strum-strings (2026-09-15, ADR 0581) — the shape-informed STRING-ARRIVAL
+cue.** With the played voicing known (guided modes display the shape), the
+physical sweep IS resolvable on a mic: per-string uniquely-attributable partials
+(150–4000 Hz, uniqueness = 2.1·sr/N), centred Hann-Goertzel envelopes (N = 2048,
+hop 64), pre-onset baseline subtracted, partials summed before the 50 % rise,
+direction = sign of Kendall tau over string index vs arrival. MEASURED on
+GuitarSet hexaphonic truth (3035 clean comping sweeps, exact voicings): coverage
+50 %, 80 % on covered; ladder ≥0.80 → 97.7 % (n 218), 0.65–0.80 → 85.6 %
+(n 871), <0.65 → 60.8 % → the cue is SILENT below 0.65. Down 80 / up 82 % —
+the first balanced cue. Per-string arrival |error| median 5.6 ms vs 22 ms
+median true spread. Fused "cue if it speaks, else CRNN": 46.4 → 62.3 % on the
+1996 sweeps the live path heard (docs/eval/string-arrival-fusion-2026-09-15.md).
+REFUTED alongside: per-string energy slope (chance), ring-based voicing
+estimation (45 % pitch accuracy → cue at chance), short 4-cycle windows
+(leakage compresses the stagger), and Klangio with guessed shapes (chance —
+no voicings in that corpus). Armed only while the decoder shows the expected
+chord; the free Live mirror is a bit-identical pass-through.
